@@ -225,7 +225,8 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | **3C-VAG** | Cross-arc adversarial 3-column VAG (4 sub-phases × 4 VAG questions). All 12 D-3C-* parent drift risks verified cleared adversarially (§9.5.6.5). KR-1/2/3 named drift handoff to Phase 11b coherence verified across 8 cross-link sites (§9.5.6.6). User-facing behavior matrix documented including KR-1 regression naming (§9.5.6.7). | ✅ (this commit) | See §9.5.6 for full cross-arc VAG. **Phase 3C CLOSED end-to-end** — primitive + 2 consumers + sexp bridge + tracking-debt substrate + cumulative cross-arc VAG all delivered. Cross-track captures coherent for Phase 11b / PM Track 12 / PPN Track 4D / SH Track 1 / PReduce Track 6 / OE Track 4 inheritance. **Codifications**: "Empirical falsification as audit complement" GRADUATION-READY (5 data points; defer to user); "Audit-precedes-implementation REFRAMING discipline" PROMOTION-READY (3 data points; graduates at 4th); "ESCALATE-with-substrate" + "Combined locking test + probe artifact" + "Honest scope-down progression" watching-list. Ready for Phase 3V (cumulative Phase 3 VAG across 3A + 3B + 3C). |
 | 3V | Vision Alignment Gate Phase 3 (cumulative cross-PHASE across 3A + 3B + 3C) | ✅ `f947b30d` | **CLOSED 2026-05-25 per §9.6 expanded** (commit `f947b30d`). 4 VAG questions × 3 columns × cross-PHASE all pass adversarially (§9.6.2-5). All 6 cross-PHASE drift risks D-3V-1..6 cleared (§9.6.5). Cross-phase coherence verified (§9.6.7) — 3A + 3B + 3C compose through cell state with no cross-sub-phase coupling debt. Cross-PHASE methodology drift surfaced (§9.6.6) — "Audit-precedes-implementation REFRAMING discipline" earned 4th data point. Cumulative cross-track captures consolidated (§9.6.9) — 12+ consumer tracks. **2 codifications GRADUATED to DEVELOPMENT_LESSONS.org** (§9.6.10): "Empirical falsification as audit complement" (5 data points) + "Audit-precedes-implementation REFRAMING discipline" (4 data points). 2 inherited-from-3A codifications DEFERRED to addendum capstone PIR. Phase 3 reflection (§9.6.11) synthesizes achievements + forward-enables + PPN 4 charter fit; substrate-heavy / user-facing-light honest framing. Phase 4 bridge specified at INTERFACE level (§9.6.12) — addendum vs parent track Phase 4 distinction explicit. Suite gate inherited from 3C-VAG (8281 / 107.0s / 0). **Phase 3 CLOSED end-to-end.** Phase 4 paused per user direction. |
 | **4** | **Top-level orchestration unification — retire `process-command` sequential loop** | 🔄 (mini-design persisted) | **MINI-DESIGN OPENED 2026-05-25** — pre-implementation architectural sharpening persisted at §18 post-3V close. T1/T2/T3 audit findings consolidated; thesis sharpened (residuation == cell-at-bot waiting identity; flip-the-read-path as load-bearing move; specialized cells as migration vocabulary). Sub-phase partition revised to **6 sub-phases (4A/4B/4C/4D/4E/4V)** per audit-driven scope expansion. PM Track 12 boundary clarified (§18.5). G1-G10 empirical battery sketched (§18.6). 8 drift risks D-4-1..8 named (§18.8). 6 open architectural questions (§18.7) for continued dialogue before sub-phase work commits. Tracking [#22](https://github.com/LogosLang/prologos/issues/22). Motivating use case: mutual recursion ([PR #14](https://github.com/LogosLang/prologos/pull/14)). Gates on Phase 1 ✅ + Phase 2 ✅ + Phase 3 ✅ all met. |
-| 4A | `current-prelude-env` migration (the flip) — specialized cell + read-path flip | ⬜ | Sub-phase per §18.4 partition. Prerequisite to 4B. ~150-300 LoC. Gate: cell IS source of truth (parameter snapshot or retired). |
+| 4A.0 | Pre-0 microbench: env-cell variant comparison (A/B/C/D × 5 workloads) per §18.12 | ⬜ | NEW from audit-informed sub-phase partition refinement (2026-05-25). Gates Q1 variant decision per pre-committed criteria. ~50 LoC bench + report. Precedes 4A code changes. |
+| 4A | `current-prelude-env` migration (the flip) — specialized cell + read-path flip | ⬜ | Sub-phase per §18.4 partition. Prerequisite to 4B. Variant choice locked by 4A.0 measurement. ~150-300 LoC. Gate: cell IS source of truth (parameter snapshot or retired). |
 | 4B | Top-level form processing as installable propagators (replace 35 match arms) | ⬜ | Sub-phase per §18.4 partition. Depends on 4A. ~400-700 LoC. Gate: all form kinds elaborate; spec→defn residuation works. |
 | 4C | Retire 4 sequential caller loops | ⬜ | Sub-phase per §18.4 partition. Depends on 4B. ~100-200 LoC. Gate: G1-G4 mutual recursion gates pass. |
 | 4D | `reset-meta-store!` retirement — per-form or file-global meta scope | ⬜ | Sub-phase per §18.4 partition. Architectural question (§18.7 #2) needs resolution before sub-phase work. ~100-200 LoC. |
@@ -9523,7 +9524,8 @@ The original §3 row 227 reserved "Sub-phases (4A, 4B, 4V) populated at phase op
 | **4A** | `current-prelude-env` migration (the flip) — declare §4.6 specialized cell; flip `global-env-lookup-*` reads to `net-cell-read`; retire dual-path; parameter becomes snapshot or retires | ~150-300 | Single-form lookups still work; suite stable; cell IS source of truth |
 | **4B** | Top-level form processing as installable propagators (replace 35 match arms) — per-form-kind propagator factory; spec→defn residuation works | ~400-700 | All form kinds elaborate; spec cells residuate correctly |
 | **4C** | Retire 4 sequential caller loops — replace `(for/list ([surf ...]) (process-command surf))` with all-at-once install pattern at 4 sites | ~100-200 | Mutual recursion works end-to-end (G1-G4) |
-| **4D** | `reset-meta-store!` between-command retirement — per-form meta scope via worldview tagging OR per-form meta universe | ~100-200 | Meta state per top-level-form coherent under Phase 1 universe model |
+| **4A.0** | Pre-0 microbench: env-cell variant comparison (A/B/C/D × 5 workloads) per §18.12 | ~50 LoC bench + report | Variant decision per pre-committed criteria; informs 4A code |
+| **4D** | Replace `reset-meta-store!` network-recreation with **Phase 3A worldview-aid pattern at form scope** — per-form aid + S(-1) commit/retract (replaces the per-command `(make-elaboration-network)` mechanism per Audit B; see §18.10.1) | ~100-200 | Meta state per top-level-form via worldview tagging; per-form retraction works via S(-1) |
 | **4E** | Result emission protocol — per-command result cells; consumers drain; forward-enables PPN Track 8 + SH Track 1 | ~100-150 | `process-string` round-trip identical; result accumulation works |
 | **4V** | Cumulative cross-arc adversarial 3-column VAG + G1-G10 battery — verify thesis: zero sequential elaboration orchestrators remain | ~150-200 docs | All G1-G10 gates pass |
 
@@ -9554,6 +9556,8 @@ Phase 4 brings the PARAMETERS PHASE 4 NEEDS onto §4.6 specialized cells. PM Tra
 
 **Principle**: Phase 4 migrates ONLY what's load-bearing for top-level orchestration retirement + mutual recursion via cell residuation. PM 12 owns the rest. Each migration is a §4.6 declaration; PM 12's migration vocabulary IS Phase 4's vocabulary; no parallel framework.
 
+**FREE_ORDERING + module-loading-on-network — out of Phase 4 scope (per Audit C + user direction 2026-05-25)**: The 3-pass preparse name-registration (`macros.rkt:2366-2460` + `tools/form-deps.rkt` SCC analysis; `docs/tracking/2026-02-28_1800_FREE_ORDERING.md`) is imperative scaffolding that delivers name-level residuation at preparse time. Phase 4 introduces value-level residuation at elaboration time; the two compose. Per user direction: *"having an imperative multi-pass parsing would be a regression for the lattice-fixpoint compiler that we hold as our North Star vision. This work should likely also migrate and be updated to our propagator-native approaches. Sounds like work to be done on module-loading on network, though; not in current scope."* FREE_ORDERING is **scaffolding with retirement plan** — migrates to propagator-native cell-based name registration in module-loading-on-network follow-up work (post-Phase-4, post-PM 12). Tracked in DEFERRED.md.
+
 ### §18.6 Empirical testing battery (G1-G10)
 
 Per "Empirical Falsification as Audit Complement" codification (graduated to DEVELOPMENT_LESSONS.org at Phase 3V), Phase 4 deserves multiple falsification anchors with pre-committed criteria:
@@ -9575,21 +9579,23 @@ G1-G4 are correctness gates. G5 is cross-track integration. G6-G7 are regression
 
 Battery is provisional — refined per sub-phase mini-design with concrete acceptance files + measurement protocols.
 
-### §18.7 Open architectural questions (for further dialogue)
+### §18.7 Open architectural questions (status post-audit 2026-05-25)
 
-Architectural shape is sharper; these questions remain open and warrant continued dialogue before sub-phase work commits:
+The 6 questions raised at mini-design open were addressed via T1/T2/T3 + parallel sub-audits A/B/C (see §18.10). Post-audit status:
 
-1. **Env cell lattice/merge semantics** — hash-union with what name-collision behavior? Last-write-wins (re-define semantics), contradiction-on-collision (purity), or specialized merge? Affects re-bind / shadowing.
+1. **Env cell lattice/merge semantics** — Variant choice (B/C/D per §18.10.3) AWAITS Pre-0 measurement; see §18.12 microbench plan. Pre-committed criteria gate the decision.
 
-2. **Per-form-or-global meta state (4D's question)** — per top-level-form (each form gets a worldview bit; metas tagged per form) OR file-global (no `reset-meta-store!`; metas accumulate across the file). Residuation framing suggests file-global; isolation arguments suggest per-form. Big architectural choice.
+2. **Per-form vs file-global meta state (4D's question)** — **LOCKED**: Phase 3A worldview-aid pattern at form scope. Per Audit B (§18.10.1) `reset-meta-store!` is network REPLACEMENT, not snapshot; the audit-aligned answer is scoped narrowing via S(-1). Detailed mechanism at 4D mini-design.
 
-3. **35 match arms → propagators vs stratum handlers** — each form kind handler is registered via `register-stratum-handler!` (Phase 2 pattern), OR per-form-kind propagator-install (form cell → handler fires). Sub-phase 4B mini-design item.
+3. **35 match arms → propagators vs stratum handlers** — **LOCKED**: propagators by default; stratum handlers only for cross-stratum coordination (S(-1) retraction, result emission, topology). 4B implementation detail.
 
-4. **Cross-module mutual recursion (G5)** — design open; depends on PM 10's module loading interaction.
+4. **Cross-module mutual recursion (G5)** — **LOCKED**: cycle handling becomes lattice diagnostic per §18.11 principle. Cross-module cycles unblock via module-loading-on-network follow-up (NOT Phase 4 scope; FREE_ORDERING migration captured in §18.5 + DEFERRED.md).
 
-5. **`load-module`'s ~18 parameterize block** — separate call path with its own `for/list`. Likely PM 10 scope; coordination needed.
+5. **`load-module`'s ~18 parameterize block** — **LOCKED**: out of Phase 4 scope. Absorbed by module-loading-on-network follow-up + PM 12 cooperation. See §18.5.
 
-6. **G8 thesis-falsification rigor** — "zero sequential elaboration orchestrators" needs precise definition. What counts as "elaboration path"? What's the grep criterion?
+6. **G8 thesis-falsification rigor** — DEFERRED to 4V mini-design per scope; not blocking now.
+
+All commitments captured in §18.13 status table. Phase 4 sub-phase work can open (starting with 4A.0 Pre-0 microbench).
 
 ### §18.8 Drift risks named at mini-design open
 
@@ -9616,6 +9622,184 @@ For mid-flight principles challenge:
 - DEVELOPMENT_LESSONS.org § "Empirical Falsification as Audit Complement" — G1-G10 battery discipline source
 - DEVELOPMENT_LESSONS.org § "Audit-Precedes-Implementation REFRAMING Discipline" — informs §18.2 sharpening from §1.2 original
 - DEVELOPMENT_LESSONS.org § "Validated Is Not Deployed — Flip the Switch or Delete the Parameter" — informs dual-path-completion drift risk D-4-6
+
+### §18.10 Audit synthesis + post-audit commitments (2026-05-25)
+
+Per Stage 4 mini-design + mini-audit co-dependent cycle, three parallel sub-agent audits were conducted post-§18 persistence to inform pre-implementation architectural commitments:
+
+- **Sub-audit A** — Track 7 Layer-1 cell structure + cell count + PU/structural infrastructure + perf characteristics
+- **Sub-audit B** — `reset-meta-store!` semantics
+- **Sub-audit C** — PM Track 10 + library/book FREE_ORDERING form-level work + cross-module mutual recursion + cyclic definition handling
+
+#### §18.10.1 Headline finding — `reset-meta-store!` is network REPLACEMENT, not snapshot reset
+
+Sub-audit B's critical finding: `reset-meta-store!` at `metavar-store.rkt:2843-2917` does NOT just clear a CHAMP snapshot — it executes `(set-box! net-box (make-elaboration-network))` at line 2868. The entire elaboration network is REPLACED per command; universe cells (Phase 1 S2.* "source-of-truth") are recreated brand-new on the fresh network via `init-meta-universes!` at line 2917.
+
+This **changes Q2's framing materially**. The naive "drop reset-meta-store!" approach is NOT safe — universe cells, registry cells, cell-id parameters all become stale across forms. The audit-informed answer: replace network-recreation with **scoped narrowing via the Phase 3A worldview-aid pattern**.
+
+#### §18.10.2 Per-name cells exist (Track 7 Phase 7d); read path bypasses them
+
+Sub-audit A: Track 7 Phase 7d delivered per-name cells via `definition-cell-write!` at `global-env.rkt:109-124`. Each `def` allocates a cell-id stored in `current-definition-cell-ids` (`name → cell-id` registry). BUT reads at `global-env-lookup-type/value` (`:192, :216`) go through `(current-prelude-env)` parameter hash, not `net-cell-read`. **The cells exist as parallel write targets, not authoritative read source.**
+
+This confirms §18.2 thesis: the architectural move is flipping the read path. The substrate is partly present (per-name cells + registry); Phase 4 makes the cells authoritative.
+
+#### §18.10.3 PU + §4.6 framework rich; mega-cell vs per-name is empirical question
+
+Sub-audit A documented 6 production PU instances (4 meta universe cells + attribute-map + worldview-cache + relation-store) + `compound-cell-component-{ref,write}/pnet` primitives + §4.6 framework with convenience constructors (`make-monotone-counter-meta`, `make-cold-general-meta`, `make-warm-general-meta`).
+
+Perf characteristics (from Tropical Quantale PIR + STEP2 baseline):
+
+| Metric | Value |
+|---|---|
+| Plain cell read (pre-direct-ref-cache) | 74.3 ns/call |
+| Plain cell read (with Tropical 1V direct-ref cache) | 10.9 ns/call (−85%) |
+| Specialized cell-write fast path (Var-A N=100) | 4.52 ns/cycle |
+| Specialized cell-write amortized (N=1000) | 1.40 ns/cycle |
+| Compound cell component-ref overhead | +100-150 ns hash-ref vs direct cell-read |
+| Memory @ 100k decrements (specialized cell) | 1.1 KB alloc / 0.0 KB retain / 0 major-GC |
+
+**Trade-off envelope**: compound-cell-with-component-paths wins when (a) shared lifecycle, (b) per-write struct-copy is bottleneck, (c) reads infrequent enough that 100-150ns hash-ref overhead amortizes against allocation savings. N-separate-cells wins when reads dominate (hot read path) and consolidation gains negligible.
+
+Sub-audit A recommended (c) ONE specialized cell with hash-union merge. Dialogue surfaced (d) two-level structure preserving Track 7 per-name cells. **Pre-0 microbench gates the decision** — see §18.12.
+
+#### §18.10.4 FREE_ORDERING work at preparse layer (name-level residuation; out of Phase 4 scope)
+
+Sub-audit C: `docs/tracking/2026-02-28_1800_FREE_ORDERING.md` + `macros.rkt:2366-2460` (`preparse-expand-all`) delivers 3-pass preparse pre-registration:
+- Pass -1: `ns`/`imports` first (forces prelude trait registration)
+- Pass 0: no-dep declarations (data/trait/deftype/defmacro/bundle/property/functor) register registries
+- Pass 1: spec + impl
+- Pass 2: main `process-command` loop
+
+`tools/form-deps.rkt` with tarjan-scc: 121 modules, 907 forms, ZERO module-level cycles in current codebase.
+
+**Honest framing**: this is **PREPARSE-TIME NAME REGISTRATION** (declaration names into registries), NOT propagator-based residuation. Body elaboration still happens sequentially in `process-command`'s loop. Known limitations:
+- impl method bodies can't forward-reference user defns
+- mutual data types `A → B → A` would need intra-bucket topological sort
+- Cross-module cycles audit-confirmed-absent today; no implementation for them
+
+**User direction (2026-05-25)**: *"having an imperative multi-pass parsing would be a regression for the lattice-fixpoint compiler that we hold as our North Star vision. This work should likely also migrate and be updated to our propagator-native approaches. Sounds like work to be done on module-loading on network, though; not in current scope."*
+
+**Phase 4 vs FREE_ORDERING distinction**:
+- FREE_ORDERING: **name-level residuation** (preparse-time; imperative 3-pass)
+- Phase 4: **value-level residuation** (elaboration-time; propagator network)
+
+Both layers compose. Phase 4 does NOT retire FREE_ORDERING; it builds the propagator-native substrate that FREE_ORDERING will eventually migrate to (in module-loading-on-network follow-up work, NOT Phase 4 scope). Captured as scaffolding-with-retirement-plan in §18.5 + DEFERRED.md.
+
+#### §18.10.5 Cross-module mutual recursion + cyclic definitions current state
+
+Sub-audit C trace:
+
+| Case | Current behavior |
+|---|---|
+| `def foo := foo` (self-ref, strict) | Fuel-exhausted error after 1M reduction steps |
+| `def foo := λx. foo x` (self-ref, lazy) | **WORKS** — Track 10 PIR split elaboration design |
+| `def foo := bar; def bar := foo` (mutual, strict) | **BROKEN** — first-form fails at `bar` lookup |
+| `def foo := λx. bar x; def bar := λx. foo x` (mutual, lazy) | **BROKEN** — same first-form problem |
+| Cross-module cycle | **BROKEN** — `loading-set` check at `driver.rkt:1872-1874` raises "Circular dependency detected" |
+
+User's question (2026-05-25): *"should cyclic definitions even be a show-stopping issue on our architecture?"* — Audit-informed answer: **NO**. Phase 4's architectural commitment becomes: cyclic definitions are diagnosed via lattice convergence, not syntactically rejected. See §18.11 for the full principle.
+
+### §18.11 Cyclic definitions handling principle (NEW)
+
+Phase 4's architecture treats cyclic definitions as a **lattice convergence problem**, not a syntactic constraint. The current "Circular dependency detected" error and similar syntactic rejections are scaffolding-with-retirement-plan; the propagator architecture admits a richer treatment.
+
+#### §18.11.1 The principle
+
+Cycles are diagnosed via the natural behavior of the propagator network, NOT via syntactic pre-checks:
+
+1. **Lazy cycles (productive)** — where the cycle involves a constructor or binder that enables lattice fixpoint (recursive function, recursive type μX. F(X), mutually recursive lazy functions): resolve naturally via cell-at-bot waiting → bodies arrive → fixpoint reached. **Works post-Phase-4.**
+
+2. **Strict cycles (unproductive)** — where each cell unconditionally depends on the other reaching a ground value: cells residuate indefinitely; fuel-exhaustion fires; diagnostic surfaces. **Phase 4 + Phase 3C diagnostic chain** produces a clear "cycle without grounding" error.
+
+3. **Cross-module cycles** — currently blocked by `loading-set` check at `driver.rkt:1872-1874`. Post-Phase-4 + PM 12 + module-loading-on-network cooperation, modules' env cells span the same network; cross-module residuation works structurally. **Unblock conditional on module-loading-on-network follow-up work** (not Phase 4 scope).
+
+#### §18.11.2 Why this matters
+
+The propagator architecture has always been a lattice-fixpoint compiler in vision (per parent D.3 §1 thesis + Hyperlattice Conjecture). Syntactic cycle rejection is a workaround from the imperative-loop era. Phase 4 honors the vision: **cycles are SEMANTIC events that the lattice handles**, not syntactic patterns the parser rejects.
+
+This unlocks expressivity for:
+- Mutual recursion (G1-G4 in §18.6) — works
+- Recursive types (μ-types) without explicit annotation
+- Cross-module recursive definitions (post module-loading-on-network)
+- Future PReduce work (where rewrite rules may form cycles to be resolved via fixpoint)
+
+#### §18.11.3 Migration path
+
+| Today | Post-Phase-4 | Post-module-loading-on-network |
+|---|---|---|
+| `loading-set` cycle check rejects module imports | Same; Phase 4 doesn't touch module loading | Cycle check retires; cycle diagnosis via lattice fixpoint |
+| `process-command` sequential loop blocks mutual rec | Phase 4 retires loop; mutual rec works | Same |
+| FREE_ORDERING 3-pass preparse pre-registers names | Same; Phase 4 preserves preparse layer | Preparse migrates to propagator-native cell-write |
+| `reset-meta-store!` per command (network recreate) | Phase 4 replaces with worldview-aid pattern (§18.10.1) | Same |
+
+### §18.12 Pre-0 microbench plan (Q1 variant comparison)
+
+Per Stage 3 "Benchmark as design input" + "Empirical Falsification as Audit Complement" (graduated to DEVELOPMENT_LESSONS.org at Phase 3V), Q1's variant choice is gated on empirical measurement. Plan:
+
+#### §18.12.1 Variants
+
+| Variant | Structure |
+|---|---|
+| **A** | Status quo — parameter authoritative, cells are parallel write target (baseline) |
+| **B** | Single specialized §4.6 cell, hash-union merge, name-keyed within hasheq value |
+| **C** | Single specialized cell + component-paths per name (per-key dependent firing) |
+| **D** | Two-level: registry specialized cell + per-name binding cells (preserve Track 7 Layer-1) |
+
+#### §18.12.2 Workloads
+
+| Workload | Description | Purpose |
+|---|---|---|
+| **W1** | N=10 forms, sequential lookups (small file) | Typical small file perf |
+| **W2** | N=50 forms, sequential lookups (mid file) | Typical mid-size file |
+| **W3** | N=200 forms, sequential lookups (large library) | Scale test |
+| **W4** | N=50 forms, mutual recursion residuation (cells wait at bot, fire on dataflow) | Load-bearing case — Phase 4 thesis |
+| **W5** | Memory: cells allocated + retained bytes after 100-command file | Memory characteristics |
+
+#### §18.12.3 Pre-committed criteria
+
+Per "Empirical Falsification as Audit Complement":
+
+- If B and C within ±20% on W1-W3 → pick simpler (B)
+- If D's two-level read cost > 250 ns on W2 → drop D
+- If memory delta (B vs D) > 2× on W3 → favor B (lower memory)
+- W4 (residuation correctness): all variants must produce same elaboration; perf delta informs choice
+- W5 retained-bytes: variant must show monotonic growth bounded by file size; unbounded growth = drop
+
+#### §18.12.4 Execution
+
+Microbench plan locked at 4A.0 sub-phase open. Pre-0 phase precedes 4A code changes. Results inform variant commitment; results persisted to STEP2_BASELINE-style baseline doc for future reference.
+
+### §18.13 Open question status post-audit
+
+Summary table consolidating §18.7 status post-audit:
+
+| Q | Status | Resolution path |
+|---|---|---|
+| **Q1** Env cell lattice/merge | Variant choice (B/C/D) AWAITS Pre-0 measurement | §18.12 plan; runs at 4A.0 |
+| **Q2** Per-form vs file-global meta state | **LOCKED — Phase 3A worldview-aid pattern at form scope** (replaces network-recreation per §18.10.1) | Detailed mechanism at 4D mini-design |
+| **Q3** Propagators vs stratum handlers | **LOCKED — propagators by default**; stratum handlers only for S(-1) retraction + result emission + topology | 4B implementation detail |
+| **Q4** Cross-module mutual recursion | **LOCKED — cycle handling becomes lattice diagnostic** (§18.11) | Cross-module unblock in module-loading-on-network follow-up (not Phase 4 scope) |
+| **Q5** load-module parameterize block | **LOCKED — out of Phase 4 scope** | Absorbed by module-loading-on-network + PM 12 |
+| **Q6** G8 thesis-falsification rigor | DEFERRED to 4V mini-design | Per scope; not blocking |
+
+Phase 4 sub-phase work can now open (starting with 4A.0 Pre-0 microbench).
+
+### §18.14 Cross-references (renumbered from §18.9; expanded with audit cross-refs)
+
+In addition to §18.9's pre-audit cross-references, audit-informed additions:
+
+- Sub-audit A report — Track 7 Layer-1 + PU/§4.6 + perf (in `agentId: a5775a0ae15af31d7` session output; key findings persisted at §18.10.2 + §18.10.3)
+- Sub-audit B report — `reset-meta-store!` semantics (in `agentId: a96eb4f1383b3b3be` session output; key findings persisted at §18.10.1)
+- Sub-audit C report — PM 10 + FREE_ORDERING + cyclic defs (in `agentId: aa7643ae477cedc24` session output; key findings persisted at §18.10.4 + §18.10.5)
+- `metavar-store.rkt:2843-2917` — `reset-meta-store!` body (75 lines; network-recreation mechanism)
+- `meta-universe.rkt:175-212` — `init-meta-universes!` (universe cell allocation; recreated per `reset-meta-store!`)
+- `global-env.rkt:96, :100, :109-124, :345-360` — Track 7 Layer-1 cells per-name allocation
+- `specialized-cells.rkt:40-80` — §4.6 framework convenience constructors
+- `propagator.rkt:4296-4324` — `compound-cell-component-{ref,write}/pnet` primitives
+- `docs/tracking/2026-02-28_1800_FREE_ORDERING.md` — name-level residuation at preparse (in-scope-for-retirement at module-loading-on-network)
+- `macros.rkt:2366-2460` — `preparse-expand-all` 3-pass (FREE_ORDERING implementation)
+- `tools/form-deps.rkt` — module SCC tool (FREE_ORDERING analysis)
+- `driver.rkt:1872-1874` — `loading-set` cycle check (retires post-module-loading-on-network)
 
 ---
 
