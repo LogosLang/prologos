@@ -224,7 +224,13 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | **3C.d-VAG** | Cumulative cross-sub-step adversarial 3-column VAG. 4 VAG questions × catalogue/challenge/adversarial × 5 sub-steps (3C.d.0/1/2/3/4). All 10 D-3C.d-* drift risks verified cleared adversarially (§9.5.5.14.6). Honest framing surfaced (§9.5.5.14.4 Question (c) adversarial): 3C.d's vision-advancement is METHODOLOGICAL + INFRASTRUCTURE + TRACKING-DEBT-PAYMENT, NOT user-facing (KR-1 user-facing regression preserved through (c) ESCALATE-with-substrate deferral to Phase 11b). | ✅ (this commit) | See §9.5.5.14 for full cumulative VAG. **Phase 3C.d CLOSED end-to-end** — substrate + (β.3.i) integration + skip-gate + DEFERRED + parent row + cumulative VAG all delivered. Full suite **8281 tests / 107.0s / 0 failures** (8273 → 8281, +8; 113.4s → 107.0s, -6.4s; honest framing of "below 109-115s band" as no-regression interpretation). **Codifications**: "Empirical falsification as audit complement" NOW GRADUATION-READY (5 data points); "Audit-precedes-implementation REFRAMING discipline" PROMOTION-READY (3 data points); "ESCALATE-with-substrate" + "Combined locking test + probe artifact" watching-list (1 data point each). Ready for Phase 3C-VAG (cross-arc). |
 | **3C-VAG** | Cross-arc adversarial 3-column VAG (4 sub-phases × 4 VAG questions). All 12 D-3C-* parent drift risks verified cleared adversarially (§9.5.6.5). KR-1/2/3 named drift handoff to Phase 11b coherence verified across 8 cross-link sites (§9.5.6.6). User-facing behavior matrix documented including KR-1 regression naming (§9.5.6.7). | ✅ (this commit) | See §9.5.6 for full cross-arc VAG. **Phase 3C CLOSED end-to-end** — primitive + 2 consumers + sexp bridge + tracking-debt substrate + cumulative cross-arc VAG all delivered. Cross-track captures coherent for Phase 11b / PM Track 12 / PPN Track 4D / SH Track 1 / PReduce Track 6 / OE Track 4 inheritance. **Codifications**: "Empirical falsification as audit complement" GRADUATION-READY (5 data points; defer to user); "Audit-precedes-implementation REFRAMING discipline" PROMOTION-READY (3 data points; graduates at 4th); "ESCALATE-with-substrate" + "Combined locking test + probe artifact" + "Honest scope-down progression" watching-list. Ready for Phase 3V (cumulative Phase 3 VAG across 3A + 3B + 3C). |
 | 3V | Vision Alignment Gate Phase 3 (cumulative cross-PHASE across 3A + 3B + 3C) | ✅ `f947b30d` | **CLOSED 2026-05-25 per §9.6 expanded** (commit `f947b30d`). 4 VAG questions × 3 columns × cross-PHASE all pass adversarially (§9.6.2-5). All 6 cross-PHASE drift risks D-3V-1..6 cleared (§9.6.5). Cross-phase coherence verified (§9.6.7) — 3A + 3B + 3C compose through cell state with no cross-sub-phase coupling debt. Cross-PHASE methodology drift surfaced (§9.6.6) — "Audit-precedes-implementation REFRAMING discipline" earned 4th data point. Cumulative cross-track captures consolidated (§9.6.9) — 12+ consumer tracks. **2 codifications GRADUATED to DEVELOPMENT_LESSONS.org** (§9.6.10): "Empirical falsification as audit complement" (5 data points) + "Audit-precedes-implementation REFRAMING discipline" (4 data points). 2 inherited-from-3A codifications DEFERRED to addendum capstone PIR. Phase 3 reflection (§9.6.11) synthesizes achievements + forward-enables + PPN 4 charter fit; substrate-heavy / user-facing-light honest framing. Phase 4 bridge specified at INTERFACE level (§9.6.12) — addendum vs parent track Phase 4 distinction explicit. Suite gate inherited from 3C-VAG (8281 / 107.0s / 0). **Phase 3 CLOSED end-to-end.** Phase 4 paused per user direction. |
-| **4** | **Top-level orchestration unification — retire `process-command` sequential loop** | ⬜ | Designed at phase open per addendum methodology. Tracking [#22](https://github.com/LogosLang/prologos/issues/22). Motivating use case: mutual recursion ([PR #14](https://github.com/LogosLang/prologos/pull/14)). Gates on Phase 1 (tropical fuel) + Phase 2 (in-form strata) close. Sub-phases (4A, 4B, 4V) populated at phase open. |
+| **4** | **Top-level orchestration unification — retire `process-command` sequential loop** | 🔄 (mini-design persisted) | **MINI-DESIGN OPENED 2026-05-25** — pre-implementation architectural sharpening persisted at §18 post-3V close. T1/T2/T3 audit findings consolidated; thesis sharpened (residuation == cell-at-bot waiting identity; flip-the-read-path as load-bearing move; specialized cells as migration vocabulary). Sub-phase partition revised to **6 sub-phases (4A/4B/4C/4D/4E/4V)** per audit-driven scope expansion. PM Track 12 boundary clarified (§18.5). G1-G10 empirical battery sketched (§18.6). 8 drift risks D-4-1..8 named (§18.8). 6 open architectural questions (§18.7) for continued dialogue before sub-phase work commits. Tracking [#22](https://github.com/LogosLang/prologos/issues/22). Motivating use case: mutual recursion ([PR #14](https://github.com/LogosLang/prologos/pull/14)). Gates on Phase 1 ✅ + Phase 2 ✅ + Phase 3 ✅ all met. |
+| 4A | `current-prelude-env` migration (the flip) — specialized cell + read-path flip | ⬜ | Sub-phase per §18.4 partition. Prerequisite to 4B. ~150-300 LoC. Gate: cell IS source of truth (parameter snapshot or retired). |
+| 4B | Top-level form processing as installable propagators (replace 35 match arms) | ⬜ | Sub-phase per §18.4 partition. Depends on 4A. ~400-700 LoC. Gate: all form kinds elaborate; spec→defn residuation works. |
+| 4C | Retire 4 sequential caller loops | ⬜ | Sub-phase per §18.4 partition. Depends on 4B. ~100-200 LoC. Gate: G1-G4 mutual recursion gates pass. |
+| 4D | `reset-meta-store!` retirement — per-form or file-global meta scope | ⬜ | Sub-phase per §18.4 partition. Architectural question (§18.7 #2) needs resolution before sub-phase work. ~100-200 LoC. |
+| 4E | Result emission protocol | ⬜ | Sub-phase per §18.4 partition. ~100-150 LoC. Forward-enables PPN Track 8 + SH Track 1. |
+| 4V | Phase 4 cumulative cross-arc adversarial 3-column VAG + G1-G10 battery | ⬜ | Sub-phase per §18.4 partition. ~150-200 LoC docs. Gate: thesis falsification (zero sequential elaboration orchestrators). |
 | V | Capstone + PIR | ⬜ | |
 
 ---
@@ -9437,6 +9443,179 @@ Per user direction: phase-specific questions deferred to mini-design at phase st
 - [`.claude/rules/propagator-design.md`](../../.claude/rules/propagator-design.md)
 - [`.claude/rules/stratification.md`](../../.claude/rules/stratification.md)
 - [`.claude/rules/structural-thinking.md`](../../.claude/rules/structural-thinking.md)
+
+---
+
+## §18 Addendum Phase 4 — Top-Level Orchestration Unification (mini-design pre-implementation)
+
+Opened 2026-05-25 per Stage 4 Per-Phase Protocol step 1 (mini-design). Persists architectural sharpening from pre-implementation dialogue (T1 PPN Tracks 1-3 prior-art audit + T2 `driver.rkt::process-command` code audit + T3 mempalace prior-dialogue search) before sub-phase work begins.
+
+**Naming note**: this section covers **ADDENDUM Phase 4** (top-level orchestration retirement). Distinct from §14 "Phase 4 β2 substrate contract" which covers **PARENT TRACK Phase 4** (A2 CHAMP retirement). The two Phase 4s have distinct charters; §9.6.12 enumerates the distinction in detail.
+
+### §18.1 Charter (what Phase 4 IS — concrete)
+
+Per addendum §1.2 + §9.6.12, Phase 4 retires `process-command`'s sequential top-level form loop in `driver.rkt`. Four named deliverables:
+
+1. **Per-form-type processing as BSP stratum handlers / propagators** — each top-level form kind becomes installable on the network (paralleling Phase 2's in-form retirement pattern)
+2. **Top-level names register as cell writes** — currently parameter-hash mutation via `current-prelude-env`; post-Phase-4 cell-write via §4.6 specialized cell
+3. **Mutual recursion emergent from cell architecture** — residuation falls out of cell-at-bot waiting; no topology stratum needed for ordering
+4. **Coordination with PM Tracks 10 + 12** — PM 10 done; PM 12 boundary clarified at §18.5
+
+Tracking: [#22](https://github.com/LogosLang/prologos/issues/22). Motivating use case: [PR #14](https://github.com/LogosLang/prologos/pull/14) (kumavis pitfall #4 — mutual recursion).
+
+### §18.2 Architectural thesis (sharpened post-dialogue)
+
+The original §1.2 phrasing — *"Topology-phase semantics: top-level names register into cells before any body elaborates"* — smuggles in 2-pass thinking. "Before" is sequential framing dressed in cell vocabulary; the mantra check fails on that sentence. The sharpened thesis post-dialogue:
+
+> **Phase 4's core architectural move is to flip the read path for `current-prelude-env` (and the small set of top-level state) through specialized cells; the parameter becomes the snapshot, the cell becomes authoritative. Once the cell is authoritative, residuation falls out of cell-at-bot waiting — no new mechanism. The sequential `for/list` retires because there's no longer a reason to sequence: each `def` writes its cell; bodies that reference other names residuate at cell-at-bot until the dataflow completes.**
+
+Grounded in three findings:
+
+1. **Residuation == cell-at-bot waiting (formal identity)** — per `2026-03-26_KAN_EXTENSIONS_ATMS_GFP_PARSING.md`: *"Residuation IS the propagator waiting-for-information pattern. This is not an analogy — it's an identity... No special 'residuation' mechanism needed for PPN — it's the standard cell-at-bot behavior."*
+
+2. **Current state has dual-path with parameter-authoritative** (T2 audit): `global-env-add` (`global-env.rkt:243`) writes BOTH the `current-prelude-env` parameter hash AND a Layer-1 cell, but `global-env-lookup-*` reads through `hash-ref` on the parameter, not `net-cell-read`. The cell exists; it's a parallel write target, NOT the source of truth. **This is the load-bearing entanglement; flipping it is the architectural move.**
+
+3. **§4.6 specialized cells are the migration vocabulary** (Tropical Quantale Addendum) — declare `:tier 'hot` + `:storage 'champ` + `:fires-on` + `:on-write-check` + `:merge-fn` (cached); the cell mechanism handles the rest. No PM Track 12 dependency; no parallel migration framework.
+
+### §18.3 Pre-implementation audit findings
+
+**T1 (PPN Tracks 1-3 prior-art audit)** — substrate is ~30% present, residuation wiring is conspicuously absent:
+
+Inherited substrate:
+- Per-top-level-form cells on elab-network (Track 3 Phase 6) ✓
+- Spec cells with set-once-or-top merge (Track 3 Phase 3a, `form-cells.rkt:405-470`) ✓
+- Cell-based namespace/trait/global-env registries (Track 7) ✓
+
+Phase 4 must invent:
+- Defn propagators that READ spec/env cells and RESIDUATE on cell-at-bot
+- Cell as authoritative read source (not parallel write target)
+- Removal of `reset-meta-store!` between commands OR per-form meta universe
+- Replacement of `(for/list ([surf ...]) (process-command surf))` with install-all-at-once pattern
+
+Key prior-art quotes:
+- Track 3 design §1125: *"Keep two-pass for Track 3 as algorithmic scaffolding. Track 4 replaces it with cell-mediated dependency (spec cell → defn propagator). Flag as red flag in the design."*
+- Track 2B PIR §7: *"The merge is imperative scaffolding... Track 3-4 replaces the scaffolding with shared cells and propagator firing."*
+- Track 3 PIR §15: *"the surf production path uses datum conversion, not lattice-based information flow. The lattice infrastructure's value is for Track 4+ (elaboration), not for parsing itself."*
+
+**Phase 4 IS the deferred work the parser-on-network tracks explicitly named.**
+
+**T2 (`process-command` code audit)** — scope shape:
+- `process-command` is ~602 LoC at `driver.rkt:451`, 35 match arms — NOT thin dispatch
+- 4 caller sites all sequential `for/list`: `process-string-inner:1532`, `process-surfs:1730`, `process-file-inner:1801`, `load-module:2103`
+- ~19 `global-env-add*` calls write `current-prelude-env`
+- `current-prelude-env` defined at `global-env.rkt:80` as `make-parameter (hasheq)` — the parameter-as-source-of-truth anti-pattern
+- Downstream: `process-def` + `process-def-group` add ~600 more LoC of orchestration
+- `reset-meta-store!` at `process-command` entry (driver.rkt:457) — explicit sequential discipline
+
+**Honest scope read**: the SEQUENTIAL LOOP retirement is shallow (~4 sites; mechanical); the PARAMETER-TO-CELL FLIP for env is the deep work; the 35 match arms migrating to propagator-install pattern is mechanical-but-substantial.
+
+**T3 (mempalace prior-dialogue search)** — vindicates the reframe:
+- Residuation-as-cell-waiting identity claim (cited §18.2 above)
+- Phase 2A.0 precursor (current dailies): *"new cells follow §4.6 specialized cell type framework declarations (don't add legacy-shaped cells for PM 12 to migrate)"* — confirms vocabulary direction
+- PM Track 12 design input — dual-storage pattern noted as "decorative wrapping" until parameter retires; the dual-path IS the issue
+
+### §18.4 Revised sub-phase partition (post-dialogue)
+
+The original §3 row 227 reserved "Sub-phases (4A, 4B, 4V) populated at phase open." Audit-driven refinement per user direction *"we may need to sub-phase further, if scope demands. This is important work, so we should expand to what is needed"*:
+
+| Sub-phase | Charter | Est. LoC | Acceptance gate |
+|---|---|---|---|
+| **4A** | `current-prelude-env` migration (the flip) — declare §4.6 specialized cell; flip `global-env-lookup-*` reads to `net-cell-read`; retire dual-path; parameter becomes snapshot or retires | ~150-300 | Single-form lookups still work; suite stable; cell IS source of truth |
+| **4B** | Top-level form processing as installable propagators (replace 35 match arms) — per-form-kind propagator factory; spec→defn residuation works | ~400-700 | All form kinds elaborate; spec cells residuate correctly |
+| **4C** | Retire 4 sequential caller loops — replace `(for/list ([surf ...]) (process-command surf))` with all-at-once install pattern at 4 sites | ~100-200 | Mutual recursion works end-to-end (G1-G4) |
+| **4D** | `reset-meta-store!` between-command retirement — per-form meta scope via worldview tagging OR per-form meta universe | ~100-200 | Meta state per top-level-form coherent under Phase 1 universe model |
+| **4E** | Result emission protocol — per-command result cells; consumers drain; forward-enables PPN Track 8 + SH Track 1 | ~100-150 | `process-string` round-trip identical; result accumulation works |
+| **4V** | Cumulative cross-arc adversarial 3-column VAG + G1-G10 battery — verify thesis: zero sequential elaboration orchestrators remain | ~150-200 docs | All G1-G10 gates pass |
+
+**Total estimated**: ~1000-1750 LoC + extensive testing. **Significantly larger than the original 4A/4B/4V outline** — confirms scope expansion direction.
+
+**Sub-phase ordering rationale**: 4A (cell becomes authoritative) is prerequisite to 4B (propagators read cell). 4B+4C together deliver mutual recursion. 4D resolves cross-form meta state. 4E cleans up result emission for downstream consumers. 4V is the cumulative close.
+
+**Partition is provisional** — per Stage 4 conversational implementation cadence + audit-driven scope expansion discipline, sub-phases may further sub-divide as their own mini-designs surface findings. The 6-sub-phase shape captures current architectural understanding; mini-audits at each sub-phase open may refine.
+
+### §18.5 PM Track 12 boundary clarification
+
+Phase 4 brings the PARAMETERS PHASE 4 NEEDS onto §4.6 specialized cells. PM Track 12 retains scope for everything else.
+
+**In Phase 4 scope** (migrate to specialized cells):
+- `current-prelude-env` — top-level definitions hash; the BIG ONE; ~19 writes from `process-command` + `process-def`
+- `current-ns-context` — namespace stack
+- `current-prelude-env-prop-net-box` — retired entirely; the partial-migration dual-path no longer needed
+- Possibly `current-relation-store` (if `defr` mutual recursion is in scope)
+
+**In PM Track 12 scope** (stays PM 12):
+- `current-impl-registry`, `current-trait-registry`, `current-param-impl-registry`
+- `current-spec-store`, `current-subtype-registry`, `current-coercion-registry`
+- `current-capability-registry`, `current-bundle-registry`
+- `current-property-store`, `current-functor-store`, `current-tycon-arity-extension`
+- `current-specialization-registry`, `current-multi-defn-registry`
+- `current-preparse-registry`, `current-ctor-registry`, `current-type-meta`
+- ~18 total registry parameters used by `load-module`'s parameterize block
+
+**Principle**: Phase 4 migrates ONLY what's load-bearing for top-level orchestration retirement + mutual recursion via cell residuation. PM 12 owns the rest. Each migration is a §4.6 declaration; PM 12's migration vocabulary IS Phase 4's vocabulary; no parallel framework.
+
+### §18.6 Empirical testing battery (G1-G10)
+
+Per "Empirical Falsification as Audit Complement" codification (graduated to DEVELOPMENT_LESSONS.org at Phase 3V), Phase 4 deserves multiple falsification anchors with pre-committed criteria:
+
+| Gate | What it tests | Pre-commit criterion |
+|---|---|---|
+| **G1** | PR #14 mutual recursion | acceptance file with `def foo := bar / def bar := foo`-like pattern elaborates without error |
+| **G2** | Forward + backward references | acceptance file where `def a := f b` precedes AND follows `def b := ...` elaborates identically |
+| **G3** | Self-reference (recursive defs) | `def fact := λn. if n=0 then 1 else n * fact(n-1)` |
+| **G4** | N-form mutual recursion chains | `def a := b; def b := c; def c := a` (and longer chains) |
+| **G5** | Mutual recursion across modules | per PM 10 capabilities; design open |
+| **G6** | Full suite stability | 8281 stays or improves |
+| **G7** | Performance | A/B vs `cc25ec9b` baseline; pre-commit ±N% acceptable |
+| **G8** | Thesis falsification — zero sequential elaboration orchestrators | grep audit; every `for/fold` / `let loop` in elaboration path either retired or labeled scaffolding-with-target |
+| **G9** | `.pnet` serialization preview | network self-describing including top-level (SH Track 1 forward) |
+| **G10** | Incremental editing preview | edit one command, only affected re-elaborates (PPN Track 8 forward) |
+
+G1-G4 are correctness gates. G5 is cross-track integration. G6-G7 are regression gates. G8 is the thesis falsification (existential claim). G9-G10 are forward-enables previews (not blocking).
+
+Battery is provisional — refined per sub-phase mini-design with concrete acceptance files + measurement protocols.
+
+### §18.7 Open architectural questions (for further dialogue)
+
+Architectural shape is sharper; these questions remain open and warrant continued dialogue before sub-phase work commits:
+
+1. **Env cell lattice/merge semantics** — hash-union with what name-collision behavior? Last-write-wins (re-define semantics), contradiction-on-collision (purity), or specialized merge? Affects re-bind / shadowing.
+
+2. **Per-form-or-global meta state (4D's question)** — per top-level-form (each form gets a worldview bit; metas tagged per form) OR file-global (no `reset-meta-store!`; metas accumulate across the file). Residuation framing suggests file-global; isolation arguments suggest per-form. Big architectural choice.
+
+3. **35 match arms → propagators vs stratum handlers** — each form kind handler is registered via `register-stratum-handler!` (Phase 2 pattern), OR per-form-kind propagator-install (form cell → handler fires). Sub-phase 4B mini-design item.
+
+4. **Cross-module mutual recursion (G5)** — design open; depends on PM 10's module loading interaction.
+
+5. **`load-module`'s ~18 parameterize block** — separate call path with its own `for/list`. Likely PM 10 scope; coordination needed.
+
+6. **G8 thesis-falsification rigor** — "zero sequential elaboration orchestrators" needs precise definition. What counts as "elaboration path"? What's the grep criterion?
+
+### §18.8 Drift risks named at mini-design open
+
+For mid-flight principles challenge:
+
+- **D-4-1** — *Conflating two Phase 4s* — addendum Phase 4 vs parent track Phase 4. §9.6.12 + §18 lead-paragraph distinguish; vigilance during sub-phase mini-audits when reading `driver.rkt`.
+- **D-4-2** — *Mutual recursion as framing vs test* — PR #14 is the test case (G1); Phase 4's substrate is what makes the test pass. Don't let "make mutual recursion work" narrow scope to tactical fix.
+- **D-4-3** — *Sequential `for/fold` temptation in handler bodies* — when implementing per-form-kind handlers, watch for "for each pending command of this kind, do X" pattern. Sequential orchestration in handler shape defeats purpose.
+- **D-4-4** — *Driver-as-bootstrap vs driver-as-orchestrator* — post-Phase-4, `driver.rkt` should be BOOTSTRAP (allocate initial network; feed top-level forms; drive BSP to quiescence). NOT ORCHESTRATOR (per-command dispatch + result collection). Honest line-drawing.
+- **D-4-5** — *Scope creep into PM 12 / parent Phase 4* — addendum Phase 4 scoped to top-level orchestration retirement + minimal env-cell migration; PM 12 / parent Phase 4 are coordinated tracks, not absorbed scope.
+- **D-4-6** — *Dual-path completion* — flipping the read path means the cell becomes authoritative AND the parameter becomes snapshot OR retires. Both halves required; otherwise dual-path persists.
+- **D-4-7** — *Per-form-or-global meta state premature commitment* — 4D's architectural choice should be made via mini-design dialogue + Pre-0 probe, not assumed by 4A/4B implementation. Risk of locking in via implementation before architectural commitment.
+- **D-4-8** — *G8 thesis-falsification rigor* — "zero sequential elaboration orchestrators" needs precise definition pre-commit at 4V mini-design.
+
+### §18.9 Cross-references
+
+- Addendum §1.2 (Phase 4 scope item) + §3 row 227 (tracker; will sub-divide post-mini-design) + §9.6.12 (Phase 4 bridge from 3V; addendum-vs-parent-Phase-4 distinction)
+- Parent D.3 §6.10 + §6.11.3 (Phase 9+10+11 charter; addendum Phase 4 is the addendum's final substantive sub-phase)
+- §4.6 specialized cell framework (Tropical Quantale Addendum) — migration vocabulary
+- `2026-03-26_KAN_EXTENSIONS_ATMS_GFP_PARSING.md` — residuation-as-cell-waiting identity claim (load-bearing)
+- `driver.rkt:451` + `global-env.rkt:80,243` — code-grounded targets per T2 audit
+- `form-cells.rkt:405-470` — spec cell infrastructure (T1 audit attachment point)
+- `2026-04-01_PPN_TRACK3_DESIGN.md:1123-1125` — the Track 4 deferred-work paragraph (Phase 4 IS that deferred work)
+- DEVELOPMENT_LESSONS.org § "Empirical Falsification as Audit Complement" — G1-G10 battery discipline source
+- DEVELOPMENT_LESSONS.org § "Audit-Precedes-Implementation REFRAMING Discipline" — informs §18.2 sharpening from §1.2 original
+- DEVELOPMENT_LESSONS.org § "Validated Is Not Deployed — Flip the Switch or Delete the Parameter" — informs dual-path-completion drift risk D-4-6
 
 ---
 
