@@ -1,0 +1,168 @@
+#+TITLE: Standup — 2026-05-26
+#+DATE: 2026-05-26
+
+* Yesterday (since 2026-05-17 standup)
+
+A 9-day interval (calendar; many active sessions). ~155 commits across the
+arc closing **PPN 4C addendum Phase 2 + Phase 3 entirely** with cumulative
+VAGs, plus **opening Phase 4 mini-design** with audit-informed architectural
+commitments. The remaining addendum work has gone from "Phase 1 close" to
+"Phase 4 sub-phase work ready to begin" in this interval — substantial
+charter progress.
+
+** PPN 4C addendum Phase 2 — Orchestration Unification CLOSED ✓
+
+Phase 2 retired the elaborator's sequential ~run-stratified-resolution-pure~
+orchestrator in favor of BSP scheduler stratum handlers. Three sub-phase
+arcs (2A.0 through 2A.c → 2B → 2V).
+
+*** Cumulative metrics
+
+- Net production retirement: ~200 LoC scaffolding retired
+- Suite delta: +8 tests / −1.7s wall vs pre-Phase-2 baseline
+- 6 functions + 3 parameters + 7 provides retired
+- 2 new BSP stratum cells + handlers (retraction + resolution strata)
+- 3 parity axes added (orchestration parity validated cross-arc)
+- Charter complete: BSP outer-loop is sole orchestration for in-form work
+
+*** Codifications graduation-ready at addendum PIR
+
+- Adversarial 3-column framing matures across the arc
+- Audit-driven scope expansion (4 data points)
+
+** PPN 4C addendum Phase 3 — Union Types via ATMS + Hypercube + Residuation CLOSED ✓
+
+Phase 3 delivered the substrate for ATMS branching at the elaboration layer
+via **Realization B** (in-place worldview tagging on shared carrier — NOT
+fork-and-rejoin) plus the first-increment Propagator-First Diagnostics. Four
+sub-phase arcs (3A + 3B + 3C + 3V cumulative).
+
+*** Phase 3A — Fork-on-union basic mechanism
+
+Union types via ATMS branching delivered. **Realization B** chosen over
+fork-and-rejoin (BSP-LE 2/2B Module Theory direct-sum pattern at branch
+scope). R7 reframe centralized inline-emit at ~type-map-write~ API for
+composition gain. ~elab-speculation.rkt~ (576 LoC) retired; off-network
+surface reduced by ~706 LoC net.
+
+*** Phase 3B — Hypercube integration (documented-defer)
+
+M0 substrate fix (~#:mutual-exclusion?~ keyword on ~solver-amb~) + 3B.B
+(Gray-code) documented-defer per pre-committed §9.4.1.6 falsification
+criteria. A/B measurement: ALL DELTAS WITHIN ±1.5%; Hyperlattice Conjecture's
+CHAMP-sharing claim **bounded mechanism-coupled** (not refuted broadly) —
+applies to fork-and-rejoin; does NOT transfer to Realization B's in-place
+tagging. Honest framing: bounded, not refuted. M1+M3 deferred to Track 4D.
+
+*** Phase 3C — Residuation error-explanation
+
+**Propagator-First Diagnostics first-increment**. Reusable
+~static-reverse-walk~ primitive + two downstream consumers
+(~derivation-chain-for/union-contradict~ + ~derivation-chain-for/union-check~)
++ sexp-bridge for annotated unions + W1 srcloc wiring. Chain field type
+FLIPPED to ~(listof derivation-chain)~ LSP-ready. **KR-1/2/3 named drift**
+escalated to Phase 11b via bidirectional cross-link substrate (canary +
+DEFERRED + parent D.3 row + 3C.d.3a empirical probe artifact).
+
+*** Phase 3V — Cumulative Phase 3 VAG
+
+Cross-PHASE adversarial 3-column VAG across 3A + 3B + 3C composition.
+Phase 3 charter delivered per §9.5.A Form C + parent D.3 §6.10 + §6.11.3 at
+honestly-revised scope (substrate-heavy; user-facing-light; hypercube bounded
+mechanism-coupled). Honest reflection persisted at §9.6.11 — substrate
+retirement (~706 LoC) + Correct-by-Construction replacement of
+~with-speculative-rollback~ with Realization B + Conjecture honest refinement.
+
+**2 codifications graduated to DEVELOPMENT_LESSONS.org**:
+- Empirical Falsification as Audit Complement (5 data points)
+- Audit-Precedes-Implementation REFRAMING Discipline (4 data points — 4th
+  earned at 3V mini-audit)
+
+2 inherited codifications (Stranded high-level abstraction; Multi-axis
+discriminating coverage) deferred to addendum capstone / PIR.
+
+** PPN 4C addendum Phase 4 — Mini-design OPENED with audit-informed commitments
+
+Phase 4 (Top-Level Orchestration Unification) opened conversationally post-3V.
+Pre-implementation architectural sharpening persisted to addendum §18.1-§18.9.
+User direction: explore "what Phase 4 IS / WANTS TO BE / charter fit / project
+fit"; subsequently invited delegation for audits + mempalace semantic search.
+
+*** Three parallel sub-audits
+
+- Sub-audit A — Track 7 Layer-1 cell structure + cell count + PU/§4.6
+  framework + perf characteristics
+- Sub-audit B — ~reset-meta-store!~ semantics
+- Sub-audit C — PM 10 + library/book FREE_ORDERING form-level work +
+  cross-module mutual recursion + cyclic definition handling
+
+*** Headline finding (Audit B)
+
+~reset-meta-store!~ at ~metavar-store.rkt:2868~ executes ~(set-box! net-box
+(make-elaboration-network))~ — REPLACES the entire elaboration network per
+command. Universe cells (Phase 1 S2.* "source-of-truth") are recreated
+brand-new on the fresh network. Naive "drop reset" is NOT safe.
+
+**Audit-aligned answer**: replace network-recreation with **Phase 3A
+worldview-aid pattern at form scope** — per-form aid; failed forms retract
+via S(-1); successful forms commit. Structurally identical to Phase 3A's
+branch mechanism, just at the cross-form layer. The "Audit-Precedes-
+Implementation REFRAMING Discipline" codification (just graduated at 3V)
+earned its 6th data point here.
+
+*** Architectural commitments (5 of 6 LOCKED post-audit)
+
+- **Q1** (env cell variant) — AWAITS Pre-0 microbench (§18.12 plan; 4
+  variants A/B/C/D × 5 workloads × pre-committed criteria)
+- **Q2** (per-form meta state) — LOCKED at Phase 3A worldview-aid pattern at
+  form scope
+- **Q3** (propagators vs stratum handlers) — LOCKED at propagators-by-default
+- **Q4** (cross-module mutual recursion) — LOCKED at cycle handling becomes
+  lattice diagnostic (§18.11 principle); cross-module unblock is
+  module-loading-on-network follow-up (NOT Phase 4 scope)
+- **Q5** (load-module parameterize block) — LOCKED at out-of-Phase-4-scope
+- **Q6** (G8 thesis-falsification rigor) — DEFERRED to 4V mini-design
+
+*** Architectural commitments codified
+
+- **Cyclic definitions handling principle** (§18.11) — cycles diagnosed via
+  lattice convergence, NOT syntactically rejected. Lazy cycles resolve via
+  fixpoint; strict cycles diagnose as fuel-exhaustion. Vision-aligned with
+  parent D.3 §1 lattice-fixpoint compiler thesis.
+- **FREE_ORDERING migration** captured as DEFERRED.md entry for
+  module-loading-on-network follow-up. Per user direction: "having an
+  imperative multi-pass parsing would be a regression for the lattice-fixpoint
+  compiler that we hold as our North Star vision."
+
+*** Sub-phase partition expanded
+
+Original 4A/4B/4V outline expanded to **7 sub-phases** (4A.0 Pre-0 →
+4A → 4B → 4C → 4D → 4E → 4V) per audit-driven scope expansion + user
+authorization. Total estimated scope ~1000-1750 LoC + extensive testing.
+
+** Suite + runtime state at session close
+
+- HEAD: ~951a72f0~ (backfill on ~fbb1206c~ Phase 4 audit-informed
+  commitments)
+- Tests: 8281 / 107.0s / 0 failures (suite stable across Phase 2 + Phase 3
+  + Phase 4 mini-design; no .rkt changes since 3C-VAG gate ~cc25ec9b~)
+
+
+* Today
+
+Phase 4 sub-phase work can now open at **4A.0 (Pre-0 microbench)** — gates
+the Q1 env-cell variant decision. Per the Pre-0 plan at §18.12:
+
+- 4 variants (A/B/C/D — status quo / mega-cell / mega-cell+component-paths
+  / two-level)
+- 5 workloads (W1-W5 covering small/mid/large file + mutual rec residuation
+  + memory)
+- Pre-committed criteria gate the decision
+
+Sub-phase order: **4A.0 (Pre-0) → 4A (env-cell flip) → 4B (propagators
+replace 35 match arms) → 4C (sequential loop retirement) → 4D (Phase 3A
+worldview-aid pattern at form scope) → 4E (result emission protocol) → 4V
+(cumulative VAG)**.
+
+Natural pause point at any sub-phase boundary; mini-design at each
+sub-phase open per Stage 4 Per-Phase Protocol.
