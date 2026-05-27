@@ -1,0 +1,51 @@
+
+=== W1/W2/W3 — READ MEASUREMENT ===
+(measuring lookup of name at index N/2; 100k iterations/measurement)
+
+--- Workload N=10 forms ---
+  A.read N=10 (2× parameter-ref + hash-ref): 32.5 ns/call (100000 calls)
+  B.read N=10 (cell-read + hash-ref): 47.5 ns/call (100000 calls)
+  D.read N=10 (2× cell-read + hash-ref): 65.3 ns/call (100000 calls)
+
+--- Workload N=50 forms ---
+  A.read N=50 (2× parameter-ref + hash-ref): 32.8 ns/call (100000 calls)
+  B.read N=50 (cell-read + hash-ref): 46.3 ns/call (100000 calls)
+  D.read N=50 (2× cell-read + hash-ref): 107.3 ns/call (100000 calls)
+
+--- Workload N=200 forms ---
+  A.read N=200 (2× parameter-ref + hash-ref): 39.7 ns/call (100000 calls)
+  B.read N=200 (cell-read + hash-ref): 44.0 ns/call (100000 calls)
+  D.read N=200 (2× cell-read + hash-ref): 110.6 ns/call (100000 calls)
+
+=== W1/W2/W3 — SETUP-TIME MEASUREMENT ===
+(measuring construction of N-form env from scratch; 1000 iterations)
+
+--- Workload N=10 forms setup ---
+  A.setup N=10 (parameter hash fold): 5343.0 ns/call (1000 calls)
+  B.setup N=10 (1 cell-register + N cell-writes): 17182.1 ns/call (1000 calls)
+  D.setup N=10 (1+N cell-registers + 1 reg-write): 18379.2 ns/call (1000 calls)
+
+--- Workload N=50 forms setup ---
+  A.setup N=50 (parameter hash fold): 27992.9 ns/call (1000 calls)
+  B.setup N=50 (1 cell-register + N cell-writes): 56371.8 ns/call (1000 calls)
+  D.setup N=50 (1+N cell-registers + 1 reg-write): 78814.9 ns/call (1000 calls)
+
+--- Workload N=200 forms setup ---
+  A.setup N=200 (parameter hash fold): 119977.8 ns/call (1000 calls)
+  B.setup N=200 (1 cell-register + N cell-writes): 207859.9 ns/call (1000 calls)
+  D.setup N=200 (1+N cell-registers + 1 reg-write): 253541.0 ns/call (1000 calls)
+
+=== W5 — MEMORY (alloc + retain for N=100 setup) ===
+(median of 10 runs; retained measured post-GC)
+
+  A.mem N=100 (parameter hash): wall=0.109 ms  alloc=95.2 KB  retain=0.5 KB  (n=10)
+'#(0.109130859375 97520 480)
+  B.mem N=100 (1 cell + hasheq value): wall=0.187 ms  alloc=169.9 KB  retain=0.5 KB  (n=10)
+'#(0.18701171875 174016 472)
+  D.mem N=100 (1+N cells + registry): wall=0.219 ms  alloc=270.4 KB  retain=0.5 KB  (n=10)
+'#(0.218994140625 276880 488)
+
+=== END OF MEASUREMENT ===
+Per §18.12.3 criteria-as-guidance: review measurements together;
+decide variant aligned with principles, not strict pass/fail gates.
+
