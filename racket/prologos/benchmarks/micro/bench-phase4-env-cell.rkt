@@ -58,11 +58,27 @@
          (only-in "../../propagator.rkt"
                   make-prop-network
                   net-cell-read
-                  net-cell-write)
+                  net-cell-write
+                  ;; Audit-driven additions (2026-05-26 session):
+                  net-add-propagator
+                  run-to-quiescence
+                  compound-cell-component-ref/pnet
+                  compound-cell-component-write/pnet)
          (only-in "../../specialized-cells.rkt"
                   net-register-specialized-cell)
          (only-in "../../infra-cell.rkt"
-                  merge-hasheq-replace))
+                  merge-hasheq-replace)
+         ;; Production-faithful Variant A — uses real global-env-lookup-type
+         ;; (per audit finding 1: bench's variant-a-lookup-realistic is OPTIMISTIC
+         ;; vs production; omits Layer 3 + dep-recording + current-elaborating-name)
+         (only-in "../../global-env.rkt"
+                  current-prelude-env
+                  current-module-definitions-content
+                  current-definition-cells-content
+                  current-elaborating-name
+                  current-definition-dependencies
+                  current-cross-module-deps
+                  global-env-lookup-type))
 
 ;; ============================================================
 ;; TIMING INFRASTRUCTURE
@@ -265,6 +281,193 @@
 (bench-mem "D.mem N=100 (1+N cells + registry)" 10
            (variant-d-setup 100))
 
+;; ============================================================
+;; PRODUCTION-FAITHFUL VARIANT A (uses real global-env-lookup-type)
+;; ============================================================
+;; Audit finding 1 (2026-05-26 session): variant-a-lookup-realistic above is
+;; OPTIMISTIC vs production. Production global-env-lookup-type (global-env.rkt
+;; :192-213) has 3-layer cascade (current-definition-cells-content → current-
+;; module-definitions-content → current-prelude-env) + current-elaborating-name
+;; param-read + record-definition-dependency! side-effect when set.
+;;
+;; Two scenarios:
+;;   A-prod-no-elab — current-elaborating-name = #f (no dep-recording overhead)
+;;   A-prod-with-elab — current-elaborating-name = some-name (production reality
+;;                       during defn-body elaboration; dep-recording active)
+;;
+;; Layer-1 hit is the apples-to-apples comparison with B/C/D (all populate
+;; their authoritative store with N entries; lookup hits on first layer).
+
+(define (variant-a-prod-setup N)
+  (define names (gen-names N))
+  (define env (for/fold ([h (hasheq)]) ([n names] [i (in-naturals)])
+                (hash-set h n (gen-entry i))))
+  (values names env))
+
+(printf "\n=== W1/W2/W3 — PRODUCTION-FAITHFUL VARIANT A ===\n")
+(printf "(real global-env-lookup-type; 3-layer cascade; with/without dep-recording)\n")
+
+(for ([N (in-list '(10 50 200))])
+  (printf "\n--- Workload N=~a forms (Layer 1 hit) ---\n" N)
+
+  (define-values (a-names a-env) (variant-a-prod-setup N))
+  (define a-mid (list-ref a-names (quotient N 2)))
+
+  ;; A-prod-no-elab: current-elaborating-name = #f (baseline; no dep-recording)
+  (parameterize ([current-definition-cells-content a-env]
+                 [current-module-definitions-content (hasheq)]
+                 [current-prelude-env (hasheq)]
+                 [current-elaborating-name #f]
+                 [current-definition-dependencies (hasheq)]
+                 [current-cross-module-deps '()])
+    (bench-ns (format "A-prod-no-elab.read N=~a (3-layer + elab-name check)" N) 100000
+              (global-env-lookup-type a-mid)))
+
+  ;; A-prod-with-elab: current-elaborating-name SET (production reality)
+  ;; dep-recording + cross-module-dep recording active per lookup
+  (parameterize ([current-definition-cells-content a-env]
+                 [current-module-definitions-content (hasheq)]
+                 [current-prelude-env (hasheq)]
+                 [current-elaborating-name 'elab-target]
+                 [current-definition-dependencies (hasheq)]
+                 [current-cross-module-deps '()])
+    (bench-ns (format "A-prod-with-elab.read N=~a (+ dep-recording side-effects)" N) 100000
+              (global-env-lookup-type a-mid))))
+
+;; ============================================================
+;; VARIANT C — Single compound cell + compound-cell-component-{ref,write}/pnet
+;; ============================================================
+;; Audit finding 10 (2026-05-26): C uses compound-cell-component-ref/pnet which
+;; is 3-unwrap (cell-read + hash-ref + tagged-cell-read) vs B's 2-unwrap
+;; (cell-read + hash-ref). The §18 audit assumption "C ≅ B for reads" is
+;; based on read-path counting; this measures whether tagged-cell-value wrap/
+;; unwrap is free under wv=0 (no speculation, default case).
+
+(define (variant-c-setup N)
+  (define net (make-prop-network 1000000))
+  (define-values (net1 cid)
+    (net-register-specialized-cell net (hasheq) merge-hasheq-replace
+      #:tier 'warm #:storage 'general #:fires-on 'any-change))
+  (define names (gen-names N))
+  (define net2 (for/fold ([n net1]) ([nm names] [i (in-naturals)])
+                 (compound-cell-component-write/pnet n cid nm (gen-entry i))))
+  (values names net2 cid))
+
+(define (variant-c-lookup net cid name)
+  (compound-cell-component-ref/pnet net cid name))
+
+(printf "\n=== W1/W2/W3 — VARIANT C READ MEASUREMENT ===\n")
+(printf "(compound cell + component-paths; read via compound-cell-component-ref/pnet)\n")
+
+(for ([N (in-list '(10 50 200))])
+  (printf "\n--- Workload N=~a forms ---\n" N)
+
+  (define-values (c-names c-net c-cid) (variant-c-setup N))
+  (define c-mid (list-ref c-names (quotient N 2)))
+
+  (bench-ns (format "C.read N=~a (cell-read + hash-ref + tagged-cell-read)" N) 100000
+            (variant-c-lookup c-net c-cid c-mid)))
+
+(printf "\n=== VARIANT C SETUP-TIME MEASUREMENT ===\n")
+(for ([N (in-list '(10 50 200))])
+  (printf "\n--- Workload N=~a forms setup ---\n" N)
+  (bench-ns (format "C.setup N=~a (1 cell-register + N compound-writes)" N) 1000
+            (variant-c-setup N)))
+
+(printf "\n=== VARIANT C MEMORY (N=100) ===\n\n")
+(bench-mem "C.mem N=100 (1 compound cell)" 10
+           (variant-c-setup 100))
+
+;; ============================================================
+;; W4 LIGHT — WAKE PRECISION MEASUREMENT (B vs C vs D)
+;; ============================================================
+;; Discriminating measurement (per §18.12.9 W4 light): install ONE propagator
+;; watching name X; write to N-1 OTHER names; count fires.
+;;
+;; Expected (per audit finding 4 + audit's compound-paths semantics):
+;;   B: N-1 fires (whole-cell wake — propagator dependent on cell with no
+;;      component-paths declaration; every write to the cell wakes it)
+;;   C: 0 fires (propagator declares :component-paths (list (cons cid X));
+;;      compound-cell-component-write to other-name emits change-set with
+;;      key=other-name; filter skips this propagator)
+;;   D: 0 fires (propagator dependent on watch-name's per-name cell only;
+;;      writes to OTHER per-name cells don't enqueue this propagator)
+;;
+;; Measurement methodology: drive run-to-quiescence between EACH write to
+;; ensure per-write fires are individually counted (BSP would otherwise
+;; coalesce multiple writes within one round into one fire).
+;;
+;; NB: wake-counter is a measurement-only side-effect box (violates the
+;; "Design Invariant: Propagator Statelessness" principle deliberately as
+;; an observation instrument; production propagators never do this).
+
+(define wake-count (box 0))
+(define (make-wake-fire-fn)
+  (lambda (net)
+    (set-box! wake-count (add1 (unbox wake-count)))
+    net))
+
+(printf "\n=== W4 LIGHT — WAKE PRECISION ===\n")
+(printf "(1 propagator watching name X; N-1 writes to OTHER names; quiesce after each)\n")
+(printf "(expected — B: N-1 fires; C: 0 fires; D: 0 fires)\n")
+
+(for ([N (in-list '(10 50))])
+  (printf "\n--- Workload N=~a env entries; ~a other-name writes ---\n" N (- N 1))
+
+  (define names (gen-names N))
+  (define watch-name (list-ref names (quotient N 2)))
+  (define other-names (remove watch-name names))
+
+  ;; -------- Variant B --------
+  (let ()
+    (define-values (b-names b-net b-cid) (variant-b-setup N))
+    ;; Install propagator watching env cell (no component-paths → whole-cell wake)
+    (define-values (b-net1 _b-pid)
+      (net-add-propagator b-net (list b-cid) '() (make-wake-fire-fn)))
+    ;; Drive initial quiescence (drain install-time fire)
+    (define b-net2 (run-to-quiescence b-net1))
+    (set-box! wake-count 0)
+    ;; N-1 writes, quiesce after each
+    (define b-net-final
+      (for/fold ([n b-net2]) ([nm (in-list other-names)] [i (in-naturals)])
+        (run-to-quiescence (net-cell-write n b-cid (hasheq nm (gen-entry (+ i 10000)))))))
+    (printf "  B.wakes: ~a fires for ~a writes  (whole-cell wake)\n"
+            (unbox wake-count) (length other-names)))
+
+  ;; -------- Variant C --------
+  (let ()
+    (define-values (c-names c-net c-cid) (variant-c-setup N))
+    ;; Install propagator with :component-paths declaring watch-name only
+    (define-values (c-net1 _c-pid)
+      (net-add-propagator c-net (list c-cid) '() (make-wake-fire-fn)
+        #:component-paths (list (cons c-cid watch-name))))
+    (define c-net2 (run-to-quiescence c-net1))
+    (set-box! wake-count 0)
+    (define c-net-final
+      (for/fold ([n c-net2]) ([nm (in-list other-names)] [i (in-naturals)])
+        (run-to-quiescence
+         (compound-cell-component-write/pnet n c-cid nm (gen-entry (+ i 10000))))))
+    (printf "  C.wakes: ~a fires for ~a writes  (component-paths X-only)\n"
+            (unbox wake-count) (length other-names)))
+
+  ;; -------- Variant D --------
+  (let ()
+    (define-values (d-names d-net d-reg-cid) (variant-d-setup N))
+    ;; Read registry to find watch-name's per-name cell-id + propagator install
+    (define registry (net-cell-read d-net d-reg-cid))
+    (define watch-cid (hash-ref registry watch-name))
+    (define-values (d-net1 _d-pid)
+      (net-add-propagator d-net (list watch-cid) '() (make-wake-fire-fn)))
+    (define d-net2 (run-to-quiescence d-net1))
+    (set-box! wake-count 0)
+    (define d-net-final
+      (for/fold ([n d-net2]) ([nm (in-list other-names)] [i (in-naturals)])
+        (define other-cid (hash-ref registry nm))
+        (run-to-quiescence (net-cell-write n other-cid (gen-entry (+ i 10000))))))
+    (printf "  D.wakes: ~a fires for ~a writes  (per-name cells)\n"
+            (unbox wake-count) (length other-names))))
+
 (printf "\n=== END OF MEASUREMENT ===\n")
 (printf "Per §18.12.3 criteria-as-guidance: review measurements together;\n")
-(printf "decide variant aligned with principles, not strict pass/fail gates.\n\n")
+(printf "decide variant aligned with principles, not strict pass/fail gates.\n")
+(printf "Extended 2026-05-26 (post-audit): production-faithful A + Variant C + W4 light.\n\n")

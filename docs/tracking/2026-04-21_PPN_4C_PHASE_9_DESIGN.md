@@ -9662,6 +9662,12 @@ Perf characteristics (from Tropical Quantale PIR + STEP2 baseline):
 
 Sub-audit A recommended (c) ONE specialized cell with hash-union merge. Dialogue surfaced (d) two-level structure preserving Track 7 per-name cells. **Pre-0 microbench gates the decision** — see §18.12.
 
+**Post-measurement framework note (2026-05-26)**: the "plain cell read 10.9 ns" row above refers to the Tropical 1V direct-ref-cached FAST PATH (e.g., fuel-cell-cache on `prop-net-warm`). Env-cell variants (B/C/D) take the SLOW PATH (`'warm + 'general` cells — no direct-ref cache on `prop-net-warm`); slow-path reads land at 44-111 ns per the 4A.0 extended bench (§18.12.6). The framework's organizational discipline applies (cell-meta declaration as IR vocabulary); the fast-path perf gain does not. **Two efficiency-tweak candidates captured for follow-up** (not in 4A scope):
+- *Candidate 1* — extend merge-fn caching to slow-path (~5-10 ns/write savings)
+- *Candidate 2* — add read-side direct-ref cache on `prop-net-warm` for well-known env cell-ids (~50-90 ns/read savings per Phase 1V Item #1-bis pattern; would bring env reads closer to the 10.9 ns fast-path)
+
+If env reads become hot enough to warrant fast-path treatment, Candidate 2 is the natural upgrade path; it does not require revisiting Variant choice.
+
 #### §18.10.4 FREE_ORDERING work at preparse layer (name-level residuation; out of Phase 4 scope)
 
 Sub-audit C: `docs/tracking/2026-02-28_1800_FREE_ORDERING.md` + `macros.rkt:2366-2460` (`preparse-expand-all`) delivers 3-pass preparse pre-registration:
@@ -9769,13 +9775,122 @@ Per "Empirical Falsification as Audit Complement":
 
 Microbench plan locked at 4A.0 sub-phase open. Pre-0 phase precedes 4A code changes. Results inform variant commitment; results persisted to STEP2_BASELINE-style baseline doc for future reference.
 
+#### §18.12.5 Criteria-as-guidance refinement (NEW 2026-05-26)
+
+Per user direction during the 4A.0 mini-design conversation: §18.12.3 pre-committed criteria are **guidance for collaborative review aligned with principles**, NOT strict pass/fail gates. Measurements produce data; the variant decision is dialogue-driven against:
+
+1. **Architectural alignment** with the 10 load-bearing principles (esp. First-Class by Default, Most Generalizable Interface, Cell/Propagator/Scheduler Orthogonality)
+2. **Downstream consumer requirements** (Phase 11b diagnostic chains, LSP per-name queries, `.pnet` per-name serialization, PReduce e-class addressability)
+3. **Per-criterion measurement context** (what the number actually means; whether the comparison is fair; whether the criterion is testing what we think)
+
+Rationale: Phase 1V's experience showed that strict gates without measurement-context lead to two failure modes — (a) unilateral gate revision when measurements don't land cleanly (Phase 1V §13.7 unilateral revision flagged as red flag); (b) cataloguing pass/fail without challenging whether the gate captures the architecturally-important axis. Criteria-as-guidance with collaborative review preserves the measurement discipline while letting the architectural conversation be load-bearing for the decision.
+
+This refines (does not replace) the "Empirical Falsification as Audit Complement" codification graduated at Phase 3V — empirical measurement IS the audit complement; the decision protocol uses measurement WITH architectural framing.
+
+#### §18.12.6 4A.0 extended measurement results (2026-05-26)
+
+Initial bench (commit `e11c7fda`) measured Variants A/B/D × W1-W3-W5. Post-audit extension (this commit) added production-faithful A, Variant C, and W4 light per audit findings (§18.10.3 + 2026-05-26 mini-audit § code reality). Both baselines retained for traceability:
+- `data/benchmarks/phase4-env-cell-baseline-2026-05-26.txt` (initial)
+- `data/benchmarks/phase4-env-cell-extended-2026-05-26.txt` (post-audit, this commit)
+
+**Headline finding — Variant A bench-strawman**: the bench's original `variant-a-lookup-realistic` (2-layer parameter hash) **omits production realities** that materially change the variant ranking:
+- Layer 3 (`current-prelude-env`) — production has 3-layer cascade, not 2
+- `current-elaborating-name` parameter-read on every lookup
+- `record-definition-dependency!` side-effect when elab-name is set (param-read + param-write + hash-ref + hash-set + set-add per call)
+- `record-cross-module-dep!` side-effect when entry found (param-read + param-write + cons)
+
+Production-faithful Variant A (uses real `global-env-lookup-type` from `global-env.rkt:192-213`) measured under two scenarios:
+
+| Variant | N=10 | N=50 | N=200 |
+|---|---|---|---|
+| bench-A (2-layer hash; ORIGINAL) | 32.5 ns | 32.8 ns | 39.7 ns |
+| **A-prod-no-elab** (3-layer + elab-name check; no dep-recording) | 46.3 ns (+42%) | 54.3 ns (+66%) | 63.1 ns (+59%) |
+| **A-prod-with-elab** (3-layer + dep-recording side-effects) | **267.0 ns (+722%)** | **275.1 ns (+739%)** | **281.6 ns (+609%)** |
+
+**A-prod-with-elab is the production reality during defn-body elaboration** (elab-name is set throughout). The bench's strawman A is 5-7× faster than production.
+
+**Read measurements — all variants on the same scale**:
+
+| Variant | N=10 | N=50 | N=200 |
+|---|---|---|---|
+| **A-prod-with-elab** (status quo on the hot path) | 267.0 ns | 275.1 ns | 281.6 ns |
+| **A-prod-no-elab** (no dep-recording baseline) | 46.3 ns | 54.3 ns | 63.1 ns |
+| **B** (single specialized cell) | 47.5 ns | 46.3 ns | 44.0 ns |
+| **C** (compound cell + component-paths) | 102.4 ns | 109.0 ns | 111.4 ns |
+| **D** (registry cell + per-name binding cells) | 65.3 ns | 107.3 ns | 110.6 ns |
+
+**Audit assumption "C ≅ B for reads" REFUTED**: tagged-cell-value wrap/unwrap costs ~57-67 ns per read under wv=0 (3-unwrap vs 2-unwrap per `propagator.rkt:4296-4310`). C is ~2.5× slower than B on reads.
+
+**Setup costs** (per-call, microseconds):
+
+| Variant | N=10 | N=50 | N=200 |
+|---|---|---|---|
+| A (parameter hash fold) | 5.6 μs | 28.3 μs | 118.7 μs |
+| B (1 cell-register + N writes) | 17.2 μs | 55.8 μs | 206.2 μs |
+| C (1 cell-register + N compound-writes) | 17.6 μs | 59.4 μs | 219.3 μs |
+| D (1+N cell-registers + 1 reg-write) | 18.4 μs | 82.5 μs | 253.5 μs |
+
+**Memory** (N=100):
+
+| Variant | Alloc | Retain |
+|---|---|---|
+| A | 95.2 KB | 0.5 KB |
+| B | 169.9 KB | 0.5 KB |
+| C | 173.1 KB | 0.5 KB |
+| D | 270.4 KB | 0.5 KB |
+
+All variants show bounded retention; B/C/D allocate 1.8-2.8× more than A (cell allocation cost). D's 1.6× memory premium vs B is within the §18.12.3 2× gate guidance.
+
+**W4 light — wake precision (load-bearing for Phase 4's residuation thesis)**:
+
+| Variant | N=10 (9 writes) | N=50 (49 writes) |
+|---|---|---|
+| **B** | **9 fires** (wake-blind) | **49 fires** (wake-blind) |
+| C | 0 fires ✓ | 0 fires ✓ |
+| D | 0 fires ✓ | 0 fires ✓ |
+
+**B's wake-blindness is structurally disqualifying for Phase 4**: every env write wakes every dependent propagator → residuation via cell-at-bot waiting under mutual recursion would thrash (M propagators × N writes = M×N spurious fires). C achieves precision via `:component-paths (list (cons cid X))` declaration + `compound-cell-component-write/pnet` change-set filter; D achieves precision structurally via per-name cells.
+
+#### §18.12.7 Variant decision — D LOCKED (2026-05-26)
+
+**Decision**: Variant D — registry specialized cell + per-name binding cells, preserving Track 7 Phase 7d's per-name infrastructure as the authoritative read source.
+
+**Architectural rationale** (per principles + downstream consumer requirements):
+
+1. **First-Class by Default**: D makes each top-level name a first-class cell on the network. Cell-id is the per-name identity; downstream addressability is structural.
+2. **Most Generalizable Interface**: per-name cells compose with Phase 11b derivation chains (anchored on cell-id), LSP per-name queries (cell-id route), `.pnet` per-name serialization (cell-id addressable), PReduce e-class pattern (per-class cell = per-name cell shape).
+3. **Cell/Propagator/Scheduler Orthogonality**: D's read path is uniform across schedulers — registry cell-read + per-name cell-read. No scheduler-coupled optimization needed.
+4. **Correct by Construction**: D achieves perfect wake precision STRUCTURALLY (W4 light: 0 fires vs B's 9/49) — residuation under mutual recursion is structurally emergent from per-name cell dependency tracking.
+5. **Vision Alignment**: D is the natural completion of Track 7 Phase 7d (per-name cells exist as parallel write target today; D makes them authoritative readers).
+
+**Three-column adversarial framing on the decision**:
+
+| Claim | Catalogue | Challenge | **Adversarial** |
+|---|---|---|---|
+| D's 110 ns reads beat A-prod-with-elab's 281 ns | ✓ 2.5× speedup on production hot path | The 281 ns includes dep-recording side-effects which D's bench does NOT include — apples-to-oranges? | **The dep-recording IS scaffolding Phase 4 retires** — propagator-dependent-enqueuing replaces imperative dep-recording structurally. The 281→110 ns claim is BEFORE-AFTER for the production hot path, but the speedup decomposes: ~47 ns from cell-flip + ~170 ns from eliminating dep-recording side-effect. Honest framing names BOTH sources, not "cells are 2.5× faster" (which credits cells alone — incorrectly). |
+| D buys per-name first-class-ness for downstream tracks | ✓ Phase 11b/LSP/.pnet/PReduce align with cell-id-per-name | Is this need real or speculative? | **Grounded**: Phase 11b derivation chains anchor on cell-id per parent D.3 §6.1.1; LSP per-name queries route to cell-id (PPN Track 8 forward); `.pnet` per-name serialization needs cell-id addressability (SH Track 1 forward); PReduce e-class cells follow same shape (Track 1 per-class cell). Picking C instead means migration cost later when these tracks land. |
+| C is competitive (10% slower reads; same wake precision) | ✓ C reads = 111 ns; D reads = 110 ns | Why pay anything for D over C? | **C's storage stays opaque** — the hasheq inside a compound cell is not addressable as N first-class cells. C buys wake-precision via mechanism but NOT structural first-class-ness. To get per-name addressability later (Phase 11b/LSP/.pnet need it), C would have to migrate to D's pattern anyway. **Picking C now means re-architecting later; picking D now means the substrate is ready when downstream tracks open.** |
+| D's 75% slower reads vs B (44 vs 110 ns) is acceptable | ✓ 66 ns extra × ~10k lookups/file = ~660 μs/file negligible vs 1-2s elaboration budget | But B isn't a real choice — wake-blindness disqualifies it. | **Correct — B was a measurement reference point, not a viable Phase 4 variant.** The real choice is C vs D. **66 ns/read framing was vs B-the-strawman**; the actual cost premium (D vs C) is 10 ns/read — trivially within architectural-value-vs-perf-cost trade space. |
+
+**Open efficiency-tweaks (deferred to follow-up after 4A lands)**:
+- Read-side direct-ref cache on `prop-net-warm` for registry-cell-id (per Item #1-bis pattern); could close the C-D gap or accelerate both
+- Per-name cell read-time direct-ref cache (more aggressive; one cache slot per name; bounded by N) — speculative; not in 4A scope
+
+**Falsification record (data-driven decisions)**:
+- ✓ Bench-strawman A finding refuted "A wins reads" framing
+- ✓ Production-faithful A measurement showed A-prod-with-elab is the bottleneck being escaped (281 ns)
+- ✓ C ≅ B for reads assumption refuted (C is 2.5× slower than B)
+- ✓ W4 light confirmed B's wake-blindness; C/D both achieve perfect precision
+- ✓ D's read cost 110 ns within criteria-as-guidance (250 ns gate guidance)
+- ✓ Memory delta D/B = 1.6× within 2× gate guidance
+
 ### §18.13 Open question status post-audit
 
 Summary table consolidating §18.7 status post-audit:
 
 | Q | Status | Resolution path |
 |---|---|---|
-| **Q1** Env cell lattice/merge | Variant choice (B/C/D) AWAITS Pre-0 measurement | §18.12 plan; runs at 4A.0 |
+| **Q1** Env cell lattice/merge | **LOCKED — Variant D** (registry cell + per-name binding cells; preserves Track 7 Phase 7d per-name infrastructure as authoritative read source) | §18.12.7 decision; 4A.0 ✅ |
 | **Q2** Per-form vs file-global meta state | **LOCKED — Phase 3A worldview-aid pattern at form scope** (replaces network-recreation per §18.10.1) | Detailed mechanism at 4D mini-design |
 | **Q3** Propagators vs stratum handlers | **LOCKED — propagators by default**; stratum handlers only for S(-1) retraction + result emission + topology | 4B implementation detail |
 | **Q4** Cross-module mutual recursion | **LOCKED — cycle handling becomes lattice diagnostic** (§18.11) | Cross-module unblock in module-loading-on-network follow-up (not Phase 4 scope) |
