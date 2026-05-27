@@ -9916,6 +9916,93 @@ In addition to §18.9's pre-audit cross-references, audit-informed additions:
 - `tools/form-deps.rkt` — module SCC tool (FREE_ORDERING analysis)
 - `driver.rkt:1872-1874` — `loading-set` cycle check (retires post-module-loading-on-network)
 
+### §18.15 Phase 4A mini-design (opened 2026-05-26)
+
+Per Stage 4 Per-Phase Protocol step 1+2 (mini-design + mini-audit co-dependent cycle). Phase 4A's charter from §18.4: `current-prelude-env` migration (the flip) — Variant D LOCKED from §18.12.7. This section captures dialogue outcomes; audit findings persisted incrementally as decisions land.
+
+#### §18.15.1 Design references (mini-design opening, in-flight)
+
+- §18.4 4A row (Variant D LOCKED post-4A.0)
+- §18.2 sharpened thesis (flip the read path)
+- §18.5 PM Track 12 boundary
+- §18.10.1 reset-meta-store! is network REPLACEMENT (critical for lifecycle decision — §18.15.4)
+- §18.10.2 per-name cells exist; read path bypasses
+- §18.12.6/.7 Variant D measurement results + decision
+- §18.6 G1-G10 battery (substrate requirements for 4B/4C)
+- DESIGN_METHODOLOGY.org Stage 4 Per-Phase Protocol
+
+#### §18.15.2 Open questions (in-flight)
+
+- Q-4A.1 Cell lifecycle (Option A/B/C; in dialogue post-prior-art audit per §18.15.5)
+- Q-4A.2 Dep-recording handling — **LOCKED** (§18.15.3)
+- Q-4A.3 Per-name cell-id API exposure (open)
+- Q-4A.4 3-layer scope (open; coupled to Q-4A.1)
+- Q-4A.5 Parameter retirement vs snapshot (open)
+- Q-4A.6 Callback machinery retirement (open)
+
+#### §18.15.3 Q-4A.2 — Dep-recording retirement LOCKED (2026-05-26)
+
+**Decision**: retire dep-recording across 4A+4B with explicit timing — 4A signals retirement scaffolding; 4B realizes structural emergence via propagator dependent registry.
+
+**Background**: per the audit (§18.15-pre-audit findings), `dep-recording` is the side-effect tracking that happens during env lookup:
+
+```racket
+(define current-elaborating-name (make-parameter #f))
+(define current-definition-dependencies (make-parameter (hasheq)))
+(define current-cross-module-deps (make-parameter '()))
+
+(define (record-definition-dependency! elab-name dep-name) ...)
+(define (record-cross-module-dep! elab-name dep-name source) ...)
+```
+
+Inside `global-env-lookup-type/value` at `global-env.rkt:192-213`, when `current-elaborating-name` is set (during defn-body elaboration), every lookup records a dependency edge ("defn X depends on name Y"). Per the global-env.rkt §147 comment: *"Informational in batch mode; enables selective re-elaboration in LSP."* This IS the dep graph PPN Track 8 (incremental editing) + PPN Track 11 (LSP) consume.
+
+**Audit-grounded counts**:
+- `current-elaborating-name` parameterized at exactly ONE production site (`driver.rkt:1074`)
+- `record-definition-dependency!` + `record-cross-module-dep!` have ZERO callers outside `global-env.rkt` itself — encapsulated behind `global-env-lookup-*`
+- Per-lookup overhead under elab-name-set: ~220 ns (5-op side-effect: param-read + param-write + hash-ref + hash-set + set-add)
+
+**On-network migration opportunity** — textbook Propagator-First Infrastructure retirement:
+
+| Today | Post-4A+4B |
+|---|---|
+| `current-definition-dependencies` parameter (parallel hasheq, manually maintained) | The network's intrinsic dependent registry (scheduler's per-cell dependent list) |
+| `record-definition-dependency!` side-effect inside lookup | Propagator install-time `:reads (list per-name-cid)` declaration IS the dep edge |
+| LSP queries `definition-dependencies-snapshot` parameter | LSP queries cell-dependents via new API (`cell-dependents net cell-id → (listof prop-id)`) |
+| Per-lookup 5-op side-effect | Per-install ONE declaration; per-edit ONE wake event (scheduler dispatches dependents) |
+
+**Bootstrap challenge** (named for 4B design): under propagator-native, `:reads` is fixed at install time. But a defn's body discovers references DURING elaboration — chicken-and-egg. Three resolution patterns identified:
+
+1. **Conservative install + re-fire** — propagator declares `:reads (list registry-cid)` (whole registry); every env write wakes it; loses precision (G10 incremental editing degrades). **RULED OUT** per user — *"option 1 isn't an option because of thrashing/spurious fires."*
+2. **Two-phase install** — first fire walks body + discovers names; second install with discovered `:reads`. Adds round-trip; precise.
+3. **Topology-stratum extension** — lookup-during-fire emits topology request "add P as dependent of cell N"; topology stratum applies between BSP rounds. Precise + structurally emergent. Uses BSP-LE Track 2B's topology stratum precedent. **LEAN per dialogue** — strongest candidate; final lock-in deferred to 4B design.
+
+**Scope split (LOCKED)**:
+
+- **4A scope**: keep dep-recording as imperative parameter writes (function-call side-effect). Label `record-definition-dependency!` + `record-cross-module-dep!` + `current-definition-dependencies` + `current-cross-module-deps` + `current-elaborating-name` as **scaffolding with explicit retirement target at 4B** via module-level + inline comments. Per-lookup overhead stays at production levels (~220 ns/lookup with elab-name set). **No regression, no improvement; honest substrate-only sub-phase.**
+- **4B scope**: retire `record-definition-dependency!` + `record-cross-module-dep!` + parameter stores. `current-elaborating-name` parameter retires (no consumer left). Propagator dependents registry IS the dep graph. Introduce LSP-facing `cell-dependents` API. Pick a bootstrap resolution pattern (lean Option 3 — topology-stratum extension).
+
+**Per-lookup cost trajectory**:
+- Pre-4A: ~280 ns/lookup (status quo with elab-name set)
+- Post-4A only: ~280 ns (same — dep-recording kept; cell-read replaces hash-ref but dep-recording dominates)
+- Post-4B: ~110 ns (dep-recording retired; structural emergence via propagator dependents)
+
+Honest framing: **the 2.5× perf claim materializes at 4A+4B together**, not at 4A alone. 4A is substrate-ready; 4B is thesis-realized.
+
+**Principle alignment**:
+- *Propagator-First Infrastructure* (DESIGN_PRINCIPLES.org § "Stratified Propagator Networks"): "callback parameters that inject resolution logic across module boundaries... wakeup indices that manually track which constraints depend on which metas... All of these are symptoms of resolution logic living OUTSIDE the propagator network." Dep-recording is the env-side counterpart to PM Track 7's wakeup-index retirement — same pattern, same resolution.
+- *Correct by Construction*: structural emergence via propagator dependents is correct-by-construction; manual hasheq accumulation requires discipline.
+- *Decomplection*: separates dep-tracking (network's intrinsic concern) from lookup (env-state concern). Today they're complected via the lookup function's side-effect.
+
+**Cross-track impact**:
+- PPN Track 8 (incremental editing) inherits structural dep graph at 4B close
+- PPN Track 11 (LSP integration) — `cell-dependents` API serves textDocument/references + incremental re-elaboration use cases
+- PM Track 12 — `current-elaborating-name` retirement coordinates with PM 12's parameter-to-cell migration vocabulary
+
+#### §18.15.4 — §18.15.6 (Q-4A.1 dialogue in progress; persist when decisions land)
+
+In-flight per Stage 4 conversational cadence. Prior-art audit + memory/GC analysis ongoing; not yet ready for design-doc commitment. See current dailies for dialogue state.
+
 ---
 
 ## Cross-track inputs (running log)
