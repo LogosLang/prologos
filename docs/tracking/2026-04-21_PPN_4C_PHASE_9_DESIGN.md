@@ -227,8 +227,8 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | **4** | **Top-level orchestration unification — retire `process-command` sequential loop** | 🔄 (mini-design persisted) | **MINI-DESIGN OPENED 2026-05-25** — pre-implementation architectural sharpening persisted at §18 post-3V close. T1/T2/T3 audit findings consolidated; thesis sharpened (residuation == cell-at-bot waiting identity; flip-the-read-path as load-bearing move; specialized cells as migration vocabulary). Sub-phase partition revised to **6 sub-phases (4A/4B/4C/4D/4E/4V)** per audit-driven scope expansion. PM Track 12 boundary clarified (§18.5). G1-G10 empirical battery sketched (§18.6). 8 drift risks D-4-1..8 named (§18.8). 6 open architectural questions (§18.7) for continued dialogue before sub-phase work commits. Tracking [#22](https://github.com/LogosLang/prologos/issues/22). Motivating use case: mutual recursion ([PR #14](https://github.com/LogosLang/prologos/pull/14)). Gates on Phase 1 ✅ + Phase 2 ✅ + Phase 3 ✅ all met. |
 | 4A.0 | Pre-0 microbench: env-cell variant comparison + audit-driven extension (production-faithful A + Variant C + W4 light) per §18.12 | ✅ `e11c7fda` + `bac652ae` | **CLOSED 2026-05-26.** Initial bench `e11c7fda` (Variants A/B/D × W1-W3-W5); extended bench `bac652ae` (post-audit additions: production-faithful A via real `global-env-lookup-type`; Variant C via `compound-cell-component-{ref,write}/pnet`; W4 light wake precision). **Q1 variant decision LOCKED to Variant D** per §18.12.7 — registry cell + per-name binding cells preserves Track 7 Phase 7d per-name infrastructure as authoritative read source; per-name first-class for Phase 11b/LSP/.pnet/PReduce. Headline findings: A-prod-with-elab = 267-281 ns/lookup during elaboration (5-7× bench-A strawman 32-40 ns); B reads = 44 ns but wake-blind (N fires per N unrelated writes — structurally unviable for residuation); C reads = 100-111 ns (REFUTES audit "C ≅ B" — tagged-cell-value wrap/unwrap adds ~57-67 ns under wv=0); D reads = 110 ns + per-name first-class structural addressability. W4 light: B fires 9/9 and 49/49; C/D fire 0/9 and 0/49 (perfect precision). 2 methodology data points: "Audit-Precedes-Implementation REFRAMING Discipline" 9th + NEW "Bench-strawman risk" 1st (watching list). Adversarial 3-column framing on the variant decision (§18.12.7). Both baselines retained at data/benchmarks/. |
 | 4A | `current-prelude-env` migration (the flip) — **Variant D LOCKED**: registry specialized cell + per-name binding cells; **mini-design CLOSED 2026-05-26** | 🔄 (mini-design closed; sub-phases pending) | **Mini-design CLOSED 2026-05-26** per Stage 4 Per-Phase Protocol. All 8 architectural Q's locked (Q-4A.1 Option B-revised; Q-4A.2 retire dep-recording across 4A+4B; Q-4A.3 mnr.cell-id-map existing surface; Q-4A.4 Option (b) share-by-reference + prelude-as-import; Q-4A.5 retire 4 env params; Q-4A.6 global-env.rkt → namespace.rkt; SRE STRUCTURAL classification; Module-Theoretic framing established; NTT model sketched + cross-network bridge gap flagged for NTT_SYNTAX_DESIGN.md). Sub-phase partition 4A.a/b/c/d + 4A-VAG per §18.15.9. Total est. ~430-800 LoC (audit-driven scope reframing per Q-4A.4 share-by-reference + Q-4A.6 callback retirement). Cross-track inheritance: PM Track 12 + PPN Track 8 + PPN Track 11 + SH Track 1 + PReduce Track 1. Methodology data points: codifier-falls-into-trap 2nd data point (missed Galois bridges prior art); prior-art search via mempalace discipline added to MEMORY.md. Persisted §18.15.1-.10. Ready for 4A.a sub-phase mini-design + implementation. |
-| 4A.a | Extend mnr struct with imports field + cascading lookup helper + STRUCTURAL DefinitionEntry + global-env.rkt → namespace.rkt + current-file-mnr parameter | ⬜ | Sub-phase per §18.15.9. Foundation for 4A.b read-path flip. ~80-150 LoC. |
-| 4A.b | Flip global-env-lookup-* to cascading; migrate global-env-add* to direct mnr API (retire callbacks); retire global-env-add-type-only (subsumed by STRUCTURAL) | ⬜ | Sub-phase per §18.15.9. ~100-200 LoC. Gate: probe diff = 0; per-lookup cost similar (dep-recording still active per Q-4A.2). |
+| 4A.a | Extend mnr struct with imports field + cascading lookup helper + STRUCTURAL DefinitionEntry + global-env.rkt → namespace.rkt + current-file-mnr parameter | 🔄 (mini-design opened 2026-05-28) | **Mini-design opened 2026-05-28** with 4 architectural Q's LOCKED through conversational co-design: Q1 cons-prepend list (last-write-wins shadowing matches today); Q2 trust loading-set (cycles NOT in 4A scope per §18.11.3 — user's thesis caught Q (c) defensive scope-creep); Q3 SRE STRUCTURAL registration-only at 4A.a, merges complete (set-once-i value + type-unify-or-top type + def-collision contradicts?); Q4 namespace.rkt + define-only at 4A.a; parameterize at 4A.b. Persisted §18.16. **Methodology**: codifier-falls-into-trap pattern 3rd data point this arc (watching-list graduation eligible). Sub-phase commit ordering: (4) require change → (1)+(5) struct + parameter → (2) cascading-lookup → (3) SRE STRUCTURAL → close. ~80-150 LoC + ~50 LoC tests. |
+| 4A.b | Flip global-env-lookup-* to cascading; migrate global-env-add* to direct mnr API (retire callbacks); retire global-env-add-type-only (subsumed by STRUCTURAL). **+ Pipeline.md inheritance from 4A.a per §18.16.5.M2**: add `[current-file-module-network-ref (make-module-network)]` to (i) `tests/test-support.rkt` 6 parameterize sites at lines 82/134/158/187/210/240, (ii) `tools/batch-worker.rkt` parameterize block at lines 226-235. | ⬜ | Sub-phase per §18.15.9. ~100-200 LoC. Gate: probe diff = 0; per-lookup cost similar (dep-recording still active per Q-4A.2); **pipeline.md obligations from §18.16.5.M2 captured + verified at mini-design opening** (capture-gap discipline). |
 | 4A.c | Retire 7 parameters (4 env-state + 3 callback). Update driver.rkt import-handler (lines 1857-1869): cached module → ADD import-mnr to current-file-mnr.imports (no copy). Prelude as imports list per Q-4A.4.c. | ⬜ | Sub-phase per §18.15.9. ~150-250 LoC. Gate: all parameters retired; driver.rkt simplified; probe diff = 0. |
 | 4A.d | Test fixture migration (~30 sites) + bench re-run | ⬜ | Sub-phase per §18.15.9. ~50-100 LoC + sed-2-pass. Gate: full suite GREEN; bench shows production-A → mnr-based-A within envelope. |
 | 4A-VAG | Cumulative cross-sub-phase 3-column adversarial VAG | ⬜ | Sub-phase per §18.15.9. docs-heavy. Gate: all 13 drift risks (D-4-1..8 + D-4-A1..A5) cleared adversarially. |
@@ -10260,6 +10260,207 @@ All open architectural questions resolved. Phase 4A ready for sub-phase implemen
 - PReduce Track 1 (e-class cell substrate): mnr's "registry + per-class cell + per-instance prop-network" pattern generalizes to e-class cells.
 
 Ready for 4A.a sub-phase mini-design + implementation.
+
+### §18.16 PPN 4C Addendum Phase 4A.a mini-design (opened 2026-05-28)
+
+Per Stage 4 Per-Phase Protocol step 1+2 (mini-design + mini-audit co-dependent cycle). 4A.a charter from §18.15.9: extend `module-network-ref` struct + cascading-lookup helper + STRUCTURAL `DefinitionEntry` registration + `global-env.rkt → namespace.rkt` cycle-break + `current-file-module-network-ref` parameter. All 4 architectural sub-questions resolved through conversational co-design.
+
+#### §18.16.1 Design references
+
+- §18.15.9 4A sub-phase partition table (4A.a row, 5 deliverables, ~80-150 LoC)
+- §18.15.4 Q-4A.1 Option B-revised (extend `module-network-ref` pattern to in-flight file)
+- §18.15.5 SRE STRUCTURAL classification of `DefinitionEntry`
+- §18.15.6 Module-Theoretic framing + NTT model
+- §18.15.7 Q-4A.4 Option (b) share-by-reference (informs 4A.c, not 4A.a — but constrains 4A.a's struct shape)
+- §18.15.8 Q-4A.6 Option (γ.3) global-env.rkt → namespace.rkt cycle-break
+- §18.11 Cyclic definitions handling principle (informs Q2 scope decision)
+- §6.15 Phase 3 `:type`/`:term` tag-layer precedent (registration-first pattern; Q3 leans on this)
+- DESIGN_METHODOLOGY.org Stage 4 Per-Phase Protocol
+
+#### §18.16.2 Mantra check — scaffolding-honestly-named
+
+4A.a is a **scaffolding sub-phase**. None of the 5 deliverables move information through cells at run-time; they add the substrate that 4A.b/c/d use.
+
+- *All-at-once / all in parallel*: 5 deliverables mostly independent; commit ordering for dialogue checkpoint clarity, not architectural dependency ✓
+- *Structurally emergent*: dataflow emergence happens at 4A.b read-flip. **Acceptance-gate-named as scaffolding** rather than catalogue-claimed as mantra-advancing.
+- *Information flow / ON-NETWORK*: new struct field + helper + parameter + SRE registration are all on-network-aligned (mnr.imports holds REFERENCES; cells on `mnr.prop-net`; SRE STRUCTURAL is on-network classification). No new flow added at 4A.a; flow lands at 4A.b ✓ (scaffolding-honestly-named)
+
+**Honest framing**: 4A.a is preparation for 4A.b's mantra-advancing work. Cataloguing 4A.a as "mantra-advancing" would be the cataloguing failure mode.
+
+#### §18.16.3 Principles in play (3-column adversarial)
+
+| Principle | Catalogue (passes) | Challenge (more aligned?) | Adversarial (where breaks?) |
+|---|---|---|---|
+| First-Class by Default | Per-name cell (Track 7) + per-file mnr now first-class | Should `cell-id-map` be a cell itself? | Defer to PM Track 12 / Hasse-registry per §6.12 |
+| Most Generalizable Interface | Imports-list pattern is PM Track 12 template per §18.15.10 | Should imports be a Hasse over modules? | Defer per §18.15.7: linear list now; Hasse if N grows; module-loading-on-network territory |
+| Decomplection | mnr struct (identity) vs cells (contents); imports as references not copies | Are mnr + parameter actually orthogonal? | Parameter = "which mnr is current"; mnr = "cells". Orthogonal ✓ |
+| Correct by Construction | SRE STRUCTURAL makes type-only registration structural; eliminates `global-env-add-type-only` as separate API | Is type/value split actually independent? | API already separates lookup-type/lookup-value; `add-type-only` exists because the split is real ✓ |
+| Propagator-First Infrastructure | Extends Track 5/6/7 per-module persistent networks | Does 4A.a actually add cells/propagators? **No.** | Scaffolding-honestly-named; load-bearing at 4A.b ✓ |
+| Cell/Prop/Scheduler Orthogonality | None of 5 deliverables couple to scheduler-specific machinery | Temptation to optimize cascading-lookup via scheduler hooks at hot N? | If hot at 4A.b/c: cell-layer cache or propagator-layer fire-pattern; NOT scheduler |
+
+#### §18.16.4 Drift risks (D-4Aa-1 through D-4Aa-7)
+
+- **D-4Aa-1** — `imports` cycle protection scope. RESOLVED per Q2 (§18.16.5): cycles NOT in 4A scope; loading-set protects today; module-loading-on-network retires per §18.11.3.
+- **D-4Aa-2** — SRE STRUCTURAL "validated not deployed" risk. RESOLVED per Q3 (§18.16.5): registration-only at 4A.a is staging (no dual-path), NOT validated-not-deployed.
+- **D-4Aa-3** — parameter location / lifecycle. RESOLVED per Q4 (§18.16.5): namespace.rkt; define-only at 4A.a; parameterize at 4A.b.
+- **D-4Aa-4** — pipeline.md exhaustiveness on struct addition: VERIFIED. Only 1 direct ctor site needs update (`namespace.rkt:128 make-module-network`); 5 struct-copy sites unaffected (Racket struct-copy preserves unmentioned fields).
+- **D-4Aa-5** — `(struct-out module-network-ref)` provide auto-exports the new `module-network-ref-imports` accessor — no provide-list updates needed. VERIFIED.
+- **D-4Aa-6** — Test fixture `test-module-network-01.rkt` needs targeted re-run + new test for `imports` field semantics.
+- **D-4Aa-7** — `'definition-entry` `#:contradicts?` declaration: must declare `(eq? v 'def-collision)` to surface collisions structurally (Phase 1A-ii precedent ensures collision detection rather than silent absorption).
+
+#### §18.16.5 Architectural Q resolutions (4 LOCKED)
+
+##### Q1 — `imports` field type & ordering: LOCKED cons-prepend list, last-write-wins shadowing
+
+**Decision**: `imports : List ModuleNetworkRef`, cons-prepend (newest first), iterated in list-order at cascading-lookup.
+
+**Rationale**:
+- Cons-prepend is O(1) per import (vs O(N) for append-at-end)
+- Iteration in list-order yields **last-write-wins shadowing semantics matching today**: when file A imports B then C and both export `foo`, C's foo wins (C is cons-front, walked first). Matches `hash-set`-overwrite semantics at `driver.rkt:1857-1869`.
+- Deduped-set option rejected: physical mnr dedup happens at `lookup-module` (module-registry level); transitive duplicate scenarios don't appear at the import-list level (A imports B and C; both transitively import Prelude → A.imports = [C, B]; Prelude appears in B.imports and C.imports via cascade, but not duplicated in A.imports).
+
+**Drift catch — explicit shadowing resolution**: Track 5 Phase 4 `dep-edges` records cross-module deps explicitly. List-position shadowing is the fallback; explicit `dep-edges` are authoritative for LSP / Phase 11b consumers.
+
+##### Q2 — Cascading-lookup cycle protection: LOCKED trust loading-set; no helper-internal protection
+
+**Decision**: `module-network-cascading-lookup` is a simple recursion through local + imports with NO seen-set / NO cycle detection. Trusts the structural invariant that `imports` is acyclic-by-construction.
+
+**Rationale (sharpened during dialogue 2026-05-28)**:
+- **Cyclic-module-loading-cycles are NOT in 4A scope** per §18.11.3: "Phase 4 doesn't touch module loading; cycle check retires at module-loading-on-network." Loading-set check at `driver.rkt:1872-1874` stays as today's cycle gate.
+- The user's thesis (2026-05-28): "Cyclic module loading shouldn't matter; library-as-book multi-pass preparse devised at the term-level; with on-network module loading on network, this multi-pass preparse collapses to lattice fixpoint. Is this in scope for Phase 4? If not, I agree with the lean." RESOLUTION: NOT in 4A scope; helper trusts load-time invariant.
+- The scope-creep my initial (c) defensive lean defended against — a future-implementor bug at 4A.c accidentally adding `current-mnr` to its own imports list — is NOT a cycle-in-the-user-program concern. It's an implementor-bug concern that belongs at the 4A.c WRITE site (e.g., `(assert (not (eq? mnr imported-mnr)))` in the import handler), not at the LOOKUP layer.
+- Correct-by-Construction principle: invariants live where they're MAINTAINED, not where they're CONSUMED. The "no self-edit" invariant is maintained at 4A.c's import handler. Defense at the LOOKUP layer would be scope creep into anticipating future bugs in code that doesn't exist yet.
+- Future module-loading-on-network track: cycle check retires; cycles diagnosed via lattice fixpoint (cell-at-bot waiting / fuel exhaustion). Cascading-lookup helper unchanged — acyclic imports remains the structural invariant at the helper's layer.
+
+**Methodology data point**: codifier-falls-into-trap pattern, **3rd data point this arc** (1st: prior session missed Galois bridges prior art; 2nd: this session's prior Q-4A.1 "new pattern" mis-framing; 3rd: this session's initial Q2 (c) scope-creep defense). The 3-column adversarial framing in my initial Q2 framing was operating WITHIN the implicit assumption that cycle-protection-in-helper was 4A-relevant; user's thesis stepped outside the frame and surfaced the scope-creep. **Watching-list graduation eligible at 3 data points** — promotion candidate for DEVELOPMENT_LESSONS.org or CRITIQUE_METHODOLOGY.org at 4A close.
+
+##### Q3 — SRE STRUCTURAL registration scope: LOCKED registration-only at 4A.a; merges complete
+
+**Decision**: at 4A.a, ship the COMPLETE SRE registration for `'definition-entry` (struct definition + merge function + classification + contradicts? declaration) but DO NOT migrate write/read sites in `global-env.rkt` — those stay on `(cons type value)` until 4A.b's read-flip.
+
+**Concrete shape**:
+- Struct: `(struct def-entry (type value) #:transparent)`, plus sentinels `'def-bot` and `'def-collision`
+- `def-entry-merge`:
+  - Bot absorption: `(eq? old 'def-bot)` → new; same for new
+  - Top absorption: `(eq? old 'def-collision)` → old; same for new
+  - Per-field merge on `(def-entry, def-entry)`:
+    - `:type` field — type-unify-or-top per §18.15.5 Q2 (Role B; invokes `unify-core` with `'equality` relation; produces narrowed type on success, `'type-top` on failure)
+    - `:value` field — **strict set-once**: `(#f, v)` → v (bot → v allowed); `(v, v)` → identity; `(v1, v2)` where `v1 ≠ v2` → `'def-collision` (catches double-write bugs; PM Track 7 PIR §12 precedent)
+- Registration: `(register/minimal 'definition-entry def-entry-merge (lambda (v) (eq? v 'def-bot)) 'def-bot #:classification 'structural #:contradicts? (lambda (v) (eq? v 'def-collision)))`
+
+**Rationale**:
+- §6.15 Phase 3 `:type`/`:term` precedent: registration first (3a+3b atomic); writer migration per-rule at 3c. 4A.a → 4A.b mirrors this.
+- "Registration without consumers" is INERT REGISTRY ENTRY, not Validated-Not-Deployed (no dual-path code; no flag to flip; 4A.b activates by switching writers/readers).
+- Merges complete-at-registration so 4A.b doesn't revisit registration semantics.
+
+**Sub-decision on `:value` set-once vs replace** (resolved 2026-05-28):
+- (i) **strict set-once** chosen — collision detection catches double-write bugs that today's hasheq-replace silently absorbs
+- (ii) replace rejected — silently absorbs double-writes; non-LSP/non-REPL file elaboration already has name-collision preparse warning; if set-once fires, it surfaces a bug worth diagnosing
+- REPL / incremental-editing (PPN Track 8) may need to revisit; for 4A scope, set-once is correct
+
+##### Q4 — `current-file-module-network-ref` parameter: LOCKED namespace.rkt; define-only at 4A.a
+
+**Decision**: define the parameter in `namespace.rkt` (where mnr struct lives); provide it; DO NOT yet parameterize it at any call site in 4A.a. `parameterize` blocks update at 4A.b alongside the read-path flip.
+
+**Rationale**:
+- Cycle-break direction (Q-4A.6) is `global-env → namespace`; parameter belongs with the mnr struct it holds.
+- Identity-not-contents: parameter holds `module-network-ref` STRUCT REFERENCE (selects "which mnr is current"); cells live on `(module-network-ref-prop-net mnr)`. Distinct from the contents-as-parameter anti-pattern the env-state params (Q-4A.5 retirement targets) represent.
+- Define-only at 4A.a means: parameter exists in the codebase but no production code reads it. **Zero behavior change at 4A.a.** Read paths flip at 4A.b; test fixtures migrate at 4A.d.
+
+##### M1 — `def-entry` struct + `def-entry-merge` placement: LOCKED (α) namespace.rkt (audit-surfaced 2026-05-28)
+
+**Decision**: define `def-entry` struct + `def-bot`/`def-collision` sentinels + `def-entry-merge` function in `namespace.rkt`. Update namespace.rkt's `require` to add `(only-in "type-lattice.rkt" type-unify-or-top type-bot type-top)`. Update namespace.rkt's `provide` to add `(struct-out def-entry)` + `def-bot` + `def-collision` + `def-entry-merge`. `phase1d-registrations.rkt` imports these symbols from namespace.rkt for the SRE domain registration call.
+
+**Rationale**:
+- Semantic colocation: `def-entry` IS the per-name definition entry for `module-network-ref`; lives where mnr struct lives
+- Precedent: `decisions-state` + `decisions-state-merge` live in `decision-cell.rkt`; `attribute-map-merge-fn` in `typing-propagators.rkt`. Struct + merge live in DOMAIN-OWNING module; `phase1d-registrations.rkt` is the REGISTRATION SINK (consolidates `register-domain!` calls), NOT a struct-definition module.
+- Same module global-env.rkt (post Q-4A.6 cycle-break) will require at 4A.b — single import point
+- 1 file change vs (γ) leaf module's 2-file pattern
+
+**Cycle check verified**: type-lattice.rkt's transitive closure (racket/match, racket/list, prelude.rkt, syntax.rkt, reduction.rkt, zonk.rkt, substitution.rkt, ctor-registry.rkt, union-types.rkt) does NOT require namespace.rkt. Safe to add `namespace.rkt → type-lattice.rkt` require.
+
+**Rejected alternatives**:
+- **(β)** phase1d-registrations.rkt — module is conventionally registration sink; defining structs here breaks convention
+- **(γ)** new leaf `definition-entry.rkt` — cleaner separability but adds one file; defensible alternative if leaf-module hygiene preferred over colocation
+
+##### M2 — Pipeline.md "New Racket Parameter" timing: LOCKED (B) deferred adherence to 4A.b (audit-surfaced 2026-05-28)
+
+**Decision**: at 4A.a, `current-file-module-network-ref` is **define-only** in namespace.rkt (per Q4). Pipeline.md required parameter-entries deferred to 4A.b alongside the read-flip activation.
+
+**Applicable sites per pipeline.md "New Racket Parameter" rule**:
+
+| Site | Path / line | Applies? | When |
+|---|---|---|---|
+| Definition site | `namespace.rkt` (new define) | YES | **4A.a** (this sub-phase) |
+| `test-support.rkt` parameterize block | `tests/test-support.rkt` lines 82, 134, 158, 187, 210, 240 (6 sites) | YES — for test isolation | **4A.b** (alongside read-flip) |
+| `batch-worker.rkt` save/restore | `tools/batch-worker.rkt` lines 226-235 | YES — for batch-worker isolation | **4A.b** (alongside read-flip) |
+| `with-fresh-meta-env` | `metavar-store.rkt:1812` | NO — parameter is identity-not-contents (not meta-related) | N/A |
+| `reset-meta-store!` | `metavar-store.rkt:2917` | NO — not meta-related | N/A |
+| `save-meta-state` / `restore-meta-state!` | `metavar-store.rkt:2944, 2960` | NO — parameter holds struct REFERENCE; speculation rollback at cell layer (worldview tagging on mnr's prop-net) | N/A |
+
+**Rationale for deferred adherence**:
+- Pipeline.md rule's failure-mode RATIONALE (test pollution, batch-worker isolation gap) requires parameter to be READ at runtime. At 4A.a, parameter is define-only with no reader → no failure mode materializes.
+- 4A.b activates parameter (cascading-lookup migration); adding parameterize entries in same sub-phase = same dialogue checkpoint, same Vision Alignment Gate.
+- Tighter 4A.a scope; cleaner per-sub-phase commit boundary.
+
+**CARRY-FORWARD OBLIGATION TO 4A.b (CRITICAL — capture-gap discipline)**:
+
+Per [DEVELOPMENT_LESSONS.org § "Capture-Gap Pattern: 'Future Phase X Handles Y' Requires Verification"](principles/DEVELOPMENT_LESSONS.org): every "future phase handles Y" claim requires explicit capture creation at claim time AND verification at the future phase's mini-design opening.
+
+**Captured here at 4A.a (§18.16.5.M2)**:
+- 4A.b mini-design MUST verify capture of 2 obligations:
+  1. Add `[current-file-module-network-ref (make-module-network)]` entries to **`tests/test-support.rkt` lines 82, 134, 158, 187, 210, 240** (6 sites)
+  2. Add `[current-file-module-network-ref (make-module-network)]` entry to **`tools/batch-worker.rkt` parameterize block at lines 226-235**
+- 4A.b's §3 tracker row notes inheritance (see §3 row 4A.b update for explicit pointer).
+
+**Failure mode if uncaptured**: 4A.b reads `current-file-module-network-ref` at runtime, parameter is unset (default #f) in test/batch contexts, tests show intermittent failures with no clear signal (the classic two-context boundary bug class per DEVELOPMENT_LESSONS.org).
+
+**Adversarial check on (B)**: deferring is a deviation from pipeline.md as-written ("immediately add"). Counter: rule's failure-mode rationale doesn't apply when parameter has no reader; strict (A) would add parameterize entries that set the parameter to a fresh mnr nothing consumes — "shape without benefit" anti-pattern. Capture-gap discipline + 4A.b row pointer mitigate the deferral risk.
+
+#### §18.16.6 Sub-phase commit ordering
+
+Per Stage 4 conversational cadence + per-commit dialogue checkpoint:
+
+1. **Deliverable (4)** require change — `(require "namespace.rkt")` in `global-env.rkt`. Smallest test (build doesn't fail). Verifies cycle-break invariant on actual code.
+2. **Deliverables (1) + (5)** struct field addition + parameter definition — atomic commit (both pure additions in `namespace.rkt`; no behavioral change).
+3. **Deliverable (2)** cascading-lookup helper — separate commit with targeted test exercising local + imports walk.
+4. **Deliverable (3)** SRE STRUCTURAL registration — separate commit with targeted test exercising `def-entry-merge` semantics (bot, top, identity, type-narrow, value-set-once, value-collision).
+5. **4A.a-close** — §3 tracker row 4A.a ⬜ → ✅ with commit hashes; dailies entry per workflow rule; Vision Alignment Gate per §18.16.2 mantra check + §18.16.3 principles.
+
+Estimated total: ~80-150 LoC code + ~50 LoC test additions per §18.15.9 estimate.
+
+#### §18.16.7 Mini-audit findings (Stage 4 step 2 — COMPLETE 2026-05-28)
+
+**Audit-cleared — no reshape surprises; Q1-Q4 + M1-M2 all LOCKED**:
+
+| Audit item | Finding | Impact |
+|---|---|---|
+| `type-unify-or-top` accessibility | EXPORTED from `type-lattice.rkt:41`; already imported in `phase1d-registrations.rkt:68` (companion to `type-lattice-merge`) | Confirms Q3 + M1 — one-line `only-in` extension |
+| `type-lattice.rkt` transitive closure | racket/match, racket/list, prelude.rkt, syntax.rkt, reduction.rkt, zonk.rkt, substitution.rkt, ctor-registry.rkt, union-types.rkt — **NONE require namespace.rkt** | Safe to add `namespace.rkt → type-lattice.rkt` require (M1 cycle-clear) |
+| Struct-copy sites for `module-network-ref` | 5 sites (`driver.rkt:2163`, `namespace.rkt:144/155/161`, `test-module-network-01.rkt:277`); all unaffected | Pipeline.md exhaustiveness: only 1 direct ctor (`namespace.rkt:128 make-module-network`) needs new arg (default `'()`) |
+| `(struct-out module-network-ref)` provide | At `namespace.rkt:27` auto-exports new `module-network-ref-imports` accessor | No provide-list updates needed for accessor |
+| `phase1d-registrations.rkt` sink status | Registration sink only; NO module requires it (loaded by driver.rkt for side-effect) | Safe siting for `'definition-entry` SRE registration import |
+| SRE STRUCTURAL pattern precedent | `attribute-map-merge-fn` (`typing-propagators.rkt:440`) — single merge function with internal per-position-per-facet dispatch + `#:classification 'structural` at registration enables Phase 1f `:component-paths` enforcement | `def-entry-merge` follows same shape — confirms Q3 single-merge with internal `:type`/`:value` dispatch |
+| Name collision | `current-file-module-network-ref`, `def-entry`, `def-bot`, `def-collision`, `'definition-entry`, `module-network-ref-imports` — all absent in codebase | All names safe |
+| `global-env.rkt → namespace.rkt` cycle-break | `namespace.rkt` requires only `infra-cell.rkt` + `propagator.rkt`; no `global-env.rkt` back-edge | Q-4A.6 safe (verified at deliverable (4) timing) |
+| Pipeline.md applicable sites for new parameter | `test-support.rkt` (6 parameterize sites at lines 82, 134, 158, 187, 210, 240); `tools/batch-worker.rkt` (parameterize block at lines 226-235). `with-fresh-meta-env`/save-meta-state/reset-meta-store! **NOT applicable** (identity-not-contents) | M2 LOCKED — deferred to 4A.b per capture-gap discipline; obligation captured in §3 tracker row 4A.b |
+
+**Per "Audit-Precedes-Implementation REFRAMING Discipline" (DEVELOPMENT_LESSONS.org)**: audit complete with zero reframing. Two open micro-decisions surfaced (M1 def-entry placement; M2 parameter-entries timing); both locked in §18.16.5.M1 and §18.16.5.M2 above. Ready for implementation per §18.16.6 sub-phase commit ordering, opening with deliverable (4) cycle-break require change.
+
+#### §18.16.8 Cross-references
+
+- §18.15.4 Q-4A.1 (Option B-revised: extend `module-network-ref` to in-flight file)
+- §18.15.5 SRE STRUCTURAL classification of `DefinitionEntry`
+- §18.15.6 Module-Theoretic framing + NTT model + cross-network bridge gap (NTT_SYNTAX_DESIGN.md §17b)
+- §18.15.7 Q-4A.4 Option (b) share-by-reference (constrains 4A.a struct shape; realizes at 4A.c)
+- §18.15.8 Q-4A.6 Option (γ.3) `global-env.rkt → namespace.rkt`
+- §18.11 Cyclic definitions handling principle (informs Q2 scope decision)
+- §6.15 Phase 3 `:type`/`:term` tag-layer precedent (registration-first pattern; Q3 leans on this)
+- DEVELOPMENT_LESSONS.org § Audit-Precedes-Implementation REFRAMING Discipline (mini-audit reframing protocol)
+- DEVELOPMENT_LESSONS.org § Hot-Load Is a Protocol, Not a Prioritization
+- `racket/prologos/namespace.rkt:114-175` (`module-network-ref` struct + API)
+- `racket/prologos/global-env.rkt:72-74` (current require block)
+- `racket/prologos/phase1d-registrations.rkt:100-115` (`register/minimal` template)
 
 ---
 
