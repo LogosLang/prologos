@@ -28,10 +28,14 @@
  make-module-network
  module-network-lookup
  module-network-add-definition
+ module-network-add-import      ;; PPN 4C Addendum Phase 4A.a (Q-4A.4 Option (b)): cons-prepend import
  module-network-write
  module-network-set-status
  module-network-status
  module-network-materialize
+ ;; PPN 4C Addendum Phase 4A.a (Q-4A.5): per-file mnr parameter. Define-only
+ ;; at 4A.a (no reader); 4A.b flips global-env-lookup-* to consume it.
+ current-file-module-network-ref
  ;; Module lifecycle constants (re-exported from infra-cell.rkt)
  mod-loading
  mod-loaded
@@ -116,16 +120,29 @@
    cell-id-map      ;; hasheq: symbol → cell-id (definition name → cell)
    mod-status-cell  ;; cell-id: lifecycle monitoring (mod-loading → mod-loaded → mod-stale)
    dep-edges        ;; hasheq: symbol → (listof dep-edge-info) (Track 5 Phase 4)
-   snapshot-hash)   ;; hasheq or #f: materialized env snapshot (belt-and-suspenders, Phases 3-4)
+   snapshot-hash    ;; hasheq or #f: materialized env snapshot (belt-and-suspenders, Phases 3-4)
+   imports)         ;; (listof module-network-ref): shared-by-reference imports (PPN 4C Addendum Phase 4A.a, Q-4A.4 Option (b)). cons-prepend (newest first); cascading-lookup walks local then imports in list-order (last-write-wins shadowing matches today's hash-set-overwrite). IN-MEMORY ONLY — not serialized (pnet-serialize extracts module-info fields, not the mnr struct); SH Track 1 needs name-reference serialization when .pnet becomes network-as-value.
   #:transparent)
 
 ;; Create a fresh module network for a module about to be loaded.
 ;; Returns: module-network-ref with empty cell-id-map, no dep-edges,
-;; and mod-status initialized to mod-loading.
+;; empty imports, and mod-status initialized to mod-loading.
 (define (make-module-network)
   (define net0 (make-prop-network))
   (define-values (net1 status-cid) (net-new-mod-status-cell net0 mod-loading))
-  (module-network-ref net1 (hasheq) status-cid (hasheq) #f))
+  (module-network-ref net1 (hasheq) status-cid (hasheq) #f '()))
+
+;; Add an imported module's network as a shared-by-reference import.
+;; PPN 4C Addendum Phase 4A.a (Q-4A.4 Option (b)): cons-prepend (newest
+;; first) so cascading-lookup's list-order walk yields last-write-wins
+;; shadowing — matching today's hash-set-overwrite at the driver import.
+;; Holds a REFERENCE to imp's mnr (no copy of imp's cells/definitions).
+;; Consumed by driver.rkt's import-handler at 4A.c (replaces the copy at
+;; lines 1857-1869). O(1) per import; cascade cost is O(imports) per miss.
+;; Returns: updated module-network-ref.
+(define (module-network-add-import mnr imp)
+  (struct-copy module-network-ref mnr
+    [imports (cons imp (module-network-ref-imports mnr))]))
 
 ;; Look up a definition cell's value in a module network.
 ;; Returns: (cons type value) or #f if not found.
@@ -173,6 +190,23 @@
 (define (module-network-materialize mnr)
   (for/hasheq ([(name cid) (in-hash (module-network-ref-cell-id-map mnr))])
     (values name (net-cell-read (module-network-ref-prop-net mnr) cid))))
+
+;; ========================================
+;; Per-file module network (PPN 4C Addendum Phase 4A.a, Q-4A.5)
+;; ========================================
+;; Holds the currently-elaborating file's module-network-ref — the in-flight
+;; counterpart to loaded modules' mnr (which live in current-module-registry).
+;; Q-4A.1 Option B-revised: each file (loaded AND in-flight) owns an mnr; this
+;; parameter selects "which mnr is current" (identity, not contents — cells
+;; live on (module-network-ref-prop-net mnr)).
+;;
+;; LIFECYCLE (Q-4A.5 + M2 §18.16.5): DEFINE-ONLY at 4A.a — no production reader
+;; yet, so default #f is never consumed. 4A.b flips global-env-lookup-type/value
+;; to read from this mnr via module-network-cascading-lookup, and adds the
+;; parameterize entries to test-support.rkt (6 sites) + tools/batch-worker.rkt
+;; per pipeline.md "New Racket Parameter" (deferred per capture-gap discipline;
+;; obligation captured at design §3 tracker row 4A.b).
+(define current-file-module-network-ref (make-parameter #f))
 
 ;; ========================================
 ;; Module Registry — caches loaded modules
