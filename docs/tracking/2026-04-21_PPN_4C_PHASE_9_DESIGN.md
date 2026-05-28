@@ -9933,12 +9933,15 @@ Per Stage 4 Per-Phase Protocol step 1+2 (mini-design + mini-audit co-dependent c
 
 #### §18.15.2 Open questions (in-flight)
 
-- Q-4A.1 Cell lifecycle (Option A/B/C; in dialogue post-prior-art audit per §18.15.5)
-- Q-4A.2 Dep-recording handling — **LOCKED** (§18.15.3)
+- Q-4A.1 Cell lifecycle — **LOCKED** Option B-revised (§18.15.4); sub-Qs a/b/c/d all locked
+- Q-4A.2 Dep-recording handling — **LOCKED** retire across 4A+4B (§18.15.3)
 - Q-4A.3 Per-name cell-id API exposure (open)
-- Q-4A.4 3-layer scope (open; coupled to Q-4A.1)
-- Q-4A.5 Parameter retirement vs snapshot (open)
+- Q-4A.4 3-layer scope + module-sharing optimization (in dialogue; §18.15.7)
+- Q-4A.5 Parameter retirement vs snapshot (open; coupled to Q-4A.4)
 - Q-4A.6 Callback machinery retirement (open)
+- SRE classification — **LOCKED** STRUCTURAL (§18.15.5)
+- Module Theory framing — **established** (§18.15.6)
+- NTT model — **sketched** (§18.15.6; cross-network bridge gap flagged for NTT_SYNTAX_DESIGN.md follow-up)
 
 #### §18.15.3 Q-4A.2 — Dep-recording retirement LOCKED (2026-05-26)
 
@@ -9999,9 +10002,136 @@ Honest framing: **the 2.5× perf claim materializes at 4A+4B together**, not at 
 - PPN Track 11 (LSP integration) — `cell-dependents` API serves textDocument/references + incremental re-elaboration use cases
 - PM Track 12 — `current-elaborating-name` retirement coordinates with PM 12's parameter-to-cell migration vocabulary
 
-#### §18.15.4 — §18.15.6 (Q-4A.1 dialogue in progress; persist when decisions land)
+#### §18.15.4 Q-4A.1 — Cell lifecycle LOCKED (2026-05-26)
 
-In-flight per Stage 4 conversational cadence. Prior-art audit + memory/GC analysis ongoing; not yet ready for design-doc commitment. See current dailies for dialogue state.
+**Decision**: **Option B-revised** — extend `module-network-ref` pattern (PM Track 5 `namespace.rkt:114-175`) to the currently-elaborating file. Each file (loaded modules AND in-flight) owns a `module-network-ref` with its persistent prop-net + cell-id-map registry + per-name cells + mod-status.
+
+**Background**: PM Track 5 + PM Track 6 + PM Track 7 already established two-network architecture (persistent module networks + per-command elab-network). PM Track 7 PIR §12 explicitly framed cell persistence and cell lifecycle as orthogonal concerns. PM Track 7 considered + REJECTED per-name on the SHARED persistent registry network ("growing dynamic collection violates small-static design"). But `module-network-ref` is DIFFERENT — per-module, not shared — and explicitly designed for "growing dynamic collection of definition cells." The architectural ASYMMETRY today is: loaded modules have mnr (persistent cells, stable cell-ids); in-flight file has parameter-backed + per-command ephemeral cells (Track 5 pattern). 4A's flip CLOSES this asymmetry by extending the mnr pattern uniformly.
+
+**Sub-question resolutions** (Q-4A.1.a/b/c/d):
+
+| Sub-Q | Decision | Rationale |
+|---|---|---|
+| **Q-4A.1.a** Direction | LOCKED — Option B-revised | Prior art (PM Track 5/6/7 `module-network-ref`) makes "cross-network access" NOT a new pattern. Adversarial reframing in prior dialogue surfaced 6+ existing α/γ Galois bridges + per-module persistent networks. NO new struct, NO new primitive — reuses 100% of Track 5/6/7 infrastructure |
+| **Q-4A.1.b** Per-file scope | LOCKED — (i) each file gets a mnr; mod-status handles lifecycle | Matches Module Theory's direct sum exactly. In-flight file = mod-status stays at mod-loading until file ends. No new lifecycle state |
+| **Q-4A.1.c** Cross-network read mechanism | LOCKED — (α) function-call lookup for 4A; (β) reactive cross-network propagator-installed bridges → PPN Track 8 / module-loading-on-network | (α) matches existing PM Track 6 Phase 7d pattern for loaded modules. (β) is downstream scope for PPN Track 8 incremental editing reactive use cases |
+| **Q-4A.1.d** Sub-phase reordering | LOCKED — NO §18.4 reorder; PPN 4C Addendum Phase 4D decoupled from 4A | Under B-revised, env cells live on per-file mnr (NOT elab-network), so 4D's `reset-meta-store!` retirement is independent of 4A's env-cell flip. Both can land in §18.4 order |
+
+**Empirical anchor**: PM Track 5 PIR showed `module-network-ref` infrastructure in production with **+14% wall time** (within 25% threshold) for persistent module migration. Per-file extension inherits the same proven cost profile. For a 50-defn file: 3.6× allocation reduction per file vs status quo (~3250 ephemeral cells → ~900 cells with ~50 env cells persistent). LSP/REPL: per-name cell-id stable across commands within file → foundation for PPN Track 8 incremental editing structurally.
+
+**Memory/GC** (per Tropical Quantale Addendum PIR + STEP2 baseline): specialized cell-write 4.5 ns/cycle; 0 major-GC at 100k decrements. Cell allocation cost itself isn't a GC concern; CHAMP-churn (immutable struct-copy per cell-write) is the load on hot paths — but env writes are NOT hot path (per-defn, not per-lookup).
+
+#### §18.15.5 SRE Lattice Lens applied (2026-05-26)
+
+Per [CRITIQUE_METHODOLOGY.org § SRE Lattice Lens](principles/CRITIQUE_METHODOLOGY.org). All 6 questions resolved with 3-column adversarial framing.
+
+**Q1 Classification — LOCKED: STRUCTURAL** for `DefinitionEntry`. Per-name cell decomposes into `type` sub-cell + `value` sub-cell via SRE structural decomposition. Rationale:
+- API already separates concerns: `global-env-lookup-type` vs `global-env-lookup-value`
+- `global-env-add-type-only` (`global-env.rkt:262`) exists PRECISELY because of the "type known before value" pattern (recursive defs: type registered first, body checked, value committed after). Under STRUCTURAL classification, this pattern becomes structural (write type sub-cell; value sub-cell stays at bot); `global-env-add-type-only` is no longer needed as a separate API
+- Propagator `:reads` can target specific facets via `:component-paths` (per PPN 4C Phase 3 attribute-map structural addressing precedent)
+
+**Q2 Algebraic properties**:
+- Per-name cell: replace semantics (last-write-wins on redef); CALM-safe via worldview tagging (BSP-LE Track 2B `tagged-cell-value` pattern)
+- Sub-cell `:type`: TypeExpr lattice (SRE Track 2H — full quantale + Heyting ground sublattice + Distributive)
+- Sub-cell `:value`: TermValue lattice (set-once via reduction's normal form)
+- Registry (`name → cell-id` mapping): commutative + associative + idempotent + monotone (hash union semantics — names only added, never removed; cell-ids stable once assigned)
+- Per-name `:type` collision detection via Role B `type-unify-or-top` semantics (PPN 4C T-3 Commit A precedent)
+
+**Q3 Bridges** — within-network (cross-DOMAIN, propagator-installed): type sub-cell → mult/level/session bridges (existing). Cross-network (cross-NETWORK, function-call): per-file mnr ↔ loaded-module mnrs via `module-network-lookup`. **NTT gap identified**: cross-network bridge form (see §18.15.6).
+
+**Q4 Composition** — full bridge diagram drawn in dialogue. Per-file mnr is the focal Q-module; loaded-module mnrs compose via direct sum + dep-edges morphisms; elab-network reads via function-call cross-network lookup.
+
+**Q5 Primary vs derived**:
+- PRIMARY: per-name `:type` + `:value` sub-cells; registry (cell-id-map); mod-status; dep-edges
+- DERIVED: snapshot-hash (computed at serialization); `current-definition-cells-content` parameter (RETIRED or DERIVED snapshot post-flip per Q-4A.5)
+
+**Q6 Hasse diagram + compute topology** — the env's Hasse IS the dependency DAG:
+- Independent defs (no edge) → PARALLEL elaboration possible (4B/4C territory)
+- Dependent defs (edge) → RESIDUATE (waits-on-bot) per §18.15.3 (Q-4A.2 dep-recording retirement)
+- Per-name cell-id IS the Hasse node identity; `:reads` declarations encode Hasse edges structurally
+- For LSP edit incremental re-elaboration: Hasse down-closure of edited name = invalidation set; per Hyperlattice Conjecture, parallel re-elaboration topology FOLLOWS the Hasse structure
+
+#### §18.15.6 Module-Theoretic framing + NTT model sketch (2026-05-26)
+
+**Per [Module Theory on Lattices](docs/research/2026-03-28_MODULE_THEORY_LATTICES.md)**:
+- Each per-name cell is a TypeExpr×TermValue Q-module (with structural decomposition into type + value sub-modules)
+- Per-module env-network = direct sum of per-name modules: `Env_A = ⊕_{name ∈ names(A)} DefinitionModule(name)`
+- Cross-module env composition = coproduct: `ProgramEnv = ∐_{module} EnvModule = Env_A ⊕ Env_B ⊕ Env_Prelude`
+- Module imports = Q-module homomorphisms: `Env_B → Env_A` injection of B's named entries into A's scope
+- Cross-module deps (existing PM Track 5 Phase 4 `dep-edges`) = morphism arrows in the resulting category
+
+**NTT model** (per [NTT_SYNTAX_DESIGN.md](2026-03-22_NTT_SYNTAX_DESIGN.md) §3.2 structural + §5 interface + §15 persistence + §17.3 :foreach):
+
+```ntt
+;; Level 0 — STRUCTURAL lattice (SRE-derived decomposition)
+data DefinitionEntry
+  := def-bot
+   | def-entry [type : TypeExpr] [value : TermValue]
+   | def-collision
+  :lattice :structural
+  :bot def-bot
+  :top def-collision
+  ;; SRE-derived merge: per-component (Role B :type via type-unify-or-top;
+  ;; :value via set-once-or-replace per PM Track 7 precedent)
+
+;; Module status lifecycle (per existing namespace.rkt)
+data ModStatus := mod-loading | mod-loaded | mod-stale
+  :lattice :value
+  :bot mod-loading
+
+;; Per-module env-network interface
+interface ModuleEnvNet
+  :outputs [registry  : Cell (Hasheq Symbol CellId)
+            status    : Cell ModStatus
+            dep-edges : Cell (Hasheq Symbol (List DepEdge))]
+  ;; Dynamically via :foreach (NTT §17.3 proposed extension):
+  :foreach name in defined-names
+    definition-cell : Cell DefinitionEntry
+
+;; Per-module env-network — :lifetime :persistent
+network module-env : ModuleEnvNet
+  :lifetime :persistent
+
+;; Persistence (per NTT §15)
+serialize module-env-snapshot : Snapshot ModuleEnvNet
+  :format :pnet-v2
+  :requires [ModuleLoaded module-env]
+  :requires [Ground module-env]
+  :excludes [Propagators]
+  :gensyms :tagged
+
+fork test-env-fork : ModuleEnvNet -> TestEnvNet
+  :shares [cells propagators registries]
+  :resets [worklist fuel contradiction]
+  :lifetime :ephemeral
+
+;; CROSS-NETWORK BRIDGE — NTT GAP (proposed extension; see NTT_SYNTAX_DESIGN.md §22)
+;; cross-network-bridge ModuleAImportsB
+;;   :from-network module-B-env
+;;   :to-network   module-A-env
+;;   :imports      [name → name mapping]
+;;   :access       :function-call    ;; per PM Track 6 Phase 7d pattern
+;;   ;; :access :reactive             ;; future PPN Track 8 use case
+```
+
+**NTT Observations**:
+1. Everything on-network at the right layer ✓ (per-module env on module's persistent prop-network)
+2. NTT syntax gaps surfaced:
+   - **Cross-NETWORK bridge form** (NEW) — for cross-network access modes (function-call vs reactive)
+   - `:foreach` dynamic per-name instantiation — already proposed at NTT §17.3
+3. No remaining architectural impurities
+
+**Cross-track inheritance**:
+- PM Track 12 (parameters → cells for module loading): 4A's `module-network-ref` extension is the precedent template. The "registry + per-name cell + per-instance persistent prop-network" pattern generalizes to 17+ other parameter registries
+- PPN Track 8 + PPN Track 11 (incremental editing + LSP): substrate is stable per-name cell-ids + structural dep graph (4A + 4B)
+- SH Track 1 (.pnet network-as-value): mnr's `snapshot-hash` field already supports source staleness; SH Track 1 extends via NTT §15 `serialize`/`deserialize`
+- PReduce Track 1 (e-class cell substrate): "registry + per-class cell + per-instance prop-network" pattern from mnr generalizes to e-class cells
+
+**Codification candidate** (watching list): *"Tropical Quantale Addendum + PPN 4C Addendum Phase 4A together form the seeds for PM Track 12's general architecture for registries-on-network. Specialized cell type framework (cell-meta as IR vocabulary) + module-network-ref pattern (per-instance persistent prop-network + per-name cells + cross-network function-call) compose into the PM 12 substrate."*
+
+#### §18.15.7 Q-4A.4 — 3-layer scope (in dialogue; module-sharing optimization in scope per user)
+
+Per dialogue 2026-05-26 + module-loading load-once audit: extending 4A scope to address "optimal module-sharing" — module A imports module B (already loaded) → SHARE BY REFERENCE, not COPY. Today's architecture COPIES at import (driver.rkt:1857-1869); under Variant D + Module-Theoretic direct sum, lookup cascades through imports list without copy. In dialogue.
 
 ---
 
