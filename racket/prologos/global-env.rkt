@@ -71,7 +71,8 @@
 
 (require racket/list        ;; remove-duplicates
          racket/set         ;; seteq, set-add (Phase 3b dependency recording)
-         "infra-cell.rkt")  ;; merge-replace, merge-hasheq-identity (Phase 1e-α split)
+         "infra-cell.rkt"   ;; merge-replace, merge-hasheq-identity (Phase 1e-α split)
+         "namespace.rkt")   ;; PPN 4C Addendum Phase 4A.a (2026-05-28) Q-4A.6 cycle-break: module-network-ref + APIs consumed at 4A.b read-flip
 
 ;; ========================================
 ;; Layer 2: Prelude/module definitions (legacy)
