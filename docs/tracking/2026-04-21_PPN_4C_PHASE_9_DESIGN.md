@@ -226,7 +226,12 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 3V | Vision Alignment Gate Phase 3 (cumulative cross-PHASE across 3A + 3B + 3C) | ✅ `f947b30d` | **CLOSED 2026-05-25 per §9.6 expanded** (commit `f947b30d`). 4 VAG questions × 3 columns × cross-PHASE all pass adversarially (§9.6.2-5). All 6 cross-PHASE drift risks D-3V-1..6 cleared (§9.6.5). Cross-phase coherence verified (§9.6.7) — 3A + 3B + 3C compose through cell state with no cross-sub-phase coupling debt. Cross-PHASE methodology drift surfaced (§9.6.6) — "Audit-precedes-implementation REFRAMING discipline" earned 4th data point. Cumulative cross-track captures consolidated (§9.6.9) — 12+ consumer tracks. **2 codifications GRADUATED to DEVELOPMENT_LESSONS.org** (§9.6.10): "Empirical falsification as audit complement" (5 data points) + "Audit-precedes-implementation REFRAMING discipline" (4 data points). 2 inherited-from-3A codifications DEFERRED to addendum capstone PIR. Phase 3 reflection (§9.6.11) synthesizes achievements + forward-enables + PPN 4 charter fit; substrate-heavy / user-facing-light honest framing. Phase 4 bridge specified at INTERFACE level (§9.6.12) — addendum vs parent track Phase 4 distinction explicit. Suite gate inherited from 3C-VAG (8281 / 107.0s / 0). **Phase 3 CLOSED end-to-end.** Phase 4 paused per user direction. |
 | **4** | **Top-level orchestration unification — retire `process-command` sequential loop** | 🔄 (mini-design persisted) | **MINI-DESIGN OPENED 2026-05-25** — pre-implementation architectural sharpening persisted at §18 post-3V close. T1/T2/T3 audit findings consolidated; thesis sharpened (residuation == cell-at-bot waiting identity; flip-the-read-path as load-bearing move; specialized cells as migration vocabulary). Sub-phase partition revised to **6 sub-phases (4A/4B/4C/4D/4E/4V)** per audit-driven scope expansion. PM Track 12 boundary clarified (§18.5). G1-G10 empirical battery sketched (§18.6). 8 drift risks D-4-1..8 named (§18.8). 6 open architectural questions (§18.7) for continued dialogue before sub-phase work commits. Tracking [#22](https://github.com/LogosLang/prologos/issues/22). Motivating use case: mutual recursion ([PR #14](https://github.com/LogosLang/prologos/pull/14)). Gates on Phase 1 ✅ + Phase 2 ✅ + Phase 3 ✅ all met. |
 | 4A.0 | Pre-0 microbench: env-cell variant comparison + audit-driven extension (production-faithful A + Variant C + W4 light) per §18.12 | ✅ `e11c7fda` + `bac652ae` | **CLOSED 2026-05-26.** Initial bench `e11c7fda` (Variants A/B/D × W1-W3-W5); extended bench `bac652ae` (post-audit additions: production-faithful A via real `global-env-lookup-type`; Variant C via `compound-cell-component-{ref,write}/pnet`; W4 light wake precision). **Q1 variant decision LOCKED to Variant D** per §18.12.7 — registry cell + per-name binding cells preserves Track 7 Phase 7d per-name infrastructure as authoritative read source; per-name first-class for Phase 11b/LSP/.pnet/PReduce. Headline findings: A-prod-with-elab = 267-281 ns/lookup during elaboration (5-7× bench-A strawman 32-40 ns); B reads = 44 ns but wake-blind (N fires per N unrelated writes — structurally unviable for residuation); C reads = 100-111 ns (REFUTES audit "C ≅ B" — tagged-cell-value wrap/unwrap adds ~57-67 ns under wv=0); D reads = 110 ns + per-name first-class structural addressability. W4 light: B fires 9/9 and 49/49; C/D fire 0/9 and 0/49 (perfect precision). 2 methodology data points: "Audit-Precedes-Implementation REFRAMING Discipline" 9th + NEW "Bench-strawman risk" 1st (watching list). Adversarial 3-column framing on the variant decision (§18.12.7). Both baselines retained at data/benchmarks/. |
-| 4A | `current-prelude-env` migration (the flip) — **Variant D LOCKED**: registry specialized cell + per-name binding cells | ⬜ | Sub-phase per §18.4 partition. Variant choice resolved post-4A.0 per §18.12.7. Prerequisite to 4B. ~150-300 LoC. Gate: cell IS source of truth (parameter snapshot or retired); read path flips from `current-prelude-env` parameter hash to per-name cells via registry cell-id lookup. |
+| 4A | `current-prelude-env` migration (the flip) — **Variant D LOCKED**: registry specialized cell + per-name binding cells; **mini-design CLOSED 2026-05-26** | 🔄 (mini-design closed; sub-phases pending) | **Mini-design CLOSED 2026-05-26** per Stage 4 Per-Phase Protocol. All 8 architectural Q's locked (Q-4A.1 Option B-revised; Q-4A.2 retire dep-recording across 4A+4B; Q-4A.3 mnr.cell-id-map existing surface; Q-4A.4 Option (b) share-by-reference + prelude-as-import; Q-4A.5 retire 4 env params; Q-4A.6 global-env.rkt → namespace.rkt; SRE STRUCTURAL classification; Module-Theoretic framing established; NTT model sketched + cross-network bridge gap flagged for NTT_SYNTAX_DESIGN.md). Sub-phase partition 4A.a/b/c/d + 4A-VAG per §18.15.9. Total est. ~430-800 LoC (audit-driven scope reframing per Q-4A.4 share-by-reference + Q-4A.6 callback retirement). Cross-track inheritance: PM Track 12 + PPN Track 8 + PPN Track 11 + SH Track 1 + PReduce Track 1. Methodology data points: codifier-falls-into-trap 2nd data point (missed Galois bridges prior art); prior-art search via mempalace discipline added to MEMORY.md. Persisted §18.15.1-.10. Ready for 4A.a sub-phase mini-design + implementation. |
+| 4A.a | Extend mnr struct with imports field + cascading lookup helper + STRUCTURAL DefinitionEntry + global-env.rkt → namespace.rkt + current-file-mnr parameter | ⬜ | Sub-phase per §18.15.9. Foundation for 4A.b read-path flip. ~80-150 LoC. |
+| 4A.b | Flip global-env-lookup-* to cascading; migrate global-env-add* to direct mnr API (retire callbacks); retire global-env-add-type-only (subsumed by STRUCTURAL) | ⬜ | Sub-phase per §18.15.9. ~100-200 LoC. Gate: probe diff = 0; per-lookup cost similar (dep-recording still active per Q-4A.2). |
+| 4A.c | Retire 7 parameters (4 env-state + 3 callback). Update driver.rkt import-handler (lines 1857-1869): cached module → ADD import-mnr to current-file-mnr.imports (no copy). Prelude as imports list per Q-4A.4.c. | ⬜ | Sub-phase per §18.15.9. ~150-250 LoC. Gate: all parameters retired; driver.rkt simplified; probe diff = 0. |
+| 4A.d | Test fixture migration (~30 sites) + bench re-run | ⬜ | Sub-phase per §18.15.9. ~50-100 LoC + sed-2-pass. Gate: full suite GREEN; bench shows production-A → mnr-based-A within envelope. |
+| 4A-VAG | Cumulative cross-sub-phase 3-column adversarial VAG | ⬜ | Sub-phase per §18.15.9. docs-heavy. Gate: all 13 drift risks (D-4-1..8 + D-4-A1..A5) cleared adversarially. |
 | 4B | Top-level form processing as installable propagators (replace 35 match arms) | ⬜ | Sub-phase per §18.4 partition. Depends on 4A. ~400-700 LoC. Gate: all form kinds elaborate; spec→defn residuation works. |
 | 4C | Retire 4 sequential caller loops | ⬜ | Sub-phase per §18.4 partition. Depends on 4B. ~100-200 LoC. Gate: G1-G4 mutual recursion gates pass. |
 | 4D | `reset-meta-store!` retirement — per-form or file-global meta scope | ⬜ | Sub-phase per §18.4 partition. Architectural question (§18.7 #2) needs resolution before sub-phase work. ~100-200 LoC. |
@@ -9931,17 +9936,20 @@ Per Stage 4 Per-Phase Protocol step 1+2 (mini-design + mini-audit co-dependent c
 - §18.6 G1-G10 battery (substrate requirements for 4B/4C)
 - DESIGN_METHODOLOGY.org Stage 4 Per-Phase Protocol
 
-#### §18.15.2 Open questions (in-flight)
+#### §18.15.2 Architectural decisions — ALL LOCKED (2026-05-26)
+
+PPN 4C Addendum Phase 4A mini-design CLOSED. See §18.15.10 for cumulative status.
 
 - Q-4A.1 Cell lifecycle — **LOCKED** Option B-revised (§18.15.4); sub-Qs a/b/c/d all locked
 - Q-4A.2 Dep-recording handling — **LOCKED** retire across 4A+4B (§18.15.3)
-- Q-4A.3 Per-name cell-id API exposure (open)
-- Q-4A.4 3-layer scope + module-sharing optimization (in dialogue; §18.15.7)
-- Q-4A.5 Parameter retirement vs snapshot (open; coupled to Q-4A.4)
-- Q-4A.6 Callback machinery retirement (open)
+- Q-4A.3 Per-name cell-id API exposure — **LOCKED** Option (c) mnr.cell-id-map (§18.15.8)
+- Q-4A.4 3-layer scope + module-sharing — **LOCKED** Option (b) share-by-reference (§18.15.7)
+- Q-4A.5 Parameter retirement — **LOCKED** retire 4 env params (§18.15.8)
+- Q-4A.6 Callback machinery — **LOCKED** Option (γ.3) global-env.rkt → namespace.rkt (§18.15.8)
 - SRE classification — **LOCKED** STRUCTURAL (§18.15.5)
 - Module Theory framing — **established** (§18.15.6)
-- NTT model — **sketched** (§18.15.6; cross-network bridge gap flagged for NTT_SYNTAX_DESIGN.md follow-up)
+- NTT model — **sketched** + cross-network bridge gap flagged for NTT_SYNTAX_DESIGN.md follow-up (§18.15.6; persisted as §17b in NTT_SYNTAX_DESIGN.md)
+- 4A sub-phase partition — **LOCKED** 4A.a/b/c/d + 4A-VAG (§18.15.9)
 
 #### §18.15.3 Q-4A.2 — Dep-recording retirement LOCKED (2026-05-26)
 
@@ -10129,9 +10137,129 @@ fork test-env-fork : ModuleEnvNet -> TestEnvNet
 
 **Codification candidate** (watching list): *"Tropical Quantale Addendum + PPN 4C Addendum Phase 4A together form the seeds for PM Track 12's general architecture for registries-on-network. Specialized cell type framework (cell-meta as IR vocabulary) + module-network-ref pattern (per-instance persistent prop-network + per-name cells + cross-network function-call) compose into the PM 12 substrate."*
 
-#### §18.15.7 Q-4A.4 — 3-layer scope (in dialogue; module-sharing optimization in scope per user)
+#### §18.15.7 Q-4A.4 — 3-layer scope + module-sharing optimization LOCKED (2026-05-26)
 
-Per dialogue 2026-05-26 + module-loading load-once audit: extending 4A scope to address "optimal module-sharing" — module A imports module B (already loaded) → SHARE BY REFERENCE, not COPY. Today's architecture COPIES at import (driver.rkt:1857-1869); under Variant D + Module-Theoretic direct sum, lookup cascades through imports list without copy. In dialogue.
+**Decision**: **Option (b) share-by-reference** — collapse Layer 2 cascade (Layer 2a `current-module-definitions-content` + Layer 2b `current-prelude-env`) into imports-list iteration on per-file mnr.
+
+**Audit-grounded motivation**: Today's import flow at `driver.rkt:1857-1869` reuses cached module mnr (load-once honored via `lookup-module` at `namespace.rkt:207`) BUT COPIES cached state into local parameter scope on every import (lines 1857-1869: cached env-snapshot → `current-prelude-env` parameter + cached mnr cell-id-map values → `current-module-definitions-content` parameter). 10 files importing module B = 10 local copies of B's exports across 10 parameter scopes. **Per user direction: "shouldn't have to duplicate that import."**
+
+**Resolution**: under Variant D + Module-Theoretic direct sum, lookup cascades through imports list on local mnr — modules SHARED BY REFERENCE (mnr pointer), not COPIED. `Env_A_total = Env_A ⊕ Env_{imports of A}`.
+
+**Sub-question resolutions** (Q-4A.4.a/b/c/d):
+
+| Sub-Q | Decision | Rationale |
+|---|---|---|
+| **Q-4A.4.a** Direction | LOCKED — Option (b) share-by-reference | Eliminates dual-path COPY at import time; Module-Theoretic direct sum natural; PM Track 5 mnr infrastructure 100% reused |
+| **Q-4A.4.b** Imports list location | LOCKED — (β.1) NEW `imports : List ModuleNetworkRef` field on existing `module-network-ref` struct | Same struct; backward-compat preserved via accessor defaults; no struct migration cost |
+| **Q-4A.4.c** Prelude handling | LOCKED — prelude becomes JUST-ANOTHER-IMPORT (every file's mnr auto-includes prelude-mnr in imports list) | UNIFIES Layer 2b legacy away; eliminates special-case for prelude; cleaner Module-Theoretic |
+| **Q-4A.4.d** Migration ordering | LOCKED — 4A.a / 4A.b / 4A.c / 4A.d sub-phases | See §18.15.8 sub-phase partition |
+
+**Lookup cascade pattern** (post-4A.b):
+```
+global-env-lookup-type name:
+  - local-mnr.cell-id-map.lookup(name) → if found, read per-name :type sub-cell
+  - else iterate local-mnr.imports:
+    - import-mnr.cell-id-map.lookup(name) → if found, read per-name :type sub-cell
+  - else fail
+```
+
+**Performance bench-ability**: cascade cost = O(imports) per LOOKUP MISS. For typical files importing prelude + 3-5 modules = 4-6 cascade iterations max. Per-iteration cost ~110 ns (cell-read per 4A.0 bench). Worst case ~550-660 ns per miss vs status quo ~281 ns (with dep-recording). Tradeoff: per-miss cascade vs per-import copy. Bench at 4A.d.
+
+**Hasse-registry-on-imports** (Option (c) in dialogue): **deferred to module-loading-on-network track**. Hasse-registry primitive (PPN 4C Phase 2b infrastructure) would optimize parallel module loading + cycle detection + faster cross-module dep queries. For per-file env-lookup cascade alone, linear iteration over 4-6 imports is fine. Option (c) addresses module-loading-on-network scope, not 4A scope. **D-4-5 scope creep avoided.**
+
+#### §18.15.8 Q-4A.3, Q-4A.5, Q-4A.6 LOCKED (2026-05-26)
+
+Resolved together as natural consequences of Q-4A.1 Option B-revised + Q-4A.4 Option (b).
+
+##### Q-4A.3 — Per-name cell-id API exposure: LOCKED Option (c) — mnr.cell-id-map IS the existing surface
+
+`module-network-ref-cell-id-map` (existing struct accessor per `namespace.rkt:114-120`) IS the per-name registry. Downstream consumers (PPN Track 8 incremental editing / PPN Track 11 LSP / SH Track 1 .pnet serialization / PReduce Track 1 e-class cells) access per-name cell-ids via:
+```racket
+(define cid (hash-ref (module-network-ref-cell-id-map mnr) name #f))
+```
+
+**No new API needed for 4A.** A higher-level helper (`definition-cell-id name → cell-id`) can be added as a thin wrapper LATER if ergonomics warrants — not blocking for 4A.
+
+##### Q-4A.5 — Parameter retirement: LOCKED retire 4 env-state params entirely
+
+| Parameter | Action | Replacement |
+|---|---|---|
+| `current-prelude-env` (Layer 2b) | RETIRE entirely | Prelude in mnr.imports per Q-4A.4.c |
+| `current-module-definitions-content` (Layer 2a) | RETIRE entirely | Imported mnrs in mnr.imports per Q-4A.4.a |
+| `current-definition-cells-content` (Layer 1 parameter hash) | RETIRE entirely | Per-file mnr's per-name sub-cells (STRUCTURAL per Q-4A.5.SRE) |
+| `current-definition-cell-ids` (Layer 1 registry) | RETIRE entirely | mnr.cell-id-map (existing struct field) |
+| `current-defn-param-names` | DEFER (orthogonal cleanup) | Could move to mnr metadata; not in 4A scope |
+| `current-definition-locations` | DEFER (orthogonal cleanup) | Could move to mnr metadata; not in 4A scope |
+| `current-definition-dependencies` | STAY as scaffolding | Q-4A.2 LOCKED — retires at PPN 4C Addendum Phase 4B |
+| `current-cross-module-deps` | STAY as scaffolding | Q-4A.2 LOCKED — retires at PPN 4C Addendum Phase 4B |
+| `current-elaborating-name` | STAY as scaffolding | Q-4A.2 LOCKED — retires at PPN 4C Addendum Phase 4B |
+
+**NEW parameter**: `current-file-module-network-ref` holds the per-file mnr struct (one parameter; opens at file/test scope; replaces ~14+ test-fixture parameterize sites that today set cells-content + cell-ids).
+
+**No snapshot mode** — D-4-6 closed via complete retirement. mnr IS source of truth.
+
+##### Q-4A.6 — Callback machinery retirement: LOCKED Option (γ.3) — global-env.rkt requires namespace.rkt
+
+**Import-graph audit (2026-05-26)** confirmed no cycle exists today:
+```
+global-env.rkt requires: infra-cell.rkt only           ← LEAF today
+namespace.rkt   requires: infra-cell.rkt + propagator.rkt
+namespace.rkt   does NOT require global-env.rkt
+global-env.rkt  does NOT require namespace.rkt
+```
+
+The callback machinery (`current-prelude-env-prop-net-box`, `-prop-cell-write`, `-prop-new-cell`) was historical Track 5-era design preserving global-env.rkt's leaf status via discipline. All consumers of global-env.rkt (driver, metavar-store, cap-type-bridge, capability-inference) already require propagator.rkt transitively. **Leaf status was preserved by engineering discipline, not architectural constraint.**
+
+**Decision**: global-env.rkt → require namespace.rkt; callback machinery (3 parameters + dispatch) retires entirely; global-env.rkt directly uses `module-network-add-definition` / `module-network-write` / `module-network-lookup` from namespace.rkt.
+
+**Test fixture migration**: ~14+ parameterize sites for cells-content + ~10 for cell-ids + ~6 for prop-net-box across `test-support.rkt`, `lsp/server.rkt`, `benchmarks/`, `batch-worker.rkt`, individual test files. Migrate to `current-file-module-network-ref` parameter (point to fresh mnr OR #f to disable cell ops). Per sed-deletion 2-pass operational rule (DEVELOPMENT_LESSONS.org).
+
+#### §18.15.9 4A sub-phase partition (2026-05-26)
+
+Per Q-4A.4.d LOCKED ordering. All 4 sub-phases land per `Stage 4 Per-Phase Protocol`. Each sub-phase ends with VAG; 4A.d closes with cumulative cross-arc 4A-VAG.
+
+| Sub-phase | Deliverables | Est. LoC | Acceptance gate |
+|---|---|---|---|
+| **4A.a** | (1) Extend `module-network-ref` struct with `imports : List ModuleNetworkRef` field. (2) Add `module-network-cascading-lookup mnr name → entry` helper that walks local + imports. (3) Make `DefinitionEntry` STRUCTURAL: split per-name cell into `:type` + `:value` sub-cells via SRE; register `'definition-entry` SRE domain. (4) `global-env.rkt` requires `namespace.rkt`. (5) Add `current-file-module-network-ref` parameter holding per-file mnr struct | ~80-150 | Helper passes targeted tests; SRE structural decomposition lands; no cycle errors |
+| **4A.b** | Flip `global-env-lookup-type/value` to use cascading lookup via `current-file-module-network-ref`. Migrate `global-env-add` / `global-env-add-type-only` to use direct mnr API (`module-network-add-definition`, `module-network-write`) — no callbacks. Retire `global-env-add-type-only` as separate API (subsumed by STRUCTURAL — write only `:type` sub-cell, leave `:value` at bot) | ~100-200 | Per-lookup cost ~similar to status quo (dep-recording still active per Q-4A.2); probe diff = 0; targeted tests pass |
+| **4A.c** | Retire 4 env-state parameters (`current-prelude-env`, `current-module-definitions-content`, `current-definition-cells-content`, `current-definition-cell-ids`). Retire 3 callback parameters (`current-prelude-env-prop-net-box`, `-prop-cell-write`, `-prop-new-cell`). Update `driver.rkt` import-handler at lines 1857-1869: cached module → ADD import-mnr to `current-file-module-network-ref.imports` (no copy). Prelude loading routes through imports list per Q-4A.4.c | ~150-250 | All target parameters retired; driver.rkt import-handler simplified; probe diff = 0 |
+| **4A.d** | Test fixture migration: ~30 parameterize sites across `test-support.rkt`, `lsp/server.rkt`, `benchmarks/`, `batch-worker.rkt`, individual tests → `current-file-module-network-ref` pattern. Sed-deletion 2-pass per DEVELOPMENT_LESSONS.org. Bench: re-run `bench-phase4-env-cell.rkt` to verify 4A perf in production | ~50-100 + mechanical sed | Full suite GREEN (G6 gate); bench shows production-A → mnr-based-A within expected envelope (~280 ns/lookup with dep-recording active per Q-4A.2; full 2.5× speedup deferred to 4B) |
+| **4A-VAG** | Cumulative cross-sub-phase 3-column adversarial VAG. Verify all 8+5 = 13 drift risks (D-4-1..8 + D-4-A1..A5) cleared adversarially. Document any newly-surfaced patterns for watching list | docs-heavy | All 4 VAG questions pass adversarially; cumulative drift risk audit complete |
+
+**Honest sub-phase scope total**: ~380-700 LoC + ~50-100 mechanical test migration LoC = **~430-800 LoC for 4A overall** (within §18.4 original 150-300 LoC estimate at 1.5-3× expansion — the audit-driven scope reframing per Q-4A.4 share-by-reference + Q-4A.6 callback retirement justifies).
+
+#### §18.15.10 4A mini-design CLOSE (2026-05-26)
+
+All open architectural questions resolved. Phase 4A ready for sub-phase implementation work starting at 4A.a.
+
+| Q | Status |
+|---|---|
+| Q-4A.1 cell lifecycle | LOCKED Option B-revised (§18.15.4) |
+| Q-4A.2 dep-recording handling | LOCKED retire across 4A+4B (§18.15.3) |
+| Q-4A.3 per-name cell-id API exposure | LOCKED mnr.cell-id-map existing surface (§18.15.8) |
+| Q-4A.4 3-layer scope + module-sharing | LOCKED Option (b) share-by-reference (§18.15.7) |
+| Q-4A.5 parameter retirement | LOCKED retire 4 env params (§18.15.8) |
+| Q-4A.6 callback machinery | LOCKED Option (γ.3) global-env.rkt → namespace.rkt (§18.15.8) |
+| SRE classification | LOCKED STRUCTURAL (§18.15.5) |
+| Module Theory framing | Established (§18.15.6) |
+| NTT model | Sketched + cross-network bridge gap flagged (§18.15.6) |
+
+**Drift risks final audit**:
+- D-4-1 through D-4-8 (per §18.8) — verified clear under Option B-revised + Option (b)
+- D-4-A1 (per-command vs persistent lifecycle) — RESOLVED via per-file mnr extension
+- D-4-A2 (dep-recording overhead inversion) — NAMED honestly (4A no-regression; 4B realizes 2.5× perf claim)
+- D-4-A3 (API exposure for downstream) — RESOLVED via mnr.cell-id-map existing surface
+- D-4-A4 (test fixture migration scope) — IN SCOPE at 4A.d; ~30 sites via sed-2-pass
+- D-4-A5 (3-layer scope decision) — RESOLVED via Option (b) share-by-reference
+
+**Cross-track inheritance summary** (for forward consumers):
+- PM Track 12 (parameters → cells for module loading): 4A's module-network-ref extension + share-by-reference pattern + cascading lookup = TEMPLATE for 17+ other parameter registries. Combined with Tropical Quantale Addendum specialized cell framework (cell-meta as IR vocabulary), these compose into PM 12's substrate for registries-on-network.
+- PPN Track 8 (incremental editing): per-name cell-id stable across commands within file; cross-network reactive bridge form (NTT_SYNTAX_DESIGN.md §17b) when needed.
+- PPN Track 11 (LSP integration): cell-dependents API at 4B close; cross-module dep queries via mnr.dep-edges.
+- SH Track 1 (.pnet network-as-value): mnr's `snapshot-hash` field supports source staleness; NTT §15 `serialize`/`deserialize` operations.
+- PReduce Track 1 (e-class cell substrate): mnr's "registry + per-class cell + per-instance prop-network" pattern generalizes to e-class cells.
+
+Ready for 4A.a sub-phase mini-design + implementation.
 
 ---
 
