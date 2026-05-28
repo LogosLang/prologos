@@ -112,6 +112,76 @@
   (check-equal? (module-network-lookup mnr3 'y) (cons 'Int 20)))
 
 ;; ========================================
+;; 2b. Imports field + cascading lookup (PPN 4C Addendum Phase 4A.a)
+;; ========================================
+;; Q-4A.4 Option (b) share-by-reference: mnr.imports holds REFERENCES to
+;; imported mnrs; module-network-cascading-lookup walks local then imports.
+;; Q1 cons-prepend (newest first) → last-write-wins shadowing.
+
+(test-case "make-module-network: imports defaults to empty"
+  (define mnr (make-module-network))
+  (check-equal? (module-network-ref-imports mnr) '()))
+
+(test-case "module-network-add-import: cons-prepends (newest first)"
+  (define base (make-module-network))
+  (define imp-a (make-module-network))
+  (define imp-b (make-module-network))
+  (define m1 (module-network-add-import base imp-a))
+  (define m2 (module-network-add-import m1 imp-b))
+  ;; cons-prepend: imp-b (newest) at front, imp-a after
+  (check-equal? (module-network-ref-imports m2) (list imp-b imp-a)))
+
+(test-case "cascading-lookup: local hit (no imports)"
+  (define mnr0 (make-module-network))
+  (define-values (mnr1 _c) (module-network-add-definition mnr0 'foo (cons 'Int 1)))
+  (check-equal? (module-network-cascading-lookup mnr1 'foo) (cons 'Int 1)))
+
+(test-case "cascading-lookup: miss returns #f"
+  (define mnr (make-module-network))
+  (check-equal? (module-network-cascading-lookup mnr 'absent) #f))
+
+(test-case "cascading-lookup: one-level import hit"
+  ;; imp defines bar; local imports imp; lookup bar cascades into imp
+  (define imp0 (make-module-network))
+  (define-values (imp1 _c) (module-network-add-definition imp0 'bar (cons 'String "from-imp")))
+  (define local0 (make-module-network))
+  (define local1 (module-network-add-import local0 imp1))
+  (check-equal? (module-network-cascading-lookup local1 'bar) (cons 'String "from-imp"))
+  ;; local has no own defs → miss for a name nowhere
+  (check-equal? (module-network-cascading-lookup local1 'nope) #f))
+
+(test-case "cascading-lookup: transitive (two-level) import hit"
+  ;; grandparent defines deep; parent imports grandparent; local imports parent
+  (define gp0 (make-module-network))
+  (define-values (gp1 _c) (module-network-add-definition gp0 'deep (cons 'Bool #t)))
+  (define parent0 (make-module-network))
+  (define parent1 (module-network-add-import parent0 gp1))
+  (define local0 (make-module-network))
+  (define local1 (module-network-add-import local0 parent1))
+  (check-equal? (module-network-cascading-lookup local1 'deep) (cons 'Bool #t)))
+
+(test-case "cascading-lookup: local shadows import (same name)"
+  ;; both local and imp define dup; local wins (walked first)
+  (define imp0 (make-module-network))
+  (define-values (imp1 _ci) (module-network-add-definition imp0 'dup (cons 'Int 'from-import)))
+  (define local0 (make-module-network))
+  (define-values (local1 _cl) (module-network-add-definition local0 'dup (cons 'Int 'from-local)))
+  (define local2 (module-network-add-import local1 imp1))
+  (check-equal? (module-network-cascading-lookup local2 'dup) (cons 'Int 'from-local)))
+
+(test-case "cascading-lookup: newest import shadows older (cons-prepend order)"
+  ;; imp-old and imp-new both define same name; imp-new added last (cons-front) wins
+  (define imp-old0 (make-module-network))
+  (define-values (imp-old1 _co) (module-network-add-definition imp-old0 'shared (cons 'Int 'old)))
+  (define imp-new0 (make-module-network))
+  (define-values (imp-new1 _cn) (module-network-add-definition imp-new0 'shared (cons 'Int 'new)))
+  (define local0 (make-module-network))
+  (define local1 (module-network-add-import local0 imp-old1))  ;; older first
+  (define local2 (module-network-add-import local1 imp-new1))  ;; newer cons-front
+  ;; list-order walk hits imp-new1 (front) first → 'new wins (last-write-wins)
+  (check-equal? (module-network-cascading-lookup local2 'shared) (cons 'Int 'new)))
+
+;; ========================================
 ;; 3. Shadow-Cell Cross-Network Prototype
 ;; ========================================
 ;;

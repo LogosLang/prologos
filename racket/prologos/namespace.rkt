@@ -27,6 +27,7 @@
  (struct-out module-network-ref)
  make-module-network
  module-network-lookup
+ module-network-cascading-lookup  ;; PPN 4C Addendum Phase 4A.a (Q-4A.4 Option (b)): local + imports cascade
  module-network-add-definition
  module-network-add-import      ;; PPN 4C Addendum Phase 4A.a (Q-4A.4 Option (b)): cons-prepend import
  module-network-write
@@ -151,6 +152,33 @@
   (and cid
        (let ([val (net-cell-read (module-network-ref-prop-net mnr) cid)])
          (if (eq? val 'infra-bot) #f val))))
+
+;; Cascading lookup: walk the local cell-id-map, then imports in list-order.
+;; PPN 4C Addendum Phase 4A.a (Q-4A.4 Option (b) share-by-reference + Q1
+;; cons-prepend): local definitions shadow imports; among imports, the
+;; cons-front (newest, per module-network-add-import) shadows older — the
+;; list-order walk yields last-write-wins shadowing matching today's
+;; hash-set-overwrite at the driver import (driver.rkt:1857-1869).
+;; Recurses into imports so transitive imports (e.g., prelude reached via
+;; the import chain at 4A.c) are found.
+;;
+;; Q2 LOCKED (§18.16.5): NO cycle protection. Trusts the structural
+;; invariant that `imports` is acyclic-by-construction — the loading-set
+;; check (driver.rkt:1872-1874) gates module-load cycles today; cross-module
+;; cycles are diagnosed at the loading layer (§18.11.3 — lattice-fixpoint
+;; diagnosis in the future module-loading-on-network track), NOT here. The
+;; no-self-edit invariant is maintained at 4A.c's import handler (write site),
+;; not defended at this lookup site (Correct-by-Construction: invariants live
+;; where they're maintained, not where they're consumed).
+;;
+;; Returns: (cons type value) or #f — same contract as module-network-lookup.
+;; (At 4A.a, per-name cells still hold (cons type value); 4A.b's read-flip
+;; and Q3's STRUCTURAL DefinitionEntry change the cell value shape, at which
+;; point this helper's return follows the cell value.)
+(define (module-network-cascading-lookup mnr name)
+  (or (module-network-lookup mnr name)
+      (for/or ([imp (in-list (module-network-ref-imports mnr))])
+        (module-network-cascading-lookup imp name))))
 
 ;; Add a definition cell to a module network.
 ;; Returns: (values updated-module-network-ref cell-id)
