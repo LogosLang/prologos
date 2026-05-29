@@ -72,6 +72,7 @@
 (define (run s)
   (parameterize ([current-prelude-env shared-global-env]
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a: fresh per-test
+                 [current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-test mnr
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -89,6 +90,7 @@
 (define (run-capturing-env s)
   (parameterize ([current-prelude-env shared-global-env]
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a: fresh per-test
+                 [current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-test mnr
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]

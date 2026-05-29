@@ -82,6 +82,7 @@
   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
+                 [current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
                  [current-cross-module-deps '()]  ;; Track 5 Phase 4
                  [current-ns-context #f]
@@ -134,6 +135,7 @@
   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
+                 [current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
                  [current-cross-module-deps '()]  ;; Track 5 Phase 4
                  [current-ns-context #f]
@@ -158,6 +160,7 @@
   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
+                 [current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
                  [current-cross-module-deps '()]  ;; Track 5 Phase 4
                  [current-ns-context #f]
@@ -187,6 +190,7 @@
   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
+                 [current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
                  [current-cross-module-deps '()]  ;; Track 5 Phase 4
                  [current-ns-context #f]
@@ -210,6 +214,7 @@
   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
+                 [current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
                  [current-cross-module-deps '()]  ;; Track 5 Phase 4
                  [current-ns-context #f]
@@ -240,6 +245,7 @@
     (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                    [current-definition-cells-content (hasheq)]  ;; Phase 3a
+                   [current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
                    [current-definition-dependencies (hasheq)]  ;; Phase 3b
                    [current-cross-module-deps '()]  ;; Track 5 Phase 4
                    [current-error-port stderr-out]

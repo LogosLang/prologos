@@ -230,6 +230,7 @@
                (box ready-persistent-registry-net-contents))]  ;; Track 7 Phase 6g: fresh box per file
          [current-definition-cells-content (hasheq)]   ;; Phase 3a: fresh per-file
          [current-definition-cell-ids      (hasheq)]   ;; Phase 3a: fresh per-file
+         [current-file-module-network-ref  (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
          [current-definition-dependencies  (hasheq)]   ;; Phase 3b: fresh per-file
          [current-cross-module-deps        '()]         ;; Track 5 Phase 4: fresh per-file
          [current-prelude-env-prop-net-box  #f]          ;; Phase 3a: no stale cell writes

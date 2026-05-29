@@ -31,6 +31,8 @@
          "champ.rkt"
          "infra-cell.rkt"   ;; Phase 1a: merge-list-append for constraint cell
          "global-env.rkt"   ;; Phase 3a: current-definition-cells-content for with-fresh-meta-env
+         (only-in "namespace.rkt"  ;; PPN 4C Addendum Phase 4A.b: per-file mnr for with-fresh-meta-env (cycle-safe — already transitive via global-env→namespace)
+                  current-file-module-network-ref make-module-network)
          "propagator.rkt"   ;; Track 7 Phase 2: make-prop-network for persistent registry
          "cell-ops.rkt"     ;; Track 8 Phase B1: worldview-aware CHAMP reads
          ;; PPN 4C Step 2 S2.b (2026-04-24): compound universe cell infrastructure.
@@ -1812,6 +1814,7 @@
 (define-syntax-rule (with-fresh-meta-env body ...)
   (parameterize ([current-meta-store (make-hasheq)]
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
+                 [current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr (isolation parity with cells-content)
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
                  ;; Cell IDs: #f — reset-meta-store! populates when callbacks available
                  [current-constraint-cell-id #f]

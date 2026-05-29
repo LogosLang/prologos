@@ -119,6 +119,7 @@
     (define-values (mod-reg trait-reg impl-reg param-impl-reg preparse-reg cap-reg mod-cap-cache)
       (parameterize ([current-prelude-env (hasheq)]
                      [current-definition-cells-content (hasheq)]
+                     [current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh mnr (prelude load)
                      [current-definition-dependencies (hasheq)]
                      [current-ns-context #f]
                      [current-module-registry (hasheq)]
@@ -206,6 +207,11 @@
         (set! results (list (prologos-error #f (exn-message e)))))])
     (parameterize ([current-prelude-env           (repl-session-global-env session)]
                    [current-definition-cells-content (repl-session-definition-cells session)]
+                   ;; PPN 4C Addendum Phase 4A.b: fresh mnr per command. TODO PPN Track 11
+                   ;; (LSP integration): mnr should be SESSION-PERSISTENT (repl-session needs
+                   ;; an mnr field) to preserve cross-command defs in the REPL — mirrors
+                   ;; repl-session-definition-cells. Mechanical-mirror for now (not suite-tested).
+                   [current-file-module-network-ref (make-module-network)]
                    [current-definition-dependencies  (repl-session-definition-deps session)]
                    [current-ns-context           (repl-session-ns-context session)]
                    [current-module-registry       (repl-session-module-registry session)]

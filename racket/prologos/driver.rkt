@@ -2069,6 +2069,7 @@
                     [current-defn-param-names-cell-id #f]
                     [current-definition-cells-content (hasheq)]
                     [current-definition-cell-ids (hasheq)]
+                    [current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: per-module mnr (fresh per module-load)
                     [current-definition-dependencies (hasheq)]  ;; Phase 3b
                     [current-cross-module-deps '()]  ;; Track 5 Phase 4
                     ;; Phase A: fresh meta-info CHAMP per module
