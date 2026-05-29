@@ -232,7 +232,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 4A.b-ii | **NEW (Path A split, §18.17.4)** — `def-entry` value-shape migration: per-name cells `(cons type value)` → `def-entry` (def-entry-merge as cell merge); retire `global-env-add-type-only` (subsumed by STRUCTURAL — write `(def-entry type #f)`); handle materialization boundary (def-entry→cons adapter at `module-network-materialize` OR Layer-2 migration). Consumes the 4A.a `'definition-entry` registration. | ⬜ | Sub-phase per §18.17.4. Gate: **"expect collision findings"** (SRE Track 2I "principled refactor surfaces real facts" — NOT probe-diff=0; strict set-once turns silent double-writes into def-collision). ~100-200 LoC + boundary handling. |
 | 4A.c | **Share-by-reference + retire 7 params (Path X, §18.18)** — split into 4 sub-steps per audit (agent `a39c48df0d915dc27`; 2 blocking risks). Path X LOCKED: build interim `.pnet`-mnr reconstruction shim now + do share-by-reference (user: "strong motivator, even if temporary shim"). Rejected Path Y (defer share-by-ref to module-loading-on-network). | 🔄 (mini-design opened 2026-05-28, §18.18) | **Mini-design §18.18.** RISK 1 (.pnet modules have mnr=#f → reconstruction shim, interim precursor to SH Track 1, which gates on PPN Track 4 so can't pivot); RISK 2 (current-prelude-env has live external consumers constraint-propagators:221 + cfa-analysis:112 → migrate to cascade-flattened global-env-snapshot); RISK 3 (in-flight imports population); RISK 4 (defn-param-names cell write-only → retireable unit). Name-qualification CLEARED (FQN-symmetric). 4-step partition below. |
 | 4A.c-i | Reconstruction shim (RISK 1): rebuild env mnr from `.pnet` env-snapshot at load (driver.rkt:1917); store as module-info-module-network. Interim precursor to SH Track 1. | ✅ `e7b11170` | **CLOSED 2026-05-28.** `module-network-from-snapshot` (namespace.rkt) + wired at .pnet path (was #f). +2 tests (round-trip + empty). Suite 8304/0/113.4s warm. Count anomaly (first run 8299) traced to flaky rackcheck (test-properties) batch-worker reporting under parallel load — isolation stable 13, re-run 8304 correct; not a regression. UNUSED until 4A.c-ii-b (zero behavior change). |
-| 4A.c-ii-a | RISK 2 prep: extend global-env-snapshot to flatten imports cascade; migrate constraint-propagators:221 + cfa-analysis:112 off raw current-prelude-env. find-fqn-for-local-name uses cell-id-map KEYS (not values). | ⬜ | §18.18.3. Gate: suite green; consumers unchanged (prelude-env still populated pre-flip). |
+| 4A.c-ii-a | RISK 2 prep (D1 Wide + D2 Path Y, §18.18.5): NEW dedicated external-only source (`external-definitions-snapshot` values + `external-definition-names` keys, in global-env.rkt; backed by namespace `module-network-cascade-{materialize,names}`) — NOT global-env-snapshot (excludes local mnr cells per R-B). Migrate **3** consumers (audit R-A found `cfa-analysis:261` `cfa-get-candidates-for-arity` missed by §18.18.1): find-fqn-for-local-name→names (keys), cfa-collect-constraints + cfa-get-candidates-for-arity→snapshot (values). | 🔄 (mini-design §18.18.5, 2026-05-29) | §18.18.5. Gate: suite green + probe-diff=0 (pre-flip imports empty → external-* = Layer-2 = today's current-prelude-env view; local cells excluded). |
 | 4A.c-ii-b | Share-by-reference flip: import handler ADDS mnr to in-flight current-file-mnr.imports (RISK 3, no copy); prelude-as-import (~40 modules); lookup drops Layer-2 fallback. | ⬜ | §18.18.3. Gate: probe-diff=0; cascade carries module/prelude defs. |
 | 4A.c-iii | Retire dead params (4 env + 3 callback) + definition-cell-write!/-remove! + defn-param-names-cell unit + register-global-env-cells! simplification + dispatch collapse (box → always-mnr). | ⬜ | §18.18.3. Gate: suite green; all targets removed; param-lint clean. |
 | 4A.d | Test fixture migration (~30 sites) + bench re-run | ⬜ | Sub-phase per §18.15.9. ~50-100 LoC + sed-2-pass. Gate: full suite GREEN; bench shows production-A → mnr-based-A within envelope. |
@@ -10607,6 +10607,74 @@ Per Stage 4 Per-Phase Protocol. 4A.c retires the Layer-2 env params + callback m
 - SH master `2026-04-30_SH_MASTER.md` §29/§60/§92 (Track 1 scope + dependency + closures problem)
 - §18.15.7 Q-4A.4 Option (b); §18.17.4 Path-A/B framing (4A.b def-entry split — distinct from this Path X/Y); DEVELOPMENT_LESSONS.org § Audit-First, § "Data at Rest Closures Derived on Demand" (reconstruction precedent), § Scaffolding-Hides-Truth
 - `driver.rkt:1911-1917` (.pnet load — reconstruction site), `driver.rkt:1853-1870` (import handler), `constraint-propagators.rkt:221` + `cfa-analysis.rkt:112` (RISK 2 consumers), `pnet-serialize.rkt:498` (env-snapshot serialization)
+
+#### §18.18.5 Phase 4A.c-ii-a mini-design + mini-audit (opened 2026-05-29)
+
+Per Stage 4 Per-Phase Protocol step 1+2. 4A.c-ii-a is RISK-2 prep: migrate the external consumers of `current-prelude-env` onto a behavior-preserving cascade source so 4A.c-ii-b's share-by-reference flip switches them transparently. A thorough re-grounding audit (two delegated parallel sweeps — env-param consumer inventory `agent ab5b742221a8dbeb6` + driver/`.pnet`/materialization map `agent ac160a54bca0ba17a`, both verified against code) checked the §18.18.1 claims against the post-4A.b reality and REFUTED several, reshaping the sub-step.
+
+##### §18.18.5.1 Mini-audit synthesis (delegated + self-verified)
+
+**Confirmed (locked design holds):**
+- Read-side cascade is ALREADY live (`global-env-lookup-*` walk `module-network-cascading-lookup`); 4A.c-ii-b is a one-sided WRITE flip (`module-network-add-import` has zero production callers today). Until `.imports` is populated, cross-module resolution rides entirely on the Layer-2 copies — **the copy path is load-bearing, not redundant.**
+- RISK 3 accessible: `current-file-module-network-ref` is bound at `driver.rkt:2078` for the module-load extent; `add-import` site = `namespace.rkt:777`.
+- FQN-symmetric crux confirmed non-issue. C3: `current-definition-cell-ids` has zero external readers.
+- `find-fqn-for-local-name` (`constraint-propagators.rkt:218`) needs KEYS only (`(for/or ([(k _v) …]))`).
+
+**Refuted / new (capture-gaps caught):**
+
+| # | Finding | Phase | Evidence |
+|---|---|---|---|
+| R-A | **3 consumers, not 2.** §18.18.1 RISK 2 missed `cfa-analysis.rkt:261` `cfa-get-candidates-for-arity` (same file as the named `:112`; also `(in-hash (current-prelude-env))`; called from `narrowing.rkt:1021`). | **ii-a** | confirmed |
+| R-B | **"snapshot ≈ prelude-env → unchanged" is imprecise.** `global-env-snapshot` (global-env.rkt:349) = prelude ∪ module-defs ∪ **local-mnr** ⊋ `current-prelude-env`. All 3 consumers run DURING elaboration (narrowing-time), local mnr populated → migrating them to `global-env-snapshot` would ADD the file's own defs to their view (behavior delta; possibly a latent fix for same-file trait-impl narrowing). | **ii-a** | global-env.rkt:349-365 |
+| R-C | Snapshot-readers `lsp/server:230,546` + `batch-worker:98,99` capture the full env for persistence/isolation, NOT resolution. | ii-iii / Track 11 | confirmed |
+| R-D | **Stored mnr ≠ in-flight mnr.** `driver.rkt:2149-2155` rebuilds a fresh mnr from the snapshot with EMPTY `imports`. Transitive share-by-reference finds nothing through an import unless ii-b either stores the in-flight mnr or copies its `imports` into the rebuild. | **ii-b (architectural)** | confirmed |
+| R-E | Callback liveness: `-prop-net-box` is STILL load-bearing (dispatch predicate in `global-env-add`); `-prop-cell-write` live via `definition-cell-write-named!`; only `-prop-new-cell` is dead-read. Retire dead helpers (`definition-cell-write!/-remove!`) first. | iii | confirmed |
+| R-F | Top-level `process-file` does not bind `current-file-module-network-ref` → top-level direct imports may lack an in-flight mnr for `add-import`. | ii-b (confirm) | confirmed |
+
+##### §18.18.5.2 D1 — Wide LOCKED: 3 consumers (2026-05-29)
+
+Migrate ALL THREE external readers (incl. the §18.18.1-missed `cfa-analysis:261`). Narrow (design-literal 2) rejected — leaving `cfa-get-candidates-for-arity` on raw `current-prelude-env` is a latent break at 4A.c-iii retirement (capture-gap drift); it shares migration mechanics; cheap + atomic. Per DEVELOPMENT_LESSONS § "Audit-Driven Scope Expansion: recommend Wide unless cost prohibitive."
+
+##### §18.18.5.3 D2 — Option (Y) LOCKED: dedicated external-only cascade source (2026-05-29)
+
+Migrate the 3 consumers onto a NEW dedicated source (NOT `global-env-snapshot`), **excluding the local mnr's own cells**. This honors ii-a's behavior-preservation gate exactly, sets up ii-b transparency, and keeps "should narrowing/CFA see the file's own defs?" as a separate deliberate question (Path-A discipline from §18.17.4 — don't smuggle a behavior change into a behavior-preserving step). Rejected (X) `global-env-snapshot` (includes local-mnr defs per R-B → degrades the gate to empirical + conflates a possible latent-fix with the migration).
+
+**Shape** (keys/values split — honors the design's find-fqn "keys not values" perf directive):
+
+- `namespace.rkt` (next to `module-network-materialize`):
+  - `module-network-cascade-materialize mnr → hasheq` — own cells + imports' cascades (recursive; local shadows imports, newest-import shadows older — matches `module-network-cascading-lookup`). No cycle protection (Q2 acyclic-imports invariant).
+  - `module-network-cascade-names mnr → (listof symbol)` — keys-only counterpart (own `cell-id-map` keys + imports' cascade-names); avoids materializing values on the hot find-fqn path.
+- `global-env.rkt` (reads the Layer-2 params AND the mnr API; already requires namespace.rkt post-4A.a):
+  - `external-definitions-snapshot → hasheq` — VALUES view of external defs: Layer-2 base (`current-prelude-env` ∪ `current-module-definitions-content`) overlaid by the current-file-mnr `imports` cascade. For cfa×2.
+  - `external-definition-names → (listof symbol)` — KEYS-only counterpart (Layer-2 keys ∪ imports' cascade-names). For find-fqn.
+
+Consumer mapping: `constraint-propagators.rkt:221` → `external-definition-names`; `cfa-analysis.rkt:112` + `cfa-analysis.rkt:261` → `external-definitions-snapshot`.
+
+**Behavior-preservation (the ii-a gate):** PRE-flip, `current-file-mnr.imports` is EMPTY → the imports cascade contributes nothing → both functions return the Layer-2 view. `current-module-definitions-content` keys ⊆ `current-prelude-env` keys (the import handler copies imported defs to BOTH, driver.rkt:1857-1869), values identical for shared keys → the external-* functions equal today's `current-prelude-env` view. The LOCAL mnr's own cells are deliberately excluded (matching today, where the file's own defs live in Layer-1, invisible to these prelude-env readers). POST-flip (4A.c-ii-b): imports populated + Layer-2 retired → external-* return the imports cascade (prelude-as-import + imported), still excluding local cells. Transparent switch — no consumer edit at ii-b. Gate: full suite green + probe-diff=0.
+
+##### §18.18.5.4 Downstream captures (capture-gap discipline)
+
+- **R-C → 4A.c-iii + PPN Track 11**: `lsp/server:230,546` + `batch-worker:98,99` snapshot the full env for session-persistence / test-isolation. At Layer-2 retirement they would capture only Layer-2 (missing per-file mnr defs). batch-worker is the test-isolation backbone — its prelude snapshot/restore needs a replacement source. (lsp session-persistent mnr → PPN Track 11, per existing lsp/server:208 TODO.)
+- **R-D → 4A.c-ii-b (ARCHITECTURAL)**: the stored mnr (driver.rkt:2149-2155 rebuild) has empty `imports`; ii-b MUST resolve this (store the in-flight mnr, or copy its `imports` into the rebuild) before the share-by-reference flip — otherwise transitive resolution through an import silently fails.
+- **R-E → 4A.c-iii**: retirement ORDER — delete dead helpers first; `-prop-net-box`/`-prop-cell-write` require restructuring `global-env-add` dispatch + `definition-cell-write-named!` (param-names dual-write) before retirement.
+- **R-F → 4A.c-ii-b**: confirm whether top-level `process-file` imports need an in-flight mnr; if so add a `process-file`-level `current-file-module-network-ref` parameterize.
+
+##### §18.18.5.5 Mantra check + drift risks
+
+**Mantra**: ii-a is behavior-preserving safe-prep — it builds the transparent read-source seam. On-network-aligned (cascade helpers read `net-cell-read` on the mnr prop-net). Honest framing: ii-a does not itself advance the mantra; it positions ii-b's flip (where the external-* source becomes fully on-network).
+
+**Drift risks (D-4Ac-iia-1..4):** D-1 missed consumer → Wide (R-A) + full-suite gate (sweep found no 4th resolution-reader). D-2 behavior delta via local-mnr inclusion → (Y) excludes local cells; pre-flip imports empty → exact Layer-2 equivalence; probe-diff=0. D-3 keys-vs-values waste on find-fqn hot path → `external-definition-names` keys-only. D-4 shadowing direction → local shadows imports, newest shadows older (matches cascading-lookup); tested with synthetic mnr-with-imports.
+
+##### §18.18.5.6 Implementation plan (smallest-first)
+
+1. `namespace.rkt`: `module-network-cascade-materialize` + `module-network-cascade-names` + provides + tests (synthetic mnr with imports: own+import merge, transitive, shadowing, keys-match snapshot-keys).
+2. `global-env.rkt`: `external-definitions-snapshot` + `external-definition-names` + provides (pure additions; no consumer change; suite green).
+3. Migrate the 3 consumers (find-fqn → names; cfa×2 → snapshot). Full-suite + probe-diff=0 gate.
+4. Close: §3 tracker ✅ + dailies + VAG.
+
+##### §18.18.5.7 Methodology data points
+- Capture-gap pattern materialized AGAIN on the design's own §18.18.1 audit (R-A: `cfa-analysis:261` missed) — confirms audit-first re-grounding catches what static design audits miss.
+- Audit-delegation pattern: 4th data point (two parallel sweeps) — PROMOTE-ready.
 
 ---
 
