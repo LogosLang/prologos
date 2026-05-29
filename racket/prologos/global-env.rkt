@@ -44,6 +44,12 @@
          global-env-names
          global-env-import-module
          global-env-snapshot
+         ;; PPN 4C Addendum Phase 4A.c-ii-a (D2 Path Y): external-only read source
+         ;; (prelude + imported, EXCLUDING the file's own per-file defs) for the
+         ;; narrowing/CFA consumers. external-definitions-snapshot = values;
+         ;; external-definition-names = keys-only (hot find-fqn path).
+         external-definitions-snapshot
+         external-definition-names
          ;; Phase 3a: Per-definition cell infrastructure
          current-definition-cells-content
          current-definition-cell-ids
@@ -363,6 +369,61 @@
       (for/fold ([env with-mods])
                 ([(k v) (in-hash file-defs)])
         (hash-set env k v))))
+
+;; ========================================
+;; External definitions view (PPN 4C Addendum Phase 4A.c-ii-a, D2 Path Y)
+;; ========================================
+;; The definitions visible to the current file FROM OUTSIDE it: prelude +
+;; imported modules, EXCLUDING the file's own per-file defs (which live in the
+;; local mnr's own cell-id-map, Layer 1). This is the read source for the
+;; narrowing/CFA consumers that today iterate (current-prelude-env) and must
+;; NOT see the file's own (mid-elaboration) definitions:
+;;   constraint-propagators.rkt find-fqn-for-local-name → external-definition-names (keys)
+;;   cfa-analysis.rkt cfa-collect-constraints + cfa-get-candidates-for-arity → external-definitions-snapshot (values)
+;;
+;; Pre-4A.c-ii-b: current-file-mnr.imports is EMPTY → these return the Layer-2
+;;   base (current-prelude-env ∪ current-module-definitions-content), which =
+;;   today's (current-prelude-env) view (module-defs keys ⊆ prelude keys; values
+;;   identical for shared keys). Behavior-preserving (the ii-a gate).
+;; Post-4A.c-ii-b: imports populated + Layer-2 retired → these return the
+;;   imports cascade (prelude-as-import + imported), still excluding local cells.
+;;   Transparent switch — no consumer edit at ii-b.
+
+;; VALUES view. Returns: hasheq name → (cons type value).
+(define (external-definitions-snapshot)
+  (define mnr (current-file-module-network-ref))
+  ;; Layer-2 base (retires at 4A.c-ii-b): prelude, then module-defs overlaid
+  (define base
+    (for/fold ([acc (current-prelude-env)])
+              ([(k v) (in-hash (current-module-definitions-content))])
+      (hash-set acc k v)))
+  ;; imports cascade (empty pre-flip; authoritative post-flip) overlays base
+  (if mnr
+      (for*/fold ([acc base])
+                 ([imp (in-list (module-network-ref-imports mnr))]
+                  [(k v) (in-hash (module-network-cascade-materialize imp))])
+        (hash-set acc k v))
+      base))
+
+;; KEYS-only counterpart, for the hot find-fqn-for-local-name path (needs FQN
+;; keys, not values — avoids materializing cascade values). Returns: (listof
+;; symbol), de-duplicated via a hasheq-as-set accumulator.
+(define (external-definition-names)
+  (define mnr (current-file-module-network-ref))
+  ;; Layer-2 keys (retires at 4A.c-ii-b)
+  (define acc1
+    (for/fold ([a (hasheq)]) ([k (in-hash-keys (current-prelude-env))]) (hash-set a k #t)))
+  (define acc2
+    (for/fold ([a acc1]) ([k (in-hash-keys (current-module-definitions-content))]) (hash-set a k #t)))
+  ;; imports cascade names (empty pre-flip; authoritative post-flip)
+  (define acc3
+    (if mnr
+        (for*/fold ([a acc2])
+                   ([imp (in-list (module-network-ref-imports mnr))]
+                    [nm (in-list (module-network-cascade-names imp))])
+          (hash-set a nm #t))
+        acc2))
+  (hash-keys acc3))
 
 ;; ========================================
 ;; Cell registration (per-command)

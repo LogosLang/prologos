@@ -12,7 +12,8 @@
 (require rackunit
          "../propagator.rkt"
          "../infra-cell.rkt"
-         "../namespace.rkt")
+         "../namespace.rkt"
+         "../global-env.rkt")  ;; PPN 4C Addendum Phase 4A.c-ii-a: external-definitions-* tests
 
 ;; ========================================
 ;; 1. Module Lifecycle Lattice
@@ -266,6 +267,58 @@
   (define mnr (make-module-network))
   (check-equal? (module-network-cascade-names mnr) '())
   (check-equal? (module-network-cascade-materialize mnr) (hasheq)))
+
+;; ========================================
+;; 2e. external-definitions view (PPN 4C Addendum Phase 4A.c-ii-a, D2 Path Y)
+;; ========================================
+;; external-definitions-snapshot (values) / external-definition-names (keys),
+;; defined in global-env.rkt: Layer-2 base (prelude ∪ module-defs) overlaid by
+;; current-file-mnr's IMPORTS cascade, EXCLUDING the file's own (local) cells.
+;; The exclusion is the defining (Y) property — these consumers must see only
+;; EXTERNAL defs (prelude + imported), never the file's own mid-elaboration defs.
+
+(test-case "external-definitions-snapshot: pre-flip = Layer-2, EXCLUDES local mnr cells"
+  ;; local mnr has its own def 'localdef + EMPTY imports (the pre-flip state)
+  (define-values (local1 _cl)
+    (module-network-add-definition (make-module-network) 'localdef (cons 'Int 99)))
+  (parameterize ([current-prelude-env (hasheq 'p1 (cons 'Int 1))]
+                 [current-module-definitions-content (hasheq 'm1 (cons 'Int 2))]
+                 [current-file-module-network-ref local1])
+    ;; = prelude ∪ module-defs; 'localdef EXCLUDED (the (Y) property)
+    (check-equal? (external-definitions-snapshot)
+                  (hasheq 'p1 (cons 'Int 1) 'm1 (cons 'Int 2)))
+    (check-equal? (sorted-syms (external-definition-names)) (sorted-syms '(p1 m1)))))
+
+(test-case "external-definitions-snapshot: imports cascade overlays Layer-2, still excludes local"
+  (define-values (imp1 _ci)
+    (module-network-add-definition (make-module-network) 'impdef (cons 'String "imp")))
+  (define-values (local1 _cl)
+    (module-network-add-definition (make-module-network) 'localdef (cons 'Int 99)))
+  (define local2 (module-network-add-import local1 imp1))
+  (parameterize ([current-prelude-env (hasheq 'p1 (cons 'Int 1))]
+                 [current-module-definitions-content (hasheq)]
+                 [current-file-module-network-ref local2])
+    ;; prelude p1 + import's impdef; localdef EXCLUDED
+    (check-equal? (external-definitions-snapshot)
+                  (hasheq 'p1 (cons 'Int 1) 'impdef (cons 'String "imp")))
+    (check-equal? (sorted-syms (external-definition-names)) (sorted-syms '(p1 impdef)))))
+
+(test-case "external-definition-names: keys match external-definitions-snapshot"
+  (define-values (imp1 _ci)
+    (module-network-add-definition (make-module-network) 'impdef (cons 'Int 7)))
+  (define local2 (module-network-add-import (make-module-network) imp1))
+  (parameterize ([current-prelude-env (hasheq 'p1 (cons 'Int 1) 'p2 (cons 'Int 2))]
+                 [current-module-definitions-content (hasheq 'm1 (cons 'Int 3))]
+                 [current-file-module-network-ref local2])
+    (check-equal? (sorted-syms (external-definition-names))
+                  (sorted-syms (hash-keys (external-definitions-snapshot))))))
+
+(test-case "external-definitions-snapshot: no current-file-mnr → Layer-2 only"
+  (parameterize ([current-prelude-env (hasheq 'p1 (cons 'Int 1))]
+                 [current-module-definitions-content (hasheq 'm1 (cons 'Int 2))]
+                 [current-file-module-network-ref #f])
+    (check-equal? (external-definitions-snapshot)
+                  (hasheq 'p1 (cons 'Int 1) 'm1 (cons 'Int 2)))))
 
 ;; ========================================
 ;; 2c. Reconstruction from snapshot (PPN 4C Addendum Phase 4A.c-i, RISK 1)
