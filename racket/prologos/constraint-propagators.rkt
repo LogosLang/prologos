@@ -218,7 +218,11 @@
 (define (find-fqn-for-local-name local-name)
   (define local-str (symbol->string local-name))
   (define suffix (string-append "::" local-str))
-  (for/or ([(k _v) (in-hash (current-prelude-env))])
+  ;; PPN 4C Addendum Phase 4A.c-ii-a (D2 Path Y): external (prelude+imported)
+  ;; names via the cascade source, NOT raw (current-prelude-env). Keys-only
+  ;; (external-definition-names) — this is the hot trait/dict path; no value
+  ;; materialize. Pre-4A.c-ii-b: imports empty → = current-prelude-env keys.
+  (for/or ([k (in-list (external-definition-names))])
     (let ([ks (symbol->string k)])
       (and (string-suffix? ks suffix) k))))
 
