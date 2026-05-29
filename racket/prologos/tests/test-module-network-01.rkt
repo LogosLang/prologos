@@ -182,6 +182,28 @@
   (check-equal? (module-network-cascading-lookup local2 'shared) (cons 'Int 'new)))
 
 ;; ========================================
+;; 2c. Reconstruction from snapshot (PPN 4C Addendum Phase 4A.c-i, RISK 1)
+;; ========================================
+;; module-network-from-snapshot rebuilds an mnr from a flat env-snapshot
+;; (the .pnet-cache restore shape) so share-by-reference can reference it.
+
+(test-case "module-network-from-snapshot: round-trips a snapshot"
+  (define snap (hasheq 'foo (cons 'Int 1) 'bar (cons 'String "hi") 'baz (cons 'Bool #t)))
+  (define mnr (module-network-from-snapshot snap))
+  ;; materialize back == original snapshot (all cells reconstructed)
+  (check-equal? (module-network-materialize mnr) snap)
+  ;; reconstructed module is loaded
+  (check-equal? (module-network-status mnr) mod-loaded)
+  ;; cascading-lookup finds reconstructed entries
+  (check-equal? (module-network-cascading-lookup mnr 'foo) (cons 'Int 1))
+  (check-equal? (module-network-cascading-lookup mnr 'absent) #f))
+
+(test-case "module-network-from-snapshot: empty snapshot → empty mnr (loaded)"
+  (define mnr (module-network-from-snapshot (hasheq)))
+  (check-equal? (module-network-materialize mnr) (hasheq))
+  (check-equal? (module-network-status mnr) mod-loaded))
+
+;; ========================================
 ;; 3. Shadow-Cell Cross-Network Prototype
 ;; ========================================
 ;;

@@ -34,6 +34,7 @@
  module-network-set-status
  module-network-status
  module-network-materialize
+ module-network-from-snapshot   ;; PPN 4C Addendum Phase 4A.c-i (RISK 1): rebuild mnr from .pnet env-snapshot
  ;; PPN 4C Addendum Phase 4A.a (Q-4A.5): per-file mnr parameter. Define-only
  ;; at 4A.a (no reader); 4A.b flips global-env-lookup-* to consume it.
  current-file-module-network-ref
@@ -218,6 +219,29 @@
 (define (module-network-materialize mnr)
   (for/hasheq ([(name cid) (in-hash (module-network-ref-cell-id-map mnr))])
     (values name (net-cell-read (module-network-ref-prop-net mnr) cid))))
+
+;; Reconstruct a module-network-ref from a materialized env snapshot
+;; (hasheq name → (cons type value)). PPN 4C Addendum Phase 4A.c-i (RISK 1):
+;; `.pnet`-cached modules restore a flat env-snapshot, NOT a live mnr
+;; (driver.rkt sets module-network #f on the .pnet hit). This rebuilds the
+;; mnr's cells from that snapshot so share-by-reference (4A.c-ii-b) can
+;; reference the cached module's mnr instead of copying its exports.
+;; Status is set to mod-loaded (a reconstructed module IS loaded).
+;;
+;; INTERIM precursor to SH Track 1 (`.pnet` network-as-value, gated on PPN
+;; Track 4): SH Track 1 will deserialize the mnr DIRECTLY, retiring this
+;; snapshot-reconstruction. The env mnr is cell-only (no propagators; single
+;; named merge-replace) so it round-trips trivially — the reconstruction logic
+;; here is exactly what SH Track 1's deserialize does internally. Cost: once
+;; per module per process (cached in current-module-registry); moves cost from
+;; per-import-copy to once-per-module-reconstruction + O(1) imports.
+(define (module-network-from-snapshot snapshot)
+  (define mnr0
+    (for/fold ([mnr (make-module-network)])
+              ([(name entry) (in-hash snapshot)])
+      (define-values (mnr* _cid) (module-network-add-definition mnr name entry))
+      mnr*))
+  (module-network-set-status mnr0 mod-loaded))
 
 ;; ========================================
 ;; Per-file module network (PPN 4C Addendum Phase 4A.a, Q-4A.5)

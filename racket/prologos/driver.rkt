@@ -1914,7 +1914,13 @@
                        (hasheq)    ;; type-aliases
                        d-specs
                        d-locs
-                       #f))        ;; module-network
+                       ;; PPN 4C Addendum Phase 4A.c-i (RISK 1): reconstruct the
+                       ;; mnr from the deserialized env-snapshot (.pnet stores the
+                       ;; flat snapshot, not a live network). Was #f; share-by-
+                       ;; reference (4A.c-ii-b) needs a non-#f mnr to reference.
+                       ;; UNUSED until 4A.c-ii-b (no behavior change at 4A.c-i).
+                       ;; Interim precursor to SH Track 1 (.pnet network-as-value).
+                       (module-network-from-snapshot d-env-relinked)))
         ;; Register in module registry
         (register-module! ns-sym mod-info)
         ;; Import into caller's env (use relinked version)
