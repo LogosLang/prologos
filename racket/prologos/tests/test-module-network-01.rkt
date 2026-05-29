@@ -182,6 +182,92 @@
   (check-equal? (module-network-cascading-lookup local2 'shared) (cons 'Int 'new)))
 
 ;; ========================================
+;; 2b-cascade. Cascade materialize/names (PPN 4C Addendum Phase 4A.c-ii-a, D2 Path Y)
+;; ========================================
+;; module-network-cascade-materialize = VALUES view of own cells + imports
+;; (recursive); module-network-cascade-names = keys-only counterpart. Shadowing
+;; matches module-network-cascading-lookup. Backs external-definitions-snapshot
+;; / external-definition-names (excludes the LOCAL caller's own cells, applied
+;; one level up — these helpers materialize a GIVEN mnr in full).
+
+(define (sorted-syms xs) (sort xs symbol<?))
+
+(test-case "cascade-materialize: local only == module-network-materialize"
+  (define mnr0 (make-module-network))
+  (define-values (mnr1 _c1) (module-network-add-definition mnr0 'foo (cons 'Int 1)))
+  (define-values (mnr2 _c2) (module-network-add-definition mnr1 'bar (cons 'String "hi")))
+  (check-equal? (module-network-cascade-materialize mnr2)
+                (module-network-materialize mnr2)))
+
+(test-case "cascade-materialize: one-level import merges own + imported"
+  (define imp0 (make-module-network))
+  (define-values (imp1 _ci) (module-network-add-definition imp0 'ibar (cons 'String "imp")))
+  (define local0 (make-module-network))
+  (define-values (local1 _cl) (module-network-add-definition local0 'lfoo (cons 'Int 1)))
+  (define local2 (module-network-add-import local1 imp1))
+  (check-equal? (module-network-cascade-materialize local2)
+                (hasheq 'lfoo (cons 'Int 1) 'ibar (cons 'String "imp"))))
+
+(test-case "cascade-materialize: transitive (two-level) flattens all"
+  (define gp0 (make-module-network))
+  (define-values (gp1 _cg) (module-network-add-definition gp0 'deep (cons 'Bool #t)))
+  (define parent0 (make-module-network))
+  (define-values (parent1 _cp) (module-network-add-definition parent0 'mid (cons 'Int 5)))
+  (define parent2 (module-network-add-import parent1 gp1))
+  (define local0 (make-module-network))
+  (define-values (local1 _cl) (module-network-add-definition local0 'top (cons 'Int 9)))
+  (define local2 (module-network-add-import local1 parent2))
+  (check-equal? (module-network-cascade-materialize local2)
+                (hasheq 'top (cons 'Int 9) 'mid (cons 'Int 5) 'deep (cons 'Bool #t))))
+
+(test-case "cascade-materialize: local shadows import (same name → local value)"
+  (define imp0 (make-module-network))
+  (define-values (imp1 _ci) (module-network-add-definition imp0 'dup (cons 'Int 'from-import)))
+  (define local0 (make-module-network))
+  (define-values (local1 _cl) (module-network-add-definition local0 'dup (cons 'Int 'from-local)))
+  (define local2 (module-network-add-import local1 imp1))
+  (check-equal? (hash-ref (module-network-cascade-materialize local2) 'dup)
+                (cons 'Int 'from-local)))
+
+(test-case "cascade-materialize: newest import shadows older (cons-prepend order)"
+  (define imp-old0 (make-module-network))
+  (define-values (imp-old1 _co) (module-network-add-definition imp-old0 'shared (cons 'Int 'old)))
+  (define imp-new0 (make-module-network))
+  (define-values (imp-new1 _cn) (module-network-add-definition imp-new0 'shared (cons 'Int 'new)))
+  (define local0 (make-module-network))
+  (define local1 (module-network-add-import local0 imp-old1))  ;; older first
+  (define local2 (module-network-add-import local1 imp-new1))  ;; newer cons-front
+  (check-equal? (hash-ref (module-network-cascade-materialize local2) 'shared)
+                (cons 'Int 'new)))
+
+(test-case "cascade-names: keys match cascade-materialize keys (transitive)"
+  (define gp0 (make-module-network))
+  (define-values (gp1 _cg) (module-network-add-definition gp0 'deep (cons 'Bool #t)))
+  (define parent0 (make-module-network))
+  (define-values (parent1 _cp) (module-network-add-definition parent0 'mid (cons 'Int 5)))
+  (define parent2 (module-network-add-import parent1 gp1))
+  (define local0 (make-module-network))
+  (define-values (local1 _cl) (module-network-add-definition local0 'top (cons 'Int 9)))
+  (define local2 (module-network-add-import local1 parent2))
+  (check-equal? (sorted-syms (module-network-cascade-names local2))
+                (sorted-syms (hash-keys (module-network-cascade-materialize local2))))
+  (check-equal? (sorted-syms (module-network-cascade-names local2))
+                (sorted-syms '(top mid deep))))
+
+(test-case "cascade-names: dedups a name present in both local and import"
+  (define imp0 (make-module-network))
+  (define-values (imp1 _ci) (module-network-add-definition imp0 'dup (cons 'Int 'i)))
+  (define local0 (make-module-network))
+  (define-values (local1 _cl) (module-network-add-definition local0 'dup (cons 'Int 'l)))
+  (define local2 (module-network-add-import local1 imp1))
+  (check-equal? (module-network-cascade-names local2) '(dup)))
+
+(test-case "cascade-names/materialize: empty mnr → empty"
+  (define mnr (make-module-network))
+  (check-equal? (module-network-cascade-names mnr) '())
+  (check-equal? (module-network-cascade-materialize mnr) (hasheq)))
+
+;; ========================================
 ;; 2c. Reconstruction from snapshot (PPN 4C Addendum Phase 4A.c-i, RISK 1)
 ;; ========================================
 ;; module-network-from-snapshot rebuilds an mnr from a flat env-snapshot

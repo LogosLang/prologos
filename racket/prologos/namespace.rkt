@@ -34,6 +34,8 @@
  module-network-set-status
  module-network-status
  module-network-materialize
+ module-network-cascade-materialize  ;; PPN 4C Addendum Phase 4A.c-ii-a (D2 Path Y): own cells + imports cascade (values)
+ module-network-cascade-names        ;; PPN 4C Addendum Phase 4A.c-ii-a (D2 Path Y): own + imports cascade (keys only)
  module-network-from-snapshot   ;; PPN 4C Addendum Phase 4A.c-i (RISK 1): rebuild mnr from .pnet env-snapshot
  ;; PPN 4C Addendum Phase 4A.a (Q-4A.5): per-file mnr parameter. Define-only
  ;; at 4A.a (no reader); 4A.b flips global-env-lookup-* to consume it.
@@ -219,6 +221,53 @@
 (define (module-network-materialize mnr)
   (for/hasheq ([(name cid) (in-hash (module-network-ref-cell-id-map mnr))])
     (values name (net-cell-read (module-network-ref-prop-net mnr) cid))))
+
+;; Materialize the FULL cascade of an mnr: its own definition cells PLUS all
+;; its imports' cascades (recursively). PPN 4C Addendum Phase 4A.c-ii-a (D2
+;; Path Y): the VALUES view of definitions visible THROUGH this mnr.
+;; Shadowing matches module-network-cascading-lookup — a module's own cells
+;; shadow its imports, and (within imports) the cons-front newest shadows
+;; older. Realized by materializing imports oldest-first (reverse the
+;; cons-prepend list) then local cells last; the final hash-set wins.
+;; 'infra-bot cells are skipped (no definition), matching module-network-lookup.
+;; Q2 (§18.16.5): NO cycle protection — trusts the acyclic-imports invariant,
+;; same as module-network-cascading-lookup.
+;; Returns: hasheq symbol → (cons type value).
+(define (module-network-cascade-materialize mnr)
+  (define net (module-network-ref-prop-net mnr))
+  (define from-imports
+    (for/fold ([acc (hasheq)])
+              ([imp (in-list (reverse (module-network-ref-imports mnr)))])
+      (for/fold ([a acc])
+                ([(k v) (in-hash (module-network-cascade-materialize imp))])
+        (hash-set a k v))))
+  (for/fold ([acc from-imports])
+            ([(name cid) (in-hash (module-network-ref-cell-id-map mnr))])
+    (define v (net-cell-read net cid))
+    (if (eq? v 'infra-bot) acc (hash-set acc name v))))
+
+;; Keys-only counterpart of module-network-cascade-materialize: the set of
+;; definition names visible through this mnr (own + imports, recursive),
+;; WITHOUT materializing cell values. PPN 4C Addendum Phase 4A.c-ii-a (D2
+;; Path Y): for the hot find-fqn-for-local-name path, which needs FQN keys,
+;; not values (§18.18.3 perf note). 'infra-bot cells skipped to match the
+;; cascade-materialize key set. Dedup via a hasheq-as-set accumulator (no
+;; racket/list dependency). Shadowing is irrelevant for a key set (a name in
+;; both local and imports appears once).
+;; Returns: (listof symbol), de-duplicated.
+(define (module-network-cascade-names mnr)
+  (define (go m acc)
+    (define net (module-network-ref-prop-net m))
+    (define acc1
+      (for/fold ([a acc])
+                ([(name cid) (in-hash (module-network-ref-cell-id-map m))])
+        (if (eq? (net-cell-read net cid) 'infra-bot)
+            a
+            (hash-set a name #t))))
+    (for/fold ([a acc1])
+              ([imp (in-list (module-network-ref-imports m))])
+      (go imp a)))
+  (hash-keys (go mnr (hasheq))))
 
 ;; Reconstruct a module-network-ref from a materialized env snapshot
 ;; (hasheq name → (cons type value)). PPN 4C Addendum Phase 4A.c-i (RISK 1):
