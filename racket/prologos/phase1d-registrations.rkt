@@ -71,7 +71,11 @@
          ;; registration using the extended register/minimal helper.
          (only-in "mult-lattice.rkt"
                   mult-lattice-merge mult-lattice-contradicts?
-                  mult-bot mult-bot?))
+                  mult-bot mult-bot?)
+         ;; PPN 4C Addendum Phase 4A.a (Q3 §18.15.5): STRUCTURAL DefinitionEntry.
+         ;; M1 (γ): leaf module definition-entry.rkt (NOT namespace.rkt — would
+         ;; cycle: namespace → type-lattice → reduction → ns-context?). See M1.
+         (only-in "definition-entry.rkt" def-entry-merge def-bot def-collision))
 
 ;; ============================================================
 ;; Helper: minimal-declaration SRE domain + Tier 2 link
@@ -275,3 +279,25 @@
                   mult-bot? mult-bot
                   #:classification 'value
                   #:contradicts? mult-lattice-contradicts?)
+
+;; ============================================================
+;; DefinitionEntry — STRUCTURAL (PPN 4C Addendum Phase 4A.a, Q3 §18.15.5)
+;; ============================================================
+;; Per-name definition cell value: :type + :value sub-components merged
+;; pointwise by def-entry-merge (attribute-map-merge-fn precedent — single
+;; merge fn with internal dispatch, NOT sre-decompose sub-cells). Domain bot
+;; is def-bot; def-collision is ⊤ (#:contradicts?). #:classification 'structural
+;; enables Phase 1f :component-paths enforcement for propagators reading
+;; definition-entry cells.
+;;
+;; M1 (γ): def-entry-merge lives in leaf module definition-entry.rkt (NOT
+;; namespace.rkt — layering cycle via type-lattice → reduction → ns-context?).
+;;
+;; REGISTRATION-ONLY at 4A.a: no cell uses this merge yet (writes/reads stay on
+;; legacy (cons type value) until 4A.b read-flip). Inert registry entry — NOT a
+;; dual-path / validated-not-deployed gap (no flag to flip; 4A.b activates by
+;; migrating writers/readers).
+(register/minimal 'definition-entry def-entry-merge
+                  (lambda (v) (eq? v def-bot)) def-bot
+                  #:classification 'structural
+                  #:contradicts? (lambda (v) (eq? v def-collision)))

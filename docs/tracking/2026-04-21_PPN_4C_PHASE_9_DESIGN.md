@@ -10367,21 +10367,22 @@ Per Stage 4 Per-Phase Protocol step 1+2 (mini-design + mini-audit co-dependent c
 - Identity-not-contents: parameter holds `module-network-ref` STRUCT REFERENCE (selects "which mnr is current"); cells live on `(module-network-ref-prop-net mnr)`. Distinct from the contents-as-parameter anti-pattern the env-state params (Q-4A.5 retirement targets) represent.
 - Define-only at 4A.a means: parameter exists in the codebase but no production code reads it. **Zero behavior change at 4A.a.** Read paths flip at 4A.b; test fixtures migrate at 4A.d.
 
-##### M1 — `def-entry` struct + `def-entry-merge` placement: LOCKED (α) namespace.rkt (audit-surfaced 2026-05-28)
+##### M1 — `def-entry` placement: LOCKED (α) at mini-design → FALSIFIED at implementation → REFRAMED to (γ) leaf module `definition-entry.rkt` (2026-05-28)
 
-**Decision**: define `def-entry` struct + `def-bot`/`def-collision` sentinels + `def-entry-merge` function in `namespace.rkt`. Update namespace.rkt's `require` to add `(only-in "type-lattice.rkt" type-unify-or-top type-bot type-top)`. Update namespace.rkt's `provide` to add `(struct-out def-entry)` + `def-bot` + `def-collision` + `def-entry-merge`. `phase1d-registrations.rkt` imports these symbols from namespace.rkt for the SRE domain registration call.
+**FINAL decision (γ)**: define `def-entry` struct + `def-bot`/`def-collision` sentinels + `def-value-set-once` + `def-entry-merge` in a NEW leaf module `definition-entry.rkt` that requires `(only-in "type-lattice.rkt" type-unify-or-top type-top?)`. `phase1d-registrations.rkt` requires `definition-entry.rkt` (NOT namespace.rkt) for the SRE registration. `namespace.rkt` does NOT require it at 4A.a (def-entry is registration-only; namespace doesn't use it yet); at 4A.b `global-env.rkt` requires it for the read-flip.
 
-**Rationale**:
-- Semantic colocation: `def-entry` IS the per-name definition entry for `module-network-ref`; lives where mnr struct lives
-- Precedent: `decisions-state` + `decisions-state-merge` live in `decision-cell.rkt`; `attribute-map-merge-fn` in `typing-propagators.rkt`. Struct + merge live in DOMAIN-OWNING module; `phase1d-registrations.rkt` is the REGISTRATION SINK (consolidates `register-domain!` calls), NOT a struct-definition module.
-- Same module global-env.rkt (post Q-4A.6 cycle-break) will require at 4A.b — single import point
-- 1 file change vs (γ) leaf module's 2-file pattern
+**Falsification record (Empirical Falsification as Audit Complement)**: M1 was LOCKED (α) namespace.rkt at mini-design (semantic colocation), user co-signed. At deliverable-(3) implementation, adding `(require "type-lattice.rkt")` to namespace.rkt produced `standard-module-name-resolver: cycle in loading`. **Precise back-edge**: `namespace.rkt → type-lattice.rkt → {reduction.rkt:29, zonk.rkt:22, substitution.rkt:17} → (only-in "namespace.rkt" ns-context?)`. **namespace.rkt is a LOW-level module** — it provides `ns-context?` to the core AST pipeline (reduction/zonk/substitution); type-lattice.rkt sits ABOVE that pipeline. So `namespace → type-lattice` is a layering inversion; (α) is structurally impossible, not merely suboptimal.
 
-**Cycle check verified**: type-lattice.rkt's transitive closure (racket/match, racket/list, prelude.rkt, syntax.rkt, reduction.rkt, zonk.rkt, substitution.rkt, ctor-registry.rkt, union-types.rkt) does NOT require namespace.rkt. Safe to add `namespace.rkt → type-lattice.rkt` require.
+**Audit error that the build caught**: the original §18.16.7 "Cycle check verified" claimed type-lattice.rkt's transitive closure does NOT require namespace.rkt. That verified type-lattice's DIRECT requires only — it did not trace TRANSITIVELY into reduction/zonk/substitution, where the `ns-context?` back-edge lives. **Methodology data point**: cycle-checks must be TRANSITIVE, not direct-only — sibling of the "Mini-Audit Must Verify Carrier Capability AND Check For Existing Helpers" lesson (verified the precedent's shape, not the local carrier's full dependency reality). The build was the falsification test that static audit missed.
+
+**Why (γ) is the better design (not a compromise)**: the cycle surfaced that `def-entry` is its OWN lattice concept — "the lattice of definition entries" (type × value), parallel to type-lattice.rkt being "the lattice of types." It sits ABOVE type-lattice (correct layering), is single-responsibility, and matches the F14 "Two-layer module split for cycle-breaking" precedent (DEVELOPMENT_LESSONS § 6.8; `tropical-fuel-primitives.rkt` leaf). Echoes Scaffolding-Hides-Truth: the principled refactor surfaced a structural fact (def-entry is not a namespace appendage).
+
+**Cycle-freedom verified for (γ)**: `definition-entry.rkt → type-lattice.rkt → reduction → namespace → {infra-cell, propagator}`; nothing below `definition-entry.rkt` requires it (new module; only phase1d sink + later global-env consume it). No back-edge.
 
 **Rejected alternatives**:
-- **(β)** phase1d-registrations.rkt — module is conventionally registration sink; defining structs here breaks convention
-- **(γ)** new leaf `definition-entry.rkt` — cleaner separability but adds one file; defensible alternative if leaf-module hygiene preferred over colocation
+- **(α)** namespace.rkt — FALSIFIED by layering cycle (above)
+- **(β)** phase1d-registrations.rkt — module is conventionally registration sink; defining structs there breaks convention
+- *colocation-preserving splits considered + rejected*: (i) struct-in-namespace + merge-elsewhere separates struct from its merge; (ii) type-merge as callback param is the callback anti-pattern (DEVELOPMENT_LESSONS § "Callbacks Are a Propagator-First Anti-Pattern")
 
 ##### M2 — Pipeline.md "New Racket Parameter" timing: LOCKED (B) deferred adherence to 4A.b (audit-surfaced 2026-05-28)
 
@@ -10436,7 +10437,7 @@ Estimated total: ~80-150 LoC code + ~50 LoC test additions per §18.15.9 estimat
 | Audit item | Finding | Impact |
 |---|---|---|
 | `type-unify-or-top` accessibility | EXPORTED from `type-lattice.rkt:41`; already imported in `phase1d-registrations.rkt:68` (companion to `type-lattice-merge`) | Confirms Q3 + M1 — one-line `only-in` extension |
-| `type-lattice.rkt` transitive closure | racket/match, racket/list, prelude.rkt, syntax.rkt, reduction.rkt, zonk.rkt, substitution.rkt, ctor-registry.rkt, union-types.rkt — **NONE require namespace.rkt** | Safe to add `namespace.rkt → type-lattice.rkt` require (M1 cycle-clear) |
+| ~~`type-lattice.rkt` transitive closure~~ | ~~DIRECT requires — NONE require namespace.rkt~~ | **CLAIM ERRONEOUS — corrected at implementation (see M1 falsification record §18.16.5.M1).** This checked DIRECT requires only. TRANSITIVELY, type-lattice.rkt → {reduction,zonk,substitution}.rkt → `(only-in "namespace.rkt" ns-context?)`. namespace.rkt is LOW-level; `namespace → type-lattice` is a layering cycle. M1 reframed (α)→(γ): `def-entry` moves to NEW leaf `definition-entry.rkt`. Methodology: cycle-checks must be TRANSITIVE not direct-only. |
 | Struct-copy sites for `module-network-ref` | 5 sites (`driver.rkt:2163`, `namespace.rkt:144/155/161`, `test-module-network-01.rkt:277`); all unaffected | Pipeline.md exhaustiveness: only 1 direct ctor (`namespace.rkt:128 make-module-network`) needs new arg (default `'()`) |
 | `(struct-out module-network-ref)` provide | At `namespace.rkt:27` auto-exports new `module-network-ref-imports` accessor | No provide-list updates needed for accessor |
 | `phase1d-registrations.rkt` sink status | Registration sink only; NO module requires it (loaded by driver.rkt for side-effect) | Safe siting for `'definition-entry` SRE registration import |
