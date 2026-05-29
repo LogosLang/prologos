@@ -189,14 +189,21 @@
 ;; Lookups (two-layer: per-file first, prelude fallback)
 ;; ========================================
 
-;; Lookup the type of a global definition
+;; Lookup the type of a global definition.
+;; PPN 4C Addendum Phase 4A.b (Path A read-flip): Layer 1 reads the per-file mnr
+;; (authoritative) via module-network-cascading-lookup, replacing the off-network
+;; current-definition-cells-content hasheq. Dep-recording side-effect PRESERVED
+;; (Q-4A.2: retires at 4B, not 4A). Layer 2 (module-defs + prelude) unchanged
+;; (retires at 4A.c imports migration). cascading-lookup imports are empty until
+;; 4A.c, so a Layer-1 hit is same-file (matches pre-4A.b semantics).
 (define (global-env-lookup-type name)
   ;; Phase 3b: record dependency
   (define elab-name (current-elaborating-name))
   (when elab-name
     (record-definition-dependency! elab-name name))
-  ;; Layer 1: per-file definitions
-  (define cell-entry (hash-ref (current-definition-cells-content) name #f))
+  ;; Layer 1: per-file mnr cells (authoritative read source)
+  (define mnr (current-file-module-network-ref))
+  (define cell-entry (and mnr (module-network-cascading-lookup mnr name)))
   (cond
     [cell-entry
      ;; Track 5 Phase 4: same-file edge
@@ -204,8 +211,7 @@
        (record-cross-module-dep! elab-name name 'same-file))
      (car cell-entry)]
     [else
-     ;; Track 6 Phase 7d: module definitions from module-network-ref.
-     ;; Fallback to Layer 2 (belt-and-suspenders during migration).
+     ;; Layer 2: module definitions + prelude (unchanged; retires at 4A.c)
      (define entry (or (hash-ref (current-module-definitions-content) name #f)
                        (hash-ref (current-prelude-env) name #f)))
      ;; Track 5 Phase 4: cross-module edge (source is a module, not same-file)
@@ -213,20 +219,21 @@
        (record-cross-module-dep! elab-name name 'module))
      (and entry (car entry))]))
 
-;; Lookup the value of a global definition
+;; Lookup the value of a global definition (PPN 4C Addendum Phase 4A.b: mnr Layer 1).
 (define (global-env-lookup-value name)
   ;; Phase 3b: record dependency
   (define elab-name (current-elaborating-name))
   (when elab-name
     (record-definition-dependency! elab-name name))
-  ;; Layer 1: per-file definitions
-  (define cell-entry (hash-ref (current-definition-cells-content) name #f))
+  ;; Layer 1: per-file mnr cells
+  (define mnr (current-file-module-network-ref))
+  (define cell-entry (and mnr (module-network-cascading-lookup mnr name)))
   (cond
     [cell-entry
      ;; Track 5 Phase 4: same-file edge (already recorded in lookup-type)
      (cdr cell-entry)]
     [else
-     ;; Track 6 Phase 7d: module definitions from module-network-ref.
+     ;; Layer 2: module definitions + prelude (unchanged; retires at 4A.c)
      (define entry (or (hash-ref (current-module-definitions-content) name #f)
                        (hash-ref (current-prelude-env) name #f)))
      (and entry (cdr entry))]))
@@ -235,20 +242,32 @@
 ;; Writes (per-file → cells, module loading → legacy)
 ;; ========================================
 
+;; PPN 4C Addendum Phase 4A.b (Path A): add-or-update a definition in the
+;; per-file mnr. Create cell if name absent; else update existing cell via
+;; module-network-write (merge-replace = last-write-wins, EXACTLY matching the
+;; pre-4A.b current-definition-cells-content hash-set semantics → probe-diff=0).
+;; Values stay (cons type value) at 4A.b (def-entry shape migration is 4A.b-ii).
+(define (mnr-add-or-update! entry-name entry)
+  (define mnr (or (current-file-module-network-ref) (make-module-network)))
+  (current-file-module-network-ref
+   (if (hash-ref (module-network-ref-cell-id-map mnr) entry-name #f)
+       (module-network-write mnr entry-name entry)
+       (let-values ([(mnr* _cid) (module-network-add-definition mnr entry-name entry)])
+         mnr*))))
+
 ;; Add a definition to the global environment.
-;; When cell infrastructure is available (per-file processing):
-;;   writes to current-definition-cells-content + prop-net cell.
-;;   Returns env UNCHANGED (per-file def is NOT in the legacy hasheq).
-;; When cell infrastructure is unavailable (module loading, tests):
-;;   legacy behavior — returns updated hasheq.
+;; PPN 4C Addendum Phase 4A.b: cell path writes to the per-file mnr (authoritative
+;; Layer-1 source), NOT current-definition-cells-content (dead at 4A.b, removed
+;; at 4A.c) and NOT the ephemeral box cell (definition-cell-write! retires at 4A.c).
+;; Returns env UNCHANGED (cell-path callers discard return). Dispatch on the box
+;; (current-prelude-env-prop-net-box) is UNCHANGED — same contexts activate the
+;; cell path as pre-4A.b; only the write TARGET flips (mnr vs cells-content+box-cell).
+;; Legacy path (no cell infra — bootstrap/some tests): update prelude-env hash.
 (define (global-env-add env name type value)
   (define entry (cons type value))
   (cond
     [(current-prelude-env-prop-net-box)
-     ;; Cell path: write to Layer 1 cells (callers discard return)
-     (current-definition-cells-content
-      (hash-set (current-definition-cells-content) name entry))
-     (definition-cell-write! name entry)
+     (mnr-add-or-update! name entry)
      env]
     [else
      ;; Legacy path: update parameter AND return new hash (some callers
@@ -260,14 +279,14 @@
 ;; Pre-register only the type (value = #f) for recursive definitions.
 ;; whnf treats #f as stuck (no unfolding), so self-references are opaque
 ;; during type checking. After checking, call global-env-add with real value.
+;; PPN 4C Addendum Phase 4A.b: writes (cons type #f) to the mnr (set-once
+;; commit of the real value happens via a later global-env-add → merge-replace).
+;; STAYS as a separate API at 4A.b; retires (subsumed by STRUCTURAL) at 4A.b-ii.
 (define (global-env-add-type-only env name type)
   (define entry (cons type #f))
   (cond
     [(current-prelude-env-prop-net-box)
-     ;; Cell path: write to Layer 1 cells (callers discard return)
-     (current-definition-cells-content
-      (hash-set (current-definition-cells-content) name entry))
-     (definition-cell-write! name entry)
+     (mnr-add-or-update! name entry)
      env]
     [else
      ;; Legacy path: update parameter AND return new hash
@@ -275,20 +294,23 @@
      (current-prelude-env new-env)
      new-env]))
 
-;; Remove a definition from both layers on failure.
-;; Layer 1: remove from per-file content hash + write sentinel to cell.
-;; Layer 2: remove from prelude/module env parameter.
+;; Remove a definition from all layers on failure.
 ;; Track 5 Phase 2: consolidates 12 inline removal sites in driver.rkt.
+;; PPN 4C Addendum Phase 4A.b: Layer-1 removal drops the name from the per-file
+;; mnr's cell-id-map (cell persists in the prop-net — cells are never deleted —
+;; but the name→cid mapping is removed, so cascading-lookup misses). Matches the
+;; pre-4A.b "remove from cells-content hash + #f sentinel" visibility semantics.
 (define (global-env-remove! name)
-  ;; Layer 1: per-file definitions content
-  (current-definition-cells-content
-   (hash-remove (current-definition-cells-content) name))
-  ;; Layer 1: cell sentinel (cell stays, value = #f)
-  (definition-cell-remove! name)
-  ;; Track 6 Phase 7d: remove from module-definitions-content
+  ;; Layer 1: per-file mnr — remove the name→cid mapping
+  (define mnr (current-file-module-network-ref))
+  (when mnr
+    (current-file-module-network-ref
+     (struct-copy module-network-ref mnr
+       [cell-id-map (hash-remove (module-network-ref-cell-id-map mnr) name)])))
+  ;; Track 6 Phase 7d: remove from module-definitions-content (Layer 2a)
   (current-module-definitions-content
    (hash-remove (current-module-definitions-content) name))
-  ;; Layer 2: prelude/module env parameter (belt-and-suspenders)
+  ;; Layer 2b: prelude env parameter
   (current-prelude-env
    (hash-remove (current-prelude-env) name)))
 
@@ -297,10 +319,13 @@
 ;; ========================================
 
 ;; List all definition names (from all layers)
+;; PPN 4C Addendum Phase 4A.b: Layer-1 file-keys come from the per-file mnr's
+;; cell-id-map (names with cells), replacing current-definition-cells-content keys.
 (define (global-env-names)
   (define prelude-keys (hash-keys (current-prelude-env)))
   (define module-keys (hash-keys (current-module-definitions-content)))
-  (define file-keys (hash-keys (current-definition-cells-content)))
+  (define mnr (current-file-module-network-ref))
+  (define file-keys (if mnr (hash-keys (module-network-ref-cell-id-map mnr)) '()))
   ;; Priority: file-keys > module-keys > prelude-keys
   (remove-duplicates (append file-keys module-keys prelude-keys) eq?))
 
@@ -318,7 +343,9 @@
     (if entry (hash-set e fqn entry) e)))
 
 ;; Snapshot the current global env (merges all layers).
-;; Priority: per-file defs > module defs (from module-network-ref) > legacy prelude defs.
+;; Priority: per-file defs > module defs > legacy prelude defs.
+;; PPN 4C Addendum Phase 4A.b: per-file defs materialize from the mnr cells
+;; (module-network-materialize), replacing current-definition-cells-content.
 (define (global-env-snapshot)
   (define base (current-prelude-env))
   ;; Track 6 Phase 7d: merge module-definitions-content
@@ -329,7 +356,8 @@
         (for/fold ([env base])
                   ([(k v) (in-hash mod-defs)])
           (hash-set env k v))))
-  (define file-defs (current-definition-cells-content))
+  (define mnr (current-file-module-network-ref))
+  (define file-defs (if mnr (module-network-materialize mnr) (hasheq)))
   (if (hash-empty? file-defs)
       with-mods
       (for/fold ([env with-mods])
