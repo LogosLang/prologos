@@ -228,7 +228,8 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 4A.0 | Pre-0 microbench: env-cell variant comparison + audit-driven extension (production-faithful A + Variant C + W4 light) per §18.12 | ✅ `e11c7fda` + `bac652ae` | **CLOSED 2026-05-26.** Initial bench `e11c7fda` (Variants A/B/D × W1-W3-W5); extended bench `bac652ae` (post-audit additions: production-faithful A via real `global-env-lookup-type`; Variant C via `compound-cell-component-{ref,write}/pnet`; W4 light wake precision). **Q1 variant decision LOCKED to Variant D** per §18.12.7 — registry cell + per-name binding cells preserves Track 7 Phase 7d per-name infrastructure as authoritative read source; per-name first-class for Phase 11b/LSP/.pnet/PReduce. Headline findings: A-prod-with-elab = 267-281 ns/lookup during elaboration (5-7× bench-A strawman 32-40 ns); B reads = 44 ns but wake-blind (N fires per N unrelated writes — structurally unviable for residuation); C reads = 100-111 ns (REFUTES audit "C ≅ B" — tagged-cell-value wrap/unwrap adds ~57-67 ns under wv=0); D reads = 110 ns + per-name first-class structural addressability. W4 light: B fires 9/9 and 49/49; C/D fire 0/9 and 0/49 (perfect precision). 2 methodology data points: "Audit-Precedes-Implementation REFRAMING Discipline" 9th + NEW "Bench-strawman risk" 1st (watching list). Adversarial 3-column framing on the variant decision (§18.12.7). Both baselines retained at data/benchmarks/. |
 | 4A | `current-prelude-env` migration (the flip) — **Variant D LOCKED**: registry specialized cell + per-name binding cells; **mini-design CLOSED 2026-05-26** | 🔄 (mini-design closed; sub-phases pending) | **Mini-design CLOSED 2026-05-26** per Stage 4 Per-Phase Protocol. All 8 architectural Q's locked (Q-4A.1 Option B-revised; Q-4A.2 retire dep-recording across 4A+4B; Q-4A.3 mnr.cell-id-map existing surface; Q-4A.4 Option (b) share-by-reference + prelude-as-import; Q-4A.5 retire 4 env params; Q-4A.6 global-env.rkt → namespace.rkt; SRE STRUCTURAL classification; Module-Theoretic framing established; NTT model sketched + cross-network bridge gap flagged for NTT_SYNTAX_DESIGN.md). Sub-phase partition 4A.a/b/c/d + 4A-VAG per §18.15.9. Total est. ~430-800 LoC (audit-driven scope reframing per Q-4A.4 share-by-reference + Q-4A.6 callback retirement). Cross-track inheritance: PM Track 12 + PPN Track 8 + PPN Track 11 + SH Track 1 + PReduce Track 1. Methodology data points: codifier-falls-into-trap 2nd data point (missed Galois bridges prior art); prior-art search via mempalace discipline added to MEMORY.md. Persisted §18.15.1-.10. Ready for 4A.a sub-phase mini-design + implementation. |
 | 4A.a | Extend mnr struct with imports field + cascading lookup helper + STRUCTURAL DefinitionEntry + global-env.rkt → namespace.rkt + current-file-mnr parameter | ✅ `c4c753a8` + `4fd81a8f` + `e08bdbcc` + `3dbbdcd0` | **CLOSED 2026-05-28.** All 5 deliverables landed. Commits: (4) global-env.rkt → namespace.rkt cycle-break `c4c753a8`; (1)+(5) imports field + add-import helper + current-file-mnr parameter `4fd81a8f`; (2) cascading-lookup + tests `e08bdbcc`; (3) STRUCTURAL DefinitionEntry leaf module + registration + tests `3dbbdcd0`. **M1 reframe (α)→(γ)**: namespace.rkt placement FALSIFIED by layering cycle (namespace → type-lattice → reduction/zonk/substitution → ns-context?); def-entry moved to NEW leaf module `definition-entry.rkt` (correct layering, own lattice concept). Build-as-falsification caught the static-audit transitive-cycle-check gap (§18.16.5.M1). Q1 cons-prepend; Q2 trust-loading-set (cycles out of 4A scope per §18.11.3); Q3 registration-only merges-complete (set-once value + type-unify-or-top type + def-collision contradicts?); Q4 define-only param. M2 pipeline.md obligation captured at 4A.b row. **Regression gate: 8302 / 108.9s / 0 failures** (8281 + 21 4A.a tests). VAG passed adversarially (4 Q's, §18.16.2/3). Methodology data points: codifier-falls-into-trap 3rd (Q2); cycle-checks-must-be-transitive NEW (M1 falsification). ~165 LoC code + ~100 LoC tests across 3 files + 1 new leaf module + 1 new test file. |
-| 4A.b | Flip global-env-lookup-* to cascading; migrate global-env-add* to direct mnr API (retire callbacks); retire global-env-add-type-only (subsumed by STRUCTURAL). **+ Pipeline.md inheritance from 4A.a per §18.16.5.M2**: add `[current-file-module-network-ref (make-module-network)]` to (i) `tests/test-support.rkt` 6 parameterize sites at lines 82/134/158/187/210/240, (ii) `tools/batch-worker.rkt` parameterize block at lines 226-235. | ⬜ | Sub-phase per §18.15.9. ~100-200 LoC. Gate: probe diff = 0; per-lookup cost similar (dep-recording still active per Q-4A.2); **pipeline.md obligations from §18.16.5.M2 captured + verified at mini-design opening** (capture-gap discipline). |
+| 4A.b | **Read-path flip ONLY (Path A, §18.17.4)** — mnr becomes authoritative Layer-1 source holding `(cons type value)` (merge-replace, matches today's hash-set). Flip all **5 readers** (lookup-type/value, global-env-names, global-env-snapshot, register-global-env-cells!) + **2 writers** (global-env-add/-add-type-only internals → mnr API) + **mirror ~8 parameterize site-groups** (2→1 consolidation: cells-content+cell-ids → current-file-mnr). `add-type-only` STAYS (→ 4A.b-ii). Layer-2 fallback (module-definitions-content, prelude-env) STAYS until 4A.c. | 🔄 (mini-design opened 2026-05-28, §18.17) | **Mini-design §18.17.** Wide-scope LOCKED (no dual-path; Narrow=belt-and-suspenders rejected). Path A LOCKED: def-entry value migration split to 4A.b-ii (probe-diff=0 vs collision-detection behavior-change conflict + materialization/.pnet ripple). **M2 capture CORRECTED** — was incomplete (named test-support+batch-worker; full set is ~8 groups incl. 3 PRODUCTION sites M2 missed: driver.rkt:2070, metavar-store.rkt:1814, lsp/server.rkt:121,208 — §18.17.2). Gate: probe diff=0; per-lookup cost similar (dep-recording active per Q-4A.2). ~250-350 LoC (audit-driven expansion). Drift risks D-4Ab-1..5. |
+| 4A.b-ii | **NEW (Path A split, §18.17.4)** — `def-entry` value-shape migration: per-name cells `(cons type value)` → `def-entry` (def-entry-merge as cell merge); retire `global-env-add-type-only` (subsumed by STRUCTURAL — write `(def-entry type #f)`); handle materialization boundary (def-entry→cons adapter at `module-network-materialize` OR Layer-2 migration). Consumes the 4A.a `'definition-entry` registration. | ⬜ | Sub-phase per §18.17.4. Gate: **"expect collision findings"** (SRE Track 2I "principled refactor surfaces real facts" — NOT probe-diff=0; strict set-once turns silent double-writes into def-collision). ~100-200 LoC + boundary handling. |
 | 4A.c | Retire 7 parameters (4 env-state + 3 callback). Update driver.rkt import-handler (lines 1857-1869): cached module → ADD import-mnr to current-file-mnr.imports (no copy). Prelude as imports list per Q-4A.4.c. | ⬜ | Sub-phase per §18.15.9. ~150-250 LoC. Gate: all parameters retired; driver.rkt simplified; probe diff = 0. |
 | 4A.d | Test fixture migration (~30 sites) + bench re-run | ⬜ | Sub-phase per §18.15.9. ~50-100 LoC + sed-2-pass. Gate: full suite GREEN; bench shows production-A → mnr-based-A within envelope. |
 | 4A-VAG | Cumulative cross-sub-phase 3-column adversarial VAG | ⬜ | Sub-phase per §18.15.9. docs-heavy. Gate: all 13 drift risks (D-4-1..8 + D-4-A1..A5) cleared adversarially. |
@@ -10414,7 +10415,9 @@ Per [DEVELOPMENT_LESSONS.org § "Capture-Gap Pattern: 'Future Phase X Handles Y'
   2. Add `[current-file-module-network-ref (make-module-network)]` entry to **`tools/batch-worker.rkt` parameterize block at lines 226-235**
 - 4A.b's §3 tracker row notes inheritance (see §3 row 4A.b update for explicit pointer).
 
-**Failure mode if uncaptured**: 4A.b reads `current-file-module-network-ref` at runtime, parameter is unset (default #f) in test/batch contexts, tests show intermittent failures with no clear signal (the classic two-context boundary bug class per DEVELOPMENT_LESSONS.org).
+> **⚠ CAPTURE-GAP CORRECTION (4A.b audit, 2026-05-28)**: this M2 enumeration was **INCOMPLETE** — it named only test-support + batch-worker. The 4A.b mini-audit (§18.17.2) found the FULL set of `current-definition-cells-content`/`-cell-ids` parameterize sites that `current-file-module-network-ref` must mirror is **~8 site-groups across 6 files**, including **3 PRODUCTION-load-bearing sites M2 missed**: `driver.rkt:2070` (module-load), `metavar-store.rkt:1814` (`with-fresh-meta-env` speculation), `lsp/server.rkt:121,208` (LSP session) — plus `test-capability-06.rkt:74,91` and 2 benches. This is the capture-gap pattern materializing on my own M2 capture. Full enumeration + Wide-scope resolution at §18.17.2. (Q-4A.5's original "~14+ sites" was right; M2's summary collapsed it.)
+
+**Failure mode if uncaptured**: 4A.b reads `current-file-module-network-ref` at runtime, parameter is unset (default #f) in test/batch/PRODUCTION contexts, tests + production diverge with no clear signal (the classic two-context boundary bug class per DEVELOPMENT_LESSONS.org). The 3 production sites make this load-bearing, not just test hygiene.
 
 **Adversarial check on (B)**: deferring is a deviation from pipeline.md as-written ("immediately add"). Counter: rule's failure-mode rationale doesn't apply when parameter has no reader; strict (A) would add parameterize entries that set the parameter to a fresh mnr nothing consumes — "shape without benefit" anti-pattern. Capture-gap discipline + 4A.b row pointer mitigate the deferral risk.
 
@@ -10462,6 +10465,103 @@ Estimated total: ~80-150 LoC code + ~50 LoC test additions per §18.15.9 estimat
 - `racket/prologos/namespace.rkt:114-175` (`module-network-ref` struct + API)
 - `racket/prologos/global-env.rkt:72-74` (current require block)
 - `racket/prologos/phase1d-registrations.rkt:100-115` (`register/minimal` template)
+
+### §18.17 PPN 4C Addendum Phase 4A.b mini-design (opened 2026-05-28)
+
+Per Stage 4 Per-Phase Protocol step 1+2. 4A.b is the **read-path flip** — the mantra-advancing step where per-file definition cells become the authoritative read source (§18.2 thesis). Mini-audit surfaced material scope expansion + a Path-A/B fork; both resolved through conversational co-design.
+
+#### §18.17.1 Design references + obligations
+
+- §18.15.9 4A.b row (flip lookup to cascading; migrate add* to mnr API)
+- §18.2 thesis (flip the read path — "cell becomes authoritative")
+- §18.15.3 Q-4A.2 (dep-recording KEPT at 4A; retires at 4B) — lookup retains dep-recording side-effect
+- §18.15.5 Q3 (STRUCTURAL DefinitionEntry) — DEFERRED to 4A.b-ii per Path A (see §18.17.4)
+- §18.16.5.M2 carry-forward (pipeline.md parameter sites) — VERIFIED + CORRECTED (capture was incomplete; see §18.17.2)
+
+#### §18.17.2 Mini-audit findings (Stage 4 step 2 — the read-flip is wider than the design row)
+
+**The flip touches 5 readers + 2 writers, not just `lookup`:**
+
+| Surface | Sites |
+|---|---|
+| Readers of `current-definition-cells-content` | `global-env-lookup-type` (:199), `global-env-lookup-value` (:223), `global-env-names` (:303), `global-env-snapshot` (:332), `register-global-env-cells!` (:351) |
+| Writers | `global-env-add` (:243), `global-env-add-type-only` (:262) |
+| `global-env-add*` call sites (~17: driver ×15, elaborator:3065, typing-core:387) | **Mostly unaffected** — pass `(current-prelude-env)` + discard return under cell-path; only `global-env-add` *internals* flip. Per-site check for functional-composition callers. |
+
+All 5 readers must flip atomically (Wide) — else lookup reads mnr while names/snapshot read the stale hasheq → probe-diff ≠ 0.
+
+**Full `current-file-module-network-ref` parameterize-site set (M2 capture was INCOMPLETE — capture-gap)**: `current-definition-cells-content` (+ pair `current-definition-cell-ids`) is parameterized at **~8 site-groups across 6 files**:
+
+| Site | Kind | M2 named? |
+|---|---|---|
+| `driver.rkt:2070` (module-load block) | PRODUCTION — load-bearing | ❌ MISSED |
+| `metavar-store.rkt:1814` (`with-fresh-meta-env`, speculation) | PRODUCTION — load-bearing | ❌ MISSED |
+| `lsp/server.rkt:121, :208` (LSP session) | PRODUCTION | ❌ MISSED |
+| `tools/batch-worker.rkt:231` | test infra | ✓ |
+| `tests/test-support.rkt` ×6 (82/136/160/189/212/242) | test fixture | ✓ |
+| `tests/test-capability-06.rkt:74,91` | test (own parameterize) | ❌ MISSED |
+| `benchmarks/micro/bench-track10-module-loading.rkt` ×3 + `bench-phase4-env-cell.rkt` ×2 | bench | ❌ MISSED |
+
+Architecture: a **2→1 param consolidation** — each `[current-definition-cells-content (hasheq)] [current-definition-cell-ids (hasheq)]` pair becomes `[current-file-module-network-ref (make-module-network)]` (exactly Q-4A.5's "one param replaces ~14+ sites"). LSP wrinkle: `lsp/server.rkt:208` uses `repl-session-definition-cells` (session-persistent) — mechanical-mirror with fresh mnr at 4A.b; full session-persistence deferred to PPN Track 11.
+
+#### §18.17.3 Wide-scope decision (LOCKED 2026-05-28)
+
+**Wide / atomic**: flip all 5 readers + 2 writers + mirror all ~8 site-groups in 4A.b; `current-definition-cells-content`/`-cell-ids` become dead (set-but-unread), formally removed at 4A.c. **No dual-path.** Rejected **Narrow / gated fallback** (`if current-file-mnr then mnr else cells-content`) — textbook belt-and-suspenders (blocking red-flag per workflow.md); and no clean narrow keeps the suite green without the fallback anti-pattern.
+
+#### §18.17.4 Path-A split — `def-entry` value migration deferred to NEW 4A.b-ii (LOCKED 2026-05-28)
+
+**The conflict the audit surfaced**: 4A.b's gate is **probe-diff = 0** (behavior-preserving). But the design row bundled "retire `add-type-only`, subsumed by STRUCTURAL" = migrate per-name cell values `(cons type value)` → `def-entry`. **`def-entry-merge`'s strict set-once is a behavior CHANGE** (silent double-writes → `def-collision`) — directly contradicts probe-diff=0. Plus a value-shape ripple: loaded-module mnr cells get **materialized** (`module-network-materialize`, driver.rkt:2150) into `module-info.env-snapshot`, which is **`.pnet`-serialized** (pnet-serialize.rkt:500) + copied into Layer-2 (driver.rkt:1865). `def-entry` structs would propagate into materialization + `.pnet` + Layer-2.
+
+**Path A (LOCKED)** — split:
+- **4A.b** = read-path flip ONLY. mnr authoritative Layer-1 source; cells hold **`(cons type value)`** via existing `module-network-add-definition` (merge-replace = last-write-wins, exactly matches today's `hash-set`). Flip 5 readers + 2 writers + mirror ~8 sites. `add-type-only` STAYS (writes `(cons type #f)`). **probe-diff = 0 clean** — no value-shape ripple, no materialization/`.pnet` change. Layer 2 (`module-definitions-content`, `prelude-env`) stays as lookup fallback until 4A.c imports migration (Layer-1-only flip).
+- **4A.b-ii** (NEW) = `def-entry` value-shape migration: cells → `def-entry` (def-entry-merge as cell merge), `add-type-only` retires (subsumed by STRUCTURAL), materialization boundary handled deliberately (def-entry→cons adapter at materialize OR Layer-2 migration). Gate = **"expect collision findings"** (SRE Track 2I "principled refactor surfaces real facts" precedent), NOT probe-diff=0. Consumes the 4A.a `'definition-entry` registration.
+
+**Rationale**: the read-flip is correctness-critical and deserves a clean probe-diff=0 signal at the mantra-advancing "cells become authoritative" step; bundling a behavior-changing value migration muddies that signal. The 4A.a STRUCTURAL registration sits inert-but-tracked until 4A.b-ii — honest deferral (no dual-path; just no consumer yet), NOT validated-not-deployed.
+
+**Rejected Path B** (bundled, gate "probe-diff=0 except collision findings", inline materialize adapter) — more "complete" (consumes 4A.a registration now) but muddies the read-flip's correctness signal + rushes the `.pnet`/materialization boundary.
+
+#### §18.17.5 Sub-decisions (LOCKED)
+
+1. **Layer-1-only split**: 4A.b flips Layer 1 (per-file defs → mnr); Layer 2 (`module-definitions-content` + `prelude-env` lookup fallback) stays until 4A.c imports migration. ✓
+2. **`add-type-only`**: STAYS as-is at 4A.b (writes `(cons type #f)`); retires at 4A.b-ii (subsumed by STRUCTURAL). Simpler than the earlier "thin wrapper" lean — no change at 4A.b. ✓
+3. **LSP**: mechanical-mirror with fresh mnr at 4A.b (`lsp/server.rkt:121,208`); full `repl-session` persistence deferred to PPN Track 11. ✓
+
+#### §18.17.6 Mantra check — 4A.b IS mantra-advancing (not scaffolding)
+
+Unlike 4A.a (scaffolding), 4A.b moves information flow on-network: `global-env-lookup-*` reads cell values via `module-network-cascading-lookup` → `net-cell-read` on the per-file mnr's prop-net (authoritative), replacing the off-network `current-definition-cells-content` hasheq. ON-NETWORK ✓ (per-name cells are the read source). Dep-recording side-effect remains off-network scaffolding (Q-4A.2; retires 4B — labeled, not silent). Information-flow ✓ (values move through cells). The §18.2 thesis ("cell becomes authoritative") lands here.
+
+#### §18.17.7 Principles in play (3-column adversarial)
+
+| Principle | Catalogue | Challenge → verdict |
+|---|---|---|
+| Propagator-First Infrastructure | cells become authoritative read source | *Is the mnr cell genuinely the source, or a mirror?* Wide flip makes it sole source (cells-content dead). PASS — no mirror (Narrow rejected) |
+| Correct by Construction | probe-diff=0 verifies equivalence | *Does bundling def-entry muddy it?* Path A keeps it clean (def-entry → 4A.b-ii). PASS |
+| Decomplection | read-flip (4A.b) vs value-migration (4A.b-ii) vs Layer-2 retire (4A.c) — separated | *Over-split?* Each has a distinct gate (probe-diff=0 / collision-findings / imports). PASS — principled separation |
+| Belt-and-suspenders RED-FLAG | Narrow's gated fallback rejected | *Any dual-path left in Path A 4A.b?* No — cells-content dead, not dual-read. PASS |
+
+#### §18.17.8 Drift risks (D-4Ab-1..5)
+
+- **D-4Ab-1** — *Incomplete site-mirroring* → probe-diff≠0 in a missed context (esp. the 3 production sites M2 missed). Mitigation: §18.17.2 full enumeration is the checklist; full-suite gate catches misses.
+- **D-4Ab-2** — *def-entry creep into 4A.b* → Path A keeps `(cons type value)`; resist any `def-entry` write at 4A.b (that's 4A.b-ii). Watch `global-env-add` internals.
+- **D-4Ab-3** — *Belt-and-suspenders fallback* → no `if current-file-mnr then … else cells-content`. Cells-content goes dead, not dual-read.
+- **D-4Ab-4** — *Layer-2 entanglement* → 4A.b flips Layer 1 only; do NOT touch `module-definitions-content`/`prelude-env` lookup fallback (4A.c). The cascading-lookup's imports are empty until 4A.c — Layer 2 fallback carries module/prelude defs meanwhile.
+- **D-4Ab-5** — *`register-global-env-cells!` role* → it recreates per-name cells in the elab-network each command from cells-content. Under Wide, per-name cells move to the persistent mnr; `register-global-env-cells!`'s per-name-cell job becomes moot, but its defn-param-names-cell job (global-env.rkt:357) remains. Audit its exact retirement at implementation — may partially retire at 4A.b, fully at 4A.c (callbacks).
+
+#### §18.17.9 Implementation plan + commit ordering
+
+1. **global-env.rkt require** `definition-entry.rkt`? — NO (Path A: no def-entry at 4A.b). Require stays as-is.
+2. **Writers**: `global-env-add` internals → write `(cons type value)` to `current-file-module-network-ref` via mnr API (create cell if name absent, else update); store updated mnr back in the parameter. `global-env-add-type-only` likewise with `(cons type #f)`. Legacy (no-mnr) path preserved for contexts where `current-file-module-network-ref` is #f (pre-init) — BUT under Wide all real contexts set it; the #f branch is for the genuinely-pre-network case (assess vs D-4Ab-3 — must not become a dual-read for the env case).
+3. **Readers**: flip all 5 to read mnr (cascading-lookup for lookup-*; mnr.cell-id-map keys for names; mnr materialize for snapshot; register-global-env-cells! per D-4Ab-5).
+4. **Site-mirroring**: add `[current-file-module-network-ref (make-module-network)]` at all ~8 site-groups (the 2→1 consolidation; cells-content/cell-ids kept alongside-but-dead until 4A.c).
+5. **Per-commit**: smallest-first; full-suite regression gate at close (probe-diff=0).
+
+Estimated ~250-350 LoC (larger than the original ~100-200 row estimate per Wide + site-mirroring; audit-driven expansion).
+
+#### §18.17.10 Cross-references
+
+- §18.2 thesis; §18.15.3 Q-4A.2; §18.15.9 4A.b/4A.c rows; §18.16.5.M2 (corrected)
+- DEVELOPMENT_LESSONS.org § Audit-First Methodology Prevents Under-Scoped Implementation; § Capture-Gap Pattern; § Audit-Driven Scope Expansion Wide vs Narrow; § "Validated Is Not Deployed"; § Scaffolding-Hides-Truth (4A.b-ii collision-findings precedent — SRE Track 2I)
+- `global-env.rkt:192-360` (readers/writers); `driver.rkt:2070`, `metavar-store.rkt:1814`, `lsp/server.rkt:121,208` (production parameterize sites); `pnet-serialize.rkt:500` + `driver.rkt:2150,1865` (materialization boundary — 4A.b-ii concern)
 
 ---
 
