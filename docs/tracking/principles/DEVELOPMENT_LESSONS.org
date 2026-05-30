@@ -1671,3 +1671,54 @@ axes already covered; 3C.d.3 (β.3.i) post-empirical decision flip from
 point (§9.6.6).
 
 Promoted at PPN 4C Phase 3V (2026-05-24).
+
+** Dynamic Workflow Is the Generalization of Audit-Delegation — Amplifier, Not Replacement
+
+The =Workflow= tool (deterministic multi-phase multi-agent
+orchestration) is the generalization of the already-promoted
+audit-delegation pattern: it adds multi-phase orchestration (audit →
+design → critique → respond), structured-output schemas, and an
+adversarial critique panel as a first-class phase. It is a
+*critique-and-audit AMPLIFIER, not a design-and-implement replacement.*
+
+*The core positive (1 strong data point)*: an adversarial
+completeness-critic agent caught a LOAD-BEARING flaw in the workflow
+/author's own/ design — the workflow's dry-run instruction said "drop
+just Layer-2," which leaves the copy loops live and so cannot ATTRIBUTE
+residuals=0 to the new write (a recurrence of the §18.18.6.9
+misdiagnosis). The author's blind spot was surfaced by the independent
+adversarial layer. This is the central argument for the pattern: running
+critique lenses BLIND and in parallel /enforces/ the independence that
+solo sequential critique erodes by anchoring (lens 4 reads like lens 1).
+
+*The cautions*:
+1. *Worktree-HEAD provisioning defect* (2nd data point — see also
+   §18.18.6.10): =isolation: 'worktree'= agents have twice been
+   provisioned at a STALE base (~26-36 commits behind), SILENTLY — masked
+   because absolute-path reader agents in the same run resolve to the
+   main checkout at HEAD. Delegated empirical work MUST verify its HEAD
+   SHA. Prefer diff-back (workflow returns a patch; main session lands it
+   at the known-good HEAD).
+2. *Disproportionality*: ~1.96M tokens / 12 agents for a ~4-line change —
+   Tier-2 spend on Tier-0/1 work. The critique found real things, but a
+   ~2-audit + 3-lens panel would have caught the same load-bearing
+   findings at ~1/3 the cost. Start lean; escalate by stakes/breadth.
+3. *Co-design tension*: the workflow autonomously front-ran the
+   mini-design that is normally co-designed with the user; the user
+   reviewed at the END. Acceptable for a LOCKED-approach step (grounding
+   + hardening a settled decision); for OPEN architectural questions the
+   workflow must STOP at options+critiques and return them, not
+   self-resolve.
+
+*The rule*: delegate the "multiple independent minds" work (audits,
+critique rounds, mechanical migrations, research sweeps); keep the "one
+shared evolving understanding" work (mini-design dialogue, novel
+implementation, decision-locking) conversational. The workflow produces
+material for a decision; the human + main session makes the decision and
+lands the code.
+
+Origin: PPN 4C Addendum 4A.c-ii-b foreign-write-(b) dynamic-workflow
+experiment (2026-05-30, §18.18.6.13). See DESIGN_METHODOLOGY.org §
+"Delegation vs Co-Design (Dynamic Workflows)" (the appropriateness
+distinction + scale tiers) + ~.claude/rules/workflow.md~ § "Dynamic-workflow
+code-state discipline" / "Diff-back" (the operational reflexes).

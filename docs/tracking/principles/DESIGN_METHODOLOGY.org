@@ -1621,6 +1621,73 @@ enforced consistency is a design methodology in itself: if a feature
 can't be expressed through the pipeline, it's a signal that the
 feature's abstraction is wrong.
 
+** Delegation vs Co-Design (Dynamic Workflows)
+
+The =Workflow= tool (deterministic multi-agent orchestration) is the
+generalization of the audit-delegation pattern. The organizing
+principle for when to reach for it:
+
+#+begin_quote
+Delegate the /multiple independent minds/ work to a dynamic workflow;
+keep the /one shared evolving understanding/ work conversational.
+#+end_quote
+
+*Good fit (delegate to a workflow)* — tasks that decompose into
+independent parallel work and synthesize:
+- *Stage 1 research sweeps* (human steers/refines the question; the
+  workflow sweeps + verifies + synthesizes; the human judges the result)
+- *Stage 2 mini-audits / reality-checks* (parallel facets grounded
+  against code — the promoted audit-delegation pattern)
+- *Stage 3 adversarial critique rounds* (P/R/M/S lenses + completeness
+  critic run BLIND to each other, then reconciled by grounded-pushback
+  synthesis — the parallelism /enforces/ the lens-independence that solo
+  sequential critique erodes by anchoring)
+- *Mechanical code migrations* — a /discovered work-list/ transformed by
+  a /known recipe/, verified per-item (NOT novel-design implementation)
+- *Completeness/coverage sweeps* ("what did we miss across this surface?")
+  and *parity/divergence verification* (run N equivalent paths, diff them)
+
+*Co-design (keep conversational, high-touch)* — tasks that need one
+shared, evolving understanding between contributor and user:
+- *Mini-design dialogue for OPEN architectural questions* (the cycling
+  between design intent and code reality WITH the user)
+- *Novel-design implementation* (the per-phase cadence, the gate, commit
+  discipline — see "Conversational Implementation Cadence")
+- *Decision-locking* (the user's deliberation is load-bearing)
+
+*The decision-boundary guardrail*: a workflow produces /material for a
+decision/; the human + main session /makes and locks the decision and
+lands the code/. No workflow autonomously closes a phase, locks a Q, or
+commits to main. Co-design is preserved at the decision boundary even
+when the labor is delegated.
+
+*Scale tiers* (panel size ∝ blast-radius × breadth × uncertainty;
+*start lean, escalate only when justified*):
+- *Tier 0 — no workflow*: routine, small, or novel-implementation work →
+  solo + conversation.
+- *Tier 1 — light (~2-4 agents)*: ground an audit, or a focused critique
+  pass, on a moderate-stakes step.
+- *Tier 2 — full panel (~6-12 agents)*: high blast-radius architecture —
+  full audit fan-out + multi-lens adversarial critique + completeness
+  critic.
+- *Implementation is never a workflow tier* (except verified-base
+  mechanical migration, per ~.claude/rules/workflow.md~ § "Diff-back").
+
+For high-stakes per-phase mini-design /openings/: fan out the AUDIT (and
+optionally an adversarial pre-critique of the proposed approach), but
+keep the Q-resolution and decision-locking in dialogue. The draft stays
+co-designed; its grounding and its challenge get delegated.
+
+*Provenance*: codified 2026-05-30 from the PPN 4C Addendum 4A.c-ii-b
+foreign-write-(b) dynamic-workflow experiment (§18.18.6.13). The run
+validated the critique-amplifier value (an adversarial completeness-critic
+agent caught a load-bearing flaw in the workflow /author's own/ dry-run
+design) and surfaced the cautions (the worktree-HEAD provisioning defect;
+~1.96M tokens / 12 agents spent on a ~4-line change = Tier-2 spend on
+Tier-0/1 work). See ~.claude/rules/workflow.md~ § "Dynamic-workflow
+code-state discipline" + DEVELOPMENT_LESSONS.org § "Dynamic Workflow Is
+the Generalization of Audit-Delegation."
+
 * Anti-Patterns
 
 ** "We'll come back to it"
