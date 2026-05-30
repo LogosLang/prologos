@@ -350,8 +350,14 @@
 
 ;; Snapshot the current global env (merges all layers).
 ;; Priority: per-file defs > module defs > legacy prelude defs.
-;; PPN 4C Addendum Phase 4A.b: per-file defs materialize from the mnr cells
-;; (module-network-materialize), replacing current-definition-cells-content.
+;; PPN 4C Addendum Phase 4A.b: per-file defs materialize from the mnr cells,
+;; replacing current-definition-cells-content.
+;; PPN 4C Addendum Phase 4A.c-ii-b RF-1 (§18.18.6.8): materialize the mnr CASCADE
+;; (own cells + imports), NOT own-cells-only — so the snapshot stays fat (prelude +
+;; transitive imports) after the 4A.c-ii-b copy loops retire empties Layer-2.
+;; Behavior-preserving pre-cutover (imports empty → cascade = own-cells-only).
+;; Distinct from external-definitions-snapshot, which EXCLUDES local cells (Path Y):
+;; global-env-snapshot is the FULL env (own + external); external-* is external-only.
 (define (global-env-snapshot)
   (define base (current-prelude-env))
   ;; Track 6 Phase 7d: merge module-definitions-content
@@ -363,7 +369,7 @@
                   ([(k v) (in-hash mod-defs)])
           (hash-set env k v))))
   (define mnr (current-file-module-network-ref))
-  (define file-defs (if mnr (module-network-materialize mnr) (hasheq)))
+  (define file-defs (if mnr (module-network-cascade-materialize mnr) (hasheq)))
   (if (hash-empty? file-defs)
       with-mods
       (for/fold ([env with-mods])

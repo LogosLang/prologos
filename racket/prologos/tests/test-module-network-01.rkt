@@ -320,6 +320,31 @@
     (check-equal? (external-definitions-snapshot)
                   (hasheq 'p1 (cons 'Int 1) 'm1 (cons 'Int 2)))))
 
+;; RF-1 (§18.18.6.8): global-env-snapshot materializes the mnr CASCADE (own + imports),
+;; NOT own-cells-only. Unlike external-definitions-snapshot (which EXCLUDES local cells),
+;; global-env-snapshot INCLUDES local defs AND the imports cascade — the foundation that
+;; keeps T1 fixture captures + .pnet mod-env + production capability inference fat after
+;; the 4A.c-ii-b copy loops retire. The first assertion FAILS on the pre-RF-1 own-cells-only
+;; materialize (impdef missing); the second pins pre-cutover behavior-preservation.
+(test-case "global-env-snapshot: includes local cells AND imports cascade (RF-1)"
+  (define-values (imp1 _ci)
+    (module-network-add-definition (make-module-network) 'impdef (cons 'String "imp")))
+  (define-values (local1 _cl)
+    (module-network-add-definition (make-module-network) 'localdef (cons 'Int 99)))
+  (define local2 (module-network-add-import local1 imp1))
+  ;; Post-cutover shape: Layer-2 empty, cascade supplies own + imports.
+  (parameterize ([current-prelude-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
+                 [current-file-module-network-ref local2])
+    (check-equal? (global-env-snapshot)
+                  (hasheq 'localdef (cons 'Int 99) 'impdef (cons 'String "imp"))))
+  ;; Pre-cutover equivalence: imports empty → own cells only + Layer-2 base (no change).
+  (parameterize ([current-prelude-env (hasheq 'p1 (cons 'Int 1))]
+                 [current-module-definitions-content (hasheq)]
+                 [current-file-module-network-ref local1])  ;; local1 = own def, EMPTY imports
+    (check-equal? (global-env-snapshot)
+                  (hasheq 'p1 (cons 'Int 1) 'localdef (cons 'Int 99)))))
+
 ;; ========================================
 ;; 2c. Reconstruction from snapshot (PPN 4C Addendum Phase 4A.c-i, RISK 1)
 ;; ========================================
