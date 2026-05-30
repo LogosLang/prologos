@@ -1462,6 +1462,10 @@
   ;; Track 10B Phase A1: always scope a fresh network per call.
   ;; Network is always present (with-fresh-meta-env creates it), but each
   ;; process-string call gets its OWN scoped network to prevent leaks.
+  ;; PPN 4C Addendum Phase 4A.c-ii-b: the in-flight mnr is NOT scoped here —
+  ;; the `ns` declaration is the compilation-unit boundary (it resets the mnr,
+  ;; see process-ns-declaration), so a shared-fixture's no-`ns` continuation
+  ;; runs accumulate defs while each independent `ns` run gets a fresh mnr.
   (parameterize ([current-prop-net-box (box (make-elaboration-network))])
     (reset-meta-store!)
     (process-string-inner s)))
@@ -1555,6 +1559,8 @@
 ;; This is the path that .prologos files use — the primary design target.
 (define (process-string-ws s)
   ;; Track 10B Phase A1: always scope a fresh network per call.
+  ;; PPN 4C Addendum Phase 4A.c-ii-b: in-flight mnr scoping is at the `ns`
+  ;; declaration (process-ns-declaration), not here — see process-string.
   (parameterize ([current-prop-net-box (box (make-elaboration-network))])
     (reset-meta-store!)
     (process-string-ws-inner s)))
@@ -1751,7 +1757,16 @@
 ;; ========================================
 (define (process-file path #:verbose [verbose? #f])
   ;; Track 10B Phase A1: always scope a fresh network per call.
-  (parameterize ([current-prop-net-box (box (make-elaboration-network))])
+  ;; PPN 4C Addendum Phase 4A.c-ii-b (lifecycle): bind the in-flight mnr at the
+  ;; FILE unit boundary so import edges wired during preparse (action-1) persist
+  ;; into elaboration. INHERIT-OR-CREATE: a fixture may pre-bind the mnr with a
+  ;; prelude snapshot-import (test-support / run-ws at *:94) and call process-file
+  ;; — unconditional (make-module-network) would CLOBBER that prelude. (or ...)
+  ;; inherits the fixture's mnr value when present; creates fresh for standalone
+  ;; process-file (param default #f). Behavior-preserving while Layer-2 is active.
+  (parameterize ([current-prop-net-box (box (make-elaboration-network))]
+                 [current-file-module-network-ref
+                  (or (current-file-module-network-ref) (make-module-network))])
     (reset-meta-store!)
     (process-file-inner path #:verbose verbose?)))
 

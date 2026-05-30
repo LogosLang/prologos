@@ -757,6 +757,20 @@
     (and (>= (length datum) 3)
          (memq ':no-prelude (cddr datum))))
   (current-ns-context (make-empty-ns-context ns-sym))
+  ;; PPN 4C Addendum Phase 4A.c-ii-b: the `ns` declaration is the import-set unit
+  ;; boundary. Reset the in-flight mnr's IMPORTS to empty (keeping own per-name
+  ;; defs in cell-id-map) so each independent `ns` starts with a fresh import
+  ;; set — the auto-imports below (action-1) then wire THIS ns's modules. Without
+  ;; this, multiple run-ns calls sharing one mnr (e.g. the batch-worker's per-file
+  ;; binding, tools/batch-worker.rkt:233) would ACCUMULATE imports across
+  ;; independent ns's (a full-prelude ns leaking into a later :no-prelude ns).
+  ;; Own defs are PRESERVED so inline cross-string module defs (mod-a's defn
+  ;; imported by mod-b) and shared-fixture define-then-use still resolve.
+  (let ([cur (current-file-module-network-ref)])
+    (current-file-module-network-ref
+     (if cur
+         (struct-copy module-network-ref cur [imports '()])
+         (make-module-network))))
   ;; Decide what to auto-import
   (define skip-prelude?
     (or no-prelude?
@@ -824,6 +838,19 @@
 
      ;; Load the module if not already loaded
      (define mod (ensure-module-loaded ns-sym))
+
+     ;; PPN 4C Addendum Phase 4A.c-ii-b (action-1, RF-2 guard): wire the imported
+     ;; module's mnr as a share-by-reference import into the in-flight file's mnr,
+     ;; so the cascade reaches its defs (replacing the per-import copy at the driver
+     ;; import-handler, retired at ii-b-cut-flip). Behavior-preserving while Layer-2
+     ;; is still active (cascade and Layer-2 agree on the value); becomes the sole
+     ;; resolution path at the flip. Lazy-init (RF/lifecycle): the file unit-boundary
+     ;; binds the mnr (process-file / process-string-ws / fixture shared scope) before
+     ;; preparse runs imports, so this `or` normally finds the bound mnr.
+     (when (and mod (module-info-module-network mod))
+       (current-file-module-network-ref
+        (module-network-add-import (or (current-file-module-network-ref) (make-module-network))
+                                   (module-info-module-network mod))))
 
      ;; Process directives
      (let loop ([dirs directives])
