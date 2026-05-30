@@ -10713,6 +10713,29 @@ Per Stage 4 Per-Phase Protocol. 4A.c-ii-b is the **share-by-reference WRITE flip
 - DEVELOPMENT_LESSONS.org § "Belt-and-Suspenders Masks Bugs" (Q1 rejection); § Audit-First; § "Validated Is Not Deployed"
 - `driver.rkt:2149-2175` (R-D rebuild → store in-flight), `:1853-1870`/`:1927-1928`/`:2255-2264` (copy loops), `:1752-1758`/`:1556-1560`/`:1461` (R-F entries), `:2078` (load-module mnr binding); `namespace.rkt:814-826` (process-imports-spec add-import site), `:765-778` (prelude-as-import path); `global-env.rkt:199-239` (lookup Layer-2 fallback drop)
 
+##### §18.18.6.6 R-F falsification + (B) full-cutover re-scope (2026-05-29, implementation-driven)
+
+Implementation falsified two §18.18.6 assumptions (Audit-Precedes-Implementation REFRAMING Discipline — the suite was the falsification test):
+
+1. **R-F-via-parameterize is WRONG (suite-falsified, 19 failures).** Binding a fresh `current-file-module-network-ref` at the process-file/string entries (the ii-b-prep design) SCOPES the mnr to the call → defs are discarded on return → breaks the **define-then-use-after** pattern (e.g., test-cfa-analysis-02: `(process-string "defn apply-op …")` then `run-cfa` looks up apply-op after; path-expressions, multi-body-defn, capability, transducer, selection — 19 files). **Reframe: R-F via lazy-init in `add-import`** (`(or (current-file-module-network-ref) (make-module-network))`, the 4A.b `mnr-add-or-update!` pattern) — NO new parameterize. **ii-b-prep DISSOLVES** (no standalone prep; lazy-init is part of the cutover's add-import).
+
+2. **The cutover's copy-retirement has ~80-fixture blast radius (mini-design under-scope — capture-gap).** Retiring the copy loops empties `current-prelude-env` after prelude load; **80 test fixtures CAPTURE `current-prelude-env`** as `shared-global-env` (`(values (current-prelude-env) …)` then re-inject) — they'd capture empty and fail. §18.18.6.1 #6's "transparent switch" holds for `global-env-lookup` (cascade) consumers but NOT these 80 direct readers. Highly uniform: 80× capture, 166 inject sites (`[current-prelude-env shared-global-env]`, ~2/file).
+
+**Decision (user, 2026-05-29): (B) full cutover + migrate the ~80 fixtures** — the complete fulfillment of the phase's scoped vision (prelude-as-import + full Layer-2 retirement). Rejected (A) keep-prelude-in-Layer-2 (delivers only module-import share-by-reference; defers prelude-as-import).
+
+**Migration recipe (per fixture, isolation-preserving):**
+- Setup parameterize: add `[current-file-module-network-ref (make-module-network)]`.
+- Capture: `(values (current-prelude-env) …)` → `(values (current-file-module-network-ref) …)` (capture the prelude-mnr after prelude load).
+- Per-run inject: `[current-prelude-env shared-global-env]` → `[current-file-module-network-ref (module-network-add-import (make-module-network) shared-global-env)]` (fresh per-run mnr importing the shared prelude-mnr → preserves per-run def isolation + shares prelude via cascade).
+
+**Execution plan (workflow-assisted, user opted in):**
+- **Production cutover (serial, mine)**: add-import at process-imports-spec:826 (lazy-init; covers explicit + prelude) + store thin in-flight mnr (driver.rkt:2149-2175) + retire 4 copy loops + drop Layer-2 `[else]` fallback in lookups. Validated independently of fixtures via `process-file` on the acceptance/probe file (fixtures-agnostic).
+- **Fixture audit (workflow, fan-out, read-only)**: classify the 80 fixtures vs the canonical pattern; catalog variants; per-file recipe. De-risks before migration.
+- **Fixture migration (workflow, fan-out)**: per-file apply the recipe + compile-check, against the cutover'd tree.
+- **Assemble + full suite + atomic commit** (cutover + 80 fixtures together → no red commit).
+
+**Revised drift risks**: D-iib-R1 non-uniform fixtures (audit catalogs variants before migration); D-iib-R2 per-run isolation lost if inject doesn't wrap in fresh-mnr-import (recipe handles it); D-iib-R3 cutover bug masked by mass fixture failure (validate cutover via process-file/probe BEFORE migration).
+
 ---
 
 ## Cross-track inputs (running log)
