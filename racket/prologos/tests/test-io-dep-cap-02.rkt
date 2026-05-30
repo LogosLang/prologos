@@ -52,6 +52,7 @@
                 shared-capability-reg
                 shared-subtype-reg)
   (parameterize ([current-prelude-env (hasheq)]
+                 [current-file-module-network-ref (make-module-network)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -78,7 +79,7 @@
 
 ;; Helper: run code and return (values results cap-result)
 (define (run-and-infer s)
-  (parameterize ([current-prelude-env shared-global-env]
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -93,7 +94,7 @@
     (values results (current-module-cap-result))))
 
 (define (run s)
-  (parameterize ([current-prelude-env shared-global-env]
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -207,7 +208,7 @@
           (string-contains? (exn-message e) "E2004")
           (string-contains? (exn-message e) "FileCap")))
    (lambda ()
-     (parameterize ([current-prelude-env
+     (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot
                      (hash-set
                       (hash-set shared-global-env
                                 'g-fc
@@ -218,7 +219,7 @@
                       (cons (expr-Pi 'm0 (expr-fvar 'ReadCap)
                               (expr-Pi 'mw (expr-fvar 'Nat) (expr-fvar 'Nat)))
                             (expr-lam 'mw (expr-fvar 'Nat)
-                              (expr-app (expr-fvar 'g-fc) (expr-bvar 0)))))]
+                              (expr-app (expr-fvar 'g-fc) (expr-bvar 0)))))))]
                     [current-capability-registry shared-capability-reg]
                     [current-subtype-registry shared-subtype-reg]
                     [current-module-cap-result #f])

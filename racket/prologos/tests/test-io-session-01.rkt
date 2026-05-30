@@ -45,6 +45,7 @@
                 shared-param-impl-reg
                 shared-session-reg)
   (parameterize ([current-prelude-env (hasheq)]
+                 [current-file-module-network-ref (make-module-network)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -61,7 +62,7 @@
                  [current-strategy-registry (hasheq)])
     (install-module-loader!)
     (process-string shared-preamble)
-    (values (current-prelude-env)
+    (values (global-env-snapshot)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)

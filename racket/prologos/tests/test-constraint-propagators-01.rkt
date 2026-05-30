@@ -38,6 +38,7 @@
                 shared-param-impl-reg
                 shared-bundle-reg)
   (parameterize ([current-prelude-env (hasheq)]
+                 [current-file-module-network-ref (make-module-network)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -49,7 +50,7 @@
                  [current-bundle-registry (current-bundle-registry)])
     (install-module-loader!)
     (process-string "(ns test-constraint-propagators)")
-    (values (current-prelude-env)
+    (values (global-env-snapshot)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -59,7 +60,7 @@
 
 ;; Run sexp code using shared environment
 (define (run s)
-  (parameterize ([current-prelude-env shared-global-env]
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -165,7 +166,7 @@
 (test-case "resolve-generic-narrowing: Add with Nat args → FQN"
   (parameterize ([current-impl-registry shared-impl-reg]
                  [current-trait-registry shared-trait-reg]
-                 [current-prelude-env shared-global-env])
+                 [current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))])
     (define result (resolve-generic-narrowing 'Add (list (expr-nat-val 1) (expr-fvar '?y))
                                               (expr-nat-val 3)))
     (check-true (symbol? result)
@@ -177,7 +178,7 @@
 (test-case "resolve-generic-narrowing: Sub with Nat args → FQN"
   (parameterize ([current-impl-registry shared-impl-reg]
                  [current-trait-registry shared-trait-reg]
-                 [current-prelude-env shared-global-env])
+                 [current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))])
     (define result (resolve-generic-narrowing 'Sub (list (expr-nat-val 5) (expr-fvar '?y))
                                               (expr-nat-val 2)))
     (check-true (symbol? result)
@@ -186,7 +187,7 @@
 (test-case "resolve-generic-narrowing: Mul with Nat args → FQN"
   (parameterize ([current-impl-registry shared-impl-reg]
                  [current-trait-registry shared-trait-reg]
-                 [current-prelude-env shared-global-env])
+                 [current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))])
     (define result (resolve-generic-narrowing 'Mul (list (expr-nat-val 2) (expr-fvar '?y))
                                               (expr-nat-val 6)))
     (check-true (symbol? result)
@@ -195,7 +196,7 @@
 (test-case "resolve-generic-narrowing: unground args + Nat target → FQN via target"
   (parameterize ([current-impl-registry shared-impl-reg]
                  [current-trait-registry shared-trait-reg]
-                 [current-prelude-env shared-global-env])
+                 [current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))])
     (define result (resolve-generic-narrowing 'Add (list (expr-fvar '?x) (expr-fvar '?y))
                                               (expr-nat-val 5)))
     (check-true (symbol? result)
@@ -204,7 +205,7 @@
 (test-case "resolve-generic-narrowing: nonexistent trait → #f"
   (parameterize ([current-impl-registry shared-impl-reg]
                  [current-trait-registry shared-trait-reg]
-                 [current-prelude-env shared-global-env])
+                 [current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))])
     (check-false (resolve-generic-narrowing 'Nonexistent
                                              (list (expr-nat-val 1))
                                              (expr-nat-val 2)))))

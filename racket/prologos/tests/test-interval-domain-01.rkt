@@ -45,6 +45,7 @@
                 shared-param-impl-reg
                 shared-bundle-reg)
   (parameterize ([current-prelude-env (hasheq)]
+                 [current-file-module-network-ref (make-module-network)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
@@ -56,7 +57,7 @@
                  [current-bundle-registry (current-bundle-registry)])
     (install-module-loader!)
     (process-string "(ns test-interval-domain)")
-    (values (current-prelude-env)
+    (values (global-env-snapshot)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -357,7 +358,7 @@
 ;; ========================================
 
 (test-case "integration/add 0: 1 solution"
-  (parameterize ([current-prelude-env shared-global-env])
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))])
     (define sols
       (run-narrowing-search
        'prologos::data::nat::add
@@ -369,7 +370,7 @@
     (check-true (expr-zero? (hash-ref (car sols) 'y)))))
 
 (test-case "integration/add 1: 2 solutions"
-  (parameterize ([current-prelude-env shared-global-env])
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))])
     (define sols
       (run-narrowing-search
        'prologos::data::nat::add
@@ -379,7 +380,7 @@
     (check-equal? (length sols) 2)))
 
 (test-case "integration/add 3: 4 solutions"
-  (parameterize ([current-prelude-env shared-global-env])
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))])
     (define sols
       (run-narrowing-search
        'prologos::data::nat::add
@@ -389,7 +390,7 @@
     (check-equal? (length sols) 4)))
 
 (test-case "integration/add 10: 11 solutions"
-  (parameterize ([current-prelude-env shared-global-env])
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))])
     (define target
       (let loop ([n 10])
         (if (zero? n) (expr-zero) (expr-suc (loop (- n 1))))))
@@ -402,7 +403,7 @@
     (check-equal? (length sols) 11)))
 
 (test-case "integration/not: unchanged by intervals"
-  (parameterize ([current-prelude-env shared-global-env])
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))])
     (define sols
       (run-narrowing-search
        'prologos::data::bool::not
@@ -413,7 +414,7 @@
     (check-true (expr-false? (hash-ref (car sols) 'b)))))
 
 (test-case "integration/add zero ?y = 5: 1 solution"
-  (parameterize ([current-prelude-env shared-global-env])
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))])
     (define target
       (let loop ([n 5])
         (if (zero? n) (expr-zero) (expr-suc (loop (- n 1))))))
@@ -426,7 +427,7 @@
     (check-equal? (length sols) 1)))
 
 (test-case "integration/add (suc ?x) ?y = 3: 3 solutions"
-  (parameterize ([current-prelude-env shared-global-env])
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))])
     (define target (expr-suc (expr-suc (expr-suc (expr-zero)))))
     (define sols
       (run-narrowing-search

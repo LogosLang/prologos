@@ -34,6 +34,7 @@
                 shared-param-impl-reg
                 shared-bundle-reg)
   (parameterize ([current-prelude-env (hasheq)]
+                 [current-file-module-network-ref (make-module-network)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -45,7 +46,7 @@
                  [current-bundle-registry (current-bundle-registry)])
     (install-module-loader!)
     (process-string "(ns test-constraint-amb)")
-    (values (current-prelude-env)
+    (values (global-env-snapshot)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -55,7 +56,7 @@
 
 ;; Run sexp code using shared environment
 (define (run s)
-  (parameterize ([current-prelude-env shared-global-env]
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -79,7 +80,7 @@
 (test-case "candidates: Add with no type info → multiple candidates"
   (parameterize ([current-impl-registry shared-impl-reg]
                  [current-trait-registry shared-trait-reg]
-                 [current-prelude-env shared-global-env])
+                 [current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))])
     (define cands
       (resolve-generic-narrowing-candidates 'Add (list (expr-fvar '?x) (expr-fvar '?y))))
     (check-true (list? cands))
@@ -89,7 +90,7 @@
 (test-case "candidates: Add with Nat type tag → single candidate"
   (parameterize ([current-impl-registry shared-impl-reg]
                  [current-trait-registry shared-trait-reg]
-                 [current-prelude-env shared-global-env])
+                 [current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))])
     (define cands
       (resolve-generic-narrowing-candidates 'Add (list (expr-nat-val 1) (expr-fvar '?y))))
     (check-equal? (length cands) 1
@@ -98,7 +99,7 @@
 (test-case "candidates: nonexistent trait → empty"
   (parameterize ([current-impl-registry shared-impl-reg]
                  [current-trait-registry shared-trait-reg]
-                 [current-prelude-env shared-global-env])
+                 [current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))])
     (define cands
       (resolve-generic-narrowing-candidates 'Nonexistent (list (expr-fvar '?x))))
     (check-equal? cands '())))
@@ -110,7 +111,7 @@
 (test-case "candidate->func-name: Add Nat → FQN symbol"
   (parameterize ([current-impl-registry shared-impl-reg]
                  [current-trait-registry shared-trait-reg]
-                 [current-prelude-env shared-global-env])
+                 [current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))])
     (define cand (constraint-candidate 'Add '(Nat) 'prologos::data::nat::add))
     (define fname (candidate->func-name 'Add cand))
     (check-true (symbol? fname)
@@ -121,7 +122,7 @@
 (test-case "candidate->func-name: nonexistent trait → #f"
   (parameterize ([current-impl-registry shared-impl-reg]
                  [current-trait-registry shared-trait-reg]
-                 [current-prelude-env shared-global-env])
+                 [current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))])
     (define cand (constraint-candidate 'Nonexistent '(Nat) 'fake))
     (define fname (candidate->func-name 'Nonexistent cand))
     (check-false fname)))
@@ -161,7 +162,7 @@
 (test-case "resolve-generic-narrowing: still resolves Add with Nat args"
   (parameterize ([current-impl-registry shared-impl-reg]
                  [current-trait-registry shared-trait-reg]
-                 [current-prelude-env shared-global-env])
+                 [current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))])
     (define result (resolve-generic-narrowing 'Add (list (expr-nat-val 1) (expr-fvar '?y))
                                               (expr-nat-val 3)))
     (check-true (symbol? result)
@@ -172,6 +173,6 @@
 (test-case "resolve-generic-narrowing: unground → #f (multi-candidate takes over)"
   (parameterize ([current-impl-registry shared-impl-reg]
                  [current-trait-registry shared-trait-reg]
-                 [current-prelude-env shared-global-env])
+                 [current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))])
     (define result (resolve-generic-narrowing 'Add (list (expr-fvar '?x) (expr-fvar '?y))))
     (check-false result)))
