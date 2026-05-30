@@ -10736,6 +10736,27 @@ Implementation falsified two §18.18.6 assumptions (Audit-Precedes-Implementatio
 
 **Revised drift risks**: D-iib-R1 non-uniform fixtures (audit catalogs variants before migration); D-iib-R2 per-run isolation lost if inject doesn't wrap in fresh-mnr-import (recipe handles it); D-iib-R3 cutover bug masked by mass fixture failure (validate cutover via process-file/probe BEFORE migration).
 
+##### §18.18.6.7 Fixture-audit results + REFINED decoupled recipe (workflow, 2026-05-29)
+
+Audit workflow (`wf_6b3a9906-0c6`, 10 Explore agents over 80 files) classified: **30 uniform / 50 variant / 11 complex / 169 inject sites**. Findings:
+- Most "variants" = more inject sites (inline in test cases) or extra registry captures, not structural difference. Capture is uniformly `(values (current-prelude-env) …)`.
+- Most flagged "extra current-prelude-env uses" are RED HERRINGS — parameterizes of OTHER params (current-capability-registry/-warnings, current-impl-registry, current-schema-registry). Genuine hazards are few: (1) `(hash-count shared-global-env)` (test-collection-fns-01) treats the captured value as a HASH; (2) inline `[current-prelude-env (hasheq)]` fresh-empty injects (nil-type, trait-tycon-01, generic-arith-03) test WITHOUT prelude; (3) 11 "complex" files inject inline in test-case bodies (cfa-analysis-01/02, interval-domain-01, narrowing-search-01, unify-propagator, termination-01).
+
+**TWO recipe-reshaping findings:**
+
+1. **Migration DECOUPLES from the cutover.** If fixtures capture `(global-env-snapshot)` (a HASH — works pre- AND post-cutover; pre = current-prelude-env-based, post = mnr-cascade-based) instead of `(current-prelude-env)`, the migration is behavior-preserving PRE-cutover → suite stays 8316/0. So: **migrate fixtures FIRST (green), then cutover (green)** — two clean green steps, NO big-bang red commit. Supersedes §18.18.6.6's atomic-commit plan.
+
+2. **CRITICAL correction (would have broken cfa/find-fqn):** the inject must make prelude an IMPORT, not own-cells. `module-network-from-snapshot V` puts prelude in the mnr's OWN cells, but `external-definitions-snapshot` (the ii-a cfa/find-fqn source) EXCLUDES own cells → cfa would not see prelude. Fix: inject a fresh mnr that IMPORTS the reconstructed prelude-mnr, so prelude is visible via the imports cascade (which both global-env-lookup AND external-definitions-snapshot traverse), while per-run own-defs stay isolated + correctly excluded from external-definitions-snapshot.
+
+**REFINED RECIPE (uniform; keeps `shared-global-env` a HASH so hash-uses survive):**
+- **T1 capture**: `(values (current-prelude-env) …)` → `(values (global-env-snapshot) …)`
+- **T2 inject-shared**: `[current-prelude-env V]` → `[current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot V))]`
+- **T3 inject-fresh-empty**: add `[current-file-module-network-ref (make-module-network)]` (keep the `[current-prelude-env (hasheq)]`)
+- **T4 setup**: add `[current-file-module-network-ref (make-module-network)]` to the setup define-values parameterize
+- **Requires**: ensure `namespace.rkt` (module-network-add-import, module-network-from-snapshot, make-module-network, current-file-module-network-ref) + `global-env.rkt` (global-env-snapshot) required.
+
+**Execution**: PILOT 3 representative files (uniform / hash-use / complex) → full suite 8316/0 (validate recipe empirically, pre-cutover) → bulk migration workflow for the remaining 77 (per-file agents apply T1-T4 + compile-check) → full suite 8316/0 → THEN production cutover (validated via process-file) → full suite.
+
 ---
 
 ## Cross-track inputs (running log)
