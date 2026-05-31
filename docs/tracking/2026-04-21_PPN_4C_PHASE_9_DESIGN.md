@@ -10983,6 +10983,22 @@ The wrapper writes ONLY when `(current-file-module-network-ref)` is non-`#f`. Ra
 ###### Status
 Design **CLOSED** (critique-hardened). **NOT implemented** (Stage 4 blocked by the worktree-HEAD defect; chosen path is a later main-session implementation, user direction 2026-05-30). Next: apply the 4 edits + P-1(a) gate in the main session → run the hardened gate (behavior-preserving + collision audit + deep-proof) → close cut-prep step 2 per the 5-step protocol. Then **ii-b-cut-flip** (action-3 retire 5 copy loops + action-4 `[else #f]`, RF-4-gated) → **ii-b-close**.
 
+##### §18.18.6.14 cut-prep step 2 — foreign-write-(b) SHIPPED (2026-05-30, commit `3b8d8da6`)
+
+Implemented in the main session per §18.18.6.13 (3 edits, all-additive, +38 LoC). `global-env-add-to-mnr!` (box-independent, P-1(a) already-bound gated) added at global-env.rkt:264 + provide; the bare + FQN additive calls added in handle-foreign-decl (driver.rkt:2538/2543). The verbatim §18.18.6.13 edit spec applied with zero deviation; R-10 confirmed (driver requires global-env.rkt plainly).
+
+**The HARDENED GATE — all PASS:**
+- *Compile*: check-parens balanced + `raco make` exit 0.
+- *Behavior-preserving*: full suite **8318 / 0 / 114.9s warm** (= 8317 baseline + 1 new test; warm wall ≈ 112.1s baseline → no perf regression; probe-diff=0 via test-elaboration-parity). The earlier first-run 8312 was the documented flaky-rackcheck under-report (test-properties.rkt = 13 in isolation), confirmed.
+- *Collision audit (F1/S-3)*: PASS. Every production `foreign` decl uses `:as` (distinct alias, original hidden). 3 aliases share a name with a prelude fn (`head`/`tail` in `prologos::core::path`; `length` in `prologos::data::string`) but are module-scoped + value-appropriate (Path→Keyword / String→Int), kept in their own module's mnr at the value already in Layer-2. Empirically confirmed by probe-diff=0.
+- *Deep-proof (F2 isolation + S-2 value-equivalence)*: DECISIVE A/B via `module-network-cascading-lookup` (the Layer-1-only cascade = the post-cut-flip resolution path) on an inline `racket/base` foreign decl (sole mnr-population path = foreign-write-(b); no `.pnet`/copy-loop masking). **ON** → cascade has the alias (bare AND FQN), value-equivalent to Layer-2. **OFF** (toggled, recompiled) → cascade EMPTY. Proves foreign-write-(b) is load-bearing + unmasked + value-preserving (not belt-and-suspenders). Toggle reverted.
+
+**Surfaced finding (validates critique F3/R-6 — batch-worker mnr-bind extent)**: the behavior-preserving gate caught `test-foreign` failing 2 alias "original-hidden" tests. Root cause was NOT a foreign-write-(b) bug but **cross-test mnr leakage**: the batch-worker binds ONE `current-file-module-network-ref` per FILE (batch-worker.rkt:233), and `test-foreign`'s bespoke `run-ns` reset `current-prelude-env` per call but NOT the mnr — so an earlier bare-`add1` decl leaked into a later alias test via the shared mnr. Pre-change foreign went to the per-call-reset Layer-2 (no leak); the mnr write exposed the gap. **Production is unaffected** (one `process-file` = one unit; alias-hiding holds — we write the alias `increment`, never the original `add1`). Fix: `run-ns` resets the mnr per call (extracted `call-in-ns-env`), mirroring its Layer-2 reset + the test-support fresh-per-run pattern. This is the same "ambient param mutated by a production path leaks across units sharing the binding" shape as §18.18.6.12's ns-reset insight, now at the test-harness layer.
+
+**Durable regression guard**: the instrument-and-revert deep-proof was made permanent as `test-foreign` test-case `foreign/write-b-mnr-cascade-reachable` (+1 test) — asserts a foreign def is reachable via the mnr cascade (bare + FQN) value-equivalently to Layer-2, so foreign-write-(b) cannot regress invisibly before the cut-flip relies on it.
+
+**ii-b sub-step ledger**: cut-prep step 1 ✅ (`6f1060b5`) · **cut-prep step 2 ✅ (`3b8d8da6`)** · cut-flip ⬜ · ii-b-close ⬜. **Next: ii-b-cut-flip** — action-3 (retire the 5 copy loops) + action-4 (`[else #f]`), RF-4-gated (process-file-first + clean `.pnet` regen + 8-file cap-cohort) → ii-b-close.
+
 ---
 
 ## Cross-track inputs (running log)
