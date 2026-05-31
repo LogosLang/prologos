@@ -10999,6 +10999,30 @@ Implemented in the main session per §18.18.6.13 (3 edits, all-additive, +38 LoC
 
 **ii-b sub-step ledger**: cut-prep step 1 ✅ (`6f1060b5`) · **cut-prep step 2 ✅ (`3b8d8da6`)** · cut-flip ⬜ · ii-b-close ⬜. **Next: ii-b-cut-flip** — action-3 (retire the 5 copy loops) + action-4 (`[else #f]`), RF-4-gated (process-file-first + clean `.pnet` regen + 8-file cap-cohort) → ii-b-close.
 
+##### §18.18.6.15 ii-b-cut-flip mini-design + mini-audit OPENED (2026-05-30; decisions LOCKED, dry-run + implementation HELD for fresh-budget turn)
+
+Mini-design opened per Stage 4 Per-Phase Protocol. The cut-flip was largely pre-designed (§18.18.6.8 RF-1..RF-5 + §18.18.6.11 Q4 partition); cut-prep steps 1+2 cleared both known blockers (import-edge/lifecycle = §18.18.6.10; foreign class-B = §18.18.6.14). So this mini-design = confirm-against-reality + ground the sites + the empirical de-risk. **Conversational (co-design), not a workflow** — per the 2026-05-30 Delegation-vs-Co-Design codification, decision-locking stays high-touch.
+
+**Charter (unchanged)**: ONE atomic breaking step — action-3 (retire the 5 copy loops) + action-4 (`[else #f]`), RF-4-gated. action-2 (thin module mnr) DEFERRED (cut-prep step 1; fat reconstruction mnrs give reachability).
+
+**Mini-audit (grounded at HEAD `8a012146`):**
+- *Action-3 — 5 copy loops (exact lines)*: cached-prelude-env (driver.rkt:1872-1874), cached-module-defs (:1879-1884), `.pnet`-hit prelude-env (:1942-1943), full-load prelude-env (:2270-2272), full-load module-defs (:2273-2279). All in `load-module`, downstream of action-1's chokepoint.
+- *Action-4 — 2 lookup `[else]` sites*: `global-env-lookup-type` :222-229, `global-env-lookup-value` :244-248. RF-3: replace the `[else]` BODY with `#f`-on-miss (NOT delete the clause — `(void)` is truthy, breaks ~20 truthiness callers).
+- *R-3 (direct Layer-2 readers)* — **clean**: NO production direct `current-prelude-env` reader remains (ii-a migrated constraint-propagators/cfa onto external-*; RF-5 keeps external-*'s own Layer-2-base reads, retiring at 4A.c-iii). `current-module-definitions-content` = only the copy loops (action-3) + batch-worker capture (R-C; self-heals via action-1 re-import).
+- *D-5 (action-1 covers every import)* — **confirmed**: `ensure-module-loaded` has ONE production caller (`namespace.rkt:840`); action-1 (`module-network-add-import`) wired at `:852`; `load-module` runs only via the loader callback (driver.rkt:88). No production bypass. (Direct `load-module` callers in test-stdlib-01/03 + test-core-prelude are harness-only — see NEW-2.)
+
+**NEW findings (this mini-audit):**
+- **NEW-1 — dep-edge KIND flip (LOCKED benign).** action-4 drops the `[else]`'s `record-cross-module-dep! … 'module` (global-env.rkt:227-228); post-cut-flip cross-module names resolve via the cascade `cell-entry` path (:220) → recorded `'same-file` (cascading-lookup doesn't report own-cell-vs-import). **Decision (user-agreed 2026-05-30): benign** — dep-recording is Q-4A.2 scaffolding ("informational in batch mode," retires + reworked via propagator dependents at 4B); no live consumer depends on the `'module`/`'same-file` distinction. RF-4 probe-diff MUST cover the cross-module-dep counters (critique P-3) to confirm nothing asserts on it. Precise dep-edge-kind-from-cascade deferred to 4B.
+- **NEW-2 — test-direct-`load-module` callers.** `test-stdlib-01/03-*`, `test-core-prelude` call `(load-module …)` directly (bypass action-1) and may rely on the copy loop's Layer-2 population → may break post-cut-flip (same shape as test-foreign's `run-ns` leak). Surface via the dry-run / full suite; fix (if needed) = the cascade-import isolation pattern.
+
+**Mantra/framing**: cut-flip is mantra-advancing (cross-module resolution off-network-copies → on-network cascade) and is the OPPOSITE of belt-and-suspenders (removing Layer-2, trusting the cascade — the dual-path RESOLVES to one). Honest caveat (M-ADV-3): the cascade READ is imperative recursion; this proves resolution BEHAVIOR is on-network, read-mechanism imperative until 4A.c-iii+.
+
+**Decisions LOCKED (user-agreed 2026-05-30):**
+1. dep-edge KIND flip = benign (NEW-1); RF-4 probe-diff covers cross-module-dep counters.
+2. Decisive empirical pre-check = **full-cutover dry-run at HEAD** (instrument-and-revert: temp action-3+4 + clean `.pnet` + `process-file` on acceptance + test-harness, instrument the FATAL site (elaborator.rkt ~:761) → confirm class A + B = 0 + surface residuals (incl. NEW-2), then revert). §18.18.6.11 ran this pre-cut-prep-2 (found class-B foreign); now it should be clean.
+
+**Status: mini-design + mini-audit DONE; decisions LOCKED. HELD for a fresh-budget turn** (context-window management). NEXT (in order): (1) full-cutover dry-run (decisive de-risk); (2) atomic cut-flip = action-3 (retire 5 copy loops) + action-4 (`[else #f]`); (3) RF-4 gate (process-file-first + clean `.pnet` regen + full suite + 8-file cap-cohort + cross-module-dep counters); (4) any NEW-2 test-harness fixups; (5) ii-b-close (tracker/dailies/VAG + residual edge cases). Then 4A.c-iii (retire 4 env params + 3 callbacks; Q2's (c) box-decouple).
+
 ---
 
 ## Cross-track inputs (running log)
