@@ -2536,11 +2536,19 @@
 
   ;; Register in global env with full type (including capability Pi binders)
   (global-env-add (current-prelude-env) prologos-name full-type val)
+  ;; PPN 4C Addendum Phase 4A.c-ii-b foreign-write-(b): ADDITIVE box-independent
+  ;; mnr write (scaffolding; retires 4A.c-iii). Layer-2 above is the retiring
+  ;; source; this populates the incoming mnr source-of-truth ahead of the cut-flip
+  ;; so the foreign def is cascade-reachable once Layer-2 is dropped.
+  (global-env-add-to-mnr! prologos-name full-type val)
 
   ;; Also register FQN if in a namespace
   (when (current-ns-context)
     (define fqn (qualify-name prologos-name (ns-context-current-ns (current-ns-context))))
     (global-env-add (current-prelude-env) fqn full-type val)
+    ;; 4A.c-ii-b foreign-write-(b) FQN, mirrors bare: the cascade is exact-symbol
+    ;; (no FQN->bare alias), so BOTH keys must be mnr-materialized to resolve.
+    (global-env-add-to-mnr! fqn full-type val)
     ;; Auto-export the foreign binding (must update current-ns-context —
     ;; ns-context-add-auto-export returns a new struct, does not mutate)
     (current-ns-context

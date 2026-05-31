@@ -40,6 +40,9 @@
          global-env-lookup-value
          global-env-add
          global-env-add-type-only
+         ;; PPN 4C Addendum Phase 4A.c-ii-b (foreign-write-(b)) scaffolding;
+         ;; retires at 4A.c-iii (box-free global-env-add subsumes it).
+         global-env-add-to-mnr!
          global-env-remove!
          global-env-names
          global-env-import-module
@@ -260,6 +263,25 @@
        (module-network-write mnr entry-name entry)
        (let-values ([(mnr* _cid) (module-network-add-definition mnr entry-name entry)])
          mnr*))))
+
+;; PPN 4C Addendum Phase 4A.c-ii-b (foreign-write-(b)) — SCAFFOLDING.
+;; Box-INDEPENDENT additive write of a definition into the in-flight per-file mnr,
+;; GATED on an already-bound mnr. Used by handle-foreign-decl: `foreign` defs are
+;; processed during PREPARSE where current-prelude-env-prop-net-box = #f, so
+;; global-env-add takes the legacy Layer-2 path and the def never reaches the mnr
+;; → class-B residual after the cut-flip drops Layer-2. This routes the foreign def
+;; into the mnr so it is cascade-reachable. Box-INDEPENDENT on purpose: reusing the
+;; box-gated global-env-add would no-op at preparse (box=#f). The `when` gate keeps
+;; bare process-string/-ws foreign Layer-2-only (no orphan mnr — mnr-add-or-update!
+;; would otherwise lazy-init a fresh one and flip lookup onto the cascade path).
+;; RETIREMENT (4A.c-iii, 3-site delete): this def + its provide entry + both
+;; handle-foreign-decl call sites; the box-free global-env-add then carries the mnr
+;; write alone. NOT "pragmatic"; NOT belt-and-suspenders — Layer-2b is the OUTGOING
+;; read-authoritative source (dropped by action-4 at the cut-flip), the mnr is the
+;; INCOMING source-of-truth populated ahead of the flip (a sequenced hand-off).
+(define (global-env-add-to-mnr! name type value)
+  (when (current-file-module-network-ref)
+    (mnr-add-or-update! name (cons type value))))
 
 ;; Add a definition to the global environment.
 ;; PPN 4C Addendum Phase 4A.b: cell path writes to the per-file mnr (authoritative
