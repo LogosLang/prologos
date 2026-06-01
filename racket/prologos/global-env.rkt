@@ -245,33 +245,26 @@
 ;; but the name→cid mapping is removed, so cascading-lookup misses). Matches the
 ;; pre-4A.b "remove from cells-content hash + #f sentinel" visibility semantics.
 (define (global-env-remove! name)
-  ;; Layer 1: per-file mnr — remove the name→cid mapping
+  ;; PPN 4C Addendum Phase 4A.c-iii-b: mnr-only. The Layer-2a/2b hash-removes
+  ;; retired — the mnr cascade is the sole resolution source; current-prelude-env
+  ;; / -module-definitions-content are unwritten (empty) in production.
   (define mnr (current-file-module-network-ref))
   (when mnr
     (current-file-module-network-ref
      (struct-copy module-network-ref mnr
-       [cell-id-map (hash-remove (module-network-ref-cell-id-map mnr) name)])))
-  ;; Track 6 Phase 7d: remove from module-definitions-content (Layer 2a)
-  (current-module-definitions-content
-   (hash-remove (current-module-definitions-content) name))
-  ;; Layer 2b: prelude env parameter
-  (current-prelude-env
-   (hash-remove (current-prelude-env) name)))
+       [cell-id-map (hash-remove (module-network-ref-cell-id-map mnr) name)]))))
 
 ;; ========================================
 ;; Utilities (merge both layers)
 ;; ========================================
 
-;; List all definition names (from all layers)
-;; PPN 4C Addendum Phase 4A.b: Layer-1 file-keys come from the per-file mnr's
-;; cell-id-map (names with cells), replacing current-definition-cells-content keys.
+;; List all definition names visible to the current file.
+;; PPN 4C Addendum Phase 4A.c-iii-b: cascade-only (own cells + imports, prelude
+;; included as an import). Layer-2 prelude/module-def keys retired (unwritten/
+;; empty in production); module-network-cascade-names already de-duplicates.
 (define (global-env-names)
-  (define prelude-keys (hash-keys (current-prelude-env)))
-  (define module-keys (hash-keys (current-module-definitions-content)))
   (define mnr (current-file-module-network-ref))
-  (define file-keys (if mnr (hash-keys (module-network-ref-cell-id-map mnr)) '()))
-  ;; Priority: file-keys > module-keys > prelude-keys
-  (remove-duplicates (append file-keys module-keys prelude-keys) eq?))
+  (if mnr (module-network-cascade-names mnr) '()))
 
 ;; Import a module's exported definitions into a global env.
 ;; Takes a qualify-fn that maps (short-name, namespace-sym) → fqn-symbol.
@@ -286,33 +279,15 @@
     (define entry (hash-ref module-env fqn #f))
     (if entry (hash-set e fqn entry) e)))
 
-;; Snapshot the current global env (merges all layers).
-;; Priority: per-file defs > module defs > legacy prelude defs.
-;; PPN 4C Addendum Phase 4A.b: per-file defs materialize from the mnr cells,
-;; replacing current-definition-cells-content.
-;; PPN 4C Addendum Phase 4A.c-ii-b RF-1 (§18.18.6.8): materialize the mnr CASCADE
-;; (own cells + imports), NOT own-cells-only — so the snapshot stays fat (prelude +
-;; transitive imports) after the 4A.c-ii-b copy loops retire empties Layer-2.
-;; Behavior-preserving pre-cutover (imports empty → cascade = own-cells-only).
+;; Snapshot the FULL current global env: the mnr CASCADE (own cells + imports,
+;; prelude included as an import). PPN 4C Addendum Phase 4A.c-iii-b: cascade-only
+;; — the Layer-2 base (current-prelude-env ∪ current-module-definitions-content)
+;; retired; it has been unwritten/empty in production since the cut-flip + a1.
 ;; Distinct from external-definitions-snapshot, which EXCLUDES local cells (Path Y):
 ;; global-env-snapshot is the FULL env (own + external); external-* is external-only.
 (define (global-env-snapshot)
-  (define base (current-prelude-env))
-  ;; Track 6 Phase 7d: merge module-definitions-content
-  (define mod-defs (current-module-definitions-content))
-  (define with-mods
-    (if (hash-empty? mod-defs)
-        base
-        (for/fold ([env base])
-                  ([(k v) (in-hash mod-defs)])
-          (hash-set env k v))))
   (define mnr (current-file-module-network-ref))
-  (define file-defs (if mnr (module-network-cascade-materialize mnr) (hasheq)))
-  (if (hash-empty? file-defs)
-      with-mods
-      (for/fold ([env with-mods])
-                ([(k v) (in-hash file-defs)])
-        (hash-set env k v))))
+  (if mnr (module-network-cascade-materialize mnr) (hasheq)))
 
 ;; ========================================
 ;; External definitions view (PPN 4C Addendum Phase 4A.c-ii-a, D2 Path Y)
@@ -325,49 +300,33 @@
 ;;   constraint-propagators.rkt find-fqn-for-local-name → external-definition-names (keys)
 ;;   cfa-analysis.rkt cfa-collect-constraints + cfa-get-candidates-for-arity → external-definitions-snapshot (values)
 ;;
-;; Pre-4A.c-ii-b: current-file-mnr.imports is EMPTY → these return the Layer-2
-;;   base (current-prelude-env ∪ current-module-definitions-content), which =
-;;   today's (current-prelude-env) view (module-defs keys ⊆ prelude keys; values
-;;   identical for shared keys). Behavior-preserving (the ii-a gate).
-;; Post-4A.c-ii-b: imports populated + Layer-2 retired → these return the
-;;   imports cascade (prelude-as-import + imported), still excluding local cells.
-;;   Transparent switch — no consumer edit at ii-b.
+;; PPN 4C Addendum Phase 4A.c-iii-b: imports-cascade only (prelude-as-import +
+;;   imported modules), excluding local cells. The Layer-2 base retired — it was
+;;   unwritten/empty in production since the cut-flip + a1; the cascade is now the
+;;   sole source (the consumers switched transparently at the ii-b cut-flip).
 
 ;; VALUES view. Returns: hasheq name → (cons type value).
 (define (external-definitions-snapshot)
   (define mnr (current-file-module-network-ref))
-  ;; Layer-2 base (retires at 4A.c-ii-b): prelude, then module-defs overlaid
-  (define base
-    (for/fold ([acc (current-prelude-env)])
-              ([(k v) (in-hash (current-module-definitions-content))])
-      (hash-set acc k v)))
-  ;; imports cascade (empty pre-flip; authoritative post-flip) overlays base
   (if mnr
-      (for*/fold ([acc base])
+      (for*/fold ([acc (hasheq)])
                  ([imp (in-list (module-network-ref-imports mnr))]
                   [(k v) (in-hash (module-network-cascade-materialize imp))])
         (hash-set acc k v))
-      base))
+      (hasheq)))
 
 ;; KEYS-only counterpart, for the hot find-fqn-for-local-name path (needs FQN
 ;; keys, not values — avoids materializing cascade values). Returns: (listof
 ;; symbol), de-duplicated via a hasheq-as-set accumulator.
 (define (external-definition-names)
   (define mnr (current-file-module-network-ref))
-  ;; Layer-2 keys (retires at 4A.c-ii-b)
-  (define acc1
-    (for/fold ([a (hasheq)]) ([k (in-hash-keys (current-prelude-env))]) (hash-set a k #t)))
-  (define acc2
-    (for/fold ([a acc1]) ([k (in-hash-keys (current-module-definitions-content))]) (hash-set a k #t)))
-  ;; imports cascade names (empty pre-flip; authoritative post-flip)
-  (define acc3
-    (if mnr
-        (for*/fold ([a acc2])
-                   ([imp (in-list (module-network-ref-imports mnr))]
-                    [nm (in-list (module-network-cascade-names imp))])
-          (hash-set a nm #t))
-        acc2))
-  (hash-keys acc3))
+  (if mnr
+      (hash-keys
+       (for*/fold ([a (hasheq)])
+                  ([imp (in-list (module-network-ref-imports mnr))]
+                   [nm (in-list (module-network-cascade-names imp))])
+         (hash-set a nm #t)))
+      '()))
 
 ;; ========================================
 ;; Defn param-name registry

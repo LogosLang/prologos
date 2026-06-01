@@ -277,73 +277,62 @@
 ;; The exclusion is the defining (Y) property — these consumers must see only
 ;; EXTERNAL defs (prelude + imported), never the file's own mid-elaboration defs.
 
-(test-case "external-definitions-snapshot: pre-flip = Layer-2, EXCLUDES local mnr cells"
-  ;; local mnr has its own def 'localdef + EMPTY imports (the pre-flip state)
+(test-case "external-definitions-snapshot: cascade-only, EXCLUDES local cells (RF-5)"
+  ;; RF-5 (§18.18.7-b): Layer-2 base retired. external-* = imports cascade only,
+  ;; excluding the file's own (local) cells. local mnr has 'localdef + EMPTY
+  ;; imports → external view is EMPTY (localdef is local; no Layer-2 base).
   (define-values (local1 _cl)
     (module-network-add-definition (make-module-network) 'localdef (cons 'Int 99)))
-  (parameterize ([current-prelude-env (hasheq 'p1 (cons 'Int 1))]
-                 [current-module-definitions-content (hasheq 'm1 (cons 'Int 2))]
-                 [current-file-module-network-ref local1])
-    ;; = prelude ∪ module-defs; 'localdef EXCLUDED (the (Y) property)
-    (check-equal? (external-definitions-snapshot)
-                  (hasheq 'p1 (cons 'Int 1) 'm1 (cons 'Int 2)))
-    (check-equal? (sorted-syms (external-definition-names)) (sorted-syms '(p1 m1)))))
+  (parameterize ([current-file-module-network-ref local1])
+    (check-equal? (external-definitions-snapshot) (hasheq))
+    (check-equal? (external-definition-names) '())))
 
-(test-case "external-definitions-snapshot: imports cascade overlays Layer-2, still excludes local"
+(test-case "external-definitions-snapshot: imports cascade, excludes local (RF-5)"
   (define-values (imp1 _ci)
     (module-network-add-definition (make-module-network) 'impdef (cons 'String "imp")))
   (define-values (local1 _cl)
     (module-network-add-definition (make-module-network) 'localdef (cons 'Int 99)))
   (define local2 (module-network-add-import local1 imp1))
-  (parameterize ([current-prelude-env (hasheq 'p1 (cons 'Int 1))]
-                 [current-module-definitions-content (hasheq)]
-                 [current-file-module-network-ref local2])
-    ;; prelude p1 + import's impdef; localdef EXCLUDED
+  (parameterize ([current-file-module-network-ref local2])
+    ;; import's impdef only; 'localdef EXCLUDED (local); no Layer-2 base
     (check-equal? (external-definitions-snapshot)
-                  (hasheq 'p1 (cons 'Int 1) 'impdef (cons 'String "imp")))
-    (check-equal? (sorted-syms (external-definition-names)) (sorted-syms '(p1 impdef)))))
+                  (hasheq 'impdef (cons 'String "imp")))
+    (check-equal? (sorted-syms (external-definition-names)) (sorted-syms '(impdef)))))
 
-(test-case "external-definition-names: keys match external-definitions-snapshot"
+(test-case "external-definition-names: keys match external-definitions-snapshot (RF-5)"
   (define-values (imp1 _ci)
     (module-network-add-definition (make-module-network) 'impdef (cons 'Int 7)))
   (define local2 (module-network-add-import (make-module-network) imp1))
-  (parameterize ([current-prelude-env (hasheq 'p1 (cons 'Int 1) 'p2 (cons 'Int 2))]
-                 [current-module-definitions-content (hasheq 'm1 (cons 'Int 3))]
-                 [current-file-module-network-ref local2])
+  (parameterize ([current-file-module-network-ref local2])
     (check-equal? (sorted-syms (external-definition-names))
                   (sorted-syms (hash-keys (external-definitions-snapshot))))))
 
-(test-case "external-definitions-snapshot: no current-file-mnr → Layer-2 only"
-  (parameterize ([current-prelude-env (hasheq 'p1 (cons 'Int 1))]
-                 [current-module-definitions-content (hasheq 'm1 (cons 'Int 2))]
-                 [current-file-module-network-ref #f])
-    (check-equal? (external-definitions-snapshot)
-                  (hasheq 'p1 (cons 'Int 1) 'm1 (cons 'Int 2)))))
+(test-case "external-definitions-snapshot: no current-file-mnr → empty (RF-5)"
+  ;; RF-5: no mnr → no cascade → empty (the Layer-2-only fallback retired).
+  (parameterize ([current-file-module-network-ref #f])
+    (check-equal? (external-definitions-snapshot) (hasheq))
+    (check-equal? (external-definition-names) '())))
 
-;; RF-1 (§18.18.6.8): global-env-snapshot materializes the mnr CASCADE (own + imports),
-;; NOT own-cells-only. Unlike external-definitions-snapshot (which EXCLUDES local cells),
-;; global-env-snapshot INCLUDES local defs AND the imports cascade — the foundation that
-;; keeps T1 fixture captures + .pnet mod-env + production capability inference fat after
-;; the 4A.c-ii-b copy loops retire. The first assertion FAILS on the pre-RF-1 own-cells-only
-;; materialize (impdef missing); the second pins pre-cutover behavior-preservation.
-(test-case "global-env-snapshot: includes local cells AND imports cascade (RF-1)"
+;; RF-5 (§18.18.7-b): global-env-snapshot is cascade-only (own cells + imports),
+;; the FULL env (unlike external-*, which EXCLUDES local). The Layer-2 base
+;; (current-prelude-env ∪ current-module-definitions-content) retired — a seeded
+;; current-prelude-env is NO LONGER read; the 2nd assertion is the regression guard.
+(test-case "global-env-snapshot: cascade-only — own + imports, Layer-2 base ignored (RF-5)"
   (define-values (imp1 _ci)
     (module-network-add-definition (make-module-network) 'impdef (cons 'String "imp")))
   (define-values (local1 _cl)
     (module-network-add-definition (make-module-network) 'localdef (cons 'Int 99)))
   (define local2 (module-network-add-import local1 imp1))
-  ;; Post-cutover shape: Layer-2 empty, cascade supplies own + imports.
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-file-module-network-ref local2])
+  ;; cascade supplies own 'localdef + import 'impdef
+  (parameterize ([current-file-module-network-ref local2])
     (check-equal? (global-env-snapshot)
                   (hasheq 'localdef (cons 'Int 99) 'impdef (cons 'String "imp"))))
-  ;; Pre-cutover equivalence: imports empty → own cells only + Layer-2 base (no change).
+  ;; RF-5 regression guard: a seeded current-prelude-env 'p1 is IGNORED (Layer-2
+  ;; base retired); EMPTY imports → cascade = own cells only → just 'localdef.
   (parameterize ([current-prelude-env (hasheq 'p1 (cons 'Int 1))]
-                 [current-module-definitions-content (hasheq)]
-                 [current-file-module-network-ref local1])  ;; local1 = own def, EMPTY imports
+                 [current-file-module-network-ref local1])
     (check-equal? (global-env-snapshot)
-                  (hasheq 'p1 (cons 'Int 1) 'localdef (cons 'Int 99)))))
+                  (hasheq 'localdef (cons 'Int 99)))))
 
 ;; ========================================
 ;; 2c. Reconstruction from snapshot (PPN 4C Addendum Phase 4A.c-i, RISK 1)
