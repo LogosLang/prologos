@@ -34,7 +34,13 @@
          "../prop-observatory.rkt"
          "../observatory-serialize.rkt")
 
-(provide run-lsp-server)
+(provide run-lsp-server
+         ;; PPN 4C Addendum Phase 4A.c-iii-d: test seam for the cross-command REPL
+         ;; regression test (tests/test-lsp-repl-01.rkt). The LSP eval path had no
+         ;; suite coverage — the Level-3 gap that let the 4A.b regression land invisibly.
+         make-initial-state
+         get-or-create-session!
+         eval-in-session-raw!)
 
 ;; ============================================================
 ;; Server state
@@ -92,8 +98,7 @@
 
 ;; Per-URI REPL session state. Definitions accumulate across evals.
 (struct repl-session
-  (global-env              ; hasheq: name → (cons type value)
-   ns-context              ; ns-context or #f
+  (ns-context              ; ns-context or #f
    module-registry         ; hasheq: ns-sym → module-info
    trait-registry          ; hasheq
    impl-registry           ; hasheq
@@ -101,8 +106,11 @@
    preparse-registry       ; hasheq
    capability-registry     ; hasheq
    spec-store              ; hasheq
-   definition-cells        ; hasheq (Phase 3a)
    definition-deps         ; hasheq (Phase 3b)
+   mnr                     ; module-network-ref (PPN 4C 4A.c-iii-d): on-network def store;
+                           ;   persists cross-command defs. Replaces the retired global-env/
+                           ;   definition-cells param-snapshot fields — the mnr IS the live store
+                           ;   (global-env-add writes it; resolution reads it via the cascade).
    ) #:mutable)
 
 ;; Load prelude once and cache registries (mirrors test-support.rkt pattern).
@@ -163,7 +171,6 @@
      (define pc (lsp-state-prelude-cache state))
      (define session
        (repl-session
-        (hasheq)                                    ; global-env (fresh)
         #f                                          ; ns-context
         (prelude-cache-module-registry pc)           ; module-registry
         (prelude-cache-trait-registry pc)             ; trait-registry
@@ -172,8 +179,8 @@
         (prelude-cache-preparse-registry pc)           ; preparse-registry
         (prelude-cache-capability-registry pc)         ; capability-registry
         (hasheq)                                    ; spec-store
-        (hasheq)                                    ; definition-cells (Phase 3a)
-        (hasheq)))                                  ; definition-deps (Phase 3b)
+        (hasheq)                                    ; definition-deps (Phase 3b)
+        (make-module-network)))                     ; mnr (PPN 4C 4A.c-iii-d): fresh on-network def store; (ns repl) below wires the prelude in
      ;; Initialize the session with a namespace declaration to load prelude
      (eval-in-session-raw! state session "(ns repl)\n")
      (hash-set! sessions uri session)
@@ -205,13 +212,14 @@
     ([exn:fail?
       (lambda (e)
         (set! results (list (prologos-error #f (exn-message e)))))])
-    (parameterize ([current-prelude-env           (repl-session-global-env session)]
-                   [current-definition-cells-content (repl-session-definition-cells session)]
-                   ;; PPN 4C Addendum Phase 4A.b: fresh mnr per command. TODO PPN Track 11
-                   ;; (LSP integration): mnr should be SESSION-PERSISTENT (repl-session needs
-                   ;; an mnr field) to preserve cross-command defs in the REPL — mirrors
-                   ;; repl-session-definition-cells. Mechanical-mirror for now (not suite-tested).
-                   [current-file-module-network-ref (make-module-network)]
+    (parameterize ([current-prelude-env             (hasheq)]   ;; vestigial; -e sweeps with the param retirement
+                   [current-definition-cells-content (hasheq)]  ;; vestigial; -e sweeps with the param retirement
+                   ;; PPN 4C Addendum Phase 4A.c-iii-d: the session-persistent mnr IS the REPL
+                   ;; def store. Inherit-or-create from the session field (mirrors process-file's
+                   ;; lifecycle at driver.rkt:1766) + write back below — this carries cross-command
+                   ;; defs (cmd1 `def x` resolves in cmd2). global-env-add writes this mnr.
+                   [current-file-module-network-ref
+                    (or (repl-session-mnr session) (make-module-network))]
                    [current-definition-dependencies  (repl-session-definition-deps session)]
                    [current-ns-context           (repl-session-ns-context session)]
                    [current-module-registry       (repl-session-module-registry session)]
@@ -226,8 +234,8 @@
                    [current-definition-locations   (hasheq)])
       (install-module-loader!)
       (set! results (process-string-ws code))
-      ;; Snapshot state back into session (definitions accumulate)
-      (set-repl-session-global-env!           session (current-prelude-env))
+      ;; Snapshot state back into session (definitions accumulate in the mnr)
+      (set-repl-session-mnr!                  session (current-file-module-network-ref))
       (set-repl-session-ns-context!           session (current-ns-context))
       (set-repl-session-module-registry!      session (current-module-registry))
       (set-repl-session-trait-registry!        session (current-trait-registry))
@@ -236,7 +244,6 @@
       (set-repl-session-preparse-registry!      session (current-preparse-registry))
       (set-repl-session-capability-registry!    session (current-capability-registry))
       (set-repl-session-spec-store!             session (current-spec-store))
-      (set-repl-session-definition-cells!       session (current-definition-cells-content))
       (set-repl-session-definition-deps!        session (current-definition-dependencies))))
   results)
 
@@ -397,7 +404,10 @@
      (define session (get-or-create-session! state uri))
      ;; Try global-env lookup first, then wrap in infer
      (define sym (string->symbol code))
-     (define entry (hash-ref (repl-session-global-env session) sym #f))
+     ;; PPN 4C Addendum Phase 4A.c-iii-d: resolve via the session's on-network mnr
+     ;; (the def store), not the retired repl-session-global-env param-snapshot field.
+     (define entry (let ([mnr (repl-session-mnr session)])
+                     (and mnr (module-network-cascading-lookup mnr sym))))
      (cond
        [(and entry (pair? entry))
         (respond! (hasheq 'type (pp-expr (car entry))))]
@@ -999,9 +1009,11 @@
   (define repl-state
     (cond
       [session
-       (define env (repl-session-global-env session))
+       ;; PPN 4C Addendum Phase 4A.c-iii-d: count the session mnr's own definitions
+       ;; (cell-id-map = user defs; prelude lives in the mnr's imports, not own cells).
+       (define mnr (repl-session-mnr session))
        (hasheq 'active #t
-               'evalCount (hash-count env)
+               'evalCount (if mnr (hash-count (module-network-ref-cell-id-map mnr)) 0)
                'lastResult (json-null))]
       [else
        (hasheq 'active #f
