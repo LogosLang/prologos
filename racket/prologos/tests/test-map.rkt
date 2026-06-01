@@ -19,9 +19,7 @@
 
 ;; Helper to run with clean global env
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (process-string s)))
+  (process-string s))
 
 ;; ========================================
 ;; Core AST: Keyword type formation
@@ -237,19 +235,15 @@
     (check-equal? result '("false : Bool"))))
 
 (test-case "surface: def + eval with map"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(def m <(Map Keyword Nat)> (map-assoc (map-empty Keyword Nat) :age (suc (suc zero))))\n(eval (map-get m :age))")])
-      (check-equal? (length result) 2)
-      (check-true (string-contains? (car result) "m : [Map Keyword Nat] defined"))
-      (check-equal? (cadr result) "2N : Nat"))))
+  (let ([result (process-string "(def m <(Map Keyword Nat)> (map-assoc (map-empty Keyword Nat) :age (suc (suc zero))))\n(eval (map-get m :age))")])
+    (check-equal? (length result) 2)
+    (check-true (string-contains? (car result) "m : [Map Keyword Nat] defined"))
+    (check-equal? (cadr result) "2N : Nat")))
 
 (test-case "surface: defn with map parameter"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(defn lookup-age [m <(Map Keyword Nat)>] <Nat> (map-get m :age))\n(eval (lookup-age (map-assoc (map-empty Keyword Nat) :age (suc (suc (suc zero))))))")])
-      (check-equal? (length result) 2)
-      (check-equal? (cadr result) "3N : Nat"))))
+  (let ([result (process-string "(defn lookup-age [m <(Map Keyword Nat)>] <Nat> (map-get m :age))\n(eval (lookup-age (map-assoc (map-empty Keyword Nat) :age (suc (suc (suc zero))))))")])
+    (check-equal? (length result) 2)
+    (check-equal? (cadr result) "3N : Nat")))
 
 ;; ========================================
 ;; Surface syntax: Map literal {k v ...} via sexp mode
@@ -268,11 +262,9 @@
                 '("OK")))
 
 (test-case "surface: map literal via def"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(def m <(Map Keyword Nat)> {:x (suc zero)})\n(eval (map-get m :x))")])
-      (check-equal? (length result) 2)
-      (check-equal? (cadr result) "1N : Nat"))))
+  (let ([result (process-string "(def m <(Map Keyword Nat)> {:x (suc zero)})\n(eval (map-get m :x))")])
+    (check-equal? (length result) 2)
+    (check-equal? (cadr result) "1N : Nat")))
 
 ;; ========================================
 ;; map-keys and map-vals reduction (Phase 3a)
@@ -289,16 +281,14 @@
     (check-true (string-contains? (car result) ":x"))))
 
 (test-case "map-keys: multi-entry map has correct count"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string
-                   (string-append
-                    "(def m <(Map Keyword Nat)> (map-assoc (map-assoc (map-empty Keyword Nat) :a zero) :b (suc zero)))\n"
-                    "(eval (map-keys m))"))])
-      (check-equal? (length result) 2)
-      ;; Second result is the keys list — should mention :a and :b
-      (check-true (string-contains? (cadr result) ":a"))
-      (check-true (string-contains? (cadr result) ":b")))))
+  (let ([result (process-string
+                 (string-append
+                  "(def m <(Map Keyword Nat)> (map-assoc (map-assoc (map-empty Keyword Nat) :a zero) :b (suc zero)))\n"
+                  "(eval (map-keys m))"))])
+    (check-equal? (length result) 2)
+    ;; Second result is the keys list — should mention :a and :b
+    (check-true (string-contains? (cadr result) ":a"))
+    (check-true (string-contains? (cadr result) ":b"))))
 
 (test-case "map-vals: single-entry map"
   (let ([result (run "(eval (map-vals (map-assoc (map-empty Keyword Nat) :x (suc (suc zero)))))")])

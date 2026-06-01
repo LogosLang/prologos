@@ -190,9 +190,7 @@
 ;; ========================================
 
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (process-string s)))
+  (process-string s))
 
 (test-case "posit16 surface: eval literal"
   (check-equal? (run "(eval (posit16 16384))")
@@ -211,12 +209,10 @@
                 '("OK")))
 
 (test-case "posit16 surface: def + eval"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(def one <Posit16> (posit16 16384))\n(eval one)")])
-      (check-equal? (length result) 2)
-      (check-true (string-contains? (car result) "one : Posit16 defined"))
-      (check-equal? (cadr result) "[posit16 16384] : Posit16"))))
+  (let ([result (process-string "(def one <Posit16> (posit16 16384))\n(eval one)")])
+    (check-equal? (length result) 2)
+    (check-true (string-contains? (car result) "one : Posit16 defined"))
+    (check-equal? (cadr result) "[posit16 16384] : Posit16")))
 
 (test-case "posit16 surface: negation"
   (check-equal? (run "(eval (p16-neg (posit16 16384)))")
@@ -247,8 +243,6 @@
                 '("[posit16 32768] : Posit16")))
 
 (test-case "posit16 surface: defn with Posit16"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(defn p16-double [x <Posit16>] <Posit16>\n  (p16+ x x))\n(eval (p16-double (posit16 16384)))")])
-      (check-equal? (length result) 2)
-      (check-equal? (cadr result) "[posit16 18432] : Posit16"))))
+  (let ([result (process-string "(defn p16-double [x <Posit16>] <Posit16>\n  (p16+ x x))\n(eval (p16-double (posit16 16384)))")])
+    (check-equal? (length result) 2)
+    (check-equal? (cadr result) "[posit16 18432] : Posit16")))

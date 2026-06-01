@@ -19,9 +19,7 @@
 
 ;; Helper: run through pipeline, return last result string
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-module-registry (hasheq)]
                  )
@@ -32,9 +30,7 @@
 
 ;; Helper: run through pipeline, return the session-entry from the registry
 (define (run-get-session s name)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-module-registry (hasheq)]
                  )

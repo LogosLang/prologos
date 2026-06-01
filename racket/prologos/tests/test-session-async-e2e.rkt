@@ -24,9 +24,7 @@
 ;; Helper: load a .prologos file via process-file
 (define (run-file filename)
   (define path (build-path here filename))
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
@@ -64,9 +62,7 @@
   (check-true (string-contains? (fourth results) "type-checked")))
 
 (test-case "e2e-file: async session registry populated"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
@@ -82,9 +78,7 @@
     (check-true (sess-end? (sess-async-recv-cont cont)))))
 
 (test-case "e2e-file: mixed session has async+sync structure"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
@@ -111,9 +105,7 @@
   (check-true (string-contains? dual-result "!!")))
 
 (test-case "e2e-file: :scheduler-io strategy property"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]

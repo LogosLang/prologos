@@ -35,9 +35,7 @@
 
 ;; Run sexp-mode code
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry prelude-preparse-registry]

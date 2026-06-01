@@ -38,9 +38,7 @@
 
 ;; Run without prelude, suppress stderr, return all results
 (define (run-simple s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-error-port (open-output-nowhere)])
+  (parameterize ([current-error-port (open-output-nowhere)])
     (process-string s)))
 
 ;; Run with prelude, suppress stderr, return last result
@@ -60,9 +58,7 @@
 (define (run-simple-with-stderr s)
   (define stderr-out (open-output-string))
   (define results
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                   [current-error-port stderr-out])
+    (parameterize ([current-error-port stderr-out])
       (process-string s)))
   (cons results (get-output-string stderr-out)))
 
@@ -208,9 +204,7 @@
 
 ;; Helper: Run a command through the driver, return speculation failures list.
 (define (run-and-get-failures s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-error-port (open-output-nowhere)])
+  (parameterize ([current-error-port (open-output-nowhere)])
     (define failures-box (box '()))
     (parameterize ([current-speculation-failures failures-box])
       (process-string s)

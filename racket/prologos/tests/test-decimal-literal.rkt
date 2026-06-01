@@ -20,9 +20,7 @@
 
 ;; Helper: run through process-string (sexp mode)
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (process-string s)))
+  (process-string s))
 
 ;; Token accessors via struct->vector (token struct is not exported)
 (define tok-type token-type)

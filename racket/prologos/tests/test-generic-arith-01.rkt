@@ -18,9 +18,7 @@
 
 ;; Helper: run through process-string (sexp mode)
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (car (process-string s))))
+  (car (process-string s)))
 
 ;; ========================================
 ;; Int arithmetic

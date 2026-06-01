@@ -25,9 +25,7 @@
 ;; Helper: run a multi-line sexp-mode string, return last result
 ;; Uses minimal state (no prelude) — session types use built-in Nat.
 (define (run-last s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-process-registry (hasheq)]
@@ -38,9 +36,7 @@
 
 ;; Helper: run and return all results
 (define (run-all s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-process-registry (hasheq)]
@@ -204,9 +200,7 @@
 ;; ========================================
 
 (test-case "spawn: process registry populated after defproc"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-process-registry (hasheq)]
@@ -224,9 +218,7 @@
     (check-true (sess-send? (process-entry-session-type entry)))))
 
 (test-case "spawn: process registry not populated on type-check failure"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-process-registry (hasheq)]

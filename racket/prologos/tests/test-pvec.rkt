@@ -26,15 +26,11 @@
 ;; Compute the lib directory path for namespace loading
 ;; Helper to run with clean global env
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (process-string s)))
+  (process-string s))
 
 ;; Helper to run with namespace system (prelude) active
 (define (run-ns s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry prelude-preparse-registry])
@@ -285,23 +281,19 @@
 ;; ========================================
 
 (test-case "surface: def + eval with PVec"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(def v <(PVec Nat)> (pvec-push (pvec-empty Nat) (suc (suc zero))))\n(eval (pvec-nth v zero))")])
-      (check-equal? (length result) 2)
-      (check-true (string-contains? (car result) "v : [PVec Nat] defined"))
-      (check-equal? (cadr result) "2N : Nat"))))
+  (let ([result (process-string "(def v <(PVec Nat)> (pvec-push (pvec-empty Nat) (suc (suc zero))))\n(eval (pvec-nth v zero))")])
+    (check-equal? (length result) 2)
+    (check-true (string-contains? (car result) "v : [PVec Nat] defined"))
+    (check-equal? (cadr result) "2N : Nat")))
 
 ;; ========================================
 ;; Surface syntax: defn with PVec parameter
 ;; ========================================
 
 (test-case "surface: defn with PVec parameter"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(defn first-elem [v <(PVec Nat)>] <Nat> (pvec-nth v zero))\n(eval (first-elem (pvec-push (pvec-empty Nat) (suc (suc (suc zero))))))")])
-      (check-equal? (length result) 2)
-      (check-equal? (cadr result) "3N : Nat"))))
+  (let ([result (process-string "(defn first-elem [v <(PVec Nat)>] <Nat> (pvec-nth v zero))\n(eval (first-elem (pvec-push (pvec-empty Nat) (suc (suc (suc zero))))))")])
+    (check-equal? (length result) 2)
+    (check-equal? (cadr result) "3N : Nat")))
 
 ;; ========================================
 ;; @[...] literal syntax: empty
@@ -325,11 +317,9 @@
 ;; ========================================
 
 (test-case "surface: @[...] literal via def"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(def v <(PVec Nat)> @[zero (suc zero) (suc (suc zero))])\n(eval (pvec-nth v (suc zero)))")])
-      (check-equal? (length result) 2)
-      (check-equal? (cadr result) "1N : Nat"))))
+  (let ([result (process-string "(def v <(PVec Nat)> @[zero (suc zero) (suc (suc zero))])\n(eval (pvec-nth v (suc zero)))")])
+    (check-equal? (length result) 2)
+    (check-equal? (cadr result) "1N : Nat")))
 
 ;; ========================================
 ;; @[...] literal syntax: pvec-nth on literal
@@ -337,11 +327,9 @@
 
 (test-case "surface: pvec-nth on @[...] literal via def"
   ;; @[...] literals need checking context to resolve element type metas
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(def v <(PVec Nat)> @[zero (suc zero) (suc (suc zero))])\n(eval (pvec-nth v (suc (suc zero))))")])
-      (check-equal? (length result) 2)
-      (check-equal? (cadr result) "2N : Nat"))))
+  (let ([result (process-string "(def v <(PVec Nat)> @[zero (suc zero) (suc (suc zero))])\n(eval (pvec-nth v (suc (suc zero))))")])
+    (check-equal? (length result) 2)
+    (check-equal? (cadr result) "2N : Nat")))
 
 ;; ========================================
 ;; Reader tests: WS reader @[] tokenization
@@ -388,16 +376,14 @@
     (check-true (string-contains? (car result) "0N"))))
 
 (test-case "pvec-to-list: multi-element vector"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string
-                   (string-append
-                    "(def v <(PVec Nat)> (pvec-push (pvec-push (pvec-empty Nat) zero) (suc zero)))\n"
-                    "(eval (pvec-to-list v))"))])
-      (check-equal? (length result) 2)
-      ;; Second result is the list with 0N and 1N
-      (check-true (string-contains? (cadr result) "0N"))
-      (check-true (string-contains? (cadr result) "1N")))))
+  (let ([result (process-string
+                 (string-append
+                  "(def v <(PVec Nat)> (pvec-push (pvec-push (pvec-empty Nat) zero) (suc zero)))\n"
+                  "(eval (pvec-to-list v))"))])
+    (check-equal? (length result) 2)
+    ;; Second result is the list with 0N and 1N
+    (check-true (string-contains? (cadr result) "0N"))
+    (check-true (string-contains? (cadr result) "1N"))))
 
 (test-case "pvec-to-list: type inferred as List A"
   (let ([result (run "(infer (pvec-to-list (pvec-empty Nat)))")])

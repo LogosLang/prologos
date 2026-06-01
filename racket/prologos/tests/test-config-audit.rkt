@@ -43,9 +43,7 @@
 
 ;; Process WS-mode string and return trait from store
 (define (trait-for-ws name s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-spec-store (hasheq)]
+  (parameterize ([current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
                  [current-preparse-registry (current-preparse-registry)]
@@ -57,9 +55,7 @@
 
 ;; Process WS-mode string and return functor from store
 (define (functor-for-ws name s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-spec-store (hasheq)]
+  (parameterize ([current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
                  [current-preparse-registry (current-preparse-registry)]
@@ -71,9 +67,7 @@
 
 ;; Process WS-mode string and return property from store
 (define (property-for-ws name s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-spec-store (hasheq)]
+  (parameterize ([current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
                  [current-preparse-registry (current-preparse-registry)]
@@ -116,9 +110,7 @@
   (check-equal? (hash-ref (trait-meta-metadata tm) ':deprecated #f) "use NewTrait instead"))
 
 (test-case "G5: trait :laws still registers in trait-laws store"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-spec-store (hasheq)]
+  (parameterize ([current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
                  [current-preparse-registry (current-preparse-registry)]
@@ -242,9 +234,7 @@
   (check-exn
    #rx"functor `Result` conflicts with existing data type"
    (lambda ()
-     (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                    [current-spec-store (hasheq)]
+     (parameterize ([current-spec-store (hasheq)]
                     [current-property-store (hasheq)]
                     [current-functor-store (hasheq)]
                     [current-preparse-registry (current-preparse-registry)]
@@ -262,9 +252,7 @@
   (check-exn
    #rx"functor `MyData` conflicts with existing data type"
    (lambda ()
-     (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                    [current-spec-store (hasheq)]
+     (parameterize ([current-spec-store (hasheq)]
                     [current-property-store (hasheq)]
                     [current-functor-store (hasheq)]
                     [current-preparse-registry (current-preparse-registry)]
@@ -314,9 +302,7 @@
   (check-exn
    #rx"`:invariant` and `:pre`/`:post` have different proof obligation semantics"
    (lambda ()
-     (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                    [current-spec-store (hasheq)]
+     (parameterize ([current-spec-store (hasheq)]
                     [current-property-store (hasheq)]
                     [current-preparse-registry (current-preparse-registry)]
                     [current-trait-registry (hasheq)]
@@ -330,9 +316,7 @@
   (check-exn
    #rx"`:invariant` and `:pre`/`:post` have different proof obligation semantics"
    (lambda ()
-     (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                    [current-spec-store (hasheq)]
+     (parameterize ([current-spec-store (hasheq)]
                     [current-property-store (hasheq)]
                     [current-preparse-registry (current-preparse-registry)]
                     [current-trait-registry (hasheq)]
@@ -422,9 +406,7 @@
 ;; ========================================
 
 (test-case "backward-compat: trait with :laws still works"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-spec-store (hasheq)]
+  (parameterize ([current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
                  [current-preparse-registry (current-preparse-registry)]
@@ -462,9 +444,7 @@
     (check-equal? expanded '((Eq X) (Ord X)))))
 
 (test-case "backward-compat: functor still registers as deftype"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-spec-store (hasheq)]
+  (parameterize ([current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
                  [current-preparse-registry (current-preparse-registry)]

@@ -21,9 +21,7 @@
 
 ;; Helper to run with clean global env (sexp mode)
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (process-string s)))
+  (process-string s))
 
 ;; ========================================
 ;; Type checking: type constructors (sexp mode)

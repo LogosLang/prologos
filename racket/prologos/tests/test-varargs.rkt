@@ -37,9 +37,7 @@
 
 ;; Run sexp-mode Prologos code
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry prelude-preparse-registry]
@@ -59,9 +57,7 @@
   (call-with-output-file tmp #:exists 'replace
     (lambda (out) (display s out)))
   (define result
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                   [current-ns-context #f]
+    (parameterize ([current-ns-context #f]
                    [current-module-registry prelude-module-registry]
                    [current-lib-paths (list prelude-lib-dir)]
                    [current-preparse-registry prelude-preparse-registry]
@@ -133,8 +129,6 @@
 
 (test-case "varargs spec: desugar-rest-type basic"
   (parameterize ([current-spec-store (hasheq)]
-                 [current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
                  [current-preparse-registry prelude-preparse-registry])
     (process-spec '(spec add-all Nat $rest -> Nat))
     (define entry (lookup-spec 'add-all))
@@ -147,8 +141,6 @@
 
 (test-case "varargs spec: mixed fixed + varargs"
   (parameterize ([current-spec-store (hasheq)]
-                 [current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
                  [current-preparse-registry prelude-preparse-registry])
     (process-spec '(spec max-of Nat Nat $rest -> Nat))
     (define entry (lookup-spec 'max-of))
@@ -160,8 +152,6 @@
 
 (test-case "varargs spec: with implicit binders"
   (parameterize ([current-spec-store (hasheq)]
-                 [current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
                  [current-preparse-registry prelude-preparse-registry])
     (process-spec '(spec list-of ($brace-params A) A $rest -> (List A)))
     (define entry (lookup-spec 'list-of))
@@ -170,8 +160,6 @@
 
 (test-case "varargs spec: non-variadic has rest-type #f"
   (parameterize ([current-spec-store (hasheq)]
-                 [current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
                  [current-preparse-registry prelude-preparse-registry])
     (process-spec '(spec id Nat -> Nat))
     (define entry (lookup-spec 'id))
@@ -179,8 +167,6 @@
 
 (test-case "varargs spec: $rest at start is error"
   (parameterize ([current-spec-store (hasheq)]
-                 [current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
                  [current-preparse-registry prelude-preparse-registry])
     (check-exn exn:fail?
       (lambda () (process-spec '(spec bad $rest -> Nat))))))

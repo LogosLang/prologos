@@ -40,9 +40,7 @@
 
 ;; Run sexp-mode code
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry prelude-preparse-registry]
@@ -62,9 +60,7 @@
   (call-with-output-file tmp #:exists 'replace
     (lambda (out) (display s out)))
   (define result
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                   [current-ns-context #f]
+    (parameterize ([current-ns-context #f]
                    [current-module-registry prelude-module-registry]
                    [current-lib-paths (list prelude-lib-dir)]
                    [current-preparse-registry prelude-preparse-registry]
@@ -138,8 +134,6 @@
 (test-case "sexp-parity/varargs: spec with ... works in sexp mode"
   ;; (spec foo Nat ... -> Nat) — using bare ... instead of $rest
   (parameterize ([current-spec-store (hasheq)]
-                 [current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
                  [current-preparse-registry prelude-preparse-registry])
     (process-spec '(spec add-all Nat ... -> Nat))
     (define entry (lookup-spec 'add-all))
@@ -152,8 +146,6 @@
 
 (test-case "sexp-parity/varargs: spec with ... mixed fixed+rest"
   (parameterize ([current-spec-store (hasheq)]
-                 [current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
                  [current-preparse-registry prelude-preparse-registry])
     (process-spec '(spec max-of Nat Nat ... -> Nat))
     (define entry (lookup-spec 'max-of))
@@ -164,8 +156,6 @@
 
 (test-case "sexp-parity/varargs: spec with ... and implicit binders"
   (parameterize ([current-spec-store (hasheq)]
-                 [current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
                  [current-preparse-registry prelude-preparse-registry])
     (process-spec '(spec list-of ($brace-params A) A ... -> (List A)))
     (define entry (lookup-spec 'list-of))
@@ -174,8 +164,6 @@
 
 (test-case "sexp-parity/varargs: spec with ... at start is error"
   (parameterize ([current-spec-store (hasheq)]
-                 [current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
                  [current-preparse-registry prelude-preparse-registry])
     (check-exn exn:fail?
       (lambda () (process-spec '(spec bad ... -> Nat))))))

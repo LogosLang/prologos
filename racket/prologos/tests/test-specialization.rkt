@@ -30,9 +30,7 @@
 ;; ========================================
 
 (define (run-ns-last s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry prelude-preparse-registry]
@@ -169,9 +167,7 @@
 (test-case "specialize/e2e: registry persists across module processing"
   ;; Verify that after processing a module with specialize forms,
   ;; the registry has the correct entries
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry prelude-preparse-registry]

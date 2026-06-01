@@ -18,9 +18,7 @@
 
 ;; Helper: run through pipeline, return last result
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
@@ -32,9 +30,7 @@
 
 ;; Helper: run and return the strategy-entry from the registry
 (define (run-get-strategy s name)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]

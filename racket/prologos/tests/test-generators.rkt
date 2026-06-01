@@ -28,9 +28,7 @@
 
 (define-syntax-rule (with-fresh-tc-env body ...)
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                   [current-reduction-fuel (box 50000)])
+    (parameterize ([current-reduction-fuel (box 50000)])
       body ...)))
 
 ;; ============================================================

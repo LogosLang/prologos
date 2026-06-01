@@ -63,26 +63,20 @@
 (test-case "nil value infer → Nil (without List constructor)"
   (with-fresh-meta-env
     ;; When List nil constructor is NOT in global env, expr-nil infers to Nil
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-file-module-network-ref (make-module-network)]
-                 [current-module-definitions-content (hasheq)])
+    (parameterize ([current-file-module-network-ref (make-module-network)])
       (check-equal? (tc:infer ctx-empty (expr-nil))
                     (expr-Nil)
                     "nil : Nil (no list constructor)"))))
 
 (test-case "nil value check against Nil"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-file-module-network-ref (make-module-network)]
-                 [current-module-definitions-content (hasheq)])
+    (parameterize ([current-file-module-network-ref (make-module-network)])
       (check-true (tc:check ctx-empty (expr-nil) (expr-Nil))
                   "nil checks as Nil"))))
 
 (test-case "nil-check typing returns Bool"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-file-module-network-ref (make-module-network)]
-                 [current-module-definitions-content (hasheq)])
+    (parameterize ([current-file-module-network-ref (make-module-network)])
       (check-equal? (tc:infer ctx-empty (expr-nil-check (expr-nil)))
                     (expr-Bool)
                     "nil? : _ → Bool"))))
@@ -218,9 +212,7 @@
 (define-values (shared-global-env shared-ns-context shared-module-reg
                 shared-trait-reg shared-impl-reg shared-param-impl-reg
                 shared-bundle-reg)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-file-module-network-ref (make-module-network)]
-                 [current-module-definitions-content (hasheq)]
+  (parameterize ([current-file-module-network-ref (make-module-network)]
                  [current-ns-context #f]
                  [current-module-registry (make-hash)]
                  [current-lib-paths (list lib-dir)]

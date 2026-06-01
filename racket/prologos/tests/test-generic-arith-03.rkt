@@ -32,9 +32,7 @@
 
 ;; sexp mode (no prelude)
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-file-module-network-ref (make-module-network)]
-                 [current-module-definitions-content (hasheq)])
+  (parameterize ([current-file-module-network-ref (make-module-network)])
     (car (process-string s))))
 
 ;; Shared fixture for WS-mode tests (prelude loaded once)
@@ -48,9 +46,7 @@
                 shared-impl-reg
                 shared-param-impl-reg
                 shared-bundle-reg)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-file-module-network-ref (make-module-network)]
-                 [current-module-definitions-content (hasheq)]
+  (parameterize ([current-file-module-network-ref (make-module-network)]
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
                  [current-lib-paths (list lib-dir)]

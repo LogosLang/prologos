@@ -82,9 +82,7 @@
    (make-config #:tests 50)
    (property ([ty gen:prologos-type])
      (with-fresh-meta-env
-       (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                      [current-reduction-fuel (box 50000)])
+       (parameterize ([current-reduction-fuel (box 50000)])
          (define result (unify '() ty ty))
          (check-true (not (eq? result #f))
                      (format "Same type should unify: ~a" ty))
@@ -98,9 +96,7 @@
    (make-config #:tests 30)
    (property ([ty (gen:prologos-type-depth 0)])
      (with-fresh-meta-env
-       (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                      [current-reduction-fuel (box 50000)])
+       (parameterize ([current-reduction-fuel (box 50000)])
          ;; Create a meta, unify with concrete type
          (define m (fresh-meta '() (expr-Type 0) 'test))
          (define result (unify '() m ty))
@@ -151,9 +147,7 @@
    (make-config #:tests 30)
    (property ([prog gen:well-typed-program])
      (with-fresh-meta-env
-       (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                      [current-reduction-fuel (box 50000)])
+       (parameterize ([current-reduction-fuel (box 50000)])
          (define term (car prog))
          (define z1 (zonk term))
          (define z2 (zonk z1))

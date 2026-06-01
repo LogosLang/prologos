@@ -40,15 +40,11 @@
 
 ;; Helper to run sexp code with clean global env
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (process-string s)))
+  (process-string s))
 
 ;; Helper: run prologos code with namespace system active
 (define (run-ns s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry prelude-preparse-registry]
@@ -107,14 +103,12 @@
 
 (test-case "infer: map-assoc with matching value type -- no widening"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      (let* ([m (expr-map-empty (expr-Keyword) (expr-Nat))]
-             [m1 (expr-map-assoc m (expr-keyword 'x) (expr-zero))])
-        (define ty (tc:infer ctx-empty m1))
-        (check-true (expr-Map? ty))
-        (check-equal? (expr-Map-k-type ty) (expr-Keyword))
-        (check-equal? (expr-Map-v-type ty) (expr-Nat))))))
+    (let* ([m (expr-map-empty (expr-Keyword) (expr-Nat))]
+           [m1 (expr-map-assoc m (expr-keyword 'x) (expr-zero))])
+      (define ty (tc:infer ctx-empty m1))
+      (check-true (expr-Map? ty))
+      (check-equal? (expr-Map-k-type ty) (expr-Keyword))
+      (check-equal? (expr-Map-v-type ty) (expr-Nat)))))
 
 (test-case "infer: map-assoc with annotated Nat value type rejects String (no auto-widening post-T-2)"
   ;; Pre-T-2 this test expected silent widening to (Nat | String). Under
@@ -122,30 +116,26 @@
   ;; a String value into a (Map Keyword Nat) is a type error. Opt into
   ;; narrow unions via explicit annotation: (Map Keyword <Nat | String>).
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      (let* ([m (expr-map-empty (expr-Keyword) (expr-Nat))]
-             [m1 (expr-map-assoc m (expr-keyword 'x) (expr-zero))]
-             [m2 (expr-map-assoc m1 (expr-keyword 'y) (expr-string "hello"))])
-        (define ty (tc:infer ctx-empty m2))
-        ;; Strict annotation → type error; no silent widening
-        (check-true (expr-error? ty)
-                    "strict annotated Nat map rejects String value (no auto-widening)")))))
+    (let* ([m (expr-map-empty (expr-Keyword) (expr-Nat))]
+           [m1 (expr-map-assoc m (expr-keyword 'x) (expr-zero))]
+           [m2 (expr-map-assoc m1 (expr-keyword 'y) (expr-string "hello"))])
+      (define ty (tc:infer ctx-empty m2))
+      ;; Strict annotation → type error; no silent widening
+      (check-true (expr-error? ty)
+                  "strict annotated Nat map rejects String value (no auto-widening)"))))
 
 (test-case "infer: map-assoc with Open value type accepts heterogeneous values"
   ;; Open-by-design: unannotated literals use expr-Open for value type.
   ;; map-assoc with ANY value type succeeds trivially (α-semantic).
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      (let* ([m (expr-map-empty (expr-Keyword) (expr-Open))]
-             [m1 (expr-map-assoc m (expr-keyword 'x) (expr-zero))]
-             [m2 (expr-map-assoc m1 (expr-keyword 'y) (expr-string "hello"))])
-        (define ty (tc:infer ctx-empty m2))
-        (check-true (expr-Map? ty) "result should be a Map type")
-        (check-equal? (expr-Map-k-type ty) (expr-Keyword))
-        (check-equal? (expr-Map-v-type ty) (expr-Open)
-                      "value type stays Open (no union accumulation)")))))
+    (let* ([m (expr-map-empty (expr-Keyword) (expr-Open))]
+           [m1 (expr-map-assoc m (expr-keyword 'x) (expr-zero))]
+           [m2 (expr-map-assoc m1 (expr-keyword 'y) (expr-string "hello"))])
+      (define ty (tc:infer ctx-empty m2))
+      (check-true (expr-Map? ty) "result should be a Map type")
+      (check-equal? (expr-Map-k-type ty) (expr-Keyword))
+      (check-equal? (expr-Map-v-type ty) (expr-Open)
+                    "value type stays Open (no union accumulation)"))))
 
 ;; ========================================
 ;; C. Surface syntax: sexp mode

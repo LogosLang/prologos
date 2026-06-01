@@ -20,9 +20,7 @@
 
 ;; Helper to run with clean global env
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (process-string s)))
+  (process-string s))
 
 ;; ========================================
 ;; Core AST: Set type formation
@@ -328,23 +326,19 @@
 ;; ========================================
 
 (test-case "surface: def + eval with Set"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(def s <(Set Nat)> (set-insert (set-empty Nat) (suc (suc zero))))\n(eval (set-member? s (suc (suc zero))))")])
-      (check-equal? (length result) 2)
-      (check-true (string-contains? (car result) "s : [Set Nat] defined"))
-      (check-equal? (cadr result) "true : Bool"))))
+  (let ([result (process-string "(def s <(Set Nat)> (set-insert (set-empty Nat) (suc (suc zero))))\n(eval (set-member? s (suc (suc zero))))")])
+    (check-equal? (length result) 2)
+    (check-true (string-contains? (car result) "s : [Set Nat] defined"))
+    (check-equal? (cadr result) "true : Bool")))
 
 ;; ========================================
 ;; Surface syntax: defn with Set parameter
 ;; ========================================
 
 (test-case "surface: defn with Set parameter"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(defn has-zero [s <(Set Nat)>] <Bool> (set-member? s zero))\n(eval (has-zero (set-insert (set-empty Nat) zero)))")])
-      (check-equal? (length result) 2)
-      (check-equal? (cadr result) "true : Bool"))))
+  (let ([result (process-string "(defn has-zero [s <(Set Nat)>] <Bool> (set-member? s zero))\n(eval (has-zero (set-insert (set-empty Nat) zero)))")])
+    (check-equal? (length result) 2)
+    (check-equal? (cadr result) "true : Bool")))
 
 ;; ========================================
 ;; #{...} literal syntax: empty (sexp)
@@ -370,22 +364,18 @@
 ;; ========================================
 
 (test-case "surface: #{...} literal via def"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(def s <(Set Nat)> #{zero (suc zero) (suc (suc zero))})\n(eval (set-size s))")])
-      (check-equal? (length result) 2)
-      (check-equal? (cadr result) "3N : Nat"))))
+  (let ([result (process-string "(def s <(Set Nat)> #{zero (suc zero) (suc (suc zero))})\n(eval (set-size s))")])
+    (check-equal? (length result) 2)
+    (check-equal? (cadr result) "3N : Nat")))
 
 ;; ========================================
 ;; #{...} literal syntax: member? on literal
 ;; ========================================
 
 (test-case "surface: set-member? on #{...} literal via def"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(def s <(Set Nat)> #{zero (suc zero) (suc (suc zero))})\n(eval (set-member? s (suc zero)))")])
-      (check-equal? (length result) 2)
-      (check-equal? (cadr result) "true : Bool"))))
+  (let ([result (process-string "(def s <(Set Nat)> #{zero (suc zero) (suc (suc zero))})\n(eval (set-member? s (suc zero)))")])
+    (check-equal? (length result) 2)
+    (check-equal? (cadr result) "true : Bool")))
 
 ;; ========================================
 ;; Reader tests: WS reader #{} tokenization
@@ -432,13 +422,11 @@
     (check-true (string-contains? (car result) "1N"))))
 
 (test-case "set-to-list: multi-element set has correct count"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string
-                   (string-append
-                    "(def s <(Set Nat)> (set-insert (set-insert (set-empty Nat) zero) (suc zero)))\n"
-                    "(eval (set-to-list s))"))])
-      (check-equal? (length result) 2)
-      ;; Second result is the list — should mention both 0N and 1N
-      (check-true (string-contains? (cadr result) "0N"))
-      (check-true (string-contains? (cadr result) "1N")))))
+  (let ([result (process-string
+                 (string-append
+                  "(def s <(Set Nat)> (set-insert (set-insert (set-empty Nat) zero) (suc zero)))\n"
+                  "(eval (set-to-list s))"))])
+    (check-equal? (length result) 2)
+    ;; Second result is the list — should mention both 0N and 1N
+    (check-true (string-contains? (cadr result) "0N"))
+    (check-true (string-contains? (cadr result) "1N"))))

@@ -21,9 +21,7 @@
 
 ;; Helper: run through process-string (sexp mode)
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (process-string s)))
+  (process-string s))
 
 ;; Token accessors via struct->vector (token struct is not exported)
 (define tok-type token-type)
@@ -116,21 +114,17 @@
                 '("[posit32 1207959552] : Posit32")))
 
 (test-case "approx-literal surface: def with ~N"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(def x <Posit32> ~42)\n(eval x)")])
-      (check-equal? (length result) 2)
-      (check-true (string-contains? (car result) "x : Posit32 defined"))
-      (check-equal? (cadr result) "[posit32 1698693120] : Posit32"))))
+  (let ([result (process-string "(def x <Posit32> ~42)\n(eval x)")])
+    (check-equal? (length result) 2)
+    (check-true (string-contains? (car result) "x : Posit32 defined"))
+    (check-equal? (cadr result) "[posit32 1698693120] : Posit32")))
 
 (test-case "approx-literal surface: ~N in function body"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(defn add42 [x <Posit32>] <Posit32>\n  (p32+ x ~42))\n(eval (add42 ~1))")])
-      (check-equal? (length result) 2)
-      ;; 1 + 42 = 43
-      (check-equal? (cadr result)
-                    (format "[posit32 ~a] : Posit32" (posit32-encode 43))))))
+  (let ([result (process-string "(defn add42 [x <Posit32>] <Posit32>\n  (p32+ x ~42))\n(eval (add42 ~1))")])
+    (check-equal? (length result) 2)
+    ;; 1 + 42 = 43
+    (check-equal? (cadr result)
+                  (format "[posit32 ~a] : Posit32" (posit32-encode 43)))))
 
 ;; ========================================
 ;; Decimal literal syntax: ~3.14

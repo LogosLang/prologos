@@ -31,9 +31,7 @@
 ;; Minimal run: no prelude, fresh state per call.
 ;; Matches the pattern from test-session-elaborate-01.rkt.
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-module-registry (hasheq)]
                  [current-capability-registry (hasheq)]
@@ -46,9 +44,7 @@
 
 ;; Run with capability declarations pre-loaded, preserving state.
 (define (run-with-caps s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-module-registry (hasheq)]
                  [current-capability-registry (hasheq)]
@@ -66,9 +62,7 @@
 
 ;; Run and return all results (for multi-command strings)
 (define (run-all-with-caps s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-module-registry (hasheq)]
                  [current-capability-registry (hasheq)]

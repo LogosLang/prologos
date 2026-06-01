@@ -31,9 +31,7 @@
 ;; Helper
 ;; ========================================
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (process-string s)))
+  (process-string s))
 
 (define (run-first s)
   (car (run s)))
@@ -76,18 +74,14 @@
 ;; ========================================
 
 (test-case "union: whnf passes through"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (check-equal?
-      (whnf (expr-union (expr-Nat) (expr-Bool)))
-      (expr-union (expr-Nat) (expr-Bool)))))
+  (check-equal?
+    (whnf (expr-union (expr-Nat) (expr-Bool)))
+    (expr-union (expr-Nat) (expr-Bool))))
 
 (test-case "union: nf normalizes components"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (check-equal?
-      (nf (expr-union (expr-Nat) (expr-Bool)))
-      (expr-union (expr-Nat) (expr-Bool)))))
+  (check-equal?
+    (nf (expr-union (expr-Nat) (expr-Bool)))
+    (expr-union (expr-Nat) (expr-Bool))))
 
 ;; ========================================
 ;; AST: pretty-print
@@ -109,48 +103,38 @@
 
 (test-case "unify: Nat | Bool ≡ Nat | Bool"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      (check-true
-        (unify-ok? (unify ctx-empty
-                          (expr-union (expr-Nat) (expr-Bool))
-                          (expr-union (expr-Nat) (expr-Bool))))))))
+    (check-true
+      (unify-ok? (unify ctx-empty
+                        (expr-union (expr-Nat) (expr-Bool))
+                        (expr-union (expr-Nat) (expr-Bool)))))))
 
 (test-case "unify: Nat | Bool ≡ Bool | Nat (commutativity)"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      (check-true
-        (unify-ok? (unify ctx-empty
-                          (expr-union (expr-Nat) (expr-Bool))
-                          (expr-union (expr-Bool) (expr-Nat))))))))
+    (check-true
+      (unify-ok? (unify ctx-empty
+                        (expr-union (expr-Nat) (expr-Bool))
+                        (expr-union (expr-Bool) (expr-Nat)))))))
 
 (test-case "unify: (Nat | Bool) | Unit ≡ Nat | (Bool | Unit) (associativity)"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      (check-true
-        (unify-ok? (unify ctx-empty
-                          (expr-union (expr-union (expr-Nat) (expr-Bool)) (expr-Unit))
-                          (expr-union (expr-Nat) (expr-union (expr-Bool) (expr-Unit)))))))))
+    (check-true
+      (unify-ok? (unify ctx-empty
+                        (expr-union (expr-union (expr-Nat) (expr-Bool)) (expr-Unit))
+                        (expr-union (expr-Nat) (expr-union (expr-Bool) (expr-Unit))))))))
 
 (test-case "unify: Nat | Bool ≢ Nat | Unit"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      (check-false
-        (unify ctx-empty
-               (expr-union (expr-Nat) (expr-Bool))
-               (expr-union (expr-Nat) (expr-Unit)))))))
+    (check-false
+      (unify ctx-empty
+             (expr-union (expr-Nat) (expr-Bool))
+             (expr-union (expr-Nat) (expr-Unit))))))
 
 (test-case "unify: Nat | Bool ≢ Nat (different cardinality)"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      (check-false
-        (unify ctx-empty
-               (expr-union (expr-Nat) (expr-Bool))
-               (expr-Nat))))))
+    (check-false
+      (unify ctx-empty
+             (expr-union (expr-Nat) (expr-Bool))
+             (expr-Nat)))))
 
 ;; ========================================
 ;; Type formation: is-type and infer-level

@@ -49,9 +49,7 @@
                 shared-param-impl-reg
                 shared-ctor-reg
                 shared-type-meta)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-file-module-network-ref (make-module-network)]
-                 [current-module-definitions-content (hasheq)]
+  (parameterize ([current-file-module-network-ref (make-module-network)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]

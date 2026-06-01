@@ -29,9 +29,7 @@
 ;; Helper
 ;; ========================================
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-spec-store (hasheq)]
+  (parameterize ([current-spec-store (hasheq)]
                  [current-preparse-registry (current-preparse-registry)])
     (process-string s)))
 

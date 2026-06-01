@@ -20,9 +20,7 @@
 
 ;; Helper: run through process-string (sexp mode)
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (process-string s)))
+  (process-string s))
 
 ;; ========================================
 ;; Within exact family: Nat + Int → Int

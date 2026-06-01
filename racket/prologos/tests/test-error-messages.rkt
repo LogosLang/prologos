@@ -32,9 +32,7 @@
 ;; Helper: process commands and return results
 ;; ========================================
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (process-string s)))
+  (process-string s))
 
 (define (run-first s)
   (car (run s)))
@@ -44,9 +42,7 @@
 
 (define (run-ns s)
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                   [current-ns-context #f]
+    (parameterize ([current-ns-context #f]
                    [current-module-registry prelude-module-registry]
                    [current-lib-paths (list prelude-lib-dir)]
                    [current-preparse-registry prelude-preparse-registry])
@@ -277,9 +273,7 @@
   ;; We need a simpler case that triggers failed constraints
   ;; Let's use a known case: applying a function to wrong implicit type
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                   [current-ns-context #f]
+    (parameterize ([current-ns-context #f]
                    [current-module-registry prelude-module-registry]
                    [current-lib-paths (list prelude-lib-dir)]
                    [current-preparse-registry prelude-preparse-registry])

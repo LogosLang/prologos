@@ -34,8 +34,7 @@
 ;; Shared per-call environment for foreign tests. Extracted so run-ns and the
 ;; foreign-write-(b) mnr assertion share ONE parameterize block.
 (define (call-in-ns-env thunk)
-  (parameterize ([current-prelude-env (hasheq)]
-                 ;; PPN 4C Addendum Phase 4A.c-ii-b: isolate the per-file mnr PER
+  (parameterize (;; PPN 4C Addendum Phase 4A.c-ii-b: isolate the per-file mnr PER
                  ;; call (matching the current-prelude-env reset). The batch-worker
                  ;; binds ONE current-file-module-network-ref for the whole file;
                  ;; without this reset, foreign defs written to the mnr by
@@ -43,7 +42,6 @@
                  ;; `add1` decl would shadow a later alias's "original hidden"
                  ;; assertion). Mirrors the test-support.rkt fresh-per-run pattern.
                  [current-file-module-network-ref (make-module-network)]
-                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]

@@ -126,60 +126,54 @@
 
 (test-case "readiness/solve-meta-triggers-retry-and-resolution"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                   [current-module-definitions-content (hasheq)])
-      (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
-      (define mid (expr-meta-id m))
-      ;; Create applied-meta constraint: (app ?m zero) vs Nat — postpones
-      (define flex-term (expr-app m (expr-zero)))
-      (define result (unify ctx-empty flex-term (expr-Nat)))
-      (check-equal? result 'postponed)
-      (check-equal? (length (all-postponed-constraints)) 1)
-      ;; Solve the meta — exercises set-latch: meta-component-write
-      ;; flips the watcher, threshold fires, action emitted, resolution
-      ;; executor processes the retry, constraint becomes solved.
-      (solve-meta! mid (expr-lam 'mw (expr-hole) (expr-Nat)))
-      (check-equal? (length (all-postponed-constraints)) 0)
-      (check-equal? (length (all-failed-constraints)) 0))))
+    (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
+    (define mid (expr-meta-id m))
+    ;; Create applied-meta constraint: (app ?m zero) vs Nat — postpones
+    (define flex-term (expr-app m (expr-zero)))
+    (define result (unify ctx-empty flex-term (expr-Nat)))
+    (check-equal? result 'postponed)
+    (check-equal? (length (all-postponed-constraints)) 1)
+    ;; Solve the meta — exercises set-latch: meta-component-write
+    ;; flips the watcher, threshold fires, action emitted, resolution
+    ;; executor processes the retry, constraint becomes solved.
+    (solve-meta! mid (expr-lam 'mw (expr-hole) (expr-Nat)))
+    (check-equal? (length (all-postponed-constraints)) 0)
+    (check-equal? (length (all-failed-constraints)) 0)))
 
 (test-case "readiness/solve-meta-fails-constraint-via-event-path"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                   [current-module-definitions-content (hasheq)])
-      (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
-      (define mid (expr-meta-id m))
-      ;; (app ?m zero) vs Bool — postpones
-      (define flex-term (expr-app m (expr-zero)))
-      (unify ctx-empty flex-term (expr-Bool))
-      ;; Solve ?m to (fn [x] Nat) — retry yields Nat ≠ Bool → failed
-      (solve-meta! mid (expr-lam 'mw (expr-hole) (expr-Nat)))
-      (check-equal? (length (all-postponed-constraints)) 0)
-      (check-equal? (length (all-failed-constraints)) 1))))
+    (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
+    (define mid (expr-meta-id m))
+    ;; (app ?m zero) vs Bool — postpones
+    (define flex-term (expr-app m (expr-zero)))
+    (unify ctx-empty flex-term (expr-Bool))
+    ;; Solve ?m to (fn [x] Nat) — retry yields Nat ≠ Bool → failed
+    (solve-meta! mid (expr-lam 'mw (expr-hole) (expr-Nat)))
+    (check-equal? (length (all-postponed-constraints)) 0)
+    (check-equal? (length (all-failed-constraints)) 1)))
 
 (test-case "readiness/multi-constraint-isolated-resolution"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                   [current-module-definitions-content (hasheq)])
-      (define m1 (fresh-meta ctx-empty (expr-Type (lzero)) "a"))
-      (define m2 (fresh-meta ctx-empty (expr-Type (lzero)) "b"))
-      (define mid1 (expr-meta-id m1))
-      (define mid2 (expr-meta-id m2))
-      ;; Two independent constraints
-      (define flex1 (expr-app m1 (expr-zero)))
-      (define flex2 (expr-app m2 (expr-zero)))
-      (unify ctx-empty flex1 (expr-Nat))
-      (unify ctx-empty flex2 (expr-Bool))
-      (check-equal? (length (all-postponed-constraints)) 2)
-      ;; Solve only m1 — set-latch for m1's constraint fires; m2's
-      ;; constraint may also be eagerly retried (C3 bridge can attempt
-      ;; resolution during quiescence) but stays postponed if not
-      ;; resolvable.
-      (solve-meta! mid1 (expr-lam 'mw (expr-hole) (expr-Nat)))
-      (check-true (<= (length (all-postponed-constraints)) 1))
-      ;; Solve m2 — second constraint resolves
-      (solve-meta! mid2 (expr-lam 'mw (expr-hole) (expr-Bool)))
-      (check-equal? (length (all-postponed-constraints)) 0)
-      (check-equal? (length (all-failed-constraints)) 0))))
+    (define m1 (fresh-meta ctx-empty (expr-Type (lzero)) "a"))
+    (define m2 (fresh-meta ctx-empty (expr-Type (lzero)) "b"))
+    (define mid1 (expr-meta-id m1))
+    (define mid2 (expr-meta-id m2))
+    ;; Two independent constraints
+    (define flex1 (expr-app m1 (expr-zero)))
+    (define flex2 (expr-app m2 (expr-zero)))
+    (unify ctx-empty flex1 (expr-Nat))
+    (unify ctx-empty flex2 (expr-Bool))
+    (check-equal? (length (all-postponed-constraints)) 2)
+    ;; Solve only m1 — set-latch for m1's constraint fires; m2's
+    ;; constraint may also be eagerly retried (C3 bridge can attempt
+    ;; resolution during quiescence) but stays postponed if not
+    ;; resolvable.
+    (solve-meta! mid1 (expr-lam 'mw (expr-hole) (expr-Nat)))
+    (check-true (<= (length (all-postponed-constraints)) 1))
+    ;; Solve m2 — second constraint resolves
+    (solve-meta! mid2 (expr-lam 'mw (expr-hole) (expr-Bool)))
+    (check-equal? (length (all-postponed-constraints)) 0)
+    (check-equal? (length (all-failed-constraints)) 0)))
 
 ;; ========================================
 ;; Idempotency + skip behaviors
@@ -214,20 +208,18 @@
 
 (test-case "idempotency/already-solved-no-spurious-refire"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                   [current-module-definitions-content (hasheq)])
-      (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
-      (define mid (expr-meta-id m))
-      (define flex-term (expr-app m (expr-zero)))
-      (unify ctx-empty flex-term (expr-Nat))
-      ;; Solve once — constraint resolves
-      (solve-meta! mid (expr-lam 'mw (expr-hole) (expr-Nat)))
-      (check-equal? (length (all-postponed-constraints)) 0)
-      (check-equal? (length (all-failed-constraints)) 0)
-      ;; Already-solved constraint: re-asserting the same solution is
-      ;; idempotent — solve-meta! on already-solved meta no-ops via
-      ;; meta-solved? guard.
-      (check-true (meta-solved? mid)))))
+    (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
+    (define mid (expr-meta-id m))
+    (define flex-term (expr-app m (expr-zero)))
+    (unify ctx-empty flex-term (expr-Nat))
+    ;; Solve once — constraint resolves
+    (solve-meta! mid (expr-lam 'mw (expr-hole) (expr-Nat)))
+    (check-equal? (length (all-postponed-constraints)) 0)
+    (check-equal? (length (all-failed-constraints)) 0)
+    ;; Already-solved constraint: re-asserting the same solution is
+    ;; idempotent — solve-meta! on already-solved meta no-ops via
+    ;; meta-solved? guard.
+    (check-true (meta-solved? mid))))
 
 ;; ========================================
 ;; Cell-id consistency (universe model)

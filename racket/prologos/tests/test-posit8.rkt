@@ -210,9 +210,7 @@
 
 ;; Helper to run with clean global env
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (process-string s)))
+  (process-string s))
 
 (test-case "posit8 surface: eval literal"
   (check-equal? (run "(eval (posit8 64))")
@@ -231,12 +229,10 @@
                 '("OK")))
 
 (test-case "posit8 surface: def + eval"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(def one <Posit8> (posit8 64))\n(eval one)")])
-      (check-equal? (length result) 2)
-      (check-true (string-contains? (car result) "one : Posit8 defined"))
-      (check-equal? (cadr result) "[posit8 64] : Posit8"))))
+  (let ([result (process-string "(def one <Posit8> (posit8 64))\n(eval one)")])
+    (check-equal? (length result) 2)
+    (check-true (string-contains? (car result) "one : Posit8 defined"))
+    (check-equal? (cadr result) "[posit8 64] : Posit8")))
 
 (test-case "posit8 surface: negation"
   (check-equal? (run "(eval (p8-neg (posit8 64)))")
@@ -267,8 +263,6 @@
                 '("[posit8 128] : Posit8")))
 
 (test-case "posit8 surface: defn with Posit8"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(defn p8-double [x <Posit8>] <Posit8>\n  (p8+ x x))\n(eval (p8-double (posit8 64)))")])
-      (check-equal? (length result) 2)
-      (check-equal? (cadr result) "[posit8 72] : Posit8"))))
+  (let ([result (process-string "(defn p8-double [x <Posit8>] <Posit8>\n  (p8+ x x))\n(eval (p8-double (posit8 64)))")])
+    (check-equal? (length result) 2)
+    (check-equal? (cadr result) "[posit8 72] : Posit8")))

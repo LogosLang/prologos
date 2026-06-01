@@ -41,9 +41,7 @@
                 shared-impl-reg
                 shared-param-impl-reg
                 shared-bundle-reg)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-file-module-network-ref (make-module-network)]
-                 [current-module-definitions-content (hasheq)]
+  (parameterize ([current-file-module-network-ref (make-module-network)]
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
                  [current-lib-paths (list lib-dir)]

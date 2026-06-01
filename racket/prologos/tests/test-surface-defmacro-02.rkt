@@ -18,9 +18,7 @@
 
 ;; Helper: run prologos code with namespace system active
 (define (run-ns s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry prelude-preparse-registry])
@@ -49,9 +47,7 @@
   ;; defmacro- should NOT add to auto-exports
   ;; We verify by checking that the macro works locally (test above)
   ;; but isn't in auto-exports. This is a structural test.
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry prelude-preparse-registry])

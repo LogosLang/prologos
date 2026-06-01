@@ -25,9 +25,7 @@
 ;; ========================================
 
 (define (run-ws ws-string)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
