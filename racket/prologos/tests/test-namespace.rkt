@@ -187,8 +187,9 @@
 
 (test-case "elaboration resolves via namespace"
   ;; Set up: global env has a fully-qualified name
-  (parameterize ([current-prelude-env
-                  (hasheq 'prologos::data::nat::add (cons (expr-Nat) (expr-zero)))]
+  (parameterize ([current-file-module-network-ref
+                  (module-network-from-snapshot
+                   (hasheq 'prologos::data::nat::add (cons (expr-Nat) (expr-zero))))]
                  [current-module-registry (hasheq)]
                  [current-ns-context
                   (ns-context-add-refer
@@ -199,8 +200,9 @@
     (check-equal? result (expr-fvar 'prologos::data::nat::add))))
 
 (test-case "elaboration resolves via alias"
-  (parameterize ([current-prelude-env
-                  (hasheq 'prologos::data::nat::add (cons (expr-Nat) (expr-zero)))]
+  (parameterize ([current-file-module-network-ref
+                  (module-network-from-snapshot
+                   (hasheq 'prologos::data::nat::add (cons (expr-Nat) (expr-zero))))]
                  [current-module-registry (hasheq)]
                  [current-ns-context
                   (ns-context-add-alias
@@ -212,8 +214,9 @@
 
 (test-case "elaboration backward-compatible without ns-context"
   ;; When current-ns-context is #f, old behavior is preserved
-  (parameterize ([current-prelude-env
-                  (hasheq 'myname (cons (expr-Nat) (expr-zero)))]
+  (parameterize ([current-file-module-network-ref
+                  (module-network-from-snapshot
+                   (hasheq 'myname (cons (expr-Nat) (expr-zero))))]
                  [current-ns-context #f])
     (define result (elaborate (surf-var 'myname srcloc-unknown)))
     (check-equal? result (expr-fvar 'myname))))

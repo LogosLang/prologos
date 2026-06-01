@@ -1866,22 +1866,11 @@
   ;; Return early if cached — but still import env into caller
   (cond
     [cached
-     ;; Import ALL of the cached module's definitions into the caller's global env.
-     ;; Without this, modules loaded in nested parameterize scopes (which start
-     ;; with fresh empty envs) can't see definitions from previously-cached modules.
-     (for ([(k v) (in-hash (module-info-env-snapshot cached))])
-       (current-prelude-env
-        (hash-set (current-prelude-env) k v)))
-     ;; Track 6 Phase 7d: populate module-definitions-content from module-network-ref.
-     ;; The module network is the authoritative source (Track 5); this hasheq is the
-     ;; materialized lookup cache. Belt-and-suspenders: both paths active during validation.
-     (define mnr (module-info-module-network cached))
-     (when mnr
-       (for ([(name cid) (in-hash (module-network-ref-cell-id-map mnr))])
-         (define val (net-cell-read (module-network-ref-prop-net mnr) cid))
-         (unless (eq? val 'infra-bot)
-           (current-module-definitions-content
-            (hash-set (current-module-definitions-content) name val)))))
+     ;; PPN 4C Addendum Phase 4A.c-ii-b cut-flip: Layer-2 copy loops RETIRED.
+     ;; Pre-cut-flip these flattened the cached module's env-snapshot into
+     ;; current-prelude-env + current-module-definitions-content. Now the importer's
+     ;; in-flight mnr gets this module wired as a share-by-reference import (action-1,
+     ;; namespace.rkt process-imports-spec) → cascade-reachable without copying.
      cached]
     [else
      ;; 2. Check for circular dependencies
@@ -1938,9 +1927,8 @@
                        (module-network-from-snapshot d-env-relinked)))
         ;; Register in module registry
         (register-module! ns-sym mod-info)
-        ;; Import into caller's env (use relinked version)
-        (for ([(k v) (in-hash d-env-relinked)])
-          (current-prelude-env (hash-set (current-prelude-env) k v)))
+        ;; PPN 4C Addendum Phase 4A.c-ii-b cut-flip: Layer-2 copy loop RETIRED
+        ;; (importer wires this module's reconstructed mnr as an import via action-1).
         ;; Track 10 Phase 2e: MERGE registries (not SET).
         ;; The deserialized registry contains this module's contributions + its deps.
         ;; Merging preserves the caller's existing entries while adding the module's.
@@ -2263,20 +2251,11 @@
      ;; 6. Register
      (register-module! ns-sym mi)
 
-     ;; 7. Import ALL of module's definitions into the CALLER's global env.
-     ;; This includes transitive dependencies (from modules the loaded module
-     ;; itself required), which are needed for reduction/evaluation — function
-     ;; bodies may reference cross-module globals that must be unfoldable.
-     (for ([(k v) (in-hash mod-env)])
-       (current-prelude-env
-        (hash-set (current-prelude-env) k v)))
-     ;; Track 6 Phase 7d: populate module-definitions-content from module-network-ref.
-     (when mod-module-network
-       (for ([(name cid) (in-hash (module-network-ref-cell-id-map mod-module-network))])
-         (define val (net-cell-read (module-network-ref-prop-net mod-module-network) cid))
-         (unless (eq? val 'infra-bot)
-           (current-module-definitions-content
-            (hash-set (current-module-definitions-content) name val)))))
+     ;; PPN 4C Addendum Phase 4A.c-ii-b cut-flip: the two Layer-2 copy loops RETIRED.
+     ;; Pre-cut-flip they flattened mod-env (incl. transitive deps) into
+     ;; current-prelude-env + current-module-definitions-content for the caller.
+     ;; Now the caller wires this module's mnr as a share-by-reference import
+     ;; (action-1) → cascade-reachable (transitive via fat module mnrs) without copying.
 
      ;; Track 10 Phase 1b: serialize successful elaboration to .pnet
      ;; Track 10 Phase 2d: only write .pnet if write is enabled.

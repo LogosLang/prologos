@@ -220,13 +220,12 @@
        (record-cross-module-dep! elab-name name 'same-file))
      (car cell-entry)]
     [else
-     ;; Layer 2: module definitions + prelude (unchanged; retires at 4A.c)
-     (define entry (or (hash-ref (current-module-definitions-content) name #f)
-                       (hash-ref (current-prelude-env) name #f)))
-     ;; Track 5 Phase 4: cross-module edge (source is a module, not same-file)
-     (when (and entry elab-name)
-       (record-cross-module-dep! elab-name name 'module))
-     (and entry (car entry))]))
+     ;; PPN 4C Addendum Phase 4A.c-ii-b cut-flip: Layer-2 fallback RETIRED.
+     ;; The mnr cascade (cell-entry path above) is the SOLE resolution source.
+     ;; #f-on-miss (NOT (void) — ~20 callers test truthiness via (and entry ...)).
+     ;; NEW-1: cross-module names now hit the cascade cell-entry path → recorded
+     ;; 'same-file (benign; dep-recording is Q-4A.2 scaffolding, retires at 4B).
+     #f]))
 
 ;; Lookup the value of a global definition (PPN 4C Addendum Phase 4A.b: mnr Layer 1).
 (define (global-env-lookup-value name)
@@ -242,10 +241,9 @@
      ;; Track 5 Phase 4: same-file edge (already recorded in lookup-type)
      (cdr cell-entry)]
     [else
-     ;; Layer 2: module definitions + prelude (unchanged; retires at 4A.c)
-     (define entry (or (hash-ref (current-module-definitions-content) name #f)
-                       (hash-ref (current-prelude-env) name #f)))
-     (and entry (cdr entry))]))
+     ;; PPN 4C Addendum Phase 4A.c-ii-b cut-flip: Layer-2 fallback RETIRED
+     ;; (see global-env-lookup-type). #f-on-miss; cascade is the sole source.
+     #f]))
 
 ;; ========================================
 ;; Writes (per-file → cells, module loading → legacy)

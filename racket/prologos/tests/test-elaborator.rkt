@@ -14,6 +14,7 @@
          "../errors.rkt"
          "../global-env.rkt"
          "../metavar-store.rkt"
+         "../namespace.rkt"
          "../driver.rkt")
 
 ;; Helper: parse and elaborate from string
@@ -171,21 +172,21 @@
 ;; ========================================
 
 (test-case "elab: (f x) — single arg with globals"
-  (parameterize ([current-prelude-env
-                  (global-env-add (global-env-add (hasheq)
-                                   'f (expr-Pi 'mw (expr-Nat) (expr-Nat)) (expr-lam 'mw (expr-Nat) (expr-bvar 0)))
-                                   'x (expr-Nat) (expr-zero))])
+  ;; PPN 4C Addendum Phase 4A.c-ii-b cut-flip: env set up via the per-file mnr
+  ;; (production resolution path) instead of the retired Layer-2 current-prelude-env.
+  (parameterize ([current-file-module-network-ref
+                  (module-network-from-snapshot
+                   (hasheq 'f (cons (expr-Pi 'mw (expr-Nat) (expr-Nat)) (expr-lam 'mw (expr-Nat) (expr-bvar 0)))
+                           'x (cons (expr-Nat) (expr-zero))))])
     (check-equal? (elab "(f x)")
                   (expr-app (expr-fvar 'f) (expr-fvar 'x)))))
 
 (test-case "elab: multi-arg app (f a b) -> app(app(fvar f, fvar a), fvar b)"
-  (parameterize ([current-prelude-env
-                  (global-env-add
-                   (global-env-add
-                    (global-env-add (hasheq)
-                                    'f (expr-Nat) (expr-zero))
-                    'a (expr-Nat) (expr-zero))
-                   'b (expr-Nat) (expr-zero))])
+  (parameterize ([current-file-module-network-ref
+                  (module-network-from-snapshot
+                   (hasheq 'f (cons (expr-Nat) (expr-zero))
+                           'a (cons (expr-Nat) (expr-zero))
+                           'b (cons (expr-Nat) (expr-zero))))])
     (check-equal? (elab "(f a b)")
                   (expr-app (expr-app (expr-fvar 'f) (expr-fvar 'a)) (expr-fvar 'b)))))
 

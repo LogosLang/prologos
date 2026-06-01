@@ -194,11 +194,12 @@
   ;; the created meta should have meta-source-info, not a bare string.
   ;; Note: maybe-auto-apply-implicits only fires when ALL params are m0.
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env
-                    (global-env-add (hasheq) 'test-fn
-                      ;; All-implicit: Pi(A :0 Type, B :0 A, Nat)
-                      (expr-Pi 'm0 (expr-Type (lzero)) (expr-Pi 'm0 (expr-bvar 0) (expr-Nat)))
-                      (expr-lam 'm0 (expr-Type (lzero)) (expr-lam 'm0 (expr-bvar 0) (expr-zero))))])
+    (parameterize ([current-file-module-network-ref
+                    (module-network-from-snapshot
+                     (hasheq 'test-fn
+                       ;; All-implicit: Pi(A :0 Type, B :0 A, Nat)
+                       (cons (expr-Pi 'm0 (expr-Type (lzero)) (expr-Pi 'm0 (expr-bvar 0) (expr-Nat)))
+                             (expr-lam 'm0 (expr-Type (lzero)) (expr-lam 'm0 (expr-bvar 0) (expr-zero))))))])
       ;; Elaborate a bare reference to test-fn (should auto-apply with meta-source-info)
       (define result (elaborate (surf-var 'test-fn (srcloc "test.prl" 5 3 7))))
       (check-false (prologos-error? result))
@@ -216,11 +217,12 @@
   ;; The meta created should have the name map containing "x" from the lambda binder.
   ;; Note: maybe-auto-apply-implicits only fires when ALL params are m0.
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env
-                    (global-env-add (hasheq) 'impl-fn
-                      ;; All-implicit: Pi(A :0 Type, B :0 A, Nat)
-                      (expr-Pi 'm0 (expr-Type (lzero)) (expr-Pi 'm0 (expr-bvar 0) (expr-Nat)))
-                      (expr-lam 'm0 (expr-Type (lzero)) (expr-lam 'm0 (expr-bvar 0) (expr-zero))))])
+    (parameterize ([current-file-module-network-ref
+                    (module-network-from-snapshot
+                     (hasheq 'impl-fn
+                       ;; All-implicit: Pi(A :0 Type, B :0 A, Nat)
+                       (cons (expr-Pi 'm0 (expr-Type (lzero)) (expr-Pi 'm0 (expr-bvar 0) (expr-Nat)))
+                             (expr-lam 'm0 (expr-Type (lzero)) (expr-lam 'm0 (expr-bvar 0) (expr-zero))))))])
       ;; Elaborate (fn [x <Nat>] impl-fn) — inside the lambda body, env has "x"
       (define result (elaborate (surf-lam
                                   (binder-info 'x 'mw (surf-nat-type srcloc-unknown))
