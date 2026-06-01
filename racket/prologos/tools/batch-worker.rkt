@@ -94,9 +94,7 @@
 (define ready-module-loader           (current-module-loader))
 (define ready-spec-propagation-handler (current-spec-propagation-handler))
 (define ready-foreign-handler         (current-foreign-handler))
-;; global-env.rkt
-(define ready-global-env              (current-prelude-env))
-(define ready-module-defs-content     (current-module-definitions-content))  ;; Track 6 Phase 7d
+;; global-env.rkt — Layer-2 params retired (4A.c-iii-e); resolution is the mnr cascade.
 ;; Track 7 Phase 6g: Snapshot persistent registry network CONTENTS (not box identity).
 ;; Each test file gets a fresh box with the post-prelude network contents,
 ;; preventing cross-file leakage via box mutation.
@@ -222,13 +220,9 @@
          [current-module-loader           ready-module-loader]
          [current-spec-propagation-handler ready-spec-propagation-handler]
          [current-foreign-handler         ready-foreign-handler]
-         ;; global-env.rkt
-         [current-prelude-env              ready-global-env]
-         [current-module-definitions-content ready-module-defs-content]  ;; Track 6 Phase 7d
          [current-persistent-registry-net-box
           (and ready-persistent-registry-net-contents
                (box ready-persistent-registry-net-contents))]  ;; Track 7 Phase 6g: fresh box per file
-         [current-definition-cells-content (hasheq)]   ;; Phase 3a: fresh per-file
          [current-file-module-network-ref  (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
          [current-definition-dependencies  (hasheq)]   ;; Phase 3b: fresh per-file
          [current-cross-module-deps        '()]         ;; Track 5 Phase 4: fresh per-file

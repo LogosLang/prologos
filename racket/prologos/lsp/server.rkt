@@ -125,9 +125,7 @@
       (simplify-path (build-path here-dir ".." "lib")))
     (define prelude-obs (make-observatory (hasheq 'source "prelude")))
     (define-values (mod-reg trait-reg impl-reg param-impl-reg preparse-reg cap-reg mod-cap-cache)
-      (parameterize ([current-prelude-env (hasheq)]
-                     [current-definition-cells-content (hasheq)]
-                     [current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh mnr (prelude load)
+      (parameterize ([current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.c-iii-e: fresh mnr (prelude load)
                      [current-definition-dependencies (hasheq)]
                      [current-ns-context #f]
                      [current-module-registry (hasheq)]
@@ -212,9 +210,7 @@
     ([exn:fail?
       (lambda (e)
         (set! results (list (prologos-error #f (exn-message e)))))])
-    (parameterize ([current-prelude-env             (hasheq)]   ;; vestigial; -e sweeps with the param retirement
-                   [current-definition-cells-content (hasheq)]  ;; vestigial; -e sweeps with the param retirement
-                   ;; PPN 4C Addendum Phase 4A.c-iii-d: the session-persistent mnr IS the REPL
+    (parameterize (;; PPN 4C Addendum Phase 4A.c-iii-d: the session-persistent mnr IS the REPL
                    ;; def store. Inherit-or-create from the session field (mirrors process-file's
                    ;; lifecycle at driver.rkt:1766) + write back below — this carries cross-command
                    ;; defs (cmd1 `def x` resolves in cmd2). global-env-add writes this mnr.
@@ -553,7 +549,7 @@
       (delete-file tmp-path)
       ;; Capture definition locations, type env, and spec store before parameterize exits
       (set! captured-def-locs (current-definition-locations))
-      (set! captured-type-env (current-prelude-env))
+      (set! captured-type-env (hasheq))  ;; PPN 4C Addendum Phase 4A.c-iii-e: current-prelude-env retired; file-save hover/completion functional restore (capture the file's env from process-file's internal mnr) → PPN Track 11
       (set! captured-spec-store (current-spec-store))
       ;; Visualization Phase 3: capture propagator network trace
       (define net-box (current-prop-net-box))

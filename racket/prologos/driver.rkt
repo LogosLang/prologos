@@ -2031,9 +2031,7 @@
      (define mod-property-store #f)
      (define mod-functor-store #f)
      (define mod-module-network #f)
-     (parameterize ([current-prelude-env (hasheq)]
-                    [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
-                    [current-ns-context #f]
+     (parameterize ([current-ns-context #f]
                     [current-meta-store (make-hasheq)]
                     [current-preparse-registry (current-preparse-registry)]
                     [current-ctor-registry (current-ctor-registry)]
@@ -2069,10 +2067,9 @@
                     ;; PPN 4C Addendum Phase 4A: module loading accumulates defs into
                     ;; the in-flight per-file mnr via always-mnr global-env-add (a1);
                     ;; the mnr cascade is the resolution source (4A.b cut-flip). The
-                    ;; Layer-2 params bound in this block retire at 4A.c-iii-c.
+                    ;; Layer-2 params retired at 4A.c-iii-e.
                     [current-module-registry-cell-id #f]
                     [current-ns-context-cell-id #f]
-                    [current-definition-cells-content (hasheq)]
                     [current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: per-module mnr (fresh per module-load)
                     [current-definition-dependencies (hasheq)]  ;; Phase 3b
                     [current-cross-module-deps '()]  ;; Track 5 Phase 4

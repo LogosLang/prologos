@@ -1813,8 +1813,7 @@
 ;;   (with-fresh-meta-env (parameterize ([current-retry-unify ...]) ...))
 (define-syntax-rule (with-fresh-meta-env body ...)
   (parameterize ([current-meta-store (make-hasheq)]
-                 [current-definition-cells-content (hasheq)]  ;; Phase 3a
-                 [current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr (isolation parity with cells-content)
+                 [current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.c-iii-e: fresh per-file mnr (isolation)
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
                  ;; Cell IDs: #f — reset-meta-store! populates when callbacks available
                  [current-constraint-cell-id #f]

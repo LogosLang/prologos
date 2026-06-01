@@ -327,10 +327,10 @@
   (parameterize ([current-file-module-network-ref local2])
     (check-equal? (global-env-snapshot)
                   (hasheq 'localdef (cons 'Int 99) 'impdef (cons 'String "imp"))))
-  ;; RF-5 regression guard: a seeded current-prelude-env 'p1 is IGNORED (Layer-2
-  ;; base retired); EMPTY imports → cascade = own cells only → just 'localdef.
-  (parameterize ([current-prelude-env (hasheq 'p1 (cons 'Int 1))]
-                 [current-file-module-network-ref local1])
+  ;; EMPTY imports → cascade = own cells only → just 'localdef. (The RF-5 seed of
+  ;; current-prelude-env retired in 4A.c-iii-e — the param no longer exists;
+  ;; global-env-snapshot is cascade-only, the Layer-2 base is gone.)
+  (parameterize ([current-file-module-network-ref local1])
     (check-equal? (global-env-snapshot)
                   (hasheq 'localdef (cons 'Int 99)))))
 

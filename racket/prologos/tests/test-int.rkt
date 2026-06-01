@@ -256,9 +256,7 @@
 
 ;; Helper to run with clean global env
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (process-string s)))
+  (process-string s))
 
 (test-case "int surface: eval literal"
   (check-equal? (run "(eval (int 42))")
@@ -321,12 +319,10 @@
                 '("OK")))
 
 (test-case "int surface: def + eval"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(def x <Int> (int 42))\n(eval x)")])
-      (check-equal? (length result) 2)
-      (check-true (string-contains? (car result) "x : Int defined"))
-      (check-equal? (cadr result) "42 : Int"))))
+  (let ([result (process-string "(def x <Int> (int 42))\n(eval x)")])
+    (check-equal? (length result) 2)
+    (check-true (string-contains? (car result) "x : Int defined"))
+    (check-equal? (cadr result) "42 : Int")))
 
 (test-case "int surface: nested arithmetic"
   (check-equal? (run "(eval (int+ (int* (int 3) (int 4)) (int 5)))")

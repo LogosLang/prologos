@@ -35,9 +35,8 @@
   (displayln "Prologos v0.3.0")
   (displayln ":quit to exit | :env | :load | :type | :expand | :macros | :specs | :instances | :methods | :satisfies")
   (newline)
-  ;; Start with empty global env
-  (parameterize ([current-prelude-env (hasheq)])
-    (repl-loop)))
+  ;; The mnr is lazy-init'd on the first def (global-env-add); resolution reads its cascade.
+  (repl-loop))
 
 (define (repl-loop)
   (display "> ")
