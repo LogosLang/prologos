@@ -64,13 +64,13 @@
   (last (run-ns s)))
 
 (test-case "foreign/write-b-mnr-cascade-reachable"
-  ;; PPN 4C Addendum Phase 4A.c-ii-b foreign-write-(b): a foreign def must be
-  ;; reachable via the per-file mnr cascade — the post-cut-flip resolution path
-  ;; (module-network-cascading-lookup walks Layer-1 only) — value-equivalent to
-  ;; the Layer-2 entry. This makes the instrument-and-revert deep-proof a DURABLE
-  ;; regression guard: if foreign-write-(b) regresses, the cascade goes empty here,
-  ;; long before the cut-flip would surface it as unbound foreign names. Both bare
-  ;; and FQN keys must be present (the cascade is exact-symbol, no FQN->bare alias).
+  ;; A foreign def must be reachable via the per-file mnr cascade — the resolution
+  ;; path (module-network-cascading-lookup walks Layer-1). Both bare and FQN keys
+  ;; must be present (the cascade is exact-symbol, no FQN->bare alias) and resolve
+  ;; to the same entry. PPN 4C Addendum Phase 4A.c-iii-a: foreign defs now reach the
+  ;; mnr via the always-mnr global-env-add (the old foreign-write-(b)
+  ;; global-env-add-to-mnr! folded in); Layer-2 is no longer written, so the prior
+  ;; "value-equivalent to Layer-2" assertion is replaced by bare==FQN.
   (call-in-ns-env
    (lambda ()
      (process-string "(ns test::fw-mnr)\n(foreign racket \"racket/base\" (add1 :as increment : Nat -> Nat))")
@@ -79,8 +79,8 @@
      (define casc-fqn  (module-network-cascading-lookup mnr 'test::fw-mnr::increment))
      (check-true (and casc-bare #t) "foreign alias reachable via mnr cascade (bare)")
      (check-true (and casc-fqn #t)  "foreign alias reachable via mnr cascade (FQN)")
-     (check-equal? casc-bare (hash-ref (current-prelude-env) 'increment #f)
-                   "mnr cascade entry value-equivalent to Layer-2"))))
+     (check-equal? casc-bare casc-fqn
+                   "bare and FQN keys resolve to the same foreign entry"))))
 
 (define (check-contains actual substr [msg #f])
   (check-true (string-contains? actual substr)

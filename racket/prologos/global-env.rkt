@@ -40,9 +40,6 @@
          global-env-lookup-value
          global-env-add
          global-env-add-type-only
-         ;; PPN 4C Addendum Phase 4A.c-ii-b (foreign-write-(b)) scaffolding;
-         ;; retires at 4A.c-iii (box-free global-env-add subsumes it).
-         global-env-add-to-mnr!
          global-env-remove!
          global-env-names
          global-env-import-module
@@ -262,63 +259,24 @@
        (let-values ([(mnr* _cid) (module-network-add-definition mnr entry-name entry)])
          mnr*))))
 
-;; PPN 4C Addendum Phase 4A.c-ii-b (foreign-write-(b)) — SCAFFOLDING.
-;; Box-INDEPENDENT additive write of a definition into the in-flight per-file mnr,
-;; GATED on an already-bound mnr. Used by handle-foreign-decl: `foreign` defs are
-;; processed during PREPARSE where current-prelude-env-prop-net-box = #f, so
-;; global-env-add takes the legacy Layer-2 path and the def never reaches the mnr
-;; → class-B residual after the cut-flip drops Layer-2. This routes the foreign def
-;; into the mnr so it is cascade-reachable. Box-INDEPENDENT on purpose: reusing the
-;; box-gated global-env-add would no-op at preparse (box=#f). The `when` gate keeps
-;; bare process-string/-ws foreign Layer-2-only (no orphan mnr — mnr-add-or-update!
-;; would otherwise lazy-init a fresh one and flip lookup onto the cascade path).
-;; RETIREMENT (4A.c-iii, 3-site delete): this def + its provide entry + both
-;; handle-foreign-decl call sites; the box-free global-env-add then carries the mnr
-;; write alone. NOT "pragmatic"; NOT belt-and-suspenders — Layer-2b is the OUTGOING
-;; read-authoritative source (dropped by action-4 at the cut-flip), the mnr is the
-;; INCOMING source-of-truth populated ahead of the flip (a sequenced hand-off).
-(define (global-env-add-to-mnr! name type value)
-  (when (current-file-module-network-ref)
-    (mnr-add-or-update! name (cons type value))))
-
 ;; Add a definition to the global environment.
-;; PPN 4C Addendum Phase 4A.b: cell path writes to the per-file mnr (authoritative
-;; Layer-1 source), NOT current-definition-cells-content (dead at 4A.b, removed
-;; at 4A.c) and NOT the ephemeral box cell (definition-cell-write! retires at 4A.c).
-;; Returns env UNCHANGED (cell-path callers discard return). Dispatch on the box
-;; (current-prelude-env-prop-net-box) is UNCHANGED — same contexts activate the
-;; cell path as pre-4A.b; only the write TARGET flips (mnr vs cells-content+box-cell).
-;; Legacy path (no cell infra — bootstrap/some tests): update prelude-env hash.
-(define (global-env-add env name type value)
-  (define entry (cons type value))
-  (cond
-    [(current-prelude-env-prop-net-box)
-     (mnr-add-or-update! name entry)
-     env]
-    [else
-     ;; Legacy path: update parameter AND return new hash (some callers
-     ;; compose functionally: (global-env-add (global-env-add ...) ...))
-     (define new-env (hash-set env name entry))
-     (current-prelude-env new-env)
-     new-env]))
+;; PPN 4C Addendum Phase 4A.c-iii-a: dispatch COLLAPSED to always-mnr — the
+;; box-gated legacy Layer-2 path is RETIRED (the 4A.c-ii-b cut-flip made the mnr
+;; cascade the sole resolution source). mnr-add-or-update! lazy-inits the in-flight
+;; mnr if unbound; in every real context (process-file/-command, fixtures) it is
+;; bound. Degenerate bare process-string-without-(ns ...) is the LSP/REPL class
+;; (PPN Track 11). Returns void (no caller uses the return).
+;; The 4A.c-ii-b foreign-write-(b) helper (global-env-add-to-mnr!) folded in here:
+;; the box-free global-env-add now carries the mnr write for foreign defs too.
+(define (global-env-add name type value)
+  (mnr-add-or-update! name (cons type value)))
 
 ;; Pre-register only the type (value = #f) for recursive definitions.
-;; whnf treats #f as stuck (no unfolding), so self-references are opaque
-;; during type checking. After checking, call global-env-add with real value.
-;; PPN 4C Addendum Phase 4A.b: writes (cons type #f) to the mnr (set-once
-;; commit of the real value happens via a later global-env-add → merge-replace).
-;; STAYS as a separate API at 4A.b; retires (subsumed by STRUCTURAL) at 4A.b-ii.
-(define (global-env-add-type-only env name type)
-  (define entry (cons type #f))
-  (cond
-    [(current-prelude-env-prop-net-box)
-     (mnr-add-or-update! name entry)
-     env]
-    [else
-     ;; Legacy path: update parameter AND return new hash
-     (define new-env (hash-set env name entry))
-     (current-prelude-env new-env)
-     new-env]))
+;; whnf treats #f as stuck (no unfolding), so self-references are opaque during
+;; type checking. After checking, call global-env-add with the real value.
+;; PPN 4C Addendum Phase 4A.c-iii-a: always-mnr (see global-env-add).
+(define (global-env-add-type-only name type)
+  (mnr-add-or-update! name (cons type #f)))
 
 ;; Remove a definition from all layers on failure.
 ;; Track 5 Phase 2: consolidates 12 inline removal sites in driver.rkt.

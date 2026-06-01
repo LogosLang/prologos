@@ -382,11 +382,8 @@
                                         '()       ;; provides-paths = empty
                                         '()       ;; includes-names = empty
                                         #f))      ;; srcloc = synthetic
-                       ;; Install as type in global-env
-                       (current-prelude-env
-                        (global-env-add-type-only (current-prelude-env)
-                                                  sub-name
-                                                  (expr-Type (lzero))))
+                       ;; Install as type in global-env (4A.c-iii-a: always-mnr)
+                       (global-env-add-type-only sub-name (expr-Type (lzero)))
                        (expr-fvar sub-name))]))]))]
           ;; Not a schema type — return as-is (e.g., String, Nat)
           [_ field-type-expr]))))

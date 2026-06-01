@@ -673,11 +673,11 @@
                                  (begin
                                    (let ([zonked-body (time-phase! zonk (freeze expr))]
                                        [zonked-type (time-phase! zonk (freeze ty))])
-                                   (global-env-add (current-prelude-env) name zonked-type zonked-body)
+                                   (global-env-add name zonked-type zonked-body)
                                    (when (current-ns-context)
                                      (define fqn (qualify-name name
                                                    (ns-context-current-ns (current-ns-context))))
-                                     (global-env-add (current-prelude-env) fqn zonked-type zonked-body))
+                                     (global-env-add fqn zonked-type zonked-body))
                                    ;; Convert zonked defr body to runtime relation-info
                                    ;; and register in the global relation store
                                    (when (expr-defr? zonked-body)
@@ -695,9 +695,9 @@
                   ;; Install the selection name as a type in the global env.
                   [(list 'selection name-fqn name-short schema-name)
                    ;; Install under both FQN and short name
-                   (global-env-add-type-only (current-prelude-env) name-fqn (expr-Type 0))
+                   (global-env-add-type-only name-fqn (expr-Type 0))
                    (unless (eq? name-fqn name-short)
-                     (global-env-add-type-only (current-prelude-env) name-short (expr-Type 0)))
+                     (global-env-add-type-only name-short (expr-Type 0)))
                    (format "selection ~a from ~a registered." name-short schema-name)]
 
                   ;; (capability name-fqn name-short cap-type) — capability declaration
@@ -706,9 +706,9 @@
                   ;; Dependent caps: cap-type = Pi(p :0 T, ... (expr-Type 0)).
                   [(list 'capability name-fqn name-short cap-type)
                    ;; Install under both FQN and short name
-                   (global-env-add-type-only (current-prelude-env) name-fqn cap-type)
+                   (global-env-add-type-only name-fqn cap-type)
                    (unless (eq? name-fqn name-short)
-                     (global-env-add-type-only (current-prelude-env) name-short cap-type))
+                     (global-env-add-type-only name-short cap-type))
                    (format "capability ~a registered." name-short)]
 
                   ;; (cap-closure name) — transitive capability closure query
@@ -814,11 +814,11 @@
                   ;; Register the session name as a type in the global env
                   [(list 'session name sess-body)
                    ;; Install as a type-level binding (like capability/selection)
-                   (global-env-add-type-only (current-prelude-env) name (expr-Type 0))
+                   (global-env-add-type-only name (expr-Type 0))
                    (when (current-ns-context)
                      (define fqn (qualify-name name
                                    (ns-context-current-ns (current-ns-context))))
-                     (global-env-add-type-only (current-prelude-env) fqn (expr-Type 0)))
+                     (global-env-add-type-only fqn (expr-Type 0)))
                    (format "session ~a defined." name)]
 
                   ;; Phase S3+S5a: Process definition
@@ -853,11 +853,11 @@
                             (when (pair? caps)
                               (check-process-cap-warnings name caps proc-body))
                             ;; Register in global env
-                            (global-env-add-type-only (current-prelude-env) name (expr-Type 0))
+                            (global-env-add-type-only name (expr-Type 0))
                             (when (current-ns-context)
                               (define fqn (qualify-name name
                                             (ns-context-current-ns (current-ns-context))))
-                              (global-env-add-type-only (current-prelude-env) fqn (expr-Type 0)))
+                              (global-env-add-type-only fqn (expr-Type 0)))
                             ;; S7c: Register in process registry for spawn
                             (register-process! name
                               (process-entry name resolved-sess proc-body caps srcloc-unknown))
@@ -873,7 +873,7 @@
                                       name (pp-session resolved-sess)))])]
                         [else
                          ;; No resolved session — register without type-checking for now
-                         (global-env-add-type-only (current-prelude-env) name (expr-Type 0))
+                         (global-env-add-type-only name (expr-Type 0))
                          ;; S7c: Register in process registry (no resolved session for execution)
                          (register-process! name
                            (process-entry name #f proc-body caps srcloc-unknown))
@@ -883,7 +883,7 @@
                       ;; S5c: Check for dead/ambient authority warnings
                       (when (pair? caps)
                         (check-process-cap-warnings name caps proc-body))
-                      (global-env-add-type-only (current-prelude-env) name (expr-Type 0))
+                      (global-env-add-type-only name (expr-Type 0))
                       ;; S7c: Register in process registry (no session type for execution)
                       (register-process! name
                         (process-entry name #f proc-body caps srcloc-unknown))
@@ -1146,13 +1146,13 @@
                  (cond
                    [(prologos-error? qtt-ok) qtt-ok]
                    [else
-                    (global-env-add (current-prelude-env) name zonked-type zonked-body)
+                    (global-env-add name zonked-type zonked-body)
                     ;; LSP Tier 2.3: record definition location
                     (register-definition-location! name def-srcloc)
                     (when (current-ns-context)
                       (define fqn (qualify-name name
                                     (ns-context-current-ns (current-ns-context))))
-                      (global-env-add (current-prelude-env) fqn zonked-type zonked-body)
+                      (global-env-add fqn zonked-type zonked-body)
                       (register-definition-location! fqn def-srcloc))
                     (format "~a : ~a defined." name (pp-expr zonked-type))])])])])])])]
     ;; Existing annotated path (type annotation present)
@@ -1181,11 +1181,11 @@
             'def-type-annotation
             (format "~a : ~a" name (pp-expr type*)))
            ;; 3. Pre-register for recursive references
-           (global-env-add-type-only (current-prelude-env) name type*)
+           (global-env-add-type-only name type*)
            (when (current-ns-context)
              (define fqn (qualify-name name
                            (ns-context-current-ns (current-ns-context))))
-             (global-env-add-type-only (current-prelude-env) fqn type*))
+             (global-env-add-type-only fqn type*))
            ;; Check if this is a data type or constructor definition.
            ;; Both are opaque with native constructors — the Church-encoded bodies
            ;; can't be type-checked against the new Type 0 annotation.
@@ -1204,13 +1204,13 @@
            (cond
              [data-type-def?
               (let ([zonked-type (time-phase! zonk (freeze type))])
-                (global-env-add-type-only (current-prelude-env) name zonked-type)
+                (global-env-add-type-only name zonked-type)
                 ;; LSP Tier 2.3: record definition location
                 (register-definition-location! name def-srcloc)
                 (when (current-ns-context)
                   (define fqn (qualify-name name
                                 (ns-context-current-ns (current-ns-context))))
-                  (global-env-add-type-only (current-prelude-env) fqn zonked-type)
+                  (global-env-add-type-only fqn zonked-type)
                   (register-definition-location! fqn def-srcloc))
                 (format "~a : ~a defined." name (pp-expr zonked-type)))]
              [else
@@ -1298,13 +1298,13 @@
                           (remove-failed-definition! name)
                           qtt-ok]
                          [else
-                          (global-env-add (current-prelude-env) name zonked-type zonked-body)
+                          (global-env-add name zonked-type zonked-body)
                           ;; LSP Tier 2.3: record definition location
                           (register-definition-location! name def-srcloc)
                           (when (current-ns-context)
                             (define fqn (qualify-name name
                                           (ns-context-current-ns (current-ns-context))))
-                            (global-env-add (current-prelude-env) fqn zonked-type zonked-body)
+                            (global-env-add fqn zonked-type zonked-body)
                             (register-definition-location! fqn def-srcloc))
                           (format "~a : ~a defined."
                                   name (pp-expr zonked-type))])]
@@ -2513,21 +2513,17 @@
   (define val (expr-foreign-fn prologos-name effective-proc full-arity '() full-marshal-in marshal-out
                                module-path-str racket-name))
 
-  ;; Register in global env with full type (including capability Pi binders)
-  (global-env-add (current-prelude-env) prologos-name full-type val)
-  ;; PPN 4C Addendum Phase 4A.c-ii-b foreign-write-(b): ADDITIVE box-independent
-  ;; mnr write (scaffolding; retires 4A.c-iii). Layer-2 above is the retiring
-  ;; source; this populates the incoming mnr source-of-truth ahead of the cut-flip
-  ;; so the foreign def is cascade-reachable once Layer-2 is dropped.
-  (global-env-add-to-mnr! prologos-name full-type val)
+  ;; Register in global env with full type (including capability Pi binders).
+  ;; 4A.c-iii-a: global-env-add is now always-mnr (folds in the old
+  ;; foreign-write-(b) global-env-add-to-mnr!), so foreign defs reach the mnr here.
+  (global-env-add prologos-name full-type val)
 
   ;; Also register FQN if in a namespace
   (when (current-ns-context)
     (define fqn (qualify-name prologos-name (ns-context-current-ns (current-ns-context))))
-    (global-env-add (current-prelude-env) fqn full-type val)
-    ;; 4A.c-ii-b foreign-write-(b) FQN, mirrors bare: the cascade is exact-symbol
-    ;; (no FQN->bare alias), so BOTH keys must be mnr-materialized to resolve.
-    (global-env-add-to-mnr! fqn full-type val)
+    ;; FQN mirrors bare: the cascade is exact-symbol (no FQN->bare alias), so
+    ;; BOTH keys are mnr-materialized (always-mnr global-env-add) to resolve.
+    (global-env-add fqn full-type val)
     ;; Auto-export the foreign binding (must update current-ns-context —
     ;; ns-context-add-auto-export returns a new struct, does not mutate)
     (current-ns-context
