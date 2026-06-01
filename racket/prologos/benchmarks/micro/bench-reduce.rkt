@@ -22,11 +22,10 @@
 
 ;; Helper: run process-string in a fresh env, capturing stderr
 (define (bench-process-string str)
-  (parameterize ([current-prelude-env (hasheq)])
-    (with-output-to-string
-      (λ ()
-        (parameterize ([current-error-port (current-output-port)])
-          (process-string str))))))
+  (with-output-to-string
+    (λ ()
+      (parameterize ([current-error-port (current-output-port)])
+        (process-string str)))))
 
 ;; ============================================================
 ;; Benchmarks
@@ -36,8 +35,7 @@
 (define b-nf-small
   (let ([term (nat->ast 10)])
     (bench "reduce: nf Nat(10) x100"
-      (parameterize ([current-prelude-env (hasheq)]
-                     [current-reduction-fuel (box 100000)])
+      (parameterize ([current-reduction-fuel (box 100000)])
         (for ([_ (in-range 100)])
           (nf term))))))
 
@@ -45,8 +43,7 @@
 (define b-nf-medium
   (let ([term (nat->ast 50)])
     (bench "reduce: nf Nat(50) x20"
-      (parameterize ([current-prelude-env (hasheq)]
-                     [current-reduction-fuel (box 100000)])
+      (parameterize ([current-reduction-fuel (box 100000)])
         (for ([_ (in-range 20)])
           (nf term))))))
 
@@ -60,8 +57,7 @@
 (define b-beta-chain
   (let ([term (id-chain 100 (expr-Nat))])
     (bench "reduce: beta-chain (depth=100) x10"
-      (parameterize ([current-prelude-env (hasheq)]
-                     [current-reduction-fuel (box 100000)])
+      (parameterize ([current-reduction-fuel (box 100000)])
         (for ([_ (in-range 10)])
           (nf term))))))
 
@@ -69,8 +65,7 @@
 (define b-whnf-deep
   (let ([term (nat->ast 50)])
     (bench "reduce: whnf Nat(50) x500"
-      (parameterize ([current-prelude-env (hasheq)]
-                     [current-reduction-fuel (box 100000)])
+      (parameterize ([current-reduction-fuel (box 100000)])
         (for ([_ (in-range 500)])
           (whnf term))))))
 

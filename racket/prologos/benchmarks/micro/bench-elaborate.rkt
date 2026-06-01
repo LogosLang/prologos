@@ -13,11 +13,10 @@
 
 ;; Helper: run process-string in a fresh env, discard output
 (define (bench-eval str)
-  (parameterize ([current-prelude-env (hasheq)])
-    (with-output-to-string
-      (λ ()
-        (parameterize ([current-error-port (current-output-port)])
-          (process-string str))))))
+  (with-output-to-string
+    (λ ()
+      (parameterize ([current-error-port (current-output-port)])
+        (process-string str)))))
 
 ;; ============================================================
 ;; Benchmarks
@@ -46,15 +45,14 @@
 ;; 5. Multiple definitions in sequence
 (define b-multi-def
   (bench "elaborate: 5 sequential defs"
-    (parameterize ([current-prelude-env (hasheq)])
-      (with-output-to-string
-        (λ ()
-          (parameterize ([current-error-port (current-output-port)])
-            (process-string "(def a : Nat 1N)")
-            (process-string "(def b : Nat 2N)")
-            (process-string "(def c : Nat 3N)")
-            (process-string "(def d : Nat 4N)")
-            (process-string "(def e : Nat 5N)")))))))
+    (with-output-to-string
+      (λ ()
+        (parameterize ([current-error-port (current-output-port)])
+          (process-string "(def a : Nat 1N)")
+          (process-string "(def b : Nat 2N)")
+          (process-string "(def c : Nat 3N)")
+          (process-string "(def d : Nat 4N)")
+          (process-string "(def e : Nat 5N)"))))))
 
 ;; 6. Lambda with implicit (needs metavar + unification)
 (define b-identity

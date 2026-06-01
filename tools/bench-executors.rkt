@@ -71,8 +71,6 @@
   (define start (current-inexact-monotonic-milliseconds))
   (parameterize ([p:current-parallel-executor executor-val]
                  [p:current-use-bsp-scheduler? #t]
-                 [current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
                  [current-lib-paths (list lib-dir)]

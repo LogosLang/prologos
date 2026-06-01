@@ -259,10 +259,7 @@
   (printf "  D2: Per-module timing breakdown (loading from scratch):\n")
   (define prelude-modules
     (for/list ([(k v) (in-hash prelude-module-registry)]) k))
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-definition-cells-content (hasheq)]
-                 [current-definition-dependencies (hasheq)]
+  (parameterize ([current-definition-dependencies (hasheq)]
                  [current-cross-module-deps '()]
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
@@ -308,10 +305,7 @@
 ;; D1: Full (process-string "(ns bench)") — expensive, few iterations
 (let ()
   (bench "D1: process-string \"(ns bench)\" (full prelude)" 3
-    (parameterize ([current-prelude-env (hasheq)]
-                   [current-module-definitions-content (hasheq)]
-                   [current-definition-cells-content (hasheq)]
-                   [current-definition-dependencies (hasheq)]
+    (parameterize ([current-definition-dependencies (hasheq)]
                    [current-cross-module-deps '()]
                    [current-ns-context #f]
                    [current-module-registry (hasheq)]
@@ -436,10 +430,7 @@
 ;; G1: Time to restore state from prelude-module-registry (run-ns-last pattern)
 (let ()
   (bench "G1: run-ns-last state restoration (parameterize + install-module-loader!)" 100
-    (parameterize ([current-prelude-env (hasheq)]
-                   [current-module-definitions-content (hasheq)]
-                   [current-definition-cells-content (hasheq)]
-                   [current-definition-dependencies (hasheq)]
+    (parameterize ([current-definition-dependencies (hasheq)]
                    [current-cross-module-deps '()]
                    [current-ns-context #f]
                    [current-module-registry prelude-module-registry]

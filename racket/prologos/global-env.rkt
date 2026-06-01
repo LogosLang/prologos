@@ -3,40 +3,24 @@
 ;;;
 ;;; PROLOGOS GLOBAL ENVIRONMENT
 ;;;
-;;; Two-layer architecture (Propagator-First Migration Phase 3):
+;;; Single resolution source: the per-file `module-network-ref` (mnr) cascade
+;;; (current-file-module-network-ref). Per-file definitions live in the local
+;;; mnr's per-name cells; prelude + imported definitions are reached by walking
+;;; the mnr's imports cascade (PPN 4C Addendum Phase 4A.b read-flip + 4A.c
+;;; share-by-reference). The legacy two-layer hasheq param stores
+;;; (current-prelude-env / current-module-definitions-content /
+;;; current-definition-cells-content) were RETIRED at 4A.c-iii-e-2 — the mnr
+;;; cascade is now the sole source; there is no Layer-1/Layer-2 fallback.
 ;;;
-;;;   Layer 1: current-definition-cells-content (hasheq: name → (cons type value))
-;;;     - Per-file definitions created during elaboration
-;;;     - Persistent across commands within a file; reset per-file/per-test
-;;;     - Authoritative for per-file defs — lookups check here FIRST
-;;;     - Each definition backed by a cell in the propagator network
-;;;     - Phase 3b: lookups record dependency edges in current-definition-dependencies
-;;;
-;;;   Layer 2: current-prelude-env (hasheq: name → (cons type value))
-;;;     - Prelude and module definitions (populated during module loading)
-;;;     - Structurally frozen after prelude loading: global-env-add doesn't
-;;;       write here when cell infrastructure is available
-;;;     - Serves as fallback when definition not found in Layer 1
-;;;     - Track 6 Phase 9: renamed from current-global-env to current-prelude-env
-;;;
-;;; NOTE (4A.c-iii): the box-gated global-env-add dispatch + the "freeze"
-;;; mechanism (current-prelude-env-prop-net-box) RETIRED at 4A.c-iii-a1/a2/a3
-;;; — global-env-add is now always-mnr; the per-file mnr cascade is the sole
-;;; resolution source (4A.b cut-flip). Layer 2 below survives only as the
-;;; snapshot / external-* base, retiring at 4A.c-iii-c.
-;;;
-;;; Read path: global-env-lookup-type/value check Layer 1 first, then Layer 2.
-;;; Merge: global-env-snapshot merges both layers (per-file shadows prelude).
-;;; Names: global-env-names returns union of both layers.
+;;; Reads:     global-env-lookup-type/value → local mnr cascade (module-network-cascading-lookup)
+;;; Names:     global-env-names             → cascade names
+;;; Snapshot:  global-env-snapshot          → cascade-materialize (local ∪ imports)
+;;; External:  external-definitions-snapshot / external-definition-names
+;;;              → prelude + imports only (EXCLUDES the file's own per-file defs)
+;;; Writes:    global-env-add / -add-type-only / -remove! → the in-flight mnr (mnr-add-or-update!)
 ;;;
 
-(provide current-prelude-env
-         ;; Track 6 Phase 9: canonical name. Holds prelude/module definitions (Layer 2).
-         ;; Per-file definitions are in current-definition-cells-content (Layer 1).
-         ;; Use global-env-lookup-* for reads (checks both layers).
-         ;; Track 6 Phase 7d: Module definitions sourced from module-network-ref
-         current-module-definitions-content
-         global-env-lookup-type
+(provide global-env-lookup-type
          global-env-lookup-value
          global-env-add
          global-env-add-type-only
@@ -50,9 +34,6 @@
          ;; external-definition-names = keys-only (hot find-fqn path).
          external-definitions-snapshot
          external-definition-names
-         ;; Phase 3a: Per-definition cell infrastructure (current-definition-cells-content
-         ;; survives only for the LSP REPL session → retires at 4A.c-iii-d / PPN Track 11)
-         current-definition-cells-content
          ;; Phase 3b: Definition dependency recording
          current-elaborating-name
          current-definition-dependencies
@@ -75,27 +56,6 @@
          "infra-cell.rkt"   ;; merge-replace, merge-hasheq-identity (Phase 1e-α split)
          "namespace.rkt")   ;; PPN 4C Addendum Phase 4A.a (2026-05-28) Q-4A.6 cycle-break: module-network-ref + APIs consumed at 4A.b read-flip
 
-;; ========================================
-;; Layer 2: Prelude/module definitions (legacy)
-;; ========================================
-;; Populated during module loading. Structurally frozen after prelude load.
-(define current-prelude-env (make-parameter (hasheq)))
-
-;; ========================================
-;; Module definitions (Track 6 Phase 7d)
-;; ========================================
-;; Persistent hasheq: name → (cons type value) populated from module-network-ref
-;; during module import. Analogous to current-definition-cells-content but for
-;; module/prelude defs. Sourced from Track 5's module network cells — the module
-;; network is the authoritative source; this is the materialized lookup cache.
-;; Persists across commands within a file; reset per-file/per-test.
-(define current-module-definitions-content (make-parameter (hasheq)))
-
-;; ========================================
-;; Layer 1: Per-file definitions (Phase 3a)
-;; ========================================
-;; Persistent across commands within a file. Reset per-file (and per-test).
-(define current-definition-cells-content (make-parameter (hasheq)))
 
 ;; PPN 4C Addendum Phase 4A.c-iii-a2/a3: the box-gated per-definition
 ;; cell-write path RETIRED. definition-cell-write! / -remove! / -write-named!
@@ -147,7 +107,7 @@
            (current-cross-module-deps)))))
 
 ;; ========================================
-;; Lookups (two-layer: per-file first, prelude fallback)
+;; Lookups (per-file mnr cascade — sole resolution source)
 ;; ========================================
 
 ;; Lookup the type of a global definition.
@@ -250,7 +210,7 @@
        [cell-id-map (hash-remove (module-network-ref-cell-id-map mnr) name)]))))
 
 ;; ========================================
-;; Utilities (merge both layers)
+;; Utilities (cascade views — local ∪ imports)
 ;; ========================================
 
 ;; List all definition names visible to the current file.

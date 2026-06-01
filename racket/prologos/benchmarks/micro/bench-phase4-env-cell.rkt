@@ -72,9 +72,6 @@
          ;; (per audit finding 1: bench's variant-a-lookup-realistic is OPTIMISTIC
          ;; vs production; omits Layer 3 + dep-recording + current-elaborating-name)
          (only-in "../../global-env.rkt"
-                  current-prelude-env
-                  current-module-definitions-content
-                  current-definition-cells-content
                   current-elaborating-name
                   current-definition-dependencies
                   current-cross-module-deps
@@ -282,57 +279,16 @@
            (variant-d-setup 100))
 
 ;; ============================================================
-;; PRODUCTION-FAITHFUL VARIANT A (uses real global-env-lookup-type)
+;; PRODUCTION-FAITHFUL VARIANT A — NEUTRALIZED (PPN 4C Addendum 4A.c-iii-e-2)
 ;; ============================================================
-;; Audit finding 1 (2026-05-26 session): variant-a-lookup-realistic above is
-;; OPTIMISTIC vs production. Production global-env-lookup-type (global-env.rkt
-;; :192-213) has 3-layer cascade (current-definition-cells-content → current-
-;; module-definitions-content → current-prelude-env) + current-elaborating-name
-;; param-read + record-definition-dependency! side-effect when set.
-;;
-;; Two scenarios:
-;;   A-prod-no-elab — current-elaborating-name = #f (no dep-recording overhead)
-;;   A-prod-with-elab — current-elaborating-name = some-name (production reality
-;;                       during defn-body elaboration; dep-recording active)
-;;
-;; Layer-1 hit is the apples-to-apples comparison with B/C/D (all populate
-;; their authoritative store with N entries; lookup hits on first layer).
-
-(define (variant-a-prod-setup N)
-  (define names (gen-names N))
-  (define env (for/fold ([h (hasheq)]) ([n names] [i (in-naturals)])
-                (hash-set h n (gen-entry i))))
-  (values names env))
-
-(printf "\n=== W1/W2/W3 — PRODUCTION-FAITHFUL VARIANT A ===\n")
-(printf "(real global-env-lookup-type; 3-layer cascade; with/without dep-recording)\n")
-
-(for ([N (in-list '(10 50 200))])
-  (printf "\n--- Workload N=~a forms (Layer 1 hit) ---\n" N)
-
-  (define-values (a-names a-env) (variant-a-prod-setup N))
-  (define a-mid (list-ref a-names (quotient N 2)))
-
-  ;; A-prod-no-elab: current-elaborating-name = #f (baseline; no dep-recording)
-  (parameterize ([current-definition-cells-content a-env]
-                 [current-module-definitions-content (hasheq)]
-                 [current-prelude-env (hasheq)]
-                 [current-elaborating-name #f]
-                 [current-definition-dependencies (hasheq)]
-                 [current-cross-module-deps '()])
-    (bench-ns (format "A-prod-no-elab.read N=~a (3-layer + elab-name check)" N) 100000
-              (global-env-lookup-type a-mid)))
-
-  ;; A-prod-with-elab: current-elaborating-name SET (production reality)
-  ;; dep-recording + cross-module-dep recording active per lookup
-  (parameterize ([current-definition-cells-content a-env]
-                 [current-module-definitions-content (hasheq)]
-                 [current-prelude-env (hasheq)]
-                 [current-elaborating-name 'elab-target]
-                 [current-definition-dependencies (hasheq)]
-                 [current-cross-module-deps '()])
-    (bench-ns (format "A-prod-with-elab.read N=~a (+ dep-recording side-effects)" N) 100000
-              (global-env-lookup-type a-mid))))
+;; This section modeled the now-RETIRED 3-layer param path
+;; (current-definition-cells-content → current-module-definitions-content →
+;; current-prelude-env) that global-env-lookup-type read pre-4A.b. Those 3
+;; params are retired at 4A.c-iii-e-2; global-env-lookup-type now resolves via
+;; the per-file module-network-ref cascade, so the Variant-A measurement is
+;; obsolete as written. Removed here to keep the bench compiling after the
+;; param retirement. Full rework (model the mnr-cascade lookup path) is deferred
+;; to 4A.d (bench re-run).
 
 ;; ============================================================
 ;; VARIANT C — Single compound cell + compound-cell-component-{ref,write}/pnet

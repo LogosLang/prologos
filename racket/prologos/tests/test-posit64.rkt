@@ -250,8 +250,6 @@
                 '("[posit64 9223372036854775808] : Posit64")))
 
 (test-case "posit64 surface: defn with Posit64"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(defn p64-double [x <Posit64>] <Posit64>\n  (p64+ x x))\n(eval (p64-double (posit64 4611686018427387904)))")])
-      (check-equal? (length result) 2)
-      (check-equal? (cadr result) "[posit64 5188146770730811392] : Posit64"))))
+  (let ([result (process-string "(defn p64-double [x <Posit64>] <Posit64>\n  (p64+ x x))\n(eval (p64-double (posit64 4611686018427387904)))")])
+    (check-equal? (length result) 2)
+    (check-equal? (cadr result) "[posit64 5188146770730811392] : Posit64")))
