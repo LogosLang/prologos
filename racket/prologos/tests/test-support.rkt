@@ -96,7 +96,6 @@
                  ;; Track 6 Phase 7a: network isolation (fresh network per call)
                  [current-prop-net-box              #f]
                  [current-persistent-registry-net-box #f]  ;; #f during prelude load; created below
-                 [current-prelude-env-prop-net-box   #f]
                  [current-ns-prop-net-box           #f]
                  [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]

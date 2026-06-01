@@ -233,7 +233,6 @@
          [current-file-module-network-ref  (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
          [current-definition-dependencies  (hasheq)]   ;; Phase 3b: fresh per-file
          [current-cross-module-deps        '()]         ;; Track 5 Phase 4: fresh per-file
-         [current-prelude-env-prop-net-box  #f]          ;; Phase 3a: no stale cell writes
          [current-ns-prop-net-box          #f]          ;; Phase 3c: no stale ns cell writes
          [current-module-registry-cell-id  #f]          ;; Phase 3c: fresh per-file
          [current-ns-context-cell-id       #f]          ;; Phase 3c: fresh per-file

@@ -471,9 +471,9 @@
   ;; `process-retraction` BSP value-tier handler. Per D.3 §8.8.4 deliverable 8.
   ;; Track 7 Phase 3: macros/warnings/narrow net-box scoping removed — reads/writes
   ;; go directly to the persistent registry network, not through per-command elab-network.
-  ;; prelude-env and ns net-boxes still needed for per-definition cells.
-  (parameterize ([current-prelude-env-prop-net-box (current-prop-net-box)]  ;; Phase 3a: activate cell writes (auto-reverts)
-                 [current-ns-prop-net-box (current-prop-net-box)]          ;; Phase 3c: activate ns cell writes (auto-reverts)
+  ;; ns net-box still needed for per-command namespace cells. (prelude-env
+  ;; box retired at 4A.c-iii-a3 — global-env-add is always-mnr.)
+  (parameterize ([current-ns-prop-net-box (current-prop-net-box)]          ;; Phase 3c: activate ns cell writes (auto-reverts)
                  [current-nf-cache (make-hash)]         ;; per-command nf memoization
                  [current-whnf-cache (make-hash)]       ;; per-command whnf memoization
                  [current-reduction-fuel (box 1000000)]  ;; 1M step limit
@@ -1350,8 +1350,7 @@
   (register-narrow-cells! (current-prop-net-box) (current-prop-new-infra-cell))
       (register-namespace-cells! (current-prop-net-box) (current-prop-new-infra-cell))
       (init-speculation-tracking!)
-      (parameterize ([current-prelude-env-prop-net-box (current-prop-net-box)]
-                     [current-ns-prop-net-box (current-prop-net-box)])
+      (parameterize ([current-ns-prop-net-box (current-prop-net-box)])
         (process-def def))))
   ;; Check for errors
   (define first-err (findf prologos-error? results))
@@ -2067,12 +2066,10 @@
                     ;; module-network-ref (Track 5).
                     [current-prop-net-box (box (make-prop-network))]
                     ;; Track 6 Phase 1a: id-map is now a field of elab-network (no separate box)
-                    ;; Track 5 Phase 3a: Module loading now uses cell path.
-                    ;; process-command sets current-prelude-env-prop-net-box to
-                    ;; (current-prop-net-box) in its inner parameterize, so
-                    ;; global-env-add writes to Layer 1 cells. Definitions
-                    ;; accumulate in current-definition-cells-content (persists
-                    ;; across commands). global-env-snapshot merges both layers.
+                    ;; PPN 4C Addendum Phase 4A: module loading accumulates defs into
+                    ;; the in-flight per-file mnr via always-mnr global-env-add (a1);
+                    ;; the mnr cascade is the resolution source (4A.b cut-flip). The
+                    ;; Layer-2 params bound in this block retire at 4A.c-iii-c.
                     [current-module-registry-cell-id #f]
                     [current-ns-context-cell-id #f]
                     [current-defn-param-names-cell-id #f]
@@ -2642,10 +2639,6 @@
 ;; Track 3 Phase 5: Install narrowing cell callbacks.
 (current-narrow-prop-cell-write elab-cell-write)
 (current-narrow-prop-cell-read elab-cell-read)
-
-;; Phase 3a: Install global-env cell callbacks.
-(current-prelude-env-prop-cell-write elab-cell-write)
-(current-prelude-env-prop-new-cell elab-new-infra-cell)
 
 ;; Phase 3c: Install namespace cell callbacks.
 (current-ns-prop-cell-write elab-cell-write)

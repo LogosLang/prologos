@@ -19,11 +19,11 @@
 ;;;     - Serves as fallback when definition not found in Layer 1
 ;;;     - Track 6 Phase 9: renamed from current-global-env to current-prelude-env
 ;;;
-;;; The "freeze" is structural: during module loading, parameterize sets
-;;; current-prelude-env-prop-net-box to #f, so global-env-add falls back to
-;;; legacy behavior (writes to Layer 2). After module loading returns, the
-;;; prop-net is set up by process-command's parameterize, so global-env-add
-;;; writes to Layer 1 + cell. The legacy hasheq stops growing automatically.
+;;; NOTE (4A.c-iii): the box-gated global-env-add dispatch + the "freeze"
+;;; mechanism (current-prelude-env-prop-net-box) RETIRED at 4A.c-iii-a1/a2/a3
+;;; — global-env-add is now always-mnr; the per-file mnr cascade is the sole
+;;; resolution source (4A.b cut-flip). Layer 2 below survives only as the
+;;; snapshot / external-* base, retiring at 4A.c-iii-c.
 ;;;
 ;;; Read path: global-env-lookup-type/value check Layer 1 first, then Layer 2.
 ;;; Merge: global-env-snapshot merges both layers (per-file shadows prelude).
@@ -53,9 +53,6 @@
          ;; Phase 3a: Per-definition cell infrastructure
          current-definition-cells-content
          current-definition-cell-ids
-         current-prelude-env-prop-net-box
-         current-prelude-env-prop-cell-write
-         current-prelude-env-prop-new-cell
          ;; Phase 3b: Definition dependency recording
          current-elaborating-name
          current-definition-dependencies
@@ -105,18 +102,13 @@
 ;; Cells exist for future propagator wiring (LSP dependency propagation).
 (define current-definition-cell-ids (make-parameter (hasheq)))
 
-;; Callback parameters for network access (set by driver.rkt).
-(define current-prelude-env-prop-net-box (make-parameter #f))
-(define current-prelude-env-prop-cell-write (make-parameter #f))
-(define current-prelude-env-prop-new-cell (make-parameter #f))
-
-;; PPN 4C Addendum Phase 4A.c-iii-a2: definition-cell-write! / -remove! /
-;; -write-named! RETIRED. They were the box-gated per-definition cell-write
-;; path; a1's dispatch collapse (global-env-add → always-mnr) removed every
-;; caller of write!/remove!, and this sub-phase removes the last caller of
-;; -write-named! (the defn-param-names dual-write). The mnr is the sole
-;; per-name authority since 4A.b. The 3 callback params (-prop-net-box etc.)
-;; are now set-but-unread until 4A.c-iii-a3.
+;; PPN 4C Addendum Phase 4A.c-iii-a2/a3: the box-gated per-definition
+;; cell-write path RETIRED. definition-cell-write! / -remove! / -write-named!
+;; (a2) were the only readers of the 3 network-access callback params
+;; (current-prelude-env-prop-net-box / -prop-cell-write / -prop-new-cell);
+;; a3 removed those params entirely. a1's dispatch collapse (global-env-add →
+;; always-mnr) made the box path unreachable; the mnr is the sole per-name
+;; authority since 4A.b.
 
 ;; ========================================
 ;; Phase 3b: Definition dependency recording

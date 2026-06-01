@@ -90,8 +90,6 @@ current-parsing-relational-goal?
 current-perf-counters
 current-phase-timings
 current-pnet-write-enabled?
-current-prelude-env-prop-cell-write
-current-prelude-env-prop-new-cell
 current-preparse-registry-cell-id
 current-process-registry
 current-process-registry-cell-id
