@@ -97,10 +97,9 @@
                  [current-prop-net-box              #f]
                  [current-persistent-registry-net-box #f]  ;; #f during prelude load; created below
                  [current-ns-prop-net-box           #f]
-                 [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
-                 [current-defn-param-names-cell-id  #f])
+                 )
     (install-module-loader!)
     (process-string "(ns prelude-cache)\n")
     ;; Track 7 Phase 6d: Initialize persistent registry network from post-prelude params.
@@ -146,10 +145,9 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 10 Phase 3c: fork replaces 8 network params
                  [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
-                 [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
-                 [current-defn-param-names-cell-id  #f])
+                 )
     (with-forked-network current-prop-net-box
       (install-module-loader!)
       (last (process-string s)))))
@@ -171,10 +169,9 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 10 Phase 3c: fork replaces 8 network params
                  [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
-                 [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
-                 [current-defn-param-names-cell-id  #f])
+                 )
     (with-forked-network current-prop-net-box
       (install-module-loader!)
       (process-string s))))
@@ -201,10 +198,9 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 10 Phase 3c: fork replaces 8 network params
                  [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
-                 [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
-                 [current-defn-param-names-cell-id  #f])
+                 )
     (with-forked-network current-prop-net-box
       (install-module-loader!)
       (last (process-string-ws s)))))
@@ -225,10 +221,9 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 10 Phase 3c: fork replaces 8 network params
                  [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
-                 [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
-                 [current-defn-param-names-cell-id  #f])
+                 )
     (with-forked-network current-prop-net-box
       (install-module-loader!)
       (process-string-ws s))))
@@ -250,10 +245,9 @@
                    [current-error-port stderr-out]
                    ;; Track 10 Phase 3c: fork replaces 8 network params
                    [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
-                   [current-definition-cell-ids       (hasheq)]
                    [current-module-registry-cell-id   #f]
                    [current-ns-context-cell-id        #f]
-                   [current-defn-param-names-cell-id  #f])
+                   )
       (with-forked-network current-prop-net-box
         (process-string s))))
   (cons results (get-output-string stderr-out)))

@@ -50,16 +50,15 @@
          ;; external-definition-names = keys-only (hot find-fqn path).
          external-definitions-snapshot
          external-definition-names
-         ;; Phase 3a: Per-definition cell infrastructure
+         ;; Phase 3a: Per-definition cell infrastructure (current-definition-cells-content
+         ;; survives only for the LSP REPL session → retires at 4A.c-iii-d / PPN Track 11)
          current-definition-cells-content
-         current-definition-cell-ids
          ;; Phase 3b: Definition dependency recording
          current-elaborating-name
          current-definition-dependencies
          definition-dependencies-snapshot
          ;; Defn param-name registry (user-facing names for bound-arg display)
          current-defn-param-names
-         current-defn-param-names-cell-id
          register-defn-param-names!
          lookup-defn-param-names
          ;; Track 5 Phase 4: Cross-module dependency edges
@@ -97,10 +96,6 @@
 ;; ========================================
 ;; Persistent across commands within a file. Reset per-file (and per-test).
 (define current-definition-cells-content (make-parameter (hasheq)))
-
-;; Per-command cell-ids in the prop-net (recreated each command).
-;; Cells exist for future propagator wiring (LSP dependency propagation).
-(define current-definition-cell-ids (make-parameter (hasheq)))
 
 ;; PPN 4C Addendum Phase 4A.c-iii-a2/a3: the box-gated per-definition
 ;; cell-write path RETIRED. definition-cell-write! / -remove! / -write-named!
@@ -337,7 +332,6 @@
 ;; bound-variable output (e.g., :y_ 3N) instead of internal lambda names.
 
 (define current-defn-param-names (make-parameter (hasheq)))
-(define current-defn-param-names-cell-id (make-parameter #f))
 
 (define (register-defn-param-names! name param-names)
   ;; PPN 4C Addendum Phase 4A.c-iii-a2: the Phase-3c cell dual-write retired

@@ -229,14 +229,12 @@
           (and ready-persistent-registry-net-contents
                (box ready-persistent-registry-net-contents))]  ;; Track 7 Phase 6g: fresh box per file
          [current-definition-cells-content (hasheq)]   ;; Phase 3a: fresh per-file
-         [current-definition-cell-ids      (hasheq)]   ;; Phase 3a: fresh per-file
          [current-file-module-network-ref  (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
          [current-definition-dependencies  (hasheq)]   ;; Phase 3b: fresh per-file
          [current-cross-module-deps        '()]         ;; Track 5 Phase 4: fresh per-file
          [current-ns-prop-net-box          #f]          ;; Phase 3c: no stale ns cell writes
          [current-module-registry-cell-id  #f]          ;; Phase 3c: fresh per-file
          [current-ns-context-cell-id       #f]          ;; Phase 3c: fresh per-file
-         [current-defn-param-names-cell-id #f]          ;; Phase 3c: fresh per-file
          ;; tree-parser.rkt — §11 PPN Track 3: fresh per file
          [current-source-str              ""]
          [current-raw-node                #f]

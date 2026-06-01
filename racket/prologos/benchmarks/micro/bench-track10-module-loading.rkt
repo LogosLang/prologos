@@ -275,10 +275,9 @@
                  [current-prop-net-box              #f]
                  [current-persistent-registry-net-box #f]
                  [current-ns-prop-net-box           #f]
-                 [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
-                 [current-defn-param-names-cell-id  #f])
+                 )
     (install-module-loader!)
     ;; Sort module names for consistent output
     (define sorted-modules (sort prelude-modules symbol<?))
@@ -325,10 +324,9 @@
                    [current-prop-net-box              #f]
                    [current-persistent-registry-net-box #f]
                    [current-ns-prop-net-box           #f]
-                   [current-definition-cell-ids       (hasheq)]
                    [current-module-registry-cell-id   #f]
                    [current-ns-context-cell-id        #f]
-                   [current-defn-param-names-cell-id  #f])
+                   )
       (install-module-loader!)
       (with-output-to-string
         (lambda ()
@@ -453,10 +451,9 @@
                    [current-prop-net-box              #f]
                    [current-persistent-registry-net-box prelude-persistent-registry-net-box]
                    [current-ns-prop-net-box           #f]
-                   [current-definition-cell-ids       (hasheq)]
                    [current-module-registry-cell-id   #f]
                    [current-ns-context-cell-id        #f]
-                   [current-defn-param-names-cell-id  #f])
+                   )
       (install-module-loader!)
       (void))))
 

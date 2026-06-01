@@ -2072,9 +2072,7 @@
                     ;; Layer-2 params bound in this block retire at 4A.c-iii-c.
                     [current-module-registry-cell-id #f]
                     [current-ns-context-cell-id #f]
-                    [current-defn-param-names-cell-id #f]
                     [current-definition-cells-content (hasheq)]
-                    [current-definition-cell-ids (hasheq)]
                     [current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: per-module mnr (fresh per module-load)
                     [current-definition-dependencies (hasheq)]  ;; Phase 3b
                     [current-cross-module-deps '()]  ;; Track 5 Phase 4
