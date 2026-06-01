@@ -56,7 +56,6 @@
          current-prelude-env-prop-net-box
          current-prelude-env-prop-cell-write
          current-prelude-env-prop-new-cell
-         register-global-env-cells!
          ;; Phase 3b: Definition dependency recording
          current-elaborating-name
          current-definition-dependencies
@@ -111,44 +110,13 @@
 (define current-prelude-env-prop-cell-write (make-parameter #f))
 (define current-prelude-env-prop-new-cell (make-parameter #f))
 
-;; Helper: write to per-definition cell in the prop-net.
-;; Creates a new cell if one doesn't exist for this name.
-(define (definition-cell-write! name entry)
-  (define net-box (current-prelude-env-prop-net-box))
-  (define write-fn (current-prelude-env-prop-cell-write))
-  (define new-cell-fn (current-prelude-env-prop-new-cell))
-  (when (and net-box write-fn)
-    (define cid (hash-ref (current-definition-cell-ids) name #f))
-    (cond
-      [cid
-       ;; Update existing cell (e.g., type-only → type+value)
-       (set-box! net-box (write-fn (unbox net-box) cid entry))]
-      [new-cell-fn
-       ;; Create new cell for new definition
-       (define-values (enet* new-cid) (new-cell-fn (unbox net-box) entry merge-replace))
-       (current-definition-cell-ids
-        (hash-set (current-definition-cell-ids) name new-cid))
-       (set-box! net-box enet*)])))
-
-;; Helper: write sentinel (#f) to a definition cell in the prop-net.
-;; The cell itself persists (cells are never deleted); the #f sentinel
-;; tells global-env-lookup-type/value to return #f (definition invisible).
-;; Track 5 Phase 2: extracted for failure cleanup consolidation.
-(define (definition-cell-remove! name)
-  (define net-box (current-prelude-env-prop-net-box))
-  (define write-fn (current-prelude-env-prop-cell-write))
-  (when (and net-box write-fn)
-    (define cid (hash-ref (current-definition-cell-ids) name #f))
-    (when cid
-      (set-box! net-box (write-fn (unbox net-box) cid #f)))))
-
-;; Helper: write to a known cell-id in the prop-net.
-;; Used for param-names and other singleton cells.
-(define (definition-cell-write-named! cell-id entry)
-  (define net-box (current-prelude-env-prop-net-box))
-  (define write-fn (current-prelude-env-prop-cell-write))
-  (when (and net-box write-fn cell-id)
-    (set-box! net-box (write-fn (unbox net-box) cell-id entry))))
+;; PPN 4C Addendum Phase 4A.c-iii-a2: definition-cell-write! / -remove! /
+;; -write-named! RETIRED. They were the box-gated per-definition cell-write
+;; path; a1's dispatch collapse (global-env-add → always-mnr) removed every
+;; caller of write!/remove!, and this sub-phase removes the last caller of
+;; -write-named! (the defn-param-names dual-write). The mnr is the sole
+;; per-name authority since 4A.b. The 3 callback params (-prop-net-box etc.)
+;; are now set-but-unread until 4A.c-iii-a3.
 
 ;; ========================================
 ;; Phase 3b: Definition dependency recording
@@ -410,30 +378,6 @@
   (hash-keys acc3))
 
 ;; ========================================
-;; Cell registration (per-command)
-;; ========================================
-
-;; Create per-definition cells in the propagator network.
-;; Called per-command after reset-meta-store!, since the network is fresh.
-;; Recreates cells from current-definition-cells-content (which persists).
-(define (register-global-env-cells! net-box new-cell-fn)
-  (when (and net-box new-cell-fn)
-    ;; Note: does NOT set current-prelude-env-prop-net-box here.
-    ;; driver.rkt sets it in process-command's parameterize block so
-    ;; it auto-reverts when the command finishes (preventing test leakage).
-    (define cells-content (current-definition-cells-content))
-    (define-values (final-enet final-ids)
-      (for/fold ([enet (unbox net-box)] [ids (hasheq)])
-                ([(name entry) (in-hash cells-content)])
-        (define-values (enet* cid) (new-cell-fn enet entry merge-replace))
-        (values enet* (hash-set ids name cid))))
-    (current-definition-cell-ids final-ids)
-    ;; Phase 3c: Create defn-param-names cell
-    (define-values (enet-pn pn-cid) (new-cell-fn final-enet (current-defn-param-names) merge-replace))
-    (current-defn-param-names-cell-id pn-cid)
-    (set-box! net-box enet-pn)))
-
-;; ========================================
 ;; Defn param-name registry
 ;; ========================================
 ;; Maps function name (symbol) to user-facing parameter names (listof symbol).
@@ -445,11 +389,11 @@
 (define current-defn-param-names-cell-id (make-parameter #f))
 
 (define (register-defn-param-names! name param-names)
+  ;; PPN 4C Addendum Phase 4A.c-iii-a2: the Phase-3c cell dual-write retired
+  ;; (the cell was write-only — RISK 4). The param hash registry stays; it is
+  ;; the live source read by lookup-defn-param-names + pnet-serialize.
   (current-defn-param-names
-   (hash-set (current-defn-param-names) name param-names))
-  ;; Phase 3c: dual-write to cell
-  (definition-cell-write-named! (current-defn-param-names-cell-id)
-                                (current-defn-param-names)))
+   (hash-set (current-defn-param-names) name param-names)))
 
 (define (lookup-defn-param-names name)
   (hash-ref (current-defn-param-names) name #f))

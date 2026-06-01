@@ -457,8 +457,9 @@
     (reset-meta-store!)  ;; clear metavariables from previous command
   ;; Track 7 Phase 3: Registry cells (macros, warnings, narrowing) now live in the
   ;; persistent registry network — no per-command cell creation needed.
-  ;; Per-definition and namespace cells still created per-command in elab-network.
-  (register-global-env-cells! (current-prop-net-box) (current-prop-new-infra-cell))
+  ;; PPN 4C Addendum Phase 4A.c-iii-a2: register-global-env-cells! retired
+  ;; (the mnr is the authoritative per-name store since 4A.b). Namespace cells
+  ;; still created per-command in elab-network.
   (register-namespace-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   ;; Phase D: Initialize ATMS for dependency-directed error tracking.
   (when (not (current-command-atms))
@@ -1347,7 +1348,6 @@
       (register-macros-cells! (current-prop-net-box) (current-prop-new-infra-cell))
       (register-warning-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   (register-narrow-cells! (current-prop-net-box) (current-prop-new-infra-cell))
-      (register-global-env-cells! (current-prop-net-box) (current-prop-new-infra-cell))
       (register-namespace-cells! (current-prop-net-box) (current-prop-new-infra-cell))
       (init-speculation-tracking!)
       (parameterize ([current-prelude-env-prop-net-box (current-prop-net-box)]
@@ -2446,7 +2446,6 @@
   (register-macros-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   (register-warning-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   (register-narrow-cells! (current-prop-net-box) (current-prop-new-infra-cell))
-  (register-global-env-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   (register-namespace-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   (define type-surf (parse-datum type-sexp))
   (when (prologos-error? type-surf)
