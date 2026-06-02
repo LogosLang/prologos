@@ -26,7 +26,6 @@
          global-env-add-type-only
          global-env-remove!
          global-env-names
-         global-env-import-module
          global-env-snapshot
          ;; PPN 4C Addendum Phase 4A.c-ii-a (D2 Path Y): external-only read source
          ;; (prelude + imported, EXCLUDING the file's own per-file defs) for the
@@ -221,18 +220,9 @@
   (define mnr (current-file-module-network-ref))
   (if mnr (module-network-cascade-names mnr) '()))
 
-;; Import a module's exported definitions into a global env.
-;; Takes a qualify-fn that maps (short-name, namespace-sym) → fqn-symbol.
-;; The module-exports is a list of short-name symbols.
-;; The module-env is a hasheq of fqn → (cons type value).
-;; Note: This operates on raw hasheqs and is used during module loading
-;; (legacy path). Per-file definitions don't go through this path.
-(define (global-env-import-module env module-exports module-env qualify-fn module-ns)
-  (for/fold ([e env])
-            ([short-name (in-list module-exports)])
-    (define fqn (qualify-fn short-name module-ns))
-    (define entry (hash-ref module-env fqn #f))
-    (if entry (hash-set e fqn entry) e)))
+;; (global-env-import-module RETIRED at 4A-VAG, 2026-06-01: the legacy raw-hasheq
+;; module-import for/fold was superseded by 4A.c's share-by-reference imports
+;; (module-network-add-import); zero production callers remained.)
 
 ;; Snapshot the FULL current global env: the mnr CASCADE (own cells + imports,
 ;; prelude included as an import). PPN 4C Addendum Phase 4A.c-iii-b: cascade-only

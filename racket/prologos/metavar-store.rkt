@@ -30,7 +30,7 @@
          "performance-counters.rkt"
          "champ.rkt"
          "infra-cell.rkt"   ;; Phase 1a: merge-list-append for constraint cell
-         "global-env.rkt"   ;; Phase 3a: current-definition-cells-content for with-fresh-meta-env
+         "global-env.rkt"   ;; global-env-add + dep-recording params (current-definition-cells-content RETIRED 4A.c-iii-e; with-fresh-meta-env now binds current-file-module-network-ref — see namespace.rkt import below)
          (only-in "namespace.rkt"  ;; PPN 4C Addendum Phase 4A.b: per-file mnr for with-fresh-meta-env (cycle-safe — already transitive via global-env→namespace)
                   current-file-module-network-ref make-module-network)
          "propagator.rkt"   ;; Track 7 Phase 2: make-prop-network for persistent registry

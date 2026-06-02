@@ -162,24 +162,8 @@
   (check-equal? (ns->path-segments 'prologos::core)
                 '("prologos" "core")))
 
-;; ========================================
-;; Global Env Import
-;; ========================================
-
-(test-case "global-env-import-module"
-  (define mod-env
-    (hasheq 'test.mod::foo (cons (expr-Nat) (expr-zero))
-            'test.mod::bar (cons (expr-Bool) (expr-true))))
-  (define result
-    (global-env-import-module (hasheq)
-                              '(foo bar)
-                              mod-env
-                              qualify-name
-                              'test.mod))
-  (check-true (hash-has-key? result 'test.mod::foo))
-  (check-true (hash-has-key? result 'test.mod::bar))
-  (check-equal? (car (hash-ref result 'test.mod::foo)) (expr-Nat))
-  (check-equal? (cdr (hash-ref result 'test.mod::foo)) (expr-zero)))
+;; (Global Env Import test RETIRED at 4A-VAG, 2026-06-01: global-env-import-module
+;; was retired — superseded by 4A.c share-by-reference imports.)
 
 ;; ========================================
 ;; Elaboration with Namespace Context

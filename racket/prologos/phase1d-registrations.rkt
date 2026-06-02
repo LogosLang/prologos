@@ -293,10 +293,10 @@
 ;; M1 (γ): def-entry-merge lives in leaf module definition-entry.rkt (NOT
 ;; namespace.rkt — layering cycle via type-lattice → reduction → ns-context?).
 ;;
-;; REGISTRATION-ONLY at 4A.a: no cell uses this merge yet (writes/reads stay on
-;; legacy (cons type value) until 4A.b read-flip). Inert registry entry — NOT a
-;; dual-path / validated-not-deployed gap (no flag to flip; 4A.b activates by
-;; migrating writers/readers).
+;; LIVE since 4A.b-ii (2026-06-01): the per-file mnr's per-name cells hold a
+;; def-entry value, merged by this domain's def-entry-merge (namespace.rkt's mnr
+;; API wraps/unwraps via the cons↔def-entry adapters). Registered at 4A.a; 4A.b-ii
+;; activated it by migrating the mnr writers/readers to def-entry. Not inert.
 (register/minimal 'definition-entry def-entry-merge
                   (lambda (v) (eq? v def-bot)) def-bot
                   #:classification 'structural
