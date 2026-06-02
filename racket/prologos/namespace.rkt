@@ -17,8 +17,15 @@
          racket/list
          racket/set
          racket/path
-         "infra-cell.rkt"    ;; merge-replace, merge-hasheq-replace, mod-status, net-new-mod-status-cell
-         "propagator.rkt")   ;; make-prop-network, net-cell-read, net-cell-write
+         "infra-cell.rkt"    ;; merge-replace, merge-hasheq-replace, mod-status, net-new-mod-status-cell, net-new-cell-with-merge
+         "propagator.rkt"    ;; make-prop-network, net-cell-read, net-cell-write
+         ;; PPN 4C Addendum Phase 4A.b-ii: per-name cell value is a def-entry
+         ;; (STRUCTURAL type × value); the mnr API wraps (cons type value) → def-entry
+         ;; on write and unwraps on read. definition-entry.rkt is a PURE LEAF under LWW
+         ;; (no type-lattice require), so this require is acyclic (cf. 4A.a M1 (γ)).
+         (only-in "definition-entry.rkt"
+                  def-entry def-entry? def-entry-type def-entry-value
+                  def-bot def-collision def-entry-merge))
 
 (provide
  ;; Module info
@@ -148,13 +155,40 @@
   (struct-copy module-network-ref mnr
     [imports (cons imp (module-network-ref-imports mnr))]))
 
+;; ========================================
+;; def-entry value adapter (PPN 4C Addendum Phase 4A.b-ii, §18.17.10)
+;; ========================================
+;; The per-name cell's canonical value is a `def-entry` (STRUCTURAL type × value),
+;; merged by def-entry-merge (LWW). The mnr API presents the legacy
+;; (cons type value) to all downstream consumers (audit-verified 0 ripple): the
+;; WRITE adapter wraps cons → def-entry; the READ adapter unwraps def-entry → cons.
+;; def-entry is thus fully ENCAPSULATED in this module's mnr API.
+
+;; WRITE adapter: (cons type value) → def-entry. A def-entry / def-bot / infra-bot
+;; passes through unchanged (idempotent — callers may pass either shape).
+(define (cons->def-entry v)
+  (if (pair? v) (def-entry (car v) (cdr v)) v))
+
+;; READ adapter: def-entry → (cons type value); def-bot / 'infra-bot (no
+;; definition) → #f. def-collision is the unreachable forward-compat ⊤ under LWW
+;; — error loudly if it ever surfaces (a real finding). A non-conforming shape
+;; also errors (Correct-by-Construction: surface a missed write path, don't absorb).
+(define (def-entry->cons v)
+  (cond
+    [(or (eq? v 'infra-bot) (eq? v def-bot)) #f]
+    [(def-entry? v) (cons (def-entry-type v) (def-entry-value v))]
+    [(eq? v def-collision)
+     (error 'def-entry->cons "def-collision surfaced (unreachable under LWW): a definition cell holds the ⊤")]
+    [else
+     (error 'def-entry->cons "unexpected cell value (expected def-entry / def-bot / infra-bot): ~v" v)]))
+
 ;; Look up a definition cell's value in a module network.
-;; Returns: (cons type value) or #f if not found.
+;; Returns: (cons type value) or #f if not found. (4A.b-ii: cell holds a def-entry;
+;; the read adapter unwraps it.)
 (define (module-network-lookup mnr name)
   (define cid (hash-ref (module-network-ref-cell-id-map mnr) name #f))
   (and cid
-       (let ([val (net-cell-read (module-network-ref-prop-net mnr) cid)])
-         (if (eq? val 'infra-bot) #f val))))
+       (def-entry->cons (net-cell-read (module-network-ref-prop-net mnr) cid))))
 
 ;; Cascading lookup: walk the local cell-id-map, then imports in list-order.
 ;; PPN 4C Addendum Phase 4A.a (Q-4A.4 Option (b) share-by-reference + Q1
@@ -187,7 +221,12 @@
 ;; Returns: (values updated-module-network-ref cell-id)
 (define (module-network-add-definition mnr name initial-value)
   (define net (module-network-ref-prop-net mnr))
-  (define-values (net* cid) (net-new-replace-cell net initial-value))
+  ;; PPN 4C Addendum Phase 4A.b-ii: the cell's canonical value is a def-entry,
+  ;; merged by def-entry-merge (LWW; def-collision is the unreachable forward-compat
+  ;; ⊤ → #:contradicts?). The write adapter wraps the caller's (cons type value).
+  (define-values (net* cid)
+    (net-new-cell-with-merge net def-entry-merge (cons->def-entry initial-value)
+                             (lambda (v) (eq? v def-collision))))
   (values
    (struct-copy module-network-ref mnr
      [prop-net net*]
@@ -200,8 +239,9 @@
   (define cid (hash-ref (module-network-ref-cell-id-map mnr) name #f))
   (unless cid
     (error 'module-network-write "no cell for ~a" name))
+  ;; PPN 4C Addendum Phase 4A.b-ii: write adapter wraps (cons type value) → def-entry.
   (struct-copy module-network-ref mnr
-    [prop-net (net-cell-write (module-network-ref-prop-net mnr) cid value)]))
+    [prop-net (net-cell-write (module-network-ref-prop-net mnr) cid (cons->def-entry value))]))
 
 ;; Update the module status cell (e.g., mod-loading → mod-loaded).
 ;; Returns: updated module-network-ref
@@ -220,7 +260,7 @@
 ;; Returns: hasheq of symbol → (cons type value)
 (define (module-network-materialize mnr)
   (for/hasheq ([(name cid) (in-hash (module-network-ref-cell-id-map mnr))])
-    (values name (net-cell-read (module-network-ref-prop-net mnr) cid))))
+    (values name (def-entry->cons (net-cell-read (module-network-ref-prop-net mnr) cid)))))
 
 ;; Materialize the FULL cascade of an mnr: its own definition cells PLUS all
 ;; its imports' cascades (recursively). PPN 4C Addendum Phase 4A.c-ii-a (D2
@@ -244,7 +284,7 @@
   (for/fold ([acc from-imports])
             ([(name cid) (in-hash (module-network-ref-cell-id-map mnr))])
     (define v (net-cell-read net cid))
-    (if (eq? v 'infra-bot) acc (hash-set acc name v))))
+    (if (or (eq? v 'infra-bot) (eq? v def-bot)) acc (hash-set acc name (def-entry->cons v)))))
 
 ;; Keys-only counterpart of module-network-cascade-materialize: the set of
 ;; definition names visible through this mnr (own + imports, recursive),

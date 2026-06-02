@@ -1,44 +1,37 @@
 #lang racket/base
 
 ;;;
-;;; definition-entry.rkt — STRUCTURAL lattice for per-name definition entries
+;;; definition-entry.rkt — STRUCTURAL value shape for per-name definition cells
 ;;;
-;;; PPN 4C Addendum Phase 4A.a (Q3 / §18.15.5 of 2026-04-21_PPN_4C_PHASE_9_DESIGN.md).
+;;; PPN 4C Addendum Phase 4A.a (Q3 / §18.15.5) introduced this; Phase 4A.b-ii
+;;; (§18.17.10) DEPLOYS it as the per-name definition cell value and revises the
+;;; merge to LAST-WRITE-WINS (see "Merge semantics" below).
 ;;;
 ;;; A per-name definition cell's value decomposes into :type + :value
-;;; sub-components — the SRE STRUCTURAL classification of DefinitionEntry.
-;;; This is "the lattice of definition entries" (type × value), parallel to
-;;; type-lattice.rkt being "the lattice of types": it sits ABOVE type-lattice
-;;; (requires type-unify-or-top for the :type sub-component merge).
+;;; sub-components — the SRE STRUCTURAL classification of DefinitionEntry
+;;; ("the lattice of definition entries", type × value). The STRUCTURAL win is
+;;; facet-addressability: a propagator can read / declare :component-paths on a
+;;; single facet (e.g. trait resolution reading :type, reduction reading :value)
+;;; — aligned with the AttributeRecord/facet design (D.3 §6.11) + First-Class-
+;;; by-Default. The cell holds a def-entry; namespace.rkt's mnr API wraps
+;;; (cons type value) → def-entry on WRITE and unwraps def-entry → (cons type
+;;; value) on READ (the 4A.b-ii ADAPTER, both directions) — so def-entry is
+;;; fully ENCAPSULATED within the mnr API and downstream consumers are unchanged
+;;; (audit-verified 0 production ripple, §18.17.10).
 ;;;
-;;; LAYERING (why this is a dedicated leaf module, M1 (γ) — falsification record
-;;; at design §18.16.5.M1): namespace.rkt is a LOW-level module (it feeds
-;;; ns-context? to reduction/zonk/substitution). type-lattice.rkt sits ABOVE that
-;;; pipeline. So namespace.rkt CANNOT require type-lattice.rkt (layering cycle).
-;;; def-entry-merge needs type-unify-or-top → it lives here, above type-lattice,
-;;; required by phase1d-registrations.rkt (registration) and (at 4A.b) global-env.rkt.
-;;; Matches the F14 "two-layer module split for cycle-breaking" precedent
-;;; (DEVELOPMENT_LESSONS § 6.8; tropical-fuel-primitives.rkt leaf).
+;;; PURE LEAF (4A.b-ii): requires only racket/base. (4A.a required type-lattice
+;;; for the set-once :type merge's type-unify-or-top; under LWW the :type is
+;;; new-wins, so the require is DROPPED — which also lets namespace.rkt require
+;;; THIS module directly, where 4A.a's M1 (γ) noted namespace→type-lattice would
+;;; cycle. If a future language-design decision restores set-once + type-unify
+;;; — see "Merge semantics" — the type-lattice require returns and the
+;;; namespace-layering cycle must be handled then.)
 ;;;
-;;; Three constructors (NTT model §18.15.6):
+;;; Three constructors:
 ;;;   def-bot                — no information (fresh cell)
 ;;;   (def-entry type value) — type + value sub-components
-;;;   def-collision          — contradiction (⊤): type-incompatible OR double-write
-;;;
-;;; STRUCTURAL realization follows the attribute-map-merge-fn precedent
-;;; (typing-propagators.rkt:440): ONE merge function with internal per-component
-;;; dispatch (NOT sre-decompose-generic sub-cell allocation). The "sub-cells"
-;;; framing is conceptual — type/value are sub-components merged pointwise.
-;;;
-;;; REGISTRATION-ONLY at 4A.a (Q3 LOCKED): no cell uses def-entry-merge yet
-;;; (writes/reads stay on the legacy (cons type value) shape until 4A.b's
-;;; read-flip). The merge is COMPLETE here so 4A.b doesn't revisit semantics.
-;;; This subsumes global-env-add-type-only as a separate API — "type known
-;;; before value" is structural: write (def-entry type #f); value stays at
-;;; #f-bot until committed.
-
-(require (only-in "type-lattice.rkt"  ;; :type sub-component merge (Role B equality-enforce)
-                  type-unify-or-top type-top?))
+;;;   def-collision          — contradiction (⊤): KEPT but UNREACHABLE under the
+;;;                            current last-write-wins merge (see below).
 
 (provide (struct-out def-entry)
          def-bot
@@ -55,45 +48,53 @@
 (struct def-entry (type value) #:transparent)
 
 ;; ========================================
-;; :value sub-component merge — strict set-once
+;; Merge semantics — LAST-WRITE-WINS (PPN 4C Addendum 4A.b-ii / §18.17.10)
 ;; ========================================
-;; Q3 §18.15.5 (PM Track 7 PIR §12 precedent). #f is the "value pending"
-;; marker (recursive defs: type registered first, value committed after
-;; body-check) — matches the existing (cons type #f) convention from
-;; global-env-add-type-only. #f is NEVER a legitimate value (values are
-;; elaborated exprs, never raw Racket #f).
-;;   #f + v     → v          (bot → take new; recursive-def value commit)
-;;   v + #f     → v          (keep known value)
-;;   v + v      → v          (idempotent)
-;;   v1 + v2≠   → collision   (double-write with inconsistency: CAUGHT, not absorbed)
-(define (def-value-set-once old-v new-v)
-  (cond
-    [(eq? old-v #f) new-v]
-    [(eq? new-v #f) old-v]
-    [(equal? old-v new-v) old-v]
-    [else 'value-collision]))
+;; Re-definitions are LEGAL by current language-design intent (user, 2026-06-01;
+;; whether that is correct at the language-design level is a separate, OPEN
+;; discussion). The merge sees only old+new values — it cannot distinguish a
+;; legal user redefinition from an internal double-write — so it is LAST-WRITE-
+;; WINS, NOT set-once. This matches the pre-4A.b-ii merge-replace semantics on
+;; the (cons type value) shape; the def-entry migration is a behavior-preserving
+;; REPRESENTATION change (probe-diff = 0) deploying the STRUCTURAL value shape.
+;;
+;; This merge is NON-MONOTONE (replace), like the merge-replace it succeeds —
+;; the STRUCTURAL win is the value SHAPE (facet-addressability), not a monotone
+;; join.
+;;
+;; FORWARD-COMPAT: def-collision (⊤) + the #:contradicts? registration
+;; (phase1d-registrations.rkt) are KEPT but UNREACHABLE under LWW. If the open
+;; language-design discussion later makes redefinition an error (or requires
+;; catching internal double-writes), restore SET-ONCE on :value + type-unify-or-
+;; top on :type (re-adding the type-lattice require + handling the namespace
+;; cycle) — ONLY this merge changes; the constructors + registration already
+;; support it.
 
-;; ========================================
-;; def-entry-merge — STRUCTURAL per-component merge
-;; ========================================
-;; Handles 'infra-bot (universal fresh-cell sentinel — convention shared by all
-;; infra-cell merges, e.g. merge-hasheq-identity at infra-cell.rkt:121) AND
-;; def-bot (domain bot). def-collision absorbs (⊤). Both def-entry → merge :type
-;; via type-unify-or-top, :value via set-once; either sub-component contradiction
-;; (type-top / value-collision) → def-collision. Non-conforming shapes error
-;; loudly (Correct-by-Construction: surface migration bugs at 4A.b, don't absorb).
+;; :value — new wins, UNLESS new is #f. #f is the "value pending" marker
+;;   (recursive defs: type registered first via (def-entry type #f), value
+;;   committed after body-check; whnf treats #f as stuck — reduction.rkt:3017).
+;;   #f is NEVER a legitimate value (values are elaborated exprs, never raw #f).
+;;     #f new → keep old   (a type-only re-register doesn't clobber a committed value)
+;;     v  new → v          (commit / redefinition: new wins)
+(define (def-value-lww old-v new-v)
+  (if (eq? new-v #f) old-v new-v))
+
+;; def-entry-merge — STRUCTURAL per-component LWW.
+;; Handles 'infra-bot (universal fresh-cell sentinel) + def-bot (domain bot):
+;; either → take the other. :type new-wins; :value via def-value-lww.
+;; def-collision absorbs (forward-compat; unreachable under LWW). Non-conforming
+;; shapes error loudly (Correct-by-Construction: surface migration bugs, don't
+;; absorb).
 (define (def-entry-merge old new)
   (cond
     [(or (eq? old def-bot) (eq? old 'infra-bot)) new]
     [(or (eq? new def-bot) (eq? new 'infra-bot)) old]
-    [(eq? old def-collision) old]
-    [(eq? new def-collision) new]
+    [(eq? old def-collision) old]    ;; forward-compat (unreachable under LWW)
+    [(eq? new def-collision) new]    ;; forward-compat (unreachable under LWW)
     [(and (def-entry? old) (def-entry? new))
-     (define mt (type-unify-or-top (def-entry-type old) (def-entry-type new)))
-     (define mv (def-value-set-once (def-entry-value old) (def-entry-value new)))
-     (if (or (type-top? mt) (eq? mv 'value-collision))
-         def-collision
-         (def-entry mt mv))]
+     ;; LWW (legal redefinition): new type wins; new value wins unless pending (#f).
+     (def-entry (def-entry-type new)
+                (def-value-lww (def-entry-value old) (def-entry-value new)))]
     [else
      (error 'def-entry-merge
             "unexpected value shape (expected def-bot / def-entry / def-collision / infra-bot): ~v vs ~v"
