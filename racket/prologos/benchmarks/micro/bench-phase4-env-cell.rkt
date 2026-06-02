@@ -75,7 +75,16 @@
                   current-elaborating-name
                   current-definition-dependencies
                   current-cross-module-deps
-                  global-env-lookup-type))
+                  global-env-lookup-type)
+         ;; PPN 4C Addendum 4A.d (§18.19): mnr cascade API for the faithful
+         ;; production-read model. def-entry is ENCAPSULATED in namespace.rkt's
+         ;; mnr API (Finding 5) → setup builds the env via the cons-shape API
+         ;; (module-network-from-snapshot), never raw def-entry cells.
+         (only-in "../../namespace.rkt"
+                  make-module-network
+                  module-network-add-import
+                  module-network-from-snapshot
+                  current-file-module-network-ref))
 
 ;; ============================================================
 ;; TIMING INFRASTRUCTURE
@@ -279,16 +288,106 @@
            (variant-d-setup 100))
 
 ;; ============================================================
-;; PRODUCTION-FAITHFUL VARIANT A — NEUTRALIZED (PPN 4C Addendum 4A.c-iii-e-2)
+;; A-prod (mnr-cascade) — FAITHFUL PRODUCTION READ (PPN 4C Addendum 4A.d, §18.19)
 ;; ============================================================
-;; This section modeled the now-RETIRED 3-layer param path
-;; (current-definition-cells-content → current-module-definitions-content →
-;; current-prelude-env) that global-env-lookup-type read pre-4A.b. Those 3
-;; params are retired at 4A.c-iii-e-2; global-env-lookup-type now resolves via
-;; the per-file module-network-ref cascade, so the Variant-A measurement is
-;; obsolete as written. Removed here to keep the bench compiling after the
-;; param retirement. Full rework (model the mnr-cascade lookup path) is deferred
-;; to 4A.d (bench re-run).
+;; Reworks the 4A.c-iii-e-2-neutralized "production-faithful Variant A". The
+;; pre-4A.b A-prod modeled the now-retired 3-layer PARAM walk; this models the
+;; ACTUAL post-4A.c production read: global-env-lookup-type → mnr cascade
+;; (module-network-cascading-lookup) + the Q-4A.2 dep-recording side-effect
+;; (kept until 4B). def-entry is ENCAPSULATED (§18.19 Finding 5) → setup builds
+;; the mnr via the cons-shape API (module-network-from-snapshot), NOT raw cells.
+;;
+;; Q2 (iv) SENSITIVITY SWEEP (§18.19.3): the production cascade is DEPTH-2
+;; fat-flat (driver.rkt:2144-2150 rebuilds loaded mnrs flat w/ empty imports),
+;; so a HIT walks the for/or import list until the match → per-lookup cost SCALES
+;; with the matching import's position. We measure axis A {0 local / 1 fat / 39
+;; fat} × position {early/late} × axis C {with/without current-elaborating-name}
+;; and report the SPREAD — a single-import measurement alone would risk the 4A.0
+;; bench-strawman (under-reporting late-import hits ~3-4×).
+;;
+;; HONEST FRAMING (§18.19 Finding 4): this REGENERATES (≠ re-confirms) the
+;; stale-on-disk 267-281 ns A-prod row; the new number models the mnr cascade
+;; (different machinery than the retired param walk) — both "~status-quo
+;; per-lookup". NOT chasing 280 ns / the 4A+4B 2.5× speedup (Q-4A.2: dep-recording
+;; retires at 4B, not 4A).
+
+;; env hasheq: name → (cons type value) — the cons shape the mnr write-adapter wraps.
+(define (env-of names)
+  (for/fold ([h (hasheq)]) ([nm names] [i (in-naturals)])
+    (hash-set h nm (gen-entry i))))
+
+;; A fat mnr holding `names` in its OWN cells (status mod-loaded, empty imports).
+(define (snapshot-mnr names) (module-network-from-snapshot (env-of names)))
+
+;; N filler names disjoint from (gen-names N) — populate non-matching imports.
+(define (filler-names tag N)
+  (for/list ([i (in-range N)]) (string->symbol (format "f~a-name-~a" tag i))))
+
+;; In-flight mnr with `imports` in CHECK order (head = checked first). add-import
+;; cons-prepends (newest-first), so fold over the REVERSE to preserve check order.
+(define (inflight-with-imports imports-check-order)
+  (for/fold ([m (make-module-network)])
+            ([imp (in-list (reverse imports-check-order))])
+    (module-network-add-import m imp)))
+
+;; The 4 import-topology shapes for a target name in (gen-names N):
+;;   'local           — name in the in-flight mnr's OWN cells (0 imports; local hit)
+;;   'import-1        — empty own cells; 1 fat import holds the name (canonical fixture)
+;;   'import-39-early — 39 imports, target FIRST-checked (0 import-misses before hit)
+;;   'import-39-late  — 39 imports, target LAST-checked (38 import-misses before hit)
+(define (build-mnr shape N)
+  (define names (gen-names N))
+  (define target-import (snapshot-mnr names))
+  (define (fillers) (for/list ([k (in-range 38)]) (snapshot-mnr (filler-names k N))))
+  (case shape
+    [(local)           (snapshot-mnr names)]
+    [(import-1)        (inflight-with-imports (list target-import))]
+    [(import-39-early) (inflight-with-imports (cons target-import (fillers)))]
+    [(import-39-late)  (inflight-with-imports (append (fillers) (list target-import)))]))
+
+;; with-elab: current-elaborating-name set → record-definition-dependency! +
+;; record-cross-module-dep! fire (the ~280 ns regime). no-elab: both no-op.
+(define-syntax-rule (bench-aprod-with-elab label mnr name)
+  (parameterize ([current-file-module-network-ref mnr]
+                 [current-elaborating-name 'bench-elab-target]
+                 [current-definition-dependencies (hasheq)]
+                 [current-cross-module-deps '()])
+    (bench-ns label 100000 (global-env-lookup-type name))))
+
+(define-syntax-rule (bench-aprod-no-elab label mnr name)
+  (parameterize ([current-file-module-network-ref mnr])
+    (bench-ns label 100000 (global-env-lookup-type name))))
+
+(printf "\n=== A-prod (mnr-cascade) — HEADLINE local-def hit (N=10/50/200) ===\n")
+(printf "(global-env-lookup-type via mnr cascade; 0 imports — name in own cells.\n")
+(printf " Regenerates the stale A-prod row — DIFFERENT machinery than the old 3-layer param walk.)\n")
+
+(for ([N (in-list '(10 50 200))])
+  (printf "\n--- N=~a (local-def hit) ---\n" N)
+  (define mnr (build-mnr 'local N))
+  (define name (list-ref (gen-names N) (quotient N 2)))
+  (bench-aprod-no-elab
+   (format "A-prod-no-elab.read   N=~a (mnr cascade, local hit)" N) mnr name)
+  (bench-aprod-with-elab
+   (format "A-prod-with-elab.read N=~a (+ dep-recording)" N) mnr name))
+
+(printf "\n=== A-prod (mnr-cascade) — Q2(iv) SENSITIVITY SWEEP (N=50) ===\n")
+(printf "(import-topology × position, HIT path; the for/or walk makes hit cost\n")
+(printf " scale with the matching import's position — report the SPREAD)\n")
+
+(let ([N 50])
+  (define name (list-ref (gen-names N) (quotient N 2)))
+  (define shapes '(local import-1 import-39-early import-39-late))
+  ;; Build the 4 mnrs once; reuse across both elab regimes.
+  (define mnrs (for/list ([s (in-list shapes)]) (cons s (build-mnr s N))))
+  (printf "\n--- with-elab (dep-recording on; the production regime) ---\n")
+  (for ([sm (in-list mnrs)])
+    (bench-aprod-with-elab
+     (format "A-prod-with-elab.read shape=~a N=50" (car sm)) (cdr sm) name))
+  (printf "\n--- no-elab (dep-recording off; the cascade-walk cost alone) ---\n")
+  (for ([sm (in-list mnrs)])
+    (bench-aprod-no-elab
+     (format "A-prod-no-elab.read   shape=~a N=50" (car sm)) (cdr sm) name)))
 
 ;; ============================================================
 ;; VARIANT C — Single compound cell + compound-cell-component-{ref,write}/pnet
@@ -426,4 +525,8 @@
 (printf "\n=== END OF MEASUREMENT ===\n")
 (printf "Per §18.12.3 criteria-as-guidance: review measurements together;\n")
 (printf "decide variant aligned with principles, not strict pass/fail gates.\n")
-(printf "Extended 2026-05-26 (post-audit): production-faithful A + Variant C + W4 light.\n\n")
+(printf "Extended 2026-05-26 (post-audit): production-faithful A + Variant C + W4 light.\n")
+(printf "4A.d (2026-06-01, §18.19): A-prod reworked to the mnr-cascade path + Q2(iv)\n")
+(printf "sensitivity sweep. A/B/C/D + W4-light above are the 4A.0 historical record\n")
+(printf "(variant comparison that chose D); A-prod is the FAITHFUL production read.\n")
+(printf "NOT chasing 280 ns / the 4A+4B 2.5× — dep-recording retires at 4B (Q-4A.2).\n\n")
