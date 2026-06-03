@@ -11634,6 +11634,29 @@ Findings: forward refs error **meta-free** (`meta_created:0`) — a **synchronou
 
 **NEXT (Probe 1c continuation):** a minimal **all-at-once-on-the-mnr prototype** — hand-install a forward-ref fixture's 2–3 forms as propagators on the mnr (NET-1), drive to quiescence, measure (a) does the forward ref resolve (single-network residuation works), (b) does the §6 canary (`test-first-rest-01::first-of-rest`) stay green. The mnr is undriven today; installing form-propagators + driving it is the heart of 4B. Lean: **trace-first** (confirm the mnr drives cleanly, no install) **then** the minimal install (the install-breaks-resolution risk bites at the install).
 
+#### §18.21.14 Probe 1c continuation — all-at-once-on-mnr prototype: (A) mechanically viable; A3-narrow chosen (2026-06-03)
+
+Ran the §18.21.13-NEXT prototype @ HEAD `e64cd59e` (ephemeral `/tmp/probe1c/probe-mnr-allatonce.rkt`, regenerable; Part A trace-first + Part B forward + Part C backward control).
+
+| Part | Result |
+|---|---|
+| **A — trace-first** (drive a populated mnr, NO install) | mnr drives cleanly under `run-to-quiescence-bsp` (✓ — undriven *today* but a real `prop-network`, drivable) |
+| **B — forward all-at-once** (a's residuation propagator installed BEFORE b commits) | `a := b` resolves to `5` in **one fixpoint** (✓ single-network residuation) |
+| **C — backward control** (b commits, then a installed) | resolves (✓ order-independent) |
+| **§6 canary** `test-first-rest-01` @ `e64cd59e` | **15/15** (baseline; no production change) |
+
+**What it PROVES:** the §18.2 residuation mechanism (cell-at-bot waiting → fire-on-commit) works on the **mnr substrate** — a forward ref resolves **order-independently in one fixpoint** when the residuation propagator and the referent's `def-entry` cell are **co-located on one network**. **(A) single-network is mechanically viable**, and the mnr CAN be driven (the §18.21.2 "never BSP-driven" was "never *called*," not "incapable").
+
+**What it does NOT prove (Network Reality Check — guard against over-reading):** it is a **mechanism probe with a hand-rolled value-copy propagator** (`a := b's value`), NOT real elaboration — it **conflates type+value** (hand-set `(def-entry 'NatT 5)`). The **hard case is unexercised**: at the *value* level a forward ref is *stuck* (`whnf`→`e`, reduction.rkt:3017, un-stickable), but at the *type* level the fvar case **errors synchronously** (`elaborator.rkt:761`) — the type-level forward ref is the thing that actually fails, and the probe skipped it. The **§6 install-breaks-resolution risk is still UNTESTED** (no production change → canary-green is trivial). The probe's own `dissolves NET-1↔NET-2` printf **OVER-CLAIMS**: everything was on NET-1, so it shows **A1/A3-host-on-the-mnr is viable**, not that the two-network boundary dissolves in the real setup.
+
+**Corrected A1/A3 framing (supersedes the §18.21.11.4 sub-fork phrasing):** A1 and A3 **both host the forward-ref residuation propagators ON the mnr** (the probe confirms that shared substrate). They differ in **SCOPE**, not mechanism: **A1** = full typing moves onto the mnr (≈ PM Track 13 mnr↔elab unify; big); **A3** = a **narrow `def-entry`-production layer** on the mnr (forms-as-propagators driven to one fixpoint) + type-resolution reads staying the cascade *after* the fixpoint. (An earlier dialogue mis-statement — "A3 can't residuate because the cascade is synchronous" — is WRONG: A3's forward-ref residuation IS via propagators on the mnr; the cascade is only the post-fixpoint / backward read.)
+
+**DECISION (user-confirmed 2026-06-03): probe A3-narrow first** — the smallest bet that could dissolve the boundary. The **type-level forward ref** (the synchronous `elaborator.rkt:761` error) is the part the next step must exercise against **real elaboration**, and it is where the **§6 install-breaks-resolution** risk bites.
+
+**NEXT — the A3-narrow real-elaboration probe:** wire a **minimal forward-ref *type* residuation** into the actual path (the file's defns install `def-entry`-producing propagators on the mnr, driven to one fixpoint; a forward fvar residuates on the referent's `def-entry` cell instead of erroring), as an **instrument-and-revert spike**, gated by the **§6 canary** (`test-first-rest-01::first-of-rest`) run **for real** + the `fwd-val` fixture via `process-file`. Ground the wiring first (defn handler write path `driver.rkt:1185`/`:1150`; fvar type-error `elaborator.rkt:761` + on-network fvar `typing-propagators.rkt:2474`; per-command loop vs all-at-once; who drives the mnr; the NET-1↔NET-2 coupling), then **checkpoint before the production-touching install**.
+
+**Cross-refs:** probe `/tmp/probe1c/probe-mnr-allatonce.rkt`; canary `tests/test-first-rest-01.rkt:99`; mnr API `namespace.rkt:141/222/238` + `(struct-out module-network-ref)`; `run-to-quiescence-bsp propagator.rkt:3226`; def-entry `definition-entry.rkt:48/88`; §6 risk `2026-05-19_PPN_4D_IMPLEMENTATION_DRAFT_NOTE.md` §6.
+
 ---
 
 ## Cross-track inputs (running log)
