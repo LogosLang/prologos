@@ -213,3 +213,31 @@ Replace the two O(N) folds (undeclared-writes :2869-2890 + new-cells :2894-2910)
 **Out of scope (tracked, §7.6)**: the `cell-domains`-in-fire path is latent-not-live (now guarded loudly by the debug assert; a real fix deferred to *if the assert ever fires*).
 
 **Cross-track**: resolves PPN 4C Addendum Phase 4B's **Q-4B.9** (§18.21.10) — the scheduler O(diff) fix that de-risks 4B's persistent-mnr residuation (and benefits all persistent-network work). 4B mini-design resumes from here with the fix in place.
+
+---
+
+## §11 Implications for cell-architecture choices (compound/PU vs separate cells)
+
+A reusable design heuristic distilled from the 2026-06-03 perf discussion. This optimization changed the **economics** of the compound-cell-vs-separate-cells decision that recurs across tracks (4B env cells, PM Track 12 registries, PReduce e-class cells). The decision is **semantically free** (CALM — same fixpoint either way); only the cost model moved.
+
+**What changed.** `fire-and-collect-writes`' per-fire delta-extraction is now O(changed), **independent of cells-CHAMP cardinality N**. Previously it was O(N) *per fire* — a hidden, *ongoing* tax that scaled with the total cell count and was paid on every fire across the whole network. That tax fell on the **separate-cells** strategy (more cells → bigger N → costlier every fire) and was dodged by compound cells (N components collapse to ONE cells-CHAMP entry the fold saw as a single item). **It is now gone.** So compound cells had a *hidden fourth perf advantage* — keeping the cells-CHAMP small so the scheduler's per-fire scan stayed cheap — that no longer exists.
+
+**What did NOT change** (compound cells still win these; the fix didn't touch them):
+- *Allocation*: 1 cell vs N CHAMP inserts at creation (the classic propagator-design.md § Cell Allocation Efficiency claim — still true).
+- *Memory*: 1 entry + a hasheq vs N entries (4A.0: 170 KB vs 270 KB @ N=100).
+- *Tree depth*: fewer cells → shallower cells-CHAMP → a log-factor on all per-cell ops.
+- *Reads*: a **worldview-tagged** component read (`compound-cell-component-ref/pnet`, 3-unwrap: cell-read + hash-ref + tagged-cell-read) is ~2.5× a plain cell-read (4A.0: 100–111 ns vs 44–47 ns). NB: a *plain* map-in-a-cell reads cheaply — the read penalty is specific to the **tagged/component-path PU**.
+
+**The load-bearing distinction — perf-motivated vs correctness-motivated compound cells:**
+- Reaching for a PU **to keep the network small for scheduler speed** → **retired**. Separate cells no longer impose a global per-fire externality on the rest of the network.
+- Reaching for a PU for **worldview/speculation tagging (Module-Theory Realization B), wake precision via `:component-paths`, or an embedded structure-aware-merge lattice (partial info / SRE decomposition)** → **unchanged.** These are correctness/expressiveness reasons; the optimization is orthogonal, and the tagged-read cost is the intrinsic price of those semantics, not a scheduler artifact.
+
+**Heuristic for "N related values":**
+- **Separate cells** when values are read independently / on a hot path, need first-class per-value identity (cell-id addressability for diagnostics / LSP / `.pnet` / derivation chains), or want simple per-value wake precision. (The old "but it bloats the network and taxes every fire" objection is gone.)
+- **Compound/PU cell** when (a) the group is genuinely accessed/merged as a unit, (b) memory or allocation churn dominates, (c) you need worldview/speculation tagging on a shared carrier (Realization B — often decisive on its own), or (d) the value is an embedded lattice with a structure-aware merge.
+
+**Concrete**: this retroactively de-risked the 4A.0 **Variant D** choice (separate per-name env cells over compound) — 4B's persistent mnr with N per-name cells would have paid O(N²)/file under the old fold; now O(changed). The separate-cells choice is cheaper exactly where 4B needs it.
+
+**Principle**: per Cell/Propagator/Scheduler Orthogonality the layers are *semantically* orthogonal but were *economically* coupled (scheduler per-fire cost depended on cell-layer cardinality). The fix **decoupled the economics** — compound-vs-separate is now decidable on the **local merits of the group** (reads / memory / identity / speculation), without a global per-fire-cost externality from network size.
+
+*Status*: 1 data point (this optimization). **Graduation candidate** for `propagator-design.md` § Cell Allocation Efficiency (which today argues the compound-cell efficiency case) once exercised across 4B / PM Track 12 / PReduce e-classes — then codify the nuance there with the accumulated evidence.
