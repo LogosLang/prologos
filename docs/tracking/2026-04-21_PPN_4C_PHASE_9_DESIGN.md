@@ -11611,6 +11611,29 @@ Grounding-audit `wf_f27f8b33-fb1` (3 facets + completeness critic @ `71aaf69b`) 
 
 **Cross-refs:** grounding `wf_f27f8b33-fb1`; PM 12 note `2026-06-03_PM_TRACK12_SPEC_DEFN_NAME_ORDERING_NOTE.md`; code @ `71aaf69b`: `macros.rkt:2366-2460/3335-3535/479/4058/469`, `tree-parser.rkt:590`, `form-cells.rkt:353` (dead), `definition-entry.rkt:96/65-71`, `global-env.rkt:192`, `namespace.rkt:191/228`, `macros.rkt:566`, `elaborator.rkt:377-401/577/652`, `typing-core.rkt:411`.
 
+#### §18.21.13 Probe 1c step 1 + fixture baseline + the 4B+4C-coupling sharpening (2026-06-03)
+
+Probe 1c opened on the §18.21.12-revised target (residuation on the **defn-written** `def-entry` cell; `spec` untouched). Step 1 (spec-path trace) + a forward/backward/mutual fixture baseline @ HEAD `107d8c19`.
+
+**Step 1 (spec-path trace) — CONFIRMED** (already folded into §18.21.12's verdict): `process-spec` (preparse) → `register-spec!` → spec-store only; `spec` never writes the `def-entry` cell.
+
+**Fixture baseline** (`/tmp/probe1c/*.prologos`, run via `tools/run-file.rkt` @ `107d8c19`; regenerable):
+
+| Fixture | Result | `meta_created` | `propagators` |
+|---|---|---|---|
+| **fwd-fn** (ping refs pong, both spec'd, simple forward — NOT in Probe 1's A–F) | ping defn ERROR Unbound; pong OK; `[ping 3N]` ERROR | 0 | 0 |
+| **mutual-fn** (myeven↔myodd, spec'd cycle) | 3× ERROR Unbound | 0 | 0 |
+| **bwd-val** (`def b`; `def a:=b`; `a`) — control | **0 errors** → `5N` | 0 | 0 |
+| **fwd-val** (`def a:=b`; `def b`; `a`) | a defn ERROR Unbound; b OK; `a` ERROR | 0 | 0 |
+
+Findings: forward refs error **meta-free** (`meta_created:0`) — a **synchronous "Unbound variable"** (`elaborator.rkt:761`) at the *referencing command*, because the referent's `def-entry` cell is empty *then*. Backward works via the cascade. `propagators:0` even on the working path → the env read is entirely function-call (confirms §18.20.5). A spec'd **simple** forward fn ref (fwd-fn) errors too — `spec` doesn't help (confirms §18.21.12).
+
+**THE SHARPENING (load-bearing for Q-4B.3 + the 4B/4C ordering):** the forward-ref failure is a SYNCHRONOUS error at the referencing command, when the referent's defn hasn't run. So the residuation is NOT "suspend command N, resume at command N+K" — it requires **the whole file's forms installed on ONE network driven to ONE fixpoint (4C's all-at-once)**, where the reference propagator residuates at cell-at-bot and the defn propagator writes the cell, resolving within that single fixpoint. **A per-command 4B residuation cannot deliver forward refs alone — it is inherently 4B+4C together.** §18.20.7 said this for *mutual recursion*; the fixtures show it for **any** forward ref. This is the §18.2 thesis in its honest form: ordering emerges only with one fixpoint, not per-command sequencing.
+
+**The crux, now precise (the A1/A3/B fork):** *which network hosts the all-at-once fixpoint?* NET-1 (mnr — where the `def-entry` cells live + persist across commands) → single-network (A); NET-2 (persistent-registry — where typing lives) reading NET-1 → cross-network (B). The next Probe 1c step settles it.
+
+**NEXT (Probe 1c continuation):** a minimal **all-at-once-on-the-mnr prototype** — hand-install a forward-ref fixture's 2–3 forms as propagators on the mnr (NET-1), drive to quiescence, measure (a) does the forward ref resolve (single-network residuation works), (b) does the §6 canary (`test-first-rest-01::first-of-rest`) stay green. The mnr is undriven today; installing form-propagators + driving it is the heart of 4B. Lean: **trace-first** (confirm the mnr drives cleanly, no install) **then** the minimal install (the install-breaks-resolution risk bites at the install).
+
 ---
 
 ## Cross-track inputs (running log)
