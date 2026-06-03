@@ -581,12 +581,15 @@ When BOTH main-track Phase 4 AND PM Track 12 complete, `with-speculative-rollbac
 
 Expected scope: ~20-30 min mechanical sub-phase. All 6 caller transformations are API substitution; no semantic changes (the Level-3 `speculate` form is observationally equivalent to current `with-speculative-rollback` once off-network residue is gone).
 
-**Track 12 now has THREE complementary unlocks from PPN 4C**:
+**Track 12 now has FOUR complementary unlocks from PPN 4C**:
 - 1e-α's 32 identity-or-error migration candidates (macros.rkt registries)
 - 1e-β-iii's 5 timestamp-ordered migration candidates (parameter-snapshot cells)
 - **1A-iii-a-wide Step 1 + T-1: `with-speculative-rollback` light cleanup** (6 caller migrations + mechanism retirement) — gated on Phase 4 + PM 12 core migration
+- **Addendum Phase 4B: `spec`/`defn` name-level free-ordering on-network** (the spec→`def-entry`-`:type`-cell slice) — see the dedicated note below
 
-All three flow from the same architectural act: making cells primary (retiring parameters + off-network stores) and establishing scope structure.
+The first three flow from the same architectural act: making cells primary (retiring parameters + off-network stores) and establishing scope structure.
+
+**Design input from PPN 4C Addendum Phase 4B (2026-06-03)** — `spec`/`defn` name-level free-ordering on-network: a dedicated implementation note captures the deferred consideration of making the `spec` form write the per-name `def-entry` `:type` cell on-network (so a forward/mutual reference to a spec'd name resolves via cell residuation, not the imperative FREE_ORDERING preparse name-pass). Phase 4B evaluated this for its own scope and **deferred it here** — the grounding found it is *not* entangled with the ~18 PM-12 registry parameters (good — it's a sibling concern), but it *is* a four-way entanglement (no elaboration hook → net-new `surf-spec` pipeline surface; the rich `spec-entry` can't collapse into the `def-entry` `:type` cell; the spec-store/`def-entry` two-network crossing; `maybe-inject-spec`'s preparse validation must be preserved). It realizes the PPN Track 3 designed-but-never-built spec-cell-residuation item, and couples to PM Track 13 (mnr↔elab unification dissolves the network crossing). Full grounded pickup facts (file:line @ `71aaf69b`): [`2026-06-03_PM_TRACK12_SPEC_DEFN_NAME_ORDERING_NOTE.md`](2026-06-03_PM_TRACK12_SPEC_DEFN_NAME_ORDERING_NOTE.md). Origin: PPN 4C addendum [`2026-04-21_PPN_4C_PHASE_9_DESIGN.md`](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) §18.21.11–§18.21.12.
 
 **Residual solver-config parameters**: `current-solver-strategy-override`, `current-is-eval-fn`, and other solver-specific parameters may be better addressed in a BSP-LE series sub-track or continue as parameters with test-harness registration (they're solver-local, less entangled with module loading). Scope decision at PM 12 Stage 2.
 
