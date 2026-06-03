@@ -81,4 +81,4 @@
 (bench-accum 1000 #f)
 (bench-accum 1000 #t)
 (bench-write-only 1000)
-(printf "GATE: after the fire-and-collect-writes O(diff) fix, accum ratio should approach ~1 (flat).\n")
+(printf "GATE: after the fire-and-collect-writes O(diff) fix, accum ratio should approach ~~1 (flat).\n")
