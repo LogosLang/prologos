@@ -20,7 +20,7 @@
 | Design LOCKED | converged mini-design (S.1-S.4 + D-S.3) | ✅ | §7 (2026-06-03, co-designed) |
 | S-a | `champ-diff` in champ.rkt + `tests/test-champ-diff.rkt` (differential oracle + edge cases) | ✅ | 12 tests green (450 randomized oracle trials + collisions + high-bit + deps-only + O(changed)); champ.rkt compiles; no callers yet |
 | S-b | rewire `fire-and-collect-writes` → `champ-diff`; delete 2 folds; debug ASSERT; fix stale comment | ✅ | bench **22×→0.7 (flat)**; 53 targeted + 3 D-S.3 tests green; acceptance+probe 0 errors; adversarial 1-err confirmed PRE-EXISTING (behavior-preserving) |
-| S-c | gate (full suite + bench A/B + acceptance; optional suite-wide invariant-on) | ⬜ | bench 22×→~1 ✅ (done at S-b); full suite 8327/0 + acceptance NEXT |
+| S-c | gate (full suite + bench A/B + acceptance; suite-wide invariant-on validation) | ✅ | **GATE GREEN (2026-06-03)**: full suite **8342/0** (flag OFF, prod config); suite-wide invariant validation (flag ON) — invariant holds across all 8341 prod-path tests (lone fail = our own off-by-default test, scaffold artifact); bench **22.3×→0.6/1.1 flat**; acceptance+probe 0 errors. See §10. |
 
 **Per-phase completion protocol** (DESIGN_METHODOLOGY.org Stage 4): each step ends with (a) test coverage, (b) commit, (c) tracker update, (d) dailies, (e) proceed.
 
@@ -178,6 +178,12 @@ Replace the two O(N) folds (undeclared-writes :2869-2890 + new-cells :2894-2910)
 - **Full suite GREEN (8327 / 0)** — `fire-and-collect-writes` is core scheduler; every test runs through it. Mandatory full-suite regression (not a casual edit).
 - **Acceptance file** via `process-file` (Level-3).
 
+**RESULT — GATE GREEN (2026-06-03), @ HEAD `756e1794` (S-b, production fire path = `champ-diff`):**
+- Bench: accum ratio **22.3×→0.6** (no self-clean) / 25×→1.1 (self-clean) — flat; per-cmd quiescence ~0.006 ms independent of N. O(N²)/file accumulation gone.
+- **Full suite (production config, flag OFF): 8342 / 0** (104.3s). Behavior-preserving regression gate passed.
+- **Suite-wide invariant validation (flag ON via temporary default-flip, reverted via `git checkout`): 8341/8342** — every production-path test passed *with the D-S.3 invariant asserting*. The lone failure was `test-scheduler-odiff.rkt:52` (the *"silent when OFF (default)"* test, broken only by the scaffold's default-flip; it also confirmed the assert fires correctly on a real domain-cell-mid-fire). → **the D-S.3 caller-invariant now holds as a measured fact across the entire suite**, not just static analysis.
+- Acceptance `2026-04-17-ppn-track4c.prologos` + probe `2026-04-22-1A-iii-probe.prologos` via `tools/run-file.rkt`: **0 errors**.
+
 ---
 
 ## §9 Cross-references
@@ -187,3 +193,23 @@ Replace the two O(N) folds (undeclared-writes :2869-2890 + new-cells :2894-2910)
 - **Bench**: `benchmarks/micro/bench-scheduler-accumulation.rkt` (durable gate).
 - **Principles**: DESIGN_PRINCIPLES.org § Cell / Propagator / Scheduler Orthogonality (scheduler-layer optimization, semantics-preserving, portable across schedulers); .claude/rules/on-network.md.
 - **Methodology**: DESIGN_METHODOLOGY.org Stage 4 implementation protocol; .claude/rules/testing.md (full-suite regression gate).
+
+---
+
+## §10 Outcome / close (PIR-lite, 2026-06-03)
+
+**Status: COMPLETE.** `fire-and-collect-writes` per-quiescence cost is now O(network-diff), not O(network-size). Commit chain on `main`: `4b201433` (doc+grounding) → `15249534` (design LOCKED §7) → `1f1171ca` (S-a `champ-diff` + tests) → `756e1794` (S-b rewire) → S-c (this close, doc-only — no production `.rkt` change; the gate is verification).
+
+**What was built**: a general eq?-pruned CHAMP structural-diff primitive (`champ-diff`, champ.rkt, exported) replacing the two O(N) `champ-fold` scans in the BSP fire path. Scheduler-layer, semantics-preserving (Cell/Propagator/Scheduler Orthogonality). One production path (the old folds deleted). Permanent differential oracle (`test-champ-diff.rkt`, 450 randomized trials) + the D-S.3 debug-gated invariant (`current-check-fire-invariants?`, default #f).
+
+**Metrics**: bench accum ratio 22.3×→0.6 (flat); full suite 8327→8342 (+15 tests: 12 champ-diff + 3 D-S.3), 0 failures; net production LoC ≈ flat (champ-diff added, two folds removed).
+
+**Lessons / data points** (candidates for distillation):
+- *Adversarial grounding caught a convenient-but-false audit claim*: the "collisions unreachable (perfect hash)" claim was wrong — the trie uses only the low 35 hash bits, so namespaced ids collide; the general primitive + a forced-collision test (hash 0 vs 2³⁵) empirically confirmed it. Correct-by-Construction over "can't-happen" assumptions.
+- *Investigate-don't-defer*: the D-S.3 "perpetuate + defer" instinct was the anti-pattern; the investigation (`wf_28e9d770-ad6`) showed it's neither a live bug nor structurally impossible (a caller-invariant resting on a stale code comment), and the principled response was to make the invariant structural (ASSERT) + validate it suite-wide — not defer.
+- *Validation scaffold pattern*: flip a debug-gated invariant's default ON for one suite run to convert a static caller-invariant into a measured suite-wide fact, then `git checkout`-revert. The lone "failure" was the off-by-default unit test — a benign, expected scaffold artifact.
+- *Stale-doc hazard*: propagator.rkt:2170-2171 ("net-new-cell will error during BSP fire rounds") was false and misled both the framing and a grounding facet; fixed in S-b. DEVELOPMENT_LESSONS "CALM guard errors" framing is similarly aspirational vs the actual request-emission mechanism (low-priority lessons-doc note, §7.6).
+
+**Out of scope (tracked, §7.6)**: the `cell-domains`-in-fire path is latent-not-live (now guarded loudly by the debug assert; a real fix deferred to *if the assert ever fires*).
+
+**Cross-track**: resolves PPN 4C Addendum Phase 4B's **Q-4B.9** (§18.21.10) — the scheduler O(diff) fix that de-risks 4B's persistent-mnr residuation (and benefits all persistent-network work). 4B mini-design resumes from here with the fix in place.

@@ -11536,7 +11536,9 @@ Ran Probe 2 (+ isolation 2b) main-session: a synthetic persistent prop-network a
 
 **NEW scope consideration (user-raised 2026-06-03) → Q-4B.9**: can the scheduler's per-quiescence cost be optimized **O(network-size) → O(network-diff)** (incremental / semi-naive)? If achievable, it dissolves the accumulation cost at the **scheduler layer** (Cell/Propagator/Scheduler Orthogonality — scheduler-layer, semantics-preserving), reducing the 4B/4C coupling. Investigation → §18.21.10.
 
-#### §18.21.10 Scheduler O(network-size) → O(network-diff) — diagnosis + fix options (2026-06-03) — Q-4B.9; NEXT-SESSION PRIORITY
+#### §18.21.10 Scheduler O(network-size) → O(network-diff) — diagnosis + fix options (2026-06-03) — Q-4B.9 ✅ RESOLVED
+
+**✅ RESOLVED (2026-06-03) — shipped as a STANDALONE scheduler-layer optimization.** See `docs/tracking/2026-06-03_SCHEDULER_ODIFF_OPTIMIZATION.md` (design LOCKED §7; gate GREEN §10). `fire-and-collect-writes` now uses an eq?-pruned CHAMP structural diff (`champ-diff`); the two O(N) `champ-fold` scans are gone. Bench accum ratio **22.3×→0.6 (flat)**; full suite **8342/0**; the D-S.3 caller-invariant validated suite-wide (invariant-on run). Commit chain `4b201433`→`15249534`→`1f1171ca`→`756e1794` on `main`. **4B's persistent-mnr residuation (§18.21.3) is de-risked** — per-command quiescence on the accumulating mnr is now O(changed), so the network-soup cost (Q-4B.2 / §18.21.9) is dissolved at the scheduler layer. The diagnosis + fix-options below are retained for the record.
 
 **USER-DIRECTED (2026-06-03): do this scheduler optimization FIRST, before more Phase 4B work.** It's the principled root-cause fix for the network-soup accumulation (§18.21.9), benefits ALL persistent-network work (registry networks, future incremental editing/LSP), and de-risks 4B's persistent-mnr residuation. Its own scheduler-layer concern (orthogonal to 4B's residuation design).
 
