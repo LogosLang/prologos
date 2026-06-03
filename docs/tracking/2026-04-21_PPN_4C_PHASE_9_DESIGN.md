@@ -11447,7 +11447,7 @@ The user recalled (correctly) designing an **encapsulated stratified Pocket Univ
 
 #### §18.21.5 Open questions (the work-through list — gate the LOCKs)
 
-- **Q-4B.1 (THE crux; EMPIRICAL — Probe 1)**: does a spec→defn / mutual-recursion residuation **FIRE** do **value-level reduction** (un-sticking a stuck `whnf`/`global-env-lookup-value` when a sibling's env cell commits — no metas, seam-free, lives on the persistent mnr) **OR typing re-entry + meta-alloc** (the seam)? And **for which cases**: function mutual recursion (`def a := f b; def b := g a` — `a` needs `b`'s *value*; hypothesis = value-level) vs **dependent types** (`def v : Vec n := …` where `v`'s *type* depends on `n`'s pending *value* → re-type → metas → seam). **This decides whether the seam bites the 4B gate at all.**
+- **Q-4B.1 (THE crux) — LARGELY ANSWERED by Probe 1 (§18.21.8, 2026-06-02)**: the spec→defn gate is **value-level + seam-free** (references are meta-free; metas come only from per-command un-spec'd inference) — *provided* 4B adds an up-front type-registration ordering step. The residuation splits into a **type-registration ordering pass** + a **value-level residuation propagator** on the persistent mnr (§18.21.8 reframe). **The seam (typing re-entry + cross-command metas) bites only inference-only mutual recursion** (un-spec'd cycle). **Remaining sub-case = Probe 1b**: dependent-type-on-pending-value (`def v : Vec n := …`) — the one case value-pending could force *typing* residuation; UNPROBED.
 - **Q-4B.2 (EMPIRICAL — Probe 2)**: does installing residuation propagators on the **persistent mnr** re-incur the Track 4A "network soup" accumulation cost? Do P1/P2/P3 + inertness-after-quiescence mitigate it over a file's commands? (The §3.3 open measurable.)
 - **Q-4B.3 (gated on Q-4B.1) — the seam / 4B↔4D re-ordering**: IF the fire re-types (seam present), is **4D a prerequisite** (pull the worldview-aid forward), or does **4C's all-at-once install** collapse a file's forms into one elab-network (no per-command discard between them, avoiding the seam)? Current lock is 4B→4C→4D; the interaction **direction** is design-acknowledged **unanalyzed** (§18.20.7); `D-4-7` says probe, don't pre-commit. Parent A2 does **not** help (refuted, §18.21.2).
 - **Q-4B.4 — bootstrap lock**: Option 2 (two-phase install) vs Option 3 (topology-stratum @`3153`) for the `:reads`-fixed-at-install vs body-discovers-refs-during-elaboration chicken-and-egg. **Cross-checks Q-4B.2**: the topology stratum fires on a *specific network's* BSP loop — does the persistent mnr get a topology stratum, or do residuation requests target the per-command elab-network's? Option 1 ruled out.
@@ -11462,8 +11462,8 @@ The user recalled (correctly) designing an **encapsulated stratified Pocket Univ
 
 Per `D-4-7` + the "Empirical Falsification as Audit Complement" discipline, the load-bearing leans (§18.21.3) gate on data, not argument:
 
-- **Probe 1 — the residuation-fire trace (settles Q-4B.1, THE crux)**: trace what a stuck-then-unstuck same-file reference does at HEAD today — the `whnf` reduction reading `global-env-lookup-value` (`reduction.rkt:3017`, `#f`-is-stuck) vs a typing re-entry — and **whether metas are allocated**. Two cases: (a) function mutual recursion (value-level hypothesis → seam-free); (b) dependent type referencing a pending value (re-type hypothesis → seam). Also pull the `a8b597de` §13 Galois-bridge code to see what an output-bridge fire concretely does.
-- **Probe 2 — accumulation on the persistent mnr (settles Q-4B.2)**: install N residuation propagators on a persistent network; measure memory/perf over a file's commands; check whether P1/P2/P3 + inertness keep growth sub-linear (the §3.3 open measurable). Cross-references the 4A.0/4A.d cell-allocation benches.
+- **Probe 1 — the residuation-fire trace (settles Q-4B.1) — ✅ DONE → §18.21.8**: spec→defn = value-level/seam-free via type-ordering + value-residuation; metas come only from un-spec'd inference; seam confined to inference-cycles. **Sub-case still open → Probe 1b** (dependent-type-on-pending-value; UNPROBED).
+- **Probe 2 — accumulation on the persistent mnr (settles Q-4B.2) — ← RUNNING NEXT**: install N residuation propagators on a persistent network; measure memory/perf over a file's commands; check whether P1/P2/P3 + inertness keep growth sub-linear (the §3.3 open measurable + the Track 4A "network soup" timeout). Cross-references the 4A.0/4A.d cell-allocation benches.
 
 #### §18.21.7 Cross-references
 
@@ -11471,6 +11471,44 @@ Per `D-4-7` + the "Empirical Falsification as Audit Complement" discipline, the 
 - Design: §18.2 (thesis), §18.3 (STALE env-flip framing), §18.4 (partition), §18.6 (G1-G10), §18.7 #2/#3 (locks), §18.10.1 (reset-meta-store! finding), §18.15.3 (dep-recording + bootstrap), §18.15.4 Q-4A.1.d (lock scope), §18.20.5 (honest on-network nuance), §18.20.7 (road-ahead + the "unanalyzed" seam + `D-4-7`).
 - External: NTT `2026-03-22_NTT_SYNTAX_DESIGN.md` §16.1b (PU `:embedded` kind — aspirational), §8 (Exchange / inter-stratum adjunctions — syntax-only), §17b (cross-network bridge gap); PM Track 13 `2026-05-20_PM_TRACK13_IMPLEMENTATION_NOTE.md` §3.2 (handler-as-DATA / network-values — the firing-PU's home).
 - Parent: `2026-04-17_PPN_TRACK4C_DESIGN.md` §6.3 (A2 CHAMP retirement ≠ network-replacement), §3 tracker Phase 4 ⬜.
+
+#### §18.21.8 Probe 1 results — residuation-fire trace (2026-06-02) — Q-4B.1 LARGELY ANSWERED
+
+Ran Probe 1 main-session at HEAD `e5ede4b2`: static trace of the typing/reduction paths + 6 empirical fixtures via `process-file`.
+
+**Static (verified):**
+- `infer` for a reference `(expr-fvar name)` (`typing-core.rkt:404-427`): `(if ty ty (expr-error))` — returns the env type directly when known, else `(expr-error)`. **A reference allocates NO meta**; it resolves or errors.
+- `whnf` for a reference (`reduction.rkt:3013-3018`): `(global-env-lookup-value name)` → unfold if found, else return `e` (**stuck**). Value-level; no meta, no error.
+- The §13 bridge (`make-trait-resolution-bridge-fire-fn`, `resolution.rkt:335`) operates on the per-command elab-network (`current-prop-net-box`) — within-command trait/constraint resolution, NOT a cross-command/env bridge.
+
+**Empirical (6 fixtures; `meta_created` is the key measurement):**
+
+| # | Case | Result | `meta_created` |
+|---|---|---|---|
+| A | `def b := a` forward, no spec | ERROR (a unbound) | 0 |
+| B | mutual rec **WITH** specs | ERROR (b unbound in `defn a`) | 0 |
+| C | mutual rec **NO** specs | ERROR ×3 | 4 |
+| D | self-ref `defn loop [x] [loop x]` | **WORKS** | 2 |
+| E | backward, **all spec'd**, ordered | **WORKS** | **0** |
+| F | backward, **no spec**, ordered | WORKS | 4 |
+
+**Findings:** (1) a name reference is **meta-free** — resolves or errors, never residuates-with-a-meta. (2) Metas come from **un-spec'd signature INFERENCE** (E spec'd=**0** vs F inferred=**4**, identical structure), per-defn within a command, independent of references. (3) **`spec` does NOT populate the env type a reference reads** (B failed *despite* specs) — the env type binding is created only by the **defn** (`global-env-add[-type-only]`, driver.rkt:677/699…). A current GAP.
+
+**Seam verdict (answers Q-4B.1 for the gate):** the spec→defn residuation is **value-level + seam-free** PROVIDED 4B adds an up-front **type-registration ordering** step. Because references are meta-free and metas come only from per-command inference, the cross-command residuation reduces to: register all top-level types FIRST (generalize the self-ref `global-env-add-type-only` that makes D work) → bodies type in **one pass** (refs resolve meta-free) → **value-level** reduction un-sticks on pending values (`whnf` stuck-on-`#f`) on the **persistent mnr**. **No typing re-entry, no metas-from-residuation, no seam.** The seam (typing re-entry + cross-command metas) bites **only inference-only mutual recursion** (un-spec'd cycle — HM let-rec; C's 4 metas can't be ordered away).
+
+**Design reframe (Probe-1-supported — promotes §18.21.3 lean #4):** 4B's residuation splits into **two cleanly-separated mechanisms** —
+1. **Type-registration ORDERING pass** (topology, NOT per-reference residuation): all top-level types into env cells before any body. FREE_ORDERING generalized + on the mnr; natural fit for the Option-3 topology stratum (Q-4B.4). **Surfaced bounded sub-task: wire `spec`→env-type-cell up-front** (closes the Fixture-B gap — with-spec mutual recursion is a *current* gap 4B closes).
+2. **Value-level residuation propagator** on the persistent mnr: reduction stuck-on-pending-value → `:reads` the env cell → un-sticks on commit. Seam-free, no metas. The genuine cell-at-bot residuation.
+3. **Inference-only mutual recursion** = the typing-level seam → named/deferred (4D-gated or a harder let-rec-inference slice).
+
+**REMAINING MEASUREMENT WORK (still owed to inform the design):**
+- **Probe 1b — dependent-type-on-pending-value (UNPROBED)**: `def v : Vec n := …` where `v`'s TYPE depends on `n`'s pending VALUE → the one case value-pending could block *typing* (the type can't normalize until the value commits) → possible typing residuation. The remaining edge of Q-4B.1; likely the same named/deferred bucket as inference-cycles. Needs a `Vec`/indexed fixture.
+- **Probe 2 — accumulation on the persistent mnr (Q-4B.2)**: does installing residuation propagators on the persistent mnr re-incur the Track 4A "network soup" cost; do P1/P2/P3 + inertness mitigate over a file. **← running next.**
+- **Future — validate the type-registration-pass design once built**: does the up-front ordering actually make forward = backward, meta-free, at scale (the design's own A/B gate).
+
+#### §18.21.7 Cross-references (cont.)
+
+(§18.21.7 above predates §18.21.8; Probe-1 cross-refs: `typing-core.rkt:404-427`, `reduction.rkt:3013-3018`, `resolution.rkt:335`, driver.rkt:677/699; fixtures `/tmp/probe1/*.prologos`.)
 
 ---
 
