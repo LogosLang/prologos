@@ -16,9 +16,11 @@
 | Baseline | reproduce Probe-2 bench (`bench-scheduler-accumulation.rkt`) | ✅ | 22.3× / 25× / write-only FLAT @ `d6247221` (2026-06-03); see §3 |
 | Bench fix | escape `~1` in the trailing GATE `printf` (exit-0) | ✅ | trivial; gate now exits clean |
 | Grounding-audit | parallel HEAD-pinned facets + completeness critic | ✅ | `wf_78a9d79b-341` (2026-06-03); synthesis + open design decisions → §6; all load-bearing claims R-lens-verified |
-| Option 1 (quick) | `new-cells` next-id guard — validate diagnosis, ~2× | ⬜ | ~2 lines; still O(N); empirical confirmation step |
-| Option 2 (full) | CHAMP eq?-pruned structural-diff primitive → rewire | ⬜ | the target; Stage-4 implementation protocol (§7) |
-| Gate | bench flattens + full suite 8327/0 + acceptance file | ⬜ | core scheduler → mandatory full-suite regression |
+| D-S.3 investigation | is the cold-CHAMP mid-fire drop real? | ✅ | `wf_28e9d770-ad6`; latent-not-live + harmless → ASSERT (debug). §7.1 |
+| Design LOCKED | converged mini-design (S.1-S.4 + D-S.3) | ✅ | §7 (2026-06-03, co-designed) |
+| S-a | `champ-diff` in champ.rkt + `tests/test-champ-diff.rkt` (differential oracle + edge cases) | ⬜ | green in isolation; no callers yet |
+| S-b | rewire `fire-and-collect-writes` → `champ-diff`; delete 2 folds; debug ASSERT; fix stale comment | ⬜ | probe-diff=0; targeted tests |
+| S-c | gate | ⬜ | bench 22×→~1; full suite 8327/0; acceptance |
 
 **Per-phase completion protocol** (DESIGN_METHODOLOGY.org Stage 4): each step ends with (a) test coverage, (b) commit, (c) tracker update, (d) dailies, (e) proceed.
 
@@ -118,14 +120,55 @@ The result network = `snapshot + O(writes)` CHAMP-inserts → it **shares struct
 
 ---
 
-## §7 Implementation plan (Stage 4 protocol)
+## §7 Converged design — LOCKED (2026-06-03, co-designed)
 
-Option 1 first (quick empirical validation), then Option 2 under the full Stage-4 implementation protocol:
-- **Mini-design + mini-audit** (this doc + the grounding-audit §6) — co-design the primitive's shape (signature, classification of changed vs new, collision/transient handling) with the user before writing.
-- **Per-phase principles challenge** — the diff primitive is a propagator/scheduler-layer mechanism; verify it's purely scheduler-layer (no cell/propagator semantics change) per Orthogonality.
-- **Test coverage** — the new primitive needs unit tests (collision nodes, deep/wide tries, new-cell-during-fire, contradiction-to-input-cell, namespaced parallel allocation, no-change eq? fast-path) BEFORE/with the rewire.
-- **Microbench claim verification** — re-run the gate bench at close; confirm the accum ratio flattens (the load-bearing perf claim).
-- **VAG** (adversarial) + 5-step completion.
+| # | Decision | Resolution | Principle |
+|---|---|---|---|
+| S.1 / D-S.1 | collision handling | **general** `champ-diff`, handles collision nodes structurally | Correct-by-Construction — don't depend on the unverified "collisions unreachable" claim: the trie uses only the low 35 hash bits, so namespaced cell-ids (`(ns<<32)\|local`, ns≥8 reaches bit ≥35) *can* land in a collision node |
+| S.2 | retire old folds? | **YES — one production path** (`champ-diff`); the two `champ-fold` scans are deleted from `fire-and-collect-writes` | Correct-by-Construction — no dual production path |
+| S.2 (i/ii) | parity oracle | **(i) permanent** ~10-line naive model in the test as a standing randomized differential guard (a test reference impl, NOT a production fork) | model-based testing |
+| S.3 / D-S.3 | the `cell-domains`/`cell-decomps`/`pair-decomps` drop | **ASSERT (debug-mode)** invariant at the new-cells capture point + regression test; NOT capture-all-7, NOT defer | Correct-by-Construction (make the latent silent-drop loud); Decomplection (perf change stays behavior-identical); let-pain-drive-design (no speculative capture machinery) |
+| S.4 | Option 1 first? | **No — straight to Option 2** | Completeness |
+| cleanup | stale comment | fix propagator.rkt:2170-2171 ("net-new-cell will error during BSP fire rounds" — false; contradicts the CALM contract at :17-22) | honest docs |
+
+### §7.1 D-S.3 investigation result (why ASSERT, not fix/defer)
+
+`wf_28e9d770-ad6` (4 facets + critic; load-bearing facts main-session R-lens-verified). The drop **splits by CHAMP**:
+- **`cell-decomps` + `pair-decomps`** — written ONLY by decomposition, which is dispatcher-gated: in-fire it emits a topology *request* (a captured value-write); the actual write runs in a `#:tier 'topology` handler between rounds on the canonical net (`current-bsp-fire-round?`=#f). **Structurally unreachable in-fire.** Linchpin (verified): `current-bsp-fire-round? #t` is set at EXACTLY one site (propagator.rkt:2844).
+- **`cell-domains`** — written by `net-new-cell` *itself*; `net-new-cell` IS allowed + captured in-fire. **Reachable-by-primitive, unreachable-by-current-callers** — a caller-invariant, not a structural impossibility. (The "CALM guard errors on in-fire net-new-cell" belief came from the STALE comment at propagator.rkt:2170-2171.)
+- **Impact if ever triggered**: at worst wasteful-but-correct; `cell-domains` is self-healing (re-derivable from the captured merge-fn; sole consumer is a debug-lint `enforce-component-paths!`). No corruption path.
+
+→ Not a live bug, not structurally impossible: a latent gap guarded only by convention. **ASSERT** makes the invariant structural (loud failure if any future caller violates it) at zero production cost (debug-gated) + behavior-preserving — addressing it *now* without speculative capture machinery.
+
+### §7.2 The `champ-diff` primitive (champ.rkt, exported)
+
+`(champ-diff snap-root result-root same?) → (values changed new)`:
+- Parallel walk of `result` vs `snap`, **`eq?`-pruning at every node** (identical sub-tries skipped wholesale — the existing root-level `(eq? snap-cells result-cells)` guard pushed recursively down the trie). **O(changed)**.
+- For each key present in `result`: absent in snap → `new`; present + `(same? old-val new-val)` → skip; present + not-same → `changed`. Reports result-side adds/changes; does NOT report deletions (documented precondition: `result ⊇ snap`, which holds on the fire path — cells are never removed).
+- `same?` is **caller-supplied** (champ.rkt stays prop-cell-agnostic — layering). `fire-and-collect-writes` passes prop-cell-VALUE equality (so dependents-only entry changes are correctly skipped, matching the old fold).
+- **Collision nodes** handled structurally (compare entries lists; `eq?` fast-path).
+- **Precondition** (documented + debug-assertable via the exported `champ-all-persistent?`): both CHAMPs persistent (`edit=#f`). Sound for the fire path — `net-cell-write` uses persistent `champ-insert`; owned-transient sites freeze-before-expose.
+
+### §7.3 Rewiring `fire-and-collect-writes` (S-b)
+
+Replace the two O(N) folds (undeclared-writes :2869-2890 + new-cells :2894-2910) with ONE `champ-diff`; partition its `changed`/`new` via output-set + snapshot-next-id (classification stays in the caller, NOT structural): `changed ∩ output-set` → already in value-writes (skip); `changed ∖ output-set` → undeclared; `new` → 6-tuple. `value-writes` (output-cids, O(outputs)) + `new-propagators` (next-prop-id range) unchanged. 5-field `fire-result` shape preserved. **+ the D-S.3 debug-mode ASSERT**: each new cell carries no `cell-decomps`/`pair-decomps`/`cell-domains` entry.
+
+### §7.4 Differential oracle (permanent — S.2 (i))
+
+`tests/test-champ-diff.rkt` keeps a ~10-line naive model (full-scan classify) and asserts `champ-diff` ≡ model on randomized `(snap, result)` pairs — a standing regression guard. Not a production path.
+
+### §7.5 Sub-phase partition
+
+| Sub | Deliverable | Gate |
+|---|---|---|
+| **S-a** | `champ-diff` in champ.rkt + provides; `tests/test-champ-diff.rkt` (differential oracle + forced-collision + new-key + namespaced-id + dependents-only-change + no-change eq? + deep/wide tries) | test green in isolation; nothing else touched (`champ-diff` has no callers yet) |
+| **S-b** | rewire `fire-and-collect-writes` → `champ-diff`; delete the 2 folds; add the debug-mode D-S.3 assert; fix the stale comment :2170-2171 | probe-diff = 0; targeted scheduler tests pass |
+| **S-c** | gate | bench ratio 22×→~1; full suite 8327/0; acceptance file via `process-file` |
+
+### §7.6 Out of scope (tracked)
+
+- The `cell-domains`-in-fire path is *latent-not-live*; the ASSERT makes it loud. A real fix (route any future in-fire domain-cell creation through topology, or extend capture) is deferred to *when the assert fires* (with the concrete case in hand) — DEFERRED.md noted.
+- DEVELOPMENT_LESSONS.org "CALM Requires Fixed Topology" describes the guard as *erroring* on in-fire topology change; the actual mechanism is request-emission (dispatcher self-gate). Lessons-doc accuracy note (low priority).
 
 ---
 
