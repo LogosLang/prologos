@@ -273,7 +273,9 @@
  make-trace-accumulator
  ;; B2f Phase 0: Quiescence cell-write instrumentation
  current-quiescence-write-counter
- current-quiescence-change-counter)
+ current-quiescence-change-counter
+ ;; scheduler O(diff) S-b: debug-gated D-S.3 invariant check
+ current-check-fire-invariants?)
 
 ;; ========================================
 ;; Structs
@@ -2167,9 +2169,13 @@
 ;; PPN 4C Phase 3A.d (2026-05-22): elab-speculation.rkt retired (zero callers; stranded).
 (define current-use-bsp-scheduler? (make-parameter #t))  ;; PAR Track 1 Phase 5: BSP is the default
 
-;; CALM topology guard: when #t, fire functions must not modify network topology.
-;; net-add-propagator and net-new-cell will error during BSP fire rounds.
-;; Topology changes require stratum boundaries (stratification).
+;; CALM topology guard: #t only during a fire-and-collect-writes fire round.
+;; NOT an error gate — net-new-cell and net-add-propagator ARE allowed in-fire
+;; (the new cell/propagator is captured and applied by the topology stratum
+;; between rounds; see the contract at the top of this file). The flag is read
+;; by decomposition dispatchers (emit a topology request vs decompose inline)
+;; and by net-add-propagator (defer worklist scheduling). Set at exactly one
+;; site: fire-and-collect-writes' parameterize.
 (define current-bsp-fire-round? (make-parameter #f))
 
 ;; BSP-LE Track 2 Phase 2 CORRECTION: current-assumption-viable? REMOVED.
@@ -2207,6 +2213,15 @@
 ;; - change-counter: only calls that actually modify the CHAMP (non-eq? merge result)
 (define current-quiescence-write-counter (make-parameter #f))
 (define current-quiescence-change-counter (make-parameter #f))
+
+;; Scheduler O(diff) S-b: debug-gated D-S.3 invariant check. When #t,
+;; fire-and-collect-writes errors if a mid-fire-created cell carries decomp/
+;; domain metadata (cell-domains/cell-decomps) or any pair-decomp was written
+;; in-fire — exactly the metadata bulk-merge-writes' new-cell path would DROP.
+;; Default #f => zero production cost. Turn on in tests to enforce the invariant
+;; (decomposition runs in the topology stratum between rounds, not in-fire; see
+;; docs/tracking/2026-06-03_SCHEDULER_ODIFF_OPTIMIZATION.md §7.1).
+(define current-check-fire-invariants? (make-parameter #f))
 
 ;; ========================================
 ;; Propagator Operations
@@ -2837,14 +2852,12 @@
                               (prop-id-hash pid) pid))
   (when (eq? prop 'none)
     (error 'fire-and-collect-writes "unknown propagator: ~a" pid))
-  (define snapshot-next-id (prop-network-next-cell-id snapshot-net))
   ;; Fire propagator against snapshot (with CALM topology guard).
   ;; Phase 2b: set cell-id namespace for parallel-safe cell allocation.
   (define result-net
     (parameterize ([current-bsp-fire-round? #t]
                    [current-cell-id-namespace namespace-idx])
       (fire-propagator prop snapshot-net)))  ;; PPN 4C Phase 1.5
-  (define result-next-id (prop-network-next-cell-id result-net))
   ;; Diff output cells for value writes (correct delta for merge-based cells).
   ;; A1: previously added decomp-request-cell-id unconditionally as a catch-all
   ;; for topology writes. No longer needed — topology cells are each propagator's
@@ -2863,51 +2876,63 @@
       (if (equal? old new)
           writes
           (cons (cons cid new) writes))))
-  ;; Also check for undeclared writes (e.g., contradiction writes to input cells).
-  ;; These are captured as direct-set operations (bypass merge in bulk-merge-writes)
-  ;; to avoid double-merging with non-idempotent merge functions like append.
+  ;; Scheduler O(network-diff): replace the two O(network-size) champ-fold scans
+  ;; (undeclared-writes + new-cells) with ONE eq?-pruned champ-diff over the cells
+  ;; CHAMP. Identical sub-tries share structure and are eq?-skipped wholesale, so
+  ;; the cost is O(changed), not O(network-size). The diff returns result-side
+  ;; CHANGED (present in snap, value differs) and NEW (absent from snap) cells;
+  ;; classification (value/undeclared/new) stays HERE, not in the diff. Note:
+  ;; "present in snap" <=> "existing cell" (every snapshot cell has id < next-id),
+  ;; so the structural diff subsumes the old (< (cell-id-n cid) snapshot-next-id)
+  ;; watermark. same? compares prop-cell VALUE so dependents-only entry changes
+  ;; are not reported (matching the retired undeclared fold). See
+  ;; docs/tracking/2026-06-03_SCHEDULER_ODIFF_OPTIMIZATION.md §7.
+  (define output-set (for/hasheq ([cid (in-list output-cids)]) (values cid #t)))
+  (define-values (diff-changed diff-new)
+    (champ-diff (prop-network-cells snapshot-net)
+                (prop-network-cells result-net)
+                (lambda (old-cell new-cell)
+                  (equal? (prop-cell-value old-cell) (prop-cell-value new-cell)))))
+  ;; Existing cells whose VALUE changed and are NOT declared outputs → undeclared
+  ;; (direct-set, bypass merge). Declared-output changes are already in
+  ;; value-writes (→ merge); skip them here.
   (define undeclared-writes
-    (let ([snap-cells (prop-network-cells snapshot-net)]
-          [result-cells (prop-network-cells result-net)]
-          [output-set (for/hasheq ([cid (in-list output-cids)]) (values cid #t))])
-      (if (eq? snap-cells result-cells)
-          '()
-          (champ-fold/hash
-           result-cells
-           (lambda (h cid cell acc)
-             (cond
-               [(hash-has-key? output-set cid) acc]  ;; Already in value-writes
-               [(< (cell-id-n cid) snapshot-next-id) ;; Existing cell, not new
-                (let ([old-cell (champ-lookup snap-cells h cid)])
-                  (if (eq? old-cell 'none)
-                      acc
-                      (let ([old-val (prop-cell-value old-cell)]
-                            [new-val (prop-cell-value cell)])
-                        (if (equal? old-val new-val)
-                            acc
-                            (cons (cons cid new-val) acc)))))]
-               [else acc]))
-           '()))))  ;; Phase 2b: Capture new cells via CHAMP diff (replaces range-based scan).
-  ;; With per-propagator cell-id namespaces, range scanning doesn't work —
-  ;; namespaced IDs are sparse. CHAMP diff finds cells in result not in snapshot.
-  ;; O(new cells) via structural comparison of persistent hash-array-mapped tries.
+    (for/fold ([acc '()]) ([p (in-list diff-changed)])
+      (if (hash-has-key? output-set (car p))
+          acc
+          (cons (cons (car p) (prop-cell-value (cdr p))) acc))))
+  ;; New cells (absent from snapshot) → 6-tuple with cold-side fn registries,
+  ;; exactly as the retired new-cells fold built it.
   (define new-cells
-    (let ([snap-cells (prop-network-cells snapshot-net)]
-          [result-cells (prop-network-cells result-net)])
-      (if (eq? snap-cells result-cells)
-          '()  ;; No new cells — common case, zero overhead (same CHAMP node)
-          (champ-fold/hash
-           result-cells
-           (lambda (h cid cell acc)
-             (if (not (eq? 'none (champ-lookup snap-cells h cid)))
-                 acc  ;; Cell existed in snapshot — not new
-                 ;; New cell: extract merge-fn, contra-fn, widen-fn, cell-dir
-                 (let ([merge-fn (champ-lookup (prop-network-merge-fns result-net) h cid)]
-                       [contra-fn (champ-lookup (prop-network-contradiction-fns result-net) h cid)]
-                       [widen-fn (champ-lookup (prop-network-widen-fns result-net) h cid)]
-                       [cell-dir (champ-lookup (prop-network-cell-dirs result-net) h cid)])
-                   (cons (list cid cell merge-fn contra-fn widen-fn cell-dir) acc))))
-           '()))))
+    (for/list ([p (in-list diff-new)])
+      (define cid (car p))
+      (define cell (cdr p))
+      (define h (cell-id-hash cid))
+      (list cid cell
+            (champ-lookup (prop-network-merge-fns result-net) h cid)
+            (champ-lookup (prop-network-contradiction-fns result-net) h cid)
+            (champ-lookup (prop-network-widen-fns result-net) h cid)
+            (champ-lookup (prop-network-cell-dirs result-net) h cid))))
+  ;; D-S.3 invariant (debug-gated, default off → zero production cost): decomp/
+  ;; domain metadata is never produced for a mid-fire-created cell — decomposition
+  ;; runs in the topology stratum between rounds, not in-fire (§7.1). If a future
+  ;; caller violates this, the entry bulk-merge-writes would silently DROP is
+  ;; caught LOUDLY here. cell-domains/cell-decomps are cell-id-keyed; pair-decomps
+  ;; is a memo set keyed by cell-pair → assert it wasn't mutated in-fire at all.
+  (when (current-check-fire-invariants?)
+    (for ([p (in-list diff-new)])
+      (define cid (car p))
+      (define h (cell-id-hash cid))
+      (unless (eq? 'none (champ-lookup (prop-network-cell-domains result-net) h cid))
+        (error 'fire-and-collect-writes
+               "D-S.3 invariant: mid-fire cell ~a carries a cell-domains entry (bulk-merge-writes would drop it)" cid))
+      (unless (eq? 'none (champ-lookup (prop-network-cell-decomps result-net) h cid))
+        (error 'fire-and-collect-writes
+               "D-S.3 invariant: mid-fire cell ~a carries a cell-decomps entry (would be dropped)" cid)))
+    (unless (eq? (prop-network-pair-decomps result-net)
+                 (prop-network-pair-decomps snapshot-net))
+      (error 'fire-and-collect-writes
+             "D-S.3 invariant: pair-decomps mutated in-fire (would be dropped)")))
   ;; PAR Track 1: Capture new propagators via next-prop-id comparison.
   ;; Propagators created during BSP are NOT on the worklist (deferred).
   ;; The topology stratum adds them to the canonical network and schedules them.

@@ -19,8 +19,8 @@
 | D-S.3 investigation | is the cold-CHAMP mid-fire drop real? | ✅ | `wf_28e9d770-ad6`; latent-not-live + harmless → ASSERT (debug). §7.1 |
 | Design LOCKED | converged mini-design (S.1-S.4 + D-S.3) | ✅ | §7 (2026-06-03, co-designed) |
 | S-a | `champ-diff` in champ.rkt + `tests/test-champ-diff.rkt` (differential oracle + edge cases) | ✅ | 12 tests green (450 randomized oracle trials + collisions + high-bit + deps-only + O(changed)); champ.rkt compiles; no callers yet |
-| S-b | rewire `fire-and-collect-writes` → `champ-diff`; delete 2 folds; debug ASSERT; fix stale comment | ⬜ | probe-diff=0; targeted tests |
-| S-c | gate | ⬜ | bench 22×→~1; full suite 8327/0; acceptance |
+| S-b | rewire `fire-and-collect-writes` → `champ-diff`; delete 2 folds; debug ASSERT; fix stale comment | ✅ | bench **22×→0.7 (flat)**; 53 targeted + 3 D-S.3 tests green; acceptance+probe 0 errors; adversarial 1-err confirmed PRE-EXISTING (behavior-preserving) |
+| S-c | gate (full suite + bench A/B + acceptance; optional suite-wide invariant-on) | ⬜ | bench 22×→~1 ✅ (done at S-b); full suite 8327/0 + acceptance NEXT |
 
 **Per-phase completion protocol** (DESIGN_METHODOLOGY.org Stage 4): each step ends with (a) test coverage, (b) commit, (c) tracker update, (d) dailies, (e) proceed.
 
