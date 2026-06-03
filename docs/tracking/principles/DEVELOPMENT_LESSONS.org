@@ -653,9 +653,16 @@ the decomposition that would detect the violation never materialized.
 *The invariant*: Within a stratum, the network topology is FIXED.
 Propagator fire functions may only write cell values
 (=net-cell-write=). Creating cells (=net-new-cell=) or propagators
-(=net-add-propagator=) requires a stratum boundary. A dynamic guard
-(=current-bsp-fire-round?=) enforces this — violation produces an
-immediate error rather than a silent wrong result.
+(=net-add-propagator=) requires a stratum boundary. *Mechanism (corrected
+2026-06-03)*: =current-bsp-fire-round?= is NOT an error gate — it is a
+DISPATCH DISCRIMINATOR. Decomposition dispatchers read it and emit a topology
+REQUEST when in-fire (decomposing inline only under DFS); =net-add-propagator=
+reads it to DEFER worklist scheduling. =net-new-cell= and =net-add-propagator=
+are ALLOWED in-fire and CAPTURED (applied by the topology stratum between
+rounds) — they do NOT error. (The earlier "guard produces an immediate error"
+framing, and the stale code comment at =propagator.rkt:2170-2171=, were
+inaccurate; verified during the scheduler O(diff) work — see
+=docs/tracking/2026-06-03_SCHEDULER_ODIFF_OPTIMIZATION.md= §7.1.)
 
 *The architectural pattern*: Separate two fixpoints.
 1. *Topology fixpoint*: what cells and propagators exist. The set of
@@ -681,9 +688,14 @@ stratum (BSP over expanded topology) → repeat until neither changes.
   CALM guard will catch it at the API level, preventing silent
   incorrectness.
 
-This is the Correct-by-Construction principle applied to scheduling:
-the guard makes the invariant structural (error on violation) rather
-than maintained by discipline (hoping fire functions don't add cells).
+This is the Correct-by-Construction principle applied to scheduling: the
+dispatcher self-gate makes *decomposition* structural (request-emission, not
+an inline topology change in-fire). Note (2026-06-03): the flag does NOT
+hard-error on a rogue in-fire =net-new-cell=, so the narrower invariant "a
+mid-fire-created cell carries no decomp/domain metadata" is convention-
+maintained — the scheduler O(diff) work added a debug-mode assert
+(=current-check-fire-invariants?=) that makes a violation LOUD, and validated
+the invariant holds suite-wide.
 
 See commit =af35f5e= (CALM topology guard implementation).
 
