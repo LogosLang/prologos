@@ -18,7 +18,7 @@
 | Grounding-audit | parallel HEAD-pinned facets + completeness critic | ✅ | `wf_78a9d79b-341` (2026-06-03); synthesis + open design decisions → §6; all load-bearing claims R-lens-verified |
 | D-S.3 investigation | is the cold-CHAMP mid-fire drop real? | ✅ | `wf_28e9d770-ad6`; latent-not-live + harmless → ASSERT (debug). §7.1 |
 | Design LOCKED | converged mini-design (S.1-S.4 + D-S.3) | ✅ | §7 (2026-06-03, co-designed) |
-| S-a | `champ-diff` in champ.rkt + `tests/test-champ-diff.rkt` (differential oracle + edge cases) | ⬜ | green in isolation; no callers yet |
+| S-a | `champ-diff` in champ.rkt + `tests/test-champ-diff.rkt` (differential oracle + edge cases) | ✅ | 12 tests green (450 randomized oracle trials + collisions + high-bit + deps-only + O(changed)); champ.rkt compiles; no callers yet |
 | S-b | rewire `fire-and-collect-writes` → `champ-diff`; delete 2 folds; debug ASSERT; fix stale comment | ⬜ | probe-diff=0; targeted tests |
 | S-c | gate | ⬜ | bench 22×→~1; full suite 8327/0; acceptance |
 
