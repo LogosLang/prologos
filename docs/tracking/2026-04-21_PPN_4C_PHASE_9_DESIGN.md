@@ -11448,7 +11448,8 @@ The user recalled (correctly) designing an **encapsulated stratified Pocket Univ
 #### §18.21.5 Open questions (the work-through list — gate the LOCKs)
 
 - **Q-4B.1 (THE crux) — LARGELY ANSWERED by Probe 1 (§18.21.8, 2026-06-02)**: the spec→defn gate is **value-level + seam-free** (references are meta-free; metas come only from per-command un-spec'd inference) — *provided* 4B adds an up-front type-registration ordering step. The residuation splits into a **type-registration ordering pass** + a **value-level residuation propagator** on the persistent mnr (§18.21.8 reframe). **The seam (typing re-entry + cross-command metas) bites only inference-only mutual recursion** (un-spec'd cycle). **Remaining sub-case = Probe 1b**: dependent-type-on-pending-value (`def v : Vec n := …`) — the one case value-pending could force *typing* residuation; UNPROBED.
-- **Q-4B.2 (EMPIRICAL — Probe 2)**: does installing residuation propagators on the **persistent mnr** re-incur the Track 4A "network soup" accumulation cost? Do P1/P2/P3 + inertness-after-quiescence mitigate it over a file's commands? (The §3.3 open measurable.)
+- **Q-4B.2 (EMPIRICAL) — ANSWERED by Probe 2 (§18.21.9, 2026-06-03)**: yes — per-command quiescence on the accumulating mnr grows ~22×/1000 cmds (O(N²)/file), and the cost is in **`run-to-quiescence`** (write-only is flat; it is *not* the cells, *not* propagator-count). **Mitigation = 4C's all-at-once / one-quiescence-per-file** (O(N)) — couples 4B↔4C; **+ P2 self-cleaning for memory** (4.5×). File-bounded (mnr resets per file). Opens **Q-4B.9** (scheduler O(diff)).
+- **Q-4B.9 (NEW, user-raised 2026-06-03) — scheduler O(network-size) → O(network-diff)**: can `run-to-quiescence`'s per-quiescence cost be made incremental (only re-process the changed sub-region), dissolving the accumulation at the **scheduler layer** rather than relying on 4C's all-at-once batching? What is the actual O(N) operation in `run-to-quiescence`/`run-to-quiescence-bsp` (worklist re-seed? convergence scan? snapshot/merge?), and is an incremental/semi-naive variant semantics-preserving (CALM)? **Candidate to bring into scope** (its own scheduler-layer concern per Cell/Propagator/Scheduler Orthogonality; benefits ALL persistent-network work, not just 4B). Investigation → §18.21.10.
 - **Q-4B.3 (gated on Q-4B.1) — the seam / 4B↔4D re-ordering**: IF the fire re-types (seam present), is **4D a prerequisite** (pull the worldview-aid forward), or does **4C's all-at-once install** collapse a file's forms into one elab-network (no per-command discard between them, avoiding the seam)? Current lock is 4B→4C→4D; the interaction **direction** is design-acknowledged **unanalyzed** (§18.20.7); `D-4-7` says probe, don't pre-commit. Parent A2 does **not** help (refuted, §18.21.2).
 - **Q-4B.4 — bootstrap lock**: Option 2 (two-phase install) vs Option 3 (topology-stratum @`3153`) for the `:reads`-fixed-at-install vs body-discovers-refs-during-elaboration chicken-and-egg. **Cross-checks Q-4B.2**: the topology stratum fires on a *specific network's* BSP loop — does the persistent mnr get a topology stratum, or do residuation requests target the per-command elab-network's? Option 1 ruled out.
 - **Q-4B.5 — factory shape**: the 2-level dispatch (3 surf-predicate + 27 elab-result arms). Which arms → propagators vs stay imperative? (Query/introspection arms write nothing; `eval`/`infer`/`defr` already route on-network with imperative fallback.) §18.7 #3 propagators-by-default.
@@ -11463,7 +11464,8 @@ The user recalled (correctly) designing an **encapsulated stratified Pocket Univ
 Per `D-4-7` + the "Empirical Falsification as Audit Complement" discipline, the load-bearing leans (§18.21.3) gate on data, not argument:
 
 - **Probe 1 — the residuation-fire trace (settles Q-4B.1) — ✅ DONE → §18.21.8**: spec→defn = value-level/seam-free via type-ordering + value-residuation; metas come only from un-spec'd inference; seam confined to inference-cycles. **Sub-case still open → Probe 1b** (dependent-type-on-pending-value; UNPROBED).
-- **Probe 2 — accumulation on the persistent mnr (settles Q-4B.2) — ← RUNNING NEXT**: install N residuation propagators on a persistent network; measure memory/perf over a file's commands; check whether P1/P2/P3 + inertness keep growth sub-linear (the §3.3 open measurable + the Track 4A "network soup" timeout). Cross-references the 4A.0/4A.d cell-allocation benches.
+- **Probe 2 — accumulation on the persistent mnr (settles Q-4B.2) — ✅ DONE → §18.21.9**: per-command quiescence grows ~22×/1000 (O(N²)/file); cost is in `run-to-quiescence` (write-only flat); 4C all-at-once = mitigation; P2 = memory. **Opened Q-4B.9** (scheduler O(diff)) → §18.21.10.
+- **Probe 1b — dependent-type-on-pending-value (Q-4B.1 remaining sub-case) — still open** (needs a `Vec`/indexed fixture).
 
 #### §18.21.7 Cross-references
 
@@ -11509,6 +11511,30 @@ Ran Probe 1 main-session at HEAD `e5ede4b2`: static trace of the typing/reductio
 #### §18.21.7 Cross-references (cont.)
 
 (§18.21.7 above predates §18.21.8; Probe-1 cross-refs: `typing-core.rkt:404-427`, `reduction.rkt:3013-3018`, `resolution.rkt:335`, driver.rkt:677/699; fixtures `/tmp/probe1/*.prologos`.)
+
+#### §18.21.9 Probe 2 results — accumulation on the persistent mnr (2026-06-03) — Q-4B.2 ANSWERED
+
+Ran Probe 2 (+ isolation 2b) main-session: a synthetic persistent prop-network accumulating N fire-once residuation propagators across N "commands", measuring per-command quiescence time + memory.
+
+**Measurements (N=1000):**
+
+| Variant | per-cmd quiescence first50→last50 | growth | mem/cmd |
+|---|---|---|---|
+| no self-clean | 0.017 → 0.383 ms | **22×** | 717 B |
+| self-clean (P2) | 0.016 → 0.365 ms | 23× | **159 B** |
+| **write-only (2b: no props, no quiescence)** | 0.0026 → 0.001 ms | **0.4× (FLAT)** | — |
+
+**Findings:**
+1. **The network-soup accumulation cost is REAL** — per-command quiescence grows ~22× over 1000 commands (≈ O(network-size) per command → **O(N²) over a file**). Confirms §3.3's open concern empirically.
+2. **The cost is in `run-to-quiescence`, NOT the cells/representation** — write-only (`net-new-cell` + `net-cell-write`, no quiescence) is **FLAT** (~0.001 ms regardless of N). The immutable-CHAMP write is O(1)-ish; the **scheduler's** per-command cost is what grows.
+3. **NOT propagator-count-bound either** — P2 self-cleaning (remove the fire-once propagator after firing) cut **memory 4.5×** (717→159 B/cmd) but left the **time** growth unchanged. So the time scales with the persistent network's **size**, not the live-propagator count.
+
+**Implications for 4B/4C (the key design connection):**
+- **4C's "all-at-once install" IS the network-soup mitigation** (not just the mutual-recursion enabler). Per-command quiescence on an accumulating mnr is O(N²); installing all forms + ONE file-level quiescence is O(N). The residuation propagators on the persistent mnr want to be driven by 4C's all-at-once / one-quiescence-per-file, NOT per-command. **This couples 4B and 4C more tightly than the road-ahead's "4B then 4C" implied** — 4B's persistent-mnr viability at scale depends on 4C's all-at-once.
+- **P2 self-cleaning is needed for memory** regardless (4.5× reduction). Residuation propagators are fire-once by nature → P2 applies directly.
+- **File-bounded**: the mnr resets per file, so the cost is O(file-size²) per-command or O(file-size) all-at-once. Typical files (<200 defs): negligible. Large libraries (1000 defs): all-at-once matters.
+
+**NEW scope consideration (user-raised 2026-06-03) → Q-4B.9**: can the scheduler's per-quiescence cost be optimized **O(network-size) → O(network-diff)** (incremental / semi-naive)? If achievable, it dissolves the accumulation cost at the **scheduler layer** (Cell/Propagator/Scheduler Orthogonality — scheduler-layer, semantics-preserving), reducing the 4B/4C coupling. Investigation → §18.21.10 (TBD).
 
 ---
 
