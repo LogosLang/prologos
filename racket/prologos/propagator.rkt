@@ -3175,11 +3175,39 @@
 ;; topology is stable so its fork sees the complete network.
 (define stratum-handlers (box '()))
 
+;; PPN 4C Addendum Phase 4B.2-c (§18.21.19 Q4): the cell-id indices a fresh
+;; make-prop-network pre-allocates. The zero-NET-2 invariant (§18.21.19.1 D1 —
+;; driving a network that has ONLY the pre-allocated cells, e.g. the per-file
+;; module-network-ref, fires no stratum handler because process-tier reads each
+;; handler's request cell from the net + skips on empty) is CONTINGENT on every
+;; registered handler's request cell being pre-allocated. A handler on a
+;; non-pre-allocated cell would CRASH at the drive (process-tier's net-cell-read
+;; of the absent cell errors "unknown cell"). Computed once from a canonical
+;; fresh network (ACTUAL presence via the cells CHAMP keys — no contiguity
+;; assumption). 4B.2 is the first phase to DRIVE a non-elaboration network (the
+;; mnr), so this latent fragility becomes load-bearing here.
+(define preallocated-cell-ns
+  (for/hasheqv ([k (in-list (champ-keys (prop-network-cells (make-prop-network))))])
+    (values (cell-id-n k) #t)))
+
 (define (register-stratum-handler! request-cell-id handler-fn
                                    #:tier [tier 'value]
                                    #:reset-value [reset-value (hasheq)])
   (unless (memq tier '(topology value))
     (error 'register-stratum-handler! "tier must be 'topology or 'value, got ~a" tier))
+  ;; PPN 4C Addendum Phase 4B.2-c (§18.21.19 Q4): superset-contingency guard —
+  ;; catch a mis-registered handler at REGISTRATION (module-load), loudly +
+  ;; structurally, rather than as a cryptic "unknown cell" crash when the mnr is
+  ;; driven (the zero-NET-2 invariant's prerequisite).
+  (unless (hash-has-key? preallocated-cell-ns (cell-id-n request-cell-id))
+    (error 'register-stratum-handler!
+           (string-append
+            "request cell ~a is NOT pre-allocated by make-prop-network. Driving a "
+            "network that has only the pre-allocated cells (e.g. the per-file "
+            "module-network-ref, PPN 4C Addendum 4B.2) would crash on the handler's "
+            "net-cell-read of the absent cell. Pre-allocate the request cell in "
+            "make-prop-network alongside the other stratum-request cells.")
+           request-cell-id))
   (set-box! stratum-handlers
             (append (unbox stratum-handlers)
                     (list (list request-cell-id handler-fn tier reset-value)))))

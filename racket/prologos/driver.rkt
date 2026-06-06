@@ -1754,6 +1754,28 @@
 ;; ========================================
 ;; Process all commands from a file
 ;; ========================================
+;; PPN 4C Addendum Phase 4B.2-c (§18.21.19 Q1, Option C): drive the in-flight
+;; per-file mnr (NET-1) to quiescence at the FILE-unit boundary. TODAY this is a
+;; LIVE NO-OP — an empty fixpoint: the mnr has ZERO propagators installed, so the
+;; scheduler returns the net unchanged (eq?), and the zero-NET-2 invariant
+;; (§18.21.19.1 D1) makes driving it provably fire NO NET-2 typing handler. 4B.3
+;; installs the δ residuation propagators this same drive then runs — with NO
+;; flag-flip (behavior emerges from what's installed; this is an empty fixpoint,
+;; NOT the "validated≠deployed" anti-pattern). Scheduler-agnostic via
+;; current-quiescence-scheduler (Cell/Propagator/Scheduler Orthogonality). Reads
+;; the FINAL mnr (the param accumulates defs through the form loop) and writes the
+;; driven prop-net back only when it actually changed (true no-op otherwise).
+;; Option C: process-file only at 4B.2; module-load + string-path drive are 4B.3
+;; (δ-dependent timing + the rebuilt-vs-in-flight module-load asymmetry).
+(define (drive-file-mnr!)
+  (define mnr (current-file-module-network-ref))
+  (when mnr
+    (define net (module-network-ref-prop-net mnr))
+    (define driven ((current-quiescence-scheduler) net))
+    (unless (eq? driven net)
+      (current-file-module-network-ref
+       (struct-copy module-network-ref mnr [prop-net driven])))))
+
 (define (process-file path #:verbose [verbose? #f])
   ;; Track 10B Phase A1: always scope a fresh network per call.
   ;; PPN 4C Addendum Phase 4A.c-ii-b (lifecycle): bind the in-flight mnr at the
@@ -1831,6 +1853,10 @@
                                   s)))
                           (emit-verbose-command! cmd-i form-str snap-before snap-after elapsed))])
                 result))))))
+  ;; PPN 4C Addendum Phase 4B.2-c (§18.21.19 Q1): drive NET-1 (the per-file mnr)
+  ;; at the file-unit boundary — all defs are written, the mnr is final. LIVE
+  ;; NO-OP today (zero propagators); 4B.3's δ residuation propagators run here.
+  (drive-file-mnr!)
   ;; Emit formatted error diagnostics to stderr when enabled (test runner integration)
   (when (current-emit-error-diagnostics)
     (for ([r (in-list results)])

@@ -355,6 +355,35 @@
       (check-equal? (module-network-cascading-lookup mnr n) #f))))
 
 ;; ========================================
+;; 2h. NET-1 drive + zero-NET-2 invariant (PPN 4C Addendum Phase 4B.2-c, §18.21.19)
+;; ========================================
+;; Driving the per-file mnr (NET-1) is a structural NO-OP at 4B.2: the mnr has
+;; ZERO propagators installed, so the scheduler returns the net unchanged, and
+;; every NET-2 typing handler is skipped (process-tier reads its EMPTY request
+;; cell). The superset-contingency guard (register-stratum-handler!) keeps that
+;; invariant safe — every handler's request cell is pre-allocated by
+;; make-prop-network (else the drive would crash on an absent cell).
+
+(test-case "zero-NET-2: driving a fresh def-bot-only mnr is a structural no-op (D1)"
+  ;; make-module-network → make-prop-network: all stratum-request cells
+  ;; pre-allocated EMPTY, zero propagators. Driving (through the production
+  ;; scheduler = BSP by default) fires no handler (the empty-guard skips each)
+  ;; and returns the SAME net (eq?) — empty worklist. A missing handler cell
+  ;; would crash here (process-tier net-cell-read), so this also exercises the
+  ;; superset invariant for every handler loaded in this test image.
+  (define-values (mnr1 _a) (module-network-add-definition (make-module-network) 'a def-bot))
+  (define-values (mnr2 _b) (module-network-add-definition mnr1 'b def-bot))
+  (define net (module-network-ref-prop-net mnr2))
+  (check-eq? (run-to-quiescence net) net))
+
+(test-case "register-stratum-handler!: rejects a non-pre-allocated request cell (4B.2-c guard)"
+  ;; cell-id 999 is NOT pre-allocated by make-prop-network → registering a handler
+  ;; on it must ERROR (the guard fires BEFORE the set-box!, so no box pollution),
+  ;; rather than crash later when the mnr is driven over the absent cell.
+  (check-exn exn:fail?
+    (lambda () (register-stratum-handler! (cell-id 999) (lambda (net pending) net)))))
+
+;; ========================================
 ;; 2e. external-definitions view (PPN 4C Addendum Phase 4A.c-ii-a, D2 Path Y)
 ;; ========================================
 ;; external-definitions-snapshot (values) / external-definition-names (keys),
