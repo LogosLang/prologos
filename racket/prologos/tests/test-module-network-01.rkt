@@ -13,8 +13,9 @@
          "../propagator.rkt"
          "../infra-cell.rkt"
          "../namespace.rkt"
-         "../global-env.rkt"  ;; PPN 4C Addendum Phase 4A.c-ii-a: external-definitions-* tests
-         "../definition-entry.rkt")  ;; PPN 4C Addendum Phase 4B.2-a: def-bot (pre-alloc keys-leak test)
+         "../global-env.rkt"  ;; PPN 4C Addendum Phase 4A.c-ii-a: external-definitions-* tests + 4B.2-b prealloc-def-cell!
+         "../definition-entry.rkt"  ;; PPN 4C Addendum Phase 4B.2-a: def-bot (pre-alloc keys-leak test)
+         "../macros.rkt")  ;; PPN 4C Addendum Phase 4B.2-b: preparse-expand-all + current-preparse-registry (pass integration test)
 
 ;; ========================================
 ;; 1. Module Lifecycle Lattice
@@ -289,6 +290,69 @@
   ;; names-view and values-view AGREE (no asymmetry; the leak is closed)
   (check-equal? (sorted-syms (module-network-cascade-names mnr2))
                 (sorted-syms (hash-keys (module-network-cascade-materialize mnr2)))))
+
+;; ========================================
+;; 2g. def-bot pre-allocation (PPN 4C Addendum Phase 4B.2-b, §18.21.19)
+;; ========================================
+;; prealloc-def-cell! (global-env.rkt) seeds a def-bot cell IF the name is
+;; absent — idempotent, ORDER-INSENSITIVE (FREE_ORDERING), never clobbers a
+;; real value, and a def-bot cell reads #f (= same Unbound as absent) so it is
+;; BEHAVIOR-PRESERVING. The preparse-expand-all Pass 1.5 wires it for every
+;; user def/defn name.
+
+(test-case "prealloc-def-cell!: a pre-allocated name has a cell but reads #f (def-bot)"
+  (parameterize ([current-file-module-network-ref (make-module-network)])
+    (prealloc-def-cell! 'pend)
+    (define mnr (current-file-module-network-ref))
+    (check-true (hash-has-key? (module-network-ref-cell-id-map mnr) 'pend))  ;; cell exists
+    (check-equal? (module-network-cascading-lookup mnr 'pend) #f)))           ;; reads #f = unbound
+
+(test-case "prealloc-def-cell!: ORDER-INSENSITIVE (FREE_ORDERING — same name set, any order)"
+  (define (prealloc-in-order names)
+    (parameterize ([current-file-module-network-ref (make-module-network)])
+      (for ([n (in-list names)]) (prealloc-def-cell! n))
+      (current-file-module-network-ref)))
+  (define fwd (prealloc-in-order '(aa bb cc)))
+  (define rev (prealloc-in-order '(cc bb aa)))
+  ;; same NAME SET regardless of source order (cell-ids may differ; the observable does not)
+  (check-equal? (sorted-syms (hash-keys (module-network-ref-cell-id-map fwd)))
+                (sorted-syms (hash-keys (module-network-ref-cell-id-map rev))))
+  (check-equal? (sorted-syms (hash-keys (module-network-ref-cell-id-map fwd)))
+                (sorted-syms '(aa bb cc)))
+  (for ([n '(aa bb cc)])
+    (check-equal? (module-network-cascading-lookup fwd n) #f)
+    (check-equal? (module-network-cascading-lookup rev n) #f)))
+
+(test-case "prealloc-def-cell!: idempotent — re-pre-alloc reuses the same cell"
+  (parameterize ([current-file-module-network-ref (make-module-network)])
+    (prealloc-def-cell! 'z)
+    (define cid1 (hash-ref (module-network-ref-cell-id-map (current-file-module-network-ref)) 'z))
+    (prealloc-def-cell! 'z)
+    (define cid2 (hash-ref (module-network-ref-cell-id-map (current-file-module-network-ref)) 'z))
+    (check-equal? cid1 cid2)))
+
+(test-case "prealloc-def-cell!: does NOT clobber an existing real value (present → no-op)"
+  (parameterize ([current-file-module-network-ref (make-module-network)])
+    (global-env-add 'y 'Int 42)               ;; real value first (def-bot is the merge identity)
+    (prealloc-def-cell! 'y)                    ;; pre-alloc after — must NOT overwrite
+    (check-equal? (module-network-cascading-lookup (current-file-module-network-ref) 'y)
+                  (cons 'Int 42))))            ;; preserved
+
+;; Pass-integration: the preparse-expand-all Pass 1.5 actually pre-allocs
+;; (otherwise a head-match bug would be invisible — pre-alloc is behavior-
+;; preserving, so the suite wouldn't catch it). Mirrors test-defmacro's
+;; direct preparse-expand-all pattern.
+(test-case "preparse-expand-all: pre-allocates def-bot cells for user def/defn (incl. def-)"
+  (parameterize ([current-file-module-network-ref (make-module-network)]
+                 [current-preparse-registry (current-preparse-registry)])
+    (preparse-expand-all (list (datum->syntax #f '(def aa := 1))
+                               (datum->syntax #f '(defn bb [x] x))
+                               (datum->syntax #f '(def- cc := 2))))  ;; private suffix too
+    (define mnr (current-file-module-network-ref))
+    (for ([n '(aa bb cc)])
+      (check-true (hash-has-key? (module-network-ref-cell-id-map mnr) n))   ;; pre-allocated
+      ;; behavior-preserving: a pre-allocated-but-unground name reads #f (Unbound)
+      (check-equal? (module-network-cascading-lookup mnr n) #f))))
 
 ;; ========================================
 ;; 2e. external-definitions view (PPN 4C Addendum Phase 4A.c-ii-a, D2 Path Y)

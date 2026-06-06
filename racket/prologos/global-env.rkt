@@ -24,6 +24,7 @@
          global-env-lookup-value
          global-env-add
          global-env-add-type-only
+         prealloc-def-cell!  ;; PPN 4C Addendum Phase 4B.2-b: def-bot pre-allocation (preparse sweep)
          global-env-remove!
          global-env-names
          global-env-snapshot
@@ -44,7 +45,8 @@
          all-definition-locations)
 
 (require "infra-cell.rkt"   ;; merge-replace, merge-hasheq-identity (Phase 1e-α split)
-         "namespace.rkt")   ;; PPN 4C Addendum Phase 4A.a (2026-05-28) Q-4A.6 cycle-break: module-network-ref + APIs consumed at 4A.b read-flip
+         "namespace.rkt"    ;; PPN 4C Addendum Phase 4A.a (2026-05-28) Q-4A.6 cycle-break: module-network-ref + APIs consumed at 4A.b read-flip
+         "definition-entry.rkt")  ;; PPN 4C Addendum Phase 4B.2-b: def-bot (prealloc-def-cell!). Pure leaf → no cycle.
          ;; PPN 4C Addendum Phase 4B.1: racket/list (remove-duplicates) + racket/set
          ;; (seteq/set-add) requires retired — sole consumers were global-env-names
          ;; (cascade-only since 4A.c-iii-b) + dep-recording (retired 4B.1).
@@ -105,6 +107,24 @@
        (module-network-write mnr entry-name entry)
        (let-values ([(mnr* _cid) (module-network-add-definition mnr entry-name entry)])
          mnr*))))
+
+;; PPN 4C Addendum Phase 4B.2-b (§18.21.19): pre-allocate a def-bot cell for
+;; `name` in the in-flight mnr IF the name is absent. IDEMPOTENT / ORDER-
+;; INSENSITIVE — it reads only cell-id-map KEY presence (never a cell VALUE)
+;; to decide, so the FREE_ORDERING guard holds (pre-allocating a name set in
+;; any order yields the same cells). A def-bot cell reads #f via the lookup
+;; adapter (def-entry->cons: def-bot → #f) = the SAME "Unbound variable" as an
+;; absent name, so pre-alloc is BEHAVIOR-PRESERVING at 4B.2 (a forward-ref
+;; still errors); 4B.3's δ residuation propagator turns the def-bot read into
+;; a wait. Never clobbers a real value — def-bot is the def-entry-merge
+;; identity, so even a present cell is left untouched (we no-op on present
+;; rather than write, avoiding a redundant struct-copy). Called by
+;; preparse-expand-all's def-bot pre-alloc pass for every user def/defn name.
+(define (prealloc-def-cell! name)
+  (define mnr (or (current-file-module-network-ref) (make-module-network)))
+  (unless (hash-ref (module-network-ref-cell-id-map mnr) name #f)
+    (let-values ([(mnr* _cid) (module-network-add-definition mnr name def-bot)])
+      (current-file-module-network-ref mnr*))))
 
 ;; Add a definition to the global environment.
 ;; PPN 4C Addendum Phase 4A.c-iii-a: dispatch COLLAPSED to always-mnr — the
