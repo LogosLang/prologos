@@ -302,7 +302,15 @@
     (define acc1
       (for/fold ([a acc])
                 ([(name cid) (in-hash (module-network-ref-cell-id-map m))])
-        (if (eq? (net-cell-read net cid) 'infra-bot)
+        ;; PPN 4C Addendum Phase 4B.2-a: skip def-bot too. A pre-allocated
+        ;; but-unground name (def-bot cell, from the 4B.2-b pre-alloc sweep)
+        ;; must NOT leak into the keys-view — mirror cascade-materialize
+        ;; (the values-view, :288) + def-entry->cons (:179) which both treat
+        ;; def-bot ≡ 'infra-bot ("no definition yet"). Makes pre-alloc a true
+        ;; keys-view no-op (was: only 'infra-bot skipped → def-bot leaked into
+        ;; global-env-names → repl :env display).
+        (define v (net-cell-read net cid))
+        (if (or (eq? v 'infra-bot) (eq? v def-bot))
             a
             (hash-set a name #t))))
     (for/fold ([a acc1])

@@ -13,7 +13,8 @@
          "../propagator.rkt"
          "../infra-cell.rkt"
          "../namespace.rkt"
-         "../global-env.rkt")  ;; PPN 4C Addendum Phase 4A.c-ii-a: external-definitions-* tests
+         "../global-env.rkt"  ;; PPN 4C Addendum Phase 4A.c-ii-a: external-definitions-* tests
+         "../definition-entry.rkt")  ;; PPN 4C Addendum Phase 4B.2-a: def-bot (pre-alloc keys-leak test)
 
 ;; ========================================
 ;; 1. Module Lifecycle Lattice
@@ -266,6 +267,28 @@
   (define mnr (make-module-network))
   (check-equal? (module-network-cascade-names mnr) '())
   (check-equal? (module-network-cascade-materialize mnr) (hasheq)))
+
+;; PPN 4C Addendum Phase 4B.2-a: a def-bot cell (pre-allocated but unground,
+;; the shape the 4B.2-b preparse sweep installs) is "no definition yet" — it
+;; must be EXCLUDED from cascade-names (the keys-view), matching the values-view
+;; (cascade-materialize) + the read adapter (def-entry->cons: def-bot → #f).
+;; Regression guard for the keys-leak: before the namespace.rkt:305 fix,
+;; cascade-names skipped only 'infra-bot, so a def-bot cell LEAKED into the
+;; names key set (→ global-env-names → repl :env display). Pre-alloc must be a
+;; true keys-view no-op (it FAILS pre-fix, PASSES post-fix).
+(test-case "cascade-names: EXCLUDES a def-bot (pre-allocated, unground) cell (4B.2-a keys-leak)"
+  (define-values (mnr1 _c1)
+    (module-network-add-definition (make-module-network) 'realdef (cons 'Int 1)))
+  ;; pre-allocate an unground name as a def-bot cell (the 4B.2-b sweep shape)
+  (define-values (mnr2 _c2)
+    (module-network-add-definition mnr1 'pending def-bot))
+  ;; the def-bot cell reads as #f (no definition) — lookup agrees with absent
+  (check-equal? (module-network-cascading-lookup mnr2 'pending) #f)
+  ;; keys-view EXCLUDES 'pending (the fix) — only the ground 'realdef is visible
+  (check-equal? (module-network-cascade-names mnr2) '(realdef))
+  ;; names-view and values-view AGREE (no asymmetry; the leak is closed)
+  (check-equal? (sorted-syms (module-network-cascade-names mnr2))
+                (sorted-syms (hash-keys (module-network-cascade-materialize mnr2)))))
 
 ;; ========================================
 ;; 2e. external-definitions view (PPN 4C Addendum Phase 4A.c-ii-a, D2 Path Y)
