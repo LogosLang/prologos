@@ -22,6 +22,7 @@
 
 (provide global-env-lookup-type
          global-env-lookup-value
+         global-env-lookup-status  ;; PPN 4C Addendum Phase 4B.3-a (DQ2): (status . payload) read; lookup-type/value project it; 4B.3-b's process-def discrimination consumes it
          global-env-add
          global-env-add-type-only
          prealloc-def-cell!  ;; PPN 4C Addendum Phase 4B.2-b: def-bot pre-allocation (preparse sweep)
@@ -74,22 +75,32 @@
 ;; Lookups (per-file mnr cascade — sole resolution source)
 ;; ========================================
 
-;; Lookup the type of a global definition.
-;; PPN 4C Addendum Phase 4A.b (Path A read-flip): Layer 1 reads the per-file mnr
-;; (authoritative) via module-network-cascading-lookup. Layer-2 fallback retired
-;; at 4A.c-ii-b cut-flip; dep-recording side-effect retired at 4B.1. The mnr
-;; cascade is the SOLE resolution source. #f-on-miss (NOT (void) — ~20 callers
-;; test truthiness via (and entry ...)).
-(define (global-env-lookup-type name)
+;; PPN 4C Addendum Phase 4B.3-a (DQ2, §18.21.21): the status read keyed off the
+;; in-flight mnr — (cons status payload) per module-network-lookup-status:
+;;   'ground . (cons type value)  /  'pending . cid  /  'absent . #f
+;; The single cascade-truth source at the global-env layer; lookup-type/value
+;; (below) are PROJECTIONS of it. The 4B.3-b consumer (process-def's forward-ref
+;; discrimination + δ install) reads this directly. No in-flight mnr → 'absent
+;; (matches the pre-factoring (and mnr ...) #f-on-no-mnr in the projections).
+(define (global-env-lookup-status name)
   (define mnr (current-file-module-network-ref))
-  (define cell-entry (and mnr (module-network-cascading-lookup mnr name)))
-  (and cell-entry (car cell-entry)))
+  (if mnr (module-network-lookup-status mnr name) '(absent . #f)))
 
-;; Lookup the value of a global definition (PPN 4C Addendum Phase 4A.b: mnr Layer 1).
+;; Lookup the type of a global definition.
+;; PPN 4C Addendum Phase 4B.3-a (DQ2): a PROJECTION of global-env-lookup-status
+;; (ground → type; pending/absent → #f). Behavior-exact with the pre-4B.3-a
+;; cascade read. #f-on-miss (NOT (void) — ~20 callers test truthiness via
+;; (and entry ...)).
+(define (global-env-lookup-type name)
+  (define s (global-env-lookup-status name))
+  (and (eq? (car s) 'ground) (car (cdr s))))
+
+;; Lookup the value of a global definition.
+;; PPN 4C Addendum Phase 4B.3-a (DQ2): a PROJECTION of global-env-lookup-status
+;; (ground → value; pending/absent → #f).
 (define (global-env-lookup-value name)
-  (define mnr (current-file-module-network-ref))
-  (define cell-entry (and mnr (module-network-cascading-lookup mnr name)))
-  (and cell-entry (cdr cell-entry)))
+  (define s (global-env-lookup-status name))
+  (and (eq? (car s) 'ground) (cdr (cdr s))))
 
 ;; ========================================
 ;; Writes (per-file → cells, module loading → legacy)

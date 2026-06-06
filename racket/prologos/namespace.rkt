@@ -35,6 +35,7 @@
  make-module-network
  module-network-lookup
  module-network-cascading-lookup  ;; PPN 4C Addendum Phase 4A.a (Q-4A.4 Option (b)): local + imports cascade
+ module-network-lookup-status     ;; PPN 4C Addendum Phase 4B.3-a (DQ2): single cascade-truth source; cascading-lookup + lookup-type/value are projections
  module-network-add-definition
  module-network-add-import      ;; PPN 4C Addendum Phase 4A.a (Q-4A.4 Option (b)): cons-prepend import
  module-network-write
@@ -213,10 +214,43 @@
 ;; (At 4A.a, per-name cells still hold (cons type value); 4A.b's read-flip
 ;; and Q3's STRUCTURAL DefinitionEntry change the cell value shape, at which
 ;; point this helper's return follows the cell value.)
+;;
+;; PPN 4C Addendum Phase 4B.3-a (DQ2, §18.21.21): now a GROUND-PROJECTION of
+;; module-network-lookup-status (the single cascade-truth source). Behavior-exact:
+;; ground → the (cons type value) entry; pending/absent → #f (the old #f-on-miss).
 (define (module-network-cascading-lookup mnr name)
-  (or (module-network-lookup mnr name)
-      (for/or ([imp (in-list (module-network-ref-imports mnr))])
-        (module-network-cascading-lookup imp name))))
+  (define s (module-network-lookup-status mnr name))
+  (and (eq? (car s) 'ground) (cdr s)))
+
+;; PPN 4C Addendum Phase 4B.3-a (DQ2, §18.21.21): the SINGLE cascade-truth source.
+;; Walks local-ground → import-ground → local-pending → absent, returning
+;; (cons status payload):
+;;   'ground  . (cons type value)  — resolves (locally, or ground via an import)
+;;   'pending . cid                — a LOCAL def-bot cell (pre-allocated, not yet
+;;                                    defined); cid is the def-bot cell-id, which
+;;                                    4B.3-b's δ residuation propagator :reads
+;;   'absent  . #f                 — unknown name (a genuine typo)
+;; module-network-cascading-lookup (above) + global-env-lookup-type/value are
+;; PROJECTIONS of this — Correct-by-Construction: ONE walk → no two-walk drift
+;; (D-4B3-1). The pending/absent split is computed here but UNCONSUMED until
+;; 4B.3-b (the projections collapse both → #f, preserving today's behavior).
+;; Reuses module-network-lookup's local read (def-entry->cons), so the
+;; def-bot→#f collapse AND the def-collision/non-conforming loud-error path are
+;; parity-exact with the pre-factoring cascade. The import sub-walk uses the
+;; cascading-lookup projection (ground-only), so a name def-bot LOCALLY but
+;; ground in an IMPORT resolves to the import (local-entry #f → import-ground
+;; fires BEFORE the 'pending branch) — import-shadowing preserved.
+(define (module-network-lookup-status mnr name)
+  (define cid (hash-ref (module-network-ref-cell-id-map mnr) name #f))
+  (define local-entry
+    (and cid (def-entry->cons (net-cell-read (module-network-ref-prop-net mnr) cid))))
+  (cond
+    [local-entry (cons 'ground local-entry)]
+    [(for/or ([imp (in-list (module-network-ref-imports mnr))])
+       (module-network-cascading-lookup imp name))
+     => (lambda (entry) (cons 'ground entry))]
+    [cid (cons 'pending cid)]
+    [else (cons 'absent #f)]))
 
 ;; Add a definition cell to a module network.
 ;; Returns: (values updated-module-network-ref cell-id)

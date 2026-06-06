@@ -355,6 +355,65 @@
       (check-equal? (module-network-cascading-lookup mnr n) #f))))
 
 ;; ========================================
+;; 2g-status. Three-way status lookup (PPN 4C Addendum Phase 4B.3-a, DQ2, §18.21.21)
+;; ========================================
+;; module-network-lookup-status is the SINGLE cascade-truth source — it walks
+;; local-ground → import-ground → local-pending → absent and returns
+;; (cons status payload): 'ground . (type . value) / 'pending . cid / 'absent . #f.
+;; module-network-cascading-lookup + global-env-lookup-type/value are PROJECTIONS
+;; of it (behavior-preserving; the pending/absent split is computed but unconsumed
+;; until 4B.3-b). These tests are the 4B.3-a gate: status-shape + projection-
+;; agreement + cascade-order-agreement (the two-walk-drift guard, D-4B3-1).
+
+(test-case "module-network-lookup-status: three-way shape (ground / pending / absent)"
+  (define-values (mnr1 _cg) (module-network-add-definition (make-module-network) 'g (cons 'Int 7)))
+  (define-values (mnr2 pend-cid) (module-network-add-definition mnr1 'p def-bot))
+  (check-equal? (module-network-lookup-status mnr2 'g) (cons 'ground (cons 'Int 7)))   ;; ground → entry
+  (check-equal? (module-network-lookup-status mnr2 'p) (cons 'pending pend-cid))       ;; pending → the def-bot cid
+  (check-equal? (module-network-lookup-status mnr2 'nope) (cons 'absent #f)))          ;; absent → #f
+
+(test-case "4B.3-a: projections agree with the pre-factoring lookups (ground / pending / absent)"
+  (define-values (mnr1 _cg) (module-network-add-definition (make-module-network) 'g (cons 'Int 7)))
+  (define-values (mnr2 _cp) (module-network-add-definition mnr1 'p def-bot))
+  ;; cascading-lookup: ground → entry; pending + absent BOTH collapse → #f (today's behavior)
+  (check-equal? (module-network-cascading-lookup mnr2 'g) (cons 'Int 7))
+  (check-equal? (module-network-cascading-lookup mnr2 'p) #f)
+  (check-equal? (module-network-cascading-lookup mnr2 'nope) #f)
+  ;; global-env-lookup-type/value: ground → type/value; pending + absent → #f
+  (parameterize ([current-file-module-network-ref mnr2])
+    (check-equal? (global-env-lookup-type 'g) 'Int)
+    (check-equal? (global-env-lookup-value 'g) 7)
+    (check-false (global-env-lookup-type 'p))
+    (check-false (global-env-lookup-value 'p))
+    (check-false (global-env-lookup-type 'nope))
+    (check-false (global-env-lookup-value 'nope))
+    ;; global-env-lookup-status (the 4B.3-b consumer API): same three-way
+    (check-equal? (global-env-lookup-status 'g) (cons 'ground (cons 'Int 7)))
+    (check-equal? (car (global-env-lookup-status 'p)) 'pending)
+    (check-equal? (global-env-lookup-status 'nope) (cons 'absent #f)))
+  ;; no in-flight mnr → 'absent (matches the pre-factoring (and mnr ...) #f-on-no-mnr)
+  (parameterize ([current-file-module-network-ref #f])
+    (check-equal? (global-env-lookup-status 'g) (cons 'absent #f))
+    (check-false (global-env-lookup-type 'g))))
+
+(test-case "4B.3-a: cascade-order — def-bot-local-but-ground-in-import resolves to the IMPORT (D-4B3-1 two-walk guard)"
+  (define-values (imp1 _ci) (module-network-add-definition (make-module-network) 'shared (cons 'Str "imp")))
+  ;; (A) local def-bot + import ground → the walk (local-ground? NO → import-ground? YES)
+  ;;     must resolve to the IMPORT, NOT report 'pending — import-shadowing preserved.
+  (define-values (loc1 _cl) (module-network-add-definition (make-module-network) 'shared def-bot))
+  (define loc2 (module-network-add-import loc1 imp1))
+  (check-equal? (module-network-lookup-status loc2 'shared) (cons 'ground (cons 'Str "imp")))
+  (check-equal? (module-network-cascading-lookup loc2 'shared) (cons 'Str "imp"))  ;; projection agrees
+  ;; (B) local GROUND shadows import-ground (local real value wins, walked first)
+  (define-values (loc3 _cl3) (module-network-add-definition (make-module-network) 'shared (cons 'Str "loc")))
+  (define loc4 (module-network-add-import loc3 imp1))
+  (check-equal? (module-network-lookup-status loc4 'shared) (cons 'ground (cons 'Str "loc")))
+  ;; (C) local def-bot + name ABSENT in imports → genuine local forward-ref = 'pending
+  (define-values (loc5 pend-cid) (module-network-add-definition (make-module-network) 'fwd def-bot))
+  (define loc6 (module-network-add-import loc5 imp1))
+  (check-equal? (module-network-lookup-status loc6 'fwd) (cons 'pending pend-cid)))
+
+;; ========================================
 ;; 2h. NET-1 drive + zero-NET-2 invariant (PPN 4C Addendum Phase 4B.2-c, §18.21.19)
 ;; ========================================
 ;; Driving the per-file mnr (NET-1) is a structural NO-OP at 4B.2: the mnr has
