@@ -130,18 +130,19 @@
   (prop-net          ;; prop-network: persistent network with definition cells
    cell-id-map      ;; hasheq: symbol → cell-id (definition name → cell)
    mod-status-cell  ;; cell-id: lifecycle monitoring (mod-loading → mod-loaded → mod-stale)
-   dep-edges        ;; hasheq: symbol → (listof dep-edge-info) (Track 5 Phase 4)
+   ;; PPN 4C Addendum Phase 4B.1: the `dep-edges` field RETIRED (write-only;
+   ;; zero production consumers; the dep-recording machinery retired outright).
    snapshot-hash    ;; hasheq or #f: materialized env snapshot (belt-and-suspenders, Phases 3-4)
    imports)         ;; (listof module-network-ref): shared-by-reference imports (PPN 4C Addendum Phase 4A.a, Q-4A.4 Option (b)). cons-prepend (newest first); cascading-lookup walks local then imports in list-order (last-write-wins shadowing matches today's hash-set-overwrite). IN-MEMORY ONLY — not serialized (pnet-serialize extracts module-info fields, not the mnr struct); SH Track 1 needs name-reference serialization when .pnet becomes network-as-value.
   #:transparent)
 
 ;; Create a fresh module network for a module about to be loaded.
-;; Returns: module-network-ref with empty cell-id-map, no dep-edges,
-;; empty imports, and mod-status initialized to mod-loading.
+;; Returns: module-network-ref with empty cell-id-map, empty imports,
+;; and mod-status initialized to mod-loading.
 (define (make-module-network)
   (define net0 (make-prop-network))
   (define-values (net1 status-cid) (net-new-mod-status-cell net0 mod-loading))
-  (module-network-ref net1 (hasheq) status-cid (hasheq) #f '()))
+  (module-network-ref net1 (hasheq) status-cid #f '()))
 
 ;; Add an imported module's network as a shared-by-reference import.
 ;; PPN 4C Addendum Phase 4A.a (Q-4A.4 Option (b)): cons-prepend (newest

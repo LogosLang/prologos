@@ -106,7 +106,9 @@
    preparse-registry       ; hasheq
    capability-registry     ; hasheq
    spec-store              ; hasheq
-   definition-deps         ; hasheq (Phase 3b)
+   ;; PPN 4C Addendum Phase 4B.1: the `definition-deps` field RETIRED
+   ;; (store-only — read back into current-definition-dependencies + written;
+   ;; never consumed to drive a feature, never serialized; dep-recording retired).
    mnr                     ; module-network-ref (PPN 4C 4A.c-iii-d): on-network def store;
                            ;   persists cross-command defs. Replaces the retired global-env/
                            ;   definition-cells param-snapshot fields — the mnr IS the live store
@@ -126,7 +128,6 @@
     (define prelude-obs (make-observatory (hasheq 'source "prelude")))
     (define-values (mod-reg trait-reg impl-reg param-impl-reg preparse-reg cap-reg mod-cap-cache)
       (parameterize ([current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.c-iii-e: fresh mnr (prelude load)
-                     [current-definition-dependencies (hasheq)]
                      [current-ns-context #f]
                      [current-module-registry (hasheq)]
                      [current-lib-paths (list lib-dir)]
@@ -177,7 +178,6 @@
         (prelude-cache-preparse-registry pc)           ; preparse-registry
         (prelude-cache-capability-registry pc)         ; capability-registry
         (hasheq)                                    ; spec-store
-        (hasheq)                                    ; definition-deps (Phase 3b)
         (make-module-network)))                     ; mnr (PPN 4C 4A.c-iii-d): fresh on-network def store; (ns repl) below wires the prelude in
      ;; Initialize the session with a namespace declaration to load prelude
      (eval-in-session-raw! state session "(ns repl)\n")
@@ -216,7 +216,6 @@
                    ;; defs (cmd1 `def x` resolves in cmd2). global-env-add writes this mnr.
                    [current-file-module-network-ref
                     (or (repl-session-mnr session) (make-module-network))]
-                   [current-definition-dependencies  (repl-session-definition-deps session)]
                    [current-ns-context           (repl-session-ns-context session)]
                    [current-module-registry       (repl-session-module-registry session)]
                    [current-lib-paths             (list (prelude-cache-lib-dir pc))]
@@ -239,8 +238,7 @@
       (set-repl-session-param-impl-registry!   session (current-param-impl-registry))
       (set-repl-session-preparse-registry!      session (current-preparse-registry))
       (set-repl-session-capability-registry!    session (current-capability-registry))
-      (set-repl-session-spec-store!             session (current-spec-store))
-      (set-repl-session-definition-deps!        session (current-definition-dependencies))))
+      (set-repl-session-spec-store!             session (current-spec-store))))
   results)
 
 ;; Log a message to stderr (not stdout — stdout is the LSP channel).

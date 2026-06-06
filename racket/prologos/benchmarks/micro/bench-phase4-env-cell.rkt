@@ -68,13 +68,11 @@
                   net-register-specialized-cell)
          (only-in "../../infra-cell.rkt"
                   merge-hasheq-replace)
-         ;; Production-faithful Variant A — uses real global-env-lookup-type
-         ;; (per audit finding 1: bench's variant-a-lookup-realistic is OPTIMISTIC
-         ;; vs production; omits Layer 3 + dep-recording + current-elaborating-name)
+         ;; Production-faithful Variant A — uses real global-env-lookup-type.
+         ;; PPN 4C Addendum Phase 4B.1: the dep-recording params (current-elaborating-name
+         ;; / -definition-dependencies / -cross-module-deps) RETIRED — the with-elab
+         ;; regime collapses into the cascade-walk cost (see the A-prod section below).
          (only-in "../../global-env.rkt"
-                  current-elaborating-name
-                  current-definition-dependencies
-                  current-cross-module-deps
                   global-env-lookup-type)
          ;; PPN 4C Addendum 4A.d (§18.19): mnr cascade API for the faithful
          ;; production-read model. def-entry is ENCAPSULATED in namespace.rkt's
@@ -292,24 +290,28 @@
 ;; ============================================================
 ;; Reworks the 4A.c-iii-e-2-neutralized "production-faithful Variant A". The
 ;; pre-4A.b A-prod modeled the now-retired 3-layer PARAM walk; this models the
-;; ACTUAL post-4A.c production read: global-env-lookup-type → mnr cascade
-;; (module-network-cascading-lookup) + the Q-4A.2 dep-recording side-effect
-;; (kept until 4B). def-entry is ENCAPSULATED (§18.19 Finding 5) → setup builds
-;; the mnr via the cons-shape API (module-network-from-snapshot), NOT raw cells.
+;; ACTUAL post-4B.1 production read: global-env-lookup-type → mnr cascade
+;; (module-network-cascading-lookup). def-entry is ENCAPSULATED (§18.19 Finding 5)
+;; → setup builds the mnr via the cons-shape API (module-network-from-snapshot),
+;; NOT raw cells.
+;;
+;; PPN 4C Addendum Phase 4B.1 (THE CAPTURE): dep-recording RETIRED → the
+;; with-elab/no-elab regime split is GONE. The lookup is now the cascade-walk
+;; cost ALONE (≈ the former no-elab). Compare against the 4A.d with-elab baseline
+;; (phase4-env-cell-4Ad-2026-06-01.txt: ~323-355 ns local) — the ~170-230 ns/lookup
+;; delta IS the dep-recording overhead 4B.1 removes. PART of the 4A+4B 2.5×
+;; (the rest — δ residuation + propagator :reads — lands across 4B.2-4B.5).
 ;;
 ;; Q2 (iv) SENSITIVITY SWEEP (§18.19.3): the production cascade is DEPTH-2
-;; fat-flat (driver.rkt:2144-2150 rebuilds loaded mnrs flat w/ empty imports),
-;; so a HIT walks the for/or import list until the match → per-lookup cost SCALES
-;; with the matching import's position. We measure axis A {0 local / 1 fat / 39
-;; fat} × position {early/late} × axis C {with/without current-elaborating-name}
-;; and report the SPREAD — a single-import measurement alone would risk the 4A.0
-;; bench-strawman (under-reporting late-import hits ~3-4×).
+;; fat-flat (driver.rkt rebuilds loaded mnrs flat w/ empty imports), so a HIT
+;; walks the for/or import list until the match → per-lookup cost SCALES with the
+;; matching import's position. We measure axis A {0 local / 1 fat / 39 fat} ×
+;; position {early/late} and report the SPREAD — a single-import measurement alone
+;; would risk the 4A.0 bench-strawman (under-reporting late-import hits ~3-4×).
 ;;
 ;; HONEST FRAMING (§18.19 Finding 4): this REGENERATES (≠ re-confirms) the
-;; stale-on-disk 267-281 ns A-prod row; the new number models the mnr cascade
-;; (different machinery than the retired param walk) — both "~status-quo
-;; per-lookup". NOT chasing 280 ns / the 4A+4B 2.5× speedup (Q-4A.2: dep-recording
-;; retires at 4B, not 4A).
+;; stale-on-disk A-prod row; the new number models the mnr cascade. Only 4B.1's
+;; dep-recording slice of the 2.5× lands here.
 
 ;; env hasheq: name → (cons type value) — the cons shape the mnr write-adapter wraps.
 (define (env-of names)
@@ -345,31 +347,25 @@
     [(import-39-early) (inflight-with-imports (cons target-import (fillers)))]
     [(import-39-late)  (inflight-with-imports (append (fillers) (list target-import)))]))
 
-;; with-elab: current-elaborating-name set → record-definition-dependency! +
-;; record-cross-module-dep! fire (the ~280 ns regime). no-elab: both no-op.
-(define-syntax-rule (bench-aprod-with-elab label mnr name)
-  (parameterize ([current-file-module-network-ref mnr]
-                 [current-elaborating-name 'bench-elab-target]
-                 [current-definition-dependencies (hasheq)]
-                 [current-cross-module-deps '()])
-    (bench-ns label 100000 (global-env-lookup-type name))))
-
-(define-syntax-rule (bench-aprod-no-elab label mnr name)
+;; PPN 4C Addendum Phase 4B.1: dep-recording retired → ONE regime (the mnr
+;; cascade-walk cost; the former no-elab). The with-elab macro + its 3 retired
+;; params are GONE — the 4A.d with-elab baseline is the before-picture for the
+;; dep-recording capture.
+(define-syntax-rule (bench-aprod label mnr name)
   (parameterize ([current-file-module-network-ref mnr])
     (bench-ns label 100000 (global-env-lookup-type name))))
 
 (printf "\n=== A-prod (mnr-cascade) — HEADLINE local-def hit (N=10/50/200) ===\n")
 (printf "(global-env-lookup-type via mnr cascade; 0 imports — name in own cells.\n")
-(printf " Regenerates the stale A-prod row — DIFFERENT machinery than the old 3-layer param walk.)\n")
+(printf " Post-4B.1: dep-recording retired → cascade-walk cost ALONE.\n")
+(printf " 4A.d with-elab baseline was ~~323-355 ns local → the delta is the dep-recording capture.)\n")
 
 (for ([N (in-list '(10 50 200))])
   (printf "\n--- N=~a (local-def hit) ---\n" N)
   (define mnr (build-mnr 'local N))
   (define name (list-ref (gen-names N) (quotient N 2)))
-  (bench-aprod-no-elab
-   (format "A-prod-no-elab.read   N=~a (mnr cascade, local hit)" N) mnr name)
-  (bench-aprod-with-elab
-   (format "A-prod-with-elab.read N=~a (+ dep-recording)" N) mnr name))
+  (bench-aprod
+   (format "A-prod.read N=~a (mnr cascade, local hit; no dep-recording)" N) mnr name))
 
 (printf "\n=== A-prod (mnr-cascade) — Q2(iv) SENSITIVITY SWEEP (N=50) ===\n")
 (printf "(import-topology × position, HIT path; the for/or walk makes hit cost\n")
@@ -378,16 +374,10 @@
 (let ([N 50])
   (define name (list-ref (gen-names N) (quotient N 2)))
   (define shapes '(local import-1 import-39-early import-39-late))
-  ;; Build the 4 mnrs once; reuse across both elab regimes.
   (define mnrs (for/list ([s (in-list shapes)]) (cons s (build-mnr s N))))
-  (printf "\n--- with-elab (dep-recording on; the production regime) ---\n")
   (for ([sm (in-list mnrs)])
-    (bench-aprod-with-elab
-     (format "A-prod-with-elab.read shape=~a N=50" (car sm)) (cdr sm) name))
-  (printf "\n--- no-elab (dep-recording off; the cascade-walk cost alone) ---\n")
-  (for ([sm (in-list mnrs)])
-    (bench-aprod-no-elab
-     (format "A-prod-no-elab.read   shape=~a N=50" (car sm)) (cdr sm) name)))
+    (bench-aprod
+     (format "A-prod.read shape=~a N=50 (no dep-recording)" (car sm)) (cdr sm) name)))
 
 ;; ============================================================
 ;; VARIANT C — Single compound cell + compound-cell-component-{ref,write}/pnet
@@ -529,4 +519,8 @@
 (printf "4A.d (2026-06-01, §18.19): A-prod reworked to the mnr-cascade path + Q2(iv)\n")
 (printf "sensitivity sweep. A/B/C/D + W4-light above are the 4A.0 historical record\n")
 (printf "(variant comparison that chose D); A-prod is the FAITHFUL production read.\n")
-(printf "NOT chasing 280 ns / the 4A+4B 2.5× — dep-recording retires at 4B (Q-4A.2).\n\n")
+(printf "4B.1 (2026-06-04, §18.21.18): dep-recording RETIRED → A-prod is one regime\n")
+(printf "(no with-elab). vs the 4A.d with-elab baseline (~~323-355 ns local), the\n")
+(printf "~~250 ns/lookup delta IS the dep-recording capture — the 4B.1 slice of the\n")
+(printf "4A+4B 2.5×. The cascade-walk import-position spread (4B.2-4B.5's territory)\n")
+(printf "persists. Full 2.5× lands at 4B close.\n\n")

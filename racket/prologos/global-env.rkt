@@ -33,27 +33,21 @@
          ;; external-definition-names = keys-only (hot find-fqn path).
          external-definitions-snapshot
          external-definition-names
-         ;; Phase 3b: Definition dependency recording
-         current-elaborating-name
-         current-definition-dependencies
-         definition-dependencies-snapshot
          ;; Defn param-name registry (user-facing names for bound-arg display)
          current-defn-param-names
          register-defn-param-names!
          lookup-defn-param-names
-         ;; Track 5 Phase 4: Cross-module dependency edges
-         current-cross-module-deps
-         record-cross-module-dep!
          ;; LSP Tier 2.3: Definition location registry
          current-definition-locations
          register-definition-location!
          lookup-definition-location
          all-definition-locations)
 
-(require racket/list        ;; remove-duplicates
-         racket/set         ;; seteq, set-add (Phase 3b dependency recording)
-         "infra-cell.rkt"   ;; merge-replace, merge-hasheq-identity (Phase 1e-α split)
+(require "infra-cell.rkt"   ;; merge-replace, merge-hasheq-identity (Phase 1e-α split)
          "namespace.rkt")   ;; PPN 4C Addendum Phase 4A.a (2026-05-28) Q-4A.6 cycle-break: module-network-ref + APIs consumed at 4A.b read-flip
+         ;; PPN 4C Addendum Phase 4B.1: racket/list (remove-duplicates) + racket/set
+         ;; (seteq/set-add) requires retired — sole consumers were global-env-names
+         ;; (cascade-only since 4A.c-iii-b) + dep-recording (retired 4B.1).
 
 
 ;; PPN 4C Addendum Phase 4A.c-iii-a2/a3: the box-gated per-definition
@@ -64,46 +58,15 @@
 ;; always-mnr) made the box path unreachable; the mnr is the sole per-name
 ;; authority since 4A.b.
 
-;; ========================================
-;; Phase 3b: Definition dependency recording
-;; ========================================
-;; When elaboration references a prior definition via lookup, record a
-;; dependency edge. Informational in batch mode; enables selective
-;; re-elaboration in LSP.
-
-;; Set to the name of the definition currently being elaborated.
-;; When set, lookups record dependency edges.
-(define current-elaborating-name (make-parameter #f))
-
-;; Persistent across commands within a file (same lifecycle as
-;; current-definition-cells-content). Maps name → (seteq dep-name).
-(define current-definition-dependencies (make-parameter (hasheq)))
-
-;; Record that `elaborating-name` depends on `dep-name`.
-(define (record-definition-dependency! elaborating-name dep-name)
-  (when (not (eq? elaborating-name dep-name))  ;; skip self-references
-    (define deps (current-definition-dependencies))
-    (define existing (hash-ref deps elaborating-name (seteq)))
-    (current-definition-dependencies
-     (hash-set deps elaborating-name (set-add existing dep-name)))))
-
-;; Snapshot for inspection/testing.
-(define (definition-dependencies-snapshot)
-  (current-definition-dependencies))
-
-;; Track 5 Phase 4: Cross-module dependency edge recording.
-;; Accumulates (list dep-name src-origin) pairs where src-origin is 'same-file
-;; or a module namespace symbol. Persistent across commands within a file.
-;; Used by driver.rkt to populate module-network-ref dep-edges at file end.
-(define current-cross-module-deps (make-parameter '()))
-
-;; Record a cross-module dependency: current definition depends on `dep-name`
-;; which was resolved from `source` ('same-file or a module namespace symbol).
-(define (record-cross-module-dep! elab-name dep-name source)
-  (when (and elab-name (not (eq? elab-name dep-name)))
-    (current-cross-module-deps
-     (cons (list elab-name dep-name source)
-           (current-cross-module-deps)))))
+;; PPN 4C Addendum Phase 4B.1 (2026-06-04): the Phase-3b / Track-5-Phase-4
+;; definition-dependency recording machinery RETIRED OUTRIGHT (zero production
+;; consumers — nothing read the dep data to drive behavior). Retired:
+;; current-elaborating-name / current-definition-dependencies /
+;; current-cross-module-deps params + record-definition-dependency! /
+;; definition-dependencies-snapshot / record-cross-module-dep! fns + the
+;; per-lookup side-effect below. The module-network-ref dep-edges field +
+;; the driver dep-edge-hash builder die with it. Captures the ~170-230 ns/lookup
+;; dep-recording overhead (part of the 4A+4B 2.5×). Per §18.21.17 row 4B.1.
 
 ;; ========================================
 ;; Lookups (per-file mnr cascade — sole resolution source)
@@ -111,50 +74,20 @@
 
 ;; Lookup the type of a global definition.
 ;; PPN 4C Addendum Phase 4A.b (Path A read-flip): Layer 1 reads the per-file mnr
-;; (authoritative) via module-network-cascading-lookup, replacing the off-network
-;; current-definition-cells-content hasheq. Dep-recording side-effect PRESERVED
-;; (Q-4A.2: retires at 4B, not 4A). Layer 2 (module-defs + prelude) unchanged
-;; (retires at 4A.c imports migration). cascading-lookup imports are empty until
-;; 4A.c, so a Layer-1 hit is same-file (matches pre-4A.b semantics).
+;; (authoritative) via module-network-cascading-lookup. Layer-2 fallback retired
+;; at 4A.c-ii-b cut-flip; dep-recording side-effect retired at 4B.1. The mnr
+;; cascade is the SOLE resolution source. #f-on-miss (NOT (void) — ~20 callers
+;; test truthiness via (and entry ...)).
 (define (global-env-lookup-type name)
-  ;; Phase 3b: record dependency
-  (define elab-name (current-elaborating-name))
-  (when elab-name
-    (record-definition-dependency! elab-name name))
-  ;; Layer 1: per-file mnr cells (authoritative read source)
   (define mnr (current-file-module-network-ref))
   (define cell-entry (and mnr (module-network-cascading-lookup mnr name)))
-  (cond
-    [cell-entry
-     ;; Track 5 Phase 4: same-file edge
-     (when elab-name
-       (record-cross-module-dep! elab-name name 'same-file))
-     (car cell-entry)]
-    [else
-     ;; PPN 4C Addendum Phase 4A.c-ii-b cut-flip: Layer-2 fallback RETIRED.
-     ;; The mnr cascade (cell-entry path above) is the SOLE resolution source.
-     ;; #f-on-miss (NOT (void) — ~20 callers test truthiness via (and entry ...)).
-     ;; NEW-1: cross-module names now hit the cascade cell-entry path → recorded
-     ;; 'same-file (benign; dep-recording is Q-4A.2 scaffolding, retires at 4B).
-     #f]))
+  (and cell-entry (car cell-entry)))
 
 ;; Lookup the value of a global definition (PPN 4C Addendum Phase 4A.b: mnr Layer 1).
 (define (global-env-lookup-value name)
-  ;; Phase 3b: record dependency
-  (define elab-name (current-elaborating-name))
-  (when elab-name
-    (record-definition-dependency! elab-name name))
-  ;; Layer 1: per-file mnr cells
   (define mnr (current-file-module-network-ref))
   (define cell-entry (and mnr (module-network-cascading-lookup mnr name)))
-  (cond
-    [cell-entry
-     ;; Track 5 Phase 4: same-file edge (already recorded in lookup-type)
-     (cdr cell-entry)]
-    [else
-     ;; PPN 4C Addendum Phase 4A.c-ii-b cut-flip: Layer-2 fallback RETIRED
-     ;; (see global-env-lookup-type). #f-on-miss; cascade is the sole source.
-     #f]))
+  (and cell-entry (cdr cell-entry)))
 
 ;; ========================================
 ;; Writes (per-file → cells, module loading → legacy)

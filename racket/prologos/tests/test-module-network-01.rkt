@@ -54,7 +54,6 @@
   (define mnr (make-module-network))
   (check-equal? (module-network-status mnr) mod-loading)
   (check-equal? (module-network-ref-cell-id-map mnr) (hasheq))
-  (check-equal? (module-network-ref-dep-edges mnr) (hasheq))
   (check-false  (module-network-ref-snapshot-hash mnr)))
 
 (test-case "module-network-add-definition: adds a cell, lookup works"
@@ -490,45 +489,6 @@
   (define snap (module-network-materialize mnr4))
   (check-equal? (hash-count snap) 3))
 
-;; ============================================================
-;; Phase 4: Cross-module dependency edges
-;; ============================================================
-
-(test-case "module-network-ref: dep-edges populated from cross-module deps"
-  ;; Simulate what driver.rkt does: accumulate cross-module deps during
-  ;; module loading, then populate dep-edges in the module-network-ref.
-  (define mnr0 (make-module-network))
-  (define-values (mnr1 _c1) (module-network-add-definition mnr0 'add (cons 'fn 'add-impl)))
-  (define-values (mnr2 _c2) (module-network-add-definition mnr1 'double (cons 'fn 'double-impl)))
-  (define mnr3 (module-network-set-status mnr2 mod-loaded))
-
-  ;; Simulate cross-module deps: double depends on add (same-file)
-  ;; and on nat::zero (from module)
-  (define deps '((double add same-file)
-                 (double nat::zero module)))
-
-  ;; Build dep-edge hash (same logic as driver.rkt)
-  (define dep-edge-hash
-    (for/fold ([h (hasheq)])
-              ([dep (in-list deps)])
-      (define dst-name (car dep))
-      (define src-name (cadr dep))
-      (define source (caddr dep))
-      (hash-set h dst-name
-                (cons (cons src-name source)
-                      (hash-ref h dst-name '())))))
-
-  ;; Attach to module-network-ref
-  (define mnr4 (struct-copy module-network-ref mnr3
-                  [dep-edges dep-edge-hash]))
-
-  ;; Verify dep-edges
-  (check-equal? (hash-count (module-network-ref-dep-edges mnr4)) 1)
-  (define double-deps (hash-ref (module-network-ref-dep-edges mnr4) 'double '()))
-  (check-equal? (length double-deps) 2)
-  ;; Both edges present (order depends on fold)
-  (check-not-false (member (cons 'add 'same-file) double-deps))
-  (check-not-false (member (cons 'nat::zero 'module) double-deps))
-
-  ;; 'add has no recorded deps
-  (check-equal? (hash-ref (module-network-ref-dep-edges mnr4) 'add '()) '()))
+;; PPN 4C Addendum Phase 4B.1: the "dep-edges populated from cross-module deps"
+;; test-case RETIRED — the dep-edges field + the dep-recording machinery it
+;; tested were retired outright (zero production consumers).

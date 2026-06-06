@@ -1814,7 +1814,6 @@
 (define-syntax-rule (with-fresh-meta-env body ...)
   (parameterize ([current-meta-store (make-hasheq)]
                  [current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.c-iii-e: fresh per-file mnr (isolation)
-                 [current-definition-dependencies (hasheq)]  ;; Phase 3b
                  ;; Cell IDs: #f — reset-meta-store! populates when callbacks available
                  [current-constraint-cell-id #f]
                  [current-trait-constraint-cell-id #f]

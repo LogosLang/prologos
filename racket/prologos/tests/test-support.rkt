@@ -80,8 +80,6 @@
                 prelude-capability-registry
                 prelude-persistent-registry-net-box)  ;; Track 7 Phase 6d
   (parameterize ([current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
-                 [current-definition-dependencies (hasheq)]  ;; Phase 3b
-                 [current-cross-module-deps '()]  ;; Track 5 Phase 4
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -128,8 +126,6 @@
   ;; Network-related params replaced by with-forked-network (8 params → 1 fork).
   ;; Registry params remain until Phase 6 migrates them to cells.
   (parameterize ([current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
-                 [current-definition-dependencies (hasheq)]  ;; Phase 3b
-                 [current-cross-module-deps '()]  ;; Track 5 Phase 4
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -149,8 +145,6 @@
 ;; Process a string and return ALL results (list).
 (define (run-ns-all s)
   (parameterize ([current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
-                 [current-definition-dependencies (hasheq)]  ;; Phase 3b
-                 [current-cross-module-deps '()]  ;; Track 5 Phase 4
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -175,8 +169,6 @@
 
 (define (run-ns-ws-last s)
   (parameterize ([current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
-                 [current-definition-dependencies (hasheq)]  ;; Phase 3b
-                 [current-cross-module-deps '()]  ;; Track 5 Phase 4
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -195,8 +187,6 @@
 
 (define (run-ns-ws-all s)
   (parameterize ([current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
-                 [current-definition-dependencies (hasheq)]  ;; Phase 3b
-                 [current-cross-module-deps '()]  ;; Track 5 Phase 4
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -222,8 +212,6 @@
   (define stderr-out (open-output-string))
   (define results
     (parameterize ([current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
-                   [current-definition-dependencies (hasheq)]  ;; Phase 3b
-                   [current-cross-module-deps '()]  ;; Track 5 Phase 4
                    [current-error-port stderr-out]
                    ;; Track 10 Phase 3c: fork replaces 8 network params
                    [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d

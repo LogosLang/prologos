@@ -1,0 +1,124 @@
+
+=== W1/W2/W3 — READ MEASUREMENT ===
+(measuring lookup of name at index N/2; 100k iterations/measurement)
+
+--- Workload N=10 forms ---
+  A.read N=10 (2× parameter-ref + hash-ref): 26.9 ns/call (100000 calls)
+  B.read N=10 (cell-read + hash-ref): 36.7 ns/call (100000 calls)
+  D.read N=10 (2× cell-read + hash-ref): 64.7 ns/call (100000 calls)
+
+--- Workload N=50 forms ---
+  A.read N=50 (2× parameter-ref + hash-ref): 34.3 ns/call (100000 calls)
+  B.read N=50 (cell-read + hash-ref): 39.9 ns/call (100000 calls)
+  D.read N=50 (2× cell-read + hash-ref): 102.0 ns/call (100000 calls)
+
+--- Workload N=200 forms ---
+  A.read N=200 (2× parameter-ref + hash-ref): 41.0 ns/call (100000 calls)
+  B.read N=200 (cell-read + hash-ref): 44.1 ns/call (100000 calls)
+  D.read N=200 (2× cell-read + hash-ref): 111.7 ns/call (100000 calls)
+
+=== W1/W2/W3 — SETUP-TIME MEASUREMENT ===
+(measuring construction of N-form env from scratch; 1000 iterations)
+
+--- Workload N=10 forms setup ---
+  A.setup N=10 (parameter hash fold): 5171.1 ns/call (1000 calls)
+  B.setup N=10 (1 cell-register + N cell-writes): 16619.1 ns/call (1000 calls)
+  D.setup N=10 (1+N cell-registers + 1 reg-write): 18397.0 ns/call (1000 calls)
+
+--- Workload N=50 forms setup ---
+  A.setup N=50 (parameter hash fold): 28338.1 ns/call (1000 calls)
+  B.setup N=50 (1 cell-register + N cell-writes): 55422.9 ns/call (1000 calls)
+  D.setup N=50 (1+N cell-registers + 1 reg-write): 77896.0 ns/call (1000 calls)
+
+--- Workload N=200 forms setup ---
+  A.setup N=200 (parameter hash fold): 116996.1 ns/call (1000 calls)
+  B.setup N=200 (1 cell-register + N cell-writes): 207272.9 ns/call (1000 calls)
+  D.setup N=200 (1+N cell-registers + 1 reg-write): 252784.9 ns/call (1000 calls)
+
+=== W5 — MEMORY (alloc + retain for N=100 setup) ===
+(median of 10 runs; retained measured post-GC)
+
+  A.mem N=100 (parameter hash): wall=0.110 ms  alloc=95.2 KB  retain=-0.0 KB  (n=10)
+'#(0.110107421875 97520 -8)
+  B.mem N=100 (1 cell + hasheq value): wall=0.178 ms  alloc=169.9 KB  retain=0.0 KB  (n=10)
+'#(0.177978515625 174016 0)
+  D.mem N=100 (1+N cells + registry): wall=0.221 ms  alloc=270.4 KB  retain=0.0 KB  (n=10)
+'#(0.22119140625 276880 8)
+
+=== A-prod (mnr-cascade) — HEADLINE local-def hit (N=10/50/200) ===
+(global-env-lookup-type via mnr cascade; 0 imports — name in own cells.
+ Post-4B.1: dep-recording retired → cascade-walk cost ALONE.
+ 4A.d with-elab baseline was ~323-355 ns local → the delta is the dep-recording capture.)
+
+--- N=10 (local-def hit) ---
+  A-prod.read N=10 (mnr cascade, local hit; no dep-recording): 72.9 ns/call (100000 calls)
+
+--- N=50 (local-def hit) ---
+  A-prod.read N=50 (mnr cascade, local hit; no dep-recording): 94.9 ns/call (100000 calls)
+
+--- N=200 (local-def hit) ---
+  A-prod.read N=200 (mnr cascade, local hit; no dep-recording): 102.7 ns/call (100000 calls)
+
+=== A-prod (mnr-cascade) — Q2(iv) SENSITIVITY SWEEP (N=50) ===
+(import-topology × position, HIT path; the for/or walk makes hit cost
+ scale with the matching import's position — report the SPREAD)
+  A-prod.read shape=local N=50 (no dep-recording): 94.4 ns/call (100000 calls)
+  A-prod.read shape=import-1 N=50 (no dep-recording): 110.5 ns/call (100000 calls)
+  A-prod.read shape=import-39-early N=50 (no dep-recording): 114.5 ns/call (100000 calls)
+  A-prod.read shape=import-39-late N=50 (no dep-recording): 1027.2 ns/call (100000 calls)
+
+=== W1/W2/W3 — VARIANT C READ MEASUREMENT ===
+(compound cell + component-paths; read via compound-cell-component-ref/pnet)
+
+--- Workload N=10 forms ---
+  C.read N=10 (cell-read + hash-ref + tagged-cell-read): 106.6 ns/call (100000 calls)
+
+--- Workload N=50 forms ---
+  C.read N=50 (cell-read + hash-ref + tagged-cell-read): 106.9 ns/call (100000 calls)
+
+--- Workload N=200 forms ---
+  C.read N=200 (cell-read + hash-ref + tagged-cell-read): 109.6 ns/call (100000 calls)
+
+=== VARIANT C SETUP-TIME MEASUREMENT ===
+
+--- Workload N=10 forms setup ---
+  C.setup N=10 (1 cell-register + N compound-writes): 17729.0 ns/call (1000 calls)
+
+--- Workload N=50 forms setup ---
+  C.setup N=50 (1 cell-register + N compound-writes): 59096.9 ns/call (1000 calls)
+
+--- Workload N=200 forms setup ---
+  C.setup N=200 (1 cell-register + N compound-writes): 217479.0 ns/call (1000 calls)
+
+=== VARIANT C MEMORY (N=100) ===
+
+  C.mem N=100 (1 compound cell): wall=0.178 ms  alloc=173.1 KB  retain=0.1 KB  (n=10)
+'#(0.177978515625 177216 104)
+
+=== W4 LIGHT — WAKE PRECISION ===
+(1 propagator watching name X; N-1 writes to OTHER names; quiesce after each)
+(expected — B: N-1 fires; C: 0 fires; D: 0 fires)
+
+--- Workload N=10 env entries; 9 other-name writes ---
+  B.wakes: 9 fires for 9 writes  (whole-cell wake)
+  C.wakes: 0 fires for 9 writes  (component-paths X-only)
+  D.wakes: 0 fires for 9 writes  (per-name cells)
+
+--- Workload N=50 env entries; 49 other-name writes ---
+  B.wakes: 49 fires for 49 writes  (whole-cell wake)
+  C.wakes: 0 fires for 49 writes  (component-paths X-only)
+  D.wakes: 0 fires for 49 writes  (per-name cells)
+
+=== END OF MEASUREMENT ===
+Per §18.12.3 criteria-as-guidance: review measurements together;
+decide variant aligned with principles, not strict pass/fail gates.
+Extended 2026-05-26 (post-audit): production-faithful A + Variant C + W4 light.
+4A.d (2026-06-01, §18.19): A-prod reworked to the mnr-cascade path + Q2(iv)
+sensitivity sweep. A/B/C/D + W4-light above are the 4A.0 historical record
+(variant comparison that chose D); A-prod is the FAITHFUL production read.
+4B.1 (2026-06-04, §18.21.18): dep-recording RETIRED → A-prod is one regime
+(no with-elab). vs the 4A.d with-elab baseline (~323-355 ns local), the
+~250 ns/lookup delta IS the dep-recording capture — the 4B.1 slice of the
+4A+4B 2.5×. The cascade-walk import-position spread (4B.2-4B.5's territory)
+persists. Full 2.5× lands at 4B close.
+

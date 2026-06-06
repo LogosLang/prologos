@@ -259,9 +259,7 @@
   (printf "  D2: Per-module timing breakdown (loading from scratch):\n")
   (define prelude-modules
     (for/list ([(k v) (in-hash prelude-module-registry)]) k))
-  (parameterize ([current-definition-dependencies (hasheq)]
-                 [current-cross-module-deps '()]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry (hasheq)]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry (current-preparse-registry)]
@@ -305,9 +303,7 @@
 ;; D1: Full (process-string "(ns bench)") — expensive, few iterations
 (let ()
   (bench "D1: process-string \"(ns bench)\" (full prelude)" 3
-    (parameterize ([current-definition-dependencies (hasheq)]
-                   [current-cross-module-deps '()]
-                   [current-ns-context #f]
+    (parameterize ([current-ns-context #f]
                    [current-module-registry (hasheq)]
                    [current-lib-paths (list prelude-lib-dir)]
                    [current-preparse-registry (current-preparse-registry)]
@@ -430,9 +426,7 @@
 ;; G1: Time to restore state from prelude-module-registry (run-ns-last pattern)
 (let ()
   (bench "G1: run-ns-last state restoration (parameterize + install-module-loader!)" 100
-    (parameterize ([current-definition-dependencies (hasheq)]
-                   [current-cross-module-deps '()]
-                   [current-ns-context #f]
+    (parameterize ([current-ns-context #f]
                    [current-module-registry prelude-module-registry]
                    [current-lib-paths (list prelude-lib-dir)]
                    [current-preparse-registry prelude-preparse-registry]

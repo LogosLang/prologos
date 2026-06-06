@@ -1071,8 +1071,8 @@
       (define fqn (qualify-name name
                     (ns-context-current-ns (current-ns-context))))
       (register-definition-location! fqn def-srcloc)))
-  ;; Phase 3b: Record dependencies during elaboration/type-checking.
-  (parameterize ([current-elaborating-name name])
+  ;; PPN 4C Addendum Phase 4B.1: dep-recording retired — the
+  ;; (parameterize ([current-elaborating-name name]) ...) wrapper removed.
   (cond
     ;; Sprint 10: Type-inferred def (no type annotation)
     [(not type-surf)
@@ -1309,7 +1309,7 @@
                             (register-definition-location! fqn def-srcloc))
                           (format "~a : ~a defined."
                                   name (pp-expr zonked-type))])]
-                      )])])])])])])])))  ;; extra ) closes Phase 3b parameterize
+                      )])])])])])])]))
 
 ;; ========================================
 ;; Process a multi-body defn group
@@ -2071,8 +2071,6 @@
                     [current-module-registry-cell-id #f]
                     [current-ns-context-cell-id #f]
                     [current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: per-module mnr (fresh per module-load)
-                    [current-definition-dependencies (hasheq)]  ;; Phase 3b
-                    [current-cross-module-deps '()]  ;; Track 5 Phase 4
                     ;; Phase A: fresh meta-info CHAMP per module
                     [current-prop-meta-info-box #f]
                     ;; PPN 4C S2.e-iv-c (2026-04-25): champ-box parameter
@@ -2148,23 +2146,13 @@
                            ([(name entry) (in-hash mod-env)])
                    (define-values (mnr* cid) (module-network-add-definition mnr name entry))
                    (values mnr* (void))))
-               ;; Mark loaded, store snapshot hash, and populate dep-edges
+               ;; Mark loaded + store snapshot hash. PPN 4C Addendum Phase 4B.1:
+               ;; the dep-edges field + the cross-module-deps dep-edge-hash builder
+               ;; RETIRED (write-only; zero production consumers).
                (let* ([mnr1 (module-network-set-status mnr-final mod-loaded)]
                       [snap (module-network-materialize mnr1)]
-                      ;; Track 5 Phase 4: Build dep-edges from recorded cross-module deps.
-                      ;; Groups edges by destination name → list of (src-name . source).
-                      [dep-edge-hash
-                       (for/fold ([h (hasheq)])
-                                 ([dep (in-list (current-cross-module-deps))])
-                         (define dst-name (car dep))
-                         (define src-name (cadr dep))
-                         (define source (caddr dep))
-                         (hash-set h dst-name
-                                   (cons (cons src-name source)
-                                         (hash-ref h dst-name '()))))]
                       [mnr2 (struct-copy module-network-ref mnr1
-                               [snapshot-hash snap]
-                               [dep-edges dep-edge-hash])])
+                               [snapshot-hash snap])])
                  ;; Phase 3d dual-path validation removed in Phase 5b — 0 mismatches
                  ;; across 7147 tests (200+ modules) over Phases 3-4.
                  mnr2))))
