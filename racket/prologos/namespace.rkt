@@ -39,6 +39,7 @@
  module-network-add-definition
  module-network-add-import      ;; PPN 4C Addendum Phase 4A.a (Q-4A.4 Option (b)): cons-prepend import
  module-network-write
+ module-network-install-fire-once  ;; PPN 4C Addendum Phase 4B.3-b (§18.21.22): install a fire-once δ propagator on the mnr's prop-net
  module-network-set-status
  module-network-status
  module-network-materialize
@@ -277,6 +278,27 @@
   ;; PPN 4C Addendum Phase 4A.b-ii: write adapter wraps (cons type value) → def-entry.
   (struct-copy module-network-ref mnr
     [prop-net (net-cell-write (module-network-ref-prop-net mnr) cid (cons->def-entry value))]))
+
+;; PPN 4C Addendum Phase 4B.3-b (§18.21.22): install a fire-once propagator on
+;; the mnr's prop-net (NET-1) and struct-copy the updated net back. GENERIC /
+;; domain-agnostic — it takes the input/output cids + the fire-fn; the δ-specific
+;; def-entry fire-fn is built by the caller (driver.rkt, which has expr-fvar +
+;; def-entry in scope — namespace.rkt has no expr-fvar). The referent INPUT cell
+;; is 'definition-entry = #:classification 'structural, so the caller MUST pass
+;; #:component-paths or net-add-propagator's enforce-component-paths! hard-errors
+;; (propagator.rkt:1411-1431). fire-once = the LWW exactly-once write (the δ is
+;; the sole writer of the referrer's def-entry cell, §18.21.20 DQ1). Installed
+;; per-command OUTSIDE any BSP fire round → scheduled on the mnr worklist
+;; (propagator.rkt:2320-2323) → fired by the file-end drive (drive-file-mnr!).
+;; Returns the updated mnr; the caller threads it back via
+;; (current-file-module-network-ref ...).
+(define (module-network-install-fire-once mnr input-cids output-cids fire-fn
+                                          #:component-paths [cpaths '()])
+  (define-values (net* _pid)
+    (net-add-fire-once-propagator (module-network-ref-prop-net mnr)
+                                  input-cids output-cids fire-fn
+                                  #:component-paths cpaths))
+  (struct-copy module-network-ref mnr [prop-net net*]))
 
 ;; Update the module status cell (e.g., mod-loading → mod-loaded).
 ;; Returns: updated module-network-ref

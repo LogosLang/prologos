@@ -443,6 +443,54 @@
     (lambda () (register-stratum-handler! (cell-id 999) (lambda (net pending) net)))))
 
 ;; ========================================
+;; 2i. δ residuation install (PPN 4C Addendum Phase 4B.3-b, §18.21.22)
+;; ========================================
+;; The ACTIVE flip's mechanism in isolation: a fire-once δ on NET-1 :reads the
+;; referent's def-entry cell, :writes the referrer cell. Before the referent
+;; grounds, the referrer stays def-bot (residuates); when the referent grounds
+;; (def-bot → def-entry) the drive fires the δ → the referrer becomes a def-entry.
+;; D1 structural guard: def-entry cells are cids ≥21 (disjoint from reserved
+;; stratum cells 0-19 + mod-status 20); the δ writes ONLY the referrer def-entry
+;; cell, so the NET-2 zero-invariant (no stratum-request cell touched) holds.
+
+(test-case "4B.3-b δ: referent grounds → referrer gets a def-entry; D1 cids ≥21"
+  (define-values (mnr1 ref-cid) (module-network-add-definition (make-module-network) 'a def-bot))
+  (define-values (mnr2 rer-cid) (module-network-add-definition mnr1 'x def-bot))
+  ;; D1 structural guard: def-entry cells land ≥21 (reserved 0-19 + mod-status 20)
+  (check-true (>= (cell-id-n ref-cid) 21))
+  (check-true (>= (cell-id-n rer-cid) 21))
+  ;; install the δ (referent ground → copy a def-entry to the referrer). The input
+  ;; cell is 'definition-entry = #:classification 'structural → #:component-paths
+  ;; is REQUIRED, else net-add-propagator hard-errors (enforce-component-paths!).
+  (define mnr3
+    (module-network-install-fire-once mnr2 (list ref-cid) (list rer-cid)
+      (lambda (net)
+        (define e (net-cell-read net ref-cid))
+        (if (def-entry? e)
+            (net-cell-write net rer-cid (def-entry (def-entry-type e) (def-entry-value e)))
+            net))
+      #:component-paths (list (cons ref-cid ':value))))
+  ;; pending: the referrer is still def-bot (the δ residuates — referent unground)
+  (check-eq? (net-cell-read (module-network-ref-prop-net mnr3) rer-cid) def-bot)
+  ;; ground the referent (def-bot → def-entry) + drive → the δ fires once
+  (define mnr4 (module-network-write mnr3 'a (cons 'NatT 'theval)))
+  (define driven (run-to-quiescence (module-network-ref-prop-net mnr4)))
+  (define rer-val (net-cell-read driven rer-cid))
+  (check-true (def-entry? rer-val))            ;; the referrer is now a def-entry
+  (check-equal? (def-entry-type rer-val) 'NatT)
+  (check-equal? (def-entry-value rer-val) 'theval))
+
+(test-case "4B.3-b δ: install on a structural cell WITHOUT #:component-paths hard-errors"
+  ;; the §18.21.22 ① finding: 'definition-entry is #:classification 'structural,
+  ;; so enforce-component-paths! requires a declared path for the input cell.
+  (define-values (mnr1 ref-cid) (module-network-add-definition (make-module-network) 'a def-bot))
+  (define-values (mnr2 rer-cid) (module-network-add-definition mnr1 'x def-bot))
+  (check-exn exn:fail?
+    (lambda ()
+      (module-network-install-fire-once mnr2 (list ref-cid) (list rer-cid)
+        (lambda (net) net)))))
+
+;; ========================================
 ;; 2e. external-definitions view (PPN 4C Addendum Phase 4A.c-ii-a, D2 Path Y)
 ;; ========================================
 ;; external-definitions-snapshot (values) / external-definition-names (keys),

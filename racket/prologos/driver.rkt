@@ -25,6 +25,11 @@
          "pretty-print.rkt"
          "typing-errors.rkt"
          "global-env.rkt"
+         ;; PPN 4C Addendum Phase 4B.3-b (§18.21.22): the δ residuation fire-fn
+         ;; constructs/inspects def-entry values directly (net-cell-write inside a
+         ;; fire-fn bypasses the mnr's cons↔def-entry adapters). Pure leaf → no cycle.
+         (only-in "definition-entry.rkt"
+                  def-entry def-entry? def-entry-type def-entry-value)
          "macros.rkt"
          "sexp-readtable.rkt"
          "parse-reader.rkt"  ;; unified reader: WS-mode + sexp re-exports
@@ -1052,6 +1057,106 @@
        (cons result all-warning-strs)
        "\n")))))  ;; PPN 4C Phase 1.5: close parameterize
 
+;; ============================================================
+;; PPN 4C Addendum Phase 4B.3-b (§18.21.22): forward bare-ref residuation
+;; ============================================================
+;; The ACTIVE flip — the env READ becomes cell-at-bot residuation on NET-1 (the
+;; per-file mnr). When `def x := a` references a not-yet-defined same-file `a`,
+;; process-def installs a δ fire-once propagator on the mnr (:reads a's cell,
+;; :writes x's cell(s)) and DEFERS its own commit; the δ is the SOLE writer (LWW
+;; exactly-once). The file-end drive (drive-file-mnr!) fires the δ when `a`
+;; grounds; the DQ5 post-drive sweep finalizes the deferred result.
+
+;; Gate (DQ4): residuation is enabled ONLY within process-file (where the drive +
+;; the finalize sweep run). #f elsewhere (process-string / REPL / module-load) →
+;; a forward ref errors immediately at the referencing site, status quo.
+(define current-residuation-enabled? (make-parameter #f))
+
+;; The deferred-commit placeholder: occupies the residuated command's slot in the
+;; process-file results list (positional). The DQ5 sweep replaces each with the
+;; finalized result. Neither a string nor a prologos-error, so the
+;; error-diagnostics loop skips it and the sweep finds it unambiguously.
+(struct residuation-placeholder (name srcloc) #:transparent)
+
+;; Try to residuate a forward bare-ref. Returns a residuation-placeholder (and
+;; installs the δ) iff `body-surf` is a bare-var reference to a PENDING same-file
+;; def-head and residuation is enabled; else #f (no side effect). `name` = the def
+;; being defined (the referrer); `def-srcloc` = its location (for the unbound case).
+(define (try-forward-ref-residuation name body-surf def-srcloc)
+  (and (current-residuation-enabled?)
+       (surf-var? body-surf)
+       (let ([referent (surf-var-name body-surf)])
+         (define referent-status (global-env-lookup-status referent))
+         ;; pending-def-head signal: the BARE name's status (Pass 1.5 seeds bare
+         ;; names; a never-defined typo is absent → not pending → not residuated).
+         (and (eq? (car referent-status) 'pending)
+              (let* (;; :reads the BARE referent cell — already seeded by Pass 1.5,
+                     ;; and it grounds when `def a` runs (driver.rkt:1150). The
+                     ;; STORED form uses the resolved (own-ns FQN) NAME for parity.
+                     [referent-cid (cdr referent-status)]
+                     [ns (and (current-ns-context)
+                              (ns-context-current-ns (current-ns-context)))]
+                     ;; DQ3: qualify-name = the elaborator.rkt:703 branch that wins
+                     ;; for an own-ns def-head (the resolve-name generalization for
+                     ;; import-shadowing is 4B.4 scope, D-4B3-8/9).
+                     [resolved-referent (if ns (qualify-name referent ns) referent)]
+                     [resolved-ref-expr (expr-fvar resolved-referent)]
+                     ;; Option A (§18.21.22): the δ writes the SAME cell set
+                     ;; process-def's commit would — bare `name` (driver.rkt:1150)
+                     ;; always + `foo::name` (driver.rkt:1156) under ns — parity-exact,
+                     ;; both ground together (the DQ5 sweep is then unambiguous).
+                     ;; Pass 1.5 seeded only bare names → lazy-pre-alloc the FQN.
+                     [referrer-fqn (and ns (qualify-name name ns))]
+                     [_pre (when referrer-fqn (prealloc-def-cell! referrer-fqn))]
+                     [write-cids
+                      (cons (cdr (global-env-lookup-status name))
+                            (if referrer-fqn
+                                (list (cdr (global-env-lookup-status referrer-fqn)))
+                                '()))]
+                     ;; the δ: referent ground → write the deferred commit
+                     ;; (def-entry referent-type (expr-fvar resolved-referent)) to
+                     ;; the referrer cell(s); def-bot → no-op (residuate). Uses the
+                     ;; `net` PARAMETER for read+write (never a captured net —
+                     ;; propagator-design.md fire-function rule).
+                     [fire-fn
+                      (lambda (net)
+                        (define referent-entry (net-cell-read net referent-cid))
+                        (if (def-entry? referent-entry)
+                            (let ([v (def-entry (def-entry-type referent-entry)
+                                                resolved-ref-expr)])
+                              (for/fold ([n net]) ([wc (in-list write-cids)])
+                                (net-cell-write n wc v)))
+                            net))])
+                ;; install on the mnr; #:component-paths REQUIRED (the input cell is
+                ;; 'structural — enforce-component-paths!). :value is the facet the
+                ;; deferred commit depends on; def-bot→def-entry is opaque to
+                ;; pu-value-diff, so the wake is unconditional and the path is the
+                ;; Correct-by-Construction gate (§18.21.22 ①). Thread the mnr back.
+                (current-file-module-network-ref
+                 (module-network-install-fire-once
+                  (current-file-module-network-ref)
+                  (list referent-cid) write-cids fire-fn
+                  #:component-paths (list (cons referent-cid ':value))))
+                (residuation-placeholder name def-srcloc))))))
+
+;; DQ5 post-drive finalize sweep: replace each residuation-placeholder in the
+;; results list (positional, in place) with its finalized result — cell ground →
+;; "x : T defined." (matching the immediate-path string); still def-bot →
+;; unbound-variable-error (the immediate→file-end shift for a forward-ref that
+;; never grounds). Run AFTER drive-file-mnr! and BEFORE the error-diagnostics loop
+;; (so the file-end error is diagnosed like an immediate typo). Reads groundness
+;; via the 4B.3-a status API (by name) — the single cascade-truth source.
+(define (finalize-residuations results)
+  (for/list ([r (in-list results)])
+    (if (residuation-placeholder? r)
+        (let* ([name (residuation-placeholder-name r)]
+               [s (global-env-lookup-status name)])
+          (if (eq? (car s) 'ground)
+              (format "~a : ~a defined." name (pp-expr (car (cdr s))))
+              (unbound-variable-error (residuation-placeholder-srcloc r)
+                                      "Unbound variable" name)))
+        r)))
+
 ;; Process a def command with split elaboration for recursive support.
 ;; 1. Elaborate type first
 ;; 2. Pre-register (cons type #f) in global env
@@ -1073,7 +1178,18 @@
       (register-definition-location! fqn def-srcloc)))
   ;; PPN 4C Addendum Phase 4B.1: dep-recording retired — the
   ;; (parameterize ([current-elaborating-name name]) ...) wrapper removed.
+  ;; PPN 4C Addendum Phase 4B.3-b (§18.21.22): forward bare-ref residuation (the
+  ;; ACTIVE flip). On the INFERRED path only, if the body is a bare-var reference
+  ;; to a PENDING (def-bot) same-file def, install a δ on NET-1 + DEFER the commit
+  ;; (the δ becomes the sole writer → LWW exactly-once); resid = the placeholder
+  ;; the file-end DQ5 sweep finalizes. #f → fall through to normal elaboration
+  ;; (general body, ground/absent ref, annotated path [4B.4], or residuation
+  ;; disabled). try-forward-ref-residuation has NO side effect when it returns #f.
+  (define resid
+    (and (not type-surf)
+         (try-forward-ref-residuation name body-surf def-srcloc)))
   (cond
+    [resid resid]
     ;; Sprint 10: Type-inferred def (no type annotation)
     [(not type-surf)
      ;; IO-D5: If this is `main`, provision SysCap into capability scope.
@@ -1787,7 +1903,10 @@
   ;; process-file (param default #f). Behavior-preserving while Layer-2 is active.
   (parameterize ([current-prop-net-box (box (make-elaboration-network))]
                  [current-file-module-network-ref
-                  (or (current-file-module-network-ref) (make-module-network))])
+                  (or (current-file-module-network-ref) (make-module-network))]
+                 ;; PPN 4C Addendum Phase 4B.3-b (§18.21.22 DQ4): residuation is
+                 ;; process-file-only — the drive + the finalize sweep run here.
+                 [current-residuation-enabled? #t])
     (reset-meta-store!)
     (process-file-inner path #:verbose verbose?)))
 
@@ -1857,9 +1976,15 @@
   ;; at the file-unit boundary — all defs are written, the mnr is final. LIVE
   ;; NO-OP today (zero propagators); 4B.3's δ residuation propagators run here.
   (drive-file-mnr!)
+  ;; PPN 4C Addendum Phase 4B.3-b (§18.21.22 DQ5): post-drive finalize sweep —
+  ;; replace each residuation-placeholder (positional, in place) with its
+  ;; finalized result (cell ground → "x : T defined."; still def-bot → unbound
+  ;; error). BEFORE the diagnostics loop, so a never-grounded forward-ref's
+  ;; file-end unbound error is emitted like an immediate typo.
+  (define final-results (finalize-residuations results))
   ;; Emit formatted error diagnostics to stderr when enabled (test runner integration)
   (when (current-emit-error-diagnostics)
-    (for ([r (in-list results)])
+    (for ([r (in-list final-results)])
       (when (prologos-error? r)
         (emit-error-diagnostic r))))
   (when pc (print-perf-report! pc))
@@ -1868,7 +1993,7 @@
   (print-memory-report! (measure-memory-after mem-before))
   (print-cell-metrics-report! (collect-cell-metrics))
   (print-quiescence-stats! qs)
-  results)
+  final-results)
 
 ;; ========================================
 ;; Module Loading
