@@ -272,6 +272,7 @@ PM Track 10                      =   SRE Track 6 (module loading)
 - *SH (Self-Hosting) Series* ✅ opened 2026-04-30 — see [[file:2026-04-30_SH_MASTER.md][SH Master]]. Stage 0/1 founding done; implementation tracks 1-10 ⬜ gate on PReduce delivery (Track 4) + PPN Track 4 completion.
 - *PReduce Series* ✅ opened 2026-05-02 — see [[file:2026-05-02_PREDUCE_MASTER.md][PReduce Master]]. Cross-series dependency for SH; gates implementation tracks on PPN 4C Phase 1B.
 - *PM Track 12+*: Module-load-time infrastructure on network (domain/ctor/property registrations as cell writes). See PM Master Track 8 audit section.
+- *PM Track 12B — Free Ordering on Network* ⬜ Stage-0 pre-design capture (2026-06-06) — see [[file:2026-06-06_PM_TRACK12B_FREE_ORDERING_ON_NETWORK.md][implementation note]] + [[file:2026-03-13_PROPAGATOR_MIGRATION_MASTER.md][PM Master § Track 12B]]. Retire the imperative FREE_ORDERING multi-pass + Phase-5b hoist → uniform on-network forward-ref residuation (full order-independence). Consumes PM 12 (registries→cells) + the PPN 4C 4C/4D cross-network seam; NOT NTT. Origin: PPN 4C Addendum Phase 4B.4 mini-design grounding.
 
 *Theory (ongoing, fed by application tracks):*
 - PRN: Hyperlattice rewriting formalism (grows from PPN + SRE + PReduce)

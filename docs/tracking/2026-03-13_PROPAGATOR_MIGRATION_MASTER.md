@@ -599,6 +599,29 @@ The first three flow from the same architectural act: making cells primary (reti
 
 ---
 
+### Track 12B: Free Ordering on Network
+
+**Status**: ⬜ NOT STARTED — Stage-0 pre-design capture (2026-06-06). Full implementation note: [`2026-06-06_PM_TRACK12B_FREE_ORDERING_ON_NETWORK.md`](2026-06-06_PM_TRACK12B_FREE_ORDERING_ON_NETWORK.md).
+
+**Goal**: Achieve full **order independence** by retiring the imperative FREE_ORDERING multi-pass preparse (Pass −1/0/1/1.5/2 pre-registrations + the Phase-5b generated-decl hoist) and replacing it with uniform **on-network forward-ref residuation** — every forward reference residuates to fixpoint on the network; no multi-pass, no topological hoist, no order-dependency. Builds directly on PPN 4C Addendum Phase 4B's NET-1 δ residuation substrate.
+
+**Relationship to Track 12**: Track 12 is the **mechanical** registries→cells migration; Track 12B is the **architectural** layer on top — it makes forward-refs *residuate* against those cells and *deletes* the imperative multi-pass that substitutes for residuation today. 12B **consumes** Track 12's cells.
+
+**Scope** (grounded inventory in the implementation note §3 — re-ground on pickup):
+- Retire the Pass-0/1 imperative pre-registrations (`macros.rkt:2390–2460`: `register-schema!`/`register-selection!`/`process-data`/`process-trait`/… + Pass-1 spec/impl) → forward-refs residuate on-network.
+- Retire the Phase-5b generated-decl hoist (`macros.rkt:2876–2903`) → ctors residuate (needs a **post-expansion** generated-name seeding pass; Pass-1.5 is pre-expansion).
+- Convert the 3 synchronous typing env-reads (`typing-propagators.rkt:1771/2475/2644`, all NET-2) to wait on NET-1 cells — **the cross-network seam** (A3-narrow / §6 boundary).
+- Bring the remaining forward-ref-gating off-network registries on-network (Track 12): `current-multi-defn-registry` (the multi-clause base-name permanently-`'pending` landmine), `current-relation-store` (defr), capability/schema/selection registries.
+- Retire the `loading-set` cross-module cycle check (`driver.rkt:~2132`) → cycle diagnosis via lattice fixpoint (PPN 4C addendum §18.11).
+
+**Dependencies**: Track 12 (registries→cells, hard dep); PPN 4C Addendum Phase 4C/4D (the cross-network seam + §6 diagnosis); PPN 4C Addendum Phase 4B (the NET-1 δ substrate). **NOT NTT** — NTT §17b is speculative future *syntax* for declaring such networks, not an implementation dependency; the cross-network access is implemented directly in Racket.
+
+**Origin**: PPN 4C Addendum Phase 4B.4 mini-design grounding (2026-06-06). The 4B.4 probes established that type-only producers (selection/capability/session) **already** forward-resolve via the imperative multi-pass — so the free-ordering work for them is *retiring* the scaffolding, not adding them to the δ. See the implementation note §4 for the probe evidence.
+
+**Design document**: TBD (full Stage 1–3 when picked up).
+
+---
+
 ### Track 13: Stratum-Handler Mechanism + Scheduler State as On-Network Cells
 
 **Goal**: Migrate the stratum-handler registry (currently `stratum-handlers` box at `propagator.rkt:2827`, off-network) and broader scheduler state onto the propagator network as specialized scheduler-state cells. Frames propagator networks + scheduler as **compiler technology in their own right** — networks are first-class IR (per SH Series Track 1's `.pnet`); scheduler state should be IR-native, not Racket-box bookkeeping.
