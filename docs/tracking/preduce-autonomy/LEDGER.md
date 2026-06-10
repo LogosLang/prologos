@@ -280,3 +280,16 @@ Entry template:
   The charter's Phase B (autonomous loop, Track 1 entry) conditions are met once the
   branch merges. 8 autonomy data points held for the retro.
 - **Landed in**: D.3 + Master amendments (rows 0/0.3/5) (this commit).
+
+## 2026-06-10 — LOOP iteration 0 (Phase B shakeout) — [ROUTINE]
+- **Decision**: iteration 0 executed per charter §7 kickoff: (a) cold-compile +
+  full-suite BASELINE launched in the worktree (background; results ingested next
+  firing — local green + timings entry are the gates' floor); (b) DEFERRED.md triage
+  DONE (the A.0 leftover): "Reduction Cache Cells" marked ABSORBED into PReduce
+  (belt-and-suspenders guard noted); Allocation-Efficiency audit + per-command
+  transient-allocation finding cross-referenced as Track 1 cost-model inputs;
+  bench-ab --refs confirmed valid for Track 4; (c) Phase B dailies created.
+- **Flagged for iteration 1**: the §5.8 reduction-share measurement METHOD is a small
+  design decision (existing time-phase! instrumentation vs profiler run on the
+  comparative suite) — not improvised inside the shakeout.
+- **Landed in**: (this commit)

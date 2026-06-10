@@ -31,6 +31,14 @@ Deferral".
 
 ## HIGH PRIORITY: Propagator/Cell Allocation Efficiency Track
 
+**PReduce Track 1 cross-reference (2026-06-10 triage)**: this audit + the per-command
+transient-allocation finding below (§ "Future Track 4D Scope": ~1100 transient cells/run
+dominate cell_allocs) are NAMED INPUTS to PReduce Track 1's allocation cost model — the
+eager-allocate green slice (D.1 §4.8 D-frame) adds per-reserved-KEY cells, and the D5
+probe's transcription-cost interpretation should be read against this baseline. The
+audit's "batch cell registration via transient CHAMP builder" is the same shape as the
+locked batched-topology-request seed pour.
+
 ### Design Track for Efficient Prop/Cell Allocation
 - **Audit complete**: `docs/tracking/2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md` (commit `f7bd03d`)
 - **Thesis**: Any even modest gains in allocation efficiency will have disproportionate effect across the entire infrastructure — every part of the system creates cells and propagators at scale
@@ -199,11 +207,14 @@ Deferral".
 - Additional abstract domains (Congruence, Pointer, etc.)
 - Source: `docs/tracking/2026-02-27_1026_GALOIS_CONNECTIONS_ABSTRACT_INTERPRETATION.md`
 
-### Propagator-First Phase 3e: Reduction Cache Cells — NOT STARTED
-- Convert whnf/nf/nat-value caches to write-through cells
-- Gated behind `current-track-reduction-deps?` parameter (off for batch, on for LSP)
-- **Risk**: Performance regression in batch mode
-- Dependencies: Phase 3a (per-definition cells), Phase 3b (dependency recording) — both complete
+### Propagator-First Phase 3e: Reduction Cache Cells — ABSORBED INTO PReduce (2026-06-10 triage)
+- ~~Convert whnf/nf/nat-value caches to write-through cells~~ — **SUPERSEDED**: the
+  write-through-cache-cell approach is absorbed by the PReduce e-class substrate
+  (reduction results live in e-class cells; the memo caches are the imperative analog
+  retired at Track 8). See PReduce Master + D.1 §4 scaffold ledger item 11 (the four
+  cache parameters enumerated, Track 8 retirement scope). Do NOT implement this entry
+  independently — it would build the competing mechanism the belt-and-suspenders rule bans.
+- Dependencies note retained for history: Phase 3a/3b complete.
 
 ---
 

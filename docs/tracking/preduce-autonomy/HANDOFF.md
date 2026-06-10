@@ -5,11 +5,15 @@ the start of every iteration.**
 
 ---
 
-## Current state (as of 2026-06-10, interactive pre-loop session)
+## Current state (as of 2026-06-10, LOOP iteration 0 — Phase B is LIVE)
 
-The loop has NOT yet run, and per the 2026-06-10 owner decision it does NOT run
-until Phase A (Tracks 0.1–0.3 design closure) completes interactively. Charter §2
-records the amended sequencing.
+**The loop is running.** Iteration 0 (shakeout) executed: DEFERRED triage DONE
+(3 PReduce items dispositioned), Phase B dailies created, baseline compile+suite
+launched in background. PENDING from iteration 0: ingest the suite result (green +
+timings = gate floor); then the §5.8 perf baseline (bench-ab --output) — the
+reduction-share measurement METHOD is iteration 1's first decision (time-phase!
+instrumentation vs profiler; do not improvise). After that: the implementation queue
+(below). Phase A history follows for context.
 
 Done so far (all interactive, with the owner):
 - Branch `preduce-autonomy` + worktree `/Users/avanti/dev/projects/prologos-preduce-auto`,
