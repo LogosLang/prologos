@@ -19,7 +19,7 @@ run `wf_118652c1-716`); owner decisions D2/D5/D7 (2026-06-10 session).
 |---|---|---|---|
 | SM1 | AST PU compound cell layout (Layer 1 granularity) | ⬜ | Gates on SM2 lock (occurrence components reference e-class cells) |
 | SM2 | E-class cell realization | ✅ | LOCKED 2026-06-10 — T5 census LOW risk (§2.10); corpus amendments in lock commit |
-| SM3 | Unified rule registry cell | ⬜ | Inherits SM2's per-rule write-target datum (eager/saturate tag) + NAC field (memo) |
+| SM3 | Unified rule registry cell | 🔄 | Settled 2026-06-10 (§3); owner D1/D2/D4 decided; LOCK pending tier census + owner review |
 | SM4 | Strata (S0 + S(-1)) | ⬜ | Congruence placement RESOLVED into SM2 (S0 watchers); re-derive "two strata suffice" incl. rebuild + fuel |
 | SM5 | Effect-stratum boundary marker | ⬜ | Owner-census #5 open: posture against COMMENT-ONLY Stratum 3 (effect-executor.rkt:53-54) |
 | SM6 | Persistence regimes | ⬜ | Consumes SM2's content-address key decision (D3); couples to Track 0.3 schema (T7 open) |
@@ -126,6 +126,10 @@ rule kind may be tagged EAGER only if no coexisting rule's LHS can match a form 
 discarding makes unreachable. Acceptance artifact: a completeness statement in this doc at lock +
 a test exercising an EAGER-discard/SATURATE-match interaction (new artifact class; required at
 Track 1, not green slice).
+**Backflow flag (added 2026-06-10 at SM3 settle)**: the SM3 congruence finding — congruence
+closure creates pattern matches no rhs-template analysis predicts — plausibly weakens the
+STRUCTURAL CHECKABILITY of this contract too (same reachability shape, same blind spot). Verify
+before promising any registry-watcher enforcement mechanism for it; the contract itself stands.
 
 **D5 (owner) — probe**: the redefined probe (injected candidate rule set — SRE Track 2D's 13 DPO
 rules + arithmetic identities; measures applicable-rule overlap, reduction-chain lengths,
@@ -242,3 +246,132 @@ serves relate-layer dispatch (which propagator fires), not cell-merge override;
 hardcodes the equality merge when creating decomposition sub-cells — term-structure
 sub-cells do NOT inherit the e-class product merge, and must not be conflated with
 e-class cells.
+
+## §3 Sub-model 3 — The Unified Rule Registry (SETTLED 2026-06-10)
+
+Inputs: 2026-06-10 grounding sweep (registry landscape) + design-options panel run
+`wf_f8b887ba-0ca` (3 clusters × propose/critique + synthesis) + owner decisions D1/D2/D4.
+
+### §3.1 Decided design
+
+**Storage (owner D4 — "4b")**: the registry is born CELL-FIRST as **one compound universe
+cell on the persistent registry network** — components keyed by module-id, each holding that
+module's rules — plus a **propagator-MAINTAINED tag-index component** (a propagator watches
+rule components and derives the tag index; information flow, not registrar dual-write). The
+parameter+cell-mirror shape is OFF the table (belt-and-suspenders; would mint a 17th parameter
+into PM Track 12's drain pile, with the verified silent-skip guard as a built-in drift
+mechanism). SRE registration: a `'rule-registry` domain. Persistence = serialize a module's own
+component into its `.pnet` section (structural provenance — no annotation+filter). The
+per-domain-universe migration checklist (pipeline.md) applies; this pioneers the universe
+pattern on the persistent network (named cost).
+**Bootstrap**: seed pour at prn-init projecting the Racket-side stores (ctor-registry tables +
+sre-rewrite-registry) into property-tagged rule-data under a kernel/prelude pseudo-module
+namespace. The Racket module-load hasheq accumulation necessarily predates any network — named
+scaffolding-constant. **Prelude window verified non-blocking** (test-support.rkt:93 keeps
+prn-box #f during prelude BY DESIGN; zero Prologos-surface rule registrations exist today, so
+seed-pour-at-init suffices; re-sequencing is deferred with a Track 9 trigger: first prelude
+module that defines a surface rule).
+
+**Schema (SP1 — storage-independent; the `sre-rewrite-rule` spine extended)**: name,
+lhs-pattern, interface-keys, rhs-template, apply-fn, directionality, cost, confluence-class —
+PLUS: `enrichment-tag` (memo taxonomy: enrichment-preserving-or-not), `write-target` (SM2
+datum: best-only vs +alts), `nac-spec` (semantic NACs only — see below), `tier`
+(declarative | closure-resident), module-qualified `rule-id`, RESERVED `worldview-bitmask`
+slot (schema frozen without it would force a full pipeline.md struct-field migration later),
+and `stratum` KEPT as a separate pipeline-stage field (not conflated with enrichment-tag).
+Ctor-descs absorb as property-tagged entries at the REGISTRY+ROUTING level only — the Master:79
+"prop:ctor-desc-tag becomes a property" claim is real for routing, FAKE for payload (ctor-desc
+is 4 closure fields with no declarative core); the doc says so.
+
+**Two-tier registry (owner D2)**: tier 1 = declarative rules — serializable; what Track 0.3
+honestly hands the LLVM collaborator. Tier 2 = closure-resident (~8 of 14 SRE rules with
+`rhs-template=#f` + all ctor-descs) — registered as property-tagged metadata + named Racket
+references, NEVER serialized (pnet-serialize stubs procedures as `'foreign-proc`). Tier 2 is
+**absorbed in metadata only** — in those words; consumers (typing-propagators generic
+decomposition) keep reading the legacy hasheqs until a named consumer-read migration track.
+The declarative-core compiler (recursion schemes as data; ctor-desc behavior as derivable
+meta-description) is OUT of SM3 — queued as a named future track aligned with self-hosting.
+
+**NAC semantics (owner D1 — resolves owner-census point 1)**: termination-guard NACs (the
+memo's `x → (+ x 0)` motivating case) **DISSOLVE** — they are the e-class cell's ACI
+absorption law restated; zero build, no field. Semantic NACs mean **"absent at the
+extraction-time fixpoint"** — checked when Track 4 extraction selects forms, AFTER all
+congruence closure (the only congruence-correct boundary: the verified finding is that
+congruence merges create NAC-pattern matches no rhs-template analysis predicts, so
+firing-round checks are structurally under-approximate and "absent forever" is unrealizable
+monotonically). Realization substrate: **monotone presence cells** (one Boolean ⊥→⊤ cell per
+distinct NAC pattern, maintained by an S0 match propagator; consumers READ presence instead of
+scanning). The firing-round arm is NOT built (revisit only if Track 0.2's kind census finds a
+rule genuinely needing pre-extraction absence). Absent-forever is a named-not-built escalation
+with recorded preconditions: e-class un-splitting (no precedent), transitive write-tag
+provenance (verified non-inheriting), assumption-bit recycling (none found).
+
+**Merge contract (D5, carried)**: module-qualified keyspace; per-namespace **dedup-or-error**
+join (NOT table-registry's per-key new-wins; today's sre-rewrite list-append is verifiably not
+ACI — re-registration duplicates); kernel/prelude pseudo-module owns the seed; F5 append-only
+restated per-namespace.
+
+**Dispatch (D6, carried)**: `'eclass-refine` enters the propagator-ctor-table as the relation
+ENTRY (Option-1-as-entry only — its fire-time rule-pull firing realization is killed: it is
+today's `for/or` first-match loop relocated into a fire-fn, registration-order-dependent the
+moment Track 9 critical pairs arrive). Firing realization = **broadcast-over-tag-matched-rules
+per (cell × stratum)** with result-merge = the SM2 write-target semantics. Argued on
+SEMANTICS — ACI merge-as-answer is order-independent by construction where first-match-wins
+breaks CALM under critical pairs — and explicitly NOT on the A/B 2.3×–75.6× numbers (category
+error: those discriminate broadcast-vs-N-propagators; both candidate shapes are one sequential
+loop per fire today, propagator.rkt:2446-2447; no perf claim is load-bearing here, so no
+microbench obligation attaches). Per-rule installs remain the heterogeneous fallback variant.
+
+**Dynamism (D7, carried)**: rule-set growth machinery (4b delta-installs via topology watcher
+vs the critic's `#:items-from` items-from-cell broadcast extension) is DEFERRED to a named
+mini-design with a Track 9 trigger — all current registration is module-load-time; the dynamic
+path would fire zero times until a mid-session registration consumer exists.
+
+### §3.2 Slices (composing with §2.5)
+
+SP1 schema lock (this section) → SP2 registry-cell green slice — **independent of the e-class
+substrate**: cell-first birth + locked merge + batched seed pour + derived tag-index +
+rules-by-tag/by-id lookup probe + shared-fixture test file + acceptance file via process-file +
+suite green; exercises all four execution contexts → SP3 dispatch (gated on SM2 substrate code
+existing) → SP4 NAC presence cells + extraction filter (Track 4 deployment gate, tracker row)
+→ SP5 persistence (per-module component serialization, tier 1 only; couples Track 0.3) → SP6
+dynamism (Track 9 gate).
+
+### §3.3 Scaffold/deferral ledger additions (items 7-9, extending §2.6)
+
+| # | Scaffold / deferral | Retirement / deployment trigger |
+|---|---|---|
+| 7 | Bootstrap seed pour from Racket module-load hasheqs | Self-hosted module loading; or declarative-core compiler track |
+| 8 | Tier-2 metadata-only absorption (consumers still read legacy hasheqs imperatively) | Named consumer-read migration work-list + deletion commit |
+| 9 | Validated-not-deployed stack: NAC extraction filter (Track 4), dynamism (Track 9), worldview serialization (e-class serialization design) | Each gets a tracker row + acceptance probe per the Validated≠Deployed rule — no silent stacking |
+
+### §3.4 Naming hygiene (design deliverable at lock)
+
+Disambiguate FOUR colliding names before any code: ctor-DESC tables (ctor-registry.rkt) vs
+ctor-META parameter (macros.rkt:5932 `current-ctor-registry` — a verified conflation that
+misled a panel round); registry rule-TAG-index (this sub-model) vs SM2 carrier ROOT-TAG index
+(hashcons/e-matching — fed back to SM1/SM2 as load-bearing for presence cells' component-paths).
+
+### §3.5 Lock-blocking items
+
+- **Tier census exactness**: pin the drifting counts (ctor registrations cited 26/28/31; SRE
+  rules 13/14; closure-resident 7-9) with a per-rule tier-membership table. Running as a
+  read-only census agent; result lands in §3.6 at lock.
+- **R-lens: broadcast write shape vs SM2 product merge** — verify the broadcast fold's
+  contribution shape composes with the componentwise e-class merge, or design a product-aware
+  write variant (feeds SP3).
+- **R-lens: dormant `make-rewrite-propagator-fn`** (sre-rewrite.rkt:479-481, exported, zero
+  callers, "Phase 7 installs this") — excavate why the per-rule install path stalled before SP3
+  re-proposes its shape; retire the export or adopt it.
+
+### §3.6 NTT correspondence-table entries seeded by SM3
+
+| NTT construct | Realization | Status |
+|---|---|---|
+| Rule-registry universe cell (module-keyed components) | per-domain universe pattern (pipeline.md checklist; meta-universe precedent) on prn | PROPOSED-NEW (SP2; pioneers universe-on-prn) |
+| Propagator-maintained tag-index component | derived-index propagator (information flow) | PROPOSED-NEW (SP2) |
+| Dedup-or-error namespace join | new merge fn + SRE 'rule-registry domain registration | PROPOSED-NEW (SP2) |
+| Broadcast-over-rules firing | net-add-broadcast-propagator (propagator.rkt:2429-2462) | EXISTS (instantiation NEW at SP3) |
+| NAC presence cells | monotone Boolean cells + S0 match propagators | PROPOSED-NEW (SP4 / Track 4) |
+| Per-module `.pnet` rule sections (tier 1) | pnet-serialize extension | PROPOSED-NEW (SP5 / Track 0.3) |
+

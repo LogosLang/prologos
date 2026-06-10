@@ -96,4 +96,31 @@ Entry template:
   superseded-banner). arXiv:2511.20782 WebSearch-verified (Arbore/Cheung/Willsey).
 - **Principle / precedent cited**: workflow.md doc-drift gate ("verified-false premises
   otherwise re-import" — the 'as written' trap that killed panel option C3).
-- **Landed in**: (this commit)
+- **Landed in**: commit `db0bb8ba`
+
+## 2026-06-10 — interactive (pre-loop) — [OWNER-DECIDED] Track 0.1 SM3 decisions D1/D2/D4
+- **Decision**: Sub-model 3 (unified rule registry) settled via design-options panel
+  (run `wf_f8b887ba-0ca`) + owner-challenger pass + owner decisions:
+  - **D1 semantic-NAC boundary (resolves owner-census point 1)**: extraction-fixpoint
+    absence — the only congruence-correct boundary (verified: congruence closure creates
+    NAC matches no rhs-template analysis predicts). Termination-guard NACs DISSOLVE into
+    the e-class ACI absorption law (zero build). Absent-forever = named-not-built
+    escalation. Realization: monotone presence cells.
+  - **D2 two-tier registry**: tier-1 declarative/serializable (the honest Track 0.3
+    deliverable); tier-2 closure-resident, absorbed in METADATA ONLY (verified: ~8/14 SRE
+    rules closure-resident, ctor-descs have no declarative core); declarative-core
+    compiler queued as named future track.
+  - **D4 storage**: "4b" — ONE compound universe cell on the persistent network,
+    module-keyed components + propagator-maintained tag-index; cell-first birth;
+    parameter+mirror OFF the table. Prelude-window verified non-blocking (seed-pour at
+    prn-init; re-sequencing has a Track 9 trigger).
+- **Carried (designed, not owner-gated)**: D5 dedup-or-error namespace merge (today's
+  list-append verifiably not ACI); D6 dispatch = relation ENTRY + broadcast-over-rules
+  argued on SEMANTICS not the A/B numbers (verified category error); D7 dynamism deferred
+  with Track 9 trigger. SM2 backflow flag added (congruence finding weakens EAGER
+  contract's structural checkability — contract stands, enforcement mechanism unverified).
+- **Process note (autonomy-experiment data point #3)**: panel agents pinned to main
+  cannot see branch artifacts — the synthesis flagged the SM2 lock doc as "absent" when
+  it is committed on this branch. Future panels must receive the worktree path for
+  branch docs.
+- **Landed in**: design doc §3 (this commit); lock pending tier census + owner review.
