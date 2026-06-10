@@ -123,4 +123,26 @@ Entry template:
   cannot see branch artifacts — the synthesis flagged the SM2 lock doc as "absent" when
   it is committed on this branch. Future panels must receive the worktree path for
   branch docs.
-- **Landed in**: design doc §3 (this commit); lock pending tier census + owner review.
+- **Landed in**: design doc §3 (commit `e343af03`); locked at `7162f492`.
+
+## 2026-06-10 — interactive (pre-loop) — [OWNER-DECIDED] Track 0.1 SM1 decisions (carrier / identity regime / 2′)
+- **Decision**: Sub-model 1 (Layer 1) settled via panel `wf_01c38ba0-ab4` + main-session
+  R-lens verifications + owner decisions:
+  - **Carrier home**: EXTEND the production attribute map with reduction facets — on the
+    REGROUNDED justification (Realization-B carve-outs verifiably absent + intra-cell
+    production precedent; the phase-collapse thesis cannot adjudicate and is removed from
+    the rationale per the justification-by-slogan guard).
+  - **Identity regime**: epoch-keyed live-parse occurrence-sets (old epochs inert, no
+    retraction); epoch mechanism = 2′-assessment design obligation.
+  - **2′ posture**: COMMISSION a focused adversarial assessment of the registry-resident
+    embryo before anything locks on it (critic-invented, unvetted, sits on the confirmed
+    O(all-keys) diff-cost ceiling, front-runs D4's universe gate). SM1.4 blocked on it.
+- **Main-session verifications this round**: diff-cost ceiling CONFIRMED (pu-value-diff
+  diffs old vs FULL merged value; no changed-path hint on net-cell-write — any fix must
+  be cell-layer per orthogonality); ".pnet cache populates it" comment is FICTION (zero
+  attribute handling in pnet-serialize) — carrier is session-persistent only.
+- **Autonomy-experiment data point #4**: the panel's composed architecture closed only
+  through a critic-invented variant (2′) that no agent adversarially vetted — the
+  owner-challenger layer caught it and the owner gated it. Pattern: panel COMPOSITIONS
+  need the same skepticism as panel kill-shots.
+- **Landed in**: design doc §4 (this commit); SM1 lock pending the 2′ assessment.

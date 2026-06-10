@@ -26,20 +26,23 @@ Done so far (all interactive, with the owner):
 loop iteration). DONE 2026-06-10: closure semantics decided (decisions-first → coarse
 NTT exit gate); SM2 (e-class cell) SETTLED via options panel + owner decisions D2/D5/D7
 — see `docs/tracking/2026-06-10_PREDUCE_TRACK01_DESIGN.md` §2 and the ledger entry.
-DONE: SM2 LOCKED (db0bb8ba). SM3 LOCKED (tier census pinned §3.7: 13 rules 5/8 split,
-28 ctor-descs, 17 pnet registries, 41-entry seed pour with 5 serializable; naming
-scheme delivered §3.4; make-rewrite-propagator-fn disposition = rework as broadcast
-item-fn at SP3).
-NEXT: (a) SM1 (AST PU layout) — carries the carrier-root-index requirement fed back
-from SM3 §3.4; recommended next. (b) Then SM4 (re-derive "two strata suffice" incl.
-congruence watchers + fuel + presence cells), SM5 (effect posture — owner-census
-point 5: design against comment-only Stratum 3 vs gate), SM6 (persistence regimes —
-consumes D3 content-address key + tier split). (c) DEFERRED.md triage still pending.
-(d) R-lens carried: T3/T4 (SM2.3), T7 (SM6/0.3), broadcast-write-shape vs product
-merge (SP3).
-PROCESS: panels read MAIN checkout — pass the worktree path
-(/Users/avanti/dev/projects/prologos-preduce-auto) for branch docs (ledger data
-point #3).
+DONE: SM2 LOCKED (db0bb8ba), SM3 LOCKED (7162f492), SM1 SETTLED (§4) — owner: extend
+attribute map / epoch-keyed live-parse / commission 2′ assessment. Diff-cost ceiling
+CONFIRMED (O(all-keys) per compound write; fix must be cell-layer); ".pnet populates
+attribute map" comment = fiction.
+NEXT: (a) The 2′ ASSESSMENT (launched as a panel at session end if running — else
+launch: registry-resident embryo as first-class proposal + adversarial pass; scope:
+cell-layer delta-notify design, D4 re-gating, epoch-keyed occurrence-set mechanism,
+microbench prescription, SM2 NAME-at-reservation amendment question). SM1 LOCK lands
+when it returns (+ §4.6 Master amendments in the lock commit). (b) SM4 (strata
+re-derivation: congruence watchers + presence cells + fuel + S(-1); most inputs now
+fixed), SM5 (effect posture — owner-census point 5), SM6 (persistence — consumes D3
+KEY + tier split + the ".pnet is parameter-only" reality). (c) DEFERRED.md triage
+still pending. (d) R-lens carried: T4 (SM2.3/SM1.5), T7 (SM6/0.3), broadcast-write-
+shape vs product merge (SP3), dispatch-attachment question (§4.2, before watcher code).
+PROCESS: pass the worktree path (/Users/avanti/dev/projects/prologos-preduce-auto)
+for branch docs; panel COMPOSITIONS need the same skepticism as kill-shots (data
+point #4).
 
 ## If the loop is started before Phase A completes
 

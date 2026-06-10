@@ -1,7 +1,7 @@
 # PReduce Track 0.1 — Architectural Design (D.1)
 
 **Created**: 2026-06-10
-**Status**: Stage 3 in progress — sub-model 2 SETTLED (pending lock), sub-models 1/3/4/5/6 open
+**Status**: Stage 3 in progress — SM2 ✅ SM3 ✅ LOCKED; SM1 SETTLED (§4, lock pending the 2′ assessment); SM4/SM5/SM6 open
 **Supersedes**: the Master's Track 0.1 row wording, per the 2026-06-10 owner agreement on closure
 semantics: this doc's body is the **six sub-models settled as design decisions**, and 0.1 closes
 with a **coarse NTT model + correspondence table as the exit gate** (every NTT keyword maps to an
@@ -17,7 +17,7 @@ run `wf_118652c1-716`); owner decisions D2/D5/D7 (2026-06-10 session).
 
 | Sub-model | Description | Status | Notes |
 |---|---|---|---|
-| SM1 | AST PU compound cell layout (Layer 1 granularity) | ⬜ | Gates on SM2 lock (occurrence components reference e-class cells) |
+| SM1 | AST PU compound cell layout (Layer 1 granularity) | 🔄 | Settled 2026-06-10 (§4); owner: extend attr-map / epoch-keyed / commission 2′; LOCK pending 2′ assessment |
 | SM2 | E-class cell realization | ✅ | LOCKED 2026-06-10 — T5 census LOW risk (§2.10); corpus amendments in lock commit |
 | SM3 | Unified rule registry cell | ✅ | LOCKED 2026-06-10 — tier census pinned (§3.7); naming scheme delivered (§3.4) |
 | SM4 | Strata (S0 + S(-1)) | ⬜ | Congruence placement RESOLVED into SM2 (S0 watchers); re-derive "two strata suffice" incl. rebuild + fuel |
@@ -407,3 +407,129 @@ registries (indices 7-23). Seed-pour total: 41 entries (13 rules + 28 ctor-descs
 | NAC presence cells | monotone Boolean cells + S0 match propagators | PROPOSED-NEW (SP4 / Track 4) |
 | Per-module `.pnet` rule sections (tier 1) | pnet-serialize extension | PROPOSED-NEW (SP5 / Track 0.3) |
 
+
+## §4 Sub-model 1 — AST PU Compound Layout / Layer 1 (SETTLED 2026-06-10)
+
+Inputs: 2026-06-10 grounding sweep (attribute map / M-type / reduction state / index prior
+art) + design-options panel run `wf_01c38ba0-ab4` + main-session R-lens verifications +
+owner decisions (carrier home, identity regime, 2′ posture).
+
+### §4.1 Decided design
+
+**Carrier home (owner)**: reduction occurrence-state EXTENDS the production typed attribute
+map — the persistent compound cell at typing-propagators.rkt:2845-2865, same eq?-identity
+positions, same two-level pointwise merge. **Regrounded justification** (per the
+justification-by-slogan guard): the phase-collapse thesis constrains Layer 2 + same-scheduler
+and is satisfied by a separate cell too — it cannot adjudicate this choice; the operative
+arguments are (a) the Realization-B / prefer-tagging-over-bridges lesson with its carve-outs
+VERIFIABLY ABSENT (same positions, same record shape, both S0), and (b) the production-proven
+intra-cell cross-component precedent. New facets: `:eclass-link` (holds the **content-address
+KEY uniformly — never a cell-id, never the canonical NAME**; cross-cluster consensus + D3),
+`:reduction-status` (small monotone chain), `:cost-in-context` (Q-order min-join; direction —
+derived-monotone vs cache-invalidate — DECLARED when the facet lands, per-facet lattice
+discipline), `:reduction-provenance` (**set-union/deduped, NOT append** — the verified
+`:warnings` append-duplication hazard must not be copied).
+
+**Granularity + storage population**: per-(position × facet) — the proven shape; Master Q1 is
+RESOLVED by adoption, not invention. Lazy-on-first-write is the VERIFIED default of
+attribute-map-merge-fn — build nothing. **SM1.1 substrate commit** (ONE commit + full typing
+regression + acceptance): explicit facet-merge/bot/bot? cases for the new facets; harden the
+`[else new-v]` merge default (typing-propagators.rkt:412) to ERROR; the TWO-site bot-filter
+fix (:449-450 wholesale fresh-position insert + :457-458 facet clause order); the that-read
+arity-2 expose-or-filter decision; update the "5 facets preserved" invariant comment.
+
+**Identity regime (owner)**: the widening/occurrence-set ranges over **epoch-keyed live-parse
+occurrences** — sets keyed by parse/command epoch; triggers count within-epoch only; old
+epochs go INERT without deletion (monotone-compatible; no retraction). The epoch mechanism
+itself is a named design obligation inside the 2′ assessment. Grounds: positions are
+eq?-ephemeral while the registry is persistent — un-epoched counting fires from cross-parse
+history noise and silently decays lazy into eager.
+
+**Materialization posture (owner)**: the registry-resident-embryo variant ("2′") is
+COMMISSIONED for its own adversarial assessment before anything locks on it — it was
+critic-invented and never vetted, it sits on the now-CONFIRMED O(all-keys) diff-cost ceiling,
+and it front-runs D4's microbench-gated universe deferral. SM1.4 (widening + congruence
+coverage) is BLOCKED on that assessment. The green slice proceeds meanwhile (singleton-only
+probe — per-class cell and embryo coincide there; D4's green wording covers it).
+
+**Scaffolding named**: (i) the carrier's `make-parameter` cell-id discovery
+(typing-propagators.rkt:2833) + per-command fallback dual path (:2856-2865) become SHARED
+load-bearing plumbing for two subsystems — named with the PM Track 12 (parameters→cells)
+retirement story; (ii) the imperative analog = FOUR reduction.rkt parameters
+(current-nat-value-cache :875, current-whnf-cache :1310, current-reduction-fuel :1313,
+current-nf-cache :3035) — Track 8 retirement scope; whether current-reduction-fuel maps to
+the tropical-fuel cell discipline instead is a Track 4 question.
+
+### §4.2 Carried decisions and rules
+
+- **Forcing-boundary rule (codified from PPN 4C §18.21.25's G1 failure)**: every lazy posture
+  must declare what FORCES materialization for whole-tree consumers. Rule: NAC presence
+  checks and cost extraction may only consume **ingestion-complete scopes** — "absent" must
+  be checked-empty, never never-demanded. Applies to SP4 and Track 4.
+- **Dispatch attachment** (open, answer BEFORE any watcher code, SM1.2/SP3): is rule dispatch
+  Layer-2-only under SM3's locked broadcast-per-(cell × stratum), with Layer-1 watchers only
+  for bridge/provenance facets? Determines what "reduction propagators install on tm-cid"
+  even means.
+- **Link-facet population** (lock at SM1.2 with the ingestion realization): the `:eclass-link`
+  facet is DERIVED (recomputable by re-hashing) — population is memoization policy. The
+  single-facet eager pour re-ships the killed transcription cost (changed-set × dependent-fold
+  tax); lazy-memo is the working lean. The ingestion realization (depth-wavefront broadcast vs
+  one-fold-per-root) must be LOCKED explicitly — choosing the fold while citing the wavefront's
+  Hasse story would be vocabulary without structure.
+- **Speculation probe (SM1.5, gates SM2.3)**: targeted base-exclusion test — wv=0 reduction
+  write + active typing fork + branch-wv read on the session-promoted shared carrier
+  (tagged-cell-read excludes base when a branch entry matches, decision-cell.rkt:420-434) —
+  BEFORE any cross-facet consumer. Subsumes T3's remainder.
+
+### §4.3 Substrate facts verified this round (load-bearing)
+
+- **Diff-cost ceiling CONFIRMED**: `pu-value-diff` diffs old against the FULL merged value
+  (propagator.rkt:1647+, :2054-2060) and `net-cell-write` takes no changed-path hint — every
+  write to a session-global compound carrier pays O(all-keys). Any fix MUST be cell-layer
+  (write supplies its changed paths) — a BSP-round piggyback would reproduce the rejected
+  tropical-fuel "Option E" shape. This is D4's microbench content and 2′'s entry fee.
+- **".pnet cache populates it" is FICTION** (typing-propagators.rkt:2844 comment vs zero
+  attribute handling in pnet-serialize.rkt): the attribute map is SESSION-persistent only;
+  cross-session persistence remains Layer-2/SM6 business. Fix the comment at SM1.1.
+- The Master's "AST is one PU / M-type in one cell / 5 PUs" is design-lore: the parse tree IS
+  the M-type (parse-reader.rkt:1104-1114); "PU" in code is the pattern (discrimination cell,
+  fact-row PU); no AST-topology-as-one-cell exists. Layer 1's honest realization is
+  "parse-tree M-type + attribute-map pattern".
+
+### §4.4 Slices
+
+SM1.0 docs+locks (Master amendments §4.6; boundary + forcing rules) → SM1.1 production merge
+substrate (ONE commit, full regression) → SM1.2 identity green slice (registry cell +
+reservations + ':root-index/':parents derived components + locked ingestion realization +
+the CONSUMING READ — without an in-track read the slice is write-only ceremony; D5 counters
+wired) → SM1.3 first rewrite end-to-end (ONE declarative SM3 seed rule on a probe term,
+Level-3 acceptance) → SM1.4 widening + congruence coverage (BLOCKED on 2′ assessment) →
+SM1.5 speculation probe (gates SM2.3).
+
+### §4.5 Scaffold ledger additions (items 10-12, extending §2.6/§3.3)
+
+| # | Scaffold / deferral | Retirement / trigger |
+|---|---|---|
+| 10 | Shared make-parameter cell-id + per-command fallback (now two-subsystem load-bearing) | PM Track 12 parameters→cells |
+| 11 | Reduction memo caches (4 parameters) coexist as authoritative until conversion checking reads :eclass-link | Track 8 parity + retirement |
+| 12 | Trigger-(ii) SATURATE widening arm (designed, dormant) | Track 4 deployment gate + ledger row |
+
+### §4.6 Corpus amendments at SM1 lock
+
+1. Master §Layer-1: "components reference Layer 2 **by cell-id**" → by content-address KEY;
+   add the realization-or-pivot sentence (Layer 1 realized as parse-tree M-type +
+   attribute-map pattern; the one-PU-per-AST claim retired as design-lore). (§Layer-2's
+   circularity phrase was already amended at the SM2 lock.)
+2. SM2 §2.1 NAME-at-reservation amendment — owner-gated, PENDING the 2′ assessment (which
+   decides reservation semantics); flagged, not yet applied.
+3. Code comment typing-propagators.rkt:2844 (".pnet cache populates it") — fix at SM1.1.
+
+### §4.7 NTT correspondence-table entries seeded by SM1
+
+| NTT construct | Realization | Status |
+|---|---|---|
+| Occurrence record (position → facet product) | attribute map + facet-merge (typing-propagators.rkt:393-463) | EXISTS (4 new facet cases at SM1.1) |
+| `:eclass-link` KEY-valued facet | content-address KEY per D3 | PROPOSED-NEW (SM1.1) |
+| Hashcons registry cell + ':root-index/':parents derived components | discrimination-cell + cell-decomps precedents | PROPOSED-NEW (SM1.2; carrier-root-index home) |
+| Epoch-keyed occurrence-sets | none — undesigned | PROPOSED-NEW (2′ assessment deliverable) |
+| Cell-layer delta-notify (changed-path hint on write) | none — confirmed absent | PROPOSED-NEW (2′ assessment entry fee; D4 microbench content) |
