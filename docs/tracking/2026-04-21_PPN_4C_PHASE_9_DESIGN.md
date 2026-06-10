@@ -12273,6 +12273,36 @@ The LAST 4B sub-phase (§18.21.17 row 4B.5). Phase-design per Stage 4: **groundi
 
 Grounding `wf_dc6f6166-dfa`; probes `/tmp/probe4b5/*.prologos` (ephemeral; committed fixtures land at 4B.5.a/b). Code @ `ed8e2200`/`5b0c78ed`: the §18.21.24.6 landmark list + elab-network-types.rkt:104-120 (dormant template), metavar-store.rkt:2844-2918 (reset + dual gate), driver.rkt:1510-1548 (def-group + flattening), macros.rkt:9646-9651 (bypass), elaborator.rkt:735-739/:1010-1012 (registry consumers), propagator.rkt:3386-3393/:2871-2878/:1746-1750 (fire-once facts), :4208-4256 (decomp-key/pair-decomps). Locks consumed: D1-D6 (§18.21.16), DQ1-DQ5 (§18.21.20), ①/② (§18.21.22), α+TC-(a) (§18.21.24), Q2/4D (§18.13). The (iii) capture: PM 12B note §10; PM 13 note §9 pointer.
 
+#### §18.21.26 4B.5.a mini-design + mini-audit — A1 arm + scan + acyclic demand-driven sweep (2026-06-10)
+
+Targeted main-session mini-audit (per the §18.21.21 precedent — the heavy grounding ran at §18.21.25; this re-ground is surgical) + wiring co-design. All §18.21.25 locks carry.
+
+##### §18.21.26.1 Mini-audit findings (@ `5b0c78ed`)
+
+- **D-4B5-5 VERIFIED at source**: `elaborate-var`'s first arm is `[idx (expr-bvar idx)]` (elaborator.rkt:664) — locals are de Bruijn bvars; only free/global refs are `expr-fvar`. The post-elaborate scan is exact.
+- **The full resolution chain read** (elaborator.rkt:661-765): locals → relational-env → relational-fallback → own-ns FQN (ground-gated) → where-method → resolve-name FQN (ground-gated) → bare (ground-gated) → multi-defn "must be applied" error → constraint-inference → `suc`/primitive-op eta → `[else]` unbound. **Three ground-gated arms; the multi-defn arm precedes the tail.**
+- **`with-fresh-meta-env` REUSE-BLOCKED as-is** (metavar-store.rkt:1815-1843): binds a FRESH `current-file-module-network-ref` — would hide the file's mnr from the sweep's typing. Also binds 15 params + `reset-meta-store!`.
+- **The inferred commit tail is extractable** (driver.rkt:1271-1347): infer-on-network/err→infer/err → is-type → trait/cap/constraint checks → freeze/specialize/zonk → QTT → dual `global-env-add` + location registration. Inline today; this IS the sweep's per-item work.
+- **No general free-vars utility** (only macros.rkt:8716 local); the holes helpers (`type-contains-hole?`/`-meta?`, driver) are the in-file walk precedent; `shift` (substitution.rkt) is the canonical exhaustive case list.
+
+##### §18.21.26.2 Wiring decisions (W1-W5, user-approved leans)
+
+- **W1 — arm placement + name rule**: the pending arm goes at the resolution chain's TAIL, immediately before `[else]`, gated on `current-residuation-enabled?`. Consequences: behavior-superset (only previously-Unbound programs change); import-shadow status quo preserved (D-4B3-8 → 12B); **the multi-defn arm fires first → arity-dispatched base names keep "must be applied" instead of residuating on the never-grounding base cell (the R3 landmine dodged at the elaborator layer)**. Name rule (DQ3 parity): the arm returns the resolved own-FQN fvar under ns (bare otherwise); the scan keys groundness on the BARE name (strip via `split-qualified-name` — the 4B.3-b read-side precedent). Gate: G2 stored-form parity test (fwd-vs-bwd committed bodies `pp-expr`-identical). **Named boundary**: the pending arm skips `maybe-auto-apply-implicits` (no type available) — forward refs to all-implicit-param defs may type differently than backward; simple case tested, implicit-heavy case named for 12B.
+- **W2 — extract the commit tail** as `type-and-commit-def` (shared by process-def's inferred path [behavior-preserving refactor] + the sweep). The sweep's annotated arm generalizes the shipped TC-(a) (check/err against T + commit).
+- **W3 — fresh-context variant**: factor `with-fresh-meta-env` into a core that does NOT bind the mnr (the sweep's per-item context) + the test wrapper re-adds the fresh mnr. Suite gates the factoring (users must see identical behavior).
+- **W4 — demand trigger is DATA-driven**: process-command's expression arm runs the same pending-fvar scan post-elaborate; pending → invoke the sweep via a `current-residuation-sweep` hook parameter (bound in process-file-inner; named scaffolding, dies with the sweep) → re-check; still pending → today's unbound error text. Placeholders stay positional in `results`; the sweep records completions in a map; **file-end finalize = one last sweep + a single replacement walk**.
+- **W5 — the scan mirrors `shift`'s exhaustive case list**: pure `collect-fvar-names` walk (decomplected from status filtering, which stays driver-side where global-env is already required).
+
+##### §18.21.26.3 Sub-phase-discovered design items (resolved in-design, verify-at-implementation)
+
+- **Self-exclusion rule**: the scan EXCLUDES the def's own name (bare + own-FQN) from pending-referents — self-references are well-founded exactly as today's pre-register pattern (whnf stuck-on-#f); without exclusion a self-referencing def deadlocks on its own groundness.
+- **Annotated-path pre-register interaction (the D-4B5-2 trap, again)**: the annotated path pre-registers `(def-entry T #f)` BEFORE body elaboration (self-recursion support). On general-body deferral the pre-register must be UNDONE (cell restored to def-bot → `'pending`) or finalize's groundness keying breaks. **VERIFY at implementation**: `global-env-remove!`'s post-4A mnr semantics (does it restore def-bot?); the inferred-path self-ref mechanism (`def foo := λx. foo x` WORKS today per §18.10.5 — identify the mechanism before touching; G3 gates it).
+- **def-group guard**: clauses with pending fvars post-elaboration → status-quo unbound error (no clause-level residuation; the flattening untouched).
+
+##### §18.21.26.4 Gate (RF-4) + estimate
+
+p4 chain → 0 err · G2 stored-form parity · mid-file-use demand case · self-ref (G3) regression · committed `test-general-body-01` · §6 canary · §2i guard · acceptance + probe (process-file) · clean `.pnet` regen · full suite. ~200-350 LoC.
+
 ---
 
 ## Cross-track inputs (running log)
