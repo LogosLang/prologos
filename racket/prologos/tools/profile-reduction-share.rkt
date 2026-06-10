@@ -60,5 +60,25 @@
             red (if (zero? total) 0 (real->decimal-string (* 100.0 (/ red total)) 2))
             sub (if (zero? total) 0 (real->decimal-string (* 100.0 (/ sub total)) 2))
             (if (zero? total) 0 (real->decimal-string (* 100.0 (/ (+ red sub) total)) 2)))
+    ;; v2 (same day): call-tree TOTALS for reduction.rkt nodes — the analyzer merges
+    ;; recursion into one node, so node-total = time the function is anywhere on
+    ;; stack; the max total among reduction.rkt roots bounds the reduction CALL-TREE
+    ;; share (self-time under-attributes: whnf's work lands in callee modules).
+    (printf "\n-- reduction.rkt nodes by TOTAL (call-tree attribution) --\n")
+    (define red-nodes
+      (sort (for/list ([n (in-list (profile-nodes prof))]
+                       #:when (let ([f (src-file n)])
+                                (and f (string-contains? f "reduction.rkt"))))
+              n)
+            > #:key node-total))
+    (for ([n (in-list (take red-nodes (min 10 (length red-nodes))))])
+      (printf "~a: total ~a ms (~a%)  self ~a ms\n"
+              (or (node-id n) '<anon>) (node-total n)
+              (if (zero? total) 0 (real->decimal-string (* 100.0 (/ (node-total n) total)) 2))
+              (node-self n)))
+    (unless (null? red-nodes)
+      (printf "REDUCTION-TREE-BOUND: ~a%\n"
+              (if (zero? total) 0
+                  (real->decimal-string (* 100.0 (/ (node-total (car red-nodes)) total)) 2))))
     (printf "\n-- full profile (render-text) --\n")
     (render prof)))
