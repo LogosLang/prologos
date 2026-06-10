@@ -37,13 +37,15 @@
 
 (define eclass-bot
   (hasheq ':best #f
-          ':alts (seteq)
+          ;; ':alts members are PCE digests (bytes) — equal?-based set REQUIRED
+          ;; (seteq would fail to dedup equal digests computed separately)
+          ':alts (set)
           ':canonical #f
           ':provenance (seteq)
           ':regime 'retraction-eligible))
 
 (define (make-eclass-value #:best [best #f]
-                           #:alts [alts (seteq)]
+                           #:alts [alts (set)]
                            #:canonical [canonical #f]
                            #:provenance [provenance (seteq)]
                            #:regime [regime 'retraction-eligible])
@@ -83,8 +85,8 @@
     [(not (hash? new)) old]
     [else
      (hasheq ':best       (best-merge (hash-ref old ':best #f) (hash-ref new ':best #f))
-             ':alts       (set-union (hash-ref old ':alts (seteq))
-                                     (hash-ref new ':alts (seteq)))
+             ':alts       (set-union (hash-ref old ':alts (set))
+                                     (hash-ref new ':alts (set)))
              ':canonical  (canonical-merge (hash-ref old ':canonical #f)
                                            (hash-ref new ':canonical #f))
              ':provenance (set-union (hash-ref old ':provenance (seteq))

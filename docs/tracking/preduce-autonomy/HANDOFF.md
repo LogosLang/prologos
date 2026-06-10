@@ -32,15 +32,20 @@ vectors + 23 tests; cross-process determinism verified).
 DONE: eclass-cell.rkt + the 'eclass-refine relation LANDED (the SM2 lock realized:
 product merge + 'term carrier + relation constant/variance/factory/ctor-table; 22
 tests through the public dispatcher).
-NEXT UNIT: **the GREEN SLICE** (D.1 §2.4): hashcons registry (PCE-keyed e-node →
-e-class cell-id allocation; allocation-order ids feed ':canonical) + the
-union-emitter (the e-graph union = installing an 'eclass-refine relate between two
-class cells) + the LITERAL TRACE test (cell-creation → install → min-join write →
-quiescence → canonical read) + the racing-union test (two unions racing in one BSP
-round → same fixpoint) + the CONSUMING READ (an :eclass-link facet written into the
-attribute map pointing at a class; read back the class best — asserted in
-test-eclass-cell extension, acceptance file gains a §8 marker comment only until
-reduction rules land). D5 probe can interleave (calibration-only).
+DONE: **THE GREEN SLICE IS ALIVE** (eclass-graph.rkt: hashcons + intern + union-
+emitter; 41 first-run-green checks incl. the D.1 §2.4 literal trace, racing-union
+CALM fixpoint, and the consuming read; ':alts equal?-set design fix). Track 1
+substrate stack complete: facets ✅ shape-P ✅ PCE ✅ product cell + relation ✅
+hashcons + union ✅.
+NEXT UNIT (choose at firing per charter §7 sequencing): (a) **#:after ordering +
+keep-pending substrate** (stratification.md CAUTION: REQUIRED before any
+order-sensitive handler pair — BLOCKING for rule promotion; touches
+register-stratum-handler! propagator.rkt:3193 + the process-tier auto-reset
+:3466-3468), OR (b) **D5 probe** (singleton-fraction calibration on the comparative
+corpus — cheap, informs Track 1 close), OR (c) **congruence layer** (S0
+signature-set watchers per D.1 §2.1). Recommended order: (b) D5 probe (one firing,
+data informs everything), then (a) #:after substrate, then (c). The effect-safety
+guard (BLOCKING Track 2 Phase 0) remains queued behind these.
 Implementation queue below. Phase A history follows for context.
 
 Done so far (all interactive, with the owner):

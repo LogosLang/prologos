@@ -11,12 +11,12 @@
 ;; --- componentwise-ACI laws (spot checks) ---
 
 (define v1 (make-eclass-value #:best (cons 5 (expr-int 1))
-                              #:alts (seteq 'n1)
+                              #:alts (set 'n1)
                               #:canonical 10
                               #:provenance (seteq 'r1)
                               #:regime 'contextual))
 (define v2 (make-eclass-value #:best (cons 3 (expr-int 2))
-                              #:alts (seteq 'n2)
+                              #:alts (set 'n2)
                               #:canonical 7
                               #:provenance (seteq 'r2)
                               #:regime 'ground))
@@ -26,7 +26,7 @@
 ;; idempotence
 (check-equal? (eclass-merge v1 v1) v1)
 ;; associativity (sample)
-(define v3 (make-eclass-value #:best (cons 4 (expr-int 3)) #:alts (seteq 'n3)))
+(define v3 (make-eclass-value #:best (cons 4 (expr-int 3)) #:alts (set 'n3)))
 (check-equal? (eclass-merge (eclass-merge v1 v2) v3)
               (eclass-merge v1 (eclass-merge v2 v3)))
 ;; bot is the identity
@@ -39,7 +39,7 @@
 
 (define m (eclass-merge v1 v2))
 (check-equal? (hash-ref m ':best) (cons 3 (expr-int 2)))          ;; argmin by cost
-(check-equal? (hash-ref m ':alts) (seteq 'n1 'n2))                ;; set-union
+(check-equal? (hash-ref m ':alts) (set 'n1 'n2))                 ;; set-union (equal?-based)
 (check-equal? (hash-ref m ':canonical) 7)                         ;; min allocation order
 (check-equal? (hash-ref m ':provenance) (seteq 'r1 'r2))          ;; set-union
 (check-equal? (hash-ref m ':regime) 'ground)                      ;; max toward ground

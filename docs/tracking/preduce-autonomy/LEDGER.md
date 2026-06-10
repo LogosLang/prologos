@@ -514,3 +514,26 @@ Entry template:
   through the PUBLIC dispatcher (sre-make-structural-relate-propagator), idempotent
   re-fire.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 9 — [SIGNIFICANT] THE GREEN SLICE IS ALIVE (D.1 §2.4 trace executing)
+- **Shipped**: eclass-graph.rkt — the hashcons registry (on-network cell; PCE-digest →
+  (alloc . cell-id), equal?-keyed; per-key MIN-BY-ALLOC hash-union so racing interns
+  resolve deterministically), eclass-intern (content-address via the single hasher;
+  hashcons hit = same cell + ZERO allocation; ':canonical = the cell-id's allocation
+  number — network ids are monotone, min-join IS first-allocation order, NO separate
+  counter, no off-network state), eclass-union (e-graph union = an 'eclass-refine
+  relate INSTALL; the join lands at BSP quiescence), lookup/read.
+- **Design fix mid-unit**: ':alts switched to equal?-based sets (members are PCE
+  digests = bytes; seteq would silently fail to dedup equal digests computed
+  separately — caught at design time, before any test could mask it).
+- **The three trace tests (41 checks, first-run green)**: (1) the LITERAL TRACE —
+  create → intern → union install → quiescence → both cells hold the join, argmin
+  best, min-alloc canonical, digest-dedup alts; (2) RACING UNIONS — a~b + b~c
+  installed before quiescence, permuted orders → ONE fixpoint (CALM
+  order-independence, transitive convergence through the shared cell, global argmin
+  preserved); (3) the CONSUMING READ — :eclass-link facet (arity-3 raw) → registry
+  → class best, with the link FILTERED from the user-facing arity-2 view.
+- **Three-key separation live**: canonical NAME (min alloc) ≠ cost-best FORM
+  (argmin) ≠ content-address KEY (PCE digest) — each asserted by a distinct check.
+- **Landed in**: (this commit). Track 1's substrate stack is now: facets ✅ shape-P ✅
+  PCE ✅ product cell + relation ✅ hashcons + union ✅.
