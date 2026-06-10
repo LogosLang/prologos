@@ -145,4 +145,22 @@ Entry template:
   through a critic-invented variant (2′) that no agent adversarially vetted — the
   owner-challenger layer caught it and the owner gated it. Pattern: panel COMPOSITIONS
   need the same skepticism as panel kill-shots.
-- **Landed in**: design doc §4 (this commit); SM1 lock pending the 2′ assessment.
+- **Landed in**: design doc §4 (commit `183f5a52`); SM1 lock pending the 2′ assessment.
+
+## 2026-06-10 — interactive (pre-loop) — [OWNER-DECIDED] SM1 LOCKED via the 2′ assessment (D frame)
+- **Decision**: The commissioned 2′ assessment (panel `wf_9d49880c-9ea`) returned; owner
+  adopted: (1) the **D frame** — eager-allocate green slice + shape-P delta-notify built
+  for the attribute map now + 2′-B pre-registered at D4's gate with T-FLIP thresholds
+  (80%/50% singleton fraction, 1.5× alloc cost, 1.2× suite wall) as owned conventions;
+  D5 singleton-fraction count BEFORE any allocation code; (2) SM2's "singleton structural
+  fast path" phrase = SATISFIED PER-CLASS (write-target datum, not storage home — no
+  embryo commitment; clarifying sentence added to §2.1); (3) epochs = instrumentation-
+  grade counter for the D5 measurement (ledger item 13), real epoch cell at SM1.2.
+- **Assessment highlights**: 2′-as-commissioned DEAD by its own packet (per-key watcher
+  install conveyor + the newly-priced dependent-fold second ceiling); shape-P
+  ('pointwise-merge declared property, changed-paths from delta keys, no API change)
+  verified correct-by-construction for both compound-tagged-merge and
+  attribute-map-merge-fn; NAME-at-reservation DROPPED (no SM2 amendment — minted at
+  allocation per lock); the "no path-declaring S0 dependents" negative invariant given
+  a recorded home (§4.8 + allocation-site comments; SM3 rule registry = named exception).
+- **Landed in**: design doc §4.8 + §4.6 closure + Master §Layer-1 amendment (this commit).

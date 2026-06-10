@@ -1,7 +1,7 @@
 # PReduce Track 0.1 — Architectural Design (D.1)
 
 **Created**: 2026-06-10
-**Status**: Stage 3 in progress — SM2 ✅ SM3 ✅ LOCKED; SM1 SETTLED (§4, lock pending the 2′ assessment); SM4/SM5/SM6 open
+**Status**: Stage 3 in progress — SM1 ✅ SM2 ✅ SM3 ✅ LOCKED; SM4/SM5/SM6 open; then the NTT exit gate
 **Supersedes**: the Master's Track 0.1 row wording, per the 2026-06-10 owner agreement on closure
 semantics: this doc's body is the **six sub-models settled as design decisions**, and 0.1 closes
 with a **coarse NTT model + correspondence table as the exit gate** (every NTT keyword maps to an
@@ -17,7 +17,7 @@ run `wf_118652c1-716`); owner decisions D2/D5/D7 (2026-06-10 session).
 
 | Sub-model | Description | Status | Notes |
 |---|---|---|---|
-| SM1 | AST PU compound cell layout (Layer 1 granularity) | 🔄 | Settled 2026-06-10 (§4); owner: extend attr-map / epoch-keyed / commission 2′; LOCK pending 2′ assessment |
+| SM1 | AST PU compound cell layout (Layer 1 granularity) | ✅ | LOCKED 2026-06-10 — 2′ assessment delivered the D frame (§4.8): eager green + shape-P for attr-map + 2′-B pre-registered at D4's gate |
 | SM2 | E-class cell realization | ✅ | LOCKED 2026-06-10 — T5 census LOW risk (§2.10); corpus amendments in lock commit |
 | SM3 | Unified rule registry cell | ✅ | LOCKED 2026-06-10 — tier census pinned (§3.7); naming scheme delivered (§3.4) |
 | SM4 | Strata (S0 + S(-1)) | ⬜ | Congruence placement RESOLVED into SM2 (S0 watchers); re-derive "two strata suffice" incl. rebuild + fuel |
@@ -78,7 +78,10 @@ Axis-1 tag determines its **write-target** — EAGER kinds (IN-fragment, conflue
 arithmetic) write `best` only; SATURATE kinds (genuinely non-confluent cost-differing rules) also
 write `alts`. The singleton case is the structural fast path; widening is emergent, not moded.
 `alts`-existence is justified-or-descoped by the SATURATE-rule existence trigger (scaffold ledger
-item 6).
+item 6). **Clarified at SM1 lock (owner, 2026-06-10)**: "the singleton case is the structural
+fast path" is SATISFIED PER-CLASS — eager kinds write `best`-only so singleton cells stay
+minimal by construction; the fast path is the WRITE-TARGET datum, not a storage-home
+commitment (no embryo implied; a future T-FLIP firing needs no amendment to this lock).
 
 **Congruence closure = S0, structurally emergent** (panel cluster B): hashcons signature-set
 watchers discover congruent pairs and emit unions as min-join writes; the congruence invariant is
@@ -408,7 +411,7 @@ registries (indices 7-23). Seed-pour total: 41 entries (13 rules + 28 ctor-descs
 | Per-module `.pnet` rule sections (tier 1) | pnet-serialize extension | PROPOSED-NEW (SP5 / Track 0.3) |
 
 
-## §4 Sub-model 1 — AST PU Compound Layout / Layer 1 (SETTLED 2026-06-10)
+## §4 Sub-model 1 — AST PU Compound Layout / Layer 1 (LOCKED 2026-06-10)
 
 Inputs: 2026-06-10 grounding sweep (attribute map / M-type / reduction state / index prior
 art) + design-options panel run `wf_01c38ba0-ab4` + main-session R-lens verifications +
@@ -445,12 +448,17 @@ itself is a named design obligation inside the 2′ assessment. Grounds: positio
 eq?-ephemeral while the registry is persistent — un-epoched counting fires from cross-parse
 history noise and silently decays lazy into eager.
 
-**Materialization posture (owner)**: the registry-resident-embryo variant ("2′") is
-COMMISSIONED for its own adversarial assessment before anything locks on it — it was
-critic-invented and never vetted, it sits on the now-CONFIRMED O(all-keys) diff-cost ceiling,
-and it front-runs D4's microbench-gated universe deferral. SM1.4 (widening + congruence
-coverage) is BLOCKED on that assessment. The green slice proceeds meanwhile (singleton-only
-probe — per-class cell and embryo coincide there; D4's green wording covers it).
+**Materialization posture (owner; resolved by the 2′ assessment — see §4.8)**: the
+**D frame**. Track 1 proceeds on EAGER-ALLOCATE (per-class cell per reserved KEY, batched
+topology requests — D4's green wording); **shape-P delta-notify is built for the attribute
+map now** (independent need — the production carrier's confirmed ceiling — and it de-risks
+the mechanism); **2′-B** (the stratum variant: registry with ZERO S0 path-watchers,
+writer-emitted widening requests, topology-tier handler) is PRE-REGISTERED as D4's
+microbench-gated consolidation candidate with pre-named flip thresholds (T-FLIP: singleton
+fraction 50%/80%, allocation-cost ratio 1.5×, suite wall 1.2× — owned as pre-registration
+CONVENTIONS, recalibrated at first real workload). The D5 singleton-fraction count runs
+BEFORE any allocation code (zero new machinery). 2′-as-commissioned (per-key S0 watchers)
+is DEAD by its own assessment: per-key install churn + the dependent-fold second ceiling.
 
 **Scaffolding named**: (i) the carrier's `make-parameter` cell-id discovery
 (typing-propagators.rkt:2833) + per-command fallback dual path (:2856-2865) become SHARED
@@ -513,16 +521,55 @@ SM1.5 speculation probe (gates SM2.3).
 | 10 | Shared make-parameter cell-id + per-command fallback (now two-subsystem load-bearing) | PM Track 12 parameters→cells |
 | 11 | Reduction memo caches (4 parameters) coexist as authoritative until conversion checking reads :eclass-link | Track 8 parity + retirement |
 | 12 | Trigger-(ii) SATURATE widening arm (designed, dormant) | Track 4 deployment gate + ledger row |
+| 13 | Instrumentation-grade off-network epoch counter (D5 measurement only) | Real epoch cell at SM1.2 (pre-allocated + two-context audit) |
 
 ### §4.6 Corpus amendments at SM1 lock
 
 1. Master §Layer-1: "components reference Layer 2 **by cell-id**" → by content-address KEY;
    add the realization-or-pivot sentence (Layer 1 realized as parse-tree M-type +
-   attribute-map pattern; the one-PU-per-AST claim retired as design-lore). (§Layer-2's
-   circularity phrase was already amended at the SM2 lock.)
-2. SM2 §2.1 NAME-at-reservation amendment — owner-gated, PENDING the 2′ assessment (which
-   decides reservation semantics); flagged, not yet applied.
-3. Code comment typing-propagators.rkt:2844 (".pnet cache populates it") — fix at SM1.1.
+   attribute-map pattern; the one-PU-per-AST claim retired as design-lore). ✅ APPLIED in
+   the lock commit. (§Layer-2's circularity phrase was already amended at the SM2 lock.)
+2. SM2 §2.1 NAME-at-reservation amendment — ✅ CLOSED, NO AMENDMENT NEEDED: 2′-B mints the
+   NAME in the topology handler at cell allocation, exactly as the SM2 lock says.
+3. Code comment typing-propagators.rkt:2844 (".pnet cache populates it") — fix at SM1.1
+   (code change; lands with the SM1.1 commit).
+
+### §4.8 The 2′ assessment verdict (panel `wf_9d49880c-9ea`, adopted at lock)
+
+**Shape-P delta-notify (the assessment's prize, adopted as design)**: a cell-DECLARED
+`'pointwise-merge` property (ideally DERIVED via `resolve-domain-properties` — ledger item 5's
+machinery): `k ∉ keys(delta) ⟹ merged[k] = old[k]`, keys never removed. VERIFIED true by
+construction for `compound-tagged-merge` AND `attribute-map-merge-fn`. When declared,
+`net-cell-write`'s slow path computes changed-paths from the DELTA's keys only — O(|delta|),
+no caller API change (the component-write helper already knows its path and currently
+destroys it at the boundary). Scheduler-independent (a Cell-layer dependency-notification
+policy — the orthogonality table's assigned home). Built FIRST for the attribute map (SM1.1
+adjacent), with its own re-microbench at close (magnitude unmeasured; the ceiling is
+structurally confirmed).
+**Second ceiling (new finding, priced)**: even with shape-P, the per-write dependent
+champ-folds are O(#dependents) — per-key watcher designs reinstate the cost. Fix would need
+cached cell-level flags (a second cell-layer change; pipeline.md struct-field discipline).
+This is what killed 2′-as-commissioned alongside the install conveyor.
+**The negative invariant + its home**: the registry (and eager's index cell) stay cheap by
+taking **no path-declaring S0 dependents** — a machinery-less invariant whose silent
+violation resurrects the full diff ceiling (the fast/slow dispatch is decided per-write by
+what dependents EXIST). HOME: this section + a mandatory comment at each such cell's
+allocation site; SM3's rule registry is the named, separately-priced EXCEPTION (its
+rule-tag-index watchers are deliberate). Until NTT's compound-cell contract lands, this
+discipline is the only guard.
+**T-FLIP gate (D4's microbench content, pre-registered)**: 2′-B flips IN if the D5-measured
+singleton fraction ≥ 80% AND eager allocation cost ≥ 1.5× the 2′-B prototype on M1-M3
+microbenches AND suite wall ≤ 1.2×; eager stands if singleton fraction < 50% or thresholds
+unmet. Numbers are conventions; recalibrate at first real workload. 2′-B's pre-allocation
+fee (widening request cell + epoch cell need make-prop-network pre-allocation + two-context
+audits, forced by the zero-NET-2 guard at register-stratum-handler!, propagator.rkt:3198-3210)
+is priced INTO the gate.
+**Epochs (owner)**: D5 measurement runs on an instrumentation-grade off-network per-command
+counter (named scaffolding, ledger item 13); the REAL epoch cell (pre-allocated +
+two-context-audited) lands at SM1.2 with the identity green slice.
+**Two-SHA discipline**: this lock doc lives on `preduce-autonomy` while code verification
+pins main — gate write-ups cite BOTH SHAs until the branch merges (workflow.md
+dynamic-workflow code-state discipline).
 
 ### §4.7 NTT correspondence-table entries seeded by SM1
 

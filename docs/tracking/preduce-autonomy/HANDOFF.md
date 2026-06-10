@@ -30,16 +30,20 @@ DONE: SM2 LOCKED (db0bb8ba), SM3 LOCKED (7162f492), SM1 SETTLED (§4) — owner:
 attribute map / epoch-keyed live-parse / commission 2′ assessment. Diff-cost ceiling
 CONFIRMED (O(all-keys) per compound write; fix must be cell-layer); ".pnet populates
 attribute map" comment = fiction.
-NEXT: (a) The 2′ ASSESSMENT (launched as a panel at session end if running — else
-launch: registry-resident embryo as first-class proposal + adversarial pass; scope:
-cell-layer delta-notify design, D4 re-gating, epoch-keyed occurrence-set mechanism,
-microbench prescription, SM2 NAME-at-reservation amendment question). SM1 LOCK lands
-when it returns (+ §4.6 Master amendments in the lock commit). (b) SM4 (strata
-re-derivation: congruence watchers + presence cells + fuel + S(-1); most inputs now
-fixed), SM5 (effect posture — owner-census point 5), SM6 (persistence — consumes D3
-KEY + tier split + the ".pnet is parameter-only" reality). (c) DEFERRED.md triage
-still pending. (d) R-lens carried: T4 (SM2.3/SM1.5), T7 (SM6/0.3), broadcast-write-
-shape vs product merge (SP3), dispatch-attachment question (§4.2, before watcher code).
+DONE ALSO: SM1 LOCKED (D frame adopted: eager green + shape-P for attr-map + 2′-B
+pre-registered at D4's T-FLIP gate; NAME-at-reservation closed no-amendment; SM2
+fast-path phrase clarified per-class; Master §Layer-1 amended; negative invariant
+homed in §4.8).
+NEXT: (a) SM4 (strata re-derivation: congruence watchers + presence cells + fuel +
+S(-1) + the "two strata suffice" honest derivation; nearly all inputs now fixed —
+likely the cheapest panel round). (b) SM5 (effect posture — owner-census point 5).
+(c) SM6 (persistence — consumes D3 KEY + tier split + ".pnet is parameter-only"
+reality). (d) Then the NTT exit gate (coarse model + correspondence table — §2.8,
+§3.6, §4.7 entries already seeded). (e) DEFERRED.md triage still pending. (f) R-lens
+carried: T4 (SM2.3/SM1.5), T7 (SM6/0.3), broadcast-write-shape vs product merge (SP3),
+dispatch-attachment question (§4.2, before watcher code). (g) Implementation queue
+when 0.1 closes: SM1.1 production-merge substrate commit (+ shape-P for attr-map +
+.pnet comment fix), D5 probe (T6 scoping + singleton-fraction count FIRST).
 PROCESS: pass the worktree path (/Users/avanti/dev/projects/prologos-preduce-auto)
 for branch docs; panel COMPOSITIONS need the same skepticism as kill-shots (data
 point #4).

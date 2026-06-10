@@ -62,9 +62,9 @@
 
 ### Layer 1 — Per-AST-PU compound regions
 
-The AST is one Pocket Universe (per [PPN Track 1 D.7](2026-03-30_PPN_TRACK2B_DESIGN.md): tree topology stored as polynomial-functor M-type in one cell, reducing 5000+ cells to 5 PUs). Per-node occurrence-state (reduction status, cost-in-context, substitution environment, provenance) lives as **compound-cell components** keyed by node-position inside the AST PU, NOT as separate per-node PUs. The PU is the monotonic execution shell at compound-component granularity.
+**Amended 2026-06-10 per Track 0.1 SM1 lock ([D.1 §4](2026-06-10_PREDUCE_TRACK01_DESIGN.md))** — realization-or-pivot: the "AST is one Pocket Universe / M-type in one cell / 5 PUs" framing is retired as design-lore (verified: the parse tree IS the M-type — parse-tree-node, parse-reader.rkt:1104-1114 — but no AST-topology-as-one-cell exists; "PU" in code is the pattern: one compound cell, components indexed by alternatives). Layer 1's realization: per-node occurrence-state (`:eclass-link`, `:reduction-status`, `:cost-in-context`, `:reduction-provenance`) lives as new FACETS of the production typed attribute map (the persistent compound cell, positions = expr identity, per-(position × facet) components, two-level pointwise merge) — the proven per-AST compound region, extended.
 
-Component values reference Layer 2 (shared e-class cells) by cell-id. Multiple syntactic occurrences of the same term share the same e-class cell, preserving Lévy-optimal sharing.
+Component values reference Layer 2 by **content-address KEY** (never cell-id, never canonical NAME — D3 three-key separation). Multiple syntactic occurrences of the same term share the same e-class through the shared KEY, preserving Lévy-optimal sharing. The attribute map is SESSION-persistent only; cross-session persistence is Layer 2 / `.pnet` business (Track 5 / SM6).
 
 ### Layer 2 — Shared e-class cells
 
