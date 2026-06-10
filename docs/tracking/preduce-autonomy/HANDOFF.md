@@ -53,8 +53,9 @@ NEXT (in order):
 (a) **OWNER: review + merge `preduce-autonomy` → main** (decided: merge after 0.3
 close; docs-only, no code/suite risk; the lock-set becomes citable at main HEAD;
 rebase onto current main first — main advances under the owner's other session).
-(b) **OWNER ACTIONS carried**: Zig PoC pinning (identify branch, archive, document
-read interface — D.3 §5); DEFERRED.md triage (A.0 leftover, never done).
+(b) **OWNER ACTIONS carried**: DEFERRED.md triage (A.0 leftover — folded into the
+loop's iteration-0 shakeout). [Zig PoC pinning REMOVED per owner ruling 2026-06-10:
+the PoC is a separate lowering experiment, not a consumer — D.3 §5 amended.]
 (c) **PHASE B ENTRY (the autonomous loop)**: conditions met post-merge. Track 1 =
 the implementation queue in dependency order: SM1.1 production-merge commit + shape-P
 delta-notify + comment fix (ONE commit + full typing regression); pce.rkt (PCE/1

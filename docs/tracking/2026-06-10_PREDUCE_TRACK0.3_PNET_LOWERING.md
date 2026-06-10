@@ -64,14 +64,16 @@ not outrun this spec). Direct-to-LLVM (not MLIR) per the standing commitment.
 re-derive by NAME at load — the two-tier shape); divergence is structurally prevented
 by one schema rather than discipline.
 
-## §5 Owner actions + gates (tracker rows)
+## §5 Consumer posture + gates (AMENDED 2026-06-10, owner ruling)
 
-1. **PoC pinning** (OWNER): identify the Zig PoC branch, archive source, document its
-   current read interface (engineering-anchors A3 TODO inherited here).
-2. **First-consumer-integration gate**: the boundary spec is normative-from-our-side
-   (collaborator rebases); validated at the first real consumer integration.
-3. PCE/1 golden vectors = the cross-language conformance artifact (Zig consumer tests
-   against them, not against our source).
+**Owner ruling**: the Zig PoC is a SEPARATE experiment to learn from lowering — it is
+NOT a consumer of this spec, and PoC pinning is NOT a 0.3 obligation (the
+engineering-anchors A3 TODO remains the A0 paper's concern, not PReduce's). Consequence:
+there is currently **NO external consumer** of this format. The spec is
+normative-from-our-side; the **PCE/1 golden vectors are the SOLE conformance artifact**
+until a real consumer exists (any future consumer tests against the vectors, not our
+source). The **first-consumer-integration validation gate** stays on the tracker,
+UNBOUND — it binds when a real consumer is identified.
 
 ## §6 Track 5 implements / 0.3 specified
 

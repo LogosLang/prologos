@@ -178,6 +178,25 @@ measurement harness — Track 2 design opener (the deferred benchmark-posture de
 (4) sharing-aware extraction (e-boost ILP, treewidth, sparse methods) — Track 4's
 NP-boundary; (5) optimism-in-eqsat (Arbore-Cheung-Willsey) applicability to Q2
 merge-under-partial-information — Track 1/4 seam.
+**Owner-added lines (2026-06-10)**: (6) MULTI-DIMENSIONAL cost with tropical quantales —
+e-class extraction under product/tensor quantale composition + the cost-model SELECTION
+policy (which Q, where, when) — Track 4 design; substantial grounding EXISTS
+(TROPICAL_QUANTALE_RESEARCH; addendum §4 multi-quantale NTT model) — commission a
+deep-research only if Track 4's mini-design finds the existing grounding insufficient
+for the composition decision, and scope it to the GAP. (7) Cross-module +
+cross-compilation sharing of discovered e-classes / super-optimization RESULTS
+(persistent superoptimizer caches à la Souper, distributed eqsat, content-addressed
+optimization databases) — Track 5; extends the question-keyed store beyond per-module
+sections. (8) Frontier DELTA sweep on e-(hyper)graphs, interaction nets, GoI — the
+2026-06-02 sweep is the BASELINE; commission the delta (what moved since) before
+Track 2's design opens. (9) FIRST-PRINCIPLES assessment of Petri nets, proof nets, and
+bundled interactions against the lattice-propagator substrate — PRN/PTF-series theory
+research, NOT PReduce-gating; commission on owner interest or when a design tension
+suggests one of those frames fits better than ours. Standing framing (owner, 2026-06-10):
+much of this work is green-field (lattice-based propagators as a whole), but everything
+should be groundable in first principles and adjacent formal disciplines — synthesis
+across those fields to ground and guide engineering is the UTM-FL programme's job, and
+research commissions should serve that synthesis, not replace it.
 
 **5.7 mempalace discipline (added 2026-06-10).** mempalace semantic search is part of
 the STANDING grounding repertoire: query it at every design opening and before any
