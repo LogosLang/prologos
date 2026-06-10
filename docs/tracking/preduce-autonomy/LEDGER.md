@@ -219,4 +219,19 @@ Entry template:
   (Option 2 / guard earlier) was directionally RIGHT and produced a better synthesis
   than either pre-packaged option.
 - **Landed in**: design doc §6 + §7 + SM2 §2.1 product amendment + Master Axis-2
-  re-specification (this commit).
+  re-specification (commit `d2036954`).
+
+## 2026-06-10 — interactive (pre-loop) — [ROUTINE] TRACK 0.1 CLOSED — NTT exit gate PASSED
+- **Decision**: the exit gate ran as main-session assembly (coarse NTT model §8.1 +
+  unified 24-row correspondence table §8.2 + consistency checks §8.3) followed by ONE
+  adversarial purity agent. Verdict: PASS-WITH-AMENDMENTS, all applied — (A) precise
+  lattice definitions for write-once-flat and dedup-or-error (⊤contradiction as
+  legitimate top; merge totality preserved; idempotent identical re-registration);
+  (B) the idempotence seam added to carried seams; (C) two pre-deployment verification
+  gates recorded (SP2: dedup-or-error ACI in code; SP3: broadcast write-shape composes
+  with the product merge). Master Track 0.1 row → ✅ with D.1 linked.
+- **Principle / precedent cited**: the NTT-model-required rule (workflow.md) — 3/3
+  tracks using NTT modeling have now caught real defects (PPN Track 2: 3 gaps; SRE 2G:
+  scatter impurity; PReduce 0.1: two under-specified merge error semantics).
+- **Landed in**: (this commit). Track 0.1 closure = the experiment's Phase A
+  substantially complete; six autonomy data points held for the retro.

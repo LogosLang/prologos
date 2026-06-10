@@ -43,14 +43,22 @@ pessimistic classification + bite counters; regime = 5th SM2 product component
 (owner-signed amendment of a locked sub-model); ground-only cross-session day one;
 T7 RESOLVED in-panel (pnet-serialize surface read; first-of-kind cell-state sections
 named).
-**ALL SIX SUB-MODELS LOCKED. NEXT: the NTT exit gate** — assemble the coarse NTT model
-+ unified correspondence table (§2.8/§3.6/§4.7/§5.8 + §6/§7 entries), run the
-cross-sub-model consistency checks, amend the Master Track 0.1 row, declare Track 0.1
-CLOSED; then Track 0.2 (taxonomy — mostly falls out of SM3's Axis-1 + tier census) and
-Track 0.3 (schema freeze — reserved slots already specified). DEFERRED.md triage still
-pending. Implementation queue: SM1.1 production-merge commit (+ shape-P + comment fix),
-D5 probe (singleton-fraction FIRST), #:after ordering + keep-pending (BLOCKING for the
-promotion handler), effect-safety guard (BLOCKING Track 2 Phase 0).
+**TRACK 0.1 CLOSED 2026-06-10** — NTT exit gate PASSED (D.1 §8.4; adversarial purity
+pass returned PASS-WITH-AMENDMENTS, all applied: precise lattice definitions for
+write-once-flat + dedup-or-error with ⊤contradiction as legitimate top; two
+pre-deployment verification gates recorded for SP2/SP3). Master Track 0.1 row ✅.
+NEXT: (a) Track 0.2 (rule-property taxonomy — mostly falls out of SM3's Axis-1
+enrichment-tag reframe + the §3.7 tier census + SM5's effectful? classification;
+NAC requirement already resolved by SM3 D1). (b) Track 0.3 (.pnet schema freeze —
+reserved slots specified across SM3/SM6; the D3 key-fork + encoding freeze is ONE
+owner cycle; collaborator boundary per the sweep's extract-then-lower obligations).
+(c) DEFERRED.md triage (A.0 leftover, still pending). (d) Implementation queue
+(Track 1 opens after 0.2/0.3): SM1.1 production-merge commit + shape-P + comment fix;
+D5 probe (singleton-fraction FIRST); #:after ordering + keep-pending (BLOCKING for
+promotion); effect-safety guard (BLOCKING Track 2 Phase 0). (e) AUTONOMY EXPERIMENT:
+Phase A is effectively COMPLETE for 0.1 — the charter's Phase B (loop entry at
+Track 1) comes into reach once 0.2/0.3 close; the ledger holds 6 data points for the
+autonomy retro.
 PROCESS: pass the worktree path (/Users/avanti/dev/projects/prologos-preduce-auto)
 for branch docs; panel COMPOSITIONS need the same skepticism as kill-shots (data
 point #4).

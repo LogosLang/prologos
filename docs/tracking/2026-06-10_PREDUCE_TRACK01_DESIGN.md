@@ -1,7 +1,7 @@
 # PReduce Track 0.1 — Architectural Design (D.1)
 
 **Created**: 2026-06-10
-**Status**: Stage 3 — ALL SIX SUB-MODELS LOCKED (SM1-SM6 ✅); the NTT exit gate is the remaining closure step
+**Status**: **CLOSED 2026-06-10** — all six sub-models locked + NTT exit gate PASSED (§8.4)
 **Supersedes**: the Master's Track 0.1 row wording, per the 2026-06-10 owner agreement on closure
 semantics: this doc's body is the **six sub-models settled as design decisions**, and 0.1 closes
 with a **coarse NTT model + correspondence table as the exit gate** (every NTT keyword maps to an
@@ -23,7 +23,7 @@ run `wf_118652c1-716`); owner decisions D2/D5/D7 (2026-06-10 session).
 | SM4 | Strata (S0 + S(-1)) | ✅ | LOCKED 2026-06-10 — exhibited 12-row table (§5.1); zero-new-KINDS claim (§5.2); single normative home; prn e-class home |
 | SM5 | Effect-stratum boundary marker | ✅ | LOCKED 2026-06-10 — F-A/F-B soundness findings; floor in Track 1 + guard as BLOCKING Track 2 Phase 0 (§6) |
 | SM6 | Persistence regimes | ✅ | LOCKED 2026-06-10 — Axis-2 product re-spec; ground-admission rule; regime = 5th product component; question-homed store (§7) |
-| NTT exit gate | Coarse NTT model + correspondence table | ⬜ | After SM1–SM6; PROPOSED-NEW registry started in §2.8 |
+| NTT exit gate | Coarse NTT model + correspondence table | ✅ | PASS 2026-06-10 (§8.4) — amendments applied; TRACK 0.1 CLOSED |
 
 ---
 
@@ -811,3 +811,158 @@ the Cranelift 1.13 finding predicts the registry alone earns its keep first.
 | 16 | Pessimistic effectful/context-free classification (+ bite counters) | Type-derived α at Track 7; context-digest key upgrade |
 | 17 | Ground-only cross-session persistence | Portable assumption-identity design (post-Track 5 data) |
 | 18 | Effect-safety guard timing | BLOCKING Track 2 Phase 0 (structurally enforced, not calendar) |
+
+## §8 NTT Exit Gate — Coarse Model + Unified Correspondence Table
+
+Per the 2026-06-10 closure agreement: the exit gate is a COARSE NTT model (cells, lattice
+declarations, propagator skeletons, tier assignments) + the correspondence discipline
+(every keyword → existing realization file:line, or PROPOSED-NEW + owning track).
+Fine-grained NTT (full fire semantics, exact layouts) lands per-track in Tracks 1-4 docs.
+
+### §8.1 The coarse NTT model
+
+```ntt
+;; ───── Layer 2: e-class cells (per-class, home = prn; SM2 + §7.3) ─────
+cell eclass[KEY]                ;; KEY = content-address: structural hash over de Bruijn
+                                ;; canonical form (D3); EFFECTFUL occurrences instead use
+                                ;; deterministic (epoch × occurrence-path) keys (§6.2)
+  :lattice :structural
+  :enrichment :semilattice [:Q-module Q]      ;; DERIVED annotation (A-1b)
+  :components { best       : (Q × Form)   :merge q-argmin/tie-structural-hash  ;; Q-polymorphic (D7)
+                alts       : Set<ENode>   :merge set-union
+                canonical  : ClassName    :merge min-allocation-order
+                provenance : Support      :merge set-union          ;; NOT append (§4.1 hazard)
+                regime     : Confidence3  :merge max-toward-ground } ;; §7.3, owner-signed
+  ;; eager-vs-saturate is NOT cell shape: per-rule write-target datum (SM2)
+
+cell hashcons-registry          ;; prn; reservations + derived indexes (SM1 D-frame)
+  :lattice :structural
+  :components { reservations : KEY → {occurrences: EpochKeyed-Set, status: 2-chain, name-at-alloc}
+                root-index   : Tag → Set<KEY>     ;; carrier-root-index, propagator-MAINTAINED
+                parents      : KEY → Set<KEY> }
+  :merge per-key dedup-or-error
+  :invariant NO-path-declaring-S0-dependents      ;; §4.8 negative invariant; comment at alloc site
+
+;; ───── Layer 1: occurrence facets on the EXISTING attribute map (SM1) ─────
+cell attribute-map              ;; EXISTS — production typing carrier
+  :property pointwise-merge     ;; shape-P (PROPOSED-NEW): k∉keys(delta) ⟹ merged[k]=old[k]
+  :new-facets { :eclass-link          : KEY    :merge write-once-flat
+                :reduction-status     : Chain  :merge monotone-chain
+                :cost-in-context      : Q      :merge q-min   ;; direction declared at landing (§4.2)
+                :reduction-provenance : Set    :merge set-union
+                :opaque               : Bool   :merge or }    ;; SM5 positive facet, LOAD-BEARING
+
+;; ───── Layer 3: rule registry (prn universe cell; SM3 4b) ─────
+cell rule-registry
+  :lattice :structural
+  :components { module-id → rules-champ        ;; per-module components, structural provenance
+                rule-tag-index (derived) }      ;; propagator-maintained; the NAMED invariant exception
+  :merge module-qualified dedup-or-error        ;; list-append is NOT ACI; per-namespace F5
+  ;; rule-data: { lhs-pattern, rhs-template|apply-ref(tier-2), directionality, cost,
+  ;;              enrichment-tag, write-target, nac-spec, tier, effectful?, stratum,
+  ;;              rule-id(module-qualified), worldview-slot(RESERVED) }
+
+cell presence[NAC-pattern]      ;; SM3 D1 / SM4 row 5a
+  :lattice Bool ⊥→⊤  :merge or  ;; monotone presence; absence = read-time at extraction fixpoint
+
+cell epoch                      ;; SM1.2 (real cell; instrumentation-grade counter until then)
+  :merge monotone-counter       ;; old epochs inert, never deleted
+
+;; ───── Propagators (all S0 unless tiered; SM4 table is normative) ─────
+propagator union-emitter        :reads/:writes eclass.canonical
+  ;; symmetric min-joins; racing unions resolve by the CELL's merge (green-slice criterion)
+propagator congruence-watcher   :reads hashcons-registry{root-index,parents}, eclass.canonical
+                                :writes eclass.canonical          ;; mixed broadcast+fire-once (SCAFFOLD-3)
+propagator rewrite-dispatch     ;; broadcast-over-rules per (cell × stratum); SM3 D6
+  :reads eclass.{best,alts}, rule-registry.rule-tag-index
+  :writes eclass.best [+alts per rule write-target]
+  :guard effect-safety          ;; no RHS delete/dup/reorder of effect-bearing captures —
+                                ;; BLOCKING Track 2 Phase 0 (§6.2)
+propagator presence-maintainer[p] :reads carrier via root-index paths :writes presence[p]
+propagator index-derivers       :reads registry/reservation components :writes derived indexes
+propagator cost-extraction      ;; Track 4: S0 fixpoint BETWEEN per-class cells;
+                                ;; consumers use the dual-trigger quiescence-gated READ (§5.4)
+
+;; ───── Handlers: tier INSTANCES, zero new kinds (SM4 §5.2) ─────
+handler process-retraction   :tier value      ;; EXISTS (unified S(-1))
+handler materialization      :tier topology   ;; batched allocation; 2′-B widening if T-FLIP
+handler promotion            :tier value  :after process-retraction
+                             ;; #:after = PROPOSED-NEW substrate (BLOCKING, §5.5)
+;; fuel: NO handler — cell-layer :on-write-check (EXISTS); §5.1 row 9
+```
+
+### §8.2 Unified correspondence table (consolidates §2.8/§3.6/§4.7/§5.8 + §6/§7)
+
+| NTT construct | Realization | Status / owner |
+|---|---|---|
+| Compound product cell + componentwise merge | attribute-map production pattern (typing-propagators.rkt:2864, :440-463) | EXISTS |
+| merge-IS-order join-semilattice | sre-core.rkt:147-150 | EXISTS |
+| min-join total-order merge | tropical-fuel min precedent (propagator.rkt:1079-1096) | EXISTS (registration new, Track 1) |
+| 'monotone-set / set-union domain | infra-cell-sre-registrations.rkt:130-142 | EXISTS |
+| broadcast-over-items + component-paths | net-add-broadcast-propagator (propagator.rkt:2429) | EXISTS (instantiation new, SP3) |
+| value/topology-tier handlers | register-stratum-handler! (propagator.rkt:3193) | EXISTS |
+| fuel exhaustion on-write-check | propagator.rkt:1083, :1898-1953 | EXISTS |
+| worldview tagging / fork machinery | tagged-cell-value + decision cells (BSP-LE 2B) | EXISTS (SM2.3 semantics open — D1/T4) |
+| `'eclass-refine` relation on term carrier | merge-registry idiom (sre-core.rkt:157-165) | PROPOSED-NEW — Track 1 (8-edit surface, §2.10) |
+| e-class product cell (5 components) | — | PROPOSED-NEW — Track 1 |
+| hashcons-registry + root-index/parents | discrimination-cell + cell-decomps precedents | PROPOSED-NEW — Track 1 (SM1.2) |
+| `:enrichment` derived annotation | resolve-domain-properties (sre-core.rkt:1935) | PROPOSED-NEW — Track 1 derivation; T8 validation wiring |
+| `[:Q-module Q]` polymorphic cost slot | quantale property surface (tropical-fuel.rkt:98-124) as interface | PROPOSED-NEW — Track 1 iface; Track 4 composition |
+| rule-registry universe cell + tag-index | per-domain universe pattern (pipeline.md checklist) | PROPOSED-NEW — SP2 (pioneers universe-on-prn) |
+| dedup-or-error namespace merge | — | PROPOSED-NEW — SP2 |
+| shape-P `pointwise-merge` property + delta-notify | verified true for both production merges | PROPOSED-NEW — SM1.1-adjacent (attr-map first) |
+| new attribute-map facets (5) | facet-merge table extension | PROPOSED-NEW — SM1.1 (ONE commit + full regression) |
+| presence cells | — | PROPOSED-NEW — SP4/Track 4 |
+| epoch cell | — | PROPOSED-NEW — SM1.2 (instr-grade scaffolding until) |
+| deterministic effectful identity keys | — | PROPOSED-NEW — Track 1 (+ 0.3 encoding freeze, one cycle) |
+| effect-safety guard at application core | — | PROPOSED-NEW — Track 2 Phase 0 (BLOCKING) |
+| `#:after` handler ordering + keep-pending | — | PROPOSED-NEW — Track 1/5 (BLOCKING for promotion) |
+| regime 5th component + promotion handler | — | PROPOSED-NEW — Track 1 (component) / Track 5 (handler) |
+| per-module .pnet e-class sections + rewrites registry | serialize-time projection | PROPOSED-NEW — Track 5 / 0.3 (FIRST cell-state sections) |
+| effectful? / context-free pessimistic classifiers + counters | — | PROPOSED-NEW — Track 1 (upgrades: Track 7 α / context-digest) |
+
+### §8.3 Cross-sub-model consistency checks (run at gate)
+
+1. **All component merges ACI** (amended per the gate's purity pass): argmin-with-total-
+   tie-break ✓; set-union ✓; min ✓; max-chain ✓; or ✓; **write-once-flat** is the flat
+   lattice ⊥ < k < ⊤contradiction — ⊥⊔k=k, k⊔k=k (idempotent: the facet is DERIVED, so
+   re-derivation writes the SAME key), k₁⊔k₂(≠)=⊤ (a key conflict on a derived facet means
+   the hasher diverged — contradiction as legitimate lattice top, matching the substrate's
+   contradiction discipline; NOT an exception, totality preserved) ✓; **dedup-or-error**:
+   identical (rule-id → rule-data) re-registration merges IDEMPOTENTLY (no duplicate, no
+   error); same rule-id + different data = ⊤contradiction at that key (error as lattice
+   value; surfaced as a registration-time diagnostic; merge totality preserved); the
+   keyspace itself only grows (F5 per-namespace) ✓.
+2. **Regime component (max) composes with the product** ✓ (§7.3 vs SM4 max-merge finding).
+3. **Effectful keys never enter root-index/signature sets** ✓ consistent with the
+   §4.8/§6.2 invariants; the positive `:opaque` facet is the load-bearing datum ✓.
+4. **Every PROPOSED-NEW names its owner** ✓ (table above).
+5. **Mantra walk**: no imperative loop-over-rules (broadcast + tag-index); no
+   deferred-rebuild stratum (S0 watchers); no scheduler-coupled cell semantics (shape-P
+   is cell-layer; fuel is cell-layer; T-FLIP is microbench-gated storage). Known named
+   strains: SCAFFOLD-3 mixed watcher realization; install-conveyor topology slivers;
+   the 18-item scaffold/deferral ledger with triggers.
+6. **Open seams carried past 0.1 closure (named, with owners)**: D1 worldview support-set
+   semantics (SM2.3, gated on T4 probe); dispatch attachment (§4.2, before watcher code);
+   ingestion realization lock (SM1.2); broadcast-write-shape vs product merge (SP3);
+   Track 4 cost-semantics lock (local relaxation green; sharing-aware = NP boundary);
+   dedup-or-error idempotence under identical re-registration verified IN CODE (SP2).
+
+### §8.4 Gate verdict — PASS (2026-06-10)
+
+Adversarial purity pass returned PASS-WITH-AMENDMENTS; all three applied: (A) the two
+least-obvious merges given precise lattice definitions with ⊤contradiction as legitimate
+top — totality preserved, no merge-time exceptions (§8.3 check 1, amended); (B) the
+dedup-or-error idempotence seam added to the carried-seams list; (C) two PRE-DEPLOYMENT
+VERIFICATION GATES recorded: before SM3 SP2 ships, the dedup-or-error merge is verified
+ACI in code (or its non-ACI cases documented with failure modes); before SP3 ships, the
+broadcast write-shape is verified to compose with the SM2 componentwise product merge
+under write-target routing. Fidelity ✓ (no contradictions with §2-§7); completeness ✓
+(all 18 ledger items + every §8.1 keyword covered); purity ✓ (no unnamed imperative
+dispatch; ACI write-target merge makes broadcast answers registration-order-independent).
+
+**TRACK 0.1 IS CLOSED.** The architecture: six locked sub-models, a coarse NTT model
+whose every keyword traces to a realization or a named owner, an 18-item scaffold ledger
+with retirement triggers, two blocking substrate obligations (#:after ordering;
+effect-safety guard at Track 2 Phase 0), and pre-named measurement gates (T-FLIP, D5
+probe, bite counters) standing between the design and its unmeasured claims.
