@@ -5,36 +5,47 @@ the start of every iteration.**
 
 ---
 
-## Current state (as of iteration 0, 2026-06-10)
+## Current state (as of 2026-06-10, interactive pre-loop session)
 
-The loop has NOT yet run. Infrastructure was set up interactively with the owner:
-branch `preduce-autonomy`, worktree `/Users/avanti/dev/projects/prologos-preduce-auto`,
-based at main `d1586b15`. Charter, ledger, and this handoff exist and are committed.
+The loop has NOT yet run, and per the 2026-06-10 owner decision it does NOT run
+until Phase A (Tracks 0.1–0.3 design closure) completes interactively. Charter §2
+records the amended sequencing.
+
+Done so far (all interactive, with the owner):
+- Branch `preduce-autonomy` + worktree `/Users/avanti/dev/projects/prologos-preduce-auto`,
+  rebased onto main at `533bfcab` (charter commit now `05a82134`).
+- TBGH research layer committed to main (`c27bcc89`) — owner-ratified.
+- Grounding-audit staleness fixes committed to main (`533bfcab`).
+- Vision grounding audit complete: owner-decision census (8 open points, charter §3),
+  drift inventory, prerequisite reality check (tropical-fuel: real, deployed, caveats
+  recorded in charter §2), typing-on-network Network Reality Check: PASSES.
 
 ## Exact next step
 
-**Phase A.0 (housekeeping)** per CHARTER.md §2:
-1. Read the 2026-05-09 substrate-research internal note's §10 drift log
-   (`docs/research/utm-fl/outputs/preduce-adhesive-rewriting-substrate-internal-research.md`)
-   and reconcile the PReduce Master (`docs/tracking/2026-05-02_PREDUCE_MASTER.md`)
-   cross-references against it.
-2. Verify the untracked Track 0.1 sketch
-   (`docs/research/2026-05-02_PREDUCE_TRACK01_ARCHITECTURAL_SKETCH.md`) is current
-   against the drift log, then commit it. NOTE: it is untracked in the MAIN worktree —
-   check whether it's present in this worktree (untracked files don't follow branches);
-   if absent, copy it from the main checkout
-   (`/Users/avanti/dev/projects/prologos/docs/research/2026-05-02_PREDUCE_TRACK01_ARCHITECTURAL_SKETCH.md`).
-3. DEFERRED.md triage for PReduce-relevant items (workflow.md track-start discipline).
+**Interactive Track 0.1 co-design** (main session, owner present — NOT a loop
+iteration). Opening agenda per the audit's ranked questions: (a) DEFERRED.md triage
+(A.0 leftover); (b) owner-census point 2 — define what "Track 0.1 closure" means
+(Master row promises NTT model + six sub-models; the sketch ships neither); then
+(c) work census points 3, 5, 6 as the 0.1 sub-models reach them.
+
+## If the loop is started before Phase A completes
+
+Do NOT begin Track 1 implementation — Phase A designs are not locked. The only
+loop-eligible work is read-only grounding prep (e.g., per-sub-model code-surface
+audits feeding the interactive co-design). When in doubt, halt with a BLOCKED
+ledger entry per charter §8.
 
 ## Open threads
 
-- The three ⚠ OWNER-PROVISIONAL decision points (charter §3) will arise during
-  Phase A design closure — none decided yet.
-- Track 1 prerequisite verification (does `tropical-fuel.rkt` actually ship what
-  PPN 4C Phase 1B's design says?) is needed before Phase B — can be done as
-  read-only grounding any time Phase A stalls.
+- Owner-decision census: 8 open points listed in charter §3; TBGH ratification resolved.
+- DEFERRED.md triage not yet done (A.0 leftover; fold into 0.1 opening).
+- MASTER_ROADMAP: dedicated PReduce rollup section under PRN still to be added
+  (noted in Master references, 2026-06-10).
+- Main is advancing concurrently (owner's PPN 4C session); rebase this branch onto
+  main at each interactive session boundary, and re-verify HEAD-pinned citations after
+  each rebase.
 
 ## Gate status
 
-No code changes yet; no gates run. Suite state inherited from main `d1586b15`
-(green per that commit's discipline).
+Docs-only commits so far; no code changes on this branch; no gates run. Suite state
+inherited from main (8380/0 green per `82f22446` commit message).

@@ -30,23 +30,27 @@ rigor.
 
 ## 2. Scope and sequencing
 
-**In scope**, in order:
+**In scope**, in order (sequencing amended 2026-06-10 per owner direction):
 
-- **Phase A — footing** (do FIRST, before any new design work):
-  - A.0 Housekeeping: reconcile the PReduce Master's cross-references against the
-    2026-05-09 substrate-research internal note §10 drift log; commit the untracked
-    Track 0.1 architectural sketch (`docs/research/2026-05-02_PREDUCE_TRACK01_ARCHITECTURAL_SKETCH.md`)
-    after verifying its content is current; DEFERRED.md triage for PReduce-relevant items.
-    Low-stakes by design — it exercises the loop machinery (ledger, handoff, gates,
-    dailies) where mistakes are cheap.
-  - A.1 Track 0.1 closure — architectural sketch finalized through the full
-    deliberative process (§5), including the NTT model (MANDATORY per workflow.md).
-  - A.2 Track 0.2 closure — rule-property taxonomy.
-  - A.3 Track 0.3 closure — `.pnet` extension + LLVM lowering interface design.
-- **Phase B — implementation tracks** in Master order (Track 1 e-class substrate first),
-  each gated on its design closure and on prerequisite verification (Track 1 gates on
-  PPN 4C Phase 1B `tropical-fuel.rkt` — VERIFY the substrate actually shipped before
-  consuming it; do not assume from docs).
+- **Phase A — footing. INTERACTIVE, not loop work.** The owner decided (2026-06-10)
+  that Tracks 0.1–0.3 design closure happens as main-session co-design with the owner,
+  per the workflow.md "design dialogue stays main-session + user-interactive" discipline.
+  Status:
+  - A.0 Housekeeping — ✅ DONE interactively 2026-06-10: TBGH research layer committed
+    (main `c27bcc89`), grounding-audit staleness fixes committed (main `533bfcab`),
+    branch rebased onto main. DEFERRED.md triage remains open (fold into A.1 opening).
+  - A.1 Track 0.1 closure — interactive co-design (in progress).
+  - A.2 Track 0.2 closure — interactive co-design.
+  - A.3 Track 0.3 closure — interactive co-design.
+- **Phase B — implementation tracks: THE LOOP'S ENTRY POINT.** Runs in Master order
+  (Track 1 e-class substrate first), each track gated on its locked design from Phase A
+  and on prerequisite verification. NOTE from the 2026-06-10 grounding audit: the
+  tropical-fuel substrate is VERIFIED production-deployed (gate is satisfiable), but
+  (i) `tropical-left-residual` has zero production consumers — Track 4's on-network
+  wrapping is greenfield; (ii) the monotone-counter fast path is speculation-gated —
+  Track 6 gets the slow path; (iii) the e-class cell's order/enrichment declaration has
+  NO existing SRE realization — Track 1 needs new domain infrastructure per the locked
+  0.1 design.
 
 **Out of scope / hard stops regardless of autonomy level:**
 
@@ -69,7 +73,19 @@ Every non-trivial decision gets a ledger entry (§6) with one of three labels:
 |---|---|---|
 | **ROUTINE** | Within established patterns; cite the precedent/principle | test layout, file naming, following an SRE-Track-0 analog |
 | **SIGNIFICANT** | A real design choice between live options; ledger entry must show the options considered, the critique outcome, and the principle that decided it | lattice realization choices, stratum assignment, cell granularity |
-| **OWNER-PROVISIONAL** | A decision the owner explicitly flagged for approval, decided provisionally to keep the loop unblocked | the three pre-flagged points from the 2026-05-09 engineering memo: (1) NAC support as first-class rule requirement, (2) C3.e shared residuation API as merge target with the Logic Engine, (3) HVM2 as Track 2 benchmark target |
+| **OWNER-PROVISIONAL** | A decision the owner explicitly flagged for approval, decided provisionally to keep the loop unblocked | any owner-census point (see below) reached by the loop before the owner has settled it in Phase A |
+
+Owner-decision census (per the 2026-06-10 grounding audit; most should be settled
+during the interactive Phase A, shrinking this list before the loop starts):
+RESOLVED — TBGH/GBT frame adoption (RATIFIED by owner 2026-06-10; commit `c27bcc89`).
+OPEN — (1) NAC as first-class rule-schema field [gates 0.2]; (2) Track 0.1 deliverable
+scope (Master row vs sketch reality) [gates 0.1]; (3) tree-vs-DAG cost + eager-vs-
+saturate (+ e-class-size measurement gate) [shapes 0.2 + Track 1]; (4) direct-to-LLVM
+vs region IR + extract-then-lower split [gates 0.3]; (5) effect-stratum posture against
+comment-only Stratum 3 [gates 0.1 sub-model 5 + Track 7]; (6) refinement-order substrate
+realization [gates 0.1 sub-model 2 + Track 1]; (7) S1 Q-shape + C3.e shared residuation
+API merge + HVM2 benchmark ceiling [gate Tracks 4/2]; (8) collaborator timing
+(naive-reducer-now vs rebases-later) [shapes 0.3 sequencing].
 
 OWNER-PROVISIONAL rules: decide it, document the rationale AND the concrete reversal
 path (what gets reverted/reworked if the owner overrules), tag the ledger entry
