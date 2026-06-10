@@ -339,3 +339,40 @@ Entry template:
 - **Protocol backlog**: wfle + track4-acceptance runs failed silently (re-run with
   stderr); sub-second benchmarks excluded from the denominator corpus.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 2 — [SIGNIFICANT] SM1.1 mini-design closed (grounding-audit `wf_33f45b2a-8fc` + R-lens)
+- **Audit verdicts adopted** (all claims verified; ':term mystery resolved — that-write
+  maps ':term→':type at :570-571, hardening breaks zero production callers):
+  1. **Hardening scope = ALL THREE defaults** (facet-merge :412, facet-bot :421,
+     facet-bot? :432 → error naming the facet). Rationale: the permissive defaults
+     would silently give the four new facets WRONG semantics (last-write-wins;
+     (not v) misclassifies set-valued bots). The only affected code is
+     bench-attribute-record.rkt's J-A sections (simulated ':mult/':level/':session —
+     a REJECTED architecture): those sections are EXCISED with an annotation, not
+     preserved (measuring a counterfactual is not worth a permissive merge default).
+  2. **Bot-filter motivation RESTATED** (capture-gap correction): production never
+     writes bot deltas today (guards verified at :1617-1619/:1565-1567/:817); the
+     two-site fix is prophylactic hygiene for the new facets, not a current-bug fix.
+     Clause order: skip-bot-delta FIRST, then old-bot-store, then equal?, then merge.
+  3. **Expose-or-filter = FILTER at arity-2** (the user-facing whole-record view —
+     :eclass-link etc. are internal e-graph state; no LSP-hover leak), arity-3
+     by-name reads stay raw. Both arms specified per the capture gap.
+  4. **Shape-P = ENUM route, PLAIN-ONLY v1**: reuse specialized-cell-meta enum fields
+     (no struct change — pipeline.md checklist does NOT trigger; verified the
+     fast-path gate requires 'hot+'monotone-counter so a new combo falls through);
+     dispatch at the SOLE pu-value-diff call site (propagator.rkt:2056-2058, delta
+     in scope at :1984); tagged-promoted cells keep full diff (the masked
+     (cons pos ':term) mismatch at :1191 is a PRE-EXISTING latent bug, ledgered as
+     its own small item — NOT touched in SM1.1).
+  5. **'5 facets' prose = FOUR sites** (typing-propagators :479/:523 + two test
+     files) — same-commit updates; the :2844 comment rewords to CHAMP-sharing-
+     within-run only.
+- **[⚠ OWNER-PROVISIONAL] Acceptance-file ruling**: workflow.md's Phase-0 gate is
+  unsatisfied (no PReduce acceptance file exists). PROVISIONAL: SM1.1 (additive
+  facets + hygiene, no behavior change to existing paths) gates on the EXISTING
+  ppn-track4c acceptance + probe + full suite; the PReduce Track 1 acceptance file
+  is created as the NEXT unit (before any e-class code). Reversal path: if the owner
+  wants the acceptance file strictly first, SM1.1's commit waits behind it (no code
+  conflict either way).
+- **Landed in**: (this commit); implementation begins this firing, ONE code commit
+  when green.
