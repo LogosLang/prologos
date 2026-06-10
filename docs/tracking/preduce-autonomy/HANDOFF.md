@@ -29,15 +29,18 @@ DONE: Track 1 acceptance file landed (Phase-0 gate discharged; reduction-kind-
 organized; Level-3 clean; run before/after every phase).
 DONE: pce.rkt LANDED (PCE/1 encoder + digests + persisted-domain guard + golden
 vectors + 23 tests; cross-process determinism verified).
-NEXT UNIT: **the term-carrier domain + 'eclass-refine relation** (the §2.10-censused
-8-edit surface: sre-eclass-refine constant, variance-maps entry,
-sre-make-eclass-refine-propagator factory, propagator-ctor-table entry, term-domain
-registration with the merge-registry case) — mini-audit the touch points at current
-HEAD first, then implement + tests. THEN: e-class product cell (5 components,
-PCE-keyed) + hashcons registry + union-emitter = the GREEN SLICE (D.1 §2.4: the
-literal trace cell-creation → install → min-join write → quiescence → canonical
-read, + racing-union test, + the CONSUMING READ via :eclass-link → class best
-asserted in the acceptance file). D5 probe can interleave (calibration-only).
+DONE: eclass-cell.rkt + the 'eclass-refine relation LANDED (the SM2 lock realized:
+product merge + 'term carrier + relation constant/variance/factory/ctor-table; 22
+tests through the public dispatcher).
+NEXT UNIT: **the GREEN SLICE** (D.1 §2.4): hashcons registry (PCE-keyed e-node →
+e-class cell-id allocation; allocation-order ids feed ':canonical) + the
+union-emitter (the e-graph union = installing an 'eclass-refine relate between two
+class cells) + the LITERAL TRACE test (cell-creation → install → min-join write →
+quiescence → canonical read) + the racing-union test (two unions racing in one BSP
+round → same fixpoint) + the CONSUMING READ (an :eclass-link facet written into the
+attribute map pointing at a class; read back the class best — asserted in
+test-eclass-cell extension, acceptance file gains a §8 marker comment only until
+reduction rules land). D5 probe can interleave (calibration-only).
 Implementation queue below. Phase A history follows for context.
 
 Done so far (all interactive, with the owner):

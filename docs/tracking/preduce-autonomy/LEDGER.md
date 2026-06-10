@@ -496,3 +496,21 @@ Entry template:
   preconditions (expr structs loc-free, de Bruijn, 313 transparent, struct->vector
   stable names).
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 8 — [ROUTINE] eclass-cell.rkt + 'eclass-refine relation landed (SM2 lock realized)
+- **Shipped**: eclass-cell.rkt — the locked componentwise-ACI product
+  {best argmin-with-PCE-tie-break | alts set-union | canonical min-join |
+  provenance set-union | regime max-toward-ground}, eclass-bot/bot?/merge,
+  Q-shape-agnostic (cost . form) best carrier (owner D7 honored), the 'term
+  carrier domain hosting BOTH 'equality (flat→'term-top) and 'eclass-refine
+  (coarsening join) via merge-registry (SM2 D2: shared carrier, relations as
+  propagator kinds) + register-domain! + register-merge-fn!/lattice. sre-core.rkt
+  4-edit surface per the §2.10 census: sre-eclass-refine relation constant
+  (order-preserving+idempotent), variance-maps entry (components → equality at v1;
+  congruence is the signature-watcher layer's job), sre-make-eclass-refine-
+  propagator (symmetric coarsening via the domain registry), propagator-ctor-table
+  entry. Tests (22): ACI laws, per-component semantics, PCE tie-break symmetry +
+  determinism, closed regime chain, registry dispatch, live-network coarsening
+  through the PUBLIC dispatcher (sre-make-structural-relate-propagator), idempotent
+  re-fire.
+- **Landed in**: (this commit)

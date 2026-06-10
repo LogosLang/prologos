@@ -41,6 +41,7 @@
  sre-subtype
  sre-subtype-reverse
  sre-duality
+ sre-eclass-refine  ;; PReduce Track 1
  sre-phantom
  ;; Track 2F: algebraic foundation
  derive-sub-relation
@@ -2226,6 +2227,17 @@
    #f  ;; propagator-ctor: wired in Phase 4
    'phantom))
 
+;; E-class refinement: coarsening join (PReduce Track 1; SM2 lock D.1 §2.1 owner D2 —
+;; a RELATION on the shared 'term carrier, per the merge-registry idiom; the T5 census
+;; confirmed the open table-driven surface). Order-preserving: relating two cells
+;; coarsens both toward the equivalence-class join (monotone, CALM-safe).
+(define sre-eclass-refine
+  (sre-relation
+   'eclass-refine
+   (seteq 'order-preserving 'idempotent)
+   #f  ;; propagator-ctor: wired via propagator-ctor-table
+   'eclass-refine))
+
 ;; --- Track 2F: Variance-map registry ---
 ;; Defined AFTER all 5 relations (D.3 E1: avoids circular reference).
 ;; Maps (relation, variance) → sub-relation struct value.
@@ -2242,7 +2254,12 @@
    'duality        (hasheq 'same-domain sre-duality  'cross-domain sre-equality  '= sre-equality
                            'ø sre-phantom  #f sre-equality)
    'phantom        (hasheq '+ sre-phantom  '- sre-phantom  '= sre-phantom  'ø sre-phantom
-                           'same-domain sre-phantom  'cross-domain sre-phantom  #f sre-phantom)))
+                           'same-domain sre-phantom  'cross-domain sre-phantom  #f sre-phantom)
+   ;; PReduce Track 1: components of e-class-related terms relate by EQUALITY at v1
+   ;; (congruence over components is the signature-watcher layer's job — D.1 §2.1;
+   ;; relation-layer binder decomposition deferred per the binder posture).
+   'eclass-refine  (hasheq 'same-domain sre-eclass-refine  'cross-domain sre-equality
+                           '= sre-equality  'ø sre-phantom  #f sre-equality)))
 
 ;; derive-sub-relation: table-driven sub-relation derivation.
 ;; Replaces the 3 hand-written sub-relation-fn closures.
@@ -2834,12 +2851,28 @@
 ;; Defined AFTER all propagator constructors (forward-reference safe).
 ;; Maps relation name → fire function factory.
 ;; Adding a new relation kind: add one entry here.
+;; PReduce Track 1 (SM2 lock): e-class refinement propagator — symmetric coarsening.
+;; Reads both cells, computes the 'eclass-refine join from the DOMAIN's merge-registry
+;; (the relation selects the merge at relate time; cells bound their own merge at
+;; creation — T5 census structural refinement), writes the join to both. Monotone,
+;; idempotent, CALM-safe; racing relates resolve by fixpoint.
+(define (sre-make-eclass-refine-propagator domain cell-a cell-b relation)
+  (define merge (sre-domain-merge domain sre-eclass-refine))
+  (lambda (net)
+    (define va (net-cell-read net cell-a))
+    (define vb (net-cell-read net cell-b))
+    (define joined (merge va vb))
+    (let* ([n1 (if (equal? joined va) net (net-cell-write net cell-a joined))]
+           [n2 (if (equal? joined vb) n1 (net-cell-write n1 cell-b joined))])
+      n2)))
+
 (define propagator-ctor-table
   (hasheq
    'equality        sre-make-equality-propagator
    'subtype         sre-make-subtype-propagator
    'subtype-reverse sre-make-subtype-propagator
    'duality         sre-make-duality-propagator
+   'eclass-refine   sre-make-eclass-refine-propagator
    'phantom         (λ (domain cell-a cell-b relation) (λ (net) net))))
 
 ;; ========================================================================
