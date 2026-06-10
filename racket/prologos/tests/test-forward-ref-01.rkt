@@ -78,12 +78,15 @@
   (define rs (run-file-fixture "ns tf5\ndef x := nonexistent"))
   (check-true (unbound-for? rs 'nonexistent)))
 
-;; ③ the DEF-vs-USE boundary — the forward DEF resolves, but a top-level EXPR
-;; USE of x BEFORE the drive sees x pending → unbound (the documented 4C boundary).
-(test-case "4B.3-b boundary: mid-file top-level use of a forward-def errors (4C territory)"
+;; ③ the DEF-vs-USE boundary — AMENDED at 4B.5.a (§18.21.25.3, user-ratified):
+;; a top-level USE now resolves against everything defined-or-deferred SO FAR
+;; (the demand trigger runs the sweep fixpoint, firing x's δ, then retries).
+;; The REMAINING boundary: uses depending on textually-LATER defs (4C).
+(test-case "4B.5.a amendment: mid-file top-level use of a forward-def RESOLVES (demand sweep)"
   (define rs (run-file-fixture "ns tf6\ndef x := a\ndef a := 5N\nx"))
   (check-true (has? rs "x : Nat defined."))  ;; the DEF resolves
-  (check-true (unbound-for? rs 'x)))          ;; the premature USE errors
+  (check-true (has? rs "5N : Nat"))           ;; the USE now resolves too
+  (check-false (unbound-for? rs 'x)))
 
 ;;; ============================================================
 ;;; PPN 4C Addendum Phase 4B.4.a (§18.21.24) — fwd-annot: the ANNOTATED path

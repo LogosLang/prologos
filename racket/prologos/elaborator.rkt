@@ -758,6 +758,21 @@
       ;; first-class. Mirrors the `suc` pattern above.
       [(primitive-op-eta-expansion name)
        => (lambda (e) e)]
+      ;; PPN 4C Addendum Phase 4B.5.a (§18.21.26 W1): pending-aware resolution.
+      ;; A name that failed ALL ground resolution above but is a KNOWN def-head
+      ;; awaiting its definition (Pass-1.5 def-bot cell → 'pending) resolves as
+      ;; a normal fvar; typing + commit residuate via the general-body sweep
+      ;; (driver.rkt — the command-time elaboration is the DETECTOR; the sweep
+      ;; re-runs the def when its referents ground). TAIL position is load-
+      ;; bearing: only names that would have been Unbound reach here — the
+      ;; import-shadow arms (D-4B3-8) and the multi-defn "must be applied" arm
+      ;; above keep their behavior (an arity-dispatched base name errors
+      ;; informatively rather than residuating on its never-grounding base
+      ;; cell). Gated to process-file (DQ4) — all other contexts see the
+      ;; status-quo unbound error below.
+      [(and (current-residuation-enabled?)
+            (eq? (car (global-env-lookup-status name)) 'pending))
+       (expr-fvar name)]
       [else (unbound-variable-error loc "Unbound variable" name)])))
 
 ;; ========================================

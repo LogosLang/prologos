@@ -458,7 +458,10 @@
   ;; Elaborate-level parameterize sharpens further; this covers top-level
   ;; warnings/errors that fire outside elaborate (e.g., from process-command
   ;; bookkeeping before elaborate runs).
-  (parameterize ([current-source-loc (or (surf-node-srcloc surf) (current-source-loc))])
+  (parameterize ([current-source-loc (or (surf-node-srcloc surf) (current-source-loc))]
+                 ;; 4B.5.a: the ORIGINAL surf — stored by general-body
+                 ;; placeholders; the sweep re-runs it (full fidelity).
+                 [current-processing-surf surf])
     (reset-meta-store!)  ;; clear metavariables from previous command
   ;; Track 7 Phase 3: Registry cells (macros, warnings, narrowing) now live in the
   ;; persistent registry network — no per-command cell creation needed.
@@ -528,6 +531,20 @@
                   ;; unhandled expression kinds (ATMS ops, narrowing, auto-implicits).
                   ;; Fallback is diagnostic — logged for SRE coverage tracking.
                   [(list 'eval expr)
+                   ;; PPN 4C Addendum Phase 4B.5.a (§18.21.26 W4 revised): the
+                   ;; DATA-driven demand trigger — a USE referencing pending /
+                   ;; deferred names returns the demand sentinel; the
+                   ;; process-file loop sweeps + retries (uses resolve against
+                   ;; the residue-so-far; textually-later defs stay the 4C
+                   ;; boundary, erroring with the carried status-quo text).
+                   (cond
+                     [(residuation-demand-name expr)
+                      => (lambda (nm)
+                           (residuation-demand
+                            (unbound-variable-error
+                             (or (surf-node-srcloc surf) srcloc-unknown)
+                             "Unbound variable" nm)))]
+                     [else
                    (let ([ty (time-phase! type-check
                               (let ([net-ty (infer-on-network/err ctx-empty expr)])
                                 (if (prologos-error? net-ty)
@@ -551,7 +568,7 @@
                                              (if (expr-string? (expr-panic-msg val))
                                                  (expr-string-val (expr-panic-msg val))
                                                  (pp-expr (expr-panic-msg val)))))
-                                         (format "~a : ~a" (pp-expr val) (pp-expr ty-nf))))))))))]
+                                         (format "~a : ~a" (pp-expr val) (pp-expr ty-nf))))))))))])]
 
                   ;; (infer expr) — Track 4B Phase 9: on-network first, fallback for unhandled
                   [(list 'infer expr)
@@ -1070,7 +1087,178 @@
 ;; Gate (DQ4): residuation is enabled ONLY within process-file (where the drive +
 ;; the finalize sweep run). #f elsewhere (process-string / REPL / module-load) →
 ;; a forward ref errors immediately at the referencing site, status quo.
-(define current-residuation-enabled? (make-parameter #f))
+;; PPN 4C Addendum Phase 4B.5.a (§18.21.26): the parameter MOVED to
+;; global-env.rkt (a leaf) so elaborate-var's pending-aware arm reads it
+;; without a require cycle. driver.rkt consumes it via the global-env require.
+
+;; ========================================
+;; PPN 4C Addendum Phase 4B.5.a (§18.21.26 revised): general-body residuation
+;; ========================================
+;;
+;; `def a := [f b]` (body NOT a bare var) with forward referents: the
+;; command-time elaboration is the DETECTOR (elaborate-var's pending arm lets
+;; a known pending def-head resolve as a normal fvar; the post-elaborate scan
+;; below finds the pending referents — exact scoping, exact diagnostics). The
+;; COMMIT is deferred: the placeholder stores the ORIGINAL SURF (an elaborated
+;; body would carry dangling expr-metas across reset-meta-store! — the R5
+;; hazard); the SWEEP re-runs process-command on the stored surf when the
+;; referents ground (process-command's own reset IS the fresh context). The
+;; sweep is the imperative stand-in for 4C's whole-file fixpoint — NAMED
+;; SCAFFOLDING; retirement = on-network deferred typing (PM 12B note §10).
+
+;; The residue: outstanding general-body placeholders (box of list) + the
+;; completions map (eq-keyed mutable hasheq: placeholder → final result).
+;; Bound per-file in process-file's parameterize; #f elsewhere.
+(define current-general-residue (make-parameter #f))
+(define current-general-completions (make-parameter #f))
+
+;; The general-body deferred-commit placeholder (positional in results, like
+;; residuation-placeholder). surf = the ORIGINAL surf command (re-run by the
+;; sweep); pending-referents = the bare names 'pending at detection time.
+(struct general-body-placeholder (name srcloc surf pending-referents) #:transparent)
+
+;; The demand sentinel: a top-level USE whose elaboration references pending /
+;; deferred names. The process-file loop catches it, runs the sweep fixpoint
+;; over the residue-so-far, retries the command ONCE; still demanding → the
+;; carried status-quo unbound error is the result. (§18.21.25.3: uses resolve
+;; against everything defined-or-deferred SO FAR; textually-later defs stay
+;; the named 4C boundary.)
+(struct residuation-demand (error) #:transparent)
+
+;; Collect every expr-fvar name in an elaborated expression. GENERIC
+;; REFLECTIVE walk (struct->vector over the transparent expr structs) rather
+;; than a mirrored per-node case list — exhaustive over current AND future
+;; nodes by construction (§18.21.26 W5, revised). Over-collection (e.g.,
+;; fvars inside meta contexts) is harmless: the pending FILTER below discards
+;; anything that is not a seeded same-file def-head.
+(define (collect-fvar-names e)
+  (let walk ([v e] [acc (seteq)])
+    (cond
+      [(expr-fvar? v) (set-add acc (expr-fvar-name v))]
+      [(struct? v)
+       (let ([vec (struct->vector v)])
+         (for/fold ([a acc]) ([i (in-range 1 (vector-length vec))])
+           (walk (vector-ref vec i) a)))]
+      [(pair? v) (walk (cdr v) (walk (car v) acc))]
+      [(vector? v) (for/fold ([a acc]) ([x (in-vector v)]) (walk x a))]
+      [(hash? v) (for/fold ([a acc]) ([(k x) (in-hash v)]) (walk x (walk k a)))]
+      [else acc])))
+
+;; The pending referents of an elaborated expression: fvar names whose
+;; def-entry cell is 'pending (a seeded same-file def-head awaiting its
+;; definition). exclude: names to omit — the def's OWN name(s) on the
+;; ANNOTATED path (the pre-register supplies the self type). The INFERRED
+;; path does NOT exclude self (inferred self-recursion is broken today —
+;; probe 2026-06-10; self-pending stalls in 4B.5.a [file-end unbound,
+;; status-quo-equivalent] and becomes a size-1 SCC for 4B.5.b's pass).
+(define (pending-referent-names e #:exclude [exclude '()])
+  (for/list ([nm (in-set (collect-fvar-names e))]
+             #:when (and (not (memq nm exclude))
+                         (eq? 'pending (car (global-env-lookup-status nm)))))
+    nm))
+
+;; Demand-trigger check for a top-level USE: a referenced name is 'pending OR
+;; has an outstanding (uncompleted) placeholder — the latter catches deferred
+;; ANNOTATED defs whose pre-register reads 'ground-with-#f (typing against T
+;; is fine for DEFS, but a USE would evaluate to a stuck term — sweep first).
+(define (residuation-demand-name e)
+  (and (current-residuation-enabled?)
+       (current-general-residue)
+       (let ([residue-names
+              (for/seteq ([ph (in-list (unbox (current-general-residue)))]
+                          #:unless (and (current-general-completions)
+                                        (hash-has-key? (current-general-completions) ph)))
+                (general-body-placeholder-name ph))])
+         (for/first ([nm (in-set (collect-fvar-names e))]
+                     #:when (or (eq? 'pending (car (global-env-lookup-status nm)))
+                                (set-member? residue-names nm)
+                                (let-values ([(_p short) (split-qualified-name nm)])
+                                  (set-member? residue-names short))))
+           nm))))
+
+;; In-def-group guard (§18.21.26.3): clause-level residuation is NOT supported
+;; (the group's findf flattening would swallow a placeholder; genuine
+;; multi-arity is PM 12B's). Inside process-def-group, a clause body with
+;; pending referents gets the status-quo unbound error instead of deferring.
+(define current-in-def-group? (make-parameter #f))
+
+;; The original surf of the command being processed (set by process-command) —
+;; what the placeholder stores and the sweep re-runs.
+(define current-processing-surf (make-parameter #f))
+
+;; Try to defer a general-body def whose elaborated body references pending
+;; names. Returns: #f (nothing pending — proceed normally) | a
+;; general-body-placeholder (deferred; pushed to the residue) | a
+;; prologos-error (in-def-group guard). Called post-elaboration on BOTH
+;; process-def paths.
+(define (try-defer-general-body name def-srcloc elaborated-body exclude)
+  (and (current-residuation-enabled?)
+       (current-general-residue)
+       (current-processing-surf)
+       (let ([pending (pending-referent-names elaborated-body #:exclude exclude)])
+         (and (pair? pending)
+              (if (current-in-def-group?)
+                  (unbound-variable-error def-srcloc "Unbound variable" (car pending))
+                  (let ([ph (general-body-placeholder
+                             name def-srcloc (current-processing-surf) pending)])
+                    (set-box! (current-general-residue)
+                              (cons ph (unbox (current-general-residue))))
+                    ph))))))
+
+;; The acyclic general-body sweep: semi-naive re-evaluation over the residue.
+;; Each pass re-runs (process-command stored-surf) for every outstanding
+;; placeholder whose pending referents are no longer 'pending (ground via the
+;; drive/a prior completion, or absent via a failed referent — the re-run then
+;; errors properly). A re-run that RE-DEFERS (e.g. inferred self-pending) is
+;; not progress: its duplicate placeholder is dropped, the original stays
+;; outstanding (4B.5.b's SCC residue). Returns #t iff ≥1 completion happened.
+(define (run-general-residuation-sweep!)
+  (and (current-general-residue) (current-general-completions)
+       (let loop ([any-progress? #f])
+         (define completions (current-general-completions))
+         (define outstanding
+           (for/list ([ph (in-list (reverse (unbox (current-general-residue))))]
+                      #:unless (hash-has-key? completions ph))
+             ph))
+         (define progressed?
+           (for/fold ([prog #f]) ([ph (in-list outstanding)])
+             (cond
+               [(for/or ([r (in-list (general-body-placeholder-pending-referents ph))])
+                  (eq? 'pending (car (global-env-lookup-status r))))
+                prog]  ;; still waiting
+               [else
+                (define result (process-command (general-body-placeholder-surf ph)))
+                (cond
+                  [(general-body-placeholder? result)
+                   ;; re-deferred (self-pending) — drop the duplicate; no progress
+                   (set-box! (current-general-residue)
+                             (remq result (unbox (current-general-residue))))
+                   prog]
+                  [else
+                   (hash-set! completions ph result)
+                   #t])])))
+         (if progressed? (loop #t) any-progress?))))
+
+;; Drive NET-1 + sweep, alternating to fixpoint: a sweep completion writes
+;; cells that may unblock bare-ref δs (drive), whose fires may unblock sweep
+;; items — and vice versa. Terminates: completions are monotone, bounded by
+;; the residue; the drive is O(diff)-idempotent.
+(define (run-residuation-fixpoint!)
+  (drive-file-mnr!)
+  (when (run-general-residuation-sweep!)
+    (run-residuation-fixpoint!)))
+
+;; Demand-retry shim for the process-file loop: a residuation-demand from the
+;; eval arm triggers the sweep fixpoint, then ONE retry; still demanding →
+;; the carried status-quo unbound error.
+(define (process-command/demand surf)
+  (define r (process-command surf))
+  (if (residuation-demand? r)
+      (begin
+        (run-residuation-fixpoint!)
+        (let ([r2 (process-command surf)])
+          (if (residuation-demand? r2) (residuation-demand-error r2) r2)))
+      r))
 
 ;; The deferred-commit placeholder: occupies the residuated command's slot in the
 ;; process-file results list (positional). The DQ5 sweep replaces each with the
@@ -1207,6 +1395,23 @@
 ;; construction: the δ re-supplied it).
 (define (finalize-residuations results)
   (for/list ([r (in-list results)])
+    (cond
+      ;; 4B.5.a (§18.21.26): general-body placeholders finalize from the
+      ;; completions map (the sweep already ran — the fixpoint precedes this
+      ;; walk). Never-completed → file-end unbound on the first still-pending
+      ;; referent (DQ5 style; .b upgrades the stalled-cycle case to the
+      ;; §18.11 cycle diagnostic).
+      [(general-body-placeholder? r)
+       (or (and (current-general-completions)
+                (hash-ref (current-general-completions) r #f))
+           (unbound-variable-error
+            (or (general-body-placeholder-srcloc r) srcloc-unknown)
+            "Unbound variable"
+            (or (for/first ([n (in-list (general-body-placeholder-pending-referents r))]
+                            #:when (eq? 'pending (car (global-env-lookup-status n))))
+                  n)
+                (car (general-body-placeholder-pending-referents r)))))]
+      [else
     (if (residuation-placeholder? r)
         (let* ([name (residuation-placeholder-name r)]
                [s (global-env-lookup-status name)])
@@ -1225,7 +1430,7 @@
                   [else (format "~a : ~a defined." name (pp-expr (car (cdr s))))]))
               (unbound-variable-error (residuation-placeholder-srcloc r)
                                       "Unbound variable" name)))
-        r)))
+        r)])))
 
 ;; Process a def command with split elaboration for recursive support.
 ;; 1. Elaborate type first
@@ -1276,6 +1481,13 @@
          (elaborate body-surf))))
      (cond
        [(prologos-error? body) body]
+       ;; 4B.5.a (§18.21.26): general-body deferral — the elaborated body
+       ;; references pending same-file def-heads (the pending arm let them
+       ;; resolve). Defer the typing + commit to the sweep (re-run of the
+       ;; stored surf when the referents ground). NO self-exclusion on the
+       ;; inferred path (self-pending stalls → file-end unbound in .a,
+       ;; status-quo-equivalent; the 4B.5.b SCC pass owns it).
+       [(try-defer-general-body name def-srcloc body '()) => values]
        [else
         ;; Track 4B Phase 9: on-network first, fallback for unhandled
         (define inferred-type
@@ -1351,6 +1563,14 @@
      (define type (time-phase! elaborate (elaborate type-surf)))
      (cond
        [(prologos-error? type) type]
+       ;; 4B.5.a type-position guard (§18.21.26.3): type-position forward-refs
+       ;; stay unsupported (PM 12B). Without this, the pending arm would let a
+       ;; pending name elaborate in TYPE position and fail later with degraded
+       ;; diagnostics — preserve the status-quo unbound error.
+       [(and (current-residuation-enabled?)
+             (let ([p (pending-referent-names type)]) (and (pair? p) (car p))))
+        => (lambda (nm)
+             (unbound-variable-error def-srcloc "Unbound variable" nm))]
        [else
         ;; 2. Check type is well-formed
         ;; Sprint 10: Skip is-type for types with holes (bare-param defn).
@@ -1418,6 +1638,30 @@
                  ;; Remove pre-registered entry on elaboration failure
                  (remove-failed-definition! name)
                  body]
+                ;; 4B.5.a (§18.21.26): annotated general-body deferral. Exclude
+                ;; SELF (bare + own-FQN) — the pre-register supplies the self
+                ;; type (today's working recursion mechanism, preserved). The
+                ;; pre-register STAYS in ('ground-with-#f is benign under
+                ;; placeholder-keyed completion tracking: referencing defs type
+                ;; against T; the demand trigger is residue-aware for USES) —
+                ;; but it is RE-WRITTEN META-FREE below: type* may hold
+                ;; holes→metas that dangle after reset-meta-store! (the stored-
+                ;; type discipline).
+                [(try-defer-general-body name def-srcloc body
+                   (if (current-ns-context)
+                       (list name (qualify-name name
+                                    (ns-context-current-ns (current-ns-context))))
+                       (list name)))
+                 => (lambda (ph)
+                      (when (general-body-placeholder? ph)
+                        (define safe-ty (unsolved-metas-to-holes (freeze type*)))
+                        (global-env-add-type-only name safe-ty)
+                        (when (current-ns-context)
+                          (global-env-add-type-only
+                           (qualify-name name
+                             (ns-context-current-ns (current-ns-context)))
+                           safe-ty)))
+                      ph)]
                 [else
                  ;; 5. Check body against type (use type* which has metas instead of holes)
                  ;; Sprint 9: pass recovered name map for de Bruijn recovery in errors
@@ -1539,7 +1783,12 @@
   (register-narrow-cells! (current-prop-net-box) (current-prop-new-infra-cell))
       (register-namespace-cells! (current-prop-net-box) (current-prop-new-infra-cell))
       (init-speculation-tracking!)
-      (parameterize ([current-ns-prop-net-box (current-prop-net-box)])
+      ;; 4B.5.a (§18.21.26.3): clause-level residuation NOT supported (the
+      ;; findf flattening below would swallow a placeholder; genuine
+      ;; multi-arity → PM 12B). The guard makes a pending-referent clause
+      ;; error with the status-quo unbound text instead of deferring.
+      (parameterize ([current-ns-prop-net-box (current-prop-net-box)]
+                     [current-in-def-group? #t])
         (process-def def))))
   ;; Check for errors
   (define first-err (findf prologos-error? results))
@@ -1979,7 +2228,11 @@
                   (or (current-file-module-network-ref) (make-module-network))]
                  ;; PPN 4C Addendum Phase 4B.3-b (§18.21.22 DQ4): residuation is
                  ;; process-file-only — the drive + the finalize sweep run here.
-                 [current-residuation-enabled? #t])
+                 [current-residuation-enabled? #t]
+                 ;; 4B.5.a (§18.21.26): the general-body residue + completions
+                 ;; (per-file lifetime; scaffolding tier — PM 12B §10 retires).
+                 [current-general-residue (box '())]
+                 [current-general-completions (make-hasheq)])
     (reset-meta-store!)
     (process-file-inner path #:verbose verbose?)))
 
@@ -2033,7 +2286,9 @@
               ;; Track 7 Phase 0b: per-command snapshot/delta when verbose
               (let* ([snap-before (if verbose? (perf-counters-snapshot (current-perf-counters)) #f)]
                      [t0 (if verbose? (current-inexact-monotonic-milliseconds) 0)]
-                     [result (process-command surf)]
+                     ;; 4B.5.a: demand-aware — a USE of pending/deferred names
+                     ;; triggers the sweep fixpoint + one retry (§18.21.26 W4).
+                     [result (process-command/demand surf)]
                      [_ (when verbose?
                           (define snap-after (perf-counters-snapshot (current-perf-counters)))
                           (define elapsed (- (current-inexact-monotonic-milliseconds) t0))
@@ -2048,7 +2303,9 @@
   ;; PPN 4C Addendum Phase 4B.2-c (§18.21.19 Q1): drive NET-1 (the per-file mnr)
   ;; at the file-unit boundary — all defs are written, the mnr is final. LIVE
   ;; NO-OP today (zero propagators); 4B.3's δ residuation propagators run here.
-  (drive-file-mnr!)
+  ;; 4B.5.a (§18.21.26): drive + general-body sweep, alternated to fixpoint —
+  ;; a sweep completion can unblock a bare-ref δ and vice versa.
+  (run-residuation-fixpoint!)
   ;; PPN 4C Addendum Phase 4B.3-b (§18.21.22 DQ5): post-drive finalize sweep —
   ;; replace each residuation-placeholder (positional, in place) with its
   ;; finalized result (cell ground → "x : T defined."; still def-bot → unbound

@@ -35,6 +35,11 @@
          ;; external-definition-names = keys-only (hot find-fqn path).
          external-definitions-snapshot
          external-definition-names
+         ;; PPN 4C Addendum Phase 4B.5.a (§18.21.26): the DQ4 residuation gate.
+         ;; Defined HERE (a leaf both driver.rkt and elaborator.rkt require) so
+         ;; elaborate-var's pending-aware arm reads it without a require cycle.
+         ;; #t only within process-file's parameterize (driver.rkt).
+         current-residuation-enabled?
          ;; Defn param-name registry (user-facing names for bound-arg display)
          current-defn-param-names
          register-defn-param-names!
@@ -52,6 +57,13 @@
          ;; (seteq/set-add) requires retired — sole consumers were global-env-names
          ;; (cascade-only since 4A.c-iii-b) + dep-recording (retired 4B.1).
 
+
+;; PPN 4C Addendum Phase 4B.5.a (§18.21.26): the DQ4 residuation gate (moved
+;; here from driver.rkt so elaborate-var's pending-aware arm can consume it).
+;; When #t (process-file only), a name that fails ALL ground resolution but is
+;; a KNOWN pending def-head resolves as a normal fvar; typing/commit residuate
+;; via the general-body sweep (driver.rkt).
+(define current-residuation-enabled? (make-parameter #f))
 
 ;; PPN 4C Addendum Phase 4A.c-iii-a2/a3: the box-gated per-definition
 ;; cell-write path RETIRED. definition-cell-write! / -remove! / -write-named!
