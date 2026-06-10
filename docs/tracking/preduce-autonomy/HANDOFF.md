@@ -27,16 +27,17 @@ structural fix = SM3 registry absorption; gate policy = non-blocking iff passes
 individually, verified per occurrence).
 DONE: Track 1 acceptance file landed (Phase-0 gate discharged; reduction-kind-
 organized; Level-3 clean; run before/after every phase).
-NEXT UNIT: **pce.rkt — the PCE/1 canonical encoder + sha256 hasher + golden vectors**
-(D.3 §2: single-hasher rule — pce.rkt owns encode+hash; the golden-vector generator
-IS the library; precedes hashcons per LBD-5; deterministic little-endian, sorted
-iteration, uninterned-excluded, kind-byte domain separation; loc-free de Bruijn
-domain; admission-guard ERROR for the session-local effectful digest in the
-persisted domain). Mini-audit first (what term representation does the encoder
-consume — expr structs at which canonicalization stage; reuse grounding from D.1
-§2.1 binder posture: de Bruijn canonical form BEFORE hashing). THEN: D5 probe;
-term-carrier domain + 'eclass-refine; e-class cells + hashcons + union-emitter
-(green slice).
+DONE: pce.rkt LANDED (PCE/1 encoder + digests + persisted-domain guard + golden
+vectors + 23 tests; cross-process determinism verified).
+NEXT UNIT: **the term-carrier domain + 'eclass-refine relation** (the §2.10-censused
+8-edit surface: sre-eclass-refine constant, variance-maps entry,
+sre-make-eclass-refine-propagator factory, propagator-ctor-table entry, term-domain
+registration with the merge-registry case) — mini-audit the touch points at current
+HEAD first, then implement + tests. THEN: e-class product cell (5 components,
+PCE-keyed) + hashcons registry + union-emitter = the GREEN SLICE (D.1 §2.4: the
+literal trace cell-creation → install → min-join write → quiescence → canonical
+read, + racing-union test, + the CONSUMING READ via :eclass-link → class best
+asserted in the acceptance file). D5 probe can interleave (calibration-only).
 Implementation queue below. Phase A history follows for context.
 
 Done so far (all interactive, with the owner):

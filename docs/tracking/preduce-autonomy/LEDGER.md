@@ -479,3 +479,20 @@ Entry template:
   acceptance ruling (iter 2) is DISCHARGED — the Phase-0 gate now exists for all
   Track 1+ phases; run before/after each phase per workflow.md.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 7 — [ROUTINE] pce.rkt landed — the PCE/1 identity cornerstone
+- **Shipped**: pce.rkt (the SINGLE-HASHER module per D.3 §2: canonical encoder over
+  the closed v1 domain — exact ints sign+magnitude bignum-safe, exact rationals,
+  interned symbols, strings/bytes/booleans/null/pairs/vectors, sorted immutable
+  hashes, transparent structs by stable name+arity+fields; little-endian length
+  prefixes; floats + uninterned symbols = admission ERRORS) + sha256 digests with
+  VERSION+KIND prefix + the persisted-domain guard (kind-2 effectful-session digests
+  structurally excluded — D.3 closure iv) + the golden-vector GENERATOR in-module
+  (the artifact: data/pce-golden-vectors-v1.txt, 13 vectors) + tests/test-pce.rkt
+  (23 checks: determinism, distinctness, kind separation, guards, hash-order
+  independence, bignums, live golden-vector conformance).
+- **Verified**: digests DETERMINISTIC across separate OS processes (regenerate+diff
+  clean) — the property equal-hash-code never had; mini-audit confirmed the encoding
+  preconditions (expr structs loc-free, de Bruijn, 313 transparent, struct->vector
+  stable names).
+- **Landed in**: (this commit)
