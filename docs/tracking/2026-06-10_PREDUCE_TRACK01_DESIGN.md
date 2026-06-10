@@ -18,7 +18,7 @@ run `wf_118652c1-716`); owner decisions D2/D5/D7 (2026-06-10 session).
 | Sub-model | Description | Status | Notes |
 |---|---|---|---|
 | SM1 | AST PU compound cell layout (Layer 1 granularity) | ⬜ | Gates on SM2 lock (occurrence components reference e-class cells) |
-| SM2 | E-class cell realization | 🔄 | Settled 2026-06-10 (this doc §2); LOCK pending T5 census + owner review |
+| SM2 | E-class cell realization | ✅ | LOCKED 2026-06-10 — T5 census LOW risk (§2.10); corpus amendments in lock commit |
 | SM3 | Unified rule registry cell | ⬜ | Inherits SM2's per-rule write-target datum (eager/saturate tag) + NAC field (memo) |
 | SM4 | Strata (S0 + S(-1)) | ⬜ | Congruence placement RESOLVED into SM2 (S0 watchers); re-derive "two strata suffice" incl. rebuild + fuel |
 | SM5 | Effect-stratum boundary marker | ⬜ | Owner-census #5 open: posture against COMMENT-ONLY Stratum 3 (effect-executor.rkt:53-54) |
@@ -27,7 +27,7 @@ run `wf_118652c1-716`); owner decisions D2/D5/D7 (2026-06-10 session).
 
 ---
 
-## §2 Sub-model 2 — The E-class Cell (SETTLED 2026-06-10)
+## §2 Sub-model 2 — The E-class Cell (LOCKED 2026-06-10)
 
 ### §2.1 Decided design
 
@@ -186,7 +186,7 @@ gives cost-PROVENANCE, not an NP-escaping DAG extractor). Redefined probe runs p
 | 5 | Asserted-enrichment-before-validation (if 1b ships before derivation wiring) | Wire `resolve-domain-properties`-backed derivation + registration-time mismatch error, by Track 1 close (T8: inference machinery EXISTS — resolve = infer + derive-composite, sre-core.rkt:1935; enforcement wiring is the gap) |
 | 6 | `alts` component existence | Justified by first SATURATE-tagged rule kind at Track 4 design or probe evidence; else descope to best-only + named retrofit plan |
 
-### §2.7 Corpus amendments REQUIRED in the lock commit (verified-false premises otherwise re-import)
+### §2.7 Corpus amendments REQUIRED in the lock commit — ✅ DONE in the lock commit (items 1-3 amended: Master Layer-2, E_GRAPHS:240 + §7.1, sketch §4.2 superseded-banner; item 4 verified, see §2.9)
 
 1. Master:73-75 + sketch §4.2: `:order :refinement` → the memo's `:enrichment :semilattice`
    pivot (+ Q-module slot, Q-polymorphic per D7) — the product cell REALIZES the standing
@@ -210,12 +210,35 @@ gives cost-PROVENANCE, not an NP-escaping DAG extractor). Redefined probe runs p
 | min-join total-order merge | tropical-fuel min-merge precedent (propagator.rkt:1079-1096) | EXISTS (registration NEW) |
 | S0 congruence watchers | set-latch + mixed broadcast/fire-once (propagator-design.md pattern; propagator.rkt:2429-2462) | EXISTS (instantiation NEW) |
 
-### §2.9 Open R-lens targets carried to lock
+### §2.9 Open R-lens targets carried past lock
 
-- **T5** (LOCK-BLOCKING for D2): flat-equality consumer census + closed-relation-set touch surface.
 - **T3** (SM2.3): tagged-OF-compound composition — `promote-cell-to-tagged` on a compound hasheq
   carrier has no verified production site; read decision-cell.rkt:529 merge path.
 - **T4** (SM2.3 / D1): raw-read availability inside watcher item-fns for support-set plumbing.
 - **T7** (SM2.4 / Track 0.3): pnet-serialize CELL-SCHEMA surface for enrichment annotation +
   compound values + provenance.
 - **T6** (D5): scope the injected-rule probe variant (SRE Track 2D's 13 rules importable?).
+- (§2.7 item 4 RESOLVED at lock: arXiv:2511.20782 "Optimism in Equality Saturation"
+  WebSearch-verified — Arbore, Cheung, Willsey, Berkeley; v4 2026-04-16.)
+
+### §2.10 T5 census result (LOCK CLEARED, 2026-06-10; HEAD `533bfcab`)
+
+**Verdict: LOW risk — D2 confirmed.** The relation set is an OPEN, table-driven registry
+(variance-maps at sre-core.rkt:2234-2245, propagator-ctor-table at :2837-2843, per-domain
+merge-registry lambdas; no exhaustive case forms found). Adding `'eclass-refine` is an
+8-edit touch surface: relation constant (~:2190), variance-maps entry, NEW
+`sre-make-eclass-refine-propagator` factory, propagator-ctor-table entry, term-domain
+registration with the `'eclass-refine` merge-registry case; type/tropical-fuel domains
+verified unaffected.
+
+**Structural refinement adopted into D2**: relations are PROPAGATOR kinds, not cell
+properties. Cells bind ONE merge-fn at creation (`net-new-cell`, propagator.rkt:1330);
+per-relation merge selection happens at propagator fire time via the relation-keyed
+merge-registry lookup. Consequences for Track 1: (i) e-class cells bind the componentwise
+PRODUCT merge at creation — racing unions therefore resolve by the CELL's min-join, which
+is exactly the green-slice acceptance criterion; (ii) the `'eclass-refine` registry entry
+serves relate-layer dispatch (which propagator fires), not cell-merge override;
+(iii) FOOTNOTE for Track 1's decomposition path: `sre-identify-sub-cell` (sre-core.rkt:2280)
+hardcodes the equality merge when creating decomposition sub-cells — term-structure
+sub-cells do NOT inherit the e-class product merge, and must not be conflated with
+e-class cells.

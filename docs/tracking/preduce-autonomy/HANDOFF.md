@@ -26,12 +26,13 @@ Done so far (all interactive, with the owner):
 loop iteration). DONE 2026-06-10: closure semantics decided (decisions-first → coarse
 NTT exit gate); SM2 (e-class cell) SETTLED via options panel + owner decisions D2/D5/D7
 — see `docs/tracking/2026-06-10_PREDUCE_TRACK01_DESIGN.md` §2 and the ledger entry.
-NEXT: (a) T5 census (lock-blocking for D2: flat-equality consumer census + closed
-relation-set touch surface, sre-core.rkt:2250/:2176-2186); (b) SM2 lock commit
-INCLUDING the §2.7 corpus amendments (same commit, per the verified-false-premise
-re-import hazard); (c) then SM1 (AST PU layout — gates on SM2) or SM3 (rule registry —
-inherits SM2's write-target datum + NAC field); (d) DEFERRED.md triage still pending
-(A.0 leftover); (e) redefined probe (D5) can be scoped any time — T6.
+DONE: T5 census (LOW — D.1 §2.10) + SM2 LOCK commit with §2.7 corpus amendments.
+NEXT: (a) SM1 (AST PU layout — gates on SM2, now unblocked) or SM3 (rule registry —
+inherits SM2's write-target datum + NAC field; NAC acknowledgment is owner-census
+point 1, still open); owner picks order. (b) DEFERRED.md triage still pending (A.0
+leftover). (c) redefined probe (D5) can be scoped any time — T6. (d) T3/T4/T7 R-lens
+targets carried past lock (see D.1 §2.9) — T4 blocks SM2.3 worldview coloring;
+T7 couples SM6/Track 0.3.
 
 ## If the loop is started before Phase A completes
 

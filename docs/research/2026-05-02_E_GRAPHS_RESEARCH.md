@@ -237,7 +237,7 @@ This matters for Prologos because:
 
 **Limitations**: in-memory data structure; no incremental persistence story prior to Merckx et al. 2026; pattern matching is term-rewriting-style rather than higher-order; binding handling is hand-rolled per-application.
 
-**For Prologos**: egg is the design reference. We won't link against it (we're on a different substrate), but its operational shapes guide our cell layout and rebuild scheduling. Notable: egg's batched-rebuild matches our BSP-round semantics — propagators fire concurrently within a round, then the merge happens at the round boundary. This is structurally aligned.
+**For Prologos**: egg is the design reference. We won't link against it (we're on a different substrate), but its operational shapes guide our cell layout. **(Amended 2026-06-10, Track 0.1 SM2 lock)**: the earlier claim that "egg's batched-rebuild matches our BSP-round semantics" overstated the analogy — in the locked design ([D.1 §2](../tracking/2026-06-10_PREDUCE_TRACK01_DESIGN.md)) congruence closure is NOT a batched repair pass at all; it is S0 signature-set watchers whose invariant holds structurally at the quiescent fixpoint. What genuinely aligns with egg is concurrent firing within a round with merge at the boundary; the deferred-rebuild shape itself was evaluated and rejected (stratification's admission test answers "S0").
 
 ### §4.2 egglog
 
@@ -410,14 +410,14 @@ For PReduce: we expect comparable signatures, with CHAMP overhead adding a const
 
 The keystone realization: **each e-class is a cell on the propagator network**. Specifically:
 
-- **Cell value**: the e-class state — set of e-nodes, representative, accumulated cost, equivalence-witness provenance
-- **Merge function**: union-find merge — when two cells are unioned, take the union of e-node sets, resolve cost via tropical-min, accumulate provenance
-- **Cell-id assignment**: structural hash of the canonical representative — content-addressing built in
+- **Cell value**: the e-class state — componentwise-ACI product `{best | alts | canonical | provenance}` (amended 2026-06-10 per [D.1 §2](../tracking/2026-06-10_PREDUCE_TRACK01_DESIGN.md))
+- **Merge function**: componentwise joins — `best` per-Q argmin, `alts` e-node set-union, `canonical` min-join over allocation-order, `provenance` monotone accumulation
+- **Cell-id / keys** (amended 2026-06-10, D3 three-key separation): the original "cell-id = structural hash of the canonical representative" is CIRCULAR once classes merge. Three separate keys: union-find canonical NAME (allocation-order id), cost-best FORM (per-Q argmin), content-address KEY (structural hash — hashcons + `.pnet`)
 - **Parent-pointer structure**: bidirectional cell references (e-class cell has parent-list as compound-component; updated monotonically)
 
-Per SRE lattice lens (Q1): e-class cell is **structural** (multiple components: e-node set, representative, cost, provenance). NTT declaration: `:lattice :structural :order :refinement`.
+Per SRE lattice lens (Q1): e-class cell is **structural** (multiple components). NTT declaration (amended 2026-06-10, supersedes `:order :refinement` which had no substrate realization): `:lattice :structural :enrichment :semilattice [:Q-module Q]`, Q-polymorphic per owner D7.
 
-The refinement-poset structure (`A ≤ B` iff every term in A is in B) is critical — it's what extraction's residuation walks. The poset is **not** a lattice because it has no joins in general (two unrelated e-classes have no common refinement); it's a meet-semilattice (intersections always exist). Cost-extraction operates on the meet-semilattice via residuation.
+The refinement-poset observation (`A ≤ B` iff every term in A is in B; a meet-semilattice, not a lattice) remains mathematically informative but is NO LONGER the cell declaration — the cell is a join-semilattice product where merge IS the order. Extraction walks the e-node child-DAG via Track-4 cost propagators; residuation supplies cost-provenance (per the 2026-06-02 sweep correction, it is not an NP-escaping DAG extractor).
 
 ### §7.2 Hashcons via CHAMP structural sharing
 

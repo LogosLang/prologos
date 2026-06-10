@@ -80,5 +80,20 @@ Entry template:
   kill-shot with production evidence (typing-propagators.rkt:2488 — intra-cell
   cross-component propagation ships today), reopening the carrier-split as a measured
   storage decision (D4).
-- **Landed in**: `docs/tracking/2026-06-10_PREDUCE_TRACK01_DESIGN.md` §2 (this commit);
+- **Landed in**: `docs/tracking/2026-06-10_PREDUCE_TRACK01_DESIGN.md` §2 (commit `cc12a74f`);
   lock pending T5 census + owner review of the draft.
+
+## 2026-06-10 — interactive (pre-loop) — [ROUTINE] SM2 LOCKED — T5 census LOW + corpus amendments
+- **Decision**: SM2 lock executed. T5 census (read-only agent, HEAD `533bfcab`) returned
+  LOW risk: relation set is an open table-driven registry (8-edit touch surface);
+  structural refinement adopted — relations are propagator kinds, cells bind ONE merge
+  at creation, so e-class cells bind the product merge at creation and racing unions
+  resolve by the cell's min-join (green-slice criterion); footnote: sre-identify-sub-cell
+  (sre-core.rkt:2280) hardcodes equality merge for decomposition sub-cells. Corpus
+  amendments per D.1 §2.7 landed in the SAME commit (Master Layer-2 → product cell +
+  :enrichment declaration + D3 three-key separation; E_GRAPHS:240 BSP-rebuild analogy
+  softened; E_GRAPHS §7.1 cell-value/keys/declaration amended; sketch §4.2
+  superseded-banner). arXiv:2511.20782 WebSearch-verified (Arbore/Cheung/Willsey).
+- **Principle / precedent cited**: workflow.md doc-drift gate ("verified-false premises
+  otherwise re-import" — the 'as written' trap that killed panel option C3).
+- **Landed in**: (this commit)

@@ -68,11 +68,9 @@ Component values reference Layer 2 (shared e-class cells) by cell-id. Multiple s
 
 ### Layer 2 — Shared e-class cells
 
-One cell per term-equivalence class. Hashcons + union-find realized as cell-id assignment (structural hash determines cell-id) + union-merge (e-class merge updates union-find roots monotonically).
+One cell per term-equivalence class. **Amended 2026-06-10 per Track 0.1 SM2 lock ([D.1 §2](2026-06-10_PREDUCE_TRACK01_DESIGN.md))**: the cell value is a componentwise-ACI product `{best: (Q-cost × form) argmin | alts: e-node set-union | canonical: min-join over allocation-order | provenance: monotone}` on a join-semilattice where **merge IS the order** (matching sre-core.rkt's design note exactly). NTT declaration: `:lattice :structural :enrichment :semilattice [:Q-module Q]` — Q-POLYMORPHIC per owner D7 (2026-06-10 S1 commitment; tropical is the first instance); this realizes the engineering memo's 2026-05-09 pivot and supersedes the original `:order :refinement` declaration, which had no substrate realization.
 
-E-class cell value carries **refinement-poset structure** (`:order :refinement`, not just join-semilattice) — `A ≤ B` iff every term in A is in B. The poset's Hasse diagram IS the operational graph that cost-guided extraction (Layer 3 stratum) walks via tropical-quantale residuation. SRE lattice-lens Q6 (Hasse diagram = parallel decomposition) applies directly.
-
-The e-class cell is **structural** (multiple components: term set, representative, cost, equivalence-witnesses). NTT declaration: `:lattice :structural :order :refinement`.
+Three keys are SEPARATE by decision D3 (resolving a verified circularity — "cell-id = structural hash of canonical representative" is circular once classes merge): union-find canonical NAME (allocation-order id), cost-best FORM (per-Q argmin), content-address KEY (structural hash; hashcons + `.pnet`). Extraction's operational graph is the e-node child-DAG walked by Track-4 cost propagators between cells; per the 2026-06-02 sweep correction, residuation supplies cost-PROVENANCE — it is not an NP-escaping DAG extractor. Congruence closure is S0 signature-set watchers (structurally emergent at the quiescent fixpoint), and the eager-vs-saturate regime is a per-rule write-target datum, not a cell-shape commitment.
 
 ### Layer 3 — Unified rule registry + property-tagged rules
 
