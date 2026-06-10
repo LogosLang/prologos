@@ -127,3 +127,32 @@ All line numbers are post-4B.3-b; re-verify at the then-current HEAD (the 4B arc
 - FREE_ORDERING — `docs/tracking/2026-02-28_1800_FREE_ORDERING.md` (the 3-pass preparse this track retires).
 - DEFERRED.md § "Free Ordering on Network (PM Track 12B)".
 - Grounding-audit run: `wf_c667e1e1-ab9` (5 facets + completeness critic @ `9cc752ea`).
+
+---
+
+## §10 On-network deferred typing — the PPN 4C Addendum Phase 4B.5 "(iii)" design capture (2026-06-10, user-directed visible work)
+
+4B.5's mechanism fork (design doc §18.21.25.3 Q-4B5.1) chose **(ii-b)** — an imperative demand-driven sweep at the finalize layer — and deferred **(iii)**, the on-network realization, HERE as visible work. Same verdict shape as the 4B.4.a TC-(b) analysis: *the cheap version is principle-blocked; the principled version is infrastructure-blocked.* This section is the principled version's design capture, to be picked up when the prerequisites land.
+
+### §10.1 What (iii) IS
+
+General-body forward-ref residuation realized as genuine on-network deferred typing: the body's NET-2 elaboration/typing state **survives** across commands; when the referent's `def-entry` cell (NET-1) grounds, the typing propagators **re-fire** and the def commits structurally — no sweep, no placeholder list, no imperative retry. The 4B.5 sweep + SCC pass + the A1 gate + the demand trigger ALL retire under (iii). Together with the γ merge-as-answer upgrade (§6 item; type-obligation emerges from the lattice), this completes on-network elaboration for the def layer.
+
+### §10.2 The three prerequisites (why it's infrastructure-blocked)
+
+1. **PM 12 cells** — the ambient elaboration context (registries, parameters) that deferred typing needs must be on-network state, not parameterize-scoped Racket state that dies with the command.
+2. **PM Track 13 mnr↔elab unification OR the NTT §17b cross-network bridge** — a NET-2 typing propagator must `:reads` a NET-1 `def-entry` cell. Today a propagator is `net → net` on ONE network; the crossing needs either unification (one network) or a genuinely new cross-network bridge primitive (NTT §17b, 5 open Q's).
+3. **§6 root-cause diagnosis** (PPN 4D note §6, install-breaks-resolution) — (iii) installs propagators into NET-2's meta-resolution fixpoint, exactly the undiagnosed sensitivity class. The `first-of-rest` canary is a tripwire, not a license.
+
+### §10.3 Audit facts to build against (R-lens-verified @ `ed8e2200`; design doc §18.21.25.1 — RE-GROUND on pickup)
+
+- **The live per-command discard is `reset-meta-store!`** (metavar-store.rkt:2869 `(set-box! net-box (make-elaboration-network))`) — 7 driver sites (:462 per-command, :1536 per-clause, :1658, :1705, :1753, :1983, :2649) + metavar-store.rkt:1841, with DUAL behavior gated on `(when new-cell-fn …)` (:2865-2866). The non-discard reset must reconcile ALL sites + both gate behaviors (pipeline.md Two-Context Audit).
+- **`reset-elab-network-command-state` (elab-network-types.rkt:104) is dormant AND broken** — zero callers (callback removed by Track 7 Phase 6, driver.rkt:2831); `:108` calls 2-arg `(prop-net-hot '() fuel)` against the 1-field struct (fuel retired by D.4 1C-iv-b). Reviving it = re-shaping against the hot/warm/cold + fuel-cell migration FIRST.
+- **Revival hazards**: preserving warm cells while resetting `next-prop-id→0` leaves stale per-cell dependents champs keyed by colliding prop-ids (propagator.rkt:291/298); the template also clears `pair-decomps` (:114-115) — wiping install-dedup state any preserved propagators rely on. Universe + infra cell-ids are re-populated per reset (metavar-store.rkt:2873-2918) — surviving propagators installed against prior cell-ids dangle; **cell-id stability across commands is an unstated prerequisite**.
+- **δ-ification facts** (for when general-body δs return): fire-once lock-in is conditional on PRODUCED OUTPUT (propagator.rkt:3386-3393; equal?-diff over declared outputs :2871-2878; wake on ANY path :1746-1750) → an N-input all-or-nothing fire-once IS an all-ready gate (no set-latch needed at N=2-3; adjudicate vs propagator-design.md at scale). Hazards: partial write permanently locks; equal?-write does not lock (redefinition). Dedup keys must be RAW directional cons `(referrer-cid . referent-cid)` — `decomp-key` canonicalizes and would collapse the mutual a→b/b→a pair (propagator.rkt:4208-4212); `net-pair-decomp?`/`insert` accept raw keys on any network incl. NET-1.
+- **Component-paths contract carries**: `'definition-entry` is `#:classification 'structural` (phase1d-registrations.rkt:300-303; wiring infra-cell-sre-registrations.rkt:47); every δ input needs its `(cons cid path)` entry (propagator.rkt:1411-1431).
+
+### §10.4 What retires when (iii) lands
+
+The 4B.5 sweep machinery (groundness passes + SCC pass + assumption-env), the A1 `current-residuation-enabled?` gates (both sites), the demand trigger, the general-body placeholder, the def-group guard — all named scaffolding in §18.21.25 with this section as the retirement target. The DEF-vs-USE residual boundary (uses of textually-later defs) dissolves under the whole-file fixpoint.
+

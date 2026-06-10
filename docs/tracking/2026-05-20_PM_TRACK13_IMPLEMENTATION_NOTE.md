@@ -197,3 +197,10 @@ The pattern: scheduler-state migrates piecemeal. PM 13 adds the handler registry
 ---
 
 **This is a Stage 0 SEED note. Do not implement without Stage 1/2/3 cycle.**
+
+---
+
+## §9 Cross-track input from PPN 4C Addendum Phase 4B.5 (2026-06-10)
+
+4B.5's mechanism fork deferred the **on-network deferred-typing** design ("(iii)") with PM Track 13's mnr↔elab unification as one of its three prerequisites — the NET-1↔NET-2 crossing must dissolve (one network) or be bridged (NTT §17b) before a NET-2 typing propagator can `:reads` a NET-1 `def-entry` cell. **The full design capture lives in the PM Track 12B note §10** (`2026-06-06_PM_TRACK12B_FREE_ORDERING_ON_NETWORK.md`) — including the non-discard-reset facts PM 13 work must build against (the live discard is `reset-meta-store!` with 8 sites + a dual context gate; the dormant `reset-elab-network-command-state` template is broken at HEAD; stale-dependents/`next-prop-id` collision + pair-decomps-clearing + infra-cell-id churn hazards). When PM 13 opens, read 12B §10 alongside §3 of this note.
+
