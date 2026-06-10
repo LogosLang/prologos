@@ -22,11 +22,16 @@ Done so far (all interactive, with the owner):
 
 ## Exact next step
 
-**Interactive Track 0.1 co-design** (main session, owner present — NOT a loop
-iteration). Opening agenda per the audit's ranked questions: (a) DEFERRED.md triage
-(A.0 leftover); (b) owner-census point 2 — define what "Track 0.1 closure" means
-(Master row promises NTT model + six sub-models; the sketch ships neither); then
-(c) work census points 3, 5, 6 as the 0.1 sub-models reach them.
+**Interactive Track 0.1 co-design, continued** (main session, owner present — NOT a
+loop iteration). DONE 2026-06-10: closure semantics decided (decisions-first → coarse
+NTT exit gate); SM2 (e-class cell) SETTLED via options panel + owner decisions D2/D5/D7
+— see `docs/tracking/2026-06-10_PREDUCE_TRACK01_DESIGN.md` §2 and the ledger entry.
+NEXT: (a) T5 census (lock-blocking for D2: flat-equality consumer census + closed
+relation-set touch surface, sre-core.rkt:2250/:2176-2186); (b) SM2 lock commit
+INCLUDING the §2.7 corpus amendments (same commit, per the verified-false-premise
+re-import hazard); (c) then SM1 (AST PU layout — gates on SM2) or SM3 (rule registry —
+inherits SM2's write-target datum + NAC field); (d) DEFERRED.md triage still pending
+(A.0 leftover); (e) redefined probe (D5) can be scoped any time — T6.
 
 ## If the loop is started before Phase A completes
 

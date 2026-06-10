@@ -58,3 +58,27 @@ Entry template:
   comment-only); S(-1) = `process-retraction` unified handler since 2026-05-20.
 - **Landed in**: audit synthesis in main-session transcript; durable corrections in
   main `533bfcab`.
+
+## 2026-06-10 — interactive (pre-loop) — [OWNER-DECIDED] Track 0.1 SM2 decisions D2/D5/D7
+- **Decision**: Sub-model 2 (e-class cell) settled via design-options panel
+  (run `wf_118652c1-716`: 3 clusters × propose/adversarial-critique + synthesis) +
+  main-session owner-challenger pass + owner decisions:
+  - **D2 domain home**: shared term carrier — `'eclass-refine` as a merge-registry
+    relation, NOT a separate 'eclass domain (T5 census = lock-blocking falsification check).
+  - **D5 probe**: redefined injected-rule probe, parallel, calibration-only; never
+    gates cell shape (original Artifact-1 criterion VOID — verified tautology,
+    reduction.rkt:1390 first-match-wins).
+  - **D7 cost-Q (S1 commitment, Master Q5 direction)**: Q-POLYMORPHIC from day one;
+    tropical = first instance; storage specialization per-Q + microbench-gated.
+    NOTE: owner diverged from the session recommendation (monomorphic-tropical-now) —
+    generality over fast-path.
+- **Options considered**: 4-5 per cluster + critic-added options; full record in panel
+  output (main-session transcript) and distilled into the design doc.
+- **Principle / precedent cited**: Cell/Propagator/Scheduler orthogonality (regime as
+  per-rule registry datum); merge-IS-order (sre-core.rkt:147-150); prefer-tagging-over-
+  bridges (structural-thinking.md). Owner-challenger pass REFUTED the panel's cluster-A
+  kill-shot with production evidence (typing-propagators.rkt:2488 — intra-cell
+  cross-component propagation ships today), reopening the carrier-split as a measured
+  storage decision (D4).
+- **Landed in**: `docs/tracking/2026-06-10_PREDUCE_TRACK01_DESIGN.md` §2 (this commit);
+  lock pending T5 census + owner review of the draft.
