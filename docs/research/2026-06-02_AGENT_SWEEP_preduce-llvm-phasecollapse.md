@@ -7,6 +7,7 @@
 > ⚠️ Two corrections this sweep forces onto our committed docs:
 > 1. `E_GRAPHS_RESEARCH §471` + `TROPICAL_QUANTALE §10.7` over-claim "extraction = residuation, free." True for **tree cost** only; DAG/sharing-aware cost (what codegen needs) is **NP-complete + inapproximable**. Residuation's real contribution is cost-**provenance**, not an NP-escaping extractor.
 > 2. The Schlatt "persistent compiler abstraction" citation `arXiv:2602.16707` (in `E_GRAPHS_RESEARCH`, `PREDUCE_MASTER`) is **structurally invalid** (no month 26) — garbled or hallucinated. Find the real ID before any external use.
+>    **[CORRECTION 2026-06-10: this P0's ID parse was wrong — arXiv IDs are YYMM.NNNNN, so `2602` = February 2026, structurally VALID. WebSearch-verified: the paper is real at arXiv:2602.16707. The ACTUAL citation defect was author attribution — the authors are Merckx, Lopoukhine, Coward, Cheng, De Suer, Grosser (no "Schlatt" among them). Attribution fixed in E_GRAPHS_RESEARCH + PREDUCE_MASTER; this note preserves the sweep record.]**
 
 ---
 

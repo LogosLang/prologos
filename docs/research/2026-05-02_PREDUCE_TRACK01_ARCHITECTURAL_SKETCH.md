@@ -126,7 +126,7 @@ Binder handling: dependent types + lambda calculi force the issue. Moss 2025 int
 
 **Alternatives considered**:
 - **(a) Vanilla egg-style without CHAMP structural sharing** — engineered hashcons table, no cross-cell sharing. **Rejected**: gives up the substrate's free structural sharing; doesn't compose with `.pnet` content-addressing.
-- **(b) Schlatt-style persistent in MLIR-dialect form** ([arXiv:2602.16707](https://arxiv.org/abs/2602.16707)) — e-graph as first-class IR construct. **Architecturally analogous to ours** — Schlatt's `eqsat` dialect role is filled by e-class cells in our setting. Not a true alternative; the same architectural move on a different substrate.
+- **(b) Merckx-et-al.-style persistent in MLIR-dialect form** ([arXiv:2602.16707](https://arxiv.org/abs/2602.16707); attribution corrected 2026-06-10, previously mis-cited as "Schlatt") — e-graph as first-class IR construct. **Architecturally analogous to ours** — their `eqsat` dialect role is filled by e-class cells in our setting. Not a true alternative; the same architectural move on a different substrate.
 - **(c) Colored e-graphs as primary representation** (Singher-Itzhaky 2023) — context-sensitive equivalences first-class throughout. **Adopted partially** — colored e-graph theory grounds our worldview-tagged e-classes (§5.2 below); but as PRIMARY representation for closed-term equivalences (the bulk of cases), the coloring overhead is unnecessary. Colored equivalences layer atop ground equivalences via worldview tags.
 
 **Tipping factors**:
@@ -203,7 +203,7 @@ A rule's tags can stack — a rule can be both `IN-fragment` and `confluence-by-
 - If retraction-bit consultation turns out to have prohibitive overhead, retraction-eligible might be merged into contextual (with retraction-bits in the worldview)
 - If `.pnet` content-addressing scales better with uniform regime treatment, alternative (b) becomes attractive
 
-**References**: [E-Graphs Research §7.7-7.8](2026-05-02_E_GRAPHS_RESEARCH.md); BSP-LE 2B tagged-cell-value pattern; Schlatt 2026 ([arXiv:2602.16707](https://arxiv.org/abs/2602.16707)); Singher-Itzhaky 2023.
+**References**: [E-Graphs Research §7.7-7.8](2026-05-02_E_GRAPHS_RESEARCH.md); BSP-LE 2B tagged-cell-value pattern; Merckx et al. 2026 ([arXiv:2602.16707](https://arxiv.org/abs/2602.16707)); Singher-Itzhaky 2023.
 
 ---
 
@@ -280,7 +280,7 @@ Leading direction: full absorption — `prop:ctor-desc-tag` becomes a property t
 
 ### §7.7 What's the tropical residual operator's actual API surface?
 
-[E-Graphs Research §7.5](2026-05-02_E_GRAPHS_RESEARCH.md) makes the strong claim: the extraction algorithm IS the tropical residual operator that PPN 4C Phase 1B already ships. PReduce inherits the algebra. The **operational** question: what's the residual operator's actual API surface in `tropical-fuel.rkt`? Phase 1B is in flight (D.2 design); PReduce 0.1 references the residual but doesn't constrain its interface. Verification work for Track 4 (cost-guided extraction) once Phase 1B closes.
+[E-Graphs Research §7.5](2026-05-02_E_GRAPHS_RESEARCH.md) makes the strong claim: the extraction algorithm IS the tropical residual operator that PPN 4C Phase 1B already ships. PReduce inherits the algebra. The **operational** question: what's the residual operator's actual API surface in `tropical-fuel.rkt`? **Status updated 2026-06-10**: Phase 1B CLOSED 2026-05-17 (atomic close, see MASTER_ROADMAP); the substrate-research note resolves the signature at the level of C3.d (`\_Q : Q × M → M`), realized as `tropical-left-residual` in `tropical-fuel-primitives.rkt` — a pure read-time function with ZERO production consumers today. PReduce inherits the algebra; the on-network propagator wrapping is greenfield Track 4 work, and the operator's consumption pattern (read-time vs propagator-wrapped) is a Track 4 design decision.
 
 ### §7.8 Fixpoint termination across non-confluent rules
 

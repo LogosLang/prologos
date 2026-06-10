@@ -235,7 +235,7 @@ This matters for Prologos because:
 
 **Production users**: Cranelift's mid-end optimizations (acyclic variant, see §4.3); SPORES (linear algebra); Tensat (tensor compilation); Diospyros (vectorization); Fast Fourier Transform synthesis. egg's reach is significant.
 
-**Limitations**: in-memory data structure; no incremental persistence story prior to Schlatt 2026; pattern matching is term-rewriting-style rather than higher-order; binding handling is hand-rolled per-application.
+**Limitations**: in-memory data structure; no incremental persistence story prior to Merckx et al. 2026; pattern matching is term-rewriting-style rather than higher-order; binding handling is hand-rolled per-application.
 
 **For Prologos**: egg is the design reference. We won't link against it (we're on a different substrate), but its operational shapes guide our cell layout and rebuild scheduling. Notable: egg's batched-rebuild matches our BSP-round semantics — propagators fire concurrently within a round, then the merge happens at the round boundary. This is structurally aligned.
 
@@ -270,17 +270,17 @@ This matters for Prologos because:
 
 This is the closest existing-system analog to Prologos's "the substrate IS the IR" position. The eqsat MLIR dialect makes e-graph state into a first-class IR construct; we make it cell-state on the propagator network. Both move e-graphs from "tool you call" to "structure that lives inside the compilation substrate."
 
-### §4.6 Schlatt 2026: persistent compiler abstraction
+### §4.6 Merckx et al. 2026: persistent compiler abstraction
 
-**Schlatt et al.** "E-Graphs as a Persistent Compiler Abstraction" ([arXiv:2602.16707](https://arxiv.org/abs/2602.16707), February 2026) proposes representing e-graphs natively in the compiler's IR rather than as a separate optimization phase. Key insight: if the e-graph persists throughout compilation, equality information discovered during one phase is available to all subsequent phases. This avoids the "information loss" problem where an early phase discovers equalities that a later phase could use but cannot access.
+**Merckx et al.** (Merckx, Lopoukhine, Coward, Cheng, De Suer, Grosser) "E-Graphs as a Persistent Compiler Abstraction" ([arXiv:2602.16707](https://arxiv.org/abs/2602.16707), February 2026; attribution corrected 2026-06-10 — previously mis-cited throughout as "Schlatt"; ID WebSearch-verified) proposes representing e-graphs natively in the compiler's IR rather than as a separate optimization phase. Key insight: if the e-graph persists throughout compilation, equality information discovered during one phase is available to all subsequent phases. This avoids the "information loss" problem where an early phase discovers equalities that a later phase could use but cannot access.
 
 The implementation (using xDSL and MLIR) introduces an `eqsat` dialect that represents e-graph equivalence classes directly in the IR. Pattern rewriting can be interleaved with other compiler transformations, with the e-graph maintaining all discovered equalities.
 
-**For Prologos**: Schlatt 2026 is the architectural cousin closest to our setting. Their `eqsat` dialect role is filled in our setting by e-class cells on the propagator network. Their persistence story (e-graph persists through compilation) maps to our cell-state persistence (`.pnet` round-trip + content-addressing). They report that persistent e-graphs unlock optimizations across phase boundaries; we get the same benefit by virtue of the unified-substrate architecture, not as a separate add-on.
+**For Prologos**: Merckx et al. 2026 is the architectural cousin closest to our setting. Their `eqsat` dialect role is filled in our setting by e-class cells on the propagator network. Their persistence story (e-graph persists through compilation) maps to our cell-state persistence (`.pnet` round-trip + content-addressing). They report that persistent e-graphs unlock optimizations across phase boundaries; we get the same benefit by virtue of the unified-substrate architecture, not as a separate add-on.
 
 ### §4.7 Production maturity assessment
 
-Equality saturation moved from "specialized tool" to "general compiler infrastructure" between 2021 (egg) and 2026 (Schlatt persistent abstraction; eqsat MLIR dialect). The frontier is moving, but production integration is still uneven:
+Equality saturation moved from "specialized tool" to "general compiler infrastructure" between 2021 (egg) and 2026 (Merckx et al. persistent abstraction; eqsat MLIR dialect). The frontier is moving, but production integration is still uneven:
 
 | System | E-graph maturity | Persistence | Integration depth |
 |---|---|---|---|
@@ -289,10 +289,10 @@ Equality saturation moved from "specialized tool" to "general compiler infrastru
 | Cranelift | Acyclic only | None (per-function) | Compiler-internal |
 | DialEgg | Research | None | MLIR plug-in |
 | eqsat MLIR | Research | Per-dialect | First-class IR |
-| Schlatt 2026 | Research | Cross-phase | First-class IR |
+| Merckx et al. 2026 | Research | Cross-phase | First-class IR |
 | **Prologos PReduce target** | First-class | Cross-session via `.pnet` | Substrate-level |
 
-The trend line points where Prologos is heading. Schlatt 2026 is the closest existing peer; PReduce's combination of substrate-level integration + cross-session persistence + tropical-quantale extraction + BSP-LE speculation is novel.
+The trend line points where Prologos is heading. Merckx et al. 2026 is the closest existing peer; PReduce's combination of substrate-level integration + cross-session persistence + tropical-quantale extraction + BSP-LE speculation is novel.
 
 ---
 
@@ -332,13 +332,13 @@ Worth experimenting once the substrate is in place. Not a near-term track.
 
 ### §5.5 Persistent compiler abstraction (revisited)
 
-Schlatt 2026 (cited in §4.6) deserves mention here as well — it's the closest peer to Prologos's vision. Three pieces:
+Merckx et al. 2026 (cited in §4.6) deserves mention here as well — it's the closest peer to Prologos's vision. Three pieces:
 
 1. **E-graph persistence across compilation phases**: equality information from earlier phases available to later phases.
 2. **First-class IR construct**: the `eqsat` dialect makes e-graph state visible in the IR, not hidden in a separate optimization engine.
 3. **Cross-pass interleaving**: rewrites can be applied alongside lowering, type inference, etc., rather than as a phase.
 
-Prologos PReduce's "substrate IS the IR" position generalizes all three. Phases ARE strata in our setting; cross-phase information flow IS cell-state propagation; first-class IR construct IS cell-id assignment. Schlatt 2026 is the proof-of-concept that persistent e-graphs unlock cross-phase optimization; PReduce extends it to cross-session persistence via `.pnet`.
+Prologos PReduce's "substrate IS the IR" position generalizes all three. Phases ARE strata in our setting; cross-phase information flow IS cell-state propagation; first-class IR construct IS cell-id assignment. Merckx et al. 2026 is the proof-of-concept that persistent e-graphs unlock cross-phase optimization; PReduce extends it to cross-session persistence via `.pnet`.
 
 ---
 
@@ -493,7 +493,7 @@ The four levels compose because they're different lenses on the same propagator-
 
 ### §7.7 `.pnet` content-addressing for cross-session persistence
 
-Schlatt 2026's persistent-compiler-abstraction story extends across sessions for free in our setting:
+Merckx et al. 2026's persistent-compiler-abstraction story extends across sessions for free in our setting:
 
 - Each e-class cell has a structural hash (CHAMP-derived)
 - `.pnet` serialization preserves cell IDs (when SH Track 1 lands; design context for PReduce Track 0.3)
@@ -632,7 +632,7 @@ For Prologos: the scheduler IS the propagator scheduler; schedule expressions co
 - Cranelift acyclic e-graphs [egraphs.org meeting](https://egraphs.org/meeting/2025-08-21-dialegg)
 - DialEgg (CGO 2025). [Conference page](https://2025.cgo.org/details/cgo-2025-papers/44/DialEgg-Dialect-Agnostic-MLIR-Optimizer-using-Equality-Saturation-with-Egglog)
 - eqsat MLIR dialect. [arXiv:2505.09363](https://arxiv.org/html/2505.09363v1)
-- Schlatt, A., et al. (2026). E-Graphs as a Persistent Compiler Abstraction. [arXiv:2602.16707](https://arxiv.org/abs/2602.16707)
+- Merckx, J., Lopoukhine, A., Coward, S., Cheng, J., De Suer, B., Grosser, T. (2026). E-Graphs as a Persistent Compiler Abstraction. [arXiv:2602.16707](https://arxiv.org/abs/2602.16707)
 
 ### §9.4 Recent advances
 - E-Graphs Modulo Theories (2024). [arXiv:2504.14340](https://arxiv.org/html/2504.14340)

@@ -27,10 +27,10 @@
 **Key insight (2026-05-02)**: The architectural endpoint of PReduce is reduction natively on-network as e-graph + DPO + tropical-quantale + GoI on the **same substrate** that hosts parsing, typing, elaboration, and module loading — not as a separate engine bolted onto the compiler. Three layers compose: per-AST-PU compound regions hold occurrence-state; shared e-class cells hold term-equivalence state with refinement-poset structure; a unified rule registry holds property-tagged rewrite rules dispatched by the propagator scheduler. Two orthogonal axes parameterize the design: the **rule-property axis** (IN-fragment vs adhesive-DPO vs non-monotone) determines stratum + parallelism guarantees; the **persistence-regime axis** (ground vs contextual vs retraction-eligible vs opaque) determines cacheability across sessions. The combination is what makes the SH-series super-optimization story shippable.
 
 **Cross-series connections**:
-- **PPN 4C Phase 1B** ([Tropical Quantale Addendum](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md)) is the hard substrate prerequisite — ships `tropical-fuel.rkt` cell factory + budget cell + threshold propagator + residuation operator + SRE quantale-property declarations. PReduce inherits without recreating.
+- **PPN 4C Phase 1B** ([Tropical Quantale Addendum](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md)) is the hard substrate prerequisite (CLOSED 2026-05-17; gates Track 1 *implementation*, not Track 0.x design closure) — ships the tropical-fuel substrate: quantale algebra + SRE quantale-property declarations (`tropical-fuel-primitives.rkt` re-exported via `tropical-fuel.rkt`), specialized-cell factory + live fuel/budget cells (`propagator.rkt` + `specialized-cells.rkt`). Wording corrected per 2026-06-10 grounding audit: (i) the planned threshold *propagator* was REPLACED in D.4 by an on-write predicate (no separate propagator); (ii) `tropical-left-residual` is a pure read-time function with zero production consumers today — PReduce inherits the ALGEBRA without recreating it, but the on-network residuation wrapping Track 4 needs is greenfield work, not inheritance; (iii) the monotone-counter fast path is gated to not-under-speculation, so Track 6 (speculative reduction) gets the slow path — Phase 1V ns/cycle numbers do not port.
 - **BSP-LE Track 2B** ([PIR](2026-04-16_BSP_LE_TRACK2B_PIR.md)) provides the speculative-search infrastructure: Q_n hypercube worldview, bitmask subcube pruning, Gray-code branch ordering, ATMS nogoods, retraction stratum S(-1). PReduce's cost-bounded speculative reduction consumes this directly.
 - **SRE Track 2D** delivered 13 concrete DPO rewrite rules; PReduce extends the rule registry to term reduction, generalizing the SRE form-registry pattern. The Track 2D *adhesive guarantees* (in the strict-adhesive presheaf category) transfer to PReduce's e-class subsystem through *shared semilattice enrichment* per the substrate-research note (C2.f, 2026-05-09), not through shared adhesivity — a unified categorical home rather than a per-theorem audit.
-- **PRN Master** is the theory home; PReduce findings contribute back to PRN's Universal Primitives and Confirmed Findings tables. PRN §2 conjectures β/δ/ι-reduction-as-DPO-rules — PReduce Track 1 is the predicted confirmation.
+- **PRN Master** is the theory home; PReduce findings contribute back to PRN's Universal Primitives and Confirmed Findings tables. PRN §2 conjectures β/δ/ι-reduction-as-DPO-rules — PReduce Track 2 (first rule kind, β) is the predicted confirmation, consistent with the Track 2 tracker row (Track 1 is the e-class substrate; rule-kind confirmations land in Tracks 2-3). (Locus inconsistency fixed 2026-06-10.)
 - **SH Master** is the consumer — PReduce delivers the algorithmic perf foundation that makes self-hosted Prologos competitive at runtime; SH Track 4 (production LLVM substrate) gates on PReduce delivery for the super-optimization claim.
 - **NTT** — rewrite rules will eventually carry NTT type annotations; rule-property declarations are NTT property declarations. Forward-compatible-with but not gated-on NTT formalization.
 
@@ -48,7 +48,7 @@
 | 2 | First IN-fragment rewrite-rule kind (β-reduction) | ⬜ | — | — | Validates IN-fragment-as-property approach. Lévy-optimal sharing inherited via shared e-class cells. PRN §2 conjecture confirmation. |
 | 3 | First adhesive-DPO rewrite-rule kind (ι/case-selection, structural normalization) | ⬜ | — | — | Validates DPO machinery on the same e-class substrate. Critical-pair analysis as runtime mechanism. |
 | 4 | Cost-guided extraction — tropical-quantale residuation on e-class poset | ⬜ | — | — | Consumes PPN 4C Phase 1B residuation operator. Module Theory §6 e-graphs-as-quotient-modules realized. |
-| 5 | Persistence — content-addressed e-class storage + `.pnet` round-trip + cross-session loading | ⬜ | — | — | Schlatt 2026 ("E-Graphs as a Persistent Compiler Abstraction") realized on our substrate. Regime-tagged cache discipline. |
+| 5 | Persistence — content-addressed e-class storage + `.pnet` round-trip + cross-session loading | ⬜ | — | — | Merckx et al. 2026 ("E-Graphs as a Persistent Compiler Abstraction") realized on our substrate. Regime-tagged cache discipline. |
 | 6 | Speculative reduction — cost-bounded ATMS branching for non-confluent rule cases | ⬜ | — | — | Consumes BSP-LE 2B hypercube infrastructure. The "4-level optimization strategy" (ATMS + Left Kan + Right Kan + tropical) realized for reduction. |
 | 7 | Effect-stratum boundary protocol — opaque cells for FFI + capability-typed effects | ⬜ | — | — | PReduce respects effect-stratum boundary; doesn't try to subsume opaque-evaluation. Architecture AD's Stratum 3 is the existing pattern. |
 | 8 | `reduction.rkt` parity + retirement — multi-track endgame | ⬜ | — | — | Per `workflow.md` "validated ≠ deployed" discipline: parity with `reduction.rkt` validated → new substrate as production default → `reduction.rkt` retirement as its own track after baking. |
@@ -80,7 +80,7 @@ One CHAMP cell from rule-id → rule-data, generalizing the SRE form registry. S
 
 Rules carry **property-tag declarations** (Axis 1 below). The propagator scheduler dispatches rules to the correct stratum based on property tags. Two strata suffice:
 - **S0 rewriting stratum** (monotone): all confluent rewriting (IN-fragment + adhesive-DPO + structural-decomposition). Property tags determine local guarantees + parallelism (Lévy-optimal vs DPO with critical-pair analysis).
-- **S(-1) retraction stratum** (non-monotone): retraction-eligible rewrites (BSP-LE 2B existing pattern).
+- **S(-1) retraction stratum** (non-monotone): retraction-eligible rewrites. Lineage corrected 2026-06-10: S(-1) originated in PM Track 7 (elaborator network) and was unified onto the generalized BSP stratum mechanism by PPN 4C 2B (2026-05-20) — it now lives as `process-retraction` registered via `register-stratum-handler!` (`run-retraction-stratum!` retired). PReduce consumes the unified handler mechanism, not a BSP-LE-2B-specific pattern.
 
 Effect-aware reduction respects the existing effect-stratum boundary (Architecture AD Stratum 3) — opaque cells are uninterpretable to PReduce's rewriting layer.
 
@@ -110,7 +110,7 @@ A rule's property tags can stack — a rule can be both `IN-fragment` and `confl
 | **Open** | Don't persist resolved value; persist the rewrite-rule template | Rule-id | Rules with free metas; pattern templates |
 | **Opaque** | Cannot persist rewrites (no rewrite to persist) | N/A | FFI calls; capability-typed effect evaluation |
 
-Storage realization (Track 5): content-addressed `.pnet` fragments load on demand. Schlatt 2026 ("E-Graphs as a Persistent Compiler Abstraction") + IPVM-style content addressing realized on our substrate. The retraction-bit consultation is the discipline that prevents stale equalities from polluting the ground regime.
+Storage realization (Track 5): content-addressed `.pnet` fragments load on demand. Merckx et al. 2026 ("E-Graphs as a Persistent Compiler Abstraction") + IPVM-style content addressing realized on our substrate. The retraction-bit consultation is the discipline that prevents stale equalities from polluting the ground regime.
 
 ---
 
@@ -129,7 +129,7 @@ Six concrete NTT sub-models specifying the three-layer architecture:
 1. **AST PU compound cell layout** — what components carry occurrence-state per node-position; how component-paths address nodes; merge semantics per component.
 2. **E-class cell** — `:lattice :structural :order :refinement` declarations; merge function (union-find with structural-hash dedup); component layout (term set, representative, cost annotation, equivalence-witnesses, provenance).
 3. **Unified rule registry cell** — CHAMP from rule-id → rule-data; property-tag taxonomy from Axis 1; per-rule consumers (which dispatch propagators care).
-4. **Rewriting stratum (S0)** + retraction stratum (S(-1)) — only two needed; S0 internal property-tag-based dispatch; S(-1) consumes BSP-LE 2B retraction infrastructure.
+4. **Rewriting stratum (S0)** + retraction stratum (S(-1)) — only two needed; S0 internal property-tag-based dispatch; S(-1) consumes the unified BSP stratum-handler retraction infrastructure (`process-retraction` via `register-stratum-handler!`; lineage PM Track 7 → PPN 4C 2B, 2026-05-20).
 5. **Effect-stratum boundary marker** — opaque cell type the rewriting layer doesn't enter; protocol for handing off to Architecture AD Stratum 3.
 6. **Persistence regimes** — content-hashing scheme; worldview-tag composition; retraction-bit consultation discipline.
 
@@ -191,9 +191,9 @@ Tracks beyond 1 emerge from Track 0 findings — exact partition decided at Trac
 
 4. **Adhesive guarantees for the full PReduce rewriting system**: SRE Track 2D + adhesive theory established this for structural decomposition. Does it extend to term-reduction rules with critical pairs? **Reframed 2026-05-09 via substrate-research note**: under the Tiurin–Barrett–Ghica–Hu (LICS 2025) semilattice-enriched SMC frame, the guarantees come from *enrichment* rather than adhesivity proper. Per Bonchi et al. *String diagram rewrite theory III* (MSCS 2022), **DPOI confluence is decidable for terminating systems** — directly applicable to Track 3. Empirical confirmation is still Track 3 work; the formal grounding is no longer at the open M-adhesive frontier.
 
-5. **Cost lattice composition**: PPN 4C Phase 1B ships single-quantale tropical fuel. PReduce extraction needs per-rewrite-rule cost + per-eclass cheapest-derivation. Single tropical quantale or product/tensor of multiple? PPN 4C addendum §4 multi-quantale composition NTT model is the basis; PReduce's specific composition decided in Track 4.
+5. **Cost lattice composition**: PPN 4C Phase 1B ships single-quantale tropical fuel. PReduce extraction needs per-rewrite-rule cost + per-eclass cheapest-derivation. Single tropical quantale or product/tensor of multiple? PPN 4C addendum §4 multi-quantale composition NTT model is the basis; PReduce's specific composition decided in Track 4. **Disposition 2026-05-09 (substrate note + engineering memo; body amended 2026-06-10)**: the math foundation is supplied — quantale-module framing with residual operator signature `\_Q : Q × M → M` per C3.d. The CHOICE of Q (single tropical vs product/tensor) remains an explicit S1 commitment — owner decision at Track 4 design. Foundation resolved; choice open.
 
-6. **Retraction-bit consultation discipline**: how does the persistence layer check retraction state before promoting to ground regime? Periodic sweep? On-write check? Retraction-stratum coordination? Track 0.1 design + Track 5 implementation.
+6. **Retraction-bit consultation discipline**: how does the persistence layer check retraction state before promoting to ground regime? Periodic sweep? On-write check? Retraction-stratum coordination? Track 0.1 design + Track 5 implementation. **Disposition 2026-05-09 (substrate note + engineering memo; body amended 2026-06-10)**: protocol clarified — ATMS-worldview-parameterized enrichment IS the protocol; the remaining work is implementation discipline (Track 0.1 design + Track 5), not protocol invention.
 
 7. **Effect-stratum boundary protocol**: how does PReduce hand off to Architecture AD's Stratum 3? When does an opaque-cell value re-enter PReduce's reach (after the effect resolves)? Track 0.1 + Track 7 design.
 
@@ -212,7 +212,7 @@ Tracks beyond 1 emerge from Track 0 findings — exact partition decided at Trac
 ## References to Project Artifacts
 
 ### Roadmap + masters
-- [`docs/tracking/MASTER_ROADMAP.org`](MASTER_ROADMAP.org) — series-of-series tracking; PReduce slot to be added under PRN's application-series rollup
+- [`docs/tracking/MASTER_ROADMAP.org`](MASTER_ROADMAP.org) — series-of-series tracking; PReduce is referenced at the PM Track 9 promotion note, SRE Track 6 ownership row, and SH gating rows (2026-06-10: a dedicated PReduce rollup section under PRN remains to be added)
 - [PRN Master](2026-03-26_PRN_MASTER.md) — theory series; PReduce is one of its application series
 - [SH Master](2026-04-30_SH_MASTER.md) — self-hosting series; PReduce is its critical cross-series dependency
 - [PPN Master](2026-03-26_PPN_MASTER.md) — propagator-parsing series; provides the parser/elaborator substrate PReduce reduces over
@@ -221,7 +221,7 @@ Tracks beyond 1 emerge from Track 0 findings — exact partition decided at Trac
 - [PPN 4C Tropical Quantale Addendum Design D.2](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) — substrate prerequisite
 
 ### Implementation references
-- [`racket/prologos/reduction.rkt`](../../racket/prologos/reduction.rkt) — current imperative reducer (~4000 lines, ~50 cases); Track 8 retirement target
+- [`racket/prologos/reduction.rkt`](../../racket/prologos/reduction.rkt) — current imperative reducer (~3,560 lines, ~50 cases); Track 8 retirement target
 - [`racket/prologos/propagator.rkt`](../../racket/prologos/propagator.rkt) — substrate primitives; `register-stratum-handler!` pattern PReduce extends
 - [`racket/prologos/pnet-serialize.rkt`](../../racket/prologos/pnet-serialize.rkt) — `.pnet` format; Track 0.3 + Track 5 extension target
 - [`racket/prologos/sre-core.rkt`](../../racket/prologos/sre-core.rkt) — SRE form registry; PReduce's unified rule registry generalizes this pattern
@@ -242,7 +242,7 @@ Tracks beyond 1 emerge from Track 0 findings — exact partition decided at Trac
 - [Propagator Network as Super-Optimizing Compiler](../research/2026-04-30_PROPAGATOR_NETWORK_AS_SUPEROPTIMIZING_COMPILER.md) — architectural-distinctiveness argument
 
 ### External literature (from prior research notes)
-- **E-graphs / equality saturation**: Willsey et al. (2021) [arXiv:2004.03082](https://arxiv.org/abs/2004.03082); Schlatt (2026) "E-Graphs as a Persistent Compiler Abstraction" [arXiv:2602.16707](https://arxiv.org/abs/2602.16707); Moss (2025) "E-Graphs with Bindings" [arXiv:2505.00807](https://arxiv.org/abs/2505.00807); Biondo-Castelnovo-Gadducci CALCO 2025 "EGGs Are Adhesive!"
+- **E-graphs / equality saturation**: Willsey et al. (2021) [arXiv:2004.03082](https://arxiv.org/abs/2004.03082); Merckx, Lopoukhine, Coward, Cheng, De Suer, Grosser (2026) "E-Graphs as a Persistent Compiler Abstraction" [arXiv:2602.16707](https://arxiv.org/abs/2602.16707) (attribution corrected 2026-06-10; previously mis-cited as "Schlatt"; ID WebSearch-verified); Moss (2025) "E-Graphs with Bindings" [arXiv:2505.00807](https://arxiv.org/abs/2505.00807); Biondo-Castelnovo-Gadducci CALCO 2025 "EGGs Are Adhesive!"
 - **Interaction nets / GoI**: Lafont (1990, 1997); Girard GoI I-V; Mackie GoI Machine; Muroya-Ghica DGoIM [arXiv:1803.00427](https://arxiv.org/abs/1803.00427); HVM2 [HigherOrderCO/HVM2](https://github.com/HigherOrderCO/HVM2)
 - **Adhesive categories**: Lack-Sobocinski (2005); Inria (2025) Rocq formalization; Corradini et al. (CONCUR 2024)
 - **Tropical / quantale**: Litvinov-Maslov (2001); Russo (arXiv:1002.0968); Fujii (arXiv:1909.07620); Bacci-Mardare-Panangaden-Plotkin (2023); Lawvere (1973)

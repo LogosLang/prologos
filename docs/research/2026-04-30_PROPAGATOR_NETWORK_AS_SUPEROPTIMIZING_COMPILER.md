@@ -302,7 +302,7 @@ The companion path note ([`2026-04-30_SELF_HOSTING_PATH_AND_BOOTSTRAP.md`](2026-
 - eqsat MLIR dialect. [arXiv:2505.09363](https://arxiv.org/html/2505.09363v1)
 - LLM-Guided Strategy Synthesis for Scalable Equality Saturation. [arXiv:2604.17364](https://arxiv.org/html/2604.17364v1)
 - Cranelift acyclic e-graphs. [egraphs community](https://egraphs.org/meeting/2025-08-21-dialegg)
-- Schlatt, A. (2026). E-Graphs as a Persistent Compiler Abstraction. [arXiv:2602.16707](https://arxiv.org/abs/2602.16707)
+- Merckx, J., Lopoukhine, A., Coward, S., Cheng, J., De Suer, B., Grosser, T. (2026). E-Graphs as a Persistent Compiler Abstraction. [arXiv:2602.16707](https://arxiv.org/abs/2602.16707) (attribution corrected 2026-06-10; previously mis-cited as "Schlatt, A.")
 - Moss, A. (2025). E-Graphs with Bindings. [arXiv:2505.00807](https://arxiv.org/abs/2505.00807)
 - Tate-Stepp-Tatlock (2009). Equality Saturation: A New Approach to Optimization. *POPL '09*.
 
