@@ -207,6 +207,18 @@ iteration. Small iterations are what make the ledger auditable and rewinds cheap
 attempts on the same problem, stop iterating and audit the domain. Read failure logs;
 never re-run the full suite to diagnose.
 
+**Context discipline (added 2026-06-10, owner question on context management)**: the loop
+does not control compaction timing — it controls RECOVERABILITY. Rules: (i) bulk reading
+lives in disposable agents/panels; main context holds distilled syntheses only. (ii) Every
+verdict/decision is written to the design doc + ledger BEFORE the next deliberation opens —
+never hold two undecided panels at once; settle→commit→next is the atomic unit. (iii) End
+every iteration at a clean boundary (commit + handoff rewritten) so compaction between
+units is harmless. (iv) After any compaction, re-ground from files in order: CHARTER →
+HANDOFF → design-doc tracker → ledger tail — never from memory of the summary alone.
+(v) If compaction lands mid-deliberation, the first post-compaction action is to re-read
+the undecided artifact from its output file (panel outputs persist on disk), not to
+re-run it.
+
 ## 8. Stop conditions
 
 Halt the loop (write a BLOCKED ledger entry + final handoff, then stop scheduling)
