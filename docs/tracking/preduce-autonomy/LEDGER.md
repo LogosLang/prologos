@@ -376,3 +376,19 @@ Entry template:
   conflict either way).
 - **Landed in**: (this commit); implementation begins this firing, ONE code commit
   when green.
+
+## 2026-06-10 — LOOP iteration 2 — [SIGNIFICANT] §5.8 DENOMINATOR RECONCILED — phase accounting found
+- **Discovery during the SM1.1a acceptance gate**: the driver emits PHASE-TIMINGS with
+  a SEPARATE `reduce_ms` bucket. On ppn-track4c: reduce 1136ms of ~1523ms phase total
+  = **~75% reduction share by PHASE accounting** — vs 25.4% by whole-process profiler
+  tree-bound on the same file. Reconciliation: the denominators differ — phase
+  accounting measures in-driver phase time (excludes startup/parse/module-load that
+  the profiler's whole-process total includes). The owner-reported ~50-60% is
+  CONSISTENT with phase accounting; iteration 1's "not reproduced" verdict was a
+  denominator-definition artifact, not a contradiction. The iteration-1 doorbell
+  stands CORRECTED (good news: the perf thesis's headroom is real under the
+  phase-accounting lens).
+- **§5.8 protocol v3**: BOTH numbers are now standing baselines — phase-accounting
+  reduce-share (~75% ppn-track4c) for the user-experienced compile-time story;
+  profiler tree-bound (25.4%) for whole-process honesty. Track 4/8 claims cite both.
+- **Landed in**: (this commit)
