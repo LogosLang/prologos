@@ -160,9 +160,11 @@ These are different structural claims. The interaction-net claim is well-establi
 
 **Schlatt et al. (Merckx et al. 2026, arXiv:2602.16707), "E-Graphs as a Persistent Compiler Abstraction."** xDSL/MLIR dialect (`eqsat`) for native e-graph IR; equality saturation interleaved with constructive compiler passes.
 
-**Moss / Tiurin (2025, arXiv:2505.00807), "E-Graphs With Bindings."** Categorical interpretation in closed symmetric monoidal categories; hierarchical hypergraph DPO rewriting; addresses λ-binders.
+**Tiurin, Barrett, Ghica, Hu (LICS 2025, arXiv:2406.15882), "Equivalence Hypergraphs: DPO Rewriting for Monoidal E-Graphs."** Foundational categorical interpretation of e-graphs as morphisms in *semilattice-enriched* Cartesian / symmetric monoidal categories. Headline theorem (6.5): full equivalence of categories `SMT⁺(Σ, E) ≃ MEHypI(Σ)/S, E`. EDPOI rewriting on e-hypergraphs is sound and complete. **The Moss–Tiurin (2025) bindings extension below builds on this paper, not on Biondo et al.** Substrate-research note 2026-05-09 (`docs/research/utm-fl/outputs/preduce-adhesive-rewriting-substrate-internal-research.md`) adopts this as the *primary* categorical frame for PReduce; substrate fit is direct (our lattice-valued cells *are* the semilattices the enrichment requires).
 
-**Biondo, Castelnovo, Gadducci (CALCO 2025), "EGGs Are Adhesive!"** (LIPIcs 342:10). Proves e-graphs (acyclic term graphs with congruence closure) form an adhesive category. Explicit categorical foundation; enables DPO rewriting theory to apply.
+**Moss / Tiurin (2025, arXiv:2505.00807), "E-Graphs With Bindings."** Categorical interpretation in closed symmetric monoidal categories; hierarchical hypergraph DPO rewriting; addresses λ-binders. **Direct extension of Tiurin-Barrett-Ghica-Hu (LICS 2025) above** — same enrichment framework, lifted to closed SMCs.
+
+**Biondo, Castelnovo, Gadducci (CALCO 2025, arXiv:2503.13678), "EGGs Are Adhesive!"** (LIPIcs 342:10). Proves e-graphs form a `T_Σ`-adhesive category — a form of M-adhesive, not full adhesive in the Lack–Sobociński sense. Alternative / comparison categorical frame to Tiurin-Barrett-Ghica-Hu above. Standard DPO parallelism / causality transfer is *open* per the paper's own §7 (the EGG rule format is left-linear, sitting in "left-linear M-adhesive theory still under development").
 
 **Cranelift ægraphs (Fallin 2023, EGRAPHS workshop / blog 2026-04-09)**, "Acyclic E-graphs for Efficient Optimization in a Production Compiler." First e-graph in production JIT. *Not* full equality saturation — greedy single-pass, predictable compile time. Production-scale e-graph compiler optimization is now real.
 

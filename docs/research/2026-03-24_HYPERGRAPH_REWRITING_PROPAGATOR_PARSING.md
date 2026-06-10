@@ -194,16 +194,23 @@ Key examples of adhesive categories:
 
 The practical consequence: any formalism that lives in an adhesive category gets the full DPO rewriting theory "for free" --- local Church-Rosser, parallelism, concurrency, and critical pair analysis. Recent work (2025) has formalized adhesive category theory in the Rocq proof assistant, providing machine-checked foundations.
 
-### 3.3 E-Graphs Are Adhesive
+### 3.3 E-Graphs: M-adhesive (Biondo) and semilattice-enriched (TBGH) categorical frames
 
-A breakthrough result from Biondo, Castelnovo, and Gadducci (CALCO 2025) establishes that **e-graphs form an adhesive category**. E-graphs --- the data structure underlying equality saturation --- can be defined as acyclic term graphs with an equivalence relation on nodes, closed under the operators of the signature.
+*Note (amended 2026-05-09)*: this subsection was originally written under the Biondo-et-al. paraphrase. Substrate research that session (`docs/research/utm-fl/outputs/preduce-adhesive-rewriting-substrate-internal-research.md` §2.C1 + §2.C1.alt) refined the picture; the corrected framing is recorded here.
 
-The adhesiveness result means that:
-- DPO rewriting rules over e-graphs are well-behaved.
-- Equality saturation can be understood as iterated DPO rewriting.
-- The confluence and parallelism results for adhesive categories apply to e-graph rewriting.
+**Two complementary categorical frames** for e-graphs:
 
-This connects directly to Track 9 (Reduction as Propagators) in the Prologos roadmap. If reduction on the propagator network uses an e-graph representation, and e-graphs are adhesive, then we inherit a rich algebraic theory of when reductions commute, when they conflict, and how to analyze the rewriting system for termination and confluence.
+1. **M-adhesive (Biondo, Castelnovo, Gadducci, CALCO 2025, [arXiv:2503.13678](https://arxiv.org/abs/2503.13678))**: the category `EGG` is **`T_Σ`-adhesive** — a form of M-adhesive, NOT full adhesive in the Lack-Sobocinski sense. `T_Σ` is a restricted class of monos. The EGG rule format used by `egg`/`egglog` is *left-linear* (identity left, regular mono right) and sits in the "left-linear M-adhesive theory still under development" frontier per Biondo §1 + §7. The paper's own §7 explicitly flags that standard DPO parallelism / causality theorems are *not yet* ported to the EGG case.
+2. **Semilattice-enriched SMC (Tiurin, Barrett, Ghica, Hu, LICS 2025, [arXiv:2406.15882](https://arxiv.org/abs/2406.15882))**: e-graphs are morphisms in Cartesian categories enriched over semilattices (or more general semilattice-enriched SMCs). Headline theorem (6.5): full equivalence of categories `SMT⁺(Σ, E) ≃ MEHypI(Σ)/S, E`. EDPOI rewriting on e-hypergraphs is sound and complete. **The theory is closed** for the Cartesian case (standard term-rewriting setting).
+
+The adhesiveness/enrichment results jointly mean that:
+- DPO rewriting rules over e-graphs are well-defined under both frames
+- Equality saturation = iterated DPO/EDPOI rewriting, with NACs (negative application conditions) required for expansive rules
+- Confluence and parallelism: **closed** under TBGH semilattice-enriched (decidable confluence per Bonchi et al. III, MSCS 2022); **open** under Biondo for the EGG left-linear case
+
+**Substrate fit for Prologos**: the TBGH enrichment frame is the strictly better fit — our lattice-valued cells *are* the semilattices the enrichment requires; we don't add machinery, we recognize what we already have. The substrate-research note (2026-05-09) recommends TBGH as the *primary* categorical frame for PReduce, with Biondo retained as a comparison point. **Bindings** (lambda-style binders) are handled by Moss-Tiurin 2025 ([arXiv:2505.00807](https://arxiv.org/abs/2505.00807)), which extends TBGH — not Biondo — to closed SMCs.
+
+This connects directly to PReduce (formerly Track 9 / Reduction as Propagators). PReduce's e-class subsystem inherits the categorical machinery via shared enrichment with SRE Track 2D's parse-tree presheaf category, rather than through a per-theorem audit obligation.
 
 ### 3.4 Connection to Term Rewriting
 

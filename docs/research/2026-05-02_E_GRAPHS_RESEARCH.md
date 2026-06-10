@@ -148,22 +148,33 @@ For Prologos: β/δ/ι reduction rules are the immediate target; structural-deco
 
 ## §3 Theoretical grounding
 
-### §3.1 Adhesive category theory and e-graphs
+### §3.1 Categorical foundations of e-graphs (two complementary frames)
 
-**Theorem (Biondo, Castelnovo, Gadducci CALCO 2025)**: e-graphs form an adhesive category.
+*Note (amended 2026-05-09)*: this section was originally written under the single-frame Biondo-et-al. paraphrase. Substrate research that session (`docs/research/utm-fl/outputs/preduce-adhesive-rewriting-substrate-internal-research.md` §2.C1 + §2.C1.alt) established **two complementary categorical frames** for e-graphs, with the *enrichment* frame being a strictly better fit for our substrate. Both are recorded here.
 
-**What adhesive means** (Lack-Sobocinski 2005): a category is **adhesive** if pushouts along monomorphisms exist and satisfy a "van Kampen" condition that ensures pushout squares compose well. Adhesive categories axiomatize the conditions for DPO (Double-Pushout) graph rewriting to be well-behaved.
+**Frame A — M-adhesive (Biondo–Castelnovo–Gadducci, CALCO 2025, [arXiv:2503.13678](https://arxiv.org/abs/2503.13678))**: the category `EGG` of e-term graphs is `T_Σ`-adhesive (a form of M-adhesive, not full adhesive in the Lack–Sobociski sense). `T_Σ` is a restricted class of monomorphisms (regular monos pullback-stable on the equivalence quotient).
 
-**Consequences for e-graphs**:
-- DPO rewrite rules over e-graphs are well-behaved (rule application has the expected algebraic properties)
-- Equality saturation can be understood as iterated DPO rewriting
-- Confluence and parallelism analysis tools for adhesive categories apply directly
-- Critical pair analysis transfers (when do two rule applications conflict?)
-- Local Church-Rosser, parallelism, concurrency theorems all transfer
+**What M-adhesive means** (Ehrig-Golas-Habel-Lambers-Orejas 2012, 2014; Heindel 2009): the van Kampen condition is restricted to a designated class `M` of monos rather than all monos. Adhesivity = strict `Mono(X)`-adhesivity; quasiadhesivity = strict `Reg(X)`-adhesivity. **Neither holds for `EGG`.** The EGG rule format used by `egg`/`egglog` is *left-linear* (identity on the left leg, regular mono on the right), which sits in the "left-linear M-adhesive theory still under development" frontier per Biondo et al. §1 + §7 (their own admission).
 
-This is the foundational result that connects e-graph theory to the mature graph-transformation literature. Prior to CALCO 2025, e-graph rewriting was understood operationally (algorithm + invariant) but not categorically grounded in a way that gave systematic transfer of theorems.
+**Consequences under Frame A**:
+- DPO rule application is well-defined
+- Equality saturation = iterated DPO rewriting with NACs (the EGG rule format requires negative application conditions to terminate; Biondo §6)
+- Standard DPO transfer theorems on parallelism / causality / critical-pair analysis are *not yet* established for the EGG-specific left-linear M-adhesive case (open per Biondo §7; Baldan-Castelnovo-Corradini-Gadducci CONCUR 2024 is the active state-of-the-art)
 
-**For Prologos**: SRE Track 2D already uses DPO rewriting via adhesive structure (parse trees as adhesive, per [`2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md`](2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md)). E-graphs being adhesive means the same theoretical machinery applies to PReduce's e-class cells and rewrite rules. We don't need a separate framework; the SRE foundations transfer.
+**Frame B — Semilattice-enriched SMC (Tiurin–Barrett–Ghica–Hu, LICS 2025, [arXiv:2406.15882](https://arxiv.org/abs/2406.15882))**: e-graphs are morphisms in **Cartesian categories enriched over semilattices** (or more generally semilattice-enriched symmetric monoidal categories). Headline theorem (6.5) is a **full equivalence of categories**:
+
+> `SMT⁺(Σ, E) ≃ MEHypI(Σ)/S, E`.
+
+Hom-sets carry the structure of a semilattice (the join `+` IS the e-class "f or g" combinator); composition and tensor distribute over `+` (Definition 2.5 enrichment axioms). EDPOI rewriting on e-hypergraphs is sound and complete.
+
+**Why Frame B is the better fit for our substrate**:
+- **Categorical primitive is *enrichment*, not adhesivity**. The semilattice enrichment is intrinsic to our lattice-valued cells — we don't add machinery, we recognize what we already have.
+- **The theory is closed**, not at the active-research frontier. EDPOI for Cartesian SMC has full equivalence; parallelism/causality theorems transfer cleanly.
+- **Bindings come for free**: Moss–Tiurin 2025 ([arXiv:2505.00807](https://arxiv.org/abs/2505.00807)) extends TBGH — not Biondo — to closed symmetric monoidal categories for λ-binders.
+- **Multi-dim cost extends naturally**: quantale-enrichment generalizes semilattice-enrichment; Russo 2010 Q-modules supply the residuation API ([arXiv:1002.0968](https://arxiv.org/abs/1002.0968)).
+- **Bonchi et al. *String diagram rewrite theory I/II/III* (JACM 2022, MSCS 2022 × 2)** supply the supporting rewriting infrastructure; III contains decidability of DPOI confluence for terminating systems.
+
+**For Prologos / PReduce**: Frame B is the *primary* working categorical frame (per substrate-research note's recommendation, 2026-05-09). SRE Track 2D's parse-tree presheaf category is semilattice-enriched; PReduce's e-class subsystem is also semilattice-enriched; the cross-system transfer goes through *shared enrichment* rather than per-theorem audit. Frame A is retained as a useful comparison point. The original framing of this section — "e-graphs are adhesive; SRE foundations transfer" — was directionally right but **overstated** the adhesivity claim and **understated** the per-theorem-audit obligation under Frame A. Under Frame B, the transfer is unified through enrichment.
 
 ### §3.2 E-graphs as quotient modules
 
