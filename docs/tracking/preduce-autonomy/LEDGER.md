@@ -293,3 +293,27 @@ Entry template:
   design decision (existing time-phase! instrumentation vs profiler run on the
   comparative suite) — not improvised inside the shakeout.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 0 CLOSED + iteration 1 — [SIGNIFICANT] reduction-share measurement method
+- **Iteration 0 CLOSED**: suite baseline GREEN (8380/428/131.2s all pass, timings at
+  41d222d7); bench-ab Phase B baseline saved
+  (data/benchmarks/preduce-phaseb-baseline-41d222d7.json; A≈B sanity holds, cv≤1.1%).
+- **Iteration 1 decision — the §5.8 reduction-share METHOD**: SAMPLING PROFILER over
+  the comparative suite, in-process via driver main, one process per benchmark
+  (bench-ab isolation parity), 5ms samples, ZERO production-code changes; share =
+  SELF-time aggregated by source file (avoids recursive-total double-counting),
+  reduction.rkt and substitution.rkt reported separately + combined; full render-text
+  profile saved per benchmark for the record. Realized as the repeatable
+  tools/profile-reduction-share.rkt (committed).
+- **Options considered**: (a) time-phase! instrumentation — rejected: phase-level
+  timers cannot isolate reduction nested inside type-check/eval; (b) timer wrapping
+  of whnf/nf entries — rejected for v1: touches THE hot path (even a disabled-flag
+  check per whnf call is a per-call cost; the SM1.1 blast-radius discipline says
+  measure first, instrument only if profiler attribution proves too coarse — named
+  upgrade); (c) sampling profiler — ADOPTED.
+- **Caveats recorded** (from the smoke test): an <unknown> attribution bucket
+  (runtime/JIT frames) and performance-counters.rkt overhead visible on tiny
+  benchmarks — report shares of both total and attributed time on the big benchmarks;
+  refine only if the bounds are too loose to serve as the denominator.
+- **Landed in**: (this commit); measurement running in background across the full
+  comparative set → results ingested next firing = the §5.8 DENOMINATOR.
