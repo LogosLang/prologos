@@ -159,6 +159,34 @@ work-list, and parallel read-only research. Agents that produce code return diff
 the main loop applies them at known HEAD and runs the gates. Every agent reading
 code must verify and cite the HEAD SHA it read against.
 
+**5.6 Research escalation (added 2026-06-10, owner direction).** When design or
+implementation hits a question whose answer lives in FRONTIER LITERATURE — not our
+corpus, not our code — commission the `deep-research` skill (fan-out search +
+adversarial verification + cited report). This charter IS the standing authorization
+to invoke it. Triggers: an external claim becomes load-bearing for a design choice;
+algorithm selection where the literature moved recently; novelty positioning before an
+external-facing claim. Discipline: outputs land as `docs/research/` notes marked
+AGENT-GENERATED with provenance (the 2026-06-02 sweep is the template); they are
+recency-adjudicated and main-session-verified before binding (the same rule as panels
+— research findings are search hits, not facts); cited into design docs by section.
+Use for load-bearing unknowns, not curiosity — one commission per genuine question.
+**Pre-seeded research queue** (already-known candidates, fire when their track opens):
+(1) e-graphs with bindings under DEPENDENT types + QTT (Moss 2025 follow-ons; e-matching
+under binders) — Track 2 Phase 3 / Q8; (2) HVM2 interaction-count methodology +
+measurement harness — Track 2 design opener (the deferred benchmark-posture decision);
+(3) DPOI confluence-decidability algorithmics (Bonchi et al. III) — Track 3;
+(4) sharing-aware extraction (e-boost ILP, treewidth, sparse methods) — Track 4's
+NP-boundary; (5) optimism-in-eqsat (Arbore-Cheung-Willsey) applicability to Q2
+merge-under-partial-information — Track 1/4 seam.
+
+**5.7 mempalace discipline (added 2026-06-10).** mempalace semantic search is part of
+the STANDING grounding repertoire: query it at every design opening and before any
+"this is new" claim (per the prior-art memory rule). ALWAYS recency-adjudicate hits
+against the freshest committed source before handing them to panels — adjudicated
+prior-art measurably cheapens rounds (validated SM4 + 0.3). Never treat a hit as
+authoritative (the recency failure mode is documented in mempalace.md); the post-commit
+docs hook keeps the palace fresh as the loop commits tracking/research docs.
+
 ## 6. Coordination and persistence (the file spine)
 
 The loop assumes **every iteration wakes up amnesiac**. All state lives in files,
@@ -190,6 +218,29 @@ then current dailies (narrative), then design docs (depth), then `git log`/diffs
 **Scope cap**: one sub-phase, one design-stage step, or one critique round per
 iteration — whichever is smallest. Never start a second phase's work in the same
 iteration. Small iterations are what make the ledger auditable and rewinds cheap.
+
+**Phase B kickoff (one-time, added 2026-06-10)**: (0) owner merges `preduce-autonomy`
+→ main; (1) the loop session starts IN the worktree (cwd = this repo copy) on a fresh
+branch off merged main (or continuing this branch — owner's call at merge);
+(2) **iteration 0 is a cheap shakeout** mirroring A.0: full-suite baseline run in the
+worktree (establishes local green + timings entry), DEFERRED.md triage (the carried
+A.0 leftover), Phase B dailies file created — loop machinery exercised before any
+production edit; (3) iteration 1 opens the implementation queue (HANDOFF order).
+**The kickoff one-liner** (durable here so any session can restart the loop):
+`/loop Execute ONE iteration of the PReduce autonomy experiment: read
+docs/tracking/preduce-autonomy/CHARTER.md then HANDOFF.md, perform the single next
+scoped unit per charter §7, run the gates, commit, update LEDGER + dailies + HANDOFF,
+then continue. Halt per charter §8.`
+(Dynamic /loop self-paces via wake-ups; each firing re-grounds from files by design.)
+
+**Notification (added 2026-06-10)**: on any §8 halt/BLOCKED event and at each track
+close, send a push notification to the owner (PushNotification tool) — the ledger
+remains the review surface; the notification is just the doorbell.
+
+**Budget posture**: full design panels are reserved for track/phase mini-designs;
+sub-phase mini-audits use the cheaper grounding-audit workflow (workflow.md default);
+single Explore agents for surgical verification. Token cost is not a hard constraint
+(owner direction) but waste is still waste.
 
 **Iteration template** (in order):
 1. Re-read `CHARTER.md` (owner may have redirected) and `HANDOFF.md`.
