@@ -84,3 +84,76 @@
   (define rs (run-file-fixture "ns tf6\ndef x := a\ndef a := 5N\nx"))
   (check-true (has? rs "x : Nat defined."))  ;; the DEF resolves
   (check-true (unbound-for? rs 'x)))          ;; the premature USE errors
+
+;;; ============================================================
+;;; PPN 4C Addendum Phase 4B.4.a (§18.21.24) — fwd-annot: the ANNOTATED path
+;;; residuates too. The δ RE-SUPPLIES the captured zonked annotation T
+;;; (def-entry-merge's :type is new-wins — the referent's type would clobber T);
+;;; the TC-(a) finalize-time check runs the deferred type-obligation (a ⊨ T).
+;;; ============================================================
+
+;; ④ forward ANNOTATED def — probe g, the 4B.4 deliverable.
+(test-case "4B.4.a: forward annotated def resolves (def x : Nat := a; def a := 5N)"
+  (define rs (run-file-fixture "ns tf7\ndef x : Nat := a\ndef a := 5N"))
+  (check-true (has? rs "x : Nat defined."))
+  (check-true (has? rs "a : Nat defined.")))
+
+;; ⑤ annotated def-chain — all three at the one drive.
+(test-case "4B.4.a: annotated forward def-chain resolves"
+  (define rs (run-file-fixture "ns tf8\ndef y : Nat := x\ndef x : Nat := a\ndef a := 5N"))
+  (check-true (has? rs "y : Nat defined."))
+  (check-true (has? rs "x : Nat defined."))
+  (check-true (has? rs "a : Nat defined.")))
+
+;; ⑥ (annotated x, annotated a) — pins the moot open-item (§18.21.24.1): a
+;; FORWARD referent is always still def-bot/'pending at the referrer's
+;; processing time (a's own pre-register runs only inside a's later process-def).
+(test-case "4B.4.a: annotated x referencing annotated a resolves (both annotated)"
+  (define rs (run-file-fixture "ns tf9\ndef x : Nat := a\ndef a : Nat := 5N"))
+  (check-true (has? rs "x : Nat defined."))
+  (check-true (has? rs "a : Nat defined.")))
+
+;; ⑦ backward annotated control — referent ground → 'pending fails → falls
+;; through to the annotated [else] → status-quo synchronous path.
+(test-case "4B.4.a: backward annotated control (def a := 5N; def x : Nat := a)"
+  (define rs (run-file-fixture "ns tf10\ndef a := 5N\ndef x : Nat := a"))
+  (check-true (has? rs "a : Nat defined."))
+  (check-true (has? rs "x : Nat defined.")))
+
+;; ⑧ T-PRESERVATION discriminator — the annotation is WIDER than the referent's
+;; type. The cell must hold T (the union), NOT the referent's Int: had the δ
+;; transplanted the referent's type (the clobber, D-4B4a-1), this would print
+;; "x : Int defined." The TC check passes (Int ⊨ Int | String).
+(test-case "4B.4.a: annotation T preserved in the cell (union annotation, Int referent)"
+  (define rs (run-file-fixture "ns tf11\ndef x : <Int | String> := a\ndef a := 5"))
+  (check-true (has? rs "x : Int | String defined."))
+  (check-true (has? rs "a : Int defined.")))
+
+;; ⑨ type-mismatch annotated forward → file-end TYPE error (TC-(a)), NOT
+;; Unbound (the pre-4B.4.a behavior was unbound-variable-error for x).
+;; The referent's own def still succeeds; x's failed def is removed (parity
+;; with the immediate annotated path's remove-failed-definition!).
+(test-case "4B.4.a: type-mismatch annotated forward → file-end type error (not unbound)"
+  (define rs (run-file-fixture "ns tf12\ndef x : String := a\ndef a := 5N"))
+  (check-true (for/or ([r (in-list rs)]) (type-mismatch-error? r)))
+  (check-false (unbound-for? rs 'x))
+  (check-true (has? rs "a : Nat defined.")))
+
+;; ⑩ the OPAQUE data-type exclusion — `Wrap` is a registered data-type, so the
+;; annotated redefinition routes through the [else]'s opaque branch (type-only,
+;; body IGNORED — value never grounds); a δ here would wait forever
+;; (§18.21.24.3 reject case 1, NAME-keyed). Behavior-preserved vs 4B.3-b:
+;; 0 errors, Wrap stays type-only, the ignored bare-var body residuates nothing.
+(test-case "4B.4.a: opaque data-type exclusion (annotated redefinition of a data-type name)"
+  (define rs (run-file-fixture "ns tf13\ndata Wrap := MkWrap\ndef Wrap : Type := later\ndef later := Nat"))
+  (check-false (for/or ([r (in-list rs)]) (prologos-error? r)))
+  (check-true (has? rs "later : [Type 0] defined.")))
+
+;; ⑪ malformed annotation — is-type fails in the helper → 'reject → the [else]
+;; re-elaborates + reports (error-path parity; D-4B4a-6). Still an immediate
+;; not-a-type error, never residuated.
+(test-case "4B.4.a: malformed annotation falls through to the [else] (parity)"
+  (define rs (run-file-fixture "ns tf14\ndef x : 5N := a\ndef a := 5N"))
+  (check-true (for/or ([r (in-list rs)]) (prologos-error? r)))
+  (check-false (unbound-for? rs 'a))
+  (check-true (has? rs "a : Nat defined.")))

@@ -1076,13 +1076,55 @@
 ;; process-file results list (positional). The DQ5 sweep replaces each with the
 ;; finalized result. Neither a string nor a prologos-error, so the
 ;; error-diagnostics loop skips it and the sweep finds it unambiguously.
-(struct residuation-placeholder (name srcloc) #:transparent)
+;; 4B.4.a (§18.21.24): + `annotation` (the captured zonked annotation T for an
+;; ANNOTATED residuation; #f for inferred) + `referent` (the resolved referent
+;; name) — carried for the finalize-time TC-(a) type-obligation check.
+(struct residuation-placeholder (name srcloc annotation referent) #:transparent)
+
+;; 4B.4.a (§18.21.24): pre-check + capture the annotation for an ANNOTATED
+;; forward-ref residuation. Returns the captured zonked-T when the def may
+;; residuate, or 'reject to fall through to the annotated [else] (which then
+;; handles the case exactly as today — behavior preserved). Reject cases:
+;;   - the name is a registered data-type/ctor/schema (the opaque branch: its
+;;     value stays #f forever — a δ residuating on it would never finalize);
+;;     NAME-keyed, replicating the [else]'s data-type-def? (body shape is NOT
+;;     a reliable signal — §18.21.24.1)
+;;   - T fails to elaborate or is not a well-formed type (the [else]
+;;     re-elaborates + reports with full diagnostics — error-path parity at the
+;;     cost of a double elaboration on the error path only)
+;;   - T contains holes or unsolved metas (their metas die at reset-meta-store!
+;;     before the file-end drive; NAMED boundary — status-quo behavior)
+(define (residuation-annotated-type-or-reject name type-surf)
+  (define-values (_pfx short-name) (split-qualified-name name))
+  (define data-type-def?
+    (or (lookup-type-ctors name)
+        (and short-name (lookup-type-ctors short-name))
+        (lookup-ctor name)
+        (and short-name (lookup-ctor short-name))
+        (lookup-schema name)
+        (and short-name (lookup-schema short-name))))
+  (cond
+    [data-type-def? 'reject]
+    [else
+     (define type (elaborate type-surf))
+     (cond
+       [(prologos-error? type) 'reject]
+       [(or (type-contains-hole? type) (type-contains-meta? type)) 'reject]
+       [(prologos-error? (is-type/err ctx-empty type)) 'reject]
+       [else (freeze type)])]))  ;; zonk at capture time (T is ground → stable)
 
 ;; Try to residuate a forward bare-ref. Returns a residuation-placeholder (and
 ;; installs the δ) iff `body-surf` is a bare-var reference to a PENDING same-file
 ;; def-head and residuation is enabled; else #f (no side effect). `name` = the def
 ;; being defined (the referrer); `def-srcloc` = its location (for the unbound case).
-(define (try-forward-ref-residuation name body-surf def-srcloc)
+;; 4B.4.a (§18.21.24): `type-surf` = the def's surface annotation or #f. Both
+;; paths residuate; the ANNOTATED δ RE-SUPPLIES the captured zonked-T
+;; (def-entry-merge's :type is new-wins — writing the referent's type would
+;; clobber the annotation), while the INFERRED δ takes the referent's type
+;; (4B.3-b behavior, unchanged). The annotated pre-checks live in
+;; residuation-annotated-type-or-reject; 'reject → #f (fall through to the
+;; [else], which pre-registers + reports exactly as today).
+(define (try-forward-ref-residuation name type-surf body-surf def-srcloc)
   (and (current-residuation-enabled?)
        (surf-var? body-surf)
        (let ([referent (surf-var-name body-surf)])
@@ -1090,54 +1132,64 @@
          ;; pending-def-head signal: the BARE name's status (Pass 1.5 seeds bare
          ;; names; a never-defined typo is absent → not pending → not residuated).
          (and (eq? (car referent-status) 'pending)
-              (let* (;; :reads the BARE referent cell — already seeded by Pass 1.5,
-                     ;; and it grounds when `def a` runs (driver.rkt:1150). The
-                     ;; STORED form uses the resolved (own-ns FQN) NAME for parity.
-                     [referent-cid (cdr referent-status)]
-                     [ns (and (current-ns-context)
-                              (ns-context-current-ns (current-ns-context)))]
-                     ;; DQ3: qualify-name = the elaborator.rkt:703 branch that wins
-                     ;; for an own-ns def-head (the resolve-name generalization for
-                     ;; import-shadowing is 4B.4 scope, D-4B3-8/9).
-                     [resolved-referent (if ns (qualify-name referent ns) referent)]
-                     [resolved-ref-expr (expr-fvar resolved-referent)]
-                     ;; Option A (§18.21.22): the δ writes the SAME cell set
-                     ;; process-def's commit would — bare `name` (driver.rkt:1150)
-                     ;; always + `foo::name` (driver.rkt:1156) under ns — parity-exact,
-                     ;; both ground together (the DQ5 sweep is then unambiguous).
-                     ;; Pass 1.5 seeded only bare names → lazy-pre-alloc the FQN.
-                     [referrer-fqn (and ns (qualify-name name ns))]
-                     [_pre (when referrer-fqn (prealloc-def-cell! referrer-fqn))]
-                     [write-cids
-                      (cons (cdr (global-env-lookup-status name))
-                            (if referrer-fqn
-                                (list (cdr (global-env-lookup-status referrer-fqn)))
-                                '()))]
-                     ;; the δ: referent ground → write the deferred commit
-                     ;; (def-entry referent-type (expr-fvar resolved-referent)) to
-                     ;; the referrer cell(s); def-bot → no-op (residuate). Uses the
-                     ;; `net` PARAMETER for read+write (never a captured net —
-                     ;; propagator-design.md fire-function rule).
-                     [fire-fn
-                      (lambda (net)
-                        (define referent-entry (net-cell-read net referent-cid))
-                        (if (def-entry? referent-entry)
-                            (let ([v (def-entry (def-entry-type referent-entry)
-                                                resolved-ref-expr)])
-                              (for/fold ([n net]) ([wc (in-list write-cids)])
-                                (net-cell-write n wc v)))
-                            net))])
-                ;; install on the mnr; #:component-paths REQUIRED (the input cell is
-                ;; 'structural — enforce-component-paths!). :value is the facet the
-                ;; deferred commit depends on; def-bot→def-entry is opaque to
-                ;; pu-value-diff, so the wake is unconditional and the path is the
-                ;; Correct-by-Construction gate (§18.21.22 ①). Thread the mnr back.
-                (current-file-module-network-ref
-                 (module-network-install-fire-once
-                  (current-file-module-network-ref)
-                  (list referent-cid) write-cids fire-fn
-                  #:component-paths (list (cons referent-cid ':value))))
-                (residuation-placeholder name def-srcloc))))))
+              (let ([captured-T (and type-surf
+                                     (residuation-annotated-type-or-reject name type-surf))])
+                (and (not (eq? captured-T 'reject))
+                     (let* (;; :reads the BARE referent cell — already seeded by Pass
+                            ;; 1.5; it grounds when the referent's own def commits. The
+                            ;; STORED form uses the resolved (own-ns FQN) NAME for parity.
+                            [referent-cid (cdr referent-status)]
+                            [ns (and (current-ns-context)
+                                     (ns-context-current-ns (current-ns-context)))]
+                            ;; DQ3: qualify-name = the elaborator own-ns branch that
+                            ;; wins for an own-ns def-head (the resolve-name
+                            ;; generalization for import-shadowing is PM 12B scope,
+                            ;; D-4B3-8/9).
+                            [resolved-referent (if ns (qualify-name referent ns) referent)]
+                            [resolved-ref-expr (expr-fvar resolved-referent)]
+                            ;; Option A (§18.21.22): the δ writes the SAME cell set
+                            ;; process-def's commit would — bare `name` always +
+                            ;; `foo::name` under ns — parity-exact, both ground
+                            ;; together (the DQ5 sweep is then unambiguous). Pass 1.5
+                            ;; seeded only bare names → lazy-pre-alloc the FQN.
+                            [referrer-fqn (and ns (qualify-name name ns))]
+                            [_pre (when referrer-fqn (prealloc-def-cell! referrer-fqn))]
+                            [write-cids
+                             (cons (cdr (global-env-lookup-status name))
+                                   (if referrer-fqn
+                                       (list (cdr (global-env-lookup-status referrer-fqn)))
+                                       '()))]
+                            ;; the δ: referent ground → write the deferred commit to
+                            ;; the referrer cell(s); def-bot → no-op (residuate).
+                            ;; :type = the captured annotation T when annotated
+                            ;; (RE-SUPPLY — D-4B4a-1: merge :type is new-wins, so the
+                            ;; referent's type would clobber T), else the referent's
+                            ;; type (inferred). Uses the `net` PARAMETER for
+                            ;; read+write (never a captured net —
+                            ;; propagator-design.md fire-function rule).
+                            [fire-fn
+                             (lambda (net)
+                               (define referent-entry (net-cell-read net referent-cid))
+                               (if (def-entry? referent-entry)
+                                   (let ([v (def-entry (or captured-T
+                                                           (def-entry-type referent-entry))
+                                                       resolved-ref-expr)])
+                                     (for/fold ([n net]) ([wc (in-list write-cids)])
+                                       (net-cell-write n wc v)))
+                                   net))])
+                       ;; install on the mnr; #:component-paths REQUIRED (the input
+                       ;; cell is 'structural — enforce-component-paths!). :value is
+                       ;; the facet the deferred commit depends on; def-bot→def-entry
+                       ;; is opaque to pu-value-diff, so the wake is unconditional and
+                       ;; the path is the Correct-by-Construction gate (§18.21.22 ①).
+                       ;; Thread the mnr back.
+                       (current-file-module-network-ref
+                        (module-network-install-fire-once
+                         (current-file-module-network-ref)
+                         (list referent-cid) write-cids fire-fn
+                         #:component-paths (list (cons referent-cid ':value))))
+                       (residuation-placeholder name def-srcloc
+                                                 captured-T resolved-referent))))))))
 
 ;; DQ5 post-drive finalize sweep: replace each residuation-placeholder in the
 ;; results list (positional, in place) with its finalized result — cell ground →
@@ -1146,13 +1198,31 @@
 ;; never grounds). Run AFTER drive-file-mnr! and BEFORE the error-diagnostics loop
 ;; (so the file-end error is diagnosed like an immediate typo). Reads groundness
 ;; via the 4B.3-a status API (by name) — the single cascade-truth source.
+;; 4B.4.a TC-(a) (§18.21.24): for an ANNOTATED residuation ('ground + annotation
+;; carried), run the deferred type-obligation — the annotated path's check/err of
+;; the stored (expr-fvar referent) against T, post-drive when the referent is
+;; ground. Mismatch → remove-failed-definition! + the chk error in the slot
+;; (file-end type error; parity with the immediate annotated path). The success
+;; string pp's the CELL's type (the on-network truth — for annotated, T by
+;; construction: the δ re-supplied it).
 (define (finalize-residuations results)
   (for/list ([r (in-list results)])
     (if (residuation-placeholder? r)
         (let* ([name (residuation-placeholder-name r)]
                [s (global-env-lookup-status name)])
           (if (eq? (car s) 'ground)
-              (format "~a : ~a defined." name (pp-expr (car (cdr s))))
+              (let* ([T (residuation-placeholder-annotation r)]
+                     [chk (and T (check/err ctx-empty
+                                            (expr-fvar (residuation-placeholder-referent r))
+                                            T
+                                            (or (residuation-placeholder-srcloc r)
+                                                srcloc-unknown)
+                                            (recover-name-map)))])
+                (cond
+                  [(prologos-error? chk)
+                   (remove-failed-definition! name)
+                   chk]
+                  [else (format "~a : ~a defined." name (pp-expr (car (cdr s))))]))
               (unbound-variable-error (residuation-placeholder-srcloc r)
                                       "Unbound variable" name)))
         r)))
@@ -1178,16 +1248,19 @@
       (register-definition-location! fqn def-srcloc)))
   ;; PPN 4C Addendum Phase 4B.1: dep-recording retired — the
   ;; (parameterize ([current-elaborating-name name]) ...) wrapper removed.
-  ;; PPN 4C Addendum Phase 4B.3-b (§18.21.22): forward bare-ref residuation (the
-  ;; ACTIVE flip). On the INFERRED path only, if the body is a bare-var reference
-  ;; to a PENDING (def-bot) same-file def, install a δ on NET-1 + DEFER the commit
-  ;; (the δ becomes the sole writer → LWW exactly-once); resid = the placeholder
-  ;; the file-end DQ5 sweep finalizes. #f → fall through to normal elaboration
-  ;; (general body, ground/absent ref, annotated path [4B.4], or residuation
-  ;; disabled). try-forward-ref-residuation has NO side effect when it returns #f.
+  ;; PPN 4C Addendum Phase 4B.3-b (§18.21.22) + 4B.4.a (§18.21.24): forward
+  ;; bare-ref residuation (the ACTIVE flip), BOTH paths. If the body is a
+  ;; bare-var reference to a PENDING (def-bot) same-file def, install a δ on
+  ;; NET-1 + DEFER the commit (the δ is the sole writer → LWW exactly-once;
+  ;; 4B.4.a: the resid short-circuit also skips the annotated [else]'s
+  ;; pre-register, so the referrer stays def-bot/'pending until the δ fires);
+  ;; resid = the placeholder the file-end DQ5 sweep finalizes (+ the TC-(a)
+  ;; type-obligation for annotated). #f → fall through to normal elaboration
+  ;; (general body, ground/absent ref, annotated reject cases [data-type /
+  ;; holes / malformed — §18.21.24.3], or residuation disabled).
+  ;; try-forward-ref-residuation has NO side effect when it returns #f.
   (define resid
-    (and (not type-surf)
-         (try-forward-ref-residuation name body-surf def-srcloc)))
+    (try-forward-ref-residuation name type-surf body-surf def-srcloc))
   (cond
     [resid resid]
     ;; Sprint 10: Type-inferred def (no type annotation)
