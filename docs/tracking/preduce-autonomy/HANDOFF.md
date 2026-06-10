@@ -25,13 +25,18 @@ missing restore-list entry), conformance patch landed, fix hypothesis REFUTED by
 experiment, flake CLASSIFIED+TRACKED in DEFERRED.md (instrumented probe queued;
 structural fix = SM3 registry absorption; gate policy = non-blocking iff passes
 individually, verified per occurrence).
-NEXT UNIT: **the PReduce Track 1 acceptance file** (OWNER-PROVISIONAL ruling, ledger
-iter 2 — Phase 0 gate before any e-class code): a broad .prologos exerciser per
-ACCEPTANCE_FILE_METHODOLOGY (reduction-heavy + typing + traits + collections),
-committed at examples/2026-06-10-preduce-track1.prologos, run via process-file
-before/after every Track 1 phase. THEN the implementation queue resumes: pce.rkt
-(PCE/1 encoder + golden vectors), D5 probe, term-carrier domain + 'eclass-refine,
-e-class cells + hashcons + union-emitter (green slice).
+DONE: Track 1 acceptance file landed (Phase-0 gate discharged; reduction-kind-
+organized; Level-3 clean; run before/after every phase).
+NEXT UNIT: **pce.rkt — the PCE/1 canonical encoder + sha256 hasher + golden vectors**
+(D.3 §2: single-hasher rule — pce.rkt owns encode+hash; the golden-vector generator
+IS the library; precedes hashcons per LBD-5; deterministic little-endian, sorted
+iteration, uninterned-excluded, kind-byte domain separation; loc-free de Bruijn
+domain; admission-guard ERROR for the session-local effectful digest in the
+persisted domain). Mini-audit first (what term representation does the encoder
+consume — expr structs at which canonicalization stage; reuse grounding from D.1
+§2.1 binder posture: de Bruijn canonical form BEFORE hashing). THEN: D5 probe;
+term-carrier domain + 'eclass-refine; e-class cells + hashcons + union-emitter
+(green slice).
 Implementation queue below. Phase A history follows for context.
 
 Done so far (all interactive, with the owner):

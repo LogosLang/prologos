@@ -1,0 +1,128 @@
+ns examples.preduce-track1
+
+;; ========================================================================
+;;
+;;  PReduce Track 1: E-Class Cell Substrate — Acceptance File (Phase 0)
+;;
+;;  Broad REDUCTION-HEAVY pipeline exercise for the PReduce implementation
+;;  tracks. Every expression is LIVE. Run via `process-file` BEFORE and
+;;  AFTER each Track 1+ phase (D.1 §4.4 slices; autonomy ledger iter 2
+;;  OWNER-PROVISIONAL ruling discharged by this file's creation).
+;;
+;;  Coverage by REDUCTION KIND (D.2 §2 taxonomy):
+;;    §1 β — function application, closures, higher-order
+;;    §2 δ — definition unfolding chains
+;;    §3 ι — pattern matching (built-in eliminators + user multi-arity)
+;;    §4 arithmetic — Int/Nat literal ops + generic ops + cross-family
+;;    §5 trait-dispatched — Eq/Ord/Add residue after resolution
+;;    §6 collections — list ι + transducer-ish pipelines
+;;    §7 mixed depth — reduction chains the e-class substrate must match
+;;       (whnf parity targets for the Track 1 green slice's CONSUMING READ)
+;;
+;; ========================================================================
+
+def tag : String := "preduce-track1-acceptance"
+
+;; ========================================================================
+;; §1 β — application + closures + higher-order
+;; ========================================================================
+
+spec make-adder Int -> [Int -> Int]
+defn make-adder [n]
+  [fn [x : Int] [int+ n x]]
+
+def add5 := [make-adder 5]
+
+[add5 37]
+
+spec twice [Int -> Int] Int -> Int
+defn twice [f x] [f [f x]]
+
+[twice add5 10]
+
+[twice [make-adder 3] 0]
+
+;; ========================================================================
+;; §2 δ — definition unfolding chains
+;; ========================================================================
+
+def base := 7
+def derived := [int* base 6]
+def chained := [int+ derived base]
+
+chained
+
+;; ========================================================================
+;; §3 ι — pattern matching: built-in eliminators + user multi-arity
+;; ========================================================================
+
+spec is-zero Nat -> Bool
+defn is-zero
+  | zero  -> true
+  | suc _ -> false
+
+[is-zero 0N]
+[is-zero 3N]
+
+spec nat-pred Nat -> Nat
+defn nat-pred
+  | zero    -> zero
+  | [suc n] -> n
+
+[nat-pred 5N]
+
+spec safe-head [List Int] -> Int
+defn safe-head
+  | nil        -> 0
+  | [cons h _] -> h
+
+[safe-head '[10 20 30]]
+[safe-head [the [List Int] nil]]
+
+;; ========================================================================
+;; §4 arithmetic — literal, generic, cross-family
+;; ========================================================================
+
+[int+ [int* 3 4] [int- 10 3]]
+
+[+ [* 3 4] [- 10 3]]
+
+[+ 1N 2N]
+
+;; ========================================================================
+;; §5 trait-dispatched — resolution residue reduces via δ+β
+;; ========================================================================
+
+[eq? 42 42]
+[eq? "a" "b"]
+
+spec sum-list [List Int] -> Int
+defn sum-list
+  | nil        -> 0
+  | [cons h t] -> [+ h [sum-list t]]
+
+[sum-list '[1 2 3 4 5]]
+
+;; ========================================================================
+;; §6 collections — list ι + pipelines
+;; ========================================================================
+
+map [int* _ 2] '[1 2 3]
+
+|> 5 [make-adder 1] [make-adder 2]
+
+;; ========================================================================
+;; §7 mixed depth — whnf parity targets for the Track 1 green slice
+;; ========================================================================
+
+spec fib Int -> Int
+defn fib [n]
+  match [lt? n 2]
+    | true  -> n
+    | false -> [+ [fib [- n 1]] [fib [- n 2]]]
+
+[fib 10]
+
+[twice [fn [x : Int] [+ [fib 5] x]] 1]
+
+[sum-list [map [int+ _ 1] '[1 2 3 4]]]

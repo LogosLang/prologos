@@ -468,3 +468,14 @@ Entry template:
   spiraling; the refuted fix was KEPT (independently checklist-correct), the
   refutation recorded, the deep diagnosis queued rather than improvised.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 6 — [ROUTINE] Track 1 acceptance file landed (Phase 0 gate discharged)
+- **Shipped**: examples/2026-06-10-preduce-track1.prologos — reduction-heavy broad
+  exerciser organized BY REDUCTION KIND per the D.2 taxonomy (β closures/higher-order,
+  δ unfolding chains, ι built-in + user multi-arity, arithmetic literal/generic/Nat,
+  trait residue, collections/pipelines, mixed-depth whnf parity targets for the green
+  slice's CONSUMING READ). Level-3 clean first run: 0 errors, 275 reduce steps,
+  baseline-only match-fail hole noise (parity with track4c). The OWNER-PROVISIONAL
+  acceptance ruling (iter 2) is DISCHARGED — the Phase-0 gate now exists for all
+  Track 1+ phases; run before/after each phase per workflow.md.
+- **Landed in**: (this commit)
