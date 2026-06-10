@@ -34,16 +34,21 @@ DONE ALSO: SM1 LOCKED (D frame adopted: eager green + shape-P for attr-map + 2�
 pre-registered at D4's T-FLIP gate; NAME-at-reservation closed no-amendment; SM2
 fast-path phrase clarified per-class; Master §Layer-1 amended; negative invariant
 homed in §4.8).
-NEXT: (a) SM4 (strata re-derivation: congruence watchers + presence cells + fuel +
-S(-1) + the "two strata suffice" honest derivation; nearly all inputs now fixed —
-likely the cheapest panel round). (b) SM5 (effect posture — owner-census point 5).
-(c) SM6 (persistence — consumes D3 KEY + tier split + ".pnet is parameter-only"
-reality). (d) Then the NTT exit gate (coarse model + correspondence table — §2.8,
-§3.6, §4.7 entries already seeded). (e) DEFERRED.md triage still pending. (f) R-lens
-carried: T4 (SM2.3/SM1.5), T7 (SM6/0.3), broadcast-write-shape vs product merge (SP3),
-dispatch-attachment question (§4.2, before watcher code). (g) Implementation queue
-when 0.1 closes: SM1.1 production-merge substrate commit (+ shape-P for attr-map +
-.pnet comment fix), D5 probe (T6 scoping + singleton-fraction count FIRST).
+DONE ALSO: SM4 LOCKED (exhibited 12-row table §5.1; tier vocabulary; single normative
+source = stratification.md + table; prn e-class home; extraction (i)-A + dual-trigger
+read; promotion (ii)-A blocked on #:after substrate work; Master + stratification.md
+amendments landed).
+NEXT: (a) SM5 (effect-stratum boundary marker — owner-census point 5: posture against
+COMMENT-ONLY Stratum 3; the Master:99 amendment already states "none — boundary
+marker"; SM5 designs the marker + hand-off protocol honestly against the unbuilt
+stratum). (b) SM6 (persistence regimes — consumes D3 KEY, tier split, ".pnet is
+parameter-only", promotion handler placement §5.5, retraction-bit protocol per Q6
+disposition). (c) NTT exit gate (§2.8/§3.6/§4.7/§5.8 entries seeded). (d) DEFERRED.md
+triage still pending. (e) R-lens carried: T4 (SM2.3/SM1.5), T7 (SM6/0.3),
+broadcast-write-shape (SP3), dispatch-attachment (§4.2). (f) Implementation queue:
+SM1.1 production-merge commit (+ shape-P + comment fix), D5 probe (singleton-fraction
+FIRST), #:after ordering declaration + keep-pending idiom (BLOCKING for SM6's
+promotion handler; Track 1/5).
 PROCESS: pass the worktree path (/Users/avanti/dev/projects/prologos-preduce-auto)
 for branch docs; panel COMPOSITIONS need the same skepticism as kill-shots (data
 point #4).

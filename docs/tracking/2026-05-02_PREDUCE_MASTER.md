@@ -76,9 +76,7 @@ Three keys are SEPARATE by decision D3 (resolving a verified circularity — "ce
 
 One CHAMP cell from rule-id → rule-data, generalizing the SRE form registry. SRE's `prop:ctor-desc-tag` becomes a *property* on a rule, not a separate registry. PRN §3 "rule registration as universal primitive" realized: the registry hosts structural-decomposition rules (formerly SRE-only) AND term-rewriting rules (PReduce contribution).
 
-Rules carry **property-tag declarations** (Axis 1 below). The propagator scheduler dispatches rules to the correct stratum based on property tags. Two strata suffice:
-- **S0 rewriting stratum** (monotone): all confluent rewriting (IN-fragment + adhesive-DPO + structural-decomposition). Property tags determine local guarantees + parallelism (Lévy-optimal vs DPO with critical-pair analysis).
-- **S(-1) retraction stratum** (non-monotone): retraction-eligible rewrites. Lineage corrected 2026-06-10: S(-1) originated in PM Track 7 (elaborator network) and was unified onto the generalized BSP stratum mechanism by PPN 4C 2B (2026-05-20) — it now lives as `process-retraction` registered via `register-stratum-handler!` (`run-retraction-stratum!` retired). PReduce consumes the unified handler mechanism, not a BSP-LE-2B-specific pattern.
+Rules carry **property-tag declarations** (Axis 1 below). **Amended 2026-06-10 per Track 0.1 SM4 lock ([D.1 §5](2026-06-10_PREDUCE_TRACK01_DESIGN.md))**: the rule-DISPATCH strata are two — **S0** (monotone rewriting: IN-fragment + adhesive-DPO + structural-decomposition, broadcast-over-rules with property tags routing the write-target) and **S(-1)** (retraction: the unified `process-retraction` value-tier handler; lineage PM Track 7 → PPN 4C 2B 2026-05-20). Everything else PReduce uses is tier-ordered handler INSTANCES of existing kinds (`#:tier 'value` / `#:tier 'topology`) plus the CELL layer (fuel exhaustion via on-write-check). **PReduce introduces ZERO new stratum/tier kinds** — exhibited, computation by computation, in the D.1 §5.1 assignment table, which together with `.claude/rules/stratification.md` is the NORMATIVE home for stratum semantics (this section is deliberately just the claim + pointer).
 
 Effect-aware reduction respects the existing effect-stratum boundary (Architecture AD Stratum 3) — opaque cells are uninterpretable to PReduce's rewriting layer.
 
@@ -91,10 +89,10 @@ Effect-aware reduction respects the existing effect-stratum boundary (Architectu
 | Rule property tag | Algebraic guarantees | Stratum | Parallelism |
 |---|---|---|---|
 | **IN-fragment** | Binary principal port + locality + strong confluence (Lafont 1990, 1997) | S0 | Lévy-optimal sharing; HVM2-style massive parallelism |
-| **Adhesive-DPO** | Adhesive category + critical-pair analysis (Lack-Sobocinski 2005, Biondo et al. 2025) | S0 | DPO confluence under critical-pair-free scheduling |
+| **Adhesive-DPO** | Adhesive category + critical-pair analysis (Lack-Sobocinski 2005, Biondo et al. 2025; enrichment frame per TBGH) | S0 | Critical pairs resolve by lattice JOIN (merge-as-answer, order-independent); critical-pair analysis is a REGISTRY datum routing write-target (+ optional scheduler perf hint) — correctness never depends on scheduling (amended 2026-06-10, SM4 F4) |
 | **Confluence-by-construction** | `prop:ctor-desc-tag`-style structural confluence (SRE pattern) | S0 | Trivial parallelism (no critical pairs) |
 | **Non-monotone / retraction-eligible** | Requires retraction stratum | S(-1) | Sequential within stratum; parallel with other S(-1) work |
-| **Opaque (FFI + effects)** | Uninterpretable; trust-and-record | (effect stratum) | Scheduler-determined; outside PReduce's reach |
+| **Opaque (FFI + effects)** | Uninterpretable; trust-and-record | none — boundary marker (Stratum 3 is comment-only at effect-executor.rkt:53-54; posture = SM5) | Scheduler-determined; outside PReduce's reach |
 
 A rule's property tags can stack — a rule can be both `IN-fragment` and `confluence-by-construction`. The scheduler exploits the strongest guarantee available.
 

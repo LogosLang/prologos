@@ -1,7 +1,7 @@
 # PReduce Track 0.1 — Architectural Design (D.1)
 
 **Created**: 2026-06-10
-**Status**: Stage 3 in progress — SM1 ✅ SM2 ✅ SM3 ✅ LOCKED; SM4/SM5/SM6 open; then the NTT exit gate
+**Status**: Stage 3 in progress — SM1 ✅ SM2 ✅ SM3 ✅ SM4 ✅ LOCKED; SM5/SM6 open; then the NTT exit gate
 **Supersedes**: the Master's Track 0.1 row wording, per the 2026-06-10 owner agreement on closure
 semantics: this doc's body is the **six sub-models settled as design decisions**, and 0.1 closes
 with a **coarse NTT model + correspondence table as the exit gate** (every NTT keyword maps to an
@@ -20,7 +20,7 @@ run `wf_118652c1-716`); owner decisions D2/D5/D7 (2026-06-10 session).
 | SM1 | AST PU compound cell layout (Layer 1 granularity) | ✅ | LOCKED 2026-06-10 — 2′ assessment delivered the D frame (§4.8): eager green + shape-P for attr-map + 2′-B pre-registered at D4's gate |
 | SM2 | E-class cell realization | ✅ | LOCKED 2026-06-10 — T5 census LOW risk (§2.10); corpus amendments in lock commit |
 | SM3 | Unified rule registry cell | ✅ | LOCKED 2026-06-10 — tier census pinned (§3.7); naming scheme delivered (§3.4) |
-| SM4 | Strata (S0 + S(-1)) | ⬜ | Congruence placement RESOLVED into SM2 (S0 watchers); re-derive "two strata suffice" incl. rebuild + fuel |
+| SM4 | Strata (S0 + S(-1)) | ✅ | LOCKED 2026-06-10 — exhibited 12-row table (§5.1); zero-new-KINDS claim (§5.2); single normative home; prn e-class home |
 | SM5 | Effect-stratum boundary marker | ⬜ | Owner-census #5 open: posture against COMMENT-ONLY Stratum 3 (effect-executor.rkt:53-54) |
 | SM6 | Persistence regimes | ⬜ | Consumes SM2's content-address key decision (D3); couples to Track 0.3 schema (T7 open) |
 | NTT exit gate | Coarse NTT model + correspondence table | ⬜ | After SM1–SM6; PROPOSED-NEW registry started in §2.8 |
@@ -580,3 +580,107 @@ dynamic-workflow code-state discipline).
 | Hashcons registry cell + ':root-index/':parents derived components | discrimination-cell + cell-decomps precedents | PROPOSED-NEW (SM1.2; carrier-root-index home) |
 | Epoch-keyed occurrence-sets | none — undesigned | PROPOSED-NEW (2′ assessment deliverable) |
 | Cell-layer delta-notify (changed-path hint on write) | none — confirmed absent | PROPOSED-NEW (2′ assessment entry fee; D4 microbench content) |
+
+## §5 Sub-model 4 — Strata Derivation (LOCKED 2026-06-10)
+
+Inputs: panel `wf_0a69bf63-f7f` (exhibited table + critique + synthesis); mempalace
+prior-art probes (recency-adjudicated: fuel = cell-layer per D.4, superseding older
+threshold-propagator wording; WFLE = separate config-dispatched engine); owner decisions
+(tier vocabulary / single normative source / prn e-class home).
+
+### §5.1 The exhibited stratum-assignment table (admission test per stratification.md; code at main `533bfcab`)
+
+| # | Computation | Qq/Qm/Qt/Qo | Assignment |
+|---|---|---|---|
+| 0 | Ingestion pour (parse tree → hashcons) | N/N/Y/N | S0 broadcast (realization LOCKED at SM1.2: wavefront vs fold) + row-6 allocation |
+| 1 | Eager rewrite firing (best-only) | N/N/N/N | S0 broadcast-over-rules; D6 completeness contract is rule-SET soundness, not a stratum issue |
+| 2 | Adhesive-DPO firing | N/N/N/N | S0 — critical pairs resolve by lattice JOIN (merge-as-answer), not scheduling (finding F4 → Master:96 reword) |
+| 3 | Congruence union emission | N/N/N* /N | S0 watchers; *new-signature watcher INSTALL = topology-tier sliver |
+| 4 | Canonicalization/forwarding | N/N/N/N | S0 min-join cascades; T1 path-compression question is cell-write-protocol, stratum-neutral |
+| 5a | NAC presence maintenance | N/N/N/N | S0 match propagators, carrier-root-index component-paths |
+| 5b | NAC absence CONSUMPTION | **Y**/N/N/N | READ-at-quiescence (the table's only Qq:YES); graduation trigger: extraction write-back → value-tier handler INSTANCE (existing kind) |
+| 6 | E-class materialization | -/-/**Y**/- | Construction-time install (common case) + topology tier (mid-saturation; 2′-B handler if T-FLIP) |
+| 7 | Retraction | -/**Y**/-/- | S(-1) = `process-retraction` unified value-tier handler; per-network request-cell INSTANCE priced (F5) |
+| 8 | Speculative branching (Track 6) | N/N/N/N within wv | S0-embedded worldview machinery (S0-Guard shape, NOT S1-NAF fork — no provability inversion) + existing fork-contradiction handler; NO S2 well-founded need (verified) |
+| 9 | Fuel exhaustion + pruning | — | CELL layer (`on-write-check` writes contradiction structurally — verified propagator.rkt:1083/:1898-1953); "cost-bounded exploration" stratum candidate DISSOLVED (F3b) |
+| 10 | Rule registration | — | Seed pour = construction-time (ledger item 7); Track 9 runtime = topology tier OR `#:items-from` cell-layer (mini-design at Track 9; items-from-cell flagged as more mantra-aligned) |
+| 11 | rule-tag-index + carrier-root-index derivation | N/N/N/N | S0 derivation propagators; rule-tag-index = the named §4.8 invariant exception |
+
+Verified absences: no L1-readiness analog (scan would be the excluded polling pattern); no S2;
+Stratum 3 remains comment-only (SM5's boundary marker is all PReduce needs).
+
+### §5.2 The amended claim (owner: TIER vocabulary)
+
+**Rule-DISPATCH strata are two: S0 (monotone rewriting) + S(-1) (retraction).** Everything
+else PReduce uses is tier-ordered HANDLER INSTANCES of existing kinds (`#:tier 'value`,
+`#:tier 'topology` — the code's own vocabulary) plus the CELL layer (fuel). Headline:
+**PReduce introduces ZERO new stratum/tier KINDS** — a corollary of the exhibited table,
+not an assertion. (Absorbs the rule-dispatch scope reading as the claim's first sentence
+and the assignment PROCEDURE as the table's justification column.)
+
+### §5.3 Normative home (owner: SINGLE SOURCE)
+
+`stratification.md` + this §5 table are THE normative home for stratum/tier semantics.
+The Master's architecture section reduces to the two-sentence claim + pointer (amendment
+in this lock commit). Rationale: three self-falsifications accumulated in five weeks via
+duplicated vocabulary (Master:73/:81 vs :96 vs :99), and even the 2026-06-10 morning
+staleness pass missed stratification.md:46/:138 — duplication-driven drift is structural.
+
+### §5.4 Extraction placement ((i)-A adopted)
+
+Extraction is **S0-computed**: per-class cost propagators compute the optimal-form fixpoint
+(the Hyperlattice framing — extraction IS the fixpoint, not an action after it); consumers
+use a **quiescence-gated dual-trigger READ protocol** (demand = drive-then-read; scope-end =
+whole-scope read — the §18.21.25 dual-trigger lesson; pure demand is banned by precedent).
+NAC absence = read-time conjunction over presence cells (stale-verdict bug inexpressible).
+The boundary transcription walk inside the read protocol is named scaffolding (ledger 14).
+**(i)-C** (between-round extraction handler) is PRE-REGISTERED with build trigger = first
+on-network demander (ledger 15). **Cost semantics for the green slice**: local
+DAG-relaxation (per-node best from child bests, poly-time); sharing-aware non-local cost is
+Track 4's named NP-boundary question — row 5b's wording is conditional on that lock.
+Master Layer-2 already carries the residuation-as-provenance correction (SM2 lock).
+
+### §5.5 Promotion placement ((ii)-A adopted, with the substrate fix as a BLOCKING obligation)
+
+Ground-regime promotion runs as a **between-round value-tier handler on a promotion-request
+cell**, ordered AFTER retraction settling — an INSTANCE of the existing handler kind.
+**BLOCKING substrate obligation before any order-sensitive registration** (verified at
+HEAD): handler ordering is silent append-order (propagator.rkt:3213), the process-tier
+window runs later handlers in the SAME pass and **unconditionally auto-resets request
+cells** (:3466-3468) — and the regime chain is max-merge (demotion structurally
+inexpressible), so a promotion through the wrong window is PERMANENTLY wrong ground state.
+Required: an explicit `#:after` ordering declaration on `register-stratum-handler!` + the
+keep-pending/re-enqueue idiom (PROPOSED-NEW, Track 1/5 substrate work). SM6 inherits this
+placement + the retraction-bit consultation realization.
+
+### §5.6 E-class network home (owner: prn)
+
+E-class cells + the hashcons registry live on the **persistent registry network** (session
+persistence is the point: Lévy sharing + amortized equalities across commands; the
+attribute map referencing them is already there). Priced into Track 1: prn's
+make-prop-network gains pre-allocated retraction + fork-contradiction request-cell
+INSTANCES (zero-NET-2 guard, propagator.rkt:3198-3214) + the two-context audit (F5).
+
+### §5.7 Corpus amendments in this lock commit
+
+1. Master Layer-3 "Two strata suffice" → the §5.2 claim + pointer (single-source reduction).
+2. Master:96 Axis-1 Adhesive-DPO row: "critical-pair-free scheduling" → critical-pair
+   analysis as REGISTRY datum (write-target routing) / scheduler perf hint (F4).
+3. Master:99 Axis-1 Opaque row Stratum column: "(effect stratum)" → "none — boundary
+   marker (Stratum 3 comment-only; SM5)" (F7).
+4. stratification.md:46: legacy `register-topology-handler!` box claim → RETIRED 2026-04-16
+   (handlers are `#:tier 'topology`; propagator.rkt:3153-3159) (F3a).
+5. stratification.md "Cost-bounded exploration" candidate → DISSOLVED (cell-layer
+   realization shipped, Phase 1B) (F3b).
+6. stratification.md gains the tier-vocabulary note + pointer to this table (normative home).
+
+### §5.8 Scaffold ledger additions (items 14-15) + NTT entries
+
+| # | Scaffold / deferral | Trigger |
+|---|---|---|
+| 14 | Boundary transcription walk inside the extraction read protocol | First on-network demander → (i)-C build |
+| 15 | (i)-C between-round extraction handler pre-registration | Same trigger; admission re-test at build |
+
+NTT: `#:after` handler-ordering declaration — PROPOSED-NEW (Track 1/5, BLOCKING for SM6);
+demand-marker cell ((i)-A′ refinement) — pre-registered; promotion-request cell instance —
+PROPOSED-NEW (Track 5); all S0 assignments realize on EXISTING primitives per the table.

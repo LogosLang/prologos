@@ -163,4 +163,29 @@ Entry template:
   attribute-map-merge-fn; NAME-at-reservation DROPPED (no SM2 amendment — minted at
   allocation per lock); the "no path-declaring S0 dependents" negative invariant given
   a recorded home (§4.8 + allocation-site comments; SM3 rule registry = named exception).
-- **Landed in**: design doc §4.8 + §4.6 closure + Master §Layer-1 amendment (this commit).
+- **Landed in**: design doc §4.8 + §4.6 closure + Master §Layer-1 amendment (commit `d702b9c5`).
+
+## 2026-06-10 — interactive (pre-loop) — [OWNER-DECIDED] SM4 LOCKED — exhibited strata table + tier vocabulary + single source + prn home
+- **Decision**: SM4 settled+locked in one round (panel `wf_0a69bf63-f7f` + mempalace
+  prior-art probes, recency-adjudicated). Owner: (1) TIER vocabulary — rule-dispatch
+  strata = S0 + S(-1); everything else = tier-ordered handler INSTANCES (the code's own
+  #:tier vocabulary); headline = "zero new stratum/tier KINDS", a corollary of the
+  exhibited 12-row table; (2) SINGLE normative source — stratification.md + D.1 §5.1;
+  Master reduced to claim + pointer (three self-falsifications in five weeks from
+  duplicated vocabulary); (3) e-class cells live on PRN (request-cell instances
+  pre-allocation + two-context audit priced into Track 1).
+- **Carried**: extraction = (i)-A S0-computed fixpoint + dual-trigger read protocol
+  (§18.21.25 precedent; pure demand banned); promotion = (ii)-A between-round handler
+  AFTER retraction settling, BLOCKED on the #:after ordering declaration + keep-pending
+  idiom (verified: silent append-order + unconditional auto-reset + max-merge regime ⇒
+  wrong-window promotion is PERMANENT); cost semantics for green slice = local
+  DAG-relaxation, sharing-aware = Track 4 NP-boundary.
+- **Corpus amendments in lock commit**: Master Layer-3 claim+pointer; Master:96 F4
+  reword; Master:99 F7 opaque-row fix; stratification.md:46 F3a (legacy box RETIRED
+  2026-04-16 — our own morning pass had preserved the stale claim) + :138 F3b
+  (cost-bounded DISSOLVED) + tier-vocabulary normative note.
+- **Autonomy data point #5**: mempalace prior-art probes (recency-adjudicated in main
+  session) fed the panel pre-verified facts and visibly cheapened the round (5 agents,
+  ~800k tokens vs ~1M); the panel still caught staleness OUR OWN same-day pass missed —
+  duplication-driven drift is real and the single-source decision is the structural fix.
+- **Landed in**: design doc §5 + Master + stratification.md amendments (this commit).

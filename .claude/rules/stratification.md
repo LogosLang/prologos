@@ -43,7 +43,19 @@ The project has accumulated multiple concrete strata across tracks. Some use the
 - **S0 + Topology + S1 NAF + S(-1) + L2** all use the BSP scheduler's general outer loop via `register-stratum-handler!` (8 production registration sites across elaborator-network.rkt, metavar-store.rkt, narrowing.rkt, relations.rkt, propagator.rkt, typing-propagators.rkt).
 - **Stratum 3** is referenced in design but not realized at all (comment-only at effect-executor.rkt:53-54) — any design that "hands off to Stratum 3" (e.g., PReduce Track 7) is designing against an unbuilt boundary and must say so.
 
-Topology's `register-topology-handler!` is still a legacy box that predates `register-stratum-handler!`. Functionally equivalent, but kept separate for now — a small cleanup candidate.
+(Amended 2026-06-10, PReduce SM4 F3a: the legacy `register-topology-handler!` box was
+RETIRED 2026-04-16 — topology handlers are `register-stratum-handler! #:tier 'topology`
+(propagator.rkt:3153-3159, :3193-3197). The earlier "kept separate" note was stale.)
+
+**Tier vocabulary (2026-06-10, normative)**: handlers register with `#:tier 'value` or
+`#:tier 'topology`; "strata" in claim-counting contexts means rule-DISPATCH strata (S0,
+S(-1)); other handlers are tier-ordered INSTANCES of existing kinds. The PReduce Track 0.1
+stratum-assignment table (D.1 §5.1) is the worked normative example — this file + that
+table are the single source for stratum semantics; series masters carry claims + pointers
+only. CAUTION (verified 2026-06-10): handler ordering is silent registration append-order
+(propagator.rkt:3213) and the process-tier window auto-resets request cells unconditionally
+(:3466-3468) — an explicit `#:after` declaration + keep-pending idiom are REQUIRED substrate
+work before any order-sensitive handler pair lands (PReduce Track 1/5).
 
 ### Termination guarantees (from GÖDEL_COMPLETENESS.org)
 
@@ -135,7 +147,11 @@ Structural narrowing (discrimination: "which alternatives' argument patterns mat
 The infrastructure is ready to support additional strata without new primitives:
 
 - **S2 well-founded semantics**: odd NAF cycles (`p :- not q. q :- not p.`) require a three-valued fixpoint at a higher stratum than S1. The well-founded engine (`wf-engine.rkt`) currently runs as a separate solver; it could be unified as a stratum on the same base.
-- **Cost-bounded exploration**: tropical thresholds for resource-aware search. A "cost exceeded" request triggers pruning.
+- **Cost-bounded exploration** — **DISSOLVED 2026-06-10 (PReduce SM4 F3b)**: realized at
+  the CELL layer by PPN 4C Phase 1B (fuel `#:on-write-check` writes contradiction
+  structurally, propagator.rkt:1083/:1898-1953; "no separate threshold propagator" per
+  D.4); pruning = the existing contradiction → nogood → worldview-narrowing machinery.
+  Not a stratum, by this file's own admission test.
 - **Constraint activation levels**: constraint propagators that fire only when their dependencies reach a readiness threshold. Currently ad-hoc; could be a stratum.
 - **Self-hosted compiler passes**: each pass (parsing, type inference, code generation) is stratum-separable. Running them as BSP strata on the same base gives incremental-compilation for free via cell persistence.
 
