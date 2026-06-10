@@ -42,11 +42,11 @@
 |-------|------------|--------|--------|-----|-------|
 | 0 | Series founding research synthesis (this master + three sub-deliverables) | 🔄 | This document | — | Three sub-deliverables (0.1, 0.2, 0.3) detailed below. Stage 0/1 work; no implementation. |
 | 0.1 | Architectural design — six sub-models + coarse NTT model + correspondence table | ✅ | [D.1](2026-06-10_PREDUCE_TRACK01_DESIGN.md) | — | **CLOSED 2026-06-10**: SM1-SM6 locked through six panel rounds + owner co-design; NTT exit gate PASSED (D.1 §8.4). Resolved: granularity (per-position×facet, adopted), rule-registry unification (universe cell, two-tier), e-class realization (product cell, merge-IS-order), effect boundary (F-A/F-B soundness floor + guard), persistence regimes (Axis-2 product re-spec). |
-| 0.2 | Rule-property taxonomy — catalogs Prologos reduction kinds + assigns each to stratum + property tags | ⬜ | — | — | Output: rule-property table + analysis of IN-fragment promotion candidates. Determines Track-N partition. |
+| 0.2 | Rule-property taxonomy — 10-kind table + promotion analysis + Track-N partition | ✅ | [D.2](2026-06-10_PREDUCE_TRACK0.2_RULE_TAXONOMY.md) | — | **CLOSED 2026-06-10.** Partition: Track 2 = IN-ladder (guard Phase 0 → arithmetic seed → δ → guarded β; structural exit criterion bound); Track 3 = ι/DPO. HVM2 posture deferred WITH guard (Track 2 design opens with it). Census: 461 whnf arms / 235 heads. |
 | 0.3 | `.pnet` extension + LLVM lowering interface | ⬜ | — | — | Our canonical format. Collaborator's LLVM-lowering prototype is one consumer voice but rebases to whatever we commit. Co-designed with SH Track 1 (`.pnet` network-as-value). |
 | 1 | E-class cell substrate — cell type + hashcons + union-find on cells | ⬜ | — | — | Analog of SRE Track 0 (form-registry substrate). Gates on PPN 4C Phase 1B + Track 0.1 closure. The first real implementation work. |
-| 2 | First IN-fragment rewrite-rule kind (β-reduction) | ⬜ | — | — | Validates IN-fragment-as-property approach. Lévy-optimal sharing inherited via shared e-class cells. PRN §2 conjecture confirmation. |
-| 3 | First adhesive-DPO rewrite-rule kind (ι/case-selection, structural normalization) | ⬜ | — | — | Validates DPO machinery on the same e-class substrate. Critical-pair analysis as runtime mechanism. |
+| 2 | IN-fragment rule track — interior LADDERED per D.2 §5 (2026-06-10): Phase 0 effect-safety guard (BLOCKING) → arithmetic seed (~12-20 ops) → δ → guarded β | ⬜ | — | — | EXIT CRITERION (owner-bound): not done until the guard passes AND guarded β fires AND PRN §2 confirmation recorded. Design doc MUST open with the HVM2 benchmark-posture decision (deferred 2026-06-10 with this guard). |
+| 3 | First adhesive-DPO rule kind: ι (dual-Nat-rep pairs + user expr-reduce) | ⬜ | — | — | Critical pairs resolve by lattice JOIN (SM4 F4). OPENS with the blocking implicit-NAC verification (D.2 §4) — only then does the pattern-completion-vs-nac-spec choice exist. |
 | 4 | Cost-guided extraction — tropical-quantale residuation on e-class poset | ⬜ | — | — | Consumes PPN 4C Phase 1B residuation operator. Module Theory §6 e-graphs-as-quotient-modules realized. |
 | 5 | Persistence — content-addressed e-class storage + `.pnet` round-trip + cross-session loading | ⬜ | — | — | Merckx et al. 2026 ("E-Graphs as a Persistent Compiler Abstraction") realized on our substrate. Regime-tagged cache discipline. |
 | 6 | Speculative reduction — cost-bounded ATMS branching for non-confluent rule cases | ⬜ | — | — | Consumes BSP-LE 2B hypercube infrastructure. The "4-level optimization strategy" (ATMS + Left Kan + Right Kan + tropical) realized for reduction. |
@@ -226,7 +226,7 @@ Tracks beyond 1 emerge from Track 0 findings — exact partition decided at Trac
 - [PPN 4C Tropical Quantale Addendum Design D.2](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) — substrate prerequisite
 
 ### Implementation references
-- [`racket/prologos/reduction.rkt`](../../racket/prologos/reduction.rkt) — current imperative reducer (~3,560 lines, ~50 cases); Track 8 retirement target
+- [`racket/prologos/reduction.rkt`](../../racket/prologos/reduction.rkt) — current imperative reducer (~3,560 lines; **461 whnf arms over 235 head constructors** per the D.2 census, 2026-06-10 — the earlier "~50 cases" was stale by ~9×); Track 8 retirement target
 - [`racket/prologos/propagator.rkt`](../../racket/prologos/propagator.rkt) — substrate primitives; `register-stratum-handler!` pattern PReduce extends
 - [`racket/prologos/pnet-serialize.rkt`](../../racket/prologos/pnet-serialize.rkt) — `.pnet` format; Track 0.3 + Track 5 extension target
 - [`racket/prologos/sre-core.rkt`](../../racket/prologos/sre-core.rkt) — SRE form registry; PReduce's unified rule registry generalizes this pattern

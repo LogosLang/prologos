@@ -233,5 +233,25 @@ Entry template:
 - **Principle / precedent cited**: the NTT-model-required rule (workflow.md) — 3/3
   tracks using NTT modeling have now caught real defects (PPN Track 2: 3 gaps; SRE 2G:
   scatter impurity; PReduce 0.1: two under-specified merge error semantics).
-- **Landed in**: (this commit). Track 0.1 closure = the experiment's Phase A
+- **Landed in**: commit `326f7e4e`. Track 0.1 closure = the experiment's Phase A
   substantially complete; six autonomy data points held for the retro.
+
+## 2026-06-10 — interactive (pre-loop) — [OWNER-DECIDED] TRACK 0.2 CLOSED — taxonomy + partition + HVM2 deferral
+- **Decision**: single-cluster panel (`wf_4d3d2df9-a4c`, 3 agents) + owner decisions:
+  - **Partition = Option B + corrections + STRUCTURAL binding**: Track 2 = IN-ladder
+    (guard Phase 0 → named arithmetic seed ~12-20 ops → δ → guarded β) with the
+    owner-bound exit criterion (guard passes AND guarded β fires AND PRN §2 recorded);
+    Track 3 = ι/DPO.
+  - **HVM2 = DEFERRED WHOLE** (owner diverged from the reference-posture
+    recommendation) — with the guard that Track 2's design doc opens with the
+    benchmark-posture decision; interaction-count characterization recorded as the
+    honest-middle material.
+- **Panel findings of note**: "~50 whnf cases" stale by ~9× (461 arms/235 heads —
+  Master amended); the effect-safety guard must cover ι instantiation (field-drop +
+  natrec step-duplication), not only β; trait-narrowing multi-candidate fallback =
+  the first genuine SATURATE/+alts producer (ledger-6 evidence); the implicit-NAC
+  claim DOWNGRADED to conditional by the critique (blocking verification commissioned
+  at Track 3 opening — do NOT fire the SM3 D1 revisit unverified); capability/session/
+  NAF/FFI confirmed as dimensions/boundaries/existing-strata, not rule kinds.
+- **Landed in**: D.2 (docs/tracking/2026-06-10_PREDUCE_TRACK0.2_RULE_TAXONOMY.md) +
+  Master amendments (rows 0.2/2/3 + census) (this commit).
