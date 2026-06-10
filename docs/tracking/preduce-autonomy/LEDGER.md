@@ -419,3 +419,30 @@ Entry template:
   targeted sets green; acceptance (ppn-track4c) Level-3 clean (and yielded the
   PHASE-TIMINGS denominator reconciliation, ledgered above).
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 4 — [SIGNIFICANT] SM1.1b LANDED — shape-P precise; over-fire×fire-once lesson
+- **Shipped**: `pointwise-delta-paths` (propagator.rkt, sole-diff-site dispatch;
+  PLAIN-only; tagged falls back) + `#:storage 'pointwise-compound` on BOTH attr-map
+  creation sites (factory route, 'warm tier — fast-path gate not satisfied) +
+  benchmarks/micro/bench-shape-p.rkt + shape-P behavioral tests (watched/unwatched/
+  no-change/absorbed — worklist-membership assertions).
+- **Microbench claim VERIFIED (§5.8, before+after, same harness)**: plain
+  pu-value-diff 10.6µs/128µs/811µs per 1-pos write at N=100/1000/5000 → shape-P
+  ~1.9-2.0µs FLAT (~420× at N=5000). Precision cost: statistically invisible.
+- **AUTONOMY DATA POINT #10 — the gate refuted MY OWN design reasoning**: v1 derived
+  paths from delta keys alone ("sound SUPERSET — over-fire only, CALM-safe") and broke
+  trait resolution: over-fire is sound for monotone REFIREABLE propagators but
+  CONSUMES FIRE-ONCE dependents' single shot (no-change wakes ate the constraint/
+  trait propagators' one firing). Fix: exact comparison restricted to delta keys —
+  equal to pu-value-diff's result under the pointwise law, still O(|delta|).
+  CODIFICATION CANDIDATE (Watching, needs 1 more data point): "changed-path
+  precision is a SOUNDNESS contract wherever fire-once dependents exist; over-fire
+  is not free."
+- **Batch-flake adjudication (controlled A/B, this iteration)**: the final gate
+  showed test-sre-coverage failing IN BATCH ONLY (passes individually); stash +
+  control suite at the SM1.1a state reproduced the SAME failure (plus the documented
+  test-module-network-01) WITHOUT shape-P ⇒ NOT an SM1.1b regression. Residual
+  honesty: the control includes SM1.1a — whether SM1.1a made sre-coverage
+  batch-MARGINAL is the next unit's question (pre-SM1.1a control = step 1 of the
+  flake-diagnosis audit). Both flakes now tracked together.
+- **Landed in**: (this commit). SM1.1 (a+b) COMPLETE.

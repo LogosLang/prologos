@@ -2925,8 +2925,16 @@
 (define (init-attribute-map-cell! prn-box)
   (when prn-box
     (define pnet (unbox prn-box))
+    ;; PReduce SM1.1b shape-P: the attribute map declares 'pointwise-compound
+    ;; storage (attribute-map-merge-fn is pointwise by construction — D.1 §8.1),
+    ;; so slow-path writes derive changed-paths from the DELTA: O(|delta|).
+    ;; 'warm tier deliberately does NOT satisfy the hot/monotone-counter fast
+    ;; path gate (propagator.rkt fast-path? check).
     (define-values (pnet* cid)
-      (net-new-cell pnet (hasheq) attribute-map-merge-fn))
+      (net-register-specialized-cell pnet (hasheq) attribute-map-merge-fn
+                                     #:tier 'warm
+                                     #:storage 'pointwise-compound
+                                     #:fires-on 'any-change))
     (current-attribute-map-cell-id cid)
     (set-box! prn-box pnet*)))
 
@@ -2939,9 +2947,15 @@
       ;; Persistent network available + global cell initialized → use it
       [(and prn-box (current-attribute-map-cell-id))
        (values (unbox prn-box) (current-attribute-map-cell-id) #t)]
-      ;; Fallback: per-command cell on the provided network (test context)
+      ;; Fallback: per-command cell on the provided network (test context).
+      ;; PReduce SM1.1b: carries the SAME shape-P declaration as the persistent
+      ;; site (two-context boundary — both creation sites covered, D.1 §4.8).
       [else
-       (define-values (n c) (net-new-cell pnet (hasheq) attribute-map-merge-fn))
+       (define-values (n c)
+         (net-register-specialized-cell pnet (hasheq) attribute-map-merge-fn
+                                        #:tier 'warm
+                                        #:storage 'pointwise-compound
+                                        #:fires-on 'any-change))
        (values n c #f)]))
   ;; 2. Create per-command output cells (meta solutions + warnings)
   (define-values (net1 output-cid)

@@ -3,6 +3,7 @@
 ;; Unit-level: the four reduction facets' lattice laws, the closed-dispatch
 ;; hardening, the two-site bot-filter, and the arity-2 internal-facet filter.
 (require rackunit racket/set
+         "../propagator.rkt"
          "../typing-propagators.rkt")
 
 ;; ---- new facet lattice laws ----
@@ -92,3 +93,55 @@
   ;; absent internal facet reads as its bot:
   (check-true (facet-bot? ':reduction-provenance
                           (that-read am 'p ':reduction-provenance))))
+
+;; ---- shape-P (SM1.1b): pointwise-compound delta-notify on a live network ----
+;; The pointwise declaration derives changed-paths from the DELTA; this must
+;; PRESERVE component-path filter precision: a watched-path write enqueues the
+;; dependent; an unwatched-position write does not.
+(let*-values ([(net0 cid)
+               (net-register-specialized-cell (make-prop-network) (hasheq)
+                                              attribute-map-merge-fn
+                                              #:tier 'warm
+                                              #:storage 'pointwise-compound
+                                              #:fires-on 'any-change)])
+  (define net1 (net-cell-write net0 cid
+                               (hasheq 'p1 (hasheq ':cost-in-context 10)
+                                       'p2 (hasheq ':cost-in-context 10))))
+  (define-values (net2 pid)
+    (net-add-fire-once-propagator net1 (list cid) (list cid)
+      (lambda (net) net)
+      #:component-paths (list (cons cid (cons 'p1 ':cost-in-context)))))
+  (define wl0 (prop-network-worklist net2))
+  ;; Unwatched position: delta-paths = ((p2 . :cost-in-context)) — filtered out.
+  (define net3 (net-cell-write net2 cid (hasheq 'p2 (hasheq ':cost-in-context 3))))
+  (check-equal? (prop-network-worklist net3) wl0
+                "unwatched-position write must not enqueue the dependent (shape-P precision)")
+  ;; Watched path: min-join 10⊔3 = 3 (a real change) — dependent enqueued.
+  (define net4 (net-cell-write net3 cid (hasheq 'p1 (hasheq ':cost-in-context 3))))
+  (check-true (and (member pid (prop-network-worklist net4)) #t)
+              "watched-path write must enqueue the dependent under shape-P"))
+
+;; ---- shape-P regression guard (ledger iter 4): NO-CHANGE writes must not wake ----
+;; A no-change write on the WATCHED path must not enqueue the dependent — the
+;; superset version of delta-paths consumed fire-once dependents' single shot on
+;; no-change wakes and broke trait resolution (gate-caught). Precision required.
+(let*-values ([(net0 cid)
+               (net-register-specialized-cell (make-prop-network) (hasheq)
+                                              attribute-map-merge-fn
+                                              #:tier 'warm
+                                              #:storage 'pointwise-compound
+                                              #:fires-on 'any-change)])
+  (define net1 (net-cell-write net0 cid (hasheq 'p1 (hasheq ':cost-in-context 5))))
+  (define-values (net2 pid)
+    (net-add-fire-once-propagator net1 (list cid) (list cid)
+      (lambda (net) net)
+      #:component-paths (list (cons cid (cons 'p1 ':cost-in-context)))))
+  (define wl0 (prop-network-worklist net2))
+  ;; Same value re-write (5 ⊔ 5 = 5, no change) on the WATCHED path:
+  (define net3 (net-cell-write net2 cid (hasheq 'p1 (hasheq ':cost-in-context 5))))
+  (check-equal? (prop-network-worklist net3) wl0
+                "no-change write must not enqueue (fire-once safety)")
+  ;; Worse value (min keeps 5, no change):
+  (define net4 (net-cell-write net3 cid (hasheq 'p1 (hasheq ':cost-in-context 9))))
+  (check-equal? (prop-network-worklist net4) wl0
+                "absorbed write must not enqueue (fire-once safety)"))

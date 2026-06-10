@@ -17,11 +17,15 @@ whole-process honesty; both standing). DONE: **SM1.1a LANDED green** (facet subs
 4 internal facets + hardened closed dispatch + scoped bot-filter + arity-2 filter +
 tests; one wake-duty regression gate-caught + root-caused + scoped; one pre-existing
 batch flake documented — test-module-network-01 4B.3-b, registry state under
-batch save/restore). NEXT UNIT: **SM1.1b = shape-P delta-notify for the attribute
-map** (enum route per ledger iteration 2: specialized-cell-meta enum values, dispatch
-at the SOLE pu-value-diff call site propagator.rkt:2056-2058, BOTH attr-map creation
-sites, plain-only v1) + its §5.8 RE-MICROBENCH (the claim is load-bearing — measure
-the diff cost before/after on an attr-map-heavy workload). THEN: the PReduce Track 1
+batch save/restore). DONE: **SM1.1b LANDED — SM1.1 (a+b) COMPLETE** (shape-P precise: ~420× at N=5000,
+flat O(|delta|); over-fire×fire-once lesson = data point #10 + Watching codification
+candidate; batch flakes adjudicated NOT-SM1.1b by controlled A/B).
+NEXT UNIT: **batch-flake diagnosis audit** (the diagnostic protocol step 1 — audit
+the domain): (a) control suite at PRE-SM1.1a state (2c48d6b8~1) — did SM1.1a make
+test-sre-coverage batch-marginal, or is it ancient?; (b) enumerate the pollution
+mechanism for BOTH flakes (test-module-network-01 enforce-component-paths
+classification state + sre-coverage generic-op wake) across batch-worker
+save/restore; (c) fix or formally skip-list with tracking. THEN: the PReduce Track 1
 acceptance file (OWNER-PROVISIONAL ruling, ledger iteration 2) before any e-class
 code.
 Implementation queue below. Phase A history follows for context.

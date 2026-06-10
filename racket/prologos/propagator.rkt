@@ -1644,6 +1644,41 @@
 ;;
 ;; For FLAT hasheq values (legacy type-maps), produces position keys as before.
 ;; For all other values, returns #f (all dependents fire).
+
+;; PReduce Track 1 SM1.1b — shape-P delta-notify (D.1 §4.8; autonomy ledger iters 2+4).
+;; For cells whose merge is POINTWISE (k ∉ keys(delta) ⟹ merged[k] = old[k]; keys
+;; never removed — declared via specialized-cell-meta #:storage 'pointwise-compound),
+;; the changed-path set is computed by comparing ONLY the DELTA's keys against
+;; old/merged: O(|delta|) instead of pu-value-diff's O(all merged keys), and — by
+;; the pointwise law — EXACTLY EQUAL to pu-value-diff's result (changes ⊆ delta
+;; keys; keys are never removed). PRECISION IS LOAD-BEARING, not an optimization
+;; nicety: a superset ("over-fire is CALM-safe") version of this helper consumed
+;; FIRE-ONCE dependents' single shot on no-change wakes and broke trait resolution
+;; (gate-caught 2026-06-10; ledger iteration 4). Emission mirrors pu-value-diff:
+;; (pos . facet) for nested records, the key itself for flat entries. Cell-layer
+;; policy, scheduler-independent.
+(define (pointwise-delta-paths old-val merged delta)
+  (for/fold ([changed '()]) ([(k dv) (in-hash delta)])
+    (define old-v (hash-ref old-val k 'pu-diff-absent))
+    (define new-v (hash-ref merged k 'pu-diff-absent))
+    (cond
+      ;; No actual change at this position (incl. site-1-filtered all-bot inserts
+      ;; where both sides are absent) → emit nothing.
+      [(or (eq? new-v old-v) (equal? new-v old-v)) changed]
+      [(and (hash? new-v) (immutable? new-v)
+            (hash? old-v) (immutable? old-v))
+       ;; Nested record: compare only the delta's facets (pointwise inner law).
+       (for/fold ([c changed]) ([(fk _dfv) (in-hash dv)])
+         (define ofv (hash-ref old-v fk 'pu-diff-absent))
+         (define nfv (hash-ref new-v fk 'pu-diff-absent))
+         (if (or (eq? nfv ofv) (equal? nfv ofv)) c (cons (cons k fk) c)))]
+      [(and (hash? new-v) (immutable? new-v) (eq? old-v 'pu-diff-absent))
+       ;; Fresh position: emit only the facets that actually got STORED
+       ;; (site-1 bot-filter may store fewer than the delta carried).
+       (for/fold ([c changed]) ([(fk _dfv) (in-hash dv)])
+         (if (hash-has-key? new-v fk) (cons (cons k fk) c) c))]
+      [else (cons k changed)])))
+
 (define (pu-value-diff old-val new-val)
   (cond
     ;; Both are hasheq → diff per key, with nested record support
@@ -2053,8 +2088,19 @@
                                       #f)])
                      (if (or has-component-paths? has-assumptions?)
                          ;; Slow path: compute diff, filter dependents (+ on-network assumption check)
+                         ;; PReduce SM1.1b shape-P: pointwise-declared cells derive
+                         ;; changed-paths from the DELTA (O(|delta|)) — PLAIN values
+                         ;; only (tagged-promoted cells keep the full diff; D.1 §4.8).
                          (let ([changed (if has-component-paths?
-                                            (pu-value-diff old-val merged)
+                                            (let ([m (prop-cell-meta cell)])
+                                              (if (and m
+                                                       (eq? (specialized-cell-meta-storage m)
+                                                            'pointwise-compound)
+                                                       (hash? old-val) (immutable? old-val)
+                                                       (hash? new-val) (immutable? new-val)
+                                                       (not (tagged-cell-value? merged)))
+                                                  (pointwise-delta-paths old-val merged new-val)
+                                                  (pu-value-diff old-val merged)))
                                             #f)])
                            (filter-dependents-by-paths deps-champ changed
                                                        (if has-assumptions? net #f)))

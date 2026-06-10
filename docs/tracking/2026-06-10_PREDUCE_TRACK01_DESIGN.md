@@ -542,7 +542,13 @@ SM1.5 speculation probe (gates SM2.3).
 ### §4.8 The 2′ assessment verdict (panel `wf_9d49880c-9ea`, adopted at lock)
 
 **Shape-P delta-notify (the assessment's prize, adopted as design)**: a cell-DECLARED
-`'pointwise-merge` property (ideally DERIVED via `resolve-domain-properties` — ledger item 5's
+`'pointwise-merge` property — **AS-IMPLEMENTED (SM1.1b, 2026-06-10; ledger iter 4):
+PRECISION IS LOAD-BEARING** — the changed-path computation compares the delta's keys
+against old/merged (exact, still O(|delta|)); the design's "sound superset / over-fire
+only" reading was REFUTED at the gate: over-fire CONSUMES fire-once dependents' single
+shot (trait resolution broke). Realized as `#:storage 'pointwise-compound` on
+specialized-cell-meta (enum route) + `pointwise-delta-paths` at the sole diff site;
+microbench: 11/128/811µs → ~2µs FLAT at N=100/1000/5000 (~420× at N=5000) — (ideally DERIVED via `resolve-domain-properties` — ledger item 5's
 machinery): `k ∉ keys(delta) ⟹ merged[k] = old[k]`, keys never removed. VERIFIED true by
 construction for `compound-tagged-merge` AND `attribute-map-merge-fn`. When declared,
 `net-cell-write`'s slow path computes changed-paths from the DELTA's keys only — O(|delta|),
