@@ -19,7 +19,7 @@ run `wf_118652c1-716`); owner decisions D2/D5/D7 (2026-06-10 session).
 |---|---|---|---|
 | SM1 | AST PU compound cell layout (Layer 1 granularity) | ⬜ | Gates on SM2 lock (occurrence components reference e-class cells) |
 | SM2 | E-class cell realization | ✅ | LOCKED 2026-06-10 — T5 census LOW risk (§2.10); corpus amendments in lock commit |
-| SM3 | Unified rule registry cell | 🔄 | Settled 2026-06-10 (§3); owner D1/D2/D4 decided; LOCK pending tier census + owner review |
+| SM3 | Unified rule registry cell | ✅ | LOCKED 2026-06-10 — tier census pinned (§3.7); naming scheme delivered (§3.4) |
 | SM4 | Strata (S0 + S(-1)) | ⬜ | Congruence placement RESOLVED into SM2 (S0 watchers); re-derive "two strata suffice" incl. rebuild + fuel |
 | SM5 | Effect-stratum boundary marker | ⬜ | Owner-census #5 open: posture against COMMENT-ONLY Stratum 3 (effect-executor.rkt:53-54) |
 | SM6 | Persistence regimes | ⬜ | Consumes SM2's content-address key decision (D3); couples to Track 0.3 schema (T7 open) |
@@ -247,7 +247,7 @@ hardcodes the equality merge when creating decomposition sub-cells — term-stru
 sub-cells do NOT inherit the e-class product merge, and must not be conflated with
 e-class cells.
 
-## §3 Sub-model 3 — The Unified Rule Registry (SETTLED 2026-06-10)
+## §3 Sub-model 3 — The Unified Rule Registry (LOCKED 2026-06-10)
 
 Inputs: 2026-06-10 grounding sweep (registry landscape) + design-options panel run
 `wf_f8b887ba-0ca` (3 clusters × propose/critique + synthesis) + owner decisions D1/D2/D4.
@@ -345,24 +345,56 @@ dynamism (Track 9 gate).
 | 8 | Tier-2 metadata-only absorption (consumers still read legacy hasheqs imperatively) | Named consumer-read migration work-list + deletion commit |
 | 9 | Validated-not-deployed stack: NAC extraction filter (Track 4), dynamism (Track 9), worldview serialization (e-class serialization design) | Each gets a tracker row + acceptance probe per the Validated≠Deployed rule — no silent stacking |
 
-### §3.4 Naming hygiene (design deliverable at lock)
+### §3.4 Naming hygiene (DELIVERED at lock)
 
-Disambiguate FOUR colliding names before any code: ctor-DESC tables (ctor-registry.rkt) vs
-ctor-META parameter (macros.rkt:5932 `current-ctor-registry` — a verified conflation that
-misled a panel round); registry rule-TAG-index (this sub-model) vs SM2 carrier ROOT-TAG index
-(hashcons/e-matching — fed back to SM1/SM2 as load-bearing for presence cells' component-paths).
+Four colliding names, canonical PReduce vocabulary fixed here — PReduce docs and code never
+say bare "ctor registry" or bare "tag index":
 
-### §3.5 Lock-blocking items
+| Canonical name | Refers to | NOT to be confused with |
+|---|---|---|
+| **ctor-desc registry** | ctor-registry.rkt domain→tag→ctor-desc tables (structural decomposition) | the ctor-META parameter |
+| **ctor-meta parameter** | macros.rkt `current-ctor-registry` (zero/suc/true/false/unit metadata; pnet entry 8) | the ctor-desc registry |
+| **rule-tag-index** | the propagator-maintained tag-index COMPONENT of the rule-registry universe cell (SM3 dispatch) | the carrier root index |
+| **carrier-root-index** | the SM2 term-carrier root-tag/hashcons index (e-matching; presence-cell component-paths) | the rule-tag-index |
 
-- **Tier census exactness**: pin the drifting counts (ctor registrations cited 26/28/31; SRE
-  rules 13/14; closure-resident 7-9) with a per-rule tier-membership table. Running as a
-  read-only census agent; result lands in §3.6 at lock.
-- **R-lens: broadcast write shape vs SM2 product merge** — verify the broadcast fold's
-  contribution shape composes with the componentwise e-class merge, or design a product-aware
-  write variant (feeds SP3).
-- **R-lens: dormant `make-rewrite-propagator-fn`** (sre-rewrite.rkt:479-481, exported, zero
-  callers, "Phase 7 installs this") — excavate why the per-rule install path stalled before SP3
-  re-proposes its shape; retire the export or adopt it.
+The carrier-root-index requirement is FED BACK to SM1/SM2 as load-bearing (without it,
+absence-adjacent watchers degrade to global carrier watches).
+
+### §3.5 Lock-blocking items — RESOLVED at lock (2026-06-10)
+
+- **Tier census**: ✅ pinned by direct enumeration (§3.7). Counts: 13 SRE rules (5 tier-1 /
+  8 tier-2); 28 true `register-ctor!` calls (type 11 / data 8 / session 9); 17 serialized
+  registries (pnet indices 7-23). Census header said "14 rules" while enumerating 13 — pinned
+  to the enumerated table; the SP2 seed pour enumerates programmatically and is the final
+  arbiter.
+- **Dormant `make-rewrite-propagator-fn`**: ✅ excavated — it is the Phase-7 per-rule bridge
+  (wraps `apply-sre-rewrite-rule` into the propagator fire protocol, `value | #f`); never
+  activated. SP3's broadcast-over-rules supersedes the per-RULE shape; disposition: rework as
+  the broadcast ITEM-FN's inner application (the rule-application core is exactly what the
+  item-fn needs) — do not delete blindly, do not install as-is. Carried to SP3.
+- **Broadcast write shape vs SM2 product merge** — still open, carried to SP3 (verify the
+  broadcast fold's contribution shape composes with the componentwise e-class merge, or design
+  a product-aware write variant).
+
+### §3.7 Tier census (PINNED 2026-06-10, HEAD `533bfcab`, direct enumeration)
+
+**SRE rewrite rules — 13 total, 5 tier-1 / 8 tier-2:**
+
+| Rule | Tier | | Rule | Tier |
+|---|---|---|---|---|
+| expand-if-3 | 1 | | expand-list-literal-fold | 2 |
+| expand-if-4 | 1 | | expand-lseq-literal-fold | 2 |
+| expand-when | 1 | | expand-do-fold | 2 |
+| expand-let-assign | 1 | | expand-pipe-gt-fold | 2 |
+| expand-let-bracket | 1 | | expand-compose-fold | 2 |
+| | | | expand-cond-fold | 2 |
+| | | | expand-quasiquote-tree | 2 |
+| | | | expand-mixfix-pu (surface-rewrite.rkt:1786) | 2 |
+
+**Ctor-desc registrations**: 28 true `register-ctor!` calls — 'type 11 / 'data 8 / 'session 9.
+All 28 are tier-2 (closure-resident; no declarative core). **pnet-serialize**: 17 parameter
+registries (indices 7-23). Seed-pour total: 41 entries (13 rules + 28 ctor-descs), of which
+5 are tier-1 serializable today.
 
 ### §3.6 NTT correspondence-table entries seeded by SM3
 

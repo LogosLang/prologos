@@ -26,20 +26,20 @@ Done so far (all interactive, with the owner):
 loop iteration). DONE 2026-06-10: closure semantics decided (decisions-first → coarse
 NTT exit gate); SM2 (e-class cell) SETTLED via options panel + owner decisions D2/D5/D7
 — see `docs/tracking/2026-06-10_PREDUCE_TRACK01_DESIGN.md` §2 and the ledger entry.
-DONE: SM2 LOCKED (db0bb8ba). SM3 SETTLED (design doc §3) — owner D1 (NAC =
-extraction-fixpoint absence; owner-census point 1 RESOLVED), D2 (two-tier), D4 (4b
-universe cell on prn). SM3 LOCK pending: tier-census agent (running in background at
-session end — per-rule tier membership + exact counts; result lands in §3.5/§3.6) +
-owner review.
-NEXT: (a) SM3 lock commit when census lands (no corpus amendments owed this time —
-naming-hygiene deliverable §3.4 due at lock). (b) Then SM1 (AST PU layout — note §3.4:
-the SM2 carrier ROOT-TAG index is fed back to SM1/SM2 as load-bearing). (c) Remaining:
-SM4 (re-derive "two strata suffice" incl. congruence + fuel), SM5 (effect posture —
-owner-census point 5), SM6 (persistence regimes). (d) DEFERRED.md triage still pending.
-(e) R-lens carried: T3/T4 (SM2.3), T7 (SM6/0.3), SM3's broadcast-write-shape +
-make-rewrite-propagator-fn excavation (SP3).
-PROCESS: panels read MAIN checkout — pass the worktree path for branch docs (ledger
-data point #3).
+DONE: SM2 LOCKED (db0bb8ba). SM3 LOCKED (tier census pinned §3.7: 13 rules 5/8 split,
+28 ctor-descs, 17 pnet registries, 41-entry seed pour with 5 serializable; naming
+scheme delivered §3.4; make-rewrite-propagator-fn disposition = rework as broadcast
+item-fn at SP3).
+NEXT: (a) SM1 (AST PU layout) — carries the carrier-root-index requirement fed back
+from SM3 §3.4; recommended next. (b) Then SM4 (re-derive "two strata suffice" incl.
+congruence watchers + fuel + presence cells), SM5 (effect posture — owner-census
+point 5: design against comment-only Stratum 3 vs gate), SM6 (persistence regimes —
+consumes D3 content-address key + tier split). (c) DEFERRED.md triage still pending.
+(d) R-lens carried: T3/T4 (SM2.3), T7 (SM6/0.3), broadcast-write-shape vs product
+merge (SP3).
+PROCESS: panels read MAIN checkout — pass the worktree path
+(/Users/avanti/dev/projects/prologos-preduce-auto) for branch docs (ledger data
+point #3).
 
 ## If the loop is started before Phase A completes
 
