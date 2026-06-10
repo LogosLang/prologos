@@ -392,3 +392,30 @@ Entry template:
   reduce-share (~75% ppn-track4c) for the user-experienced compile-time story;
   profiler tree-bound (25.4%) for whole-process honesty. Track 4/8 claims cite both.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 3 — [ROUTINE] SM1.1a LANDED — facet substrate green
+- **Shipped** (one code commit): four reduction facet cases across all three dispatches
+  (lattice defs per D.1 §8.3 incl. ⊤ values); ALL THREE defaults hardened to error;
+  bot-filter SCOPED to internal reduction facets; arity-2 FILTER
+  (internal-reduction-facets hidden; arity-3 raw); bench J-A counterfactual excised
+  (A5 memory sections retained — they never touch the dispatches); comment fixes
+  (:type-shim, arity-2 doc, .pnet fiction); new tests/test-preduce-facets.rkt
+  (lattice laws, hardening, both filter sites, pointwise spot-check, arity-2 filter).
+- **Gate story (the process working)**: full suite caught ONE real consequence —
+  test-sre-coverage: 4 generic-op checks → type-bot. Root cause: the UNSCOPED
+  bot-filter suppressed legacy :type bot-seed writes whose changed-paths do
+  WAKE-SIGNAL duty for numeric-join propagators (the audit's one untraced R-lens item
+  — "origin of stored bots" — was exactly this; flagged-not-traced, the gate traced
+  it). Fix: scope the filter. AUTONOMY DATA POINT #9: a static audit's flagged-unknown
+  became a gate-caught regression — the flag discipline + the gate together did the
+  job co-design would have.
+- **Pre-existing flake documented (NOT ours)**: test-module-network-01 4B.3-b failed
+  in ONE full-suite batch run ("No exception raised" from enforce-component-paths!),
+  passes 59/59 individually; mechanism = registry-classification state under
+  batch-worker save/restore; exposure trigger = file count 428→429 reshuffling
+  partitions. Latent ordering sensitivity in REGISTRY state, not touched by SM1.1a.
+  Watching-listed; candidate for the batch-worker parameter audit.
+- **Suite**: 8417/429 green except the documented flake (passes individually);
+  targeted sets green; acceptance (ppn-track4c) Level-3 clean (and yielded the
+  PHASE-TIMINGS denominator reconciliation, ledgered above).
+- **Landed in**: (this commit)

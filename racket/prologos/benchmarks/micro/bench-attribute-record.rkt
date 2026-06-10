@@ -330,49 +330,16 @@
 (displayln "============================================================")
 
 (displayln "")
-(displayln "  Fixture: J-A extended attribute-map (8 facets per meta-pos)")
+(displayln "  [J-A simulation sections EXCISED 2026-06-10, PReduce SM1.1]")
 
-;; J-A simulation: build an extended attribute-map with :mult populated
-;; alongside :type/:context/:usage/:constraints/:warnings.
-(define (make-jA-fixture [N 100])
-  (define net0 (make-prop-network))
-  (define-values (net1 cid) (net-new-cell net0 (hasheq) attribute-map-merge-fn))
-  (define positions (for/list ([_ (in-range N)]) (gensym 'meta-pos)))
-  ;; Populate each position with 5 standard facets + 3 simulated (mult/level/session)
-  (define jA-record
-    (hasheq ':type (classifier-only (expr-Int))
-            ':context #f
-            ':usage '()
-            ':constraints (facet-bot ':constraints)
-            ':warnings '()
-            ;; Simulated J-A facets (in production J-A, facet-bot table would
-            ;; have entries for these; for benchmark purposes we read them raw)
-            ':mult 'mult-bot
-            ':level 'unsolved
-            ':session 'unsolved))
-  (define jA-am
-    (for/hasheq ([pos (in-list positions)])
-      (values pos jA-record)))
-  ;; Write the J-A am to the cell once via direct cell-write (bypasses merge —
-  ;; benchmark fixture only, mirrors what J-A facet population would produce)
-  (define net2 (net-cell-write net1 cid jA-am))
-  (values net2 cid positions))
-
-(define-values (jA-net jA-cid jA-positions) (make-jA-fixture 100))
-(define jA-am (net-cell-read jA-net jA-cid))
-(define jA-pos (car jA-positions))
-
-;; Helper: J-A simulated read — what that-read would do post-J-A extension
-(define (that-read-jA-simulated am pos facet)
-  (define record (hash-ref am pos #f))
-  (cond
-    [(not record) 'bot]
-    [else (hash-ref record facet 'bot)]))
-
-;; A2.J-A: simulated that-read :mult at meta-pos (J-A architecture)
-(define a2-jA
-  (bench-ns "A2.J-A (that-read-jA-simulated am pos :mult)" 50000
-            (that-read-jA-simulated jA-am jA-pos ':mult)))
+;; J-A SIMULATION EXCISED (2026-06-10, PReduce Track 1 SM1.1; autonomy ledger
+;; iteration 2): the J-A sections simulated :mult/:level/:session as UNKNOWN
+;; attribute-map facets — a REJECTED architecture (J-C universe routing won;
+;; PPN 4C S2). SM1.1 closed the facet dispatch (facet-merge/facet-bot/facet-bot?
+;; error on unknown facets — D.1 §4.1), so simulating unknown facets through the
+;; production merge is no longer expressible, by design. The J-C measurements
+;; below remain (they measure the SHIPPED architecture). Historical J-A numbers:
+;; see this file's git history + the A-tier review notes.
 
 ;; A2.J-C: composed dispatch predicate + compound-cell-component-ref
 (with-elab-env
@@ -407,14 +374,7 @@
 
     (void a2-jC a3-jC)))
 
-;; A3.J-A: simulated that-write :mult at meta-pos
-(define a3-jA
-  (bench-ns "A3.J-A simulated that-write :mult full path" 20000
-            ;; Mirrors what that-write would do for an :mult facet under J-A:
-            ;; build (hasheq pos (hasheq :mult val)) delta + net-cell-write +
-            ;; attribute-map-merge-fn handles per-facet merge
-            (net-cell-write jA-net jA-cid
-                            (hasheq jA-pos (hasheq ':mult 'mult-bot)))))
+;; A3.J-A: EXCISED with the J-A fixture (see Section 6 header note).
 
 ;; ============================================================
 ;; SECTION 7: A4 — Specialized-cell-cache lower bound

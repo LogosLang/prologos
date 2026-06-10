@@ -11,12 +11,19 @@ the start of every iteration.**
 bench-ab baseline saved). Iteration 1 IN FLIGHT: the reduction-share method DECIDED
 (sampling profiler; tools/profile-reduction-share.rkt committed — see ledger) and the
 measurement is running across the comparative set in background
-(data/benchmarks/profiles/redshare-*.txt). DONE: §5.8 DENOMINATOR v1 RECORDED
-(tree-bounds 25.36% ppn-track4c / 36.89% type-adversarial — owner-reported ~50-60%
-NOT reproduced; owner notified via doorbell; ledger entry has the full protocol +
-caveats). NEXT: SM1.1 (production-merge substrate commit) — mini-audit via
-grounding-audit workflow LAUNCHED in background this firing; ingest its synthesis,
-R-lens-verify, then implement SM1.1 as ONE commit + full typing regression.
+(data/benchmarks/profiles/redshare-*.txt). DONE: denominator RECONCILED (phase-accounting reduce_ms ~75% on ppn-track4c — the
+owner figure is CONSISTENT under the phase lens; profiler tree-bound 25.4% for
+whole-process honesty; both standing). DONE: **SM1.1a LANDED green** (facet substrate:
+4 internal facets + hardened closed dispatch + scoped bot-filter + arity-2 filter +
+tests; one wake-duty regression gate-caught + root-caused + scoped; one pre-existing
+batch flake documented — test-module-network-01 4B.3-b, registry state under
+batch save/restore). NEXT UNIT: **SM1.1b = shape-P delta-notify for the attribute
+map** (enum route per ledger iteration 2: specialized-cell-meta enum values, dispatch
+at the SOLE pu-value-diff call site propagator.rkt:2056-2058, BOTH attr-map creation
+sites, plain-only v1) + its §5.8 RE-MICROBENCH (the claim is load-bearing — measure
+the diff cost before/after on an attr-map-heavy workload). THEN: the PReduce Track 1
+acceptance file (OWNER-PROVISIONAL ruling, ledger iteration 2) before any e-class
+code.
 Implementation queue below. Phase A history follows for context.
 
 Done so far (all interactive, with the owner):

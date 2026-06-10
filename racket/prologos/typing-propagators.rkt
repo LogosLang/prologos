@@ -409,7 +409,41 @@
     [(:usage) (add-usage old-v new-v)]
     ;; Track 4B Phase 7: warnings merge via monotone accumulation (append)
     [(:warnings) (append old-v new-v)]
-    [else new-v]))
+    ;; PReduce Track 1 SM1.1: reduction facets (D.1 §4.1; lattice defs §8.3).
+    ;; :eclass-link — flat lattice ⊥(#f) < KEY < ⊤. The facet is DERIVED
+    ;; (re-derivation writes the same content-address KEY); a key conflict means
+    ;; the hasher diverged — ⊤ is a legitimate lattice value, NOT an exception.
+    [(:eclass-link)
+     (cond
+       [(equal? old-v new-v) old-v]
+       [else 'eclass-link-top])]
+    ;; :reduction-status — monotone chain ⊥(#f) ⊑ (reduced . KEY) ⊑ exhausted,
+    ;; with ⊤ for rank-equal key conflicts (totality; never an exception).
+    [(:reduction-status)
+     (define (rank v)
+       (cond [(not v) 0]
+             [(and (pair? v) (eq? (car v) 'reduced)) 1]
+             [(eq? v 'exhausted) 2]
+             [else 3]))  ;; 'reduction-status-top
+     (define ro (rank old-v))
+     (define rn (rank new-v))
+     (cond
+       [(> ro rn) old-v]
+       [(> rn ro) new-v]
+       [(equal? old-v new-v) old-v]
+       [else 'reduction-status-top])]
+    ;; :cost-in-context — Q-order min-join. Direction DECLARED at landing per
+    ;; D.1 §4.1: monotone min (derived from Layer-2 best ⊗ context weight);
+    ;; cache-invalidate semantics rejected. v1 carrier: real number; the
+    ;; Q-polymorphic generalization arrives with Track 1's Q interface.
+    [(:cost-in-context) (min old-v new-v)]
+    ;; :reduction-provenance — set-union (NOT append: idempotence required;
+    ;; the :warnings append-duplication hazard must not be copied — D.1 §4.1).
+    [(:reduction-provenance) (set-union old-v new-v)]
+    ;; PReduce SM1.1 hardening: facets are a CLOSED dispatch. The old
+    ;; [else new-v] default was last-write-wins — silently WRONG semantics for
+    ;; any facet without an explicit case (D.1 §4.1).
+    [else (error 'facet-merge "unknown facet ~a — facets are a closed set; add explicit facet-merge/facet-bot/facet-bot? cases" facet)]))
 
 (define (facet-bot facet)
   (case facet
@@ -418,7 +452,12 @@
     [(:constraints) constraint-bot]  ;; constraint-cell.rkt: all candidates possible
     [(:usage) '()]               ;; empty usage vector
     [(:warnings) '()]            ;; no warnings
-    [else #f]))
+    ;; PReduce Track 1 SM1.1 facets:
+    [(:eclass-link) #f]
+    [(:reduction-status) #f]
+    [(:cost-in-context) #f]   ;; absent = no cost information yet (min-lattice ⊥)
+    [(:reduction-provenance) (seteq)]
+    [else (error 'facet-bot "unknown facet ~a — facets are a closed set" facet)]))
 
 (define (facet-bot? facet v)
   (case facet
@@ -429,7 +468,13 @@
     [(:constraints) (constraint-bot? v)]
     [(:usage) (null? v)]
     [(:warnings) (null? v)]
-    [else (not v)]))
+    ;; PReduce Track 1 SM1.1 facets ((not v) would MISCLASSIFY set-valued bots —
+    ;; the verified motivation for closing this dispatch):
+    [(:eclass-link) (not v)]
+    [(:reduction-status) (not v)]
+    [(:cost-in-context) (not v)]
+    [(:reduction-provenance) (and (set? v) (set-empty? v))]
+    [else (error 'facet-bot? "unknown facet ~a — facets are a closed set" facet)]))
 
 ;; --- Attribute map merge: two-level pointwise ---
 ;;
@@ -445,15 +490,35 @@
      (for/fold ([result old]) ([(pos record) (in-hash new)])
        (define old-record (hash-ref result pos (hasheq)))
        (cond
-         ;; No existing record at this position → insert new record
+         ;; No existing record at this position → insert new record.
+         ;; PReduce SM1.1 bot-filter site 1, SCOPED to the internal reduction
+         ;; facets: their bots are never MATERIALIZED (structural hygiene,
+         ;; D.1 §4.1). LEGACY facets keep their bot writes — verified live
+         ;; semantics: a bot-classified :type seed write's CHANGED PATH carries
+         ;; wake-signal duty for numeric-join propagators (regression caught by
+         ;; test-sre-coverage; ledger iteration 2 amendment).
          [(and (hash? old-record) (zero? (hash-count old-record)))
-          (hash-set result pos record)]
+          (define filtered
+            (for/fold ([r (hasheq)]) ([(facet val) (in-hash record)])
+              (if (and (memq facet internal-reduction-facets)
+                       (facet-bot? facet val))
+                  r
+                  (hash-set r facet val))))
+          (if (zero? (hash-count filtered))
+              result
+              (hash-set result pos filtered))]
          ;; Both have records → merge per facet
          [else
           (define merged-record
             (for/fold ([rec old-record]) ([(facet val) (in-hash record)])
               (define old-val (hash-ref rec facet (facet-bot facet)))
               (cond
+                ;; PReduce SM1.1 bot-filter site 2, SCOPED as site 1: internal
+                ;; reduction facets never store bot deltas (incl. bot-on-bot);
+                ;; legacy facets keep the original clause order/semantics.
+                [(and (memq facet internal-reduction-facets)
+                      (facet-bot? facet val))
+                 rec]
                 [(facet-bot? facet old-val) (hash-set rec facet val)]
                 [(facet-bot? facet val) rec]
                 [(equal? old-val val) rec]  ;; idempotent
@@ -476,7 +541,9 @@
 ;; CLASSIFIER (the type a position must have) and INHABITANT (the specific value
 ;; solving it). Callers see the surface :type and :term keywords; the shim
 ;; auto-unwraps the classifier and routes :term to the inhabitant layer of the
-;; SAME :type facet (not a new 6th facet — 5 facets preserved per D.3 §4.2).
+;; SAME :type facet (not a new 6th facet — the user-facing facet set is
+;; preserved per D.3 §4.2; PReduce SM1.1 adds four INTERNAL reduction facets,
+;; filtered from the arity-2 view — D.1 §4.1).
 ;;
 ;; Cascade handling: when the merge produces classify-inhabit-contradiction?
 ;; (classifier × classifier → type-top), the :type reader returns type-top so
@@ -520,8 +587,16 @@
 ;;
 ;; Missing facets are NOT synthesized with bot defaults — iterate or use
 ;; hash-ref with (facet-bot facet) fallback if the caller needs a uniform
-;; shape across all 5 facets. Keeps the return shape minimal and honest
+;; shape across the user-facing facets. Keeps the return shape minimal and honest
 ;; (returns what's actually stored, not what might be stored).
+;;
+;; PReduce Track 1 SM1.1 (D.1 §4.1, ledger iteration 2): the four reduction
+;; facets are INTERNAL e-graph state and are FILTERED from this user-facing
+;; whole-record view (no :eclass-link leakage into LSP hover / `that` / debug
+;; surfaces). Arity-3 by-name reads remain raw for internal callers.
+(define internal-reduction-facets
+  '(:eclass-link :reduction-status :cost-in-context :reduction-provenance))
+
 (define that-read
   (case-lambda
     [(attribute-map position)
@@ -532,11 +607,12 @@
         (cond
           [(not (hash? record)) (hasheq)]
           [else
-           ;; Start: all non-:type facets pass through as-is
+           ;; Start: all non-:type, non-internal facets pass through as-is
            (define base
              (for/fold ([acc (hasheq)])
                        ([(facet val) (in-hash record)]
-                        #:unless (eq? facet ':type))
+                        #:unless (or (eq? facet ':type)
+                                     (memq facet internal-reduction-facets)))
                (hash-set acc facet val)))
            ;; If :type facet stored, decompose classify-inhabit-value into
            ;; user-facing :type (classifier) + :term (inhabitant) entries.
@@ -2841,7 +2917,11 @@
 ;; registry network. Called once per file alongside init-macros-cells!,
 ;; init-warning-cells!, init-narrow-cells!. The cell is a MODULE-LEVEL
 ;; attribute store — the typing facet of the module environment.
-;; §9: CHAMP structural sharing across commands. .pnet cache populates it.
+;; §9: CHAMP structural sharing across commands WITHIN a file run. (The earlier
+;; ".pnet cache populates it" claim was fiction — pnet-serialize has no
+;; attribute-map handling; the cell is freshly allocated per file. Verified
+;; 2026-06-10, PReduce SM1.1; cross-session persistence is Layer-2/.pnet
+;; business per D.1 §4.3.)
 (define (init-attribute-map-cell! prn-box)
   (when prn-box
     (define pnet (unbox prn-box))
