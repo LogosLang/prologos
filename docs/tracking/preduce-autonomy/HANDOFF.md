@@ -20,14 +20,18 @@ batch flake documented — test-module-network-01 4B.3-b, registry state under
 batch save/restore). DONE: **SM1.1b LANDED — SM1.1 (a+b) COMPLETE** (shape-P precise: ~420× at N=5000,
 flat O(|delta|); over-fire×fire-once lesson = data point #10 + Watching codification
 candidate; batch flakes adjudicated NOT-SM1.1b by controlled A/B).
-NEXT UNIT: **batch-flake diagnosis audit** (the diagnostic protocol step 1 — audit
-the domain): (a) control suite at PRE-SM1.1a state (2c48d6b8~1) — did SM1.1a make
-test-sre-coverage batch-marginal, or is it ancient?; (b) enumerate the pollution
-mechanism for BOTH flakes (test-module-network-01 enforce-component-paths
-classification state + sre-coverage generic-op wake) across batch-worker
-save/restore; (c) fix or formally skip-list with tracking. THEN: the PReduce Track 1
-acceptance file (OWNER-PROVISIONAL ruling, ledger iteration 2) before any e-class
-code.
+DONE: flake audit (iter 5) — mechanism found (module-load parameter mutation +
+missing restore-list entry), conformance patch landed, fix hypothesis REFUTED by
+experiment, flake CLASSIFIED+TRACKED in DEFERRED.md (instrumented probe queued;
+structural fix = SM3 registry absorption; gate policy = non-blocking iff passes
+individually, verified per occurrence).
+NEXT UNIT: **the PReduce Track 1 acceptance file** (OWNER-PROVISIONAL ruling, ledger
+iter 2 — Phase 0 gate before any e-class code): a broad .prologos exerciser per
+ACCEPTANCE_FILE_METHODOLOGY (reduction-heavy + typing + traits + collections),
+committed at examples/2026-06-10-preduce-track1.prologos, run via process-file
+before/after every Track 1 phase. THEN the implementation queue resumes: pce.rkt
+(PCE/1 encoder + golden vectors), D5 probe, term-carrier domain + 'eclass-refine,
+e-class cells + hashcons + union-emitter (green slice).
 Implementation queue below. Phase A history follows for context.
 
 Done so far (all interactive, with the owner):

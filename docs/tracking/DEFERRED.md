@@ -29,6 +29,33 @@ Deferral".
 
 ---
 
+## TRACKED FLAKE: typing-domain rule visibility under batch workers (test-sre-coverage)
+
+- **Signature**: test-sre-coverage.rkt's 4 generic-op checks → 'type-bot IN BATCH ONLY
+  (passes 9/9 individually, every time); intermittent across full-suite runs.
+  Sibling (different storage family, separate trace needed):
+  test-module-network-01.rkt 4B.3-b "No exception raised" (enforce-component-paths
+  classification state).
+- **Evidence trail (2026-06-10, PReduce autonomy ledger iters 3-5)**: controlled A/B
+  showed the flake at SM1.1a state WITHOUT shape-P; pre-SM1.1a single control run
+  green (CONFOUNDED: also 428-vs-429 file partition change). Mechanism analysis:
+  install-default-typing-domain! mutates the parameter current-typing-domain at
+  MODULE LOAD (typing-propagators.rkt:2331); the parameter was missing from
+  batch-worker's save/restore (pipeline.md New-Parameter checklist violation —
+  conformance patch landed iter 5). **Hypothesis REFUTED by experiment**: the
+  capture+restore did NOT eliminate the batch failure — likely the worker-init
+  capture itself reads an empty parameterization (thread-of-instantiation vs
+  thread-of-capture). Next diagnostic step (queued): instrument
+  (length (current-typing-domain)) at worker init + per-file entry in a reproduced
+  batch context; do NOT guess further without the instrument.
+- **STRUCTURAL FIX IS ON THE ROADMAP**: PReduce SM3's unified rule registry absorbs
+  the typing-domain registry — rule visibility becomes CELL state on prn, not thread
+  parameterization (D.1 §3; the registry-as-cell pattern). This flake is one more
+  motivation for that absorption's priority.
+- **Gate policy until then**: this signature = known-tracked flake; suite gates treat
+  it as non-blocking IFF the file passes individually in the same session (verified
+  per occurrence; never silently).
+
 ## HIGH PRIORITY: Propagator/Cell Allocation Efficiency Track
 
 **PReduce Track 1 cross-reference (2026-06-10 triage)**: this audit + the per-command

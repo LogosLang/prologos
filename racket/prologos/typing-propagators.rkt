@@ -161,6 +161,7 @@
  register-typing-rule!
  lookup-typing-rule
  install-default-typing-domain!
+ current-typing-domain  ;; PReduce iter-5: batch-worker restore-list conformance
  unhandled-expr-counts
  ;; Phase 3 (D.4): Production integration
  infer-on-network

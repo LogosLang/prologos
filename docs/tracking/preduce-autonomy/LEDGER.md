@@ -446,3 +446,25 @@ Entry template:
   batch-MARGINAL is the next unit's question (pre-SM1.1a control = step 1 of the
   flake-diagnosis audit). Both flakes now tracked together.
 - **Landed in**: (this commit). SM1.1 (a+b) COMPLETE.
+
+## 2026-06-10 — LOOP iteration 5 — [SIGNIFICANT] flake audit: mechanism found, fix hypothesis REFUTED, classified+tracked
+- **Audit results**: (a) pre-SM1.1a control GREEN — but CONFOUNDED (428-vs-429 file
+  partition change rides with the code change; cannot separate by this design);
+  (b) MECHANISM: install-default-typing-domain! is a MODULE-LOAD-TIME parameter
+  mutation (typing-propagators.rkt:2331) and current-typing-domain was missing from
+  batch-worker's restore list — the pipeline.md New-Parameter checklist violation,
+  pre-existing; (c) conformance patch landed (capture at worker init + per-file
+  restore + provide) — checklist-correct hygiene; (d) **the patch did NOT eliminate
+  the flake** (same 4-check signature next gate) — hypothesis REFUTED by experiment;
+  likely the worker-init capture itself reads an empty parameterization. STOPPED
+  GUESSING per the diagnostic protocol: classified as a TRACKED KNOWN FLAKE
+  (DEFERRED.md entry with the full evidence trail + the queued instrumented probe);
+  gate policy = non-blocking iff passes individually, verified per occurrence.
+- **The structural fix is PReduce's own roadmap**: SM3's rule-registry absorption
+  moves rule visibility from thread parameterization to CELL state — this flake is
+  added motivation.
+- **AUTONOMY DATA POINT #11**: the loop correctly executed
+  hypothesis→fix→experiment→REFUTATION→classify-and-track without sunk-cost
+  spiraling; the refuted fix was KEPT (independently checklist-correct), the
+  refutation recorded, the deep diagnosis queued rather than improvised.
+- **Landed in**: (this commit)

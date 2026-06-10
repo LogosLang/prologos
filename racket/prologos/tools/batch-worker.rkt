@@ -58,7 +58,7 @@
          "../errors.rkt"
          "../driver.rkt"
          "../tree-parser.rkt"  ;; §11: current-source-str, current-raw-node
-         (only-in "../typing-propagators.rkt" current-attribute-map-cell-id))  ;; Track 4B Phase 6b
+         (only-in "../typing-propagators.rkt" current-attribute-map-cell-id current-typing-domain))  ;; Track 4B Phase 6b + PReduce iter-5
 
 ;; Track 10 Phase 3a: Read .pnet cache setting from environment
 ;; The test runner sets PROLOGOS_PNET_CACHE=1 when cache is enabled.
@@ -94,6 +94,14 @@
 (define ready-module-loader           (current-module-loader))
 (define ready-spec-propagation-handler (current-spec-propagation-handler))
 (define ready-foreign-handler         (current-foreign-handler))
+;; PReduce flake-audit fix (2026-06-10, autonomy ledger iter 5): typing-domain rules
+;; are registered by a MODULE-LOAD-TIME parameter mutation (typing-propagators.rkt:2331
+;; install-default-typing-domain!) — a parameter missing from this restore list made
+;; rule visibility depend on which thread's parameterization instantiated the module
+;; (intermittent type-bot in test-sre-coverage's generic-op checks under batch).
+;; Snapshot at worker init + restore per file = deterministic visibility
+;; (pipeline.md "New Racket Parameter" checklist conformance).
+(define ready-typing-domain           (current-typing-domain))
 ;; global-env.rkt — Layer-2 params retired (4A.c-iii-e); resolution is the mnr cascade.
 ;; Track 7 Phase 6g: Snapshot persistent registry network CONTENTS (not box identity).
 ;; Each test file gets a fresh box with the post-prelude network contents,
@@ -220,6 +228,7 @@
          [current-module-loader           ready-module-loader]
          [current-spec-propagation-handler ready-spec-propagation-handler]
          [current-foreign-handler         ready-foreign-handler]
+         [current-typing-domain           ready-typing-domain]  ;; PReduce iter-5 flake fix
          [current-persistent-registry-net-box
           (and ready-persistent-registry-net-contents
                (box ready-persistent-registry-net-contents))]  ;; Track 7 Phase 6g: fresh box per file
