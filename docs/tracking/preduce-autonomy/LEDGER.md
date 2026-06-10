@@ -317,3 +317,25 @@ Entry template:
   refine only if the bounds are too loose to serve as the denominator.
 - **Landed in**: (this commit); measurement running in background across the full
   comparative set → results ingested next firing = the §5.8 DENOMINATOR.
+
+## 2026-06-10 — LOOP iteration 1 — [SIGNIFICANT] §5.8 DENOMINATOR v1 recorded — owner figure NOT reproduced
+- **Measured** (v2 protocol: sampling profiler, call-tree REDUCTION-TREE-BOUND =
+  max node-total among reduction.rkt nodes, recursion-merged):
+  ppn-track4c acceptance = **25.36%** tree-bound (1.79% self);
+  type-adversarial = **36.89%** (3.00% self);
+  constraints-adversarial = 2.32% (elaboration-stress by design);
+  sub-second benchmarks unreliable at 5ms sampling (church-folds v1/v2 variance).
+- **Finding**: the reduction call-tree share on reduction-heavy representative
+  workloads is ~25-37% — the self-vs-tree gap (10-15×) confirms whnf's work lands in
+  callees (match dispatch, champ, counters). The owner-reported ~50-60% is NOT
+  reproduced on this corpus. Possible reconciliations: the figure describes other
+  workloads (full suite? evaluation-heavy real programs?), or includes costs this
+  protocol attributes elsewhere. OWNER NOTIFIED (charter doorbell) — async input
+  wanted on the figure's provenance; the loop CONTINUES meanwhile (the queue's next
+  units are correctness-gated, not denominator-gated).
+- **Denominator v1 (standing until owner input or protocol v3)**: Track 4/8 perf
+  claims measure against THIS protocol (tools/profile-reduction-share.rkt) on
+  ppn-track4c + type-adversarial: baseline tree-bounds 25.36% / 36.89%.
+- **Protocol backlog**: wfle + track4-acceptance runs failed silently (re-run with
+  stderr); sub-second benchmarks excluded from the denominator corpus.
+- **Landed in**: (this commit)

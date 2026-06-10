@@ -11,11 +11,13 @@ the start of every iteration.**
 bench-ab baseline saved). Iteration 1 IN FLIGHT: the reduction-share method DECIDED
 (sampling profiler; tools/profile-reduction-share.rkt committed — see ledger) and the
 measurement is running across the comparative set in background
-(data/benchmarks/profiles/redshare-*.txt). NEXT FIRING: ingest the shares → record
-the §5.8 DENOMINATOR (verify the owner-reported ~50-60%) in dailies + ledger; then
-open SM1.1 (production-merge substrate commit) with its mini-audit via the
-grounding-audit workflow (charter budget posture). Implementation queue below.
-Phase A history follows for context.
+(data/benchmarks/profiles/redshare-*.txt). DONE: §5.8 DENOMINATOR v1 RECORDED
+(tree-bounds 25.36% ppn-track4c / 36.89% type-adversarial — owner-reported ~50-60%
+NOT reproduced; owner notified via doorbell; ledger entry has the full protocol +
+caveats). NEXT: SM1.1 (production-merge substrate commit) — mini-audit via
+grounding-audit workflow LAUNCHED in background this firing; ingest its synthesis,
+R-lens-verify, then implement SM1.1 as ONE commit + full typing regression.
+Implementation queue below. Phase A history follows for context.
 
 Done so far (all interactive, with the owner):
 - Branch `preduce-autonomy` + worktree `/Users/avanti/dev/projects/prologos-preduce-auto`,
