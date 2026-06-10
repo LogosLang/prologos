@@ -34,21 +34,23 @@ DONE ALSO: SM1 LOCKED (D frame adopted: eager green + shape-P for attr-map + 2�
 pre-registered at D4's T-FLIP gate; NAME-at-reservation closed no-amendment; SM2
 fast-path phrase clarified per-class; Master §Layer-1 amended; negative invariant
 homed in §4.8).
-DONE ALSO: SM4 LOCKED (exhibited 12-row table §5.1; tier vocabulary; single normative
-source = stratification.md + table; prn e-class home; extraction (i)-A + dual-trigger
-read; promotion (ii)-A blocked on #:after substrate work; Master + stratification.md
-amendments landed).
-NEXT: (a) SM5 (effect-stratum boundary marker — owner-census point 5: posture against
-COMMENT-ONLY Stratum 3; the Master:99 amendment already states "none — boundary
-marker"; SM5 designs the marker + hand-off protocol honestly against the unbuilt
-stratum). (b) SM6 (persistence regimes — consumes D3 KEY, tier split, ".pnet is
-parameter-only", promotion handler placement §5.5, retraction-bit protocol per Q6
-disposition). (c) NTT exit gate (§2.8/§3.6/§4.7/§5.8 entries seeded). (d) DEFERRED.md
-triage still pending. (e) R-lens carried: T4 (SM2.3/SM1.5), T7 (SM6/0.3),
-broadcast-write-shape (SP3), dispatch-attachment (§4.2). (f) Implementation queue:
-SM1.1 production-merge commit (+ shape-P + comment fix), D5 probe (singleton-fraction
-FIRST), #:after ordering declaration + keep-pending idiom (BLOCKING for SM6's
-promotion handler; Track 1/5).
+DONE ALSO: SM4 LOCKED. SM5 + SM6 LOCKED (combined panel; §6 + §7): F-A hashcons-dedup
++ F-B generic-rule-capture soundness findings; floor in Track 1, effect-safety guard =
+BLOCKING Track 2 Phase 0; deterministic (epoch × occurrence-path) keys for effectful
+occurrences; add-only re-entry (Q7 answered); Axis-2 re-specified as product (Master
+amended); ground-admission rule (born-context-free only into question-keyed store);
+pessimistic classification + bite counters; regime = 5th SM2 product component
+(owner-signed amendment of a locked sub-model); ground-only cross-session day one;
+T7 RESOLVED in-panel (pnet-serialize surface read; first-of-kind cell-state sections
+named).
+**ALL SIX SUB-MODELS LOCKED. NEXT: the NTT exit gate** — assemble the coarse NTT model
++ unified correspondence table (§2.8/§3.6/§4.7/§5.8 + §6/§7 entries), run the
+cross-sub-model consistency checks, amend the Master Track 0.1 row, declare Track 0.1
+CLOSED; then Track 0.2 (taxonomy — mostly falls out of SM3's Axis-1 + tier census) and
+Track 0.3 (schema freeze — reserved slots already specified). DEFERRED.md triage still
+pending. Implementation queue: SM1.1 production-merge commit (+ shape-P + comment fix),
+D5 probe (singleton-fraction FIRST), #:after ordering + keep-pending (BLOCKING for the
+promotion handler), effect-safety guard (BLOCKING Track 2 Phase 0).
 PROCESS: pass the worktree path (/Users/avanti/dev/projects/prologos-preduce-auto)
 for branch docs; panel COMPOSITIONS need the same skepticism as kill-shots (data
 point #4).

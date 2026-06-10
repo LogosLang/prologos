@@ -1,7 +1,7 @@
 # PReduce Track 0.1 — Architectural Design (D.1)
 
 **Created**: 2026-06-10
-**Status**: Stage 3 in progress — SM1 ✅ SM2 ✅ SM3 ✅ SM4 ✅ LOCKED; SM5/SM6 open; then the NTT exit gate
+**Status**: Stage 3 — ALL SIX SUB-MODELS LOCKED (SM1-SM6 ✅); the NTT exit gate is the remaining closure step
 **Supersedes**: the Master's Track 0.1 row wording, per the 2026-06-10 owner agreement on closure
 semantics: this doc's body is the **six sub-models settled as design decisions**, and 0.1 closes
 with a **coarse NTT model + correspondence table as the exit gate** (every NTT keyword maps to an
@@ -21,8 +21,8 @@ run `wf_118652c1-716`); owner decisions D2/D5/D7 (2026-06-10 session).
 | SM2 | E-class cell realization | ✅ | LOCKED 2026-06-10 — T5 census LOW risk (§2.10); corpus amendments in lock commit |
 | SM3 | Unified rule registry cell | ✅ | LOCKED 2026-06-10 — tier census pinned (§3.7); naming scheme delivered (§3.4) |
 | SM4 | Strata (S0 + S(-1)) | ✅ | LOCKED 2026-06-10 — exhibited 12-row table (§5.1); zero-new-KINDS claim (§5.2); single normative home; prn e-class home |
-| SM5 | Effect-stratum boundary marker | ⬜ | Owner-census #5 open: posture against COMMENT-ONLY Stratum 3 (effect-executor.rkt:53-54) |
-| SM6 | Persistence regimes | ⬜ | Consumes SM2's content-address key decision (D3); couples to Track 0.3 schema (T7 open) |
+| SM5 | Effect-stratum boundary marker | ✅ | LOCKED 2026-06-10 — F-A/F-B soundness findings; floor in Track 1 + guard as BLOCKING Track 2 Phase 0 (§6) |
+| SM6 | Persistence regimes | ✅ | LOCKED 2026-06-10 — Axis-2 product re-spec; ground-admission rule; regime = 5th product component; question-homed store (§7) |
 | NTT exit gate | Coarse NTT model + correspondence table | ⬜ | After SM1–SM6; PROPOSED-NEW registry started in §2.8 |
 
 ---
@@ -52,8 +52,13 @@ sre-core.rkt:147-150 exactly — the declaration narrows to what the substrate i
 eclass-value := { best       : (Q-cost × form)   merge: argmin by Q-order, tie-break structural hash
                   alts       : e-node set          merge: set-union
                   canonical  : class-name          merge: min-join over allocation-order total order
-                  provenance : support metadata    merge: monotone accumulation }
+                  provenance : support metadata    merge: monotone accumulation
+                  regime     : confidence chain    merge: max toward ground (SM6 §7.3) }
 ```
+
+**(Amended at SM5/SM6 lock with explicit owner sign-off, 2026-06-10: the `regime` 5th
+component added per §7.3 — per-class dynamic-confidence state; composes with the
+componentwise-ACI product; the single home both SM5 and SM6 read.)**
 
 **Q-polymorphic cost (owner decision D7 — S1 commitment resolving Master Q5's direction)**: the
 `best` component is parameterized over an arbitrary quantale Q from day one. The Q interface is
@@ -684,3 +689,125 @@ INSTANCES (zero-NET-2 guard, propagator.rkt:3198-3214) + the two-context audit (
 NTT: `#:after` handler-ordering declaration — PROPOSED-NEW (Track 1/5, BLOCKING for SM6);
 demand-marker cell ((i)-A′ refinement) — pre-registered; promotion-request cell instance —
 PROPOSED-NEW (Track 5); all S0 assignments realize on EXISTING primitives per the table.
+
+## §6 Sub-model 5 — Effect-Boundary Marker (LOCKED 2026-06-10)
+
+Inputs: panel `wf_bdd89ecd-516` SM5 cluster; mempalace probe (sketch §6.3 lean adjudicated
+STALE — it hands off to the unbuilt Stratum 3); owner decisions (posture + guard timing,
+decided after full design-space explanation per owner request).
+
+### §6.1 The two soundness findings (this round's discoveries; both VERIFIED)
+
+**F-A — hashcons unsoundness at INGESTION**: under D3 content-addressing, two occurrences
+of `[read ch]` hash equal → same e-class → extraction dedups the effect. Breaks before any
+rule fires; no dispatch-layer fix can reach it. **F-B — generic-rule capture**: variable-
+binding rules (dead-code, CSE, let-float; β itself) delete/duplicate/reorder effectful
+subterms bound to pattern VARIABLES without matching the effectful head. Head-based
+protection is sound ONLY while the rule set is 100% head-specific (the tier-1 seed is;
+Track 2 β is the first generic rule). Consequence: "no marker, dispatch never matches
+effectful heads" (old posture B) is UNSOUND-AS-STATED.
+
+### §6.2 Decided design (owner)
+
+**Track 1 (the soundness floor — Option 1)**: head-classification as an `effectful?`
+property tag on SM3 registry entries (routing-level; no ctor-desc struct change);
+PESSIMISTIC default for capability-polymorphic heads (pure head, effectful instantiation —
+verified at driver.rkt:2976 / cap-type-bridge.rkt:67; syntactic tags alone CANNOT classify
+these) + a D5-style counter measuring how often pessimism bites; type-derived α consuming
+the existing capability lattice is the NAMED Track 7 upgrade. Effectful-headed occurrences
+get a **deterministic (epoch × occurrence-path) identity key** (NOT the structural hash;
+NOT a gensym nonce — deterministic = idempotent under re-fire + serializable for Track 5),
+are NEVER written into the hashcons signature index / carrier-root-index, and carry a
+positive `:opaque` facet. Pure ARGUMENTS of effectful calls reduce normally (boundary is
+one node thick). The positive facet is LOAD-BEARING (absence-from-index alone does not
+carry congruence safety — Track 5's persistence hasher is a second content-address
+producer by design).
+
+**Track 2 Phase 0 (the dispatch guard — Option 2, BLOCKING)**: the rule-application core
+(the single choke point instantiating any RHS) enforces the effect-safety condition — an
+RHS may not DELETE, DUPLICATE, or REORDER a captured subterm whose class is effect-bearing.
+Owner-decided timing: this is a **blocking entry requirement of Track 2** — it must exist
+and pass before β (the first generic rule) ever fires; β is its first real exercise, in the
+same track. This synthesizes the panel's validated≠deployed concern with the owner's
+safety instinct (no generic rule can ever run unguarded, structurally).
+
+**Hand-off + re-entry**: effects execute exactly as today (effect-executor.rkt's
+execute-effects — the module's own named intentional CALM coordination point — and
+io-bridge's Gauss-Seidel-only path). The marker makes rewriting STOP; it does not schedule
+effects. Stratum-3 hand-off = named deferral, trigger = Architecture AD realizing the
+stratum. Re-entry is **ADD-ONLY**: an effect's result ingests as a NEW term; no retraction
+of reductions made around the boundary (Master Q7 answered; monotone-substrate-sound).
+
+### §6.3 Grounding facts recorded
+
+"Stratum 3" appears in source exactly ONCE (comment, effect-executor.rkt:54), and the
+promised post-execution verification already runs INLINE today (:132-149, :230-235). The
+effect pipeline's monotone prefix is genuinely on-network (effect-bridge α; effect-ordering
+propagator; session-propagators). Opacity prior art: `expr-opaque` (foreign.rkt:296),
+`$foreign-block` "do NOT recurse" (macros.rkt:1746).
+
+## §7 Sub-model 6 — Persistence Regimes (LOCKED 2026-06-10)
+
+Inputs: panel `wf_bdd89ecd-516` SM6 cluster; mempalace probe (owner-registered
+registry-of-optimal-rewrites schema = FIXED input); owner decisions.
+
+### §7.1 Axis-2 re-specified (owner; Master amendment in this commit)
+
+The flat five-regime table becomes a PRODUCT: a 3-element **dynamic-confidence chain**
+`retraction-eligible ⊑ contextual ⊑ ground` (max-merge toward ground; demotion
+structurally inexpressible per SM4 — which is exactly why admission is guarded) × static
+**admission classes**. `opaque` sits OUTSIDE the chain (it is SM5's Boolean facet — an
+identity/admission property, not a confidence level); `open` is discharged by SM3 SP5's
+rule-id keyspace (templates persist as rules, not as e-class entries).
+
+### §7.2 Ground admission + promotion (owner)
+
+**Ground-admission rule (day one)**: only BORN-context-free entries (derivations consuming
+NO module-environment facts — pessimistic classification, same mechanism as §6.2's
+effectful default) enter the question-keyed fragment store. PROMOTED entries (commitment-
+supported, env-dependent) stay MODULE-HOMED, where whole-module mtime invalidation bounds
+the wv0-at-birth ≠ context-free conflation (the cluster's sharpest finding: "ground" was
+two proxies, neither matching the semantic definition). Named upgrade: a context-digest
+key component folds env-dependence into the key.
+**Promotion**: the §5.5 between-round handler (AFTER retraction settling; BLOCKED on the
+#:after substrate work); admissible evidence = monotone-stable per-bit commitment (the
+only evidence sound under max-merge permanence). What promotion WRITES: the regime
+component (§7.3) climbs the chain.
+
+### §7.3 Regime home (owner sign-off: amends the LOCKED SM2 §2.1 product)
+
+The regime value is the **5th component of the e-class cell product**:
+`{best | alts | canonical | provenance | regime}` — regime merge = max toward ground.
+Per-class state, cohesion test passes, ONE home for both SM5 and SM6 readers.
+Primary/derived chain: ctor-level classification PRIMARY; the `:opaque` facet, the regime
+component, and any persisted tag are DERIVED. Lands at Track 1.
+
+### §7.4 Storage + sections (Track 5 / Track 0.3)
+
+**Question-homed store** (owner-registered schema, FIXED): the registry of optimal
+rewrites — key `(source-e-class-content-hash, cost-criterion-id, worldview-bitmask?)`,
+value = chosen extraction + regime tag — content-addressed by the QUESTION; its validity
+must NOT borrow from module-source mtime (verified: pnet-serialize invalidation is
+whole-file path:mtime with no size/transitive-dep checks, :465-483). **Per-module .pnet
+e-class sections** carry ground-regime tier-1 content only (content-hash → canonical form
++ best + regime tag). These are the FIRST genuine cell-state-derived .pnet sections (named
+first-of-kind risk; everything today is parameter snapshots); realization = serialize-time
+projection (read cells at serialize-module!, project declarative core, filter by
+origin-module + regime). **Worldview cross-session**: ground-only crosses sessions day
+one; contextual/retraction-eligible persist within-session only; portable assumption
+identity is REDUCED TO SCHEMA RESERVATION (worldview-bitmask slot + cost-criterion-id +
+regime tag reserved in 0.3's schema). **D3 key-fork amendment + 0.3 encoding freeze (one
+cycle)**: the deterministic (epoch × occurrence-path) key for effectful occurrences + the
+Merkle child-digest rule for effectful children + the positive-facet-is-load-bearing
+ruling are signed off TOGETHER with 0.3's encoding freeze. **Pre-named measurement**: full
+e-class persistence (beyond the rewrites registry) is justified only if D5-corpus
+cache-hit data shows cross-session reuse beyond what the question-keyed store captures —
+the Cranelift 1.13 finding predicts the registry alone earns its keep first.
+
+### §7.5 Scaffold/deferral ledger additions (items 16-18)
+
+| # | Item | Trigger |
+|---|---|---|
+| 16 | Pessimistic effectful/context-free classification (+ bite counters) | Type-derived α at Track 7; context-digest key upgrade |
+| 17 | Ground-only cross-session persistence | Portable assumption-identity design (post-Track 5 data) |
+| 18 | Effect-safety guard timing | BLOCKING Track 2 Phase 0 (structurally enforced, not calendar) |

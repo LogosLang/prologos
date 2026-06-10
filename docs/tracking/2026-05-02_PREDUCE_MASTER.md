@@ -98,13 +98,22 @@ A rule's property tags can stack — a rule can be both `IN-fragment` and `confl
 
 ### Axis 2: Persistence-regime axis (determines cacheability)
 
+**Re-specified 2026-06-10 per Track 0.1 SM6 lock ([D.1 §7.1](2026-06-10_PREDUCE_TRACK01_DESIGN.md))**:
+Axis 2 is a PRODUCT, not a flat five-way table — a 3-element **dynamic-confidence chain**
+(`retraction-eligible ⊑ contextual ⊑ ground`, max-merge toward ground; demotion structurally
+inexpressible, so admission is guarded) × static **admission classes**. `opaque` sits OUTSIDE
+the chain (SM5's Boolean facet — an identity property, not a confidence level); `open` is
+discharged by the rule registry's rule-id keyspace (templates persist as rules). Ground
+admission day one: born-context-free entries only (D.1 §7.2); promoted entries stay
+module-homed. The original table is retained below as examples of the classes:
+
 | Regime | Persistence | Cache key | Example |
 |---|---|---|---|
 | **Ground/closed** | Persist freely across sessions | Content hash (CHAMP-derived) | `(+ 1 2) ≡ 3`; structural decomposition of closed types |
-| **Contextual** | Persist with worldview-bitmask tag | Content hash + worldview | Trait-resolved equality; constraint-dependent rewrites |
-| **Retraction-eligible** | Contextual + retraction-bit consultation before promotion to ground | Content hash + worldview + retraction state | Equalities discovered under hypothesis; speculative rewrites |
-| **Open** | Don't persist resolved value; persist the rewrite-rule template | Rule-id | Rules with free metas; pattern templates |
-| **Opaque** | Cannot persist rewrites (no rewrite to persist) | N/A | FFI calls; capability-typed effect evaluation |
+| **Contextual** | Within-session (cross-session = reserved schema slot) | Content hash + worldview | Trait-resolved equality; constraint-dependent rewrites |
+| **Retraction-eligible** | Contextual + per-bit commitment evidence before promotion | Content hash + worldview + retraction state | Equalities discovered under hypothesis; speculative rewrites |
+| **Open** (admission class) | Persist the rule template via the rule registry | Rule-id | Rules with free metas; pattern templates |
+| **Opaque** (admission class) | Cannot persist rewrites; per-occurrence identity keys | (epoch × occurrence-path) | FFI calls; capability-typed effect evaluation |
 
 Storage realization (Track 5): content-addressed `.pnet` fragments load on demand. Merckx et al. 2026 ("E-Graphs as a Persistent Compiler Abstraction") + IPVM-style content addressing realized on our substrate. The retraction-bit consultation is the discipline that prevents stale equalities from polluting the ground regime.
 

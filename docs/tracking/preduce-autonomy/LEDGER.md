@@ -188,4 +188,35 @@ Entry template:
   session) fed the panel pre-verified facts and visibly cheapened the round (5 agents,
   ~800k tokens vs ~1M); the panel still caught staleness OUR OWN same-day pass missed —
   duplication-driven drift is real and the single-source decision is the structural fix.
-- **Landed in**: design doc §5 + Master + stratification.md amendments (this commit).
+- **Landed in**: design doc §5 + Master + stratification.md amendments (commit `465fc16a`).
+
+## 2026-06-10 — interactive (pre-loop) — [OWNER-DECIDED] SM5 + SM6 LOCKED — effect soundness + persistence product
+- **Decision**: final two sub-models locked from the combined panel (`wf_bdd89ecd-516`):
+  - **SM5**: posture A composite with owner-refined guard timing — Option 1 soundness
+    floor in Track 1 (effectful? registry property, PESSIMISTIC default for
+    capability-polymorphic heads + bite counter, deterministic (epoch × occurrence-path)
+    identity keys, never-in-signature-index, positive :opaque facet); the effect-safety
+    guard (no RHS delete/duplicate/reorder of captured effect-bearing subterms) =
+    **BLOCKING Track 2 Phase 0** — the owner asked for the full design space in prose
+    after finding the option labels too compressed, then chose the synthesis (guard
+    structurally precedes the first generic rule, which IS β). Add-only re-entry
+    (Master Q7 answered). Stratum-3 hand-off = named deferral (Architecture AD trigger).
+  - **SM6**: Axis-2 re-specified as PRODUCT (3-chain × admission classes; opaque outside
+    as facet; open → rule-id keyspace) + ground-admission rule (born-context-free only
+    into the question-keyed store; promoted stay module-homed); pessimistic
+    classification both instances; **regime = 5th component of the SM2 product (explicit
+    owner sign-off to amend a locked sub-model)**; question-homed rewrites registry
+    decoupled from mtime; ground-only cross-session day one; reserved schema slots;
+    D3 key-fork + 0.3 encoding freeze as one cycle.
+- **Round discoveries**: F-A (hashcons dedups effects at ingestion) + F-B (generic rules
+  capture effects through pattern variables) — posture B returned UNSOUND-AS-STATED;
+  classification needs NON-LOCAL evidence (capability-polymorphic heads / module-env
+  dependence — one decision shape, two instances); "ground" was two proxies, neither
+  semantic. T7 RESOLVED in-panel.
+- **Autonomy data point #6**: compressed option labels failed the owner at the decision
+  point — the co-design needs full prose design-space exposition BEFORE the question
+  when the options carry novel soundness content; the owner's "uninformed intuition"
+  (Option 2 / guard earlier) was directionally RIGHT and produced a better synthesis
+  than either pre-packaged option.
+- **Landed in**: design doc §6 + §7 + SM2 §2.1 product amendment + Master Axis-2
+  re-specification (this commit).
