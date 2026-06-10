@@ -206,6 +206,36 @@ prior-art measurably cheapens rounds (validated SM4 + 0.3). Never treat a hit as
 authoritative (the recency failure mode is documented in mempalace.md); the post-commit
 docs hook keeps the palace fresh as the loop commits tracking/research docs.
 
+**5.8 Measurement as a design instrument (added 2026-06-10, owner direction).**
+PReduce carries a PERFORMANCE objective, not just an architectural one: the owner
+reports ~50-60% of current execution time is spent in reductions (OWNER-REPORTED —
+empirically baselined at iteration 0, see §7; that measured share becomes THE
+denominator for every PReduce perf claim). Consequences:
+
+- **Baseline first**: iteration 0 captures the reduction-share profile on the
+  comparative suite + the standing baselines (`bench-ab.rkt --output`, timings.jsonl,
+  micro-suite) BEFORE any substrate code lands. No perf claim without its denominator.
+- **Pre-0 microbench as a DESIGN tool**: when a design choice is perf-motivated
+  (storage strategies, T-FLIP, shape-P magnitude, cost-cell specialization), microbench
+  the candidates BEFORE locking — the existing Pre-0 discipline, standing for Phase B.
+  The already-pre-named gates (D5 probe + counters, T-FLIP thresholds, M1-M3, bite
+  counters, shape-P re-microbench) are instances of this rule, not exceptions.
+- **A/B at every phase close touching the reduction path**: `bench-ab.rkt --runs 10`
+  vs the prior baseline (`--ref` for quick checks); suite-level 1.2×-rolling-median
+  and per-file regression rules (testing.md) apply; never run competing A/B
+  comparisons concurrently.
+- **HONESTY ABOUT THE CURVE**: early tracks may REGRESS wall-clock — e-graph ingestion
+  overhead vs direct recursion is the documented Cranelift trade (7-8% compile time for
+  2% runtime). The measurement regime exists to keep that VISIBLE, not to panic on it:
+  pre-named expectation — Tracks 1-3 are correctness + architecture (regressions
+  bounded and recorded, never silent); the perf PAYOFF thesis validates at Track 4
+  (cost-guided extraction on targeted patterns: constant folding, CSE, β-η per D.1
+  §2.2's success criteria) and Track 5 (cross-session amortization). Claiming early
+  and panicking early are the same mistake in opposite directions.
+- **Track 8 endgame**: parity is necessary; PERF IS THE POINT. The retirement case
+  must include the measured reduction-share improvement against the iteration-0
+  denominator.
+
 ## 6. Coordination and persistence (the file spine)
 
 The loop assumes **every iteration wakes up amnesiac**. All state lives in files,
@@ -242,9 +272,11 @@ iteration. Small iterations are what make the ledger auditable and rewinds cheap
 → main; (1) the loop session starts IN the worktree (cwd = this repo copy) on a fresh
 branch off merged main (or continuing this branch — owner's call at merge);
 (2) **iteration 0 is a cheap shakeout** mirroring A.0: full-suite baseline run in the
-worktree (establishes local green + timings entry), DEFERRED.md triage (the carried
-A.0 leftover), Phase B dailies file created — loop machinery exercised before any
-production edit; (3) iteration 1 opens the implementation queue (HANDOFF order).
+worktree (establishes local green + timings entry), the §5.8 PERF BASELINE capture
+(reduction-share profile on the comparative suite + bench-ab baselines saved with
+--output — verifying the owner-reported ~50-60% reduction share empirically),
+DEFERRED.md triage (the carried A.0 leftover), Phase B dailies file created — loop
+machinery exercised before any production edit; (3) iteration 1 opens the implementation queue (HANDOFF order).
 **The kickoff one-liner** (durable here so any session can restart the loop):
 `/loop Execute ONE iteration of the PReduce autonomy experiment: read
 docs/tracking/preduce-autonomy/CHARTER.md then HANDOFF.md, perform the single next
