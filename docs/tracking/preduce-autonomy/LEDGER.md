@@ -254,4 +254,29 @@ Entry template:
   at Track 3 opening — do NOT fire the SM3 D1 revisit unverified); capability/session/
   NAF/FFI confirmed as dimensions/boundaries/existing-strata, not rule kinds.
 - **Landed in**: D.2 (docs/tracking/2026-06-10_PREDUCE_TRACK0.2_RULE_TAXONOMY.md) +
-  Master amendments (rows 0.2/2/3 + census) (this commit).
+  Master amendments (rows 0.2/2/3 + census) (commit `92c5339e`).
+
+## 2026-06-10 — interactive (pre-loop) — [OWNER-DECIDED] TRACK 0.3 CLOSED — PHASE A COMPLETE
+- **Decision**: 2-cluster panel (`wf_7250f731-04d`) + owner decisions:
+  - **Identity sign-off package (the one §7.4 owner cycle; the track's only
+    non-reversible rulings)**: PCE/1 canonical encoding + sha256-bytes (verified
+    in-base) + the three D3 rulings + BOTH key-space closures (effectful digest
+    structurally excluded from the persisted domain via admission-guard ERROR +
+    kind-byte separation; question-store key gains the RULE-SET-DIGEST component).
+  - **Container + payload**: .pnet/2 tagged sections (evolution as format property;
+    question sidecar nothing-mtime-shaped; one-time cold rebuild accepted) + boundary
+    tier 2′ (extraction sections + frozen CELL-record incl. per-cell enrichment
+    annotation — the verified day-one obligation; propagator-record RESERVED,
+    NTT/SH-Track-1 trigger). Single-hasher rule: pce.rkt owns encode+hash; golden
+    vectors ARE the cross-language conformance artifact.
+  - **Merge timing**: branch lands on main after 0.3 close (owner reviews + merges;
+    Phase B branches fresh off main).
+- **Grounding highlights**: no canonical encoder exists anywhere; equal-hash-code has
+  no stability contract; gensym uids traversal-order-dependent (forbidden in hash
+  domains); PNET_VERSION equality-gate; additive reads de facto; Zig PoC unpinned
+  (owner-action tracker row). The critique's reflexive catch: the lock-set itself was
+  main-invisible — LBD-1 provenance ratification = this merge decision.
+- **PHASE A COMPLETE**: Tracks 0.1 + 0.2 + 0.3 closed; Track 0 (series founding) ✅.
+  The charter's Phase B (autonomous loop, Track 1 entry) conditions are met once the
+  branch merges. 8 autonomy data points held for the retro.
+- **Landed in**: D.3 + Master amendments (rows 0/0.3/5) (this commit).

@@ -47,21 +47,26 @@ named).
 pass returned PASS-WITH-AMENDMENTS, all applied: precise lattice definitions for
 write-once-flat + dedup-or-error with ⊤contradiction as legitimate top; two
 pre-deployment verification gates recorded for SP2/SP3). Master Track 0.1 row ✅.
-**TRACK 0.2 CLOSED 2026-06-10** (D.2: 10-kind taxonomy + promotion analysis +
-partition B-laddered with structural exit binding; HVM2 deferred WITH the
-design-doc-opens-with-it guard; 461-arm census; guard-covers-ι finding; SATURATE
-producer evidence; implicit-NAC verification commissioned at Track 3 opening).
-NEXT: (a) **Track 0.3** (.pnet schema freeze — the LAST Phase A item: reserved slots
-specified across SM3 §3.1 + SM6 §7.4; the D3 key-fork + encoding freeze is ONE owner
-cycle per §7.4; collaborator boundary per the sweep's extract-then-lower obligations;
-co-designed with SH Track 1 per the Master row; enrichment annotation visible to
-lowering per the memo). (b) DEFERRED.md triage (A.0 leftover, still pending).
-(c) Implementation queue (Track 1 opens after 0.3): SM1.1 production-merge commit +
-shape-P + comment fix; D5 probe (singleton-fraction FIRST; injected-rule redefinition
-per SM2 D5); #:after ordering + keep-pending (BLOCKING for promotion); effect-safety
-guard (BLOCKING Track 2 Phase 0; must cover ι instantiation per D.2 §1 G3).
-(d) AUTONOMY EXPERIMENT: after 0.3 closes, Phase A is COMPLETE and the charter's
-Phase B (autonomous loop, Track 1 entry) is in reach; ledger holds 7 data points.
+**PHASE A COMPLETE 2026-06-10** — Tracks 0.1 (D.1), 0.2 (D.2), 0.3 (D.3) all CLOSED;
+Track 0 (series founding) ✅ in the Master. The full lock-set lives on this branch.
+NEXT (in order):
+(a) **OWNER: review + merge `preduce-autonomy` → main** (decided: merge after 0.3
+close; docs-only, no code/suite risk; the lock-set becomes citable at main HEAD;
+rebase onto current main first — main advances under the owner's other session).
+(b) **OWNER ACTIONS carried**: Zig PoC pinning (identify branch, archive, document
+read interface — D.3 §5); DEFERRED.md triage (A.0 leftover, never done).
+(c) **PHASE B ENTRY (the autonomous loop)**: conditions met post-merge. Track 1 =
+the implementation queue in dependency order: SM1.1 production-merge commit + shape-P
+delta-notify + comment fix (ONE commit + full typing regression); pce.rkt (PCE/1
+encoder + golden vectors — precedes hashcons per LBD-5); D5 probe (singleton-fraction
+FIRST; injected-rule variant); term-carrier domain + 'eclass-refine (8-edit surface,
+§2.10); e-class product cell (5 components) + hashcons registry + union-emitter
+(green slice per §2.4/§3.2); #:after ordering + keep-pending substrate (BLOCKING for
+promotion); congruence layer; effect-safety guard = BLOCKING Track 2 Phase 0 (covers
+ι instantiation). Per the charter: the loop works Phase B against these LOCKED
+designs; OWNER-PROVISIONAL label for anything the locks under-determine; main-session
+checkpoints per charter §7.
+(d) Ledger holds 8 autonomy data points for the retro (charter §9).
 PROCESS: pass the worktree path (/Users/avanti/dev/projects/prologos-preduce-auto)
 for branch docs; panel COMPOSITIONS need the same skepticism as kill-shots (data
 point #4).
