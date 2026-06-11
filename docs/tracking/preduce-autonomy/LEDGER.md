@@ -793,3 +793,16 @@ Entry template:
   checklist), the elaboration ingestion call-site, acceptance §4 Level-3 probe,
   §5.8 A/B bench.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 21 — [ROUTINE] Phase 1 close-out: counters field + driver seed pour
+- **Shipped**: perf-counters gains guard-skips (18th field; struct checklist swept:
+  all 5 direct ctor sites updated — incl. tools/profile-unify.rkt found STALE at 16
+  fields pre-existing, fixed in passing; ->hasheq + provide + the increment macro;
+  reset! ALSO gained the missing inert-dependent-skips reset — same oversight class,
+  fixed in passing); the dispatch guard's skip! now increments BOTH the test box
+  (unit instrumentation) and the pc (production PERF-COUNTERS reporting — different
+  consumers, no fallback logic); pour-arithmetic-seed! rides the driver's prn init
+  after the kernel pour. test-perf-counters' key census 16→17.
+- **Gates**: 73 targeted green; acceptance 0 errors with the seed pouring at every
+  file init.
+- **Landed in**: (this commit). A/B bench at the gate's tail.

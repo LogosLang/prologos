@@ -11,7 +11,8 @@
 (require "rule-registry.rkt")
 
 (provide arithmetic-seed-rules
-         register-arithmetic-seed!)
+         register-arithmetic-seed!
+         pour-arithmetic-seed!)
 
 (define (fold-rule name head op #:arity [arity 2])
   (make-preduce-rule
@@ -57,3 +58,9 @@
 (define (register-arithmetic-seed! net registry-cid)
   (for/fold ([n net]) ([r (in-list arithmetic-seed-rules)])
     (register-rule n registry-cid 'kernel r)))
+
+;; driver-init wrapper (same shape as pour-kernel-rule-seed!)
+(define (pour-arithmetic-seed! prn-box)
+  (define cid (current-rule-registry-cell-id))
+  (when (and prn-box cid)
+    (set-box! prn-box (register-arithmetic-seed! (unbox prn-box) cid))))

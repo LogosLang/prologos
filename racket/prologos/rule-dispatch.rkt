@@ -23,6 +23,7 @@
 ;;; (named upgrade: per-rule declared profiles).
 (require racket/set
          racket/list
+         "performance-counters.rkt"
          "rule-registry.rkt"
          "eclass-graph.rkt"
          "eclass-cell.rkt"
@@ -88,7 +89,13 @@
 ;; --- the guard ---
 ;; bindings: (hash var → class-cid). Returns #t (fire) or #f (skip; counted).
 (define (guard-allows? net profile bindings)
-  (define (skip!) (set-box! guard-skips (add1 (unbox guard-skips))) #f)
+  ;; the box is TEST instrumentation (unit tests run without a pc installed);
+  ;; the pc field is PRODUCTION reporting (PERF-COUNTERS line) — different
+  ;; consumers, no fallback logic between them
+  (define (skip!)
+    (set-box! guard-skips (add1 (unbox guard-skips)))
+    (perf-inc-guard-skip!)
+    #f)
   (cond
     [(eq? profile 'underivable)
      ;; tier-2 pessimism: any effect-bearing capture ⇒ skip

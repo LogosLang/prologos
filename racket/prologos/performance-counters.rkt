@@ -36,6 +36,7 @@
  perf-inc-cell-alloc!
  perf-inc-inert-dependent-skip!
  perf-inc-prop-alloc!
+ perf-inc-guard-skip!  ;; PReduce Track 2 Phase 1
 
  ;; Lifecycle
  with-perf-counters
@@ -142,7 +143,9 @@
    cell-allocs            ;; cells allocated via net-new-cell
    prop-allocs            ;; PUnify Phase 1: propagators added via net-add-propagator
    ;; BSP-LE Track 2 Phase 2: inert dependent instrumentation
-   inert-dependent-skips)  ;; times filter-dependents skipped an inert assumption-tagged dependent
+   inert-dependent-skips   ;; times filter-dependents skipped an inert assumption-tagged dependent
+   ;; PReduce Track 2 Phase 1: the RHS effect-safety guard (D.1 §6.2)
+   guard-skips)            ;; rule fires structurally skipped by the dispatch guard
   #:mutable #:transparent)
 
 ;; Parameter: #f = disabled (default), perf-counters struct = enabled
@@ -232,12 +235,16 @@
 
 ;; with-perf-counters: set up fresh counters, run body, return (values result pc)
 (define-syntax-rule (with-perf-counters body ...)
-  (let ([pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)])
+  (let ([pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)])
     (parameterize ([current-perf-counters pc])
       (let ([result (begin body ...)])
         (values result pc)))))
 
 ;; Reset all counters to zero
+(define-syntax-rule (perf-inc-guard-skip!)
+  (let ([pc (current-perf-counters)])
+    (when pc (set-perf-counters-guard-skips! pc (add1 (perf-counters-guard-skips pc))))))
+
 (define (perf-counters-reset! pc)
   (set-perf-counters-unify-steps! pc 0)
   (set-perf-counters-reduce-steps! pc 0)
@@ -254,7 +261,10 @@
   (set-perf-counters-resolution-cycles! pc 0)
   (set-perf-counters-prop-firings! pc 0)
   (set-perf-counters-cell-allocs! pc 0)
-  (set-perf-counters-prop-allocs! pc 0))
+  (set-perf-counters-prop-allocs! pc 0)
+  ;; PReduce iter 21: these two were missing from reset! (same oversight class)
+  (set-perf-counters-inert-dependent-skips! pc 0)
+  (set-perf-counters-guard-skips! pc 0))
 
 ;; Snapshot to immutable hasheq (for JSON serialization)
 (define (perf-counters->hasheq pc)
@@ -273,7 +283,8 @@
           'resolution_cycles (perf-counters-resolution-cycles pc)
           'prop_firings      (perf-counters-prop-firings pc)
           'cell_allocs       (perf-counters-cell-allocs pc)
-          'prop_allocs       (perf-counters-prop-allocs pc)))
+          'prop_allocs       (perf-counters-prop-allocs pc)
+          'guard_skips       (perf-counters-guard-skips pc)))
 
 ;; ============================================================
 ;; Subprocess reporting

@@ -60,6 +60,7 @@
          "propagator.rkt"
          "typing-propagators.rkt"  ;; PPN Track 4 D.4: propagator-native typing
          "rule-registry.rkt"  ;; PReduce SM3 15b: registry cell + kernel seed pour
+         "kernel-rules-seed.rkt"  ;; PReduce Track 2 Phase 1: the arithmetic seed
          "champ.rkt"
          "unify.rkt"
          "atms.rkt"
@@ -2276,7 +2277,9 @@
     (init-attribute-map-cell! prn-box)  ;; Track 4B Phase 0c: global attribute store
     ;; PReduce SM3 15b: the rule-registry universe cell + the kernel seed pour
     (init-rule-registry-cell! prn-box)
-    (pour-kernel-rule-seed! prn-box))
+    (pour-kernel-rule-seed! prn-box)
+    ;; PReduce Track 2 Phase 1: the arithmetic seed rides the same prn init
+    (pour-arithmetic-seed! prn-box))
   (define-values (results pc)
     (parameterize ([current-phase-timings pt]
                    [current-provenance-counters pv]

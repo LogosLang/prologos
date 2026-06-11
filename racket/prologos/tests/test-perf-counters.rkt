@@ -70,8 +70,9 @@
   (check-equal? (hash-ref h 'infer_steps) 1)
   (check-equal? (hash-ref h 'elaborate_steps) 0)
   (check-equal? (hash-ref h 'zonk_steps) 0)
-  ;; All 16 keys present (12 original + 3 Track 7 Phase 0b + 1 PUnify Phase 1)
-  (check-equal? (length (hash-keys h)) 16))
+  ;; All 17 keys present (12 original + 3 Track 7 Phase 0b + 1 PUnify Phase 1
+  ;; + guard_skips, PReduce Track 2 Phase 1)
+  (check-equal? (length (hash-keys h)) 17))
 
 ;; ============================================================
 ;; with-perf-counters scoping
@@ -124,7 +125,7 @@
   (define t1-off (current-inexact-monotonic-milliseconds))
   (define off-ms (- t1-off t0-off))
   ;; Enabled
-  (define pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
+  (define pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
   (define t0-on (current-inexact-monotonic-milliseconds))
   (parameterize ([current-perf-counters pc])
     (for ([_ (in-range 1000000)])

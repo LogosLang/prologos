@@ -150,7 +150,7 @@
       (define net6 (net-cell-write net5 decision-cid
                                    (decision-from-alternatives (list h2))))
       ;; Enable perf counters
-      (define pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
+      (define pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
       ;; Write to in-cid with perf counters active
       (define net7
         (parameterize ([current-perf-counters pc])
