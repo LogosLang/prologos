@@ -939,3 +939,25 @@ Entry template:
   information — a request is information).
 - **Landed in**: (this commit). Phase 1 next: Q interface + cost cells + fixpoint
   propagators + the diamond/cascade tests.
+
+## 2026-06-10 — LOOP iteration 29 — [SIGNIFICANT] Track 4 Phase 1 — EXTRACTION RUNS AS A PROPAGATOR FIXPOINT
+- **Shipped**: extraction.rkt (the q-instance interface — combine/better?/identity/
+  top/criterion-id; tropical v1; tropical-cost-merge + 'extraction-cost SRE domain;
+  lazy per-canonical cost cells seeded from LITERAL bests; REFIREABLE cost-recompute
+  propagators per descriptor; run-to-quiescence = the fixpoint; pure top-down argmin
+  read rebuilding the cost-best FORM tree) + the parent-descriptor index cell
+  (child-keyed, written at intern-node; descriptors gained node-cost as a
+  backward-compatible 4th element).
+- **Two gate-caught e-graph fundamentals (data points #17, #18)**: (1) LITERAL-ONLY
+  SEEDING — a node-born ':best carries the node-LOCAL cost, not a valid total; the
+  seed must come from literal alts only (the local 2 beat the compositional 3 and
+  served a non-form); (2) CANONICALIZE EVERY IDENTITY — descriptors carry pre-union
+  member cell-ids; the union is invisible unless reachability, cell allocation,
+  propagator wiring, and the read ALL go through ':canonical (the diamond's g-alt
+  was unreachable from f's cell until then). Both are textbook e-graph rules that
+  the propagator realization had to re-learn through its own gates — and now
+  enforces by construction.
+- **The diamond passes**: g(x) at 3 beats f(x) at 11 through ONE quiescence;
+  h(g(x)) at 4 through two levels; cheaper literals beat node alts; deterministic.
+- **Landed in**: (this commit). Phases 2-4: the question-keyed store, residuation,
+  the payoff A/B.

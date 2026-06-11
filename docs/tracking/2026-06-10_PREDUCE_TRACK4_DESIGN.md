@@ -13,7 +13,7 @@ re-decide. Module Theory §6 (e-graphs as quotient modules) is the realized fram
 | Phase | Description | Status | Notes |
 |---|---|---|---|
 | D | Design through VAG | ✅ | iters 27-28; DESIGN COMPLETE |
-| 1 | The Q interface + compositional cost cells (extraction-as-fixpoint) | ⬜ | §2 |
+| 1 | The Q interface + compositional cost cells (extraction-as-fixpoint) | ✅ | iter 29: extraction.rkt; diamond/cascade/literal/determinism green; two gate-caught fundamentals (literal-only seeding; canonicalize EVERY identity) |
 | 2 | Extraction read + the question-keyed rewrites store (SM6 §7.4 schema) | ⬜ | §3 |
 | 3 | Residuation (budget-bounded extraction; 1B's first consumer) | ⬜ | §4 |
 | 4 | The payoff A/B (the chartered curve-turn measurement) | ⬜ | §5 |

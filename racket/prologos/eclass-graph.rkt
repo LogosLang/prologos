@@ -28,6 +28,9 @@
 
 (provide current-eclass-hashcons-cell-id
          init-eclass-hashcons-cell!
+         current-parent-index-cell-id
+         init-parent-index-cell!
+         parent-index-merge
          make-eclass-graph
          eclass-registry-merge
          eclass-intern
@@ -237,7 +240,7 @@
   (define reg (net-cell-read net reg-cid))
   (define existing (and (hash? reg) (hash-ref reg sig #f)))
   (cond
-    [existing (values net (cdr existing) (list op child-cids (cdr existing)))]
+    [existing (values net (cdr existing) (list op child-cids (cdr existing) cost))]
     [else
      (define-values (net1 cid) (net-new-cell net eclass-bot eclass-merge))
      (define alloc (cell-id-n cid))
@@ -271,7 +274,18 @@
                            #:component-paths
                            (for/list ([c (in-list child-cids)])
                              (cons c ':canonical))))
-     (values net4 cid (list op child-cids cid))]))
+     ;; Track 4 Phase 1 (iter 29): the parent-descriptor index — child-keyed
+     ;; (the cost-recompute fan-in projection); written here (cheap monotone),
+     ;; consumed lazily by extraction. Descriptor gains node-cost as a 4th
+     ;; element (older consumers access only the first three — compatible).
+     (define descriptor (list op child-cids cid cost))
+     (define pidx (current-parent-index-cell-id))
+     (define net5
+       (if pidx
+           (for/fold ([n net4]) ([c (in-list child-cids)])
+             (net-cell-write n pidx (hash (cell-id-n c) (set descriptor))))
+           net4))
+     (values net5 cid descriptor)]))
 
 ;; Collision scan: recompute every descriptor's signature against CURRENT
 ;; canonicals; group classes whose nodes now share a signature. Returns a list
@@ -318,4 +332,24 @@
   (when prn-box
     (define-values (pnet* cid) (make-eclass-graph (unbox prn-box)))
     (current-eclass-hashcons-cell-id cid)
+    (set-box! prn-box pnet*)))
+
+;; --- Track 4 Phase 1 (iter 29): the parent-descriptor index cell ---
+;; child-alloc → (set descriptor); hash-union-of-set-union (the iter-12 merge
+;; shape). Child-keyed = the cost-recompute FAN-IN projection; extraction's
+;; per-parent grouping derives by scan at request time (v1; a parent-keyed
+;; second projection is the named refinement if scans show in profiles).
+(define (parent-index-merge old new)
+  (cond
+    [(not (hash? old)) new]
+    [(not (hash? new)) old]
+    [else (for/fold ([acc old]) ([(k v) (in-hash new)])
+            (hash-update acc k (lambda (s) (set-union s v)) (set)))]))
+
+(define current-parent-index-cell-id (make-parameter #f))
+(define (init-parent-index-cell! prn-box)
+  (when prn-box
+    (define-values (pnet* cid)
+      (net-new-cell (unbox prn-box) (hash) parent-index-merge))
+    (current-parent-index-cell-id cid)
     (set-box! prn-box pnet*)))
