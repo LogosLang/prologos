@@ -9,7 +9,7 @@ guard passes AND guarded β fires AND the PRN §2 confirmation is recorded.
 
 | Phase | Description | Status | Notes |
 |---|---|---|---|
-| D | This design doc through critique rounds + fine NTT | 🔄 | opened iter 17 |
+| D | This design doc through critique rounds + fine NTT | ✅ | iter 17-18; DESIGN COMPLETE (HVM2 §1 owner-provisional B+C) |
 | 0 | RHS effect-safety dispatch guard (BLOCKING — D.1 §6.2 Option 2) | ⬜ | spec §2 |
 | 1 | Arithmetic seed (~12-20 literal-fold rules) | ⬜ | §3 |
 | 2 | δ (definition unfolding) | ⬜ | |
@@ -122,20 +122,97 @@ order-independent under critical pairs by construction — the lock's semantic
 argument; NO perf claim attaches, so no microbench obligation here). Per-rule
 installs remain the heterogeneous fallback.
 
-## §5 Fine-grained NTT model — TO WRITE in the design rounds (PIR §15 default)
+## §5 Fine-grained NTT model (written iter 18; PIR §15 default discharged)
 
-Cells (registry universe, e-class product, attr-map facets), lattice
-declarations (all six locked merges), the dispatch propagator skeleton, and the
-Phase-0 guard's place in the fire path — expressed in NTT speculative syntax
-with the correspondence table extended from D.1 §8. Owed BEFORE Phase 1 lands.
+```ntt
+;; --- cells (lattices = the six locked merges) ---
+cell rule-registry : RuleRegistry
+  :lattice :structural            ;; module-keyed product; dedup-or-error join
+  :merge   rule-registry-merge    ;; rule-registry.rkt:96
+  :home    prn
 
-## §6 Open questions for the critique rounds
+cell eclass[k] : EClassProduct    ;; one per interned class, PCE-keyed
+  :lattice :structural            ;; {best|alts|canonical|provenance|regime}
+  :merge   eclass-merge           ;; eclass-cell.rkt:80 (merge IS the order)
 
-1. Ingestion timing: intern at elaboration (every typed position) vs at first
-   rule match (lazy)? The D5 singleton-fraction data (probe still queued) would
-   answer this empirically; without it, lazy is the conservative default.
-2. The seed's literal representation: expr-int values are PCE-encodable today;
-   nat literals as suc-chains explode class counts — fold to expr-int-backed
-   canonical forms first?
-3. Guard diagnostics surface: counted skips need an observability home
-   (PERF-COUNTERS line vs a :warnings facet entry).
+cell congruence-sig-index : SigIndex     :merge hash-union-of-set-union  ;; cell-20
+cell congruence-request   : SigDelta     :merge hash-union              ;; cell-21
+cell attribute-map        : AttrMap      :merge attribute-map-merge-fn
+  :storage 'pointwise-compound    ;; shape-P: O(|delta|) changed-paths
+
+;; --- the dispatch propagator (Phase 1+; ONE broadcast per class × stratum) ---
+propagator rule-dispatch [class-cid]
+  :reads  (eclass[class-cid] rule-registry)
+  :writes (eclass[*] congruence-sig-index congruence-request)
+  :fire (let* ([head (head-tag-of (best-form eclass[class-cid]))]
+               [rules (rules-for-tag rule-registry head)])
+          (broadcast rules                       ;; D6: tag-matched broadcast
+            (lambda (rule)
+              (apply-rule rule class-cid))))     ;; → rule-dispatch.rkt
+
+;; --- apply-rule (the SINGLE RHS-instantiation choke point; Phase 0 guard inline) ---
+;; match LHS → bind captures → GUARD (capture-profile × effect-bearing reads —
+;; delete/dup/reorder on effect-bearing ⇒ structural SKIP + counter) →
+;; instantiate RHS → eclass-intern → eclass-union (result-merge = write-target)
+
+;; --- strata (SM4: no new kinds) ---
+;; rule-dispatch fires in S0 (monotone: intern+union only grows classes);
+;; congruence collision handler stays #:tier 'topology (cells 20/21, iter 12);
+;; extraction-time NAC presence reads land at Track 4 (not here).
+```
+
+Correspondence: every keyword above → realization file:line as annotated; NEW
+surfaces are `rule-dispatch.rkt` (apply-rule + capture-profile) and the
+ingestion call-site (§6 Q1 resolution below). The D.1 §8 table extends by these
+two rows; everything else reuses Track 1 realizations unchanged.
+
+**IN-correspondence subsection (posture B, OWNER-PROVISIONAL)**: literal-fold
+rules ≈ IN annihilation (two "agents" — op node + literal children — rewrite to
+a value node); δ-unfolding ≈ indirection-node dereference; e-class sharing via
+hashcons ≈ HVM2 duplication-node sharing WITHOUT the affine bookkeeping (our
+sharing is lattice-monotone, not resource-counted — the QTT layer keeps
+multiplicity soundness instead); BSP worklist ≈ the redex queue. Divergence
+NAMED: merge-as-order has no IN analog; worldview tagging has no IN analog.
+
+## §6 Open questions — RESOLVED (iter 18; 3-column adversarial per the VAG rule)
+
+**Q1 ingestion timing → LAZY (intern at first rule match)).** Catalogue: lazy
+avoids interning the (unmeasured — D5 still queued) singleton majority; eager
+gives congruence a complete graph. Challenge: does lazy starve congruence?
+No — congruence only ever does work when unions happen, and unions only happen
+where rules fire; classes that never meet a rule contribute nothing but memory.
+Risk accepted: when D5 data arrives, if singleton fraction is LOW, flip to
+eager (one call-site move; recorded as the reversal path).
+
+**Q2 nat literals → fold suc-chains to numeric form AT THE RULE BOUNDARY.**
+Catalogue: the nat-value memoization precedent (reduction.rkt:875) already
+extracts naturals from suc-chains per-command. Challenge: interning every suc
+node as its own class is structurally pointless (the chain IS one literal);
+PCE-encoding a 1000-deep chain is also O(n) waste. Resolution: the seed's nat
+rules match via nat-value extraction and intern the NUMERIC literal form;
+suc-chain sub-positions are not interned (lazy ingestion makes this free).
+
+**Q3 guard observability → PERF-COUNTERS.** Catalogue: perf-inc-* counters are
+the established shape; :warnings is user-facing. Challenge: is a guard skip
+user-relevant? NO at Phase 0 (it is an internal soundness event; the rule
+simply doesn't fire — semantics preserved); YES later if a user RULE is
+skipped (Track 9 user rules — :warnings entry then, named). Phase 0:
+`guard_skips` counter in PERF-COUNTERS.
+
+**Panel-skip rationale (charter §5.2)**: all three questions sit entirely on
+surfaces built this session with locked semantics; a multi-agent panel would
+re-read code the resolver authored. The genuinely panel-shaped round was the
+SM-level design (Phase A, six panels). Recorded, not silent.
+
+## §7 VAG (adversarial, 3-column — iter 18)
+
+| Decision | Catalogue (passes?) | Challenge (could it be MORE aligned?) |
+|---|---|---|
+| Lazy ingestion | on-network at first use | CHALLENGED: is lazy "imperative dispatch deciding what happens when"? No — laziness here is ABSENCE of work for absent information; the mantra binds information that EXISTS. Flip-to-eager path recorded. |
+| Broadcast dispatch | D6 lock; ACI result-merge | CHALLENGED: the broadcast wraps a sequential loop today (propagator.rkt:2446) — claiming parallelism would be shape-without-benefit. NO perf claim made (the lock's own framing); the broadcast-profile metadata is the future scheduler's hook. |
+| Guard as structural skip | soundness floor honored | CHALLENGED: should a skip be a CONTRADICTION instead (loud)? No — a skipped rule preserves semantics exactly (the term stays reducible by other rules / whnf); contradiction would make effect-adjacency a type error, which the SM5 lock explicitly rejected (boundary is one node thick). |
+| Capture-profile at registration | derived once, stored | CHALLENGED: is the derived field a cache that can go stale? No — rule templates are IMMUTABLE post-registration (dedup-or-error makes re-registration equal?-only); staleness is structurally impossible. |
+
+**DESIGN COMPLETE** pending the owner's HVM2 ruling (§1, proceeding B+C
+provisional) — Phase 0 implementation may begin (its spec is lock-derived and
+unaffected by any §1 outcome).
