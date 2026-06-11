@@ -1108,3 +1108,16 @@ Entry template:
   domain registrations. The structural fix remains the registries-as-cells
   migration (SM3's pattern generalized).
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 39 — [SIGNIFICANT] TRACK 5 CLOSED — the pre-registered outcome, recorded
+- **Warm ≈ cold on both files** (339/338ms; 1538/1558ms) — EXACTLY the §5
+  pre-registration: the persisted share at δ/β-only coverage is below
+  measurement; the multiplier is ι's coverage (Track 3), not widened scope.
+- **The series' payoff chain, fully instrumented and honest**: free ingestion
+  (iter 33) + working extraction (Track 4) + working persistence (Track 5) all
+  AWAIT ONE MULTIPLIER — rule/ingestion coverage (ι). Three consumers ready;
+  one producer missing. That is a clean, actionable state.
+- **PIR** (§16: the comparator family CODIFY-CANDIDATE ripened at 2 points;
+  probe-first-on-asserts new; the falsify-the-workload pattern CONFIRMED as
+  prospective practice via the pre-registration). Master row CLOSED. Doorbell.
+- **Landed in**: (this commit)
