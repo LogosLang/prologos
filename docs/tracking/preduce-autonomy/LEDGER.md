@@ -1077,3 +1077,25 @@ Entry template:
   iter 9 makes the FAMILY's 2nd — codify-candidate: "choose set comparators by
   MEMBER identity semantics, and test value equality across constructions".)
 - **Landed in**: (this commit). Phase 2: re-pour + invalidation + driver wiring.
+
+## 2026-06-10 — LOOP iteration 37 — [SIGNIFICANT] Track 5 Phase 2 — THE FIRST .pnetx EXISTS; a substrate finding en route
+- **Shipped**: the re-pour (digest match = hashcons hit by construction; store
+  merges keep-better; mtime invalidation = degraded-to-cold) + driver wiring
+  (origin per file; the store init; PREDUCE_PNETX-gated load at init + save at
+  close; batch-worker conformance) + quiesce-then-project in the save.
+- **SUBSTRATE FINDING (probe-driven, DEFERRED-listed)**: the prn carries PERMANENT
+  WORKLIST RESIDUE — ~112 prop-ids neither scheduler fires NOR removes
+  (run-to-quiescence no-ops on them; fuel untouched) — so strict null-worklist
+  quiescence is unachievable on the prn. The projection AMENDED to
+  residue-tolerant (cell state is at its fireable fixpoint; residue cannot change
+  it); the fix candidate (runner removes unfireable ids) is propagator-core
+  surgery, its own unit. The hard assert's one-day life was still worth it: it
+  FOUND this.
+- **Three misc lessons banked**: python str.replace replaces ALL (the save hook
+  landed in 3 functions; mapped + pruned); the silent-degrade handler needed a
+  probe to see through (observability vs robustness tension at production
+  boundaries); .pnetx artifacts gitignored.
+- **THE FIRST REAL .pnetx**: 2.5KB of ground e-class content (content-hash →
+  expr forms + costs) written from a full driver run and readable back. 10/10
+  targeted; the warm-vs-cold A/B (Phase 3) is now POSSIBLE.
+- **Landed in**: (this commit)

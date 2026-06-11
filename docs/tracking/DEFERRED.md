@@ -56,6 +56,20 @@ Deferral".
   it as non-blocking IFF the file passes individually in the same session (verified
   per occurrence; never silently).
 
+## SUBSTRATE FINDING: permanent worklist residue on the prn (2026-06-10, PReduce iter 37)
+
+At file close the persistent registry network's worklist holds ~112 prop-ids that
+NEITHER scheduler (BSP or Gauss-Seidel) fires or removes — run-to-quiescence is a
+no-op on them (fuel untouched), so `net-quiescent?` (null-worklist) is permanently
+#f for the prn. Probe-verified during Track 5 Phase 2. Hypothesis: stale entries
+referencing propagators absent from the current network lineage (box-swap
+inheritance), skipped-without-removal by the runner. IMPACT: any consumer asserting
+strict quiescence on the prn fails (the Track 5 projection was amended to
+residue-tolerant: cell state is at its FIREABLE fixpoint; residue cannot change
+it). FIX CANDIDATE: the runner removes unfireable ids from the worklist instead of
+skipping them (propagator-core surgery — its own unit, with a census of where
+residue originates).
+
 ## HIGH PRIORITY: Propagator/Cell Allocation Efficiency Track
 
 **PReduce Track 1 cross-reference (2026-06-10 triage)**: this audit + the per-command

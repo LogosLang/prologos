@@ -60,7 +60,9 @@
          "../tree-parser.rkt"  ;; §11: current-source-str, current-raw-node
          (only-in "../typing-propagators.rkt" current-attribute-map-cell-id current-typing-domain)  ;; Track 4B Phase 6b + PReduce iter-5
          (only-in "../rule-registry.rkt" current-rule-registry-cell-id)  ;; PReduce SM3 15b
-         (only-in "../eclass-graph.rkt" current-eclass-hashcons-cell-id))  ;; PReduce iter 22
+         (only-in "../eclass-graph.rkt" current-eclass-hashcons-cell-id
+                  current-intern-origin)  ;; PReduce iter 22/37
+         (only-in "../extraction-store.rkt" current-extraction-store-cell-id))  ;; PReduce iter 37
 
 ;; Track 10 Phase 3a: Read .pnet cache setting from environment
 ;; The test runner sets PROLOGOS_PNET_CACHE=1 when cache is enabled.
@@ -265,6 +267,8 @@
          ;; PReduce SM3 15b: rule-registry cell-id — reset per file
          [current-rule-registry-cell-id       #f]
          [current-eclass-hashcons-cell-id     #f]  ;; PReduce iter 22
+         [current-intern-origin               'unknown]  ;; PReduce iter 37
+         [current-extraction-store-cell-id    #f]  ;; PReduce iter 37
          ;; errors.rkt — emit formatted errors to stderr for failure logs
          [current-emit-error-diagnostics  #t]
          ;; Set load-relative-directory so dynamic-require with relative

@@ -61,7 +61,11 @@
          "typing-propagators.rkt"  ;; PPN Track 4 D.4: propagator-native typing
          "rule-registry.rkt"  ;; PReduce SM3 15b: registry cell + kernel seed pour
          "kernel-rules-seed.rkt"  ;; PReduce Track 2 Phase 1: the arithmetic seed
-         (only-in "eclass-graph.rkt" init-eclass-hashcons-cell!)  ;; PReduce iter 22
+         (only-in "eclass-graph.rkt" init-eclass-hashcons-cell!
+                  current-eclass-hashcons-cell-id current-intern-origin)  ;; PReduce iter 22/37
+         (only-in "extraction-store.rkt" init-extraction-store-cell!
+                  current-extraction-store-cell-id)  ;; PReduce iter 37
+         (only-in "preduce-pnet.rkt" preduce-load-pnetx! preduce-save-pnetx!)  ;; PReduce iter 37
          (only-in "reduction.rkt" current-preduce-ingest? current-preduce-ingest-int-folds?)  ;; PReduce iter 22/33 A/B switches
          "champ.rkt"
          "unify.rkt"
@@ -2284,6 +2288,16 @@
     (pour-arithmetic-seed! prn-box)
     ;; PReduce Track 2 ingestion (iter 22): the per-file hashcons e-graph cell
     (init-eclass-hashcons-cell! prn-box)
+    ;; PReduce Track 5 Phase 2 (iter 37): the question-keyed store + persistence.
+    ;; Origin scopes this file (the projection's provenance filter); the .pnetx
+    ;; load/save is gated by PREDUCE_PNETX (the persistence experiment switch —
+    ;; no artifacts from normal runs; same discipline as the ingestion gates).
+    (init-extraction-store-cell! prn-box)
+    (current-intern-origin (string->symbol path-str))
+    (when (getenv "PREDUCE_PNETX")
+      (preduce-load-pnetx! prn-box path-str
+                           (current-eclass-hashcons-cell-id)
+                           (current-extraction-store-cell-id)))
     ;; the A/B switch (subprocess benchmarking): PREDUCE_INGEST=1 turns the
     ;; gated whnf hook ON for this process — the experiment toggle, NOT a
     ;; deployment path (the flip criterion is named at the hook's definition)
@@ -2337,6 +2351,15 @@
     (for ([r (in-list final-results)])
       (when (prologos-error? r)
         (emit-error-diagnostic r))))
+  ;; PReduce Track 5 Phase 2 (iter 37): the gated save at file close
+  ;; (degrades to no-save on non-quiescence — persistence never crashes
+  ;; the production boundary)
+  (when (getenv "PREDUCE_PNETX")
+    (let ([prn-box (current-persistent-registry-net-box)])
+      (preduce-save-pnetx! prn-box path-str
+                           (current-eclass-hashcons-cell-id)
+                           (current-extraction-store-cell-id)
+                           (string->symbol path-str))))
   (when pc (print-perf-report! pc))
   (print-phase-report! pt)
   (print-provenance-report! pv)

@@ -48,12 +48,14 @@
   (define ecs (cdr (assq 'preduce-eclasses sections)))
   (check-equal? (length ecs) 1 "exactly the one ground/this-origin class projects")
   (check-equal? (cadr (car ecs)) (expr-int 42) "the projected form is the best")
-  ;; quiescence assertion: a non-quiescent net refuses to project
+  ;; residue tolerance (iter 37 amendment): the projection reads cell state;
+  ;; pending worklist ids cannot change it — projecting a non-drained net is
+  ;; the PRODUCTION reality (the prn's permanent residue finding)
   (define-values (net5 cc) (net-new-cell net4 'bot (lambda (o n) n)))
   (define-values (net6 _pid)
     (net-add-propagator net5 (list cc) (list cc) (lambda (n) n)))
-  (check-exn exn:fail? (lambda () (preduce-project-sections net6 hc store 'test-module))
-             "ASSERT quiescent-at-serialize")
+  (check-not-exn (lambda () (preduce-project-sections net6 hc store 'test-module))
+                 "residue-tolerant projection")
   ;; full file round-trip through the projection
   (define tmp2 (make-temporary-file "pnetx-proj-~a"))
   (preduce-write-pnetx! tmp2 net4 hc store 'test-module)
