@@ -961,3 +961,16 @@ Entry template:
   h(g(x)) at 4 through two levels; cheaper literals beat node alts; deterministic.
 - **Landed in**: (this commit). Phases 2-4: the question-keyed store, residuation,
   the payoff A/B.
+
+## 2026-06-10 — LOOP iteration 30 — [ROUTINE] Track 4 Phase 2 — the question-keyed store lives
+- **Shipped**: extraction-store.rkt — the SM6 §7.4 owner schema realized as a CACHE
+  LATTICE (keep-better per key under the criterion's order; bot=empty; recomputable
+  from primary; the registry contract explicitly NOT applied); the question key =
+  (PCE digest of the class's SORTED alt-digest set, criterion-id, RESERVED
+  worldview #f) — content-defined: the same alternative set is the same QUESTION
+  regardless of cell identity; extract/cached (consult-before, record-after).
+- **Proof (15 checks)**: miss runs the fixpoint + records; HIT SERVES WITH ZERO
+  ALLOCATION (next-cell-id unchanged — the fixpoint provably did not run); a
+  different criterion-id is a different question; keep-better absorbs a worse
+  write and accepts a better one (the lattice, both directions).
+- **Landed in**: (this commit). Phase 3 residuation next, then the payoff A/B.

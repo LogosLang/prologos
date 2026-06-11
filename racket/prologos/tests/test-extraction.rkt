@@ -3,6 +3,7 @@
 ;; ledger iter 29): the DIAMOND (cheap path wins at quiescence) + the two-level
 ;; cascade + the cost-best form tree.
 (require rackunit racket/set
+         "../extraction-store.rkt"
          "../extraction.rkt"
          "../eclass-graph.rkt"
          "../eclass-cell.rkt"
@@ -64,3 +65,39 @@
     (define-values (net3 c1 f1) (extract net2 hc pidx cg))
     (define-values (net4 c2 f2) (extract net3 hc pidx cg))
     (check-equal? (list c1 f1) (list c2 f2) "extraction is deterministic")))
+
+;; ---- Phase 2 (iter 30): the question-keyed CACHE lattice ----
+(parameterize ([current-parent-index-cell-id #f]
+               [current-extraction-store-cell-id #f])
+  (define-values (net0 hc pidx) (fresh-graph))
+  (parameterize ([current-parent-index-cell-id pidx])
+    (define pb (box net0))
+    (init-extraction-store-cell! pb)
+    (define store (current-extraction-store-cell-id))
+    (define-values (net1 cx _dx) (eclass-intern (unbox pb) hc '(lit x) #:cost 1))
+    (define-values (net2 cg _dg) (eclass-intern-node net1 hc 'g (list cx) #:cost 2))
+    ;; MISS: full fixpoint runs + the answer records
+    (define-values (net3 c1 f1 v1) (extract/cached net2 hc pidx store cg))
+    (check-equal? v1 'miss)
+    (check-equal? (list c1 f1) (list 3 '(g (lit x))))
+    ;; HIT: served from the store — NO fixpoint (observable: zero new cells)
+    (define cells-before (prop-network-next-cell-id net3))
+    (define-values (net4 c2 f2 v2) (extract/cached net3 hc pidx store cg))
+    (check-equal? v2 'hit)
+    (check-equal? (list c2 f2) (list c1 f1) "the hit serves the recorded answer")
+    (check-equal? (prop-network-next-cell-id net4) cells-before
+                  "a hit allocates NOTHING — no fixpoint ran")
+    ;; CRITERION ISOLATION: a different Q instance is a different QUESTION
+    (define q2 (q-instance + < 0 +inf.0 'other-criterion))
+    (define-values (net5 c3 f3 v3) (extract/cached net4 hc pidx store cg #:q q2))
+    (check-equal? v3 'miss "a different criterion-id misses (key isolation)")
+    ;; KEEP-BETTER: a better entry under the same key wins; a worse one is absorbed
+    (define key (eclass-question-key net5 cg 'tropical-v1))
+    (define net6 (net-cell-write net5 store
+                                 (hash key (hash 'cost 999 'form '(worse) 'regime 'ground))))
+    (check-equal? (hash-ref (hash-ref (net-cell-read net6 store) key) 'cost) 3
+                  "a WORSE write is absorbed — keep-better is the lattice")
+    (define net7 (net-cell-write net6 store
+                                 (hash key (hash 'cost 1 'form '(better) 'regime 'ground))))
+    (check-equal? (hash-ref (hash-ref (net-cell-read net7 store) key) 'cost) 1
+                  "a BETTER write updates — monotone toward the optimum")))
