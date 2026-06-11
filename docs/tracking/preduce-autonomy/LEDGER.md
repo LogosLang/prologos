@@ -1121,3 +1121,22 @@ Entry template:
   probe-first-on-asserts new; the falsify-the-workload pattern CONFIRMED as
   prospective practice via the pre-registration). Master row CLOSED. Doorbell.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 40 — [SIGNIFICANT] Track 3 OPENED — and the BLOCKING verification RESOLVED in the same firing
+- **The D.2 §4 verification (static trace, compile-match-tree macros.rkt:9217)**:
+  catch-alls DO NOT survive — variable/wildcard rows compile to leaf BODIES;
+  constructor dispatch builds one arm PER CONSTRUCTOR with later rows SPECIALIZED
+  in (the compiler already IS pattern completion); int literals become equality
+  chains; empty rows become __match-fail holes. CONSEQUENCES: ι arms carry NO
+  implicit NACs (ctor-keyed, disjoint by prop:ctor-desc-tag); the
+  pattern-completion-vs-nac-spec choice DOES NOT EXIST; SM3 D1's revisit clause
+  does NOT fire; Track 3 needs NO NAC machinery. (The runtime probe path was
+  abandoned after two env-scoping dead-ends — the static read answered in one;
+  probe-vs-static is a judgment lesson, not a rule.)
+- **The design simplifies radically**: ι mirrors δ (gated hook at the ι arms;
+  {redex, arm-result} e-classes; per-(type,ctor) tier-2 metadata; the Phase-0
+  guard applies verbatim to scrutinee captures). §4 pre-registers the ESCALATION
+  boundary: if the payoff still doesn't materialize WITH ι coverage, the suspect
+  becomes the per-position floor itself and the answer is SH/Zig lowering — not
+  more Racket-side coverage.
+- **Landed in**: (this commit)
