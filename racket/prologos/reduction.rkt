@@ -15,6 +15,7 @@
          racket/string
          (prefix-in pr/ "rule-dispatch.rkt")     ;; PReduce Track 2 ingestion (iter 22)
          (prefix-in pr/ "eclass-graph.rkt")
+         (prefix-in pr/ "eclass-cell.rkt")       ;; iter 24: make-eclass-value for δ-memo
          (prefix-in pr/ "rule-registry.rkt")
          "prelude.rkt"
          "syntax.rkt"
@@ -1337,6 +1338,37 @@
        [(cons _ (list 'lit (? exact-integer? n))) (expr-int n)]
        [_ (expr-int (op-fn a b))])]
     [else (expr-int (op-fn a b))]))
+
+;; δ-memo (Phase 2, iter 24): the e-class IS {body, whnf(body)} — two equal terms,
+;; keyed by the BODY's PCE digest (redefinition ⇒ new digest ⇒ fresh memo: SOUND
+;; by construction; orphaned entries are the documented monotone-garbage class).
+;; The form for δ is the EXPR STRUCT ITSELF (loc-free, PCE-encodable — iter 7
+;; verification): projection is identity, both directions. The win vs the
+;; per-command whnf cache is CROSS-COMMAND persistence on the prn.
+;; Registry posture: kernel::delta is a tier-2 METADATA entry (the established
+;; ctor-desc absorbed-in-metadata-only pattern); this hook is the realization.
+(define (preduce-ingest-delta val)
+  ;; → the whnf'd result; TOTAL (native path when unplumbed)
+  (define prn-box (current-persistent-registry-net-box))
+  (define hc (pr/current-eclass-hashcons-cell-id))
+  (cond
+    [(and prn-box hc)
+     (define net0 (unbox prn-box))
+     (define-values (net1 cid dig) (pr/eclass-intern net0 hc val #:cost 10))
+     (define existing-best (hash-ref (pr/eclass-read net1 cid) ':best #f))
+     (cond
+       ;; MEMO HIT: a previous unfold already wrote the whnf result (cost 0)
+       [(and existing-best (zero? (car existing-best)))
+        (set-box! prn-box net1)
+        (cdr existing-best)]
+       [else
+        ;; MISS: native whnf, then the result joins the class as the cost-0 best
+        (define result (whnf val))
+        (define net2 (net-cell-write net1 cid
+                                     (pr/make-eclass-value #:best (cons 0 result))))
+        (set-box! prn-box net2)
+        result])]
+    [else (whnf val)]))
 
 ;; ========================================
 ;; Weak Head Normal Form
@@ -3056,6 +3088,14 @@
     ;; Constructor and type-name fvars are canonical — do NOT unfold.
     ;; This keeps constructor applications as (fvar 'cons arg1 arg2) in WHNF,
     ;; allowing structural PM (try-structural-reduce) to decompose them.
+    ;; PReduce δ-memo (gated, default OFF — see preduce-ingest-delta above):
+    [(expr-fvar name)
+     #:when (and (current-preduce-ingest?)
+                 (not (or (lookup-ctor name) (lookup-ctor (ctor-short-name name))
+                          (lookup-type-ctors name)
+                          (lookup-type-ctors (ctor-short-name name)))))
+     (let ([val (global-env-lookup-value name)])
+       (if val (preduce-ingest-delta val) e))]
     [(expr-fvar name)
      (if (or (lookup-ctor name) (lookup-ctor (ctor-short-name name))
              (lookup-type-ctors name) (lookup-type-ctors (ctor-short-name name)))

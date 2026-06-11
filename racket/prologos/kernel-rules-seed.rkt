@@ -52,7 +52,16 @@
    (fold-rule 'bool-not-fold 'bool-not 'not #:arity 1)
    ;; nat structural folds on numeric literal form (2) — design §6 Q2
    (fold-rule 'nat-suc-fold 'suc 'add1 #:arity 1)
-   (fold-rule 'nat-pred-fold 'nat-pred 'sub1 #:arity 1)))
+   (fold-rule 'nat-pred-fold 'nat-pred 'sub1 #:arity 1)
+   ;; δ (Phase 2, iter 24): tier-2 METADATA entry (the ctor-desc
+   ;; absorbed-in-metadata-only pattern) — the realization is reduction.rkt's
+   ;; preduce-ingest-delta hook; this entry documents it in the registry
+   (make-preduce-rule #:name 'delta-unfold
+                      #:rule-id 'kernel::seed::delta-unfold
+                      #:interface-keys '(fvar)
+                      #:tier 'closure-resident
+                      #:confluence-class 'delta
+                      #:stratum 's0)))
 
 ;; → net' (idempotent under dedup-or-error; same path as the kernel pour)
 (define (register-arithmetic-seed! net registry-cid)

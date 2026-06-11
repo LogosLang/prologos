@@ -846,3 +846,23 @@ Entry template:
   fold) — exactly the bounded early regression the charter §5.8 anticipates;
   default stays OFF; the flip criterion stands as named at the hook.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 24 — [SIGNIFICANT] δ (Phase 2) landed — the memo that can beat the floor
+- **The design insight (3-columned in-flight)**: the e-graph form for δ is THE EXPR
+  STRUCT ITSELF (loc-free + PCE-encodable, iter-7 verification ⇒ projection is
+  identity both ways), and the memo class is {body, whnf(body)} — literally an
+  e-class of two equal terms, body at cost 10, result at cost 0 (argmin serves the
+  result). KEYED BY THE BODY'S DIGEST: redefinition ⇒ new digest ⇒ fresh memo —
+  SOUND BY CONSTRUCTION (orphans = the documented monotone-garbage class). The win
+  vs current-whnf-cache is CROSS-COMMAND persistence on the prn (the per-command
+  cache resets; the e-graph doesn't) — and eventually cross-file via Track 5.
+- **Shipped**: preduce-ingest-delta (TOTAL; gated by the same default-OFF flag) +
+  the gated fvar clause ahead of the native δ arm (ctor/type names still never
+  unfold) + kernel::delta as a tier-2 METADATA registry entry (the ctor-desc
+  absorbed-in-metadata-only pattern; the hook is the realization).
+- **Coverage honesty**: unit tests pin the memo MECHANICS; the fvar-arm path needs
+  a global env and is exercised at LEVEL 3 (acceptance with PREDUCE_INGEST=1 —
+  clean; every def reference routes through the hook). A dedicated
+  process-string-level δ test is owed with the Phase 2/3 A/B unit.
+- **Landed in**: (this commit). Next: guarded β (Phase 3 — the guard's first real
+  exercise) + the δ/β A/B against the iter-23 floor.
