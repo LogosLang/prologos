@@ -46,15 +46,21 @@ DONE: **congruence ENGINE (11a)** — signatures, decomposed intern-node with
 descriptors, collision scan, batch union; the textbook cascade + sound-if-stale
 heal both execute (77 e-class checks green). Asymmetric-staleness property ledgered
 (only union-CHANGED canonicals go stale — bounds 11b's watcher set).
-NEXT UNIT: **congruence wiring (11b)**: parent watchers (plain refireable
-propagators per node descriptor, watching child class cells; write
-{sig → (set class-alloc)} into a monotone signature-index cell) + the collision
-handler (topology-tier stratum handler on a NEW preallocated request cell —
-make-prop-network preallocation touch + the #:after substrate's first consumer =
-the owed keep-pending behavioral test) + the end-to-end cascade test (a∪b at
-quiescence auto-unions f(a),f(b) with NO manual scan). Mini-audit the preallocation
-surface first (make-prop-network cell list + preallocated-cell-ns). THEN: the
-effect-safety guard (BLOCKING Track 2 Phase 0); then rule promotion.
+DONE: **congruence WIRING (11b)** — cells 20/21 preallocated; refireable parent
+watchers on ':canonical component-paths; stateless topology-tier collision handler;
+ONE union + ONE quiescence auto-unions congruent parents INCLUDING two-level
+cascades. D.1 §2.1 congruence fully realized. (keep-pending not consumed — the
+monotone-index + delta-request split was CALM-cleaner; its behavioral test stays
+owed at rule dispatch.)
+NEXT UNIT: **the effect-safety guard** (BLOCKING Track 2 Phase 0; D.1 §6 F-A/F-B
+locks): hashcons must NOT dedup effectful occurrences — per-occurrence
+deterministic (epoch × occurrence-path) keys for effectful terms; the guard ERRORS
+on any attempt to intern an effect-bearing term through the ground hashcons path
+(detection: effect-marker structs / session types in the term — mini-audit
+effect-executor.rkt + the F-A lock in D.1 §6 for the marker predicate). Tests:
+guard fires on effectful terms; pure terms unaffected; the (epoch × path) key shape
+admits per-occurrence interning WITHOUT dedup. THEN: rule promotion begins (the
+arithmetic seed per D.2's IN-ladder).
 Implementation queue below. Phase A history follows for context.
 
 Done so far (all interactive, with the owner):

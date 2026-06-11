@@ -37,7 +37,9 @@
          eclass-node-signature
          eclass-intern-node
          eclass-congruence-collisions
-         eclass-union-all)
+         eclass-union-all
+         ;; 11b reactive wiring (ledger iter 12)
+         process-congruence-requests)
 
 ;; --- the hashcons registry cell ---
 
@@ -160,7 +162,27 @@
                                    #:regime regime))
      (define net2 (net-cell-write net1 cid v0))
      (define net3 (net-cell-write net2 reg-cid (hash sig (cons alloc cid))))
-     (values net3 cid (list op child-cids cid))]))
+     ;; 11b: seed the signature index + install the PARENT WATCHER — a plain
+     ;; REFIREABLE propagator (congruence cascades refire it; fire-once would
+     ;; consume its shot — the iter-4 lesson applied at design time) watching
+     ;; ONLY the children's ':canonical components (asymmetric staleness: only
+     ;; union-CHANGED canonicals matter; component-paths give the precision).
+     (define net3a (net-cell-write net3 congruence-sig-index-cell-id
+                                   (hash sig (set cid))))
+     (define (watch net)
+       (define sig* (eclass-node-signature net op child-cids))
+       (define n1 (net-cell-write net congruence-sig-index-cell-id
+                                  (hash sig* (set cid))))
+       (net-cell-write n1 congruence-request-cell-id (hash sig* #t)))
+     (define-values (net4 _wpid)
+       (net-add-propagator net3a child-cids
+                           (list congruence-sig-index-cell-id
+                                 congruence-request-cell-id)
+                           watch
+                           #:component-paths
+                           (for/list ([c (in-list child-cids)])
+                             (cons c ':canonical))))
+     (values net4 cid (list op child-cids cid))]))
 
 ;; Collision scan: recompute every descriptor's signature against CURRENT
 ;; canonicals; group classes whose nodes now share a signature. Returns a list
@@ -179,3 +201,24 @@
   (for/fold ([n net]) ([group (in-list groups)])
     (for/fold ([n2 n]) ([a (in-list group)] [b (in-list (cdr group))])
       (eclass-union n2 a b))))
+
+;; --- 11b: the congruence collision handler (topology tier) ---
+;; Reads the round's CHANGED sigs (the request delta), consults the monotone
+;; signature index, and installs 'eclass-refine relates for every collided
+;; group. STATELESS: re-installing a relate for an already-unioned group is an
+;; idempotent no-op at quiescence (the joins are equal) — bounded by the number
+;; of sig-changes, which is bounded by unions. Topology tier: installing
+;; propagators is a structural change (stratification.md request-accumulator
+;; pattern; the cell is preallocated as cell-21).
+(define (process-congruence-requests net pending)
+  (define index (net-cell-read net congruence-sig-index-cell-id))
+  (for/fold ([n net]) ([(sig _v) (in-hash pending)])
+    (define group (and (hash? index) (hash-ref index sig #f)))
+    (if (and group (> (set-count group) 1))
+        (eclass-union-all n (list (set->list group)))
+        n)))
+
+(register-stratum-handler! congruence-request-cell-id
+                           process-congruence-requests
+                           #:tier 'topology
+                           #:reset-value (hash))

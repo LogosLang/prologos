@@ -586,3 +586,25 @@ Entry template:
   suite caught the misconstruction — data point #12, gates catching test-author
   error, not just code error.)
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 12 — [SIGNIFICANT] congruence WIRING landed (11b) — the cascade is REACTIVE
+- **Shipped**: cells 20 (congruence sig-index — monotone {sig → (set class-cid)},
+  equal?-keyed, sound-if-stale) + 21 (congruence request — per-round changed-sig
+  delta) PREALLOCATED in make-prop-network with drift guards (zero behavior change
+  for non-e-class networks; zero-NET-2 preserved). eclass-intern-node now seeds the
+  index AND installs the PARENT WATCHER: a plain REFIREABLE propagator (the iter-4
+  over-fire×fire-once lesson applied at design time) watching ONLY the children's
+  ':canonical component-paths (the asymmetric-staleness property applied — only
+  union-changed canonicals wake it). process-congruence-requests: STATELESS
+  topology-tier handler (collided group → 'eclass-refine relate installs;
+  re-installs idempotent at quiescence; registered at module load on the
+  preallocated cell per the request-accumulator pattern).
+- **Proof**: ONE union + ONE run-to-quiescence auto-unions congruent parents with
+  NO manual scan — including the TWO-LEVEL cascade (the f-union itself wakes g's
+  watchers). BSP is the scheduler default so the production path is exercised.
+- **Design notes**: keep-pending NOT consumed here after all — the monotone-index +
+  delta-request split is CALM-cleaner than a keep-pending accumulator (the index is
+  state = a cell; requests are deltas). The keep-pending behavioral test remains
+  owed at its true first consumer (rule dispatch).
+- **D.1 §2.1's congruence design is now fully realized** (engine 11a + wiring 11b).
+- **Landed in**: (this commit)

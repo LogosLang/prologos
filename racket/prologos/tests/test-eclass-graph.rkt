@@ -135,3 +135,33 @@
   (define net6 (run-to-quiescence (eclass-union-all net5 groups)))
   (check-equal? (eclass-read net6 cfa) (eclass-read net6 cfa2)
                 "the duplicate is unioned away — wasteful-but-sound"))
+
+;; ---- 11b REACTIVE: a ∪ b auto-unions f(a), f(b) at quiescence — NO manual scan ----
+
+(let*-values ([(net0 reg) (make-eclass-graph (make-prop-network))]
+              [(net1 ca _da) (eclass-intern net0 reg ta #:cost 5)]
+              [(net2 cb _db) (eclass-intern net1 reg tb #:cost 1)]
+              [(net3 cfa _dfa) (eclass-intern-node net2 reg 'f (list ca) #:cost 2)]
+              [(net4 cfb _dfb) (eclass-intern-node net3 reg 'f (list cb) #:cost 3)])
+  (check-not-equal? (eclass-read net4 cfa) (eclass-read net4 cfb))
+  ;; ONE union + ONE quiescence: watchers recompute sigs, the topology-tier
+  ;; handler installs the relate, the join lands — fully automatic
+  (define net5 (run-to-quiescence (eclass-union net4 ca cb)))
+  (check-equal? (eclass-read net5 cfa) (eclass-read net5 cfb)
+                "congruent parents auto-union at quiescence (reactive cascade)")
+  (check-equal? (car (hash-ref (eclass-read net5 cfa) ':best)) 2
+                "the cheaper parent form wins automatically"))
+
+;; two-LEVEL cascade: the f-union must itself wake g's watchers
+(let*-values ([(net0 reg) (make-eclass-graph (make-prop-network))]
+              [(net1 ca _x1) (eclass-intern net0 reg ta #:cost 5)]
+              [(net2 cb _x2) (eclass-intern net1 reg tb #:cost 1)]
+              [(net3 cfa _x3) (eclass-intern-node net2 reg 'f (list ca))]
+              [(net4 cfb _x4) (eclass-intern-node net3 reg 'f (list cb))]
+              [(net5 cga _x5) (eclass-intern-node net4 reg 'g (list cfa))]
+              [(net6 cgb _x6) (eclass-intern-node net5 reg 'g (list cfb))])
+  (define net7 (run-to-quiescence (eclass-union net6 ca cb)))
+  (check-equal? (eclass-read net7 cfa) (eclass-read net7 cfb)
+                "level 1: f-parents converge")
+  (check-equal? (eclass-read net7 cga) (eclass-read net7 cgb)
+                "level 2: the f-union cascades through to g-parents"))

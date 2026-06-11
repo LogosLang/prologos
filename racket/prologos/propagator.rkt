@@ -99,6 +99,8 @@
  fuel-budget-cell-id
  ;; PPN 4C Phase 2A.0 (2026-05-19): stratum-request cells + merges
  retraction-stratum-request-cell-id
+ congruence-sig-index-cell-id   ;; PReduce Track 1 11b
+ congruence-request-cell-id     ;; PReduce Track 1 11b
  resolution-stratum-request-cell-id
  retraction-stratum-merge
  resolution-stratum-merge
@@ -786,6 +788,27 @@
 (define contradicted-branch-aids-cell-id (cell-id 18))
 (define union-derivation-chains-cell-id (cell-id 19))
 
+;; PReduce Track 1 11b (autonomy ledger iter 12): congruence wiring cells.
+;; cell-id 20: signature index — {sig-digest → (set class-cell-id)}, equal?-keyed
+;;   (sigs are bytes), MONOTONE (sound-if-stale: signature equality at any time is
+;;   congruence forever — eclass-graph.rkt header). Written by parent watchers.
+;; cell-id 21: congruence request — {sig-digest → #t}, the per-round delta of
+;;   CHANGED sigs; the topology-tier handler (eclass-graph.rkt) reads it, consults
+;;   the index, installs 'eclass-refine relates for collided groups.
+(define congruence-sig-index-cell-id (cell-id 20))
+(define congruence-request-cell-id (cell-id 21))
+(define (congruence-sig-index-merge old new)
+  (cond
+    [(not (hash? old)) new]
+    [(not (hash? new)) old]
+    [else (for/fold ([acc old]) ([(k v) (in-hash new)])
+            (hash-update acc k (lambda (s) (set-union s v)) (set)))]))
+(define (congruence-request-merge old new)
+  (cond
+    [(not (hash? old)) new]
+    [(not (hash? new)) old]
+    [else (for/fold ([acc old]) ([(k v) (in-hash new)]) (hash-set acc k v))]))
+
 ;; Merges for the 2A.0 stratum-request cells. Local definitions per
 ;; propagator.rkt's existing pattern (cf. naf-pending-merge at line 622,
 ;; topology-request-merge at line 686). Defined locally because
@@ -1201,6 +1224,28 @@
     (error 'make-prop-network
            "union-derivation-chains-cell-id allocation drift: expected ~a, got ~a"
            union-derivation-chains-cell-id actual-union-derivation-chains-cid))
+  ;; PReduce Track 1 11b: cell-20 congruence sig-index + cell-21 congruence
+  ;; request. Empty accumulators until eclass-graph.rkt installs watchers /
+  ;; registers the handler — zero behavior change for non-e-class networks
+  ;; (process-tier's empty check skips; zero-NET-2 invariant preserved).
+  (define-values (net10 actual-congruence-sig-index-cid)
+    (net-register-specialized-cell net9 (hash) congruence-sig-index-merge
+      #:tier 'warm
+      #:storage 'general
+      #:fires-on 'any-change))
+  (unless (equal? actual-congruence-sig-index-cid congruence-sig-index-cell-id)
+    (error 'make-prop-network
+           "congruence-sig-index-cell-id allocation drift: expected ~a, got ~a"
+           congruence-sig-index-cell-id actual-congruence-sig-index-cid))
+  (define-values (net11 actual-congruence-request-cid)
+    (net-register-specialized-cell net10 (hash) congruence-request-merge
+      #:tier 'warm
+      #:storage 'general
+      #:fires-on 'any-change))
+  (unless (equal? actual-congruence-request-cid congruence-request-cell-id)
+    (error 'make-prop-network
+           "congruence-request-cell-id allocation drift: expected ~a, got ~a"
+           congruence-request-cell-id actual-congruence-request-cid))
   ;; D.4 1V-3 Item #1-bis (§11.X.3 step 3): set fuel-cell-cache on prop-net-warm.
   ;; D.4 1V-5 Item #1-quater (§11.X.4 step 3): set worldview-cache-cache on prop-net-warm.
   ;; Both cells now registered (worldview-cache at base-net; fuel-cell at net2);
@@ -1212,11 +1257,11 @@
   ;; sharing into net9's cells map. Direct-refs lookup from net9's cells CHAMP
   ;; retrieves the original prop-cells.
   (let* ([fc-h (cell-id-hash fuel-cell-id)]
-         [fc-cell (champ-lookup (prop-network-cells net9) fc-h fuel-cell-id)]
+         [fc-cell (champ-lookup (prop-network-cells net11) fc-h fuel-cell-id)]
          [wv-h (cell-id-hash worldview-cache-cell-id)]
-         [wv-cell (champ-lookup (prop-network-cells net9) wv-h worldview-cache-cell-id)])
-    (struct-copy prop-network net9
-      [warm (struct-copy prop-net-warm (prop-network-warm net9)
+         [wv-cell (champ-lookup (prop-network-cells net11) wv-h worldview-cache-cell-id)])
+    (struct-copy prop-network net11
+      [warm (struct-copy prop-net-warm (prop-network-warm net11)
               [fuel-cell-cache fc-cell]
               [worldview-cache-cache wv-cell])])))
 
