@@ -887,3 +887,23 @@ Entry template:
   Remaining before track close: the δ/β A/B vs the iter-23 floor + the owed
   process-string δ test + Track 2 PIR + doorbell.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 26 — [SIGNIFICANT] TRACK 2 CLOSED — and the A/B caught a real crash
+- **The A/B did its §5.8 job twice over**: (1) it CAUGHT a real ON-path crash the
+  grep-based acceptance check had missed (δ/β interning meta-bearing exprs →
+  PCE's admission guard correctly erroring on uninterned symbols; the weak gate
+  counted zero "error" lines and never checked exit codes — data point #16:
+  ACCEPTANCE CHECKS MUST CHECK EXIT CODES). Fix: PCE-admissibility fallback in the
+  memo (inadmissible terms simply don't memoize — domain dispatch, not defensive
+  programming; the closed-domain design behaving as designed). (2) It rendered the
+  honest verdict: ON = +38% on the fresh-heavy small acceptance (reduce 40→164ms —
+  the floor manifesting), NEUTRAL on ppn-track4c. THE FLIP CRITERION IS NOT MET;
+  default stays OFF per the hook's own definition; the payoff curve points at
+  Tracks 4/5 exactly as chartered at iteration 0.
+- **The owed δ process-string test**: DISCHARGED BY the Level-3 acceptance-ON exit-
+  code-checked gate (strictly stronger than process-string for this path) — the
+  reasoning recorded here rather than a redundant test.
+- **Track 2 CLOSED**: PIR (16 questions; §15 corpus caveat explicit; §16
+  longitudinal — precision-as-soundness CONFIRMED at 3 data points), Master row ✅
+  with the A/B verdict, doorbell rung.
+- **Landed in**: (this commit)

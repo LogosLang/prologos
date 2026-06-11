@@ -1356,23 +1356,35 @@
   ;; through the gates — compositionality is preserved.
   (define prn-box (current-persistent-registry-net-box))
   (define hc (pr/current-eclass-hashcons-cell-id))
+  ;; PCE-ADMISSIBILITY fallback (iter 26 — found by the Track 2 close A/B, which
+  ;; caught what a grep-for-error acceptance check missed): expr forms can carry
+  ;; uninterned symbols (meta ids, gensyms) — OUTSIDE PCE/1's closed domain BY
+  ;; DESIGN (the admission guard is doing its job). Inadmissible terms simply
+  ;; do not memoize: fall to the native step. The handler is on the GATED path
+  ;; only and catches the admission-guard error class the encoder raises
+  ;; deliberately — this is domain dispatch, not defensive programming.
   (cond
     [(and prn-box hc)
-     (define net0 (unbox prn-box))
-     (define-values (net1 cid dig) (pr/eclass-intern net0 hc val #:cost 10))
-     (define existing-best (hash-ref (pr/eclass-read net1 cid) ':best #f))
-     (cond
-       ;; MEMO HIT: a previous computation already wrote the result (cost 0)
-       [(and existing-best (zero? (car existing-best)))
-        (set-box! prn-box net1)
-        (cdr existing-best)]
-       [else
-        ;; MISS: the native step, then the result joins the class as cost-0 best
-        (define result (compute))
-        (define net2 (net-cell-write net1 cid
-                                     (pr/make-eclass-value #:best (cons 0 result))))
-        (set-box! prn-box net2)
-        result])]
+     (with-handlers ([exn:fail? (lambda (_e) (compute))])
+       (define net0 (unbox prn-box))
+       (define-values (net1 cid dig) (pr/eclass-intern net0 hc val #:cost 10))
+       (define existing-best (hash-ref (pr/eclass-read net1 cid) ':best #f))
+       (cond
+         ;; MEMO HIT: a previous computation already wrote the result (cost 0)
+         [(and existing-best (zero? (car existing-best)))
+          (set-box! prn-box net1)
+          (cdr existing-best)]
+         [else
+          ;; MISS: the native step, then the result joins as the cost-0 best.
+          ;; The RESULT may itself be inadmissible — encode-check it by writing
+          ;; under the same handler: an inadmissible RESULT aborts the memo
+          ;; write (the class keeps the body alone) but still returns the result.
+          (define result (compute))
+          (with-handlers ([exn:fail? (lambda (_e) result)])
+            (define net2 (net-cell-write net1 cid
+                                         (pr/make-eclass-value #:best (cons 0 result))))
+            (set-box! prn-box net2)
+            result)]))]
     [else (compute)]))
 
 ;; guarded β support (Phase 3, iter 25): the arg's EFFECT-HEAD check — walk the
