@@ -130,3 +130,47 @@
   (check-equal? (guard-skip-count) 1 "the guard skipped the e-graph recording")
   (check-equal? (hash-count (net-cell-read (unbox pb) hc)) n1
                 "no class recorded for the effect-capturing redex"))
+
+;; ---- ι ingestion (Track 3 Phase 1, iter 41): the natrec recursion carriers ----
+(parameterize ([current-rule-registry-cell-id #f]
+               [current-eclass-hashcons-cell-id #f]
+               [current-persistent-registry-net-box (box (make-prop-network))])
+  (define pb (current-persistent-registry-net-box))
+  (init-rule-registry-cell! pb)
+  (init-eclass-hashcons-cell! pb)
+  (define hc (current-eclass-hashcons-cell-id))
+  ;; natrec computing 3 + 2 via the suc-step (the church-arithmetic shape):
+  ;; natrec _ 3 (λp.λr. suc r) 2 → 5
+  (define plus-redex
+    (expr-natrec (expr-lam 'mw (expr-Nat) (expr-Nat))
+                 (expr-nat-val 3)
+                 (expr-lam 'mw (expr-Nat)
+                           (expr-lam 'mw (expr-Nat) (expr-suc (expr-bvar 0))))
+                 (expr-nat-val 2)))
+  (parameterize ([current-preduce-ingest? #t])
+    ;; whnf exposes the head constructor (WEAK head — the inner natrec stays);
+    ;; nf drives the full value: 3+2=5 (the first expectation here forgot
+    ;; weak-head semantics — the hook was right, the test was wrong)
+    (check-true (expr-suc? (whnf plus-redex)) "whnf exposes suc (weak head)")
+    (check-equal? (nf plus-redex) (expr-nat-val 5) "nf lands 3+2=5 through the e-graph"))
+  ;; the redex chain memoized: classes exist for the nat-val steps
+  (check-true (> (hash-count (net-cell-read (unbox pb) hc)) 0)
+              "ι redexes populated the e-graph")
+  ;; memo hit: same redex re-whnf'd, zero new classes
+  (define n0 (hash-count (net-cell-read (unbox pb) hc)))
+  (parameterize ([current-preduce-ingest? #t]) (whnf plus-redex))
+  (check-equal? (hash-count (net-cell-read (unbox pb) hc)) n0 "ι memo hit")
+  ;; effect-headed step: the guard SKIPS the recording, native ι still computes
+  (reset-guard-skip-count!)
+  (define eff-redex
+    (expr-natrec (expr-lam 'mw (expr-Nat) (expr-Nat))
+                 (expr-nat-val 0)
+                 (expr-app (expr-fvar 'read) (expr-fvar 'ch))
+                 (expr-nat-val 1)))
+  (define n1 (hash-count (net-cell-read (unbox pb) hc)))
+  (parameterize ([current-preduce-ingest? #t])
+    (void (with-handlers ([exn:fail? (lambda (_e) 'native-error-ok)])
+            (whnf eff-redex))))
+  (check-true (> (guard-skip-count) 0) "effect-headed step skipped the e-graph")
+  (check-equal? (hash-count (net-cell-read (unbox pb) hc)) n1
+                "no class recorded for the effectful ι redex"))

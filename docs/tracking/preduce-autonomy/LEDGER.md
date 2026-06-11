@@ -1140,3 +1140,18 @@ Entry template:
   becomes the per-position floor itself and the answer is SH/Zig lowering — not
   more Racket-side coverage.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 41 — [ROUTINE] Track 3 Phase 1 — ι joins the e-graph
+- **Shipped**: gated ι clauses on the natrec RECURSION CARRIERS (nat-val>0 + suc —
+  the church-arithmetic workhorses; each step a {redex, result} e-class via the δ
+  mechanics; #:compute = the native step, VERIFIED VERBATIM against the native
+  arms before tests — the semantics-drift risk named and checked); the guard on
+  effect-headed base/step/target (pessimistic + counted).
+- **Test lesson (small, honest)**: my first expectation forgot WEAK-head semantics
+  (whnf exposes suc; the inner natrec stays) — the hook was right, the test was
+  wrong; nf carries the value assertion.
+- **Preliminary glance** (ONE run, not the verdict): track4c reduce 1222ms with ι
+  vs ~1156 DB baseline (+66ms) — per-step intern overhead on heavy nat work
+  without cross-command reuse visible in-file. Phase 3's A/B renders the real
+  verdict against the §4 escalation boundary.
+- **Landed in**: (this commit)

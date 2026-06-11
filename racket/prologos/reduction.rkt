@@ -1516,11 +1516,36 @@
 
     ;; Iota reduction for natrec — native nat-val (Idris 2 model)
     [(expr-natrec _ base _ (expr-nat-val n)) #:when (= n 0) (whnf base)]
+    ;; PReduce ι ingestion (Track 3 Phase 1, iter 41; gated, default OFF):
+    ;; the natrec recursion carriers memoize as {redex, result} e-classes —
+    ;; the δ mechanics verbatim (#:compute = the native step; totality).
+    ;; Guard: an effect-headed base/step skips the recording (pessimistic;
+    ;; native ι stays legacy-sound).
+    [(and redex (expr-natrec mot base step (expr-nat-val n)))
+     #:when (and (> n 0) (current-preduce-ingest?))
+     (if (or (expr-head-effectful? base) (expr-head-effectful? step))
+         (begin (pr/guard-skip-note!)
+                (whnf (expr-app (expr-app step (expr-nat-val (- n 1)))
+                                (expr-natrec mot base step (expr-nat-val (- n 1))))))
+         (preduce-ingest-delta redex
+                               #:compute (lambda ()
+                                           (whnf (expr-app (expr-app step (expr-nat-val (- n 1)))
+                                                           (expr-natrec mot base step (expr-nat-val (- n 1))))))))]
     [(expr-natrec mot base step (expr-nat-val n)) #:when (> n 0)
      (whnf (expr-app (expr-app step (expr-nat-val (- n 1)))
                      (expr-natrec mot base step (expr-nat-val (- n 1)))))]
     ;; Iota reduction for natrec — legacy Peano representation
     [(expr-natrec _ base _ (expr-zero)) (whnf base)]
+    [(and redex (expr-natrec mot base step (expr-suc n)))
+     #:when (current-preduce-ingest?)
+     (if (or (expr-head-effectful? base) (expr-head-effectful? step)
+             (expr-head-effectful? n))
+         (begin (pr/guard-skip-note!)
+                (whnf (expr-app (expr-app step n) (expr-natrec mot base step n))))
+         (preduce-ingest-delta redex
+                               #:compute (lambda ()
+                                           (whnf (expr-app (expr-app step n)
+                                                           (expr-natrec mot base step n))))))]
     [(expr-natrec mot base step (expr-suc n))
      (whnf (expr-app (expr-app step n) (expr-natrec mot base step n)))]
 
