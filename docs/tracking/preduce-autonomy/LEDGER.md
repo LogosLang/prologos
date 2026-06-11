@@ -1044,3 +1044,18 @@ Entry template:
   names need NO cross-session stability — the content-hash is the key) and the
   origin-provenance verification.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 35 — [SIGNIFICANT] Track 5 DESIGN COMPLETE — with two mini-audit findings
+- **Q2 finding**: intern provenance carries NO origin module (verified) — Phase 1
+  gains current-intern-origin + the pessimistic unknown-not-projected posture
+  (the 4th pessimism instance; VAG habit-checked: the pattern belongs to
+  identity-bearing admission domains, not reflex).
+- **Q3 finding (the bigger one)**: the .pnet/2 tagged-section writer DOES NOT
+  EXIST — the 0.3 freeze is a spec; serialize-module-state is the legacy tuple
+  writer. Phase 1 HONESTLY RE-SCOPED: this track realizes the container's first
+  producer AND consumer (sections append; old readers skip; degraded-not-
+  divergent without section support — the VAG's dual-path challenge answered).
+- **Q1**: triples-only (the three-key separation answers it — canonicals are
+  per-session BY DESIGN; persisting them would re-couple what SM2 separated).
+- **Landed in**: (this commit). Phase 1 next: section writer/reader + origin
+  provenance + the projection.

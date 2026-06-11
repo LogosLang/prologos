@@ -14,7 +14,7 @@ parameter snapshots. The projection discipline below is the risk's mitigation.
 
 | Phase | Description | Status | Notes |
 |---|---|---|---|
-| D | Design through critique | 🔄 | opened iter 34 |
+| D | Design through critique | ✅ | iters 34-35; DESIGN COMPLETE (Q3 re-scoped Phase 1: the .pnet/2 section writer is greenfield) |
 | 1 | Serialize-time projection (the two sections) | ⬜ | §2 |
 | 2 | Load-time re-pour + invalidation | ⬜ | §3-§4 |
 | 3 | The cross-file A/B (the multiplication measurement) | ⬜ | §5 |
@@ -69,16 +69,38 @@ pre-registration: if warm ≈ cold, the persisted share is too small at current
 hook coverage — recorded as such, with the ingestion-coverage expansion (ι at
 Track 3) as the next multiplier, NOT silently widened scope here.
 
-## §6 Open questions (for the critique round)
+## §6 Questions — RESOLVED (iter 35; 3-column + mini-audits)
 
-1. Does section A persist hashcons REGISTRY entries (digest→cid is per-session
-   meaningless) or content triples only (re-intern allocates fresh cells)? The
-   sketch says triples-only — challenge whether canonical NAMES need stability
-   across sessions (SM2's three-key separation says NO: the KEY is the
-   content-hash; canonicals are per-session allocation order).
-2. Serialize-time cost: the projection scans the full hashcons per module —
-   acceptable at current scale; the per-module provenance filter needs the
-   origin recorded at intern time (a provenance set member today? verify).
-3. Where does serialize-module! live and what is its extension surface
-   (pnet-serialize.rkt's section writer — the 0.3 container's first new
-   producer)?
+**Q1 → TRIPLES-ONLY.** Catalogue: digest→cid entries are per-session
+meaningless. Challenge: do canonical NAMES need cross-session stability? NO —
+the SM2 three-key separation answers it: the content-hash is THE key;
+canonicals are per-session allocation order BY DESIGN (min-alloc); persisting
+them would create a false-identity coupling the keys were separated to prevent.
+
+**Q2 → the origin GAP is REAL (mini-audited).** Provenance sets today carry
+only 'intern/'intern-node/'effect-occurrence — NO origin module. Phase 1 item:
+`current-intern-origin` (a parameter the driver sets per file; folded into the
+provenance set at intern as `(cons 'origin id)`); the projection filters on it.
+Until set, origin='unknown classes are NOT projected (pessimistic — the same
+admission posture as everything else in this series).
+
+**Q3 → the .pnet/2 SECTION WRITER DOES NOT EXIST YET (mini-audited).** The 0.3
+freeze is a SPEC; pnet-serialize.rkt's serialize-module-state (:498) is the
+legacy whole-tuple writer with no tagged sections. HONESTLY RE-SCOPED: Phase 1
+includes realizing the .pnet/2 tagged-section writer/reader pair — this track
+builds the container's FIRST producer AND consumer (which is also exactly why
+the SM6 lock named the first-of-kind risk). The legacy tuple path is untouched
+(sections append; old readers skip unknown tags per the container spec).
+
+## §7 VAG (adversarial, 3-column — iter 35)
+
+| Decision | Catalogue | Challenge |
+|---|---|---|
+| Pure-read projection | no serializer-side mutation ✓ | CHALLENGED: is read-at-serialize a hidden consult-order dependency (cells mid-quiescence)? Serialization runs at module close AFTER the file's last quiescence — the read sees the fixpoint; assert quiescent-at-serialize in the writer (cheap, structural). |
+| Pessimistic origin filter | unknown ⇒ not projected | CHALLENGED: pessimism is now used FOUR times in this series — habit check: each instance gates ADMISSION to an identity-bearing domain where wrong inclusion is unsound and exclusion is only slow. The pattern is the domain's, not a reflex. |
+| Triples-only | three-key separation ✓ | (resolved above — the challenge IS Q1) |
+| Sections append to legacy .pnet | forward-compatible ✓ | CHALLENGED: belt-and-suspenders (two formats)? NO — the tuple is the EXISTING format; sections are additive payloads in the spec'd container; nothing dual-paths (a reader without section support simply has no e-class warm-start — degraded, not divergent). |
+
+**DESIGN COMPLETE** (iter 35). Phase 1: the tagged-section writer/reader +
+origin provenance + the projection; Phase 2: re-pour + invalidation; Phase 3:
+warm-vs-cold.
