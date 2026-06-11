@@ -829,3 +829,20 @@ Entry template:
   comparative suite barely hits literal int folds, so per-fold ns is the honest
   §5.8 instrument), then δ (Phase 2).
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 23 — [SIGNIFICANT] the OVERHEAD FLOOR measured (§5.8)
+- **bench-preduce-ingest.rkt** (committed; repeatable): native whnf int-fold
+  ~119.1µs/op fresh, ~117.3µs same-expr (no whnf cache in the bare process — the
+  absolute includes invariant per-call whnf overhead; the DELTAS are the
+  instrument). E-graph gate ON: FRESH positions ~170.7µs (+51.6µs = the
+  intern+dispatch+union round-trip — THE FLOOR), MEMO HITS ~123.8µs (+6.5µs =
+  digest+hashcons lookup).
+- **The bar this sets (recorded as the §5.8 design input for δ/β)**: a memoized
+  position pays ~52µs once + ~6.5µs per reuse; it WINS when the recomputation it
+  avoids exceeds that amortized cost. δ-unfolding + β on non-trivial bodies cost
+  orders more than 52µs (phase-accounting: 1136ms reduce on ppn-track4c) —
+  plausible headroom, to be PROVEN at the Phase 2/3 A/B, not assumed.
+- **Curve honesty**: with seed-only rules the hook is a pure cost (+43% per fresh
+  fold) — exactly the bounded early regression the charter §5.8 anticipates;
+  default stays OFF; the flip criterion stands as named at the hook.
+- **Landed in**: (this commit)
