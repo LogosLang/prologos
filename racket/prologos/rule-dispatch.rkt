@@ -35,7 +35,8 @@
          apply-rule
          dispatch-rules
          guard-skip-count
-         reset-guard-skip-count!)
+         reset-guard-skip-count!
+         guard-skip-note!)
 
 ;; --- the Phase-0 observability counter (PERF-COUNTERS struct-field integration
 ;;     rides with Phase 1's driver wiring, where the counter becomes externally
@@ -44,6 +45,11 @@
 (define guard-skips (box 0))
 (define (guard-skip-count) (unbox guard-skips))
 (define (reset-guard-skip-count!) (set-box! guard-skips 0))
+;; ONE increment path for BOTH consumers (test box + production pc) — the two
+;; counters diverging was gate-caught at iter 25 (the β clause hit only the pc).
+(define (guard-skip-note!)
+  (set-box! guard-skips (add1 (unbox guard-skips)))
+  (perf-inc-guard-skip!))
 
 ;; --- capture-profile derivation (at REGISTRATION; templates immutable) ---
 
@@ -92,10 +98,7 @@
   ;; the box is TEST instrumentation (unit tests run without a pc installed);
   ;; the pc field is PRODUCTION reporting (PERF-COUNTERS line) — different
   ;; consumers, no fallback logic between them
-  (define (skip!)
-    (set-box! guard-skips (add1 (unbox guard-skips)))
-    (perf-inc-guard-skip!)
-    #f)
+  (define (skip!) (guard-skip-note!) #f)
   (cond
     [(eq? profile 'underivable)
      ;; tier-2 pessimism: any effect-bearing capture ⇒ skip

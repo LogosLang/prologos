@@ -1347,8 +1347,13 @@
 ;; per-command whnf cache is CROSS-COMMAND persistence on the prn.
 ;; Registry posture: kernel::delta is a tier-2 METADATA entry (the established
 ;; ctor-desc absorbed-in-metadata-only pattern); this hook is the realization.
-(define (preduce-ingest-delta val)
-  ;; → the whnf'd result; TOTAL (native path when unplumbed)
+(define (preduce-ingest-delta val #:compute [compute (lambda () (whnf val))])
+  ;; → the whnf'd result; TOTAL (native path when unplumbed). #:compute is the
+  ;; NATIVE step for the miss path — callers whose VAL re-matches their own
+  ;; gated clause (β redexes, iter 25) MUST pass the de-gated step or the memo
+  ;; miss recurses into itself (δ's default is safe: whnf of a def BODY does
+  ;; not re-match the fvar clause). Sub-redexes inside the step still route
+  ;; through the gates — compositionality is preserved.
   (define prn-box (current-persistent-registry-net-box))
   (define hc (pr/current-eclass-hashcons-cell-id))
   (cond
@@ -1357,18 +1362,32 @@
      (define-values (net1 cid dig) (pr/eclass-intern net0 hc val #:cost 10))
      (define existing-best (hash-ref (pr/eclass-read net1 cid) ':best #f))
      (cond
-       ;; MEMO HIT: a previous unfold already wrote the whnf result (cost 0)
+       ;; MEMO HIT: a previous computation already wrote the result (cost 0)
        [(and existing-best (zero? (car existing-best)))
         (set-box! prn-box net1)
         (cdr existing-best)]
        [else
-        ;; MISS: native whnf, then the result joins the class as the cost-0 best
-        (define result (whnf val))
+        ;; MISS: the native step, then the result joins the class as cost-0 best
+        (define result (compute))
         (define net2 (net-cell-write net1 cid
                                      (pr/make-eclass-value #:best (cons 0 result))))
         (set-box! prn-box net2)
         result])]
-    [else (whnf val)]))
+    [else (compute)]))
+
+;; guarded β support (Phase 3, iter 25): the arg's EFFECT-HEAD check — walk the
+;; app spine to the head fvar and consult the iteration-13 head classification.
+;; v1 guard posture: an effect-headed arg PESSIMISTICALLY skips the e-graph β
+;; (we cannot prove single-use without a binder-aware usage counter — the NAMED
+;; upgrade); the NATIVE β remains sound in legacy semantics (effects are deferred
+;; descriptors, not executed during reduction — the guard protects the E-GRAPH's
+;; dedup/extraction identity, F-A/F-B).
+(define (expr-head-effectful? e)
+  (let spine ([x e])
+    (cond
+      [(expr-app? x) (spine (expr-app-func x))]
+      [(expr-fvar? x) (pr/effectful-head? (expr-fvar-name x))]
+      [else #f])))
 
 ;; ========================================
 ;; Weak Head Normal Form
@@ -1458,6 +1477,18 @@
 (define (whnf-impl/match e)
   (match e
     ;; Beta reduction: app(lam(m, A, body), arg) -> whnf(subst(0, arg, body))
+    ;; PReduce guarded β (Phase 3, iter 25; gated, default OFF): the redex
+    ;; memoizes as {redex, whnf(redex)} — the SAME e-class mechanics as δ —
+    ;; UNLESS the arg is effect-headed (pessimistic guard + counter; the e-graph
+    ;; never records a β that could dedup/delete an effect — D.1 §6.2; the
+    ;; native β below stays sound for the legacy semantics).
+    [(and redex (expr-app (expr-lam _ _ body) arg))
+     #:when (current-preduce-ingest?)
+     (if (expr-head-effectful? arg)
+         (begin (pr/guard-skip-note!)
+                (whnf (subst 0 arg body)))
+         (preduce-ingest-delta redex
+                               #:compute (lambda () (whnf (subst 0 arg body)))))]
     [(expr-app (expr-lam _ _ body) arg)
      (whnf (subst 0 arg body))]
 

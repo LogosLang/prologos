@@ -866,3 +866,24 @@ Entry template:
   process-string-level δ test is owed with the Phase 2/3 A/B unit.
 - **Landed in**: (this commit). Next: guarded β (Phase 3 — the guard's first real
   exercise) + the δ/β A/B against the iter-23 floor.
+
+## 2026-06-10 — LOOP iteration 25 — [SIGNIFICANT] GUARDED β FIRES — the Track 2 exit criterion holds
+- **Shipped**: expr-head-effectful? (app-spine walk to the iteration-13 head
+  classification) + the gated β clause (pure-arg redexes memoize as
+  {redex, contractum} e-classes via the SAME mechanics as δ — preduce-ingest-delta
+  gained #:compute, the de-gated native step, after the memo-miss recursion was
+  caught AT DESIGN REVIEW pre-test; effect-headed args = PESSIMISTIC skip + counter,
+  native β stays legacy-sound since effects are deferred descriptors — the guard
+  protects the E-GRAPH's identity semantics, F-A/F-B). guard-skip-note! unifies the
+  test-box and pc counter paths (the two diverged — gate-caught, data point #15:
+  dual counters need ONE increment fn by construction).
+- **The owner-bound exit criterion**: (1) the guard passes ✓ (Phase 0, 30+ checks +
+  the β skip test); (2) guarded β FIRES ✓ (the contractum joins the redex's class at
+  cost 0; memo hits on re-reduction; acceptance Level-3 clean with β live —
+  twice/make-adder/fib all route through it); (3) the PRN §2 confirmation RECORDED ✓
+  (PRN master Confirmed Findings row: β/δ as DPO-style e-graph rewrites with the
+  guard as application condition).
+- **Track 2's ladder is COMPLETE**: Phase 0 guard → arithmetic seed → δ → guarded β.
+  Remaining before track close: the δ/β A/B vs the iter-23 floor + the owed
+  process-string δ test + Track 2 PIR + doorbell.
+- **Landed in**: (this commit)

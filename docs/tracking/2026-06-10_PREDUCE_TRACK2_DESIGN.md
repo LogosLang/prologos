@@ -13,7 +13,7 @@ guard passes AND guarded β fires AND the PRN §2 confirmation is recorded.
 | 0 | RHS effect-safety dispatch guard (BLOCKING — D.1 §6.2 Option 2) | ✅ | iter 19; rule-dispatch.rkt; 30+ checks (all 3 violation kinds skip; pure/order-preserving fire; tier-2 pessimism; end-to-end fold) |
 | 1 | Arithmetic seed (~12-20 literal-fold rules) | 🔄 | iter 20: 15 rules + compute nodes + dispatch FIRE (65 checks); REMAINING: PERF-COUNTERS field, ingestion call-site, acceptance probe, A/B bench |
 | 2 | δ (definition unfolding) | ✅ | iter 24: δ-memo hook ({body, whnf(body)} = one e-class; digest-keyed = redefinition-sound; cross-command persistence is the win vs the per-command whnf cache); kernel::delta tier-2 metadata entry |
-| 3 | Guarded β | ⬜ | the guard's first real exercise |
+| 3 | Guarded β | ✅ | iter 25: fires + guard skips effect-capturing redexes + contractum joins the redex e-class; PRN §2 CONFIRMED (PRN master row added); counter-unification fix (data point #15) |
 
 ## §1 The HVM2 benchmark-posture decision — OWNER PACKAGE (the D.2 guard discharged)
 
