@@ -989,3 +989,22 @@ Entry template:
   (the truncated floor); the residual threads ASSOCIATIVELY down the winning
   tree (manual chain ≡ root residual).
 - **Landed in**: (this commit). Phase 4 (the payoff A/B) closes the track.
+
+## 2026-06-10 — LOOP iteration 32 — [SIGNIFICANT] TRACK 4 CLOSED — the machinery is done; the curve has not turned; the levers are named
+- **The A/B's real findings**: (1) TWO corpus premises FALSIFIED in single runs
+  (defs evaluate eagerly — references add no reduce work; repeated top-level calls
+  don't route heavy work through the instrumented path at testable scale) — the
+  falsifications taught more than a confirming benchmark; (2) the memo's MARGINAL
+  cost on repeated identical redexes ≈ 0 (proven in deltas: corpus +12ms OFF,
+  ~0 ON); (3) blanket ingestion's standing overhead (+~130ms on the acceptance)
+  exceeds recovery on every corpus in hand. THE FLIP CRITERION REMAINS UNMET —
+  recorded without spin.
+- **What IS done**: extraction as a propagator fixpoint (proven), the question-
+  keyed store (zero-allocation hits), residuation consumed, the floor + the
+  instruments. §15's chain names the SPECIFIC levers: selective ingestion
+  (δ/β-only, size-thresholded), the consult-wiring of extract/cached into the
+  read path, Track 5 cross-file multiplication — each cheap to test against
+  ppn-track4c's 1136ms reduce phase.
+- **PIR + Master row + doorbell.** §16 new candidate: "falsify the workload
+  premise before building the benchmark" (2 points this track).
+- **Landed in**: (this commit)

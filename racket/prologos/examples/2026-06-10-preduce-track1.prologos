@@ -126,3 +126,27 @@ defn fib [n]
 [twice [fn [x : Int] [+ [fib 5] x]] 1]
 
 [sum-list [map [int+ _ 1] '[1 2 3 4]]]
+
+;; ========================================================================
+;; §8 REPEATED-REFERENCE corpus (Track 4 Phase 4 — the payoff A/B's workload;
+;; the Track 2 PIR §15 corpus caveat answered WITH a corpus)
+;; ========================================================================
+;; A def with a non-trivial body, referenced across MANY separate commands:
+;; the per-command whnf cache pays the unfold ONCE PER COMMAND; the δ-memo
+;; (cross-command, on the prn) pays ONCE PER FILE.
+
+;; (first attempt — def references — falsified: defs evaluate eagerly, so
+;; references add no reduce work; the recurring work is repeated CALLS)
+
+[int+ [fib 16] 1]
+[int+ [fib 16] 2]
+[int+ [fib 16] 3]
+[int+ [fib 16] 4]
+[int+ [fib 16] 5]
+[int+ [fib 16] 6]
+[int+ [fib 16] 7]
+[int+ [fib 16] 8]
+[int- [fib 16] 1]
+[int- [fib 16] 2]
+[int* [fib 16] 2]
+[int* [fib 16] 3]
