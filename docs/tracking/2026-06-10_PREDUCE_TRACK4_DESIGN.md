@@ -12,7 +12,7 @@ re-decide. Module Theory §6 (e-graphs as quotient modules) is the realized fram
 
 | Phase | Description | Status | Notes |
 |---|---|---|---|
-| D | Design through VAG | 🔄 | opened iter 27 |
+| D | Design through VAG | ✅ | iters 27-28; DESIGN COMPLETE |
 | 1 | The Q interface + compositional cost cells (extraction-as-fixpoint) | ⬜ | §2 |
 | 2 | Extraction read + the question-keyed rewrites store (SM6 §7.4 schema) | ⬜ | §3 |
 | 3 | Residuation (budget-bounded extraction; 1B's first consumer) | ⬜ | §4 |
@@ -78,15 +78,71 @@ acceptance section built to exercise repeated-reference workloads (the §15 corp
 caveat answered with a corpus, not an excuse). The flip decision re-opens HERE with
 that data.
 
-## §6 Open design questions (for the critique round)
+## §6 Design questions — RESOLVED (iter 28; 3-column adversarial)
 
-1. Cost-cell allocation: eager per class at intern, or lazy at first extraction
-   read? (The D5-shaped question again — lazy default per the Track 2 precedent
-   unless the fixpoint's fan-in makes eager cheaper.)
-2. Where does the parent-index for cost propagators live — reuse the congruence
-   sig-index entries (they already map parents) or a dedicated index? (Cohesion
-   test: same fan-in, different payload — 3-column it at implementation.)
-3. The store's "update-if-better" merge vs dedup-or-error: better-wins is monotone
-   under q-better? but breaks the registry's append-only framing — justify or
-   reshape (likely: the store is NOT a registry; it is a CACHE lattice — different
-   contract, named explicitly).
+**Q1 cost-cell allocation → LAZY (at extraction request, over the reachable
+subgraph).** Catalogue: lazy skips cells for never-extracted classes; eager runs
+the fixpoint incrementally during ingestion. Challenge: doesn't lazy burst-allocate
+at read time? Yes — and the read is ALREADY a quiescence call (the burst is one
+topology round); eager pays fixpoint cost for classes never asked about, on the
+ingestion path the Track 2 A/B just showed is overhead-sensitive. Same resolution
+shape as Track 2's lazy ingestion; same reversal path (extraction-frequency data).
+
+**Q2 parent-index → DEDICATED cell.** Catalogue: the congruence sig-index maps
+signatures→classes (a different projection); the cost propagator needs
+(parent-class, child-classes, node-cost) triples = the intern-node DESCRIPTORS.
+Challenge: reuse the sig-index? Mixing payloads on one component fails the
+cohesion test ("separate cells for separate concerns") and couples extraction to
+congruence's carrier shape. Resolution: a parent-descriptor index cell
+(hash child-alloc → set of descriptors; hash-union-of-set-union — the iteration-12
+merge reused), WRITTEN at intern-node (cheap monotone write), CONSUMED lazily by
+extraction (Q1).
+
+**Q3 the store contract → a CACHE LATTICE, named as such.** Catalogue:
+better-wins merge is monotone under q-better?. Challenge: doesn't this break
+append-only registry framing? It would — IF it were a registry. It is NOT: the
+rules registry holds AUTHORITATIVE definitions (dedup-or-error); the extraction
+store holds DERIVED optima (keep-better; recomputable from primary; eviction =
+whole-cell reset at the SM6 invalidation boundaries). Primary/derived per the SRE
+lens Q5 — different contracts, different modules (extraction-store.rkt), never
+conflated.
+
+## §7 Fine NTT (the cost-fixpoint layer)
+
+```ntt
+cell extraction-cost[k] : Q          ;; lazy-allocated per reachable class
+  :lattice :value                    ;; min-lattice under q-better? (CALM descent)
+  :merge   q-min-merge               ;; PROPOSED-NEW (extraction.rkt)
+
+cell parent-descriptor-index : ParentIdx   ;; child-alloc → (set descriptor)
+  :lattice :structural
+  :merge   hash-union-of-set-union   ;; the iteration-12 merge, reused
+
+propagator cost-recompute [descriptor]     ;; REFIREABLE (precision contract)
+  :reads  (extraction-cost[child] ... parent-descriptor-index)
+  :writes (extraction-cost[parent])
+  :fire (write parent (q-combine node-cost (q-combine* children-costs)))
+
+;; extraction READ: pure at quiescence — argmin alt per class, residual-pruned
+;; (tropical-left-residual — 1B's first consumer); semantic-NAC presence reads
+;; consult their presence cells HERE (the SM3 D1 boundary).
+```
+
+Correspondences: q-min-merge + extraction.rkt PROPOSED-NEW (Phase 1's two
+surfaces); everything else reuses landed realizations (descriptors:
+eclass-graph.rkt intern-node; the fan-in shape: iteration 12; quiescence:
+run-to-quiescence; residual: tropical-fuel-primitives).
+
+## §8 VAG (adversarial, 3-column — iter 28)
+
+| Decision | Catalogue | Challenge |
+|---|---|---|
+| Extraction as propagator fixpoint | cells+propagators+quiescence ✓ | CHALLENGED: is the top-down argmin READ off-network imperative? It is a READ — reads are how consumers consume cells (the consuming-read pattern from Track 1); the COMPUTATION (cost fixpoint) is on-network. No hidden fixpoint in the read. |
+| Lazy allocation | first-use, like Track 2 | CHALLENGED: "lazy" twice in a row — is this a creeping anti-mantra habit? No: both cases bind work to information that EXISTS (an extraction REQUEST is information); eager would manufacture work for absent questions. The mantra governs flow of present information, not speculative precomputation. |
+| Dedicated parent-index | cohesion test ✓ | CHALLENGED: a third index cell (hashcons, sig-index, parent-index) — consolidation candidate? Each is a different PROJECTION of the node set with a different consumer + merge; consolidating couples consumers. Revisit only if Track 5 serialization wants one section. |
+| Cache-lattice store | primary/derived named ✓ | CHALLENGED: "cache" historically masks bugs (belt-and-suspenders rule). This cache is RECOMPUTABLE-BY-CONSTRUCTION from primary cells with a DECLARED eviction boundary — the masked-bug shape requires a fallback path, which does not exist (a miss recomputes, full stop). |
+
+**DESIGN COMPLETE** (iter 28). Phase 1 implements: the Q interface, q-min-merge,
+the parent-descriptor index write at intern-node, lazy cost-cell allocation +
+cost-recompute propagators, the extraction read; tests = the diamond graph
+(cheap path wins through the fixpoint) + a two-level cost-drop cascade.

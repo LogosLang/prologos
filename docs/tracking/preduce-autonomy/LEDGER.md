@@ -925,3 +925,17 @@ Entry template:
   CORPUS (a repeated-reference acceptance section), and re-opens the flip decision
   with that data.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 28 — [SIGNIFICANT] Track 4 DESIGN COMPLETE
+- §6 resolved 3-column: LAZY cost cells (extraction-request-bound; the burst rides
+  the quiescence call already being made); DEDICATED parent-descriptor index
+  (cohesion; the iteration-12 merge reused; written at intern, consumed lazily);
+  the store is a CACHE LATTICE not a registry (primary/derived per SRE Q5;
+  recomputable-by-construction with a declared eviction boundary — the
+  belt-and-suspenders shape requires a fallback path, which does not exist).
+- §7 fine NTT: two PROPOSED-NEW surfaces only (q-min-merge + extraction.rkt);
+  everything else reuses landed realizations. §8 VAG challenged four decisions
+  incl. the "lazy twice in a row" habit check (resolved: both bind work to PRESENT
+  information — a request is information).
+- **Landed in**: (this commit). Phase 1 next: Q interface + cost cells + fixpoint
+  propagators + the diamond/cascade tests.
