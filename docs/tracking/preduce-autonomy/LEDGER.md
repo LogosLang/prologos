@@ -711,3 +711,19 @@ Entry template:
 - **The kernel pseudo-module now holds the projected rule corpus on-network**;
   Track 2's arithmetic seed registers into the same cell.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 17 — [SIGNIFICANT] Track 2 design OPENED — the HVM2 owner package + the locked-derived skeleton
+- **The D.2 guard discharged**: the design doc opens with the HVM2 posture decision
+  as a full-prose OWNER PACKAGE (three postures with honest costs; loop
+  recommendation = B+C: reference-architecture correspondences for the design +
+  benchmarking bound to the Track 8 trigger where §5.8 instruments make comparison
+  meaningful). Proceeding OWNER-PROVISIONAL on B+C; reversal = additive-prose
+  deletion; A adoptable later without rework. DOORBELL rung.
+- **§2-§4 derive from owner-signed locks** (no new decisions): Phase 0 RHS guard
+  realization sketch (capture-profile derived at REGISTRATION; effect-bearing
+  consult at APPLY; structural skip + counter, not error; tier-2 pessimism);
+  the ~20-op arithmetic seed enumeration; broadcast-over-tag dispatch.
+- **§5 fine NTT owed before Phase 1** (PIR §15 default in effect). §6 names the
+  three open questions for the critique rounds (ingestion timing wants D5 data;
+  nat-literal representation; guard observability home).
+- **Landed in**: (this commit)
