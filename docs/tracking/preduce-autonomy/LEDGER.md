@@ -748,3 +748,25 @@ Entry template:
   capture-profile staleness structurally impossible). DESIGN COMPLETE pending
   only the §1 HVM2 ruling (B+C provisional; Phase 0 unaffected by any outcome).
 - **Landed in**: `1736f804`
+
+## 2026-06-10 — LOOP iteration 19 — [SIGNIFICANT] Track 2 Phase 0 LANDED — the BLOCKING guard exists and passes
+- **Shipped**: rule-dispatch.rkt — derive-capture-profile (registration-time;
+  per-var LHS/RHS occurrence counts + ordered sequences; 'underivable for tier-2;
+  staleness structurally impossible per the VAG), effect-bearing-class? (reads the
+  iteration-13 floor's provenance marker), guard-allows? (DELETE = captured-unused;
+  DUPLICATE = used-more-than-captured; REORDER = effectful relative order changed;
+  violating match = STRUCTURAL SKIP + counter, never an error; tier-2 = pessimistic
+  skip on any effectful capture + counter), apply-rule (THE single RHS choke point:
+  match → bind → GUARD → instantiate → intern → union; lazy class-of contract —
+  uninterned subforms are effect-free BY CONSTRUCTION since the floor interns every
+  effectful occurrence). PERF-COUNTERS struct-field integration NAMED to Phase 1's
+  wiring commit (fixed-field struct → checklist; module counter until then).
+- **Tests preceded the seed (the lock's ordering)**: 30+ checks incl. all three
+  violation kinds skipping on effect-bearing captures, the order-PRESERVING
+  effectful match firing (not a violation), pure matches firing freely, tier-2
+  pessimism counted, the end-to-end literal fold landing (folded form wins argmin;
+  original alt retained), and the guard blocking a deleting fire AT the choke
+  point with the class verifiably untouched.
+- **β may now be designed against a guard that already exists** — the owner's
+  structural-not-calendar timing honored.
+- **Landed in**: (this commit)

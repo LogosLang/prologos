@@ -10,7 +10,7 @@ guard passes AND guarded β fires AND the PRN §2 confirmation is recorded.
 | Phase | Description | Status | Notes |
 |---|---|---|---|
 | D | This design doc through critique rounds + fine NTT | ✅ | iter 17-18; DESIGN COMPLETE (HVM2 §1 owner-provisional B+C) |
-| 0 | RHS effect-safety dispatch guard (BLOCKING — D.1 §6.2 Option 2) | ⬜ | spec §2 |
+| 0 | RHS effect-safety dispatch guard (BLOCKING — D.1 §6.2 Option 2) | ✅ | iter 19; rule-dispatch.rkt; 30+ checks (all 3 violation kinds skip; pure/order-preserving fire; tier-2 pessimism; end-to-end fold) |
 | 1 | Arithmetic seed (~12-20 literal-fold rules) | ⬜ | §3 |
 | 2 | δ (definition unfolding) | ⬜ | |
 | 3 | Guarded β | ⬜ | the guard's first real exercise |
