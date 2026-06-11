@@ -607,4 +607,8 @@ Entry template:
   state = a cell; requests are deltas). The keep-pending behavioral test remains
   owed at its true first consumer (rule dispatch).
 - **D.1 §2.1's congruence design is now fully realized** (engine 11a + wiring 11b).
-- **Landed in**: (this commit)
+- **Gate follow-up (same iteration)**: test-trace-serialize's preallocated-cell
+  CENSUS assertions (20→22, 22→24) updated for cells 20/21 — the pipeline.md
+  "reflection-based consumers" checklist item, caught by the gate exactly where
+  the checklist says to look; sre-coverage = the tracked flake, 9/9 individually.
+- **Landed in**: (this commit + the census fast-follow)
