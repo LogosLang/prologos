@@ -727,3 +727,24 @@ Entry template:
   three open questions for the critique rounds (ingestion timing wants D5 data;
   nat-literal representation; guard observability home).
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 18 — [SIGNIFICANT] Track 2 DESIGN COMPLETE
+- **§5 fine NTT model written** (PIR §15 default discharged): cells with the six
+  locked merges, the rule-dispatch propagator skeleton (broadcast-over-tag), the
+  apply-rule choke point with the guard inline, strata placement (S0 dispatch —
+  monotone; topology congruence unchanged), correspondence rows for the two NEW
+  surfaces (rule-dispatch.rkt + the ingestion call-site), and the posture-B
+  IN-correspondence subsection WITH named divergences (merge-as-order and
+  worldview tagging have no IN analog).
+- **§6 resolved 3-column**: lazy ingestion (D5-data reversal path recorded);
+  nat suc-chains fold to numeric form at the rule boundary (nat-value precedent;
+  lazy makes sub-position non-interning free); guard observability =
+  PERF-COUNTERS guard_skips (user-facing :warnings deferred to Track 9 user
+  rules, named). PANEL-SKIP rationale recorded in-doc (all three questions sit on
+  surfaces authored this session with locked semantics; the panel-shaped round
+  was Phase A's SM design).
+- **§7 adversarial VAG**: four decisions challenged (lazy-vs-mantra; broadcast
+  shape-without-benefit avoided — no perf claim; skip-vs-contradiction; derived
+  capture-profile staleness structurally impossible). DESIGN COMPLETE pending
+  only the §1 HVM2 ruling (B+C provisional; Phase 0 unaffected by any outcome).
+- **Landed in**: `1736f804`
