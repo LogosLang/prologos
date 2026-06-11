@@ -35,7 +35,11 @@ Deferral".
   (passes 9/9 individually, every time); intermittent across full-suite runs.
   Sibling (different storage family, separate trace needed):
   test-module-network-01.rkt 4B.3-b "No exception raised" (enforce-component-paths
-  classification state).
+  classification state). THIRD FAMILY MEMBER (2026-06-10 iter 38):
+  test-facet-sre-registration.rkt — Tier-2 merge-registry lookups → #f in batch
+  only (21/21 individually); the merge-fn-registry's module-load registrations
+  share the same visibility class; exposure grew with PReduce's new domain
+  registrations (term/extraction-cost/extraction-store/rule-registry).
 - **Evidence trail (2026-06-10, PReduce autonomy ledger iters 3-5)**: controlled A/B
   showed the flake at SM1.1a state WITHOUT shape-P; pre-SM1.1a single control run
   green (CONFOUNDED: also 428-vs-429 file partition change). Mechanism analysis:

@@ -1099,3 +1099,12 @@ Entry template:
   expr forms + costs) written from a full driver run and readable back. 10/10
   targeted; the warm-vs-cold A/B (Phase 3) is now POSSIBLE.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 38 (gate adjudication) — [ROUTINE] Phase 2 gate green by policy; the flake family gains its 3rd member
+- The Phase-2 gate: 8644 tests; the tracked sre-coverage flake (9/9 individually)
+  + test-facet-sre-registration NEW in the same class (Tier-2 merge-registry
+  lookups #f in batch only; 21/21 individually) — the registry-visibility family's
+  THIRD member, DEFERRED entry extended; exposure grew with PReduce's four new
+  domain registrations. The structural fix remains the registries-as-cells
+  migration (SM3's pattern generalized).
+- **Landed in**: (this commit)
