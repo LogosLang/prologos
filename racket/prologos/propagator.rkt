@@ -76,7 +76,7 @@
  prop-network-cell-dirs
  prop-network-cell-domains  ;; PPN 4C Phase 1c: Tier 3 domain inheritance
  lookup-cell-domain          ;; PPN 4C Phase 1c: cell-id → domain-name-symbol or #f
- current-domain-classification-lookup  ;; PPN 4C Phase 1f: callback for structural enforcement
+ set-domain-classification-lookup!  ;; PPN 4C Phase 1f callback (box since 2026-06-11 — thread-visibility fix)
  enforce-component-paths!   ;; PPN 4C Phase 1f: structural-cell component-paths enforcement
  ;; Hash helpers (for CHAMP keying)
  cell-id-hash
@@ -1450,12 +1450,24 @@
 ;; #f = parameter unset (no enforcement). 'unclassified = domain exists but
 ;; unclassified. 'structural/'value = classified; structural triggers
 ;; :component-paths enforcement.
-(define current-domain-classification-lookup (make-parameter #f))
+;; FLAKE-FAMILY FIX (2026-06-11; the registry-visibility family's root mechanism,
+;; diagnosed at the owner's report): this was a PARAMETER wired by a module-load
+;; assignment (infra-cell-sre-registrations.rkt) — parameter assignments land in
+;; the INSTANTIATING THREAD's cell only, and batch workers run each test file in
+;; a fresh thread (the per-file timeout), so enforcement wiring was visible only
+;; when the wiring module happened to be instantiated by the worker MAIN thread
+;; (partition-order-dependent → the intermittent batch-only "No exception
+;; raised"). A BOX is ordinary shared state: one instantiation, every thread.
+;; The injection pattern (cycle-break: propagator cannot require sre-core)
+;; is unchanged — only the storage stops being thread-local.
+(define domain-classification-lookup-box (box #f))
+(define (set-domain-classification-lookup! fn)
+  (set-box! domain-classification-lookup-box fn))
 
 ;; PPN 4C Phase 1f: enforce :component-paths for structural-domain cells.
 ;; Error-level: hard. Skips unclassified / value domains (progressive rollout).
 (define (enforce-component-paths! net input-ids component-paths)
-  (define lookup (current-domain-classification-lookup))
+  (define lookup (unbox domain-classification-lookup-box))
   (when lookup  ;; skip if no classification wiring yet
     (for ([cid (in-list input-ids)])
       (define domain-name (lookup-cell-domain net cid))

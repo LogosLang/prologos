@@ -35,7 +35,7 @@
          "infra-cell.rkt"
          "sre-core.rkt"
          "merge-fn-registry.rkt"
-         (only-in "propagator.rkt" current-domain-classification-lookup))
+         (only-in "propagator.rkt" set-domain-classification-lookup!))
 
 ;; PPN 4C Phase 1f (2026-04-20): wire the classification-lookup callback.
 ;; propagator.rkt's net-add-propagator consults this parameter to
@@ -44,7 +44,7 @@
 ;; sre-core (where lookup-domain-classification is defined) and
 ;; propagator.rkt (where the parameter is defined), and loads early
 ;; in the driver's module chain.
-(current-domain-classification-lookup lookup-domain-classification)
+(set-domain-classification-lookup! lookup-domain-classification)
 
 ;; 'hasheq-identity — merge-hasheq-identity (identity-or-error)
 ;; Contradiction sentinel: 'hasheq-identity-contradiction — returned

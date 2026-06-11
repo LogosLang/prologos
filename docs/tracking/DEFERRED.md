@@ -33,13 +33,33 @@ Deferral".
 
 - **Signature**: test-sre-coverage.rkt's 4 generic-op checks → 'type-bot IN BATCH ONLY
   (passes 9/9 individually, every time); intermittent across full-suite runs.
-  Sibling (different storage family, separate trace needed):
-  test-module-network-01.rkt 4B.3-b "No exception raised" (enforce-component-paths
-  classification state). THIRD FAMILY MEMBER (2026-06-10 iter 38):
+  Sibling — **MECHANISM CONFIRMED + FIXED (2026-06-11, post-halt, owner-reported)**:
+  test-module-network-01.rkt 4B.3-b "No exception raised" — root cause was
+  `current-domain-classification-lookup` being a `make-parameter` wired by a
+  MODULE-LOAD-TIME assignment (infra-cell-sre-registrations.rkt); parameter
+  assignments land only in the instantiating thread's cell, and batch workers
+  run each test file's dynamic-require IN A FRESH THREAD (the per-file timeout,
+  batch-worker.rkt) → whether enforcement wiring was visible to a given test
+  thread depended on WHICH thread first instantiated the wiring module →
+  partition-order-dependent silent skip in `enforce-component-paths!`'s
+  `(when lookup ...)`. Fix: parameter → module-level BOX + setter
+  (`set-domain-classification-lookup!`) — ordinary shared state, visible to all
+  threads; the cycle-breaking injection pattern unchanged. No scoped
+  `parameterize` consumers existed (verified by grep before the swap). Suite
+  gate green post-fix (8655 tests / 439 files / all pass).
+  THIRD FAMILY MEMBER (2026-06-10 iter 38):
   test-facet-sre-registration.rkt — Tier-2 merge-registry lookups → #f in batch
   only (21/21 individually); the merge-fn-registry's module-load registrations
   share the same visibility class; exposure grew with PReduce's new domain
   registrations (term/extraction-cost/extraction-store/rule-registry).
+- **The confirmed mechanism likely generalizes to the other two members**: any
+  `make-parameter` mutated at module load (not parameterized per-scope) has the
+  same thread-cell visibility hazard under batch workers. Candidate same-shape
+  fixes: `current-typing-domain` (typing-propagators.rkt — the sre-coverage
+  member; NOTE it has 1 parameterize-adjacent consumer surface to audit first:
+  batch-worker save/restore entry from iter 5) and whatever load-time path
+  feeds the test-facet-sre-registration lookups. Sweep is owner-sequenced
+  (cheap tactical fix now vs waiting for the registries-as-cells migration).
 - **Evidence trail (2026-06-10, PReduce autonomy ledger iters 3-5)**: controlled A/B
   showed the flake at SM1.1a state WITHOUT shape-P; pre-SM1.1a single control run
   green (CONFOUNDED: also 428-vs-429 file partition change). Mechanism analysis:
