@@ -30,7 +30,14 @@
 (require racket/set
          "sre-core.rkt"
          "merge-fn-registry.rkt"
-         "propagator.rkt")
+         "propagator.rkt"
+         (only-in "sre-rewrite.rkt" all-sre-rewrite-rules
+                  sre-rewrite-rule-name sre-rewrite-rule-lhs-pattern
+                  sre-rewrite-rule-interface-keys sre-rewrite-rule-rhs-template
+                  sre-rewrite-rule-apply-fn sre-rewrite-rule-directionality
+                  sre-rewrite-rule-cost sre-rewrite-rule-confluence-class
+                  sre-rewrite-rule-stratum)
+         (only-in "ctor-registry.rkt" all-ctor-descs ctor-desc-tag))
 
 (provide (struct-out preduce-rule)
          make-preduce-rule
@@ -39,7 +46,11 @@
          register-rule
          rule-lookup
          rules-for-tag
-         rule-registry-sre-domain)
+         rule-registry-sre-domain
+         ;; 15b: prn wiring + the kernel seed pour (ledger iter 16)
+         current-rule-registry-cell-id
+         init-rule-registry-cell!
+         pour-kernel-rule-seed!)
 
 ;; --- SP1 schema ---
 (struct preduce-rule
@@ -166,3 +177,63 @@
   (if (and idx (hash-ref idx tag #f))
       (hash-ref idx tag)
       (set)))
+
+;; --- 15b: prn wiring + the kernel seed pour (D.1 §3.1 Bootstrap; ledger iter 16) ---
+
+;; cell-ID plumbing only (same shape as current-attribute-map-cell-id; the
+;; parameter+cell-VALUE-mirror shape stays off the table per owner D4).
+(define current-rule-registry-cell-id (make-parameter #f))
+
+(define (init-rule-registry-cell! prn-box)
+  (when prn-box
+    (define-values (pnet* cid) (make-rule-registry-cell (unbox prn-box)))
+    (current-rule-registry-cell-id cid)
+    (set-box! prn-box pnet*)))
+
+;; The SEED POUR: project the Racket-side stores into property-tagged rule-data
+;; under the kernel pseudo-module. The module-load hasheq accumulation necessarily
+;; predates any network — NAMED SCAFFOLDING-CONSTANT (D.1 §3.1); the pour is the
+;; bridge, not a dual-write (it runs ONCE at prn init; dedup-or-error makes
+;; re-pours idempotent). Tier split: rhs-template present → 'declarative;
+;; absent → 'closure-resident (apply-fn = the named Racket reference, NEVER
+;; serialized). Ctor-descs absorb as tier-2 METADATA ONLY (registry+routing;
+;; the 4 closure fields stay in the legacy tables; consumers unchanged until
+;; the named consumer-read migration track).
+(define (pour-kernel-rule-seed! prn-box)
+  (define cid (current-rule-registry-cell-id))
+  (when (and prn-box cid)
+    (define net0 (unbox prn-box))
+    ;; sre-rewrite rules (qualified by stratum to avoid cross-stratum name clashes)
+    (define net1
+      (for/fold ([n net0]) ([r (in-list (all-sre-rewrite-rules))])
+        (define rid (string->symbol
+                     (format "kernel::~a::~a"
+                             (sre-rewrite-rule-stratum r) (sre-rewrite-rule-name r))))
+        (register-rule n cid 'kernel
+          (make-preduce-rule
+           #:name (sre-rewrite-rule-name r)
+           #:rule-id rid
+           #:interface-keys (let ([ks (sre-rewrite-rule-interface-keys r)])
+                              (if (list? ks) ks '()))
+           #:tier (if (sre-rewrite-rule-rhs-template r) 'declarative 'closure-resident)
+           #:lhs-pattern (sre-rewrite-rule-lhs-pattern r)
+           #:rhs-template (sre-rewrite-rule-rhs-template r)
+           #:apply-fn (sre-rewrite-rule-apply-fn r)
+           #:directionality (sre-rewrite-rule-directionality r)
+           #:cost (sre-rewrite-rule-cost r)
+           #:confluence-class (sre-rewrite-rule-confluence-class r)
+           #:stratum (sre-rewrite-rule-stratum r)))))
+    ;; ctor-descs as tier-2 metadata (tag + arity; closures stay legacy-homed)
+    (define net2
+      (for/fold ([n net1]) ([d (in-list (all-ctor-descs))])
+        (define tag (ctor-desc-tag d))
+        ;; metadata-only absorption: tag for routing; arity and the 4 closure
+        ;; fields stay LEGACY-HOMED (the ctor tables remain authoritative until
+        ;; the named consumer-read migration track — D.1 §3.1)
+        (register-rule n cid 'kernel
+          (make-preduce-rule
+           #:name tag
+           #:rule-id (string->symbol (format "kernel::ctor::~a" tag))
+           #:interface-keys (list tag)
+           #:tier 'closure-resident))))
+    (set-box! prn-box net2)))

@@ -59,6 +59,7 @@
          "type-lattice.rkt"
          "propagator.rkt"
          "typing-propagators.rkt"  ;; PPN Track 4 D.4: propagator-native typing
+         "rule-registry.rkt"  ;; PReduce SM3 15b: registry cell + kernel seed pour
          "champ.rkt"
          "unify.rkt"
          "atms.rkt"
@@ -2272,7 +2273,10 @@
     (init-macros-cells! prn-box)
     (init-warning-cells! prn-box)
     (init-narrow-cells! prn-box)
-    (init-attribute-map-cell! prn-box))  ;; Track 4B Phase 0c: global attribute store
+    (init-attribute-map-cell! prn-box)  ;; Track 4B Phase 0c: global attribute store
+    ;; PReduce SM3 15b: the rule-registry universe cell + the kernel seed pour
+    (init-rule-registry-cell! prn-box)
+    (pour-kernel-rule-seed! prn-box))
   (define-values (results pc)
     (parameterize ([current-phase-timings pt]
                    [current-provenance-counters pv]

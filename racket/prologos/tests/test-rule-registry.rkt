@@ -69,3 +69,25 @@
 (check-equal? (preduce-rule-tier r-closure) 'closure-resident)
 (check-equal? (preduce-rule-stratum r-add) 's0)
 (check-equal? (preduce-rule-write-target r-add) 'best+alts)
+
+;; ---- 15b: the kernel seed pour (driver-init projection) ----
+(parameterize ([current-rule-registry-cell-id #f])
+  (define prn-box (box (make-prop-network)))
+  (init-rule-registry-cell! prn-box)
+  (check-true (cell-id? (current-rule-registry-cell-id)) "init sets the cell-id")
+  (pour-kernel-rule-seed! prn-box)
+  (define cid (current-rule-registry-cell-id))
+  (define net (run-to-quiescence (unbox prn-box)))
+  (define reg (net-cell-read net cid))
+  (define kernel-rules (hash-ref reg 'kernel (hash)))
+  (check-true (> (hash-count kernel-rules) 10)
+              "the pour projects the Racket-side stores (sre-rewrites + ctor metadata)")
+  ;; tier split: ctor entries are closure-resident; some sre-rewrites declarative
+  (define tiers (for/list ([(_k r) (in-hash kernel-rules)]) (preduce-rule-tier r)))
+  (check-true (and (memq 'closure-resident tiers) #t) "tier-2 entries present")
+  (check-true (and (memq 'declarative tiers) #t) "tier-1 entries present")
+  ;; idempotent re-pour (dedup-or-error: equal? re-registration)
+  (check-not-exn (lambda () (pour-kernel-rule-seed! prn-box)) "re-pour is idempotent")
+  ;; the tag index derives over the seed
+  (define idx (hash-ref (net-cell-read net cid) ':tag-index (hash)))
+  (check-true (> (hash-count idx) 0) "tag index derives over the kernel seed"))

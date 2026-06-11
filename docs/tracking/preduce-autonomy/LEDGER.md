@@ -698,3 +698,16 @@ Entry template:
   typing-domain consumer-read migration (its own named track); broadcast dispatch
   (Track 2 where rules first fire).
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 16 — [ROUTINE] SM3 15b landed — seed pour + driver wiring; SM3 COMPLETE
+- **Shipped**: current-rule-registry-cell-id (cell-ID plumbing only — the value-
+  mirror shape stays off the table per D4) + init-rule-registry-cell! +
+  pour-kernel-rule-seed! (sre-rewrite rules tier-split by rhs-template presence,
+  stratum-qualified ids; ctor-descs as tier-2 ROUTING METADATA only — arity + the
+  4 closure fields stay legacy-homed until the named consumer-read migration);
+  wired into driver's per-file prn init (after init-attribute-map-cell!);
+  batch-worker New-Parameter conformance (#f per file). Re-pour idempotent under
+  dedup-or-error. Acceptance clean WITH the pour live in the init path.
+- **The kernel pseudo-module now holds the projected rule corpus on-network**;
+  Track 2's arithmetic seed registers into the same cell.
+- **Landed in**: (this commit)

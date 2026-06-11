@@ -58,7 +58,8 @@
          "../errors.rkt"
          "../driver.rkt"
          "../tree-parser.rkt"  ;; §11: current-source-str, current-raw-node
-         (only-in "../typing-propagators.rkt" current-attribute-map-cell-id current-typing-domain))  ;; Track 4B Phase 6b + PReduce iter-5
+         (only-in "../typing-propagators.rkt" current-attribute-map-cell-id current-typing-domain)  ;; Track 4B Phase 6b + PReduce iter-5
+         (only-in "../rule-registry.rkt" current-rule-registry-cell-id))  ;; PReduce SM3 15b
 
 ;; Track 10 Phase 3a: Read .pnet cache setting from environment
 ;; The test runner sets PROLOGOS_PNET_CACHE=1 when cache is enabled.
@@ -260,6 +261,8 @@
          ;; (cell-14, allocated in make-prop-network).
          ;; Track 4B Phase 6b: global attribute-map cell — reset per file
          [current-attribute-map-cell-id       #f]
+         ;; PReduce SM3 15b: rule-registry cell-id — reset per file
+         [current-rule-registry-cell-id       #f]
          ;; errors.rkt — emit formatted errors to stderr for failure logs
          [current-emit-error-diagnostics  #t]
          ;; Set load-relative-directory so dynamic-require with relative
