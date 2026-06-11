@@ -28,6 +28,7 @@
 
 (provide current-eclass-hashcons-cell-id
          init-eclass-hashcons-cell!
+         current-intern-origin
          current-parent-index-cell-id
          init-parent-index-cell!
          parent-index-merge
@@ -78,6 +79,7 @@
                        #:cost [cost 1]
                        #:regime [regime 'ground]
                        #:provenance [provenance (seteq 'intern)])
+  (define provenance* (set-add provenance (origin-marker)))
   ;; effect-safety guard (iter 13): application terms with effectful heads may
   ;; not enter the ground path (head = the operator position of an expr-app
   ;; spine whose head is a known symbol is checked at the NODE path; raw-term
@@ -94,7 +96,7 @@
      (define v0 (make-eclass-value #:best (cons cost term)
                                    #:alts (set digest)
                                    #:canonical alloc
-                                   #:provenance provenance
+                                   #:provenance provenance*
                                    #:regime regime))
      (define net2 (net-cell-write net1 cid v0))
      (define net3 (net-cell-write net2 reg-cid (hash digest (cons alloc cid))))
@@ -250,7 +252,7 @@
      (define v0 (make-eclass-value #:best (cons cost form)
                                    #:alts (set sig)
                                    #:canonical alloc
-                                   #:provenance (seteq 'intern-node)
+                                   #:provenance (set-add (seteq 'intern-node) (origin-marker))
                                    #:regime regime))
      (define net2 (net-cell-write net1 cid v0))
      (define net3 (net-cell-write net2 reg-cid (hash sig (cons alloc cid))))
@@ -327,6 +329,17 @@
                            #:reset-value (hash))
 
 ;; --- driver-init plumbing (iter 22; same shape as the rule-registry cell) ---
+;; iter 36 (Track 5 Phase 1): the intern ORIGIN — folded into every class's
+;; provenance as (cons 'origin id); the serialize-time projection filters on it
+;; (unknown ⇒ not projected — the pessimistic admission posture). The driver
+;; sets it per file; bare contexts stay 'unknown.
+(define current-intern-origin (make-parameter 'unknown))
+;; the provenance MARKER is an INTERNED SYMBOL ("origin:<id>"), not a cons —
+;; eq-sets with fresh cons members break VALUE equality (equal? fixpoints
+;; compared unequal; the racing-union test caught it at iter 36 — data point:
+;; eq-set members must be eq-stable across constructions)
+(define (origin-marker)
+  (string->symbol (format "origin:~a" (current-intern-origin))))
 (define current-eclass-hashcons-cell-id (make-parameter #f))
 (define (init-eclass-hashcons-cell! prn-box)
   (when prn-box

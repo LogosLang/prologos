@@ -1059,3 +1059,21 @@ Entry template:
   per-session BY DESIGN; persisting them would re-couple what SM2 separated).
 - **Landed in**: (this commit). Phase 1 next: section writer/reader + origin
   provenance + the projection.
+
+## 2026-06-10 — LOOP iteration 36 — [SIGNIFICANT] Track 5 Phase 1 — the container's first realization
+- **Shipped**: pnet-sections.rkt (the .pnet/2 tagged-section container REALIZED —
+  sibling .pnetx siting, 3-columned: zero legacy-reader risk vs in-file
+  trailing-data gamble; versioned s-expr; unknown tags skip by lookup; missing/
+  malformed = degraded #f, never fatal) + current-intern-origin folded into
+  provenance + preduce-pnet.rkt (the PURE-READ projection: quiescent-at-serialize
+  ASSERTED; ground + this-origin + PCE-admissible filters; section B carries the
+  ground store entries; full file round-trip).
+- **Gate-caught (data point #19)**: origin as (cons 'origin id) in seteq
+  provenance broke VALUE EQUALITY (fresh equal?-not-eq? pairs made identical
+  racing-union fixpoints compare unequal — the iter-9 test caught it instantly).
+  Fix: INTERNED SYMBOL markers ('origin:<id>' — eq-stable across constructions).
+  The lesson: eq-set members must be eq-stable; pairs/strings in seteq are a
+  value-equality landmine. (Watching: 1 point + the alts-digest seteq→set fix at
+  iter 9 makes the FAMILY's 2nd — codify-candidate: "choose set comparators by
+  MEMBER identity semantics, and test value equality across constructions".)
+- **Landed in**: (this commit). Phase 2: re-pour + invalidation + driver wiring.

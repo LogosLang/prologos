@@ -15,7 +15,7 @@ parameter snapshots. The projection discipline below is the risk's mitigation.
 | Phase | Description | Status | Notes |
 |---|---|---|---|
 | D | Design through critique | ✅ | iters 34-35; DESIGN COMPLETE (Q3 re-scoped Phase 1: the .pnet/2 section writer is greenfield) |
-| 1 | Serialize-time projection (the two sections) | ⬜ | §2 |
+| 1 | Serialize-time projection (the two sections) | ✅ | iter 36: pnet-sections.rkt (the container's first realization; sibling .pnetx siting) + origin provenance (INTERNED markers — the eq-set value-equality lesson) + the asserted projection |
 | 2 | Load-time re-pour + invalidation | ⬜ | §3-§4 |
 | 3 | The cross-file A/B (the multiplication measurement) | ⬜ | §5 |
 

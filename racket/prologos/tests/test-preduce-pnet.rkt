@@ -1,0 +1,62 @@
+#lang racket/base
+;; PReduce Track 5 Phase 1 — the .pnet/2 container's first realization + origin
+;; provenance + the projection (ledger iter 36).
+(require rackunit racket/set racket/file
+         "../pnet-sections.rkt"
+         "../preduce-pnet.rkt"
+         "../eclass-graph.rkt"
+         "../eclass-cell.rkt"
+         "../extraction-store.rkt"
+         "../propagator.rkt"
+         "../syntax.rkt")
+
+;; ---- the container: round-trip + unknown-tag skip + degraded reads ----
+(define tmp (make-temporary-file "pnetx-test-~a"))
+(pnet2-write-sections tmp (list (cons 'alpha '(1 2 3))
+                                (cons 'beta (hash 'k "v"))))
+(define secs (pnet2-read-sections tmp))
+(check-equal? (pnet2-section-ref secs 'alpha) '(1 2 3) "round-trip")
+(check-equal? (pnet2-section-ref secs 'beta) (hash 'k "v"))
+(check-false (pnet2-section-ref secs 'unknown-tag) "unknown tags skip by lookup")
+(check-false (pnet2-read-sections "/nonexistent/path.pnetx") "missing file = degraded #f")
+(display-to-file "(not-a-pnet2-file)" tmp #:exists 'replace)
+(check-false (pnet2-read-sections tmp) "malformed = degraded #f, never fatal")
+(delete-file tmp)
+
+;; ---- origin provenance + the projection ----
+(parameterize ([current-intern-origin 'test-module]
+               [current-parent-index-cell-id #f])
+  (define-values (net0 hc) (make-eclass-graph (make-prop-network)))
+  (define pb (box net0))
+  (init-extraction-store-cell! pb)
+  (define store (current-extraction-store-cell-id))
+  (define-values (net1 c1 _d1) (eclass-intern (unbox pb) hc (expr-int 42) #:cost 1))
+  ;; an effectful class: NEVER ground/projected
+  (define occ (box (hash)))
+  (define-values (net2 c2 _k2) (eclass-intern-effectful net1 occ 'read 0 '(p)))
+  ;; a class interned under a DIFFERENT origin: filtered out
+  (define-values (net3 c3 _d3)
+    (parameterize ([current-intern-origin 'other-module])
+      (eclass-intern net2 hc (expr-int 99) #:cost 1)))
+  (define net4 (run-to-quiescence net3))
+  ;; provenance carries the origin (scan semantics)
+  (check-true (set-member? (hash-ref (eclass-read net4 c1) ':provenance)
+                           'origin:test-module)
+              "interned origin marker (eq-stable across constructions)")
+  ;; the projection: only the ground, this-origin, admissible class
+  (define sections (preduce-project-sections net4 hc store 'test-module))
+  (define ecs (cdr (assq 'preduce-eclasses sections)))
+  (check-equal? (length ecs) 1 "exactly the one ground/this-origin class projects")
+  (check-equal? (cadr (car ecs)) (expr-int 42) "the projected form is the best")
+  ;; quiescence assertion: a non-quiescent net refuses to project
+  (define-values (net5 cc) (net-new-cell net4 'bot (lambda (o n) n)))
+  (define-values (net6 _pid)
+    (net-add-propagator net5 (list cc) (list cc) (lambda (n) n)))
+  (check-exn exn:fail? (lambda () (preduce-project-sections net6 hc store 'test-module))
+             "ASSERT quiescent-at-serialize")
+  ;; full file round-trip through the projection
+  (define tmp2 (make-temporary-file "pnetx-proj-~a"))
+  (preduce-write-pnetx! tmp2 net4 hc store 'test-module)
+  (define back (pnet2-read-sections tmp2))
+  (check-equal? (length (pnet2-section-ref back 'preduce-eclasses)) 1)
+  (delete-file tmp2))
