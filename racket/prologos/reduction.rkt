@@ -44,6 +44,7 @@
 
 (provide whnf nf nf-whnf conv conv-nf
          current-preduce-ingest?  ;; PReduce Track 2 ingestion gate (iter 22)
+ current-preduce-ingest-int-folds?  ;; iter 33: the selectivity lever
          current-nf-cache current-whnf-cache
          current-reduction-fuel current-nat-value-cache
          ;; Solver normalization (for benchmarks + PUnify)
@@ -1318,6 +1319,11 @@
 ;; MONOTONE GARBAGE (dead-branch interns) — sound-but-wasteful, the same class as
 ;; stale-canonical duplicate allocation (eclass-graph.rkt header).
 (define current-preduce-ingest? (make-parameter #f))
+;; SELECTIVE ingestion (iter 33 — the Track 4 PIR §15 lever): int-fold ingestion
+;; gated SEPARATELY; the floor data says blanket small-fold floods are the
+;; overhead source while δ/β memos carry the value. Default #t preserves the
+;; ALL mode; the driver's PREDUCE_INGEST=db sets it #f (δ/β-only).
+(define current-preduce-ingest-int-folds? (make-parameter #t))
 
 (define (preduce-ingest-int e op-sym op-fn a b)
   ;; e-graph round-trip when the plumbing is live; NATIVE fold otherwise —
@@ -1605,13 +1611,13 @@
     ;; Binary arithmetic on literals
     ;; PReduce ingestion (gated, default OFF — see preduce-ingest-int above):
     [(expr-int-add (expr-int a) (expr-int b))
-     #:when (current-preduce-ingest?)
+     #:when (and (current-preduce-ingest?) (current-preduce-ingest-int-folds?))
      (preduce-ingest-int e 'int+ + a b)]
     [(expr-int-sub (expr-int a) (expr-int b))
-     #:when (current-preduce-ingest?)
+     #:when (and (current-preduce-ingest?) (current-preduce-ingest-int-folds?))
      (preduce-ingest-int e 'int- - a b)]
     [(expr-int-mul (expr-int a) (expr-int b))
-     #:when (current-preduce-ingest?)
+     #:when (and (current-preduce-ingest?) (current-preduce-ingest-int-folds?))
      (preduce-ingest-int e 'int* * a b)]
     [(expr-int-add (expr-int a) (expr-int b)) (expr-int (+ a b))]
     [(expr-int-sub (expr-int a) (expr-int b)) (expr-int (- a b))]

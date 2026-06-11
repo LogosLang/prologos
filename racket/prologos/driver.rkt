@@ -62,7 +62,7 @@
          "rule-registry.rkt"  ;; PReduce SM3 15b: registry cell + kernel seed pour
          "kernel-rules-seed.rkt"  ;; PReduce Track 2 Phase 1: the arithmetic seed
          (only-in "eclass-graph.rkt" init-eclass-hashcons-cell!)  ;; PReduce iter 22
-         (only-in "reduction.rkt" current-preduce-ingest?)  ;; PReduce iter 22 A/B switch
+         (only-in "reduction.rkt" current-preduce-ingest? current-preduce-ingest-int-folds?)  ;; PReduce iter 22/33 A/B switches
          "champ.rkt"
          "unify.rkt"
          "atms.rkt"
@@ -2288,7 +2288,11 @@
     ;; gated whnf hook ON for this process — the experiment toggle, NOT a
     ;; deployment path (the flip criterion is named at the hook's definition)
     (when (getenv "PREDUCE_INGEST")
-      (current-preduce-ingest? #t)))
+      (current-preduce-ingest? #t)
+      ;; iter 33: PREDUCE_INGEST=db = δ/β-only (int folds native) — the
+      ;; selectivity experiment mode
+      (when (equal? (getenv "PREDUCE_INGEST") "db")
+        (current-preduce-ingest-int-folds? #f))))
   (define-values (results pc)
     (parameterize ([current-phase-timings pt]
                    [current-provenance-counters pv]

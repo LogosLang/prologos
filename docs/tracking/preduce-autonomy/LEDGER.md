@@ -1008,3 +1008,20 @@ Entry template:
 - **PIR + Master row + doorbell.** §16 new candidate: "falsify the workload
   premise before building the benchmark" (2 points this track).
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 33 — [SIGNIFICANT] the SELECTIVITY experiment — ingestion can be FREE
+- **The lever** (PREDUCE_INGEST=db: δ/β-only; int folds native; one parameter +
+  three #:when extensions): the 30-run three-way A/B says —
+  acceptance: OFF 336ms / ALL 466ms / **DB 337ms** — DB eliminates the ENTIRE
+  standing overhead (the int-fold floods were 100% of it);
+  ppn-track4c: OFF 1528 / **ALL 1496** / DB 1547 — ALL is mildly BEST on the
+  elaboration-heavy file (borderline-significant -2%: the int-fold memos pay
+  exactly where elaboration re-reduces), DB ≈ OFF.
+- **What this changes**: "ingestion can be free" re-prices Track 5 — cross-file
+  reuse via the question-keyed store no longer needs to overcome a standing
+  overhead; and the per-workload inversion (small files want DB, heavy files
+  mildly favor ALL) makes the eventual default a WORKLOAD-ADAPTIVE choice, not a
+  global flip. The flip criterion as originally named remains unmet (no corpus
+  shows decisive net positive); the honest reframe: the next win condition is
+  Track 5's cross-file multiplication on a free-ingestion base.
+- **Landed in**: (this commit)
