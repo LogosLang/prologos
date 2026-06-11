@@ -664,3 +664,19 @@ Entry template:
   ingest). PIR next unit (16-question live checklist + longitudinal survey) + the
   Track 1 close DOORBELL per charter §8.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 14 close — [SIGNIFICANT] TRACK 1 CLOSED — PIR written; doorbell rung
+- **bench-ab at close (§5.8 curve honesty)**: large benchmarks ±2.5% vs the
+  iteration-0 baseline (type-adversarial +0.8%) — NEUTRAL as designed (nothing in
+  the production path consumes the substrate yet); sub-second deltas
+  noise-dominated; pattern-matching +9.6% WATCH-LISTED for next-phase re-check.
+  Saved: data/benchmarks/preduce-track1-close-e350a8c0.json.
+- **PIR**: 2026-06-10_PREDUCE_TRACK1_PIR.md — all 16 questions answered against the
+  methodology checklist; §15 carries one OWNER-PROVISIONAL (fine NTT model as
+  Track 2's design opener rather than a Track 1 retrofit); §16 names the
+  codify-NOW item (changed-path precision contract → propagator-design.md, 2 data
+  points) + 2 watching items. Master row: Track 1 CLOSED with PIR link.
+- **[⚠ OWNER] doorbell**: Track 1 closed per charter §8 — the owner notification
+  carries: substrate complete + neutral perf + the §15 NTT ruling request + the
+  SM3-registry-as-bridge-unit plan for Track 2's opening.
+- **Landed in**: (this commit)
