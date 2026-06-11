@@ -52,10 +52,14 @@ RETIRED 2026-04-16 — topology handlers are `register-stratum-handler! #:tier '
 S(-1)); other handlers are tier-ordered INSTANCES of existing kinds. The PReduce Track 0.1
 stratum-assignment table (D.1 §5.1) is the worked normative example — this file + that
 table are the single source for stratum semantics; series masters carry claims + pointers
-only. CAUTION (verified 2026-06-10): handler ordering is silent registration append-order
-(propagator.rkt:3213) and the process-tier window auto-resets request cells unconditionally
-(:3466-3468) — an explicit `#:after` declaration + keep-pending idiom are REQUIRED substrate
-work before any order-sensitive handler pair lands (PReduce Track 1/5).
+only. CAUTION → DISCHARGED (2026-06-10, PReduce Track 1, autonomy ledger iter 10):
+`register-stratum-handler!` now takes `#:after (list request-cell-ids)` — per-tier STABLE
+topological order (pure `order-stratum-entries`, provided + tested; cycles error at
+registration; unknown/cross-tier targets inert) — and `#:keep-pending? #t`, which runs the
+auto-reset BEFORE the handler so deliberately re-written requests survive the round
+(legacy handlers keep the exact handler→reset order; all 8 production sites unchanged).
+Order-sensitive handler pairs (PReduce rule dispatch) now declare their ordering
+explicitly instead of relying on registration append-order.
 
 ### Termination guarantees (from GÖDEL_COMPLETENESS.org)
 

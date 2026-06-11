@@ -223,6 +223,7 @@
  naf-pending-cell-id
  naf-pending-merge
  register-stratum-handler!
+ order-stratum-entries  ;; PReduce Track 1: pure, provided for tests
  stratum-handlers
  ;; PPN 4C Phase 3c-iii: classify-inhabit residuation request cell + merge.
  classify-inhabit-request-cell-id
@@ -3238,7 +3239,10 @@
 
 (define (register-stratum-handler! request-cell-id handler-fn
                                    #:tier [tier 'value]
-                                   #:reset-value [reset-value (hasheq)])
+                                   #:reset-value [reset-value (hasheq)]
+                                   ;; PReduce Track 1 substrate (ledger iter 10):
+                                   #:after [after '()]
+                                   #:keep-pending? [keep-pending? #f])
   (unless (memq tier '(topology value))
     (error 'register-stratum-handler! "tier must be 'topology or 'value, got ~a" tier))
   ;; PPN 4C Addendum Phase 4B.2-c (§18.21.19 Q4): superset-contingency guard —
@@ -3255,14 +3259,52 @@
             "make-prop-network alongside the other stratum-request cells.")
            request-cell-id))
   (set-box! stratum-handlers
-            (append (unbox stratum-handlers)
-                    (list (list request-cell-id handler-fn tier reset-value)))))
+            (order-stratum-entries
+             (append (unbox stratum-handlers)
+                     (list (list request-cell-id handler-fn tier reset-value
+                                 after keep-pending?))))))
 
 ;; Accessors for stratum-handler entries.
 (define (stratum-handler-cell-id    entry) (car entry))
 (define (stratum-handler-fn         entry) (cadr entry))
 (define (stratum-handler-tier       entry) (caddr entry))
 (define (stratum-handler-reset-val  entry) (cadddr entry))
+(define (stratum-handler-after      entry) (list-ref entry 4))
+(define (stratum-handler-keep-pending? entry) (list-ref entry 5))
+
+;; PReduce Track 1 (#:after substrate; stratification.md CAUTION discharged,
+;; ledger iter 10): STABLE topological order of stratum entries WITHIN each tier
+;; by the #:after graph (an entry runs after every entry whose request-cell-id it
+;; names). Replaces silent registration append-order for order-sensitive pairs;
+;; unconstrained entries keep their registration order (stability). #:after
+;; targets not (yet) registered are inert — the box re-sorts on EVERY
+;; registration, so the edge takes effect when the target arrives. Cycles error
+;; at registration (loudly, module-load time). PURE — provided for direct tests.
+(define (order-stratum-entries entries)
+  (define (sort-tier tier-entries)
+    (define cids (for/list ([e (in-list tier-entries)]) (stratum-handler-cell-id e)))
+    (let loop ([ready '()] [pending tier-entries])
+      (cond
+        [(null? pending) (reverse ready)]
+        [else
+         ;; first pending entry whose after-deps are all already in ready (or absent)
+         (define next
+           (for/first ([e (in-list pending)]
+                       #:when (for/and ([dep (in-list (stratum-handler-after e))])
+                                (or (not (member dep cids))
+                                    (for/or ([r (in-list ready)])
+                                      (equal? (stratum-handler-cell-id r) dep)))))
+             e))
+         (unless next
+           (error 'order-stratum-entries
+                  "#:after cycle among stratum handlers on cells ~a"
+                  (for/list ([e (in-list pending)]) (stratum-handler-cell-id e))))
+         (loop (cons next ready) (remq next pending))])))
+  ;; sort each tier independently; reassemble preserving the overall list as
+  ;; topology-tier entries then value-tier entries is NOT required — process-tier
+  ;; filters by tier, so per-tier relative order is the only thing that matters.
+  (append (sort-tier (filter (lambda (e) (eq? (stratum-handler-tier e) 'topology)) entries))
+          (sort-tier (filter (lambda (e) (eq? (stratum-handler-tier e) 'value)) entries))))
 
 ;; PAR Track 1: Built-in topology handler for callback-topology-request.
 ;; Calls the opaque callback outside BSP fire rounds.
@@ -3508,8 +3550,16 @@
                         (and (list? pending) (null? pending)))
                     (process net (cdr remaining))]
                    [else
-                    (define processed (handler-fn net pending))
-                    (define cleared (net-cell-reset processed req-cid reset-val))
+                    ;; PReduce Track 1 keep-pending idiom (ledger iter 10): for
+                    ;; #:keep-pending? handlers the reset runs BEFORE the handler
+                    ;; (on the captured pending value), so requests the handler
+                    ;; deliberately RE-WRITES survive the round — the legacy
+                    ;; unconditional post-handler reset clobbered them. Legacy
+                    ;; handlers keep the original handler→reset order exactly.
+                    (define cleared
+                      (if (stratum-handler-keep-pending? entry)
+                          (handler-fn (net-cell-reset net req-cid reset-val) pending)
+                          (net-cell-reset (handler-fn net pending) req-cid reset-val)))
                     (if (pair? (prop-network-worklist cleared))
                         ;; Produced S0 work — return to outer-loop
                         (begin

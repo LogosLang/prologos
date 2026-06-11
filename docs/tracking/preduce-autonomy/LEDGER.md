@@ -537,3 +537,24 @@ Entry template:
   (argmin) ≠ content-address KEY (PCE digest) — each asserted by a distinct check.
 - **Landed in**: (this commit). Track 1's substrate stack is now: facets ✅ shape-P ✅
   PCE ✅ product cell + relation ✅ hashcons + union ✅.
+
+## 2026-06-10 — LOOP iteration 10 — [ROUTINE] #:after + keep-pending stratum substrate landed (BLOCKING dependency discharged)
+- **Re-sequencing note**: D5 probe deferred — a faithful singleton-fraction capture
+  needs a whnf-cache observer hook (production touch, own mini-design; the
+  per-command cache parameter is discarded after each command, so post-run
+  inspection can't see it). Queued with the hook design note; the #:after substrate
+  (BLOCKING for rule promotion) taken instead.
+- **Shipped**: register-stratum-handler! gains #:after (per-tier STABLE topological
+  order via the pure+provided order-stratum-entries; cycles error at module-load;
+  unknown/cross-tier targets inert — re-sort on every registration picks up
+  late-registering targets) + #:keep-pending? (reset-BEFORE-handler so deliberate
+  request re-writes survive; legacy order preserved exactly for all 8 production
+  sites — entries are plain lists, no struct checklist). stratification.md CAUTION
+  amended to DISCHARGED.
+- **Coverage note (honest)**: the pure sort is exhaustively tested (chain/stability/
+  diamond/cycle/inert/cross-tier, 10 checks); the keep-pending PROCESS-TIER branch is
+  shape-landed and will get its behavioral test at the FIRST consumer (the rule-
+  dispatch handler) — global stratum-handlers box pollution makes a safe isolated
+  integration test impossible today (the same registry-globalness the tracked flake
+  lives in; noted, not fought here).
+- **Landed in**: (this commit)

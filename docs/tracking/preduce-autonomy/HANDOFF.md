@@ -37,15 +37,19 @@ emitter; 41 first-run-green checks incl. the D.1 §2.4 literal trace, racing-uni
 CALM fixpoint, and the consuming read; ':alts equal?-set design fix). Track 1
 substrate stack complete: facets ✅ shape-P ✅ PCE ✅ product cell + relation ✅
 hashcons + union ✅.
-NEXT UNIT (choose at firing per charter §7 sequencing): (a) **#:after ordering +
-keep-pending substrate** (stratification.md CAUTION: REQUIRED before any
-order-sensitive handler pair — BLOCKING for rule promotion; touches
-register-stratum-handler! propagator.rkt:3193 + the process-tier auto-reset
-:3466-3468), OR (b) **D5 probe** (singleton-fraction calibration on the comparative
-corpus — cheap, informs Track 1 close), OR (c) **congruence layer** (S0
-signature-set watchers per D.1 §2.1). Recommended order: (b) D5 probe (one firing,
-data informs everything), then (a) #:after substrate, then (c). The effect-safety
-guard (BLOCKING Track 2 Phase 0) remains queued behind these.
+DONE: **#:after + keep-pending substrate** (iter 10; stratification.md CAUTION
+DISCHARGED; pure sort tested; keep-pending behavioral coverage owed at first
+consumer). D5 probe DEFERRED with design note: needs a whnf-cache observer hook
+(per-command parameter is discarded; post-run inspection blind) — small production
+touch, own mini-audit when taken.
+NEXT UNIT: **the congruence layer** (D.1 §2.1: S0 signature-set watchers — when a
+child class's canonical changes, parent e-nodes' signatures recompute and matching
+signatures trigger unions; the green slice's union-emitter is the action). Mini-audit
+first: signature representation (PCE digest of the e-node with child slots replaced
+by child canonical names), watcher realization (broadcast over parent sets vs
+fire-once per node — propagator-design.md set-latch table), and where parent-lists
+live (registry cell extension vs separate parent-index cell). THEN: the effect-safety
+guard (BLOCKING Track 2 Phase 0); then rule promotion begins.
 Implementation queue below. Phase A history follows for context.
 
 Done so far (all interactive, with the owner):
