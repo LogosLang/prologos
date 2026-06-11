@@ -1025,3 +1025,22 @@ Entry template:
   shows decisive net positive); the honest reframe: the next win condition is
   Track 5's cross-file multiplication on a free-ingestion base.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 34 — [SIGNIFICANT] Track 5 design OPENED — the first cell-state-derived .pnet sections
+- **The opener** (everything derives from frozen locks — PCE/1, .pnet/2, SM6):
+  two ground-only payloads (per-module e-class content triples + the question-
+  keyed store, whose validity deliberately does NOT borrow module mtime);
+  serialize-time PURE-READ projection (the first-of-kind risk's discipline:
+  no serializer-side mutation; inadmissible classes simply not projected — the
+  iter-26 admission discipline reused; descriptors NOT persisted — re-interning
+  rebuilds cheaper); load-time re-pour where the kernel seed pours (digest match
+  = hashcons hit BY CONSTRUCTION; the store reconciles via keep-better — the
+  lattice does it); invalidation split (mtime for A; content-defined
+  unreachability for B). §5 pre-registers the honest A/B: warm-vs-cold recompile;
+  if warm ≈ cold the persisted share is too small at current hook coverage —
+  recorded as such, ι (Track 3) is the coverage multiplier, NOT silent scope
+  widening here.
+- **§6 names the critique questions** incl. the three-key challenge (canonical
+  names need NO cross-session stability — the content-hash is the key) and the
+  origin-provenance verification.
+- **Landed in**: (this commit)
