@@ -441,6 +441,10 @@
     ;; :reduction-provenance — set-union (NOT append: idempotence required;
     ;; the :warnings append-duplication hazard must not be copied — D.1 §4.1).
     [(:reduction-provenance) (set-union old-v new-v)]
+    ;; :opaque — the POSITIVE effect-boundary marker (D.1 §6.2 F-A lock: the
+    ;; facet is LOAD-BEARING — absence-from-index alone does not carry
+    ;; congruence safety). Monotone-or: #f ⊑ #t, never un-set.
+    [(:opaque) (or old-v new-v)]
     ;; PReduce SM1.1 hardening: facets are a CLOSED dispatch. The old
     ;; [else new-v] default was last-write-wins — silently WRONG semantics for
     ;; any facet without an explicit case (D.1 §4.1).
@@ -458,6 +462,7 @@
     [(:reduction-status) #f]
     [(:cost-in-context) #f]   ;; absent = no cost information yet (min-lattice ⊥)
     [(:reduction-provenance) (seteq)]
+    [(:opaque) #f]
     [else (error 'facet-bot "unknown facet ~a — facets are a closed set" facet)]))
 
 (define (facet-bot? facet v)
@@ -475,6 +480,7 @@
     [(:reduction-status) (not v)]
     [(:cost-in-context) (not v)]
     [(:reduction-provenance) (and (set? v) (set-empty? v))]
+    [(:opaque) (not v)]
     [else (error 'facet-bot? "unknown facet ~a — facets are a closed set" facet)]))
 
 ;; --- Attribute map merge: two-level pointwise ---
@@ -596,7 +602,7 @@
 ;; whole-record view (no :eclass-link leakage into LSP hover / `that` / debug
 ;; surfaces). Arity-3 by-name reads remain raw for internal callers.
 (define internal-reduction-facets
-  '(:eclass-link :reduction-status :cost-in-context :reduction-provenance))
+  '(:eclass-link :reduction-status :cost-in-context :reduction-provenance :opaque))
 
 (define that-read
   (case-lambda

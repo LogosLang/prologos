@@ -630,3 +630,26 @@ Entry template:
   name the census consumers explicitly (trace-serialize, test-propagator,
   observatory) — 1 data point, codify on the next preallocation.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 13 — [SIGNIFICANT] effect-safety FLOOR landed (D.1 §6.2 F-A, Track 1 Option 1)
+- **Shipped**: the :opaque facet (the MISSED 5th SM1.1 facet — D.1 §4.1 listed it via
+  the §6 lock, my SM1.1a shipped 4; landed here where it is load-bearing; monotone-or,
+  internal/filtered); head classification v1 (explicit effectful-head registry seeded
+  read/write/print/send/recv/perform + capability-polymorphic registry with
+  PESSIMISTIC default + the bite counter the lock requires; unregistered = pure;
+  authoritative α = SM3 registry / Track 7 named upgrade); ground-path ADMISSION
+  GUARDS in eclass-intern + eclass-intern-node (effectful heads ERROR — "use
+  eclass-intern-effectful"); eclass-intern-effectful: deterministic
+  (epoch × occurrence-path) kind-2 keys (persistence-excluded BY pce-persistable-
+  digest — the iter-7 guard doing its job), cell-only allocation (NO hashcons
+  registry entry, NO signature-index entry, NO parent watcher — congruence never
+  sees effect occurrences as dedup sources), idempotent re-fire (same key → same
+  class, zero allocation).
+- **Tests (117 targeted green)**: guards fire / pure unaffected; two [read ch]
+  occurrences NEVER dedup; idempotent re-fire; kind-2 persistence exclusion
+  verified live; registry + sig-index exclusion asserted; bite counter counts;
+  :opaque facet laws + user-view filtering.
+- **Track 2's blocking entry guard (the RHS delete/dup/reorder check) remains
+  exactly where the owner put it**: at Track 2 Phase 0, before β ever fires — this
+  unit is the Track 1 FLOOR only.
+- **Landed in**: (this commit)

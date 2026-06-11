@@ -39,7 +39,13 @@
          eclass-congruence-collisions
          eclass-union-all
          ;; 11b reactive wiring (ledger iter 12)
-         process-congruence-requests)
+         process-congruence-requests
+         ;; effect-safety floor (ledger iter 13 — D.1 §6.2 F-A lock)
+         register-effectful-head!
+         register-capability-polymorphic-head!
+         effectful-head?
+         pessimism-bite-count
+         eclass-intern-effectful)
 
 ;; --- the hashcons registry cell ---
 
@@ -67,6 +73,11 @@
                        #:cost [cost 1]
                        #:regime [regime 'ground]
                        #:provenance [provenance (seteq 'intern)])
+  ;; effect-safety guard (iter 13): application terms with effectful heads may
+  ;; not enter the ground path (head = the operator position of an expr-app
+  ;; spine whose head is a known symbol is checked at the NODE path; raw-term
+  ;; interning guards symbolic heads when the term IS a bare operator symbol)
+  (when (symbol? term) (guard-ground-path! 'eclass-intern term))
   (define digest (pce-persistable-digest PCE-KIND-GROUND-TERM term))
   (define reg (net-cell-read net reg-cid))
   (define existing (and (hash? reg) (hash-ref reg digest #f)))
@@ -141,9 +152,85 @@
 ;; DESCRIPTOR (list op child-cids class-cid) alongside — 11b's watchers and the
 ;; collision scan consume descriptors.
 ;; → (values net' class-cid descriptor)
+
+;; ========================================================================
+;; Effect-safety floor (ledger iter 13 — D.1 §6.2 F-A lock, Track 1 Option 1)
+;;
+;; F-A: two occurrences of [read ch] hash equal → same e-class → extraction
+;; DEDUPS THE EFFECT. The floor: effectful-headed occurrences NEVER enter the
+;; ground hashcons path — they get a deterministic (epoch × occurrence-path)
+;; identity key (kind-2: session-local, structurally excluded from persistence
+;; by pce-persistable-digest), are NEVER written to the hashcons registry or
+;; the congruence signature index, and carry the positive :opaque facet at
+;; their positions (the facet is LOAD-BEARING — absence-from-index alone does
+;; not carry congruence safety; typing-propagators.rkt :opaque).
+;;
+;; HEAD CLASSIFICATION (v1 = the floor's shape; type-derived α consuming the
+;; capability lattice is the NAMED Track 7 upgrade): an explicit effectful-head
+;; registry + a capability-polymorphic registry with PESSIMISTIC default
+;; (treated effectful; a bite counter measures how often pessimism fires —
+;; the D5-style counter the lock requires). Unregistered heads are PURE
+;; (the SM3 rule registry will own authoritative classification).
+;; ========================================================================
+
+(define effectful-head-registry (box (seteq 'read 'write 'print 'send 'recv 'perform)))
+(define capability-polymorphic-registry (box (seteq)))
+(define pessimism-bites (box 0))
+
+(define (register-effectful-head! op)
+  (set-box! effectful-head-registry (set-add (unbox effectful-head-registry) op)))
+(define (register-capability-polymorphic-head! op)
+  (set-box! capability-polymorphic-registry
+            (set-add (unbox capability-polymorphic-registry) op)))
+(define (pessimism-bite-count) (unbox pessimism-bites))
+
+(define (effectful-head? op)
+  (cond
+    [(set-member? (unbox effectful-head-registry) op) #t]
+    [(set-member? (unbox capability-polymorphic-registry) op)
+     ;; pessimistic: pure head, possibly-effectful instantiation → treat
+     ;; effectful + count the bite (D.1 §6.2; upgrade = type-derived α)
+     (set-box! pessimism-bites (add1 (unbox pessimism-bites)))
+     #t]
+    [else #f]))
+
+(define (guard-ground-path! who op)
+  (when (effectful-head? op)
+    (error who
+           "ADMISSION GUARD (F-A, D.1 §6.2): effectful head ~a may not enter the ground hashcons path — use eclass-intern-effectful (per-occurrence epoch×path identity)"
+           op)))
+
+;; Per-occurrence intern for effectful heads: the key is the DETERMINISTIC
+;; (epoch × occurrence-path) identity — idempotent under re-fire (same epoch +
+;; path → the SAME class), serializability-shaped for Track 5, but kind-2:
+;; structurally excluded from anything that persists. The class is allocated
+;; CELL-ONLY: no hashcons registry entry, no signature-index entry, no parent
+;; watcher — congruence machinery never sees it as a dedup source.
+;; → (values net' class-cid occurrence-key)
+(define (eclass-intern-effectful net occurrence-index-box op epoch occurrence-path
+                                 #:cost [cost 1])
+  (define key (pce-digest PCE-KIND-EFFECTFUL-SESSION
+                          (list->vector (list 'effect-occurrence op epoch occurrence-path))))
+  (define idx (unbox occurrence-index-box))
+  (define existing (hash-ref idx key #f))
+  (cond
+    [existing (values net existing key)]
+    [else
+     (define-values (net1 cid) (net-new-cell net eclass-bot eclass-merge))
+     (define v0 (make-eclass-value
+                 #:best (cons cost (list->vector (list 'effect-occurrence op epoch occurrence-path)))
+                 #:alts (set key)
+                 #:canonical (cell-id-n cid)
+                 #:provenance (seteq 'effect-occurrence)
+                 #:regime 'retraction-eligible))
+     (define net2 (net-cell-write net1 cid v0))
+     (set-box! occurrence-index-box (hash-set idx key cid))
+     (values net2 cid key)]))
+
 (define (eclass-intern-node net reg-cid op child-cids
                             #:cost [cost 1]
                             #:regime [regime 'ground])
+  (guard-ground-path! 'eclass-intern-node op)
   (define sig (eclass-node-signature net op child-cids))
   (define reg (net-cell-read net reg-cid))
   (define existing (and (hash? reg) (hash-ref reg sig #f)))

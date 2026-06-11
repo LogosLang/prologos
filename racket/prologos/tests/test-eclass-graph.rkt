@@ -165,3 +165,56 @@
                 "level 1: f-parents converge")
   (check-equal? (eclass-read net7 cga) (eclass-read net7 cgb)
                 "level 2: the f-union cascades through to g-parents"))
+
+;; ---- EFFECT-SAFETY FLOOR (iter 13 — D.1 §6.2 F-A lock) ----
+
+;; ground-path guards ERROR on effectful heads
+(let*-values ([(net0 reg) (make-eclass-graph (make-prop-network))]
+              [(net1 ca _) (eclass-intern net0 reg ta #:cost 5)])
+  (check-exn exn:fail?
+    (lambda () (eclass-intern-node net1 reg 'read (list ca)))
+    "effectful head through the node path must error")
+  (check-exn exn:fail?
+    (lambda () (eclass-intern net1 reg 'print))
+    "effectful bare-symbol term through the ground path must error")
+  ;; pure heads unaffected
+  (check-not-exn (lambda () (eclass-intern-node net1 reg 'f (list ca)))))
+
+;; per-occurrence identity: same effectful op, DIFFERENT paths → DISTINCT classes;
+;; the SAME (epoch × path) re-fire → the SAME class (deterministic idempotence)
+(let*-values ([(net0 reg) (make-eclass-graph (make-prop-network))])
+  (define occ-idx (box (hash)))
+  (define-values (net1 c1 k1) (eclass-intern-effectful net0 occ-idx 'read 0 '(body 1)))
+  (define-values (net2 c2 k2) (eclass-intern-effectful net1 occ-idx 'read 0 '(body 2)))
+  (check-not-equal? c1 c2 "two occurrences of [read ch] are NEVER deduped (F-A)")
+  (check-not-equal? k1 k2)
+  (define-values (net3 c1b k1b) (eclass-intern-effectful net2 occ-idx 'read 0 '(body 1)))
+  (check-equal? c1b c1 "same (epoch × path) re-fire is idempotent — same class")
+  (check-eq? net3 net2 "idempotent re-fire allocates nothing")
+  ;; the occurrence key is kind-2: structurally excluded from persistence
+  (check-exn exn:fail?
+    (lambda () (pce-persistable-digest PCE-KIND-EFFECTFUL-SESSION
+                                       (vector 'effect-occurrence 'read 0 '(body 1)))))
+  ;; effectful classes are NOT in the hashcons registry and NOT in the sig index
+  (define final-reg (net-cell-read net3 reg))
+  (check-false (for/or ([(_k v) (in-hash final-reg)]) (or (equal? (cdr v) c1) (equal? (cdr v) c2)))
+               "effectful classes never enter the hashcons registry")
+  (define sig-idx (net-cell-read net3 congruence-sig-index-cell-id))
+  (check-false (for/or ([(_k cids) (in-hash sig-idx)])
+                 (or (set-member? cids c1) (set-member? cids c2)))
+               "effectful classes never enter the signature index"))
+
+;; pessimistic classification + the bite counter
+(let ([before (pessimism-bite-count)])
+  (register-capability-polymorphic-head! 'maybe-effectful-op)
+  (check-true (effectful-head? 'maybe-effectful-op) "capability-polymorphic ⇒ pessimistic effectful")
+  (check-equal? (pessimism-bite-count) (add1 before) "the bite counter measures pessimism"))
+
+;; the :opaque facet (the load-bearing positive marker): monotone-or, never un-set
+(check-equal? (facet-merge ':opaque #f #t) #t)
+(check-equal? (facet-merge ':opaque #t #f) #t)
+(check-true (facet-bot? ':opaque (facet-bot ':opaque)))
+(let* ([am (attribute-map-merge-fn (hasheq) (hasheq 'p (hasheq ':opaque #t)))]
+       [view (that-read am 'p)])
+  (check-equal? (that-read am 'p ':opaque) #t "arity-3 reads the marker")
+  (check-false (hash-has-key? view ':opaque) "internal facet — filtered from the user view"))
