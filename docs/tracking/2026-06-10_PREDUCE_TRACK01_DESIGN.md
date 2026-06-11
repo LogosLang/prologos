@@ -972,3 +972,37 @@ whose every keyword traces to a realization or a named owner, an 18-item scaffol
 with retirement triggers, two blocking substrate obligations (#:after ordering;
 effect-safety guard at Track 2 Phase 0), and pre-named measurement gates (T-FLIP, D5
 probe, bite counters) standing between the design and its unmeasured claims.
+
+## §9 Track 1 Close-Out Audit (2026-06-10, autonomy loop iteration 14)
+
+**Substrate inventory (all landed, gated, committed — ledger iterations 2-13)**:
+facets (SM1 §4: 4 reduction facets + :opaque, closed dispatch, SCOPED bot-filter,
+arity-2 privacy filter) · shape-P (§4.8: PRECISE O(|delta|), ~420× flat at N=5000;
+precision is a soundness contract — fire-once lesson) · PCE/1 (D.3 §2 realized:
+single hasher, golden vectors, kind separation, persisted-domain guard) · the
+e-class product cell + 'eclass-refine (SM2 §2.1: merge-IS-order, Q-shape-agnostic
+best, equal?-set alts) · hashcons + union (§2.4 literal trace EXECUTES; racing
+unions → one CALM fixpoint; three-key separation asserted) · #:after +
+keep-pending (SM4's ordering caution DISCHARGED) · congruence (§2.1: sound-if-stale
+signatures; asymmetric staleness; reactive topology-tier cascade, two levels
+proven) · the effect-safety FLOOR (§6.2 Track 1 Option 1: head classification +
+pessimism counter, ground-path admission guards, deterministic epoch×path kind-2
+keys, congruence-invisible occurrence cells).
+
+**Deviations from design, all ledgered**: bot-filter SCOPED (unscoped broke legacy
+wake-duty — gate-caught); shape-P PRECISE not superset (over-fire consumed
+fire-once shots — gate-caught); :opaque landed at iteration 13 not SM1.1a (missed
+5th facet, honest-recorded); keep-pending not consumed by congruence (monotone-
+index + delta-request was CALM-cleaner).
+
+**Named remainders** (none block Track 2's opening EXCEPT the first): SM3
+rule-registry universe cell (rules must live somewhere before the arithmetic seed;
+ALSO the typing-domain flake's structural fix) · D5 probe (whnf-cache observer
+hook) · keep-pending behavioral test (first consumer = rule dispatch) · production
+:eclass-link writers (Track 2 ingestion wires positions→classes) · fine-grained
+Track 1 NTT model (per the §8 closure agreement — PIR question) · .pnet e-class
+sections (Track 5).
+
+**Perf posture (§5.8)**: nothing in the production reduction path consumes the
+substrate yet — expectation NEUTRAL vs the iteration-0 baseline; bench-ab A/B
+recorded at close (see ledger iteration 14) per honesty-about-the-curve.

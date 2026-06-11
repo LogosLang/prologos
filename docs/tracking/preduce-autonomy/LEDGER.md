@@ -653,3 +653,14 @@ Entry template:
   exactly where the owner put it**: at Track 2 Phase 0, before β ever fires — this
   unit is the Track 1 FLOOR only.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 14 — [SIGNIFICANT] Track 1 CLOSE-OUT AUDIT (D.1 §9; Master row ✅)
+- Substrate inventory + design deviations + named remainders written into D.1 §9 and
+  the Master Track 1 row (✅ SUBSTRATE COMPLETE with commit trail). The four
+  deviations are all gate-caught-and-ledgered items, none silent. SM3's rule-registry
+  universe cell is named as the bridge unit before Track 2 (rules need a home before
+  the arithmetic seed; doubles as the typing-domain flake's structural fix).
+- bench-ab A/B vs the iteration-0 baseline running at close (results appended on
+  ingest). PIR next unit (16-question live checklist + longitudinal survey) + the
+  Track 1 close DOORBELL per charter §8.
+- **Landed in**: (this commit)
