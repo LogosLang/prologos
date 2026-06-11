@@ -158,6 +158,20 @@ The latch cell SHOULD be SRE-registered to the `'monotone-set` domain (`infra-ce
 
 Why this matters: SRE classification gives the latch cell architectural alignment with the set-latch pattern, structural classification for `:component-paths` enforcement, and SRE-validated algebraic property declarations (commutative, associative, idempotent). Skipping the registration drift is the "check codebase for existing helpers" miss codified in `DEVELOPMENT_LESSONS.org` § "Mini-Audit Must Verify Carrier Capability AND Check For Existing Helpers."
 
+## Changed-Path Precision Is a Soundness Contract (added 2026-06-10, PReduce Track 1)
+
+Wherever FIRE-ONCE dependents exist, the changed-path set a cell write reports must be
+PRECISE — not a superset. "Over-fire is CALM-safe" holds only for monotone REFIREABLE
+propagators: a fire-once dependent woken by a no-change path CONSUMES ITS SINGLE SHOT
+on unready inputs and is inert when the real trigger arrives. Two data points
+(2026-06-10, PReduce Track 1): shape-P v1's superset delta-paths broke trait
+resolution at the gate (the constraint/trait fire-once propagators ate their shot on
+no-change wakes; fix = exact comparison restricted to the delta's keys — same
+asymptotics, ledger iter 4); the congruence parent watchers were made REFIREABLE at
+design time for the same reason (iter 12). Rule: when optimizing a diff/notify path,
+verify either (a) the result is EXACTLY the changed set, or (b) no fire-once
+propagator can depend on the cell. Precision-by-construction beats auditing (b).
+
 ## Component Indexing
 
 **MANDATORY**: Any propagator watching a compound cell (hasheq, scope-cell, decisions-state, commitments-state) MUST declare `#:component-paths` specifying which components it watches.

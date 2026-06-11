@@ -680,3 +680,21 @@ Entry template:
   carries: substrate complete + neutral perf + the §15 NTT ruling request + the
   SM3-registry-as-bridge-unit plan for Track 2's opening.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 15 — [SIGNIFICANT] SM3 rule-registry universe cell landed (15a — the Track 2 bridge)
+- **Shipped**: rule-registry.rkt — the SP1 schema struct (sre-rewrite spine + the
+  six locked extensions incl. the RESERVED worldview-bitmask slot + stratum kept
+  separate); the universe cell (module-keyed components; per-namespace
+  DEDUP-OR-ERROR merge — the not-ACI list-append fixed by construction); the
+  PROPAGATOR-MAINTAINED ':tag-index (self-watching monotone derivation —
+  information flow, not registrar dual-write); 'rule-registry SRE domain;
+  register/lookup/rules-for-tag reads. 68 targeted checks: isolation, idempotent
+  re-register, conflict ERROR, index derivation at quiescence, late-registration
+  monotone catch-up, schema round-trips.
+- **CODIFIED (the PIR §16 codify-NOW item, riding this rules commit)**:
+  propagator-design.md § "Changed-Path Precision Is a Soundness Contract" — the
+  over-fire×fire-once lesson, 2 data points.
+- **NOT in 15a (named)**: prn-init seed pour + driver wiring (15b); the
+  typing-domain consumer-read migration (its own named track); broadcast dispatch
+  (Track 2 where rules first fire).
+- **Landed in**: (this commit)
