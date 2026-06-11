@@ -15,7 +15,7 @@ re-decide. Module Theory §6 (e-graphs as quotient modules) is the realized fram
 | D | Design through VAG | ✅ | iters 27-28; DESIGN COMPLETE |
 | 1 | The Q interface + compositional cost cells (extraction-as-fixpoint) | ✅ | iter 29: extraction.rkt; diamond/cascade/literal/determinism green; two gate-caught fundamentals (literal-only seeding; canonicalize EVERY identity) |
 | 2 | Extraction read + the question-keyed rewrites store (SM6 §7.4 schema) | ✅ | iter 30: extraction-store.rkt (cache lattice; content-defined question keys; hit = zero-allocation; criterion isolation; keep-better verified both directions) |
-| 3 | Residuation (budget-bounded extraction; 1B's first consumer) | ⬜ | §4 |
+| 3 | Residuation (budget-bounded extraction; 1B's first consumer) | ✅ | iter 31: extract/budgeted (root feasibility = comparison; residual returned; infeasible = #f never error; associative threading verified vs the primitive) |
 | 4 | The payoff A/B (the chartered curve-turn measurement) | ⬜ | §5 |
 
 ## §1 The composition decision (derived from owner D7 — not re-decided)

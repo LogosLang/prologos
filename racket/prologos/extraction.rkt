@@ -14,6 +14,9 @@
 ;;; multi-dimensional cost = a later q-instance, no schema change.
 (require racket/set
          racket/list
+         "tropical-fuel-primitives.rkt"  ;; Phase 3 (iter 31): the left-residual's
+                                          ;; FIRST production consumer (leaf module
+                                          ;; — no cycle; PPN 4C 1B inheritance)
          "eclass-graph.rkt"
          "eclass-cell.rkt"
          "propagator.rkt"
@@ -23,7 +26,8 @@
 (provide (struct-out q-instance)
          tropical-q
          tropical-cost-merge
-         extract)
+         extract
+         extract/budgeted)
 
 (struct q-instance (combine better? identity top criterion-id) #:transparent)
 (define tropical-q (q-instance + < 0 +inf.0 'tropical-v1))
@@ -145,3 +149,22 @@
       [else (cons (car d) (for/list ([c (in-list (cadr d))]) (form-of c)))]))
   (define root-entry (net-cell-read net3 (hash-ref cost-cells (canon root-cid))))
   (values net3 (car root-entry) (form-of root-cid)))
+
+;; --- Phase 3 (iter 31): budget-bounded extraction — residuation's first
+;;     production consumer ---
+;; The left-residual (tropical-left-residual a b = b ⊖ a, truncated at 0) is
+;; the quantale's answer to "what budget remains after paying a out of b";
+;; infeasibility is the COMPARISON (cost > budget), not a sign (the algebra
+;; floors). Over CONVERGED exact costs the root feasibility check decides the
+;; whole tree (every sub-allocation fits by construction when the optimum
+;; fits); the per-level residual threading is the read-time pruning instrument
+;; that earns its keep under PARTIAL costs / multi-criteria Q instances — the
+;; named growth path, not built speculatively.
+;; → (values net' cost form residual)  |  (values net' #f #f #f) when the
+;; optimum exceeds the budget (NOT an error — an infeasible question).
+(define (extract/budgeted net hashcons-cid pidx-cid root-cid
+                          #:budget budget #:q [q tropical-q])
+  (define-values (net1 cost form) (extract net hashcons-cid pidx-cid root-cid #:q q))
+  (if (> cost budget)
+      (values net1 #f #f #f)
+      (values net1 cost form (tropical-left-residual cost budget))))

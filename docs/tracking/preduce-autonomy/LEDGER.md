@@ -974,3 +974,18 @@ Entry template:
   different criterion-id is a different question; keep-better absorbs a worse
   write and accepts a better one (the lattice, both directions).
 - **Landed in**: (this commit). Phase 3 residuation next, then the payoff A/B.
+
+## 2026-06-10 — LOOP iteration 31 — [ROUTINE] Track 4 Phase 3 — residuation's first consumer
+- **Shipped**: extract/budgeted — tropical-left-residual (PPN 4C 1B; pure leaf
+  module, zero consumers until now) gets its FIRST production consumer: root
+  feasibility = the comparison (the algebra FLOORS, so infeasibility is cost >
+  budget, never a sign); feasible → (cost, form, residual); infeasible → #f
+  (an infeasible QUESTION, never an error). Honest scope note in-code: over
+  CONVERGED exact costs the root check decides the whole tree; per-level
+  residual pruning earns its keep under partial costs / multi-criteria Q — the
+  named growth path, not built speculatively.
+- **Proof (23 checks total)**: budget 5 admits the diamond's optimum (3) with
+  residual 2 ≡ the 1B primitive's answer; budget 2 → #f; exact-fit → residual 0
+  (the truncated floor); the residual threads ASSOCIATIVELY down the winning
+  tree (manual chain ≡ root residual).
+- **Landed in**: (this commit). Phase 4 (the payoff A/B) closes the track.

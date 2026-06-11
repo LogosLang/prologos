@@ -3,6 +3,7 @@
 ;; ledger iter 29): the DIAMOND (cheap path wins at quiescence) + the two-level
 ;; cascade + the cost-best form tree.
 (require rackunit racket/set
+         (only-in "../tropical-fuel-primitives.rkt" tropical-left-residual)
          "../extraction-store.rkt"
          "../extraction.rkt"
          "../eclass-graph.rkt"
@@ -101,3 +102,30 @@
                                  (hash key (hash 'cost 1 'form '(better) 'regime 'ground))))
     (check-equal? (hash-ref (hash-ref (net-cell-read net7 store) key) 'cost) 1
                   "a BETTER write updates — monotone toward the optimum")))
+
+;; ---- Phase 3 (iter 31): residuation — budget-bounded extraction ----
+(parameterize ([current-parent-index-cell-id #f])
+  (define-values (net0 hc pidx) (fresh-graph))
+  (parameterize ([current-parent-index-cell-id pidx])
+    (define-values (net1 cx _dx) (eclass-intern net0 hc '(lit x) #:cost 1))
+    (define-values (net2 cf _df) (eclass-intern-node net1 hc 'f (list cx) #:cost 10))
+    (define-values (net3 cg _dg) (eclass-intern-node net2 hc 'g (list cx) #:cost 2))
+    (define net4 (run-to-quiescence (eclass-union net3 cf cg)))
+    ;; budget admits the cheap alt (3 ≤ 5): extraction + the residual
+    (define-values (net5 c1 f1 r1) (extract/budgeted net4 hc pidx cf #:budget 5))
+    (check-equal? (list c1 f1) (list 3 '(g (lit x))))
+    (check-equal? r1 2 "residual = budget ⊖ cost")
+    (check-equal? r1 (tropical-left-residual c1 5) "consistent with the 1B algebra")
+    ;; budget below even the OPTIMUM: infeasible — #f, never an error
+    (define-values (net6 c2 f2 r2) (extract/budgeted net5 hc pidx cf #:budget 2))
+    (check-false c2 "an infeasible question answers #f")
+    (check-false f2)
+    (check-false r2)
+    ;; exact-fit budget: feasible with residual 0 (the truncated floor)
+    (define-values (net7 c3 f3 r3) (extract/budgeted net6 hc pidx cf #:budget 3))
+    (check-equal? (list c3 f3 r3) (list 3 '(g (lit x)) 0))
+    ;; per-level threading arithmetic (the read-time pruning instrument): on the
+    ;; winning tree h-free here, check the manual chain on g(x): pay g's op (2)
+    ;; out of 5 → 3 remains for the child; x costs 1 → residual 2 = r1
+    (check-equal? (tropical-left-residual 1 (tropical-left-residual 2 5)) r1
+                  "the residual threads associatively down the winning tree")))
