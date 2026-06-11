@@ -61,6 +61,8 @@
          "typing-propagators.rkt"  ;; PPN Track 4 D.4: propagator-native typing
          "rule-registry.rkt"  ;; PReduce SM3 15b: registry cell + kernel seed pour
          "kernel-rules-seed.rkt"  ;; PReduce Track 2 Phase 1: the arithmetic seed
+         (only-in "eclass-graph.rkt" init-eclass-hashcons-cell!)  ;; PReduce iter 22
+         (only-in "reduction.rkt" current-preduce-ingest?)  ;; PReduce iter 22 A/B switch
          "champ.rkt"
          "unify.rkt"
          "atms.rkt"
@@ -2279,7 +2281,14 @@
     (init-rule-registry-cell! prn-box)
     (pour-kernel-rule-seed! prn-box)
     ;; PReduce Track 2 Phase 1: the arithmetic seed rides the same prn init
-    (pour-arithmetic-seed! prn-box))
+    (pour-arithmetic-seed! prn-box)
+    ;; PReduce Track 2 ingestion (iter 22): the per-file hashcons e-graph cell
+    (init-eclass-hashcons-cell! prn-box)
+    ;; the A/B switch (subprocess benchmarking): PREDUCE_INGEST=1 turns the
+    ;; gated whnf hook ON for this process — the experiment toggle, NOT a
+    ;; deployment path (the flip criterion is named at the hook's definition)
+    (when (getenv "PREDUCE_INGEST")
+      (current-preduce-ingest? #t)))
   (define-values (results pc)
     (parameterize ([current-phase-timings pt]
                    [current-provenance-counters pv]

@@ -13,6 +13,9 @@
 (require racket/match
          racket/list
          racket/string
+         (prefix-in pr/ "rule-dispatch.rkt")     ;; PReduce Track 2 ingestion (iter 22)
+         (prefix-in pr/ "eclass-graph.rkt")
+         (prefix-in pr/ "rule-registry.rkt")
          "prelude.rkt"
          "syntax.rkt"
          "substitution.rkt"
@@ -39,6 +42,7 @@
          "prop-observatory.rkt")  ;; Observatory: capture user network runs
 
 (provide whnf nf nf-whnf conv conv-nf
+         current-preduce-ingest?  ;; PReduce Track 2 ingestion gate (iter 22)
          current-nf-cache current-whnf-cache
          current-reduction-fuel current-nat-value-cache
          ;; Solver normalization (for benchmarks + PUnify)
@@ -1303,6 +1307,38 @@
            (expr-error? e))))       ;; error propagation
 
 ;; ========================================
+;; PReduce Track 2 ingestion hook (iter 22; Track 2 design §4 — LAZY ingestion).
+;; PARAMETER-GATED, DEFAULT OFF: this unit's deliverable is the OVERHEAD-FLOOR
+;; instrument (what intern+dispatch costs per arithmetic position — the bound on
+;; what δ/β must later save), NOT a deployment. The flip criterion is NAMED:
+;; δ (Phase 2) + guarded β (Phase 3) landed AND the §5.8 A/B positive — then the
+;; default flips or the hook reverts (validated≠deployed; no permanent dual path).
+;; Speculative-context note: e-graph writes during speculative whnf persist as
+;; MONOTONE GARBAGE (dead-branch interns) — sound-but-wasteful, the same class as
+;; stale-canonical duplicate allocation (eclass-graph.rkt header).
+(define current-preduce-ingest? (make-parameter #f))
+
+(define (preduce-ingest-int e op-sym op-fn a b)
+  ;; e-graph round-trip when the plumbing is live; NATIVE fold otherwise —
+  ;; this function always returns the folded expr (match clauses don't fall
+  ;; through, so the gated clause must be total).
+  (define prn-box (current-persistent-registry-net-box))
+  (define hc (pr/current-eclass-hashcons-cell-id))
+  (define reg (pr/current-rule-registry-cell-id))
+  (cond
+    [(and prn-box hc reg)
+     (define form (list op-sym (list 'lit a) (list 'lit b)))
+     (define net0 (unbox prn-box))
+     (define-values (net1 cid _d) (pr/eclass-intern net0 hc form #:cost 5))
+     (define-values (net2 _fired) (pr/dispatch-rules net1 hc reg cid #:result-cost 1))
+     (set-box! prn-box net2)
+     (define best (hash-ref (pr/eclass-read net2 cid) ':best #f))
+     (match best
+       [(cons _ (list 'lit (? exact-integer? n))) (expr-int n)]
+       [_ (expr-int (op-fn a b))])]
+    [else (expr-int (op-fn a b))]))
+
+;; ========================================
 ;; Weak Head Normal Form
 ;; Per-command memoization: when current-whnf-cache is active,
 ;; cache whnf results keyed by expr.
@@ -1492,6 +1528,16 @@
     ;; ---- Int iota rules: compute when arguments are int literals ----
 
     ;; Binary arithmetic on literals
+    ;; PReduce ingestion (gated, default OFF — see preduce-ingest-int above):
+    [(expr-int-add (expr-int a) (expr-int b))
+     #:when (current-preduce-ingest?)
+     (preduce-ingest-int e 'int+ + a b)]
+    [(expr-int-sub (expr-int a) (expr-int b))
+     #:when (current-preduce-ingest?)
+     (preduce-ingest-int e 'int- - a b)]
+    [(expr-int-mul (expr-int a) (expr-int b))
+     #:when (current-preduce-ingest?)
+     (preduce-ingest-int e 'int* * a b)]
     [(expr-int-add (expr-int a) (expr-int b)) (expr-int (+ a b))]
     [(expr-int-sub (expr-int a) (expr-int b)) (expr-int (- a b))]
     [(expr-int-mul (expr-int a) (expr-int b)) (expr-int (* a b))]

@@ -806,3 +806,26 @@ Entry template:
 - **Gates**: 73 targeted green; acceptance 0 errors with the seed pouring at every
   file init.
 - **Landed in**: (this commit). A/B bench at the gate's tail.
+
+## 2026-06-10 — LOOP iteration 22 — [SIGNIFICANT] THE INGESTION HOOK — whnf meets the e-graph (gated, default OFF)
+- **Shipped**: current-preduce-ingest? (default #f) + preduce-ingest-int (TOTAL —
+  e-graph round-trip when plumbed, native fold otherwise; match clauses don't fall
+  through) + three gated clauses ahead of whnf's int-add/sub/mul literal arms +
+  the per-file hashcons cell (init-eclass-hashcons-cell! at driver prn init;
+  batch-worker conformant) + the PREDUCE_INGEST=1 subprocess A/B switch (the
+  experiment toggle, NOT a deployment path — the flip criterion is NAMED at the
+  hook: δ + guarded β landed AND §5.8 A/B positive, then flip or revert per
+  validated≠deployed).
+- **Honest framing (charter honesty-about-the-curve)**: the seed ops are exactly
+  what whnf folds natively at ns speed — this unit's deliverable is the OVERHEAD
+  FLOOR instrument (per-position intern+dispatch cost bounds what δ/β must save),
+  not a win. Speculative-context note ledgered: e-graph writes during speculative
+  whnf persist as monotone garbage (sound-but-wasteful, the documented class).
+- **Proof**: 55 targeted checks (OFF default untouched; ON-unplumbed total;
+  ON-plumbed lands identical folds with classes persisting as MEMOS — re-ingestion
+  is a hashcons hit, zero growth); acceptance Level-3 clean with ingest ON
+  (reduction-on-network processing real program arithmetic in a full driver run).
+- **NEXT**: the per-fold ns microbench (ON vs OFF — the floor number; the
+  comparative suite barely hits literal int folds, so per-fold ns is the honest
+  §5.8 instrument), then δ (Phase 2).
+- **Landed in**: (this commit)

@@ -26,7 +26,9 @@
          "sre-core.rkt"
          "propagator.rkt")
 
-(provide make-eclass-graph
+(provide current-eclass-hashcons-cell-id
+         init-eclass-hashcons-cell!
+         make-eclass-graph
          eclass-registry-merge
          eclass-intern
          eclass-union
@@ -309,3 +311,11 @@
                            process-congruence-requests
                            #:tier 'topology
                            #:reset-value (hash))
+
+;; --- driver-init plumbing (iter 22; same shape as the rule-registry cell) ---
+(define current-eclass-hashcons-cell-id (make-parameter #f))
+(define (init-eclass-hashcons-cell! prn-box)
+  (when prn-box
+    (define-values (pnet* cid) (make-eclass-graph (unbox prn-box)))
+    (current-eclass-hashcons-cell-id cid)
+    (set-box! prn-box pnet*)))
