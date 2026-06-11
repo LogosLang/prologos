@@ -907,3 +907,21 @@ Entry template:
   longitudinal — precision-as-soundness CONFIRMED at 3 data points), Master row ✅
   with the A/B verdict, doorbell rung.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 27 — [SIGNIFICANT] Track 4 design OPENED — extraction as a propagator fixpoint
+- **The design centerpiece**: classic e-graph extraction IS a propagator quiescence
+  on the existing substrate — Q-valued extraction-cost cells (min-merge, CALM) +
+  refireable per-node cost propagators watching children (the iteration-12 fan-in
+  shape with a different payload) + a pure top-down read at quiescence. NO new
+  stratum (the SM4 admission test passes: extraction needs S0 quiescence, which
+  run-to-quiescence provides); extraction-time is ALSO where semantic-NAC presence
+  reads land per the SM3 D1 lock.
+- **§1 derives (not re-decides) from owner D7**: Q = 4-function interface; v1 =
+  tropical (min,+); multi-dim cost = a later Q instance, no schema change.
+- **§3 names a contract distinction**: the question-keyed store is a CACHE lattice
+  (better-wins monotone under q-better?), NOT a registry (append-only) — the §6 Q3
+  critique question.
+- **§5 commits the payoff A/B** to answer the Track 2 §15 corpus caveat WITH A
+  CORPUS (a repeated-reference acceptance section), and re-opens the flip decision
+  with that data.
+- **Landed in**: (this commit)
