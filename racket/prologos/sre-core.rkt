@@ -310,8 +310,9 @@
 
 ;; PPN 4C Phase 1f (2026-04-20): classification lookup for enforcement.
 ;; Returns 'structural | 'value | 'unclassified. #f if domain unregistered.
-;; A loader module wires this into propagator.rkt's
-;; `current-domain-classification-lookup` parameter at initialization.
+;; A loader module wires this into propagator.rkt via
+;; `set-domain-classification-lookup!` (box-backed since 2026-06-11) at
+;; initialization.
 (define (lookup-domain-classification name)
   (define d (lookup-domain name))
   (if d (sre-domain-classification d) #f))

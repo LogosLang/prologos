@@ -36,9 +36,7 @@
 
 (provide register-merge-fn!/lattice
          lookup-merge-fn-domain
-         merge-fn-registry-size
-         ;; Testing support: reset the registry between tests
-         reset-merge-fn-registry!)
+         merge-fn-registry-size)
 
 ;; ========================================
 ;; Registry storage (SCAFFOLDING — PM Track 12)
@@ -104,8 +102,14 @@
 (define (merge-fn-registry-size)
   (hash-count scaffolding-merge-fn-registry))
 
-;; Reset to empty state. SCAFFOLDING — only for test isolation.
-;; Not exported for production use; production registrations are
-;; at module load time and should not be unregistered.
-(define (reset-merge-fn-registry!)
-  (hash-clear! scaffolding-merge-fn-registry))
+;; reset-merge-fn-registry! RETIRED (2026-06-11, flake-family fix).
+;; Destructive clearing of this load-time-populated, process-shared
+;; registry is structurally unsafe under batch-worker module-instance
+;; caching: a test file calling it empties the registry for every LATER
+;; test file in the same worker (module bodies do not re-execute on
+;; re-require), silently breaking Tier-3 domain inheritance and the
+;; Phase 1f structural enforcement downstream — the confirmed mechanism
+;; behind the test-facet-sre-registration and test-module-network-01
+;; batch-only flakes. Tests assert sizes DELTA-style against a captured
+;; base instead. If a future test genuinely needs a clean slate, add a
+;; snapshot/restore pair (hash-copy based) — never a clear.

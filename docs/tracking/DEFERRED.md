@@ -29,56 +29,71 @@ Deferral".
 
 ---
 
-## TRACKED FLAKE: typing-domain rule visibility under batch workers (test-sre-coverage)
+## TRACKED FLAKE FAMILY: registry visibility under batch workers — 2 of 3 CLOSED
 
-- **Signature**: test-sre-coverage.rkt's 4 generic-op checks → 'type-bot IN BATCH ONLY
-  (passes 9/9 individually, every time); intermittent across full-suite runs.
-  Sibling — **MECHANISM CONFIRMED + FIXED (2026-06-11, post-halt, owner-reported)**:
-  test-module-network-01.rkt 4B.3-b "No exception raised" — root cause was
-  `current-domain-classification-lookup` being a `make-parameter` wired by a
-  MODULE-LOAD-TIME assignment (infra-cell-sre-registrations.rkt); parameter
-  assignments land only in the instantiating thread's cell, and batch workers
-  run each test file's dynamic-require IN A FRESH THREAD (the per-file timeout,
-  batch-worker.rkt) → whether enforcement wiring was visible to a given test
-  thread depended on WHICH thread first instantiated the wiring module →
-  partition-order-dependent silent skip in `enforce-component-paths!`'s
-  `(when lookup ...)`. Fix: parameter → module-level BOX + setter
-  (`set-domain-classification-lookup!`) — ordinary shared state, visible to all
-  threads; the cycle-breaking injection pattern unchanged. No scoped
-  `parameterize` consumers existed (verified by grep before the swap). Suite
-  gate green post-fix (8655 tests / 439 files / all pass).
-  THIRD FAMILY MEMBER (2026-06-10 iter 38):
-  test-facet-sre-registration.rkt — Tier-2 merge-registry lookups → #f in batch
-  only (21/21 individually); the merge-fn-registry's module-load registrations
-  share the same visibility class; exposure grew with PReduce's new domain
-  registrations (term/extraction-cost/extraction-store/rule-registry).
-- **The confirmed mechanism likely generalizes to the other two members**: any
-  `make-parameter` mutated at module load (not parameterized per-scope) has the
-  same thread-cell visibility hazard under batch workers. Candidate same-shape
-  fixes: `current-typing-domain` (typing-propagators.rkt — the sre-coverage
-  member; NOTE it has 1 parameterize-adjacent consumer surface to audit first:
-  batch-worker save/restore entry from iter 5) and whatever load-time path
-  feeds the test-facet-sre-registration lookups. Sweep is owner-sequenced
-  (cheap tactical fix now vs waiting for the registries-as-cells migration).
-- **Evidence trail (2026-06-10, PReduce autonomy ledger iters 3-5)**: controlled A/B
-  showed the flake at SM1.1a state WITHOUT shape-P; pre-SM1.1a single control run
-  green (CONFOUNDED: also 428-vs-429 file partition change). Mechanism analysis:
-  install-default-typing-domain! mutates the parameter current-typing-domain at
-  MODULE LOAD (typing-propagators.rkt:2331); the parameter was missing from
-  batch-worker's save/restore (pipeline.md New-Parameter checklist violation —
-  conformance patch landed iter 5). **Hypothesis REFUTED by experiment**: the
-  capture+restore did NOT eliminate the batch failure — likely the worker-init
-  capture itself reads an empty parameterization (thread-of-instantiation vs
-  thread-of-capture). Next diagnostic step (queued): instrument
-  (length (current-typing-domain)) at worker init + per-file entry in a reproduced
-  batch context; do NOT guess further without the instrument.
-- **STRUCTURAL FIX IS ON THE ROADMAP**: PReduce SM3's unified rule registry absorbs
-  the typing-domain registry — rule visibility becomes CELL state on prn, not thread
-  parameterization (D.1 §3; the registry-as-cell pattern). This flake is one more
+- **Members 2 + 3 CLOSED (2026-06-11, post-halt sweep): ONE confirmed mechanism —
+  destructive clearing of the shared merge-fn registry by test files.**
+  tests/test-cell-domain-inheritance.rkt (10 calls) and tests/test-merge-fn-registry.rkt
+  (8 calls) called `reset-merge-fn-registry!`, which `hash-clear!`s the process-shared,
+  load-time-populated `scaffolding-merge-fn-registry`. Batch workers cache module
+  instances, so module bodies do NOT re-execute for later files in the same worker —
+  the ~30 production registrations cannot re-fire, and every LATER co-located file sees
+  an empty registry. Downstream: cells stop inheriting domains via
+  `lookup-merge-fn-domain` at allocation (propagator.rkt net-new-cell), so
+  (a) test-facet-sre-registration's Tier-2/Tier-3 lookups → #f (member 3), and
+  (b) `enforce-component-paths!` finds no domain-name and silently skips →
+  test-module-network-01 4B.3-b "No exception raised" (member 2). Intermittence =
+  LPT work-stealing partition nondeterminism (destroyer must precede the victim in the
+  same worker). CONFIRMED by controlled repro: `batch-worker [test-merge-fn-registry,
+  test-module-network-01]` failed deterministically pre-fix. FIX: all 18 reset calls
+  deleted; test-merge-fn-registry's absolute size assertions converted to delta-style
+  against a captured base; `reset-merge-fn-registry!` RETIRED from merge-fn-registry.rkt
+  (zero remaining callers; future clean-slate needs = snapshot/restore, never clear).
+  Verified: all 6 destroyer/victim pair-orders pass + full suite green.
+- **CORRECTION of the 2026-06-11 morning claim**: member 2 was first attributed to
+  `current-domain-classification-lookup` parameter thread-cell visibility and marked
+  "FIXED" by the parameter→box swap (commit 84deb047). Adversarial audit REFUTED that
+  mechanism for batch-worker: infra-cell-sre-registrations.rkt is in driver.rkt's STATIC
+  require graph, and batch-worker requires driver.rkt at module level → wiring
+  instantiates on the worker MAIN thread → visible to every per-file thread (empirically
+  verified; the invisibility class requires FIRST instantiation via dynamic-require
+  inside a non-main thread, which no current runner does). The post-fix repro confirmed:
+  member 2 still failed with the box in place. The box swap REMAINS as thread-visibility
+  hardening (the hazard class is real for hypothetical future runners), but the cure was
+  the reset retirement above. The green suite after 84deb047 was a lucky partition.
+- **Member 1 STILL OPEN: test-sre-coverage's 4 generic-op checks → 'type-bot IN BATCH
+  ONLY** (passes 9/9 individually); intermittent. BOTH candidate mechanisms are now
+  refuted for this signature: (a) thread-cell parameter visibility of
+  `current-typing-domain` — same static-require argument as above (typing-propagators
+  is in driver's graph; the iter-5 save/restore patch was also experimentally refuted);
+  (b) merge-fn-registry clearing — controlled repro `[test-merge-fn-registry,
+  test-sre-coverage]` PASSES. Next diagnostic: capture the failing partition from a
+  real occurrence (`data/benchmarks/failures/` log + worker file list) and bisect
+  pairwise over co-located files; suspect class = another shared-registry mutation
+  (e.g., `register-domain!` OVERWRITE of an existing domain by a test, sre-core.rkt:302
+  warns but proceeds) or BSP scheduling. Do NOT guess further without a reproduced
+  partition.
+- **Audit residue (2026-06-11 workflow, 21 agents)**: (i) a verified parameter→box fix
+  plan for `current-typing-domain` exists (audit archive) but is NOT applied — no
+  demonstrated mechanism connects it to member 1's signature; the refuted iter-5
+  batch-worker save/restore entry (batch-worker.rkt:108/:235) stays pending member 1's
+  true diagnosis (it is refuted-as-fix scaffolding; remove or supersede when member 1
+  closes). (ii) The hazard-class inventory found ~16 load-time-wired callback parameters
+  that are DEAD wiring (driver.rkt:3104-3187 install-prop-network-callbacks! stubs et
+  al.) — retirement candidates for PM Track 12; NOTE one "dead" claim was refuted
+  (current-prop-fresh-meta is live at metavar-store.rkt:1860/:1924), so each needs
+  individual verification before deletion. (iii) Stale-coordinate doc-rot logged:
+  pipeline.md:121 cites `current-structural-mult-bridge at driver.rkt:2658` (actual
+  :3231); DEFERRED PM-Track-12 entries cite `driver.rkt:2633` for
+  current-lattice-meta-solution-fn (actual :3193).
+- **STRUCTURAL FIX IS ON THE ROADMAP**: PReduce SM3's unified rule registry + PM Track
+  12 registries-as-cells absorb these off-network registries — visibility becomes CELL
+  state on prn, not process-shared hasheqs mutated by tests. This family is one more
   motivation for that absorption's priority.
-- **Gate policy until then**: this signature = known-tracked flake; suite gates treat
-  it as non-blocking IFF the file passes individually in the same session (verified
-  per occurrence; never silently).
+- **Gate policy**: the member-1 signature (test-sre-coverage 'type-bot in batch) remains
+  a known-tracked flake; suite gates treat it as non-blocking IFF the file passes
+  individually in the same session (verified per occurrence; never silently). Members
+  2 + 3 signatures are NO LONGER expected — a recurrence is a NEW bug, not this family.
 
 ## SUBSTRATE FINDING: permanent worklist residue on the prn (2026-06-10, PReduce iter 37)
 

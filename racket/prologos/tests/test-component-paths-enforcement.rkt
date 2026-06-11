@@ -12,7 +12,7 @@
          "../propagator.rkt"
          "../sre-core.rkt"
          "../merge-fn-registry.rkt"
-         "../infra-cell-sre-registrations.rkt")  ;; wires current-domain-classification-lookup
+         "../infra-cell-sre-registrations.rkt")  ;; wires the domain-classification lookup box (set-domain-classification-lookup!)
 
 ;; ============================================================
 ;; Setup: test-structural and test-value domains

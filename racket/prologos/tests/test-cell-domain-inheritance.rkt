@@ -27,48 +27,36 @@
 (define (fresh-net)
   (make-prop-network))
 
-(test-case "cell inherits domain from registered merge-fn"
-  (reset-merge-fn-registry!)
-  (define fn (make-test-merge-fn))
+(test-case "cell inherits domain from registered merge-fn"  (define fn (make-test-merge-fn))
   (register-merge-fn!/lattice fn #:for-domain 'TestDomain)
   (define-values (net cid) (net-new-cell (fresh-net) 'initial fn))
   (check-equal? (lookup-cell-domain net cid) 'TestDomain))
 
-(test-case "unregistered merge-fn leaves cell unclassified (#f)"
-  (reset-merge-fn-registry!)
-  (define fn (make-test-merge-fn))
+(test-case "unregistered merge-fn leaves cell unclassified (#f)"  (define fn (make-test-merge-fn))
   ;; fn NOT registered
   (define-values (net cid) (net-new-cell (fresh-net) 'initial fn))
   (check-false (lookup-cell-domain net cid)))
 
-(test-case "#:domain override wins over registered merge-fn"
-  (reset-merge-fn-registry!)
-  (define fn (make-test-merge-fn))
+(test-case "#:domain override wins over registered merge-fn"  (define fn (make-test-merge-fn))
   (register-merge-fn!/lattice fn #:for-domain 'InheritedDomain)
   (define-values (net cid)
     (net-new-cell (fresh-net) 'initial fn #f #:domain 'OverrideDomain))
   (check-equal? (lookup-cell-domain net cid) 'OverrideDomain))
 
-(test-case "#:domain override works when merge-fn unregistered"
-  (reset-merge-fn-registry!)
-  (define fn (make-test-merge-fn))
+(test-case "#:domain override works when merge-fn unregistered"  (define fn (make-test-merge-fn))
   ;; fn NOT registered
   (define-values (net cid)
     (net-new-cell (fresh-net) 'initial fn #f #:domain 'ExplicitDomain))
   (check-equal? (lookup-cell-domain net cid) 'ExplicitDomain))
 
-(test-case "multiple cells on same merge-fn all inherit"
-  (reset-merge-fn-registry!)
-  (define fn (make-test-merge-fn))
+(test-case "multiple cells on same merge-fn all inherit"  (define fn (make-test-merge-fn))
   (register-merge-fn!/lattice fn #:for-domain 'SharedDomain)
   (define-values (net1 cid1) (net-new-cell (fresh-net) 'a fn))
   (define-values (net2 cid2) (net-new-cell net1 'b fn))
   (check-equal? (lookup-cell-domain net2 cid1) 'SharedDomain)
   (check-equal? (lookup-cell-domain net2 cid2) 'SharedDomain))
 
-(test-case "cells with different merge-fns get different domains"
-  (reset-merge-fn-registry!)
-  (define fn-a (make-test-merge-fn))
+(test-case "cells with different merge-fns get different domains"  (define fn-a (make-test-merge-fn))
   (define fn-b (make-test-merge-fn))
   (register-merge-fn!/lattice fn-a #:for-domain 'DomainA)
   (register-merge-fn!/lattice fn-b #:for-domain 'DomainB)
@@ -77,24 +65,18 @@
   (check-equal? (lookup-cell-domain net2 cid-a) 'DomainA)
   (check-equal? (lookup-cell-domain net2 cid-b) 'DomainB))
 
-(test-case "net-new-cell-desc also inherits"
-  (reset-merge-fn-registry!)
-  (define meet (make-test-meet-fn))
+(test-case "net-new-cell-desc also inherits"  (define meet (make-test-meet-fn))
   (register-merge-fn!/lattice meet #:for-domain 'DescDomain)
   (define-values (net cid) (net-new-cell-desc (fresh-net) 'top meet))
   (check-equal? (lookup-cell-domain net cid) 'DescDomain))
 
-(test-case "net-new-cell-desc honors #:domain override"
-  (reset-merge-fn-registry!)
-  (define meet (make-test-meet-fn))
+(test-case "net-new-cell-desc honors #:domain override"  (define meet (make-test-meet-fn))
   (register-merge-fn!/lattice meet #:for-domain 'InheritedMeet)
   (define-values (net cid)
     (net-new-cell-desc (fresh-net) 'top meet #f #:domain 'OverrideMeet))
   (check-equal? (lookup-cell-domain net cid) 'OverrideMeet))
 
-(test-case "backward compat: existing call sites without #:domain work"
-  (reset-merge-fn-registry!)
-  (define fn (make-test-merge-fn))
+(test-case "backward compat: existing call sites without #:domain work"  (define fn (make-test-merge-fn))
   ;; Simulate the 101 existing call sites: no domain kwarg, no registration.
   ;; Cell should allocate successfully and be unclassified.
   (define-values (net cid) (net-new-cell (fresh-net) 'initial fn))
@@ -102,7 +84,5 @@
   ;; Cell is still fully functional for reads/writes.
   (check-equal? (net-cell-read net cid) 'initial))
 
-(test-case "lookup-cell-domain on unknown cell-id returns #f"
-  (reset-merge-fn-registry!)
-  ;; Not an allocated cell-id
+(test-case "lookup-cell-domain on unknown cell-id returns #f"  ;; Not an allocated cell-id
   (check-false (lookup-cell-domain (fresh-net) (cell-id 999999))))

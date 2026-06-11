@@ -1450,16 +1450,21 @@
 ;; #f = parameter unset (no enforcement). 'unclassified = domain exists but
 ;; unclassified. 'structural/'value = classified; structural triggers
 ;; :component-paths enforcement.
-;; FLAKE-FAMILY FIX (2026-06-11; the registry-visibility family's root mechanism,
-;; diagnosed at the owner's report): this was a PARAMETER wired by a module-load
-;; assignment (infra-cell-sre-registrations.rkt) — parameter assignments land in
-;; the INSTANTIATING THREAD's cell only, and batch workers run each test file in
-;; a fresh thread (the per-file timeout), so enforcement wiring was visible only
-;; when the wiring module happened to be instantiated by the worker MAIN thread
-;; (partition-order-dependent → the intermittent batch-only "No exception
-;; raised"). A BOX is ordinary shared state: one instantiation, every thread.
-;; The injection pattern (cycle-break: propagator cannot require sre-core)
-;; is unchanged — only the storage stops being thread-local.
+;; BOX, not parameter (2026-06-11 hardening): this injection point was a
+;; make-parameter wired by a module-load assignment in
+;; infra-cell-sre-registrations.rkt. Parameter assignments land only in the
+;; instantiating thread's cell — empirically, a wiring module first
+;; instantiated via dynamic-require inside a non-main thread leaves the wired
+;; value invisible to every other thread. A box is ordinary shared state:
+;; one instantiation, every thread, under any runner. The injection pattern
+;; (cycle-break: propagator cannot require sre-core) is unchanged.
+;; HONESTY NOTE: the box swap was first landed as the suspected fix for the
+;; test-module-network-01 batch flake, but a controlled repro then showed
+;; that flake's actual cause was destructive clearing of the shared
+;; merge-fn registry by earlier test files in the same worker (see
+;; merge-fn-registry.rkt § reset-merge-fn-registry! RETIRED) — the cell
+;; never inherits its domain, so enforce-component-paths! below finds no
+;; domain-name and skips. The box remains as thread-visibility hardening.
 (define domain-classification-lookup-box (box #f))
 (define (set-domain-classification-lookup! fn)
   (set-box! domain-classification-lookup-box fn))
