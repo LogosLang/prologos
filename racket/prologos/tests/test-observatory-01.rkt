@@ -304,9 +304,9 @@
   (check-not-eq? meta-c 'none)
   (check-eq? (cell-meta-subsystem meta-a) 'user)
   (check-eq? (cell-meta-domain meta-a) 'lattice)
-  (check-equal? (cell-meta-label meta-a) "cell-20")  ;; PPN 4C 3C.b.1: cell-ids 0-19 pre-allocated (0-17 as before + 18=contradicted-branch-aids, 19=union-derivation-chains)
-  (check-equal? (cell-meta-label meta-b) "cell-21")
-  (check-equal? (cell-meta-label meta-c) "cell-22"))
+  (check-equal? (cell-meta-label meta-a) "cell-22")  ;; PReduce Track 1 11b: cell-ids 0-21 pre-allocated (0-19 as before + 20=congruence-sig-index, 21=congruence-request)
+  (check-equal? (cell-meta-label meta-b) "cell-23")
+  (check-equal? (cell-meta-label meta-c) "cell-24"))
 
 ;; ========================================
 ;; 11. Multiple captures accumulate

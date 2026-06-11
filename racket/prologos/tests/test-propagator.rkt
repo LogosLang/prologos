@@ -39,7 +39,7 @@
   (check-true (prop-network? net))
   (check-true (net-quiescent? net))
   (check-false (net-contradiction? net))
-  (check-equal? (prop-network-next-cell-id net) 20)  ;; well-known: 0=decomp-request, 1=worldview-cache, 2=relation-store, 3=config, 4=naf-pending, 5=pool-config, 6-9=topology subsystem cells (A1), 10=classify-inhabit-request (PPN 4C Phase 3c-iii), 11=fuel, 12=fuel-budget (Tropical Addendum), 13=retraction-stratum-request, 14=resolution-stratum-request (PPN 4C 2A.0), 15=fork-on-union-request, 16=fork-contradiction-request (PPN 4C 3A.0), 17=decomposed-positions (PPN 4C 3A.c.1), 18=contradicted-branch-aids, 19=union-derivation-chains (PPN 4C 3C.b.1)
+  (check-equal? (prop-network-next-cell-id net) 22)  ;; well-known: 0=decomp-request, 1=worldview-cache, 2=relation-store, 3=config, 4=naf-pending, 5=pool-config, 6-9=topology subsystem cells (A1), 10=classify-inhabit-request (PPN 4C Phase 3c-iii), 11=fuel, 12=fuel-budget (Tropical Addendum), 13=retraction-stratum-request, 14=resolution-stratum-request (PPN 4C 2A.0), 15=fork-on-union-request, 16=fork-contradiction-request (PPN 4C 3A.0), 17=decomposed-positions (PPN 4C 3A.c.1), 18=contradicted-branch-aids, 19=union-derivation-chains (PPN 4C 3C.b.1), 20=congruence-sig-index, 21=congruence-request (PReduce Track 1 11b)
   (check-equal? (prop-network-next-prop-id net) 0))
 
 (test-case "make-prop-network: custom fuel"
@@ -69,16 +69,16 @@
   (define-values (net1 cid) (net-new-cell net 'bot flat-merge))
   (check-true (prop-network? net1))
   (check-true (cell-id? cid))
-  (check-equal? (cell-id-n cid) 20))  ;; PPN 4C 3C.b.1: first user cell is 20 (0-17 as before + 18=contradicted-branch-aids, 19=union-derivation-chains)
+  (check-equal? (cell-id-n cid) 22))  ;; PReduce Track 1 11b: first user cell is 22 (0-19 as before + 20=congruence-sig-index, 21=congruence-request)
 
 (test-case "net-new-cell: sequential cell ids"
   (define net (make-prop-network))
   (define-values (net1 cid1) (net-new-cell net 'bot flat-merge))
   (define-values (net2 cid2) (net-new-cell net1 'bot flat-merge))
   (define-values (net3 cid3) (net-new-cell net2 'bot flat-merge))
-  (check-equal? (cell-id-n cid1) 20)  ;; PPN 4C 3C.b.1: offset by 20 (post 13-19 cells: retraction, resolution, fork-on-union, fork-contradiction, decomposed-positions, contradicted-branch-aids, union-derivation-chains)
-  (check-equal? (cell-id-n cid2) 21)
-  (check-equal? (cell-id-n cid3) 22))
+  (check-equal? (cell-id-n cid1) 22)  ;; PReduce Track 1 11b: offset by 22 (post 13-21 cells)
+  (check-equal? (cell-id-n cid2) 23)
+  (check-equal? (cell-id-n cid3) 24))
 
 (test-case "net-new-cell: initial value accessible"
   (define-values (net cid) (net-new-cell (make-prop-network) 42 max-merge))
@@ -196,12 +196,12 @@
                       (list 'bot flat-merge)))
   (define-values (net* ids) (net-new-cells-batch net specs))
   (check-equal? (length ids) 3)
-  (check-equal? (map cell-id-n ids) '(20 21 22))  ;; PPN 4C 3C.b.1: offset by 20 (post 13-19 cells)
+  (check-equal? (map cell-id-n ids) '(22 23 24))  ;; PReduce Track 1 11b: offset by 22 (post 13-21 cells)
   ;; All cells readable with initial values
   (for ([cid (in-list ids)])
     (check-equal? (net-cell-read net* cid) 'bot))
-  ;; next-cell-id advanced by 3 from 20 → 23
-  (check-equal? (prop-network-next-cell-id net*) 23))
+  ;; next-cell-id advanced by 3 from 22 → 25
+  (check-equal? (prop-network-next-cell-id net*) 25))
 
 (test-case "net-new-cells-batch: cells are writable and merge correctly"
   (define net (make-prop-network))
@@ -233,7 +233,7 @@
   (define specs (list (list 'bot flat-merge)
                       (list 'bot flat-merge)))
   (define-values (net2 ids) (net-new-cells-batch net1 specs))
-  ;; PPN 4C 3C.b.1: existing cell is ID 20 (post 13-19 cells); batch starts at 21
-  (check-equal? (cell-id-n existing-id) 20)
-  (check-equal? (map cell-id-n ids) '(21 22))
-  (check-equal? (prop-network-next-cell-id net2) 23))
+  ;; PReduce Track 1 11b: existing cell is ID 22 (post 13-21 cells); batch starts at 23
+  (check-equal? (cell-id-n existing-id) 22)
+  (check-equal? (map cell-id-n ids) '(23 24))
+  (check-equal? (prop-network-next-cell-id net2) 25))

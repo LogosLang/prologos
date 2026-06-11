@@ -612,3 +612,21 @@ Entry template:
   "reflection-based consumers" checklist item, caught by the gate exactly where
   the checklist says to look; sre-coverage = the tracked flake, 9/9 individually.
 - **Landed in**: (this commit + the census fast-follow)
+
+## 2026-06-10 — LOOP iteration 12 follow-up — [ROUTINE] cell-census class swept (3 files, 8 sites) + a process lesson
+- The 11b preallocation (cells 20/21) shifted the well-known census 20→22; the
+  reflection/census consumers asserting it: test-trace-serialize (2 sites, fixed
+  in the fast-follow), test-propagator (5 sites), test-observatory-01 (1 site).
+  ALL now updated.
+- **Process lesson (data point #13)**: I fixed the FIRST gate-reported file instead
+  of auditing the census CLASS — two more gate rounds found the rest one file at a
+  time (the diagnostic-protocol "audit the domain" rule applied late). ALSO: two
+  silent no-op python replaces (pattern mismatch) slipped through before an
+  asserted-match fix — assert-pattern-found is now the standing discipline for
+  scripted edits (the Edit tool's uniqueness check does this natively; scripted
+  multi-edits must replicate it).
+- **Checklist amendment candidate (Watching)**: pipeline.md "New Struct Field" has
+  the reflection-consumer item; a "New PREALLOCATED CELL" checklist entry should
+  name the census consumers explicitly (trace-serialize, test-propagator,
+  observatory) — 1 data point, codify on the next preallocation.
+- **Landed in**: (this commit)
