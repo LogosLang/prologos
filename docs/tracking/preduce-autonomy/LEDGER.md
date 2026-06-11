@@ -770,3 +770,26 @@ Entry template:
 - **β may now be designed against a guard that already exists** — the owner's
   structural-not-calendar timing honored.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 20 — [SIGNIFICANT] THE SEED FIRES — the first reduction rules run on the e-graph
+- **Shipped**: the (compute OP ...) template node (declarative-serializable per the
+  D.2 tier-1 requirement — rules stay DATA; the whitelisted pure-op table is the
+  INTERPRETER's) + dispatch-rules (rules-for-tag → registry-rule-by-id →
+  apply-rule per match; direct invocation per lazy ingestion) +
+  kernel-rules-seed.rkt (15 declarative folds: int arith ×5 incl. div/mod with
+  abort-on-zero, comparisons ×5, booleans ×3, nat suc/pred on numeric form ×2 per
+  the §6 Q2 resolution).
+- **Gate-caught at first seed run (data point #14)**: #f was BOTH a legitimate
+  computed value (boolean folds) AND the abort sentinel — correct false-valued
+  folds aborted. Fix: a distinct gensym sentinel; domain failures return IT,
+  #f flows as a value. The unused sentinel binding was already in the draft —
+  the design knew, the implementation shortcut; the test corpus's comparison
+  coverage caught it immediately.
+- **The series thesis is now literally running**: intern → tag-lookup → GUARD →
+  declarative fold → union → argmin extraction, at quiescence, on cells. 65
+  checks: all 15 folds, div/0 non-firing with class untouched, non-literal
+  no-match, alts retained (best+alts), re-dispatch fixpoint.
+- **Phase 1 REMAINING (named)**: PERF-COUNTERS guard_skips field (struct
+  checklist), the elaboration ingestion call-site, acceptance §4 Level-3 probe,
+  §5.8 A/B bench.
+- **Landed in**: (this commit)

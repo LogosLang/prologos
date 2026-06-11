@@ -46,6 +46,7 @@
          register-rule
          rule-lookup
          rules-for-tag
+         registry-rule-by-id
          rule-registry-sre-domain
          ;; 15b: prn wiring + the kernel seed pour (ledger iter 16)
          current-rule-registry-cell-id
@@ -169,6 +170,15 @@
   (and (hash? reg)
        (let ([rules (hash-ref reg module-id #f)])
          (and rules (hash-ref rules rule-id #f)))))
+
+;; id → rule across module components (v1 dispatch helper; module-qualified
+;; ids make collisions impossible, so first hit is THE hit)
+(define (registry-rule-by-id net cid rule-id)
+  (define reg (net-cell-read net cid))
+  (and (hash? reg)
+       (for/or ([(mod-id rules) (in-hash reg)]
+                #:unless (eq? mod-id ':tag-index))
+         (hash-ref rules rule-id #f))))
 
 ;; the dispatch read: tag → set of rule-ids (from the DERIVED index)
 (define (rules-for-tag net cid tag)

@@ -32,6 +32,7 @@
          effect-bearing-class?
          guard-allows?
          apply-rule
+         dispatch-rules
          guard-skip-count
          reset-guard-skip-count!)
 
@@ -130,12 +131,53 @@
       [(equal? p f) env]
       [else #f])))
 
+;; The COMPUTE node (Phase 1): keeps fold rules DECLARATIVE-SERIALIZABLE
+;; (D.2 tier-1 — what 0.3 hands the LLVM collaborator). The op table is the
+;; INTERPRETER'S whitelist (pure, total-or-#f); the rule carries only data.
+;; A #f result (e.g. division by zero, type mismatch) aborts instantiation —
+;; the rule simply does not fire for that match.
+;; ABORT is a DISTINCT sentinel — #f is a legitimate computed VALUE (boolean
+;; folds!); conflating them aborted correct false-valued folds (gate-caught at
+;; first seed run, iter 20). Domain failures (div/0, type mismatch) return the
+;; sentinel; the whole template aborts and the rule does not fire.
+(define abort-instantiation (gensym 'abort))
+(define (guarded-int2 f)
+  (lambda (a b) (if (and (exact-integer? a) (exact-integer? b))
+                    (f a b) abort-instantiation)))
+(define compute-ops
+  (hasheq '+ (guarded-int2 +) '- (guarded-int2 -) '* (guarded-int2 *)
+          '/ (lambda (a b) (if (and (exact-integer? a) (exact-integer? b)
+                                    (not (zero? b)))
+                               (quotient a b) abort-instantiation))
+          'mod (lambda (a b) (if (and (exact-integer? a) (exact-integer? b)
+                                      (not (zero? b)))
+                                 (remainder a b) abort-instantiation))
+          '< (guarded-int2 <) '<= (guarded-int2 <=)
+          '> (guarded-int2 >) '>= (guarded-int2 >=) '= (guarded-int2 =)
+          'and (lambda (a b) (if (and (boolean? a) (boolean? b))
+                                 (and a b) abort-instantiation))
+          'or  (lambda (a b) (if (and (boolean? a) (boolean? b))
+                                 (or a b) abort-instantiation))
+          'not (lambda (a) (if (boolean? a) (not a) abort-instantiation))
+          'add1 (lambda (a) (if (exact-integer? a) (add1 a) abort-instantiation))
+          'sub1 (lambda (a) (if (and (exact-integer? a) (>= a 1))
+                                (sub1 a) abort-instantiation))))
+
 (define (instantiate-template rhs env)
-  (let walk ([p rhs])
-    (cond
-      [(and (pair? p) (eq? (car p) 'ref)) (hash-ref env (cadr p))]
-      [(pair? p) (map walk p)]
-      [else p])))
+  (let/ec return
+    (let walk ([p rhs])
+      (cond
+        [(and (pair? p) (eq? (car p) 'ref)) (hash-ref env (cadr p))]
+        [(and (pair? p) (eq? (car p) 'compute))
+         (define op (hash-ref compute-ops (cadr p) #f))
+         (unless op (return #f))
+         (define args (map walk (cddr p)))
+         (define result
+           (with-handlers ([exn:fail? (lambda (_e) abort-instantiation)])
+             (apply op args)))
+         (if (eq? result abort-instantiation) (return #f) result)]
+        [(pair? p) (map walk p)]
+        [else p]))))
 
 ;; --- apply-rule: THE choke point ---
 ;; The match is driven on the class's best FORM; captured subforms bind to their
@@ -173,7 +215,34 @@
           [else
            (define result-form (instantiate-template
                                 (preduce-rule-rhs-template rule) env))
-           (define-values (net1 result-cid _dig)
-             (eclass-intern net reg-cid result-form #:cost cost))
-           (define net2 (run-to-quiescence (eclass-union net1 class-cid result-cid)))
-           (values net2 #t)])])]))
+           (cond
+             [(not result-form) (values net #f)]  ;; compute aborted (e.g. div/0)
+             [else
+              (define-values (net1 result-cid _dig)
+                (eclass-intern net reg-cid result-form #:cost cost))
+              (define net2 (run-to-quiescence (eclass-union net1 class-cid result-cid)))
+              (values net2 #t)])])])]))
+
+;; --- dispatch (design §4/§5: rules-for-tag → apply-rule per matched rule) ---
+;; Direct-invocation realization (lazy ingestion; the elaboration call-site is
+;; its own unit). → (values net' fired-count)
+(define (dispatch-rules net hashcons-cid registry-cid class-cid
+                        #:class-of [class-of (lambda (s) #f)]
+                        #:result-cost [result-cost 1])
+  (define v (net-cell-read net class-cid))
+  (define best (and (hash? v) (hash-ref v ':best #f)))
+  (define form (and best (cdr best)))
+  (define head (and (pair? form) (symbol? (car form)) (car form)))
+  (cond
+    [(not head) (values net 0)]
+    [else
+     (define rids (rules-for-tag net registry-cid head))
+     (for/fold ([n net] [fired 0]) ([rid (in-set rids)])
+       (define rule (registry-rule-by-id n registry-cid rid))
+       (cond
+         [(not rule) (values n fired)]
+         [else
+          (define-values (n2 fired?)
+            (apply-rule n hashcons-cid rule class-cid
+                        #:class-of class-of #:cost result-cost))
+          (values n2 (if fired? (add1 fired) fired))]))]))
