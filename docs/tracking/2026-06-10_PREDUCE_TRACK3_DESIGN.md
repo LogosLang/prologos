@@ -43,8 +43,8 @@ SM4 F4 — both contractums join the class; extraction picks by cost.
 |---|---|---|---|
 | 0 | The §0 verification | ✅ | this doc; static trace decisive |
 | 1 | The ι ingestion hook (built-in eliminators: natrec/boolrec/listrec heads) | ✅ | iter 41: the natrec recursion carriers (nat-val>0 + suc arms; #:compute = the native step VERIFIED verbatim; guard on effect-headed base/step/target); weak-head test lesson; preliminary single-run glance +66ms on track4c (Phase 3 renders the verdict) |
-| 2 | User expr-reduce arms + the kernel metadata registration | ⬜ | |
-| 3 | The coverage A/B (the multiplier measurement: re-run Tracks 4/5's A/Bs WITH ι coverage) | ⬜ | the series' payoff test |
+| 2 | User expr-reduce arms + the kernel metadata registration | ⏸️ | DESCOPED iter 42 (moot-for-payoff per the §15 verdict; registry completeness only; can ride any later track) |
+| 3 | The coverage A/B (the multiplier measurement: re-run Tracks 4/5's A/Bs WITH ι coverage) | ✅ | iter 42: ALL MODES WITHIN NOISE — recording free, memo value ≤ cost; THE PRE-REGISTERED BOUNDARY FIRES: the answer is SH/Zig lowering (PIR §15) |
 
 ## §3 The guard interaction
 

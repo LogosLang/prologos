@@ -1155,3 +1155,22 @@ Entry template:
   without cross-command reuse visible in-file. Phase 3's A/B renders the real
   verdict against the §4 escalation boundary.
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 42 — [SIGNIFICANT] TRACK 3 CLOSED — THE SERIES VERDICT RENDERED
+- **The coverage A/B (30 runs)**: OFF/DB/WARM ALL WITHIN NOISE on both files
+  (341/342/341ms acceptance; 1573/1575/1570ms track4c). The preliminary +66ms
+  glance dissolved under medians (falsify-the-workload's 3rd point — CODIFY-ripe).
+- **TWO LOAD-BEARING FACTS**: (1) the e-graph recording layer is WALL-CLOCK-FREE
+  at ι+δ/β coverage — a complete reduction-recording architecture at zero marginal
+  cost is itself a result; (2) the memo's value never exceeds its cost on this
+  substrate at these workloads — memoizable-redex RECURRENCE, not coverage, is
+  the binding constraint.
+- **THE PRE-REGISTERED BOUNDARY FIRES** (Track 3 design §4, named before the
+  data): the suspect is the per-position floor (+52µs of pure Racket
+  alloc/hash); the answer is SH/Zig LOWERING, where intern+dispatch at ~ns
+  inverts the economics. The Racket-side coverage chapter CLOSES with the
+  complete dossier: every mechanism proven, the floor characterized, the
+  lowering case handed to SH WITH NUMBERS — exactly what the charter's
+  honesty-about-the-curve §5.8 was written to produce.
+- Track 3 PIR + Master row CLOSED + Phase 2 DESCOPED (named). Doorbell.
+- **Landed in**: (this commit)
