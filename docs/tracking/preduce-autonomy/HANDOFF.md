@@ -42,14 +42,19 @@ DISCHARGED; pure sort tested; keep-pending behavioral coverage owed at first
 consumer). D5 probe DEFERRED with design note: needs a whnf-cache observer hook
 (per-command parameter is discarded; post-run inspection blind) — small production
 touch, own mini-audit when taken.
-NEXT UNIT: **the congruence layer** (D.1 §2.1: S0 signature-set watchers — when a
-child class's canonical changes, parent e-nodes' signatures recompute and matching
-signatures trigger unions; the green slice's union-emitter is the action). Mini-audit
-first: signature representation (PCE digest of the e-node with child slots replaced
-by child canonical names), watcher realization (broadcast over parent sets vs
-fire-once per node — propagator-design.md set-latch table), and where parent-lists
-live (registry cell extension vs separate parent-index cell). THEN: the effect-safety
-guard (BLOCKING Track 2 Phase 0); then rule promotion begins.
+DONE: **congruence ENGINE (11a)** — signatures, decomposed intern-node with
+descriptors, collision scan, batch union; the textbook cascade + sound-if-stale
+heal both execute (77 e-class checks green). Asymmetric-staleness property ledgered
+(only union-CHANGED canonicals go stale — bounds 11b's watcher set).
+NEXT UNIT: **congruence wiring (11b)**: parent watchers (plain refireable
+propagators per node descriptor, watching child class cells; write
+{sig → (set class-alloc)} into a monotone signature-index cell) + the collision
+handler (topology-tier stratum handler on a NEW preallocated request cell —
+make-prop-network preallocation touch + the #:after substrate's first consumer =
+the owed keep-pending behavioral test) + the end-to-end cascade test (a∪b at
+quiescence auto-unions f(a),f(b) with NO manual scan). Mini-audit the preallocation
+surface first (make-prop-network cell list + preallocated-cell-ns). THEN: the
+effect-safety guard (BLOCKING Track 2 Phase 0); then rule promotion.
 Implementation queue below. Phase A history follows for context.
 
 Done so far (all interactive, with the owner):

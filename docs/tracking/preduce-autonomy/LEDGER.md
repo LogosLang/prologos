@@ -558,3 +558,31 @@ Entry template:
   integration test impossible today (the same registry-globalness the tracked flake
   lives in; noted, not fought here).
 - **Landed in**: (this commit)
+
+## 2026-06-10 — LOOP iteration 11 — [SIGNIFICANT] congruence ENGINE landed (11a; the cascade executes)
+- **Mini-design decisions (solo, in-context grounding — every consumed module was
+  authored this session)**: (1) e-node SIGNATURE = PCE digest of
+  (vector 'enode op canonical(child)...) — canonicals are PCE-encodable min-alloc
+  integers; (2) **SOUND-IF-STALE** is the load-bearing argument: classes only
+  coarsen, so signature equality at ANY time is congruence FOREVER — stale index
+  entries can never cause a wrong union; a stale-keyed intern allocates a duplicate
+  that the scan heals (wasteful-but-sound = the CALM-compatible failure mode);
+  (3) phasing: 11a = the ENGINE (decomposed intern + collision scan + batch union —
+  pure/cell-level, fully testable NOW), 11b = the reactive wiring (parent watchers +
+  topology-tier collision handler on a PREALLOCATED request cell — needs the
+  make-prop-network preallocation touch, own mini-audit).
+- **Shipped**: eclass-canonical, eclass-node-signature, eclass-intern-node
+  (signature-keyed; returns node DESCRIPTORS for 11b's watchers),
+  eclass-congruence-collisions (group-by-current-signature scan),
+  eclass-union-all (chained relates per group). Tests: the textbook cascade
+  (f(a),f(b) distinct → a∪b → collision detected → cascade converges, cheaper
+  parent form wins, idempotent re-scan) + the sound-if-stale duplicate-heal path.
+- **Property learned at the gate (test failed in the GOOD direction, then fixed)**:
+  staleness is ASYMMETRIC under min-join — the FIRST-allocated class's canonical
+  never changes (its signature-keyed nodes stay fresh forever); only LATER-allocated
+  classes' parents go stale. 11b's watchers therefore only react to canonicals the
+  union actually CHANGED — the join computation already knows which side that is.
+  (Also: my test initially constructed the stale scenario on the wrong side and the
+  suite caught the misconstruction — data point #12, gates catching test-author
+  error, not just code error.)
+- **Landed in**: (this commit)

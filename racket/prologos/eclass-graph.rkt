@@ -31,7 +31,13 @@
          eclass-intern
          eclass-union
          eclass-lookup
-         eclass-read)
+         eclass-read
+         ;; congruence engine (PReduce Track 1, iter 11a — D.1 §2.1)
+         eclass-canonical
+         eclass-node-signature
+         eclass-intern-node
+         eclass-congruence-collisions
+         eclass-union-all)
 
 ;; --- the hashcons registry cell ---
 
@@ -97,3 +103,79 @@
 
 (define (eclass-read net cid)
   (net-cell-read net cid))
+
+;; ========================================================================
+;; Congruence engine (PReduce Track 1, iter 11a — D.1 §2.1)
+;;
+;; E-NODES are decomposed applications: (op, child-class...). A node's
+;; SIGNATURE is the PCE digest of (vector 'enode op canonical(child)...) —
+;; canonicals are the min-alloc NAMES, PCE-encodable integers.
+;;
+;; SOUND-IF-STALE (the load-bearing argument, ledger iter 11): classes only
+;; COARSEN (unions never split), so two nodes whose signatures were equal at
+;; ANY point are congruent FOREVER — stale signature-index entries can never
+;; cause a wrong union. An intern keyed by a STALE canonical merely allocates
+;; a duplicate class for the same node; the congruence scan detects the
+;; signature collision and unions the duplicate away. Wasteful-but-sound is
+;; the CALM-compatible failure mode; precision returns at quiescence.
+;;
+;; 11a = the ENGINE (signatures, decomposed intern, collision scan, batch
+;; union) — pure + cell-level, fully testable. 11b = the reactive wiring
+;; (parent watchers + topology-tier collision handler).
+;; ========================================================================
+
+;; the canonical NAME of a class (min-alloc component of the product)
+(define (eclass-canonical net cid)
+  (define v (net-cell-read net cid))
+  (and (hash? v) (hash-ref v ':canonical #f)))
+
+;; signature = content address of (op, canonical children...)
+(define (eclass-node-signature net op child-cids)
+  (define canon (for/list ([c (in-list child-cids)]) (eclass-canonical net c)))
+  (pce-persistable-digest PCE-KIND-GROUND-TERM
+                          (list->vector (cons 'enode (cons op canon)))))
+
+;; Decomposed intern: a node keyed by its CURRENT signature. Returns the node
+;; DESCRIPTOR (list op child-cids class-cid) alongside — 11b's watchers and the
+;; collision scan consume descriptors.
+;; → (values net' class-cid descriptor)
+(define (eclass-intern-node net reg-cid op child-cids
+                            #:cost [cost 1]
+                            #:regime [regime 'ground])
+  (define sig (eclass-node-signature net op child-cids))
+  (define reg (net-cell-read net reg-cid))
+  (define existing (and (hash? reg) (hash-ref reg sig #f)))
+  (cond
+    [existing (values net (cdr existing) (list op child-cids (cdr existing)))]
+    [else
+     (define-values (net1 cid) (net-new-cell net eclass-bot eclass-merge))
+     (define alloc (cell-id-n cid))
+     ;; the node's FORM for cost purposes: the signature vector itself at v1
+     ;; (real terms attach when reduction rules intern concrete exprs)
+     (define form (list->vector (cons 'enode (cons op (map cell-id-n child-cids)))))
+     (define v0 (make-eclass-value #:best (cons cost form)
+                                   #:alts (set sig)
+                                   #:canonical alloc
+                                   #:provenance (seteq 'intern-node)
+                                   #:regime regime))
+     (define net2 (net-cell-write net1 cid v0))
+     (define net3 (net-cell-write net2 reg-cid (hash sig (cons alloc cid))))
+     (values net3 cid (list op child-cids cid))]))
+
+;; Collision scan: recompute every descriptor's signature against CURRENT
+;; canonicals; group classes whose nodes now share a signature. Returns a list
+;; of class-cid groups (each ≥2 distinct classes) needing union.
+(define (eclass-congruence-collisions net descriptors)
+  (define by-sig
+    (for/fold ([acc (hash)]) ([d (in-list descriptors)])
+      (define sig (eclass-node-signature net (car d) (cadr d)))
+      (hash-update acc sig (lambda (s) (set-add s (caddr d))) (set))))
+  (for/list ([(sig cids) (in-hash by-sig)]
+             #:when (> (set-count cids) 1))
+    (set->list cids)))
+
+;; Batch union: chain 'eclass-refine relates across each group.
+(define (eclass-union-all net groups)
+  (for/fold ([n net]) ([group (in-list groups)])
+    (for/fold ([n2 n]) ([a (in-list group)] [b (in-list (cdr group))])
+      (eclass-union n2 a b))))

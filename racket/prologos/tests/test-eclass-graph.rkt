@@ -79,3 +79,59 @@
                 "the consuming read reaches the class's cost-best form")
   ;; and the link stays OUT of the user-facing arity-2 view
   (check-false (hash-has-key? (that-read am 'pos7) ':eclass-link)))
+
+;; ---- CONGRUENCE ENGINE (iter 11a): f(a), f(b) union after a ∪ b ----
+
+(let*-values ([(net0 reg) (make-eclass-graph (make-prop-network))]
+              [(net1 ca da) (eclass-intern net0 reg ta #:cost 5)]
+              [(net2 cb db) (eclass-intern net1 reg tb #:cost 1)])
+  ;; intern parent nodes f(a), f(b): different child classes → different sigs
+  (define-values (net3 cfa dfa) (eclass-intern-node net2 reg 'f (list ca) #:cost 2))
+  (define-values (net4 cfb dfb) (eclass-intern-node net3 reg 'f (list cb) #:cost 3))
+  (check-not-equal? cfa cfb "distinct children ⇒ distinct parent classes")
+  ;; re-intern of the SAME node is a hashcons hit
+  (let-values ([(net4x cfa2 _) (eclass-intern-node net4 reg 'f (list ca))])
+    (check-equal? cfa2 cfa)
+    (check-eq? net4x net4 "node hashcons hit allocates nothing"))
+  ;; no collisions before the child union
+  (check-equal? (eclass-congruence-collisions net4 (list dfa dfb)) '())
+  ;; union the children + quiesce: canonicals coarsen to the shared min
+  (define net5 (run-to-quiescence (eclass-union net4 ca cb)))
+  (check-equal? (eclass-canonical net5 ca) (eclass-canonical net5 cb))
+  ;; the scan now detects the f-collision
+  (define groups (eclass-congruence-collisions net5 (list dfa dfb)))
+  (check-equal? (length groups) 1)
+  (check-equal? (list->seteq (car groups)) (seteq cfa cfb))
+  ;; the cascade: union the collided group + quiesce → parents converge
+  (define net6 (run-to-quiescence (eclass-union-all net5 groups)))
+  (check-equal? (eclass-read net6 cfa) (eclass-read net6 cfb)
+                "congruent parents hold one joined class value")
+  (check-equal? (car (hash-ref (eclass-read net6 cfa) ':best)) 2
+                "the cheaper parent form wins the joined class")
+  ;; idempotence: a second scan over CURRENT state finds the same (already-
+  ;; unioned) group — re-unioning is a no-op at quiescence
+  (define net7 (run-to-quiescence
+                (eclass-union-all net6 (eclass-congruence-collisions net6 (list dfa dfb)))))
+  (check-equal? (eclass-read net7 cfa) (eclass-read net6 cfa)))
+
+;; sound-if-stale: an intern keyed by a STALE canonical allocates a duplicate,
+;; and the congruence scan heals it (the documented wasteful-but-sound mode)
+(let*-values ([(net0 reg) (make-eclass-graph (make-prop-network))]
+              [(net1 ca _da) (eclass-intern net0 reg ta #:cost 5)]
+              [(net2 cb _db) (eclass-intern net1 reg tb #:cost 1)]
+              ;; the parent watches the LATER-allocated child: its canonical is the
+              ;; one the union CHANGES (min-join pulls it down to ca's alloc) —
+              ;; the first-allocated child's canonical survives unions unchanged
+              ;; (asserted by the first iteration-11a test's hashcons hit)
+              [(net3 cfa dfa) (eclass-intern-node net2 reg 'g (list cb))])
+  (define net4 (run-to-quiescence (eclass-union net3 ca cb)))
+  ;; same node g(b) re-interned AFTER the union: canonical changed → new sig
+  ;; → duplicate class (NOT the old cell)
+  (define-values (net5 cfa2 dfa2) (eclass-intern-node net4 reg 'g (list cb)))
+  (check-not-equal? cfa2 cfa "stale-key miss allocates a duplicate (documented)")
+  ;; the scan detects the duplicate pair and the cascade heals it
+  (define groups (eclass-congruence-collisions net5 (list dfa dfa2)))
+  (check-equal? (length groups) 1)
+  (define net6 (run-to-quiescence (eclass-union-all net5 groups)))
+  (check-equal? (eclass-read net6 cfa) (eclass-read net6 cfa2)
+                "the duplicate is unioned away — wasteful-but-sound"))
