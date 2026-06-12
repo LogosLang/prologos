@@ -95,19 +95,92 @@ Deferral".
   individually in the same session (verified per occurrence; never silently). Members
   2 + 3 signatures are NO LONGER expected — a recurrence is a NEW bug, not this family.
 
-## SUBSTRATE FINDING: permanent worklist residue on the prn (2026-06-10, PReduce iter 37)
+## SUBSTRATE FINDING (MECHANISM CORRECTED 2026-06-11): the prn is PERMANENTLY POISONED by a fuel-exhaustion contradiction — the "worklist residue" is a symptom
 
-At file close the persistent registry network's worklist holds ~112 prop-ids that
-NEITHER scheduler (BSP or Gauss-Seidel) fires or removes — run-to-quiescence is a
-no-op on them (fuel untouched), so `net-quiescent?` (null-worklist) is permanently
-#f for the prn. Probe-verified during Track 5 Phase 2. Hypothesis: stale entries
-referencing propagators absent from the current network lineage (box-swap
-inheritance), skipped-without-removal by the runner. IMPACT: any consumer asserting
-strict quiescence on the prn fails (the Track 5 projection was amended to
-residue-tolerant: cell state is at its FIREABLE fixpoint; residue cannot change
-it). FIX CANDIDATE: the runner removes unfireable ids from the worklist instead of
-skipping them (propagator-core surgery — its own unit, with a census of where
-residue originates).
+Original observation (2026-06-10, PReduce iter 37): at file close the prn's worklist
+holds ~112 prop-ids no scheduler fires or removes; `net-quiescent?` permanently #f.
+
+**2026-06-11 probe-verified diagnosis (audit workflow census; probe re-run at HEAD;
+all three code claims spot-checked main-session)**:
+- The iter-37 stale-lineage/box-swap hypothesis is REFUTED: on a fresh
+  ppn-track4c run, ALL worklist pids (156 observed; count file-dependent) resolve
+  LIVE in the propagators CHAMP with srclocs at real acceptance-file commands.
+- ACTUAL MECHANISM: `infer-on-network` runs each command's PPN typing ON the prn
+  under a bounded budget — it saves fuel, `net-cell-reset`s the fuel cell to
+  TYPING-FUEL-LIMIT=200 (typing-propagators.rkt:3004-3005), runs BSP, restores
+  fuel (:3008). When ONE command's typing burns >200 fuel, the fuel
+  `#:on-write-check` sets the NETWORK CONTRADICTION (= fuel-cell-id), and
+  `net-cell-reset` (propagator.rkt:1864+) restores only the CELL VALUE — the
+  contradiction field is never cleared, by anything, anywhere. Both schedulers
+  short-circuit on a non-#f contradiction BEFORE touching the worklist
+  (GS propagator.rkt:2812; BSP :3417/:3464/:3471) — so the prn is GLOBALLY
+  NON-RUNNABLE for the rest of the process, and the worklist accumulates live,
+  fireable, never-fired propagators. The network also carries the incoherent
+  state contradiction=fuel-exhausted while the fuel cell reads ~1,000,000.
+- IMPACT (probe-quantified): after the first >200-fuel command, (a) on-network
+  typing silently degrades to the imperative fallback for the REST of the file
+  (probe: 28 success/3 fallback on the clean prefix vs 2/12 after poisoning);
+  (b) PReduce rule dispatch, congruence cascades, and the extraction fixpoint
+  all no-op (direct cell writes — δ-memo, registry pours — keep working);
+  (c) the §5.8 on-network-share denominators and any A/B on fuel-heavy
+  workloads were partially measured on a dead e-graph (deltas mostly survive —
+  both arms equally poisoned — but absolute shares are contaminated);
+  (d) the iter-37 residue-tolerance premise "cell state is at its FIREABLE
+  fixpoint; residue cannot change it" is REFUTED — the stranded propagators
+  WOULD change cell state if the contradiction were cleared, so the Track 5
+  projection can serialize pre-fixpoint state.
+- **The recorded fix candidate (runner removes unfireable ids) targets the WRONG
+  LAYER and must not land as written** — the ids are live; removal would
+  amputate real typing/congruence work with no contradiction left as evidence.
+- CORRECT FIX (at the bounded-typing boundary, typing-propagators.rkt:3008
+  region): restore/scope the contradiction state alongside the fuel restore —
+  clear a fuel-exhaustion contradiction the bounded run itself introduced, or
+  run the bounded attempt on a fork (fork-prop-network already resets fuel +
+  worklist) so exhaustion cannot poison the shared prn. A worklist-hygiene pass
+  for genuinely dangling ids can ride along but is not the cure.
+- Also amend preduce-pnet.rkt:41-47's residue-tolerance comment when fixing.
+
+## DEFECT (found 2026-06-11, owner persistence-fidelity review): warm-start re-pour DROPS the persisted digest key — cross-session hits structurally impossible
+
+The Track 5 loader (`preduce-load-pnetx!`, preduce-pnet.rkt re-pour loop) reads
+`(cadr e)` (best-form) + `(caddr e)` (cost) and NEVER `(car e)` (the persisted
+digest-hex): it re-interns the best FORM and lets `eclass-intern` recompute the
+key as digest(best-form). For every MEMO entry — best-form = the whnf RESULT,
+digest = of the originally-interned BODY, which is the entire point of a memo —
+the warm registry therefore holds the WRONG key and the warm intern of the body
+MISSES. Probe-verified: cold {body→result, cost 0} → save → fresh net → load →
+warm intern of body → cost 10 MISS; on the real acceptance .pnetx, 15/15
+Section A entries have digest(form) ≠ persisted digest — 100% of the warm-start
+payload is unreachable on reload. key-survival = 0 means the iter-39 warm ≈ cold
+A/B could not have detected ANY recurrence benefit regardless of workload — the
+ledger's "persisted share below measurement" attribution is incomplete (true but
+masked the defect: the pre-registered warm≈cold expectation made zero-hits look
+like small-coverage, and test-preduce-pnet.rkt round-trips only identity classes
+where digest(form) = persisted digest trivially). The design comment "the
+persisted content-hash IS the intern key BY CONSTRUCTION" (preduce-pnet.rkt
+§3 region) holds only for identity classes, whose hits save nothing.
+
+FIX (~5 lines + test): key the re-poured class by the PERSISTED digest — decode
+`(hex->bytes (car e))` and register it into the hashcons registry cell (hash-union
+merge is ACI-safe), either via an `#:digest` override on eclass-intern or a
+post-intern registry write. Then a synthetic high-recurrence cross-session A/B
+(expensive natrec/δ cascades compiled twice with PREDUCE_PNETX=1 PREDUCE_INGEST=db)
+becomes the first honest test of the "optimize once, re-use indefinitely" thesis
+on Racket — per-hit economics still bound the payoff to coarse, ms-scale,
+genuinely recurring top redexes (+6.5µs/hit vs the avoided #:compute).
+
+Related gaps for the super-optimization vision (recorded, not defects):
+- CROSS-MODULE reuse does not exist: the only preduce-load-pnetx! call site loads
+  the file-being-compiled's own .pnetx; load-module never consults an imported
+  module's .pnetx. Section B is already NOT origin-filtered, so the schema
+  tolerates a shared store — only the wiring is missing.
+- extract/cached has ZERO production callers (Track 4 PIR §4's named deferral) —
+  Section B is EMPTY in real artifacts; the cost-OPTIMIZED form is never served,
+  only the recorded whnf result. The consult-wiring is the prerequisite for
+  serving extraction's optimum.
+- "Per-module" Section A is really per-top-level-compile: `current-intern-origin`
+  is set once per process-file and never reset by load-module, so classes created
+  while an import elaborates in-process land in the IMPORTER's .pnetx.
 
 ## HIGH PRIORITY: Propagator/Cell Allocation Efficiency Track
 
