@@ -153,3 +153,113 @@ caches), JSON artifact 31.5KB.
   structurally dead. The probe avoids the trap via
   `current-network-capture-box`. Phase 2's exporter supersedes; flag for the
   owner / an LSP follow-up.
+
+## 7. Stage-3 design decisions (Phase 1, iteration 46)
+
+Status: **PROPOSED — under critique** (two independent adversarial critics
+running; findings and resolutions land in §7.7; 2-column VAG in §7.8; the
+status flips to LOCKED only after resolution).
+
+### D1 — Exporter: `tools/viz-export.rkt`, one self-contained JSON per run
+
+CLI: `racket tools/viz-export.rkt FILE.prologos -o out.json [--max-diffs N]`.
+Capture recipe = the probe's validated trio (`current-bsp-observer` +
+`current-observatory` + `current-network-capture-box`). Envelope:
+
+```
+{ "vizTrace": 1,
+  "file": ..., "wallMs": ..., "commands": N, "errors": N,
+  "captures": [ {label, subsystem, status, timestampMs, sequence, topology} ],
+  "finalTopology": {cells, propagators, stats},          // last elab-network
+  "rounds": [ {roundNumber, timestampMs, cellDiffs, propagatorsFired,
+               contradiction, atmsEvents} ],
+  "identity": { "cellDomains": {cid: domain},            // D4 identity stack
+                "wellKnownCells": {cid: name},
+                "propagatorSrclocs": {pid: srcloc-string} } }
+```
+
+**Round↔command correlation**: `bsp-round` carries no timestamp and the
+accumulator re-stamps round numbers globally across ALL scheduler runs — a raw
+round list would present module-loading rounds, per-command runs, and solver
+runs as ONE misleading timeline. The exporter's observer wrapper records
+`(current-inexact-milliseconds)` per round; observatory captures already carry
+wall-clock + sequence (driver.rkt:1059-1060). The viewer groups rounds into
+command epochs by timestamp interleaving. Cheap, exporter-side, no production
+edits.
+
+**Coverage day one**: the elab-network captures arrive per command via the
+driver's observatory hook; session/capability/narrowing/user-reduction
+subsystems register their own captures wherever those paths run (per the
+PTF Track 1 observatory wiring) — the exporter exports ALL captures present.
+Solver (relations/ATMS) networks have no observatory hook day one: NAMED gap,
+Phase 4 rider (verify on a relations-using acceptance file in Phase 2).
+
+### D2 — Schema: reuse the existing serializers verbatim; identity as an envelope supplement
+
+`serialize-network-topology` + `serialize-bsp-round` are used UNCHANGED (the
+probe verified completeness: edges, per-round diffs, values). The D4 identity
+maps are computed BY THE EXPORTER into the envelope's `identity` section —
+trace-serialize.rkt is NOT modified in Phase 2. This is named scaffolding:
+keeping Phase 2 tools-only (no production edits before the in-container
+full-suite baseline) at the cost of identity living outside the core schema.
+**Fold-in decision point pre-registered**: at Phase 4, either the identity
+section graduates into `serialize-network-topology` (if the viewer proves the
+fields belong in every consumer, including the VS Code panel) or stays
+exporter-local (if it's viz-specific). Not both indefinitely.
+
+### D3 — Viewer: single-file static HTML+JS, dependency-free, in `tools/viz/`
+
+`tools/viz/index.html` — hand-rolled Canvas rendering, no build step, no
+vendored libraries. Loads trace JSON via file-input/drag-drop (file:// safe;
+no server, no CORS exposure) with optional `fetch` for served contexts.
+Bipartite conventions REUSED from propagatorView.ts (cells=circles,
+propagators=diamonds; replay-with-scrubber semantics); CODE not reused — the
+extension's rendering core is entangled with its bundler + d3 subpackages and
+one `acquireVsCodeApi()` seam; porting costs more than rewriting at this
+feature size and would couple the standalone viewer to extension internals.
+Layout: simple BFS-layering from input-degree-0 cells (adequate at probe
+magnitudes). **Pre-registered revisit condition**: if the acceptance corpus
+produces >1k-node graphs or unreadable layouts, revisit layout (d3-dag port or
+WebWorker Sugiyama) as its own decision — do not silently grow the hand-rolled
+one.
+
+### D4 — Cell/propagator identity: best-available-wins stack
+
+(1) well-known cell-id table (cells 0–21, from propagator.rkt's named
+constants); (2) `prop-network-cell-domains` champ → domain symbol (the
+post-universe-migration replacement for hollow `elab-cell-info` — finding F4);
+(3) `elab-cell-info` srcloc/type when present; (4) the existing value-shape
+heuristic as floor. Viewer colors by DOMAIN primarily; subsystem retained as a
+secondary facet. Propagators: srcloc from the propagator struct (PPN 4C
+Phase 1.5 field) rendered as tooltip + (in served contexts) source link.
+
+### D5 — G3 (Tier-1 observer dropout): defer the fix, surface the gap
+
+Phase 2 ships tools-only — no scheduler edits. The dropout share CANNOT be
+measured from outside (no hook in the Tier-1 branch), so quantification waits
+for Phase 4's first sub-unit: a Tier-1 entry counter (production touch ⇒ its
+own mini-audit + the full-suite baseline first). Mitigation NOW: the viewer
+displays capture coverage prominently ("N rounds captured across M runs;
+fast-path runs are not traced") so the gap is VISIBLE, never silent. Any
+eventual fix must be scheduler-independent in semantics (orthogonality rule);
+candidate = observer call in the Tier-1 branch (cell/propagator-layer concern,
+zero-cost when unarmed), NOT an exporter-mode scheduler flag.
+
+### D6 — NTT model: NOT APPLICABLE (named, with reasoning)
+
+This track adds NO cells, propagators, lattices, bridges, or strata — it is a
+read-side projection of existing network state through the established
+zero-cost observer parameter. The NTT-model requirement binds tracks that BUILD
+on the network; the only candidate production touch (D5's Tier-1 counter/
+observer) is deferred to Phase 4 and gets its own mini-design there. Mantra
+check: observation tooling's PURPOSE is information flow OUT of the network to
+humans; the capture mechanism is the codified `current-bsp-observer` pattern
+(zero overhead when `#f`).
+
+### 7.7 Critique round findings + resolutions
+
+(filled by the critique round below)
+
+### 7.8 Vision Alignment Gate (2-column)
+
+(filled at lock)
