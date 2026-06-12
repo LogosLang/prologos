@@ -366,6 +366,7 @@ When elaboration, resolution, matching, and reduction all use the SRE:
 | 3 | Kind-Aware ~:auto~ Scheduling | ⬜ | Track 2, PAR |
 | 4 | Array Programming Sublanguage | ⬜ | Tracks 0-3, NTT |
 | 5 | Lattice Morphology Formalization | ⬜ | Hyperlattice Conjecture |
+| V | Browser visualization + arbitrary-program trace export (viz-export.rkt + tools/viz/) | ✅ 2026-06-12 | [[file:2026-06-12_PTF_TRACK2_BROWSER_VIZ_DESIGN.md][design]] + [[file:2026-06-12_PTF_TRACK2_PIR.md][PIR]]; named "PTF Track 2" in its own docs (predates noticing the collision with the planned Pipeline-Detection row — this row disambiguates); owner-goal arc of the re-armed autonomy loop |
 
 ** PRN (Propagator-Rewriting-Network)  — /Theory: hyperlattice rewriting as unifying formalism/
 

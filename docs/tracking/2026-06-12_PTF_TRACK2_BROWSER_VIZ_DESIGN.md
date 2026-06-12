@@ -23,7 +23,7 @@ see `docs/tracking/2026-03-12_PROPAGATOR_VISUALIZATION_DESIGN.md` +
 | 2c | `tools/viz-export.rkt` + golden tests (tests land WITH the exporter) | ✅ | iter 50 (`b0bbb88`): ALL criteria PASS on the corpus — monotone ✓, captures==commands ✓, **solver free path ✓** (relation epochs 67-81c/172-179p); fallbacks NOT needed; envelope ≤880KB |
 | T | Dedicated test file `tests/test-viz-export.rkt` (schema regression) | ✅ | landed with 2c; 7/7 (envelope keys, parity, monotone, identity coverage, D7 bounds, solver-epoch assert, jsexpr round-trip) |
 | 3 | Standalone browser viewer: topology + playback; component-aware layout; coverage display | ✅ | iter 51 (`10b0f4a`): tools/viz/index.html + check.js; headless core verification ALL PASS on the corpus; **browser acceptance = owner's machine** (no GUI in the container — honest limitation); artifacts delivered to owner |
-| 4 | Riders per data: compound-cell component diffs; D7 depth; solver hook if 2c validation demands; any rider adding cells/propagators carries its own NTT model | ⬜ | |
+| 4 | Riders per data: compound-cell component diffs; D7 depth; solver hook if 2c validation demands; any rider adding cells/propagators carries its own NTT model | ✅ | ADJUDICATED at close (iter 52): solve-hook DISSOLVED (free path validated); A2 timestamps DORMANT (bucketing validated); F4 production identity OUT OF SCOPE (PATH B); component diffs + D7 depth → DEFERRED.md w/ triggers. **TRACK CLOSED** — PIR: `2026-06-12_PTF_TRACK2_PIR.md` |
 
 ## 1. Grounding synthesis (what EXISTS at `ff739de7`)
 

@@ -1005,3 +1005,23 @@ Replace 3-pass imperative preparse with propagator-native cell-based name regist
 - Implementation: `macros.rkt:2366-2460` (`preparse-expand-all`), `tools/form-deps.rkt` (SCC analysis)
 - Module-level cycle detection (related, same retirement target): `driver.rkt:1872-1874` (`loading-set` "Circular dependency detected")
 - Future track (where this retires): module-loading-on-network follow-up — PM Track 12 + post-Phase-4 + possibly PPN Track 4D coordination
+
+## PTF Track V (browser viz) riders — deferred at track close (2026-06-12)
+
+Two riders survived the close adjudication (PIR §4; design doc §7 tracker):
+
+- **Compound-cell component diffs**: `cell-diff` is whole-cell; post-PPN-4C
+  universe/compound cells hold many components, so playback shows
+  "hash(N) → hash(N+1)" where a component-level story exists. Trigger:
+  viewer users need sub-cell playback. Likely cell-layer (diff at
+  component-write time), NOT exporter-side.
+- **D7 value-detail depth**: exporter unpacks ONE level of hash keys
+  (bounded at 8). Trigger: hover detail proves insufficient for
+  understanding relation stores / registries. Watch depth creep (VAG §7.8
+  note) — cap-and-name, never silent growth.
+
+Also recorded for the owner (NOT riders, adjacent-defect flags from the arc):
+LSP prop-trace capture structurally dead (server.rkt:553 post-unwind read);
+3 doc-vs-implementation drifts (syntax-doc int+/int* map partials fail
+inference; bench-ab `--ref` documented-unimplemented; colon-form `spec`
+parses dependent with single-clause defn).

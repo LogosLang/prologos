@@ -1380,3 +1380,23 @@ Entry template:
   acceptance — index.html + two corpus envelopes DELIVERED to the owner
   (proactive file send).
 - **Landed in**: code `10b0f4a`; docs (this commit)
+
+## 2026-06-12 — LOOP iteration 52 — [SIGNIFICANT] PTF TRACK V (the viz arc) CLOSED — and the loop PAUSES awaiting owner review (§8-adjacent adjudication)
+- **Track close**: 9/9 phases ✅; riders adjudicated (2 dissolved, 1 dormant,
+  2 → DEFERRED.md); PIR written skeleton-first from the 16 questions incl.
+  the charter §9 autonomy retro (`2026-06-12_PTF_TRACK2_PIR.md`); Master PTF
+  section gains the disambiguated **Track V** row (naming collision with the
+  planned "Track 2: Pipeline Detection" found at close — the arc's docs keep
+  their internal name, the Master row disambiguates).
+- **The owner's stated final goal is DELIVERED pending browser acceptance**:
+  exporter + viewer + corpus envelopes sent to the owner (iteration 51).
+  Suite green (8666/439); every phase gated; one production edit total.
+- **⚠ PAUSE ADJUDICATION (the §8 lens)**: none of the hard stop conditions
+  fired — but the re-arm direction's goal is satisfied pending the owner's
+  acceptance run, and the next arcs (retro queue (a)-(e), the deferred
+  riders, the doc-drift fixes) are OWNER-SEQUENCING calls — exactly the
+  situation in which the original loop halted. DECISION: stop re-arming;
+  leave the kickoff one-liner standing (charter §7); the owner re-arms with
+  a sequencing ruling, exactly as this arc began. Reversal path: trivial
+  (run the one-liner).
+- **Landed in**: (this commit)
