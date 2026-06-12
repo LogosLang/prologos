@@ -186,14 +186,18 @@ on Racket — per-hit economics still bound the payoff to coarse, ms-scale,
 genuinely recurring top redexes (+6.5µs/hit vs the avoided #:compute).
 
 Related gaps for the super-optimization vision (recorded, not defects):
-- CROSS-MODULE reuse does not exist: the only preduce-load-pnetx! call site loads
-  the file-being-compiled's own .pnetx; load-module never consults an imported
-  module's .pnetx. Section B is already NOT origin-filtered, so the schema
-  tolerates a shared store — only the wiring is missing.
-- extract/cached has ZERO production callers (Track 4 PIR §4's named deferral) —
-  Section B is EMPTY in real artifacts; the cost-OPTIMIZED form is never served,
-  only the recorded whnf result. The consult-wiring is the prerequisite for
-  serving extraction's optimum.
+- CROSS-MODULE reuse: the SERVING half landed with the consult-wiring (the
+  store's question key is content-defined; Section B not origin-filtered). The
+  LOADING half is still missing: load-module never consults an imported
+  module's .pnetx — one call site in driver.rkt's import path, the natural
+  next unit.
+- extract/cached production consult — **WIRED 2026-06-11 (commit edd9bfdd)**:
+  store-consult/record-reduction now serve + populate the store at the δ/β/ι
+  ingestion choke point (cost-0 entries = reduction results); Section B is
+  non-empty in production (476 entries on the warm-natrec synthetic). What
+  remains of the original gap: serving extraction's COMPOSITIONAL optimum
+  (vs the recorded whnf result) still needs decomposed interning + descriptor
+  population — the flat-vs-decomposed question, owner-sequenced.
 - "Per-module" Section A is really per-top-level-compile: `current-intern-origin`
   is set once per process-file and never reset by load-module, so classes created
   while an import elaborates in-process land in the IMPORTER's .pnetx.
