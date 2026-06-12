@@ -38,33 +38,39 @@ https://download.racket-lang.org/installers/9.0/racket-9.0-x86_64-linux-cs.sh
 `raco make -j 4 driver.rkt` in racket/prologos. The Workflow runtime is absent
 — grounding/critique run as parallel Explore agents with the same disciplines.
 
-## Exact next step (iteration 50)
+## Exact next step (iteration 51)
 
-**PTF Track 2 Phase 2c — `tools/viz-export.rkt` + golden tests** (one scoped
-unit; the exporter per locked D1/D2/D4/D7 — tools-only, no production edits):
+**PTF Track 2 Phase 3 — the standalone browser viewer** (THE user-facing
+deliverable; one scoped unit, but the largest one — if it needs splitting,
+3a = static topology view, 3b = playback, each its own iteration):
 
-1. Build on the probe's validated recipe (viz-capture-probe.rkt is the
-   skeleton): observer wrapper that ALSO records
-   `(current-inexact-milliseconds)` per round; observatory + capture-box;
-   `--max-diffs` + `--max-rounds` + truncation flags.
-2. The envelope per D1 (vizTrace 1): captures (label/subsystem/status/
-   timestampMs/sequence/topology via serialize-network-topology),
-   finalTopology, rounds (serialize-bsp-round + roundTimestampMs), identity
-   (cellDomains from prop-network-cell-domains; wellKnownCells 0–21 from
-   propagator.rkt constants; propagatorSrclocs; coverage stats per D4), D7
-   valueDetail (one-level hash unpacking, bounded).
-3. **Epoch-bucketing validation on the corpus** (the locked 2c criteria):
-   round timestamps strictly monotone per run; epoch count == command count
-   (bucket rounds by capture timestamps); pre-first-capture rounds → load
-   epoch. **Solver free-path validation**: per-epoch topology from each
-   epoch's LAST round snapshot — does the relational corpus file yield
-   solver-cell epochs? If bucketing or solver-visibility FAILS → activate
-   the pre-registered 2b fallbacks (observer-site timestamps / solve-boundary
-   observatory hook) as iteration 51 instead of proceeding.
-4. Golden test: tests/test-viz-export.rkt — run the exporter on a tiny
-   fixture, assert envelope keys + coverage stats + monotonicity (schema
-   regression per Phase T seed). Targeted runner; acceptance probe; docs;
-   commit; push; re-arm.
+`tools/viz/index.html` — single file, dependency-free, no build step (locked
+D3). Loads a vizTrace/1 JSON via file-input/drag-drop (file:// safe; no
+server). MUST-HAVES per the locked design + critique:
+1. **Topology view**: bipartite Canvas graph — cells=circles,
+   propagators=diamonds (conventions from propagatorView.ts; code NOT
+   ported); edges propagator.inputs/outputs; COMPONENT-AWARE layout
+   (disconnected components laid out independently, grid-arranged; BFS
+   layering within components; SELF-LOOP arcs — they're real, e.g.
+   propagator 8 inputs=[34] outputs=[34]); zoom/pan (Canvas transform);
+   hover tooltips (cell value, valueDetail keys, domain, well-known name,
+   propagator srcloc).
+2. **Identity coloring (D4 as locked)**: color by best-available (domain →
+   well-known → subsystem → heuristic); display the coverage stats — never
+   pretend full coverage.
+3. **Playback**: epoch selector (per-command; labels from captures) +
+   round scrubber within epoch; on each round: flash the diffed cells
+   (cellDiffs old→new on hover) + highlight fired propagators; coverage
+   line ("N rounds across M epochs"). Per-epoch topology switch (the
+   solver epochs LOOK different — that's the point: 67-81c/172-179p).
+4. Validate against all 3 corpus envelopes (regenerate via the exporter;
+   /tmp copies may be gone). Check in a small golden envelope? NO — large;
+   regenerate on demand. Document usage at the top of index.html + in the
+   design doc.
+5. Browser-verification limitation: this container has no GUI browser —
+   verify with node-less static checks (JSON loads, JS syntax via `node
+   --check` if node exists, else careful review) + ship; the OWNER's
+   browser is the real acceptance. Record the limitation honestly.
 
 **Container noise floor (calibrate perf claims)**: A/A same-code bench
 registers up to 15.3% "significant" — see ledger iter 49.

@@ -1337,3 +1337,26 @@ Entry template:
   clean run + structural adjudication. Lesson: bench runs get an exclusive
   machine, ALWAYS — even at iteration starts.
 - **Landed in**: code `6d25e58`; docs (this commit)
+
+## 2026-06-12 — LOOP iteration 50 — [ROUTINE] PTF Track 2 Phase 2c + T CLOSED — the exporter exists; every locked validation criterion PASSED; the solver free path is REAL
+- **`tools/viz-export.rkt`** (`b0bbb88`): vizTrace/1 envelope per the locked
+  D1/D2/D4/D7 — per-command captures with topology; epoch-bucketed rounds
+  (timestamped by the observer wrapper); per-epoch LAST-SNAPSHOT topologies;
+  per-topology identity (impl note: cell-id spaces are PER-NETWORK, so
+  identity cannot be a global map — recorded as a D1 implementation
+  amendment); bounded D7 value detail; always-computed validation block.
+- **The 2c criteria, all PASS on the 3-file corpus**: timestamps monotone ✓;
+  captures==commands (17/17, 16/16, 4/4) ✓; **solver free path VALIDATED** —
+  relation/solve epochs expose the solver machinery (67–81 cells /
+  172–179 propagators vs the 41c/0p final elab net; relational-demo's store
+  visibly GROWS 57c/2p → 87c/17p across the tutorial). The pre-registered
+  2b fallbacks (observer-site timestamps; solve-boundary hook) are NOT
+  needed — they stay dormant, documented.
+- **Golden test** `tests/test-viz-export.rkt` 7/7 (Phase T's deliverable,
+  landed with 2c per the locked tracker note). Two fixture syntax stumbles
+  on the way (inline defn body = WS layout violation; `spec NAME : T` colon
+  form parses as a DEPENDENT signature on single-clause defns — 3rd
+  doc-vs-implementation drift flag this arc) — both gate-caught.
+- No production edits this iteration (tools+tests only) → full suite not
+  required; targeted gate green.
+- **Landed in**: code `b0bbb88`; docs (this commit)

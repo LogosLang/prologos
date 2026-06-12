@@ -20,8 +20,8 @@ see `docs/tracking/2026-03-12_PROPAGATOR_VISUALIZATION_DESIGN.md` +
 | 0A | Acceptance file `examples/2026-06-12-ptf-track2-viz.prologos` + corpus definition (ordering debt from critique B1 — acceptance precedes ALL implementation) | ✅ | iter 47; Level-3 clean (17 commands, 0 errors); corpus audit §8 |
 | 2a | In-container full-suite baseline (gate for any production edit) | ✅ | iter 48: **8658/439 ALL PASS, 401.5s** (after env fixes: rackcheck + `raco pkg install --link` + one stale 8.10 .zo; 9 env-failures → 0; zero flakes) |
 | 2b | Production hooks: Tier-1 observer call (A1); pre-registered fallbacks: observer-site timestamps (A2), solve-boundary observatory hook (A4) — full suite + bench A/B at close | ✅ | iter 49 (`6d25e58`): armed path = per-fire champ-diff + one bsp-round; unarmed byte-identical; 3 unit tests; suite 8666/439 GREEN (400.6s ≈ baseline); fallbacks NOT yet needed (2c validates); corpus never takes Tier-1 (falsified-workload note in ledger) |
-| 2c | `tools/viz-export.rkt` + golden tests (tests land WITH the exporter) | ⬜ | epoch-bucketing validation criteria per §7.7 A2 |
-| T | Dedicated test file `tests/test-viz-export.rkt` (schema regression) | ⬜ | before the viewer consumes the schema |
+| 2c | `tools/viz-export.rkt` + golden tests (tests land WITH the exporter) | ✅ | iter 50 (`b0bbb88`): ALL criteria PASS on the corpus — monotone ✓, captures==commands ✓, **solver free path ✓** (relation epochs 67-81c/172-179p); fallbacks NOT needed; envelope ≤880KB |
+| T | Dedicated test file `tests/test-viz-export.rkt` (schema regression) | ✅ | landed with 2c; 7/7 (envelope keys, parity, monotone, identity coverage, D7 bounds, solver-epoch assert, jsexpr round-trip) |
 | 3 | Standalone browser viewer: topology + playback; component-aware layout; coverage display | ⬜ | corpus scale audit gates entry (B9) |
 | 4 | Riders per data: compound-cell component diffs; D7 depth; solver hook if 2c validation demands; any rider adding cells/propagators carries its own NTT model | ⬜ | |
 
