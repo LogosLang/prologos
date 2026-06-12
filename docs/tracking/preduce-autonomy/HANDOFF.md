@@ -38,24 +38,36 @@ https://download.racket-lang.org/installers/9.0/racket-9.0-x86_64-linux-cs.sh
 `raco make -j 4 driver.rkt` in racket/prologos. The Workflow runtime is absent
 — grounding/critique run as parallel Explore agents with the same disciplines.
 
-## Exact next step (iteration 48)
+## Exact next step (iteration 49)
 
-**PTF Track 2 Phase 2a — the in-container full-suite baseline** (one scoped
-unit; the gate for ANY production edit, and 2b is next):
+**PTF Track 2 Phase 2b — the Tier-1 observer production edit** (one scoped
+unit; THE production touch of this track, locked at §7 D5-revised):
 
-1. `raco make driver.rkt` is already green under 9.0; run the FULL suite:
-   `racket tools/run-affected-tests.rkt --all 2>&1 | tail -30` (from
-   racket/prologos; capture summary + failures in ONE run per testing.md).
-2. Expect inherited state ~8663 green at `ff739de7`-equivalent; this
-   container has NEVER run the full suite — adjudicate any failures per the
-   failure-log protocol (read `data/benchmarks/failures/*.log`; the
-   registry-visibility flake family is KNOWN: batch-only failures pass
-   individually → non-blocking per standing policy, verify per occurrence).
-3. Record the baseline in the design doc gate-status + ledger; this is the
-   2b regression reference.
-4. If green (or green-with-adjudicated-flakes): NEXT iteration (49) = 2b
-   production hooks (Tier-1 observer call per D5-revised; mini-audit of
-   propagator.rkt:3437–3471 first; full suite + bench A/B at close).
+1. **Mini-audit first** (surgical, main-session): read propagator.rkt
+   3437–3471 (Tier-1 flush) + 3581–3598 (Tier-2 observer call shape) at
+   current HEAD. Confirm: where the Tier-1 fold's post-state lives, what a
+   bsp-round needs (round-number, network, diffs, fired pids, contradiction,
+   atms-events), and whether Tier-1 can cheaply produce cell-diffs (it
+   knows its writes) or ships diffs=`'()` day one (then the round records
+   FIRES + the post-state snapshot only — decide at the audit, record in
+   the design doc).
+2. **Bench PRE baseline BEFORE the edit**: `racket tools/bench-ab.rkt
+   --runs 10 benchmarks/comparative/ --output /tmp/bench-pre-2b.json`
+   (from racket/prologos; no concurrent runs).
+3. The edit: observer call in the Tier-1 branch — `(when observer ...)`
+   mirroring Tier-2's shape; zero-cost when unarmed; NO behavior change to
+   firing. check-parens → `raco make driver.rkt` → targeted tests
+   (test-trace-serialize, test-observatory-01/02, test-propagator-bsp if it
+   exists) → probe on the acceptance file (expect MORE rounds — fire-once
+   programs now visible; record the delta in the design doc).
+4. Bench POST + compare (A/B vs PRE; 1.2× rules); FULL SUITE as the gate
+   (8658/439/401.5s is the reference). Ledger + dailies + HANDOFF + commit.
+
+## Container re-setup recipe (if the container was recreated)
+
+Racket 9.0 install (see Environment above) + `raco pkg install --auto
+--skip-installed rackcheck` + `raco pkg install --link --auto
+racket/prologos` + `raco make -j 4 driver.rkt` in racket/prologos.
 
 ## Implementation queue (after 0A) — per the LOCKED design (§7, amended)
 

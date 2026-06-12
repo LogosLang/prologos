@@ -1285,3 +1285,22 @@ Entry template:
   for the above).
 - **Gates**: parens ✅; Level-3 acceptance ✅ (0 errors); corpus probes ✅.
 - **Landed in**: (this commit)
+
+## 2026-06-12 — LOOP iteration 48 — [ROUTINE] PTF Track 2 Phase 2a CLOSED — the in-container full-suite baseline is GREEN: 8658/439 ALL PASS (401.5s)
+- **First-ever full suite in this container**: initial run 8536 green / 9
+  FAILURES — ALL NINE adjudicated environment-setup, zero code failures:
+  (a) 6× `prologos/propagator` collection not found → repo was never
+  `raco pkg install --link`ed here; (b) 2× missing `rackcheck` package;
+  (c) 1× stale 8.10-compiled .zo (test-observatory-01). Fixed all three
+  classes; the 9 files re-verified individually via the targeted runner
+  (127/127); then ONE forced full-suite regression gate (the anti-rerun
+  guard correctly fired on the unforced attempt — pkg installs are invisible
+  to its .rkt-mtime check; --force-rerun is the sanctioned escape).
+- **The baseline**: 8658 tests / 439 files / all pass / 401.5s wall (4-core
+  container; the owner-machine ~130s is not comparable — per-container
+  rolling-median rules apply from here). Zero flakes this run (the
+  registry-visibility family did not fire).
+- **2b is UNBLOCKED**: the Tier-1 observer production edit may proceed
+  (mini-audit of propagator.rkt:3437–3471 first; bench-ab PRE baseline
+  captured before the edit, A/B after — sequential, never concurrent).
+- **Landed in**: (this commit)
