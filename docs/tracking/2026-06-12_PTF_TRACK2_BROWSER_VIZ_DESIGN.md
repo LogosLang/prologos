@@ -16,11 +16,14 @@ see `docs/tracking/2026-03-12_PROPAGATOR_VISUALIZATION_DESIGN.md` +
 |---|---|---|---|
 | 0 | Grounding audit (5 facets + adversarial critic) | ✅ | this commit; synthesis below |
 | 0.5 | Environment shakeout + empirical capture probe (install Racket in container; run a demo file with observer armed; verify non-empty rounds + real edges; measure counts) | ✅ | iter 45; findings §6; probe = tools/viz-capture-probe.rkt |
-| 1 | Stage 3 design lock: exporter CLI shape + JSON schema posture + viewer stack | ⬜ | design rounds per charter §5 |
-| 2 | `tools/viz-export.rkt` — headless CLI: `.prologos` in → self-contained trace JSON out | ⬜ | reuses trace-serialize + observatory-serialize |
-| 3 | Standalone browser viewer (no build step) consuming the trace JSON; topology view + BSP-round playback | ⬜ | reuse rendering architecture + palette from propagatorView.ts |
-| 4 | Fidelity riders: Tier-1 observer coverage, solver-network capture, compound-cell component diffs | ⬜ | scope per Phase 0.5 findings |
-| T | Test phase: exporter golden test + schema regression | ⬜ | mandatory per workflow.md |
+| 1 | Stage 3 design lock: D1–D7 + critique round + VAG | ✅ | iter 46; §7; LOCKED (amended) |
+| 0A | Acceptance file `examples/2026-06-12-ptf-track2-viz.prologos` + corpus definition (ordering debt from critique B1 — acceptance precedes ALL implementation) | ⬜ | iteration 47; corpus = acceptance file + prop-viz-demo + a relations demo |
+| 2a | In-container full-suite baseline (gate for any production edit) | ⬜ | |
+| 2b | Production hooks: Tier-1 observer call (A1); pre-registered fallbacks: observer-site timestamps (A2), solve-boundary observatory hook (A4) — full suite + bench A/B at close | ⬜ | smallest viable production touch |
+| 2c | `tools/viz-export.rkt` + golden tests (tests land WITH the exporter) | ⬜ | epoch-bucketing validation criteria per §7.7 A2 |
+| T | Dedicated test file `tests/test-viz-export.rkt` (schema regression) | ⬜ | before the viewer consumes the schema |
+| 3 | Standalone browser viewer: topology + playback; component-aware layout; coverage display | ⬜ | corpus scale audit gates entry (B9) |
+| 4 | Riders per data: compound-cell component diffs; D7 depth; solver hook if 2c validation demands; any rider adding cells/propagators carries its own NTT model | ⬜ | |
 
 ## 1. Grounding synthesis (what EXISTS at `ff739de7`)
 
@@ -156,9 +159,13 @@ caches), JSON artifact 31.5KB.
 
 ## 7. Stage-3 design decisions (Phase 1, iteration 46)
 
-Status: **PROPOSED — under critique** (two independent adversarial critics
-running; findings and resolutions land in §7.7; 2-column VAG in §7.8; the
-status flips to LOCKED only after resolution).
+Status: **LOCKED (amended)** — two independent adversarial critics returned
+1 BLOCKER + 4 MAJOR (Critic A, refutation mandate) and 1 BLOCKER + 4 MAJOR
+(Critic B, P/R/M/S + red-flags). All adjudicated in §7.7 (including push-backs);
+amendments applied in-place below; 2-column VAG in §7.8. The single largest
+amendment: **"tools-only Phase 2" was overturned** — the owner's goal requires
+two minimal production hooks (Tier-1 observer call; pre-registered fallbacks),
+so Phase 2 splits into 2a (baseline) / 2b (hooks, gated) / 2c (exporter).
 
 ### D1 — Exporter: `tools/viz-export.rkt`, one self-contained JSON per run
 
@@ -199,13 +206,13 @@ Phase 4 rider (verify on a relations-using acceptance file in Phase 2).
 `serialize-network-topology` + `serialize-bsp-round` are used UNCHANGED (the
 probe verified completeness: edges, per-round diffs, values). The D4 identity
 maps are computed BY THE EXPORTER into the envelope's `identity` section —
-trace-serialize.rkt is NOT modified in Phase 2. This is named scaffolding:
-keeping Phase 2 tools-only (no production edits before the in-container
-full-suite baseline) at the cost of identity living outside the core schema.
-**Fold-in decision point pre-registered**: at Phase 4, either the identity
-section graduates into `serialize-network-topology` (if the viewer proves the
-fields belong in every consumer, including the VS Code panel) or stays
-exporter-local (if it's viz-specific). Not both indefinitely.
+trace-serialize.rkt is FROZEN this track. **AMENDED AT LOCK (critique B5 —
+the "fold-in decision point" was a validated≠deployed dangle): PATH B is
+DECIDED.** Identity is exporter-local as the END-STATE of this track, not a
+waystation: the fields are unproven until the viewer exists, and core-schema
+churn must not precede validation. The VS Code panel's identity-hollowness
+(F4) is explicitly OUT-OF-SCOPE — owner-queue material. Fold-in re-opens only
+via a new owner-decided track.
 
 ### D3 — Viewer: single-file static HTML+JS, dependency-free, in `tools/viz/`
 
@@ -217,11 +224,19 @@ propagators=diamonds; replay-with-scrubber semantics); CODE not reused — the
 extension's rendering core is entangled with its bundler + d3 subpackages and
 one `acquireVsCodeApi()` seam; porting costs more than rewriting at this
 feature size and would couple the standalone viewer to extension internals.
-Layout: simple BFS-layering from input-degree-0 cells (adequate at probe
-magnitudes). **Pre-registered revisit condition**: if the acceptance corpus
-produces >1k-node graphs or unreadable layouts, revisit layout (d3-dag port or
-WebWorker Sugiyama) as its own decision — do not silently grow the hand-rolled
-one.
+**AMENDED AT LOCK (critique B4): this is INCOMPLETE DECOMPLECTION, named** —
+the more-aligned end-state is a shared rendering core with thin VS Code +
+browser adapters; deferred because the standalone viewer must not depend on
+the extension's build pipeline. Revisit triggers: >1k-node corpus graphs OR
+the panel adopting the identity fields.
+Layout **(amended per critique A5)**: component-aware from day one —
+disconnected components laid out independently and arranged in a grid;
+self-loops rendered as arcs on the node (the probe showed self-loops are
+REAL: propagator 8 has inputs=[34], outputs=[34]); BFS-layering within
+components. Legibility acceptance on the relations corpus file gates Phase 3
+close. **Pre-registered revisit condition** (unchanged): >1k-node graphs or
+unreadable layouts → revisit layout (d3-dag port or WebWorker Sugiyama) as
+its own decision — do not silently grow the hand-rolled one.
 
 ### D4 — Cell/propagator identity: best-available-wins stack
 
@@ -229,21 +244,35 @@ one.
 constants); (2) `prop-network-cell-domains` champ → domain symbol (the
 post-universe-migration replacement for hollow `elab-cell-info` — finding F4);
 (3) `elab-cell-info` srcloc/type when present; (4) the existing value-shape
-heuristic as floor. Viewer colors by DOMAIN primarily; subsystem retained as a
-secondary facet. Propagators: srcloc from the propagator struct (PPN 4C
-Phase 1.5 field) rendered as tooltip + (in served contexts) source link.
+heuristic as floor. **AMENDED AT LOCK (critique B2, resolved WITH DATA —
+probe rerun, iteration 46)**: cell-domains coverage on the demo is **24/44
+(55%), 7 distinct domains** (hasheq-replace ×9, monotone-set ×7,
+hash-of-lists-accumulator ×3, tropical-fuel ×2, constraint-status-map,
+error-descriptor-map, hasse-registry) — NOT hollow, but below the 70% bar, so
+the pre-registered rename fires: the claim is **"best-available identity with
+MEASURED coverage"**, not "colors by domain primarily". The exporter emits
+per-level coverage stats in the envelope; the viewer displays them. Note:
+domain names are merge-strategy-flavored — the palette maps them to
+lattice-meaningful colors, which honestly serves "how the system works" (the
+merge structure IS the system). Propagators: srcloc from the propagator
+struct (PPN 4C Phase 1.5 field) rendered as tooltip + (in served contexts)
+source link.
 
-### D5 — G3 (Tier-1 observer dropout): defer the fix, surface the gap
+### D5 — G3 (Tier-1 observer dropout): **REVISED AT LOCK — the fix is PROMOTED to Phase 2b**
 
-Phase 2 ships tools-only — no scheduler edits. The dropout share CANNOT be
-measured from outside (no hook in the Tier-1 branch), so quantification waits
-for Phase 4's first sub-unit: a Tier-1 entry counter (production touch ⇒ its
-own mini-audit + the full-suite baseline first). Mitigation NOW: the viewer
-displays capture coverage prominently ("N rounds captured across M runs;
-fast-path runs are not traced") so the gap is VISIBLE, never silent. Any
-eventual fix must be scheduler-independent in semantics (orthogonality rule);
-candidate = observer call in the Tier-1 branch (cell/propagator-layer concern,
-zero-cost when unarmed), NOT an exporter-mode scheduler flag.
+Original posture (defer to Phase 4, mitigate with a viewer message) was
+REFUTED by both critics: Critic A showed simple fire-once programs (the
+canonical relational demos) produce ZERO rounds — "arbitrary programs" is
+false without the fix; Critic B showed the "visibility" mitigation had no
+data source — a hardcoded string, not surfacing. **Resolution: the observer
+call lands in the Tier-1 branch (propagator.rkt:3437–3471) in Phase 2b** —
+zero-cost when unarmed (one parameter read, the price Tier-2 already pays),
+semantics scheduler-independent (it REPORTS fires; it alters nothing — the
+orthogonality rule is satisfied at the propagator/observation layer, not via
+an exporter-mode scheduler flag). The Phase-4 counter is DROPPED — dissolved
+by the fix (observed fast-path runs leave no dropout to count). Gates: 2a
+full-suite baseline precedes; bench A/B at 2b close (Tier-1 is the hot path;
+the testing.md regression rules apply).
 
 ### D6 — NTT model: NOT APPLICABLE (named, with reasoning)
 
@@ -256,10 +285,47 @@ check: observation tooling's PURPOSE is information flow OUT of the network to
 humans; the capture mechanism is the codified `current-bsp-observer` pattern
 (zero overhead when `#f`).
 
-### 7.7 Critique round findings + resolutions
+### 7.7 Critique round findings + adjudications (two independent critics, iteration 46)
 
-(filled by the critique round below)
+**Critic A (mandate: refute the central claim)** — verdict was "substantially
+refuted; recoverable with corrections"; all corrections adjudicated:
 
-### 7.8 Vision Alignment Gate (2-column)
+| # | Finding | Adjudication |
+|---|---|---|
+| A1 | BLOCKER: Tier-1 fast path skips the observer → simple fire-once programs (canonical relational demos) trace EMPTY | ACCEPTED — fix promoted to Phase 2b (see D5 revision) |
+| A2 | MAJOR: timestamp epoch-correlation fragile (sub-ms rounds, coarse clocks, wrapper-outside-loop) | PARTIAL, with push-back: the wrapper records AT observer invocation (inside the loop), and Linux/macOS clocks give sub-ms float precision — the named failure modes don't apply as stated. ACCEPTED core: bucketing is UNVALIDATED → Phase 2c acceptance criteria (strict per-run monotonicity; epoch count == command count on the corpus; pre-first-capture rounds labeled as load-epoch). Pre-registered fallback: 1-line observer-site timestamps in 2b if validation fails |
+| A3 | MAJOR: value rendering opaque ("hash(N entries)") — playback uninformative | ACCEPTED as **D7 (new)**: exporter-side bounded semantic detail — one-level hash unpacking (keys + per-key summary), decision/worldview cells rendered as bitmask + labels, sizes capped; lands in the envelope (PATH B consistent); trace-serialize untouched. Viewer shows detail on hover/click |
+| A4 | MAJOR: solver/relations networks invisible day one — the pedagogically central propagation missing | ACCEPTED, two-part: (i) FREE PATH first — rounds carry full network snapshots and the ambient observer fires in solver BSP runs too; the exporter derives per-epoch topology from each epoch's last snapshot (A1's fix also un-hides solver fast-paths); validated on the relations corpus file in 2c; (ii) pre-registered 2b fallback: solve-boundary observatory registration if solver epochs come back empty |
+| A5 | MAJOR: BFS layering fails on solver graphs (disconnected components, self-loops, wide layers) | ACCEPTED into D3: component-aware layout day one + self-loop arcs + relations-file legibility gate |
+| A6 | MINOR: monochrome coloring | Merged into D4 (resolved with data — see D4 amendment) |
+| A7 | MINOR: cold-cache prelude can explode the trace | ACCEPTED: `--max-rounds` + truncation flag join `--max-diffs` |
 
-(filled at lock)
+**Critic B (mandate: P/R/M/S + red-flag scan)** — verdict "cannot lock as-is";
+all blockers resolved at lock:
+
+| # | Finding | Adjudication |
+|---|---|---|
+| B1 | BLOCKER: no Phase-0 acceptance file (workflow.md mandate) | ACCEPTED — Phase 0A added; `examples/2026-06-12-ptf-track2-viz.prologos` is iteration 47's unit, BEFORE any implementation; corpus defined there |
+| B2 | MAJOR: D4's cell-domains may be F4-hollow one level down | RESOLVED WITH DATA at lock (probe rerun): 24/44 = 55% coverage, 7 domains — not hollow, below the 70% bar → pre-registered rename FIRED (see D4 amendment) |
+| B3 | MAJOR: D5's "visibility" had no data source | DISSOLVED by A1/D5 revision — observed fast-paths leave no dropout; counter dropped |
+| B4 | MAJOR: D3 framed pragmatism as principle | ACCEPTED — reframed as incomplete decomplection with named deferral reason + two revisit triggers |
+| B5 | MAJOR: D2's "fold-in decision point" = validated≠deployed dangle | ACCEPTED — **PATH B decided at lock**: exporter-local identity is the track's end-state; panel out-of-scope; fold-in reopens only via a new owner-decided track |
+| B6 | MINOR: D6 NTT claim incomplete re Phase 4 | ACCEPTED — any Phase 4 rider adding cells/propagators carries its own NTT model; 2b's observer call adds neither |
+| B7 | MINOR: envelope fields viewer-specific | ACCEPTED — D1-note: epoch-correlation fields are exporter/viewer-specific, not schema-canonical |
+| B8 | MINOR: Phase T after Phase 4 | ACCEPTED — tracker reordered (2c carries its golden tests; T precedes the viewer) |
+| B9 | MINOR: corpus undefined/unaudited | ACCEPTED — corpus at 0A; probe-based scale audit gates Phase 3 entry |
+
+### 7.8 Vision Alignment Gate (2-column: catalogue / challenge)
+
+| Decision | Column 1 — catalogue (passes?) | Column 2 — could it be MORE aligned? |
+|---|---|---|
+| D1 envelope | Reuses production serializers; one self-contained artifact | YES, marginally: epoch fields are viewer-coupled — named non-canonical (B7) rather than pretending generality |
+| D2 schema | Production schema untouched; no churn before validation | The inherited "pre-registered fold-in" pattern WAS the drift — challenged and KILLED at lock (PATH B decided; no dual path remains) |
+| D3 viewer | No build step; runs from file://; conventions reused | YES: shared rendering core is more aligned — named as incomplete decomplection with explicit reopen triggers, per the pragmatic-ban rule |
+| D4 identity | 4-level best-available stack; measured | The original "primarily by domain" OVERSOLD an unmeasured source — measurement (55%) forced the honest claim; this is §5.8 measurement-as-design-instrument working |
+| D5 Tier-1 | Zero-cost-unarmed observation; scheduler-orthogonal | The inherited "tools-only Phase 2" posture was CHALLENGED AND OVERTURNED — safety theater that made the owner's goal undeliverable; replaced by gated minimal hooks |
+| D6 NTT | N/A claim scoped to read-side phases | Tightened: per-rider NTT obligation pre-registered for Phase 4 |
+| D7 values | Bounded semantic unpacking, envelope-local | Watch: depth creep — capped sizes + Phase 4 rider for depth, not silent growth |
+
+VAG requirement met: at least one inherited pattern challenged — two were
+(the D2 fold-in dangle; the tools-only Phase 2 posture), both overturned.

@@ -17,6 +17,7 @@
 
 (require json
          racket/list
+         "../champ.rkt"
          "../driver.rkt"
          "../errors.rkt"
          "../propagator.rkt"
@@ -78,7 +79,19 @@
            (hash-ref stats 'totalCells)
            (hash-ref stats 'totalPropagators)
            (length edge-bearing))
-   (printf "  cells by subsystem: ~a\n" by-subsystem)]
+   (printf "  cells by subsystem: ~a\n" by-subsystem)
+   ;; D4 identity-stack coverage audit (PTF Track 2 critique B2): does the
+   ;; cell-domains champ actually cover cells, or is it F4-hollow one level down?
+   (let* ([pnet (elab-network-prop-net enet)]
+          [domains-champ (prop-network-cell-domains pnet)]
+          [domain-cids (champ-keys domains-champ)]
+          [by-domain
+           (for/fold ([h (hash)]) ([cid (in-list domain-cids)])
+             (define d (champ-lookup domains-champ (cell-id-n cid) cid))
+             (hash-update h d add1 0))])
+     (printf "  cell-domains coverage: ~a/~a cells carry a domain\n"
+             (length domain-cids) (hash-ref stats 'totalCells))
+     (printf "  domains: ~a\n" by-domain))]
   [else
    (printf "topology: NO elab-network captured (cap-box empty)\n")])
 

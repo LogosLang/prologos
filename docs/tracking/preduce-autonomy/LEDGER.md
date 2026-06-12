@@ -1233,3 +1233,34 @@ Entry template:
   run this iteration (docs+tools-only changes; first in-container full-suite
   baseline is owed before the first PRODUCTION edit — likely Phase 1/2 boundary).
 - **Landed in**: (this commit)
+
+## 2026-06-12 — LOOP iteration 46 — [SIGNIFICANT] PTF Track 2 Stage-3 design LOCKED (amended) — and the critique apparatus EARNED ITS COST on unfamiliar surfaces
+- **Process**: PROPOSED D1–D6 drafted from grounding+probe data (commit
+  6dd6245), then TWO independent adversarial critics (fresh contexts,
+  file-grounded; one refutation-mandated, one P/R/M/S+red-flags) — the first
+  Phase-B-style design round on surfaces the loop did NOT author, and the
+  panels found what in-context drafting missed: 2 BLOCKERs + 8 MAJORs.
+- **The big overturn**: "tools-only Phase 2" was REFUTED — Tier-1 fast-path
+  runs skip the observer, so simple fire-once programs (the canonical
+  relational demos) trace EMPTY; "arbitrary programs" was false as drafted.
+  The Tier-1 observer call is PROMOTED to Phase 2b (zero-cost unarmed,
+  scheduler-orthogonal, gated by 2a full-suite baseline + bench A/B).
+- **Dual-path killed at lock**: D2's "fold-in decision point pre-registered"
+  was adjudicated a validated≠deployed dangle (critique B5) — PATH B decided:
+  identity is exporter-local as the END-STATE; trace-serialize.rkt frozen;
+  VS Code panel out-of-scope.
+- **Measurement as design instrument (§5.8) fired in-round**: critique B2
+  ("is cell-domains F4-hollow one level down?") was answered with DATA before
+  lock — probe extended + rerun: 55% coverage, 7 domains → the pre-registered
+  <70% rename clause fired; D4's claim downgraded to "best-available identity
+  with measured coverage".
+- **Methodology debt caught**: no Phase-0 acceptance file (workflow.md
+  mandate) — Phase 0A added; iteration 47 writes
+  examples/2026-06-12-ptf-track2-viz.prologos + corpus BEFORE implementation.
+- **Push-backs recorded** (the loop challenged the critics too): A2's
+  clock-coarseness mechanics rejected (sub-ms float clocks; wrapper records
+  inside the loop), its core accepted as unvalidated-until-measured with
+  acceptance criteria + pre-registered fallback. New D7 (semantic value
+  detail) from A3. Full adjudication: design doc §7.7; VAG §7.8 (two
+  inherited patterns challenged AND overturned).
+- **Landed in**: (this commit)

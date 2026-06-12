@@ -17,12 +17,16 @@ arbitrary prologos programs** — opened as **PTF Track 2** (design doc:
 `docs/tracking/2026-06-12_PTF_TRACK2_BROWSER_VIZ_DESIGN.md`; grounding §1-§5,
 empirical findings §6).
 
-**Iteration ledger this arc**: 44 = arc open + grounding audit (commit
-`5ef450a`). 45 = Phase 0.5 shakeout + probe (commits `914abbb` + this one):
-Racket 9.0 installed in-container (8.10 REJECTED: `thread #:pool 'own`,
-propagator.rkt:3748), toolchain green, probe `tools/viz-capture-probe.rkt` ran
-clean — **real edges exist at HEAD, headless capture works end-to-end, 31.5KB
-JSON for the demo**. Findings F1–F7 in the design doc §6.
+**Iteration ledger this arc**: 44 = arc open + grounding audit (`5ef450a`).
+45 = Phase 0.5 shakeout + probe (`914abbb`, `c1b96bf`): Racket 9.0 installed
+(8.10 REJECTED: `thread #:pool 'own`, propagator.rkt:3748), toolchain green,
+probe ran clean — real edges at HEAD, headless capture end-to-end, findings
+F1–F7 (§6). 46 = **Stage-3 design LOCKED (amended)** (`6dd6245` + this
+commit): two independent adversarial critics → 2 BLOCKERs + 8 MAJORs
+adjudicated (§7.7); "tools-only Phase 2" OVERTURNED (Tier-1 observer fix
+promoted to 2b); PATH B decided for identity; D4 downgraded per in-round
+measurement (55% domain coverage); D7 added; Phase 0A (acceptance file)
+added per critique B1. VAG §7.8.
 
 **Environment**: remote ephemeral container `/home/user/prologos`, branch
 `claude/charming-archimedes-98yb48` (== preduce-autonomy state; push = the
@@ -34,45 +38,43 @@ https://download.racket-lang.org/installers/9.0/racket-9.0-x86_64-linux-cs.sh
 `raco make -j 4 driver.rkt` in racket/prologos. The Workflow runtime is absent
 — grounding/critique run as parallel Explore agents with the same disciplines.
 
-## Exact next step (iteration 46)
+## Exact next step (iteration 47)
 
-**PTF Track 2 Phase 1 — Stage-3 design lock** (one scoped unit: the design
-round + lock; NO implementation in the same iteration). Settle the §3 design
-questions, informed by §6 findings:
+**PTF Track 2 Phase 0A — the acceptance file + corpus** (one scoped unit;
+ordering debt from critique B1 — acceptance precedes ALL implementation):
 
-1. **Exporter CLI shape** (`tools/viz-export.rkt`): per-command sections vs
-   whole-file merge; elab-network only day one vs +solver/ATMS; the probe's
-   capture recipe (observer + observatory + capture-box) is the validated base.
-2. **Schema posture**: default = REUSE the existing trace/observatory JSON
-   schema (F2 shows it's complete: topology + edges + per-round diffs); decide
-   the self-contained-file envelope (one JSON: topology + rounds + metadata,
-   as the probe already emits).
-3. **Viewer stack**: single-file static HTML+JS (no build step) vs porting
-   propagatorView.ts behind a browser shim. Input: coupling is one
-   `acquireVsCodeApi()` site + message passing (critic §5, ~90% portable);
-   but a dependency-free single-file viewer avoids the extension's build
-   pipeline entirely. Decide with a 3-column rationale (or an independent
-   critique agent — this arc touches surfaces the loop did not author).
-4. **Cell identity/coloring (F4)**: subsystem categorization via
-   elab-cell-info is HOLLOW at HEAD — design the replacement identity source
-   (candidate: `prop-network-cell-domains` champ, PPN 4C Phase 1c; plus
-   well-known cell-id constants 0–21 for infra labeling; propagator srcloc
-   for click-to-source).
-5. **G3 posture (Tier-1 dropout)**: add the cheap counter to size the dropout
-   share BEFORE choosing instrument-Tier-1 vs force-Tier-2-in-export-mode.
-   Orthogonality rule: any fix must be scheduler-independent in semantics.
-Write decisions into the design doc (2-column catalogue/challenge for the VAG),
-ledger the lock, THEN stop — Phase 2 (exporter implementation) is iteration 47.
+1. Write `racket/prologos/examples/2026-06-12-ptf-track2-viz.prologos` — a
+   broad exercise of what the viz must SHOW: elaboration (defn/spec/traits),
+   relations + `solve` (the pedagogically central solver propagation —
+   critique A4), pattern matching, and at least one contradiction/retraction
+   if cheap. Level-3 clean (0 errors via process-file).
+2. Define the corpus in the design doc: acceptance file + prop-viz-demo +
+   one existing relations demo (e.g., relational-demo.prologos if it runs
+   clean at HEAD).
+3. Run the PROBE over the whole corpus; record per-file magnitudes (cells/
+   propagators/rounds/diffs/domain-coverage) in the design doc — this is the
+   B9 scale audit that gates Phase 3 entry AND the A4 free-path check (do
+   solver rounds appear in the accumulator? does the last-snapshot-per-epoch
+   topology contain solver cells?).
+4. Tracker, ledger if decisions fall out, dailies, HANDOFF, commit, push.
 
-## Implementation queue (after Phase 1)
+## Implementation queue (after 0A) — per the LOCKED design (§7, amended)
 
-- Phase 2: `tools/viz-export.rkt` + golden test (+ the F3 counter; first
-  in-container FULL-SUITE BASELINE before any production .rkt edit).
-- Phase 3: standalone browser viewer + playback (palette + bipartite
-  conventions from propagatorView.ts; Graphviz/Cytoscape rejection stands).
-- Phase 4: fidelity riders per probe data (G3 fix if warranted, solver
-  capture, F4 production identity improvements, F7 LSP defect hand-off).
-- Phase T: test phase (mandatory).
+- **2a**: in-container FULL-SUITE BASELINE (gate for any production edit).
+- **2b**: production hooks — Tier-1 observer call (promoted at lock; D5
+  revised); pre-registered fallbacks live here too (observer-site timestamps
+  if 2c validation fails; solve-boundary observatory hook if the free path
+  leaves solver epochs empty). Full suite + bench A/B at close (Tier-1 = hot
+  path).
+- **2c**: `tools/viz-export.rkt` + golden tests; epoch-bucketing validation
+  criteria (strict monotonicity; epoch count == command count; load-epoch
+  labeling); D7 semantic value detail; identity coverage stats (D4 amended:
+  55% measured — "best-available with measured coverage").
+- **T**: `tests/test-viz-export.rkt` schema regression (before the viewer).
+- **3**: standalone single-file viewer (component-aware layout day one;
+  self-loop arcs; coverage display; corpus scale audit gates entry).
+- **4**: riders per data (compound-cell diffs; D7 depth; per-rider NTT
+  models if any rider adds cells/propagators).
 
 ## Open threads
 
