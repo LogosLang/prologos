@@ -349,3 +349,66 @@
   ;; All 20 outputs should be 42
   (for ([cid (in-list outputs)])
     (check-equal? (net-cell-read result cid) 42)))
+
+;; ========================================
+;; PTF Track 2 Phase 2b: Tier-1 observer coverage (gap G3)
+;; ========================================
+;; Tier-1 (zero worldview, fire-once + empty-inputs worklist) used to skip the
+;; BSP observer entirely — fire-once-only programs traced EMPTY. These cases
+;; pin the armed path (one bsp-round, precise diffs + attribution) and the
+;; unarmed path (behavior unchanged).
+
+(test-case "tier-1: armed observer sees the fire-once flush"
+  (define net0 (make-prop-network))
+  (define-values (net1 ca) (net-new-cell net0 'bot flat-merge))
+  (define-values (net2 p1)
+    (net-add-fire-once-propagator net1 '() (list ca)
+                                  (lambda (net) (net-cell-write net ca 'hello))))
+  (define seen '())
+  (define result
+    (parameterize ([current-bsp-observer (lambda (r) (set! seen (cons r seen)))])
+      (run-to-quiescence-bsp net2)))
+  (check-equal? (net-cell-read result ca) 'hello)
+  (check-equal? (length seen) 1 "exactly one bsp-round from the Tier-1 flush")
+  (define r (car seen))
+  (check-equal? (bsp-round-propagators-fired r) (list p1))
+  (check-false (bsp-round-contradiction r))
+  (define diffs (bsp-round-cell-diffs r))
+  (check-equal? (length diffs) 1)
+  (check-equal? (cell-diff-cell-id (car diffs)) ca)
+  (check-equal? (cell-diff-new-value (car diffs)) 'hello)
+  (check-equal? (cell-diff-source-propagator (car diffs)) p1
+                "diff attributed to the firing propagator"))
+
+(test-case "tier-1: two fire-once props -> one round, both attributed"
+  (define net0 (make-prop-network))
+  (define-values (net1 ca) (net-new-cell net0 'bot flat-merge))
+  (define-values (net2 cb) (net-new-cell net1 'bot flat-merge))
+  (define-values (net3 p1)
+    (net-add-fire-once-propagator net2 '() (list ca)
+                                  (lambda (net) (net-cell-write net ca 'x))))
+  (define-values (net4 p2)
+    (net-add-fire-once-propagator net3 '() (list cb)
+                                  (lambda (net) (net-cell-write net cb 'y))))
+  (define seen '())
+  (define result
+    (parameterize ([current-bsp-observer (lambda (r) (set! seen (cons r seen)))])
+      (run-to-quiescence-bsp net4)))
+  (check-equal? (net-cell-read result ca) 'x)
+  (check-equal? (net-cell-read result cb) 'y)
+  (check-equal? (length seen) 1)
+  (define r (car seen))
+  (check-equal? (length (bsp-round-propagators-fired r)) 2)
+  (define srcs (map cell-diff-source-propagator (bsp-round-cell-diffs r)))
+  (check-true (and (member p1 srcs) (member p2 srcs) #t)
+              "each diff attributed to its own firing propagator"))
+
+(test-case "tier-1: unarmed observer -> behavior unchanged, nothing recorded"
+  (define net0 (make-prop-network))
+  (define-values (net1 ca) (net-new-cell net0 'bot flat-merge))
+  (define-values (net2 _p)
+    (net-add-fire-once-propagator net1 '() (list ca)
+                                  (lambda (net) (net-cell-write net ca 'quiet))))
+  (define result (run-to-quiescence-bsp net2))
+  (check-equal? (net-cell-read result ca) 'quiet)
+  (check-equal? (prop-network-worklist result) '()))

@@ -3458,17 +3458,56 @@
      ;; No speculation, no branching, no NAF, no inter-propagator dependencies.
      ;; Fire all worklist propagators directly on canonical. One pass.
      ;; No snapshot, no dedup, no topology, no strata.
-     (define result
-       (for/fold ([n net])
-                 ([pid (in-list (prop-network-worklist net))])
-         (define prop (champ-lookup (prop-network-propagators n)
-                                    (prop-id-hash pid) pid))
-         (if (eq? prop 'none) n
-             (fire-propagator prop n))))  ;; PPN 4C Phase 1.5
+     ;; PTF Track 2 Phase 2b: Tier-1 runs were observer-invisible (gap G3) —
+     ;; fire-once-only programs traced EMPTY. When an observer is armed, fire
+     ;; with per-fire eq?-pruned champ-diff (O(changed) per fire) for precise
+     ;; cell-diff attribution and emit ONE bsp-round mirroring Tier-2's shape.
+     ;; The unarmed fold is unchanged — zero cost when no observer.
+     (define-values (result t1-diffs t1-pids)
+       (if observer
+           (for/fold ([n net] [diffs '()] [pids '()])
+                     ([pid (in-list (prop-network-worklist net))])
+             (define prop (champ-lookup (prop-network-propagators n)
+                                        (prop-id-hash pid) pid))
+             (if (eq? prop 'none)
+                 (values n diffs pids)
+                 (let ([n2 (fire-propagator prop n)])
+                   (define-values (chg nw)
+                     (champ-diff (prop-network-cells n)
+                                 (prop-network-cells n2)
+                                 (lambda (o r) (equal? (prop-cell-value o)
+                                                       (prop-cell-value r)))))
+                   (define diffs*
+                     (for/fold ([d diffs])
+                               ([cv (in-list (append chg nw))])
+                       (define cid (car cv))
+                       (define old (champ-lookup (prop-network-cells n)
+                                                 (cell-id-hash cid) cid))
+                       (cons (cell-diff cid
+                                        (if (eq? old 'none)
+                                            'bot
+                                            (prop-cell-value old))
+                                        (prop-cell-value (cdr cv))
+                                        pid)
+                             d)))
+                   (values n2 diffs* (cons pid pids)))))
+           (values (for/fold ([n net])
+                             ([pid (in-list (prop-network-worklist net))])
+                     (define prop (champ-lookup (prop-network-propagators n)
+                                                (prop-id-hash pid) pid))
+                     (if (eq? prop 'none) n
+                         (fire-propagator prop n)))  ;; PPN 4C Phase 1.5
+                   '()
+                   '())))
      ;; Clear worklist after flush
-     (struct-copy prop-network result
-       [hot (struct-copy prop-net-hot (prop-network-hot result)
-              [worklist '()])])]
+     (define cleared
+       (struct-copy prop-network result
+         [hot (struct-copy prop-net-hot (prop-network-hot result)
+                [worklist '()])]))
+     (when observer
+       (observer (bsp-round 0 cleared (reverse t1-diffs) (reverse t1-pids)
+                            (prop-network-contradiction cleared) '())))
+     cleared]
 
     [else
      ;; TIER 2 (or empty worklist): full BSP with optimizations.
