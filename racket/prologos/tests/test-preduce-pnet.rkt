@@ -4,6 +4,7 @@
 (require rackunit racket/set racket/file
          "../pnet-sections.rkt"
          "../preduce-pnet.rkt"
+         (only-in "../pnet-serialize.rkt" deep-serializable->struct)
          "../eclass-graph.rkt"
          "../eclass-cell.rkt"
          "../extraction-store.rkt"
@@ -47,7 +48,8 @@
   (define sections (preduce-project-sections net4 hc store 'test-module))
   (define ecs (cdr (assq 'preduce-eclasses sections)))
   (check-equal? (length ecs) 1 "exactly the one ground/this-origin class projects")
-  (check-equal? (cadr (car ecs)) (expr-int 42) "the projected form is the best")
+  (check-equal? (deep-serializable->struct (cadr (car ecs))) (expr-int 42)
+                "the projected form decodes to the best (codec-encoded since 2026-06-11)")
   ;; residue tolerance (iter 37 amendment): the projection reads cell state;
   ;; pending worklist ids cannot change it — projecting a non-drained net is
   ;; the PRODUCTION reality (the prn's permanent residue finding)
@@ -90,5 +92,35 @@
   (check-true (and wbest (zero? (car wbest)))
               "key survival: warm body intern hits the memo (cost 0)")
   (check-equal? (cdr wbest) result "the memoized result is served warm")
+  (delete-file src)
+  (delete-file (preduce-pnetx-path src)))
+
+;; ---- expr-STRUCT round-trip regression (2026-06-11, second stacked defect):
+;; transparent expr structs do not survive raw write/read (they come back as
+;; plain vectors and crash nf with "no matching clause" when served warm).
+;; The container payloads now route through pnet-serialize's codec; this
+;; round-trips the exact crashing shape (an expr-lam result).
+(parameterize ([current-intern-origin 'codec-test]
+               [current-parent-index-cell-id #f])
+  (define-values (net0 hc) (make-eclass-graph (make-prop-network)))
+  (define pb (box net0))
+  (define body (expr-app (expr-lam 'mw (expr-Int) (expr-bvar 0)) (expr-int 7)))
+  (define result (expr-lam 'mw (expr-Int) (expr-bvar 0)))
+  (define-values (net1 cid1 _d) (eclass-intern (unbox pb) hc body #:cost 10))
+  (define net2 (net-cell-write net1 cid1 (make-eclass-value #:best (cons 0 result))))
+  (set-box! pb net2)
+  (define src (make-temporary-file "pnetx-codec-~a"))
+  (display-to-file "x" src #:exists 'replace)
+  (preduce-save-pnetx! pb src hc #f 'codec-test)
+  (define-values (wnet0 whc) (make-eclass-graph (make-prop-network)))
+  (define wb (box wnet0))
+  (preduce-load-pnetx! wb src whc #f)
+  (define-values (wnet1 wcid _wd) (eclass-intern (unbox wb) whc body #:cost 10))
+  (set-box! wb wnet1)
+  (define wbest (hash-ref (eclass-read (unbox wb) wcid) ':best #f))
+  (check-true (and wbest (zero? (car wbest))) "expr-struct memo hits warm")
+  (check-true (expr-lam? (cdr wbest))
+              "the served form is a REAL expr-lam struct, not a vector")
+  (check-equal? (cdr wbest) result "expr round-trips structurally equal")
   (delete-file src)
   (delete-file (preduce-pnetx-path src)))

@@ -9,6 +9,8 @@
          "eclass-cell.rkt"
          "extraction-store.rkt"
          "pnet-sections.rkt"
+         (only-in "pnet-serialize.rkt"
+                  deep-struct->serializable deep-serializable->struct)
          "pce.rkt"
          "propagator.rkt")
 
@@ -60,7 +62,14 @@
                   (with-handlers ([exn:fail? (lambda (_e) #f)])
                     (pce-encode (cdr best))
                     #t))
-             (cons (list (pce-hex dig) (cdr best) (car best) 'ground) acc)]
+             ;; FORM CODEC (2026-06-11, second stacked defect): expr STRUCTS do
+             ;; not survive raw write/read (transparent structs read back as
+             ;; plain vectors → "no matching clause" crashes when served warm).
+             ;; PCE-encodable ≠ container-round-trippable — the admissibility
+             ;; check alone was the wrong criterion. Encode via the legacy
+             ;; .pnet codec (every AST node registers there per pipeline.md).
+             (cons (list (pce-hex dig) (deep-struct->serializable (cdr best))
+                         (car best) 'ground) acc)]
             [else acc]))
         '()))
   (define store (and store-cid (net-cell-read net store-cid)))
@@ -68,7 +77,8 @@
     (if (hash? store)
         (for/list ([(k v) (in-hash store)]
                    #:when (eq? (hash-ref v 'regime #f) 'ground))
-          (list (pce-hex (car k)) (cadr k) (hash-ref v 'cost) (hash-ref v 'form)))
+          (list (pce-hex (car k)) (cadr k) (hash-ref v 'cost)
+                (deep-struct->serializable (hash-ref v 'form))))
         '()))
   (list (cons SECTION-ECLASSES eclass-entries)
         (cons SECTION-REWRITES rewrite-entries)))
@@ -115,7 +125,7 @@
       ;; section A: re-intern content triples + persisted-digest alias
       (for ([e (in-list (or (pnet2-section-ref sections SECTION-ECLASSES) '()))])
         (define persisted-dig (hex->bytes (car e)))
-        (define form (cadr e))
+        (define form (deep-serializable->struct (cadr e)))
         (define cost (caddr e))
         (define-values (n1 cid dig)
           (eclass-intern (unbox prn-box) hashcons-cid form
@@ -133,7 +143,9 @@
           (define store-delta
             (for/hash ([e (in-list entries)])
               (values (list (hex->bytes (car e)) (cadr e) #f)
-                      (hash 'cost (caddr e) 'form (cadddr e) 'regime 'ground))))
+                      (hash 'cost (caddr e)
+                            'form (deep-serializable->struct (cadddr e))
+                            'regime 'ground))))
           (set-box! prn-box
                     (net-cell-write (unbox prn-box) store-cid store-delta)))))))
 
