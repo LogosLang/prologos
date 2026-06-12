@@ -17,6 +17,7 @@
          (prefix-in pr/ "eclass-graph.rkt")
          (prefix-in pr/ "eclass-cell.rkt")       ;; iter 24: make-eclass-value for δ-memo
          (prefix-in pr/ "rule-registry.rkt")
+         (prefix-in pr/ "extraction-store.rkt")  ;; 2026-06-11: consult-wiring
          "prelude.rkt"
          "syntax.rkt"
          "substitution.rkt"
@@ -45,6 +46,7 @@
 (provide whnf nf nf-whnf conv conv-nf
          current-preduce-ingest?  ;; PReduce Track 2 ingestion gate (iter 22)
  current-preduce-ingest-int-folds?  ;; iter 33: the selectivity lever
+         preduce-ingest-delta  ;; 2026-06-11: exported for consult-wiring tests
          current-nf-cache current-whnf-cache
          current-reduction-fuel current-nat-value-cache
          ;; Solver normalization (for benchmarks + PUnify)
@@ -1381,16 +1383,37 @@
           (set-box! prn-box net1)
           (cdr existing-best)]
          [else
-          ;; MISS: the native step, then the result joins as the cost-0 best.
-          ;; The RESULT may itself be inadmissible — encode-check it by writing
-          ;; under the same handler: an inadmissible RESULT aborts the memo
-          ;; write (the class keeps the body alone) but still returns the result.
-          (define result (compute))
-          (with-handlers ([exn:fail? (lambda (_e) result)])
-            (define net2 (net-cell-write net1 cid
-                                         (pr/make-eclass-value #:best (cons 0 result))))
-            (set-box! prn-box net2)
-            result)]))]
+          ;; MISS in the hashcons. Consult the question-keyed store FIRST
+          ;; (Track 4 PIR §4 consult-wiring, landed 2026-06-11): cost-0
+          ;; entries are recorded reduction results — re-poured Section B
+          ;; entries arrive here cross-session, and the store is the
+          ;; cross-module channel (not origin-filtered at projection). A hit
+          ;; promotes to the class cost-0 best so later encounters take the
+          ;; hashcons fast path; compute is skipped entirely.
+          (define store-cid (pr/current-extraction-store-cell-id))
+          (define stored
+            (and store-cid (pr/store-consult-reduction net1 store-cid cid)))
+          (cond
+            [stored
+             (define net2 (net-cell-write net1 cid
+                                          (pr/make-eclass-value #:best (cons 0 stored))))
+             (set-box! prn-box net2)
+             stored]
+            [else
+             ;; the native step, then the result joins as the cost-0 best AND
+             ;; records in the store. The RESULT may itself be inadmissible —
+             ;; encode-check it by writing under the same handler: an
+             ;; inadmissible RESULT aborts the memo + store writes (the class
+             ;; keeps the body alone) but still returns the result.
+             (define result (compute))
+             (with-handlers ([exn:fail? (lambda (_e) result)])
+               (define net2 (net-cell-write net1 cid
+                                            (pr/make-eclass-value #:best (cons 0 result))))
+               (define net3 (if store-cid
+                                (pr/store-record-reduction net2 store-cid cid result)
+                                net2))
+               (set-box! prn-box net3)
+               result)])]))]
     [else (compute)]))
 
 ;; guarded β support (Phase 3, iter 25): the arg's EFFECT-HEAD check — walk the

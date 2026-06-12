@@ -11,6 +11,9 @@
          "../kernel-rules-seed.rkt"
          "../propagator.rkt"
          (only-in "../metavar-store.rkt" current-persistent-registry-net-box)
+         (only-in "../extraction-store.rkt"
+                  current-extraction-store-cell-id init-extraction-store-cell!
+                  store-record-reduction)
          (only-in "../pce.rkt" pce-digest PCE-KIND-GROUND-TERM))
 
 ;; OFF (the default): native fold; no e-graph involvement
@@ -174,3 +177,38 @@
   (check-true (> (guard-skip-count) 0) "effect-headed step skipped the e-graph")
   (check-equal? (hash-count (net-cell-read (unbox pb) hc)) n1
                 "no class recorded for the effectful ι redex"))
+
+;; ---- consult-wiring (2026-06-11): the store SERVES the read path ----
+;; The sharp check: pre-seed the store with the question's result, then call
+;; preduce-ingest-delta with a #:compute that ERRORS — a working consult path
+;; serves from the store without ever running the native step.
+(parameterize ([current-eclass-hashcons-cell-id #f]
+               [current-extraction-store-cell-id #f]
+               [current-persistent-registry-net-box (box (make-prop-network))])
+  (define pb (current-persistent-registry-net-box))
+  (init-eclass-hashcons-cell! pb)
+  (init-extraction-store-cell! pb)
+  (define hc (current-eclass-hashcons-cell-id))
+  (define sc (current-extraction-store-cell-id))
+  (define body '(consult-body 20 22))
+  (define result '(consult-result 42))
+  ;; seed: intern the body (a prior session's class), record its result in
+  ;; the store, then ERASE the class best back to... simpler: a FRESH network
+  ;; world where only the STORE knows the answer — intern body in a scratch
+  ;; net to learn the question key, then seed the production store directly.
+  (define-values (n1 cid1 _d) (eclass-intern (unbox pb) hc body #:cost 10))
+  (set-box! pb n1)
+  (set-box! pb (store-record-reduction (unbox pb) sc cid1 result))
+  ;; the class best is still (10 . body) — the hashcons path MISSES; only the
+  ;; store has the answer. compute must NOT run:
+  (define served
+    (preduce-ingest-delta body
+                          #:compute (lambda () (error 'consult-wiring "compute ran"))))
+  (check-equal? served result "the store serves the read path; compute skipped")
+  ;; and the hit PROMOTED the class best to cost 0:
+  (define best (hash-ref (eclass-read (unbox pb) cid1) ':best #f))
+  (check-true (and best (zero? (car best))) "store hit promoted to class best")
+  ;; second encounter takes the hashcons fast path (still no compute):
+  (check-equal? (preduce-ingest-delta body
+                                      #:compute (lambda () (error 'x "ran")))
+                result "subsequent encounters hit the promoted best"))

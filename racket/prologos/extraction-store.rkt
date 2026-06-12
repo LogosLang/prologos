@@ -28,7 +28,9 @@
          current-extraction-store-cell-id
          init-extraction-store-cell!
          eclass-question-key
-         extract/cached)
+         extract/cached
+         store-consult-reduction
+         store-record-reduction)
 
 ;; per-key keep-better (v1 tropical; the Q-generic form parameterizes later
 ;; with the same SRE-fixed-fn posture as the other merges)
@@ -89,3 +91,24 @@
                                   (hash key (hash 'cost cost 'form form
                                                   'regime 'ground))))
      (values net2 cost form 'miss)]))
+
+;; --- reduction-serving consult/record (2026-06-11, the Track 4 PIR §4
+;; consult-wiring landed): the δ/β/ι ingestion choke point asks the store
+;; BEFORE running the native step, and records after. COST-0 ENTRIES ONLY
+;; serve: a cost-0 entry is a recorded REDUCTION RESULT (the question-body's
+;; whnf — deterministic over closed ground PCE-admissible terms, so a hit
+;; recorded by ANY module/session is the correct result here); non-0 entries
+;; are extraction FORMS (extract/cached's own records), not reduction results.
+;; The question key is content-defined (digest of the sorted alt set), so it
+;; survives sessions and crosses modules — Section B is deliberately NOT
+;; origin-filtered at projection; this is the cross-module channel.
+(define (store-consult-reduction net store-cid root-cid)
+  (define key (eclass-question-key net root-cid (q-instance-criterion-id tropical-q)))
+  (define store (net-cell-read net store-cid))
+  (define entry (and (hash? store) (hash-ref store key #f)))
+  (and entry (zero? (hash-ref entry 'cost)) (hash-ref entry 'form)))
+
+(define (store-record-reduction net store-cid root-cid result)
+  (define key (eclass-question-key net root-cid (q-instance-criterion-id tropical-q)))
+  (net-cell-write net store-cid
+                  (hash key (hash 'cost 0 'form result 'regime 'ground))))
