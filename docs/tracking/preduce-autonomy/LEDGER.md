@@ -1210,3 +1210,26 @@ Entry template:
 - **Reversal path**: delete the remote session branch; nothing on main moves.
   Blast radius: one branch.
 - **Landed in**: (this commit)
+
+## 2026-06-12 — LOOP iteration 45 — [ROUTINE] PTF Track 2 Phase 0.5 CLOSED — environment shakeout + empirical capture probe; the design opens with DATA
+- **Environment**: apt Racket 8.10 hit a REAL wall (`thread #:pool 'own`,
+  propagator.rkt:3748 — parallel BSP needs 9.0); official 9.0 installed;
+  toolchain green in-container (raco make clean; targeted runner + batch
+  workers live: test-trace-serialize 19/19). check-parens.sh gained a PATH
+  fallback (owner's pinned Mac path preserved).
+- **Probe** (`tools/viz-capture-probe.rkt`, committed): mirrors the LSP arming
+  recipe but captures the elab-network via `current-network-capture-box`
+  (surviving process-file's parameterize unwind — the LSP's own post-unwind
+  read at server.rkt:553 is flagged as structurally dead, finding F7).
+- **Findings (design doc §6)**: F1 real propagator edges EXIST at HEAD (9/9
+  with inputs+outputs — the March "0 edges" note is empirically stale); F2
+  headless capture works end-to-end (17 rounds / 35 diffs / 152 fires / 4
+  per-command observatory captures / 31.5KB JSON); F3 Tier-1 dropout didn't
+  blank the demo (share unquantified — Phase 1 carries a counter); F4
+  subsystem categorization DEGRADED (all cells 'infrastructure'; cell-info
+  hollowed by the universe migration; cell-domains champ is the candidate
+  replacement); F5 magnitudes small per-command.
+- **Gate status**: parens ✅; targeted smoke ✅; probe run ✅; full suite NOT
+  run this iteration (docs+tools-only changes; first in-container full-suite
+  baseline is owed before the first PRODUCTION edit — likely Phase 1/2 boundary).
+- **Landed in**: (this commit)

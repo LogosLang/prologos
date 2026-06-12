@@ -18,6 +18,7 @@
 (require json
          racket/list
          "../driver.rkt"
+         "../errors.rkt"
          "../propagator.rkt"
          "../prop-observatory.rkt"
          "../elaborator-network.rkt"

@@ -5,84 +5,93 @@ the start of every iteration.**
 
 ---
 
-## Current state (as of 2026-06-12, iteration 44 — RE-ARMED on a new arc)
+## Current state (as of 2026-06-12, iteration 45 closed — PTF Track 2 Phase 0.5 ✅)
 
 **History in one paragraph**: the original Phase B loop ran 43 iterations on
 2026-06-10, closed Tracks 1/2/4/5/3 with PIRs, rendered the series verdict, and
-HALTED per §8 (see `RETRO.md`). Post-halt, owner-interactive sessions fixed three
-stacked defects and REWROTE the warm verdict for real corpora (ppn-track4c WARM
-reduce 123ms vs 1172ms OFF — 9.5×; suite 8663 green at `ff739de7`). On
-2026-06-12 the owner RE-ARMED the loop with a new final goal:
+HALTED per §8 (see `RETRO.md`). Post-halt owner sessions fixed three stacked
+defects and rewrote the warm verdict (9.5× warm reduce cut; suite 8663 green at
+`ff739de7`). On 2026-06-12 the owner RE-ARMED the loop with a new final goal —
+**a browser visualization of the propagator network with execution playback for
+arbitrary prologos programs** — opened as **PTF Track 2** (design doc:
+`docs/tracking/2026-06-12_PTF_TRACK2_BROWSER_VIZ_DESIGN.md`; grounding §1-§5,
+empirical findings §6).
 
-> a browser visualization that can show the propagator network and play
-> execution, to show how the system works, for arbitrary prologos programs.
+**Iteration ledger this arc**: 44 = arc open + grounding audit (commit
+`5ef450a`). 45 = Phase 0.5 shakeout + probe (commits `914abbb` + this one):
+Racket 9.0 installed in-container (8.10 REJECTED: `thread #:pool 'own`,
+propagator.rkt:3748), toolchain green, probe `tools/viz-capture-probe.rkt` ran
+clean — **real edges exist at HEAD, headless capture works end-to-end, 31.5KB
+JSON for the demo**. Findings F1–F7 in the design doc §6.
 
-This opened **PTF Track 2** (design doc:
-`docs/tracking/2026-06-12_PTF_TRACK2_BROWSER_VIZ_DESIGN.md`). The retro's owner
-queue (a)-(e) stays queued behind it.
+**Environment**: remote ephemeral container `/home/user/prologos`, branch
+`claude/charming-archimedes-98yb48` (== preduce-autonomy state; push = the
+persistence mechanism, ledgered OWNER-PROVISIONAL). Racket 9.0 at
+`/usr/local/bin/racket` (PATH-first). If the container was RECREATED since
+iteration 45: re-install 9.0 (`curl -sL -o /tmp/r.sh
+https://download.racket-lang.org/installers/9.0/racket-9.0-x86_64-linux-cs.sh
+&& sudo sh /tmp/r.sh --unix-style --dest /usr/local --create-dir`), then
+`raco make -j 4 driver.rkt` in racket/prologos. The Workflow runtime is absent
+— grounding/critique run as parallel Explore agents with the same disciplines.
 
-**Environment (changed — read this)**: the loop now runs in a REMOTE EPHEMERAL
-container at `/home/user/prologos`, branch `claude/charming-archimedes-98yb48`
-(verified: `preduce-autonomy` is an ancestor, zero divergence — this branch IS
-the autonomy state). Persistence = commit + push to that branch (ledger
-OWNER-PROVISIONAL, 2026-06-12): still no main, no PRs. Racket is NOT installed;
-apt offers 8.10, project pins 9.0. The Workflow runtime is absent — grounding
-audits run as parallel Explore agents with the same disciplines (HEAD-pin, cite
-SHA, verified-vs-inferred, completeness critic).
+## Exact next step (iteration 46)
 
-## Exact next step (iteration 45)
+**PTF Track 2 Phase 1 — Stage-3 design lock** (one scoped unit: the design
+round + lock; NO implementation in the same iteration). Settle the §3 design
+questions, informed by §6 findings:
 
-**PTF Track 2 Phase 0.5 — environment shakeout + empirical capture probe** (one
-scoped unit):
+1. **Exporter CLI shape** (`tools/viz-export.rkt`): per-command sections vs
+   whole-file merge; elab-network only day one vs +solver/ATMS; the probe's
+   capture recipe (observer + observatory + capture-box) is the validated base.
+2. **Schema posture**: default = REUSE the existing trace/observatory JSON
+   schema (F2 shows it's complete: topology + edges + per-round diffs); decide
+   the self-contained-file envelope (one JSON: topology + rounds + metadata,
+   as the probe already emits).
+3. **Viewer stack**: single-file static HTML+JS (no build step) vs porting
+   propagatorView.ts behind a browser shim. Input: coupling is one
+   `acquireVsCodeApi()` site + message passing (critic §5, ~90% portable);
+   but a dependency-free single-file viewer avoids the extension's build
+   pipeline entirely. Decide with a 3-column rationale (or an independent
+   critique agent — this arc touches surfaces the loop did not author).
+4. **Cell identity/coloring (F4)**: subsystem categorization via
+   elab-cell-info is HOLLOW at HEAD — design the replacement identity source
+   (candidate: `prop-network-cell-domains` champ, PPN 4C Phase 1c; plus
+   well-known cell-id constants 0–21 for infra labeling; propagator srcloc
+   for click-to-source).
+5. **G3 posture (Tier-1 dropout)**: add the cheap counter to size the dropout
+   share BEFORE choosing instrument-Tier-1 vs force-Tier-2-in-export-mode.
+   Orthogonality rule: any fix must be scheduler-independent in semantics.
+Write decisions into the design doc (2-column catalogue/challenge for the VAG),
+ledger the lock, THEN stop — Phase 2 (exporter implementation) is iteration 47.
 
-1. Install Racket (try apt 8.10 first; if the codebase won't compile, use the
-   upstream 9.0 installer). Smoke: `raco make racket/prologos/driver.rkt`, then
-   ONE targeted test via the runner.
-2. Write a THROWAWAY probe script (not the production exporter): arm
-   `current-bsp-observer` (make-trace-accumulator) + `current-observatory`,
-   run `racket/prologos/lib/examples/prop-viz-demo.prologos` via process-file,
-   dump topology + rounds JSON via trace-serialize/observatory-serialize.
-3. Answer with DATA: (a) are propagator inputs/outputs non-empty at today's HEAD
-   (the March "0 edges" staleness question)? (b) how many rounds does a typical
-   file record — does the Tier-1 fast path (propagator.rkt:3437–3471, NO observer
-   call) swallow the trace for simple programs (gap G3)? (c) cells/propagators/
-   diff-volume magnitudes (gap G6). R-lens the design doc §5 targets while there.
-4. Record findings in the design doc (Phase 0.5 row), ledger if decisions fall
-   out, dailies, rewrite this handoff. The Stage-3 design lock (Phase 1) is the
-   NEXT unit after that — do not start it in the same iteration.
+## Implementation queue (after Phase 1)
 
-## Implementation queue (after Phase 0.5)
-
-1. Phase 1: Stage-3 design lock — exporter CLI shape, schema posture (default
-   leaning: reuse the existing observatory/trace JSON schema verbatim), viewer
-   stack (single-file static HTML+JS vs porting propagatorView.ts's core), G3
-   posture (Tier-1 observer call vs exporter-mode flag — orthogonality-check the
-   flag), playback granularity (rounds-only day one). Design rounds per charter
-   §5; the critique can be in-context 3-column IF panel-skip reasons are recorded
-   (retro precedent), but this arc touches surfaces the loop did NOT author —
-   lean toward at least one independent critique agent.
-2. Phase 2: `tools/viz-export.rkt` headless CLI exporter + golden test.
-3. Phase 3: standalone browser viewer + playback (reuse palette + bipartite
-   conventions from propagatorView.ts; Graphviz/Cytoscape REJECTED in the March
-   design — don't relitigate).
-4. Phase 4: fidelity riders (G3 production fix, solver-network capture, G5
-   component diffs) — scope per probe data.
+- Phase 2: `tools/viz-export.rkt` + golden test (+ the F3 counter; first
+  in-container FULL-SUITE BASELINE before any production .rkt edit).
+- Phase 3: standalone browser viewer + playback (palette + bipartite
+  conventions from propagatorView.ts; Graphviz/Cytoscape rejection stands).
+- Phase 4: fidelity riders per probe data (G3 fix if warranted, solver
+  capture, F4 production identity improvements, F7 LSP defect hand-off).
+- Phase T: test phase (mandatory).
 
 ## Open threads
 
-- Retro owner queue (a)-(e) — queued, not cancelled: SH/Zig lowering case;
-  registries-as-cells (kills the 3-member flake family); D5 + observer hook;
-  prn residue fix; Phase-2/boolrec riders.
-- HANDOFF process note: late-loop iterations stopped rewriting this file (RETRO
-  absorbed the role at halt). Resumed as of iteration 44 — keep the discipline.
-- The registry-visibility flake family (3 members, DEFERRED.md) — non-blocking
-  gate policy stands: batch-only failures pass if green individually.
-- Charter §7 mentions PushNotification doorbells on halts/track closes — tool
-  availability in this environment unverified; check at next halt/close event.
+- F7: LSP prop-trace capture path structurally dead (server.rkt:553 reads
+  net-box post-unwind; default #f) — flagged for owner/LSP follow-up, NOT
+  this track's scope.
+- Retro owner queue (a)-(e) — queued, not cancelled.
+- Registry-visibility flake family (3 members) — non-blocking gate policy
+  stands.
+- PushNotification doorbell tool: NOT available in this environment (checked
+  iteration 45) — halts/track-closes are signaled via ledger + final summary
+  text instead.
+- In-container full-suite baseline owed before first production edit
+  (Phase 2 opener).
 
 ## Gate status
 
-Iteration 44 was docs-only (design doc + ledger + dailies + this handoff) — no
-code gates due. Suite state inherited: 8663 green at `ff739de7` (post-halt,
-owner-verified). NO gates have been run in THIS container yet (no Racket) —
-Phase 0.5 establishes local green before any production edit.
+Iteration 45: parens ✅ (script now PATH-portable), targeted smoke ✅
+(test-trace-serialize 19/19 via the runner — batch workers verified live under
+9.0), probe ✅ (0 errors, JSON artifact verified well-formed). Full suite not
+yet run in this container (docs+tools-only so far); suite state inherited:
+8663 green at `ff739de7`.

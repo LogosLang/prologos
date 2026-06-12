@@ -15,7 +15,7 @@ see `docs/tracking/2026-03-12_PROPAGATOR_VISUALIZATION_DESIGN.md` +
 | Phase | Description | Status | Notes |
 |---|---|---|---|
 | 0 | Grounding audit (5 facets + adversarial critic) | ✅ | this commit; synthesis below |
-| 0.5 | Environment shakeout + empirical capture probe (install Racket in container; run a demo file with observer armed; verify non-empty rounds + real edges; measure counts) | ⬜ | next loop unit; de-risks all design decisions |
+| 0.5 | Environment shakeout + empirical capture probe (install Racket in container; run a demo file with observer armed; verify non-empty rounds + real edges; measure counts) | ✅ | iter 45; findings §6; probe = tools/viz-capture-probe.rkt |
 | 1 | Stage 3 design lock: exporter CLI shape + JSON schema posture + viewer stack | ⬜ | design rounds per charter §5 |
 | 2 | `tools/viz-export.rkt` — headless CLI: `.prologos` in → self-contained trace JSON out | ⬜ | reuses trace-serialize + observatory-serialize |
 | 3 | Standalone browser viewer (no build step) consuming the trace JSON; topology view + BSP-round playback | ⬜ | reuse rendering architecture + palette from propagatorView.ts |
@@ -116,3 +116,40 @@ completeness critic; citations are file:line at this HEAD.
   observer armed; count cells/propagators/rounds/diff-volume; check non-empty
   propagator `inputs`/`outputs` at today's HEAD (the March "0 edges" note is
   probe-scoped, critic-adjudicated likely stale post-PPN-4C — verify with data).
+
+## 6. Phase 0.5 findings (iteration 45, probe = `tools/viz-capture-probe.rkt`)
+
+Probe run: `prop-viz-demo.prologos`, 4 commands, 0 errors, 4.9s wall (cold
+caches), JSON artifact 31.5KB.
+
+- **F1 — real edges EXIST at HEAD**: the last command's elab-network has 9
+  propagators, ALL with non-empty `inputs` AND `outputs`. The March "0 edges"
+  note is empirically stale; the bipartite graph has real structure to draw.
+- **F2 — the capture pipeline works headless end-to-end**: observer +
+  observatory + `current-network-capture-box` through `process-file` with no
+  LSP: 17 rounds, 35 cell-diffs (with old/new values + source propagator),
+  152 fires, 4 observatory captures (one per command). Playback material is
+  real and well-formed JSON.
+- **F3 — Tier-1 dropout (G3) did not blank this workload** (17 Tier-2 rounds
+  recorded). The per-run dropout SHARE remains unquantified — Phase 1 design
+  carries a cheap counter to size it before deciding the G3 posture.
+- **F4 — subsystem categorization is DEGRADED at HEAD**: all 44 cells
+  categorize as `infrastructure` — `elab-cell-info` lookups return `'none` for
+  every cell. The March viewer's green/purple coloring assumed per-cell
+  cell-info that the PPN 4C universe migration hollowed out. The natural
+  replacement identity source is the Tier-3 `cell-domains` champ
+  (`prop-network-cell-domains`, PPN 4C Phase 1c) — a Phase 1 design input.
+- **F5 — magnitudes are small** for per-command topology (44 cells / 9 props);
+  the LSP's 33MB-prelude-capture warning remains the scale ceiling — the
+  exporter keeps per-command scoping + the probe's diff cap.
+- **F6 — environment**: the Racket 9.0 pin is REAL — 8.10 rejects
+  `thread #:pool 'own` (propagator.rkt:3748, parallel BSP). Racket 9.0
+  installed in the container; raco make, targeted runner, and batch workers
+  all green (test-trace-serialize 19/19 via the runner).
+- **F7 — latent defect flagged (adjacent code, NOT fixed — out of scope)**:
+  `lsp/server.rkt:553` reads `current-prop-net-box` AFTER `process-file`'s
+  parameterize unwinds; the parameter defaults to `#f`
+  (metavar-store.rkt:1401), so the LSP's `captured-prop-trace` path appears
+  structurally dead. The probe avoids the trap via
+  `current-network-capture-box`. Phase 2's exporter supersedes; flag for the
+  owner / an LSP follow-up.
