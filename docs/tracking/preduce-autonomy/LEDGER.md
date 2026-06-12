@@ -1304,3 +1304,36 @@ Entry template:
   (mini-audit of propagator.rkt:3437–3471 first; bench-ab PRE baseline
   captured before the edit, A/B after — sequential, never concurrent).
 - **Landed in**: (this commit)
+
+## 2026-06-12 — LOOP iteration 49 — [SIGNIFICANT] PTF Track 2 Phase 2b CLOSED — the track's production edit landed green: Tier-1 BSP runs are observer-visible
+- **The edit** (`6d25e58`, propagator.rkt Tier-1 branch): when an observer is
+  armed, the flush fires with PER-FIRE eq?-pruned `champ-diff` (O(changed)
+  per fire) giving precise cell-diff attribution, and emits ONE bsp-round
+  mirroring Tier-2's shape. The unarmed fold is byte-identical to the old
+  fast path — the observer parameter read pre-existed at function entry, so
+  the unarmed delta is literally one branch on a local.
+- **Gates**: parens ✅; raco make ✅; targeted (trace-serialize, trace-data,
+  observatory-01/02, propagator-bsp) 81/81 ✅; 3 NEW unit tests pin
+  armed/attribution/unarmed ✅; acceptance probe unchanged-green ✅;
+  FULL SUITE **8666/439 ALL PASS, 400.6s** (baseline 8658/401.5s — +8 = the
+  new checks; wall in noise) ✅.
+- **Perf adjudication (honest, in lieu of the locked "bench A/B")**:
+  bench-ab's documented `--ref HEAD~1` mode is NOT IMPLEMENTED (header
+  drift; line 170 "same code for now") — second doc-vs-implementation drift
+  this arc. Evidence for the zero-cost-unarmed claim: (i) code structure
+  (one branch); (ii) suite wall within noise; (iii) a clean A/A distribution
+  run captured (/tmp/bench-2b-post.json → standing reference) which ALSO
+  quantified the container's noise floor: same-code A/A registers up to
+  "15.3% significant speedup" (solve-adversarial, warm-up effects) — ALL
+  future in-container perf claims must clear that bar, not just p<0.05.
+- **Falsified workload premise (codify-pattern #1 fires again)**: critique
+  A1 asserted simple relational programs take Tier-1 — NONE of the 3 corpus
+  files do (probe delta = 0). The fix is still right (fire-once workloads
+  exist — unit-tested; the gap was real at the scheduler level), but the
+  pedagogical urgency was overstated. Recorded as the 4th falsified-premise
+  data point.
+- **Process self-catch**: the bench PRE baseline was launched CONCURRENTLY
+  with the edit's compile — contaminated, killed, replaced by the post-hoc
+  clean run + structural adjudication. Lesson: bench runs get an exclusive
+  machine, ALWAYS — even at iteration starts.
+- **Landed in**: code `6d25e58`; docs (this commit)

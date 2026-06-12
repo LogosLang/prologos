@@ -38,30 +38,36 @@ https://download.racket-lang.org/installers/9.0/racket-9.0-x86_64-linux-cs.sh
 `raco make -j 4 driver.rkt` in racket/prologos. The Workflow runtime is absent
 — grounding/critique run as parallel Explore agents with the same disciplines.
 
-## Exact next step (iteration 49)
+## Exact next step (iteration 50)
 
-**PTF Track 2 Phase 2b — the Tier-1 observer production edit** (one scoped
-unit; THE production touch of this track, locked at §7 D5-revised):
+**PTF Track 2 Phase 2c — `tools/viz-export.rkt` + golden tests** (one scoped
+unit; the exporter per locked D1/D2/D4/D7 — tools-only, no production edits):
 
-1. **Mini-audit first** (surgical, main-session): read propagator.rkt
-   3437–3471 (Tier-1 flush) + 3581–3598 (Tier-2 observer call shape) at
-   current HEAD. Confirm: where the Tier-1 fold's post-state lives, what a
-   bsp-round needs (round-number, network, diffs, fired pids, contradiction,
-   atms-events), and whether Tier-1 can cheaply produce cell-diffs (it
-   knows its writes) or ships diffs=`'()` day one (then the round records
-   FIRES + the post-state snapshot only — decide at the audit, record in
-   the design doc).
-2. **Bench PRE baseline BEFORE the edit**: `racket tools/bench-ab.rkt
-   --runs 10 benchmarks/comparative/ --output /tmp/bench-pre-2b.json`
-   (from racket/prologos; no concurrent runs).
-3. The edit: observer call in the Tier-1 branch — `(when observer ...)`
-   mirroring Tier-2's shape; zero-cost when unarmed; NO behavior change to
-   firing. check-parens → `raco make driver.rkt` → targeted tests
-   (test-trace-serialize, test-observatory-01/02, test-propagator-bsp if it
-   exists) → probe on the acceptance file (expect MORE rounds — fire-once
-   programs now visible; record the delta in the design doc).
-4. Bench POST + compare (A/B vs PRE; 1.2× rules); FULL SUITE as the gate
-   (8658/439/401.5s is the reference). Ledger + dailies + HANDOFF + commit.
+1. Build on the probe's validated recipe (viz-capture-probe.rkt is the
+   skeleton): observer wrapper that ALSO records
+   `(current-inexact-milliseconds)` per round; observatory + capture-box;
+   `--max-diffs` + `--max-rounds` + truncation flags.
+2. The envelope per D1 (vizTrace 1): captures (label/subsystem/status/
+   timestampMs/sequence/topology via serialize-network-topology),
+   finalTopology, rounds (serialize-bsp-round + roundTimestampMs), identity
+   (cellDomains from prop-network-cell-domains; wellKnownCells 0–21 from
+   propagator.rkt constants; propagatorSrclocs; coverage stats per D4), D7
+   valueDetail (one-level hash unpacking, bounded).
+3. **Epoch-bucketing validation on the corpus** (the locked 2c criteria):
+   round timestamps strictly monotone per run; epoch count == command count
+   (bucket rounds by capture timestamps); pre-first-capture rounds → load
+   epoch. **Solver free-path validation**: per-epoch topology from each
+   epoch's LAST round snapshot — does the relational corpus file yield
+   solver-cell epochs? If bucketing or solver-visibility FAILS → activate
+   the pre-registered 2b fallbacks (observer-site timestamps / solve-boundary
+   observatory hook) as iteration 51 instead of proceeding.
+4. Golden test: tests/test-viz-export.rkt — run the exporter on a tiny
+   fixture, assert envelope keys + coverage stats + monotonicity (schema
+   regression per Phase T seed). Targeted runner; acceptance probe; docs;
+   commit; push; re-arm.
+
+**Container noise floor (calibrate perf claims)**: A/A same-code bench
+registers up to 15.3% "significant" — see ledger iter 49.
 
 ## Container re-setup recipe (if the container was recreated)
 
