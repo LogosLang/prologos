@@ -209,6 +209,7 @@
  decomp-request-merge
  decomp-request-cell-id
  net-cell-reset
+ net-restore-contradiction  ;; bounded-attempt boundary (2026-06-11 prn poisoning fix)
  (struct-out callback-topology-request)
  ;; PAR Track 2 R1: BSP round statistics
  current-bsp-round-stats
@@ -1889,6 +1890,28 @@
 ;; The current value becomes the base; entries start empty.
 ;; Must be called BEFORE speculative writes under a non-zero worldview.
 ;; No-op if the cell already holds a tagged-cell-value.
+
+;; Restore the network contradiction field to a saved value. For BOUNDED
+;; ATTEMPT boundaries (e.g., infer-on-network's TYPING-FUEL-LIMIT run on the
+;; persistent registry network): the attempt's contradiction — typically fuel
+;; exhaustion when one command's typing burns past the bound — is consumed by
+;; that command's own result read (bot → imperative fallback). Nothing else
+;; ever clears the contradiction field (net-cell-reset restores only the CELL
+;; value), and both schedulers short-circuit on a non-#f contradiction before
+;; touching the worklist — so without this restore, one over-budget command
+;; PERMANENTLY poisons the shared long-lived network: every later command's
+;; on-network typing silently falls back imperative, and all propagator-
+;; mediated work (rule dispatch, congruence, extraction fixpoints) no-ops
+;; while the worklist accumulates live never-fired propagators.
+;; Probe-verified 2026-06-11 (post-halt owner review; DEFERRED.md substrate
+;; finding, mechanism-corrected entry).
+(define (net-restore-contradiction net saved)
+  (if (equal? (prop-network-contradiction net) saved)
+      net
+      (struct-copy prop-network net
+        [warm (struct-copy prop-net-warm (prop-network-warm net)
+                [contradiction saved])])))
+
 (define (promote-cell-to-tagged net cid)
   (define val (net-cell-read-raw net cid))
   (if (tagged-cell-value? val)

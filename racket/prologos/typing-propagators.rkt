@@ -3002,10 +3002,23 @@
     ;; net-cell-reset bypasses merge: the bounded run gets exactly TYPING-FUEL-LIMIT
     ;; budget regardless of current.
     (define saved-fuel (net-cell-read net2w fuel-cell-id))
+    ;; Save the contradiction state too: this bounded attempt may exhaust its
+    ;; budget and set the network contradiction (fuel on-write-check). That
+    ;; outcome belongs to THIS command (read as bot → fallback below) — it
+    ;; must not outlive the attempt on the shared prn, where it would block
+    ;; both schedulers for every later command (the 2026-06-11 prn-poisoning
+    ;; finding: silent imperative-fallback degradation + dead PReduce
+    ;; dispatch/congruence/extraction for the rest of the process).
+    (define saved-contra (prop-network-contradiction net2w))
     (define net2-limited (net-cell-reset net2w fuel-cell-id TYPING-FUEL-LIMIT))
     (define net3 (run-to-quiescence-bsp net2-limited))
-    ;; Restore fuel (cell-API; bypass merge to write saved-fuel directly).
-    (define net3-restored (net-cell-reset net3 fuel-cell-id saved-fuel))
+    ;; Restore fuel (cell-API; bypass merge to write saved-fuel directly)
+    ;; and the contradiction (bounded-attempt boundary; see
+    ;; net-restore-contradiction's contract in propagator.rkt).
+    (define net3-restored
+      (net-restore-contradiction
+       (net-cell-reset net3 fuel-cell-id saved-fuel)
+       saved-contra))
     ;; 5. Read results
     (define root-type (type-map-read net3-restored tm-cid expr))
     (define meta-solutions (net-cell-read net3-restored output-cid))
