@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<!--
+  Prologos propagator-network visualizer — PTF Track 2 Phase 3.
+
+  Standalone, single-file, dependency-free (locked design D3: no build step,
+  no vendored libraries; conventions follow the VS Code panel — cells are
+  circles, propagators are diamonds — code deliberately NOT ported).
+
+  Usage:
+    1. Generate a trace:  racket tools/viz-export.rkt FILE.prologos -o out.json
+    2. Open this file in any browser (file:// works — no server needed).
+    3. Drop out.json onto the page (or use the file picker).
+
+  Scope selector: the final elaboration network, any per-command capture, or
+  any EPOCH's last-round snapshot (epochs are where solver networks appear —
+  relation/solve commands run on networks distinct from the elab net).
+  Playback: pick an epoch, scrub/play its BSP rounds; fired propagators
+  highlight, diffed cells flash, the diff list shows old → new per cell.
+
+  Coloring (locked D4 — best-available with MEASURED coverage, displayed):
+  cell domain (hashed palette) → well-known infra cell (gold ring + name) →
+  subsystem (type-inference green / multiplicity purple / infrastructure
+  gray) → value-shape heuristic. The coverage line reports how many cells
+  actually carry identity — the viewer never pretends full coverage.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Prologos propagator network</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.4 system-ui, sans-serif; background: #1e1e1e; color: #ddd;
+         display: grid; grid-template-rows: auto 1fr; height: 100vh; }
+  header { display: flex; gap: 10px; align-items: center; padding: 8px 12px;
+           background: #252526; border-bottom: 1px solid #333; flex-wrap: wrap; }
+  header .title { font-weight: 600; color: #9cdcfe; margin-right: 6px; }
+  select, input[type=file], button { background: #3c3c3c; color: #ddd; border: 1px solid #555;
+           border-radius: 4px; padding: 3px 8px; font: inherit; }
+  button:hover, select:hover { border-color: #888; cursor: pointer; }
+  #main { display: grid; grid-template-columns: 1fr 320px; min-height: 0; }
+  #canvasWrap { position: relative; min-width: 0; }
+  canvas { display: block; width: 100%; height: 100%; }
+  #tooltip { position: absolute; pointer-events: none; background: #2d2d30; border: 1px solid #555;
+             border-radius: 4px; padding: 6px 9px; max-width: 360px; display: none; z-index: 5;
+             white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 12px; }
+  #side { border-left: 1px solid #333; background: #252526; padding: 10px; overflow-y: auto; }
+  #side h3 { margin: 10px 0 4px; font-size: 12px; text-transform: uppercase; color: #888; }
+  #drop { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+          color: #888; font-size: 16px; border: 2px dashed #444; margin: 18px; border-radius: 10px; }
+  .legend-item { display: flex; gap: 6px; align-items: center; margin: 2px 0; font-size: 12px; }
+  .swatch { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+  #diffs { font-family: ui-monospace, monospace; font-size: 11.5px; }
+  .diff-row { padding: 2px 4px; border-left: 3px solid #c586c0; margin: 2px 0; background: #2a2a2c; }
+  #coverage { color: #888; font-size: 12px; }
+  #playRow { display: flex; gap: 6px; align-items: center; margin: 4px 0; }
+  input[type=range] { flex: 1; }
+  .muted { color: #777; }
+</style>
+</head>
+<body>
+<header>
+  <span class="title">Prologos network</span>
+  <input type="file" id="file" accept=".json,.vizjson">
+  <label>scope <select id="scope"></select></label>
+  <label>epoch <select id="epoch"></select></label>
+  <button id="fit">fit</button>
+  <span id="status" class="muted">no trace loaded</span>
+</header>
+<div id="main">
+  <div id="canvasWrap">
+    <canvas id="canvas"></canvas>
+    <div id="tooltip"></div>
+    <div id="drop">drop a vizTrace JSON here (tools/viz-export.rkt output)</div>
+  </div>
+  <div id="side">
+    <h3>playback</h3>
+    <div id="playRow">
+      <button id="play">▶</button>
+      <input type="range" id="round" min="0" max="0" value="0">
+      <span id="roundLabel" class="muted">–</span>
+    </div>
+    <div id="coverage"></div>
+    <h3>round diffs</h3>
+    <div id="diffs" class="muted">load a trace, pick an epoch</div>
+    <h3>legend</h3>
+    <div id="legend"></div>
+  </div>
+</div>
+
+<script>
+/* ============== PURE CORE (no DOM) — node-verifiable =============== */
+/* @PURE-BEGIN */
+
+const SUBSYSTEM_COLORS = { "type-inference": "#6a9955", "multiplicity": "#b48ead",
+                           "infrastructure": "#888888", "unknown": "#666666" };
+
+function hashHue(s) {              // stable string → hue
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return ((h % 360) + 360) % 360;
+}
+
+// All viewable topology sections of a vizTrace/1 envelope.
+function buildScopes(env) {
+  const scopes = [];
+  if (env.finalTopology && env.finalTopology.present !== false)
+    scopes.push({ id: "final", label: "final elaboration network", section: env.finalTopology });
+  (env.captures || []).forEach((c, i) =>
+    scopes.push({ id: "cap" + i, label: `cmd ${i}: ${c.label} (${c.subsystem})`, section: c }));
+  (env.epochs || []).forEach(e =>
+    scopes.push({ id: "epoch" + e.epoch,
+                  label: `epoch ${e.epoch}: ${e.label} [${e.topology.stats.totalCells}c/${e.topology.stats.totalPropagators}p]`,
+                  section: e, epoch: e.epoch }));
+  return scopes;
+}
+
+function cellColor(cell, identity) {
+  const id = String(cell.id);
+  const dom = identity && identity.cellDomains && identity.cellDomains[id];
+  if (dom) return { group: "domain: " + dom, color: `hsl(${hashHue(dom)} 55% 55%)` };
+  const wk = identity && identity.wellKnownCells && identity.wellKnownCells[id];
+  if (wk) return { group: "well-known infra", color: "#d4a017" };
+  const sub = cell.subsystem || "unknown";
+  return { group: sub, color: SUBSYSTEM_COLORS[sub] || SUBSYSTEM_COLORS.unknown };
+}
+
+// Bipartite graph from one topology section.
+function buildGraph(section) {
+  const topo = section.topology, identity = section.identity || {};
+  const nodes = [], edges = [], byId = new Map();
+  for (const c of topo.cells) {
+    const col = cellColor(c, identity);
+    const wk = identity.wellKnownCells && identity.wellKnownCells[String(c.id)];
+    const n = { key: "c" + c.id, kind: "cell", id: c.id, value: c.value,
+                label: wk ? wk : "c" + c.id, group: col.group, color: col.color,
+                detail: section.valueDetail && section.valueDetail[String(c.id)] };
+    nodes.push(n); byId.set(n.key, n);
+  }
+  for (const p of topo.propagators) {
+    const src = identity.propagatorSrclocs && identity.propagatorSrclocs[String(p.id)];
+    const n = { key: "p" + p.id, kind: "prop", id: p.id, label: "p" + p.id,
+                group: "propagator", color: "#569cd6", srcloc: src };
+    nodes.push(n); byId.set(n.key, n);
+    for (const i of p.inputs)
+      if (byId.has("c" + i)) edges.push({ from: "c" + i, to: n.key });
+    for (const o of p.outputs)
+      if (byId.has("c" + o)) edges.push({ from: n.key, to: "c" + o });
+  }
+  return { nodes, edges, byId };
+}
+
+// Component-aware layered layout (locked D3 + critique A5): union-find the
+// components, BFS-layer each from its in-degree-0 nodes (arbitrary root when
+// cyclic), grid-arrange components. Self-loops render as arcs, not layout.
+function layoutGraph(graph) {
+  const parent = new Map();
+  const find = k => { let r = k; while (parent.get(r) !== r) r = parent.get(r);
+                      let c = k; while (parent.get(c) !== r) { const n = parent.get(c); parent.set(c, r); c = n; }
+                      return r; };
+  for (const n of graph.nodes) parent.set(n.key, n.key);
+  for (const e of graph.edges) {
+    const a = find(e.from), b = find(e.to);
+    if (a !== b) parent.set(a, b);
+  }
+  const comps = new Map();
+  for (const n of graph.nodes) {
+    const r = find(n.key);
+    if (!comps.has(r)) comps.set(r, []);
+    comps.get(r).push(n);
+  }
+  const indeg = new Map(graph.nodes.map(n => [n.key, 0]));
+  const out = new Map(graph.nodes.map(n => [n.key, []]));
+  for (const e of graph.edges) {
+    if (e.from === e.to) continue;                       // self-loop: arc only
+    indeg.set(e.to, indeg.get(e.to) + 1);
+    out.get(e.from).push(e.to);
+  }
+  const pos = new Map();
+  const compBoxes = [];
+  const NX = 90, NY = 34;                                // layer / row spacing
+  for (const members of comps.values()) {
+    const layer = new Map();
+    let queue = members.filter(n => indeg.get(n.key) === 0).map(n => n.key);
+    if (queue.length === 0) queue = [members[0].key];    // cyclic component
+    queue.forEach(k => layer.set(k, 0));
+    let frontier = queue.slice();
+    while (frontier.length) {
+      const next = [];
+      for (const k of frontier)
+        for (const t of out.get(k))
+          if (!layer.has(t)) { layer.set(t, layer.get(k) + 1); next.push(t); }
+      frontier = next;
+    }
+    for (const n of members) if (!layer.has(n.key)) layer.set(n.key, 0);
+    const byLayer = new Map();
+    for (const n of members) {
+      const l = layer.get(n.key);
+      if (!byLayer.has(l)) byLayer.set(l, []);
+      byLayer.get(l).push(n.key);
+    }
+    let w = 0, h = 0;
+    for (const [l, ks] of byLayer) {
+      ks.forEach((k, i) => pos.set(k, { x: l * NX, y: i * NY }));
+      w = Math.max(w, l * NX + NX);
+      h = Math.max(h, ks.length * NY);
+    }
+    compBoxes.push({ members, w, h });
+  }
+  // grid-arrange components, biggest first
+  compBoxes.sort((a, b) => (b.w * b.h) - (a.w * a.h));
+  let cx = 0, cy = 0, rowH = 0, totalW = 0;
+  const MAXW = Math.max(900, Math.sqrt(compBoxes.reduce((s, c) => s + (c.w + 60) * (c.h + 60), 0)) * 1.4);
+  for (const box of compBoxes) {
+    if (cx > 0 && cx + box.w > MAXW) { cx = 0; cy += rowH + 60; rowH = 0; }
+    for (const n of box.members) {
+      const p = pos.get(n.key);
+      pos.set(n.key, { x: p.x + cx, y: p.y + cy });
+    }
+    cx += box.w + 60; rowH = Math.max(rowH, box.h); totalW = Math.max(totalW, cx);
+  }
+  return { pos, width: totalW, height: cy + rowH, componentCount: compBoxes.length };
+}
+
+function roundsForEpoch(env, epoch) {
+  return (env.rounds || []).filter(r => r.epoch === epoch);
+}
+
+/* @PURE-END */
+/* ===================== DOM / rendering layer ====================== */
+
+if (typeof document !== "undefined") (function () {
+  const canvas = document.getElementById("canvas"), ctx = canvas.getContext("2d");
+  const tooltip = document.getElementById("tooltip");
+  let env = null, scopes = [], graph = null, layout = null;
+  let view = { x: 40, y: 40, k: 1 };
+  let highlight = { fired: new Set(), diffed: new Set() };
+  let epochRounds = [], roundIdx = 0, playing = null;
+
+  function setStatus(s) { document.getElementById("status").textContent = s; }
+
+  function loadEnvelope(obj) {
+    if (obj.vizTrace !== 1) { setStatus("not a vizTrace/1 file"); return; }
+    env = obj; scopes = buildScopes(env);
+    const sel = document.getElementById("scope");
+    sel.innerHTML = "";
+    scopes.forEach((s, i) => sel.add(new Option(s.label, i)));
+    const esel = document.getElementById("epoch");
+    esel.innerHTML = "";
+    (env.epochs || []).forEach(e =>
+      esel.add(new Option(`epoch ${e.epoch}: ${e.label} (${e.roundsInEpoch} rounds)`, e.epoch)));
+    document.getElementById("drop").style.display = "none";
+    const v = env.validation || {};
+    setStatus(`${env.file} — ${env.commands} cmds, ${env.errors} errors, ` +
+              `${v.roundsTotal} rounds, captures==commands: ${v.capturesMatchCommands}`);
+    selectScope(0);
+    if (env.epochs && env.epochs.length) selectEpoch(env.epochs[0].epoch);
+  }
+
+  function selectScope(i) {
+    const s = scopes[i]; if (!s) return;
+    graph = buildGraph(s.section);
+    layout = layoutGraph(graph);
+    highlight = { fired: new Set(), diffed: new Set() };
+    const cov = s.section.identity && s.section.identity.coverage;
+    document.getElementById("coverage").textContent = cov
+      ? `identity coverage: ${cov.cellsWithDomain}/${cov.totalCells} cells with domain, ` +
+        `${cov.cellsWellKnown} well-known — ${layout.componentCount} component(s)`
+      : "";
+    buildLegend();
+    fit(); draw();
+  }
+
+  function selectEpoch(e) {
+    epochRounds = roundsForEpoch(env, e);
+    const slider = document.getElementById("round");
+    slider.max = Math.max(0, epochRounds.length - 1);
+    slider.value = 0; roundIdx = 0;
+    const sIdx = scopes.findIndex(s => s.epoch === e);
+    if (sIdx >= 0) { document.getElementById("scope").value = sIdx; selectScope(sIdx); }
+    showRound(0);
+  }
+
+  function showRound(i) {
+    roundIdx = i;
+    const r = epochRounds[i];
+    const diffsDiv = document.getElementById("diffs");
+    document.getElementById("roundLabel").textContent =
+      epochRounds.length ? `${i + 1}/${epochRounds.length}` : "–";
+    highlight = { fired: new Set(), diffed: new Set() };
+    if (!r) { diffsDiv.textContent = "no rounds in this epoch"; draw(); return; }
+    (r.propagatorsFired || []).forEach(p => highlight.fired.add("p" + p));
+    const rows = (r.cellDiffs || []).map(d => {
+      highlight.diffed.add("c" + d.cellId);
+      return `<div class="diff-row">c${d.cellId}: ${escapeHtml(trim(d.oldValue))} → ` +
+             `${escapeHtml(trim(d.newValue))} <span class="muted">(p${d.sourcePropagator})</span></div>`;
+    });
+    diffsDiv.innerHTML =
+      `<div class="muted">round ${r.roundNumber} — ${(r.propagatorsFired || []).length} fired` +
+      (r.contradiction !== null && r.contradiction !== undefined
+         ? `, contradiction @ c${r.contradiction}` : "") + `</div>` +
+      (rows.join("") || `<div class="muted">no cell changes recorded</div>`);
+    draw();
+  }
+
+  function trim(s) { s = String(s); return s.length > 48 ? s.slice(0, 45) + "…" : s; }
+  function escapeHtml(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+
+  function buildLegend() {
+    const groups = new Map();
+    for (const n of graph.nodes) if (!groups.has(n.group)) groups.set(n.group, n.color);
+    document.getElementById("legend").innerHTML =
+      [...groups].map(([g, c]) =>
+        `<div class="legend-item"><span class="swatch" style="background:${c}"></span>${escapeHtml(g)}</div>`).join("") +
+      `<div class="legend-item"><span class="swatch" style="background:#569cd6;border-radius:0;transform:rotate(45deg)"></span>propagator</div>`;
+  }
+
+  function fit() {
+    if (!layout) return;
+    const kx = (canvas.width - 80) / Math.max(layout.width, 1);
+    const ky = (canvas.height - 80) / Math.max(layout.height, 1);
+    view.k = Math.min(1.5, Math.max(0.05, Math.min(kx, ky)));
+    view.x = 40; view.y = 40;
+    draw();
+  }
+
+  function draw() {
+    if (!graph) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(view.x, view.y); ctx.scale(view.k, view.k);
+    ctx.lineWidth = 1 / view.k;
+    for (const e of graph.edges) {
+      const a = layout.pos.get(e.from), b = layout.pos.get(e.to);
+      ctx.strokeStyle = "#555";
+      ctx.beginPath();
+      if (e.from === e.to) {                       // self-loop arc
+        ctx.arc(a.x + 10, a.y - 10, 9, 0, Math.PI * 2);
+      } else {
+        ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+      }
+      ctx.stroke();
+    }
+    const fontPx = Math.max(9, 11 / view.k);
+    ctx.font = `${fontPx}px ui-monospace, monospace`;
+    for (const n of graph.nodes) {
+      const p = layout.pos.get(n.key);
+      const hot = highlight.fired.has(n.key) || highlight.diffed.has(n.key);
+      ctx.beginPath();
+      if (n.kind === "cell") {
+        ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+      } else {
+        ctx.moveTo(p.x, p.y - 9); ctx.lineTo(p.x + 9, p.y);
+        ctx.lineTo(p.x, p.y + 9); ctx.lineTo(p.x - 9, p.y); ctx.closePath();
+      }
+      ctx.fillStyle = highlight.diffed.has(n.key) ? "#e9c46a" : n.color;
+      ctx.fill();
+      ctx.strokeStyle = highlight.fired.has(n.key) ? "#ff6b6b" : (hot ? "#e9c46a" : "#222");
+      ctx.lineWidth = (hot ? 2.5 : 1) / view.k;
+      ctx.stroke();
+      if (view.k > 0.45) {
+        ctx.fillStyle = "#bbb";
+        ctx.fillText(n.label, p.x + 11, p.y + 4);
+      }
+    }
+    ctx.restore();
+  }
+
+  function resize() {
+    canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; draw();
+  }
+  window.addEventListener("resize", resize);
+
+  // pan / zoom / hover
+  let dragging = null;
+  canvas.addEventListener("mousedown", e => dragging = { x: e.offsetX - view.x, y: e.offsetY - view.y });
+  window.addEventListener("mouseup", () => dragging = null);
+  canvas.addEventListener("mousemove", e => {
+    if (dragging) { view.x = e.offsetX - dragging.x; view.y = e.offsetY - dragging.y; draw(); return; }
+    if (!graph) return;
+    const gx = (e.offsetX - view.x) / view.k, gy = (e.offsetY - view.y) / view.k;
+    let hit = null;
+    for (const n of graph.nodes) {
+      const p = layout.pos.get(n.key);
+      if (Math.abs(p.x - gx) < 10 && Math.abs(p.y - gy) < 10) { hit = n; break; }
+    }
+    if (hit) {
+      tooltip.style.display = "block";
+      tooltip.style.left = (e.offsetX + 14) + "px";
+      tooltip.style.top = (e.offsetY + 14) + "px";
+      let txt = hit.kind === "cell"
+        ? `cell ${hit.id} (${hit.group})\nvalue: ${hit.value}`
+        : `propagator ${hit.id}` + (hit.srcloc ? `\nsrc: ${hit.srcloc}` : "");
+      if (hit.detail)
+        txt += `\nentries: ${hit.detail.entryCount}` +
+               (hit.detail.keys.length ? `\nkeys: ${hit.detail.keys.join(", ")}` +
+                (hit.detail.truncated ? " …" : "") : "");
+      tooltip.textContent = txt;
+    } else tooltip.style.display = "none";
+  });
+  canvas.addEventListener("wheel", e => {
+    e.preventDefault();
+    const f = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    const gx = (e.offsetX - view.x) / view.k, gy = (e.offsetY - view.y) / view.k;
+    view.k *= f;
+    view.x = e.offsetX - gx * view.k; view.y = e.offsetY - gy * view.k;
+    draw();
+  }, { passive: false });
+
+  // wiring
+  document.getElementById("file").addEventListener("change", e => {
+    const f = e.target.files[0];
+    if (f) f.text().then(t => loadEnvelope(JSON.parse(t)));
+  });
+  const wrap = document.getElementById("canvasWrap");
+  wrap.addEventListener("dragover", e => e.preventDefault());
+  wrap.addEventListener("drop", e => {
+    e.preventDefault();
+    const f = e.dataTransfer.files[0];
+    if (f) f.text().then(t => loadEnvelope(JSON.parse(t)));
+  });
+  document.getElementById("scope").addEventListener("change", e => selectScope(+e.target.value));
+  document.getElementById("epoch").addEventListener("change", e => selectEpoch(+e.target.value));
+  document.getElementById("round").addEventListener("input", e => showRound(+e.target.value));
+  document.getElementById("fit").addEventListener("click", fit);
+  document.getElementById("play").addEventListener("click", () => {
+    const btn = document.getElementById("play");
+    if (playing) { clearInterval(playing); playing = null; btn.textContent = "▶"; return; }
+    btn.textContent = "⏸";
+    playing = setInterval(() => {
+      if (roundIdx + 1 >= epochRounds.length) { clearInterval(playing); playing = null; btn.textContent = "▶"; return; }
+      document.getElementById("round").value = roundIdx + 1;
+      showRound(roundIdx + 1);
+    }, 650);
+  });
+  resize();
+})();
+</script>
+</body>
+</html>
