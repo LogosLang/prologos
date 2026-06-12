@@ -9,6 +9,8 @@
 # Exit 0 = all balanced. Exit 1 = error (with location).
 
 RACKET="/Applications/Racket v9.0/bin/racket"
+# Fallback to PATH lookup when the pinned binary is absent (e.g., Linux CI/containers)
+[ -x "$RACKET" ] || RACKET="$(command -v racket)"
 
 check_file() {
     local f="$1"
