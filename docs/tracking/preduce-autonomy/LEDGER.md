@@ -1174,3 +1174,39 @@ Entry template:
   honesty-about-the-curve §5.8 was written to produce.
 - Track 3 PIR + Master row CLOSED + Phase 2 DESCOPED (named). Doorbell.
 - **Landed in**: (this commit)
+
+## 2026-06-12 — LOOP RE-ARM, iteration 44 — [SIGNIFICANT] New arc opened per owner direction: PTF Track 2 (standalone browser viz + arbitrary-program trace export)
+- **The owner's /loop re-arm message IS the sequencing ruling** the §8 halt was
+  waiting on: "Our final goal is generate a browser visualization that can show
+  the propagator network and play execution in order to show how the system works
+  for arbitrary prologos programs." This supersedes the retro's candidate queue
+  (a)-(e) (SH/Zig case, registries-as-cells, D5, prn residue, Phase-2 riders) —
+  those remain queued, not cancelled.
+- **Grounding audit run per charter §5.1** (5 HEAD-pinned facets + adversarial
+  completeness critic; the Workflow runtime is absent in this environment, so the
+  same structure ran as parallel Explore agents — disciplines preserved: SHA
+  verification, file:line citations, verified-vs-inferred, capture-gaps).
+- **Headline finding**: this is NOT greenfield. PTF Track 1 already built the
+  capture layer (current-bsp-observer + bsp-round/cell-diff/prop-trace +
+  trace-serialize JSON WITH propagator input/output edges + observatory) and a
+  complete VS Code webview viewer (propagatorView.ts, BSP-round replay, scrubber).
+  The REAL gaps: no headless CLI exporter (G1), no standalone browser host (G2),
+  Tier-1 fast-path observer dropout (G3), solver/per-module capture seams (G4),
+  compound-cell diff granularity (G5). Design doc:
+  docs/tracking/2026-06-12_PTF_TRACK2_BROWSER_VIZ_DESIGN.md.
+- **Naming [ROUTINE]**: lands as PTF Track 2 (extends PTF Track 1 observatory),
+  not a new series — taxonomy consistency per workflow.md Series-prefix rule.
+- **Landed in**: (this commit)
+
+## 2026-06-12 — LOOP iteration 44 — [⚠ OWNER-PROVISIONAL] Environment migration: the loop now runs in a remote ephemeral container; persistence = push to the session branch
+- **Decision**: commits push to `claude/charming-archimedes-98yb48` on origin
+  (the branch carries the full preduce-autonomy state; verified
+  `preduce-autonomy` is an ancestor of its HEAD with zero divergence). The
+  charter §2 "no pushes to remotes" line is operationally amended for this
+  environment: the container is reclaimed on idle, so unpushed work is LOST —
+  no-push here equals destroying the ledger the owner reviews by.
+- **Intent preserved**: still no commits to main, no production-default flips,
+  no PRs, owner merges. The push target is an isolated branch.
+- **Reversal path**: delete the remote session branch; nothing on main moves.
+  Blast radius: one branch.
+- **Landed in**: (this commit)
