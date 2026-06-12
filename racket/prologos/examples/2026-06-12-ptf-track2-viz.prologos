@@ -45,9 +45,12 @@ defn is-zero
 
 [+ [* 3 4] [- 10 3]]
 
-map [int+ 1 _] '[1 2 3]
+;; NOTE: generic `plus` partials — the int+/int* partial forms shown in
+;; prologos-syntax.md fail "Could not infer type" under map at HEAD
+;; (doc-vs-implementation drift, flagged in the loop dailies 2026-06-12).
+map [plus 1 _] '[1 2 3]
 
-map [int* _ 2] [int-range 1 5]
+map [plus 10 _] [int-range 1 5]
 
 ;; ========================================================================
 ;; §3 Relations — the solver network (A4 free-path target)

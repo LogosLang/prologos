@@ -18,7 +18,7 @@ arbitrary prologos programs** — opened as **PTF Track 2** (design doc:
 empirical findings §6).
 
 **Iteration ledger this arc**: 44 = arc open + grounding audit (`5ef450a`).
-45 = Phase 0.5 shakeout + probe (`914abbb`, `c1b96bf`): Racket 9.0 installed
+45 = Phase 0.5 (`914abbb`, `c1b96bf`): Racket 9.0 installed
 (8.10 REJECTED: `thread #:pool 'own`, propagator.rkt:3748), toolchain green,
 probe ran clean — real edges at HEAD, headless capture end-to-end, findings
 F1–F7 (§6). 46 = **Stage-3 design LOCKED (amended)** (`6dd6245` + this
@@ -38,25 +38,24 @@ https://download.racket-lang.org/installers/9.0/racket-9.0-x86_64-linux-cs.sh
 `raco make -j 4 driver.rkt` in racket/prologos. The Workflow runtime is absent
 — grounding/critique run as parallel Explore agents with the same disciplines.
 
-## Exact next step (iteration 47)
+## Exact next step (iteration 48)
 
-**PTF Track 2 Phase 0A — the acceptance file + corpus** (one scoped unit;
-ordering debt from critique B1 — acceptance precedes ALL implementation):
+**PTF Track 2 Phase 2a — the in-container full-suite baseline** (one scoped
+unit; the gate for ANY production edit, and 2b is next):
 
-1. Write `racket/prologos/examples/2026-06-12-ptf-track2-viz.prologos` — a
-   broad exercise of what the viz must SHOW: elaboration (defn/spec/traits),
-   relations + `solve` (the pedagogically central solver propagation —
-   critique A4), pattern matching, and at least one contradiction/retraction
-   if cheap. Level-3 clean (0 errors via process-file).
-2. Define the corpus in the design doc: acceptance file + prop-viz-demo +
-   one existing relations demo (e.g., relational-demo.prologos if it runs
-   clean at HEAD).
-3. Run the PROBE over the whole corpus; record per-file magnitudes (cells/
-   propagators/rounds/diffs/domain-coverage) in the design doc — this is the
-   B9 scale audit that gates Phase 3 entry AND the A4 free-path check (do
-   solver rounds appear in the accumulator? does the last-snapshot-per-epoch
-   topology contain solver cells?).
-4. Tracker, ledger if decisions fall out, dailies, HANDOFF, commit, push.
+1. `raco make driver.rkt` is already green under 9.0; run the FULL suite:
+   `racket tools/run-affected-tests.rkt --all 2>&1 | tail -30` (from
+   racket/prologos; capture summary + failures in ONE run per testing.md).
+2. Expect inherited state ~8663 green at `ff739de7`-equivalent; this
+   container has NEVER run the full suite — adjudicate any failures per the
+   failure-log protocol (read `data/benchmarks/failures/*.log`; the
+   registry-visibility flake family is KNOWN: batch-only failures pass
+   individually → non-blocking per standing policy, verify per occurrence).
+3. Record the baseline in the design doc gate-status + ledger; this is the
+   2b regression reference.
+4. If green (or green-with-adjudicated-flakes): NEXT iteration (49) = 2b
+   production hooks (Tier-1 observer call per D5-revised; mini-audit of
+   propagator.rkt:3437–3471 first; full suite + bench A/B at close).
 
 ## Implementation queue (after 0A) — per the LOCKED design (§7, amended)
 

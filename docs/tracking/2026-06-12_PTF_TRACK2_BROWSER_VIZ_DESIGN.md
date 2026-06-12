@@ -17,7 +17,7 @@ see `docs/tracking/2026-03-12_PROPAGATOR_VISUALIZATION_DESIGN.md` +
 | 0 | Grounding audit (5 facets + adversarial critic) | ✅ | this commit; synthesis below |
 | 0.5 | Environment shakeout + empirical capture probe (install Racket in container; run a demo file with observer armed; verify non-empty rounds + real edges; measure counts) | ✅ | iter 45; findings §6; probe = tools/viz-capture-probe.rkt |
 | 1 | Stage 3 design lock: D1–D7 + critique round + VAG | ✅ | iter 46; §7; LOCKED (amended) |
-| 0A | Acceptance file `examples/2026-06-12-ptf-track2-viz.prologos` + corpus definition (ordering debt from critique B1 — acceptance precedes ALL implementation) | ⬜ | iteration 47; corpus = acceptance file + prop-viz-demo + a relations demo |
+| 0A | Acceptance file `examples/2026-06-12-ptf-track2-viz.prologos` + corpus definition (ordering debt from critique B1 — acceptance precedes ALL implementation) | ✅ | iter 47; Level-3 clean (17 commands, 0 errors); corpus audit §8 |
 | 2a | In-container full-suite baseline (gate for any production edit) | ⬜ | |
 | 2b | Production hooks: Tier-1 observer call (A1); pre-registered fallbacks: observer-site timestamps (A2), solve-boundary observatory hook (A4) — full suite + bench A/B at close | ⬜ | smallest viable production touch |
 | 2c | `tools/viz-export.rkt` + golden tests (tests land WITH the exporter) | ⬜ | epoch-bucketing validation criteria per §7.7 A2 |
@@ -329,3 +329,33 @@ all blockers resolved at lock:
 
 VAG requirement met: at least one inherited pattern challenged — two were
 (the D2 fold-in dangle; the tools-only Phase 2 posture), both overturned.
+
+## 8. Phase 0A — corpus definition + audit (iteration 47)
+
+**Corpus** (all Level-3 clean via probe/process-file at this HEAD):
+
+| File | commands | errors | rounds | diffs | fires | last-epoch net | captures | JSON |
+|---|---|---|---|---|---|---|---|---|
+| `examples/2026-06-12-ptf-track2-viz.prologos` (acceptance) | 17 | 0 | 45 | 91 | 380 | 36c/6p | 17 | 41KB |
+| `lib/examples/prop-viz-demo.prologos` | 4 | 0 | 17 | 35 | 152 | 44c/9p | 4 | 31.5KB |
+| `examples/relational-demo.prologos` | 16 | 0 | 17 | 1 | 18 | **87c/17p** | 16 | 27KB |
+
+**B9 scale verdict**: max topology 87 cells / 17 propagators — far under the
+1k-node D3 revisit trigger. Component-aware BFS layout stands. JSON ≤ 41KB.
+
+**A4 free-path verdict: PARTIALLY VALIDATED, positive.** Round snapshots DO
+carry solver topology (relational-demo's last epoch = 87c/17p, a solver
+network distinct from its 41c/0p final elab-net), and solver work is visible
+(acceptance: solver_unifies 73, solver_backtracks 17, atms_hypothesis_count 3).
+CAVEAT (recorded, not resolved): relational-demo's 10 solve queries produced
+only 18 observed fires — the share of solve execution that runs through
+BSP-observable rounds vs DFS-internal steps is UNQUANTIFIED. Phase 2c
+validates per-epoch solver topology on this corpus; the pre-registered 2b
+solve-boundary observatory hook remains the fallback (per §7.7 A4).
+
+**Doc-drift flag (found by the Level-3 gate)**: `map [int+ 1 _] '[...]` and
+`map [int* _ 2] [...]` — the partial-application forms shown as idiomatic in
+`.claude/rules/prologos-syntax.md` — fail "Could not infer type" under `map`
+at this HEAD; the generic `plus` partials work. Acceptance file uses the
+working forms with a NOTE; flagged for owner (syntax-doc or inference fix —
+not this track's scope).

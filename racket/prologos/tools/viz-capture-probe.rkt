@@ -56,6 +56,9 @@
         (round (- t1 t0))
         (length results)
         (length (filter prologos-error? results)))
+(for ([r (in-list results)] [i (in-naturals)])
+  (when (prologos-error? r)
+    (printf "  ERROR @ command ~a: ~a\n" i (prologos-error-message r))))
 
 ;; --- Topology from the last command's elab-network ---
 (define topo

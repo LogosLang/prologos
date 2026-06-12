@@ -1264,3 +1264,24 @@ Entry template:
   detail) from A3. Full adjudication: design doc §7.7; VAG §7.8 (two
   inherited patterns challenged AND overturned).
 - **Landed in**: (this commit)
+
+## 2026-06-12 — LOOP iteration 47 — [ROUTINE] PTF Track 2 Phase 0A CLOSED — acceptance file Level-3 clean; corpus audited; the A4 free-path question answered with data
+- **Acceptance file** (`examples/2026-06-12-ptf-track2-viz.prologos`): 17
+  commands, 0 errors — elaboration (spec/defn, multi-arity ι, Nat patterns),
+  polymorphic map pipelines, relations (facts + recursive ancestor + 4 solve
+  shapes incl. empty-result), NAF (mirrors the WFLE-attested form). First run
+  had 2 inference errors — the Level-3 gate doing its job: the
+  `map [int+ 1 _]`/`[int* _ 2]` partial forms FROM THE SYNTAX DOC fail
+  "Could not infer type" at HEAD (generic `plus` partials work). Fixed with
+  working forms + NOTE; **doc-vs-implementation drift flagged for the owner**.
+- **Corpus audit (B9)**: 3 files, max 87 cells/17 propagators, JSON ≤ 41KB —
+  far under the 1k D3 revisit trigger; component-aware BFS layout stands.
+- **A4 free-path: PARTIALLY VALIDATED, positive** — round snapshots carry
+  SOLVER topology (87c/17p ≠ 41c/0p elab); solver counters fire (73 unifies,
+  17 backtracks, 3 ATMS hypotheses). Caveat recorded: BSP-observable share of
+  solve execution unquantified (relational-demo: 10 queries → 18 observed
+  fires); 2c validates; 2b hook stays the fallback.
+- **Probe upgraded**: per-command error messages printed (the diagnosis tool
+  for the above).
+- **Gates**: parens ✅; Level-3 acceptance ✅ (0 errors); corpus probes ✅.
+- **Landed in**: (this commit)
