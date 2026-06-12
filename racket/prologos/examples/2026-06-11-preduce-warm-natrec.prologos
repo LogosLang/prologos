@@ -1,0 +1,18 @@
+ns preduce-warmth
+
+;; Cross-session warm-start workload: deep natrec cascades at TOP LEVEL —
+;; re-reduced identically on every compile; each carrier step routes through
+;; the gated iota hook; the warm top-redex hit short-circuits the whole chain.
+
+spec nadd Nat Nat -> Nat
+defn nadd [x y]
+  (natrec Nat x [fn [k : Nat] [fn [r : Nat] [suc r]]] y)
+
+spec nmul Nat Nat -> Nat
+defn nmul [x y]
+  (natrec Nat 0N [fn [k : Nat] [fn [r : Nat] [nadd x r]]] y)
+
+[nmul 12N 12N]
+[nmul 12N 13N]
+[nmul 13N 12N]
+[nadd [nmul 10N 10N] [nmul 10N 11N]]

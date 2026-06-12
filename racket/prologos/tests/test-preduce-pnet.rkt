@@ -62,3 +62,33 @@
   (define back (pnet2-read-sections tmp2))
   (check-equal? (length (pnet2-section-ref back 'preduce-eclasses)) 1)
   (delete-file tmp2))
+
+;; ---- key-survival regression (2026-06-11): memo classes must be reachable by
+;; their PERSISTED (body) digest on reload — the warm lookup arrives keyed by
+;; digest(body); the persisted form is the cost-0 RESULT whose digest differs.
+;; Pre-fix, 100% of real memo entries were unreachable warm (DEFERRED.md entry).
+(parameterize ([current-intern-origin 'memo-test]
+               [current-parent-index-cell-id #f])
+  (define-values (net0 hc) (make-eclass-graph (make-prop-network)))
+  (define pb (box net0))
+  (define body '(reduce memo-body 20 22))
+  (define result '(memo-result 42))
+  (define-values (net1 cid1 _bd) (eclass-intern (unbox pb) hc body #:cost 10))
+  (define net2 (net-cell-write net1 cid1 (make-eclass-value #:best (cons 0 result))))
+  (set-box! pb net2)
+  (define src (make-temporary-file "pnetx-src-~a"))
+  (display-to-file "x" src #:exists 'replace)
+  (preduce-save-pnetx! pb src hc #f 'memo-test)
+  ;; fresh world (a new session)
+  (define-values (wnet0 whc) (make-eclass-graph (make-prop-network)))
+  (define wb (box wnet0))
+  (preduce-load-pnetx! wb src whc #f)
+  ;; the warm intern of the BODY must hit the memo
+  (define-values (wnet1 wcid _wd) (eclass-intern (unbox wb) whc body #:cost 10))
+  (set-box! wb wnet1)
+  (define wbest (hash-ref (eclass-read (unbox wb) wcid) ':best #f))
+  (check-true (and wbest (zero? (car wbest)))
+              "key survival: warm body intern hits the memo (cost 0)")
+  (check-equal? (cdr wbest) result "the memoized result is served warm")
+  (delete-file src)
+  (delete-file (preduce-pnetx-path src)))

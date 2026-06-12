@@ -140,7 +140,23 @@ all three code claims spot-checked main-session)**:
   for genuinely dangling ids can ride along but is not the cure.
 - Also amend preduce-pnet.rkt:41-47's residue-tolerance comment when fixing.
 
-## DEFECT (found 2026-06-11, owner persistence-fidelity review): warm-start re-pour DROPS the persisted digest key — cross-session hits structurally impossible
+## DEFECT — FIXED (found + fixed 2026-06-11, owner persistence-fidelity review): warm-start re-pour DROPPED the persisted digest key — cross-session hits were structurally impossible
+
+**FIX LANDED** (same day): the re-pour now registers the persisted digest as an
+alias to the re-poured class (preduce-pnet.rkt; hash-union per-key min-by-alloc
+merge, ACI-safe; identity classes skip the alias). Memo round-trip regression
+test added (test-preduce-pnet.rkt). **FIRST DEMONSTRATED CROSS-SESSION WIN**
+(the synthetic recurrence-rich workload the series A/Bs lacked —
+examples/2026-06-11-preduce-warm-natrec.prologos, deep Peano natrec cascades
+at top level, DB mode + PNETX): native OFF reduce_ms 5933 / COLD recording
+5072 (recording NET-POSITIVE in-session on recurrence-rich work) / WARM
+reduce_ms **0** (×3 runs; total wall 9.3s → 3.7s ≈ 2.5×; outputs verified
+identical to native; .pnetx 1.0MB — every carrier step persists, the named
+Section-A eviction knob is now data-motivated). This bounds the series
+verdict precisely: the Racket floor loses only when recurrence is absent —
+when recurrence exists (recompile-without-change IS the compiler-cache use
+case), the inversion is total even on Racket. ORIGINAL FINDING (for the
+record):
 
 The Track 5 loader (`preduce-load-pnetx!`, preduce-pnet.rkt re-pour loop) reads
 `(cadr e)` (best-form) + `(caddr e)` (cost) and NEVER `(car e)` (the persisted

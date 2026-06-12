@@ -89,11 +89,18 @@
     (bytes-set! b i (string->number (substring hx (* 2 i) (+ 2 (* 2 i))) 16)))
   b)
 
-;; Re-pour: section A entries re-intern (the persisted content-hash IS the
-;; intern key — the digest match is the hashcons hit BY CONSTRUCTION; persisted
-;; costs ride along; regime 'ground; origin = the CURRENT file's origin
-;; parameter, set by the driver before this runs). Section B merges via
-;; keep-better — the lattice reconciles stale-vs-fresh automatically.
+;; Re-pour: section A entries re-intern. KEY SURVIVAL (2026-06-11 fix): the
+;; persisted digest is the digest of the ORIGINALLY-INTERNED term — for memo
+;; classes that is the BODY, while the persisted form is the cost-0 RESULT.
+;; Re-interning the form alone registers only digest(form); the warm lookup
+;; arrives keyed by digest(body) and would MISS (probe-verified: 15/15 entries
+;; of the real acceptance artifact were unreachable; the iter-39 warm≈cold
+;; A/B could not have seen any recurrence benefit). So the persisted digest is
+;; registered as an ALIAS to the re-poured class (hash-union per-key
+;; min-by-alloc merge — ACI-safe). Identity classes (digest(form) = persisted)
+;; skip the alias. Persisted costs ride along; regime 'ground; origin = the
+;; CURRENT file's origin parameter. Section B merges via keep-better — the
+;; lattice reconciles stale-vs-fresh automatically.
 ;; MTIME INVALIDATION (SM6 day-one bound): a source newer than its .pnetx
 ;; skips the re-pour entirely (degraded to cold, never wrong).
 (define (preduce-load-pnetx! prn-box src hashcons-cid store-cid)
@@ -105,14 +112,20 @@
                  (file-or-directory-modify-seconds src)))
     (define sections (pnet2-read-sections px))
     (when sections
-      ;; section A: re-intern content triples
+      ;; section A: re-intern content triples + persisted-digest alias
       (for ([e (in-list (or (pnet2-section-ref sections SECTION-ECLASSES) '()))])
+        (define persisted-dig (hex->bytes (car e)))
         (define form (cadr e))
         (define cost (caddr e))
-        (define-values (n1 _cid _d)
+        (define-values (n1 cid dig)
           (eclass-intern (unbox prn-box) hashcons-cid form
                          #:cost cost #:regime 'ground))
-        (set-box! prn-box n1))
+        (define n2
+          (if (equal? dig persisted-dig)
+              n1
+              (net-cell-write n1 hashcons-cid
+                              (hash persisted-dig (cons (cell-id-n cid) cid)))))
+        (set-box! prn-box n2))
       ;; section B: rebuild keys, merge keep-better
       (when store-cid
         (define entries (or (pnet2-section-ref sections SECTION-REWRITES) '()))
