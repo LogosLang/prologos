@@ -1360,3 +1360,23 @@ Entry template:
 - No production edits this iteration (tools+tests only) → full suite not
   required; targeted gate green.
 - **Landed in**: code `b0bbb88`; docs (this commit)
+
+## 2026-06-12 — LOOP iteration 51 — [ROUTINE] PTF Track 2 Phase 3 SHIPPED — the owner's goal artifact exists and was DELIVERED
+- **`tools/viz/index.html`** (`10b0f4a`): single-file, dependency-free
+  browser viewer per locked D3 — component-aware layered Canvas layout
+  (union-find components, BFS layers, grid arrangement, self-loop arcs),
+  zoom/pan/hover with valueDetail + srcloc tooltips, D4 identity coloring
+  with the MEASURED coverage line always displayed, scope selector
+  (final / per-command captures / per-epoch solver snapshots), and
+  playback: epoch selector + round scrubber + play — fired propagators
+  ring red, diffed cells flash gold, the diff list shows old → new with
+  source-propagator attribution.
+- **Verification in a browserless container** (named limitation): the pure
+  core (scopes/graph/layout/bucketing) is in a delimited @PURE block;
+  `tools/viz/check.js` extracts and runs it under node against the REAL
+  corpus envelopes — ALL CHECKS PASS (32/33/8 scopes; max 260 nodes; all
+  edges resolve; all nodes positioned, zero coordinate overlaps; round
+  bucketing complete 45/45, 17/17, 17/17). The owner's browser is the real
+  acceptance — index.html + two corpus envelopes DELIVERED to the owner
+  (proactive file send).
+- **Landed in**: code `10b0f4a`; docs (this commit)

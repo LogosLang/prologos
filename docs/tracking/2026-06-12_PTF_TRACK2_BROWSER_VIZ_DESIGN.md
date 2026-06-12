@@ -22,7 +22,7 @@ see `docs/tracking/2026-03-12_PROPAGATOR_VISUALIZATION_DESIGN.md` +
 | 2b | Production hooks: Tier-1 observer call (A1); pre-registered fallbacks: observer-site timestamps (A2), solve-boundary observatory hook (A4) — full suite + bench A/B at close | ✅ | iter 49 (`6d25e58`): armed path = per-fire champ-diff + one bsp-round; unarmed byte-identical; 3 unit tests; suite 8666/439 GREEN (400.6s ≈ baseline); fallbacks NOT yet needed (2c validates); corpus never takes Tier-1 (falsified-workload note in ledger) |
 | 2c | `tools/viz-export.rkt` + golden tests (tests land WITH the exporter) | ✅ | iter 50 (`b0bbb88`): ALL criteria PASS on the corpus — monotone ✓, captures==commands ✓, **solver free path ✓** (relation epochs 67-81c/172-179p); fallbacks NOT needed; envelope ≤880KB |
 | T | Dedicated test file `tests/test-viz-export.rkt` (schema regression) | ✅ | landed with 2c; 7/7 (envelope keys, parity, monotone, identity coverage, D7 bounds, solver-epoch assert, jsexpr round-trip) |
-| 3 | Standalone browser viewer: topology + playback; component-aware layout; coverage display | ⬜ | corpus scale audit gates entry (B9) |
+| 3 | Standalone browser viewer: topology + playback; component-aware layout; coverage display | ✅ | iter 51 (`10b0f4a`): tools/viz/index.html + check.js; headless core verification ALL PASS on the corpus; **browser acceptance = owner's machine** (no GUI in the container — honest limitation); artifacts delivered to owner |
 | 4 | Riders per data: compound-cell component diffs; D7 depth; solver hook if 2c validation demands; any rider adding cells/propagators carries its own NTT model | ⬜ | |
 
 ## 1. Grounding synthesis (what EXISTS at `ff739de7`)

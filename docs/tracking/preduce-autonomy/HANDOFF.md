@@ -38,39 +38,36 @@ https://download.racket-lang.org/installers/9.0/racket-9.0-x86_64-linux-cs.sh
 `raco make -j 4 driver.rkt` in racket/prologos. The Workflow runtime is absent
 — grounding/critique run as parallel Explore agents with the same disciplines.
 
-## Exact next step (iteration 51)
+## Exact next step (iteration 52)
 
-**PTF Track 2 Phase 3 — the standalone browser viewer** (THE user-facing
-deliverable; one scoped unit, but the largest one — if it needs splitting,
-3a = static topology view, 3b = playback, each its own iteration):
+**PTF Track 2 TRACK CLOSE** (one scoped unit):
 
-`tools/viz/index.html` — single file, dependency-free, no build step (locked
-D3). Loads a vizTrace/1 JSON via file-input/drag-drop (file:// safe; no
-server). MUST-HAVES per the locked design + critique:
-1. **Topology view**: bipartite Canvas graph — cells=circles,
-   propagators=diamonds (conventions from propagatorView.ts; code NOT
-   ported); edges propagator.inputs/outputs; COMPONENT-AWARE layout
-   (disconnected components laid out independently, grid-arranged; BFS
-   layering within components; SELF-LOOP arcs — they're real, e.g.
-   propagator 8 inputs=[34] outputs=[34]); zoom/pan (Canvas transform);
-   hover tooltips (cell value, valueDetail keys, domain, well-known name,
-   propagator srcloc).
-2. **Identity coloring (D4 as locked)**: color by best-available (domain →
-   well-known → subsystem → heuristic); display the coverage stats — never
-   pretend full coverage.
-3. **Playback**: epoch selector (per-command; labels from captures) +
-   round scrubber within epoch; on each round: flash the diffed cells
-   (cellDiffs old→new on hover) + highlight fired propagators; coverage
-   line ("N rounds across M epochs"). Per-epoch topology switch (the
-   solver epochs LOOK different — that's the point: 67-81c/172-179p).
-4. Validate against all 3 corpus envelopes (regenerate via the exporter;
-   /tmp copies may be gone). Check in a small golden envelope? NO — large;
-   regenerate on demand. Document usage at the top of index.html + in the
-   design doc.
-5. Browser-verification limitation: this container has no GUI browser —
-   verify with node-less static checks (JSON loads, JS syntax via `node
-   --check` if node exists, else careful review) + ship; the OWNER's
-   browser is the real acceptance. Record the limitation honestly.
+1. **Phase 4 riders adjudication per data** (write into the design doc):
+   solver-boundary hook → DISSOLVED (free path validated 2c); F4 production
+   identity → OUT OF SCOPE (PATH B, owner queue); A2 timestamp fallback →
+   DORMANT (bucketing validated); remaining candidates (compound-cell
+   component diffs; D7 depth; viewer layout upgrade at >1k nodes) →
+   DEFERRED.md entries with their pre-registered triggers.
+2. **PIR** — skeleton-first from POST_IMPLEMENTATION_REVIEW.org's 16
+   questions (read it BEFORE writing; the 4-consecutive-PIRs failure mode
+   is documented). Include the §16 longitudinal note against the PReduce
+   PIRs on this branch.
+3. **Autonomy retro section** (charter §9) in the PIR: where the re-armed
+   loop matched/fell short of interactive quality; the critique apparatus
+   verdict (2 BLOCKERs found by panels on unfamiliar surfaces — the
+   RETRO.md prediction CONFIRMED); the falsified-premise count; the 3
+   doc-drift flags for the owner (int+/int* map partials; bench-ab --ref;
+   spec colon-form dependent parse); environment lessons (9.0 pin,
+   container noise floor, bench-exclusivity self-catch).
+4. Master roadmap: PTF Track 2 row ✅ with design doc + PIR links.
+5. Owner doorbell: PushNotification unavailable here — the final summary
+   message IS the doorbell; make it carry the track-close statement.
+6. HANDOFF rewritten to the post-track state: loop continues per owner
+   direction (the retro queue (a)-(e) remains; or HALT per §8 if the owner
+   goal is satisfied — ADJUDICATE: the stated final goal is DELIVERED
+   pending owner browser acceptance, so the DEFAULT is a §8-adjacent
+   PAUSE: stop re-arming, leave the re-arm one-liner, await owner review.
+   Record the adjudication in the ledger.)
 
 **Container noise floor (calibrate perf claims)**: A/A same-code bench
 registers up to 15.3% "significant" — see ledger iter 49.
