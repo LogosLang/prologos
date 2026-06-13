@@ -172,78 +172,83 @@
             'roundsTotal (length rounds)
             'roundsBucketed (length round-epochs)))
 
-  ;; Per-epoch last-snapshot topology — the A4 solver free path: whichever
-  ;; network ran that epoch's last observed round is what gets serialized.
-  (define last-round-per-epoch
-    (for/fold ([h (hash)]) ([r (in-list rounds)] [e (in-list round-epochs)])
-      (hash-set h e r)))   ;; later rounds overwrite: keeps the LAST per epoch
-  ;; First global round-number per epoch — epoch ids are NOT temporal (hash
-  ;; bucketing), so the viewer needs this to order the unified timeline.
-  (define first-round-per-epoch
-    (for/fold ([h (hash)]) ([r (in-list rounds)] [e (in-list round-epochs)])
-      (if (hash-has-key? h e) h (hash-set h e (bsp-round-round-number r)))))
-  (define epochs-json
-    (for/list ([(e r) (in-hash last-round-per-epoch)])
-      (define label
-        (cond [(< e n-caps) (net-capture-label (list-ref captures e))]
-              [else "file-close"]))
-      (hash-set* (topology-section (bsp-round-network-snapshot r))
-                 'epoch e
-                 'label (format "~a" label)
-                 'firstRound (hash-ref first-round-per-epoch e 0)
-                 'roundsInEpoch (for/sum ([e2 (in-list round-epochs)])
-                                  (if (= e e2) 1 0)))))
-
-  ;; Rounds (truncate honestly past the caps; diffs cap measured globally).
-  (define total-diffs (for/sum ([r (in-list rounds)])
-                        (length (bsp-round-cell-diffs r))))
-  (define rounds-truncated? (or (> (length rounds) max-rounds)
-                                (> total-diffs max-diffs)))
+  ;; --- vizTrace 2: per-ROUND topology. Each round is rendered against its
+  ;; OWN network snapshot, fixing the per-epoch id-space mismatch (a round's
+  ;; fired props / cell diffs reference cells in the id-space of the network
+  ;; THAT ROUND ran on — elaboration vs a solve-fork — which an epoch's
+  ;; last-round snapshot need not match). Topologies are globally deduped by
+  ;; signature; each round carries an index into the table.
+  (define (friendly s) (regexp-replace #rx"^elab:" s ""))
+  (define capped-rounds (if (> (length rounds) max-rounds) (take rounds max-rounds) rounds))
+  (define capped-times  (if (> (length times)  max-rounds) (take times  max-rounds) times))
+  (define capped-epochs (if (> (length round-epochs) max-rounds) (take round-epochs max-rounds) round-epochs))
+  (define topo-table (make-hash))   ;; signature → index
+  (define topo-rev '())             ;; reversed topology sections
+  (define topo-count 0)
+  (define (intern-topology! pnet)
+    (define topo (serialize-network-topology pnet))
+    (define sig
+      (string-append
+       (string-join (sort (map (lambda (c) (number->string (hash-ref c 'id)))
+                               (hash-ref topo 'cells)) string<?) ",")
+       "|"
+       (string-join (sort (map (lambda (p) (format "~a:~a>~a" (hash-ref p 'id)
+                                                    (hash-ref p 'inputs) (hash-ref p 'outputs)))
+                               (hash-ref topo 'propagators)) string<?) ";")))
+    (or (hash-ref topo-table sig #f)
+        (let ([idx topo-count])
+          (hash-set! topo-table sig idx)
+          (set! topo-count (add1 topo-count))
+          (set! topo-rev (cons (hasheq 'topology topo
+                                       'identity (identity-for-network pnet)) topo-rev))
+          idx)))
+  (define total-diffs (for/sum ([r (in-list rounds)]) (length (bsp-round-cell-diffs r))))
+  (define diffs-capped? (> total-diffs max-diffs))
+  (define (round-label e)
+    (friendly (cond [(< e n-caps) (format "~a" (net-capture-label (list-ref captures e)))]
+                    [else "file-close"])))
   (define rounds-json
-    (for/list ([r (in-list (if (> (length rounds) max-rounds)
-                               (take rounds max-rounds)
-                               rounds))]
-               [ts (in-list times)]
-               [e (in-list round-epochs)])
-      (define base (if (> total-diffs max-diffs)
-                       (hasheq 'roundNumber (bsp-round-round-number r)
-                               'diffCount (length (bsp-round-cell-diffs r))
-                               'propagatorsFired
-                               (map prop-id-n (bsp-round-propagators-fired r)))
-                       (serialize-bsp-round r)))
-      (hash-set* base 'timestampMs ts 'epoch e)))
-
-  (define captures-json
-    (for/list ([c (in-list captures)])
-      (hash-set* (topology-section (net-capture-network c))
-                 'label (format "~a" (net-capture-label c))
-                 'subsystem (format "~a" (net-capture-subsystem c))
-                 'status (format "~a" (net-capture-status c))
-                 'timestampMs (net-capture-timestamp-ms c)
-                 'sequence (net-capture-sequence-number c))))
+    (for/list ([r (in-list capped-rounds)] [ts (in-list capped-times)] [e (in-list capped-epochs)])
+      (hasheq 'roundNumber (bsp-round-round-number r)
+              'timestampMs ts
+              'command (round-label e)
+              'topo (intern-topology! (bsp-round-network-snapshot r))
+              'propagatorsFired (map prop-id-n (bsp-round-propagators-fired r))
+              'cellDiffs (if diffs-capped? '()
+                             (map serialize-cell-diff (bsp-round-cell-diffs r))))))
+  (define topologies-json (reverse topo-rev))
+  ;; Ordered distinct commands (label + first round) for the timeline readout.
+  (define commands-json
+    (let loop ([rs rounds-json] [seen (hash)] [acc '()] [seq 0])
+      (cond [(null? rs) (reverse acc)]
+            [(hash-has-key? seen (hash-ref (car rs) 'command)) (loop (cdr rs) seen acc seq)]
+            [else (loop (cdr rs) (hash-set seen (hash-ref (car rs) 'command) #t)
+                        (cons (hasheq 'seq seq 'label (hash-ref (car rs) 'command)
+                                      'firstRound (hash-ref (car rs) 'roundNumber)) acc)
+                        (add1 seq))])))
 
   (define enet (unbox cap-box))
-  (hasheq 'vizTrace 1
+  (hasheq 'vizTrace 2
           'file (format "~a" src-path)
           'source (hasheq 'path (format "~a" src-path)
                           'lines (read-source-lines src-path))
           'wallMs (- t1 t0)
-          'commands n-cmds
+          'commandCount n-cmds
           'errors (length (filter prologos-error? results))
           'errorMessages (for/list ([r (in-list results)]
                                     #:when (prologos-error? r))
                            (prologos-error-message r))
-          'captures captures-json
+          'commands commands-json
+          'topologies topologies-json
+          'rounds rounds-json
           'finalTopology
           (if enet
               (hash-set (topology-section (elab-network-prop-net enet)
                                           (elab-network-cell-info enet))
                         'present #t)
               (hasheq 'present #f))
-          'epochs epochs-json
-          'rounds rounds-json
-          'roundsTruncated rounds-truncated?
-          'validation validation))
+          'roundsTruncated (or (> (length rounds) max-rounds) diffs-capped?)
+          'validation (hash-set validation 'topologyCount topo-count)))
 
 (module+ main
   (define args (vector->list (current-command-line-arguments)))
@@ -269,17 +274,16 @@
       #:exists 'replace)
     (printf "wrote ~a (~a bytes)\n" out (file-size out)))
   (define v (hash-ref envelope 'validation))
-  (printf "commands ~a  errors ~a  captures ~a  rounds ~a  monotone ~a  captures==commands ~a\n"
-          (hash-ref envelope 'commands) (hash-ref envelope 'errors)
-          (hash-ref v 'captureCount) (hash-ref v 'roundsTotal)
+  (define rs (hash-ref envelope 'rounds))
+  (define fired (map (lambda (r) (length (hash-ref r 'propagatorsFired))) rs))
+  (define max-fired (if (null? fired) 0 (apply max fired)))
+  (printf "vizTrace2  errors ~a  rounds ~a  topologies ~a  monotone ~a  captures==commands ~a\n"
+          (hash-ref envelope 'errors) (length rs)
+          (hash-ref v 'topologyCount)
           (hash-ref v 'roundTimestampsMonotone)
           (hash-ref v 'capturesMatchCommands))
-  (printf "epochs: ~a\n"
-          (for/list ([e (in-list (hash-ref envelope 'epochs))])
-            (list (hash-ref e 'epoch)
-                  (hash-ref e 'label)
-                  (hash-ref (hash-ref (hash-ref e 'topology) 'stats) 'totalCells)
-                  (hash-ref (hash-ref (hash-ref e 'topology) 'stats) 'totalPropagators))))
+  (printf "concurrency: max propagators fired in one round = ~a (rounds with >1: ~a)\n"
+          max-fired (length (filter (lambda (n) (> n 1)) fired)))
   (when (and validate?
              (not (and (hash-ref v 'roundTimestampsMonotone)
                        (hash-ref v 'capturesMatchCommands)

@@ -1,7 +1,5 @@
 // Headless verification of the viewer's pure core (the @PURE block) against
-// real exported envelopes. Runs in node (no browser): extracts the pure
-// functions, exercises the unified-timeline model, asserts invariants.
-//   node tools/viz/check.js tools/viz/index.html trace1.vizjson trace2.vizjson ...
+// real vizTrace 2 envelopes. node tools/viz/check.js index.html t1.vizjson ...
 const fs = require('fs');
 const html = fs.readFileSync(process.argv[2], 'utf8');
 const m = html.match(/\/\* @PURE-BEGIN \*\/([\s\S]*?)\/\* @PURE-END \*\//);
@@ -9,53 +7,46 @@ if (!m) { console.error('PURE block not found'); process.exit(1); }
 eval(m[1]);
 
 let failures = 0;
-const check = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); failures++; } };
+const check = (c, msg) => { if (!c) { console.error('FAIL: ' + msg); failures++; } };
 
 for (const file of process.argv.slice(3)) {
   if (!fs.existsSync(file)) { console.log(file, 'MISSING'); continue; }
   const env = JSON.parse(fs.readFileSync(file, 'utf8'));
-  check(env.vizTrace === 1, 'vizTrace version');
-
-  const union = buildUnion(env);
-  const wired = wiredCellIds(union);
-  const visDefault = visibleCellIds(env, union, false);
-  const visAll = visibleCellIds(env, union, true);
-  check(visAll.size >= visDefault.size, 'show-all ⊇ default');
-  for (const w of wired) check(visDefault.has(w), 'wired cell ' + w + ' visible by default');
-
-  const g = buildGraph(union, visDefault, env);
-  const touched = new Set();
-  for (const e of g.edges) { check(g.byId.has(e.from) && g.byId.has(e.to), 'edge endpoints'); touched.add(e.from); touched.add(e.to); }
-  const cellNodes = g.nodes.filter(n => n.kind === 'cell');
-  const connCells = cellNodes.filter(n => touched.has(n.key) || (union.identity.wellKnownCells || {})[String(n.id)]);
-  const connPct = cellNodes.length ? Math.round(100 * connCells.length / cellNodes.length) : 100;
-
-  const labeled = g.nodes.filter(n => n.kind === 'prop' && !/^p\d+$/.test(n.label)).length;
-  const propCount = g.nodes.filter(n => n.kind === 'prop').length;
-
-  const lay = layoutGraph(g);
-  const seen = new Set();
-  for (const n of g.nodes) { const p = lay.pos.get(n.key); check(p && isFinite(p.x) && isFinite(p.y), 'positioned ' + n.key);
-    const k = p.x + ',' + p.y; check(!seen.has(k), 'overlap ' + k); seen.add(k); }
-
+  check(env.vizTrace === 2, 'vizTrace 2');
   const rounds = timelineRounds(env);
-  const presence = epochPresence(env);
-  let prevRN = -Infinity, anyFired = false, anyGrowth = false;
+  const changed = changedCellIdsGlobal(env);
+
+  let prevRN = -Infinity, anyFired = false, anyGrowth = false, maxFired = 0, labeledOK = true, connOK = true;
   for (let i = 0; i < rounds.length; i++) {
-    check(rounds[i].roundNumber >= prevRN, 'rounds ordered'); prevRN = rounds[i].roundNumber;
-    const fr = frameAt(env, rounds, presence, i);
-    if (fr.fired.size) anyFired = true;
-    if (i > 0 && (fr.born.cells.size || fr.born.props.size)) anyGrowth = true;
-    for (const p of fr.present.props) check(union.props.has(p), 'present prop in union ' + p);
+    const r = rounds[i];
+    check(r.roundNumber >= prevRN, 'rounds ordered'); prevRN = r.roundNumber;
+    check(env.topologies[r.topo] !== undefined, 'round topo ref valid');
+    // fired props + diff cells must exist in THIS round's own topology (the bug we fixed)
+    const topo = env.topologies[r.topo].topology;
+    const propIds = new Set(topo.propagators.map(p => p.id));
+    const cellIds = new Set(topo.cells.map(c => c.id));
+    for (const pid of r.propagatorsFired) check(propIds.has(pid), `fired prop ${pid} in round's own topo`);
+    for (const d of (r.cellDiffs || [])) check(cellIds.has(d.cell ?? d.cellId), `diff cell in round's own topo`);
+    maxFired = Math.max(maxFired, r.propagatorsFired.length);
+    if (r.propagatorsFired.length) anyFired = true;
+    if (i > 0 && r.topo !== rounds[i - 1].topo) anyGrowth = true;
+
+    // graph + both layouts must be well-formed for the default-filtered view
+    const g = buildGraphFromTopo(env.topologies[r.topo], env.source, changed, false);
+    for (const e of g.edges) check(g.byId.has(e.from) && g.byId.has(e.to), 'edge endpoints');
+    for (const lay of [layoutLayered(g), layoutForce(g, null, 800, 600)]) {
+      for (const n of g.nodes) { const p = lay.pos.get(n.key); check(p && isFinite(p.x) && isFinite(p.y), 'positioned ' + n.key); }
+    }
+    const labeled = g.nodes.filter(n => n.kind === 'prop' && !/^p\d+$/.test(n.label)).length;
+    const props = g.nodes.filter(n => n.kind === 'prop').length;
+    if (props && labeled === 0) labeledOK = false;
   }
   check(anyFired, 'some round fires a propagator');
-  check(anyGrowth || rounds.length <= 1, 'network grows across the timeline');
-  const series = growthSeries(env, rounds, presence);
-  check(series.length === rounds.length, 'growth series length');
+  check(rounds.length <= 1 || anyGrowth, 'network changes across timeline');
 
-  console.log(`${file.split('/').pop()}: cells(union)=${union.cells.size} props=${union.props.size} ` +
-              `| default-view cells=${cellNodes.length} (${connPct}% connected) ` +
-              `| propLabels=${labeled}/${propCount} from source | rounds=${rounds.length} components=${lay.componentCount}`);
+  console.log(`${file.split('/').pop()}: vizTrace${env.vizTrace} rounds=${rounds.length} ` +
+              `topologies=${env.topologies.length} commands=${(env.commands||[]).length} ` +
+              `maxFired/round=${maxFired} propLabelsFromSource=${labeledOK}`);
 }
 console.log(failures === 0 ? 'ALL CHECKS PASS' : failures + ' FAILURES');
 process.exit(failures === 0 ? 0 : 1);

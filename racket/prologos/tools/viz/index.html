@@ -1,26 +1,24 @@
 <!DOCTYPE html>
 <!--
-  Prologos propagator-network visualizer — PTF Track V (rebuilt 2026-06-13
-  after owner feedback: "I expected labeled propagators firing from cells to
-  cells, scheduler data, one evolving network — not a cloud of unconnected
-  dots").
+  Prologos propagator-network visualizer — PTF Track V (vizTrace 2, 2026-06-13).
 
-  Model (owner-chosen): ONE UNIFIED TIMELINE. Scrub/play the whole run; the
-  network GROWS (cells + propagators appear per command) and propagators
-  light up as they fire, with values flowing input-cells → propagator →
-  output-cells. Infrastructure cells (registries, fuel, the relation store,
-  config) that aren't wired to any propagator are HIDDEN by default — the
-  connected propagator graph is the focus; well-known cells that change
-  (e.g. the relation store filling with facts) are kept. Toggle reveals all.
+  Shows PROGRAM EXECUTION as a propagator network, played over one timeline.
+  Each round renders the network THAT ROUND ACTUALLY RAN ON (its own snapshot),
+  so the solver's worldview/NAF forks show up as the network changing across
+  the timeline — the branch-level concurrency Prologos has today. (Functional
+  reduction is not yet on the network; the rich execution lives in the
+  relational/logic solver — `solve`/`defr`.)
 
-  Propagators are labeled by the SOURCE CONSTRUCT that installed them (their
-  fire-functions are anonymous closures; the source line is the meaningful
-  identity, and ~all carry one).
+  - Timeline scrubber/play over all rounds; propagators pulse red when they
+    fire, edges light up input->propagator->output, written cells flash gold,
+    newly-created nodes ring teal.
+  - Layout toggle: force-directed (free shape) or layered (dataflow depth).
+  - Infrastructure cells (registries, fuel, relation store) unwired to any
+    propagator are hidden by default; "show infrastructure cells" reveals them.
+  - Propagators are labeled by the SOURCE CONSTRUCT that installed them.
 
-  Standalone, single-file, dependency-free (locked design D3). Works from
-  file:// — no server. Generate a trace with:
+  Standalone, dependency-free, file://-safe. Generate a trace with:
     racket tools/viz-export.rkt FILE.prologos -o out.json
-  then drop out.json onto the page.
 -->
 <html lang="en">
 <head>
@@ -35,9 +33,9 @@
            background: #252526; border-bottom: 1px solid #333; flex-wrap: wrap; }
   header .title { font-weight: 600; color: #9cdcfe; }
   header .cmd { color: #dcdcaa; font-family: ui-monospace, monospace; }
-  input[type=file], button, label.tog { background: #3c3c3c; color: #ddd; border: 1px solid #555;
+  input[type=file], button, label.tog, select { background: #3c3c3c; color: #ddd; border: 1px solid #555;
            border-radius: 4px; padding: 3px 8px; font: inherit; }
-  button:hover, label.tog:hover { border-color: #888; cursor: pointer; }
+  button:hover, label.tog:hover, select:hover { border-color: #888; cursor: pointer; }
   #main { display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
   #canvasWrap { position: relative; min-width: 0; }
   canvas { display: block; width: 100%; height: 100%; }
@@ -45,18 +43,14 @@
              border-radius: 4px; padding: 6px 9px; max-width: 380px; display: none; z-index: 5;
              white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 12px; }
   #side { border-left: 1px solid #333; background: #252526; padding: 10px; overflow-y: auto; }
-  #side h3 { margin: 12px 0 4px; font-size: 11px; text-transform: uppercase; color: #888;
-             letter-spacing: .5px; }
+  #side h3 { margin: 12px 0 4px; font-size: 11px; text-transform: uppercase; color: #888; letter-spacing: .5px; }
   #drop { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-          color: #888; font-size: 16px; border: 2px dashed #444; margin: 18px; border-radius: 10px;
-          text-align: center; padding: 20px; }
+          color: #888; font-size: 16px; border: 2px dashed #444; margin: 18px; border-radius: 10px; text-align: center; padding: 20px; }
   #timeRow { display: flex; gap: 8px; align-items: center; }
-  #time { flex: 1; }
   input[type=range] { width: 100%; }
-  .stat { display: flex; justify-content: space-between; font-family: ui-monospace, monospace;
-          font-size: 12px; padding: 1px 0; }
+  .stat { display: flex; justify-content: space-between; font-family: ui-monospace, monospace; font-size: 12px; padding: 1px 0; }
   .stat b { color: #9cdcfe; font-weight: 600; }
-  #diffs { font-family: ui-monospace, monospace; font-size: 11.5px; max-height: 220px; overflow-y: auto; }
+  #diffs { font-family: ui-monospace, monospace; font-size: 11.5px; max-height: 200px; overflow-y: auto; }
   .diff-row { padding: 2px 5px; border-left: 3px solid #e9c46a; margin: 2px 0; background: #2a2a2c; }
   .diff-row .src { color: #888; }
   .legend-item { display: flex; gap: 6px; align-items: center; margin: 2px 0; font-size: 12px; }
@@ -71,7 +65,8 @@
   <input type="file" id="file" accept=".json,.vizjson">
   <span id="cmd" class="cmd muted">drop a trace to begin</span>
   <span style="flex:1"></span>
-  <label class="tog"><input type="checkbox" id="showAll"> show infrastructure cells</label>
+  <label>layout <select id="layout"><option value="force">force-directed</option><option value="layered">layered</option></select></label>
+  <label class="tog"><input type="checkbox" id="showAll"> infrastructure</label>
   <button id="fit">fit</button>
 </header>
 <div id="main">
@@ -82,14 +77,11 @@
   </div>
   <div id="side">
     <h3>execution timeline</h3>
-    <div id="timeRow">
-      <button id="play">▶</button>
-      <input type="range" id="time" min="0" max="0" value="0">
-    </div>
+    <div id="timeRow"><button id="play">▶</button><input type="range" id="time" min="0" max="0" value="0"></div>
     <div id="timeLabel" class="muted">–</div>
     <h3>scheduler</h3>
     <div id="sched"><canvas id="spark"></canvas></div>
-    <div class="stat"><span>this round fired</span><b id="sFired">–</b></div>
+    <div class="stat"><span>fired this round</span><b id="sFired">–</b></div>
     <div class="stat"><span>cells written</span><b id="sWrites">–</b></div>
     <div class="stat"><span>network now</span><b id="sNet">–</b></div>
     <div class="stat"><span>round</span><b id="sRound">–</b></div>
@@ -107,95 +99,59 @@
 const SUBSYSTEM_COLORS = { "type-inference": "#6a9955", "multiplicity": "#b48ead",
                            "infrastructure": "#888888", "unknown": "#666666" };
 
-function hashHue(s) {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-  return ((h % 360) + 360) % 360;
-}
+function hashHue(s) { let h = 0; for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0; return ((h % 360) + 360) % 360; }
+function parseSrcLine(s) { if (!s) return null; const m = s.match(/srcloc\s+\S+\s+(\d+)\s/); return m ? +m[1] : null; }
+function friendlyLabel(s) { return String(s || "").replace(/^elab:/, ""); }
 
-// "#(struct:srcloc path LINE COL POS SPAN)" → LINE (int) or null.
-function parseSrcLine(s) {
-  if (!s) return null;
-  const m = s.match(/srcloc\s+\S+\s+(\d+)\s/);
-  return m ? +m[1] : null;
+function changedCellIdsGlobal(env) {
+  const c = new Set();
+  for (const r of (env.rounds || [])) for (const d of (r.cellDiffs || [])) c.add(d.cellId);
+  return c;
 }
-
-// Union all per-epoch topologies into one stable node set (cell-ids and
-// prop-ids share one space within a process-file run — solver forks continue
-// the parent's id counter). Keeps the richest instance of each.
-function buildUnion(env) {
-  const cells = new Map(), props = new Map(), identity = {};
-  for (const e of (env.epochs || [])) {
-    const id = e.identity || {};
-    for (const k of ["cellDomains", "wellKnownCells", "propagatorSrclocs"]) {
-      identity[k] = Object.assign(identity[k] || {}, id[k] || {});
-    }
-    for (const c of e.topology.cells) if (!cells.has(c.id) || c.value !== undefined) cells.set(c.id, c);
-    for (const p of e.topology.propagators) props.set(p.id, p);
-  }
-  return { cells, props, identity };
-}
-
-function wiredCellIds(union) {
+function wiredCellIds(topology) {
   const w = new Set();
-  for (const p of union.props.values()) {
-    for (const i of p.inputs) w.add(i);
-    for (const o of p.outputs) w.add(o);
-  }
+  for (const p of topology.propagators) { for (const i of p.inputs) w.add(i); for (const o of p.outputs) w.add(o); }
   return w;
 }
-
-// Well-known (named) cells that actually change during the run — kept even
-// when unwired, because their evolution is semantic (e.g. the relation store).
-function namedChangedCellIds(env, union) {
-  const wk = union.identity.wellKnownCells || {};
-  const changed = new Set();
-  for (const r of (env.rounds || []))
-    for (const d of (r.cellDiffs || []))
-      if (wk[String(d.cellId)]) changed.add(d.cellId);
-  return changed;
-}
-
-function visibleCellIds(env, union, showAll) {
-  if (showAll) return new Set([...union.cells.keys()]);
-  const vis = wiredCellIds(union);
-  for (const id of namedChangedCellIds(env, union)) vis.add(id);
+function topoVisibleCells(topoSection, changedGlobal, showAll) {
+  const topo = topoSection.topology, id = topoSection.identity || {};
+  if (showAll) return new Set(topo.cells.map(c => c.id));
+  const vis = wiredCellIds(topo);
+  const wk = id.wellKnownCells || {};
+  for (const c of topo.cells) if (wk[String(c.id)] && changedGlobal.has(c.id)) vis.add(c.id);
   return vis;
 }
-
-function propLabel(id, union, env) {
-  const sl = union.identity.propagatorSrclocs || {};
-  const line = parseSrcLine(sl[String(id)]);
-  const src = env.source && env.source.lines && line != null ? env.source.lines[String(line)] : null;
-  return src ? src : "p" + id;
+function propLabel(id, identity, source) {
+  const sl = (identity.propagatorSrclocs || {})[String(id)];
+  const line = parseSrcLine(sl);
+  const src = source && source.lines && line != null ? source.lines[String(line)] : null;
+  return src || ("p" + id);
 }
-
-function cellColor(cell, union) {
+function cellColor(cell, identity) {
   const id = String(cell.id);
-  const wk = union.identity.wellKnownCells && union.identity.wellKnownCells[id];
+  const wk = (identity.wellKnownCells || {})[id];
   if (wk) return { group: "infra: " + wk, color: "#d4a017" };
-  const dom = union.identity.cellDomains && union.identity.cellDomains[id];
+  const dom = (identity.cellDomains || {})[id];
   if (dom) return { group: "domain: " + dom, color: `hsl(${hashHue(dom)} 55% 58%)` };
   const sub = cell.subsystem || "unknown";
   return { group: sub, color: SUBSYSTEM_COLORS[sub] || SUBSYSTEM_COLORS.unknown };
 }
 
-// Bipartite graph over the visible cells + all propagators.
-function buildGraph(union, visibleCells, env) {
+// Graph for ONE topology section (a single round's actual network).
+function buildGraphFromTopo(topoSection, source, changedGlobal, showAll) {
+  const topo = topoSection.topology, identity = topoSection.identity || {};
+  const visible = topoVisibleCells(topoSection, changedGlobal, showAll);
   const nodes = [], edges = [], byId = new Map();
-  for (const c of union.cells.values()) {
-    if (!visibleCells.has(c.id)) continue;
-    const col = cellColor(c, union);
-    const wk = union.identity.wellKnownCells && union.identity.wellKnownCells[String(c.id)];
-    const n = { key: "c" + c.id, kind: "cell", id: c.id, value: c.value,
-                label: wk || ("c" + c.id), group: col.group, color: col.color };
+  for (const c of topo.cells) {
+    if (!visible.has(c.id)) continue;
+    const col = cellColor(c, identity);
+    const wk = (identity.wellKnownCells || {})[String(c.id)];
+    const n = { key: "c" + c.id, kind: "cell", id: c.id, value: c.value, label: wk || ("c" + c.id), group: col.group, color: col.color };
     nodes.push(n); byId.set(n.key, n);
   }
-  for (const p of union.props.values()) {
-    const n = { key: "p" + p.id, kind: "prop", id: p.id, label: propLabel(p.id, union, env),
-                group: "propagator", color: "#569cd6",
-                inputs: p.inputs.filter(i => byId.has("c" + i)),
-                outputs: p.outputs.filter(o => byId.has("c" + o)) };
+  for (const p of topo.propagators) {
+    const n = { key: "p" + p.id, kind: "prop", id: p.id, label: propLabel(p.id, identity, source), group: "propagator", color: "#569cd6",
+                inputs: p.inputs.filter(i => byId.has("c" + i)), outputs: p.outputs.filter(o => byId.has("c" + o)) };
     nodes.push(n); byId.set(n.key, n);
     for (const i of n.inputs) edges.push({ from: "c" + i, to: n.key, pid: p.id });
     for (const o of n.outputs) edges.push({ from: n.key, to: "c" + o, pid: p.id });
@@ -203,91 +159,88 @@ function buildGraph(union, visibleCells, env) {
   return { nodes, edges, byId };
 }
 
-// Layered layout: union-find components, BFS-layer each, grid-arrange.
-function layoutGraph(graph) {
-  const parent = new Map();
-  const find = k => { let r = k; while (parent.get(r) !== r) r = parent.get(r);
-                      let c = k; while (parent.get(c) !== r) { const n = parent.get(c); parent.set(c, r); c = n; }
-                      return r; };
-  for (const n of graph.nodes) parent.set(n.key, n.key);
-  for (const e of graph.edges) { const a = find(e.from), b = find(e.to); if (a !== b) parent.set(a, b); }
+function countComponents(graph) {
+  const par = new Map(); const find = k => { let r = k; while (par.get(r) !== r) r = par.get(r); return r; };
+  for (const n of graph.nodes) par.set(n.key, n.key);
+  for (const e of graph.edges) { const a = find(e.from), b = find(e.to); if (a !== b) par.set(a, b); }
+  return new Set(graph.nodes.map(n => find(n.key))).size;
+}
+
+// Layered (Sugiyama-ish) layout — dataflow depth.
+function layoutLayered(graph) {
+  const par = new Map(); const find = k => { let r = k; while (par.get(r) !== r) r = par.get(r); return r; };
+  for (const n of graph.nodes) par.set(n.key, n.key);
+  for (const e of graph.edges) { const a = find(e.from), b = find(e.to); if (a !== b) par.set(a, b); }
   const comps = new Map();
   for (const n of graph.nodes) { const r = find(n.key); if (!comps.has(r)) comps.set(r, []); comps.get(r).push(n); }
   const indeg = new Map(graph.nodes.map(n => [n.key, 0])), out = new Map(graph.nodes.map(n => [n.key, []]));
   for (const e of graph.edges) { if (e.from === e.to) continue; indeg.set(e.to, indeg.get(e.to) + 1); out.get(e.from).push(e.to); }
-  const pos = new Map(), boxes = [];
-  const NX = 150, NY = 38;
+  const pos = new Map(), boxes = [], NX = 150, NY = 40;
   for (const members of comps.values()) {
-    const layer = new Map();
-    let q = members.filter(n => indeg.get(n.key) === 0).map(n => n.key);
-    if (!q.length) q = [members[0].key];
-    q.forEach(k => layer.set(k, 0));
-    let fr = q.slice();
-    while (fr.length) {
-      const nx = [];
-      for (const k of fr) for (const t of out.get(k)) if (!layer.has(t)) { layer.set(t, layer.get(k) + 1); nx.push(t); }
-      fr = nx;
-    }
+    const layer = new Map(); let q = members.filter(n => indeg.get(n.key) === 0).map(n => n.key);
+    if (!q.length) q = [members[0].key]; q.forEach(k => layer.set(k, 0)); let fr = q.slice();
+    while (fr.length) { const nx = []; for (const k of fr) for (const t of out.get(k)) if (!layer.has(t)) { layer.set(t, layer.get(k) + 1); nx.push(t); } fr = nx; }
     for (const n of members) if (!layer.has(n.key)) layer.set(n.key, 0);
-    const byLayer = new Map();
-    for (const n of members) { const l = layer.get(n.key); if (!byLayer.has(l)) byLayer.set(l, []); byLayer.get(l).push(n.key); }
-    let w = 0, h = 0;
-    for (const [l, ks] of byLayer) { ks.forEach((k, i) => pos.set(k, { x: l * NX, y: i * NY })); w = Math.max(w, l * NX + NX); h = Math.max(h, ks.length * NY); }
+    const byLayer = new Map(); for (const n of members) { const l = layer.get(n.key); if (!byLayer.has(l)) byLayer.set(l, []); byLayer.get(l).push(n.key); }
+    let w = 0, h = 0; for (const [l, ks] of byLayer) { ks.forEach((k, i) => pos.set(k, { x: l * NX, y: i * NY })); w = Math.max(w, l * NX + NX); h = Math.max(h, ks.length * NY); }
     boxes.push({ members, w, h });
   }
   boxes.sort((a, b) => (b.w * b.h) - (a.w * a.h));
   let cx = 0, cy = 0, rowH = 0, totalW = 0;
   const MAXW = Math.max(1100, Math.sqrt(boxes.reduce((s, b) => s + (b.w + 80) * (b.h + 80), 0)) * 1.5);
-  for (const box of boxes) {
-    if (cx > 0 && cx + box.w > MAXW) { cx = 0; cy += rowH + 70; rowH = 0; }
+  for (const box of boxes) { if (cx > 0 && cx + box.w > MAXW) { cx = 0; cy += rowH + 70; rowH = 0; }
     for (const n of box.members) { const p = pos.get(n.key); pos.set(n.key, { x: p.x + cx, y: p.y + cy }); }
-    cx += box.w + 80; rowH = Math.max(rowH, box.h); totalW = Math.max(totalW, cx);
-  }
+    cx += box.w + 80; rowH = Math.max(rowH, box.h); totalW = Math.max(totalW, cx); }
   return { pos, width: totalW, height: cy + rowH, componentCount: boxes.length };
 }
 
-// Epochs ordered along the timeline by their first global round.
-function orderedEpochs(env) {
-  return (env.epochs || []).slice().sort((a, b) => (a.firstRound || 0) - (b.firstRound || 0));
+// Force-directed (Fruchterman-Reingold), deterministic seed → reproducible.
+function layoutForce(graph, seed, W, H) {
+  W = W || 1000; H = H || 700;
+  const nodes = graph.nodes, n = nodes.length || 1, k = Math.sqrt((W * H) / n);
+  const pos = new Map();
+  nodes.forEach((nd, i) => {
+    if (seed && seed.has(nd.key)) pos.set(nd.key, { x: seed.get(nd.key).x, y: seed.get(nd.key).y });
+    else { const a = 2 * Math.PI * i / n, R = k * Math.sqrt(n) / 2; pos.set(nd.key, { x: W / 2 + Math.cos(a) * R, y: H / 2 + Math.sin(a) * R }); }
+  });
+  const adj = graph.edges.filter(e => e.from !== e.to);
+  let temp = W / 8;
+  const iters = n > 300 ? 150 : 250;
+  for (let it = 0; it < iters; it++) {
+    const disp = new Map(nodes.map(nd => [nd.key, { x: 0, y: 0 }]));
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+      const a = pos.get(nodes[i].key), b = pos.get(nodes[j].key);
+      let dx = a.x - b.x, dy = a.y - b.y, d = Math.hypot(dx, dy) || 0.01;
+      const f = k * k / d, ux = dx / d, uy = dy / d;
+      const da = disp.get(nodes[i].key), db = disp.get(nodes[j].key);
+      da.x += ux * f; da.y += uy * f; db.x -= ux * f; db.y -= uy * f;
+    }
+    for (const e of adj) {
+      const a = pos.get(e.from), b = pos.get(e.to);
+      let dx = a.x - b.x, dy = a.y - b.y, d = Math.hypot(dx, dy) || 0.01;
+      const f = d * d / k, ux = dx / d, uy = dy / d;
+      const da = disp.get(e.from), db = disp.get(e.to);
+      da.x -= ux * f; da.y -= uy * f; db.x += ux * f; db.y += uy * f;
+    }
+    for (const nd of nodes) { const p = pos.get(nd.key), d = disp.get(nd.key); d.x += (W / 2 - p.x) * 0.012; d.y += (H / 2 - p.y) * 0.012; }
+    for (const nd of nodes) { const p = pos.get(nd.key), d = disp.get(nd.key); const dl = Math.hypot(d.x, d.y) || 0.01, lim = Math.min(dl, temp); p.x += d.x / dl * lim; p.y += d.y / dl * lim; }
+    temp *= 0.97;
+  }
+  const xs = [...pos.values()].map(p => p.x), ys = [...pos.values()].map(p => p.y);
+  const minX = Math.min(...xs), minY = Math.min(...ys);
+  for (const p of pos.values()) { p.x -= minX; p.y -= minY; }
+  return { pos, width: Math.max(...xs) - minX, height: Math.max(...ys) - minY, componentCount: countComponents(graph) };
 }
 
-// Per-epoch present id sets.
-function epochPresence(env) {
-  const m = new Map();
-  for (const e of (env.epochs || []))
-    m.set(e.epoch, { cells: new Set(e.topology.cells.map(c => c.id)),
-                     props: new Set(e.topology.propagators.map(p => p.id)) });
-  return m;
-}
+function timelineRounds(env) { return (env.rounds || []).slice().sort((a, b) => a.roundNumber - b.roundNumber); }
 
-// Rounds in chronological order (roundNumber is globally re-stamped).
-function timelineRounds(env) {
-  return (env.rounds || []).slice().sort((a, b) => a.roundNumber - b.roundNumber);
+// Node-id sets present in a given topology (for born/growth detection).
+function topoNodeKeys(env, topoIdx) {
+  const t = env.topologies[topoIdx]; const s = new Set();
+  for (const c of t.topology.cells) s.add("c" + c.id);
+  for (const p of t.topology.propagators) s.add("p" + p.id);
+  return s;
 }
-
-// Frame at timeline index i: what exists, what's newly born, what fired/changed.
-function frameAt(env, rounds, presence, i) {
-  const r = rounds[i];
-  const pres = presence.get(r.epoch) || { cells: new Set(), props: new Set() };
-  let born = { cells: new Set(), props: new Set() };
-  if (i > 0) {
-    const prev = presence.get(rounds[i - 1].epoch) || { cells: new Set(), props: new Set() };
-    for (const c of pres.cells) if (!prev.cells.has(c)) born.cells.add(c);
-    for (const p of pres.props) if (!prev.props.has(p)) born.props.add(p);
-  } else { born = { cells: new Set(pres.cells), props: new Set(pres.props) }; }
-  const fired = new Set((r.propagatorsFired || []));
-  const changed = (r.cellDiffs || []).map(d => ({ cell: d.cellId, old: d.oldValue, neu: d.newValue, src: d.sourcePropagator }));
-  return { round: r, epochId: r.epoch, present: pres, born, fired, changed };
-}
-
-// Growth series for the sparkline: present cell/prop counts per round.
-function growthSeries(env, rounds, presence) {
-  return rounds.map(r => { const p = presence.get(r.epoch) || { cells: new Set(), props: new Set() };
-                           return { cells: p.cells.size, props: p.props.size }; });
-}
-
-// Friendly command label: "elab:eval" → "eval", strip "elab:".
-function friendlyLabel(s) { return String(s || "").replace(/^elab:/, ""); }
 
 /* @PURE-END */
 /* ===================== DOM / rendering layer ====================== */
@@ -296,212 +249,162 @@ if (typeof document !== "undefined") (function () {
   const canvas = document.getElementById("canvas"), ctx = canvas.getContext("2d");
   const spark = document.getElementById("spark"), sctx = spark.getContext("2d");
   const tooltip = document.getElementById("tooltip");
-  let env = null, union = null, graph = null, layout = null;
-  let rounds = [], presence = null, series = [], idx = 0;
-  let frame = null, playing = null, showAll = false;
-  let view = { x: 40, y: 40, k: 1 }, lastEpoch = null;
+  let env = null, rounds = [], changedGlobal = null, idx = 0;
+  let mode = "force", showAll = false, playing = null;
+  let view = { x: 40, y: 40, k: 1 }, lastTopo = -1;
+  const cache = new Map();   // key `${mode}:${topoIdx}:${showAll}` -> {graph, layout}
 
-  function rebuild() {
-    const vis = visibleCellIds(env, union, showAll);
-    graph = buildGraph(union, vis, env);
-    layout = layoutGraph(graph);
-    buildLegend();
+  function gl(topoIdx) {
+    const key = mode + ":" + topoIdx + ":" + showAll;
+    if (cache.has(key)) return cache.get(key);
+    const graph = buildGraphFromTopo(env.topologies[topoIdx], env.source, changedGlobal, showAll);
+    let layout;
+    if (mode === "layered") layout = layoutLayered(graph);
+    else {
+      // seed from the previous topology's layout (shared keys) for stable growth
+      let seed = null;
+      for (let j = idx - 1; j >= 0; j--) { const pk = mode + ":" + rounds[j].topo + ":" + showAll; if (cache.has(pk)) { seed = cache.get(pk).layout.pos; break; } }
+      layout = layoutForce(graph, seed, 1000, 700);
+    }
+    const v = { graph, layout }; cache.set(key, v); return v;
   }
 
   function loadEnvelope(obj) {
-    if (obj.vizTrace !== 1) { document.getElementById("cmd").textContent = "not a vizTrace/1 file"; return; }
-    env = obj; union = buildUnion(env);
-    rounds = timelineRounds(env); presence = epochPresence(env); series = growthSeries(env, rounds, presence);
-    rebuild();
+    if (obj.vizTrace !== 2) { document.getElementById("cmd").textContent = obj.vizTrace ? "need vizTrace 2 (re-export with the current tool)" : "not a vizTrace file"; return; }
+    env = obj; rounds = timelineRounds(env); changedGlobal = changedCellIdsGlobal(env); cache.clear(); lastTopo = -1;
     document.getElementById("drop").style.display = "none";
-    const slider = document.getElementById("time");
-    slider.max = Math.max(0, rounds.length - 1); slider.value = 0; idx = 0; lastEpoch = null;
-    showFrame(0); fitToPresent(true);
-    drawSpark();
+    const slider = document.getElementById("time"); slider.max = Math.max(0, rounds.length - 1); slider.value = 0; idx = 0;
+    showFrame(0); fitView(true); drawSpark();
   }
 
   function showFrame(i) {
-    idx = i;
-    frame = frameAt(env, rounds, presence, i);
-    const epochObj = (env.epochs || []).find(e => e.epoch === frame.epochId);
-    const label = epochObj ? friendlyLabel(epochObj.label) : "?";
-    const cmdSeq = orderedEpochs(env).findIndex(e => e.epoch === frame.epochId) + 1;
-    document.getElementById("cmd").textContent =
-      `● command ${cmdSeq}/${(env.epochs || []).length}: ${label}`;
-    document.getElementById("timeLabel").textContent =
-      `round ${frame.round.roundNumber} (${i + 1}/${rounds.length})`;
-    document.getElementById("sFired").textContent = frame.fired.size;
-    document.getElementById("sWrites").textContent = frame.changed.length;
-    document.getElementById("sNet").textContent =
-      `${frame.present.cells.size} cells · ${frame.present.props.size} props`;
+    idx = i; const r = rounds[i]; const { graph, layout } = gl(r.topo);
+    const cmds = env.commands || [];
+    const seq = (cmds.findIndex(c => c.label === r.command) + 1) || "?";
+    document.getElementById("cmd").textContent = `● command ${seq}/${cmds.length}: ${r.command}`;
+    document.getElementById("timeLabel").textContent = `round ${r.roundNumber} (${i + 1}/${rounds.length})`;
+    const st = env.topologies[r.topo].topology.stats;
+    document.getElementById("sFired").textContent = r.propagatorsFired.length;
+    document.getElementById("sWrites").textContent = (r.cellDiffs || []).length;
+    document.getElementById("sNet").textContent = `${st.totalCells} cells · ${st.totalPropagators} props`;
     document.getElementById("sRound").textContent = `${i + 1} / ${rounds.length}`;
-    // diffs
     const dd = document.getElementById("diffs");
-    if (!frame.changed.length) dd.innerHTML = `<span class="muted">no cell writes this round</span>`;
-    else dd.innerHTML = frame.changed.map(d => {
-      const wk = union.identity.wellKnownCells && union.identity.wellKnownCells[String(d.cell)];
-      const nm = wk ? wk : "c" + d.cell;
-      return `<div class="diff-row">${esc(nm)}: ${esc(trim(d.old))} → ${esc(trim(d.neu))}` +
-             `<br><span class="src">by ${esc(trim(propLabel(d.src, union, env)))}</span></div>`;
+    if (!(r.cellDiffs || []).length) dd.innerHTML = `<span class="muted">no cell writes this round</span>`;
+    else dd.innerHTML = r.cellDiffs.map(d => {
+      const id = env.topologies[r.topo].identity || {};
+      const wk = (id.wellKnownCells || {})[String(d.cellId)];
+      return `<div class="diff-row">${esc(wk || "c" + d.cellId)}: ${esc(trim(d.oldValue))} → ${esc(trim(d.newValue))}` +
+             `<br><span class="src">by ${esc(trim(propLabel(d.sourcePropagator, id, env.source)))}</span></div>`;
     }).join("");
-    // fit when the command changes (smooth within a command)
-    if (frame.epochId !== lastEpoch) { fitToPresent(false); lastEpoch = frame.epochId; }
+    if (r.topo !== lastTopo) { fitView(false); lastTopo = r.topo; }
     draw(); drawSpark();
   }
 
-  function presentKeys() {
-    const ks = new Set();
-    for (const c of frame.present.cells) if (graph.byId.has("c" + c)) ks.add("c" + c);
-    for (const p of frame.present.props) if (graph.byId.has("p" + p)) ks.add("p" + p);
-    return ks;
+  function curGL() { return gl(rounds[idx].topo); }
+  function bornKeys() {
+    if (idx === 0) return new Set(topoNodeKeys(env, rounds[0].topo));
+    const prev = topoNodeKeys(env, rounds[idx - 1].topo), cur = topoNodeKeys(env, rounds[idx].topo);
+    const b = new Set(); for (const k of cur) if (!prev.has(k)) b.add(k); return b;
   }
 
-  function fitToPresent(all) {
-    if (!layout || !frame) return;
-    let xs = [], ys = [];
-    const keys = all ? graph.nodes.map(n => n.key) : [...presentKeys()];
-    for (const k of keys) { const p = layout.pos.get(k); if (p) { xs.push(p.x); ys.push(p.y); } }
-    if (!xs.length) { view = { x: 40, y: 40, k: 1 }; return; }
+  function fitView(all) {
+    const { graph, layout } = curGL();
+    const keys = graph.nodes.map(n => n.key);
+    if (!keys.length) { view = { x: 60, y: 60, k: 1 }; return; }
+    const xs = keys.map(k => layout.pos.get(k).x), ys = keys.map(k => layout.pos.get(k).y);
     const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
     const w = canvas.width - 120, h = canvas.height - 120;
-    view.k = Math.min(1.6, Math.max(0.08, Math.min(w / Math.max(maxX - minX, 1), h / Math.max(maxY - minY, 1))));
+    view.k = Math.min(1.7, Math.max(0.06, Math.min(w / Math.max(maxX - minX, 1), h / Math.max(maxY - minY, 1))));
     view.x = 60 - minX * view.k + (w - (maxX - minX) * view.k) / 2;
-    view.y = 60 - minY * view.k;
+    view.y = 70 - minY * view.k + (h - (maxY - minY) * view.k) / 2;
   }
 
   function draw() {
-    if (!graph) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.save(); ctx.translate(view.x, view.y); ctx.scale(view.k, view.k);
-    const present = presentKeys();
-    // edges (only when both endpoints present)
+    if (!env) return; const r = rounds[idx], { graph, layout } = curGL();
+    ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.save(); ctx.translate(view.x, view.y); ctx.scale(view.k, view.k);
+    const fired = new Set(r.propagatorsFired), born = bornKeys(), changed = new Set((r.cellDiffs || []).map(d => "c" + d.cellId));
     for (const e of graph.edges) {
-      if (!present.has(e.from) || !present.has(e.to)) continue;
-      const a = layout.pos.get(e.from), b = layout.pos.get(e.to);
-      const live = frame.fired.has(e.pid);
-      ctx.strokeStyle = live ? "#4ec9b0" : "#444";
-      ctx.lineWidth = (live ? 2.4 : 0.8) / view.k;
+      const a = layout.pos.get(e.from), b = layout.pos.get(e.to); if (!a || !b) continue;
+      const live = fired.has(e.pid);
+      ctx.strokeStyle = live ? "#4ec9b0" : "#3a3a3a"; ctx.lineWidth = (live ? 2.4 : 0.8) / view.k;
       ctx.beginPath();
       if (e.from === e.to) ctx.arc(a.x + 10, a.y - 10, 9, 0, Math.PI * 2);
-      else { ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); }
-      ctx.stroke();
-      if (live) {  // arrowhead toward target
-        const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1;
-        const ux = dx / L, uy = dy / L, hx = b.x - ux * 11, hy = b.y - uy * 11;
-        ctx.fillStyle = "#4ec9b0"; ctx.beginPath();
-        ctx.moveTo(b.x - ux * 3, b.y - uy * 3);
-        ctx.lineTo(hx - uy * 4, hy + ux * 4); ctx.lineTo(hx + uy * 4, hy - ux * 4); ctx.closePath(); ctx.fill();
-      }
+      else { ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); } ctx.stroke();
+      if (live && e.from !== e.to) { const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L, hx = b.x - ux * 11, hy = b.y - uy * 11;
+        ctx.fillStyle = "#4ec9b0"; ctx.beginPath(); ctx.moveTo(b.x - ux * 3, b.y - uy * 3); ctx.lineTo(hx - uy * 4, hy + ux * 4); ctx.lineTo(hx + uy * 4, hy - ux * 4); ctx.closePath(); ctx.fill(); }
     }
-    const fp = Math.max(8, 11 / view.k);
-    ctx.font = `${fp}px ui-monospace, monospace`;
-    const changedCells = new Set(frame.changed.map(d => "c" + d.cell));
+    const fp = Math.max(8, 11 / view.k); ctx.font = `${fp}px ui-monospace, monospace`;
     for (const n of graph.nodes) {
-      if (!present.has(n.key)) continue;
-      const p = layout.pos.get(n.key);
-      const fired = n.kind === "prop" && frame.fired.has(n.id);
-      const wrote = changedCells.has(n.key);
-      const born = (n.kind === "cell" ? frame.born.cells : frame.born.props).has(n.id);
+      const p = layout.pos.get(n.key); const isFired = n.kind === "prop" && fired.has(n.id), wrote = changed.has(n.key), isBorn = born.has(n.key);
       ctx.beginPath();
       if (n.kind === "cell") ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
       else { ctx.moveTo(p.x, p.y - 9); ctx.lineTo(p.x + 9, p.y); ctx.lineTo(p.x, p.y + 9); ctx.lineTo(p.x - 9, p.y); ctx.closePath(); }
       ctx.fillStyle = wrote ? "#e9c46a" : n.color; ctx.fill();
-      ctx.strokeStyle = fired ? "#ff6b6b" : born ? "#4ec9b0" : (wrote ? "#e9c46a" : "#222");
-      ctx.lineWidth = (fired || born || wrote ? 2.6 : 1) / view.k;
-      ctx.stroke();
-      if (view.k > 0.42) {
-        ctx.fillStyle = n.kind === "prop" ? "#bcd" : "#bbb";
-        const lab = n.label.length > 28 ? n.label.slice(0, 27) + "…" : n.label;
-        ctx.fillText(lab, p.x + 12, p.y + 4);
-      }
+      ctx.strokeStyle = isFired ? "#ff6b6b" : isBorn ? "#4ec9b0" : wrote ? "#e9c46a" : "#222";
+      ctx.lineWidth = (isFired || isBorn || wrote ? 2.6 : 1) / view.k; ctx.stroke();
+      if (view.k > 0.4) { ctx.fillStyle = n.kind === "prop" ? "#bcd" : "#bbb"; const lab = n.label.length > 30 ? n.label.slice(0, 29) + "…" : n.label; ctx.fillText(lab, p.x + 12, p.y + 4); }
     }
     ctx.restore();
   }
 
   function drawSpark() {
-    if (!series.length) return;
-    const W = spark.width = spark.clientWidth, H = spark.height = spark.clientHeight;
-    sctx.clearRect(0, 0, W, H);
-    const maxC = Math.max(1, ...series.map(s => s.cells)), maxP = Math.max(1, ...series.map(s => s.props));
-    const plot = (key, max, color) => {
-      sctx.strokeStyle = color; sctx.lineWidth = 1.5; sctx.beginPath();
-      series.forEach((s, i) => { const x = i / Math.max(series.length - 1, 1) * W, y = H - (s[key] / max) * (H - 4) - 2;
-        i ? sctx.lineTo(x, y) : sctx.moveTo(x, y); });
-      sctx.stroke();
-    };
-    plot("cells", maxC, "#888"); plot("props", maxP, "#569cd6");
-    const x = idx / Math.max(series.length - 1, 1) * W;
-    sctx.strokeStyle = "#e9c46a"; sctx.lineWidth = 1; sctx.beginPath(); sctx.moveTo(x, 0); sctx.lineTo(x, H); sctx.stroke();
+    if (!rounds.length) return; const Wd = spark.width = spark.clientWidth, Hd = spark.height = spark.clientHeight; sctx.clearRect(0, 0, Wd, Hd);
+    const series = rounds.map(r => env.topologies[r.topo].topology.stats);
+    const maxC = Math.max(1, ...series.map(s => s.totalCells)), maxP = Math.max(1, ...series.map(s => s.totalPropagators));
+    const plot = (key, max, color) => { sctx.strokeStyle = color; sctx.lineWidth = 1.5; sctx.beginPath();
+      series.forEach((s, i) => { const x = i / Math.max(series.length - 1, 1) * Wd, y = Hd - (s[key] / max) * (Hd - 4) - 2; i ? sctx.lineTo(x, y) : sctx.moveTo(x, y); }); sctx.stroke(); };
+    plot("totalCells", maxC, "#888"); plot("totalPropagators", maxP, "#569cd6");
+    const x = idx / Math.max(series.length - 1, 1) * Wd; sctx.strokeStyle = "#e9c46a"; sctx.beginPath(); sctx.moveTo(x, 0); sctx.lineTo(x, Hd); sctx.stroke();
   }
 
   function buildLegend() {
-    const groups = new Map();
+    const { graph } = curGL(); const groups = new Map();
     for (const n of graph.nodes) if (n.kind === "cell" && !groups.has(n.group)) groups.set(n.group, n.color);
-    const items = [...groups].slice(0, 12).map(([g, c]) =>
-      `<div class="legend-item"><span class="swatch" style="background:${c}"></span>${esc(g)}</div>`).join("");
     document.getElementById("legend").innerHTML =
-      `<div class="legend-item"><span class="swatch" style="background:#569cd6;border-radius:0;transform:rotate(45deg)"></span>propagator (◇, label = source)</div>` +
+      `<div class="legend-item"><span class="swatch" style="background:#569cd6;border-radius:0;transform:rotate(45deg)"></span>propagator (◇, label=source)</div>` +
       `<div class="legend-item"><span class="swatch" style="background:#ff6b6b"></span>fired this round</div>` +
-      `<div class="legend-item"><span class="swatch" style="background:#e9c46a"></span>value written this round</div>` +
-      `<div class="legend-item"><span class="swatch" style="background:#4ec9b0"></span>newly created</div>` + items;
+      `<div class="legend-item"><span class="swatch" style="background:#e9c46a"></span>value written</div>` +
+      `<div class="legend-item"><span class="swatch" style="background:#4ec9b0"></span>newly created</div>` +
+      [...groups].slice(0, 10).map(([g, c]) => `<div class="legend-item"><span class="swatch" style="background:${c}"></span>${esc(g)}</div>`).join("");
   }
 
   function trim(s) { s = String(s); return s.length > 44 ? s.slice(0, 41) + "…" : s; }
   function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
-
   function resize() { canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; draw(); }
   window.addEventListener("resize", () => { resize(); drawSpark(); });
 
-  // pan / zoom / hover
   let drag = null;
   canvas.addEventListener("mousedown", e => drag = { x: e.offsetX - view.x, y: e.offsetY - view.y });
   window.addEventListener("mouseup", () => drag = null);
   canvas.addEventListener("mousemove", e => {
     if (drag) { view.x = e.offsetX - drag.x; view.y = e.offsetY - drag.y; draw(); return; }
-    if (!graph || !frame) return;
-    const gx = (e.offsetX - view.x) / view.k, gy = (e.offsetY - view.y) / view.k;
-    const present = presentKeys();
-    let hit = null;
-    for (const n of graph.nodes) { if (!present.has(n.key)) continue; const p = layout.pos.get(n.key);
-      if (Math.abs(p.x - gx) < 11 && Math.abs(p.y - gy) < 11) { hit = n; break; } }
-    if (hit) {
-      tooltip.style.display = "block"; tooltip.style.left = (e.offsetX + 14) + "px"; tooltip.style.top = (e.offsetY + 14) + "px";
-      if (hit.kind === "cell") {
-        const c = union.cells.get(hit.id);
-        tooltip.textContent = `cell ${hit.id} (${hit.group})\nvalue: ${c ? c.value : "?"}`;
-      } else {
-        const sl = union.identity.propagatorSrclocs && union.identity.propagatorSrclocs[String(hit.id)];
-        tooltip.textContent = `propagator ${hit.id}\n${hit.label}` +
-          (sl ? `\n${sl.replace(/#\(struct:srcloc\s+/, "").replace(/\)$/, "")}` : "") +
-          `\nreads ${hit.inputs.length} cell(s), writes ${hit.outputs.length}`;
-      }
+    if (!env) return; const { graph, layout } = curGL(); const gx = (e.offsetX - view.x) / view.k, gy = (e.offsetY - view.y) / view.k;
+    let hit = null; for (const n of graph.nodes) { const p = layout.pos.get(n.key); if (Math.abs(p.x - gx) < 11 && Math.abs(p.y - gy) < 11) { hit = n; break; } }
+    if (hit) { tooltip.style.display = "block"; tooltip.style.left = (e.offsetX + 14) + "px"; tooltip.style.top = (e.offsetY + 14) + "px";
+      const id = env.topologies[rounds[idx].topo].identity || {};
+      if (hit.kind === "cell") tooltip.textContent = `cell ${hit.id} (${hit.group})\nvalue: ${hit.value}`;
+      else { const sl = (id.propagatorSrclocs || {})[String(hit.id)]; tooltip.textContent = `propagator ${hit.id}\n${hit.label}` + (sl ? `\n${sl.replace(/#\(struct:srcloc\s+/, "").replace(/\)$/, "")}` : "") + `\nreads ${hit.inputs.length}, writes ${hit.outputs.length}`; }
     } else tooltip.style.display = "none";
   });
-  canvas.addEventListener("wheel", e => {
-    e.preventDefault(); const f = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-    const gx = (e.offsetX - view.x) / view.k, gy = (e.offsetY - view.y) / view.k;
-    view.k *= f; view.x = e.offsetX - gx * view.k; view.y = e.offsetY - gy * view.k; draw();
-  }, { passive: false });
+  canvas.addEventListener("wheel", e => { e.preventDefault(); const f = e.deltaY < 0 ? 1.15 : 1 / 1.15; const gx = (e.offsetX - view.x) / view.k, gy = (e.offsetY - view.y) / view.k; view.k *= f; view.x = e.offsetX - gx * view.k; view.y = e.offsetY - gy * view.k; draw(); }, { passive: false });
 
-  // wiring
   function loadFile(f) { f.text().then(t => loadEnvelope(JSON.parse(t))); }
   document.getElementById("file").addEventListener("change", e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
   const wrap = document.getElementById("canvasWrap");
   wrap.addEventListener("dragover", e => e.preventDefault());
   wrap.addEventListener("drop", e => { e.preventDefault(); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
-  document.getElementById("time").addEventListener("input", e => showFrame(+e.target.value));
-  document.getElementById("fit").addEventListener("click", () => { fitToPresent(false); draw(); });
-  document.getElementById("showAll").addEventListener("change", e => { showAll = e.target.checked; rebuild(); fitToPresent(false); draw(); });
+  document.getElementById("time").addEventListener("input", e => { showFrame(+e.target.value); buildLegend(); });
+  document.getElementById("fit").addEventListener("click", () => { fitView(false); draw(); });
+  document.getElementById("layout").addEventListener("change", e => { mode = e.target.value; cache.clear(); lastTopo = -1; showFrame(idx); fitView(false); draw(); buildLegend(); });
+  document.getElementById("showAll").addEventListener("change", e => { showAll = e.target.checked; cache.clear(); lastTopo = -1; showFrame(idx); fitView(false); draw(); buildLegend(); });
   document.getElementById("play").addEventListener("click", () => {
     const btn = document.getElementById("play");
     if (playing) { clearInterval(playing); playing = null; btn.textContent = "▶"; return; }
     btn.textContent = "⏸";
-    playing = setInterval(() => {
-      if (idx + 1 >= rounds.length) { clearInterval(playing); playing = null; btn.textContent = "▶"; return; }
-      document.getElementById("time").value = idx + 1; showFrame(idx + 1);
-    }, 600);
+    playing = setInterval(() => { if (idx + 1 >= rounds.length) { clearInterval(playing); playing = null; btn.textContent = "▶"; return; } document.getElementById("time").value = idx + 1; showFrame(idx + 1); }, 700);
   });
   resize();
+  const _orig = loadEnvelope; loadEnvelope = obj => { _orig(obj); buildLegend(); };
 })();
 </script>
 </body>
