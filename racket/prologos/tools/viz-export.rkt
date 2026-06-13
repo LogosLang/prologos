@@ -26,6 +26,7 @@
 (require json
          racket/list
          racket/string
+         racket/file
          "../champ.rkt"
          "../driver.rkt"
          "../errors.rkt"
@@ -116,6 +117,19 @@
           [(<= ts (car cs)) k]
           [else (loop (add1 k) (cdr cs))])))
 
+;; Source lines keyed by line-number string → trimmed text. Lets the viewer
+;; label propagators by the SOURCE CONSTRUCT that installed them (fire-fns are
+;; anonymous closures; srcloc is the meaningful identity). Best-effort: a
+;; missing/unreadable file yields an empty map.
+(define (read-source-lines path)
+  (with-handlers ([exn:fail? (lambda (_) (hasheq))])
+    (define lines (file->lines path))
+    (for/hasheq ([ln (in-list lines)] [i (in-naturals 1)]
+                 #:when (positive? (string-length (string-trim ln))))
+      (define t (string-trim ln))
+      (values (string->symbol (number->string i))
+              (if (> (string-length t) 120) (substring t 0 120) t)))))
+
 ;; viz-export-file : path (-> hasheq) — runs FILE, returns the envelope jsexpr.
 (define (viz-export-file src-path
                          #:max-diffs [max-diffs 50000]
@@ -163,6 +177,11 @@
   (define last-round-per-epoch
     (for/fold ([h (hash)]) ([r (in-list rounds)] [e (in-list round-epochs)])
       (hash-set h e r)))   ;; later rounds overwrite: keeps the LAST per epoch
+  ;; First global round-number per epoch — epoch ids are NOT temporal (hash
+  ;; bucketing), so the viewer needs this to order the unified timeline.
+  (define first-round-per-epoch
+    (for/fold ([h (hash)]) ([r (in-list rounds)] [e (in-list round-epochs)])
+      (if (hash-has-key? h e) h (hash-set h e (bsp-round-round-number r)))))
   (define epochs-json
     (for/list ([(e r) (in-hash last-round-per-epoch)])
       (define label
@@ -171,6 +190,7 @@
       (hash-set* (topology-section (bsp-round-network-snapshot r))
                  'epoch e
                  'label (format "~a" label)
+                 'firstRound (hash-ref first-round-per-epoch e 0)
                  'roundsInEpoch (for/sum ([e2 (in-list round-epochs)])
                                   (if (= e e2) 1 0)))))
 
@@ -205,6 +225,8 @@
   (define enet (unbox cap-box))
   (hasheq 'vizTrace 1
           'file (format "~a" src-path)
+          'source (hasheq 'path (format "~a" src-path)
+                          'lines (read-source-lines src-path))
           'wallMs (- t1 t0)
           'commands n-cmds
           'errors (length (filter prologos-error? results))
