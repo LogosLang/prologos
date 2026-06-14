@@ -1,0 +1,25 @@
+ns examples.fib-small
+
+;; Small naive Fibonacci — the TRACEABLE companion to 2026-06-14-fib-naive.prologos
+;; (which uses [fib 15] and hits the perf wall under on-network reduction).
+;;
+;; PReduce Track 8 Phase 4a: each reduction step (β/δ/ι) is recorded ON-NETWORK as
+;; a UNION propagator (the DPO {redex, result} e-class), so the viz shows the
+;; recursion AS propagators — not "only one propagator [fib n]" as before.
+;;
+;; Export it:  racket tools/viz-export.rkt examples/2026-06-14-fib-small.prologos -o fib.json
+;; fib 6 ≈ 172 rounds, ≤18 propagators firing per round (75 rounds with >1).
+;;
+;; Note (Phase 4a §8 findings): naive fib does NOT memo-collapse — β reduces
+;; call-by-name, so [fib k] reached via different paths carries differently-reduced
+;; args and hashes to different e-classes. So this stays exponential (× per-step
+;; union cost); keep n small for the viz. Larger n + memo-collapse (call-by-value
+;; memo key) + incremental observer is the SH/Zig-era perf frontier.
+
+spec fib Int -> Int
+defn fib
+  | 0 -> 0
+  | 1 -> 1
+  | n -> [int+ [fib [int- n 1]] [fib [int- n 2]]]
+
+[fib 6]
