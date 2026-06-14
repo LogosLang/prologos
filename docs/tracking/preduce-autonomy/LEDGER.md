@@ -1560,3 +1560,40 @@ Entry template:
 - Commits: `02da3bd` (cbv memo key) · `031ff2f` (incremental observer) + this
   tracker/ledger/design-doc update.
 - NEXT: send owner the now-working fib 15 trace; await direction on 4b/4c + 5.
+
+## 2026-06-14 — LOOP (PReduce Track 8) Phases 4b/4c/5 — [SIGNIFICANT, owner: through phase 5] design + 5a (whnf-step1 + parity), 5b/5c designed+de-risked
+- **Owner**: "/loop continue design and implementation through phase 5." (Phase 5
+  owner-gate lifted by this explicit directive; I lead/approve design.)
+- **Design (`12f97a7`)**: `2026-06-14_PREDUCE_T8_PHASE4b5_NETWORK_DRIVEN_REDUCTION.md`
+  — network-DRIVEN reduction via a demand cascade + extraction bypass. Grounded the
+  reality: `whnf-impl/match` is ~1700 lines over dozens of constructs with subtle
+  strictness → a COMPLETE bypass (parity across all) is multi-session; staged
+  migration with a shrinking `'native` fallback, PARITY-gated per construct.
+  Form-rep decision: expr-structs + native one-step compute (sidesteps the
+  list-form template's de-Bruijn-subst gap — the 4c blocker).
+- **5a (`a72b3f2`)**: `whnf-step1` one-step classifier ('whnf | 'native |
+  (step C) | (demand SUB RECON)) mirroring whnf-impl/match for the migrated
+  fragment (β, ι natrec, suc-collapse, fst/snd, J, boolrec, ann, vhead/vtail +
+  subterm-demand); `whnf-via-egraph` driver (iterate step1; demand via nested;
+  neutral-stuck via no-progress). PARITY harness `tests/test-preduce-egraph.rkt`
+  (27 checks): whnf-via-egraph == native whnf across a corpus + migrated arms
+  confirmed step/demand (not silent native). Pure addition — default whnf
+  UNTOUCHED (opt-in); 'native fallback makes non-migrated constructs
+  parity-trivial. **Full suite 8705 all-pass (441 files, 330s).**
+- **5a's driver is a LOOP, not the scheduler** — it validates the one-step
+  decomposition + gives the intern→reduce→extract shape. The genuine network-DRIVE
+  (scheduler-driven reduce-stratum cascade) is 5b.
+- **5b/5c DESIGNED + de-risked (§9, not yet built)**: origin-keyed reduce-request
+  (cell-23, keep-pending) → extraction is a simple K `:best` write (no cost-race);
+  the `step` arm's eclass-union supplies the worklist activity that re-triggers the
+  stratum each round (the load-bearing cascade mechanism); emitter (Phase-2 pattern)
+  kicks the first pass; nested demand re-entrant (strata run fire-round #f).
+  Risk register (6 points) recorded. NOT BUILT because the machinery has several
+  interdependent correctness points (cascade re-trigger, extraction, parity) whose
+  clean landing is a focused effort — methodology forbids half-built hot-path
+  machinery; 5a (validated primitive, gated) is the honest landed increment per the
+  design's §8 scope-creep guard.
+- Commits: `12f97a7` (design) · `a72b3f2` (5a) + this tracker/ledger update.
+- NEXT: implement 5b per §9 (origin-keyed cascade + emitter + extraction), parity
+  harness NETWORK variant; then 5c (route whnf through it for the covered fragment).
+  Terminal (delete native arms) owner-gated.

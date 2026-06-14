@@ -1,10 +1,19 @@
 # PReduce Track 8 — Phases 4b/4c/5: network-DRIVEN reduction + bypass `reduction.rkt`
 
 **Created**: 2026-06-14
-**Status**: 🔄 DESIGN (Stage 3) — I lead/approve per owner posture ("you lead and
-approve design … review after implementation complete"; "/loop continue design
-and implementation through phase 5"). Methodology gates (NTT, Network Reality
-Check, PARITY, full suite) apply.
+**Status**: 🔄 Stage 3 design + 5a implemented. I lead/approve per owner posture
+("you lead and approve design … review after implementation complete"; "/loop
+continue design and implementation through phase 5"). Methodology gates (NTT,
+Network Reality Check, PARITY, full suite) apply.
+
+**Progress**: 5a ✅ (`a72b3f2`) — `whnf-step1` one-step classifier + `whnf-via-egraph`
+driver, PARITY-gated against native whnf (test-preduce-egraph.rkt, 27 checks).
+Pure addition; default whnf untouched. The migrated fragment (β, ι, suc-collapse,
+fst/snd, J, boolrec, ann, vhead/vtail + subterm-demand) is validated correct;
+the rest is the 'native fallback. **5a's driver is a LOOP, not the scheduler** —
+it validates the one-step decomposition + gives the intern→reduce→extract shape;
+the scheduler-driven reduce-stratum cascade (genuine network-DRIVE) is 5b, and
+routing whnf through extraction (bypass) is 5c. See §7.
 **Builds on**: Phase 2 (dispatch stratum), Phase 4a (recursion step = union
 propagator) + the cbv memo key + incremental observer
 (`2026-06-14_PREDUCE_T8_PHASE4_RECURSION_ON_NETWORK.md`).
@@ -165,3 +174,56 @@ when `whnf-step1` covers everything (the terminal, owner-gated).
 - **Scope creep**: STOP at 5a (engine + parity, no default change) if 5b parity
   is not clean; that is a complete, valuable, honest increment. 5c+/terminal are
   explicitly multi-session.
+
+## 9. 5b machinery — DESIGNED + de-risked (next-session implementation spec)
+
+5a's driver is a LOOP. 5b makes it scheduler-driven (the genuine network-DRIVE).
+The machinery is intricate (several interdependent correctness points); it is fully
+specified here so it implements cleanly. Per §8 scope-creep guard, 5a (validated
+primitive, gated) is the landed increment; 5b lands when its parity is clean.
+
+**Request representation (origin-keyed — sidesteps the extraction/cost problem).**
+`reduce-request-cell-id` (cell-23; hash-union; **`#:keep-pending? #t`**) maps
+`origin-K → current-form` (NOT `class-id → #t`). The origin K is fixed; the form
+evolves down the reduction. This makes extraction trivial: when done, write K's
+`:best`. No cost-juggling across a union chain.
+
+**Reduce stratum handler** (reduction.rkt; registered `register-stratum-handler!
+#:tier 'topology #:keep-pending? #t`). For each `(K . F)` in pending:
+- `'whnf`  → write K `:best = (cons 0 F)` (the WHNF). Done (no re-request).
+- `'native`→ `Fn = (whnf F)`; write K `:best = (cons 0 Fn)`. Done.
+- `(step C)`→ union K with intern(C) (the on-network RECORDING / viz trace); write
+  `reduce-request {K → C}` (cascade; survives via keep-pending).
+- `(demand SUB RECON)` → `sub-nf = whnf-via-egraph-NETWORK(SUB)` (nested, re-entrant
+  — `current-bsp-fire-round?` is #f in strata, verified Phase 2); `F' = RECON sub-nf`;
+  write `reduce-request {K → F'}`.
+
+**Cascade re-trigger (the load-bearing mechanism):** the `union K (intern C)` in the
+`step` arm installs an `eclass-union` relate propagator → **S0 worklist activity** →
+the BSP outer loop fires it → strata re-run → the reduce stratum sees the kept
+`{K → C}` → reduces C → … This is why `step` MUST union (not just re-request): the
+union is what re-triggers the scheduler each round (mirrors how congruence requests
+ride on watcher fires). Without it, a bare request write leaves the worklist empty
+and the stratum never re-runs (the Phase-2 inner/drain early-return on empty
+worklist).
+
+**Driver / extraction.** `whnf-via-egraph-NETWORK(E)`: `eclass-intern E → K`; install
+a fire-once S0 EMITTER on K writing `reduce-request {K → E}` (the Phase-2 emitter
+pattern — needed so the first stratum pass runs; emitter watches K so it dodges the
+Tier-1 fast path that skips strata); `run-to-quiescence`; extract `(cdr (eclass-read
+K :best))`. No-plumbing → native `whnf` (total, as 5a).
+
+**Parity + deploy (5c).** Extend test-preduce-egraph with a NETWORK variant (set up
+prn-box + hc per test-preduce-ingest) and assert `whnf-via-egraph-NETWORK == whnf`
+on the corpus. When parity holds + suite green, route `whnf` through the network
+path for the covered fragment (`'native` for the rest — the shrinking fallback).
+
+**Correctness points to verify (the risk register):**
+1. Cascade terminates: `'whnf`/`'native` arms write no request; fuel (cell-11) backstops.
+2. Extraction = WHNF: origin-keyed `:best`-write at the `'whnf` arm (not cost-racing).
+3. keep-pending: reset runs BEFORE the handler, so the handler's `{K→C}` survives.
+4. Re-trigger: the `step` arm's union supplies the worklist activity each round.
+5. Nested demand re-entrancy: clear/scope as Phase 2 (strata run with fire-round #f).
+6. cell-23 cell-count test bumps (test-propagator/trace-serialize/observatory) — as cell-22.
+
+This is the complete spec; 5b is implementation + parity-debugging, not redesign.
