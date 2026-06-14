@@ -58,6 +58,10 @@ function svgFrame(i) {
   for (const e of graph.edges) {
     const a = layout.pos.get(e.from), b = layout.pos.get(e.to); if (!a || !b) continue;
     const [ax, ay] = P(a.x, a.y), [bx, by] = P(b.x, b.y), live = fired.has(e.pid);
+    if (e.kind === "containment") {  // reduction DAG — dashed violet
+      s += `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" stroke="#c586c0" stroke-width="1.1" stroke-dasharray="5,4"/>`;
+      continue;
+    }
     if (e.from === e.to) s += `<circle cx="${(ax + 10).toFixed(1)}" cy="${(ay - 10).toFixed(1)}" r="9" fill="none" stroke="${live ? '#4ec9b0' : '#3a3a3a'}" stroke-width="${live ? 2.4 : 0.8}"/>`;
     else { s += `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" stroke="${live ? '#4ec9b0' : '#3a3a3a'}" stroke-width="${live ? 2.4 : 0.7}"/>`;
       if (live) { const dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L, hx = bx - ux * 12, hy = by - uy * 12;

@@ -34,6 +34,7 @@
          "../prop-observatory.rkt"
          "../elaborator-network.rkt"
          (only-in "../reduction.rkt" current-preduce-ingest?)  ;; on-network reduction gate
+         (only-in "../eclass-graph.rkt" current-eclass-containment-box)
          "../trace-serialize.rkt")
 
 (provide viz-export-file)
@@ -149,13 +150,22 @@
     (bsp-observe r))
   (define obs (make-observatory (hasheq 'file (format "~a" src-path))))
   (define cap-box (box #f))
+  ;; containment capture (reduction DAG): parent-alloc → (listof child-alloc),
+  ;; recorded at intern time. Only meaningful when reduction is on-network.
+  (define containment-box (and reduce? (box (make-hash))))
   (define t0 (current-inexact-milliseconds))
   (define results
     (parameterize ([current-bsp-observer timed-observer]
                    [current-observatory obs]
                    [current-network-capture-box cap-box]
-                   [current-preduce-ingest? reduce?])
+                   [current-preduce-ingest? reduce?]
+                   [current-eclass-containment-box containment-box])
       (process-file src-path)))
+  (define containment   ;; cid → (listof child-cid), deduped
+    (if containment-box
+        (for/hash ([(k v) (in-hash (unbox containment-box))])
+          (values k (remove-duplicates v)))
+        (hash)))
   (define t1 (current-inexact-milliseconds))
 
   (define rounds (bsp-get-rounds))
@@ -207,8 +217,18 @@
         (let ([idx topo-count])
           (hash-set! topo-table sig idx)
           (set! topo-count (add1 topo-count))
+          ;; containment edges present in THIS topology (both ends are cells here)
+          (define present
+            (for/hasheq ([c (in-list (hash-ref topo 'cells))]) (values (hash-ref c 'id) #t)))
+          (define cont-edges
+            (for*/list ([(parent kids) (in-hash containment)]
+                        #:when (hash-ref present parent #f)
+                        [kid (in-list kids)]
+                        #:when (hash-ref present kid #f))
+              (hasheq 'from parent 'to kid)))
           (set! topo-rev (cons (hasheq 'topology topo
-                                       'identity (identity-for-network pnet)) topo-rev))
+                                       'identity (identity-for-network pnet)
+                                       'containment cont-edges) topo-rev))
           idx)))
   (define total-diffs (for/sum ([r (in-list rounds)]) (length (bsp-round-cell-diffs r))))
   (define diffs-capped? (> total-diffs max-diffs))

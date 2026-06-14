@@ -169,6 +169,13 @@ function buildGraphFromTopo(topoSection, source, changedGlobal, showAll) {
     for (const i of n.inputs) edges.push({ from: "c" + i, to: n.key, pid: p.id });
     for (const o of n.outputs) edges.push({ from: n.key, to: "c" + o, pid: p.id });
   }
+  // containment edges (the reduction DAG via the hashcons registry): parent
+  // e-class cell → child sub-term e-class cell. Distinct from propagator
+  // dataflow — drawn dashed. Added to `edges` so layout connects the DAG.
+  for (const e of (topoSection.containment || [])) {
+    if (byId.has("c" + e.from) && byId.has("c" + e.to))
+      edges.push({ from: "c" + e.from, to: "c" + e.to, kind: "containment" });
+  }
   return { nodes, edges, byId };
 }
 
@@ -338,6 +345,11 @@ if (typeof document !== "undefined") (function () {
     const fired = new Set(r.propagatorsFired), born = bornKeys(), changed = new Set((r.cellDiffs || []).map(d => "c" + d.cellId));
     for (const e of graph.edges) {
       const a = layout.pos.get(e.from), b = layout.pos.get(e.to); if (!a || !b) continue;
+      if (e.kind === "containment") {  // reduction DAG — dashed violet, parent→child
+        ctx.strokeStyle = "#c586c0"; ctx.lineWidth = 1.1 / view.k; ctx.setLineDash([5 / view.k, 4 / view.k]);
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]);
+        continue;
+      }
       const live = fired.has(e.pid);
       ctx.strokeStyle = live ? "#4ec9b0" : "#3a3a3a"; ctx.lineWidth = (live ? 2.4 : 0.8) / view.k;
       ctx.beginPath();
@@ -375,6 +387,7 @@ if (typeof document !== "undefined") (function () {
     for (const n of graph.nodes) if (n.kind === "cell" && !groups.has(n.group)) groups.set(n.group, n.color);
     document.getElementById("legend").innerHTML =
       `<div class="legend-item"><span class="swatch" style="background:#569cd6;border-radius:0;transform:rotate(45deg)"></span>propagator (◇, label=source)</div>` +
+      `<div class="legend-item"><span class="swatch" style="background:#c586c0;border-radius:0;height:2px"></span>containment (reduction DAG, dashed)</div>` +
       `<div class="legend-item"><span class="swatch" style="background:#ff6b6b"></span>fired this round</div>` +
       `<div class="legend-item"><span class="swatch" style="background:#e9c46a"></span>value written</div>` +
       `<div class="legend-item"><span class="swatch" style="background:#4ec9b0"></span>newly created</div>` +
