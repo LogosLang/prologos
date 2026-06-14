@@ -1,0 +1,14 @@
+ns examples.fib-naive
+
+;; Naive (non-memoized) Fibonacci: each call spawns TWO independent recursive
+;; calls — the classic exponential recursion tree. With on-network reduction,
+;; watch whether the e-graph's hashcons SHARES identical [fib k] subterms
+;; (collapsing the exponential tree) or recomputes them.
+
+spec fib Int -> Int
+defn fib
+  | 0 -> 0
+  | 1 -> 1
+  | n -> [int+ [fib [int- n 1]] [fib [int- n 2]]]
+
+[fib 15]
