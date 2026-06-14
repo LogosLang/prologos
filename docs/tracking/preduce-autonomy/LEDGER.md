@@ -1597,3 +1597,31 @@ Entry template:
 - NEXT: implement 5b per §9 (origin-keyed cascade + emitter + extraction), parity
   harness NETWORK variant; then 5c (route whnf through it for the covered fragment).
   Terminal (delete native arms) owner-gated.
+
+## 2026-06-14 — LOOP (PReduce Track 8) Phase 5b — [SIGNIFICANT] scheduler-driven reduction cascade — genuine network-DRIVE, parity-gated
+- Built `whnf-via-egraph-network` (`c49c53c`): the reduction DRIVER is now the BSP
+  scheduler (keep-pending reduce stratum on cell-23), not a Racket loop. Per design
+  §9: origin-keyed reduce-request {K → current-form}; 'whnf/'native write K's cost-0
+  :best (extraction); 'step interns + unions K (the union supplies the worklist
+  activity that RE-TRIGGERS the stratum each round — the load-bearing cascade
+  mechanism) + re-requests {K → C}; 'demand reduces the strict subterm natively then
+  continues. Emitter kicks the first pass (dodges Tier-1). No-plumbing/inadmissible
+  → native whnf (total).
+- **Network Reality Check PASSES**: scheduler-driven stratum + emitter + per-step
+  union; result via net-cell-write (K :best); trace intern→emitter→reduce-request
+  →stratum→cascade→scheduler-re-fire→extract. This is the genuine network-DRIVE for
+  the migrated head fragment (β/ι/suc/fst/snd/J/boolrec/ann/vhead/vtail).
+- **PARITY gate**: test-preduce-egraph.rkt network variant (+20 → 47 checks):
+  whnf-via-egraph-network == native whnf across the corpus. cell-23 cell-count
+  bumps (test-propagator/trace-serialize/observatory) + viz-export identity table.
+  **Full suite 8725 all-pass (441 files, 343s).**
+- **Honest scope**: this is the network-driven ENGINE (the Phase 5 substrate),
+  opt-in + validated; NOT yet the default whnf. 5c (route the default through it =
+  bypass deploy) is staged — low-value + hot-path-risky until more constructs
+  migrate off 'native (most reduction is still 'native). Demand subterms native in
+  5b (head chain scheduler-driven; full cascade-driven demand via set-latch =
+  future). Terminal (delete native arms) owner-gated.
+- Commits: `c49c53c` (5b) + this tracker/ledger/design-doc update.
+- NEXT (staged): migrate more constructs into whnf-step1 (arith/reduce/δ via
+  demand+compute) so 5c routing is meaningful; then 5c deploy (parity-gated); 5d
+  set-latch demand; terminal owner-gated.

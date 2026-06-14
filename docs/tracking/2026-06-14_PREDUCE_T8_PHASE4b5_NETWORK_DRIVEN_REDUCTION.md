@@ -6,14 +6,18 @@
 continue design and implementation through phase 5"). Methodology gates (NTT,
 Network Reality Check, PARITY, full suite) apply.
 
-**Progress**: 5a ✅ (`a72b3f2`) — `whnf-step1` one-step classifier + `whnf-via-egraph`
-driver, PARITY-gated against native whnf (test-preduce-egraph.rkt, 27 checks).
-Pure addition; default whnf untouched. The migrated fragment (β, ι, suc-collapse,
-fst/snd, J, boolrec, ann, vhead/vtail + subterm-demand) is validated correct;
-the rest is the 'native fallback. **5a's driver is a LOOP, not the scheduler** —
-it validates the one-step decomposition + gives the intern→reduce→extract shape;
-the scheduler-driven reduce-stratum cascade (genuine network-DRIVE) is 5b, and
-routing whnf through extraction (bypass) is 5c. See §7.
+**Progress**: 5a ✅ (`a72b3f2`) — `whnf-step1` + loop-driven `whnf-via-egraph`,
+parity-gated. **5b ✅ (`c49c53c`)** — `whnf-via-egraph-network`: the SCHEDULER-DRIVEN
+cascade (reduce stratum, cell-23, keep-pending). The reduction DRIVER is the BSP
+scheduler, not a loop — Network Reality Check PASSES. Parity-gated against native
+whnf (test-preduce-egraph.rkt network variant, 47 checks); **full suite 8725
+all-pass**. The migrated fragment (β, ι, suc-collapse, fst/snd, J, boolrec, ann,
+vhead/vtail) is genuinely network-driven; the rest is the 'native fallback;
+demand subterms native (full cascade-driven demand via set-latch = future).
+**5c (route the DEFAULT whnf through the engine = bypass deploy) is staged**: it
+is low-value + risky until more constructs migrate off 'native (most reduction is
+still 'native today), and it changes the hot path → needs suite-wide parity.
+Terminal (delete native arms) owner-gated. See §10.
 **Builds on**: Phase 2 (dispatch stratum), Phase 4a (recursion step = union
 propagator) + the cbv memo key + incremental observer
 (`2026-06-14_PREDUCE_T8_PHASE4_RECURSION_ON_NETWORK.md`).
@@ -227,3 +231,40 @@ path for the covered fragment (`'native` for the rest — the shrinking fallback
 6. cell-23 cell-count test bumps (test-propagator/trace-serialize/observatory) — as cell-22.
 
 This is the complete spec; 5b is implementation + parity-debugging, not redesign.
+
+## 10. 5b LANDED (2026-06-14) — scheduler-driven reduction, validated
+
+`whnf-via-egraph-network` (`c49c53c`) realizes the genuine network-DRIVE: the BSP
+scheduler drives reduction via the keep-pending reduce stratum, exactly per §9.
+
+- **cell-23 reduce-request** (origin-keyed {K → current-form}, hash-overwrite).
+- **`process-reduce-requests`** (`register-stratum-handler! #:keep-pending? #t
+  #:tier 'topology`): 'whnf/'native write K's cost-0 `:best` (extraction); 'step
+  interns + unions K (the union = the worklist activity that re-triggers the
+  stratum each round) + re-requests {K → C}; 'demand reduces the strict subterm
+  natively then continues the cascade.
+- **driver**: intern E → emitter (fire-once on K, dodges Tier-1) writes {K → E};
+  `run-to-quiescence` saturates; extract K's `:best`. No-plumbing/inadmissible →
+  native whnf (total).
+
+**Network Reality Check (PASSES):** (1) stratum + emitter + per-step union added;
+(2) result via `net-cell-write` (K's :best), triggered by the reduce-request cell
+write + union worklist activity, driven by `run-to-quiescence` (the scheduler) —
+NOT a Racket loop; (3) trace: intern → emitter → reduce-request → stratum →
+cascade (union + re-request) → scheduler re-fires → 'whnf → write K :best →
+extract.
+
+**Gate:** parity (whnf-via-egraph-network == native whnf, 47 checks) + full suite
+**8725 all-pass**.
+
+**What this is / isn't.** This is the network-driven reduction ENGINE (the Phase 5
+substrate), validated, for the migrated head fragment. It is NOT yet the default
+whnf (5c). Deploying it as the default is gated on migrating the remaining
+constructs (arith, structural reduce, δ, foreign, posits, maps, strings…) into
+`whnf-step1` so the routing is meaningful rather than mostly-'native overhead —
+the multi-session construct-migration work. The terminal (`reduction.rkt` arms
+deleted) stays owner-gated.
+
+**Honest scope note:** demand subterms reduce via native whnf in 5b (the head
+chain is scheduler-driven). Full cascade-driven demand (the strict subterms also
+on the cascade) is the set-latch refinement (`propagator-design.md`), deferred.
