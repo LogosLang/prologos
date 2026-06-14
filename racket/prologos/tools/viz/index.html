@@ -52,6 +52,7 @@
   .diff-row { padding: 2px 5px; border-left: 3px solid #e9c46a; margin: 2px 0; background: #2a2a2c; }
   .diff-row .src { color: #888; }
   .legend-item { display: flex; gap: 6px; align-items: center; margin: 2px 0; font-size: 12px; }
+  .legsec { font-size: 10px; text-transform: uppercase; color: #666; letter-spacing: .5px; margin: 8px 0 2px; }
   .swatch { width: 12px; height: 12px; border-radius: 50%; flex: none; border: 1px solid #222; }
   .muted { color: #777; }
 </style>
@@ -569,16 +570,29 @@ function Sidebar({ env, rounds, idx, setIdx, round, topoIdx, playing, setPlaying
 }
 
 function Legend({ graph }) {
-  const groups = new Map();
-  for (const n of graph.nodes) if (n.kind === "cell" && !groups.has(n.group)) groups.set(n.group, n.color);
-  const sw = (c, extra) => <span className="swatch" style={{ background: c, ...extra }} />;
+  const groups = new Map();   // distinct cell identity groups actually in view
+  for (const n of graph.nodes)
+    if (n.kind === "cell" && !n.group.startsWith("infra:") && !groups.has(n.group)) groups.set(n.group, n.color);
+  const dot = (c, extra) => <span className="swatch" style={{ background: c, ...extra }} />;
+  const ring = (c) => <span className="swatch" style={{ background: "transparent", borderColor: c, borderWidth: 2 }} />;
+  const line = (c, dash) => <span className="swatch" style={{ background: c, width: 14, height: 0, borderRadius: 0, borderTop: `2px ${dash ? "dashed" : "solid"} ${c}` }} />;
   return <div>
-    <div className="legend-item">{sw("#569cd6", { borderRadius: 0, transform: "rotate(45deg)" })}propagator (◇, label=source)</div>
-    <div className="legend-item">{sw("#c586c0", { borderRadius: 0, height: 2 })}containment (reduction DAG, dashed)</div>
-    <div className="legend-item">{sw("#ff6b6b")}fired this round</div>
-    <div className="legend-item">{sw("#e9c46a")}value written</div>
-    <div className="legend-item">{sw("#4ec9b0")}newly created</div>
-    {[...groups].slice(0, 10).map(([g, c]) => <div className="legend-item" key={g}>{sw(c)}{g}</div>)}
+    <div className="legsec">shapes</div>
+    <div className="legend-item">{dot("#888")}● cell (an e-class / value)</div>
+    <div className="legend-item">{dot("#569cd6", { borderRadius: 0, transform: "rotate(45deg)" })}◆ propagator (label = source / op)</div>
+    <div className="legsec">cell fill = identity</div>
+    <div className="legend-item">{dot("#d4a017")}well-known infrastructure cell</div>
+    <div className="legend-item">{dot("#6a9955")}type-inference</div>
+    <div className="legend-item">{dot("#b48ead")}multiplicity</div>
+    <div className="legend-item">{dot("#888888")}infrastructure / unknown</div>
+    {[...groups].map(([g, c]) => <div className="legend-item" key={g}>{dot(c)}{g}</div>)}
+    <div className="legsec">this round (ring / fill)</div>
+    <div className="legend-item">{ring("#ff6b6b")}fired (propagator) · merged (e-class)</div>
+    <div className="legend-item">{dot("#e9c46a")}value written</div>
+    <div className="legend-item">{ring("#4ec9b0")}newly created</div>
+    <div className="legsec">edges</div>
+    <div className="legend-item">{line("#3a3a3a", false)}propagator dataflow (teal when firing)</div>
+    <div className="legend-item">{line("#c586c0", true)}containment / reduction DAG</div>
   </div>;
 }
 
