@@ -1550,12 +1550,28 @@
     ;; (Off-network native β arm deleted 2026-06-14: on-network reduction is the
     ;; only path on this branch; preduce-ingest-delta degrades to #:compute when
     ;; the e-graph infra is absent, so this is behaviorally total.)
-    [(and redex (expr-app (expr-lam _ _ body) arg))
+    [(and redex (expr-app (expr-lam m A body) arg))
      (if (expr-head-effectful? arg)
          (begin (pr/guard-skip-note!)
                 (whnf (subst 0 arg body)))
-         (preduce-ingest-delta redex
-                               #:compute (lambda () (whnf (subst 0 arg body)))))]
+         ;; CALL-BY-VALUE MEMO KEY (Phase 4a perf): key the β redex by the
+         ;; NORMALIZED arg, so recursive calls reaching the same value share ONE
+         ;; e-class and the recursion MEMO-COLLAPSES (e.g. naive fib: [fib 5]
+         ;; reached via (int- 6 1) vs (int- 7 2) now share (app <lam> (int 5))).
+         ;; Reduction stays CALL-BY-NAME — #:compute substitutes the ORIGINAL arg;
+         ;; only the memo KEY is normalized. Sound: arg-nf and arg denote the same
+         ;; value, so the contractum is identical (whnf is deterministic). The
+         ;; key-normalization is BOUNDED (a private fuel box, so it never depletes
+         ;; the real budget) and GUARDED (a divergent/erroring arg that
+         ;; call-by-name would not force falls back to the ORIGINAL redex key — no
+         ;; collapse for that redex, but no regression and no spurious divergence).
+         (let* ([fb (current-reduction-fuel)]
+                [arg-nf (with-handlers ([exn:fail? (lambda (_e) arg)])
+                          (parameterize ([current-reduction-fuel
+                                          (box (if fb (unbox fb) 1000000))])
+                            (whnf arg)))])
+           (preduce-ingest-delta (expr-app (expr-lam m A body) arg-nf)
+                                 #:compute (lambda () (whnf (subst 0 arg body))))))]
 
     ;; Projections on pairs
     [(expr-fst (expr-pair e1 _)) (whnf e1)]
