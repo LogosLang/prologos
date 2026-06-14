@@ -1331,7 +1331,21 @@
      (define form (list op-sym (list 'lit a) (list 'lit b)))
      (define net0 (unbox prn-box))
      (define-values (net1 cid _d) (pr/eclass-intern net0 hc form #:cost 5))
-     (define-values (net2 _fired) (pr/dispatch-rules net1 hc reg cid #:result-cost 1))
+     ;; Phase 2 (PReduce Track 8): dispatch is a STRATUM FIRING, not an imperative
+     ;; call. Install a fire-once S0 emitter on the redex class that writes the
+     ;; class to the dispatch-request cell; run-to-quiescence fires it (worklist
+     ;; activity → the BSP loop), and the topology-tier dispatch handler
+     ;; (rule-dispatch.rkt process-dispatch-requests) then runs dispatch-rules →
+     ;; apply-rule → eclass-union, landing the folded result as :best. We read
+     ;; AFTER quiescence — same contract as the old direct dispatch-rules call;
+     ;; only WHO triggers dispatch moved on-network. The emitter WATCHES cid
+     ;; (non-empty inputs) so the worklist is NOT Tier-1-fast-path eligible
+     ;; (Tier-1 skips strata, which would skip dispatch).
+     (define-values (net1a _epid)
+       (net-add-fire-once-propagator
+        net1 (list cid) (list dispatch-request-cell-id)
+        (lambda (n) (net-cell-write n dispatch-request-cell-id (hash cid #t)))))
+     (define net2 (run-to-quiescence net1a))
      (set-box! prn-box net2)
      (define best (hash-ref (pr/eclass-read net2 cid) ':best #f))
      (match best
