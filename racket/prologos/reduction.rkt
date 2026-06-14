@@ -47,6 +47,7 @@
          preduce-ingest-delta  ;; 2026-06-11: exported for consult-wiring tests
          whnf-step1 whnf-via-egraph  ;; Phase 5a: network-driven reduction engine
          whnf-via-egraph-network     ;; Phase 5b: scheduler-driven cascade
+         current-egraph-whnf?        ;; Phase 5c: route the default whnf through it
          current-nf-cache current-whnf-cache
          current-reduction-fuel current-nat-value-cache
          ;; Solver normalization (for benchmarks + PUnify)
@@ -1467,7 +1468,20 @@
 ;; Use (box N) to set a limit; whnf-impl decrements on each call.
 (define current-reduction-fuel (make-parameter #f))
 
+;; Phase 5c deploy hook: route the DEFAULT whnf through the scheduler-driven
+;; cascade (whnf-via-egraph-network) instead of the native recursive reducer.
+;; Default OFF (production unchanged); PREDUCE_ROUTE=1 flips it ON so the full
+;; suite can be the comprehensive parity oracle + perf checkpoint before deletion.
+;; The cascade's native fallbacks de-route via (parameterize ([... #f]) …) so the
+;; native one-step compute never re-enters the cascade (no infinite recursion).
+(define current-egraph-whnf? (make-parameter (and (getenv "PREDUCE_ROUTE") #t)))
+
 (define (whnf e)
+  (if (current-egraph-whnf?)
+      (whnf-via-egraph-network e)
+      (whnf-core e)))
+
+(define (whnf-core e)
   (define cache (current-whnf-cache))
   (cond
     [(and cache (hash-ref cache e #f))
@@ -1477,6 +1491,12 @@
      (when cache
        (hash-set! cache e result))
      result]))
+
+;; the native reducer with routing DISABLED for the whole sub-reduction — the
+;; cascade's 'native / no-plumbing / inadmissible fallbacks use this so the native
+;; one-step compute (and its internal whnf recursion) never re-enters the cascade.
+(define (whnf-native e)
+  (parameterize ([current-egraph-whnf? #f]) (whnf-core e)))
 
 ;; Fast-path: is this expression definitely already in WHNF?
 ;; Returns #t for type atoms, type constructors, value constructors,
@@ -3345,8 +3365,31 @@
               [else 'native])]
        [(expr-int-neg a) (if (whnf-trivial? a) 'native (list 'demand a (lambda (x) (expr-int-neg x))))]
        [(expr-int-abs a) (if (whnf-trivial? a) 'native (list 'demand a (lambda (x) (expr-int-abs x))))]
-       ;; structural reduce/match, δ (fvar unfold), rat/posit arith, from-nat,
-       ;; foreign, maps, strings, … : not yet migrated → native (staged batches).
+       ;; structural reduce / match (Phase 5c batch 2): strict in the scrutinee.
+       ;; Try a constructor-decomposition arm on the current scrutinee; else demand
+       ;; the scrutinee; else (a value but no arm) a builtin-constructor arm; else
+       ;; stuck/neutral. Reuses the native try-structural-reduce / try-builtin-reduce.
+       [(expr-reduce scrut arms structural?)
+        (cond
+          [(try-structural-reduce scrut arms) => (lambda (r) (cons 'step r))]
+          [(not (whnf-trivial? scrut))
+           (list 'demand scrut (lambda (s) (expr-reduce s arms structural?)))]
+          [(try-builtin-reduce scrut arms) => (lambda (r) (cons 'step r))]
+          [else 'whnf])]
+       ;; δ — fvar global-definition unfold. Constructor/type fvars are canonical.
+       [(expr-fvar name)
+        (cond
+          [(or (lookup-ctor name) (lookup-ctor (ctor-short-name name))
+               (lookup-type-ctors name) (lookup-type-ctors (ctor-short-name name)))
+           'whnf]
+          [(global-env-lookup-value name) => (lambda (val) (cons 'step val))]
+          [else 'whnf])]
+       ;; solved metavariable → its solution
+       [(expr-meta id cell-id)
+        (cond [(meta-solution/cell-id cell-id id) => (lambda (sol) (cons 'step sol))]
+              [else 'whnf])]
+       ;; rat/posit/quire/generic arith, maps/pvec/set + transients, net/cell/prop
+       ;; FFI, union-find, table-store, solver/goal, … : staged batches → native.
        [_ 'native])]))
 
 ;; whnf-via-egraph : reduce E to WHNF by ITERATING whnf-step1 (the extraction
@@ -3359,7 +3402,7 @@
     (define step (whnf-step1 cur))
     (cond
       [(eq? step 'whnf) cur]
-      [(eq? step 'native) (whnf cur)]   ; native fully reduces this construct to WHNF
+      [(eq? step 'native) (whnf-native cur)]   ; native reduces this construct (de-routed)
       [(eq? (car step) 'step) (loop (cdr step))]
       [else ;; 'demand
        (define sub (cadr step))
@@ -3390,7 +3433,7 @@
 ;; record the step (union K with intern(C) — also the re-trigger worklist activity)
 ;; and re-request {K → C}. Inadmissible C → resolve natively into K's best.
 (define (pr-cascade! net hc K C)
-  (with-handlers ([exn:fail? (lambda (_e) (pr-write-whnf! net K (whnf C)))])
+  (with-handlers ([exn:fail? (lambda (_e) (pr-write-whnf! net K (whnf-native C)))])
     (define-values (net1 Cc _d) (pr/eclass-intern net hc C #:cost 5))
     (define net2 (pr/eclass-union net1 K Cc))
     (net-cell-write net2 reduce-request-cell-id (hash K C))))
@@ -3404,12 +3447,12 @@
        (define step (whnf-step1 F))
        (cond
          [(eq? step 'whnf) (pr-write-whnf! n K F)]
-         [(eq? step 'native) (pr-write-whnf! n K (whnf F))]
+         [(eq? step 'native) (pr-write-whnf! n K (whnf-native F))]
          [(eq? (car step) 'step) (pr-cascade! n hc K (cdr step))]
          [else ;; 'demand — reduce the strict subterm natively, then continue the cascade
           (define sub (cadr step))
           (define recon (caddr step))
-          (define next (recon (whnf sub)))
+          (define next (recon (whnf-native sub)))
           (if (equal? next F) (pr-write-whnf! n K F) (pr-cascade! n hc K next))]))]
     [else net]))
 
@@ -3427,7 +3470,7 @@
   (define hc (pr/current-eclass-hashcons-cell-id))
   (cond
     [(and prn-box hc)
-     (with-handlers ([exn:fail? (lambda (_e) (whnf e))])
+     (with-handlers ([exn:fail? (lambda (_e) (whnf-native e))])
        (define net0 (unbox prn-box))
        (define-values (net1 K _d) (pr/eclass-intern net0 hc e #:cost 10))
        (define-values (net1a _ep)
@@ -3437,8 +3480,8 @@
        (define net2 (run-to-quiescence net1a))
        (set-box! prn-box net2)
        (define best (hash-ref (pr/eclass-read net2 K) ':best #f))
-       (if (and best (zero? (car best))) (cdr best) (whnf e)))]
-    [else (whnf e)]))
+       (if (and best (zero? (car best))) (cdr best) (whnf-native e)))]
+    [else (whnf-native e)]))
 
 ;; First reduce to WHNF, then normalize all subterms.
 ;; Per-command memoization: when current-nf-cache is active,
