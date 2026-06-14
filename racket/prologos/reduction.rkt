@@ -3308,8 +3308,45 @@
         (list 'demand target (lambda (t) (expr-boolrec mot tc fc t)))]
        [(expr-vhead t n v) (list 'demand v (lambda (x) (expr-vhead t n x)))]
        [(expr-vtail t n v) (list 'demand v (lambda (x) (expr-vtail t n x)))]
-       ;; arith, structural reduce/match, δ (fvar unfold), foreign, maps, strings,
-       ;; … : not yet migrated → native (the staged fallback).
+       ;; int arithmetic (Phase 5c migration batch 1): fold when both operands are
+       ;; int literals; else demand the non-value operand. Both-values-but-not-both-
+       ;; int (rat/posit/coercion) and div/mod (zero-guard) → native — parity-safe.
+       [(expr-int-add (expr-int a) (expr-int b)) (cons 'step (expr-int (+ a b)))]
+       [(expr-int-sub (expr-int a) (expr-int b)) (cons 'step (expr-int (- a b)))]
+       [(expr-int-mul (expr-int a) (expr-int b)) (cons 'step (expr-int (* a b)))]
+       [(expr-int-neg (expr-int a)) (cons 'step (expr-int (- a)))]
+       [(expr-int-abs (expr-int a)) (cons 'step (expr-int (abs a)))]
+       [(expr-int-lt (expr-int a) (expr-int b)) (cons 'step (if (< a b) (expr-true) (expr-false)))]
+       [(expr-int-le (expr-int a) (expr-int b)) (cons 'step (if (<= a b) (expr-true) (expr-false)))]
+       [(expr-int-eq (expr-int a) (expr-int b)) (cons 'step (if (= a b) (expr-true) (expr-false)))]
+       [(expr-int-add a b)
+        (cond [(not (whnf-trivial? a)) (list 'demand a (lambda (x) (expr-int-add x b)))]
+              [(not (whnf-trivial? b)) (list 'demand b (lambda (y) (expr-int-add a y)))]
+              [else 'native])]
+       [(expr-int-sub a b)
+        (cond [(not (whnf-trivial? a)) (list 'demand a (lambda (x) (expr-int-sub x b)))]
+              [(not (whnf-trivial? b)) (list 'demand b (lambda (y) (expr-int-sub a y)))]
+              [else 'native])]
+       [(expr-int-mul a b)
+        (cond [(not (whnf-trivial? a)) (list 'demand a (lambda (x) (expr-int-mul x b)))]
+              [(not (whnf-trivial? b)) (list 'demand b (lambda (y) (expr-int-mul a y)))]
+              [else 'native])]
+       [(expr-int-lt a b)
+        (cond [(not (whnf-trivial? a)) (list 'demand a (lambda (x) (expr-int-lt x b)))]
+              [(not (whnf-trivial? b)) (list 'demand b (lambda (y) (expr-int-lt a y)))]
+              [else 'native])]
+       [(expr-int-le a b)
+        (cond [(not (whnf-trivial? a)) (list 'demand a (lambda (x) (expr-int-le x b)))]
+              [(not (whnf-trivial? b)) (list 'demand b (lambda (y) (expr-int-le a y)))]
+              [else 'native])]
+       [(expr-int-eq a b)
+        (cond [(not (whnf-trivial? a)) (list 'demand a (lambda (x) (expr-int-eq x b)))]
+              [(not (whnf-trivial? b)) (list 'demand b (lambda (y) (expr-int-eq a y)))]
+              [else 'native])]
+       [(expr-int-neg a) (if (whnf-trivial? a) 'native (list 'demand a (lambda (x) (expr-int-neg x))))]
+       [(expr-int-abs a) (if (whnf-trivial? a) 'native (list 'demand a (lambda (x) (expr-int-abs x))))]
+       ;; structural reduce/match, δ (fvar unfold), rat/posit arith, from-nat,
+       ;; foreign, maps, strings, … : not yet migrated → native (staged batches).
        [_ 'native])]))
 
 ;; whnf-via-egraph : reduce E to WHNF by ITERATING whnf-step1 (the extraction

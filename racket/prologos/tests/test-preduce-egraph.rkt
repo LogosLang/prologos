@@ -30,8 +30,10 @@
               'step "ι natrec(nat-val) is migrated")
 ;; a value is 'whnf; an un-migrated redex (arith) is 'native
 (check-equal? (whnf-step1 (expr-int 7)) 'whnf "literal is whnf")
-(check-equal? (whnf-step1 (expr-int-add (expr-int 1) (expr-int 2)))
-              'native "arith is native (not yet migrated)")
+(check-equal? (car (whnf-step1 (expr-int-add (expr-int 1) (expr-int 2))))
+              'step "int arith is migrated (Phase 5c batch 1)")
+(check-equal? (whnf-step1 (expr-int-div (expr-int 8) (expr-int 0)))
+              'native "div-by-zero stays native (zero-guard)")
 ;; a non-lam application demands its function
 (check-equal? (car (whnf-step1 (expr-app (expr-fvar 'foo) (expr-int 5))))
               'demand "app-of-non-lam demands the function")
@@ -70,9 +72,31 @@
            (expr-int 9) (expr-refl))
    ;; ann is transparent
    (expr-ann (expr-int 42) (expr-Int))
-   ;; arith (NATIVE fallback) — parity-trivial but must hold
+   ;; arith — now MIGRATED (Phase 5c batch 1): folds + nested-demand + comparisons
    (expr-int-add (expr-int 1) (expr-int 2))
    (expr-int-mul (expr-int 6) (expr-int 7))
+   (expr-int-sub (expr-int 10) (expr-int 3))
+   (expr-int-neg (expr-int 5))
+   (expr-int-abs (expr-int -8))
+   ;; nested arith (strict demand on operands): (1+2)*(10-3) → 21
+   (expr-int-mul (expr-int-add (expr-int 1) (expr-int 2))
+                 (expr-int-sub (expr-int 10) (expr-int 3)))
+   ;; deeper nest: ((2*3)+(4*5)) → 26
+   (expr-int-add (expr-int-mul (expr-int 2) (expr-int 3))
+                 (expr-int-mul (expr-int 4) (expr-int 5)))
+   ;; comparisons → Bool
+   (expr-int-lt (expr-int 3) (expr-int 5))
+   (expr-int-le (expr-int 5) (expr-int 5))
+   (expr-int-eq (expr-int 4) (expr-int 4))
+   (expr-int-eq (expr-int 4) (expr-int 9))
+   ;; β exposing nested arith: (λx. (x+1)*(x-1)) 5 → 24
+   (expr-app (expr-lam 'mw (expr-Int)
+                       (expr-int-mul (expr-int-add (expr-bvar 0) (expr-int 1))
+                                     (expr-int-sub (expr-bvar 0) (expr-int 1))))
+             (expr-int 5))
+   ;; div/mod stay native (zero-guard) — parity must still hold
+   (expr-int-div (expr-int 20) (expr-int 4))
+   (expr-int-mod (expr-int 17) (expr-int 5))
    ;; β exposing arith: (λx. x+1) 5  →  6  (β migrated, int+ native)
    (expr-app (expr-lam 'mw (expr-Int) (expr-int-add (expr-bvar 0) (expr-int 1)))
              (expr-int 5))
