@@ -16,12 +16,12 @@ for (const file of process.argv.slice(3)) {
   const rounds = timelineRounds(env);
   const changed = changedCellIdsGlobal(env);
 
-  let prevRN = -Infinity, anyFired = false, anyGrowth = false, maxFired = 0, labeledOK = true, connOK = true;
+  let prevRN = -Infinity, anyFired = false, anyGrowth = false, maxFired = 0, labeledOK = true;
+  // per-round invariants (cheap) over every round
   for (let i = 0; i < rounds.length; i++) {
     const r = rounds[i];
     check(r.roundNumber >= prevRN, 'rounds ordered'); prevRN = r.roundNumber;
     check(env.topologies[r.topo] !== undefined, 'round topo ref valid');
-    // fired props + diff cells must exist in THIS round's own topology (the bug we fixed)
     const topo = env.topologies[r.topo].topology;
     const propIds = new Set(topo.propagators.map(p => p.id));
     const cellIds = new Set(topo.cells.map(c => c.id));
@@ -30,13 +30,13 @@ for (const file of process.argv.slice(3)) {
     maxFired = Math.max(maxFired, r.propagatorsFired.length);
     if (r.propagatorsFired.length) anyFired = true;
     if (i > 0 && r.topo !== rounds[i - 1].topo) anyGrowth = true;
-
-    // graph + both layouts must be well-formed for the default-filtered view
-    const g = buildGraphFromTopo(env.topologies[r.topo], env.source, changed, false);
+  }
+  // graph + both layouts: ONCE per distinct topology (layout is expensive)
+  for (let ti = 0; ti < env.topologies.length; ti++) {
+    const g = buildGraphFromTopo(env.topologies[ti], env.source, changed, false);
     for (const e of g.edges) check(g.byId.has(e.from) && g.byId.has(e.to), 'edge endpoints');
-    for (const lay of [layoutLayered(g), layoutForce(g, null, 800, 600)]) {
+    for (const lay of [layoutLayered(g), layoutForce(g, null, 800, 600)])
       for (const n of g.nodes) { const p = lay.pos.get(n.key); check(p && isFinite(p.x) && isFinite(p.y), 'positioned ' + n.key); }
-    }
     const labeled = g.nodes.filter(n => n.kind === 'prop' && !/^p\d+$/.test(n.label)).length;
     const props = g.nodes.filter(n => n.kind === 'prop').length;
     if (props && labeled === 0) labeledOK = false;

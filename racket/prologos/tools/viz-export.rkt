@@ -33,6 +33,7 @@
          "../propagator.rkt"
          "../prop-observatory.rkt"
          "../elaborator-network.rkt"
+         (only-in "../reduction.rkt" current-preduce-ingest?)  ;; on-network reduction gate
          "../trace-serialize.rkt")
 
 (provide viz-export-file)
@@ -131,9 +132,15 @@
               (if (> (string-length t) 120) (substring t 0 120) t)))))
 
 ;; viz-export-file : path (-> hasheq) — runs FILE, returns the envelope jsexpr.
+;; #:reduce? activates on-network reduction (PReduce ingestion) so functional
+;; reduction (β/δ/ι) runs as e-graph propagators instead of the off-network
+;; recursive reducer — the difference between a 1-round fold and watching a
+;; balanced arithmetic tree reduce 256-wide in parallel. Default off (matches
+;; the production default; this is the visualization's experiment switch).
 (define (viz-export-file src-path
                          #:max-diffs [max-diffs 50000]
-                         #:max-rounds [max-rounds 5000])
+                         #:max-rounds [max-rounds 5000]
+                         #:reduce? [reduce? #f])
   (define-values (bsp-observe bsp-get-rounds) (make-trace-accumulator))
   (define round-times (box '()))   ;; reversed; one ts per observed round
   (define (timed-observer r)
@@ -146,7 +153,8 @@
   (define results
     (parameterize ([current-bsp-observer timed-observer]
                    [current-observatory obs]
-                   [current-network-capture-box cap-box])
+                   [current-network-capture-box cap-box]
+                   [current-preduce-ingest? reduce?])
       (process-file src-path)))
   (define t1 (current-inexact-milliseconds))
 
@@ -259,11 +267,14 @@
   (define src (findf (lambda (a) (not (string-prefix? a "-"))) args))
   (define out (flag-val "-o" args))
   (define validate? (member "--validate" args))
+  (define reduce? (and (member "--reduce" args) #t))
   (unless src
-    (eprintf "usage: racket tools/viz-export.rkt FILE.prologos -o out.json [--max-diffs N] [--max-rounds N] [--validate]\n")
+    (eprintf "usage: racket tools/viz-export.rkt FILE.prologos -o out.json [--reduce] [--max-diffs N] [--max-rounds N] [--validate]\n")
+    (eprintf "  --reduce : run functional reduction on-network (β/δ/ι as e-graph propagators)\n")
     (exit 1))
   (define envelope
     (viz-export-file src
+                     #:reduce? reduce?
                      #:max-diffs (cond [(flag-val "--max-diffs" args) => string->number]
                                        [else 50000])
                      #:max-rounds (cond [(flag-val "--max-rounds" args) => string->number]
