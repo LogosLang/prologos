@@ -127,6 +127,19 @@ function propLabel(id, identity, source) {
   const src = source && source.lines && line != null ? source.lines[String(line)] : null;
   return src || ("p" + id);
 }
+// Readable node label: well-known name, else the cell's reduced value when it's
+// short and meaningful (e-class values now render as "(lit N)" etc.), else cN.
+function cellNodeLabel(cell, wk) {
+  if (wk) return wk;
+  const v = cell.value;
+  if (typeof v === "string" && v !== "⊥" && v.length <= 18
+      && !/^hash\(/.test(v) && !/^e-class/.test(v) && v !== "()") {
+    const m = /^\(lit (.+)\)$/.exec(v);
+    return m ? m[1] : v;
+  }
+  return "c" + cell.id;
+}
+
 function cellColor(cell, identity) {
   const id = String(cell.id);
   const wk = (identity.wellKnownCells || {})[id];
@@ -146,7 +159,7 @@ function buildGraphFromTopo(topoSection, source, changedGlobal, showAll) {
     if (!visible.has(c.id)) continue;
     const col = cellColor(c, identity);
     const wk = (identity.wellKnownCells || {})[String(c.id)];
-    const n = { key: "c" + c.id, kind: "cell", id: c.id, value: c.value, label: wk || ("c" + c.id), group: col.group, color: col.color };
+    const n = { key: "c" + c.id, kind: "cell", id: c.id, value: c.value, label: cellNodeLabel(c, wk), group: col.group, color: col.color };
     nodes.push(n); byId.set(n.key, n);
   }
   for (const p of topo.propagators) {
