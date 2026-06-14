@@ -1,9 +1,11 @@
 # PReduce → Default + On-Network Compute/Recursion — Next-Session Plan
 
 **Created**: 2026-06-14
-**Status**: 🔄 IN PROGRESS — Phases 0–2 ✅ (suite 8674 all-pass); Phase 3 dropped
-(off-roadmap); Phase 4 (recursion on-network — the owner goal) is next and is
-research-grade (needs a full Stage-3 design arc). Phase 5 owner-gated.
+**Status**: 🔄 IN PROGRESS — Phases 0–2 ✅; Phase 3 dropped (off-roadmap);
+Phase 4a ✅ (recursion steps as union propagators — viz shows recursion as
+propagators; suite 8678 all-pass). Phase 4b/4c (network DRIVES recursion) =
+documented research frontier (worsen the perf wall on Racket; SH/Zig-era).
+Phase 5 owner-gated. The viz success criterion is MET at tractable sizes.
 **Branch**: `claude/charming-archimedes-98yb48` (prototype for a future
 propagator-native Prologos, built on the PReduce on-network-reduction prototype)
 **Owner directive (2026-06-14)**: move PReduce to default and implement the
@@ -96,7 +98,8 @@ Every phase below follows the standing discipline — non-negotiable:
 | 1 | **On-network reduction is the ONLY path** — native deleted (owner upgraded "flip" → "flip + delete native") | ✅ | `1741476`+`<this>`: removed `current-preduce-ingest?`/`-int-folds?` gate, de-gated β/ι/δ/int ingest arms, deleted duplicate native arms; removed `PREDUCE_INGEST` env + viz `--reduce`/`--no-reduce`; ported `test-preduce-ingest`; deleted on/off micro-bench. **Full suite 8671 ALL PASS (406.7s).** Absorbs part of Phase 5 (native compute arms gone; `whnf` still drives). |
 | 2 | **Rule application becomes propagator firing** (arithmetic dispatch: an imperative `dispatch-rules` call → an on-network STRATUM firing, mirroring the congruence engine) | ✅ | `656a294` core (cell-22 dispatch-request + `process-dispatch-requests` topology stratum + emitter in `preduce-ingest-int`) · `edeff08` 2T · `ac65fad` cell-count test bumps. NTT model + Network Reality Check in the design doc. Suite **8674 all-pass**. Scope: arithmetic path only (the grounding finding — see below); β/δ/ι is Phase 4 |
 | 3 | ~~Compute as propagators~~ **DROPPED (off-roadmap)** | ❌ | The e-graph evaluates primitives FUNCTIONALLY inside a rule (`instantiate-template`'s `(apply op args)`) — that IS the e-graph design, not an incomplete version. A standalone `int+` propagator is the *direct-compute* substrate we explicitly chose NOT to build (gives up structural sharing). Owner-approved correction 2026-06-14. "Everything-on-network" is satisfied when rule application is stratum firing (Phase 2) — the compute runs INSIDE the dispatch fire |
-| 4 | **Recursion / β-δ-ι on-network** (the recursion path becomes rule-based propagator firing; `fib`→`fib` unfolding on the network — THE owner goal: viz shows fib reducing via propagators) | ⬜ | **hardest; research-grade.** Grounding (Phase 2) found β/δ/ι is a memoized native compute + DIRECT cell-write (no rule, no union, no propagator) — there is no "rule application" to convert; making it propagator-native is a substrate redesign. Full Stage-3 arc: grounding-audit + design panel + ≥2 adversarial critique rounds + NTT model |
+| 4a | **Recursion step as a union propagator** (β/δ/ι record {redex,result} via eclass-union, not a cell-write; viz shows recursion as propagators) | ✅ | `2bf9b5e` + design doc `2026-06-14_PREDUCE_T8_PHASE4_RECURSION_ON_NETWORK.md`. Suite **8678 all-pass**; fib 6 viz: 172 rounds, ≤18 props/round, union propagators visible (pre-4a: "only one propagator"). Net-threading fix preserves the recursion subtree. THE viz goal met at tractable sizes |
+| 4b/4c | **Network DRIVES recursion** (ι cascade; δ/β as declarative rules — β needs list-form de Bruijn subst) | ⏸️ | **Research frontier (documented, not built).** Findings (§8 of the 4a doc): naive fib does NOT memo-collapse (call-by-name redex variance), so 4a is exponential + per-step union cost → fib ≥ ~10 impractical on Racket. 4b/4c ADD per-step network work → worsen the wall. Path to collapse = call-by-value memo key (reduction-strategy change) + incremental observer; wall-clock payoff routes to SH/Zig (the PReduce perf verdict) |
 | 5 | **Route the covered fragment through the e-graph, bypassing `reduction.rkt`** (the Track 8 slice for what's now fully on-network) | ⬜ | terminal; owner-checkpoint before landing; parity gate vs the recursive reducer |
 | T | Dedicated tests per phase (`tests/test-preduce-*` extensions) | ⬜ | rule-firing observability, compute-propagator parity, recursion-on-network parity |
 

@@ -1,8 +1,10 @@
 # PReduce Track 8 — Phase 4: Recursion (β/δ/ι) on-network
 
 **Created**: 2026-06-14
-**Status**: 🔄 IN PROGRESS — Phase 4a implementing; 4b assessed after; 4c framed
-as the research frontier.
+**Status**: ✅ 4a DONE (`2bf9b5e`; suite 8678 all-pass; viz shows recursion as
+union propagators for fib ≤ ~7). 4b/4c = documented research frontier (they add
+per-step network work → worsen the perf wall on Racket; SH/Zig-era). See §8
+Findings. Phase 5 owner-gated.
 **Owner posture (2026-06-14)**: "for this prototype branch, you lead and approve
 design. don't ask me for details. I will review after the implementation is
 complete." → I make the design decisions here; the methodology gates (NTT model,
@@ -147,3 +149,55 @@ the branch directive recorded.)
   union propagator), not just a value.
 - **4b**: (separate sub-phase doc if pursued) ι rule + cascade emission + weak-head
   control + fuel.
+
+## 8. Findings (post-4a, 2026-06-14) — the perf wall + the fib-naive answer
+
+4a is correct (full suite 8678 all-pass) and **achieves the viz goal**: a small fib
+exports with the recursion shown AS propagators. fib 6 (`/tmp/fib-6.prologos`):
+172 rounds, 73 topologies, 0 errors, **up to 18 propagators firing in one round,
+75 rounds with >1** — the union (eclass-refine relate) propagators are the
+recursion steps (props with `inputs == outputs`, two e-class cells). Pre-4a the
+viz showed "only one propagator [fib 15]"; 4a makes the recursion tree a web of
+union propagators. ✓
+
+**The perf wall (honest, expected — the PReduce verdict).** Larger fib is
+impractical to reduce/export under 4a:
+
+| n | reduce_ms (no observer) |
+|---|---|
+| fib 6 | 449 |
+| fib 8 | 1344 (741 reduce_steps) |
+| fib 10 | 4552 |
+| fib 12 | 24052 |
+| fib 15 | >120s (timeout) |
+
+Super-linear → the recursion is **not memoized**, and each step now pays a union +
+`run-to-quiescence` (vs a discarded cell-write pre-4a). The viz export is worse
+still: the observer diffs cells O(cells) PER ROUND, and 4a turns each step into a
+round → quadratic. fib 8 export times out; **fib ≤ 6–7 is the practical viz size**
+on the Racket substrate.
+
+**Why naive fib does NOT memo-collapse (this answers `fib-naive.prologos`'s own
+question).** The example asks whether the hashcons shares identical `[fib k]`
+subterms. It does **not** — because β reduces under **call-by-name**: the redex is
+`(app <fib-lam> <unreduced-arg>)`, and `[fib 5]` reached via `[fib 6]`
+(arg `(int- 6 1)`) vs `[fib 7]` (arg `(int- 7 2)`) has **different redex digests**
+even though both denote `[fib 5]`. Different digests ⇒ no hashcons hit ⇒ no memo
+⇒ the exponential tree is recomputed, not shared.
+
+**The path to collapse (research frontier, not built):** normalize the β arg to a
+canonical value BEFORE forming/interning the redex (call-by-value at the memo key),
+so `(app <fib-lam> (int 5))` is shared. This is a reduction-STRATEGY change
+(eager arg evaluation) with semantic implications (laziness) — it belongs to a
+dedicated design, and the wall-clock payoff is the SH/Zig lowering the PReduce
+verdict already routes perf through. The observer's per-round O(cells) diffing
+should also become incremental (a viz-export optimization) before large traces.
+
+**Decision (I lead/approve per owner posture):** 4a is the landed Phase 4
+deliverable — recursion-step recording is on-network as union propagators, and the
+viz shows recursion as propagators at tractable sizes. 4b (network-DRIVES-recursion
+via the ι cascade) and 4c (β/δ as declarative rules; β needs list-form de Bruijn
+subst) are the documented frontier: both ADD per-step network work, so they make
+the perf wall worse, not better, on Racket — they are SH/Zig-era / dedicated
+research, not landable improvements on this branch now. Phase 5 (bypass
+`reduction.rkt`) remains the owner-gated terminal.
