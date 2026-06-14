@@ -102,6 +102,7 @@
  congruence-sig-index-cell-id   ;; PReduce Track 1 11b
  congruence-request-cell-id     ;; PReduce Track 1 11b
  dispatch-request-cell-id       ;; PReduce Track 8 Phase 2
+ reduce-request-cell-id         ;; PReduce Track 8 Phase 5b
  resolution-stratum-request-cell-id
  retraction-stratum-merge
  resolution-stratum-merge
@@ -827,6 +828,18 @@
     [(not (hash? new)) old]
     [else (for/fold ([acc old]) ([(k v) (in-hash new)]) (hash-set acc k v))]))
 
+;; PReduce Track 8 Phase 5b: cell-23 reduce request — {origin-class-cid → current-form},
+;; the network-DRIVEN reduction cascade (design §9). Origin-keyed (K fixed, form
+;; evolves) so extraction is a simple K :best write. hash-OVERWRITE merge (latest
+;; form per K wins). Driven by the keep-pending reduce stratum (reduction.rkt); the
+;; step arm's eclass-union supplies the worklist activity that re-triggers it.
+(define reduce-request-cell-id (cell-id 23))
+(define (reduce-request-merge old new)
+  (cond
+    [(not (hash? old)) new]
+    [(not (hash? new)) old]
+    [else (for/fold ([acc old]) ([(k v) (in-hash new)]) (hash-set acc k v))]))
+
 ;; Merges for the 2A.0 stratum-request cells. Local definitions per
 ;; propagator.rkt's existing pattern (cf. naf-pending-merge at line 622,
 ;; topology-request-merge at line 686). Defined locally because
@@ -1277,6 +1290,18 @@
     (error 'make-prop-network
            "dispatch-request-cell-id allocation drift: expected ~a, got ~a"
            dispatch-request-cell-id actual-dispatch-request-cid))
+  ;; PReduce Track 8 Phase 5b: cell-23 reduce request. Empty until
+  ;; whnf-via-egraph installs an emitter + reduction.rkt registers the keep-pending
+  ;; reduce stratum — zero behavior change otherwise (empty-pending skip).
+  (define-values (net13 actual-reduce-request-cid)
+    (net-register-specialized-cell net12 (hash) reduce-request-merge
+      #:tier 'warm
+      #:storage 'general
+      #:fires-on 'any-change))
+  (unless (equal? actual-reduce-request-cid reduce-request-cell-id)
+    (error 'make-prop-network
+           "reduce-request-cell-id allocation drift: expected ~a, got ~a"
+           reduce-request-cell-id actual-reduce-request-cid))
   ;; D.4 1V-3 Item #1-bis (§11.X.3 step 3): set fuel-cell-cache on prop-net-warm.
   ;; D.4 1V-5 Item #1-quater (§11.X.4 step 3): set worldview-cache-cache on prop-net-warm.
   ;; Both cells now registered (worldview-cache at base-net; fuel-cell at net2);
@@ -1288,11 +1313,11 @@
   ;; sharing into net9's cells map. Direct-refs lookup from net9's cells CHAMP
   ;; retrieves the original prop-cells.
   (let* ([fc-h (cell-id-hash fuel-cell-id)]
-         [fc-cell (champ-lookup (prop-network-cells net12) fc-h fuel-cell-id)]
+         [fc-cell (champ-lookup (prop-network-cells net13) fc-h fuel-cell-id)]
          [wv-h (cell-id-hash worldview-cache-cell-id)]
-         [wv-cell (champ-lookup (prop-network-cells net12) wv-h worldview-cache-cell-id)])
-    (struct-copy prop-network net12
-      [warm (struct-copy prop-net-warm (prop-network-warm net12)
+         [wv-cell (champ-lookup (prop-network-cells net13) wv-h worldview-cache-cell-id)])
+    (struct-copy prop-network net13
+      [warm (struct-copy prop-net-warm (prop-network-warm net13)
               [fuel-cell-cache fc-cell]
               [worldview-cache-cache wv-cell])])))
 

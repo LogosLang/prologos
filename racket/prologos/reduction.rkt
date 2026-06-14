@@ -46,6 +46,7 @@
 (provide whnf nf nf-whnf conv conv-nf
          preduce-ingest-delta  ;; 2026-06-11: exported for consult-wiring tests
          whnf-step1 whnf-via-egraph  ;; Phase 5a: network-driven reduction engine
+         whnf-via-egraph-network     ;; Phase 5b: scheduler-driven cascade
          current-nf-cache current-whnf-cache
          current-reduction-fuel current-nat-value-cache
          ;; Solver normalization (for benchmarks + PUnify)
@@ -3329,6 +3330,78 @@
        (define sub-nf (whnf-via-egraph sub))
        (define next (recon sub-nf))
        (if (equal? next cur) cur (loop next))])))
+
+;; ====================================================================
+;; Phase 5b (PReduce Track 8): SCHEDULER-DRIVEN reduction — the genuine
+;; network-DRIVE (design §9). The reduce DRIVER is the BSP scheduler (a
+;; keep-pending reduce stratum), not a Racket loop. whnf-via-egraph-network
+;; interns the term, kicks an emitter, and run-to-quiescence drives the head
+;; cascade; the WHNF is EXTRACTED from the origin class's :best.
+;;
+;; Origin-keyed requests {K → current-form}: K (the origin class) is fixed, the
+;; form evolves down the reduction → extraction is a simple K :best write.
+;; The 'step arm's eclass-union supplies the S0 worklist activity that re-triggers
+;; the stratum each round (the load-bearing cascade mechanism, §9). Demand
+;; subterms are reduced via native whnf here (correct result; full cascade-driven
+;; demand via a set-latch is the documented refinement) — the HEAD chain is
+;; scheduler-driven. PARITY-gated (test-preduce-egraph.rkt network variant).
+
+;; write the WHNF as the origin class's cost-0 best (the extraction target)
+(define (pr-write-whnf! net K F)
+  (net-cell-write net K (pr/make-eclass-value #:best (cons 0 F))))
+
+;; record the step (union K with intern(C) — also the re-trigger worklist activity)
+;; and re-request {K → C}. Inadmissible C → resolve natively into K's best.
+(define (pr-cascade! net hc K C)
+  (with-handlers ([exn:fail? (lambda (_e) (pr-write-whnf! net K (whnf C)))])
+    (define-values (net1 Cc _d) (pr/eclass-intern net hc C #:cost 5))
+    (define net2 (pr/eclass-union net1 K Cc))
+    (net-cell-write net2 reduce-request-cell-id (hash K C))))
+
+;; the keep-pending reduce stratum handler
+(define (process-reduce-requests net pending)
+  (define hc (pr/current-eclass-hashcons-cell-id))
+  (cond
+    [(and hc (hash? pending))
+     (for/fold ([n net]) ([(K F) (in-hash pending)])
+       (define step (whnf-step1 F))
+       (cond
+         [(eq? step 'whnf) (pr-write-whnf! n K F)]
+         [(eq? step 'native) (pr-write-whnf! n K (whnf F))]
+         [(eq? (car step) 'step) (pr-cascade! n hc K (cdr step))]
+         [else ;; 'demand — reduce the strict subterm natively, then continue the cascade
+          (define sub (cadr step))
+          (define recon (caddr step))
+          (define next (recon (whnf sub)))
+          (if (equal? next F) (pr-write-whnf! n K F) (pr-cascade! n hc K next))]))]
+    [else net]))
+
+(register-stratum-handler! reduce-request-cell-id
+                           process-reduce-requests
+                           #:tier 'topology
+                           #:keep-pending? #t
+                           #:reset-value (hash))
+
+;; whnf-via-egraph-network : reduce E to WHNF by SCHEDULER-DRIVEN saturation.
+;; intern E → K; emitter writes {K → E}; run-to-quiescence drives the cascade;
+;; extract K's :best (the WHNF). No e-graph plumbing / inadmissible E → native whnf.
+(define (whnf-via-egraph-network e)
+  (define prn-box (current-persistent-registry-net-box))
+  (define hc (pr/current-eclass-hashcons-cell-id))
+  (cond
+    [(and prn-box hc)
+     (with-handlers ([exn:fail? (lambda (_e) (whnf e))])
+       (define net0 (unbox prn-box))
+       (define-values (net1 K _d) (pr/eclass-intern net0 hc e #:cost 10))
+       (define-values (net1a _ep)
+         (net-add-fire-once-propagator
+          net1 (list K) (list reduce-request-cell-id)
+          (lambda (n) (net-cell-write n reduce-request-cell-id (hash K e)))))
+       (define net2 (run-to-quiescence net1a))
+       (set-box! prn-box net2)
+       (define best (hash-ref (pr/eclass-read net2 K) ':best #f))
+       (if (and best (zero? (car best))) (cdr best) (whnf e)))]
+    [else (whnf e)]))
 
 ;; First reduce to WHNF, then normalize all subterms.
 ;; Per-command memoization: when current-nf-cache is active,

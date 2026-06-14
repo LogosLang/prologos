@@ -51,7 +51,7 @@
           16 "fork-contradiction-request" 17 "decomposed-positions"
           18 "contradicted-branch-aids" 19 "union-derivation-chains"
           20 "congruence-sig-index" 21 "congruence-request"
-          22 "dispatch-request"))
+          22 "dispatch-request" 23 "reduce-request"))
 
 (define (num-key n) (string->symbol (number->string n)))
 

@@ -8,7 +8,12 @@
 ;; non-negotiable before any construct is "migrated".
 (require rackunit
          "../reduction.rkt"
-         "../syntax.rkt")
+         "../syntax.rkt"
+         "../propagator.rkt"
+         "../eclass-graph.rkt"
+         "../rule-registry.rkt"
+         "../kernel-rules-seed.rkt"
+         (only-in "../metavar-store.rkt" current-persistent-registry-net-box))
 
 ;; --- whnf-step1 classifies the migrated head redexes as 'step (not 'native) ---
 ;; (proves the arms are actually MIGRATED, not silently falling back)
@@ -92,3 +97,21 @@
                (expr-nat-val 2)))
 (check-true (expr-suc? (whnf-via-egraph plus-redex))
             "whnf-via-egraph exposes suc (weak head), like native")
+
+;; --- Phase 5b: SCHEDULER-DRIVEN parity — whnf-via-egraph-network == native whnf ---
+;; With the e-graph plumbing live, the reduce stratum drives the head cascade
+;; (the genuine network-DRIVE). Same corpus; same answers.
+(parameterize ([current-rule-registry-cell-id #f]
+               [current-eclass-hashcons-cell-id #f]
+               [current-persistent-registry-net-box (box (make-prop-network))])
+  (define pb (current-persistent-registry-net-box))
+  (init-rule-registry-cell! pb)
+  (set-box! pb (run-to-quiescence
+                (register-arithmetic-seed! (unbox pb) (current-rule-registry-cell-id))))
+  (init-eclass-hashcons-cell! pb)
+  (for ([e (in-list corpus)] [i (in-naturals)])
+    (check-equal? (whnf-via-egraph-network e) (whnf e)
+                  (format "NETWORK parity at corpus[~a]: ~a" i e)))
+  ;; the ι term still exposes suc at the weak head, scheduler-driven
+  (check-true (expr-suc? (whnf-via-egraph-network plus-redex))
+              "whnf-via-egraph-network exposes suc (weak head)"))
