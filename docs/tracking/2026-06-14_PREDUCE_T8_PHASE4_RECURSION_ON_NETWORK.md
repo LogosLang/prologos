@@ -1,10 +1,11 @@
 # PReduce Track 8 — Phase 4: Recursion (β/δ/ι) on-network
 
 **Created**: 2026-06-14
-**Status**: ✅ 4a DONE (`2bf9b5e`; suite 8678 all-pass; viz shows recursion as
-union propagators for fib ≤ ~7). 4b/4c = documented research frontier (they add
-per-step network work → worsen the perf wall on Racket; SH/Zig-era). See §8
-Findings. Phase 5 owner-gated.
+**Status**: ✅ 4a DONE + perf wall LIFTED on Racket (`2bf9b5e` union recording;
+`02da3bd` call-by-value memo key — naive fib exponential→linear; `031ff2f`
+incremental viz observer). Suite 8673 all-pass; **fib 15 now reduces in 0.27s and
+viz-exports in 11s** (was >120s timeout). 4b/4c still the network-DRIVES-recursion
+frontier. See §8 + §9. Phase 5 owner-gated.
 **Owner posture (2026-06-14)**: "for this prototype branch, you lead and approve
 design. don't ask me for details. I will review after the implementation is
 complete." → I make the design decisions here; the methodology gates (NTT model,
@@ -201,3 +202,36 @@ subst) are the documented frontier: both ADD per-step network work, so they make
 the perf wall worse, not better, on Racket — they are SH/Zig-era / dedicated
 research, not landable improvements on this branch now. Phase 5 (bypass
 `reduction.rkt`) remains the owner-gated terminal.
+
+## 9. Perf wall LIFTED (2026-06-14) — call-by-value memo key + incremental observer
+
+The §8 wall is substantially gone on Racket. Two targeted changes (owner-requested):
+
+**(1) Call-by-value memo key (`02da3bd`, reduction.rkt β arm).** Key the β redex by
+the NORMALIZED arg (whnf'd in a private bounded fuel box, guarded), so `[fib 5]`
+reached via `(int- 6 1)` vs `(int- 7 2)` shares ONE e-class. Reduction stays
+call-by-name (the `#:compute` thunk substitutes the ORIGINAL arg) — only the memo
+KEY is normalized. Sound: arg-nf and arg denote the same value ⇒ identical
+contractum. A divergent/unused arg falls back to the original redex key (no
+collapse, no regression, no spurious divergence; the bounded fuel never depletes
+the real budget). **Effect: naive fib exponential → LINEAR.** reduce_steps fib
+8/12/15/20 = 202/287/350/455 (was 741/exp/>120s/—); fib 15 reduce 274ms; fib 10
+= 55 verified; acceptance reduce_ms 2117→194. This ANSWERS `fib-naive.prologos`'s
+question: WITH the cbv key the hashcons now SHARES `[fib k]` subterms (collapses
+the tree).
+
+**(2) Incremental viz observer (`031ff2f`, viz-export.rkt).** `intern-topology!`
+computed `serialize-network-topology` (full JSON incl. per-cell
+`serialize-lattice-value`) for EVERY round just to derive the dedup signature. Now
+the signature is computed cheaply from the pnet (cell-ids + propagator
+connections), and the full serialize runs ONLY on a NEW topology. Same dedup
+(identical sig format). fib 15 export 16.3s → 11.1s (~32%).
+
+**Net:** fib 15 (the owner's example) went from >120s-timeout-untraceable to a
+0.27s reduce + 11s viz export, 234 rounds, 0 errors — the recursion shown as
+union propagators. Full suite 8673 all-pass (and FASTER: 372s vs 540s — the
+suite's reduction tests collapse too).
+
+**Still frontier (unchanged):** 4b/4c (network DRIVES recursion — ι cascade, β/δ
+as declarative dispatch rules). The cbv key collapses + speeds the RECORDING path;
+it does not move the DRIVER (whnf) onto the network. Phase 5 owner-gated.

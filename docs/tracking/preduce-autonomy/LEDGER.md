@@ -1526,3 +1526,37 @@ Entry template:
 - Commits: `2bf9b5e` (4a core + 4a-T + design doc) + this tracker/ledger update.
 - NEXT: present Phase 0–4a for owner review (per posture). Phase 4b/4c + 5 await
   owner direction (perf-frontier / SH-Zig + owner-gated terminal).
+
+## 2026-06-14 — LOOP (PReduce Track 8) Phase 4a perf — [SIGNIFICANT, owner-requested] perf wall LIFTED: cbv memo key + incremental observer
+- **Owner request (verbatim)**: "do The single highest-value follow-up is making
+  naive fib memo-collapse so large traces work: a call-by-value memo key
+  (normalize the β arg before the redex digest, keeping reduction itself
+  call-by-name) + an incremental viz observer (drop the per-round O(cells) diff)."
+- **Part 1 — call-by-value memo key (`02da3bd`, reduction.rkt β arm)**: key the β
+  redex by the NORMALIZED arg (whnf'd in a PRIVATE bounded fuel box, guarded by
+  with-handlers), so `[fib 5]` reached via `(int- 6 1)` vs `(int- 7 2)` shares ONE
+  e-class. Reduction stays CALL-BY-NAME — `#:compute` substitutes the ORIGINAL
+  arg; only the memo KEY is normalized. Sound (arg-nf = arg in value ⇒ identical
+  contractum; whnf deterministic). Divergent/unused arg falls back to the original
+  key (no collapse, no regression, bounded fuel never depletes the real budget).
+  **Naive fib exponential → LINEAR**: reduce_steps fib 8/12/15/20 =
+  202/287/350/455 (was 741/exp/>120s); fib 15 reduce 274ms; fib 10 = 55 verified;
+  acceptance reduce_ms 2117→194. Answers fib-naive's own question (WITH the cbv key
+  the hashcons SHARES `[fib k]` subterms = collapses the tree).
+- **Part 2 — incremental viz observer (`031ff2f`, viz-export.rkt)**:
+  `intern-topology!` did a full `serialize-network-topology` (incl. per-cell
+  `serialize-lattice-value`) EVERY round just for the dedup signature. Now the
+  signature is computed cheaply from the pnet (cell-ids + propagator connections),
+  full serialize ONLY on a NEW topology. Identical sig format ⇒ identical dedup.
+  fib 15 export 16.3s → 11.1s (~32%). Also added cell-22 (dispatch-request) to the
+  well-known-cells identity table (missed in Phase 2).
+- **Net**: fib 15 (owner's example) >120s-untraceable → 0.27s reduce + 11s export,
+  234 rounds, 0 errors, recursion shown as union propagators. **Full suite 8673
+  ALL PASS — and FASTER (372s vs 540s)**: the suite's reduction tests collapse too.
+  0 failures.
+- **Still frontier**: 4b/4c (network DRIVES recursion). The cbv key collapses +
+  speeds the RECORDING path; the DRIVER (whnf) is still off-network. Phase 5
+  owner-gated.
+- Commits: `02da3bd` (cbv memo key) · `031ff2f` (incremental observer) + this
+  tracker/ledger/design-doc update.
+- NEXT: send owner the now-working fib 15 trace; await direction on 4b/4c + 5.
