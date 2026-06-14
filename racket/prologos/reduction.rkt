@@ -1406,18 +1406,37 @@
              (set-box! prn-box net2)
              stored]
             [else
-             ;; the native step, then the result joins as the cost-0 best AND
-             ;; records in the store. The RESULT may itself be inadmissible —
-             ;; encode-check it by writing under the same handler: an
-             ;; inadmissible RESULT aborts the memo + store writes (the class
-             ;; keeps the body alone) but still returns the result.
+             ;; the native step, then the result joins the redex class as a UNION
+             ;; PROPAGATOR (Phase 4a — PReduce Track 8): the reduction step is the
+             ;; DPO {redex, result} e-class joined by eclass-union (the SAME
+             ;; mechanism as the arithmetic fold's union), NOT a bare cell-write —
+             ;; so the step is visible as PROPAGATION (the viz goal: recursion
+             ;; performed by propagators).
+             ;;
+             ;; Net threading: we PUBLISH the redex class (net1) before compute and
+             ;; read the POST-compute net, so the recursion SUBTREE — the sub-step
+             ;; unions that compute builds via nested preduce calls — PERSISTS in
+             ;; the e-graph (the pre-4a code discarded compute's net, keeping only
+             ;; the top redex→result). Persisting the subtree also lets the
+             ;; hashcons memo SHARE repeated sub-redexes (e.g. naive fib's
+             ;; overlapping calls), which the discard previously defeated. The
+             ;; e-graph grows O(distinct subterms) — accepted (plan §1; perf
+             ;; regression expected on this branch).
+             ;;
+             ;; The RESULT may be inadmissible — eclass-intern raises; the handler
+             ;; returns the result unmemoized (the class keeps the body alone) but
+             ;; still computes. (compute's own mutations already published via the
+             ;; set-box! below remain — sound monotone garbage.)
+             (set-box! prn-box net1)
              (define result (compute))
              (with-handlers ([exn:fail? (lambda (_e) result)])
-               (define net2 (net-cell-write net1 cid
-                                            (pr/make-eclass-value #:best (cons 0 result))))
+               (define net-post (unbox prn-box))
+               (define-values (net2 result-cid _rd)
+                 (pr/eclass-intern net-post hc result #:cost 0))
+               (define net2b (run-to-quiescence (pr/eclass-union net2 cid result-cid)))
                (define net3 (if store-cid
-                                (pr/store-record-reduction net2 store-cid cid result)
-                                net2))
+                                (pr/store-record-reduction net2b store-cid cid result)
+                                net2b))
                (set-box! prn-box net3)
                result)])]))]
     [else (compute)]))

@@ -201,3 +201,30 @@
   (check-equal? (preduce-ingest-delta body
                                       #:compute (lambda () (error 'x "ran")))
                 result "subsequent encounters hit the promoted best"))
+
+;; ---- Phase 4a (PReduce Track 8): recursion step recorded as a UNION ----
+;; A β/δ/ι reduction joins {redex, result} via a union PROPAGATOR (not a bare
+;; cell-write): the result is interned as its OWN class (pre-4a it was only the
+;; redex's :best) and the union makes redex + result share a :canonical.
+(parameterize ([current-rule-registry-cell-id #f]
+               [current-eclass-hashcons-cell-id #f]
+               [current-persistent-registry-net-box (box (make-prop-network))])
+  (define pb (current-persistent-registry-net-box))
+  (init-rule-registry-cell! pb)
+  (init-eclass-hashcons-cell! pb)
+  (define hc (current-eclass-hashcons-cell-id))
+  ;; a PURE β redex: ((λx. x + 1) 5) → 6
+  (define redex (expr-app (expr-lam 'mw (expr-Int)
+                                    (expr-int-add (expr-bvar 0) (expr-int 1)))
+                          (expr-int 5)))
+  (check-equal? (whnf redex) (expr-int 6) "β lands the contractum")
+  (define net (unbox pb))
+  (define redex-cid (eclass-lookup net hc (pce-digest PCE-KIND-GROUND-TERM redex)))
+  ;; the RESULT is interned as its own class (Phase 4a — pre-4a it was not)
+  (define result-cid (eclass-lookup net hc (pce-digest PCE-KIND-GROUND-TERM (expr-int 6))))
+  (check-true (and redex-cid #t) "the β redex has a class")
+  (check-true (and result-cid #t) "Phase 4a: the result is interned as its OWN class")
+  ;; the union joined them — redex + result share a canonical
+  (check-equal? (hash-ref (eclass-read net redex-cid) ':canonical)
+                (hash-ref (eclass-read net result-cid) ':canonical)
+                "the β step is a UNION: redex and result share a canonical"))
