@@ -33,10 +33,16 @@
          "../propagator.rkt"
          "../prop-observatory.rkt"
          "../elaborator-network.rkt"
-         (only-in "../eclass-graph.rkt" current-eclass-containment-box)
+         (only-in "../eclass-graph.rkt" current-eclass-containment-box
+                  current-eclass-hashcons-cell-id init-eclass-hashcons-cell!)
+         (only-in "../reduction.rkt" whnf-via-egraph-network)
+         (only-in "../rule-registry.rkt"
+                  current-rule-registry-cell-id init-rule-registry-cell!)
+         (only-in "../kernel-rules-seed.rkt" register-arithmetic-seed!)
+         (only-in "../metavar-store.rkt" current-persistent-registry-net-box)
          "../trace-serialize.rkt")
 
-(provide viz-export-file)
+(provide viz-export-file viz-export-expr-network)
 
 ;; Well-known infrastructure cells (propagator.rkt:500-800, 2323). Identity is
 ;; exporter-local per D2 PATH B; this table mirrors the named constants — when
@@ -158,25 +164,20 @@
       (values (string->symbol (number->string i))
               (if (> (string-length t) 120) (substring t 0 120) t)))))
 
-;; viz-export-file : path (-> hasheq) — runs FILE, returns the envelope jsexpr.
-;; Reduction is ON-NETWORK unconditionally (β/δ/ι/int-folds route through the
-;; e-graph: redex⇒result rewrites become union propagators — DPO rewriting on the
-;; propagator substrate, PRN §2). The off-network native reduction path was
-;; deleted 2026-06-14 (owner directive: this prototype branch always uses
-;; on-network reduction and the viz shows it). No flag — there's nothing to toggle.
-(define (viz-export-file src-path
-                         #:max-diffs [max-diffs 50000]
-                         #:max-rounds [max-rounds 5000])
+;; --- the trace harness, factored so both the file driver (process-file) and the
+;; --- Phase 5b network driver (whnf-via-egraph-network) share the SAME envelope.
+;; run-thunk : (-> (listof result)) — runs under the armed observer + e-graph
+;; capture; its run-to-quiescence rounds are what the envelope renders.
+(define (run-with-viz-trace run-thunk src-label source-lines max-diffs max-rounds)
   (define-values (bsp-observe bsp-get-rounds) (make-trace-accumulator))
   (define round-times (box '()))   ;; reversed; one ts per observed round
   (define (timed-observer r)
     (set-box! round-times (cons (current-inexact-milliseconds)
                                 (unbox round-times)))
     (bsp-observe r))
-  (define obs (make-observatory (hasheq 'file (format "~a" src-path))))
+  (define obs (make-observatory (hasheq 'file (format "~a" src-label))))
   (define cap-box (box #f))
-  ;; containment capture (reduction DAG): parent-alloc → (listof child-alloc),
-  ;; recorded at intern time.
+  ;; containment capture (reduction DAG): parent-alloc → (listof child-alloc).
   (define containment-box (box (make-hash)))
   (define t0 (current-inexact-milliseconds))
   (define results
@@ -184,12 +185,52 @@
                    [current-observatory obs]
                    [current-network-capture-box cap-box]
                    [current-eclass-containment-box containment-box])
-      (process-file src-path)))
+      (run-thunk)))
+  (define t1 (current-inexact-milliseconds))
+  (build-viz-envelope src-label source-lines results
+                      bsp-get-rounds round-times obs cap-box containment-box
+                      t0 t1 max-diffs max-rounds))
+
+;; viz-export-file : path → envelope jsexpr. Reduction is ON-NETWORK (β/δ/ι/int-folds
+;; route through the e-graph: redex⇒result rewrites become union propagators).
+(define (viz-export-file src-path
+                         #:max-diffs [max-diffs 50000]
+                         #:max-rounds [max-rounds 5000])
+  (run-with-viz-trace (lambda () (process-file src-path))
+                      (format "~a" src-path) (read-source-lines src-path)
+                      max-diffs max-rounds))
+
+;; viz-export-expr-network : expr → envelope jsexpr. Phase 5b — drive reduction of a
+;; (constructed, ground) expr through whnf-via-egraph-network: the SCHEDULER-DRIVEN
+;; reduce-stratum cascade. The trace then SHOWS the network DRIVING reduction (the
+;; reduce-request cell, the emitter, the per-step union cascade), not just recording
+;; it. Sets up the e-graph plumbing (registry + arithmetic seed + hashcons) here.
+(define (viz-export-expr-network e
+                                 #:label [label "whnf-via-egraph-network"]
+                                 #:source-lines [source-lines (hash)]
+                                 #:max-diffs [max-diffs 50000]
+                                 #:max-rounds [max-rounds 5000])
+  (run-with-viz-trace
+   (lambda ()
+     (parameterize ([current-rule-registry-cell-id #f]
+                    [current-eclass-hashcons-cell-id #f]
+                    [current-persistent-registry-net-box (box (make-prop-network))])
+       (define pb (current-persistent-registry-net-box))
+       (init-rule-registry-cell! pb)
+       (set-box! pb (run-to-quiescence
+                     (register-arithmetic-seed! (unbox pb) (current-rule-registry-cell-id))))
+       (init-eclass-hashcons-cell! pb)
+       (list (whnf-via-egraph-network e))))
+   label source-lines max-diffs max-rounds))
+
+;; the shared envelope builder (vizTrace 2): per-round deduped topology + identity +
+;; containment, from the observer's captured rounds.
+(define (build-viz-envelope src-label source-lines results
+                            bsp-get-rounds round-times obs cap-box containment-box
+                            t0 t1 max-diffs max-rounds)
   (define containment   ;; cid → (listof child-cid), deduped
     (for/hash ([(k v) (in-hash (unbox containment-box))])
       (values k (remove-duplicates v))))
-  (define t1 (current-inexact-milliseconds))
-
   (define rounds (bsp-get-rounds))
   (define times (reverse (unbox round-times)))
   (define captures (sort (observatory-captures obs) <
@@ -274,9 +315,9 @@
 
   (define enet (unbox cap-box))
   (hasheq 'vizTrace 2
-          'file (format "~a" src-path)
-          'source (hasheq 'path (format "~a" src-path)
-                          'lines (read-source-lines src-path))
+          'file src-label
+          'source (hasheq 'path src-label
+                          'lines source-lines)
           'wallMs (- t1 t0)
           'commandCount n-cmds
           'errors (length (filter prologos-error? results))
