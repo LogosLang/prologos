@@ -130,7 +130,13 @@ function buildGraphFromTopo(topoSection, source, changedGlobal, showAll) {
     nodes.push(n); byId.set(n.key, n);
   }
   for (const p of topo.propagators) {
-    const n = { key: "p" + p.id, kind: "prop", id: p.id, label: propLabel(p.id, identity, source), group: "propagator", color: "#569cd6",
+    // Label by what the propagator DOES, not the source line it inherited.
+    // A union-emitter has inputs == outputs (same two e-class cells it merges);
+    // everything else keeps its source-construct label.
+    const isUnion = p.inputs.length > 0 && p.inputs.length === p.outputs.length
+                    && p.inputs.every(i => p.outputs.includes(i));
+    const label = isUnion ? "union ≡" : propLabel(p.id, identity, source);
+    const n = { key: "p" + p.id, kind: "prop", id: p.id, label, op: isUnion ? "union" : "other", group: "propagator", color: "#569cd6",
                 inputs: p.inputs.filter(i => byId.has("c" + i)), outputs: p.outputs.filter(o => byId.has("c" + o)) };
     nodes.push(n); byId.set(n.key, n);
     for (const i of n.inputs) edges.push({ from: "c" + i, to: n.key, pid: p.id });
@@ -243,6 +249,7 @@ function App() {
   const [mode, setMode] = useState("force");
   const [showAll, setShowAll] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState(700);   // ms per step
   const [fitSignal, setFitSignal] = useState(0);
 
   const rounds = useMemo(() => env ? timelineRounds(env) : [], [env]);
@@ -257,9 +264,9 @@ function App() {
   useEffect(() => {
     if (!playing || !env) return;
     if (idx + 1 >= rounds.length) { setPlaying(false); return; }
-    const t = setTimeout(() => setIdx(i => i + 1), 700);
+    const t = setTimeout(() => setIdx(i => i + 1), speed);
     return () => clearTimeout(t);
-  }, [playing, idx, rounds.length, env]);
+  }, [playing, idx, rounds.length, env, speed]);
 
   const round = env ? rounds[idx] : null;
   const topoIdx = round ? round.topo : 0;
@@ -299,7 +306,8 @@ function App() {
       <div className="main">
         <GraphView graph={graph} mode={mode} highlights={highlights} env={env} fitSignal={fitSignal} />
         <Sidebar env={env} rounds={rounds} idx={idx} setIdx={setIdx} round={round}
-                 topoIdx={topoIdx} playing={playing} setPlaying={setPlaying} graph={graph} />
+                 topoIdx={topoIdx} playing={playing} setPlaying={setPlaying} graph={graph}
+                 speed={speed} setSpeed={setSpeed} />
       </div>
     </div>
   );
@@ -454,7 +462,7 @@ function Tooltip({ node, env, x, y }) {
   return <div className="tooltip" style={{ left: x + 14, top: y + 14 }}>{text}</div>;
 }
 
-function Sidebar({ env, rounds, idx, setIdx, round, topoIdx, playing, setPlaying, graph }) {
+function Sidebar({ env, rounds, idx, setIdx, round, topoIdx, playing, setPlaying, graph, speed, setSpeed }) {
   const st = env.topologies[topoIdx].topology.stats;
   const id = env.topologies[topoIdx].identity || {};
   const series = useMemo(() => rounds.map(r => env.topologies[r.topo].topology.stats), [env, rounds]);
@@ -473,6 +481,13 @@ function Sidebar({ env, rounds, idx, setIdx, round, topoIdx, playing, setPlaying
                onChange={e => { setPlaying(false); setIdx(+e.target.value); }} />
       </div>
       <div className="muted">round {round.roundNumber} ({idx + 1}/{rounds.length})</div>
+      <div className="timeRow" style={{ marginTop: 4 }}>
+        <span className="muted" style={{ fontSize: 11 }}>speed</span>
+        {/* slider value is inverted so right = faster */}
+        <input type="range" min="80" max="1600" step="20" value={1680 - speed}
+               onChange={e => setSpeed(1680 - +e.target.value)} />
+        <span className="muted" style={{ fontSize: 11, whiteSpace: "nowrap" }}>{speed}ms</span>
+      </div>
       <h3>scheduler</h3>
       <svg width={W} height={H} style={{ background: "#1e1e1e", border: "1px solid #333", borderRadius: 4 }}>
         <path d={path} fill="none" stroke="#569cd6" strokeWidth="1.5" />
