@@ -19,6 +19,15 @@
                   store-record-reduction)
          (only-in "../pce.rkt" pce-digest PCE-KIND-GROUND-TERM))
 
+;; This file tests the 4a RECORDING path (preduce-ingest-delta/int) specifically —
+;; the e-graph classes whnf interns via the native β/ι/δ arms. The Phase 5c routing
+;; deploy (PREDUCE_ROUTE=1) routes whnf through the scheduler cascade instead, which
+;; records differently (eclass-union, tested by test-preduce-egraph). So pin routing
+;; OFF here: this file validates the path routing replaces, until the native reducer
+;; is deleted (at which point these recording assertions retire). Reduction VALUES
+;; are identical either way; only the recorded class structure differs.
+(current-egraph-whnf? #f)
+
 ;; No e-graph plumbing: the ingest path degrades to the native fold (total).
 (check-equal? (whnf (expr-int-add (expr-int 1) (expr-int 2))) (expr-int 3))
 (check-equal? (whnf (expr-int-mul (expr-int 6) (expr-int 7))) (expr-int 42))
