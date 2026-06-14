@@ -44,8 +44,6 @@
          "prop-observatory.rkt")  ;; Observatory: capture user network runs
 
 (provide whnf nf nf-whnf conv conv-nf
-         current-preduce-ingest?  ;; PReduce Track 2 ingestion gate (iter 22)
- current-preduce-ingest-int-folds?  ;; iter 33: the selectivity lever
          preduce-ingest-delta  ;; 2026-06-11: exported for consult-wiring tests
          current-nf-cache current-whnf-cache
          current-reduction-fuel current-nat-value-cache
@@ -1311,21 +1309,15 @@
            (expr-error? e))))       ;; error propagation
 
 ;; ========================================
-;; PReduce Track 2 ingestion hook (iter 22; Track 2 design §4 — LAZY ingestion).
-;; PARAMETER-GATED, DEFAULT OFF: this unit's deliverable is the OVERHEAD-FLOOR
-;; instrument (what intern+dispatch costs per arithmetic position — the bound on
-;; what δ/β must later save), NOT a deployment. The flip criterion is NAMED:
-;; δ (Phase 2) + guarded β (Phase 3) landed AND the §5.8 A/B positive — then the
-;; default flips or the hook reverts (validated≠deployed; no permanent dual path).
-;; Speculative-context note: e-graph writes during speculative whnf persist as
-;; MONOTONE GARBAGE (dead-branch interns) — sound-but-wasteful, the same class as
-;; stale-canonical duplicate allocation (eclass-graph.rkt header).
-(define current-preduce-ingest? (make-parameter #f))
-;; SELECTIVE ingestion (iter 33 — the Track 4 PIR §15 lever): int-fold ingestion
-;; gated SEPARATELY; the floor data says blanket small-fold floods are the
-;; overhead source while δ/β memos carry the value. Default #t preserves the
-;; ALL mode; the driver's PREDUCE_INGEST=db sets it #f (δ/β-only).
-(define current-preduce-ingest-int-folds? (make-parameter #t))
+;; PReduce ingestion hook (Track 2 design §4 — LAZY ingestion).
+;; ON-NETWORK REDUCTION IS THE ONLY PATH on this branch (2026-06-14 owner
+;; directive): the parameter gate and the off-network native arms were deleted;
+;; β/ι/δ/int-folds always route through the e-graph ingest, which degrades to the
+;; native step (#:compute / op-fn) when the e-graph infra is absent, so the hooks
+;; are behaviorally total. Speculative-context note: e-graph writes during
+;; speculative whnf persist as MONOTONE GARBAGE (dead-branch interns) —
+;; sound-but-wasteful, the same class as stale-canonical duplicate allocation
+;; (eclass-graph.rkt header).
 
 (define (preduce-ingest-int e op-sym op-fn a b)
   ;; e-graph round-trip when the plumbing is live; NATIVE fold otherwise —
@@ -1518,20 +1510,19 @@
 (define (whnf-impl/match e)
   (match e
     ;; Beta reduction: app(lam(m, A, body), arg) -> whnf(subst(0, arg, body))
-    ;; PReduce guarded β (Phase 3, iter 25; gated, default OFF): the redex
-    ;; memoizes as {redex, whnf(redex)} — the SAME e-class mechanics as δ —
-    ;; UNLESS the arg is effect-headed (pessimistic guard + counter; the e-graph
-    ;; never records a β that could dedup/delete an effect — D.1 §6.2; the
-    ;; native β below stays sound for the legacy semantics).
+    ;; PReduce guarded β: the redex memoizes ON-NETWORK as {redex, whnf(redex)}
+    ;; — the SAME e-class mechanics as δ — UNLESS the arg is effect-headed
+    ;; (pessimistic guard + counter; the e-graph never records a β that could
+    ;; dedup/delete an effect — D.1 §6.2; the guard path still computes natively).
+    ;; (Off-network native β arm deleted 2026-06-14: on-network reduction is the
+    ;; only path on this branch; preduce-ingest-delta degrades to #:compute when
+    ;; the e-graph infra is absent, so this is behaviorally total.)
     [(and redex (expr-app (expr-lam _ _ body) arg))
-     #:when (current-preduce-ingest?)
      (if (expr-head-effectful? arg)
          (begin (pr/guard-skip-note!)
                 (whnf (subst 0 arg body)))
          (preduce-ingest-delta redex
                                #:compute (lambda () (whnf (subst 0 arg body)))))]
-    [(expr-app (expr-lam _ _ body) arg)
-     (whnf (subst 0 arg body))]
 
     ;; Projections on pairs
     [(expr-fst (expr-pair e1 _)) (whnf e1)]
@@ -1539,13 +1530,12 @@
 
     ;; Iota reduction for natrec — native nat-val (Idris 2 model)
     [(expr-natrec _ base _ (expr-nat-val n)) #:when (= n 0) (whnf base)]
-    ;; PReduce ι ingestion (Track 3 Phase 1, iter 41; gated, default OFF):
-    ;; the natrec recursion carriers memoize as {redex, result} e-classes —
-    ;; the δ mechanics verbatim (#:compute = the native step; totality).
-    ;; Guard: an effect-headed base/step skips the recording (pessimistic;
-    ;; native ι stays legacy-sound).
+    ;; PReduce ι ingestion: the natrec recursion carriers memoize ON-NETWORK as
+    ;; {redex, result} e-classes — the δ mechanics verbatim. An effect-headed
+    ;; base/step skips the recording (pessimistic; the guard path computes
+    ;; natively). (Off-network native ι arms deleted 2026-06-14.)
     [(and redex (expr-natrec mot base step (expr-nat-val n)))
-     #:when (and (> n 0) (current-preduce-ingest?))
+     #:when (> n 0)
      (if (or (expr-head-effectful? base) (expr-head-effectful? step))
          (begin (pr/guard-skip-note!)
                 (whnf (expr-app (expr-app step (expr-nat-val (- n 1)))
@@ -1554,13 +1544,9 @@
                                #:compute (lambda ()
                                            (whnf (expr-app (expr-app step (expr-nat-val (- n 1)))
                                                            (expr-natrec mot base step (expr-nat-val (- n 1))))))))]
-    [(expr-natrec mot base step (expr-nat-val n)) #:when (> n 0)
-     (whnf (expr-app (expr-app step (expr-nat-val (- n 1)))
-                     (expr-natrec mot base step (expr-nat-val (- n 1)))))]
     ;; Iota reduction for natrec — legacy Peano representation
     [(expr-natrec _ base _ (expr-zero)) (whnf base)]
     [(and redex (expr-natrec mot base step (expr-suc n)))
-     #:when (current-preduce-ingest?)
      (if (or (expr-head-effectful? base) (expr-head-effectful? step)
              (expr-head-effectful? n))
          (begin (pr/guard-skip-note!)
@@ -1569,8 +1555,6 @@
                                #:compute (lambda ()
                                            (whnf (expr-app (expr-app step n)
                                                            (expr-natrec mot base step n))))))]
-    [(expr-natrec mot base step (expr-suc n))
-     (whnf (expr-app (expr-app step n) (expr-natrec mot base step n)))]
 
     ;; Suc collapse: concrete inner → native nat-val
     [(expr-suc (expr-nat-val k)) (expr-nat-val (+ k 1))]
@@ -1656,20 +1640,12 @@
 
     ;; ---- Int iota rules: compute when arguments are int literals ----
 
-    ;; Binary arithmetic on literals
-    ;; PReduce ingestion (gated, default OFF — see preduce-ingest-int above):
-    [(expr-int-add (expr-int a) (expr-int b))
-     #:when (and (current-preduce-ingest?) (current-preduce-ingest-int-folds?))
-     (preduce-ingest-int e 'int+ + a b)]
-    [(expr-int-sub (expr-int a) (expr-int b))
-     #:when (and (current-preduce-ingest?) (current-preduce-ingest-int-folds?))
-     (preduce-ingest-int e 'int- - a b)]
-    [(expr-int-mul (expr-int a) (expr-int b))
-     #:when (and (current-preduce-ingest?) (current-preduce-ingest-int-folds?))
-     (preduce-ingest-int e 'int* * a b)]
-    [(expr-int-add (expr-int a) (expr-int b)) (expr-int (+ a b))]
-    [(expr-int-sub (expr-int a) (expr-int b)) (expr-int (- a b))]
-    [(expr-int-mul (expr-int a) (expr-int b)) (expr-int (* a b))]
+    ;; Binary arithmetic on literals — ON-NETWORK via the e-graph ingest path
+    ;; (preduce-ingest-int interns + folds, degrading to the native op when the
+    ;; e-graph infra is absent). Off-network native folds deleted 2026-06-14.
+    [(expr-int-add (expr-int a) (expr-int b)) (preduce-ingest-int e 'int+ + a b)]
+    [(expr-int-sub (expr-int a) (expr-int b)) (preduce-ingest-int e 'int- - a b)]
+    [(expr-int-mul (expr-int a) (expr-int b)) (preduce-ingest-int e 'int* * a b)]
     [(expr-int-div (expr-int a) (expr-int b))
      (if (zero? b) e (expr-int (quotient a b)))]
     [(expr-int-mod (expr-int a) (expr-int b))
@@ -3185,12 +3161,15 @@
     ;; Constructor and type-name fvars are canonical — do NOT unfold.
     ;; This keeps constructor applications as (fvar 'cons arg1 arg2) in WHNF,
     ;; allowing structural PM (try-structural-reduce) to decompose them.
-    ;; PReduce δ-memo (gated, default OFF — see preduce-ingest-delta above):
+    ;; PReduce δ-memo: non-constructor defn references unfold ON-NETWORK via the
+    ;; e-graph ({body, whnf(body)} as one e-class), degrading to whnf(body) when
+    ;; the e-graph infra is absent. The native arm below now handles only
+    ;; constructor/type fvars (canonical, not unfolded). Off-network δ path
+    ;; deleted 2026-06-14 — on-network reduction is the only path on this branch.
     [(expr-fvar name)
-     #:when (and (current-preduce-ingest?)
-                 (not (or (lookup-ctor name) (lookup-ctor (ctor-short-name name))
-                          (lookup-type-ctors name)
-                          (lookup-type-ctors (ctor-short-name name)))))
+     #:when (not (or (lookup-ctor name) (lookup-ctor (ctor-short-name name))
+                     (lookup-type-ctors name)
+                     (lookup-type-ctors (ctor-short-name name))))
      (let ([val (global-env-lookup-value name)])
        (if val (preduce-ingest-delta val) e))]
     [(expr-fvar name)

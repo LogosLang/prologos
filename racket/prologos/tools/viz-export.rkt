@@ -33,7 +33,6 @@
          "../propagator.rkt"
          "../prop-observatory.rkt"
          "../elaborator-network.rkt"
-         (only-in "../reduction.rkt" current-preduce-ingest?)  ;; on-network reduction gate
          (only-in "../eclass-graph.rkt" current-eclass-containment-box)
          "../trace-serialize.rkt")
 
@@ -133,19 +132,14 @@
               (if (> (string-length t) 120) (substring t 0 120) t)))))
 
 ;; viz-export-file : path (-> hasheq) — runs FILE, returns the envelope jsexpr.
-;; #:reduce? activates on-network reduction (PReduce ingestion) so functional
-;; reduction (β/δ/ι) runs as e-graph propagators (PReduce on-network reduction:
-;; redex⇒result rewrites become union propagators on the network — DPO rewriting
-;; on the propagator substrate, PRN §2) instead of the off-network recursive
-;; reducer leaving an invisible 1-round fold.
-;; BRANCH DIRECTIVE (owner, 2026-06-14): this is a prototype branch for showing
-;; how the viz works for a FUTURE propagator-native Prologos, built on the
-;; PReduce on-network-reduction prototype. On this branch we ALWAYS use
-;; on-network reduction — so it defaults ON here. `--no-reduce` disables.
+;; Reduction is ON-NETWORK unconditionally (β/δ/ι/int-folds route through the
+;; e-graph: redex⇒result rewrites become union propagators — DPO rewriting on the
+;; propagator substrate, PRN §2). The off-network native reduction path was
+;; deleted 2026-06-14 (owner directive: this prototype branch always uses
+;; on-network reduction and the viz shows it). No flag — there's nothing to toggle.
 (define (viz-export-file src-path
                          #:max-diffs [max-diffs 50000]
-                         #:max-rounds [max-rounds 5000]
-                         #:reduce? [reduce? #t])
+                         #:max-rounds [max-rounds 5000])
   (define-values (bsp-observe bsp-get-rounds) (make-trace-accumulator))
   (define round-times (box '()))   ;; reversed; one ts per observed round
   (define (timed-observer r)
@@ -155,21 +149,18 @@
   (define obs (make-observatory (hasheq 'file (format "~a" src-path))))
   (define cap-box (box #f))
   ;; containment capture (reduction DAG): parent-alloc → (listof child-alloc),
-  ;; recorded at intern time. Only meaningful when reduction is on-network.
-  (define containment-box (and reduce? (box (make-hash))))
+  ;; recorded at intern time.
+  (define containment-box (box (make-hash)))
   (define t0 (current-inexact-milliseconds))
   (define results
     (parameterize ([current-bsp-observer timed-observer]
                    [current-observatory obs]
                    [current-network-capture-box cap-box]
-                   [current-preduce-ingest? reduce?]
                    [current-eclass-containment-box containment-box])
       (process-file src-path)))
   (define containment   ;; cid → (listof child-cid), deduped
-    (if containment-box
-        (for/hash ([(k v) (in-hash (unbox containment-box))])
-          (values k (remove-duplicates v)))
-        (hash)))
+    (for/hash ([(k v) (in-hash (unbox containment-box))])
+      (values k (remove-duplicates v))))
   (define t1 (current-inexact-milliseconds))
 
   (define rounds (bsp-get-rounds))
@@ -291,16 +282,12 @@
   (define src (findf (lambda (a) (not (string-prefix? a "-"))) args))
   (define out (flag-val "-o" args))
   (define validate? (member "--validate" args))
-  ;; On-network (PReduce) reduction is the BRANCH DEFAULT (see viz-export-file).
-  ;; --no-reduce falls back to the off-network recursive reducer (records nothing).
-  (define reduce? (not (member "--no-reduce" args)))
   (unless src
-    (eprintf "usage: racket tools/viz-export.rkt FILE.prologos -o out.json [--no-reduce] [--max-diffs N] [--max-rounds N] [--validate]\n")
-    (eprintf "  on-network (propagator-native) reduction is ON by default on this branch; --no-reduce disables it\n")
+    (eprintf "usage: racket tools/viz-export.rkt FILE.prologos -o out.json [--max-diffs N] [--max-rounds N] [--validate]\n")
+    (eprintf "  reduction is on-network (propagator-native) on this branch — always.\n")
     (exit 1))
   (define envelope
     (viz-export-file src
-                     #:reduce? reduce?
                      #:max-diffs (cond [(flag-val "--max-diffs" args) => string->number]
                                        [else 50000])
                      #:max-rounds (cond [(flag-val "--max-rounds" args) => string->number]
