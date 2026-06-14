@@ -1,0 +1,51 @@
+ns examples.onnetwork-reduction
+
+;; PReduce-default + on-network-compute ACCEPTANCE FILE (Phase 0).
+;; Exercises every reduction kind the ingest hooks cover (reduction.rkt):
+;;   β (lambda application), ι (Nat natrec), δ (definition unfolding),
+;;   int folds (int+/int-/int*). Every form is LIVE and must be 0-error.
+;; Success instrument for the plan: export with
+;;   racket tools/viz-export.rkt examples/2026-06-14-onnetwork-reduction.prologos -o out.json
+;; and confirm each phase's new on-network structure is visible.
+
+def tag : String := "onnetwork-reduction-acceptance"
+
+;; ---- δ : definition unfolding chains ----
+def base := 7
+def derived := [int* base 6]
+def chained := [int+ derived [int- base 2]]
+chained
+
+;; ---- β : explicit lambda application ----
+[[fn [x : Int] [int* x 2]] 21]
+
+spec twice [Int -> Int] Int -> Int
+defn twice [f x] [f [f x]]
+[twice [fn [n : Int] [int+ n 1]] 10]
+
+;; ---- ι : Nat structural recursion (natrec) ----
+spec is-zero Nat -> Bool
+defn is-zero
+  | zero  -> true
+  | suc _ -> false
+[is-zero 3N]
+[is-zero 0N]
+
+;; ---- int recursion + δ + arithmetic : factorial / fib ----
+spec factorial Int -> Int
+defn factorial
+  | 0 -> 1
+  | n -> [int* n [factorial [int- n 1]]]
+[factorial 5]
+[factorial 6]
+
+spec fib Int -> Int
+defn fib
+  | 0 -> 0
+  | 1 -> 1
+  | n -> [int+ [fib [int- n 1]] [fib [int- n 2]]]
+[fib 8]
+
+;; ---- int folds : a balanced arithmetic tree (wide parallel reduction) ----
+[int+ [int+ [int* 6 7] [int- 100 58]] [int+ [int* 3 4] [int* 8 9]]]
+[int* [int+ 3 4] [int- 50 8]]
