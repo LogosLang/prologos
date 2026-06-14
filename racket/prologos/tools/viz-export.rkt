@@ -50,7 +50,8 @@
           14 "resolution-stratum-request" 15 "fork-on-union-request"
           16 "fork-contradiction-request" 17 "decomposed-positions"
           18 "contradicted-branch-aids" 19 "union-derivation-chains"
-          20 "congruence-sig-index" 21 "congruence-request"))
+          20 "congruence-sig-index" 21 "congruence-request"
+          22 "dispatch-request"))
 
 (define (num-key n) (string->symbol (number->string n)))
 
@@ -86,6 +87,32 @@
           'coverage (hasheq 'cellsWithDomain (length domain-cids)
                             'cellsWellKnown (hash-count wkc)
                             'totalCells total)))
+
+;; Cheap topology signature (incremental observer, Phase 4a perf): cell-ids +
+;; propagator connections ONLY — skips the per-cell `serialize-lattice-value`
+;; that DOMINATES `serialize-network-topology` (e-class values carry
+;; :best/:alts/:canonical/:provenance sets). Produces the SAME dedup key the full
+;; serialize would, so the full serialize runs ONLY on a NEW topology — not once
+;; per round. Under monotone network growth most rounds share a topology, so this
+;; turns the per-round cost from O(net + every cell's value) into O(cells+props
+;; ids). Matches the legacy sig format exactly (cell `id`s sorted | `pid:in>out`
+;; sorted).
+(define (topology-signature pnet)
+  (define cells-champ (prop-network-cells pnet))
+  (define props-champ (prop-network-propagators pnet))
+  (string-append
+   (string-join (sort (map (lambda (cid) (number->string (cell-id-n cid)))
+                           (champ-keys cells-champ)) string<?) ",")
+   "|"
+   (string-join
+    (sort (map (lambda (pid)
+                 (define prop (champ-lookup props-champ (prop-id-hash pid) pid))
+                 (format "~a:~a>~a" (prop-id-n pid)
+                         (map cell-id-n (propagator-inputs prop))
+                         (map cell-id-n (propagator-outputs prop))))
+               (champ-keys props-champ))
+          string<?)
+    ";")))
 
 ;; D7: bounded one-level semantic detail for hash-valued cells (the "hash(N
 ;; entries)" opacity fix — keys only, capped; depth growth is a Phase 4 rider).
@@ -199,17 +226,12 @@
   (define topo-rev '())             ;; reversed topology sections
   (define topo-count 0)
   (define (intern-topology! pnet)
-    (define topo (serialize-network-topology pnet))
-    (define sig
-      (string-append
-       (string-join (sort (map (lambda (c) (number->string (hash-ref c 'id)))
-                               (hash-ref topo 'cells)) string<?) ",")
-       "|"
-       (string-join (sort (map (lambda (p) (format "~a:~a>~a" (hash-ref p 'id)
-                                                    (hash-ref p 'inputs) (hash-ref p 'outputs)))
-                               (hash-ref topo 'propagators)) string<?) ";")))
+    ;; Cheap sig per round (no value serialization); full serialize ONLY on a NEW
+    ;; topology (the incremental-observer win — most rounds reuse a topology).
+    (define sig (topology-signature pnet))
     (or (hash-ref topo-table sig #f)
-        (let ([idx topo-count])
+        (let ([idx topo-count]
+              [topo (serialize-network-topology pnet)])
           (hash-set! topo-table sig idx)
           (set! topo-count (add1 topo-count))
           ;; containment edges present in THIS topology (both ends are cells here)
