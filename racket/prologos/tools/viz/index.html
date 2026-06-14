@@ -444,9 +444,10 @@ function GraphView({ graph, mode, highlights, env, fitSignal }) {
   };
   const onDown = e => { dragRef.current = { x: e.clientX - view.x, y: e.clientY - view.y }; };
   const onMove = e => {
-    const r = wrapRef.current.getBoundingClientRect();
-    setMouse({ x: e.clientX - r.left, y: e.clientY - r.top });
-    if (dragRef.current) setView(v => ({ ...v, x: e.clientX - dragRef.current.x, y: e.clientY - dragRef.current.y }));
+    const r = wrapRef.current && wrapRef.current.getBoundingClientRect();
+    if (r) setMouse({ x: e.clientX - r.left, y: e.clientY - r.top });
+    const d = dragRef.current;   // capture BEFORE the async setView updater (drag may end first → null.x crash)
+    if (d) setView(v => ({ ...v, x: e.clientX - d.x, y: e.clientY - d.y }));
   };
   const onUp = () => { dragRef.current = null; };
 
