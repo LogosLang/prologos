@@ -1,8 +1,26 @@
 # PReduce Track 8 — Phase 2: Rule application as propagator firing
 
 **Created**: 2026-06-14
-**Status**: 🔄 DESIGN (Stage 3) — grounded; realization locked against the
-congruence template; implementation next.
+**Status**: ✅ IMPLEMENTED (arithmetic path) — `656a294` core + `edeff08` 2T +
+`ac65fad` cell-count test bumps. Suite 8674 all-pass; acceptance file 0 errors.
+The realization is exactly the congruence template (S0 emitter → request cell →
+topology stratum). Scope narrowed to the arithmetic/dispatch path per the
+grounding finding below; the recursion path (β/δ/ι) is Phase 4. Owner chose
+"Pursue the goal (P2→P4)" 2026-06-14.
+
+**Implementation note (vs §7 steps)**: the dispatch request is emitted by an S0
+emitter installed in `preduce-ingest-int` (the arithmetic caller), NOT from
+`eclass-intern`'s new-class branch (§7 step 2b). Reason: `eclass-intern` is a
+generic primitive used by every path (incl. β/δ/ι and apply-rule's RHS interns);
+emitting from there would request dispatch on every interned class globally,
+coupling the primitive to the rule system and risking unintended saturation.
+Caller-emission keeps Phase 2 strictly scoped to arithmetic. A direct
+request-write would not work: `run-to-quiescence-inner`/`-drain` (and the BSP
+Tier-1 fast path) only run strata when the worklist is non-empty — so the
+request must be emitted by a PROPAGATOR FIRE (the emitter), which creates the
+worklist activity, exactly as the congruence watcher does. The emitter WATCHES
+the redex class (non-empty inputs) so it is not Tier-1-fast-path eligible (Tier-1
+skips strata).
 
 ## ⚠ GROUNDING FINDING (2026-06-14, before cutting core code) — scope narrows
 

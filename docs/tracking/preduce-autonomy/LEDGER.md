@@ -1440,3 +1440,51 @@ Entry template:
 - Commits: 1741476 (bench deletion) + the source-edit follow-up + this tracker.
 - NEXT: Phase 2 (rule application as OBSERVABLE propagator firing) — research-
   grade per the plan; grounding-audit + likely owner checkpoint.
+
+## 2026-06-14 — LOOP (PReduce Track 8 plan) Phase 2 — [SIGNIFICANT] arithmetic dispatch is now an on-network STRATUM FIRING; grounding narrowed scope + owner chose P2→P4
+- **Grounding finding (before cutting code)**: the substrate has TWO unlike
+  reduction paths. int-fold (`preduce-ingest-int`) = `dispatch-rules` →
+  `apply-rule` → `eclass-intern` RHS + `eclass-union` (the union IS a
+  propagator; only DISPATCH was imperative). β/δ/ι (`preduce-ingest-delta`,
+  reduction.rkt:1350-1408) = memoized native `(compute)` + a DIRECT
+  `net-cell-write` of the result as `:best` (reduction.rkt:1402) — NO rule, NO
+  union, NO propagator. So "rule application IS propagator firing" applies
+  cleanly ONLY to the arithmetic path; the recursion path (the fib/factorial
+  case) has no rule application to convert — it is the deeper Phase 4.
+- **Surfaced to owner** (charter §8 — design didn't lock as assumed). Owner chose
+  **"Pursue the goal (P2→P4)"**: land Phase 2 (arithmetic) as the foundation,
+  then design Phase 4 properly (NTT + critique) so the viz shows fib reducing via
+  propagators.
+- **Phase 2 done (arithmetic path)**: dispatch moved from the imperative
+  `dispatch-rules` call to an on-network topology STRATUM firing, mirroring the
+  congruence engine exactly:
+  - `propagator.rkt`: reserve cell-22 `dispatch-request-cell-id` (hash-overwrite
+    merge); preallocate in `make-prop-network` (net12) with drift check; provide.
+  - `rule-dispatch.rkt`: `process-dispatch-requests` topology-tier handler —
+    CLEARS the request cell at entry (apply-rule drives its own nested
+    `run-to-quiescence`; the stratification.md fork-clear idiom prevents
+    re-dispatch), reads registry+hashcons cell-ids from their parameters, runs
+    `dispatch-rules` per pending class. `register-stratum-handler!`.
+  - `reduction.rkt`: `preduce-ingest-int` installs a fire-once S0 EMITTER on the
+    redex class that writes the dispatch-request cell, then `run-to-quiescence`;
+    reads `:best` after quiescence (same contract). The emitter must (a) exist as
+    a propagator fire — a direct request-write would not trigger strata since the
+    inner/drain schedulers only run strata when the worklist is non-empty; and
+    (b) WATCH the redex class (non-empty inputs) so it is NOT Tier-1-fast-path
+    eligible (Tier-1 skips strata).
+  - Emission from the caller (not `eclass-intern`'s new-class branch, plan §7
+    step 2b) keeps scope strictly arithmetic — `eclass-intern` is generic.
+- **Network Reality Check**: ✅ stratum + emitter propagator added; result via the
+  union propagator's `net-cell-write`; trace intern→emitter→request-cell→
+  stratum→dispatch-rules→apply-rule→eclass-union→`:best`→caller read.
+- **Phase 3 (plan) DROPPED** as off-roadmap (owner-approved): the e-graph
+  evaluates primitives functionally inside a rule — a standalone compute
+  propagator is the direct-compute substrate we chose NOT to build.
+- **Gate**: test-preduce-ingest.rkt 29 tests (+3 2T proving the stratum handler
+  does the rewrite); acceptance file 0 errors; **full suite 8674 ALL PASS
+  (548.6s)**. 3 cell-count test failures (cell-22 shifts the well-known count
+  22→23) fixed in test-propagator / test-trace-serialize / test-observatory-01.
+- Commits: `656a294` (core) · `edeff08` (2T) · `ac65fad` (cell-count bumps) ·
+  `3f13ac9` (grounding finding doc) + this tracker/ledger update.
+- NEXT: Phase 4 design — recursion β/δ/ι on-network (research-grade; full Stage-3
+  arc). This is the owner's actual goal (viz shows fib reducing via propagators).

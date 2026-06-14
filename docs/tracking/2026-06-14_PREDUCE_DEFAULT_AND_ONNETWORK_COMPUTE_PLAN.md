@@ -1,7 +1,9 @@
 # PReduce → Default + On-Network Compute/Recursion — Next-Session Plan
 
 **Created**: 2026-06-14
-**Status**: ⬜ PLANNED — design + implementation for the next session(s)
+**Status**: 🔄 IN PROGRESS — Phases 0–2 ✅ (suite 8674 all-pass); Phase 3 dropped
+(off-roadmap); Phase 4 (recursion on-network — the owner goal) is next and is
+research-grade (needs a full Stage-3 design arc). Phase 5 owner-gated.
 **Branch**: `claude/charming-archimedes-98yb48` (prototype for a future
 propagator-native Prologos, built on the PReduce on-network-reduction prototype)
 **Owner directive (2026-06-14)**: move PReduce to default and implement the
@@ -92,9 +94,9 @@ Every phase below follows the standing discipline — non-negotiable:
 |---|---|---|---|
 | 0 | Baseline + acceptance file + scope-lock measurement | ✅ | `98e3b35` acceptance file (0-error, 155 rounds); suite ingest-ON baseline = 8669 all-pass (flipping breaks nothing); ingest hooks scope-locked (β/ι/δ/int-folds) |
 | 1 | **On-network reduction is the ONLY path** — native deleted (owner upgraded "flip" → "flip + delete native") | ✅ | `1741476`+`<this>`: removed `current-preduce-ingest?`/`-int-folds?` gate, de-gated β/ι/δ/int ingest arms, deleted duplicate native arms; removed `PREDUCE_INGEST` env + viz `--reduce`/`--no-reduce`; ported `test-preduce-ingest`; deleted on/off micro-bench. **Full suite 8671 ALL PASS (406.7s).** Absorbs part of Phase 5 (native compute arms gone; `whnf` still drives). |
-| 2 | **Rule application becomes observable propagator firing** (un-collapse the atomic ingest; rules fire across BSP rounds on the observed network) | ⬜ | NTT model; Network Reality Check; viz shows redex → rule-fire → result across rounds |
-| 3 | **Compute as propagators** (arithmetic primitive: a propagator reads operand cells, writes result — replacing `(apply op …)` in `instantiate-template`) | ⬜ | NTT model; viz shows `read-A,B → write-C`; `parallel-reduction` reads as real compute-propagation |
-| 4 | **Recursion / β-δ on-network** (the recursion driver becomes propagator-driven rewriting; `fib`→`fib` unfolding on the network) | ⬜ | hardest; likely needs a design panel; viz shows fib's recursion as propagators |
+| 2 | **Rule application becomes propagator firing** (arithmetic dispatch: an imperative `dispatch-rules` call → an on-network STRATUM firing, mirroring the congruence engine) | ✅ | `656a294` core (cell-22 dispatch-request + `process-dispatch-requests` topology stratum + emitter in `preduce-ingest-int`) · `edeff08` 2T · `ac65fad` cell-count test bumps. NTT model + Network Reality Check in the design doc. Suite **8674 all-pass**. Scope: arithmetic path only (the grounding finding — see below); β/δ/ι is Phase 4 |
+| 3 | ~~Compute as propagators~~ **DROPPED (off-roadmap)** | ❌ | The e-graph evaluates primitives FUNCTIONALLY inside a rule (`instantiate-template`'s `(apply op args)`) — that IS the e-graph design, not an incomplete version. A standalone `int+` propagator is the *direct-compute* substrate we explicitly chose NOT to build (gives up structural sharing). Owner-approved correction 2026-06-14. "Everything-on-network" is satisfied when rule application is stratum firing (Phase 2) — the compute runs INSIDE the dispatch fire |
+| 4 | **Recursion / β-δ-ι on-network** (the recursion path becomes rule-based propagator firing; `fib`→`fib` unfolding on the network — THE owner goal: viz shows fib reducing via propagators) | ⬜ | **hardest; research-grade.** Grounding (Phase 2) found β/δ/ι is a memoized native compute + DIRECT cell-write (no rule, no union, no propagator) — there is no "rule application" to convert; making it propagator-native is a substrate redesign. Full Stage-3 arc: grounding-audit + design panel + ≥2 adversarial critique rounds + NTT model |
 | 5 | **Route the covered fragment through the e-graph, bypassing `reduction.rkt`** (the Track 8 slice for what's now fully on-network) | ⬜ | terminal; owner-checkpoint before landing; parity gate vs the recursive reducer |
 | T | Dedicated tests per phase (`tests/test-preduce-*` extensions) | ⬜ | rule-firing observability, compute-propagator parity, recursion-on-network parity |
 
