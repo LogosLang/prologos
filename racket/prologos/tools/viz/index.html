@@ -236,6 +236,46 @@ function topoNodeKeys(env, topoIdx) {
   return s;
 }
 
+// Collapse to the e-CLASS level: every pair of cells joined by a "union ≡"
+// propagator is the same equivalence class, so merge them into one node and
+// drop the union propagators. Each value becomes a single node; the containment
+// DAG (and any congruence propagators) connect e-classes directly. A collapsed
+// node carries `members` (the original cell keys) + `mergedProps` (the union
+// propagator ids that merged into it) so highlights still map back.
+function collapseEclasses(graph) {
+  const par = new Map(); const find = k => { let r = k; while (par.get(r) !== r) r = par.get(r); let c = k; while (par.get(c) !== r) { const n = par.get(c); par.set(c, r); c = n; } return r; };
+  for (const n of graph.nodes) par.set(n.key, n.key);
+  const unionProps = new Map();   // propKey -> { id, cells:[cellKey] }
+  for (const n of graph.nodes) {
+    if (n.kind === "prop" && n.op === "union") {
+      const cells = (n.inputs || []).map(i => "c" + i);
+      unionProps.set(n.key, { id: n.id, cells });
+      for (let i = 1; i < cells.length; i++) { const a = find(cells[0]), b = find(cells[i]); if (a !== b) par.set(a, b); }
+    }
+  }
+  const rootMerged = new Map();   // root -> [unionPropId]
+  for (const u of unionProps.values()) { if (!u.cells.length) continue; const r = find(u.cells[0]); if (!rootMerged.has(r)) rootMerged.set(r, []); rootMerged.get(r).push(u.id); }
+  const groups = new Map();
+  for (const n of graph.nodes) { if (n.kind !== "cell") continue; const r = find(n.key); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(n); }
+  const remap = new Map(), nodes = [], byId = new Map();
+  for (const [root, members] of groups) {
+    const rep = members.find(m => !/^c\d+$/.test(m.label)) || members[0];
+    const node = Object.assign({}, rep, { members: members.map(m => m.key), mergedProps: rootMerged.get(root) || [], eclassSize: members.length });
+    for (const m of members) remap.set(m.key, rep.key);
+    nodes.push(node); byId.set(node.key, node);
+  }
+  for (const n of graph.nodes) if (n.kind === "prop" && n.op !== "union") { const node = Object.assign({}, n, { members: [n.key], mergedProps: [] }); nodes.push(node); byId.set(node.key, node); }
+  const seen = new Set(), edges = [];
+  for (const e of graph.edges) {
+    if (unionProps.has(e.from) || unionProps.has(e.to)) continue;
+    const from = remap.get(e.from) || e.from, to = remap.get(e.to) || e.to;
+    if (from === to || !byId.has(from) || !byId.has(to)) continue;
+    const k = (e.kind || "d") + from + "|" + to; if (seen.has(k)) continue; seen.add(k);
+    edges.push(Object.assign({}, e, { from, to }));
+  }
+  return { nodes, edges, byId };
+}
+
 /* @PURE-END */
 </script>
 
@@ -248,6 +288,7 @@ function App() {
   const [idx, setIdx] = useState(0);
   const [mode, setMode] = useState("force");
   const [showAll, setShowAll] = useState(false);
+  const [collapse, setCollapse] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(700);   // ms per step
   const [fitSignal, setFitSignal] = useState(0);
@@ -270,8 +311,9 @@ function App() {
 
   const round = env ? rounds[idx] : null;
   const topoIdx = round ? round.topo : 0;
-  const graph = useMemo(() => env ? buildGraphFromTopo(env.topologies[topoIdx], env.source, changed, showAll) : null,
-                        [env, topoIdx, showAll, changed]);
+  const rawGraph = useMemo(() => env ? buildGraphFromTopo(env.topologies[topoIdx], env.source, changed, showAll) : null,
+                           [env, topoIdx, showAll, changed]);
+  const graph = useMemo(() => rawGraph && collapse ? collapseEclasses(rawGraph) : rawGraph, [rawGraph, collapse]);
   const highlights = useMemo(() => {
     if (!env) return { fired: new Set(), wrote: new Set(), born: new Set() };
     const fired = new Set(round.propagatorsFired);
@@ -302,6 +344,7 @@ function App() {
          onDrop={e => { e.preventDefault(); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); }}>
       <Header env={env} cmdText={`● command ${seq}/${cmds.length}: ${round.command}`}
               mode={mode} setMode={setMode} showAll={showAll} setShowAll={setShowAll}
+              collapse={collapse} setCollapse={setCollapse}
               onFile={loadFile} onFit={() => setFitSignal(s => s + 1)} />
       <div className="main">
         <GraphView graph={graph} mode={mode} highlights={highlights} env={env} fitSignal={fitSignal} />
@@ -313,7 +356,7 @@ function App() {
   );
 }
 
-function Header({ env, cmdText, msg, mode, setMode, showAll, setShowAll, onFile, onFit }) {
+function Header({ env, cmdText, msg, mode, setMode, showAll, setShowAll, collapse, setCollapse, onFile, onFit }) {
   return (
     <header>
       <span className="title">Prologos network</span>
@@ -327,6 +370,8 @@ function Header({ env, cmdText, msg, mode, setMode, showAll, setShowAll, onFile,
           <option value="force">force-directed (live)</option>
           <option value="layered">layered</option>
         </select></label>
+        <label className="tog"><input type="checkbox" checked={collapse}
+          onChange={e => setCollapse(e.target.checked)} /> collapse e-classes</label>
         <label className="tog"><input type="checkbox" checked={showAll}
           onChange={e => setShowAll(e.target.checked)} /> infrastructure</label>
         <button onClick={onFit}>fit</button>
@@ -357,7 +402,12 @@ function GraphView({ graph, mode, highlights, env, fitSignal }) {
     nodesRef.current = new Map(nodes.map(n => [n.key, n]));
     if (simRef.current) { simRef.current.stop(); simRef.current = null; }
     if (mode === "force") {
-      const links = graph.edges.filter(e => e.from !== e.to).map(e => ({ source: e.from, target: e.to }));
+      // only link endpoints that are actually nodes in THIS sim, else d3-force
+      // dereferences a null source/target on tick ("reading 'x' of null")
+      const keyset = new Set(nodes.map(n => n.key));
+      const links = graph.edges
+        .filter(e => e.from !== e.to && keyset.has(e.from) && keyset.has(e.to))
+        .map(e => ({ source: e.from, target: e.to }));
       const sim = d3.forceSimulation(nodes)
         .force("charge", d3.forceManyBody().strength(-170))
         .force("link", d3.forceLink(links).id(d => d.key).distance(46).strength(0.5))
@@ -424,8 +474,10 @@ function GraphView({ graph, mode, highlights, env, fitSignal }) {
           })}
           {graph.nodes.map(n0 => {
             const n = nmap.get(n0.key); if (!n) return null;
-            const isFired = n.kind === "prop" && fired.has(n.id);
-            const wroteN = wrote.has(n.key), bornN = born.has(n.key);
+            const mem = n0.members || [n0.key];               // collapsed: original cell keys
+            const isFired = (n0.kind === "prop" && fired.has(n0.id))
+                            || (n0.mergedProps && n0.mergedProps.some(p => fired.has(p)));  // a union merged into this e-class
+            const wroteN = mem.some(k => wrote.has(k)), bornN = mem.some(k => born.has(k));
             const stroke = isFired ? "#ff6b6b" : bornN ? "#4ec9b0" : wroteN ? "#e9c46a" : "#222";
             const sw = iw(isFired || bornN || wroteN ? 2.6 : 1);
             const fill = wroteN ? "#e9c46a" : n.color;
