@@ -45,6 +45,7 @@
 
 (provide whnf nf nf-whnf conv conv-nf
          preduce-ingest-delta  ;; 2026-06-11: exported for consult-wiring tests
+         whnf-step1 whnf-via-egraph  ;; Phase 5a: network-driven reduction engine
          current-nf-cache current-whnf-cache
          current-reduction-fuel current-nat-value-cache
          ;; Solver normalization (for benchmarks + PUnify)
@@ -3239,6 +3240,96 @@
 
 ;; ========================================
 ;; Full Normalization
+;; ========================================
+;; Phase 5a (PReduce Track 8): network-driven reduction engine — the ONE-STEP
+;; classifier + an extraction-style driver. The design's foundational primitive
+;; (2026-06-14_PREDUCE_T8_PHASE4b5_NETWORK_DRIVEN_REDUCTION.md §3). PARITY-gated
+;; against native whnf (tests/test-preduce-egraph.rkt). The scheduler-driven
+;; cascade (reduce stratum) is the staged next increment; this validates the
+;; one-step decomposition is parity-correct and gives whnf-via-egraph (the
+;; intern→reduce→extract shape Phase 5 generalizes).
+;;
+;; whnf-step1 : expr -> 'whnf | 'native | (cons 'step C) | (list 'demand SUB RECON)
+;;   'whnf          — E is weak-head-normal (value/neutral)
+;;   'native        — construct not yet migrated; driver delegates to native whnf
+;;                    (staged fallback — shrinks as constructs migrate)
+;;   (cons 'step C) — E head-reduces ONE step to C
+;;   (list 'demand SUB RECON) — E is STRICT in SUB; reduce SUB to WHNF, then the
+;;                    next form is (RECON sub-nf). Mis-classification is parity-safe
+;;                    (the migrated arms mirror whnf-impl/match; the rest is 'native).
+(define (whnf-step1 e)
+  (cond
+    [(whnf-trivial? e) 'whnf]
+    [else
+     (match e
+       ;; β (head). Effect-headed arg → native (the guard path; never recorded).
+       [(expr-app (expr-lam _ _ body) arg)
+        (if (expr-head-effectful? arg) 'native (cons 'step (subst 0 arg body)))]
+       ;; projections on pairs (head)
+       [(expr-fst (expr-pair e1 _)) (cons 'step e1)]
+       [(expr-snd (expr-pair _ e2)) (cons 'step e2)]
+       ;; ι natrec (head) — nat-val / legacy zero+suc. Effect-headed → native.
+       [(expr-natrec _ base _ (expr-nat-val n)) #:when (= n 0) (cons 'step base)]
+       [(expr-natrec mot base step (expr-nat-val n))
+        #:when (> n 0)
+        (if (or (expr-head-effectful? base) (expr-head-effectful? step))
+            'native
+            (cons 'step (expr-app (expr-app step (expr-nat-val (- n 1)))
+                                  (expr-natrec mot base step (expr-nat-val (- n 1))))))]
+       [(expr-natrec _ base _ (expr-zero)) (cons 'step base)]
+       [(expr-natrec mot base step (expr-suc n))
+        (if (or (expr-head-effectful? base) (expr-head-effectful? step)
+                (expr-head-effectful? n))
+            'native
+            (cons 'step (expr-app (expr-app step n) (expr-natrec mot base step n))))]
+       ;; suc-collapse (head)
+       [(expr-suc (expr-nat-val k)) (cons 'step (expr-nat-val (+ k 1)))]
+       [(expr-suc (expr-zero)) (cons 'step (expr-nat-val 1))]
+       ;; J / boolrec / ann / vhead / vtail (head)
+       [(expr-J _ base left _ (expr-refl)) (cons 'step (expr-app base left))]
+       [(expr-boolrec _ tc _ (expr-true)) (cons 'step tc)]
+       [(expr-boolrec _ _ fc (expr-false)) (cons 'step fc)]
+       [(expr-ann e1 _) (cons 'step e1)]
+       [(expr-vhead _ _ (expr-vcons _ _ hd _)) (cons 'step hd)]
+       [(expr-vtail _ _ (expr-vcons _ _ _ tl)) (cons 'step tl)]
+       ;; demand arms — reduce the head-exposing subterm first (mirror the native
+       ;; "reduce subterm, then retry" arms). RECON re-forms the head with the nf.
+       [(expr-app f a)
+        #:when (not (expr-lam? f))
+        (list 'demand f (lambda (f-nf) (expr-app f-nf a)))]
+       [(expr-fst e1) (list 'demand e1 (lambda (x) (expr-fst x)))]
+       [(expr-snd e1) (list 'demand e1 (lambda (x) (expr-snd x)))]
+       [(expr-natrec mot base step target)
+        (list 'demand target (lambda (t) (expr-natrec mot base step t)))]
+       [(expr-J mot base left right proof)
+        (list 'demand proof (lambda (p) (expr-J mot base left right p)))]
+       [(expr-boolrec mot tc fc target)
+        (list 'demand target (lambda (t) (expr-boolrec mot tc fc t)))]
+       [(expr-vhead t n v) (list 'demand v (lambda (x) (expr-vhead t n x)))]
+       [(expr-vtail t n v) (list 'demand v (lambda (x) (expr-vtail t n x)))]
+       ;; arith, structural reduce/match, δ (fvar unfold), foreign, maps, strings,
+       ;; … : not yet migrated → native (the staged fallback).
+       [_ 'native])]))
+
+;; whnf-via-egraph : reduce E to WHNF by ITERATING whnf-step1 (the extraction
+;; shape — Phase 5 generalizes this to scheduler-driven saturation). Demand is
+;; satisfied by a NESTED whnf-via-egraph on the strict subterm; no-progress (the
+;; head still demands an already-normal subterm) is a neutral WHNF (the native
+;; `(equal? e1* e1)` stuck check). Fuel-bounded (shares current-reduction-fuel).
+(define (whnf-via-egraph e)
+  (let loop ([cur e])
+    (define step (whnf-step1 cur))
+    (cond
+      [(eq? step 'whnf) cur]
+      [(eq? step 'native) (whnf cur)]   ; native fully reduces this construct to WHNF
+      [(eq? (car step) 'step) (loop (cdr step))]
+      [else ;; 'demand
+       (define sub (cadr step))
+       (define recon (caddr step))
+       (define sub-nf (whnf-via-egraph sub))
+       (define next (recon sub-nf))
+       (if (equal? next cur) cur (loop next))])))
+
 ;; First reduce to WHNF, then normalize all subterms.
 ;; Per-command memoization: when current-nf-cache is active,
 ;; cache nf results keyed by expr (transparent structs → equal?-based hashing).
