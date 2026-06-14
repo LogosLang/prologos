@@ -3,6 +3,42 @@
 **Created**: 2026-06-14
 **Status**: 🔄 DESIGN (Stage 3) — grounded; realization locked against the
 congruence template; implementation next.
+
+## ⚠ GROUNDING FINDING (2026-06-14, before cutting core code) — scope narrows
+
+Reading `preduce-ingest-int` vs `preduce-ingest-delta` revealed the substrate has
+TWO unlike reduction paths:
+
+- **int-fold path** (`preduce-ingest-int`, reduction.rkt:1330): `dispatch-rules`
+  → `apply-rule` → `instantiate-template` compute + `eclass-intern` RHS +
+  `eclass-union`. The union IS a propagator; only DISPATCH (match) is imperative.
+  Phase 2 ("dispatch as propagator firing") applies cleanly HERE.
+- **β/δ/ι path** (`preduce-ingest-delta`, reduction.rkt:1350): interns the redex,
+  consults memo/store, on miss runs `(compute)` (the native step) and writes the
+  result as the class `:best` via a **direct `net-cell-write`** (reduction.rkt:
+  1402). NO rule, NO union, NO propagator — it is compute-and-cache.
+
+**Consequence**: "rule application IS propagator firing" applies cleanly ONLY to
+the arithmetic/dispatch path. The recursion path (β/δ/ι — the interesting part
+for fib) has no "rule application" to convert into firing; it is a memoized
+native compute. Making IT propagator-native is the deeper **Phase 4** (turn the
+compute-and-cache into rule-based propagator firing) — a substrate redesign, the
+PReduce thesis endgame, genuinely research-grade (the project itself deferred it
+and routed the perf case to SH/Zig).
+
+Two further frictions even for the narrow (arithmetic) Phase 2: `apply-rule` runs
+its OWN `run-to-quiescence` (so wrapping dispatch in a propagator fire risks
+nested/re-entrant quiescence), and reactive dispatch means installing the union
+propagator DURING a fire (topology-change-mid-quiescence — doable via the
+topology stratum, as congruence does, but real risk).
+
+**Decision deferred to owner (charter §8: design didn't lock as assumed —
+surface).** See the checkpoint in the session.
+
+---
+
+## (original design below — realization template still valid for the arithmetic path)
+
 **Plan**: `2026-06-14_PREDUCE_DEFAULT_AND_ONNETWORK_COMPUTE_PLAN.md` (Phase 2)
 **Roadmap basis**: PReduce Master thesis — *"rule application IS propagator
 firing"*; everything-on-network mantra. Owner (2026-06-14): substrate change is
