@@ -1,96 +1,63 @@
 <!DOCTYPE html>
 <!--
-  Prologos propagator-network visualizer — PTF Track V (vizTrace 2, 2026-06-13).
+  Prologos propagator-network visualizer — PTF Track V.
+
+  React + SVG, live d3-force simulation (CDN deps). Force mode shows the graph
+  SMOOTHLY settling — stepping the timeline reuses node positions and gently
+  restarts the simulation, so new nodes ease in and the graph relaxes (no jerky
+  snap). Layered mode is a static dataflow-depth layout.
 
   Shows PROGRAM EXECUTION as a propagator network, played over one timeline.
-  Each round renders the network THAT ROUND ACTUALLY RAN ON (its own snapshot),
-  so the solver's worldview/NAF forks show up as the network changing across
-  the timeline — the branch-level concurrency Prologos has today. (Functional
-  reduction is not yet on the network; the rich execution lives in the
-  relational/logic solver — `solve`/`defr`.)
+  Each round renders the network that round actually ran on. Solid edges =
+  propagator dataflow; dashed violet = containment (the reduction DAG via the
+  hashcons registry). Infrastructure cells hidden by default; e-class cells show
+  their reduced value; propagators label by source construct.
 
-  - Timeline scrubber/play over all rounds; propagators pulse red when they
-    fire, edges light up input->propagator->output, written cells flash gold,
-    newly-created nodes ring teal.
-  - Layout toggle: force-directed (free shape) or layered (dataflow depth).
-  - Infrastructure cells (registries, fuel, relation store) unwired to any
-    propagator are hidden by default; "show infrastructure cells" reveals them.
-  - Propagators are labeled by the SOURCE CONSTRUCT that installed them.
-
-  Standalone, dependency-free, file://-safe. Generate a trace with:
-    racket tools/viz-export.rkt FILE.prologos -o out.json
+  Single file, no build step (deps from CDN — needs network). Generate a trace:
+    racket tools/viz-export.rkt FILE.prologos -o out.json [--reduce]
 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <title>Prologos propagator network</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 13px/1.4 system-ui, sans-serif; background: #1e1e1e; color: #ddd;
-         display: grid; grid-template-rows: auto 1fr; height: 100vh; }
-  header { display: flex; gap: 10px; align-items: center; padding: 8px 12px;
-           background: #252526; border-bottom: 1px solid #333; flex-wrap: wrap; }
+  body { margin: 0; font: 13px/1.4 system-ui, sans-serif; background: #1e1e1e; color: #ddd; height: 100vh; overflow: hidden; }
+  #root { height: 100vh; }
+  .app { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
+  header { display: flex; gap: 10px; align-items: center; padding: 8px 12px; background: #252526; border-bottom: 1px solid #333; flex-wrap: wrap; }
   header .title { font-weight: 600; color: #9cdcfe; }
   header .cmd { color: #dcdcaa; font-family: ui-monospace, monospace; }
-  input[type=file], button, label.tog, select { background: #3c3c3c; color: #ddd; border: 1px solid #555;
-           border-radius: 4px; padding: 3px 8px; font: inherit; }
+  input[type=file], button, label.tog, select { background: #3c3c3c; color: #ddd; border: 1px solid #555; border-radius: 4px; padding: 3px 8px; font: inherit; }
   button:hover, label.tog:hover, select:hover { border-color: #888; cursor: pointer; }
-  #main { display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
-  #canvasWrap { position: relative; min-width: 0; }
-  canvas { display: block; width: 100%; height: 100%; }
-  #tooltip { position: absolute; pointer-events: none; background: #2d2d30; border: 1px solid #666;
-             border-radius: 4px; padding: 6px 9px; max-width: 380px; display: none; z-index: 5;
-             white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 12px; }
-  #side { border-left: 1px solid #333; background: #252526; padding: 10px; overflow-y: auto; }
-  #side h3 { margin: 12px 0 4px; font-size: 11px; text-transform: uppercase; color: #888; letter-spacing: .5px; }
-  #drop { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-          color: #888; font-size: 16px; border: 2px dashed #444; margin: 18px; border-radius: 10px; text-align: center; padding: 20px; }
-  #timeRow { display: flex; gap: 8px; align-items: center; }
+  .main { display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
+  .graphwrap { position: relative; min-width: 0; overflow: hidden; cursor: grab; }
+  .graphwrap:active { cursor: grabbing; }
+  svg { display: block; width: 100%; height: 100%; }
+  .tooltip { position: absolute; pointer-events: none; background: #2d2d30; border: 1px solid #666; border-radius: 4px; padding: 6px 9px; max-width: 380px; z-index: 5; white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 12px; }
+  .side { border-left: 1px solid #333; background: #252526; padding: 10px; overflow-y: auto; }
+  .side h3 { margin: 12px 0 4px; font-size: 11px; text-transform: uppercase; color: #888; letter-spacing: .5px; }
+  .drop { display: flex; align-items: center; justify-content: center; height: 100%; color: #888; font-size: 16px; text-align: center; }
+  .drop .box { border: 2px dashed #444; border-radius: 10px; padding: 40px 60px; }
+  .timeRow { display: flex; gap: 8px; align-items: center; }
   input[type=range] { width: 100%; }
   .stat { display: flex; justify-content: space-between; font-family: ui-monospace, monospace; font-size: 12px; padding: 1px 0; }
   .stat b { color: #9cdcfe; font-weight: 600; }
-  #diffs { font-family: ui-monospace, monospace; font-size: 11.5px; max-height: 200px; overflow-y: auto; }
+  .diffs { font-family: ui-monospace, monospace; font-size: 11.5px; max-height: 200px; overflow-y: auto; }
   .diff-row { padding: 2px 5px; border-left: 3px solid #e9c46a; margin: 2px 0; background: #2a2a2c; }
   .diff-row .src { color: #888; }
   .legend-item { display: flex; gap: 6px; align-items: center; margin: 2px 0; font-size: 12px; }
   .swatch { width: 12px; height: 12px; border-radius: 50%; flex: none; border: 1px solid #222; }
   .muted { color: #777; }
-  #sched canvas { width: 100%; height: 52px; background: #1e1e1e; border: 1px solid #333; border-radius: 4px; }
 </style>
 </head>
 <body>
-<header>
-  <span class="title">Prologos network</span>
-  <input type="file" id="file" accept=".json,.vizjson">
-  <span id="cmd" class="cmd muted">drop a trace to begin</span>
-  <span style="flex:1"></span>
-  <label>layout <select id="layout"><option value="force">force-directed</option><option value="layered">layered</option></select></label>
-  <label class="tog"><input type="checkbox" id="showAll"> infrastructure</label>
-  <button id="fit">fit</button>
-</header>
-<div id="main">
-  <div id="canvasWrap">
-    <canvas id="canvas"></canvas>
-    <div id="tooltip"></div>
-    <div id="drop">drop a vizTrace JSON here<br><span style="font-size:13px" class="muted">(tools/viz-export.rkt output)</span></div>
-  </div>
-  <div id="side">
-    <h3>execution timeline</h3>
-    <div id="timeRow"><button id="play">▶</button><input type="range" id="time" min="0" max="0" value="0"></div>
-    <div id="timeLabel" class="muted">–</div>
-    <h3>scheduler</h3>
-    <div id="sched"><canvas id="spark"></canvas></div>
-    <div class="stat"><span>fired this round</span><b id="sFired">–</b></div>
-    <div class="stat"><span>cells written</span><b id="sWrites">–</b></div>
-    <div class="stat"><span>network now</span><b id="sNet">–</b></div>
-    <div class="stat"><span>round</span><b id="sRound">–</b></div>
-    <h3>cell writes this round</h3>
-    <div id="diffs" class="muted">–</div>
-    <h3>legend</h3>
-    <div id="legend"></div>
-  </div>
-</div>
+<div id="root"></div>
 
 <script>
 /* ============== PURE CORE (no DOM) — node-verifiable =============== */
@@ -215,6 +182,7 @@ function layoutLayered(graph) {
 }
 
 // Force-directed (Fruchterman-Reingold), deterministic seed → reproducible.
+// Used by check.js + the mp4 renderer (the browser uses live d3-force instead).
 function layoutForce(graph, seed, W, H) {
   W = W || 1000; H = H || 700;
   const nodes = graph.nodes, n = nodes.length || 1, k = Math.sqrt((W * H) / n);
@@ -263,175 +231,292 @@ function topoNodeKeys(env, topoIdx) {
 }
 
 /* @PURE-END */
-/* ===================== DOM / rendering layer ====================== */
+</script>
 
-if (typeof document !== "undefined") (function () {
-  const canvas = document.getElementById("canvas"), ctx = canvas.getContext("2d");
-  const spark = document.getElementById("spark"), sctx = spark.getContext("2d");
-  const tooltip = document.getElementById("tooltip");
-  let env = null, rounds = [], changedGlobal = null, idx = 0;
-  let mode = "force", showAll = false, playing = null;
-  let view = { x: 40, y: 40, k: 1 }, lastTopo = -1;
-  const cache = new Map();   // key `${mode}:${topoIdx}:${showAll}` -> {graph, layout}
+<script type="text/babel">
+const { useState, useRef, useEffect, useMemo, useCallback } = React;
 
-  function gl(topoIdx) {
-    const key = mode + ":" + topoIdx + ":" + showAll;
-    if (cache.has(key)) return cache.get(key);
-    const graph = buildGraphFromTopo(env.topologies[topoIdx], env.source, changedGlobal, showAll);
-    let layout;
-    if (mode === "layered") layout = layoutLayered(graph);
-    else {
-      // seed from the previous topology's layout (shared keys) for stable growth
-      let seed = null;
-      for (let j = idx - 1; j >= 0; j--) { const pk = mode + ":" + rounds[j].topo + ":" + showAll; if (cache.has(pk)) { seed = cache.get(pk).layout.pos; break; } }
-      layout = layoutForce(graph, seed, 1000, 700);
+function App() {
+  const [env, setEnv] = useState(null);
+  const [msg, setMsg] = useState("drop a vizTrace JSON (tools/viz-export.rkt output)");
+  const [idx, setIdx] = useState(0);
+  const [mode, setMode] = useState("force");
+  const [showAll, setShowAll] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [fitSignal, setFitSignal] = useState(0);
+
+  const rounds = useMemo(() => env ? timelineRounds(env) : [], [env]);
+  const changed = useMemo(() => env ? changedCellIdsGlobal(env) : new Set(), [env]);
+
+  const loadFile = (file) => file.text().then(t => {
+    let o; try { o = JSON.parse(t); } catch (e) { setMsg("invalid JSON"); return; }
+    if (o.vizTrace !== 2) { setMsg(o.vizTrace ? "need vizTrace 2 (re-export with the current tool)" : "not a vizTrace file"); return; }
+    setEnv(o); setIdx(0); setPlaying(false);
+  });
+
+  useEffect(() => {
+    if (!playing || !env) return;
+    if (idx + 1 >= rounds.length) { setPlaying(false); return; }
+    const t = setTimeout(() => setIdx(i => i + 1), 700);
+    return () => clearTimeout(t);
+  }, [playing, idx, rounds.length, env]);
+
+  const round = env ? rounds[idx] : null;
+  const topoIdx = round ? round.topo : 0;
+  const graph = useMemo(() => env ? buildGraphFromTopo(env.topologies[topoIdx], env.source, changed, showAll) : null,
+                        [env, topoIdx, showAll, changed]);
+  const highlights = useMemo(() => {
+    if (!env) return { fired: new Set(), wrote: new Set(), born: new Set() };
+    const fired = new Set(round.propagatorsFired);
+    const wrote = new Set((round.cellDiffs || []).map(d => "c" + d.cellId));
+    const prev = idx > 0 ? topoNodeKeys(env, rounds[idx - 1].topo) : new Set();
+    const cur = topoNodeKeys(env, topoIdx);
+    const born = new Set([...cur].filter(k => !prev.has(k)));
+    return { fired, wrote, born };
+  }, [env, idx, topoIdx]);
+
+  if (!env) return (
+    <div className="app">
+      <Header env={null} msg={msg} onFile={loadFile} />
+      <div className="drop"><label className="box" style={{cursor:"pointer"}}>
+        {msg}<br/><span className="muted" style={{fontSize:13}}>click or drop a .vizjson file</span>
+        <input type="file" accept=".json,.vizjson" style={{display:"none"}}
+               onChange={e => e.target.files[0] && loadFile(e.target.files[0])} />
+      </label></div>
+    </div>
+  );
+
+  const cmds = env.commands || [];
+  const seq = (cmds.findIndex(c => c.label === round.command) + 1) || "?";
+
+  return (
+    <div className="app"
+         onDragOver={e => e.preventDefault()}
+         onDrop={e => { e.preventDefault(); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); }}>
+      <Header env={env} cmdText={`● command ${seq}/${cmds.length}: ${round.command}`}
+              mode={mode} setMode={setMode} showAll={showAll} setShowAll={setShowAll}
+              onFile={loadFile} onFit={() => setFitSignal(s => s + 1)} />
+      <div className="main">
+        <GraphView graph={graph} mode={mode} highlights={highlights} env={env} fitSignal={fitSignal} />
+        <Sidebar env={env} rounds={rounds} idx={idx} setIdx={setIdx} round={round}
+                 topoIdx={topoIdx} playing={playing} setPlaying={setPlaying} graph={graph} />
+      </div>
+    </div>
+  );
+}
+
+function Header({ env, cmdText, msg, mode, setMode, showAll, setShowAll, onFile, onFit }) {
+  return (
+    <header>
+      <span className="title">Prologos network</span>
+      <label className="tog" style={{cursor:"pointer"}}>load
+        <input type="file" accept=".json,.vizjson" style={{display:"none"}}
+               onChange={e => e.target.files[0] && onFile(e.target.files[0])} /></label>
+      <span className="cmd muted">{cmdText || msg}</span>
+      <span style={{flex:1}} />
+      {env && <>
+        <label>layout <select value={mode} onChange={e => setMode(e.target.value)}>
+          <option value="force">force-directed (live)</option>
+          <option value="layered">layered</option>
+        </select></label>
+        <label className="tog"><input type="checkbox" checked={showAll}
+          onChange={e => setShowAll(e.target.checked)} /> infrastructure</label>
+        <button onClick={onFit}>fit</button>
+      </>}
+    </header>
+  );
+}
+
+function GraphView({ graph, mode, highlights, env, fitSignal }) {
+  const wrapRef = useRef(null);
+  const nodesRef = useRef(new Map());
+  const simRef = useRef(null);
+  const [, bump] = useState(0);
+  const [view, setView] = useState({ x: 500, y: 350, k: 1 });
+  const [hover, setHover] = useState(null);
+  const [mouse, setMouse] = useState({ x: 0, y: 0 });
+  const dragRef = useRef(null);
+
+  // (re)build the node set + simulation when the topology or mode changes
+  useEffect(() => {
+    if (!graph) return;
+    const cur = nodesRef.current;
+    const nodes = graph.nodes.map(n => {
+      const prev = cur.get(n.key);
+      if (prev) { Object.assign(prev, { label: n.label, color: n.color, kind: n.kind, group: n.group, value: n.value, id: n.id, inputs: n.inputs, outputs: n.outputs }); return prev; }
+      return Object.assign({}, n, { x: (Math.random() - .5) * 240, y: (Math.random() - .5) * 240, vx: 0, vy: 0 });
+    });
+    nodesRef.current = new Map(nodes.map(n => [n.key, n]));
+    if (simRef.current) { simRef.current.stop(); simRef.current = null; }
+    if (mode === "force") {
+      const links = graph.edges.filter(e => e.from !== e.to).map(e => ({ source: e.from, target: e.to }));
+      const sim = d3.forceSimulation(nodes)
+        .force("charge", d3.forceManyBody().strength(-170))
+        .force("link", d3.forceLink(links).id(d => d.key).distance(46).strength(0.5))
+        .force("x", d3.forceX(0).strength(0.045))
+        .force("y", d3.forceY(0).strength(0.045))
+        .force("collide", d3.forceCollide(13))
+        .alpha(0.9).alphaDecay(0.02).velocityDecay(0.32);
+      sim.on("tick", () => bump(t => (t + 1) & 0xffff));
+      simRef.current = sim;
+    } else {
+      const lay = layoutLayered(graph);
+      nodes.forEach(n => { const p = lay.pos.get(n.key); n.x = p.x - lay.width / 2; n.y = p.y - lay.height / 2; });
+      bump(t => (t + 1) & 0xffff);
     }
-    const v = { graph, layout }; cache.set(key, v); return v;
-  }
+    return () => { if (simRef.current) simRef.current.stop(); };
+  }, [graph, mode]);
 
-  function loadEnvelope(obj) {
-    if (obj.vizTrace !== 2) { document.getElementById("cmd").textContent = obj.vizTrace ? "need vizTrace 2 (re-export with the current tool)" : "not a vizTrace file"; return; }
-    env = obj; rounds = timelineRounds(env); changedGlobal = changedCellIdsGlobal(env); cache.clear(); lastTopo = -1;
-    document.getElementById("drop").style.display = "none";
-    const slider = document.getElementById("time"); slider.max = Math.max(0, rounds.length - 1); slider.value = 0; idx = 0;
-    showFrame(0); fitView(true); drawSpark();
-  }
-
-  function showFrame(i) {
-    idx = i; const r = rounds[i]; const { graph, layout } = gl(r.topo);
-    const cmds = env.commands || [];
-    const seq = (cmds.findIndex(c => c.label === r.command) + 1) || "?";
-    document.getElementById("cmd").textContent = `● command ${seq}/${cmds.length}: ${r.command}`;
-    document.getElementById("timeLabel").textContent = `round ${r.roundNumber} (${i + 1}/${rounds.length})`;
-    const st = env.topologies[r.topo].topology.stats;
-    document.getElementById("sFired").textContent = r.propagatorsFired.length;
-    document.getElementById("sWrites").textContent = (r.cellDiffs || []).length;
-    document.getElementById("sNet").textContent = `${st.totalCells} cells · ${st.totalPropagators} props`;
-    document.getElementById("sRound").textContent = `${i + 1} / ${rounds.length}`;
-    const dd = document.getElementById("diffs");
-    if (!(r.cellDiffs || []).length) dd.innerHTML = `<span class="muted">no cell writes this round</span>`;
-    else dd.innerHTML = r.cellDiffs.map(d => {
-      const id = env.topologies[r.topo].identity || {};
-      const wk = (id.wellKnownCells || {})[String(d.cellId)];
-      return `<div class="diff-row">${esc(wk || "c" + d.cellId)}: ${esc(trim(d.oldValue))} → ${esc(trim(d.newValue))}` +
-             `<br><span class="src">by ${esc(trim(propLabel(d.sourcePropagator, id, env.source)))}</span></div>`;
-    }).join("");
-    if (r.topo !== lastTopo) { fitView(false); lastTopo = r.topo; }
-    draw(); drawSpark();
-  }
-
-  function curGL() { return gl(rounds[idx].topo); }
-  function bornKeys() {
-    if (idx === 0) return new Set(topoNodeKeys(env, rounds[0].topo));
-    const prev = topoNodeKeys(env, rounds[idx - 1].topo), cur = topoNodeKeys(env, rounds[idx].topo);
-    const b = new Set(); for (const k of cur) if (!prev.has(k)) b.add(k); return b;
-  }
-
-  function fitView(all) {
-    const { graph, layout } = curGL();
-    const keys = graph.nodes.map(n => n.key);
-    if (!keys.length) { view = { x: 60, y: 60, k: 1 }; return; }
-    const xs = keys.map(k => layout.pos.get(k).x), ys = keys.map(k => layout.pos.get(k).y);
+  // fit-to-content on demand
+  useEffect(() => {
+    if (!fitSignal || !wrapRef.current) return;
+    const ps = [...nodesRef.current.values()];
+    if (!ps.length) return;
+    const xs = ps.map(p => p.x), ys = ps.map(p => p.y);
     const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
-    const w = canvas.width - 120, h = canvas.height - 120;
-    view.k = Math.min(1.7, Math.max(0.06, Math.min(w / Math.max(maxX - minX, 1), h / Math.max(maxY - minY, 1))));
-    view.x = 60 - minX * view.k + (w - (maxX - minX) * view.k) / 2;
-    view.y = 70 - minY * view.k + (h - (maxY - minY) * view.k) / 2;
+    const r = wrapRef.current.getBoundingClientRect();
+    const k = Math.min(2, Math.max(0.05, Math.min((r.width - 120) / Math.max(maxX - minX, 1), (r.height - 120) / Math.max(maxY - minY, 1))));
+    setView({ k, x: r.width / 2 - (minX + maxX) / 2 * k, y: r.height / 2 - (minY + maxY) / 2 * k });
+  }, [fitSignal]);
+
+  const onWheel = e => {
+    const r = wrapRef.current.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+    const f = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    setView(v => { const k = Math.max(0.04, Math.min(5, v.k * f)); return { k, x: mx - (mx - v.x) * (k / v.k), y: my - (my - v.y) * (k / v.k) }; });
+  };
+  const onDown = e => { dragRef.current = { x: e.clientX - view.x, y: e.clientY - view.y }; };
+  const onMove = e => {
+    const r = wrapRef.current.getBoundingClientRect();
+    setMouse({ x: e.clientX - r.left, y: e.clientY - r.top });
+    if (dragRef.current) setView(v => ({ ...v, x: e.clientX - dragRef.current.x, y: e.clientY - dragRef.current.y }));
+  };
+  const onUp = () => { dragRef.current = null; };
+
+  if (!graph) return <div className="graphwrap" ref={wrapRef} />;
+  const nmap = nodesRef.current;
+  const { fired, wrote, born } = highlights;
+  const k = view.k, iw = w => w / k;
+
+  return (
+    <div className="graphwrap" ref={wrapRef} onWheel={onWheel} onMouseDown={onDown}
+         onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={() => { onUp(); setHover(null); }}>
+      <svg>
+        <g transform={`translate(${view.x},${view.y}) scale(${k})`}>
+          {graph.edges.map((e, i) => {
+            const a = nmap.get(e.from), b = nmap.get(e.to); if (!a || !b) return null;
+            if (e.kind === "containment")
+              return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#c586c0"
+                           strokeWidth={iw(1.1)} strokeDasharray={`${iw(5)},${iw(4)}`} />;
+            const live = fired.has(e.pid);
+            if (e.from === e.to)
+              return <circle key={i} cx={a.x + 10} cy={a.y - 10} r="9" fill="none"
+                             stroke={live ? "#4ec9b0" : "#3a3a3a"} strokeWidth={iw(live ? 2.4 : 0.8)} />;
+            return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                         stroke={live ? "#4ec9b0" : "#3a3a3a"} strokeWidth={iw(live ? 2.4 : 0.8)} />;
+          })}
+          {graph.nodes.map(n0 => {
+            const n = nmap.get(n0.key); if (!n) return null;
+            const isFired = n.kind === "prop" && fired.has(n.id);
+            const wroteN = wrote.has(n.key), bornN = born.has(n.key);
+            const stroke = isFired ? "#ff6b6b" : bornN ? "#4ec9b0" : wroteN ? "#e9c46a" : "#222";
+            const sw = iw(isFired || bornN || wroteN ? 2.6 : 1);
+            const fill = wroteN ? "#e9c46a" : n.color;
+            return (
+              <g key={n.key} onMouseEnter={() => setHover(n)} style={{ cursor: "pointer" }}>
+                {n.kind === "cell"
+                  ? <circle cx={n.x} cy={n.y} r="8" fill={fill} stroke={stroke} strokeWidth={sw} />
+                  : <polygon points={`${n.x},${n.y-9} ${n.x+9},${n.y} ${n.x},${n.y+9} ${n.x-9},${n.y}`}
+                             fill={fill} stroke={stroke} strokeWidth={sw} />}
+                {k > 0.4 &&
+                  <text x={n.x + 12} y={n.y + 4} fontSize={iw(11)} fill={n.kind === "prop" ? "#bcd" : "#bbb"}
+                        style={{ pointerEvents: "none" }}>
+                    {n.label.length > 26 ? n.label.slice(0, 25) + "…" : n.label}</text>}
+              </g>
+            );
+          })}
+        </g>
+      </svg>
+      {hover && <Tooltip node={hover} env={env} x={mouse.x} y={mouse.y} />}
+    </div>
+  );
+}
+
+function Tooltip({ node, env, x, y }) {
+  let text;
+  if (node.kind === "cell") text = `cell ${node.id} (${node.group})\nvalue: ${node.value}`;
+  else {
+    const id = (env.topologies.find(t => (t.identity.propagatorSrclocs || {})[String(node.id)]) || {}).identity || {};
+    const sl = (id.propagatorSrclocs || {})[String(node.id)];
+    text = `propagator ${node.id}\n${node.label}` +
+      (sl ? `\n${sl.replace(/#\(struct:srcloc\s+/, "").replace(/\)$/, "")}` : "") +
+      `\nreads ${node.inputs.length}, writes ${node.outputs.length}`;
   }
+  return <div className="tooltip" style={{ left: x + 14, top: y + 14 }}>{text}</div>;
+}
 
-  function draw() {
-    if (!env) return; const r = rounds[idx], { graph, layout } = curGL();
-    ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.save(); ctx.translate(view.x, view.y); ctx.scale(view.k, view.k);
-    const fired = new Set(r.propagatorsFired), born = bornKeys(), changed = new Set((r.cellDiffs || []).map(d => "c" + d.cellId));
-    for (const e of graph.edges) {
-      const a = layout.pos.get(e.from), b = layout.pos.get(e.to); if (!a || !b) continue;
-      if (e.kind === "containment") {  // reduction DAG — dashed violet, parent→child
-        ctx.strokeStyle = "#c586c0"; ctx.lineWidth = 1.1 / view.k; ctx.setLineDash([5 / view.k, 4 / view.k]);
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]);
-        continue;
-      }
-      const live = fired.has(e.pid);
-      ctx.strokeStyle = live ? "#4ec9b0" : "#3a3a3a"; ctx.lineWidth = (live ? 2.4 : 0.8) / view.k;
-      ctx.beginPath();
-      if (e.from === e.to) ctx.arc(a.x + 10, a.y - 10, 9, 0, Math.PI * 2);
-      else { ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); } ctx.stroke();
-      if (live && e.from !== e.to) { const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L, hx = b.x - ux * 11, hy = b.y - uy * 11;
-        ctx.fillStyle = "#4ec9b0"; ctx.beginPath(); ctx.moveTo(b.x - ux * 3, b.y - uy * 3); ctx.lineTo(hx - uy * 4, hy + ux * 4); ctx.lineTo(hx + uy * 4, hy - ux * 4); ctx.closePath(); ctx.fill(); }
-    }
-    const fp = Math.max(8, 11 / view.k); ctx.font = `${fp}px ui-monospace, monospace`;
-    for (const n of graph.nodes) {
-      const p = layout.pos.get(n.key); const isFired = n.kind === "prop" && fired.has(n.id), wrote = changed.has(n.key), isBorn = born.has(n.key);
-      ctx.beginPath();
-      if (n.kind === "cell") ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
-      else { ctx.moveTo(p.x, p.y - 9); ctx.lineTo(p.x + 9, p.y); ctx.lineTo(p.x, p.y + 9); ctx.lineTo(p.x - 9, p.y); ctx.closePath(); }
-      ctx.fillStyle = wrote ? "#e9c46a" : n.color; ctx.fill();
-      ctx.strokeStyle = isFired ? "#ff6b6b" : isBorn ? "#4ec9b0" : wrote ? "#e9c46a" : "#222";
-      ctx.lineWidth = (isFired || isBorn || wrote ? 2.6 : 1) / view.k; ctx.stroke();
-      if (view.k > 0.4) { ctx.fillStyle = n.kind === "prop" ? "#bcd" : "#bbb"; const lab = n.label.length > 30 ? n.label.slice(0, 29) + "…" : n.label; ctx.fillText(lab, p.x + 12, p.y + 4); }
-    }
-    ctx.restore();
-  }
+function Sidebar({ env, rounds, idx, setIdx, round, topoIdx, playing, setPlaying, graph }) {
+  const st = env.topologies[topoIdx].topology.stats;
+  const id = env.topologies[topoIdx].identity || {};
+  const series = useMemo(() => rounds.map(r => env.topologies[r.topo].topology.stats), [env, rounds]);
+  const maxP = Math.max(1, ...series.map(s => s.totalPropagators));
+  const W = 318, H = 46;
+  const path = series.map((s, i) => `${i ? "L" : "M"}${(i / Math.max(series.length - 1, 1) * W).toFixed(1)},${(H - s.totalPropagators / maxP * (H - 4) - 2).toFixed(1)}`).join("");
+  const px = idx / Math.max(series.length - 1, 1) * W;
+  const cont = (env.topologies[topoIdx].containment || []).length;
 
-  function drawSpark() {
-    if (!rounds.length) return; const Wd = spark.width = spark.clientWidth, Hd = spark.height = spark.clientHeight; sctx.clearRect(0, 0, Wd, Hd);
-    const series = rounds.map(r => env.topologies[r.topo].topology.stats);
-    const maxC = Math.max(1, ...series.map(s => s.totalCells)), maxP = Math.max(1, ...series.map(s => s.totalPropagators));
-    const plot = (key, max, color) => { sctx.strokeStyle = color; sctx.lineWidth = 1.5; sctx.beginPath();
-      series.forEach((s, i) => { const x = i / Math.max(series.length - 1, 1) * Wd, y = Hd - (s[key] / max) * (Hd - 4) - 2; i ? sctx.lineTo(x, y) : sctx.moveTo(x, y); }); sctx.stroke(); };
-    plot("totalCells", maxC, "#888"); plot("totalPropagators", maxP, "#569cd6");
-    const x = idx / Math.max(series.length - 1, 1) * Wd; sctx.strokeStyle = "#e9c46a"; sctx.beginPath(); sctx.moveTo(x, 0); sctx.lineTo(x, Hd); sctx.stroke();
-  }
+  return (
+    <div className="side">
+      <h3>execution timeline</h3>
+      <div className="timeRow">
+        <button onClick={() => setPlaying(p => !p)}>{playing ? "⏸" : "▶"}</button>
+        <input type="range" min="0" max={rounds.length - 1} value={idx}
+               onChange={e => { setPlaying(false); setIdx(+e.target.value); }} />
+      </div>
+      <div className="muted">round {round.roundNumber} ({idx + 1}/{rounds.length})</div>
+      <h3>scheduler</h3>
+      <svg width={W} height={H} style={{ background: "#1e1e1e", border: "1px solid #333", borderRadius: 4 }}>
+        <path d={path} fill="none" stroke="#569cd6" strokeWidth="1.5" />
+        <line x1={px} y1="0" x2={px} y2={H} stroke="#e9c46a" />
+      </svg>
+      <div className="stat"><span>fired this round</span><b>{round.propagatorsFired.length}</b></div>
+      <div className="stat"><span>cells written</span><b>{(round.cellDiffs || []).length}</b></div>
+      <div className="stat"><span>network now</span><b>{st.totalCells}c · {st.totalPropagators}p</b></div>
+      {cont > 0 && <div className="stat"><span>containment edges</span><b>{cont}</b></div>}
+      <h3>cell writes this round</h3>
+      <div className="diffs">
+        {(round.cellDiffs || []).length === 0
+          ? <span className="muted">no cell writes this round</span>
+          : round.cellDiffs.map((d, i) => {
+              const wk = (id.wellKnownCells || {})[String(d.cellId)];
+              return <div className="diff-row" key={i}>
+                {wk || "c" + d.cellId}: {trim(d.oldValue)} → {trim(d.newValue)}
+                <br /><span className="src">by {trim(propLabel(d.sourcePropagator, id, env.source))}</span>
+              </div>;
+            })}
+      </div>
+      <h3>legend</h3>
+      <Legend graph={graph} />
+    </div>
+  );
+}
 
-  function buildLegend() {
-    const { graph } = curGL(); const groups = new Map();
-    for (const n of graph.nodes) if (n.kind === "cell" && !groups.has(n.group)) groups.set(n.group, n.color);
-    document.getElementById("legend").innerHTML =
-      `<div class="legend-item"><span class="swatch" style="background:#569cd6;border-radius:0;transform:rotate(45deg)"></span>propagator (◇, label=source)</div>` +
-      `<div class="legend-item"><span class="swatch" style="background:#c586c0;border-radius:0;height:2px"></span>containment (reduction DAG, dashed)</div>` +
-      `<div class="legend-item"><span class="swatch" style="background:#ff6b6b"></span>fired this round</div>` +
-      `<div class="legend-item"><span class="swatch" style="background:#e9c46a"></span>value written</div>` +
-      `<div class="legend-item"><span class="swatch" style="background:#4ec9b0"></span>newly created</div>` +
-      [...groups].slice(0, 10).map(([g, c]) => `<div class="legend-item"><span class="swatch" style="background:${c}"></span>${esc(g)}</div>`).join("");
-  }
+function Legend({ graph }) {
+  const groups = new Map();
+  for (const n of graph.nodes) if (n.kind === "cell" && !groups.has(n.group)) groups.set(n.group, n.color);
+  const sw = (c, extra) => <span className="swatch" style={{ background: c, ...extra }} />;
+  return <div>
+    <div className="legend-item">{sw("#569cd6", { borderRadius: 0, transform: "rotate(45deg)" })}propagator (◇, label=source)</div>
+    <div className="legend-item">{sw("#c586c0", { borderRadius: 0, height: 2 })}containment (reduction DAG, dashed)</div>
+    <div className="legend-item">{sw("#ff6b6b")}fired this round</div>
+    <div className="legend-item">{sw("#e9c46a")}value written</div>
+    <div className="legend-item">{sw("#4ec9b0")}newly created</div>
+    {[...groups].slice(0, 10).map(([g, c]) => <div className="legend-item" key={g}>{sw(c)}{g}</div>)}
+  </div>;
+}
 
-  function trim(s) { s = String(s); return s.length > 44 ? s.slice(0, 41) + "…" : s; }
-  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
-  function resize() { canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; draw(); }
-  window.addEventListener("resize", () => { resize(); drawSpark(); });
+function trim(s) { s = String(s); return s.length > 44 ? s.slice(0, 41) + "…" : s; }
 
-  let drag = null;
-  canvas.addEventListener("mousedown", e => drag = { x: e.offsetX - view.x, y: e.offsetY - view.y });
-  window.addEventListener("mouseup", () => drag = null);
-  canvas.addEventListener("mousemove", e => {
-    if (drag) { view.x = e.offsetX - drag.x; view.y = e.offsetY - drag.y; draw(); return; }
-    if (!env) return; const { graph, layout } = curGL(); const gx = (e.offsetX - view.x) / view.k, gy = (e.offsetY - view.y) / view.k;
-    let hit = null; for (const n of graph.nodes) { const p = layout.pos.get(n.key); if (Math.abs(p.x - gx) < 11 && Math.abs(p.y - gy) < 11) { hit = n; break; } }
-    if (hit) { tooltip.style.display = "block"; tooltip.style.left = (e.offsetX + 14) + "px"; tooltip.style.top = (e.offsetY + 14) + "px";
-      const id = env.topologies[rounds[idx].topo].identity || {};
-      if (hit.kind === "cell") tooltip.textContent = `cell ${hit.id} (${hit.group})\nvalue: ${hit.value}`;
-      else { const sl = (id.propagatorSrclocs || {})[String(hit.id)]; tooltip.textContent = `propagator ${hit.id}\n${hit.label}` + (sl ? `\n${sl.replace(/#\(struct:srcloc\s+/, "").replace(/\)$/, "")}` : "") + `\nreads ${hit.inputs.length}, writes ${hit.outputs.length}`; }
-    } else tooltip.style.display = "none";
-  });
-  canvas.addEventListener("wheel", e => { e.preventDefault(); const f = e.deltaY < 0 ? 1.15 : 1 / 1.15; const gx = (e.offsetX - view.x) / view.k, gy = (e.offsetY - view.y) / view.k; view.k *= f; view.x = e.offsetX - gx * view.k; view.y = e.offsetY - gy * view.k; draw(); }, { passive: false });
-
-  function loadFile(f) { f.text().then(t => loadEnvelope(JSON.parse(t))); }
-  document.getElementById("file").addEventListener("change", e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
-  const wrap = document.getElementById("canvasWrap");
-  wrap.addEventListener("dragover", e => e.preventDefault());
-  wrap.addEventListener("drop", e => { e.preventDefault(); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
-  document.getElementById("time").addEventListener("input", e => { showFrame(+e.target.value); buildLegend(); });
-  document.getElementById("fit").addEventListener("click", () => { fitView(false); draw(); });
-  document.getElementById("layout").addEventListener("change", e => { mode = e.target.value; cache.clear(); lastTopo = -1; showFrame(idx); fitView(false); draw(); buildLegend(); });
-  document.getElementById("showAll").addEventListener("change", e => { showAll = e.target.checked; cache.clear(); lastTopo = -1; showFrame(idx); fitView(false); draw(); buildLegend(); });
-  document.getElementById("play").addEventListener("click", () => {
-    const btn = document.getElementById("play");
-    if (playing) { clearInterval(playing); playing = null; btn.textContent = "▶"; return; }
-    btn.textContent = "⏸";
-    playing = setInterval(() => { if (idx + 1 >= rounds.length) { clearInterval(playing); playing = null; btn.textContent = "▶"; return; } document.getElementById("time").value = idx + 1; showFrame(idx + 1); }, 700);
-  });
-  resize();
-  const _orig = loadEnvelope; loadEnvelope = obj => { _orig(obj); buildLegend(); };
-})();
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
 </script>
 </body>
 </html>
