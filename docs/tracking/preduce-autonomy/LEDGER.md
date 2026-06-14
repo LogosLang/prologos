@@ -1417,3 +1417,26 @@ Entry template:
   (`reduction.rkt`). Track 8 (e-graph as the engine) is the anticipated future.
 - Golden test green; exporter compiles.
 - **Landed in**: (this commit)
+
+## 2026-06-14 — LOOP (PReduce Track 8 plan) Phases 0-1 — [SIGNIFICANT, owner directive] on-network reduction is the ONLY path; native deleted
+- **Owner directive**: "flip it and delete the native version (prototype branch
+  so it's safe)" + "any tests hardcoded to this part should be ported or thrown."
+- **Phase 0**: acceptance file examples/2026-06-14-onnetwork-reduction.prologos
+  (0-error, exercises β/ι/δ/int-folds; 155 rounds/71 topologies on-network).
+  Baseline: full suite with PREDUCE_INGEST=1 = 8669 ALL PASS → flipping the
+  default breaks nothing (de-risked the deletion). Ingest hooks scope-locked.
+- **Phase 1 (upgraded to native-deletion)**: removed the
+  current-preduce-ingest?/-int-folds? parameter gate; de-gated the β/ι(nat-val,
+  suc)/δ ingest arms (now unconditional); DELETED the duplicate native arms for
+  β, ι, int+/-/*. Non-duplicate native rules (div/mod/cmp, fst/snd/boolrec/J,
+  constructor-fvar canonical) kept — not off-network duplicates. SAFE because
+  preduce-ingest-{delta,int} degrade to the exact native step (#:compute/op-fn)
+  when the e-graph infra is absent (verified: preduce-ingest-delta cond falls to
+  (compute)). Removed PREDUCE_INGEST env (driver) + #:reduce?/--reduce/--no-reduce
+  (viz-export). Ported test-preduce-ingest.rkt (param wrappers stripped, e-graph
+  assertions kept — they now test the only path); deleted obsolete on/off micro-
+  benchmark. GATE: full suite 8671 ALL PASS (406.7s). Absorbs part of Phase 5
+  (native compute arms gone; whnf still drives — full whnf-bypass is later).
+- Commits: 1741476 (bench deletion) + the source-edit follow-up + this tracker.
+- NEXT: Phase 2 (rule application as OBSERVABLE propagator firing) — research-
+  grade per the plan; grounding-audit + likely owner checkpoint.

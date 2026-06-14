@@ -90,8 +90,8 @@ Every phase below follows the standing discipline — non-negotiable:
 
 | Phase | Description | Status | Notes |
 |---|---|---|---|
-| 0 | Baseline + acceptance file + scope-lock measurement | ⬜ | full suite + bench with ingest OFF (today) and ON; acceptance `.prologos`; quantify what flipping breaks |
-| 1 | **PReduce ingestion is the production default** (flip `current-preduce-ingest?` → #t; retire the gate) | ⬜ | the "deploy the validated infra" step; full-suite green is the gate; perf regression recorded, not fixed |
+| 0 | Baseline + acceptance file + scope-lock measurement | ✅ | `98e3b35` acceptance file (0-error, 155 rounds); suite ingest-ON baseline = 8669 all-pass (flipping breaks nothing); ingest hooks scope-locked (β/ι/δ/int-folds) |
+| 1 | **On-network reduction is the ONLY path** — native deleted (owner upgraded "flip" → "flip + delete native") | ✅ | `1741476`+`<this>`: removed `current-preduce-ingest?`/`-int-folds?` gate, de-gated β/ι/δ/int ingest arms, deleted duplicate native arms; removed `PREDUCE_INGEST` env + viz `--reduce`/`--no-reduce`; ported `test-preduce-ingest`; deleted on/off micro-bench. **Full suite 8671 ALL PASS (406.7s).** Absorbs part of Phase 5 (native compute arms gone; `whnf` still drives). |
 | 2 | **Rule application becomes observable propagator firing** (un-collapse the atomic ingest; rules fire across BSP rounds on the observed network) | ⬜ | NTT model; Network Reality Check; viz shows redex → rule-fire → result across rounds |
 | 3 | **Compute as propagators** (arithmetic primitive: a propagator reads operand cells, writes result — replacing `(apply op …)` in `instantiate-template`) | ⬜ | NTT model; viz shows `read-A,B → write-C`; `parallel-reduction` reads as real compute-propagation |
 | 4 | **Recursion / β-δ on-network** (the recursion driver becomes propagator-driven rewriting; `fib`→`fib` unfolding on the network) | ⬜ | hardest; likely needs a design panel; viz shows fib's recursion as propagators |
