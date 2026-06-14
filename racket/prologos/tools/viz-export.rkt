@@ -134,14 +134,18 @@
 
 ;; viz-export-file : path (-> hasheq) — runs FILE, returns the envelope jsexpr.
 ;; #:reduce? activates on-network reduction (PReduce ingestion) so functional
-;; reduction (β/δ/ι) runs as e-graph propagators instead of the off-network
-;; recursive reducer — the difference between a 1-round fold and watching a
-;; balanced arithmetic tree reduce 256-wide in parallel. Default off (matches
-;; the production default; this is the visualization's experiment switch).
+;; reduction (β/δ/ι) runs as e-graph propagators (PReduce on-network reduction:
+;; redex⇒result rewrites become union propagators on the network — DPO rewriting
+;; on the propagator substrate, PRN §2) instead of the off-network recursive
+;; reducer leaving an invisible 1-round fold.
+;; BRANCH DIRECTIVE (owner, 2026-06-14): this is a prototype branch for showing
+;; how the viz works for a FUTURE propagator-native Prologos, built on the
+;; PReduce on-network-reduction prototype. On this branch we ALWAYS use
+;; on-network reduction — so it defaults ON here. `--no-reduce` disables.
 (define (viz-export-file src-path
                          #:max-diffs [max-diffs 50000]
                          #:max-rounds [max-rounds 5000]
-                         #:reduce? [reduce? #f])
+                         #:reduce? [reduce? #t])
   (define-values (bsp-observe bsp-get-rounds) (make-trace-accumulator))
   (define round-times (box '()))   ;; reversed; one ts per observed round
   (define (timed-observer r)
@@ -287,10 +291,12 @@
   (define src (findf (lambda (a) (not (string-prefix? a "-"))) args))
   (define out (flag-val "-o" args))
   (define validate? (member "--validate" args))
-  (define reduce? (and (member "--reduce" args) #t))
+  ;; On-network (PReduce) reduction is the BRANCH DEFAULT (see viz-export-file).
+  ;; --no-reduce falls back to the off-network recursive reducer (records nothing).
+  (define reduce? (not (member "--no-reduce" args)))
   (unless src
-    (eprintf "usage: racket tools/viz-export.rkt FILE.prologos -o out.json [--reduce] [--max-diffs N] [--max-rounds N] [--validate]\n")
-    (eprintf "  --reduce : run functional reduction on-network (β/δ/ι as e-graph propagators)\n")
+    (eprintf "usage: racket tools/viz-export.rkt FILE.prologos -o out.json [--no-reduce] [--max-diffs N] [--max-rounds N] [--validate]\n")
+    (eprintf "  on-network (propagator-native) reduction is ON by default on this branch; --no-reduce disables it\n")
     (exit 1))
   (define envelope
     (viz-export-file src

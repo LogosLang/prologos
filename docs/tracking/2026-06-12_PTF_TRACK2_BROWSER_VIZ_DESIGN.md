@@ -10,6 +10,46 @@ system works for arbitrary prologos programs."
 see `docs/tracking/2026-03-12_PROPAGATOR_VISUALIZATION_DESIGN.md` +
 `2026-03-12_PROPAGATOR_OBSERVATORY.md`.
 
+## BRANCH DIRECTIVE — on-network reduction is the target (owner, 2026-06-14)
+
+**Written down per owner direction.** This is a **prototype branch for showing
+how the visualization works for a FUTURE, propagator-native Prologos.** It is
+built on top of the **PReduce on-network-reduction prototype**. Therefore:
+
+1. **On-network reduction is ALWAYS used on this branch.** The viz exporter
+   defaults reduction to on-network (`#:reduce? #t`; `--no-reduce` to opt out).
+   Functional reduction is run through the PReduce e-graph, not the
+   off-network recursive reducer. (Done: `viz-export.rkt`, 2026-06-14.)
+2. **The visualization is based on, and shows, propagator-based reduction.**
+   That is the whole point — the viz exists to make the propagator-native
+   execution visible.
+
+**What "propagator-based reduction" IS today, precisely** (so the directive is
+honest about the prototype's current reach):
+
+- **ON-network now**: each reduction STEP — a redex ⇒ result rewrite — is
+  applied to the e-graph as a **union propagator** (`eclass-union`,
+  `eclass-graph.rkt`). This is **DPO rewriting on the propagator substrate**,
+  which the PReduce series confirmed (PRN Master, Confirmed Findings §2). So
+  the union propagators the viz shows ARE the reductions, applied on-network.
+  The e-graph's structural sharing (hashcons) makes it the propagator-native,
+  automatically-memoizing reduction engine the vision calls for.
+- **NOT-yet on-network** (the gap a fully propagator-native future closes, and
+  which the viz will surface MORE of as PReduce matures): (a) the **RHS value
+  computation** — instantiating a rule's result (e.g. `377+233=610`) is still a
+  function (`instantiate-template`, `rule-dispatch.rkt:apply-rule`), not a
+  compute-propagator reading operands and writing the sum; (b) the **recursion
+  driver** — `fib` calling `fib` is still the recursive reducer
+  (`reduction.rkt`). Track 8 (e-graph as the reduction ENGINE, retiring
+  `reduction.rkt`) is the future work this prototype anticipates.
+
+**Consequence for the viz**: with on-network reduction the default, the viewer
+shows the reduction-as-rewriting (the union steps + the e-class DAG). As the
+RHS-compute and recursion driver move on-network in future PReduce work, those
+will appear as additional propagators with no viewer change required — the
+viewer renders whatever propagators the trace contains. The viz is the
+instrument that will make that progression visible.
+
 ## Progress Tracker
 
 | Phase | Description | Status | Notes |

@@ -1400,3 +1400,20 @@ Entry template:
   a sequencing ruling, exactly as this arc began. Reversal path: trivial
   (run the one-liner).
 - **Landed in**: (this commit)
+
+## 2026-06-14 — [SIGNIFICANT, owner directive] On-network reduction is the BRANCH DEFAULT; the viz targets propagator-based reduction
+- **Owner direction (verbatim intent)**: this is a prototype branch for showing
+  how the viz works for a FUTURE propagator-native Prologos, built on the
+  PReduce on-network-reduction prototype. On this branch we ALWAYS use the
+  on-network (PReduce) reduction; the visualization is based on / shows that
+  propagator-based reduction. "Write that down."
+- **Done**: `viz-export.rkt` flips `#:reduce?` default to #t (on-network
+  reduction ON by default; `--no-reduce` opts out). Directive written into
+  `docs/tracking/2026-06-12_PTF_TRACK2_BROWSER_VIZ_DESIGN.md` § BRANCH DIRECTIVE.
+- **Honesty recorded in the directive** (the precise reach of "propagator-based
+  reduction" today): reduction STEPS (redex⇒result) ARE on-network as union
+  propagators = DPO rewriting (PRN §2 confirmed); NOT-yet-on-network = the RHS
+  value compute (`instantiate-template`) + the recursion driver
+  (`reduction.rkt`). Track 8 (e-graph as the engine) is the anticipated future.
+- Golden test green; exporter compiles.
+- **Landed in**: (this commit)
