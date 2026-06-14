@@ -5,7 +5,8 @@
 ;; and land the same answers, with the classes observable afterward; the hook is
 ;; TOTAL (degrades to the native step when the e-graph infra is absent).
 (require rackunit racket/set
-         (only-in "../rule-dispatch.rkt" guard-skip-count reset-guard-skip-count!)
+         (only-in "../rule-dispatch.rkt"
+                  guard-skip-count reset-guard-skip-count! process-dispatch-requests)
          "../reduction.rkt"
          "../syntax.rkt"
          "../eclass-graph.rkt"
@@ -49,6 +50,34 @@
   (whnf (expr-int-add (expr-int 1) (expr-int 2)))
   (check-equal? (hash-count (net-cell-read (unbox prn-box) hc)) n-classes-before
                 "re-ingestion of the same position is a memo hit"))
+
+;; ---- Phase 2 (PReduce Track 8): dispatch as a STRATUM FIRING ----
+;; The arithmetic rewrite is performed by the dispatch stratum handler
+;; (process-dispatch-requests), NOT an imperative dispatch-rules call. Intern a
+;; redex WITHOUT dispatching, then run the handler directly on a pending request:
+;; it must land the fold and clear the request cell (the entry-reset idiom).
+(parameterize ([current-rule-registry-cell-id #f]
+               [current-eclass-hashcons-cell-id #f]
+               [current-persistent-registry-net-box (box (make-prop-network))])
+  (define pb (current-persistent-registry-net-box))
+  (init-rule-registry-cell! pb)
+  (set-box! pb (run-to-quiescence
+                (register-arithmetic-seed! (unbox pb)
+                                           (current-rule-registry-cell-id))))
+  (init-eclass-hashcons-cell! pb)
+  (define hc (current-eclass-hashcons-cell-id))
+  (define form (list 'int+ (list 'lit 2) (list 'lit 3)))
+  (define-values (n1 cid _d) (eclass-intern (unbox pb) hc form #:cost 5))
+  ;; pre-dispatch: the class best is still the UNREDUCED redex
+  (check-equal? (hash-ref (eclass-read n1 cid) ':best) (cons 5 form)
+                "pre-dispatch: best is the unreduced redex")
+  ;; the STRATUM HANDLER performs the rewrite (proving dispatch is on-network)
+  (define n2 (process-dispatch-requests n1 (hash cid #t)))
+  (check-equal? (hash-ref (eclass-read n2 cid) ':best) (cons 1 '(lit 5))
+                "the dispatch stratum handler folded 2+3=5 into the class best")
+  ;; the handler cleared the request cell at entry (re-entrancy guard)
+  (check-true (hash-empty? (net-cell-read n2 dispatch-request-cell-id))
+              "the handler cleared the dispatch-request cell at entry"))
 
 ;; ---- δ-memo: {body, whnf(body)} as one e-class ----
 (parameterize ([current-rule-registry-cell-id #f]
