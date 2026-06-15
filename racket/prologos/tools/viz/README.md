@@ -43,8 +43,10 @@ python3 tools/viz/extract-song-timings.py 'https://youtu.be/VIDEO' \
 # from a local audio file:
 python3 tools/viz/extract-song-timings.py mysong.mp3 -o mysong.timings.json
 
-# tune: lower --threshold = more hits; --min-gap = min seconds between hits
-python3 tools/viz/extract-song-timings.py in.wav -o out.json --threshold 1.4 --min-gap 0.08
+# tune: lower --threshold = more hits; --min-gap = min seconds between hits;
+# --hifreq weights onsets toward high frequencies to isolate bright
+# mallet/xylophone/glockenspiel hits from bass/kick/vocals:
+python3 tools/viz/extract-song-timings.py in.wav -o out.json --threshold 2.0 --min-gap 0.12 --hifreq
 ```
 
 Dependencies: `numpy`, `ffmpeg` on PATH (`pip install static-ffmpeg` provides a
@@ -67,6 +69,13 @@ music-sync feature is testable out of the box:
 
 Load a vizTrace, then load those two files in the **music-synced playback**
 panel and press play.
+
+It also ships real onsets for the original request song:
+
+- `examples/praise-the-lamb.timings.json` — 1549 `--hifreq` hits extracted from
+  *Cult of the Lamb — Praise the Lamb* (`https://youtu.be/PoH5hC5PzSQ`). The
+  audio itself isn't committed (copyright); pair this timings file with your own
+  copy of the track in the music panel.
 
 ## Headless checks
 

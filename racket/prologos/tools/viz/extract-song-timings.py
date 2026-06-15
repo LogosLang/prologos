@@ -66,12 +66,14 @@ def decode_pcm(path):
     return x
 
 
-def detect_onsets(x, threshold=1.5, min_gap=0.06, hop=512, win=1024):
+def detect_onsets(x, threshold=1.5, min_gap=0.06, hop=512, win=1024, hifreq=False):
     """Spectral-flux onset detection tuned for sharp percussive hits.
 
     Returns a sorted list of onset times in seconds. `threshold` scales the
     adaptive (local-mean + std) picking threshold; `min_gap` is the minimum
-    seconds between consecutive onsets.
+    seconds between consecutive onsets. With `hifreq`, the flux is weighted
+    toward high frequencies — bright mallet/xylophone/glockenspiel hits sit
+    there, so this isolates the melodic-percussion line from bass/kick/vocals.
     """
     import numpy as np
     if len(x) < win:
@@ -85,7 +87,14 @@ def detect_onsets(x, threshold=1.5, min_gap=0.06, hop=512, win=1024):
         mags[i] = np.abs(np.fft.rfft(frame))
     # spectral flux: sum of positive bin-to-bin magnitude increases
     diff = np.diff(mags, axis=0)
-    flux = np.maximum(diff, 0.0).sum(axis=1)
+    pos = np.maximum(diff, 0.0)
+    if hifreq:
+        n_bins = pos.shape[1]
+        freqs = np.arange(n_bins) * (SR / 2) / (n_bins - 1)
+        wt = (freqs >= 1500).astype("float32")   # emphasize > ~1.5 kHz (mallet range)
+        flux = (pos * wt).sum(axis=1)
+    else:
+        flux = pos.sum(axis=1)
     flux = np.concatenate([[0.0], flux])
     if flux.max() > 0:
         flux = flux / flux.max()
@@ -118,6 +127,8 @@ def main():
     ap.add_argument("-o", "--out", default="song.timings.json", help="output timings JSON")
     ap.add_argument("--threshold", type=float, default=1.5, help="onset sensitivity (lower = more hits)")
     ap.add_argument("--min-gap", type=float, default=0.06, help="min seconds between hits")
+    ap.add_argument("--hifreq", action="store_true",
+                    help="weight onsets toward high freqs (isolate bright mallet/xylophone hits)")
     ap.add_argument("--keep-audio", metavar="PATH", help="also save the decoded/downloaded audio here")
     ap.add_argument("--cookies-from-browser", help="pass to yt-dlp if YouTube demands sign-in (e.g. chrome, firefox)")
     args = ap.parse_args()
@@ -135,7 +146,7 @@ def main():
             sys.exit(f"audio not found: {audio}")
         x = decode_pcm(audio)
         dur = len(x) / SR
-        hits = detect_onsets(x, threshold=args.threshold, min_gap=args.min_gap)
+        hits = detect_onsets(x, threshold=args.threshold, min_gap=args.min_gap, hifreq=args.hifreq)
         print(f"[extract] {dur:.1f}s audio → {len(hits)} hits "
               f"({len(hits) / dur:.1f}/s)", file=sys.stderr)
         doc = {
@@ -145,6 +156,7 @@ def main():
             "durationSec": round(dur, 3),
             "threshold": args.threshold,
             "minGap": args.min_gap,
+            "hifreq": args.hifreq,
             "count": len(hits),
             "hits": hits,
         }
