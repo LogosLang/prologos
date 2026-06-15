@@ -1625,3 +1625,40 @@ Entry template:
 - NEXT (staged): migrate more constructs into whnf-step1 (arith/reduce/δ via
   demand+compute) so 5c routing is meaningful; then 5c deploy (parity-gated); 5d
   set-latch demand; terminal owner-gated.
+
+## 2026-06-15 — LOOP (PReduce Track 8) Phase 5c — [SIGNIFICANT, owner directive] the cascade is the DEFAULT reduction driver; off-network DRIVER deleted (compute leaf kept)
+- **Owner**: "/loop implement through phase 5 including deletion of off-network
+  reduction" → calibrated to "Delete the recursive off-network DRIVER, keep the
+  compute leaf" (AskUserQuestion 2026-06-15).
+- **Routing hook + deploy** (`12d4131`, `568ef07`, `c98d3a9`): `current-egraph-whnf?`
+  default flipped ON — `whnf` routes through the scheduler-driven cascade
+  (whnf-via-egraph-network) by default. The BSP scheduler now DRIVES ground
+  reduction; the recursive native reducer is no longer the default path. De-routing
+  helper `whnf-native` (parameterize#f) prevents the native fallback re-entering the
+  cascade. PREDUCE_NATIVE=1 forces native.
+- **batch 1 (int arith)** + **batch 2 (reduce/match, δ, meta)** migrated to
+  whnf-step1 (the driver classifier); the rest (rat/posit/quire/generic arith,
+  maps/pvec/set, FFI) ride 'native → the COMPUTE LEAF (native compute, "compute
+  inside the rule").
+- **GATE: full suite with the cascade as DEFAULT = 8750 ALL PASS (386.9s, ~15%
+  over native 335s)** — every reduction value correct. The one routed-suite failure
+  (test-preduce-ingest, 4a-recording-structure assertions) pinned PREDUCE_NATIVE
+  (it tests the path routing replaces).
+- **Two fundamental LIMITS found (honest, architectural — not gaps)**:
+  1. **Non-ground reduction can't be on-network**: the e-graph requires
+     PCE-ADMISSIBLE (ground) terms; metavar/elaboration reduction can't be interned
+     → de-routes to native. So the native reducer is RETAINED as the non-ground
+     fallback (can't be physically deleted).
+  2. **Full deletion of whnf-impl is a reimplementation, not a mechanical grind**:
+     ~150 primitive folds (mechanical) + higher-order ops (fold/map/filter RECURSE
+     via f-application — non-mechanical) + runtime FFI. So "delete off-network
+     reduction" = delete the DRIVER (done: cascade is the driver), keep the COMPUTE
+     LEAF (the e-graph's own compute-inside-the-rule design).
+- Net: the off-network reduction DRIVER is deleted (as the default path); the
+  native reducer is demoted to compute-leaf + non-ground-fallback. On-network
+  reduction (the cascade) is the production default driver.
+- Commits: `12d4131` (hook + batch 2) · `568ef07` (test pin) · `c98d3a9` (default
+  flip) + this ledger update. (`84137e5` batch 1 earlier.)
+- NEXT (optional refinements): route 'native compute-leaf operands back through the
+  cascade (more on-network for ground compute); migrate more primitive folds into
+  whnf-step1 to shrink the leaf; the higher-order/FFI tail + perf remain SH/Zig-era.
