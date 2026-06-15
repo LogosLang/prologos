@@ -129,12 +129,13 @@
                #:when (hash? (prop-cell-value
                               (champ-lookup cells-champ (cell-id-n cid) cid))))
     (define v (prop-cell-value (champ-lookup cells-champ (cell-id-n cid) cid)))
-    (define ks (hash-keys v))
+    ;; Sort stringified keys for deterministic output — hash-keys order is
+    ;; unspecified, so the truncated key list could otherwise vary run-to-run
+    ;; (golden snapshots and mp4 frame inputs must be stable).
+    (define ks (sort (map (lambda (k) (format "~a" k)) (hash-keys v)) string<?))
     (values (num-key (cell-id-n cid))
             (hasheq 'entryCount (hash-count v)
-                    'keys (for/list ([k (in-list (take ks (min (length ks)
-                                                               VALUE-DETAIL-MAX-KEYS)))])
-                            (format "~a" k))
+                    'keys (take ks (min (length ks) VALUE-DETAIL-MAX-KEYS))
                     'truncated (> (hash-count v) VALUE-DETAIL-MAX-KEYS)))))
 
 (define (topology-section pnet [cell-info #f])
