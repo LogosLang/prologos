@@ -47,7 +47,7 @@ python3 tools/viz/extract-song-timings.py mysong.mp3 -o mysong.timings.json
 # --band-low/--band-high (Hz) restrict onsets to one instrument's band — e.g. a
 # low xylophone/marimba sits a few hundred Hz, distinct from arpeggiated strings
 # above and the kick/bass below:
-python3 tools/viz/extract-song-timings.py in.wav -o out.json --threshold 1.6 --band-low 120 --band-high 520
+python3 tools/viz/extract-song-timings.py in.wav -o out.json --threshold 1.5 --band-low 110 --band-high 300
 ```
 
 Dependencies: `numpy`, `ffmpeg` on PATH (`pip install static-ffmpeg` provides a
@@ -75,7 +75,7 @@ It also ships real onsets for the original request song:
 
 - `examples/praise-the-lamb.timings.json` — onsets extracted from
   *Cult of the Lamb — Praise the Lamb* (`https://youtu.be/PoH5hC5PzSQ`) in the
-  low xylophone band (~145 Hz fundamental; `--band-low 120 --band-high 520`).
+  low xylophone band (~145 Hz fundamental; `--band-low 110 --band-high 300`).
   The audio itself isn't committed (copyright); pair this timings file with your
   own copy of the track in the music panel.
 
