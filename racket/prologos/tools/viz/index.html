@@ -297,6 +297,7 @@ function App() {
   const [mode, setMode] = useState("force");
   const [showAll, setShowAll] = useState(false);
   const [collapse, setCollapse] = useState(false);
+  const [showLabels, setShowLabels] = useState(true);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(700);   // ms per step
   const [fitSignal, setFitSignal] = useState(0);
@@ -353,9 +354,10 @@ function App() {
       <Header env={env} cmdText={`● command ${seq}/${cmds.length}: ${round.command}`}
               mode={mode} setMode={setMode} showAll={showAll} setShowAll={setShowAll}
               collapse={collapse} setCollapse={setCollapse}
+              showLabels={showLabels} setShowLabels={setShowLabels}
               onFile={loadFile} onFit={() => setFitSignal(s => s + 1)} />
       <div className="main">
-        <GraphView graph={graph} mode={mode} highlights={highlights} env={env} fitSignal={fitSignal} />
+        <GraphView graph={graph} mode={mode} highlights={highlights} env={env} fitSignal={fitSignal} showLabels={showLabels} />
         <Sidebar env={env} rounds={rounds} idx={idx} setIdx={setIdx} round={round}
                  topoIdx={topoIdx} playing={playing} setPlaying={setPlaying} graph={graph}
                  speed={speed} setSpeed={setSpeed} />
@@ -364,7 +366,7 @@ function App() {
   );
 }
 
-function Header({ env, cmdText, msg, mode, setMode, showAll, setShowAll, collapse, setCollapse, onFile, onFit }) {
+function Header({ env, cmdText, msg, mode, setMode, showAll, setShowAll, collapse, setCollapse, showLabels, setShowLabels, onFile, onFit }) {
   return (
     <header>
       <span className="title">Prologos network</span>
@@ -382,13 +384,15 @@ function Header({ env, cmdText, msg, mode, setMode, showAll, setShowAll, collaps
           onChange={e => setCollapse(e.target.checked)} /> collapse e-classes</label>
         <label className="tog"><input type="checkbox" checked={showAll}
           onChange={e => setShowAll(e.target.checked)} /> infrastructure</label>
+        <label className="tog"><input type="checkbox" checked={showLabels}
+          onChange={e => setShowLabels(e.target.checked)} /> labels</label>
         <button onClick={onFit}>fit</button>
       </>}
     </header>
   );
 }
 
-function GraphView({ graph, mode, highlights, env, fitSignal }) {
+function GraphView({ graph, mode, highlights, env, fitSignal, showLabels }) {
   const wrapRef = useRef(null);
   const nodesRef = useRef(new Map());
   const simRef = useRef(null);
@@ -496,7 +500,7 @@ function GraphView({ graph, mode, highlights, env, fitSignal }) {
                   ? <circle cx={n.x} cy={n.y} r="8" fill={fill} stroke={stroke} strokeWidth={sw} />
                   : <polygon points={`${n.x},${n.y-9} ${n.x+9},${n.y} ${n.x},${n.y+9} ${n.x-9},${n.y}`}
                              fill={fill} stroke={stroke} strokeWidth={sw} />}
-                {k > 0.4 &&
+                {showLabels && k > 0.4 &&
                   <text x={n.x + 12} y={n.y + 4} fontSize={iw(11)} fill={n.kind === "prop" ? "#bcd" : "#bbb"}
                         style={{ pointerEvents: "none" }}>
                     {n.label.length > 26 ? n.label.slice(0, 25) + "…" : n.label}</text>}
