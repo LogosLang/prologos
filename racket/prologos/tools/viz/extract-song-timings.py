@@ -66,14 +66,18 @@ def decode_pcm(path):
     return x
 
 
-def detect_onsets(x, threshold=1.5, min_gap=0.06, hop=512, win=1024, hifreq=False):
+def detect_onsets(x, threshold=1.5, min_gap=0.06, hop=512, win=1024,
+                  band_low=0.0, band_high=0.0):
     """Spectral-flux onset detection tuned for sharp percussive hits.
 
     Returns a sorted list of onset times in seconds. `threshold` scales the
     adaptive (local-mean + std) picking threshold; `min_gap` is the minimum
-    seconds between consecutive onsets. With `hifreq`, the flux is weighted
-    toward high frequencies — bright mallet/xylophone/glockenspiel hits sit
-    there, so this isolates the melodic-percussion line from bass/kick/vocals.
+    seconds between consecutive onsets.
+
+    `band_low`/`band_high` (Hz) restrict the flux to a frequency band so you can
+    isolate ONE instrument's onsets — e.g. a low xylophone / marimba sits in a
+    low-mid band (a few hundred Hz), distinct from arpeggiated strings higher up
+    and the kick/bass below. `band_high <= 0` means "up to Nyquist".
     """
     import numpy as np
     if len(x) < win:
@@ -88,11 +92,12 @@ def detect_onsets(x, threshold=1.5, min_gap=0.06, hop=512, win=1024, hifreq=Fals
     # spectral flux: sum of positive bin-to-bin magnitude increases
     diff = np.diff(mags, axis=0)
     pos = np.maximum(diff, 0.0)
-    if hifreq:
+    if band_low > 0 or band_high > 0:
         n_bins = pos.shape[1]
         freqs = np.arange(n_bins) * (SR / 2) / (n_bins - 1)
-        wt = (freqs >= 1500).astype("float32")   # emphasize > ~1.5 kHz (mallet range)
-        flux = (pos * wt).sum(axis=1)
+        hi = band_high if band_high > 0 else SR / 2
+        mask = ((freqs >= band_low) & (freqs <= hi)).astype("float32")
+        flux = (pos * mask).sum(axis=1)
     else:
         flux = pos.sum(axis=1)
     flux = np.concatenate([[0.0], flux])
@@ -127,8 +132,10 @@ def main():
     ap.add_argument("-o", "--out", default="song.timings.json", help="output timings JSON")
     ap.add_argument("--threshold", type=float, default=1.5, help="onset sensitivity (lower = more hits)")
     ap.add_argument("--min-gap", type=float, default=0.06, help="min seconds between hits")
-    ap.add_argument("--hifreq", action="store_true",
-                    help="weight onsets toward high freqs (isolate bright mallet/xylophone hits)")
+    ap.add_argument("--band-low", type=float, default=0.0,
+                    help="restrict onsets to freqs >= this (Hz) — isolate one instrument's band")
+    ap.add_argument("--band-high", type=float, default=0.0,
+                    help="restrict onsets to freqs <= this (Hz); 0 = up to Nyquist")
     ap.add_argument("--keep-audio", metavar="PATH", help="also save the decoded/downloaded audio here")
     ap.add_argument("--cookies-from-browser", help="pass to yt-dlp if YouTube demands sign-in (e.g. chrome, firefox)")
     args = ap.parse_args()
@@ -146,7 +153,8 @@ def main():
             sys.exit(f"audio not found: {audio}")
         x = decode_pcm(audio)
         dur = len(x) / SR
-        hits = detect_onsets(x, threshold=args.threshold, min_gap=args.min_gap, hifreq=args.hifreq)
+        hits = detect_onsets(x, threshold=args.threshold, min_gap=args.min_gap,
+                             band_low=args.band_low, band_high=args.band_high)
         print(f"[extract] {dur:.1f}s audio → {len(hits)} hits "
               f"({len(hits) / dur:.1f}/s)", file=sys.stderr)
         doc = {
@@ -156,7 +164,8 @@ def main():
             "durationSec": round(dur, 3),
             "threshold": args.threshold,
             "minGap": args.min_gap,
-            "hifreq": args.hifreq,
+            "bandLow": args.band_low,
+            "bandHigh": args.band_high,
             "count": len(hits),
             "hits": hits,
         }

@@ -44,9 +44,10 @@ python3 tools/viz/extract-song-timings.py 'https://youtu.be/VIDEO' \
 python3 tools/viz/extract-song-timings.py mysong.mp3 -o mysong.timings.json
 
 # tune: lower --threshold = more hits; --min-gap = min seconds between hits;
-# --hifreq weights onsets toward high frequencies to isolate bright
-# mallet/xylophone/glockenspiel hits from bass/kick/vocals:
-python3 tools/viz/extract-song-timings.py in.wav -o out.json --threshold 2.0 --min-gap 0.12 --hifreq
+# --band-low/--band-high (Hz) restrict onsets to one instrument's band — e.g. a
+# low xylophone/marimba sits a few hundred Hz, distinct from arpeggiated strings
+# above and the kick/bass below:
+python3 tools/viz/extract-song-timings.py in.wav -o out.json --threshold 1.6 --band-low 120 --band-high 520
 ```
 
 Dependencies: `numpy`, `ffmpeg` on PATH (`pip install static-ffmpeg` provides a
@@ -72,10 +73,11 @@ panel and press play.
 
 It also ships real onsets for the original request song:
 
-- `examples/praise-the-lamb.timings.json` — 1549 `--hifreq` hits extracted from
-  *Cult of the Lamb — Praise the Lamb* (`https://youtu.be/PoH5hC5PzSQ`). The
-  audio itself isn't committed (copyright); pair this timings file with your own
-  copy of the track in the music panel.
+- `examples/praise-the-lamb.timings.json` — onsets extracted from
+  *Cult of the Lamb — Praise the Lamb* (`https://youtu.be/PoH5hC5PzSQ`) in the
+  low xylophone band (~145 Hz fundamental; `--band-low 120 --band-high 520`).
+  The audio itself isn't committed (copyright); pair this timings file with your
+  own copy of the track in the music panel.
 
 ## Headless checks
 
