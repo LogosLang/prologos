@@ -132,12 +132,19 @@ function buildGraphFromTopo(topoSection, source, changedGlobal, showAll) {
   }
   for (const p of topo.propagators) {
     // Label by what the propagator DOES, not the source line it inherited.
-    // A union-emitter has inputs == outputs (same two e-class cells it merges);
-    // everything else keeps its source-construct label.
+    //  - union-emitter: inputs == outputs (the two e-class cells it merges) → "union ≡"
+    //  - request emitter: writes a *-request infra cell (reduce/dispatch stratum
+    //    trigger) → "emit <stratum>"; this is the cascade kick, not a "fib" propagator
+    //  - else: keep the source-construct label (where it was installed)
     const isUnion = p.inputs.length > 0 && p.inputs.length === p.outputs.length
                     && p.inputs.every(i => p.outputs.includes(i));
-    const label = isUnion ? "union ≡" : propLabel(p.id, identity, source);
-    const n = { key: "p" + p.id, kind: "prop", id: p.id, label, op: isUnion ? "union" : "other", group: "propagator", color: "#569cd6",
+    const wkOut = p.outputs.map(o => (identity.wellKnownCells || {})[String(o)]).filter(Boolean);
+    const reqOut = wkOut.find(w => /-request$/.test(w));
+    const kind = isUnion ? "union" : reqOut ? "emit" : "other";
+    const label = isUnion ? "union ≡"
+                : reqOut ? ("emit " + reqOut.replace("-request", ""))
+                : propLabel(p.id, identity, source);
+    const n = { key: "p" + p.id, kind: "prop", id: p.id, label, op: kind, group: "propagator", color: "#569cd6",
                 inputs: p.inputs.filter(i => byId.has("c" + i)), outputs: p.outputs.filter(o => byId.has("c" + o)) };
     nodes.push(n); byId.set(n.key, n);
     for (const i of n.inputs) edges.push({ from: "c" + i, to: n.key, pid: p.id });
@@ -521,7 +528,7 @@ function Sidebar({ env, rounds, idx, setIdx, round, topoIdx, playing, setPlaying
   const id = env.topologies[topoIdx].identity || {};
   const series = useMemo(() => rounds.map(r => env.topologies[r.topo].topology.stats), [env, rounds]);
   const maxP = Math.max(1, ...series.map(s => s.totalPropagators));
-  const W = 318, H = 46;
+  const W = 318, H = 24;
   const path = series.map((s, i) => `${i ? "L" : "M"}${(i / Math.max(series.length - 1, 1) * W).toFixed(1)},${(H - s.totalPropagators / maxP * (H - 4) - 2).toFixed(1)}`).join("");
   const px = idx / Math.max(series.length - 1, 1) * W;
   const cont = (env.topologies[topoIdx].containment || []).length;
