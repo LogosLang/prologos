@@ -52,6 +52,24 @@ python3 tools/viz/extract-song-timings.py in.wav -o out.json \
     --band-low 110 --band-high 300 --min-strength 0.5 --min-gap 0.12
 ```
 
+**Beat-grid mode (`--grid`)** — for a quiet, *metronomic* instrument. Per-onset
+picking fails when the target plays a steady pulse but is quieter than the
+kick/snare on the loud beats: the picker grabs the loud off-beat transients and
+misses the quiet ones. `--grid` instead locks a steady beat grid to the band's
+pulse — it estimates the tempo from the band onset-envelope autocorrelation and
+emits `phase + k·period`. Anchor the phase to the instrument's first audible hit
+with `--phase` (blind phase-finding locks onto the louder beat), and bound the
+tempo search with `--tempo-min/max`:
+
+```
+python3 tools/viz/extract-song-timings.py in.wav -o out.json \
+    --grid --band-low 110 --band-high 350 --phase 0.10 --tempo-min 55 --tempo-max 90
+```
+
+A constant-tempo track stays aligned for its whole length (no drift); the
+tradeoff is it pulses through sections where the instrument rests. Pass an
+explicit `--bpm` to skip tempo estimation.
+
 Dependencies: `numpy`, `ffmpeg` on PATH (`pip install static-ffmpeg` provides a
 static binary), and `yt-dlp` for URLs. No librosa required.
 
@@ -75,12 +93,12 @@ panel and press play.
 
 It also ships real onsets for the original request song:
 
-- `examples/praise-the-lamb.timings.json` — 634 low-xylophone onsets (~1.8/s)
-  extracted from *Cult of the Lamb — Praise the Lamb*
-  (`https://youtu.be/PoH5hC5PzSQ`) in the low band (~145 Hz fundamental;
-  `--band-low 110 --band-high 300 --min-strength 0.5`). The audio itself isn't
-  committed (copyright); pair this timings file with your own copy of the track
-  in the music panel.
+- `examples/praise-the-lamb.timings.json` — 407 beats (~1.1/s) of the low
+  xylophone pulse in *Cult of the Lamb — Praise the Lamb*
+  (`https://youtu.be/PoH5hC5PzSQ`), `--grid` mode at 67.5 BPM locked to the
+  xylophone's phase (`--band-low 110 --band-high 350 --phase 0.10`). The audio
+  itself isn't committed (copyright); pair this timings file with your own copy
+  of the track in the music panel.
 
 ## Headless checks
 

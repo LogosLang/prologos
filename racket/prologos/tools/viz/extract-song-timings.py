@@ -134,6 +134,82 @@ def detect_onsets(x, threshold=1.5, min_gap=0.06, hop=512, win=1024,
     return onsets
 
 
+def band_onset_envelope(x, band_low=0.0, band_high=0.0, hop=256, win=1024):
+    """Positive spectral-flux envelope (optionally band-limited), + frames/sec."""
+    import numpy as np
+    window = np.hanning(win).astype("float32")
+    n_frames = 1 + (len(x) - win) // hop
+    mags = np.empty((n_frames, win // 2 + 1), dtype="float32")
+    for i in range(n_frames):
+        mags[i] = np.abs(np.fft.rfft(x[i * hop: i * hop + win] * window))
+    pos = np.maximum(np.diff(mags, axis=0), 0.0)
+    if band_low > 0 or band_high > 0:
+        freqs = np.arange(pos.shape[1]) * (SR / 2) / (pos.shape[1] - 1)
+        hi = band_high if band_high > 0 else SR / 2
+        mask = ((freqs >= band_low) & (freqs <= hi)).astype("float32")
+        env = (pos * mask).sum(axis=1)
+    else:
+        env = pos.sum(axis=1)
+    return np.concatenate([[0.0], env]), SR / hop
+
+
+def beat_grid(x, dur, bpm=0.0, phase=-1.0, band_low=0.0, band_high=0.0,
+              tempo_min=50.0, tempo_max=100.0):
+    """Lock a steady beat grid to ONE instrument's metronomic pulse.
+
+    Some instruments (a low xylophone here) play a dead-steady pulse but are
+    quieter than the kick/snare on the loud beats — so per-onset picking grabs
+    the wrong transients and misses the quiet ones. The fix: estimate the tempo
+    (period) from the band onset envelope's autocorrelation, lock the phase to
+    where that band's energy actually lands, and emit a grid `phase + k·period`.
+    Constant-tempo tracks stay aligned for their whole length (no drift).
+
+    `bpm` (0 = auto-estimate within tempo_min..tempo_max); `phase` start seconds
+    (<0 = auto). Returns the grid times in seconds.
+    """
+    import numpy as np
+    env, fps = band_onset_envelope(x, band_low, band_high)
+    e = env - env.mean(); e[e < 0] = 0.0
+    tol = int(round(0.05 * fps))
+
+    def score(P, ph):
+        idx = np.round(np.arange(ph, dur - 0.1, P) * fps).astype(int)
+        return sum(env[max(0, i - tol): i + tol + 1].max()
+                   for i in idx if 0 <= i < len(env)) / max(1, len(idx))
+
+    # candidate period: explicit bpm, else autocorrelation within the tempo range
+    if bpm > 0:
+        cand = 60.0 / bpm
+    else:
+        ac = np.correlate(e, e, mode="full")[len(e) - 1:]
+        lags = np.arange(len(ac)) / fps
+        win = (lags >= 60.0 / tempo_max) & (lags <= 60.0 / tempo_min)
+        idx = np.where(win)[0]
+        cand = lags[idx[np.argmax(ac[idx])]]
+
+    # Phase: when a quiet instrument is the target, blind phase-finding locks onto
+    # the LOUDER beat. So if --phase anchors the pulse (e.g. its first audible
+    # hit), constrain the search near it; otherwise take the globally best-aligned
+    # phase. Refine the period jointly (±3%) — a coarse period drifts over a long
+    # track; the per-beat tolerance-max keeps the grid on the metrical position.
+    if bpm > 0:
+        periods = [cand]
+    else:
+        periods = np.arange(cand * 0.97, cand * 1.03, 0.0002)
+    if phase >= 0:
+        phases = np.arange(max(0.0, phase - 0.12), phase + 0.12, 0.01)
+    else:
+        phases = np.arange(0.0, cand, 0.02)
+    best = (-1.0, cand, phases[0])
+    for P in periods:
+        for ph in phases:
+            s = score(P, ph)
+            if s > best[0]:
+                best = (s, float(P), float(ph))
+    _, period, phase = best
+    return [round(float(t), 4) for t in np.arange(phase, dur - 0.02, period)], period, phase
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -147,6 +223,13 @@ def main():
                     help="restrict onsets to freqs <= this (Hz); 0 = up to Nyquist")
     ap.add_argument("--min-strength", type=float, default=0.0,
                     help="loudness floor 0..1 (fraction of 99.5pct flux) — thin a band to just the strong hits")
+    ap.add_argument("--grid", action="store_true",
+                    help="emit a steady beat grid locked to the band's pulse (best for a quiet metronomic "
+                         "instrument like a low xylophone) instead of per-onset picking")
+    ap.add_argument("--bpm", type=float, default=0.0, help="grid tempo (0 = auto-estimate)")
+    ap.add_argument("--phase", type=float, default=-1.0, help="grid start offset in seconds (<0 = auto)")
+    ap.add_argument("--tempo-min", type=float, default=50.0, help="auto-tempo lower bound (BPM)")
+    ap.add_argument("--tempo-max", type=float, default=100.0, help="auto-tempo upper bound (BPM)")
     ap.add_argument("--keep-audio", metavar="PATH", help="also save the decoded/downloaded audio here")
     ap.add_argument("--cookies-from-browser", help="pass to yt-dlp if YouTube demands sign-in (e.g. chrome, firefox)")
     args = ap.parse_args()
@@ -164,14 +247,27 @@ def main():
             sys.exit(f"audio not found: {audio}")
         x = decode_pcm(audio)
         dur = len(x) / SR
-        hits = detect_onsets(x, threshold=args.threshold, min_gap=args.min_gap,
-                             band_low=args.band_low, band_high=args.band_high,
-                             min_strength=args.min_strength)
-        print(f"[extract] {dur:.1f}s audio → {len(hits)} hits "
-              f"({len(hits) / dur:.1f}/s)", file=sys.stderr)
+        mode = "onset"
+        grid_period = grid_phase = None
+        if args.grid:
+            mode = "grid"
+            hits, grid_period, grid_phase = beat_grid(
+                x, dur, bpm=args.bpm, phase=args.phase,
+                band_low=args.band_low, band_high=args.band_high,
+                tempo_min=args.tempo_min, tempo_max=args.tempo_max)
+            print(f"[extract] {dur:.1f}s audio → {len(hits)} grid beats "
+                  f"@ {60 / grid_period:.1f} BPM (period {grid_period:.4f}s, phase "
+                  f"{grid_phase:.3f}s, {len(hits) / dur:.1f}/s)", file=sys.stderr)
+        else:
+            hits = detect_onsets(x, threshold=args.threshold, min_gap=args.min_gap,
+                                 band_low=args.band_low, band_high=args.band_high,
+                                 min_strength=args.min_strength)
+            print(f"[extract] {dur:.1f}s audio → {len(hits)} hits "
+                  f"({len(hits) / dur:.1f}/s)", file=sys.stderr)
         doc = {
             "source": args.source,
             "generated": datetime.datetime.utcnow().isoformat() + "Z",
+            "mode": mode,
             "sampleRate": SR,
             "durationSec": round(dur, 3),
             "threshold": args.threshold,
@@ -182,6 +278,10 @@ def main():
             "count": len(hits),
             "hits": hits,
         }
+        if mode == "grid":
+            doc["bpm"] = round(60 / grid_period, 3)
+            doc["periodSec"] = round(grid_period, 5)
+            doc["phaseSec"] = round(grid_phase, 4)
         with open(args.out, "w") as f:
             json.dump(doc, f, indent=0)
         print(f"[extract] wrote {args.out}", file=sys.stderr)
