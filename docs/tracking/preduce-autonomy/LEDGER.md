@@ -1662,3 +1662,25 @@ Entry template:
 - NEXT (optional refinements): route 'native compute-leaf operands back through the
   cascade (more on-network for ground compute); migrate more primitive folds into
   whnf-step1 to shrink the leaf; the higher-order/FFI tail + perf remain SH/Zig-era.
+
+## 2026-06-15 — LOOP (PReduce Track 8) Phase 5c refinement — [ROUTINE, owner: "do #1"] route the 'native compute-leaf operands on-network; #2 declined (tension)
+- **#1 DONE** (`0c51010`): when whnf-step1 hits 'native (a primitive compute
+  construct not yet migrated — rat/posit/generic arith, data ops, FFI), the cascade
+  reduces it via whnf-impl directly (ambient routing ON) instead of whnf-native, so
+  its OPERAND sub-reductions route BACK through the cascade (on-network); only the
+  primitive fold is native. Full suite 8750 all-pass, 294.6s (FASTER than the prior
+  default-routed 386.9s; ~88% of native 335s). Owner confirmed "do #1".
+- **#2 DECLINED (not a clean win — tension found)**: migrating more folds into
+  whnf-step1 routes their operands through the cascade's `demand` path, which is
+  either NATIVE (regressing #1's operand-routing) or ~7× slower (demand-routed:
+  every recursive subterm nest-cascades — acceptance 247ms→1699ms measured). So
+  fold-migration trades operand-on-network for fold-as-cascade-step visibility — no
+  free lunch; #1 sits at the better point. The 7× full-demand-routing lever (maximal
+  on-network + viz, ~7× cost) is left to owner discretion; NOT taken.
+- **Architecture END-STATE (Phase 5c complete per "delete driver, keep compute
+  leaf")**: the BSP scheduler DRIVES ground reduction (β/ι/δ/app/reduce/proj +
+  int-arith via whnf-step1 + the reduce-stratum cascade, default-on); the native
+  reducer is the COMPUTE LEAF (primitive folds, operands routed on-network) +
+  the NON-GROUND fallback (metavar/elaboration — e-graph admissibility limit). Suite
+  green; ~12-15% over native.
+- Commit: `0c51010` + this ledger update.
