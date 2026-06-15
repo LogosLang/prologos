@@ -528,7 +528,7 @@ function Sidebar({ env, rounds, idx, setIdx, round, topoIdx, playing, setPlaying
   const id = env.topologies[topoIdx].identity || {};
   const series = useMemo(() => rounds.map(r => env.topologies[r.topo].topology.stats), [env, rounds]);
   const maxP = Math.max(1, ...series.map(s => s.totalPropagators));
-  const W = 318, H = 24;
+  const W = 318, H = 46;
   const path = series.map((s, i) => `${i ? "L" : "M"}${(i / Math.max(series.length - 1, 1) * W).toFixed(1)},${(H - s.totalPropagators / maxP * (H - 4) - 2).toFixed(1)}`).join("");
   const px = idx / Math.max(series.length - 1, 1) * W;
   const cont = (env.topologies[topoIdx].containment || []).length;
@@ -550,7 +550,8 @@ function Sidebar({ env, rounds, idx, setIdx, round, topoIdx, playing, setPlaying
         <span className="muted" style={{ fontSize: 11, whiteSpace: "nowrap" }}>{speed}ms</span>
       </div>
       <h3>scheduler</h3>
-      <svg width={W} height={H} style={{ background: "#1e1e1e", border: "1px solid #333", borderRadius: 4 }}>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}
+           style={{ width: W, height: H, flex: "none", background: "#1e1e1e", border: "1px solid #333", borderRadius: 4 }}>
         <path d={path} fill="none" stroke="#569cd6" strokeWidth="1.5" />
         <line x1={px} y1="0" x2={px} y2={H} stroke="#e9c46a" />
       </svg>
