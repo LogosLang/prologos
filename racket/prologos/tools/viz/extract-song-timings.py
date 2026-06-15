@@ -210,6 +210,28 @@ def beat_grid(x, dur, bpm=0.0, phase=-1.0, band_low=0.0, band_high=0.0,
     return [round(float(t), 4) for t in np.arange(phase, dur - 0.02, period)], period, phase
 
 
+def tempo_map(dur, segments, phase=-1.0):
+    """Piecewise-constant beat grid: a list of (start_sec, bpm) segments, each
+    emitting beats at its own tempo from its start until the next segment (or the
+    end). The first segment may be anchored with `phase` (else it starts at its
+    own start time); later segments start exactly on their boundary, so a tempo
+    switch lands a beat right on the drop. Lets you e.g. hold a slow intro pulse
+    then rush 10x faster at the chorus.
+    """
+    segs = sorted(segments, key=lambda s: s[0])
+    times = []
+    for i, (start, bpm) in enumerate(segs):
+        end = segs[i + 1][0] if i + 1 < len(segs) else dur
+        period = 60.0 / bpm
+        t = phase if (i == 0 and phase >= 0) else start
+        while t < start:
+            t += period
+        while t < end - 1e-4:
+            times.append(round(t, 4))
+            t += period
+    return sorted(set(times))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -230,6 +252,10 @@ def main():
     ap.add_argument("--phase", type=float, default=-1.0, help="grid start offset in seconds (<0 = auto)")
     ap.add_argument("--tempo-min", type=float, default=50.0, help="auto-tempo lower bound (BPM)")
     ap.add_argument("--tempo-max", type=float, default=100.0, help="auto-tempo upper bound (BPM)")
+    ap.add_argument("--segments", default="",
+                    help="piecewise tempo map as 'startSec:bpm,startSec:bpm,...' "
+                         "(e.g. '0:67.5,28.5:675' = slow intro then 10x burst at 28.5s); "
+                         "uses --phase to anchor the first segment")
     ap.add_argument("--keep-audio", metavar="PATH", help="also save the decoded/downloaded audio here")
     ap.add_argument("--cookies-from-browser", help="pass to yt-dlp if YouTube demands sign-in (e.g. chrome, firefox)")
     args = ap.parse_args()
@@ -249,7 +275,15 @@ def main():
         dur = len(x) / SR
         mode = "onset"
         grid_period = grid_phase = None
-        if args.grid:
+        if args.segments:
+            mode = "segments"
+            segs = [(float(a), float(b)) for a, b in
+                    (p.split(":") for p in args.segments.split(","))]
+            hits = tempo_map(dur, segs, phase=args.phase)
+            print(f"[extract] {dur:.1f}s audio → {len(hits)} beats over "
+                  f"{len(segs)} tempo segments {segs} ({len(hits) / dur:.1f}/s avg)",
+                  file=sys.stderr)
+        elif args.grid:
             mode = "grid"
             hits, grid_period, grid_phase = beat_grid(
                 x, dur, bpm=args.bpm, phase=args.phase,
@@ -282,6 +316,8 @@ def main():
             doc["bpm"] = round(60 / grid_period, 3)
             doc["periodSec"] = round(grid_period, 5)
             doc["phaseSec"] = round(grid_phase, 4)
+        elif mode == "segments":
+            doc["segments"] = [{"startSec": s, "bpm": b} for s, b in segs]
         with open(args.out, "w") as f:
             json.dump(doc, f, indent=0)
         print(f"[extract] wrote {args.out}", file=sys.stderr)

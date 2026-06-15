@@ -70,6 +70,15 @@ A constant-tempo track stays aligned for its whole length (no drift); the
 tradeoff is it pulses through sections where the instrument rests. Pass an
 explicit `--bpm` to skip tempo estimation.
 
+**Tempo map (`--segments`)** — a piecewise grid of `startSec:bpm` segments, each
+running at its own tempo until the next. Lets you hold a slow pulse through an
+intro then rush at a drop (a tempo switch lands a beat exactly on the boundary):
+
+```
+python3 tools/viz/extract-song-timings.py in.wav -o out.json \
+    --segments '0:67.5,28.5:675' --phase 0.10
+```
+
 Dependencies: `numpy`, `ffmpeg` on PATH (`pip install static-ffmpeg` provides a
 static binary), and `yt-dlp` for URLs. No librosa required.
 
@@ -99,6 +108,10 @@ It also ships real onsets for the original request song:
   xylophone's phase (`--band-low 110 --band-high 350 --phase 0.10`). The audio
   itself isn't committed (copyright); pair this timings file with your own copy
   of the track in the music panel.
+- `examples/praise-the-lamb-tempomap.timings.json` — alternate take: the slow
+  intro pulse (67.5 BPM) then a 10× burst from 28.5s (`--segments
+  '0:67.5,28.5:675'`), so the timeline crawls through the build then rushes the
+  drop.
 
 ## Headless checks
 
