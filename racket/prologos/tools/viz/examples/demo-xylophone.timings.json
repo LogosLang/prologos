@@ -1,0 +1,21 @@
+{
+"source": "synthetic demo (make-demo-song.py)",
+"sampleRate": 22050,
+"durationSec": 4.6,
+"count": 13,
+"hits": [
+0.3,
+0.62,
+0.95,
+1.1,
+1.55,
+1.88,
+2.2,
+2.35,
+2.8,
+3.15,
+3.5,
+3.65,
+4.1
+]
+}

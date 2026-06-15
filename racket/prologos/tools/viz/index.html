@@ -13,6 +13,11 @@
   hashcons registry). Infrastructure cells hidden by default; e-class cells show
   their reduced value; propagators label by source construct.
 
+  Two ways to play the timeline: the timer ▶ (one round every N ms) or
+  MUSIC-SYNCED playback — load an audio file + a timings file (hit onsets in
+  seconds, e.g. a song's xylophone hits) and each hit advances one step, so the
+  reduction plays in time with the music. See README.md + extract-song-timings.py.
+
   Single file, no build step (deps from CDN — needs network). Generate a trace:
     racket tools/viz-export.rkt FILE.prologos -o out.json [--reduce]
 -->
@@ -40,8 +45,15 @@
   .graphwrap:active { cursor: grabbing; }
   svg { display: block; width: 100%; height: 100%; }
   .tooltip { position: absolute; pointer-events: none; background: #2d2d30; border: 1px solid #666; border-radius: 4px; padding: 6px 9px; max-width: 380px; z-index: 5; white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 12px; }
-  .side { border-left: 1px solid #333; background: #252526; padding: 10px; overflow-y: auto; }
+  .side { border-left: 1px solid #333; background: #252526; padding: 10px; overflow-y: auto; display: flex; flex-direction: column; }
   .side h3 { margin: 12px 0 4px; font-size: 11px; text-transform: uppercase; color: #888; letter-spacing: .5px; }
+  .music { border: 1px solid #3a3a3a; border-radius: 6px; padding: 4px 8px 8px; margin-top: 6px; background: #2a2a2c; }
+  .music h3 { margin: 4px 0 6px; }
+  .musrow { display: flex; gap: 6px; margin: 4px 0; }
+  .music audio { filter: invert(0.9) hue-rotate(180deg); border-radius: 4px; }
+  /* legend sticks to the bottom of the scrolling sidebar */
+  .legend-wrap { margin-top: auto; position: sticky; bottom: 0; background: #252526;
+                 padding: 6px 0 2px; border-top: 1px solid #333; }
   .drop { display: flex; align-items: center; justify-content: center; height: 100%; color: #888; font-size: 16px; text-align: center; }
   .drop .box { border: 2px dashed #444; border-radius: 10px; padding: 40px 60px; }
   .timeRow { display: flex; gap: 8px; align-items: center; }
@@ -236,6 +248,43 @@ function layoutForce(graph, seed, W, H) {
 
 function timelineRounds(env) { return (env.rounds || []).slice().sort((a, b) => a.roundNumber - b.roundNumber); }
 
+// ---- music-synced playback ------------------------------------------------
+// A "timings" file is a list of hit timestamps (seconds) — e.g. the xylophone
+// onsets of a song. Accepts: a bare JSON array [0.5, 0.9, …]; a JSON object
+// keyed by hits/timings/beats/onsets/times (numbers, or {time}/{t}/{sec}
+// objects); or plain text (whitespace/comma/newline-separated numbers).
+function parseTimings(text) {
+  text = String(text || "").trim();
+  if (!text) return [];
+  let arr = null;
+  if (text[0] === "[" || text[0] === "{") {
+    try {
+      const o = JSON.parse(text);
+      if (Array.isArray(o)) arr = o;
+      else arr = o.hits || o.timings || o.beats || o.onsets || o.times || o.steps || null;
+    } catch (e) { arr = null; }
+  }
+  if (!arr) arr = text.split(/[\s,]+/).filter(s => s.length);
+  const nums = arr.map(x => {
+    if (typeof x === "number") return x;
+    if (typeof x === "string") return parseFloat(x);
+    if (x && typeof x === "object") { const v = x.time != null ? x.time : x.t != null ? x.t : x.sec != null ? x.sec : x.seconds; return Number(v); }
+    return NaN;
+  }).filter(n => Number.isFinite(n) && n >= 0);
+  nums.sort((a, b) => a - b);
+  return nums;
+}
+
+// Step index for a given audio time: how many hits have elapsed (each hit
+// advances one step), clamped into the available rounds. Step 0 is the initial
+// state shown before the first hit fires. Binary search keeps the rAF loop cheap.
+function stepForTime(timings, t, nRounds) {
+  if (!timings || !timings.length || !nRounds) return 0;
+  let lo = 0, hi = timings.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (timings[m] <= t) lo = m + 1; else hi = m; }
+  return Math.max(0, Math.min(nRounds - 1, lo));
+}
+
 // Node-id sets present in a given topology (for born/growth detection).
 function topoNodeKeys(env, topoIdx) {
   const t = env.topologies[topoIdx]; const s = new Set();
@@ -301,9 +350,40 @@ function App() {
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(700);   // ms per step
   const [fitSignal, setFitSignal] = useState(0);
+  // music-synced playback
+  const [audioUrl, setAudioUrl] = useState(null);
+  const [audioName, setAudioName] = useState(null);
+  const [timings, setTimings] = useState(null);
+  const [timingsName, setTimingsName] = useState(null);
+  const [musicPlaying, setMusicPlaying] = useState(false);
+  const audioRef = useRef(null);
 
   const rounds = useMemo(() => env ? timelineRounds(env) : [], [env]);
   const changed = useMemo(() => env ? changedCellIdsGlobal(env) : new Set(), [env]);
+
+  const loadAudio = (file) => {
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setAudioUrl(URL.createObjectURL(file)); setAudioName(file.name); setMusicPlaying(false);
+  };
+  const loadTimings = (file) => file.text().then(t => {
+    const hits = parseTimings(t);
+    setTimings(hits); setTimingsName(file.name + " · " + hits.length + " hits");
+  });
+
+  // While the audio plays, drive the step index from its currentTime via the
+  // hit timestamps — each onset advances one step. requestAnimationFrame keeps
+  // it smooth and decoupled from React's render timer.
+  useEffect(() => {
+    if (!musicPlaying || !env || !timings) return;
+    let raf = 0;
+    const tick = () => {
+      const a = audioRef.current;
+      if (a) setIdx(stepForTime(timings, a.currentTime, rounds.length));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [musicPlaying, env, timings, rounds.length]);
 
   const loadFile = (file) => file.text().then(t => {
     let o; try { o = JSON.parse(t); } catch (e) { setMsg("invalid JSON"); return; }
@@ -312,11 +392,11 @@ function App() {
   });
 
   useEffect(() => {
-    if (!playing || !env) return;
+    if (!playing || musicPlaying || !env) return;
     if (idx + 1 >= rounds.length) { setPlaying(false); return; }
     const t = setTimeout(() => setIdx(i => i + 1), speed);
     return () => clearTimeout(t);
-  }, [playing, idx, rounds.length, env, speed]);
+  }, [playing, musicPlaying, idx, rounds.length, env, speed]);
 
   const round = env ? rounds[idx] : null;
   const topoIdx = round ? round.topo : 0;
@@ -360,7 +440,12 @@ function App() {
         <GraphView graph={graph} mode={mode} highlights={highlights} env={env} fitSignal={fitSignal} showLabels={showLabels} />
         <Sidebar env={env} rounds={rounds} idx={idx} setIdx={setIdx} round={round}
                  topoIdx={topoIdx} playing={playing} setPlaying={setPlaying} graph={graph}
-                 speed={speed} setSpeed={setSpeed} />
+                 speed={speed} setSpeed={setSpeed}
+                 audioRef={audioRef} audioUrl={audioUrl} audioName={audioName}
+                 timings={timings} timingsName={timingsName}
+                 loadAudio={loadAudio} loadTimings={loadTimings}
+                 musicPlaying={musicPlaying} setMusicPlaying={setMusicPlaying}
+                 setPlayingTimer={setPlaying} />
       </div>
     </div>
   );
@@ -527,7 +612,9 @@ function Tooltip({ node, env, x, y }) {
   return <div className="tooltip" style={{ left: x + 14, top: y + 14 }}>{text}</div>;
 }
 
-function Sidebar({ env, rounds, idx, setIdx, round, topoIdx, playing, setPlaying, graph, speed, setSpeed }) {
+function Sidebar({ env, rounds, idx, setIdx, round, topoIdx, playing, setPlaying, graph, speed, setSpeed,
+                   audioRef, audioUrl, audioName, timings, timingsName, loadAudio, loadTimings,
+                   musicPlaying, setMusicPlaying, setPlayingTimer }) {
   const st = env.topologies[topoIdx].topology.stats;
   const id = env.topologies[topoIdx].identity || {};
   const series = useMemo(() => rounds.map(r => env.topologies[r.topo].topology.stats), [env, rounds]);
@@ -553,6 +640,10 @@ function Sidebar({ env, rounds, idx, setIdx, round, topoIdx, playing, setPlaying
                onChange={e => setSpeed(1680 - +e.target.value)} />
         <span className="muted" style={{ fontSize: 11, whiteSpace: "nowrap" }}>{speed}ms</span>
       </div>
+      <MusicSync audioRef={audioRef} audioUrl={audioUrl} audioName={audioName}
+                 timings={timings} timingsName={timingsName} loadAudio={loadAudio} loadTimings={loadTimings}
+                 musicPlaying={musicPlaying} setMusicPlaying={setMusicPlaying}
+                 setPlayingTimer={setPlayingTimer} idx={idx} nRounds={rounds.length} />
       <h3>scheduler</h3>
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}
            style={{ width: W, height: H, flex: "none", background: "#1e1e1e", border: "1px solid #333", borderRadius: 4 }}>
@@ -575,11 +666,53 @@ function Sidebar({ env, rounds, idx, setIdx, round, topoIdx, playing, setPlaying
               </div>;
             })}
       </div>
-      <h3>legend</h3>
-      <Legend graph={graph} />
+      <div className="legend-wrap">
+        <h3 style={{ marginTop: 0 }}>legend</h3>
+        <Legend graph={graph} />
+      </div>
     </div>
   );
 }
+
+// Music-synced playback: load an audio file + a timings file (hit onsets in
+// seconds). Playing the audio drives the timeline — each onset advances one
+// step — running alongside (and independent of) the timer-based ▶ control.
+function MusicSync({ audioRef, audioUrl, audioName, timings, timingsName, loadAudio, loadTimings,
+                     musicPlaying, setMusicPlaying, setPlayingTimer, idx, nRounds }) {
+  const ready = audioUrl && timings && timings.length > 0;
+  return (
+    <div className="music">
+      <h3>music-synced playback</h3>
+      <div className="musrow">
+        <label className="tog" style={{ cursor: "pointer", flex: 1, justifyContent: "center" }}>
+          {audioName ? "♪ " + clip(audioName, 22) : "load audio…"}
+          <input type="file" accept="audio/*" style={{ display: "none" }}
+                 onChange={e => e.target.files[0] && loadAudio(e.target.files[0])} />
+        </label>
+      </div>
+      <div className="musrow">
+        <label className="tog" style={{ cursor: "pointer", flex: 1, justifyContent: "center" }}>
+          {timingsName ? "⤓ " + clip(timingsName, 26) : "load timings…"}
+          <input type="file" accept=".json,.txt,.csv,.timings" style={{ display: "none" }}
+                 onChange={e => e.target.files[0] && loadTimings(e.target.files[0])} />
+        </label>
+      </div>
+      {audioUrl &&
+        <audio ref={audioRef} src={audioUrl} controls style={{ width: "100%", marginTop: 6, height: 32 }}
+               onPlay={() => { setPlayingTimer(false); setMusicPlaying(true); }}
+               onPause={() => setMusicPlaying(false)}
+               onEnded={() => setMusicPlaying(false)} />}
+      <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+        {!audioUrl && !timings ? "play the song to advance steps on each hit"
+          : !ready ? "load both an audio file and a timings file"
+          : musicPlaying ? `▶ synced · step ${idx + 1}/${nRounds} · ${timings.length} hits`
+          : `ready · ${timings.length} hits → ${nRounds} steps`}
+      </div>
+    </div>
+  );
+}
+
+function clip(s, n) { s = String(s); return s.length > n ? s.slice(0, n - 1) + "…" : s; }
 
 function Legend({ graph }) {
   const groups = new Map();   // distinct cell identity groups actually in view

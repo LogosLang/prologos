@@ -9,6 +9,24 @@ eval(m[1]);
 let failures = 0;
 const check = (c, msg) => { if (!c) { console.error('FAIL: ' + msg); failures++; } };
 
+// ---- music-synced playback: parseTimings + stepForTime --------------------
+const arrEq = (a, b) => a.length === b.length && a.every((x, i) => Math.abs(x - b[i]) < 1e-9);
+check(arrEq(parseTimings('[0.5, 0.9, 1.3]'), [0.5, 0.9, 1.3]), 'parseTimings bare JSON array');
+check(arrEq(parseTimings('{"hits":[1.3,0.5,0.9]}'), [0.5, 0.9, 1.3]), 'parseTimings .hits sorted');
+check(arrEq(parseTimings('{"onsets":[2,1]}'), [1, 2]), 'parseTimings .onsets alias');
+check(arrEq(parseTimings('0.5 0.9\n1.3,2.0'), [0.5, 0.9, 1.3, 2.0]), 'parseTimings plain text');
+check(arrEq(parseTimings('{"hits":[{"time":0.9},{"time":0.1}]}'), [0.1, 0.9]), 'parseTimings object entries');
+check(arrEq(parseTimings(''), []), 'parseTimings empty');
+check(arrEq(parseTimings('garbage'), []), 'parseTimings non-numeric');
+const T = [1.0, 2.0, 3.0];
+check(stepForTime(T, 0.0, 10) === 0, 'stepForTime before first hit = 0');
+check(stepForTime(T, 1.0, 10) === 1, 'stepForTime at first hit = 1');
+check(stepForTime(T, 2.5, 10) === 2, 'stepForTime mid = count elapsed');
+check(stepForTime(T, 99, 10) === 3, 'stepForTime all hits elapsed');
+check(stepForTime(T, 99, 2) === 1, 'stepForTime clamps to nRounds-1');
+check(stepForTime([], 5, 10) === 0, 'stepForTime no timings = 0');
+check(stepForTime(T, 5, 0) === 0, 'stepForTime no rounds = 0');
+
 for (const file of process.argv.slice(3)) {
   if (!fs.existsSync(file)) { console.log(file, 'MISSING'); continue; }
   const env = JSON.parse(fs.readFileSync(file, 'utf8'));
