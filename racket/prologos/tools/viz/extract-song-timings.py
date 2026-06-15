@@ -67,7 +67,7 @@ def decode_pcm(path):
 
 
 def detect_onsets(x, threshold=1.5, min_gap=0.06, hop=512, win=1024,
-                  band_low=0.0, band_high=0.0):
+                  band_low=0.0, band_high=0.0, min_strength=0.0):
     """Spectral-flux onset detection tuned for sharp percussive hits.
 
     Returns a sorted list of onset times in seconds. `threshold` scales the
@@ -78,6 +78,11 @@ def detect_onsets(x, threshold=1.5, min_gap=0.06, hop=512, win=1024,
     isolate ONE instrument's onsets — e.g. a low xylophone / marimba sits in a
     low-mid band (a few hundred Hz), distinct from arpeggiated strings higher up
     and the kick/bass below. `band_high <= 0` means "up to Nyquist".
+
+    `min_strength` (0..1) is an absolute loudness floor: a peak is kept only if
+    its flux reaches this fraction of the song's 99.5th-percentile flux. This is
+    what separates the loud mallet hits from the quiet bass/percussion bleed in
+    the same band — raise it to thin a dense band down to just the strong notes.
     """
     import numpy as np
     if len(x) < win:
@@ -101,6 +106,9 @@ def detect_onsets(x, threshold=1.5, min_gap=0.06, hop=512, win=1024,
     else:
         flux = pos.sum(axis=1)
     flux = np.concatenate([[0.0], flux])
+    # absolute strength floor, normalized by a robust (99.5th-pct) loudness scale
+    scale = np.percentile(flux, 99.5) if flux.size else 0.0
+    strength = flux / scale if scale > 0 else flux
     if flux.max() > 0:
         flux = flux / flux.max()
     # adaptive threshold over a local window
@@ -118,7 +126,8 @@ def detect_onsets(x, threshold=1.5, min_gap=0.06, hop=512, win=1024,
     min_frames = max(1, int(round(min_gap * SR / hop)))
     onsets, last = [], -10 ** 9
     for i in range(1, len(flux) - 1):
-        if flux[i] >= thr[i] and flux[i] >= flux[i - 1] and flux[i] >= flux[i + 1]:
+        if flux[i] >= thr[i] and flux[i] >= flux[i - 1] and flux[i] >= flux[i + 1] \
+                and strength[i] >= min_strength:
             if i - last >= min_frames:
                 onsets.append(round(i * hop / SR, 4))
                 last = i
@@ -136,6 +145,8 @@ def main():
                     help="restrict onsets to freqs >= this (Hz) — isolate one instrument's band")
     ap.add_argument("--band-high", type=float, default=0.0,
                     help="restrict onsets to freqs <= this (Hz); 0 = up to Nyquist")
+    ap.add_argument("--min-strength", type=float, default=0.0,
+                    help="loudness floor 0..1 (fraction of 99.5pct flux) — thin a band to just the strong hits")
     ap.add_argument("--keep-audio", metavar="PATH", help="also save the decoded/downloaded audio here")
     ap.add_argument("--cookies-from-browser", help="pass to yt-dlp if YouTube demands sign-in (e.g. chrome, firefox)")
     args = ap.parse_args()
@@ -154,7 +165,8 @@ def main():
         x = decode_pcm(audio)
         dur = len(x) / SR
         hits = detect_onsets(x, threshold=args.threshold, min_gap=args.min_gap,
-                             band_low=args.band_low, band_high=args.band_high)
+                             band_low=args.band_low, band_high=args.band_high,
+                             min_strength=args.min_strength)
         print(f"[extract] {dur:.1f}s audio → {len(hits)} hits "
               f"({len(hits) / dur:.1f}/s)", file=sys.stderr)
         doc = {
@@ -166,6 +178,7 @@ def main():
             "minGap": args.min_gap,
             "bandLow": args.band_low,
             "bandHigh": args.band_high,
+            "minStrength": args.min_strength,
             "count": len(hits),
             "hits": hits,
         }

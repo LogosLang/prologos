@@ -57,3 +57,7 @@ racket/prologos/data/cache/
 mempalace.yaml
 entities.json
 *.pnetx
+
+# Python bytecode
+__pycache__/
+*.pyc
