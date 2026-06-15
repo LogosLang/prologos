@@ -3451,9 +3451,18 @@
        (define step (whnf-step1 F))
        (cond
          [(eq? step 'whnf) (pr-write-whnf! n K F)]
-         [(eq? step 'native) (pr-write-whnf! n K (whnf-native F))]
+         ;; 'native: a COMPUTE-LEAF construct (arith fold / data-structure op / FFI).
+         ;; whnf-impl computes the primitive (native) but its OPERAND sub-reductions
+         ;; route back through the cascade (the ambient default is on) — so only the
+         ;; fold is off-network; the operands' driving stays on-network. (NOT whnf F
+         ;; — that re-routes F itself → infinite loop; NOT whnf-native — that
+         ;; de-routes the operands too.)
+         [(eq? step 'native) (pr-write-whnf! n K (whnf-impl F))]
          [(eq? (car step) 'step) (pr-cascade! n hc K (cdr step))]
-         [else ;; 'demand — reduce the strict subterm natively, then continue the cascade
+         [else ;; 'demand — reduce the strict subterm natively (de-routed). Routing
+          ;; demand subterms back through the cascade is CORRECT but ~7× slower
+          ;; (every recursive subterm spawns a nested cascade); the head chain is
+          ;; already on-network via the 'step cascade, so keep demand native.
           (define sub (cadr step))
           (define recon (caddr step))
           (define next (recon (whnf-native sub)))
