@@ -1684,3 +1684,35 @@ Entry template:
   the NON-GROUND fallback (metavar/elaboration — e-graph admissibility limit). Suite
   green; ~12-15% over native.
 - Commit: `0c51010` + this ledger update.
+
+## 2026-06-15 — LOOP (PReduce Track 8) Phase 5d — [SIGNIFICANT, owner: "fix: reduction design serializes independent subterms, and any other 'all in parallel' work"] parallel demand
+- **Decision**: replace single-subterm `'demand` with `'demand-par` for the
+  INDEPENDENT-strict-operand case (binary arithmetic). Independent operands now
+  reduce in the SAME BSP rounds (interleaved cascades) instead of being sequenced.
+  This is the set-latch demand refinement the 5b design doc deferred (§10.5).
+- **Options considered**:
+  - (chosen) **barrier-joined parallel cascade**: `step1-par` emits `'demand-par`;
+    `pr-demand-par` interns each non-value operand to its own class KOi, queues all
+    {KOi → Oi} into the same `reduce-request` round (the per-key hash-union merge
+    accumulates them), and installs ONE barrier propagator (`net-add-barrier`,
+    set-latch fan-in) that re-forms {K → recon*(resolved)} when all KOi reach
+    cost-0 :best. Reuses existing first-class primitives; minimal surface.
+  - (deferred) **e-node + congruence reduction rule**: intern `(int+ KO1 KO2)` as an
+    e-node and let a congruence-driven reduction rule fire when children are values
+    — more "structurally emergent" but a larger redesign; not needed for the fix.
+  - (rejected) full demand-routing for ALL `'demand` arms — the ~7× cost declined in
+    5c; single-strict-subterm arms have no independent parallelism to gain anyway.
+- **Principle / precedent cited**: design mantra "all in parallel"; set-latch fan-in
+  (`propagator-design.md`); Network Reality Check (operand reductions are now real
+  net-add-propagator/net-cell-write cascades, not whnf-native off-network).
+- **Evidence**: viz before/after — balanced ×/+ tree 353→**43** BSP rounds (8.2×
+  depth reduction, 256 propagators/round); fib 6 51→**78** multi-prop rounds.
+  fib + tree values identical on-network vs native (8, 1462). Parity-gated
+  (test-preduce-egraph both variants) + 250 targeted tests green; full routed suite
+  = regression gate (running).
+- **Scope (honest)**: binary arithmetic only — the genuine independent-strict case.
+  Parallelism INSIDE whnf-impl's primitive folds (N-ary data ops) and inside `nf`
+  (full-NF subterm normalization is a pure recursive Racket fn, not on-network) is
+  the larger compute-leaf / nf reimplementation, SH/Zig-era; explicitly out of scope.
+- **Landed in**: commit `b2c5e31` (reduction.rkt + design doc §10.5) + this ledger
+  update.
