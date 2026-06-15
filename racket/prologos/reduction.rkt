@@ -3274,7 +3274,9 @@
 ;; one-step decomposition is parity-correct and gives whnf-via-egraph (the
 ;; intern→reduce→extract shape Phase 5 generalizes).
 ;;
-;; whnf-step1 : expr -> 'whnf | 'native | (cons 'step C) | (list 'demand SUB RECON)
+;; whnf-step1 : expr -> 'whnf | 'native | (cons 'step C)
+;;                       | (list 'demand SUB RECON)
+;;                       | (list 'demand-par OPERANDS RECON*)
 ;;   'whnf          — E is weak-head-normal (value/neutral)
 ;;   'native        — construct not yet migrated; driver delegates to native whnf
 ;;                    (staged fallback — shrinks as constructs migrate)
@@ -3282,6 +3284,28 @@
 ;;   (list 'demand SUB RECON) — E is STRICT in SUB; reduce SUB to WHNF, then the
 ;;                    next form is (RECON sub-nf). Mis-classification is parity-safe
 ;;                    (the migrated arms mirror whnf-impl/match; the rest is 'native).
+;;   (list 'demand-par OPERANDS RECON*) — E is STRICT in N INDEPENDENT operands
+;;                    (binary arithmetic: both args, neither depends on the other).
+;;                    The operands reduce TOGETHER (network driver: one cascade,
+;;                    interleaved per BSP round — "all in parallel"; iterating
+;;                    driver: sequentially, parity-identical). RECON* takes the LIST
+;;                    of reduced operands (positional) and re-forms the head.
+;;                    This is the fix for "reduction serializes independent
+;;                    subterms": single-subterm 'demand sequenced operand i before
+;;                    operand j even when independent (e.g. fib's two recursive
+;;                    branches under int+); 'demand-par lets them progress in the
+;;                    same rounds.
+
+;; step1-par : classify a strict-in-N-independent-operands head. If EVERY operand
+;; is already a value (whnf-trivial), the primitive is ready to fold → 'native (the
+;; compute leaf — int-int fast-folds are matched by the literal arms before this).
+;; Otherwise the operands are reduced in parallel via 'demand-par; recon* re-forms
+;; the head from the positional list of reduced operands.
+(define (step1-par operands recon*)
+  (if (andmap whnf-trivial? operands)
+      'native
+      (list 'demand-par operands recon*)))
+
 (define (whnf-step1 e)
   (cond
     [(whnf-trivial? e) 'whnf]
@@ -3343,30 +3367,17 @@
        [(expr-int-lt (expr-int a) (expr-int b)) (cons 'step (if (< a b) (expr-true) (expr-false)))]
        [(expr-int-le (expr-int a) (expr-int b)) (cons 'step (if (<= a b) (expr-true) (expr-false)))]
        [(expr-int-eq (expr-int a) (expr-int b)) (cons 'step (if (= a b) (expr-true) (expr-false)))]
-       [(expr-int-add a b)
-        (cond [(not (whnf-trivial? a)) (list 'demand a (lambda (x) (expr-int-add x b)))]
-              [(not (whnf-trivial? b)) (list 'demand b (lambda (y) (expr-int-add a y)))]
-              [else 'native])]
-       [(expr-int-sub a b)
-        (cond [(not (whnf-trivial? a)) (list 'demand a (lambda (x) (expr-int-sub x b)))]
-              [(not (whnf-trivial? b)) (list 'demand b (lambda (y) (expr-int-sub a y)))]
-              [else 'native])]
-       [(expr-int-mul a b)
-        (cond [(not (whnf-trivial? a)) (list 'demand a (lambda (x) (expr-int-mul x b)))]
-              [(not (whnf-trivial? b)) (list 'demand b (lambda (y) (expr-int-mul a y)))]
-              [else 'native])]
-       [(expr-int-lt a b)
-        (cond [(not (whnf-trivial? a)) (list 'demand a (lambda (x) (expr-int-lt x b)))]
-              [(not (whnf-trivial? b)) (list 'demand b (lambda (y) (expr-int-lt a y)))]
-              [else 'native])]
-       [(expr-int-le a b)
-        (cond [(not (whnf-trivial? a)) (list 'demand a (lambda (x) (expr-int-le x b)))]
-              [(not (whnf-trivial? b)) (list 'demand b (lambda (y) (expr-int-le a y)))]
-              [else 'native])]
-       [(expr-int-eq a b)
-        (cond [(not (whnf-trivial? a)) (list 'demand a (lambda (x) (expr-int-eq x b)))]
-              [(not (whnf-trivial? b)) (list 'demand b (lambda (y) (expr-int-eq a y)))]
-              [else 'native])]
+       ;; binary arithmetic — STRICT in BOTH operands, which are INDEPENDENT (neither
+       ;; depends on the other). 'demand-par reduces them together (the fix for
+       ;; serialized independent subterms). recon* re-forms the head positionally;
+       ;; the both-int literal arms above fold first, so by the time recon* re-forms
+       ;; with both operands reduced, the literal arm fires next round.
+       [(expr-int-add a b) (step1-par (list a b) (lambda (vs) (expr-int-add (car vs) (cadr vs))))]
+       [(expr-int-sub a b) (step1-par (list a b) (lambda (vs) (expr-int-sub (car vs) (cadr vs))))]
+       [(expr-int-mul a b) (step1-par (list a b) (lambda (vs) (expr-int-mul (car vs) (cadr vs))))]
+       [(expr-int-lt a b)  (step1-par (list a b) (lambda (vs) (expr-int-lt  (car vs) (cadr vs))))]
+       [(expr-int-le a b)  (step1-par (list a b) (lambda (vs) (expr-int-le  (car vs) (cadr vs))))]
+       [(expr-int-eq a b)  (step1-par (list a b) (lambda (vs) (expr-int-eq  (car vs) (cadr vs))))]
        [(expr-int-neg a) (if (whnf-trivial? a) 'native (list 'demand a (lambda (x) (expr-int-neg x))))]
        [(expr-int-abs a) (if (whnf-trivial? a) 'native (list 'demand a (lambda (x) (expr-int-abs x))))]
        ;; structural reduce / match (Phase 5c batch 2): strict in the scrutinee.
@@ -3408,6 +3419,13 @@
       [(eq? step 'whnf) cur]
       [(eq? step 'native) (whnf-native cur)]   ; native reduces this construct (de-routed)
       [(eq? (car step) 'step) (loop (cdr step))]
+      [(eq? (car step) 'demand-par)
+       ;; iterating variant: reduce each independent operand to WHNF (sequentially
+       ;; here — the network driver is what makes them parallel), assemble, recon.
+       (define operands (cadr step))
+       (define recon* (caddr step))
+       (define next (recon* (map whnf-via-egraph operands)))
+       (if (equal? next cur) cur (loop next))]
       [else ;; 'demand
        (define sub (cadr step))
        (define recon (caddr step))
@@ -3442,6 +3460,57 @@
     (define net2 (pr/eclass-union net1 K Cc))
     (net-cell-write net2 reduce-request-cell-id (hash K C))))
 
+;; ---- 'demand-par: independent operands reduce in parallel (set-latch fan-in) ----
+;; An e-class is READY (its sub-cascade has reached WHNF) once its :best is cost-0,
+;; the marker pr-write-whnf! sets. Pre-reduction it carries the intern cost (≥1).
+(define (pr-eclass-ready? v)
+  (define best (and (hash? v) (hash-ref v ':best #f)))
+  (and best (zero? (car best)) #t))
+
+;; the reduced WHNF term in a READY class (pr-eclass-ready? already gated cost-0)
+(define (pr-eclass-whnf-of net cid)
+  (cdr (hash-ref (pr/eclass-read net cid) ':best)))
+
+;; pr-demand-par: drive N INDEPENDENT operands to WHNF together, then re-form the
+;; head. Each non-value operand is interned to its own class KOi and queued
+;; {KOi → Oi} into the SAME reduce-request round → the stratum advances ALL of them
+;; one step per round (interleaved cascades = "all in parallel"; vs single-subterm
+;; 'demand which sequenced operand i fully before operand j). A BARRIER propagator
+;; (set-latch fan-in, propagator-design.md) watches the KOi classes; when ALL are
+;; ready it re-forms {K → (recon* resolved)} and the head cascade continues. Value
+;; operands pass through unchanged (no class allocated). Inadmissible operand →
+;; native fallback for the whole head (parity-safe).
+(define (pr-demand-par net hc K operands recon*)
+  (with-handlers ([exn:fail? (lambda (_e)
+                               (pr-write-whnf! net K (whnf-native (recon* operands))))])
+    ;; slot := (cons 'val term) [pass-through] | (cons 'class KOi) [cascade-driven]
+    (define-values (net* slots class-cids)
+      (for/fold ([n net] [slots '()] [cids '()]) ([Oi (in-list operands)])
+        (cond
+          [(whnf-trivial? Oi) (values n (cons (cons 'val Oi) slots) cids)]
+          [else
+           (define-values (n1 KOi _d) (pr/eclass-intern n hc Oi #:cost 5))
+           (define n2 (net-cell-write n1 reduce-request-cell-id (hash KOi Oi)))
+           (values n2 (cons (cons 'class KOi) slots) (cons KOi cids))])))
+    (define slots* (reverse slots))
+    (cond
+      [(null? class-cids)
+       ;; defensive: step1-par yields 'native when all operands are values, so this
+       ;; is unreachable via the classifier — handle it as an immediate re-form.
+       (pr-cascade! net* hc K (recon* operands))]
+      [else
+       (define conditions (map (lambda (cid) (cons cid pr-eclass-ready?)) class-cids))
+       (define body-fn
+         (lambda (n)
+           (define resolved
+             (map (lambda (slot)
+                    (if (eq? (car slot) 'val) (cdr slot) (pr-eclass-whnf-of n (cdr slot))))
+                  slots*))
+           (net-cell-write n reduce-request-cell-id (hash K (recon* resolved)))))
+       (define-values (net2 _pid)
+         (net-add-barrier net* conditions '() (list reduce-request-cell-id) body-fn))
+       net2])))
+
 ;; the keep-pending reduce stratum handler
 (define (process-reduce-requests net pending)
   (define hc (pr/current-eclass-hashcons-cell-id))
@@ -3459,6 +3528,11 @@
          ;; de-routes the operands too.)
          [(eq? step 'native) (pr-write-whnf! n K (whnf-impl F))]
          [(eq? (car step) 'step) (pr-cascade! n hc K (cdr step))]
+         ;; 'demand-par — N independent operands reduce TOGETHER on-network, joined
+         ;; by a barrier (set-latch fan-in). This is the parallel path: the operands'
+         ;; cascades interleave per round rather than being sequenced.
+         [(eq? (car step) 'demand-par)
+          (pr-demand-par n hc K (cadr step) (caddr step))]
          [else ;; 'demand — reduce the strict subterm natively (de-routed). Routing
           ;; demand subterms back through the cascade is CORRECT but ~7× slower
           ;; (every recursive subterm spawns a nested cascade); the head chain is

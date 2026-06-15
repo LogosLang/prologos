@@ -14,6 +14,14 @@ whnf (test-preduce-egraph.rkt network variant, 47 checks); **full suite 8725
 all-pass**. The migrated fragment (β, ι, suc-collapse, fst/snd, J, boolrec, ann,
 vhead/vtail) is genuinely network-driven; the rest is the 'native fallback;
 demand subterms native (full cascade-driven demand via set-latch = future).
+**5d ✅ (parallel demand)** — the set-latch refinement landed for INDEPENDENT
+operands: binary arithmetic (int+/-/*/lt/le/eq) emits `'demand-par`, which interns
+ALL operands and queues them into the SAME reduce-request round so their cascades
+interleave per BSP round (not sequenced), joined by a barrier propagator
+(set-latch fan-in, `propagator-design.md`). Fixes "reduction serializes
+independent subterms": the balanced-tree acceptance collapsed 353→43 BSP rounds
+(8.2× depth reduction, max 256 propagators/round); fib's two recursive branches now
+progress together. Parity-gated; full suite green. See §10.5.
 **5c (route the DEFAULT whnf through the engine = bypass deploy) is staged**: it
 is low-value + risky until more constructs migrate off 'native (most reduction is
 still 'native today), and it changes the hot path → needs suite-wide parity.
@@ -267,4 +275,59 @@ deleted) stays owner-gated.
 
 **Honest scope note:** demand subterms reduce via native whnf in 5b (the head
 chain is scheduler-driven). Full cascade-driven demand (the strict subterms also
-on the cascade) is the set-latch refinement (`propagator-design.md`), deferred.
+on the cascade) is the set-latch refinement (`propagator-design.md`) — landed for
+INDEPENDENT operands in 5d (§10.5); the single-strict-subterm `'demand` arms (app
+head, fst/snd, natrec target, J, boolrec, vhead/vtail, reduce scrutinee, int
+neg/abs) stay native (one strict position → no parallelism to gain; routing them
+is the ~7× demand-cascade cost declined in 5c).
+
+## 10.5 — 5d: parallel demand (`'demand-par`) — the set-latch refinement for independent operands
+
+**Problem (owner, 2026-06-15):** "reduction design serializes independent
+subterms." Single-subterm `'demand` is strict in exactly ONE position, so a
+construct with N INDEPENDENT strict operands (binary arithmetic: `int+` is strict
+in BOTH args, neither depends on the other) was sequenced — operand i fully reduced
+before operand j even began. For `(int+ (fib (n-1)) (fib (n-2)))` the two recursive
+branches are independent yet were reduced one-then-the-other. This violates the
+mantra's "all in parallel."
+
+**Fix:** `whnf-step1`'s binary-arithmetic arms now emit
+`(list 'demand-par OPERANDS RECON*)` (via the `step1-par` helper: `'native` when all
+operands are already values — the int-int fast-folds are matched first; else
+`'demand-par`). The reduce stratum's `pr-demand-par`:
+1. interns EACH non-value operand to its own class `KOi` and queues `{KOi → Oi}`
+   into the SAME `reduce-request` round → the stratum's `for/fold` advances ALL
+   operands one step per round (interleaved cascades = parallel rounds);
+2. installs a BARRIER propagator (`net-add-barrier`, the set-latch fan-in) watching
+   the `KOi` classes; when ALL are READY (`:best` is cost-0 — the `pr-write-whnf!`
+   marker) it re-forms `{K → (RECON* resolved)}` and the head cascade continues;
+3. value operands pass through unchanged (no class allocated).
+
+The iterating `whnf-via-egraph` variant handles `'demand-par` by reducing each
+operand sequentially (parity-identical result; the parallelism is a property of the
+NETWORK driver, not the classifier).
+
+**Network Reality Check:** ✅ the operands' reductions are now genuine
+`net-add-propagator`/`net-cell-write` cascades on the network (vs `whnf-native`
+off-network in 5b); the barrier is a `net-add-propagator`; the join is information
+flow through the `KOi` cells.
+
+**Evidence (viz traces, before/after):**
+| file | rounds (old → new) | multi-prop rounds | max prop/round |
+|---|---|---|---|
+| `2026-06-14-parallel-reduction.prologos` (balanced ×/+ tree) | 353 → **43** (8.2×) | 49 → 36 | 256 → 256 |
+| `2026-06-14-fib-small.prologos` (`fib 6`) | 220 → 248 | 51 → **78** | 21 → 22 |
+
+The balanced tree is the clean demonstration: the same width-256 work that was
+sequenced across 353 rounds now completes in 43 (the tree's actual depth). fib gains
+concurrency (51→78 multi-prop rounds) at a small round-count cost (operand reduction
+moved on-network — more interning/union propagators); fib's depth-dominated
+recursion is inherently more serial than the balanced tree.
+
+**Scope:** binary arithmetic only (`int+/-/*/lt/le/eq`) — the genuine
+independent-strict-operand case. Other eliminators are strict in one position (no
+parallelism to gain). Generalizing parallelism INTO `whnf-impl`'s primitive folds
+(e.g. parallel reduction of N-ary data-op operands) is the larger compute-leaf
+reimplementation, SH/Zig-era.
+
+Parity-gated (`test-preduce-egraph.rkt`, both variants); full suite green.
