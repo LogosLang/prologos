@@ -1468,13 +1468,17 @@
 ;; Use (box N) to set a limit; whnf-impl decrements on each call.
 (define current-reduction-fuel (make-parameter #f))
 
-;; Phase 5c deploy hook: route the DEFAULT whnf through the scheduler-driven
-;; cascade (whnf-via-egraph-network) instead of the native recursive reducer.
-;; Default OFF (production unchanged); PREDUCE_ROUTE=1 flips it ON so the full
-;; suite can be the comprehensive parity oracle + perf checkpoint before deletion.
-;; The cascade's native fallbacks de-route via (parameterize ([... #f]) …) so the
-;; native one-step compute never re-enters the cascade (no infinite recursion).
-(define current-egraph-whnf? (make-parameter (and (getenv "PREDUCE_ROUTE") #t)))
+;; Phase 5c: the DEFAULT whnf routes through the scheduler-driven cascade
+;; (whnf-via-egraph-network) — the cascade is the on-network reduction DRIVER for
+;; ground terms (owner directive 2026-06-15: "delete the recursive off-network
+;; DRIVER, keep the compute leaf"). The native reducer (whnf-core/whnf-impl) is
+;; retained NOT as the driver but as: (a) the primitive COMPUTE LEAF reached via
+;; whnf-step1's 'native (arithmetic folds, data-structure ops, FFI — "compute
+;; inside the rule", the e-graph's own design), and (b) the NON-GROUND fallback:
+;; the e-graph requires PCE-admissible (ground) terms, so metavar/elaboration
+;; reduction can't be interned and de-routes via whnf-native. Set #f to force the
+;; native driver (e.g. test-preduce-ingest, which tests the 4a recording path).
+(define current-egraph-whnf? (make-parameter (not (getenv "PREDUCE_NATIVE"))))
 
 (define (whnf e)
   (if (current-egraph-whnf?)
