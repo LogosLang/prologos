@@ -35,7 +35,7 @@
   header .cmd { color: #dcdcaa; font-family: ui-monospace, monospace; }
   input[type=file], button, label.tog, select { background: #3c3c3c; color: #ddd; border: 1px solid #555; border-radius: 4px; padding: 3px 8px; font: inherit; }
   button:hover, label.tog:hover, select:hover { border-color: #888; cursor: pointer; }
-  .main { display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
+  .main { display: grid; grid-template-columns: 1fr 340px; min-height: 0; position: relative; }
   .graphwrap { position: relative; min-width: 0; overflow: hidden; cursor: grab; }
   .graphwrap:active { cursor: grabbing; }
   svg { display: block; width: 100%; height: 100%; }
@@ -55,6 +55,18 @@
   .legsec { font-size: 10px; text-transform: uppercase; color: #666; letter-spacing: .5px; margin: 8px 0 2px; }
   .swatch { width: 12px; height: 12px; border-radius: 50%; flex: none; border: 1px solid #222; }
   .muted { color: #777; }
+  .codepanel { position: absolute; top: 10px; left: 10px; width: 380px; max-height: 48%; overflow: auto; z-index: 4;
+               background: rgba(28,28,30,.93); border: 1px solid #333; border-radius: 6px;
+               font-family: ui-monospace, monospace; font-size: 11.5px; line-height: 1.55; box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+  .codepanel .cphead { position: sticky; top: 0; background: #252526; padding: 4px 9px; border-bottom: 1px solid #333;
+                       color: #888; text-transform: uppercase; font-size: 10px; letter-spacing: .5px; }
+  .codepanel .cprow { display: flex; padding: 0 6px; white-space: pre; cursor: pointer; }
+  .codepanel .cprow:hover, .codepanel .cprow.on { background: rgba(255,215,0,.13); }
+  .codepanel .cprow.on { box-shadow: inset 2px 0 0 #ffd700; }
+  .codepanel .ln { width: 2.2em; text-align: right; margin-right: 9px; color: #555; flex: none; user-select: none; }
+  .codepanel .cprow.mapped .ln { color: #6a9955; font-weight: 600; }
+  .tok-kw { color: #569cd6; } .tok-str { color: #ce9178; } .tok-com { color: #6a9955; font-style: italic; }
+  .tok-num { color: #b5cea8; } .tok-punct { color: #d4d4d4; } .tok-bracket { color: #9a9a9a; }
 </style>
 </head>
 <body>
@@ -145,6 +157,7 @@ function buildGraphFromTopo(topoSection, source, changedGlobal, showAll) {
                 : reqOut ? ("emit " + reqOut.replace("-request", ""))
                 : propLabel(p.id, identity, source);
     const n = { key: "p" + p.id, kind: "prop", id: p.id, label, op: kind, group: "propagator", color: "#569cd6",
+                srcLine: parseSrcLine((identity.propagatorSrclocs || {})[String(p.id)]),
                 inputs: p.inputs.filter(i => byId.has("c" + i)), outputs: p.outputs.filter(o => byId.has("c" + o)) };
     nodes.push(n); byId.set(n.key, n);
     for (const i of n.inputs) edges.push({ from: "c" + i, to: n.key, pid: p.id });
@@ -301,6 +314,8 @@ function App() {
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(700);   // ms per step
   const [fitSignal, setFitSignal] = useState(0);
+  const [showCode, setShowCode] = useState(true);
+  const [activeLine, setActiveLine] = useState(null);   // source line ↔ node cross-highlight
 
   const rounds = useMemo(() => env ? timelineRounds(env) : [], [env]);
   const changed = useMemo(() => env ? changedCellIdsGlobal(env) : new Set(), [env]);
@@ -323,6 +338,11 @@ function App() {
   const rawGraph = useMemo(() => env ? buildGraphFromTopo(env.topologies[topoIdx], env.source, changed, showAll) : null,
                            [env, topoIdx, showAll, changed]);
   const graph = useMemo(() => rawGraph && collapse ? collapseEclasses(rawGraph) : rawGraph, [rawGraph, collapse]);
+  const mappedLines = useMemo(() => {
+    const s = new Set();
+    if (graph) for (const n of graph.nodes) if (n.srcLine != null) s.add(n.srcLine);
+    return s;
+  }, [graph]);
   const highlights = useMemo(() => {
     if (!env) return { fired: new Set(), wrote: new Set(), born: new Set() };
     const fired = new Set(round.propagatorsFired);
@@ -355,9 +375,13 @@ function App() {
               mode={mode} setMode={setMode} showAll={showAll} setShowAll={setShowAll}
               collapse={collapse} setCollapse={setCollapse}
               showLabels={showLabels} setShowLabels={setShowLabels}
+              showCode={showCode} setShowCode={setShowCode}
               onFile={loadFile} onFit={() => setFitSignal(s => s + 1)} />
       <div className="main">
-        <GraphView graph={graph} mode={mode} highlights={highlights} env={env} fitSignal={fitSignal} showLabels={showLabels} />
+        <GraphView graph={graph} mode={mode} highlights={highlights} env={env} fitSignal={fitSignal}
+                   showLabels={showLabels} activeLine={activeLine} setActiveLine={setActiveLine} />
+        {showCode && env.source &&
+          <CodePanel source={env.source} activeLine={activeLine} setActiveLine={setActiveLine} mappedLines={mappedLines} />}
         <Sidebar env={env} rounds={rounds} idx={idx} setIdx={setIdx} round={round}
                  topoIdx={topoIdx} playing={playing} setPlaying={setPlaying} graph={graph}
                  speed={speed} setSpeed={setSpeed} />
@@ -366,7 +390,7 @@ function App() {
   );
 }
 
-function Header({ env, cmdText, msg, mode, setMode, showAll, setShowAll, collapse, setCollapse, showLabels, setShowLabels, onFile, onFit }) {
+function Header({ env, cmdText, msg, mode, setMode, showAll, setShowAll, collapse, setCollapse, showLabels, setShowLabels, showCode, setShowCode, onFile, onFit }) {
   return (
     <header>
       <span className="title">Prologos network</span>
@@ -386,13 +410,57 @@ function Header({ env, cmdText, msg, mode, setMode, showAll, setShowAll, collaps
           onChange={e => setShowAll(e.target.checked)} /> infrastructure</label>
         <label className="tog"><input type="checkbox" checked={showLabels}
           onChange={e => setShowLabels(e.target.checked)} /> labels</label>
+        <label className="tog"><input type="checkbox" checked={showCode}
+          onChange={e => setShowCode(e.target.checked)} /> code</label>
         <button onClick={onFit}>fit</button>
       </>}
     </header>
   );
 }
 
-function GraphView({ graph, mode, highlights, env, fitSignal, showLabels }) {
+// Lightweight Prologos surface-syntax highlighter (per line; comments/strings
+// don't span lines in WS mode). Approximate — for readability, not parsing.
+function tokenizeProlog(line) {
+  const kw = new Set(["ns","spec","defn","def","type","bundle","match","the","fn",
+                      "solve","defr","impl","trait","import","where","let","in","data"]);
+  const re = /(;[^\n]*)|("(?:[^"\\]|\\.)*")|([A-Za-z_][A-Za-z0-9_*?!:.\/+\-]*)|(\d[\w.]*)|([\[\](){}<>])|(\s+)|(.)/g;
+  const out = []; let m;
+  while ((m = re.exec(line))) {
+    if (m[1]) out.push({ t: m[1], c: "tok-com" });
+    else if (m[2]) out.push({ t: m[2], c: "tok-str" });
+    else if (m[3]) out.push({ t: m[3], c: kw.has(m[3]) ? "tok-kw" : "" });
+    else if (m[4]) out.push({ t: m[4], c: "tok-num" });
+    else if (m[5]) out.push({ t: m[5], c: "tok-bracket" });
+    else if (m[6]) out.push({ t: m[6], c: "" });
+    else out.push({ t: m[7], c: "tok-punct" });
+  }
+  return out;
+}
+
+// Source panel (top-left). Hovering a line cross-highlights its nodes in the
+// graph (via setActiveLine); hovering a node lights its source line here.
+// `mapped` = lines with ≥1 propagator in the current round's topology.
+function CodePanel({ source, activeLine, setActiveLine, mappedLines }) {
+  const lines = source.lines || {};
+  const maxLine = Object.keys(lines).reduce((a, k) => Math.max(a, +k), 0);
+  const rows = [];
+  for (let i = 1; i <= maxLine; i++) rows.push([i, lines[String(i)] != null ? lines[String(i)] : ""]);
+  return (
+    <div className="codepanel">
+      <div className="cphead">{source.path || "source"}</div>
+      {rows.map(([ln, text]) => (
+        <div key={ln}
+             className={"cprow" + (ln === activeLine ? " on" : "") + (mappedLines.has(ln) ? " mapped" : "")}
+             onMouseEnter={() => setActiveLine(ln)} onMouseLeave={() => setActiveLine(null)}>
+          <span className="ln">{ln}</span>
+          <span>{tokenizeProlog(text).map((tk, i) => <span key={i} className={tk.c || undefined}>{tk.t}</span>)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GraphView({ graph, mode, highlights, env, fitSignal, showLabels, activeLine, setActiveLine }) {
   const wrapRef = useRef(null);
   const nodesRef = useRef(new Map());
   const simRef = useRef(null);
@@ -495,7 +563,12 @@ function GraphView({ graph, mode, highlights, env, fitSignal, showLabels }) {
             const sw = iw(isFired || bornN || wroteN ? 2.6 : 1);
             const fill = wroteN ? "#e9c46a" : n.color;
             return (
-              <g key={n.key} onMouseEnter={() => setHover(n)} style={{ cursor: "pointer" }}>
+              <g key={n.key} style={{ cursor: "pointer" }}
+                 onMouseEnter={() => { setHover(n); setActiveLine(n.srcLine != null ? n.srcLine : null); }}
+                 onMouseLeave={() => setActiveLine(null)}>
+                {n.srcLine != null && n.srcLine === activeLine &&
+                  <polygon points={`${n.x},${n.y-13} ${n.x+13},${n.y} ${n.x},${n.y+13} ${n.x-13},${n.y}`}
+                           fill="none" stroke="#ffd700" strokeWidth={iw(2)} opacity="0.95" />}
                 {n.kind === "cell"
                   ? <circle cx={n.x} cy={n.y} r="8" fill={fill} stroke={stroke} strokeWidth={sw} />
                   : <polygon points={`${n.x},${n.y-9} ${n.x+9},${n.y} ${n.x},${n.y+9} ${n.x-9},${n.y}`}
