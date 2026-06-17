@@ -107,7 +107,7 @@
 
 (test-case "serialize-network-topology: empty network"
   (define js (serialize-network-topology (make-prop-network)))
-  (check-equal? (hash-ref (hash-ref js 'stats) 'totalCells) 22)  ;; PReduce Track 1 11b: 22 well-known cells (0-19 as before + 20=congruence-sig-index, 21=congruence-request)
+  (check-equal? (hash-ref (hash-ref js 'stats) 'totalCells) 24)  ;; PReduce Track 8 Phase 5b: 24 well-known cells (0-22 + 23=reduce-request)
   (check-equal? (hash-ref (hash-ref js 'stats) 'totalPropagators) 0)
   (check-equal? (hash-ref (hash-ref js 'stats) 'contradiction) (json-null)))
 
@@ -121,7 +121,7 @@
     (if (eq? v 'bot) net (net-cell-write net cid-b v)))
   (define-values (net3 pid) (net-add-propagator net2 (list cid-a) (list cid-b) copy-fn))
   (define js (serialize-network-topology net3))
-  (check-equal? (hash-ref (hash-ref js 'stats) 'totalCells) 24)  ;; PReduce Track 1 11b: 22 well-known + 2 user (cid-a, cid-b)
+  (check-equal? (hash-ref (hash-ref js 'stats) 'totalCells) 26)  ;; PReduce Track 8 Phase 5b: 24 well-known + 2 user (cid-a, cid-b)
   (check-equal? (hash-ref (hash-ref js 'stats) 'totalPropagators) 1)
   ;; Check propagator has correct inputs/outputs
   (define prop-json (car (hash-ref js 'propagators)))

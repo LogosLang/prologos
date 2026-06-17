@@ -36,7 +36,8 @@
          dispatch-rules
          guard-skip-count
          reset-guard-skip-count!
-         guard-skip-note!)
+         guard-skip-note!
+         process-dispatch-requests)
 
 ;; --- the Phase-0 observability counter (PERF-COUNTERS struct-field integration
 ;;     rides with Phase 1's driver wiring, where the counter becomes externally
@@ -256,3 +257,37 @@
             (apply-rule n hashcons-cid rule class-cid
                         #:class-of class-of #:cost result-cost))
           (values n2 (if fired? (add1 fired) fired))]))]))
+
+;; --- Phase 2 (PReduce Track 8): dispatch as a STRATUM FIRING ----------------
+;; "Rule application IS propagator firing." Instead of preduce-ingest-int calling
+;; dispatch-rules imperatively, it installs an S0 emitter on the redex class that
+;; writes dispatch-request-cell-id; run-to-quiescence then fires THIS handler
+;; between rounds (topology tier — apply-rule installs union propagators, a
+;; structural change). Mirrors the congruence engine (eclass-graph.rkt
+;; process-congruence-requests + cell-21).
+;;
+;; The handler reads the registry + hashcons cell-ids from their parameters
+;; (set by the driver / test before whnf, valid in run-to-quiescence's dynamic
+;; extent), and runs the existing dispatch-rules on each pending class.
+;;
+;; Re-entrancy: apply-rule drives its OWN run-to-quiescence (to land the union).
+;; That nested quiescence would re-see the SAME pending requests (the framework's
+;; post-handler reset has not run yet), re-dispatching ad infinitum. So we CLEAR
+;; the request cell on the working net at entry (the stratification.md "fork-based
+;; handlers must clear the request cell" idiom) before any apply-rule runs.
+(define (process-dispatch-requests net pending)
+  (define net0 (net-cell-reset net dispatch-request-cell-id (hash)))
+  (define hc (current-eclass-hashcons-cell-id))
+  (define reg (current-rule-registry-cell-id))
+  (cond
+    [(and hc reg (hash? pending))
+     (for/fold ([n net0]) ([(cid _v) (in-hash pending)])
+       (define-values (n2 _fired)
+         (dispatch-rules n hc reg cid #:result-cost 1))
+       n2)]
+    [else net0]))
+
+(register-stratum-handler! dispatch-request-cell-id
+                           process-dispatch-requests
+                           #:tier 'topology
+                           #:reset-value (hash))

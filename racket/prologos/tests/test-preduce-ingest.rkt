@@ -1,9 +1,12 @@
 #lang racket/base
-;; PReduce Track 2 — the ingestion hook (iter 22): gated OFF by default; when ON,
-;; whnf's int folds route through the e-graph and land the same answers, with the
-;; classes observable afterward.
+;; PReduce ingestion (the on-network reduction path). On-network reduction is the
+;; ONLY path on this branch (the parameter gate + off-network native arms were
+;; deleted 2026-06-14): whnf's β/ι/δ/int-folds always route through the e-graph
+;; and land the same answers, with the classes observable afterward; the hook is
+;; TOTAL (degrades to the native step when the e-graph infra is absent).
 (require rackunit racket/set
-         (only-in "../rule-dispatch.rkt" guard-skip-count reset-guard-skip-count!)
+         (only-in "../rule-dispatch.rkt"
+                  guard-skip-count reset-guard-skip-count! process-dispatch-requests)
          "../reduction.rkt"
          "../syntax.rkt"
          "../eclass-graph.rkt"
@@ -16,16 +19,20 @@
                   store-record-reduction)
          (only-in "../pce.rkt" pce-digest PCE-KIND-GROUND-TERM))
 
-;; OFF (the default): native fold; no e-graph involvement
+;; This file tests the 4a RECORDING path (preduce-ingest-delta/int) specifically —
+;; the e-graph classes whnf interns via the native β/ι/δ arms. The Phase 5c routing
+;; deploy (PREDUCE_ROUTE=1) routes whnf through the scheduler cascade instead, which
+;; records differently (eclass-union, tested by test-preduce-egraph). So pin routing
+;; OFF here: this file validates the path routing replaces, until the native reducer
+;; is deleted (at which point these recording assertions retire). Reduction VALUES
+;; are identical either way; only the recorded class structure differs.
+(current-egraph-whnf? #f)
+
+;; No e-graph plumbing: the ingest path degrades to the native fold (total).
 (check-equal? (whnf (expr-int-add (expr-int 1) (expr-int 2))) (expr-int 3))
-(check-false (current-preduce-ingest?) "default is OFF")
+(check-equal? (whnf (expr-int-mul (expr-int 6) (expr-int 7))) (expr-int 42))
 
-;; ON with no plumbing: still the native answers (the hook is total)
-(parameterize ([current-preduce-ingest? #t])
-  (check-equal? (whnf (expr-int-add (expr-int 1) (expr-int 2))) (expr-int 3))
-  (check-equal? (whnf (expr-int-mul (expr-int 6) (expr-int 7))) (expr-int 42)))
-
-;; ON with full plumbing: same answers, AND the e-graph holds the folded classes
+;; With full plumbing: same answers, AND the e-graph holds the folded classes
 (define prn-box (box (make-prop-network)))
 (parameterize ([current-rule-registry-cell-id #f]
                [current-eclass-hashcons-cell-id #f]
@@ -35,11 +42,10 @@
                      (register-arithmetic-seed! (unbox prn-box)
                                                 (current-rule-registry-cell-id))))
   (init-eclass-hashcons-cell! prn-box)
-  (parameterize ([current-preduce-ingest? #t])
-    (check-equal? (whnf (expr-int-add (expr-int 1) (expr-int 2))) (expr-int 3)
-                  "e-graph path lands the same fold")
-    (check-equal? (whnf (expr-int-sub (expr-int 10) (expr-int 3))) (expr-int 7))
-    (check-equal? (whnf (expr-int-mul (expr-int 6) (expr-int 7))) (expr-int 42)))
+  (check-equal? (whnf (expr-int-add (expr-int 1) (expr-int 2))) (expr-int 3)
+                "e-graph path lands the same fold")
+  (check-equal? (whnf (expr-int-sub (expr-int 10) (expr-int 3))) (expr-int 7))
+  (check-equal? (whnf (expr-int-mul (expr-int 6) (expr-int 7))) (expr-int 42))
   ;; the classes are now IN the e-graph (the memo exists)
   (define net (unbox prn-box))
   (define hc (current-eclass-hashcons-cell-id))
@@ -50,37 +56,39 @@
                 "the class best is the folded literal")
   ;; re-whnf of the same shape is a hashcons HIT (no new class)
   (define n-classes-before (hash-count (net-cell-read net hc)))
-  (parameterize ([current-preduce-ingest? #t])
-    (whnf (expr-int-add (expr-int 1) (expr-int 2))))
+  (whnf (expr-int-add (expr-int 1) (expr-int 2)))
   (check-equal? (hash-count (net-cell-read (unbox prn-box) hc)) n-classes-before
                 "re-ingestion of the same position is a memo hit"))
 
-;; ---- δ-memo (Phase 2, iter 24): {body, whnf(body)} as one e-class ----
-(require (only-in "../eclass-cell.rkt" eclass-bot))
-(define prn-box2 (box (make-prop-network)))
+;; ---- Phase 2 (PReduce Track 8): dispatch as a STRATUM FIRING ----
+;; The arithmetic rewrite is performed by the dispatch stratum handler
+;; (process-dispatch-requests), NOT an imperative dispatch-rules call. Intern a
+;; redex WITHOUT dispatching, then run the handler directly on a pending request:
+;; it must land the fold and clear the request cell (the entry-reset idiom).
 (parameterize ([current-rule-registry-cell-id #f]
                [current-eclass-hashcons-cell-id #f]
-               [current-persistent-registry-net-box prn-box2])
-  (init-rule-registry-cell! prn-box2)
-  (init-eclass-hashcons-cell! prn-box2)
+               [current-persistent-registry-net-box (box (make-prop-network))])
+  (define pb (current-persistent-registry-net-box))
+  (init-rule-registry-cell! pb)
+  (set-box! pb (run-to-quiescence
+                (register-arithmetic-seed! (unbox pb)
+                                           (current-rule-registry-cell-id))))
+  (init-eclass-hashcons-cell! pb)
   (define hc (current-eclass-hashcons-cell-id))
-  ;; a "definition body" worth memoizing: (int+ (int* 2 3) 4) — whnf folds to 10
-  (define body (expr-int-add (expr-int-mul (expr-int 2) (expr-int 3)) (expr-int 4)))
-  (parameterize ([current-preduce-ingest? #t])
-    ;; the hook is exercised through the δ entry point directly (the fvar arm
-    ;; needs a global env; the memo mechanics are what this test pins)
-    (define r1 (whnf body))
-    (check-equal? r1 (expr-int 10)))
-  ;; simulate the δ path: the class keyed by digest(body) holds whnf(body) at cost 0
-  (define dig (pce-digest PCE-KIND-GROUND-TERM body))
-  ;; note: the int-fold ingestion above interned SUBTERM forms, not the body
-  ;; expr itself — the δ memo is exercised end-to-end below via the public hook
-  (void))
+  (define form (list 'int+ (list 'lit 2) (list 'lit 3)))
+  (define-values (n1 cid _d) (eclass-intern (unbox pb) hc form #:cost 5))
+  ;; pre-dispatch: the class best is still the UNREDUCED redex
+  (check-equal? (hash-ref (eclass-read n1 cid) ':best) (cons 5 form)
+                "pre-dispatch: best is the unreduced redex")
+  ;; the STRATUM HANDLER performs the rewrite (proving dispatch is on-network)
+  (define n2 (process-dispatch-requests n1 (hash cid #t)))
+  (check-equal? (hash-ref (eclass-read n2 cid) ':best) (cons 1 '(lit 5))
+                "the dispatch stratum handler folded 2+3=5 into the class best")
+  ;; the handler cleared the request cell at entry (re-entrancy guard)
+  (check-true (hash-empty? (net-cell-read n2 dispatch-request-cell-id))
+              "the handler cleared the dispatch-request cell at entry"))
 
-;; the δ hook through whnf with a real global env is exercised at Level 3
-;; (acceptance with PREDUCE_INGEST=1 — every def reference routes through it);
-;; here we pin the memo MECHANICS via two whnf calls on an fvar-free body and
-;; the e-graph class shape after a manual delta round-trip:
+;; ---- δ-memo: {body, whnf(body)} as one e-class ----
 (parameterize ([current-rule-registry-cell-id #f]
                [current-eclass-hashcons-cell-id #f]
                [current-persistent-registry-net-box (box (make-prop-network))])
@@ -89,15 +97,14 @@
   (init-eclass-hashcons-cell! pb)
   (define hc (current-eclass-hashcons-cell-id))
   (define body (expr-int-add (expr-int 1) (expr-int 2)))
-  (parameterize ([current-preduce-ingest? #t])
-    ;; first whnf of the body: the int-fold hook interns + folds
-    (check-equal? (whnf body) (expr-int 3)))
+  ;; first whnf of the body: the int-fold hook interns + folds
+  (check-equal? (whnf body) (expr-int 3))
   ;; the body's class exists in the e-graph (the int hook keyed it by its form)
   (define net (unbox pb))
   (check-true (> (hash-count (net-cell-read net hc)) 0)
               "ingestion populated the per-file e-graph"))
 
-;; ---- guarded β (Phase 3, iter 25): the Track 2 exit criterion ----
+;; ---- guarded β: the Track 2 exit criterion ----
 (parameterize ([current-rule-registry-cell-id #f]
                [current-eclass-hashcons-cell-id #f]
                [current-persistent-registry-net-box (box (make-prop-network))])
@@ -109,8 +116,7 @@
   (define redex (expr-app (expr-lam 'mw (expr-Int)
                                     (expr-int-add (expr-bvar 0) (expr-int 1)))
                           (expr-int 5)))
-  (parameterize ([current-preduce-ingest? #t])
-    (check-equal? (whnf redex) (expr-int 6) "guarded β fires and lands the contractum"))
+  (check-equal? (whnf redex) (expr-int 6) "guarded β fires and lands the contractum")
   ;; the redex class holds the contractum at cost 0 (the {redex, result} e-class)
   (define dig (pce-digest PCE-KIND-GROUND-TERM redex))
   (define cid (eclass-lookup (unbox pb) hc dig))
@@ -119,22 +125,21 @@
                 "the contractum is the class best — β recorded as an e-class join")
   ;; memo hit: same redex again, no new classes
   (define n0 (hash-count (net-cell-read (unbox pb) hc)))
-  (parameterize ([current-preduce-ingest? #t]) (whnf redex))
+  (whnf redex)
   (check-equal? (hash-count (net-cell-read (unbox pb) hc)) n0 "β memo hit")
   ;; an EFFECT-HEADED arg: ((λx. 99) (read ch)) — the guard SKIPS the e-graph
   ;; (pessimistic: deletion of an effectful capture must never be RECORDED);
-  ;; the native β still computes (legacy effects are deferred descriptors)
+  ;; the guard path still computes (legacy effects are deferred descriptors)
   (define eff-redex (expr-app (expr-lam 'mw (expr-Int) (expr-int 99))
                               (expr-app (expr-fvar 'read) (expr-fvar 'ch))))
   (reset-guard-skip-count!)
   (define n1 (hash-count (net-cell-read (unbox pb) hc)))
-  (parameterize ([current-preduce-ingest? #t])
-    (check-equal? (whnf eff-redex) (expr-int 99) "native β remains sound"))
+  (check-equal? (whnf eff-redex) (expr-int 99) "the guard path still computes")
   (check-equal? (guard-skip-count) 1 "the guard skipped the e-graph recording")
   (check-equal? (hash-count (net-cell-read (unbox pb) hc)) n1
                 "no class recorded for the effect-capturing redex"))
 
-;; ---- ι ingestion (Track 3 Phase 1, iter 41): the natrec recursion carriers ----
+;; ---- ι ingestion: the natrec recursion carriers ----
 (parameterize ([current-rule-registry-cell-id #f]
                [current-eclass-hashcons-cell-id #f]
                [current-persistent-registry-net-box (box (make-prop-network))])
@@ -150,20 +155,18 @@
                  (expr-lam 'mw (expr-Nat)
                            (expr-lam 'mw (expr-Nat) (expr-suc (expr-bvar 0))))
                  (expr-nat-val 2)))
-  (parameterize ([current-preduce-ingest? #t])
-    ;; whnf exposes the head constructor (WEAK head — the inner natrec stays);
-    ;; nf drives the full value: 3+2=5 (the first expectation here forgot
-    ;; weak-head semantics — the hook was right, the test was wrong)
-    (check-true (expr-suc? (whnf plus-redex)) "whnf exposes suc (weak head)")
-    (check-equal? (nf plus-redex) (expr-nat-val 5) "nf lands 3+2=5 through the e-graph"))
+  ;; whnf exposes the head constructor (WEAK head — the inner natrec stays);
+  ;; nf drives the full value: 3+2=5 (through the e-graph)
+  (check-true (expr-suc? (whnf plus-redex)) "whnf exposes suc (weak head)")
+  (check-equal? (nf plus-redex) (expr-nat-val 5) "nf lands 3+2=5 through the e-graph")
   ;; the redex chain memoized: classes exist for the nat-val steps
   (check-true (> (hash-count (net-cell-read (unbox pb) hc)) 0)
               "ι redexes populated the e-graph")
   ;; memo hit: same redex re-whnf'd, zero new classes
   (define n0 (hash-count (net-cell-read (unbox pb) hc)))
-  (parameterize ([current-preduce-ingest? #t]) (whnf plus-redex))
+  (whnf plus-redex)
   (check-equal? (hash-count (net-cell-read (unbox pb) hc)) n0 "ι memo hit")
-  ;; effect-headed step: the guard SKIPS the recording, native ι still computes
+  ;; effect-headed step: the guard SKIPS the recording, the guard path still computes
   (reset-guard-skip-count!)
   (define eff-redex
     (expr-natrec (expr-lam 'mw (expr-Nat) (expr-Nat))
@@ -171,9 +174,8 @@
                  (expr-app (expr-fvar 'read) (expr-fvar 'ch))
                  (expr-nat-val 1)))
   (define n1 (hash-count (net-cell-read (unbox pb) hc)))
-  (parameterize ([current-preduce-ingest? #t])
-    (void (with-handlers ([exn:fail? (lambda (_e) 'native-error-ok)])
-            (whnf eff-redex))))
+  (void (with-handlers ([exn:fail? (lambda (_e) 'native-error-ok)])
+          (whnf eff-redex)))
   (check-true (> (guard-skip-count) 0) "effect-headed step skipped the e-graph")
   (check-equal? (hash-count (net-cell-read (unbox pb) hc)) n1
                 "no class recorded for the effectful ι redex"))
@@ -192,10 +194,6 @@
   (define sc (current-extraction-store-cell-id))
   (define body '(consult-body 20 22))
   (define result '(consult-result 42))
-  ;; seed: intern the body (a prior session's class), record its result in
-  ;; the store, then ERASE the class best back to... simpler: a FRESH network
-  ;; world where only the STORE knows the answer — intern body in a scratch
-  ;; net to learn the question key, then seed the production store directly.
   (define-values (n1 cid1 _d) (eclass-intern (unbox pb) hc body #:cost 10))
   (set-box! pb n1)
   (set-box! pb (store-record-reduction (unbox pb) sc cid1 result))
@@ -212,3 +210,30 @@
   (check-equal? (preduce-ingest-delta body
                                       #:compute (lambda () (error 'x "ran")))
                 result "subsequent encounters hit the promoted best"))
+
+;; ---- Phase 4a (PReduce Track 8): recursion step recorded as a UNION ----
+;; A β/δ/ι reduction joins {redex, result} via a union PROPAGATOR (not a bare
+;; cell-write): the result is interned as its OWN class (pre-4a it was only the
+;; redex's :best) and the union makes redex + result share a :canonical.
+(parameterize ([current-rule-registry-cell-id #f]
+               [current-eclass-hashcons-cell-id #f]
+               [current-persistent-registry-net-box (box (make-prop-network))])
+  (define pb (current-persistent-registry-net-box))
+  (init-rule-registry-cell! pb)
+  (init-eclass-hashcons-cell! pb)
+  (define hc (current-eclass-hashcons-cell-id))
+  ;; a PURE β redex: ((λx. x + 1) 5) → 6
+  (define redex (expr-app (expr-lam 'mw (expr-Int)
+                                    (expr-int-add (expr-bvar 0) (expr-int 1)))
+                          (expr-int 5)))
+  (check-equal? (whnf redex) (expr-int 6) "β lands the contractum")
+  (define net (unbox pb))
+  (define redex-cid (eclass-lookup net hc (pce-digest PCE-KIND-GROUND-TERM redex)))
+  ;; the RESULT is interned as its own class (Phase 4a — pre-4a it was not)
+  (define result-cid (eclass-lookup net hc (pce-digest PCE-KIND-GROUND-TERM (expr-int 6))))
+  (check-true (and redex-cid #t) "the β redex has a class")
+  (check-true (and result-cid #t) "Phase 4a: the result is interned as its OWN class")
+  ;; the union joined them — redex + result share a canonical
+  (check-equal? (hash-ref (eclass-read net redex-cid) ':canonical)
+                (hash-ref (eclass-read net result-cid) ':canonical)
+                "the β step is a UNION: redex and result share a canonical"))

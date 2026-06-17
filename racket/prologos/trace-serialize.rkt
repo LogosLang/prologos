@@ -41,6 +41,18 @@
     [(eq? v type-bot) "⊥"]
     [(eq? v type-top) "⊤"]
     [(eq? v 'bot) "⊥"]  ;; raw bot symbol used in some cells
+    ;; e-class product cell (eclass-cell.rkt): a hasheq whose ':best is a
+    ;; (cost . reduced-form) pair. Surface the reduced form so reduction
+    ;; visualizations read as actual values/terms, not "hash(N entries)".
+    [(and (hash? v) (hash-has-key? v ':best))
+     (let ([best (hash-ref v ':best #f)])
+       (cond
+         [(not best) "e-class ⊥"]
+         [(pair? best)
+          (with-handlers ([exn:fail? (lambda (_) (format "~v" (cdr best)))])
+            (pp-expr (cdr best)))]
+         [else (with-handlers ([exn:fail? (lambda (_) (format "~v" best))])
+                 (pp-expr best))]))]
     [(hash? v)
      (format "hash(~a entries)" (hash-count v))]
     [(pair? v)

@@ -27,6 +27,7 @@
          "propagator.rkt")
 
 (provide current-eclass-hashcons-cell-id
+         current-eclass-containment-box  ;; PTF Track V: reduction-DAG capture
          init-eclass-hashcons-cell!
          current-intern-origin
          current-parent-index-cell-id
@@ -74,6 +75,30 @@
 
 ;; --- intern ---
 
+;; PTF Track V (viz): optional containment recording. When set to a (box hash),
+;; eclass-intern records parent-alloc → (listof child-alloc) for each interned
+;; term's IMMEDIATE sub-terms, resolving children against the registry at intern
+;; time (children are interned bottom-up, so they're present). This captures the
+;; reduction DAG structure (e.g. int+((lit 377),(lit 233)) → its operands) which
+;; is otherwise consumed: an e-class's :best becomes the reduced VALUE, losing
+;; the redex shape. Off-network viz side-channel; default #f = zero cost.
+(define current-eclass-containment-box (make-parameter #f))
+
+;; Immediate child sub-terms of a sexp-encoded term (op c1 c2 ...): the operands.
+;; (lit N) is a leaf. Non-list / symbol-headed-lit terms have no children.
+(define (term-immediate-children t)
+  (if (and (pair? t) (symbol? (car t)) (not (eq? (car t) 'lit)))
+      (filter pair? (cdr t))
+      '()))
+
+(define (record-term-containment! box reg parent-alloc term)
+  (define h (unbox box))
+  (for ([ch (in-list (term-immediate-children term))])
+    (define cd (pce-persistable-digest PCE-KIND-GROUND-TERM ch))
+    (define entry (and (hash? reg) (hash-ref reg cd #f)))
+    (when entry  ;; child already interned → record parent → child-alloc
+      (hash-update! h parent-alloc (lambda (l) (cons (car entry) l)) '()))))
+
 ;; → (values net' class-cid digest)
 (define (eclass-intern net reg-cid term
                        #:cost [cost 1]
@@ -100,6 +125,8 @@
                                    #:regime regime))
      (define net2 (net-cell-write net1 cid v0))
      (define net3 (net-cell-write net2 reg-cid (hash digest (cons alloc cid))))
+     (when (current-eclass-containment-box)
+       (record-term-containment! (current-eclass-containment-box) reg alloc term))
      (values net3 cid digest)]))
 
 ;; --- union-emitter ---

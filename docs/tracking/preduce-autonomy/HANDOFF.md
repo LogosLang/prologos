@@ -5,143 +5,66 @@ the start of every iteration.**
 
 ---
 
-## Current state (as of 2026-06-10, LOOP iteration 0 — Phase B is LIVE)
+## Current state (as of 2026-06-12, iteration 52 — PTF Track V CLOSED; **the loop is PAUSED awaiting owner review**)
 
-**The loop is running.** Iteration 0 CLOSED (suite GREEN 8380/428/131.2s at 41d222d7;
-bench-ab baseline saved). Iteration 1 IN FLIGHT: the reduction-share method DECIDED
-(sampling profiler; tools/profile-reduction-share.rkt committed — see ledger) and the
-measurement is running across the comparative set in background
-(data/benchmarks/profiles/redshare-*.txt). DONE: denominator RECONCILED (phase-accounting reduce_ms ~75% on ppn-track4c — the
-owner figure is CONSISTENT under the phase lens; profiler tree-bound 25.4% for
-whole-process honesty; both standing). DONE: **SM1.1a LANDED green** (facet substrate:
-4 internal facets + hardened closed dispatch + scoped bot-filter + arity-2 filter +
-tests; one wake-duty regression gate-caught + root-caused + scoped; one pre-existing
-batch flake documented — test-module-network-01 4B.3-b, registry state under
-batch save/restore). DONE: **SM1.1b LANDED — SM1.1 (a+b) COMPLETE** (shape-P precise: ~420× at N=5000,
-flat O(|delta|); over-fire×fire-once lesson = data point #10 + Watching codification
-candidate; batch flakes adjudicated NOT-SM1.1b by controlled A/B).
-DONE: flake audit (iter 5) — mechanism found (module-load parameter mutation +
-missing restore-list entry), conformance patch landed, fix hypothesis REFUTED by
-experiment, flake CLASSIFIED+TRACKED in DEFERRED.md (instrumented probe queued;
-structural fix = SM3 registry absorption; gate policy = non-blocking iff passes
-individually, verified per occurrence).
-DONE: Track 1 acceptance file landed (Phase-0 gate discharged; reduction-kind-
-organized; Level-3 clean; run before/after every phase).
-DONE: pce.rkt LANDED (PCE/1 encoder + digests + persisted-domain guard + golden
-vectors + 23 tests; cross-process determinism verified).
-DONE: eclass-cell.rkt + the 'eclass-refine relation LANDED (the SM2 lock realized:
-product merge + 'term carrier + relation constant/variance/factory/ctor-table; 22
-tests through the public dispatcher).
-DONE: **THE GREEN SLICE IS ALIVE** (eclass-graph.rkt: hashcons + intern + union-
-emitter; 41 first-run-green checks incl. the D.1 §2.4 literal trace, racing-union
-CALM fixpoint, and the consuming read; ':alts equal?-set design fix). Track 1
-substrate stack complete: facets ✅ shape-P ✅ PCE ✅ product cell + relation ✅
-hashcons + union ✅.
-DONE: **#:after + keep-pending substrate** (iter 10; stratification.md CAUTION
-DISCHARGED; pure sort tested; keep-pending behavioral coverage owed at first
-consumer). D5 probe DEFERRED with design note: needs a whnf-cache observer hook
-(per-command parameter is discarded; post-run inspection blind) — small production
-touch, own mini-audit when taken.
-DONE: **congruence ENGINE (11a)** — signatures, decomposed intern-node with
-descriptors, collision scan, batch union; the textbook cascade + sound-if-stale
-heal both execute (77 e-class checks green). Asymmetric-staleness property ledgered
-(only union-CHANGED canonicals go stale — bounds 11b's watcher set).
-DONE: **congruence WIRING (11b)** — cells 20/21 preallocated; refireable parent
-watchers on ':canonical component-paths; stateless topology-tier collision handler;
-ONE union + ONE quiescence auto-unions congruent parents INCLUDING two-level
-cascades. D.1 §2.1 congruence fully realized. (keep-pending not consumed — the
-monotone-index + delta-request split was CALM-cleaner; its behavioral test stays
-owed at rule dispatch.)
-NEXT UNIT: **the effect-safety guard** (BLOCKING Track 2 Phase 0; D.1 §6 F-A/F-B
-locks): hashcons must NOT dedup effectful occurrences — per-occurrence
-deterministic (epoch × occurrence-path) keys for effectful terms; the guard ERRORS
-on any attempt to intern an effect-bearing term through the ground hashcons path
-(detection: effect-marker structs / session types in the term — mini-audit
-effect-executor.rkt + the F-A lock in D.1 §6 for the marker predicate). Tests:
-guard fires on effectful terms; pure terms unaffected; the (epoch × path) key shape
-admits per-occurrence interning WITHOUT dedup. THEN: rule promotion begins (the
-arithmetic seed per D.2's IN-ladder).
-Implementation queue below. Phase A history follows for context.
+**The viz arc is COMPLETE.** The owner's re-arm goal — a browser visualization
+of the propagator network with execution playback for arbitrary prologos
+programs — is DELIVERED pending the owner's browser acceptance:
 
-Done so far (all interactive, with the owner):
-- Branch `preduce-autonomy` + worktree `/Users/avanti/dev/projects/prologos-preduce-auto`,
-  rebased onto main at `533bfcab` (charter commit now `05a82134`).
-- TBGH research layer committed to main (`c27bcc89`) — owner-ratified.
-- Grounding-audit staleness fixes committed to main (`533bfcab`).
-- Vision grounding audit complete: owner-decision census (8 open points, charter §3),
-  drift inventory, prerequisite reality check (tropical-fuel: real, deployed, caveats
-  recorded in charter §2), typing-on-network Network Reality Check: PASSES.
+- `racket tools/viz-export.rkt FILE.prologos -o out.json` → vizTrace/1 JSON
+- `tools/viz/index.html` → open in any browser, drop the JSON, explore +
+  play (epochs = per-command networks incl. SOLVER epochs; rounds = fired
+  propagators + attributed cell diffs)
+- Verified headlessly (`tools/viz/check.js` ALL PASS on the 3-file corpus);
+  artifacts sent to the owner (iteration 51).
 
-## Exact next step
+**Close artifacts**: PIR `docs/tracking/2026-06-12_PTF_TRACK2_PIR.md`
+(16 questions + charter §9 autonomy retro); design doc tracker 10/10 ✅;
+Master PTF section row **Track V** (naming collision with planned "Track 2:
+Pipeline Detection" — disambiguated there); DEFERRED.md carries the 2
+surviving riders; suite GREEN 8666/439 at close.
 
-**Interactive Track 0.1 co-design, continued** (main session, owner present — NOT a
-loop iteration). DONE 2026-06-10: closure semantics decided (decisions-first → coarse
-NTT exit gate); SM2 (e-class cell) SETTLED via options panel + owner decisions D2/D5/D7
-— see `docs/tracking/2026-06-10_PREDUCE_TRACK01_DESIGN.md` §2 and the ledger entry.
-DONE: SM2 LOCKED (db0bb8ba), SM3 LOCKED (7162f492), SM1 SETTLED (§4) — owner: extend
-attribute map / epoch-keyed live-parse / commission 2′ assessment. Diff-cost ceiling
-CONFIRMED (O(all-keys) per compound write; fix must be cell-layer); ".pnet populates
-attribute map" comment = fiction.
-DONE ALSO: SM1 LOCKED (D frame adopted: eager green + shape-P for attr-map + 2′-B
-pre-registered at D4's T-FLIP gate; NAME-at-reservation closed no-amendment; SM2
-fast-path phrase clarified per-class; Master §Layer-1 amended; negative invariant
-homed in §4.8).
-DONE ALSO: SM4 LOCKED. SM5 + SM6 LOCKED (combined panel; §6 + §7): F-A hashcons-dedup
-+ F-B generic-rule-capture soundness findings; floor in Track 1, effect-safety guard =
-BLOCKING Track 2 Phase 0; deterministic (epoch × occurrence-path) keys for effectful
-occurrences; add-only re-entry (Q7 answered); Axis-2 re-specified as product (Master
-amended); ground-admission rule (born-context-free only into question-keyed store);
-pessimistic classification + bite counters; regime = 5th SM2 product component
-(owner-signed amendment of a locked sub-model); ground-only cross-session day one;
-T7 RESOLVED in-panel (pnet-serialize surface read; first-of-kind cell-state sections
-named).
-**TRACK 0.1 CLOSED 2026-06-10** — NTT exit gate PASSED (D.1 §8.4; adversarial purity
-pass returned PASS-WITH-AMENDMENTS, all applied: precise lattice definitions for
-write-once-flat + dedup-or-error with ⊤contradiction as legitimate top; two
-pre-deployment verification gates recorded for SP2/SP3). Master Track 0.1 row ✅.
-**PHASE A COMPLETE 2026-06-10** — Tracks 0.1 (D.1), 0.2 (D.2), 0.3 (D.3) all CLOSED;
-Track 0 (series founding) ✅ in the Master. The full lock-set lives on this branch.
-NEXT (in order):
-(a) **OWNER: review + merge `preduce-autonomy` → main** (decided: merge after 0.3
-close; docs-only, no code/suite risk; the lock-set becomes citable at main HEAD;
-rebase onto current main first — main advances under the owner's other session).
-(b) **OWNER ACTIONS carried**: DEFERRED.md triage (A.0 leftover — folded into the
-loop's iteration-0 shakeout). [Zig PoC pinning REMOVED per owner ruling 2026-06-10:
-the PoC is a separate lowering experiment, not a consumer — D.3 §5 amended.]
-(c) **PHASE B ENTRY (the autonomous loop)**: conditions met post-merge. Track 1 =
-the implementation queue in dependency order: SM1.1 production-merge commit + shape-P
-delta-notify + comment fix (ONE commit + full typing regression); pce.rkt (PCE/1
-encoder + golden vectors — precedes hashcons per LBD-5); D5 probe (singleton-fraction
-FIRST; injected-rule variant); term-carrier domain + 'eclass-refine (8-edit surface,
-§2.10); e-class product cell (5 components) + hashcons registry + union-emitter
-(green slice per §2.4/§3.2); #:after ordering + keep-pending substrate (BLOCKING for
-promotion); congruence layer; effect-safety guard = BLOCKING Track 2 Phase 0 (covers
-ι instantiation). Per the charter: the loop works Phase B against these LOCKED
-designs; OWNER-PROVISIONAL label for anything the locks under-determine; main-session
-checkpoints per charter §7.
-(d) Ledger holds 8 autonomy data points for the retro (charter §9).
-PROCESS: pass the worktree path (/Users/avanti/dev/projects/prologos-preduce-auto)
-for branch docs; panel COMPOSITIONS need the same skepticism as kill-shots (data
-point #4).
+**Why paused (ledger iteration 52)**: the re-arm direction is satisfied;
+the candidate next arcs are owner-sequencing calls — the same situation as
+the original §8 halt. No hard stop fired; this is a deliberate pause.
 
-## If the loop is started before Phase A completes
+## To re-arm the loop
 
-Do NOT begin Track 1 implementation — Phase A designs are not locked. The only
-loop-eligible work is read-only grounding prep (e.g., per-sub-model code-surface
-audits feeding the interactive co-design). When in doubt, halt with a BLOCKED
-ledger entry per charter §8.
+Run the charter §7 kickoff one-liner (unchanged), optionally with a new goal
+appended — exactly how this arc started. First iteration after re-arm:
+re-read CHARTER → this file → the ledger tail, then take the owner's
+sequencing ruling as the queue.
 
-## Open threads
+## The owner's review queue (in suggested order)
 
-- Owner-decision census: 8 open points listed in charter §3; TBGH ratification resolved.
-- DEFERRED.md triage not yet done (A.0 leftover; fold into 0.1 opening).
-- MASTER_ROADMAP: dedicated PReduce rollup section under PRN still to be added
-  (noted in Master references, 2026-06-10).
-- Main is advancing concurrently (owner's PPN 4C session); rebase this branch onto
-  main at each interactive session boundary, and re-verify HEAD-pinned citations after
-  each rebase.
+1. **Browser acceptance**: open the delivered index.html + envelopes (or
+   regenerate: the two tools above). The relational-demo trace's relation
+   epochs are the showcase.
+2. LEDGER.md iterations 44–52 (decisions, incl. OWNER-PROVISIONAL push
+   posture + the pause adjudication), then the PIR (esp. the autonomy retro
+   + §16 longitudinal note).
+3. **Flags needing owner rulings**: (a) 3 doc-vs-implementation drifts
+   (syntax-doc map partials; bench-ab `--ref`; colon-form spec); (b) LSP
+   prop-trace capture structurally dead (F7); (c) the PTF naming collision;
+   (d) whether the deferred riders (component diffs; D7 depth) get
+   scheduled; (e) the standing retro queue (a)-(e) from RETRO.md.
 
-## Gate status
+## Environment (for any future session in a fresh container)
 
-Docs-only commits so far; no code changes on this branch; no gates run. Suite state
-inherited from main (8380/0 green per `82f22446` commit message).
+`/home/user/prologos`, branch `claude/charming-archimedes-98yb48` (the
+autonomy state; push = persistence). Setup recipe: install Racket 9.0
+(`curl -sL -o /tmp/r.sh https://download.racket-lang.org/installers/9.0/racket-9.0-x86_64-linux-cs.sh
+&& sudo sh /tmp/r.sh --unix-style --dest /usr/local --create-dir`), then
+`raco pkg install --auto --skip-installed rackcheck`, `raco pkg install
+--link --auto racket/prologos`, `raco make -j 4 driver.rkt` (in
+racket/prologos). Full suite ~400s/4 cores; bench A/A noise floor 15.3%
+(ledger iter 49); no Workflow runtime (use parallel Explore agents); no
+PushNotification tool (final summaries are the doorbell); no GUI browser
+(node headless checks + owner acceptance).
+
+## Gate status at close
+
+Suite 8666/439 ALL PASS (iter 49, post-production-edit; no production edits
+since). Targeted: test-viz-export 7/7, test-propagator-bsp 21/21. Acceptance
+file Level-3 clean. Corpus envelopes validate (monotone, captures==commands,
+solver epochs present). check.js ALL PASS.

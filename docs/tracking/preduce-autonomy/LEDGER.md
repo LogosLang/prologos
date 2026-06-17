@@ -1174,3 +1174,545 @@ Entry template:
   honesty-about-the-curve §5.8 was written to produce.
 - Track 3 PIR + Master row CLOSED + Phase 2 DESCOPED (named). Doorbell.
 - **Landed in**: (this commit)
+
+## 2026-06-12 — LOOP RE-ARM, iteration 44 — [SIGNIFICANT] New arc opened per owner direction: PTF Track 2 (standalone browser viz + arbitrary-program trace export)
+- **The owner's /loop re-arm message IS the sequencing ruling** the §8 halt was
+  waiting on: "Our final goal is generate a browser visualization that can show
+  the propagator network and play execution in order to show how the system works
+  for arbitrary prologos programs." This supersedes the retro's candidate queue
+  (a)-(e) (SH/Zig case, registries-as-cells, D5, prn residue, Phase-2 riders) —
+  those remain queued, not cancelled.
+- **Grounding audit run per charter §5.1** (5 HEAD-pinned facets + adversarial
+  completeness critic; the Workflow runtime is absent in this environment, so the
+  same structure ran as parallel Explore agents — disciplines preserved: SHA
+  verification, file:line citations, verified-vs-inferred, capture-gaps).
+- **Headline finding**: this is NOT greenfield. PTF Track 1 already built the
+  capture layer (current-bsp-observer + bsp-round/cell-diff/prop-trace +
+  trace-serialize JSON WITH propagator input/output edges + observatory) and a
+  complete VS Code webview viewer (propagatorView.ts, BSP-round replay, scrubber).
+  The REAL gaps: no headless CLI exporter (G1), no standalone browser host (G2),
+  Tier-1 fast-path observer dropout (G3), solver/per-module capture seams (G4),
+  compound-cell diff granularity (G5). Design doc:
+  docs/tracking/2026-06-12_PTF_TRACK2_BROWSER_VIZ_DESIGN.md.
+- **Naming [ROUTINE]**: lands as PTF Track 2 (extends PTF Track 1 observatory),
+  not a new series — taxonomy consistency per workflow.md Series-prefix rule.
+- **Landed in**: (this commit)
+
+## 2026-06-12 — LOOP iteration 44 — [⚠ OWNER-PROVISIONAL] Environment migration: the loop now runs in a remote ephemeral container; persistence = push to the session branch
+- **Decision**: commits push to `claude/charming-archimedes-98yb48` on origin
+  (the branch carries the full preduce-autonomy state; verified
+  `preduce-autonomy` is an ancestor of its HEAD with zero divergence). The
+  charter §2 "no pushes to remotes" line is operationally amended for this
+  environment: the container is reclaimed on idle, so unpushed work is LOST —
+  no-push here equals destroying the ledger the owner reviews by.
+- **Intent preserved**: still no commits to main, no production-default flips,
+  no PRs, owner merges. The push target is an isolated branch.
+- **Reversal path**: delete the remote session branch; nothing on main moves.
+  Blast radius: one branch.
+- **Landed in**: (this commit)
+
+## 2026-06-12 — LOOP iteration 45 — [ROUTINE] PTF Track 2 Phase 0.5 CLOSED — environment shakeout + empirical capture probe; the design opens with DATA
+- **Environment**: apt Racket 8.10 hit a REAL wall (`thread #:pool 'own`,
+  propagator.rkt:3748 — parallel BSP needs 9.0); official 9.0 installed;
+  toolchain green in-container (raco make clean; targeted runner + batch
+  workers live: test-trace-serialize 19/19). check-parens.sh gained a PATH
+  fallback (owner's pinned Mac path preserved).
+- **Probe** (`tools/viz-capture-probe.rkt`, committed): mirrors the LSP arming
+  recipe but captures the elab-network via `current-network-capture-box`
+  (surviving process-file's parameterize unwind — the LSP's own post-unwind
+  read at server.rkt:553 is flagged as structurally dead, finding F7).
+- **Findings (design doc §6)**: F1 real propagator edges EXIST at HEAD (9/9
+  with inputs+outputs — the March "0 edges" note is empirically stale); F2
+  headless capture works end-to-end (17 rounds / 35 diffs / 152 fires / 4
+  per-command observatory captures / 31.5KB JSON); F3 Tier-1 dropout didn't
+  blank the demo (share unquantified — Phase 1 carries a counter); F4
+  subsystem categorization DEGRADED (all cells 'infrastructure'; cell-info
+  hollowed by the universe migration; cell-domains champ is the candidate
+  replacement); F5 magnitudes small per-command.
+- **Gate status**: parens ✅; targeted smoke ✅; probe run ✅; full suite NOT
+  run this iteration (docs+tools-only changes; first in-container full-suite
+  baseline is owed before the first PRODUCTION edit — likely Phase 1/2 boundary).
+- **Landed in**: (this commit)
+
+## 2026-06-12 — LOOP iteration 46 — [SIGNIFICANT] PTF Track 2 Stage-3 design LOCKED (amended) — and the critique apparatus EARNED ITS COST on unfamiliar surfaces
+- **Process**: PROPOSED D1–D6 drafted from grounding+probe data (commit
+  6dd6245), then TWO independent adversarial critics (fresh contexts,
+  file-grounded; one refutation-mandated, one P/R/M/S+red-flags) — the first
+  Phase-B-style design round on surfaces the loop did NOT author, and the
+  panels found what in-context drafting missed: 2 BLOCKERs + 8 MAJORs.
+- **The big overturn**: "tools-only Phase 2" was REFUTED — Tier-1 fast-path
+  runs skip the observer, so simple fire-once programs (the canonical
+  relational demos) trace EMPTY; "arbitrary programs" was false as drafted.
+  The Tier-1 observer call is PROMOTED to Phase 2b (zero-cost unarmed,
+  scheduler-orthogonal, gated by 2a full-suite baseline + bench A/B).
+- **Dual-path killed at lock**: D2's "fold-in decision point pre-registered"
+  was adjudicated a validated≠deployed dangle (critique B5) — PATH B decided:
+  identity is exporter-local as the END-STATE; trace-serialize.rkt frozen;
+  VS Code panel out-of-scope.
+- **Measurement as design instrument (§5.8) fired in-round**: critique B2
+  ("is cell-domains F4-hollow one level down?") was answered with DATA before
+  lock — probe extended + rerun: 55% coverage, 7 domains → the pre-registered
+  <70% rename clause fired; D4's claim downgraded to "best-available identity
+  with measured coverage".
+- **Methodology debt caught**: no Phase-0 acceptance file (workflow.md
+  mandate) — Phase 0A added; iteration 47 writes
+  examples/2026-06-12-ptf-track2-viz.prologos + corpus BEFORE implementation.
+- **Push-backs recorded** (the loop challenged the critics too): A2's
+  clock-coarseness mechanics rejected (sub-ms float clocks; wrapper records
+  inside the loop), its core accepted as unvalidated-until-measured with
+  acceptance criteria + pre-registered fallback. New D7 (semantic value
+  detail) from A3. Full adjudication: design doc §7.7; VAG §7.8 (two
+  inherited patterns challenged AND overturned).
+- **Landed in**: (this commit)
+
+## 2026-06-12 — LOOP iteration 47 — [ROUTINE] PTF Track 2 Phase 0A CLOSED — acceptance file Level-3 clean; corpus audited; the A4 free-path question answered with data
+- **Acceptance file** (`examples/2026-06-12-ptf-track2-viz.prologos`): 17
+  commands, 0 errors — elaboration (spec/defn, multi-arity ι, Nat patterns),
+  polymorphic map pipelines, relations (facts + recursive ancestor + 4 solve
+  shapes incl. empty-result), NAF (mirrors the WFLE-attested form). First run
+  had 2 inference errors — the Level-3 gate doing its job: the
+  `map [int+ 1 _]`/`[int* _ 2]` partial forms FROM THE SYNTAX DOC fail
+  "Could not infer type" at HEAD (generic `plus` partials work). Fixed with
+  working forms + NOTE; **doc-vs-implementation drift flagged for the owner**.
+- **Corpus audit (B9)**: 3 files, max 87 cells/17 propagators, JSON ≤ 41KB —
+  far under the 1k D3 revisit trigger; component-aware BFS layout stands.
+- **A4 free-path: PARTIALLY VALIDATED, positive** — round snapshots carry
+  SOLVER topology (87c/17p ≠ 41c/0p elab); solver counters fire (73 unifies,
+  17 backtracks, 3 ATMS hypotheses). Caveat recorded: BSP-observable share of
+  solve execution unquantified (relational-demo: 10 queries → 18 observed
+  fires); 2c validates; 2b hook stays the fallback.
+- **Probe upgraded**: per-command error messages printed (the diagnosis tool
+  for the above).
+- **Gates**: parens ✅; Level-3 acceptance ✅ (0 errors); corpus probes ✅.
+- **Landed in**: (this commit)
+
+## 2026-06-12 — LOOP iteration 48 — [ROUTINE] PTF Track 2 Phase 2a CLOSED — the in-container full-suite baseline is GREEN: 8658/439 ALL PASS (401.5s)
+- **First-ever full suite in this container**: initial run 8536 green / 9
+  FAILURES — ALL NINE adjudicated environment-setup, zero code failures:
+  (a) 6× `prologos/propagator` collection not found → repo was never
+  `raco pkg install --link`ed here; (b) 2× missing `rackcheck` package;
+  (c) 1× stale 8.10-compiled .zo (test-observatory-01). Fixed all three
+  classes; the 9 files re-verified individually via the targeted runner
+  (127/127); then ONE forced full-suite regression gate (the anti-rerun
+  guard correctly fired on the unforced attempt — pkg installs are invisible
+  to its .rkt-mtime check; --force-rerun is the sanctioned escape).
+- **The baseline**: 8658 tests / 439 files / all pass / 401.5s wall (4-core
+  container; the owner-machine ~130s is not comparable — per-container
+  rolling-median rules apply from here). Zero flakes this run (the
+  registry-visibility family did not fire).
+- **2b is UNBLOCKED**: the Tier-1 observer production edit may proceed
+  (mini-audit of propagator.rkt:3437–3471 first; bench-ab PRE baseline
+  captured before the edit, A/B after — sequential, never concurrent).
+- **Landed in**: (this commit)
+
+## 2026-06-12 — LOOP iteration 49 — [SIGNIFICANT] PTF Track 2 Phase 2b CLOSED — the track's production edit landed green: Tier-1 BSP runs are observer-visible
+- **The edit** (`6d25e58`, propagator.rkt Tier-1 branch): when an observer is
+  armed, the flush fires with PER-FIRE eq?-pruned `champ-diff` (O(changed)
+  per fire) giving precise cell-diff attribution, and emits ONE bsp-round
+  mirroring Tier-2's shape. The unarmed fold is byte-identical to the old
+  fast path — the observer parameter read pre-existed at function entry, so
+  the unarmed delta is literally one branch on a local.
+- **Gates**: parens ✅; raco make ✅; targeted (trace-serialize, trace-data,
+  observatory-01/02, propagator-bsp) 81/81 ✅; 3 NEW unit tests pin
+  armed/attribution/unarmed ✅; acceptance probe unchanged-green ✅;
+  FULL SUITE **8666/439 ALL PASS, 400.6s** (baseline 8658/401.5s — +8 = the
+  new checks; wall in noise) ✅.
+- **Perf adjudication (honest, in lieu of the locked "bench A/B")**:
+  bench-ab's documented `--ref HEAD~1` mode is NOT IMPLEMENTED (header
+  drift; line 170 "same code for now") — second doc-vs-implementation drift
+  this arc. Evidence for the zero-cost-unarmed claim: (i) code structure
+  (one branch); (ii) suite wall within noise; (iii) a clean A/A distribution
+  run captured (/tmp/bench-2b-post.json → standing reference) which ALSO
+  quantified the container's noise floor: same-code A/A registers up to
+  "15.3% significant speedup" (solve-adversarial, warm-up effects) — ALL
+  future in-container perf claims must clear that bar, not just p<0.05.
+- **Falsified workload premise (codify-pattern #1 fires again)**: critique
+  A1 asserted simple relational programs take Tier-1 — NONE of the 3 corpus
+  files do (probe delta = 0). The fix is still right (fire-once workloads
+  exist — unit-tested; the gap was real at the scheduler level), but the
+  pedagogical urgency was overstated. Recorded as the 4th falsified-premise
+  data point.
+- **Process self-catch**: the bench PRE baseline was launched CONCURRENTLY
+  with the edit's compile — contaminated, killed, replaced by the post-hoc
+  clean run + structural adjudication. Lesson: bench runs get an exclusive
+  machine, ALWAYS — even at iteration starts.
+- **Landed in**: code `6d25e58`; docs (this commit)
+
+## 2026-06-12 — LOOP iteration 50 — [ROUTINE] PTF Track 2 Phase 2c + T CLOSED — the exporter exists; every locked validation criterion PASSED; the solver free path is REAL
+- **`tools/viz-export.rkt`** (`b0bbb88`): vizTrace/1 envelope per the locked
+  D1/D2/D4/D7 — per-command captures with topology; epoch-bucketed rounds
+  (timestamped by the observer wrapper); per-epoch LAST-SNAPSHOT topologies;
+  per-topology identity (impl note: cell-id spaces are PER-NETWORK, so
+  identity cannot be a global map — recorded as a D1 implementation
+  amendment); bounded D7 value detail; always-computed validation block.
+- **The 2c criteria, all PASS on the 3-file corpus**: timestamps monotone ✓;
+  captures==commands (17/17, 16/16, 4/4) ✓; **solver free path VALIDATED** —
+  relation/solve epochs expose the solver machinery (67–81 cells /
+  172–179 propagators vs the 41c/0p final elab net; relational-demo's store
+  visibly GROWS 57c/2p → 87c/17p across the tutorial). The pre-registered
+  2b fallbacks (observer-site timestamps; solve-boundary hook) are NOT
+  needed — they stay dormant, documented.
+- **Golden test** `tests/test-viz-export.rkt` 7/7 (Phase T's deliverable,
+  landed with 2c per the locked tracker note). Two fixture syntax stumbles
+  on the way (inline defn body = WS layout violation; `spec NAME : T` colon
+  form parses as a DEPENDENT signature on single-clause defns — 3rd
+  doc-vs-implementation drift flag this arc) — both gate-caught.
+- No production edits this iteration (tools+tests only) → full suite not
+  required; targeted gate green.
+- **Landed in**: code `b0bbb88`; docs (this commit)
+
+## 2026-06-12 — LOOP iteration 51 — [ROUTINE] PTF Track 2 Phase 3 SHIPPED — the owner's goal artifact exists and was DELIVERED
+- **`tools/viz/index.html`** (`10b0f4a`): single-file, dependency-free
+  browser viewer per locked D3 — component-aware layered Canvas layout
+  (union-find components, BFS layers, grid arrangement, self-loop arcs),
+  zoom/pan/hover with valueDetail + srcloc tooltips, D4 identity coloring
+  with the MEASURED coverage line always displayed, scope selector
+  (final / per-command captures / per-epoch solver snapshots), and
+  playback: epoch selector + round scrubber + play — fired propagators
+  ring red, diffed cells flash gold, the diff list shows old → new with
+  source-propagator attribution.
+- **Verification in a browserless container** (named limitation): the pure
+  core (scopes/graph/layout/bucketing) is in a delimited @PURE block;
+  `tools/viz/check.js` extracts and runs it under node against the REAL
+  corpus envelopes — ALL CHECKS PASS (32/33/8 scopes; max 260 nodes; all
+  edges resolve; all nodes positioned, zero coordinate overlaps; round
+  bucketing complete 45/45, 17/17, 17/17). The owner's browser is the real
+  acceptance — index.html + two corpus envelopes DELIVERED to the owner
+  (proactive file send).
+- **Landed in**: code `10b0f4a`; docs (this commit)
+
+## 2026-06-12 — LOOP iteration 52 — [SIGNIFICANT] PTF TRACK V (the viz arc) CLOSED — and the loop PAUSES awaiting owner review (§8-adjacent adjudication)
+- **Track close**: 9/9 phases ✅; riders adjudicated (2 dissolved, 1 dormant,
+  2 → DEFERRED.md); PIR written skeleton-first from the 16 questions incl.
+  the charter §9 autonomy retro (`2026-06-12_PTF_TRACK2_PIR.md`); Master PTF
+  section gains the disambiguated **Track V** row (naming collision with the
+  planned "Track 2: Pipeline Detection" found at close — the arc's docs keep
+  their internal name, the Master row disambiguates).
+- **The owner's stated final goal is DELIVERED pending browser acceptance**:
+  exporter + viewer + corpus envelopes sent to the owner (iteration 51).
+  Suite green (8666/439); every phase gated; one production edit total.
+- **⚠ PAUSE ADJUDICATION (the §8 lens)**: none of the hard stop conditions
+  fired — but the re-arm direction's goal is satisfied pending the owner's
+  acceptance run, and the next arcs (retro queue (a)-(e), the deferred
+  riders, the doc-drift fixes) are OWNER-SEQUENCING calls — exactly the
+  situation in which the original loop halted. DECISION: stop re-arming;
+  leave the kickoff one-liner standing (charter §7); the owner re-arms with
+  a sequencing ruling, exactly as this arc began. Reversal path: trivial
+  (run the one-liner).
+- **Landed in**: (this commit)
+
+## 2026-06-14 — [SIGNIFICANT, owner directive] On-network reduction is the BRANCH DEFAULT; the viz targets propagator-based reduction
+- **Owner direction (verbatim intent)**: this is a prototype branch for showing
+  how the viz works for a FUTURE propagator-native Prologos, built on the
+  PReduce on-network-reduction prototype. On this branch we ALWAYS use the
+  on-network (PReduce) reduction; the visualization is based on / shows that
+  propagator-based reduction. "Write that down."
+- **Done**: `viz-export.rkt` flips `#:reduce?` default to #t (on-network
+  reduction ON by default; `--no-reduce` opts out). Directive written into
+  `docs/tracking/2026-06-12_PTF_TRACK2_BROWSER_VIZ_DESIGN.md` § BRANCH DIRECTIVE.
+- **Honesty recorded in the directive** (the precise reach of "propagator-based
+  reduction" today): reduction STEPS (redex⇒result) ARE on-network as union
+  propagators = DPO rewriting (PRN §2 confirmed); NOT-yet-on-network = the RHS
+  value compute (`instantiate-template`) + the recursion driver
+  (`reduction.rkt`). Track 8 (e-graph as the engine) is the anticipated future.
+- Golden test green; exporter compiles.
+- **Landed in**: (this commit)
+
+## 2026-06-14 — LOOP (PReduce Track 8 plan) Phases 0-1 — [SIGNIFICANT, owner directive] on-network reduction is the ONLY path; native deleted
+- **Owner directive**: "flip it and delete the native version (prototype branch
+  so it's safe)" + "any tests hardcoded to this part should be ported or thrown."
+- **Phase 0**: acceptance file examples/2026-06-14-onnetwork-reduction.prologos
+  (0-error, exercises β/ι/δ/int-folds; 155 rounds/71 topologies on-network).
+  Baseline: full suite with PREDUCE_INGEST=1 = 8669 ALL PASS → flipping the
+  default breaks nothing (de-risked the deletion). Ingest hooks scope-locked.
+- **Phase 1 (upgraded to native-deletion)**: removed the
+  current-preduce-ingest?/-int-folds? parameter gate; de-gated the β/ι(nat-val,
+  suc)/δ ingest arms (now unconditional); DELETED the duplicate native arms for
+  β, ι, int+/-/*. Non-duplicate native rules (div/mod/cmp, fst/snd/boolrec/J,
+  constructor-fvar canonical) kept — not off-network duplicates. SAFE because
+  preduce-ingest-{delta,int} degrade to the exact native step (#:compute/op-fn)
+  when the e-graph infra is absent (verified: preduce-ingest-delta cond falls to
+  (compute)). Removed PREDUCE_INGEST env (driver) + #:reduce?/--reduce/--no-reduce
+  (viz-export). Ported test-preduce-ingest.rkt (param wrappers stripped, e-graph
+  assertions kept — they now test the only path); deleted obsolete on/off micro-
+  benchmark. GATE: full suite 8671 ALL PASS (406.7s). Absorbs part of Phase 5
+  (native compute arms gone; whnf still drives — full whnf-bypass is later).
+- Commits: 1741476 (bench deletion) + the source-edit follow-up + this tracker.
+- NEXT: Phase 2 (rule application as OBSERVABLE propagator firing) — research-
+  grade per the plan; grounding-audit + likely owner checkpoint.
+
+## 2026-06-14 — LOOP (PReduce Track 8 plan) Phase 2 — [SIGNIFICANT] arithmetic dispatch is now an on-network STRATUM FIRING; grounding narrowed scope + owner chose P2→P4
+- **Grounding finding (before cutting code)**: the substrate has TWO unlike
+  reduction paths. int-fold (`preduce-ingest-int`) = `dispatch-rules` →
+  `apply-rule` → `eclass-intern` RHS + `eclass-union` (the union IS a
+  propagator; only DISPATCH was imperative). β/δ/ι (`preduce-ingest-delta`,
+  reduction.rkt:1350-1408) = memoized native `(compute)` + a DIRECT
+  `net-cell-write` of the result as `:best` (reduction.rkt:1402) — NO rule, NO
+  union, NO propagator. So "rule application IS propagator firing" applies
+  cleanly ONLY to the arithmetic path; the recursion path (the fib/factorial
+  case) has no rule application to convert — it is the deeper Phase 4.
+- **Surfaced to owner** (charter §8 — design didn't lock as assumed). Owner chose
+  **"Pursue the goal (P2→P4)"**: land Phase 2 (arithmetic) as the foundation,
+  then design Phase 4 properly (NTT + critique) so the viz shows fib reducing via
+  propagators.
+- **Phase 2 done (arithmetic path)**: dispatch moved from the imperative
+  `dispatch-rules` call to an on-network topology STRATUM firing, mirroring the
+  congruence engine exactly:
+  - `propagator.rkt`: reserve cell-22 `dispatch-request-cell-id` (hash-overwrite
+    merge); preallocate in `make-prop-network` (net12) with drift check; provide.
+  - `rule-dispatch.rkt`: `process-dispatch-requests` topology-tier handler —
+    CLEARS the request cell at entry (apply-rule drives its own nested
+    `run-to-quiescence`; the stratification.md fork-clear idiom prevents
+    re-dispatch), reads registry+hashcons cell-ids from their parameters, runs
+    `dispatch-rules` per pending class. `register-stratum-handler!`.
+  - `reduction.rkt`: `preduce-ingest-int` installs a fire-once S0 EMITTER on the
+    redex class that writes the dispatch-request cell, then `run-to-quiescence`;
+    reads `:best` after quiescence (same contract). The emitter must (a) exist as
+    a propagator fire — a direct request-write would not trigger strata since the
+    inner/drain schedulers only run strata when the worklist is non-empty; and
+    (b) WATCH the redex class (non-empty inputs) so it is NOT Tier-1-fast-path
+    eligible (Tier-1 skips strata).
+  - Emission from the caller (not `eclass-intern`'s new-class branch, plan §7
+    step 2b) keeps scope strictly arithmetic — `eclass-intern` is generic.
+- **Network Reality Check**: ✅ stratum + emitter propagator added; result via the
+  union propagator's `net-cell-write`; trace intern→emitter→request-cell→
+  stratum→dispatch-rules→apply-rule→eclass-union→`:best`→caller read.
+- **Phase 3 (plan) DROPPED** as off-roadmap (owner-approved): the e-graph
+  evaluates primitives functionally inside a rule — a standalone compute
+  propagator is the direct-compute substrate we chose NOT to build.
+- **Gate**: test-preduce-ingest.rkt 29 tests (+3 2T proving the stratum handler
+  does the rewrite); acceptance file 0 errors; **full suite 8674 ALL PASS
+  (548.6s)**. 3 cell-count test failures (cell-22 shifts the well-known count
+  22→23) fixed in test-propagator / test-trace-serialize / test-observatory-01.
+- Commits: `656a294` (core) · `edeff08` (2T) · `ac65fad` (cell-count bumps) ·
+  `3f13ac9` (grounding finding doc) + this tracker/ledger update.
+- NEXT: Phase 4 design — recursion β/δ/ι on-network (research-grade; full Stage-3
+  arc). This is the owner's actual goal (viz shows fib reducing via propagators).
+
+## 2026-06-14 — LOOP (PReduce Track 8 plan) Phase 4a — [SIGNIFICANT, owner delegated design] recursion step is now a UNION propagator; viz shows recursion as propagators
+- **Owner posture (verbatim)**: "for this prototype branch, you lead and approve
+  design. don't ask me for details. I will review after the implementation is
+  complete." → I make the Phase 4 design decisions; methodology gates still apply.
+  (Phase 5 — bypass reduction.rkt — kept as the documented irreversible hard-stop.)
+- **Phase 4a done** (design doc `2026-06-14_PREDUCE_T8_PHASE4_RECURSION_ON_NETWORK.md`):
+  `preduce-ingest-delta`'s miss path records the β/δ/ι reduction step as a UNION
+  propagator (intern result + `eclass-union`, the DPO {redex,result} e-class — the
+  SAME mechanism as the arithmetic fold), replacing the bare `net-cell-write`.
+  Net-threading fix (load-bearing): publish the redex class (net1) BEFORE compute
+  and read the POST-compute net, so the recursion SUBTREE persists (pre-4a
+  discarded compute's net, keeping only the top redex→result and defeating
+  hashcons sharing). 4a-T: +4 tests (result interned as its own class; redex+result
+  share a canonical = the union). Suite **8678 all-pass** (540.9s, no suite
+  regression — the heavy reduction perf tests are skip-listed).
+- **VIZ GOAL MET (tractable sizes)**: fib 6 export = 172 rounds, 73 topologies,
+  0 errors, **up to 18 propagators firing per round (75 rounds with >1)** — the
+  union (eclass-refine relate) propagators ARE the recursion steps. Pre-4a the viz
+  showed "only one propagator [fib 15]"; 4a makes the recursion a web of
+  propagators. Commit `2bf9b5e`.
+- **PERF WALL (honest finding, the PReduce verdict in action)**: reduce_ms fib
+  6/8/10/12 = 449/1344/4552/24052; fib 15 >120s. Super-linear because naive fib
+  does NOT memo-collapse: β reduces call-by-name, so `[fib 5]` redexes carry
+  differently-unreduced args (`(int- 6 1)` vs `(int- 7 2)`) → different digests →
+  no hashcons hit → exponential recompute, now × per-step union+quiescence cost.
+  This ANSWERS `fib-naive.prologos`'s own question (it recomputes, doesn't share).
+  The viz observer's O(cells)/round diffing makes export quadratic → fib ≤ ~6-7 is
+  the practical viz size on Racket.
+- **4b/4c = documented research frontier (NOT built)**: network-DRIVES-recursion
+  (ι cascade; β/δ as declarative rules — β needs list-form de Bruijn subst) ADDS
+  per-step network work → worsens the wall. Path to memo-collapse = call-by-value
+  memo key (reduction-strategy change) + incremental observer; wall-clock payoff
+  routes to SH/Zig. These are SH/Zig-era / dedicated research, not landable wins on
+  this branch now.
+- Commits: `2bf9b5e` (4a core + 4a-T + design doc) + this tracker/ledger update.
+- NEXT: present Phase 0–4a for owner review (per posture). Phase 4b/4c + 5 await
+  owner direction (perf-frontier / SH-Zig + owner-gated terminal).
+
+## 2026-06-14 — LOOP (PReduce Track 8) Phase 4a perf — [SIGNIFICANT, owner-requested] perf wall LIFTED: cbv memo key + incremental observer
+- **Owner request (verbatim)**: "do The single highest-value follow-up is making
+  naive fib memo-collapse so large traces work: a call-by-value memo key
+  (normalize the β arg before the redex digest, keeping reduction itself
+  call-by-name) + an incremental viz observer (drop the per-round O(cells) diff)."
+- **Part 1 — call-by-value memo key (`02da3bd`, reduction.rkt β arm)**: key the β
+  redex by the NORMALIZED arg (whnf'd in a PRIVATE bounded fuel box, guarded by
+  with-handlers), so `[fib 5]` reached via `(int- 6 1)` vs `(int- 7 2)` shares ONE
+  e-class. Reduction stays CALL-BY-NAME — `#:compute` substitutes the ORIGINAL
+  arg; only the memo KEY is normalized. Sound (arg-nf = arg in value ⇒ identical
+  contractum; whnf deterministic). Divergent/unused arg falls back to the original
+  key (no collapse, no regression, bounded fuel never depletes the real budget).
+  **Naive fib exponential → LINEAR**: reduce_steps fib 8/12/15/20 =
+  202/287/350/455 (was 741/exp/>120s); fib 15 reduce 274ms; fib 10 = 55 verified;
+  acceptance reduce_ms 2117→194. Answers fib-naive's own question (WITH the cbv key
+  the hashcons SHARES `[fib k]` subterms = collapses the tree).
+- **Part 2 — incremental viz observer (`031ff2f`, viz-export.rkt)**:
+  `intern-topology!` did a full `serialize-network-topology` (incl. per-cell
+  `serialize-lattice-value`) EVERY round just for the dedup signature. Now the
+  signature is computed cheaply from the pnet (cell-ids + propagator connections),
+  full serialize ONLY on a NEW topology. Identical sig format ⇒ identical dedup.
+  fib 15 export 16.3s → 11.1s (~32%). Also added cell-22 (dispatch-request) to the
+  well-known-cells identity table (missed in Phase 2).
+- **Net**: fib 15 (owner's example) >120s-untraceable → 0.27s reduce + 11s export,
+  234 rounds, 0 errors, recursion shown as union propagators. **Full suite 8673
+  ALL PASS — and FASTER (372s vs 540s)**: the suite's reduction tests collapse too.
+  0 failures.
+- **Still frontier**: 4b/4c (network DRIVES recursion). The cbv key collapses +
+  speeds the RECORDING path; the DRIVER (whnf) is still off-network. Phase 5
+  owner-gated.
+- Commits: `02da3bd` (cbv memo key) · `031ff2f` (incremental observer) + this
+  tracker/ledger/design-doc update.
+- NEXT: send owner the now-working fib 15 trace; await direction on 4b/4c + 5.
+
+## 2026-06-14 — LOOP (PReduce Track 8) Phases 4b/4c/5 — [SIGNIFICANT, owner: through phase 5] design + 5a (whnf-step1 + parity), 5b/5c designed+de-risked
+- **Owner**: "/loop continue design and implementation through phase 5." (Phase 5
+  owner-gate lifted by this explicit directive; I lead/approve design.)
+- **Design (`12f97a7`)**: `2026-06-14_PREDUCE_T8_PHASE4b5_NETWORK_DRIVEN_REDUCTION.md`
+  — network-DRIVEN reduction via a demand cascade + extraction bypass. Grounded the
+  reality: `whnf-impl/match` is ~1700 lines over dozens of constructs with subtle
+  strictness → a COMPLETE bypass (parity across all) is multi-session; staged
+  migration with a shrinking `'native` fallback, PARITY-gated per construct.
+  Form-rep decision: expr-structs + native one-step compute (sidesteps the
+  list-form template's de-Bruijn-subst gap — the 4c blocker).
+- **5a (`a72b3f2`)**: `whnf-step1` one-step classifier ('whnf | 'native |
+  (step C) | (demand SUB RECON)) mirroring whnf-impl/match for the migrated
+  fragment (β, ι natrec, suc-collapse, fst/snd, J, boolrec, ann, vhead/vtail +
+  subterm-demand); `whnf-via-egraph` driver (iterate step1; demand via nested;
+  neutral-stuck via no-progress). PARITY harness `tests/test-preduce-egraph.rkt`
+  (27 checks): whnf-via-egraph == native whnf across a corpus + migrated arms
+  confirmed step/demand (not silent native). Pure addition — default whnf
+  UNTOUCHED (opt-in); 'native fallback makes non-migrated constructs
+  parity-trivial. **Full suite 8705 all-pass (441 files, 330s).**
+- **5a's driver is a LOOP, not the scheduler** — it validates the one-step
+  decomposition + gives the intern→reduce→extract shape. The genuine network-DRIVE
+  (scheduler-driven reduce-stratum cascade) is 5b.
+- **5b/5c DESIGNED + de-risked (§9, not yet built)**: origin-keyed reduce-request
+  (cell-23, keep-pending) → extraction is a simple K `:best` write (no cost-race);
+  the `step` arm's eclass-union supplies the worklist activity that re-triggers the
+  stratum each round (the load-bearing cascade mechanism); emitter (Phase-2 pattern)
+  kicks the first pass; nested demand re-entrant (strata run fire-round #f).
+  Risk register (6 points) recorded. NOT BUILT because the machinery has several
+  interdependent correctness points (cascade re-trigger, extraction, parity) whose
+  clean landing is a focused effort — methodology forbids half-built hot-path
+  machinery; 5a (validated primitive, gated) is the honest landed increment per the
+  design's §8 scope-creep guard.
+- Commits: `12f97a7` (design) · `a72b3f2` (5a) + this tracker/ledger update.
+- NEXT: implement 5b per §9 (origin-keyed cascade + emitter + extraction), parity
+  harness NETWORK variant; then 5c (route whnf through it for the covered fragment).
+  Terminal (delete native arms) owner-gated.
+
+## 2026-06-14 — LOOP (PReduce Track 8) Phase 5b — [SIGNIFICANT] scheduler-driven reduction cascade — genuine network-DRIVE, parity-gated
+- Built `whnf-via-egraph-network` (`c49c53c`): the reduction DRIVER is now the BSP
+  scheduler (keep-pending reduce stratum on cell-23), not a Racket loop. Per design
+  §9: origin-keyed reduce-request {K → current-form}; 'whnf/'native write K's cost-0
+  :best (extraction); 'step interns + unions K (the union supplies the worklist
+  activity that RE-TRIGGERS the stratum each round — the load-bearing cascade
+  mechanism) + re-requests {K → C}; 'demand reduces the strict subterm natively then
+  continues. Emitter kicks the first pass (dodges Tier-1). No-plumbing/inadmissible
+  → native whnf (total).
+- **Network Reality Check PASSES**: scheduler-driven stratum + emitter + per-step
+  union; result via net-cell-write (K :best); trace intern→emitter→reduce-request
+  →stratum→cascade→scheduler-re-fire→extract. This is the genuine network-DRIVE for
+  the migrated head fragment (β/ι/suc/fst/snd/J/boolrec/ann/vhead/vtail).
+- **PARITY gate**: test-preduce-egraph.rkt network variant (+20 → 47 checks):
+  whnf-via-egraph-network == native whnf across the corpus. cell-23 cell-count
+  bumps (test-propagator/trace-serialize/observatory) + viz-export identity table.
+  **Full suite 8725 all-pass (441 files, 343s).**
+- **Honest scope**: this is the network-driven ENGINE (the Phase 5 substrate),
+  opt-in + validated; NOT yet the default whnf. 5c (route the default through it =
+  bypass deploy) is staged — low-value + hot-path-risky until more constructs
+  migrate off 'native (most reduction is still 'native). Demand subterms native in
+  5b (head chain scheduler-driven; full cascade-driven demand via set-latch =
+  future). Terminal (delete native arms) owner-gated.
+- Commits: `c49c53c` (5b) + this tracker/ledger/design-doc update.
+- NEXT (staged): migrate more constructs into whnf-step1 (arith/reduce/δ via
+  demand+compute) so 5c routing is meaningful; then 5c deploy (parity-gated); 5d
+  set-latch demand; terminal owner-gated.
+
+## 2026-06-15 — LOOP (PReduce Track 8) Phase 5c — [SIGNIFICANT, owner directive] the cascade is the DEFAULT reduction driver; off-network DRIVER deleted (compute leaf kept)
+- **Owner**: "/loop implement through phase 5 including deletion of off-network
+  reduction" → calibrated to "Delete the recursive off-network DRIVER, keep the
+  compute leaf" (AskUserQuestion 2026-06-15).
+- **Routing hook + deploy** (`12d4131`, `568ef07`, `c98d3a9`): `current-egraph-whnf?`
+  default flipped ON — `whnf` routes through the scheduler-driven cascade
+  (whnf-via-egraph-network) by default. The BSP scheduler now DRIVES ground
+  reduction; the recursive native reducer is no longer the default path. De-routing
+  helper `whnf-native` (parameterize#f) prevents the native fallback re-entering the
+  cascade. PREDUCE_NATIVE=1 forces native.
+- **batch 1 (int arith)** + **batch 2 (reduce/match, δ, meta)** migrated to
+  whnf-step1 (the driver classifier); the rest (rat/posit/quire/generic arith,
+  maps/pvec/set, FFI) ride 'native → the COMPUTE LEAF (native compute, "compute
+  inside the rule").
+- **GATE: full suite with the cascade as DEFAULT = 8750 ALL PASS (386.9s, ~15%
+  over native 335s)** — every reduction value correct. The one routed-suite failure
+  (test-preduce-ingest, 4a-recording-structure assertions) pinned PREDUCE_NATIVE
+  (it tests the path routing replaces).
+- **Two fundamental LIMITS found (honest, architectural — not gaps)**:
+  1. **Non-ground reduction can't be on-network**: the e-graph requires
+     PCE-ADMISSIBLE (ground) terms; metavar/elaboration reduction can't be interned
+     → de-routes to native. So the native reducer is RETAINED as the non-ground
+     fallback (can't be physically deleted).
+  2. **Full deletion of whnf-impl is a reimplementation, not a mechanical grind**:
+     ~150 primitive folds (mechanical) + higher-order ops (fold/map/filter RECURSE
+     via f-application — non-mechanical) + runtime FFI. So "delete off-network
+     reduction" = delete the DRIVER (done: cascade is the driver), keep the COMPUTE
+     LEAF (the e-graph's own compute-inside-the-rule design).
+- Net: the off-network reduction DRIVER is deleted (as the default path); the
+  native reducer is demoted to compute-leaf + non-ground-fallback. On-network
+  reduction (the cascade) is the production default driver.
+- Commits: `12d4131` (hook + batch 2) · `568ef07` (test pin) · `c98d3a9` (default
+  flip) + this ledger update. (`84137e5` batch 1 earlier.)
+- NEXT (optional refinements): route 'native compute-leaf operands back through the
+  cascade (more on-network for ground compute); migrate more primitive folds into
+  whnf-step1 to shrink the leaf; the higher-order/FFI tail + perf remain SH/Zig-era.
+
+## 2026-06-15 — LOOP (PReduce Track 8) Phase 5c refinement — [ROUTINE, owner: "do #1"] route the 'native compute-leaf operands on-network; #2 declined (tension)
+- **#1 DONE** (`0c51010`): when whnf-step1 hits 'native (a primitive compute
+  construct not yet migrated — rat/posit/generic arith, data ops, FFI), the cascade
+  reduces it via whnf-impl directly (ambient routing ON) instead of whnf-native, so
+  its OPERAND sub-reductions route BACK through the cascade (on-network); only the
+  primitive fold is native. Full suite 8750 all-pass, 294.6s (FASTER than the prior
+  default-routed 386.9s; ~88% of native 335s). Owner confirmed "do #1".
+- **#2 DECLINED (not a clean win — tension found)**: migrating more folds into
+  whnf-step1 routes their operands through the cascade's `demand` path, which is
+  either NATIVE (regressing #1's operand-routing) or ~7× slower (demand-routed:
+  every recursive subterm nest-cascades — acceptance 247ms→1699ms measured). So
+  fold-migration trades operand-on-network for fold-as-cascade-step visibility — no
+  free lunch; #1 sits at the better point. The 7× full-demand-routing lever (maximal
+  on-network + viz, ~7× cost) is left to owner discretion; NOT taken.
+- **Architecture END-STATE (Phase 5c complete per "delete driver, keep compute
+  leaf")**: the BSP scheduler DRIVES ground reduction (β/ι/δ/app/reduce/proj +
+  int-arith via whnf-step1 + the reduce-stratum cascade, default-on); the native
+  reducer is the COMPUTE LEAF (primitive folds, operands routed on-network) +
+  the NON-GROUND fallback (metavar/elaboration — e-graph admissibility limit). Suite
+  green; ~12-15% over native.
+- Commit: `0c51010` + this ledger update.
+
+## 2026-06-15 — LOOP (PReduce Track 8) Phase 5d — [SIGNIFICANT, owner: "fix: reduction design serializes independent subterms, and any other 'all in parallel' work"] parallel demand
+- **Decision**: replace single-subterm `'demand` with `'demand-par` for the
+  INDEPENDENT-strict-operand case (binary arithmetic). Independent operands now
+  reduce in the SAME BSP rounds (interleaved cascades) instead of being sequenced.
+  This is the set-latch demand refinement the 5b design doc deferred (§10.5).
+- **Options considered**:
+  - (chosen) **barrier-joined parallel cascade**: `step1-par` emits `'demand-par`;
+    `pr-demand-par` interns each non-value operand to its own class KOi, queues all
+    {KOi → Oi} into the same `reduce-request` round (the per-key hash-union merge
+    accumulates them), and installs ONE barrier propagator (`net-add-barrier`,
+    set-latch fan-in) that re-forms {K → recon*(resolved)} when all KOi reach
+    cost-0 :best. Reuses existing first-class primitives; minimal surface.
+  - (deferred) **e-node + congruence reduction rule**: intern `(int+ KO1 KO2)` as an
+    e-node and let a congruence-driven reduction rule fire when children are values
+    — more "structurally emergent" but a larger redesign; not needed for the fix.
+  - (rejected) full demand-routing for ALL `'demand` arms — the ~7× cost declined in
+    5c; single-strict-subterm arms have no independent parallelism to gain anyway.
+- **Principle / precedent cited**: design mantra "all in parallel"; set-latch fan-in
+  (`propagator-design.md`); Network Reality Check (operand reductions are now real
+  net-add-propagator/net-cell-write cascades, not whnf-native off-network).
+- **Evidence**: viz before/after — balanced ×/+ tree 353→**43** BSP rounds (8.2×
+  depth reduction, 256 propagators/round); fib 6 51→**78** multi-prop rounds.
+  fib + tree values identical on-network vs native (8, 1462). Parity-gated
+  (test-preduce-egraph both variants) + 250 targeted tests green; full routed suite
+  = regression gate (running).
+- **Scope (honest)**: binary arithmetic only — the genuine independent-strict case.
+  Parallelism INSIDE whnf-impl's primitive folds (N-ary data ops) and inside `nf`
+  (full-NF subterm normalization is a pure recursive Racket fn, not on-network) is
+  the larger compute-leaf / nf reimplementation, SH/Zig-era; explicitly out of scope.
+- **Landed in**: commit `b2c5e31` (reduction.rkt + design doc §10.5) + this ledger
+  update.

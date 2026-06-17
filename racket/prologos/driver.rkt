@@ -66,7 +66,6 @@
          (only-in "extraction-store.rkt" init-extraction-store-cell!
                   current-extraction-store-cell-id)  ;; PReduce iter 37
          (only-in "preduce-pnet.rkt" preduce-load-pnetx! preduce-save-pnetx!)  ;; PReduce iter 37
-         (only-in "reduction.rkt" current-preduce-ingest? current-preduce-ingest-int-folds?)  ;; PReduce iter 22/33 A/B switches
          "champ.rkt"
          "unify.rkt"
          "atms.rkt"
@@ -2298,15 +2297,9 @@
       (preduce-load-pnetx! prn-box path-str
                            (current-eclass-hashcons-cell-id)
                            (current-extraction-store-cell-id)))
-    ;; the A/B switch (subprocess benchmarking): PREDUCE_INGEST=1 turns the
-    ;; gated whnf hook ON for this process — the experiment toggle, NOT a
-    ;; deployment path (the flip criterion is named at the hook's definition)
-    (when (getenv "PREDUCE_INGEST")
-      (current-preduce-ingest? #t)
-      ;; iter 33: PREDUCE_INGEST=db = δ/β-only (int folds native) — the
-      ;; selectivity experiment mode
-      (when (equal? (getenv "PREDUCE_INGEST") "db")
-        (current-preduce-ingest-int-folds? #f))))
+    ;; (PREDUCE_INGEST env toggle removed 2026-06-14 — on-network reduction is
+    ;; unconditional now; PREDUCE_PNETX persistence remains its own experiment.)
+    )
   (define-values (results pc)
     (parameterize ([current-phase-timings pt]
                    [current-provenance-counters pv]

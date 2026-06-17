@@ -44,9 +44,10 @@
          "prop-observatory.rkt")  ;; Observatory: capture user network runs
 
 (provide whnf nf nf-whnf conv conv-nf
-         current-preduce-ingest?  ;; PReduce Track 2 ingestion gate (iter 22)
- current-preduce-ingest-int-folds?  ;; iter 33: the selectivity lever
          preduce-ingest-delta  ;; 2026-06-11: exported for consult-wiring tests
+         whnf-step1 whnf-via-egraph  ;; Phase 5a: network-driven reduction engine
+         whnf-via-egraph-network     ;; Phase 5b: scheduler-driven cascade
+         current-egraph-whnf?        ;; Phase 5c: route the default whnf through it
          current-nf-cache current-whnf-cache
          current-reduction-fuel current-nat-value-cache
          ;; Solver normalization (for benchmarks + PUnify)
@@ -1311,21 +1312,15 @@
            (expr-error? e))))       ;; error propagation
 
 ;; ========================================
-;; PReduce Track 2 ingestion hook (iter 22; Track 2 design §4 — LAZY ingestion).
-;; PARAMETER-GATED, DEFAULT OFF: this unit's deliverable is the OVERHEAD-FLOOR
-;; instrument (what intern+dispatch costs per arithmetic position — the bound on
-;; what δ/β must later save), NOT a deployment. The flip criterion is NAMED:
-;; δ (Phase 2) + guarded β (Phase 3) landed AND the §5.8 A/B positive — then the
-;; default flips or the hook reverts (validated≠deployed; no permanent dual path).
-;; Speculative-context note: e-graph writes during speculative whnf persist as
-;; MONOTONE GARBAGE (dead-branch interns) — sound-but-wasteful, the same class as
-;; stale-canonical duplicate allocation (eclass-graph.rkt header).
-(define current-preduce-ingest? (make-parameter #f))
-;; SELECTIVE ingestion (iter 33 — the Track 4 PIR §15 lever): int-fold ingestion
-;; gated SEPARATELY; the floor data says blanket small-fold floods are the
-;; overhead source while δ/β memos carry the value. Default #t preserves the
-;; ALL mode; the driver's PREDUCE_INGEST=db sets it #f (δ/β-only).
-(define current-preduce-ingest-int-folds? (make-parameter #t))
+;; PReduce ingestion hook (Track 2 design §4 — LAZY ingestion).
+;; ON-NETWORK REDUCTION IS THE ONLY PATH on this branch (2026-06-14 owner
+;; directive): the parameter gate and the off-network native arms were deleted;
+;; β/ι/δ/int-folds always route through the e-graph ingest, which degrades to the
+;; native step (#:compute / op-fn) when the e-graph infra is absent, so the hooks
+;; are behaviorally total. Speculative-context note: e-graph writes during
+;; speculative whnf persist as MONOTONE GARBAGE (dead-branch interns) —
+;; sound-but-wasteful, the same class as stale-canonical duplicate allocation
+;; (eclass-graph.rkt header).
 
 (define (preduce-ingest-int e op-sym op-fn a b)
   ;; e-graph round-trip when the plumbing is live; NATIVE fold otherwise —
@@ -1339,7 +1334,21 @@
      (define form (list op-sym (list 'lit a) (list 'lit b)))
      (define net0 (unbox prn-box))
      (define-values (net1 cid _d) (pr/eclass-intern net0 hc form #:cost 5))
-     (define-values (net2 _fired) (pr/dispatch-rules net1 hc reg cid #:result-cost 1))
+     ;; Phase 2 (PReduce Track 8): dispatch is a STRATUM FIRING, not an imperative
+     ;; call. Install a fire-once S0 emitter on the redex class that writes the
+     ;; class to the dispatch-request cell; run-to-quiescence fires it (worklist
+     ;; activity → the BSP loop), and the topology-tier dispatch handler
+     ;; (rule-dispatch.rkt process-dispatch-requests) then runs dispatch-rules →
+     ;; apply-rule → eclass-union, landing the folded result as :best. We read
+     ;; AFTER quiescence — same contract as the old direct dispatch-rules call;
+     ;; only WHO triggers dispatch moved on-network. The emitter WATCHES cid
+     ;; (non-empty inputs) so the worklist is NOT Tier-1-fast-path eligible
+     ;; (Tier-1 skips strata, which would skip dispatch).
+     (define-values (net1a _epid)
+       (net-add-fire-once-propagator
+        net1 (list cid) (list dispatch-request-cell-id)
+        (lambda (n) (net-cell-write n dispatch-request-cell-id (hash cid #t)))))
+     (define net2 (run-to-quiescence net1a))
      (set-box! prn-box net2)
      (define best (hash-ref (pr/eclass-read net2 cid) ':best #f))
      (match best
@@ -1400,18 +1409,37 @@
              (set-box! prn-box net2)
              stored]
             [else
-             ;; the native step, then the result joins as the cost-0 best AND
-             ;; records in the store. The RESULT may itself be inadmissible —
-             ;; encode-check it by writing under the same handler: an
-             ;; inadmissible RESULT aborts the memo + store writes (the class
-             ;; keeps the body alone) but still returns the result.
+             ;; the native step, then the result joins the redex class as a UNION
+             ;; PROPAGATOR (Phase 4a — PReduce Track 8): the reduction step is the
+             ;; DPO {redex, result} e-class joined by eclass-union (the SAME
+             ;; mechanism as the arithmetic fold's union), NOT a bare cell-write —
+             ;; so the step is visible as PROPAGATION (the viz goal: recursion
+             ;; performed by propagators).
+             ;;
+             ;; Net threading: we PUBLISH the redex class (net1) before compute and
+             ;; read the POST-compute net, so the recursion SUBTREE — the sub-step
+             ;; unions that compute builds via nested preduce calls — PERSISTS in
+             ;; the e-graph (the pre-4a code discarded compute's net, keeping only
+             ;; the top redex→result). Persisting the subtree also lets the
+             ;; hashcons memo SHARE repeated sub-redexes (e.g. naive fib's
+             ;; overlapping calls), which the discard previously defeated. The
+             ;; e-graph grows O(distinct subterms) — accepted (plan §1; perf
+             ;; regression expected on this branch).
+             ;;
+             ;; The RESULT may be inadmissible — eclass-intern raises; the handler
+             ;; returns the result unmemoized (the class keeps the body alone) but
+             ;; still computes. (compute's own mutations already published via the
+             ;; set-box! below remain — sound monotone garbage.)
+             (set-box! prn-box net1)
              (define result (compute))
              (with-handlers ([exn:fail? (lambda (_e) result)])
-               (define net2 (net-cell-write net1 cid
-                                            (pr/make-eclass-value #:best (cons 0 result))))
+               (define net-post (unbox prn-box))
+               (define-values (net2 result-cid _rd)
+                 (pr/eclass-intern net-post hc result #:cost 0))
+               (define net2b (run-to-quiescence (pr/eclass-union net2 cid result-cid)))
                (define net3 (if store-cid
-                                (pr/store-record-reduction net2 store-cid cid result)
-                                net2))
+                                (pr/store-record-reduction net2b store-cid cid result)
+                                net2b))
                (set-box! prn-box net3)
                result)])]))]
     [else (compute)]))
@@ -1440,7 +1468,24 @@
 ;; Use (box N) to set a limit; whnf-impl decrements on each call.
 (define current-reduction-fuel (make-parameter #f))
 
+;; Phase 5c: the DEFAULT whnf routes through the scheduler-driven cascade
+;; (whnf-via-egraph-network) — the cascade is the on-network reduction DRIVER for
+;; ground terms (owner directive 2026-06-15: "delete the recursive off-network
+;; DRIVER, keep the compute leaf"). The native reducer (whnf-core/whnf-impl) is
+;; retained NOT as the driver but as: (a) the primitive COMPUTE LEAF reached via
+;; whnf-step1's 'native (arithmetic folds, data-structure ops, FFI — "compute
+;; inside the rule", the e-graph's own design), and (b) the NON-GROUND fallback:
+;; the e-graph requires PCE-admissible (ground) terms, so metavar/elaboration
+;; reduction can't be interned and de-routes via whnf-native. Set #f to force the
+;; native driver (e.g. test-preduce-ingest, which tests the 4a recording path).
+(define current-egraph-whnf? (make-parameter (not (getenv "PREDUCE_NATIVE"))))
+
 (define (whnf e)
+  (if (current-egraph-whnf?)
+      (whnf-via-egraph-network e)
+      (whnf-core e)))
+
+(define (whnf-core e)
   (define cache (current-whnf-cache))
   (cond
     [(and cache (hash-ref cache e #f))
@@ -1450,6 +1495,12 @@
      (when cache
        (hash-set! cache e result))
      result]))
+
+;; the native reducer with routing DISABLED for the whole sub-reduction — the
+;; cascade's 'native / no-plumbing / inadmissible fallbacks use this so the native
+;; one-step compute (and its internal whnf recursion) never re-enters the cascade.
+(define (whnf-native e)
+  (parameterize ([current-egraph-whnf? #f]) (whnf-core e)))
 
 ;; Fast-path: is this expression definitely already in WHNF?
 ;; Returns #t for type atoms, type constructors, value constructors,
@@ -1518,20 +1569,35 @@
 (define (whnf-impl/match e)
   (match e
     ;; Beta reduction: app(lam(m, A, body), arg) -> whnf(subst(0, arg, body))
-    ;; PReduce guarded β (Phase 3, iter 25; gated, default OFF): the redex
-    ;; memoizes as {redex, whnf(redex)} — the SAME e-class mechanics as δ —
-    ;; UNLESS the arg is effect-headed (pessimistic guard + counter; the e-graph
-    ;; never records a β that could dedup/delete an effect — D.1 §6.2; the
-    ;; native β below stays sound for the legacy semantics).
-    [(and redex (expr-app (expr-lam _ _ body) arg))
-     #:when (current-preduce-ingest?)
+    ;; PReduce guarded β: the redex memoizes ON-NETWORK as {redex, whnf(redex)}
+    ;; — the SAME e-class mechanics as δ — UNLESS the arg is effect-headed
+    ;; (pessimistic guard + counter; the e-graph never records a β that could
+    ;; dedup/delete an effect — D.1 §6.2; the guard path still computes natively).
+    ;; (Off-network native β arm deleted 2026-06-14: on-network reduction is the
+    ;; only path on this branch; preduce-ingest-delta degrades to #:compute when
+    ;; the e-graph infra is absent, so this is behaviorally total.)
+    [(and redex (expr-app (expr-lam m A body) arg))
      (if (expr-head-effectful? arg)
          (begin (pr/guard-skip-note!)
                 (whnf (subst 0 arg body)))
-         (preduce-ingest-delta redex
-                               #:compute (lambda () (whnf (subst 0 arg body)))))]
-    [(expr-app (expr-lam _ _ body) arg)
-     (whnf (subst 0 arg body))]
+         ;; CALL-BY-VALUE MEMO KEY (Phase 4a perf): key the β redex by the
+         ;; NORMALIZED arg, so recursive calls reaching the same value share ONE
+         ;; e-class and the recursion MEMO-COLLAPSES (e.g. naive fib: [fib 5]
+         ;; reached via (int- 6 1) vs (int- 7 2) now share (app <lam> (int 5))).
+         ;; Reduction stays CALL-BY-NAME — #:compute substitutes the ORIGINAL arg;
+         ;; only the memo KEY is normalized. Sound: arg-nf and arg denote the same
+         ;; value, so the contractum is identical (whnf is deterministic). The
+         ;; key-normalization is BOUNDED (a private fuel box, so it never depletes
+         ;; the real budget) and GUARDED (a divergent/erroring arg that
+         ;; call-by-name would not force falls back to the ORIGINAL redex key — no
+         ;; collapse for that redex, but no regression and no spurious divergence).
+         (let* ([fb (current-reduction-fuel)]
+                [arg-nf (with-handlers ([exn:fail? (lambda (_e) arg)])
+                          (parameterize ([current-reduction-fuel
+                                          (box (if fb (unbox fb) 1000000))])
+                            (whnf arg)))])
+           (preduce-ingest-delta (expr-app (expr-lam m A body) arg-nf)
+                                 #:compute (lambda () (whnf (subst 0 arg body))))))]
 
     ;; Projections on pairs
     [(expr-fst (expr-pair e1 _)) (whnf e1)]
@@ -1539,13 +1605,12 @@
 
     ;; Iota reduction for natrec — native nat-val (Idris 2 model)
     [(expr-natrec _ base _ (expr-nat-val n)) #:when (= n 0) (whnf base)]
-    ;; PReduce ι ingestion (Track 3 Phase 1, iter 41; gated, default OFF):
-    ;; the natrec recursion carriers memoize as {redex, result} e-classes —
-    ;; the δ mechanics verbatim (#:compute = the native step; totality).
-    ;; Guard: an effect-headed base/step skips the recording (pessimistic;
-    ;; native ι stays legacy-sound).
+    ;; PReduce ι ingestion: the natrec recursion carriers memoize ON-NETWORK as
+    ;; {redex, result} e-classes — the δ mechanics verbatim. An effect-headed
+    ;; base/step skips the recording (pessimistic; the guard path computes
+    ;; natively). (Off-network native ι arms deleted 2026-06-14.)
     [(and redex (expr-natrec mot base step (expr-nat-val n)))
-     #:when (and (> n 0) (current-preduce-ingest?))
+     #:when (> n 0)
      (if (or (expr-head-effectful? base) (expr-head-effectful? step))
          (begin (pr/guard-skip-note!)
                 (whnf (expr-app (expr-app step (expr-nat-val (- n 1)))
@@ -1554,13 +1619,9 @@
                                #:compute (lambda ()
                                            (whnf (expr-app (expr-app step (expr-nat-val (- n 1)))
                                                            (expr-natrec mot base step (expr-nat-val (- n 1))))))))]
-    [(expr-natrec mot base step (expr-nat-val n)) #:when (> n 0)
-     (whnf (expr-app (expr-app step (expr-nat-val (- n 1)))
-                     (expr-natrec mot base step (expr-nat-val (- n 1)))))]
     ;; Iota reduction for natrec — legacy Peano representation
     [(expr-natrec _ base _ (expr-zero)) (whnf base)]
     [(and redex (expr-natrec mot base step (expr-suc n)))
-     #:when (current-preduce-ingest?)
      (if (or (expr-head-effectful? base) (expr-head-effectful? step)
              (expr-head-effectful? n))
          (begin (pr/guard-skip-note!)
@@ -1569,8 +1630,6 @@
                                #:compute (lambda ()
                                            (whnf (expr-app (expr-app step n)
                                                            (expr-natrec mot base step n))))))]
-    [(expr-natrec mot base step (expr-suc n))
-     (whnf (expr-app (expr-app step n) (expr-natrec mot base step n)))]
 
     ;; Suc collapse: concrete inner → native nat-val
     [(expr-suc (expr-nat-val k)) (expr-nat-val (+ k 1))]
@@ -1656,20 +1715,12 @@
 
     ;; ---- Int iota rules: compute when arguments are int literals ----
 
-    ;; Binary arithmetic on literals
-    ;; PReduce ingestion (gated, default OFF — see preduce-ingest-int above):
-    [(expr-int-add (expr-int a) (expr-int b))
-     #:when (and (current-preduce-ingest?) (current-preduce-ingest-int-folds?))
-     (preduce-ingest-int e 'int+ + a b)]
-    [(expr-int-sub (expr-int a) (expr-int b))
-     #:when (and (current-preduce-ingest?) (current-preduce-ingest-int-folds?))
-     (preduce-ingest-int e 'int- - a b)]
-    [(expr-int-mul (expr-int a) (expr-int b))
-     #:when (and (current-preduce-ingest?) (current-preduce-ingest-int-folds?))
-     (preduce-ingest-int e 'int* * a b)]
-    [(expr-int-add (expr-int a) (expr-int b)) (expr-int (+ a b))]
-    [(expr-int-sub (expr-int a) (expr-int b)) (expr-int (- a b))]
-    [(expr-int-mul (expr-int a) (expr-int b)) (expr-int (* a b))]
+    ;; Binary arithmetic on literals — ON-NETWORK via the e-graph ingest path
+    ;; (preduce-ingest-int interns + folds, degrading to the native op when the
+    ;; e-graph infra is absent). Off-network native folds deleted 2026-06-14.
+    [(expr-int-add (expr-int a) (expr-int b)) (preduce-ingest-int e 'int+ + a b)]
+    [(expr-int-sub (expr-int a) (expr-int b)) (preduce-ingest-int e 'int- - a b)]
+    [(expr-int-mul (expr-int a) (expr-int b)) (preduce-ingest-int e 'int* * a b)]
     [(expr-int-div (expr-int a) (expr-int b))
      (if (zero? b) e (expr-int (quotient a b)))]
     [(expr-int-mod (expr-int a) (expr-int b))
@@ -3185,12 +3236,15 @@
     ;; Constructor and type-name fvars are canonical — do NOT unfold.
     ;; This keeps constructor applications as (fvar 'cons arg1 arg2) in WHNF,
     ;; allowing structural PM (try-structural-reduce) to decompose them.
-    ;; PReduce δ-memo (gated, default OFF — see preduce-ingest-delta above):
+    ;; PReduce δ-memo: non-constructor defn references unfold ON-NETWORK via the
+    ;; e-graph ({body, whnf(body)} as one e-class), degrading to whnf(body) when
+    ;; the e-graph infra is absent. The native arm below now handles only
+    ;; constructor/type fvars (canonical, not unfolded). Off-network δ path
+    ;; deleted 2026-06-14 — on-network reduction is the only path on this branch.
     [(expr-fvar name)
-     #:when (and (current-preduce-ingest?)
-                 (not (or (lookup-ctor name) (lookup-ctor (ctor-short-name name))
-                          (lookup-type-ctors name)
-                          (lookup-type-ctors (ctor-short-name name)))))
+     #:when (not (or (lookup-ctor name) (lookup-ctor (ctor-short-name name))
+                     (lookup-type-ctors name)
+                     (lookup-type-ctors (ctor-short-name name))))
      (let ([val (global-env-lookup-value name)])
        (if val (preduce-ingest-delta val) e))]
     [(expr-fvar name)
@@ -3211,6 +3265,311 @@
 
 ;; ========================================
 ;; Full Normalization
+;; ========================================
+;; Phase 5a (PReduce Track 8): network-driven reduction engine — the ONE-STEP
+;; classifier + an extraction-style driver. The design's foundational primitive
+;; (2026-06-14_PREDUCE_T8_PHASE4b5_NETWORK_DRIVEN_REDUCTION.md §3). PARITY-gated
+;; against native whnf (tests/test-preduce-egraph.rkt). The scheduler-driven
+;; cascade (reduce stratum) is the staged next increment; this validates the
+;; one-step decomposition is parity-correct and gives whnf-via-egraph (the
+;; intern→reduce→extract shape Phase 5 generalizes).
+;;
+;; whnf-step1 : expr -> 'whnf | 'native | (cons 'step C)
+;;                       | (list 'demand SUB RECON)
+;;                       | (list 'demand-par OPERANDS RECON*)
+;;   'whnf          — E is weak-head-normal (value/neutral)
+;;   'native        — construct not yet migrated; driver delegates to native whnf
+;;                    (staged fallback — shrinks as constructs migrate)
+;;   (cons 'step C) — E head-reduces ONE step to C
+;;   (list 'demand SUB RECON) — E is STRICT in SUB; reduce SUB to WHNF, then the
+;;                    next form is (RECON sub-nf). Mis-classification is parity-safe
+;;                    (the migrated arms mirror whnf-impl/match; the rest is 'native).
+;;   (list 'demand-par OPERANDS RECON*) — E is STRICT in N INDEPENDENT operands
+;;                    (binary arithmetic: both args, neither depends on the other).
+;;                    The operands reduce TOGETHER (network driver: one cascade,
+;;                    interleaved per BSP round — "all in parallel"; iterating
+;;                    driver: sequentially, parity-identical). RECON* takes the LIST
+;;                    of reduced operands (positional) and re-forms the head.
+;;                    This is the fix for "reduction serializes independent
+;;                    subterms": single-subterm 'demand sequenced operand i before
+;;                    operand j even when independent (e.g. fib's two recursive
+;;                    branches under int+); 'demand-par lets them progress in the
+;;                    same rounds.
+
+;; step1-par : classify a strict-in-N-independent-operands head. If EVERY operand
+;; is already a value (whnf-trivial), the primitive is ready to fold → 'native (the
+;; compute leaf — int-int fast-folds are matched by the literal arms before this).
+;; Otherwise the operands are reduced in parallel via 'demand-par; recon* re-forms
+;; the head from the positional list of reduced operands.
+(define (step1-par operands recon*)
+  (if (andmap whnf-trivial? operands)
+      'native
+      (list 'demand-par operands recon*)))
+
+(define (whnf-step1 e)
+  (cond
+    [(whnf-trivial? e) 'whnf]
+    [else
+     (match e
+       ;; β (head). Effect-headed arg → native (the guard path; never recorded).
+       [(expr-app (expr-lam _ _ body) arg)
+        (if (expr-head-effectful? arg) 'native (cons 'step (subst 0 arg body)))]
+       ;; projections on pairs (head)
+       [(expr-fst (expr-pair e1 _)) (cons 'step e1)]
+       [(expr-snd (expr-pair _ e2)) (cons 'step e2)]
+       ;; ι natrec (head) — nat-val / legacy zero+suc. Effect-headed → native.
+       [(expr-natrec _ base _ (expr-nat-val n)) #:when (= n 0) (cons 'step base)]
+       [(expr-natrec mot base step (expr-nat-val n))
+        #:when (> n 0)
+        (if (or (expr-head-effectful? base) (expr-head-effectful? step))
+            'native
+            (cons 'step (expr-app (expr-app step (expr-nat-val (- n 1)))
+                                  (expr-natrec mot base step (expr-nat-val (- n 1))))))]
+       [(expr-natrec _ base _ (expr-zero)) (cons 'step base)]
+       [(expr-natrec mot base step (expr-suc n))
+        (if (or (expr-head-effectful? base) (expr-head-effectful? step)
+                (expr-head-effectful? n))
+            'native
+            (cons 'step (expr-app (expr-app step n) (expr-natrec mot base step n))))]
+       ;; suc-collapse (head)
+       [(expr-suc (expr-nat-val k)) (cons 'step (expr-nat-val (+ k 1)))]
+       [(expr-suc (expr-zero)) (cons 'step (expr-nat-val 1))]
+       ;; J / boolrec / ann / vhead / vtail (head)
+       [(expr-J _ base left _ (expr-refl)) (cons 'step (expr-app base left))]
+       [(expr-boolrec _ tc _ (expr-true)) (cons 'step tc)]
+       [(expr-boolrec _ _ fc (expr-false)) (cons 'step fc)]
+       [(expr-ann e1 _) (cons 'step e1)]
+       [(expr-vhead _ _ (expr-vcons _ _ hd _)) (cons 'step hd)]
+       [(expr-vtail _ _ (expr-vcons _ _ _ tl)) (cons 'step tl)]
+       ;; demand arms — reduce the head-exposing subterm first (mirror the native
+       ;; "reduce subterm, then retry" arms). RECON re-forms the head with the nf.
+       [(expr-app f a)
+        #:when (not (expr-lam? f))
+        (list 'demand f (lambda (f-nf) (expr-app f-nf a)))]
+       [(expr-fst e1) (list 'demand e1 (lambda (x) (expr-fst x)))]
+       [(expr-snd e1) (list 'demand e1 (lambda (x) (expr-snd x)))]
+       [(expr-natrec mot base step target)
+        (list 'demand target (lambda (t) (expr-natrec mot base step t)))]
+       [(expr-J mot base left right proof)
+        (list 'demand proof (lambda (p) (expr-J mot base left right p)))]
+       [(expr-boolrec mot tc fc target)
+        (list 'demand target (lambda (t) (expr-boolrec mot tc fc t)))]
+       [(expr-vhead t n v) (list 'demand v (lambda (x) (expr-vhead t n x)))]
+       [(expr-vtail t n v) (list 'demand v (lambda (x) (expr-vtail t n x)))]
+       ;; int arithmetic (Phase 5c migration batch 1): fold when both operands are
+       ;; int literals; else demand the non-value operand. Both-values-but-not-both-
+       ;; int (rat/posit/coercion) and div/mod (zero-guard) → native — parity-safe.
+       [(expr-int-add (expr-int a) (expr-int b)) (cons 'step (expr-int (+ a b)))]
+       [(expr-int-sub (expr-int a) (expr-int b)) (cons 'step (expr-int (- a b)))]
+       [(expr-int-mul (expr-int a) (expr-int b)) (cons 'step (expr-int (* a b)))]
+       [(expr-int-neg (expr-int a)) (cons 'step (expr-int (- a)))]
+       [(expr-int-abs (expr-int a)) (cons 'step (expr-int (abs a)))]
+       [(expr-int-lt (expr-int a) (expr-int b)) (cons 'step (if (< a b) (expr-true) (expr-false)))]
+       [(expr-int-le (expr-int a) (expr-int b)) (cons 'step (if (<= a b) (expr-true) (expr-false)))]
+       [(expr-int-eq (expr-int a) (expr-int b)) (cons 'step (if (= a b) (expr-true) (expr-false)))]
+       ;; binary arithmetic — STRICT in BOTH operands, which are INDEPENDENT (neither
+       ;; depends on the other). 'demand-par reduces them together (the fix for
+       ;; serialized independent subterms). recon* re-forms the head positionally;
+       ;; the both-int literal arms above fold first, so by the time recon* re-forms
+       ;; with both operands reduced, the literal arm fires next round.
+       [(expr-int-add a b) (step1-par (list a b) (lambda (vs) (expr-int-add (car vs) (cadr vs))))]
+       [(expr-int-sub a b) (step1-par (list a b) (lambda (vs) (expr-int-sub (car vs) (cadr vs))))]
+       [(expr-int-mul a b) (step1-par (list a b) (lambda (vs) (expr-int-mul (car vs) (cadr vs))))]
+       [(expr-int-lt a b)  (step1-par (list a b) (lambda (vs) (expr-int-lt  (car vs) (cadr vs))))]
+       [(expr-int-le a b)  (step1-par (list a b) (lambda (vs) (expr-int-le  (car vs) (cadr vs))))]
+       [(expr-int-eq a b)  (step1-par (list a b) (lambda (vs) (expr-int-eq  (car vs) (cadr vs))))]
+       [(expr-int-neg a) (if (whnf-trivial? a) 'native (list 'demand a (lambda (x) (expr-int-neg x))))]
+       [(expr-int-abs a) (if (whnf-trivial? a) 'native (list 'demand a (lambda (x) (expr-int-abs x))))]
+       ;; structural reduce / match (Phase 5c batch 2): strict in the scrutinee.
+       ;; Try a constructor-decomposition arm on the current scrutinee; else demand
+       ;; the scrutinee; else (a value but no arm) a builtin-constructor arm; else
+       ;; stuck/neutral. Reuses the native try-structural-reduce / try-builtin-reduce.
+       [(expr-reduce scrut arms structural?)
+        (cond
+          [(try-structural-reduce scrut arms) => (lambda (r) (cons 'step r))]
+          [(not (whnf-trivial? scrut))
+           (list 'demand scrut (lambda (s) (expr-reduce s arms structural?)))]
+          [(try-builtin-reduce scrut arms) => (lambda (r) (cons 'step r))]
+          [else 'whnf])]
+       ;; δ — fvar global-definition unfold. Constructor/type fvars are canonical.
+       [(expr-fvar name)
+        (cond
+          [(or (lookup-ctor name) (lookup-ctor (ctor-short-name name))
+               (lookup-type-ctors name) (lookup-type-ctors (ctor-short-name name)))
+           'whnf]
+          [(global-env-lookup-value name) => (lambda (val) (cons 'step val))]
+          [else 'whnf])]
+       ;; solved metavariable → its solution
+       [(expr-meta id cell-id)
+        (cond [(meta-solution/cell-id cell-id id) => (lambda (sol) (cons 'step sol))]
+              [else 'whnf])]
+       ;; rat/posit/quire/generic arith, maps/pvec/set + transients, net/cell/prop
+       ;; FFI, union-find, table-store, solver/goal, … : staged batches → native.
+       [_ 'native])]))
+
+;; whnf-via-egraph : reduce E to WHNF by ITERATING whnf-step1 (the extraction
+;; shape — Phase 5 generalizes this to scheduler-driven saturation). Demand is
+;; satisfied by a NESTED whnf-via-egraph on the strict subterm; no-progress (the
+;; head still demands an already-normal subterm) is a neutral WHNF (the native
+;; `(equal? e1* e1)` stuck check). Fuel-bounded (shares current-reduction-fuel).
+(define (whnf-via-egraph e)
+  (let loop ([cur e])
+    (define step (whnf-step1 cur))
+    (cond
+      [(eq? step 'whnf) cur]
+      [(eq? step 'native) (whnf-native cur)]   ; native reduces this construct (de-routed)
+      [(eq? (car step) 'step) (loop (cdr step))]
+      [(eq? (car step) 'demand-par)
+       ;; iterating variant: reduce each independent operand to WHNF (sequentially
+       ;; here — the network driver is what makes them parallel), assemble, recon.
+       (define operands (cadr step))
+       (define recon* (caddr step))
+       (define next (recon* (map whnf-via-egraph operands)))
+       (if (equal? next cur) cur (loop next))]
+      [else ;; 'demand
+       (define sub (cadr step))
+       (define recon (caddr step))
+       (define sub-nf (whnf-via-egraph sub))
+       (define next (recon sub-nf))
+       (if (equal? next cur) cur (loop next))])))
+
+;; ====================================================================
+;; Phase 5b (PReduce Track 8): SCHEDULER-DRIVEN reduction — the genuine
+;; network-DRIVE (design §9). The reduce DRIVER is the BSP scheduler (a
+;; keep-pending reduce stratum), not a Racket loop. whnf-via-egraph-network
+;; interns the term, kicks an emitter, and run-to-quiescence drives the head
+;; cascade; the WHNF is EXTRACTED from the origin class's :best.
+;;
+;; Origin-keyed requests {K → current-form}: K (the origin class) is fixed, the
+;; form evolves down the reduction → extraction is a simple K :best write.
+;; The 'step arm's eclass-union supplies the S0 worklist activity that re-triggers
+;; the stratum each round (the load-bearing cascade mechanism, §9). Demand
+;; subterms are reduced via native whnf here (correct result; full cascade-driven
+;; demand via a set-latch is the documented refinement) — the HEAD chain is
+;; scheduler-driven. PARITY-gated (test-preduce-egraph.rkt network variant).
+
+;; write the WHNF as the origin class's cost-0 best (the extraction target)
+(define (pr-write-whnf! net K F)
+  (net-cell-write net K (pr/make-eclass-value #:best (cons 0 F))))
+
+;; record the step (union K with intern(C) — also the re-trigger worklist activity)
+;; and re-request {K → C}. Inadmissible C → resolve natively into K's best.
+(define (pr-cascade! net hc K C)
+  (with-handlers ([exn:fail? (lambda (_e) (pr-write-whnf! net K (whnf-native C)))])
+    (define-values (net1 Cc _d) (pr/eclass-intern net hc C #:cost 5))
+    (define net2 (pr/eclass-union net1 K Cc))
+    (net-cell-write net2 reduce-request-cell-id (hash K C))))
+
+;; ---- 'demand-par: independent operands reduce in parallel (set-latch fan-in) ----
+;; An e-class is READY (its sub-cascade has reached WHNF) once its :best is cost-0,
+;; the marker pr-write-whnf! sets. Pre-reduction it carries the intern cost (≥1).
+(define (pr-eclass-ready? v)
+  (define best (and (hash? v) (hash-ref v ':best #f)))
+  (and best (zero? (car best)) #t))
+
+;; the reduced WHNF term in a READY class (pr-eclass-ready? already gated cost-0)
+(define (pr-eclass-whnf-of net cid)
+  (cdr (hash-ref (pr/eclass-read net cid) ':best)))
+
+;; pr-demand-par: drive N INDEPENDENT operands to WHNF together, then re-form the
+;; head. Each non-value operand is interned to its own class KOi and queued
+;; {KOi → Oi} into the SAME reduce-request round → the stratum advances ALL of them
+;; one step per round (interleaved cascades = "all in parallel"; vs single-subterm
+;; 'demand which sequenced operand i fully before operand j). A BARRIER propagator
+;; (set-latch fan-in, propagator-design.md) watches the KOi classes; when ALL are
+;; ready it re-forms {K → (recon* resolved)} and the head cascade continues. Value
+;; operands pass through unchanged (no class allocated). Inadmissible operand →
+;; native fallback for the whole head (parity-safe).
+(define (pr-demand-par net hc K operands recon*)
+  (with-handlers ([exn:fail? (lambda (_e)
+                               (pr-write-whnf! net K (whnf-native (recon* operands))))])
+    ;; slot := (cons 'val term) [pass-through] | (cons 'class KOi) [cascade-driven]
+    (define-values (net* slots class-cids)
+      (for/fold ([n net] [slots '()] [cids '()]) ([Oi (in-list operands)])
+        (cond
+          [(whnf-trivial? Oi) (values n (cons (cons 'val Oi) slots) cids)]
+          [else
+           (define-values (n1 KOi _d) (pr/eclass-intern n hc Oi #:cost 5))
+           (define n2 (net-cell-write n1 reduce-request-cell-id (hash KOi Oi)))
+           (values n2 (cons (cons 'class KOi) slots) (cons KOi cids))])))
+    (define slots* (reverse slots))
+    (cond
+      [(null? class-cids)
+       ;; defensive: step1-par yields 'native when all operands are values, so this
+       ;; is unreachable via the classifier — handle it as an immediate re-form.
+       (pr-cascade! net* hc K (recon* operands))]
+      [else
+       (define conditions (map (lambda (cid) (cons cid pr-eclass-ready?)) class-cids))
+       (define body-fn
+         (lambda (n)
+           (define resolved
+             (map (lambda (slot)
+                    (if (eq? (car slot) 'val) (cdr slot) (pr-eclass-whnf-of n (cdr slot))))
+                  slots*))
+           (net-cell-write n reduce-request-cell-id (hash K (recon* resolved)))))
+       (define-values (net2 _pid)
+         (net-add-barrier net* conditions '() (list reduce-request-cell-id) body-fn))
+       net2])))
+
+;; the keep-pending reduce stratum handler
+(define (process-reduce-requests net pending)
+  (define hc (pr/current-eclass-hashcons-cell-id))
+  (cond
+    [(and hc (hash? pending))
+     (for/fold ([n net]) ([(K F) (in-hash pending)])
+       (define step (whnf-step1 F))
+       (cond
+         [(eq? step 'whnf) (pr-write-whnf! n K F)]
+         ;; 'native: a COMPUTE-LEAF construct (arith fold / data-structure op / FFI).
+         ;; whnf-impl computes the primitive (native) but its OPERAND sub-reductions
+         ;; route back through the cascade (the ambient default is on) — so only the
+         ;; fold is off-network; the operands' driving stays on-network. (NOT whnf F
+         ;; — that re-routes F itself → infinite loop; NOT whnf-native — that
+         ;; de-routes the operands too.)
+         [(eq? step 'native) (pr-write-whnf! n K (whnf-impl F))]
+         [(eq? (car step) 'step) (pr-cascade! n hc K (cdr step))]
+         ;; 'demand-par — N independent operands reduce TOGETHER on-network, joined
+         ;; by a barrier (set-latch fan-in). This is the parallel path: the operands'
+         ;; cascades interleave per round rather than being sequenced.
+         [(eq? (car step) 'demand-par)
+          (pr-demand-par n hc K (cadr step) (caddr step))]
+         [else ;; 'demand — reduce the strict subterm natively (de-routed). Routing
+          ;; demand subterms back through the cascade is CORRECT but ~7× slower
+          ;; (every recursive subterm spawns a nested cascade); the head chain is
+          ;; already on-network via the 'step cascade, so keep demand native.
+          (define sub (cadr step))
+          (define recon (caddr step))
+          (define next (recon (whnf-native sub)))
+          (if (equal? next F) (pr-write-whnf! n K F) (pr-cascade! n hc K next))]))]
+    [else net]))
+
+(register-stratum-handler! reduce-request-cell-id
+                           process-reduce-requests
+                           #:tier 'topology
+                           #:keep-pending? #t
+                           #:reset-value (hash))
+
+;; whnf-via-egraph-network : reduce E to WHNF by SCHEDULER-DRIVEN saturation.
+;; intern E → K; emitter writes {K → E}; run-to-quiescence drives the cascade;
+;; extract K's :best (the WHNF). No e-graph plumbing / inadmissible E → native whnf.
+(define (whnf-via-egraph-network e)
+  (define prn-box (current-persistent-registry-net-box))
+  (define hc (pr/current-eclass-hashcons-cell-id))
+  (cond
+    [(and prn-box hc)
+     (with-handlers ([exn:fail? (lambda (_e) (whnf-native e))])
+       (define net0 (unbox prn-box))
+       (define-values (net1 K _d) (pr/eclass-intern net0 hc e #:cost 10))
+       (define-values (net1a _ep)
+         (net-add-fire-once-propagator
+          net1 (list K) (list reduce-request-cell-id)
+          (lambda (n) (net-cell-write n reduce-request-cell-id (hash K e)))))
+       (define net2 (run-to-quiescence net1a))
+       (set-box! prn-box net2)
+       (define best (hash-ref (pr/eclass-read net2 K) ':best #f))
+       (if (and best (zero? (car best))) (cdr best) (whnf-native e)))]
+    [else (whnf-native e)]))
+
 ;; First reduce to WHNF, then normalize all subterms.
 ;; Per-command memoization: when current-nf-cache is active,
 ;; cache nf results keyed by expr (transparent structs → equal?-based hashing).

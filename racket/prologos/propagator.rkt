@@ -101,6 +101,8 @@
  retraction-stratum-request-cell-id
  congruence-sig-index-cell-id   ;; PReduce Track 1 11b
  congruence-request-cell-id     ;; PReduce Track 1 11b
+ dispatch-request-cell-id       ;; PReduce Track 8 Phase 2
+ reduce-request-cell-id         ;; PReduce Track 8 Phase 5b
  resolution-stratum-request-cell-id
  retraction-stratum-merge
  resolution-stratum-merge
@@ -810,6 +812,34 @@
     [(not (hash? new)) old]
     [else (for/fold ([acc old]) ([(k v) (in-hash new)]) (hash-set acc k v))]))
 
+;; PReduce Track 8 Phase 2: cell-22 dispatch request — {class-cid → #t}, the
+;; per-round delta of newly-interned redex classes whose head should be matched
+;; against the rule registry. preduce-ingest-int installs an S0 emitter on the
+;; redex class that writes this cell; the dispatch stratum handler
+;; (rule-dispatch.rkt) reads it and runs dispatch-rules per class (→ apply-rule
+;; → eclass-union). This moves dispatch from an imperative call to a STRATUM
+;; FIRING — "rule application IS propagator firing" for the arithmetic path (the
+;; recursion path β/δ/ι is the deeper Phase 4). Mirrors the congruence engine
+;; (cell-21 + process-congruence-requests).
+(define dispatch-request-cell-id (cell-id 22))
+(define (dispatch-request-merge old new)
+  (cond
+    [(not (hash? old)) new]
+    [(not (hash? new)) old]
+    [else (for/fold ([acc old]) ([(k v) (in-hash new)]) (hash-set acc k v))]))
+
+;; PReduce Track 8 Phase 5b: cell-23 reduce request — {origin-class-cid → current-form},
+;; the network-DRIVEN reduction cascade (design §9). Origin-keyed (K fixed, form
+;; evolves) so extraction is a simple K :best write. hash-OVERWRITE merge (latest
+;; form per K wins). Driven by the keep-pending reduce stratum (reduction.rkt); the
+;; step arm's eclass-union supplies the worklist activity that re-triggers it.
+(define reduce-request-cell-id (cell-id 23))
+(define (reduce-request-merge old new)
+  (cond
+    [(not (hash? old)) new]
+    [(not (hash? new)) old]
+    [else (for/fold ([acc old]) ([(k v) (in-hash new)]) (hash-set acc k v))]))
+
 ;; Merges for the 2A.0 stratum-request cells. Local definitions per
 ;; propagator.rkt's existing pattern (cf. naf-pending-merge at line 622,
 ;; topology-request-merge at line 686). Defined locally because
@@ -1247,6 +1277,31 @@
     (error 'make-prop-network
            "congruence-request-cell-id allocation drift: expected ~a, got ~a"
            congruence-request-cell-id actual-congruence-request-cid))
+  ;; PReduce Track 8 Phase 2: cell-22 dispatch request. Empty accumulator until
+  ;; preduce-ingest-int installs an emitter + rule-dispatch.rkt registers the
+  ;; handler — zero behavior change for non-e-class networks (the dispatch
+  ;; stratum's empty-pending check skips). Same posture as cell-20/21.
+  (define-values (net12 actual-dispatch-request-cid)
+    (net-register-specialized-cell net11 (hash) dispatch-request-merge
+      #:tier 'warm
+      #:storage 'general
+      #:fires-on 'any-change))
+  (unless (equal? actual-dispatch-request-cid dispatch-request-cell-id)
+    (error 'make-prop-network
+           "dispatch-request-cell-id allocation drift: expected ~a, got ~a"
+           dispatch-request-cell-id actual-dispatch-request-cid))
+  ;; PReduce Track 8 Phase 5b: cell-23 reduce request. Empty until
+  ;; whnf-via-egraph installs an emitter + reduction.rkt registers the keep-pending
+  ;; reduce stratum — zero behavior change otherwise (empty-pending skip).
+  (define-values (net13 actual-reduce-request-cid)
+    (net-register-specialized-cell net12 (hash) reduce-request-merge
+      #:tier 'warm
+      #:storage 'general
+      #:fires-on 'any-change))
+  (unless (equal? actual-reduce-request-cid reduce-request-cell-id)
+    (error 'make-prop-network
+           "reduce-request-cell-id allocation drift: expected ~a, got ~a"
+           reduce-request-cell-id actual-reduce-request-cid))
   ;; D.4 1V-3 Item #1-bis (§11.X.3 step 3): set fuel-cell-cache on prop-net-warm.
   ;; D.4 1V-5 Item #1-quater (§11.X.4 step 3): set worldview-cache-cache on prop-net-warm.
   ;; Both cells now registered (worldview-cache at base-net; fuel-cell at net2);
@@ -1258,11 +1313,11 @@
   ;; sharing into net9's cells map. Direct-refs lookup from net9's cells CHAMP
   ;; retrieves the original prop-cells.
   (let* ([fc-h (cell-id-hash fuel-cell-id)]
-         [fc-cell (champ-lookup (prop-network-cells net11) fc-h fuel-cell-id)]
+         [fc-cell (champ-lookup (prop-network-cells net13) fc-h fuel-cell-id)]
          [wv-h (cell-id-hash worldview-cache-cell-id)]
-         [wv-cell (champ-lookup (prop-network-cells net11) wv-h worldview-cache-cell-id)])
-    (struct-copy prop-network net11
-      [warm (struct-copy prop-net-warm (prop-network-warm net11)
+         [wv-cell (champ-lookup (prop-network-cells net13) wv-h worldview-cache-cell-id)])
+    (struct-copy prop-network net13
+      [warm (struct-copy prop-net-warm (prop-network-warm net13)
               [fuel-cell-cache fc-cell]
               [worldview-cache-cache wv-cell])])))
 
@@ -3458,17 +3513,56 @@
      ;; No speculation, no branching, no NAF, no inter-propagator dependencies.
      ;; Fire all worklist propagators directly on canonical. One pass.
      ;; No snapshot, no dedup, no topology, no strata.
-     (define result
-       (for/fold ([n net])
-                 ([pid (in-list (prop-network-worklist net))])
-         (define prop (champ-lookup (prop-network-propagators n)
-                                    (prop-id-hash pid) pid))
-         (if (eq? prop 'none) n
-             (fire-propagator prop n))))  ;; PPN 4C Phase 1.5
+     ;; PTF Track 2 Phase 2b: Tier-1 runs were observer-invisible (gap G3) —
+     ;; fire-once-only programs traced EMPTY. When an observer is armed, fire
+     ;; with per-fire eq?-pruned champ-diff (O(changed) per fire) for precise
+     ;; cell-diff attribution and emit ONE bsp-round mirroring Tier-2's shape.
+     ;; The unarmed fold is unchanged — zero cost when no observer.
+     (define-values (result t1-diffs t1-pids)
+       (if observer
+           (for/fold ([n net] [diffs '()] [pids '()])
+                     ([pid (in-list (prop-network-worklist net))])
+             (define prop (champ-lookup (prop-network-propagators n)
+                                        (prop-id-hash pid) pid))
+             (if (eq? prop 'none)
+                 (values n diffs pids)
+                 (let ([n2 (fire-propagator prop n)])
+                   (define-values (chg nw)
+                     (champ-diff (prop-network-cells n)
+                                 (prop-network-cells n2)
+                                 (lambda (o r) (equal? (prop-cell-value o)
+                                                       (prop-cell-value r)))))
+                   (define diffs*
+                     (for/fold ([d diffs])
+                               ([cv (in-list (append chg nw))])
+                       (define cid (car cv))
+                       (define old (champ-lookup (prop-network-cells n)
+                                                 (cell-id-hash cid) cid))
+                       (cons (cell-diff cid
+                                        (if (eq? old 'none)
+                                            'bot
+                                            (prop-cell-value old))
+                                        (prop-cell-value (cdr cv))
+                                        pid)
+                             d)))
+                   (values n2 diffs* (cons pid pids)))))
+           (values (for/fold ([n net])
+                             ([pid (in-list (prop-network-worklist net))])
+                     (define prop (champ-lookup (prop-network-propagators n)
+                                                (prop-id-hash pid) pid))
+                     (if (eq? prop 'none) n
+                         (fire-propagator prop n)))  ;; PPN 4C Phase 1.5
+                   '()
+                   '())))
      ;; Clear worklist after flush
-     (struct-copy prop-network result
-       [hot (struct-copy prop-net-hot (prop-network-hot result)
-              [worklist '()])])]
+     (define cleared
+       (struct-copy prop-network result
+         [hot (struct-copy prop-net-hot (prop-network-hot result)
+                [worklist '()])]))
+     (when observer
+       (observer (bsp-round 0 cleared (reverse t1-diffs) (reverse t1-pids)
+                            (prop-network-contradiction cleared) '())))
+     cleared]
 
     [else
      ;; TIER 2 (or empty worklist): full BSP with optimizations.

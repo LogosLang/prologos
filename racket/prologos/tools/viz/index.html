@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<!--
+  Prologos propagator-network visualizer — PTF Track V.
+
+  React + SVG, live d3-force simulation (CDN deps). Force mode shows the graph
+  SMOOTHLY settling — stepping the timeline reuses node positions and gently
+  restarts the simulation, so new nodes ease in and the graph relaxes (no jerky
+  snap). Layered mode is a static dataflow-depth layout.
+
+  Shows PROGRAM EXECUTION as a propagator network, played over one timeline.
+  Each round renders the network that round actually ran on. Solid edges =
+  propagator dataflow; dashed violet = containment (the reduction DAG via the
+  hashcons registry). Infrastructure cells hidden by default; e-class cells show
+  their reduced value; propagators label by source construct.
+
+  Single file, no build step (deps from CDN — needs network). Generate a trace:
+    racket tools/viz-export.rkt FILE.prologos -o out.json [--reduce]
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Prologos propagator network</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.4 system-ui, sans-serif; background: #1e1e1e; color: #ddd; height: 100vh; overflow: hidden; }
+  #root { height: 100vh; }
+  .app { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
+  header { display: flex; gap: 10px; align-items: center; padding: 8px 12px; background: #252526; border-bottom: 1px solid #333; flex-wrap: wrap; }
+  header .title { font-weight: 600; color: #9cdcfe; }
+  header .cmd { color: #dcdcaa; font-family: ui-monospace, monospace; }
+  input[type=file], button, label.tog, select { background: #3c3c3c; color: #ddd; border: 1px solid #555; border-radius: 4px; padding: 3px 8px; font: inherit; }
+  button:hover, label.tog:hover, select:hover { border-color: #888; cursor: pointer; }
+  .main { display: grid; grid-template-columns: 1fr 340px; min-height: 0; position: relative; }
+  .graphwrap { position: relative; min-width: 0; overflow: hidden; cursor: grab; }
+  .graphwrap:active { cursor: grabbing; }
+  svg { display: block; width: 100%; height: 100%; }
+  .tooltip { position: absolute; pointer-events: none; background: #2d2d30; border: 1px solid #666; border-radius: 4px; padding: 6px 9px; max-width: 380px; z-index: 5; white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 12px; }
+  .side { border-left: 1px solid #333; background: #252526; padding: 10px; overflow-y: auto; }
+  .side h3 { margin: 12px 0 4px; font-size: 11px; text-transform: uppercase; color: #888; letter-spacing: .5px; }
+  .drop { display: flex; align-items: center; justify-content: center; height: 100%; color: #888; font-size: 16px; text-align: center; }
+  .drop .box { border: 2px dashed #444; border-radius: 10px; padding: 40px 60px; }
+  .timeRow { display: flex; gap: 8px; align-items: center; }
+  input[type=range] { width: 100%; }
+  .stat { display: flex; justify-content: space-between; font-family: ui-monospace, monospace; font-size: 12px; padding: 1px 0; }
+  .stat b { color: #9cdcfe; font-weight: 600; }
+  .diffs { font-family: ui-monospace, monospace; font-size: 11.5px; max-height: 200px; overflow-y: auto; }
+  .diff-row { padding: 2px 5px; border-left: 3px solid #e9c46a; margin: 2px 0; background: #2a2a2c; }
+  .diff-row .src { color: #888; }
+  .legend-item { display: flex; gap: 6px; align-items: center; margin: 2px 0; font-size: 12px; }
+  .legsec { font-size: 10px; text-transform: uppercase; color: #666; letter-spacing: .5px; margin: 8px 0 2px; }
+  .swatch { width: 12px; height: 12px; border-radius: 50%; flex: none; border: 1px solid #222; }
+  .muted { color: #777; }
+  .codepanel { position: absolute; top: 10px; left: 10px; width: 380px; max-height: 48%; overflow: auto; z-index: 4;
+               background: rgba(28,28,30,.93); border: 1px solid #333; border-radius: 6px;
+               font-family: ui-monospace, monospace; font-size: 11.5px; line-height: 1.55; box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+  .codepanel .cphead { position: sticky; top: 0; background: #252526; padding: 4px 9px; border-bottom: 1px solid #333;
+                       color: #888; text-transform: uppercase; font-size: 10px; letter-spacing: .5px; }
+  .codepanel .cprow { display: flex; padding: 0 6px; white-space: pre; cursor: pointer; }
+  .codepanel .cprow:hover, .codepanel .cprow.on { background: rgba(255,215,0,.13); }
+  .codepanel .cprow.on { box-shadow: inset 2px 0 0 #ffd700; }
+  .codepanel .ln { width: 2.2em; text-align: right; margin-right: 9px; color: #555; flex: none; user-select: none; }
+  .codepanel .cprow.mapped .ln { color: #6a9955; font-weight: 600; }
+  .tok-kw { color: #569cd6; } .tok-str { color: #ce9178; } .tok-com { color: #6a9955; font-style: italic; }
+  .tok-num { color: #b5cea8; } .tok-punct { color: #d4d4d4; } .tok-bracket { color: #9a9a9a; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+/* ============== PURE CORE (no DOM) — node-verifiable =============== */
+/* @PURE-BEGIN */
+
+const SUBSYSTEM_COLORS = { "type-inference": "#6a9955", "multiplicity": "#b48ead",
+                           "infrastructure": "#888888", "unknown": "#666666" };
+
+function hashHue(s) { let h = 0; for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0; return ((h % 360) + 360) % 360; }
+function parseSrcLine(s) { if (!s) return null; const m = s.match(/srcloc\s+\S+\s+(\d+)\s/); return m ? +m[1] : null; }
+function friendlyLabel(s) { return String(s || "").replace(/^elab:/, ""); }
+
+function changedCellIdsGlobal(env) {
+  const c = new Set();
+  for (const r of (env.rounds || [])) for (const d of (r.cellDiffs || [])) c.add(d.cellId);
+  return c;
+}
+function wiredCellIds(topology) {
+  const w = new Set();
+  for (const p of topology.propagators) { for (const i of p.inputs) w.add(i); for (const o of p.outputs) w.add(o); }
+  return w;
+}
+function topoVisibleCells(topoSection, changedGlobal, showAll) {
+  const topo = topoSection.topology, id = topoSection.identity || {};
+  if (showAll) return new Set(topo.cells.map(c => c.id));
+  const vis = wiredCellIds(topo);
+  const wk = id.wellKnownCells || {};
+  for (const c of topo.cells) if (wk[String(c.id)] && changedGlobal.has(c.id)) vis.add(c.id);
+  return vis;
+}
+function propLabel(id, identity, source) {
+  const sl = (identity.propagatorSrclocs || {})[String(id)];
+  const line = parseSrcLine(sl);
+  const src = source && source.lines && line != null ? source.lines[String(line)] : null;
+  return src || ("p" + id);
+}
+// Readable node label: well-known name, else the cell's reduced value when it's
+// short and meaningful (e-class values now render as "(lit N)" etc.), else cN.
+function cellNodeLabel(cell, wk) {
+  if (wk) return wk;
+  const v = cell.value;
+  if (typeof v === "string" && v !== "⊥" && v.length <= 18
+      && !/^hash\(/.test(v) && !/^e-class/.test(v) && v !== "()") {
+    const m = /^\(lit (.+)\)$/.exec(v);
+    return m ? m[1] : v;
+  }
+  return "c" + cell.id;
+}
+
+function cellColor(cell, identity) {
+  const id = String(cell.id);
+  const wk = (identity.wellKnownCells || {})[id];
+  if (wk) return { group: "infra: " + wk, color: "#d4a017" };
+  const dom = (identity.cellDomains || {})[id];
+  if (dom) return { group: "domain: " + dom, color: `hsl(${hashHue(dom)} 55% 58%)` };
+  const sub = cell.subsystem || "unknown";
+  return { group: sub, color: SUBSYSTEM_COLORS[sub] || SUBSYSTEM_COLORS.unknown };
+}
+
+// Graph for ONE topology section (a single round's actual network).
+function buildGraphFromTopo(topoSection, source, changedGlobal, showAll) {
+  const topo = topoSection.topology, identity = topoSection.identity || {};
+  const visible = topoVisibleCells(topoSection, changedGlobal, showAll);
+  const nodes = [], edges = [], byId = new Map();
+  for (const c of topo.cells) {
+    if (!visible.has(c.id)) continue;
+    const col = cellColor(c, identity);
+    const wk = (identity.wellKnownCells || {})[String(c.id)];
+    const n = { key: "c" + c.id, kind: "cell", id: c.id, value: c.value, label: cellNodeLabel(c, wk), group: col.group, color: col.color };
+    nodes.push(n); byId.set(n.key, n);
+  }
+  for (const p of topo.propagators) {
+    // Label by what the propagator DOES, not the source line it inherited.
+    //  - union-emitter: inputs == outputs (the two e-class cells it merges) → "union ≡"
+    //  - request emitter: writes a *-request infra cell (reduce/dispatch stratum
+    //    trigger) → "emit <stratum>"; this is the cascade kick, not a "fib" propagator
+    //  - else: keep the source-construct label (where it was installed)
+    const isUnion = p.inputs.length > 0 && p.inputs.length === p.outputs.length
+                    && p.inputs.every(i => p.outputs.includes(i));
+    const wkOut = p.outputs.map(o => (identity.wellKnownCells || {})[String(o)]).filter(Boolean);
+    const reqOut = wkOut.find(w => /-request$/.test(w));
+    const kind = isUnion ? "union" : reqOut ? "emit" : "other";
+    const label = isUnion ? "union ≡"
+                : reqOut ? ("emit " + reqOut.replace("-request", ""))
+                : propLabel(p.id, identity, source);
+    const n = { key: "p" + p.id, kind: "prop", id: p.id, label, op: kind, group: "propagator", color: "#569cd6",
+                srcLine: parseSrcLine((identity.propagatorSrclocs || {})[String(p.id)]),
+                inputs: p.inputs.filter(i => byId.has("c" + i)), outputs: p.outputs.filter(o => byId.has("c" + o)) };
+    nodes.push(n); byId.set(n.key, n);
+    for (const i of n.inputs) edges.push({ from: "c" + i, to: n.key, pid: p.id });
+    for (const o of n.outputs) edges.push({ from: n.key, to: "c" + o, pid: p.id });
+  }
+  // containment edges (the reduction DAG via the hashcons registry): parent
+  // e-class cell → child sub-term e-class cell. Distinct from propagator
+  // dataflow — drawn dashed. Added to `edges` so layout connects the DAG.
+  for (const e of (topoSection.containment || [])) {
+    if (byId.has("c" + e.from) && byId.has("c" + e.to))
+      edges.push({ from: "c" + e.from, to: "c" + e.to, kind: "containment" });
+  }
+  return { nodes, edges, byId };
+}
+
+function countComponents(graph) {
+  const par = new Map(); const find = k => { let r = k; while (par.get(r) !== r) r = par.get(r); return r; };
+  for (const n of graph.nodes) par.set(n.key, n.key);
+  for (const e of graph.edges) { const a = find(e.from), b = find(e.to); if (a !== b) par.set(a, b); }
+  return new Set(graph.nodes.map(n => find(n.key))).size;
+}
+
+// Layered (Sugiyama-ish) layout — dataflow depth.
+function layoutLayered(graph) {
+  const par = new Map(); const find = k => { let r = k; while (par.get(r) !== r) r = par.get(r); return r; };
+  for (const n of graph.nodes) par.set(n.key, n.key);
+  for (const e of graph.edges) { const a = find(e.from), b = find(e.to); if (a !== b) par.set(a, b); }
+  const comps = new Map();
+  for (const n of graph.nodes) { const r = find(n.key); if (!comps.has(r)) comps.set(r, []); comps.get(r).push(n); }
+  const indeg = new Map(graph.nodes.map(n => [n.key, 0])), out = new Map(graph.nodes.map(n => [n.key, []]));
+  for (const e of graph.edges) { if (e.from === e.to) continue; indeg.set(e.to, indeg.get(e.to) + 1); out.get(e.from).push(e.to); }
+  const pos = new Map(), boxes = [], NX = 150, NY = 40;
+  for (const members of comps.values()) {
+    const layer = new Map(); let q = members.filter(n => indeg.get(n.key) === 0).map(n => n.key);
+    if (!q.length) q = [members[0].key]; q.forEach(k => layer.set(k, 0)); let fr = q.slice();
+    while (fr.length) { const nx = []; for (const k of fr) for (const t of out.get(k)) if (!layer.has(t)) { layer.set(t, layer.get(k) + 1); nx.push(t); } fr = nx; }
+    for (const n of members) if (!layer.has(n.key)) layer.set(n.key, 0);
+    const byLayer = new Map(); for (const n of members) { const l = layer.get(n.key); if (!byLayer.has(l)) byLayer.set(l, []); byLayer.get(l).push(n.key); }
+    let w = 0, h = 0; for (const [l, ks] of byLayer) { ks.forEach((k, i) => pos.set(k, { x: l * NX, y: i * NY })); w = Math.max(w, l * NX + NX); h = Math.max(h, ks.length * NY); }
+    boxes.push({ members, w, h });
+  }
+  boxes.sort((a, b) => (b.w * b.h) - (a.w * a.h));
+  let cx = 0, cy = 0, rowH = 0, totalW = 0;
+  const MAXW = Math.max(1100, Math.sqrt(boxes.reduce((s, b) => s + (b.w + 80) * (b.h + 80), 0)) * 1.5);
+  for (const box of boxes) { if (cx > 0 && cx + box.w > MAXW) { cx = 0; cy += rowH + 70; rowH = 0; }
+    for (const n of box.members) { const p = pos.get(n.key); pos.set(n.key, { x: p.x + cx, y: p.y + cy }); }
+    cx += box.w + 80; rowH = Math.max(rowH, box.h); totalW = Math.max(totalW, cx); }
+  return { pos, width: totalW, height: cy + rowH, componentCount: boxes.length };
+}
+
+// Force-directed (Fruchterman-Reingold), deterministic seed → reproducible.
+// Used by check.js + the mp4 renderer (the browser uses live d3-force instead).
+function layoutForce(graph, seed, W, H) {
+  W = W || 1000; H = H || 700;
+  const nodes = graph.nodes, n = nodes.length || 1, k = Math.sqrt((W * H) / n);
+  const pos = new Map();
+  nodes.forEach((nd, i) => {
+    if (seed && seed.has(nd.key)) pos.set(nd.key, { x: seed.get(nd.key).x, y: seed.get(nd.key).y });
+    else { const a = 2 * Math.PI * i / n, R = k * Math.sqrt(n) / 2; pos.set(nd.key, { x: W / 2 + Math.cos(a) * R, y: H / 2 + Math.sin(a) * R }); }
+  });
+  const adj = graph.edges.filter(e => e.from !== e.to);
+  let temp = W / 8;
+  const iters = n > 300 ? 150 : 250;
+  for (let it = 0; it < iters; it++) {
+    const disp = new Map(nodes.map(nd => [nd.key, { x: 0, y: 0 }]));
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+      const a = pos.get(nodes[i].key), b = pos.get(nodes[j].key);
+      let dx = a.x - b.x, dy = a.y - b.y, d = Math.hypot(dx, dy) || 0.01;
+      const f = k * k / d, ux = dx / d, uy = dy / d;
+      const da = disp.get(nodes[i].key), db = disp.get(nodes[j].key);
+      da.x += ux * f; da.y += uy * f; db.x -= ux * f; db.y -= uy * f;
+    }
+    for (const e of adj) {
+      const a = pos.get(e.from), b = pos.get(e.to);
+      let dx = a.x - b.x, dy = a.y - b.y, d = Math.hypot(dx, dy) || 0.01;
+      const f = d * d / k, ux = dx / d, uy = dy / d;
+      const da = disp.get(e.from), db = disp.get(e.to);
+      da.x -= ux * f; da.y -= uy * f; db.x += ux * f; db.y += uy * f;
+    }
+    for (const nd of nodes) { const p = pos.get(nd.key), d = disp.get(nd.key); d.x += (W / 2 - p.x) * 0.012; d.y += (H / 2 - p.y) * 0.012; }
+    for (const nd of nodes) { const p = pos.get(nd.key), d = disp.get(nd.key); const dl = Math.hypot(d.x, d.y) || 0.01, lim = Math.min(dl, temp); p.x += d.x / dl * lim; p.y += d.y / dl * lim; }
+    temp *= 0.97;
+  }
+  const xs = [...pos.values()].map(p => p.x), ys = [...pos.values()].map(p => p.y);
+  const minX = Math.min(...xs), minY = Math.min(...ys);
+  for (const p of pos.values()) { p.x -= minX; p.y -= minY; }
+  return { pos, width: Math.max(...xs) - minX, height: Math.max(...ys) - minY, componentCount: countComponents(graph) };
+}
+
+function timelineRounds(env) { return (env.rounds || []).slice().sort((a, b) => a.roundNumber - b.roundNumber); }
+
+// Node-id sets present in a given topology (for born/growth detection).
+function topoNodeKeys(env, topoIdx) {
+  const t = env.topologies[topoIdx]; const s = new Set();
+  for (const c of t.topology.cells) s.add("c" + c.id);
+  for (const p of t.topology.propagators) s.add("p" + p.id);
+  return s;
+}
+
+// Collapse to the e-CLASS level: every pair of cells joined by a "union ≡"
+// propagator is the same equivalence class, so merge them into one node and
+// drop the union propagators. Each value becomes a single node; the containment
+// DAG (and any congruence propagators) connect e-classes directly. A collapsed
+// node carries `members` (the original cell keys) + `mergedProps` (the union
+// propagator ids that merged into it) so highlights still map back.
+function collapseEclasses(graph) {
+  const par = new Map(); const find = k => { let r = k; while (par.get(r) !== r) r = par.get(r); let c = k; while (par.get(c) !== r) { const n = par.get(c); par.set(c, r); c = n; } return r; };
+  for (const n of graph.nodes) par.set(n.key, n.key);
+  const unionProps = new Map();   // propKey -> { id, cells:[cellKey] }
+  for (const n of graph.nodes) {
+    if (n.kind === "prop" && n.op === "union") {
+      const cells = (n.inputs || []).map(i => "c" + i);
+      unionProps.set(n.key, { id: n.id, cells });
+      for (let i = 1; i < cells.length; i++) { const a = find(cells[0]), b = find(cells[i]); if (a !== b) par.set(a, b); }
+    }
+  }
+  const rootMerged = new Map();   // root -> [unionPropId]
+  for (const u of unionProps.values()) { if (!u.cells.length) continue; const r = find(u.cells[0]); if (!rootMerged.has(r)) rootMerged.set(r, []); rootMerged.get(r).push(u.id); }
+  const groups = new Map();
+  for (const n of graph.nodes) { if (n.kind !== "cell") continue; const r = find(n.key); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(n); }
+  const remap = new Map(), nodes = [], byId = new Map();
+  for (const [root, members] of groups) {
+    const rep = members.find(m => !/^c\d+$/.test(m.label)) || members[0];
+    const node = Object.assign({}, rep, { members: members.map(m => m.key), mergedProps: rootMerged.get(root) || [], eclassSize: members.length });
+    for (const m of members) remap.set(m.key, rep.key);
+    nodes.push(node); byId.set(node.key, node);
+  }
+  for (const n of graph.nodes) if (n.kind === "prop" && n.op !== "union") { const node = Object.assign({}, n, { members: [n.key], mergedProps: [] }); nodes.push(node); byId.set(node.key, node); }
+  const seen = new Set(), edges = [];
+  for (const e of graph.edges) {
+    if (unionProps.has(e.from) || unionProps.has(e.to)) continue;
+    const from = remap.get(e.from) || e.from, to = remap.get(e.to) || e.to;
+    if (from === to || !byId.has(from) || !byId.has(to)) continue;
+    const k = (e.kind || "d") + from + "|" + to; if (seen.has(k)) continue; seen.add(k);
+    edges.push(Object.assign({}, e, { from, to }));
+  }
+  return { nodes, edges, byId };
+}
+
+/* @PURE-END */
+</script>
+
+<script type="text/babel">
+const { useState, useRef, useEffect, useMemo, useCallback } = React;
+
+function App() {
+  const [env, setEnv] = useState(null);
+  const [msg, setMsg] = useState("drop a vizTrace JSON (tools/viz-export.rkt output)");
+  const [idx, setIdx] = useState(0);
+  const [mode, setMode] = useState("force");
+  const [showAll, setShowAll] = useState(false);
+  const [collapse, setCollapse] = useState(false);
+  const [showLabels, setShowLabels] = useState(true);
+  const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState(700);   // ms per step
+  const [fitSignal, setFitSignal] = useState(0);
+  const [showCode, setShowCode] = useState(true);
+  const [activeLine, setActiveLine] = useState(null);   // source line ↔ node cross-highlight
+
+  const rounds = useMemo(() => env ? timelineRounds(env) : [], [env]);
+  const changed = useMemo(() => env ? changedCellIdsGlobal(env) : new Set(), [env]);
+
+  const loadFile = (file) => file.text().then(t => {
+    let o; try { o = JSON.parse(t); } catch (e) { setMsg("invalid JSON"); return; }
+    if (o.vizTrace !== 2) { setMsg(o.vizTrace ? "need vizTrace 2 (re-export with the current tool)" : "not a vizTrace file"); return; }
+    setEnv(o); setIdx(0); setPlaying(false);
+  });
+
+  useEffect(() => {
+    if (!playing || !env) return;
+    if (idx + 1 >= rounds.length) { setPlaying(false); return; }
+    const t = setTimeout(() => setIdx(i => i + 1), speed);
+    return () => clearTimeout(t);
+  }, [playing, idx, rounds.length, env, speed]);
+
+  const round = env ? rounds[idx] : null;
+  const topoIdx = round ? round.topo : 0;
+  const rawGraph = useMemo(() => env ? buildGraphFromTopo(env.topologies[topoIdx], env.source, changed, showAll) : null,
+                           [env, topoIdx, showAll, changed]);
+  const graph = useMemo(() => rawGraph && collapse ? collapseEclasses(rawGraph) : rawGraph, [rawGraph, collapse]);
+  const mappedLines = useMemo(() => {
+    const s = new Set();
+    if (graph) for (const n of graph.nodes) if (n.srcLine != null) s.add(n.srcLine);
+    return s;
+  }, [graph]);
+  const highlights = useMemo(() => {
+    if (!env) return { fired: new Set(), wrote: new Set(), born: new Set() };
+    const fired = new Set(round.propagatorsFired);
+    const wrote = new Set((round.cellDiffs || []).map(d => "c" + d.cellId));
+    const prev = idx > 0 ? topoNodeKeys(env, rounds[idx - 1].topo) : new Set();
+    const cur = topoNodeKeys(env, topoIdx);
+    const born = new Set([...cur].filter(k => !prev.has(k)));
+    return { fired, wrote, born };
+  }, [env, idx, topoIdx]);
+
+  if (!env) return (
+    <div className="app">
+      <Header env={null} msg={msg} onFile={loadFile} />
+      <div className="drop"><label className="box" style={{cursor:"pointer"}}>
+        {msg}<br/><span className="muted" style={{fontSize:13}}>click or drop a .vizjson file</span>
+        <input type="file" accept=".json,.vizjson" style={{display:"none"}}
+               onChange={e => e.target.files[0] && loadFile(e.target.files[0])} />
+      </label></div>
+    </div>
+  );
+
+  const cmds = env.commands || [];
+  const seq = (cmds.findIndex(c => c.label === round.command) + 1) || "?";
+
+  return (
+    <div className="app"
+         onDragOver={e => e.preventDefault()}
+         onDrop={e => { e.preventDefault(); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); }}>
+      <Header env={env} cmdText={`● command ${seq}/${cmds.length}: ${round.command}`}
+              mode={mode} setMode={setMode} showAll={showAll} setShowAll={setShowAll}
+              collapse={collapse} setCollapse={setCollapse}
+              showLabels={showLabels} setShowLabels={setShowLabels}
+              showCode={showCode} setShowCode={setShowCode}
+              onFile={loadFile} onFit={() => setFitSignal(s => s + 1)} />
+      <div className="main">
+        <GraphView graph={graph} mode={mode} highlights={highlights} env={env} fitSignal={fitSignal}
+                   showLabels={showLabels} activeLine={activeLine} setActiveLine={setActiveLine} />
+        {showCode && env.source &&
+          <CodePanel source={env.source} activeLine={activeLine} setActiveLine={setActiveLine} mappedLines={mappedLines} />}
+        <Sidebar env={env} rounds={rounds} idx={idx} setIdx={setIdx} round={round}
+                 topoIdx={topoIdx} playing={playing} setPlaying={setPlaying} graph={graph}
+                 speed={speed} setSpeed={setSpeed} />
+      </div>
+    </div>
+  );
+}
+
+function Header({ env, cmdText, msg, mode, setMode, showAll, setShowAll, collapse, setCollapse, showLabels, setShowLabels, showCode, setShowCode, onFile, onFit }) {
+  return (
+    <header>
+      <span className="title">Prologos network</span>
+      <label className="tog" style={{cursor:"pointer"}}>load
+        <input type="file" accept=".json,.vizjson" style={{display:"none"}}
+               onChange={e => e.target.files[0] && onFile(e.target.files[0])} /></label>
+      <span className="cmd muted">{cmdText || msg}</span>
+      <span style={{flex:1}} />
+      {env && <>
+        <label>layout <select value={mode} onChange={e => setMode(e.target.value)}>
+          <option value="force">force-directed (live)</option>
+          <option value="layered">layered</option>
+        </select></label>
+        <label className="tog"><input type="checkbox" checked={collapse}
+          onChange={e => setCollapse(e.target.checked)} /> collapse e-classes</label>
+        <label className="tog"><input type="checkbox" checked={showAll}
+          onChange={e => setShowAll(e.target.checked)} /> infrastructure</label>
+        <label className="tog"><input type="checkbox" checked={showLabels}
+          onChange={e => setShowLabels(e.target.checked)} /> labels</label>
+        <label className="tog"><input type="checkbox" checked={showCode}
+          onChange={e => setShowCode(e.target.checked)} /> code</label>
+        <button onClick={onFit}>fit</button>
+      </>}
+    </header>
+  );
+}
+
+// Lightweight Prologos surface-syntax highlighter (per line; comments/strings
+// don't span lines in WS mode). Approximate — for readability, not parsing.
+function tokenizeProlog(line) {
+  const kw = new Set(["ns","spec","defn","def","type","bundle","match","the","fn",
+                      "solve","defr","impl","trait","import","where","let","in","data"]);
+  const re = /(;[^\n]*)|("(?:[^"\\]|\\.)*")|([A-Za-z_][A-Za-z0-9_*?!:.\/+\-]*)|(\d[\w.]*)|([\[\](){}<>])|(\s+)|(.)/g;
+  const out = []; let m;
+  while ((m = re.exec(line))) {
+    if (m[1]) out.push({ t: m[1], c: "tok-com" });
+    else if (m[2]) out.push({ t: m[2], c: "tok-str" });
+    else if (m[3]) out.push({ t: m[3], c: kw.has(m[3]) ? "tok-kw" : "" });
+    else if (m[4]) out.push({ t: m[4], c: "tok-num" });
+    else if (m[5]) out.push({ t: m[5], c: "tok-bracket" });
+    else if (m[6]) out.push({ t: m[6], c: "" });
+    else out.push({ t: m[7], c: "tok-punct" });
+  }
+  return out;
+}
+
+// Source panel (top-left). Hovering a line cross-highlights its nodes in the
+// graph (via setActiveLine); hovering a node lights its source line here.
+// `mapped` = lines with ≥1 propagator in the current round's topology.
+function CodePanel({ source, activeLine, setActiveLine, mappedLines }) {
+  const lines = source.lines || {};
+  const maxLine = Object.keys(lines).reduce((a, k) => Math.max(a, +k), 0);
+  const rows = [];
+  for (let i = 1; i <= maxLine; i++) rows.push([i, lines[String(i)] != null ? lines[String(i)] : ""]);
+  return (
+    <div className="codepanel">
+      <div className="cphead">{source.path || "source"}</div>
+      {rows.map(([ln, text]) => (
+        <div key={ln}
+             className={"cprow" + (ln === activeLine ? " on" : "") + (mappedLines.has(ln) ? " mapped" : "")}
+             onMouseEnter={() => setActiveLine(ln)} onMouseLeave={() => setActiveLine(null)}>
+          <span className="ln">{ln}</span>
+          <span>{tokenizeProlog(text).map((tk, i) => <span key={i} className={tk.c || undefined}>{tk.t}</span>)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GraphView({ graph, mode, highlights, env, fitSignal, showLabels, activeLine, setActiveLine }) {
+  const wrapRef = useRef(null);
+  const nodesRef = useRef(new Map());
+  const simRef = useRef(null);
+  const [, bump] = useState(0);
+  const [view, setView] = useState({ x: 500, y: 350, k: 1 });
+  const [hover, setHover] = useState(null);
+  const [mouse, setMouse] = useState({ x: 0, y: 0 });
+  const dragRef = useRef(null);
+
+  // (re)build the node set + simulation when the topology or mode changes
+  useEffect(() => {
+    if (!graph) return;
+    const cur = nodesRef.current;
+    const nodes = graph.nodes.map(n => {
+      const prev = cur.get(n.key);
+      if (prev) { Object.assign(prev, { label: n.label, color: n.color, kind: n.kind, group: n.group, value: n.value, id: n.id, inputs: n.inputs, outputs: n.outputs }); return prev; }
+      return Object.assign({}, n, { x: (Math.random() - .5) * 240, y: (Math.random() - .5) * 240, vx: 0, vy: 0 });
+    });
+    nodesRef.current = new Map(nodes.map(n => [n.key, n]));
+    if (simRef.current) { simRef.current.stop(); simRef.current = null; }
+    if (mode === "force") {
+      // only link endpoints that are actually nodes in THIS sim, else d3-force
+      // dereferences a null source/target on tick ("reading 'x' of null")
+      const keyset = new Set(nodes.map(n => n.key));
+      const links = graph.edges
+        .filter(e => e.from !== e.to && keyset.has(e.from) && keyset.has(e.to))
+        .map(e => ({ source: e.from, target: e.to }));
+      const sim = d3.forceSimulation(nodes)
+        .force("charge", d3.forceManyBody().strength(-170))
+        .force("link", d3.forceLink(links).id(d => d.key).distance(46).strength(0.5))
+        .force("x", d3.forceX(0).strength(0.045))
+        .force("y", d3.forceY(0).strength(0.045))
+        .force("collide", d3.forceCollide(13))
+        .alpha(0.9).alphaDecay(0.02).velocityDecay(0.32);
+      sim.on("tick", () => bump(t => (t + 1) & 0xffff));
+      simRef.current = sim;
+    } else {
+      const lay = layoutLayered(graph);
+      nodes.forEach(n => { const p = lay.pos.get(n.key); n.x = p.x - lay.width / 2; n.y = p.y - lay.height / 2; });
+      bump(t => (t + 1) & 0xffff);
+    }
+    return () => { if (simRef.current) simRef.current.stop(); };
+  }, [graph, mode]);
+
+  // fit-to-content on demand
+  useEffect(() => {
+    if (!fitSignal || !wrapRef.current) return;
+    const ps = [...nodesRef.current.values()];
+    if (!ps.length) return;
+    const xs = ps.map(p => p.x), ys = ps.map(p => p.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+    const r = wrapRef.current.getBoundingClientRect();
+    const k = Math.min(2, Math.max(0.05, Math.min((r.width - 120) / Math.max(maxX - minX, 1), (r.height - 120) / Math.max(maxY - minY, 1))));
+    setView({ k, x: r.width / 2 - (minX + maxX) / 2 * k, y: r.height / 2 - (minY + maxY) / 2 * k });
+  }, [fitSignal]);
+
+  const onWheel = e => {
+    const r = wrapRef.current.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+    const f = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    setView(v => { const k = Math.max(0.04, Math.min(5, v.k * f)); return { k, x: mx - (mx - v.x) * (k / v.k), y: my - (my - v.y) * (k / v.k) }; });
+  };
+  const onDown = e => { dragRef.current = { x: e.clientX - view.x, y: e.clientY - view.y }; };
+  const onMove = e => {
+    const r = wrapRef.current && wrapRef.current.getBoundingClientRect();
+    if (r) setMouse({ x: e.clientX - r.left, y: e.clientY - r.top });
+    const d = dragRef.current;   // capture BEFORE the async setView updater (drag may end first → null.x crash)
+    if (d) setView(v => ({ ...v, x: e.clientX - d.x, y: e.clientY - d.y }));
+  };
+  const onUp = () => { dragRef.current = null; };
+
+  if (!graph) return <div className="graphwrap" ref={wrapRef} />;
+  const nmap = nodesRef.current;
+  const { fired, wrote, born } = highlights;
+  const k = view.k, iw = w => w / k;
+
+  return (
+    <div className="graphwrap" ref={wrapRef} onWheel={onWheel} onMouseDown={onDown}
+         onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={() => { onUp(); setHover(null); }}>
+      <svg>
+        <g transform={`translate(${view.x},${view.y}) scale(${k})`}>
+          {graph.edges.map((e, i) => {
+            const a = nmap.get(e.from), b = nmap.get(e.to); if (!a || !b) return null;
+            if (e.kind === "containment")
+              return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#c586c0"
+                           strokeWidth={iw(1.1)} strokeDasharray={`${iw(5)},${iw(4)}`} />;
+            const live = fired.has(e.pid);
+            if (e.from === e.to)
+              return <circle key={i} cx={a.x + 10} cy={a.y - 10} r="9" fill="none"
+                             stroke={live ? "#4ec9b0" : "#3a3a3a"} strokeWidth={iw(live ? 2.4 : 0.8)} />;
+            return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                         stroke={live ? "#4ec9b0" : "#3a3a3a"} strokeWidth={iw(live ? 2.4 : 0.8)} />;
+          })}
+          {graph.nodes.map(n0 => {
+            const n = nmap.get(n0.key); if (!n) return null;
+            const mem = n0.members || [n0.key];               // collapsed: original cell keys
+            const isFired = (n0.kind === "prop" && fired.has(n0.id))
+                            || (n0.mergedProps && n0.mergedProps.some(p => fired.has(p)));  // a union merged into this e-class
+            const wroteN = mem.some(k => wrote.has(k)), bornN = mem.some(k => born.has(k));
+            const stroke = isFired ? "#ff6b6b" : bornN ? "#4ec9b0" : wroteN ? "#e9c46a" : "#222";
+            const sw = iw(isFired || bornN || wroteN ? 2.6 : 1);
+            const fill = wroteN ? "#e9c46a" : n.color;
+            return (
+              <g key={n.key} style={{ cursor: "pointer" }}
+                 onMouseEnter={() => { setHover(n); setActiveLine(n.srcLine != null ? n.srcLine : null); }}
+                 onMouseLeave={() => setActiveLine(null)}>
+                {n.srcLine != null && n.srcLine === activeLine &&
+                  <polygon points={`${n.x},${n.y-13} ${n.x+13},${n.y} ${n.x},${n.y+13} ${n.x-13},${n.y}`}
+                           fill="none" stroke="#ffd700" strokeWidth={iw(2)} opacity="0.95" />}
+                {n.kind === "cell"
+                  ? <circle cx={n.x} cy={n.y} r="8" fill={fill} stroke={stroke} strokeWidth={sw} />
+                  : <polygon points={`${n.x},${n.y-9} ${n.x+9},${n.y} ${n.x},${n.y+9} ${n.x-9},${n.y}`}
+                             fill={fill} stroke={stroke} strokeWidth={sw} />}
+                {showLabels && k > 0.4 &&
+                  <text x={n.x + 12} y={n.y + 4} fontSize={iw(11)} fill={n.kind === "prop" ? "#bcd" : "#bbb"}
+                        style={{ pointerEvents: "none" }}>
+                    {n.label.length > 26 ? n.label.slice(0, 25) + "…" : n.label}</text>}
+              </g>
+            );
+          })}
+        </g>
+      </svg>
+      {hover && <Tooltip node={hover} env={env} x={mouse.x} y={mouse.y} />}
+    </div>
+  );
+}
+
+function Tooltip({ node, env, x, y }) {
+  let text;
+  if (node.kind === "cell") text = `cell ${node.id} (${node.group})\nvalue: ${node.value}`;
+  else {
+    const id = (env.topologies.find(t => (t.identity.propagatorSrclocs || {})[String(node.id)]) || {}).identity || {};
+    const sl = (id.propagatorSrclocs || {})[String(node.id)];
+    text = `propagator ${node.id}\n${node.label}` +
+      (sl ? `\n${sl.replace(/#\(struct:srcloc\s+/, "").replace(/\)$/, "")}` : "") +
+      `\nreads ${node.inputs.length}, writes ${node.outputs.length}`;
+  }
+  return <div className="tooltip" style={{ left: x + 14, top: y + 14 }}>{text}</div>;
+}
+
+function Sidebar({ env, rounds, idx, setIdx, round, topoIdx, playing, setPlaying, graph, speed, setSpeed }) {
+  const st = env.topologies[topoIdx].topology.stats;
+  const id = env.topologies[topoIdx].identity || {};
+  const series = useMemo(() => rounds.map(r => env.topologies[r.topo].topology.stats), [env, rounds]);
+  const maxP = Math.max(1, ...series.map(s => s.totalPropagators));
+  const W = 318, H = 46;
+  const path = series.map((s, i) => `${i ? "L" : "M"}${(i / Math.max(series.length - 1, 1) * W).toFixed(1)},${(H - s.totalPropagators / maxP * (H - 4) - 2).toFixed(1)}`).join("");
+  const px = idx / Math.max(series.length - 1, 1) * W;
+  const cont = (env.topologies[topoIdx].containment || []).length;
+
+  return (
+    <div className="side">
+      <h3>execution timeline</h3>
+      <div className="timeRow">
+        <button onClick={() => setPlaying(p => !p)}>{playing ? "⏸" : "▶"}</button>
+        <input type="range" min="0" max={rounds.length - 1} value={idx}
+               onChange={e => { setPlaying(false); setIdx(+e.target.value); }} />
+      </div>
+      <div className="muted">round {round.roundNumber} ({idx + 1}/{rounds.length})</div>
+      <div className="timeRow" style={{ marginTop: 4 }}>
+        <span className="muted" style={{ fontSize: 11 }}>speed</span>
+        {/* slider value is inverted so right = faster */}
+        <input type="range" min="80" max="1600" step="20" value={1680 - speed}
+               onChange={e => setSpeed(1680 - +e.target.value)} />
+        <span className="muted" style={{ fontSize: 11, whiteSpace: "nowrap" }}>{speed}ms</span>
+      </div>
+      <h3>scheduler</h3>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}
+           style={{ width: W, height: H, flex: "none", background: "#1e1e1e", border: "1px solid #333", borderRadius: 4 }}>
+        <path d={path} fill="none" stroke="#569cd6" strokeWidth="1.5" />
+        <line x1={px} y1="0" x2={px} y2={H} stroke="#e9c46a" />
+      </svg>
+      <div className="stat"><span>fired this round</span><b>{round.propagatorsFired.length}</b></div>
+      <div className="stat"><span>cells written</span><b>{(round.cellDiffs || []).length}</b></div>
+      <div className="stat"><span>network now</span><b>{st.totalCells}c · {st.totalPropagators}p</b></div>
+      {cont > 0 && <div className="stat"><span>containment edges</span><b>{cont}</b></div>}
+      <h3>cell writes this round</h3>
+      <div className="diffs">
+        {(round.cellDiffs || []).length === 0
+          ? <span className="muted">no cell writes this round</span>
+          : round.cellDiffs.map((d, i) => {
+              const wk = (id.wellKnownCells || {})[String(d.cellId)];
+              return <div className="diff-row" key={i}>
+                {wk || "c" + d.cellId}: {trim(d.oldValue)} → {trim(d.newValue)}
+                <br /><span className="src">by {trim(propLabel(d.sourcePropagator, id, env.source))}</span>
+              </div>;
+            })}
+      </div>
+      <h3>legend</h3>
+      <Legend graph={graph} />
+    </div>
+  );
+}
+
+function Legend({ graph }) {
+  const groups = new Map();   // distinct cell identity groups actually in view
+  for (const n of graph.nodes)
+    if (n.kind === "cell" && !n.group.startsWith("infra:") && !groups.has(n.group)) groups.set(n.group, n.color);
+  const dot = (c, extra) => <span className="swatch" style={{ background: c, ...extra }} />;
+  const ring = (c) => <span className="swatch" style={{ background: "transparent", borderColor: c, borderWidth: 2 }} />;
+  const line = (c, dash) => <span className="swatch" style={{ background: c, width: 14, height: 0, borderRadius: 0, borderTop: `2px ${dash ? "dashed" : "solid"} ${c}` }} />;
+  return <div>
+    <div className="legsec">shapes</div>
+    <div className="legend-item">{dot("#888")}● cell (an e-class / value)</div>
+    <div className="legend-item">{dot("#569cd6", { borderRadius: 0, transform: "rotate(45deg)" })}◆ propagator (label = source / op)</div>
+    <div className="legsec">cell fill = identity</div>
+    <div className="legend-item">{dot("#d4a017")}well-known infrastructure cell</div>
+    <div className="legend-item">{dot("#6a9955")}type-inference</div>
+    <div className="legend-item">{dot("#b48ead")}multiplicity</div>
+    <div className="legend-item">{dot("#888888")}infrastructure / unknown</div>
+    {[...groups].map(([g, c]) => <div className="legend-item" key={g}>{dot(c)}{g}</div>)}
+    <div className="legsec">this round (ring / fill)</div>
+    <div className="legend-item">{ring("#ff6b6b")}fired (propagator) · merged (e-class)</div>
+    <div className="legend-item">{dot("#e9c46a")}value written</div>
+    <div className="legend-item">{ring("#4ec9b0")}newly created</div>
+    <div className="legsec">edges</div>
+    <div className="legend-item">{line("#3a3a3a", false)}propagator dataflow (teal when firing)</div>
+    <div className="legend-item">{line("#c586c0", true)}containment / reduction DAG</div>
+  </div>;
+}
+
+function trim(s) { s = String(s); return s.length > 44 ? s.slice(0, 41) + "…" : s; }
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

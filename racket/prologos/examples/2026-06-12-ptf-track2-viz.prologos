@@ -1,0 +1,92 @@
+ns examples.ptf-track2-viz
+
+;; ========================================================================
+;;
+;;  PTF Track 2: Browser Visualization — Acceptance File (Phase 0A)
+;;
+;;  Exercises what the visualization must SHOW for "arbitrary programs":
+;;  every expression is LIVE. Run via `process-file` (or the capture probe,
+;;  tools/viz-capture-probe.rkt) BEFORE and AFTER each Track 2 phase.
+;;  The probe over this file is the corpus scale audit (design doc §7.7 B9)
+;;  and the solver free-path check (§7.7 A4).
+;;
+;;  Coverage by VIZ CONCERN:
+;;    §1 elaboration — spec/defn, polymorphic metas, multi-arity ι
+;;    §2 functional pipelines — application, partials, generic traits
+;;    §3 relations — facts, recursive rules, solve queries (the SOLVER
+;;       network: unification, fork, worldviews — the A4 target)
+;;    §4 negation-as-failure — S1 stratum activity (nogoods/worldviews)
+;;
+;; ========================================================================
+
+def tag : String := "ptf-track2-viz-acceptance"
+
+;; ========================================================================
+;; §1 Elaboration — type-inference cells, multi-arity ι
+;; ========================================================================
+
+spec factorial : Int -> Int
+defn factorial [n]
+  | 0  -> 1
+  | n  -> * n [factorial [- n 1]]
+
+[factorial 6]
+
+spec is-zero Nat -> Bool
+defn is-zero
+  | zero  -> true
+  | suc _ -> false
+
+[is-zero 3N]
+
+;; ========================================================================
+;; §2 Functional pipelines — polymorphic metas + generic arithmetic
+;; ========================================================================
+
+[+ [* 3 4] [- 10 3]]
+
+;; NOTE: generic `plus` partials — the int+/int* partial forms shown in
+;; prologos-syntax.md fail "Could not infer type" under map at HEAD
+;; (doc-vs-implementation drift, flagged in the loop dailies 2026-06-12).
+map [plus 1 _] '[1 2 3]
+
+map [plus 10 _] [int-range 1 5]
+
+;; ========================================================================
+;; §3 Relations — the solver network (A4 free-path target)
+;; ========================================================================
+
+defr parent [?x ?y]
+  || "alice" "bob"
+     "bob"   "carol"
+     "bob"   "dave"
+     "carol" "eve"
+
+defr ancestor [?x ?y]
+  &> (parent x y)
+  &> (parent x z) (ancestor z y)
+
+;; ground query (single answer)
+eval (solve (parent "alice" who))
+
+;; open query (all four facts)
+eval (solve (parent x y))
+
+;; recursive query (transitive closure — backtracking + freshening)
+eval (solve (ancestor "alice" who))
+
+;; empty result (failure path)
+eval (solve (parent "eve" child))
+
+;; ========================================================================
+;; §4 Negation-as-failure — S1 stratum (mirrors the WFLE acceptance form)
+;; ========================================================================
+
+defr blocked [?x]
+  || "dave"
+
+defr open-child [?x ?y]
+  &> (parent x y) (not (blocked y))
+
+;; bob's children minus the blocked one => carol only
+eval (solve (open-child "bob" who))

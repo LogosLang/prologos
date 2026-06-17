@@ -1,0 +1,32 @@
+ns examples.reduction-showcase
+
+;; Many INDEPENDENT reductions. Independent subexpressions elaborate and reduce
+;; as parallel propagators (wide BSP rounds fire dozens at once), and on-network
+;; reduction (PREDUCE_INGEST=1) records each β/δ/ι step into the e-graph.
+
+spec factorial Int -> Int
+defn factorial
+  | 0 -> 1
+  | n -> [int* n [factorial [int- n 1]]]
+
+spec fib Int -> Int
+defn fib
+  | 0 -> 0
+  | 1 -> 1
+  | n -> [int+ [fib [int- n 1]] [fib [int- n 2]]]
+
+[factorial 5]
+[factorial 6]
+[factorial 7]
+[fib 7]
+[fib 8]
+[fib 9]
+
+[int+ [int* 6 7] [int- 100 58]]
+[int* [int+ 3 4] [int+ 5 6]]
+[int- [int* 9 9] [int+ 20 21]]
+[int+ [int+ 1 2] [int+ 3 4]]
+[int* [int- 50 8] [int+ 1 1]]
+
+[int+ [factorial 4] [fib 6]]
+[int* [factorial 3] [factorial 3]]

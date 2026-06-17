@@ -304,9 +304,9 @@
   (check-not-eq? meta-c 'none)
   (check-eq? (cell-meta-subsystem meta-a) 'user)
   (check-eq? (cell-meta-domain meta-a) 'lattice)
-  (check-equal? (cell-meta-label meta-a) "cell-22")  ;; PReduce Track 1 11b: cell-ids 0-21 pre-allocated (0-19 as before + 20=congruence-sig-index, 21=congruence-request)
-  (check-equal? (cell-meta-label meta-b) "cell-23")
-  (check-equal? (cell-meta-label meta-c) "cell-24"))
+  (check-equal? (cell-meta-label meta-a) "cell-24")  ;; PReduce Track 8 Phase 5b: cell-ids 0-23 pre-allocated (0-22 + 23=reduce-request)
+  (check-equal? (cell-meta-label meta-b) "cell-25")
+  (check-equal? (cell-meta-label meta-c) "cell-26"))
 
 ;; ========================================
 ;; 11. Multiple captures accumulate
