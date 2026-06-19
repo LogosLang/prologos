@@ -1,0 +1,285 @@
+ns examples.eigentrust
+
+;; ========================================================================
+;;
+;;     E I G E N T R U S T   I N   P R O L O G O S
+;;     --------------------------------------------
+;;
+;;     Kamvar, Schlosser, Garcia-Molina (2003):
+;;     "The EigenTrust Algorithm for Reputation Management in P2P Networks"
+;;
+;;     EigenTrust computes a global trust vector t over n peers from a
+;;     trust-flow matrix M (column-stochastic: each column sums to 1).
+;;     M[i][j] is the fraction of peer j's outgoing trust that flows TO
+;;     peer i. A pre-trust vector p anchors the computation.
+;;
+;;     The update is a damped power iteration:
+;;
+;;         t_{k+1} = (1 - alpha) * M * t_k + alpha * p
+;;
+;;     (Equivalently, if C is the row-stochastic "i trusts j" matrix,
+;;     M = C^T. This file works directly with the column-stochastic M
+;;     so the iteration is a plain matrix-vector multiply.)
+;;
+;;     Invariants (enforceable via `col-stochastic?`):
+;;     - Every column of M sums to 1. Rows have no such requirement.
+;;     - p is a probability distribution over peers: non-negative, sums to 1.
+;;
+;;     Implementation notes:
+;;     - Uses exact Rat arithmetic (no float rounding).
+;;     - Matrix is [List [List Rat]], row-major. Row i of M is the
+;;       incoming-trust vector for peer i.
+;;     - `mat-vec-mul M t` is the standard matrix-vector multiply:
+;;       (M*t)[i] = dot(M[i], t).
+;;     - Convergence: L-infinity norm of (t_{k+1} - t_k) < epsilon.
+;;     - All vector/matrix helpers use explicit structural recursion
+;;       (no closures over map/zip-with) to stay inside QTT linearity.
+;;
+;; ========================================================================
+
+
+;; ============================================================
+;; Vector primitives (explicit recursion over [List Rat])
+;; ============================================================
+
+;; Dot product of two Rat vectors. Truncates to the shorter input.
+spec dot [List Rat] [List Rat] -> Rat
+defn dot [xs ys]
+  match xs
+    | nil       -> 0/1
+    | cons x as -> match ys
+      | nil       -> 0/1
+      | cons y bs -> rat+ [rat* x y] [dot as bs]
+
+;; Sum of a vector's entries — useful for the column-stochastic check.
+spec vec-sum [List Rat] -> Rat
+defn vec-sum [xs]
+  match xs
+    | nil       -> 0/1
+    | cons x as -> rat+ x [vec-sum as]
+
+;; Scale every element of a vector by a Rat scalar.
+spec scale-vec Rat [List Rat] -> [List Rat]
+defn scale-vec [s xs]
+  match xs
+    | nil       -> nil
+    | cons x as -> cons [rat* s x] [scale-vec s as]
+
+;; Elementwise addition of two Rat vectors.
+spec add-vec [List Rat] [List Rat] -> [List Rat]
+defn add-vec [xs ys]
+  match xs
+    | nil       -> nil
+    | cons x as -> match ys
+      | nil       -> nil
+      | cons y bs -> cons [rat+ x y] [add-vec as bs]
+
+;; Elementwise subtraction.
+spec sub-vec [List Rat] [List Rat] -> [List Rat]
+defn sub-vec [xs ys]
+  match xs
+    | nil       -> nil
+    | cons x as -> match ys
+      | nil       -> nil
+      | cons y bs -> cons [rat- x y] [sub-vec as bs]
+
+;; Pointwise max of two Rats.
+spec rat-max Rat Rat -> Rat
+defn rat-max [a b]
+  match [rat-lt a b]
+    | true  -> b
+    | false -> a
+
+;; L-infinity norm (max absolute value). Seeded at 0/1.
+spec linf-norm [List Rat] -> Rat
+defn linf-norm [xs]
+  match xs
+    | nil       -> 0/1
+    | cons x as -> rat-max [rat-abs x] [linf-norm as]
+
+
+;; ============================================================
+;; Standard matrix-vector multiply: (M * t)[i] = dot(M[i], t)
+;; ============================================================
+
+spec mat-vec-mul [List [List Rat]] [List Rat] -> [List Rat]
+defn mat-vec-mul [m t]
+  match m
+    | nil       -> nil
+    | cons r rs -> cons [dot r t] [mat-vec-mul rs t]
+
+
+;; ============================================================
+;; Column-stochastic invariant check.
+;;
+;; A matrix M is column-stochastic iff for every column j,
+;; sum_i M[i][j] = 1. Equivalently, M^T * 1 = 1 (where 1 is the
+;; all-ones vector). We compute M^T * 1 via one pass and compare
+;; every entry to 1/1.
+;;
+;; M^T * 1: for each column j, sum over i of M[i][j]. This is
+;; "sum of rows": add-vec-fold across rows of M.
+;; ============================================================
+
+;; Elementwise sum of all rows of a matrix.
+;; Returns nil on the empty matrix (0-dimensional has no columns).
+spec col-sums [List [List Rat]] -> [List Rat]
+defn col-sums [m]
+  match m
+    | nil         -> nil
+    | cons r rest -> match rest
+      | nil        -> r
+      | cons _ _   -> add-vec r [col-sums rest]
+
+;; All entries of a vector equal to 1/1?
+spec all-ones? [List Rat] -> Bool
+defn all-ones? [xs]
+  match xs
+    | nil       -> true
+    | cons x as -> match [rat-eq x 1/1]
+      | false -> false
+      | true  -> all-ones? as
+
+;; Main predicate: does every column of M sum to 1?
+spec col-stochastic? [List [List Rat]] -> Bool
+defn col-stochastic? [m]
+  all-ones? [col-sums m]
+
+
+;; ============================================================
+;; Damped EigenTrust update:
+;;   t_new = (1 - alpha) * M * t + alpha * p
+;; ============================================================
+
+spec eigentrust-step [List [List Rat]] [List Rat] Rat [List Rat] -> [List Rat]
+defn eigentrust-step [m p alpha t]
+  add-vec [scale-vec [rat- 1/1 alpha] [mat-vec-mul m t]] [scale-vec alpha p]
+
+
+;; ============================================================
+;; Power iteration. Carries both the previous iterate `t` and the
+;; current iterate `tnew` so each round computes `eigentrust-step`
+;; exactly once.
+;; ============================================================
+
+spec eigentrust-iterate [List [List Rat]] [List Rat] Rat Rat Int [List Rat] [List Rat] -> [List Rat]
+defn eigentrust-iterate [m p alpha eps budget t tnew]
+  match [int-le budget 0]
+    | true  -> tnew
+    | false -> match [rat-lt [linf-norm [sub-vec tnew t]] eps]
+      | true  -> tnew
+      | false -> eigentrust-iterate m p alpha eps [int- budget 1] tnew [eigentrust-step m p alpha tnew]
+
+
+;; ============================================================
+;; Top-level entry point. Enforces the column-stochastic invariant
+;; on M; panics if violated.
+;;
+;; Initial iterate is the pre-trust vector p (convention: any
+;; distribution summing to 1 works; starting at p is simplest).
+;; ============================================================
+
+spec eigentrust [List [List Rat]] [List Rat] Rat Rat Int -> [List Rat]
+defn eigentrust [m p alpha eps max-iter]
+  match [col-stochastic? m]
+    | false -> (the [List Rat] [panic "eigentrust: M must be column-stochastic"])
+    | true  -> eigentrust-iterate m p alpha eps max-iter p [eigentrust-step m p alpha p]
+
+
+;; ========================================================================
+;; Worked examples
+;; ========================================================================
+
+;; --- Example 1: uniform matrix (doubly stochastic; uniform is fixed point) ---
+
+def m-uniform-4 : [List [List Rat]] := '['[1/4 1/4 1/4 1/4] '[1/4 1/4 1/4 1/4] '[1/4 1/4 1/4 1/4] '[1/4 1/4 1/4 1/4]]
+
+def p-uniform-4 : [List Rat] := '[1/4 1/4 1/4 1/4]
+
+[col-stochastic? m-uniform-4]
+;; => true
+
+[eigentrust m-uniform-4 p-uniform-4 1/10 1/1000 50]
+;; => '[1/4 1/4 1/4 1/4]
+
+
+;; --- Example 2: 3-peer symmetric matrix ---
+
+def rz : Rat := 0/1
+
+def m-others-3 : [List [List Rat]] := '['[rz 1/2 1/2] '[1/2 rz 1/2] '[1/2 1/2 rz]]
+
+def p-uniform-3 : [List Rat] := '[1/3 1/3 1/3]
+
+[col-stochastic? m-others-3]
+;; => true
+
+[eigentrust m-others-3 p-uniform-3 1/10 1/1000 50]
+;; => '[1/3 1/3 1/3]
+
+
+;; --- Example 3: asymmetric 3-peer (column-stochastic form) ---
+;;
+;; The column-stochastic form of the "peer 0 splits trust equally
+;; between 1 and 2; peer 1 trusts only 2; peer 2 trusts only 0" graph
+;; has each column summing to 1. Columns are "outgoing trust from j",
+;; rows are "incoming trust to i".
+
+def ro : Rat := 1/1
+
+def m-asym-3 : [List [List Rat]] := '['[rz rz ro] '[1/2 rz rz] '[1/2 ro rz]]
+
+[col-stochastic? m-asym-3]
+;; => true
+
+[eigentrust-step m-asym-3 p-uniform-3 3/10 p-uniform-3]
+
+
+;; --- Example 4: 4-peer ring with concentrated pre-trust ---
+;;
+;; Ring: peer j sends all their trust to peer (j+1) mod 4.
+;; Column j has a single 1 in row (j+1) mod 4.
+;; Pre-trust concentrates on peer 0.
+;; Convergence is slow (the ring permutation has |eigenvalue| = 1
+;; on the unit circle; only damping pulls us toward uniform).
+
+def m-ring-4 : [List [List Rat]] := '['[rz rz rz ro] '[ro rz rz rz] '[rz ro rz rz] '[rz rz ro rz]]
+
+def p-seed-0 : [List Rat] := '[ro rz rz rz]
+
+[col-stochastic? m-ring-4]
+;; => true
+
+[vec-sum p-seed-0]
+;; => 1 : Rat   (valid probability distribution)
+
+[eigentrust m-ring-4 p-seed-0 3/10 1/1000 3]
+
+
+;; --- Example 5: a handful of primitives ---
+
+[dot '[1/2 1/3] '[1/4 1/3]]
+;; => 1/8 + 1/9 = 17/72
+
+[scale-vec 1/2 '[1/2 1/3 1/4]]
+;; => '[1/4 1/6 1/8]
+
+[add-vec '[1/4 1/4] '[1/4 1/4]]
+;; => '[1/2 1/2]
+
+[linf-norm [sub-vec '[1/2 1/3] '[1/4 1/3]]]
+;; => 1/4
+
+
+;; --- Example 6: invariant enforcement ---
+;;
+;; A non-column-stochastic matrix panics.
+
+def m-bad : [List [List Rat]] := '['[1/2 1/2] '[1/2 rz]]
+
+[col-stochastic? m-bad]
+;; => false   (col 1 sums to 1/2)
+
+;; Calling eigentrust on m-bad panics (error value returned, not evaluated):
+;; [eigentrust m-bad '[1/2 1/2] 1/10 1/1000 10]
+;; => panic: eigentrust: M must be column-stochastic

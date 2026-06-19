@@ -1,0 +1,146 @@
+ns benchmarks::comparative::eigentrust-list-rat
+
+;; ============================================================
+;; Benchmark: EigenTrust — List + Rat variant
+;;
+;; Part of the 4-way {List, PVec} × {Rat, Posit32} comparison.
+;; The matrix is column-stochastic: each column sums to 1. The
+;; `eigentrust` entry point enforces the invariant via `col-stochastic?`
+;; and panics if it fails.
+;;
+;; Shared workload across all four variants:
+;;   W1. eigentrust on 4x4 uniform (converges in 1 step).
+;;   W2. eigentrust on 3x3 symmetric (converges in 1 step).
+;;   W3. eigentrust on 4x4 ring with concentrated pre-trust, 3 FORCED
+;;       iters (alpha=3/10, eps=0 — never converges, budget exhausts).
+;;       This is the only workload producing non-trivial reduce_ms.
+;;       The ring permutation has |eigenvalue| = 1 on the unit circle;
+;;       only damping pulls toward uniform. Starting all trust on
+;;       peer 0 amplifies the settling pattern.
+;;   W4. col-stochastic? m-uniform-4 (invariant check).
+;;   W5. one eigentrust-step on 4x4 uniform.
+;;   W6. one mat-vec-mul on 4x4 uniform.
+;;   W7-W9. a handful of primitive vector ops.
+;; ============================================================
+
+spec dot [List Rat] [List Rat] -> Rat
+defn dot [xs ys]
+  match xs
+    | nil       -> 0/1
+    | cons x as -> match ys
+      | nil       -> 0/1
+      | cons y bs -> rat+ [rat* x y] [dot as bs]
+
+spec scale-vec Rat [List Rat] -> [List Rat]
+defn scale-vec [s xs]
+  match xs
+    | nil       -> nil
+    | cons x as -> cons [rat* s x] [scale-vec s as]
+
+spec add-vec [List Rat] [List Rat] -> [List Rat]
+defn add-vec [xs ys]
+  match xs
+    | nil       -> nil
+    | cons x as -> match ys
+      | nil       -> nil
+      | cons y bs -> cons [rat+ x y] [add-vec as bs]
+
+spec sub-vec [List Rat] [List Rat] -> [List Rat]
+defn sub-vec [xs ys]
+  match xs
+    | nil       -> nil
+    | cons x as -> match ys
+      | nil       -> nil
+      | cons y bs -> cons [rat- x y] [sub-vec as bs]
+
+spec rat-max Rat Rat -> Rat
+defn rat-max [a b]
+  match [rat-lt a b]
+    | true  -> b
+    | false -> a
+
+spec linf-norm [List Rat] -> Rat
+defn linf-norm [xs]
+  match xs
+    | nil       -> 0/1
+    | cons x as -> rat-max [rat-abs x] [linf-norm as]
+
+spec mat-vec-mul [List [List Rat]] [List Rat] -> [List Rat]
+defn mat-vec-mul [m t]
+  match m
+    | nil       -> nil
+    | cons r rs -> cons [dot r t] [mat-vec-mul rs t]
+
+spec col-sums [List [List Rat]] -> [List Rat]
+defn col-sums [m]
+  match m
+    | nil         -> nil
+    | cons r rest -> match rest
+      | nil        -> r
+      | cons _ _   -> add-vec r [col-sums rest]
+
+spec all-ones? [List Rat] -> Bool
+defn all-ones? [xs]
+  match xs
+    | nil       -> true
+    | cons x as -> match [rat-eq x 1/1]
+      | false -> false
+      | true  -> all-ones? as
+
+spec col-stochastic? [List [List Rat]] -> Bool
+defn col-stochastic? [m]
+  all-ones? [col-sums m]
+
+spec eigentrust-step [List [List Rat]] [List Rat] Rat [List Rat] -> [List Rat]
+defn eigentrust-step [m p alpha t]
+  add-vec [scale-vec [rat- 1/1 alpha] [mat-vec-mul m t]] [scale-vec alpha p]
+
+spec eigentrust-iterate [List [List Rat]] [List Rat] Rat Rat Int [List Rat] [List Rat] -> [List Rat]
+defn eigentrust-iterate [m p alpha eps budget t tnew]
+  match [int-le budget 0]
+    | true  -> tnew
+    | false -> match [rat-lt [linf-norm [sub-vec tnew t]] eps]
+      | true  -> tnew
+      | false -> eigentrust-iterate m p alpha eps [int- budget 1] tnew [eigentrust-step m p alpha tnew]
+
+spec eigentrust [List [List Rat]] [List Rat] Rat Rat Int -> [List Rat]
+defn eigentrust [m p alpha eps max-iter]
+  match [col-stochastic? m]
+    | false -> (the [List Rat] [panic "eigentrust: M must be column-stochastic"])
+    | true  -> eigentrust-iterate m p alpha eps max-iter p [eigentrust-step m p alpha p]
+
+
+;; ============================================================
+;; Fixtures
+;; ============================================================
+
+def rz : Rat := 0/1
+def ro : Rat := 1/1
+
+def p-uniform-4 : [List Rat] := '[1/4 1/4 1/4 1/4]
+def p-uniform-3 : [List Rat] := '[1/3 1/3 1/3]
+def p-seed-0    : [List Rat] := '[ro rz rz rz]
+
+def m-uniform-4 : [List [List Rat]] := '['[1/4 1/4 1/4 1/4] '[1/4 1/4 1/4 1/4] '[1/4 1/4 1/4 1/4] '[1/4 1/4 1/4 1/4]]
+
+def m-others-3 : [List [List Rat]] := '['[rz 1/2 1/2] '[1/2 rz 1/2] '[1/2 1/2 rz]]
+
+;; 4-peer ring: column j has a single 1 in row (j+1) mod 4.
+;; Column-stochastic (each column sums to 1); row 0 receives from peer 3, etc.
+def m-ring-4 : [List [List Rat]] := '['[rz rz rz ro] '[ro rz rz rz] '[rz ro rz rz] '[rz rz ro rz]]
+
+
+;; ============================================================
+;; Workloads (W1..W9 — identical across all 4 comparison variants)
+;; ============================================================
+
+eigentrust m-uniform-4 p-uniform-4 1/10 1/1000 50
+eigentrust m-others-3 p-uniform-3 1/10 1/1000 50
+;; W3: 3 FORCED iters on ring, alpha=3/10, eps=0 — slow settling.
+eigentrust m-ring-4 p-seed-0 3/10 0/1 3
+col-stochastic? m-uniform-4
+eigentrust-step m-uniform-4 p-uniform-4 1/10 p-uniform-4
+mat-vec-mul m-uniform-4 p-uniform-4
+scale-vec 1/2 '[1/2 1/3 1/4]
+add-vec '[1/4 1/4] '[1/4 1/4]
+linf-norm [sub-vec '[1/2 1/3] '[1/4 1/3]]
