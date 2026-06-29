@@ -1,0 +1,138 @@
+ns dep-resolver
+
+;; ============================================================================
+;; Dependency-Resolver Demo  —  DEMO Series, Track 1  (P0 acceptance core)
+;; ============================================================================
+;; A multi-paradigm program: read a real dependency graph from disk (Process /
+;; Functional), query it as a (hyper)graph with reusable subqueries
+;; (Relational), and explain the results (on-network provenance).
+;;
+;; Run (from the repo root):
+;;   racket racket/prologos/tools/run-file.rkt \
+;;     racket/prologos/examples/dependency-demo/dependency-resolver.prologos
+;;   => expect "--- 0 errors ---"
+;;
+;; P0 = the runnable acceptance core. The ingestion->relation BRIDGE is not yet
+;; buildable at Level 3; each gap is marked  🎯 TARGET  with the reason (these
+;; are the filed language gaps this demo exists to surface — see the design doc
+;; docs/tracking/2026-06-28_DEPENDENCY_RESOLVER_DEMO_DESIGN.md).
+;; ============================================================================
+
+require [prologos::core::io          :refer [read-file]]
+require [prologos::core::string-ops  :refer [split lines]]
+
+;; ----------------------------------------------------------------------------
+;; 1. Functional + Process ingestion: read & parse the real CSV from disk
+;; ----------------------------------------------------------------------------
+;; `read-file` works at top level ONLY as a bare expression (the SysCap powerbox
+;; provisions the capability there; a `def`-binding fails E2001). The CSV is
+;; parsed in PURE Prologos (split / lines) — `prologos::core::csv` (FFI) cannot
+;; be imported at top level today (E2001 at module load; filed).
+
+eval [println "== dependency edges (parsed from deps.csv) =="]
+eval [map [fn [row : String] [split "," row]]
+          [lines [read-file "racket/prologos/examples/dependency-demo/deps.csv"]]]
+
+;; 🎯 TARGET (P1/P2/P3): JSON package records -> validate -> load as facts.
+;;   - no user-facing JSON parser yet (P1)
+;;   - user `data Json | ...` ADTs: the type binds but constructors do NOT bind
+;;     at WS Level 3 (filed) -> model JSON with maps/lists/Result instead
+;;   - `validate : Map x Schema -> Validation` needs an accumulating applicative
+;;     (`Result` short-circuits; filed) and `:from` runtime fact-loading (RPF track)
+;; def packages := [json::parse-json [read-file ".../packages.json"]]
+
+;; ----------------------------------------------------------------------------
+;; 2. Relational core: the dependency graph as facts
+;; ----------------------------------------------------------------------------
+;; Untyped `defr` (the schema-typed form `defr R : Schema || ...` is UNWIRED at
+;; L3 — parse-defr hardcodes the schema field to #f; filed). Field-named query
+;; results still come for free from the ?param names.
+
+defr depends [?pkg ?dep]
+  || "app"    "left"
+     "app"    "right"
+     "left"   "shared"
+     "right"  "shared"
+     "right"  "logger"
+     "shared" "util"
+     "logger" "fmt"
+
+defr license [?pkg ?lic]
+  || "app"    "MIT"
+     "left"   "MIT"
+     "right"  "Apache-2.0"
+     "shared" "MIT"
+     "logger" "GPL-3.0"
+     "util"   "MIT"
+     "fmt"    "LGPL-2.1"
+
+defr copyleft [?lic]
+  || "GPL-3.0"
+     "LGPL-2.1"
+
+;; ----------------------------------------------------------------------------
+;; 3. Transitive closure: what does a package need, directly or indirectly?
+;; ----------------------------------------------------------------------------
+
+defr needs [?pkg ?dep]
+  &> (depends pkg dep)
+  &> (depends pkg mid) (needs mid dep)
+
+eval [println "== transitive dependencies of app =="]
+eval (solve (needs "app" dep))
+;; => app needs: left, right, shared, logger, util, fmt  (shared via two paths = the diamond)
+
+;; ----------------------------------------------------------------------------
+;; 4. Supply-chain audit: REUSE `needs` as a subquery, join to licenses
+;; ----------------------------------------------------------------------------
+;; risky-dep reuses the `needs` closure as a subgoal and joins it to license +
+;; copyleft — "reuse of queries as subqueries over a graph-database operation".
+
+defr risky-dep [?pkg ?dep ?lic]
+  &> (needs pkg dep) (license dep lic) (copyleft lic)
+
+eval [println "== copyleft transitive deps of app (the audit finding) =="]
+eval (solve (risky-dep "app" dep lic))
+;; => {logger, GPL-3.0} and {fmt, LGPL-2.1}  (fmt is 3 hops deep: app->right->logger->fmt)
+
+;; ----------------------------------------------------------------------------
+;; 5. Provenance: WHY does app transitively need fmt? (derivation tree)
+;; ----------------------------------------------------------------------------
+
+eval [println "== provenance: app -> fmt =="]
+explain (needs "app" "fmt")
+;; => derivation tree: needs(app,fmt) <- depends(app,right), needs(right,fmt)
+;;                     <- depends(right,logger), needs(logger,fmt) <- depends(logger,fmt)
+
+;; ----------------------------------------------------------------------------
+;; 6. Schema: types records as maps (the shared contract)
+;; ----------------------------------------------------------------------------
+;; `schema` types MAPS today; the schema -> relation linkage is the 🎯 target in
+;; section 2. Field access is type-aware.
+
+schema Package
+  :name    String
+  :version String
+  :license String
+
+def example-pkg : Package := {:name "logger" :version "0.9.0" :license "GPL-3.0"}
+eval [map-get example-pkg :name]
+
+;; ----------------------------------------------------------------------------
+;; 7. Process paradigm: a tiny session-typed announcement
+;; ----------------------------------------------------------------------------
+;; `defproc` only type-checks; `spawn` runs it.
+
+session Announce
+  ! String
+  end
+
+defproc announcer : Announce
+  self ! "audit complete"
+  stop
+
+spawn announcer
+
+;; 🎯 TARGET (P6): named session composition — a Resolver protocol whose
+;;   :audit continuation IS a named Audit protocol (needs surf-sess-ref
+;;   elaborator integration + first L3 example; filed).
