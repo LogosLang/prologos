@@ -1607,6 +1607,9 @@
     ;; ---- Posit32 ----
     [(surf-posit32-type loc) (expr-Posit32)]
     [(surf-posit32 v loc) (expr-posit32 v)]
+    ;; ---- Float types (Numerics N3) ----
+    [(surf-float32-type loc) (expr-Float32)]
+    [(surf-float64-type loc) (expr-Float64)]
     [(surf-p32-add a b loc)
      (let ([ea (elaborate a env depth)]
            [eb (elaborate b env depth)])

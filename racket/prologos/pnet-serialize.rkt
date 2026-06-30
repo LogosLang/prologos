@@ -284,7 +284,8 @@
   ;; --- Additional types from frequency analysis ---
   ;; Posit types
   (when (with-handlers ([exn? (lambda (_) #f)]) (expr-Posit8) #t)
-    (reg0! expr-Posit8) (reg0! expr-Posit16) (reg0! expr-Posit32) (reg0! expr-Posit64))
+    (reg0! expr-Posit8) (reg0! expr-Posit16) (reg0! expr-Posit32) (reg0! expr-Posit64)
+    (reg0! expr-Float32) (reg0! expr-Float64))
 
   ;; Int/Rat operations (appear in foreign function types)
   (when (with-handlers ([exn? (lambda (_) #f)]) (expr-int-add (expr-zero) (expr-zero)) #t)
@@ -337,6 +338,9 @@
   ;; Posit types + ops (4 widths)
   (auto-cache! expr-Posit8) (auto-cache! expr-Posit16) (auto-cache! expr-Posit32) (auto-cache! expr-Posit64)
   (auto-cache! expr-posit8 0) (auto-cache! expr-posit16 0) (auto-cache! expr-posit32 0) (auto-cache! expr-posit64 0)
+  ;; Float (Numerics N3)
+  (auto-cache! expr-Float32) (auto-cache! expr-Float64)
+  (auto-cache! expr-float32 0) (auto-cache! expr-float64 0)
   (for ([ops (list (list expr-p8-add expr-p8-sub expr-p8-mul expr-p8-div expr-p8-eq expr-p8-lt expr-p8-le expr-p8-neg expr-p8-abs expr-p8-from-int expr-p8-from-rat expr-p8-to-rat)
                    (list expr-p16-add expr-p16-sub expr-p16-mul expr-p16-div expr-p16-eq expr-p16-lt expr-p16-le expr-p16-neg expr-p16-abs expr-p16-from-int expr-p16-from-rat expr-p16-to-rat)
                    (list expr-p32-add expr-p32-sub expr-p32-mul expr-p32-div expr-p32-eq expr-p32-lt expr-p32-le expr-p32-neg expr-p32-abs expr-p32-from-int expr-p32-from-rat expr-p32-to-rat)

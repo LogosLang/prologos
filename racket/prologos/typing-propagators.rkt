@@ -784,6 +784,8 @@
     [(expr-Posit16? type-val) 'approximate]
     [(expr-Posit32? type-val) 'approximate]
     [(expr-Posit64? type-val) 'approximate]
+    [(expr-Float32? type-val) 'approximate]
+    [(expr-Float64? type-val) 'approximate]
     ;; FQN types (from global env)
     [(expr-fvar? type-val)
      (define s (symbol->string (expr-fvar-name type-val)))
@@ -2083,6 +2085,8 @@
   (register-typing-rule! expr-posit16? 0 '() (expr-Posit16) 'posit16-literal)
   (register-typing-rule! expr-posit32? 0 '() (expr-Posit32) 'posit32-literal)
   (register-typing-rule! expr-posit64? 0 '() (expr-Posit64) 'posit64-literal)
+  (register-typing-rule! expr-float32? 0 '() (expr-Float32) 'float32-literal)
+  (register-typing-rule! expr-float64? 0 '() (expr-Float64) 'float64-literal)
 
   ;; Quire literals
   (register-typing-rule! expr-quire8-val? 0 '() (expr-Quire8) 'quire8-literal)
@@ -2096,6 +2100,7 @@
   ;; ===== TYPE CONSTRUCTORS → Type(lzero) =====
   (for ([pred (list expr-Char? expr-Symbol? expr-Keyword? expr-Unit? expr-Nil?
                    expr-Posit8? expr-Posit16? expr-Posit32? expr-Posit64?
+                   expr-Float32? expr-Float64?
                    expr-Quire8? expr-Quire16? expr-Quire32? expr-Quire64?
                    expr-Rat? expr-Path? expr-goal-type? expr-solver-type?
                    expr-derivation-type?)]

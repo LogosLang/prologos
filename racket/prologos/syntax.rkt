@@ -133,6 +133,9 @@
  (struct-out expr-p64-from-nat)
  (struct-out expr-p64-to-rat) (struct-out expr-p64-from-rat) (struct-out expr-p64-from-int)
  (struct-out expr-p64-if-nar)
+ ;; Float (IEEE-754 binary floats — Numerics N3)
+ (struct-out expr-Float32) (struct-out expr-float32)
+ (struct-out expr-Float64) (struct-out expr-float64)
  ;; Quire accumulators (exact product sums for posit types)
  (struct-out expr-Quire8) (struct-out expr-quire8-val)
  (struct-out expr-quire8-fma) (struct-out expr-quire8-to)
@@ -515,6 +518,18 @@
 (struct expr-p64-from-rat (a) #:transparent)   ; Rat -> Posit64
 (struct expr-p64-from-int (a) #:transparent)   ; Int -> Posit64
 (struct expr-p64-if-nar (type nar-case normal-case val) #:transparent)
+
+;; ========================================
+;; Float (IEEE-754 binary floats — interop numeric, Numerics N3)
+;; Float32 = single precision, Float64 = double precision. Value `val` is a
+;; Racket flonum (f64 = double; f32 = single-flonum). +nan.0/+inf.0/-inf.0 are
+;; native flonum values. Ops + `f` literals are added in later N3 sub-phases.
+;; ========================================
+
+(struct expr-Float32 () #:transparent)
+(struct expr-float32 (val) #:transparent)
+(struct expr-Float64 () #:transparent)
+(struct expr-float64 (val) #:transparent)
 
 ;; ========================================
 ;; Quire accumulators (exact product sums for posit types)
@@ -1051,6 +1066,7 @@
       (expr-p64-neg? x) (expr-p64-abs? x) (expr-p64-sqrt? x)
       (expr-p64-lt? x) (expr-p64-le? x) (expr-p64-eq? x)
       (expr-p64-from-nat? x) (expr-p64-to-rat? x) (expr-p64-from-rat? x) (expr-p64-from-int? x) (expr-p64-if-nar? x)
+      (expr-Float32? x) (expr-float32? x) (expr-Float64? x) (expr-float64? x)
       (expr-Int? x) (expr-int? x)
       (expr-int-add? x) (expr-int-sub? x) (expr-int-mul? x)
       (expr-int-div? x) (expr-int-mod? x)

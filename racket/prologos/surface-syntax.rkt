@@ -152,6 +152,9 @@
  ;; Posit32 surface forms
  (struct-out surf-posit32-type)
  (struct-out surf-posit32)
+ ;; Float surface types (Numerics N3)
+ (struct-out surf-float32-type)
+ (struct-out surf-float64-type)
  (struct-out surf-p32-add)
  (struct-out surf-p32-sub)
  (struct-out surf-p32-mul)
@@ -690,6 +693,10 @@
 
 ;; Posit32 type: Posit32
 (struct surf-posit32-type (srcloc) #:transparent)
+
+;; Float types (Numerics N3): Float32, Float64 (`f` literals + ops added later)
+(struct surf-float32-type (srcloc) #:transparent)
+(struct surf-float64-type (srcloc) #:transparent)
 
 ;; Posit32 literal: (posit32 <integer>)
 (struct surf-posit32 (val srcloc) #:transparent)

@@ -1342,6 +1342,7 @@
       (expr-Bool? e) (expr-String? e) (expr-Char? e) (expr-Keyword? e)
       (expr-Unit? e) (expr-Nil? e) (expr-Symbol? e) (expr-Path? e)
       (expr-Posit8? e) (expr-Posit16? e) (expr-Posit32? e) (expr-Posit64? e)
+      (expr-Float32? e) (expr-Float64? e)
       (expr-Quire8? e) (expr-Quire16? e) (expr-Quire32? e) (expr-Quire64? e)
       ;; Type constructors (compound type formers — no reduction rule)
       (expr-Pi? e) (expr-Sigma? e) (expr-Type? e)
@@ -1354,6 +1355,7 @@
       (expr-int? e) (expr-rat? e) (expr-string? e) (expr-char? e)
       (expr-keyword? e) (expr-symbol? e)
       (expr-posit8? e) (expr-posit16? e) (expr-posit32? e) (expr-posit64? e)
+      (expr-float32? e) (expr-float64? e)
       ;; Structural forms (not reducible at head)
       (expr-lam? e) (expr-pair? e) (expr-union? e)
       (expr-vcons? e) (expr-vnil? e)
@@ -3205,6 +3207,11 @@
     ;; Posit32 normalization
     [(expr-Posit32) e]
     [(expr-posit32 _) e]
+    ;; Float (Numerics N3) — leaf normalization
+    [(expr-Float32) e]
+    [(expr-float32 _) e]
+    [(expr-Float64) e]
+    [(expr-float64 _) e]
     [(expr-p32-add a b) (expr-p32-add (nf a) (nf b))]
     [(expr-p32-sub a b) (expr-p32-sub (nf a) (nf b))]
     [(expr-p32-mul a b) (expr-p32-mul (nf a) (nf b))]

@@ -519,6 +519,8 @@
     [(Posit16) (surf-posit16-type loc)]
     [(Posit32) (surf-posit32-type loc)]
     [(Posit64) (surf-posit64-type loc)]
+    [(Float32) (surf-float32-type loc)]
+    [(Float64) (surf-float64-type loc)]
     [(Quire8) (surf-quire8-type loc)]
     [(Quire16) (surf-quire16-type loc)]
     [(Quire32) (surf-quire32-type loc)]

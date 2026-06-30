@@ -162,6 +162,10 @@
     ;; Posit32 (all non-binding)
     [(expr-Posit32) e]
     [(expr-posit32 _) e]
+    [(expr-Float32) e]
+    [(expr-float32 _) e]
+    [(expr-Float64) e]
+    [(expr-float64 _) e]
     [(expr-p32-add a b) (expr-p32-add (zonk a) (zonk b))]
     [(expr-p32-sub a b) (expr-p32-sub (zonk a) (zonk b))]
     [(expr-p32-mul a b) (expr-p32-mul (zonk a) (zonk b))]
@@ -594,6 +598,10 @@
     ;; Posit32 (all non-binding)
     [(expr-Posit32) e]
     [(expr-posit32 _) e]
+    [(expr-Float32) e]
+    [(expr-float32 _) e]
+    [(expr-Float64) e]
+    [(expr-float64 _) e]
     [(expr-p32-add a b) (expr-p32-add (zonk-at-depth depth a) (zonk-at-depth depth b))]
     [(expr-p32-sub a b) (expr-p32-sub (zonk-at-depth depth a) (zonk-at-depth depth b))]
     [(expr-p32-mul a b) (expr-p32-mul (zonk-at-depth depth a) (zonk-at-depth depth b))]
@@ -1030,6 +1038,10 @@
     ;; Posit32 (all non-binding)
     [(expr-Posit32) e]
     [(expr-posit32 _) e]
+    [(expr-Float32) e]
+    [(expr-float32 _) e]
+    [(expr-Float64) e]
+    [(expr-float64 _) e]
     [(expr-p32-add a b) (expr-p32-add (default-metas a) (default-metas b))]
     [(expr-p32-sub a b) (expr-p32-sub (default-metas a) (default-metas b))]
     [(expr-p32-mul a b) (expr-p32-mul (default-metas a) (default-metas b))]

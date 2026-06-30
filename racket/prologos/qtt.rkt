@@ -199,6 +199,11 @@
     ;; Posit32
     [(expr-Posit32) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-posit32 _) (tu (expr-Posit32) (zero-usage n))]
+    ;; Float (Numerics N3)
+    [(expr-Float32) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-float32 _) (tu (expr-Float32) (zero-usage n))]
+    [(expr-Float64) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-float64 _) (tu (expr-Float64) (zero-usage n))]
     ;; Posit64
     [(expr-Posit64) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-posit64 _) (tu (expr-Posit64) (zero-usage n))]

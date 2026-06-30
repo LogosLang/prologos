@@ -152,6 +152,10 @@
     ;; Posit32 (all non-binding)
     [(expr-Posit32) e]
     [(expr-posit32 _) e]
+    [(expr-Float32) e]
+    [(expr-float32 _) e]
+    [(expr-Float64) e]
+    [(expr-float64 _) e]
     [(expr-p32-add a b) (expr-p32-add (shift delta cutoff a) (shift delta cutoff b))]
     [(expr-p32-sub a b) (expr-p32-sub (shift delta cutoff a) (shift delta cutoff b))]
     [(expr-p32-mul a b) (expr-p32-mul (shift delta cutoff a) (shift delta cutoff b))]
@@ -593,6 +597,10 @@
     ;; Posit32 (all non-binding)
     [(expr-Posit32) e]
     [(expr-posit32 _) e]
+    [(expr-Float32) e]
+    [(expr-float32 _) e]
+    [(expr-Float64) e]
+    [(expr-float64 _) e]
     [(expr-p32-add a b) (expr-p32-add (subst k s a) (subst k s b))]
     [(expr-p32-sub a b) (expr-p32-sub (subst k s a) (subst k s b))]
     [(expr-p32-mul a b) (expr-p32-mul (subst k s a) (subst k s b))]

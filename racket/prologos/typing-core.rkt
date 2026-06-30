@@ -255,6 +255,8 @@
        [(Posit16) (expr-Posit16)]
        [(Posit32) (expr-Posit32)]
        [(Posit64) (expr-Posit64)]
+       [(Float32) (expr-Float32)]
+       [(Float64) (expr-Float64)]
        [else      (expr-fvar datum)])]
     [(and (list? datum) (>= (length datum) 2))
      ;; Compound type: (List Nat) → (app (fvar List) (Nat))
@@ -986,6 +988,12 @@
      (if (and (exact-integer? v) (<= 0 v 4294967295))
          (expr-Posit32)
          (expr-error))]
+
+    ;; ---- Float (Numerics N3): val is a Racket flonum (incl. +nan.0/+inf.0) ----
+    [(expr-Float32) (expr-Type (lzero))]
+    [(expr-float32 v) (if (flonum? v) (expr-Float32) (expr-error))]
+    [(expr-Float64) (expr-Type (lzero))]
+    [(expr-float64 v) (if (flonum? v) (expr-Float64) (expr-error))]
 
     ;; Binary arithmetic: Posit32 -> Posit32 -> Posit32
     [(expr-p32-add a b)
@@ -2123,6 +2131,10 @@
     [((expr-posit32 v) (expr-Posit32))
      (and (exact-integer? v) (<= 0 v 4294967295))]
 
+    ;; ---- Float literal check (Numerics N3) ----
+    [((expr-float32 v) (expr-Float32)) (flonum? v)]
+    [((expr-float64 v) (expr-Float64)) (flonum? v)]
+
     ;; ---- Posit64 literal check ----
     [((expr-posit64 v) (expr-Posit64))
      (and (exact-integer? v) (<= 0 v 18446744073709551615))]
@@ -2628,6 +2640,10 @@
 
     ;; Posit32 formation: Posit32 : Type(0)
     [(expr-Posit32) (just-level (lzero))]
+
+    ;; Float formation (Numerics N3): Float32/Float64 : Type(0)
+    [(expr-Float32) (just-level (lzero))]
+    [(expr-Float64) (just-level (lzero))]
 
     ;; Posit64 formation: Posit64 : Type(0)
     [(expr-Posit64) (just-level (lzero))]
