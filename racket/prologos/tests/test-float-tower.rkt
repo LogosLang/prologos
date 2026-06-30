@@ -18,6 +18,7 @@
          racket/string
          "test-support.rkt"
          "../syntax.rkt"
+         "../reduction.rkt"
          (prefix-in tc: "../typing-core.rkt")
          (prefix-in sub: "../subtype-predicate.rkt")
          "../driver.rkt")
@@ -94,3 +95,27 @@
   (check-equal? (ws-val "3.14") "[posit32 1284463657] : Posit32")
   (check-true (string-contains? (ws-val "[lt 1 2]") "true") "generic lt over Int still works")
   (check-equal? (ws-val "[+ 2 3]") "5 : Int" "generic + over Int still works"))
+
+;; ========================================
+;; Regression (P0 fix): NaN/±Inf survive cross-family/cross-width generic
+;; arithmetic. Before the fix, the different-tag coercion branch round-tripped
+;; each operand through inexact->exact, which CRASHES on +inf.0/+nan.0 (no
+;; exact rational representation). Same-width direct ops were always safe
+;; (native float-impl), which is why test-float-ops' NaN/Inf coverage missed it.
+;; ========================================
+
+(test-case "NaN/Inf in cross-family generic arithmetic — no crash, correct result"
+  ;; Int + Float64(+inf.0) → Float64(+inf.0)  (minimal repro)
+  (check-equal? (nf (expr-generic-add (expr-int 3) (expr-float64 +inf.0)))
+                (expr-float64 +inf.0))
+  ;; Int + (1.0f64 / 0.0f64) → +inf.0  (well-typed surface-level repro)
+  (check-equal? (nf (expr-generic-add (expr-int 3)
+                                      (expr-f64-div (expr-float64 1.0) (expr-float64 0.0))))
+                (expr-float64 +inf.0))
+  ;; Int * Float64(-inf.0) → -inf.0
+  (check-equal? (nf (expr-generic-mul (expr-int 2) (expr-float64 -inf.0)))
+                (expr-float64 -inf.0))
+  ;; cross-width: Float32 + Float64(NaN) → Float64(NaN); NaN≠NaN ⇒ self-inequality
+  (let ([r (nf (expr-generic-add (expr-float32 2.0) (expr-float64 +nan.0)))])
+    (check-true (expr-float64? r) "join widens to Float64")
+    (let ([v (expr-float64-val r)]) (check-false (= v v) "NaN preserved through coercion"))))

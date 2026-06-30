@@ -1120,6 +1120,27 @@
     [(f64) (expr-float64 (exact->inexact val))]
     [else #f]))
 
+;; NaN/Inf-safe flonum extraction: Float literals pass their flonum through
+;; (so +inf.0/+nan.0 survive — these have NO exact rational representation);
+;; exact/posit literals go via the exact rational then ->inexact.
+(define (literal->flonum e)
+  (cond
+    [(expr-float32? e) (expr-float32-val e)]
+    [(expr-float64? e) (expr-float64-val e)]
+    [else (let ([r (literal->rational e)]) (and r (exact->inexact r)))]))
+
+;; Coerce a concrete numeric literal to a target type tag, NaN/Inf-safe.
+;; Float targets coerce via flonums DIRECTLY — round-tripping +inf.0/+nan.0
+;; through inexact->exact (as the exact path does) crashes the reducer.
+;; Non-float targets are only reached when both operands are exact/posit
+;; (type-tag-join never yields an exact/posit tag once a Float operand is
+;; present), so the exact rational path there is always NaN/Inf-free.
+(define (coerce-literal e tag)
+  (cond
+    [(eq? tag 'f32) (let ([fv (literal->flonum e)]) (and fv (expr-float32 (flsingle fv))))]
+    [(eq? tag 'f64) (let ([fv (literal->flonum e)]) (and fv (expr-float64 fv)))]
+    [else (let ([r (literal->rational e)]) (and r (rational->literal r tag)))]))
+
 ;; Type-tag ranking for numeric-join at reduction level.
 ;; Exact: nat(0) < int(1) < rat(2). Posit: p8(10) < p16(11) < p32(12) < p64(13).
 (define (type-tag-rank tag)
@@ -1186,10 +1207,12 @@
               ;; Non-Nat same type: the same-type iota rules in whnf will handle it.
               ;; Retry via whnf so the pattern-match iota rules fire.
               [else (whnf (ctor a* b*))])]
-           ;; Different types — coerce both to join type, retry
+           ;; Different types — coerce both to join type, retry.
+           ;; coerce-literal is NaN/Inf-safe (a Float operand carrying +inf.0/
+           ;; +nan.0 cannot round-trip through an exact rational).
            [else
-            (let ([ca (rational->literal (literal->rational a*) join)]
-                  [cb (rational->literal (literal->rational b*) join)])
+            (let ([ca (coerce-literal a* join)]
+                  [cb (coerce-literal b* join)])
               (if (and ca cb)
                   (whnf (ctor ca cb))
                   (ctor a* b*)))]))]
