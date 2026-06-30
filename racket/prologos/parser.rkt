@@ -5224,20 +5224,62 @@
         (if err err
             (surf-defr name #f variants loc))]
 
-       ;; Single-arity: (defr name [params] body...)
+       ;; Single-arity: (defr name [params] body...)  OR  (defr name : Schema body...)
        [else
-        (define params-stx (car rest))
-        (define body-tokens (cdr rest))
-        (define params (parse-rel-params params-stx loc))
+        ;; Schema-typed form: the `:` reads as a bare symbol token between the
+        ;; relation name and the schema name; arity + (field-named) params are
+        ;; derived from the named schema (registered by preparse before parse).
         (cond
-          [(and (list? params) (ormap prologos-error? params))
-           (findf prologos-error? params)]
-          [(prologos-error? params) params]
+          [(eq? (and (pair? rest) (stx->datum (car rest))) ':)
+           (parse-defr-schema-typed name (cdr rest) loc)]
           [else
-           (define param-arity (if (list? params) (length params) #f))
-           (define body (parse-defr-body body-tokens loc #:arity param-arity))
+           (define params-stx (car rest))
+           (define body-tokens (cdr rest))
+           (define params (parse-rel-params params-stx loc))
+           (cond
+             [(and (list? params) (ormap prologos-error? params))
+              (findf prologos-error? params)]
+             [(prologos-error? params) params]
+             [else
+              (define param-arity (if (list? params) (length params) #f))
+              (define body (parse-defr-body body-tokens loc #:arity param-arity))
+              (if (prologos-error? body) body
+                  (surf-defr name #f (list (surf-defr-variant params body loc)) loc))])])])]))
+
+;; Parse a schema-typed defr body: (defr name : Schema body...).
+;; `after-colon` is the token list following the `:` (= (SchemaName body...)).
+;; The named schema is already registered (preparse-expand-all runs before parse),
+;; so we derive arity from its field count and synthesize field-named, free-mode
+;; params — this drives correct fact-row splitting (parse-defr-body #:arity) AND
+;; query-matching arity. Fact rows are type-checked positionally against the schema
+;; field types during type-checking (typing-core/qtt expr-defr case).
+(define (parse-defr-schema-typed name after-colon loc)
+  (cond
+    [(null? after-colon)
+     (prologos-error loc (format "defr ~a: expected a schema name after ':'" name))]
+    [else
+     (define schema-name (stx->datum (car after-colon)))
+     (cond
+       [(not (symbol? schema-name))
+        (prologos-error loc (format "defr ~a: expected a schema name after ':', got ~a" name schema-name))]
+       [else
+        (define entry (lookup-schema schema-name))
+        (cond
+          [(not entry)
+           (prologos-error loc (format "defr ~a : ~a — unknown schema ~a (declare it with `schema ~a ...` first)"
+                                       name schema-name schema-name schema-name))]
+          [else
+           (define fields (schema-entry-fields entry))
+           ;; field-named, free-mode params; arity = field count
+           (define synth-params (for/list ([f (in-list fields)]) (cons (schema-field-keyword f) #f)))
+           (define schema-arity (length synth-params))
+           ;; schema reference surf — elaborates to (expr-fvar SchemaName);
+           ;; expr-defr->relation-info reads its name (relations.rkt:786-791)
+           (define schema-surf (parse-datum (car after-colon)))
+           (define body-tokens (cdr after-colon))
+           (define body (parse-defr-body body-tokens loc #:arity schema-arity))
            (if (prologos-error? body) body
-               (surf-defr name #f (list (surf-defr-variant params body loc)) loc))])])]))
+               (surf-defr name schema-surf (list (surf-defr-variant synth-params body loc)) loc))])])]))
 
 ;; (rel [params] body...) — anonymous relation
 (define (parse-rel args loc)

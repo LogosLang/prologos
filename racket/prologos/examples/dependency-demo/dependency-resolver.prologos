@@ -42,12 +42,29 @@ eval [map [fn [row : String] [split "," row]]
 ;; def packages := [json::parse-json [read-file ".../packages.json"]]
 
 ;; ----------------------------------------------------------------------------
-;; 2. Relational core: the dependency graph as facts
+;; 2. Relational core: schema-typed package records + the dependency graph
 ;; ----------------------------------------------------------------------------
-;; Untyped `defr` (the schema-typed form `defr R : Schema || ...` is UNWIRED at
-;; L3 — parse-defr hardcodes the schema field to #f; filed). Field-named query
-;; results still come for free from the ?param names.
+;; `schema` is the shared contract. A schema-typed relation (`defr R : Schema`)
+;; derives its arity from the schema and TYPE-CHECKS each fact row positionally:
+;; a wrong-typed value (e.g. a non-String in a :version column, or a wrong-width
+;; row) is a compile error. This is the schema<->relation linkage — the demo's
+;; connective tissue.
 
+schema Package
+  :name    String
+  :version String
+  :license String
+
+defr package : Package
+  || "app"    "1.0.0" "MIT"
+     "left"   "2.1.0" "MIT"
+     "right"  "1.5.0" "Apache-2.0"
+     "shared" "3.0.0" "MIT"
+     "logger" "0.9.0" "GPL-3.0"
+     "util"   "4.2.1" "MIT"
+     "fmt"    "1.0.3" "LGPL-2.1"
+
+;; Dependency edges (untyped 2-column relation).
 defr depends [?pkg ?dep]
   || "app"    "left"
      "app"    "right"
@@ -57,15 +74,7 @@ defr depends [?pkg ?dep]
      "shared" "util"
      "logger" "fmt"
 
-defr license [?pkg ?lic]
-  || "app"    "MIT"
-     "left"   "MIT"
-     "right"  "Apache-2.0"
-     "shared" "MIT"
-     "logger" "GPL-3.0"
-     "util"   "MIT"
-     "fmt"    "LGPL-2.1"
-
+;; Non-permissive licenses (the audit policy).
 defr copyleft [?lic]
   || "GPL-3.0"
      "LGPL-2.1"
@@ -85,11 +94,12 @@ eval (solve (needs "app" dep))
 ;; ----------------------------------------------------------------------------
 ;; 4. Supply-chain audit: REUSE `needs` as a subquery, join to licenses
 ;; ----------------------------------------------------------------------------
-;; risky-dep reuses the `needs` closure as a subgoal and joins it to license +
-;; copyleft — "reuse of queries as subqueries over a graph-database operation".
+;; risky-dep reuses the `needs` closure as a subgoal and joins it to the
+;; schema-typed `package` relation's license column + copyleft — "reuse of
+;; queries as subqueries over a graph-database operation".
 
 defr risky-dep [?pkg ?dep ?lic]
-  &> (needs pkg dep) (license dep lic) (copyleft lic)
+  &> (needs pkg dep) (package dep ver lic) (copyleft lic)
 
 eval [println "== copyleft transitive deps of app (the audit finding) =="]
 eval (solve (risky-dep "app" dep lic))
@@ -105,21 +115,7 @@ explain (needs "app" "fmt")
 ;;                     <- depends(right,logger), needs(logger,fmt) <- depends(logger,fmt)
 
 ;; ----------------------------------------------------------------------------
-;; 6. Schema: types records as maps (the shared contract)
-;; ----------------------------------------------------------------------------
-;; `schema` types MAPS today; the schema -> relation linkage is the 🎯 target in
-;; section 2. Field access is type-aware.
-
-schema Package
-  :name    String
-  :version String
-  :license String
-
-def example-pkg : Package := {:name "logger" :version "0.9.0" :license "GPL-3.0"}
-eval [map-get example-pkg :name]
-
-;; ----------------------------------------------------------------------------
-;; 7. Process paradigm: a tiny session-typed announcement
+;; 6. Process paradigm: a tiny session-typed announcement
 ;; ----------------------------------------------------------------------------
 ;; `defproc` only type-checks; `spawn` runs it.
 

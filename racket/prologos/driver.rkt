@@ -406,6 +406,38 @@
     [(proc-solve _t cont) (proc-body-used-caps cont)]
     [_ (set)]))
 
+;; Type-check the fact rows of a schema-typed relation against the schema's field
+;; types. Returns #f if all rows are well-typed (or the relation has no schema /
+;; no facts), or an error-message string on the first offending row. Fact-row
+;; terms are ground literals, so they are checked in the empty context.
+(define (check-relation-schema-rows rel-info)
+  (define sname (relation-info-schema rel-info))
+  (define entry (and sname (lookup-schema-by-name sname)))
+  (cond
+    [(not entry) #f]
+    [else
+     (define fields (schema-entry-fields entry))
+     (define n (length fields))
+     (define rname (relation-info-name rel-info))
+     (or
+      (for/or ([variant (in-list (relation-info-variants rel-info))])
+        (for/or ([fr (in-list (variant-info-facts variant))]
+                 [ri (in-naturals 1)])
+          (define terms (fact-row-terms fr))
+          (cond
+            [(not (= (length terms) n))
+             (format "defr ~a : ~a — fact row ~a has ~a value(s) but schema ~a has ~a field(s)"
+                     rname sname ri (length terms) sname n)]
+            [else
+             (for/or ([term (in-list terms)]
+                      [fld (in-list fields)])
+               (define ft (schema-field-type->expr (schema-field-type-datum fld)))
+               (and (not (check ctx-empty term ft))
+                    (format "defr ~a : ~a — field :~a expects ~a, got ~a"
+                            rname sname (schema-field-keyword fld)
+                            (pp-expr ft) (pp-expr term))))])))
+      #f)]))
+
 ;; Emit W2002 warnings for capability binders that are never used in boundary ops.
 ;; Also emit W2003 for :w caps in process headers.
 (define (check-process-cap-warnings name caps proc-body)
@@ -701,14 +733,21 @@
                                      (define fqn (qualify-name name
                                                    (ns-context-current-ns (current-ns-context))))
                                      (global-env-add fqn zonked-type zonked-body))
-                                   ;; Convert zonked defr body to runtime relation-info
-                                   ;; and register in the global relation store
-                                   (when (expr-defr? zonked-body)
-                                     (define rel-info (expr-defr->relation-info zonked-body))
-                                     (current-relation-store
-                                      (relation-register (current-relation-store) rel-info))
-                                     (bump-relation-store-version!))
-                                   (format "~a : ~a defined." name (pp-expr zonked-type)))))))))]
+                                   ;; Convert zonked defr body to runtime relation-info,
+                                   ;; type-check schema-typed fact rows, and register.
+                                   (cond
+                                     [(expr-defr? zonked-body)
+                                      (define rel-info (expr-defr->relation-info zonked-body))
+                                      (define schema-err (check-relation-schema-rows rel-info))
+                                      (cond
+                                        [schema-err (prologos-error #f schema-err)]
+                                        [else
+                                         (current-relation-store
+                                          (relation-register (current-relation-store) rel-info))
+                                         (bump-relation-store-version!)
+                                         (format "~a : ~a defined." name (pp-expr zonked-type))])]
+                                     [else
+                                      (format "~a : ~a defined." name (pp-expr zonked-type))]))))))))]
 
                   ;; (subtype sub-key super-key) — declaration already processed in elaborator
                   [(list 'subtype sub-key super-key)
