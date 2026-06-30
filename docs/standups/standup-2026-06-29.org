@@ -1,0 +1,69 @@
+#+TITLE: Standup — 2026-06-29
+#+DATE: 2026-06-29
+
+* Yesterday (since 2026-05-26 standup)
+
+Opened and substantially advanced a new **DEMO Series** — a demo-driven
+dogfooding effort that exercises Process + Relational + Functional through a
+single ~schema~ contract, using the demo as a forcing function to surface and
+close real language gaps. Went from opening conversation → Stage-3 design
+(D.2, critique-complete) → runnable P0 acceptance core → two language fixes
+landed → editor/tooling fixes. 4 commits (~282b138c~ → ~2f8f699c~).
+
+Design doc: ~docs/tracking/2026-06-28_DEPENDENCY_RESOLVER_DEMO_DESIGN.md~.
+Full session log: ~docs/tracking/standups/2026-06-29_dailies.md~.
+
+** DEMO Track 1 — dependency-resolver demo: Stage-3 + P0 ✓ (~282b138c~)
+
+A multi-paradigm dependency resolver: read a real dependency graph (Process/
+Functional), query it as a graph with reusable subqueries (Relational), and
+explain results (on-network provenance). The organizing insight: ~schema~ is
+the relational "spec" — it types both the records and the relations (the
+connective tissue).
+
+*** Stage-3 D.2 — independent P/R/M/S critique caught 2 blocking defects pre-code
+
+- ~Result~ short-circuits → validation needs a ~Validation~ accumulating
+  applicative (filed P2a).
+- The relation fact store is OFF-network (param + per-query fork-copy +
+  name-grained-replace merge) → real ~:from~ = a persistent fact-grained cell.
+  This IS the "deeper relational fact representation" I'd named as the SQLite
+  prerequisite. Spun out as the owned **RPF track**.
+
+*** P0 acceptance core — runs 0 errors / ~30s at L3, 5 gaps filed
+
+Real file IO + pure-Prologos CSV parse + relational graph queries + recursive
+closure + audit join + ~explain~ provenance + schema-as-maps + session/spawn.
+Grounded by a 6-facet syntax workflow whose facets *ran live probes*.
+
+** Schema-typed ~defr R : Schema~ — gap #1 FIXED ✓ (~fac8902e~)
+
+~parse-defr~ never recognized the ~: Schema~ annotation (fed the ~:~ to the
+param parser, the error got silently dropped, the relation never registered).
+Now: parser derives arity + field-named params from the schema; driver
+type-checks fact rows positionally against field types. Demo uses it; tests
+in ~tests/test-defr-schema.rkt~. Scope = register + type-check facts.
+
+** Review fixes ✓ (~bb16e535~, ~2f8f699c~)
+
+- Look-and-feel conventions applied + saved (implicit ~eval~; single ~require~
+  block; no outer delimiters on top-level calls).
+- ~_~ wildcard in relational goals FIXED (~surf-hole~ → fresh anonymous logic
+  var in relational context).
+- LSP framing corruption FIXED — stdout is the JSON-RPC channel; a doc with a
+  top-level ~println~ was polluting it during elaboration.
+- ~test-parse-reader~ "unbalanced library files" was my Emacs lock files
+  (~.#~ dangling symlinks); the lib scan now skips them like the examples scan.
+
+* Today
+
+- Hunt the foray.prologos type-checker hang (propagator quiescence loop; foray
+  is NOT bracket-imbalanced — it reads fine but hangs). Then a fully green
+  regression suite.
+- Then back to the demo plan: P1 (pure-Prologos JSON → maps/lists/Result) +
+  P2a (~Validation~ applicative).
+
+* Blockers
+
+None. (A flaky ~test-module-network-01~ — passes in isolation — is on the
+watching list.)
