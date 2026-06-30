@@ -7073,6 +7073,46 @@
      #t]
     [else #f]))
 
+;; ---- Normalize the raw constructor clause list before parse-data-ctor ----
+;; The WS reader emits single-line `data X := c1 | c2 ...` as a FLAT token stream
+;; `(:= c1 $pipe c2 ...)` and `data X | c1 | c2` as `($pipe c1 ...)`, with no
+;; grouping. Mapping parse-data-ctor over those flat tokens treats `:=`/`$pipe`
+;; (and trailing field-type atoms) as constructor names — field-bearing ctors
+;; bind with wrong arity and field types leak as phantom nullary ctors. `defn`
+;; avoids this via group-defn-pipes; `data` had no equivalent. We strip a leading
+;; `:=` separator and split on `$pipe` into proper (Name field...) clauses.
+;; Indented / bare-juxtaposition / sexp forms (already one-clause-per-element,
+;; no `:=`/`$pipe`) pass through unchanged.
+(define (data-ctor-list-has-pipe? lst)
+  (and (pair? lst)
+       (or (memq '$pipe lst)
+           (and (pair? (car lst)) (eq? (car (car lst)) '$pipe)))))
+
+;; A split-on-pipe segment that is a single already-parenthesized clause comes
+;; back double-wrapped: `(suc Nat)` → `((suc Nat))`. Unwrap so parse-data-ctor
+;; sees `(suc Nat)`. Leave `(zero)` / `(jbool Bool)` untouched.
+(define (unwrap-data-ctor-segment seg)
+  (if (and (pair? seg) (null? (cdr seg)) (pair? (car seg)))
+      (car seg)
+      seg))
+
+(define data-bar-sym (string->symbol "|"))
+
+(define (normalize-data-ctor-clauses raw-ctors0)
+  ;; The merge reader emits `|` as `$pipe`; the cell (process-string-ws) reader
+  ;; keeps it as the literal `|` symbol. Canonicalize literal `|` → `$pipe` so
+  ;; both pipelines normalize identically.
+  (define raw-ctors
+    (if (list? raw-ctors0)
+        (map (lambda (x) (if (eq? x data-bar-sym) '$pipe x)) raw-ctors0)
+        raw-ctors0))
+  (cond
+    [(and (pair? raw-ctors) (eq? (car raw-ctors) ':=))
+     (map unwrap-data-ctor-segment (split-on-pipe (cdr raw-ctors)))]
+    [(data-ctor-list-has-pipe? raw-ctors)
+     (map unwrap-data-ctor-segment (split-on-pipe raw-ctors))]
+    [else raw-ctors]))
+
 ;; Main data processing function
 ;; Returns a list of s-expression datums: ((def ...) (def ...) ...)
 (define (process-data datum)
@@ -7102,7 +7142,8 @@
          (values tn ps rest)])))
 
   ;; Zero-constructor types are allowed (uninhabited types like Never/Void)
-  (define ctors (map parse-data-ctor raw-ctors))
+  ;; Normalize WS separator forms (`:=` / `$pipe`) into proper clauses first.
+  (define ctors (map parse-data-ctor (normalize-data-ctor-clauses raw-ctors)))
   ;; ctors = ((name . (field-types ...)) ...)
 
   ;; ---- Generate the type definition ----
