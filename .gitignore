@@ -56,3 +56,6 @@ racket/prologos/data/cache/
 # MemPalace per-project files (issue #185)
 mempalace.yaml
 entities.json
+
+# Generated propagator-network module caches (.pnet embeds machine-specific abs paths + mtimes; regenerable, like .zo)
+racket/prologos/data/cache/pnet/
