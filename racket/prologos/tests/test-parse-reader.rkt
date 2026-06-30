@@ -917,7 +917,12 @@
   (define lib-dir (build-path project-root "lib" "prologos"))
   (define files
     (for/list ([f (in-directory lib-dir)]
-               #:when (regexp-match? #rx"\\.prologos$" (path->string f)))
+               #:when (regexp-match? #rx"\\.prologos$" (path->string f))
+               ;; Skip editor lock/autosave files (Emacs: .#name, name.~undo-tree~, etc.)
+               ;; A leading `.` or `~` in the basename is conventionally non-source.
+               #:unless (let ([name (path->string (file-name-from-path f))])
+                          (or (regexp-match? #rx"^\\." name)
+                              (regexp-match? #rx"^~" name))))
       f))
   (define unbalanced 0)
   (for ([f (in-list files)])
@@ -1087,7 +1092,12 @@
   (define lib-dir (build-path project-root "lib" "prologos"))
   (define files
     (for/list ([f (in-directory lib-dir)]
-               #:when (regexp-match? #rx"\\.prologos$" (path->string f)))
+               #:when (regexp-match? #rx"\\.prologos$" (path->string f))
+               ;; Skip editor lock/autosave files (Emacs: .#name, name.~undo-tree~, etc.)
+               ;; A leading `.` or `~` in the basename is conventionally non-source.
+               #:unless (let ([name (path->string (file-name-from-path f))])
+                          (or (regexp-match? #rx"^\\." name)
+                              (regexp-match? #rx"^~" name))))
       f))
   (check-true (> (length files) 10)
               "Expected at least 10 .prologos library files")

@@ -226,6 +226,9 @@
                    [current-capability-registry    (repl-session-capability-registry session)]
                    [current-spec-store             (repl-session-spec-store session)]
                    [current-error-port             (open-output-nowhere)]
+                   ;; stdout is the LSP channel — keep eval'd top-level IO off it.
+                   ;; (Future: capture into the returned result instead of discarding.)
+                   [current-output-port            (open-output-nowhere)]
                    [current-definition-locations   (hasheq)])
       (install-module-loader!)
       (set! results (process-string-ws code))
@@ -528,6 +531,11 @@
                    [current-definition-locations (hasheq)]
                    ;; Suppress process-file perf/phase/memory/diagnostic noise
                    [current-error-port (open-output-nowhere)]
+                   ;; CRITICAL: stdout IS the LSP JSON-RPC channel. A document with
+                   ;; top-level IO (e.g. `[println …]`) would have process-file write
+                   ;; to stdout during elaboration, corrupting message framing
+                   ;; ("Header must provide a Content-Length property"). Redirect it.
+                   [current-output-port (open-output-nowhere)]
                    ;; Visualization Phase 1: capture BSP rounds
                    [current-bsp-observer bsp-observe]
                    ;; Observatory: capture all subsystem networks
