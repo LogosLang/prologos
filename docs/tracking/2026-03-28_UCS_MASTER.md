@@ -40,6 +40,7 @@ The algebraic CSP dichotomy theorem (Bulatov-Zhuk) guarantees: constraint solvin
 | 2 | Residuation Engine — automatic backward propagators | ⬜ | Depends on R1. For domains that are residuated: derive backward from forward. |
 | 3 | CDCL Integration — SAT optimization for Boolean domains | ⬜ | Depends on BSP-LE (ATMS). For domains that are Boolean: watched literals, conflict learning. |
 | 4 | Resource Constraints — quantale-based solving | ⬜ | For QTT multiplicities, session linearity, effect resource tracking. |
+| 5 | Refinement Typing via Traits (`Type@property`) | ⬜ | Spawned from Numerics track Q7 (2026-06-30). Refinement = constraint over an algebraic (Galois) domain; unify `trait` + `property` + refinement; `trait`-as-type-producer; full refinement inference (= `#=` over refinement domains). Note: [[file:2026-06-30_TRAITS_AS_REFINEMENT_TYPING_NOTE.md][Traits Are Refinement Typing]]. Numerics ships the v1 slice (fixed Sign refinements over an internal `base@element` carrier); this track owns the general surface + extension. Cross-ref SRE (refinement-as-relation?). |
 
 ---
 

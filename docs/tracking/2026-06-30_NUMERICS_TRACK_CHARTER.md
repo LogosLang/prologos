@@ -33,6 +33,7 @@
 | **D-N2** | Numeric tower → **refinement-via-`trait`** (compositionally safe), not subtyping | completed Phases 3e/3f (subtyping tower) |
 | **D-N3** | DEMO P1 (JSON) **blocks on Float**; JSON decimals → `JFloat Float` | DEMO doc D1/§4.3 (was `JNum Rat`) |
 | **D-N4** | A **dedicated Numerics track** (this charter), RPF-style governance | DEMO §11 "filed against owning series" |
+| **D-N5** | **Substrate = Galois/abstract-domain** (a refinement IS a Sign/Interval domain element; arithmetic preserves it natively via the domain lattice) + **disposition B** (keep primitive within-family widening; trait-refine ONLY the user layer PosInt/Zero/…) + **commit-now** (no separate Pre-0 spike — fold the bridge-soundness check into design phase 1) | resolves §5 forks #1 (disposition), #2 (substrate), #3 (preserving arithmetic) — design cycle 2026-06-30 |
 
 ## §4 Scope + provisional phases (Stage-3 cycle will refine)
 
@@ -48,7 +49,13 @@
 
 DEMO P1 unblocks after **N1 + N3** (exponent lexing + a usable Float with a literal form). N4/N5 can follow without blocking the demo.
 
-## §5 Open design questions (for the Stage-3 cycle — NOT decided here)
+## §5 Open design questions (for the Stage-3 cycle)
+
+**RESOLVED 2026-06-30 (design cycle, `numerics-refinement-design` workflow → owner co-design):** #1 tower disposition → **B (surgical)** (`numeric-join` is rank-driven, decoupled from the refined→base erasure, so keep primitive widening + trait-refine only the user layer = smallest blast radius, *shrinks* the F2 footprint). #2 substrate → **Galois/abstract-domain** (refinement = a Sign/Interval value-set element; reuses the already-sound domains + the `net-add-cross-domain-propagator` type↔mult bridge precedent). #3 refinement-preserving arithmetic → **YES** (native to the Galois substrate: `[1,∞)+[1,∞)=[2,∞)⊑[1,∞)`). **Load-bearing risk to verify in design phase 1** (per the commit-now decision): does a type↔interval Galois bridge compose soundly with the existing F7/quantale type lattice + `subtype-lattice-merge`? Plus two bounded audits: full `subtype-pair?` consumer census for the 5 refined names; confirm the primitive tower needs zero residual subtype edges.
+
+**Design-dialogue resolutions (Clusters 1–3, 2026-06-30 — detail in memory [[numerics-track]]):** Q1 carrier = refinement *attribute* (concrete-or-meta, mirrors `type`); Q2 domain = Sign built-in, extensible (GaloisConnection-trait) toward Interval/user domains; Q3 = local propagate-and-check (**full inference → future track**); Q4 = 8-element Sign lattice internally + `Pos/Zero/Neg/NonZero` named + transfer parallel to `numeric-join` (preserve-or-⊤, never-reject); Q5 = subsumption `base + r1⊑r2` at the one point + F2-clean refinement lattice; Q6 = representation-identical, refinement **erased** (coercion-to-base = identity). **Q7 surface SLICED**: v1 ships the fixed Sign refinements over the internal `base@element` carrier; the **general `Type@named-property-or-refinement` surface + `trait`-as-type-producer + `property` unification + full inference** → spawned **UCS refinement track** ([UCS Master](2026-03-28_UCS_MASTER.md) track 5; note [`2026-06-30_TRAITS_AS_REFINEMENT_TYPING_NOTE.md`](2026-06-30_TRAITS_AS_REFINEMENT_TYPING_NOTE.md); cross-ref SRE). Key fact: `trait` today = a *constraint* (→ dictionary), not a *type-producer* — the producer step is the thin type-system layer.
+
+**Still open:**
 
 1. **Tower disposition under refinement-via-trait**: retire numeric subtyping *entirely* (all 9 edges → traits), keep *posit* subtyping but trait-refine the exact family, or *layer* trait-refinement on top of subtyping? (`numeric-join` is the highest-risk consumer either way.)
 2. **Refinement substrate** (3 candidates the codebase already ships): (i) extend `bundle` to carry base+predicate (closest to the framing; bundles compose *traits* today, not *type-refinements*); (ii) reuse the **Galois/abstract-domain** machinery ([`lattice.prologos`](../../racket/prologos/lib/prologos/core/lattice.prologos) + Sign/Parity/Interval domains model refinement as *lattice elements* — but it's analysis-wired, not elaboration-wired); (iii) net-new **predicate/liquid** refinement (most powerful; no machinery today; QTT has only m0/m1/mw, no predicate hooks).
