@@ -892,7 +892,13 @@
 
     ;; Type hole (inferred during checking)
     [(surf-hole loc)
-     (expr-hole)]
+     ;; `_` in a relational goal (solve/explain/defr body) is the anonymous
+     ;; don't-care variable — a FRESH logic var per occurrence (so `(p a _)` /
+     ;; `(q _ b)` don't alias and a lone `_` matches any value). In functional
+     ;; context it stays a hole (partial application / type to be inferred).
+     (if (current-relational-fallback?)
+         (expr-logic-var (gensym '_anon) 'free)
+         (expr-hole))]
 
     ;; Typed hole (?? or ??name — reports expected type)
     [(surf-typed-hole name _)

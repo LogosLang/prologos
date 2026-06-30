@@ -144,3 +144,19 @@
   (define msg (first-error-message results))
   (check-true (and msg (string-contains? msg "field"))
               (format "expected a width-mismatch error, got: ~a" msg)))
+
+;; ========================================
+;; 6. `_` wildcard in a relational goal matches any value
+;; ========================================
+(test-case "relational goal: _ is an anonymous wildcard (matches any value)"
+  (define results
+    (run-prologos-string
+     (string-append PKG-SCHEMA
+       "defr package : Package\n"
+       "  || \"app\"    \"1.0.0\" \"MIT\"\n"
+       "     \"logger\" \"0.9.0\" \"GPL-3.0\"\n\n"
+       ;; _ for the version column — should still match the "logger" row
+       "eval (solve (package \"logger\" _ l))\n")))
+  (check-no-errors results)
+  (check-equal? (count-answers (last-result results)) 1
+                "_ wildcard should let the query match (version is don't-care)"))

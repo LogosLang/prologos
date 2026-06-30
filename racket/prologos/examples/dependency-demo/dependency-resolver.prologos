@@ -19,7 +19,7 @@ ns dep-resolver
 ;; ============================================================================
 
 require [prologos::core::io          :refer [read-file]]
-require [prologos::core::string-ops  :refer [split lines]]
+        [prologos::core::string-ops  :refer [split lines]]
 
 ;; ----------------------------------------------------------------------------
 ;; 1. Functional + Process ingestion: read & parse the real CSV from disk
@@ -29,9 +29,9 @@ require [prologos::core::string-ops  :refer [split lines]]
 ;; parsed in PURE Prologos (split / lines) — `prologos::core::csv` (FFI) cannot
 ;; be imported at top level today (E2001 at module load; filed).
 
-eval [println "== dependency edges (parsed from deps.csv) =="]
-eval [map [fn [row : String] [split "," row]]
-          [lines [read-file "racket/prologos/examples/dependency-demo/deps.csv"]]]
+[println "== dependency edges (parsed from deps.csv) =="]
+[map [fn [row : String] [split "," row]]
+     [lines [read-file "racket/prologos/examples/dependency-demo/deps.csv"]]]
 
 ;; 🎯 TARGET (P1/P2/P3): JSON package records -> validate -> load as facts.
 ;;   - no user-facing JSON parser yet (P1)
@@ -87,8 +87,8 @@ defr needs [?pkg ?dep]
   &> (depends pkg dep)
   &> (depends pkg mid) (needs mid dep)
 
-eval [println "== transitive dependencies of app =="]
-eval (solve (needs "app" dep))
+[println "== transitive dependencies of app =="]
+(solve (needs "app" dep))
 ;; => app needs: left, right, shared, logger, util, fmt  (shared via two paths = the diamond)
 
 ;; ----------------------------------------------------------------------------
@@ -99,17 +99,17 @@ eval (solve (needs "app" dep))
 ;; queries as subqueries over a graph-database operation".
 
 defr risky-dep [?pkg ?dep ?lic]
-  &> (needs pkg dep) (package dep ver lic) (copyleft lic)
+  &> (needs pkg dep) (package dep _ lic) (copyleft lic)
 
-eval [println "== copyleft transitive deps of app (the audit finding) =="]
-eval (solve (risky-dep "app" dep lic))
+[println "== copyleft transitive deps of app (the audit finding) =="]
+(solve (risky-dep "app" dep lic))
 ;; => {logger, GPL-3.0} and {fmt, LGPL-2.1}  (fmt is 3 hops deep: app->right->logger->fmt)
 
 ;; ----------------------------------------------------------------------------
 ;; 5. Provenance: WHY does app transitively need fmt? (derivation tree)
 ;; ----------------------------------------------------------------------------
 
-eval [println "== provenance: app -> fmt =="]
+[println "== provenance: app -> fmt =="]
 explain (needs "app" "fmt")
 ;; => derivation tree: needs(app,fmt) <- depends(app,right), needs(right,fmt)
 ;;                     <- depends(right,logger), needs(logger,fmt) <- depends(logger,fmt)
