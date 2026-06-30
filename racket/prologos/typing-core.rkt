@@ -995,6 +995,28 @@
     [(expr-Float64) (expr-Type (lzero))]
     [(expr-float64 v) (if (flonum? v) (expr-Float64) (expr-error))]
 
+    ;; Float ops (Numerics N3b): arith FloatN -> FloatN -> FloatN; compare -> Bool
+    [(expr-f32-add a b) (if (and (check ctx a (expr-Float32)) (check ctx b (expr-Float32))) (expr-Float32) (expr-error))]
+    [(expr-f32-sub a b) (if (and (check ctx a (expr-Float32)) (check ctx b (expr-Float32))) (expr-Float32) (expr-error))]
+    [(expr-f32-mul a b) (if (and (check ctx a (expr-Float32)) (check ctx b (expr-Float32))) (expr-Float32) (expr-error))]
+    [(expr-f32-div a b) (if (and (check ctx a (expr-Float32)) (check ctx b (expr-Float32))) (expr-Float32) (expr-error))]
+    [(expr-f32-neg a) (if (check ctx a (expr-Float32)) (expr-Float32) (expr-error))]
+    [(expr-f32-abs a) (if (check ctx a (expr-Float32)) (expr-Float32) (expr-error))]
+    [(expr-f32-sqrt a) (if (check ctx a (expr-Float32)) (expr-Float32) (expr-error))]
+    [(expr-f32-lt a b) (if (and (check ctx a (expr-Float32)) (check ctx b (expr-Float32))) (expr-Bool) (expr-error))]
+    [(expr-f32-le a b) (if (and (check ctx a (expr-Float32)) (check ctx b (expr-Float32))) (expr-Bool) (expr-error))]
+    [(expr-f32-eq a b) (if (and (check ctx a (expr-Float32)) (check ctx b (expr-Float32))) (expr-Bool) (expr-error))]
+    [(expr-f64-add a b) (if (and (check ctx a (expr-Float64)) (check ctx b (expr-Float64))) (expr-Float64) (expr-error))]
+    [(expr-f64-sub a b) (if (and (check ctx a (expr-Float64)) (check ctx b (expr-Float64))) (expr-Float64) (expr-error))]
+    [(expr-f64-mul a b) (if (and (check ctx a (expr-Float64)) (check ctx b (expr-Float64))) (expr-Float64) (expr-error))]
+    [(expr-f64-div a b) (if (and (check ctx a (expr-Float64)) (check ctx b (expr-Float64))) (expr-Float64) (expr-error))]
+    [(expr-f64-neg a) (if (check ctx a (expr-Float64)) (expr-Float64) (expr-error))]
+    [(expr-f64-abs a) (if (check ctx a (expr-Float64)) (expr-Float64) (expr-error))]
+    [(expr-f64-sqrt a) (if (check ctx a (expr-Float64)) (expr-Float64) (expr-error))]
+    [(expr-f64-lt a b) (if (and (check ctx a (expr-Float64)) (check ctx b (expr-Float64))) (expr-Bool) (expr-error))]
+    [(expr-f64-le a b) (if (and (check ctx a (expr-Float64)) (check ctx b (expr-Float64))) (expr-Bool) (expr-error))]
+    [(expr-f64-eq a b) (if (and (check ctx a (expr-Float64)) (check ctx b (expr-Float64))) (expr-Bool) (expr-error))]
+
     ;; Binary arithmetic: Posit32 -> Posit32 -> Posit32
     [(expr-p32-add a b)
      (if (and (check ctx a (expr-Posit32)) (check ctx b (expr-Posit32)))

@@ -814,6 +814,62 @@
               [_ (tu-error)]))]
          [_ (tu-error)]))]
 
+    ;; ---- Float32/Float64 ops (Numerics N3b) ----
+    [(expr-f32-add a b)
+     (let ([r1 (checkQ ctx a (expr-Float32))] [r2 (checkQ ctx b (expr-Float32))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Float32) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f32-sub a b)
+     (let ([r1 (checkQ ctx a (expr-Float32))] [r2 (checkQ ctx b (expr-Float32))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Float32) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f32-mul a b)
+     (let ([r1 (checkQ ctx a (expr-Float32))] [r2 (checkQ ctx b (expr-Float32))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Float32) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f32-div a b)
+     (let ([r1 (checkQ ctx a (expr-Float32))] [r2 (checkQ ctx b (expr-Float32))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Float32) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f32-neg a)
+     (let ([r (inferQ ctx a)]) (match r [(tu (expr-Float32) u) (tu (expr-Float32) u)] [_ (tu-error)]))]
+    [(expr-f32-abs a)
+     (let ([r (inferQ ctx a)]) (match r [(tu (expr-Float32) u) (tu (expr-Float32) u)] [_ (tu-error)]))]
+    [(expr-f32-sqrt a)
+     (let ([r (inferQ ctx a)]) (match r [(tu (expr-Float32) u) (tu (expr-Float32) u)] [_ (tu-error)]))]
+    [(expr-f32-lt a b)
+     (let ([r1 (checkQ ctx a (expr-Float32))] [r2 (checkQ ctx b (expr-Float32))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f32-le a b)
+     (let ([r1 (checkQ ctx a (expr-Float32))] [r2 (checkQ ctx b (expr-Float32))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f32-eq a b)
+     (let ([r1 (checkQ ctx a (expr-Float32))] [r2 (checkQ ctx b (expr-Float32))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f64-add a b)
+     (let ([r1 (checkQ ctx a (expr-Float64))] [r2 (checkQ ctx b (expr-Float64))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Float64) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f64-sub a b)
+     (let ([r1 (checkQ ctx a (expr-Float64))] [r2 (checkQ ctx b (expr-Float64))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Float64) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f64-mul a b)
+     (let ([r1 (checkQ ctx a (expr-Float64))] [r2 (checkQ ctx b (expr-Float64))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Float64) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f64-div a b)
+     (let ([r1 (checkQ ctx a (expr-Float64))] [r2 (checkQ ctx b (expr-Float64))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Float64) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f64-neg a)
+     (let ([r (inferQ ctx a)]) (match r [(tu (expr-Float64) u) (tu (expr-Float64) u)] [_ (tu-error)]))]
+    [(expr-f64-abs a)
+     (let ([r (inferQ ctx a)]) (match r [(tu (expr-Float64) u) (tu (expr-Float64) u)] [_ (tu-error)]))]
+    [(expr-f64-sqrt a)
+     (let ([r (inferQ ctx a)]) (match r [(tu (expr-Float64) u) (tu (expr-Float64) u)] [_ (tu-error)]))]
+    [(expr-f64-lt a b)
+     (let ([r1 (checkQ ctx a (expr-Float64))] [r2 (checkQ ctx b (expr-Float64))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f64-le a b)
+     (let ([r1 (checkQ ctx a (expr-Float64))] [r2 (checkQ ctx b (expr-Float64))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f64-eq a b)
+     (let ([r1 (checkQ ctx a (expr-Float64))] [r2 (checkQ ctx b (expr-Float64))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+
     ;; ---- Posit32 binary operations ----
     ;; Binary ops: Posit32 -> Posit32 -> Posit32
     [(expr-p32-add a b)

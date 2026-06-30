@@ -8711,6 +8711,8 @@
     Posit16 posit16 p16+ p16- p16* p16/ p16-neg p16-abs p16-sqrt p16-lt p16-le p16-from-nat p16-if-nar
     Posit32 posit32 p32+ p32- p32* p32/ p32-neg p32-abs p32-sqrt p32-lt p32-le p32-from-nat p32-if-nar
     Posit64 posit64 p64+ p64- p64* p64/ p64-neg p64-abs p64-sqrt p64-lt p64-le p64-from-nat p64-if-nar
+    Float32 float32 f32+ f32- f32* f32/ f32-neg f32-abs f32-sqrt f32-lt f32-le f32-eq
+    Float64 float64 f64+ f64- f64* f64/ f64-neg f64-abs f64-sqrt f64-lt f64-le f64-eq
     Quire8 q8-zero q8-fma q8-to
     Quire16 q16-zero q16-fma q16-to
     Quire32 q32-zero q32-fma q32-to

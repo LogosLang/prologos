@@ -344,7 +344,10 @@
   (for ([ops (list (list expr-p8-add expr-p8-sub expr-p8-mul expr-p8-div expr-p8-eq expr-p8-lt expr-p8-le expr-p8-neg expr-p8-abs expr-p8-from-int expr-p8-from-rat expr-p8-to-rat)
                    (list expr-p16-add expr-p16-sub expr-p16-mul expr-p16-div expr-p16-eq expr-p16-lt expr-p16-le expr-p16-neg expr-p16-abs expr-p16-from-int expr-p16-from-rat expr-p16-to-rat)
                    (list expr-p32-add expr-p32-sub expr-p32-mul expr-p32-div expr-p32-eq expr-p32-lt expr-p32-le expr-p32-neg expr-p32-abs expr-p32-from-int expr-p32-from-rat expr-p32-to-rat)
-                   (list expr-p64-add expr-p64-sub expr-p64-mul expr-p64-div expr-p64-eq expr-p64-lt expr-p64-le expr-p64-neg expr-p64-abs expr-p64-from-int expr-p64-from-rat expr-p64-to-rat))])
+                   (list expr-p64-add expr-p64-sub expr-p64-mul expr-p64-div expr-p64-eq expr-p64-lt expr-p64-le expr-p64-neg expr-p64-abs expr-p64-from-int expr-p64-from-rat expr-p64-to-rat)
+                   ;; Float ops (Numerics N3b)
+                   (list expr-f32-add expr-f32-sub expr-f32-mul expr-f32-div expr-f32-eq expr-f32-lt expr-f32-le expr-f32-neg expr-f32-abs expr-f32-sqrt)
+                   (list expr-f64-add expr-f64-sub expr-f64-mul expr-f64-div expr-f64-eq expr-f64-lt expr-f64-le expr-f64-neg expr-f64-abs expr-f64-sqrt))])
     (for ([op ops])
       (auto-cache! op d) (auto-cache! op d d)))
   ;; Int/Rat ops

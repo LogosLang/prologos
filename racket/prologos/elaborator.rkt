@@ -1610,6 +1610,61 @@
     ;; ---- Float types (Numerics N3) ----
     [(surf-float32-type loc) (expr-Float32)]
     [(surf-float64-type loc) (expr-Float64)]
+    ;; ---- Float ops (Numerics N3b) ----
+    [(surf-f32-add a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f32-add ea eb)]))]
+    [(surf-f32-sub a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f32-sub ea eb)]))]
+    [(surf-f32-mul a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f32-mul ea eb)]))]
+    [(surf-f32-div a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f32-div ea eb)]))]
+    [(surf-f32-neg a loc)
+     (let ([ea (elaborate a env depth)]) (if (prologos-error? ea) ea (expr-f32-neg ea)))]
+    [(surf-f32-abs a loc)
+     (let ([ea (elaborate a env depth)]) (if (prologos-error? ea) ea (expr-f32-abs ea)))]
+    [(surf-f32-sqrt a loc)
+     (let ([ea (elaborate a env depth)]) (if (prologos-error? ea) ea (expr-f32-sqrt ea)))]
+    [(surf-f32-lt a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f32-lt ea eb)]))]
+    [(surf-f32-le a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f32-le ea eb)]))]
+    [(surf-f32-eq a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f32-eq ea eb)]))]
+    [(surf-f64-add a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f64-add ea eb)]))]
+    [(surf-f64-sub a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f64-sub ea eb)]))]
+    [(surf-f64-mul a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f64-mul ea eb)]))]
+    [(surf-f64-div a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f64-div ea eb)]))]
+    [(surf-f64-neg a loc)
+     (let ([ea (elaborate a env depth)]) (if (prologos-error? ea) ea (expr-f64-neg ea)))]
+    [(surf-f64-abs a loc)
+     (let ([ea (elaborate a env depth)]) (if (prologos-error? ea) ea (expr-f64-abs ea)))]
+    [(surf-f64-sqrt a loc)
+     (let ([ea (elaborate a env depth)]) (if (prologos-error? ea) ea (expr-f64-sqrt ea)))]
+    [(surf-f64-lt a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f64-lt ea eb)]))]
+    [(surf-f64-le a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f64-le ea eb)]))]
+    [(surf-f64-eq a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f64-eq ea eb)]))]
     [(surf-p32-add a b loc)
      (let ([ea (elaborate a env depth)]
            [eb (elaborate b env depth)])

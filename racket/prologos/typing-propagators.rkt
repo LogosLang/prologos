@@ -2216,6 +2216,42 @@
   (register-typing-rule! expr-p32-from-rat? 1 (list expr-p32-from-rat-a) (expr-Posit32) 'p32-from-rat)
   (register-typing-rule! expr-p32-from-int? 1 (list expr-p32-from-int-a) (expr-Posit32) 'p32-from-int)
 
+  ;; ===== FLOAT32 OPS (Numerics N3b) =====
+  (register-binary-ops!
+   (list (list expr-f32-add? expr-f32-add-a expr-f32-add-b 'f32-add)
+         (list expr-f32-sub? expr-f32-sub-a expr-f32-sub-b 'f32-sub)
+         (list expr-f32-mul? expr-f32-mul-a expr-f32-mul-b 'f32-mul)
+         (list expr-f32-div? expr-f32-div-a expr-f32-div-b 'f32-div))
+   (expr-Float32))
+  (register-unary-ops!
+   (list (list expr-f32-neg? expr-f32-neg-a 'f32-neg)
+         (list expr-f32-abs? expr-f32-abs-a 'f32-abs)
+         (list expr-f32-sqrt? expr-f32-sqrt-a 'f32-sqrt))
+   (expr-Float32))
+  (register-binary-ops!
+   (list (list expr-f32-lt? expr-f32-lt-a expr-f32-lt-b 'f32-lt)
+         (list expr-f32-le? expr-f32-le-a expr-f32-le-b 'f32-le)
+         (list expr-f32-eq? expr-f32-eq-a expr-f32-eq-b 'f32-eq))
+   (expr-Bool))
+
+  ;; ===== FLOAT64 OPS (Numerics N3b) =====
+  (register-binary-ops!
+   (list (list expr-f64-add? expr-f64-add-a expr-f64-add-b 'f64-add)
+         (list expr-f64-sub? expr-f64-sub-a expr-f64-sub-b 'f64-sub)
+         (list expr-f64-mul? expr-f64-mul-a expr-f64-mul-b 'f64-mul)
+         (list expr-f64-div? expr-f64-div-a expr-f64-div-b 'f64-div))
+   (expr-Float64))
+  (register-unary-ops!
+   (list (list expr-f64-neg? expr-f64-neg-a 'f64-neg)
+         (list expr-f64-abs? expr-f64-abs-a 'f64-abs)
+         (list expr-f64-sqrt? expr-f64-sqrt-a 'f64-sqrt))
+   (expr-Float64))
+  (register-binary-ops!
+   (list (list expr-f64-lt? expr-f64-lt-a expr-f64-lt-b 'f64-lt)
+         (list expr-f64-le? expr-f64-le-a expr-f64-le-b 'f64-le)
+         (list expr-f64-eq? expr-f64-eq-a expr-f64-eq-b 'f64-eq))
+   (expr-Bool))
+
   ;; ===== POSIT64 ARITHMETIC =====
   (register-binary-ops!
    (list (list expr-p64-add? expr-p64-add-a expr-p64-add-b 'p64-add)
