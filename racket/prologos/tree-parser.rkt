@@ -617,7 +617,7 @@
                    item]
                   [(and (pair? item)
                         (not (memq (car item) '($brace-params $angle-type $list-literal
-                                                $nat-literal $rat-literal $approx-literal $decimal-literal
+                                                $nat-literal $rat-literal $approx-literal $decimal-literal $float-literal
                                                 $set-literal $vec-literal $foreign-block
                                                 $typed-hole $solver-config quote $quote)))
                         (>= (length item) 2)

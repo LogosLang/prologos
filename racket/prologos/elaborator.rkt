@@ -9,6 +9,7 @@
 (require racket/match
          racket/list
          racket/string
+         racket/flonum
          "prelude.rkt"
          "syntax.rkt"
          "source-location.rkt"
@@ -1610,6 +1611,12 @@
     ;; ---- Float types (Numerics N3) ----
     [(surf-float32-type loc) (expr-Float32)]
     [(surf-float64-type loc) (expr-Float64)]
+    ;; ---- Float value literal (Numerics N3c) — exact rational → IEEE flonum ----
+    ;; f32 rounds to single precision at construction (flsingle); f64 is the double.
+    [(surf-float-lit v w loc)
+     (if (= w 32)
+         (expr-float32 (flsingle (exact->inexact v)))
+         (expr-float64 (exact->inexact v)))]
     ;; ---- Float ops (Numerics N3b) ----
     [(surf-f32-add a b loc)
      (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])

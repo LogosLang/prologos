@@ -155,6 +155,8 @@
  ;; Float surface types (Numerics N3)
  (struct-out surf-float32-type)
  (struct-out surf-float64-type)
+ ;; Float value literal (Numerics N3c)
+ (struct-out surf-float-lit)
  ;; Float ops (Numerics N3b)
  (struct-out surf-f32-add) (struct-out surf-f32-sub) (struct-out surf-f32-mul) (struct-out surf-f32-div)
  (struct-out surf-f32-neg) (struct-out surf-f32-abs) (struct-out surf-f32-sqrt)
@@ -704,6 +706,8 @@
 ;; Float types (Numerics N3): Float32, Float64 (`f` literals + ops added later)
 (struct surf-float32-type (srcloc) #:transparent)
 (struct surf-float64-type (srcloc) #:transparent)
+;; Float value literal (Numerics N3c): val = exact rational, width ∈ {32, 64}
+(struct surf-float-lit (val width srcloc) #:transparent)
 ;; Float arithmetic + comparison ops (Numerics N3b)
 (struct surf-f32-add (a b srcloc) #:transparent)
 (struct surf-f32-sub (a b srcloc) #:transparent)

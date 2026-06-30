@@ -656,6 +656,16 @@
                (parse-error loc (format "decimal literal requires a numeric argument, got: ~a" v) #f)))
          (parse-error loc "decimal literal requires exactly one argument" #f))]
 
+    ;; $float-literal sentinel (Numerics N3c): 3.14f / 3.14f32 / 3.14f64 → surf-float-lit
+    [(and (symbol? head) (eq? head '$float-literal))
+     (if (= (length args) 2)
+         (let ([v (stx->datum (car args))]
+               [w (stx->datum (cadr args))])
+           (if (and (number? v) (exact? v) (rational? v) (memv w '(32 64)))
+               (surf-float-lit v w loc)
+               (parse-error loc (format "float literal requires (exact-rational width 32|64), got: ~a ~a" v w) #f)))
+         (parse-error loc "float literal requires exactly two arguments (value width)" #f))]
+
     ;; $foreign-block sentinel: foreign escape block
     ;; ($foreign-block racket (code-datums...) (captures...) (exports...))
     [(and (symbol? head) (eq? head '$foreign-block))
@@ -5140,7 +5150,7 @@
                  (define sd (stx->datum s))
                  (and (pair? sd)
                       (let ([h (if (syntax? (car sd)) (syntax-e (car sd)) (car sd))])
-                        (memq h '($nat-literal $decimal-literal $approx-literal)))))
+                        (memq h '($nat-literal $decimal-literal $approx-literal $float-literal)))))
                (define-values (flat-terms nested-rows)
                  (partition (lambda (s)
                               (or (not (pair? (stx->datum s)))

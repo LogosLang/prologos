@@ -345,6 +345,63 @@
                        (define nc (rrb-char-at rrb m))
                        (if (and nc (char-numeric? nc)) (loop (+ m 1)) (- m pos)))))))))
 
+(define (recognize-float-literal rrb pos)
+  ;; Float literal (Numerics N3c): [-]?digit+(.digit+)?([eE][+-]?digit+)? f (32|64)?
+  ;; REQUIRES the trailing `f` (optionally `f32`/`f64`); only fires when present so
+  ;; bare numbers/decimals/exponents fall through (bare 3.14 stays Posit32 = N4).
+  ;; Classified 'float-literal → ($float-literal <exact-rational> <width>) → Float.
+  (define c0 (rrb-char-at rrb pos))
+  (define neg?
+    (and c0 (char=? c0 #\-)
+         (let ([c1 (rrb-char-at rrb (+ pos 1))])
+           (and c1 (char-numeric? c1)))
+         ;; same delimiter gate as recognize-negative-number (so x-3.0f stays ident)
+         (or (= pos 0)
+             (let ([prev (rrb-char-at rrb (- pos 1))])
+               (and prev (or (char=? prev #\space) (char=? prev #\newline)
+                             (char=? prev #\tab) (char=? prev #\()
+                             (char=? prev #\[) (char=? prev #\{)
+                             (char=? prev #\<)))))))
+  (define start (if neg? (+ pos 1) pos))
+  (define s0 (rrb-char-at rrb start))
+  (and s0 (char-numeric? s0)
+       (let* ([i (let loop ([i (+ start 1)])         ;; integer-part digits
+                   (define nc (rrb-char-at rrb i))
+                   (if (and nc (char-numeric? nc)) (loop (+ i 1)) i))]
+              [i (let ([dot (rrb-char-at rrb i)]      ;; optional .digit+
+                       [d1 (rrb-char-at rrb (+ i 1))])
+                   (if (and dot (char=? dot #\.) d1 (char-numeric? d1))
+                       (let loop ([j (+ i 2)])
+                         (define nc (rrb-char-at rrb j))
+                         (if (and nc (char-numeric? nc)) (loop (+ j 1)) j))
+                       i))]
+              [i (let ([ec (rrb-char-at rrb i)])      ;; optional [eE][+-]?digit+
+                   (if (and ec (or (char=? ec #\e) (char=? ec #\E)))
+                       (let* ([j (+ i 1)]
+                              [sgn (rrb-char-at rrb j)]
+                              [k (if (and sgn (or (char=? sgn #\+) (char=? sgn #\-))) (+ j 1) j)]
+                              [d (rrb-char-at rrb k)])
+                         (if (and d (char-numeric? d))
+                             (let loop ([m (+ k 1)])
+                               (define nc (rrb-char-at rrb m))
+                               (if (and nc (char-numeric? nc)) (loop (+ m 1)) m))
+                             i))   ;; 'e' without exponent digits → no exp consumed
+                       i))]
+              [fc (rrb-char-at rrb i)])               ;; REQUIRE the `f` suffix
+         (and fc (char=? fc #\f)
+              (let* ([j (+ i 1)]
+                     [cj (rrb-char-at rrb j)]
+                     [cj1 (rrb-char-at rrb (+ j 1))]
+                     [j2 (cond
+                           [(and cj cj1 (char=? cj #\3) (char=? cj1 #\2)) (+ j 2)]
+                           [(and cj cj1 (char=? cj #\6) (char=? cj1 #\4)) (+ j 2)]
+                           [else j])]
+                     [after (rrb-char-at rrb j2)])
+                ;; trailing guard: the suffix must end the token (no alnum after)
+                (and (or (not after)
+                         (not (or (char-numeric? after) (char-alphabetic? after))))
+                     (- j2 pos)))))))
+
 (define (recognize-string rrb pos)
   ;; String: " ... " with escape handling
   (define c (rrb-char-at rrb pos))
@@ -901,6 +958,12 @@
   (register-token-pattern!
    (token-pattern 'exp-literal (lambda (rrb pos) (recognize-exp-literal rrb pos))
                   (lambda (s p l) 'number) 97))
+  ;; Float literals (Numerics N3c): 3.14f, 3.14f32, 1.5e-3f64 → Float.
+  ;; Priority 98 so it wins over exp-literal (97) and below, consuming the
+  ;; trailing `f`/`f32`/`f64` in one token; only fires when the `f` suffix is present.
+  (register-token-pattern!
+   (token-pattern 'float-literal (lambda (rrb pos) (recognize-float-literal rrb pos))
+                  (lambda (s p l) 'float-literal) 98))
   (register-token-pattern!
    (token-pattern 'negative-number (lambda (rrb pos) (recognize-negative-number rrb pos))
                   (lambda (rrb pos len)
@@ -2448,6 +2511,36 @@
                    (cons (make-stx (list (make-stx '$approx-literal source vl vc (+ spos 1) 1)
                                          (make-stx num-val source vl (+ vc 1) (+ spos 2) (- epos spos 1)))
                                    source vl vc (+ spos 1) (- epos spos))
+                         result))]
+            ;; Float-literal compound token (Numerics N3c): 3.14f → ($float-literal 157/50 64)
+            [(eq? type 'float-literal)
+             (define lex (token-entry-lexeme item))
+             (define len (string-length lex))
+             (define lc (string-ref lex (- len 1)))
+             (define-values (num-str width)
+               (cond
+                 [(and (>= len 3) (char=? lc #\2)
+                       (char=? (string-ref lex (- len 2)) #\3)
+                       (char=? (string-ref lex (- len 3)) #\f))
+                  (values (substring lex 0 (- len 3)) 32)]
+                 [(and (>= len 3) (char=? lc #\4)
+                       (char=? (string-ref lex (- len 2)) #\6)
+                       (char=? (string-ref lex (- len 3)) #\f))
+                  (values (substring lex 0 (- len 3)) 64)]
+                 [(char=? lc #\f) (values (substring lex 0 (- len 1)) 64)]
+                 [else (values lex 64)]))
+             ;; exact rational (157/50) like decimal/approx; Float conversion at elaborate
+             (define num-val (or (string->number (string-append "#e" num-str))
+                                 (string->number num-str)
+                                 (string->symbol num-str)))
+             (define spos (token-entry-start-pos item))
+             (define epos (token-entry-end-pos item))
+             (define-values (vl vc) (pos->line-col source-str spos))
+             (loop (+ i 1)
+                   (cons (make-stx (list (make-stx '$float-literal source vl vc (+ spos 1) 1)
+                                         (make-stx num-val source vl vc spos (- epos spos))
+                                         (make-stx width source vl vc spos (- epos spos)))
+                                   source vl vc spos (- epos spos))
                          result))]
             ;; Tilde prefix: ~ followed by token → $approx-literal sentinel
             ;; ~42 → ($approx-literal 42), ~[1 2] handled by tilde-lbracket
