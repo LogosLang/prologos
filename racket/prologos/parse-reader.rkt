@@ -302,6 +302,49 @@
           [else #f]))  ;; no dot found — not a decimal
       #f))
 
+(define (recognize-exp-literal rrb pos)
+  ;; Exponent literal (Numerics N1): [-]?digit+(.digit+)?[eE][+-]?digit+
+  ;; ONLY matches when an exponent is actually present — otherwise returns #f so
+  ;; plain numbers/decimals/arrows fall through to recognize-number /
+  ;; recognize-decimal-literal / recognize-negative-number / session-arrow.
+  ;; Classified as 'number → value via #e → EXACT (Int if integral, Rat if not),
+  ;; bypassing the decimal-literal → Posit32 path (bare 3.14 stays Posit32 = N4).
+  (define c0 (rrb-char-at rrb pos))
+  (define neg?
+    (and c0 (char=? c0 #\-)
+         (let ([c1 (rrb-char-at rrb (+ pos 1))])
+           (and c1 (char-numeric? c1)))
+         ;; same delimiter gate as recognize-negative-number (so x-1e3 stays ident)
+         (or (= pos 0)
+             (let ([prev (rrb-char-at rrb (- pos 1))])
+               (and prev (or (char=? prev #\space) (char=? prev #\newline)
+                             (char=? prev #\tab) (char=? prev #\()
+                             (char=? prev #\[) (char=? prev #\{)
+                             (char=? prev #\<)))))))
+  (define start (if neg? (+ pos 1) pos))
+  (define s0 (rrb-char-at rrb start))
+  (and s0 (char-numeric? s0)
+       (let* ([i (let loop ([i (+ start 1)])  ;; integer-part digits
+                   (define nc (rrb-char-at rrb i))
+                   (if (and nc (char-numeric? nc)) (loop (+ i 1)) i))]
+              [i (let ([dot (rrb-char-at rrb i)]      ;; optional .digit+
+                       [d1 (rrb-char-at rrb (+ i 1))])
+                   (if (and dot (char=? dot #\.) d1 (char-numeric? d1))
+                       (let loop ([j (+ i 2)])
+                         (define nc (rrb-char-at rrb j))
+                         (if (and nc (char-numeric? nc)) (loop (+ j 1)) j))
+                       i))]
+              [ec (rrb-char-at rrb i)])             ;; REQUIRE [eE][+-]?digit+
+         (and ec (or (char=? ec #\e) (char=? ec #\E))
+              (let* ([j (+ i 1)]
+                     [sgn (rrb-char-at rrb j)]
+                     [k (if (and sgn (or (char=? sgn #\+) (char=? sgn #\-))) (+ j 1) j)]
+                     [d (rrb-char-at rrb k)])
+                (and d (char-numeric? d)
+                     (let loop ([m (+ k 1)])
+                       (define nc (rrb-char-at rrb m))
+                       (if (and nc (char-numeric? nc)) (loop (+ m 1)) (- m pos)))))))))
+
 (define (recognize-string rrb pos)
   ;; String: " ... " with escape handling
   (define c (rrb-char-at rrb pos))
@@ -851,6 +894,13 @@
   (register-token-pattern!
    (token-pattern 'session-op (lambda (rrb pos) (recognize-session-op rrb pos))
                   (lambda (s p l) 'symbol) 96))  ;; ?, ! standalone
+  ;; Exponent literals (Numerics N1): 1e10, 1.5e-3, -1.5e-3 → exact (Int/Rat).
+  ;; Priority 97 so it wins over negative-number (96), decimal-literal (75) and
+  ;; number (70) for exponent-bearing lexemes; only fires when an exponent is
+  ;; present, so plain numbers/decimals/arrows are unaffected.
+  (register-token-pattern!
+   (token-pattern 'exp-literal (lambda (rrb pos) (recognize-exp-literal rrb pos))
+                  (lambda (s p l) 'number) 97))
   (register-token-pattern!
    (token-pattern 'negative-number (lambda (rrb pos) (recognize-negative-number rrb pos))
                   (lambda (rrb pos len)
@@ -1588,7 +1638,8 @@
          [(equal? lexeme "||") '$facts-sep]
          [(equal? lexeme "&>") '$clause-sep]
          [else sym])]
-      [(number) (or (string->number lexeme) (string->symbol lexeme))]
+      ;; #e prefix → exact (Numerics N1: exponent literals; idempotent for plain int/rat)
+      [(number) (or (string->number (string-append "#e" lexeme)) (string->number lexeme) (string->symbol lexeme))]
       [(string)
        ;; Strip surrounding quotes if present (old reader returned raw content)
        (if (and (>= (string-length lexeme) 2)
@@ -1769,7 +1820,8 @@
                   [(string=? lexeme "->") '->]
                   [(string=? lexeme "->>") '->>]
                   [else (string->symbol lexeme)])]
-      [(number) (or (string->number lexeme) (string->symbol lexeme))]
+      ;; #e prefix → exact (Numerics N1: exponent literals; idempotent for plain int/rat)
+      [(number) (or (string->number (string-append "#e" lexeme)) (string->number lexeme) (string->symbol lexeme))]
       [(nat-literal) (string->number (substring lexeme 0 (- (string-length lexeme) 1)))]
       [(string) (if (and (>= (string-length lexeme) 2)
                          (char=? (string-ref lexeme 0) #\")
