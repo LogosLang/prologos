@@ -90,7 +90,7 @@ defr needs [?pkg ?dep]
   &> (depends pkg mid) (needs mid dep)
 
 println "== transitive dependencies of app =="
-(solve (needs "app" dep))
+solve (needs "app" dep)
 ;; => app needs: left, right, shared, logger, util, fmt  (shared via two paths = the diamond)
 
 ;; ----------------------------------------------------------------------------
@@ -104,7 +104,7 @@ defr risky-dep [?pkg ?dep ?lic]
   &> (needs pkg dep) (package dep _ lic) (copyleft lic)
 
 println "== copyleft transitive deps of app (the audit finding) =="
-(solve (risky-dep "app" dep lic))
+solve (risky-dep "app" dep lic)
 ;; => {logger, GPL-3.0} and {fmt, LGPL-2.1}  (fmt is 3 hops deep: app->right->logger->fmt)
 
 ;; ----------------------------------------------------------------------------
