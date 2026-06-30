@@ -6111,6 +6111,7 @@
 (register-subtype-pair! 'Posit16 'Posit32)
 (register-subtype-pair! 'Posit16 'Posit64)
 (register-subtype-pair! 'Posit32 'Posit64)
+(register-subtype-pair! 'Float32 'Float64)
 
 ;; ========================================
 ;; Capability registry (Capabilities as Types)

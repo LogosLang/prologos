@@ -13,6 +13,7 @@
 (require racket/match
          racket/list
          racket/string
+         racket/flonum
          "prelude.rkt"
          "syntax.rkt"
          "substitution.rkt"
@@ -962,6 +963,13 @@
        [else #f])]
     [else #f]))
 
+;; Widen a Float32 literal to Float64 (the only float subtype edge, N3d): a
+;; single-precision value is exactly representable as a double, so the flonum is
+;; unchanged. Returns #f when no widening applies (target=32, or already f64).
+(define (try-coerce-to-float target-width e)
+  (and (= target-width 64) (expr-float32? e)
+       (expr-float64 (expr-float32-val e))))
+
 ;; ========================================
 ;; Stuck-term reduction helpers
 ;; ========================================
@@ -1049,16 +1057,23 @@
 
 ;; Float reducers (Numerics N3b): no width-coercion (cross-family is N3d);
 ;; just reduce operands then re-apply, mirroring the posit no-coercion branch.
-(define (reduce-float-binary ctor a b)
+(define (reduce-float-binary target-width ctor a b)
   (let ([a* (whnf a)] [b* (whnf b)])
-    (cond
-      [(not (equal? a* a)) (whnf (ctor a* b))]
-      [(not (equal? b* b)) (whnf (ctor a b*))]
-      [else (ctor a b)])))
+    (let ([ca (or (try-coerce-to-float target-width a*) a*)]
+          [cb (or (try-coerce-to-float target-width b*) b*)])
+      (cond
+        [(or (not (eq? ca a*)) (not (eq? cb b*))) (whnf (ctor ca cb))]
+        [(not (equal? a* a)) (whnf (ctor a* b))]
+        [(not (equal? b* b)) (whnf (ctor a b*))]
+        [else (ctor a b)]))))
 
-(define (reduce-float-unary ctor a)
+(define (reduce-float-unary target-width ctor a)
   (let ([a* (whnf a)])
-    (if (equal? a* a) (ctor a) (whnf (ctor a*)))))
+    (let ([ca (or (try-coerce-to-float target-width a*) a*)])
+      (cond
+        [(not (eq? ca a*)) (whnf (ctor ca))]
+        [(not (equal? a* a)) (whnf (ctor a*))]
+        [else (ctor a)]))))
 
 ;; Extract the Racket-level exact rational value from a concrete numeric literal.
 ;; Returns #f for non-literal/non-numeric expressions.
@@ -1070,6 +1085,8 @@
     [(expr-posit16? e) (posit16-decode (expr-posit16-val e))]
     [(expr-posit32? e) (posit32-decode (expr-posit32-val e))]
     [(expr-posit64? e) (posit64-decode (expr-posit64-val e))]
+    [(expr-float32? e) (inexact->exact (expr-float32-val e))]
+    [(expr-float64? e) (inexact->exact (expr-float64-val e))]
     [else
      (let ([nv (nat-value e)])
        (and nv nv))]))
@@ -1084,6 +1101,8 @@
     [(expr-posit16? e) 'p16]
     [(expr-posit32? e) 'p32]
     [(expr-posit64? e) 'p64]
+    [(expr-float32? e) 'f32]
+    [(expr-float64? e) 'f64]
     [else #f]))
 
 
@@ -1097,6 +1116,8 @@
     [(p16) (expr-posit16 (posit16-encode val))]
     [(p32) (expr-posit32 (posit32-encode val))]
     [(p64) (expr-posit64 (posit64-encode val))]
+    [(f32) (expr-float32 (flsingle (exact->inexact val)))]
+    [(f64) (expr-float64 (exact->inexact val))]
     [else #f]))
 
 ;; Type-tag ranking for numeric-join at reduction level.
@@ -1105,6 +1126,7 @@
   (case tag
     [(nat) 0] [(int) 1] [(rat) 2]
     [(p8) 10] [(p16) 11] [(p32) 12] [(p64) 13]
+    [(f32) 20] [(f64) 21]
     [else -1]))
 
 ;; Compute the join type tag for two type tags.
@@ -1122,6 +1144,12 @@
      (if (>= (type-tag-rank t2) (type-tag-rank 'p32)) t2 'p32)]
     [(and (memq t1 '(p8 p16 p32 p64)) (memq t2 '(nat int rat)))
      (if (>= (type-tag-rank t1) (type-tag-rank 'p32)) t1 'p32)]
+    ;; Float family (Numerics N3d): widen within-float; exact+float PRESERVES the
+    ;; float width (no clamp); posit+float = no join (→ #f → stuck/type error).
+    [(and (memq t1 '(f32 f64)) (memq t2 '(f32 f64)))
+     (if (> (type-tag-rank t1) (type-tag-rank t2)) t1 t2)]
+    [(and (memq t1 '(nat int rat)) (memq t2 '(f32 f64))) t2]
+    [(and (memq t1 '(f32 f64)) (memq t2 '(nat int rat))) t1]
     [else #f]))
 
 ;; Reduce a generic binary operation: reduce both operands, retry.
@@ -1770,26 +1798,26 @@
     [(expr-f64-le (expr-float64 a) (expr-float64 b)) (if (float64-le? a b) (expr-true) (expr-false))]
     [(expr-f64-eq (expr-float64 a) (expr-float64 b)) (if (float64-eq? a b) (expr-true) (expr-false))]
     ;; Float stuck-term reduction: reduce operands
-    [(expr-f32-add a b) (reduce-float-binary expr-f32-add a b)]
-    [(expr-f32-sub a b) (reduce-float-binary expr-f32-sub a b)]
-    [(expr-f32-mul a b) (reduce-float-binary expr-f32-mul a b)]
-    [(expr-f32-div a b) (reduce-float-binary expr-f32-div a b)]
-    [(expr-f32-lt a b) (reduce-float-binary expr-f32-lt a b)]
-    [(expr-f32-le a b) (reduce-float-binary expr-f32-le a b)]
-    [(expr-f32-eq a b) (reduce-float-binary expr-f32-eq a b)]
-    [(expr-f32-neg a) (reduce-float-unary expr-f32-neg a)]
-    [(expr-f32-abs a) (reduce-float-unary expr-f32-abs a)]
-    [(expr-f32-sqrt a) (reduce-float-unary expr-f32-sqrt a)]
-    [(expr-f64-add a b) (reduce-float-binary expr-f64-add a b)]
-    [(expr-f64-sub a b) (reduce-float-binary expr-f64-sub a b)]
-    [(expr-f64-mul a b) (reduce-float-binary expr-f64-mul a b)]
-    [(expr-f64-div a b) (reduce-float-binary expr-f64-div a b)]
-    [(expr-f64-lt a b) (reduce-float-binary expr-f64-lt a b)]
-    [(expr-f64-le a b) (reduce-float-binary expr-f64-le a b)]
-    [(expr-f64-eq a b) (reduce-float-binary expr-f64-eq a b)]
-    [(expr-f64-neg a) (reduce-float-unary expr-f64-neg a)]
-    [(expr-f64-abs a) (reduce-float-unary expr-f64-abs a)]
-    [(expr-f64-sqrt a) (reduce-float-unary expr-f64-sqrt a)]
+    [(expr-f32-add a b) (reduce-float-binary 32 expr-f32-add a b)]
+    [(expr-f32-sub a b) (reduce-float-binary 32 expr-f32-sub a b)]
+    [(expr-f32-mul a b) (reduce-float-binary 32 expr-f32-mul a b)]
+    [(expr-f32-div a b) (reduce-float-binary 32 expr-f32-div a b)]
+    [(expr-f32-lt a b) (reduce-float-binary 32 expr-f32-lt a b)]
+    [(expr-f32-le a b) (reduce-float-binary 32 expr-f32-le a b)]
+    [(expr-f32-eq a b) (reduce-float-binary 32 expr-f32-eq a b)]
+    [(expr-f32-neg a) (reduce-float-unary 32 expr-f32-neg a)]
+    [(expr-f32-abs a) (reduce-float-unary 32 expr-f32-abs a)]
+    [(expr-f32-sqrt a) (reduce-float-unary 32 expr-f32-sqrt a)]
+    [(expr-f64-add a b) (reduce-float-binary 64 expr-f64-add a b)]
+    [(expr-f64-sub a b) (reduce-float-binary 64 expr-f64-sub a b)]
+    [(expr-f64-mul a b) (reduce-float-binary 64 expr-f64-mul a b)]
+    [(expr-f64-div a b) (reduce-float-binary 64 expr-f64-div a b)]
+    [(expr-f64-lt a b) (reduce-float-binary 64 expr-f64-lt a b)]
+    [(expr-f64-le a b) (reduce-float-binary 64 expr-f64-le a b)]
+    [(expr-f64-eq a b) (reduce-float-binary 64 expr-f64-eq a b)]
+    [(expr-f64-neg a) (reduce-float-unary 64 expr-f64-neg a)]
+    [(expr-f64-abs a) (reduce-float-unary 64 expr-f64-abs a)]
+    [(expr-f64-sqrt a) (reduce-float-unary 64 expr-f64-sqrt a)]
 
     ;; ---- Posit32 iota rules: compute when arguments are posit32 literals ----
 
@@ -2132,6 +2160,30 @@
     [(expr-generic-abs (expr-posit16 a)) (expr-posit16 (posit16-abs a))]
     [(expr-generic-abs (expr-posit32 a)) (expr-posit32 (posit32-abs a))]
     [(expr-generic-abs (expr-posit64 a)) (expr-posit64 (posit64-abs a))]
+
+    ;; ---- Float same-type generic arith (Numerics N3d) ----
+    [(expr-generic-add (expr-float32 a) (expr-float32 b)) (expr-float32 (float32-add a b))]
+    [(expr-generic-add (expr-float64 a) (expr-float64 b)) (expr-float64 (float64-add a b))]
+    [(expr-generic-sub (expr-float32 a) (expr-float32 b)) (expr-float32 (float32-sub a b))]
+    [(expr-generic-sub (expr-float64 a) (expr-float64 b)) (expr-float64 (float64-sub a b))]
+    [(expr-generic-mul (expr-float32 a) (expr-float32 b)) (expr-float32 (float32-mul a b))]
+    [(expr-generic-mul (expr-float64 a) (expr-float64 b)) (expr-float64 (float64-mul a b))]
+    [(expr-generic-div (expr-float32 a) (expr-float32 b)) (expr-float32 (float32-div a b))]
+    [(expr-generic-div (expr-float64 a) (expr-float64 b)) (expr-float64 (float64-div a b))]
+    [(expr-generic-lt (expr-float32 a) (expr-float32 b)) (if (float32-lt? a b) (expr-true) (expr-false))]
+    [(expr-generic-lt (expr-float64 a) (expr-float64 b)) (if (float64-lt? a b) (expr-true) (expr-false))]
+    [(expr-generic-le (expr-float32 a) (expr-float32 b)) (if (float32-le? a b) (expr-true) (expr-false))]
+    [(expr-generic-le (expr-float64 a) (expr-float64 b)) (if (float64-le? a b) (expr-true) (expr-false))]
+    [(expr-generic-gt (expr-float32 a) (expr-float32 b)) (if (float32-lt? b a) (expr-true) (expr-false))]
+    [(expr-generic-gt (expr-float64 a) (expr-float64 b)) (if (float64-lt? b a) (expr-true) (expr-false))]
+    [(expr-generic-ge (expr-float32 a) (expr-float32 b)) (if (float32-le? b a) (expr-true) (expr-false))]
+    [(expr-generic-ge (expr-float64 a) (expr-float64 b)) (if (float64-le? b a) (expr-true) (expr-false))]
+    [(expr-generic-eq (expr-float32 a) (expr-float32 b)) (if (float32-eq? a b) (expr-true) (expr-false))]
+    [(expr-generic-eq (expr-float64 a) (expr-float64 b)) (if (float64-eq? a b) (expr-true) (expr-false))]
+    [(expr-generic-negate (expr-float32 a)) (expr-float32 (float32-neg a))]
+    [(expr-generic-negate (expr-float64 a)) (expr-float64 (float64-neg a))]
+    [(expr-generic-abs (expr-float32 a)) (expr-float32 (float32-abs a))]
+    [(expr-generic-abs (expr-float64 a)) (expr-float64 (float64-abs a))]
 
     ;; generic-from-int: Int -> TargetType conversion based on target type
     [(expr-generic-from-int (expr-Int) (expr-int v))  (expr-int v)]             ; identity

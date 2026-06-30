@@ -108,19 +108,22 @@
 (define (concrete-numeric-type? t)
   (or (expr-Nat? t) (expr-Int? t) (expr-Rat? t)
       (expr-Posit8? t) (expr-Posit16? t)
-      (expr-Posit32? t) (expr-Posit64? t)))
+      (expr-Posit32? t) (expr-Posit64? t)
+      (expr-Float32? t) (expr-Float64? t)))
 
 ;; Types that support division (excludes Nat).
 (define (divisible-numeric-type? t)
   (or (expr-Int? t) (expr-Rat? t)
       (expr-Posit8? t) (expr-Posit16? t)
-      (expr-Posit32? t) (expr-Posit64? t)))
+      (expr-Posit32? t) (expr-Posit64? t)
+      (expr-Float32? t) (expr-Float64? t)))
 
 ;; Types that support negation (excludes Nat).
 (define (negatable-numeric-type? t)
   (or (expr-Int? t) (expr-Rat? t)
       (expr-Posit8? t) (expr-Posit16? t)
-      (expr-Posit32? t) (expr-Posit64? t)))
+      (expr-Posit32? t) (expr-Posit64? t)
+      (expr-Float32? t) (expr-Float64? t)))
 
 ;; Valid target types for from-integer (Int -> T): Int, Rat, Posit8-64.
 (define (from-int-target-type? t)
@@ -163,6 +166,19 @@
   (case r [(0) (expr-Posit8)] [(1) (expr-Posit16)]
           [(2) (expr-Posit32)] [(3) (expr-Posit64)] [else #f]))
 
+;; float-type? — Float32, Float64 (IEEE approximate family; separate rank family
+;; from posit — Posit↔Float has NO numeric-join, explicit conversion only)
+(define (float-type? t)
+  (or (expr-Float32? t) (expr-Float64? t)))
+
+;; Rank within float family: Float32 < Float64
+(define (float-rank t)
+  (cond [(expr-Float32? t) 0] [(expr-Float64? t) 1] [else -1]))
+
+;; Type at a given float rank
+(define (float-type-at-rank r)
+  (case r [(0) (expr-Float32)] [(1) (expr-Float64)] [else #f]))
+
 ;; Phase H: Normalize refined numeric types to their base type.
 ;; PosInt/NegInt/Zero → Int; PosRat/NegRat → Rat; others unchanged.
 ;; Uses the subtype registry to determine the base type.
@@ -201,7 +217,13 @@
        (posit-type-at-rank (max 2 (posit-rank t2)))]
       [(and (posit-type? t1) (exact-numeric-type? t2))
        (posit-type-at-rank (max 2 (posit-rank t1)))]
-      ;; Not numeric types
+      ;; Float family (Numerics N3d): widen within-Float; exact+Float PRESERVES the
+      ;; Float operand's width (NOT a clamp like posit); Posit+Float = no join (→ #f).
+      [(and (float-type? t1) (float-type? t2))
+       (float-type-at-rank (max (float-rank t1) (float-rank t2)))]
+      [(and (exact-numeric-type? t1) (float-type? t2)) t2]
+      [(and (float-type? t1) (exact-numeric-type? t2)) t1]
+      ;; Not numeric types (incl. Posit↔Float — explicit conversion only)
       [else #f])))
 
 ;; Human-readable name for a numeric type expression (for warnings).
@@ -210,6 +232,7 @@
     [(expr-Nat? t) "Nat"] [(expr-Int? t) "Int"] [(expr-Rat? t) "Rat"]
     [(expr-Posit8? t) "Posit8"] [(expr-Posit16? t) "Posit16"]
     [(expr-Posit32? t) "Posit32"] [(expr-Posit64? t) "Posit64"]
+    [(expr-Float32? t) "Float32"] [(expr-Float64? t) "Float64"]
     [else "?"]))
 
 ;; numeric-join with coercion warning: emit a warning when exact→posit coercion occurs.

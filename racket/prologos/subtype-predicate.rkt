@@ -137,6 +137,8 @@
     [((expr-Posit16) (expr-Posit32)) #t]
     [((expr-Posit16) (expr-Posit64)) #t]
     [((expr-Posit32) (expr-Posit64)) #t]
+    ;; Float family (Numerics N3d): within-Float widening (NO Posit↔Float edge)
+    [((expr-Float32) (expr-Float64)) #t]
     [(_ _)
      (let ([k1 (type-key t1)] [k2 (type-key t2)])
        (and k1 k2 (subtype-pair? k1 k2)))]))
