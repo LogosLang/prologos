@@ -2253,7 +2253,18 @@
       (current-file-module-network-ref
        (struct-copy module-network-ref mnr [prop-net driven])))))
 
-(define (process-file path #:verbose [verbose? #f])
+(define (process-file path #:verbose [verbose? #f] #:source-dir [source-dir #f])
+  ;; Resource-path anchoring (relative-path fix, 2026-06-29): a .prologos program's
+  ;; relative `read-file`/`read-csv` paths resolve against the SOURCE FILE's
+  ;; directory (location-independent, mirroring module resolution against an
+  ;; absolute lib root) — NOT the ambient process CWD (which differs between
+  ;; run-file.rkt [repo root] and the LSP/REPL [editor's dir]). Absolutize `path`
+  ;; FIRST (against cwd-at-call) so process-file-inner can re-open the source after
+  ;; current-directory is re-anchored; `source-dir` overrides the anchor for the LSP
+  ;; diagnostics path (which processes a temp copy whose dir is not the real dir).
+  (define abs-path (path->complete-path path))
+  (define-values (file-dir _fname _must-dir) (split-path abs-path))
+  (define anchor-dir (or source-dir (and (path? file-dir) file-dir)))
   ;; Track 10B Phase A1: always scope a fresh network per call.
   ;; PPN 4C Addendum Phase 4A.c-ii-b (lifecycle): bind the in-flight mnr at the
   ;; FILE unit boundary so import edges wired during preparse (action-1) persist
@@ -2271,9 +2282,10 @@
                  ;; 4B.5.a (§18.21.26): the general-body residue + completions
                  ;; (per-file lifetime; scaffolding tier — PM 12B §10 retires).
                  [current-general-residue (box '())]
-                 [current-general-completions (make-hasheq)])
+                 [current-general-completions (make-hasheq)]
+                 [current-directory (or anchor-dir (current-directory))])
     (reset-meta-store!)
-    (process-file-inner path #:verbose verbose?)))
+    (process-file-inner abs-path #:verbose verbose?)))
 
 (define (process-file-inner path #:verbose [verbose? #f])
   (define path-str (if (string? path) path (path->string path)))

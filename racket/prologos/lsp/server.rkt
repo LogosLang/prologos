@@ -390,7 +390,14 @@
      (define code (hash-ref params 'code ""))
      (lsp-log state "REPL loadFile for ~a" uri)
      (define session (get-or-create-session! state uri))
-     (define results (eval-in-session! state session code))
+     ;; Anchor the program's relative resource paths (read-file) at the source
+     ;; file's directory (location-independent), not the editor's process CWD.
+     (define src-dir (source-dir-of (uri->path uri)))
+     (define results
+       (if src-dir
+           (parameterize ([current-directory src-dir])
+             (eval-in-session! state session code))
+           (eval-in-session! state session code)))
      (respond! (hasheq 'results results))]
 
     ;; ---- REPL: Type of expression (Tier 4) ----
@@ -547,7 +554,7 @@
         #:exists 'replace)
       (with-handlers ([exn:fail? (lambda (e)
                                    (set! errors (cons (prologos-error #f (exn-message e)) errors)))])
-        (define results (process-file tmp-path))
+        (define results (process-file tmp-path #:source-dir (source-dir-of file-path)))
         ;; Extract errors from the result list
         (for ([r (in-list (or results '()))])
           (when (prologos-error? r)
@@ -1141,6 +1148,16 @@
      ;; Handle percent-encoded characters
      (regexp-replace* #rx"%20" raw " ")]
     [else uri]))
+
+;; Directory of a path/string (absolutized); #f if undeterminable (e.g. empty/untitled).
+;; Anchors a .prologos program's relative resource paths (read-file) at its source
+;; directory rather than the ambient process CWD (relative-path fix, 2026-06-29).
+(define (source-dir-of path-or-string)
+  (with-handlers ([exn:fail? (lambda (_e) #f)])
+    (and path-or-string
+         (not (equal? path-or-string ""))
+         (let-values ([(d _n _dd) (split-path (path->complete-path path-or-string))])
+           (and (path? d) d)))))
 
 ;; Convert /path/to/file.prologos → file:///path/to/file.prologos
 (define (path->uri path)

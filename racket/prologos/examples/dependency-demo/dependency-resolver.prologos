@@ -7,10 +7,11 @@ ns dep-resolver
 ;; Functional), query it as a (hyper)graph with reusable subqueries
 ;; (Relational), and explain the results (on-network provenance).
 ;;
-;; Run (from the repo root):
+;; Run (from anywhere — relative paths resolve against THIS file's directory):
 ;;   racket racket/prologos/tools/run-file.rkt \
 ;;     racket/prologos/examples/dependency-demo/dependency-resolver.prologos
 ;;   => expect "--- 0 errors ---"
+;; Also loadable directly in the VSCode/Emacs LSP REPL (same anchoring).
 ;;
 ;; P0 = the runnable acceptance core. The ingestion->relation BRIDGE is not yet
 ;; buildable at Level 3; each gap is marked  🎯 TARGET  with the reason (these
@@ -28,10 +29,11 @@ require [prologos::core::io          :refer [read-file]]
 ;; provisions the capability there; a `def`-binding fails E2001). The CSV is
 ;; parsed in PURE Prologos (split / lines) — `prologos::core::csv` (FFI) cannot
 ;; be imported at top level today (E2001 at module load; filed).
+;; Relative path resolves against THIS file's directory — deps.csv is a sibling.
 
 println "== dependency edges (parsed from deps.csv) =="
 map [fn [row : String] [split "," row]]
-    [lines [read-file "racket/prologos/examples/dependency-demo/deps.csv"]]
+    [lines [read-file "deps.csv"]]
 
 ;; 🎯 TARGET (P1/P2/P3): JSON package records -> validate -> load as facts.
 ;;   - no user-facing JSON parser yet (P1)
