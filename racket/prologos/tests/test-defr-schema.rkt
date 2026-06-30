@@ -49,6 +49,23 @@
   (delete-file tmp)
   results)
 
+;; Same as run-prologos-string but via process-string-ws (the WS-string / LSP-REPL
+;; path, which uses the cell pipeline) instead of process-file (merge pipeline).
+;; Guards REPL parity for schema-typed defr — the cell pipeline must emit schema's
+;; type def (form-cells, 2026-06-29).
+(define (run-prologos-string-ws content)
+  (parameterize ([current-ns-context #f]
+                 [current-module-registry (hasheq)]
+                 [current-lib-paths (list lib-dir)]
+                 [current-relation-store (make-relation-store)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (current-trait-registry)]
+                 [current-impl-registry (current-impl-registry)]
+                 [current-param-impl-registry (current-param-impl-registry)]
+                 [current-bundle-registry (current-bundle-registry)])
+    (install-module-loader!)
+    (process-string-ws content)))
+
 (define (check-no-errors results)
   (for ([r (in-list results)])
     (when (prologos-error? r)
@@ -160,3 +177,23 @@
   (check-no-errors results)
   (check-equal? (count-answers (last-result results)) 1
                 "_ wildcard should let the query match (version is don't-care)"))
+
+;; ========================================
+;; 7. Schema-typed defr via the WS-STRING / REPL path (process-string-ws)
+;; ========================================
+;; Regression (2026-06-29): the LSP REPL evaluates via process-string-ws (cell
+;; pipeline), where `schema` was side-effect-only and dropped its emitted type
+;; def — so schema-typed `defr R : Schema` silently failed to register
+;; ("Unknown relation" at solve). The cell pipeline now emits the schema's
+;; `(def Name : (Type 0) (Type 0))`, achieving parity with process-file.
+(test-case "schema-typed defr registers + solves via process-string-ws (REPL path)"
+  (define results
+    (run-prologos-string-ws
+     (string-append PKG-SCHEMA
+       "defr package : Package\n"
+       "  || \"app\"    \"1.0.0\" \"MIT\"\n"
+       "     \"logger\" \"0.9.0\" \"GPL-3.0\"\n\n"
+       "eval (solve (package n v l))\n")))
+  (check-no-errors results)
+  (check-equal? (count-answers (last-result results)) 2
+                "schema-typed package should register + solve to 2 answers via the WS-string path"))

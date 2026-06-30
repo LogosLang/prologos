@@ -287,8 +287,25 @@
             (cond
               ;; Side-effect-only: no surfs
               [(memq tag '(ns imports exports spec deftype bundle defmacro property
-                           functor schema precedence-group specialize))
+                           functor precedence-group specialize))
                acc]
+              ;; `schema` is NOT purely side-effect-only — besides registering its
+              ;; fields, it defines an opaque type `(def Name : (Type 0) (Type 0))`
+              ;; (same pattern as `data`). Emit that def so the type binds in the env,
+              ;; matching process-file's merge path. Without it the cell/REPL path
+              ;; leaves the schema type unbound, so a schema-typed `defr R : Schema`
+              ;; can't elaborate and is silently dropped. (Field registration already
+              ;; happened in preparse-expand-all; nested sub-schema defs are a follow-on.)
+              [(eq? tag 'schema)
+               (let* ([raw-node (hash-ref raw-map line #f)]
+                      [use-node (or raw-node node)]
+                      [datum (and use-node (tree-node-to-datum use-node source-str))]
+                      [flat (and datum (flatten-ws-datum datum))])
+                 (if (and (pair? flat) (>= (length flat) 2) (symbol? (cadr flat)))
+                     (let ([surfs (defs-to-surfs
+                                   (list `(def ,(cadr flat) : (Type 0) (Type 0))))])
+                       (if (null? surfs) acc (cons (cons line surfs) acc)))
+                     acc))]
               ;; Generated-def forms: process-consumed-form returns sexp lists
               [(memq tag '(data trait impl))
                (define gen-defs (process-consumed-form tag node))
