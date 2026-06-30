@@ -12,6 +12,12 @@
 (require rackunit
          "../merge-fn-registry.rkt")
 
+;; Snapshot the process-global registry at file load and restore it at file end
+;; (last form below): the reset-merge-fn-registry! calls in these test cases
+;; otherwise wipe production registrations for sibling tests sharing the same
+;; batch worker (the SRE-registry batch state-isolation flake, 2026-06-29).
+(define merge-fn-registry-snapshot-at-load (save-merge-fn-registry-snapshot))
+
 ;; ========================================
 ;; Fixture helpers
 ;; ========================================
@@ -90,3 +96,6 @@
   (check-exn exn:fail?
              (lambda ()
                (register-merge-fn!/lattice fn #:for-domain "not-a-symbol"))))
+
+;; Restore production registrations wiped by the resets above (see snapshot at top).
+(restore-merge-fn-registry! merge-fn-registry-snapshot-at-load)

@@ -15,7 +15,14 @@
          "../namespace.rkt"
          "../global-env.rkt"  ;; PPN 4C Addendum Phase 4A.c-ii-a: external-definitions-* tests + 4B.2-b prealloc-def-cell!
          "../definition-entry.rkt"  ;; PPN 4C Addendum Phase 4B.2-a: def-bot (pre-alloc keys-leak test)
-         "../macros.rkt")  ;; PPN 4C Addendum Phase 4B.2-b: preparse-expand-all + current-preparse-registry (pass integration test)
+         "../macros.rkt"  ;; PPN 4C Addendum Phase 4B.2-b: preparse-expand-all + current-preparse-registry (pass integration test)
+         ;; 2026-06-29 flake fix: own the precondition for the structural-domain
+         ;; "#:component-paths hard-errors" test (~line 488). That guard needs the
+         ;; classification-lookup wiring AND the 'definition-entry -> 'structural
+         ;; registration, both otherwise driver-exclusive — a silent no-op under
+         ;; bare `raco test`.
+         "../infra-cell-sre-registrations.rkt"
+         "../phase1d-registrations.rkt")
 
 ;; ========================================
 ;; 1. Module Lifecycle Lattice
