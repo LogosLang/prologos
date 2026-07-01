@@ -18,6 +18,7 @@
 
 (require racket/match
          racket/string
+         (only-in racket/flonum flsingle)   ;; Numerics N3f: Float32 single-rounding on marshal-in
          "syntax.rkt"
          "posit-impl.rkt")
 
@@ -34,6 +35,10 @@
          posit32->rational
          posit64->rational
          rational->posit
+         float32->flonum
+         float64->flonum
+         flonum->float32
+         flonum->float64
          prologos-list->racket-list
          racket-list->prologos-list
          parse-foreign-type
@@ -189,6 +194,20 @@
       [else
        (error 'foreign "Cannot marshal to list — not a cons/nil chain: ~a" e)])))
 
+;; Per-width Prologos Float → Racket flonum (Numerics N3f). Rejects mismatched
+;; IR widths so a `Float32`-typed slot won't silently accept an `expr-float64`.
+;; NaN/±Inf pass through unchanged — they are ordinary flonums, so the FFI is
+;; the legitimate NaN/Inf round-trip point (no exact-rational detour).
+(define (float32->flonum e)
+  (match e
+    [(expr-float32 v) v]
+    [_ (error 'foreign "Cannot marshal to Float32 — not a Float32 literal: ~a" e)]))
+
+(define (float64->flonum e)
+  (match e
+    [(expr-float64 v) v]
+    [_ (error 'foreign "Cannot marshal to Float64 — not a Float64 literal: ~a" e)]))
+
 (define (marshal-prologos->racket base-type val)
   (cond
     ;; Compound List type: (List <inner>)
@@ -210,6 +229,8 @@
        [(Posit16) (posit16->rational val)]
        [(Posit32) (posit32->rational val)]
        [(Posit64) (posit64->rational val)]
+       [(Float32) (float32->flonum val)]
+       [(Float64) (float64->flonum val)]
        ;; Passthrough types: the Prologos IR value IS the Racket value
        [(Path Keyword Passthrough) val]
        [else
@@ -265,6 +286,19 @@
          (expr-nil)
          elems))
 
+;; Racket real → Prologos Float literal (Numerics N3f). Accepts any real
+;; (flonum or exact); Float32 rounds the result to single precision (flsingle).
+;; NaN/±Inf marshal cleanly (they are reals; exact->inexact is identity on them).
+(define (flonum->float32 n)
+  (unless (real? n)
+    (error 'foreign "Cannot marshal to Float32: expected a real number, got ~a" n))
+  (expr-float32 (flsingle (exact->inexact n))))
+
+(define (flonum->float64 n)
+  (unless (real? n)
+    (error 'foreign "Cannot marshal to Float64: expected a real number, got ~a" n))
+  (expr-float64 (exact->inexact n)))
+
 (define (marshal-racket->prologos base-type val)
   (cond
     ;; Compound List type: (List <inner>)
@@ -288,6 +322,8 @@
        [(Posit16) (rational->posit 16 val)]
        [(Posit32) (rational->posit 32 val)]
        [(Posit64) (rational->posit 64 val)]
+       [(Float32) (flonum->float32 val)]
+       [(Float64) (flonum->float64 val)]
        ;; Passthrough types: result is already a Prologos IR value
        [(Path Keyword Passthrough) val]
        [else

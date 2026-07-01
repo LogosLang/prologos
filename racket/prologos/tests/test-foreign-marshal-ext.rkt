@@ -382,3 +382,31 @@
   (check-equal? racket-result '(0 1 2 3))
   (define ir-result (out racket-result))
   (check-equal? (marshal-prologos->racket '(List Int) ir-result) '(0 1 2 3)))
+
+;; ========================================
+;; Float marshalling (Numerics N3f)
+;; ========================================
+
+(test-case "ffi-ext/Float64: flonum roundtrip"
+  (check-equal? (marshal-prologos->racket 'Float64 (expr-float64 3.14)) 3.14)
+  (check-equal? (marshal-racket->prologos 'Float64 3.14) (expr-float64 3.14))
+  (check-equal? (marshal-prologos->racket 'Float64 (marshal-racket->prologos 'Float64 2.5)) 2.5))
+
+(test-case "ffi-ext/Float32: single-precision roundtrip"
+  (define f32 (marshal-racket->prologos 'Float32 0.5))
+  (check-pred expr-float32? f32)
+  (check-equal? (marshal-prologos->racket 'Float32 f32) 0.5)
+  ;; exact input marshals via exact->inexact
+  (check-equal? (marshal-prologos->racket 'Float32 (marshal-racket->prologos 'Float32 2)) 2.0))
+
+(test-case "ffi-ext/Float: NaN/Inf round-trip cleanly (the FFI round-trip point)"
+  (check-equal? (marshal-prologos->racket 'Float64 (marshal-racket->prologos 'Float64 +inf.0)) +inf.0)
+  (check-equal? (marshal-prologos->racket 'Float64 (marshal-racket->prologos 'Float64 -inf.0)) -inf.0)
+  ;; NaN ≠ NaN → self-inequality on the round-tripped value
+  (define nan-rt (marshal-prologos->racket 'Float64 (marshal-racket->prologos 'Float64 +nan.0)))
+  (check-true (and (real? nan-rt) (not (= nan-rt nan-rt))) "NaN survives the round-trip"))
+
+(test-case "ffi-ext/Float: rejects width mismatch + non-real"
+  (check-exn exn:fail? (lambda () (marshal-prologos->racket 'Float32 (expr-float64 1.0))))
+  (check-exn exn:fail? (lambda () (marshal-prologos->racket 'Float64 (expr-float32 1.0))))
+  (check-exn exn:fail? (lambda () (marshal-racket->prologos 'Float64 "not a number"))))
