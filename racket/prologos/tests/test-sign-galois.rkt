@@ -75,19 +75,19 @@
       (format "(eval (GaloisConnection-alpha ~a (mk-interval -5 5)))" dict)))
     "sign-top"))
 
-(test-case "alpha: mk-interval 0 10 → sign-top (includes zero at lower bound)"
+(test-case "alpha: mk-interval 0 10 → sign-nonneg (contains zero and positives → ≥0)"
   (check-contains
     (run-ns-last (string-append
       sign-galois-preamble
       (format "(eval (GaloisConnection-alpha ~a (mk-interval 0 10)))" dict)))
-    "sign-top"))
+    "sign-nonneg"))
 
-(test-case "alpha: mk-interval -10 0 → sign-top (includes zero at upper bound)"
+(test-case "alpha: mk-interval -10 0 → sign-nonpos (contains negatives and zero → ≤0)"
   (check-contains
     (run-ns-last (string-append
       sign-galois-preamble
       (format "(eval (GaloisConnection-alpha ~a (mk-interval -10 0)))" dict)))
-    "sign-top"))
+    "sign-nonpos"))
 
 ;; ========================================
 ;; 2. Gamma: Sign → Interval

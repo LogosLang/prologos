@@ -161,7 +161,7 @@
      "(imports [prologos::core::abstract-domains :refer []])\n"
      "(imports [prologos::core::lattice :refer [Lattice Lattice-join]])\n"
      "(eval (Lattice-join Sign--Lattice--dict sign-neg sign-pos))\n"))
-   "sign-top"))
+   "sign-nonzero"))
 
 (test-case "e2e: Parity domain loads and Lattice instance works"
   (check-contains

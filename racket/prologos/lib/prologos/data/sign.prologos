@@ -3,23 +3,34 @@ ns prologos::data::sign
 ;; ========================================
 ;; Sign Domain — Abstract sign analysis
 ;; ========================================
-;; Five-element lattice for sign abstraction:
+;; Eight-element powerset lattice ℘({neg, zero, pos}) — the Boolean cube Q₃.
+;; ⊑ = ⊆   ⊥ = ∅ (sign-bot)   ⊤ = {neg,zero,pos} (sign-top)   join = ∪
 ;;
-;;          sign-top
-;;         /   |   \
-;;   sign-neg sign-zero sign-pos
-;;         \   |   /
-;;          sign-bot
+;;                    sign-top  {neg,zero,pos}
+;;                 /            |             \
+;;        sign-nonpos      sign-nonzero      sign-nonneg
+;;        {neg,zero}       {neg,pos}         {zero,pos}
+;;            |   \         /       \         /   |
+;;         sign-neg     sign-zero       sign-pos
+;;          {neg}         {zero}          {pos}
+;;                 \        |        /
+;;                     sign-bot  ∅
 ;;
-;; sign-bot  = no information (unreachable)
-;; sign-neg  = definitely negative
-;; sign-zero = definitely zero
-;; sign-pos  = definitely positive
-;; sign-top  = unknown sign (could be anything)
+;; sign-bot     = ∅              no information (unreachable)
+;; sign-neg     = {neg}          definitely negative
+;; sign-zero    = {zero}         definitely zero
+;; sign-pos     = {pos}          definitely positive
+;; sign-nonpos  = {neg,zero}     ≤ 0
+;; sign-nonzero = {neg,pos}      ≠ 0
+;; sign-nonneg  = {zero,pos}     ≥ 0
+;; sign-top     = {neg,zero,pos} unknown sign
 
 data Sign
   sign-bot
   sign-neg
   sign-zero
   sign-pos
+  sign-nonpos
+  sign-nonzero
+  sign-nonneg
   sign-top
