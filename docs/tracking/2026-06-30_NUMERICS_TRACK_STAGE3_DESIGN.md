@@ -26,7 +26,7 @@ Add **`Float`** (full IEEE compute primitive, interop numeric), reconceive the *
 | **N0** | Design-phase-1 verification: bridge-soundness check + 2 bounded audits (§8) | — | ⬜ (gate for N5) |
 | **N1** | Exponent lexing (`1e10`→Int, `1.5e-3`→Rat) — exact-at-source, **WS-only** | — | ✅ (dedicated `recognize-exp-literal`; sexp→N4; `tests/test-exp-literal.rkt`) |
 | **N2** | Posit/Quire display fix (wire dead decoder) + shortest-round-tripping + Rat terminating-decimal display | — | ⬜ (cheap; the "inscrutable" fix) |
-| **N3** | `Float` primitive — new rank family (sub-phases N3a–g; see §9) | N1 ✅ | 🔄 **N3a** ✅ + **N3b** ✅ (`db816e65`) + **N3c** literals ✅ (`d90a8245`) + **N3d** numeric-tower (numeric-join Float family + Float32<:Float64 + generic arith) ✅ (`41f8c385`; 4 files; `tests/test-float-tower.rkt`; suite 8437); N3e–g pending |
+| **N3** | `Float` primitive — new rank family (sub-phases N3a–g; see §9) | N1 ✅ | 🔄 **N3a** ✅ + **N3b** ✅ (`db816e65`) + **N3c** literals ✅ (`d90a8245`) + **N3d** numeric-tower (numeric-join Float family + Float32<:Float64 + generic arith) ✅ (`41f8c385`; 4 files; `tests/test-float-tower.rkt`; suite 8437); **N3e-core** (Rat/Int→Float via Path B — the DEMO-P1 unblock) ✅ (`6cc47faf`; `tests/test-float-conversions.rkt`; suite 8442); N3e-rest/N3f/N3g pending |
 | **N4** | Context-typed polymorphic literal model (Q8 D): bare exact literals → type-from-context, unconstrained → exact Rat | N2 (Rat display), N3 (`f` marker) | ⬜ |
 | **N5** | Refinement substrate: `refinement` meta-domain + type↔refinement Galois bridge + arithmetic transfer + subsumption + migrate the 5 refined types | N0 (verification) | ⬜ (the tower reconception) |
 | **N6** | Ergonomics cleanup (fold [2026-02-22 audit](2026-02-22_NUMERICS_ERGONOMICS_AUDIT.org)) + vision/roadmap reconciliation (update `LANGUAGE_VISION.org`; close 2026-02-19 roadmap) | N3–N5 | ⬜ |
@@ -270,6 +270,8 @@ An independent P/R/M/S + completeness review of D.2 + the committed N1/N3a–N3d
 - **P2 — this doc.** Folded §15's corrections into the body: §4.2 (`Sign` is 5-element flat; 8-element net-new), §4.3 (subsumption coordinate `:2476-2485`; §15-D12 transfer), §4.6 (10 ops/width; preserve-width; NaN/Inf ordinary flonums), §5/§13 (N5 function-level, not on-network).
 - **P3 → §4.3a (LOCKED).** The F2-isolation representation invariant — `@d` carried out-of-band (option (ii); the mult-meta precedent), owner-confirmed; general `Type@refinement` → future UCS track.
 - **P4 → §9a.** The N3e mini-design (Path B for the DEMO-P1-critical Rat/Int→Float; Float→Rat = TryFrom→None; N3e-core / N3e-rest split).
+
+**N3e-core LANDED (`6cc47faf`, session 2):** Rat/Int→Float via Path B exactly per §9a — `from-{rat,int}-target-type?` accept Float, `generic-from-{rat,int}` Float arms, `FromInt`/`FromRat` Float instances (bundle participation, 0-error elaboration). `from-rational Float64 r` works L1+L2; the **DEMO-P1 JSON `Rat→JFloat` path is unblocked**. `test-float-conversions.rkt`; suite 8442. N3e-rest (Float→Rat TryFrom→None, Float64→Float32, Posit↔Float) deferred.
 
 Verified SOUND by the review (unchanged): pipeline exhaustiveness for N3a–N3d; width-preservation consistent across both join machineries; Posit↔Float type-error clean; f32 single-rounding; D8 bare-int deferral.
 
