@@ -116,12 +116,12 @@
    "7 : Int"))
 
 (test-case "refined-sub/posrat-in-rat-add"
-  ;; (rat+ (pos-rat 1/2) 3/4) → 5/4 : Rat
+  ;; (rat+ (pos-rat 1/2) 3/4) → 1.25 : Rat
   (check-contains
    (run-ns-last
     (string-append (rs-ns 'rs-b4)
      "(eval (rat+ (pos-rat 1/2) 3/4))\n"))
-   "5/4 : Rat"))
+   "1.25 : Rat"))
 
 (test-case "refined-sub/negrat-in-rat-mul"
   ;; (rat* (neg-rat -2/3) 3) → -2 : Rat

@@ -100,12 +100,12 @@
   ;; Zero for Posit32: posit32 encoding 0 = posit zero
   (define result (run-ns-last (string-append preamble
     "(eval (AdditiveIdentity-zero Posit32--AdditiveIdentity--dict))")))
-  (check-contains result "posit32 0"))
+  (check-contains result "~0 : Posit32"))
 
 (test-case "posit-id/additive-identity-posit8-eval"
   (define result (run-ns-last (string-append preamble
     "(eval (AdditiveIdentity-zero Posit8--AdditiveIdentity--dict))")))
-  (check-contains result "posit8 0"))
+  (check-contains result "~0 : Posit8"))
 
 ;; ========================================
 ;; MultiplicativeIdentity — Posit evaluation
@@ -115,7 +115,7 @@
   ;; One for Posit32: posit32 encoding 1073741824 = 1.0
   (define result (run-ns-last (string-append preamble
     "(eval (MultiplicativeIdentity-one Posit32--MultiplicativeIdentity--dict))")))
-  (check-contains result "posit32 1073741824"))
+  (check-contains result "~1 : Posit32"))
 
 ;; ========================================
 ;; sum — Posit32 list
@@ -128,14 +128,14 @@
     "(eval (sum Posit32--Add--dict Posit32--AdditiveIdentity--dict
       (cons Posit32 ~1 (cons Posit32 ~2 (cons Posit32 ~3 (nil Posit32))))))")))
   (check-contains result "Posit32")
-  ;; 6.0 in Posit32 = encoding 1342177280
-  (check-contains result "posit32"))
+  ;; 6.0 in Posit32 displays as ~6 (Numerics N2)
+  (check-contains result "~6 : Posit32"))
 
 (test-case "posit-id/sum-posit32-empty"
   ;; sum of empty Posit32 list = zero = posit32(0)
   (define result (run-ns-last (string-append preamble
     "(eval (sum Posit32--Add--dict Posit32--AdditiveIdentity--dict (nil Posit32)))")))
-  (check-contains result "posit32 0"))
+  (check-contains result "~0 : Posit32"))
 
 ;; ========================================
 ;; product — Posit32 list
@@ -147,13 +147,13 @@
     "(eval (product Posit32--Mul--dict Posit32--MultiplicativeIdentity--dict
       (cons Posit32 ~2 (cons Posit32 ~3 (nil Posit32)))))")))
   (check-contains result "Posit32")
-  (check-contains result "posit32"))
+  (check-contains result "~6 : Posit32"))
 
 (test-case "posit-id/product-posit32-empty"
   ;; product of empty = one = posit32(1073741824) = 1.0
   (define result (run-ns-last (string-append preamble
     "(eval (product Posit32--Mul--dict Posit32--MultiplicativeIdentity--dict (nil Posit32)))")))
-  (check-contains result "posit32 1073741824"))
+  (check-contains result "~1 : Posit32"))
 
 ;; ========================================
 ;; Posit64 — verify larger width works too

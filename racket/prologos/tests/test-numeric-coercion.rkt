@@ -45,13 +45,13 @@
 ;; ========================================
 
 (test-case "coercion/int+rat"
-  ;; 3 + 1/2 → 7/2 : Rat
+  ;; 3 + 1/2 → 3.5 : Rat
   (check-equal? (run "(eval (+ 3 1/2))")
-                '("7/2 : Rat")))
+                '("3.5 : Rat")))
 
 (test-case "coercion/rat+int"
   (check-equal? (run "(eval (+ 1/2 3))")
-                '("7/2 : Rat")))
+                '("3.5 : Rat")))
 
 (test-case "coercion/nat+rat"
   ;; 2N + 1/3 → 7/3 : Rat
@@ -89,22 +89,22 @@
   ;; 42 + ~1.0 → Posit32, with coercion warning
   (define result (run "(eval (+ 42 ~1.0))"))
   (check-equal? result
-                (list (format "[posit32 ~a] : Posit32\nwarning: implicit coercion from Int to Posit32 (loss of exactness)"
-                              (posit32-encode 43)))))
+                (list (format "~~~a : Posit32\nwarning: implicit coercion from Int to Posit32 (loss of exactness)"
+                              (posit-shortest-decimal 32 (posit32-encode 43))))))
 
 (test-case "coercion/rat+p32"
   ;; 1/2 + ~0.5 → Posit32, with coercion warning
   (define result (run "(eval (+ 1/2 ~0.5))"))
   (check-equal? result
-                (list (format "[posit32 ~a] : Posit32\nwarning: implicit coercion from Rat to Posit32 (loss of exactness)"
-                              (posit32-encode 1)))))
+                (list (format "~~~a : Posit32\nwarning: implicit coercion from Rat to Posit32 (loss of exactness)"
+                              (posit-shortest-decimal 32 (posit32-encode 1))))))
 
 (test-case "coercion/nat+p32"
   ;; 3N + ~1.0 → Posit32, with coercion warning
   (define result (run "(eval (+ 3N ~1.0))"))
   (check-equal? result
-                (list (format "[posit32 ~a] : Posit32\nwarning: implicit coercion from Nat to Posit32 (loss of exactness)"
-                              (posit32-encode 4)))))
+                (list (format "~~~a : Posit32\nwarning: implicit coercion from Nat to Posit32 (loss of exactness)"
+                              (posit-shortest-decimal 32 (posit32-encode 4))))))
 
 ;; ========================================
 ;; Cross-family: exact + Posit64 → Posit64
@@ -115,8 +115,8 @@
   ;; Use from-integer to get a p64 value, then add
   (define result (run "(eval (+ 10 (from-integer <Posit64> 5)))"))
   (check-equal? result
-                (list (format "[posit64 ~a] : Posit64\nwarning: implicit coercion from Int to Posit64 (loss of exactness)"
-                              (posit64-encode 15)))))
+                (list (format "~~~a : Posit64\nwarning: implicit coercion from Int to Posit64 (loss of exactness)"
+                              (posit-shortest-decimal 64 (posit64-encode 15))))))
 
 ;; ========================================
 ;; Within posit family: P8 + P32 → P32
@@ -126,7 +126,7 @@
   ;; from-integer Posit8 2 + ~3.0 → Posit32
   (define result (run "(eval (+ (from-integer <Posit8> 2) ~3.0))"))
   (check-equal? result
-                (list (format "[posit32 ~a] : Posit32" (posit32-encode 5)))))
+                (list (format "~~~a : Posit32" (posit-shortest-decimal 32 (posit32-encode 5))))))
 
 ;; ========================================
 ;; Type inference checks
@@ -150,13 +150,13 @@
 
 (test-case "coercion/int*rat"
   (check-equal? (run "(eval (* 3 1/2))")
-                '("3/2 : Rat")))
+                '("1.5 : Rat")))
 
 (test-case "coercion/nat*p32"
   (define result (run "(eval (* 2N ~3.0))"))
   (check-equal? result
-                (list (format "[posit32 ~a] : Posit32\nwarning: implicit coercion from Nat to Posit32 (loss of exactness)"
-                              (posit32-encode 6)))))
+                (list (format "~~~a : Posit32\nwarning: implicit coercion from Nat to Posit32 (loss of exactness)"
+                              (posit-shortest-decimal 32 (posit32-encode 6))))))
 
 ;; ========================================
 ;; Division with coercion
@@ -181,4 +181,4 @@
 
 (test-case "coercion/same-p32-add"
   (check-equal? (run "(eval (+ ~1.0 ~2.0))")
-                (list (format "[posit32 ~a] : Posit32" (posit32-encode 3)))))
+                (list (format "~~~a : Posit32" (posit-shortest-decimal 32 (posit32-encode 3))))))

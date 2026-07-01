@@ -8,6 +8,9 @@
 
 (require racket/match
          racket/string
+         racket/flonum
+         racket/math
+         "posit-impl.rkt"
          "prelude.rkt"
          "syntax.rkt"
          "sessions.rkt"
@@ -46,6 +49,45 @@
   (if (member candidate names-in-scope)
       (format "~a_~a" base depth)
       candidate))
+
+;; ========================================
+;; Q10-complete numeric display (Numerics N2)
+;; ========================================
+;;
+;; "Display = a re-readable marked literal of the same value."
+;;   - Posit  → ~<shortest-decimal>   (re-parses to Posit via ~ marker)
+;;   - Float64 → <shortest-decimal>f  ;  Float32 → <shortest-decimal>f32
+;;   - Rat    → exact decimal if terminating, else the fraction
+;; Non-finite floats have no re-readable `f`-literal; we print the bare
+;; Racket name (+nan.0 / +inf.0 / -inf.0) — display-only, does not round-trip.
+
+;; Float64 display: `<decimal>f` for finite, bare name for non-finite.
+(define (float64->display v)
+  (cond
+    [(nan? v) "+nan.0"]
+    [(= v +inf.0) "+inf.0"]
+    [(= v -inf.0) "-inf.0"]
+    ;; number->string already yields the shortest round-tripping double decimal.
+    [else (string-append (number->string v) "f")]))
+
+;; Float32 display: `<decimal>f32` for finite, bare name for non-finite.
+;; v is a flonum that is exactly single-representable (flsingle-rounded).
+(define (float32->display v)
+  (cond
+    [(nan? v) "+nan.0"]
+    [(= v +inf.0) "+inf.0"]
+    [(= v -inf.0) "-inf.0"]
+    [else
+     (string-append
+      (shortest-decimal (inexact->exact v)
+                        (lambda (q) (flsingle (exact->inexact q)))
+                        v)
+      "f32")]))
+
+;; Posit display: `~<shortest-decimal>` (or `NaR` for the NaR bit pattern).
+(define (posit->display n v)
+  (let ([s (posit-shortest-decimal n v)])
+    (if (string=? s "NaR") "NaR" (string-append "~" s))))
 
 ;; ========================================
 ;; Pretty-print expressions
@@ -221,7 +263,7 @@
 
     ;; Posit8
     [(expr-Posit8) "Posit8"]
-    [(expr-posit8 v) (format "[posit8 ~a]" v)]
+    [(expr-posit8 v) (posit->display 8 v)]
     [(expr-p8-add a b) (format "[p8+ ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p8-sub a b) (format "[p8- ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p8-mul a b) (format "[p8* ~a ~a]" (pp-expr a names) (pp-expr b names))]
@@ -242,7 +284,7 @@
 
     ;; Posit16
     [(expr-Posit16) "Posit16"]
-    [(expr-posit16 v) (format "[posit16 ~a]" v)]
+    [(expr-posit16 v) (posit->display 16 v)]
     [(expr-p16-add a b) (format "[p16+ ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p16-sub a b) (format "[p16- ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p16-mul a b) (format "[p16* ~a ~a]" (pp-expr a names) (pp-expr b names))]
@@ -263,11 +305,11 @@
 
     ;; Posit32
     [(expr-Posit32) "Posit32"]
-    [(expr-posit32 v) (format "[posit32 ~a]" v)]
+    [(expr-posit32 v) (posit->display 32 v)]
     [(expr-Float32) "Float32"]
-    [(expr-float32 v) (format "[float32 ~a]" v)]
+    [(expr-float32 v) (float32->display v)]
     [(expr-Float64) "Float64"]
-    [(expr-float64 v) (format "[float64 ~a]" v)]
+    [(expr-float64 v) (float64->display v)]
     ;; Float ops (Numerics N3b)
     [(expr-f32-add a b) (format "[f32+ ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-f32-sub a b) (format "[f32- ~a ~a]" (pp-expr a names) (pp-expr b names))]
@@ -314,7 +356,7 @@
 
     ;; Posit64
     [(expr-Posit64) "Posit64"]
-    [(expr-posit64 v) (format "[posit64 ~a]" v)]
+    [(expr-posit64 v) (posit->display 64 v)]
     [(expr-p64-add a b) (format "[p64+ ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p64-sub a b) (format "[p64- ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p64-mul a b) (format "[p64* ~a ~a]" (pp-expr a names) (pp-expr b names))]
@@ -622,7 +664,7 @@
 
     ;; Rat
     [(expr-Rat) "Rat"]
-    [(expr-rat v) (number->string v)]
+    [(expr-rat v) (rat->display-string v)]
     [(expr-rat-add a b) (format "[rat+ ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-rat-sub a b) (format "[rat- ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-rat-mul a b) (format "[rat* ~a ~a]" (pp-expr a names) (pp-expr b names))]

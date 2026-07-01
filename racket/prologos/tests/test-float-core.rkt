@@ -51,8 +51,8 @@
 (test-case "float pretty-print"
   (check-equal? (pp-expr (expr-Float32) '()) "Float32")
   (check-equal? (pp-expr (expr-Float64) '()) "Float64")
-  (check-equal? (pp-expr (expr-float32 3.14) '()) "[float32 3.14]")
-  (check-equal? (pp-expr (expr-float64 3.14) '()) "[float64 3.14]"))
+  (check-equal? (pp-expr (expr-float32 3.14) '()) "3.14f32")
+  (check-equal? (pp-expr (expr-float64 3.14) '()) "3.14f"))
 
 ;; ========================================
 ;; Substitution — leaf (identity, no binders)

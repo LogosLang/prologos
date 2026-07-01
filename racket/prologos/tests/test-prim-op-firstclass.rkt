@@ -66,7 +66,7 @@
   ;; Pre-fix: "Unbound variable rat-abs" (or "Multiplicity violation").
   (check-contains
    (run-last "(eval [map rat-abs '[(rat 1/2) (rat -1/3) (rat -1/6)]])")
-   "1/2"))
+   "0.5"))
 
 (test-case "prim-op-firstclass/pitfall: foldr int+ over an Int list"
   ;; The eigentrust pitfalls doc example: int+ passed to foldr.
@@ -104,7 +104,7 @@
 (test-case "prim-op-firstclass/family: map rat-neg negates rats"
   (check-contains
    (run-last "(eval [map rat-neg '[(rat 1/2) (rat 1/3)]])")
-   "-1/2"))
+   "-0.5"))
 
 ;; ========================================
 ;; Variable binding: def f := int+ — DOCUMENTED BEHAVIOR

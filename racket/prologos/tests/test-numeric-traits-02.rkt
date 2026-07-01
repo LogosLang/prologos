@@ -58,8 +58,8 @@
     "  (Neg-neg A $Neg-A x))\n"
     "(eval (generic-neg (rat 3/5)))\n")))
   (check-true (and (not (null? results))
-                   (string-contains? (last results) "-3/5"))
-              (format "Expected -3/5 in results: ~a" results)))
+                   (string-contains? (last results) "-0.6"))
+              (format "Expected -0.6 (was -3/5) in results: ~a" results)))
 
 
 ;; ========================================
@@ -243,7 +243,7 @@
     "(defn frac-div [x y] where (Fractional A)\n"
     "  (Div-div A $Div-A x y))\n"
     "(eval (frac-div (rat 5/3) (rat 2/3)))\n")))
-  (check-true (string-contains? (last results) "5/2 : Rat")))
+  (check-true (string-contains? (last results) "2.5 : Rat")))
 
 
 ;; ========================================

@@ -33,12 +33,12 @@
 ;; ========================================
 
 (test-case "generic arith over same-type floats"
-  (check-equal? (ws-val "[+ 3.0f64 2.0f64]") "[float64 5.0] : Float64")
-  (check-equal? (ws-val "[- 5.0f64 1.5f64]") "[float64 3.5] : Float64")
-  (check-equal? (ws-val "[* 2.0f32 4.0f32]") "[float32 8.0] : Float32")
-  (check-equal? (ws-val "[/ 9.0f64 3.0f64]") "[float64 3.0] : Float64")
-  (check-equal? (ws-val "[negate 2.5f64]")   "[float64 -2.5] : Float64")
-  (check-equal? (ws-val "[abs -2.5f64]")     "[float64 2.5] : Float64"))
+  (check-equal? (ws-val "[+ 3.0f64 2.0f64]") "5.0f : Float64")
+  (check-equal? (ws-val "[- 5.0f64 1.5f64]") "3.5f : Float64")
+  (check-equal? (ws-val "[* 2.0f32 4.0f32]") "8f32 : Float32")
+  (check-equal? (ws-val "[/ 9.0f64 3.0f64]") "3.0f : Float64")
+  (check-equal? (ws-val "[negate 2.5f64]")   "-2.5f : Float64")
+  (check-equal? (ws-val "[abs -2.5f64]")     "2.5f : Float64"))
 
 ;; ========================================
 ;; numeric-join: exact+Float preserves width; both-float widens
@@ -46,7 +46,7 @@
 
 (test-case "both-float widens (Float32 + Float64 → Float64)"
   ;; both approximate → no coercion warning
-  (check-equal? (ws-val "[+ 2.0f32 3.0f64]") "[float64 5.0] : Float64"))
+  (check-equal? (ws-val "[+ 2.0f32 3.0f64]") "5.0f : Float64"))
 
 ;; The exact+Float width rules are now assertable at WS level (L2): the warning-cell
 ;; LEAK is FIXED (reset-warning-cells! runs per-command in process-command), so
@@ -57,8 +57,8 @@
 
 (test-case "exact+Float width rules at WS level (leak fixed)"
   ;; Int+Float32 PRESERVES Float32 width (not a clamp); value+type via ws-val
-  (check-equal? (ws-val "[+ 1 2.0f32]") "[float32 3.0] : Float32" "Int+Float32 preserves width")
-  (check-equal? (ws-val "[+ 1 2.0f64]") "[float64 3.0] : Float64" "Int+Float64 widens to Float64")
+  (check-equal? (ws-val "[+ 1 2.0f32]") "3f32 : Float32" "Int+Float32 preserves width")
+  (check-equal? (ws-val "[+ 1 2.0f64]") "3.0f : Float64" "Int+Float64 widens to Float64")
   ;; exact→Float emits a loss-of-exactness warning (symmetry with exact→Posit)
   (check-true (string-contains? (ws-full "[+ 1 2.0f32]") "loss of exactness")
               "Int+Float32 warns (exact→approximate)")
@@ -105,7 +105,7 @@
 ;; ========================================
 
 (test-case "regression: exact/posit arithmetic unchanged"
-  (check-equal? (ws-val "3.14") "[posit32 1284463657] : Posit32")
+  (check-equal? (ws-val "3.14") "~3.14 : Posit32")
   (check-true (string-contains? (ws-val "[lt 1 2]") "true") "generic lt over Int still works")
   (check-equal? (ws-val "[+ 2 3]") "5 : Int" "generic + over Int still works"))
 

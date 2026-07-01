@@ -63,7 +63,7 @@
 
 (test-case "prelude-numerics/div-rat"
   ;; Rat division via parser keyword /
-  (check-equal? (run-first "(eval (/ 1/2 1/3))") "3/2 : Rat"))
+  (check-equal? (run-first "(eval (/ 1/2 1/3))") "1.5 : Rat"))
 
 ;; ========================================
 ;; Div and FromRat names available
@@ -103,7 +103,7 @@
 
 (test-case "prelude-numerics/fractional-rat-div"
   ;; Fractional bundle resolves for Rat (Div component)
-  (check-equal? (run-first "(eval (/ 3/4 1/2))") "3/2 : Rat"))
+  (check-equal? (run-first "(eval (/ 3/4 1/2))") "1.5 : Rat"))
 
 (test-case "prelude-numerics/fractional-rat-add"
   ;; Fractional bundle resolves for Rat (Add via Num component)

@@ -103,7 +103,7 @@
    (run-ns-last
     (string-append (rr-ns 'rr-uc2)
      "(eval (neg-rat-val (unsafe-neg-rat -2/5)))\n"))
-   "-2/5"))
+   "-0.4"))
 
 ;; ========================================
 ;; 3. Eq Instances (explicit dict-passing)

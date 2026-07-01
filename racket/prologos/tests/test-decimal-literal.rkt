@@ -85,15 +85,15 @@
 (test-case "decimal-literal/eval-3.14"
   ;; 3.14 → Posit32
   (check-equal? (run "(eval 3.14)")
-                (list (format "[posit32 ~a] : Posit32" (posit32-encode 157/50)))))
+                (list (format "~~~a : Posit32" (posit-shortest-decimal 32 (posit32-encode 157/50))))))
 
 (test-case "decimal-literal/eval-0.5"
   (check-equal? (run "(eval 0.5)")
-                (list (format "[posit32 ~a] : Posit32" (posit32-encode 1/2)))))
+                (list (format "~~~a : Posit32" (posit-shortest-decimal 32 (posit32-encode 1/2))))))
 
 (test-case "decimal-literal/eval-1.0"
   (check-equal? (run "(eval 1.0)")
-                (list (format "[posit32 ~a] : Posit32" (posit32-encode 1)))))
+                (list (format "~~~a : Posit32" (posit-shortest-decimal 32 (posit32-encode 1))))))
 
 (test-case "decimal-literal/check-type"
   ;; 3.14 should type-check as Posit32
@@ -121,12 +121,12 @@
 (test-case "decimal-literal/tilde-unchanged"
   ;; ~3.14 should still produce Posit32 via approx-literal path
   (check-equal? (run "(eval ~3.14)")
-                (list (format "[posit32 ~a] : Posit32" (posit32-encode 157/50)))))
+                (list (format "~~~a : Posit32" (posit-shortest-decimal 32 (posit32-encode 157/50))))))
 
 (test-case "decimal-literal/tilde-integer-unchanged"
   ;; ~42 should still produce Posit32
   (check-equal? (run "(eval ~42)")
-                '("[posit32 1698693120] : Posit32")))
+                '("~42 : Posit32")))
 
 ;; ========================================
 ;; Arithmetic with bare decimals
@@ -135,7 +135,7 @@
 (test-case "decimal-literal/p32-add"
   ;; [p32+ 1.0 2.0] should work
   (check-equal? (run "(eval (p32+ 1.0 2.0))")
-                (list (format "[posit32 ~a] : Posit32" (posit32-encode 3)))))
+                (list (format "~~~a : Posit32" (posit-shortest-decimal 32 (posit32-encode 3))))))
 
 ;; ========================================
 ;; List literal with bare decimals

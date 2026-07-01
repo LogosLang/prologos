@@ -20,7 +20,10 @@
 ;;;
 
 (require racket/match
-         racket/list)
+         racket/list
+         racket/format   ; ~r for sig-digit decimal formatting
+         racket/math     ; log for magnitude computation
+         racket/flonum)  ; flsingle for Float32 round-trip encoding
 
 (provide
  ;; ---- Posit8 ----
@@ -69,7 +72,13 @@
  quire32-fma quire32-to
  quire64-fma quire64-to
  ;; ---- Widening (Phase 3e) ----
- posit-widen)
+ posit-widen
+ ;; ---- Q10-complete numeric display (Numerics N2) ----
+ sig-digits-string shortest-decimal
+ posit-shortest-decimal
+ rat-terminates? rat->display-string
+ ;; generic width-parameterized codecs (for display helpers / tests)
+ posit-encode posit-decode)
 
 ;; ========================================
 ;; Global parameters (2022 Standard)
@@ -360,13 +369,93 @@
 (define (posit-to-rational n v)
   (posit-decode n v))
 
-(define (posit-display n v)
+;; ========================================
+;; Q10-complete numeric display (Numerics N2)
+;; ========================================
+;;
+;; "Display = a re-readable marked literal of the same value."
+;;
+;; The core algorithm computes the FEWEST significant decimal digits whose
+;; formatted + re-parsed + re-encoded value equals the target stored rep.
+;; The re-encode check is the correctness guarantee: any formatting quirk
+;; self-corrects by trying more digits until the round-trip is exact.
+
+;; Format flonum x with d significant digits as a positional decimal string.
+;; d ≥ 1. Uses ~r's exact-places mode; the number of decimal places is derived
+;; from the magnitude so the result carries exactly d significant digits.
+(define (sig-digits-string x d)
+  (if (zero? x)
+      "0"
+      (let* ([mag (inexact->exact (floor (/ (log (abs x)) (log 10))))]
+             [places (max 0 (- d 1 mag))])
+        (~r x #:precision (list '= places) #:notation 'positional))))
+
+;; Shortest round-tripping decimal string for a value.
+;;   exact-r : the exact rational value the target represents
+;;   encode  : exact-rational -> stored-rep (e.g. posit-encode, flsingle∘exact->inexact)
+;;   target  : the stored rep we must round-trip back to
+;; Returns the fewest-significant-digit decimal string that re-encodes to target.
+(define (shortest-decimal exact-r encode target)
+  (if (integer? exact-r)
+      (number->string exact-r)
+      (let ([x (exact->inexact exact-r)])
+        (let loop ([d 1])
+          (if (> d 18)
+              (number->string x)                  ; fallback: shortest double decimal
+              (let* ([s (sig-digits-string x d)]
+                     [p (string->number s)])
+                (if (and p (equal? (encode (inexact->exact p)) target))
+                    s
+                    (loop (add1 d)))))))))
+
+;; Posit display: shortest ~-markable decimal that re-encodes to bits v.
+;; Marker `~` is added by the caller (pretty-print); this returns the bare
+;; decimal (or "NaR" / integer string).
+(define (posit-shortest-decimal n v)
   (let ([r (posit-decode n v)])
     (cond
       [(eq? r 'nar) "NaR"]
       [(zero? r) "0"]
       [(integer? r) (number->string r)]
-      [else (number->string (exact->inexact r))])))
+      [else (shortest-decimal r (lambda (q) (posit-encode n q)) v)])))
+
+;; Legacy name retained for any callers still expecting the old behaviour name;
+;; now returns the shortest re-readable decimal (bare, no `~` marker).
+(define (posit-display n v)
+  (posit-shortest-decimal n v))
+
+;; Does an exact rational terminate as a finite decimal? True iff the
+;; denominator (in lowest terms) factors only into 2 and 5.
+(define (rat-terminates? r)
+  (let loop ([den (denominator r)])
+    (cond [(= den 1) #t]
+          [(zero? (remainder den 2)) (loop (quotient den 2))]
+          [(zero? (remainder den 5)) (loop (quotient den 5))]
+          [else #f])))
+
+;; Display string for an exact rational per Q10:
+;;   - integer            → the integer string ("3", "-5")
+;;   - terminating decimal → the exact finite decimal ("3.14", "0.5")
+;;   - otherwise           → the fraction ("1/3", "3/7")
+;; The terminating case computes the exact number of decimal places from the
+;; 2/5 factorisation, so the ~r result is exact (no rounding).
+(define (rat->display-string r)
+  (cond
+    [(integer? r) (number->string r)]
+    [(rat-terminates? r)
+     ;; Count decimal places: the max power of 2 and of 5 dividing the
+     ;; reduced denominator. k = max(#2s, #5s) is the exact place count for
+     ;; the terminating expansion.
+     (let* ([den (denominator r)]
+            [twos (let loop ([d den] [k 0])
+                    (if (and (> d 1) (zero? (remainder d 2)))
+                        (loop (quotient d 2) (add1 k)) k))]
+            [fives (let loop ([d den] [k 0])
+                     (if (and (> d 1) (zero? (remainder d 5)))
+                         (loop (quotient d 5) (add1 k)) k))]
+            [places (max twos fives)])
+       (~r r #:precision (list '= places) #:notation 'positional))]
+    [else (number->string r)]))
 
 ;; ========================================
 ;; Posit8 wrappers (backward-compatible)

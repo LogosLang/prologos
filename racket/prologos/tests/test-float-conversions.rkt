@@ -43,12 +43,12 @@
 ;; ========================================
 
 (test-case "from-rational / from-integer Float at WS level"
-  (check-equal? (ws-val "[from-integer Float64 3]") "[float64 3.0] : Float64")
-  (check-equal? (ws-val "[from-integer Float32 5]") "[float32 5.0] : Float32")
-  (check-equal? (ws-val "[from-rational Float64 [from-int 7]]") "[float64 7.0] : Float64")
-  (check-equal? (ws-val "[from-rational Float32 [from-int 2]]") "[float32 2.0] : Float32")
+  (check-equal? (ws-val "[from-integer Float64 3]") "3.0f : Float64")
+  (check-equal? (ws-val "[from-integer Float32 5]") "5f32 : Float32")
+  (check-equal? (ws-val "[from-rational Float64 [from-int 7]]") "7.0f : Float64")
+  (check-equal? (ws-val "[from-rational Float32 [from-int 2]]") "2f32 : Float32")
   ;; composes with Float arithmetic (result is Float64 + Float64)
-  (check-equal? (ws-val "[+ 1.0f64 [from-integer Float64 2]]") "[float64 3.0] : Float64"))
+  (check-equal? (ws-val "[+ 1.0f64 [from-integer Float64 2]]") "3.0f : Float64"))
 
 ;; ========================================
 ;; N3e-rest — L1: reverse Float -> {Rat, Int, Bool, Float32} conversion arms
@@ -93,10 +93,10 @@
 ;; ========================================
 
 (test-case "reverse Float conversions at WS level"
-  (check-equal? (ws-val "[float-to-rat 0.5f64]")     "1/2 : Rat")
-  (check-equal? (ws-val "[float-to-rat 0.25f32]")    "1/4 : Rat")
+  (check-equal? (ws-val "[float-to-rat 0.5f64]")     "0.5 : Rat")
+  (check-equal? (ws-val "[float-to-rat 0.25f32]")    "0.25 : Rat")
   (check-equal? (ws-val "[float-finite? 3.0f64]")    "true : Bool")
   (check-equal? (ws-val "[float-finite? [f64/ 1.0f64 0.0f64]]") "false : Bool")
   (check-equal? (ws-val "[float-to-int 3.7f64]")     "3 : Int")
   (check-equal? (ws-val "[float-to-int -2.9f64]")    "-2 : Int")
-  (check-equal? (ws-val "[float-to-float32 2.5f64]") "[float32 2.5] : Float32"))
+  (check-equal? (ws-val "[float-to-float32 2.5f64]") "2.5f32 : Float32"))

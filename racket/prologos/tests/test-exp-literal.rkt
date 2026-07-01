@@ -82,10 +82,10 @@
   (check-equal? (run-ns-ws-last "1e10") "10000000000 : Int"))
 
 (test-case "exp-literal/ws-eval-1.5e-3-Rat"
-  (check-equal? (run-ns-ws-last "1.5e-3") "3/2000 : Rat"))
+  (check-equal? (run-ns-ws-last "1.5e-3") "0.0015 : Rat"))
 
 (test-case "exp-literal/ws-eval-neg-1.5e-3-Rat"
-  (check-equal? (run-ns-ws-last "-1.5e-3") "-3/2000 : Rat"))
+  (check-equal? (run-ns-ws-last "-1.5e-3") "-0.0015 : Rat"))
 
 (test-case "exp-literal/ws-eval-2e3-Int"
   (check-equal? (run-ns-ws-last "2e3") "2000 : Int"))
@@ -159,5 +159,5 @@
   (delete-file tmp)
   (check-true (and (member "10000000000 : Int" results) #t)
               "L3: 1e10 -> Int in a real .prologos file")
-  (check-true (and (member "3/2000 : Rat" results) #t)
+  (check-true (and (member "0.0015 : Rat" results) #t)
               "L3: 1.5e-3 -> Rat in a real .prologos file"))

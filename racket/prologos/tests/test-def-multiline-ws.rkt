@@ -160,7 +160,8 @@
   (check-true (string? result)
               (format "expected evaluation result string, got: ~v" result))
   ;; The value should print as the list literal we bound.
-  (check-true (regexp-match? #rx"1/2 1/2 1/2" result)
+  ;; Numerics N2: terminating rats display as decimals, so 1/2 → 0.5.
+  (check-true (regexp-match? #rx"0.5 0.5 0.5" result)
               (format "expected bound value to print, got: ~v" result)))
 
 (test-case "two-line def: result matches one-line def"

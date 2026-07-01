@@ -126,7 +126,7 @@
     "(imports [prologos::core::arithmetic :refer [Div Div-div]])\n"
     "(imports [prologos::core::arithmetic :refer []])\n"
     "(eval (Div-div Rat Rat--Div--dict (rat 5/3) (rat 2/3)))\n")))
-  (check-true (string-contains? (format "~a" r) "5/2 : Rat")))
+  (check-true (string-contains? (format "~a" r) "2.5 : Rat")))
 
 
 (test-case "neg/int-direct"

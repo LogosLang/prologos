@@ -53,7 +53,7 @@
 (test-case "surface/p8-from-rat-roundtrip"
   ;; Encode 1/2 to posit8 then decode back to rat
   (define r (run-ns-strings "(ns t)(eval (p8-to-rat (p8-from-rat (rat 1/2))))"))
-  (check-true (string-contains? (last r) "1/2 : Rat")))
+  (check-true (string-contains? (last r) "0.5 : Rat")))
 
 
 (test-case "surface/p32-from-int-then-to-rat"
