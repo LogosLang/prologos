@@ -161,6 +161,47 @@ impl TryFrom Int Posit64
     some Posit64 [p64-from-int i]
 
 ;; ========================================
+;; Float -> Rat / Int (Numerics N3e-rest) — None on NaN/±Inf
+;; ========================================
+;; float-finite? guards the conversion: NaN and ±Inf have no exact rational /
+;; integer representation, so try-from returns none for them; float-to-rat /
+;; float-to-int are total on the finite subset. Both Float widths supported
+;; (float-to-rat / float-to-int / float-finite? pattern-match on either width).
+
+impl TryFrom Float64 Rat
+  defn try-from [x : Float64] <Option Rat>
+    match [float-finite? x]
+      | true  -> some Rat [float-to-rat x]
+      | false -> none Rat
+
+impl TryFrom Float32 Rat
+  defn try-from [x : Float32] <Option Rat>
+    match [float-finite? x]
+      | true  -> some Rat [float-to-rat x]
+      | false -> none Rat
+
+impl TryFrom Float64 Int
+  defn try-from [x : Float64] <Option Int>
+    match [float-finite? x]
+      | true  -> some Int [float-to-int x]
+      | false -> none Int
+
+impl TryFrom Float32 Int
+  defn try-from [x : Float32] <Option Int>
+    match [float-finite? x]
+      | true  -> some Int [float-to-int x]
+      | false -> none Int
+
+;; ========================================
+;; Float64 -> Float32 (Numerics N3e-rest) — narrowing, lossy but total
+;; ========================================
+;; float-to-float32 handles NaN/±Inf via flsingle, so this never fails.
+
+impl TryFrom Float64 Float32
+  defn try-from [x : Float64] <Option Float32>
+    some Float32 [float-to-float32 x]
+
+;; ========================================
 ;; Into Trait — reversed From (convenience)
 ;; ========================================
 ;; Into A B = A -> B (single-method: dict IS the function)

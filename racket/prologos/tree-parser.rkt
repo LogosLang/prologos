@@ -326,6 +326,9 @@
    "not" surf-not
    ;; Nat
    "suc" surf-suc
+   ;; Cross-width Float conversions (Numerics N3e-rest)
+   "float-finite?" surf-float-finite  "float-to-rat" surf-float-to-rat
+   "float-to-int" surf-float-to-int   "float-to-float32" surf-float-to-float32
    ))
 
 ;; ========================================

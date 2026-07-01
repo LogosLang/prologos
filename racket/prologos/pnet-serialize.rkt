@@ -350,6 +350,9 @@
                    (list expr-f64-add expr-f64-sub expr-f64-mul expr-f64-div expr-f64-eq expr-f64-lt expr-f64-le expr-f64-neg expr-f64-abs expr-f64-sqrt))])
     (for ([op ops])
       (auto-cache! op d) (auto-cache! op d d)))
+  ;; Cross-width Float conversions (Numerics N3e-rest) — unary
+  (for ([op (list expr-float-finite expr-float-to-rat expr-float-to-int expr-float-to-float32)])
+    (auto-cache! op d))
   ;; Int/Rat ops
   (for ([op (list expr-int-add expr-int-sub expr-int-mul expr-int-div expr-int-lt expr-int-eq)])
     (auto-cache! op d d))

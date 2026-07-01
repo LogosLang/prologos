@@ -1842,6 +1842,32 @@
     [(expr-f64-abs a) (reduce-float-unary 64 expr-f64-abs a)]
     [(expr-f64-sqrt a) (reduce-float-unary 64 expr-f64-sqrt a)]
 
+    ;; ---- Cross-width Float conversions (Numerics N3e-rest) ----
+    ;; Value cases for BOTH float widths. `rational?` guards exclude NaN/±Inf so
+    ;; float-to-rat / float-to-int never hit `inexact->exact` on a non-rational.
+    ;; float-finite? : Float -> Bool
+    [(expr-float-finite (expr-float64 v)) (if (rational? v) (expr-true) (expr-false))]
+    [(expr-float-finite (expr-float32 v)) (if (rational? v) (expr-true) (expr-false))]
+    ;; float-to-rat : Float -> Rat (finite only; NaN/±Inf → falls through to stuck)
+    [(expr-float-to-rat (expr-float64 v)) #:when (rational? v) (expr-rat (inexact->exact v))]
+    [(expr-float-to-rat (expr-float32 v)) #:when (rational? v) (expr-rat (inexact->exact v))]
+    ;; float-to-int : Float -> Int (truncate toward zero; finite only)
+    [(expr-float-to-int (expr-float64 v)) #:when (rational? v) (expr-int (inexact->exact (truncate v)))]
+    [(expr-float-to-int (expr-float32 v)) #:when (rational? v) (expr-int (inexact->exact (truncate v)))]
+    ;; float-to-float32 : Float -> Float32 (narrowing; total — flsingle handles NaN/±Inf)
+    [(expr-float-to-float32 (expr-float64 v)) (expr-float32 (flsingle v))]
+    [(expr-float-to-float32 (expr-float32 v)) (expr-float32 v)]
+    ;; Stuck-term reduction: reduce operand then retry. NaN/±Inf float-to-rat /
+    ;; float-to-int reach here (value guard failed) and stay stuck without crashing.
+    [(expr-float-finite a)
+     (let ([a* (whnf a)]) (if (equal? a* a) (expr-float-finite a) (whnf (expr-float-finite a*))))]
+    [(expr-float-to-rat a)
+     (let ([a* (whnf a)]) (if (equal? a* a) (expr-float-to-rat a) (whnf (expr-float-to-rat a*))))]
+    [(expr-float-to-int a)
+     (let ([a* (whnf a)]) (if (equal? a* a) (expr-float-to-int a) (whnf (expr-float-to-int a*))))]
+    [(expr-float-to-float32 a)
+     (let ([a* (whnf a)]) (if (equal? a* a) (expr-float-to-float32 a) (whnf (expr-float-to-float32 a*))))]
+
     ;; ---- Posit32 iota rules: compute when arguments are posit32 literals ----
 
     ;; Binary arithmetic on literals
@@ -3370,6 +3396,11 @@
     [(expr-f64-lt a b) (expr-f64-lt (nf a) (nf b))]
     [(expr-f64-le a b) (expr-f64-le (nf a) (nf b))]
     [(expr-f64-eq a b) (expr-f64-eq (nf a) (nf b))]
+    ;; Cross-width Float conversions (Numerics N3e-rest)
+    [(expr-float-finite a) (expr-float-finite (nf a))]
+    [(expr-float-to-rat a) (expr-float-to-rat (nf a))]
+    [(expr-float-to-int a) (expr-float-to-int (nf a))]
+    [(expr-float-to-float32 a) (expr-float-to-float32 (nf a))]
     [(expr-p32-add a b) (expr-p32-add (nf a) (nf b))]
     [(expr-p32-sub a b) (expr-p32-sub (nf a) (nf b))]
     [(expr-p32-mul a b) (expr-p32-mul (nf a) (nf b))]

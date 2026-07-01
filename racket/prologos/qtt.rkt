@@ -870,6 +870,20 @@
      (let ([r1 (checkQ ctx a (expr-Float64))] [r2 (checkQ ctx b (expr-Float64))])
        (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))] [(_ _) (tu-error)]))]
 
+    ;; ---- Cross-width Float conversions (Numerics N3e-rest): arg Float32 OR Float64 ----
+    [(expr-float-finite a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu ta u) #:when (let ([w (whnf ta)]) (or (expr-Float32? w) (expr-Float64? w))) (tu (expr-Bool) u)] [_ (tu-error)]))]
+    [(expr-float-to-rat a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu ta u) #:when (let ([w (whnf ta)]) (or (expr-Float32? w) (expr-Float64? w))) (tu (expr-Rat) u)] [_ (tu-error)]))]
+    [(expr-float-to-int a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu ta u) #:when (let ([w (whnf ta)]) (or (expr-Float32? w) (expr-Float64? w))) (tu (expr-Int) u)] [_ (tu-error)]))]
+    [(expr-float-to-float32 a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu ta u) #:when (let ([w (whnf ta)]) (or (expr-Float32? w) (expr-Float64? w))) (tu (expr-Float32) u)] [_ (tu-error)]))]
+
     ;; ---- Posit32 binary operations ----
     ;; Binary ops: Posit32 -> Posit32 -> Posit32
     [(expr-p32-add a b)

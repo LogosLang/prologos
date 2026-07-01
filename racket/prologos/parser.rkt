@@ -58,6 +58,8 @@
     ;; Float ops (Numerics N3b) — Float32/Float64 type names dispatch as type-symbols
     f32+ f32- f32* f32/ f32-neg f32-abs f32-sqrt f32-lt f32-le f32-eq
     f64+ f64- f64* f64/ f64-neg f64-abs f64-sqrt f64-lt f64-le f64-eq
+    ;; Cross-width Float conversions (Numerics N3e-rest)
+    float-finite? float-to-rat float-to-int float-to-float32
     Quire8 q8-zero q8-fma q8-to
     Quire16 q16-zero q16-fma q16-to
     Quire32 q32-zero q32-fma q32-to
@@ -1557,6 +1559,19 @@
         (or (check-arity 'f64-eq args 2 loc)
             (let ([a (parse-datum (car args))] [b (parse-datum (cadr args))])
               (cond [(prologos-error? a) a] [(prologos-error? b) b] [else (surf-f64-eq a b loc)])))]
+       ;; Cross-width Float conversions (Numerics N3e-rest)
+       [(float-finite?)
+        (or (check-arity 'float-finite? args 1 loc)
+            (let ([a (parse-datum (car args))]) (if (prologos-error? a) a (surf-float-finite a loc))))]
+       [(float-to-rat)
+        (or (check-arity 'float-to-rat args 1 loc)
+            (let ([a (parse-datum (car args))]) (if (prologos-error? a) a (surf-float-to-rat a loc))))]
+       [(float-to-int)
+        (or (check-arity 'float-to-int args 1 loc)
+            (let ([a (parse-datum (car args))]) (if (prologos-error? a) a (surf-float-to-int a loc))))]
+       [(float-to-float32)
+        (or (check-arity 'float-to-float32 args 1 loc)
+            (let ([a (parse-datum (car args))]) (if (prologos-error? a) a (surf-float-to-float32 a loc))))]
        [(p32+)
         (or (check-arity 'p32+ args 2 loc)
             (let ([a (parse-datum (car args))]

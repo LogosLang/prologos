@@ -177,6 +177,11 @@
     [(expr-f64-lt a b) (expr-f64-lt (shift delta cutoff a) (shift delta cutoff b))]
     [(expr-f64-le a b) (expr-f64-le (shift delta cutoff a) (shift delta cutoff b))]
     [(expr-f64-eq a b) (expr-f64-eq (shift delta cutoff a) (shift delta cutoff b))]
+    ;; Cross-width Float conversions (Numerics N3e-rest)
+    [(expr-float-finite a) (expr-float-finite (shift delta cutoff a))]
+    [(expr-float-to-rat a) (expr-float-to-rat (shift delta cutoff a))]
+    [(expr-float-to-int a) (expr-float-to-int (shift delta cutoff a))]
+    [(expr-float-to-float32 a) (expr-float-to-float32 (shift delta cutoff a))]
     [(expr-p32-add a b) (expr-p32-add (shift delta cutoff a) (shift delta cutoff b))]
     [(expr-p32-sub a b) (expr-p32-sub (shift delta cutoff a) (shift delta cutoff b))]
     [(expr-p32-mul a b) (expr-p32-mul (shift delta cutoff a) (shift delta cutoff b))]
@@ -643,6 +648,11 @@
     [(expr-f64-lt a b) (expr-f64-lt (subst k s a) (subst k s b))]
     [(expr-f64-le a b) (expr-f64-le (subst k s a) (subst k s b))]
     [(expr-f64-eq a b) (expr-f64-eq (subst k s a) (subst k s b))]
+    ;; Cross-width Float conversions (Numerics N3e-rest)
+    [(expr-float-finite a) (expr-float-finite (subst k s a))]
+    [(expr-float-to-rat a) (expr-float-to-rat (subst k s a))]
+    [(expr-float-to-int a) (expr-float-to-int (subst k s a))]
+    [(expr-float-to-float32 a) (expr-float-to-float32 (subst k s a))]
     [(expr-p32-add a b) (expr-p32-add (subst k s a) (subst k s b))]
     [(expr-p32-sub a b) (expr-p32-sub (subst k s a) (subst k s b))]
     [(expr-p32-mul a b) (expr-p32-mul (subst k s a) (subst k s b))]

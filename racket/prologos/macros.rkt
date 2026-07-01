@@ -8714,6 +8714,7 @@
     Posit64 posit64 p64+ p64- p64* p64/ p64-neg p64-abs p64-sqrt p64-lt p64-le p64-from-nat p64-if-nar
     Float32 float32 f32+ f32- f32* f32/ f32-neg f32-abs f32-sqrt f32-lt f32-le f32-eq
     Float64 float64 f64+ f64- f64* f64/ f64-neg f64-abs f64-sqrt f64-lt f64-le f64-eq
+    float-finite? float-to-rat float-to-int float-to-float32
     Quire8 q8-zero q8-fma q8-to
     Quire16 q16-zero q16-fma q16-to
     Quire32 q32-zero q32-fma q32-to

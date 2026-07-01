@@ -289,6 +289,11 @@
     [(expr-f64-lt a b) (format "[f64-lt ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-f64-le a b) (format "[f64-le ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-f64-eq a b) (format "[f64-eq ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    ;; Cross-width Float conversions (Numerics N3e-rest)
+    [(expr-float-finite a) (format "[float-finite? ~a]" (pp-expr a names))]
+    [(expr-float-to-rat a) (format "[float-to-rat ~a]" (pp-expr a names))]
+    [(expr-float-to-int a) (format "[float-to-int ~a]" (pp-expr a names))]
+    [(expr-float-to-float32 a) (format "[float-to-float32 ~a]" (pp-expr a names))]
     [(expr-p32-add a b) (format "[p32+ ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p32-sub a b) (format "[p32- ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p32-mul a b) (format "[p32* ~a ~a]" (pp-expr a names) (pp-expr b names))]
@@ -985,6 +990,11 @@
     [(expr-f64-lt a b) (or (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-f64-le a b) (or (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-f64-eq a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    ;; Cross-width Float conversions (Numerics N3e-rest)
+    [(expr-float-finite a) (uses-bvar0? a)]
+    [(expr-float-to-rat a) (uses-bvar0? a)]
+    [(expr-float-to-int a) (uses-bvar0? a)]
+    [(expr-float-to-float32 a) (uses-bvar0? a)]
     [(expr-p32-add a b) (or (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-p32-sub a b) (or (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-p32-mul a b) (or (uses-bvar0? a) (uses-bvar0? b))]

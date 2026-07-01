@@ -1672,6 +1672,15 @@
     [(surf-f64-eq a b loc)
      (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
        (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f64-eq ea eb)]))]
+    ;; Cross-width Float conversions (Numerics N3e-rest)
+    [(surf-float-finite a loc)
+     (let ([ea (elaborate a env depth)]) (if (prologos-error? ea) ea (expr-float-finite ea)))]
+    [(surf-float-to-rat a loc)
+     (let ([ea (elaborate a env depth)]) (if (prologos-error? ea) ea (expr-float-to-rat ea)))]
+    [(surf-float-to-int a loc)
+     (let ([ea (elaborate a env depth)]) (if (prologos-error? ea) ea (expr-float-to-int ea)))]
+    [(surf-float-to-float32 a loc)
+     (let ([ea (elaborate a env depth)]) (if (prologos-error? ea) ea (expr-float-to-float32 ea)))]
     [(surf-p32-add a b loc)
      (let ([ea (elaborate a env depth)]
            [eb (elaborate b env depth)])

@@ -143,6 +143,9 @@
  (struct-out expr-f64-add) (struct-out expr-f64-sub) (struct-out expr-f64-mul) (struct-out expr-f64-div)
  (struct-out expr-f64-neg) (struct-out expr-f64-abs) (struct-out expr-f64-sqrt)
  (struct-out expr-f64-lt) (struct-out expr-f64-le) (struct-out expr-f64-eq)
+ ;; Cross-width Float conversions (Numerics N3e-rest)
+ (struct-out expr-float-finite) (struct-out expr-float-to-rat)
+ (struct-out expr-float-to-int) (struct-out expr-float-to-float32)
  ;; Quire accumulators (exact product sums for posit types)
  (struct-out expr-Quire8) (struct-out expr-quire8-val)
  (struct-out expr-quire8-fma) (struct-out expr-quire8-to)
@@ -559,6 +562,13 @@
 (struct expr-f64-lt (a b) #:transparent)
 (struct expr-f64-le (a b) #:transparent)
 (struct expr-f64-eq (a b) #:transparent)
+;; Cross-width Float conversions (Numerics N3e-rest) — accept Float32 OR Float64.
+;; `float-finite?` : Float -> Bool ; float-to-rat : Float -> Rat (NaN/±Inf stuck);
+;; float-to-int : Float -> Int (truncate) ; float-to-float32 : Float -> Float32.
+(struct expr-float-finite (a) #:transparent)      ; Float -> Bool  (keyword: float-finite?)
+(struct expr-float-to-rat (a) #:transparent)      ; Float -> Rat
+(struct expr-float-to-int (a) #:transparent)      ; Float -> Int
+(struct expr-float-to-float32 (a) #:transparent)  ; Float -> Float32
 
 ;; ========================================
 ;; Quire accumulators (exact product sums for posit types)
@@ -1102,6 +1112,7 @@
       (expr-f64-add? x) (expr-f64-sub? x) (expr-f64-mul? x) (expr-f64-div? x)
       (expr-f64-neg? x) (expr-f64-abs? x) (expr-f64-sqrt? x)
       (expr-f64-lt? x) (expr-f64-le? x) (expr-f64-eq? x)
+      (expr-float-finite? x) (expr-float-to-rat? x) (expr-float-to-int? x) (expr-float-to-float32? x)
       (expr-Int? x) (expr-int? x)
       (expr-int-add? x) (expr-int-sub? x) (expr-int-mul? x)
       (expr-int-div? x) (expr-int-mod? x)

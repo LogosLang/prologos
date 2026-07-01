@@ -164,6 +164,9 @@
  (struct-out surf-f64-add) (struct-out surf-f64-sub) (struct-out surf-f64-mul) (struct-out surf-f64-div)
  (struct-out surf-f64-neg) (struct-out surf-f64-abs) (struct-out surf-f64-sqrt)
  (struct-out surf-f64-lt) (struct-out surf-f64-le) (struct-out surf-f64-eq)
+ ;; Cross-width Float conversions (Numerics N3e-rest)
+ (struct-out surf-float-finite) (struct-out surf-float-to-rat)
+ (struct-out surf-float-to-int) (struct-out surf-float-to-float32)
  (struct-out surf-p32-add)
  (struct-out surf-p32-sub)
  (struct-out surf-p32-mul)
@@ -729,6 +732,11 @@
 (struct surf-f64-lt (a b srcloc) #:transparent)
 (struct surf-f64-le (a b srcloc) #:transparent)
 (struct surf-f64-eq (a b srcloc) #:transparent)
+;; Cross-width Float conversions (Numerics N3e-rest) — keyword float-finite? etc.
+(struct surf-float-finite (a srcloc) #:transparent)
+(struct surf-float-to-rat (a srcloc) #:transparent)
+(struct surf-float-to-int (a srcloc) #:transparent)
+(struct surf-float-to-float32 (a srcloc) #:transparent)
 
 ;; Posit32 literal: (posit32 <integer>)
 (struct surf-posit32 (val srcloc) #:transparent)

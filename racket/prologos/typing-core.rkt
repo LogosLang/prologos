@@ -1045,6 +1045,16 @@
     [(expr-f64-le a b) (if (and (check ctx a (expr-Float64)) (check ctx b (expr-Float64))) (expr-Bool) (expr-error))]
     [(expr-f64-eq a b) (if (and (check ctx a (expr-Float64)) (check ctx b (expr-Float64))) (expr-Bool) (expr-error))]
 
+    ;; Cross-width Float conversions (Numerics N3e-rest): arg is Float32 OR Float64.
+    [(expr-float-finite a)
+     (if (float-type? (whnf (infer ctx a))) (expr-Bool) (expr-error))]
+    [(expr-float-to-rat a)
+     (if (float-type? (whnf (infer ctx a))) (expr-Rat) (expr-error))]
+    [(expr-float-to-int a)
+     (if (float-type? (whnf (infer ctx a))) (expr-Int) (expr-error))]
+    [(expr-float-to-float32 a)
+     (if (float-type? (whnf (infer ctx a))) (expr-Float32) (expr-error))]
+
     ;; Binary arithmetic: Posit32 -> Posit32 -> Posit32
     [(expr-p32-add a b)
      (if (and (check ctx a (expr-Posit32)) (check ctx b (expr-Posit32)))
