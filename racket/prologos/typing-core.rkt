@@ -125,17 +125,19 @@
       (expr-Posit32? t) (expr-Posit64? t)
       (expr-Float32? t) (expr-Float64? t)))
 
-;; Valid target types for from-integer (Int -> T): Int, Rat, Posit8-64.
+;; Valid target types for from-integer (Int -> T): Int, Rat, Posit8-64, Float32/64 (N3e).
 (define (from-int-target-type? t)
   (or (expr-Int? t) (expr-Rat? t)
       (expr-Posit8? t) (expr-Posit16? t)
-      (expr-Posit32? t) (expr-Posit64? t)))
+      (expr-Posit32? t) (expr-Posit64? t)
+      (expr-Float32? t) (expr-Float64? t)))
 
-;; Valid target types for from-rational (Rat -> T): Rat, Posit8-64.
+;; Valid target types for from-rational (Rat -> T): Rat, Posit8-64, Float32/64 (N3e).
 (define (from-rat-target-type? t)
   (or (expr-Rat? t)
       (expr-Posit8? t) (expr-Posit16? t)
-      (expr-Posit32? t) (expr-Posit64? t)))
+      (expr-Posit32? t) (expr-Posit64? t)
+      (expr-Float32? t) (expr-Float64? t)))
 
 ;; ========================================
 ;; Numeric type join (least upper bound)

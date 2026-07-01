@@ -2215,6 +2215,8 @@
     [(expr-generic-from-int (expr-Posit16) (expr-int v)) (expr-posit16 (posit16-encode v))]
     [(expr-generic-from-int (expr-Posit32) (expr-int v)) (expr-posit32 (posit32-encode v))]
     [(expr-generic-from-int (expr-Posit64) (expr-int v)) (expr-posit64 (posit64-encode v))]
+    [(expr-generic-from-int (expr-Float32) (expr-int v)) (expr-float32 (flsingle (exact->inexact v)))]  ; Int -> Float32 (N3e)
+    [(expr-generic-from-int (expr-Float64) (expr-int v)) (expr-float64 (exact->inexact v))]              ; Int -> Float64 (N3e)
 
     ;; generic-from-rat: Rat -> TargetType conversion based on target type
     [(expr-generic-from-rat (expr-Rat) (expr-rat v))  (expr-rat v)]             ; identity
@@ -2222,6 +2224,8 @@
     [(expr-generic-from-rat (expr-Posit16) (expr-rat v)) (expr-posit16 (posit16-encode v))]
     [(expr-generic-from-rat (expr-Posit32) (expr-rat v)) (expr-posit32 (posit32-encode v))]
     [(expr-generic-from-rat (expr-Posit64) (expr-rat v)) (expr-posit64 (posit64-encode v))]
+    [(expr-generic-from-rat (expr-Float32) (expr-rat v)) (expr-float32 (flsingle (exact->inexact v)))]  ; Rat -> Float32 (N3e, DEMO-P1)
+    [(expr-generic-from-rat (expr-Float64) (expr-rat v)) (expr-float64 (exact->inexact v))]              ; Rat -> Float64 (N3e, DEMO-P1)
 
     ;; ---- Generic arithmetic stuck-term reduction ----
     ;; Binary ops: reduce operands
