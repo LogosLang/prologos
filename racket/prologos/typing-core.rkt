@@ -41,7 +41,7 @@
          subtype? type-key
          list-type-fvar
          concrete-numeric-type? divisible-numeric-type? negatable-numeric-type?
-         from-int-target-type? from-rat-target-type?
+         from-int-target-type? from-rat-target-type? num-lit-representable?
          numeric-join exact-numeric-type? posit-type?
          base-numeric-type refine-arith refine-arith1
          ;; Schema type helpers
@@ -139,6 +139,17 @@
       (expr-Posit8? t) (expr-Posit16? t)
       (expr-Posit32? t) (expr-Posit64? t)
       (expr-Float32? t) (expr-Float64? t)))
+
+;; N4: is exact `val` (with integral? flag) representable in concrete numeric type `t`?
+;; Int needs integral; Nat needs integral + nonneg; Rat/Posit/Float accept any rational.
+(define (num-lit-representable? val integral? t)
+  (cond
+    [(expr-Int? t) integral?]
+    [(expr-Nat? t) (and integral? (>= val 0))]
+    [(expr-Rat? t) #t]
+    [(posit-type? t) #t]
+    [(float-type? t) #t]
+    [else #f]))
 
 ;; ========================================
 ;; Numeric type join (least upper bound)
@@ -2133,6 +2144,10 @@
      (infer ctx target)
      (expr-hole)]
 
+    ;; ---- N4: numeric literal in infer position (bare/top-level `3.14`, inference-
+    ;; ---- position arg) — its type is its meta alpha; context or zonk-default resolves it.
+    [(expr-num-lit _ _ alpha) alpha]
+
     ;; ---- Fallback: cannot infer ----
     [_ (expr-error)]))
 
@@ -2215,6 +2230,19 @@
     [((expr-fsuc n1 i) (expr-Fin bound))
      (and (unify-ok? (unify ctx bound (expr-suc n1)))
           (check ctx i (expr-Fin n1)))]
+
+    ;; ---- N4: context-typed numeric literal (decimal/fraction/non-integral-exp) ----
+    ;; Resolve alpha from the expected type T + validate representability. Concrete
+    ;; numeric target → representability-gated solve; unsolved meta target → link + defer.
+    ;; Refined numeric targets (PosRat etc.) are deferred (error) — a decimal rarely targets one.
+    [((expr-num-lit exact-val integral? alpha) T)
+     (cond
+       [(concrete-numeric-type? T)
+        (and (num-lit-representable? exact-val integral? T)
+             (unify-ok? (unify ctx alpha T)))]
+       [(expr-meta? T)
+        (unify-ok? (unify ctx alpha T))]
+       [else #f])]
 
     ;; ---- Int literal check ----
     [((expr-int v) (expr-Int))

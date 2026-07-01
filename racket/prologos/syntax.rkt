@@ -295,6 +295,8 @@
  (struct-out expr-panic)
  ;; Metavariable (to be solved during elaboration/unification)
  (struct-out expr-meta)
+ ;; N4: context-typed polymorphic numeric literal (transient)
+ (struct-out expr-num-lit)
  ;; Reduce (ML-style pattern matching — desugared in type checker)
  (struct-out expr-reduce)
  (struct-out expr-reduce-arm)
@@ -1008,6 +1010,14 @@
      (+ 17 (eq-hash-code (expr-meta-id a))))])
 
 ;; ========================================
+;; N4: context-typed polymorphic numeric literal (transient).
+;; Collapses to a concrete numeric node once its type meta `alpha` resolves
+;; (check-mode, from context) or defaults (zonk: integral? → Int else Rat).
+;; `val` = exact rational; `integral?` = whether val is an integer; `alpha` =
+;; a fresh type meta (expr-meta). Never reaches a .pnet cache (collapsed at freeze).
+(struct expr-num-lit (val integral? alpha) #:transparent)
+
+;; ========================================
 ;; Reduce (ML-style pattern matching — desugared in type checker)
 ;; ========================================
 ;; expr-reduce-arm: ctor-name (symbol), binding-count (int), body (core expr)
@@ -1172,7 +1182,7 @@
       (expr-solver-config? x) (expr-cut? x)
       (expr-opaque? x)
       (expr-panic? x)
-      (expr-hole? x) (expr-typed-hole? x) (expr-Open? x) (expr-meta? x) (expr-reduce? x)
+      (expr-hole? x) (expr-typed-hole? x) (expr-Open? x) (expr-meta? x) (expr-num-lit? x) (expr-reduce? x)
       (expr-union? x) (expr-tycon? x) (expr-error? x)))
 
 ;; ========================================

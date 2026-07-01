@@ -2050,6 +2050,9 @@
     [(expr-Vec _ _) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-Fin _) (tu (expr-Type (lzero)) (zero-usage n))]
 
+    ;; ---- N4: numeric literal — type is its meta alpha; zero resource usage ----
+    [(expr-num-lit _ _ alpha) (tu alpha (zero-usage n))]
+
     ;; ---- Fallback ----
     [_ (tu-error)]))
 
@@ -2135,6 +2138,18 @@
     ;; ---- Meta expression: optimistically succeed with zero usage ----
     ;; A metavariable (from implicit arg insertion) doesn't consume resources.
     [((expr-meta _ _) _) (bu #t (zero-usage n))]
+
+    ;; ---- N4: context-typed numeric literal — mirror typing-core check: resolve alpha
+    ;; ---- from the expected type + validate representability. Zero resource usage.
+    [((expr-num-lit exact-val integral? alpha) T)
+     (cond
+       [(concrete-numeric-type? T)
+        (bu (and (num-lit-representable? exact-val integral? T)
+                 (unify-ok? (unify ctx alpha T)))
+            (zero-usage n))]
+       [(expr-meta? T)
+        (bu (unify-ok? (unify ctx alpha T)) (zero-usage n))]
+       [else (bu #f (zero-usage n))])]
 
     ;; ---- Symbol literal: check against Symbol type ----
     [((expr-symbol _) (expr-Symbol)) (bu #t (zero-usage n))]

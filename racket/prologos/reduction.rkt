@@ -3236,6 +3236,7 @@
     [(expr-typed-hole _) e]
     [(expr-Open) e]
     [(expr-meta _ _) e]
+    [(expr-num-lit _ _ _) e]  ;; N4: transient literal — collapsed by zonk; identity if it slips through
     [(expr-error) e]
     [(? ns-context?) e]  ;; namespace metadata — pass-through
     [(expr-panic msg) (expr-panic (nf msg))]  ;; reduce msg, stay stuck

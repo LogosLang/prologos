@@ -2440,6 +2440,9 @@
       ;; Zero propagator overhead: no dependents entry, no scheduling, no cleanup.
       [(expr-int _)    (type-map-write net tm-cid e (expr-Int))]
       [(expr-nat-val _)(type-map-write net tm-cid e (expr-Nat))]
+      ;; N4: numeric literal — on-network infer writes its per-node type meta (alpha);
+      ;; check/default resolves alpha function-level (there is no check-on-network path).
+      [(expr-num-lit _ _ alpha) (type-map-write net tm-cid e alpha)]
       [(expr-true)     (type-map-write net tm-cid e (expr-Bool))]
       [(expr-false)    (type-map-write net tm-cid e (expr-Bool))]
 

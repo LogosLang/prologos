@@ -19,6 +19,8 @@
          "substitution.rkt"
          "performance-counters.rkt"
          "solver.rkt"
+         (only-in "posit-impl.rkt" posit8-encode posit16-encode posit32-encode posit64-encode)  ;; N4: literal collapse encoders
+         (only-in racket/flonum flsingle)  ;; N4: Float32 collapse rounding
          (only-in "namespace.rkt" ns-context?))
 
 (provide zonk zonk-ctx zonk-final freeze zonk-at-depth
@@ -45,6 +47,24 @@
 ;; ========================================
 ;; Zonk: substitute solved metavariables
 ;; ========================================
+;; N4: collapse a resolved numeric literal to its concrete node for type `ty`.
+;; Returns #f if `ty` is not a concrete numeric type (caller keeps the transient
+;; expr-num-lit). Encoders mirror the elaborate-time literal paths (posit-encode,
+;; exact->inexact / flsingle). Representability is validated in check-mode; here we
+;; trust the resolved type (Int ⇒ val integral, Nat ⇒ integral + nonneg).
+(define (collapse-num-lit val integral? ty)
+  (cond
+    [(expr-Int? ty)     (expr-int val)]
+    [(expr-Nat? ty)     (expr-nat-val val)]
+    [(expr-Rat? ty)     (expr-rat val)]
+    [(expr-Posit8? ty)  (expr-posit8  (posit8-encode  val))]
+    [(expr-Posit16? ty) (expr-posit16 (posit16-encode val))]
+    [(expr-Posit32? ty) (expr-posit32 (posit32-encode val))]
+    [(expr-Posit64? ty) (expr-posit64 (posit64-encode val))]
+    [(expr-Float32? ty) (expr-float32 (flsingle (exact->inexact val)))]
+    [(expr-Float64? ty) (expr-float64 (exact->inexact val))]
+    [else #f]))
+
 (define (zonk e)
   (perf-inc-zonk!)
   (zonk-count! 'zonk)
@@ -60,6 +80,13 @@
        (if sol
            (zonk sol)       ; recursive: solution may contain more metas
            e))]             ; unsolved: leave as-is
+
+    ;; N4: numeric literal — zonk its type meta; collapse if resolved to a concrete
+    ;; numeric type, else keep the transient node (defaulted later in default-metas).
+    [(expr-num-lit val integral? alpha)
+     (let ([za (zonk alpha)])
+       (or (collapse-num-lit val integral? za)
+           (expr-num-lit val integral? za)))]
 
     ;; Atoms — return unchanged
     [(expr-bvar _) e]
@@ -520,6 +547,13 @@
                  (shift depth 0 zonked-sol)
                  zonked-sol))
            e))]  ; unsolved: leave as-is
+
+    ;; N4: numeric literal — resolve its type meta at depth; collapse if concrete,
+    ;; else keep the transient node (a collapsed literal has no bound vars → no shift).
+    [(expr-num-lit val integral? alpha)
+     (let ([za (zonk-at-depth depth alpha)])
+       (or (collapse-num-lit val integral? za)
+           (expr-num-lit val integral? za)))]
 
     ;; Atoms — return unchanged
     [(expr-bvar _) e]
@@ -1004,6 +1038,18 @@
   (match e
     [(expr-Type l) (expr-Type (zonk-level-default l))]
     [(expr-meta _ _) e]
+    ;; N4: unsolved numeric literal (zonk already collapsed solved ones) → default by
+    ;; integral?: Int if integral, else Rat. Defensive: also collapse if alpha turns
+    ;; out solved (e.g. a default-metas call without a preceding zonk).
+    [(expr-num-lit val integral? alpha)
+     (define resolved
+       (match alpha
+         [(expr-meta id cell-id)
+          (let ([sol (meta-solution/cell-id cell-id id)])
+            (if sol (zonk sol) alpha))]
+         [_ alpha]))
+     (or (collapse-num-lit val integral? resolved)
+         (collapse-num-lit val integral? (if integral? (expr-Int) (expr-Rat))))]
     [(expr-bvar _) e]
     [(expr-fvar _) e]
     [(expr-zero) e]

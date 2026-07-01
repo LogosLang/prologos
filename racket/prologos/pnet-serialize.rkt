@@ -210,6 +210,7 @@
   (reg2! expr-ann (expr-unit) (expr-Unit))
   (reg2! expr-Sigma (expr-Nat) (expr-Nat))
   (reg2! expr-meta 'test-meta #f)
+  (reg3! expr-num-lit 1/2 #f #f)  ;; N4: transient numeric literal (rarely serialized)
   (reg2! expr-Map (expr-Nat) (expr-Nat))
   (reg1! expr-Set (expr-Nat))
   (reg2! expr-union (expr-Nat) (expr-Int))
