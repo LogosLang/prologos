@@ -1,6 +1,6 @@
 # Numerics Track — Stage-3 Design (D.1)
 
-**Status**: **D.2** — independent P/R/M/S + completeness critique complete + owner-adjudicated (2026-06-30). **Read §15 (Critique Adjudication) — it SUPERSEDES the D.1 body where noted** (notably: N5 is function-level, not on-network; the Sign algebra is net-new; the census/tests are broadened; bare-integer polymorphism deferred). Then ready for implementation (N0–N6).
+**Status**: **D.2** — independent P/R/M/S + completeness critique complete + owner-adjudicated (2026-06-30). **Read §15 (Critique Adjudication) — it SUPERSEDES the D.1 body where noted** (notably: N5 is function-level, not on-network; the Sign algebra is net-new; the census/tests are broadened; bare-integer polymorphism deferred). Then ready for implementation (N0–N6). **Session 2 (2026-06-30): post-implementation review → §16** — P0 NaN/Inf reducer crash + P1 warning-cell leak FIXED; §15 folded into the body; F2-isolation invariant locked (§4.3a); N3e mini-design written (§9a).
 **Date**: 2026-06-30
 **Series/Track**: Numerics track (resume + revise the [2026-02-19 Numerics Tower](2026-02-19_NUMERICS_TOWER_ROADMAP.md)). Charter: [`2026-06-30_NUMERICS_TRACK_CHARTER.md`](2026-06-30_NUMERICS_TRACK_CHARTER.md). Spawned from DEMO Track 1 (the dependency-resolver demo's JSON numbers).
 **Grounding basis**: `numerics-grounding` + `numerics-refinement-design` + `decimal-literal-default-research` workflows (all HEAD-pinned / cited); the substrate code claims are R-lens-verified; pivot at `typing-core.rkt:166-178,186-207,2419-2428`, `subtype-predicate.rkt:130-142,352`.
@@ -58,7 +58,9 @@ Add **`Float`** (full IEEE compute primitive, interop numeric), reconceive the *
 
 A numeric type is `base @ d` where `base` ∈ {Nat, Int, Rat, PositN, FloatN} and `d` is a **refinement element** of a Galois abstract domain (Sign in v1). `d = ⊤` means "no refinement" (= plain base). The attribute is **erased at runtime** (Q6) — `Int@pos` *is* an `Int` value the checker knows is positive. The primitive within-family tower (`Nat<:Int<:Rat`, posit/float chains) is **untouched** (disposition B) — it stays rank-driven (`numeric-join`) + the hardcoded fast-path edges; only the *user-refinement layer* moves to `@d`.
 
-### §4.2 The Sign domain algebra (traits — already mostly built)
+### §4.2 The Sign domain algebra
+
+> **⚠ §15 D1 correction (supersedes "already mostly built"):** the *real* `Sign` at HEAD is a **5-element flat** lattice — there is **NO** `impl Add/Mul/Neg Sign` and **NO** `GaloisConnection Int Sign` (only `Interval↔Sign`). The 8-element powerset lattice + the transfer instances + the `Int↔Sign` connection described below are **NET-NEW**. Decision: **replace** the 5-element `Sign` with the 8-element powerset (one canonical `Sign`); migrate the existing `GaloisConnection Interval Sign` consumers + tests intentionally; re-run the §6 SRE lens against the real delta.
 
 The refinement domain's algebra is trait-expressed (`impl Lattice Sign`, `impl GaloisConnection Int Sign`, `impl Add Sign`/`impl Mul Sign`) — see [`core/lattice.prologos`](../../racket/prologos/lib/prologos/core/lattice.prologos), [`core/abstract-domains.prologos`](../../racket/prologos/lib/prologos/core/abstract-domains.prologos), [`interval-domain.rkt`](../../racket/prologos/interval-domain.rkt). v1 extends `Sign` to the **8-element powerset-of-signs lattice** (the standard abstract sign domain):
 
@@ -85,9 +87,11 @@ named:  Pos={pos}  Zero={zero}  Neg={neg}  NonZero={neg,pos}
 
 ### §4.3 Subsumption + arithmetic wiring (the thin type-system layer)
 
-- **Subsumption** (Q5) at the single point [`typing-core.rkt:2419-2428`]: for numeric types, `T@d1 <: T@d2` iff `T` base-compatible (the *existing untouched* primitive path) **and** `d1 ⊑ d2` (⊆). `Int@Pos <: Int` (Pos ⊑ ⊤) ✓; `Int </: Int@Pos` (⊤ ⋢ Pos) — narrowing requires a runtime check.
-- **Arithmetic** (Q4) in the generic-arith rules [`typing-core.rkt:789-833`]: result type = `numeric-join(base₁,base₂) @ transfer_op(d₁,d₂)` — **two parallel computations**: base via rank (unchanged), refinement via the domain transfer. Sibling separation; refinement never enters `numeric-join` or `subtype-lattice-merge`.
+- **Subsumption** (Q5) at the numeric subsumption point [`typing-core.rkt:2476-2485`] (the conversion-fallback `subtype?` call — the D.1 `:2419-2428` coordinate is **stale**): for numeric types, `T@d1 <: T@d2` iff `T` base-compatible (the *existing untouched* primitive path) **and** `d1 ⊑ d2` (⊆). `Int@Pos <: Int` (Pos ⊑ ⊤) ✓; `Int </: Int@Pos` (⊤ ⋢ Pos) — narrowing requires a runtime check.
+- **Arithmetic** (Q4) in the generic-arith rules [`typing-core.rkt:789-833`]: result type = `numeric-join(base₁,base₂) @ transfer_op(d₁,d₂)` — **two parallel computations**: base via rank (unchanged), refinement via the domain transfer. Sibling separation; refinement never enters `numeric-join` or `subtype-lattice-merge`. **(§15 D12: define the `+` transfer pointwise `α∘op#∘(γ×γ)`, NOT join-of-operands — §4.2's `+` row is D.1-stale.)**
 - **Narrowing** (`Int → Option (Int@Pos)`): the smart-constructor, **auto-derived from γ** (the predicate `n>0` *is* `γ(Pos)`); returns the same value statically refined (Q6 erasure) or `None`.
+
+**§4.3a — F2-isolation representation invariant (LOCKED 2026-06-30; option (ii), owner-confirmed).** §15-D6's "refined types provably never reach `subtype-lattice-merge`" holds ONLY if `@d`'s representation keeps it out of the SRE structural-subtype walk. The walk recurses compound components RAW (`subtype-predicate.rkt:167,186`) into `subtype-lattice-merge` (`:354`, the F2 hazard) — so an embedded `@d` node inside `Option (Int@Pos)` (the narrowing type above) would leak. **Decision: `@d` is carried OUT-OF-BAND** — never a sub-node, field, or component of any type value that can reach `sre-constructor-tag` / `structural-subtype-ground?` / `subtype-lattice-merge`. This mirrors the QTT **mult-meta** precedent (a separate sibling domain, never ctor-registered ⇒ structurally unreachable from the type merge) and mult-on-`Pi` (a fenced field with variance `=`). **Invariant:** every type flowing into `subtype?` is the bare base, with `@d` stripped; subsumption *decomposes* — `T@d1 <: T@d2` ⟺ `subtype?(base,base) ∧ d1⊑d2`, computed separately; transfer runs *parallel* to `numeric-join`, never inside it. **One genuinely-new wiring site:** the subsumption point (`:2476-2485`) has no strip today (`numeric-join` already strips for the old registry-named refinements at `:185` — the arithmetic-side precedent). *N5 consideration:* a bare `Int` atom has no field to hang `@d` on, so `@d` is keyed to the inference-time type-*position* (threaded through `infer`/`check`); `Option (Int@Pos)` is the stress test (the recursed arg stays bare `Int`; the `@d` slot travels with the position). The general `Type@refinement` surface + trait-as-type-producer + full (liquid-typing) inference → a future **UCS Series track** (owner, 2026-06-30; note `2026-06-30_TRAITS_AS_REFINEMENT_TYPING_NOTE.md`); N5 ships ONLY the fixed built-in Sign slice numerics needs.
 
 ### §4.4 Representation + migration of the 5 refined types
 
@@ -116,9 +120,11 @@ N  = Nat                                 42N
 
 ### §4.6 Float primitive (N3)
 
-New rank family alongside exact + posit. AST-pipeline footprint (per `pipeline.md`; Posit32 is the template — ~16 files, typing-core ~47 / qtt ~39 / reduction ~58 clauses): type + value + ~14 op structs/width, `Float32`/`Float64`, `±Inf`/`NaN` special values, the `f` literals. **FFI** ([`foreign.rkt:192-290`]): Float arms in both marshal directions (Racket flonum ↔ Float struct) — the legit NaN/Inf round-trip point. **`numeric-join` extension (Q11):** `exact + Float → Float` (auto-absorb, min Float? — likely Float64), `Float32 <: Float64`; **Posit + Float → no join** (explicit `From`/`TryFrom` only, mirroring Rat↔Posit Phase 3f). A Float-named type already classifies `'approximate` via `typing-propagators.rkt:790-797` (live).
+New rank family alongside exact + posit. AST-pipeline footprint (per `pipeline.md`; Posit32 is the template — ~16 files, typing-core ~47 / qtt ~39 / reduction ~58 clauses): type + value + **10 op structs/width (20 total)**, `Float32`/`Float64`, `±Inf`/`NaN` (ordinary flonums — no special struct support needed), the `f` literals. **FFI** ([`foreign.rkt:192-290`]): Float arms in both marshal directions (Racket flonum ↔ Float struct) — the legit NaN/Inf round-trip point. **`numeric-join` extension (Q11):** `exact + Float → Float` (auto-absorb, **PRESERVING the Float operand's width** — landed N3d, NOT "min Float64"), `Float32 <: Float64`; **Posit + Float → no join** (explicit `From`/`TryFrom` only, mirroring Rat↔Posit Phase 3f). A Float-named type already classifies `'approximate` via `typing-propagators.rkt:790-797` (live).
 
-## §5 NTT Model (on-network parts — N5)
+## §5 NTT Model (on-network parts — N5) — ⚠ SUPERSEDED by §15
+
+> **§15: N5 is FUNCTION-LEVEL, not on-network.** Numeric typing (`numeric-join`, generic-arith, subsumption) is plain imperative functions — there is **no** refinement meta-domain, **no** Galois bridge, **no** on-network N5. The NTT model below is the *rejected* on-network framing, kept for the record. On-network retirement of N5's (function-level) scaffolding = a future **PPN** track (`2026-06-30_NUMERICS_ON_NETWORK_PPN_NOTE.md`).
 
 Only N5 touches the propagator network. The refinement substrate as NTT:
 
@@ -170,6 +176,35 @@ propagator refine-add :reads d1-cell d2-cell :writes dr-cell   fire = (transfer-
 - **N5** refinement substrate — N0 gates it; build the `refinement` meta-domain + bridge + transfer + subsumption; migrate the 5 refined types; auto-derive narrowing. Tests: `test-subtyping.rkt` parity (refined subsumption), refinement-preserving arithmetic (`Pos+Pos→Pos`, `Pos+Neg→⊤`), narrowing, erasure (refined value = base value at runtime).
 - **N6** ergonomics + reconciliation — fold the audit's open items; update `LANGUAGE_VISION.org` (Float user-facing); close the 2026-02-19 roadmap into this track.
 
+### §9a — N3e Mini-Design (conversions + prim-ops; the DEMO-P1 unblock)
+
+Grounded via the Numerics-review N3e footprint agent (HEAD `94323129`). **Split N3e into N3e-core (DEMO-P1 unblock) and N3e-rest (deferrable).**
+
+**Two conversion paths; N3e-core uses Path B (nearly free):**
+- **Path A** — a dedicated per-target prim-op (the Posit `p32-from-rat` template): ONE conversion = a full AST node ≈ **12 files / ~23 sites** (the charter's "~5-file" is a ~2.4× undercount). Reserve for the lossy/guarded conversions.
+- **Path B** — the EXISTING generic-dispatch nodes `expr-generic-from-rat` / `expr-generic-from-int` (surface `from-rational`/`from-integer`; full pipeline already wired) dispatch on the target TYPE. Adding a Float target = **+Float to `from-rat-target-type?`/`from-int-target-type?` (`typing-core.rkt:129,135`) + ~4 reduction arms (`reduction.rkt:2196`)** — no new AST node. The coercion math already exists (`rational->literal` f32/f64 cases, `:1119`).
+
+**N3e-core (DEMO-P1-critical; ~2 files / ~6 sites + ~8 `conversions.prologos` instances):**
+
+| Direction | From/TryFrom | via |
+|---|---|---|
+| **Rat→Float64/32** ★ | From (total; overflow→±Inf benign; f32 via `flsingle`) | Path B |
+| **Int→Float64/32** | From (total; lossy ≥2⁵³ — silent, like all float math) | Path B |
+| Float32→Float64 | From (widen, total) | **already done** (`try-coerce-to-float`; `Float32<:Float64` edge) |
+
+**N3e-rest (deferrable to N3g / post-DEMO-P1):**
+
+| Direction | From/TryFrom | NaN/Inf | via |
+|---|---|---|---|
+| Float64→Float32 | From (narrow, lossy; `flsingle`) | benign | new prim-op |
+| **Float→Rat** | **TryFrom → `None` on NaN/±Inf** | **LANDMINE** | new prim-op + guard |
+| Float→Int | TryFrom (truncate) → `None` on NaN/±Inf | LANDMINE | new prim-op + guard |
+| Posit↔Float (Q11) | TryFrom both (Rat pivot) | inherits Float→Rat guard | **DEFER** |
+
+**Float→Rat landmine (SAME root as the P0 `reduction.rkt` fix):** `inexact->exact` throws on NaN/±Inf. **Resolution: `TryFrom → Option Rat`, `None` when `(or (nan? v) (infinite? v))`, else `some [inexact->exact v]`** — the honest answer (NaN/±Inf have no exact rational rep), matching the `conversions.prologos` `TryFrom` convention and the `coerce-literal` precedent (`reduction.rkt:1138`, the P0 fix). Add `nan?`/`infinite?` guards. Do NOT route through a Quire/error path.
+
+**DEMO-P1 note (review):** the demo's synthetic dataset has **zero JSON numbers** (all strings), so N3e-core is needed for JSON-parser *completeness* (a complete parser must handle `JFloat` decimals), not for the current acceptance line — add a numeric field when P1 lands to exercise the path at L3. Precision: Rat→Float64 = round-to-nearest-even (`exact->inexact`); big-Rat→Float overflow → ±Inf (benign).
+
 ## §10 WS Impact
 
 - New surface: `f`/`f32`/`f64` Float literals; exponent syntax; the (sliced) refinement names `Pos`/`Neg`/`Zero`/`NonZero` (as types). Preparse/reader: extend number tokenization (N1) + the `f` suffix; no new top-level form (refinements are types; the general `Type@property` form is deferred).
@@ -182,20 +217,21 @@ Per-phase tests above. Cross-cutting: a Numerics regression set; the existing `t
 
 ## §12 Open Questions / Deferred
 
-- Bare-integer polymorphism (N4 sub-point — recommend yes).
-- α-only vs bidirectional refinement bridge (N5).
-- `numeric-join` exact+Float target width (Float64 vs preserve) (N3).
+- Bare-integer polymorphism → **DEFERRED out of v1** (§15 D8; `3`=Int; only decimals/exponents/fractions get context-typed D).
+- `numeric-join` exact+Float target width → **RESOLVED: preserve the Float operand width** (landed N3d; §4.6). §4.6/Q11 "Float64?" text is D.1-stale.
+- α-only vs bidirectional refinement bridge → **MOOT** (§15: N5 is function-level, no bridge).
 - Very-long-terminating-decimal display threshold (N2).
-- **Deferred tracks:** full refinement inference (future); general `Type@property` surface + trait-as-type-producer + `property` unification (UCS track 5); Interval/user Galois-domain refinements (extension); strict division-safety mode (future).
+- **Warning-cell re-home** (from the Numerics review; per-command reset landed `80aca978`): re-home the coercion/deprecation/capability warning cells from the persistent-registry net onto the per-command elab-network so `reset-warning-cells!` can be deleted (correct-by-construction). Crosses the elaboration-vs-module-load two-context boundary — its own scoped follow-up.
+- **Deferred tracks:** full refinement inference / general `Type@refinement` surface + trait-as-type-producer + `property` unification + user Galois-domain refinements → **UCS Series track** (owner-confirmed 2026-06-30; note `2026-06-30_TRAITS_AS_REFINEMENT_TYPING_NOTE.md`); Interval refinements (extension); strict division-safety mode (future).
 
 ## §13 Proportionate Methodology
 
 | Gate | Applies? |
 |---|---|
 | Progress tracker near top (§2) · phased roadmap · per-phase tests | ✅ |
-| NTT model | ✅ **N5 only** (§5) — the sole on-network phase |
+| NTT model | ➖ **N/A** (§15: N5 is function-level, not on-network — §5 retired) |
 | SRE lattice lens | ✅ (§6) — the Sign refinement lattice (= Q₃ cube) |
-| On-network / Mantra audit | ✅ N5 (§7) |
+| On-network / Mantra audit | ➖ N/A (§15: N5 function-level) |
 | WS Impact | ✅ (§10) — new literal/type surface |
 | P/R/M/S adversarial self-critique | ✅ applied live via `numerics-refinement-design` workflow (substrate + disposition) |
 | Pre-0 microbench | ◐ N4 (polymorphic-literal elaboration cost), N5 (refinement-erasure runtime win); N1/N2/N3 are feature-enabling |
@@ -224,6 +260,18 @@ Independent P/R/M/S + completeness critique (`numerics-stage3-critique`, 2026-06
 - **Meta-correction (4 lenses)**: re-ground every "reuse / already-built / cheap / only-consumer" claim against grep before N5 — the *capture-gap* failure mode (it recurred across D1/D3/D9).
 
 **Net phase impact**: order unchanged (N0–N6); **N0 drops the bridge-gate** (keeps the 2 audits, broadened per D3); **N5 is much smaller** (function-level, no meta-domain/bridge); **N2→N2a/N2b**. DEMO P1 still unblocks after N1+N3.
+
+## §16 Post-Implementation Review Fixes (2026-06-30, session 2)
+
+An independent P/R/M/S + completeness review of D.2 + the committed N1/N3a–N3d (34 findings; blocking/major adversarially verified at HEAD `94323129`). Outcome:
+
+- **P0 — fixed (`c6226555`).** Cross-family generic arithmetic crashed the reducer on NaN/±Inf (`literal->rational` → `inexact->exact` in `reduce-generic-binary`'s coercion branch); `[+ 3 [/ 1.0f64 0.0f64]]` threw instead of `+inf.0`. Fixed via NaN/Inf-safe `coerce-literal`/`literal->flonum`; regression test in `test-float-tower.rkt`.
+- **P1 — fixed (`80aca978`).** The coercion-warning cell was mis-homed on the grows-forever persistent-registry net → leaked across commands/tests (a locked rule lost L2 coverage). Fixed via per-command `reset-warning-cells!` + reconciling the imperative `numeric-join/warn!` to warn on exact↔approximate (Posit OR Float), matching the on-network detector. Re-home to the elab-net = tracked follow-up (§12). Full suite green (8439).
+- **P2 — this doc.** Folded §15's corrections into the body: §4.2 (`Sign` is 5-element flat; 8-element net-new), §4.3 (subsumption coordinate `:2476-2485`; §15-D12 transfer), §4.6 (10 ops/width; preserve-width; NaN/Inf ordinary flonums), §5/§13 (N5 function-level, not on-network).
+- **P3 → §4.3a (LOCKED).** The F2-isolation representation invariant — `@d` carried out-of-band (option (ii); the mult-meta precedent), owner-confirmed; general `Type@refinement` → future UCS track.
+- **P4 → §9a.** The N3e mini-design (Path B for the DEMO-P1-critical Rat/Int→Float; Float→Rat = TryFrom→None; N3e-core / N3e-rest split).
+
+Verified SOUND by the review (unchanged): pipeline exhaustiveness for N3a–N3d; width-preservation consistent across both join machineries; Posit↔Float type-error clean; f32 single-rounding; D8 bare-int deferral.
 
 ---
 *Stage-3 **D.2**, 2026-06-30. D.1 dialogue (Clusters 1–4 + foundation) + the §15 critique adjudication. Next: N0 (2 broadened audits, no bridge-gate) → N1 exponent-lex + N2a Posit-display (cheap wins; N1 on the DEMO-P1 path) → N3 Float → N4 literals → N5 function-level refinement → N6. On-network retirement of N5's scaffolding = the PPN note.*
