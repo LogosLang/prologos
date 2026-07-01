@@ -30,7 +30,8 @@
          "global-constraints.rkt" ;; Phase 3c: for current-narrow-var-constraints
          "sessions.rkt"          ;; Phase S3: session type constructors (elaboration target)
          "solver.rkt"            ;; Solver configuration (make-solver-config)
-         "processes.rkt")        ;; Phase S3: process constructors (elaboration target)
+         "processes.rkt"        ;; Phase S3: process constructors (elaboration target)
+         "sign-refinement.rkt")  ;; Numerics N5de: refined-name? recognizer
 
 (provide elaborate
          elaborate-top-level
@@ -774,6 +775,8 @@
       [(and (current-residuation-enabled?)
             (eq? (car (global-env-lookup-status name)) 'pending))
        (expr-fvar name)]
+      ;; Numerics N5de: nominal-erased refined numeric types (PosInt/…) are built-in nominal types.
+      [(refined-name? name) (expr-fvar name)]
       [else (unbound-variable-error loc "Unbound variable" name)])))
 
 ;; ========================================

@@ -2,7 +2,8 @@
 
 ;;;
 ;;; Tests for refined rational types: PosRat, NegRat
-;;; Phase D.2 + D.3: data types, smart constructors, Eq/Ord instances
+;;; Numerics N5de (Q6 erasure): refined types are BUILTIN nominal-erased (a PosRat IS a Rat).
+;;; Constructors are unsafe-*/`the`; the `data` ctors and refined Eq/Ord dicts are gone.
 ;;;
 
 (require rackunit
@@ -19,20 +20,22 @@
   (check-true (string-contains? actual-str substr)
               (or msg (format "Expected ~s to contain ~s" actual-str substr))))
 
-;; :no-prelude with explicit imports
+;; :no-prelude preamble — erased refined-rat surface (functions). PosRat/NegRat builtin.
 (define refined-rat-preamble
   (string-append
    "(ns rr :no-prelude)\n"
    "(imports [prologos::data::option :refer [Option some none]])\n"
-   "(imports [prologos::data::refined-rat :refer [PosRat pos-rat NegRat neg-rat to-pos-rat to-neg-rat is-zero-rat? unsafe-pos-rat unsafe-neg-rat pos-rat-val neg-rat-val]])\n"
-   "(imports [prologos::data::refined-instances :refer [PosRat--Eq--dict NegRat--Eq--dict PosRat--Ord--dict NegRat--Ord--dict]])\n"
-   "(imports [prologos::core::eq :refer [Eq Eq-eq?]])\n"
-   "(imports [prologos::core::ord :refer [Ord Ord-compare]])\n"
-   "(imports [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n"))
+   "(imports [prologos::data::refined-rat :refer [to-pos-rat to-neg-rat is-zero-rat? unsafe-pos-rat unsafe-neg-rat pos-rat-val neg-rat-val]])\n"))
 
 (define (rr-ns name)
   (string-replace refined-rat-preamble "(ns rr :no-prelude)"
                   (format "(ns ~a :no-prelude)" name)))
+
+;; Prelude-free preamble for sign arithmetic (bare +/negate keywords; see test-refined-int).
+(define (rr-arith-ns name)
+  (string-append
+   (format "(ns ~a :no-prelude)\n" name)
+   "(imports [prologos::data::refined-rat :refer [unsafe-pos-rat unsafe-neg-rat]])\n"))
 
 ;; ========================================
 ;; 1. Smart Constructors
@@ -88,7 +91,7 @@
    "false : Bool"))
 
 ;; ========================================
-;; 2. Unsafe Constructors + Extractors
+;; 2. Unsafe Constructors + Extractors (erased identity → base Rat)
 ;; ========================================
 
 (test-case "refined-rat: unsafe-pos-rat + extract"
@@ -105,73 +108,46 @@
      "(eval (neg-rat-val (unsafe-neg-rat -2/5)))\n"))
    "-0.4"))
 
-;; ========================================
-;; 3. Eq Instances (explicit dict-passing)
-;; ========================================
-
-(test-case "refined-rat: Eq PosRat equal"
-  (check-equal?
+(test-case "refined-rat: unsafe-pos-rat display : PosRat"
+  (check-contains
    (run-ns-last
-    (string-append (rr-ns 'rr-eq1)
-     "(eval (Eq-eq? PosRat PosRat--Eq--dict (pos-rat 3/7) (pos-rat 3/7)))\n"))
-   "true : Bool"))
-
-(test-case "refined-rat: Eq PosRat not equal"
-  (check-equal?
-   (run-ns-last
-    (string-append (rr-ns 'rr-eq2)
-     "(eval (Eq-eq? PosRat PosRat--Eq--dict (pos-rat 1/2) (pos-rat 3/4)))\n"))
-   "false : Bool"))
-
-(test-case "refined-rat: Eq NegRat equal"
-  (check-equal?
-   (run-ns-last
-    (string-append (rr-ns 'rr-eq3)
-     "(eval (Eq-eq? NegRat NegRat--Eq--dict (neg-rat -5/3) (neg-rat -5/3)))\n"))
-   "true : Bool"))
-
-(test-case "refined-rat: Eq NegRat not equal"
-  (check-equal?
-   (run-ns-last
-    (string-append (rr-ns 'rr-eq4)
-     "(eval (Eq-eq? NegRat NegRat--Eq--dict (neg-rat -1/2) (neg-rat -3/4)))\n"))
-   "false : Bool"))
+    (string-append (rr-ns 'rr-uc3)
+     "(eval (the PosRat (unsafe-pos-rat 7/3)))\n"))
+   "PosRat"))
 
 ;; ========================================
-;; 4. Ord Instances (explicit dict-passing)
+;; 3. Subsumption (PosRat <: Rat; value erased to base)
 ;; ========================================
 
-(test-case "refined-rat: Ord PosRat less"
+(test-case "refined-rat: PosRat subsumes to Rat"
   (check-contains
    (run-ns-last
-    (string-append (rr-ns 'rr-ord1)
-     "(eval (Ord-compare PosRat PosRat--Ord--dict (pos-rat 1/4) (pos-rat 3/4)))\n"))
-   "lt-ord"))
+    (string-append (rr-ns 'rr-sub1)
+     "(def r : Rat (unsafe-pos-rat 3/7))\n"
+     "(eval r)\n"))
+   "Rat"))
 
-(test-case "refined-rat: Ord PosRat equal"
-  (check-contains
-   (run-ns-last
-    (string-append (rr-ns 'rr-ord2)
-     "(eval (Ord-compare PosRat PosRat--Ord--dict (pos-rat 1/2) (pos-rat 1/2)))\n"))
-   "eq-ord"))
+;; ========================================
+;; 4. Sign-preserving arithmetic (N5de transfer; bare keywords)
+;; ========================================
 
-(test-case "refined-rat: Ord PosRat greater"
+(test-case "refined-rat: PosRat + PosRat = PosRat"
   (check-contains
    (run-ns-last
-    (string-append (rr-ns 'rr-ord3)
-     "(eval (Ord-compare PosRat PosRat--Ord--dict (pos-rat 3/4) (pos-rat 1/4)))\n"))
-   "gt-ord"))
+    (string-append (rr-arith-ns 'rr-ar1)
+     "(eval (+ (unsafe-pos-rat 1/2) (unsafe-pos-rat 1/4)))\n"))
+   "PosRat"))
 
-(test-case "refined-rat: Ord NegRat less"
+(test-case "refined-rat: negate PosRat = NegRat"
   (check-contains
    (run-ns-last
-    (string-append (rr-ns 'rr-ord4)
-     "(eval (Ord-compare NegRat NegRat--Ord--dict (neg-rat -3/4) (neg-rat -1/4)))\n"))
-   "lt-ord"))
+    (string-append (rr-arith-ns 'rr-ar2)
+     "(eval (negate (unsafe-pos-rat 1/2)))\n"))
+   "NegRat"))
 
-(test-case "refined-rat: Ord NegRat greater"
+(test-case "refined-rat: PosRat * NegRat = NegRat"
   (check-contains
    (run-ns-last
-    (string-append (rr-ns 'rr-ord5)
-     "(eval (Ord-compare NegRat NegRat--Ord--dict (neg-rat -1/5) (neg-rat -4/5)))\n"))
-   "gt-ord"))
+    (string-append (rr-arith-ns 'rr-ar3)
+     "(eval (* (unsafe-pos-rat 2/3) (unsafe-neg-rat -3/5)))\n"))
+   "NegRat"))

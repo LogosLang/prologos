@@ -3,93 +3,54 @@ ns prologos::data::refined-int :no-prelude
 require [prologos::data::option :refer [Option some none]]
 
 ;; ========================================
-;; Refined Integer Types
+;; Refined Integer Types — Numerics N5de (Q6 erasure)
 ;; ========================================
-;; Wrapper types for expressing numeric sign constraints at the type level.
-;; Smart constructors validate at runtime; unsafe constructors trust the caller.
-;;
-;; Subtyping lattice (enforced by the type system via subtype declarations):
-;;
-;;              Int
-;;            /  |  \
-;;      NegInt Zero PosInt
-;;
-;; PosInt, NegInt, Zero are subtypes of Int — they can be used anywhere Int is expected.
+;; PosInt/NegInt/Zero are now BUILT-IN nominal-erased types (registered in macros.rkt:
+;; `builtin-type-names` + the subtype-registry seeds `PosInt/NegInt/Zero <: Int <: Rat`).
+;; A refined value IS its base (a PosInt is an Int) at runtime — no wrapper, no boxing.
+;; This module provides the smart/unsafe constructors + trivial accessors; the
+;; refinement lattice lives in the subtype registry and sign-preserving arithmetic in
+;; typing-core (sign-refinement.rkt). `(the T e)` is the erased narrowing cast.
 
-;; Positive integers (value > 0)
-data PosInt
-  pos-int Int
-
-;; Negative integers (value < 0)
-data NegInt
-  neg-int Int
-
-;; Zero singleton
-data Zero
-  mk-zero
-
-;; ========================================
-;; Smart Constructors (runtime-checked)
-;; ========================================
+;; --- Smart constructors (runtime-checked) ---
 
 spec to-pos-int Int -> [Option PosInt]
 defn to-pos-int [n]
   if [int-lt 0 n]
-    [some [pos-int n]]
+    [some (the PosInt n)]
     none
 
 spec to-neg-int Int -> [Option NegInt]
 defn to-neg-int [n]
   if [int-lt n 0]
-    [some [neg-int n]]
+    [some (the NegInt n)]
     none
 
 spec is-zero? Int -> Bool
 defn is-zero? [n]
   int-eq n 0
 
-;; ========================================
-;; Unsafe Constructors (caller guarantees invariant)
-;; ========================================
+;; --- Unsafe constructors (caller guarantees the invariant) ---
 
 spec unsafe-pos-int Int -> PosInt
 defn unsafe-pos-int [n]
-  pos-int n
+  (the PosInt n)
 
 spec unsafe-neg-int Int -> NegInt
 defn unsafe-neg-int [n]
-  neg-int n
+  (the NegInt n)
 
-;; ========================================
-;; Extractors
-;; ========================================
+;; --- Zero value (was the nullary constructor `mk-zero`; now the erased Int 0 : Zero) ---
+
+def mk-zero : Zero := (the Zero 0)
+
+;; --- Accessors: erased identity (a refined value already IS its base) ---
 
 spec pos-int-val PosInt -> Int
-defn pos-int-val [p]
-  match p
-    | pos-int n -> n
+defn pos-int-val [p] p
 
 spec neg-int-val NegInt -> Int
-defn neg-int-val [p]
-  match p
-    | neg-int n -> n
-
-;; ========================================
-;; Conversion: back to Int
-;; ========================================
+defn neg-int-val [p] p
 
 spec zero-to-int Zero -> Int
-defn zero-to-int [z]
-  match z
-    | mk-zero -> 0
-
-;; ========================================
-;; Subtype declarations
-;; ========================================
-;; PosInt <: Int <: Rat (auto-inferred coercion: unwrap single-field constructor)
-;; NegInt <: Int <: Rat (auto-inferred coercion: unwrap single-field constructor)
-;; Zero <: Int <: Rat (explicit coercion via zero-to-int: nullary constructor)
-
-subtype PosInt Int
-subtype NegInt Int
-subtype Zero Int via zero-to-int
+defn zero-to-int [z] z

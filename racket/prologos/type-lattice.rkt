@@ -396,9 +396,15 @@
 
 (define (try-unify-pure t1 t2)
   ;; First reduce both to WHNF
-  (let ([a (whnf t1)]
-        [b (whnf t2)])
+  (let ([a (if (or (eq? t1 'type-top) (eq? t1 'type-bot)) t1 (whnf t1))]
+        [b (if (or (eq? t2 'type-top) (eq? t2 'type-bot)) t2 (whnf t2))])
     (cond
+      ;; Numerics N5de: type-lattice sentinels — type-top absorbs, type-bot is identity;
+      ;; never whnf'd (symbols, not exprs). Prevents the on-network refined-merge crash
+      ;; (untyped refined inference; full on-network refinement → future PPN track, §15).
+      [(or (eq? a 'type-top) (eq? b 'type-top)) 'type-top]
+      [(eq? a 'type-bot) b]
+      [(eq? b 'type-bot) a]
       ;; Fast path: structurally identical
       [(equal? a b) a]
 

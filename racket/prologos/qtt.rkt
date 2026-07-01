@@ -23,6 +23,7 @@
          "reduction.rkt"
          "unify.rkt"
          "typing-core.rkt"
+         "sign-refinement.rkt"  ;; Numerics N5de: refined-name?/refined-name->base
          "metavar-store.rkt"
          "elab-speculation-bridge.rkt"
          "global-env.rkt"
@@ -164,6 +165,8 @@
 
     ;; ---- Free variable: look up global environment ----
     ;; Global references do not consume local linear resources.
+    ;; Numerics N5de: nominal-erased refined numeric types are built-in types (: Type 0).
+    [(expr-fvar (? refined-name? _)) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-fvar name)
      (let ([ty (global-env-lookup-type name)])
        (if ty
@@ -268,12 +271,16 @@
 
     ;; ---- Annotation: ann(e, T) ----
     [(expr-ann e1 t)
-     (if (is-type ctx t)
-         (let ([r (checkQ ctx e1 t)])
-           (match r
-             [(bu #t u) (tu t u)]
-             [_ (tu-error)]))
-         (tu-error))]
+     ;; Numerics N5de: ascription to a refined numeric type = erased narrowing cast (mirror typing-core).
+     (let ([tw (whnf t)])
+       (cond
+         [(and (expr-fvar? tw) (refined-name? (expr-fvar-name tw)))
+          (let ([r (checkQ ctx e1 (if (eq? (refined-name->base (expr-fvar-name tw)) 'Int) (expr-Int) (expr-Rat)))])
+            (match r [(bu #t u) (tu t u)] [_ (tu-error)]))]
+         [(is-type ctx t)
+          (let ([r (checkQ ctx e1 t)])
+            (match r [(bu #t u) (tu t u)] [_ (tu-error)]))]
+         [else (tu-error)]))]
 
     ;; ---- Application ----
     ;; Usage = U_func + pi * U_arg
@@ -517,36 +524,40 @@
            [r2 (inferQ ctx b)])
        (match* (r1 r2)
          [((tu t1 u1) (tu t2 u2))
-          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
-              (tu t1 (add-usage u1 u2))
-              (tu-error))]
+          (let ([j (numeric-join t1 t2)])          ;; N5de: base via numeric-join (mixed refined+bare OK); sign via transfer
+            (if (and j (concrete-numeric-type? j))
+                (tu (refine-arith t1 t2 j sign-transfer-add) (add-usage u1 u2))
+                (tu-error)))]
          [(_ _) (tu-error)]))]
     [(expr-generic-sub a b)
      (let ([r1 (inferQ ctx a)]
            [r2 (inferQ ctx b)])
        (match* (r1 r2)
          [((tu t1 u1) (tu t2 u2))
-          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
-              (tu t1 (add-usage u1 u2))
-              (tu-error))]
+          (let ([j (numeric-join t1 t2)])
+            (if (and j (concrete-numeric-type? j))
+                (tu (refine-arith t1 t2 j sign-transfer-sub) (add-usage u1 u2))
+                (tu-error)))]
          [(_ _) (tu-error)]))]
     [(expr-generic-mul a b)
      (let ([r1 (inferQ ctx a)]
            [r2 (inferQ ctx b)])
        (match* (r1 r2)
          [((tu t1 u1) (tu t2 u2))
-          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
-              (tu t1 (add-usage u1 u2))
-              (tu-error))]
+          (let ([j (numeric-join t1 t2)])
+            (if (and j (concrete-numeric-type? j))
+                (tu (refine-arith t1 t2 j sign-transfer-mul) (add-usage u1 u2))
+                (tu-error)))]
          [(_ _) (tu-error)]))]
     [(expr-generic-div a b)
      (let ([r1 (inferQ ctx a)]
            [r2 (inferQ ctx b)])
        (match* (r1 r2)
          [((tu t1 u1) (tu t2 u2))
-          (if (and (equal? t1 t2) (divisible-numeric-type? t1))
-              (tu t1 (add-usage u1 u2))
-              (tu-error))]
+          (let ([j (numeric-join t1 t2)])
+            (if (and j (divisible-numeric-type? j))
+                (tu (refine-arith t1 t2 j sign-transfer-div) (add-usage u1 u2))
+                (tu-error)))]
          [(_ _) (tu-error)]))]
 
     ;; Binary comparison: infer both args, return Bool
@@ -555,66 +566,74 @@
            [r2 (inferQ ctx b)])
        (match* (r1 r2)
          [((tu t1 u1) (tu t2 u2))
-          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
-              (tu (expr-Bool) (add-usage u1 u2))
-              (tu-error))]
+          (let ([j (numeric-join t1 t2)])
+            (if (and j (concrete-numeric-type? j))
+                (tu (expr-Bool) (add-usage u1 u2))
+                (tu-error)))]
          [(_ _) (tu-error)]))]
     [(expr-generic-le a b)
      (let ([r1 (inferQ ctx a)]
            [r2 (inferQ ctx b)])
        (match* (r1 r2)
          [((tu t1 u1) (tu t2 u2))
-          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
-              (tu (expr-Bool) (add-usage u1 u2))
-              (tu-error))]
+          (let ([j (numeric-join t1 t2)])
+            (if (and j (concrete-numeric-type? j))
+                (tu (expr-Bool) (add-usage u1 u2))
+                (tu-error)))]
          [(_ _) (tu-error)]))]
     [(expr-generic-gt a b)
      (let ([r1 (inferQ ctx a)]
            [r2 (inferQ ctx b)])
        (match* (r1 r2)
          [((tu t1 u1) (tu t2 u2))
-          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
-              (tu (expr-Bool) (add-usage u1 u2))
-              (tu-error))]
+          (let ([j (numeric-join t1 t2)])
+            (if (and j (concrete-numeric-type? j))
+                (tu (expr-Bool) (add-usage u1 u2))
+                (tu-error)))]
          [(_ _) (tu-error)]))]
     [(expr-generic-ge a b)
      (let ([r1 (inferQ ctx a)]
            [r2 (inferQ ctx b)])
        (match* (r1 r2)
          [((tu t1 u1) (tu t2 u2))
-          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
-              (tu (expr-Bool) (add-usage u1 u2))
-              (tu-error))]
+          (let ([j (numeric-join t1 t2)])
+            (if (and j (concrete-numeric-type? j))
+                (tu (expr-Bool) (add-usage u1 u2))
+                (tu-error)))]
          [(_ _) (tu-error)]))]
     [(expr-generic-eq a b)
      (let ([r1 (inferQ ctx a)]
            [r2 (inferQ ctx b)])
        (match* (r1 r2)
          [((tu t1 u1) (tu t2 u2))
-          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
-              (tu (expr-Bool) (add-usage u1 u2))
-              (tu-error))]
+          (let ([j (numeric-join t1 t2)])
+            (if (and j (concrete-numeric-type? j))
+                (tu (expr-Bool) (add-usage u1 u2))
+                (tu-error)))]
          [(_ _) (tu-error)]))]
     [(expr-generic-mod a b)
      (let ([r1 (inferQ ctx a)]
            [r2 (inferQ ctx b)])
        (match* (r1 r2)
          [((tu t1 u1) (tu t2 u2))
-          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
-              (tu t1 (add-usage u1 u2))
-              (tu-error))]
+          (let ([j (numeric-join t1 t2)])          ;; N5de: mod unrefined — result is the base
+            (if (and j (concrete-numeric-type? j))
+                (tu j (add-usage u1 u2))
+                (tu-error)))]
          [(_ _) (tu-error)]))]
 
     ;; Unary: infer arg, return same type
     [(expr-generic-negate a)
      (let ([r (inferQ ctx a)])
        (match r
-         [(tu t u) (if (negatable-numeric-type? t) (tu t u) (tu-error))]
+         [(tu t u) (let ([bt (base-numeric-type t)])
+                     (if (negatable-numeric-type? bt) (tu (refine-arith1 t bt sign-transfer-neg) u) (tu-error)))]
          [_ (tu-error)]))]
     [(expr-generic-abs a)
      (let ([r (inferQ ctx a)])
        (match r
-         [(tu t u) (if (concrete-numeric-type? t) (tu t u) (tu-error))]
+         [(tu t u) (let ([bt (base-numeric-type t)])
+                     (if (concrete-numeric-type? bt) (tu (refine-arith1 t bt sign-transfer-abs) u) (tu-error)))]
          [_ (tu-error)]))]
 
     ;; Generic conversion: from-integer TargetType val, from-rational TargetType val

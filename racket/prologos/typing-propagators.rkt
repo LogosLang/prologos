@@ -49,7 +49,12 @@
                   merge-classify-inhabit
                   classify-inhabit-contradiction?)
          (only-in "qtt.rkt" zero-usage single-usage add-usage scale-usage)  ;; Track 4B Phase 4
-         (only-in "typing-core.rkt" numeric-join)  ;; Phase T: generic op return types
+         (only-in "typing-core.rkt" numeric-join
+                  refine-arith refine-arith1 base-numeric-type
+                  negatable-numeric-type? concrete-numeric-type? divisible-numeric-type?)  ;; Phase T + N5de sign transfer
+         (only-in "sign-refinement.rkt"
+                  sign-transfer-add sign-transfer-sub sign-transfer-mul sign-transfer-div
+                  sign-transfer-neg sign-transfer-abs)  ;; N5de: sign-preserving arith on the on-network path (scaffolding bridge → PPN, §15)
          (only-in "warnings.rkt" emit-coercion-warning!)  ;; Phase 9 prep: coercion bridge
          (only-in "trait-resolution.rkt" resolve-trait-constraints!)  ;; Phase 9: parametric bridge
          ;; Note (PPN 4C Path T-3 Commit A.2-a, 2026-04-22): pre-T-3 expr-union
@@ -2313,18 +2318,32 @@
   ;; Binary arithmetic: numeric-join of both operand types.
   ;; Comparisons: always Bool.
   ;; Unary: identity (same as operand type).
-  (define (generic-arithmetic-ret ts) (numeric-join (car ts) (cadr ts)))
   (define (generic-comparison-ret ts) (expr-Bool))
-  (define (generic-unary-ret ts) (car ts))
+  ;; N5de sign-preserving arithmetic on the on-network typing path (mirrors typing-core.rkt:859-913).
+  ;; SCAFFOLDING BRIDGE: the on-network ret-fn calls the imperative refine-arith; native cell-flow
+  ;; refinement is deferred to the PPN track (§15). numeric-join → base; refine-arith re-refines the
+  ;; sign (bare operands ⇒ sign-top ⇒ bare base). mod is unrefined; unary guard-fail returns operand t.
+  (define (make-arith-ret transfer2 div?)
+    (lambda (ts)
+      (let ([j (numeric-join (car ts) (cadr ts))])
+        (and j (or (not div?) (divisible-numeric-type? j))
+             (refine-arith (car ts) (cadr ts) j transfer2)))))
+  (define (generic-mod-ret ts) (numeric-join (car ts) (cadr ts)))
+  (define (generic-negate-ret ts)
+    (let* ([t (car ts)] [tb (base-numeric-type t)])
+      (if (negatable-numeric-type? tb) (refine-arith1 t tb sign-transfer-neg) t)))
+  (define (generic-abs-ret ts)
+    (let* ([t (car ts)] [tb (base-numeric-type t)])
+      (if (concrete-numeric-type? tb) (refine-arith1 t tb sign-transfer-abs) t)))
 
-  ;; Binary arithmetic ops: return type = numeric-join(a, b)
-  (for ([info (list (list expr-generic-add? expr-generic-add-a expr-generic-add-b 'generic-add)
-                    (list expr-generic-sub? expr-generic-sub-a expr-generic-sub-b 'generic-sub)
-                    (list expr-generic-mul? expr-generic-mul-a expr-generic-mul-b 'generic-mul)
-                    (list expr-generic-div? expr-generic-div-a expr-generic-div-b 'generic-div)
-                    (list expr-generic-mod? expr-generic-mod-a expr-generic-mod-b 'generic-mod))])
+  ;; Binary arithmetic ops: refine-arith(numeric-join(a,b)) via the per-op Sign transfer.
+  (for ([info (list (list expr-generic-add? expr-generic-add-a expr-generic-add-b 'generic-add (make-arith-ret sign-transfer-add #f))
+                    (list expr-generic-sub? expr-generic-sub-a expr-generic-sub-b 'generic-sub (make-arith-ret sign-transfer-sub #f))
+                    (list expr-generic-mul? expr-generic-mul-a expr-generic-mul-b 'generic-mul (make-arith-ret sign-transfer-mul #f))
+                    (list expr-generic-div? expr-generic-div-a expr-generic-div-b 'generic-div (make-arith-ret sign-transfer-div #t))
+                    (list expr-generic-mod? expr-generic-mod-a expr-generic-mod-b 'generic-mod generic-mod-ret))])
     (register-typing-rule! (car info) 2 (list (cadr info) (caddr info))
-                           generic-arithmetic-ret (cadddr info)))
+                           (list-ref info 4) (cadddr info)))
 
   ;; Comparison ops: return type = Bool
   (for ([info (list (list expr-generic-lt? expr-generic-lt-a expr-generic-lt-b 'generic-lt)
@@ -2335,11 +2354,11 @@
     (register-typing-rule! (car info) 2 (list (cadr info) (caddr info))
                            generic-comparison-ret (cadddr info)))
 
-  ;; Unary ops: return type = same as operand
+  ;; Unary ops: N5de sign transfer (generic-negate-ret / generic-abs-ret defined above).
   (register-typing-rule! expr-generic-negate? 1 (list expr-generic-negate-a)
-                         generic-unary-ret 'generic-negate)
+                         generic-negate-ret 'generic-negate)
   (register-typing-rule! expr-generic-abs? 1 (list expr-generic-abs-a)
-                         generic-unary-ret 'generic-abs)
+                         generic-abs-ret 'generic-abs)
 
   ;; Conversion: return type = target-type field (first child EXPRESSION).
   ;; generic-from-int(target-type, arg) → target-type

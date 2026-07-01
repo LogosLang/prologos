@@ -49,6 +49,10 @@
   (perf-inc-zonk!)
   (zonk-count! 'zonk)
   (match e
+    ;; Numerics N5de: type-lattice sentinels (from on-network type-unify-or-top) are symbols,
+    ;; not exprs — pass through so an on-network refined-fvar merge that yields type-top/bot
+    ;; doesn't crash zonk. (On-network refinement handling is a future PPN track, design §15.)
+    [(or 'type-top 'type-bot) e]
     ;; THE KEY CASE: metavariable — follow solution recursively
     ;; PM 8F Phase 3: use cell-id fast path (skips 82ns id-map lookup)
     [(expr-meta id cell-id)
@@ -504,6 +508,8 @@
 (define (zonk-at-depth depth e)
   (zonk-count! (if (= depth 0) 'zonk-at-depth-0 'zonk-at-depth-1))
   (match e
+    ;; Numerics N5de: type-lattice sentinels pass through (see zonk).
+    [(or 'type-top 'type-bot) e]
     ;; THE KEY CASE: metavariable — follow solution and shift by accumulated depth
     ;; PM 8F Phase 3: use cell-id fast path (same as zonk)
     [(expr-meta id cell-id)

@@ -32,6 +32,7 @@
          "warnings.rkt"
          "pretty-print.rkt"
          "subtype-predicate.rkt"  ;; SRE Track 1: extracted flat subtype predicate
+         "sign-refinement.rkt"    ;; Numerics N5c: Sign transfer + name<->Sign/base tables
 )
 
 (provide infer check is-type infer-level
@@ -42,7 +43,7 @@
          concrete-numeric-type? divisible-numeric-type? negatable-numeric-type?
          from-int-target-type? from-rat-target-type?
          numeric-join exact-numeric-type? posit-type?
-         base-numeric-type
+         base-numeric-type refine-arith refine-arith1
          ;; Schema type helpers
          schema-field-type->expr
          schema-lookup-field
@@ -194,6 +195,34 @@
        [(subtype-pair? name 'Rat) (expr-Rat)]
        [else t])]
     [_ t]))
+
+;; Numerics N5de: base-type expr for a refined-name's base symbol ('Int/'Rat).
+(define (refined-base->expr base-sym)
+  (case base-sym [(Int) (expr-Int)] [(Rat) (expr-Rat)] [else (expr-error)]))
+
+;; Numerics N5de: refinement-preserving arithmetic transfer. Runs PARALLEL to numeric-join —
+;; base via rank (numeric-join, which already strips refined operands to base), sign via the
+;; Sign transfer; the sign channel never enters numeric-join / subtype-lattice-merge.
+(define (operand-sign t)
+  (if (and (expr-fvar? t) (refined-name? (expr-fvar-name t)))
+      (refined-name->sign (expr-fvar-name t))
+      sign-top))                       ;; bare/non-refined operand ⇒ ⊤ ("no refinement")
+(define (base-sym-of j)                ;; refinements are named only over Int/Rat bases
+  (cond [(expr-Int? j) 'Int] [(expr-Rat? j) 'Rat] [else #f]))
+;; re-refine the numeric-join result j via a binary sign transfer; bare j if the sign is unnamed/⊤.
+(define (refine-arith ta tb j transfer2)
+  (let ([bs (base-sym-of j)])
+    (if bs
+        (let ([rn (base+sign->refined-name bs (transfer2 (operand-sign ta) (operand-sign tb)))])
+          (if rn (expr-fvar rn) j))
+        j)))
+;; unary variant (negate/abs): j is the base result type (post base-numeric-type strip).
+(define (refine-arith1 ta j transfer1)
+  (let ([bs (base-sym-of j)])
+    (if bs
+        (let ([rn (base+sign->refined-name bs (transfer1 (operand-sign ta)))])
+          (if rn (expr-fvar rn) j))
+        j)))
 
 ;; numeric-join: least upper bound of two numeric types.
 ;; Returns the wider type, or #f if not numeric types.
@@ -431,6 +460,8 @@
          (expr-error))]
 
     ;; ---- Free variable: lookup in global environment ----
+    ;; Numerics N5de: nominal-erased refined numeric types are built-in types (: Type 0).
+    [(expr-fvar (? refined-name? _)) (expr-Type (lzero))]
     [(expr-fvar name)
      (let ([ty (global-env-lookup-type name)])
        (when ty
@@ -535,9 +566,18 @@
     ;; ---- Annotated terms ----
     ;; ann(e, T) synthesizes T if T is a type and e checks against T
     [(expr-ann e1 t)
-     (if (and (is-type ctx t) (check ctx e1 t))
-         t
-         (expr-error))]
+     ;; Numerics N5de: ascription to a refined numeric type is an ERASED NARROWING CAST
+     ;; (unsafe; scoped to `the` — NOT the general conversion fallback, so the invariant
+     ;; that Int </: PosInt is preserved elsewhere). Check the operand against the BASE
+     ;; (Int/Rat) and re-type to the refined type. `the` already erases to e1 at runtime.
+     (let ([tw (whnf t)])
+       (cond
+         [(and (expr-fvar? tw) (refined-name? (expr-fvar-name tw)))
+          (if (check ctx e1 (refined-base->expr (refined-name->base (expr-fvar-name tw))))
+              t
+              (expr-error))]
+         [(and (is-type ctx t) (check ctx e1 t)) t]
+         [else (expr-error)]))]
 
     ;; ---- Lambda with explicit domain: synthesize Pi type ----
     ;; Enables inference of bare lambdas (e.g., multi-bracket fn) at top level.
@@ -819,19 +859,19 @@
     [(expr-generic-add a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
             [j (numeric-join/warn! ta tb)])
-       (if j j (expr-error)))]
+       (if j (refine-arith ta tb j sign-transfer-add) (expr-error)))]
     [(expr-generic-sub a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
             [j (numeric-join/warn! ta tb)])
-       (if j j (expr-error)))]
+       (if j (refine-arith ta tb j sign-transfer-sub) (expr-error)))]
     [(expr-generic-mul a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
             [j (numeric-join/warn! ta tb)])
-       (if j j (expr-error)))]
+       (if j (refine-arith ta tb j sign-transfer-mul) (expr-error)))]
     [(expr-generic-div a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
             [j (numeric-join/warn! ta tb)])
-       (if (and j (divisible-numeric-type? j)) j (expr-error)))]
+       (if (and j (divisible-numeric-type? j)) (refine-arith ta tb j sign-transfer-div) (expr-error)))]
 
     ;; Binary comparison: T1 -> T2 -> Bool (coercion via numeric-join)
     [(expr-generic-lt a b)
@@ -859,13 +899,18 @@
             [j (numeric-join/warn! ta tb)])
        (if j j (expr-error)))]
 
-    ;; Unary: T -> T
+    ;; Unary: T -> T  (Numerics N5de: guard on the BASE — refined operands strip to Int/Rat —
+    ;; then re-refine via the sign transfer; also fixes `abs NegInt → PosInt`.)
     [(expr-generic-negate a)
-     (let ([ta (infer ctx a)])
-       (if (negatable-numeric-type? ta) ta (expr-error)))]
+     (let* ([ta (infer ctx a)] [tb (base-numeric-type ta)])
+       (if (negatable-numeric-type? tb)
+           (refine-arith1 ta tb sign-transfer-neg)
+           (expr-error)))]
     [(expr-generic-abs a)
-     (let ([ta (infer ctx a)])
-       (if (concrete-numeric-type? ta) ta (expr-error)))]
+     (let* ([ta (infer ctx a)] [tb (base-numeric-type ta)])
+       (if (concrete-numeric-type? tb)
+           (refine-arith1 ta tb sign-transfer-abs)
+           (expr-error)))]
 
     ;; Generic conversion: from-integer TargetType val (Int -> T)
     [(expr-generic-from-int target-type arg)
@@ -2691,6 +2736,9 @@
 
     ;; Rat formation: Rat : Type(0)
     [(expr-Rat) (just-level (lzero))]
+
+    ;; Numerics N5de: refined numeric types (PosInt/…) : Type(0)
+    [(expr-fvar (? refined-name? _)) (just-level (lzero))]
 
     ;; Posit8 formation: Posit8 : Type(0)
     [(expr-Posit8) (just-level (lzero))]

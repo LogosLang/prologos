@@ -873,7 +873,9 @@
 (define builtin-type-names
   '(Nat Int Rat Bool String Char Keyword Unit Nil Symbol Type
     Posit8 Posit16 Posit32 Posit64 Quire8 Quire16 Quire32 Quire64
-    List PVec Map Set Option Result Pair LSeq Value))
+    List PVec Map Set Option Result Pair LSeq Value
+    ;; Numerics N5de: nominal-erased refined numeric types (Q6; base Int/Rat at runtime)
+    PosInt NegInt Zero NonZeroInt PosRat NegRat NonZeroRat))
 (define (qualify-type-datum datum ns-ctx)
   (cond
     [(symbol? datum)
@@ -6112,6 +6114,28 @@
 (register-subtype-pair! 'Posit16 'Posit64)
 (register-subtype-pair! 'Posit32 'Posit64)
 (register-subtype-pair! 'Float32 'Float64)
+;; Numerics N5de: nominal-erased refined numeric types (Q6 erasure ⇒ identity coercion,
+;; like capabilities). Seeded here (replacing the deleted `subtype PosInt Int` decls) so
+;; subtype? recognizes them everywhere (SRE structural walk + base-numeric-type). No auto
+;; transitive closure at register-subtype-pair! ⇒ seed transitive edges explicitly.
+;; base edges → Int/Rat:
+(register-subtype-pair! 'PosInt 'Int)
+(register-subtype-pair! 'NegInt 'Int)
+(register-subtype-pair! 'Zero 'Int)
+(register-subtype-pair! 'NonZeroInt 'Int)
+(register-subtype-pair! 'PosRat 'Rat)
+(register-subtype-pair! 'NegRat 'Rat)
+(register-subtype-pair! 'NonZeroRat 'Rat)
+;; transitive Int-family → Rat:
+(register-subtype-pair! 'PosInt 'Rat)
+(register-subtype-pair! 'NegInt 'Rat)
+(register-subtype-pair! 'Zero 'Rat)
+(register-subtype-pair! 'NonZeroInt 'Rat)
+;; same-base sign edges (Sign ⊆): Pos/Neg ⊑ NonZero (Zero ⊄ NonZero):
+(register-subtype-pair! 'PosInt 'NonZeroInt)
+(register-subtype-pair! 'NegInt 'NonZeroInt)
+(register-subtype-pair! 'PosRat 'NonZeroRat)
+(register-subtype-pair! 'NegRat 'NonZeroRat)
 
 ;; ========================================
 ;; Capability registry (Capabilities as Types)
@@ -6564,7 +6588,9 @@
                   ;; Propagator / ATMS / Relational ground types
                   PropNetwork CellId PropId UnionFind
                   ATMS AssumptionId TableStore
-                  Solver Goal Derivation))
+                  Solver Goal Derivation
+                  ;; Numerics N5de: nominal-erased refined numeric types (concrete, not tyvars)
+                  PosInt NegInt Zero NonZeroInt PosRat NegRat NonZeroRat))
       (lookup-ctor sym)       ;; user-defined constructor → known
       (lookup-type-ctors sym) ;; user-defined type → known
       (lookup-trait sym)      ;; trait → known (not a variable)
@@ -8721,6 +8747,8 @@
     Quire64 q64-zero q64-fma q64-to
     Int int int+ int- int* int/ int-mod int-neg int-abs int-lt int-le int-eq from-nat
     Rat rat rat+ rat- rat* rat/ rat-neg rat-abs rat-lt rat-le rat-eq from-int rat-numer rat-denom
+    ;; Numerics N5de: nominal-erased refined numeric types (concrete built-ins, not free tyvars)
+    PosInt NegInt Zero NonZeroInt PosRat NegRat NonZeroRat
     Keyword Map map-empty map-assoc map-get map-dissoc map-size map-has-key? map-keys map-vals
     Set set-empty set-insert set-member? set-delete set-size set-union set-intersect set-diff set-to-list
     PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice pvec-to-list pvec-from-list pvec-fold pvec-map pvec-filter

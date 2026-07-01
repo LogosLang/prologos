@@ -1442,6 +1442,10 @@
   ;; Fast path: trivially-WHNF expressions bypass the full match.
   ;; Cost: ~0.5μs (struct predicate checks) vs ~150μs (match fallthrough).
   (cond
+    ;; Numerics N5de: type-lattice sentinels (from on-network type-unify-or-top merges) are
+    ;; symbols, not exprs; pass through so a compound type carrying a nested type-top/bot
+    ;; doesn't crash reduction. (Full on-network refinement handling → future PPN track, §15.)
+    [(or (eq? e 'type-top) (eq? e 'type-bot)) e]
     [(whnf-trivial? e) e]
     [else
      ;; Check fuel
