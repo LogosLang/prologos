@@ -54,7 +54,8 @@
                   negatable-numeric-type? concrete-numeric-type? divisible-numeric-type?)  ;; Phase T + N5de sign transfer
          (only-in "sign-refinement.rkt"
                   sign-transfer-add sign-transfer-sub sign-transfer-mul sign-transfer-div
-                  sign-transfer-neg sign-transfer-abs)  ;; N5de: sign-preserving arith on the on-network path (scaffolding bridge → PPN, §15)
+                  sign-transfer-neg sign-transfer-abs
+                  refined-name?)  ;; N5de sign transfer; N5f: refined-name? drives the exact classifier
          (only-in "warnings.rkt" emit-coercion-warning!)  ;; Phase 9 prep: coercion bridge
          (only-in "trait-resolution.rkt" resolve-trait-constraints!)  ;; Phase 9: parametric bridge
          ;; Note (PPN 4C Path T-3 Commit A.2-a, 2026-04-22): pre-T-3 expr-union
@@ -776,6 +777,12 @@
      (expr-fvar-name type-val)]
     [else #f]))
 
+;; N5f: last segment of a possibly-::-qualified type name → bare symbol
+;; ('prologos::data::refined-int::PosInt → 'PosInt; bare 'PosInt → 'PosInt).
+(define (fvar-name-last-segment name)
+  (define segs (string-split (symbol->string name) "::"))
+  (if (null? segs) name (string->symbol (list-ref segs (sub1 (length segs))))))
+
 ;; Type family classifier for coercion detection.
 ;; exact = arbitrary-precision (Int, Nat, Rat and subtypes)
 ;; approximate = machine-precision (Posit*, Float*)
@@ -791,16 +798,18 @@
     [(expr-Posit64? type-val) 'approximate]
     [(expr-Float32? type-val) 'approximate]
     [(expr-Float64? type-val) 'approximate]
-    ;; FQN types (from global env)
+    ;; FQN types (from global env): classify by EXACT last-segment, not substring.
+    ;; N5f (§8a fix 2): substring over-matched arbitrary names (Position⊃"Posit",
+    ;; NonZero⊃"Zero", Rateable⊃"Rat"). refined-name? is the authoritative refined
+    ;; whitelist (all 7 refined names have base Int/Rat = exact); the builtin numeric
+    ;; names are a defensive no-regress case — approximate/exact builtins normally
+    ;; arrive as structs above, but an FQN alias reaching here still classifies right.
     [(expr-fvar? type-val)
-     (define s (symbol->string (expr-fvar-name type-val)))
+     (define seg (fvar-name-last-segment (expr-fvar-name type-val)))
      (cond
-       [(or (string-contains? s "Rat") (string-contains? s "NegInt")
-            (string-contains? s "PosInt") (string-contains? s "Zero")
-            (string-contains? s "NegRat") (string-contains? s "PosRat"))
-        'exact]
-       [(or (string-contains? s "Posit") (string-contains? s "Float"))
-        'approximate]
+       [(refined-name? seg) 'exact]
+       [(memq seg '(Posit8 Posit16 Posit32 Posit64 Float32 Float64)) 'approximate]
+       [(memq seg '(Int Nat Rat)) 'exact]
        [else 'other])]
     [else 'other]))
 
