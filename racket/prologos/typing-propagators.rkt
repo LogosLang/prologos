@@ -2051,21 +2051,42 @@
          #:component-paths child-type-paths))
      net*]
     [else
-     ;; Constant return type
+     ;; Constant return type. Install children (if any) first.
      (define net-with-children
        (for/fold ([n net]) ([child-fn (in-list children)])
          (install-typing-network n tm-cid (child-fn e) ctx-pos)))
-     ;; PPN 4C Phase 3e/follow-up (2026-04-20): literal-fire writes a constant
-     ;; and does NOT read any cell. Inputs = (list) — no dependencies. The
-     ;; propagator still fires exactly once via the scheduler's initial-firing
-     ;; path (net-add-propagator unconditionally enqueues pid at install time).
-     ;; No :component-paths needed (empty input list means no structural
-     ;; inputs to enforce). Cleaner than the (cons tm-cid #f) whole-cell
-     ;; declaration that misleadingly suggested it watches everything.
-     (define-values (net* _pid)
-       (net-add-propagator net-with-children (list) (list tm-cid)
-                           (make-literal-fire-fn tm-cid e ret-type)))
-     net*]))
+     (cond
+       [(null? children)
+        ;; True literal (arity 0): no operands to watch — fast path, write the
+        ;; constant once. PPN 4C Phase 3e/follow-up (2026-04-20): literal-fire writes
+        ;; a constant and reads no cell; inputs = (list) — fires once via initial-firing.
+        (define-values (net* _pid)
+          (net-add-propagator net-with-children (list) (list tm-cid)
+                              (make-literal-fire-fn tm-cid e ret-type)))
+        net*]
+       [else
+        ;; N4b (Option B): constant-return op WITH operands — watch each child's :type
+        ;; and FORWARD a child type-top to the op position instead of masking it. A
+        ;; context-typed num-lit operand whose default collides with the expected
+        ;; operand type produces type-top at that child; forwarding it makes the
+        ;; on-network result non-clean, so the imperative fallback runs (its op rule
+        ;; checks operands + solves the literal's meta). Concrete/marker operands keep
+        ;; clean child :types → no type-top → the constant ret-type is written as before.
+        (define child-exprs (map (lambda (fn) (fn e)) children))
+        (define child-type-paths
+          (map (lambda (c) (cons tm-cid (cons c ':type))) child-exprs))
+        (define-values (net* _pid)
+          (net-add-propagator net-with-children (list tm-cid) (list tm-cid)
+            (lambda (net)
+              (define child-types
+                (map (lambda (c) (type-map-read net tm-cid c)) child-exprs))
+              (cond
+                [(ormap type-bot? child-types) net]  ;; wait for all children
+                [(ormap type-top? child-types)
+                 (type-map-write net tm-cid e type-top)]
+                [else (type-map-write net tm-cid e ret-type)]))
+            #:component-paths child-type-paths))
+        net*])]))
 
 ;; Register ALL known expression kinds.
 ;; Called once at module load time.
@@ -2440,9 +2461,10 @@
       ;; Zero propagator overhead: no dependents entry, no scheduling, no cleanup.
       [(expr-int _)    (type-map-write net tm-cid e (expr-Int))]
       [(expr-nat-val _)(type-map-write net tm-cid e (expr-Nat))]
-      ;; N4: numeric literal — on-network infer writes its per-node type meta (alpha);
-      ;; check/default resolves alpha function-level (there is no check-on-network path).
-      [(expr-num-lit _ _ alpha) (type-map-write net tm-cid e alpha)]
+      ;; N4: numeric literal — on-network runs only in INFER position (no check-on-network),
+      ;; so write its DEFAULT type (Int if integral else Rat); annotated/context positions are
+      ;; typed function-level by the check arm (which solves alpha, collapsed at zonk).
+      [(expr-num-lit _ integral? _) (type-map-write net tm-cid e (if integral? (expr-Int) (expr-Rat)))]
       [(expr-true)     (type-map-write net tm-cid e (expr-Bool))]
       [(expr-false)    (type-map-write net tm-cid e (expr-Bool))]
 

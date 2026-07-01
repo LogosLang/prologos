@@ -46,6 +46,22 @@
          ;; Solver normalization (for benchmarks + PUnify)
          normalize-ast-to-solver-term)
 
+;; N4: collapse a resolved numeric literal (expr-num-lit) to its concrete node.
+;; Local mirror of zonk's collapse-num-lit (reduction can't require zonk — cycle via
+;; solver). Returns #f if `ty` is not a concrete numeric type (caller keeps the node).
+(define (num-lit->concrete val integral? ty)
+  (cond
+    [(expr-Int? ty)     (expr-int val)]
+    [(expr-Nat? ty)     (expr-nat-val val)]
+    [(expr-Rat? ty)     (expr-rat val)]
+    [(expr-Posit8? ty)  (expr-posit8  (posit8-encode  val))]
+    [(expr-Posit16? ty) (expr-posit16 (posit16-encode val))]
+    [(expr-Posit32? ty) (expr-posit32 (posit32-encode val))]
+    [(expr-Posit64? ty) (expr-posit64 (posit64-encode val))]
+    [(expr-Float32? ty) (expr-float32 (flsingle (exact->inexact val)))]
+    [(expr-Float64? ty) (expr-float64 (exact->inexact val))]
+    [else #f]))
+
 ;; ========================================
 ;; Helpers for building Prologos List values in reduction
 ;; ========================================
@@ -3192,6 +3208,15 @@
      (let ([sol (meta-solution/cell-id cell-id id)])
        (if sol (whnf sol) e))]
 
+    ;; N4: numeric literal — collapse to its concrete node once alpha is solved (so
+    ;; primitive ops reducing their args see concrete values); stuck if unsolved.
+    [(expr-num-lit val integral? alpha)
+     (define resolved
+       (match alpha
+         [(expr-meta id cell-id) (or (meta-solution/cell-id cell-id id) alpha)]
+         [_ alpha]))
+     (or (num-lit->concrete val integral? resolved) e)]
+
     ;; Everything else is already in WHNF
     [_ e]))
 
@@ -3236,7 +3261,13 @@
     [(expr-typed-hole _) e]
     [(expr-Open) e]
     [(expr-meta _ _) e]
-    [(expr-num-lit _ _ _) e]  ;; N4: transient literal — collapsed by zonk; identity if it slips through
+    ;; N4: numeric literal — collapse when alpha solved (mirror whnf); else identity.
+    [(expr-num-lit val integral? alpha)
+     (define resolved
+       (match alpha
+         [(expr-meta id cell-id) (or (meta-solution/cell-id cell-id id) alpha)]
+         [_ alpha]))
+     (or (num-lit->concrete val integral? resolved) e)]
     [(expr-error) e]
     [(? ns-context?) e]  ;; namespace metadata — pass-through
     [(expr-panic msg) (expr-panic (nf msg))]  ;; reduce msg, stay stuck

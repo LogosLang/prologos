@@ -1316,6 +1316,12 @@
     ;; ---- Rat ----
     [(surf-rat-type loc) (expr-Rat)]
     [(surf-rat-lit v loc) (expr-rat v)]
+    ;; N4b: polymorphic numeric literal → expr-num-lit with a FRESH type meta (alpha),
+    ;; resolved from context in check-mode or defaulted (integral? → Int else Rat) in zonk.
+    [(surf-num-lit v integral? loc)
+     (expr-num-lit v integral?
+       (fresh-meta ctx-empty (expr-hole)
+         (meta-source-info loc 'num-lit-type "polymorphic numeric literal" #f (env->name-stack env))))]
     [(surf-rat-add a b loc)
      (let ([ea (elaborate a env depth)]
            [eb (elaborate b env depth)])

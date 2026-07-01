@@ -105,7 +105,7 @@
 ;; ========================================
 
 (test-case "regression: exact/posit arithmetic unchanged"
-  (check-equal? (ws-val "3.14") "~3.14 : Posit32")
+  (check-equal? (ws-val "3.14") "3.14 : Rat")  ;; N4: bare decimal → polymorphic Rat
   (check-true (string-contains? (ws-val "[lt 1 2]") "true") "generic lt over Int still works")
   (check-equal? (ws-val "[+ 2 3]") "5 : Int" "generic + over Int still works"))
 

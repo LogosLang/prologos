@@ -98,10 +98,10 @@
 ;; Regression: non-exponent literals UNCHANGED
 ;; ========================================
 
-(test-case "exp-literal/regress-bare-decimal-Posit32"
-  ;; 3.14 (no exponent) stays Posit32 — N1 must NOT touch it (that's N4)
+(test-case "exp-literal/bare-decimal-polymorphic-N4"
+  ;; N4: bare 3.14 (no exponent) is now a polymorphic literal → unconstrained Rat
   (define r (run-ns-ws-last "3.14"))
-  (check-true (string-contains? r "Posit32") "bare 3.14 stays Posit32"))
+  (check-true (string-contains? r "Rat") "bare 3.14 → Rat (N4 polymorphic)"))
 
 (test-case "exp-literal/regress-int"
   (check-equal? (run-ns-ws-last "42") "42 : Int"))
@@ -135,14 +135,14 @@
                "x-1e3 must not produce a number token (stays an identifier)"))
 
 ;; ========================================
-;; Deferred (D7): sexp exponents still -> Posit32 (N4 reconciles). Captured here
-;; so the WS/sexp divergence is explicit, not silent.
+;; N4 reconciled the sexp path: a sexp exponent reads as an inexact number →
+;; surf-num-lit (polymorphic). 1e10 is integral → unconstrained Int.
 ;; ========================================
 
-(test-case "exp-literal/sexp-still-Posit32-deferred-N4"
+(test-case "exp-literal/sexp-integral-exp-N4-Int"
   (define r (run-ns-last "(eval 1e10)"))
-  (check-true (string-contains? r "Posit32")
-              "sexp 1e10 stays Posit32 (N1 is WS-only; sexp -> N4)"))
+  (check-true (string-contains? r "Int")
+              "sexp 1e10 → Int (N4 handles the sexp path N1 deferred)"))
 
 ;; ========================================
 ;; Level 3: WS file via process-file.

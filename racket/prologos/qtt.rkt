@@ -2050,8 +2050,8 @@
     [(expr-Vec _ _) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-Fin _) (tu (expr-Type (lzero)) (zero-usage n))]
 
-    ;; ---- N4: numeric literal — type is its meta alpha; zero resource usage ----
-    [(expr-num-lit _ _ alpha) (tu alpha (zero-usage n))]
+    ;; ---- N4: numeric literal in infer position → DEFAULT type (Int if integral else Rat); zero usage ----
+    [(expr-num-lit _ integral? _) (tu (if integral? (expr-Int) (expr-Rat)) (zero-usage n))]
 
     ;; ---- Fallback ----
     [_ (tu-error)]))

@@ -487,12 +487,12 @@
 
     ;; Bare fraction (rational literal, e.g. 3/7)
     [(and (number? d) (exact? d) (rational? d) (not (integer? d)))
-     (surf-rat-lit d loc)]
+     (surf-num-lit d #f loc)]  ;; N4b: bare fraction → polymorphic (non-integer → integral? #f)
 
     ;; Inexact number (e.g. 3.14 from sexp mode) → Posit32 (approximate)
     ;; Racket's reader produces inexact floats for decimals; convert to exact for Posit encoding.
     [(and (number? d) (inexact? d))
-     (surf-approx-literal (inexact->exact d) loc)]
+     (let ([ex (inexact->exact d)]) (surf-num-lit ex (integer? ex) loc))]  ;; N4b: bare decimal → polymorphic
 
     ;; String literal → surf-string
     [(string? d)
@@ -636,7 +636,8 @@
      (if (= (length args) 1)
          (let ([v (stx->datum (car args))])
            (if (and (number? v) (exact? v) (rational? v))
-               (surf-rat-lit v loc)
+               ;; N4b: genuine fraction → polymorphic; integer-valued slash (0/1, 6/3) stays concrete Rat.
+               (if (integer? v) (surf-rat-lit v loc) (surf-num-lit v #f loc))
                (parse-error loc (format "rat literal requires an exact rational, got: ~a" v) #f)))
          (parse-error loc "rat literal requires exactly one argument" #f))]
 
@@ -654,7 +655,7 @@
      (if (= (length args) 1)
          (let ([v (stx->datum (car args))])
            (if (and (number? v) (exact? v) (rational? v))
-               (surf-approx-literal v loc)
+               (surf-num-lit v (integer? v) loc)  ;; N4b: bare decimal → polymorphic (3.0→Int, 3.14→Rat by default)
                (parse-error loc (format "decimal literal requires a numeric argument, got: ~a" v) #f)))
          (parse-error loc "decimal literal requires exactly one argument" #f))]
 

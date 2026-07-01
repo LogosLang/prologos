@@ -2144,9 +2144,10 @@
      (infer ctx target)
      (expr-hole)]
 
-    ;; ---- N4: numeric literal in infer position (bare/top-level `3.14`, inference-
-    ;; ---- position arg) — its type is its meta alpha; context or zonk-default resolves it.
-    [(expr-num-lit _ _ alpha) alpha]
+    ;; ---- N4: numeric literal in INFER position (unconstrained: bare/top-level 3.14,
+    ;; ---- arithmetic operand, polymorphic-fn arg) → its DEFAULT type (Int if integral
+    ;; ---- else Rat). Context-typing happens in CHECK (fires before infer, solves alpha).
+    [(expr-num-lit _ integral? _) (if integral? (expr-Int) (expr-Rat))]
 
     ;; ---- Fallback: cannot infer ----
     [_ (expr-error)]))

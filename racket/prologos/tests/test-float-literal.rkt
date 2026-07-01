@@ -57,7 +57,7 @@
 ;; ========================================
 
 (test-case "non-float literals unchanged"
-  (check-equal? (run-ns-ws-last "3.14") "~3.14 : Posit32" "bare 3.14 stays Posit32")
+  (check-equal? (run-ns-ws-last "3.14") "3.14 : Rat" "N4: bare 3.14 → polymorphic Rat")
   (check-equal? (run-ns-ws-last "1e10") "10000000000 : Int" "N1 exponent literal still exact Int")
   (check-equal? (run-ns-ws-last "42") "42 : Int" "bare int unchanged")
   (let ([r (run-ns-ws-last "1/2")])

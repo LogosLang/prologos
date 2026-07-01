@@ -191,11 +191,11 @@
 ;; 7. End-to-End: WS-Mode Eval
 ;; ========================================
 
-(test-case "neg-lit/e2e: decimal -3.14 produces Posit32"
-  ;; In WS mode, -3.14 → decimal-literal(-157/50) → surf-approx-literal → expr-posit32
+(test-case "neg-lit/e2e: decimal -3.14 is polymorphic (N4)"
+  ;; N4: -3.14 → $decimal-literal(-157/50) → surf-num-lit → unconstrained Rat
   (check-contains
    (run-ns-last
     (string-append
      "(ns neg-e2e-dec)\n"
      "(eval ($decimal-literal -157/50))\n"))
-   "Posit32"))
+   "Rat"))

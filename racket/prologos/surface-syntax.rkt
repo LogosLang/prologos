@@ -219,6 +219,8 @@
  (struct-out surf-quire64-to)
  ;; Approximate literal (~N)
  (struct-out surf-approx-literal)
+ ;; N4b: polymorphic numeric literal (bare decimal/fraction)
+ (struct-out surf-num-lit)
  ;; Symbol surface forms
  (struct-out surf-symbol-type)
  (struct-out surf-symbol)
@@ -836,6 +838,11 @@
 ;; Approximate literal: ~N → nearest Posit32 (default), width-aware in check context
 ;; val is an exact rational (integer or fraction)
 (struct surf-approx-literal (val srcloc) #:transparent)
+
+;; N4b: polymorphic numeric literal (bare decimal/fraction/non-integral-exp).
+;; val = exact rational; integral? = (integer? val) for the Int-vs-Rat default;
+;; srcloc LAST (the surf-node-srcloc last-field invariant). Elaborates to expr-num-lit.
+(struct surf-num-lit (val integral? srcloc) #:transparent)
 
 ;; ========================================
 ;; Symbol type and literal (for code-as-data)

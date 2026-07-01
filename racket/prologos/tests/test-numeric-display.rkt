@@ -88,7 +88,7 @@
 ;; ========================================
 
 (test-case "Posit32 display carries ~ marker and round-trips"
-  (for ([orig (in-list (list "3.14" "~42" "0.5" "1.0" "~3/7" "0.125"))])
+  (for ([orig (in-list (list "~3.14" "~42" "~0.5" "~1.0" "~3/7" "~0.125"))])  ;; N4: bare decimals are now Rat; markers (~) stay Posit32
     (define disp (run-ns-ws-last orig))
     (check-true (string-contains? disp ": Posit32")
                 (format "~a should be Posit32: ~a" orig disp))

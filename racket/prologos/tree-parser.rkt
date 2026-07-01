@@ -236,7 +236,7 @@
             [(and (exact-integer? n) (string-contains? lex "/")) (surf-rat-lit n loc)]
             [(and (exact-integer? n) (>= n 0)) (surf-int-lit n loc)]
             [(exact-integer? n) (surf-int-lit n loc)]
-            [(rational? n) (surf-rat-lit n loc)]
+            [(rational? n) (surf-num-lit (inexact->exact n) #f loc)]  ;; N4b: genuine fraction → polymorphic
             [else (surf-var s loc)]))]
 
     ;; Nat literal: 42N
