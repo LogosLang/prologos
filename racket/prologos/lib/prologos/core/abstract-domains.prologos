@@ -3,11 +3,6 @@ ns prologos::core::abstract-domains
 require [prologos::data::sign :refer [Sign sign-bot sign-neg sign-zero sign-pos sign-top]]
 require [prologos::data::parity :refer [Parity parity-bot parity-even parity-odd parity-top]]
 require [prologos::core::lattice :refer [Lattice HasTop GaloisConnection Interval interval-bot interval-top mk-interval]]
-require [prologos::core::eq :refer [Eq Eq-eq?]]
-require [prologos::core::ord :refer [Ord Ord-compare]]
-require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]]
-require [prologos::data::refined-int :refer [PosInt pos-int NegInt neg-int Zero mk-zero]]
-require [prologos::data::refined-rat :refer [PosRat pos-rat NegRat neg-rat]]
 require [prologos::data::bool :refer [and or]]
 
 ;; ========================================
@@ -170,98 +165,4 @@ impl GaloisConnection Interval Sign
       | sign-pos  -> mk-interval 1/1 pos-inf
       | sign-top  -> mk-interval neg-inf pos-inf
 
-;; ========================================
-;; Eq PosInt -- delegate to underlying Int
-;; ========================================
-
-impl Eq PosInt
-  defn eq? [x <PosInt> y <PosInt>] <Bool>
-    match x
-      | pos-int a -> match y
-                       | pos-int b -> int-eq a b
-
-;; ========================================
-;; Eq NegInt -- delegate to underlying Int
-;; ========================================
-
-impl Eq NegInt
-  defn eq? [x <NegInt> y <NegInt>] <Bool>
-    match x
-      | neg-int a -> match y
-                       | neg-int b -> int-eq a b
-
-;; ========================================
-;; Eq Zero -- singleton, always equal
-;; ========================================
-
-impl Eq Zero
-  defn eq? [x <Zero> y <Zero>] <Bool>
-    true
-
-;; ========================================
-;; Ord PosInt -- delegate to underlying Int
-;; ========================================
-
-impl Ord PosInt
-  defn compare [x <PosInt> y <PosInt>] <Ordering>
-    match x
-      | pos-int a -> match y
-                       | pos-int b -> if [int-lt a b] lt-ord [if [int-eq a b] eq-ord gt-ord]
-
-;; ========================================
-;; Ord NegInt -- delegate to underlying Int
-;; ========================================
-
-impl Ord NegInt
-  defn compare [x <NegInt> y <NegInt>] <Ordering>
-    match x
-      | neg-int a -> match y
-                       | neg-int b -> if [int-lt a b] lt-ord [if [int-eq a b] eq-ord gt-ord]
-
-;; ========================================
-;; Ord Zero -- singleton, always eq-ord
-;; ========================================
-
-impl Ord Zero
-  defn compare [x <Zero> y <Zero>] <Ordering>
-    eq-ord
-
-;; ========================================
-;; Eq PosRat -- delegate to underlying Rat
-;; ========================================
-
-impl Eq PosRat
-  defn eq? [x <PosRat> y <PosRat>] <Bool>
-    match x
-      | pos-rat a -> match y
-                       | pos-rat b -> rat-eq a b
-
-;; ========================================
-;; Eq NegRat -- delegate to underlying Rat
-;; ========================================
-
-impl Eq NegRat
-  defn eq? [x <NegRat> y <NegRat>] <Bool>
-    match x
-      | neg-rat a -> match y
-                       | neg-rat b -> rat-eq a b
-
-;; ========================================
-;; Ord PosRat -- delegate to underlying Rat
-;; ========================================
-
-impl Ord PosRat
-  defn compare [x <PosRat> y <PosRat>] <Ordering>
-    match x
-      | pos-rat a -> match y
-                       | pos-rat b -> if [rat-lt a b] lt-ord [if [rat-eq a b] eq-ord gt-ord]
-
-;; ========================================
-;; Ord NegRat -- delegate to underlying Rat
-;; ========================================
-
-impl Ord NegRat
-  defn compare [x <NegRat> y <NegRat>] <Ordering>
-    match x
-      | neg-rat a -> match y
-                       | neg-rat b -> if [rat-lt a b] lt-ord [if [rat-eq a b] eq-ord gt-ord]
+;; (Refined-type Eq/Ord instances relocated to prologos::data::refined-instances — N5a.)

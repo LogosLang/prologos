@@ -185,7 +185,7 @@
   (check-contains
    (run-ns-last
     (string-append (rs-ns 'rs-e2)
-     "(imports [prologos::core::abstract-domains :refer [PosInt--Eq--dict]])\n"
+     "(imports [prologos::data::refined-instances :refer [PosInt--Eq--dict]])\n"
      "(imports [prologos::core::eq :refer [Eq Eq-eq?]])\n"
      "(eval (Eq-eq? PosInt PosInt--Eq--dict (pos-int 5) (pos-int 5)))\n"))
    "true"))

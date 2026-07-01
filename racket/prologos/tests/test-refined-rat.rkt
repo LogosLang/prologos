@@ -25,7 +25,7 @@
    "(ns rr :no-prelude)\n"
    "(imports [prologos::data::option :refer [Option some none]])\n"
    "(imports [prologos::data::refined-rat :refer [PosRat pos-rat NegRat neg-rat to-pos-rat to-neg-rat is-zero-rat? unsafe-pos-rat unsafe-neg-rat pos-rat-val neg-rat-val]])\n"
-   "(imports [prologos::core::abstract-domains :refer [PosRat--Eq--dict NegRat--Eq--dict PosRat--Ord--dict NegRat--Ord--dict]])\n"
+   "(imports [prologos::data::refined-instances :refer [PosRat--Eq--dict NegRat--Eq--dict PosRat--Ord--dict NegRat--Ord--dict]])\n"
    "(imports [prologos::core::eq :refer [Eq Eq-eq?]])\n"
    "(imports [prologos::core::ord :refer [Ord Ord-compare]])\n"
    "(imports [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n"))

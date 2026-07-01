@@ -25,7 +25,7 @@
    "(ns ri :no-prelude)\n"
    "(imports [prologos::data::option :refer [Option some none]])\n"
    "(imports [prologos::data::refined-int :refer [PosInt pos-int NegInt neg-int Zero mk-zero to-pos-int to-neg-int is-zero? unsafe-pos-int unsafe-neg-int pos-int-val neg-int-val zero-to-int]])\n"
-   "(imports [prologos::core::abstract-domains :refer [PosInt--Eq--dict NegInt--Eq--dict Zero--Eq--dict PosInt--Ord--dict NegInt--Ord--dict Zero--Ord--dict]])\n"
+   "(imports [prologos::data::refined-instances :refer [PosInt--Eq--dict NegInt--Eq--dict Zero--Eq--dict PosInt--Ord--dict NegInt--Ord--dict Zero--Ord--dict]])\n"
    "(imports [prologos::core::eq :refer [Eq Eq-eq?]])\n"
    "(imports [prologos::core::ord :refer [Ord Ord-compare]])\n"
    "(imports [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]])\n"))
