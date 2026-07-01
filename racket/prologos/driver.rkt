@@ -495,6 +495,10 @@
                  ;; placeholders; the sweep re-runs it (full fidelity).
                  [current-processing-surf surf])
     (reset-meta-store!)  ;; clear metavariables from previous command
+    (reset-warning-cells!)  ;; clear per-command warning cells: they are mis-homed on
+                            ;; the grows-forever persistent registry net, which
+                            ;; reset-meta-store! does NOT rebuild — so without this
+                            ;; they leak across commands / run-ns-ws-last calls / tests.
   ;; Track 7 Phase 3: Registry cells (macros, warnings, narrowing) now live in the
   ;; persistent registry network — no per-command cell creation needed.
   ;; PPN 4C Addendum Phase 4A.c-iii-a2: register-global-env-cells! retired

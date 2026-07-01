@@ -42,6 +42,7 @@
          current-capability-warnings-cell-id
          register-warning-cells!
          init-warning-cells!
+         reset-warning-cells!
          ;; Track 3 Phase 4: cell-primary readers
          read-coercion-warnings
          read-deprecation-warnings
@@ -88,6 +89,26 @@
     (current-deprecation-warnings-cell-id dw-cid)
     (define-values (net3 capw-cid) (net-new-cell net2 (current-capability-warnings) merge-list-append))
     (current-capability-warnings-cell-id capw-cid)
+    (set-box! prn-box net3)))
+
+;; Per-command reset: clear the (grows-only) warning cells on the persistent
+;; registry network back to '(). These cells are per-command EPHEMERAL but live
+;; on the persistent-registry net (init-warning-cells!), which reset-meta-store!
+;; does NOT rebuild — so without this they accumulate across commands / tests
+;; (the passes-alone-fails-in-batch hazard, and a locked rule losing L2 coverage).
+;; net-cell-reset bypasses the list-append merge (which only grows) to clear to
+;; '(). Called from process-command after reset-meta-store!. FOLLOW-UP: re-home
+;; these onto the per-command elab-network so this explicit reset can be deleted
+;; (correct-by-construction) — deferred because it crosses the elaboration-vs-
+;; module-load two-context boundary.
+(define (reset-warning-cells!)
+  (define prn-box (current-persistent-registry-net-box))
+  (when prn-box
+    (define net0 (unbox prn-box))
+    (define (clr net cid) (if cid (net-cell-reset net cid '()) net))
+    (define net1 (clr net0 (current-coercion-warnings-cell-id)))
+    (define net2 (clr net1 (current-deprecation-warnings-cell-id)))
+    (define net3 (clr net2 (current-capability-warnings-cell-id)))
     (set-box! prn-box net3)))
 
 ;; Legacy: per-command warning cell creation.

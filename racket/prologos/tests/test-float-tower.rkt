@@ -9,9 +9,10 @@
 ;;; Posit↔Float = NO join → type error (explicit conversion only).
 ;;;
 ;;; NOTE: exact→Float coercion emits a "loss of exactness" warning (Float is
-;;; 'approximate, like Posit) which the on-network path appends to output AND
-;;; leaks across run-ns-ws-last calls (shared buffer — fixture artifact). `ws-val`
-;;; strips the trailing warning so we assert on the value+type only.
+;;; 'approximate, like Posit). `ws-val` strips the trailing warning so value+type
+;;; assertions are clean; `ws-full` keeps it for the warning-emitted / no-leak
+;;; assertions. The warning-cell leak (accumulation across run-ns-ws-last calls)
+;;; is FIXED via reset-warning-cells! (per-command, warnings.rkt/driver.rkt).
 ;;;
 
 (require rackunit
@@ -47,11 +48,23 @@
   ;; both approximate → no coercion warning
   (check-equal? (ws-val "[+ 2.0f32 3.0f64]") "[float64 5.0] : Float64"))
 
-;; NOTE: the exact+Float width rules (Int+Float32→Float32 PRESERVE, Int+Float64→Float64)
-;; are asserted at the numeric-join UNIT level below — NOT via run-ns-ws-last — because
-;; exact→Float emits a "loss of exactness" coercion warning that the warning CELL
-;; accumulates and LEAKS across run-ns-ws-last calls / test files (pre-existing
-;; warnings-cell-not-reset-per-command issue, surfaced by N3d; filed in dailies).
+;; The exact+Float width rules are now assertable at WS level (L2): the warning-cell
+;; LEAK is FIXED (reset-warning-cells! runs per-command in process-command), so
+;; warnings no longer accumulate across run-ns-ws-last calls / test files.
+
+;; full output INCLUDING the trailing coercion-warning line(s)
+(define (ws-full s) (run-ns-ws-last s))
+
+(test-case "exact+Float width rules at WS level (leak fixed)"
+  ;; Int+Float32 PRESERVES Float32 width (not a clamp); value+type via ws-val
+  (check-equal? (ws-val "[+ 1 2.0f32]") "[float32 3.0] : Float32" "Int+Float32 preserves width")
+  (check-equal? (ws-val "[+ 1 2.0f64]") "[float64 3.0] : Float64" "Int+Float64 widens to Float64")
+  ;; exact→Float emits a loss-of-exactness warning (symmetry with exact→Posit)
+  (check-true (string-contains? (ws-full "[+ 1 2.0f32]") "loss of exactness")
+              "Int+Float32 warns (exact→approximate)")
+  ;; isolation: a pure-Float op after an exact+Float op must NOT carry a leaked warning
+  (check-false (string-contains? (ws-full "[+ 1.0f32 2.0f32]") "loss of exactness")
+               "Float+Float emits no warning; no leak from the prior command"))
 
 ;; ========================================
 ;; Generic comparisons over floats (word keywords; `<` is type-grouping in WS)

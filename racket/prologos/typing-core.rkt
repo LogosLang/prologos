@@ -235,20 +235,23 @@
     [(expr-Float32? t) "Float32"] [(expr-Float64? t) "Float64"]
     [else "?"]))
 
-;; numeric-join with coercion warning: emit a warning when exact→posit coercion occurs.
+;; numeric-join with coercion warning: emit when an EXACT operand is coerced into
+;; an APPROXIMATE result (Posit OR Float). Single source of truth for the imperative
+;; path — matches the on-network coercion detector (typing-propagators
+;; make-coercion-detection-fire-fn), which already warns on exact↔approximate.
+;; exact→Float warns by symmetry with exact→Posit: Float is 'approximate (loses
+;; exactness) just like Posit.
 (define (numeric-join/warn! t1 t2)
   (define j (numeric-join t1 t2))
   (when (and j (not (equal? t1 t2)))
-    ;; Cross-family: one exact, one posit → loss of exactness
-    (when (or (and (exact-numeric-type? t1) (posit-type? t2))
-              (and (posit-type? t1) (exact-numeric-type? t2))
-              ;; Also warn if both exact but result is approximate (shouldn't happen,
-              ;; but guard anyway)
-              )
-      ;; Determine which operand is exact
-      (define exact-t (cond [(exact-numeric-type? t1) t1]
-                            [(exact-numeric-type? t2) t2]
-                            [else #f]))
+    (define t1-exact? (exact-numeric-type? t1))
+    (define t2-exact? (exact-numeric-type? t2))
+    (define t1-approx? (or (posit-type? t1) (float-type? t1)))
+    (define t2-approx? (or (posit-type? t2) (float-type? t2)))
+    ;; Cross-family exact↔approximate → loss of exactness
+    (when (or (and t1-exact? t2-approx?)
+              (and t2-exact? t1-approx?))
+      (define exact-t (cond [t1-exact? t1] [t2-exact? t2] [else #f]))
       (when exact-t
         (emit-coercion-warning! (numeric-type-name exact-t)
                                 (numeric-type-name j)))))
