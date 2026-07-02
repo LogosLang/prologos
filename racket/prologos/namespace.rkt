@@ -730,7 +730,7 @@
     (imports [prologos::core::ord :refer [Ord compare ord-compare PartialOrd partial-compare PartialOrd-partial-compare
                                           nat-ord ord-lt ord-le ord-gt ord-ge ord-eq
                                           ord-min ord-max Char--Ord--dict String--Ord--dict]])
-    (imports [prologos::core::arithmetic :refer [Add Sub Mul Div Neg Abs mul div neg abs String--Add--dict]])
+    (imports [prologos::core::arithmetic :refer [Add Sub Mul Div Neg Abs mul div neg abs + - * / negate String--Add--dict]])
     (imports [prologos::core::conversions :refer [From Into TryFrom FromInt FromRat
                                                   ToFloat64 ToFloat32 ToPosit8 ToPosit16 ToPosit32 ToPosit64 ToRat ToInt
                                                   to-float64 to-float32 to-posit8 to-posit16 to-posit32 to-posit64 to-rat to-int

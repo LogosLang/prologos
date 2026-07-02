@@ -33,7 +33,8 @@
 ## Application style
 
 - **Uncurried** -- `defn foo [x y z] body`, `spec f A B -> C`. Multiple arguments in one bracket group.
-- **Prefer partial application with wildcards** over inline lambdas -- `[int* _ 2]` rather than `[fn [x] [int* x 2]]`. Use `fn` only when the lambda body is complex enough to need named parameters.
+- **Prefer partial application with wildcards** over inline lambdas -- `[int* _ 2]` rather than `[fn [x] [int* x 2]]`. Use `fn` only when the lambda body is complex enough to need named parameters. Partials are ALWAYS explicit-hole sections (`[+ 7 _]`); under-application (`[+ 7]`) is an error, never an implicit partial (D-N6E.1).
+- **Operators are first-class values** (Numerics N6e-E2) -- `+`, `-`, `*`, `/`, `negate`, `abs` can be passed to higher-order functions directly: `reduce + 0 xs`, `map negate xs`. Semantics pin: in HEAD position at arity 2, `[+ a b]` is the parser keyword with **auto-widening** numeric-join (mixed numeric types fine: `[+ 1 1.5]` → Posit32); everywhere else the name denotes the lawful **same-type** trait function (`{A} A A -> A where (Add A)`, dicts resolved from context). HOF contexts are homogeneous by container, so the difference rarely surfaces.
 - **Pipeline `|>` and `compose`** for chaining named functions -- `|> 5 inc dbl sqr` is idiomatic.
 - **Eval is implicit** -- write `[f x]` not `eval [f x]`. Top-level expressions just evaluate.
 - **Don't wrap outer tree** -- top-level forms are implicit.

@@ -335,3 +335,40 @@ impl Abs Float32
 impl Abs Float64
   defn abs [x : Float64] <Float64>
     f64-abs x
+
+;; ========================================
+;; Operator values (Numerics N6e-E2, M2)
+;; ========================================
+;; The operator NAMES as first-class where-constrained values, so
+;; `reduce + 0 xs`, `map negate xs`, etc. work directly. Semantics pin
+;; (Numerics design doc §9d Q1): in HEAD position at arity 2, `[+ a b]`
+;; remains the parser keyword with auto-widening numeric-join (mixed types
+;; fine); everywhere ELSE the name denotes this lawful same-type trait
+;; function (dicts resolved from context via the where machinery).
+;; Being trait-backed (not lambdas) keeps each op's algebraic structure
+;; reachable — e.g. AdditiveIdentity for a future identity-aware reduce.
+;; Uncurried: under-application ([+ 7]) is an error, never an implicit
+;; partial (D-N6E.1 — use an explicit-hole section [+ 7 _]).
+;; Live here (not algebra.prologos) so the where-trait lookup is in-module
+;; under ANY load path; algebra's explicit-dict plus/minus/… are superseded
+;; and slated for retirement in N6f.
+
+spec + {A} A A -> A where (Add A)
+defn + [x y]
+  add x y
+
+spec - {A} A A -> A where (Sub A)
+defn - [x y]
+  sub x y
+
+spec * {A} A A -> A where (Mul A)
+defn * [x y]
+  mul x y
+
+spec / {A} A A -> A where (Div A)
+defn / [x y]
+  div x y
+
+spec negate {A} A -> A where (Neg A)
+defn negate [x]
+  neg x

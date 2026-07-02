@@ -64,3 +64,44 @@
   (check-equal? (r 6) "5 : Int")
   (check-equal? (r 7) "7.0f : Float64")
   (check-equal? (r 8) "6 : Int"))
+
+;; ========================================
+;; E2 — operator values (+ - * / negate as where-constrained trait fns)
+;; ========================================
+;; Q1 pin: head-position [+ a b] stays the auto-widening keyword;
+;; value-position + is the same-type Add function (algebra.prologos).
+
+(define results-e2
+  (ws-all
+   ;; value position: the headline requirement
+   "eval [reduce + 0 '[1 2 3]]"
+   "eval [reduce * 1 '[1 2 3 4]]"
+   "eval [map negate '[1 2]]"
+   ;; homogeneous posit list through the value (dict = Add Posit32)
+   "eval [reduce + 0.0 '[1.5 2.5]]"
+   ;; head position: keyword still wins at arity 2 (auto-widening join)
+   "eval [+ 1 2]"
+   "eval [+ 1 1.5]"
+   "eval [- 10 4]"
+   ;; D-N6E.1: under-application is an ERROR, never an implicit partial
+   "eval [+ 7]"))
+
+(define (r2 i) (format "~a" (list-ref results-e2 i)))
+
+(test-case "e2/op-values-under-hofs"
+  (check-equal? (r2 0) "6 : Int")
+  (check-equal? (r2 1) "24 : Int")
+  (check-equal? (r2 2) "'[-1 -2] : [prologos::data::list::List Int]")
+  (check-equal? (r2 3) "4.0 : Posit32"))
+
+(test-case "e2/head-position-keyword-preserved"
+  (check-equal? (r2 4) "3 : Int")
+  (check-equal? (r2 5) "2.5 : Posit32")
+  (check-equal? (r2 6) "6 : Int"))
+
+(test-case "e2/under-application-is-error-not-partial"
+  ;; uncurried defn applied to 1 arg — must not yield a silent partial
+  (check-false (string-contains? (r2 7) "fn ["))
+  (check-true (or (string-contains? (r2 7) "rror")
+                  (string-contains? (r2 7) "mismatch")
+                  (string-contains? (r2 7) "Pi"))))
