@@ -338,6 +338,28 @@
    "float-to-int" surf-float-to-int   "float-to-float32" surf-float-to-float32
    ))
 
+;; (N6e-E3) Explicit-hole section over a builtin op keyword (D-N6E.1):
+;; [int* _ 2] → (fn [$_0] [int* $_0 2]) — the lambda wraps the KEYWORD, so
+;; sections inherit head-position semantics (auto-widening join for generics).
+;; Plain _ (surf-hole) only, left-to-right; mirrors the surf-app placeholder
+;; desugar ($_N names, hole-domain binders). parse-keyword-section in
+;; parser.rkt is the datum-route twin — keep behaviors in lockstep.
+(define (build-op-section ctor parsed-args loc)
+  (define n (for/sum ([a (in-list parsed-args)]) (if (surf-hole? a) 1 0)))
+  (define names
+    (for/list ([i (in-range n)]) (string->symbol (format "$_~a" i))))
+  (define filled
+    (let loop ([as parsed-args] [ns names])
+      (cond
+        [(null? as) '()]
+        [(surf-hole? (car as))
+         (cons (surf-var (car ns) loc) (loop (cdr as) (cdr ns)))]
+        [else (cons (car as) (loop (cdr as) ns))])))
+  (foldr (lambda (nm acc)
+           (surf-lam (binder-info nm #f (surf-hole loc)) acc loc))
+         (apply ctor (append filled (list loc)))
+         names))
+
 ;; ========================================
 ;; Stub implementations for form parsing
 ;; ========================================
@@ -1397,6 +1419,10 @@
                   [b (parse-form-tree (cadr args))])
               (cond [(prologos-error? a) a]
                     [(prologos-error? b) b]
+                    ;; (N6e-E3) explicit-hole section: [int* _ 2] → lambda
+                    [(or (surf-hole? a) (surf-hole? b))
+                     (build-op-section (hash-ref builtin-binary-ops head-lex)
+                                       (list a b) loc)]
                     [else ((hash-ref builtin-binary-ops head-lex) a b loc)]))
             (parse-application-tree children loc))]
        ;; Built-in unary operations
@@ -1404,7 +1430,11 @@
         (if (= (length args) 1)
             (let ([a (parse-form-tree (car args))])
               (if (prologos-error? a) a
-                  ((hash-ref builtin-unary-ops head-lex) a loc)))
+                  (if (surf-hole? a)
+                      ;; (N6e-E3) explicit-hole section: [negate _] → lambda
+                      (build-op-section (hash-ref builtin-unary-ops head-lex)
+                                        (list a) loc)
+                      ((hash-ref builtin-unary-ops head-lex) a loc))))
             (parse-application-tree children loc))]
        ;; Default: check for pipe/compose operators in children (mid-expression)
        ;; These are handled by preparse's expand-pipe-block/expand-compose-sexp,

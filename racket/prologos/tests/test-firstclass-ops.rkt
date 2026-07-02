@@ -105,3 +105,63 @@
   (check-true (or (string-contains? (r2 7) "rror")
                   (string-contains? (r2 7) "mismatch")
                   (string-contains? (r2 7) "Pi"))))
+
+;; ========================================
+;; E3 — explicit-hole sections over keyword heads (D-N6E.1)
+;; ========================================
+;; [int* _ 2] / [+ 1.5 _] desugar AT PARSE to hole-domain lambdas WRAPPING
+;; the keyword, so sections inherit head-position semantics (auto-widening
+;; numeric-join for generics). Pins: hole count = arity, left-to-right,
+;; immediately-enclosing bracket group only. Faithful mirror of surf-app
+;; _-sections (parity-probed at E3 close): generic ops under unsolved metas
+;; ([map [+ _ 1] xs]) fail inference IDENTICALLY to the explicit lambda
+;; [map [fn [x] [+ x 1]] xs] — a pre-existing limitation, not E3's.
+
+(define results-e3
+  (ws-all
+   ;; THE documented idiom (prologos-syntax.md § Application style)
+   "eval [map [int* _ 2] '[1 2 3]]"
+   ;; auto-widening join through a generic-keyword section (Q1 pin)
+   "eval [[+ 1.5 _] 1]"
+   ;; prim-family sections: float, posit
+   "eval [map [f64* _ 2.0f64] '[1.0f64 2.0f64]]"
+   "eval [map [p32* _ 2.0] '[1.0 3.0]]"
+   ;; unary prim section
+   "eval [map [int-neg _] '[1 2]]"
+   ;; concrete comparison section under filter
+   "eval [filter [int-lt _ 3] '[1 2 3 4]]"
+   ;; surf-app single-hole section (pre-existing route — parity control)
+   "defn sub2i [x y] [int- x y]"
+   "eval [[sub2i _ 3] 10]"
+   ;; nested group: the hole belongs to the INNER group only → + gets a
+   ;; lambda operand → LOUD error (the immediately-enclosing pin)
+   "eval [+ 7 [int* _ 2]]"
+   ;; def-RHS (infer position): LOUD error, not the pre-E3 silent `: Int`
+   "def bad-section := [int* _ 2]"))
+
+(define (r3 i) (format "~a" (list-ref results-e3 i)))
+
+(test-case "e3/documented-idiom-int*-section"
+  (check-equal? (r3 0) "'[2 4 6] : [prologos::data::list::List Int]"))
+
+(test-case "e3/section-inherits-auto-widening-join"
+  ;; 1.5 is Posit32; the Int arg widens via the keyword's numeric-join
+  ;; (value coercion may append a warning line — assert the prefix)
+  (check-true (string-prefix? (r3 1) "2.5 : Posit32")))
+
+(test-case "e3/prim-family-and-unary-sections"
+  (check-equal? (r3 2) "'[2.0f 4.0f] : [prologos::data::list::List Float64]")
+  (check-equal? (r3 3) "'[2.0 6.0] : [prologos::data::list::List Posit32]")
+  (check-equal? (r3 4) "'[-1 -2] : [prologos::data::list::List Int]")
+  (check-equal? (r3 5) "'[1 2] : [prologos::data::list::List Int]"))
+
+(test-case "e3/surf-app-section-parity-control"
+  (check-equal? (r3 7) "7 : Int"))
+
+(test-case "e3/nested-group-hole-is-inner-only"
+  (check-true (string-contains? (r3 8) "Could not infer")))
+
+(test-case "e3/def-rhs-section-fails-loudly"
+  ;; pre-E3 this silently defined bad-section : Int
+  (check-false (string-contains? (r3 9) "defined"))
+  (check-true (string-contains? (r3 9) "Could not infer")))

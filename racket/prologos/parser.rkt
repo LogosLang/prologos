@@ -601,6 +601,64 @@
 ;; ========================================
 ;; Parse list forms: (op arg ...)
 ;; ========================================
+;; (N6e-E3) Explicit-hole sections over keyword heads (D-N6E.1).
+;; [+ 7 _] and [int* _ 2] desugar to hole-domain lambdas WRAPPING THE KEYWORD,
+;; so sections inherit head-position semantics (e.g. auto-widening numeric-join
+;; for the generic ops). Plain _ only, left-to-right; holes count only at the
+;; immediately-enclosing bracket group (direct args — nested groups desugar
+;; their own). Mirrors the surf-app placeholder desugar (macros.rkt
+;; expand-expression): same $_N names, same hole-domain lambda construction,
+;; so keyword sections behave exactly like [f _ 2] over ordinary heads.
+;; Exclusions: quire ops + p*-if-nar (odd arities — the same pin that keeps
+;; them out of the eta-table), literal-constructor keywords (int, rat, p8 …
+;; take datums, not expressions). Match/defn PATTERNS are unaffected — they
+;; parse via parse-single-pattern, which never routes through parse-list.
+(define sectionable-op-keywords
+  (for/hasheq ([sym (in-list
+                     (append
+                      '(int+ int- int* int/ int-mod int-neg int-abs
+                        int-lt int-le int-eq
+                        rat+ rat- rat* rat/ rat-neg rat-abs
+                        rat-lt rat-le rat-eq rat-numer rat-denom
+                        + - * / lt le gt ge eq mod negate abs
+                        from-integer from-rational from-nat from-int
+                        suc pair fst snd not map-get map-assoc)
+                      (for*/list ([w (in-list '("p8" "p16" "p32" "p64"))]
+                                  [op (in-list '("+" "-" "*" "/" "-neg" "-abs"
+                                                 "-sqrt" "-lt" "-le" "-eq"
+                                                 "-from-nat" "-to-rat"
+                                                 "-from-rat" "-from-int"))])
+                        (string->symbol (string-append w op)))
+                      (for*/list ([w (in-list '("f32" "f64"))]
+                                  [op (in-list '("+" "-" "*" "/" "-neg" "-abs"
+                                                 "-sqrt" "-lt" "-le" "-eq"))])
+                        (string->symbol (string-append w op)))))])
+    (values sym #t)))
+
+;; Section rewrite: replace each top-level _ arg with a fresh $_i name, parse
+;; the substituted form through the normal keyword arm (no holes remain, so
+;; the hook does not re-fire), then wrap the result in hole-domain lambdas
+;; (one per hole, left-to-right — curried, like the surf-app desugar).
+(define (parse-keyword-section head-stx args loc)
+  (define (hole? a) (eq? (stx->datum a) '_))
+  (define n-holes (for/sum ([a (in-list args)]) (if (hole? a) 1 0)))
+  (define names
+    (for/list ([i (in-range n-holes)])
+      (string->symbol (format "$_~a" i))))
+  (define new-args
+    (let loop ([as args] [ns names])
+      (cond
+        [(null? as) '()]
+        [(hole? (car as)) (cons (car ns) (loop (cdr as) (cdr ns)))]
+        [else (cons (car as) (loop (cdr as) ns))])))
+  (define inner (parse-list (cons head-stx new-args) loc #f))
+  (if (prologos-error? inner)
+      inner
+      (foldr (lambda (nm acc)
+               (surf-lam (binder-info nm #f (surf-hole loc)) acc loc))
+             inner
+             names)))
+
 (define (parse-list elems loc stx)
   ;; elems is either a list of syntax objects or plain datums
   ;; Normalize: if stx is a syntax object, get the list of syntax children
@@ -714,6 +772,15 @@
     [(and (symbol? head) (eq? head '$typed-hole))
      (define hole-name (if (pair? args) (stx->datum (car args)) #f))
      (surf-typed-hole hole-name loc)]
+
+    ;; (N6e-E3) Explicit-hole SECTION over an op keyword: [+ 7 _], [int* _ 2].
+    ;; Desugars to a hole-domain lambda wrapping the keyword form (see
+    ;; parse-keyword-section above). Fires only for whitelisted op keywords
+    ;; with a top-level _ among the direct args.
+    [(and (symbol? head)
+          (hash-ref sectionable-op-keywords head #f)
+          (ormap (lambda (a) (eq? (stx->datum a) '_)) args))
+     (parse-keyword-section head-stx args loc)]
 
     ;; Keyword-headed forms
     [(symbol? head)
