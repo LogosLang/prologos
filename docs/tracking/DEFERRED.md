@@ -15,6 +15,73 @@ Deferral".
 
 ---
 
+## Numerics N6d-i follow-ups: method-wrapper derive skip-set remediation
+
+Four items deferred from the auto-derive design (Numerics design doc §9d D-N6.5;
+grounding-audit 2026-07-02 at HEAD `c8a425f7`). The derive ships with a
+skip+warn policy; these lift the skips / harden the substrate.
+
+### 1. Lift the `add`/`sub`/`mult` derive skips (arithmetic-name remediation)
+
+- **What**: the derive skips `add`/`sub`/`mult` because (a) `arithmetic.prologos:3`
+  refers nat's `add sub mult` unqualified and the `impl Add Nat` body is bare
+  `add x y` (`:25-27`) — a derived own-module `add` would CAPTURE it (own-ns
+  resolution beats where-context AND imports, `elaborator.rkt:702-718`) making
+  the Nat instance self-referential; (b) nat's concrete `spec add Nat Nat -> Nat`
+  and a derived generic `spec add {A} … where (Add A)` clobber in the bare-name
+  spec store (see item 2).
+- **Remediation**: qualify the nat calls in the impl bodies (`nat::add x y` or
+  rename the refers), then resolve the spec collision (rename nat's Peano fns,
+  or de-export their specs, or fix item 2 first), then remove the three names
+  from the derive skip-list. Migration touches Nat-heavy tests.
+- **Value**: `add`/`sub`/`mult` as first-class generic values. Low urgency —
+  generic `+ - *` keywords cover bare-call ergonomics; first-class use hits the
+  N6e inference wall regardless.
+
+### 2. Spec-store bare-name keying — silent clobber (structural defect)
+
+- **What**: the spec registry keys by BARE symbol with silent last-write-wins:
+  `register-spec!` (`macros.rkt:480-482`), import spec-propagation
+  (`driver.rkt:2810-2811`), and implicit-hole counting strips FQNs before
+  lookup (`elaborator.rkt:567-576`). Two same-named specs from different
+  modules (e.g. nat's `add` vs a generic `add`; a derived `reduce` vs
+  `list.prologos`'s `reduce`) overwrite each other in any module importing
+  both — the loser's call sites get WRONG implicit-argument counts, silently.
+- **Fix direction**: FQN-keyed spec store (or module-scoped shadowing with
+  deliberate resolution order). Crosses the module system — candidate for a
+  PM-series follow-up. Blocks item 1's clean resolution.
+
+### 3. Zero-arg / output-position-only trait methods as context-resolved values
+
+- **What**: the derive's argument-position rule excludes constants (`zero`,
+  `one`, `bot`, `top`, `empty-coll`) and output-only methods (`from-integer :
+  Int -> A`). Structurally: bare-reference auto-apply requires all-m0 binders
+  (`elaborator.rkt:541-542`) but where-dict params are mw (`macros.rkt:4213`),
+  and there is no argument to unify the type var against. Expected-type-directed
+  constraint resolution (`def z : Float64 := zero`) is UNPROVEN at HEAD — no
+  machinery confirmed for solving an output-position constraint meta from the
+  checking direction before `resolve-trait-constraints!`.
+- **Fix direction**: a checking-mode resolution path (the N4 context-typing
+  shape applied to constraint metas). Natural home: the UCS trait re-engineering
+  track (`2026-06-30_TRAITS_AS_REFINEMENT_TYPING_NOTE.md`) or a dedicated
+  probe+mini-design. Also lifts the `from-integer`/`from-rational` exclusions
+  (whose names additionally collide with hard arity-2 parser keywords —
+  `parser.rkt:1961-1974` — so they may want distinct wrapper names regardless).
+
+### 4. Registry silent-overwrite: no duplicate-binding diagnostics
+
+- **What**: every collision surface found by the N6d-i audit fails SILENTLY —
+  trait registry (`macros.rkt:6228-6231`), spec store, import shadowing
+  (`namespace.rkt:833` "MUST BE LAST — shadowing depends on ordering") are all
+  hash-set overwrite with no duplicate-binding error or warning.
+- **Fix direction**: an opt-in (or default-on) duplicate-binding diagnostic at
+  registration time. Cheap hardening; would have made the N6d-i collision
+  census mechanical instead of forensic. The derive's cross-trait-duplicate
+  warning (modeled on HKT-9's ambiguity check, `elaborator.rkt:165-176`) is the
+  first slice.
+
+---
+
 ## BUG: Union-type checking hangs the type-checker (BSP non-quiescence)
 
 - **Found**: 2026-06-29 hunting a `foray.prologos` type-check hang (DEMO Series session).
