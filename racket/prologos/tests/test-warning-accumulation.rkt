@@ -104,9 +104,10 @@
 ;; ========================================
 
 (test-case "warn/fresh-exact-arith-is-silent: + 3.13 1.0 alone never warns"
+  ;; N6b: decimals default Posit32 — both operands same family, no coercion at all
   (define rs (run-file "eval [+ 3.13 1.0]"))
   (check-equal? (warning-counts rs) '(0))
-  (check-true (string-contains? (car rs) ": Rat")))
+  (check-true (string-contains? (car rs) ": Posit32")))
 
 ;; ========================================
 ;; Values-only policy (D-N6.4c)

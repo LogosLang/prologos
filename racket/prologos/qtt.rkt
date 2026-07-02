@@ -2051,7 +2051,7 @@
     [(expr-Fin _) (tu (expr-Type (lzero)) (zero-usage n))]
 
     ;; ---- N4: numeric literal in infer position → DEFAULT type (Int if integral else Rat); zero usage ----
-    [(expr-num-lit _ integral? _) (tu (if integral? (expr-Int) (expr-Rat)) (zero-usage n))]
+    [(expr-num-lit _ integral? origin _) (tu (num-lit-default-type origin integral?) (zero-usage n))]
 
     ;; ---- Fallback ----
     [_ (tu-error)]))
@@ -2141,7 +2141,7 @@
 
     ;; ---- N4: context-typed numeric literal — mirror typing-core check: resolve alpha
     ;; ---- from the expected type + validate representability. Zero resource usage.
-    [((expr-num-lit exact-val integral? alpha) T)
+    [((expr-num-lit exact-val integral? _origin alpha) T)
      (cond
        [(concrete-numeric-type? T)
         (bu (and (num-lit-representable? exact-val integral? T)

@@ -191,11 +191,11 @@
 ;; 7. End-to-End: WS-Mode Eval
 ;; ========================================
 
-(test-case "neg-lit/e2e: decimal -3.14 is polymorphic (N4)"
-  ;; N4: -3.14 → $decimal-literal(-157/50) → surf-num-lit → unconstrained Rat
+(test-case "neg-lit/e2e: decimal -3.14 is polymorphic (N6b: Posit32 default)"
+  ;; -3.14 → $decimal-literal(-157/50) → surf-num-lit 'decimal → unconstrained Posit32
   (check-contains
    (run-ns-last
     (string-append
      "(ns neg-e2e-dec)\n"
      "(eval ($decimal-literal -157/50))\n"))
-   "Rat"))
+   "Posit32"))

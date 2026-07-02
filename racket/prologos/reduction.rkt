@@ -3210,7 +3210,7 @@
 
     ;; N4: numeric literal — collapse to its concrete node once alpha is solved (so
     ;; primitive ops reducing their args see concrete values); stuck if unsolved.
-    [(expr-num-lit val integral? alpha)
+    [(expr-num-lit val integral? _origin alpha)
      (define resolved
        (match alpha
          [(expr-meta id cell-id) (or (meta-solution/cell-id cell-id id) alpha)]
@@ -3262,7 +3262,7 @@
     [(expr-Open) e]
     [(expr-meta _ _) e]
     ;; N4: numeric literal — collapse when alpha solved (mirror whnf); else identity.
-    [(expr-num-lit val integral? alpha)
+    [(expr-num-lit val integral? _origin alpha)
      (define resolved
        (match alpha
          [(expr-meta id cell-id) (or (meta-solution/cell-id cell-id id) alpha)]

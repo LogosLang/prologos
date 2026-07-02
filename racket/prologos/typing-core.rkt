@@ -2167,9 +2167,10 @@
      (expr-hole)]
 
     ;; ---- N4: numeric literal in INFER position (unconstrained: bare/top-level 3.14,
-    ;; ---- arithmetic operand, polymorphic-fn arg) → its DEFAULT type (Int if integral
-    ;; ---- else Rat). Context-typing happens in CHECK (fires before infer, solves alpha).
-    [(expr-num-lit _ integral? _) (if integral? (expr-Int) (expr-Rat))]
+    ;; ---- arithmetic operand, polymorphic-fn arg) → its DEFAULT type (N6b: keyed on
+    ;; ---- notation origin — decimal→Posit32, fraction→Rat, exponent→Int/Posit32).
+    ;; ---- Context-typing happens in CHECK (fires before infer, solves alpha).
+    [(expr-num-lit _ integral? origin _) (num-lit-default-type origin integral?)]
 
     ;; ---- Fallback: cannot infer ----
     [_ (expr-error)]))
@@ -2258,7 +2259,7 @@
     ;; Resolve alpha from the expected type T + validate representability. Concrete
     ;; numeric target → representability-gated solve; unsolved meta target → link + defer.
     ;; Refined numeric targets (PosRat etc.) are deferred (error) — a decimal rarely targets one.
-    [((expr-num-lit exact-val integral? alpha) T)
+    [((expr-num-lit exact-val integral? _origin alpha) T)
      (cond
        [(concrete-numeric-type? T)
         (and (num-lit-representable? exact-val integral? T)

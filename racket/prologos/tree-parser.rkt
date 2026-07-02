@@ -236,7 +236,14 @@
             [(and (exact-integer? n) (string-contains? lex "/")) (surf-rat-lit n loc)]
             [(and (exact-integer? n) (>= n 0)) (surf-int-lit n loc)]
             [(exact-integer? n) (surf-int-lit n loc)]
-            [(rational? n) (surf-num-lit (inexact->exact n) #f loc)]  ;; N4b: genuine fraction → polymorphic
+            [(rational? n)
+             ;; N6b: origin from the LEXEME (compat path): slash → fraction,
+             ;; e/E → exponent, else (dotted/inexact) → decimal.
+             (surf-num-lit (inexact->exact n) #f
+                           (cond [(string-contains? lex "/") 'fraction]
+                                 [(or (string-contains? lex "e") (string-contains? lex "E")) 'exponent]
+                                 [else 'decimal])
+                           loc)]
             [else (surf-var s loc)]))]
 
     ;; Nat literal: 42N
@@ -621,6 +628,7 @@
                   [(and (pair? item)
                         (not (memq (car item) '($brace-params $angle-type $list-literal
                                                 $nat-literal $rat-literal $approx-literal $decimal-literal $float-literal
+                                                $exp-literal $posit-literal  ;; N6b
                                                 $set-literal $vec-literal $foreign-block
                                                 $typed-hole $solver-config quote $quote)))
                         (>= (length item) 2)

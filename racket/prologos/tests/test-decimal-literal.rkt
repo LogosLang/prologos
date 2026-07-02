@@ -85,17 +85,16 @@
 ;; ========================================
 
 (test-case "decimal-literal/eval-3.14"
-  ;; N4: unconstrained 3.14 → Rat (sexp carries the flonum's exact value)
-  (check-true (string-contains? (car (run "(eval 3.14)")) ": Rat")
-              "3.14 → Rat (N4 polymorphic default)"))
+  ;; N6b: unconstrained decimal → Posit32 (decimal notation = approximate intent)
+  (check-true (string-contains? (car (run "(eval 3.14)")) ": Posit32")
+              "3.14 → Posit32 (N6b decimal default)"))
 
 (test-case "decimal-literal/eval-0.5"
-  ;; 0.5 = 1/2 exactly → Rat
-  (check-equal? (run "(eval 0.5)") '("0.5 : Rat")))
+  (check-equal? (run "(eval 0.5)") '("~0.5 : Posit32")))
 
 (test-case "decimal-literal/eval-1.0"
-  ;; 1.0 is integral → Int
-  (check-equal? (run "(eval 1.0)") '("1 : Int")))
+  ;; N6b: integral VALUE but decimal NOTATION → Posit32 (origin wins)
+  (check-equal? (run "(eval 1.0)") '("~1 : Posit32")))
 
 (test-case "decimal-literal/check-type"
   ;; 3.14 still type-checks against Posit32 (context-typed via the check arm)
@@ -103,9 +102,9 @@
                 '("OK")))
 
 (test-case "decimal-literal/infer"
-  ;; N4: unconstrained 3.14 infers as Rat (was Posit32 pre-N4)
+  ;; N6b: unconstrained 3.14 infers as Posit32 (decimal-origin default)
   (define result (car (run "(infer 3.14)")))
-  (check-true (string-contains? result "Rat") "3.14 infers as Rat (N4 default)"))
+  (check-true (string-contains? result "Posit32") "3.14 infers as Posit32 (N6b default)"))
 
 ;; ========================================
 ;; Unchanged: rationals stay Rat

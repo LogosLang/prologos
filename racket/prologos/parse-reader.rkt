@@ -402,6 +402,67 @@
                          (not (or (char-numeric? after) (char-alphabetic? after))))
                      (- j2 pos)))))))
 
+(define (recognize-posit-literal rrb pos)
+  ;; Posit literal (Numerics N6b): [-]?digit+(.digit+)?([eE][+-]?digit+)? p (8|16|32|64)
+  ;; REQUIRES the trailing `pNN` with an EXPLICIT width — there is deliberately no
+  ;; bare `p` form: bare decimals ARE Posit32 (D-N6.1), so `3.14p` would add a
+  ;; redundant spelling. Mirrors recognize-float-literal (widths differ: one-char 8).
+  ;; Classified 'posit-literal → ($posit-literal <exact-rational> <width>) → Posit.
+  (define c0 (rrb-char-at rrb pos))
+  (define neg?
+    (and c0 (char=? c0 #\-)
+         (let ([c1 (rrb-char-at rrb (+ pos 1))])
+           (and c1 (char-numeric? c1)))
+         ;; same delimiter gate as recognize-negative-number (so x-3.0p8 stays ident)
+         (or (= pos 0)
+             (let ([prev (rrb-char-at rrb (- pos 1))])
+               (and prev (or (char=? prev #\space) (char=? prev #\newline)
+                             (char=? prev #\tab) (char=? prev #\()
+                             (char=? prev #\[) (char=? prev #\{)
+                             (char=? prev #\<)))))))
+  (define start (if neg? (+ pos 1) pos))
+  (define s0 (rrb-char-at rrb start))
+  (and s0 (char-numeric? s0)
+       (let* ([i (let loop ([i (+ start 1)])         ;; integer-part digits
+                   (define nc (rrb-char-at rrb i))
+                   (if (and nc (char-numeric? nc)) (loop (+ i 1)) i))]
+              [i (let ([dot (rrb-char-at rrb i)]      ;; optional .digit+
+                       [d1 (rrb-char-at rrb (+ i 1))])
+                   (if (and dot (char=? dot #\.) d1 (char-numeric? d1))
+                       (let loop ([j (+ i 2)])
+                         (define nc (rrb-char-at rrb j))
+                         (if (and nc (char-numeric? nc)) (loop (+ j 1)) j))
+                       i))]
+              [i (let ([ec (rrb-char-at rrb i)])      ;; optional [eE][+-]?digit+
+                   (if (and ec (or (char=? ec #\e) (char=? ec #\E)))
+                       (let* ([j (+ i 1)]
+                              [sgn (rrb-char-at rrb j)]
+                              [k (if (and sgn (or (char=? sgn #\+) (char=? sgn #\-))) (+ j 1) j)]
+                              [d (rrb-char-at rrb k)])
+                         (if (and d (char-numeric? d))
+                             (let loop ([m (+ k 1)])
+                               (define nc (rrb-char-at rrb m))
+                               (if (and nc (char-numeric? nc)) (loop (+ m 1)) m))
+                             i))   ;; 'e' without exponent digits → no exp consumed
+                       i))]
+              [pc (rrb-char-at rrb i)])               ;; REQUIRE the `p` suffix
+         (and pc (char=? pc #\p)
+              (let* ([j (+ i 1)]
+                     [cj (rrb-char-at rrb j)]
+                     [cj1 (rrb-char-at rrb (+ j 1))]
+                     [j2 (cond
+                           [(and cj cj1 (char=? cj #\1) (char=? cj1 #\6)) (+ j 2)]
+                           [(and cj cj1 (char=? cj #\3) (char=? cj1 #\2)) (+ j 2)]
+                           [(and cj cj1 (char=? cj #\6) (char=? cj1 #\4)) (+ j 2)]
+                           [(and cj (char=? cj #\8)) (+ j 1)]
+                           [else #f])]                 ;; NO bare `p` — width mandatory
+                     [after (and j2 (rrb-char-at rrb j2))])
+                (and j2
+                     ;; trailing guard: the suffix must end the token (no alnum after)
+                     (or (not after)
+                         (not (or (char-numeric? after) (char-alphabetic? after))))
+                     (- j2 pos)))))))
+
 (define (recognize-string rrb pos)
   ;; String: " ... " with escape handling
   (define c (rrb-char-at rrb pos))
@@ -964,6 +1025,12 @@
   (register-token-pattern!
    (token-pattern 'float-literal (lambda (rrb pos) (recognize-float-literal rrb pos))
                   (lambda (s p l) 'float-literal) 98))
+  ;; Posit literals (Numerics N6b): 2p8, 3.14p16, 1.5e-3p64 → Posit{8,16,32,64}.
+  ;; p32 accepted on input for explicitness though display emits bare (Posit32
+  ;; is the bare-decimal default width). Suffix space disjoint from `f`.
+  (register-token-pattern!
+   (token-pattern 'posit-literal (lambda (rrb pos) (recognize-posit-literal rrb pos))
+                  (lambda (s p l) 'posit-literal) 99))
   (register-token-pattern!
    (token-pattern 'negative-number (lambda (rrb pos) (recognize-negative-number rrb pos))
                   (lambda (rrb pos len)
@@ -1970,6 +2037,16 @@
         (make-stx (list (make-stx '$rat-literal source line col pos1 0)
                         (make-stx value source line col pos1 span))
                   source line col pos1 span)]
+       ;; N6b: NON-INTEGRAL exponent lexeme (1.5e-3) → ($exp-literal n). The
+       ;; exp-literal token identity is erased at tokenize (its classifier
+       ;; returns 'number), so like the `/` case above the LEXEME is the only
+       ;; carrier of notation origin. Integral exponents (1e10) stay bare —
+       ;; they parse as exact integers → Int (structural; D8-consistent).
+       [(and (exact? value) (not (integer? value))
+             (or (string-contains? lexeme "e") (string-contains? lexeme "E")))
+        (make-stx (list (make-stx '$exp-literal source line col pos1 0)
+                        (make-stx value source line col pos1 span))
+                  source line col pos1 span)]
        [else (make-stx value source line col pos1 span)])]
     [(rest-param)
      (if (string=? lexeme "...")
@@ -2511,6 +2588,42 @@
                    (cons (make-stx (list (make-stx '$approx-literal source vl vc (+ spos 1) 1)
                                          (make-stx num-val source vl (+ vc 1) (+ spos 2) (- epos spos 1)))
                                    source vl vc (+ spos 1) (- epos spos))
+                         result))]
+            ;; Posit-literal compound token (Numerics N6b): 3.14p16 → ($posit-literal 157/50 16)
+            [(eq? type 'posit-literal)
+             (define lex (token-entry-lexeme item))
+             (define len (string-length lex))
+             (define lc (string-ref lex (- len 1)))
+             (define-values (num-str width)
+               (cond
+                 [(and (>= len 3) (char=? lc #\6)
+                       (char=? (string-ref lex (- len 2)) #\1)
+                       (char=? (string-ref lex (- len 3)) #\p))
+                  (values (substring lex 0 (- len 3)) 16)]
+                 [(and (>= len 3) (char=? lc #\2)
+                       (char=? (string-ref lex (- len 2)) #\3)
+                       (char=? (string-ref lex (- len 3)) #\p))
+                  (values (substring lex 0 (- len 3)) 32)]
+                 [(and (>= len 3) (char=? lc #\4)
+                       (char=? (string-ref lex (- len 2)) #\6)
+                       (char=? (string-ref lex (- len 3)) #\p))
+                  (values (substring lex 0 (- len 3)) 64)]
+                 [(and (>= len 2) (char=? lc #\8)
+                       (char=? (string-ref lex (- len 2)) #\p))
+                  (values (substring lex 0 (- len 2)) 8)]
+                 [else (values lex 32)]))  ;; unreachable: recognizer requires a width
+             ;; exact rational like decimal/approx; posit encoding at elaborate
+             (define num-val (or (string->number (string-append "#e" num-str))
+                                 (string->number num-str)
+                                 (string->symbol num-str)))
+             (define spos (token-entry-start-pos item))
+             (define epos (token-entry-end-pos item))
+             (define-values (vl vc) (pos->line-col source-str spos))
+             (loop (+ i 1)
+                   (cons (make-stx (list (make-stx '$posit-literal source vl vc (+ spos 1) 1)
+                                         (make-stx num-val source vl vc spos (- epos spos))
+                                         (make-stx width source vl vc spos (- epos spos)))
+                                   source vl vc spos (- epos spos))
                          result))]
             ;; Float-literal compound token (Numerics N3c): 3.14f → ($float-literal 157/50 64)
             [(eq? type 'float-literal)

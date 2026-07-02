@@ -157,6 +157,7 @@
  (struct-out surf-float64-type)
  ;; Float value literal (Numerics N3c)
  (struct-out surf-float-lit)
+ (struct-out surf-posit-lit)
  ;; Float ops (Numerics N3b)
  (struct-out surf-f32-add) (struct-out surf-f32-sub) (struct-out surf-f32-mul) (struct-out surf-f32-div)
  (struct-out surf-f32-neg) (struct-out surf-f32-abs) (struct-out surf-f32-sqrt)
@@ -713,6 +714,10 @@
 (struct surf-float64-type (srcloc) #:transparent)
 ;; Float value literal (Numerics N3c): val = exact rational, width ∈ {32, 64}
 (struct surf-float-lit (val width srcloc) #:transparent)
+;; Posit value literal (Numerics N6b): 2p8 / 3.14p16 / 1.5e-3p64 —
+;; val = exact rational, width ∈ {8, 16, 32, 64}. Eager posit-encode at
+;; elaborate (mirrors surf-float-lit / the ~-path; NOT context-typed).
+(struct surf-posit-lit (val width srcloc) #:transparent)
 ;; Float arithmetic + comparison ops (Numerics N3b)
 (struct surf-f32-add (a b srcloc) #:transparent)
 (struct surf-f32-sub (a b srcloc) #:transparent)
@@ -840,9 +845,11 @@
 (struct surf-approx-literal (val srcloc) #:transparent)
 
 ;; N4b: polymorphic numeric literal (bare decimal/fraction/non-integral-exp).
-;; val = exact rational; integral? = (integer? val) for the Int-vs-Rat default;
-;; srcloc LAST (the surf-node-srcloc last-field invariant). Elaborates to expr-num-lit.
-(struct surf-num-lit (val integral? srcloc) #:transparent)
+;; val = exact rational; integral? = (integer? val); origin = the notation the
+;; literal was written in ('decimal | 'fraction | 'exponent — N6b, drives the
+;; unconstrained default via num-lit-default-type); srcloc LAST (the
+;; surf-node-srcloc last-field invariant). Elaborates to expr-num-lit.
+(struct surf-num-lit (val integral? origin srcloc) #:transparent)
 
 ;; ========================================
 ;; Symbol type and literal (for code-as-data)

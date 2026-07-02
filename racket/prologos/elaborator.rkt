@@ -1317,9 +1317,9 @@
     [(surf-rat-type loc) (expr-Rat)]
     [(surf-rat-lit v loc) (expr-rat v)]
     ;; N4b: polymorphic numeric literal → expr-num-lit with a FRESH type meta (alpha),
-    ;; resolved from context in check-mode or defaulted (integral? → Int else Rat) in zonk.
-    [(surf-num-lit v integral? loc)
-     (expr-num-lit v integral?
+    ;; resolved from context in check-mode or defaulted (N6b: by notation origin) in zonk.
+    [(surf-num-lit v integral? origin loc)
+     (expr-num-lit v integral? origin
        (fresh-meta ctx-empty (expr-hole)
          (meta-source-info loc 'num-lit-type "polymorphic numeric literal" #f (env->name-stack env))))]
     [(surf-rat-add a b loc)
@@ -1626,6 +1626,14 @@
      (if (= w 32)
          (expr-float32 (flsingle (exact->inexact v)))
          (expr-float64 (exact->inexact v)))]
+    ;; ---- Posit value literal (Numerics N6b) — exact rational → posit bits ----
+    ;; Round-to-nearest-even posit encode (silent, per D-N6.4: literals never warn).
+    [(surf-posit-lit v w loc)
+     (case w
+       [(8)  (expr-posit8  (posit8-encode v))]
+       [(16) (expr-posit16 (posit16-encode v))]
+       [(32) (expr-posit32 (posit32-encode v))]
+       [else (expr-posit64 (posit64-encode v))])]
     ;; ---- Float ops (Numerics N3b) ----
     [(surf-f32-add a b loc)
      (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])

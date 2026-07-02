@@ -297,6 +297,8 @@
  (struct-out expr-meta)
  ;; N4: context-typed polymorphic numeric literal (transient)
  (struct-out expr-num-lit)
+ num-lit-default-type  ;; N6b: the origin-keyed unconstrained-default rule
+
  ;; Reduce (ML-style pattern matching — desugared in type checker)
  (struct-out expr-reduce)
  (struct-out expr-reduce-arm)
@@ -1012,10 +1014,31 @@
 ;; ========================================
 ;; N4: context-typed polymorphic numeric literal (transient).
 ;; Collapses to a concrete numeric node once its type meta `alpha` resolves
-;; (check-mode, from context) or defaults (zonk: integral? → Int else Rat).
-;; `val` = exact rational; `integral?` = whether val is an integer; `alpha` =
-;; a fresh type meta (expr-meta). Never reaches a .pnet cache (collapsed at freeze).
-(struct expr-num-lit (val integral? alpha) #:transparent)
+;; (check-mode, from context) or defaults (see num-lit-default-type below).
+;; `val` = exact rational; `integral?` = whether val is an integer; `origin` =
+;; the NOTATION the literal was written in ('decimal | 'fraction | 'exponent) —
+;; N6b: drives the unconstrained default (notation is unrecoverable from the
+;; value: 157/50 written as a fraction stays Rat; 3.14 written as a decimal
+;; defaults Posit32); `alpha` = a fresh type meta (expr-meta). Never reaches
+;; a .pnet cache (collapsed at freeze).
+(struct expr-num-lit (val integral? origin alpha) #:transparent)
+
+;; N6b (D-N6.1): the unconstrained-default rule, keyed on notation origin.
+;; Lives here (not typing-core/zonk) so all four default sites — typing-core
+;; infer, qtt inferQ, zonk default-metas, typing-propagators install — share
+;; ONE definition without require cycles.
+;;   'decimal  → Posit32  (decimal notation = approximate intent; includes 3.0 —
+;;               integral VALUE, decimal NOTATION; context-typing to Int still works)
+;;   'fraction → Rat      (intentional fractional use)
+;;   'exponent → Int if integral else Posit32 (1e10 stays Int — structurally it
+;;               never becomes a num-lit in WS; defensive here — 1.5e-3 → Posit32)
+;;   fallback  → old Int/Rat rule (defensive; no producer emits other origins)
+(define (num-lit-default-type origin integral?)
+  (case origin
+    [(decimal)  (expr-Posit32)]
+    [(fraction) (expr-Rat)]
+    [(exponent) (if integral? (expr-Int) (expr-Posit32))]
+    [else       (if integral? (expr-Int) (expr-Rat))]))
 
 ;; ========================================
 ;; Reduce (ML-style pattern matching — desugared in type checker)

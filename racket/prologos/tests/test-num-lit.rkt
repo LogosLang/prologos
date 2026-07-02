@@ -60,14 +60,16 @@
   (check-equal? (run "(eval (the Int 3.0))")      '("3 : Int")))
 
 ;; ========================================
-;; Unconstrained -> Rat (Int if integral); WS mode = clean display
+;; Unconstrained defaults (N6b: keyed on notation origin — decimal→Posit32,
+;; fraction→Rat, non-integral exponent→Posit32; 1e10 stays Int structurally)
 ;; ========================================
 
 (test-case "num-lit/unconstrained-defaults"
-  (check-equal? (run-ns-ws-last "3.14") "3.14 : Rat" "bare decimal -> Rat")
-  (check-true (string-contains? (run-ns-ws-last "3.0") "Int") "integral decimal -> Int")
-  (check-true (string-contains? (run-ns-ws-last "3/7") "Rat") "bare fraction -> Rat")
-  (check-true (string-contains? (run-ns-ws-last "1.5e-3") "Rat") "non-integral exponent -> Rat"))
+  (check-equal? (run-ns-ws-last "3.14") "~3.14 : Posit32" "bare decimal -> Posit32 (N6b)")
+  (check-true (string-contains? (run-ns-ws-last "3.0") "Posit32")
+              "integral-value DECIMAL notation -> Posit32 (N6b: origin wins)")
+  (check-true (string-contains? (run-ns-ws-last "3/7") "Rat") "bare fraction -> Rat (unchanged)")
+  (check-true (string-contains? (run-ns-ws-last "1.5e-3") "Posit32") "non-integral exponent -> Posit32 (N6b)"))
 
 ;; ========================================
 ;; Generic arithmetic over polymorphic literals

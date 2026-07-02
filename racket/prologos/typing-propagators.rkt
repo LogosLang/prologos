@@ -2500,9 +2500,10 @@
       [(expr-int _)    (type-map-write net tm-cid e (expr-Int))]
       [(expr-nat-val _)(type-map-write net tm-cid e (expr-Nat))]
       ;; N4: numeric literal — on-network runs only in INFER position (no check-on-network),
-      ;; so write its DEFAULT type (Int if integral else Rat); annotated/context positions are
-      ;; typed function-level by the check arm (which solves alpha, collapsed at zonk).
-      [(expr-num-lit _ integral? _) (type-map-write net tm-cid e (if integral? (expr-Int) (expr-Rat)))]
+      ;; so write its DEFAULT type (N6b: keyed on notation origin via num-lit-default-type);
+      ;; annotated/context positions are typed function-level by the check arm (which
+      ;; solves alpha, collapsed at zonk).
+      [(expr-num-lit _ integral? origin _) (type-map-write net tm-cid e (num-lit-default-type origin integral?))]
       [(expr-true)     (type-map-write net tm-cid e (expr-Bool))]
       [(expr-false)    (type-map-write net tm-cid e (expr-Bool))]
 

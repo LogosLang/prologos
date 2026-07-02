@@ -83,10 +83,10 @@
 
     ;; N4: numeric literal — zonk its type meta; collapse if resolved to a concrete
     ;; numeric type, else keep the transient node (defaulted later in default-metas).
-    [(expr-num-lit val integral? alpha)
+    [(expr-num-lit val integral? origin alpha)
      (let ([za (zonk alpha)])
        (or (collapse-num-lit val integral? za)
-           (expr-num-lit val integral? za)))]
+           (expr-num-lit val integral? origin za)))]
 
     ;; Atoms — return unchanged
     [(expr-bvar _) e]
@@ -550,10 +550,10 @@
 
     ;; N4: numeric literal — resolve its type meta at depth; collapse if concrete,
     ;; else keep the transient node (a collapsed literal has no bound vars → no shift).
-    [(expr-num-lit val integral? alpha)
+    [(expr-num-lit val integral? origin alpha)
      (let ([za (zonk-at-depth depth alpha)])
        (or (collapse-num-lit val integral? za)
-           (expr-num-lit val integral? za)))]
+           (expr-num-lit val integral? origin za)))]
 
     ;; Atoms — return unchanged
     [(expr-bvar _) e]
@@ -1039,9 +1039,10 @@
     [(expr-Type l) (expr-Type (zonk-level-default l))]
     [(expr-meta _ _) e]
     ;; N4: unsolved numeric literal (zonk already collapsed solved ones) → default by
-    ;; integral?: Int if integral, else Rat. Defensive: also collapse if alpha turns
-    ;; out solved (e.g. a default-metas call without a preceding zonk).
-    [(expr-num-lit val integral? alpha)
+    ;; NOTATION ORIGIN (N6b: decimal→Posit32, fraction→Rat, exponent→Int/Posit32 —
+    ;; num-lit-default-type). Defensive: also collapse if alpha turns out solved
+    ;; (e.g. a default-metas call without a preceding zonk).
+    [(expr-num-lit val integral? origin alpha)
      (define resolved
        (match alpha
          [(expr-meta id cell-id)
@@ -1049,7 +1050,7 @@
             (if sol (zonk sol) alpha))]
          [_ alpha]))
      (or (collapse-num-lit val integral? resolved)
-         (collapse-num-lit val integral? (if integral? (expr-Int) (expr-Rat))))]
+         (collapse-num-lit val integral? (num-lit-default-type origin integral?)))]
     [(expr-bvar _) e]
     [(expr-fvar _) e]
     [(expr-zero) e]

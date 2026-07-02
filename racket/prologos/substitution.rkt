@@ -48,7 +48,7 @@
     [(expr-typed-hole _) e]
     [(expr-Open) e]
     [(expr-meta _ _) e]
-    [(expr-num-lit _ _ _) e]
+    [(expr-num-lit _ _ _ _) e]
     [(expr-error) e]
     [(? ns-context?) e]  ;; namespace metadata — pass-through
 
@@ -520,7 +520,7 @@
     [(expr-typed-hole _) e]
     [(expr-Open) e]
     [(expr-meta _ _) e]
-    [(expr-num-lit _ _ _) e]
+    [(expr-num-lit _ _ _ _) e]
     [(expr-error) e]
     [(? ns-context?) e]
 

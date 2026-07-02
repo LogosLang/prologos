@@ -71,8 +71,11 @@
                 '((eval 10000000000))))
 
 (test-case "exp-literal/ws-roundtrip-rat"
+  ;; N6b: non-integral exponent lexemes carry the $exp-literal sentinel (the
+  ;; token identity is erased at tokenize, so the lexeme check preserves
+  ;; notation origin — like $rat-literal for `/`); integral exps stay bare.
   (check-equal? (read-all-forms-string "eval 1.5e-3")
-                '((eval 3/2000))))
+                '((eval ($exp-literal 3/2000)))))
 
 ;; ========================================
 ;; End-to-end (WS string, cell pipeline = REPL/L3 path) -> Int / Rat
@@ -81,11 +84,12 @@
 (test-case "exp-literal/ws-eval-1e10-Int"
   (check-equal? (run-ns-ws-last "1e10") "10000000000 : Int"))
 
-(test-case "exp-literal/ws-eval-1.5e-3-Rat"
-  (check-equal? (run-ns-ws-last "1.5e-3") "0.0015 : Rat"))
+(test-case "exp-literal/ws-eval-1.5e-3-Posit32"
+  ;; N6b: non-integral exponents default Posit32 (exponent origin via $exp-literal)
+  (check-equal? (run-ns-ws-last "1.5e-3") "~0.0015 : Posit32"))
 
-(test-case "exp-literal/ws-eval-neg-1.5e-3-Rat"
-  (check-equal? (run-ns-ws-last "-1.5e-3") "-0.0015 : Rat"))
+(test-case "exp-literal/ws-eval-neg-1.5e-3-Posit32"
+  (check-equal? (run-ns-ws-last "-1.5e-3") "~-0.0015 : Posit32"))
 
 (test-case "exp-literal/ws-eval-2e3-Int"
   (check-equal? (run-ns-ws-last "2e3") "2000 : Int"))
@@ -98,10 +102,10 @@
 ;; Regression: non-exponent literals UNCHANGED
 ;; ========================================
 
-(test-case "exp-literal/bare-decimal-polymorphic-N4"
-  ;; N4: bare 3.14 (no exponent) is now a polymorphic literal → unconstrained Rat
+(test-case "exp-literal/bare-decimal-polymorphic"
+  ;; N6b: bare 3.14 is a polymorphic literal, decimal origin → Posit32 default
   (define r (run-ns-ws-last "3.14"))
-  (check-true (string-contains? r "Rat") "bare 3.14 → Rat (N4 polymorphic)"))
+  (check-true (string-contains? r "Posit32") "bare 3.14 → Posit32 (N6b decimal default)"))
 
 (test-case "exp-literal/regress-int"
   (check-equal? (run-ns-ws-last "42") "42 : Int"))
@@ -135,14 +139,17 @@
                "x-1e3 must not produce a number token (stays an identifier)"))
 
 ;; ========================================
-;; N4 reconciled the sexp path: a sexp exponent reads as an inexact number →
-;; surf-num-lit (polymorphic). 1e10 is integral → unconstrained Int.
+;; Sexp path (internal IR): a sexp exponent reads as an INEXACT flonum —
+;; indistinguishable from a decimal (1e10 ≡ 1.0's shape) → decimal origin →
+;; Posit32 (N6b). This is the documented sexp/WS exponent asymmetry: WS is
+;; authoritative (WS 1e10 → Int, asserted above); sexp mode cannot recover
+;; exponent notation from Racket's reader.
 ;; ========================================
 
-(test-case "exp-literal/sexp-integral-exp-N4-Int"
+(test-case "exp-literal/sexp-integral-exp-decimal-origin"
   (define r (run-ns-last "(eval 1e10)"))
-  (check-true (string-contains? r "Int")
-              "sexp 1e10 → Int (N4 handles the sexp path N1 deferred)"))
+  (check-true (string-contains? r "Posit32")
+              "sexp 1e10 → Posit32 (decimal origin; documented sexp/WS asymmetry)"))
 
 ;; ========================================
 ;; Level 3: WS file via process-file.
@@ -159,5 +166,5 @@
   (delete-file tmp)
   (check-true (and (member "10000000000 : Int" results) #t)
               "L3: 1e10 -> Int in a real .prologos file")
-  (check-true (and (member "0.0015 : Rat" results) #t)
-              "L3: 1.5e-3 -> Rat in a real .prologos file"))
+  (check-true (and (member "~0.0015 : Posit32" results) #t)
+              "L3: 1.5e-3 -> Posit32 in a real .prologos file (N6b)"))

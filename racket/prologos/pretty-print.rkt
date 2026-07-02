@@ -125,7 +125,7 @@
        (if sol
            (pp-expr sol names)
            (format "?~a" id)))]
-    [(expr-num-lit val _ _) (format "~a" val)]  ;; N4: transient literal (usually collapsed pre-display)
+    [(expr-num-lit val _ _ _) (format "~a" val)]  ;; N4: transient literal (usually collapsed pre-display)
     [(expr-error) "<error>"]
 
     ;; Unapplied type constructor (HKT)

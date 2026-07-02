@@ -485,14 +485,18 @@
     [(exact-integer? d)
      (surf-int-lit d loc)]
 
-    ;; Bare fraction (rational literal, e.g. 3/7)
+    ;; Bare fraction (rational literal, e.g. 3/7). Input set: sexp fractions +
+    ;; (pre-N6b) WS non-integral exponents; WS exponents now carry their own
+    ;; $exp-literal sentinel, so this arm is unambiguously fraction-origin.
     [(and (number? d) (exact? d) (rational? d) (not (integer? d)))
-     (surf-num-lit d #f loc)]  ;; N4b: bare fraction → polymorphic (non-integer → integral? #f)
+     (surf-num-lit d #f 'fraction loc)]
 
-    ;; Inexact number (e.g. 3.14 from sexp mode) → Posit32 (approximate)
-    ;; Racket's reader produces inexact floats for decimals; convert to exact for Posit encoding.
+    ;; Inexact number (e.g. 3.14 from sexp mode) → decimal-origin polymorphic
+    ;; (N6b default: Posit32). Racket's reader produces inexact floats for
+    ;; decimals AND exponents in sexp mode — both bucket to 'decimal (same
+    ;; Posit32 default; the documented sexp/WS exponent asymmetry).
     [(and (number? d) (inexact? d))
-     (let ([ex (inexact->exact d)]) (surf-num-lit ex (integer? ex) loc))]  ;; N4b: bare decimal → polymorphic
+     (let ([ex (inexact->exact d)]) (surf-num-lit ex (integer? ex) 'decimal loc))]
 
     ;; String literal → surf-string
     [(string? d)
@@ -637,7 +641,7 @@
          (let ([v (stx->datum (car args))])
            (if (and (number? v) (exact? v) (rational? v))
                ;; N4b: genuine fraction → polymorphic; integer-valued slash (0/1, 6/3) stays concrete Rat.
-               (if (integer? v) (surf-rat-lit v loc) (surf-num-lit v #f loc))
+               (if (integer? v) (surf-rat-lit v loc) (surf-num-lit v #f 'fraction loc))
                (parse-error loc (format "rat literal requires an exact rational, got: ~a" v) #f)))
          (parse-error loc "rat literal requires exactly one argument" #f))]
 
@@ -650,14 +654,36 @@
                (parse-error loc (format "~~ requires a numeric argument, got: ~a" v) #f)))
          (parse-error loc "~~ requires exactly one argument" #f))]
 
-    ;; $decimal-literal sentinel: 3.14 → surf-approx-literal (bare decimal = Posit32)
+    ;; $decimal-literal sentinel: 3.14 → decimal-origin polymorphic literal
+    ;; (N6b default: Posit32 — decimal notation = approximate intent; incl. 3.0)
     [(and (symbol? head) (eq? head '$decimal-literal))
      (if (= (length args) 1)
          (let ([v (stx->datum (car args))])
            (if (and (number? v) (exact? v) (rational? v))
-               (surf-num-lit v (integer? v) loc)  ;; N4b: bare decimal → polymorphic (3.0→Int, 3.14→Rat by default)
+               (surf-num-lit v (integer? v) 'decimal loc)
                (parse-error loc (format "decimal literal requires a numeric argument, got: ~a" v) #f)))
          (parse-error loc "decimal literal requires exactly one argument" #f))]
+
+    ;; $exp-literal sentinel (N6b): WS non-integral exponent (1.5e-3) → exponent-origin
+    ;; polymorphic literal (default: Posit32). Integral exponents (1e10) never get here —
+    ;; they arrive as exact integers → surf-int-lit (structurally Int).
+    [(and (symbol? head) (eq? head '$exp-literal))
+     (if (= (length args) 1)
+         (let ([v (stx->datum (car args))])
+           (if (and (number? v) (exact? v) (rational? v))
+               (surf-num-lit v (integer? v) 'exponent loc)
+               (parse-error loc (format "exponent literal requires a numeric argument, got: ~a" v) #f)))
+         (parse-error loc "exponent literal requires exactly one argument" #f))]
+
+    ;; $posit-literal sentinel (Numerics N6b): 2p8 / 3.14p16 / 3.14p64 → surf-posit-lit
+    [(and (symbol? head) (eq? head '$posit-literal))
+     (if (= (length args) 2)
+         (let ([v (stx->datum (car args))]
+               [w (stx->datum (cadr args))])
+           (if (and (number? v) (exact? v) (rational? v) (memv w '(8 16 32 64)))
+               (surf-posit-lit v w loc)
+               (parse-error loc (format "posit literal requires (exact-rational width 8|16|32|64), got: ~a ~a" v w) #f)))
+         (parse-error loc "posit literal requires exactly two arguments (value width)" #f))]
 
     ;; $float-literal sentinel (Numerics N3c): 3.14f / 3.14f32 / 3.14f64 → surf-float-lit
     [(and (symbol? head) (eq? head '$float-literal))
@@ -5166,7 +5192,8 @@
                  (define sd (stx->datum s))
                  (and (pair? sd)
                       (let ([h (if (syntax? (car sd)) (syntax-e (car sd)) (car sd))])
-                        (memq h '($nat-literal $decimal-literal $approx-literal $float-literal)))))
+                        (memq h '($nat-literal $decimal-literal $approx-literal $float-literal
+                                  $exp-literal $posit-literal)))))  ;; N6b
                (define-values (flat-terms nested-rows)
                  (partition (lambda (s)
                               (or (not (pair? (stx->datum s)))
