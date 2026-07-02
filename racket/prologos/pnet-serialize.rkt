@@ -374,6 +374,11 @@
     (auto-cache! op d d))
   (for ([op (list expr-rat-neg expr-rat-abs)])
     (auto-cache! op d))
+  ;; Rat projections (Numerics N6d-ii: first cached-lib-body use via to-int/to-rat
+  ;; Rat leg [int/ [rat-numer x] [rat-denom x]]; unregistered => raw-vector impostor
+  ;; landmine, pipeline.md item 6).
+  (for ([op (list expr-rat-numer expr-rat-denom)])
+    (auto-cache! op d))
   ;; Collection ops
   (auto-cache! expr-set-empty d) (auto-cache! expr-set-insert d d) (auto-cache! expr-set-member d d)
   (auto-cache! expr-set-delete d d) (auto-cache! expr-set-union d d) (auto-cache! expr-set-diff d d)
