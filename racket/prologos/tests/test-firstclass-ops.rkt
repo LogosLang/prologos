@@ -212,3 +212,29 @@
   (check-false (string-contains? (ri 7) "defined"))        ;; def-RHS loud
   (check-true (string-contains? (ri 7) "Could not infer"))
   (check-equal? (ri 8) "'[2 4 6] : [prologos::data::list::List Int]"))
+
+;; ========================================
+;; Issue #70 (C, N6e diagnostic stopgap) — generic-op-under-hole-lambda hint
+;; ========================================
+;; C does NOT fix #70 (the real fix, container-before-fn ordering = option B, is
+;; scheduled for E5); it turns the bare "Could not infer type" into an actionable
+;; hint when the failing expr is the #70 signature (a hole-domain lambda wrapping
+;; a GENERIC numeric op). It must NOT fire on concrete-op or unrelated errors.
+
+(define results-i70c
+  (ws-all
+   "eval [map [+ _ 1] '[1 2 3]]"        ;; #70 flagship → error + hint
+   "eval [filter [lt _ 3] '[1 2 3 4]]"  ;; comparison section → error + hint
+   "eval [+ 7 [int* _ 2]]"))            ;; hole-lam wraps a CONCRETE op → error, NO #70 hint
+
+(define (rc i) (format "~a" (list-ref results-i70c i)))
+
+(test-case "i70c/hint-on-generic-op-under-hole-lambda"
+  (check-true (string-contains? (rc 0) "Could not infer type"))
+  (check-true (string-contains? (rc 0) "issue #70"))
+  (check-true (string-contains? (rc 1) "issue #70")))
+
+(test-case "i70c/no-hint-on-concrete-op-error"
+  ;; the inner section wraps int* (concrete), not a generic op → plain error
+  (check-true (string-contains? (rc 2) "Could not infer"))
+  (check-false (string-contains? (rc 2) "issue #70")))

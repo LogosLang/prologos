@@ -44,6 +44,64 @@
          checkQ-top/err)
 
 ;; ========================================
+;; Issue #70 diagnostic (N6e-C stopgap).
+;; ========================================
+;; A "Could not infer type" whose expr contains a HOLE-domain lambda (an
+;; unannotated `fn` / `_`-section) wrapping a generic numeric op (+ - * / < …)
+;; is almost always the #70 gap: the op's numeric type can't be inferred while
+;; its operand (the lambda param) is still an unsolved element meta — map/filter
+;; type the fn arg before the container that would solve it. Detect that shape
+;; and append an actionable hint. Best-effort structural walk, runs ONLY on the
+;; already-failing error path; purely additive text (no soundness effect). The
+;; real fix (container-before-fn ordering; option B) is scheduled for N6e-E5 —
+;; see issue #70 + design doc §12 / §9d E5.
+(define (generic-op-node? x)
+  (or (expr-generic-add? x) (expr-generic-sub? x) (expr-generic-mul? x)
+      (expr-generic-div? x) (expr-generic-mod? x)
+      (expr-generic-lt? x) (expr-generic-le? x) (expr-generic-gt? x)
+      (expr-generic-ge? x) (expr-generic-eq? x)
+      (expr-generic-negate? x) (expr-generic-abs? x)))
+
+;; Immediate sub-exprs of a transparent expr struct (also recursing into list /
+;; pair fields). Non-expr fields ignored; an exotic container just yields no
+;; hint, never an error.
+(define (expr-subfields x)
+  (if (expr? x)
+      (let ([v (struct->vector x)])
+        (let loop ([i 1] [acc '()])
+          (if (>= i (vector-length v))
+              (reverse acc)
+              (let ([f (vector-ref v i)])
+                (loop (add1 i)
+                      (cond
+                        [(expr? f) (cons f acc)]
+                        [(list? f) (append (reverse (filter expr? f)) acc)]
+                        [(pair? f)
+                         (append (reverse (filter expr? (list (car f) (cdr f)))) acc)]
+                        [else acc]))))))
+      '()))
+
+;; Does e contain an expr-lam with a HOLE domain whose body-subtree contains a
+;; generic op? Single pass tracking "am I inside a hole-lambda".
+(define (hole-lambda-over-generic-op? e)
+  (let search ([x e] [in-hole-lam? #f])
+    (cond
+      [(and in-hole-lam? (generic-op-node? x)) #t]
+      [(expr-lam? x)
+       (or (search (expr-lam-type x) #f)
+           (search (expr-lam-body x)
+                   (or in-hole-lam? (expr-hole? (expr-lam-type x)))))]
+      [else (ormap (lambda (s) (search s in-hole-lam?)) (expr-subfields x))])))
+
+(define i70-inference-hint
+  (string-append
+   "Could not infer type"
+   " — hint (issue #70): a generic numeric op (+, -, *, /, <, …) over an"
+   " unannotated parameter can't infer its numeric type here; annotate the"
+   " parameter (e.g. [fn [x : Int] …]) or use a concrete-op section (e.g."
+   " [int* _ 2] / [int+ _ 1])."))
+
+;; ========================================
 ;; Infer with error reporting
 ;; ========================================
 ;; Returns (or/c Expr? prologos-error?)
@@ -52,7 +110,9 @@
   (let ([result (infer ctx e)])
     (if (expr-error? result)
         (inference-failed-error loc
-                                "Could not infer type"
+                                (if (hole-lambda-over-generic-op? e)
+                                    i70-inference-hint
+                                    "Could not infer type")
                                 (pp-expr e names))
         result)))
 
