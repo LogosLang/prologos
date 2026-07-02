@@ -2152,11 +2152,38 @@
 
   ;; Apply merge-form to each preparse surf, using tree-by-line for lookup.
   ;; Preparse ordering preserved (Pass 5b hoisting for generated defs).
+  ;;
+  ;; (N6e-E5.2, issue #69(b)) Preparse ERROR surfs are NO LONGER silently
+  ;; dropped. Previously the #:when filter vanished any preparse-mangled form
+  ;; (and often the file tail) with zero diagnostics — and ALSO discarded the
+  ;; tree parser's successful recovery of that form, because tree surfs only
+  ;; surface via the preparse spine. Now: recovery-first — if the tree parser
+  ;; parsed the errored form's source line, use the tree surf; otherwise KEEP
+  ;; the error surf, which downstream already reports (results passthrough +
+  ;; emit-error-diagnostic).
+  ;;
+  ;; EXCEPTION — consumed-form residue: ns/require/provide are PREPARSE-
+  ;; processed (side effects); the parser's "X should have been processed
+  ;; before parsing" surf is their NORMAL representation, not a user error.
+  ;; That class stays dropped (it was the old blanket filter's one legitimate
+  ;; customer — keeping it would inject phantom error entries and shift the
+  ;; positional results consumers).
+  (define (consumed-form-residue? s)
+    (and (prologos-error? s)
+         (let ([m (prologos-error-message s)])
+           (and (string? m)
+                (string-suffix? m "should have been processed before parsing")))))
   (for/list ([s (in-list preparse-surfs)]
-             #:when (not (prologos-error? s)))
-    (define line (surf-source-line s))
-    (define tree-match (and line (hash-ref tree-by-line line #f)))
-    (merge-form s tree-match)))
+             #:unless (consumed-form-residue? s))
+    (cond
+      [(prologos-error? s)
+       (define line (loc->line (prologos-error-srcloc s)))
+       (define tree-match (and line (hash-ref tree-by-line line #f)))
+       (or tree-match s)]
+      [else
+       (define line (surf-source-line s))
+       (define tree-match (and line (hash-ref tree-by-line line #f)))
+       (merge-form s tree-match)])))
 
 ;; PPN Track 3 Phase 4: Cell pipeline runs alongside merge.
 ;; Merge remains the surf source (proven, handles all forms).
@@ -2199,12 +2226,9 @@
                  [current-raw-node #f])
     (process-string-ws-inner-impl s)))
 
-;; PPN Track 3: merge cell surfs with preparse surfs.
-;; Uses preparse surfs as base (proven, complete).
-;; Cell pipeline provides: form cell infrastructure, spec cells, registration.
-;; As cell-path form handlers improve, surfs will shift from preparse to cells.
-(define (merge-cell-surfs-with-preparse cell-surfs preparse-surfs cell-map)
-  (filter (lambda (s) (not (prologos-error? s))) preparse-surfs))
+;; (N6e-E5.2) merge-cell-surfs-with-preparse DELETED — dead code (zero
+;; callers; it was a bare error-swallowing filter, the same defect class as
+;; the merge-preparse-and-tree-parser #:when fixed above).
 
 (define (process-surfs surfs)
   ;; Common tail for both old and new paths.

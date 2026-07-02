@@ -7,10 +7,11 @@
 ;; Each trait defines one operation, and instances provide the
 ;; implementation for each numeric type.
 ;;
-;; The parser keywords `+`, `-`, `*`, `/`, `negate`, and `abs`
-;; dispatch at the AST level based on the type of their arguments.
-;; These traits provide the same operations as first-class values
-;; that can be passed to higher-order functions like `reduce`.
+;; In HEAD position at arity 2, `[+ a b]` is the auto-widening parser
+;; keyword (numeric-join over the operand types). Everywhere else the
+;; names `+`, `-`, `*`, `/`, `negate` denote first-class VALUES backed by
+;; these traits (Numerics N6e-E2): `reduce + 0 xs` and `map negate xs`
+;; work directly, resolving the trait dictionary from context.
 ;;
 ;; Because each is a single-method trait, the dictionary IS the
 ;; function — no wrapper struct needed.

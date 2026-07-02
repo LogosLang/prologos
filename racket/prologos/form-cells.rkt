@@ -275,6 +275,16 @@
   '(eval check infer def defn defn-multi spec
     strategy session defproc defr solver subtype selection capability foreign))
 
+;; (N6e-E5.2) Consumed-form residue: ns/require/provide are PREPARSE-processed
+;; (side effects); the parser's "X should have been processed before parsing"
+;; surf is their normal representation, not a user error. Mirror of the
+;; predicate in driver.rkt's merge-preparse-and-tree-parser — keep in lockstep.
+(define (consumed-form-residue? s)
+  (and (prologos-error? s)
+       (let ([m (prologos-error-message s)])
+         (and (string? m)
+              (regexp-match? #rx"should have been processed before parsing$" m)))))
+
 ;; §11 TREE-CANONICAL extraction rewrite
 (define (extract-surfs-from-form-cells enet cell-map
                                         #:source-str [source-str #f]
@@ -319,11 +329,18 @@
                      (if (null? surfs) acc
                          (cons (cons line surfs) acc))))]
               ;; §11 opt-in: verified forms use tree-parser, rest datum
+              ;; (N6e-E5.2, issue #69(b)) parse ERRORS are KEPT (were silently
+              ;; dropped — the L2 sibling of the driver merge swallow): the
+              ;; error surf flows into the results and is reported downstream.
+              ;; EXCEPTION: consumed-form residue (ns/require/provide are
+              ;; preparse-processed; the parser's "X should have been processed
+              ;; before parsing" surf is their normal representation) stays
+              ;; dropped — mirrors the driver merge's exception.
               [(memq tag tree-parser-verified-tags)
                (define surf (parse-form-tree node))
-               (if (not (prologos-error? surf))
-                   (cons (cons line (list surf)) acc)
-                   acc)]
+               (if (consumed-form-residue? surf)
+                   acc
+                   (cons (cons line (list surf)) acc))]
               ;; Datum conversion for unverified forms
               [else
                (let* ([raw-node (hash-ref raw-map line #f)]
@@ -343,7 +360,12 @@
                        (define norm-datum (normalize-ws-tokens eq-datum))
                        (define expanded (preparse-expand-single norm-datum))
                        (define s (parse-datum (datum->syntax #f expanded)))
-                       (if (prologos-error? s) acc
+                       ;; (N6e-E5.2) parse errors KEPT — see the verified-tags
+                       ;; arm above (incl. the consumed-form-residue exception).
+                       ;; (The no-datum + exn arms still skip: those fire on
+                       ;; legitimate non-form content.)
+                       (if (consumed-form-residue? s)
+                           acc
                            (cons (cons line (list s)) acc)))))])))))  ;; close
   ;; Sort by source line, flatten surf lists
   (define sorted (sort pairs < #:key car))

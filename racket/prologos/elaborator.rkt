@@ -807,7 +807,38 @@
        (expr-fvar name)]
       ;; Numerics N5de: nominal-erased refined numeric types (PosInt/…) are built-in nominal types.
       [(refined-name? name) (expr-fvar name)]
-      [else (unbound-variable-error loc "Unbound variable" name)])))
+      [else (unbound-variable-error
+             loc
+             (or (hash-ref unbound-op-hint-table name #f) "Unbound variable")
+             name)])))
+
+;; (N6e-E5.3) Op-spelling hints for KNOWN op-like names that reach the unbound
+;; fallback: keywords with no value form (mod, quire ops, p*-if-nar), and the
+;; angle-bracket-conflicted comparison spellings. The hint rides the error's
+;; message field (rendered by errors.rkt when non-default). NOTE: bare `lt`
+;; and `eq` never reach here — they resolve to String foreign fns (the
+;; silent-shadow class, filed separately); bare `<` never reaches elaboration
+;; (issue #69(a) reader tokenization).
+(define unbound-op-hint-table
+  (let ([cmp-hint
+         (string-append
+          "hint: as a first-class value use ord-lt/ord-le/ord-gt/ord-ge "
+          "(trait comparisons), or a keyword section like [le _ _]")]
+        [angle-hint
+         (string-append
+          "hint: comparison keywords are spelled lt/le/gt/ge in Prologos "
+          "(< and <= conflict with angle-bracket syntax); values: "
+          "ord-lt/ord-le/ord-gt/ord-ge")]
+        [quire-hint "hint: quire ops are keyword-only (no first-class value form)"]
+        [if-nar-hint "hint: p*-if-nar is keyword-only (no first-class value form)"])
+    (hasheq
+     'mod "hint: mod is a keyword; for a first-class value use the section [mod _ _]"
+     'le cmp-hint 'gt cmp-hint 'ge cmp-hint
+     '<= angle-hint '>= angle-hint '> angle-hint
+     'q8-fma quire-hint 'q16-fma quire-hint 'q32-fma quire-hint 'q64-fma quire-hint
+     'q8-to quire-hint 'q16-to quire-hint 'q32-to quire-hint 'q64-to quire-hint
+     'p8-if-nar if-nar-hint 'p16-if-nar if-nar-hint
+     'p32-if-nar if-nar-hint 'p64-if-nar if-nar-hint)))
 
 ;; ========================================
 ;; Primitive operators as first-class values

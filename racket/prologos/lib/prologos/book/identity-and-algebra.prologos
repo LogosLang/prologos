@@ -155,9 +155,13 @@ defn int-range [start end]
 ;; ========================================
 ;; First-Class Generic Arithmetic
 ;; ========================================
-;; Parser keywords (+, -, *, /, negate, abs) dispatch at the AST level
-;; and can't be passed to higher-order functions like reduce, map, fold.
-;; These wrappers are proper first-class values.
+;; Since Numerics N6e-E2, the operator names themselves ARE first-class
+;; values: `reduce + 0 xs` and `map negate xs` work directly (in head
+;; position at arity 2, `[+ a b]` is the auto-widening keyword; everywhere
+;; else `+` denotes the lawful same-type Add function). Explicit-hole
+;; sections also work: `[map [int* _ 2] xs]`, `[+ 7 _]` (N6e-E3).
+;; These older wrappers predate that and are slated for retirement (N6f);
+;; prefer the operator names.
 
 spec plus [Add A] A -> A -> A
   :doc "First-class addition — pass to higher-order functions like reduce, map"

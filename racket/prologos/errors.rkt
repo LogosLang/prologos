@@ -156,10 +156,16 @@
              (format "    ~a" step)
              (format "    because: ~a" step))))
       "\n")]
-    [(unbound-variable-error _ _ name)
+    [(unbound-variable-error _ uv-msg name)
      (string-join
-      (list (format "Error at ~a" loc-str)
-            (format "  Unbound variable: ~a" name))
+      (append
+       (list (format "Error at ~a" loc-str)
+             (format "  Unbound variable: ~a" name))
+       ;; (N6e-E5.3) a non-default message is a HINT (e.g. op-spelling
+       ;; guidance from elaborate-var) — render it; the default stays as-is.
+       (if (equal? uv-msg "Unbound variable")
+           '()
+           (list (format "  ~a" uv-msg))))
       "\n")]
     [(multiplicity-error _ _ variable declared actual)
      (string-join
