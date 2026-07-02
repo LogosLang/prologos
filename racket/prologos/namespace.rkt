@@ -722,11 +722,15 @@
                                            nth-int take-int drop-int length-int]])
 
     ;; ---- Core traits (type class definitions) ----
-    (imports [prologos::core::eq :refer [Eq eq-check eq-neq nat-eq Char--Eq--dict String--Eq--dict]])
-    (imports [prologos::core::ord :refer [Ord ord-compare PartialOrd PartialOrd-partial-compare
+    ;; N6d-i: derived bare-name method wrappers (eq?, compare, mul, div, neg,
+    ;; abs) added to the curated refers — spec propagation is refer-gated, and
+    ;; the wrappers' where-constraint spec entries drive call-site dict holes.
+    ;; (add/sub/join/reduce are derive-skipped; see DEFERRED.md N6d-i.)
+    (imports [prologos::core::eq :refer [Eq eq? eq-check eq-neq nat-eq Char--Eq--dict String--Eq--dict]])
+    (imports [prologos::core::ord :refer [Ord compare ord-compare PartialOrd partial-compare PartialOrd-partial-compare
                                           nat-ord ord-lt ord-le ord-gt ord-ge ord-eq
                                           ord-min ord-max Char--Ord--dict String--Ord--dict]])
-    (imports [prologos::core::arithmetic :refer [Add Sub Mul Div Neg Abs String--Add--dict]])
+    (imports [prologos::core::arithmetic :refer [Add Sub Mul Div Neg Abs mul div neg abs String--Add--dict]])
     (imports [prologos::core::conversions :refer [From Into TryFrom FromInt FromRat]])
     (imports [prologos::core::algebra :refer-all])
     (imports [prologos::core::lattice :refer-all])

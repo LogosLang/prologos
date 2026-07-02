@@ -7541,8 +7541,99 @@
 
       `(def ,accessor-name : ,accessor-type ,accessor-body)))
 
-  ;; Return the accessor defs (deftype was already processed via process-deftype)
-  accessor-defs)
+  ;; ---- N6d-i: derive bare-name constrained method wrappers ----
+  ;; Each derivable method `m : sig` also gets a top-level generic function
+  ;;   m : Pi(params :0) -> (T params...) -> sig      (= the accessor's type)
+  ;; with the accessor's body, PLUS a bare-name spec-entry whose
+  ;; where-constraints make call sites insert the type + dict implicit holes
+  ;; (elaborator implicit-param-count = leading-m0 + spec where-constraints).
+  ;; The dict meta's trait constraint then registers from the Pi domain.
+  ;; Rule: derive iff EVERY trait param occurs in an argument (domain)
+  ;; position of the method type — constants (zero/one/top/empty-coll) and
+  ;; output-position-only methods (from/try-from/into/from-integer/
+  ;; from-rational, alpha/gamma) are excluded structurally: their type var
+  ;; cannot be solved from call arguments. See DEFERRED.md § "Numerics
+  ;; N6d-i follow-ups" item 3 for the expected-type-resolution future.
+  ;; Skip-set: method names whose derivation would capture or clobber
+  ;; existing same-named bindings (own-module import capture; bare-name
+  ;; spec-store overwrite — issues #66/#67). Census-seeded 2026-07-02:
+  ;;   add/sub — arithmetic.prologos refers nat's add/sub and the Nat impl
+  ;;             bodies call them bare (capture → self-referential dicts);
+  ;;   join    — string-ops join (spec clobber; heavily used);
+  ;;   reduce  — data/list reduce (spec clobber).
+  ;; Lifting these = DEFERRED.md § "Numerics N6d-i follow-ups" item 1.
+  (define derive-skip-methods '(add sub join reduce))
+
+  ;; Domain (argument-position) sub-datums of a method type: strip Pi
+  ;; wrappers into the body, then collect nested prefix-arrow domains;
+  ;; tolerate flat infix (d1 ... -> cod) from raw angle-type datums.
+  (define (method-domain-datums t)
+    (cond
+      [(and (list? t) (= (length t) 3) (memq (car t) '(Pi pi)))
+       (method-domain-datums (caddr t))]
+      [(and (list? t) (= (length t) 3) (eq? (car t) '->))
+       (cons (cadr t) (method-domain-datums (caddr t)))]
+      [(and (list? t) (memq '-> (if (null? t) '() (cdr t))))
+       ;; flat infix: segments before the LAST -> are domains
+       (let loop ([xs t] [cur '()] [segs '()])
+         (cond
+           [(null? xs)
+            (let ([all (reverse (cons (reverse cur) segs))])
+              (apply append (map (lambda (s) s) (reverse (cdr (reverse all))))))]
+           [(eq? (car xs) '->) (loop (cdr xs) '() (cons (reverse cur) segs))]
+           [else (loop (cdr xs) (cons (car xs) cur) segs)]))]
+      [else '()]))
+
+  (define (datum-mentions? t sym)
+    (cond
+      [(eq? t sym) #t]
+      [(pair? t) (or (datum-mentions? (car t) sym) (datum-mentions? (cdr t) sym))]
+      [else #f]))
+
+  (define (derivable-method? method)
+    (define mname (trait-method-name method))
+    (and (not (memq mname derive-skip-methods))
+         (not (null? params))
+         (let ([doms (method-domain-datums (trait-method-type-datum method))])
+           (for/and ([p (in-list params)])
+             (for/or ([d (in-list doms)])
+               (datum-mentions? d (car p)))))))
+
+  (define derived-wrapper-defs
+    (for/list ([method (in-list methods)]
+               [i (in-naturals)]
+               #:when (derivable-method? method))
+      (define method-name (trait-method-name method))
+      (define method-type (trait-method-type-datum method))
+      (define wrapper-type
+        (build-nested-pi
+         param-pi-bindings
+         (build-arrow-type (list applied-trait-type) method-type)))
+      (define dict-var 'dict)
+      (define projection
+        (if (= n-methods 1)
+            dict-var
+            (build-sigma-accessor n-methods i dict-var)))
+      (define inner-fn
+        `(fn (,dict-var : ,applied-trait-type) ,projection))
+      (define wrapper-body
+        (if (null? params)
+            inner-fn
+            (build-nested-fn param-pi-bindings inner-fn)))
+      ;; Bare-name spec entry: the where-constraints count drives call-site
+      ;; implicit-hole insertion (type vars + dict). Idempotent (hash-set) —
+      ;; safe under the preparse Pass-0 double-run.
+      (register-spec! method-name
+                      (spec-entry (list (list applied-trait-type '-> method-type))
+                                  #f #f srcloc-unknown
+                                  (list applied-trait-type)
+                                  params
+                                  #f (hasheq)))
+      `(def ,method-name : ,wrapper-type ,wrapper-body)))
+
+  ;; Return accessor defs + derived bare-name wrappers
+  ;; (deftype was already processed via process-deftype)
+  (append accessor-defs derived-wrapper-defs))
 
 ;; ========================================
 ;; Property declarations

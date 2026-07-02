@@ -58,8 +58,9 @@
                  [current-trait-registry (hasheq)])
     (define defs
       (process-trait '(trait (Showable (A : (Type 0))) (show : A -> Nat))))
-    ;; Should produce 1 accessor def
-    (check-equal? (length defs) 1)
+    ;; 1 accessor + 1 derived bare-name wrapper (N6d-i: show is derivable —
+    ;; A appears in an argument position). Accessor is first.
+    (check-equal? (length defs) 2)
     ;; Accessor should be named Showable-show
     (define acc (car defs))
     (check-equal? (cadr acc) 'Showable-show)
@@ -77,8 +78,8 @@
                  [current-trait-registry (hasheq)])
     (define defs
       (process-trait '(trait (Eq (A : (Type 0))) (== : A -> A -> Bool) (/= : A -> A -> Bool))))
-    ;; Should produce 2 accessor defs
-    (check-equal? (length defs) 2)
+    ;; 2 accessors + 2 derived wrappers (N6d-i; both methods derivable). Accessors first.
+    (check-equal? (length defs) 4)
     (check-equal? (cadr (first defs)) 'Eq-==)
     (check-equal? (cadr (second defs)) 'Eq-/=)
     ;; Trait should have 2 methods
@@ -113,7 +114,7 @@
                  [current-trait-registry (hasheq)])
     (define defs
       (process-trait '(trait Eq ($brace-params A) (== : A -> A -> Bool))))
-    (check-equal? (length defs) 1)
+    (check-equal? (length defs) 2)  ;; 1 accessor + 1 derived wrapper (N6d-i)
     (define tm (lookup-trait 'Eq))
     (check-true (trait-meta? tm))
     (check-equal? (trait-meta-name tm) 'Eq)
@@ -183,7 +184,7 @@
                         (add-a : A -> A -> A)
                         (sub-a : A -> A -> A)
                         (neg-a : A -> A))))
-    (check-equal? (length defs) 3)
+    (check-equal? (length defs) 6)  ;; 3 accessors + 3 derived wrappers (N6d-i; all derivable). Accessors first.
     ;; Verify trait metadata
     (define tm (lookup-trait 'Arith))
     (check-equal? (length (trait-meta-methods tm)) 3)

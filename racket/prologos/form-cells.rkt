@@ -198,7 +198,12 @@
     (case tag
       ;; Category 1: produce generated defs (registration + N defs)
       [(data)     (process-data datum)]
-      [(trait)    (process-trait datum)]
+      ;; N6d-i: map preparse-expand-form like the impl arm (parity with the
+      ;; file-mode trait arm, macros.rkt) — trait output now includes derived
+      ;; method wrappers whose deftype-macro sub-forms need expansion.
+      [(trait)    (let ([defs (process-trait datum)])
+                    (for/list ([d (in-list defs)])
+                      (preparse-expand-form d)))]
       [(impl)     (let ([defs (process-impl datum)])
                     (for/list ([d (in-list defs)])
                       (preparse-expand-form d)))]

@@ -699,6 +699,22 @@
                           [else 'free])
                         'free)])
          (expr-logic-var stripped mode))]
+      ;; Phase D: resolve bare trait method names from where-context.
+      ;; This MUST come before namespace/global resolution so that `add` inside
+      ;; a `where (Add A)` body resolves through the dict parameter, not the
+      ;; concrete global `prologos::data::nat::add`.
+      ;; N6d-i: it must ALSO come before own-namespace resolution. Before the
+      ;; auto-derived method wrappers existed, trait methods had no top-level
+      ;; binding, so the own-ns arm below missed them and where-context won for
+      ;; a bare method call inside a constrained body (e.g. `[leq x y]` inside
+      ;; `impl Lattice (Map K V) where (Lattice V)` → `Lattice-leq V dict`). The
+      ;; derive adds a top-level `leq` wrapper in the module's own namespace, so
+      ;; without this ordering the own-ns arm would capture it and (in point-free
+      ;; position) fail trait resolution against an unsolved var. where-context
+      ;; only fires for methods of ACTIVE where-constraints, so putting it first
+      ;; is a no-op for every other name — own-ns priority (below) is preserved.
+      [(resolve-method-from-where name env depth)
+       => (lambda (resolved) resolved)]
       ;; Own-namespace definition takes priority over imports (including prelude).
       ;; This ensures `def map ...` in `ns foo` resolves to `foo::map`, not the
       ;; prelude's `prologos::data::list::map`.
@@ -710,12 +726,6 @@
             (if auto-apply?
                 (maybe-auto-apply-implicits (expr-fvar own-fqn) own-fqn loc env depth)
                 (expr-fvar own-fqn)))]
-      ;; Phase D: resolve bare trait method names from where-context.
-      ;; This MUST come before namespace/global resolution so that `add` inside
-      ;; a `where (Add A)` body resolves through the dict parameter, not the
-      ;; concrete global `prologos::data::nat::add`.
-      [(resolve-method-from-where name env depth)
-       => (lambda (resolved) resolved)]
       ;; When namespace context is active, try FQN resolution (imports, refer-map).
       [(and (current-ns-context)
             (let ([resolved (resolve-name name (current-ns-context))])

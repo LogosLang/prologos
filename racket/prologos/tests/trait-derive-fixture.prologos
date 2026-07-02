@@ -1,0 +1,27 @@
+ns trait-derive-fixture
+
+;; N6d-i L3 fixture: local trait declaration derives bare-name wrappers.
+
+;; single-method trait
+trait Doubler {A}
+  dbl : A -> A
+
+impl Doubler Int
+  defn dbl [x : Int] <Int>
+    [int* x 2]
+
+eval [dbl 21]
+
+;; multi-method trait (Sigma-projection wrapper bodies)
+trait Scaler {A}
+  scale-up   : A -> A
+  scale-down : A -> A
+
+impl Scaler Int
+  defn scale-up [x : Int] <Int>
+    [int* x 2]
+  defn scale-down [x : Int] <Int>
+    [int/ x 2]
+
+eval [scale-up 21]
+eval [scale-down 10]
