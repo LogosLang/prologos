@@ -354,6 +354,17 @@
   ;; Cross-width Float conversions (Numerics N3e-rest) — unary
   (for ([op (list expr-float-finite expr-float-to-rat expr-float-to-int expr-float-to-float32)])
     (auto-cache! op d))
+  ;; Posit if-nar eliminators (Numerics Q11) — arity 4: (tp nar-case val-case v).
+  ;; First library use is conversions.prologos; without this registration the
+  ;; .pnet reader's unknown-tag fallback returns a raw VECTOR that then fails
+  ;; every struct match downstream (subst is the first to throw).
+  (for ([op (list expr-p8-if-nar expr-p16-if-nar expr-p32-if-nar expr-p64-if-nar)])
+    (auto-cache! op d d d d))
+  ;; Generic conversion dispatch nodes (Numerics N3e Path B) — arity 2:
+  ;; (target-type arg). Same landmine class as if-nar above: first INVOKED
+  ;; library use is the Q11 Posit->Float instances.
+  (for ([op (list expr-generic-from-rat expr-generic-from-int)])
+    (auto-cache! op d d))
   ;; Int/Rat ops
   (for ([op (list expr-int-add expr-int-sub expr-int-mul expr-int-div expr-int-lt expr-int-eq)])
     (auto-cache! op d d))

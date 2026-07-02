@@ -3,6 +3,20 @@ ns prologos::core::conversions
 require [prologos::data::option :refer [Option some none]]
 
 ;; ========================================
+;; Special-value constants (Numerics Q11)
+;; ========================================
+;; NaR per posit width (raw bit patterns — the single posit exception value)
+;; and Float NaN (0/0). Used by the NaR-correct posit widening and the
+;; cross-scheme Posit<->Float conversions below.
+
+def p8-nar  : Posit8  := posit8 128
+def p16-nar : Posit16 := posit16 32768
+def p32-nar : Posit32 := posit32 2147483648
+def p64-nar : Posit64 := posit64 9223372036854775808
+def f32-nan : Float32 := [f32/ 0.0f32 0.0f32]
+def f64-nan : Float64 := [f64/ 0.0f64 0.0f64]
+
+;; ========================================
 ;; From Trait — lossless conversion from A to B
 ;; ========================================
 ;; From A B = A -> B (single-method: dict IS the function)
@@ -42,41 +56,49 @@ impl From Nat Rat
 ;; Within-family: posit widening (lossless)
 ;; ========================================
 ;; Widening: decode source posit to exact rational, encode to wider target.
+;; NaR-correct (Numerics Q11 retrofit): NaR widens to NaR at the target width
+;; (matching the Racket-side posit-widen auto-coercion path). The Rat pivot
+;; runs only on finite posits — p*-to-rat on NaR is an error, not a value.
 
 ;; Posit8 -> Posit16
 impl From Posit8 Posit16
   defn from [x : Posit8] <Posit16>
-    p16-from-rat [p8-to-rat x]
+    p8-if-nar Posit16 p16-nar [p16-from-rat [p8-to-rat x]] x
 
 ;; Posit8 -> Posit32
 impl From Posit8 Posit32
   defn from [x : Posit8] <Posit32>
-    p32-from-rat [p8-to-rat x]
+    p8-if-nar Posit32 p32-nar [p32-from-rat [p8-to-rat x]] x
 
 ;; Posit8 -> Posit64
 impl From Posit8 Posit64
   defn from [x : Posit8] <Posit64>
-    p64-from-rat [p8-to-rat x]
+    p8-if-nar Posit64 p64-nar [p64-from-rat [p8-to-rat x]] x
 
 ;; Posit16 -> Posit32
 impl From Posit16 Posit32
   defn from [x : Posit16] <Posit32>
-    p32-from-rat [p16-to-rat x]
+    p16-if-nar Posit32 p32-nar [p32-from-rat [p16-to-rat x]] x
 
 ;; Posit16 -> Posit64
 impl From Posit16 Posit64
   defn from [x : Posit16] <Posit64>
-    p64-from-rat [p16-to-rat x]
+    p16-if-nar Posit64 p64-nar [p64-from-rat [p16-to-rat x]] x
 
 ;; Posit32 -> Posit64
 impl From Posit32 Posit64
   defn from [x : Posit32] <Posit64>
-    p64-from-rat [p32-to-rat x]
+    p32-if-nar Posit64 p64-nar [p64-from-rat [p32-to-rat x]] x
 
 ;; ========================================
-;; Cross-family: Posit -> Rat (lossless)
+;; Cross-family: Posit -> Rat (lossless on FINITE posits)
 ;; ========================================
-;; Every finite posit has an exact rational representation.
+;; Every finite posit has an exact rational representation. NaR does NOT —
+;; p*-to-rat reduces NaR to an error, so these From instances are total only
+;; on the finite subset (a latent violation of From's totality contract).
+;; The honest interface is TryFrom (NaR -> none); the From -> TryFrom
+;; migration is deferred to Numerics N6 (ergonomics) — see the Numerics
+;; design doc §12.
 
 ;; Posit8 -> Rat
 impl From Posit8 Rat
@@ -97,6 +119,106 @@ impl From Posit32 Rat
 impl From Posit64 Rat
   defn from [x : Posit64] <Rat>
     p64-to-rat x
+
+;; ========================================
+;; Cross-scheme: Posit <-> Float (Numerics Q11) — TOTAL, posit-standard
+;; ========================================
+;; The two approximation schemes have NO numeric join (mixed Posit/Float
+;; arithmetic is a type error; N3d) — conversion is EXPLICIT, via these
+;; instances. Total per the posit standard's prescribed conversion:
+;;   Posit -> Float:  NaR -> NaN; finite posits pivot exactly through Rat
+;;     (every finite posit is a dyadic rational; Rat -> Float rounds).
+;;   Float -> Posit:  NaN / +Inf / -Inf -> NaR; finite floats pivot through
+;;     Rat (exact) then round to nearest posit (clamped, never NaR).
+;; Both directions are From (total), so they pick up the Into blanket.
+
+;; --- Posit -> Float64 ---
+
+impl From Posit8 Float64
+  defn from [x : Posit8] <Float64>
+    p8-if-nar Float64 f64-nan [from-rational Float64 [p8-to-rat x]] x
+
+impl From Posit16 Float64
+  defn from [x : Posit16] <Float64>
+    p16-if-nar Float64 f64-nan [from-rational Float64 [p16-to-rat x]] x
+
+impl From Posit32 Float64
+  defn from [x : Posit32] <Float64>
+    p32-if-nar Float64 f64-nan [from-rational Float64 [p32-to-rat x]] x
+
+impl From Posit64 Float64
+  defn from [x : Posit64] <Float64>
+    p64-if-nar Float64 f64-nan [from-rational Float64 [p64-to-rat x]] x
+
+;; --- Posit -> Float32 ---
+
+impl From Posit8 Float32
+  defn from [x : Posit8] <Float32>
+    p8-if-nar Float32 f32-nan [from-rational Float32 [p8-to-rat x]] x
+
+impl From Posit16 Float32
+  defn from [x : Posit16] <Float32>
+    p16-if-nar Float32 f32-nan [from-rational Float32 [p16-to-rat x]] x
+
+impl From Posit32 Float32
+  defn from [x : Posit32] <Float32>
+    p32-if-nar Float32 f32-nan [from-rational Float32 [p32-to-rat x]] x
+
+impl From Posit64 Float32
+  defn from [x : Posit64] <Float32>
+    p64-if-nar Float32 f32-nan [from-rational Float32 [p64-to-rat x]] x
+
+;; --- Float64 -> Posit ---
+
+impl From Float64 Posit8
+  defn from [x : Float64] <Posit8>
+    match [float-finite? x]
+      | true  -> p8-from-rat [float-to-rat x]
+      | false -> p8-nar
+
+impl From Float64 Posit16
+  defn from [x : Float64] <Posit16>
+    match [float-finite? x]
+      | true  -> p16-from-rat [float-to-rat x]
+      | false -> p16-nar
+
+impl From Float64 Posit32
+  defn from [x : Float64] <Posit32>
+    match [float-finite? x]
+      | true  -> p32-from-rat [float-to-rat x]
+      | false -> p32-nar
+
+impl From Float64 Posit64
+  defn from [x : Float64] <Posit64>
+    match [float-finite? x]
+      | true  -> p64-from-rat [float-to-rat x]
+      | false -> p64-nar
+
+;; --- Float32 -> Posit ---
+
+impl From Float32 Posit8
+  defn from [x : Float32] <Posit8>
+    match [float-finite? x]
+      | true  -> p8-from-rat [float-to-rat x]
+      | false -> p8-nar
+
+impl From Float32 Posit16
+  defn from [x : Float32] <Posit16>
+    match [float-finite? x]
+      | true  -> p16-from-rat [float-to-rat x]
+      | false -> p16-nar
+
+impl From Float32 Posit32
+  defn from [x : Float32] <Posit32>
+    match [float-finite? x]
+      | true  -> p32-from-rat [float-to-rat x]
+      | false -> p32-nar
+
+impl From Float32 Posit64
+  defn from [x : Float32] <Posit64>
+    match [float-finite? x]
+      | true  -> p64-from-rat [float-to-rat x]
+      | false -> p64-nar
 
 ;; ========================================
 ;; TryFrom Trait — fallible conversion from A to B
