@@ -165,3 +165,50 @@
   ;; pre-E3 this silently defined bad-section : Int
   (check-false (string-contains? (r3 9) "defined"))
   (check-true (string-contains? (r3 9) "Could not infer")))
+
+;; ========================================
+;; Issue #71 — saturated multi-hole sections applied in infer position
+;; ========================================
+;; [[- _ _] 10 3] desugars to a CURRIED 2-hole lambda applied to 2 args; the
+;; app rule can't unwrap it (the inner λ lands in bare infer position → error).
+;; Fix (reduction.rkt saturated-hole-section-app? + whnf-then-infer pre-case in
+;; typing-core infer + qtt inferQ): a saturated >=2-hole section whnf-reduces to
+;; a lambda-free concrete form, which the ordinary rules type. On-network install
+;; has no twin — a saturated section leaves ⊥ there and driver.rkt:585 falls back
+;; to the fixed imperative infer (sound: ⊥ = "don't know", not a wrong type).
+
+(define results-i71
+  (ws-all
+   ;; keyword route, 2-hole, saturated → the reported failure, now types
+   "eval [[- _ _] 10 3]"
+   "eval [[+ _ _] 1 2]"
+   ;; the reduced concrete keyword app re-enters the auto-widening head rule
+   "eval [[+ _ _] 1 1.5]"
+   ;; surf-app route (macros.rkt placeholder desugar) — parity with keyword route
+   "defn sub2j [x y] [int- x y]"
+   "eval [[sub2j _ _] 10 3]"
+   ;; --- E3 contract non-regressions (must all still hold) ---
+   "eval [[+ 1.5 _] 1]"          ;; single-hole saturated section (auto-widen)
+   "eval [+ 7 [int* _ 2]]"       ;; nested-group → inner section is a λ operand → LOUD
+   "def bad71 := [int* _ 2]"     ;; def-RHS unsaturated section → LOUD (not silent : Int)
+   "eval [map [int* _ 2] '[1 2 3]]"))  ;; the documented idiom (E3)
+
+(define (ri i) (format "~a" (list-ref results-i71 i)))
+
+(test-case "i71/saturated-multihole-keyword-section-types"
+  (check-equal? (ri 0) "7 : Int")
+  (check-equal? (ri 1) "3 : Int"))
+
+(test-case "i71/multihole-section-inherits-auto-widening"
+  (check-true (string-prefix? (ri 2) "2.5 : Posit32")))
+
+(test-case "i71/surf-app-multihole-parity"
+  (check-equal? (ri 4) "7 : Int")
+  (check-equal? (ri 4) (ri 0)))   ;; keyword + surf-app routes agree
+
+(test-case "i71/e3-contract-preserved"
+  (check-true (string-prefix? (ri 5) "2.5 : Posit32"))   ;; single-hole still works
+  (check-true (string-contains? (ri 6) "Could not infer")) ;; nested-group loud
+  (check-false (string-contains? (ri 7) "defined"))        ;; def-RHS loud
+  (check-true (string-contains? (ri 7) "Could not infer"))
+  (check-equal? (ri 8) "'[2 4 6] : [prologos::data::list::List Int]"))

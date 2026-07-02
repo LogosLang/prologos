@@ -44,7 +44,10 @@
          current-nf-cache current-whnf-cache
          current-reduction-fuel current-nat-value-cache
          ;; Solver normalization (for benchmarks + PUnify)
-         normalize-ast-to-solver-term)
+         normalize-ast-to-solver-term
+         ;; N6e issue #71: saturated-multi-hole-section classifier (shared by
+         ;; infer/inferQ so the 3-stage guard cannot drift between stages).
+         saturated-hole-section-app?)
 
 ;; N4: collapse a resolved numeric literal (expr-num-lit) to its concrete node.
 ;; Local mirror of zonk's collapse-num-lit (reduction can't require zonk — cycle via
@@ -1250,6 +1253,27 @@
        a*]
       [(not (equal? a* a)) (whnf (ctor a*))]
       [else (ctor a)])))
+
+;; ========================================
+;; N6e issue #71: recognize a SATURATED multi-hole explicit-hole SECTION
+;; application — a spine whose ultimate head is a chain of >=2 nested HOLE-domain
+;; lambdas, applied to at least that many args (e.g. `[[- _ _] 10 3]` =
+;; ((λ$_0. λ$_1. body) 10 3)). Such a form can't be typed by unwrapping one lambda
+;; per app node: after the first beta-app the inner λ is a bare hole-lambda in
+;; INFER position → expr-error. whnf fully collapses it to a lambda-free concrete
+;; form the ordinary rules type. The >=2-hole guard leaves single-hole sections
+;; AND single-beta let-expansion untouched; the saturation guard leaves
+;; under-applied (def-RHS) sections a loud error (E3 contract preserved).
+(define (saturated-hole-section-app? e)
+  (let loop ([spine e] [nargs 0])
+    (match spine
+      [(expr-app f _) (loop f (add1 nargs))]
+      [(expr-lam _ _ _)
+       (let count ([b spine] [k 0])
+         (match b
+           [(expr-lam _ d bb) #:when (expr-hole? d) (count bb (add1 k))]
+           [_ (and (>= k 2) (>= nargs k))]))]
+      [_ #f])))
 
 ;; ========================================
 ;; Structural pattern matching for reduce

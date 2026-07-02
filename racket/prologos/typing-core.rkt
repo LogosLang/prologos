@@ -627,6 +627,17 @@
 
     ;; ---- Pi elimination (application) ----
     [(expr-app e1 e2)
+     (cond
+       ;; Issue #71: a saturated multi-hole explicit-hole section applied in
+       ;; infer position (`[[- _ _] 10 3]`) — whnf-reduce to the lambda-free
+       ;; concrete form, which the ordinary rules type. The guard fires ONLY on
+       ;; the failing set (>=2 nested hole lambdas + saturated): single-hole
+       ;; sections + single-beta let-expansion (below) and under-applied def-RHS
+       ;; sections stay on their existing paths. Mirrored in qtt inferQ.
+       ;; (On-network install has no twin: a saturated section leaves ⊥ there →
+       ;;  driver.rkt:585 falls back to this imperative infer — sound, no divergence.)
+       [(saturated-hole-section-app? e) (infer ctx (whnf e))]
+       [else
      (match e1
        ;; Special case: ((lam m A body) arg) — direct beta-typed application
        ;; The lambda's domain gives us the argument type, and we infer the body
@@ -672,7 +683,7 @@
                      (if (or (eq? result 'type-bot) (eq? result 'type-top))
                          (expr-error)
                          result))))]
-            [else (expr-error)]))])]
+            [else (expr-error)]))])])]
 
     ;; ---- Sigma elimination: fst ----
     [(expr-fst e1)

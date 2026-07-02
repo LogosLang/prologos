@@ -285,6 +285,11 @@
     ;; ---- Application ----
     ;; Usage = U_func + pi * U_arg
     [(expr-app e1 e2)
+     (cond
+       ;; Issue #71 (Stage-2 twin of typing-core): a saturated multi-hole section
+       ;; → whnf-reduce then inferQ the lambda-free concrete form. Same guard.
+       [(saturated-hole-section-app? e) (inferQ ctx (whnf e))]
+       [else
      (match e1
        ;; Special case: app(lam(m, dom, body), arg) — beta-typed application
        ;; This supports let-expansion: (let x := v body) = app(lam(m, dom, body), v)
@@ -319,7 +324,7 @@
                      (tu (subst 0 e2 b) (add-usage u1 (scale-usage m u2)))]
                     [_ (tu-error)]))]
                [_ (tu-error)])]
-            [_ (tu-error)]))])]
+            [_ (tu-error)]))])])]
 
     ;; ---- fst ----
     [(expr-fst e1)
