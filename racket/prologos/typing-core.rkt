@@ -197,7 +197,12 @@
 ;; Phase H: Normalize refined numeric types to their base type.
 ;; PosInt/NegInt/Zero → Int; PosRat/NegRat → Rat; others unchanged.
 ;; Uses the subtype registry to determine the base type.
-(define (base-numeric-type t)
+;; Issue #70 (N6e-E5, R1 extension): resolve a SOLVED meta first — the unary
+;; generic rules (negate/abs) guard on this function's result directly (they
+;; don't go through numeric-join), so they need the same resolution step.
+;; resolve-solved-meta is defined below with numeric-join (R1-join).
+(define (base-numeric-type t0)
+  (define t (resolve-solved-meta t0))
   (match t
     [(expr-fvar name)
      (cond
@@ -242,9 +247,25 @@
 ;; Cross-family: posit wins (approximate dominates exact).
 ;; The resulting posit width is max(P32, posit operand width) for cross-family.
 ;; Phase H: normalizes refined types (PosInt→Int, etc.) before computing the join.
+;; Issue #70 (N6e-E5, R1-join): follow a meta operand to its solution before
+;; the concrete-only tests below. The generic-op rules read RAW operand types
+;; (no whnf/zonk anywhere on that path: ctx-extend stores raw metas, bvar infer
+;; shifts them unresolved), so without this even a SOLVED element meta
+;; hard-fails the join (verified by repro at E5 open). Placing the resolution
+;; INSIDE numeric-join makes it drift-free across the 3 typing stages by
+;; construction: infer (this file), inferQ (qtt.rkt imports THIS numeric-join),
+;; and the on-network make-arith-ret (typing-propagators.rkt) all share it —
+;; as does numeric-join/warn!.
+(define (resolve-solved-meta t)
+  (match t
+    [(expr-meta id cell-id)
+     (let ([sol (meta-solution/cell-id cell-id id)])
+       (if sol (resolve-solved-meta sol) t))]
+    [_ t]))
+
 (define (numeric-join t1 t2)
-  (let ([t1 (base-numeric-type t1)]
-        [t2 (base-numeric-type t2)])
+  (let ([t1 (base-numeric-type (resolve-solved-meta t1))]
+        [t2 (base-numeric-type (resolve-solved-meta t2))])
     (cond
       ;; Same numeric type
       [(and (equal? t1 t2) (concrete-numeric-type? t1)) t1]
@@ -481,6 +502,64 @@
           [_ field-type-expr]))))
 
 ;; ========================================
+;; Issue #70 (N6e-E5, R2-spine) helpers
+;; ========================================
+
+;; Collect an application spine: (app (app f a) b) → (values f (list a b)).
+;; Local (typing-core-only fix; reduction's decompose-app is not provided and
+;; targets fvar heads — this one is shape-agnostic).
+(define (spine-collect e)
+  (let loop ([x e] [args '()])
+    (match x
+      [(expr-app f a) (loop f (cons a args))]
+      [_ (values x args)])))
+
+;; A hole-domain lambda: an unannotated `fn` or an E3 explicit-hole section.
+(define (hole-domain-lam? x)
+  (and (expr-lam? x) (expr-hole? (expr-lam-type x))))
+
+;; Trigger for the deferred spine walk: a non-lambda-headed spine with at
+;; least one hole-domain-lambda argument. Head-lam spines are excluded so the
+;; beta/let-expansion special case and the #71 saturated-section pre-case
+;; keep their existing paths.
+(define (app-spine-with-deferrable-fn? e)
+  (let-values ([(head args) (spine-collect e)])
+    (and (not (expr-lam? head))
+         (pair? args)
+         (ormap hole-domain-lam? args))))
+
+;; The deferred two-pass walk. Pass 1: walk the Pi left-to-right; check each
+;; non-deferrable arg in order; for hole-domain-lambda args, RECORD (arg . dom)
+;; and continue (substituting the arg expression into the codomain exactly as
+;; the default path does). Pass 2: run the deferred checks — by now the later
+;; args (containers, inits, seeds) have solved the shared metas, and the body's
+;; numeric rules resolve them via R1-join. Non-Pi mid-walk → expr-error (any
+;; spine matching the trigger also fails on today's union/other paths, since
+;; those infer the hole-domain lambda — behavior-equivalent).
+(define (infer-app-spine-deferred ctx e)
+  (let-values ([(head args) (spine-collect e)])
+    (let loop ([t (infer ctx head)] [as args] [deferred '()])
+      (cond
+        [(expr-error? t) (expr-error)]
+        [(null? as)
+         (if (for/and ([d (in-list (reverse deferred))])
+               (check ctx (car d) (cdr d)))
+             t
+             (expr-error))]
+        [else
+         (let ([tw (whnf t)])
+           (if (expr-Pi? tw)
+               (let ([arg (car as)]
+                     [dom (expr-Pi-domain tw)]
+                     [cod (expr-Pi-codomain tw)])
+                 (if (hole-domain-lam? arg)
+                     (loop (subst 0 arg cod) (cdr as) (cons (cons arg dom) deferred))
+                     (if (check ctx arg dom)
+                         (loop (subst 0 arg cod) (cdr as) deferred)
+                         (expr-error))))
+               (expr-error)))]))))
+
+;; ========================================
 ;; Type inference (synthesis mode)
 ;; ========================================
 (define (infer ctx e)
@@ -637,6 +716,25 @@
        ;; (On-network install has no twin: a saturated section leaves ⊥ there →
        ;;  driver.rkt:585 falls back to this imperative infer — sound, no divergence.)
        [(saturated-hole-section-app? e) (infer ctx (whnf e))]
+       ;; Issue #70 (N6e-E5, R2-spine): an application spine containing a
+       ;; hole-domain-lambda argument (`[map [+ _ 1] xs]`, `[map [fn [x] …] xs]`).
+       ;; The default one-arg-per-node walk checks the fn BEFORE the container
+       ;; that solves the shared element meta, and the fn's failure kills the
+       ;; app before the container is ever visited. Fix: walk the whole spine,
+       ;; DEFER checking hole-domain-lambda args (substitute-and-continue —
+       ;; subst uses the arg EXPRESSION, so deferral never blocks dependent
+       ;; codomains), check everything else left-to-right, then run the
+       ;; deferred checks (their domains' metas now solved by the later args;
+       ;; numeric-join resolves solved metas per R1-join above).
+       ;; Soundness: no stdlib HOF Pi is term-dependent between explicit args
+       ;; (surf-arrow emits anonymous binders — grounded at E5 open); the walk
+       ;; order is unchanged, only CHECK order moves. Head-lam spines are
+       ;; excluded (beta/let-expansion + #71 keep their paths).
+       ;; Stage twins deliberately ABSENT: qtt runs post-freeze (solved metas
+       ;; already substituted — the trigger is erased before inferQ); the
+       ;; on-network path leaves the op position at ⊥ and driver.rkt:585 falls
+       ;; back here (verified: it cannot ship a wrong type for this shape).
+       [(app-spine-with-deferrable-fn? e) (infer-app-spine-deferred ctx e)]
        [else
      (match e1
        ;; Special case: ((lam m A body) arg) — direct beta-typed application

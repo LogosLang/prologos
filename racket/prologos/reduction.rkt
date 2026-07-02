@@ -1424,7 +1424,14 @@
      => values]
     [else
      (define result (whnf-impl e))
-     (when cache
+     ;; Issue #70 (N6e-E5): do NOT cache a result that is an (unsolved) meta —
+     ;; a meta whnf'd before its solve would otherwise pin the UNRESOLVED meta
+     ;; in the per-command cache, permanently masking the solution from every
+     ;; later whnf in the same command (exposed by the deferred spine walk,
+     ;; which legitimately whnfs metas after mid-command container solves).
+     ;; A SOLVED meta's whnf returns its solution (concrete) and caches fine —
+     ;; solutions are solve-once permanent.
+     (when (and cache (not (expr-meta? result)))
        (hash-set! cache e result))
      result]))
 

@@ -214,30 +214,34 @@
   (check-equal? (ri 8) "'[2 4 6] : [prologos::data::list::List Int]"))
 
 ;; ========================================
-;; Issue #70 (C, N6e diagnostic stopgap) — generic-op-under-hole-lambda hint
+;; Issue #70 (C diagnostic + E5 B real fix)
 ;; ========================================
-;; C does NOT fix #70 (the real fix, container-before-fn ordering = option B, is
-;; scheduled for E5); it turns the bare "Could not infer type" into an actionable
-;; hint when the failing expr is the #70 signature (a hole-domain lambda wrapping
-;; a GENERIC numeric op). It must NOT fire on concrete-op or unrelated errors.
+;; E5-B (R1-join + R2-spine) FIXED the flagship cases — the C-era hint
+;; assertions inverted to success. The hint machinery remains for shapes B
+;; does not reach (a bare hole-lambda-over-generic-op in def-RHS infer
+;; position) and must still NOT fire on concrete-op errors.
 
 (define results-i70c
   (ws-all
-   "eval [map [+ _ 1] '[1 2 3]]"        ;; #70 flagship → error + hint
-   "eval [filter [lt _ 3] '[1 2 3 4]]"  ;; comparison section → error + hint
+   "eval [map [+ _ 1] '[1 2 3]]"        ;; fixed by E5-B (was error + hint)
+   "eval [filter [lt _ 3] '[1 2 3 4]]"  ;; fixed by E5-B (was error + hint)
+   "def g70 := [fn [x] [+ x 1]]"        ;; def-RHS bare hole-lambda → still error + hint
    "eval [+ 7 [int* _ 2]]"))            ;; hole-lam wraps a CONCRETE op → error, NO #70 hint
 
 (define (rc i) (format "~a" (list-ref results-i70c i)))
 
-(test-case "i70c/hint-on-generic-op-under-hole-lambda"
-  (check-true (string-contains? (rc 0) "Could not infer type"))
-  (check-true (string-contains? (rc 0) "issue #70"))
-  (check-true (string-contains? (rc 1) "issue #70")))
+(test-case "i70/flagship-fixed-by-e5-b"
+  (check-equal? (rc 0) "'[2 3 4] : [prologos::data::list::List Int]")
+  (check-equal? (rc 1) "'[1 2] : [prologos::data::list::List Int]"))
+
+(test-case "i70c/hint-still-fires-on-def-rhs-hole-lambda"
+  (check-false (string-contains? (rc 2) "defined"))
+  (check-true (string-contains? (rc 2) "issue #70")))
 
 (test-case "i70c/no-hint-on-concrete-op-error"
   ;; the inner section wraps int* (concrete), not a generic op → plain error
-  (check-true (string-contains? (rc 2) "Could not infer"))
-  (check-false (string-contains? (rc 2) "issue #70")))
+  (check-true (string-contains? (rc 3) "Could not infer"))
+  (check-false (string-contains? (rc 3) "issue #70")))
 
 ;; ========================================
 ;; E4 — prim-op eta-table extension to posit/float (M3, Q2 pin)
@@ -247,9 +251,9 @@
 ;; widths + 4 cross-width conversions). Quire + p*-if-nar excluded (odd
 ;; arities). The 4 float conversions are Float64-domained as VALUES (their
 ;; keyword rules stay width-polymorphic); the 4 keywords also joined the E3
-;; sectionable whitelist — applied sections work for BOTH widths, but a
-;; conversion SECTION under map is #70-class (infer-and-test rules can't
-;; solve the hole meta; hint fires; real fix = #70-B at E5).
+;; sectionable whitelist — applied sections work for BOTH widths; a
+;; conversion SECTION under map was #70-class at E4 close — FIXED by E5-B
+;; (see the e5 block below; the r4 12 case inverted to success).
 
 (define results-e4
   (ws-all
@@ -297,9 +301,72 @@
   (check-equal? (r4 10) "3/2 : Rat")          ;; applied section, f32 arg
   (check-equal? (r4 11) "'[3/2] : [prologos::data::list::List Rat]"))
 
-(test-case "e4/conversion-section-under-map-is-70-class-with-hint"
-  (check-true (string-contains? (r4 12) "Could not infer type"))
-  (check-true (string-contains? (r4 12) "issue #70")))
+(test-case "e4/conversion-section-under-map-fixed-by-e5-b"
+  ;; was the #70-class limitation (error + hint); E5-B dissolved it
+  (check-equal? (r4 12) "'[3/2] : [prologos::data::list::List Rat]"))
 
 (test-case "e4/pre-e4-eta-non-regression"
   (check-equal? (r4 13) "6 : Int"))
+
+;; ========================================
+;; E5-B — issue #70 real fix: R1-join + R2-spine (+ whnf-cache staleness fix)
+;; ========================================
+;; R1-join: numeric-join (and base-numeric-type, for the unary negate/abs
+;; guards) resolve SOLVED metas before their concrete-only tests — shared by
+;; all 3 typing stages by construction (qtt + typing-propagators import them).
+;; R2-spine: infer expr-app defers checking hole-domain-lambda args until the
+;; other spine args (containers, inits, seeds) have solved the shared element
+;; metas; the walk order (and dependent-codomain substitution) is unchanged.
+;; whnf-cache fix (reduction.rkt): a meta whnf'd before its solve is no longer
+;; pinned unresolved in the per-command cache (pre-existing staleness bug,
+;; exposed by the deferred checks; float infer-and-test rules resolve via whnf).
+;; No qtt twin (qtt runs post-freeze — solved metas already substituted);
+;; no on-network twin (op position stays ⊥ → sound imperative fallback).
+
+(define results-e5
+  (ws-all
+   ;; the flagship class, all generic ops
+   "eval [map [+ _ 1] '[1 2 3]]"
+   "eval [map [fn [x] [+ x 1]] '[1 2 3]]"
+   "eval [map [* _ 2] '[1 2 3]]"
+   "eval [map [negate _] '[1 -2]]"
+   "eval [filter [lt _ 3] '[1 2 3 4]]"
+   ;; mixed-numerics soundness (the anti-D pin): domain = container's Int,
+   ;; result WIDENS to Posit32 — the case option D would have rejected
+   "eval [map [+ _ 1.5] '[1 2 3]]"
+   ;; float conversions under map — the E4 limitation dissolved, BOTH widths
+   "eval [map [float-to-rat _] '[1.5f64 2.5f64]]"
+   "eval [map [float-to-rat _] '[1.5f32]]"
+   "eval [map [float-finite? _] '[1.0f64]]"
+   ;; trait-method body inside a hole lambda
+   "eval [map [fn [x] [abs x]] '[1 -2 3]]"
+   ;; E3/E2 loud-error + widening contracts must survive B
+   "eval [[+ 1.5 _] 1]"
+   "eval [+ 7 [int* _ 2]]"
+   "def bad-e5 := [int* _ 2]"))
+
+(define (r5 i) (format "~a" (list-ref results-e5 i)))
+
+(test-case "e5b/generic-sections-and-lambdas-under-hofs"
+  (check-equal? (r5 0) "'[2 3 4] : [prologos::data::list::List Int]")
+  (check-equal? (r5 1) "'[2 3 4] : [prologos::data::list::List Int]")
+  (check-equal? (r5 2) "'[2 4 6] : [prologos::data::list::List Int]")
+  (check-equal? (r5 3) "'[-1 2] : [prologos::data::list::List Int]")
+  (check-equal? (r5 4) "'[1 2] : [prologos::data::list::List Int]"))
+
+(test-case "e5b/mixed-numerics-widen-not-reject"
+  (check-true (string-prefix? (r5 5) "'[2.5 3.5 4.5] : [prologos::data::list::List Posit32]")))
+
+(test-case "e5b/float-conversion-sections-both-widths"
+  (check-equal? (r5 6) "'[3/2 5/2] : [prologos::data::list::List Rat]")
+  (check-equal? (r5 7) "'[3/2] : [prologos::data::list::List Rat]")
+  (check-equal? (r5 8) "'[true] : [prologos::data::list::List Bool]"))
+
+(test-case "e5b/trait-method-body-in-hole-lambda"
+  (check-equal? (r5 9) "'[1 2 3] : [prologos::data::list::List Int]"))
+
+(test-case "e5b/e3-contracts-survive-b"
+  (check-true (string-prefix? (r5 10) "2.5 : Posit32"))
+  (check-true (string-contains? (r5 11) "Could not infer"))
+  (check-false (string-contains? (r5 12) "defined"))
+  (check-true (string-contains? (r5 12) "Could not infer")))
