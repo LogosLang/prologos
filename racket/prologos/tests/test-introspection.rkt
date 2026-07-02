@@ -402,8 +402,8 @@
 (test-case "pp-datum: $rest-param sentinel"
   (check-equal? (pp-datum '($rest-param xs)) "...xs"))
 
-(test-case "pp-datum: $approx-literal sentinel"
-  (check-equal? (pp-datum '($approx-literal 3.14)) "~3.14"))
+(test-case "pp-datum: $lseq-literal sentinel"
+  (check-equal? (pp-datum '($lseq-literal 1 2)) "~[1 2]"))
 
 (test-case "pp-datum: regular list"
   (check-equal? (pp-datum '(add 1 2)) "(add 1 2)"))

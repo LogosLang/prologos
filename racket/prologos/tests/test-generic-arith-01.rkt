@@ -73,10 +73,10 @@
   (check-equal? (run "(eval (+ 1/2 3/7))") "13/14 : Rat"))
 
 (test-case "generic-arith/rat-sub"
-  (check-equal? (run "(eval (- 3/4 1/4))") "0.5 : Rat"))
+  (check-equal? (run "(eval (- 3/4 1/4))") "1/2 : Rat"))
 
 (test-case "generic-arith/rat-mul"
-  (check-equal? (run "(eval (* 2/3 3/5))") "0.4 : Rat"))
+  (check-equal? (run "(eval (* 2/3 3/5))") "2/5 : Rat"))
 
 (test-case "generic-arith/rat-div"
   (check-equal? (run "(eval (/ 1/2 1/4))") "2 : Rat"))
@@ -92,24 +92,24 @@
 ;; ========================================
 
 (test-case "generic-arith/p32-add"
-  (define result (run "(eval (+ ~1 ~2))"))
+  (define result (run "(eval (+ 1.0 2.0))"))
   (check-true (string-contains? result "Posit32")
               (format "expected Posit32, got: ~a" result))
   ;; Numerics N2: posit displays as ~<decimal>. ~1 + ~2 = ~3.
-  (check-true (string-contains? result "~3")
+  (check-true (string-contains? result "3.0")
               (format "expected ~~3, got: ~a" result)))
 
 (test-case "generic-arith/p32-mul"
-  (define result (run "(eval (* ~3 ~4))"))
+  (define result (run "(eval (* 3.0 4.0))"))
   (check-true (string-contains? result "Posit32"))
-  (check-true (string-contains? result "~12")))
+  (check-true (string-contains? result "12.0")))
 
 (test-case "generic-arith/p32-negate"
-  (define result (run "(eval (negate ~5))"))
+  (define result (run "(eval (negate 5.0))"))
   (check-true (string-contains? result "Posit32")))
 
 (test-case "generic-arith/p32-lt"
-  (check-true (string-contains? (run "(eval (lt ~1 ~2))") "true")))
+  (check-true (string-contains? (run "(eval (lt 1.0 2.0))") "true")))
 
 ;; ========================================
 ;; Type inference
@@ -122,7 +122,7 @@
   (check-true (string-contains? (run "(infer (+ 1/2 1/3))") "Rat")))
 
 (test-case "generic-arith/infer-p32-add"
-  (check-true (string-contains? (run "(infer (+ ~1 ~2))") "Posit32")))
+  (check-true (string-contains? (run "(infer (+ 1.0 2.0))") "Posit32")))
 
 (test-case "generic-arith/infer-int-lt"
   (check-true (string-contains? (run "(infer (lt 3 4))") "Bool")))

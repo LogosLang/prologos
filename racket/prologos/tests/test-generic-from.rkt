@@ -37,7 +37,7 @@
   (check-true (string-contains? result "Posit32")
               (format "expected Posit32, got: ~a" result))
   ;; Numerics N2: posit displays as ~<decimal>. from-integer 42 → ~42.
-  (check-true (string-contains? result "~42")))
+  (check-true (string-contains? result "42.0")))
 
 (test-case "from-integer/int-to-posit8"
   (define result (run "(eval (from-integer Posit8 1))"))
@@ -66,8 +66,8 @@
   (define result (run "(eval (from-rational Posit32 3/7))"))
   (check-true (string-contains? result "Posit32")
               (format "expected Posit32, got: ~a" result))
-  ;; Numerics N2: shortest decimal of posit32(3/7) is 0.42857143, marked with ~.
-  (check-true (string-contains? result (string-append "~" (posit-shortest-decimal 32 (posit32-encode 3/7))))))
+  ;; N6c: shortest decimal of posit32(3/7) displays bare (sigil-free).
+  (check-true (string-contains? result (posit-shortest-decimal 32 (posit32-encode 3/7)))))
 
 (test-case "from-rational/rat-to-posit8"
   (define result (run "(eval (from-rational Posit8 1/2))"))

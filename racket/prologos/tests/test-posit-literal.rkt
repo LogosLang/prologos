@@ -21,18 +21,18 @@
 ;; ========================================
 
 (test-case "posit-literal/widths"
-  (check-equal? (ws-val "2p8")       "~2 : Posit8")
-  (check-equal? (ws-val "3.14p16")   "~3.14 : Posit16")
-  (check-equal? (ws-val "3.14p32")   "~3.14 : Posit32")
-  (check-equal? (ws-val "1.5e-3p64") "~0.0015 : Posit64"))
+  (check-equal? (ws-val "2p8")       "2p8 : Posit8")
+  (check-equal? (ws-val "3.14p16")   "3.14p16 : Posit16")
+  (check-equal? (ws-val "3.14p32")   "3.14 : Posit32")
+  (check-equal? (ws-val "1.5e-3p64") "0.0015p64 : Posit64"))
 
 (test-case "posit-literal/negative-and-integer-shapes"
-  (check-equal? (ws-val "-2.5p16") "~-2.5 : Posit16")
-  (check-equal? (ws-val "42p32")   "~42 : Posit32"))
+  (check-equal? (ws-val "-2.5p16") "-2.5p16 : Posit16")
+  (check-equal? (ws-val "42p32")   "42.0 : Posit32"))
 
 (test-case "posit-literal/arithmetic-composes"
   ;; same-width posit arithmetic over pNN literals
-  (check-equal? (ws-val "[p16+ 1.5p16 2.0p16]") "~3.5 : Posit16"))
+  (check-equal? (ws-val "[p16+ 1.5p16 2.0p16]") "3.5p16 : Posit16"))
 
 (test-case "posit-literal/no-bare-p"
   ;; `3.14p` is NOT a posit literal (width mandatory); it lexes as the decimal
@@ -49,8 +49,8 @@
 ;; ========================================
 
 (test-case "posit-literal/n6b-defaults"
-  (check-equal? (ws-val "3.14")        "~3.14 : Posit32")
-  (check-equal? (ws-val "3.0")         "~3 : Posit32")
-  (check-equal? (ws-val "[+ 3.13 1.0]") "~4.13 : Posit32")
+  (check-equal? (ws-val "3.14")        "3.14 : Posit32")
+  (check-equal? (ws-val "3.0")         "3.0 : Posit32")
+  (check-equal? (ws-val "[+ 3.13 1.0]") "4.13 : Posit32")
   (check-true (string-contains? (ws-val "3/7") "Rat"))
   (check-true (string-contains? (ws-val "1e10") "Int")))

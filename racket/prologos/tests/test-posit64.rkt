@@ -188,9 +188,9 @@
 
 (test-case "posit64 pretty-printing"
   (check-equal? (pp-expr (expr-Posit64) '()) "Posit64" "pp Posit64")
-  (check-equal? (pp-expr (expr-posit64 4611686018427387904) '()) "~1" "pp posit64(one)")
+  (check-equal? (pp-expr (expr-posit64 4611686018427387904) '()) "1p64" "pp posit64(one)")
   (check-equal? (pp-expr (expr-p64-add (expr-posit64 4611686018427387904) (expr-posit64 5188146770730811392)) '())
-                "[p64+ ~1 ~2]" "pp p64+"))
+                "[p64+ 1p64 2p64]" "pp p64+"))
 
 ;; ========================================
 ;; Surface syntax: End-to-end via process-string
@@ -201,11 +201,11 @@
 
 (test-case "posit64 surface: eval literal"
   (check-equal? (run "(eval (posit64 4611686018427387904))")
-                '("~1 : Posit64")))
+                '("1p64 : Posit64")))
 
 (test-case "posit64 surface: arithmetic 1+1=2"
   (check-equal? (run "(eval (p64+ (posit64 4611686018427387904) (posit64 4611686018427387904)))")
-                '("~2 : Posit64")))
+                '("2p64 : Posit64")))
 
 (test-case "posit64 surface: check type"
   (check-equal? (run "(check (posit64 4611686018427387904) <Posit64>)")
@@ -219,11 +219,11 @@
   (let ([result (process-string "(def one <Posit64> (posit64 4611686018427387904))\n(eval one)")])
     (check-equal? (length result) 2)
     (check-true (string-contains? (car result) "one : Posit64 defined"))
-    (check-equal? (cadr result) "~1 : Posit64")))
+    (check-equal? (cadr result) "1p64 : Posit64")))
 
 (test-case "posit64 surface: negation"
   (check-equal? (run "(eval (p64-neg (posit64 4611686018427387904)))")
-                '("~-1 : Posit64")))
+                '("-1p64 : Posit64")))
 
 (test-case "posit64 surface: comparison"
   (check-equal? (run "(eval (p64-lt (posit64 4611686018427387904) (posit64 5188146770730811392)))")
@@ -231,7 +231,7 @@
 
 (test-case "posit64 surface: from-nat"
   (check-equal? (run "(eval (p64-from-nat (suc (suc zero))))")
-                '("~2 : Posit64")))
+                '("2p64 : Posit64")))
 
 (test-case "posit64 surface: if-nar on NaR"
   (check-equal? (run "(eval (p64-if-nar Nat zero (suc zero) (posit64 9223372036854775808)))")
@@ -252,4 +252,4 @@
 (test-case "posit64 surface: defn with Posit64"
   (let ([result (process-string "(defn p64-double [x <Posit64>] <Posit64>\n  (p64+ x x))\n(eval (p64-double (posit64 4611686018427387904)))")])
     (check-equal? (length result) 2)
-    (check-equal? (cadr result) "~2 : Posit64")))
+    (check-equal? (cadr result) "2p64 : Posit64")))

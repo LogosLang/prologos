@@ -44,11 +44,11 @@
    ;; happy paths, all 8 width pairs (posit8 64 = 1.0, posit16 16384 = 1.0)
    "eval [From-from Posit8  Float64 Posit8-Float64--From--dict  [posit8 64]]"
    "eval [From-from Posit16 Float64 Posit16-Float64--From--dict [posit16 16384]]"
-   "eval [From-from Posit32 Float64 Posit32-Float64--From--dict ~1.5]"
+   "eval [From-from Posit32 Float64 Posit32-Float64--From--dict 1.5]"
    "eval [From-from Posit64 Float64 Posit64-Float64--From--dict [p64-from-rat 3/2]]"
    "eval [From-from Posit8  Float32 Posit8-Float32--From--dict  [posit8 64]]"
    "eval [From-from Posit16 Float32 Posit16-Float32--From--dict [posit16 16384]]"
-   "eval [From-from Posit32 Float32 Posit32-Float32--From--dict ~2.5]"
+   "eval [From-from Posit32 Float32 Posit32-Float32--From--dict 2.5]"
    "eval [From-from Posit64 Float32 Posit64-Float32--From--dict [p64-from-rat 1/2]]"
    ;; NaR -> NaN (both float widths; posit8 128 / posit32 2147483648 = NaR)
    "eval [From-from Posit32 Float64 Posit32-Float64--From--dict [posit32 2147483648]]"
@@ -77,7 +77,7 @@
   (check-has (list-ref results-a 10) "NaR")
   (check-has (list-ref results-a 10) "Posit16")
   ;; finite widening behavior unchanged
-  (check-has (list-ref results-a 11) "~1")
+  (check-has (list-ref results-a 11) "1p16")
   (check-has (list-ref results-a 11) "Posit16"))
 
 ;; ========================================
@@ -106,14 +106,14 @@
    "eval [p8-from-rat 1000000]"))
 
 (test-case "float->posit happy paths (all 8 width pairs)"
-  (check-equal? (list-ref results-b 0) "~1 : Posit8")
-  (check-equal? (list-ref results-b 1) "~2 : Posit16")
-  (check-equal? (list-ref results-b 2) "~1.5 : Posit32")
-  (check-equal? (list-ref results-b 3) "~1.5 : Posit64")
-  (check-equal? (list-ref results-b 4) "~2 : Posit8")
-  (check-equal? (list-ref results-b 5) "~1.5 : Posit16")
-  (check-equal? (list-ref results-b 6) "~2.5 : Posit32")
-  (check-equal? (list-ref results-b 7) "~0.5 : Posit64"))
+  (check-equal? (list-ref results-b 0) "1p8 : Posit8")
+  (check-equal? (list-ref results-b 1) "2p16 : Posit16")
+  (check-equal? (list-ref results-b 2) "1.5 : Posit32")
+  (check-equal? (list-ref results-b 3) "1.5p64 : Posit64")
+  (check-equal? (list-ref results-b 4) "2p8 : Posit8")
+  (check-equal? (list-ref results-b 5) "1.5p16 : Posit16")
+  (check-equal? (list-ref results-b 6) "2.5 : Posit32")
+  (check-equal? (list-ref results-b 7) "0.5p64 : Posit64"))
 
 (test-case "float NaN/+Inf/-Inf -> posit NaR (posit-standard total mapping)"
   (for ([i (in-list '(8 9 10))])

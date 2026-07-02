@@ -30,27 +30,27 @@
 ;; value-operand twins below assert the warning.
 
 (test-case "warning/int-literal+p32-silent"
-  (define result (car (run "(eval (+ 42 ~1.0))")))
+  (define result (car (run "(eval (+ 42 1.0))")))
   (check-true (string-contains? result "Posit32") "Result still Posit32")
   (check-false (string-contains? result "warning:")
                "Literal operand must not warn (values-only policy)"))
 
 (test-case "warning/rat-literal+p32-silent"
-  (define result (car (run "(eval (+ 1/2 ~0.5))")))
+  (define result (car (run "(eval (+ 1/2 0.5))")))
   (check-false (string-contains? result "warning:")))
 
 (test-case "warning/nat-literal+p32-silent"
-  (define result (car (run "(eval (+ 3N ~1.0))")))
+  (define result (car (run "(eval (+ 3N 1.0))")))
   (check-false (string-contains? result "warning:")))
 
 (test-case "warning/int-lt-p32-literal-silent"
-  (define result (car (run "(eval (lt 3 ~4.0))")))
+  (define result (car (run "(eval (lt 3 4.0))")))
   (check-false (string-contains? result "warning:")))
 
 ;; ---- value-operand twins: still warn ----
 
 (test-case "warning/int-value+p32-warns"
-  (define result (last (run "(def n : Int 42)(eval (+ n ~1.0))")))
+  (define result (last (run "(def n : Int 42)(eval (+ n 1.0))")))
   (check-true (string-contains? result "warning:")
               "Value operand still warns")
   (check-true (string-contains? result "Int")
@@ -61,13 +61,13 @@
               "Warning should mention loss of exactness"))
 
 (test-case "warning/rat-value+p32-warns"
-  (define result (last (run "(def r : Rat 1/2)(eval (+ r ~0.5))")))
+  (define result (last (run "(def r : Rat 1/2)(eval (+ r 0.5))")))
   (check-true (string-contains? result "warning:"))
   (check-true (string-contains? result "Rat")))
 
 (test-case "warning/int-value-lt-p32-warns"
   ;; Comparison also warns (value operand)
-  (define result (last (run "(def n : Int 3)(eval (lt n ~4.0))")))
+  (define result (last (run "(def n : Int 3)(eval (lt n 4.0))")))
   (check-true (string-contains? result "warning:")))
 
 ;; ========================================
@@ -86,7 +86,7 @@
                "Same-type Rat should not warn"))
 
 (test-case "warning/same-p32-no-warning"
-  (define result (car (run "(eval (+ ~1.0 ~2.0))")))
+  (define result (car (run "(eval (+ 1.0 2.0))")))
   (check-false (string-contains? result "warning:")
                "Same-type Posit32 should not warn"))
 
@@ -104,7 +104,7 @@
 
 (test-case "warning/p8+p32-no-warning"
   ;; Posit8 + Posit32 → within posit family, no warning
-  (define result (car (run "(eval (+ (from-integer <Posit8> 2) ~3.0))")))
+  (define result (car (run "(eval (+ (from-integer <Posit8> 2) 3.0))")))
   (check-false (string-contains? result "warning:")
                "Posit8+Posit32 (within posit) should not warn"))
 
@@ -115,7 +115,7 @@
 (test-case "warning/format-structure"
   ;; Verify the warning is on a separate line after the result
   ;; (N6a: value operand — literals no longer warn)
-  (define result (last (run "(def n : Int 42)(eval (+ n ~1.0))")))
+  (define result (last (run "(def n : Int 42)(eval (+ n 1.0))")))
   (define lines (string-split result "\n"))
   (check-equal? (length lines) 2 "Should have result line + warning line")
   ;; First line is the result
@@ -131,12 +131,12 @@
 
 (test-case "warning/infer-cross-family"
   ;; infer with a VALUE operand shows the warning; literal form is silent (N6a)
-  (define result (last (run "(def n : Int 42)(infer (+ n ~1.0))")))
+  (define result (last (run "(def n : Int 42)(infer (+ n 1.0))")))
   (check-true (string-contains? result "Posit32") "Should infer Posit32")
   (check-true (string-contains? result "warning:") "Should have warning"))
 
 (test-case "warning/infer-literal-cross-family-silent"
-  (define result (car (run "(infer (+ 42 ~1.0))")))
+  (define result (car (run "(infer (+ 42 1.0))")))
   (check-true (string-contains? result "Posit32") "Should infer Posit32")
   (check-false (string-contains? result "warning:") "Literal form is silent"))
 

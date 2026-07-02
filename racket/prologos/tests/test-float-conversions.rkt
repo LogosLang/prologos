@@ -93,8 +93,8 @@
 ;; ========================================
 
 (test-case "reverse Float conversions at WS level"
-  (check-equal? (ws-val "[float-to-rat 0.5f64]")     "0.5 : Rat")
-  (check-equal? (ws-val "[float-to-rat 0.25f32]")    "0.25 : Rat")
+  (check-equal? (ws-val "[float-to-rat 0.5f64]")     "1/2 : Rat")
+  (check-equal? (ws-val "[float-to-rat 0.25f32]")    "1/4 : Rat")
   (check-equal? (ws-val "[float-finite? 3.0f64]")    "true : Bool")
   (check-equal? (ws-val "[float-finite? [f64/ 1.0f64 0.0f64]]") "false : Bool")
   (check-equal? (ws-val "[float-to-int 3.7f64]")     "3 : Int")

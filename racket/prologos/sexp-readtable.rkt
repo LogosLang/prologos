@@ -261,15 +261,13 @@
   (if (syntax? stx) (syntax->datum stx) stx))
 
 ;; ========================================
-;; Tilde reader: ~[ for LSeq literals, ~N for approximate literals
+;; Tilde reader: ~[ for LSeq literals
 ;; ========================================
 ;; When ~ is followed by [, read LSeq literal as ($lseq-literal ...).
 ;; ~[1 2 3] → ($lseq-literal 1 2 3)
 ;; ~[] → ($lseq-literal)
-;; When ~ is followed by a number, reads as ($approx-literal <value>).
-;; ~42 → ($approx-literal 42)
-;; ~3/7 → ($approx-literal 3/7)
-;; Bare ~ (not followed by [ or digit) is an error.
+;; (N6c) ~N approximate literals were REMOVED — bare decimals are Posit32,
+;; other widths use pNN literals. Anything else after ~ is an error.
 
 (define (read-tilde-syntax ch port src line col pos)
   (define next (peek-char port))
@@ -308,19 +306,8 @@
      (define span (- end-pos pos))
      (datum->syntax #f (cons '$lseq-literal elements)
                     (list src line col pos span))]
-    ;; ~N — approximate literal
-    [(and (char? next) (char-numeric? next))
-     ;; Read the number using the standard Racket reader
-     (define num-val
-       (parameterize ([current-readtable prologos-readtable])
-         (read-syntax src port)))
-     (define v (if (syntax? num-val) (syntax-e num-val) num-val))
-     (define end-pos (file-position port))
-     (define span (- end-pos pos))
-     (datum->syntax #f (list '$approx-literal v)
-                    (list src line col pos span))]
     [else
-     (error 'prologos-reader "~a:~a:~a: ~ must be followed by [ (LSeq literal) or a number (approximate literal)"
+     (error 'prologos-reader "~a:~a:~a: ~ must be followed by [ (LSeq literal) — `~~N` approximate literals were removed; bare decimals are Posit32, use pNN for other widths"
             src (or line 0) (or col 0))]))
 
 (define (read-tilde-datum ch port)

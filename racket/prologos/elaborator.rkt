@@ -1907,11 +1907,7 @@
      (let ([eq (elaborate q env depth)])
        (if (prologos-error? eq) eq (expr-quire64-to eq)))]
 
-    ;; Approximate literal: ~N → default Posit32
-    ;; Context-aware width selection happens in the type checker (check mode).
-    ;; At elaboration time, we default to Posit32.
-    [(surf-approx-literal v loc)
-     (expr-posit32 (posit32-encode (if (exact? v) v (inexact->exact v))))]
+    ;; (N6c) surf-approx-literal arm removed (~N deprecated)
 
     ;; ---- Symbol type and literal ----
     [(surf-symbol-type loc)

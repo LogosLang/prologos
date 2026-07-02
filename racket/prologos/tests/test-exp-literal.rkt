@@ -86,10 +86,10 @@
 
 (test-case "exp-literal/ws-eval-1.5e-3-Posit32"
   ;; N6b: non-integral exponents default Posit32 (exponent origin via $exp-literal)
-  (check-equal? (run-ns-ws-last "1.5e-3") "~0.0015 : Posit32"))
+  (check-equal? (run-ns-ws-last "1.5e-3") "0.0015 : Posit32"))
 
 (test-case "exp-literal/ws-eval-neg-1.5e-3-Posit32"
-  (check-equal? (run-ns-ws-last "-1.5e-3") "~-0.0015 : Posit32"))
+  (check-equal? (run-ns-ws-last "-1.5e-3") "-0.0015 : Posit32"))
 
 (test-case "exp-literal/ws-eval-2e3-Int"
   (check-equal? (run-ns-ws-last "2e3") "2000 : Int"))
@@ -113,10 +113,10 @@
 (test-case "exp-literal/regress-rat"
   (check-equal? (run-ns-ws-last "3/7") "3/7 : Rat"))
 
-(test-case "exp-literal/regress-tilde-exponent-Posit32"
-  ;; ~1.5e-3 (tilde already accepted exponents) stays Posit32
-  (define r (run-ns-ws-last "~1.5e-3"))
-  (check-true (string-contains? r "Posit32") "~1.5e-3 stays Posit32"))
+(test-case "exp-literal/regress-pNN-exponent-Posit64 (N6c: ~ removed)"
+  ;; exponent-composed pNN literal takes the explicit width
+  (define r (run-ns-ws-last "1.5e-3p64"))
+  (check-true (string-contains? r "Posit64") "1.5e-3p64 is Posit64"))
 
 ;; ========================================
 ;; Non-regression: exp-literal must NOT capture arrows / identifiers
@@ -166,5 +166,5 @@
   (delete-file tmp)
   (check-true (and (member "10000000000 : Int" results) #t)
               "L3: 1e10 -> Int in a real .prologos file")
-  (check-true (and (member "~0.0015 : Posit32" results) #t)
+  (check-true (and (member "0.0015 : Posit32" results) #t)
               "L3: 1.5e-3 -> Posit32 in a real .prologos file (N6b)"))

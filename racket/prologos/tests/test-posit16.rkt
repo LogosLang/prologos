@@ -181,9 +181,9 @@
 
 (test-case "posit16 pretty-printing"
   (check-equal? (pp-expr (expr-Posit16) '()) "Posit16" "pp Posit16")
-  (check-equal? (pp-expr (expr-posit16 16384) '()) "~1" "pp posit16(16384)")
+  (check-equal? (pp-expr (expr-posit16 16384) '()) "1p16" "pp posit16(16384)")
   (check-equal? (pp-expr (expr-p16-add (expr-posit16 16384) (expr-posit16 18432)) '())
-                "[p16+ ~1 ~2]" "pp p16+"))
+                "[p16+ 1p16 2p16]" "pp p16+"))
 
 ;; ========================================
 ;; Surface syntax: End-to-end via process-string
@@ -194,11 +194,11 @@
 
 (test-case "posit16 surface: eval literal"
   (check-equal? (run "(eval (posit16 16384))")
-                '("~1 : Posit16")))
+                '("1p16 : Posit16")))
 
 (test-case "posit16 surface: arithmetic 1+1=2"
   (check-equal? (run "(eval (p16+ (posit16 16384) (posit16 16384)))")
-                '("~2 : Posit16")))
+                '("2p16 : Posit16")))
 
 (test-case "posit16 surface: check type"
   (check-equal? (run "(check (posit16 16384) <Posit16>)")
@@ -212,11 +212,11 @@
   (let ([result (process-string "(def one <Posit16> (posit16 16384))\n(eval one)")])
     (check-equal? (length result) 2)
     (check-true (string-contains? (car result) "one : Posit16 defined"))
-    (check-equal? (cadr result) "~1 : Posit16")))
+    (check-equal? (cadr result) "1p16 : Posit16")))
 
 (test-case "posit16 surface: negation"
   (check-equal? (run "(eval (p16-neg (posit16 16384)))")
-                '("~-1 : Posit16")))
+                '("-1p16 : Posit16")))
 
 (test-case "posit16 surface: comparison"
   (check-equal? (run "(eval (p16-lt (posit16 16384) (posit16 18432)))")
@@ -224,7 +224,7 @@
 
 (test-case "posit16 surface: from-nat"
   (check-equal? (run "(eval (p16-from-nat (suc (suc zero))))")
-                '("~2 : Posit16")))
+                '("2p16 : Posit16")))
 
 (test-case "posit16 surface: if-nar on NaR"
   (check-equal? (run "(eval (p16-if-nar Nat zero (suc zero) (posit16 32768)))")
@@ -245,4 +245,4 @@
 (test-case "posit16 surface: defn with Posit16"
   (let ([result (process-string "(defn p16-double [x <Posit16>] <Posit16>\n  (p16+ x x))\n(eval (p16-double (posit16 16384)))")])
     (check-equal? (length result) 2)
-    (check-equal? (cadr result) "~2 : Posit16")))
+    (check-equal? (cadr result) "2p16 : Posit16")))

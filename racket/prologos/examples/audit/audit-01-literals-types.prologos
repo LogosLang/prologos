@@ -74,14 +74,14 @@ suc [suc zero]
 ;; 4. Posit / Approximate Literals
 ;; ========================================================================
 
-~3.14
-;; expect: ~3.14 : Posit32
+3.14
+;; expect: 3.14 : Posit32
 
-~42
-;; expect: ~42 : Posit32
+42.0
+;; expect: 42.0 : Posit32
 
-~1/3
-;; expect: ~1/3 : Posit32
+[p32-from-rat 1/3]
+;; expect: Posit32 (shortest re-encoding decimal of 1/3)
 
 3.14
 ;; expect: 3.14 : Posit32 (bare decimal = Posit32)

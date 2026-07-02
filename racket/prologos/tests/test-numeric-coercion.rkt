@@ -48,11 +48,11 @@
 (test-case "coercion/int+rat"
   ;; 3 + 1/2 → 3.5 : Rat
   (check-equal? (run "(eval (+ 3 1/2))")
-                '("3.5 : Rat")))
+                '("7/2 : Rat")))
 
 (test-case "coercion/rat+int"
   (check-equal? (run "(eval (+ 1/2 3))")
-                '("3.5 : Rat")))
+                '("7/2 : Rat")))
 
 (test-case "coercion/nat+rat"
   ;; 2N + 1/3 → 7/3 : Rat
@@ -91,32 +91,28 @@
 ;; normalized warning text.
 
 (test-case "coercion/int+p32"
-  ;; 42 + ~1.0 → Posit32; literal operand → silent (N6a)
-  (define result (run "(eval (+ 42 ~1.0))"))
+  ;; 42 + 1.0 → Posit32; literal operand → silent (N6a)
+  (define result (run "(eval (+ 42 1.0))"))
   (check-equal? result
-                (list (format "~~~a : Posit32"
-                              (posit-shortest-decimal 32 (posit32-encode 43))))))
+                '("43.0 : Posit32")))
 
 (test-case "coercion/int-value+p32"
   ;; VALUE operand: warns, with the canonical normalized text (exact-side → join)
-  (define result (run "(def n : Int 42)(eval (+ n ~1.0))"))
+  (define result (run "(def n : Int 42)(eval (+ n 1.0))"))
   (check-equal? (last result)
-                (format "~~~a : Posit32\nwarning: implicit coercion from Int to Posit32 (loss of exactness)"
-                        (posit-shortest-decimal 32 (posit32-encode 43)))))
+                "43.0 : Posit32\nwarning: implicit coercion from Int to Posit32 (loss of exactness)"))
 
 (test-case "coercion/rat+p32"
-  ;; 1/2 + ~0.5 → Posit32; literal operand → silent (N6a)
-  (define result (run "(eval (+ 1/2 ~0.5))"))
+  ;; 1/2 + 0.5 → Posit32; literal operand → silent (N6a)
+  (define result (run "(eval (+ 1/2 0.5))"))
   (check-equal? result
-                (list (format "~~~a : Posit32"
-                              (posit-shortest-decimal 32 (posit32-encode 1))))))
+                '("1.0 : Posit32")))
 
 (test-case "coercion/nat+p32"
-  ;; 3N + ~1.0 → Posit32; literal operand → silent (N6a)
-  (define result (run "(eval (+ 3N ~1.0))"))
+  ;; 3N + 1.0 → Posit32; literal operand → silent (N6a)
+  (define result (run "(eval (+ 3N 1.0))"))
   (check-equal? result
-                (list (format "~~~a : Posit32"
-                              (posit-shortest-decimal 32 (posit32-encode 4))))))
+                '("4.0 : Posit32")))
 
 ;; ========================================
 ;; Cross-family: exact + Posit64 → Posit64
@@ -126,18 +122,17 @@
   ;; 10 + p64-value → Posit64; the exact-side operand (10) is a literal → silent (N6a)
   (define result (run "(eval (+ 10 (from-integer <Posit64> 5)))"))
   (check-equal? result
-                (list (format "~~~a : Posit64"
-                              (posit-shortest-decimal 64 (posit64-encode 15))))))
+                '("15p64 : Posit64")))
 
 ;; ========================================
 ;; Within posit family: P8 + P32 → P32
 ;; ========================================
 
 (test-case "coercion/p8+p32"
-  ;; from-integer Posit8 2 + ~3.0 → Posit32
-  (define result (run "(eval (+ (from-integer <Posit8> 2) ~3.0))"))
+  ;; from-integer Posit8 2 + 3.0 → Posit32
+  (define result (run "(eval (+ (from-integer <Posit8> 2) 3.0))"))
   (check-equal? result
-                (list (format "~~~a : Posit32" (posit-shortest-decimal 32 (posit32-encode 5))))))
+                '("5.0 : Posit32")))
 
 ;; ========================================
 ;; Type inference checks
@@ -152,7 +147,7 @@
   (check-true (string-contains? result "Rat") "Int+Rat should infer as Rat"))
 
 (test-case "coercion/infer-int+p32"
-  (define result (car (run "(infer (+ 42 ~1.0))")))
+  (define result (car (run "(infer (+ 42 1.0))")))
   (check-true (string-contains? result "Posit32") "Int+Posit32 should infer as Posit32"))
 
 ;; ========================================
@@ -161,14 +156,13 @@
 
 (test-case "coercion/int*rat"
   (check-equal? (run "(eval (* 3 1/2))")
-                '("1.5 : Rat")))
+                '("3/2 : Rat")))
 
 (test-case "coercion/nat*p32"
   ;; literal operand → silent (N6a)
-  (define result (run "(eval (* 2N ~3.0))"))
+  (define result (run "(eval (* 2N 3.0))"))
   (check-equal? result
-                (list (format "~~~a : Posit32"
-                              (posit-shortest-decimal 32 (posit32-encode 6))))))
+                '("6.0 : Posit32")))
 
 ;; ========================================
 ;; Division with coercion
@@ -192,5 +186,5 @@
                 '("13/14 : Rat")))
 
 (test-case "coercion/same-p32-add"
-  (check-equal? (run "(eval (+ ~1.0 ~2.0))")
-                (list (format "~~~a : Posit32" (posit-shortest-decimal 32 (posit32-encode 3))))))
+  (check-equal? (run "(eval (+ 1.0 2.0))")
+                '("3.0 : Posit32")))

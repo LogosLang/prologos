@@ -645,14 +645,7 @@
                (parse-error loc (format "rat literal requires an exact rational, got: ~a" v) #f)))
          (parse-error loc "rat literal requires exactly one argument" #f))]
 
-    ;; $approx-literal sentinel: ~N → surf-approx-literal
-    [(and (symbol? head) (eq? head '$approx-literal))
-     (if (= (length args) 1)
-         (let ([v (stx->datum (car args))])
-           (if (and (number? v) (or (exact? v) (inexact? v)))
-               (surf-approx-literal (if (exact? v) v (inexact->exact v)) loc)
-               (parse-error loc (format "~~ requires a numeric argument, got: ~a" v) #f)))
-         (parse-error loc "~~ requires exactly one argument" #f))]
+    ;; (N6c) $approx-literal sentinel removed (~N deprecated; pNN + bare decimals)
 
     ;; $decimal-literal sentinel: 3.14 → decimal-origin polymorphic literal
     ;; (N6b default: Posit32 — decimal notation = approximate intent; incl. 3.0)
@@ -5185,15 +5178,15 @@
                ;; Content after sentinel head. In WS mode, continuation rows
                ;; at deeper indentation become nested sublists within the $facts-sep.
                ;; Flat terms = first row, nested pairs = subsequent rows.
-               ;; Note: $nat-literal, $decimal-literal, $approx-literal wrapped terms
+               ;; Note: $nat-literal, $decimal-literal, ... wrapped terms
                ;; are pairs but are single terms, not nested rows.
                (define content (cdr d))  ;; list of syntax objects
                (define (term-sentinel? s)
                  (define sd (stx->datum s))
                  (and (pair? sd)
                       (let ([h (if (syntax? (car sd)) (syntax-e (car sd)) (car sd))])
-                        (memq h '($nat-literal $decimal-literal $approx-literal $float-literal
-                                  $exp-literal $posit-literal)))))  ;; N6b
+                        (memq h '($nat-literal $decimal-literal $float-literal
+                                  $exp-literal $posit-literal)))))  ;; N6b (+N6c: $approx-literal removed)
                (define-values (flat-terms nested-rows)
                  (partition (lambda (s)
                               (or (not (pair? (stx->datum s)))

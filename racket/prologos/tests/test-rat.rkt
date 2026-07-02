@@ -259,7 +259,7 @@
 (test-case "rat pretty-printing"
   (check-equal? (pp-expr (expr-Rat) '()) "Rat" "pp Rat")
   (check-equal? (pp-expr (expr-rat 3/7) '()) "3/7" "pp rat(3/7)")
-  (check-equal? (pp-expr (expr-rat -1/2) '()) "-0.5" "pp rat(-1/2)")
+  (check-equal? (pp-expr (expr-rat -1/2) '()) "-1/2" "pp rat(-1/2)")
   (check-equal? (pp-expr (expr-rat 42) '()) "42" "pp rat(42)")
   (check-equal? (pp-expr (expr-rat-add (expr-rat 1/3) (expr-rat 1/6)) '())
                 "[rat+ 1/3 1/6]" "pp rat+"))
@@ -282,23 +282,23 @@
 
 (test-case "rat surface: eval negative rational"
   (check-equal? (run "(eval (rat -1/2))")
-                '("-0.5 : Rat")))
+                '("-1/2 : Rat")))
 
 (test-case "rat surface: addition"
   (check-equal? (run "(eval (rat+ (rat 1/3) (rat 1/6)))")
-                '("0.5 : Rat")))
+                '("1/2 : Rat")))
 
 (test-case "rat surface: subtraction"
   (check-equal? (run "(eval (rat- (rat 3/4) (rat 1/4)))")
-                '("0.5 : Rat")))
+                '("1/2 : Rat")))
 
 (test-case "rat surface: multiplication"
   (check-equal? (run "(eval (rat* (rat 2/3) (rat 3/5)))")
-                '("0.4 : Rat")))
+                '("2/5 : Rat")))
 
 (test-case "rat surface: division"
   (check-equal? (run "(eval (rat/ (rat 3/4) (rat 2)))")
-                '("0.375 : Rat")))
+                '("3/8 : Rat")))
 
 (test-case "rat surface: negation"
   (check-equal? (run "(eval (rat-neg (rat 3/7)))")
@@ -306,7 +306,7 @@
 
 (test-case "rat surface: abs"
   (check-equal? (run "(eval (rat-abs (rat -3/4)))")
-                '("0.75 : Rat")))
+                '("3/4 : Rat")))
 
 (test-case "rat surface: comparison lt"
   (check-equal? (run "(eval (rat-lt (rat 1/3) (rat 1/2)))")
@@ -348,7 +348,7 @@
 
 (test-case "rat surface: nested arithmetic"
   (check-equal? (run "(eval (rat+ (rat* (rat 1/2) (rat 2/3)) (rat 1/6)))")
-                '("0.5 : Rat")))
+                '("1/2 : Rat")))
 
 (test-case "rat surface: bare fraction literal"
   ;; Test that bare 3/7 is tokenized as a rational number

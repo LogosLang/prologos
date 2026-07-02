@@ -151,8 +151,6 @@
    (test-dep '() #t)
    'test-abstract-interpretation-e2e.rkt
    (test-dep '(champ.rkt propagator.rkt) #t)
-   'test-approx-literal.rkt
-   (test-dep '(driver.rkt global-env.rkt parser.rkt posit-impl.rkt prelude.rkt reader.rkt surface-syntax.rkt syntax.rkt) #f)
    'test-architecture-d-02.rkt
    (test-dep '(effect-executor.rkt effect-ordering.rkt effect-position.rkt io-bridge.rkt processes.rkt propagator.rkt session-lattice.rkt session-runtime.rkt sessions.rkt syntax.rkt) #f)
    'test-architecture-selection-01.rkt

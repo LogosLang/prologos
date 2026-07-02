@@ -5,7 +5,7 @@
 ;;;
 ;;; N4: Bare decimals (3.14, 0.5) are POLYMORPHIC numeric literals (surf-num-lit) —
 ;;; they carry an exact value and resolve their type from context; unconstrained →
-;;; Rat (Int if integral). Tilde literals (~42 = Posit32) + explicit rationals stay concrete.
+;;; Posit32 for decimals (N6b). pNN literals + explicit rationals stay concrete.
 ;;;
 
 (require racket/string
@@ -90,11 +90,11 @@
               "3.14 → Posit32 (N6b decimal default)"))
 
 (test-case "decimal-literal/eval-0.5"
-  (check-equal? (run "(eval 0.5)") '("~0.5 : Posit32")))
+  (check-equal? (run "(eval 0.5)") '("0.5 : Posit32")))
 
 (test-case "decimal-literal/eval-1.0"
   ;; N6b: integral VALUE but decimal NOTATION → Posit32 (origin wins)
-  (check-equal? (run "(eval 1.0)") '("~1 : Posit32")))
+  (check-equal? (run "(eval 1.0)") '("1.0 : Posit32")))
 
 (test-case "decimal-literal/check-type"
   ;; 3.14 still type-checks against Posit32 (context-typed via the check arm)
@@ -119,15 +119,10 @@
 ;; Unchanged: ~N still works
 ;; ========================================
 
-(test-case "decimal-literal/tilde-unchanged"
-  ;; ~3.14 should still produce Posit32 via approx-literal path
-  (check-equal? (run "(eval ~3.14)")
-                (list (format "~~~a : Posit32" (posit-shortest-decimal 32 (posit32-encode 157/50))))))
-
-(test-case "decimal-literal/tilde-integer-unchanged"
-  ;; ~42 should still produce Posit32
-  (check-equal? (run "(eval ~42)")
-                '("~42 : Posit32")))
+(test-case "decimal-literal/pNN-markers (N6c: ~ removed)"
+  ;; pNN literals are the explicit-width posit form; sexp ~N now errors.
+  (check-exn exn:fail? (lambda () (run "(eval ~3.14)")))
+  (check-exn exn:fail? (lambda () (run "(eval ~42)"))))
 
 ;; ========================================
 ;; Arithmetic with bare decimals
@@ -138,7 +133,7 @@
   ;; (Bare literal DIRECTLY to a width-specific op resolves to Rat/Int, not the op type —
   ;; deferred to N4c; ascription `(the Posit32 ...)` context-types correctly via Option B.)
   (check-equal? (run "(eval (p32+ (the Posit32 1.0) (the Posit32 2.0)))")
-                (list (format "~~~a : Posit32" (posit-shortest-decimal 32 (posit32-encode 3))))))
+                '("3.0 : Posit32")))
 
 ;; ========================================
 ;; List literal with bare decimals

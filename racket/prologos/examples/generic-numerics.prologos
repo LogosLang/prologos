@@ -130,7 +130,7 @@ defn sum-of-squares [add-d mul-d x y]
 .{3N + 4N}
 ;; => 7N : Nat
 
-.{~1.5 + ~2.5}
+.{1.5 + 2.5}
 ;; => [posit32 1342177280] : Posit32  (4.0)
 
 ;; Comparison operators too:

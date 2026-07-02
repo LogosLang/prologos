@@ -559,16 +559,18 @@
       2
       #f))
 
-(define (recognize-tilde-number rrb pos)
-  ;; ~42 or ~3/7 or ~3.14 (approx-literal)
+;; (N6c) `~N` approximate literals are REMOVED — bare decimals are Posit32
+;; (N6b), other widths use pNN literals (2.5p8). `~[` (LSeq) survives via
+;; recognize-tilde-lbracket above. The recognizer is KEPT solely so stale
+;; tilde-numeric input gets a migration hint instead of silent mis-tokenizing.
+(define (recognize-removed-tilde-number rrb pos)
   (define c1 (rrb-char-at rrb pos))
   (define c2 (rrb-char-at rrb (+ pos 1)))
   (if (and c1 c2 (char=? c1 #\~)
            (or (char-numeric? c2)
-               (and (char=? c2 #\-) ;; negative: ~-5
+               (and (char=? c2 #\-)
                     (let ([c3 (rrb-char-at rrb (+ pos 2))])
                       (and c3 (char-numeric? c3))))))
-      ;; Scan forward for the full number (including trailing N for Nat)
       (let loop ([i (+ pos 1)])
         (define c (rrb-char-at rrb i))
         (if (and c (or (char-numeric? c) (char=? c #\.) (char=? c #\/)
@@ -1091,9 +1093,14 @@
   (register-token-pattern!
    (token-pattern 'tilde-lbracket (lambda (rrb pos) (recognize-tilde-lbracket rrb pos))
                   (lambda (s p l) 'tilde-lbracket) 85))
+  ;; (N6c) ~N approximate literals removed — the pattern now raises a
+  ;; migration hint (fires on the production tokenizer, any entry path)
   (register-token-pattern!
-   (token-pattern 'tilde-number (lambda (rrb pos) (recognize-tilde-number rrb pos))
-                  (lambda (s p l) 'approx-literal) 86))  ;; higher priority than tilde-lbracket
+   (token-pattern 'tilde-number (lambda (rrb pos) (recognize-removed-tilde-number rrb pos))
+                  (lambda (s p l)
+                    (error 'prologos-reader
+                           "`~~` approximate literals were removed — bare decimals are Posit32 (3.14); use pNN literals for other widths (3.14p64)"))
+                  86))
   ;; Backtick and comma (quasiquote/unquote)
   (register-token-pattern!
    (token-pattern 'backtick (lambda (rrb pos) (recognize-backtick rrb pos))
@@ -1786,11 +1793,6 @@
        ;; Parse as exact rational: "3.14" → 157/50, "-3.14" → -157/50
        (define exact-str (string-append "#e" lexeme))
        (or (string->number exact-str) (string->number lexeme) lexeme)]
-      [(approx-literal)
-       (define num-str (substring lexeme 1))
-       ;; Parse as exact: prepend #e to get exact rational (3.14 → 157/50)
-       (define exact-str (string-append "#e" num-str))
-       (or (string->number exact-str) (string->number num-str) lexeme)]
       [(pipe) '$pipe]
       [(pipe-right) '$pipe-gt]
       [(facts-sep) '$facts-sep]
@@ -1843,15 +1845,20 @@
     (define entry (rrb-get disamb-rrb i))
     (define type (set-first (token-entry-types entry)))
     (define lexeme (token-entry-lexeme entry))
-    ;; Reject negative Nats (-3N, ~-3N)
+    ;; Reject negative Nats (-3N)
     (when (and (eq? type 'nat-literal)
                (string-contains? lexeme "-"))
       (error 'tokenize-string "Negative Nat literal not allowed: ~a" lexeme))
-    (when (and (eq? type 'approx-literal)
-               (let ([num-str (substring lexeme 1)])
-                 (and (string-contains? num-str "-")
-                      (string-suffix? num-str "N"))))
-      (error 'tokenize-string "Negative Nat literal not allowed: ~a" lexeme))
+    ;; (N6c) Reject stray ~ with a migration hint: `~N` approximate literals
+    ;; were removed (`~[` LSeq is tokenized earlier and never reaches here).
+    (when (and (eq? type 'symbol)
+               (or (equal? lexeme "~")
+                   (and (string-prefix? lexeme "~")
+                        (> (string-length lexeme) 1)
+                        (let ([c (string-ref lexeme 1)])
+                          (or (char-numeric? c) (char=? c #\-))))))
+      (error 'prologos-reader
+             "`~~` approximate literals were removed — bare decimals are Posit32 (3.14); use pNN literals for other widths (3.14p64)"))
     ;; Reject standalone & (must use &> for rule clauses)
     (when (and (eq? type 'symbol) (equal? lexeme "&"))
       (error 'prologos-reader "Unexpected & — use &> for rule clauses"))
@@ -2573,22 +2580,7 @@
                                          (make-stx num-val source vl vc spos (- epos spos)))
                                    source vl vc spos (- epos spos))
                          result))]
-            ;; Approx-literal compound token: ~42 → ($approx-literal 42)
-            [(eq? type 'approx-literal)
-             (define lex (token-entry-lexeme item))
-             (define num-str (substring lex 1))
-             ;; Parse as exact rational: 3.14 → 157/50 (matching old reader)
-             (define num-val (or (string->number (string-append "#e" num-str))
-                                 (string->number num-str)
-                                 (string->symbol num-str)))
-             (define spos (token-entry-start-pos item))
-             (define epos (token-entry-end-pos item))
-             (define-values (vl vc) (pos->line-col source-str spos))
-             (loop (+ i 1)
-                   (cons (make-stx (list (make-stx '$approx-literal source vl vc (+ spos 1) 1)
-                                         (make-stx num-val source vl (+ vc 1) (+ spos 2) (- epos spos 1)))
-                                   source vl vc (+ spos 1) (- epos spos))
-                         result))]
+            ;; (N6c) approx-literal compound-token arm removed (~N deprecated)
             ;; Posit-literal compound token (Numerics N6b): 3.14p16 → ($posit-literal 157/50 16)
             [(eq? type 'posit-literal)
              (define lex (token-entry-lexeme item))
@@ -2655,24 +2647,8 @@
                                          (make-stx width source vl vc spos (- epos spos)))
                                    source vl vc spos (- epos spos))
                          result))]
-            ;; Tilde prefix: ~ followed by token → $approx-literal sentinel
-            ;; ~42 → ($approx-literal 42), ~[1 2] handled by tilde-lbracket
-            [(and (eq? type 'symbol)
-                  (equal? (token-entry-lexeme item) "~")
-                  (< (+ i 1) end)
-                  (let ([next (vector-ref vec (+ i 1))])
-                    (and (token-entry? next)
-                         ;; Adjacent: no whitespace gap
-                         (= (token-entry-end-pos item)
-                            (token-entry-start-pos next)))))
-             (let* ([next-item (vector-ref vec (+ i 1))]
-                    [next-stx (token-entry->stx next-item source source-str)])
-               (define-values (vl vc) (pos->line-col source-str (token-entry-start-pos item)))
-               (loop (+ i 2)
-                     (cons (make-stx (list (make-stx '$approx-literal source vl vc (+ (token-entry-start-pos item) 1) 1)
-                                           next-stx)
-                                     source vl vc (+ (token-entry-start-pos item) 1) 1)
-                           result)))]
+            ;; (N6c) adjacent-tilde $approx-literal arm removed (~N deprecated;
+            ;; a stray ~ symbol is rejected at tokenize-time with a migration hint)
             ;; Backtick prefix: ` followed by element → $quasiquote sentinel
             [(eq? type 'backtick)
              (if (< (+ i 1) end)

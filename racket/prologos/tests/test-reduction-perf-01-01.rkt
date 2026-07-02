@@ -66,23 +66,23 @@
 ;; Decimal posit literals
 ;; ========================================
 
-(test-case "perf: decimal posit ~3.14 evaluates"
+(test-case "perf: decimal posit 3.14 evaluates"
   (define results
     (run-ns "(ns test.decimal :no-prelude)
-(eval ~3.14)"))
+(eval 3.14)"))
   (check-true (ormap (lambda (r)
                         (and (string? r)
                              (string-contains? r "Posit32")))
                       results)
-              "~3.14 should produce a Posit32"))
+              "3.14 should produce a Posit32"))
 
 (test-case "perf: decimal posit arithmetic"
   (define results
     (run-ns "(ns test.decimal-arith :no-prelude)
-(eval (p32+ ~1.5 ~2.5))"))
+(eval (p32+ 1.5 2.5))"))
   ;; 1.5 + 2.5 = 4.0
   (check-true (ormap (lambda (r)
                         (and (string? r)
                              (string-contains? r "Posit32")))
                       results)
-              "~1.5 + ~2.5 should produce a Posit32"))
+              "1.5 + 2.5 should produce a Posit32"))

@@ -51,15 +51,18 @@
       candidate))
 
 ;; ========================================
-;; Q10-complete numeric display (Numerics N2)
+;; Q10-complete numeric display (Numerics N2; sigil-free N6c)
 ;; ========================================
 ;;
-;; "Display = a re-readable marked literal of the same value."
-;;   - Posit  → ~<shortest-decimal>   (re-parses to Posit via ~ marker)
+;; "Display = a re-readable literal of the same value."
+;;   - Posit32 → <shortest-decimal>, bare (decimal notation IS Posit32 post-N6b);
+;;     integral values force a `.0` so they re-read as Posit32, not Int
+;;   - Posit8/16/64 → <shortest-decimal>pNN (mirrors Float32's `2.5f32`)
 ;;   - Float64 → <shortest-decimal>f  ;  Float32 → <shortest-decimal>f32
-;;   - Rat    → exact decimal if terminating, else the fraction
-;; Non-finite floats have no re-readable `f`-literal; we print the bare
-;; Racket name (+nan.0 / +inf.0 / -inf.0) — display-only, does not round-trip.
+;;   - Rat    → plain exact notation (fractions; integral Rat displays bare —
+;;     re-reads as Int, which widens back via Int <: Rat)
+;; Non-finite floats + NaR have no reader literal; we print the bare name
+;; (+nan.0 / +inf.0 / -inf.0 / NaR) — display-only, does not round-trip.
 
 ;; Float64 display: `<decimal>f` for finite, bare name for non-finite.
 (define (float64->display v)
@@ -84,10 +87,18 @@
                         v)
       "f32")]))
 
-;; Posit display: `~<shortest-decimal>` (or `NaR` for the NaR bit pattern).
+;; Posit display (N6c, sigil-free): Posit32 bare (integral → forced `.0`);
+;; other widths suffixed `pNN` (integral mantissa re-reads via the pNN
+;; integer shape, e.g. `2p8`). NaR = bare name, all widths (no reader form).
 (define (posit->display n v)
   (let ([s (posit-shortest-decimal n v)])
-    (if (string=? s "NaR") "NaR" (string-append "~" s))))
+    (cond
+      [(string=? s "NaR") "NaR"]
+      [(= n 32)
+       (if (or (string-contains? s ".") (string-contains? s "e"))
+           s
+           (string-append s ".0"))]
+      [else (string-append s "p" (number->string n))])))
 
 ;; ========================================
 ;; Pretty-print expressions
@@ -665,7 +676,7 @@
 
     ;; Rat
     [(expr-Rat) "Rat"]
-    [(expr-rat v) (rat->display-string v)]
+    [(expr-rat v) (number->string v)]  ;; (N6c) plain exact notation — D-N6.3 revert
     [(expr-rat-add a b) (format "[rat+ ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-rat-sub a b) (format "[rat- ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-rat-mul a b) (format "[rat* ~a ~a]" (pp-expr a names) (pp-expr b names))]
@@ -1517,9 +1528,7 @@
          [(and (eq? h '$rest-param) (pair? (cdr d)) (null? (cddr d)))
           (format "...~a" (pp-datum (cadr d)))]
 
-         ;; ($approx-literal val) → ~val
-         [(and (eq? h '$approx-literal) (pair? (cdr d)) (null? (cddr d)))
-          (format "~~~a" (pp-datum (cadr d)))]
+         ;; (N6c) $approx-literal pp-datum case removed (~N deprecated)
 
          ;; ($list-tail expr) — standalone (shouldn't appear outside $list-literal)
          [(and (eq? h '$list-tail) (pair? (cdr d)) (null? (cddr d)))

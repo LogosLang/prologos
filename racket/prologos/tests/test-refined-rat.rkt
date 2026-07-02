@@ -106,7 +106,7 @@
    (run-ns-last
     (string-append (rr-ns 'rr-uc2)
      "(eval (neg-rat-val (unsafe-neg-rat -2/5)))\n"))
-   "-0.4"))
+   "-2/5"))
 
 (test-case "refined-rat: unsafe-pos-rat display : PosRat"
   (check-contains

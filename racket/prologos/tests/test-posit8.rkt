@@ -200,9 +200,9 @@
 
 (test-case "posit8 pretty-printing"
   (check-equal? (pp-expr (expr-Posit8) '()) "Posit8" "pp Posit8")
-  (check-equal? (pp-expr (expr-posit8 64) '()) "~1" "pp posit8(64)")
+  (check-equal? (pp-expr (expr-posit8 64) '()) "1p8" "pp posit8(64)")
   (check-equal? (pp-expr (expr-p8-add (expr-posit8 64) (expr-posit8 72)) '())
-                "[p8+ ~1 ~2]" "pp p8+"))
+                "[p8+ 1p8 2p8]" "pp p8+"))
 
 ;; ========================================
 ;; Surface syntax: End-to-end via process-string
@@ -214,11 +214,11 @@
 
 (test-case "posit8 surface: eval literal"
   (check-equal? (run "(eval (posit8 64))")
-                '("~1 : Posit8")))
+                '("1p8 : Posit8")))
 
 (test-case "posit8 surface: arithmetic 1+1=2"
   (check-equal? (run "(eval (p8+ (posit8 64) (posit8 64)))")
-                '("~2 : Posit8")))
+                '("2p8 : Posit8")))
 
 (test-case "posit8 surface: check type"
   (check-equal? (run "(check (posit8 64) <Posit8>)")
@@ -232,11 +232,11 @@
   (let ([result (process-string "(def one <Posit8> (posit8 64))\n(eval one)")])
     (check-equal? (length result) 2)
     (check-true (string-contains? (car result) "one : Posit8 defined"))
-    (check-equal? (cadr result) "~1 : Posit8")))
+    (check-equal? (cadr result) "1p8 : Posit8")))
 
 (test-case "posit8 surface: negation"
   (check-equal? (run "(eval (p8-neg (posit8 64)))")
-                '("~-1 : Posit8")))
+                '("-1p8 : Posit8")))
 
 (test-case "posit8 surface: comparison"
   (check-equal? (run "(eval (p8-lt (posit8 64) (posit8 72)))")
@@ -244,7 +244,7 @@
 
 (test-case "posit8 surface: from-nat"
   (check-equal? (run "(eval (p8-from-nat (suc (suc zero))))")
-                '("~2 : Posit8")))
+                '("2p8 : Posit8")))
 
 (test-case "posit8 surface: if-nar on NaR"
   (check-equal? (run "(eval (p8-if-nar Nat zero (suc zero) (posit8 128)))")
@@ -265,4 +265,4 @@
 (test-case "posit8 surface: defn with Posit8"
   (let ([result (process-string "(defn p8-double [x <Posit8>] <Posit8>\n  (p8+ x x))\n(eval (p8-double (posit8 64)))")])
     (check-equal? (length result) 2)
-    (check-equal? (cadr result) "~2 : Posit8")))
+    (check-equal? (cadr result) "2p8 : Posit8")))

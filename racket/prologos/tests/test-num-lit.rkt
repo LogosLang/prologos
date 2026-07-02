@@ -56,7 +56,7 @@
 
 (test-case "num-lit/eval-ascribed-collapses"
   (check-equal? (run "(eval (the Float64 3.14))") '("3.14f : Float64"))
-  (check-equal? (run "(eval (the Posit32 1.0))")  '("~1 : Posit32"))
+  (check-equal? (run "(eval (the Posit32 1.0))")  '("1.0 : Posit32"))
   (check-equal? (run "(eval (the Int 3.0))")      '("3 : Int")))
 
 ;; ========================================
@@ -65,7 +65,7 @@
 ;; ========================================
 
 (test-case "num-lit/unconstrained-defaults"
-  (check-equal? (run-ns-ws-last "3.14") "~3.14 : Posit32" "bare decimal -> Posit32 (N6b)")
+  (check-equal? (run-ns-ws-last "3.14") "3.14 : Posit32" "bare decimal -> Posit32 (N6b)")
   (check-true (string-contains? (run-ns-ws-last "3.0") "Posit32")
               "integral-value DECIMAL notation -> Posit32 (N6b: origin wins)")
   (check-true (string-contains? (run-ns-ws-last "3/7") "Rat") "bare fraction -> Rat (unchanged)")
@@ -83,7 +83,7 @@
 ;; ========================================
 
 (test-case "num-lit/ascribed-width-op"
-  (check-equal? (run "(eval (p32+ (the Posit32 1.0) (the Posit32 2.0)))") '("~3 : Posit32"))
+  (check-equal? (run "(eval (p32+ (the Posit32 1.0) (the Posit32 2.0)))") '("3.0 : Posit32"))
   (check-equal? (run "(eval (f64+ (the Float64 1.0) (the Float64 2.0)))") '("3.0f : Float64")))
 
 ;; ========================================
@@ -91,8 +91,11 @@
 ;; ========================================
 
 (test-case "num-lit/markers-unchanged"
-  (check-true (string-contains? (run-ns-ws-last "~3.14") "Posit32") "~3.14 stays Posit32")
-  (check-true (string-contains? (run-ns-ws-last "3.14f64") "Float64") "3.14f64 stays Float64"))
+  (check-true (string-contains? (run-ns-ws-last "3.14p32") "Posit32") "3.14p32 stays Posit32")
+  (check-true (string-contains? (run-ns-ws-last "3.14f64") "Float64") "3.14f64 stays Float64")
+  ;; (N6c) the ~ marker is gone — stale input gets a migration hint
+  (check-exn (regexp "approximate literals were removed")
+             (lambda () (run-ns-ws-last "~3.14"))))
 
 ;; ========================================
 ;; N1 integral exponent stays Int (non-regression)

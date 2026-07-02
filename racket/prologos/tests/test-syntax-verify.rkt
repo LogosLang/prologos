@@ -76,10 +76,10 @@
      (eval m)")))
   (check-contains result "Map"))
 
-;; Test: Approx literal ~1.5 works (Posit32)
+;; Test: bare decimal 1.5 infers Posit32 (N6b)
 (test-case "syntax/approx-literal"
   (define result (run-ns-last (string-append preamble
-    "(infer ~1.5)")))
+    "(infer 1.5)")))
   (check-contains result "Posit32"))
 
 ;; Test: List literal '[1 2 3] works

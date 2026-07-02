@@ -1,20 +1,21 @@
 #lang racket/base
 
 ;;;
-;;; Numerics N2 — Q10-complete numeric display round-trip properties.
+;;; Numerics N2/N6c — Q10-complete numeric display round-trip properties.
 ;;;
-;;; "Display = a re-readable marked literal of the same value."
+;;; "Display = a re-readable literal of the same value." (sigil-free, N6c)
 ;;;
 ;;; These tests verify the display contract INDEPENDENT of the specific
 ;;; expected-string assertions scattered across the numeric test suite:
-;;;   (a) pp-expr output carries the correct marker (~ / f / f32 / decimal);
+;;;   (a) pp-expr output carries the correct form (bare / pNN / f / f32 / fraction);
 ;;;   (b) re-parsing that output through the WS pipeline yields the SAME value
 ;;;       (structural round-trip on the underlying stored representation).
 ;;;
-;;; Posit  → ~<shortest-decimal>            (re-parses to Posit32 via ~ marker)
+;;; Posit32 → <shortest-decimal>, bare (integral values force `.0`)
+;;; Posit8/16/64 → <shortest-decimal>pNN
 ;;; Float64 → <shortest-decimal>f            (re-parses to Float64)
 ;;; Float32 → <shortest-decimal>f32          (re-parses to Float32)
-;;; Rat    → exact decimal if terminating, else the fraction
+;;; Rat    → plain exact notation (fractions; integral Rat displays bare)
 ;;;
 
 (require rackunit
@@ -22,6 +23,8 @@
          racket/flonum
          "test-support.rkt"
          "../driver.rkt"
+         "../syntax.rkt"
+         "../pretty-print.rkt"
          "../posit-impl.rkt")
 
 ;; Strip " : Type" suffix from a "value : type" display string.
@@ -29,14 +32,14 @@
   (car (regexp-split #px" : " disp)))
 
 ;; ========================================
-;; Unit-level: the shortest-decimal / rat helpers directly
+;; Unit-level: the shortest-decimal helper directly
 ;; ========================================
 
 (test-case "shortest-decimal: posit32 terminating decimals"
   ;; 3.14 → 157/50 → posit32; shortest re-encoding decimal is "3.14"
   (check-equal? (posit-shortest-decimal 32 (posit32-encode 157/50)) "3.14")
   (check-equal? (posit-shortest-decimal 32 (posit32-encode 1/2))    "0.5")
-  (check-equal? (posit-shortest-decimal 32 (posit32-encode 3))      "3")   ; integer
+  (check-equal? (posit-shortest-decimal 32 (posit32-encode 3))      "3")   ; integer (bare; pp adds .0)
   (check-equal? (posit-shortest-decimal 32 (posit32-encode 0))      "0")
   (check-equal? (posit-shortest-decimal 32 (posit32-encode -5/2))   "-2.5"))
 
@@ -65,38 +68,54 @@
     (check-equal? (flsingle (exact->inexact p)) v
                   (format "float32 round-trip for ~a via ~a" q s))))
 
-(test-case "rat-terminates? classification"
-  (check-true  (rat-terminates? 157/50))  ; 50 = 2·5^2
-  (check-true  (rat-terminates? 1/2))
-  (check-true  (rat-terminates? 1/8))
-  (check-true  (rat-terminates? 3/1))      ; integer
-  (check-true  (rat-terminates? 1/1000))   ; 1000 = 2^3·5^3
-  (check-false (rat-terminates? 1/3))
-  (check-false (rat-terminates? 3/7))
-  (check-false (rat-terminates? 22/7)))
-
-(test-case "rat->display-string: terminating → decimal, else fraction"
-  (check-equal? (rat->display-string 157/50) "3.14")
-  (check-equal? (rat->display-string 1/2)    "0.5")
-  (check-equal? (rat->display-string 3)      "3")     ; integer
-  (check-equal? (rat->display-string 1/8)    "0.125")
-  (check-equal? (rat->display-string 1/3)    "1/3")   ; non-terminating
-  (check-equal? (rat->display-string 3/7)    "3/7"))
-
 ;; ========================================
-;; End-to-end: pp-expr output marker + WS re-parse round-trip
+;; Unit-level: pp-expr posit forms (all four widths) + all-256 posit8 sweep
 ;; ========================================
 
-(test-case "Posit32 display carries ~ marker and round-trips"
-  (for ([orig (in-list (list "~3.14" "~42" "~0.5" "~1.0" "~3/7" "~0.125"))])  ;; N4: bare decimals are now Rat; markers (~) stay Posit32
+(test-case "pp-expr posit forms: bare Posit32 (forced .0), pNN others"
+  (check-equal? (pp-expr (expr-posit32 (posit32-encode 157/50)) '()) "3.14")
+  (check-equal? (pp-expr (expr-posit32 (posit32-encode 3)) '())      "3.0")   ; forced .0
+  (check-equal? (pp-expr (expr-posit32 (posit32-encode 0)) '())      "0.0")
+  (check-equal? (pp-expr (expr-posit8  (posit8-encode 5/2)) '())     "2.5p8")
+  (check-equal? (pp-expr (expr-posit8  (posit8-encode 2)) '())       "2p8")
+  (check-equal? (pp-expr (expr-posit16 (posit16-encode 3/2)) '())    "1.5p16")
+  (check-equal? (pp-expr (expr-posit64 (posit64-encode 1/2)) '())    "0.5p64"))
+
+(test-case "all-256 posit8 display round-trip (N6c: p8 display is re-readable)"
+  ;; Every non-NaR posit8 bit pattern's display, stripped of its p8 suffix and
+  ;; re-read as an exact number, must re-encode to the same bits.
+  (for ([i (in-range 0 256)])
+    (unless (= i 128)  ;; NaR: displays "NaR", no reader literal
+      (define s (pp-expr (expr-posit8 i) '()))
+      (check-true (string-suffix? s "p8") (format "posit8 ~a display ~a has p8 suffix" i s))
+      (define mant (substring s 0 (- (string-length s) 2)))
+      (define q (string->number (string-append "#e" mant)))
+      (check-equal? (posit8-encode q) i
+                    (format "posit8 display round-trip for bits ~a via ~a" i s)))))
+
+;; ========================================
+;; End-to-end: pp-expr output + WS re-parse round-trip
+;; ========================================
+
+(test-case "Posit32 displays bare and round-trips (incl. integral .0 + p32 input)"
+  (for ([orig (in-list (list "3.14" "42.0" "0.5" "1.0" "0.125" "3.14p32" "[p32-from-rat 3/7]"))])
     (define disp (run-ns-ws-last orig))
     (check-true (string-contains? disp ": Posit32")
                 (format "~a should be Posit32: ~a" orig disp))
-    (check-true (string-prefix? (value-part disp) "~")
-                (format "~a display should start with ~~: ~a" orig disp))
+    (check-false (string-prefix? (value-part disp) "~")
+                 (format "~a display must be sigil-free: ~a" orig disp))
     ;; Round-trip: re-parse the displayed literal → same display.
     (check-equal? (run-ns-ws-last (value-part disp)) disp
                   (format "posit round-trip for ~a" orig))))
+
+(test-case "Posit8/16/64 display pNN-suffixed and round-trip"
+  (for ([orig (in-list (list "2.5p8" "2p8" "1.5p16" "-2.5p16" "0.5p64"))]
+        [ty   (in-list (list ": Posit8" ": Posit8" ": Posit16" ": Posit16" ": Posit64"))])
+    (define disp (run-ns-ws-last orig))
+    (check-true (string-contains? disp ty)
+                (format "~a should be ~a: ~a" orig ty disp))
+    (check-equal? (run-ns-ws-last (value-part disp)) disp
+                  (format "pNN round-trip for ~a" orig))))
 
 (test-case "Float64 display carries f marker and round-trips"
   (for ([orig (in-list (list "3.14f" "3.14f64" "-2.5f" "3f" "0.0f"))])
@@ -121,16 +140,25 @@
     (check-equal? (run-ns-ws-last (value-part disp)) disp
                   (format "float32 round-trip for ~a" orig))))
 
-(test-case "Rat display: terminating → decimal, non-terminating → fraction"
-  ;; 1/2 terminates → "0.5"; but note bare 0.5 is Posit32, so a Rat 0.5 arises
-  ;; from a Rat-typed expression. Use rat literals via `/`.
+(test-case "Rat displays as plain exact notation (fractions; N6c revert)"
   (let ([d13 (run-ns-ws-last "1/3")])
     (check-true (string-contains? d13 "Rat") (format "1/3 is Rat: ~a" d13))
-    (check-equal? (value-part d13) "1/3" "non-terminating rat prints as fraction"))
+    (check-equal? (value-part d13) "1/3"))
   (let ([d37 (run-ns-ws-last "3/7")])
     (check-true (string-contains? d37 "Rat") (format "3/7 is Rat: ~a" d37))
     (check-equal? (value-part d37) "3/7"))
-  ;; A terminating Rat prints as a decimal. 1/2 → "0.5".
+  ;; Terminating rationals also display as fractions post-N6c (a "0.5" display
+  ;; would re-read as Posit32; the fraction is the honest exact literal).
   (let ([d12 (run-ns-ws-last "1/2")])
     (check-true (string-contains? d12 "Rat") (format "1/2 is Rat: ~a" d12))
-    (check-equal? (value-part d12) "0.5" "terminating rat prints as decimal")))
+    (check-equal? (value-part d12) "1/2"))
+  ;; Integral Rat displays bare (re-reads as Int, which widens via Int <: Rat).
+  (let ([d1 (run-ns-ws-last "[+ 1/2 1/2]")])
+    (check-true (string-contains? d1 "Rat") (format "1/2+1/2 is Rat: ~a" d1))
+    (check-equal? (value-part d1) "1")))
+
+(test-case "~N input is rejected with a migration hint (N6c)"
+  (check-exn (regexp "approximate literals were removed")
+             (lambda () (run-ns-ws-last "~3.14")))
+  (check-exn (regexp "approximate literals were removed")
+             (lambda () (run-ns-ws-last "~42"))))

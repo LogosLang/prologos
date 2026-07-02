@@ -122,7 +122,7 @@ defn nat-double
 (the Int 0)
 ;; => 0 : Int
 
-;; TIP: Bare numbers are Int. Use 42N for Nat, 3/7 for Rat, ~3.14 for Posit.
+;; TIP: Bare numbers are Int. Use 42N for Nat, 3/7 for Rat; decimals (3.14) are Posit32.
 
 
 ;; --- Primitive Arithmetic ---
@@ -677,34 +677,34 @@ defn generic-double [add-d x]
 ;; The posit ↔ rational bridge is the key to understanding posit values.
 
 
-;; --- Decimal Posit Literals: ~3.14 ---
+;; --- Decimal Posit Literals: 3.14 ---
 ;;
-;; The ~ prefix creates approximate (Posit32) literals.
-;; With decimal syntax, you can write familiar constants:
+;; Bare decimal literals are approximate (Posit32) values (N6b).
+;; Familiar constants just work:
 
-~3.14
-;; => [posit32 1284463657] : Posit32  (π approximation)
+3.14
+;; => 3.14 : Posit32  (π approximation)
 
-~2.718
-;; => [posit32 1256143716] : Posit32  (e approximation)
+2.718
+;; => 2.718 : Posit32  (e approximation)
 
-~0.5
-;; => [posit32 939524096] : Posit32  (1/2 exactly)
+0.5
+;; => 0.5 : Posit32  (1/2 exactly)
 
 ;; Decimal syntax converts to exact rationals internally:
-;; ~3.14 → exact 157/50, then encoded as nearest Posit32.
+;; 3.14 → exact 157/50, then encoded as nearest Posit32.
 ;; This means no floating-point rounding during parsing!
 
 ;; Arithmetic with decimal posits:
-[p32+ ~1.5 ~2.5]
-;; => [posit32 1342177280] : Posit32  (4.0)
+[p32+ 1.5 2.5]
+;; => 4.0 : Posit32
 
-[p32* ~3.14 ~3.14]
-;; => [posit32 1507593919] : Posit32  (≈ 9.86, π²)
+[p32* 3.14 3.14]
+;; => 9.8596 : Posit32  (≈ π²)
 
 ;; Mix with integer/fraction posit literals:
-[p32+ ~42 ~0.5]
-;; => [posit32 1699741696] : Posit32  (42.5)
+[p32+ 42.0 0.5]
+;; => 42.5 : Posit32
 
 
 ;; ---- Trait instances for Posits ---
@@ -713,8 +713,8 @@ defn generic-double [add-d x]
 .{(posit8 64) + (posit8 64)}
 ;; => [posit8 72] : Posit8  (1.0 + 1.0 = 2.0)
 
-.{~3.14 * ~3.14}
-;; => [posit32 1507593919] : Posit32  (≈ 9.86, π²)
+.{3.14 * 3.14}
+;; => 9.8596 : Posit32  (≈ π²)
 
 
 ;; ────────────────────────────────────────────────────────────
@@ -1145,7 +1145,7 @@ as-posit
 ;;
 ;; Rat   3/7             .{x + y}, rat+, rat-, rat*, rat/
 ;;
-;; Posit ~3.14           .{x + y}, p{N}+, p{N}-, p{N}*, p{N}/
+;; Posit 3.14 / 2.5p8           .{x + y}, p{N}+, p{N}-, p{N}*, p{N}/
 ;;       (posit8 64)     (N = 8, 16, 32, 64)
 ;;
 ;; GENERIC:

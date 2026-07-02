@@ -212,7 +212,7 @@
 ;; Display
 ;; ========================================
 
-(test-case "posit8-display"
-  (check-equal? (posit8-display 0) "0" "display 0")
-  (check-equal? (posit8-display 128) "NaR" "display NaR")
-  (check-equal? (posit8-display #x40) "1" "display 1"))
+(test-case "posit8 shortest-decimal (N6c: legacy posit8-display retired)"
+  (check-equal? (posit-shortest-decimal 8 0) "0" "display 0")
+  (check-equal? (posit-shortest-decimal 8 128) "NaR" "display NaR")
+  (check-equal? (posit-shortest-decimal 8 #x40) "1" "display 1"))

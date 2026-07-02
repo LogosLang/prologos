@@ -141,10 +141,10 @@
 
 (test-case "posit-eq/trait-eq-posit32"
   (define result (run (string-append preamble
-    "(eval (Eq-eq? Posit32 Posit32--Eq--dict ~1 ~1))")))
+    "(eval (Eq-eq? Posit32 Posit32--Eq--dict 1.0 1.0))")))
   (check-contains result "true"))
 
 (test-case "posit-eq/trait-eq-posit32-false"
   (define result (run (string-append preamble
-    "(eval (Eq-eq? Posit32 Posit32--Eq--dict ~1 ~2))")))
+    "(eval (Eq-eq? Posit32 Posit32--Eq--dict 1.0 2.0))")))
   (check-contains result "false"))

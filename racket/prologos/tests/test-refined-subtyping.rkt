@@ -118,7 +118,7 @@
    (run-ns-last
     (string-append (rs-ns 'rs-b4)
      "(eval (rat+ (unsafe-pos-rat 1/2) 3/4))\n"))
-   "1.25 : Rat"))
+   "5/4 : Rat"))
 
 (test-case "refined-sub/negrat-in-rat-mul"
   (check-contains
