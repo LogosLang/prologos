@@ -238,3 +238,68 @@
   ;; the inner section wraps int* (concrete), not a generic op → plain error
   (check-true (string-contains? (rc 2) "Could not infer"))
   (check-false (string-contains? (rc 2) "issue #70")))
+
+;; ========================================
+;; E4 — prim-op eta-table extension to posit/float (M3, Q2 pin)
+;; ========================================
+;; Bare posit/float prim keywords in value position eta-expand (elaborator
+;; primitive-op-eta-table, +80 entries: 14 x 4 posit widths + 10 x 2 float
+;; widths + 4 cross-width conversions). Quire + p*-if-nar excluded (odd
+;; arities). The 4 float conversions are Float64-domained as VALUES (their
+;; keyword rules stay width-polymorphic); the 4 keywords also joined the E3
+;; sectionable whitelist — applied sections work for BOTH widths, but a
+;; conversion SECTION under map is #70-class (infer-and-test rules can't
+;; solve the hole meta; hint fires; real fix = #70-B at E5).
+
+(define results-e4
+  (ws-all
+   ;; bare posit values under HOFs (was: Unbound variable)
+   "eval [reduce p32+ 0.0 '[1.5 2.5]]"
+   "eval [map p32-neg '[1.0 2.0]]"
+   "eval [map p32-to-rat '[0.5 1.5]]"
+   ;; bare float values under HOFs
+   "eval [reduce f64* 1.0f64 '[2.0f64 3.0f64]]"
+   "eval [map f64-neg '[1.0f64 -2.0f64]]"
+   ;; first-class: def-bindable; comparison value returns Bool
+   "def padd4 := p32+"
+   "eval [padd4 1.0 2.0]"
+   "def plt4 := p32-lt"
+   "eval [plt4 1.0 2.0]"
+   ;; conversion VALUES over Float64 lists
+   "eval [map float-to-rat '[1.5f64 2.5f64]]"
+   ;; applied-position conversion SECTION: width-polymorphic (f32 arg)
+   "eval [[float-to-rat _] 1.5f32]"
+   ;; the Float32-under-map workaround: annotated lambda
+   "eval [map [fn [x : Float32] [float-to-rat x]] '[1.5f32]]"
+   ;; KNOWN LIMITATION (#70-class): conversion section under map → hint
+   "eval [map [float-to-rat _] '[1.5f64]]"
+   ;; non-regression: pre-E4 eta entry
+   "eval [reduce int+ 0 '[1 2 3]]"))
+
+(define (r4 i) (format "~a" (list-ref results-e4 i)))
+
+(test-case "e4/posit-values-under-hofs"
+  (check-equal? (r4 0) "4.0 : Posit32")
+  (check-equal? (r4 1) "'[-1.0 -2.0] : [prologos::data::list::List Posit32]")
+  (check-equal? (r4 2) "'[1/2 3/2] : [prologos::data::list::List Rat]"))
+
+(test-case "e4/float-values-under-hofs"
+  (check-equal? (r4 3) "6.0f : Float64")
+  (check-equal? (r4 4) "'[-1.0f 2.0f] : [prologos::data::list::List Float64]"))
+
+(test-case "e4/def-bindable-and-comparison-bool"
+  (check-equal? (r4 6) "3.0 : Posit32")
+  (check-true (string-contains? (r4 7) "Posit32 Posit32 -> Bool"))
+  (check-equal? (r4 8) "true : Bool"))
+
+(test-case "e4/conversion-values-and-sections"
+  (check-equal? (r4 9) "'[3/2 5/2] : [prologos::data::list::List Rat]")
+  (check-equal? (r4 10) "3/2 : Rat")          ;; applied section, f32 arg
+  (check-equal? (r4 11) "'[3/2] : [prologos::data::list::List Rat]"))
+
+(test-case "e4/conversion-section-under-map-is-70-class-with-hint"
+  (check-true (string-contains? (r4 12) "Could not infer type"))
+  (check-true (string-contains? (r4 12) "issue #70")))
+
+(test-case "e4/pre-e4-eta-non-regression"
+  (check-equal? (r4 13) "6 : Int"))

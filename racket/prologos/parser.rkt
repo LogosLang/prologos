@@ -622,7 +622,14 @@
                         rat-lt rat-le rat-eq rat-numer rat-denom
                         + - * / lt le gt ge eq mod negate abs
                         from-integer from-rational from-nat from-int
-                        suc pair fst snd not map-get map-assoc)
+                        suc pair fst snd not map-get map-assoc
+                        ;; N6e-E4: cross-width float conversions — the SECTION
+                        ;; form is the width-polymorphic complement to the
+                        ;; Float64-domained eta values (a section's hole domain
+                        ;; defers to the container; the keyword rule accepts
+                        ;; Float32 OR Float64).
+                        float-finite? float-to-rat float-to-int
+                        float-to-float32)
                       (for*/list ([w (in-list '("p8" "p16" "p32" "p64"))]
                                   [op (in-list '("+" "-" "*" "/" "-neg" "-abs"
                                                  "-sqrt" "-lt" "-le" "-eq"

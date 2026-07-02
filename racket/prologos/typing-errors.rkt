@@ -60,7 +60,12 @@
       (expr-generic-div? x) (expr-generic-mod? x)
       (expr-generic-lt? x) (expr-generic-le? x) (expr-generic-gt? x)
       (expr-generic-ge? x) (expr-generic-eq? x)
-      (expr-generic-negate? x) (expr-generic-abs? x)))
+      (expr-generic-negate? x) (expr-generic-abs? x)
+      ;; N6e-E4: the cross-width float conversions are the same #70 class —
+      ;; their rules INFER-and-test the operand (float-type?), so they can't
+      ;; solve a hole-lambda's meta either (unlike check-mode rules like int*).
+      (expr-float-finite? x) (expr-float-to-rat? x)
+      (expr-float-to-int? x) (expr-float-to-float32? x)))
 
 ;; Immediate sub-exprs of a transparent expr struct (also recursing into list /
 ;; pair fields). Non-expr fields ignored; an exotic container just yields no

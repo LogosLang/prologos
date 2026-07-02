@@ -874,7 +874,111 @@
    ;; Rat conversions
    'from-int  (lambda () (eta-unary  (expr-Int) expr-from-int))
    'rat-numer (lambda () (eta-unary  (expr-Rat) expr-rat-numer))
-   'rat-denom (lambda () (eta-unary  (expr-Rat) expr-rat-denom))))
+   'rat-denom (lambda () (eta-unary  (expr-Rat) expr-rat-denom))
+
+   ;; ---- Numerics N6e-E4 (Q2 pin): posit + float families ----
+   ;; Same shapes as the int/rat entries: arithmetic/comparisons take the
+   ;; width's type as both operand domains (comparisons return Bool via the
+   ;; node's typing rule); conversions take their ARGUMENT type as domain
+   ;; (the from-nat / rat-numer precedent). Exclusions per the E4 pin:
+   ;; quire ops (nullary/odd arities) + p*-if-nar (arity-4 type-param shape).
+
+   ;; Posit8: arithmetic Posit8 -> Posit8 -> Posit8; comparisons -> Bool
+   'p8+          (lambda () (eta-binary (expr-Posit8) expr-p8-add))
+   'p8-          (lambda () (eta-binary (expr-Posit8) expr-p8-sub))
+   'p8*          (lambda () (eta-binary (expr-Posit8) expr-p8-mul))
+   'p8/          (lambda () (eta-binary (expr-Posit8) expr-p8-div))
+   'p8-neg       (lambda () (eta-unary  (expr-Posit8) expr-p8-neg))
+   'p8-abs       (lambda () (eta-unary  (expr-Posit8) expr-p8-abs))
+   'p8-sqrt      (lambda () (eta-unary  (expr-Posit8) expr-p8-sqrt))
+   'p8-lt        (lambda () (eta-binary (expr-Posit8) expr-p8-lt))
+   'p8-le        (lambda () (eta-binary (expr-Posit8) expr-p8-le))
+   'p8-eq        (lambda () (eta-binary (expr-Posit8) expr-p8-eq))
+   'p8-from-nat  (lambda () (eta-unary  (expr-Nat)    expr-p8-from-nat))
+   'p8-to-rat    (lambda () (eta-unary  (expr-Posit8) expr-p8-to-rat))
+   'p8-from-rat  (lambda () (eta-unary  (expr-Rat)    expr-p8-from-rat))
+   'p8-from-int  (lambda () (eta-unary  (expr-Int)    expr-p8-from-int))
+
+   ;; Posit16
+   'p16+         (lambda () (eta-binary (expr-Posit16) expr-p16-add))
+   'p16-         (lambda () (eta-binary (expr-Posit16) expr-p16-sub))
+   'p16*         (lambda () (eta-binary (expr-Posit16) expr-p16-mul))
+   'p16/         (lambda () (eta-binary (expr-Posit16) expr-p16-div))
+   'p16-neg      (lambda () (eta-unary  (expr-Posit16) expr-p16-neg))
+   'p16-abs      (lambda () (eta-unary  (expr-Posit16) expr-p16-abs))
+   'p16-sqrt     (lambda () (eta-unary  (expr-Posit16) expr-p16-sqrt))
+   'p16-lt       (lambda () (eta-binary (expr-Posit16) expr-p16-lt))
+   'p16-le       (lambda () (eta-binary (expr-Posit16) expr-p16-le))
+   'p16-eq       (lambda () (eta-binary (expr-Posit16) expr-p16-eq))
+   'p16-from-nat (lambda () (eta-unary  (expr-Nat)     expr-p16-from-nat))
+   'p16-to-rat   (lambda () (eta-unary  (expr-Posit16) expr-p16-to-rat))
+   'p16-from-rat (lambda () (eta-unary  (expr-Rat)     expr-p16-from-rat))
+   'p16-from-int (lambda () (eta-unary  (expr-Int)     expr-p16-from-int))
+
+   ;; Posit32
+   'p32+         (lambda () (eta-binary (expr-Posit32) expr-p32-add))
+   'p32-         (lambda () (eta-binary (expr-Posit32) expr-p32-sub))
+   'p32*         (lambda () (eta-binary (expr-Posit32) expr-p32-mul))
+   'p32/         (lambda () (eta-binary (expr-Posit32) expr-p32-div))
+   'p32-neg      (lambda () (eta-unary  (expr-Posit32) expr-p32-neg))
+   'p32-abs      (lambda () (eta-unary  (expr-Posit32) expr-p32-abs))
+   'p32-sqrt     (lambda () (eta-unary  (expr-Posit32) expr-p32-sqrt))
+   'p32-lt       (lambda () (eta-binary (expr-Posit32) expr-p32-lt))
+   'p32-le       (lambda () (eta-binary (expr-Posit32) expr-p32-le))
+   'p32-eq       (lambda () (eta-binary (expr-Posit32) expr-p32-eq))
+   'p32-from-nat (lambda () (eta-unary  (expr-Nat)     expr-p32-from-nat))
+   'p32-to-rat   (lambda () (eta-unary  (expr-Posit32) expr-p32-to-rat))
+   'p32-from-rat (lambda () (eta-unary  (expr-Rat)     expr-p32-from-rat))
+   'p32-from-int (lambda () (eta-unary  (expr-Int)     expr-p32-from-int))
+
+   ;; Posit64
+   'p64+         (lambda () (eta-binary (expr-Posit64) expr-p64-add))
+   'p64-         (lambda () (eta-binary (expr-Posit64) expr-p64-sub))
+   'p64*         (lambda () (eta-binary (expr-Posit64) expr-p64-mul))
+   'p64/         (lambda () (eta-binary (expr-Posit64) expr-p64-div))
+   'p64-neg      (lambda () (eta-unary  (expr-Posit64) expr-p64-neg))
+   'p64-abs      (lambda () (eta-unary  (expr-Posit64) expr-p64-abs))
+   'p64-sqrt     (lambda () (eta-unary  (expr-Posit64) expr-p64-sqrt))
+   'p64-lt       (lambda () (eta-binary (expr-Posit64) expr-p64-lt))
+   'p64-le       (lambda () (eta-binary (expr-Posit64) expr-p64-le))
+   'p64-eq       (lambda () (eta-binary (expr-Posit64) expr-p64-eq))
+   'p64-from-nat (lambda () (eta-unary  (expr-Nat)     expr-p64-from-nat))
+   'p64-to-rat   (lambda () (eta-unary  (expr-Posit64) expr-p64-to-rat))
+   'p64-from-rat (lambda () (eta-unary  (expr-Rat)     expr-p64-from-rat))
+   'p64-from-int (lambda () (eta-unary  (expr-Int)     expr-p64-from-int))
+
+   ;; Float32
+   'f32+         (lambda () (eta-binary (expr-Float32) expr-f32-add))
+   'f32-         (lambda () (eta-binary (expr-Float32) expr-f32-sub))
+   'f32*         (lambda () (eta-binary (expr-Float32) expr-f32-mul))
+   'f32/         (lambda () (eta-binary (expr-Float32) expr-f32-div))
+   'f32-neg      (lambda () (eta-unary  (expr-Float32) expr-f32-neg))
+   'f32-abs      (lambda () (eta-unary  (expr-Float32) expr-f32-abs))
+   'f32-sqrt     (lambda () (eta-unary  (expr-Float32) expr-f32-sqrt))
+   'f32-lt       (lambda () (eta-binary (expr-Float32) expr-f32-lt))
+   'f32-le       (lambda () (eta-binary (expr-Float32) expr-f32-le))
+   'f32-eq       (lambda () (eta-binary (expr-Float32) expr-f32-eq))
+
+   ;; Float64
+   'f64+         (lambda () (eta-binary (expr-Float64) expr-f64-add))
+   'f64-         (lambda () (eta-binary (expr-Float64) expr-f64-sub))
+   'f64*         (lambda () (eta-binary (expr-Float64) expr-f64-mul))
+   'f64/         (lambda () (eta-binary (expr-Float64) expr-f64-div))
+   'f64-neg      (lambda () (eta-unary  (expr-Float64) expr-f64-neg))
+   'f64-abs      (lambda () (eta-unary  (expr-Float64) expr-f64-abs))
+   'f64-sqrt     (lambda () (eta-unary  (expr-Float64) expr-f64-sqrt))
+   'f64-lt       (lambda () (eta-binary (expr-Float64) expr-f64-lt))
+   'f64-le       (lambda () (eta-binary (expr-Float64) expr-f64-le))
+   'f64-eq       (lambda () (eta-binary (expr-Float64) expr-f64-eq))
+
+   ;; Cross-width Float conversions (N3e-rest keywords). Their TYPING rules are
+   ;; width-polymorphic (float-type?, Float32 OR Float64), but eta needs one
+   ;; concrete domain: Float64 (the wider) — Float32 arguments subsume via the
+   ;; registered Float32<:Float64 widening (value-exact, NaN/Inf-preserving).
+   'float-finite?    (lambda () (eta-unary (expr-Float64) expr-float-finite))
+   'float-to-rat     (lambda () (eta-unary (expr-Float64) expr-float-to-rat))
+   'float-to-int     (lambda () (eta-unary (expr-Float64) expr-float-to-int))
+   'float-to-float32 (lambda () (eta-unary (expr-Float64) expr-float-to-float32))))
 
 ;; Look up a primitive-op name and return the eta-expanded expr-lam, or #f.
 ;; Called from elaborate-var as a final fallback before "Unbound variable".
