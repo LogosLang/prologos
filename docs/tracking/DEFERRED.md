@@ -21,24 +21,28 @@ Four items deferred from the auto-derive design (Numerics design doc §9d D-N6.5
 grounding-audit 2026-07-02 at HEAD `c8a425f7`). The derive ships with a
 skip+warn policy; these lift the skips / harden the substrate.
 
-### 1. Lift the `add`/`sub`/`mult` derive skips (arithmetic-name remediation)
+### 1. Lift the `add`/`sub`/`join`/`reduce` derive skips (spec-clobber remediation)
 
-- **What**: the derive skips `add`/`sub`/`mult` because (a) `arithmetic.prologos:3`
-  refers nat's `add sub mult` unqualified and the `impl Add Nat` body is bare
-  `add x y` (`:25-27`) — a derived own-module `add` would CAPTURE it (own-ns
-  resolution beats where-context AND imports, `elaborator.rkt:702-718`) making
-  the Nat instance self-referential; (b) nat's concrete `spec add Nat Nat -> Nat`
-  and a derived generic `spec add {A} … where (Add A)` clobber in the bare-name
-  spec store (see item 2).
-- **Remediation**: qualify the nat calls in the impl bodies (`nat::add x y` or
-  rename the refers), then resolve the spec collision (rename nat's Peano fns,
-  or de-export their specs, or fix item 2 first), then remove the three names
-  from the derive skip-list. Migration touches Nat-heavy tests.
-- **Value**: `add`/`sub`/`mult` as first-class generic values. Low urgency —
-  generic `+ - *` keywords cover bare-call ergonomics; first-class use hits the
-  N6e inference wall regardless.
+- **Scope narrowed 2026-07-02**: the N6d-i derive shipped an elaborator
+  resolution reorder (`elaborator.rkt`: where-context arm moved BEFORE the
+  own-namespace arm) that STRUCTURALLY fixes the *capture* class — a bare
+  trait-method call inside a `where`-constrained body (e.g. `[leq x y]` in
+  `impl Lattice (Map K V) where (Lattice V)`, `[narrow x y]` in propagator) now
+  resolves via the where-dict, not a same-named derived wrapper, restoring the
+  pre-derive behavior for ALL methods. So capture is NO LONGER a reason to skip.
+- **The remaining skip reason = spec-CLOBBER only** (issue #66): the derive
+  skips `add`/`sub`/`join`/`reduce` because each collides with an existing
+  NON-trait top-level def+spec of the same name — nat's `add`/`sub` (`impl Add
+  Nat` body calls the *imported* nat `add`, an unconstrained context the reorder
+  doesn't touch) + their concrete `spec add Nat Nat -> Nat`; string-ops `join`;
+  list `reduce`. A derived generic `spec add {A} … where (Add A)` overwrites the
+  concrete spec in the bare-name spec store → wrong implicit-arg counts.
+- **Remediation**: fix the bare-name spec-store clobber (issue #66 — FQN-keyed
+  or module-scoped specs), then the skips lift cleanly. Low urgency (generic
+  `+ - *` keywords cover bare-call ergonomics; `mul`/`eq?`/`compare`/`neg`/`abs`
+  already derive first-class fine).
 
-### 2. Spec-store bare-name keying — silent clobber (structural defect)
+### 2. Spec-store bare-name keying — silent clobber (structural defect) [issue #66]
 
 - **What**: the spec registry keys by BARE symbol with silent last-write-wins:
   `register-spec!` (`macros.rkt:480-482`), import spec-propagation
@@ -68,7 +72,7 @@ skip+warn policy; these lift the skips / harden the substrate.
   (whose names additionally collide with hard arity-2 parser keywords —
   `parser.rkt:1961-1974` — so they may want distinct wrapper names regardless).
 
-### 4. Registry silent-overwrite: no duplicate-binding diagnostics
+### 4. Registry silent-overwrite: no duplicate-binding diagnostics [issue #67]
 
 - **What**: every collision surface found by the N6d-i audit fails SILENTLY —
   trait registry (`macros.rkt:6228-6231`), spec store, import shadowing
