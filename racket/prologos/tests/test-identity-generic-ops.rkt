@@ -163,9 +163,11 @@
 (test-case "identity/sum-type"
   ;; sum : Pi(A:0 Type) (A -> A -> A) -> A -> List A -> A
   ;; (Add A = A->A->A inlined, AdditiveIdentity A = A inlined)
+  ;; N6e E1: bare `sum` auto-instantiates (type + both dict holes inserted) —
+  ;; the first-class value [List ?A] -> ?A, not the raw Pi.
   (define result (run-ns-last (string-append preamble
     "(infer sum)")))
-  (check-contains result "Pi")
+  (check-contains result "->")
   (check-contains result "List"))
 
 ;; ========================================
@@ -190,9 +192,10 @@
 (test-case "identity/product-type"
   ;; product : Pi(A:0 Type) (A -> A -> A) -> A -> List A -> A
   ;; (Mul A = A->A->A inlined, MultiplicativeIdentity A = A inlined)
+  ;; N6e E1: instantiated value [List ?A] -> ?A (see sum-type note).
   (define result (run-ns-last (string-append preamble
     "(infer product)")))
-  (check-contains result "Pi")
+  (check-contains result "->")
   (check-contains result "List"))
 
 ;; ========================================

@@ -531,21 +531,41 @@
 
 ;; Auto-apply holes for a bare variable whose type has ALL m0 parameters.
 ;; e.g., nil : Pi(A :0 Type 0, List A) → (app (fvar nil) hole)
-;; Only applies when ALL Pi binders are m0 (fully implicit).
-;; For mixed types (like cons : Pi(A :0 Type 0, A -> List A -> List A)),
-;; we don't auto-apply — the user must use application syntax.
+;; Applies when ALL Pi binders are m0 (fully implicit).
+;; N6e E1: ALSO applies to the implicit PREFIX of a where-constrained name —
+;; leading m0 type binders + their mw dict binders (counted via the spec's
+;; where-constraints, same as the application path's implicit-param-count) —
+;; provided explicit params remain (the result is a function value). This is
+;; what makes derived trait methods / to-X / any where-constrained fn honest
+;; first-class values in argument position ([map abs xs], [map to-float64 xs]):
+;; previously the all-m0 gate left them as raw fvars whose erased type binders
+;; consumed the HOF's arguments (silent garbage).
+;; Pure-m0-mixed names WITHOUT where-constraints (like cons : Pi(A :0, A -> …))
+;; stay un-applied — the long-standing decision; use application syntax/sections.
 (define (maybe-auto-apply-implicits fvar-expr resolved-name loc env depth)
   (define ftype (global-env-lookup-type resolved-name))
   (if ftype
       (let ([mults (collect-pi-mults ftype)])
-        (if (and (not (null? mults))
-                 (andmap (lambda (m) (eq? m 'm0)) mults))
-            ;; All params are implicit → auto-apply with Pi-chain-walking tagging
-            (insert-implicits-with-tagging fvar-expr ftype (length mults)
-                                           resolved-name loc env
-                                           #:depth depth
-                                           #:default-kind 'implicit)
-            fvar-expr))
+        (cond
+          [(and (not (null? mults))
+                (andmap (lambda (m) (eq? m 'm0)) mults))
+           ;; All params are implicit → auto-apply with Pi-chain-walking tagging
+           (insert-implicits-with-tagging fvar-expr ftype (length mults)
+                                          resolved-name loc env
+                                          #:depth depth
+                                          #:default-kind 'implicit)]
+          [(not (null? mults))
+           ;; N6e E1: where-constrained prefix instantiation.
+           (let ([n-imp (implicit-param-count ftype resolved-name)]
+                 [n-m0 (leading-m0-count mults)])
+             (if (and (> n-imp n-m0)              ;; has where-constraint dicts
+                      (< n-imp (length mults)))   ;; explicit params remain → fn value
+                 (insert-implicits-with-tagging fvar-expr ftype n-imp
+                                                resolved-name loc env
+                                                #:depth depth
+                                                #:default-kind 'implicit)
+                 fvar-expr))]
+          [else fvar-expr]))
       fvar-expr))
 
 ;; Given a function's global type and the number of user-supplied args,

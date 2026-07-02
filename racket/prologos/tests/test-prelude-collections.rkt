@@ -144,13 +144,14 @@
 ;; ========================================
 
 (test-case "prelude/sum-accessible"
+  ;; N6e E1: bare `sum` is the instantiated value [List ?A] -> ?A (not raw Pi).
   (define result (run-ns-last (string-append preamble "(infer sum)")))
-  (check-contains result "Pi")
+  (check-contains result "->")
   (check-contains result "List"))
 
 (test-case "prelude/product-accessible"
   (define result (run-ns-last (string-append preamble "(infer product)")))
-  (check-contains result "Pi")
+  (check-contains result "->")
   (check-contains result "List"))
 
 (test-case "prelude/int-range-accessible"

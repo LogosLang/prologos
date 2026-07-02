@@ -120,12 +120,14 @@
 ;; ========================================
 
 (test-case "generic-arith-fc/infer-plus"
-  ;; Type is Pi over A, then dict : A->A->A, then A->A->A
-  ;; The constraint (Add A) becomes inline: dict param has type (A A -> A)
+  ;; N6e E1: a bare where-constrained name auto-instantiates (m0 type holes +
+  ;; mw dict holes) — bare `plus` is now a first-class FUNCTION VALUE
+  ;; (?A ?A -> ?A with the Add dict resolved from context), no longer the raw
+  ;; polymorphic Pi. Same contract all-m0 names (nil) have always had.
   (define r (run-ns-last (string-append preamble "(infer plus)")))
-  ;; Should be a Pi type with arrow structure
-  (check-contains r "Pi"))
+  (check-contains r "->"))
 
 (test-case "generic-arith-fc/infer-negate-fn"
+  ;; N6e E1: instantiated function value (?A -> ?A), not the raw Pi.
   (define r (run-ns-last (string-append preamble "(infer negate-fn)")))
-  (check-contains r "Pi"))
+  (check-contains r "->"))

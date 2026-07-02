@@ -138,11 +138,13 @@
 
 
 (test-case "eq/eq-neq-type-check"
-  ;; eq-neq : Pi(A :0 Type 0). (Eq A) -> A -> A -> Bool
-  ;; After deftype expansion: (-> A (-> A Bool)) is Eq A
-  (check-equal?
-   (last (run-ns "(ns eq8)\n(imports [prologos::core::eq :refer [eq-neq]])\n(check eq-neq : (Pi (A :0 (Type 0)) (-> (-> A (-> A Bool)) (-> A (-> A Bool)))))"))
-   "OK"))
+  ;; N6e E1: bare `eq-neq` auto-instantiates (type + Eq-dict holes), so the raw
+  ;; polymorphic Pi is no longer ascribable to a bare reference (the all-m0 nil
+  ;; precedent). Assert the instantiated value shape instead.
+  (check-true
+   (string-contains?
+    (format "~a" (last (run-ns "(ns eq8)\n(imports [prologos::core::eq :refer [eq-neq]])\n(infer eq-neq)")))
+    "Bool")))
 
 
 ;; ========================================

@@ -131,11 +131,13 @@
 
 
 (test-case "c1/functor-type-check"
-  ;; list-functor : Functor List
+  ;; list-functor : Functor List. N6e E1: the bare reference auto-instantiates
+  ;; (implicit holes inserted) so the raw polymorphic dict type is no longer
+  ;; ascribable to a bare name; assert the instantiated functor-value shape.
   (define result
     (run-last
-     "(check list-functor : (Functor List))"))
-  (check-equal? result "OK"))
+     "(infer list-functor)"))
+  (check-true (string-contains? (format "~a" result) "List")))
 
 
 ;; ========================================
