@@ -1582,9 +1582,30 @@
            net  ;; all usages compatible — no warnings
            (that-write net tm-cid expr-pos ':warnings violations))])))
 
+;; N6a: enumerate an expr's subterms as an eq-set, for scoping the
+;; post-quiescence warning harvest to the current command's tree.
+;; GENERIC transparent-struct walk — deliberately shape-agnostic: no
+;; per-node-kind exhaustiveness obligation (the pipeline.md trap), and a
+;; superset is harmless since the set is used only for membership
+;; filtering of attr-map positions (which are exactly expr objects).
+(define (expr-subterm-seteq root)
+  (define seen (mutable-seteq))
+  (let loop ([v root])
+    (cond
+      [(and (struct? v) (not (set-member? seen v)))
+       (set-add! seen v)
+       (define vec (struct->vector v))
+       (for ([i (in-range 1 (vector-length vec))])
+         (loop (vector-ref vec i)))]
+      [(pair? v) (loop (car v)) (loop (cdr v))]
+      [else (void)]))
+  seen)
+
 ;; Warning-collection propagator: reads all :warnings facets from
 ;; the attribute map and writes the collected set to an output cell.
 ;; Fires at S2 after all warning producers have written.
+;; N6a: RETIRED from production (infer-on-network now does a scoped
+;; post-quiescence read); kept exported for tests (test-meta-feedback).
 (define (make-warning-collection-fire-fn tm-cid output-cid)
   (lambda (net)
     (define tm (net-cell-read net tm-cid))
@@ -2957,29 +2978,22 @@
       [else
        (define-values (n c) (net-new-cell pnet (hasheq) attribute-map-merge-fn))
        (values n c #f)]))
-  ;; 2. Create per-command output cells (meta solutions + warnings)
+  ;; 2. Create per-command output cell (meta solutions).
+  ;; N6a (warning-accumulation fix): the per-command warning-output cell +
+  ;; its whole-map fire-once collection propagator are RETIRED. The old
+  ;; collection fire folded over EVERY position in the attribute map — on
+  ;; the PERSISTENT attr-map this harvested :warnings facets deposited by
+  ;; ALL prior commands (facet values persist by design; P3 clears
+  ;; dependents only), re-attaching stale warnings to every later result.
+  ;; Its firing round was also expression-shape-dependent (own-facet
+  ;; harvest sometimes landed one command late). Warnings are now read
+  ;; directly post-quiescence, scoped to the current command's expr tree
+  ;; (step 5 below). make-warning-collection-fire-fn stays exported (tests).
   (define-values (net1 output-cid)
     (net-new-cell net0 '() meta-solution-merge))
-  (define-values (net1b warning-output-cid)
-    (net-new-cell net1 '() merge-list-append))
   ;; 3. Install ALL attribute propagators (typing + constraints + usage + meta-bridge)
   (parameterize ([current-meta-solution-output-cell-id output-cid])
-    (define net2 (install-typing-network net1b tm-cid expr ctx-val))
-    ;; Phase 7: Install warning-collection propagator (S2, P2 fire-once).
-    ;; Reads all :warnings facets, writes to warning output cell.
-    ;; PPN 4C Phase 3e: genuine whole-cell read — the collection fire iterates
-    ;; every position's :warnings facet. Declared as (cons tm-cid #f) per the
-    ;; propagator.rkt filter convention — explicit whole-cell watch, passes
-    ;; Phase 1f structural enforcement. Design question per §6.15.5: could this
-    ;; be split into per-position warning-emitters? The warning-collection
-    ;; aggregates multi-position findings at elaboration close (S2 stratum),
-    ;; so component-paths per known-positions list isn't natural — new
-    ;; warning positions are emitted dynamically during elaboration. Accepted
-    ;; as whole-cell read.
-    (define-values (net2w _w-pid)
-      (net-add-fire-once-propagator net2 (list tm-cid) (list warning-output-cid)
-        (make-warning-collection-fire-fn tm-cid warning-output-cid) tm-cid
-        #:component-paths (list (cons tm-cid #f))))
+    (define net2w (install-typing-network net1 tm-cid expr ctx-val))
     ;; 4. Run to quiescence with fuel limit (save/restore for main network)
     ;; D.4 1C-iv-a (§10.0.6 D-1C-iii-5 retirement obligation; D-1C-iv-2 mitigation):
     ;; migrated from struct-copy substitution to cell-API. Pre-migration: writes
@@ -3002,16 +3016,29 @@
     ;; 5. Read results
     (define root-type (type-map-read net3-restored tm-cid expr))
     (define meta-solutions (net-cell-read net3-restored output-cid))
-    (define warnings (net-cell-read net3-restored warning-output-cid))
+    ;; N6a: scoped post-quiescence warning harvest — read the attr-map ONCE
+    ;; and extract :warnings facets ONLY at positions belonging to the
+    ;; current command's expr tree. Deterministic (post-fixpoint cell read),
+    ;; immune to stale facets from prior commands / module loads.
+    (define warnings
+      (let ([tm (net-cell-read net3-restored tm-cid)])
+        (if (not (hash? tm))
+            '()
+            (let ([scope (expr-subterm-seteq expr)])
+              (for/fold ([acc '()])
+                        ([(pos record) (in-hash tm)])
+                (if (and (set-member? scope pos) (hash? record))
+                    (let ([ws (hash-ref record ':warnings '())])
+                      (if (null? ws) acc (append acc ws)))
+                    acc))))))
     ;; 6. P3 cleanup: clear dependents from all cells.
     (define net4 (net-clear-dependents net3-restored tm-cid))
     (define net5 (net-clear-dependents net4 output-cid))
-    (define net6 (net-clear-dependents net5 warning-output-cid))
     ;; 7. Rebox the persistent network if we used it.
     (when use-persistent?
-      (set-box! prn-box net6))
+      (set-box! prn-box net5))
     ;; Return: cleaned network, root type, meta solutions, warnings
-    (values (if use-persistent? pnet net6) root-type meta-solutions warnings)))
+    (values (if use-persistent? pnet net5) root-type meta-solutions warnings)))
 
 ;; ============================================================
 ;; Production Entry Point: infer-on-network/err
@@ -3049,10 +3076,6 @@
        (define solution (cdr pair))
        (unless (meta-solved? meta-id)
          (solve-meta! meta-id solution)))
-     ;; Bridge on-network warnings to imperative warning parameters (SCAFFOLDING)
-     (for ([w (in-list warnings)])
-       (when (and (list? w) (pair? w) (eq? (car w) 'coercion-warning))
-         (emit-coercion-warning! (cadr w) (caddr w))))
      ;; Parametric trait resolution bridge (SCAFFOLDING)
      ;; Resolves parametric constraints (Seqable, Foldable, Reducible) where
      ;; monomorphic on-network resolution succeeded for type-args but the
@@ -3082,6 +3105,14 @@
         (set-box! on-network-fallback-count (add1 (unbox on-network-fallback-count)))
         (inference-failed-error loc "on-network: unsolved dict" (pp-expr expr names))]
        [else
+        ;; N6a (double-emission guard): bridge on-network warnings to the
+        ;; imperative warning parameters (SCAFFOLDING) ONLY on success — on
+        ;; any fallback branch above, the driver re-runs the imperative
+        ;; infer/err, whose numeric-join/warn! emits its own coercion
+        ;; warnings; bridging here too would emit the same coercion twice.
+        (for ([w (in-list warnings)])
+          (when (and (list? w) (pair? w) (eq? (car w) 'coercion-warning))
+            (emit-coercion-warning! (cadr w) (caddr w))))
         (set-box! on-network-success-count (add1 (unbox on-network-success-count)))
         root-type])]))
 
