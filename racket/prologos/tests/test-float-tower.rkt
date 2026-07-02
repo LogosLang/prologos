@@ -59,9 +59,9 @@
   ;; Int+Float32 PRESERVES Float32 width (not a clamp); value+type via ws-val
   (check-equal? (ws-val "[+ 1 2.0f32]") "3f32 : Float32" "Int+Float32 preserves width")
   (check-equal? (ws-val "[+ 1 2.0f64]") "3.0f : Float64" "Int+Float64 widens to Float64")
-  ;; exact→Float emits a loss-of-exactness warning (symmetry with exact→Posit)
-  (check-true (string-contains? (ws-full "[+ 1 2.0f32]") "loss of exactness")
-              "Int+Float32 warns (exact→approximate)")
+  ;; N6a values-only policy: a bare exact LITERAL operand does not warn
+  (check-false (string-contains? (ws-full "[+ 1 2.0f32]") "loss of exactness")
+               "Int literal + Float32 is silent (values-only policy)")
   ;; isolation: a pure-Float op after an exact+Float op must NOT carry a leaked warning
   (check-false (string-contains? (ws-full "[+ 1.0f32 2.0f32]") "loss of exactness")
                "Float+Float emits no warning; no leak from the prior command"))

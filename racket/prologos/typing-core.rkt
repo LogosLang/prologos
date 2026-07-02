@@ -43,6 +43,7 @@
          concrete-numeric-type? divisible-numeric-type? negatable-numeric-type?
          from-int-target-type? from-rat-target-type? num-lit-representable?
          numeric-join exact-numeric-type? posit-type?
+         numeric-type-name bare-exact-literal?  ;; N6a: warning policy + text normalization
          base-numeric-type refine-arith refine-arith1
          ;; Schema type helpers
          schema-field-type->expr
@@ -277,13 +278,32 @@
     [(expr-Float32? t) "Float32"] [(expr-Float64? t) "Float64"]
     [else "?"]))
 
+;; N6a values-only warning policy (D-N6.4c): a bare exact LITERAL operand
+;; never triggers a coercion warning — a literal's exactness is not user
+;; intent (the polymorphic-literal default just happens to be exact); only
+;; a runtime VALUE of exact type flowing into an approximate type warns.
+;; Scope: bare literal nodes at typing time (pre-zonk); an ASCRIBED literal
+;; like (the Rat 3.13) is an explicit exactness assertion and still warns.
+(define (bare-exact-literal? e)
+  (or (expr-num-lit? e) (expr-int? e) (expr-rat? e)
+      (expr-nat-val? e)  ;; 3N → O(1) native natural literal
+      ;; Hand-written Peano numerals: ground suc-chains ending in zero.
+      ;; (suc n) with a variable inside is a VALUE, not a literal — still warns.
+      (let loop ([v e])
+        (cond [(expr-zero? v) #t]
+              [(expr-suc? v) (loop (expr-suc-pred v))]
+              [else #f]))))
+
 ;; numeric-join with coercion warning: emit when an EXACT operand is coerced into
 ;; an APPROXIMATE result (Posit OR Float). Single source of truth for the imperative
 ;; path — matches the on-network coercion detector (typing-propagators
 ;; make-coercion-detection-fire-fn), which already warns on exact↔approximate.
 ;; exact→Float warns by symmetry with exact→Posit: Float is 'approximate (loses
 ;; exactness) just like Posit.
-(define (numeric-join/warn! t1 t2)
+;; N6a: optional operand exprs (a b, aligned with t1 t2) enable the values-only
+;; policy — when the exact-side operand is a bare literal, the warning is
+;; suppressed. Callers that don't pass operands keep the old always-warn behavior.
+(define (numeric-join/warn! t1 t2 [a #f] [b #f])
   (define j (numeric-join t1 t2))
   (when (and j (not (equal? t1 t2)))
     (define t1-exact? (exact-numeric-type? t1))
@@ -294,7 +314,9 @@
     (when (or (and t1-exact? t2-approx?)
               (and t2-exact? t1-approx?))
       (define exact-t (cond [t1-exact? t1] [t2-exact? t2] [else #f]))
-      (when exact-t
+      (define exact-operand (cond [t1-exact? a] [t2-exact? b] [else #f]))
+      (when (and exact-t
+                 (not (and exact-operand (bare-exact-literal? exact-operand))))
         (emit-coercion-warning! (numeric-type-name exact-t)
                                 (numeric-type-name j)))))
   j)
@@ -869,45 +891,45 @@
     ;; Binary arithmetic: T1 -> T2 -> join(T1,T2) (coercion via numeric-join)
     [(expr-generic-add a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
-            [j (numeric-join/warn! ta tb)])
+            [j (numeric-join/warn! ta tb a b)])
        (if j (refine-arith ta tb j sign-transfer-add) (expr-error)))]
     [(expr-generic-sub a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
-            [j (numeric-join/warn! ta tb)])
+            [j (numeric-join/warn! ta tb a b)])
        (if j (refine-arith ta tb j sign-transfer-sub) (expr-error)))]
     [(expr-generic-mul a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
-            [j (numeric-join/warn! ta tb)])
+            [j (numeric-join/warn! ta tb a b)])
        (if j (refine-arith ta tb j sign-transfer-mul) (expr-error)))]
     [(expr-generic-div a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
-            [j (numeric-join/warn! ta tb)])
+            [j (numeric-join/warn! ta tb a b)])
        (if (and j (divisible-numeric-type? j)) (refine-arith ta tb j sign-transfer-div) (expr-error)))]
 
     ;; Binary comparison: T1 -> T2 -> Bool (coercion via numeric-join)
     [(expr-generic-lt a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
-            [j (numeric-join/warn! ta tb)])
+            [j (numeric-join/warn! ta tb a b)])
        (if j (expr-Bool) (expr-error)))]
     [(expr-generic-le a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
-            [j (numeric-join/warn! ta tb)])
+            [j (numeric-join/warn! ta tb a b)])
        (if j (expr-Bool) (expr-error)))]
     [(expr-generic-gt a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
-            [j (numeric-join/warn! ta tb)])
+            [j (numeric-join/warn! ta tb a b)])
        (if j (expr-Bool) (expr-error)))]
     [(expr-generic-ge a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
-            [j (numeric-join/warn! ta tb)])
+            [j (numeric-join/warn! ta tb a b)])
        (if j (expr-Bool) (expr-error)))]
     [(expr-generic-eq a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
-            [j (numeric-join/warn! ta tb)])
+            [j (numeric-join/warn! ta tb a b)])
        (if j (expr-Bool) (expr-error)))]
     [(expr-generic-mod a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
-            [j (numeric-join/warn! ta tb)])
+            [j (numeric-join/warn! ta tb a b)])
        (if j j (expr-error)))]
 
     ;; Unary: T -> T  (Numerics N5de: guard on the BASE — refined operands strip to Int/Rat —

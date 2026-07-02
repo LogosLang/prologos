@@ -64,32 +64,40 @@
 ;; Bug B — accumulation regression
 ;; ========================================
 
+;; NOTE (N6a values-only policy): warning-triggering commands use a BOUND
+;; VALUE operand (def n : Int) — bare exact literals no longer warn, so a
+;; literal form here would trivially pass with zero warnings everywhere.
+;; The def contributes a "defined." result (count 0) at position 1.
+
 (test-case "warn/no-accumulation: one float command, three exact commands"
-  ;; Pre-fix: (1 1 1 1) — the eval-1 warning re-attached to every later result.
+  ;; Pre-fix: the eval-1 warning re-attached to every later result.
   (check-equal? (warning-counts
-                 (run-file "eval [+ 3 1.5f64]"
+                 (run-file "def n : Int := 3"
+                           "eval [+ n 1.5f64]"
                            "eval [+ 1 2]"
                            "eval [* 2/3 3/4]"
                            "eval [+ 1/2 1/4]"))
-                '(1 0 0 0)))
+                '(0 1 0 0 0)))
 
 (test-case "warn/no-growth: three float commands then one exact"
-  ;; Pre-fix: (1 1 2 3) — monotone growth (with a one-command harvest lag).
+  ;; Pre-fix: monotone growth (with a one-command harvest lag).
   (check-equal? (warning-counts
-                 (run-file "eval [+ 3 1.5f64]"
-                           "eval [+ 4 2.5f64]"
-                           "eval [+ 5 3.5f64]"
+                 (run-file "def n : Int := 3"
+                           "eval [+ n 1.5f64]"
+                           "eval [+ n 2.5f64]"
+                           "eval [+ n 3.5f64]"
                            "eval [+ 1 2]"))
-                '(1 1 1 0)))
+                '(0 1 1 1 0)))
 
 (test-case "warn/own-warning-preserved: float command in a later file position"
   ;; Guards the harvest-lag class: the warning lands on ITS OWN command.
   (check-equal? (warning-counts
-                 (run-file "eval [+ 1 2]"
+                 (run-file "def n : Int := 3"
+                           "eval [+ 1 2]"
                            "eval [* 2/3 3/4]"
-                           "eval [+ 3 1.5f64]"
+                           "eval [+ n 1.5f64]"
                            "eval [+ 1 2]"))
-                '(0 0 1 0)))
+                '(0 0 0 1 0)))
 
 ;; ========================================
 ;; Bug A — spurious-warning lock-in (the owner's REPL transcript)
@@ -101,9 +109,17 @@
   (check-true (string-contains? (car rs) ": Rat")))
 
 ;; ========================================
-;; Single-emitter guard (on-network bridge only on success)
+;; Values-only policy (D-N6.4c)
 ;; ========================================
 
-(test-case "warn/single-emission: exactly one warning per coercion"
-  (define rs (run-file "eval [+ 3 [from-integer Posit8 1]]"))
-  (check-equal? (warning-counts rs) '(1)))
+(test-case "warn/literal-operand-silent: bare exact literal + float never warns"
+  (check-equal? (warning-counts (run-file "eval [+ 3 1.5f64]")) '(0)))
+
+;; ========================================
+;; Single-emitter guard (on-network bridge only on success) + dedupe
+;; ========================================
+
+(test-case "warn/single-emission: exactly one warning line per distinct coercion"
+  (define rs (run-file "def n : Int := 3"
+                       "eval [+ n [from-integer Posit8 1]]"))
+  (check-equal? (warning-counts rs) '(0 1)))

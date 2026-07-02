@@ -1100,7 +1100,11 @@
     (when (and cap nb)
       (set-box! cap (unbox nb))))
   ;; Append warnings to result string (if any)
-  (define coercion-warns (reverse (read-coercion-warnings)))
+  ;; N6a dedupe (SCAFFOLDING — retired when the warning cells move to a
+  ;; set-union merge under the §12 re-home): one displayed line per distinct
+  ;; (from,to) coercion per command; the structs are #:transparent so
+  ;; equal?-dedup is exactly (from,to) identity.
+  (define coercion-warns (remove-duplicates (reverse (read-coercion-warnings))))
   (define deprecation-warns (reverse (read-deprecation-warnings)))
   (define capability-warns (reverse (read-capability-warnings)))
   (define all-warning-strs

@@ -49,9 +49,10 @@
                   merge-classify-inhabit
                   classify-inhabit-contradiction?)
          (only-in "qtt.rkt" zero-usage single-usage add-usage scale-usage)  ;; Track 4B Phase 4
-         (only-in "typing-core.rkt" numeric-join
+         (only-in "typing-core.rkt" numeric-join numeric-type-name
                   refine-arith refine-arith1 base-numeric-type
-                  negatable-numeric-type? concrete-numeric-type? divisible-numeric-type?)  ;; Phase T + N5de sign transfer
+                  negatable-numeric-type? concrete-numeric-type? divisible-numeric-type?
+                  bare-exact-literal?)  ;; Phase T + N5de sign transfer + N6a warning policy
          (only-in "sign-refinement.rkt"
                   sign-transfer-add sign-transfer-sub sign-transfer-mul sign-transfer-div
                   sign-transfer-neg sign-transfer-abs
@@ -816,6 +817,11 @@
 ;; S2 coercion-detection propagator: reads both arg types at a generic
 ;; op position. If they're from different families (exact vs approximate),
 ;; writes a coercion warning to :warnings. P2 fire-once.
+;; N6a: (a) values-only policy — a bare exact LITERAL operand never warns
+;; (mirrors numeric-join/warn!); (b) normalized text — exact-side type →
+;; JOIN type (mirroring the imperative wording exactly; previously raw
+;; operand types in argument order, e.g. "Int to Posit8" where the
+;; imperative said "Int to Posit32").
 (define (make-coercion-detection-fire-fn tm-cid position arg1-pos arg2-pos)
   (lambda (net)
     (define tm (net-cell-read net tm-cid))
@@ -828,9 +834,20 @@
        (define f2 (type-family t2))
        (cond
          [(and (not (eq? f1 'other)) (not (eq? f2 'other)) (not (eq? f1 f2)))
-          ;; Cross-family: emit coercion warning
-          (define warning (list 'coercion-warning (pp-expr t1) (pp-expr t2)))
-          (that-write net tm-cid position ':warnings (list warning))]
+          ;; Cross-family: identify the exact side (operand expr + type)
+          (define exact-first? (eq? f1 'exact))
+          (define exact-t (if exact-first? t1 t2))
+          (define exact-operand (if exact-first? arg1-pos arg2-pos))
+          (cond
+            ;; values-only: bare exact literal → no warning
+            [(bare-exact-literal? exact-operand) net]
+            [else
+             (define j (numeric-join t1 t2))
+             (define warning
+               (list 'coercion-warning
+                     (numeric-type-name exact-t)
+                     (if j (numeric-type-name j) (pp-expr (if exact-first? t2 t1)))))
+             (that-write net tm-cid position ':warnings (list warning))])]
          [else net])])))
 
 ;; Constraint-creation propagator: builds initial constraint domain from
