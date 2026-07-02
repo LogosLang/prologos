@@ -96,6 +96,16 @@ trait MultiplicativeIdentity {A}
 (def Posit64--MultiplicativeIdentity--dict : [MultiplicativeIdentity Posit64] [posit64 4611686018427387904])
 
 ;; ========================================
+;; Float32 / Float64 Identity Instances (Numerics N6d-iii)
+;; ========================================
+;; f-suffix literals — bare 0.0/1.0 now default to Posit32 (D-N6.1).
+
+(def Float32--AdditiveIdentity--dict : [AdditiveIdentity Float32] 0.0f32)
+(def Float32--MultiplicativeIdentity--dict : [MultiplicativeIdentity Float32] 1.0f32)
+(def Float64--AdditiveIdentity--dict : [AdditiveIdentity Float64] 0.0f64)
+(def Float64--MultiplicativeIdentity--dict : [MultiplicativeIdentity Float64] 1.0f64)
+
+;; ========================================
 ;; sum — generic additive fold over a list
 ;; ========================================
 ;; sum [Add A] [AdditiveIdentity A] (List A) -> A

@@ -346,17 +346,25 @@
               [result (inexact->exact (sqrt (exact->inexact va)))])
          (posit-encode n result))])))
 
+;; Numerics N6d-iii: comparison per the 2022 Posit Standard's TOTAL order —
+;; NaR == NaR (reflexive), NaR is the LEAST element (NaR < every real). The
+;; shipped code EXCLUDED NaR (non-reflexive, off-spec); this makes Eq/Ord Posit
+;; lawful. Posit encoding is canonical (one bit pattern per value, unique 0/NaR),
+;; so raw bit equality IS value equality including NaR==NaR.
 (define (posit-eq? n a b)
-  (let ([nar (posit-nar-val n)])
-    (and (not (= a nar)) (not (= b nar)) (= a b))))
+  (= a b))
 
 (define (posit-lt? n a b)
   (let ([nar (posit-nar-val n)])
-    (and (not (= a nar)) (not (= b nar)) (< (u->s n a) (u->s n b)))))
+    (cond [(= a nar) (not (= b nar))]   ; NaR < real (least); NaR not < NaR
+          [(= b nar) #f]                 ; real not < NaR
+          [else (< (u->s n a) (u->s n b))])))
 
 (define (posit-le? n a b)
   (let ([nar (posit-nar-val n)])
-    (and (not (= a nar)) (not (= b nar)) (<= (u->s n a) (u->s n b)))))
+    (cond [(= a nar) #t]                 ; NaR <= everything (least)
+          [(= b nar) #f]                 ; real not <= NaR
+          [else (<= (u->s n a) (u->s n b))])))
 
 (define (posit-from-nat n k)
   (posit-encode n k))

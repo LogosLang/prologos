@@ -287,3 +287,51 @@ impl Abs Posit32
 impl Abs Posit64
   defn abs [x : Posit64] <Posit64>
     p64-abs x
+
+;; ========================================
+;; Float32 / Float64 instances (Numerics N6d-iii)
+;; ========================================
+;; Delegate to the native f{32,64} arithmetic prims (float-impl.rkt); NaN/±Inf
+;; propagate per IEEE. Makes Float a Num/Fractional citizen (with Eq/Ord).
+
+impl Add Float32
+  defn add [x : Float32  y : Float32] <Float32>
+    f32+ x y
+impl Add Float64
+  defn add [x : Float64  y : Float64] <Float64>
+    f64+ x y
+
+impl Sub Float32
+  defn sub [x : Float32  y : Float32] <Float32>
+    f32- x y
+impl Sub Float64
+  defn sub [x : Float64  y : Float64] <Float64>
+    f64- x y
+
+impl Mul Float32
+  defn mul [x : Float32  y : Float32] <Float32>
+    f32* x y
+impl Mul Float64
+  defn mul [x : Float64  y : Float64] <Float64>
+    f64* x y
+
+impl Div Float32
+  defn div [x : Float32  y : Float32] <Float32>
+    f32/ x y
+impl Div Float64
+  defn div [x : Float64  y : Float64] <Float64>
+    f64/ x y
+
+impl Neg Float32
+  defn neg [x : Float32] <Float32>
+    f32-neg x
+impl Neg Float64
+  defn neg [x : Float64] <Float64>
+    f64-neg x
+
+impl Abs Float32
+  defn abs [x : Float32] <Float32>
+    f32-abs x
+impl Abs Float64
+  defn abs [x : Float64] <Float64>
+    f64-abs x

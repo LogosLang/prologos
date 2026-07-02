@@ -118,10 +118,10 @@
   (check-equal? (whnf (expr-p8-le (expr-posit8 64) (expr-posit8 64)))
                 (expr-true)
                 "1 <= 1")
-  ;; NaR < anything → false
+  ;; NaR < every real (2022 Posit Standard: NaR is the least element) — N6d-iii
   (check-equal? (whnf (expr-p8-lt (expr-posit8 128) (expr-posit8 64)))
-                (expr-false)
-                "NaR not < 1"))
+                (expr-true)
+                "NaR < 1 (NaR least)"))
 
 ;; ========================================
 ;; Core AST: Conversion

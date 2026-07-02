@@ -119,9 +119,10 @@
   (check-equal? (whnf (expr-p32-le (expr-posit32 1073741824) (expr-posit32 1073741824)))
                 (expr-true)
                 "1 <= 1")
+  ;; NaR < every real (2022 Posit Standard: NaR is the least element) — N6d-iii
   (check-equal? (whnf (expr-p32-lt (expr-posit32 2147483648) (expr-posit32 1073741824)))
-                (expr-false)
-                "NaR not < 1"))
+                (expr-true)
+                "NaR < 1 (NaR least)"))
 
 ;; ========================================
 ;; Core AST: Conversion
