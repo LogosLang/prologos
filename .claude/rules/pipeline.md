@@ -15,7 +15,7 @@ These are the always-touch files. No exceptions.
 3. `zonk.rkt` — all three zonk functions (`zonk`, `zonk-at-depth`, `default-metas`)
 4. `reduction.rkt` — `whnf` (at minimum, add to `trivially-whnf?` set for stuck/atomic nodes; add `nf` identity case). Check `definitely-not-map?` if the node could appear as a value.
 5. `pretty-print.rkt` — `pp-expr` display + `uses-bvar0?` recursion
-6. `pnet-serialize.rkt` — `reg0!` / `reg1!` / `regN!` for auto-cache serialization. **REQUIRED post-PM 10** — module caching depends on this. (Pre-PM-10 checklists missed this; don't.)
+6. `pnet-serialize.rkt` — `reg0!` / `reg1!` / `regN!` (or the `auto-cache!` block) for auto-cache serialization. **REQUIRED post-PM 10** — module caching depends on this. (Pre-PM-10 checklists missed this; don't.) **Failure mode is MISLEADING (Numerics Q11, 2026-07-01)**: an unregistered node in a cached library body does NOT error at cache read — the reader's unknown-tag fallback silently returns a raw **vector** (pnet-serialize.rkt `[else v]` arm), which then fails the first struct `match` to touch it, arbitrarily far away (Q11 hit `subst`), with an error that PRINTS like the real struct (`#(struct:expr-… …)`). If a match "with the right arm" fails on a node that "exists", suspect a deserialized vector impostor and check the registration FIRST. Note also: the gap stays latent until the node first appears in — or is first INVOKED from — a cached module body (`expr-p*-if-nar` sat unregistered for months; `expr-generic-from-rat` was registered-adjacent but only detonated when a cached body using it was first beta-reduced).
 7. `typing-core.rkt` — `infer` / `check` / `is-type` / `infer-level` cases
 8. `qtt.rkt` — `inferQ` / `checkQ` cases (must parallel typing-core)
 
