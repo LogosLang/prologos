@@ -181,82 +181,90 @@ it is a single-method trait: the dictionary IS the hash function.</p>
   <code>eq? x y = true  ⟹  hash x = hash y</code></p>
 <p>(The converse need not hold — hash collisions are allowed.)</p>
 <p>This chapter defines the trait, a hash combiner, and instances
-for all standard types.</p></div>
-<h2 class="part-header">Part I — The Hashable Trait</h2>
+for all standard types including Nat, Bool, Ordering, Char,
+String, and parameterized types (Option A, List A).</p></div>
 <section class="module-container">
-<div class="module-badge">prologos::core::hashable-trait</div>
-<h3 class="section-title">Hashable Trait and Combiner</h3>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::nat <span class="hl-kwlit">:refer</span> [add mult]]
-
-<span class="hl-kw">trait</span> <span class="hl-ty">Hashable</span> {<span class="hl-ty">A</span>}
+<div class="module-badge">prologos::core::hashable</div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::nat      <span class="hl-kwlit">:refer</span> [add mult]]
+<span class="hl-kw">require</span> [prologos::data::option   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]
+<span class="hl-kw">require</span> [prologos::data::list     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons]]
+<span class="hl-kw">require</span> [prologos::data::ordering <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ordering</span> lt-ord eq-ord gt-ord]]</code></pre>
+<div class="prose"><p>========================================
+Hashable Trait
+========================================
+Hashable A = A -&gt; Nat (single-method: dict IS the function)
+Generated: deftype Hashable, accessor Hashable-hash
+Instance naming: Nat--Hashable--dict, Bool--Hashable--dict, etc.</p></div>
+<pre><code class="prologos"><span class="hl-kw">trait</span> <span class="hl-ty">Hashable</span> {<span class="hl-ty">A</span>}
   hash : <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span></code></pre>
-<div class="prose"><p>hash-combine: Boost-style combiner: h1*31 + h2
-The constant 31 is a commonly-used prime for hash combining.</p></div>
+<div class="prose"><p>========================================
+Hash Combiners
+========================================</p>
+<p>hash-combine: Boost-style combiner: h1*31 + h2
+The constant 31 is a commonly-used prime for hash combining.
+(For Church-encoded Nat this is slow, but correct for prototype.)</p></div>
 <pre><code class="prologos"><span class="hl-kw">def</span> nat31 : <span class="hl-ty">Nat</span> <span class="hl-op">:=</span> <span class="hl-num">31<span class="hl-ty">N</span></span>
 
 <span class="hl-kw">spec</span> hash-combine <span class="hl-ty">Nat</span> <span class="hl-ty">Nat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>
 <span class="hl-kw">defn</span> hash-combine [h1 h2]
   add [mult h1 nat31] h2</code></pre>
-</section>
-<h2 class="part-header">Part II — Instances</h2>
-<section class="module-container">
-<div class="module-badge">prologos::core::hashable-instances</div>
-<h3 class="section-title">Hashable Instances for Primitive Types</h3>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::hashable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Hashable</span> <span class="hl-ty">Hashable-hash</span> hash-combine]]
-<span class="hl-kw">require</span> [prologos::data::nat            <span class="hl-kwlit">:refer</span> [add]]
-<span class="hl-kw">require</span> [prologos::data::option          <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]
-<span class="hl-kw">require</span> [prologos::data::list            <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons]]
-<span class="hl-kw">require</span> [prologos::data::ordering        <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ordering</span> lt-ord eq-ord gt-ord]]</code></pre>
-<div class="prose"><p>Hashable Nat — identity hash (hash n = n)</p></div>
+<div class="prose"><p>========================================
+Hashable Nat — identity hash
+========================================
+hash n = n (the natural number itself)</p></div>
 <pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Hashable</span> <span class="hl-ty">Nat</span>
   <span class="hl-kw">defn</span> hash [n : <span class="hl-ty">Nat</span>] &lt;<span class="hl-ty">Nat</span>&gt;
     n</code></pre>
-<div class="prose"><p>Hashable Bool — true=1, false=0</p></div>
+<div class="prose"><p>========================================
+Hashable Bool — true=1, false=0
+========================================
+Note: Use 'if' instead of 'match' — match on Bool inside impl
+body hits a mult-meta store issue with bare params.</p></div>
 <pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Hashable</span> <span class="hl-ty">Bool</span>
   <span class="hl-kw">defn</span> hash [b : <span class="hl-ty">Bool</span>] &lt;<span class="hl-ty">Nat</span>&gt;
     <span class="hl-kw">if</span> b [suc zero] zero</code></pre>
-<div class="prose"><p>Hashable Ordering — lt=0, eq=1, gt=2</p></div>
+<div class="prose"><p>========================================
+Hashable Ordering — lt=0, eq=1, gt=2
+========================================</p></div>
 <pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Hashable</span> <span class="hl-ty">Ordering</span>
   <span class="hl-kw">defn</span> hash [o : <span class="hl-ty">Ordering</span>] &lt;<span class="hl-ty">Nat</span>&gt;
     <span class="hl-kw">match</span> o
       | lt-ord <span class="hl-op">-&gt;</span> zero
       | eq-ord <span class="hl-op">-&gt;</span> suc zero
       | gt-ord <span class="hl-op">-&gt;</span> suc [suc zero]</code></pre>
-<h3 class="section-title">Parameterized Hash Functions</h3>
-<div class="prose"><p>These take the Hashable dictionary as an explicit argument.
-When auto-resolution is available, the dict param becomes implicit.</p>
-<p>hash-option: none → 0, some a → hash-combine 1 (hash a)</p></div>
+<div class="prose"><p>========================================
+Parameterized hash functions (explicit dict)
+========================================
+These take the Hashable dictionary as an explicit argument,
+matching the existing pattern used by <code>elem</code> in list.prologos.</p>
+<p>hash-option: hash an Option A using a Hashable A dict.
+none -&gt; 0, some a -&gt; hash-combine 1 (hash a)</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> hash-option [<span class="hl-ty">Hashable</span> <span class="hl-ty">A</span>] [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>
 <span class="hl-kw">defn</span> hash-option [hash-a opt]
   <span class="hl-kw">match</span> opt
     | none   <span class="hl-op">-&gt;</span> zero
     | some a <span class="hl-op">-&gt;</span> hash-combine [suc zero] [hash-a a]</code></pre>
-<div class="prose"><p>hash-list: nil → 0, cons a as → hash-combine (hash a) (hash-list as)</p></div>
+<div class="prose"><p>hash-list: hash a List A using a Hashable A dict.
+nil -&gt; 0, cons a as -&gt; hash-combine (hash a) (hash-list as)</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> hash-list [<span class="hl-ty">Hashable</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>
 <span class="hl-kw">defn</span> hash-list [hash-a xs]
   <span class="hl-kw">match</span> xs
     | nil       <span class="hl-op">-&gt;</span> zero
     | cons a as <span class="hl-op">-&gt;</span> hash-combine [hash-a a] [hash-list hash-a as]</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::hashable-char-instance</div>
-<h3 class="section-title">Hashable Char</h3>
-<div class="prose"><p>Hash by Unicode code point.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::hashable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Hashable</span>]]
-
-<span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [<span class="hl-str">"char-&gt;integer"</span> <span class="hl-kwlit">:as</span> char-hash-nat : <span class="hl-ty">Char</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>]
+<div class="prose"><p>========================================
+Hashable Char — hash by code point
+========================================
+Use char-&gt;integer marshalled as Nat for the hash value.</p></div>
+<pre><code class="prologos"><span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [<span class="hl-str">"char-&gt;integer"</span> <span class="hl-kwlit">:as</span> char-hash-nat : <span class="hl-ty">Char</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>]
 
 <span class="hl-kw">impl</span> <span class="hl-ty">Hashable</span> <span class="hl-ty">Char</span>
   <span class="hl-kw">defn</span> hash [c : <span class="hl-ty">Char</span>] &lt;<span class="hl-ty">Nat</span>&gt;
     char-hash-nat c</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::hashable-string-instance</div>
-<h3 class="section-title">Hashable String</h3>
-<div class="prose"><p>Uses Racket's <code>equal-hash-code</code> for efficient string hashing.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::hashable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Hashable</span>]]
-
-<span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [equal-hash-code <span class="hl-kwlit">:as</span> string-hash-nat : <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>]
+<div class="prose"><p>========================================
+Hashable String — use Racket's equal-hash-code
+========================================
+equal-hash-code returns a fixnum; marshal as Nat for the hash trait.</p></div>
+<pre><code class="prologos"><span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [equal-hash-code <span class="hl-kwlit">:as</span> string-hash-nat : <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>]
 
 <span class="hl-kw">impl</span> <span class="hl-ty">Hashable</span> <span class="hl-ty">String</span>
   <span class="hl-kw">defn</span> hash [s : <span class="hl-ty">String</span>] &lt;<span class="hl-ty">Nat</span>&gt;

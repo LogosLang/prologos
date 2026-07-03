@@ -189,21 +189,23 @@ expected — the type checker inserts the unwrapping automatically.</p>
 <code>Sign</code> — which are data types used by the lattice framework for
 static analysis. They appear here because they are pure data types
 with no dependencies on the lattice machinery; their lattice
-instances live in the Lattices chapter.</p></div>
+instances and trait instances (Eq, Ord, GaloisConnection) live in
+the Lattices chapter under <code>prologos::core::abstract-domains</code>.</p></div>
 <h2 class="part-header">Part I — Refined Integers</h2>
 <section class="module-container">
 <div class="module-badge">prologos::data::refined-int</div>
-<h3 class="section-title">Refined Integer Types</h3>
-<div class="prose"><p>Wrapper types for expressing numeric sign constraints at the type level.
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::option <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]</code></pre>
+<div class="prose"><p>========================================
+Refined Integer Types
+========================================
+Wrapper types for expressing numeric sign constraints at the type level.
 Smart constructors validate at runtime; unsafe constructors trust the caller.</p>
-<p>Subtyping lattice (enforced by the type system via <code>subtype</code> declarations):</p>
+<p>Subtyping lattice (enforced by the type system via subtype declarations):</p>
 <p>             Int
            /  |  \
      NegInt Zero PosInt</p>
-<p><code>PosInt</code>, <code>NegInt</code>, <code>Zero</code> are subtypes of <code>Int</code> — they can be used
-anywhere <code>Int</code> is expected.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::option <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]</code></pre>
-<div class="prose"><p>Positive integers (value &gt; 0)</p></div>
+<p>PosInt, NegInt, Zero are subtypes of Int — they can be used anywhere Int is expected.</p>
+<p>Positive integers (value &gt; 0)</p></div>
 <pre><code class="prologos"><span class="hl-kw">data</span> <span class="hl-ty">PosInt</span>
   pos-int <span class="hl-ty">Int</span></code></pre>
 <div class="prose"><p>Negative integers (value &lt; 0)</p></div>
@@ -212,9 +214,9 @@ anywhere <code>Int</code> is expected.</p></div>
 <div class="prose"><p>Zero singleton</p></div>
 <pre><code class="prologos"><span class="hl-kw">data</span> <span class="hl-ty">Zero</span>
   mk-zero</code></pre>
-<h3 class="section-title">Smart Constructors</h3>
-<div class="prose"><p>Runtime-checked constructors that return <code>Option</code>. Use these when
-the sign of a value is not statically known.</p></div>
+<div class="prose"><p>========================================
+Smart Constructors (runtime-checked)
+========================================</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> to-pos-int <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> <span class="hl-ty">PosInt</span>]
 <span class="hl-kw">defn</span> to-pos-int [n]
   <span class="hl-kw">if</span> [int-lt <span class="hl-num">0</span> n]
@@ -230,9 +232,9 @@ the sign of a value is not statically known.</p></div>
 <span class="hl-kw">spec</span> is-zero? <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
 <span class="hl-kw">defn</span> is-zero? [n]
   int-eq n <span class="hl-num">0</span></code></pre>
-<h3 class="section-title">Unsafe Constructors</h3>
-<div class="prose"><p>These bypass runtime checks — the caller guarantees the invariant.
-Use only when the sign is known from context (e.g., after a guard).</p></div>
+<div class="prose"><p>========================================
+Unsafe Constructors (caller guarantees invariant)
+========================================</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> unsafe-pos-int <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">PosInt</span>
 <span class="hl-kw">defn</span> unsafe-pos-int [n]
   pos-int n
@@ -240,7 +242,9 @@ Use only when the sign is known from context (e.g., after a guard).</p></div>
 <span class="hl-kw">spec</span> unsafe-neg-int <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">NegInt</span>
 <span class="hl-kw">defn</span> unsafe-neg-int [n]
   neg-int n</code></pre>
-<h3 class="section-title">Extractors</h3>
+<div class="prose"><p>========================================
+Extractors
+========================================</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> pos-int-val <span class="hl-ty">PosInt</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span>
 <span class="hl-kw">defn</span> pos-int-val [p]
   <span class="hl-kw">match</span> p
@@ -249,16 +253,20 @@ Use only when the sign is known from context (e.g., after a guard).</p></div>
 <span class="hl-kw">spec</span> neg-int-val <span class="hl-ty">NegInt</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span>
 <span class="hl-kw">defn</span> neg-int-val [p]
   <span class="hl-kw">match</span> p
-    | neg-int n <span class="hl-op">-&gt;</span> n
-
-<span class="hl-kw">spec</span> zero-to-int <span class="hl-ty">Zero</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span>
+    | neg-int n <span class="hl-op">-&gt;</span> n</code></pre>
+<div class="prose"><p>========================================
+Conversion: back to Int
+========================================</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> zero-to-int <span class="hl-ty">Zero</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span>
 <span class="hl-kw">defn</span> zero-to-int [z]
   <span class="hl-kw">match</span> z
     | mk-zero <span class="hl-op">-&gt;</span> <span class="hl-num">0</span></code></pre>
-<h3 class="section-title">Subtype Declarations</h3>
-<div class="prose"><p><code>PosInt &lt;: Int</code> and <code>NegInt &lt;: Int</code> are auto-inferred: single-field
-wrapper constructors automatically unwrap. <code>Zero &lt;: Int</code> needs an
-explicit coercion since <code>mk-zero</code> is nullary.</p></div>
+<div class="prose"><p>========================================
+Subtype declarations
+========================================
+PosInt &lt;: Int &lt;: Rat (auto-inferred coercion: unwrap single-field constructor)
+NegInt &lt;: Int &lt;: Rat (auto-inferred coercion: unwrap single-field constructor)
+Zero &lt;: Int &lt;: Rat (explicit coercion via zero-to-int: nullary constructor)</p></div>
 <pre><code class="prologos"><span class="hl-kw">subtype</span> <span class="hl-ty">PosInt</span> <span class="hl-ty">Int</span>
 <span class="hl-kw">subtype</span> <span class="hl-ty">NegInt</span> <span class="hl-ty">Int</span>
 <span class="hl-kw">subtype</span> <span class="hl-ty">Zero</span> <span class="hl-ty">Int</span> via zero-to-int</code></pre>
@@ -266,20 +274,26 @@ explicit coercion since <code>mk-zero</code> is nullary.</p></div>
 <h2 class="part-header">Part II — Refined Rationals</h2>
 <section class="module-container">
 <div class="module-badge">prologos::data::refined-rat</div>
-<h3 class="section-title">Refined Rational Types</h3>
-<div class="prose"><p>The same pattern as refined integers, applied to <code>Rat</code>:</p>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::option <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]</code></pre>
+<div class="prose"><p>========================================
+Refined Rational Types
+========================================
+Wrapper types for expressing numeric sign constraints at the type level.
+Smart constructors validate at runtime; unsafe constructors trust the caller.</p>
+<p>Subtyping lattice (enforced by the type system via subtype declarations):</p>
 <p>          Rat
          /   \
    NegRat     PosRat</p>
-<p>No <code>ZeroRat</code> — zero is already representable as <code>0/1 : Rat</code>.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::option <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]</code></pre>
-<div class="prose"><p>Positive rationals (value &gt; 0)</p></div>
+<p>PosRat, NegRat are subtypes of Rat — they can be used anywhere Rat is expected.</p>
+<p>Positive rationals (value &gt; 0)</p></div>
 <pre><code class="prologos"><span class="hl-kw">data</span> <span class="hl-ty">PosRat</span>
   pos-rat <span class="hl-ty">Rat</span></code></pre>
 <div class="prose"><p>Negative rationals (value &lt; 0)</p></div>
 <pre><code class="prologos"><span class="hl-kw">data</span> <span class="hl-ty">NegRat</span>
   neg-rat <span class="hl-ty">Rat</span></code></pre>
-<h3 class="section-title">Smart Constructors</h3>
+<div class="prose"><p>========================================
+Smart Constructors (runtime-checked)
+========================================</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> to-pos-rat <span class="hl-ty">Rat</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> <span class="hl-ty">PosRat</span>]
 <span class="hl-kw">defn</span> to-pos-rat [r]
   <span class="hl-kw">if</span> [rat-lt <span class="hl-num">0/1</span> r]
@@ -295,7 +309,9 @@ explicit coercion since <code>mk-zero</code> is nullary.</p></div>
 <span class="hl-kw">spec</span> is-zero-rat? <span class="hl-ty">Rat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
 <span class="hl-kw">defn</span> is-zero-rat? [r]
   rat-eq r <span class="hl-num">0/1</span></code></pre>
-<h3 class="section-title">Unsafe Constructors</h3>
+<div class="prose"><p>========================================
+Unsafe Constructors (caller guarantees invariant)
+========================================</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> unsafe-pos-rat <span class="hl-ty">Rat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">PosRat</span>
 <span class="hl-kw">defn</span> unsafe-pos-rat [r]
   pos-rat r
@@ -303,7 +319,9 @@ explicit coercion since <code>mk-zero</code> is nullary.</p></div>
 <span class="hl-kw">spec</span> unsafe-neg-rat <span class="hl-ty">Rat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">NegRat</span>
 <span class="hl-kw">defn</span> unsafe-neg-rat [r]
   neg-rat r</code></pre>
-<h3 class="section-title">Extractors</h3>
+<div class="prose"><p>========================================
+Extractors
+========================================</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> pos-rat-val <span class="hl-ty">PosRat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Rat</span>
 <span class="hl-kw">defn</span> pos-rat-val [p]
   <span class="hl-kw">match</span> p
@@ -313,101 +331,30 @@ explicit coercion since <code>mk-zero</code> is nullary.</p></div>
 <span class="hl-kw">defn</span> neg-rat-val [p]
   <span class="hl-kw">match</span> p
     | neg-rat r <span class="hl-op">-&gt;</span> r</code></pre>
-<h3 class="section-title">Subtype Declarations</h3>
-<div class="prose"><p>Auto-inferred coercions: unwrap single-field constructors.</p></div>
+<div class="prose"><p>========================================
+Subtype declarations
+========================================
+PosRat &lt;: Rat (auto-inferred coercion: unwrap single-field constructor)
+NegRat &lt;: Rat (auto-inferred coercion: unwrap single-field constructor)</p></div>
 <pre><code class="prologos"><span class="hl-kw">subtype</span> <span class="hl-ty">PosRat</span> <span class="hl-ty">Rat</span>
 <span class="hl-kw">subtype</span> <span class="hl-ty">NegRat</span> <span class="hl-ty">Rat</span></code></pre>
 </section>
-<h2 class="part-header">Part III — Refined Integer Instances</h2>
-<section class="module-container">
-<div class="module-badge">prologos::core::refined-int-instances</div>
-<h3 class="section-title">Eq and Ord for Refined Integers</h3>
-<div class="prose"><p>Each instance delegates to the underlying <code>Int</code> comparison.
-<code>Zero</code> is a singleton — all values are equal, all comparisons
-return <code>eq-ord</code>.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::eq-trait   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Eq</span> <span class="hl-ty">Eq-eq?</span>]]
-<span class="hl-kw">require</span> [prologos::core::ord-trait  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ord</span> <span class="hl-ty">Ord-compare</span>]]
-<span class="hl-kw">require</span> [prologos::data::ordering   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ordering</span> lt-ord eq-ord gt-ord]]
-<span class="hl-kw">require</span> [prologos::data::refined-int <span class="hl-kwlit">:refer</span> [<span class="hl-ty">PosInt</span> pos-int <span class="hl-ty">NegInt</span> neg-int <span class="hl-ty">Zero</span> mk-zero]]</code></pre>
-<div class="prose"><p>Eq PosInt — delegate to underlying Int</p></div>
-<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Eq</span> <span class="hl-ty">PosInt</span>
-  <span class="hl-kw">defn</span> eq? [x &lt;<span class="hl-ty">PosInt</span>&gt; y &lt;<span class="hl-ty">PosInt</span>&gt;] &lt;<span class="hl-ty">Bool</span>&gt;
-    <span class="hl-kw">match</span> x
-      | pos-int a <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> y
-                       | pos-int b <span class="hl-op">-&gt;</span> int-eq a b</code></pre>
-<div class="prose"><p>Eq NegInt — delegate to underlying Int</p></div>
-<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Eq</span> <span class="hl-ty">NegInt</span>
-  <span class="hl-kw">defn</span> eq? [x &lt;<span class="hl-ty">NegInt</span>&gt; y &lt;<span class="hl-ty">NegInt</span>&gt;] &lt;<span class="hl-ty">Bool</span>&gt;
-    <span class="hl-kw">match</span> x
-      | neg-int a <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> y
-                       | neg-int b <span class="hl-op">-&gt;</span> int-eq a b</code></pre>
-<div class="prose"><p>Eq Zero — singleton, always equal</p></div>
-<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Eq</span> <span class="hl-ty">Zero</span>
-  <span class="hl-kw">defn</span> eq? [x &lt;<span class="hl-ty">Zero</span>&gt; y &lt;<span class="hl-ty">Zero</span>&gt;] &lt;<span class="hl-ty">Bool</span>&gt;
-    true</code></pre>
-<div class="prose"><p>Ord PosInt — delegate to underlying Int</p></div>
-<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">PosInt</span>
-  <span class="hl-kw">defn</span> compare [x &lt;<span class="hl-ty">PosInt</span>&gt; y &lt;<span class="hl-ty">PosInt</span>&gt;] &lt;<span class="hl-ty">Ordering</span>&gt;
-    <span class="hl-kw">match</span> x
-      | pos-int a <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> y
-                       | pos-int b <span class="hl-op">-&gt;</span> <span class="hl-kw">if</span> [int-lt a b] lt-ord [<span class="hl-kw">if</span> [int-eq a b] eq-ord gt-ord]</code></pre>
-<div class="prose"><p>Ord NegInt — delegate to underlying Int</p></div>
-<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">NegInt</span>
-  <span class="hl-kw">defn</span> compare [x &lt;<span class="hl-ty">NegInt</span>&gt; y &lt;<span class="hl-ty">NegInt</span>&gt;] &lt;<span class="hl-ty">Ordering</span>&gt;
-    <span class="hl-kw">match</span> x
-      | neg-int a <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> y
-                       | neg-int b <span class="hl-op">-&gt;</span> <span class="hl-kw">if</span> [int-lt a b] lt-ord [<span class="hl-kw">if</span> [int-eq a b] eq-ord gt-ord]</code></pre>
-<div class="prose"><p>Ord Zero — singleton, always eq-ord</p></div>
-<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Zero</span>
-  <span class="hl-kw">defn</span> compare [x &lt;<span class="hl-ty">Zero</span>&gt; y &lt;<span class="hl-ty">Zero</span>&gt;] &lt;<span class="hl-ty">Ordering</span>&gt;
-    eq-ord</code></pre>
-</section>
-<h2 class="part-header">Part IV — Refined Rational Instances</h2>
-<section class="module-container">
-<div class="module-badge">prologos::core::refined-rat-instances</div>
-<h3 class="section-title">Eq and Ord for Refined Rationals</h3>
-<div class="prose"><p>Same delegation pattern as refined integers.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::eq-trait   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Eq</span> <span class="hl-ty">Eq-eq?</span>]]
-<span class="hl-kw">require</span> [prologos::core::ord-trait  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ord</span> <span class="hl-ty">Ord-compare</span>]]
-<span class="hl-kw">require</span> [prologos::data::ordering   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ordering</span> lt-ord eq-ord gt-ord]]
-<span class="hl-kw">require</span> [prologos::data::refined-rat <span class="hl-kwlit">:refer</span> [<span class="hl-ty">PosRat</span> pos-rat <span class="hl-ty">NegRat</span> neg-rat]]</code></pre>
-<div class="prose"><p>Eq PosRat — delegate to underlying Rat</p></div>
-<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Eq</span> <span class="hl-ty">PosRat</span>
-  <span class="hl-kw">defn</span> eq? [x &lt;<span class="hl-ty">PosRat</span>&gt; y &lt;<span class="hl-ty">PosRat</span>&gt;] &lt;<span class="hl-ty">Bool</span>&gt;
-    <span class="hl-kw">match</span> x
-      | pos-rat a <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> y
-                       | pos-rat b <span class="hl-op">-&gt;</span> rat-eq a b</code></pre>
-<div class="prose"><p>Eq NegRat — delegate to underlying Rat</p></div>
-<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Eq</span> <span class="hl-ty">NegRat</span>
-  <span class="hl-kw">defn</span> eq? [x &lt;<span class="hl-ty">NegRat</span>&gt; y &lt;<span class="hl-ty">NegRat</span>&gt;] &lt;<span class="hl-ty">Bool</span>&gt;
-    <span class="hl-kw">match</span> x
-      | neg-rat a <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> y
-                       | neg-rat b <span class="hl-op">-&gt;</span> rat-eq a b</code></pre>
-<div class="prose"><p>Ord PosRat — delegate to underlying Rat</p></div>
-<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">PosRat</span>
-  <span class="hl-kw">defn</span> compare [x &lt;<span class="hl-ty">PosRat</span>&gt; y &lt;<span class="hl-ty">PosRat</span>&gt;] &lt;<span class="hl-ty">Ordering</span>&gt;
-    <span class="hl-kw">match</span> x
-      | pos-rat a <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> y
-                       | pos-rat b <span class="hl-op">-&gt;</span> <span class="hl-kw">if</span> [rat-lt a b] lt-ord [<span class="hl-kw">if</span> [rat-eq a b] eq-ord gt-ord]</code></pre>
-<div class="prose"><p>Ord NegRat — delegate to underlying Rat</p></div>
-<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">NegRat</span>
-  <span class="hl-kw">defn</span> compare [x &lt;<span class="hl-ty">NegRat</span>&gt; y &lt;<span class="hl-ty">NegRat</span>&gt;] &lt;<span class="hl-ty">Ordering</span>&gt;
-    <span class="hl-kw">match</span> x
-      | neg-rat a <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> y
-                       | neg-rat b <span class="hl-op">-&gt;</span> <span class="hl-kw">if</span> [rat-lt a b] lt-ord [<span class="hl-kw">if</span> [rat-eq a b] eq-ord gt-ord]</code></pre>
-</section>
-<h2 class="part-header">Part V — Abstract Domains</h2>
+<h2 class="part-header">Part III — Abstract Domains (Data Types)</h2>
 <section class="module-container">
 <div class="module-badge">prologos::data::parity</div>
-<h3 class="section-title">The Parity Domain</h3>
-<div class="prose"><p>A four-element lattice for abstract parity analysis.
-Used by the lattice framework to track whether a numeric
-value is provably even, provably odd, or unknown.</p>
-<p>      parity-top        (unknown parity)
+<div class="prose"><p>========================================
+Parity Domain — Abstract parity analysis
+========================================
+Four-element lattice for parity abstraction:</p>
+<p>      parity-top
        /     \
  parity-even  parity-odd
        \     /
-      parity-bot        (unreachable / no information)</p></div>
+      parity-bot</p>
+<p>parity-bot  = no information (unreachable)
+parity-even = definitely even
+parity-odd  = definitely odd
+parity-top  = unknown parity</p></div>
 <pre><code class="prologos"><span class="hl-kw">data</span> <span class="hl-ty">Parity</span>
   parity-bot
   parity-even
@@ -416,20 +363,27 @@ value is provably even, provably odd, or unknown.</p>
 </section>
 <section class="module-container">
 <div class="module-badge">prologos::data::sign</div>
-<h3 class="section-title">The Sign Domain</h3>
-<div class="prose"><p>A five-element lattice for abstract sign analysis.
-Used by Galois connections to abstract numeric intervals
-into sign information.</p>
-<p>         sign-top           (unknown sign)
-        /   |   \
-  sign-neg sign-zero sign-pos
-        \   |   /
-         sign-bot           (unreachable / no information)</p></div>
+<div class="prose"><p>========================================
+Sign Domain — Abstract sign analysis
+========================================
+Eight-element powerset lattice ℘({neg, zero, pos}) — the Boolean cube Q₃.
+⊑ = ⊆   ⊥ = sign-bot (∅)   ⊤ = sign-top ({neg,zero,pos})   join = ∪</p>
+<p>sign-bot     = ∅              no information (unreachable)
+sign-neg     = {neg}          definitely negative
+sign-zero    = {zero}         definitely zero
+sign-pos     = {pos}          definitely positive
+sign-nonpos  = {neg,zero}     ≤ 0
+sign-nonzero = {neg,pos}      ≠ 0
+sign-nonneg  = {zero,pos}     ≥ 0
+sign-top     = {neg,zero,pos} unknown sign</p></div>
 <pre><code class="prologos"><span class="hl-kw">data</span> <span class="hl-ty">Sign</span>
   sign-bot
   sign-neg
   sign-zero
   sign-pos
+  sign-nonpos
+  sign-nonzero
+  sign-nonneg
   sign-top</code></pre>
 </section>
 </article>

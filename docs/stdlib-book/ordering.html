@@ -187,42 +187,29 @@ Prologos equivalent of Haskell's <code>LT | EQ | GT</code>.</p>
 <p>The chapter begins with the Ordering type itself, then defines
 the Ord trait with its derived comparison operators, and finally
 covers PartialOrd for lattice-like structures.</p></div>
-<h2 class="part-header">Part I — Total Ordering</h2>
 <section class="module-container">
 <div class="module-badge">prologos::data::ordering</div>
-<h3 class="section-title">The Ordering Type</h3>
-<div class="prose"><p>A three-way comparison result. Every <code>compare</code> call returns
-one of these three constructors:</p>
-<p>  • <code>lt-ord</code> — the first argument is less than the second
-  • <code>eq-ord</code> — the arguments are equal
-  • <code>gt-ord</code> — the first argument is greater than the second</p>
-<p>This is a simple enumeration — no fields, no parameters.</p></div>
+<div class="prose"><p>========================================
+Prologos Ordering Type
+Three-way comparison result.
+========================================</p></div>
 <pre><code class="prologos"><span class="hl-kw">data</span> <span class="hl-ty">Ordering</span>
   lt-ord
   eq-ord
   gt-ord</code></pre>
 </section>
 <section class="module-container">
-<div class="module-badge">prologos::core::ord-trait</div>
-<h3 class="section-title">The Ord Trait</h3>
-<div class="prose"><p>The Ord trait is the foundation of comparison in Prologos.
-Any type with a total ordering implements this single-method
-trait. Like Eq, Ord is a single-method trait — the dictionary
-IS the <code>compare</code> function.</p>
-<p>Laws:
-  • Reflexive:     compare x x ≡ eq-ord
-  • Transitive:    compare x y = lt-ord ∧ compare y z = lt-ord ⟹ compare x z = lt-ord
-  • Antisymmetric: compare x y = lt-ord ⟹ compare y x = gt-ord
-  • Total:         ord-le x y ∨ ord-le y x</p>
-<p>From <code>compare</code> alone, we derive the full suite of comparison
-operators: <code>ord-lt</code>, <code>ord-le</code>, <code>ord-gt</code>, <code>ord-ge</code>, <code>ord-eq</code>,
-<code>ord-min</code>, <code>ord-max</code>. These are defined generically — once you
-implement <code>compare</code>, you get all seven for free.</p></div>
+<div class="module-badge">prologos::core::ord</div>
 <pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::ordering <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ordering</span> lt-ord eq-ord gt-ord]]
-<span class="hl-kw">require</span> [prologos::data::nat <span class="hl-kwlit">:refer</span> [lt? nat-eq?]]
-<span class="hl-kw">require</span> [prologos::data::bool <span class="hl-kwlit">:refer</span> [not]]
-
-<span class="hl-kw">trait</span> <span class="hl-ty">Ord</span> {<span class="hl-ty">A</span>}
+<span class="hl-kw">require</span> [prologos::data::nat      <span class="hl-kwlit">:refer</span> [lt? nat-eq?]]
+<span class="hl-kw">require</span> [prologos::data::bool     <span class="hl-kwlit">:refer</span> [not and]]
+<span class="hl-kw">require</span> [prologos::data::option   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]
+<span class="hl-kw">require</span> [prologos::data::char     <span class="hl-kwlit">:as</span> char <span class="hl-kwlit">:refer</span> []]
+<span class="hl-kw">require</span> [prologos::data::string   <span class="hl-kwlit">:as</span> str  <span class="hl-kwlit">:refer</span> []]</code></pre>
+<div class="prose"><p>========================================
+Ord Trait — total ordering
+========================================</p></div>
+<pre><code class="prologos"><span class="hl-kw">trait</span> <span class="hl-ty">Ord</span> {<span class="hl-ty">A</span>}
   compare : <span class="hl-ty">A</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Ordering</span>
   <span class="hl-kwlit">:doc</span> <span class="hl-str">"Total ordering: compares two values and returns lt-ord, eq-ord, or gt-ord"</span>
   <span class="hl-kwlit">:laws</span>
@@ -238,11 +225,18 @@ implement <code>compare</code>, you get all seven for free.</p></div>
     - <span class="hl-kwlit">:name</span> <span class="hl-str">"total"</span>
       <span class="hl-kwlit">:forall</span> {x y : <span class="hl-ty">A</span>}
       <span class="hl-kwlit">:holds</span> [or [ord-le x y] [ord-le y x]]</code></pre>
-<h3 class="section-title">Ord for Natural Numbers</h3>
-<div class="prose"><p>Natural numbers are totally ordered by magnitude. The
-implementation delegates to <code>lt?</code> and <code>nat-eq?</code> from
-<code>prologos::data::nat</code>, which are defined by structural
-recursion on the Peano representation.</p></div>
+<div class="prose"><p>========================================
+PartialOrd Trait
+========================================
+A partial order supports comparison that may be incomparable.
+partial-compare : A A -&gt; Option Ordering
+Returns (some ordering) for comparable elements, (none) for incomparable.
+Needed for lattice types in propagator integration.</p></div>
+<pre><code class="prologos"><span class="hl-kw">trait</span> <span class="hl-ty">PartialOrd</span> {<span class="hl-ty">A</span>}
+  partial-compare : <span class="hl-ty">A</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> <span class="hl-ty">Ordering</span>]</code></pre>
+<div class="prose"><p>========================================
+Ord Nat
+========================================</p></div>
 <pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Nat</span>
   <span class="hl-kw">defn</span> compare [x y] &lt;<span class="hl-ty">Ordering</span>&gt;
     <span class="hl-kw">match</span> [lt? x y]
@@ -252,11 +246,7 @@ recursion on the Peano representation.</p></div>
                    | false <span class="hl-op">-&gt;</span> gt-ord</code></pre>
 <div class="prose"><p>Backward-compatible alias</p></div>
 <pre><code class="prologos"><span class="hl-kw">def</span> nat-ord <span class="hl-ty">Nat--Ord--dict</span></code></pre>
-<h3 class="section-title">Derived Comparison Operators</h3>
-<div class="prose"><p>Given any Ord dictionary, we can derive the standard
-comparison operators by pattern matching on the Ordering
-result. These are generic — they work for any type with
-an Ord instance.</p>
+<div class="prose"><p>Derived operations from an Ord dictionary</p>
 <p>Less than</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> ord-lt [<span class="hl-ty">Ord</span> <span class="hl-ty">A</span>] <span class="hl-ty">A</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
   <span class="hl-kwlit">:doc</span> <span class="hl-str">"Strict less-than derived from compare"</span>
@@ -313,121 +303,78 @@ an Ord instance.</p>
     | lt-ord <span class="hl-op">-&gt;</span> y
     | eq-ord <span class="hl-op">-&gt;</span> x
     | gt-ord <span class="hl-op">-&gt;</span> x</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::ord-instances</div>
-<h3 class="section-title">Ord for Booleans</h3>
-<div class="prose"><p>Booleans have a natural total order: <code>false &lt; true</code>.
-This mirrors the convention in most languages and
-corresponds to the numeric interpretation false=0, true=1.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::ord-trait    <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ord</span> <span class="hl-ty">Ord-compare</span>]]
-<span class="hl-kw">require</span> [prologos::data::ordering     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ordering</span> lt-ord eq-ord gt-ord]]
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Bool</span>
+<div class="prose"><p>========================================
+Ord Bool — false &lt; true
+========================================</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Bool</span>
   <span class="hl-kw">defn</span> compare [x : <span class="hl-ty">Bool</span> y : <span class="hl-ty">Bool</span>] &lt;<span class="hl-ty">Ordering</span>&gt;
     <span class="hl-kw">if</span> x
       [<span class="hl-kw">if</span> y eq-ord gt-ord]
       [<span class="hl-kw">if</span> y lt-ord eq-ord]</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::ord-numeric-instances</div>
-<h3 class="section-title">Ord for Numeric Types</h3>
-<div class="prose"><p>Each numeric type delegates to foreign primitives for
-comparison. The pattern is uniform: check less-than first,
-then equality, and default to greater-than.</p>
-<p>For the Posit types (Posit8 through Posit64), there is no
-dedicated equality primitive — we derive equality from
-<code>le</code> by checking <code>le(x,y) ∧ le(y,x)</code>.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::ord-trait  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ord</span> <span class="hl-ty">Ord-compare</span>]]
-<span class="hl-kw">require</span> [prologos::data::ordering   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ordering</span> lt-ord eq-ord gt-ord]]
-<span class="hl-kw">require</span> [prologos::data::bool       <span class="hl-kwlit">:refer</span> [and]]
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Int</span>
+<div class="prose"><p>========================================
+Ord Int
+========================================</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Int</span>
   <span class="hl-kw">defn</span> compare [x : <span class="hl-ty">Int</span>  y : <span class="hl-ty">Int</span>] &lt;<span class="hl-ty">Ordering</span>&gt;
     <span class="hl-kw">if</span> [int-lt x y] lt-ord
-      [<span class="hl-kw">if</span> [int-eq x y] eq-ord gt-ord]
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Rat</span>
+      [<span class="hl-kw">if</span> [int-eq x y] eq-ord gt-ord]</code></pre>
+<div class="prose"><p>========================================
+Ord Rat
+========================================</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Rat</span>
   <span class="hl-kw">defn</span> compare [x : <span class="hl-ty">Rat</span>  y : <span class="hl-ty">Rat</span>] &lt;<span class="hl-ty">Ordering</span>&gt;
     <span class="hl-kw">if</span> [rat-lt x y] lt-ord
-      [<span class="hl-kw">if</span> [rat-eq x y] eq-ord gt-ord]
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Posit8</span>
+      [<span class="hl-kw">if</span> [rat-eq x y] eq-ord gt-ord]</code></pre>
+<div class="prose"><p>========================================
+Ord Posit8
+========================================
+No p8-eq primitive; derive eq from p8-le:
+eq?(x,y) = and(le(x,y), le(y,x))</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Posit8</span>
   <span class="hl-kw">defn</span> compare [x : <span class="hl-ty">Posit8</span>  y : <span class="hl-ty">Posit8</span>] &lt;<span class="hl-ty">Ordering</span>&gt;
     <span class="hl-kw">if</span> [p8-lt x y] lt-ord
-      [<span class="hl-kw">if</span> [and [p8-le x y] [p8-le y x]] eq-ord gt-ord]
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Posit16</span>
+      [<span class="hl-kw">if</span> [and [p8-le x y] [p8-le y x]] eq-ord gt-ord]</code></pre>
+<div class="prose"><p>========================================
+Ord Posit16
+========================================</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Posit16</span>
   <span class="hl-kw">defn</span> compare [x : <span class="hl-ty">Posit16</span>  y : <span class="hl-ty">Posit16</span>] &lt;<span class="hl-ty">Ordering</span>&gt;
     <span class="hl-kw">if</span> [p16-lt x y] lt-ord
-      [<span class="hl-kw">if</span> [and [p16-le x y] [p16-le y x]] eq-ord gt-ord]
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Posit32</span>
+      [<span class="hl-kw">if</span> [and [p16-le x y] [p16-le y x]] eq-ord gt-ord]</code></pre>
+<div class="prose"><p>========================================
+Ord Posit32
+========================================</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Posit32</span>
   <span class="hl-kw">defn</span> compare [x : <span class="hl-ty">Posit32</span>  y : <span class="hl-ty">Posit32</span>] &lt;<span class="hl-ty">Ordering</span>&gt;
     <span class="hl-kw">if</span> [p32-lt x y] lt-ord
-      [<span class="hl-kw">if</span> [and [p32-le x y] [p32-le y x]] eq-ord gt-ord]
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Posit64</span>
+      [<span class="hl-kw">if</span> [and [p32-le x y] [p32-le y x]] eq-ord gt-ord]</code></pre>
+<div class="prose"><p>========================================
+Ord Posit64
+========================================</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Posit64</span>
   <span class="hl-kw">defn</span> compare [x : <span class="hl-ty">Posit64</span>  y : <span class="hl-ty">Posit64</span>] &lt;<span class="hl-ty">Ordering</span>&gt;
     <span class="hl-kw">if</span> [p64-lt x y] lt-ord
       [<span class="hl-kw">if</span> [and [p64-le x y] [p64-le y x]] eq-ord gt-ord]</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::ord-char-instance</div>
-<h3 class="section-title">Ord for Characters</h3>
-<div class="prose"><p>Characters are ordered by Unicode code point. The
-implementation delegates to <code>char::lt</code> and <code>char::eq</code>
-from <code>prologos::data::char</code>.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::ord-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ord</span>]]
-<span class="hl-kw">require</span> [prologos::data::char      <span class="hl-kwlit">:as</span> char <span class="hl-kwlit">:refer</span> []]
-<span class="hl-kw">require</span> [prologos::data::ordering  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ordering</span> lt-ord eq-ord gt-ord]]
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Char</span>
+<div class="prose"><p>========================================
+Ord Char — by Unicode code point
+========================================</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Char</span>
   <span class="hl-kw">defn</span> compare [x : <span class="hl-ty">Char</span>  y : <span class="hl-ty">Char</span>] &lt;<span class="hl-ty">Ordering</span>&gt;
     <span class="hl-kw">if</span> [char::lt x y]
       lt-ord
       [<span class="hl-kw">if</span> [char::eq x y]
         eq-ord
         gt-ord]</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::ord-string-instance</div>
-<h3 class="section-title">Ord for Strings</h3>
-<div class="prose"><p>Strings are ordered lexicographically — character by
-character, left to right, with shorter strings comparing
-less when one is a prefix of the other.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::ord-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ord</span>]]
-<span class="hl-kw">require</span> [prologos::data::string    <span class="hl-kwlit">:as</span> str <span class="hl-kwlit">:refer</span> []]
-<span class="hl-kw">require</span> [prologos::data::ordering  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ordering</span> lt-ord eq-ord gt-ord]]
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">String</span>
+<div class="prose"><p>========================================
+Ord String — lexicographic ordering
+========================================</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">String</span>
   <span class="hl-kw">defn</span> compare [x : <span class="hl-ty">String</span>  y : <span class="hl-ty">String</span>] &lt;<span class="hl-ty">Ordering</span>&gt;
     <span class="hl-kw">if</span> [str::lt x y]
       lt-ord
       [<span class="hl-kw">if</span> [str::eq x y]
         eq-ord
         gt-ord]</code></pre>
-</section>
-<h2 class="part-header">Part II — Partial Ordering</h2>
-<section class="module-container">
-<div class="module-badge">prologos::core::partialord-trait</div>
-<h3 class="section-title">The PartialOrd Trait</h3>
-<div class="prose"><p>Not all types have a total ordering. Floating-point NaN
-values, lattice elements in abstract interpretation, and
-set-inclusion orderings all have pairs of incomparable
-values. For these, Prologos provides PartialOrd.</p>
-<p>Where <code>compare</code> returns a bare <code>Ordering</code>, <code>partial-compare</code>
-wraps it in <code>Option</code>: <code>some lt-ord</code> when comparable, <code>none</code>
-when not. Every Ord type is trivially PartialOrd (just wrap
-in <code>some</code>), but PartialOrd captures the weaker guarantee.</p>
-<p>This trait is particularly important for propagator
-integration, where lattice types must support partial
-comparison to detect convergence.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::option    <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]
-<span class="hl-kw">require</span> [prologos::data::ordering  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ordering</span> lt-ord eq-ord gt-ord]]
-
-<span class="hl-kw">trait</span> <span class="hl-ty">PartialOrd</span> {<span class="hl-ty">A</span>}
-  partial-compare : <span class="hl-ty">A</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> <span class="hl-ty">Ordering</span>]</code></pre>
 </section>
 </article>
 <nav class="bottom-nav"><a href="equality.html">← Equality</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="booleans.html">Booleans →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>

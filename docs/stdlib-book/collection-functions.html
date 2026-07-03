@@ -171,40 +171,51 @@ ol.toc-chapters a:hover { text-decoration: underline; }
 </script>
 </head>
 <body>
-<nav class="chapter-nav"><a href="seqable-buildable.html">← Seqable Buildable</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="lists.html">Lists →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+<nav class="chapter-nav"><a href="collection-traits.html">← Collection Traits</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="lists.html">Lists →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
 <article>
 <h1 class="chapter-title">Collection Functions</h1>
-<div class="prose"><p>With Seqable, Buildable, and Foldable in hand, we can now write
-<strong>generic</strong> collection operations that work on any collection type.
-<code>map</code>, <code>filter</code>, <code>reduce</code>, <code>take</code>, <code>drop</code>, <code>into</code> — all defined
-once, usable everywhere.</p>
-<p>The pattern is always the same:</p>
-<p>    to-seq → lseq-op → from-seq</p>
-<p>The compiler auto-resolves the Seqable/Buildable/Foldable
-dictionaries at each call site from the concrete type. When you
-write <code>map f my-pvec</code>, the compiler passes the PVec Seqable and
-Buildable dicts automatically.</p>
+<div class="prose"><p>With Seqable, Buildable, Foldable, and Reducible in hand, we can
+now write <strong>generic</strong> collection operations that work on any
+collection type. <code>map</code>, <code>filter</code>, <code>reduce</code>, <code>take</code>, <code>drop</code>,
+<code>into</code> — all defined once, usable everywhere.</p>
+<p>Two patterns:</p>
+<p>  (1) <strong>Reducing ops</strong> use <code>Reducible</code> (native left fold) — folds
+      directly over the source's internal structure. No LSeq
+      intermediary. Includes: <code>reduce</code>, <code>length</code>, <code>any?</code>, <code>all?</code>, <code>find</code>.</p>
+<p>  (2) <strong>Transforming ops</strong> use <code>Seqable + Buildable</code> — converts
+      to LSeq, transforms, converts back. Includes: <code>map</code>, <code>filter</code>,
+      <code>take</code>, <code>drop</code>, <code>concat</code>, <code>into</code>.</p>
+<p>The compiler auto-resolves the trait dictionaries at each call site
+from the concrete type.</p>
 <p>This chapter also includes List-specialized versions (for when
 HKT inference isn't available) and named conversion functions
 between the standard collection types.</p></div>
-<h2 class="part-header">Part I — Generic Operations</h2>
 <section class="module-container">
-<div class="module-badge">prologos::core::collection-fns</div>
-<h3 class="section-title">Generic Collection Functions</h3>
-<div class="prose"><p>These operate on any collection implementing Seqable, Buildable,
-or Foldable. Names intentionally match (and shadow) List-specific
-versions in the prelude.</p>
-<p>Single-method trait dicts (<code>$seq</code>, <code>$foldable</code>) are the function
-itself; multi-method trait accessors (<code>Buildable-from-seq</code>) are
-global fvars. Type args are passed explicitly to lseq functions.</p></div>
-<pre><code class="prologos">(<span class="hl-kw">require</span> (prologos::core::seqable-trait    <span class="hl-kwlit">:refer</span> (<span class="hl-ty">Seqable</span>))
-         (prologos::core::buildable-trait  <span class="hl-kwlit">:refer</span> (<span class="hl-ty">Buildable</span> <span class="hl-ty">Buildable-from-seq</span>))
-         (prologos::core::foldable-trait   <span class="hl-kwlit">:refer</span> (<span class="hl-ty">Foldable</span>))
-         (prologos::data::lseq            <span class="hl-kwlit">:refer</span> (<span class="hl-ty">LSeq</span> lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?))
-         (prologos::data::lseq-ops        <span class="hl-kwlit">:refer</span> (lseq-map lseq-filter lseq-take lseq-drop
-                                                  lseq-append lseq-fold lseq-length lseq-to-list))
-         (prologos::data::list            <span class="hl-kwlit">:refer</span> (<span class="hl-ty">List</span>))
-         (prologos::data::option          <span class="hl-kwlit">:refer</span> (<span class="hl-ty">Option</span> none some)))</code></pre>
+<div class="module-badge">prologos::core::collections</div>
+<pre><code class="prologos">(imports (prologos::core::collection-traits <span class="hl-kwlit">:refer</span> (<span class="hl-ty">Seqable</span>))
+         (prologos::core::collection-traits <span class="hl-kwlit">:refer</span> (<span class="hl-ty">Buildable</span> <span class="hl-ty">Buildable-from-seq</span>))
+         (prologos::core::collection-traits <span class="hl-kwlit">:refer</span> (<span class="hl-ty">Foldable</span>))
+         (prologos::core::collection-traits <span class="hl-kwlit">:refer</span> (<span class="hl-ty">Reducible</span>))
+         (prologos::core::list              <span class="hl-kwlit">:refer</span> (<span class="hl-ty">List--Seqable--dict</span> <span class="hl-ty">List--Buildable--dict</span> <span class="hl-ty">List--Buildable--from-seq</span>))
+         (prologos::data::lseq             <span class="hl-kwlit">:refer</span> (<span class="hl-ty">LSeq</span> lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?))
+         (prologos::data::lseq-ops         <span class="hl-kwlit">:refer</span> (lseq-map lseq-filter lseq-take lseq-drop
+                                                   lseq-append lseq-fold lseq-length lseq-to-list
+                                                   list-to-lseq))
+         (prologos::data::list             <span class="hl-kwlit">:refer</span> (<span class="hl-ty">List</span> nil cons foldr))
+         (prologos::data::option           <span class="hl-kwlit">:refer</span> (<span class="hl-ty">Option</span> none some)))</code></pre>
+<div class="prose"><p>========================================
+Generic Collection Functions
+========================================
+These operate on any collection implementing Seqable/Buildable/Foldable/Reducible.
+Names intentionally match (and shadow) List-specific versions in the prelude.
+The compiler auto-resolves trait dicts at call sites from the concrete type.</p>
+<p>Two patterns:
+  (1) Reducing ops: use Reducible (left fold) — folds natively over source
+  (2) Transforming ops: use Seqable+Buildable — to-seq → lseq-op → from-seq</p>
+<p>NOTE: Single-method trait dicts ($seq, $red) are the function itself;
+multi-method trait accessors (Buildable-from-seq) are global fvars.
+Type args are passed explicitly to lseq functions that need them.</p></div>
+<h3 class="section-title">Transforming ops (Seqable + Buildable)</h3>
 <div class="prose"><p>map : (A -&gt; B) -&gt; C A -&gt; C B</p></div>
 <pre><code class="prologos">(<span class="hl-kw">spec</span> map {<span class="hl-ty">A</span> <span class="hl-ty">B</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Seqable</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">Buildable</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">B</span>))
 (<span class="hl-kw">defn</span> map [$seq $build f xs]
@@ -213,49 +224,56 @@ global fvars. Type args are passed explicitly to lseq functions.</p></div>
 <pre><code class="prologos">(<span class="hl-kw">spec</span> filter {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Seqable</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">Buildable</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">Bool</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>))
 (<span class="hl-kw">defn</span> filter [$seq $build pred xs]
   (<span class="hl-ty">Buildable-from-seq</span> $build <span class="hl-ty">A</span> (lseq-filter <span class="hl-ty">A</span> pred ($seq <span class="hl-ty">A</span> xs))))</code></pre>
+<div class="prose"><p>concat : C A -&gt; C A -&gt; C A</p></div>
+<pre><code class="prologos">(<span class="hl-kw">spec</span> concat {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Seqable</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">Buildable</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>))
+(<span class="hl-kw">defn</span> concat [$seq $build xs ys]
+  (<span class="hl-ty">Buildable-from-seq</span> $build <span class="hl-ty">A</span> (lseq-append <span class="hl-ty">A</span> ($seq <span class="hl-ty">A</span> xs) ($seq <span class="hl-ty">A</span> ys))))</code></pre>
+<h3 class="section-title">Reducing ops (Reducible — native left fold)</h3>
 <div class="prose"><p>reduce : (B -&gt; A -&gt; B) -&gt; B -&gt; C A -&gt; B   [left fold, accumulator first]
-Matches List::reduce semantics: f takes (acc, elem).</p></div>
-<pre><code class="prologos">(<span class="hl-kw">spec</span> reduce {<span class="hl-ty">A</span> <span class="hl-ty">B</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Seqable</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>)) <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span>)
-(<span class="hl-kw">defn</span> reduce [$seq f z xs]
-  (lseq-fold <span class="hl-ty">B</span> <span class="hl-ty">A</span> f z ($seq <span class="hl-ty">A</span> xs)))</code></pre>
+Folds natively over the collection via Reducible — no LSeq intermediary.</p></div>
+<pre><code class="prologos">(<span class="hl-kw">spec</span> reduce {<span class="hl-ty">A</span> <span class="hl-ty">B</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Reducible</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>)) <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span>)
+(<span class="hl-kw">defn</span> reduce [$red f z xs]
+  ($red <span class="hl-ty">A</span> <span class="hl-ty">B</span> f z xs))</code></pre>
+<div class="prose"><p>length : C A -&gt; Nat
+Counts elements via native left fold.</p></div>
+<pre><code class="prologos">(<span class="hl-kw">spec</span> length {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Reducible</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>)
+(<span class="hl-kw">defn</span> length [$red xs]
+  ($red <span class="hl-ty">A</span> <span class="hl-ty">Nat</span> (<span class="hl-kw">fn</span> (n : <span class="hl-ty">Nat</span>) (<span class="hl-kw">fn</span> (_ : <span class="hl-ty">A</span>) (suc n))) zero xs))</code></pre>
+<div class="prose"><p>any? : (A -&gt; Bool) -&gt; C A -&gt; Bool
+Note: does NOT short-circuit (processes all elements via fold).</p></div>
+<pre><code class="prologos">(<span class="hl-kw">spec</span> any? {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Reducible</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">Bool</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>)
+(<span class="hl-kw">defn</span> any? [$red pred xs]
+  ($red <span class="hl-ty">A</span> <span class="hl-ty">Bool</span> (<span class="hl-kw">fn</span> (acc : <span class="hl-ty">Bool</span>) (<span class="hl-kw">fn</span> (a : <span class="hl-ty">A</span>) (<span class="hl-kw">if</span> (pred a) true acc))) false xs))</code></pre>
+<div class="prose"><p>all? : (A -&gt; Bool) -&gt; C A -&gt; Bool
+Note: does NOT short-circuit (processes all elements via fold).</p></div>
+<pre><code class="prologos">(<span class="hl-kw">spec</span> all? {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Reducible</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">Bool</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>)
+(<span class="hl-kw">defn</span> all? [$red pred xs]
+  ($red <span class="hl-ty">A</span> <span class="hl-ty">Bool</span> (<span class="hl-kw">fn</span> (acc : <span class="hl-ty">Bool</span>) (<span class="hl-kw">fn</span> (a : <span class="hl-ty">A</span>) (<span class="hl-kw">if</span> (pred a) acc false))) true xs))</code></pre>
+<div class="prose"><p>find : (A -&gt; Bool) -&gt; C A -&gt; Option A
+Note: does NOT short-circuit (processes all elements via fold).</p></div>
+<pre><code class="prologos">(<span class="hl-kw">spec</span> find {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Reducible</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">Bool</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">Option</span> <span class="hl-ty">A</span>))
+(<span class="hl-kw">defn</span> find [$red pred xs]
+  ($red <span class="hl-ty">A</span> (<span class="hl-ty">Option</span> <span class="hl-ty">A</span>)
+    (<span class="hl-kw">fn</span> (acc : (<span class="hl-ty">Option</span> <span class="hl-ty">A</span>)) (<span class="hl-kw">fn</span> (a : <span class="hl-ty">A</span>)
+      (<span class="hl-kw">match</span> acc
+        (some _ <span class="hl-op">-&gt;</span> acc)
+        (none <span class="hl-op">-&gt;</span> (<span class="hl-kw">if</span> (pred a) (some <span class="hl-ty">A</span> a) (none <span class="hl-ty">A</span>))))))
+    (none <span class="hl-ty">A</span>) xs))</code></pre>
+<div class="prose"><p>to-list : C A -&gt; List A
+Materialize any Seqable collection into a List.</p></div>
+<pre><code class="prologos">(<span class="hl-kw">spec</span> to-list {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Seqable</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">List</span> <span class="hl-ty">A</span>))
+(<span class="hl-kw">defn</span> to-list [$seq xs]
+  (lseq-to-list ($seq <span class="hl-ty">A</span> xs)))</code></pre>
+<h3 class="section-title">Seqable-based ops (head access, reduce1)</h3>
 <div class="prose"><p>reduce1 : (A -&gt; A -&gt; A) -&gt; C A -&gt; Option A   [first element as initial]
 Like Clojure's (reduce f coll): uses first element as accumulator.
-Returns none for empty collections, some result for non-empty.</p></div>
+Returns none for empty collections, some result for non-empty.
+Stays on Seqable because it needs head access to extract the first element.</p></div>
 <pre><code class="prologos">(<span class="hl-kw">spec</span> reduce1 {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Seqable</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">A</span>)) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">Option</span> <span class="hl-ty">A</span>))
 (<span class="hl-kw">defn</span> reduce1 [$seq f xs]
   (<span class="hl-kw">match</span> ($seq <span class="hl-ty">A</span> xs)
     (lseq-nil <span class="hl-op">-&gt;</span> (none <span class="hl-ty">A</span>))
     (lseq-cell a t <span class="hl-op">-&gt;</span> (some <span class="hl-ty">A</span> (lseq-fold <span class="hl-ty">A</span> <span class="hl-ty">A</span> f a (t unit))))))</code></pre>
-<div class="prose"><p>length : C A -&gt; Nat</p></div>
-<pre><code class="prologos">(<span class="hl-kw">spec</span> length {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Seqable</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>)
-(<span class="hl-kw">defn</span> length [$seq xs]
-  (lseq-length ($seq <span class="hl-ty">A</span> xs)))</code></pre>
-<div class="prose"><p>concat : C A -&gt; C A -&gt; C A</p></div>
-<pre><code class="prologos">(<span class="hl-kw">spec</span> concat {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Seqable</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">Buildable</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>))
-(<span class="hl-kw">defn</span> concat [$seq $build xs ys]
-  (<span class="hl-ty">Buildable-from-seq</span> $build <span class="hl-ty">A</span> (lseq-append <span class="hl-ty">A</span> ($seq <span class="hl-ty">A</span> xs) ($seq <span class="hl-ty">A</span> ys))))</code></pre>
-<div class="prose"><p>any? : (A -&gt; Bool) -&gt; C A -&gt; Bool</p></div>
-<pre><code class="prologos">(<span class="hl-kw">spec</span> any? {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Foldable</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">Bool</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>)
-(<span class="hl-kw">defn</span> any? [$foldable pred xs]
-  ($foldable <span class="hl-ty">A</span> <span class="hl-ty">Bool</span> (<span class="hl-kw">fn</span> (a : <span class="hl-ty">A</span>) (<span class="hl-kw">fn</span> (acc : <span class="hl-ty">Bool</span>) (<span class="hl-kw">if</span> (pred a) true acc))) false xs))</code></pre>
-<div class="prose"><p>all? : (A -&gt; Bool) -&gt; C A -&gt; Bool</p></div>
-<pre><code class="prologos">(<span class="hl-kw">spec</span> all? {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Foldable</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">Bool</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>)
-(<span class="hl-kw">defn</span> all? [$foldable pred xs]
-  ($foldable <span class="hl-ty">A</span> <span class="hl-ty">Bool</span> (<span class="hl-kw">fn</span> (a : <span class="hl-ty">A</span>) (<span class="hl-kw">fn</span> (acc : <span class="hl-ty">Bool</span>) (<span class="hl-kw">if</span> (pred a) acc false))) true xs))</code></pre>
-<div class="prose"><p>to-list : C A -&gt; List A</p></div>
-<pre><code class="prologos">(<span class="hl-kw">spec</span> to-list {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Seqable</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">List</span> <span class="hl-ty">A</span>))
-(<span class="hl-kw">defn</span> to-list [$seq xs]
-  (lseq-to-list ($seq <span class="hl-ty">A</span> xs)))</code></pre>
-<div class="prose"><p>find : (A -&gt; Bool) -&gt; C A -&gt; Option A
-Note: does NOT short-circuit (processes all elements via fold).</p></div>
-<pre><code class="prologos">(<span class="hl-kw">spec</span> find {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Foldable</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">Bool</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">Option</span> <span class="hl-ty">A</span>))
-(<span class="hl-kw">defn</span> find [$foldable pred xs]
-  ($foldable <span class="hl-ty">A</span> (<span class="hl-ty">Option</span> <span class="hl-ty">A</span>)
-    (<span class="hl-kw">fn</span> (a : <span class="hl-ty">A</span>) (<span class="hl-kw">fn</span> (acc : (<span class="hl-ty">Option</span> <span class="hl-ty">A</span>))
-      (<span class="hl-kw">match</span> acc
-        (some _ <span class="hl-op">-&gt;</span> acc)
-        (none <span class="hl-op">-&gt;</span> (<span class="hl-kw">if</span> (pred a) (some <span class="hl-ty">A</span> a) (none <span class="hl-ty">A</span>))))))
-    (none <span class="hl-ty">A</span>) xs))</code></pre>
 <div class="prose"><p>take : Nat -&gt; C A -&gt; C A</p></div>
 <pre><code class="prologos">(<span class="hl-kw">spec</span> take {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Seqable</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">Buildable</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span> <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>))
 (<span class="hl-kw">defn</span> take [$seq $build n xs]
@@ -268,39 +286,36 @@ Note: does NOT short-circuit (processes all elements via fold).</p></div>
 Converts a source collection into the target collection type.
 The target arg determines the output type (its value is discarded).
 Usage: (into @[] '[1 2 3]) → @[1 2 3]
-       (into #{} @[1 2 3]) → #{1 2 3}</p></div>
+       (into #{} @[1 2 3]) → #{1 2 3}
+       |&gt; '[1 2 3] (into @[])   ;; in pipe context</p></div>
 <pre><code class="prologos">(<span class="hl-kw">spec</span> into {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">S</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} {<span class="hl-ty">T</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Seqable</span> <span class="hl-ty">S</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">Buildable</span> <span class="hl-ty">T</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">T</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">S</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">T</span> <span class="hl-ty">A</span>))
 (<span class="hl-kw">defn</span> into [$seq $build _target source]
   (<span class="hl-ty">Buildable-from-seq</span> $build <span class="hl-ty">A</span> ($seq <span class="hl-ty">A</span> source)))</code></pre>
 <div class="prose"><p>head : C A -&gt; Option A
 Get the first element of any collection, or none if empty.
-Note: named <code>head</code> not <code>first</code> because <code>first</code> is a parser keyword.</p></div>
+Converts to LSeq via Seqable, then extracts the head.
+Note: named <code>head</code> not <code>first</code> because <code>first</code> is a parser keyword
+(Sigma pair projection).</p></div>
 <pre><code class="prologos">(<span class="hl-kw">spec</span> head {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Seqable</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">Option</span> <span class="hl-ty">A</span>))
 (<span class="hl-kw">defn</span> head [$seq xs]
   (lseq-head <span class="hl-ty">A</span> ($seq <span class="hl-ty">A</span> xs)))</code></pre>
-<div class="prose"><p>empty? : C A -&gt; Bool</p></div>
+<div class="prose"><p>empty? : C A -&gt; Bool
+Check if a collection is empty.</p></div>
 <pre><code class="prologos">(<span class="hl-kw">spec</span> empty? {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Seqable</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>)
 (<span class="hl-kw">defn</span> empty? [$seq xs]
   (lseq-empty? <span class="hl-ty">A</span> ($seq <span class="hl-ty">A</span> xs)))</code></pre>
 <div class="prose"><p>rest-seq : C A -&gt; LSeq A
-Get the remaining elements as a lazy sequence.</p></div>
+Get the remaining elements as a lazy sequence.
+The return type is always LSeq (not the original collection type)
+since this streams the tail without materializing a new collection.</p></div>
 <pre><code class="prologos">(<span class="hl-kw">spec</span> rest-seq {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} (<span class="hl-ty">Seqable</span> <span class="hl-ty">C</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">C</span> <span class="hl-ty">A</span>) <span class="hl-op">-&gt;</span> (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>))
 (<span class="hl-kw">defn</span> rest-seq [$seq xs]
   (lseq-rest <span class="hl-ty">A</span> ($seq <span class="hl-ty">A</span> xs)))</code></pre>
-</section>
-<h2 class="part-header">Part II — List-Specialized Operations</h2>
-<section class="module-container">
-<div class="module-badge">prologos::core::collection-ops</div>
-<h3 class="section-title">List-Specialized Collection Operations</h3>
-<div class="prose"><p>These demonstrate the Seq-centric architecture with concrete
-List types, useful when HKT type parameters can't be passed
-at call sites. The pattern is: to-seq → lseq-op → from-seq.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::seqable-list    <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List--Seqable--dict</span>]]
-<span class="hl-kw">require</span> [prologos::core::buildable-list  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List--Buildable--dict</span> <span class="hl-ty">List--Buildable--from-seq</span>]]
-<span class="hl-kw">require</span> [prologos::data::lseq            <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span>]]
-<span class="hl-kw">require</span> [prologos::data::lseq-ops        <span class="hl-kwlit">:refer</span> [lseq-map lseq-filter lseq-to-list lseq-length]]
-<span class="hl-kw">require</span> [prologos::data::list             <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span>]]</code></pre>
-<div class="prose"><p>coll-map : (A -&gt; B) -&gt; List A -&gt; List B</p></div>
+<div class="prose"><p>========================================
+Collection Operations (List-specialized)
+========================================
+Demonstrates Seq-centric architecture with explicit List specialization.</p>
+<p>coll-map : (A -&gt; B) -&gt; List A -&gt; List B</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> coll-map {<span class="hl-ty">A</span> <span class="hl-ty">B</span> : <span class="hl-ty">Type</span>} [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">B</span>]
 <span class="hl-kw">defn</span> coll-map [f xs]
   <span class="hl-ty">List--Buildable--from-seq</span> <span class="hl-ty">B</span> [lseq-map <span class="hl-ty">A</span> <span class="hl-ty">B</span> f [<span class="hl-ty">List--Seqable--dict</span> <span class="hl-ty">A</span> xs]]</code></pre>
@@ -316,21 +331,17 @@ at call sites. The pattern is: to-seq → lseq-op → from-seq.</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> coll-to-list {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]
 <span class="hl-kw">defn</span> coll-to-list [xs]
   lseq-to-list <span class="hl-ty">A</span> [<span class="hl-ty">List--Seqable--dict</span> <span class="hl-ty">A</span> xs]</code></pre>
-</section>
-<h2 class="part-header">Part III — Collection Conversions</h2>
-<section class="module-container">
-<div class="module-badge">prologos::core::collection-conversions</div>
-<h3 class="section-title">Named Conversion Functions</h3>
-<div class="prose"><p>Explicit conversions between List, PVec, LSeq, and Set.
-No HKT dispatch — named functions for each direction.
-All conversions flow through LSeq as the pivot representation.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::list     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons foldr]]
-<span class="hl-kw">require</span> [prologos::data::lseq     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span> lseq-nil]]
-<span class="hl-kw">require</span> [prologos::data::lseq-ops <span class="hl-kwlit">:refer</span> [list-to-lseq lseq-to-list]]</code></pre>
+<div class="prose"><p>========================================
+Collection Conversion Functions
+========================================
+Named conversion utilities between List, PVec, LSeq, and Set.
+No HKT dispatch — explicit named functions for each direction.</p></div>
+<h3 class="section-title">List → PVec</h3>
 <div class="prose"><p>vec : List A -&gt; PVec A</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> vec {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>]
 <span class="hl-kw">defn</span> vec [xs]
   pvec-from-list xs</code></pre>
+<h3 class="section-title">Any → LSeq (lazy sequence)</h3>
 <div class="prose"><p>list-to-seq : List A -&gt; LSeq A</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> list-to-seq {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>]
 <span class="hl-kw">defn</span> list-to-seq [xs]
@@ -343,6 +354,7 @@ All conversions flow through LSeq as the pivot representation.</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> set-to-seq {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} [<span class="hl-ty">Set</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>]
 <span class="hl-kw">defn</span> set-to-seq [s]
   list-to-lseq <span class="hl-ty">A</span> [set-to-list s]</code></pre>
+<h3 class="section-title">LSeq → specific collections (into-*)</h3>
 <div class="prose"><p>into-list : LSeq A -&gt; List A</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> into-list {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]
 <span class="hl-kw">defn</span> into-list [xs]
@@ -359,7 +371,7 @@ Folds the lazy sequence into a Set via set-insert.
   foldr <span class="hl-ty">A</span> [<span class="hl-ty">Set</span> <span class="hl-ty">A</span>] [<span class="hl-kw">fn</span> a acc [set-insert acc a]] [set-empty <span class="hl-ty">A</span>] [lseq-to-list <span class="hl-ty">A</span> xs]</code></pre>
 </section>
 </article>
-<nav class="bottom-nav"><a href="seqable-buildable.html">← Seqable Buildable</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="lists.html">Lists →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+<nav class="bottom-nav"><a href="collection-traits.html">← Collection Traits</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="lists.html">Lists →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
 
 </body>
 </html>

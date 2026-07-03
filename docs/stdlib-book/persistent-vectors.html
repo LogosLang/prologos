@@ -189,89 +189,71 @@ AST-level keywords that reduce directly via Racket's <code>rrb</code> library.
 This chapter defines the <strong>trait instances</strong> and <strong>derived operations</strong>
 that integrate PVec into the generic collection framework.</p>
 <p>Literal syntax: <code>@[1N 2N 3N]</code> creates a PVec of natural numbers.</p></div>
-<h2 class="part-header">Part I — Trait Instances</h2>
 <section class="module-container">
-<div class="module-badge">prologos::core::seqable-pvec</div>
-<h3 class="section-title">Seqable Instance</h3>
-<div class="prose"><p>Converts a PVec to an LSeq by first materializing to a List
-(via native <code>pvec-to-list</code>), then wrapping with <code>list-to-lseq</code>.
-This two-step conversion is necessary because PVec's RRB-tree
-structure doesn't naturally produce a lazy sequence.</p>
-<p>Because Seqable is a single-method trait, the dictionary IS the
-conversion function itself — no wrapper struct.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::seqable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Seqable</span>]]
+<div class="module-badge">prologos::core::pvec</div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::collection-traits <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Seqable</span>
+                                                    <span class="hl-ty">Buildable</span>
+                                                    <span class="hl-ty">Foldable</span>
+                                                    <span class="hl-ty">Reducible</span>
+                                                    <span class="hl-ty">Indexed</span> <span class="hl-ty">Indexed-idx-nth</span> <span class="hl-ty">Indexed-idx-length</span> <span class="hl-ty">Indexed-idx-update</span>
+                                                    <span class="hl-ty">Functor</span>]]
 <span class="hl-kw">require</span> [prologos::data::lseq          <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span>]]
-<span class="hl-kw">require</span> [prologos::data::lseq-ops      <span class="hl-kwlit">:refer</span> [list-to-lseq]]
-<span class="hl-kw">require</span> [prologos::data::list           <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span>]]
-
-(<span class="hl-kw">def</span> <span class="hl-ty">PVec--Seqable--dict</span> : [<span class="hl-ty">Seqable</span> <span class="hl-ty">PVec</span>]
+<span class="hl-kw">require</span> [prologos::data::lseq-ops      <span class="hl-kwlit">:refer</span> [list-to-lseq lseq-to-list]]
+<span class="hl-kw">require</span> [prologos::data::list           <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons]]
+<span class="hl-kw">require</span> [prologos::data::option        <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]
+<span class="hl-kw">require</span> [prologos::data::nat            <span class="hl-kwlit">:refer</span> [lt?]]</code></pre>
+<div class="prose"><p>========================================
+Seqable PVec Instance
+========================================
+Convert a PVec to an LSeq via pvec-to-list -&gt; list-to-lseq.
+The Seqable dict IS the function (single-method trait).</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> <span class="hl-ty">PVec--Seqable--dict</span> : [<span class="hl-ty">Seqable</span> <span class="hl-ty">PVec</span>]
   (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (v : (<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>))
     (list-to-lseq <span class="hl-ty">A</span> (pvec-to-list v)))))</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::foldable-pvec</div>
-<h3 class="section-title">Foldable Instance</h3>
-<div class="prose"><p>Uses native <code>pvec-fold</code> (a left fold via <code>rrb-fold</code>) for O(n)
-traversal without List conversion. This is more efficient than
-going through Seqable.</p>
-<p><strong>Argument flip</strong>: <code>pvec-fold</code> is accumulator-first <code>(B -&gt; A -&gt; B)</code>,
-but Foldable's fold method is element-first <code>(A -&gt; B -&gt; B)</code>. We
-flip the arguments. This changes semantics from right-fold to
-left-fold, which is acceptable for PVec (indexed, left-to-right
-is the natural traversal order).</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::foldable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Foldable</span>]]
-
-(<span class="hl-kw">def</span> pvec-foldable : [<span class="hl-ty">Foldable</span> <span class="hl-ty">PVec</span>]
-  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">B</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (f : (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-ty">B</span>))) (<span class="hl-kw">fn</span> (z : <span class="hl-ty">B</span>) (<span class="hl-kw">fn</span> (v : (<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>))
-    (pvec-fold (<span class="hl-kw">fn</span> (acc : <span class="hl-ty">B</span>) (<span class="hl-kw">fn</span> (elem : <span class="hl-ty">A</span>) (f elem acc))) z v)))))))</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::buildable-pvec</div>
-<h3 class="section-title">Buildable Instance</h3>
-<div class="prose"><p>Builds a PVec from a lazy sequence by materializing to a List
-(via <code>lseq-to-list</code>), then converting with native <code>pvec-from-list</code>.
-Also provides an empty PVec via <code>pvec-empty</code>.</p>
-<p>Buildable is a two-method trait, so the dict is a Sigma pair:
-  <code>(pair from-seq empty-coll)</code></p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::buildable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Buildable</span>]]
-<span class="hl-kw">require</span> [prologos::data::lseq            <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span>]]
-<span class="hl-kw">require</span> [prologos::data::lseq-ops        <span class="hl-kwlit">:refer</span> [lseq-to-list]]
-<span class="hl-kw">require</span> [prologos::data::list             <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span>]]
-
-(<span class="hl-kw">spec</span> <span class="hl-ty">PVec--Buildable--dict</span> (<span class="hl-ty">Buildable</span> <span class="hl-ty">PVec</span>))
+<div class="prose"><p>========================================
+Buildable PVec Instance
+========================================
+from-seq   : LSeq A -&gt; PVec A  (via lseq-to-list -&gt; pvec-from-list)
+empty-coll : PVec A             (via pvec-empty)
+conj       : PVec A -&gt; A -&gt; PVec A  (via pvec-push — append to end, O(log32 n))</p>
+<p>Buildable is a three-method trait, so the dict is a nested Sigma pair.</p></div>
+<pre><code class="prologos">(<span class="hl-kw">spec</span> <span class="hl-ty">PVec--Buildable--dict</span> (<span class="hl-ty">Buildable</span> <span class="hl-ty">PVec</span>))
 (<span class="hl-kw">def</span> <span class="hl-ty">PVec--Buildable--dict</span>
   (pair
     (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>))
       (pvec-from-list (lseq-to-list <span class="hl-ty">A</span> xs))))
-    (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (pvec-empty <span class="hl-ty">A</span>))))</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::functor-pvec</div>
-<h3 class="section-title">Functor Instance</h3>
-<div class="prose"><p>Uses native <code>pvec-map</code> for O(n) element-wise mapping without
-List conversion. This is the most efficient way to transform
-a PVec's contents.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::functor-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Functor</span>]]
-
-(<span class="hl-kw">def</span> pvec-functor : [<span class="hl-ty">Functor</span> <span class="hl-ty">PVec</span>]
-  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">B</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (f : (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>)) (<span class="hl-kw">fn</span> (v : (<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>))
-    (pvec-map f v))))))</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::indexed-pvec</div>
-<h3 class="section-title">Indexed Instance</h3>
-<div class="prose"><p>O(log32 n) implementations via native PVec primitives. The Indexed
-trait provides positional access — nth, length, and update — which
-is the natural interface for an array-like structure.</p>
-<p><code>idx-nth</code> is bounds-checked: returns <code>some</code> if in bounds, <code>none</code>
-otherwise. The native <code>pvec-nth</code> does not check bounds, so we
-guard with <code>lt?</code>.</p>
-<p>The Indexed dict is a triple (idx-nth, idx-length, idx-update)
-packed as a nested Sigma: <code>(pair nth (pair length update))</code>.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::indexed-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Indexed</span> <span class="hl-ty">Indexed-idx-nth</span> <span class="hl-ty">Indexed-idx-length</span> <span class="hl-ty">Indexed-idx-update</span>]]
-<span class="hl-kw">require</span> [prologos::data::option        <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]
-<span class="hl-kw">require</span> [prologos::data::nat            <span class="hl-kwlit">:refer</span> [lt?]]</code></pre>
-<div class="prose"><p>idx-nth : PVec A -&gt; Nat -&gt; Option A</p></div>
+    (pair
+      (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (pvec-empty <span class="hl-ty">A</span>))
+      (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (v : (<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>)) (<span class="hl-kw">fn</span> (x : <span class="hl-ty">A</span>) (pvec-push v x)))))))</code></pre>
+<div class="prose"><p>========================================
+Foldable instance for PVec
+========================================
+Uses native pvec-fold (left fold via rrb-fold) for O(n) traversal
+without List conversion.</p>
+<p>Note: pvec-fold is accumulator-first (B -&gt; A -&gt; B), but Foldable's
+fold method is element-first (A -&gt; B -&gt; B). We flip the arguments.
+This changes semantics from right-fold to left-fold, which is
+acceptable for PVec (indexed, left-to-right is natural).</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> pvec-foldable : [<span class="hl-ty">Foldable</span> <span class="hl-ty">PVec</span>]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">B</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (f : (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-ty">B</span>))) (<span class="hl-kw">fn</span> (z : <span class="hl-ty">B</span>) (<span class="hl-kw">fn</span> (v : (<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>))
+    (pvec-fold (<span class="hl-kw">fn</span> (acc : <span class="hl-ty">B</span>) (<span class="hl-kw">fn</span> (elem : <span class="hl-ty">A</span>) (f elem acc))) z v)))))))</code></pre>
+<div class="prose"><p>========================================
+Reducible instance for PVec
+========================================
+Uses native pvec-fold (left fold via RRB tree traversal) for
+O(n) traversal without List conversion.</p>
+<p>pvec-fold : (B -&gt; A -&gt; B) -&gt; B -&gt; PVec A -&gt; B
+Reducible : Pi [A :0 Type] Pi [B :0 Type] (B -&gt; A -&gt; B) -&gt; B -&gt; PVec A -&gt; B</p>
+<p>The function signature matches directly: accumulator-first.</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> pvec-reducible : [<span class="hl-ty">Reducible</span> <span class="hl-ty">PVec</span>]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">B</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (f : (<span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>))) (<span class="hl-kw">fn</span> (z : <span class="hl-ty">B</span>) (<span class="hl-kw">fn</span> (v : (<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>))
+    (pvec-fold f z v)))))))</code></pre>
+<div class="prose"><p>========================================
+Indexed PVec Instance
+========================================
+O(log32 n) implementations via native PVec primitives.</p>
+<p>idx-nth : PVec A -&gt; Nat -&gt; Option A
+Bounds-checked: returns (some elem) if in bounds, (none) otherwise.</p></div>
 <pre><code class="prologos">(<span class="hl-kw">def</span> pvec-idx-nth : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>] [<span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span> [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>]]]]
   (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (v : (<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>)) (<span class="hl-kw">fn</span> (n : <span class="hl-ty">Nat</span>)
     (<span class="hl-kw">if</span> [lt? n [pvec-length v]]
@@ -288,18 +270,22 @@ packed as a nested Sigma: <code>(pair nth (pair length update))</code>.</p></div
 <div class="prose"><p>Indexed dict: triple (idx-nth, idx-length, idx-update) as nested Sigma</p></div>
 <pre><code class="prologos">(<span class="hl-kw">def</span> <span class="hl-ty">PVec--Indexed--dict</span> : (<span class="hl-ty">Indexed</span> <span class="hl-ty">PVec</span>)
   (pair pvec-idx-nth (pair pvec-idx-length pvec-idx-update)))</code></pre>
-</section>
-<h2 class="part-header">Part II — Derived Operations</h2>
-<section class="module-container">
-<div class="module-badge">prologos::core::pvec-ops</div>
-<h3 class="section-title">PVec Operations</h3>
-<div class="prose"><p><code>pvec-map</code>, <code>pvec-filter</code>, and <code>pvec-fold</code> are native AST primitives
-(parser keywords) that reduce via <code>rrb-fold</code> in the reduction engine.
-This module provides derived operations and function wrappers around
-AST keywords.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::list    <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons]]
-<span class="hl-kw">require</span> [prologos::data::option  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]</code></pre>
-<div class="prose"><p>pvec-any? : (A -&gt; Bool) -&gt; PVec A -&gt; Bool</p></div>
+<div class="prose"><p>========================================
+Functor instance for PVec
+========================================
+Uses native pvec-map for O(n) mapping without List conversion.
+pvec-functor : Functor PVec
+= Pi(A :0 Type) Pi(B :0 Type) (A -&gt; B) -&gt; PVec A -&gt; PVec B</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> pvec-functor : [<span class="hl-ty">Functor</span> <span class="hl-ty">PVec</span>]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">B</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (f : (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>)) (<span class="hl-kw">fn</span> (v : (<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>))
+    (pvec-map f v))))))</code></pre>
+<div class="prose"><p>========================================
+PVec Operations
+========================================
+pvec-map, pvec-filter, pvec-fold are now native AST primitives
+(parser keywords). They reduce via rrb-fold in the reduction engine.
+pvec-any? and pvec-all? use native pvec-fold.</p>
+<p>pvec-any? : (A -&gt; Bool) -&gt; PVec A -&gt; Bool</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> pvec-any? {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} [<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">Bool</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
 <span class="hl-kw">defn</span> pvec-any? [pred v]
   pvec-fold [<span class="hl-kw">fn</span> acc x [<span class="hl-kw">if</span> [pred x] true acc]] false v</code></pre>

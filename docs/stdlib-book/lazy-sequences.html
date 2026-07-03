@@ -171,7 +171,7 @@ ol.toc-chapters a:hover { text-decoration: underline; }
 </script>
 </head>
 <body>
-<nav class="chapter-nav"><a href="natural-numbers.html">← Natural Numbers</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="foldable.html">Foldable →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+<nav class="chapter-nav"><a href="natural-numbers.html">← Natural Numbers</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="collection-traits.html">Collection Traits →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
 <article>
 <h1 class="chapter-title">Lazy Sequences</h1>
 <div class="prose"><p>The lazy sequence — <code>LSeq</code> — is the universal intermediate
@@ -191,13 +191,16 @@ the trait instances that plug it into the collection hierarchy.</p></div>
 <h2 class="part-header">Part I — The LSeq Type</h2>
 <section class="module-container">
 <div class="module-badge">prologos::data::lseq</div>
-<h3 class="section-title">LSeq Definition</h3>
-<div class="prose"><p>A lazy sequence with two constructors. The thunk field in
-<code>lseq-cell</code> provides laziness: <code>Unit -&gt; LSeq A</code> means the
-tail is only computed when forced by applying to <code>unit</code>.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::option <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> none some]]
-
-<span class="hl-kw">data</span> <span class="hl-ty">LSeq</span> {<span class="hl-ty">A</span>}
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::option <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> none some]]</code></pre>
+<div class="prose"><p>========================================
+Prologos LSeq — Lazy Sequence
+========================================
+A lazy sequence with two constructors:
+  lseq-nil  — empty sequence
+  lseq-cell — head element + thunk producing the tail</p>
+<p>The thunk field (Unit -&gt; LSeq A) provides laziness:
+the tail is only computed when forced by applying to unit.</p></div>
+<pre><code class="prologos"><span class="hl-kw">data</span> <span class="hl-ty">LSeq</span> {<span class="hl-ty">A</span>}
   lseq-nil
   lseq-cell : <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Unit</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>]</code></pre>
 <div class="prose"><p>Get the head element as an Option.</p></div>
@@ -219,17 +222,19 @@ tail is only computed when forced by applying to <code>unit</code>.</p></div>
     | lseq-nil      <span class="hl-op">-&gt;</span> true
     | lseq-cell _ _ <span class="hl-op">-&gt;</span> false</code></pre>
 </section>
+<h2 class="part-header">Part II — LSeq Operations</h2>
 <section class="module-container">
 <div class="module-badge">prologos::data::lseq-ops</div>
-<h3 class="section-title">LSeq Operations</h3>
-<div class="prose"><p>Conversion, mapping, filtering, slicing, folding, and length.
-Functions that construct <code>lseq-cell</code> use explicit sexp-mode
-<code>(def ...)</code> bodies because the thunk field requires explicit
-type arguments passed to the constructors.</p></div>
 <pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::lseq   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span> lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?]]
         [prologos::data::option  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> none some]]
         [prologos::data::list    <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons]]</code></pre>
-<div class="prose"><p>Convert a List to an LSeq (preserves order, lazy tail thunks).</p></div>
+<div class="prose"><p>========================================
+LSeq Operations
+========================================
+Functions that construct lseq-cell use explicit (def ... (fn ...))
+with sexp bodies because the thunk field requires explicit type
+arguments. Type annotations use the unified &lt;&gt; dependent type syntax.</p>
+<p>Convert a List to an LSeq (preserves order, lazy tail thunks).</p></div>
 <pre><code class="prologos">(<span class="hl-kw">def</span> list-to-lseq : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>]]]
   (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">List</span> <span class="hl-ty">A</span>))
     (<span class="hl-kw">match</span> xs
@@ -288,60 +293,72 @@ type arguments passed to the constructors.</p></div>
   (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>))
     (lseq-fold <span class="hl-ty">Nat</span> <span class="hl-ty">A</span> (<span class="hl-kw">fn</span> (n : <span class="hl-ty">Nat</span>) (<span class="hl-kw">fn</span> (_ : <span class="hl-ty">A</span>) (suc n))) zero xs))))</code></pre>
 </section>
-<h2 class="part-header">Part II — Trait Instances</h2>
+<h2 class="part-header">Part III — Trait Instances</h2>
 <section class="module-container">
-<div class="module-badge">prologos::core::seqable-lseq</div>
-<h3 class="section-title">Seqable LSeq (Identity)</h3>
-<div class="prose"><p><code>to-seq</code> for LSeq is the identity function — LSeq is already
-a lazy sequence, so no conversion is needed.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::seqable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Seqable</span>]]
-<span class="hl-kw">require</span> [prologos::data::lseq          <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span>]]
-
-(<span class="hl-kw">def</span> <span class="hl-ty">LSeq--Seqable--dict</span> : [<span class="hl-ty">Seqable</span> <span class="hl-ty">LSeq</span>]
-  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>)) xs)))</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::foldable-lseq</div>
-<h3 class="section-title">Foldable LSeq</h3>
-<div class="prose"><p>Strict foldr: forces all elements via <code>lseq-to-list</code>, then
-delegates to list <code>foldr</code>. Adequate since fold always needs
-all elements.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::foldable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Foldable</span>]]
-<span class="hl-kw">require</span> [prologos::data::lseq           <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span>]]
-<span class="hl-kw">require</span> [prologos::data::lseq-ops       <span class="hl-kwlit">:refer</span> [lseq-to-list]]
+<div class="module-badge">prologos::core::lseq</div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::collection-traits <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Seqable</span>
+                                                    <span class="hl-ty">Buildable</span>
+                                                    <span class="hl-ty">Foldable</span>
+                                                    <span class="hl-ty">Reducible</span>
+                                                    <span class="hl-ty">Seq</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq           <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span> lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?]]
+<span class="hl-kw">require</span> [prologos::data::lseq-ops       <span class="hl-kwlit">:refer</span> [lseq-to-list lseq-fold]]
 <span class="hl-kw">require</span> [prologos::data::list            <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> foldr]]
-
-(<span class="hl-kw">def</span> lseq-foldable : [<span class="hl-ty">Foldable</span> <span class="hl-ty">LSeq</span>]
-  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">B</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (f : (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-ty">B</span>))) (<span class="hl-kw">fn</span> (z : <span class="hl-ty">B</span>) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>))
-    (foldr <span class="hl-ty">A</span> <span class="hl-ty">B</span> f z (lseq-to-list <span class="hl-ty">A</span> xs))))))))</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::buildable-lseq</div>
-<h3 class="section-title">Buildable LSeq (Identity)</h3>
-<div class="prose"><p><code>from-seq</code> for LSeq is the identity — the input is already
-an LSeq. <code>empty-coll</code> returns <code>lseq-nil</code>. Buildable is a
-two-method trait, so the dict is a Sigma pair.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::buildable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Buildable</span>]]
-<span class="hl-kw">require</span> [prologos::data::lseq            <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span> lseq-nil]]
-
-(<span class="hl-kw">spec</span> <span class="hl-ty">LSeq--Buildable--dict</span> (<span class="hl-ty">Buildable</span> <span class="hl-ty">LSeq</span>))
+<span class="hl-kw">require</span> [prologos::data::option         <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]</code></pre>
+<div class="prose"><p>========================================
+Seqable instance for LSeq (identity)
+========================================
+to-seq for LSeq is the identity function — LSeq is already a
+lazy sequence, so no conversion needed.</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> <span class="hl-ty">LSeq--Seqable--dict</span> : [<span class="hl-ty">Seqable</span> <span class="hl-ty">LSeq</span>]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>)) xs)))</code></pre>
+<div class="prose"><p>========================================
+Buildable instance for LSeq (identity)
+========================================
+from-seq for LSeq is the identity function — input is already LSeq.
+empty-coll returns lseq-nil.
+conj prepends via lseq-cell (lazy cons, O(1)).</p>
+<p>Buildable is a three-method trait, so the dict is a nested Sigma pair.</p></div>
+<pre><code class="prologos">(<span class="hl-kw">spec</span> <span class="hl-ty">LSeq--Buildable--dict</span> (<span class="hl-ty">Buildable</span> <span class="hl-ty">LSeq</span>))
 (<span class="hl-kw">def</span> <span class="hl-ty">LSeq--Buildable--dict</span>
   (pair
     (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>)) xs))
-    (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (lseq-nil <span class="hl-ty">A</span>))))</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::seq-lseq</div>
-<h3 class="section-title">Seq LSeq</h3>
-<div class="prose"><p>The Seq trait provides a three-method interface (first, rest,
-empty?) for any sequence type. For LSeq, these delegate
-directly to <code>lseq-head</code>, <code>lseq-rest</code>, and <code>lseq-empty?</code>.
-The dict is a nested Sigma: <code>(pair first-fn (pair rest-fn empty?-fn))</code>.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::seq-trait  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Seq</span>]]
-<span class="hl-kw">require</span> [prologos::data::lseq       <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span> lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?]]
-<span class="hl-kw">require</span> [prologos::data::option     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]
-
-(<span class="hl-kw">spec</span> <span class="hl-ty">LSeq--Seq--dict</span> (<span class="hl-ty">Seq</span> <span class="hl-ty">LSeq</span>))
+    (pair
+      (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (lseq-nil <span class="hl-ty">A</span>))
+      (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>)) (<span class="hl-kw">fn</span> (x : <span class="hl-ty">A</span>) (lseq-cell <span class="hl-ty">A</span> x (<span class="hl-kw">fn</span> (_ : <span class="hl-ty">Unit</span>) xs))))))))</code></pre>
+<div class="prose"><p>========================================
+Foldable instance for LSeq
+========================================
+Strict foldr: forces all elements via lseq-to-list, then delegates
+to list foldr. Adequate since fold always needs all elements.
+lseq-foldable : Foldable LSeq
+= Pi(A :0 Type) Pi(B :0 Type) (A -&gt; B -&gt; B) -&gt; B -&gt; LSeq A -&gt; B</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> lseq-foldable : [<span class="hl-ty">Foldable</span> <span class="hl-ty">LSeq</span>]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">B</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (f : (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-ty">B</span>))) (<span class="hl-kw">fn</span> (z : <span class="hl-ty">B</span>) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>))
+    (foldr <span class="hl-ty">A</span> <span class="hl-ty">B</span> f z (lseq-to-list <span class="hl-ty">A</span> xs))))))))</code></pre>
+<div class="prose"><p>========================================
+Reducible instance for LSeq
+========================================
+Uses lseq-fold (strict left fold, forces all elements).</p>
+<p>lseq-fold : Pi [A :0 Type] Pi [B :0 Type] (A -&gt; B -&gt; A) -&gt; A -&gt; LSeq B -&gt; A
+where A = accumulator type, B = element type (swapped!)</p>
+<p>Reducible expects:
+  Pi [A :0 Type] Pi [B :0 Type] (B -&gt; A -&gt; B) -&gt; B -&gt; LSeq A -&gt; B
+where A = element type, B = accumulator type</p>
+<p>So we pass type args as: lseq-fold B A (where B=acc, A=elem)
+to get: (B -&gt; A -&gt; B) -&gt; B -&gt; LSeq A -&gt; B</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> lseq-reducible : [<span class="hl-ty">Reducible</span> <span class="hl-ty">LSeq</span>]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">B</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (f : (<span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>))) (<span class="hl-kw">fn</span> (z : <span class="hl-ty">B</span>) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>))
+    (lseq-fold <span class="hl-ty">B</span> <span class="hl-ty">A</span> f z xs)))))))</code></pre>
+<div class="prose"><p>========================================
+Seq instance for LSeq
+========================================
+first  : LSeq A -&gt; Option A  (delegates to lseq-head wrapped in Option)
+rest   : LSeq A -&gt; LSeq A    (delegates to lseq-rest)
+empty? : LSeq A -&gt; Bool      (delegates to lseq-empty?)</p>
+<p>Seq is a three-method trait via deftype (nested Sigma):
+(pair first-fn (pair rest-fn empty?-fn))</p></div>
+<pre><code class="prologos">(<span class="hl-kw">spec</span> <span class="hl-ty">LSeq--Seq--dict</span> (<span class="hl-ty">Seq</span> <span class="hl-ty">LSeq</span>))
 (<span class="hl-kw">def</span> <span class="hl-ty">LSeq--Seq--dict</span>
   (pair</code></pre>
 <div class="prose"><p>first : Pi(A :0 Type) LSeq A -&gt; Option A</p></div>
@@ -360,7 +377,7 @@ The dict is a nested Sigma: <code>(pair first-fn (pair rest-fn empty?-fn))</code
         (lseq-empty? <span class="hl-ty">A</span> xs))))))</code></pre>
 </section>
 </article>
-<nav class="bottom-nav"><a href="natural-numbers.html">← Natural Numbers</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="foldable.html">Foldable →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+<nav class="bottom-nav"><a href="natural-numbers.html">← Natural Numbers</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="collection-traits.html">Collection Traits →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
 
 </body>
 </html>

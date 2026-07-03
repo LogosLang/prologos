@@ -178,10 +178,11 @@ ol.toc-chapters a:hover { text-decoration: underline; }
 traits: <strong>Add</strong>, <strong>Sub</strong>, <strong>Mul</strong>, <strong>Div</strong>, <strong>Neg</strong>, and <strong>Abs</strong>.
 Each trait defines one operation, and instances provide the
 implementation for each numeric type.</p>
-<p>The parser keywords <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, <code>negate</code>, and <code>abs</code>
-dispatch at the AST level based on the type of their arguments.
-These traits provide the same operations as first-class values
-that can be passed to higher-order functions like <code>reduce</code>.</p>
+<p>In HEAD position at arity 2, <code>[+ a b]</code> is the auto-widening parser
+keyword (numeric-join over the operand types). Everywhere else the
+names <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, <code>negate</code> denote first-class VALUES backed by
+these traits (Numerics N6e-E2): <code>reduce + 0 xs</code> and <code>map negate xs</code>
+work directly, resolving the trait dictionary from context.</p>
 <p>Because each is a single-method trait, the dictionary IS the
 function — no wrapper struct needed.</p>
 <p>Instance coverage:
@@ -190,14 +191,16 @@ function — no wrapper struct needed.</p>
   • <strong>Rat</strong>: Add, Sub, Mul, Div, Neg, Abs
   • <strong>Posit8–64</strong>: Add, Sub, Mul, Div, Neg, Abs
   • <strong>String</strong>: Add (concatenation) — no others</p></div>
-<h2 class="part-header">Part I — Addition</h2>
 <section class="module-container">
-<div class="module-badge">prologos::core::add-trait</div>
-<h3 class="section-title">The Add Trait</h3>
-<div class="prose"><p>Binary addition. Laws: commutative and associative.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::nat <span class="hl-kwlit">:refer</span> [add]]
-
-<span class="hl-kw">trait</span> <span class="hl-ty">Add</span> {<span class="hl-ty">A</span>}
+<div class="module-badge">prologos::core::arithmetic</div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::nat    <span class="hl-kwlit">:refer</span> [add sub mult]]
+<span class="hl-kw">require</span> [prologos::data::string <span class="hl-kwlit">:as</span> str <span class="hl-kwlit">:refer</span> []]</code></pre>
+</section>
+<h2 class="part-header">Add Trait — binary addition</h2>
+<div class="prose"><p>Add A = A A -&gt; A (single-method: dict IS the function)
+Generated: deftype Add, accessor Add-add
+Instance: Nat--Add--dict, Nat--Add--add</p></div>
+<pre><code class="prologos"><span class="hl-kw">trait</span> <span class="hl-ty">Add</span> {<span class="hl-ty">A</span>}
   add : <span class="hl-ty">A</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
   <span class="hl-kwlit">:doc</span> <span class="hl-str">"Binary addition over type A"</span>
   <span class="hl-kwlit">:laws</span>
@@ -211,99 +214,71 @@ function — no wrapper struct needed.</p>
 <pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">Nat</span>
   <span class="hl-kw">defn</span> add [x y] &lt;<span class="hl-ty">Nat</span>&gt;
     add x y</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::add-instances</div>
-<h3 class="section-title">Add Instances for Numeric Types</h3>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::add-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Add</span> <span class="hl-ty">Add-add</span>]]
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">Int</span>
+<div class="prose"><p>Int instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">Int</span>
   <span class="hl-kw">defn</span> add [x : <span class="hl-ty">Int</span>  y : <span class="hl-ty">Int</span>] &lt;<span class="hl-ty">Int</span>&gt;
-    int+ x y
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">Rat</span>
+    int+ x y</code></pre>
+<div class="prose"><p>Rat instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">Rat</span>
   <span class="hl-kw">defn</span> add [x : <span class="hl-ty">Rat</span>  y : <span class="hl-ty">Rat</span>] &lt;<span class="hl-ty">Rat</span>&gt;
-    rat+ x y
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">Posit8</span>
+    rat+ x y</code></pre>
+<div class="prose"><p>Posit8 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">Posit8</span>
   <span class="hl-kw">defn</span> add [x : <span class="hl-ty">Posit8</span>  y : <span class="hl-ty">Posit8</span>] &lt;<span class="hl-ty">Posit8</span>&gt;
-    p8+ x y
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">Posit16</span>
+    p8+ x y</code></pre>
+<div class="prose"><p>Posit16 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">Posit16</span>
   <span class="hl-kw">defn</span> add [x : <span class="hl-ty">Posit16</span>  y : <span class="hl-ty">Posit16</span>] &lt;<span class="hl-ty">Posit16</span>&gt;
-    p16+ x y
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">Posit32</span>
+    p16+ x y</code></pre>
+<div class="prose"><p>Posit32 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">Posit32</span>
   <span class="hl-kw">defn</span> add [x : <span class="hl-ty">Posit32</span>  y : <span class="hl-ty">Posit32</span>] &lt;<span class="hl-ty">Posit32</span>&gt;
-    p32+ x y
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">Posit64</span>
+    p32+ x y</code></pre>
+<div class="prose"><p>Posit64 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">Posit64</span>
   <span class="hl-kw">defn</span> add [x : <span class="hl-ty">Posit64</span>  y : <span class="hl-ty">Posit64</span>] &lt;<span class="hl-ty">Posit64</span>&gt;
     p64+ x y</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::add-string-instance</div>
-<h3 class="section-title">Add String — Concatenation</h3>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::add-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Add</span>]]
-<span class="hl-kw">require</span> [prologos::data::string    <span class="hl-kwlit">:as</span> str <span class="hl-kwlit">:refer</span> []]
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">String</span>
+<div class="prose"><p>String instance — concatenation</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">String</span>
   <span class="hl-kw">defn</span> add [x : <span class="hl-ty">String</span>  y : <span class="hl-ty">String</span>] &lt;<span class="hl-ty">String</span>&gt;
     str::append x y</code></pre>
-</section>
-<h2 class="part-header">Part II — Subtraction</h2>
-<section class="module-container">
-<div class="module-badge">prologos::core::sub-trait</div>
-<h3 class="section-title">The Sub Trait</h3>
-<div class="prose"><p>Binary subtraction. Nat subtraction is saturating:
-<code>sub(x, y) = max(x - y, 0)</code>.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::nat <span class="hl-kwlit">:refer</span> [sub]]
-
-<span class="hl-kw">trait</span> <span class="hl-ty">Sub</span> {<span class="hl-ty">A</span>}
+<h2 class="part-header">Sub Trait — binary subtraction</h2>
+<div class="prose"><p>Sub A = A A -&gt; A (single-method: dict IS the function)
+Nat sub is saturating: sub(x, y) = max(x - y, 0)</p></div>
+<pre><code class="prologos"><span class="hl-kw">trait</span> <span class="hl-ty">Sub</span> {<span class="hl-ty">A</span>}
   sub : <span class="hl-ty">A</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
   <span class="hl-kwlit">:doc</span> <span class="hl-str">"Binary subtraction over type A"</span></code></pre>
 <div class="prose"><p>Nat instance — saturating subtraction</p></div>
 <pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Nat</span>
   <span class="hl-kw">defn</span> sub [x y] &lt;<span class="hl-ty">Nat</span>&gt;
     sub x y</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::sub-instances</div>
-<h3 class="section-title">Sub Instances for Numeric Types</h3>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::sub-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Sub</span> <span class="hl-ty">Sub-sub</span>]]
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Int</span>
+<div class="prose"><p>Int instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Int</span>
   <span class="hl-kw">defn</span> sub [x : <span class="hl-ty">Int</span>  y : <span class="hl-ty">Int</span>] &lt;<span class="hl-ty">Int</span>&gt;
-    int- x y
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Rat</span>
+    int- x y</code></pre>
+<div class="prose"><p>Rat instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Rat</span>
   <span class="hl-kw">defn</span> sub [x : <span class="hl-ty">Rat</span>  y : <span class="hl-ty">Rat</span>] &lt;<span class="hl-ty">Rat</span>&gt;
-    rat- x y
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Posit8</span>
+    rat- x y</code></pre>
+<div class="prose"><p>Posit8 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Posit8</span>
   <span class="hl-kw">defn</span> sub [x : <span class="hl-ty">Posit8</span>  y : <span class="hl-ty">Posit8</span>] &lt;<span class="hl-ty">Posit8</span>&gt;
-    p8- x y
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Posit16</span>
+    p8- x y</code></pre>
+<div class="prose"><p>Posit16 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Posit16</span>
   <span class="hl-kw">defn</span> sub [x : <span class="hl-ty">Posit16</span>  y : <span class="hl-ty">Posit16</span>] &lt;<span class="hl-ty">Posit16</span>&gt;
-    p16- x y
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Posit32</span>
+    p16- x y</code></pre>
+<div class="prose"><p>Posit32 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Posit32</span>
   <span class="hl-kw">defn</span> sub [x : <span class="hl-ty">Posit32</span>  y : <span class="hl-ty">Posit32</span>] &lt;<span class="hl-ty">Posit32</span>&gt;
-    p32- x y
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Posit64</span>
+    p32- x y</code></pre>
+<div class="prose"><p>Posit64 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Posit64</span>
   <span class="hl-kw">defn</span> sub [x : <span class="hl-ty">Posit64</span>  y : <span class="hl-ty">Posit64</span>] &lt;<span class="hl-ty">Posit64</span>&gt;
     p64- x y</code></pre>
-</section>
-<h2 class="part-header">Part III — Multiplication</h2>
-<section class="module-container">
-<div class="module-badge">prologos::core::mul-trait</div>
-<h3 class="section-title">The Mul Trait</h3>
-<div class="prose"><p>Binary multiplication. Laws: commutative and associative.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::nat <span class="hl-kwlit">:refer</span> [mult]]
-
-<span class="hl-kw">trait</span> <span class="hl-ty">Mul</span> {<span class="hl-ty">A</span>}
+<h2 class="part-header">Mul Trait — binary multiplication</h2>
+<div class="prose"><p>Mul A = A A -&gt; A (single-method: dict IS the function)</p></div>
+<pre><code class="prologos"><span class="hl-kw">trait</span> <span class="hl-ty">Mul</span> {<span class="hl-ty">A</span>}
   mul : <span class="hl-ty">A</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
   <span class="hl-kwlit">:doc</span> <span class="hl-str">"Binary multiplication over type A"</span>
   <span class="hl-kwlit">:laws</span>
@@ -317,42 +292,33 @@ function — no wrapper struct needed.</p>
 <pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Nat</span>
   <span class="hl-kw">defn</span> mul [x y] &lt;<span class="hl-ty">Nat</span>&gt;
     mult x y</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::mul-instances</div>
-<h3 class="section-title">Mul Instances for Numeric Types</h3>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::mul-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Mul</span> <span class="hl-ty">Mul-mul</span>]]
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Int</span>
+<div class="prose"><p>Int instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Int</span>
   <span class="hl-kw">defn</span> mul [x : <span class="hl-ty">Int</span>  y : <span class="hl-ty">Int</span>] &lt;<span class="hl-ty">Int</span>&gt;
-    int* x y
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Rat</span>
+    int* x y</code></pre>
+<div class="prose"><p>Rat instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Rat</span>
   <span class="hl-kw">defn</span> mul [x : <span class="hl-ty">Rat</span>  y : <span class="hl-ty">Rat</span>] &lt;<span class="hl-ty">Rat</span>&gt;
-    rat* x y
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Posit8</span>
+    rat* x y</code></pre>
+<div class="prose"><p>Posit8 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Posit8</span>
   <span class="hl-kw">defn</span> mul [x : <span class="hl-ty">Posit8</span>  y : <span class="hl-ty">Posit8</span>] &lt;<span class="hl-ty">Posit8</span>&gt;
-    p8* x y
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Posit16</span>
+    p8* x y</code></pre>
+<div class="prose"><p>Posit16 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Posit16</span>
   <span class="hl-kw">defn</span> mul [x : <span class="hl-ty">Posit16</span>  y : <span class="hl-ty">Posit16</span>] &lt;<span class="hl-ty">Posit16</span>&gt;
-    p16* x y
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Posit32</span>
+    p16* x y</code></pre>
+<div class="prose"><p>Posit32 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Posit32</span>
   <span class="hl-kw">defn</span> mul [x : <span class="hl-ty">Posit32</span>  y : <span class="hl-ty">Posit32</span>] &lt;<span class="hl-ty">Posit32</span>&gt;
-    p32* x y
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Posit64</span>
+    p32* x y</code></pre>
+<div class="prose"><p>Posit64 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Posit64</span>
   <span class="hl-kw">defn</span> mul [x : <span class="hl-ty">Posit64</span>  y : <span class="hl-ty">Posit64</span>] &lt;<span class="hl-ty">Posit64</span>&gt;
     p64* x y</code></pre>
-</section>
-<h2 class="part-header">Part IV — Division</h2>
-<section class="module-container">
-<div class="module-badge">prologos::core::div-trait</div>
-<h3 class="section-title">The Div Trait</h3>
-<div class="prose"><p>Binary division. No Nat instance (no integer division primitive).
-Int division is truncating (toward zero).</p></div>
+<h2 class="part-header">Div Trait — binary division</h2>
+<div class="prose"><p>Div A = A A -&gt; A (single-method: dict IS the function)
+No Nat instance (no integer division primitive).</p></div>
 <pre><code class="prologos"><span class="hl-kw">trait</span> <span class="hl-ty">Div</span> {<span class="hl-ty">A</span>}
   div : <span class="hl-ty">A</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
   <span class="hl-kwlit">:doc</span> <span class="hl-str">"Binary division over type A"</span></code></pre>
@@ -360,38 +326,29 @@ Int division is truncating (toward zero).</p></div>
 <pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Div</span> <span class="hl-ty">Int</span>
   <span class="hl-kw">defn</span> div [x : <span class="hl-ty">Int</span>  y : <span class="hl-ty">Int</span>] &lt;<span class="hl-ty">Int</span>&gt;
     int/ x y</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::div-instances</div>
-<h3 class="section-title">Div Instances for Numeric Types</h3>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::div-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Div</span> <span class="hl-ty">Div-div</span>]]
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Div</span> <span class="hl-ty">Rat</span>
+<div class="prose"><p>Rat instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Div</span> <span class="hl-ty">Rat</span>
   <span class="hl-kw">defn</span> div [x : <span class="hl-ty">Rat</span>  y : <span class="hl-ty">Rat</span>] &lt;<span class="hl-ty">Rat</span>&gt;
-    rat/ x y
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Div</span> <span class="hl-ty">Posit8</span>
+    rat/ x y</code></pre>
+<div class="prose"><p>Posit8 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Div</span> <span class="hl-ty">Posit8</span>
   <span class="hl-kw">defn</span> div [x : <span class="hl-ty">Posit8</span>  y : <span class="hl-ty">Posit8</span>] &lt;<span class="hl-ty">Posit8</span>&gt;
-    p8/ x y
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Div</span> <span class="hl-ty">Posit16</span>
+    p8/ x y</code></pre>
+<div class="prose"><p>Posit16 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Div</span> <span class="hl-ty">Posit16</span>
   <span class="hl-kw">defn</span> div [x : <span class="hl-ty">Posit16</span>  y : <span class="hl-ty">Posit16</span>] &lt;<span class="hl-ty">Posit16</span>&gt;
-    p16/ x y
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Div</span> <span class="hl-ty">Posit32</span>
+    p16/ x y</code></pre>
+<div class="prose"><p>Posit32 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Div</span> <span class="hl-ty">Posit32</span>
   <span class="hl-kw">defn</span> div [x : <span class="hl-ty">Posit32</span>  y : <span class="hl-ty">Posit32</span>] &lt;<span class="hl-ty">Posit32</span>&gt;
-    p32/ x y
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Div</span> <span class="hl-ty">Posit64</span>
+    p32/ x y</code></pre>
+<div class="prose"><p>Posit64 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Div</span> <span class="hl-ty">Posit64</span>
   <span class="hl-kw">defn</span> div [x : <span class="hl-ty">Posit64</span>  y : <span class="hl-ty">Posit64</span>] &lt;<span class="hl-ty">Posit64</span>&gt;
     p64/ x y</code></pre>
-</section>
-<h2 class="part-header">Part V — Negation and Absolute Value</h2>
-<section class="module-container">
-<div class="module-badge">prologos::core::neg-trait</div>
-<h3 class="section-title">The Neg Trait</h3>
-<div class="prose"><p>Unary negation. No Nat instance (negation leaves the Nat domain).
-Law: involution (<code>neg (neg x) = x</code>).</p></div>
+<h2 class="part-header">Neg Trait — unary negation</h2>
+<div class="prose"><p>Neg A = A -&gt; A (single-method: dict IS the function)
+No Nat instance (negation leaves Nat domain).</p></div>
 <pre><code class="prologos"><span class="hl-kw">trait</span> <span class="hl-ty">Neg</span> {<span class="hl-ty">A</span>}
   neg : <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
   <span class="hl-kwlit">:doc</span> <span class="hl-str">"Unary negation over type A"</span>
@@ -403,37 +360,29 @@ Law: involution (<code>neg (neg x) = x</code>).</p></div>
 <pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Neg</span> <span class="hl-ty">Int</span>
   <span class="hl-kw">defn</span> neg [x : <span class="hl-ty">Int</span>] &lt;<span class="hl-ty">Int</span>&gt;
     int-neg x</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::neg-instances</div>
-<h3 class="section-title">Neg Instances for Numeric Types</h3>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::neg-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Neg</span> <span class="hl-ty">Neg-neg</span>]]
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Neg</span> <span class="hl-ty">Rat</span>
+<div class="prose"><p>Rat instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Neg</span> <span class="hl-ty">Rat</span>
   <span class="hl-kw">defn</span> neg [x : <span class="hl-ty">Rat</span>] &lt;<span class="hl-ty">Rat</span>&gt;
-    rat-neg x
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Neg</span> <span class="hl-ty">Posit8</span>
+    rat-neg x</code></pre>
+<div class="prose"><p>Posit8 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Neg</span> <span class="hl-ty">Posit8</span>
   <span class="hl-kw">defn</span> neg [x : <span class="hl-ty">Posit8</span>] &lt;<span class="hl-ty">Posit8</span>&gt;
-    p8-neg x
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Neg</span> <span class="hl-ty">Posit16</span>
+    p8-neg x</code></pre>
+<div class="prose"><p>Posit16 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Neg</span> <span class="hl-ty">Posit16</span>
   <span class="hl-kw">defn</span> neg [x : <span class="hl-ty">Posit16</span>] &lt;<span class="hl-ty">Posit16</span>&gt;
-    p16-neg x
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Neg</span> <span class="hl-ty">Posit32</span>
+    p16-neg x</code></pre>
+<div class="prose"><p>Posit32 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Neg</span> <span class="hl-ty">Posit32</span>
   <span class="hl-kw">defn</span> neg [x : <span class="hl-ty">Posit32</span>] &lt;<span class="hl-ty">Posit32</span>&gt;
-    p32-neg x
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Neg</span> <span class="hl-ty">Posit64</span>
+    p32-neg x</code></pre>
+<div class="prose"><p>Posit64 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Neg</span> <span class="hl-ty">Posit64</span>
   <span class="hl-kw">defn</span> neg [x : <span class="hl-ty">Posit64</span>] &lt;<span class="hl-ty">Posit64</span>&gt;
     p64-neg x</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::abs-trait</div>
-<h3 class="section-title">The Abs Trait</h3>
-<div class="prose"><p>Absolute value. No Nat instance (Nat is always non-negative).
-Laws: non-negative and idempotent.</p></div>
+<h2 class="part-header">Abs Trait — absolute value</h2>
+<div class="prose"><p>Abs A = A -&gt; A (single-method: dict IS the function)
+No Nat instance (Nat is always non-negative).</p></div>
 <pre><code class="prologos"><span class="hl-kw">trait</span> <span class="hl-ty">Abs</span> {<span class="hl-ty">A</span>}
   abs : <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
   <span class="hl-kwlit">:doc</span> <span class="hl-str">"Absolute value over type A"</span>
@@ -448,32 +397,26 @@ Laws: non-negative and idempotent.</p></div>
 <pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Abs</span> <span class="hl-ty">Int</span>
   <span class="hl-kw">defn</span> abs [x : <span class="hl-ty">Int</span>] &lt;<span class="hl-ty">Int</span>&gt;
     int-abs x</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::abs-instances</div>
-<h3 class="section-title">Abs Instances for Numeric Types</h3>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::abs-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Abs</span> <span class="hl-ty">Abs-abs</span>]]
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Abs</span> <span class="hl-ty">Rat</span>
+<div class="prose"><p>Rat instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Abs</span> <span class="hl-ty">Rat</span>
   <span class="hl-kw">defn</span> abs [x : <span class="hl-ty">Rat</span>] &lt;<span class="hl-ty">Rat</span>&gt;
-    rat-abs x
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Abs</span> <span class="hl-ty">Posit8</span>
+    rat-abs x</code></pre>
+<div class="prose"><p>Posit8 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Abs</span> <span class="hl-ty">Posit8</span>
   <span class="hl-kw">defn</span> abs [x : <span class="hl-ty">Posit8</span>] &lt;<span class="hl-ty">Posit8</span>&gt;
-    p8-abs x
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Abs</span> <span class="hl-ty">Posit16</span>
+    p8-abs x</code></pre>
+<div class="prose"><p>Posit16 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Abs</span> <span class="hl-ty">Posit16</span>
   <span class="hl-kw">defn</span> abs [x : <span class="hl-ty">Posit16</span>] &lt;<span class="hl-ty">Posit16</span>&gt;
-    p16-abs x
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Abs</span> <span class="hl-ty">Posit32</span>
+    p16-abs x</code></pre>
+<div class="prose"><p>Posit32 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Abs</span> <span class="hl-ty">Posit32</span>
   <span class="hl-kw">defn</span> abs [x : <span class="hl-ty">Posit32</span>] &lt;<span class="hl-ty">Posit32</span>&gt;
-    p32-abs x
-
-<span class="hl-kw">impl</span> <span class="hl-ty">Abs</span> <span class="hl-ty">Posit64</span>
+    p32-abs x</code></pre>
+<div class="prose"><p>Posit64 instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Abs</span> <span class="hl-ty">Posit64</span>
   <span class="hl-kw">defn</span> abs [x : <span class="hl-ty">Posit64</span>] &lt;<span class="hl-ty">Posit64</span>&gt;
     p64-abs x</code></pre>
-</section>
 </article>
 <nav class="bottom-nav"><a href="characters-and-strings.html">← Characters And Strings</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="identity-and-algebra.html">Identity And Algebra →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
 

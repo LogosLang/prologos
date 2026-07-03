@@ -183,7 +183,7 @@ chapter covers four related data types:</p>
   • <strong>Result</strong> — success-or-error with domain-specific semantics
   • <strong>Never</strong> — the uninhabited bottom type</p>
 <p>Pairs use the built-in <code>Sigma</code> type with a non-dependent first
-component: <code>Sigma (_ : A) B</code>. The <code>pair</code>, <code>first</code>, and <code>second</code>
+component: <code>Sigma (_ : A) B</code>. The <code>pair</code>, <code>fst</code>, and <code>snd</code>
 constructors/accessors are AST-level keywords. The Pair module
 adds derived operations like <code>swap</code>, <code>bimap</code>, and <code>uncurry</code>.</p>
 <p>Option and Result are the workhorses of error handling in
@@ -195,24 +195,24 @@ failure, Result when the error carries information.</p></div>
 <h3 class="section-title">Pair Utilities</h3>
 <div class="prose"><p>The built-in <code>Sigma</code> type represents dependent pairs. When the
 second component doesn't depend on the first, you get an ordinary
-tuple. The <code>pair</code>, <code>first</code>, and <code>second</code> keywords are built-in
+tuple. The <code>pair</code>, <code>fst</code>, and <code>snd</code> keywords are built-in
 AST nodes; this module provides derived combinators.</p>
 <p>Swap: (a, b) -&gt; (b, a)</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> swap [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">A</span>&gt;] <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">B</span>&gt;] <span class="hl-ty">A</span>]
 <span class="hl-kw">defn</span> swap [p]
-  pair [second p] [first p]</code></pre>
+  pair [snd p] [fst p]</code></pre>
 <div class="prose"><p>Map over first component: (A -&gt; C) -&gt; (A, B) -&gt; (C, B)</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> map-fst [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">C</span>] [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">A</span>&gt;] <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">C</span>&gt;] <span class="hl-ty">B</span>]
 <span class="hl-kw">defn</span> map-fst [f p]
-  pair [f [first p]] [second p]</code></pre>
+  pair [f [fst p]] [snd p]</code></pre>
 <div class="prose"><p>Map over second component: (B -&gt; C) -&gt; (A, B) -&gt; (A, C)</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> map-snd [<span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">C</span>] [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">A</span>&gt;] <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">A</span>&gt;] <span class="hl-ty">C</span>]
 <span class="hl-kw">defn</span> map-snd [f p]
-  pair [first p] [f [second p]]</code></pre>
+  pair [fst p] [f [snd p]]</code></pre>
 <div class="prose"><p>Bimap: (A -&gt; C) -&gt; (B -&gt; D) -&gt; (A, B) -&gt; (C, D)</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> bimap [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">C</span>] [<span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">D</span>] [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">A</span>&gt;] <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">C</span>&gt;] <span class="hl-ty">D</span>]
 <span class="hl-kw">defn</span> bimap [f g p]
-  pair [f [first p]] [g [second p]]</code></pre>
+  pair [f [fst p]] [g [snd p]]</code></pre>
 <div class="prose"><p>Duplicate: a -&gt; (a, a)</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> dup <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">A</span>&gt;] <span class="hl-ty">A</span>]
 <span class="hl-kw">defn</span> dup [x]
@@ -220,7 +220,7 @@ AST nodes; this module provides derived combinators.</p>
 <div class="prose"><p>Uncurry: (A -&gt; B -&gt; C) -&gt; (A, B) -&gt; C</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> uncurry [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">C</span>] [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">A</span>&gt;] <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">C</span>
 <span class="hl-kw">defn</span> uncurry [f p]
-  f [first p] [second p]</code></pre>
+  f [fst p] [snd p]</code></pre>
 </section>
 <h2 class="part-header">Part II — Option</h2>
 <section class="module-container">
