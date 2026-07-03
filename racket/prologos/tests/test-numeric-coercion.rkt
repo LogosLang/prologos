@@ -122,7 +122,7 @@
   ;; 10 + p64-value → Posit64; the exact-side operand (10) is a literal → silent (N6a)
   (define result (run "(eval (+ 10 (from-integer <Posit64> 5)))"))
   (check-equal? result
-                '("15p64 : Posit64")))
+                '("15p : Posit64")))
 
 ;; ========================================
 ;; Within posit family: P8 + P32 → P32

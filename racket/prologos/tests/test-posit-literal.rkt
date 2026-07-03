@@ -24,7 +24,7 @@
   (check-equal? (ws-val "2p8")       "2p8 : Posit8")
   (check-equal? (ws-val "3.14p16")   "3.14p16 : Posit16")
   (check-equal? (ws-val "3.14p32")   "3.14 : Posit32")
-  (check-equal? (ws-val "1.5e-3p64") "0.0015p64 : Posit64"))
+  (check-equal? (ws-val "1.5e-3p64") "0.0015p : Posit64"))
 
 (test-case "posit-literal/negative-and-integer-shapes"
   (check-equal? (ws-val "-2.5p16") "-2.5p16 : Posit16")
@@ -34,15 +34,13 @@
   ;; same-width posit arithmetic over pNN literals
   (check-equal? (ws-val "[p16+ 1.5p16 2.0p16]") "3.5p16 : Posit16"))
 
-(test-case "posit-literal/no-bare-p"
-  ;; `3.14p` is NOT a posit literal (width mandatory); it lexes as the decimal
-  ;; 3.14 followed by the identifier `p` and fails to parse/elaborate as a lone
-  ;; expression — it must never silently produce a posit value.
-  (define rs (with-handlers ([(lambda (_) #t) (lambda (_) '())])
-               (run-ns-ws-all "3.14p")))
-  (check-false (for/or ([r (in-list rs)])
-                 (and (string? r) (string-contains? r ": Posit")))
-               "bare `p` suffix must not yield a posit value"))
+(test-case "posit-literal/bare-p-is-posit64"
+  ;; bare `p` = Posit64 (added for Float symmetry: mirrors bare `f` = Float64).
+  ;; Explicit `p64` still accepted on input and coexists; display emits bare `p`.
+  (check-equal? (ws-val "3.14p")   "3.14p : Posit64")
+  (check-equal? (ws-val "3.14p64") "3.14p : Posit64")   ;; p64 input → bare `p` display
+  (check-true (string-contains? (ws-val "2p") ": Posit64"))
+  (check-true (string-contains? (ws-val "-2.5p") ": Posit64")))
 
 ;; ========================================
 ;; N6b default flip at WS level (decimal/exponent → Posit32; fraction → Rat)

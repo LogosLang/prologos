@@ -109,11 +109,11 @@
   (check-equal? (list-ref results-b 0) "1p8 : Posit8")
   (check-equal? (list-ref results-b 1) "2p16 : Posit16")
   (check-equal? (list-ref results-b 2) "1.5 : Posit32")
-  (check-equal? (list-ref results-b 3) "1.5p64 : Posit64")
+  (check-equal? (list-ref results-b 3) "1.5p : Posit64")
   (check-equal? (list-ref results-b 4) "2p8 : Posit8")
   (check-equal? (list-ref results-b 5) "1.5p16 : Posit16")
   (check-equal? (list-ref results-b 6) "2.5 : Posit32")
-  (check-equal? (list-ref results-b 7) "0.5p64 : Posit64"))
+  (check-equal? (list-ref results-b 7) "0.5p : Posit64"))
 
 (test-case "float NaN/+Inf/-Inf -> posit NaR (posit-standard total mapping)"
   (for ([i (in-list '(8 9 10))])

@@ -78,7 +78,7 @@
   (check-equal? (list-ref r-posit 2) "3.5 : Posit32")
   (check-equal? (list-ref r-posit 3) "2.5 : Posit32")
   (check-equal? (list-ref r-posit 4) "1.5p8 : Posit8")
-  (check-equal? (list-ref r-posit 5) "1.5p64 : Posit64")
+  (check-equal? (list-ref r-posit 5) "1.5p : Posit64")
   (check-equal? (list-ref r-posit 6) "3.5p16 : Posit16"))
 
 (test-case "to-posit*: non-finite float -> NaR; posit NaR -> NaR"

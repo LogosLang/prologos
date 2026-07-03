@@ -312,4 +312,4 @@
   (check-equal? (run "(eval q64-zero)")
                 '("[quire64-val 0] : Quire64"))
   (check-equal? (run "(eval (q64-to (q64-fma q64-zero (posit64 4611686018427387904) (posit64 4611686018427387904))))")
-                '("1p64 : Posit64")))
+                '("1p : Posit64")))

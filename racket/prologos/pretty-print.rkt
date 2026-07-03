@@ -88,8 +88,9 @@
       "f32")]))
 
 ;; Posit display (N6c, sigil-free): Posit32 bare (integral → forced `.0`);
-;; other widths suffixed `pNN` (integral mantissa re-reads via the pNN
-;; integer shape, e.g. `2p8`). NaR = bare name, all widths (no reader form).
+;; Posit64 → `<d>p` (symmetry with Float64's `<d>f`); Posit8/16 → `<d>pNN`
+;; (integral mantissa re-reads via the pNN integer shape, e.g. `2p8`).
+;; NaR = bare name, all widths (no reader form).
 (define (posit->display n v)
   (let ([s (posit-shortest-decimal n v)])
     (cond
@@ -98,6 +99,7 @@
        (if (or (string-contains? s ".") (string-contains? s "e"))
            s
            (string-append s ".0"))]
+      [(= n 64) (string-append s "p")]  ;; Posit64 → bare `p` (symmetry with Float64's `f`)
       [else (string-append s "p" (number->string n))])))
 
 ;; ========================================

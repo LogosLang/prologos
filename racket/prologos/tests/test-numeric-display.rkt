@@ -79,7 +79,7 @@
   (check-equal? (pp-expr (expr-posit8  (posit8-encode 5/2)) '())     "2.5p8")
   (check-equal? (pp-expr (expr-posit8  (posit8-encode 2)) '())       "2p8")
   (check-equal? (pp-expr (expr-posit16 (posit16-encode 3/2)) '())    "1.5p16")
-  (check-equal? (pp-expr (expr-posit64 (posit64-encode 1/2)) '())    "0.5p64"))
+  (check-equal? (pp-expr (expr-posit64 (posit64-encode 1/2)) '())    "0.5p"))
 
 (test-case "all-256 posit8 display round-trip (N6c: p8 display is re-readable)"
   ;; Every non-NaR posit8 bit pattern's display, stripped of its p8 suffix and

@@ -403,10 +403,10 @@
                      (- j2 pos)))))))
 
 (define (recognize-posit-literal rrb pos)
-  ;; Posit literal (Numerics N6b): [-]?digit+(.digit+)?([eE][+-]?digit+)? p (8|16|32|64)
-  ;; REQUIRES the trailing `pNN` with an EXPLICIT width — there is deliberately no
-  ;; bare `p` form: bare decimals ARE Posit32 (D-N6.1), so `3.14p` would add a
-  ;; redundant spelling. Mirrors recognize-float-literal (widths differ: one-char 8).
+  ;; Posit literal (Numerics N6b; bare `p` = Posit64 added for Float symmetry):
+  ;;   [-]?digit+(.digit+)?([eE][+-]?digit+)? p (8|16|32|64)?
+  ;; Bare `p` → Posit64 (mirrors bare `f` = Float64); explicit p8/p16/p32/p64; no
+  ;; suffix at all = Posit32 (D-N6.1 compute default). Mirrors recognize-float-literal.
   ;; Classified 'posit-literal → ($posit-literal <exact-rational> <width>) → Posit.
   (define c0 (rrb-char-at rrb pos))
   (define neg?
@@ -455,7 +455,7 @@
                            [(and cj cj1 (char=? cj #\3) (char=? cj1 #\2)) (+ j 2)]
                            [(and cj cj1 (char=? cj #\6) (char=? cj1 #\4)) (+ j 2)]
                            [(and cj (char=? cj #\8)) (+ j 1)]
-                           [else #f])]                 ;; NO bare `p` — width mandatory
+                           [else j])]                  ;; bare `p` → Posit64 (like bare `f`)
                      [after (and j2 (rrb-char-at rrb j2))])
                 (and j2
                      ;; trailing guard: the suffix must end the token (no alnum after)
@@ -1099,7 +1099,7 @@
    (token-pattern 'tilde-number (lambda (rrb pos) (recognize-removed-tilde-number rrb pos))
                   (lambda (s p l)
                     (error 'prologos-reader
-                           "`~~` approximate literals were removed — bare decimals are Posit32 (3.14); use pNN literals for other widths (3.14p64)"))
+                           "`~~` approximate literals were removed — bare decimals are Posit32 (3.14); use pNN literals for other widths (3.14p16, or 3.14p for Posit64)"))
                   86))
   ;; Backtick and comma (quasiquote/unquote)
   (register-token-pattern!
@@ -1858,7 +1858,7 @@
                         (let ([c (string-ref lexeme 1)])
                           (or (char-numeric? c) (char=? c #\-))))))
       (error 'prologos-reader
-             "`~~` approximate literals were removed — bare decimals are Posit32 (3.14); use pNN literals for other widths (3.14p64)"))
+             "`~~` approximate literals were removed — bare decimals are Posit32 (3.14); use pNN literals for other widths (3.14p16, or 3.14p for Posit64)"))
     ;; Reject standalone & (must use &> for rule clauses)
     (when (and (eq? type 'symbol) (equal? lexeme "&"))
       (error 'prologos-reader "Unexpected & — use &> for rule clauses"))
@@ -2603,7 +2603,9 @@
                  [(and (>= len 2) (char=? lc #\8)
                        (char=? (string-ref lex (- len 2)) #\p))
                   (values (substring lex 0 (- len 2)) 8)]
-                 [else (values lex 32)]))  ;; unreachable: recognizer requires a width
+                 [(char=? lc #\p)  ;; bare `p` → Posit64 (mirrors bare `f` = Float64)
+                  (values (substring lex 0 (- len 1)) 64)]
+                 [else (values lex 32)]))  ;; unreachable: recognizer emits p8/16/32/64/bare-p
              ;; exact rational like decimal/approx; posit encoding at elaborate
              (define num-val (or (string->number (string-append "#e" num-str))
                                  (string->number num-str)
