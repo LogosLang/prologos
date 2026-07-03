@@ -149,8 +149,11 @@ defn double-spend [coin alice bob]
 Prologos uses exact arithmetic by default (~Int~, ~Rat~) and Posit numbers
 for approximate computation. Posits provide tapered precision --- more bits
 near 1.0, fewer at extremes --- and a single ~NaR~ (Not a Real) instead of
-IEEE 754's zoo of NaN/Inf values. IEEE floats are available for FFI
-interop but are not the default.
+IEEE 754's zoo of NaN/Inf values. IEEE ~Float32~/~Float64~ are also full,
+user-facing compute primitives (arithmetic, literals, their own tower rank)
+--- for IEEE semantics and interop, not merely FFI (Numerics N3). Guidance:
+Posit is the recommended default for computation, Float the interop/IEEE
+choice; neither is the literal default (a bare decimal like ~3.14~ is Posit32).
 
 ** Propagator Networks
 Type inference, constraint solving, and runtime coordination all use the
