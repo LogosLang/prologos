@@ -9,6 +9,8 @@
 ;;;
 
 (require racket/string
+         racket/port          ;; open-output-nowhere, port->string (gh #73 session)
+         racket/path          ;; path-only (gh #73 lib-dir resolution)
          "source-location.rkt"
          "errors.rkt"
          "parser.rkt"
@@ -18,15 +20,139 @@
          "parse-reader.rkt"  ;; prologos-read-syntax (sexp mode)
          "macros.rkt"
          "sexp-readtable.rkt"
+         "namespace.rkt"      ;; current-module-registry / current-ns-context / current-lib-paths (gh #73)
          "trait-resolution.rkt")
 
 (provide run-repl
-         current-repl-mode)
+         current-repl-mode
+         make-repl-session    ;; gh #73: testable session entry points
+         repl-eval!)
 
 ;; ========================================
 ;; Mode parameter
 ;; ========================================
 (define current-repl-mode (make-parameter 'ws))
+
+;; ========================================
+;; Persistent REPL session (gh #73)
+;; ----------------------------------------
+;; Mirrors lsp/server.rkt `eval-in-session-raw!`: the ns/module/def context
+;; lives in a session that survives across evals. Each input `parameterize`s
+;; the 9 context params FROM the session, runs the full WS pipeline via
+;; `process-string-ws` (which consumes `ns` AND runs preparse Pass -1 — fixing
+;; BOTH the persistence loss and the bare-`ns` error), then snapshots the
+;; mutated params BACK. stdout/stderr → nowhere suppresses PERF/PHASE telemetry.
+;; (Path B per gh #73: replicated here rather than extracting a shared module,
+;;  to leave the working LSP untouched; a shared `repl-session.rkt` is filed
+;;  as a follow-up.)
+;; ========================================
+
+(struct repl-session
+  (ns-context module-registry trait-registry impl-registry param-impl-registry
+   preparse-registry capability-registry spec-store mnr) #:mutable)
+
+;; Prelude loaded once, cached (registries + lib-dir).
+(struct prelude-snap
+  (module-registry trait-registry impl-registry param-impl-registry
+   preparse-registry capability-registry lib-dir) #:transparent)
+
+(define cached-prelude (box #f))
+
+;; Load the prelude once and capture its registries (mirrors
+;; lsp/server.rkt `load-prelude-cache!`, minus the LSP observatory cache).
+(define (load-prelude!)
+  (or (unbox cached-prelude)
+      (let ()
+        (define here-dir (path->string (path-only (syntax-source #'here))))
+        (define lib-dir (simplify-path (build-path here-dir "lib")))
+        (define-values (mr tr ir pir prr cr)
+          (parameterize ([current-file-module-network-ref (make-module-network)]
+                         [current-ns-context #f]
+                         [current-module-registry (hasheq)]
+                         [current-lib-paths (list lib-dir)]
+                         [current-preparse-registry (current-preparse-registry)]
+                         [current-trait-registry (current-trait-registry)]
+                         [current-impl-registry (current-impl-registry)]
+                         [current-param-impl-registry (current-param-impl-registry)]
+                         [current-capability-registry (current-capability-registry)]
+                         [current-output-port (open-output-nowhere)]
+                         [current-error-port (open-output-nowhere)])
+            (install-module-loader!)
+            (process-string "(ns prelude-cache)\n")
+            (values (current-module-registry)
+                    (current-trait-registry)
+                    (current-impl-registry)
+                    (current-param-impl-registry)
+                    (current-preparse-registry)
+                    (current-capability-registry))))
+        (define snap (prelude-snap mr tr ir pir prr cr lib-dir))
+        (set-box! cached-prelude snap)
+        snap)))
+
+;; Create a fresh REPL session seeded from the cached prelude, with the working
+;; namespace established (`ns repl`), mirroring the LSP's get-or-create-session!.
+(define (make-repl-session)
+  (define pc (load-prelude!))
+  (define session
+    (repl-session #f
+                  (prelude-snap-module-registry pc)
+                  (prelude-snap-trait-registry pc)
+                  (prelude-snap-impl-registry pc)
+                  (prelude-snap-param-impl-registry pc)
+                  (prelude-snap-preparse-registry pc)
+                  (prelude-snap-capability-registry pc)
+                  (hasheq)
+                  (make-module-network)))
+  (repl-eval! session "(ns repl)\n")
+  session)
+
+;; Evaluate `code` in `session`: parameterize the 9 params from the session,
+;; run `process-string-ws`, snapshot the mutated params back. Returns the raw
+;; result list (formatted strings and/or prologos-error structs).
+(define (repl-eval! session code)
+  (define results '())
+  (with-handlers
+    ([exn:fail? (lambda (e) (set! results (list (prologos-error #f (exn-message e)))))])
+    (parameterize ([current-file-module-network-ref
+                    (or (repl-session-mnr session) (make-module-network))]
+                   [current-ns-context           (repl-session-ns-context session)]
+                   [current-module-registry      (repl-session-module-registry session)]
+                   [current-lib-paths            (list (prelude-snap-lib-dir (load-prelude!)))]
+                   [current-preparse-registry    (repl-session-preparse-registry session)]
+                   [current-trait-registry       (repl-session-trait-registry session)]
+                   [current-impl-registry        (repl-session-impl-registry session)]
+                   [current-param-impl-registry  (repl-session-param-impl-registry session)]
+                   [current-capability-registry  (repl-session-capability-registry session)]
+                   [current-spec-store           (repl-session-spec-store session)]
+                   [current-error-port           (open-output-nowhere)]
+                   [current-output-port          (open-output-nowhere)]
+                   [current-definition-locations (hasheq)])
+      (install-module-loader!)
+      (set! results (process-string-ws code))
+      (set-repl-session-mnr!                 session (current-file-module-network-ref))
+      (set-repl-session-ns-context!          session (current-ns-context))
+      (set-repl-session-module-registry!     session (current-module-registry))
+      (set-repl-session-trait-registry!      session (current-trait-registry))
+      (set-repl-session-impl-registry!       session (current-impl-registry))
+      (set-repl-session-param-impl-registry! session (current-param-impl-registry))
+      (set-repl-session-preparse-registry!   session (current-preparse-registry))
+      (set-repl-session-capability-registry! session (current-capability-registry))
+      (set-repl-session-spec-store!          session (current-spec-store))))
+  results)
+
+;; The interactive loop's single session (lazily initialized on first use).
+(define interactive-session (box #f))
+(define (get-interactive-session!)
+  (or (unbox interactive-session)
+      (let ([s (make-repl-session)]) (set-box! interactive-session s) s)))
+
+;; Display a result list from repl-eval!.
+(define (display-repl-results results)
+  (for ([r (in-list results)])
+    (cond
+      [(prologos-error? r) (displayln (format-error r))]
+      [(string? r)         (displayln r)]
+      [else                (displayln (format "~a" r))])))
 
 ;; ========================================
 ;; REPL Main Loop
@@ -98,37 +224,10 @@
 ;; Process input in whitespace mode
 ;; ========================================
 (define (process-ws-input input)
-  (with-handlers
-    ([exn:fail? (lambda (e)
-                  (displayln (format "Error: ~a" (exn-message e))))])
-    (define port (open-input-string input))
-    (port-count-lines! port)
-    ;; Read all forms produced by the whitespace reader
-    (define stx (prologos-read-syntax "<repl>" port))
-    (let loop ()
-      (unless (eof-object? stx)
-        ;; Pre-parse macro expansion
-        (define datum (syntax->datum stx))
-        (cond
-          [(and (pair? datum) (eq? (car datum) 'defmacro))
-           (process-defmacro datum)
-           (displayln "Macro defined.")]
-          [(and (pair? datum) (eq? (car datum) 'deftype))
-           (process-deftype datum)
-           (displayln "Type alias defined.")]
-          [else
-           (define expanded-datum (preparse-expand-form datum))
-           (define expanded-stx
-             (if (equal? expanded-datum datum) stx (datum->syntax #f expanded-datum stx)))
-           (define surf (parse-datum expanded-stx))
-           (if (prologos-error? surf)
-               (displayln (format-error surf))
-               (let ([result (process-command surf)])
-                 (if (prologos-error? result)
-                     (displayln (format-error result))
-                     (displayln result))))])
-        (set! stx (prologos-read-syntax "<repl>" port))
-        (loop)))))
+  ;; gh #73: route through the persistent session. `process-string-ws` consumes
+  ;; `ns` (Bug B) and runs the full pipeline; the session persists ns/def
+  ;; context across inputs (Bug A). Replaces the old per-form process-command loop.
+  (display-repl-results (repl-eval! (get-interactive-session!) input)))
 
 ;; ========================================
 ;; Read input in S-expression mode (paren-balanced)
@@ -210,11 +309,11 @@
        (with-handlers
          ([exn:fail? (lambda (e)
                        (displayln (format "Error loading file: ~a" (exn-message e))))])
-         (define results (process-file clean-path))
-         (for ([r (in-list results)])
-           (if (prologos-error? r)
-               (displayln (format-error r))
-               (displayln r)))))]
+         ;; gh #73: load through the session (read → process-string-ws in
+         ;; session), like the LSP's loadFile, so loaded defs persist into
+         ;; subsequent evals (was `process-file`, whose parameterize unwound).
+         (define contents (call-with-input-file clean-path port->string))
+         (display-repl-results (repl-eval! (get-interactive-session!) contents))))]
     [(string-prefix? cmd ":type")
      (let ([expr-str (string-trim (substring cmd 5))])
        (define port (open-input-string (format "(infer ~a)" expr-str)))
