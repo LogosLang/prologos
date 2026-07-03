@@ -5,3 +5,6 @@ src/parser.c
 src/tree_sitter/
 bindings/
 *.wasm
+# Built grammar libraries — platform-specific; build locally via install.sh
+*.dylib
+*.so
