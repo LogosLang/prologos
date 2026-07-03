@@ -139,34 +139,43 @@
   (check-true (string-contains? (last r) "Posit64")))
 
 
-;; Cross-family posit->rat (4 tests)
-(test-case "from/posit8-to-rat"
+;; Cross-family posit->rat via TryFrom (Num Track 1 N6f-b — None on NaR)
+(test-case "try-from/posit8-to-rat"
   (define r (run-ns-strings (string-append
-    "(ns t)(imports [prologos::core::conversions :refer [From From-from]])"
+    "(ns t)(imports [prologos::core::conversions :refer [TryFrom TryFrom-try-from]])"
     "(imports [prologos::core::conversions :refer []])"
-    "(eval (From-from Posit8 Rat Posit8-Rat--From--dict (posit8 64)))")))
-  (check-true (string-contains? (last r) "1 : Rat")))
+    "(eval (TryFrom-try-from Posit8 Rat Posit8-Rat--TryFrom--dict (posit8 64)))")))
+  (check-true (string-contains? (last r) "some Rat 1")))
 
 
-(test-case "from/posit16-to-rat"
+(test-case "try-from/posit16-to-rat"
   (define r (run-ns-strings (string-append
-    "(ns t)(imports [prologos::core::conversions :refer [From From-from]])"
+    "(ns t)(imports [prologos::core::conversions :refer [TryFrom TryFrom-try-from]])"
     "(imports [prologos::core::conversions :refer []])"
-    "(eval (From-from Posit16 Rat Posit16-Rat--From--dict (posit16 16384)))")))
-  (check-true (string-contains? (last r) "1 : Rat")))
+    "(eval (TryFrom-try-from Posit16 Rat Posit16-Rat--TryFrom--dict (posit16 16384)))")))
+  (check-true (string-contains? (last r) "some Rat 1")))
 
 
-(test-case "from/posit32-to-rat"
+(test-case "try-from/posit32-to-rat"
   (define r (run-ns-strings (string-append
-    "(ns t)(imports [prologos::core::conversions :refer [From From-from]])"
+    "(ns t)(imports [prologos::core::conversions :refer [TryFrom TryFrom-try-from]])"
     "(imports [prologos::core::conversions :refer []])"
-    "(eval (From-from Posit32 Rat Posit32-Rat--From--dict (posit32 1073741824)))")))
-  (check-true (string-contains? (last r) "1 : Rat")))
+    "(eval (TryFrom-try-from Posit32 Rat Posit32-Rat--TryFrom--dict (posit32 1073741824)))")))
+  (check-true (string-contains? (last r) "some Rat 1")))
 
 
-(test-case "from/posit64-to-rat"
+(test-case "try-from/posit64-to-rat"
   (define r (run-ns-strings (string-append
-    "(ns t)(imports [prologos::core::conversions :refer [From From-from]])"
+    "(ns t)(imports [prologos::core::conversions :refer [TryFrom TryFrom-try-from]])"
     "(imports [prologos::core::conversions :refer []])"
-    "(eval (From-from Posit64 Rat Posit64-Rat--From--dict (posit64 4611686018427387904)))")))
-  (check-true (string-contains? (last r) "1 : Rat")))
+    "(eval (TryFrom-try-from Posit64 Rat Posit64-Rat--TryFrom--dict (posit64 4611686018427387904)))")))
+  (check-true (string-contains? (last r) "some Rat 1")))
+
+
+;; NaR -> none (the totality fix; posit8 NaR bit pattern = 128)
+(test-case "try-from/posit8-nar-to-rat-is-none"
+  (define r (run-ns-strings (string-append
+    "(ns t)(imports [prologos::core::conversions :refer [TryFrom TryFrom-try-from]])"
+    "(imports [prologos::core::conversions :refer []])"
+    "(eval (TryFrom-try-from Posit8 Rat Posit8-Rat--TryFrom--dict (posit8 128)))")))
+  (check-true (string-contains? (last r) "none")))

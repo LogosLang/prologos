@@ -91,34 +91,14 @@ impl From Posit32 Posit64
     p32-if-nar Posit64 p64-nar [p64-from-rat [p32-to-rat x]] x
 
 ;; ========================================
-;; Cross-family: Posit -> Rat (lossless on FINITE posits)
+;; Cross-family: Posit -> Rat — see TryFrom (below)
 ;; ========================================
-;; Every finite posit has an exact rational representation. NaR does NOT —
-;; p*-to-rat reduces NaR to an error, so these From instances are total only
-;; on the finite subset (a latent violation of From's totality contract).
-;; The honest interface is TryFrom (NaR -> none); the From -> TryFrom
-;; migration is deferred to Numerics N6 (ergonomics) — see the Numerics
-;; design doc §12.
-
-;; Posit8 -> Rat
-impl From Posit8 Rat
-  defn from [x : Posit8] <Rat>
-    p8-to-rat x
-
-;; Posit16 -> Rat
-impl From Posit16 Rat
-  defn from [x : Posit16] <Rat>
-    p16-to-rat x
-
-;; Posit32 -> Rat
-impl From Posit32 Rat
-  defn from [x : Posit32] <Rat>
-    p32-to-rat x
-
-;; Posit64 -> Rat
-impl From Posit64 Rat
-  defn from [x : Posit64] <Rat>
-    p64-to-rat x
+;; Every FINITE posit has an exact rational representation; NaR does NOT.
+;; The honest interface is TryFrom (NaR -> none, finite -> some), defined in
+;; the TryFrom Instances section below. (The earlier total `From Posit{N} Rat`
+;; instances were a latent violation of From's totality contract; migrated to
+;; TryFrom in Num Track 1 N6f-b, 2026-07-02.) For an ergonomic total-with-panic
+;; path, use `to-rat` (ToRat) — it panics on NaR and points at try-from.
 
 ;; ========================================
 ;; Cross-scheme: Posit <-> Float (Numerics Q11) — TOTAL, posit-standard
@@ -322,6 +302,29 @@ impl TryFrom Float32 Int
 impl TryFrom Float64 Float32
   defn try-from [x : Float64] <Option Float32>
     some Float32 [float-to-float32 x]
+
+;; ========================================
+;; Posit -> Rat (Num Track 1 N6f-b) — None on NaR, some on finite
+;; ========================================
+;; Every finite posit is an exact rational; NaR has no rational form. p*-if-nar
+;; short-circuits the finite branch, so p*-to-rat is never called on NaR.
+;; (Replaces the earlier total `From Posit{N} Rat` instances.)
+
+impl TryFrom Posit8 Rat
+  defn try-from [x : Posit8] <Option Rat>
+    p8-if-nar <Option Rat> [none Rat] [some Rat [p8-to-rat x]] x
+
+impl TryFrom Posit16 Rat
+  defn try-from [x : Posit16] <Option Rat>
+    p16-if-nar <Option Rat> [none Rat] [some Rat [p16-to-rat x]] x
+
+impl TryFrom Posit32 Rat
+  defn try-from [x : Posit32] <Option Rat>
+    p32-if-nar <Option Rat> [none Rat] [some Rat [p32-to-rat x]] x
+
+impl TryFrom Posit64 Rat
+  defn try-from [x : Posit64] <Option Rat>
+    p64-if-nar <Option Rat> [none Rat] [some Rat [p64-to-rat x]] x
 
 ;; ========================================
 ;; Into Trait — reversed From (convenience)
