@@ -71,6 +71,12 @@ skip+warn policy; these lift the skips / harden the substrate.
   probe+mini-design. Also lifts the `from-integer`/`from-rational` exclusions
   (whose names additionally collide with hard arity-2 parser keywords —
   `parser.rkt:1961-1974` — so they may want distinct wrapper names regardless).
+- **N6f dependency (2026-07-02)**: the `sum`/`product` explicit-dict → where-constraint
+  modernization (Num Track 1 N6f, D-N6.5 filing) is BLOCKED here — their bodies call the
+  nullary identity accessor (`[AdditiveIdentity-zero id-dict]` / `[MultiplicativeIdentity-one …]`,
+  `core/algebra.prologos:117,129`), which needs `zero`/`one` resolved from the where-context
+  (exactly this item). N6f-a retired the `plus/minus/times/divide/negate-fn/abs-fn` wrappers
+  (commit `a556f38e`) but LEFT `sum`/`product` explicit-dict pending this resolution.
 
 ### 4. Registry silent-overwrite: no duplicate-binding diagnostics [issue #67]
 
