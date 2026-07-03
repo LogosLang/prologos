@@ -631,14 +631,14 @@ Future tracks (not yet scheduled): reverse-direction lambda passing, compound ty
 |------------------+------|
 | *Master Roadmap* | [[file:2026-07-02_NUM_MASTER.md][2026-07-02_NUM_MASTER.md]] |
 | *Thesis*         | Home for all work on the numerics systems of Prologos — numeric tower (Nat/Int/Rat/Posit/Float), refinement-via-trait, literal + display models, numeric ergonomics, and the type-system treatment of numeric polymorphism. Long-lived container; numerics-specific priors (Feb tower, ergonomics audit, coercion/subtyping) are inputs, not separate efforts. |
-| *Status*         | Founded 2026-07-02, seeded from the in-flight Numerics track. Track 1 (Tower Completion & Refinement) deep in implementation (N1–N6e ✅; N6f capstone ⬜). Track 2 (Generic ~Num~) proposed (impl-note seed). |
+| *Status*         | Founded 2026-07-02, seeded from the in-flight Numerics track. Track 1 (Tower Completion & Refinement) ✅ complete (N1–N6; N6f done 2026-07-02) → DEMO P1. Track 2 (Generic ~Num~) proposed (impl-note seed). |
 | *Origin*         | Spawned from DEMO Track 1 (the dependency-resolver demo's JSON numbers); resume+revise of the [[file:2026-02-19_NUMERICS_TOWER_ROADMAP.md][2026-02-19 Numerics Tower]]. |
 
 *** Tracks
 
 | Track | Description | Status | Design / seed |
 |-------+-------------+--------+---------------|
-| 1 | Numerics Tower Completion & Refinement (Float primitive, refinement-via-trait, literal model, display, exponent lexing, ergonomics) | 🔄 N1–N6e ✅; N6f capstone ⬜ | [[file:2026-06-30_NUMERICS_TRACK_CHARTER.md][Charter]] · [[file:2026-06-30_NUMERICS_TRACK_STAGE3_DESIGN.md][Stage-3 D.2]] |
+| 1 | Numerics Tower Completion & Refinement (Float primitive, refinement-via-trait, literal model, display, exponent lexing, ergonomics) | ✅ N1–N6 complete (N6f done) → DEMO P1 | [[file:2026-06-30_NUMERICS_TRACK_CHARTER.md][Charter]] · [[file:2026-06-30_NUMERICS_TRACK_STAGE3_DESIGN.md][Stage-3 D.2]] |
 | 2 | Generic ~Num~ — constraint-as-type numeric functions (~spec square Num -> Num~); keyword→trait routing; heterogeneous multi-arg via relational NumJoin | ⬜ proposed (seed note) | [[file:2026-07-02_GENERIC_NUM_TYPE_NOTE.md][Seed note]] |
 
 Cross-series: general ~Type@property~ refinement surface → UCS track 5 ([[file:2026-06-30_TRAITS_AS_REFINEMENT_TYPING_NOTE.md][note]]); numeric typing on-network → future PPN track ([[file:2026-06-30_NUMERICS_ON_NETWORK_PPN_NOTE.md][note]]); DEMO P1 unblocks after Track 1.

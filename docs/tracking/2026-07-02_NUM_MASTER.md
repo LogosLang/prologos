@@ -15,13 +15,13 @@ Design discipline follows the project standard (Stage 1–3 design cycle, ground
 
 ## Status
 
-Series founded 2026-07-02, seeded from the in-flight Numerics track. **Track 1** (Numerics Tower Completion) is deep in implementation (N1–N6e ✅; N6f capstone remaining). **Track 2** (Generic `Num`) is a **proposed** track with an implementation-note seed.
+Series founded 2026-07-02, seeded from the in-flight Numerics track. **Track 1** (Numerics Tower Completion) is ✅ **complete** (N1–N6; N6f reconciliation capstone done 2026-07-02) — unblocks DEMO P1. **Track 2** (Generic `Num`) is a **proposed** track with an implementation-note seed.
 
 ## Tracks
 
 | Track | Description | Status | Design / seed |
 |---|---|---|---|
-| **1 — Numerics Tower Completion & Refinement** | `Float` as a full compute primitive; numeric tower reconceived as refinement-via-trait (nominal-erased Sign-backed refined types); context-typed polymorphic literal model; round-tripping display; exponent lexing; ergonomics; vision/roadmap reconciliation. Sub-phases N0–N6 (N6f = the reconciliation capstone). | 🔄 N1–N6e ✅; **N6f** (capstone) ⬜ next | Charter: [`2026-06-30_NUMERICS_TRACK_CHARTER.md`](2026-06-30_NUMERICS_TRACK_CHARTER.md) · Stage-3 D.2: [`2026-06-30_NUMERICS_TRACK_STAGE3_DESIGN.md`](2026-06-30_NUMERICS_TRACK_STAGE3_DESIGN.md) |
+| **1 — Numerics Tower Completion & Refinement** | `Float` as a full compute primitive; numeric tower reconceived as refinement-via-trait (nominal-erased Sign-backed refined types); context-typed polymorphic literal model; round-tripping display; exponent lexing; ergonomics; vision/roadmap reconciliation. Sub-phases N0–N6 (N6f = the reconciliation capstone). | ✅ **N1–N6 complete** (N6f done 2026-07-02; `sum`/`product` dict→where deferred → DEFERRED.md) → DEMO P1 | Charter: [`2026-06-30_NUMERICS_TRACK_CHARTER.md`](2026-06-30_NUMERICS_TRACK_CHARTER.md) · Stage-3 D.2: [`2026-06-30_NUMERICS_TRACK_STAGE3_DESIGN.md`](2026-06-30_NUMERICS_TRACK_STAGE3_DESIGN.md) |
 | **2 — Generic `Num` (constraint-as-type numeric functions)** *(proposed)* | A bundle/constraint name usable directly in TYPE position (`spec square Num -> Num`) so numeric functions can be written over any numeric type. Includes the constraint-as-type desugar, keyword→trait-method routing for `+ - * /` on constrained abstract operands, and the deeper **heterogeneous** case (different numeric type per argument, result = numeric-join). | ⬜ **proposed** (seed note; not yet Stage-1) | Seed: [`2026-07-02_GENERIC_NUM_TYPE_NOTE.md`](2026-07-02_GENERIC_NUM_TYPE_NOTE.md) |
 
 **Sequencing note**: Track 2 is *out of focus for the current DEMO needs* (owner, 2026-07-02) and is deliberately NOT folded into Track 1's N6f capstone. Track 1 completes (→ DEMO P1 unblock) before Track 2 opens its own Stage-1→3 cycle.
