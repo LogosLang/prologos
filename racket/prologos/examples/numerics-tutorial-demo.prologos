@@ -503,15 +503,15 @@ defn recip [x]
 ;; => true : Bool
 
 
-;; --- Generic wrappers (prefix form) ---
+;; --- First-class operators ---
 ;;
-;; The prelude provides `plus`, `minus`, `times`, `divide` as prefix
-;; wrappers for the trait operations:
+;; Since Numerics N6e, the operator names are first-class values that
+;; dispatch through traits — use them directly (no prefix wrappers needed):
 
-[plus 10 20]
+[+ 10 20]
 ;; => 30 : Int
 
-[times 6 7]
+[* 6 7]
 ;; => 42 : Int
 
 

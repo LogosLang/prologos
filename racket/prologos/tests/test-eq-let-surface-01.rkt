@@ -114,9 +114,9 @@
   (check-true (string-contains? result "false")))
 
 (test-case "eq-surface/ws: Nat equality true"
-  ;; [plus 1N 2N] = 3N → true
+  ;; [+ 1N 2N] = 3N → true
   (define result
-    (run-ws-last "ns test-eq-nat-t\n[plus 1N 2N] = 3N\n"))
+    (run-ws-last "ns test-eq-nat-t\n[+ 1N 2N] = 3N\n"))
   (check-true (string? result))
   (check-true (string-contains? result "true")))
 
@@ -159,9 +159,9 @@
   (check-true (string-contains? result "true")))
 
 (test-case "let-eq/ws: let with plus equality in value"
-  ;; Inside a function body: let r := [plus 1N 2N] = 3N → r is true
+  ;; Inside a function body: let r := [+ 1N 2N] = 3N → r is true
   (define result
-    (run-ws-last "ns test-let-eq2\nspec test-fn2 Nat -> Bool\ndefn test-fn2 [u]\n  let r := [plus 1N 2N] = 3N\n  r\n[test-fn2 zero]\n"))
+    (run-ws-last "ns test-let-eq2\nspec test-fn2 Nat -> Bool\ndefn test-fn2 [u]\n  let r := [+ 1N 2N] = 3N\n  r\n[test-fn2 zero]\n"))
   (check-true (string? result))
   (check-true (string-contains? result "true")))
 

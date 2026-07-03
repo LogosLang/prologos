@@ -98,8 +98,9 @@
 ;; ---- Collection conversions (now in prologos::core::collections) ----
 
 ;; ---- Generic numeric operations + first-class arithmetic ----
-;; sum, product, int-range, plus, minus, times, divide, negate-fn, abs-fn
-;; are now in prologos::core::algebra (loaded via :refer-all above)
+;; sum, product, int-range are in prologos::core::algebra (loaded via :refer-all above)
+;; (the plus/minus/times/divide/negate-fn/abs-fn wrappers were retired in N6f —
+;;  use the first-class operator names + - * / negate abs directly)
 
 ;; ---- Instance registration (side-effect only, :refer []) ----
 ;; eq-instances + eq-numeric-instances merged into prologos::core::eq

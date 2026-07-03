@@ -142,19 +142,19 @@ defn sum-of-squares [add-d mul-d x y]
 
 
 ;; ========================================================================
-;; 5. PREFIX WRAPPERS: plus, minus, times, divide
+;; 5. FIRST-CLASS OPERATORS: +, -, *, /
 ;; ========================================================================
 ;;
-;; For use in higher-order contexts (map, fold, etc.), the prelude
-;; exports prefix wrappers that dispatch through traits:
+;; Since Numerics N6e, the operator names are first-class values usable in
+;; higher-order contexts (map, fold, etc.) — dispatch through traits directly:
 
-[plus 3 4]
+[+ 3 4]
 ;; => 7 : Int
 
-[times 6 7]
+[* 6 7]
 ;; => 42 : Int
 
-[minus 10 3]
+[- 10 3]
 ;; => 7 : Int
 
 
