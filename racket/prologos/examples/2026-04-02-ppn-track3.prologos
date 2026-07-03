@@ -129,8 +129,8 @@ def double-inc := >> inc inc
 eval [double-inc 40]
 
 ;; Mixfix
-eval .{3 + 4}
-eval .{2 * 3 + 1}
+eval .(3 + 4)
+eval .(2 * 3 + 1)
 
 ;; List literal
 def my-list := '[1 2 3]

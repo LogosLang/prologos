@@ -3,11 +3,11 @@
 ;;;
 ;;; PROLOGOS MIXFIX SYNTAX TESTS — Part 2
 ;;; Precedence groups, user-defined operators, chained comparisons,
-;;; diagnostics, and pattern matching with .{...}.
+;;; diagnostics, and pattern matching with .(...).
 ;;;
 ;;; G. Precedence-group registration + :mixfix metadata on spec
 ;;; H. Chained comparisons + diagnostics
-;;; I. Pattern matching with .{...}
+;;; I. Pattern matching with .(...)
 ;;;
 
 (require rackunit
@@ -178,7 +178,7 @@
 
 ;; --- Unit tests: user-defined operator used in Pratt parser ---
 
-(test-case "pratt: user-defined operator in .{...}"
+(test-case "pratt: user-defined operator in .(...)"
   (parameterize ([current-user-precedence-groups (hasheq)]
                  [current-user-operators (hasheq)]
                  [current-spec-store (current-spec-store)])
@@ -233,22 +233,22 @@
 ;; --- Chained comparisons E2E ---
 
 ;; Note: In sexp mode, < and > are readtable macro characters (angle brackets),
-;; so sexp E2E tests with < / > are only possible via WS mode's .{...} syntax.
+;; so sexp E2E tests with < / > are only possible via WS mode's .(...) syntax.
 ;; The Pratt parser correctly handles them at the datum level (see unit tests above).
 
-(test-case "e2e/ws: chained .{1 < 2 <= 3}"
+(test-case "e2e/ws: chained .(1 < 2 <= 3)"
   (define result
-    (run-ws-last "eval .{1N < 2N <= 3N}\n"))
+    (run-ws-last "eval .(1N < 2N <= 3N)\n"))
   (check-equal? result "true : Bool"))
 
-(test-case "e2e/ws: chained .{3 > 2 > 1}"
+(test-case "e2e/ws: chained .(3 > 2 > 1)"
   (define result
-    (run-ws-last "eval .{3N > 2N > 1N}\n"))
+    (run-ws-last "eval .(3N > 2N > 1N)\n"))
   (check-equal? result "true : Bool"))
 
-(test-case "e2e/ws: chained .{1 < 3 > 2} (mixed)"
+(test-case "e2e/ws: chained .(1 < 3 > 2) (mixed)"
   (define result
-    (run-ws-last "eval .{1N < 3N > 2N}\n"))
+    (run-ws-last "eval .(1N < 3N > 2N)\n"))
   (check-equal? result "true : Bool"))
 
 (test-case "e2e/sexp: chained == (no angle issues)"
@@ -280,7 +280,7 @@
     (lambda () (preparse-expand-form '($mixfix a +)))))
 
 ;; ========================================
-;; I. Phase 4 tests: pattern matching with .{...}
+;; I. Phase 4 tests: pattern matching with .(...)
 ;; ========================================
 
 ;; --- Unit test: $mixfix expansion of :: produces cons (already works) ---
@@ -293,7 +293,7 @@
   (define result (preparse-expand-form '($mixfix a :: b :: c)))
   (check-equal? result '(cons a (cons b c))))
 
-;; --- E2E: match with .{h :: t} patterns (sexp mode) ---
+;; --- E2E: match with .(h :: t) patterns (sexp mode) ---
 
 (test-case "e2e/sexp: match with $mixfix cons pattern"
   (define result
@@ -309,27 +309,27 @@
       "(eval (the (List Nat) (match '[10N] (($mixfix h :: t) -> t) (nil -> nil))))")))
   (check-true (string-contains? result "nil") (format "Expected nil in: ~a" result)))
 
-;; --- E2E: match with .{h :: t} patterns (WS mode) ---
+;; --- E2E: match with .(h :: t) patterns (WS mode) ---
 
-(test-case "e2e/ws: match with .{h :: t} pattern"
+(test-case "e2e/ws: match with .(h :: t) pattern"
   (define result
     (run-ws-last
      (string-append
       "eval\n"
       "  the Nat\n"
       "    match '[1N 2N 3N]\n"
-      "      | .{h :: t} -> h\n"
+      "      | .(h :: t) -> h\n"
       "      | nil -> 0N\n")))
   (check-equal? result "1N : Nat"))
 
-(test-case "e2e/ws: match with .{h :: t} — access tail"
+(test-case "e2e/ws: match with .(h :: t) — access tail"
   (define result
     (run-ws-last
      (string-append
       "eval\n"
       "  the [List Nat]\n"
       "    match '[5N 6N]\n"
-      "      | .{h :: t} -> t\n"
+      "      | .(h :: t) -> t\n"
       "      | nil -> nil\n")))
   (check-true (string-contains? result "6N") (format "Expected 6N in tail: ~a" result)))
 
@@ -340,6 +340,6 @@
       "eval\n"
       "  the Nat\n"
       "    match (the [List Nat] nil)\n"
-      "      | .{h :: t} -> h\n"
+      "      | .(h :: t) -> h\n"
       "      | nil -> 99N\n")))
   (check-equal? result "99N : Nat"))

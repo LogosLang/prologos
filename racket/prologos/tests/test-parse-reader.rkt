@@ -898,7 +898,7 @@
                [d (cond
                     [(memq type '(lbracket lparen lbrace
                                   quote-lbracket at-lbracket tilde-lbracket
-                                  hash-lbrace dot-lbrace))
+                                  hash-lbrace dot-lbrace dot-lparen))
                      (+ depth 1)]
                     [(memq type '(rbracket rparen rbrace))
                      (- depth 1)]

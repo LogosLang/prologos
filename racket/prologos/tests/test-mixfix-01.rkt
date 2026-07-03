@@ -2,13 +2,13 @@
 
 ;;;
 ;;; PROLOGOS MIXFIX SYNTAX TESTS — Part 1
-;;; Unit tests + basic E2E for .{...} delimited infix syntax.
+;;; Unit tests + basic E2E for .(...) delimited infix syntax.
 ;;;
-;;; A. Tokenizer: .{ produces dot-lbrace token
-;;; B. WS Reader: .{a + b} reads as ($mixfix a + b)
+;;; A. Tokenizer: .( produces dot-lbrace token
+;;; B. WS Reader: .(a + b) reads as ($mixfix a + b)
 ;;; C. Pratt Parser: ($mixfix 1 + 2 * 3) → (add 1 (mul 2 3))
 ;;; D. E2E: sexp mode ($mixfix ...)
-;;; E. E2E: WS mode (.{...})
+;;; E. E2E: WS mode (.(...))
 ;;;
 
 (require rackunit
@@ -45,17 +45,22 @@
             (not (memq (token-type t) '(newline eof))))
           (tokenize-string s)))
 
-(test-case "tokenize: .{ produces dot-lbrace token"
+(test-case "tokenize: .( produces dot-lparen token"
+  (define toks (content-tokens ".("))
+  (check-equal? (length toks) 1)
+  (check-equal? (token-type (car toks)) 'dot-lparen))
+
+(test-case "tokenize: .{ still tokenizes as dot-lbrace (retired-mixfix token)"
   (define toks (content-tokens ".{"))
   (check-equal? (length toks) 1)
   (check-equal? (token-type (car toks)) 'dot-lbrace))
 
-(test-case "tokenize: .{a + b} produces dot-lbrace, symbols, rbrace"
-  (define toks (content-tokens ".{a + b}"))
-  (check-equal? (token-type (car toks)) 'dot-lbrace)
-  (check-equal? (token-type (last toks)) 'rbrace))
+(test-case "tokenize: .(a + b) produces dot-lparen, symbols, rparen"
+  (define toks (content-tokens ".(a + b)"))
+  (check-equal? (token-type (car toks)) 'dot-lparen)
+  (check-equal? (token-type (last toks)) 'rparen))
 
-(test-case "tokenize: .{ does not conflict with .ident"
+(test-case "tokenize: .( does not conflict with .ident"
   (define toks (content-tokens ".name"))
   (check-equal? (token-type (car toks)) 'dot-access)
   (check-equal? (token-value (car toks)) 'name))
@@ -64,27 +69,27 @@
 ;; B. WS Reader tests
 ;; ========================================
 
-(test-case "reader: .{a + b} reads as ($mixfix a + b)"
-  (define forms (read-all-forms-string ".{a + b}"))
+(test-case "reader: .(a + b) reads as ($mixfix a + b)"
+  (define forms (read-all-forms-string ".(a + b)"))
   (check-equal? (length forms) 1)
   (define form (car forms))
   (check-true (pair? form))
   (check-equal? (car form) '$mixfix)
   (check-equal? (cdr form) '(a + b)))
 
-(test-case "reader: .{1 + 2 * 3} reads as ($mixfix 1 + 2 * 3)"
-  (define forms (read-all-forms-string ".{1 + 2 * 3}"))
+(test-case "reader: .(1 + 2 * 3) reads as ($mixfix 1 + 2 * 3)"
+  (define forms (read-all-forms-string ".(1 + 2 * 3)"))
   (define form (car forms))
   (check-equal? (car form) '$mixfix)
   (check-equal? (length (cdr form)) 5))
 
-(test-case "reader: .{} reads as ($mixfix)"
-  (define forms (read-all-forms-string ".{}"))
+(test-case "reader: .() reads as ($mixfix)"
+  (define forms (read-all-forms-string ".()"))
   (define form (car forms))
   (check-equal? form '($mixfix)))
 
-(test-case "reader: .{[f x] + [g y]} reads with nested brackets"
-  (define forms (read-all-forms-string ".{[f x] + [g y]}"))
+(test-case "reader: .([f x] + [g y]) reads with nested brackets"
+  (define forms (read-all-forms-string ".([f x] + [g y])"))
   (define form (car forms))
   (check-equal? (car form) '$mixfix)
   (check-equal? (length (cdr form)) 3)
@@ -273,35 +278,56 @@
   (check-equal? result "6N : Nat"))
 
 ;; ========================================
-;; E. E2E tests: WS mode (.{...})
+;; E. E2E tests: WS mode (.(...))
 ;; ========================================
 
-(test-case "e2e/ws: basic .{1 + 2}"
+(test-case "e2e/ws: basic .(1 + 2)"
   (define result
-    (run-ws-last "eval .{1N + 2N}\n"))
+    (run-ws-last "eval .(1N + 2N)\n"))
   (check-equal? result "3N : Nat"))
 
-(test-case "e2e/ws: precedence .{1 + 2 * 3}"
+(test-case "e2e/ws: precedence .(1 + 2 * 3)"
   (define result
-    (run-ws-last "eval .{1N + 2N * 3N}\n"))
+    (run-ws-last "eval .(1N + 2N * 3N)\n"))
   (check-equal? result "7N : Nat"))
 
-(test-case "e2e/ws: left-associative .{1 + 2 + 3}"
+(test-case "e2e/ws: left-associative .(1 + 2 + 3)"
   (define result
-    (run-ws-last "eval .{1N + 2N + 3N}\n"))
+    (run-ws-last "eval .(1N + 2N + 3N)\n"))
   (check-equal? result "6N : Nat"))
 
-(test-case "e2e/ws: nested brackets .{[+ 1N 2N] + 3N}"
+(test-case "e2e/ws: nested brackets .([+ 1N 2N] + 3N)"
   (define result
-    (run-ws-last "eval .{[+ 1N 2N] + 3N}\n"))
+    (run-ws-last "eval .([+ 1N 2N] + 3N)\n"))
   (check-equal? result "6N : Nat"))
 
-(test-case "e2e/ws: comparison .{1 < 2}"
+(test-case "e2e/ws: comparison .(1 < 2)"
   (define result
-    (run-ws-last "eval .{1N < 2N}\n"))
+    (run-ws-last "eval .(1N < 2N)\n"))
   (check-equal? result "true : Bool"))
 
-(test-case "e2e/ws: equality .{3 == 3}"
+(test-case "e2e/ws: equality .(3 == 3)"
   (define result
-    (run-ws-last "eval .{3N == 3N}\n"))
+    (run-ws-last "eval .(3N == 3N)\n"))
   (check-equal? result "true : Bool"))
+
+;; --- .( ) grouping + retirement of .{ } (Numerics ergonomics) ---
+
+(test-case "e2e/ws: grouping overrides precedence .((1 + 2) * 3) = 9 (vs 7 ungrouped)"
+  (define result
+    (run-ws-last "eval .((1N + 2N) * 3N)\n"))
+  (check-equal? result "9N : Nat"))
+
+(test-case "e2e/ws: deep nested grouping .(((1 + 2) * 2) + 1) = 7"
+  (define result
+    (run-ws-last "eval .(((1N + 2N) * 2N) + 1N)\n"))
+  (check-equal? result "7N : Nat"))
+
+(test-case "e2e/ws: single operand .(5) = 5"
+  (define result
+    (run-ws-last "eval .(5N)\n"))
+  (check-equal? result "5N : Nat"))
+
+(test-case "e2e/ws: .{ } is retired for mixfix — use .( )"
+  (check-exn #rx"retired"
+             (lambda () (run-ws-last "eval .{2N + 3N}\n"))))
