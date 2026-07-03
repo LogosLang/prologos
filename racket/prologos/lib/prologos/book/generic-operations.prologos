@@ -13,10 +13,10 @@
 ;;   * **seq-length, seq-drop, seq-any?, seq-all?, seq-find** ---
 ;;     operations using the Seq trait interface (first/rest/empty?)
 ;;
-;; Generic arithmetic (plus, minus, times, divide, negate-fn,
-;; abs-fn) and numeric folds (sum, product, int-range) have moved
-;; to the identity-and-algebra chapter. Type functors have moved
-;; to the collection-traits chapter.
+;; Generic arithmetic (the first-class operators `+ - * / negate abs`)
+;; and numeric folds (sum, product, int-range) are in the
+;; identity-and-algebra chapter. Type functors are in the
+;; collection-traits chapter.
 
 
 module prologos::core::generic-ops
