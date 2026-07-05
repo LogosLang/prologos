@@ -391,6 +391,10 @@
   (auto-cache! expr-pvec-nth d d) (auto-cache! expr-pvec-update d d d)
   (auto-cache! expr-pvec-length d) (auto-cache! expr-pvec-fold d d d)
   (auto-cache! expr-pvec-map d d) (auto-cache! expr-pvec-from-list d) (auto-cache! expr-pvec-to-list d)
+  ;; Path algebra + first-class path values (pipeline.md item 6 — were UNREGISTERED →
+  ;; raw-vector impostor crash when a cached library body carries them; CIU Track 6 F2)
+  (auto-cache! expr-get-in d d) (auto-cache! expr-update-in d d d) (auto-cache! expr-broadcast-get d d)
+  (auto-cache! expr-path d) (auto-cache! expr-Path)
   ;; Other
   (auto-cache! expr-from-int d d) (auto-cache! expr-from-nat d d)
   (auto-cache! expr-Symbol)

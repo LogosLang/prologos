@@ -517,7 +517,11 @@
       (let loop ([i (+ pos 2)])
         (define nc (rrb-char-at rrb i))
         (if (and nc (or (char-alphabetic? nc) (char-numeric? nc)
-                        (char=? nc #\-) (char=? nc #\_)))
+                        (char=? nc #\-) (char=? nc #\_)
+                        ;; ^ = path-selection rename separator (:key^alias); must stay in the
+                        ;; keyword token so validate-selection-paths can split it as it does in
+                        ;; sexp mode. Matches ident-continue? which already allows ^. (CIU T6 F3)
+                        (char=? nc #\^)))
             (loop (+ i 1))
             (- i pos)))
       #f))
