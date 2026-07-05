@@ -1,7 +1,7 @@
 # Collection Interface Unification (CIU) Series
 
 **Created**: 2026-03-21
-**Status**: Track 0 ✅ (Trait Hierarchy Audit). Tracks 1-2 ⬜ pre-Track-8. Tracks 3-5 ⬜ post-Track-8 (now unblocked by Track 8 completion + BSP-LE Track 2/2B).
+**Status**: Track 0 ✅ (Trait Hierarchy Audit). Tracks 1-2 ⬜ pre-Track-8. Tracks 3-5 ⬜ post-Track-8 (now unblocked by Track 8 completion + BSP-LE Track 2/2B). **Track 6 🔄 (Anonymous Records & Path Selection — design open 2026-07-05).**
 **Thesis**: All collection access — indexing, iteration, broadcast, mapping, path navigation — dispatches through traits resolved on the propagator network. Syntactic sugar generates trait constraints, not constructor-specific AST nodes. User-defined collections participate in all syntax automatically.
 
 ---
@@ -49,6 +49,7 @@ This thesis addresses 5 principle violations identified in the Collection Interf
 | 3 | Trait-Dispatched Access | `surf-get` generates Indexed/Keyed constraints; propagator resolves; `expr-get` vestigial | ⬜ | Pending | Post Track 8 |
 | 4 | Trait-Dispatched Iteration | Broadcast via Seq dict; gmap/gfilter via Functor or Seq+Buildable | ⬜ | Pending | Post Track 8 |
 | 5 | Union-Aware Dispatch | Trait resolution on union types; runtime dispatch generation | ⬜ | Pending | Post Track 8 |
+| 6 | Anonymous Records & Path Selection | `Map` = anonymous **open record** (structural/observational typing; retire the internal `Open` type); `schema` interop both directions; `coll{selector}` postfix path-selection + result-shape control + broadcast. Relates to Track 2 (dot-brace sugar) + Track 3 (Indexed/Keyed access unification). WS-first. | 🔄 | [Design](2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md) | Post Track 8 |
 
 ---
 

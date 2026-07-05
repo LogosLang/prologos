@@ -1,6 +1,6 @@
 # Path Selection & Anonymous-Record (Map) Typing — Design (Stage 0/1)
 
-**Status**: Stage 0/1 — vision capture + grounding. **Standalone tracking design document** (no parent series; owner, 2026-07-05).
+**Status**: Stage 0/1 — vision + grounding done; design open. **CIU Series, Track 6** (Anonymous Records & Path Selection; owner-designated 2026-07-05). Linked from [`2026-03-21_CIU_MASTER.md`](2026-03-21_CIU_MASTER.md).
 **Date opened**: 2026-07-05
 **Owner**: Zee Larson
 **Motivating incident**: `m.{a.a1 b.b1}` reported a misleading "`.{ }` retired for mixfix" error (the `.{`→`.(` mixfix migration clobbered path-selection `.{`). Immediate fix landed (message reworded, [issue context](#immediate-fix)); the deeper desire is to **revisit Path Selection — gaps, ergonomics, and language-design changes** — together with **how anonymous records (`Map`) are typed**.
@@ -28,6 +28,14 @@ Faithful capture; reflections in §3.
 
 *Background reading the owner flagged*: `haskellforall.com/2026/06/record-type-inference-for-dummies` (record type inference; row/structural records). *(Couldn't fetch — 403; anchor to it once the owner shares excerpts.)*
 
+## §2a Locked decisions (owner, 2026-07-05)
+
+- **D1 — `Map` IS the anonymous, open record type.** Structural/observational typing: a `Map` literal's type is the observed field types (`{:a 1}` : a record with `:a → Int`). **Retire the internal `Open` type entirely** — the structural record type replaces it.
+- **D2 — `Map` ⇄ `schema` interop, both directions.** An anonymous `Map` record and a named `schema` record inter-operate (a `Map` flows where a compatible `schema` is expected, and vice versa).
+- **D3 — two axes: named/anonymous × closed/open.** `schema` = named (already carries a `closed?` flag); `Map` = anonymous open. Reconcile as *one* structural-record notion, not two mechanisms.
+- **D4 — home = CIU Series, Track 6.** Relates to CIU Track 2 (dot-brace / sugar normalization) + Track 3 (Indexed/Keyed access unification, the Array⇄Map piece).
+- **D5 — sequencing: fundamentals first**; **WS-first** — every feature wired all the way through to WS (the usability design target) and **regression-tested in WS `.prologos` syntax directly** (not sexp/`.rkt`). A `test-first-class-paths` WS test file is part of this.
+
 ## §3 Initial design reflections (Claude — for dialogue, not decisions)
 
 - **V1/V5 is structural / row-typed records.** The "observed types of the values at the keys" reading is exactly **structural record typing**, and open records are the **row-polymorphic** case (`{:a Int | ρ}`). This is well-trodden theory (the "for dummies" post is an accessible treatment), and it's the right frame: `Open` → a structural record type carrying per-key field types, with a row variable for the open tail. `schema` = a *closed* record (no row tail); `Map` = *open* (row tail). Field projection `m.a` then has the field's type, not `Open`. The design work is *how this hooks into Prologos's existing type lattice* (union types, `schema` registry, the quantale type lattice) without reintroducing the fragilities the tower avoided.
@@ -42,7 +50,26 @@ Faithful capture; reflections in §3.
 - **`.{ … }` postfix multi-select never worked**: it was *only ever* the mixfix form; the First-Class Paths example marks `app-config.{…}` with `;; ERROR ❌`. The recent `.{`→`.( )` mixfix migration then made `.{` emit a misleading "retired for mixfix" hard-`raise` (`parse-reader.rkt:2510` → `macros.rkt:5746`). **Immediate fix landed**: reworded to "`.{ … }` is not currently supported — postfix path-selection is under redesign" (`macros.rkt`), test updated (`test-mixfix-01.rkt`). <a name="immediate-fix"></a>
 - **First-Class Paths** (design `2026-03-20_FIRST_CLASS_PATHS_DESIGN.md`) shipped Phases 0–7c: dot-access, broadcast `.*`, renaming `^`, `#p(…)` path literals, `get-in`/`update-in`/`selection`. Phase 8 (**Lens**) was deferred. Postfix object multi-select `expr.{…}` was left incomplete.
 
-*(A grounding audit of the Map-typing / path-selection / records subsystem is the next step — see §6.)*
+### §4a Grounding audit findings (2026-07-05, run `wf_b5bda45e`; HEAD 4e56da1d)
+
+**Scope verdict — the two threads are separable, with a clear lift ordering.**
+
+- **Selection syntax (V2/V3/V4) is the cheaper thread, with working precedent.** Postfix juxtaposition ALREADY exists: `arr[i]` (no space) emits `$postfix-index` via a reader *adjacency* check (`parse-reader.rkt:2461-2487`) → `(get …)` = `expr-get`. The hook for `coll{selector}` is a *single* mirror of that adjacency check on the `{`-branch (`parse-reader.rkt:2500-2506`, which today unconditionally emits `$brace-params`) → a new `$brace-select` sentinel + one fold arm in `rewrite-dot-access` (`macros.rkt:5107`). **No ambiguity** (map literals disambiguate positionally at the parser: head → literal; application uses `[]`, a different delimiter; the adjacency decision is made at the reader). This validates the `_{…}` / `coll{…}` idea AND echoes the Array/Map instinct — it is the *same* reader mechanism as `[i]`.
+- **Map structural typing (V1/V5) is the bigger, net-new lift.** There is **zero** row-polymorphism / extensible-record machinery; `expr-Map` carries one uniform value type (no per-key slot); `Open` is minted at *elaboration* (`elaborator.rkt:2127/2132`), and `Open` is an α-semantic wildcard so projection absorbs to `Open`. The reusable substrate is **`schema`** — already a *named closed structural record* with per-field projection (`typing-core:1536`), and it **already carries a `closed?` flag** (open-vs-closed exists *inside* schema; the "schema=closed / Map=open" split is partly built). The design ≈ generalize schema's per-field projection to anonymous literals: synthesize an inline field-map at elaboration + teach `map-get` to read it (mirror in `qtt` — its `expr-map-get` has NO `Open` arm today, an existing asymmetry).
+
+**~~Blocker~~ — REFUTED (main-session R-lens, 2026-07-05): schema-typed dot-access WORKS.** The audit's "broken" finding was a **probe artifact** — it used the non-canonical `schema Person := {…}` inline form. With the canonical *block* form (`schema Person` / `:name String` / `:age Int`), `def alice : Person := {…}` then `alice.age` → **`30 : Int`** (0 errors, via `process-file`). The schema per-field-projection substrate (`typing-core:1536`, `schema-lookup-field` → `schema-field-type->expr`) **functions** — V1 is *de-risked*: the plan is to generalize this proven template to anonymous literals. *(Lesson: re-verify every audit "broken" finding with canonical syntax before trusting.)*
+
+**Array⇄Map unification (V2 deep) is a CIU concern.** `expr-get` already unifies PVec/Map/List access at the *node* level (`typing-core:1484-1508`; value-directed in `reduction`), but they are disjoint at the *trait* level: `Indexed {C : Type -> Type}` vs `Keyed {C : Type -> Type -> Type}` — a **kind-arity mismatch** blocking a common supertrait. **CIU Track 3 (Trait-Dispatched Access, ⬜ pending)** is the live owner of exactly this unification (makes `expr-get` vestigial, routes `[i]`/`.k` through Indexed/Keyed constraints). This thread must **reconcile with CIU Track 3** — subsume / supersede / sequence — not parallel-design.
+
+**Latent bugs surfaced** (First-Class Paths is more broken than its tracker says — separable, worth filing):
+1. **`.pnet` gap** — the 5 path AST nodes (`expr-path`/`expr-Path`/`expr-get-in`/`expr-update-in`/`expr-broadcast-get`) are unregistered in `pnet-serialize` → **vector-impostor detonation** (the `core/path` lib crashes under a stale cache). pipeline.md item #6.
+2. **schema-typed dot-access broken** (above).
+3. **`^` rename broken in WS-file mode** (the WS keyword tokenizer excludes `^`, `parse-reader.rkt:~519`) despite Phase 7c marked ✅.
+4. **No `test-first-class-paths.rkt`** — zero Level-3 regression coverage (why 1–3 went unnoticed).
+
+**Correction to §3**: the quantale structure is confined to the QTT multiplicity layer + SRE tensor, NOT the value-type lattice where records live (flat lattice `bot→T→top` + variance subtyping). Don't over-index on quantale-for-records.
+
+*(rlens targets for when we implement: `typing-core.rkt:397-401` + the alice.age failure [root-cause the schema break — highest priority]; `elaborator.rkt:2113-2145` [Open mint site]; `parse-reader.rkt:2500-2506` [the postfix hook]; `pnet-serialize.rkt` [the 5-node gap]; `collection-traits.prologos:121/137` [the Indexed/Keyed kind mismatch].)*
 
 ## §5 Open design questions
 
