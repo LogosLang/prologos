@@ -5743,7 +5743,7 @@
 ;; $mixfix-retired for dot-lbrace so preparse can raise a targeted migration error.
 (define (expand-mixfix-retired datum)
   (error 'mixfix
-         "`.{ … }` is retired for mixfix — use `.( … )` instead (group with `( … )`)"))
+         "`.{ … }` is not currently supported — postfix path-selection is under redesign"))
 
 ;; Track 10 Phase 2c: register built-in expanders in the lookup table FIRST,
 ;; then register them in the preparse registry (which stores symbols, not closures).

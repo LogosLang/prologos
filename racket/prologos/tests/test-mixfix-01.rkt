@@ -328,6 +328,6 @@
     (run-ws-last "eval .(5N)\n"))
   (check-equal? result "5N : Nat"))
 
-(test-case "e2e/ws: .{ } is retired for mixfix — use .( )"
-  (check-exn #rx"retired"
+(test-case "e2e/ws: .{ } is not a supported form (path-selection under redesign)"
+  (check-exn #rx"not currently supported|redesign"
              (lambda () (run-ws-last "eval .{2N + 3N}\n"))))
