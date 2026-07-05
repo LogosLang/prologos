@@ -36,6 +36,13 @@ Faithful capture; reflections in §3.
 - **D4 — home = CIU Series, Track 6.** Relates to CIU Track 2 (dot-brace / sugar normalization) + Track 3 (Indexed/Keyed access unification, the Array⇄Map piece).
 - **D5 — sequencing: fundamentals first**; **WS-first** — every feature wired all the way through to WS (the usability design target) and **regression-tested in WS `.prologos` syntax directly** (not sexp/`.rkt`). A `test-first-class-paths` WS test file is part of this.
 
+## §2b Fundamentals status (F2/F3/F4 ✅ 2026-07-05)
+
+- **F2 — `.pnet` path-node registration ✅** (`af161de7`). Registered the 5 path AST nodes in `pnet-serialize`; the two-run `core/path` cache repro no longer crashes.
+- **F3 — WS `^`-rename tokenizer ✅** (`af161de7`). `recognize-keyword` now includes `^` (aligned with `ident-continue?`); `get-in u :user-name^name` works in WS. *(Branching/rename → projected map, `#p(user-name^name)`, is result-shape/V4 — deferred to F1's design.)*
+- **F4 — WS regression test file ✅** (`142da071`). `test-first-class-paths.rkt`, WS-syntax coverage for dot-access / `#p(…)` / get-in / update-in / `^`-rename. **Perf lesson**: a WS `process-file` test that loads the *full prelude* balloons to ~48s under 10-worker suite contention — use `:no-prelude` when the feature is language-level (kept the file at ~0.6s). (Broadcast `.*` needs `'[…]` = prelude; verified via probe, re-add later.)
+- **F1 — retire `Open` → structural `Map` typing** — next; mini-design below/§5.
+
 ## §3 Initial design reflections (Claude — for dialogue, not decisions)
 
 - **V1/V5 is structural / row-typed records.** The "observed types of the values at the keys" reading is exactly **structural record typing**, and open records are the **row-polymorphic** case (`{:a Int | ρ}`). This is well-trodden theory (the "for dummies" post is an accessible treatment), and it's the right frame: `Open` → a structural record type carrying per-key field types, with a row variable for the open tail. `schema` = a *closed* record (no row tail); `Map` = *open* (row tail). Field projection `m.a` then has the field's type, not `Open`. The design work is *how this hooks into Prologos's existing type lattice* (union types, `schema` registry, the quantale type lattice) without reintroducing the fragilities the tower avoided.
