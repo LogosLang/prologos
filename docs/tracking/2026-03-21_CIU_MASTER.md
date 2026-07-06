@@ -49,7 +49,7 @@ This thesis addresses 5 principle violations identified in the Collection Interf
 | 3 | Trait-Dispatched Access | `surf-get` generates Indexed/Keyed constraints; propagator resolves; `expr-get` vestigial | ⬜ | Pending | Post Track 8 |
 | 4 | Trait-Dispatched Iteration | Broadcast via Seq dict; gmap/gfilter via Functor or Seq+Buildable | ⬜ | Pending | Post Track 8 |
 | 5 | Union-Aware Dispatch | Trait resolution on union types; runtime dispatch generation | ⬜ | Pending | Post Track 8 |
-| 6 | Anonymous Records & Path Selection | `Map` = anonymous **open record** (structural/observational typing; retire the internal `Open` type); `schema` interop both directions; `coll{selector}` postfix path-selection + result-shape control + broadcast. Relates to Track 2 (dot-brace sugar) + Track 3 (Indexed/Keyed access unification). WS-first. | 🔄 | [Track](2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md) (D1–D12 locked) · [F1 Stage-3 D.1](2026-07-06_CIU_T6_F1_STRUCTURAL_RECORDS_DESIGN.md) | Post Track 8 |
+| 6 | Anonymous Records, Collections & Path Selection | `Map`/`{…}` = anonymous **open record** (structural typing); **tuples** `@[…]` = the Nat-keyed dual (one carrier, key-domain axis); `schema` interop; `coll{selector}` path-selection + result-shape + broadcast. Relates to Track 2 (sugar) + **Track 3 (Indexed/Keyed — fed by the tuple node as the Nat-keyed-row witness)**. WS-first. | 🔄 | [Track](2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md) (D1–D14 locked) · [F1 Stage-3 **D.2**](2026-07-06_CIU_T6_F1_STRUCTURAL_RECORDS_DESIGN.md) · [D.3 critique](2026-07-06_CIU_T6_F1_STAGE3_CRITIQUE_D3.md) | Post Track 8 |
 
 ---
 

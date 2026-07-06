@@ -1,188 +1,212 @@
-# CIU Track 6, F1 — Structural Record Typing for Anonymous Maps (Stage-3 Design)
+# CIU Track 6, F1 — Structural Record & Collection Typing (Stage-3 Design, D.2)
 
-**Status**: **Stage-3 D.1 (draft)** — awaiting Pre-0 benchmark input (→ D.2) and independent adversarial critique rounds (→ D.3+), per `DESIGN_METHODOLOGY.org` § Stage 3.
+**Status**: **Stage-3 D.2** — Pre-0 done (§7); independent adversarial critique done ([D.3 record](2026-07-06_CIU_T6_F1_STAGE3_CRITIQUE_D3.md), 4 BLOCKING + 12 SIGNIFICANT confirmed); collection reframe co-designed + owner-locked (D13/D14). This D.2 folds ALL of the above. Next: light re-verification of amended dispositions (§7b) → Stage-4.
 **Date**: 2026-07-06 · **Owner**: Zee Larson · **Series/Track**: CIU Track 6, phase F1
-**Co-design home**: [`2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md`](2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md) (§2a locked decisions D1–D12; §3b research synthesis; §4a grounding). Research note: [`ROWS_COALGEBRA_PROPAGATOR_NOTE`](../research/2026-07-06_ROWS_COALGEBRA_PROPAGATOR_NOTE.md).
-**Verified-at**: HEAD `ead785c0` (all file:line coordinates in this doc re-verified there by main-session R-lens; re-grep before trusting after drift).
+**Co-design home**: [`2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md`](2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md) (§2a locked D1–D14; §3b rows research; §4a grounding). Research notes: [rows/coalgebra](../research/2026-07-06_ROWS_COALGEBRA_PROPAGATOR_NOTE.md).
+**Verified-at**: HEAD `6d6a24ca` (coordinates re-verified there by main-session R-lens + the D.3 adjudicator; re-grep after drift).
 
-## §1 Goal and one-sentence job
+## §1 Goal, scope, and the reframe
 
-`{:a 1}.a : Int` — anonymous map literals type **structurally/observationally** (the type of `{:a 1}` is the record `{:a Int}`), so `+ {:a 1}.a 1 ⇒ 2 : Int` (owner V5). The entire job: **replace the elaborator's hardcoded `Open` value-type for unannotated literals with a ground row**, and teach the map-op typing arms to consume it. The projection machinery already works when the type is concrete (verified live: `def am : (Map Keyword Int) := {:a 1}` → `am.a : Int` today).
+**One-sentence F1a job**: replace the elaborator's hardcoded `Open` value-type for unannotated keyword literals with a **ground row**, and teach the map-op typing arms to consume it — so `{:a 1}.a : Int` and `+ {:a 1}.a 1 ⇒ 2 : Int` (owner V5). The projection machinery already works when the value type is concrete (verified: `def am : (Map Keyword Int) := {:a 1}` → `am.a : Int` today).
 
-Non-goals of F1a (explicitly deferred): dyn-tail semantics (F1a.2), width subsumption + Map↔schema seal (F1b), row variables ρ / `Concat` constraints (F-row), extensible variants (F-variant), any surface syntax change (record types are inferred + displayed, not user-writable, in F1a).
+**The reframe (D13/D14)**: this is not only about records. A record is a structural collection keyed by **Keyword**; a **tuple** is one keyed by **Nat (position)**; a **dictionary/array** is the **dyn-tailed uniform** instance of the same carrier. `@[1 "a"]` (heterogeneous vector) ERRORS today for the *same* reason `{:a 1 :b "x"}` would (one uniform element/value slot) — so heterogeneous collections are **net-new capability**, the positional dual of the record work. The 2×2:
+
+|  | closed / heterogeneous (per-slot types) | dyn / uniform (one type + open tail) |
+|---|---|---|
+| **Keyword-keyed** | `{:a Int :b String}` — anonymous **record** | `(Map Keyword V)` — **dictionary** |
+| **Nat-keyed** | `⟨Int, String, Bool⟩` — **tuple** (flavor A) | `(PVec V)` / array — homogeneous vector |
+
+Plus **flavor B**: a variable-length container whose *elements* differ → `List`/`PVec` with a **union** element type (`'[{:a 1} {:b 2}]` : `List <{:a Int} | {:b Int}>`).
+
+**F1a-core scope** (this slice): the Keyword-keyed closed row (records) + its full disposition + the D.3 blocker fixes. **F1a-col scope** (sibling slice, same CIU-T6 phase): flavor A (tuple minting + classifier) + flavor B (union-widening) — turns the critique's list-of-records "regression" into the feature. **Deferred**: dyn tails + `Open` deletion (F1a.2); width + Map↔schema seal (F1b); ρ/`Concat`/`DeepConcat` (F-row); variadic tuples, η, variants (later). No user-writable record/tuple *type* syntax in F1 (inferred + displayed only).
 
 ## §2 Progress Tracker
 
 | Phase | Description | Status | Notes |
 |---|---|---|---|
-| Pre-0 | Serializer probe + field-rep micro + display-churn census + baseline timing + acceptance file + `--check` expectation runner | ✅ | 2026-07-06; results §7. `record-field` struct SAFE; sorted-assoc confirmed; churn small; acceptance 26/26 green at baseline |
-| F1a-s1 | `expr-Record` node through core pipeline (files 1–8 + sets) + display | ⬜ | |
-| F1a-s2 | Literal inference (keyword-keyed seed; map-empty/assoc arms) + projection arms + qtt delegation | ⬜ | The `{:a 1}.a : Int` slice |
-| F1a-s3 | Remaining map-op arms + Record-vs-Map subsumption (union-join for metas) + union arm | ⬜ | |
-| F1a-s4 | Flip acceptance `;;N=>` expectations to F1a targets (+ add `het.z` closed-row miss) + `test-first-class-paths` flips + census fixes (~10 assertions / 4 files) + suite wrapper for `--check` | ⬜ | Acceptance file EXISTS (Pre-0), baseline-green |
-| F1a-s5 | Full-suite gate + `bench-ab` + PIR-lite checkpoint | ⬜ | |
-| F1a.2 | dyn tail live; `Open` relocation + node deletion (D1-b/D7) | ⬜ | Own mini-design |
-| F1b | Erasure-mode width + label-keyed depth; schema→Map free; Map→schema seal | ⬜ | Own Stage-3 |
-| F-row / F-variant | ρ (spike: row-kinded meta), `Concat`/`DeepConcat`, open sums | ⬜ | UCS-5 / SRE-5 junctions |
+| Pre-0 | Probes + baseline + acceptance file + `--check` runner | ✅ | §7; `record-field` struct SAFE; churn small; acceptance 26/26 baseline-green |
+| D.3 | Independent adversarial critique (P/R/M/S/U) + adjudication | ✅ | [record](2026-07-06_CIU_T6_F1_STAGE3_CRITIQUE_D3.md); 4 BLOCKING + 12 SIGNIFICANT; 2 REFUTED |
+| D.2 | Fold critique amendments + collection reframe | ✅ | this doc |
+| re-verify | Light re-verification of amended dispositions (§7b) | ⬜ | probes/anchors reusable from D.3 |
+| F1a-s1 | Carrier struct(s) through core pipeline (files 1–8 + `unify.rkt` #14 + `union-types.rkt` + `compound`-whitelist n/a) + **generic-walker audit** + display | ⬜ | B3 adds unify #14; S2 adds walker audit; S1 adds union-sort-key |
+| F1a-s2 | Literal inference + projection arms + **B1** seed-check arm + **B2** qtt fallback co-edit + qtt delegation | ⬜ | the `{:a 1}.a : Int` slice + annotation-satisfaction |
+| F1a-s3 | Remaining map-op arms (**S3** fold/filter/map-vals + nil-safe-get union) + Record<:Map subsumption + union arm + **B3** Record-vs-Record same-shape unify + **S4** qtt dissoc + **B4** dynamic-key Keyword gate + **S7** diagnostic + **S10** ground-expr? arm + **S11** empty corners | ⬜ | |
+| F1a-s4 | Flip acceptance `;;N=>` to F1a targets + `het.z` + **S5** re-census (`test-mixed-map` T-2 contract) + `test-first-class-paths` flips + **cross-module .pnet canary** + prelude-loaded WS test (B3) + `--check` suite wrapper | ⬜ | |
+| F1a-s5 | Full-suite gate + `bench-ab` vs §7.4 baseline + PIR-lite | ⬜ | |
+| F1a-col | Flavor A (tuple node/mint + classifier) + Flavor B (union-widen on element-unify-failure, VISIBLE) | ⬜ | closes the different-shape-collection regression |
+| F1a.2 | dyn tail live; `Open` relocation + node deletion (D1-b/D7) | ⬜ | own mini-design |
+| F1b | Erasure-mode width + label-keyed depth; schema→Map free; Map→schema seal | ⬜ | own Stage-3 |
 
-## §3 Grounded code facts this design consumes (all VERIFIED at `ead785c0`)
+## §3 Grounded code facts (VERIFIED at `6d6a24ca`; ✏ = corrected from D.1 by the D.3 critique)
 
 | Fact | Where |
 |---|---|
-| `Open` minted at exactly 2 sites, both the unannotated-literal seed | `elaborator.rkt:2127` (empty), `:2132` (non-empty), comment `:2117` |
-| Literal entries (`ek`/`ev` exprs) in-hand at the mint site | `elaborator.rkt:2138-2139` |
-| `{:a 1}` infers `(expr-Map ?km (expr-Open))` — hits the **Map arm**, not the schema arm | `typing-core.rkt:1465-1473` (assoc fold), `:1512-1513` (map-get returns `vt`) |
-| `expr-Map` = 2 slots, no field table; 102 production `(expr-Map ` sites | `syntax.rkt:648`; 34 typing-core / 20 qtt / 3 zonk / 2 unify / 2 trait-resolution |
-| `m.a` lowers to `(map-get m :a)`; `m[i]` to `(get m i)` | `macros.rkt:5064/5096/5119` vs `:5112` |
-| qtt `map-get` Map arm is INLINE (no delegation; no Open arm; `tu-error` fallback); schema arm delegates to `infer` | `qtt.rkt:1213` vs `:1215-1218`; assoc arm propagates `t1` unchanged (`:1196-1205`) |
-| Open α-wildcard: 3 sites; **also load-bearing for ordinary annotation checks** (`{} : (Map K T)` succeeds only via `unify:574`) | `unify.rkt:574-575`, `typing-core:2608-2609`, `qtt:2140-2141`; `typing-core:2424-2426`, `:2429-2431` |
-| Annotated-literal checking is TERM-directed (never consults the inferred type) | `typing-core:2429-2431` (vs Map), `:2433-2448` (vs schema, `closed?` at `:2444`) |
-| Schema projection template + datum→expr converter | `typing-core:1536-1548`, `:390-393`, `:351-386`; `schema-field` = `(keyword type-datum default-val check-pred)` `macros.rkt:758` |
-| `compound-type?` whitelist excludes any new node (F1b concern, NOT F1a — see §6.4) | `subtype-predicate.rkt:106-111`, `subtype?` `:113-126` |
-| Union map-get arm filters `expr-Map?` components; **uses `with-speculative-rollback` + `build-union-type`** (retired-mechanism inconsistency, flagged) | `typing-core:1549-1568`, comment `:1459` |
-| No map `merge` exists (only list merge-sort) — map combination = `assoc` chains | `lib/prologos/{book,data}/list*.prologos:359/334`; no `expr-map-merge`/keyword |
-| Current behavior baseline (live probe) | `{:a 1 :b "hello"}` : `[Map Keyword Open]`; `.a`/`.b` : `Open`; `+ q.a 1` = "Could not infer type"; annotated + schema paths already project concretely |
+| `Open` minted at exactly 2 sites, both the unannotated keyword-literal seed | `elaborator.rkt:2127`/`:2132`, comment `:2117` |
+| Literal entry key/val exprs in-hand at mint (keys are `expr-keyword`) — but the seed is built at `:2129-2132` BEFORE entries elaborate (`:2138`): the all-keyword classifier needs an **entries-first** scan (§4.2) | `elaborator.rkt:2129-2145` |
+| `{:a 1}` infers `(expr-Map ?km (expr-Open))` → the **Map arm** `:1512` (returns `vt`), NOT the schema arm `:1536` | `typing-core.rkt:1465-1473`, `:1512-1513` |
+| **✏ B1**: annotated-literal checking is TERM-directed AND recurses to the seed: `map-assoc`-vs-`Map` (`:2428-2431`) → `map-empty`-vs-`Map` (`:2424-2426`) `(unify v1 v2)`; today `v1=Open` passes via `unify:574`. A Record seed there breaks it / flex-rigid-poisons `?V` | `typing-core:2424-2431`; `unify.rkt:574/583` |
+| **✏ B2**: qtt has its OWN duplicated conversion fallback (`unify`→cumul→`subtype?`) that never calls typing-core `check` — a Record<:Map arm in typing-core is unreachable from `checkQ` | `qtt.rkt:2449-2463`; app-arm `:316-325` |
+| **✏ B3**: `classify-whnf-problem` has NO Record case → Record-vs-Record unify falls to `'conv` → fails. Reached by list-element meta solving. `'[{:a 1} {:b 2}]` types today as `(List [Map Keyword Open])` (probe) | `unify.rkt:558-719`; `elaborator` list = cons chains |
+| **✏ B4**: today's dynamic-key path DOES check the key (literal keys solve `?km:=Keyword`): `map-assoc q "str" 2` ERRORS today (probe) | `typing-core:1465-1473` |
+| **✏ S1**: `union-sort-key` sends unknown nodes to `"9:other"`; `dedup` merges only ADJACENT equals → record-containing unions non-canonical (commutativity/idempotence fail) | `union-types.rkt:43-95`, `:103-111` |
+| **✏ S2**: generic meta-walkers recurse on `struct?` only — `occurs?` (`unify:234-245`), `collect-meta-ids` (`metavar-store:915-922`), `ground-expr?` (`[_ #t]`) are BLIND to metas inside a raw assoc-list fields slot | those + `type-lattice.rkt has-unsolved-meta?` |
+| **✏ S6**: stdlib **`map-merge` EXISTS** (right-priority), prelude-reachable, feeds `impl Lattice (Map K V)`; `map-merge {:a 1} {:b 2}` → `{:a 1 :b 2}` today (probe). D.1's "no map merge exists" was FALSE (D10 semantics lock unaffected) | `lib/prologos/book/maps.prologos:136-141`, `core/map.prologos:62-66`, `core/lattice.prologos:128/229-233` |
+| **collection grounding** (probed): `@[1 2 3]`→`[PVec Int]`; `@[1 "a"]`→ERROR (single elem meta, `syntax.rkt:700`); `expr-Vec (elem-type length)` `:414`; `def v:(PVec <Int\|String>):=@[1 "a"]` CHECKS → `[PVec Int\|String]`; `pvec-nth v 0N`→`1 : Int\|String` (projection works; `0` Int errors — index-type, not union); union normalization FLATTENS (`<Int\|<String\|Bool>>`≡`Int\|String\|Bool`) | probes at HEAD |
+| schema projection template + datum→expr; `closed?` consulted at 1 site (check dir) | `typing-core:1536-1548`, `:390-393`, `:351-386`, `:2444`; `schema-field` `macros.rkt:758` |
+| `m.a`→`(map-get m :a)`; `m[i]`→`(get m i)`; `expr-get` (both typing-core `:1491`+qtt `:1221`) DELEGATES to infer (free); `map-get`'s `(expr-Map _ vt)` qtt arm `:1213` is INLINE | `macros.rkt:5064/5096/5119` vs `:5112` |
+| literal `#p` get-in/update-in **desugar** to `map-get`/`map-assoc` nests at the elaborator (only DYNAMIC paths emit `expr-get-in`/`expr-update-in`) — REFUTES the "path-node flips undeliverable" critique claims | `elaborator.rkt:2242-2252`, `:2320-2337` |
 
 ## §4 The design
 
-### §4.1 The carrier — `expr-Record` (D6)
+### §4.1 The carrier — one row, two surface presentations (D6 + D13)
 
 ```racket
-;; syntax.rkt — the anonymous structural record TYPE node (internal-only in F1a: inferred + displayed, not parsed)
-(struct expr-Record (fields tail) #:transparent)
-;;   fields : canonical assoc list ((label . field-info) ...) — label = bare keyword symbol,
-;;            sorted by symbol<? (constructor-enforced canonical form)
-;;   tail   : 'closed | 'dyn        (F1a mints 'closed ONLY; 'dyn semantics land F1a.2;
-;;                                   ρ = an expr (row-kinded meta) at F-row — the slot is expr-ready)
+;; syntax.rkt — the anonymous structural-row TYPE node (internal-only in F1: inferred + displayed, not parsed)
+(struct expr-Record (key-domain fields tail) #:transparent)
+;;   key-domain : 'keyword | 'nat        (D13 forward-compat: generalize NOW; F1a-core mints 'keyword only,
+;;                                        'nat = tuples land in F1a-col. Q_B: a row is ALL-keyword or ALL-nat —
+;;                                        homogeneous-key-domain invariant, enforced by the smart constructor.)
+;;   fields     : canonical assoc ((label . record-field) ...)
+;;                label = keyword-symbol (keyword-domain) | Nat (nat-domain);
+;;                sorted by symbol<? / < per domain (smart-constructor-enforced canonical form).
+;;   tail       : 'closed | 'dyn         (F1a mints 'closed. 'dyn = F1a.2 (+ must carry (K,V) bounds for the
+;;                                        Q_E dictionary reading). ρ = row-kinded meta at F-row. Slot is expr-ready.)
 
-;; field-info, primary proposal: a small struct
 (struct record-field (type presence) #:transparent)
-;;   type     : a type expr (per-field types are ORDINARY type exprs/metas — NO new meta domain)
-;;   presence : 'present            (F1a writes ONLY 'present; 'optional | 'absent | 'unknown reserved per D6)
-;; FALLBACK (if Pre-0 shows pnet-serialize cannot handle a nested non-expr struct): plain pairs
-;;   (label . (cons type presence-symbol)) — serializer-native; same information, less shape.
+;;   type     : an ORDINARY type expr/meta  (NO new meta domain)
+;;   presence : 'present                    (F1a writes 'present only; 'optional|'absent|'unknown reserved,
+;;                                           per D6 — the Malli-optional-keys + narrowing + presence-poly hook)
 ```
 
-Why sorted assoc (not hasheq): deterministic serialization + pretty-print + structural `equal?`; cheap recursion in `shift`/`subst`/`zonk`; n is small (records are human-written). The unordered unique-label row *theory* is unchanged — sorting is a canonical form, not semantics. Pre-0 measures assoc-vs-hasheq lookup at n∈{1,4,16} to confirm.
+**Two surface nodes, one carrier (Q_A)**: the struct is the *carrier*; the *surface* distinction (record `{…}` vs tuple `@[…]`, and the two displays) is driven by `key-domain`. Whether the nat-domain tuple later gets a physically-distinct `expr-Tuple` struct sharing the field/tail helpers, or rides `key-domain='nat` on this struct, is an F1a-col call — both satisfy "two surface nodes"; the tag is less machinery. F1a-core commits the `key-domain` field so either lands without rework (the forward-compat crux — retrofitting a key-domain parameter after a keyword-only carrier hardens is the rework risk).
 
-**Well-formedness**: `is-type` — `(expr-Record fields tail)` is a type at `Type 0` iff every field's `type` is a type (mirrors `expr-Map` at `typing-core:1445-1448`); `infer-level` → `lzero`. Duplicate labels are impossible by construction (map-literal keys are unique; assoc extension overwrites).
+**Order-significance is FREE** (D14, verified by construction): `⟨Int,String⟩` = `{0↦Int, 1↦String}` and `⟨String,Int⟩` = `{0↦String, 1↦Int}` are different slot-maps ⇒ unequal — no non-commutative monoid needed for identity/meet. The `key-domain` tag's job is narrow: canonical form (keyword→sort-by-name; nat→already positional), the dense-prefix well-formedness check (nat only, trivially satisfied by literals), and width-applicability (tuples exact/no-width; records get width at F1b).
 
-**Type-lattice merge (spec, not F1a code)**: record-meet — field-set union + per-field unify; failure ⇒ contradiction. In *information* order this is the JOIN (accumulating observations); the OSF orientation flip is documented once, here: OSF's generality-meet = our information-join.
+**Sorted assoc, not hasheq** (Pre-0 #2): determinism for serialization / display / structural `equal?`; n small. Canonicalize ONCE at row completion via a **smart constructor** (the only row producer) — supersedes D.1's "not per-extension" note (S12): user `assoc` builds rows post-literal, so per-op canonical maintenance is unavoidable and the smart constructor owns it.
 
-**Records vs dictionaries (a load-bearing distinction this design introduces)**: a *record* is a keyword-literal-keyed literal — finite, syntactically-known field set. A *dictionary* is a map with computed/non-keyword keys — uniform `(Map K V)`. F1a gives records `expr-Record` types and leaves dictionaries EXACTLY as today. The moment a non-literal key enters a record flow, typing degrades to dictionary view (§4.3). `expr-Map` is NOT retired — it remains the dictionary type and the annotation surface.
+**Well-formedness**: `is-type (expr-Record kd fs t)` at `Type 0` iff every field type `is-type` (mirrors `expr-Map` `:1445-1448`); `infer-level`→`lzero`. Duplicate labels impossible by construction.
 
-### §4.2 Elaboration (the only elaborator change)
+**Record-meet (spec; F1a has ZERO call sites — F1a.2/M1 consume it; S12)**: split honestly into (a) pure-ground: per-field `type-lattice-meet` under the orientation flip (OSF generality-meet = our information-join); (b) meta-bearing: residuated (metas → `type-bot`, conservative). Field-*extension* (assoc right-priority overwrite) is a DIFFERENT non-monotone operation — name it "row extension", never "merge", to keep it clear of the future cell-merge. **Distributivity precondition RESOLVED** (S12/§7b): per-field `type-lattice-meet` distributes over unions BY CONSTRUCTION (`type-lattice.rkt:263-274`); equal?-level canonicity of the distributed form additionally needs the S1 `union-sort-key` fix.
 
-`surf-map-literal` (`elaborator.rkt:2113-2145`): if **non-empty and every key elaborates to `expr-keyword`** → seed the chain with a **record seed** instead of `(expr-map-empty km (expr-Open))`. Mechanism: seed `(expr-map-empty (expr-Keyword) (expr-Record '() 'closed))` — zero new *term* nodes; the record type rides the existing v-type slot and `infer` returns it (§4.3). Otherwise (empty literal `{}`, or any non-keyword key) → **unchanged**, today's Open seed. (`{}` stays on the legacy path in F1a deliberately: it is the dictionary-accumulator idiom's seed; its record reading arrives with dyn tails in F1a.2.)
+**Records vs dictionaries (a load-bearing split; §6 challenges it)**: a *record/tuple* is a literal with a syntactically-known key set (keyword-literal keys / fixed positions); a *dictionary/array* is uniform with computed keys. F1a gives literals row types and leaves dictionaries/arrays as today; a non-literal key **degrades** to the dictionary view (§4.3, B4-gated). Per Q_E this is end-state (b): `expr-Map`/`PVec` are the dyn-tailed/uniform instances of the one carrier — the split is a *refinement* of D3's "one notion", not a third mechanism; the F1a `Record<:Map` arm is transitional (F1a.2 reworks it onto the dyn tail).
 
-Annotated literals are untouched — checking is term-directed (`typing-core:2429/2433`) and never consults the seed.
+### §4.2 Elaboration + the classifier (the correctness pivot; B1)
 
-### §4.3 Typing arms — the per-site disposition table (F1a-s2/s3)
+`surf-map-literal` (`elaborator.rkt:2113-2145`) — restructure to **scan keys first** (S12 minor: the seed is currently built before entries elaborate; scan the surface keys before choosing the seed):
 
-All in `typing-core.rkt` `infer` unless noted. `R` = the map's whnf-inferred type is `(expr-Record fields tail)`; F1a tails are always `'closed`.
+- **all keys keyword-literal** (non-empty) → **record seed** `(expr-map-empty (expr-Keyword) (expr-Record 'keyword '() 'closed))`. Zero new *term* nodes; the row rides the existing v-type slot; `infer` grows + returns it (§4.3). Empty `{}` → **unchanged** (today's Open seed; the empty-record reading waits for dyn tails, F1a.2 — deliberate).
+- **any non-keyword key** → unchanged Open/dictionary seed.
 
-| Site (current line) | Disposition on `R` |
-|---|---|
-| `expr-map-empty` (`:1450`) | If v-type is `expr-Record` → return it (the empty ground record). Else unchanged. |
-| `expr-map-assoc` (`:1465`) | Key = `expr-keyword` lit → `infer` v; **extend** fields right-priority (assoc = single-field merge; this IS D10's exact extension typing). Key non-literal → **degrade to dictionary**: return `(expr-Map (infer-type-of k) (expr-Open))` — byte-identical to today's behavior for dynamic keys (Open survives F1a per D7). |
-| `expr-map-get` (`:1512`) / `expr-get` (`:1491`) | Key = keyword lit: present → the field's type (**the goal**); absent → `(expr-error)` with the closed-row-miss diagnostic (§4.6). Key non-literal → `build-union-type` of all field types (sound: some field is selected; strictly better than Open). |
-| `expr-nil-safe-get` (`:1585` region) | Present → `(field-type \| Nil)`; absent + closed → `Nil` (definitionally nil — *more* precise than today); non-literal key → union-of-fields ∪ Nil. |
-| `expr-map-dissoc` (`:1619`) | Keyword lit → `R` minus the field (exact closed-row removal); non-literal → degrade to dictionary as in assoc. |
-| `expr-map-size` (`:1626`) / `expr-map-has-key` (`:1634`) | `Nat` / `Bool` (unchanged types; add the `R` match arm). |
-| `expr-map-keys` (`:1643`) / `expr-map-vals` (`:1651`) | `(List Keyword)` / `(List ⋃fields)` — both strictly better than today's `(List Open)`. |
-| Union arm of map-get (`:1549-1568`) | Accept `expr-Record?` components alongside `expr-Map?`: project each per the rules above; union the results. (Do NOT copy the `with-speculative-rollback` shape into new code; see §8 risks.) |
-| **check-subsumption** (`:2700-2706`) — NEW arm | `R <: (expr-Map K V)`: labels check against `K` (keywords); if `V` is an **unsolved meta** → solve `V := ⋃fields` (the uniform-bound view of a record is the JOIN of its fields — this keeps `def m := {:a 1}` usable where `(Map Keyword T)` is expected, replacing what seeded-Open absorption did, with a *more precise* answer); if `V` concrete → per-field check. **This is the annotation-satisfaction regression canary's mechanism.** |
-| `qtt.rkt` co-edits | `map-get` (`:1213`) + `map-assoc` (`:1196-1205`): add `expr-Record`/record-seed handling by **delegating the type to `(infer ctx e)`** (the `:1215-1218` schema-arm pattern), keeping usage computation local. `expr-get` (`:1221-1227`) already delegates — free. |
+`surf-pvec-literal` (`:2448`) — the **classifier** (F1a-col): homogeneous → `expr-PVec` (today); heterogeneous fixed → tuple (nat-domain row, flavor A, **tuple-by-default** per Q_D). Widening tuple→`PVec`-of-union is a monotone Galois projection on demand.
 
-What F1a does **not** touch: `unify.rkt:574-575` (Open wildcard — D7 relocation is F1a.2); `subtype-predicate.rkt` anything (no record-subtype judgment ever, D11; width is F1b erasure-mode); the two term-directed check arms (`:2429`, `:2433`); reduction/runtime (values stay CHAMP; types only).
+**B1 fix** (the seed must not break annotated literals): add a check arm at the `map-empty`-vs-`Map` site (`typing-core:2424`): when `v1` is an **empty closed `expr-Record`** seed, unify the KEY types only and **skip the value-unify** — the empty row asserts no fields, so it satisfies any `(Map K V)` and does not flex-rigid-poison a meta `?V`. Per-entry strictness is preserved by the `map-assoc`-vs-`Map` arm's `(check ctx v vt)` as the chain unwinds. This transcribes the seeded-`Open`'s annotation-satisfaction duty for the record seed, one arm. **Corrects D.1 §4.2's false "never consults the seed" claim.** Gated by acceptance canaries 9/14/16 + new `map-merge` canary at s2 (NOT s5).
 
-### §4.4 `merge` / `deep-merge` (D10; F1a.2-era slice, designed now)
+### §4.3 Typing-arm disposition (F1a-s2/s3) — with all D.3 fixes
 
-New **node-backed** operations (no legacy to fight — grounded: none exist): `expr-map-merge (m1 m2 deep?)` (exact node split TBD at its mini-design), value semantics right-priority overwrite, deep recursing iff both sides are maps. M1 typing: both sides `R`-ground → compute the result row exactly (right's fields + left's fields whose labels are absent on the right; deep: recurse where both field types are records — finite trees, terminating). Any side non-ground → dyn-tail result (F1a.2's representation). M3 (F-row): the node is where `Concat`/`DeepConcat` residuated constraints attach — 3-cell fundep-directional propagator in the ONE solver. WS surface (`merge`, `deep-merge` as parser keywords like `assoc`) specced at that slice's mini-design.
+`R` = whnf-inferred `(expr-Record kd fs 'closed)`. All `typing-core` `infer` unless noted.
 
-### §4.5 Open relocation plan (D7 — F1a.2, summarized here for phasing integrity)
-
-F1a leaves every non-literal `Open` path byte-identical. F1a.2: (i) `'dyn` tail semantics go live — `(Map K V)`-annotation flows and dynamic-key degradations produce dyn-tailed records instead of `(Map _ Open)`; (ii) transcribe Sekiyama–Igarashi `C_ConsL`/`C_ConsR` absorption into the unify rules for dyn tails (reproducing `unify:574`'s annotation-satisfaction duty in its principled home); (iii) unknown-field projection on a dyn tail mints a fresh type meta + records the observation (monotone, existing constraint store); (iv) delete `expr-Open` (~38 sites across 11 files, enumerated in the grounding) and the F4 perf comment's "Open by Design" docstring, with the two-role history recorded. D1-b closes there.
-
-### §4.6 WS impact (required section)
-
-**No reader/parser/preparse changes in F1a.** `{:a 1}.a` already parses; only types change. The WS-visible surface is:
-
-1. **Type display** (pretty-print): ground record → map-literal-shaped type, `{:a Int :b String}` (fields in canonical order); nested records nest (`{:a {:a1 Int}}`). Dyn tail (F1a.2) → `{:a Int | _}` (proposal — bikeshed at critique). `expr-Map` display unchanged (`[Map Keyword Int]`). *Consequence*: existing tests asserting `: Open` / `[Map Keyword Open]` displays change — Pre-0 censuses the churn (grep count), F1a-s4 fixes them.
-2. **Diagnostics**: closed-row miss reads like a user error, e.g. `field :b is not present in {:a Int} — the literal's fields are :a` (exact wording at s2; must name the *available* fields).
-3. **Not user-writable**: `{:a Int}` in type position stays a parse-time map literal (annotation surface deferred; `(Map K V)` and `schema` remain the annotation forms). Documented in the acceptance file.
-
-### §4.7 Acceptance file (Phase 0 artifact — EXISTS as of Pre-0, baseline-green 26/26)
-
-`racket/prologos/examples/2026-07-06-ciu-t6-f1-records.prologos`, `:no-prelude` (F4 perf lesson), self-verifying via `tools/run-file.rkt --check` (`;;N=>` markers; §7 item 6). Current expectations = pre-F1a baseline; each slice flips its `;;   F1a:` targets. Canaries:
-
-```
-def q := {:a 1}            ;; q : {:a Int}
-q.a                        ;; 1 : Int          ← THE goal
-+ q.a 1                    ;; 2 : Int          ← V5 (errors today)
-def m := {:a {:a1 1} :b {:b1 11}}
-m.a.a1                     ;; 1 : Int          ← nested (flips F4's "1 : Open")
-def het := {:n 1 :s "x"}
-het.n                      ;; 1 : Int          ← per-field beats uniform-join
-het.s                      ;; "x" : String
-;; het.z                   ;; closed-row miss — type error (assert message)
-def am : (Map Keyword Int) := {:a 1}
-am.a                       ;; 1 : Int          ← annotated path unchanged
-def p : Point := {:x 1 :y 2}
-p.x                        ;; 1 : Int          ← schema path unchanged
-spec sum-vals (Map Keyword Int) -> Int         ;; + a body using map-vals
-[sum-vals {:a 1 :b 2}]     ;; annotation-satisfaction canary: literal → (Map Keyword Int) via check;
-def r := {:a 1 :b 2}
-[sum-vals r]               ;; ← THE regression canary: inferred-Record-vs-Map-annotation (check-subsumption arm)
-assoc q :b "hi"            ;; : {:a Int :b String} — exact extension
-dissoc q :a                ;; : {} — exact removal
-map-keys het               ;; : (List Keyword); map-vals het : (List <Int | String>)
-```
-
-Plus `tests/test-first-class-paths.rkt` assertion flips (`"1 : Open"` → `"1 : Int"` at lines 113/127 — the file's own NOTE anticipates this) and a WS test file for the new behaviors (shared fixture pattern, `:no-prelude`).
-
-## §5 SRE lattice lens (6 questions) — the record description lattice
-
-1. **Classification**: STRUCTURAL — a labeled product of per-field VALUE lattices (the flat type lattice), indexed by a support set (labels) plus a tail state. Components evolve independently.
-2. **Algebraic properties**: per-field = the existing flat type lattice (join-semilattice + ⊤/⊥). Support = powerset lattice (Boolean) over labels. Tail = 3-point info order (`dyn ⊑ closed`, `dyn ⊑ ρ-bound`). Whole = a feature lattice (OSF-family): join = record-meet-under-orientation-flip (field union + per-field unify; clash ⇒ ⊤/contradiction). Commutative, associative, idempotent — CALM-safe when it becomes a cell merge (F-row). **Unverified precondition (flagged, §8)**: per-field meets distributing over our binary normalized unions — check before claiming distributivity anywhere.
-3. **Bridges**: (a) per-field ↔ flat type lattice — componentwise, trivially Galois. (b) record ↔ `(Map K V)` — the uniform-bound abstraction α(R) = `(Map Keyword ⋃fields)`; γ = "any record whose fields all fit V". The §4.3 check-subsumption arm IS this α — stated as a Galois connection, not ad-hoc. (c) record ↔ schema — up-shift (schema entries embed into the description lattice) is an embedding; seal is a *checked* partial inverse with residual (F1b), NOT a lattice morphism — polarity boundary, per D11/MLstruct nominality discipline.
-4. **Composition**: fields compose with unions (field types may be unions — build-union-type already normalized); records nest (field type may itself be a record) — the lattice is the least fixpoint of the labeled-product functor over the flat lattice; no cycles in F1a (ground literals are finite trees).
-5. **Primary vs derived**: a literal's ground row = PRIMARY (from syntax). The `(Map Keyword ⋃fields)` view = DERIVED (α). Schema registry = PRIMARY for nominal types. A sealed value's type (F1b) = schema name + possibly residual observed refinements (derived from both).
-6. **Hasse diagram**: nodes = (support, per-field assignments, tail); edges = single-fact refinements (add a label / refine one field / close the tail). The per-field independence means the diagram factors as a product — which IS the parallel decomposition: per-field components map directly onto compound-cell components when rows become cells (F-row), and the set-latch/broadcast patterns apply per-label. F1a consumes this only as documentation; F-row consumes it operationally.
-
-## §6 Principles gate (challenge column included) + subtyping/NTT notes
-
-| Decision | Serves | Challenge (could it be MORE aligned?) |
+| Site | Disposition on `R` | Fix |
 |---|---|---|
-| Row-shaped carrier w/ tail (D6) | Data Orientation; Correct-by-Construction (fields only from syntax) | More aligned would be rows-as-cells NOW — rejected: new-meta-domain co-migration cost is documented and F1a needs zero inference beyond existing metas. Forward-compat obligations (§4.1, ordinary type metas; sorted canonical form) are the honest bridge. |
-| Records vs dictionaries split (§4.1) | Decomplection (two concepts, two types) | Risk: is the keyword-literal test too syntactic? Challenged: it mirrors TS's fresh-literal treatment and Typed Clojure's complete-HMap literals — the *literal* is the one place the field set is a fact, not an inference. |
-| Degrade-to-dictionary on dynamic keys (§4.3) | Honest scoping; behavior preservation | Red-flag check: is `(expr-Map k (expr-Open))` here "keeping the old path"? It IS the old path — F1a's scope boundary, with D7's relocation scheduled (F1a.2). Named, dated, planned — passes the scaffolding gate. |
-| Union-join for meta `V` in Record<:Map (§4.3) | Most Generalizable Interface (α as Galois) | More aligned than Open-absorption (today) AND than per-field-unify (would reject heterogeneous records). It's the principled abstraction — and strictly more precise than the status quo. |
-| No record-subtype judgment (D11) | Decomplection; compositional safety | The fragile global relation is never built; the two subsumption uses (Record<:Map now, width at F1b) are local check arms / erasure-mode discharge. Challenged against "just extend subtype?": rejected — `compound-type?`/positional-ctor-desc would demand a label-keyed engine variant F1a doesn't need. |
-| qtt via delegation (§4.3) | Single source of truth for types | More aligned than replicating logic inline (the current `:1213` shape is the divergence bug class). |
+| `map-empty` `:1450` | v-type `expr-Record` → return it | |
+| `map-assoc` `:1465` | keyword-lit key → `infer` v, **row-extend** right-priority (D10 exact extension). Non-literal key → **first `(check ctx k (expr-Keyword))`**; on fail `expr-error` (preserves today's rejection); on pass degrade `(expr-Map (expr-Keyword) (expr-Open))` | **B4** |
+| `map-get` `:1512` / `get` `:1491` | keyword-lit: present → field type (**the goal**); absent → `expr-error` + closed-row-miss diagnostic. Non-literal: `(check k Keyword)` then `⋃fields` | B4 |
+| `nil-safe-get` `:1585` + its **own union loop `:1587-1604`** | present → `field\|Nil`; absent+closed → `Nil`; **union loop must accept Record components** (drops them today → wrong Nil-only) | **S3** |
+| `map-dissoc` `:1619` | keyword-lit → `R` minus field (exact); non-literal → B4-gated degrade | B4 |
+| `map-size` `:1626`/`has-key` `:1634` | `Nat`/`Bool` (+ `R` arm) | |
+| `map-keys` `:1643`/`vals` `:1651` | `(List Keyword)`/`(List ⋃fields)` | |
+| **`map-fold-entries` `:1836` / `map-filter-entries` `:1850` / `map-map-vals` `:1861`** | operate through the derived uniform view (`K=Keyword`, `V=⋃fields`); today `[_ (expr-error)]` → Record regresses to hard error | **S3** |
+| union arm of `map-get` `:1549-1568` | accept `expr-Record?` components; **miss policy = filter** the missing component (Q5; matches the arm's existing Map precedent; all-miss already errors). Do NOT copy `with-speculative-rollback` into new arms (§8) | S3/Q5 |
+| **check-subsumption `:2700-2706`** (NEW) | `R <: (Map K V)`: labels vs `K`; `V` meta → solve `V := ⋃fields` (Galois α; empty row → succeed WITHOUT solving `V`, Q6); `V` concrete → per-field check | Q6 |
+| **`unify.rkt` classify `:558-719`** (NEW, #14) | Record-vs-Record: equal key-domain + labels + tails → `(list 'sub per-field-goals)` (sorted zip); label mismatch → `'conv` + closed-row-miss. **Different-shape → union (F1a-col flavor B), NOT here** | **B3** |
+| **`expr-update-in` `:1429`** (dynamic path) on `R` | **degrade** result to `(expr-Map Keyword Open)` (F1a; dyn tail subsumes F1a.2) — precise-but-unsound rejected (Q7). *Literal* update-in desugars → safe (no arm needed) | **S9**/Q7 |
+| **`expr-get-in` / `expr-broadcast-get`** (dynamic) | unchanged (fresh meta, Record-indifferent) — one-line "unchanged" rows | S9 |
+| **trait-resolution** `ground-expr?` + `expr->impl-key-str` | add `ground-expr?` Record arm (meta-bearing → not ground); posture: record types match no Map-headed instance head in F1a — annotation is the escape hatch (α-bridge is F1b/UCS-5) | **S10** |
+| **qtt** `map-get` `:1213` + `map-assoc` `:1196` + **`map-dissoc` `:1244`** + the **conversion fallback `:2449-2463`** | delegate the TYPE to `(infer ctx e)` (the `:1215` schema-arm pattern), usage local; the fallback delegates type-comparison to typing-core `check` so the Record<:Map arm is reachable. map-assoc delegation is **unconditional**. Route any cell-level meta-solve through `solve-meta!` (pipeline.md Known Coupling) | **B2/S4** |
 
-**NTT-relevance (mandatory note)**: F1a adds **zero propagators and zero cells** — it is value-type-lattice representation work inside the existing imperative `infer`/`check` (same on/off-network status as all of typing-core; bringing typing on-network is PPN's turf). The Network Reality Check therefore honestly returns "function-call chain" — *and that is the correct answer for this layer*. The NTT-model obligation attaches at **F-row** (rows-as-cells, `Concat` as 3-cell propagator, set-latch per-label obligations, non-monotone residue at strata) — that design doc MUST carry the full NTT model; this one carries the forward-compat obligations (§4.1, §4.3) that keep F-row's path clear.
+**Diagnostic transport (S7)**: `expr-error` is nullary — the closed-row-miss message needs a channel. Mechanism: a `typing-errors.rkt` hint arm matching `map-get`-on-Record-with-absent-keyword (Issue-#70 walk precedent), field list capped (~6 + "+N more"), typo-suggestion optional. If descoped, the `het.z` acceptance assertion downgrades to "is a type error".
 
-## §7 Pre-0 — RESULTS (2026-07-06, executed at HEAD `ead54e27`; feeds D.2)
+**Generic-walker audit (S2, s1)**: extend `occurs?`, `collect-meta-ids`, `ground-expr?`, `has-unsolved-meta?` (+ grep the ~6 `struct->vector` walkers) with a pair?/list? recursion into `fields`, OR make the fields spine struct-based so the generic walk works unmodified. Regression tests: occurs-check meta-in-field; constraint-retry with a record-embedded meta. Propose the pipeline.md checklist addition ("sub-exprs inside a non-struct container → audit every generic walker").
 
-1. **Serializer probe ✅ RESOLVED — `record-field` struct is SAFE.** `deep-s->v` (pnet-serialize.rkt:91-118) is a *generic recursive walk*: any `struct?` → `struct->vector` with recursive elements; pairs/lists/hashes recursive. Deserialization needs only the tag registered (`regN!`). Empirical round-trip of `(list (cons 'a (expr-Int)) …)` → `equal? #t`. Production precedent for list fields: `expr-path (branches)` (syntax.rkt:673). **Decision: primary proposal stands** — `record-field` struct + `expr-Record` each get a `reg2!`; the pairs fallback is unnecessary. (The F2 vector-impostor mode = forgetting EITHER registration.)
-2. **Field-rep micro ✅ — representation is NOT perf-driven.** Lookups <0.05µs both reps at n≤16; extension: assoc cons+sort 0.2µs (n=4) / 0.9µs (n=16) vs hasheq ~0.1µs — all 3+ orders below per-form typing cost (~ms). **Sorted-assoc stands on determinism grounds** (serialization, display, `equal?`); implementation note: canonicalize ONCE at literal completion, not per-extension.
-3. **Display-churn census ✅ — SMALL.** `: Open` assertions: 5 hits in 3 test files (`test-schema-properties`, `test-first-class-paths`, `test-mixed-map`); `Map Keyword Open`: 5 hits (`test-path-expressions`, `test-mixed-map`). s4 budget: ~10 assertion flips across 4 files.
-4. **Baseline timing ✅.** Instrument = the acceptance file itself (26 forms, map-literal-heavy): elaborate 16ms / type_check 36-37ms / qtt 6ms / zonk 21-22ms / reduce 44-45ms (3 runs, tight). Post-F1a re-run compares like-for-like. Suite baseline: GREEN 8530/448/0 at `35b3bc90` (docs-only commits since).
-5. **Acceptance file ✅ LIVE + WS wiring verified through-and-through** (`examples/2026-07-06-ciu-t6-f1-records.prologos`): all §4.7 surfaces run at Level 3 (`process-file`, `:no-prelude`) — literals, projection, annotated, schema, spec/defn annotation-satisfaction (canary 16 = today's Open-absorption, confirmed live), `map-assoc`/`map-dissoc`/`map-keys`/`map-vals`/`map-size`/`map-has-key?`/`nil-safe-get`/`get-in`+`#p`. **Wiring finding**: the WS surfaces are the `map-`-prefixed parser keywords; bare `assoc`/`dissoc` ergonomic aliases do NOT exist (out of F1a scope; noted for the track's ergonomics backlog).
-6. **NEW: `.prologos`-level regression testing (owner-flagged gap) — minimal closer shipped.** `tools/run-file.rkt --check` verifies `;;N=>` (exact) / `;;N=>~` (contains) expectation markers keyed to run-file's own result indices (authoring loop: run → copy numbered outputs → `--check`). The acceptance file carries **26 expectations, 26 passing** at the pre-F1a baseline — each F1a slice flips its marked lines (F1a targets sit on adjacent `;;   F1a:` comments). Exit code 1 on mismatch → suite-integrable via a thin `tests/` wrapper (s4).
+**Untouched by F1a-core**: `unify:574-575` Open wildcard (D7 relocation = F1a.2); `subtype-predicate.rkt` (no record-subtype judgment, D11; width = F1b erasure-mode); the two term-directed check arms except the B1 seed guard; reduction/runtime (values stay CHAMP). **Coverage-gap check to close at s1** (D.3): `reduction.rkt` `whnf`/`nf`/`trivially-whnf?`/`definitely-not-map?` treatment of the new node.
 
-## §8 Risks and open items (for the critique rounds)
+### §4.4 `merge` / `deep-merge` (D10; corrected grounding S6)
 
-- ~~pnet-serialize nested-struct support~~ — **RESOLVED (Pre-0 #1)**: generic walk verified + empirical round-trip; struct shape confirmed.
-- **Distributivity precondition unverified**: per-field meet over binary normalized unions (SRE Q2) — check before any doc claims it.
-- **Union-arm inconsistency inherited**: `typing-core:1549-1568` still uses `with-speculative-rollback`+`build-union-type` — the mechanisms the `:1459` comment says were retired. F1a extends this arm minimally (accept Record components) but must NOT copy the shape into new arms; excise-or-defer decision belongs to the critique round.
-- **Heterogeneous projections become precise**: code that today silently flows `Open` into arithmetic may now surface real type errors (strictly more sound; suite + acceptance will quantify).
-- **Display churn** could be larger than expected (Pre-0 #3); s4 budgets it.
-- **`{}` stays legacy in F1a** — the empty-literal record reading waits for dyn tails; assert the `{}`-annotation canary (`typing-core:2424`) stays green.
-- **Perf**: per-literal record construction + canonical sorting (n small; Pre-0 #4 guards).
-- Open for critique: exact `record-field` vs pairs; dynamic-key projection = union-of-fields vs error; dyn-tail display; whether F1a-s3's `map-keys`/`map-vals` precision upgrades belong in s2 instead.
+**Correction**: stdlib `map-merge` (right-priority) **exists** and feeds `impl Lattice (Map K V)` — D10's *semantics* lock is unaffected (it already implements right-priority), but the merge-node mini-design must **disposition the live stdlib function** (Q4: retire-into-node — recommended — vs alias vs coexist). M1 typing (both sides `R`-ground): result row = right's fields + left's fields with labels absent-on-right (deep: recurse where both field types are records — finite trees, terminating). Non-ground → dyn-tail (F1a.2). M3 (F-row): `Concat`/`DeepConcat` residuated relational constraints, 3-cell fundep-directional propagator in the one solver. `map-merge {:a 1} {:b 2}` becomes a subsumption-arm canary (its polymorphic `(Map K ?V)` flow exercises the B1 flex-rigid path) — but **`map-merge` is prelude/stdlib** (verified §7b: unbound under `:no-prelude`), so this canary lives in the **prelude-loaded** WS test, not the `:no-prelude` acceptance file.
+
+### §4.5 Open relocation (D7 — F1a.2 summary)
+
+F1a leaves every non-literal `Open` path byte-identical. F1a.2: `'dyn` tail live ((Map K V)-annotations + dynamic-key degradations produce dyn-tailed rows carrying (K,V) bounds); transcribe Sekiyama–Igarashi `C_ConsL`/`C_ConsR` absorption into unify for dyn tails (`unify:574`'s duty, principled home); unknown-field projection on a dyn tail mints a fresh meta + records the observation; then delete `expr-Open` (~38 sites/11 files) with the two-role history recorded (docstring). D1-b closes there.
+
+### §4.6 WS impact
+
+No reader/parser/preparse change in F1a-core (`{:a 1}.a` already parses). Surface: **(1) display** — record → `{:a Int :b String}` (canonical order); nested nests; tuple (F1a-col) → `⟨Int, String⟩` (delimiter TBD); dyn tail (F1a.2) → `{:a Int | _}`; `expr-Map` unchanged. **Union display fix (S-minor)**: `pp-expr` prints unions bare `~a | ~a` (`pretty-print:718`) — the acceptance `;;N=>` targets `(List <Int | String>)` must use the ACTUAL convention (`Int | String`), not delimited. **(2) diagnostics** — closed-row miss names available fields (§4.3 S7). **(3) not user-writable** — `(Map K V)`/`schema` remain the annotation forms.
+
+### §4.7 Acceptance (EXISTS, baseline-green 26/26; §7.5)
+
+`examples/2026-07-06-ciu-t6-f1-records.prologos`, `:no-prelude`, self-verifying via `run-file.rkt --check`. s4 flips `;;N=>` to F1a targets + adds to the `:no-prelude` file: `het.z` closed-row miss (**append at file END** to avoid index renumber — S-minor); two dynamic-key canaries (Keyword key → degrade; String key → error, covering B4). **NEW prelude-loaded WS test file** (surfaces need `'[…]` list literals + stdlib `map-merge` = prelude): `'[{:a 1} {:a 2}]` same-shape (B3) + the different-shape named-regression/escape-hatch; `map-merge {:a 1} {:b 2}` + two-record `map-merge` (subsumption canary, §4.4); a `.pnet` **cross-module canary** (a Record-typed def in a lib module consumed downstream — the F2 detonation surface the single-file `:no-prelude` acceptance cannot reach; D.3 coverage gap). Plus `test-first-class-paths.rkt` `"1 : Open"`→`"1 : Int"` flips (`:113/:127`). **S10 blast-radius** (does trait dispatch on `(Map ?km Open)` literals succeed today?) quantified here via a prelude probe — the design posture (§4.3 S10) does not depend on the count.
+
+## §5 SRE lattice lens (records + collections)
+
+1. **Classification**: STRUCTURAL — labeled product of per-field/-position VALUE lattices, indexed by a support set + key-domain + tail.
+2. **Algebraic properties**: per-slot = flat type lattice (join-semilattice + ⊤/⊥); support = powerset (Boolean); tail = 3-point info order. Whole = OSF-family feature lattice. **Meet vs union are DIFFERENT operations** (Q3 resolution): *meet* (same object) = D11 conjunction-of-facts (conflict ⇒ ⊤/contradiction — for tuples, position-i-Int ∧ position-i-String = ⊥); *collection-element* context = union (no meet taken). D6's "field-union formula" conflated them; now separated. **Distributivity RESOLVED** (§7b).
+3. **Bridges**: (a) per-slot ↔ flat lattice (Galois, trivial). (b) row ↔ `(Map/PVec K V)` = the uniform-bound α(R) = `(… ⋃fields)`; the §4.3 subsumption arm IS this α. (c) row ↔ schema = up-shift embedding; seal = checked partial inverse + residual (F1b), NOT a lattice morphism (polarity boundary).
+4. **Composition**: field types may be unions (normalized) or nested rows; least fixpoint of the labeled-product functor; no cycles (ground literals finite trees).
+5. **Primary/derived**: literal ground row = PRIMARY; `(Map/PVec …⋃…)` view = DERIVED (α); tuple→PVec-of-union widening = a Galois projection (SRE Q5), realized as an on-network propagator NOT an ad-hoc cast.
+6. **Hasse**: nodes = (support, per-slot assignments, key-domain, tail); edges = single-fact refinements. Per-slot independence ⇒ the diagram factors as a product = the parallel decomposition (per-slot ↔ compound-cell components at F-row; set-latch/broadcast per key). F1a: documentation; F-row: operational.
+
+## §6 Principles gate (challenge column)
+
+| Decision | Serves | Challenge |
+|---|---|---|
+| One carrier, two surface nodes, key-domain tag (Q_A) | Most-Generalizable-Interface + Decomplection (laws decomplected by the tag) | More-aligned than pure-one-node (leaks laws across key-domain) AND than two-fully-separate (duplicates machinery + reopens tuple-subtype). Matches frontier (unify substrate, split surface). **Active enforcement**: a law reading the carrier without checking the key-domain tag = latent law-crossing bug. |
+| Records vs dictionaries split | Decomplection | Challenged "too syntactic?": the *literal* is the one place the key set is a fact (TS fresh-literal / Typed-Clojure complete-HMap precedent). Q_E frames it as a D3 refinement (dyn-tailed instance), not a 3rd mechanism. |
+| Tuple-by-default (Q_D) | First-Class-by-Default | Records already first-class per-field; array-by-default (TS) discards proven per-position facts + needs `as const` ceremony. Widening is a monotone Galois step, so no expressiveness lost. |
+| Degrade-to-dictionary on dynamic keys (B4-gated) | Honest scoping | Now key-CHECKED (B4) — not "byte-identical" (that was false); preserves today's rejections. F1a scope boundary, D7 relocation scheduled. |
+| No record/tuple-subtype judgment (D11) | Decomplection; compositional safety | Extends to tuples verbatim (per-position conjunction; Tang non-existence warrants refinement-only). `subtype-predicate.rkt` untouched — verified safe (compound-type? excludes the node → `subtype?` degrades to `equal?`, no unsoundness). |
+| Union-widening VISIBLE not silent (flavor B) | Correct-by-Construction | Tang: unbounded widening breaks principality — keep `List<Int\|String>` a user-visible outcome; run the SRE lattice check on the union merge; union is a monotone join (CALM-safe). |
+
+**NTT-relevance**: F1a adds **zero propagators, zero cells** — value-type-lattice representation inside imperative `infer`/`check` (same status as all typing-core; on-network typing is PPN's turf). Network Reality Check honestly returns "function-call chain" — correct for this layer (verified: map ops are `#f`-registered imperative returns, `typing-propagators:2366`; ctor-desc is positional so the row node can't ride it). The NTT-model obligation attaches at **F-row** (rows-as-cells, `Concat` 3-cell propagator, set-latch per-key). F1a carries only the forward-compat obligations (§4.1 key-domain generalization; ordinary metas; per-slot components) that keep F-row's path clear.
+
+## §7 Pre-0 results + §7b re-verification
+
+**§7 Pre-0** (unchanged from D.1, executed 2026-07-06): (1) serializer probe ✅ `record-field` struct SAFE (generic walk + empirical round-trip; `reg2!` each). (2) field-rep micro ✅ not perf-driven (<0.05µs lookup; sorted-assoc on determinism). (3) census ✅ small on the display grep — **corrected by S5**: `test-mixed-map.rkt` is the PPN 4C T-2 "Open by Design" contract file with ~10 colon-less `"Open"` assertions the display grep MISSED → s4 is flip-or-retire *decision* work (~2× budget) + a T-2-supersession note. (4) baseline ✅ elaborate 16 / type_check 37 / qtt 6 / zonk 22 / reduce 45 ms. (5) acceptance ✅ Level-3 WS wiring verified. (6) `run-file.rkt --check` ✅ shipped.
+
+**§7b re-verification (D.2, executed 2026-07-06)** — the D.3-amended dispositions, probed at HEAD:
+- Flavor-B projection ✅ **de-risked**: `pvec-nth (v:(PVec <Int|String>)) 0N` → `1 : Int | String`. Earlier "gap" was `0`(Int)-vs-`0N`(Nat) index, not the union. Flavor B needs only inference-widening, no new projection arm.
+- Union normalization ✅ associative/flattening (`<Int|<String|Bool>>` ≡ `<<Int|String>|Bool>` ≡ `Int|String|Bool`); record-containing unions need the S1 `union-sort-key` case for commutativity (on the amendment list).
+- Order-from-position ✅ (by construction: `⟨Int,String⟩`≠`⟨String,Int⟩` are distinct slot-maps) — no non-commutative monoid needed for F1a.
+- Ordered-rows/concat principal-types: no impossibility (Wikipedia/Wand/Morris–McKinna); the concat principal-types issue is key-domain-agnostic = the record-concat issue already solved by D10 residuation; Ur/Web existence proof. **Deferred to F-row, inherits D10.**
+- Distributivity ✅ RESOLVED (holds by construction, `type-lattice.rkt:263-274`).
+
+## §8 Risks (updated) + coverage gaps
+
+- ~~pnet nested-struct~~ ✅ (Pre-0 #1). ~~distributivity~~ ✅ (§7b). ~~map-merge-exists~~ ✅ folded (S6).
+- **Union-arm `with-speculative-rollback` inconsistency** (`:1549-1568`, the "retired" mechanism): F1a extends this arm (accept Record components) but must NOT propagate the shape into new arms; excise-or-defer is an s3 call (tracking note if deferred).
+- **Union-widening principality** (flavor B): keep VISIBLE; SRE lattice check on the union merge; not-yet-probed that a computed record-union stays non-⊤ (F1a-col gate).
+- **Heterogeneous projections become precise** → code silently flowing `Open` into arithmetic may surface real errors (strictly more sound; suite quantifies).
+- **Different-shape record collections** = named regression in F1a-core (escape hatch: `: (List <r1|r2>)`, verified to check), closed by F1a-col; prelude-loaded WS test pins it.
+- **Dense-prefix / variadic / η** = F-row/F1b (existence-proofed; not F1a).
+- **Coverage gaps to close** (from D.3, s1/s4): `reduction.rkt` whnf treatment of the node; cross-module `.pnet` consumer canary; pattern-match/narrowing over record scrutinees (probably nil — types not patterns — but assert); record-TYPE vs map-VALUE display collision in error/REPL/LSP contexts; trait dispatch on `(Map ?km Open)` literals today (2-line probe to settle S10 blast radius).
 
 ## §9 Deferred (explicit)
 
-dyn tails + Open deletion (F1a.2); width subsumption, rank≤2/weak-preservation documentation, seal + residual + `closed?` scan (F1b); `merge`/`deep-merge` nodes + M1 (F1a.2-era slice, §4.4); ρ/`Concat`/`DeepConcat`/ambiguity check (F-row; UCS-5 + SRE-5 junctions); variants (F-variant); presence marks beyond `'present` (with the schema optional-keys design); user-writable record-type annotations; V2–V4 selection syntax (track doc).
+Flavor A tuple mint + Flavor B union-widen (F1a-col, still CIU-T6); dyn tails + Open deletion (F1a.2); width + seal + `closed?` scan + rank≤2/weak-preservation docs (F1b); `merge`/`deep-merge` nodes + M1 (F1a.2-era); ρ/`Concat`/`DeepConcat`/ambiguity-check (F-row; UCS-5+SRE-5); variadic tuples + η-on-closed (later CIU, possibly dependent-typed per owner Q_C note); variants (F-variant); presence marks beyond `'present` (with schema optional-keys); user-writable record/tuple type syntax; V2–V4 selection syntax (track doc).
+
+## §10 The seven questions — resolutions (co-design, 2026-07-06)
+
+1. **Q1 heterogeneous collections** → DESIGN GOAL (D13/D14): flavor A (tuple, net-new capability, fixes `@[1 "a"]` error) + flavor B (union-element list, turns the "regression" into a feature). Classifier is the correctness pivot. (F1a-col.)
+2. **Q2 D3 end-state** → **(b)** `expr-Map`/`PVec` = dyn-tailed/uniform instances of the one carrier; F1a `Record<:Map` arm transitional; dyn tail carries (K,V) at F1a.2.
+3. **Q3 record-meet different supports** → tension DISSOLVED: meet = D11 conjunction (contradiction on conflict, tuples too); collection-element = union (no meet). D6-vs-D11 was meet-vs-union conflation.
+4. **Q4 stdlib map-merge** → retire-into-node (recommended) when the merge node lands; rides Q2(b). D10 semantics unaffected.
+5. **Q5 union-arm miss** → union-PRESERVE (neither filter nor error for the collection case); field present-in-some-arm → `Option`/refinement.
+6. **Q6 empty corners** → empty-record = empty-tuple = unit (row-monoid identity); `{} <: (Map K ?V)` succeeds WITHOUT solving V; `map-vals {}` → `(List fresh-meta)`; dissoc-absent = identity; dynamic-get-on-`{}` = miss error.
+7. **Q7 dynamic update-in** → degrade to dictionary view (sound); tuple case admits a sharper bounds-checked answer via known length (small win). Literal paths safe (desugar).
+
+Plus the collection forks: **Q_A** one-carrier/two-nodes ✅; **Q_B** forbid mixed-key ✅; **Q_C** closed tuples v1, variadic deferred ✅; **Q_D** tuple-by-default ✅; **Q_E** end-state (b) ✅.
+
+## §11 D.3 critique disposition (finding → resolution)
+
+**BLOCKING** (all CONFIRMED): **B1** seed breaks annotated literals → §4.2 seed-check arm (s2). **B2** subsumption unreachable from qtt → §4.3 qtt-fallback delegate (s2). **B3** Record-vs-Record unify undispositioned → §4.3 classify case (same-shape, s3) + union-widen for different-shape (F1a-col) + prelude WS test. **B4** dynamic-key drops key check → §4.3 Keyword gate (s3).
+**SIGNIFICANT** (all CONFIRMED, folded): S1 union-sort-key (§4.1/s1) · S2 walker audit (§4.3/s1) · S3 fold/filter/map-vals + nil-safe-get union (§4.3/s3) · S4 qtt dissoc (§4.3) · S5 census re-budget + T-2 (§7) · S6 map-merge exists (§3/§4.4) · S7 diagnostic transport (§4.3) · S8 third mint site (get-in projection maps) → extend the seed rule or name-the-regression (s2) · S9 dynamic update-in degrade (§4.3/Q7) · S10 trait-resolution posture (§4.3) · S11 empty corners (§4.3/Q6) · S12 record-meet spec split + smart-constructor + distributivity-resolved (§4.1).
+**REFUTED** (do NOT descope): literal-path get-in/update-in flips ARE deliverable (elaborator desugars — §3 last row); the s4 flips stand.
+**Coverage gaps** → §8.
