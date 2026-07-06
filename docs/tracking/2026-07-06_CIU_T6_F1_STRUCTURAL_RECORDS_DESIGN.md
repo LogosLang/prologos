@@ -28,7 +28,7 @@ Plus **flavor B**: a variable-length container whose *elements* differ → `List
 | D.3 | Independent adversarial critique (P/R/M/S/U) + adjudication | ✅ | [record](2026-07-06_CIU_T6_F1_STAGE3_CRITIQUE_D3.md); 4 BLOCKING + 12 SIGNIFICANT; 2 REFUTED |
 | D.2 | Fold critique amendments + collection reframe | ✅ | this doc |
 | re-verify | Light re-verification of amended dispositions (§7b) | ⬜ | probes/anchors reusable from D.3 |
-| F1a-s1 | Carrier struct(s) through core pipeline (files 1–8 + `unify.rkt` #14 + `union-types.rkt` + `compound`-whitelist n/a) + **generic-walker audit** + display | ⬜ | B3 adds unify #14; S2 adds walker audit; S1 adds union-sort-key |
+| F1a-s1 | Carrier struct(s) through core pipeline (files 1–8 + `union-types.rkt` + walkers) + display | ✅ | 13 files; `expr-Record`/`record-field` + `record-map-field-types` helper; S1 union-sort-key + S2 walker audit done; `tests/test-record-node.rkt` (15); suite GREEN 8530/448/0; no behavior yet (nothing mints). unify classify (B3) + minting = s2/s3 |
 | F1a-s2 | Literal inference + projection arms + **B1** seed-check arm + **B2** qtt fallback co-edit + qtt delegation | ⬜ | the `{:a 1}.a : Int` slice + annotation-satisfaction |
 | F1a-s3 | Remaining map-op arms (**S3** fold/filter/map-vals + nil-safe-get union) + Record<:Map subsumption + union arm + **B3** Record-vs-Record same-shape unify + **S4** qtt dissoc + **B4** dynamic-key Keyword gate + **S7** diagnostic + **S10** ground-expr? arm + **S11** empty corners | ⬜ | |
 | F1a-s4 | Flip acceptance `;;N=>` to F1a targets + `het.z` + **S5** re-census (`test-mixed-map` T-2 contract) + `test-first-class-paths` flips + **cross-module .pnet canary** + prelude-loaded WS test (B3) + `--check` suite wrapper | ⬜ | |

@@ -14,6 +14,7 @@
 
 (require racket/match
          racket/list
+         racket/string
          "syntax.rkt")
 
 (provide flatten-union
@@ -83,6 +84,14 @@
     [(expr-Vec e l) (format "3:Vec:~a" (union-sort-key e))]
     [(expr-Fin b) (format "3:Fin:~a" (union-sort-key b))]
     [(expr-Map k v) (format "3:Map:~a:~a" (union-sort-key k) (union-sort-key v))]
+    ;; CIU T6 F1 (S1): structural-row key — fields are canonically sorted, so this is
+    ;; deterministic → record-containing unions are commutative/idempotent under build-union-type.
+    [(expr-Record kd fields tail)
+     (format "3:Record:~a:~a:~a" kd
+             (string-join (for/list ([fld (in-list fields)])
+                            (format "~a=~a" (car fld) (union-sort-key (record-field-type (cdr fld)))))
+                          ",")
+             tail)]
     [(expr-PVec e) (format "3:PVec:~a" (union-sort-key e))]
     [(expr-Set e) (format "3:Set:~a" (union-sort-key e))]
     [(expr-Path) "3:Path"]

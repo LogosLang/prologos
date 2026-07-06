@@ -163,6 +163,8 @@
  (struct-out expr-Char) (struct-out expr-char)
  ;; String type (opaque atomic type for UTF-8 text)
  (struct-out expr-String) (struct-out expr-string)
+ ;; Anonymous structural record / tuple type (CIU T6 F1; internal-only — inferred, not parsed)
+ (struct-out expr-Record) (struct-out record-field) record-map-field-types
  ;; Map (persistent hash map)
  (struct-out expr-Map) (struct-out expr-champ)
  (struct-out expr-map-empty) (struct-out expr-map-assoc)
@@ -643,6 +645,31 @@
 ;; ========================================
 ;; Map (persistent hash map, backed by CHAMP)
 ;; ========================================
+
+;; Anonymous structural-row TYPE node (CIU T6 F1 — internal-only: inferred + displayed, NOT parsed).
+;; ONE carrier, TWO surface presentations keyed by key-domain (D13/Q_A): a record ('keyword) or a
+;; tuple ('nat). Deliberately carries NO prop:ctor-desc-tag — a keyed/variable-width row cannot register
+;; in the fixed-arity positional ctor-desc registry; width subsumption is F1b (erasure-mode), not the walk.
+;;   key-domain : 'keyword | 'nat   (F1a-core mints 'keyword only; 'nat = tuples, F1a-col.
+;;                                   Q_B: homogeneous-key-domain — a row is ALL-keyword or ALL-nat.)
+;;   fields     : canonical assoc ((label . record-field) ...); label = keyword-symbol | Nat,
+;;                sorted by symbol<? / < per domain (smart-constructor-enforced).
+;;   tail       : 'closed | 'dyn    (F1a mints 'closed; 'dyn = F1a.2; ρ row-meta = F-row.)
+(struct expr-Record (key-domain fields tail) #:transparent)
+;; A single field/slot: its type + presence mark. F1a writes presence='present only
+;; ('optional | 'absent | 'unknown reserved per D6 for schema-optional-keys / narrowing / presence-poly).
+(struct record-field (type presence) #:transparent)
+
+;; Map a procedure over every field TYPE of a record, preserving labels/presence/tail/key-domain.
+;; The single reconstruction point used by all the pipeline recursions (shift/subst/zonk/nf/…), so the
+;; `fields` list-spine walk lives in ONE place (labels + presence are not exprs — only types recurse).
+(define (record-map-field-types proc rec)
+  (expr-Record (expr-Record-key-domain rec)
+               (for/list ([fld (in-list (expr-Record-fields rec))])
+                 (cons (car fld)
+                       (record-field (proc (record-field-type (cdr fld)))
+                                     (record-field-presence (cdr fld)))))
+               (expr-Record-tail rec)))
 
 ;; Type constructor: Map K V
 (struct expr-Map (k-type v-type) #:transparent #:property prop:ctor-desc-tag '(type . Map))
@@ -1166,6 +1193,7 @@
       (expr-Keyword? x) (expr-keyword? x)
       (expr-Char? x) (expr-char? x)
       (expr-String? x) (expr-string? x)
+      (expr-Record? x)
       (expr-Map? x) (expr-champ? x) (expr-map-empty? x)
       (expr-map-assoc? x) (expr-map-get? x) (expr-nil-safe-get? x) (expr-map-dissoc? x)
       (expr-map-size? x) (expr-map-has-key? x)

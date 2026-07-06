@@ -113,6 +113,10 @@
     [(expr-Map? e)
      (or (has-unsolved-meta? (expr-Map-k-type e))
          (has-unsolved-meta? (expr-Map-v-type e)))]
+    ;; CIU T6 F1 (S2): a record has an unsolved meta iff any field type does.
+    [(expr-Record? e)
+     (for/or ([fld (in-list (expr-Record-fields e))])
+       (has-unsolved-meta? (record-field-type (cdr fld))))]
     [(expr-union? e)
      (or (has-unsolved-meta? (expr-union-left e))
          (has-unsolved-meta? (expr-union-right e)))]

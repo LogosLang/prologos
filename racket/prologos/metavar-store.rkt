@@ -912,6 +912,12 @@
                ;; Follow solved meta's solution to find transitive metas
                (walk sol acc)
                (if (memq id acc) acc (cons id acc)))))]
+      ;; CIU T6 F1 (S2): the generic walk below skips the `fields` LIST (not a struct/meta) —
+      ;; recurse into field types so constraint-readiness sees record-embedded metas ({:a ?T}).
+      [(expr-Record? e)
+       (for/fold ([a acc])
+                 ([fld (in-list (expr-Record-fields e))])
+         (walk (record-field-type (cdr fld)) a))]
       [(struct? e)
        (let ([v (struct->vector e)])
          (for/fold ([a acc])

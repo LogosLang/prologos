@@ -1179,6 +1179,14 @@
     ;; String
     [(expr-String) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-string _) (tu (expr-String) (zero-usage n))]
+    ;; Record/tuple type formation (CIU T6 F1): Type 0; usage = sum over field-type usages
+    [(expr-Record _ fields _)
+     (let loop ([fs fields] [acc (zero-usage n)])
+       (if (null? fs)
+           (tu (expr-Type (lzero)) acc)
+           (match (inferQ ctx (record-field-type (cdr (car fs))))
+             [(tu _ u) (loop (cdr fs) (add-usage acc u))]
+             [_ (tu-error)])))]
     ;; Map
     [(expr-Map k v)
      (let ([r1 (inferQ ctx k)]

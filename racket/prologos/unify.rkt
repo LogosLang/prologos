@@ -238,6 +238,11 @@
        (or (eq? (expr-meta-id e) id)
            (let ([sol (meta-solution (expr-meta-id e))])
              (and sol (check sol))))]
+      ;; CIU T6 F1 (S2): the generic struct->vector walk below stops at the `fields`
+      ;; LIST (a list is not a struct) — recurse into field types explicitly.
+      [(expr-Record? e)
+       (for/or ([fld (in-list (expr-Record-fields e))])
+         (check (record-field-type (cdr fld))))]
       [(struct? e)
        (let ([v (struct->vector e)])
          (for/or ([i (in-range 1 (vector-length v))])

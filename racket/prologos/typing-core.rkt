@@ -1441,6 +1441,12 @@
     [(expr-String) (expr-Type (lzero))]
     [(expr-string _) (expr-String)]
 
+    ;; ---- Structural-row type (CIU T6 F1) ----
+    ;; A record/tuple type is well-formed at Type 0 iff every field type is a type.
+    [(expr-Record _ fields _)
+     (if (andmap (lambda (fld) (is-type ctx (record-field-type (cdr fld)))) fields)
+         (expr-Type (lzero))
+         (expr-error))]
     ;; ---- Map type and operations ----
     [(expr-Map k v)
      (if (and (is-type ctx k) (is-type ctx v))
@@ -2938,6 +2944,16 @@
 
     ;; String formation: String : Type(0)
     [(expr-String) (just-level (lzero))]
+
+    ;; Record/tuple formation: level = max over field-type levels (Type 0 if empty)
+    [(expr-Record _ fields _)
+     (let loop ([fs fields] [acc (just-level (lzero))])
+       (if (null? fs)
+           acc
+           (let ([lf (infer-level ctx (record-field-type (cdr (car fs))))])
+             (match* (acc lf)
+               [((just-level a) (just-level b)) (loop (cdr fs) (just-level (lmax a b)))]
+               [(_ _) (no-level)]))))]
 
     ;; Map formation: Map K V : Type(max(level(K), level(V)))
     [(expr-Map k v)

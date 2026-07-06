@@ -1460,6 +1460,7 @@
       (expr-Pi? e) (expr-Sigma? e) (expr-Type? e)
       (expr-Vec? e) (expr-Eq? e) (expr-Fin? e)
       (expr-Map? e) (expr-Set? e) (expr-PVec? e)
+      (expr-Record? e)  ;; structural row type — a compound type former, no reduction rule
       (expr-TVec? e) (expr-TMap? e) (expr-TSet? e)
       ;; Value constructors (canonical forms)
       (expr-true? e) (expr-false? e) (expr-zero? e) (expr-nat-val? e)
@@ -3633,6 +3634,8 @@
     [(expr-String) e]
     [(expr-string _) e]
 
+    ;; Record/tuple type normalization: normalize field types
+    [(? expr-Record? rec) (record-map-field-types nf rec)]
     ;; Map normalization
     [(expr-Map k v) (expr-Map (nf k) (nf v))]
     [(expr-champ _) e]

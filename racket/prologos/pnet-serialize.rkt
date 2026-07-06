@@ -212,6 +212,10 @@
   (reg2! expr-meta 'test-meta #f)
   (regN! expr-num-lit 1/2 #f 'fraction #f)  ;; N4: transient numeric literal (rarely serialized); N6b: +origin
   (reg2! expr-Map (expr-Nat) (expr-Nat))
+  ;; CIU T6 F1: the structural-row type + its field struct. BOTH must register
+  ;; (F2 vector-impostor detonates on a MISSING registration under a stale .pnet cache).
+  (reg2! record-field (expr-Nat) 'present)
+  (reg3! expr-Record 'keyword '() 'closed)
   (reg1! expr-Set (expr-Nat))
   (reg2! expr-union (expr-Nat) (expr-Int))
   (reg2! expr-get (expr-unit) (expr-keyword 'k))

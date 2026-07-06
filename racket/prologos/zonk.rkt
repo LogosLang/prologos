@@ -296,6 +296,8 @@
     ;; String
     [(expr-String) e]
     [(expr-string _) e]
+    ;; Record/tuple type: zonk field types
+    [(? expr-Record? rec) (record-map-field-types zonk rec)]
     ;; Map
     [(expr-Map k v) (expr-Map (zonk k) (zonk v))]
     [(expr-champ _) e]
@@ -769,6 +771,8 @@
     ;; String
     [(expr-String) e]
     [(expr-string _) e]
+    ;; Record/tuple type: zonk field types at depth
+    [(? expr-Record? rec) (record-map-field-types (lambda (t) (zonk-at-depth depth t)) rec)]
     ;; Map
     [(expr-Map k v) (expr-Map (zonk-at-depth depth k) (zonk-at-depth depth v))]
     [(expr-champ _) e]
@@ -1242,6 +1246,8 @@
     ;; String
     [(expr-String) e]
     [(expr-string _) e]
+    ;; Record/tuple type: default metas in field types
+    [(? expr-Record? rec) (record-map-field-types default-metas rec)]
     ;; Map
     [(expr-Map k v) (expr-Map (default-metas k) (default-metas v))]
     [(expr-champ _) e]

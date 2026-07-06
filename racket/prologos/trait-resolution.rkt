@@ -65,6 +65,10 @@
     [(expr-PVec a) (ground-expr? a)]
     [(expr-Set a) (ground-expr? a)]
     [(expr-Map k v) (and (ground-expr? k) (ground-expr? v))]
+    ;; CIU T6 F1 (S2): a record is ground iff all field types are — else the [_ #t]
+    ;; default would misreport a meta-bearing record ({:a ?T}) as ground.
+    [(? expr-Record? rec)
+     (andmap (lambda (fld) (ground-expr? (record-field-type (cdr fld)))) (expr-Record-fields rec))]
     [_ #t]))  ;; atoms, fvar, bvar, tycon, etc. are always ground
 
 ;; ========================================

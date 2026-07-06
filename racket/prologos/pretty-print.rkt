@@ -431,6 +431,19 @@
     ;; String
     [(expr-String) "String"]
     [(expr-string val) (format "~s" val)]
+    ;; Record/tuple structural-row type (CIU T6 F1): keyword-domain → {:a Int :b String};
+    ;; nat-domain → ⟨Int String⟩ (tuple, F1a-col). dyn tail → trailing " | _" (F1a.2).
+    [(expr-Record kd fields tail)
+     (let ([body (string-join
+                  (for/list ([fld (in-list fields)])
+                    (if (eq? kd 'keyword)
+                        (format ":~a ~a" (car fld) (pp-expr (record-field-type (cdr fld)) names))
+                        (pp-expr (record-field-type (cdr fld)) names)))
+                  " ")]
+           [dyn (if (eq? tail 'dyn) " | _" "")])
+       (if (eq? kd 'keyword)
+           (format "{~a~a}" body dyn)
+           (format "⟨~a~a⟩" body dyn)))]
     ;; Map
     [(expr-Map k v) (format "[Map ~a ~a]" (pp-expr k names) (pp-expr v names))]
     [(expr-champ c)
@@ -967,6 +980,7 @@
     [(expr-lam _ t body) (or (uses-bvar0? t) (uses-bvar0? body))]
     [(expr-Pi _ dom cod) (or (uses-bvar0? dom) (uses-bvar0? cod))]
     [(expr-Sigma t1 t2) (or (uses-bvar0? t1) (uses-bvar0? t2))]
+    [(? expr-Record? rec) (for/or ([fld (in-list (expr-Record-fields rec))]) (uses-bvar0? (record-field-type (cdr fld))))]
     [(expr-app f a) (or (uses-bvar0? f) (uses-bvar0? a))]
     [(expr-pair e1 e2) (or (uses-bvar0? e1) (uses-bvar0? e2))]
     [(expr-fst e1) (uses-bvar0? e1)]
