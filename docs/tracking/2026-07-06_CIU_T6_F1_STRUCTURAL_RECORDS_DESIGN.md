@@ -15,11 +15,11 @@ Non-goals of F1a (explicitly deferred): dyn-tail semantics (F1a.2), width subsum
 
 | Phase | Description | Status | Notes |
 |---|---|---|---|
-| Pre-0 | Serializer probe + field-rep micro + display-churn census + baseline timing | ⬜ | Design INPUT → D.2 |
+| Pre-0 | Serializer probe + field-rep micro + display-churn census + baseline timing + acceptance file + `--check` expectation runner | ✅ | 2026-07-06; results §7. `record-field` struct SAFE; sorted-assoc confirmed; churn small; acceptance 26/26 green at baseline |
 | F1a-s1 | `expr-Record` node through core pipeline (files 1–8 + sets) + display | ⬜ | |
 | F1a-s2 | Literal inference (keyword-keyed seed; map-empty/assoc arms) + projection arms + qtt delegation | ⬜ | The `{:a 1}.a : Int` slice |
 | F1a-s3 | Remaining map-op arms + Record-vs-Map subsumption (union-join for metas) + union arm | ⬜ | |
-| F1a-s4 | WS acceptance file + `test-first-class-paths` flips + Open-display census fixes | ⬜ | |
+| F1a-s4 | Flip acceptance `;;N=>` expectations to F1a targets (+ add `het.z` closed-row miss) + `test-first-class-paths` flips + census fixes (~10 assertions / 4 files) + suite wrapper for `--check` | ⬜ | Acceptance file EXISTS (Pre-0), baseline-green |
 | F1a-s5 | Full-suite gate + `bench-ab` + PIR-lite checkpoint | ⬜ | |
 | F1a.2 | dyn tail live; `Open` relocation + node deletion (D1-b/D7) | ⬜ | Own mini-design |
 | F1b | Erasure-mode width + label-keyed depth; schema→Map free; Map→schema seal | ⬜ | Own Stage-3 |
@@ -112,9 +112,9 @@ F1a leaves every non-literal `Open` path byte-identical. F1a.2: (i) `'dyn` tail 
 2. **Diagnostics**: closed-row miss reads like a user error, e.g. `field :b is not present in {:a Int} — the literal's fields are :a` (exact wording at s2; must name the *available* fields).
 3. **Not user-writable**: `{:a Int}` in type position stays a parse-time map literal (annotation surface deferred; `(Map K V)` and `schema` remain the annotation forms). Documented in the acceptance file.
 
-### §4.7 Acceptance file (Phase 0 artifact, written at s4 with s1–s3 landing it green)
+### §4.7 Acceptance file (Phase 0 artifact — EXISTS as of Pre-0, baseline-green 26/26)
 
-`racket/prologos/examples/2026-07-06-ciu-t6-f1-records.prologos`, `:no-prelude` (F4 perf lesson). Canaries:
+`racket/prologos/examples/2026-07-06-ciu-t6-f1-records.prologos`, `:no-prelude` (F4 perf lesson), self-verifying via `tools/run-file.rkt --check` (`;;N=>` markers; §7 item 6). Current expectations = pre-F1a baseline; each slice flips its `;;   F1a:` targets. Canaries:
 
 ```
 def q := {:a 1}            ;; q : {:a Int}
@@ -163,16 +163,18 @@ Plus `tests/test-first-class-paths.rkt` assertion flips (`"1 : Open"` → `"1 : 
 
 **NTT-relevance (mandatory note)**: F1a adds **zero propagators and zero cells** — it is value-type-lattice representation work inside the existing imperative `infer`/`check` (same on/off-network status as all of typing-core; bringing typing on-network is PPN's turf). The Network Reality Check therefore honestly returns "function-call chain" — *and that is the correct answer for this layer*. The NTT-model obligation attaches at **F-row** (rows-as-cells, `Concat` as 3-cell propagator, set-latch per-label obligations, non-monotone residue at strata) — that design doc MUST carry the full NTT model; this one carries the forward-compat obligations (§4.1, §4.3) that keep F-row's path clear.
 
-## §7 Pre-0 (design input, before s1)
+## §7 Pre-0 — RESULTS (2026-07-06, executed at HEAD `ead54e27`; feeds D.2)
 
-1. **Serializer probe**: can `pnet-serialize` auto-cache an expr node carrying a nested non-expr struct (`record-field`) and an assoc list? Decides struct-vs-pairs (§4.1). (The F2 vector-impostor lesson makes this the #1 pre-flight check.)
-2. **Field-rep micro**: sorted-assoc vs hasheq lookup/extend at n∈{1,4,16} — confirm assoc is fine at record scale.
-3. **Display-churn census**: grep count of tests/examples asserting `: Open` or `[Map Keyword Open]` — sizes s4.
-4. **Baseline timing**: `bench-ab` baseline + a map-literal-heavy micro before any change (map literals are ubiquitous; per-literal record building must not regress elaboration).
+1. **Serializer probe ✅ RESOLVED — `record-field` struct is SAFE.** `deep-s->v` (pnet-serialize.rkt:91-118) is a *generic recursive walk*: any `struct?` → `struct->vector` with recursive elements; pairs/lists/hashes recursive. Deserialization needs only the tag registered (`regN!`). Empirical round-trip of `(list (cons 'a (expr-Int)) …)` → `equal? #t`. Production precedent for list fields: `expr-path (branches)` (syntax.rkt:673). **Decision: primary proposal stands** — `record-field` struct + `expr-Record` each get a `reg2!`; the pairs fallback is unnecessary. (The F2 vector-impostor mode = forgetting EITHER registration.)
+2. **Field-rep micro ✅ — representation is NOT perf-driven.** Lookups <0.05µs both reps at n≤16; extension: assoc cons+sort 0.2µs (n=4) / 0.9µs (n=16) vs hasheq ~0.1µs — all 3+ orders below per-form typing cost (~ms). **Sorted-assoc stands on determinism grounds** (serialization, display, `equal?`); implementation note: canonicalize ONCE at literal completion, not per-extension.
+3. **Display-churn census ✅ — SMALL.** `: Open` assertions: 5 hits in 3 test files (`test-schema-properties`, `test-first-class-paths`, `test-mixed-map`); `Map Keyword Open`: 5 hits (`test-path-expressions`, `test-mixed-map`). s4 budget: ~10 assertion flips across 4 files.
+4. **Baseline timing ✅.** Instrument = the acceptance file itself (26 forms, map-literal-heavy): elaborate 16ms / type_check 36-37ms / qtt 6ms / zonk 21-22ms / reduce 44-45ms (3 runs, tight). Post-F1a re-run compares like-for-like. Suite baseline: GREEN 8530/448/0 at `35b3bc90` (docs-only commits since).
+5. **Acceptance file ✅ LIVE + WS wiring verified through-and-through** (`examples/2026-07-06-ciu-t6-f1-records.prologos`): all §4.7 surfaces run at Level 3 (`process-file`, `:no-prelude`) — literals, projection, annotated, schema, spec/defn annotation-satisfaction (canary 16 = today's Open-absorption, confirmed live), `map-assoc`/`map-dissoc`/`map-keys`/`map-vals`/`map-size`/`map-has-key?`/`nil-safe-get`/`get-in`+`#p`. **Wiring finding**: the WS surfaces are the `map-`-prefixed parser keywords; bare `assoc`/`dissoc` ergonomic aliases do NOT exist (out of F1a scope; noted for the track's ergonomics backlog).
+6. **NEW: `.prologos`-level regression testing (owner-flagged gap) — minimal closer shipped.** `tools/run-file.rkt --check` verifies `;;N=>` (exact) / `;;N=>~` (contains) expectation markers keyed to run-file's own result indices (authoring loop: run → copy numbered outputs → `--check`). The acceptance file carries **26 expectations, 26 passing** at the pre-F1a baseline — each F1a slice flips its marked lines (F1a targets sit on adjacent `;;   F1a:` comments). Exit code 1 on mismatch → suite-integrable via a thin `tests/` wrapper (s4).
 
 ## §8 Risks and open items (for the critique rounds)
 
-- **pnet-serialize nested-struct support is unverified** (Pre-0 #1). Fallback shape ready.
+- ~~pnet-serialize nested-struct support~~ — **RESOLVED (Pre-0 #1)**: generic walk verified + empirical round-trip; struct shape confirmed.
 - **Distributivity precondition unverified**: per-field meet over binary normalized unions (SRE Q2) — check before any doc claims it.
 - **Union-arm inconsistency inherited**: `typing-core:1549-1568` still uses `with-speculative-rollback`+`build-union-type` — the mechanisms the `:1459` comment says were retired. F1a extends this arm minimally (accept Record components) but must NOT copy the shape into new arms; excise-or-defer decision belongs to the critique round.
 - **Heterogeneous projections become precise**: code that today silently flows `Open` into arithmetic may now surface real type errors (strictly more sound; suite + acceptance will quantify).
