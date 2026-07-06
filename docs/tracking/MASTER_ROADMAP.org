@@ -143,7 +143,7 @@ value strata. Topology strata are sequential. See =DEVELOPMENT_LESSONS.org=
 |------------------+------|
 | *Master Roadmap* | [[file:2026-03-21_CIU_MASTER.md][2026-03-21_CIU_MASTER.md]] |
 | *Thesis*         | Syntactic sugar generates trait constraints resolved on the propagator network — not constructor-specific dispatch. User-defined collections participate in all syntax automatically. |
-| *Status*         | Track 0 complete. Tracks 1–2 pre-Track 8; Tracks 3–5 post-Track 8. |
+| *Status*         | Track 0 complete. Tracks 1–2 pre-Track 8; Tracks 3–5 post-Track 8. *Track 6 🔄* (Anonymous Records & Path Selection, 2026-07-05): F1 co-design converged 2026-07-06 (D1–D12, [[file:2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md][track doc]]) → F1 Stage-3 D.1 drafted ([[file:2026-07-06_CIU_T6_F1_STRUCTURAL_RECORDS_DESIGN.md][design]]); Pre-0 + adversarial critique rounds next. |
 | *Origin*         | [[file:2026-03-20_COLLECTION_INTERFACE_AUDIT.md][Collection Interface Audit]], [[file:2026-03-20_COLLECTION_INTERFACE_UNIFICATION_DESIGN.md][Unification Design]] |
 
 *** Tracks
