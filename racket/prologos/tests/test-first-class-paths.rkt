@@ -110,7 +110,7 @@
 ;; ========================================
 
 (test-case "ws: dot-access scalar leaf"
-  (check-equal? (R 0) "1 : Open"))
+  (check-equal? (R 0) "1 : Int"))   ; CIU T6 F1a-s2: was "1 : Open" — records now project the observed type
 
 (test-case "ws: dot-access sub-record contains its keys"
   (check-true (string-contains? (R 1) ":a1"))
@@ -124,7 +124,7 @@
   (check-equal? (R 2) "#p(a.a1) : Path"))
 
 (test-case "ws: get-in with a #p literal → scalar leaf"
-  (check-equal? (R 3) "1 : Open"))
+  (check-equal? (R 3) "1 : Int"))   ; CIU T6 F1a-s2: was "1 : Open"
 
 (test-case "ws: update-in deep sets the leaf"
   (check-true (string-contains? (R 4) "101")))

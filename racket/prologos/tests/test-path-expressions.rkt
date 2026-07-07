@@ -214,7 +214,9 @@
   (define result (run-last "(update-in flat :x (fn [n] 0N))"))
   (check-false (prologos-error? result)
                (format "Expected success, got ~v" result))
-  (check-true (string-contains? (format "~a" result) "Map")))
+  ;; CIU T6 F1a-s2: `flat` is now a structural record {:x Nat ...}; literal-path update-in
+  ;; preserves the record type — assert the keyed result rather than the old (Map ...) display.
+  (check-true (string-contains? (format "~a" result) ":x")))
 
 ;; 16. update-in nested map
 (test-case "path-expr/update-in-nested"

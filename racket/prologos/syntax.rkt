@@ -164,7 +164,8 @@
  ;; String type (opaque atomic type for UTF-8 text)
  (struct-out expr-String) (struct-out expr-string)
  ;; Anonymous structural record / tuple type (CIU T6 F1; internal-only — inferred, not parsed)
- (struct-out expr-Record) (struct-out record-field) record-map-field-types
+ (struct-out expr-Record) (struct-out record-field)
+ record-map-field-types make-record record-extend record-lookup-field record-remove
  ;; Map (persistent hash map)
  (struct-out expr-Map) (struct-out expr-champ)
  (struct-out expr-map-empty) (struct-out expr-map-assoc)
@@ -669,6 +670,35 @@
                  (cons (car fld)
                        (record-field (proc (record-field-type (cdr fld)))
                                      (record-field-presence (cdr fld)))))
+               (expr-Record-tail rec)))
+
+;; SMART CONSTRUCTOR (D6 §4.1): the ONLY row producer. Dedups labels right-priority
+;; (later entries win — Clojure/D10 assoc overwrite) and re-canonicalizes the field order
+;; (keyword labels by symbol<?, nat labels by <), so structural `equal?` is a valid identity.
+(define (make-record key-domain fields tail)
+  (define ht (make-hash))
+  (for ([f (in-list fields)]) (hash-set! ht (car f) f))  ;; last write wins
+  (define less?
+    (if (eq? key-domain 'keyword)
+        (lambda (a b) (symbol<? (car a) (car b)))
+        (lambda (a b) (< (car a) (car b)))))
+  (expr-Record key-domain (sort (hash-values ht) less?) tail))
+
+;; Right-priority row extension (D10 assoc): add/overwrite one field, re-canonicalize.
+(define (record-extend rec label field-type)
+  (make-record (expr-Record-key-domain rec)
+               (append (expr-Record-fields rec)             ;; new field LAST → wins on collision
+                       (list (cons label (record-field field-type 'present))))
+               (expr-Record-tail rec)))
+
+;; Look up a field by label; returns the record-field or #f.
+(define (record-lookup-field rec label)
+  (for/first ([f (in-list (expr-Record-fields rec))] #:when (eqv? (car f) label)) (cdr f)))
+
+;; Remove a field by label (exact closed-row removal, D10 dissoc); re-canonicalize.
+(define (record-remove rec label)
+  (make-record (expr-Record-key-domain rec)
+               (filter (lambda (f) (not (eqv? (car f) label))) (expr-Record-fields rec))
                (expr-Record-tail rec)))
 
 ;; Type constructor: Map K V

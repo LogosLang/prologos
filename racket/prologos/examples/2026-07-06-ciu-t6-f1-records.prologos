@@ -14,46 +14,40 @@ ns f1-records-acceptance :no-prelude
 ;; --- fixtures -------------------------------------------------------------
 
 schema Point
-  :x Int
-  :y Int
+  :x Posit32
+  :y Posit32
 
 ;;0=>~ Point : [Type 0] defined.
 
 def q := {:a 1}
-;;1=>~ Map Keyword Open
-;;   F1a: q : {:a Int}
+;;1=>~ q : {:a Int}
 
 q.a
-;;2=> 1 : Open
-;;   F1a: 1 : Int    ← THE goal
+;;2=> 1 : Int
 
 ;; --- V5: arithmetic on a projected field (errors pre-F1a) ------------------
 
 + q.a 1
-;;3=>~ ERROR
-;;   F1a: 2 : Int
+;;3=> 2 : Int
 
 ;; --- nested records ---------------------------------------------------------
 
 def m := {:a {:a1 1} :b {:b1 11}}
-;;4=>~ Map Keyword Open
+;;4=>~ m : {:a {:a1 Int} :b {:b1 Int}}
 
 m.a.a1
-;;5=> 1 : Open
-;;   F1a: 1 : Int
+;;5=> 1 : Int
 
 ;; --- heterogeneous literal: per-field beats uniform-join --------------------
 
 def het := {:n 1 :s "x"}
-;;6=>~ Map Keyword Open
+;;6=>~ het : {:n Int :s String}
 
 het.n
-;;7=> 1 : Open
-;;   F1a: 1 : Int
+;;7=> 1 : Int
 
 het.s
-;;8=> "x" : Open
-;;   F1a: "x" : String
+;;8=> "x" : String
 
 ;; het.z   ← F1a: closed-row miss = type error naming available fields; add at s2
 
@@ -65,11 +59,11 @@ def am : (Map Keyword Int) := {:a 1}
 am.a
 ;;10=> 1 : Int
 
-def p : Point := {:x 1 :y 2}
+def p : Point := {:x 1.0 :y 2.0}
 ;;11=>~ Point
 
 p.x
-;;12=> 1 : Int
+;;12=> 1.0 : Posit32
 
 ;; --- annotation-satisfaction canaries (the Record<:Map subsumption arm) -----
 
@@ -77,13 +71,13 @@ spec idm (Map Keyword Int) -> (Map Keyword Int)
 defn idm [mm] mm
 ;;13=>~ idm
 
-[idm {:a 1}]
+idm {:a 1}
 ;;14=> {:a 1} : [Map Keyword Int]
 
 def r := {:a 1 :b 2}
-;;15=>~ Map Keyword Open
+;;15=>~ r : {:a Int :b Int}
 
-[idm r]
+idm r
 ;;16=> {:a 1, :b 2} : [Map Keyword Int]
 ;;   ← THE regression canary: inferred-map-vs-Map-annotation must stay green
 ;;     when r infers {:a Int :b Int} (via V := ⋃fields union-join)
@@ -91,20 +85,16 @@ def r := {:a 1 :b 2}
 ;; --- map-op surfaces at :no-prelude (WS wiring probe + F1a-s3 targets) ------
 
 map-assoc q :b "hi"
-;;17=>~ Map Keyword Open
-;;   F1a: : {:a Int :b String}   ← exact extension (D10)
+;;17=> {:a 1, :b "hi"} : {:a Int :b String}
 
 map-dissoc q :a
-;;18=>~ Map Keyword Open
-;;   F1a: : {}                   ← exact removal
+;;18=> {} : {}
 
 map-keys het
-;;19=>~ List
-;;   F1a: : (List Keyword)
+;;19=> '[:n :s] : [List Keyword]
 
 map-vals het
-;;20=>~ List
-;;   F1a: : (List <Int | String>)
+;;20=> '[1 "x"] : [List Int | String]
 
 map-size het
 ;;21=>~ Nat
@@ -113,14 +103,25 @@ map-has-key? het :n
 ;;22=>~ Bool
 
 nil-safe-get q :a
-;;23=> 1 : Nil | Open
-;;   F1a: 1 : <Int | Nil>
+;;23=> 1 : Int | Nil
 
 get-in m #p(a.a1)
-;;24=> 1 : Open
-;;   F1a: 1 : Int
+;;24=> 1 : Int
 
 ;; --- empty literal stays legacy in F1a (deliberate, design §4.2) ------------
 
 def e : (Map Keyword Int) := {}
 ;;25=>~ Map Keyword Int
+
+foreign racket "racket/base" :as time
+  [current-inexact-monotonic-milliseconds :as ms : Float64]
+
+[time/ms]
+
+.((3.14p + 3.13p) * 40)
+
+;; --- closed-row miss (F1a-s2): projecting an absent field is a type error ---
+;; (appended at file END so the ;;N=> indices above don't renumber)
+het.z
+;;28=>~ ERROR
+

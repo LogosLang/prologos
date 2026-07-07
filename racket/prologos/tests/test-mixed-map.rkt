@@ -32,6 +32,7 @@
          "../unify.rkt"
          "../pretty-print.rkt"
          "../driver.rkt"
+         "../errors.rkt"
          "../global-env.rkt"
          "../metavar-store.rkt"
          "../namespace.rkt"
@@ -141,31 +142,32 @@
 ;; C. Surface syntax: sexp mode
 ;; ========================================
 
-(test-case "surface/sexp: mixed map literal infers (Map Keyword Open)"
-  ;; Post-T-2: unannotated heterogeneous map literal uses Open for value type
+;; CIU T6 F1a-s2 (D7): the T-2 "Open by Design" contract for UNANNOTATED literals is
+;; SUPERSEDED — unannotated keyword literals now infer a structural RECORD with per-field
+;; types (projection returns the observed type). Annotated maps + hand-built expr-Open
+;; (§B above) are unchanged. Updated the surface tests to the record behavior.
+(test-case "surface/sexp: mixed map literal infers a structural record (was Map Open)"
   (define result (run "(infer {:name \"Alice\" :age zero})"))
   (define r (last-string result))
-  (check-true (string-contains? r "Map") "should produce a Map type")
-  (check-true (string-contains? r "Open")
-              "value type should be Open (not narrow union)"))
+  (check-true (string-contains? r ":name") "record carries its labels")
+  (check-true (string-contains? r ":age"))
+  (check-true (string-contains? r "String") "per-field observed types")
+  (check-true (string-contains? r "Nat")))
 
-(test-case "surface/sexp: homogeneous map literal also infers (Map Keyword Open)"
-  ;; Post-T-2: unannotated literals are ALWAYS Open by design, regardless
-  ;; of whether values happen to be homogeneous. Users wanting narrow
-  ;; homogeneous types annotate: `def m : (Map Keyword Nat) := {...}`.
+(test-case "surface/sexp: homogeneous map literal infers a structural record"
   (define result (run "(infer {:x zero :y (suc zero)})"))
   (define r (last-string result))
-  (check-true (string-contains? r "Map"))
-  (check-true (string-contains? r "Open")
-              "unannotated map infers Open value type"))
+  (check-true (string-contains? r ":x"))
+  (check-true (string-contains? r ":y"))
+  (check-true (string-contains? r "Nat")))
 
-(test-case "surface/sexp: map-get on Open-valued map returns Open"
+(test-case "surface/sexp: record projection returns the observed field type (was Open)"
   (define result
     (run (string-append
           "(def m {:name \"Alice\" :age zero})\n"
           "(infer (map-get m :name))")))
   (define r (last-string result))
-  (check-equal? r "Open" "map-get on Open map returns Open"))
+  (check-equal? r "String" "record projection returns the observed type"))
 
 (test-case "surface/sexp: check mixed map against annotated union type (Concern B preserved)"
   ;; Sexp union syntax: <(Map Keyword <Nat | String>)> — nested angle brackets
@@ -203,16 +205,15 @@
 ;; C2. map-get on union types (chained access)
 ;; ========================================
 
-(test-case "surface/sexp: chained map-get on nested Open-valued map returns Open"
-  ;; Post-T-2: nested unannotated maps → (Map K Open). Inner accesses return
-  ;; Open (α — trust it might be a map). Runtime preserves actual values;
-  ;; annotate for static narrow types (see next test for schema path).
+(test-case "surface/sexp: chained record projection returns the nested observed type (was Open)"
+  ;; CIU T6 F1a-s2: nested unannotated literals are nested records; chained projection
+  ;; returns the leaf's observed type ({:address {:street String}} → :street : String).
   (define result
     (run (string-append
           "(def m {:name \"Alice\" :age 43 :address {:street \"Main\"}})\n"
           "(infer (map-get (map-get m :address) :street))")))
   (define r (last-string result))
-  (check-equal? r "Open" "chained map-get on Open-valued map returns Open"))
+  (check-equal? r "String" "chained record projection returns the leaf observed type"))
 
 (test-case "surface/sexp: chained map-get on typed nested map preserves narrow type"
   ;; Concern B path: explicit annotation preserves narrow per-key types.
@@ -224,20 +225,19 @@
   (define r (last-string result))
   (check-equal? r "String" "explicit narrow annotation preserves String through chain"))
 
-(test-case "surface/sexp: map-get on Open value — α-semantic succeeds (runtime returns none on non-map)"
-  ;; Pre-T-2 this errored statically. Under α-semantic, the static check
-  ;; succeeds (trust) and runtime returns none if value is not a map.
-  ;; This matches Clojure-style dynamics. Users wanting strict static
-  ;; rejection annotate with concrete types.
+(test-case "surface/sexp: projecting a field OFF a scalar field is now a sound type error (was α-Open)"
+  ;; CIU T6 F1a-s2: {:x 1 :y 2} : {:x Int :y Int}; (map-get m :x) : Int; projecting :z off an
+  ;; Int is a type error (Int has no fields) — MORE sound than the retired α-Open trust.
   (define result
     (run (string-append
           "(def m {:x 1 :y 2})\n"
           "(infer (map-get (map-get m :x) :z))")))
-  (define r (last-string result))
-  (check-equal? r "Open" "map-get on Open succeeds trivially under α"))
+  (check-true (ormap prologos-error? result)
+              "projecting a field off a scalar is a type error"))
 
-(test-case "surface/sexp: map-get on Open-valued map returns Open"
-  ;; When outer map is (Map K Open), all chained accesses return Open.
+(test-case "surface/sexp: projecting a dictionary-typed field returns its value type"
+  ;; The fields ARE annotated dictionaries; m : {:a (Map Keyword Nat) :b (Map Keyword String)};
+  ;; (map-get m :a) : (Map Keyword Nat); (map-get that :z) : Nat (dictionary value type).
   (define result
     (run (string-append
           "(def inner1 <(Map Keyword Nat)> {:x zero})\n"
@@ -245,24 +245,23 @@
           "(def m {:a inner1 :b inner2})\n"
           "(infer (map-get (map-get m :a) :z))")))
   (define r (last-string result))
-  ;; outer m : (Map K Open); (map-get m :a) : Open; (map-get Open :z) : Open
-  (check-equal? r "Open"
-                "map-get on Open-valued outer map returns Open through chain"))
+  (check-equal? r "Nat"
+                "projecting a dictionary-typed field returns its value type"))
 
 ;; ========================================
 ;; C3. Runtime: map-get on non-Map values returns none
 ;; ========================================
 
-(test-case "runtime: map-get on non-Map value returns none"
-  ;; map-get on a concrete non-Map value (like Int) should return none
-  ;; instead of a stuck term
+(test-case "static: projecting a field off a scalar record-field is rejected (was runtime none)"
+  ;; CIU T6 F1a-s2: m :age : Int (precise record field); (map-get Int :street) is a static
+  ;; type error — caught at compile time, MORE sound than the retired α-Open runtime-none.
+  ;; Genuinely-dynamic access uses a (Map K V) annotation or nil-safe-get.
   (define result
     (run (string-append
           "(def m {:name \"Alice\" :age 43 :address {:street \"Main\"}})\n"
           "(eval (map-get (map-get m :age) :street))")))
-  (define r (last-string result))
-  (check-true (string-contains? r "none")
-              "map-get on Int should return none at runtime"))
+  (check-true (ormap prologos-error? result)
+              "projecting a field off a scalar is a static type error"))
 
 (test-case "runtime: chained map-get on nested map evaluates correctly"
   (define result
@@ -283,15 +282,15 @@
   (define r (last-string result))
   (check-equal? r "OK"))
 
-(test-case "backward-compat: map-get on unannotated homogeneous map returns Open"
-  ;; Post-T-2: unannotated literals are Open regardless of homogeneity.
-  ;; To get narrow type "Nat" back, annotate the def: `def m : (Map K Nat) := ...`.
+(test-case "backward-compat: map-get on unannotated homogeneous map returns the observed type"
+  ;; CIU T6 F1a-s2: unannotated literals are structural records; projection returns the
+  ;; observed field type (Nat here) — no annotation needed for precision anymore.
   (define result
     (run (string-append
           "(def m {:x zero :y (suc zero)})\n"
           "(infer (map-get m :x))")))
   (define r (last-string result))
-  (check-equal? r "Open" "unannotated homogeneous map-get returns Open"))
+  (check-equal? r "Nat" "unannotated homogeneous record projection returns Nat"))
 
 (test-case "backward-compat: map-get on annotated (Map K Nat) returns Nat"
   ;; Annotated maps preserve precise value types.
@@ -306,23 +305,23 @@
 ;; E. Namespace mode tests
 ;; ========================================
 
-(test-case "ns: mixed map infers (Map Keyword Open)"
-  ;; Post-T-2: unannotated heterogeneous map is Open by design (α-semantic).
+(test-case "ns: mixed map infers a structural record (was Map Open)"
+  ;; CIU T6 F1a-s2: unannotated heterogeneous literal → per-field structural record.
   (define result
     (run-ns (string-append
              "(ns test.mixed-map :no-prelude)\n"
              "(infer {:name \"Alice\" :active true})")))
   (define r (last-string result))
-  (check-true (string-contains? r "Map") "should produce a Map type")
-  (check-true (string-contains? r "Open") "value type should be Open"))
+  (check-true (string-contains? r ":name") "record carries its labels")
+  (check-true (string-contains? r "String"))
+  (check-true (string-contains? r "Bool")))
 
-(test-case "ns: map with three value types still infers Open"
-  ;; Still Open regardless of value-count/heterogeneity — Open by design default.
+(test-case "ns: map with three value types infers a three-field record"
   (define result
     (run-ns (string-append
              "(ns test.tri-map :no-prelude)\n"
              "(infer {:name \"Alice\" :age zero :active true})")))
   (define r (last-string result))
-  (check-true (string-contains? r "Map"))
-  (check-true (string-contains? r "Open")
-              "unannotated 3-value map is Open (no enumerated union)"))
+  (check-true (string-contains? r ":name"))
+  (check-true (string-contains? r ":age"))
+  (check-true (string-contains? r ":active")))

@@ -32,6 +32,7 @@
                   ctor-desc-arity))
 
 (provide subtype?
+         record-subtypes-map?   ;; CIU T6 F1: record → Map α (also used by unify's classifier)
          type-key
          subtype-lattice-merge
          build-union-type-with-absorption  ;; SRE Track 2H Phase 2
@@ -117,6 +118,11 @@
     [(equal? t1 t2) #t]
     ;; Flat fast path: 9 hardcoded edges + registry
     [(flat-subtype? t1 t2) #t]
+    ;; CIU T6 F1 (s2): the structural-record → Map Galois α, reachable from NESTED
+    ;; positions (e.g. (List Record) <: (List Map) via the covariant List walk).
+    ;; This is the record→Map bridge, NOT a record<:record judgment (D11 preserved);
+    ;; in subtype context V is always concrete, so no meta-solving is needed.
+    [(and (expr-Record? t1) (expr-Map? t2)) (record-subtypes-map? t1 t2)]
     ;; SRE structural path: only if BOTH are compound types.
     ;; Atoms (expr-Nat, expr-Int, expr-Bool, etc.) skip the structural
     ;; path entirely — eliminates 1.85μs overhead from sre-constructor-tag.
@@ -124,6 +130,15 @@
           (sre-structural-subtype-check t1 t2)) #t]
     ;; Not a subtype
     [else #f]))
+
+;; Pure structural record→Map: every label fits K, every field type <: V.
+;; Empty record satisfies any (Map K V) (Q6). Keyword-domain labels need a Keyword key type.
+(define (record-subtypes-map? rec mp)
+  (define kt (expr-Map-k-type mp))
+  (define vt (expr-Map-v-type mp))
+  (and (if (eq? (expr-Record-key-domain rec) 'keyword) (expr-Keyword? kt) #t)
+       (andmap (lambda (f) (subtype? (record-field-type (cdr f)) vt))
+               (expr-Record-fields rec))))
 
 ;; Flat subtype check: the original 9 edges + registry (fast path, no cells)
 (define (flat-subtype? t1 t2)
@@ -167,6 +182,9 @@
 (define (structural-subtype-ground? domain t1 t2)
   (cond
     [(equal? t1 t2) #t]
+    ;; CIU T6 F1 (s2): record→Map α inside a covariant component (e.g. the element of
+    ;; (List Record) <: (List Map)), reached via this component recursion — NOT subtype?.
+    [(and (expr-Record? t1) (expr-Map? t2)) (record-subtypes-map? t1 t2)]
     [else
      (define tag1 (sre-constructor-tag domain t1))
      (define tag2 (sre-constructor-tag domain t2))

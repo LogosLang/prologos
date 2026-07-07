@@ -1209,7 +1209,10 @@
            [r3 (inferQ ctx v)])
        (match* (r1 r2 r3)
          [((tu _ u1) (tu _ u2) (tu _ u3))
-          (tu (tu-type r1) (add-usage u1 (add-usage u2 u3)))]
+          ;; CIU T6 F1 (S4): delegate the TYPE to typing-core unconditionally (records GROW —
+          ;; the old (tu-type r1) returned the un-extended type = the §6 divergence bug class);
+          ;; usage stays local.
+          (tu (infer ctx e) (add-usage u1 (add-usage u2 u3)))]
          [(_ _ _) (tu-error)]))]
     [(expr-map-get m k)
      (let ([r1 (inferQ ctx m)]
@@ -1219,7 +1222,8 @@
           ;; map-get returns the value type V from Map K V
           (match t1
             [(expr-Map _ vt) (tu vt (add-usage u1 u2))]
-            ;; Schema/selection type: infer result type from typing-core, track usage
+            ;; CIU T6 F1 (s2): record/schema/selection — delegate result type to typing-core
+            [(? expr-Record?) (tu (infer ctx e) (add-usage u1 u2))]
             [(expr-fvar name)
              #:when (or (lookup-schema-by-name name) (lookup-selection-by-name name))
              (let ([result-type (infer ctx e)])
@@ -2465,6 +2469,10 @@
                        (match* ((whnf t) (whnf t1))
                          [((expr-Type l1) (expr-Type l2))
                           (level<=? l2 l1)]
+                         ;; CIU T6 F1 (B2): reach the Record<:Map subsumption from the QTT pass
+                         ;; too (checkQ's fallback is a DUPLICATE of check's — mirror the arm).
+                         [((? expr-Map? mt) (? expr-Record? rec))
+                          (record-<:-map? ctx rec (expr-Map-k-type mt) (expr-Map-v-type mt))]
                          [(t-w t1-w) (subtype? t1-w t-w)])))
               (bu #t u)
               (bu #f (zero-usage n)))]

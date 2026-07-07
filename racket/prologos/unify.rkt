@@ -579,6 +579,15 @@
       [(expr-Open? a) '(ok)]
       [(expr-Open? b) '(ok)]
 
+      ;; CIU T6 F1 (s2): record → Map coercion (records subsume to the dyn-tailed Map view, Q_E).
+      ;; In F1a a record is ALWAYS the inferred/value side and the Map the expected side, so the coercion
+      ;; fires in EITHER argument ordering — but always checks record-subtypes-map?(the-record, the-map)
+      ;; (a uniform Map is never a specific record). Pure (subtype?-based, no meta-solving): a concrete-V
+      ;; map (the polymorphic-cons / nested-annotation case) reconciles here; a meta-V map returns #f and
+      ;; falls through to check-subsumption's meta-solving arm at the top level.
+      [(and (expr-Record? a) (expr-Map? b) (record-subtypes-map? a b)) '(ok)]
+      [(and (expr-Map? a) (expr-Record? b) (record-subtypes-map? b a)) '(ok)]
+
       ;; Same unsolved meta
       [(and (expr-meta? a) (expr-meta? b)
             (eq? (expr-meta-id a) (expr-meta-id b)))

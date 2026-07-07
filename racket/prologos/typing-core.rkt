@@ -48,6 +48,7 @@
          ;; Schema type helpers
          schema-field-type->expr
          schema-lookup-field
+         record-<:-map?
          lookup-schema-by-name
          ;; Selection type helpers
          lookup-selection-by-name
@@ -391,6 +392,42 @@
   (for/first ([f (in-list (schema-entry-fields schema-entry))]
               #:when (eq? (schema-field-keyword f) keyword-sym))
     f))
+
+;; CIU T6 F1 (s2): project a field type out of a structural-row type.
+;;   literal key (keyword/nat) present → the field's type; absent → error (closed-row miss);
+;;   dynamic key → union of ALL field types (B4-gated on the key domain; empty row → error).
+(define (record-project ctx rec key)
+  (define kd (expr-Record-key-domain rec))
+  (match key
+    [(expr-keyword kw) #:when (eq? kd 'keyword)
+     (let ([fld (record-lookup-field rec kw)])
+       (if fld (record-field-type fld) (expr-error)))]
+    [_
+     (let ([fields (expr-Record-fields rec)]
+           [key-ty (if (eq? kd 'keyword) (expr-Keyword) (expr-Nat))])
+       (if (and (pair? fields) (check ctx key key-ty))
+           (build-union-type (map (lambda (f) (record-field-type (cdr f))) fields))
+           (expr-error)))]))
+
+;; CIU T6 F1 (s2): does a structural-row type satisfy (Map K V)?  The Galois α (§5.3).
+;;   keys: every label must check against K;  values: if V is an unsolved meta, solve V := ⋃fields
+;;   (uniform-bound view); else each field type must be <: V.  Empty row satisfies any (Map K V) (Q6).
+(define (record-<:-map? ctx rec kt vt)
+  (define kd (expr-Record-key-domain rec))
+  (define fields (expr-Record-fields rec))
+  (and
+   (andmap (lambda (f)
+             (check ctx (if (eq? kd 'keyword) (expr-keyword (car f)) (expr-nat-val (car f))) kt))
+           fields)
+   (cond
+     [(null? fields) #t]
+     [(expr-meta? (whnf vt))
+      (unify-ok? (unify ctx vt (build-union-type (map (lambda (f) (record-field-type (cdr f))) fields))))]
+     [else
+      (andmap (lambda (f)
+                (let ([ft (record-field-type (cdr f))])
+                  (or (unify-ok? (unify ctx ft vt)) (subtype? ft vt))))
+              fields)])))
 
 ;; Look up a schema by name, trying both the full name and bare (short) name.
 ;; Handles qualified names like 'test::Point → looks up 'Point.
@@ -1453,6 +1490,10 @@
          (expr-Type (lzero))
          (expr-error))]
     [(expr-champ _) (expr-error)]  ;; champ needs checking context
+    ;; CIU T6 F1 (s2): record-seed map-empty — the empty record type IS the map's type.
+    ;; The ONLY source of a map-empty with an expr-Record v-type is the all-keyword literal
+    ;; seed (elaborator §4.2); grows via the map-assoc Record arm below.
+    [(expr-map-empty _ (? expr-Record? rec)) rec]
     [(expr-map-empty k v)
      (if (and (is-type ctx k) (is-type ctx v))
          (expr-Map k v)
@@ -1468,6 +1509,17 @@
      ;; types via annotation or schema.
      (let ([tm (whnf (infer ctx m))])
        (match tm
+         ;; CIU T6 F1 (s2): row extension. keyword-literal key → grow the record
+         ;; (right-priority, D10). Non-literal key → degrade to dictionary view (B4-gated).
+         [(? expr-Record? rec)
+          (match k
+            [(expr-keyword kw)
+             (let ([vt (infer ctx v)])
+               (if (expr-error? vt) (expr-error) (record-extend rec kw vt)))]
+            [_
+             (if (and (check ctx k (expr-Keyword)) (not (expr-error? (infer ctx v))))
+                 (expr-Map (expr-Keyword) (expr-Open))
+                 (expr-error))])]
          [(expr-Map kt vt)
           (cond
             ;; Key must check against key type
@@ -1493,6 +1545,8 @@
          ;; PVec A → Nat/Int → A
          [(expr-PVec a)
           (if (or (check ctx key (expr-Nat)) (check ctx key (expr-Int))) a (expr-error))]
+         ;; CIU T6 F1 (s2): structural-row projection (records + tuples)
+         [(? expr-Record? rec) (record-project ctx rec key)]
          ;; Map K V → K → V
          [(expr-Map kt vt)
           (if (check ctx key kt) vt (expr-error))]
@@ -1515,6 +1569,8 @@
     [(expr-map-get m k)
      (let ([tm (whnf (infer ctx m))])
        (match tm
+         ;; CIU T6 F1 (s2): structural-row projection — {:a 1}.a : Int (THE goal)
+         [(? expr-Record? rec) (record-project ctx rec k)]
          [(expr-Map kt vt)
           (if (check ctx k kt) vt (expr-error))]
          ;; α-semantic: map-get on Open → Open (key checked trivially)
@@ -1581,6 +1637,14 @@
        (match tm
          ;; Direct Nil → result is Nil
          [(expr-Nil) (expr-Nil)]
+         ;; CIU T6 F1 (s2): nil-safe-get on a record — present → (field | Nil); absent → Nil.
+         [(? expr-Record? rec)
+          (match k
+            [(expr-keyword kw) #:when (eq? (expr-Record-key-domain rec) 'keyword)
+             (let ([fld (record-lookup-field rec kw)])
+               (if fld (build-union-type (list (whnf (record-field-type fld)) (expr-Nil))) (expr-Nil)))]
+            [_ (let ([proj (record-project ctx rec k)])
+                 (if (expr-error? proj) (expr-error) (build-union-type (list (whnf proj) (expr-Nil)))))])]
          ;; Direct Map K V → check key, return V | Nil
          [(expr-Map kt vt)
           (if (check ctx k kt)
@@ -1618,6 +1682,12 @@
     [(expr-map-dissoc m k)
      (let ([tm (whnf (infer ctx m))])
        (match tm
+         ;; CIU T6 F1 (s2): keyword-literal → exact closed-row removal; dynamic key → degrade.
+         [(? expr-Record? rec)
+          (match k
+            [(expr-keyword kw) #:when (eq? (expr-Record-key-domain rec) 'keyword) (record-remove rec kw)]
+            [_ (if (and (check ctx k (expr-Keyword)) (not (expr-error? (infer ctx k))))
+                   (expr-Map (expr-Keyword) (expr-Open)) (expr-error))])]
          [(expr-Map kt vt)
           (if (check ctx k kt) (expr-Map kt vt) (expr-error))]
          ;; α-semantic: map-dissoc on Open → Open
@@ -1627,6 +1697,7 @@
     [(expr-map-size m)
      (let ([tm (whnf (infer ctx m))])
        (match tm
+         [(? expr-Record?) (expr-Nat)]   ;; CIU T6 F1 (s2)
          [(expr-Map _ _) (expr-Nat)]
          ;; α-semantic: map-size on Open → Nat (size is always Nat regardless)
          [(expr-Open) (expr-Nat)]
@@ -1634,6 +1705,10 @@
     [(expr-map-has-key m k)
      (let ([tm (whnf (infer ctx m))])
        (match tm
+         ;; CIU T6 F1 (s2): has-key on a record — Bool if the key checks the key domain.
+         [(? expr-Record? rec)
+          (if (check ctx k (if (eq? (expr-Record-key-domain rec) 'keyword) (expr-Keyword) (expr-Nat)))
+              (expr-Bool) (expr-error))]
          [(expr-Map kt _)
           (if (check ctx k kt) (expr-Bool) (expr-error))]
          ;; α-semantic: map-has-key on Open → Bool
@@ -1644,6 +1719,9 @@
     [(expr-map-keys m)
      (let ([tm (whnf (infer ctx m))])
        (match tm
+         ;; CIU T6 F1 (s2): keys of a record → List of its key-domain type.
+         [(? expr-Record? rec)
+          (expr-app (list-type-fvar) (if (eq? (expr-Record-key-domain rec) 'keyword) (expr-Keyword) (expr-Nat)))]
          [(expr-Map kt _) (expr-app (list-type-fvar) kt)]
          ;; α-semantic: map-keys on Open → List Open
          [(expr-Open) (expr-app (list-type-fvar) (expr-Open))]
@@ -1652,6 +1730,13 @@
     [(expr-map-vals m)
      (let ([tm (whnf (infer ctx m))])
        (match tm
+         ;; CIU T6 F1 (s2): vals of a record → List of ⋃(field types). Empty record → List of a fresh nothing? use error-guard.
+         [(? expr-Record? rec)
+          (let ([fields (expr-Record-fields rec)])
+            (if (null? fields)
+                (expr-app (list-type-fvar) (expr-Open))   ;; empty record: no field types (Q6 corner — stays Open-ish in F1a)
+                (expr-app (list-type-fvar)
+                          (build-union-type (map (lambda (f) (record-field-type (cdr f))) fields)))))]
          [(expr-Map _ vt) (expr-app (list-type-fvar) vt)]
          ;; α-semantic: map-vals on Open → List Open
          [(expr-Open) (expr-app (list-type-fvar) (expr-Open))]
@@ -2428,8 +2513,13 @@
     [((expr-champ _) (expr-Map _ _)) #t]
     ;; map-empty checked against Map K V
     [((expr-map-empty k1 v1) (expr-Map k2 v2))
-     (and (unify-ok? (unify ctx k1 k2))
-          (unify-ok? (unify ctx v1 v2)))]
+     ;; CIU T6 F1 (B1): an empty-closed record SEED asserts no fields, so it satisfies any
+     ;; (Map K V) — unify keys only, SKIP the value-unify (else it fails / flex-rigid-poisons ?V).
+     ;; Per-entry strictness is preserved by the map-assoc-vs-Map arm as the chain unwinds.
+     (if (and (expr-Record? v1) (null? (expr-Record-fields v1)))
+         (unify-ok? (unify ctx k1 k2))
+         (and (unify-ok? (unify ctx k1 k2))
+              (unify-ok? (unify ctx v1 v2))))]
     ;; map-assoc checked against Map K V — propagate expected type
     [((expr-map-assoc m k v) (expr-Map kt vt))
      (and (check ctx m (expr-Map kt vt))
@@ -2708,6 +2798,10 @@
                   ;; Cumulativity: Type(m) ≤ Type(n) when m ≤ n
                   [((expr-Type l1) (expr-Type l2))
                    (level<=? l2 l1)]
+                  ;; CIU T6 F1 (s2): a structural record satisfies a (Map K V) annotation
+                  ;; (the Galois α — replaces seeded-Open absorption, more precise).
+                  [((? expr-Map? mt) (? expr-Record? rec))
+                   (record-<:-map? ctx rec (expr-Map-k-type mt) (expr-Map-v-type mt))]
                   ;; Phase 3e: within-family subtyping
                   [(t-w t1-w) (subtype? t1-w t-w)]))))]))
 

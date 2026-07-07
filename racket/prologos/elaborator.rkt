@@ -2120,29 +2120,34 @@
      ;; (e.g., `(Map K Int)` or `(Map K <Int | String>)`) check strictly against
      ;; the annotation via the ann-check path; annotation narrows value types.
      ;; Schema system provides structured per-field validation.
+     ;; CIU T6 F1 (s2): elaborate entries FIRST, then classify — an all-keyword-literal literal
+     ;; seeds a structural RECORD (value type = a growing (expr-Record); infer projects per field);
+     ;; anything else (empty {}, or any non-keyword key) keeps the legacy Open dictionary seed.
      (if (null? entries)
-         ;; Empty map: fresh meta for key, Open for value type
          (let ([km (fresh-meta ctx-empty (expr-hole)
                      (meta-source-info loc 'map-key-type "key type of empty map literal" #f (env->name-stack env)))])
            (expr-map-empty km (expr-Open)))
-         ;; Non-empty: elaborate all entries, then fold into map-assoc
-         (let ([km (fresh-meta ctx-empty (expr-hole)
-                     (meta-source-info loc 'map-key-type "key type of map literal" #f (env->name-stack env)))])
-           (let loop ([remaining entries]
-                      [result (expr-map-empty km (expr-Open))])
-             (cond
-               [(null? remaining)
-                result]
-               [else
-                (define entry (car remaining))
-                (define ek (elaborate (car entry) env depth))
-                (define ev (elaborate (cdr entry) env depth))
-                (cond
-                  [(prologos-error? ek) ek]
-                  [(prologos-error? ev) ev]
-                  [else
-                   (loop (cdr remaining)
-                         (expr-map-assoc result ek ev))])]))))]
+         (let build ([remaining entries] [acc '()])
+           (cond
+             [(null? remaining)
+              (let* ([elab (reverse acc)]
+                     [all-keyword? (andmap (lambda (p) (expr-keyword? (car p))) elab)]
+                     [seed (if all-keyword?
+                               (expr-map-empty (expr-Keyword) (expr-Record 'keyword '() 'closed))
+                               (expr-map-empty
+                                (fresh-meta ctx-empty (expr-hole)
+                                  (meta-source-info loc 'map-key-type "key type of map literal" #f (env->name-stack env)))
+                                (expr-Open)))])
+                (for/fold ([result seed]) ([p (in-list elab)])
+                  (expr-map-assoc result (car p) (cdr p))))]
+             [else
+              (define entry (car remaining))
+              (define ek (elaborate (car entry) env depth))
+              (define ev (elaborate (cdr entry) env depth))
+              (cond
+                [(prologos-error? ek) ek]
+                [(prologos-error? ev) ev]
+                [else (build (cdr remaining) (cons (cons ek ev) acc))])])))]
 
     [(surf-map-empty k v loc)
      (let ([ek (elaborate k env depth)]
