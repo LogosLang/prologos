@@ -588,6 +588,24 @@
       [(and (expr-Record? a) (expr-Map? b) (record-subtypes-map? a b)) '(ok)]
       [(and (expr-Map? a) (expr-Record? b) (record-subtypes-map? b a)) '(ok)]
 
+      ;; CIU T6 F1a-s3 (B3): Record-vs-Record with the SAME key-domain, SAME label-set,
+      ;; and SAME tail, but field TYPES that differ → decompose to per-field 'sub goals so
+      ;; field metas get solved (e.g. {:a Option ?m} vs {:a Option Int}). Ground-identical
+      ;; records already short-circuit at the equal? fast-path above; a DIFFERENT label-set
+      ;; falls through to [else '(conv)] (the F1a-col flavor-B union-widen case, deferred).
+      ;; key-domain + tail equality are EXPLICIT guards — forward-necessary so a future
+      ;; 'nat tuple or 'dyn tail never mis-decomposes here. Zip ONLY record-field TYPES;
+      ;; `presence` is not an expr and must never become a unification goal. Sorted-zip is
+      ;; label-correct because make-record canonicalizes field order (syntax.rkt).
+      [(and (expr-Record? a) (expr-Record? b)
+            (eq? (expr-Record-key-domain a) (expr-Record-key-domain b))
+            (eq? (expr-Record-tail a) (expr-Record-tail b))
+            (equal? (map car (expr-Record-fields a))
+                    (map car (expr-Record-fields b))))
+       (list 'sub (map (lambda (fa fb)
+                         (cons (record-field-type (cdr fa)) (record-field-type (cdr fb))))
+                       (expr-Record-fields a) (expr-Record-fields b)))]
+
       ;; Same unsolved meta
       [(and (expr-meta? a) (expr-meta? b)
             (eq? (expr-meta-id a) (expr-meta-id b)))
