@@ -107,6 +107,53 @@
    " [int* _ 2] / [int+ _ 1])."))
 
 ;; ========================================
+;; CIU T6 F1a-s3 (S7): closed-row-miss diagnostic.
+;; ========================================
+;; A failing expr containing a projection (map-get / get) of a KEYWORD-LITERAL
+;; key out of a RECORD-typed sub-expr that LACKS that key gets the rich
+;; "field :b is not present …" message naming the available fields. Same
+;; contract as the #70 hint above: best-effort post-hoc walk, runs ONLY on the
+;; already-failing error path, purely additive text. The walk re-infers the
+;; map sub-expr at the CALLER's ctx — a node under a binder whose map mentions
+;; bvars simply fails to infer (or isn't a Record) → no hint, never a wrong one;
+;; any exception is swallowed to the plain message.
+
+;; x is a projection node? → (m . k), else #f
+(define (projection-parts x)
+  (cond
+    [(expr-map-get? x) (cons (expr-map-get-m x) (expr-map-get-k x))]
+    [(expr-get? x) (cons (expr-get-coll x) (expr-get-key x))]
+    [else #f]))
+
+(define (format-closed-row-miss rec kw names)
+  (define labels (map car (expr-Record-fields rec)))
+  (define shown (if (> (length labels) 6) (take labels 6) labels))
+  (define more (- (length labels) (length shown)))
+  (string-append
+   "Could not infer type — field :" (symbol->string kw)
+   " is not present in the record " (pp-expr rec names)
+   (if (null? labels)
+       " (the record has no fields)"
+       (string-append
+        "; available fields: "
+        (string-join (map (lambda (l) (string-append ":" (symbol->string l))) shown) " ")
+        (if (> more 0) (format " (+~a more)" more) "")))))
+
+(define (closed-row-miss-hint ctx e names)
+  (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+    (let search ([x e])
+      (and (expr? x)
+           (or (let ([mk (projection-parts x)])
+                 (and mk
+                      (expr-keyword? (cdr mk))
+                      (let ([tm (whnf (infer ctx (car mk)))])
+                        (and (expr-Record? tm)
+                             (eq? (expr-Record-key-domain tm) 'keyword)
+                             (not (record-lookup-field tm (expr-keyword-name (cdr mk))))
+                             (format-closed-row-miss tm (expr-keyword-name (cdr mk)) names)))))
+               (ormap search (expr-subfields x)))))))
+
+;; ========================================
 ;; Infer with error reporting
 ;; ========================================
 ;; Returns (or/c Expr? prologos-error?)
@@ -115,9 +162,10 @@
   (let ([result (infer ctx e)])
     (if (expr-error? result)
         (inference-failed-error loc
-                                (if (hole-lambda-over-generic-op? e)
-                                    i70-inference-hint
-                                    "Could not infer type")
+                                (or (closed-row-miss-hint ctx e names)  ;; S7: most specific first
+                                    (if (hole-lambda-over-generic-op? e)
+                                        i70-inference-hint
+                                        "Could not infer type"))
                                 (pp-expr e names))
         result)))
 

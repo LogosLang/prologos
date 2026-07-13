@@ -123,7 +123,7 @@ foreign racket "racket/base" :as time
 ;; --- closed-row miss (F1a-s2): projecting an absent field is a type error ---
 ;; (appended at file END so the ;;N=> indices above don't renumber)
 het.z
-;;28=>~ ERROR
+;;28=>~ field :z is not present in the record {:n Int :s String}; available fields: :n :s
 
 
 ;; --- F1a-s3: fold/filter/map-vals + union arms + B4 dynamic keys -------------
