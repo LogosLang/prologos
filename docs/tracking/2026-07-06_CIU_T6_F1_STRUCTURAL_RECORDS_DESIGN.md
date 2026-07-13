@@ -32,7 +32,7 @@ Plus **flavor B**: a variable-length container whose *elements* differ → `List
 | F1a-s2 | Literal inference + projection + **B1** + **B2** + Record<:Map subsumption + **the full map-op surface** (pulled fwd from s3) + Record↔Map coercion in unify/subtype (NEW, see below) | ✅ | `{:a 1}.a : Int` ✓, V5 ✓, heterogeneous per-field ✓, `idm r` subsumption canary ✓, exact assoc/dissoc/keys/vals/has-key/nil-safe-get ✓, closed-row-miss error ✓. Suite GREEN **8545/449/0**; acceptance 27/27 (`test-f1-records-acceptance.rkt` = suite gate); 4 display-churn tests flipped (incl. the T-2 contract file supersession, D7). Elaborator classifier + record-seed mint; smart-constructor helpers (`make-record`/`record-extend`/`record-lookup-field`/`record-remove`). See §11a. |
 | F1a-s3 | Remaining record dispositions | ✅ | Grounding audit `wf_2d535113` → **B3 ✅ `a5c546c8`** (same-shape classify; prelude WS test) · **S10 ✅ already-s2** (`ground-expr?` arm; posture §11b) · **S3+B4 ✅ `83bd416f`** (fold/filter/map-vals Record arms BOTH checkers; both union arms; helpers; whnf wrappers; B4 canaries) · **S7 ✅ `d08e14bf`** (rich closed-row-miss via the #70-precedent hint walk; acceptance asserts the message) · **.pnet cross-module canary ✅ `d08e14bf`** (`test-record-pnet-cache.rkt`, the F2 two-run repro as a permanent test) · non-reachability notes §11b. Acceptance **37/37**; suite GREEN **8586/451/0** |
 | F1a-s4 | Flip acceptance `;;N=>` to F1a targets + `het.z` + **S5** re-census (`test-mixed-map` T-2 contract) + `test-first-class-paths` flips + **cross-module .pnet canary** + prelude-loaded WS test (B3) + `--check` suite wrapper | ⬜ | |
-| F1a-s5 | Full-suite gate + `bench-ab` vs §7.4 baseline + PIR-lite | ⬜ | |
+| F1a-s5 | Full-suite gate + perf verification + PIR-lite | ✅ | §11c. Suite 8586/451/0; like-for-like: net FASTER (~125→~117ms; tc −25%, qtt +13ms watch item); bench-ab all noise-level, reference saved |
 | F1a-col | Flavor A (tuple node/mint + classifier) + Flavor B (union-widen on element-unify-failure, VISIBLE) | ⬜ | closes the different-shape-collection regression |
 | F1a.2 | dyn tail live; `Open` relocation + node deletion (D1-b/D7) | ⬜ | own mini-design |
 | F1b | Erasure-mode width + label-keyed depth; schema→Map free; Map→schema seal | ⬜ | own Stage-3 |
@@ -237,3 +237,22 @@ This is a **scope refinement, not a principle violation**: **D11 (no record<:rec
 - *reduction sets*: `expr-Record` joined `trivially-whnf?`/nf-identity at s1 (a TYPE node, never in value position; runtime values remain champs).
 
 **S7 check-path note**: the rich message rides `infer/err` (the #70 precedent). The `check/err` path (e.g. an annotated def whose body contains the miss) still gets the plain failure — extend the hint there only if it proves annoying in practice.
+
+## §11c F1a-core s5 gate — PIR-lite (2026-07-06)
+
+**Objectives vs delivered**: the F1a-core objective (§1 — literals mint ground rows; projection returns observed types; every consumer arm dispositioned; the D.3 blockers fixed) is DELIVERED across s1 (`7330b582`), s2 (`589fb067`), s3 (`a5c546c8`/`83bd416f`/`d08e14bf`). Suite GREEN **8586/451/0**; acceptance **37/37** self-verifying at Level 3.
+
+**Perf verdict (microbench-claim verification per workflow.md)** — like-for-like instrument = the EXACT Pre-0 26-form acceptance file (via `git show 6d6a24ca:…`) on the post-s3 compiler vs the Pre-0 numbers:
+- **type_check 37 → 27-29ms (−25%)** — direct field lookup replaces Open-wildcard churn on record-dense code.
+- **qtt 6 → 18-19ms (+13ms, 3×)** — the honest cost of the qtt DELEGATION pattern (record-op arms re-run typing-core `infer` for the type while keeping usage local). **WATCH item**: correct-by-construction beats the divergence bug class at these magnitudes; if it ever matters, the fix is cross-checker infer memoization (not warranted now).
+- elaborate +2-3ms (entries-first scan + seed mint); zonk/reduce ~flat. **Net wall ~125 → ~117ms: F1a-core is net FASTER on record-dense code.**
+- Suite-level: 131.4-137.4s across the three s3 gates vs ~130-135s pre-F1a — inside normal variance, no 1.2×-median signal.
+- `bench-ab --runs 10 benchmarks/comparative/` at post-s3 HEAD: **all comparative deltas noise-level** (±1.5%, every p>0.2, CVs 0.8-5.7% — constraints/solve/type-adversarial + simple-typed all clean); saved as `data/benchmarks/f1a-core-post-s3-2026-07-06.json`, the F1a-core reference for future A/B (no `--ref` checkout run: owner WIP in the working tree makes checkout-based A/B unsafe this session).
+
+**What went well**: probe-first caught 2 bugs before any test (the `map` pattern-var shadowing; the earlier B1-class seed behavior); the grounding audit corrected the s3 enumeration before code (both union arms, check-side arms, whnf wrappers); the incremental acceptance-flip discipline meant s4 dissolved into the slices.
+
+**What surprised**: S10 was already done (s2 pulled it forward silently — the audit caught the tracker drift, not the code); `map-merge` being prelude-only moved a canary; the qtt delegation cost showing up 3× on a microinstrument while invisible at suite level.
+
+**Debt carried (named)**: B3's degenerate cross-command stale-meta limitation (pre-existing class, documented in `a5c546c8`); S7 not on the check-path; the union-arm's inherited `with-speculative-rollback` shape (excise decision deferred with tracking note, §8); `Open` still present everywhere non-literal (BY DESIGN — D7 relocation is F1a.2's whole job).
+
+**Right problem?** Yes — the V5 goal works end-to-end in WS, and the collection reframe (D13/D14) means the same carrier now pays for tuples + heterogeneous collections next (F1a-col), exactly as designed.
