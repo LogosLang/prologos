@@ -125,3 +125,45 @@ foreign racket "racket/base" :as time
 het.z
 ;;28=>~ ERROR
 
+
+;; --- F1a-s3: fold/filter/map-vals + union arms + B4 dynamic keys -------------
+;; (appended at file END; indices continue from the forms above)
+
+map-map-vals [fn [x : Int] [int* x 2]] q
+;;29=> {:a 2} : {:a Int}
+;;   ← label-preserving: map-vals touches values only, labels are static
+
+map-filter-entries [fn [k : Keyword] [fn [v : Int] true]] q
+;;30=> {:a 1} : [Map Keyword Int]
+;;   ← dictionary-view degrade: the surviving field set isn't static (dyn tail at F1a.2)
+
+map-fold-entries [fn [b : Int] [fn [k : Keyword] [fn [v : Int] [int+ b v]]]] 0 q
+;;31=> 1 : Int
+
+map-get [nil-safe-get m :a] :a1
+;;32=> 1 : Int
+;;   ← union arm: Record component projects; Nil component filtered (Q5)
+
+nil-safe-get [nil-safe-get m :a] :a1
+;;33=> 1 : Int | Nil
+
+map-map-vals [fn [x : <Int | String>] 7] het
+;;34=> {:n 7, :s 7} : {:n Int :s Int}
+;;   ← f consumes ⋃fields (Int|String); labels preserved, uniform result type
+
+map-vals [map-dissoc q :a]
+;;35=> nil : [List Open]
+;;   ← Q6 empty corner: ⋃∅ stays Open-ish in F1a (dyn tail replaces at F1a.2)
+
+;; --- B4: dynamic keys — Keyword-typed degrades, non-Keyword rejects ----------
+
+def kk := :a
+;;36=>~ kk : Keyword
+
+map-assoc q kk 5
+;;37=> {:a 5} : [Map Keyword Open]
+;;   ← dynamic Keyword key: degrade to dictionary view (Open survives F1a per D7)
+
+map-assoc q "strkey" 5
+;;38=>~ ERROR
+;;   ← B4: non-Keyword dynamic key stays a type error (today's rejection preserved)

@@ -49,6 +49,7 @@
          schema-field-type->expr
          schema-lookup-field
          record-<:-map?
+         record-value-union      ;; CIU T6 F1 (s3): ⋃fields uniform view (qtt mirrors consume it)
          lookup-schema-by-name
          ;; Selection type helpers
          lookup-selection-by-name
@@ -406,8 +407,39 @@
      (let ([fields (expr-Record-fields rec)]
            [key-ty (if (eq? kd 'keyword) (expr-Keyword) (expr-Nat))])
        (if (and (pair? fields) (check ctx key key-ty))
-           (build-union-type (map (lambda (f) (record-field-type (cdr f))) fields))
+           (record-value-union rec)
            (expr-error)))]))
+
+;; CIU T6 F1 (s3): ⋃fields — the uniform-bound view of a row's value types.
+;; Empty row → (expr-Open) (the F1a Q6-corner placeholder, matching the s2 map-vals
+;; precedent; F1a.2's dyn tail replaces it). Callers with a DIFFERENT empty policy
+;; (e.g. dynamic-key projection on an empty row = miss ERROR) guard BEFORE calling.
+(define (record-value-union rec)
+  (define fields (expr-Record-fields rec))
+  (if (null? fields)
+      (expr-Open)
+      (build-union-type (map (lambda (f) (record-field-type (cdr f))) fields))))
+
+;; CIU T6 F1 (s3): a record component's contribution to a union-typed map access.
+;;   keyword-literal key: PURE lookup — present → the field type; absent → #f (Q5: filter,
+;;   matching the sibling Map-component behavior; all-components-miss errors at the caller).
+;;   dynamic key: check against the row's key domain (B4) — ok → ⋃fields; else #f.
+;;   The dynamic-key check is rollback-wrapped EXACTLY like the sibling Map-component
+;;   check in the same loops: a filtered component must not leave meta commitments.
+(define (union-record-component-vt ctx rec key)
+  (define kd (expr-Record-key-domain rec))
+  (match key
+    [(expr-keyword kw) #:when (eq? kd 'keyword)
+     (let ([fld (record-lookup-field rec kw)])
+       (and fld (record-field-type fld)))]
+    [_
+     (let ([key-ty (if (eq? kd 'keyword) (expr-Keyword) (expr-Nat))])
+       (and (pair? (expr-Record-fields rec))
+            (with-speculative-rollback
+              (lambda () (check ctx key key-ty))
+              values
+              "union-record-component")
+            (record-value-union rec)))]))
 
 ;; CIU T6 F1 (s2): does a structural-row type satisfy (Map K V)?  The Galois α (§5.3).
 ;;   keys: every label must check against K;  values: if V is an unsolved meta, solve V := ⋃fields
@@ -422,7 +454,7 @@
    (cond
      [(null? fields) #t]
      [(expr-meta? (whnf vt))
-      (unify-ok? (unify ctx vt (build-union-type (map (lambda (f) (record-field-type (cdr f))) fields))))]
+      (unify-ok? (unify ctx vt (record-value-union rec)))]
      [else
       (andmap (lambda (f)
                 (let ([ft (record-field-type (cdr f))])
@@ -1609,22 +1641,27 @@
               ;; (schemas only support keyword field access)
               [_ (expr-error)]))]
          [(expr-union _ _)
-          ;; Union type: extract Map components, check key, collect value types
+          ;; Union type: extract Map + Record components, check key, collect value types
           (let* ([components (flatten-union tm)]
                  [map-vts
                   (let loop ([cs components] [acc '()])
                     (if (null? cs)
                         (reverse acc)
                         (let ([c* (whnf (car cs))])
-                          (if (expr-Map? c*)
-                              ;; Phase 5: speculative rollback with network fork/restore
-                              (if (with-speculative-rollback
-                                    (lambda () (check ctx k (expr-Map-k-type c*)))
-                                    values
-                                    "union-map-get-component")
-                                  (loop (cdr cs) (cons (expr-Map-v-type c*) acc))
-                                  (loop (cdr cs) acc))
-                              (loop (cdr cs) acc)))))])
+                          (cond
+                            [(expr-Map? c*)
+                             ;; Phase 5: speculative rollback with network fork/restore
+                             (if (with-speculative-rollback
+                                   (lambda () (check ctx k (expr-Map-k-type c*)))
+                                   values
+                                   "union-map-get-component")
+                                 (loop (cdr cs) (cons (expr-Map-v-type c*) acc))
+                                 (loop (cdr cs) acc))]
+                            ;; CIU T6 F1 (s3): record components participate (Q5: filter on miss)
+                            [(expr-Record? c*)
+                             (let ([vt (union-record-component-vt ctx c* k)])
+                               (if vt (loop (cdr cs) (cons vt acc)) (loop (cdr cs) acc)))]
+                            [else (loop (cdr cs) acc)]))))])
             (if (null? map-vts)
                 (expr-error)
                 (build-union-type map-vts)))]
@@ -1669,6 +1706,10 @@
                                    "union-nil-safe-get-component")
                                  (loop (cdr cs) (cons (expr-Map-v-type c*) acc))
                                  (loop (cdr cs) acc))]
+                            ;; CIU T6 F1 (s3): record components participate (Q5: filter on miss)
+                            [(expr-Record? c*)
+                             (let ([vt (union-record-component-vt ctx c* k)])
+                               (if vt (loop (cdr cs) (cons vt acc)) (loop (cdr cs) acc)))]
                             [else (loop (cdr cs) acc)]))))])
             ;; Always include Nil in the result (safe access returns Nil on miss/nil input)
             (build-union-type (append (map whnf map-vts) (list (expr-Nil)))))]
@@ -1730,13 +1771,9 @@
     [(expr-map-vals m)
      (let ([tm (whnf (infer ctx m))])
        (match tm
-         ;; CIU T6 F1 (s2): vals of a record → List of ⋃(field types). Empty record → List of a fresh nothing? use error-guard.
+         ;; CIU T6 F1 (s2): vals of a record → List of ⋃(field types); empty → List Open (Q6 corner, s3: via helper).
          [(? expr-Record? rec)
-          (let ([fields (expr-Record-fields rec)])
-            (if (null? fields)
-                (expr-app (list-type-fvar) (expr-Open))   ;; empty record: no field types (Q6 corner — stays Open-ish in F1a)
-                (expr-app (list-type-fvar)
-                          (build-union-type (map (lambda (f) (record-field-type (cdr f))) fields)))))]
+          (expr-app (list-type-fvar) (record-value-union rec))]
          [(expr-Map _ vt) (expr-app (list-type-fvar) vt)]
          ;; α-semantic: map-vals on Open → List Open
          [(expr-Open) (expr-app (list-type-fvar) (expr-Open))]
@@ -1925,7 +1962,7 @@
 
     ;; map-fold-entries : (B → K → V → B) → B → Map K V → B
     [(expr-map-fold-entries f init map)
-     (let ([tm (infer ctx map)]
+     (let ([tm (whnf (infer ctx map))]   ;; s3: whnf (map-get precedent) so aliased/record types match
            [tb (infer ctx init)])
        (match tm
          [(expr-Map k v)
@@ -1935,23 +1972,71 @@
             (if (check ctx f expected-f)
                 tb
                 (expr-error)))]
+         ;; CIU T6 F1 (s3): fold over a record via the uniform view (K=Keyword, V=⋃fields)
+         [(? expr-Record? rec)
+          (let ([expected-f (expr-Pi 'mw tb
+                              (expr-Pi 'mw (shift 1 0 (expr-Keyword))
+                                (expr-Pi 'mw (shift 2 0 (record-value-union rec)) (shift 3 0 tb))))])
+            (if (check ctx f expected-f)
+                tb
+                (expr-error)))]
          [_ (expr-error)]))]
 
     ;; map-filter-entries : (K → V → Bool) → Map K V → Map K V
     [(expr-map-filter-entries pred map)
-     (let ([tm (infer ctx map)])
+     (let ([tm (whnf (infer ctx map))])
        (match tm
          [(expr-Map k v)
           (if (check ctx pred (expr-Pi 'mw k (expr-Pi 'mw (shift 1 0 v) (expr-Bool))))
               (expr-Map k v)
               (expr-error))]
+         ;; CIU T6 F1 (s3): filter on a record — the surviving field set isn't static, so
+         ;; the result DEGRADES to the dictionary view (Map Keyword ⋃fields); a dyn-tailed
+         ;; row takes over at F1a.2.
+         [(? expr-Record? rec)
+          (let ([v (record-value-union rec)])
+            (if (check ctx pred (expr-Pi 'mw (expr-Keyword) (expr-Pi 'mw (shift 1 0 v) (expr-Bool))))
+                (expr-Map (expr-Keyword) v)
+                (expr-error)))]
          [_ (expr-error)]))]
 
     ;; map-map-vals : (V → W) → Map K V → Map K W
     ;; Handles both named functions and lambdas for f.
+    ;; CIU T6 F1 (s3): on a record, f consumes ⋃fields and the result is a LABEL-PRESERVING
+    ;; record (map-vals touches values only — the label set is static; same labels + presence,
+    ;; every field type := W). No dictionary degrade.
     [(expr-map-map-vals f map)
-     (let ([tm (infer ctx map)])
+     (let ([tm (whnf (infer ctx map))])
        (match tm
+         [(? expr-Record? rec)
+          (let* ([v (record-value-union rec)]
+                 [tf (infer ctx f)]
+                 [finish (lambda (w)
+                           ;; NB: for/list, NOT map — the arm's pattern var `map` (the term)
+                           ;; shadows Racket's map procedure here.
+                           (make-record (expr-Record-key-domain rec)
+                                        (for/list ([p (in-list (expr-Record-fields rec))])
+                                          (cons (car p)
+                                                (record-field w (record-field-presence (cdr p)))))
+                                        (expr-Record-tail rec)))])
+            (if (equal? tf (expr-error))
+                ;; Fallback for lambdas (mirrors the Map arm below)
+                (match f
+                  [(expr-lam _ dom body)
+                   (let ([actual-dom (if (expr-hole? dom) v (whnf dom))])
+                     (if (or (expr-hole? dom) (unify-ok? (unify ctx actual-dom v)))
+                         (let ([w (infer (cons (cons actual-dom 'mw) ctx) body)])
+                           (if (equal? w (expr-error))
+                               (expr-error)
+                               (finish (whnf (subst 0 (expr-zero) w)))))
+                         (expr-error)))]
+                  [_ (expr-error)])
+                (match (whnf tf)
+                  [(expr-Pi _ dom cod)
+                   (if (unify-ok? (unify ctx dom v))
+                       (finish (whnf (subst 0 (expr-zero) cod)))
+                       (expr-error))]
+                  [_ (expr-error)])))]
          [(expr-Map k v)
           (let ([tf (infer ctx f)])
             (if (equal? tf (expr-error))
@@ -2620,13 +2705,20 @@
           (check ctx set (expr-Set a)))]
     ;; map-fold-entries : check against result type B
     [((expr-map-fold-entries f init map) expected-type)
-     (let ([tm (infer ctx map)])
+     (let ([tm (whnf (infer ctx map))])
        (match tm
          [(expr-Map k v)
           (and (check ctx init expected-type)
                (check ctx f (expr-Pi 'mw expected-type
                               (expr-Pi 'mw (shift 1 0 k)
                                 (expr-Pi 'mw (shift 2 0 v) (shift 3 0 expected-type))))))]
+         ;; CIU T6 F1 (s3): fold over a record — uniform view (K=Keyword, V=⋃fields)
+         [(? expr-Record? rec)
+          (and (check ctx init expected-type)
+               (check ctx f (expr-Pi 'mw expected-type
+                              (expr-Pi 'mw (shift 1 0 (expr-Keyword))
+                                (expr-Pi 'mw (shift 2 0 (record-value-union rec))
+                                         (shift 3 0 expected-type))))))]
          [_ #f]))]
     ;; map-filter-entries : check against Map K V
     [((expr-map-filter-entries pred map) (expr-Map k v))
@@ -2634,11 +2726,16 @@
           (check ctx map (expr-Map k v)))]
     ;; map-map-vals : check against Map K W
     [((expr-map-map-vals f map) (expr-Map k w))
-     (let ([tm (infer ctx map)])
+     (let ([tm (whnf (infer ctx map))])
        (match tm
          [(expr-Map k2 v)
           (and (unify-ok? (unify ctx k k2))
                (check ctx f (expr-Pi 'mw v (shift 1 0 w))))]
+         ;; CIU T6 F1 (s3): record source checked against a Map result — keys are Keyword;
+         ;; f consumes the uniform view ⋃fields
+         [(? expr-Record? rec)
+          (and (unify-ok? (unify ctx k (expr-Keyword)))
+               (check ctx f (expr-Pi 'mw (record-value-union rec) (shift 1 0 w))))]
          [_ #f]))]
 
     ;; ---- Transient Builder checks ----

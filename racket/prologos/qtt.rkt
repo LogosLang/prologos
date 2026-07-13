@@ -1543,6 +1543,16 @@
                (match rf
                  [(tu _ uf) (tu tb (add-usage (add-usage uf ui) um))]
                  [_ (tu-error)]))]
+            ;; CIU T6 F1 (s3): fold over a record — uniform view (K=Keyword, V=⋃fields)
+            [(? expr-Record? rec)
+             (let* ([v (record-value-union rec)]
+                    [ef (expr-Pi 'mw tb
+                          (expr-Pi 'mw (shift 1 0 (expr-Keyword))
+                            (expr-Pi 'mw (shift 2 0 v) (shift 3 0 tb))))]
+                    [rf (inferQ-or-checkQ ctx f ef)])
+               (match rf
+                 [(tu _ uf) (tu tb (add-usage (add-usage uf ui) um))]
+                 [_ (tu-error)]))]
             [_ (tu-error)])]
          [(_ _) (tu-error)]))]
     ;; map-filter-entries : (K → V → Bool) → Map K V → Map K V
@@ -1557,6 +1567,14 @@
                (match rp
                  [(tu _ up) (tu (expr-Map k v) (add-usage up um))]
                  [_ (tu-error)]))]
+            ;; CIU T6 F1 (s3): filter on a record → dictionary view (mirrors typing-core)
+            [(? expr-Record? rec)
+             (let* ([v (record-value-union rec)]
+                    [rp (inferQ-or-checkQ ctx pred
+                          (expr-Pi 'mw (expr-Keyword) (expr-Pi 'mw (shift 1 0 v) (expr-Bool))))])
+               (match rp
+                 [(tu _ up) (tu (expr-Map (expr-Keyword) v) (add-usage up um))]
+                 [_ (tu-error)]))]
             [_ (tu-error)])]
          [_ (tu-error)]))]
     ;; map-map-vals : (V → W) → Map K V → Map K W
@@ -1568,6 +1586,13 @@
           (match tm
             [(expr-Map k v)
              (let ([rf (inferQ-or-checkQ ctx f (expr-Pi 'mw v (shift 1 0 result-type)))])
+               (match rf
+                 [(tu _ uf) (tu result-type (add-usage uf um))]
+                 [_ (tu-error)]))]
+            ;; CIU T6 F1 (s3): map-vals over a record — f consumes ⋃fields; type from infer
+            [(? expr-Record? rec)
+             (let ([rf (inferQ-or-checkQ ctx f
+                         (expr-Pi 'mw (record-value-union rec) (shift 1 0 result-type)))])
                (match rf
                  [(tu _ uf) (tu result-type (add-usage uf um))]
                  [_ (tu-error)]))]
@@ -2358,6 +2383,16 @@
                (match rf
                  [(tu _ uf) (bu #t (add-usage (add-usage uf ui) um))]
                  [_ (bu #f (zero-usage n))]))]
+            ;; CIU T6 F1 (s3): fold over a record — uniform view (K=Keyword, V=⋃fields)
+            [(? expr-Record? rec)
+             (let* ([ef (expr-Pi 'mw expected-type
+                          (expr-Pi 'mw (shift 1 0 (expr-Keyword))
+                            (expr-Pi 'mw (shift 2 0 (record-value-union rec))
+                                     (shift 3 0 expected-type))))]
+                    [rf (inferQ-or-checkQ ctx f ef)])
+               (match rf
+                 [(tu _ uf) (bu #t (add-usage (add-usage uf ui) um))]
+                 [_ (bu #f (zero-usage n))]))]
             [_ (bu #f (zero-usage n))])]
          [(_ _) (bu #f (zero-usage n))]))]
     ;; map-filter-entries : check against Map K V
@@ -2369,6 +2404,17 @@
             [(expr-Map k v)
              (let ([rp (inferQ-or-checkQ ctx pred
                          (expr-Pi 'mw k (expr-Pi 'mw (shift 1 0 v) (expr-Bool))))])
+               (match rp
+                 [(tu _ up)
+                  (bu (check ctx (expr-map-filter-entries pred map) expected-type)
+                      (add-usage up um))]
+                 [_ (bu #f (zero-usage n))]))]
+            ;; CIU T6 F1 (s3): filter on a record — pred consumes the uniform view;
+            ;; the final type check delegates to typing-core (dictionary-view result)
+            [(? expr-Record? rec)
+             (let* ([v (record-value-union rec)]
+                    [rp (inferQ-or-checkQ ctx pred
+                          (expr-Pi 'mw (expr-Keyword) (expr-Pi 'mw (shift 1 0 v) (expr-Bool))))])
                (match rp
                  [(tu _ up)
                   (bu (check ctx (expr-map-filter-entries pred map) expected-type)
@@ -2387,6 +2433,17 @@
                (match rf
                  [(tu _ uf)
                   (bu (and (unify-ok? (unify ctx k k2))
+                           (check ctx (expr-map-map-vals f map) expected-type))
+                      (add-usage uf um))]
+                 [_ (bu #f (zero-usage n))]))]
+            ;; CIU T6 F1 (s3): record source vs Map result — keys are Keyword;
+            ;; f consumes ⋃fields; final check delegates to typing-core
+            [((? expr-Record? rec) (expr-Map k w))
+             (let ([rf (inferQ-or-checkQ ctx f
+                         (expr-Pi 'mw (record-value-union rec) (shift 1 0 w)))])
+               (match rf
+                 [(tu _ uf)
+                  (bu (and (unify-ok? (unify ctx k (expr-Keyword)))
                            (check ctx (expr-map-map-vals f map) expected-type))
                       (add-usage uf um))]
                  [_ (bu #f (zero-usage n))]))]
