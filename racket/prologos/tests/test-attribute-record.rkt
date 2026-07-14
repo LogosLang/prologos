@@ -6,12 +6,12 @@
 
 (require rackunit
          rackunit/text-ui
-         prologos/propagator
-         prologos/typing-propagators
-         prologos/syntax
-         prologos/prelude
-         prologos/type-lattice
-         (only-in prologos/constraint-cell
+         "../propagator.rkt"
+         "../typing-propagators.rkt"
+         "../syntax.rkt"
+         "../prelude.rkt"
+         "../type-lattice.rkt"
+         (only-in "../constraint-cell.rkt"
                   constraint-candidate constraint-from-candidates
                   constraint-one? constraint-bot? constraint-bot))
 

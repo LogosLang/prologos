@@ -6,11 +6,11 @@
 
 (require rackunit
          rackunit/text-ui
-         prologos/propagator
-         prologos/typing-propagators
-         prologos/syntax
-         prologos/prelude
-         prologos/type-lattice)
+         "../propagator.rkt"
+         "../typing-propagators.rkt"
+         "../syntax.rkt"
+         "../prelude.rkt"
+         "../type-lattice.rkt")
 
 (define meta-feedback-tests
   (test-suite

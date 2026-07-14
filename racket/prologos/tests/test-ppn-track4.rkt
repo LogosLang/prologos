@@ -9,13 +9,13 @@
 (require rackunit
          rackunit/text-ui
          racket/set
-         prologos/propagator
-         prologos/champ
-         prologos/typing-propagators  ;; provides that-read, attribute-map-merge-fn
-         prologos/syntax
-         prologos/prelude
-         prologos/type-lattice
-         prologos/surface-rewrite)
+         "../propagator.rkt"
+         "../champ.rkt"
+         "../typing-propagators.rkt"  ;; provides that-read, attribute-map-merge-fn
+         "../syntax.rkt"
+         "../prelude.rkt"
+         "../type-lattice.rkt"
+         "../surface-rewrite.rkt")
 
 ;; ============================================================
 ;; Phase 1a: Component-indexed propagator firing
