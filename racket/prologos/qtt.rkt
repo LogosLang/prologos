@@ -1395,8 +1395,13 @@
      (let ([r1 (inferQ ctx v)]
            [r2 (inferQ ctx x)])
        (match* (r1 r2)
-         [((tu _ u1) (tu _ u2))
-          (tu (tu-type r1) (add-usage u1 u2))]
+         [((tu t1 u1) (tu _ u2))
+          ;; CIU T6 F1a-col-3: a tuple subject makes push type-CHANGING (the row grows) —
+          ;; delegate the type to infer (the §6 divergence class / S4 pattern), usage local.
+          ;; PVec subjects keep the exact echo (result type = subject type).
+          (if (expr-Record? (whnf t1))
+              (tu (infer ctx e) (add-usage u1 u2))
+              (tu t1 (add-usage u1 u2)))]
          [(_ _) (tu-error)]))]
     ;; CIU T6 F1a-col-2: list-literal twin — same delegation; usage from elems
     ;; (the chain re-elaborates the same source elements; counting BOTH would
@@ -1429,8 +1434,11 @@
        (match* (r1 r2)
          [((tu t1 u1) (tu _ u2))
           ;; pvec-nth returns the ELEMENT TYPE, not PVec
-          (match t1
+          (match (whnf t1)
             [(expr-PVec a) (tu a (add-usage u1 u2))]
+            ;; CIU T6 F1a-col-3: tuple — delegate the positional projection to infer
+            ;; (record-project lives there once); usage local.
+            [(? expr-Record?) (tu (infer ctx e) (add-usage u1 u2))]
             [_ (tu-error)])]
          [(_ _) (tu-error)]))]
     [(expr-pvec-update v i x)
@@ -1438,8 +1446,12 @@
            [r2 (inferQ ctx i)]
            [r3 (inferQ ctx x)])
        (match* (r1 r2 r3)
-         [((tu _ u1) (tu _ u2) (tu _ u3))
-          (tu (tu-type r1) (add-usage u1 (add-usage u2 u3)))]
+         [((tu t1 u1) (tu _ u2) (tu _ u3))
+          ;; CIU T6 F1a-col-3: tuple → type-changing (per-position replace / degrade) —
+          ;; delegate to infer (§6 divergence class); PVec keeps the echo.
+          (if (expr-Record? (whnf t1))
+              (tu (infer ctx e) (add-usage u1 (add-usage u2 u3)))
+              (tu t1 (add-usage u1 (add-usage u2 u3))))]
          [(_ _ _) (tu-error)]))]
     [(expr-pvec-length v)
      (let ([r (inferQ ctx v)])
@@ -1449,28 +1461,43 @@
     [(expr-pvec-pop v)
      (let ([r (inferQ ctx v)])
        (match r
-         [(tu _ u) (tu (tu-type r) u)]
+         ;; CIU T6 F1a-col-3: tuple → the row SHRINKS — delegate (§6 class); PVec echoes.
+         [(tu t1 u)
+          (if (expr-Record? (whnf t1))
+              (tu (infer ctx e) u)
+              (tu t1 u))]
          [_ (tu-error)]))]
     [(expr-pvec-concat v1 v2)
      (let ([r1 (inferQ ctx v1)]
            [r2 (inferQ ctx v2)])
        (match* (r1 r2)
-         [((tu _ u1) (tu _ u2))
-          (tu (tu-type r1) (add-usage u1 u2))]
+         [((tu t1 u1) (tu _ u2))
+          ;; CIU T6 F1a-col-3: tuple → row append / degrade — delegate (§6 class).
+          (if (expr-Record? (whnf t1))
+              (tu (infer ctx e) (add-usage u1 u2))
+              (tu t1 (add-usage u1 u2)))]
          [(_ _) (tu-error)]))]
     [(expr-pvec-slice v lo hi)
      (let ([r1 (inferQ ctx v)]
            [r2 (inferQ ctx lo)]
            [r3 (inferQ ctx hi)])
        (match* (r1 r2 r3)
-         [((tu _ u1) (tu _ u2) (tu _ u3))
-          (tu (tu-type r1) (add-usage u1 (add-usage u2 u3)))]
+         [((tu t1 u1) (tu _ u2) (tu _ u3))
+          ;; CIU T6 F1a-col-3: tuple → sub-row / degrade — delegate (§6 class).
+          (if (expr-Record? (whnf t1))
+              (tu (infer ctx e) (add-usage u1 (add-usage u2 u3)))
+              (tu t1 (add-usage u1 (add-usage u2 u3))))]
          [(_ _ _) (tu-error)]))]
     ;; pvec-to-list : PVec A → List A
     [(expr-pvec-to-list v)
      (let ([r (inferQ ctx v)])
        (match r
          [(tu (expr-PVec a) u) (tu (expr-app (list-type-fvar) a) u)]
+         ;; CIU T6 F1a-col-3: tuple → delegate to infer ((List ⋃positions)). MUST come
+         ;; before the resolution fallback below, which would silently ECHO the row
+         ;; itself as the "List" result type (wrong type, no error).
+         [(tu t1 u) #:when (expr-Record? (whnf t1))
+          (tu (infer ctx e) u)]
          [(tu _ u) (tu (tu-type r) u)]  ;; fallback if type not fully resolved
          [_ (tu-error)]))]
     ;; pvec-from-list : List A → PVec A
@@ -1488,9 +1515,17 @@
            [ri (inferQ ctx init)])
        (match* (rv ri)
          [((tu tv uv) (tu tb ui))
-          (match tv
+          (match (whnf tv)
             [(expr-PVec a)
              (let* ([ef (expr-Pi 'mw tb (expr-Pi 'mw (shift 1 0 a) (shift 2 0 tb)))]
+                    [rf (inferQ-or-checkQ ctx f ef)])
+               (match rf
+                 [(tu _ uf) (tu tb (add-usage (add-usage uf ui) uv))]
+                 [_ (tu-error)]))]
+            ;; CIU T6 F1a-col-3: fold over a tuple — uniform view (typing-core mirror)
+            [(? closed-nat-row? rec)
+             (let* ([v (record-value-union rec)]
+                    [ef (expr-Pi 'mw tb (expr-Pi 'mw (shift 1 0 v) (shift 2 0 tb)))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
                  [(tu _ uf) (tu tb (add-usage (add-usage uf ui) uv))]
@@ -1504,9 +1539,18 @@
            [rv (inferQ ctx vec)])
        (match rv
          [(tu tv uv)
-          (match tv
+          (match (whnf tv)
             [(expr-PVec a)
              (let* ([rf (inferQ-or-checkQ ctx f (expr-Pi 'mw a (shift 1 0 result-type)))])
+               (match rf
+                 [(tu _ uf) (tu result-type (add-usage uf uv))]
+                 [_ (tu-error)]))]
+            ;; CIU T6 F1a-col-3: map over a tuple — f consumes ⋃positions; the
+            ;; position-preserving result type comes from infer (the map-map-vals
+            ;; qtt-mirror pattern).
+            [(? closed-nat-row? rec)
+             (let ([rf (inferQ-or-checkQ ctx f
+                         (expr-Pi 'mw (record-value-union rec) (shift 1 0 result-type)))])
                (match rf
                  [(tu _ uf) (tu result-type (add-usage uf uv))]
                  [_ (tu-error)]))]
@@ -1517,11 +1561,19 @@
      (let ([rv (inferQ ctx vec)])
        (match rv
          [(tu tv uv)
-          (match tv
+          (match (whnf tv)
             [(expr-PVec a)
              (let ([rp (inferQ-or-checkQ ctx pred (expr-Pi 'mw a (expr-Bool)))])
                (match rp
                  [(tu _ up) (tu (expr-PVec a) (add-usage up uv))]
+                 [_ (tu-error)]))]
+            ;; CIU T6 F1a-col-3: filter on a tuple → (PVec ⋃positions) degrade
+            ;; (typing-core mirror)
+            [(? closed-nat-row? rec)
+             (let* ([v (record-value-union rec)]
+                    [rp (inferQ-or-checkQ ctx pred (expr-Pi 'mw v (expr-Bool)))])
+               (match rp
+                 [(tu _ up) (tu (expr-PVec v) (add-usage up uv))]
                  [_ (tu-error)]))]
             [_ (tu-error)])]
          [_ (tu-error)]))]
@@ -1629,10 +1681,12 @@
     [(expr-transient coll)
      (let ([r (inferQ ctx coll)])
        (match r
-         [(tu tc u) (match tc
+         [(tu tc u) (match (whnf tc)
                       [(expr-PVec a) (tu (expr-TVec a) u)]
                       [(expr-Map k v) (tu (expr-TMap k v) u)]
                       [(expr-Set a) (tu (expr-TSet a) u)]
+                      ;; CIU T6 F1a-col-3: tuple → uniform transient view (typing-core mirror)
+                      [(? closed-nat-row? rec) (tu (expr-TVec (record-value-union rec)) u)]
                       [_ (tu-error)])]
          [_ (tu-error)]))]
     [(expr-persist coll)
@@ -2346,10 +2400,20 @@
            [ri (checkQ ctx init expected-type)])
        (match* (rv ri)
          [((tu tv uv) (bu #t ui))
-          (match tv
+          (match (whnf tv)
             [(expr-PVec a)
              (let* ([ef (expr-Pi 'mw expected-type
                           (expr-Pi 'mw (shift 1 0 a) (shift 2 0 expected-type)))]
+                    [rf (inferQ-or-checkQ ctx f ef)])
+               (match rf
+                 [(tu _ uf) (bu #t (add-usage (add-usage uf ui) uv))]
+                 [_ (bu #f (zero-usage n))]))]
+            ;; CIU T6 F1a-col-3: fold over a tuple in CHECK mode — uniform view
+            ;; (the issue-#76 class: checked positions must not fall to inferQ)
+            [(? closed-nat-row? rec)
+             (let* ([v (record-value-union rec)]
+                    [ef (expr-Pi 'mw expected-type
+                          (expr-Pi 'mw (shift 1 0 v) (shift 2 0 expected-type)))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
                  [(tu _ uf) (bu #t (add-usage (add-usage uf ui) uv))]
@@ -2361,9 +2425,19 @@
      (let ([rv (inferQ ctx vec)])
        (match rv
          [(tu tv uv)
-          (match* (tv (whnf expected-type))
+          (match* ((whnf tv) (whnf expected-type))
             [((expr-PVec a) (expr-PVec b))
              (let ([rf (inferQ-or-checkQ ctx f (expr-Pi 'mw a (shift 1 0 b)))])
+               (match rf
+                 [(tu _ uf)
+                  (bu (check ctx (expr-pvec-map f vec) expected-type)
+                      (add-usage uf uv))]
+                 [_ (bu #f (zero-usage n))]))]
+            ;; CIU T6 F1a-col-3: tuple source checked against (PVec B) — f consumes
+            ;; ⋃positions (typing-core check-arm mirror; issue-#76 class)
+            [((? closed-nat-row? rec) (expr-PVec b))
+             (let ([rf (inferQ-or-checkQ ctx f
+                         (expr-Pi 'mw (record-value-union rec) (shift 1 0 b)))])
                (match rf
                  [(tu _ uf)
                   (bu (check ctx (expr-pvec-map f vec) expected-type)
@@ -2376,9 +2450,19 @@
      (let ([rv (inferQ ctx vec)])
        (match rv
          [(tu tv uv)
-          (match tv
+          (match (whnf tv)
             [(expr-PVec a)
              (let ([rp (inferQ-or-checkQ ctx pred (expr-Pi 'mw a (expr-Bool)))])
+               (match rp
+                 [(tu _ up)
+                  (bu (check ctx (expr-pvec-filter pred vec) expected-type)
+                      (add-usage up uv))]
+                 [_ (bu #f (zero-usage n))]))]
+            ;; CIU T6 F1a-col-3: tuple — pred consumes ⋃positions; the result check
+            ;; delegates (the (PVec ⋃) degrade meets the annotation via the α)
+            [(? closed-nat-row? rec)
+             (let* ([v (record-value-union rec)]
+                    [rp (inferQ-or-checkQ ctx pred (expr-Pi 'mw v (expr-Bool)))])
                (match rp
                  [(tu _ up)
                   (bu (check ctx (expr-pvec-filter pred vec) expected-type)
@@ -2579,6 +2663,15 @@
                          ;; too (checkQ's fallback is a DUPLICATE of check's — mirror the arm).
                          [((? expr-Map? mt) (? expr-Record? rec))
                           (record-<:-map? ctx rec (expr-Map-k-type mt) (expr-Map-v-type mt))]
+                         ;; CIU T6 F1a-col-3 (B2 completion): the Tuple→PVec and Tuple→List
+                         ;; α arms were missing here — ground cases were rescued by the unify
+                         ;; classifier above, but a meta element type ((PVec ?A)) reached from
+                         ;; the QTT pass could not solve ?A. Mirror check's fallback exactly.
+                         [((? expr-PVec? pt) (? expr-Record? rec))
+                          (record-<:-pvec? ctx rec (expr-PVec-elem-type pt))]
+                         [((expr-app lf la) (? expr-Record? rec))
+                          #:when (equal? lf (list-type-fvar))
+                          (record-<:-elem? ctx rec la)]
                          [(t-w t1-w) (subtype? t1-w t-w)])))
               (bu #t u)
               (bu #f (zero-usage n)))]

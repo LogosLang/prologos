@@ -1916,58 +1916,167 @@
                        (for/list ([t (in-list tys)] [i (in-naturals)])
                          (cons i (record-field t 'present)))
                        'closed)]))]
+    ;; CIU T6 F1a-col-3: every pvec-op arm whnfs its subject (the s3 map-op precedent —
+    ;; aliased/record types match) and carries a tuple ('nat row) disposition:
+    ;; EXACT where the position structure is statically known (closed tuples have static
+    ;; length), degrading to the ⋃-positions uniform view where it is not.
     [(expr-pvec-push v x)
-     (let ([tv (infer ctx v)])
+     (let ([tv (whnf (infer ctx v))])
        (match tv
          [(expr-PVec a) (if (check ctx x a) (expr-PVec a) (expr-error))]
+         ;; col-3 EXACT: push appends at position len — the row GROWS (type-changing).
+         [(? closed-nat-row? rec)
+          (let ([tx (whnf (infer ctx x))])
+            (if (expr-error? tx)
+                (expr-error)
+                (record-extend rec (length (expr-Record-fields rec)) tx)))]
          [_ (expr-error)]))]
     [(expr-pvec-nth v i)
-     (let ([tv (infer ctx v)])
+     (let ([tv (whnf (infer ctx v))])
        (match tv
          [(expr-PVec a) (if (check ctx i (expr-Nat)) a (expr-error))]
+         ;; col-3: positional projection — record-project (literal Nat → exact position
+         ;; type / closed-row miss; dynamic index → Nat-check + ⋃positions). Int literals
+         ;; are REJECTED here (unlike v[i]/expr-get): the pvec-* runtime is nat-value-only,
+         ;; so the pvec-* ops keep their Nat-only index discipline on tuples too.
+         [(? expr-Record? rec)
+          (match i
+            [(expr-int _) (expr-error)]
+            [_ (record-project ctx rec i)])]
          [_ (expr-error)]))]
     [(expr-pvec-update v i x)
-     (let ([tv (infer ctx v)])
+     (let ([tv (whnf (infer ctx v))])
        (match tv
          [(expr-PVec a) (if (and (check ctx i (expr-Nat)) (check ctx x a))
                             (expr-PVec a) (expr-error))]
+         ;; col-3: literal in-bounds index → EXACT per-position replacement (out-of-bounds
+         ;; is a STATIC miss, mirroring record-project's closed-row miss). Dynamic index →
+         ;; the touched position is unknown: degrade to (PVec ⋃positions∪W) — sound, any
+         ;; position may now hold W. Empty tuple has no position to update → error (Q6).
+         [(? closed-nat-row? rec)
+          (let ([len (length (expr-Record-fields rec))])
+            (match i
+              ;; Nat literals only (the pvec-* Nat-only index discipline; Int stalls at runtime)
+              [(expr-nat-val n)
+               #:when (exact-nonnegative-integer? n)
+               (if (< n len)
+                   (let ([tx (whnf (infer ctx x))])
+                     (if (expr-error? tx) (expr-error) (record-extend rec n tx)))
+                   (expr-error))]
+              [_
+               (if (and (> len 0) (check ctx i (expr-Nat)))
+                   (let ([tx (whnf (infer ctx x))])
+                     (if (expr-error? tx)
+                         (expr-error)
+                         (expr-PVec
+                          (build-union-type
+                           (cons tx (map (lambda (f) (record-field-type (cdr f)))
+                                         (expr-Record-fields rec)))))))
+                   (expr-error))]))]
          [_ (expr-error)]))]
     [(expr-pvec-length v)
-     (let ([tv (infer ctx v)])
+     (let ([tv (whnf (infer ctx v))])
        (match tv
          [(expr-PVec _) (expr-Nat)]
+         [(? closed-nat-row? _) (expr-Nat)]   ;; col-3: tuples have length too
          [_ (expr-error)]))]
     [(expr-pvec-pop v)
-     (let ([tv (infer ctx v)])
+     (let ([tv (whnf (infer ctx v))])
        (match tv
          [(expr-PVec a) (expr-PVec a)]
+         ;; col-3 EXACT: pop removes the LAST position (rrb-pop semantics); the row
+         ;; SHRINKS. Pop on the empty tuple is statically impossible → error.
+         [(? closed-nat-row? rec)
+          (let ([fields (expr-Record-fields rec)])
+            (if (null? fields)
+                (expr-error)
+                (record-remove rec (- (length fields) 1))))]
          [_ (expr-error)]))]
     [(expr-pvec-concat v1 v2)
-     (let ([tv1 (infer ctx v1)])
+     (let ([tv1 (whnf (infer ctx v1))])
        (match tv1
          [(expr-PVec a) (if (check ctx v2 (expr-PVec a)) (expr-PVec a) (expr-error))]
+         ;; col-3: two closed tuples → EXACT index-shifted append (ground×ground, the
+         ;; M1-style elaboration-time computation; the residuated Concat relation stays
+         ;; F-row). Tuple ++ (PVec b) → degrade (PVec ⋃positions∪b). Else error.
+         [(? closed-nat-row? rec1)
+          (let ([tv2 (whnf (infer ctx v2))])
+            (match tv2
+              [(? closed-nat-row? rec2)
+               (let ([len1 (length (expr-Record-fields rec1))])
+                 (make-record 'nat
+                              (append (expr-Record-fields rec1)
+                                      (for/list ([f (in-list (expr-Record-fields rec2))])
+                                        (cons (+ len1 (car f)) (cdr f))))
+                              'closed))]
+              [(expr-PVec b)
+               (expr-PVec
+                (build-union-type
+                 (cons b (map (lambda (f) (record-field-type (cdr f)))
+                              (expr-Record-fields rec1)))))]
+              [_ (expr-error)]))]
          [_ (expr-error)]))]
     [(expr-pvec-slice v lo hi)
-     (let ([tv (infer ctx v)])
+     (let ([tv (whnf (infer ctx v))])
        (match tv
          [(expr-PVec a) (if (and (check ctx lo (expr-Nat)) (check ctx hi (expr-Nat)))
                             (expr-PVec a) (expr-error))]
+         ;; col-3: literal bounds → EXACT clamped half-open sub-row [lo, hi) renumbered
+         ;; from 0 (rrb-slice semantics; empty range → the empty tuple). Dynamic bounds →
+         ;; degrade (PVec ⋃positions); slicing the EMPTY tuple is the empty tuple always.
+         [(? closed-nat-row? rec)
+          (let* ([fields (expr-Record-fields rec)]
+                 [len (length fields)]
+                 ;; Nat literals only (the pvec-* Nat-only index discipline; Int stalls at runtime)
+                 [lit (lambda (b) (match b
+                                    [(expr-nat-val n)
+                                     #:when (exact-nonnegative-integer? n) n]
+                                    [_ #f]))]
+                 [lo-n (lit lo)]
+                 [hi-n (lit hi)])
+            (cond
+              [(and lo-n hi-n)
+               (let ([hi* (min len hi-n)])
+                 (make-record 'nat
+                              (if (>= lo-n hi*)
+                                  '()
+                                  (for/list ([f (in-list fields)]
+                                             #:when (and (>= (car f) lo-n) (< (car f) hi*)))
+                                    (cons (- (car f) lo-n) (cdr f))))
+                              'closed))]
+              [(and (check ctx lo (expr-Nat)) (check ctx hi (expr-Nat)))
+               (if (null? fields) rec (expr-PVec (record-value-union rec)))]
+              [else (expr-error)]))]
          [_ (expr-error)]))]
     ;; pvec-to-list : PVec A → List A
     [(expr-pvec-to-list v)
-     (let ([tv (infer ctx v)])
+     (let ([tv (whnf (infer ctx v))])
        (match tv
          [(expr-PVec a) (expr-app (list-type-fvar) a)]
+         ;; col-3: uniform view (List ⋃positions) — the s2 map-vals LIST-view mirror.
+         ;; Deliberately NOT row-identity: a row-typed cons list expands the pinned
+         ;; S10-at-list-level value-stall surface; (List ⋃) keeps to-list the escape hatch.
+         [(? closed-nat-row? rec)
+          (expr-app (list-type-fvar) (record-value-union rec))]
          [_ (expr-error)]))]
     ;; pvec-fold : (B → A → B) → B → PVec A → B
     ;; Left fold over a PVec: f takes (accumulator, element), returns accumulator.
     ;; Pi codomain types are shifted to account for the binder (de Bruijn convention).
     [(expr-pvec-fold f init vec)
-     (let ([tv (infer ctx vec)]
+     (let ([tv (whnf (infer ctx vec))]
            [tb (infer ctx init)])
        (match tv
          [(expr-PVec a)
           (let ([expected-f (expr-Pi 'mw tb (expr-Pi 'mw (shift 1 0 a) (shift 2 0 tb)))])
+            (if (check ctx f expected-f)
+                tb
+                (expr-error)))]
+         ;; CIU T6 F1a-col-3: fold over a tuple — uniform view (f consumes ⋃positions;
+         ;; the map-fold-entries s3 mirror, minus the key argument).
+         [(? closed-nat-row? rec)
+          (let ([expected-f (expr-Pi 'mw tb
+                              (expr-Pi 'mw (shift 1 0 (record-value-union rec))
+                                       (shift 2 0 tb)))])
             (if (check ctx f expected-f)
                 tb
                 (expr-error)))]
@@ -1976,8 +2085,39 @@
     ;; pvec-map : (A → B) → PVec A → PVec B
     ;; Infers B from f's return type. Handles both named functions and lambdas.
     [(expr-pvec-map f vec)
-     (let ([tv (infer ctx vec)])
+     (let ([tv (whnf (infer ctx vec))])
        (match tv
+         ;; CIU T6 F1a-col-3: map over a tuple — POSITION-PRESERVING (the map-map-vals
+         ;; s3 mirror): f consumes ⋃positions; the result keeps the position set with
+         ;; every slot type := W (per-position instantiation of a polymorphic f has no
+         ;; in-tree machinery — constant-W is the honest static answer).
+         [(? closed-nat-row? rec)
+          (let* ([v (record-value-union rec)]
+                 [tf (infer ctx f)]
+                 [finish (lambda (w)
+                           (make-record 'nat
+                                        (for/list ([p (in-list (expr-Record-fields rec))])
+                                          (cons (car p)
+                                                (record-field w (record-field-presence (cdr p)))))
+                                        (expr-Record-tail rec)))])
+            (if (equal? tf (expr-error))
+                ;; Fallback for lambdas (mirrors the PVec arm below)
+                (match f
+                  [(expr-lam _ dom body)
+                   (let ([actual-dom (if (expr-hole? dom) v (whnf dom))])
+                     (if (or (expr-hole? dom) (unify-ok? (unify ctx actual-dom v)))
+                         (let ([w (infer (cons (cons actual-dom 'mw) ctx) body)])
+                           (if (equal? w (expr-error))
+                               (expr-error)
+                               (finish (whnf (subst 0 (expr-zero) w)))))
+                         (expr-error)))]
+                  [_ (expr-error)])
+                (match (whnf tf)
+                  [(expr-Pi _ dom cod)
+                   (if (unify-ok? (unify ctx dom v))
+                       (finish (whnf (subst 0 (expr-zero) cod)))
+                       (expr-error))]
+                  [_ (expr-error)])))]
          [(expr-PVec a)
           ;; Try to infer f's type first (works for named functions)
           (let ([tf (infer ctx f)])
@@ -2005,12 +2145,20 @@
 
     ;; pvec-filter : (A → Bool) → PVec A → PVec A
     [(expr-pvec-filter pred vec)
-     (let ([tv (infer ctx vec)])
+     (let ([tv (whnf (infer ctx vec))])
        (match tv
          [(expr-PVec a)
           (if (check ctx pred (expr-Pi 'mw a (expr-Bool)))
               (expr-PVec a)
               (expr-error))]
+         ;; CIU T6 F1a-col-3: filter on a tuple — the surviving position set isn't
+         ;; static, so the result DEGRADES to (PVec ⋃positions) (the map-filter-entries
+         ;; s3 dictionary-degrade mirror at the positional domain).
+         [(? closed-nat-row? rec)
+          (let ([v (record-value-union rec)])
+            (if (check ctx pred (expr-Pi 'mw v (expr-Bool)))
+                (expr-PVec v)
+                (expr-error)))]
          [_ (expr-error)]))]
 
     ;; set-fold : (B → A → B) → B → Set A → B
@@ -2149,6 +2297,10 @@
                                     (and (>= len 6)
                                          (string=? (substring n (- len 6)) "::List"))))))) a)
           (expr-PVec a)]
+         ;; CIU T6 F1a-col-3: from-list on a 'nat row — EXACT identity. The row carries
+         ;; no container tag (a '[…] row and a @[…] row are the same observational type);
+         ;; the runtime becomes an rrb where every pvec op works.
+         [(? closed-nat-row? rec) rec]
          [_ (expr-error)]))]
 
     ;; ---- Transient Builders ----
@@ -2159,6 +2311,10 @@
          [(expr-PVec a) (expr-TVec a)]
          [(expr-Map k v) (expr-TMap k v)]
          [(expr-Set a) (expr-TSet a)]
+         ;; CIU T6 F1a-col-3 (audit-surfaced same-class gap): a tuple entering the
+         ;; transient world degrades to the uniform view — transients are mutation-
+         ;; indexed dictionaries; per-position tracking through mutation is not v1.
+         [(? closed-nat-row? rec) (expr-TVec (record-value-union rec))]
          [_ (expr-error)]))]
     ;; Generic persist: dispatch on transient type
     [(expr-persist coll)
@@ -2180,9 +2336,11 @@
     [(expr-tchamp _) (expr-error)]  ;; tchamp needs checking context
     [(expr-thset _) (expr-error)]   ;; thset needs checking context
     [(expr-transient-vec v)
-     (let ([tv (infer ctx v)])
+     (let ([tv (whnf (infer ctx v))])
        (match tv
          [(expr-PVec a) (expr-TVec a)]
+         ;; CIU T6 F1a-col-3: tuple → uniform transient view (generic-transient mirror)
+         [(? closed-nat-row? rec) (expr-TVec (record-value-union rec))]
          [_ (expr-error)]))]
     [(expr-persist-vec t)
      (let ([tt (infer ctx t)])
@@ -2755,19 +2913,30 @@
     ;; pvec-fold : check against result type B
     ;; Pi codomains shifted for de Bruijn convention.
     [((expr-pvec-fold f init vec) expected-type)
-     (let ([tv (infer ctx vec)])
+     (let ([tv (whnf (infer ctx vec))])
        (match tv
          [(expr-PVec a)
           (and (check ctx init expected-type)
                (check ctx f (expr-Pi 'mw expected-type
                               (expr-Pi 'mw (shift 1 0 a) (shift 2 0 expected-type)))))]
+         ;; CIU T6 F1a-col-3: fold over a tuple in CHECK mode — uniform view (the arm's
+         ;; catch-all expected pattern means a tuple subject would otherwise hard-fail
+         ;; with no fallthrough to the conversion-fallback α).
+         [(? closed-nat-row? rec)
+          (and (check ctx init expected-type)
+               (check ctx f (expr-Pi 'mw expected-type
+                              (expr-Pi 'mw (shift 1 0 (record-value-union rec))
+                                       (shift 2 0 expected-type)))))]
          [_ #f]))]
     ;; pvec-map : check against PVec B
     [((expr-pvec-map f vec) (expr-PVec b))
-     (let ([tv (infer ctx vec)])
+     (let ([tv (whnf (infer ctx vec))])
        (match tv
          [(expr-PVec a)
           (check ctx f (expr-Pi 'mw a (shift 1 0 b)))]
+         ;; CIU T6 F1a-col-3: tuple source checked against (PVec B) — f consumes ⋃positions
+         [(? closed-nat-row? rec)
+          (check ctx f (expr-Pi 'mw (record-value-union rec) (shift 1 0 b)))]
          [_ #f]))]
     ;; pvec-filter : check against PVec A
     [((expr-pvec-filter pred vec) (expr-PVec a))

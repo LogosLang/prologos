@@ -166,6 +166,7 @@
  ;; Anonymous structural record / tuple type (CIU T6 F1; internal-only — inferred, not parsed)
  (struct-out expr-Record) (struct-out record-field)
  record-map-field-types make-record record-extend record-lookup-field record-remove
+ closed-nat-row?
  ;; Map (persistent hash map)
  (struct-out expr-Map) (struct-out expr-champ)
  (struct-out expr-map-empty) (struct-out expr-map-assoc)
@@ -700,6 +701,14 @@
   (make-record (expr-Record-key-domain rec)
                (filter (lambda (f) (not (eqv? (car f) label))) (expr-Record-fields rec))
                (expr-Record-tail rec)))
+
+;; CIU T6 F1a-col-3: a CLOSED tuple ('nat domain, 'closed tail). The EXACT tuple-op
+;; typing arms require BOTH — explicit forward-necessary guards (the B3 precedent),
+;; so a future 'dyn tail or a 'keyword row never mis-dispatches into an exact arm.
+(define (closed-nat-row? rec)
+  (and (expr-Record? rec)
+       (eq? (expr-Record-key-domain rec) 'nat)
+       (eq? (expr-Record-tail rec) 'closed)))
 
 ;; Type constructor: Map K V
 (struct expr-Map (k-type v-type) #:transparent #:property prop:ctor-desc-tag '(type . Map))
