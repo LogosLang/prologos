@@ -775,6 +775,11 @@
     [(and (symbol? head) (eq? head '$vec-literal))
      (parse-pvec-literal args loc)]
 
+    ;; CIU T6 F1a-col-2 (D15): $list-literal-parse sentinel — a no-tail '[…]
+    ;; handed through by preparse with its literal-extent identity intact.
+    [(and (symbol? head) (eq? head '$list-literal-parse))
+     (parse-surf-list-literal args loc)]
+
     ;; $typed-hole sentinel: ?? or ??name → surf-typed-hole
     [(and (symbol? head) (eq? head '$typed-hole))
      (define hole-name (if (pair? args) (stx->datum (car args)) #f))
@@ -6621,6 +6626,20 @@
   (if (prologos-error? parsed-elems)
       parsed-elems
       (surf-set-literal parsed-elems loc)))
+
+;; CIU T6 F1a-col-2: '[…] literal (no tail) → surf-list-literal (all-at-once typing).
+;; Empty '[] stays the plain nil value (parity with the legacy rewrite).
+(define (parse-surf-list-literal args loc)
+  (if (null? args)
+      (surf-var 'nil loc)
+      (let loop ([remaining args] [acc '()])
+        (cond
+          [(null? remaining) (surf-list-literal (reverse acc) loc)]
+          [else
+           (define parsed (parse-datum (car remaining)))
+           (if (prologos-error? parsed)
+               parsed
+               (loop (cdr remaining) (cons parsed acc)))]))))
 
 (define (parse-pvec-literal args loc)
   (define parsed-elems

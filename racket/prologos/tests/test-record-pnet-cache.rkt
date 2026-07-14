@@ -114,3 +114,11 @@
                (format "run 2 had errors: ~a" run2))
   ;; identical observable behavior across the cache boundary
   (check-equal? run2 run1))
+
+;; ---- Cleanup: remove our TOP-LEVEL cache file. The suite runner's pregen
+;; heuristic counts top-level *.pnet files to decide whether the prelude cache
+;; needs regenerating (tools/run-affected-tests.rkt); a leftover canary file
+;; makes it skip regeneration forever, starving batch workers of fresh prelude
+;; caches (observed 2026-07-14: 10-worker dead-at-30s startup).
+(when (file-exists? cache-path) (delete-file cache-path))
+(delete-directory/files temp-lib-dir #:must-exist? #f)

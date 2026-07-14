@@ -1398,6 +1398,19 @@
          [((tu _ u1) (tu _ u2))
           (tu (tu-type r1) (add-usage u1 u2))]
          [(_ _) (tu-error)]))]
+    ;; CIU T6 F1a-col-2: list-literal twin — same delegation; usage from elems
+    ;; (the chain re-elaborates the same source elements; counting BOTH would
+    ;; double-count usage, so the chain contributes none).
+    [(expr-list-literal elems chain)
+     (let ([result-type (infer ctx e)])
+       (if (expr-error? result-type)
+           (tu-error)
+           (let loop ([es elems] [u (zero-usage n)])
+             (if (null? es)
+                 (tu result-type u)
+                 (match (inferQ ctx (car es))
+                   [(tu _ ue) (loop (cdr es) (add-usage u ue))]
+                   [_ (tu-error)])))))]
     ;; CIU T6 F1a-col: literal-extent node — type delegates to infer (the
     ;; homogeneity/tuple decision lives there once); usage sums the elements.
     [(expr-pvec-literal elems)
@@ -2303,6 +2316,22 @@
          [((bu #t u1) (bu #t u2))
           (bu #t (add-usage u1 u2))]
          [(_ _) (bu #f (zero-usage n))]))]
+    ;; CIU T6 F1a-col-2: list literal vs (List A) — each element against A in
+    ;; CHECK mode. Load-bearing: operator values / sections (int+, [_ * 2]) only
+    ;; elaborate with an expected type (issue-#76 class); the inferQ fallback
+    ;; would run them in INFER mode and fail (test-prim-op-firstclass).
+    [((expr-list-literal elems _) expected)
+     #:when (match (whnf expected)
+              [(expr-app f _) (equal? f (list-type-fvar))]
+              [_ #f])
+     (match (whnf expected)
+       [(expr-app _ a)
+        (let loop ([es elems] [u (zero-usage n)])
+          (if (null? es)
+              (bu #t u)
+              (match (checkQ ctx (car es) a)
+                [(bu #t ue) (loop (cdr es) (add-usage u ue))]
+                [_ (bu #f (zero-usage n))])))])]
     ;; CIU T6 F1a-col: literal vs (PVec A) — each element against A (C2 mirror)
     [((expr-pvec-literal elems) (expr-PVec a))
      (let loop ([es elems] [u (zero-usage n)])

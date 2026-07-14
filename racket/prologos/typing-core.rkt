@@ -50,6 +50,7 @@
          schema-lookup-field
          record-<:-map?
          record-<:-pvec?         ;; CIU T6 F1a-col: Tuple→PVec α (meta-aware)
+         record-<:-elem?         ;; CIU T6 F1a-col-2: shared elem-side α core (PVec/List)
          record-value-union      ;; CIU T6 F1 (s3): ⋃fields uniform view (qtt mirrors consume it)
          lookup-schema-by-name
          ;; Selection type helpers
@@ -431,7 +432,9 @@
 ;; (meta-aware sibling of subtype-predicate's pure record-subtypes-pvec?).
 ;; If A is an unsolved meta, solve A := ⋃positions (uniform-bound view);
 ;; else every position type must fit A. 'keyword rows never α to PVec.
-(define (record-<:-pvec? ctx rec at)
+;; CIU T6 F1a-col-2: the shared elem-side α core — does a 'nat row satisfy a
+;; uniform container with element type `at`? (PVec and List share this.)
+(define (record-<:-elem? ctx rec at)
   (and (eq? (expr-Record-key-domain rec) 'nat)
        (let ([at* (whnf at)])
          (cond
@@ -447,6 +450,9 @@
                                    (or (subtype? ft br) (unify-ok? (unify ctx ft br))))
                                  branches)))
                       (expr-Record-fields rec)))]))))
+
+(define (record-<:-pvec? ctx rec at)
+  (record-<:-elem? ctx rec at))
 
 ;; CIU T6 F1 (s3): a record component's contribution to a union-typed map access.
 ;;   keyword-literal key: PURE lookup — present → the field type; absent → #f (Q5: filter,
@@ -1869,6 +1875,27 @@
     [(expr-rrb _) (expr-error)]   ;; rrb needs checking context
     [(expr-pvec-empty a)
      (if (is-type ctx a) (expr-PVec a) (expr-error))]
+    ;; CIU T6 F1a-col-2 (D15): list-literal twin — all-at-once. Homogeneous →
+    ;; delegate to the CHAIN's infer (today's cons-polymorphism typing, exact
+    ;; parity → (List T), and it solves the chain's implicit metas properly);
+    ;; heterogeneous → a closed 'nat row (the chain's erased implicit metas
+    ;; default at zonk-final; runtime reads only the chain).
+    [(expr-list-literal elems chain)
+     (let ([tys (for/list ([el (in-list elems)]) (whnf (infer ctx el)))])
+       (cond
+         [(ormap expr-error? tys) (expr-error)]
+         [(with-speculative-rollback
+            (lambda ()
+              (for/and ([ti (in-list (cdr tys))])
+                (unify-ok? (unify ctx (car tys) ti))))
+            values
+            "list-literal-homogeneity")
+          (infer ctx chain)]
+         [else
+          (make-record 'nat
+                       (for/list ([t (in-list tys)] [i (in-naturals)])
+                         (cons i (record-field t 'present)))
+                       'closed)]))]
     ;; CIU T6 F1a-col (D15): literal-extent typing, ALL-AT-ONCE. Homogeneous
     ;; (element types unify — rollback-probed; success commits the solves) →
     ;; (PVec T) exactly as the old meta-seeded chain; heterogeneous → a closed
@@ -2718,6 +2745,10 @@
     ;; (the union check arm handles <T1|T2> annotations; preserves the C2 behavior).
     [((expr-pvec-literal elems) (expr-PVec a))
      (for/and ([el (in-list elems)]) (check ctx el a))]
+    ;; CIU T6 F1a-col-2: list literal vs (List A) — each element against A.
+    [((expr-list-literal elems _) (expr-app f a))
+     #:when (equal? f (list-type-fvar))
+     (for/and ([el (in-list elems)]) (check ctx el a))]
     [((expr-pvec-push v x) (expr-PVec a))
      (and (check ctx v (expr-PVec a))
           (check ctx x a))]
@@ -2955,6 +2986,11 @@
                   ;; (the Tuple→PVec α; a meta A solves to ⋃positions).
                   [((? expr-PVec? pt) (? expr-Record? rec))
                    (record-<:-pvec? ctx rec (expr-PVec-elem-type pt))]
+                  ;; CIU T6 F1a-col-2: a 'nat row satisfies a (List A) annotation
+                  ;; (same α, List-shaped container).
+                  [((expr-app f a) (? expr-Record? rec))
+                   #:when (equal? f (list-type-fvar))
+                   (record-<:-elem? ctx rec a)]
                   ;; Phase 3e: within-family subtyping
                   [(t-w t1-w) (subtype? t1-w t-w)]))))]))
 

@@ -292,6 +292,8 @@
     [(expr-pvec-empty a) (expr-pvec-empty (shift delta cutoff a))]
     [(expr-pvec-push v x) (expr-pvec-push (shift delta cutoff v) (shift delta cutoff x))]
     [(expr-pvec-literal elems) (expr-pvec-literal (map (lambda (e) (shift delta cutoff e)) elems))]
+    [(expr-list-literal elems chain)
+     (expr-list-literal (map (lambda (e) (shift delta cutoff e)) elems) (shift delta cutoff chain))]
     [(expr-pvec-nth v i) (expr-pvec-nth (shift delta cutoff v) (shift delta cutoff i))]
     [(expr-pvec-update v i x) (expr-pvec-update (shift delta cutoff v) (shift delta cutoff i) (shift delta cutoff x))]
     [(expr-pvec-length v) (expr-pvec-length (shift delta cutoff v))]
@@ -767,6 +769,8 @@
     [(expr-pvec-empty a) (expr-pvec-empty (subst k s a))]
     [(expr-pvec-push v x) (expr-pvec-push (subst k s v) (subst k s x))]
     [(expr-pvec-literal elems) (expr-pvec-literal (map (lambda (e) (subst k s e)) elems))]
+    [(expr-list-literal elems chain)
+     (expr-list-literal (map (lambda (e) (subst k s e)) elems) (subst k s chain))]
     [(expr-pvec-nth v i) (expr-pvec-nth (subst k s v) (subst k s i))]
     [(expr-pvec-update v i x) (expr-pvec-update (subst k s v) (subst k s i) (subst k s x))]
     [(expr-pvec-length v) (expr-pvec-length (subst k s v))]

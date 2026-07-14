@@ -1602,16 +1602,22 @@
     [else (surf-app (car parsed) (cdr parsed) loc)]))
 
 (define (parse-list-literal-tree args loc)
-  ;; '[1 2 3] → (cons 1 (cons 2 (cons 3 nil)))
-  (let loop ([remaining args])
-    (if (null? remaining)
-        (surf-nil loc)
-        (let ([elem (parse-form-tree (car remaining))])
-          (if (prologos-error? elem) elem
-              (let ([rest-list (loop (cdr remaining))])
-                (if (prologos-error? rest-list) rest-list
-                    (surf-app (surf-var 'cons loc)
-                              (list elem rest-list) loc))))))))
+  ;; CIU T6 F1a-col-2 (D15): non-empty '[…] keeps its literal-extent identity
+  ;; (surf-list-literal) so typing can see all elements at once — homogeneous
+  ;; literals still type (List T); heterogeneous ones mint 'nat rows. Empty
+  ;; '[] stays surf-nil. (The sexp-mode $list-literal sentinel + varargs
+  ;; builders keep the legacy cons-chain lowering: sexp is internal IR, and
+  ;; varargs collect into DECLARED (List A) params where a row would
+  ;; immediately α back.)
+  (if (null? args)
+      (surf-nil loc)
+      (let loop ([remaining args] [acc '()])
+        (if (null? remaining)
+            (surf-list-literal (reverse acc) loc)
+            (let ([elem (parse-form-tree (car remaining))])
+              (if (prologos-error? elem)
+                  elem
+                  (loop (cdr remaining) (cons elem acc))))))))
 
 (define (parse-quote-tree args loc)
   (parse-error-result loc "quote: not yet implemented"))

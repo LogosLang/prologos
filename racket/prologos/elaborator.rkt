@@ -2450,6 +2450,25 @@
        (cond [(prologos-error? ea) ea]
              [else (expr-PVec ea)]))]
 
+    ;; CIU T6 F1a-col-2 (D15): '[…] (tree route, non-empty) → literal-extent node.
+    ;; The elems drive all-at-once typing; the CHAIN (cons/nil surf chain, with
+    ;; implicit args inserted by its own elaboration) is the runtime value.
+    ;; Elements elaborate twice (once standalone, once inside the chain) — both
+    ;; from the same source; typing reads elems, reduction reads the chain.
+    [(surf-list-literal elems loc)
+     (let loop ([remaining elems] [acc '()])
+       (cond
+         [(null? remaining)
+          (let ([chain (elaborate (make-varargs-list-literal elems loc) env depth)])
+            (if (prologos-error? chain)
+                chain
+                (expr-list-literal (reverse acc) chain)))]
+         [else
+          (define ex (elaborate (car remaining) env depth))
+          (cond
+            [(prologos-error? ex) ex]
+            [else (loop (cdr remaining) (cons ex acc))])]))]
+
     [(surf-pvec-literal elems loc)
      ;; CIU T6 F1a-col (D15): non-empty @[…] → the literal-extent node (typed
      ;; all-at-once: homogeneous → PVec T as before; heterogeneous → 'nat row).

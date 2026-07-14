@@ -100,13 +100,15 @@
   (check-equal? (preparse-expand-form '($list-literal))
                 'nil))
 
-(test-case "expand: ($list-literal 1 2 3) -> nested cons"
+(test-case "expand: ($list-literal 1 2 3) -> parser handoff (CIU T6 F1a-col-2)"
+  ;; No-tail literals keep their literal-extent identity: preparse hands them
+  ;; to the parser ($list-literal-parse -> surf-list-literal, all-at-once typing).
   (check-equal? (preparse-expand-form '($list-literal 1 2 3))
-                '(cons 1 (cons 2 (cons 3 nil)))))
+                '($list-literal-parse 1 2 3)))
 
-(test-case "expand: ($list-literal x) -> (cons x nil)"
+(test-case "expand: ($list-literal x) -> parser handoff (CIU T6 F1a-col-2)"
   (check-equal? (preparse-expand-form '($list-literal x))
-                '(cons x nil)))
+                '($list-literal-parse x)))
 
 (test-case "expand: ($list-literal 1 ($list-tail ys)) -> cons with tail"
   (check-equal? (preparse-expand-form '($list-literal 1 ($list-tail ys)))
@@ -124,7 +126,7 @@
   ;; When a $list-literal appears nested in another form,
   ;; preparse-expand-form should expand it recursively
   (define result (preparse-expand-form '(eval ($list-literal 1 2))))
-  (check-equal? result '(eval (cons 1 (cons 2 nil)))))
+  (check-equal? result '(eval ($list-literal-parse 1 2))))
 
 ;; ================================================================
 ;; SEXP READTABLE TESTS

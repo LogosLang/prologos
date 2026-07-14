@@ -121,12 +121,43 @@
 ;; B3: genuine mismatches stay CLEAN ERRORS (not a crash, not a wrong success)
 ;; ========================================
 
-(test-case "B3: same-label DIFFERING concrete types is a clean type error"
-  ;; {:a Int} vs {:a String} — the per-field goal fails (Int ≠ String). Correct.
-  (check-true (errored? "\nns t\n'[{:a 1} {:a \"x\"}]\n")))
+;; ========================================
+;; F1a-col-2 (D15): heterogeneous '[…] literals are OBSERVED as 'nat rows
+;; ========================================
+;; These two flipped from clean-error pins (pre-col-2) to row successes: under
+;; observational literal typing the elements are never pairwise-unified — the
+;; literal's type is what was observed, per position.
 
-(test-case "B3: DIFFERENT-shape records are a clean error (F1a-col union-widen deferred)"
-  ;; {:a Int} vs {:b Int} — no classify case (different label set) → 'conv → clean fail.
-  ;; This is the NAMED regression (escape hatch: annotate `: (List <r1|r2>)`); F1a-col
-  ;; turns it into a feature via union-widening. It must be a clean error, not a crash.
-  (check-true (errored? "\nns t\n'[{:a 1} {:b 2}]\n")))
+(test-case "col-2: same-label DIFFERING types → observed row (was: clean error)"
+  (define r (result-str "\nns t\n'[{:a 1} {:a \"x\"}]\n"))
+  (check-true (string-contains? r "⟨") (format "expected a row, got: ~a" r))
+  (check-true (string-contains? r "{:a Int}") (format "~a" r))
+  (check-true (string-contains? r "{:a String}") (format "~a" r)))
+
+(test-case "col-2: DIFFERENT-shape records → observed row (the named regression CLOSES)"
+  (define r (result-str "\nns t\ndef xs := '[{:a 1} {:b 2}]\nxs[0].a\n"))
+  (check-true (string-contains? r "1 : Int") (format "row projection failed: ~a" r)))
+
+(test-case "col-2: scalar heterogeneous list → row; homogeneous list unchanged"
+  (define r1 (result-str "\nns t\n'[1 \"a\"]\n"))
+  (check-true (string-contains? r1 "⟨Int String⟩") (format "~a" r1))
+  (define r2 (result-str "\nns t\n'[1 2 3]\n"))
+  (check-true (string-contains? r2 "List Int") (format "~a" r2)))
+
+(test-case "col-2: the Tuple→List α — row-list satisfies a (List (Map K V)) spec"
+  (define r (result-str
+             (string-append
+              "\nns t\n"
+              "spec idl (List (Map Keyword Int)) -> (List (Map Keyword Int))\n"
+              "defn idl [ll] ll\n"
+              "idl '[{:a 1} {:b 2}]\n")))
+  (check-true (string-contains? r "List") (format "~a" r))
+  (check-true (string-contains? r "Map Keyword Int") (format "~a" r)))
+
+(test-case "col-2: generic fold over a ROW-typed list — type sound (value-stall = known v1 limit)"
+  ;; length over a row-list types Nat; the VALUE may print as a stuck term when
+  ;; implicit/dict resolution can't see a row instance head (S10 posture at the
+  ;; list level; CIU T3/T5 turf). Escape hatch: pass through the α (a (List (Map …))
+  ;; spec) first. Pin only the TYPE.
+  (define r (result-str "\nns t\ndef xs := '[{:a 1} {:b 2}]\nlength xs\n"))
+  (check-true (string-contains? r ": Nat") (format "~a" r)))

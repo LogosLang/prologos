@@ -497,6 +497,8 @@
     [(expr-pvec-push v x) (format "[pvec-push ~a ~a]" (pp-expr v names) (pp-expr x names))]
     [(expr-pvec-literal elems)
      (format "@[~a]" (string-join (map (lambda (e) (pp-expr e names)) elems) " "))]
+    [(expr-list-literal elems _)
+     (format "'[~a]" (string-join (map (lambda (e) (pp-expr e names)) elems) " "))]
     [(expr-pvec-fold f init vec) (format "[pvec-fold ~a ~a ~a]" (pp-expr f names) (pp-expr init names) (pp-expr vec names))]
     [(expr-pvec-map f vec) (format "[pvec-map ~a ~a]" (pp-expr f names) (pp-expr vec names))]
     [(expr-pvec-filter pred vec) (format "[pvec-filter ~a ~a]" (pp-expr pred names) (pp-expr vec names))]
@@ -1163,6 +1165,7 @@
     [(expr-pvec-empty a) (uses-bvar0? a)]
     [(expr-pvec-push v x) (or (uses-bvar0? v) (uses-bvar0? x))]
     [(expr-pvec-literal elems) (ormap uses-bvar0? elems)]
+    [(expr-list-literal elems chain) (or (ormap uses-bvar0? elems) (uses-bvar0? chain))]
     [(expr-pvec-fold f init vec) (or (uses-bvar0? f) (uses-bvar0? init) (uses-bvar0? vec))]
     [(expr-pvec-map f vec) (or (uses-bvar0? f) (uses-bvar0? vec))]
     [(expr-pvec-filter pred vec) (or (uses-bvar0? pred) (uses-bvar0? vec))]

@@ -4720,9 +4720,15 @@
            (values (drop-right elems 1) (cadr last-elem))
            ;; No tail: terminate with nil
            (values elems 'nil)))
-     (foldr (lambda (elem rest) `(cons ,elem ,rest))
-            tail
-            proper-elems)]))
+     ;; CIU T6 F1a-col-2 (D15): NO-TAIL literals keep their literal-extent
+     ;; identity — hand off to the parser ($list-literal-parse case, mirroring
+     ;; $vec-literal) which builds surf-list-literal for all-at-once typing.
+     ;; TAIL-syntax literals ('[a b | rest]) keep the legacy cons rewrite.
+     (if (eq? tail 'nil)
+         (cons '$list-literal-parse proper-elems)
+         (foldr (lambda (elem rest) `(cons ,elem ,rest))
+                tail
+                proper-elems))]))
 
 ;; lseq literal: ~[1 2 3] → nested lseq-cell with thunks
 ;; The WS reader produces ($lseq-literal e1 e2 ...).

@@ -2561,6 +2561,8 @@
     [(expr-pvec-literal elems)
      (whnf (for/fold ([acc (expr-pvec-empty (expr-hole))]) ([el (in-list elems)])
              (expr-pvec-push acc el)))]
+    ;; CIU T6 F1a-col-2: the list literal's runtime IS its elaborated cons chain.
+    [(expr-list-literal _ chain) (whnf chain)]
     [(expr-pvec-push v x)
      (let ([v* (whnf v)])
        (if (equal? v* v) e (whnf (expr-pvec-push v* x))))]
@@ -3677,6 +3679,7 @@
     [(expr-pvec-empty a) (expr-pvec-empty (nf a))]
     [(expr-pvec-push v x) (expr-pvec-push (nf v) (nf x))]
     [(expr-pvec-literal elems) (expr-pvec-literal (map nf elems))]
+    [(expr-list-literal elems chain) (expr-list-literal (map nf elems) (nf chain))]
     [(expr-pvec-nth v i) (expr-pvec-nth (nf v) (nf i))]
     [(expr-pvec-update v i x) (expr-pvec-update (nf v) (nf i) (nf x))]
     [(expr-pvec-length v) (expr-pvec-length (nf v))]

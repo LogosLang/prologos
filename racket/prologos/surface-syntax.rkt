@@ -264,7 +264,7 @@
  (struct-out surf-set-diff)
  (struct-out surf-set-to-list)
  ;; Persistent Vector (PVec)
- (struct-out surf-pvec-type) (struct-out surf-pvec-literal)
+ (struct-out surf-pvec-type) (struct-out surf-pvec-literal) (struct-out surf-list-literal)
  (struct-out surf-pvec-empty) (struct-out surf-pvec-push)
  (struct-out surf-pvec-nth) (struct-out surf-pvec-update)
  (struct-out surf-pvec-length) (struct-out surf-pvec-pop)
@@ -914,6 +914,8 @@
 ;; Persistent Vector (PVec)
 ;; ========================================
 (struct surf-pvec-type (elem srcloc) #:transparent)          ; PVec A type
+;; CIU T6 F1a-col-2 (D15): list literal with literal-extent identity ('[…], tree route)
+(struct surf-list-literal (elems srcloc) #:transparent)
 (struct surf-pvec-literal (elems srcloc) #:transparent)      ; @[e1 e2 ...] literal — elems is a list of parsed surface exprs
 (struct surf-pvec-empty (elem-type srcloc) #:transparent)    ; (pvec-empty A)
 (struct surf-pvec-push (v x srcloc) #:transparent)           ; (pvec-push v x)
