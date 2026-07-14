@@ -607,20 +607,51 @@
          (printf "Repaired in ~as\n" (real->decimal-string (/ repair-ms 1000.0) 1))])))
 
   ;; .pnet cache: set env var for batch workers, check/generate cache
+  ;;
+  ;; Readiness heuristic (hardened 2026-07-14; incident in commit c6c3ef3a
+  ;; "Test infra fix"): the old check counted TOP-LEVEL *.pnet files, but the
+  ;; real prelude caches live under the prologos/ SUBDIRECTORY — one stray
+  ;; top-level .pnet (a test artifact) made the runner skip regeneration
+  ;; forever while the caches drifted from the compiler, until the read-only
+  ;; batch workers each re-elaborated the full prelude and starved at the
+  ;; 30s startup watchdog. "Ready" now means ALL of:
+  ;;   (a) prelude module caches exist: data/cache/pnet/prologos/**/*.pnet
+  ;;       (recursive — strays elsewhere neither satisfy nor poison this)
+  ;;   (b) the generation stamp (.pnet-stamp) exists — pnet-compile.rkt
+  ;;       writes it only AFTER a complete generation, so an interrupted
+  ;;       generation cannot present as ready
+  ;;   (c) the stamp is not older than driver_rkt.zo — mirrors
+  ;;       pnet-serialize.rkt's infrastructure-stale?, so the runner skips
+  ;;       exactly when workers will actually load from cache
   (cond
     [(do-pnet-cache?)
      (putenv "PROLOGOS_PNET_CACHE" "1")
-     ;; Check if .pnet files already exist (skip expensive generation)
      (let* ([pnet-dir (build-path project-root "data" "cache" "pnet")]
-            [pnet-count
-             (if (directory-exists? pnet-dir)
-                 (length (filter (lambda (p) (regexp-match? #rx"\\.pnet$" (path->string p)))
-                                 (directory-list pnet-dir)))
-                 0)])
-       (if (> pnet-count 0)
-           (printf ".pnet cache: ~a files ready\n" pnet-count)
+            [prelude-cache-dir (build-path pnet-dir "prologos")]
+            [stamp-path (build-path pnet-dir ".pnet-stamp")]
+            [driver-zo (build-path project-root "compiled" "driver_rkt.zo")]
+            [count-prelude-pnets
+             (lambda ()
+               (if (directory-exists? prelude-cache-dir)
+                   (for/sum ([f (in-directory prelude-cache-dir)]
+                             #:when (regexp-match? #rx"\\.pnet$" (path->string f)))
+                     1)
+                   0))]
+            [prelude-pnet-count (count-prelude-pnets)]
+            [cache-ready?
+             (and (> prelude-pnet-count 0)
+                  (file-exists? stamp-path)
+                  (or (not (file-exists? driver-zo))
+                      (>= (file-or-directory-modify-seconds stamp-path)
+                          (file-or-directory-modify-seconds driver-zo))))])
+       (if cache-ready?
+           (printf ".pnet cache: ~a prelude module caches ready\n" prelude-pnet-count)
            (let ([pnet-t0 (current-inexact-monotonic-milliseconds)])
-             (printf "Generating .pnet cache (first run) ...\n")
+             (printf "Generating .pnet cache~a ...\n"
+                     (cond
+                       [(zero? prelude-pnet-count) " (no prelude caches)"]
+                       [(not (file-exists? stamp-path)) " (no generation stamp)"]
+                       [else " (stale vs driver_rkt.zo)"]))
              (let ([dev-null-out (open-output-file "/dev/null" #:exists 'append)]
                    [dev-null-err (open-output-file "/dev/null" #:exists 'append)])
                (let-values ([(gen-proc _out _in _err)
@@ -631,8 +662,11 @@
                  (close-output-port dev-null-out)
                  (close-output-port dev-null-err)))
              (let ([pnet-ms (- (current-inexact-monotonic-milliseconds) pnet-t0)])
-               (printf ".pnet cache generated in ~as\n"
-                       (real->decimal-string (/ pnet-ms 1000.0) 1))))))]
+               (printf ".pnet cache: ~a prelude module caches generated in ~as\n"
+                       (count-prelude-pnets)
+                       (real->decimal-string (/ pnet-ms 1000.0) 1)))
+             (unless (file-exists? stamp-path)
+               (eprintf "⚠ .pnet generation left no stamp (generation may have failed); workers will re-elaborate the prelude from source\n")))))]
     [else
      (putenv "PROLOGOS_PNET_CACHE" "0")])
 
