@@ -95,6 +95,20 @@
   (check-true (string-contains? r "Int") (format "expected Int solved, got: ~a" r)))
 
 ;; ========================================
+;; col-1: literal-extent homogeneity is UNIFICATION-based, not equal?-based
+;; ========================================
+
+(test-case "col-1: @[none [some 1]] collapses to PVec (Option Int)"
+  ;; The literal-extent node unifies element types (rollback-probed; success
+  ;; commits), so meta-bearing homogeneous literals collapse to PVec exactly as
+  ;; the old meta-seeded chain did. An equal?-based homogeneity test would mint
+  ;; a spurious tuple here ((Option ?m) is not equal? to (Option Int)).
+  (define r (result-str "\nns t\n@[none [some 1]]\n"))
+  (check-true (string-contains? r "PVec") (format "expected PVec collapse, got: ~a" r))
+  (check-true (string-contains? r "Option") (format "~a" r))
+  (check-true (string-contains? r "Int") (format "~a" r)))
+
+;; ========================================
 ;; B3: same-shape-identical still works (was already ok via the equal? fast-path)
 ;; ========================================
 

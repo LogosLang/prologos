@@ -167,3 +167,48 @@ map-assoc q kk 5
 map-assoc q "strkey" 5
 ;;38=>~ ERROR
 ;;   ← B4: non-Keyword dynamic key stays a type error (today's rejection preserved)
+
+;; --- F1a-col-1 (D15): tuples — heterogeneous @[…] mints 'nat rows ------------
+
+@[1 2 3]
+;;39=> @[1 2 3] : [PVec Int]
+;;   ← homogeneous literals UNCHANGED (the D15 collapse; behavior-preservation pin)
+
+@[1 "a" true]
+;;40=> @[1 "a" true] : ⟨Int String Bool⟩
+;;   ← tuple-by-default (Q_D): heterogeneous fixed literal mints a closed 'nat row
+
+def t2 := @[1 "a"]
+;;41=>~ t2 : ⟨Int String⟩
+
+t2[0]
+;;42=> 1 : Int
+;;   ← positional projection; bare Int index accepted (Q_col-C)
+
+t2[1]
+;;43=> "a" : String
+
+def tr := @[{:a 1} {:b 2}]
+;;44=>~ tr : ⟨{:a Int} {:b Int}⟩
+;;   ← the owner-scratch shape: tuple of different-shape records
+
+tr[1].b
+;;45=> 2 : Int
+;;   ← chained positional-then-keyword projection (v[1].b; v[1.b] awaits the
+;;     Path Selection design conversation)
+
+spec idp (PVec <Int | String>) -> (PVec <Int | String>)
+defn idp [pp] pp
+;;46=>~ idp
+
+idp t2
+;;47=> @[1 "a"] : [PVec Int | String]
+;;   ← the Tuple→PVec α: an inferred tuple flows where a uniform PVec is expected
+
+def vv : (PVec <Int | String>) := @[1 "a"]
+;;48=>~ PVec Int | String
+;;   ← C2 pin: annotated heterogeneous literal (each element vs the union)
+
+t2[5]
+;;49=>~ ERROR
+;;   ← out-of-bounds positional projection on a closed tuple = type error

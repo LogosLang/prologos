@@ -2556,6 +2556,11 @@
          (expr-champ (tchamp-freeze t))))]
 
     ;; ---- PVec stuck-term reduction ----
+    ;; CIU T6 F1a-col: literal-extent node lowers to the push chain (runtime identical).
+    ;; The seed's elem-type slot is reduction-ignored (see the pvec-empty arm above).
+    [(expr-pvec-literal elems)
+     (whnf (for/fold ([acc (expr-pvec-empty (expr-hole))]) ([el (in-list elems)])
+             (expr-pvec-push acc el)))]
     [(expr-pvec-push v x)
      (let ([v* (whnf v)])
        (if (equal? v* v) e (whnf (expr-pvec-push v* x))))]
@@ -3671,6 +3676,7 @@
      (expr-rrb (rrb-from-list (map nf (rrb-to-list r))))]
     [(expr-pvec-empty a) (expr-pvec-empty (nf a))]
     [(expr-pvec-push v x) (expr-pvec-push (nf v) (nf x))]
+    [(expr-pvec-literal elems) (expr-pvec-literal (map nf elems))]
     [(expr-pvec-nth v i) (expr-pvec-nth (nf v) (nf i))]
     [(expr-pvec-update v i x) (expr-pvec-update (nf v) (nf i) (nf x))]
     [(expr-pvec-length v) (expr-pvec-length (nf v))]

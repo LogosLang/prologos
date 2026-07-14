@@ -2451,19 +2451,21 @@
              [else (expr-PVec ea)]))]
 
     [(surf-pvec-literal elems loc)
-     ;; Desugar @[e1 e2 e3] → pvec-push(pvec-push(pvec-push(pvec-empty(meta), e1), e2), e3)
-     (let ([am (fresh-meta ctx-empty (expr-hole)
-                 (meta-source-info loc 'pvec-elem-type "element type of PVec literal" #f (env->name-stack env)))])
-       (let loop ([remaining elems]
-                  [result (expr-pvec-empty am)])
-         (cond
-           [(null? remaining) result]
-           [else
-            (define ex (elaborate (car remaining) env depth))
-            (cond
-              [(prologos-error? ex) ex]
-              [else (loop (cdr remaining)
-                          (expr-pvec-push result ex))])])))]
+     ;; CIU T6 F1a-col (D15): non-empty @[…] → the literal-extent node (typed
+     ;; all-at-once: homogeneous → PVec T as before; heterogeneous → 'nat row).
+     ;; Empty @[] keeps the legacy meta seed (the {}-stays-legacy analog).
+     (if (null? elems)
+         (expr-pvec-empty
+          (fresh-meta ctx-empty (expr-hole)
+            (meta-source-info loc 'pvec-elem-type "element type of PVec literal" #f (env->name-stack env))))
+         (let loop ([remaining elems] [acc '()])
+           (cond
+             [(null? remaining) (expr-pvec-literal (reverse acc))]
+             [else
+              (define ex (elaborate (car remaining) env depth))
+              (cond
+                [(prologos-error? ex) ex]
+                [else (loop (cdr remaining) (cons ex acc))])])))]
 
     [(surf-pvec-empty a loc)
      (let ([ea (elaborate a env depth)])

@@ -49,6 +49,7 @@
          schema-field-type->expr
          schema-lookup-field
          record-<:-map?
+         record-<:-pvec?         ;; CIU T6 F1a-col: Tuple→PVec α (meta-aware)
          record-value-union      ;; CIU T6 F1 (s3): ⋃fields uniform view (qtt mirrors consume it)
          lookup-schema-by-name
          ;; Selection type helpers
@@ -403,6 +404,12 @@
     [(expr-keyword kw) #:when (eq? kd 'keyword)
      (let ([fld (record-lookup-field rec kw)])
        (if fld (record-field-type fld) (expr-error)))]
+    ;; CIU T6 F1a-col: literal Nat/Int index on a 'nat row (tuple) — position lookup.
+    ;; Bare Int literals accepted (Q_col-C), mirroring expr-get's PVec Nat-or-Int gate.
+    [(or (expr-nat-val n) (expr-int n))
+     #:when (and (eq? kd 'nat) (exact-nonnegative-integer? n))
+     (let ([fld (record-lookup-field rec n)])
+       (if fld (record-field-type fld) (expr-error)))]
     [_
      (let ([fields (expr-Record-fields rec)]
            [key-ty (if (eq? kd 'keyword) (expr-Keyword) (expr-Nat))])
@@ -419,6 +426,27 @@
   (if (null? fields)
       (expr-Open)
       (build-union-type (map (lambda (f) (record-field-type (cdr f))) fields))))
+
+;; CIU T6 F1a-col: does a 'nat row (tuple) satisfy (PVec A)?  The Tuple→PVec α
+;; (meta-aware sibling of subtype-predicate's pure record-subtypes-pvec?).
+;; If A is an unsolved meta, solve A := ⋃positions (uniform-bound view);
+;; else every position type must fit A. 'keyword rows never α to PVec.
+(define (record-<:-pvec? ctx rec at)
+  (and (eq? (expr-Record-key-domain rec) 'nat)
+       (let ([at* (whnf at)])
+         (cond
+           [(expr-meta? at*)
+            (unify-ok? (unify ctx at (record-value-union rec)))]
+           [else
+            ;; A union element type accepts a position when SOME branch fits
+            ;; (subtype? first — pure — so ground positions don't stray-solve).
+            (let ([branches (if (expr-union? at*) (flatten-union at*) (list at*))])
+              (andmap (lambda (f)
+                        (let ([ft (record-field-type (cdr f))])
+                          (ormap (lambda (br)
+                                   (or (subtype? ft br) (unify-ok? (unify ctx ft br))))
+                                 branches)))
+                      (expr-Record-fields rec)))]))))
 
 ;; CIU T6 F1 (s3): a record component's contribution to a union-typed map access.
 ;;   keyword-literal key: PURE lookup — present → the field type; absent → #f (Q5: filter,
@@ -1841,6 +1869,26 @@
     [(expr-rrb _) (expr-error)]   ;; rrb needs checking context
     [(expr-pvec-empty a)
      (if (is-type ctx a) (expr-PVec a) (expr-error))]
+    ;; CIU T6 F1a-col (D15): literal-extent typing, ALL-AT-ONCE. Homogeneous
+    ;; (element types unify — rollback-probed; success commits the solves) →
+    ;; (PVec T) exactly as the old meta-seeded chain; heterogeneous → a closed
+    ;; 'nat row (tuple-by-default, Q_D). The union view is the DERIVED α only.
+    [(expr-pvec-literal elems)
+     (let ([tys (for/list ([el (in-list elems)]) (whnf (infer ctx el)))])
+       (cond
+         [(ormap expr-error? tys) (expr-error)]
+         [(with-speculative-rollback
+            (lambda ()
+              (for/and ([ti (in-list (cdr tys))])
+                (unify-ok? (unify ctx (car tys) ti))))
+            values
+            "pvec-literal-homogeneity")
+          (expr-PVec (whnf (car tys)))]
+         [else
+          (make-record 'nat
+                       (for/list ([t (in-list tys)] [i (in-naturals)])
+                         (cons i (record-field t 'present)))
+                       'closed)]))]
     [(expr-pvec-push v x)
      (let ([tv (infer ctx v)])
        (match tv
@@ -2666,6 +2714,10 @@
     [((expr-rrb _) (expr-PVec _)) #t]
     [((expr-pvec-empty a1) (expr-PVec a2))
      (unify-ok? (unify ctx a1 a2))]
+    ;; CIU T6 F1a-col: literal checked against (PVec A) — each element against A
+    ;; (the union check arm handles <T1|T2> annotations; preserves the C2 behavior).
+    [((expr-pvec-literal elems) (expr-PVec a))
+     (for/and ([el (in-list elems)]) (check ctx el a))]
     [((expr-pvec-push v x) (expr-PVec a))
      (and (check ctx v (expr-PVec a))
           (check ctx x a))]
@@ -2899,6 +2951,10 @@
                   ;; (the Galois α — replaces seeded-Open absorption, more precise).
                   [((? expr-Map? mt) (? expr-Record? rec))
                    (record-<:-map? ctx rec (expr-Map-k-type mt) (expr-Map-v-type mt))]
+                  ;; CIU T6 F1a-col: a 'nat row (tuple) satisfies a (PVec A) annotation
+                  ;; (the Tuple→PVec α; a meta A solves to ⋃positions).
+                  [((? expr-PVec? pt) (? expr-Record? rec))
+                   (record-<:-pvec? ctx rec (expr-PVec-elem-type pt))]
                   ;; Phase 3e: within-family subtyping
                   [(t-w t1-w) (subtype? t1-w t-w)]))))]))
 

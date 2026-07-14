@@ -587,6 +587,9 @@
       ;; falls through to check-subsumption's meta-solving arm at the top level.
       [(and (expr-Record? a) (expr-Map? b) (record-subtypes-map? a b)) '(ok)]
       [(and (expr-Map? a) (expr-Record? b) (record-subtypes-map? b a)) '(ok)]
+      ;; CIU T6 F1a-col: tuple→PVec α coercion (directional; always record→PVec)
+      [(and (expr-Record? a) (expr-PVec? b) (record-subtypes-pvec? a b)) '(ok)]
+      [(and (expr-PVec? a) (expr-Record? b) (record-subtypes-pvec? b a)) '(ok)]
 
       ;; CIU T6 F1a-s3 (B3): Record-vs-Record with the SAME key-domain, SAME label-set,
       ;; and SAME tail, but field TYPES that differ → decompose to per-field 'sub goals so
