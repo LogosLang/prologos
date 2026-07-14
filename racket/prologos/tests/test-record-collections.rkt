@@ -161,3 +161,43 @@
   ;; spec) first. Pin only the TYPE.
   (define r (result-str "\nns t\ndef xs := '[{:a 1} {:b 2}]\nlength xs\n"))
   (check-true (string-contains? r ": Nat") (format "~a" r)))
+
+;; ========================================
+;; F1a-col-3/col-4: pvec-from-list on row-typed lists (prelude surfaces)
+;; ========================================
+;; The '[…] row-list needs the prelude (cons/nil), so these live here rather
+;; than the :no-prelude acceptance file (which pins the from-list∘to-list
+;; ⋃ round-trip instead).
+
+(test-case "col-3: pvec-from-list KEYWORD on a row-list = row IDENTITY (exact)"
+  ;; Rows carry no container tag — the '[…] row and the @[…] row are the same
+  ;; observational type; the runtime becomes an rrb where every pvec op works.
+  (define r (result-str "\nns t\ndef xs := '[1 \"a\"]\n[pvec-from-list xs]\n"))
+  (check-true (string-contains? r "⟨Int String⟩") (format "~a" r)))
+
+(test-case "col-3: from-list∘nth composition — records survive the container hop"
+  (define r (result-str
+             "\nns t\ndef rl := '[{:a 1} {:b 2}]\n[pvec-nth [pvec-from-list rl] 1N]\n"))
+  (check-true (string-contains? r "{:b 2} : {:b Int}") (format "~a" r)))
+
+(test-case "col-4: the generic prelude wrapper α-degrades a DEF-BOUND row-list to (PVec ⋃)"
+  ;; pvec-from-list-fn : {A} (List A) -> (PVec A) — a def-bound row's TYPE meets
+  ;; (List ?A) via the Tuple→List α (A := ⋃positions), so the WRAPPER is the
+  ;; degrade path while the keyword form above is row-identity. Both sound; the
+  ;; row is forgotten here (the uniform spec has one slot to solve).
+  (define r (result-str "\nns t\ndef xs := '[1 \"a\"]\n[pvec-from-list-fn xs]\n"))
+  (check-true (string-contains? r "PVec Int | String") (format "~a" r)))
+
+(test-case "col-4: an INLINE heterogeneous literal into the uniform wrapper stays an error"
+  ;; Inline, the literal elaborates in CHECK mode against (List ?A) — each
+  ;; element checks against the ONE meta (the C2 annotated-literal behavior:
+  ;; 1 solves ?A := Int, \"a\" then fails). Route matters: def-bound = α-degrade
+  ;; (above); inline = per-element check. Pinned so the distinction is deliberate.
+  (check-true (errored? "\nns t\n[pvec-from-list-fn '[1 \"a\"]]\n")))
+
+(test-case "col-4: (List ⋃) from pvec-to-list VALUE-reduces through prelude fns"
+  ;; The S10 value-stall is pinned for ROW-typed lists only (the col-2 case
+  ;; above); the uniform (List ⋃) view reduces fine — which is why to-list is
+  ;; the escape-hatch view (col-3 to-list disposition).
+  (define r (result-str "\nns t\ndef ul := [pvec-to-list @[1 \"a\"]]\n[length ul]\n"))
+  (check-true (string-contains? r "2N : Nat") (format "~a" r)))

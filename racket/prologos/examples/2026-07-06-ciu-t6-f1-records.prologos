@@ -212,3 +212,75 @@ def vv : (PVec <Int | String>) := @[1 "a"]
 t2[5]
 ;;49=>~ ERROR
 ;;   ← out-of-bounds positional projection on a closed tuple = type error
+
+;; ============================================================
+;; F1a-col-3 — tuple-op dispositions across the pvec ops
+;; (EXACT where the position structure is static — closed tuples
+;;  have static length; the ⋃-positions uniform view where not)
+;; ============================================================
+
+def tp := @[1 "a" true]
+;;50=>~ tp : ⟨Int String Bool⟩
+
+[pvec-nth tp 1N]
+;;51=> "a" : String
+;;   ← EXACT positional projection through pvec-nth (Nat literal index)
+
+[pvec-push tp 2]
+;;52=> @[1 "a" true 2] : ⟨Int String Bool Int⟩
+;;   ← push grows the row (type-changing)
+
+[pvec-pop tp]
+;;53=> @[1 "a"] : ⟨Int String⟩
+;;   ← pop drops the LAST position (rrb-pop semantics)
+
+[pvec-concat tp tp]
+;;54=> @[1 "a" true 1 "a" true] : ⟨Int String Bool Int String Bool⟩
+;;   ← ground×ground renumbered append (M1-style; residuated Concat = F-row)
+
+[pvec-slice tp 1N 3N]
+;;55=> @["a" true] : ⟨String Bool⟩
+;;   ← literal bounds: clamped half-open sub-row, renumbered from 0
+
+[pvec-update tp 0N "x"]
+;;56=> @["x" "a" true] : ⟨String String Bool⟩
+;;   ← literal in-bounds update is a type-CHANGING per-position replace
+
+[pvec-to-list tp]
+;;57=> '[1 "a" true] : [List Bool | Int | String]
+;;   ← uniform view (List ⋃positions) — the escape-hatch view, deliberately
+;;     NOT row-identity (a row-typed cons list would grow the pinned
+;;     S10-at-list-level value-stall surface)
+
+[pvec-map [fn [x : <Int | String | Bool>] 1] tp]
+;;58=> @[1 1 1] : ⟨Int Int Int⟩
+;;   ← map is position-preserving (constant-W row; f consumes ⋃positions)
+
+[pvec-filter [fn [x : <Int | String | Bool>] true] tp]
+;;59=> @[1 "a" true] : [PVec Bool | Int | String]
+;;   ← filter degrades: the surviving position set isn't static
+
+[pvec-from-list [pvec-to-list tp]]
+;;60=> @[1 "a" true] : [PVec Bool | Int | String]
+;;   ← the round-trip is type-lossy exactly at the to-list step (by design);
+;;     from-list on a DIRECT row-typed list is row-identity (prelude test)
+
+def MyVec := (PVec Int)
+;;61=>~ MyVec
+
+def av : MyVec := @[1 2 3]
+;;62=>~ av
+
+[pvec-nth av 1N]
+;;63=> 2 : Int
+;;   ← col-3 whnf discipline: ALIASED PVec subjects flow through the pvec ops
+;;     (pre-col-3 the 11 arms matched the raw inferred type and errored)
+
+[pvec-nth tp 9N]
+;;64=>~ ERROR
+;;   ← static out-of-bounds on a closed tuple = type error (closed-row miss)
+
+[pvec-nth tp 1]
+;;65=>~ ERROR
+;;   ← pvec-* keeps the Nat-only index discipline (the pvec-* runtime is
+;;     nat-value-only; Int literal indices are v[i]/expr-get territory)
