@@ -15,6 +15,27 @@ Deferral".
 
 ---
 
+## CIU T6 F1a.2: unsolved-projection-meta freeze policy (tighten later)
+
+Owner decision 2026-07-15 (F1a.2 co-design Q4, track doc §2a D19): unknown-field
+projection on a dyn-tailed row mints a fresh meta; when it is never constrained,
+zonk-final leaves it DISPLAYED as a meta (no type-domain defaulting exists —
+`zonk.rkt` default-metas passes type metas through). Deliberately permissive for
+F1a.2; TIGHTEN LATER (candidates: default-to-error at zonk-final, or an
+annotation-derived bound once the Q_E(b) carrier change lands). Home: F1b.
+Related: the row-comparison engine REFUSES meta-V solving from dyn rows (design
+doc §12.3) — the same tightening pass should revisit that conservatism.
+
+## CIU T6: heterogeneous key-types for Records/Maps (design space, owner-flagged)
+
+Owner note 2026-07-15 (F1a.2 co-design Q1): the design space of non-keyword row
+key-types (strings, maps, arbitrary keys as first-class key-domains) is a larger
+issue deferred out of F1a.2. Forward-compatible today: `expr-Map` survives as the
+dictionary type; the carrier's key-domain slot is where a generalization lands
+(the Q_E(b) carrier change, F1b+); D17's `{}` keyword-commitment is one
+recoverable seed site. Open properly when Q_E(b)/key-domain generalization is
+scoped.
+
 ## Numerics N6d-i follow-ups: method-wrapper derive skip-set remediation
 
 Four items deferred from the auto-derive design (Numerics design doc §9d D-N6.5;
