@@ -64,7 +64,11 @@
 ;; .pnet format version
 ;; ============================================================
 
-(define PNET_VERSION 1)
+;; CIU T6 F1a.2 p1b: 1→2 in the SAME commit as the Open mint-flip — every cache
+;; regenerates Open-free, so the :579 wildcard + the 9 Open-scrutinee arms are
+;; dead code from here and no stale cache can re-inject the deleted-at-p2 tag
+;; (the expr-p*-if-nar months-latent class, pipeline.md).
+(define PNET_VERSION 2)
 
 ;; ============================================================
 ;; Serialization: struct->vector + gensym tagging + foreign-proc

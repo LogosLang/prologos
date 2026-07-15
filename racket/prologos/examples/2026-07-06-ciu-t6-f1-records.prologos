@@ -152,7 +152,9 @@ map-map-vals [fn [x : <Int | String>] 7] het
 ;;   ← f consumes ⋃fields (Int|String); labels preserved, uniform result type
 
 map-vals [map-dissoc q :a]
-;;35=> nil : [List Open]
+;;35=>~ nil : [List ?
+;;   ← F1a.2 p1b flip: dissoc-to-{} is the EMPTY closed row; its value bound is
+;;     a fresh meta now (Q6), not Open (deleted). Meta id varies → contains-pin.
 ;;   ← Q6 empty corner: ⋃∅ stays Open-ish in F1a (dyn tail replaces at F1a.2)
 
 ;; --- B4: dynamic keys — Keyword-typed degrades, non-Keyword rejects ----------
@@ -161,7 +163,9 @@ def kk := :a
 ;;36=>~ kk : Keyword
 
 map-assoc q kk 5
-;;37=> {:a 5} : [Map Keyword Open]
+;;37=> {:a 5} : {:a Int | _}
+;;   ← F1a.2 p1b flip (D16): dynamic-key extension keeps the KNOWN fields and
+;;     flips the tail to 'dyn — strictly more informative than (Map Keyword Open).
 ;;   ← dynamic Keyword key: degrade to dictionary view (Open survives F1a per D7)
 
 map-assoc q "strkey" 5
@@ -294,8 +298,9 @@ def av : MyVec := @[1 2 3]
 ;; ============================================================
 
 def sm := [map-assoc {} "str" 1]
-;;66=>~ sm
-;;   ← string-keyed assoc onto bare {} (open ?km) — D17 flips this at p1b
+;;66=>~ ERROR
+;;   ← D17 FLIPPED (p1b): bare {} is the keyword-committed empty dyn row now —
+;;     string keys need the annotation form (;;67 below, the signed escape hatch)
 
 def am : (Map String Int) := {}
 ;;67=>~ am : [Map String Int]
@@ -322,3 +327,35 @@ def bu := [pvec-nth @[1 "a" true] [pvec-length @[1N]]]
 bu
 ;;73=> "a" : Bool | Int | String
 ;;   ← bare-union-typed def via dynamic positional projection (same fix)
+
+;; ============================================================
+;; F1a.2 p1b — the dyn tail is LIVE (D16-D20; Open is no longer
+;; minted anywhere; the node itself is deleted at p2)
+;; ============================================================
+
+def dm := {}
+;;74=>~ dm : { | _}
+;;   ← D17: bare {} = the keyword-committed empty dyn row
+
+def dm2 := [map-assoc [map-assoc {} :a 1] :b "s"]
+;;75=> dm2 : {:a Int :b String | _} defined.
+;;   ← assoc chains onto {} grow EXACT rows (the D17 payoff — pre-flip these
+;;     were (Map Keyword Open) and every projection came back Open)
+
+dm2.a
+;;76=> 1 : Int
+
+[map-get dm2 :zz]
+;;77=>~ : ?
+;;   ← D19: unknown-field projection on a dyn row = fresh meta type (the value
+;;     is a runtime miss, exactly as on any dictionary); NOT a closed-row error
+
+def hm := {"a" 1 "b" "x"}
+;;78=> hm : [Map String Int | String] defined.
+;;   ← D18: heterogeneous mixed-key literal — value slot = ⋃observed (the
+;;     expr-map-literal all-at-once typing; homogeneous stays exact)
+
+def dd := [map-dissoc {:a 1 :b 2} kk]
+;;79=>~ dd : { | _}
+;;   ← D20 posture: dynamic-key removal may have deleted ANY known field —
+;;     the only sound degrade is the empty dyn row

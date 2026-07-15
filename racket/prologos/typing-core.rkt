@@ -444,12 +444,18 @@
 ;;            D19 posture (no reconciliation; speculation rolls metas back via
 ;;            the existing save/restore machinery).
 (define (record-value-bound ctx rec [src "dyn-row-values"])
-  (if (eq? (expr-Record-tail rec) 'dyn)
-      (build-union-type
-       (cons (fresh-meta ctx (expr-Type (lzero)) src)
-             (map (lambda (f) (record-field-type (cdr f)))
-                  (expr-Record-fields rec))))
-      (record-value-union rec)))
+  (cond
+    [(eq? (expr-Record-tail rec) 'dyn)
+     (build-union-type
+      (cons (fresh-meta ctx (expr-Type (lzero)) src)
+            (map (lambda (f) (record-field-type (cdr f)))
+                 (expr-Record-fields rec))))]
+    ;; CIU T6 F1a.2 p1b (Q6): the empty CLOSED row (dissoc-to-{} / slice-to-⟨⟩)
+    ;; has no values — a fresh meta, not Open (record-value-union's Open empty
+    ;; arm is DEAD after this commit; deleted with the node at p2).
+    [(null? (expr-Record-fields rec))
+     (fresh-meta ctx (expr-Type (lzero)) src)]
+    [else (record-value-union rec)]))
 
 ;; CIU T6 F1 (s3): ⋃fields — the uniform-bound view of a row's value types.
 ;; Empty row → (expr-Open) (the F1a Q6-corner placeholder, matching the s2 map-vals
@@ -474,8 +480,11 @@
            ;; CIU T6 F1a.2 p1a (D16): meta-elem solving from ⋃positions only for
            ;; CLOSED rows (dyn remainder unknown → refuse; §12.4).
            [(expr-meta? at*)
+            ;; p1b: the EMPTY closed row satisfies any elem meta WITHOUT solving
+            ;; it (Q6 mirror of record-<:-map?'s null guard — RVU on empty is dead).
             (and (eq? (expr-Record-tail rec) 'closed)
-                 (unify-ok? (unify ctx at (record-value-union rec))))]
+                 (or (null? (expr-Record-fields rec))
+                     (unify-ok? (unify ctx at (record-value-union rec)))))]
            [else
             ;; A union element type accepts a position when SOME branch fits
             ;; (subtype? first — pure — so ground positions don't stray-solve).
@@ -1582,8 +1591,15 @@
      (define tt (infer ctx target))
      (define _pt (infer ctx paths))
      (define _ft (infer ctx fn))
-     ;; update-in returns same type as target
-     tt]
+     ;; CIU T6 F1a.2 p1b (D20): only DYNAMIC paths reach this node (literal
+     ;; paths desugar at the elaborator) — a dynamic deep-update on a record
+     ;; may have changed any field, so the only sound result is the empty dyn
+     ;; row {| _} (drop all facts; S9's (Map Keyword Open) degrade is never
+     ;; minted). Non-record targets keep the type-preserving behavior.
+     (match (whnf tt)
+       [(? expr-Record? rec)
+        (make-record (expr-Record-key-domain rec) '() 'dyn)]
+       [_ tt])]
 
     ;; ---- Char type and literals ----
     [(expr-Char) (expr-Type (lzero))]
@@ -1632,8 +1648,12 @@
              (let ([vt (infer ctx v)])
                (if (expr-error? vt) (expr-error) (record-extend rec kw vt)))]
             [_
+             ;; CIU T6 F1a.2 p1b (D16): dynamic-key extension keeps the KNOWN
+             ;; fields and flips the tail to 'dyn — strictly more informative
+             ;; than the old (Map Keyword Open). The inserted value's type is
+             ;; not recorded (bounds-free tail; named cost, §12.2).
              (if (and (check ctx k (expr-Keyword)) (not (expr-error? (infer ctx v))))
-                 (expr-Map (expr-Keyword) (expr-Open))
+                 (make-record (expr-Record-key-domain rec) (expr-Record-fields rec) 'dyn)
                  (expr-error))])]
          [(expr-Map kt vt)
           (cond
@@ -1817,8 +1837,12 @@
          [(? expr-Record? rec)
           (match k
             [(expr-keyword kw) #:when (eq? (expr-Record-key-domain rec) 'keyword) (record-remove rec kw)]
-            [_ (if (and (check ctx k (expr-Keyword)) (not (expr-error? (infer ctx k))))
-                   (expr-Map (expr-Keyword) (expr-Open)) (expr-error))])]
+            [_
+             ;; CIU T6 F1a.2 p1b (D20 posture): a dynamic-key removal may have
+             ;; deleted ANY known field — keeping the fields would be unsound;
+             ;; degrade to the empty dyn row {| _} (presence marks = F1b).
+             (if (and (check ctx k (expr-Keyword)) (not (expr-error? (infer ctx k))))
+                 (make-record (expr-Record-key-domain rec) '() 'dyn) (expr-error))])]
          [(expr-Map kt vt)
           (if (check ctx k kt) (expr-Map kt vt) (expr-error))]
          ;; α-semantic: map-dissoc on Open → Open
@@ -2130,7 +2154,7 @@
          ;; Deliberately NOT row-identity: a row-typed cons list expands the pinned
          ;; S10-at-list-level value-stall surface; (List ⋃) keeps to-list the escape hatch.
          [(? closed-nat-row? rec)
-          (expr-app (list-type-fvar) (record-value-union rec))]
+          (expr-app (list-type-fvar) (record-value-bound ctx rec "tuple-to-list"))]
          [_ (expr-error)]))]
     ;; pvec-fold : (B → A → B) → B → PVec A → B
     ;; Left fold over a PVec: f takes (accumulator, element), returns accumulator.
@@ -2148,7 +2172,7 @@
          ;; the map-fold-entries s3 mirror, minus the key argument).
          [(? closed-nat-row? rec)
           (let ([expected-f (expr-Pi 'mw tb
-                              (expr-Pi 'mw (shift 1 0 (record-value-union rec))
+                              (expr-Pi 'mw (shift 1 0 (record-value-bound ctx rec "tuple-fold"))
                                        (shift 2 0 tb)))])
             (if (check ctx f expected-f)
                 tb
@@ -2165,7 +2189,7 @@
          ;; every slot type := W (per-position instantiation of a polymorphic f has no
          ;; in-tree machinery — constant-W is the honest static answer).
          [(? closed-nat-row? rec)
-          (let* ([v (record-value-union rec)]
+          (let* ([v (record-value-bound ctx rec "tuple-map")]
                  [tf (infer ctx f)]
                  [finish (lambda (w)
                            (make-record 'nat
@@ -2228,7 +2252,7 @@
          ;; static, so the result DEGRADES to (PVec ⋃positions) (the map-filter-entries
          ;; s3 dictionary-degrade mirror at the positional domain).
          [(? closed-nat-row? rec)
-          (let ([v (record-value-union rec)])
+          (let ([v (record-value-bound ctx rec "tuple-filter")])
             (if (check ctx pred (expr-Pi 'mw v (expr-Bool)))
                 (expr-PVec v)
                 (expr-error)))]
@@ -2391,7 +2415,7 @@
          ;; CIU T6 F1a-col-3 (audit-surfaced same-class gap): a tuple entering the
          ;; transient world degrades to the uniform view — transients are mutation-
          ;; indexed dictionaries; per-position tracking through mutation is not v1.
-         [(? closed-nat-row? rec) (expr-TVec (record-value-union rec))]
+         [(? closed-nat-row? rec) (expr-TVec (record-value-bound ctx rec "tuple-transient"))]
          [_ (expr-error)]))]
     ;; Generic persist: dispatch on transient type
     [(expr-persist coll)
@@ -2417,7 +2441,7 @@
        (match tv
          [(expr-PVec a) (expr-TVec a)]
          ;; CIU T6 F1a-col-3: tuple → uniform transient view (generic-transient mirror)
-         [(? closed-nat-row? rec) (expr-TVec (record-value-union rec))]
+         [(? closed-nat-row? rec) (expr-TVec (record-value-bound ctx rec "tuple-transient"))]
          [_ (expr-error)]))]
     [(expr-persist-vec t)
      (let ([tt (infer ctx t)])
@@ -3008,7 +3032,7 @@
          [(? closed-nat-row? rec)
           (and (check ctx init expected-type)
                (check ctx f (expr-Pi 'mw expected-type
-                              (expr-Pi 'mw (shift 1 0 (record-value-union rec))
+                              (expr-Pi 'mw (shift 1 0 (record-value-bound ctx rec "tuple-fold"))
                                        (shift 2 0 expected-type)))))]
          [_ #f]))]
     ;; pvec-map : check against PVec B
@@ -3019,7 +3043,7 @@
           (check ctx f (expr-Pi 'mw a (shift 1 0 b)))]
          ;; CIU T6 F1a-col-3: tuple source checked against (PVec B) — f consumes ⋃positions
          [(? closed-nat-row? rec)
-          (check ctx f (expr-Pi 'mw (record-value-union rec) (shift 1 0 b)))]
+          (check ctx f (expr-Pi 'mw (record-value-bound ctx rec "tuple-map") (shift 1 0 b)))]
          [_ #f]))]
     ;; pvec-filter : check against PVec A
     [((expr-pvec-filter pred vec) (expr-PVec a))

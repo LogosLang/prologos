@@ -1208,7 +1208,12 @@
            [r2 (inferQ ctx v)])
        (match* (r1 r2)
          [((tu _ u1) (tu _ u2))
-          (tu (expr-Map k v) (scale-usage 'm0 (add-usage u1 u2)))]  ;; type args are erased
+          ;; CIU T6 F1a.2 p1b: a Record v-slot (the record/dyn-row literal seed)
+          ;; delegates the TYPE to infer (the S4 pattern) — the seed's type IS
+          ;; the row, and checkQ-top's fallback must see it (not (Map ?km row),
+          ;; whose meta K the pure α key-gate rightly refuses).
+          (tu (if (expr-Record? v) (infer ctx e) (expr-Map k v))
+              (scale-usage 'm0 (add-usage u1 u2)))]  ;; type args are erased
          [(_ _) (tu-error)]))]
     [(expr-map-assoc m k v)
      (let ([r1 (inferQ ctx m)]
@@ -1545,7 +1550,7 @@
                  [_ (tu-error)]))]
             ;; CIU T6 F1a-col-3: fold over a tuple — uniform view (typing-core mirror)
             [(? closed-nat-row? rec)
-             (let* ([v (record-value-union rec)]
+             (let* ([v (record-value-bound ctx rec "tuple-fold")]
                     [ef (expr-Pi 'mw tb (expr-Pi 'mw (shift 1 0 v) (shift 2 0 tb)))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
@@ -1571,7 +1576,7 @@
             ;; qtt-mirror pattern).
             [(? closed-nat-row? rec)
              (let ([rf (inferQ-or-checkQ ctx f
-                         (expr-Pi 'mw (record-value-union rec) (shift 1 0 result-type)))])
+                         (expr-Pi 'mw (record-value-bound ctx rec "tuple-map") (shift 1 0 result-type)))])
                (match rf
                  [(tu _ uf) (tu result-type (add-usage uf uv))]
                  [_ (tu-error)]))]
@@ -1591,7 +1596,7 @@
             ;; CIU T6 F1a-col-3: filter on a tuple → (PVec ⋃positions) degrade
             ;; (typing-core mirror)
             [(? closed-nat-row? rec)
-             (let* ([v (record-value-union rec)]
+             (let* ([v (record-value-bound ctx rec "tuple-filter")]
                     [rp (inferQ-or-checkQ ctx pred (expr-Pi 'mw v (expr-Bool)))])
                (match rp
                  [(tu _ up) (tu (expr-PVec v) (add-usage up uv))]
@@ -1707,7 +1712,7 @@
                       [(expr-Map k v) (tu (expr-TMap k v) u)]
                       [(expr-Set a) (tu (expr-TSet a) u)]
                       ;; CIU T6 F1a-col-3: tuple → uniform transient view (typing-core mirror)
-                      [(? closed-nat-row? rec) (tu (expr-TVec (record-value-union rec)) u)]
+                      [(? closed-nat-row? rec) (tu (expr-TVec (record-value-bound ctx rec "tuple-transient")) u)]
                       [_ (tu-error)])]
          [_ (tu-error)]))]
     [(expr-persist coll)
@@ -2444,7 +2449,7 @@
             ;; CIU T6 F1a-col-3: fold over a tuple in CHECK mode — uniform view
             ;; (the issue-#76 class: checked positions must not fall to inferQ)
             [(? closed-nat-row? rec)
-             (let* ([v (record-value-union rec)]
+             (let* ([v (record-value-bound ctx rec "tuple-fold")]
                     [ef (expr-Pi 'mw expected-type
                           (expr-Pi 'mw (shift 1 0 v) (shift 2 0 expected-type)))]
                     [rf (inferQ-or-checkQ ctx f ef)])
@@ -2470,7 +2475,7 @@
             ;; ⋃positions (typing-core check-arm mirror; issue-#76 class)
             [((? closed-nat-row? rec) (expr-PVec b))
              (let ([rf (inferQ-or-checkQ ctx f
-                         (expr-Pi 'mw (record-value-union rec) (shift 1 0 b)))])
+                         (expr-Pi 'mw (record-value-bound ctx rec "tuple-map") (shift 1 0 b)))])
                (match rf
                  [(tu _ uf)
                   (bu (check ctx (expr-pvec-map f vec) expected-type)
@@ -2494,7 +2499,7 @@
             ;; CIU T6 F1a-col-3: tuple — pred consumes ⋃positions; the result check
             ;; delegates (the (PVec ⋃) degrade meets the annotation via the α)
             [(? closed-nat-row? rec)
-             (let* ([v (record-value-union rec)]
+             (let* ([v (record-value-bound ctx rec "tuple-filter")]
                     [rp (inferQ-or-checkQ ctx pred (expr-Pi 'mw v (expr-Bool)))])
                (match rp
                  [(tu _ up)

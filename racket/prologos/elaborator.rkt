@@ -2123,23 +2123,40 @@
      ;; CIU T6 F1 (s2): elaborate entries FIRST, then classify — an all-keyword-literal literal
      ;; seeds a structural RECORD (value type = a growing (expr-Record); infer projects per field);
      ;; anything else (empty {}, or any non-keyword key) keeps the legacy Open dictionary seed.
+     ;; CIU T6 F1a.2 p1b (THE mint-flip — expr-Open is no longer seeded):
+     ;;   empty {}        → the D17 keyword-committed empty DYN row riding the
+     ;;                     v-type slot (string-keyed maps use the annotation
+     ;;                     form, which stays (Map K V) — the signed escape hatch);
+     ;;   all-keyword     → the F1a-s2 closed-record seed (unchanged);
+     ;;   any non-keyword → expr-map-literal, typed ALL-AT-ONCE (D18: keys unify
+     ;;                     to K, values = ⋃observed); the chain (runtime + zonk
+     ;;                     fallback) seeds a fresh VALUE meta, not Open.
+     ;; NB: the D17 keyword commitment lives in the ROW's key-domain (the row is
+     ;; what unannotated flows observe); the seed's K slot stays a fresh META so
+     ;; the annotation escape hatch ((Map String V) := {}) can still claim it
+     ;; through the B1 empty-seed arm (which unifies ONLY the key types).
      (if (null? entries)
-         (let ([km (fresh-meta ctx-empty (expr-hole)
-                     (meta-source-info loc 'map-key-type "key type of empty map literal" #f (env->name-stack env)))])
-           (expr-map-empty km (expr-Open)))
+         (expr-map-empty (fresh-meta ctx-empty (expr-hole)
+                           (meta-source-info loc 'map-key-type "key type of empty map literal" #f (env->name-stack env)))
+                         (expr-Record 'keyword '() 'dyn))
          (let build ([remaining entries] [acc '()])
            (cond
              [(null? remaining)
               (let* ([elab (reverse acc)]
-                     [all-keyword? (andmap (lambda (p) (expr-keyword? (car p))) elab)]
-                     [seed (if all-keyword?
-                               (expr-map-empty (expr-Keyword) (expr-Record 'keyword '() 'closed))
-                               (expr-map-empty
-                                (fresh-meta ctx-empty (expr-hole)
-                                  (meta-source-info loc 'map-key-type "key type of map literal" #f (env->name-stack env)))
-                                (expr-Open)))])
-                (for/fold ([result seed]) ([p (in-list elab)])
-                  (expr-map-assoc result (car p) (cdr p))))]
+                     [all-keyword? (andmap (lambda (p) (expr-keyword? (car p))) elab)])
+                (if all-keyword?
+                    (for/fold ([result (expr-map-empty (expr-Keyword)
+                                                       (expr-Record 'keyword '() 'closed))])
+                              ([p (in-list elab)])
+                      (expr-map-assoc result (car p) (cdr p)))
+                    (let* ([km (fresh-meta ctx-empty (expr-hole)
+                                 (meta-source-info loc 'map-key-type "key type of map literal" #f (env->name-stack env)))]
+                           [vm (fresh-meta ctx-empty (expr-hole)
+                                 (meta-source-info loc 'map-val-type "value type of map literal" #f (env->name-stack env)))]
+                           [chain (for/fold ([result (expr-map-empty km vm)])
+                                            ([p (in-list elab)])
+                                    (expr-map-assoc result (car p) (cdr p)))])
+                      (expr-map-literal (map car elab) (map cdr elab) chain))))]
              [else
               (define entry (car remaining))
               (define ek (elaborate (car entry) env depth))
