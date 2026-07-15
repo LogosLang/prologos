@@ -185,7 +185,7 @@
  (struct-out expr-set-to-list)
  ;; Persistent Vector (PVec)
  (struct-out expr-PVec) (struct-out expr-rrb) (struct-out expr-pvec-empty)
- (struct-out expr-pvec-push) (struct-out expr-pvec-literal) (struct-out expr-list-literal) (struct-out expr-pvec-nth) (struct-out expr-pvec-update)
+ (struct-out expr-pvec-push) (struct-out expr-pvec-literal) (struct-out expr-list-literal) (struct-out expr-map-literal) (struct-out expr-pvec-nth) (struct-out expr-pvec-update)
  (struct-out expr-pvec-length) (struct-out expr-pvec-pop)
  (struct-out expr-pvec-concat) (struct-out expr-pvec-slice)
  (struct-out expr-pvec-to-list) (struct-out expr-pvec-from-list)
@@ -777,6 +777,11 @@
 ;; (typed all-at-once) and the elaborated cons/nil CHAIN (the runtime value —
 ;; cons/nil are prelude constructors, so the chain is built at elaboration).
 (struct expr-list-literal (elems chain) #:transparent)        ; '[e0 e1 …] (non-empty, tree route)
+;; CIU T6 F1a.2 p1b-pre (D18): mixed-key map literal, typed ALL-AT-ONCE — keys
+;; unify to K, values give the OBSERVED uniform bound ⋃vals (the D15 literal-
+;; extent mechanism at the Map domain). The chain is the legacy assoc build
+;; (runtime reads only the chain; its metas default at zonk-final).
+(struct expr-map-literal (keys vals chain) #:transparent)     ; {k v …} with ≥1 non-keyword key
 (struct expr-pvec-nth (v i) #:transparent)                    ; pvec-nth : PVec A → Nat → A
 (struct expr-pvec-update (v i x) #:transparent)               ; pvec-update : PVec A → Nat → A → PVec A
 (struct expr-pvec-length (v) #:transparent)                   ; pvec-length : PVec A → Nat
@@ -1253,7 +1258,7 @@
       (expr-set-intersect? x) (expr-set-diff? x)
       (expr-set-to-list? x)
       (expr-PVec? x) (expr-rrb? x) (expr-pvec-empty? x)
-      (expr-pvec-push? x) (expr-pvec-literal? x) (expr-list-literal? x) (expr-pvec-nth? x) (expr-pvec-update? x)
+      (expr-pvec-push? x) (expr-pvec-literal? x) (expr-list-literal? x) (expr-map-literal? x) (expr-pvec-nth? x) (expr-pvec-update? x)
       (expr-pvec-length? x) (expr-pvec-pop? x)
       (expr-pvec-concat? x) (expr-pvec-slice? x)
       (expr-pvec-to-list? x) (expr-pvec-from-list? x)

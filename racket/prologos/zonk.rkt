@@ -332,6 +332,8 @@
     [(expr-pvec-push v x) (expr-pvec-push (zonk v) (zonk x))]
     [(expr-pvec-literal elems) (expr-pvec-literal (map zonk elems))]
     [(expr-list-literal elems chain) (expr-list-literal (map zonk elems) (zonk chain))]
+    [(expr-map-literal keys vals chain)
+     (expr-map-literal (map zonk keys) (map zonk vals) (zonk chain))]
     [(expr-pvec-nth v i) (expr-pvec-nth (zonk v) (zonk i))]
     [(expr-pvec-update v i x) (expr-pvec-update (zonk v) (zonk i) (zonk x))]
     [(expr-pvec-length v) (expr-pvec-length (zonk v))]
@@ -810,6 +812,10 @@
     [(expr-pvec-literal elems) (expr-pvec-literal (map (lambda (e) (zonk-at-depth depth e)) elems))]
     [(expr-list-literal elems chain)
      (expr-list-literal (map (lambda (e) (zonk-at-depth depth e)) elems) (zonk-at-depth depth chain))]
+    [(expr-map-literal keys vals chain)
+     (expr-map-literal (map (lambda (e) (zonk-at-depth depth e)) keys)
+                       (map (lambda (e) (zonk-at-depth depth e)) vals)
+                       (zonk-at-depth depth chain))]
     [(expr-pvec-nth v i) (expr-pvec-nth (zonk-at-depth depth v) (zonk-at-depth depth i))]
     [(expr-pvec-update v i x) (expr-pvec-update (zonk-at-depth depth v) (zonk-at-depth depth i) (zonk-at-depth depth x))]
     [(expr-pvec-length v) (expr-pvec-length (zonk-at-depth depth v))]
@@ -1286,6 +1292,8 @@
     [(expr-pvec-push v x) (expr-pvec-push (default-metas v) (default-metas x))]
     [(expr-pvec-literal elems) (expr-pvec-literal (map default-metas elems))]
     [(expr-list-literal elems chain) (expr-list-literal (map default-metas elems) (default-metas chain))]
+    [(expr-map-literal keys vals chain)
+     (expr-map-literal (map default-metas keys) (map default-metas vals) (default-metas chain))]
     [(expr-pvec-nth v i) (expr-pvec-nth (default-metas v) (default-metas i))]
     [(expr-pvec-update v i x) (expr-pvec-update (default-metas v) (default-metas i) (default-metas x))]
     [(expr-pvec-length v) (expr-pvec-length (default-metas v))]

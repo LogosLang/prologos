@@ -1423,6 +1423,20 @@
                  (match (inferQ ctx (car es))
                    [(tu _ ue) (loop (cdr es) (add-usage u ue))]
                    [_ (tu-error)])))))]
+    ;; CIU T6 F1a.2 p1b (D18): map-literal twin — type delegates to infer
+    ;; (keys-unify + ⋃vals lives there once); usage sums keys + vals; the chain
+    ;; re-elaborates the same source entries, so it contributes NO usage
+    ;; (the col-2 double-count lesson).
+    [(expr-map-literal keys vals chain)
+     (let ([result-type (infer ctx e)])
+       (if (expr-error? result-type)
+           (tu-error)
+           (let loop ([es (append keys vals)] [u (zero-usage n)])
+             (if (null? es)
+                 (tu result-type u)
+                 (match (inferQ ctx (car es))
+                   [(tu _ ue) (loop (cdr es) (add-usage u ue))]
+                   [_ (tu-error)])))))]
     ;; CIU T6 F1a-col: literal-extent node — type delegates to infer (the
     ;; homogeneity/tuple decision lives there once); usage sums the elements.
     [(expr-pvec-literal elems)
@@ -2393,6 +2407,18 @@
               (match (checkQ ctx (car es) a)
                 [(bu #t ue) (loop (cdr es) (add-usage u ue))]
                 [_ (bu #f (zero-usage n))])))])]
+    ;; CIU T6 F1a.2 p1b (D18): map literal vs (Map K V) — keys against K, values
+    ;; against V in CHECK mode (the issue-#76 operator-value class).
+    [((expr-map-literal keys vals _) (expr-Map kt vt))
+     (let loop ([es (map (lambda (k) (cons k kt)) keys)] [u (zero-usage n)]
+                [rest (map (lambda (v) (cons v vt)) vals)])
+       (cond
+         [(and (null? es) (null? rest)) (bu #t u)]
+         [(null? es) (loop rest u '())]
+         [else
+          (match (checkQ ctx (caar es) (cdar es))
+            [(bu #t ue) (loop (cdr es) (add-usage u ue) rest)]
+            [_ (bu #f (zero-usage n))])]))]
     ;; CIU T6 F1a-col: literal vs (PVec A) — each element against A (C2 mirror)
     [((expr-pvec-literal elems) (expr-PVec a))
      (let loop ([es elems] [u (zero-usage n)])

@@ -394,6 +394,7 @@
   (auto-cache! expr-pvec-empty d) (auto-cache! expr-pvec-push d d)
   (auto-cache! expr-pvec-literal (list d))  ;; CIU T6 F1a-col: literal-extent node (elems list)
   (auto-cache! expr-list-literal (list d) d)  ;; CIU T6 F1a-col-2: elems list + chain
+  (auto-cache! expr-map-literal (list d) (list d) d)  ;; CIU T6 F1a.2 p1b-pre: keys + vals + chain
   (auto-cache! expr-pvec-nth d d) (auto-cache! expr-pvec-update d d d)
   (auto-cache! expr-pvec-length d) (auto-cache! expr-pvec-fold d d d)
   (auto-cache! expr-pvec-map d d) (auto-cache! expr-pvec-from-list d) (auto-cache! expr-pvec-to-list d)

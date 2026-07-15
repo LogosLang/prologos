@@ -1953,6 +1953,22 @@
                        (for/list ([t (in-list tys)] [i (in-naturals)])
                          (cons i (record-field t 'present)))
                        'closed)]))]
+    ;; CIU T6 F1a.2 p1b (D18): mixed-key map literal, ALL-AT-ONCE — the D15
+    ;; literal-extent mechanism at the Map domain. Keys are UNIFORM (unify to K;
+    ;; a key-type conflict is an error, matching the old per-key ?km solving);
+    ;; values give the OBSERVED uniform bound ⋃vals — never a per-value check
+    ;; against a single meta (which would break heterogeneous literals), never
+    ;; global assoc-widening (D18). Runtime reads only the chain.
+    [(expr-map-literal keys vals chain)
+     (let ([kts (for/list ([k (in-list keys)]) (whnf (infer ctx k)))]
+           [vts (for/list ([v (in-list vals)]) (whnf (infer ctx v)))])
+       (cond
+         [(ormap expr-error? kts) (expr-error)]
+         [(ormap expr-error? vts) (expr-error)]
+         [(for/and ([kt (in-list (cdr kts))])
+            (unify-ok? (unify ctx (car kts) kt)))
+          (expr-Map (whnf (car kts)) (build-union-type vts))]
+         [else (expr-error)]))]
     ;; CIU T6 F1a-col (D15): literal-extent typing, ALL-AT-ONCE. Homogeneous
     ;; (element types unify — rollback-probed; success commits the solves) →
     ;; (PVec T) exactly as the old meta-seeded chain; heterogeneous → a closed
@@ -2968,6 +2984,12 @@
     [((expr-list-literal elems _) (expr-app f a))
      #:when (equal? f (list-type-fvar))
      (for/and ([el (in-list elems)]) (check ctx el a))]
+    ;; CIU T6 F1a.2 p1b (D18): map literal vs (Map K V) — each key against K,
+    ;; each value against V (the C2 annotated-literal behavior: an inline
+    ;; literal in a checked position is per-entry strict against the annotation).
+    [((expr-map-literal keys vals _) (expr-Map kt vt))
+     (and (for/and ([k (in-list keys)]) (check ctx k kt))
+          (for/and ([v (in-list vals)]) (check ctx v vt)))]
     [((expr-pvec-push v x) (expr-PVec a))
      (and (check ctx v (expr-PVec a))
           (check ctx x a))]
