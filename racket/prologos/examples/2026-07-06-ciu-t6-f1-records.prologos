@@ -284,3 +284,41 @@ def av : MyVec := @[1 2 3]
 ;;65=>~ ERROR
 ;;   ← pvec-* keeps the Nat-only index discipline (the pvec-* runtime is
 ;;     nat-value-only; Int literal indices are v[i]/expr-get territory)
+
+;; ============================================================
+;; F1a.2 p0 — pins of today's flows around the Open deletion
+;; (D16-D20 locked; see design doc §12. ;;66 is the D17 FLIP
+;;  TARGET: it works today via {}'s open key-domain meta and
+;;  becomes a type error at p1b when {} commits to keyword —
+;;  the annotated form ;;67 is the escape hatch and survives.)
+;; ============================================================
+
+def sm := [map-assoc {} "str" 1]
+;;66=>~ sm
+;;   ← string-keyed assoc onto bare {} (open ?km) — D17 flips this at p1b
+
+def am : (Map String Int) := {}
+;;67=>~ am : [Map String Int]
+;;   ← the annotation form: the D17 escape hatch, must survive p1b
+
+def dk := :a
+;;68=>~ dk
+
+[map-get {:a 1 :b 2} dk]
+;;69=> 1 : Int
+;;   ← homogeneous dynamic-key get (⋃ collapses to Int) — must survive
+
+def hu := [map-get {:a 1 :b "s"} dk]
+;;70=>~ hu
+;;   ← heterogeneous dynamic-key get DEF — the F1a.2 p0 checkQ/check
+;;     whole-union fix (was a spurious Multiplicity violation)
+
+hu
+;;71=> 1 : Int | String
+
+def bu := [pvec-nth @[1 "a" true] [pvec-length @[1N]]]
+;;72=>~ bu
+
+bu
+;;73=> "a" : Bool | Int | String
+;;   ← bare-union-typed def via dynamic positional projection (same fix)

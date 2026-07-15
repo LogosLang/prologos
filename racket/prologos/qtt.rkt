@@ -179,6 +179,13 @@
     [(expr-Bool) (tu (expr-Type (lzero)) (zero-usage n))]
     ;; Open : Type 0 (PPN 4C T-2, 2026-04-23)
     [(expr-Open) (tu (expr-Type (lzero)) (zero-usage n))]
+    ;; CIU T6 F1a.2 p0 (bug fix): an UNSOLVED meta reaching inferQ in a
+    ;; type-argument position (e.g. bare {}'s key-domain meta through
+    ;; map-empty's inferQ) must not tu-error — it made `def m0 := {}` die as a
+    ;; spurious "Multiplicity violation" (checkQ-top's generic reporter).
+    ;; Mirrors checkQ's blanket expr-meta pass; type args are erased (m0-scaled)
+    ;; by their consumers, so Type-0 + zero usage is the honest answer.
+    [(expr-meta _ _) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-zero) (tu (expr-Nat) (zero-usage n))]
     [(expr-nat-val _) (tu (expr-Nat) (zero-usage n))]
     [(expr-true) (tu (expr-Bool) (zero-usage n))]
@@ -2641,12 +2648,32 @@
 
     ;; ---- Union type: checkQ(G, e, A | B) ----
     ;; Phase 5: speculative rollback with network fork/restore.
+    ;; CIU T6 F1a.2 p0 (bug fix): a term whose INFERRED type is the WHOLE union
+    ;; (e.g. a dynamic ⋃-positions/⋃-fields projection) can never re-derive it
+    ;; branch-wise — each branch check sees only a component, so both fail and
+    ;; every bare-union-typed def died as a spurious "Multiplicity violation"
+    ;; (type-check never re-checks an unannotated def against its inferred type;
+    ;; checkQ-top does). Keep the branch split first (existing behavior, cheap
+    ;; for the common single-branch case), then fall back to whole-union
+    ;; conversion via inferQ. The right branch is now rollback-wrapped so its
+    ;; failed meta commitments cannot pollute the whole-union attempt.
     [(_ (expr-union l r))
      (let ([rl (with-speculative-rollback
                  (lambda () (checkQ ctx e l))
                  (lambda (r) (and (bu? r) (bu-ok? r)))
                  "union-checkQ-left")])
-       (or rl (checkQ ctx e r)))]
+       (or rl
+           (let ([rr (with-speculative-rollback
+                       (lambda () (checkQ ctx e r))
+                       (lambda (r) (and (bu? r) (bu-ok? r)))
+                       "union-checkQ-right")])
+             (or rr
+                 (match (inferQ ctx e)
+                   [(tu t1 u)
+                    #:when (and (not (expr-error? t1))
+                                (unify-ok? (unify ctx (expr-union l r) t1)))
+                    (bu #t u)]
+                   [_ (bu #f (zero-usage n))])))))]
 
     ;; ---- Conversion fallback ----
     ;; Phase 3e: added cumulativity + within-family subtyping (consistent with check)
