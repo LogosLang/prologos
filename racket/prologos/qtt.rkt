@@ -1629,7 +1629,7 @@
                  [_ (tu-error)]))]
             ;; CIU T6 F1 (s3): fold over a record — uniform view (K=Keyword, V=⋃fields)
             [(? expr-Record? rec)
-             (let* ([v (record-value-union rec)]
+             (let* ([v (record-value-bound ctx rec "dyn-row-fold")]
                     [ef (expr-Pi 'mw tb
                           (expr-Pi 'mw (shift 1 0 (expr-Keyword))
                             (expr-Pi 'mw (shift 2 0 v) (shift 3 0 tb))))]
@@ -1653,7 +1653,7 @@
                  [_ (tu-error)]))]
             ;; CIU T6 F1 (s3): filter on a record → dictionary view (mirrors typing-core)
             [(? expr-Record? rec)
-             (let* ([v (record-value-union rec)]
+             (let* ([v (record-value-bound ctx rec "dyn-row-filter")]
                     [rp (inferQ-or-checkQ ctx pred
                           (expr-Pi 'mw (expr-Keyword) (expr-Pi 'mw (shift 1 0 v) (expr-Bool))))])
                (match rp
@@ -1676,7 +1676,7 @@
             ;; CIU T6 F1 (s3): map-vals over a record — f consumes ⋃fields; type from infer
             [(? expr-Record? rec)
              (let ([rf (inferQ-or-checkQ ctx f
-                         (expr-Pi 'mw (record-value-union rec) (shift 1 0 result-type)))])
+                         (expr-Pi 'mw (record-value-bound ctx rec "dyn-row-map-vals") (shift 1 0 result-type)))])
                (match rf
                  [(tu _ uf) (tu result-type (add-usage uf um))]
                  [_ (tu-error)]))]
@@ -2527,7 +2527,7 @@
             [(? expr-Record? rec)
              (let* ([ef (expr-Pi 'mw expected-type
                           (expr-Pi 'mw (shift 1 0 (expr-Keyword))
-                            (expr-Pi 'mw (shift 2 0 (record-value-union rec))
+                            (expr-Pi 'mw (shift 2 0 (record-value-bound ctx rec "dyn-row-fold"))
                                      (shift 3 0 expected-type))))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
@@ -2552,7 +2552,7 @@
             ;; CIU T6 F1 (s3): filter on a record — pred consumes the uniform view;
             ;; the final type check delegates to typing-core (dictionary-view result)
             [(? expr-Record? rec)
-             (let* ([v (record-value-union rec)]
+             (let* ([v (record-value-bound ctx rec "dyn-row-filter")]
                     [rp (inferQ-or-checkQ ctx pred
                           (expr-Pi 'mw (expr-Keyword) (expr-Pi 'mw (shift 1 0 v) (expr-Bool))))])
                (match rp
@@ -2580,7 +2580,7 @@
             ;; f consumes ⋃fields; final check delegates to typing-core
             [((? expr-Record? rec) (expr-Map k w))
              (let ([rf (inferQ-or-checkQ ctx f
-                         (expr-Pi 'mw (record-value-union rec) (shift 1 0 w)))])
+                         (expr-Pi 'mw (record-value-bound ctx rec "dyn-row-map-vals") (shift 1 0 w)))])
                (match rf
                  [(tu _ uf)
                   (bu (and (unify-ok? (unify ctx k (expr-Keyword)))

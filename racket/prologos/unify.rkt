@@ -609,6 +609,33 @@
                          (cons (record-field-type (cdr fa)) (record-field-type (cdr fb))))
                        (expr-Record-fields a) (expr-Record-fields b)))]
 
+      ;; CIU T6 F1a.2 p1a (C_Cons row-vs-row): Record-vs-Record, same key-domain,
+      ;; at least ONE 'dyn tail — S–I consistency. Shared labels decompose to
+      ;; per-field 'sub goals (metas SOLVE — the solve-first D16 posture; partial-
+      ;; failure commitment is the pre-existing B3 'sub posture). A 'dyn tail
+      ;; absorbs the other side's extra labels; a CLOSED side asserts total
+      ;; knowledge, so it must CONTAIN every dyn-known label (a dyn-known field
+      ;; absent from a closed row is a conflict → fall through to '(conv)).
+      ;; dyn-vs-dyn with the SAME label-set rides the B3 arm above (tail eq);
+      ;; this arm takes dyn-vs-closed and dyn-vs-dyn with differing labels.
+      ;; Both-sides-concrete pattern: bare metas hit flex-rigid below, applied
+      ;; metas hit flex-app later — never this arm.
+      [(and (expr-Record? a) (expr-Record? b)
+            (eq? (expr-Record-key-domain a) (expr-Record-key-domain b))
+            (or (eq? (expr-Record-tail a) 'dyn) (eq? (expr-Record-tail b) 'dyn))
+            (let ([la (map car (expr-Record-fields a))]
+                  [lb (map car (expr-Record-fields b))])
+              (and (or (eq? (expr-Record-tail b) 'dyn)
+                       (andmap (lambda (l) (memv l lb)) la))
+                   (or (eq? (expr-Record-tail a) 'dyn)
+                       (andmap (lambda (l) (memv l la)) lb)))))
+       (let ([fb (expr-Record-fields b)])
+         (list 'sub
+               (for/list ([fa (in-list (expr-Record-fields a))]
+                          #:when (assv (car fa) fb))
+                 (cons (record-field-type (cdr fa))
+                       (record-field-type (cdr (assv (car fa) fb)))))))]
+
       ;; Same unsolved meta
       [(and (expr-meta? a) (expr-meta? b)
             (eq? (expr-meta-id a) (expr-meta-id b)))

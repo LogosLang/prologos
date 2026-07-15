@@ -149,6 +149,11 @@
                       (let ([tm (whnf (infer ctx (car mk)))])
                         (and (expr-Record? tm)
                              (eq? (expr-Record-key-domain tm) 'keyword)
+                             ;; CIU T6 F1a.2 p1a: CLOSED rows only — a miss on a
+                             ;; 'dyn row is legal (D19: fresh meta; the field may
+                             ;; live in the remainder), so the closed-row-miss
+                             ;; hint would be misleading there.
+                             (eq? (expr-Record-tail tm) 'closed)
                              (not (record-lookup-field tm (expr-keyword-name (cdr mk))))
                              (format-closed-row-miss tm (expr-keyword-name (cdr mk)) names)))))
                (ormap search (expr-subfields x)))))))

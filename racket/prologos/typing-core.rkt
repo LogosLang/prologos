@@ -52,6 +52,9 @@
          record-<:-pvec?         ;; CIU T6 F1a-col: Tuple→PVec α (meta-aware)
          record-<:-elem?         ;; CIU T6 F1a-col-2: shared elem-side α core (PVec/List)
          record-value-union      ;; CIU T6 F1 (s3): ⋃fields uniform view (qtt mirrors consume it)
+         record-value-bound      ;; CIU T6 F1a.2 p1a: dyn-aware value bound (⋃knowns ∪ fresh; §12.4)
+         record-project          ;; CIU T6 F1a.2 p1a: exported for synthetic dyn-row tests
+         union-record-component-vt  ;; CIU T6 F1a.2 p1a: exported for synthetic dyn-row tests
          lookup-schema-by-name
          ;; Selection type helpers
          lookup-selection-by-name
@@ -401,22 +404,52 @@
 ;;   dynamic key → union of ALL field types (B4-gated on the key domain; empty row → error).
 (define (record-project ctx rec key)
   (define kd (expr-Record-key-domain rec))
+  ;; CIU T6 F1a.2 p1a (D19): a literal-key MISS on a 'dyn row is NOT an error —
+  ;; the field may live in the unknown remainder; mint a fresh meta (the meta IS
+  ;; the observation; recording descoped to F-row per §12.5). 'closed keeps the
+  ;; miss error (+ the S7 diagnostic on the infer/err walk).
+  (define (miss)
+    (if (eq? (expr-Record-tail rec) 'dyn)
+        (fresh-meta ctx (expr-Type (lzero)) "dyn-row-projection")
+        (expr-error)))
   (match key
     [(expr-keyword kw) #:when (eq? kd 'keyword)
      (let ([fld (record-lookup-field rec kw)])
-       (if fld (record-field-type fld) (expr-error)))]
+       (if fld (record-field-type fld) (miss)))]
     ;; CIU T6 F1a-col: literal Nat/Int index on a 'nat row (tuple) — position lookup.
     ;; Bare Int literals accepted (Q_col-C), mirroring expr-get's PVec Nat-or-Int gate.
     [(or (expr-nat-val n) (expr-int n))
      #:when (and (eq? kd 'nat) (exact-nonnegative-integer? n))
      (let ([fld (record-lookup-field rec n)])
-       (if fld (record-field-type fld) (expr-error)))]
+       (if fld (record-field-type fld) (miss)))]
     [_
      (let ([fields (expr-Record-fields rec)]
            [key-ty (if (eq? kd 'keyword) (expr-Keyword) (expr-Nat))])
-       (if (and (pair? fields) (check ctx key key-ty))
-           (record-value-union rec)
-           (expr-error)))]))
+       (cond
+         ;; dyn + dynamic key: the result may be any known field OR the remainder
+         ;; — ⋃knowns ∪ fresh; the EMPTY dyn row still projects (fresh alone).
+         [(eq? (expr-Record-tail rec) 'dyn)
+          (if (check ctx key key-ty)
+              (record-value-bound ctx rec "dyn-row-dynamic-projection")
+              (expr-error))]
+         [(and (pair? fields) (check ctx key key-ty))
+          (record-value-union rec)]
+         [else (expr-error)]))]))
+
+;; CIU T6 F1a.2 p1a (§12.4): the value bound of a row for ENUMERATING consumers
+;; ("all values" — vals/fold/filter/map-vals/dynamic projection).
+;;   closed → ⋃fields (record-value-union, exactly as before);
+;;   dyn    → ⋃fields ∪ fresh-meta — the remainder's values must be absorbed by
+;;            anything consuming every value. Fresh-meta-per-call is the accepted
+;;            D19 posture (no reconciliation; speculation rolls metas back via
+;;            the existing save/restore machinery).
+(define (record-value-bound ctx rec [src "dyn-row-values"])
+  (if (eq? (expr-Record-tail rec) 'dyn)
+      (build-union-type
+       (cons (fresh-meta ctx (expr-Type (lzero)) src)
+             (map (lambda (f) (record-field-type (cdr f)))
+                  (expr-Record-fields rec))))
+      (record-value-union rec)))
 
 ;; CIU T6 F1 (s3): ⋃fields — the uniform-bound view of a row's value types.
 ;; Empty row → (expr-Open) (the F1a Q6-corner placeholder, matching the s2 map-vals
@@ -438,8 +471,11 @@
   (and (eq? (expr-Record-key-domain rec) 'nat)
        (let ([at* (whnf at)])
          (cond
+           ;; CIU T6 F1a.2 p1a (D16): meta-elem solving from ⋃positions only for
+           ;; CLOSED rows (dyn remainder unknown → refuse; §12.4).
            [(expr-meta? at*)
-            (unify-ok? (unify ctx at (record-value-union rec)))]
+            (and (eq? (expr-Record-tail rec) 'closed)
+                 (unify-ok? (unify ctx at (record-value-union rec))))]
            [else
             ;; A union element type accepts a position when SOME branch fits
             ;; (subtype? first — pure — so ground positions don't stray-solve).
@@ -465,15 +501,23 @@
   (match key
     [(expr-keyword kw) #:when (eq? kd 'keyword)
      (let ([fld (record-lookup-field rec kw)])
-       (and fld (record-field-type fld)))]
+       (cond
+         [fld (record-field-type fld)]
+         ;; CIU T6 F1a.2 p1a (§12.4): a literal miss on a 'dyn component may live
+         ;; in its remainder — FILTERING it (the closed Q5 behavior) would
+         ;; silently drop a live component; contribute a fresh meta instead.
+         [(eq? (expr-Record-tail rec) 'dyn)
+          (fresh-meta ctx (expr-Type (lzero)) "dyn-row-union-component")]
+         [else #f]))]
     [_
      (let ([key-ty (if (eq? kd 'keyword) (expr-Keyword) (expr-Nat))])
-       (and (pair? (expr-Record-fields rec))
+       (and (or (pair? (expr-Record-fields rec))
+                (eq? (expr-Record-tail rec) 'dyn))   ;; empty dyn row still projects
             (with-speculative-rollback
               (lambda () (check ctx key key-ty))
               values
               "union-record-component")
-            (record-value-union rec)))]))
+            (record-value-bound ctx rec "dyn-row-union-component")))]))
 
 ;; CIU T6 F1 (s2): does a structural-row type satisfy (Map K V)?  The Galois α (§5.3).
 ;;   keys: every label must check against K;  values: if V is an unsolved meta, solve V := ⋃fields
@@ -487,9 +531,14 @@
            fields)
    (cond
      [(null? fields) #t]
+     ;; CIU T6 F1a.2 p1a (D16): a meta V may be solved from ⋃fields ONLY for a
+     ;; CLOSED row — a dyn row's remainder is unknown, so ⋃knowns would
+     ;; over-commit; REFUSE (the meta stays unsolved; Q4 display posture).
      [(expr-meta? (whnf vt))
-      (unify-ok? (unify ctx vt (record-value-union rec)))]
+      (and (eq? (expr-Record-tail rec) 'closed)
+           (unify-ok? (unify ctx vt (record-value-union rec))))]
      [else
+      ;; Concrete V: knowns-only IS the C_ConsL absorption for dyn rows (§12.4).
       (andmap (lambda (f)
                 (let ([ft (record-field-type (cdr f))])
                   (or (unify-ok? (unify ctx ft vt)) (subtype? ft vt))))
@@ -1713,7 +1762,14 @@
           (match k
             [(expr-keyword kw) #:when (eq? (expr-Record-key-domain rec) 'keyword)
              (let ([fld (record-lookup-field rec kw)])
-               (if fld (build-union-type (list (whnf (record-field-type fld)) (expr-Nil))) (expr-Nil)))]
+               (cond
+                 [fld (build-union-type (list (whnf (record-field-type fld)) (expr-Nil)))]
+                 ;; CIU T6 F1a.2 p1a (§12.4): miss on a 'dyn row — the field may
+                 ;; live in the remainder → <fresh | Nil>; closed keeps → Nil.
+                 [(eq? (expr-Record-tail rec) 'dyn)
+                  (build-union-type
+                   (list (fresh-meta ctx (expr-Type (lzero)) "dyn-row-nil-safe") (expr-Nil)))]
+                 [else (expr-Nil)]))]
             [_ (let ([proj (record-project ctx rec k)])
                  (if (expr-error? proj) (expr-error) (build-union-type (list (whnf proj) (expr-Nil)))))])]
          ;; Direct Map K V → check key, return V | Nil
@@ -1806,8 +1862,9 @@
      (let ([tm (whnf (infer ctx m))])
        (match tm
          ;; CIU T6 F1 (s2): vals of a record → List of ⋃(field types); empty → List Open (Q6 corner, s3: via helper).
+         ;; F1a.2 p1a: dyn rows use the BOUND (⋃knowns ∪ fresh — remainder absorbed, §12.4).
          [(? expr-Record? rec)
-          (expr-app (list-type-fvar) (record-value-union rec))]
+          (expr-app (list-type-fvar) (record-value-bound ctx rec "dyn-row-vals"))]
          [(expr-Map _ vt) (expr-app (list-type-fvar) vt)]
          ;; α-semantic: map-vals on Open → List Open
          [(expr-Open) (expr-app (list-type-fvar) (expr-Open))]
@@ -2196,10 +2253,11 @@
                 tb
                 (expr-error)))]
          ;; CIU T6 F1 (s3): fold over a record via the uniform view (K=Keyword, V=⋃fields)
+         ;; F1a.2 p1a: dyn rows fold over the BOUND (§12.4).
          [(? expr-Record? rec)
           (let ([expected-f (expr-Pi 'mw tb
                               (expr-Pi 'mw (shift 1 0 (expr-Keyword))
-                                (expr-Pi 'mw (shift 2 0 (record-value-union rec)) (shift 3 0 tb))))])
+                                (expr-Pi 'mw (shift 2 0 (record-value-bound ctx rec "dyn-row-fold")) (shift 3 0 tb))))])
             (if (check ctx f expected-f)
                 tb
                 (expr-error)))]
@@ -2217,7 +2275,8 @@
          ;; the result DEGRADES to the dictionary view (Map Keyword ⋃fields); a dyn-tailed
          ;; row takes over at F1a.2.
          [(? expr-Record? rec)
-          (let ([v (record-value-union rec)])
+          ;; F1a.2 p1a: dyn rows filter over the BOUND (§12.4).
+          (let ([v (record-value-bound ctx rec "dyn-row-filter")])
             (if (check ctx pred (expr-Pi 'mw (expr-Keyword) (expr-Pi 'mw (shift 1 0 v) (expr-Bool))))
                 (expr-Map (expr-Keyword) v)
                 (expr-error)))]
@@ -2232,7 +2291,9 @@
      (let ([tm (whnf (infer ctx map))])
        (match tm
          [(? expr-Record? rec)
-          (let* ([v (record-value-union rec)]
+          ;; F1a.2 p1a: f consumes the BOUND for dyn rows; the rebuild is tail-
+          ;; preserving already (knowns := W, remainder stays unknown — §12.4).
+          (let* ([v (record-value-bound ctx rec "dyn-row-map-vals")]
                  [tf (infer ctx f)]
                  [finish (lambda (w)
                            ;; NB: for/list, NOT map — the arm's pattern var `map` (the term)
@@ -2965,11 +3026,12 @@
                               (expr-Pi 'mw (shift 1 0 k)
                                 (expr-Pi 'mw (shift 2 0 v) (shift 3 0 expected-type))))))]
          ;; CIU T6 F1 (s3): fold over a record — uniform view (K=Keyword, V=⋃fields)
+         ;; F1a.2 p1a: dyn rows fold over the BOUND (§12.4).
          [(? expr-Record? rec)
           (and (check ctx init expected-type)
                (check ctx f (expr-Pi 'mw expected-type
                               (expr-Pi 'mw (shift 1 0 (expr-Keyword))
-                                (expr-Pi 'mw (shift 2 0 (record-value-union rec))
+                                (expr-Pi 'mw (shift 2 0 (record-value-bound ctx rec "dyn-row-fold"))
                                          (shift 3 0 expected-type))))))]
          [_ #f]))]
     ;; map-filter-entries : check against Map K V
@@ -2984,10 +3046,10 @@
           (and (unify-ok? (unify ctx k k2))
                (check ctx f (expr-Pi 'mw v (shift 1 0 w))))]
          ;; CIU T6 F1 (s3): record source checked against a Map result — keys are Keyword;
-         ;; f consumes the uniform view ⋃fields
+         ;; f consumes the uniform view ⋃fields (the BOUND for dyn rows, F1a.2 p1a §12.4)
          [(? expr-Record? rec)
           (and (unify-ok? (unify ctx k (expr-Keyword)))
-               (check ctx f (expr-Pi 'mw (record-value-union rec) (shift 1 0 w))))]
+               (check ctx f (expr-Pi 'mw (record-value-bound ctx rec "dyn-row-map-vals") (shift 1 0 w))))]
          [_ #f]))]
 
     ;; ---- Transient Builder checks ----

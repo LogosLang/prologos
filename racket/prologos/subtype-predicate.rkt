@@ -136,6 +136,11 @@
 
 ;; Pure structural record→Map: every label fits K, every field type <: V.
 ;; Empty record satisfies any (Map K V) (Q6). Keyword-domain labels need a Keyword key type.
+;; CIU T6 F1a.2 p1a (D16): the knowns-only check IS the C_ConsL absorption for
+;; 'dyn-tailed rows — the unknown remainder is absorbed under the S–I consistency
+;; posture, so tail-blindness here is DELIBERATE dyn semantics, not an oversight
+;; (§12.4). The meta-solving sibling record-<:-map? in typing-core, by contrast,
+;; REFUSES to solve a meta V from a dyn row (⋃knowns would over-commit).
 (define (record-subtypes-map? rec mp)
   (define kt (expr-Map-k-type mp))
   (define vt (expr-Map-v-type mp))
