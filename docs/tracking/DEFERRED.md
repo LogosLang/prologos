@@ -17,6 +17,8 @@ Deferral".
 
 ## CIU T6 F1a.2: unsolved-projection-meta freeze policy (tighten later)
 
+**STATUS 2026-07-16: ACTIVE — in scope of the F1b Stage-3 co-design (opened this date).**
+
 Owner decision 2026-07-15 (F1a.2 co-design Q4, track doc §2a D19): unknown-field
 projection on a dyn-tailed row mints a fresh meta; when it is never constrained,
 zonk-final leaves it DISPLAYED as a meta (no type-domain defaulting exists —
@@ -355,9 +357,8 @@ skip+warn policy; these lift the skips / harden the substrate.
 
 ## Mixed-Type Maps
 
-### Type Narrowing for `map-get`
-- When key is statically known, narrow return type
-- Source: `docs/tracking/2026-02-22_MIXED_TYPE_MAPS.md`
+*(Type Narrowing for `map-get` — RESOLVED by CIU T6 F1a structural records; moved to
+DEFERRED_COMPLETE.md at the 2026-07-16 F1b-opening triage.)*
 
 ### Pattern Matching for Union Values
 - Convenience forms for matching on union values
