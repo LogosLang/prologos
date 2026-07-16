@@ -2674,26 +2674,26 @@
 
     ;; ---- Union type: checkQ(G, e, A | B) ----
     ;; Phase 5: speculative rollback with network fork/restore.
-    ;; CIU T6 F1a.2 p0 (bug fix): a term whose INFERRED type is the WHOLE union
-    ;; (e.g. a dynamic ⋃-positions/⋃-fields projection) can never re-derive it
-    ;; branch-wise — each branch check sees only a component, so both fail and
-    ;; every bare-union-typed def died as a spurious "Multiplicity violation"
-    ;; (type-check never re-checks an unannotated def against its inferred type;
-    ;; checkQ-top does). Keep the branch split first (existing behavior, cheap
-    ;; for the common single-branch case), then fall back to whole-union
-    ;; conversion via inferQ. The right branch is now rollback-wrapped so its
-    ;; failed meta commitments cannot pollute the whole-union attempt.
+    ;; CIU T6 F1a.2 p0 (bug fix, p3 perf-refit): a term whose INFERRED type is
+    ;; the WHOLE union (a dynamic ⋃ projection) can never re-derive it branch-
+    ;; wise — both branches fail and every bare-union-typed def died as a
+    ;; spurious "Multiplicity violation". The branch split stays EXACTLY as it
+    ;; always was (left rollback-probed, right bare — zero new hot-path cost;
+    ;; the p0 version rollback-wrapped the right branch and paid a meta-snapshot
+    ;; + fork on every successful right-branch check, a measured +7% on typing-
+    ;; dominated programs). The whole-union conversion runs only on the BOTH-
+    ;; FAIL path; a failed bare right branch rarely solves metas (branch types
+    ;; are concrete), and the attempt itself re-unifies — accepted posture,
+    ;; pinned by the p0 tests.
     [(_ (expr-union l r))
      (let ([rl (with-speculative-rollback
                  (lambda () (checkQ ctx e l))
                  (lambda (r) (and (bu? r) (bu-ok? r)))
                  "union-checkQ-left")])
        (or rl
-           (let ([rr (with-speculative-rollback
-                       (lambda () (checkQ ctx e r))
-                       (lambda (r) (and (bu? r) (bu-ok? r)))
-                       "union-checkQ-right")])
-             (or rr
+           (let ([rr (checkQ ctx e r)])
+             (if (and (bu? rr) (bu-ok? rr))
+                 rr
                  (match (inferQ ctx e)
                    [(tu t1 u)
                     #:when (and (not (expr-error? t1))

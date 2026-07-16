@@ -3166,21 +3166,19 @@
     ;; ---- Union type: check against A | B ----
     ;; check(G, e, A | B) succeeds if e : A or e : B.
     ;; Phase 5: speculative rollback with network fork/restore.
-    ;; CIU T6 F1a.2 p0 (bug fix): a term whose INFERRED type is the WHOLE union
-    ;; (a dynamic ⋃-fields/⋃-positions projection — reachable since the s3/col
-    ;; union-producing arms) can never re-derive it branch-wise; fall back to
-    ;; whole-union conversion after the branch split. The right branch is now
-    ;; rollback-wrapped so its failed meta commitments cannot pollute the
-    ;; whole-union attempt. (checkQ has the same fix — mirror them together.)
+    ;; CIU T6 F1a.2 p0 (bug fix, p3 perf-refit): a term whose INFERRED type is
+    ;; the WHOLE union can never re-derive it branch-wise; the whole-union
+    ;; conversion runs on the BOTH-FAIL path only. The branch split stays
+    ;; EXACTLY as it always was (left rollback-probed, right bare) — the p0
+    ;; version rollback-wrapped the right branch and paid a fork on every
+    ;; successful right-branch check (measured +7% on typing-dominated
+    ;; programs). (checkQ has the same shape — mirror them together.)
     [(_ (expr-union l r))
      (or (with-speculative-rollback
            (lambda () (check ctx e l))
            values
            "union-check-left")
-         (with-speculative-rollback
-           (lambda () (check ctx e r))
-           values
-           "union-check-right")
+         (check ctx e r)
          (let ([t1 (infer ctx e)])
            (and (not (expr-error? t1))
                 (unify-ok? (unify ctx (expr-union l r) t1)))))]
