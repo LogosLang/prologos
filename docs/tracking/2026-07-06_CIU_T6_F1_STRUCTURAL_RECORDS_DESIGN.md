@@ -401,6 +401,25 @@ Ruling text = track doc §2a D21. Implementation shape:
 - **Boundary invariant (binds §13.2)**: width discharge = the structural/label question ONLY; per-field value-type satisfaction at rich boundaries (seal, annotations) stays at CHECK-strength — the seal must NOT be realized as row-vs-row width discharge (else `:x Num` wrongly rejects `{:x Int}`).
 - **Pin amendments in the landing commit**: syntax.rkt `expr-Record` pin gains a dated note (strict reading CONFIRMED + the D15-corruption argument); the unify B3/C_Cons comments gain a pointer to the discharge arm (the one sanctioned tail-relaxation caller).
 
-### §13.2–§13.5 (S seal · T tightening · P presence · Q5 solve-shape) — OPEN, rulings pending
+### §13.2 S — the Map→schema seal + up-shift (D22 ✅ LOCKED 2026-07-16)
 
-Queue + collapsed state per the OPTIONS doc §0 ✏ note: S = placement/routes/realization-layer (panel lean A, seal-boundary-only, typing/elaboration-layer discharge — the P4 panic-swallow kills panic-desugar realizations; champ-arm dead; census clean except the 10 by-design selection sites; `the Schema` route must be enumerated); T = escape-boundary posture (P7: `:1704` transient; raw-meta leak confirmed) + severity + flip-after-presence; P = dissoc-only `'unknown` (P6: update-in arm needs NO presence machinery given zero-segment-path closure + dyn tail) + gradient (Q7) + mechanics (Q9); Q5 = echo deletion (first green) + clobber guard + typed-rows mini-track charter. By-catch defects pending placement (Q11): the on-network annotation-adoption gap; the panic-swallow class; the inline-cons width-tolerance audit; (update-in value-loss bug chipped `task_92fc799d`).
+Ruling text = track doc §2a D22. Implementation shape:
+
+| Route | Today | Under D22 |
+|---|---|---|
+| `[Person {…}]` literal constructor | preparse rewrite: defaults + panic-wrapped checks | SAME door, seal discharge: static seal (labels/types/fill/residual/closedness) + the repaired `:check` bridge |
+| `[Person m]` non-literal constructor | inference error (opaque fvar applied) | seal application (the rewrite generalizes to any `[SchemaName e]` head) |
+| `def x : Person := e` | per-field check; missing fields SILENTLY accepted (the live gap) | same discharge at the def boundary: fill-or-error (own gated commit, census cited) |
+| `the Person e` mid-expression | per-field check; NO defaults, NO checks | same discharge at the `the` boundary |
+| runtime | — | `validate` face = F1b.5 (Result-returning tabulation; witness-strength policy decided there) |
+
+- **Static discharge**: per-field CHECK-strength (D21 invariant); residual scan ONCE at the seal boundary (fill → missing-required prologos-error w/ srcloc → closedness iff `:closed`). Selections exempt via delegation + the subset-check obligation.
+- **`:check` bridge repairs (this slice)**: `expr-panic` → `definitely-not-map?` exemption list; seal-scoped def-forcing (nf at def commit when the body is a seal application; top-node panic → error, mirroring the top-level eval arm). Bridge = NAMED SCAFFOLDING, retirement decision at F1b.5.
+- **Tombstone slice**: delete `expr-schema`/`expr-schema-type` (syntax.rkt:919-920) + `surf-schema` + the ~6 pipeline identity arms; history docstring at the site. No producers → pure mechanical delete, no flip needed.
+- **Up-shift**: schema→row projection (schema-entry fields → closed keyword row) feeding the existing `record-subtypes-map?`/`record-<:-map?` αs; also gives the record-vs-schema comparison route (`the Person m` on a def-bound map) its arm.
+- **Champ-arm retirement**: typing-core:2946-2948 + qtt twins → loud refusal naming validate (closes the blanket-accept hole).
+- QTT mirrors: every new/changed check arm lands with its checkQ twin in the same commit (shared predicates where possible).
+
+### §13.3–§13.5 (T tightening · P presence · Q5 solve-shape) — OPEN, rulings pending
+
+Queue + collapsed state per the OPTIONS doc §0 ✏ note: T = escape-boundary posture (P7: `:1704` transient; raw-meta leak confirmed route-sensitive) + severity + flip-after-presence; P = dissoc-only `'unknown` (P6: the update-in arm needs NO presence machinery given zero-segment-path closure + dyn tail) + gradient (Q7) + mechanics (Q9); Q5 = echo deletion (first green) + clobber guard + typed-rows mini-track charter. By-catch defects pending placement (Q11): the on-network annotation-adoption gap; the inline-cons width-tolerance audit; (the panic-swallow class is now ADDRESSED by D22's bridge repairs; the update-in value-loss bug is chipped `task_92fc799d`).
