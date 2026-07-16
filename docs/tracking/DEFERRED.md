@@ -15,28 +15,78 @@ Deferral".
 
 ---
 
-## CIU T6 F1a.2: unsolved-projection-meta freeze policy (tighten later)
+## CIU T6 F1b: D23 posture-flip re-trigger pin (tightening RULED 2026-07-16)
 
-**STATUS 2026-07-16: ACTIVE — in scope of the F1b Stage-3 co-design (opened this date).**
+**The Q4 tightening question is RULED — D23 (track doc §2a round 6): escape-boundary
+hard error** (exploratory display stays; undischarged D19 metas ERROR when escaping
+into stored types, def-srcloc in scope). Implementation = F1b.2 (groundwork) +
+F1b.6 (the flip). **THIS ENTRY IS THE RE-TRIGGER PIN**: the F1b.6 posture flip
+lands strictly AFTER F1b.3's presence activation (D24's gated-identically gradient
+defines what "undischarged" means) — if F1b.3 slips, this pin re-triggers the flip
+decision rather than letting it orphan. **Rejected-with-reason (do NOT resurrect
+from this entry's old phrasing)**: (a) freeze-wide default-to-error at zonk-final —
+freeze fires in NON-display contexts (stored types driver.rkt:1704, constraint
+rendering :1579-1580/:1754-1755, capture :1349); a policy there corrupts error
+messages and capture, verified blast radius; (b) the constraint-store realization
+of the obligation — the constraint struct's equational rendering + retry-only
+failed-transitions do not fit an unsolved-observation obligation (the meta store
+already records provenance at mint; a second record is duplication). The
+refusal-relax half (meta-V from dyn rows) moved to § F-carrier below.
 
-Owner decision 2026-07-15 (F1a.2 co-design Q4, track doc §2a D19): unknown-field
-projection on a dyn-tailed row mints a fresh meta; when it is never constrained,
-zonk-final leaves it DISPLAYED as a meta (no type-domain defaulting exists —
-`zonk.rkt` default-metas passes type metas through). Deliberately permissive for
-F1a.2; TIGHTEN LATER (candidates: default-to-error at zonk-final, or an
-annotation-derived bound once the Q_E(b) carrier change lands). Home: F1b.
-Related: the row-comparison engine REFUSES meta-V solving from dyn rows (design
-doc §12.3) — the same tightening pass should revisit that conservatism.
+## CIU T6 F-carrier: the Q_E(b) carrier unification — consolidated retirement home (D26 stub charter, 2026-07-17)
 
-## CIU T6: heterogeneous key-types for Records/Maps (design space, owner-flagged)
+The ONE coherent future carrier change (D16): bounded dyn tails carrying `(K,V)`,
+key-domain generalization beyond `keyword`/`nat` (heterogeneous key-types:
+strings, maps, arbitrary keys — owner-flagged 2026-07-15), and `expr-Map`
+dissolution into the row carrier. Stub tracker row: F1 design doc §2. Sequencing
+vs F-row (they interact via the bounded-tail Galois end-state, design doc §12.5
+pin 3) is decided by whichever opens first. **Everything that retires here, with
+entry gates** (round-6 rulings, track doc §2a):
 
-Owner note 2026-07-15 (F1a.2 co-design Q1): the design space of non-keyword row
-key-types (strings, maps, arbitrary keys as first-class key-domains) is a larger
-issue deferred out of F1a.2. Forward-compatible today: `expr-Map` survives as the
-dictionary type; the carrier's key-domain slot is where a generalization lands
-(the Q_E(b) carrier change, F1b+); D17's `{}` keyword-commitment is one
-recoverable seed site. Open properly when Q_E(b)/key-domain generalization is
-scoped.
+1. **Covariant/label-keyed depth** (D21 deferral) — triggers: row-type
+   annotations become user-writable (the PROBES P8 forward surfaces), OR
+   supertype-typed fields (generic `Num`, unions) in expected-row positions.
+   Upgrade = local realization swap at the D21 fallback arm; can NEVER ride
+   C_Cons (`'sub` goals are pure unify pairs).
+2. **The unify-internal width slice** (D21 non-coverage) — gate: evidence of a
+   REAL production population of row-vs-row width events bypassing check
+   (PROBES P8: zero today; D15 homogeneity semantics DEPEND on the failure —
+   any unify-side width needs a direction carrier, which is F-carrier work).
+3. **T refusal-relax** (D23 deferral): solve `V := ⋃knowns ∪ ?fresh` from dyn
+   rows — gate: the union-behavior probe (union-containing-free-meta vs a later
+   exact type) pinned at the refusal-leg comments (typing-core record-<:-map?/
+   record-<:-elem?).
+4. **Annotation-derived bounds** for D19 metas — no machinery exists at HEAD
+   (meta-info.constraints is dead-threaded); becomes expressible once tails
+   carry bounds.
+5. **Heterogeneous key-types** (absorbs the former standalone entry): `expr-Map`
+   survives as the dictionary type until here; the carrier's key-domain slot is
+   where the generalization lands; D17's `{}` keyword-commitment is one
+   recoverable seed site.
+
+## CIU T6 (post-F1b): typed solution rows — own mini-track (D25.3 charter home)
+
+`solve` results carry NO type at HEAD (`expr-hole`); per-solution ROW types
+(`List {unknown : T …}`) would make Path Selection over solution sets TYPED.
+Chartered at F1b close, NOT inside F1b — the naive version is broken (solution-row
+labels are NOT statically derivable: args are whnf'd before the ground/free split;
+anonymous `_` vars become gensym-named keys — PROBES/panel Q5-B). **Entry gates**:
+(a) define the typeable-goal fragment; (b) ONE shared ground/free predicate
+consumed by reduction AND typing (never a reproduced walk); (c) the two-context/
+relation-registry audit (incl. relations from cached `.pnet` bodies); (d) reconcile
+the TWO unbound representations (unresolved var → own-name fvar vs missing key →
+`none` — presence-`'optional`/Option candidates; explain's reserved keys = the
+first `'optional` clients); (e) display posture vs D23 (untyped relations ⇒ rows
+of metas).
+
+## CIU T6 (post-F1b): explain restructure — provenance beside the rows
+
+Explain's reserved `:certainty`/`:cycle` keys merge into the SAME champ namespace
+as query-var keys (reduction.rkt explain merges) — the right eventual shape is a
+wrapper record `{:solutions […] :certainty …}` (provenance beside the rows, not
+merged in). Inherits the D25.2 interim clobber guard (reject-or-rename
+reserved-named query vars, landed at F1b.1) as a pin. Not blocked; open when the
+explain surface next gets attention.
 
 ## Numerics N6d-i follow-ups: method-wrapper derive skip-set remediation
 

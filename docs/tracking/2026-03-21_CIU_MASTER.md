@@ -1,7 +1,7 @@
 # Collection Interface Unification (CIU) Series
 
 **Created**: 2026-03-21
-**Status**: Track 0 ✅ (Trait Hierarchy Audit). Tracks 1-2 ⬜ pre-Track-8. Tracks 3-5 ⬜ post-Track-8 (now unblocked by Track 8 completion + BSP-LE Track 2/2B). **Track 6 🔄 (Anonymous Records, Collections & Path Selection): F1a-core ✅ · F1a-col ✅ · F1a.2 ✅ (2026-07-16 — `expr-Open` DELETED, D1-b done); F1b Stage-3 opening.**
+**Status**: Track 0 ✅ (Trait Hierarchy Audit). Tracks 1-2 ⬜ pre-Track-8. Tracks 3-5 ⬜ post-Track-8 (now unblocked by Track 8 completion + BSP-LE Track 2/2B). **Track 6 🔄 (Anonymous Records, Collections & Path Selection): F1a-core ✅ · F1a-col ✅ · F1a.2 ✅ (`expr-Open` DELETED, D1-b done); F1b Stage-3 ✅ CLOSED 2026-07-17 (D21–D26) — implementation next (ladder: F1 design doc §13.6).**
 **Thesis**: All collection access — indexing, iteration, broadcast, mapping, path navigation — dispatches through traits resolved on the propagator network. Syntactic sugar generates trait constraints, not constructor-specific AST nodes. User-defined collections participate in all syntax automatically.
 
 ---
