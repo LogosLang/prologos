@@ -125,18 +125,20 @@
       (check-true (expr-error? ty)
                   "strict annotated Nat map rejects String value (no auto-widening)"))))
 
-(test-case "infer: map-assoc with Open value type accepts heterogeneous values"
-  ;; Open-by-design: unannotated literals use expr-Open for value type.
-  ;; map-assoc with ANY value type succeeds trivially (α-semantic).
+(test-case "infer: map-assoc onto the dyn-row seed grows an exact heterogeneous row"
+  ;; CIU T6 F1a.2 p2: expr-Open is DELETED. The seed that once carried Open is
+  ;; the keyword-committed empty DYN row (D17); assoc chains grow EXACT rows —
+  ;; heterogeneity is native to rows, no absorption needed (the two-role history
+  ;; lives at the syntax.rkt tombstone).
   (with-fresh-meta-env
-    (let* ([m (expr-map-empty (expr-Keyword) (expr-Open))]
+    (let* ([m (expr-map-empty (expr-Keyword) (expr-Record 'keyword '() 'dyn))]
            [m1 (expr-map-assoc m (expr-keyword 'x) (expr-zero))]
            [m2 (expr-map-assoc m1 (expr-keyword 'y) (expr-string "hello"))])
       (define ty (tc:infer ctx-empty m2))
-      (check-true (expr-Map? ty) "result should be a Map type")
-      (check-equal? (expr-Map-k-type ty) (expr-Keyword))
-      (check-equal? (expr-Map-v-type ty) (expr-Open)
-                    "value type stays Open (no union accumulation)"))))
+      (check-true (expr-Record? ty) "result should be a structural row")
+      (check-equal? (expr-Record-tail ty) 'dyn "the dyn tail is preserved through extension")
+      (check-equal? (record-field-type (record-lookup-field ty 'x)) (expr-Nat))
+      (check-equal? (record-field-type (record-lookup-field ty 'y)) (expr-String)))))
 
 ;; ========================================
 ;; C. Surface syntax: sexp mode
@@ -144,8 +146,8 @@
 
 ;; CIU T6 F1a-s2 (D7): the T-2 "Open by Design" contract for UNANNOTATED literals is
 ;; SUPERSEDED — unannotated keyword literals now infer a structural RECORD with per-field
-;; types (projection returns the observed type). Annotated maps + hand-built expr-Open
-;; (§B above) are unchanged. Updated the surface tests to the record behavior.
+;; types (projection returns the observed type). F1a.2 p2 deleted expr-Open entirely
+;; (two-role history at the syntax.rkt tombstone). Annotated maps are unchanged.
 (test-case "surface/sexp: mixed map literal infers a structural record (was Map Open)"
   (define result (run "(infer {:name \"Alice\" :age zero})"))
   (define r (last-string result))

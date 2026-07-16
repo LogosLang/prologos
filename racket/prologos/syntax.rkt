@@ -294,7 +294,6 @@
  ;; both directions (bidirectional trust). Narrowing at use site is per-reference,
  ;; never globally pinned. Contrast with expr-hole (inference hole; gets solved)
  ;; and type-top (lattice contradiction sentinel). Display: "Open".
- (struct-out expr-Open)
  ;; Panic (runtime abort — inhabits any type)
  (struct-out expr-panic)
  ;; Metavariable (to be solved during elaboration/unification)
@@ -1047,28 +1046,22 @@
 (struct expr-hole () #:transparent)
 
 ;; ========================================
-;; Open type (PPN 4C T-2, 2026-04-23)
+;; expr-Open — DELETED (CIU T6 F1a.2 p2, 2026-07-15). The two-role history:
 ;; ========================================
-;; "Open by Design" — universal type for unannotated heterogeneous Map values.
-;; α-semantic (per T-2 Decision 2): compatible with any type in both directions.
-;; - check ctx v (expr-Open) = #t always (any value fits Open)
-;; - check ctx e T where (infer e) = (expr-Open) succeeds via unify Open T = T
-;; - unify with Open absorbs to the other side, never fails
-;; - is-type ctx (expr-Open) = #t; infer-level = (lzero)
-;;
-;; No user-writable surface syntax — Open only arises from elaboration
-;; (surf-map-literal without annotation). Users wanting narrow types annotate
-;; explicitly (e.g., (Map Keyword Int) or (Map Keyword <Int | String>)).
-;; The schema system provides structured validation when needed.
-;;
-;; Distinct from:
-;; - expr-hole: inference hole that gets solved to a specific type
-;; - type-top: lattice-level contradiction sentinel
-;; - expr-typed-hole: user conversation hole (??)
-;;
-;; Reference: PPN 4C Phase 9+10+11 Addendum D.3 §7.6.7 T-2 decision (2026-04-23),
-;; overriding docs/tracking/2026-03-20_COLLECTION_INTERFACE_UNIFICATION_DESIGN.md §8 D7.
-(struct expr-Open () #:transparent)
+;; "Open by Design" (PPN 4C T-2, 2026-04-23) was the universal α-semantic value
+;; type for unannotated map literals — absorbing in both directions in
+;; check/checkQ/unify. The frontier research (F1 §3b) identified its two
+;; formalized roles: (1) Sekiyama–Igarashi's ★ DYNAMIC ROW TAIL — the
+;; unify-wildcard absorption WAS the C_ConsL/C_ConsR consistency rules, coarsely
+;; rendered (unconditional, not row-scoped, absorbed metas without solving);
+;; (2) the polarized-subtyping &{} NEGATIVE TOP (the empty observation set —
+;; "nothing has been asked of this value yet"). Both roles RELOCATED into the
+;; structural row carrier's 'dyn tail (D7/D16, design doc §12): absorption is
+;; row-scoped C_Cons in unify's classifier + the knowns-only pure α; the
+;; negative-top reading is the empty dyn row {| _} that bare {} now seeds
+;; (D17); unknown-field projection mints a fresh meta (D19) instead of
+;; absorbing. Deleted only AFTER the relocation (D1-b) — no deletion before
+;; relocation, per the load-bearing annotation-satisfaction chain.
 
 ;; ========================================
 ;; Typed hole (?? or ??name — reports expected type to stderr)
@@ -1287,7 +1280,7 @@
       (expr-solver-config? x) (expr-cut? x)
       (expr-opaque? x)
       (expr-panic? x)
-      (expr-hole? x) (expr-typed-hole? x) (expr-Open? x) (expr-meta? x) (expr-num-lit? x) (expr-reduce? x)
+      (expr-hole? x) (expr-typed-hole? x) (expr-meta? x) (expr-num-lit? x) (expr-reduce? x)
       (expr-union? x) (expr-tycon? x) (expr-error? x)))
 
 ;; ========================================

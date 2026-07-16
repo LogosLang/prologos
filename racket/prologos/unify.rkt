@@ -572,12 +572,6 @@
       [(expr-typed-hole? a) '(ok)]
       [(expr-typed-hole? b) '(ok)]
 
-      ;; Open: α-semantic wildcard (PPN 4C T-2, 2026-04-23)
-      ;; Open unifies with anything in both directions. Distinct from expr-hole
-      ;; (which is an inference hole that gets solved) — Open stays Open
-      ;; globally but never blocks unification at a use site. See syntax.rkt.
-      [(expr-Open? a) '(ok)]
-      [(expr-Open? b) '(ok)]
 
       ;; CIU T6 F1 (s2): record → Map coercion (records subsume to the dyn-tailed Map view, Q_E).
       ;; In F1a a record is ALWAYS the inferred/value side and the Map the expected side, so the coercion

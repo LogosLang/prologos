@@ -2114,12 +2114,6 @@
      ;; Elaborate to nested map-assoc on map-empty.
      ;; entries is a list of (parsed-key . parsed-val) pairs.
      ;; Key type uses a fresh meta (keys are typically homogeneous, unified from entries).
-     ;; Value type uses (expr-Open) — "Open by Design" (PPN 4C T-2, 2026-04-23).
-     ;; Per ergonomics direction: unannotated heterogeneous map values are opaque
-     ;; (α-semantic — see syntax.rkt expr-Open docstring). Annotated maps
-     ;; (e.g., `(Map K Int)` or `(Map K <Int | String>)`) check strictly against
-     ;; the annotation via the ann-check path; annotation narrows value types.
-     ;; Schema system provides structured per-field validation.
      ;; CIU T6 F1 (s2): elaborate entries FIRST, then classify — an all-keyword-literal literal
      ;; seeds a structural RECORD (value type = a growing (expr-Record); infer projects per field);
      ;; anything else (empty {}, or any non-keyword key) keeps the legacy Open dictionary seed.

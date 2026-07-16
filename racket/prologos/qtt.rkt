@@ -177,8 +177,6 @@
     [(expr-Type l) (tu (expr-Type (lsuc l)) (zero-usage n))]
     [(expr-Nat) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-Bool) (tu (expr-Type (lzero)) (zero-usage n))]
-    ;; Open : Type 0 (PPN 4C T-2, 2026-04-23)
-    [(expr-Open) (tu (expr-Type (lzero)) (zero-usage n))]
     ;; CIU T6 F1a.2 p0 (bug fix): an UNSOLVED meta reaching inferQ in a
     ;; type-argument position (e.g. bare {}'s key-domain meta through
     ;; map-empty's inferQ) must not tu-error — it made `def m0 := {}` die as a
@@ -2278,9 +2276,6 @@
 
     ;; ---- Open: α-semantic wildcard (PPN 4C T-2, 2026-04-23) ----
     ;; Open unifies in both directions with zero resource usage.
-    ;; Mirrors typing-core check behavior. See syntax.rkt expr-Open.
-    [((expr-Open) _) (bu #t (zero-usage n))]
-    [(_ (expr-Open)) (bu #t (zero-usage n))]
 
     ;; ---- Meta expression: optimistically succeed with zero usage ----
     ;; A metavariable (from implicit arg insertion) doesn't consume resources.

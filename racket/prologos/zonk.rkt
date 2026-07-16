@@ -105,7 +105,6 @@
     [(expr-Type l) (expr-Type (zonk-level l))]
     [(expr-hole) e]
     [(expr-typed-hole _) e]
-    [(expr-Open) e]
     [(expr-error) e]
 
     ;; Non-expression atoms that can leak into type expressions via meta solutions.
@@ -578,7 +577,6 @@
     [(expr-Type l) (expr-Type (zonk-level l))]
     [(expr-hole) e]
     [(expr-typed-hole _) e]
-    [(expr-Open) e]
     [(expr-error) e]
     [(? ns-context?) e]
 
@@ -1081,7 +1079,6 @@
     [(expr-nil) e]
     [(expr-hole) e]
     [(expr-typed-hole _) e]
-    [(expr-Open) e]
     [(expr-error) e]
     [(? ns-context?) e]
     [(expr-lam m t body) (expr-lam (zonk-mult-default m) (default-metas t) (default-metas body))]

@@ -458,14 +458,14 @@
     [else (record-value-union rec)]))
 
 ;; CIU T6 F1 (s3): ⋃fields — the uniform-bound view of a row's value types.
-;; Empty row → (expr-Open) (the F1a Q6-corner placeholder, matching the s2 map-vals
-;; precedent; F1a.2's dyn tail replaces it). Callers with a DIFFERENT empty policy
-;; (e.g. dynamic-key projection on an empty row = miss ERROR) guard BEFORE calling.
+;; NON-EMPTY rows only (F1a.2 p2): every caller either guards the empty row or
+;; routes through record-value-bound (whose empty-closed arm mints a fresh meta,
+;; Q6). The old empty→Open arm died with the node.
 (define (record-value-union rec)
   (define fields (expr-Record-fields rec))
-  (if (null? fields)
-      (expr-Open)
-      (build-union-type (map (lambda (f) (record-field-type (cdr f))) fields))))
+  (when (null? fields)
+    (error 'record-value-union "empty row — callers must guard or use record-value-bound (F1a.2 p2)"))
+  (build-union-type (map (lambda (f) (record-field-type (cdr f))) fields)))
 
 ;; CIU T6 F1a-col: does a 'nat row (tuple) satisfy (PVec A)?  The Tuple→PVec α
 ;; (meta-aware sibling of subtype-predicate's pure record-subtypes-pvec?).
@@ -805,10 +805,6 @@
            (expr-error)))]
 
     ;; ---- Open type (PPN 4C T-2, 2026-04-23) ----
-    ;; Open is a type at universe 0. Inferring the TYPE OF the Open type.
-    ;; (Values of type Open don't appear in syntax — only the type marker does,
-    ;; produced by elaboration of unannotated map literals.)
-    [(expr-Open) (expr-Type (lzero))]
 
     ;; ---- Natural numbers ----
     [(expr-Nat) (expr-Type (lzero))]
@@ -1630,14 +1626,9 @@
          (expr-Map k v)
          (expr-error))]
     [(expr-map-assoc m k v)
-     ;; PPN 4C T-2 (2026-04-23): "Open by Design" map semantics.
-     ;; Under unannotated literals, vt = (expr-Open) and checks succeed trivially
-     ;; (α-semantic, see syntax.rkt expr-Open). Under explicit annotation
-     ;; (Map K T), checks are strict. The previous speculative widening path
-     ;; (build-union-type) + with-speculative-rollback has been retired — the
-     ;; "narrow-union default" was architectural debt feeding accidentally-
-     ;; load-bearing mechanisms (see D.3 §7.6 T-3 findings). Opt into narrow
-     ;; types via annotation or schema.
+     ;; Map-subject checks are STRICT against the concrete/⋃observed value type
+     ;; (post-F1a.2 no unannotated literal produces an absorbing value slot; the
+     ;; retired speculative-widening history: D.3 §7.6 T-3, PPN 4C T-2).
      (let ([tm (whnf (infer ctx m))])
        (match tm
          ;; CIU T6 F1 (s2): row extension. keyword-literal key → grow the record
@@ -1659,17 +1650,9 @@
           (cond
             ;; Key must check against key type
             [(not (check ctx k kt)) (expr-error)]
-            ;; Value must check against value type.
-            ;; Unannotated: vt = (expr-Open) → trivially succeeds.
-            ;; Annotated: vt = concrete T → strict check.
+            ;; Value must check against value type (strict).
             [(not (check ctx v vt)) (expr-error)]
             [else (expr-Map kt vt)])]
-         ;; α-semantic: map-assoc on Open → Open (k, v checked trivially)
-         [(expr-Open)
-          (cond
-            [(expr-error? (infer ctx k)) (expr-error)]
-            [(expr-error? (infer ctx v)) (expr-error)]
-            [else (expr-Open)])]
          [_ (expr-error)]))]
     ;; get: type-directed index/lookup
     ;; List A → Nat → A, PVec A → Nat → A, Map K V → K → V
@@ -1685,9 +1668,6 @@
          ;; Map K V → K → V
          [(expr-Map kt vt)
           (if (check ctx key kt) vt (expr-error))]
-         ;; α-semantic: get on Open → Open (trust: might be Map, might be PVec, etc.)
-         [(expr-Open)
-          (if (expr-error? (infer ctx key)) (expr-error) (expr-Open))]
          ;; Selection type → delegate to map-get typing
          [(expr-fvar name)
           #:when (lookup-selection-by-name name)
@@ -1708,9 +1688,6 @@
          [(? expr-Record? rec) (record-project ctx rec k)]
          [(expr-Map kt vt)
           (if (check ctx k kt) vt (expr-error))]
-         ;; α-semantic: map-get on Open → Open (key checked trivially)
-         [(expr-Open)
-          (if (expr-error? (infer ctx k)) (expr-error) (expr-Open))]
          ;; Selection type: gate field access to selected fields only
          [(expr-fvar name)
           #:when (lookup-selection-by-name name)
@@ -1797,9 +1774,6 @@
           (if (check ctx k kt)
               (build-union-type (list (whnf vt) (expr-Nil)))
               (expr-error))]
-         ;; α-semantic: nil-safe-get on Open → Open (trust: value or Nil, both opaque)
-         [(expr-Open)
-          (if (expr-error? (infer ctx k)) (expr-error) (expr-Open))]
          ;; Union: extract Map and Nil components
          [(expr-union _ _)
           (let* ([components (flatten-union tm)]
@@ -1845,17 +1819,12 @@
                  (make-record (expr-Record-key-domain rec) '() 'dyn) (expr-error))])]
          [(expr-Map kt vt)
           (if (check ctx k kt) (expr-Map kt vt) (expr-error))]
-         ;; α-semantic: map-dissoc on Open → Open
-         [(expr-Open)
-          (if (expr-error? (infer ctx k)) (expr-error) (expr-Open))]
          [_ (expr-error)]))]
     [(expr-map-size m)
      (let ([tm (whnf (infer ctx m))])
        (match tm
          [(? expr-Record?) (expr-Nat)]   ;; CIU T6 F1 (s2)
          [(expr-Map _ _) (expr-Nat)]
-         ;; α-semantic: map-size on Open → Nat (size is always Nat regardless)
-         [(expr-Open) (expr-Nat)]
          [_ (expr-error)]))]
     [(expr-map-has-key m k)
      (let ([tm (whnf (infer ctx m))])
@@ -1866,9 +1835,6 @@
               (expr-Bool) (expr-error))]
          [(expr-Map kt _)
           (if (check ctx k kt) (expr-Bool) (expr-error))]
-         ;; α-semantic: map-has-key on Open → Bool
-         [(expr-Open)
-          (if (expr-error? (infer ctx k)) (expr-error) (expr-Bool))]
          [_ (expr-error)]))]
     ;; map-keys: Map K V → List K
     [(expr-map-keys m)
@@ -1878,20 +1844,16 @@
          [(? expr-Record? rec)
           (expr-app (list-type-fvar) (if (eq? (expr-Record-key-domain rec) 'keyword) (expr-Keyword) (expr-Nat)))]
          [(expr-Map kt _) (expr-app (list-type-fvar) kt)]
-         ;; α-semantic: map-keys on Open → List Open
-         [(expr-Open) (expr-app (list-type-fvar) (expr-Open))]
          [_ (expr-error)]))]
     ;; map-vals: Map K V → List V
     [(expr-map-vals m)
      (let ([tm (whnf (infer ctx m))])
        (match tm
-         ;; CIU T6 F1 (s2): vals of a record → List of ⋃(field types); empty → List Open (Q6 corner, s3: via helper).
-         ;; F1a.2 p1a: dyn rows use the BOUND (⋃knowns ∪ fresh — remainder absorbed, §12.4).
+         ;; CIU T6 F1 (s2): vals of a record → List of the value bound
+         ;; (⋃fields; dyn rows add the remainder meta; empty → fresh meta — §12.4).
          [(? expr-Record? rec)
           (expr-app (list-type-fvar) (record-value-bound ctx rec "dyn-row-vals"))]
          [(expr-Map _ vt) (expr-app (list-type-fvar) vt)]
-         ;; α-semantic: map-vals on Open → List Open
-         [(expr-Open) (expr-app (list-type-fvar) (expr-Open))]
          [_ (expr-error)]))]
 
     ;; ---- Set type and operations ----
@@ -3155,11 +3117,6 @@
     ;; An expr-hole is a placeholder that will be filled by type inference.
     [((expr-hole) _) #t]
 
-    ;; ---- Open: α-semantic universal wildcard (PPN 4C T-2, 2026-04-23) ----
-    ;; An expr-Open (value or type position) succeeds against anything.
-    ;; See syntax.rkt expr-Open docstring for the "Open by Design" rationale.
-    [((expr-Open) _) #t]
-    [(_ (expr-Open)) #t]
 
     ;; ---- Typed hole: reports expected type + context to stderr, then succeeds ----
     [((expr-typed-hole name) expected)
@@ -3507,9 +3464,6 @@
     ;; Keyword formation: Keyword : Type(0)
     [(expr-Keyword) (just-level (lzero))]
 
-    ;; Open formation: Open : Type(0) (PPN 4C T-2, 2026-04-23)
-    ;; Open is a valid type living at universe level 0.
-    [(expr-Open) (just-level (lzero))]
 
     ;; Char formation: Char : Type(0)
     [(expr-Char) (just-level (lzero))]
