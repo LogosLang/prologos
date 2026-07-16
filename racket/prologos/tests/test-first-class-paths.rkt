@@ -101,7 +101,19 @@
      "#p(a.a1)\n"                           ; 2 — path literal
      "get-in m #p(a.a1)\n"                  ; 3 — get-in via #p literal
      "update-in m #p(a.a1) [int+ _ 100]\n" ; 4 — update-in deep
-     "get-in m :a^first\n"))                ; 5 — ^ rename tokenizes (F3)
+     "get-in m :a^first\n"                  ; 5 — ^ rename tokenizes (F3)
+     ;; ---- DYNAMIC paths (def-bound Path values → expr-update-in/expr-get-in
+     ;; nodes; literal #p paths above desugar statically and never mint them).
+     ;; Regression for the 2026-07-16 P6 value-loss fix: whnf arms + the
+     ;; definitely-not-map? exemptions + nf spine normalization.
+     "def pa := #p(a)\n"                                                   ; 6
+     "def strip1 := [fn [sub : [Map Keyword Int]] [map-dissoc sub :a1]]\n" ; 7
+     "def rr := [update-in m pa strip1]\n"                                 ; 8
+     "[map-get rr :b]\n"                    ; 9 — sibling value (was none)
+     "[map-get [update-in m pa strip1] :b]\n" ; 10 — inline composition (was none)
+     "map-keys rr\n"                        ; 11 — spine normalized (was stuck)
+     "map-size rr\n"                        ; 12 — (was stuck)
+     "get-in rr pa\n"))                     ; 13 — dynamic get-in over the result
    1))
 (define (R i) (list-ref evals i))
 
@@ -128,6 +140,33 @@
 
 (test-case "ws: update-in deep sets the leaf"
   (check-true (string-contains? (R 4) "101")))
+
+;; ========================================
+;; Dynamic paths — P6 value-loss regression (2026-07-16)
+;; map-get over a dynamic update-in/get-in result must yield the VALUE,
+;; never degrade to none (definitely-not-map? exemption + whnf arms), and
+;; map-keys/map-size over the result must reduce (nf spine normalization).
+;; ========================================
+
+(test-case "ws: map-get over def-bound dynamic update-in result — sibling value survives (was none)"
+  (check-true (string-contains? (R 9) ":b1"))
+  (check-false (string-contains? (R 9) "none")))
+
+(test-case "ws: map-get over INLINE dynamic update-in result (the P6 #8 bug shape)"
+  (check-true (string-contains? (R 10) ":b1"))
+  (check-false (string-contains? (R 10) "none")))
+
+(test-case "ws: map-keys over dynamic update-in result reduces (was stuck spine)"
+  (check-true (string-contains? (R 11) ":a"))
+  (check-true (string-contains? (R 11) ":b"))
+  (check-false (string-contains? (R 11) "map-keys")))
+
+(test-case "ws: map-size over dynamic update-in result reduces"
+  (check-true (string-contains? (R 12) "2N")))
+
+(test-case "ws: dynamic get-in over dynamic update-in result — updated sub-map"
+  (check-true (string-contains? (R 13) ":a2"))
+  (check-false (string-contains? (R 13) ":a1")))
 
 ;; ========================================
 ;; ^ rename tokenizes in WS (CIU Track 6 F3 regression)

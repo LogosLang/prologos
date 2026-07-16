@@ -1404,6 +1404,8 @@
            (expr-get? e)            ;; generic get, could return a map
            (expr-nil-safe-get? e)  ;; nested nil-safe-get
            (expr-map-dissoc? e)     ;; map operation
+           (expr-get-in? e)         ;; dynamic path navigation — could return a map
+           (expr-update-in? e)      ;; dynamic path update — its result IS a map
            (expr-error? e))))       ;; error propagation
 
 ;; ========================================
@@ -2742,6 +2744,36 @@
     [(expr-map-dissoc m k)
      (let ([m* (whnf m)])
        (if (equal? m* m) e (whnf (expr-map-dissoc m* k))))]
+    ;; ---- Dynamic path ops (2026-07-16 P6 value-loss fix) ----
+    ;; These previously reduced only in nf; with no whnf arm a dynamic
+    ;; update-in/get-in result was whnf-stuck, and map-get's graceful
+    ;; degradation silently converted it to none (see definitely-not-map?,
+    ;; which now also exempts both nodes for the genuinely-stuck case).
+    ;; Semantics mirror the nf arms at whnf strength.
+    [(expr-get-in target paths)
+     (let ([nt (whnf target)]
+           [np (whnf paths)])
+       (cond
+         [(and (expr-path? np) (pair? (expr-path-branches np)))
+          (foldl (lambda (seg acc) (whnf (expr-map-get acc seg)))
+                 nt (car (expr-path-branches np)))]
+         [(and (equal? nt target) (equal? np paths)) e]
+         [else (expr-get-in nt np)]))]
+    [(expr-update-in target paths fn)
+     (let ([nt (whnf target)]
+           [np (whnf paths)])
+       (cond
+         [(and (expr-path? np) (pair? (expr-path-branches np)))
+          (let build ([base nt] [segs (car (expr-path-branches np))])
+            (cond
+              [(null? segs) (whnf (expr-app fn base))]
+              [else
+               (let* ([key (car segs)]
+                      [sub (whnf (expr-map-get base key))]
+                      [updated (build sub (cdr segs))])
+                 (whnf (expr-map-assoc base key updated)))]))]
+         [(and (equal? nt target) (equal? np paths)) e]
+         [else (expr-update-in nt np fn)]))]
     [(expr-map-size m)
      (let ([m* (whnf m)])
        (if (equal? m* m) e (whnf (expr-map-size m*))))]
@@ -3581,7 +3613,10 @@
              (define key (car segs))
              (define sub (nf (expr-map-get base key)))
              (define updated (build sub (cdr segs)))
-             (expr-map-assoc base key updated)]))
+             ;; 2026-07-16: normalize the spine (was returned as a raw
+             ;; map-assoc stuck term, leaving map-keys/map-size stuck on
+             ;; dynamic update-in results — the P6 wart).
+             (nf (expr-map-assoc base key updated))]))
         (build nt segs)]
        [else (expr-update-in nt np nf-fn)])]
     [(expr-broadcast-get target fields)
