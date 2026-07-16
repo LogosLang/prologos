@@ -420,6 +420,10 @@ Ruling text = track doc §2a D22. Implementation shape:
 - **Champ-arm retirement**: typing-core:2946-2948 + qtt twins → loud refusal naming validate (closes the blanket-accept hole).
 - QTT mirrors: every new/changed check arm lands with its checkQ twin in the same commit (shared predicates where possible).
 
-### §13.3–§13.5 (T tightening · P presence · Q5 solve-shape) — OPEN, rulings pending
+### §13.3 T — Q4 tightening (D23 ✅ LOCKED 2026-07-16)
+
+Ruling text = track doc §2a D23. Implementation shape: **groundwork slice** (posture-free) = structured `meta-source-info` at the four D19 mint sites (record-project literal-miss + dynamic-key, record-value-bound empty-closed, union-record-component-vt; tags replace the bare strings, loc=#f interim) · deepened meta-walk (unsolved-metas-to-holes + type-contains-meta? gain expr-union/expr-Record recursion — consider deriving both from one generic expr meta-fold) · ALL stored-type producer sites routed through the guard (def `:1598`, defr `:735`, annotated `:1782`, foreign `:3062`, data `:1664` — coordinates drift, re-grep; `:1704` deferral store explicitly EXEMPT, it is transient) · DEFERRED.md rejected-with-reason entries. **Posture slice** (AFTER §13.4 presence activation; re-trigger pinned in DEFERRED.md) = `check-unresolved-projection-metas` filter over the unsolved-metas path, consulted in the existing driver error block at the store boundaries; hard error w/ def-srcloc; qtt untouched (the guard is a driver-boundary concern, not a checker arm).
+
+### §13.4–§13.5 (P presence · Q5 solve-shape) — OPEN, rulings pending
 
 Queue + collapsed state per the OPTIONS doc §0 ✏ note: T = escape-boundary posture (P7: `:1704` transient; raw-meta leak confirmed route-sensitive) + severity + flip-after-presence; P = dissoc-only `'unknown` (P6: the update-in arm needs NO presence machinery given zero-segment-path closure + dyn tail) + gradient (Q7) + mechanics (Q9); Q5 = echo deletion (first green) + clobber guard + typed-rows mini-track charter. By-catch defects pending placement (Q11): the on-network annotation-adoption gap; the inline-cons width-tolerance audit; (the panic-swallow class is now ADDRESSED by D22's bridge repairs; the update-in value-loss bug is chipped `task_92fc799d`).
