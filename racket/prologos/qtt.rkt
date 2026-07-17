@@ -2333,9 +2333,11 @@
 
     ;; ---- Map constructors: check against Schema type (fvar) ----
     ;; Schema types are opaque fvar types backed by maps; QTT tracks usage normally.
+    ;; CIU T6 F1b.4a (D22.8): the champ twin RETIRED LOUD (mirror of
+    ;; typing-core — runtime maps seal via validate, F1b.5; fails closed).
     [((expr-champ _) (expr-fvar name))
      #:when (lookup-schema-by-name name)
-     (bu #t (zero-usage n))]
+     (bu #f (zero-usage n))]
     [((expr-map-empty _ _) (expr-fvar name))
      #:when (lookup-schema-by-name name)
      ;; Type args of map-empty are erased (m0) — zero usage, same as (expr-champ)
@@ -2352,9 +2354,11 @@
          [(_ _ _) (bu #f (zero-usage n))]))]
     ;; ---- Map constructors: check against Selection type (fvar) ----
     ;; Selection types delegate to parent schema at value level.
+    ;; CIU T6 F1b.4a (D22.8): the champ twin RETIRED LOUD (mirror of
+    ;; typing-core; runtime maps seal via validate, F1b.5; fails closed).
     [((expr-champ _) (expr-fvar name))
      #:when (lookup-selection-by-name name)
-     (bu #t (zero-usage n))]
+     (bu #f (zero-usage n))]
     [((expr-map-empty _ _) (expr-fvar name))
      #:when (lookup-selection-by-name name)
      (bu #t (zero-usage n))]
@@ -2732,6 +2736,25 @@
                          [((expr-app lf la) (? expr-Record? rec))
                           #:when (equal? lf (list-type-fvar))
                           (record-<:-elem? ctx rec la)]
+                         ;; CIU T6 F1b.4a (D22): the row-vs-schema/selection
+                         ;; discharge twins + the schema-actual up-shift twins
+                         ;; (shared predicates from typing-core — mirror-drift cap).
+                         [((expr-fvar sname) (? expr-Record? rec))
+                          #:when (lookup-schema-by-name sname)
+                          (record-<:-schema? ctx rec (lookup-schema-by-name sname))]
+                         [((expr-fvar selname) (? expr-Record? rec))
+                          #:when (lookup-selection-by-name selname)
+                          (record-<:-selection? ctx rec (lookup-selection-by-name selname))]
+                         [((? expr-Map? mt) (expr-fvar sname))
+                          #:when (lookup-schema-by-name sname)
+                          (record-<:-map? ctx (schema->row (lookup-schema-by-name sname))
+                                          (expr-Map-k-type mt) (expr-Map-v-type mt))]
+                         [((? expr-Record? t-rec) (expr-fvar sname))
+                          #:when (and (lookup-schema-by-name sname)
+                                      (record-width-applicable?
+                                       t-rec (schema->row (lookup-schema-by-name sname))))
+                          (record-width-discharge?
+                           ctx t-rec (schema->row (lookup-schema-by-name sname)))]
                          ;; CIU T6 F1b.3 (D21): the width-discharge twin (shared
                          ;; predicates from typing-core — the mirror-drift cap).
                          ;; Returns a plain BOOLEAN into this or-chain (the bu

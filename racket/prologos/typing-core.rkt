@@ -57,6 +57,10 @@
          union-record-component-vt  ;; CIU T6 F1a.2 p1a: exported for synthetic dyn-row tests
          record-width-applicable?   ;; CIU T6 F1b.3 (D21): width-discharge static guard (qtt twin + tests)
          record-width-discharge?    ;; CIU T6 F1b.3 (D21): the shared discharge (qtt twin + tests)
+         schema->row                ;; CIU T6 F1b.4a (D22): schema→row up-shift projection (qtt twins + tests)
+         record-<:-schema?          ;; CIU T6 F1b.4a (D22): row-vs-schema discharge (qtt twin)
+         record-<:-selection?       ;; CIU T6 F1b.4a (D22): subset-aware row-vs-selection discharge (qtt twin)
+         lookup-selection-parent-schema  ;; CIU T6 F1b.4a: shared parent resolution
          lookup-schema-by-name
          ;; Selection type helpers
          lookup-selection-by-name
@@ -567,10 +571,27 @@
            (unify-ok? (unify ctx vt (record-value-union rec))))]
      [else
       ;; Concrete V: knowns-only IS the C_ConsL absorption for dyn rows (§12.4).
+      ;; F1b.4a: via the shared per-field satisfaction (union-V aware).
       (andmap (lambda (f)
-                (let ([ft (record-field-type (cdr f))])
-                  (or (unify-ok? (unify ctx ft vt)) (subtype? ft vt))))
+                (field-type-satisfies? ctx (record-field-type (cdr f)) vt))
               fields)])))
+
+;; CIU T6 F1b.4a: shared per-field satisfaction — does field type ft satisfy
+;; expected value type vt at α-strength? The single-branch case is BYTE-
+;; IDENTICAL to the historical record-<:-map? leg (unify-first — a meta ft
+;; must still solve against vt); a UNION expected type accepts when SOME
+;; branch fits (subtype?-first per the record-<:-elem? idiom, so ground
+;; fields don't stray-solve). Closes a PRE-EXISTING gap the up-shift probe
+;; surfaced: rows vs (Map K <A|B>) annotations refused although every field
+;; fit a branch (probe-4a-union ;;2). Consumers: record-<:-map?,
+;; record-<:-schema?, record-<:-selection?.
+(define (field-type-satisfies? ctx ft vt)
+  (let ([vt* (whnf vt)])
+    (if (expr-union? vt*)
+        (ormap (lambda (br)
+                 (or (subtype? ft br) (unify-ok? (unify ctx ft br))))
+               (flatten-union vt*))
+        (or (unify-ok? (unify ctx ft vt)) (subtype? ft vt)))))
 
 ;; Look up a schema by name, trying both the full name and bare (short) name.
 ;; Handles qualified names like 'test::Point → looks up 'Point.
@@ -2965,29 +2986,52 @@
                          (not (expr-error? (infer ctx v))))))]
               [_ (and (check ctx k (expr-Keyword))
                       (not (expr-error? (infer ctx v))))])))]
-    ;; map-assoc checked against Selection type — delegate to parent schema check
+    ;; CIU T6 F1b.4a (D22): map-assoc checked against Selection type — field
+    ;; TYPES validate against the PARENT schema (a selection is a read-side
+    ;; VIEW: extra parent fields on the value are by-design, test-selection-
+    ;; paths idiom), but the recursion keeps the SELECTION fvar — selection
+    ;; identity survives to the 4e residual, whose REQUIRED set is the
+    ;; selection's subset, not the parent's (the wholesale-delegation drift
+    ;; this replaces lost that identity).
     [((expr-map-assoc m k v) (expr-fvar sel-name))
      #:when (lookup-selection-by-name sel-name)
      (let* ([sel (lookup-selection-by-name sel-name)]
-            [schema-name (selection-entry-schema-name sel)])
-       ;; A selection at value level IS the parent schema — delegate to schema check
-       (check ctx (expr-map-assoc m k v) (expr-fvar schema-name)))]
+            [schema (lookup-selection-parent-schema sel)])
+       (and schema
+            (check ctx m (expr-fvar sel-name))
+            (match k
+              [(expr-keyword kw-sym)
+               (let ([field (schema-lookup-field schema kw-sym)])
+                 (if field
+                     (check ctx v (schema-field-type->expr
+                                   (schema-field-type-datum field)))
+                     (if (schema-entry-closed? schema)
+                         #f
+                         (not (expr-error? (infer ctx v))))))]
+              [_ (and (check ctx k (expr-Keyword))
+                      (not (expr-error? (infer ctx v))))])))]
     ;; map-empty checked against Selection type — delegate to parent schema
     [((expr-map-empty k1 v1) (expr-fvar sel-name))
      #:when (lookup-selection-by-name sel-name)
      #t]
-    ;; champ checked against Selection type — delegate to parent schema
+    ;; CIU T6 F1b.4a (D22.8): champ-vs-selection RETIRED LOUD — a champ is a
+    ;; RUNTIME map value (born only in reduction, after type-check); statically
+    ;; sealing one is validate's job (F1b.5). The old unconditional #t was a
+    ;; blanket-accept hole (dead at HEAD, probe-verified — but fails CLOSED now
+    ;; so any future flow that re-checks reduced values gets a refusal, not a
+    ;; silent pass). Runtime discharge: validate (Result-returning tabulation).
     [((expr-champ v) (expr-fvar sel-name))
      #:when (lookup-selection-by-name sel-name)
-     #t]
+     #f]
     ;; map-empty checked against Schema type — always ok (empty map is a valid partial schema)
     [((expr-map-empty _ _) (expr-fvar schema-name))
      #:when (lookup-schema-by-name schema-name)
      #t]
-    ;; champ checked against Schema type — accept raw champ values
+    ;; CIU T6 F1b.4a (D22.8): champ-vs-schema RETIRED LOUD (see the selection
+    ;; twin above — same rationale; runtime seal = validate, F1b.5).
     [((expr-champ _) (expr-fvar schema-name))
      #:when (lookup-schema-by-name schema-name)
-     #t]
+     #f]
 
     ;; ---- Set checks ----
     ;; hset checked against Set A
@@ -3277,6 +3321,35 @@
                   [((expr-app f a) (? expr-Record? rec))
                    #:when (equal? f (list-type-fvar))
                    (record-<:-elem? ctx rec a)]
+                  ;; CIU T6 F1b.4a (D22): a keyword row satisfies a SCHEMA
+                  ;; expectation — the row-vs-schema discharge (per-field
+                  ;; CHECK-strength on knowns; width-partial toward missing
+                  ;; until 4e's residual). `the Person m` on a def-bound row
+                  ;; stops being an inference error here.
+                  [((expr-fvar sname) (? expr-Record? rec))
+                   #:when (lookup-schema-by-name sname)
+                   (record-<:-schema? ctx rec (lookup-schema-by-name sname))]
+                  ;; F1b.4a: row vs SELECTION expectation — subset-aware
+                  ;; (fields outside the selection's view reject).
+                  [((expr-fvar selname) (? expr-Record? rec))
+                   #:when (lookup-selection-by-name selname)
+                   (record-<:-selection? ctx rec (lookup-selection-by-name selname))]
+                  ;; F1b.4a: schema-typed ACTUAL where a Map is expected — the
+                  ;; free up-shift direction (D22.7): project schema→row and
+                  ;; ride the EXISTING record→Map α.
+                  [((? expr-Map? mt) (expr-fvar sname))
+                   #:when (lookup-schema-by-name sname)
+                   (record-<:-map? ctx (schema->row (lookup-schema-by-name sname))
+                                   (expr-Map-k-type mt) (expr-Map-v-type mt))]
+                  ;; F1b.4a: schema-typed ACTUAL where a ROW is expected — the
+                  ;; projection feeding the D21 width machinery (a schema value
+                  ;; flowing into a row-solved position discharges by width).
+                  [((? expr-Record? t-rec) (expr-fvar sname))
+                   #:when (and (lookup-schema-by-name sname)
+                               (record-width-applicable?
+                                t-rec (schema->row (lookup-schema-by-name sname))))
+                   (record-width-discharge?
+                    ctx t-rec (schema->row (lookup-schema-by-name sname)))]
                   ;; CIU T6 F1b.3 (D21): erasure-mode WIDTH discharge — a wider closed
                   ;; keyword row satisfies a narrower closed keyword row expectation
                   ;; (fact-subset: extras on the actual erased; shared fields at
@@ -3339,6 +3412,64 @@
          values
          "record-width-discharge")
        #t))
+
+;; ========================================
+;; CIU T6 F1b.4a (D22): the schema→row up-shift + the row-vs-schema discharge
+;; ========================================
+;;
+;; schema->row — project a schema-entry to a CLOSED keyword row (the up-shift's
+;; carrier: schema facts become row facts, feeding the EXISTING record→Map αs
+;; and the D21 width machinery). ONE-LEVEL: nested sub-schemas stay opaque
+;; fvars (their type-datum is the auto-registered sub-name symbol, which
+;; schema-field-type->expr maps to an expr-fvar) — deep projection is not
+;; needed by any current consumer and would open the recursive-schema
+;; undecidability edge (R-note §known-hard-edges). All fields 'present
+;; (a schema field IS a positive observation; :default-filled = 'present per
+;; D22.6 — the fill happens at the seal boundary, not here).
+(define (schema->row schema)
+  (make-record 'keyword
+               (for/list ([f (in-list (schema-entry-fields schema))])
+                 (cons (schema-field-keyword f)
+                       (record-field (schema-field-type->expr (schema-field-type-datum f))
+                                     'present)))
+               'closed))
+
+;; record-<:-schema? — a keyword row (closed OR dyn) satisfies a schema
+;; expectation on its KNOWN fields: per-field CHECK-strength (unify ∨ subtype?
+;; — the record-<:-map? concrete-V idiom; the D21 boundary invariant is what
+;; makes a future `Num`-supertype schema field accept an Int row field here);
+;; unknown row fields consult closed? (mirroring the map-assoc-vs-schema arm);
+;; fields MISSING from the row are ACCEPTED — today's width-partial posture.
+;; The residual scan (F1b.4e) owns missing-required/fill/closedness at the
+;; seal boundary; a dyn row's remainder additionally can't witness absence,
+;; which 4e's closedness scan handles (refuse :closed seals on dyn actuals).
+(define (record-<:-schema? ctx rec schema)
+  (and (eq? (expr-Record-key-domain rec) 'keyword)
+       (andmap (lambda (f)
+                 (let* ([label (car f)]
+                        [ft (record-field-type (cdr f))]
+                        [field (schema-lookup-field schema label)])
+                   (if field
+                       (field-type-satisfies?
+                        ctx ft (schema-field-type->expr (schema-field-type-datum field)))
+                       (not (schema-entry-closed? schema)))))
+               (expr-Record-fields rec))))
+
+;; record-<:-selection? — the selection discharge. A selection is a READ-side
+;; VIEW over fuller data (map-get gates to requires+provides; the existing
+;; test-selection-paths idiom constructs values carrying parent fields OUTSIDE
+;; the view — by design), so CONSTRUCTION validates field TYPES against the
+;; PARENT schema and does NOT reject extra parent fields. D22's "delegate
+;; against their SUBSET" scopes the 4e RESIDUAL: what a selection-typed seal
+;; REQUIRES is the selection's field subset (not the parent's full set) — this
+;; wrapper keeps selection identity so 4e can enumerate that subset.
+(define (record-<:-selection? ctx rec sel)
+  (define schema (lookup-selection-parent-schema sel))
+  (and schema (record-<:-schema? ctx rec schema)))
+
+;; Shared parent-schema resolution (selection entries store the schema NAME).
+(define (lookup-selection-parent-schema sel)
+  (lookup-schema-by-name (selection-entry-schema-name sel)))
 
 ;; ========================================
 ;; check-reduce: type-check a reduce (match) expression
