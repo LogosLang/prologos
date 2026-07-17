@@ -182,3 +182,45 @@
                "no raw meta may appear in the stored-type display")
   (check-true (string? (last-result results))
               "the later reference must not crash (no dangling meta)"))
+
+;; ========================================
+;; 6. F1b.4-pre: the scan is UNIVERSAL (process-string contexts included)
+;; ========================================
+
+;; The F1b.4 mini-audit headline: the 5th refusal check was armed only in
+;; process-file (init-attribute-map-cell! has one caller), so wrong-typed
+;; sealed literals passed SILENTLY in process-string contexts — the
+;; two-context soundness divergence (pipeline.md Two-Context Audit seam).
+;; F1b.4-pre: infer-on-network/full returns the post-quiescence scan net +
+;; attribute-cell id, and the check runs unconditionally in every context.
+
+(define (run-string-ctx content)
+  (parameterize ([current-ns-context #f]
+                 [current-module-registry (hasheq)]
+                 [current-lib-paths (list lib-dir)]
+                 [current-relation-store (make-relation-store)]
+                 [current-defn-param-names (hasheq)]
+                 [current-schema-registry (hasheq)]
+                 [current-selection-registry (hasheq)])
+    (install-module-loader!)
+    (process-string content)))
+
+(test-case "process-string context: WRONG-typed sealed literal is REJECTED (scan universal)"
+  (define results
+    (run-string-ctx
+     (string-append
+      "(ns t)\n"
+      "(schema Person :name String :age Int)\n"
+      "(the Person ($brace-params :name 42 :age \"x\"))\n")))
+  (check-true (prologos-error? (last results))
+              "wrong-typed seal must error in process-string too (was silently accepted pre-4-pre)"))
+
+(test-case "process-string context: SOUND sealed literal still passes (re-route is behavior-preserving)"
+  (define results
+    (run-string-ctx
+     (string-append
+      "(ns t)\n"
+      "(schema Person :name String :age Int)\n"
+      "(the Person ($brace-params :name \"bob\" :age 4))\n")))
+  (check-false (prologos-error? (last results))
+               "sound seal must pass through the imperative re-route"))

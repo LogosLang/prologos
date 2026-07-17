@@ -2983,7 +2983,15 @@
     (current-attribute-map-cell-id cid)
     (set-box! prn-box pnet*)))
 
-(define (infer-on-network pnet expr ctx-val)
+;; CIU T6 F1b.4-pre: /full returns SIX values — the classic four PLUS the
+;; post-quiescence net that holds the attribute map (net5: in persistent mode
+;; it is also re-boxed into the prn; in per-command fallback mode it is the
+;; only holder) and the attribute-map cell id for THIS run. The extra two are
+;; what makes the untyped-interior scan (5th refusal check) UNIVERSAL across
+;; contexts — it reads the net typing actually ran on, with no dependence on
+;; the global arming chain (init-attribute-map-cell! is process-file-only;
+;; process-string/fixture contexts run the per-command fallback cell).
+(define (infer-on-network/full pnet expr ctx-val)
   ;; 1. Get the GLOBAL attribute-map cell from the persistent registry network.
   ;; If not initialized (e.g., test context), create per-command.
   (define prn-box (current-persistent-registry-net-box))
@@ -3056,7 +3064,13 @@
     (when use-persistent?
       (set-box! prn-box net5))
     ;; Return: cleaned network, root type, meta solutions, warnings
-    (values (if use-persistent? pnet net5) root-type meta-solutions warnings)))
+    (values (if use-persistent? pnet net5) root-type meta-solutions warnings net5 tm-cid)))
+
+;; Stable 4-value surface (tests + any external callers): drops the scan pair.
+(define (infer-on-network pnet expr ctx-val)
+  (define-values (ret root-type meta-solutions warnings _scan-net _scan-cid)
+    (infer-on-network/full pnet expr ctx-val))
+  (values ret root-type meta-solutions warnings))
 
 ;; ============================================================
 ;; Production Entry Point: infer-on-network/err
@@ -3135,9 +3149,10 @@
      (define enet (unbox net-box))
      (define pnet (elab-network-prop-net enet))
      (define ctx-val (context-cell-value ctx (length ctx)))
-     ;; Run typing on the MAIN network (returns 4 values since Phase 7)
-     (define-values (pnet* root-type meta-solutions warnings)
-       (infer-on-network pnet expr ctx-val))
+     ;; Run typing on the MAIN network (/full also returns the post-quiescence
+     ;; scan net + attribute-cell id for the universal 5th refusal check)
+     (define-values (pnet* root-type meta-solutions warnings scan-net scan-cid)
+       (infer-on-network/full pnet expr ctx-val))
      ;; Rebox the updated elab-network (attribute-map cell now on main network)
      (set-box! net-box (elab-network-rewrap enet pnet*))
      ;; Bridge meta solutions to imperative meta-store (SCAFFOLDING until Phase 9)
@@ -3183,12 +3198,12 @@
        ;; back to the imperative checker. This single choke point covers all
        ;; four driver gates (eval/infer/defr/unannotated-def) + REPL/LSP.
        ;; Computed ONLY when the four checks above pass (lazy via cond order).
-       [(and (current-persistent-registry-net-box)
-             (current-attribute-map-cell-id)
-             (untyped-interior-position
-              (unbox (current-persistent-registry-net-box))
-              (current-attribute-map-cell-id)
-              expr))
+       ;; F1b.4-pre: UNCONDITIONAL — scan-net/scan-cid come from /full, so the
+       ;; check runs in EVERY context (persistent AND per-command fallback),
+       ;; closing the two-context soundness divergence (wrong-typed sealed
+       ;; literals passed silently in process-string contexts when the global
+       ;; arming chain was absent — F1b.4 mini-audit headline finding).
+       [(untyped-interior-position scan-net scan-cid expr)
         => (lambda (pos)
              (set-box! on-network-fallback-count (add1 (unbox on-network-fallback-count)))
              (inference-failed-error loc "on-network: untyped interior"
