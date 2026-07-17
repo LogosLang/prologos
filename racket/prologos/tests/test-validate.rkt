@@ -65,7 +65,10 @@ def bad := [map-assoc [map-assoc {} :name \"bob\"] :age \"x\"]\n")
   (define rs (run-file-string (person-file 1 "[validate Person m]\n")))
   (define out (result-str (last rs)))
   (check-regexp-match #rx"result::ok \\{" out)
-  (check-regexp-match #rx"Result Person \\[Map Keyword prologos::data::reason::Reason\\]" out))
+  ;; F1b.5-s3: validate resolves S to the ns-QUALIFIED schema name (so a
+  ;; validate value unifies with a `def x : Schema :=` annotation; short and
+  ;; qualified schema fvars are distinct types).
+  (check-regexp-match #rx"Result vt[0-9]+::Person \\[Map Keyword prologos::data::reason::Reason\\]" out))
 
 (test-case "validate/err-and-err?-consumption"
   (define rs (run-file-string (person-file 2 "[validate Person bad]\n\n[err? [validate Person bad]]\n")))
@@ -124,7 +127,7 @@ schema Small\n  :n Int :check (> 10 _)\n
 [map [validate Person _] rows]\n")))
   (define out (result-str (last rs)))
   (check-regexp-match #rx"result::ok \\{" out)
-  (check-regexp-match #rx"List \\[.*Result Person" out))
+  (check-regexp-match #rx"List \\[.*Result vt[0-9]+::Person" out))  ; s3: qualified S
 
 ;; ---- loud bake errors + static reject ---------------------------------------
 

@@ -11,6 +11,12 @@
 
 ns f1b4-seal-acceptance :no-prelude
 
+;; :no-prelude — since F1b.5-s3 a :check-schema constructor door delegates its
+;; :check discharge to validate (D29), so it needs result + reason in scope
+;; (the Checked door below; the bake errors loud otherwise).
+require [prologos::data::result :refer [Result ok err ok? err?]]
+require [prologos::data::reason :refer [Reason missing-required check-failed type-mismatch unexpected-field]]
+
 ;; --- schemas ----------------------------------------------------------------
 
 schema Person
@@ -76,6 +82,8 @@ def cbad := [Checked {:name "dave" :age 0}]
 
 def cgood := [Checked {:name "fred" :age 5}]
 ;;13=> cgood : f1b4-seal-acceptance::Checked defined.
+;;   ← F1b.5-s3: the :check door delegates to validate; the qualified schema type
+;;     is preserved (validate resolves S to the ns-qualified name)
 
 cgood.age
 ;;14=> 5 : Int

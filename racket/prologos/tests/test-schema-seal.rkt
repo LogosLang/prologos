@@ -264,6 +264,10 @@
 (define CHECKED
   (string-append
    "ns t :no-prelude\n"
+   ;; F1b.5-s3 (D29): a :check-schema ctor door delegates :check to validate,
+   ;; which needs result + reason in scope in a :no-prelude file.
+   "require [prologos::data::result :refer [Result ok err ok? err?]]\n"
+   "require [prologos::data::reason :refer [Reason missing-required check-failed type-mismatch unexpected-field]]\n"
    "schema Person\n"
    "  :name String\n"
    "  :age Int :check (> _ 0)\n"))

@@ -1297,8 +1297,13 @@
                           missing-defaults))))
 
 ;; ========================================
-;; Schema check-pred wrapping helpers
+;; Schema check-pred lowering helpers
 ;; ========================================
+;; subst-underscore + normalize-check-pred lower a `:check` datum to a Bool
+;; expression. Since F1b.5-s2b they serve the validate PLAN bake (elaborator.rkt)
+;; — their original consumer, the wrap-schema-checks panic bridge, was retired at
+;; F1b.5-s3 (D29; the door now delegates :check to validate via wrap-seal-validate
+;; below). Kept provided.
 
 ;; Substitute all occurrences of the symbol _ in a datum tree.
 (define (subst-underscore datum replacement)
@@ -1326,28 +1331,41 @@
      `(,(if (eq? (car datum) '==) 'eq 'neq) ,@norm-args)]
     [else (map normalize-check-pred datum)]))
 
-;; Wrap a base-form datum with nested if/panic checks for all checked fields.
-;; Returns the wrapped datum, or base-form if no checks needed.
-(define (wrap-schema-checks schema-entry base-form)
-  (define fields (schema-entry-fields schema-entry))
-  (define checked-fields
-    (filter (lambda (f) (schema-field-check-pred f)) fields))
-  (if (null? checked-fields)
+;; CIU T6 F1b.5-s3 (D29): the constructor door's :check discharge DELEGATES to
+;; validate — the panic BRIDGE (the retired wrap-schema-checks if/panic fold) is
+;; gone. base-form is the static seal `(the S {aug|arg})`; when S carries :check
+;; fields, wrap it as
+;;   (let __schema-check-tmp base-form
+;;     (prologos::data::reason::expect-valid "S" (validate S __schema-check-tmp)))
+;; so the seal still statically type-checks base-form (the `the` boundary — Q_B
+;; keep-the-seal: wrong-typed literal fields stay a STATIC error) AND
+;; runtime-discharges :check through the ONE validate engine; expect-valid aborts
+;; with a panic carrying the byte-parity failure message on failure. No :check →
+;; base-form UNCHANGED (no-:check doors stay byte-identical: prelude-independent,
+;; display markers + the exact-marker census preserved). Applies to BOTH ctor
+;; doors; the let skeleton keeps the arg a schema-ann so seal-application-body?'s
+;; beta-redex gate fires body-independently at the def-forcing catch sites.
+;; expect-valid is emitted FQN, so a :no-prelude :check-schema constructor needs
+;; the result+reason requires (the validate bake already errors loud otherwise).
+;; The helpers subst-underscore/normalize-check-pred STAY — re-homed to the
+;; validate plan bake (elaborator.rkt) at s2b.
+(define (wrap-seal-validate schema-entry base-form)
+  (define has-checks?
+    (ormap schema-field-check-pred (schema-entry-fields schema-entry)))
+  (if (not has-checks?)
       base-form
-      (let ([tmp '__schema-check-tmp])
-        (define body
-          (foldr (lambda (f inner)
-                   (define kw-sym (schema-field-keyword f))
-                   (define access `(map-get ,tmp ,(string->symbol (format ":~a" kw-sym))))
-                   (define pred-raw (schema-field-check-pred f))
-                   (define pred-subst (subst-underscore pred-raw access))
-                   (define pred-norm (normalize-check-pred pred-subst))
-                   (define schema-name (schema-entry-name schema-entry))
-                   (define msg (format "~a: field :~a failed check ~a" schema-name kw-sym pred-raw))
-                   `(if ,pred-norm ,inner (panic ,msg)))
-                 tmp
-                 checked-fields))
-        `(let ,tmp ,base-form ,body))))
+      (let ([tmp '__schema-check-tmp]
+            [sname (cadr base-form)]                             ; (the S …) → S
+            [prefix (symbol->string (schema-entry-name schema-entry))])
+        ;; The def/eval TYPE renders via validate's unwrapped S, i.e. the SHORT
+        ;; schema name — matching validate's own display convention (`Result
+        ;; Person …`, test-validate.rkt-locked at s2). A `:check` ctor def thus
+        ;; shows `x : Checked defined.` where a non-:check sibling (via the
+        ;; `the`/def routes, unflipped) shows the qualified name; this reflects
+        ;; the real discharge path and cannot be re-annotated (`(the Schema
+        ;; <app>)` is seal-special → refuses a non-map subject).
+        `(let ,tmp ,base-form
+           (prologos::data::reason::expect-valid ,prefix (validate ,sname ,tmp))))))
 
 ;; ========================================
 ;; Session type WS-mode desugaring (Phase S1d)
@@ -1918,27 +1936,28 @@
                  (null? (cddr datum)))  ;; exactly one arg (multi-arg is NOT a seal)
             (let ([arg (cadr datum)])
               (if (and (pair? arg) (eq? (car arg) '$brace-params))
-                  ;; LITERAL route (unchanged): Phase 5b default injection +
-                  ;; Phase 5c :check assertion wrapping — field set is
-                  ;; syntactically known, so fill is static.
+                  ;; LITERAL route: Phase 5b default injection (STAYS preparse —
+                  ;; fill is static here, the field set is syntactically known),
+                  ;; then the static seal `(the S aug)` + (F1b.5-s3, D29) the
+                  ;; :check discharge DELEGATED to validate via wrap-seal-validate
+                  ;; (the panic bridge retired). No :check → the-form unchanged.
                   (let* ([augmented (inject-schema-defaults maybe-schema arg)]
                          [the-form `(the ,(car datum) ,augmented)]
-                         [wrapped (wrap-schema-checks maybe-schema the-form)])
+                         [wrapped (wrap-seal-validate maybe-schema the-form)])
                     (preparse-expand-form wrapped reg (+ depth 1)))
-                  ;; CIU T6 F1b.4b (D22): NON-LITERAL route — the constructor
-                  ;; form generalizes to `[SchemaName e]`: seal TYPE-ONLY via
-                  ;; the `the` boundary (per-field CHECK-strength through the
-                  ;; F1b.4a row-vs-schema discharge). Defaults + :check preds
-                  ;; are NOT materialized here: fill is TYPE-DIRECTED (which
-                  ;; fields are missing is a fact about e's row type) and
-                  ;; preparse has no types — the runtime-conditional wrap was
-                  ;; probe-REFUTED (branch unification loses the filled field
-                  ;; on dyn rows; closed rows mis-type: value/type mismatch).
-                  ;; Runtime fill + pred discharge for non-literals land with
-                  ;; the validate face's tabulation (F1b.5, the D22.4
-                  ;; decomposition); the 4e residual treats missing-defaulted
-                  ;; on non-literal routes accordingly.
-                  (preparse-expand-form `(the ,(car datum) ,arg) reg (+ depth 1))))
+                  ;; NON-LITERAL route — the constructor form `[SchemaName e]`.
+                  ;; The static seal `(the S e)` stays TYPE-ONLY (per-field
+                  ;; CHECK-strength through the F1b.4a row-vs-schema discharge;
+                  ;; runtime FILL is TYPE-DIRECTED and was probe-REFUTED at
+                  ;; preparse — it lands in validate's tabulation). (F1b.5-s3,
+                  ;; D29) :check-bearing schemas now ALSO delegate :check + the
+                  ;; runtime fill to validate via wrap-seal-validate — the s3
+                  ;; STRENGTHENING (census: zero live :check non-literal ctors,
+                  ;; so no existing surface flips). No :check → `(the S e)`
+                  ;; unchanged (type-only, as before).
+                  (preparse-expand-form
+                   (wrap-seal-validate maybe-schema `(the ,(car datum) ,arg))
+                   reg (+ depth 1))))
             ;; Not a schema construction — recurse into subexpressions
             (preparse-expand-subforms datum reg depth))])])]
     ;; Non-symbol list — recurse into subexpressions

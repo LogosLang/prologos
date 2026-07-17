@@ -3073,15 +3073,20 @@
              (cond
                [(prologos-error? subj) subj]
                [else
-                ;; the Result's S argument: the name global-env knows the
-                ;; schema type by (written, or ns-qualified)
+                ;; the Result's S argument: resolve to the ns-QUALIFIED schema
+                ;; type name (F1b.5-s3) — try qualified FIRST so validate's S is
+                ;; the SAME fvar the `the`/annotation routes produce (short and
+                ;; qualified schema fvars are DISTINCT types; a short S fails to
+                ;; unify with a `def x : Schema :=` annotation and displays
+                ;; unqualified). Fall back to the as-written name (already-FQN or
+                ;; short-only-bound cases).
                 (define resolved-sname
                   (cond
-                    [(global-env-lookup-type sname) sname]
                     [(and (current-ns-context)
                           (let ([q (qualify-name sname (ns-context-current-ns (current-ns-context)))])
                             (and (global-env-lookup-type q) q)))
                      => values]
+                    [(global-env-lookup-type sname) sname]
                     [else sname]))
                 (define (datum->display d)
                   (cond [(and (pair? d) (eq? (car d) '$union))
