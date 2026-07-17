@@ -95,3 +95,43 @@ def errs := [map-assoc [map-assoc [map-assoc {} :port [type-mismatch \"Int\" \"S
   (check-regexp-match #rx"\"host\" : String" (result-str (first rs)))
   (check-regexp-match #rx"true"  (result-str (second rs)))
   (check-regexp-match #rx"false" (result-str (third rs))))
+
+;; ---- s3: render-reason arms + render-failures parity + expect-valid --------
+;; ONE process-file run (each prelude load is ~4s; consolidated to keep the
+;; file under the ~30s no-output watchdog — testing.md). Two load-bearing gates
+;; for a silent s3 door flip: (1) render-failures single-failure BYTE PARITY
+;; with the retired wrap-schema-checks message "~a: field :~a failed check ~a";
+;; (2) expect-valid err → panic (process-file continues past it, so the later
+;; ok assertions compose). render-failures + expect-valid are prelude-unqualified.
+
+(test-case "reason/s3-renderers-and-expect-valid"
+  (define rs (run-file-string
+              "ns rtest5\n
+[reason::render-reason missing-required]\n
+[reason::render-reason [check-failed \"(> _ 0)\"]]\n
+[reason::render-reason [type-mismatch \"Int\" \"String\"]]\n
+[reason::render-reason unexpected-field]\n
+[render-failures \"Checked\" [map-assoc {} :age [check-failed \"(> _ 0)\"]]]\n
+[render-failures \"S\" [map-assoc [map-assoc {} :b [check-failed \"(> _ 1)\"]] :a missing-required]]\n
+[expect-valid \"X\" [the (Result Int (Map Keyword Reason)) [ok 5]]]\n
+[expect-valid \"S\" [the (Result Int (Map Keyword Reason)) [err [map-assoc {} :age missing-required]]]]\n
+[expect-valid \"X\" [the (Result Int (Map Keyword Reason)) [ok 7]]]\n"))
+  ;; render-reason: the four arms
+  (check-regexp-match #rx"\"is required\""              (result-str (list-ref rs 0)))
+  (check-regexp-match #rx"\"failed check \\(> _ 0\\)\"" (result-str (list-ref rs 1)))
+  (check-regexp-match #rx"\"expected Int, got String\"" (result-str (list-ref rs 2)))
+  (check-regexp-match #rx"\"unexpected field"           (result-str (list-ref rs 3)))
+  ;; render-failures single-failure: BYTE PARITY with the retired bridge message
+  (check-regexp-match #rx"\"Checked: field :age failed check \\(> _ 0\\)\""
+                      (result-str (list-ref rs 4)))
+  ;; render-failures multi: field-sorted (a before b), "; "-joined
+  (check-regexp-match #rx":a is required; field :b failed check"
+                      (result-str (list-ref rs 5)))
+  ;; expect-valid ok unwraps (unqualified via prelude)
+  (check-regexp-match #rx"^5 : Int" (result-str (list-ref rs 6)))
+  ;; expect-valid err → panic carrying the rendered failures
+  (check-pred prologos-error? (list-ref rs 7) "expect-valid on err aborts")
+  (check-regexp-match #rx"panic: S: field :age is required"
+                      (result-str (list-ref rs 7)))
+  ;; process-file continued past the panic; the next ok still unwraps
+  (check-regexp-match #rx"^7 : Int" (result-str (list-ref rs 8))))

@@ -9,8 +9,11 @@ ns prologos::data::reason :no-prelude
 ;; and free of the runtime qualified-ctor-minting hazard a Datum payload hits.
 
 require [prologos::data::list :as list :refer [List sort-on]]
-require [prologos::data::map-entry :refer [MapEntry entry-key]]
+require [prologos::data::map-entry :refer [MapEntry entry-key entry-val]]
 require [prologos::core::map :refer [map-to-entry-list]]
+require [prologos::data::result :refer [Result ok err]]
+require [prologos::data::string :as str]
+require [prologos::core::string-ops :refer [join]]
 
 ;; --- Foreign Keyword utilities (passthrough IR; the stdlib lacks Keyword
 ;; Eq/Ord and keyword->string) — enough to render the failure map in a
@@ -36,3 +39,40 @@ defn errors-to-list [m]
   [sort-on keyword-lte
            [fn [e : [MapEntry Keyword Reason]] [entry-key e]]
            [map-to-entry-list Keyword Reason m]]
+
+;; --- render-failures : the failure map as one human-readable line
+;; (CIU T6 F1b.5-s3, D29). Single-failure BYTE PARITY with the retired
+;; wrap-schema-checks message: "Schema: field :kw failed check (pred)";
+;; multi-failure joins field segments with "; " in field-sorted order. ---
+
+spec render-reason Reason -> String
+defn render-reason
+  | missing-required -> "is required"
+  | check-failed p -> [str::append "failed check " p]
+  | type-mismatch want got ->
+    [str::append "expected " [str::append want [str::append ", got " got]]]
+  | unexpected-field -> "unexpected field (closed schema)"
+
+spec render-entry [MapEntry Keyword Reason] -> String
+defn render-entry [e]
+  [str::append "field :"
+    [str::append [keyword-name [entry-key e]]
+      [str::append " " [render-reason [entry-val e]]]]]
+
+spec render-failures String [Map Keyword Reason] -> String
+defn render-failures [prefix es]
+  [str::append prefix
+    [str::append ": " [join "; " [list::map render-entry [errors-to-list es]]]]]
+
+;; --- expect-valid : the seal's abort face (D29 delegate; the door composes
+;; [expect-valid "Schema" [validate Schema v]]). ok unwraps; err PANICS with the
+;; rendered failures — the panic is the ARM BODY (top-node under nf, so the
+;; def-forcing + eval catch sites both see it). The recoverable alternative is
+;; validate itself (the to-rat/try-from convention: total-with-panic names its
+;; recoverable sibling). ---
+
+spec expect-valid {A} String [Result A [Map Keyword Reason]] -> A
+defn expect-valid [prefix r]
+  match r
+    | ok v   -> v
+    | err es -> panic [render-failures prefix es]
