@@ -64,6 +64,40 @@ entry gates** (round-6 rulings, track doc §2a):
    where the generalization lands; D17's `{}` keyword-commitment is one
    recoverable seed site.
 
+## CIU T6 F1b.5: the deep-walker charter — ONE mechanism, one entry (D27.5, 2026-07-17)
+
+Validate v1 is ONE-LEVEL with STRUCTURAL depth symmetry (it consumes the same
+field-set enumeration as `schema->row` — never a second one-level implementation).
+THREE deferrals are ONE walker mechanism and live in THIS single entry (never
+residue-letter entries — divergent gates/double-count):
+
+1. **Container/nested-seal traversal depth** (the driver top-node class — def-forcing
+   + eval arm see only top nodes; a seal nested in a pair/list escapes both).
+2. **Tier-2 element recursion** (`(List Int)` fields checking each element).
+   HONEST reason (D28 corrected the false one): `ctor-meta` ALREADY carries
+   field-types/params/rec-flags runtime-readable (macros.rkt `ctor-meta` +
+   `lookup-ctor`) — what is unbuilt is the param-substitution + recursion +
+   depth discipline (recursive-schema edge), NOT metadata.
+3. **Sub-schema descent** (auto-registered `Parent__field` entries carry
+   check/default = #f — stripped at registration; a one-level engine hitting a
+   sub-schema-typed field has no defined deep disposition).
+
+`defr : Schema` fact-row runtime validation rides the same charter (an adapter
+over the positional discharge, parser.rkt `parse-defr-schema-typed`).
+
+**Entry gates**: (a) a real consumer with nested/container schema shapes — the
+P-Real demo schemas are the watched trigger (checked at F1b.5-p0; list-typed
+fields would open this EARLY); (b) API compatibility is PRE-PAID: E keys are
+PATH-shaped from v1 (D27.3, singleton paths) so the walker extends without a
+breaking E change (product-over-paths); (c) the depth discipline designed
+(recursive schemas). 
+
+**Residue (e), honest wording (D27.5)**: the open?-absorbed missing-required
+(schema-seal-residual-ok?'s open? disjunct) is *dischargeable via validate
+(OPT-IN)*; AUTO-discharge is deferred to the blame-latch era — gate: the §3b
+blame-latch citation verified concrete at F1b.5-p0 (else re-anchor; an invented
+placeholder gate is forbidden).
+
 ## CIU T6 (post-F1b): typed solution rows — own mini-track (D25.3 charter home)
 
 `solve` results carry NO type at HEAD (`expr-hole`); per-solution ROW types
