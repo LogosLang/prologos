@@ -193,6 +193,7 @@
          register-schema!
          lookup-schema
          parse-schema-fields
+         qualify-type-datum
          ;; Selection registry
          current-selection-registry
          read-selection-registry
@@ -842,8 +843,64 @@
             (define-values (default-val check-pred rest)
               (parse-field-properties (cddr pairs)))
             (loop rest
-                  (cons (schema-field kw-name type-datum default-val check-pred) fields))])])))
+                  (cons (schema-field kw-name
+                                      (normalize-field-type-datum type-datum (or parent-name 'schema))
+                                      default-val check-pred)
+                        fields))])])))
   (values fields auto-subs))
+
+;; CIU T6 F1b.5-s1 (D27.6): normalize WS angle-type reader sentinels in schema
+;; field type datums at REGISTRATION. The WS reader emits `<...>` as
+;; ($angle-type ...) with `|` lexed to $pipe; ANNOTATIONS process these via
+;; the parser's unwrap-angle-type/parse-infix-type, but schema fields are
+;; stored as raw datums and bypassed that path — pre-s1 the sentinels leaked
+;; into the registry (and qualify-type-datum ns-qualified them), so every
+;; construction against an angle-typed field failed (the p0 probes,
+;; 2026-07-17). Canonical stored forms ($-heads are qualification-exempt):
+;;   <A | B | C>   →  ($union A B C)           (flattened)
+;;   <A -> B -> C> →  ($arrow A ($arrow B C))  (right-assoc)
+;;   <A>           →  A
+;; Dependent shapes (Pi binders, Sigma `*`) are NOT supported in schema field
+;; position — loud error at declaration (honest refusal; richer field types
+;; are F-carrier/walker-era work).
+(define (normalize-field-type-datum datum schema-name)
+  (cond
+    [(and (pair? datum) (eq? (car datum) '$angle-type))
+     (normalize-angle-parts (cdr datum) schema-name)]
+    [(list? datum)
+     (map (lambda (d) (normalize-field-type-datum d schema-name)) datum)]
+    [else datum]))
+
+(define (normalize-angle-parts parts schema-name)
+  (define (split-on tok lst)
+    (let loop ([rest lst] [cur '()] [acc '()])
+      (cond
+        [(null? rest) (reverse (cons (reverse cur) acc))]
+        [(eq? (car rest) tok) (loop (cdr rest) '() (cons (reverse cur) acc))]
+        [else (loop (cdr rest) (cons (car rest) cur) acc)])))
+  (define (segment->datum seg)
+    (cond
+      [(null? seg)
+       (error 'schema (format "schema ~a: empty type segment in <...> field type" schema-name))]
+      [(null? (cdr seg)) (normalize-field-type-datum (car seg) schema-name)]
+      [else (normalize-field-type-datum seg schema-name)]))
+  (cond
+    ;; union: <A | B | ...>
+    [(memq '$pipe parts)
+     (cons '$union (map segment->datum (split-on '$pipe parts)))]
+    ;; arrow: <A -> B -> C> (right-assoc)
+    [(memq '-> parts)
+     (let build ([segs (split-on '-> parts)])
+       (if (null? (cdr segs))
+           (segment->datum (car segs))
+           (list '$arrow (segment->datum (car segs)) (build (cdr segs)))))]
+    ;; single type: <A>
+    [(and (pair? parts) (null? (cdr parts)))
+     (segment->datum parts)]
+    [else
+     (error 'schema
+            (format "schema ~a: unsupported <...> field type shape ~a — schema fields support unions <A | B> and arrows <A -> B>; dependent types are not supported in schema field position"
+                    schema-name parts))]))
 
 
 ;; Parse optional field-level properties after a field's type datum.
@@ -873,15 +930,25 @@
 (define builtin-type-names
   '(Nat Int Rat Bool String Char Keyword Unit Nil Symbol Type
     Posit8 Posit16 Posit32 Posit64 Quire8 Quire16 Quire32 Quire64
+    ;; CIU T6 F1b.5-s1: Float32/Float64 were MISSING here (the two-list drift
+    ;; vs typing-core's schema-field-type->expr case table) — a Float-typed
+    ;; field under ns context was qualified past its conversion arm.
+    Float32 Float64
     List PVec Map Set Option Result Pair LSeq Value
     ;; Numerics N5de: nominal-erased refined numeric types (Q6; base Int/Rat at runtime)
     PosInt NegInt Zero NonZeroInt PosRat NegRat NonZeroRat))
 (define (qualify-type-datum datum ns-ctx)
   (cond
     [(symbol? datum)
-     (if (memq datum builtin-type-names)
-         datum
-         (qualify-name datum (ns-context-current-ns ns-ctx)))]
+     (cond
+       [(memq datum builtin-type-names) datum]
+       ;; CIU T6 F1b.5-s1: reader/normalizer sentinels ($union, $arrow — any
+       ;; $-headed atom) and operator atoms are STRUCTURE, not user type
+       ;; names — never ns-qualify them (pre-s1 this minted ns::$angle-type
+       ;; corruption in stored field datums, p0 probes).
+       [(string-prefix? (symbol->string datum) "$") datum]
+       [(eq? datum '->) datum]
+       [else (qualify-name datum (ns-context-current-ns ns-ctx))])]
     [(list? datum)
      (map (lambda (d) (qualify-type-datum d ns-ctx)) datum)]
     [else datum]))

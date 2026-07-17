@@ -189,3 +189,57 @@
   (check-equal? (schema-field-type-datum (first (schema-entry-fields entry))) '(List Nat))
   (check-equal? (schema-field-keyword (second (schema-entry-fields entry))) 'meta)
   (check-equal? (schema-field-type-datum (second (schema-entry-fields entry))) '(Map Keyword String)))
+
+;; ========================================
+;; CIU T6 F1b.5-s1: angle-sentinel normalization at registration
+;; (normalize-field-type-datum via parse-schema-fields — the p0-probe repair:
+;; pre-s1 the WS reader's $angle-type/$pipe sentinels were stored RAW and
+;; ns-qualified into corruption; every construction failed)
+;; ========================================
+
+(test-case "schema-registry/angle-union-normalized"
+  (define-values (fields _subs)
+    (parse-schema-fields '(:v ($angle-type Int $pipe String)) #f 'T))
+  (check-equal? (schema-field-type-datum (car fields)) '($union Int String)))
+
+(test-case "schema-registry/angle-union-three-way"
+  (define-values (fields _subs)
+    (parse-schema-fields '(:v ($angle-type Int $pipe String $pipe Bool)) #f 'T))
+  (check-equal? (schema-field-type-datum (car fields)) '($union Int String Bool)))
+
+(test-case "schema-registry/angle-arrow-normalized"
+  (define-values (fields _subs)
+    (parse-schema-fields '(:cb ($angle-type Int -> Int)) #f 'T))
+  (check-equal? (schema-field-type-datum (car fields)) '($arrow Int Int)))
+
+(test-case "schema-registry/angle-arrow-right-assoc"
+  (define-values (fields _subs)
+    (parse-schema-fields '(:cb ($angle-type Int -> Int -> Bool)) #f 'T))
+  (check-equal? (schema-field-type-datum (car fields)) '($arrow Int ($arrow Int Bool))))
+
+(test-case "schema-registry/angle-single-unwraps"
+  (define-values (fields _subs)
+    (parse-schema-fields '(:v ($angle-type Int)) #f 'T))
+  (check-equal? (schema-field-type-datum (car fields)) 'Int))
+
+(test-case "schema-registry/angle-union-compound-segment"
+  ;; multi-token segments stay lists: <List Int | String>
+  (define-values (fields _subs)
+    (parse-schema-fields '(:v ($angle-type List Int $pipe String)) #f 'T))
+  (check-equal? (schema-field-type-datum (car fields)) '($union (List Int) String)))
+
+(test-case "schema-registry/angle-unsupported-errors-loud"
+  ;; dependent/sigma shapes refuse LOUDLY at declaration (honest refusal;
+  ;; richer field types are F-carrier/walker-era work)
+  (check-exn exn:fail?
+             (lambda ()
+               (parse-schema-fields '(:p ($angle-type Int * String)) #f 'T))))
+
+(test-case "schema-registry/qualify-skips-sentinels-and-operators"
+  ;; qualify-type-datum must never ns-qualify $-heads or -> (pre-s1 it
+  ;; minted ns::$angle-type corruption)
+  (define ctx (make-empty-ns-context 'myns))
+  (check-equal? (qualify-type-datum '($union Int String) ctx) '($union Int String))
+  (check-equal? (qualify-type-datum '($arrow Int Int) ctx) '($arrow Int Int))
+  (check-equal? (qualify-type-datum 'Float32 ctx) 'Float32)
+  (check-equal? (qualify-type-datum 'Address ctx) 'myns::Address))

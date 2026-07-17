@@ -28,22 +28,41 @@ schema Checked
 ;;2=> Checked : [Type 0] defined.
 
 ;; --- s1: field-type repairs (angle-sentinel + bare-head qualification) ------
-;; Rich-field schemas register AND construct after the s1 repairs.
-;; (Pre-s1: both classes register but EVERY construction fails — the p0 probes.)
-;;
-;; schema WithList
-;;   :name String
-;;   :xs (List Int)
-;; s1=> WithList : [Type 0] defined.
-;;
-;; def xs3 := '[1 2 3]
-;; def wl : WithList := {:name "a" :xs xs3}
-;; s1=> wl : f1b5-validate-acceptance::WithList defined.
-;;
-;; schema WithUnion
-;;   :v <Int | String>
-;; def wu : WithUnion := {:v 3}
-;; s1=> wu : f1b5-validate-acceptance::WithUnion defined.
+;; Rich-field schemas register AND construct after the s1 repairs (pre-s1:
+;; both classes registered but EVERY construction failed — the p0 probes).
+;; Container-field ((List Int)) coverage lives in the prelude-loaded rackunit
+;; file (tests/test-schema-field-construction.rkt) — this file is :no-prelude.
+
+schema WithUnion
+  :v <Int | String>
+;;3=> WithUnion : [Type 0] defined.
+
+def wi : WithUnion := {:v 3}
+;;4=> wi : f1b5-validate-acceptance::WithUnion defined.
+
+wi.v
+;;5=> 3 : Int | String
+;;   ← the union field converts (pre-s1: mangled $angle-type/$pipe sentinels)
+
+def ws : WithUnion := {:v "x"}
+;;6=> ws : f1b5-validate-acceptance::WithUnion defined.
+
+schema WithFn
+  :name String
+  :cb <Int -> Int>
+;;7=> WithFn : [Type 0] defined.
+
+spec idi Int -> Int
+defn idi [x] x
+;;8=> idi : Int -> Int defined.
+
+def wf : WithFn := {:name "a" :cb idi}
+;;9=> wf : f1b5-validate-acceptance::WithFn defined.
+;;   ← arrow fields are EXPRESSIBLE + constructible (type-witness at runtime
+;;     = the D28 skip set; the skip-set-empty test governs)
+
+[wf.cb 4]
+;;10=> 4 : Int
 
 ;; --- s2: the node — freestanding validate (THE DEMO BEAT) -------------------
 ;;

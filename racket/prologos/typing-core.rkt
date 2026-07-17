@@ -382,12 +382,62 @@
        [(Posit16) (expr-Posit16)]
        [(Posit32) (expr-Posit32)]
        [(Posit64) (expr-Posit64)]
+       ;; CIU T6 F1b.5-s1: Quire arms were MISSING (the two-list drift vs
+       ;; macros' builtin-type-names — Quire fields minted bare fvars).
+       [(Quire8)  (expr-Quire8)]
+       [(Quire16) (expr-Quire16)]
+       [(Quire32) (expr-Quire32)]
+       [(Quire64) (expr-Quire64)]
        [(Float32) (expr-Float32)]
        [(Float64) (expr-Float64)]
-       [else      (expr-fvar datum)])]
+       [else
+        ;; CIU T6 F1b.5-s1: guarded name resolution — the list-type-fvar
+        ;; recipe (typing-core:117) generalized. User-type datums arrive
+        ;; ns-QUALIFIED from registration (qualify-type-datum); prelude
+        ;; container heads (List, Map, Option…) are qualification-SKIPPED
+        ;; (builtin-type-names) and pre-s1 minted BARE fvars that never
+        ;; unified with the prelude's qualified types (p0 probe: a correct
+        ;; List Int value REJECTED against a (List Int) field). Resolution
+        ;; order: stored name if bound → import-map resolution (guarded by
+        ;; global-env existence, the elaborate-var shape) → bare fallback
+        ;; (preserves :no-prelude / unit-test contexts).
+        (cond
+          ;; (1) import-map resolution FIRST — a bare container head (List,
+          ;; Map, Option…) may ALSO be global-env-bound under its short name,
+          ;; so stored-name-first would return the bare fvar and never unify
+          ;; with the prelude's qualified type (the list-type-fvar lesson:
+          ;; check qualified before bare).
+          [(let ([ns-ctx (current-ns-context)])
+             (and ns-ctx
+                  (let ([r (resolve-name datum ns-ctx)])
+                    (and r (not (eq? r datum)) (global-env-lookup-type r) r))))
+           => (lambda (r) (expr-fvar r))]
+          ;; (2) the stored name itself if bound (qualified user-type datums
+          ;; from registration; bare names in bare contexts).
+          [(global-env-lookup-type datum) (expr-fvar datum)]
+          ;; (3) bare fallback (:no-prelude / unit-test contexts).
+          [else (expr-fvar datum)])])]
+    ;; CIU T6 F1b.5-s1: canonical angle forms from schema-field registration
+    ;; (normalize-field-type-datum): unions and arrows now CONVERT (pre-s1
+    ;; there were no arms — even a de-sentineled union was unconvertible).
+    [(and (pair? datum) (eq? (car datum) '$union))
+     ;; ($union A B C) → right-nested expr-union (the surf-union foldr shape)
+     (let build ([parts (cdr datum)])
+       (cond
+         [(null? parts) (error 'schema-field-type->expr "empty $union datum")]
+         [(null? (cdr parts)) (schema-field-type->expr (car parts))]
+         [else (expr-union (schema-field-type->expr (car parts))
+                           (build (cdr parts)))]))]
+    [(and (pair? datum) (eq? (car datum) '$arrow))
+     ;; ($arrow A B) → non-dependent Pi at 'mw (the surf-arrow default mult;
+     ;; field types are closed, so the codomain carries no binder reference)
+     (expr-Pi 'mw
+              (schema-field-type->expr (cadr datum))
+              (schema-field-type->expr (caddr datum)))]
     [(and (list? datum) (>= (length datum) 2))
      ;; Compound type: (List Nat) → (app (fvar List) (Nat))
      ;; (Map Keyword String) → (app (app (fvar Map) (Keyword)) (String))
+     ;; (head resolution rides the symbol arm's guarded resolution above)
      (let loop ([parts datum])
        (cond
          [(null? parts) (error 'schema-field-type->expr "empty type datum")]
