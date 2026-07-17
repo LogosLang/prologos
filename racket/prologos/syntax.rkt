@@ -229,7 +229,7 @@
  (struct-out expr-goal-app) (struct-out expr-logic-var) (struct-out expr-unify-goal) (struct-out expr-is-goal) (struct-out expr-not-goal)
  ;; Narrowing (Phase 1e)
  (struct-out expr-narrow)
- (struct-out expr-relation-type) (struct-out expr-schema) (struct-out expr-schema-type)
+ (struct-out expr-relation-type)
  (struct-out expr-solve) (struct-out expr-solve-with) (struct-out expr-solve-one) (struct-out expr-goal-type)
  (struct-out expr-explain) (struct-out expr-explain-with)
  (struct-out expr-solver-config) (struct-out expr-solver-type)
@@ -958,8 +958,19 @@
 ;; vars: (listof symbol) — the ?-prefixed narrowing variable names
 (struct expr-narrow (func args target vars) #:transparent)
 (struct expr-relation-type (param-types) #:transparent)         ; type of a relation
-(struct expr-schema (name fields) #:transparent)                ; named closed validated map
-(struct expr-schema-type (name) #:transparent)                  ; type constructor for schema
+;; expr-schema / expr-schema-type — DELETED (CIU T6 F1b.4d, 2026-07-17). The
+;; history: a dormant SECOND schema realization ("named closed validated map"
+;; + its type constructor) from a road not taken — sealing was once conceived
+;; as WRAPPING the value in a witness node. The shipped realization is the
+;; registry + opaque-fvar approach (schema-entry in macros.rkt; the type is a
+;; type-only (Type 0) def), and D22 ruled TYPE-AS-WITNESS stands: sealedness
+;; is a fact of the typing derivation, values stay uniform champs (a wrapper
+;; node would fork the value representation, fight the MLstruct nominality
+;; pin, and duplicate fact-carrying the row TYPES already do). The nodes had
+;; ZERO producers, were pnet-UNREGISTERED (a latent vector-impostor hazard,
+;; pipeline.md rule 6), and their ~30 pipeline identity arms were pure drift
+;; surface. Deleted with the full-arm sweep per the expr-Open tombstone
+;; pattern (F1a.2 p2).
 ;; Solve family (4)
 (struct expr-solve (goal) #:transparent)                        ; → Seq (Map Keyword Value)
 (struct expr-solve-with (solver overrides goal) #:transparent)  ; parameterized solve
@@ -1318,7 +1329,7 @@
       (expr-uf-type? x) (expr-uf-store? x)
       (expr-table-store-type? x) (expr-table-store-val? x)
       (expr-solver-type? x) (expr-goal-type? x) (expr-derivation-type? x)
-      (expr-schema-type? x) (expr-answer-type? x) (expr-relation-type? x)
+      (expr-answer-type? x) (expr-relation-type? x)
       (expr-solver-config? x) (expr-cut? x)
       (expr-opaque? x)
       (expr-panic? x)

@@ -2742,7 +2742,6 @@
     [(expr-solver-type) (expr-Type (lzero))]
     [(expr-goal-type) (expr-Type (lzero))]
     [(expr-derivation-type) (expr-Type (lzero))]
-    [(expr-schema-type _) (expr-Type (lzero))]
     [(expr-answer-type t)
      (when t (check ctx t (expr-Type (lzero))))
      (expr-Type (lzero))]
@@ -2786,7 +2785,6 @@
      (expr-goal-type)]
 
     ;; Schema → schema-type
-    [(expr-schema nm fs) (for-each (lambda (f) (infer ctx f)) fs) (expr-schema-type nm)]
 
     ;; Solve/Explain → type-unsafe (hole)
     [(expr-solve g) (infer ctx g) (expr-hole)]
@@ -3755,7 +3753,6 @@
     [(expr-solver-type) (just-level (lzero))]
     [(expr-goal-type) (just-level (lzero))]
     [(expr-derivation-type) (just-level (lzero))]
-    [(expr-schema-type _) (just-level (lzero))]
     [(expr-answer-type _) (just-level (lzero))]
     [(expr-relation-type _) (just-level (lzero))]
 

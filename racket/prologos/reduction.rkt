@@ -1363,7 +1363,7 @@
       (expr-uf-type? e)
       (expr-table-store-type? e) (expr-solver-type? e) (expr-goal-type? e)
       (expr-derivation-type? e)
-      (expr-schema-type? e) (expr-answer-type? e) (expr-relation-type? e)
+      (expr-answer-type? e) (expr-relation-type? e)
       ;; Error / holes (stuck)
       (expr-error? e) (expr-hole? e) (expr-typed-hole? e)))
 
@@ -3056,7 +3056,6 @@
     [(expr-solver-type) e]
     [(expr-goal-type) e]
     [(expr-derivation-type) e]
-    [(expr-schema-type _) e]
     [(expr-answer-type _) e]
     [(expr-relation-type _) e]
     [(expr-cut) e]
@@ -3075,7 +3074,6 @@
     [(expr-is-goal _ _) e]
     [(expr-not-goal _) e]
     [(expr-guard _ _) e]
-    [(expr-schema _ _) e]
     ;; Solve/Explain iota rules: reduce goal then dispatch to runtime solver
     [(expr-solve goal)
      (run-solve-goal goal default-solver-config)]
@@ -3693,7 +3691,7 @@
 
     ;; Relational language (Phase 7)
     [(expr-solver-type) e] [(expr-goal-type) e] [(expr-derivation-type) e] [(expr-cut) e]
-    [(expr-schema-type _) e] [(expr-logic-var _ _) e]
+    [(expr-logic-var _ _) e]
     [(expr-answer-type t) (if t (expr-answer-type (nf t)) e)]
     [(expr-relation-type pts) (expr-relation-type (map nf pts))]
     [(expr-solver-config m) (expr-solver-config (nf m))]
@@ -3708,7 +3706,6 @@
     [(expr-is-goal v ex) (expr-is-goal (nf v) (nf ex))]
     [(expr-not-goal g) (expr-not-goal (nf g))]
     [(expr-guard cond goal) (expr-guard (nf cond) (and goal (nf goal)))]
-    [(expr-schema nm fs) (expr-schema nm (map nf fs))]
     [(expr-solve g) (expr-solve (nf g))]
     [(expr-solve-with sv ov g) (expr-solve-with (and sv (nf sv)) (and ov (nf ov)) (nf g))]
     [(expr-solve-one g) (expr-solve-one (nf g))]

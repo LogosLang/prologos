@@ -69,7 +69,6 @@
     [(expr-solver-type) "0:Solver"]
     [(expr-goal-type) "0:Goal"]
     [(expr-derivation-type) "0:DerivationTree"]
-    [(expr-schema-type name) (format "1:Schema:~a" name)]
     [(expr-answer-type _) "1:Answer"]
     [(expr-relation-type _) "1:Relation"]
     [(expr-Type l) (format "0:Type~a" l)]

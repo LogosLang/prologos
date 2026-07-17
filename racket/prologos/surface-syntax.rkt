@@ -308,7 +308,7 @@
  ;; Constraints (Phase 3c)
  (struct-out surf-all-different) (struct-out surf-element)
  (struct-out surf-cumulative) (struct-out surf-minimize)
- (struct-out surf-schema) (struct-out surf-solver)
+ (struct-out surf-solver)
  ;; Relational type constructors
  (struct-out surf-solver-type) (struct-out surf-goal-type)
  (struct-out surf-derivation-type) (struct-out surf-answer-type)
@@ -1037,7 +1037,6 @@
 ;; :minimize ?cost: branch-and-bound minimization
 (struct surf-minimize         (cost-var srcloc) #:transparent)
 ;; Schema: schema name :field Type ...
-(struct surf-schema           (name fields srcloc) #:transparent)
 ;; Solver: solver name :key val ...
 (struct surf-solver           (name options srcloc) #:transparent)
 

@@ -436,7 +436,7 @@
 
     ;; Relational language (Phase 7)
     [(expr-solver-type) e] [(expr-goal-type) e] [(expr-derivation-type) e] [(expr-cut) e]
-    [(expr-schema-type _) e] [(expr-logic-var _ _) e]
+    [(expr-logic-var _ _) e]
     [(expr-answer-type t) (expr-answer-type (zonk t))]
     [(expr-relation-type pts) (expr-relation-type (map zonk pts))]
     [(expr-solver-config m)
@@ -451,7 +451,6 @@
     [(expr-unify-goal l r) (expr-unify-goal (zonk l) (zonk r))]
     [(expr-is-goal v ex) (expr-is-goal (zonk v) (zonk ex))]
     [(expr-not-goal g) (expr-not-goal (zonk g))]
-    [(expr-schema nm fs) (expr-schema nm (map zonk fs))]
     [(expr-solve g) (expr-solve (zonk g))]
     [(expr-solve-with sv ov g) (expr-solve-with (and sv (zonk sv)) (and ov (zonk ov)) (zonk g))]
     [(expr-solve-one g) (expr-solve-one (zonk g))]
@@ -919,7 +918,7 @@
 
     ;; Relational language (Phase 7)
     [(expr-solver-type) e] [(expr-goal-type) e] [(expr-derivation-type) e] [(expr-cut) e]
-    [(expr-schema-type _) e] [(expr-logic-var _ _) e]
+    [(expr-logic-var _ _) e]
     [(expr-answer-type t) (expr-answer-type (zonk-at-depth depth t))]
     [(expr-relation-type pts) (expr-relation-type (map (lambda (p) (zonk-at-depth depth p)) pts))]
     [(expr-solver-config m)
@@ -934,7 +933,6 @@
     [(expr-unify-goal l r) (expr-unify-goal (zonk-at-depth depth l) (zonk-at-depth depth r))]
     [(expr-is-goal v ex) (expr-is-goal (zonk-at-depth depth v) (zonk-at-depth depth ex))]
     [(expr-not-goal g) (expr-not-goal (zonk-at-depth depth g))]
-    [(expr-schema nm fs) (expr-schema nm (map (lambda (f) (zonk-at-depth depth f)) fs))]
     [(expr-solve g) (expr-solve (zonk-at-depth depth g))]
     [(expr-solve-with sv ov g) (expr-solve-with (and sv (zonk-at-depth depth sv)) (and ov (zonk-at-depth depth ov)) (zonk-at-depth depth g))]
     [(expr-solve-one g) (expr-solve-one (zonk-at-depth depth g))]
@@ -1396,7 +1394,7 @@
 
     ;; Relational language (Phase 7)
     [(expr-solver-type) e] [(expr-goal-type) e] [(expr-derivation-type) e] [(expr-cut) e]
-    [(expr-schema-type _) e] [(expr-logic-var _ _) e]
+    [(expr-logic-var _ _) e]
     [(expr-answer-type t) (expr-answer-type (default-metas t))]
     [(expr-relation-type pts) (expr-relation-type (map default-metas pts))]
     [(expr-solver-config m)
@@ -1411,7 +1409,6 @@
     [(expr-unify-goal l r) (expr-unify-goal (default-metas l) (default-metas r))]
     [(expr-is-goal v ex) (expr-is-goal (default-metas v) (default-metas ex))]
     [(expr-not-goal g) (expr-not-goal (default-metas g))]
-    [(expr-schema nm fs) (expr-schema nm (map default-metas fs))]
     [(expr-solve g) (expr-solve (default-metas g))]
     [(expr-solve-with sv ov g) (expr-solve-with (and sv (default-metas sv)) (and ov (default-metas ov)) (default-metas g))]
     [(expr-solve-one g) (expr-solve-one (default-metas g))]

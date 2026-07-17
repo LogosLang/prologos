@@ -633,7 +633,6 @@
     [(expr-goal-type) "Goal"]
     [(expr-derivation-type) "DerivationTree"]
     [(expr-cut) "cut"]
-    [(expr-schema-type n) (format "(Schema ~a)" n)]
     [(expr-answer-type t)
      (if t (format "(Answer ~a)" (pp-expr t names)) "Answer")]
     [(expr-relation-type pts)
@@ -663,8 +662,6 @@
      (format "(is ~a ~a)" (pp-expr v names) (pp-expr ex names))]
     [(expr-not-goal g)
      (format "(not ~a)" (pp-expr g names))]
-    [(expr-schema nm fs)
-     (format "(schema ~a ~a fields)" nm (length fs))]
     [(expr-solve g)
      (format "(solve ~a)" (pp-expr g names))]
     [(expr-solve-with sv ov g)
@@ -1266,7 +1263,7 @@
 
     ;; Relational language (Phase 7)
     [(expr-solver-type) #f] [(expr-goal-type) #f] [(expr-derivation-type) #f] [(expr-cut) #f]
-    [(expr-schema-type _) #f] [(expr-logic-var _ _) #f]
+    [(expr-logic-var _ _) #f]
     [(expr-answer-type t) (and t (uses-bvar0? t))]
     [(expr-relation-type pts) (ormap uses-bvar0? pts)]
     [(expr-solver-config m) (uses-bvar0? m)]
@@ -1280,7 +1277,6 @@
     [(expr-unify-goal l r) (or (uses-bvar0? l) (uses-bvar0? r))]
     [(expr-is-goal v ex) (or (uses-bvar0? v) (uses-bvar0? ex))]
     [(expr-not-goal g) (uses-bvar0? g)]
-    [(expr-schema nm fs) (ormap uses-bvar0? fs)]
     [(expr-solve g) (uses-bvar0? g)]
     [(expr-solve-with sv ov g) (or (and sv (uses-bvar0? sv)) (and ov (uses-bvar0? ov)) (uses-bvar0? g))]
     [(expr-solve-one g) (uses-bvar0? g)]

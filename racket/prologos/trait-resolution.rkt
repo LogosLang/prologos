@@ -98,7 +98,6 @@
     [(expr-solver-type) "Solver"]
     [(expr-goal-type) "Goal"]
     [(expr-derivation-type) "DerivationTree"]
-    [(expr-schema-type name) (format "Schema:~a" name)]
     [(expr-answer-type _) "Answer"]
     [(expr-relation-type _) "Relation"]
     ;; HKT: unapplied type constructor

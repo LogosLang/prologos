@@ -2083,7 +2083,6 @@
     [(expr-goal-type) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-derivation-type) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-cut) (tu (expr-goal-type) (zero-usage n))]
-    [(expr-schema-type _) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-answer-type t)
      (if t
          (let ([r (inferQ ctx t)])
@@ -2149,10 +2148,6 @@
        (match* (r1 r2)
          [((tu _ u1) (tu _ u2)) (tu (expr-goal-type) (add-usage u1 u2))]
          [(_ _) (tu-error)]))]
-    [(expr-schema nm fs)
-     (define fus (for/list ([f (in-list fs)])
-                   (match (inferQ ctx f) [(tu _ u) u] [_ (zero-usage n)])))
-     (tu (expr-schema-type nm) (foldl add-usage (zero-usage n) fus))]
     [(expr-solve g)
      (let ([r (inferQ ctx g)])
        (match r [(tu _ u) (tu (expr-hole) u)] [_ (tu-error)]))]
