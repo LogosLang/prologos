@@ -199,6 +199,45 @@
   ;; raw-meta leak (PROBES §P7: stored types carried dangling ?metas).
   (metas-to-holes e))
 
+;; ========================================
+;; CIU T6 F1b.4c (D22/M3): seal-scoped def-forcing
+;; ========================================
+;; A def whose body is a SEAL APPLICATION — the constructor rewrite's
+;; elaborated shape: an expr-ann against a schema fvar, optionally under the
+;; :check beta-redex app(lam(_,hole,<boolrec…panic…>), ann(_, fvar S)) — is
+;; nf'd at commit: tabulation FORCES (the D22 co-design ruling), so a failing
+;; :check pred errors at DEFINITION time with def-srcloc (mirroring the eval
+;; arm's top-node conversion, driver eval case) instead of silently defining
+;; and later swallowing to `none` under projection (PROBES §P4). The forcing
+;; is a CHECK only — the stored body stays the unreduced redex (storage
+;; semantics unchanged); laziness for every non-seal def body is untouched
+;; (shape-gated). Named non-coverage (the eval arm's own top-node class): a
+;; seal application NESTED deeper in a body (inside a pair/list) is not
+;; forced here — runtime discharge for those is validate's job (F1b.5).
+(define (seal-application-body? body)
+  (define (schema-ann? e)
+    (and (expr-ann? e)
+         (let ([t (expr-ann-type e)])
+           (and (expr-fvar? t)
+                (lookup-schema-by-name (expr-fvar-name t))
+                #t))))
+  (or (schema-ann? body)
+      (and (expr-app? body)
+           (expr-lam? (expr-app-func body))
+           (schema-ann? (expr-app-arg body)))))
+
+;; Returns a prologos-error when the forced seal body panics; #f otherwise
+;; (usable directly as a cond => guard).
+(define (seal-forcing-error zonked-body def-srcloc)
+  (and (seal-application-body? zonked-body)
+       (let ([forced (nf (rewrite-specializations zonked-body))])
+         (and (expr-panic? forced)
+              (prologos-error def-srcloc
+                (format "panic: ~a (sealed definition forced at commit)"
+                        (if (expr-string? (expr-panic-msg forced))
+                            (expr-string-val (expr-panic-msg forced))
+                            (pp-expr (expr-panic-msg forced)))))))))
+
 ;; Check if an elaborated type contains unsolved metas (level-meta, mult-meta, or expr-meta).
 ;; When a type has unsolved metas (from implicit parameter inference), is-type may fail
 ;; because infer-level can't handle universe level mismatches caused by Church encoding
@@ -1591,6 +1630,9 @@
                        (time-phase! qtt (checkQ-top/err ctx-empty zonked-body zonked-type))))
                  (cond
                    [(prologos-error? qtt-ok) qtt-ok]
+                   ;; CIU T6 F1b.4c (D22/M3): seal-scoped def-forcing —
+                   ;; tabulation FORCES; a failing :check errors at commit.
+                   [(seal-forcing-error zonked-body def-srcloc) => values]
                    [else
                     (global-env-add name zonked-type zonked-body)
                     ;; LSP Tier 2.3: record definition location
@@ -1780,6 +1822,11 @@
                           ;; Remove pre-registered entry on QTT failure
                           (remove-failed-definition! name)
                           qtt-ok]
+                         ;; CIU T6 F1b.4c (D22/M3): seal-scoped def-forcing
+                         ;; (see the inferred-path twin) — un-register like
+                         ;; the QTT-failure arm above.
+                         [(seal-forcing-error zonked-body def-srcloc)
+                          => (lambda (err) (remove-failed-definition! name) err)]
                          [else
                           (global-env-add name zonked-type zonked-body)
                           ;; LSP Tier 2.3: record definition location

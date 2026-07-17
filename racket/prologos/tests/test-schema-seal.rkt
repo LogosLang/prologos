@@ -256,3 +256,69 @@
       "p.name\n")))
   (check-true (ok? (last-result results))
               "p : Person defined via the non-literal door must project :name"))
+
+;; ========================================
+;; 7. F1b.4c: :check minimal-repair — panic exemption + seal-scoped def-forcing
+;; ========================================
+
+(define CHECKED
+  (string-append
+   "ns t :no-prelude\n"
+   "schema Person\n"
+   "  :name String\n"
+   "  :age Int :check (> _ 0)\n"))
+
+(test-case "violating :check def errors AT COMMIT (was: silent 'defined.')"
+  (define results
+    (run-file-string
+     (string-append
+      CHECKED
+      "def bad := [Person {:name \"dave\" :age 0}]\n")))
+  (check-true (prologos-error? (last-result results))
+              "seal-scoped def-forcing: tabulation forces; the panic converts at the def boundary")
+  (check-true (regexp-match? #rx"panic" (prologos-error-message (last-result results)))
+              "the error must carry the :check panic message"))
+
+(test-case "violating :check ANNOTATED def errors at commit too"
+  (define results
+    (run-file-string
+     (string-append
+      CHECKED
+      "def bad2 : Person := [Person {:name \"gil\" :age 0}]\n")))
+  (check-true (prologos-error? (last-result results))
+              "both def commit paths force seal bodies"))
+
+(test-case "passing :check def commits and projects"
+  (define results
+    (run-file-string
+     (string-append
+      CHECKED
+      "def good := [Person {:name \"fred\" :age 5}]\n"
+      "good.age\n")))
+  (check-true (ok? (last-result results)) "a satisfying seal defines and projects"))
+
+(test-case "projection over a violating seal does NOT swallow to none (panic exemption)"
+  (define results
+    (run-file-string
+     (string-append
+      CHECKED
+      "[map-get [Person {:name \"eve\" :age 0}] :name]\n")))
+  (define r (last-result results))
+  (define shown (format "~a" r))
+  (check-false (regexp-match? #rx"^none" shown)
+               "pre-4c this displayed `none : String` — the swallow class (PROBES §P4)")
+  (check-true (regexp-match? #rx"panic" shown)
+              "the stuck panic must remain visible in the projection result"))
+
+(test-case "non-seal def bodies stay LAZY (forcing is shape-gated)"
+  ;; A panic INSIDE a lambda body (checkable — panic inhabits any type in
+  ;; check mode) defines silently: the body is not seal-shaped, so the 4c
+  ;; forcing never fires and the panic waits for application, as ever.
+  ;; (A BARE panic body was never definable — infer can't synthesize it.)
+  (define results
+    (run-file-string
+     (string-append
+      "ns t :no-prelude\n"
+      "def d : <Int -> String> := [fn [x : Int] [panic \"boom\"]]\n")))
+  (check-true (ok? (last-result results))
+              "a panic-bearing lambda def still defines silently — laziness untouched outside seals"))

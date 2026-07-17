@@ -1281,7 +1281,13 @@
            (expr-map-dissoc? e)     ;; map operation
            (expr-get-in? e)         ;; dynamic path navigation — could return a map
            (expr-update-in? e)      ;; dynamic path update — its result IS a map
-           (expr-error? e))))       ;; error propagation
+           (expr-error? e)          ;; error propagation
+           ;; CIU T6 F1b.4c (D22): a PANIC must propagate stuck, never degrade
+           ;; — the :check bridge's failure value was swallowed to `none` by
+           ;; map-get (and to nil by nil-safe-get) under projection, hiding
+           ;; the violation entirely (PROBES §P4). Mirrors the expr-error
+           ;; exemption directly above.
+           (expr-panic? e))))
 
 ;; ========================================
 ;; Weak Head Normal Form
