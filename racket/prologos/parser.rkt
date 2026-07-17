@@ -1030,6 +1030,27 @@
                 [(prologos-error? e) e]
                 [else (surf-ann t e loc)])))]
 
+       ;; CIU T6 F1b.5-s2 (D27, the A2-e attachment): [validate SchemaName e]
+       ;; → surf-validate; the plan bakes at ELABORATION (registry live).
+       ;; `_` subject = explicit eta (a keyword arm bypasses the parse-time
+       ;; section machinery, so [map [validate P _] rows] needs it here —
+       ;; the parse-keyword-section $_i + surf-hole-binder convention).
+       [(validate)
+        (or (check-arity 'validate args 2 loc)
+            (let ([sname (stx->datum (car args))])
+              (cond
+                [(not (symbol? sname))
+                 (prologos-error loc (format "validate: expected a schema name, got ~a" sname))]
+                [(eq? (stx->datum (cadr args)) '_)
+                 (surf-lam (binder-info '$_0 #f (surf-hole loc))
+                           (surf-validate sname (surf-var '$_0 loc) loc)
+                           loc)]
+                [else
+                 (let ([subj (parse-datum (cadr args))])
+                   (if (prologos-error? subj)
+                       subj
+                       (surf-validate sname subj loc)))])))]
+
        ;; (Type n)
        [(Type)
         (or (check-arity 'Type args 1 loc)

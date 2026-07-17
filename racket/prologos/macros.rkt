@@ -194,6 +194,10 @@
          lookup-schema
          parse-schema-fields
          qualify-type-datum
+         ;; CIU T6 F1b.5-s2: re-homed to the validate plan bake (D29 — the
+         ;; bridge's pred-lowering helpers gain their second consumer)
+         subst-underscore
+         normalize-check-pred
          ;; Selection registry
          current-selection-registry
          read-selection-registry

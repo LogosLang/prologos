@@ -1410,7 +1410,12 @@
        [(and head-lex (member head-lex '("solve" "solve-one" "defr" "rel" "facts"
                                          "session" "defproc" "proc" "spawn" "spawn-with"
                                          "capability" "with-cap" "with-transient"
-                                         "assert" "retract" "explain")))
+                                         "assert" "retract" "explain"
+                                         ;; CIU T6 F1b.5-s2: validate lives in the
+                                         ;; datum parser (load-bearing for validate
+                                         ;; NESTED in def/defn bodies — freestanding
+                                         ;; bare exprs pick preparse unconditionally)
+                                         "validate")))
         (parse-error-result loc (format "~a: expression keyword handled by preparse" head-lex))]
        ;; Built-in binary operations: int+, int-, etc.
        [(and head-lex (hash-has-key? builtin-binary-ops head-lex))

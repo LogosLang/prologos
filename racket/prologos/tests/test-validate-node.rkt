@@ -12,6 +12,7 @@
          "../syntax.rkt"
          (only-in "../reduction.rkt" nf definitely-not-map?)
          (only-in "../substitution.rkt" shift subst)
+         (only-in "../macros.rkt" subst-underscore normalize-check-pred)
          "../pretty-print.rkt")
 
 (define names (list 'prologos::data::result::Result 'prologos::data::reason::Reason
@@ -132,3 +133,12 @@
 (test-case "validate-node/definitely-not-map-exemption"
   ;; a stuck validate must NOT degrade under map-get (the D22/P6 class)
   (check-false (definitely-not-map? (expr-validate 'S #f '() (expr-fvar 'x) names))))
+
+(test-case "validate-node/pred-lowering-polarity-golden"
+  ;; the >-REVERSAL contract the bake composes (subst FIRST, then normalize):
+  ;; (> _ 0)  → (> x 0)  → (lt 0 x)   [lower bound: 0 < x]
+  ;; (> 10 _) → (> 10 x) → (lt x 10)  [upper bound: x < 10]
+  ;; (< _ 10) → (< x 10) → (lt x 10)  [same upper bound, kept order]
+  (check-equal? (normalize-check-pred (subst-underscore '(> _ 0) 'x)) '(lt 0 x))
+  (check-equal? (normalize-check-pred (subst-underscore '(> 10 _) 'x)) '(lt x 10))
+  (check-equal? (normalize-check-pred (subst-underscore '(< _ 10) 'x)) '(lt x 10)))

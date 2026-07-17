@@ -301,6 +301,7 @@
  (struct-out surf-clause) (struct-out surf-facts) (struct-out surf-fact-row)
  (struct-out surf-goal-app) (struct-out surf-unify) (struct-out surf-not) (struct-out surf-is)
  (struct-out surf-guard) (struct-out surf-cut)
+ (struct-out surf-validate)
  (struct-out surf-solve) (struct-out surf-solve-one) (struct-out surf-solve-with)
  (struct-out surf-explain) (struct-out surf-explain-with)
  ;; Narrowing (Phase 1e)
@@ -1010,6 +1011,10 @@
 (struct surf-guard            (condition goal srcloc) #:transparent)
 ;; Cut: (cut) — committed choice, prunes remaining alternatives
 (struct surf-cut              (srcloc) #:transparent)
+;; Validate (CIU T6 F1b.5-s2, D27): [validate SchemaName e] — the runtime
+;; tabulation face. schema-name = raw symbol (resolved at the elaboration
+;; bake); srcloc LAST (the surf-node-srcloc reflection convention).
+(struct surf-validate         (schema-name subject srcloc) #:transparent)
 ;; Solve: (solve (goal))
 (struct surf-solve            (goal srcloc) #:transparent)
 ;; Solve-one: (solve-one (goal)) — returns first answer or none

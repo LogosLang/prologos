@@ -1874,6 +1874,11 @@
             (and (or (lookup-schema-by-name n) (lookup-selection-by-name n)) #t)]
            [(? expr-union? u) (ormap (lambda (b) (map-ish? (whnf b))) (flatten-union u))]
            [(? expr-meta? _) #t]  ;; unsolved — gradual accept (the open? posture)
+           ;; holes = the post-zonk "unknown" markers (unannotated params zonk
+           ;; their domain metas to holes) — same gradual posture as metas;
+           ;; without this, defn-param subjects fail at the QTT re-infer
+           [(? expr-hole? _) #t]
+           [(? expr-typed-hole? _) #t]
            [_ #f]))
        (cond
          [(expr-error? tm) (expr-error)]

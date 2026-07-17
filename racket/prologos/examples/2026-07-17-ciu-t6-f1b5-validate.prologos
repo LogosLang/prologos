@@ -65,20 +65,47 @@ def wf : WithFn := {:name "a" :cb idi}
 ;;10=> 4 : Int
 
 ;; --- s2: the node — freestanding validate (THE DEMO BEAT) -------------------
-;;
-;; def m := [map-assoc [map-assoc {} :name "alice"] :age 30]
-;; [validate Person m]
-;; s2=> ok {...} : Result Person (Map Keyword Reason)
-;;
-;; def bad := [map-assoc [map-assoc {} :name "bob"] :age "x"]
-;; [validate Person bad]
-;; s2=> err {:age (type-mismatch ...)} — collect-all; field identity structural
-;;
-;; [validate Cfg {}]
-;; s2=> ok — defaults FILL in the runtime tabulation (non-literal-safe)
-;;
-;; [validate Checked {:name "dave" :age 0}]
-;; s2=> err {:age (check-failed ...)} — :check as recoverable Result, not panic
+;; (:no-prelude file: the bake requires the result + reason modules in scope —
+;;  without them `[validate …]` errors loud. Champ displays are trie-order, so
+;;  ok/err markers are =>~ fragments by design; deterministic err rendering is
+;;  errors-to-list's job.)
+
+require [prologos::data::result :refer [Result ok err ok? err?]]
+require [prologos::data::reason :refer [Reason missing-required check-failed type-mismatch unexpected-field errors-to-list]]
+
+def m := [map-assoc [map-assoc {} :name "alice"] :age 30]
+;;11=> m : {:age Int :name String | _} defined.
+
+[validate Person m]
+;;12=>~ prologos::data::result::ok
+;;   ← THE DEMO BEAT: the runtime tabulation face — a def-bound dyn row
+;;     validates to ok : Result Person (Map Keyword Reason)
+
+def bad := [map-assoc [map-assoc {} :name "bob"] :age "x"]
+;;13=> bad : {:age String :name String | _} defined.
+
+[validate Person bad]
+;;14=>~ type-mismatch "Int" "String"
+;;   ← err with STRUCTURAL field identity (the map key) + expected/got payload
+
+[validate Cfg {}]
+;;15=>~ :host "localhost"
+;;   ← defaults FILL in the runtime tabulation — the non-literal fill debt
+;;     discharged (M2's preparse refutation routed here, as designed)
+
+[validate Checked {:name "dave" :age 0}]
+;;16=>~ check-failed "(> _ 0)"
+;;   ← :check as a RECOVERABLE Result err — not a panic (D22.4 → D29)
+
+[validate Checked {:name "fred" :age 5}]
+;;17=>~ prologos::data::result::ok
+
+[err? [validate Person bad]]
+;;18=> true : Bool
+
+[validate Nope {}]
+;;19=>~ unknown schema Nope
+;;   ← the loud bake error (srcloc'd; converts the old silent classes)
 
 ;; --- s3: the door flip — constructor = static-seal + validate + abort -------
 ;;

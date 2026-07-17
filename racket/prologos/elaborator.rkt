@@ -31,7 +31,13 @@
          "sessions.rkt"          ;; Phase S3: session type constructors (elaboration target)
          "solver.rkt"            ;; Solver configuration (make-solver-config)
          "processes.rkt"        ;; Phase S3: process constructors (elaboration target)
-         "sign-refinement.rkt")  ;; Numerics N5de: refined-name? recognizer
+         "sign-refinement.rkt"   ;; Numerics N5de: refined-name? recognizer
+         ;; CIU T6 F1b.5-s2 (A2-e): the validate plan bake — witness tags +
+         ;; field-type conversion (typing-core) and pred-datum re-entry
+         ;; (parser). Both edges grep-verified cycle-free; raco make = proof.
+         (only-in "typing-core.rkt" field-type->witness-tag schema-field-type->expr
+                  lookup-schema-by-name lookup-selection-by-name)
+         (only-in "parser.rkt" parse-datum))
 
 (provide elaborate
          elaborate-top-level
@@ -3037,6 +3043,99 @@
     ;; solve — bare solve
     ;; Goal is elaborated in relational-fallback mode: unresolved names become
     ;; free query variables (expr-logic-var with mode 'free).
+    ;; CIU T6 F1b.5-s2 (D27): the validate BAKE. The per-field plan resolves
+    ;; fully AT ELABORATION — the schema registry is preparse/elaboration
+    ;; state, the whnf memo cache forbids registry reads at reduce time, and
+    ;; lazy baking is structurally impossible (typing can't rewrite immutable
+    ;; exprs; reduction can't reach typing-core). Payload is final before
+    ;; pnet serialization: exprs/symbols/sexps/booleans only — the pred is an
+    ;; elaborated expr-lam (a Racket closure would serialize to an error stub).
+    [(surf-validate sname subject loc)
+     (let ([entry (lookup-schema-by-name sname)])
+       (cond
+         [(not entry)
+          (if (lookup-selection-by-name sname)
+              (prologos-error loc (format "validate: selection validate is not yet supported (lands at F1b.5-s4) — ~a" sname))
+              (prologos-error loc (format "validate: unknown schema ~a — declare it with `schema ~a …` first" sname sname)))]
+         [else
+          (define required-names
+            (list 'prologos::data::result::Result 'prologos::data::reason::Reason
+                  'prologos::data::result::ok 'prologos::data::result::err
+                  'prologos::data::reason::missing-required
+                  'prologos::data::reason::check-failed
+                  'prologos::data::reason::type-mismatch
+                  'prologos::data::reason::unexpected-field))
+          (cond
+            [(not (andmap global-env-lookup-type required-names))
+             (prologos-error loc "validate requires prologos::data::result and prologos::data::reason (the prelude provides both; in a :no-prelude file `require` them explicitly)")]
+            [else
+             (define subj (elaborate subject env depth))
+             (cond
+               [(prologos-error? subj) subj]
+               [else
+                ;; the Result's S argument: the name global-env knows the
+                ;; schema type by (written, or ns-qualified)
+                (define resolved-sname
+                  (cond
+                    [(global-env-lookup-type sname) sname]
+                    [(and (current-ns-context)
+                          (let ([q (qualify-name sname (ns-context-current-ns (current-ns-context)))])
+                            (and (global-env-lookup-type q) q)))
+                     => values]
+                    [else sname]))
+                (define (datum->display d)
+                  (cond [(and (pair? d) (eq? (car d) '$union))
+                         (format "<~a>" (string-join (map datum->display (cdr d)) " | "))]
+                        [(and (pair? d) (eq? (car d) '$arrow))
+                         (format "<~a -> ~a>" (datum->display (cadr d)) (datum->display (caddr d)))]
+                        [else (format "~a" d)]))
+                (define plan-or-err
+                  (for/fold ([acc '()]) ([f (in-list (schema-entry-fields entry))])
+                    (cond
+                      [(prologos-error? acc) acc]
+                      [else
+                       (define kw (schema-field-keyword f))
+                       (define ft-expr (schema-field-type->expr (schema-field-type-datum f)))
+                       (define tag (field-type->witness-tag ft-expr))
+                       (define type-str (datum->display (schema-field-type-datum f)))
+                       ;; defaults: stored raw datums → parse + elaborate CLOSED
+                       ;; (env '() — defaults reference globals only)
+                       (define default-expr
+                         (let ([dv (schema-field-default-val f)])
+                           (and dv
+                                (let ([s (parse-datum (datum->syntax #f dv))])
+                                  (if (prologos-error? s) s (elaborate s '() 0))))))
+                       ;; :check preds: the bridge's lowering re-homed (D29):
+                       ;; subst _ → $vx, normalize ops (>/>= REVERSE args),
+                       ;; parse + elaborate with $vx at bvar 0, wrap
+                       ;; expr-lam 'mw (the suc-eta direct-construction
+                       ;; precedent — no junk mult-metas)
+                       (define pred-expr
+                         (let ([cp (schema-field-check-pred f)])
+                           (and cp
+                                (let* ([body-datum (normalize-check-pred (subst-underscore cp '$vx))]
+                                       [body-surf (parse-datum (datum->syntax #f body-datum))])
+                                  (if (prologos-error? body-surf)
+                                      body-surf
+                                      (let ([body (elaborate body-surf (env-extend '() '$vx 0) 1)])
+                                        (if (prologos-error? body) body
+                                            (expr-lam 'mw ft-expr body))))))))
+                       (cond
+                         [(prologos-error? default-expr) default-expr]
+                         [(prologos-error? pred-expr) pred-expr]
+                         [else
+                          (cons (list kw tag default-expr pred-expr type-str
+                                      (and (schema-field-check-pred f)
+                                           (format "~a" (schema-field-check-pred f))))
+                                acc)])])))
+                (if (prologos-error? plan-or-err)
+                    plan-or-err
+                    (expr-validate resolved-sname
+                                   (schema-entry-closed? entry)
+                                   (reverse plan-or-err)
+                                   subj
+                                   required-names))])])]))]
+
     [(surf-solve goal loc)
      (let ([eg (parameterize ([current-relational-fallback? #t])
                  (elaborate goal env depth))])
