@@ -109,6 +109,10 @@ Evidence chain: grounding audit `wf_1ec0797b` (8 facets @ `6f80956b`, all R-lens
 
 **Round 7 COMPLETE (D27–D29) — F1b.5 mini-design CLOSED 2026-07-17.** Implementation shape + partition + p0 probe list: F1 design doc §13.8.
 
+**✏ p0 pin resolutions (2026-07-17 — both probe-gated pins resolved WITHIN their rulings; full probe record = design doc §13.8 ✏):**
+1. **D27.2 attachment = A2-e CONFIRMED**, realized as ONE datum-parser keyword arm + ONE tree-parser bail-list entry (the solve/defr/session precedent — the "dual-parser cost" collapses to the precedented one-liner); plan baked at elaboration via cell-first `lookup-schema-by-name` ONLY (the raw parameter is absent from three save/restore lists — s1 hygiene rider), with a LOUD srcloc'd unknown-schema error (strict improvement over the pre-existing silent no-op on cache-hit-missing schemas).
+2. **D27.3 E key = the named fallback FIRES: `Map Keyword Reason`.** Path failed both probe routes (row key-domain is keyword/nat — Path keys are structurally F-carrier; `Path` unbound in annotation position). The widening cost is NAMED: nested identity at walker time = dotted-keyword path-encoding (E type never breaks; key values widen; tokenization-ambiguity check rides the walker charter); REAL Path keys re-trigger at F-carrier.
+
 ### OPEN — Path Selection unified surface (owner direction 2026-07-13; NEEDS its own deep co-design BEFORE any surface commitment)
 
 Owner (from live exploration, `foray.prologos` scratch `@[{:a 1} {:b 2}][1.b]`): the V2–V4 selection surface is converging on —

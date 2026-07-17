@@ -1,0 +1,74 @@
+;; ============================================================================
+;; CIU T6 F1b.5 — VALIDATE acceptance (skeleton laid at p0, 2026-07-17)
+;;
+;; The Result-returning runtime tabulation face (D27–D29, track doc §2a round
+;; 7; design doc §13.8). Sections fill in per slice — commented target
+;; expressions uncommented as slices land (the F1a acceptance pattern).
+;; Lives apart from the main/seal files per the hang discipline (DEFERRED.md
+;; § union-type hang): clean state here. Suite gate lands with s2.
+;; ============================================================================
+
+ns f1b5-validate-acceptance :no-prelude
+
+;; --- schemas (register today; exercised by the slices) ----------------------
+
+schema Person
+  :name String
+  :age Int
+;;0=> Person : [Type 0] defined.
+
+schema Cfg
+  :host String :default "localhost"
+  :port Int :default 8080
+;;1=> Cfg : [Type 0] defined.
+
+schema Checked
+  :name String
+  :age Int :check (> _ 0)
+;;2=> Checked : [Type 0] defined.
+
+;; --- s1: field-type repairs (angle-sentinel + bare-head qualification) ------
+;; Rich-field schemas register AND construct after the s1 repairs.
+;; (Pre-s1: both classes register but EVERY construction fails — the p0 probes.)
+;;
+;; schema WithList
+;;   :name String
+;;   :xs (List Int)
+;; s1=> WithList : [Type 0] defined.
+;;
+;; def xs3 := '[1 2 3]
+;; def wl : WithList := {:name "a" :xs xs3}
+;; s1=> wl : f1b5-validate-acceptance::WithList defined.
+;;
+;; schema WithUnion
+;;   :v <Int | String>
+;; def wu : WithUnion := {:v 3}
+;; s1=> wu : f1b5-validate-acceptance::WithUnion defined.
+
+;; --- s2: the node — freestanding validate (THE DEMO BEAT) -------------------
+;;
+;; def m := [map-assoc [map-assoc {} :name "alice"] :age 30]
+;; [validate Person m]
+;; s2=> ok {...} : Result Person (Map Keyword Reason)
+;;
+;; def bad := [map-assoc [map-assoc {} :name "bob"] :age "x"]
+;; [validate Person bad]
+;; s2=> err {:age (type-mismatch ...)} — collect-all; field identity structural
+;;
+;; [validate Cfg {}]
+;; s2=> ok — defaults FILL in the runtime tabulation (non-literal-safe)
+;;
+;; [validate Checked {:name "dave" :age 0}]
+;; s2=> err {:age (check-failed ...)} — :check as recoverable Result, not panic
+
+;; --- s3: the door flip — constructor = static-seal + validate + abort -------
+;;
+;; def cbad := [Checked {:name "dave" :age 0}]
+;; s3=> still errors at commit (sealed definition forced) — via the NODE now;
+;;      wrap-schema-checks is DELETED; message parity on single failures
+
+;; --- s4: selections — partial-view validate ----------------------------------
+;;
+;; selection NameOnly from Person :requires [:name]
+;; [validate NameOnly {:name "hana"}]
+;; s4=> ok — view-subset residual; no parent-completeness

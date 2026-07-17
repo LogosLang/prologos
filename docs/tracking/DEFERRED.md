@@ -98,6 +98,38 @@ breaking E change (product-over-paths); (c) the depth discipline designed
 blame-latch citation verified concrete at F1b.5-p0 (else re-anchor; an invented
 placeholder gate is forbidden).
 
+## CIU T6: the cross-module schema channel — staleness + cache-hit registration (probe-found at F1b.5-p0, 2026-07-17)
+
+PRE-EXISTING class, probe-verified at `6584b443` (F1b.5-p0 agents; full record
+design doc §13.8 ✏ items 6-7). THREE coupled gaps, ONE channel fix:
+
+1. **No cross-module cache invalidation**: `.pnet` validity = own source mtime +
+   `driver_rkt.zo` stamp ONLY (`source-hash-for-module`'s own comment concedes
+   no content/dep hashing). Schema-derived data baked into a USING module's AST
+   (defaults + :check chains TODAY via inject-schema-defaults/wrap-schema-checks;
+   validate's baked plans from F1b.5-s2) goes silently stale when the DEFINING
+   module's schema changes. update-deps' edge graph feeds test selection only.
+2. **Schemas are not serialized into `.pnet` and not re-registered on cache-hit**
+   (zero schema tokens in pnet-serialize's 17-registry list; no register-schema!
+   on the cache-hit merge path) → A-cache-hit + B-cache-miss ⇒ `lookup-schema`
+   = #f ⇒ the existing inject/wrap SILENTLY NO-OP. Cross-module schemas are
+   COLD-LOAD-ONLY today. (Validate's elaboration bake errors LOUD on the miss —
+   better diagnosability, same underlying gap.)
+3. **The registry parameter is off three save/restore lists** (batch-worker
+   restore, test-support parameterize, the macros 19-param snapshot) — masked
+   by cell-first reads + the cell-id riding save-macros-cell-ids. The list
+   insertions land as the F1b.5-s1 hygiene rider; THIS entry keeps the
+   structural fix.
+
+**Fix shape (one channel)**: serialize the schema registry into `.pnet` (the
+ctor-registry precedent: serialize + cache-hit merge + load-module capture/
+re-propagation) + dep participation in the cache key (content/dep hashing at
+source-hash-for-module — its comment already names the full implementation).
+**Entry gates**: (a) first REAL cross-module schema consumer (a library module
+exporting schemas — none exist today; the demo is single-file); (b) or the
+first stale-baked-plan incident in practice. Until then the class is documented
+here + at §13.8.
+
 ## CIU T6 (post-F1b): typed solution rows — own mini-track (D25.3 charter home)
 
 `solve` results carry NO type at HEAD (`expr-hole`); per-solution ROW types
