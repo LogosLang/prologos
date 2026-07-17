@@ -1,7 +1,7 @@
 # Collection Interface Unification (CIU) Series
 
 **Created**: 2026-03-21
-**Status**: Track 0 ✅ (Trait Hierarchy Audit). Tracks 1-2 ⬜ pre-Track-8. Tracks 3-5 ⬜ post-Track-8 (now unblocked by Track 8 completion + BSP-LE Track 2/2B). **Track 6 🔄 (Anonymous Records, Collections & Path Selection): F1a-core ✅ · F1a-col ✅ · F1a.2 ✅ (`expr-Open` DELETED, D1-b done); F1b Stage-3 ✅ CLOSED 2026-07-17 (D21–D26) — implementation next (ladder: F1 design doc §13.6).**
+**Status**: Track 0 ✅ (Trait Hierarchy Audit). Tracks 1-2 ⬜ pre-Track-8. Tracks 3-5 ⬜ post-Track-8 (now unblocked by Track 8 completion + BSP-LE Track 2/2B). **Track 6 🔄 (Anonymous Records, Collections & Path Selection): F1a-core ✅ · F1a-col ✅ · F1a.2 ✅ (`expr-Open` DELETED, D1-b done); F1b Stage-3 ✅ (D21–D26) · F1b.1–.4 ✅ THE SEAL (D22, suite 8790/459/0) · F1b.5 (VALIDATE) 🔄 — mini-design ✅ (D27–D29, round 7 §2a + §13.8) · p0/s1/s2 ✅ FIRST GREEN 2026-07-17 (`[validate Person champ]` end-to-end; `expr-validate` + `field-witness.rkt` + `data Reason` + field-type class repair; suite 8875/465/0); s3 (door flip + bridge deletion)/s4 (selections) ⬜ → F1b.6 → F1b.close. Ladder: §13.6/§13.8.**
 **Thesis**: All collection access — indexing, iteration, broadcast, mapping, path navigation — dispatches through traits resolved on the propagator network. Syntactic sugar generates trait constraints, not constructor-specific AST nodes. User-defined collections participate in all syntax automatically.
 
 ---
@@ -49,7 +49,7 @@ This thesis addresses 5 principle violations identified in the Collection Interf
 | 3 | Trait-Dispatched Access | `surf-get` generates Indexed/Keyed constraints; propagator resolves; `expr-get` vestigial | ⬜ | Pending | Post Track 8 |
 | 4 | Trait-Dispatched Iteration | Broadcast via Seq dict; gmap/gfilter via Functor or Seq+Buildable | ⬜ | Pending | Post Track 8 |
 | 5 | Union-Aware Dispatch | Trait resolution on union types; runtime dispatch generation | ⬜ | Pending | Post Track 8 |
-| 6 | Anonymous Records, Collections & Path Selection | `Map`/`{…}` = anonymous **open record** (structural typing); **tuples** `@[…]` = the Nat-keyed dual (one carrier, key-domain axis); `schema` interop; postfix `coll[…]` path-selection + result-shape + broadcast (OPEN owner design). Relates to Track 2 (sugar) + **Track 3 (Indexed/Keyed — fed by the tuple node as the Nat-keyed-row witness)**. WS-first. | 🔄 | [Track](2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md) (D1–D20 locked) · [F1 Stage-3 D.2](2026-07-06_CIU_T6_F1_STRUCTURAL_RECORDS_DESIGN.md) §2 tracker: **F1a-core ✅ s1–s5 · F1a-col ✅ col-1–4 · F1a.2 ✅ p0–p3** (`expr-Open` DELETED 2026-07-16, D1-b done); **F1b ⬜ Stage-3 opening** · [D.3 critique](2026-07-06_CIU_T6_F1_STAGE3_CRITIQUE_D3.md) | Post Track 8 |
+| 6 | Anonymous Records, Collections & Path Selection | `Map`/`{…}` = anonymous **open record** (structural typing); **tuples** `@[…]` = the Nat-keyed dual (one carrier, key-domain axis); `schema` interop + the Map→schema **seal** + the Result-returning **validate** face; postfix `coll[…]` path-selection + result-shape + broadcast (OPEN owner design). Relates to Track 2 (sugar) + **Track 3 (Indexed/Keyed — fed by the tuple node as the Nat-keyed-row witness)**. WS-first. | 🔄 | [Track](2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md) (§2a rounds 1–7, D1–D29) · [F1 Stage-3 D.2](2026-07-06_CIU_T6_F1_STRUCTURAL_RECORDS_DESIGN.md) §2/§13 tracker: **F1a ✅ · F1b Stage-3 ✅ · F1b.1–.4 ✅ SEAL · F1b.5 🔄 p0/s1/s2 FIRST GREEN** (validate; s3/s4 ⬜) | Post Track 8 |
 
 ---
 
