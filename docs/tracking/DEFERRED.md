@@ -84,9 +84,13 @@ of metas).
 Explain's reserved `:certainty`/`:cycle` keys merge into the SAME champ namespace
 as query-var keys (reduction.rkt explain merges) — the right eventual shape is a
 wrapper record `{:solutions […] :certainty …}` (provenance beside the rows, not
-merged in). Inherits the D25.2 interim clobber guard (reject-or-rename
-reserved-named query vars, landed at F1b.1) as a pin. Not blocked; open when the
-explain surface next gets attention.
+merged in). Inherits the D25.2 interim clobber guard as a pin — LANDED at F1b.1
+(commit `83784ef9`), realized as **binding-wins-on-collision** (the metadata
+insert is skipped when a query var claims a reserved name; covers all THREE
+reserved keys certainty/cycle/provenance — provenance is the live one under
+default semantics; skip keeps solve/explain treating the same query
+identically, vs reject which would make explain stricter). Not blocked; open
+when the explain surface next gets attention.
 
 ## Numerics N6d-i follow-ups: method-wrapper derive skip-set remediation
 
