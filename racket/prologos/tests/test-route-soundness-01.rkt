@@ -156,3 +156,29 @@
   (check-true (string? (last-result results)))
   (check-true (regexp-match? #rx"1 : Int" (last-result results))
               "the F1a goal flow is untouched"))
+
+;; ========================================
+;; 5. D23 groundwork: stored-type hygiene (deep scrub — the raw-meta leak)
+;; ========================================
+
+(test-case "stored-type scrub: open-row projection meta stores as HOLE, not raw meta"
+  ;; PROBES §P7: pre-fix, `def x := [map-get m :c]` on an open row stored
+  ;; `x : ?meta1610` verbatim — a dangling meta after per-command
+  ;; reset-meta-store! (the B3 crash class). Post-F1b.2: deep scrub at the
+  ;; store boundary → `x : _ defined.`; the escape-boundary ERROR posture is
+  ;; F1b.6 (D23) — this pin is updated then.
+  (define results
+    (run-file-string
+     (string-append
+      "ns t :no-prelude\n"
+      "def m := [map-assoc [map-assoc {} :a 1] :b \"s\"]\n"
+      "def x := [map-get m :c]\n"
+      "x\n")))
+  (define def-line (list-ref results (- (length results) 2)))
+  (check-true (string? def-line) "the def must succeed (interim posture)")
+  (check-true (regexp-match? #rx"x : _ defined" def-line)
+              "the stored type must be a hole, not a raw ?meta")
+  (check-false (regexp-match? #rx"\\?meta" def-line)
+               "no raw meta may appear in the stored-type display")
+  (check-true (string? (last-result results))
+              "the later reference must not crash (no dangling meta)"))

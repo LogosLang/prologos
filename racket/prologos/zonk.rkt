@@ -21,13 +21,16 @@
          "solver.rkt"
          (only-in "posit-impl.rkt" posit8-encode posit16-encode posit32-encode posit64-encode)  ;; N4: literal collapse encoders
          (only-in racket/flonum flsingle)  ;; N4: Float32 collapse rounding
-         (only-in "namespace.rkt" ns-context?))
+         (only-in "namespace.rkt" ns-context?)
+         (only-in "prelude.rkt" level-meta? mult-meta?))  ;; F1b.2: deep meta detector
 
 (provide zonk zonk-ctx zonk-final freeze zonk-at-depth
          ;; Phase 10 diagnostics
          freeze-substitution-counts reset-freeze-counts!
          ;; Track 10B Phase B0: call counters for frequency measurement
-         current-zonk-call-counts reset-zonk-call-counts!)
+         current-zonk-call-counts reset-zonk-call-counts!
+         ;; CIU T6 F1b.2 (D23 groundwork): deep stored-type hygiene
+         metas-to-holes expr-contains-meta-deep? expr-contains-hole-deep?)
 
 ;; ========================================
 ;; Track 10B Phase B0: call frequency counters (gated behind parameter)
@@ -1484,3 +1487,68 @@
   (map (lambda (binding)
          (cons (zonk (car binding)) (cdr binding)))
        ctx))
+
+;; ============================================================
+;; CIU T6 F1b.2 (D23 groundwork): deep stored-type hygiene
+;; ============================================================
+;;
+;; The driver's stored-type discipline ("stored unsolved metas dangle after
+;; reset-meta-store!" — every stored expr-meta is dangling by construction
+;; under per-command reset) needs a DEEP walk: the driver's historical
+;; Pi/Sigma/app/lam-only recursion missed metas embedded in unions, record
+;; rows, Maps, literal-extent nodes, etc. (the D19 raw-meta leak, PROBES
+;; §P7). Per the S2 walker lesson (don't hand-roll another per-node-kind
+;; walker), these are GENERIC transparent-struct walks: zero per-node arms,
+;; immune to the new-AST-node drift class. The transformer rebuilds via
+;; struct reflection, preserving eq?-sharing on unchanged subtrees; opaque /
+;; non-transparent structs (srclocs etc.) pass through untouched.
+
+;; Replace every unsolved expr-meta with expr-hole, deeply.
+;; (Callers run this post-freeze, so solved metas are already collapsed —
+;; any surviving expr-meta is unsolved.)
+(define (metas-to-holes v)
+  (cond
+    [(expr-meta? v) (expr-hole)]
+    [(struct? v)
+     (define-values (st _skipped) (struct-info v))
+     (cond
+       [st
+        (define vec (struct->vector v))
+        (define n (vector-length vec))
+        (define fields
+          (for/list ([i (in-range 1 n)])
+            (metas-to-holes (vector-ref vec i))))
+        (if (for/and ([i (in-range 1 n)] [f (in-list fields)])
+              (eq? f (vector-ref vec i)))
+            v
+            (apply (struct-type-make-constructor st) fields))]
+       [else v])]
+    [(pair? v)
+     (define a (metas-to-holes (car v)))
+     (define d (metas-to-holes (cdr v)))
+     (if (and (eq? a (car v)) (eq? d (cdr v))) v (cons a d))]
+    [else v]))
+
+;; Deep detector: any expr-meta / level-meta / mult-meta anywhere in v.
+(define (expr-contains-meta-deep? v)
+  (cond
+    [(or (expr-meta? v) (level-meta? v) (mult-meta? v)) #t]
+    [(struct? v)
+     (define vec (struct->vector v))
+     (for/or ([i (in-range 1 (vector-length vec))])
+       (expr-contains-meta-deep? (vector-ref vec i)))]
+    [(pair? v) (or (expr-contains-meta-deep? (car v))
+                   (expr-contains-meta-deep? (cdr v)))]
+    [else #f]))
+
+;; Deep detector: any expr-hole / expr-typed-hole anywhere in v.
+(define (expr-contains-hole-deep? v)
+  (cond
+    [(or (expr-hole? v) (expr-typed-hole? v)) #t]
+    [(struct? v)
+     (define vec (struct->vector v))
+     (for/or ([i (in-range 1 (vector-length vec))])
+       (expr-contains-hole-deep? (vector-ref vec i)))]
+    [(pair? v) (or (expr-contains-hole-deep? (car v))
+                   (expr-contains-hole-deep? (cdr v)))]
+    [else #f]))

@@ -402,3 +402,15 @@ solve (sol-parent x y)
 ;;86=> {:a 2, :b 3} : [Map Keyword Int]
 ;;   ← sound annotations re-route to the imperative checker and PASS —
 ;;     the refusal is behavior-preserving for correct code
+
+;; §F1b.2b — D23 groundwork: stored-type hygiene (deep scrub).
+;; An undischarged dyn-row projection meta stores as a HOLE, never a raw
+;; dangling ?meta (the P7 leak). INTERIM posture: the def still succeeds;
+;; F1b.6 (D23) flips escape-into-storage to a hard error — update this pin.
+
+def dm := [map-assoc [map-assoc {} :a 1] :b "s"]
+;;87=> dm : {:a Int :b String | _} defined.
+
+def dx := [map-get dm :c]
+;;88=> dx : _ defined.
+;;   ← the D19 projection meta scrubbed to a hole at the store boundary

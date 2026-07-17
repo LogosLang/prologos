@@ -168,19 +168,19 @@
 ;; When a type has holes, is-type will fail, but check will still work.
 ;; ========================================
 (define (type-contains-hole? e)
-  (match e
-    [(expr-hole) #t]
-    [(expr-typed-hole _) #t]
-    [(expr-Pi _ a b) (or (type-contains-hole? a) (type-contains-hole? b))]
-    [(expr-Sigma a b) (or (type-contains-hole? a) (type-contains-hole? b))]
-    [(expr-app f x) (or (type-contains-hole? f) (type-contains-hole? x))]
-    [(expr-lam _ a b) (or (type-contains-hole? a) (type-contains-hole? b))]
-    [_ #f]))
+  ;; CIU T6 F1b.2 (D23 groundwork): DEEP (generic walk in zonk.rkt) — the
+  ;; historical Pi/Sigma/app/lam-only recursion missed holes embedded in
+  ;; unions/rows/Maps, mis-gating consumers.
+  (expr-contains-hole-deep? e))
 
 ;; Replace expr-hole with fresh metavariables in a type expression.
 ;; This allows holes in type annotations (e.g., return type of pattern-compiled
 ;; functions) to be solved via unification during type checking.
 (define (holes-to-metas e)
+  ;; DELIBERATELY SHALLOW (F1b.2 decision): deepening this converts holes
+  ;; inside e.g. (Map _ Int) annotations into solvable metas — an
+  ;; annotation-FEATURE change, not stored-type hygiene; out of the D23
+  ;; groundwork's scope. Holes it misses stay check-wildcards (safe).
   (match e
     [(expr-hole) (fresh-meta ctx-empty (expr-Type 0) "type-hole")]
     [(expr-typed-hole _) e]
@@ -194,13 +194,10 @@
 ;; Prevents dangling meta references in stored types (metas are cleared
 ;; between commands by reset-meta-store!).
 (define (unsolved-metas-to-holes e)
-  (match e
-    [(expr-meta _ _) (expr-hole)]
-    [(expr-Pi m a b) (expr-Pi m (unsolved-metas-to-holes a) (unsolved-metas-to-holes b))]
-    [(expr-Sigma a b) (expr-Sigma (unsolved-metas-to-holes a) (unsolved-metas-to-holes b))]
-    [(expr-app f x) (expr-app (unsolved-metas-to-holes f) (unsolved-metas-to-holes x))]
-    [(expr-lam m a b) (expr-lam m (unsolved-metas-to-holes a) (unsolved-metas-to-holes b))]
-    [_ e]))
+  ;; CIU T6 F1b.2 (D23 groundwork): DEEP (generic transformer in zonk.rkt).
+  ;; The shallow version missed metas inside unions/record rows — the D19
+  ;; raw-meta leak (PROBES §P7: stored types carried dangling ?metas).
+  (metas-to-holes e))
 
 ;; Check if an elaborated type contains unsolved metas (level-meta, mult-meta, or expr-meta).
 ;; When a type has unsolved metas (from implicit parameter inference), is-type may fail
@@ -208,14 +205,10 @@
 ;; (e.g., Option (List A) where List A : Type 1 but Option expects Type 0).
 ;; These types will be properly checked during the body type-check phase.
 (define (type-contains-meta? e)
-  (match e
-    [(expr-meta _ _) #t]
-    [(expr-Type l) (level-meta? l)]
-    [(expr-Pi m a b) (or (mult-meta? m) (type-contains-meta? a) (type-contains-meta? b))]
-    [(expr-Sigma a b) (or (type-contains-meta? a) (type-contains-meta? b))]
-    [(expr-app f x) (or (type-contains-meta? f) (type-contains-meta? x))]
-    [(expr-lam m a b) (or (mult-meta? m) (type-contains-meta? a) (type-contains-meta? b))]
-    [_ #f]))
+  ;; CIU T6 F1b.2 (D23 groundwork): DEEP (generic walk in zonk.rkt) — keeps
+  ;; the ty-ok gate + residuation admissibility consistent with the deep
+  ;; scrub (shallow detection under a deep scrub would mis-gate).
+  (expr-contains-meta-deep? e))
 
 ;; Check if an expression contains node types that the QTT module
 ;; doesn't handle yet: expr-reduce (structural PM), Vec, Fin constructors/eliminators.
@@ -731,7 +724,8 @@
                                  (car te)
                                  (begin
                                    (let ([zonked-body (time-phase! zonk (freeze expr))]
-                                       [zonked-type (time-phase! zonk (freeze ty))])
+                                       ;; CIU T6 F1b.2: deep meta scrub (stored-type discipline)
+                                       [zonked-type (unsolved-metas-to-holes (time-phase! zonk (freeze ty)))])
                                    (global-env-add name zonked-type zonked-body)
                                    (when (current-ns-context)
                                      (define fqn (qualify-name name
@@ -1586,7 +1580,10 @@
                 [else
                  ;; freeze FIRST, then specialize, then QTT on zonked terms
                  (define zonked-body (rewrite-specializations (time-phase! zonk (freeze body))))
-                 (define zonked-type (time-phase! zonk (freeze inferred-type)))
+                 ;; CIU T6 F1b.2: deep-scrub unsolved metas -> holes BEFORE
+                 ;; store (closes the D19 raw-meta leak at this site, PROBES
+                 ;; §P7); scrub-before-checkQ matches the annotated path.
+                 (define zonked-type (unsolved-metas-to-holes (time-phase! zonk (freeze inferred-type))))
                  ;; Skip QTT for expressions with unsupported node types (Vec/Fin)
                  (define qtt-ok
                    (if (contains-unsupported-qtt? zonked-body)
@@ -1660,7 +1657,8 @@
            ;; body is never used at runtime. The type annotation is all we need.
            (cond
              [data-type-def?
-              (let ([zonked-type (time-phase! zonk (freeze type))])
+              ;; CIU T6 F1b.2: deep meta scrub (stored-type discipline)
+              (let ([zonked-type (unsolved-metas-to-holes (time-phase! zonk (freeze type)))])
                 (global-env-add-type-only name zonked-type)
                 ;; LSP Tier 2.3: record definition location
                 (register-definition-location! name def-srcloc)
@@ -1765,7 +1763,11 @@
                        ;; Convert any unsolved metas back to holes (prevents dangling refs).
                        (define zonked-body (rewrite-specializations (time-phase! zonk (freeze body))))
                        (define zonked-type-raw (time-phase! zonk (freeze type*)))
-                       (define zonked-type (if has-holes? (unsolved-metas-to-holes zonked-type-raw) zonked-type-raw))
+                       (define zonked-type (unsolved-metas-to-holes zonked-type-raw))
+                       ;; ^ CIU T6 F1b.2: UNCONDITIONAL (was has-holes?-gated,
+                       ;; which stored still-unsolved implicit metas RAW — a
+                       ;; leak, not a protection; every stored unsolved meta
+                       ;; dangles after per-command reset-meta-store!).
                        ;; 6.5. QTT multiplicity check (on zonked terms with concrete mults).
                        ;; Skip for expressions containing unsupported node types (Vec/Fin).
                        (define qtt-ok
@@ -3059,14 +3061,16 @@
   ;; Register in global env with full type (including capability Pi binders).
   ;; 4A.c-iii-a: global-env-add is now always-mnr (folds in the old
   ;; foreign-write-(b) global-env-add-to-mnr!), so foreign defs reach the mnr here.
-  (global-env-add prologos-name full-type val)
+  ;; CIU T6 F1b.2: deep meta scrub (stored-type discipline)
+  (define full-type-stored (unsolved-metas-to-holes full-type))
+  (global-env-add prologos-name full-type-stored val)
 
   ;; Also register FQN if in a namespace
   (when (current-ns-context)
     (define fqn (qualify-name prologos-name (ns-context-current-ns (current-ns-context))))
     ;; FQN mirrors bare: the cascade is exact-symbol (no FQN->bare alias), so
     ;; BOTH keys are mnr-materialized (always-mnr global-env-add) to resolve.
-    (global-env-add fqn full-type val)
+    (global-env-add fqn full-type-stored val)
     ;; Auto-export the foreign binding (must update current-ns-context —
     ;; ns-context-add-auto-export returns a new struct, does not mutate)
     (current-ns-context

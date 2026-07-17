@@ -410,7 +410,7 @@
   ;; miss error (+ the S7 diagnostic on the infer/err walk).
   (define (miss)
     (if (eq? (expr-Record-tail rec) 'dyn)
-        (fresh-meta ctx (expr-Type (lzero)) "dyn-row-projection")
+        (fresh-meta ctx (expr-Type (lzero)) (dyn-row-source 'dyn-row-projection))
         (expr-error)))
   (match key
     [(expr-keyword kw) #:when (eq? kd 'keyword)
@@ -430,7 +430,7 @@
          ;; — ⋃knowns ∪ fresh; the EMPTY dyn row still projects (fresh alone).
          [(eq? (expr-Record-tail rec) 'dyn)
           (if (check ctx key key-ty)
-              (record-value-bound ctx rec "dyn-row-dynamic-projection")
+              (record-value-bound ctx rec (dyn-row-source 'dyn-row-dynamic-projection))
               (expr-error))]
          [(and (pair? fields) (check ctx key key-ty))
           (record-value-union rec)]
@@ -443,7 +443,16 @@
 ;;            anything consuming every value. Fresh-meta-per-call is the accepted
 ;;            D19 posture (no reconciliation; speculation rolls metas back via
 ;;            the existing save/restore machinery).
-(define (record-value-bound ctx rec [src "dyn-row-values"])
+
+;; CIU T6 F1b.2 (D23 groundwork): structured provenance for D19 dyn-row metas.
+;; loc=#f interim — record-project/record-value-bound carry no srcloc; the
+;; D23 error boundary is the STORE sites, where def-srcloc is in scope.
+;; kind = the tag symbol (meta-category's else-arm classifies it 'primary,
+;; same as the historical bare strings — behavior-preserving).
+(define (dyn-row-source tag)
+  (meta-source-info #f tag (symbol->string tag) #f #f))
+
+(define (record-value-bound ctx rec [src (dyn-row-source 'dyn-row-values)])
   (cond
     [(eq? (expr-Record-tail rec) 'dyn)
      (build-union-type
@@ -516,7 +525,7 @@
          ;; in its remainder — FILTERING it (the closed Q5 behavior) would
          ;; silently drop a live component; contribute a fresh meta instead.
          [(eq? (expr-Record-tail rec) 'dyn)
-          (fresh-meta ctx (expr-Type (lzero)) "dyn-row-union-component")]
+          (fresh-meta ctx (expr-Type (lzero)) (dyn-row-source 'dyn-row-union-component))]
          [else #f]))]
     [_
      (let ([key-ty (if (eq? kd 'keyword) (expr-Keyword) (expr-Nat))])
@@ -526,7 +535,7 @@
               (lambda () (check ctx key key-ty))
               values
               "union-record-component")
-            (record-value-bound ctx rec "dyn-row-union-component")))]))
+            (record-value-bound ctx rec (dyn-row-source 'dyn-row-union-component))))]))
 
 ;; CIU T6 F1 (s2): does a structural-row type satisfy (Map K V)?  The Galois α (§5.3).
 ;;   keys: every label must check against K;  values: if V is an unsolved meta, solve V := ⋃fields
@@ -1765,7 +1774,7 @@
                  ;; live in the remainder → <fresh | Nil>; closed keeps → Nil.
                  [(eq? (expr-Record-tail rec) 'dyn)
                   (build-union-type
-                   (list (fresh-meta ctx (expr-Type (lzero)) "dyn-row-nil-safe") (expr-Nil)))]
+                   (list (fresh-meta ctx (expr-Type (lzero)) (dyn-row-source 'dyn-row-nil-safe)) (expr-Nil)))]
                  [else (expr-Nil)]))]
             [_ (let ([proj (record-project ctx rec k)])
                  (if (expr-error? proj) (expr-error) (build-union-type (list (whnf proj) (expr-Nil)))))])]
@@ -1852,7 +1861,7 @@
          ;; CIU T6 F1 (s2): vals of a record → List of the value bound
          ;; (⋃fields; dyn rows add the remainder meta; empty → fresh meta — §12.4).
          [(? expr-Record? rec)
-          (expr-app (list-type-fvar) (record-value-bound ctx rec "dyn-row-vals"))]
+          (expr-app (list-type-fvar) (record-value-bound ctx rec (dyn-row-source 'dyn-row-vals)))]
          [(expr-Map _ vt) (expr-app (list-type-fvar) vt)]
          [_ (expr-error)]))]
 
@@ -2259,7 +2268,7 @@
          [(? expr-Record? rec)
           (let ([expected-f (expr-Pi 'mw tb
                               (expr-Pi 'mw (shift 1 0 (expr-Keyword))
-                                (expr-Pi 'mw (shift 2 0 (record-value-bound ctx rec "dyn-row-fold")) (shift 3 0 tb))))])
+                                (expr-Pi 'mw (shift 2 0 (record-value-bound ctx rec (dyn-row-source 'dyn-row-fold))) (shift 3 0 tb))))])
             (if (check ctx f expected-f)
                 tb
                 (expr-error)))]
@@ -2278,7 +2287,7 @@
          ;; row takes over at F1a.2.
          [(? expr-Record? rec)
           ;; F1a.2 p1a: dyn rows filter over the BOUND (§12.4).
-          (let ([v (record-value-bound ctx rec "dyn-row-filter")])
+          (let ([v (record-value-bound ctx rec (dyn-row-source 'dyn-row-filter))])
             (if (check ctx pred (expr-Pi 'mw (expr-Keyword) (expr-Pi 'mw (shift 1 0 v) (expr-Bool))))
                 (expr-Map (expr-Keyword) v)
                 (expr-error)))]
@@ -2295,7 +2304,7 @@
          [(? expr-Record? rec)
           ;; F1a.2 p1a: f consumes the BOUND for dyn rows; the rebuild is tail-
           ;; preserving already (knowns := W, remainder stays unknown — §12.4).
-          (let* ([v (record-value-bound ctx rec "dyn-row-map-vals")]
+          (let* ([v (record-value-bound ctx rec (dyn-row-source 'dyn-row-map-vals))]
                  [tf (infer ctx f)]
                  [finish (lambda (w)
                            ;; NB: for/list, NOT map — the arm's pattern var `map` (the term)
@@ -3039,7 +3048,7 @@
           (and (check ctx init expected-type)
                (check ctx f (expr-Pi 'mw expected-type
                               (expr-Pi 'mw (shift 1 0 (expr-Keyword))
-                                (expr-Pi 'mw (shift 2 0 (record-value-bound ctx rec "dyn-row-fold"))
+                                (expr-Pi 'mw (shift 2 0 (record-value-bound ctx rec (dyn-row-source 'dyn-row-fold)))
                                          (shift 3 0 expected-type))))))]
          [_ #f]))]
     ;; map-filter-entries : check against Map K V
@@ -3057,7 +3066,7 @@
          ;; f consumes the uniform view ⋃fields (the BOUND for dyn rows, F1a.2 p1a §12.4)
          [(? expr-Record? rec)
           (and (unify-ok? (unify ctx k (expr-Keyword)))
-               (check ctx f (expr-Pi 'mw (record-value-bound ctx rec "dyn-row-map-vals") (shift 1 0 w))))]
+               (check ctx f (expr-Pi 'mw (record-value-bound ctx rec (dyn-row-source 'dyn-row-map-vals)) (shift 1 0 w))))]
          [_ #f]))]
 
     ;; ---- Transient Builder checks ----
