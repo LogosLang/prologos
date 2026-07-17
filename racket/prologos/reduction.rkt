@@ -229,9 +229,10 @@
 ;; Convert solver answer maps (list of hasheq) back to a Prologos expression.
 ;; Each answer is a hasheq mapping query variable names (symbols) to ground values.
 ;; Returns a Prologos List of Maps: '[(map :x val1 :y val2), ...]
-;; Optional bound-args: list of (symbol . expr) pairs for ground function arguments
-;; with spec parameter names suffixed with '_'. Added to each solution map.
-(define (answers->prologos-expr answers query-vars [bound-args '()])
+;; Solution maps carry ONLY query-var keys (CIU T6 F1b.1 / D25: the bound-args
+;; echo — ground call-site values re-emitted under '_'-suffixed relation param
+;; names — is deleted; solutions are pure answers to the queried unknowns).
+(define (answers->prologos-expr answers query-vars)
   (racket-list->prologos-list
    (for/list ([answer (in-list answers)])
      ;; Build a CHAMP map from the answer bindings
@@ -242,14 +243,7 @@
          (define key (expr-keyword qv))
          (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
          (champ-insert c (equal-hash-code key) key pval)))
-     ;; Add bound (ground) args with _ suffix param names
-     (define champ-with-bound
-       (for/fold ([c champ-val])
-                 ([ba (in-list bound-args)])
-         (define key (expr-keyword (car ba)))
-         (define pval (ground->prologos-expr (cdr ba)))
-         (champ-insert c (equal-hash-code key) key pval)))
-     (expr-champ champ-with-bound))))
+     (expr-champ champ-val))))
 
 ;; Convert a ground solver value back to a Prologos AST expression.
 ;; If the value is already an AST expression, return it directly.
@@ -298,74 +292,12 @@
          (set! goal-args (cons a* goal-args))])))
   (values (reverse goal-args) (reverse query-vars)))
 
-;; ========================================
-;; Bound-argument tracking for narrowing/solve output
-;; ========================================
-
-;; compute-bound-args : symbol (listof expr) -> (listof (cons symbol expr))
-;; For each function parameter whose corresponding argument is ground (not a
-;; logic variable), create a (param-name_ . ground-value) pair.  These are
-;; added to narrowing/solve results so the user can see which concrete values
-;; were bound to which parameters.
-;;
-;; Uses the defn param-name registry (user-facing names from defn declarations)
-;; first, falling back to peel-lambda-names from the function body.
-;;
-;; Example: `add ?y 3N = 5N` where defn add [x y]
-;;   arg 0 = ?y  → logic var → skipped
-;;   arg 1 = 3N  → ground, param 'y → (:y_ . 3N)
-(define (compute-bound-args func-name args-whnf)
-  ;; Try user-facing param names from defn registry first.
-  ;; Try FQN first, then short name (strip module prefix).
-  (define registry-names
-    (or (lookup-defn-param-names func-name)
-        (let ([short (ctor-short-name func-name)])
-          (and (not (eq? short func-name))
-               (lookup-defn-param-names short)))))
-  (define param-names
-    (cond
-      [registry-names registry-names]
-      [else '()]))
-  (cond
-    ;; Arity mismatch — function may have extra dict params or be partially applied
-    [(not (= (length param-names) (length args-whnf))) '()]
-    [else
-     (for/list ([pn (in-list param-names)]
-                [arg (in-list args-whnf)]
-                ;; Only include ground (non-logic-var) args
-                #:when (not (expr-logic-var? arg))
-                ;; Skip dict parameters (trait method convention)
-                #:when (not (eq? pn 'dict)))
-       (cons (string->symbol
-              (string-append (symbol->string pn) "_"))
-             arg))]))
-
-;; compute-bound-args-for-relation : symbol (listof any) (listof symbol) -> (listof (cons symbol expr))
-;; Like compute-bound-args but for relations (solve). Uses param-info from the
-;; relation store to get parameter names.
-(define (compute-bound-args-for-relation rel-name goal-args query-vars)
-  (define store (current-relation-store))
-  (define rel (relation-lookup store rel-name))
-  (cond
-    [(not rel) '()]
-    [else
-     (define variants (relation-info-variants rel))
-     (cond
-       [(null? variants) '()]
-       [else
-        (define params (variant-info-params (car variants)))
-        (cond
-          [(not (= (length params) (length goal-args))) '()]
-          [else
-           (for/list ([pi (in-list params)]
-                      [arg (in-list goal-args)]
-                      ;; Only include ground (non-logic-var) args
-                      #:when (not (symbol? arg))
-                      #:when (not (and (expr-logic-var? arg)
-                                       (memq (expr-logic-var-name arg) query-vars))))
-             (cons (string->symbol
-                    (string-append (symbol->string (param-info-name pi)) "_"))
-                   arg))])])]))
+;; (The bound-args echo machinery — compute-bound-args and
+;; compute-bound-args-for-relation, which re-emitted ground call-site values
+;; into solution maps under '_'-suffixed param names — was DELETED at CIU T6
+;; F1b.1 (D25). Solution maps carry only query-var keys. The defn param-name
+;; registry (global-env.rkt lookup-defn-param-names) is unrelated
+;; infrastructure and survives: macros/LSP/pnet caching consume it.)
 
 ;; Phase 5b: Constructor inversion — structurally match a constructor expression
 ;; containing logic variables against a concrete target value.
@@ -490,7 +422,7 @@
      (define ctor-solutions
        (narrow-constructor-match func-expr target-expr var-names))
      (if (pair? ctor-solutions)
-         (answers->prologos-expr ctor-solutions var-names '())
+         (answers->prologos-expr ctor-solutions var-names)
          (expr-fvar 'nil))]
     ;; Phase 2d: multi-candidate dispatch — try each candidate independently
     [(and (list? func-name) (eq? (car func-name) 'multi-dispatch))
@@ -502,20 +434,14 @@
         (for/list ([cp (in-list candidates)])
           (run-narrowing-search (cdr cp) args-whnf target-whnf var-names))))
      (define unique (remove-duplicates all-solutions equal?))
-     ;; Bound args: use first candidate's param names (all instances share arity)
-     (define bound-args
-       (if (null? candidates) '()
-           (compute-bound-args (cdr (car candidates)) args-whnf)))
-     (answers->prologos-expr unique var-names bound-args)]
+     (answers->prologos-expr unique var-names)]
     [else
      ;; Single-candidate dispatch (standard path)
      (define args-whnf (map whnf all-args))
      (define target-whnf (whnf target-expr))
      (define solutions
        (run-narrowing-search func-name args-whnf target-whnf var-names))
-     ;; Bound args: extract spec param names for ground arguments
-     (define bound-args (compute-bound-args func-name args-whnf))
-     (answers->prologos-expr solutions var-names bound-args)]))
+     (answers->prologos-expr solutions var-names)]))
 
 ;; Run solve for a goal expression, returning a Prologos list of answer maps.
 (define (run-solve-goal goal-expr config)
@@ -529,9 +455,7 @@
      (define answers
        (parameterize ([current-is-eval-fn nf])
          (stratified-solve-goal config store rel-name goal-args query-vars)))
-     ;; Bound args: show ground arguments with parameter names from relation definition
-     (define bound-args (compute-bound-args-for-relation rel-name goal-args query-vars))
-     (answers->prologos-expr answers query-vars bound-args)]
+     (answers->prologos-expr answers query-vars)]
     [(expr-rel? goal*)
      ;; Anonymous relation — create temporary relation-info and solve
      (define temp-name (gensym 'anon-rel))
@@ -547,7 +471,7 @@
      (define answers
        (parameterize ([current-is-eval-fn nf])
          (stratified-solve-goal config store temp-name goal-args query-vars)))
-     (answers->prologos-expr answers query-vars '())]
+     (answers->prologos-expr answers query-vars)]
     [(expr-unify-goal? goal*)
      ;; Inline = goal: normalize both sides to solver representation,
      ;; collect query vars, run unification, format answer.
@@ -573,7 +497,7 @@
        (for/list ([ans (in-list answers)])
          (for/hasheq ([qv (in-list query-vars)])
            (values qv (solver-term->prologos-expr (walk* ans qv))))))
-     (answers->prologos-expr converted-answers query-vars '())]
+     (answers->prologos-expr converted-answers query-vars)]
     [(expr-is-goal? goal*)
      ;; Inline is goal: evaluate expr, bind to var, return single-answer list.
      (define var-node (expr-is-goal-var goal*))
@@ -584,11 +508,15 @@
              [else (gensym 'is-var)]))
      (define result (nf is-expr))
      (define answer (hasheq var-name result))
-     (answers->prologos-expr (list answer) (list var-name) '())]
+     (answers->prologos-expr (list answer) (list var-name))]
     ;; If the goal is not yet reduced to a goal-app, return the expression unchanged
     [else (expr-solve goal*)]))
 
-;; Run solve-one for a goal expression, returning Option (first answer or none).
+;; Run solve-one for a goal expression, returning THE solution map bare, or
+;; `none` when there is no solution (CIU T6 F1b.1 / D25.4: the `some` wrapper
+;; is unwrapped so `[solve-one q].x` projects directly; `none` — the existing
+;; missing-binding fvar — stays the no-solution value; never `{}`, which since
+;; D17 reads as a legitimate empty dyn-row value).
 (define (run-solve-one-goal goal-expr config)
   (define goal* (whnf goal-expr))
   (cond
@@ -602,24 +530,15 @@
          (stratified-solve-goal config store rel-name goal-args query-vars)))
      (if (null? answers)
          (expr-fvar 'none)
-         ;; Wrap first answer in 'some' — include bound args
          (let* ([first-answer (car answers)]
-                [bound-args (compute-bound-args-for-relation rel-name goal-args query-vars)]
                 [champ-val
                  (for/fold ([c champ-empty])
                            ([qv (in-list query-vars)])
                    (define val (hash-ref first-answer qv #f))
                    (define key (expr-keyword qv))
                    (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
-                   (champ-insert c (equal-hash-code key) key pval))]
-                ;; Add bound args
-                [champ-with-bound
-                 (for/fold ([c champ-val])
-                           ([ba (in-list bound-args)])
-                   (define key (expr-keyword (car ba)))
-                   (define pval (ground->prologos-expr (cdr ba)))
                    (champ-insert c (equal-hash-code key) key pval))])
-           (expr-app (expr-fvar 'some) (expr-champ champ-with-bound))))]
+           (expr-champ champ-val)))]
     [(expr-rel? goal*)
      ;; Anonymous relation — create temporary relation-info and solve-one
      (define temp-name (gensym 'anon-rel))
@@ -644,7 +563,7 @@
                    (define key (expr-keyword qv))
                    (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
                    (champ-insert c (equal-hash-code key) key pval))])
-           (expr-app (expr-fvar 'some) (expr-champ champ-val))))]
+           (expr-champ champ-val)))]
     [(expr-unify-goal? goal*)
      ;; Inline = goal for solve-one: unify, return first answer or none.
      (define lhs (expr-unify-goal-lhs goal*))
@@ -672,7 +591,7 @@
                    (define val (solver-term->prologos-expr (walk* first-ans qv)))
                    (define key (expr-keyword qv))
                    (champ-insert c (equal-hash-code key) key val))])
-           (expr-app (expr-fvar 'some) (expr-champ champ-val))))]
+           (expr-champ champ-val)))]
     [(expr-is-goal? goal*)
      ;; Inline is goal for solve-one: evaluate expr, return (some {:var result}).
      (define var-node (expr-is-goal-var goal*))
@@ -684,7 +603,7 @@
      (define result (nf is-expr))
      (define key (expr-keyword var-name))
      (define champ-val (champ-insert champ-empty (equal-hash-code key) key result))
-     (expr-app (expr-fvar 'some) (expr-champ champ-val))]
+     (expr-champ champ-val)]
     [else (expr-solve-one goal*)]))
 
 ;; Run explain for a goal expression, returning a Prologos list of answer maps.
@@ -701,62 +620,14 @@
      (define results
        (parameterize ([current-is-eval-fn nf])
          (stratified-explain-goal config store rel-name goal-args query-vars prov-level)))
-     (define bound-args (compute-bound-args-for-relation rel-name goal-args query-vars))
+     ;; All production explain results are answer-result structs (D4). The legacy
+     ;; wf-explained-answer / answer-record arms were dead code (zero producers)
+     ;; and were deleted at CIU T6 F1b.1 along with the bound-args echo.
      (define prologos-maps
        (for/list ([r (in-list results)])
-         (cond
-           [(answer-result? r)
-            (answer-result->prologos-expr r query-vars bound-args)]
-           ;; Legacy fallback: wf-explained-answer (should no longer occur after full migration)
-           [(wf-explained-answer? r)
-            (define bindings (wf-explained-answer-bindings r))
-            (define certainty (wf-explained-answer-certainty r))
-            (define explanation (wf-explained-answer-explanation r))
-            (define base-champ
-              (for/fold ([c champ-empty])
-                        ([qv (in-list query-vars)])
-                (define val (hash-ref bindings qv #f))
-                (define key (expr-keyword qv))
-                (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
-                (champ-insert c (equal-hash-code key) key pval)))
-            (define with-bound
-              (for/fold ([c base-champ])
-                        ([ba (in-list bound-args)])
-                (define key (expr-keyword (car ba)))
-                (define pval (ground->prologos-expr (cdr ba)))
-                (champ-insert c (equal-hash-code key) key pval)))
-            (define cert-key (expr-keyword 'certainty))
-            (define with-cert
-              (champ-insert with-bound (equal-hash-code cert-key) cert-key
-                            (expr-keyword certainty)))
-            (if (and (wf-undeterminacy-explanation? explanation)
-                     (eq? certainty 'unknown))
-                (let* ([cycle-key (expr-keyword 'cycle)]
-                       [cycle-preds (wf-undeterminacy-explanation-cycle-predicates explanation)]
-                       [cycle-expr (racket-list->prologos-list
-                                    (map (lambda (p) (expr-string (symbol->string p)))
-                                         cycle-preds))])
-                  (expr-champ
-                   (champ-insert with-cert (equal-hash-code cycle-key) cycle-key cycle-expr)))
-                (expr-champ with-cert))]
-           ;; Legacy fallback: answer-record
-           [(answer-record? r)
-            (define bindings (answer-record-bindings r))
-            (define base-champ
-              (for/fold ([c champ-empty])
-                        ([qv (in-list query-vars)])
-                (define val (hash-ref bindings qv #f))
-                (define key (expr-keyword qv))
-                (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
-                (champ-insert c (equal-hash-code key) key pval)))
-            (define with-bound
-              (for/fold ([c base-champ])
-                        ([ba (in-list bound-args)])
-                (define key (expr-keyword (car ba)))
-                (define pval (ground->prologos-expr (cdr ba)))
-                (champ-insert c (equal-hash-code key) key pval)))
-            (expr-champ with-bound)]
-           [else r])))
+         (if (answer-result? r)
+             (answer-result->prologos-expr r query-vars)
+             r)))
      (racket-list->prologos-list prologos-maps)]
     [else (expr-explain goal*)]))
 
@@ -767,7 +638,17 @@
 ;; Convert an answer-result struct to a Prologos CHAMP expression.
 ;; Structure: bindings at top level, :certainty/:cycle at top level (WF only),
 ;; :provenance as nested map (when present).
-(define (answer-result->prologos-expr ar query-vars bound-args)
+;;
+;; Reserved-key guard (CIU T6 F1b.1 / D25.2 interim): the metadata keys
+;; :certainty/:cycle/:provenance are inserted AFTER the query-var bindings and
+;; champ-insert overwrites on equal keys — so a query variable that happens to
+;; share a reserved name would be silently CLOBBERED. The guard skips the
+;; metadata insert on collision: the user's binding wins (solve never inserts
+;; these keys, so this also keeps the same query behaving identically under
+;; solve and explain). The proper fix — provenance in a wrapper record beside
+;; the solutions, not merged into each row — is the explain restructure
+;; (DEFERRED.md § explain restructure), which inherits this pin.
+(define (answer-result->prologos-expr ar query-vars)
   ;; 1. Build base CHAMP from query variable bindings
   (define bindings (answer-result-bindings ar))
   (define base-champ
@@ -778,36 +659,30 @@
       (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
       (champ-insert c (equal-hash-code key) key pval)))
 
-  ;; 2. Add bound args (ground args that were already specified in the query)
-  (define with-bound
-    (for/fold ([c base-champ])
-              ([ba (in-list bound-args)])
-      (define key (expr-keyword (car ba)))
-      (define pval (ground->prologos-expr (cdr ba)))
-      (champ-insert c (equal-hash-code key) key pval)))
-
-  ;; 3. Add :certainty if present (WF semantics only)
+  ;; 2. Add :certainty if present (WF semantics only; skipped if a query var
+  ;;    claims the name — the binding wins)
   (define with-certainty
     (let ([cert (answer-result-certainty ar)])
-      (if cert
+      (if (and cert (not (memq 'certainty query-vars)))
           (let ([k (expr-keyword 'certainty)])
-            (champ-insert with-bound (equal-hash-code k) k (expr-keyword cert)))
-          with-bound)))
+            (champ-insert base-champ (equal-hash-code k) k (expr-keyword cert)))
+          base-champ)))
 
-  ;; 4. Add :cycle if present (WF unknown only)
+  ;; 3. Add :cycle if present (WF unknown only; binding wins on collision)
   (define with-cycle
     (let ([cyc (answer-result-cycle ar)])
-      (if cyc
+      (if (and cyc (not (memq 'cycle query-vars)))
           (let* ([k (expr-keyword 'cycle)]
                  [cycle-expr (racket-list->prologos-list
                               (map (lambda (p) (expr-string (symbol->string p))) cyc))])
             (champ-insert with-certainty (equal-hash-code k) k cycle-expr))
           with-certainty)))
 
-  ;; 5. Add :provenance if present (provenance level >= :summary)
+  ;; 4. Add :provenance if present (provenance level >= :summary; binding wins
+  ;;    on collision)
   (define with-provenance
     (let ([prov (answer-result-provenance ar)])
-      (if prov
+      (if (and prov (not (memq 'provenance query-vars)))
           (let ([k (expr-keyword 'provenance)])
             (champ-insert with-cycle (equal-hash-code k) k
                           (provenance-data->prologos-expr prov)))

@@ -359,3 +359,31 @@ def dd := [map-dissoc {:a 1 :b 2} kk]
 ;;79=>~ dd : { | _}
 ;;   ← D20 posture: dynamic-key removal may have deleted ANY known field —
 ;;     the only sound degrade is the empty dyn row
+
+;; ============================================================
+;; §F1b.1 — solution-set shape (D25, 2026-07-17)
+;; Solutions carry query-var keys ONLY (the bound-args echo — ground
+;; call-site values under '_'-suffixed param names — is deleted);
+;; solve-one returns the BARE solution map, or none (never {}: that
+;; is a legitimate empty dyn row under D17).
+;; ============================================================
+
+defr sol-parent [?a ?b]
+  || "alice" "bob"
+  || "alice" "charlie"
+
+solve (sol-parent "alice" y)
+;;81=> '[{:y "bob"} {:y "charlie"}] : _
+;;   ← the D25 payoff: pure answer rows, no :a_ echo, no "alice" re-emission
+
+solve-one (sol-parent "alice" y)
+;;82=> {:y "bob"} : _
+;;   ← D25.4: the BARE solution map — [solve-one q].y projects directly
+
+solve-one (sol-parent "zed" y)
+;;83=> none : _
+;;   ← no solution = none, never {} (D17: {} is an empty dyn row VALUE)
+
+solve (sol-parent x y)
+;;84=> '[{:y "bob", :x "alice"} {:y "charlie", :x "alice"}] : _
+;;   ← all-free queries were always echo-free; unchanged
