@@ -1253,6 +1253,16 @@
           (let ([result-type (infer ctx e)])
             (tu result-type (add-usage u1 u2)))]
          [(_ _) (tu-error)]))]
+
+    ;; CIU T6 F1b.5-s2: validate — the expr-get delegate pattern: subject
+    ;; usage at natural multiplicity; type from typing-core's infer arm.
+    ;; Plan exprs are BAKED CLOSED (elaborated in empty env — no free vars
+    ;; into user context), so they contribute no usage. No checkQ arm needed
+    ;; (checkQ's conversion fallback covers check position).
+    [(expr-validate _ _ _ subject _)
+     (match (inferQ ctx subject)
+       [(tu _ u) (tu (infer ctx e) u)]
+       [_ (tu-error)])]
     [(expr-nil-safe-get m k)
      (let ([r1 (inferQ ctx m)]
            [r2 (inferQ ctx k)])

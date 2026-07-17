@@ -165,6 +165,7 @@
  (struct-out expr-String) (struct-out expr-string)
  ;; Anonymous structural record / tuple type (CIU T6 F1; internal-only — inferred, not parsed)
  (struct-out expr-Record) (struct-out record-field)
+ (struct-out expr-validate) validate-map-exprs
  record-map-field-types make-record record-extend record-lookup-field record-remove
  closed-nat-row? closed-keyword-row? record-mark-all-unknown
  ;; Map (persistent hash map)
@@ -695,6 +696,50 @@
                        (record-field (proc (record-field-type (cdr fld)))
                                      (record-field-presence (cdr fld)))))
                (expr-Record-tail rec)))
+
+;; ============================================================
+;; expr-validate — the runtime schema-tabulation node (CIU T6 F1b.5-s2, D27)
+;; ============================================================
+;; Minted at ELABORATION from `[validate SchemaName e]` with the per-field
+;; plan fully BAKED (the schema registry is preparse/elaboration-time state;
+;; the whnf memo cache forbids registry reads at reduce time, and lazy baking
+;; is structurally impossible — typing can't rewrite immutable exprs and
+;; reduction can't reach typing-core). Reduces (ONE arm) to
+;; `ok filled-champ` / `err reason-champ` — payload-only ctor apps per the
+;; documented dual-arity runtime contract (foreign.rkt marshal-out precedent).
+;;
+;;   schema-name : symbol           (as resolved at bake — display + errors)
+;;   closed?     : boolean          (:closed schema → unexpected-field scan)
+;;   plan        : (listof (list kw tag default-expr pred-expr type-str pred-str))
+;;                 kw = stripped field-name symbol; tag = the s1 witness tag
+;;                 (plain sexp — field-witness.rkt grammar); default-expr /
+;;                 pred-expr = elaborated exprs or #f (pred = an expr-lam,
+;;                 NEVER a Racket closure — pnet serializes procedures to
+;;                 error stubs); type-str / pred-str = display strings baked
+;;                 for Reason payloads
+;;   subject     : expr
+;;   names       : (list Result-type Reason-type ok err missing-required
+;;                       check-failed type-mismatch unexpected-field)
+;;                 — eight FQN symbols resolved at bake (types first: the
+;;                 typing rule builds Result S (Map Keyword Reason) from them;
+;;                 the rest are the arm's runtime ctor heads)
+(struct expr-validate (schema-name closed? plan subject names) #:transparent)
+
+;; Map proc over every EXPR slot of a validate node (subject + per-field
+;; default/pred), preserving all atoms — the record-map-field-types pattern:
+;; the plan-spine walk lives in ONE place for shift/subst/zonk/nf/pp.
+(define (validate-map-exprs proc v)
+  (expr-validate (expr-validate-schema-name v)
+                 (expr-validate-closed? v)
+                 (for/list ([entry (in-list (expr-validate-plan v))])
+                   (list (car entry)
+                         (cadr entry)
+                         (let ([d (caddr entry)]) (and d (proc d)))
+                         (let ([p (cadddr entry)]) (and p (proc p)))
+                         (list-ref entry 4)
+                         (list-ref entry 5)))
+                 (proc (expr-validate-subject v))
+                 (expr-validate-names v)))
 
 ;; SMART CONSTRUCTOR (D6 §4.1): the ONLY row producer. Dedups labels right-priority
 ;; (later entries win — Clojure/D10 assoc overwrite) and re-canonicalizes the field order
@@ -1294,6 +1339,7 @@
       (expr-Char? x) (expr-char? x)
       (expr-String? x) (expr-string? x)
       (expr-Record? x)
+      (expr-validate? x)
       (expr-Map? x) (expr-champ? x) (expr-map-empty? x)
       (expr-map-assoc? x) (expr-map-get? x) (expr-nil-safe-get? x) (expr-map-dissoc? x)
       (expr-map-size? x) (expr-map-has-key? x)

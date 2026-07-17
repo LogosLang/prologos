@@ -1856,6 +1856,34 @@
           #:when (equal? f (list-type-fvar))
           (if (or (check ctx key (expr-Nat)) (check ctx key (expr-Int))) a (expr-error))]
          [_ (expr-error)]))]
+    ;; CIU T6 F1b.5-s2 (D27): validate — ONE rule, Result S (Map Keyword Reason).
+    ;; Subject discipline = INFER-DISPATCH (the map-get template below; the
+    ;; check-against-(Map Keyword ?meta) route was audit-REFUTED: record-<:-map?
+    ;; refuses to solve a meta V from a DYN row, and check's match* commits).
+    ;; Map-ish subjects accept (Record incl. dyn tails / Map / schema / selection
+    ;; / union-of-map-ish / unsolved-meta gradual); non-maps reject statically.
+    ;; The PLAN is bake-trusted (elaborated + witness-tagged at elaboration —
+    ;; the expr-num-lit carried-alpha precedent); the rule never re-checks it.
+    [(expr-validate sname _closed? _plan subject names)
+     (let ([tm (whnf (infer ctx subject))])
+       (define (map-ish? t)
+         (match t
+           [(? expr-Record? _) #t]
+           [(expr-Map _ _) #t]
+           [(expr-fvar n)
+            (and (or (lookup-schema-by-name n) (lookup-selection-by-name n)) #t)]
+           [(? expr-union? u) (ormap (lambda (b) (map-ish? (whnf b))) (flatten-union u))]
+           [(? expr-meta? _) #t]  ;; unsolved — gradual accept (the open? posture)
+           [_ #f]))
+       (cond
+         [(expr-error? tm) (expr-error)]
+         [(map-ish? tm)
+          ;; Result S (Map Keyword Reason) — names resolved at bake:
+          ;; (Result-type Reason-type ok err …)
+          (expr-app (expr-app (expr-fvar (car names)) (expr-fvar sname))
+                    (expr-Map (expr-Keyword) (expr-fvar (cadr names))))]
+         [else (expr-error)]))]
+
     [(expr-map-get m k)
      (let ([tm (whnf (infer ctx m))])
        (match tm

@@ -300,6 +300,8 @@
     [(expr-string _) e]
     ;; Record/tuple type: zonk field types
     [(? expr-Record? rec) (record-map-field-types zonk rec)]
+    ;; CIU T6 F1b.5-s2: validate — exprs via the single helper
+    [(? expr-validate? v) (validate-map-exprs zonk v)]
     ;; Map
     [(expr-Map k v) (expr-Map (zonk k) (zonk v))]
     [(expr-champ _) e]
@@ -777,6 +779,8 @@
     [(expr-string _) e]
     ;; Record/tuple type: zonk field types at depth
     [(? expr-Record? rec) (record-map-field-types (lambda (t) (zonk-at-depth depth t)) rec)]
+    ;; CIU T6 F1b.5-s2: validate — exprs via the single helper
+    [(? expr-validate? v) (validate-map-exprs (lambda (t) (zonk-at-depth depth t)) v)]
     ;; Map
     [(expr-Map k v) (expr-Map (zonk-at-depth depth k) (zonk-at-depth depth v))]
     [(expr-champ _) e]
@@ -1257,6 +1261,9 @@
     [(expr-string _) e]
     ;; Record/tuple type: default metas in field types
     [(? expr-Record? rec) (record-map-field-types default-metas rec)]
+    ;; CIU T6 F1b.5-s2: validate — the SILENT function (catch-all passthrough);
+    ;; a missed arm here would leave unsolved metas in plan exprs un-defaulted
+    [(? expr-validate? v) (validate-map-exprs default-metas v)]
     ;; Map
     [(expr-Map k v) (expr-Map (default-metas k) (default-metas v))]
     [(expr-champ _) e]

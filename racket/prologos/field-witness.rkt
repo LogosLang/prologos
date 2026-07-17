@@ -41,6 +41,7 @@
 (provide value-witnesses-tag?
          value->prim-tag
          value->ctor-type-name
+         value-kind-string
          witness-tag-skip?
          witness-tag-well-formed?)
 
@@ -108,6 +109,18 @@
        [else #t])]
     ;; malformed / unexpected tag shape → accept
     [else #t]))
+
+;; ---- value kind rendering (for Reason type-mismatch "got" payloads) --------
+;; A short display name for what the value IS — from the same classifiers the
+;; witness uses, so the error message and the witness verdict cannot drift.
+;; (No pretty-print dependency: reduction-land stays below the pp module.)
+(define (value-kind-string v)
+  (cond
+    [(value->prim-tag v) => symbol->string]
+    [(value->ctor-type-name v) => symbol->string]
+    [(expr-champ? v) "Map"]
+    [(expr-lam? v) "function"]
+    [else "value"]))
 
 ;; ---- tag introspection (for the skip-set discipline test) ------------------
 ;; A tag SKIPS (concedes witnessing) iff it is 'any, at top level or inside a

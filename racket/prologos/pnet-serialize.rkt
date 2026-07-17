@@ -220,6 +220,10 @@
   ;; (F2 vector-impostor detonates on a MISSING registration under a stale .pnet cache).
   (reg2! record-field (expr-Nat) 'present)
   (reg3! expr-Record 'keyword '() 'closed)
+  ;; CIU T6 F1b.5-s2: the validate tabulation node — SAME-COMMIT registration
+  ;; (the vector-impostor rule). Payload = symbols/booleans/sexps/exprs only
+  ;; (preds are expr-lams, NEVER Racket closures — those serialize to stubs).
+  (regN! expr-validate 'S #f '() (expr-unit) '())
   (reg1! expr-Set (expr-Nat))
   (reg2! expr-union (expr-Nat) (expr-Int))
   (reg2! expr-get (expr-unit) (expr-keyword 'k))

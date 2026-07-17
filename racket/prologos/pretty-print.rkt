@@ -466,6 +466,11 @@
     [(expr-map-empty k v) (format "{} : (Map ~a ~a)" (pp-expr k names) (pp-expr v names))]
     [(expr-map-assoc m k v) (format "[map-assoc ~a ~a ~a]" (pp-expr m names) (pp-expr k names) (pp-expr v names))]
     [(expr-map-get m k) (format "[map-get ~a ~a]" (pp-expr m names) (pp-expr k names))]
+    ;; CIU T6 F1b.5-s2: validate — compact display (plan is baked internals)
+    [(? expr-validate? v)
+     (format "[validate ~a ~a]"
+             (expr-validate-schema-name v)
+             (pp-expr (expr-validate-subject v) names))]
     [(expr-get c k) (format "[get ~a ~a]" (pp-expr c names) (pp-expr k names))]
     [(expr-nil-safe-get m k) (format "[nil-safe-get ~a ~a]" (pp-expr m names) (pp-expr k names))]
     [(expr-nil-check a) (format "[nil? ~a]" (pp-expr a names))]
@@ -1144,6 +1149,12 @@
     [(expr-map-empty k v) (or (uses-bvar0? k) (uses-bvar0? v))]
     [(expr-map-assoc m k v) (or (uses-bvar0? m) (uses-bvar0? k) (uses-bvar0? v))]
     [(expr-map-get m k) (or (uses-bvar0? m) (uses-bvar0? k))]
+    ;; CIU T6 F1b.5-s2: validate — subject + plan expr slots
+    [(? expr-validate? v)
+     (or (uses-bvar0? (expr-validate-subject v))
+         (for/or ([entry (in-list (expr-validate-plan v))])
+           (or (and (caddr entry) (uses-bvar0? (caddr entry)))
+               (and (cadddr entry) (uses-bvar0? (cadddr entry))))))]
     [(expr-get c k) (or (uses-bvar0? c) (uses-bvar0? k))]
     [(expr-nil-safe-get m k) (or (uses-bvar0? m) (uses-bvar0? k))]
     [(expr-nil-check a) (uses-bvar0? a)]

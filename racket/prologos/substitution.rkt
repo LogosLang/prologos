@@ -257,6 +257,8 @@
 
     ;; Record/tuple type: recurse into field TYPES only (labels/presence/tail carry no vars)
     [(? expr-Record? rec) (record-map-field-types (lambda (t) (shift delta cutoff t)) rec)]
+    ;; CIU T6 F1b.5-s2: validate — non-binding; exprs via the single helper
+    [(? expr-validate? v) (validate-map-exprs (lambda (t) (shift delta cutoff t)) v)]
     ;; Map (all non-binding)
     [(expr-Map k v) (expr-Map (shift delta cutoff k) (shift delta cutoff v))]
     [(expr-champ _) e]  ; Racket value, no de Bruijn vars
@@ -735,6 +737,8 @@
 
     ;; Record/tuple type: recurse into field TYPES only
     [(? expr-Record? rec) (record-map-field-types (lambda (t) (subst k s t)) rec)]
+    ;; CIU T6 F1b.5-s2: validate — non-binding; exprs via the single helper
+    [(? expr-validate? v) (validate-map-exprs (lambda (t) (subst k s t)) v)]
     ;; Map (all non-binding)
     [(expr-Map kt vt) (expr-Map (subst k s kt) (subst k s vt))]
     [(expr-champ _) e]

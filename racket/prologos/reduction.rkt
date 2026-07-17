@@ -38,11 +38,15 @@
          "narrowing.rkt"
          "definitional-tree.rkt"
          "constraint-propagators.rkt"
-         "prop-observatory.rkt")  ;; Observatory: capture user network runs
+         "prop-observatory.rkt"  ;; Observatory: capture user network runs
+         "field-witness.rkt")    ;; CIU T6 F1b.5-s2: the runtime witness interpreter (below reduction; cycle-safe)
 
 (provide whnf nf nf-whnf conv conv-nf
          current-nf-cache current-whnf-cache
          current-reduction-fuel current-nat-value-cache
+         ;; CIU T6 F1b.5-s2: the degradation guard (exemption-list membership
+         ;; is test-pinned — the D22/P6 silent-value-loss class)
+         definitely-not-map?
          ;; Solver normalization (for benchmarks + PUnify)
          normalize-ast-to-solver-term
          ;; N6e issue #71: saturated-multi-hole-section classifier (shared by
@@ -1265,6 +1269,101 @@
 ;; A value is "definitely not a map" if it cannot possibly be a CHAMP map
 ;; at runtime. Used by map-get to return none instead of a stuck term
 ;; when applied to non-map values from union-typed expressions.
+;; ============================================================
+;; CIU T6 F1b.5-s2 (D27/D28): the validate runtime TABULATION.
+;; ============================================================
+;; Force all observations, fill-or-err, positive witness (the ESOP framing).
+;; COLLECT-ALL: per-field checks are independent observations — never
+;; fail-fast (D27.4, API-pinned). Per-field failure precedence: missing →
+;; type-mismatch → check-failed (one Reason per field; the map holds one
+;; value per key). Ctor minting is PAYLOAD-ONLY over FQN heads (the
+;; foreign.rkt marshal-out contract; the dual-arity match tolerance —
+;; NEVER mint a partial type-arg chain, it silently sticks). Values are
+;; nf'd AT INSERT (nf never descends into champs) and BEFORE witnessing
+;; (the field-witness precondition). A pred that panics PROPAGATES as the
+;; node's result ("validate inherits panic semantics, v1" — D27.3); a pred
+;; that sticks (neither true/false/panic) SKIPS per D28 err-polarity
+;; (documented divergence from stay-stuck eliminators).
+(define (validate-tabulate sname closed? plan subj-champ names)
+  (define c (expr-champ-racket-champ subj-champ))
+  (define ok-name         (list-ref names 2))
+  (define err-name        (list-ref names 3))
+  (define missing-name    (list-ref names 4))
+  (define checkfail-name  (list-ref names 5))
+  (define typemis-name    (list-ref names 6))
+  (define unexpected-name (list-ref names 7))
+  (define plan-kws (map car plan))
+  ;; the ok-payload base: the subject champ rebuilt with nf'd values
+  (define base-ok
+    (champ-fold c
+                (lambda (k v acc) (champ-insert acc (equal-hash-code k) k (nf v)))
+                champ-empty))
+  ;; walk the plan: collect-all errs + fill defaults; escape on pred panic
+  (let loop ([entries plan] [okc base-ok] [errc champ-empty] [any-err? #f])
+    (cond
+      [(pair? entries)
+       (define entry (car entries))
+       (define kw       (car entry))
+       (define tag      (cadr entry))
+       (define default  (caddr entry))
+       (define pred     (cadddr entry))
+       (define type-str (list-ref entry 4))
+       (define pred-str (list-ref entry 5))
+       (define kexpr (expr-keyword kw))
+       (define khash (equal-hash-code kexpr))
+       (define found (champ-lookup c khash kexpr))
+       (cond
+         ;; missing + no default → missing-required
+         [(and (eq? found 'none) (not default))
+          (loop (cdr entries) okc
+                (champ-insert errc khash kexpr (expr-fvar missing-name))
+                #t)]
+         [else
+          (define val (nf (if (eq? found 'none) default found)))
+          (cond
+            ;; type-witness (the s1 acceptance tags; skip-safe by construction)
+            [(not (value-witnesses-tag? val tag))
+             (loop (cdr entries) okc
+                   (champ-insert errc khash kexpr
+                                 (expr-app (expr-app (expr-fvar typemis-name)
+                                                     (expr-string type-str))
+                                           (expr-string (value-kind-string val))))
+                   #t)]
+            [else
+             ;; :check pred (baked expr-lam; beta via nf)
+             (define pred-result (and pred (nf (expr-app pred val))))
+             (cond
+               ;; panic in a pred → the panic IS the node's result (D27.3)
+               [(and pred-result (expr-panic? pred-result)) pred-result]
+               [(and pred-result (expr-false? pred-result))
+                (loop (cdr entries) okc
+                      (champ-insert errc khash kexpr
+                                    (expr-app (expr-fvar checkfail-name)
+                                              (expr-string (or pred-str "check"))))
+                      #t)]
+               ;; true OR stuck (skip per err-polarity) → the field passes
+               [else
+                (loop (cdr entries)
+                      (champ-insert okc khash kexpr val)
+                      errc any-err?)])])])]
+      [else
+       ;; :closed schemas: any subject key outside the plan → unexpected-field
+       (define err-pair
+         (if closed?
+             (champ-fold c
+                         (lambda (k v acc-pair)
+                           (if (and (expr-keyword? k)
+                                    (memq (expr-keyword-name k) plan-kws))
+                               acc-pair
+                               (cons (champ-insert (car acc-pair) (equal-hash-code k) k
+                                                   (expr-fvar unexpected-name))
+                                     #t)))
+                         (cons errc any-err?))
+             (cons errc any-err?)))
+       (if (cdr err-pair)
+           (expr-app (expr-fvar err-name) (expr-champ (car err-pair)))
+           (expr-app (expr-fvar ok-name) (expr-champ okc)))])))
+
 (define (definitely-not-map? e)
   (not (or (expr-champ? e)          ;; IS a map runtime value
            (expr-fvar? e)           ;; could resolve to a map
@@ -1287,7 +1386,12 @@
            ;; map-get (and to nil by nil-safe-get) under projection, hiding
            ;; the violation entirely (PROBES §P4). Mirrors the expr-error
            ;; exemption directly above.
-           (expr-panic? e))))
+           (expr-panic? e)
+           ;; CIU T6 F1b.5-s2: a stuck validate must propagate stuck (its
+           ;; reduced result is ok/err over a champ — map-adjacent); the
+           ;; D22/P6 silent-value-loss class, decided explicitly per
+           ;; pipeline.md core item 4.
+           (expr-validate? e))))
 
 ;; ========================================
 ;; Weak Head Normal Form
@@ -2229,6 +2333,17 @@
          (if (eq? result 'none)
              (expr-error)
              (whnf result))))]
+
+    ;; CIU T6 F1b.5-s2 (D27): validate — the runtime tabulation redex.
+    ;; Subject whnf's to exactly two classes (spines/map-empty collapse to
+    ;; champs): champ → tabulate; stuck → the node stays stuck (the map-get
+    ;; [else e] precedent; safe at top level, pp arm renders it).
+    [(expr-validate sname closed? plan subject names)
+     (let ([subj* (whnf subject)])
+       (cond
+         [(expr-champ? subj*) (validate-tabulate sname closed? plan subj* names)]
+         [(equal? subj* subject) e]
+         [else (whnf (expr-validate sname closed? plan subj* names))]))]
     ;; Generic get: dispatch by collection type
     [(expr-get coll key)
      (let ([c* (whnf coll)])
@@ -3572,6 +3687,9 @@
     [(expr-map-empty k v) (expr-map-empty (nf k) (nf v))]
     [(expr-map-assoc m k v) (expr-map-assoc (nf m) (nf k) (nf v))]
     [(expr-map-get m k) (expr-map-get (nf m) (nf k))]
+    ;; CIU T6 F1b.5-s2: a validate that survived whnf is stuck — nf the
+    ;; expr slots (subject + plan defaults/preds) via the single helper
+    [(? expr-validate? v) (validate-map-exprs nf v)]
     [(expr-get c k) (expr-get (nf c) (nf k))]
     [(expr-nil-safe-get m k) (expr-nil-safe-get (nf m) (nf k))]
     [(expr-nil-check a) (expr-nil-check (nf a))]

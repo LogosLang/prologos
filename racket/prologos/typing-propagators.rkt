@@ -2149,6 +2149,10 @@
   (register-typing-rule! expr-unit? 0 '() (expr-Unit) 'unit-literal)
   (register-typing-rule! expr-nil? 0 '() (expr-Nil) 'nil-literal)
   (register-typing-rule! expr-refl? 0 '() #f 'refl)  ;; dependent: Eq a a
+  ;; CIU T6 F1b.5-s2: validate — deliberate #f return-type (the refl pattern):
+  ;; position stays ⊥ → the refusal checks re-route to the imperative checker
+  ;; (which owns the rule); registering suppresses unhandled-expr-counts noise.
+  (register-typing-rule! expr-validate? 0 '() #f 'validate)
   (register-typing-rule! expr-hole? 0 '() #f 'hole)
   (register-typing-rule! expr-error? 0 '() #f 'error)
   (register-typing-rule! expr-cut? 0 '() #f 'cut)
