@@ -1782,15 +1782,30 @@
         (define maybe-schema (lookup-schema (car datum)))
         (if (and maybe-schema
                  (pair? (cdr datum))
-                 (let ([arg (cadr datum)])
-                   (and (pair? arg) (eq? (car arg) '$brace-params)))
-                 (null? (cddr datum)))  ;; exactly one arg: the brace-params
-            ;; Phase 5b: inject default values for missing fields
-            ;; Phase 5c: wrap with :check assertions
-            (let* ([augmented (inject-schema-defaults maybe-schema (cadr datum))]
-                   [the-form `(the ,(car datum) ,augmented)]
-                   [wrapped (wrap-schema-checks maybe-schema the-form)])
-              (preparse-expand-form wrapped reg (+ depth 1)))
+                 (null? (cddr datum)))  ;; exactly one arg (multi-arg is NOT a seal)
+            (let ([arg (cadr datum)])
+              (if (and (pair? arg) (eq? (car arg) '$brace-params))
+                  ;; LITERAL route (unchanged): Phase 5b default injection +
+                  ;; Phase 5c :check assertion wrapping — field set is
+                  ;; syntactically known, so fill is static.
+                  (let* ([augmented (inject-schema-defaults maybe-schema arg)]
+                         [the-form `(the ,(car datum) ,augmented)]
+                         [wrapped (wrap-schema-checks maybe-schema the-form)])
+                    (preparse-expand-form wrapped reg (+ depth 1)))
+                  ;; CIU T6 F1b.4b (D22): NON-LITERAL route — the constructor
+                  ;; form generalizes to `[SchemaName e]`: seal TYPE-ONLY via
+                  ;; the `the` boundary (per-field CHECK-strength through the
+                  ;; F1b.4a row-vs-schema discharge). Defaults + :check preds
+                  ;; are NOT materialized here: fill is TYPE-DIRECTED (which
+                  ;; fields are missing is a fact about e's row type) and
+                  ;; preparse has no types — the runtime-conditional wrap was
+                  ;; probe-REFUTED (branch unification loses the filled field
+                  ;; on dyn rows; closed rows mis-type: value/type mismatch).
+                  ;; Runtime fill + pred discharge for non-literals land with
+                  ;; the validate face's tabulation (F1b.5, the D22.4
+                  ;; decomposition); the 4e residual treats missing-defaulted
+                  ;; on non-literal routes accordingly.
+                  (preparse-expand-form `(the ,(car datum) ,arg) reg (+ depth 1))))
             ;; Not a schema construction — recurse into subexpressions
             (preparse-expand-subforms datum reg depth))])]
     ;; Non-symbol list — recurse into subexpressions

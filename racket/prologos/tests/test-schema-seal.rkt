@@ -14,8 +14,17 @@
 ;;;       vs (Map K <A|B>) refused although every field fit a branch);
 ;;;   (5) closed? consultation: open schemas accept unknown row fields,
 ;;;       :closed schemas reject them (mirrors the map-assoc arm);
-;;;   (6) selections discharge against their SUBSET (D22) — a field outside
-;;;       the selection's view rejects even when the parent schema has it.
+;;;   (6) selections: field TYPES validate against the PARENT schema; extra
+;;;       parent fields are ACCEPTED (a selection is a read-side VIEW over
+;;;       fuller data — probe-corrected); D22's "subset" scopes the 4e
+;;;       residual (what a selection seal REQUIRES), and selection identity
+;;;       survives the recursion so 4e can enumerate it.
+;;;
+;;; F1b.4b — the constructor form generalizes: [SchemaName e] seals
+;;;   non-literals TYPE-ONLY via the `the` boundary (fill/checks for
+;;;   non-literals = validate's tabulation, F1b.5 — the runtime-conditional
+;;;   wrap was probe-REFUTED: type-directed fill needs types, preparse has
+;;;   none); the literal route keeps static defaults + :check wrapping.
 ;;;
 ;;; Missing-field residual (fill-or-error) is F1b.4e — nothing here pins
 ;;; width-partial acceptance as PERMANENT; those flips land with the census.
@@ -189,3 +198,61 @@
       "def u : NameOnly := {:name \"alice\" :age \"x\"}\n")))
   (check-true (prologos-error? (last-result results))
               "field types still validate against the parent schema"))
+
+;; ========================================
+;; 6. F1b.4b: the constructor form generalizes to non-literals
+;; ========================================
+
+(test-case "non-literal constructor [Person m] seals (was: inference error)"
+  (define results
+    (run-file-string
+     (string-append
+      PERSON
+      "def m := [map-assoc [map-assoc {} :name \"alice\"] :age 30]\n"
+      "[Person m]\n")))
+  (check-true (ok? (last-result results))
+              "[SchemaName e] generalizes: the preparse rewrite emits (the Person m)"))
+
+(test-case "non-literal constructor with a WRONG-typed field rejects"
+  (define results
+    (run-file-string
+     (string-append
+      PERSON
+      "def bad := [map-assoc [map-assoc {} :name \"bob\"] :age \"x\"]\n"
+      "[Person bad]\n")))
+  (check-true (prologos-error? (last-result results))
+              "the seal's per-field discharge must reject through the constructor door too"))
+
+(test-case "non-row constructor argument rejects"
+  (define results
+    (run-file-string
+     (string-append
+      PERSON
+      "[Person 42]\n")))
+  (check-true (prologos-error? (last-result results))
+              "Int has no row to discharge — natural rejection at the ann boundary"))
+
+(test-case "literal route unchanged: defaults still inject"
+  (define results
+    (run-file-string
+     (string-append
+      "ns t :no-prelude\n"
+      "schema Config\n"
+      "  :host String\n"
+      "  :port Int :default 8080\n"
+      "[Config {:host \"h\"}]\n")))
+  (define r (last-result results))
+  (check-true (ok? r) "the literal constructor route must keep static default injection")
+  (check-true (regexp-match? #rx"8080" (format "~a" r))
+              "the defaulted field must be materialized in the value"))
+
+(test-case "sealed non-literal def projects through the schema"
+  (define results
+    (run-file-string
+     (string-append
+      PERSON
+      "def m := [map-assoc [map-assoc {} :name \"alice\"] :age 30]\n"
+      "def p := [Person m]\n"
+      "p.name\n")))
+  (check-true (ok? (last-result results))
+              "p : Person defined via the non-literal door must project :name"))
