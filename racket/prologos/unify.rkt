@@ -592,7 +592,11 @@
       ;; falls through to [else '(conv)] (the F1a-col flavor-B union-widen case, deferred).
       ;; key-domain + tail equality are EXPLICIT guards — forward-necessary so a future
       ;; 'nat tuple or 'dyn tail never mis-decomposes here. Zip ONLY record-field TYPES;
-      ;; `presence` is not an expr and must never become a unification goal. Sorted-zip is
+      ;; `presence` is not an expr and must never become a unification GOAL — but
+      ;; presence-consulting GUARDS inside arms ARE the sanctioned mechanism (✏ F1b.3/D24:
+      ;; the C_Cons containment relaxation below consults marks; THIS arm stays
+      ;; presence-BLIND by design — same-label-set rows unify on types, marks don't gate;
+      ;; the presence dimension narrows by evidence, never by unification). Sorted-zip is
       ;; label-correct because make-record canonicalizes field order (syntax.rkt).
       [(and (expr-Record? a) (expr-Record? b)
             (eq? (expr-Record-key-domain a) (expr-Record-key-domain b))
@@ -614,15 +618,36 @@
       ;; this arm takes dyn-vs-closed and dyn-vs-dyn with differing labels.
       ;; Both-sides-concrete pattern: bare metas hit flex-rigid below, applied
       ;; metas hit flex-app later — never this arm.
+      ;;
+      ;; ✏ F1b.3 (D24, the acceptance-preserving guard): containment REQUIRES
+      ;; only presence≠'unknown labels — an 'unknown label (presence uncertain:
+      ;; the dissoc-dynamic marks) must not be demanded of a closed row, else a
+      ;; marked row would be MORE restrictive than the D20 empty `{| _}` it
+      ;; replaces. The relaxation is presence-consulting GUARD logic (the
+      ;; sanctioned mechanism per the B3 pin below), symmetric in a/b. The
+      ;; 'sub zip below still emits type goals for SHARED labels regardless of
+      ;; marks — retained type = type-IF-present, a fact; unifying two
+      ;; conditional facts is sound conjunction (co-signed at F1b.3).
+      ;;
+      ;; ✏ F1b.3 (D21 pointer): typing-core's record-width-discharge? is the
+      ;; ONE sanctioned caller that feeds this arm a deliberately tail-RELAXED
+      ;; expected row (closed→dyn on a copy) — erasure-mode width rides the
+      ;; C_Cons semantics here; nothing else may relax tails to reach this arm.
       [(and (expr-Record? a) (expr-Record? b)
             (eq? (expr-Record-key-domain a) (expr-Record-key-domain b))
             (or (eq? (expr-Record-tail a) 'dyn) (eq? (expr-Record-tail b) 'dyn))
-            (let ([la (map car (expr-Record-fields a))]
-                  [lb (map car (expr-Record-fields b))])
-              (and (or (eq? (expr-Record-tail b) 'dyn)
-                       (andmap (lambda (l) (memv l lb)) la))
-                   (or (eq? (expr-Record-tail a) 'dyn)
-                       (andmap (lambda (l) (memv l la)) lb)))))
+            (let ([required
+                   (lambda (rec)
+                     (for/list ([f (in-list (expr-Record-fields rec))]
+                                #:unless (eq? (record-field-presence (cdr f)) 'unknown))
+                       (car f)))]
+                  [labels (lambda (rec) (map car (expr-Record-fields rec)))])
+              (let ([la-req (required a)] [lb-req (required b)]
+                    [la (labels a)] [lb (labels b)])
+                (and (or (eq? (expr-Record-tail b) 'dyn)
+                         (andmap (lambda (l) (memv l lb)) la-req))
+                     (or (eq? (expr-Record-tail a) 'dyn)
+                         (andmap (lambda (l) (memv l la)) lb-req))))))
        (let ([fb (expr-Record-fields b)])
          (list 'sub
                (for/list ([fa (in-list (expr-Record-fields a))]

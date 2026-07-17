@@ -436,7 +436,13 @@
      (let ([body (string-join
                   (for/list ([fld (in-list fields)])
                     (if (eq? kd 'keyword)
-                        (format ":~a ~a" (car fld) (pp-expr (record-field-type (cdr fld)) names))
+                        ;; F1b.3 (D24): 'unknown marks display as a `?` label
+                        ;; suffix ({:a? Int | _}). Known edge: a 'present field
+                        ;; whose label itself ends in `?` is indistinguishable
+                        ;; (accepted display-only ambiguity, syntax.rkt spec).
+                        (format ":~a~a ~a" (car fld)
+                                (if (eq? (record-field-presence (cdr fld)) 'unknown) "?" "")
+                                (pp-expr (record-field-type (cdr fld)) names))
                         (pp-expr (record-field-type (cdr fld)) names)))
                   " ")]
            [dyn (if (eq? tail 'dyn) " | _" "")])

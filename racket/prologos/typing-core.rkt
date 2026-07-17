@@ -55,6 +55,8 @@
          record-value-bound      ;; CIU T6 F1a.2 p1a: dyn-aware value bound (⋃knowns ∪ fresh; §12.4)
          record-project          ;; CIU T6 F1a.2 p1a: exported for synthetic dyn-row tests
          union-record-component-vt  ;; CIU T6 F1a.2 p1a: exported for synthetic dyn-row tests
+         record-width-applicable?   ;; CIU T6 F1b.3 (D21): width-discharge static guard (qtt twin + tests)
+         record-width-discharge?    ;; CIU T6 F1b.3 (D21): the shared discharge (qtt twin + tests)
          lookup-schema-by-name
          ;; Selection type helpers
          lookup-selection-by-name
@@ -415,7 +417,12 @@
   (match key
     [(expr-keyword kw) #:when (eq? kd 'keyword)
      (let ([fld (record-lookup-field rec kw)])
-       (if fld (record-field-type fld) (miss)))]
+       ;; CIU T6 F1b.3 (D24/Q7, gated-identically): an 'unknown-marked HIT
+       ;; projects exactly like a tail miss — a fresh meta, never the retained
+       ;; type (the courtesy upgrade would assert presence the compiler lacks).
+       (if (and fld (not (eq? (record-field-presence fld) 'unknown)))
+           (record-field-type fld)
+           (miss)))]
     ;; CIU T6 F1a-col: literal Nat/Int index on a 'nat row (tuple) — position lookup.
     ;; Bare Int literals accepted (Q_col-C), mirroring expr-get's PVec Nat-or-Int gate.
     [(or (expr-nat-val n) (expr-int n))
@@ -520,7 +527,10 @@
     [(expr-keyword kw) #:when (eq? kd 'keyword)
      (let ([fld (record-lookup-field rec kw)])
        (cond
-         [fld (record-field-type fld)]
+         ;; CIU T6 F1b.3 (D24/Q7): an 'unknown-marked hit is treated exactly
+         ;; like the dyn miss below (gated-identically).
+         [(and fld (not (eq? (record-field-presence fld) 'unknown)))
+          (record-field-type fld)]
          ;; CIU T6 F1a.2 p1a (§12.4): a literal miss on a 'dyn component may live
          ;; in its remainder — FILTERING it (the closed Q5 behavior) would
          ;; silently drop a live component; contribute a fresh meta instead.
@@ -1596,12 +1606,28 @@
      (define tt (infer ctx target))
      (define _pt (infer ctx paths))
      (define _ft (infer ctx fn))
-     ;; CIU T6 F1a.2 p1b (D20): only DYNAMIC paths reach this node (literal
-     ;; paths desugar at the elaborator) — a dynamic deep-update on a record
-     ;; may have changed any field, so the only sound result is the empty dyn
-     ;; row {| _} (drop all facts; S9's (Map Keyword Open) degrade is never
-     ;; minted). Non-record targets keep the type-preserving behavior.
+     ;; CIU T6 F1b.3 (D24, supersedes the D20 drop-all): only DYNAMIC paths
+     ;; reach this node (literal paths desugar at the elaborator). Per the P6
+     ;; probe, a dynamic deep-update CANNOT delete spine keys on a non-empty
+     ;; path (every spine level rebuilds via map-assoc) — the zero-segment
+     ;; case, which CAN replace the whole map, is a runtime error since
+     ;; F1b.3 (reduction.rkt). So for a KEYWORD record target the sound
+     ;; maximally-informative posture is: labels kept, per-field FRESH metas
+     ;; (any field's VALUE may have changed), presence='present (spine
+     ;; membership is stable), dyn tail (a missing-key path INSERTS — growth
+     ;; absorbed). 'nat rows keep the prior drop-all degrade ('nat dyn rows
+     ;; are not minted — the §12.3 pin). Non-record targets type-preserving.
      (match (whnf tt)
+       [(? expr-Record? rec)
+        #:when (eq? (expr-Record-key-domain rec) 'keyword)
+        (expr-Record 'keyword
+                     (for/list ([fld (in-list (expr-Record-fields rec))])
+                       (cons (car fld)
+                             (record-field
+                              (fresh-meta ctx (expr-Type (lzero))
+                                          (dyn-row-source 'dyn-row-update-in))
+                              'present)))
+                     'dyn)]
        [(? expr-Record? rec)
         (make-record (expr-Record-key-domain rec) '() 'dyn)]
        [_ tt])]
@@ -1769,7 +1795,10 @@
             [(expr-keyword kw) #:when (eq? (expr-Record-key-domain rec) 'keyword)
              (let ([fld (record-lookup-field rec kw)])
                (cond
-                 [fld (build-union-type (list (whnf (record-field-type fld)) (expr-Nil)))]
+                 ;; CIU T6 F1b.3 (D24/Q7): an 'unknown hit rides the dyn-miss
+                 ;; branch below (gated-identically — <fresh | Nil>).
+                 [(and fld (not (eq? (record-field-presence fld) 'unknown)))
+                  (build-union-type (list (whnf (record-field-type fld)) (expr-Nil)))]
                  ;; CIU T6 F1a.2 p1a (§12.4): miss on a 'dyn row — the field may
                  ;; live in the remainder → <fresh | Nil>; closed keeps → Nil.
                  [(eq? (expr-Record-tail rec) 'dyn)
@@ -1821,11 +1850,15 @@
           (match k
             [(expr-keyword kw) #:when (eq? (expr-Record-key-domain rec) 'keyword) (record-remove rec kw)]
             [_
-             ;; CIU T6 F1a.2 p1b (D20 posture): a dynamic-key removal may have
-             ;; deleted ANY known field — keeping the fields would be unsound;
-             ;; degrade to the empty dyn row {| _} (presence marks = F1b).
+             ;; CIU T6 F1b.3 (D24, supersedes the D20 drop-all): a dynamic-key
+             ;; removal leaves every field's PRESENCE uncertain — but its
+             ;; type-if-present stays a FACT. Keep labels + types, mark all
+             ;; 'unknown, dyn tail. The marks pay via comparison precision
+             ;; (the knowns walks check retained types) + diagnostics; they
+             ;; never upgrade projection (gated-identically, Q7 — an 'unknown
+             ;; hit mints a fresh meta exactly like a tail miss).
              (if (and (check ctx k (expr-Keyword)) (not (expr-error? (infer ctx k))))
-                 (make-record (expr-Record-key-domain rec) '() 'dyn) (expr-error))])]
+                 (record-mark-all-unknown rec) (expr-error))])]
          [(expr-Map kt vt)
           (if (check ctx k kt) (expr-Map kt vt) (expr-error))]
          [_ (expr-error)]))]
@@ -3244,8 +3277,68 @@
                   [((expr-app f a) (? expr-Record? rec))
                    #:when (equal? f (list-type-fvar))
                    (record-<:-elem? ctx rec a)]
+                  ;; CIU T6 F1b.3 (D21): erasure-mode WIDTH discharge — a wider closed
+                  ;; keyword row satisfies a narrower closed keyword row expectation
+                  ;; (fact-subset: extras on the actual erased; shared fields at
+                  ;; equality-depth via the relaxed-C_Cons delegation). The #:when
+                  ;; carries the STATIC guards only, so guard-failing Record pairs
+                  ;; ('nat tuples, mixed domains, dyn tails) still fall through to
+                  ;; the subtype? leg (match* commits — the shadow would otherwise
+                  ;; silently pre-empt a future judgment there).
+                  [((? expr-Record? t-rec) (? expr-Record? t1-rec))
+                   #:when (record-width-applicable? t-rec t1-rec)
+                   (record-width-discharge? ctx t-rec t1-rec)]
                   ;; Phase 3e: within-family subtyping
                   [(t-w t1-w) (subtype? t1-w t-w)]))))]))
+
+;; ========================================
+;; CIU T6 F1b.3 (D21): the erasure-mode width discharge
+;; ========================================
+;;
+;; ONE shared realization for check's conversion fallback AND qtt's checkQ
+;; fallback twin (the issue-#76 mirror-drift cap). The principled reading:
+;; width discharge = viewing the EXPECTED row through the open-row lens —
+;; Tang-style upcast erasure erases the expected side's closure fact for the
+;; comparison, realized by relaxing the expected tail 'closed→'dyn on a copy
+;; and delegating to the EXISTING unify/C_Cons machinery (no new comparison
+;; algebra; unify/classify itself is UNTOUCHED, keeping the D15 literal-
+;; homogeneity probes structurally safe). Direction proof: unify is called
+;; expected-first, so C_Cons's containment guard demands expected-labels ⊆
+;; actual-labels (= actual ⊇ expected, exactly fact-subset width), and the
+;; shared-label 'sub goals run per-field unify (equality-depth; metas solve —
+;; the D21 residue posture). Covariant depth is the F-carrier-era upgrade
+;; (triggers pinned at D21) — it CANNOT ride C_Cons ('sub goals are pure
+;; unify pairs), so the upgrade swaps this realization, never patches unify.
+
+;; STATIC applicability (side-effect-free — safe in #:when): both sides
+;; closed keyword rows (tuples exact/no-width; dyn pairs already have C_Cons
+;; in the primary unify leg) + label containment pre-filter (a statically
+;; hopeless width event must not fork — each rollback mints a mandatory ATMS
+;; hypothesis; C_Cons would re-check containment, but only after the fork).
+(define (record-width-applicable? expected-rec actual-rec)
+  (and (closed-keyword-row? expected-rec)
+       (closed-keyword-row? actual-rec)
+       (let ([la (map car (expr-Record-fields expected-rec))]
+             [lb (map car (expr-Record-fields actual-rec))])
+         (andmap (lambda (l) (and (memv l lb) #t)) la))))
+
+;; The discharge proper: relax + delegate under rollback (union-check-left
+;; precedent — the probe is wrapped, failure restores meta state; the SUCCESS
+;; path is bare per the F1a.2 p3 refit lesson). Field metas solved on success
+;; are the accepted D21 residue. The relaxed row is built by DIRECT
+;; construction (fields are smart-constructor-canonical — the elaborator-seed
+;; precedent; make-record's re-sort would be a no-op cost).
+(define (record-width-discharge? ctx expected-rec actual-rec)
+  (and (with-speculative-rollback
+         (lambda ()
+           (unify-ok? (unify ctx
+                             (expr-Record 'keyword
+                                          (expr-Record-fields expected-rec)
+                                          'dyn)
+                             actual-rec)))
+         values
+         "record-width-discharge")
+       #t))
 
 ;; ========================================
 ;; check-reduce: type-check a reduce (match) expression

@@ -2639,6 +2639,13 @@
            [np (whnf paths)])
        (cond
          [(and (expr-path? np) (pair? (expr-path-branches np)))
+          ;; F1b.3 (D24 guard): a ZERO-segment dynamic path would apply fn to
+          ;; the WHOLE map (spine keys can vanish — P6), which the D24 typing
+          ;; posture (labels stable, 'present) cannot cover. Host error, per
+          ;; the path-ops empty-path precedent. (Inside build, null segs is
+          ;; the legitimate recursion base — the guard is entry-only.)
+          (when (null? (car (expr-path-branches np)))
+            (error 'update-in "dynamic path has zero segments — an empty path would replace the entire map"))
           (let build ([base nt] [segs (car (expr-path-branches np))])
             (cond
               [(null? segs) (whnf (expr-app fn base))]
@@ -3481,6 +3488,9 @@
      (cond
        [(and (expr-path? np) (pair? (expr-path-branches np)))
         (define segs (car (expr-path-branches np)))
+        ;; F1b.3 (D24 guard): entry-only zero-segment error (see the whnf arm).
+        (when (null? segs)
+          (error 'update-in "dynamic path has zero segments — an empty path would replace the entire map"))
         (define (build base segs)
           (cond
             [(null? segs) (nf (expr-app nf-fn base))]

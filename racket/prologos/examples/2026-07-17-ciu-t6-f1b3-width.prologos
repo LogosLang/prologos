@@ -1,0 +1,57 @@
+;; ============================================================================
+;; CIU T6 F1b.3 — D21 erasure-mode WIDTH + D24 update-in acceptance (2026-07-17)
+;;
+;; Lives apart from the main F1 acceptance file: polymorphic apps and lambda
+;; defs appended after THAT file's accumulated union state trigger the
+;; PRE-EXISTING order-dependent BSP hang (DEFERRED.md § union-type hang;
+;; worktree-verified at 0bdfca22). Clean state here — the D21/D24 gates run
+;; unobstructed. Suite-gated by tests/test-f1b3-width-acceptance.rkt.
+;; ============================================================================
+
+ns f1b3-width-acceptance :no-prelude
+
+;; --- D21: the width discharge --------------------------------------------
+
+spec pick {A : Type} A A -> A
+defn pick [x y] x
+
+def wn := {:a 1}
+
+def ww := {:a 1 :b 2}
+
+pick wn ww
+;;3=> {:a 1} : {:a Int}
+;;   ← D21: the WIDER actual {:a Int :b Int} discharges against the
+;;     narrower solved expectation — extras erased, result at the expectation
+
+pick ww wn
+;;4=>~ ERROR
+;;   ← still-rejects: a MISSING expected label is never erased (direction 2)
+
+def wempty := [map-dissoc {:a 1} :a]
+
+pick wempty {:x 1}
+;;6=> {} : {}
+;;   ← the closure-erasure pin: an empty-closed expectation accepts any
+;;     keyword record (zero required facts; keyword-domain-scoped)
+
+def wclash := {:a "s" :b 2}
+
+pick wn wclash
+;;8=>~ ERROR
+;;   ← shared-label type conflict rejects through the relaxed C_Cons goals
+
+;; --- D24: dynamic update-in (labels + fresh metas + dyn) ------------------
+
+def pth := #p(a)
+
+def idint := [fn [x : Int] x]
+
+def wui := [update-in {:a 1 :b 2} pth idint]
+;;11=> wui : {:a _ :b _ | _} defined.
+;;   ← D24 (P6): labels KEPT (spine stable; zero-segment paths = runtime
+;;     error), per-field fresh metas (values may have changed — scrubbed to
+;;     holes at the store boundary per F1b.2b), dyn tail (insert-on-miss)
+
+wui
+;;12=> {:a 1, :b 2} : {:a _ :b _ | _}

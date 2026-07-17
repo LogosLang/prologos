@@ -166,7 +166,7 @@
  ;; Anonymous structural record / tuple type (CIU T6 F1; internal-only — inferred, not parsed)
  (struct-out expr-Record) (struct-out record-field)
  record-map-field-types make-record record-extend record-lookup-field record-remove
- closed-nat-row?
+ closed-nat-row? closed-keyword-row? record-mark-all-unknown
  ;; Map (persistent hash map)
  (struct-out expr-Map) (struct-out expr-champ)
  (struct-out expr-map-empty) (struct-out expr-map-assoc)
@@ -651,14 +651,38 @@
 ;; ONE carrier, TWO surface presentations keyed by key-domain (D13/Q_A): a record ('keyword) or a
 ;; tuple ('nat). Deliberately carries NO prop:ctor-desc-tag — a keyed/variable-width row cannot register
 ;; in the fixed-arity positional ctor-desc registry; width subsumption is F1b (erasure-mode), not the walk.
+;;   ✏ F1b.3 (D21, 2026-07-17): CONFIRMED under its strict reading — width landed as the
+;;   erasure-mode discharge in check's conversion fallback (record-width-* below), NOT the walk
+;;   and NOT unify/classify (a width rule in unify would CORRUPT the D15 literal-homogeneity
+;;   probes, which rely on closed row-vs-row unify failing — PROBES P8).
 ;;   key-domain : 'keyword | 'nat   (F1a-core mints 'keyword only; 'nat = tuples, F1a-col.
 ;;                                   Q_B: homogeneous-key-domain — a row is ALL-keyword or ALL-nat.)
 ;;   fields     : canonical assoc ((label . record-field) ...); label = keyword-symbol | Nat,
 ;;                sorted by symbol<? / < per domain (smart-constructor-enforced).
 ;;   tail       : 'closed | 'dyn    (F1a mints 'closed; 'dyn = F1a.2; ρ row-meta = F-row.)
 (struct expr-Record (key-domain fields tail) #:transparent)
-;; A single field/slot: its type + presence mark. F1a writes presence='present only
-;; ('optional | 'absent | 'unknown reserved per D6 for schema-optional-keys / narrowing / presence-poly).
+;; A single field/slot: its type + presence mark.
+;;
+;; PRESENCE LATTICE (D24, F1b.3 — the points-map + joins, declared here per the S-lens
+;; obligation). A mark denotes a subset of {P(resent), A(bsent)} — what is known about the
+;; field's runtime membership; the TYPE is the field's type-if-present (a fact regardless):
+;;   'present  = {P}      (positive evidence: literal mint, assoc — record-extend's
+;;                         overwrite-to-'present on assoc IS the evidence-narrowing join)
+;;   'absent   = {A}      (reserved: negative evidence / Lacks facts — F-carrier-era)
+;;   'unknown  = {P,A}    (no evidence either way: the dissoc-dynamic writer, F1b.3)
+;;   'optional = {P,A}    (reserved: same POINT as 'unknown, distinguished by PROVENANCE —
+;;                         schema-declared optionality, schema-optional-keys era)
+;;   (contradiction = {} has no mark: presence conflicts surface as type-level conflicts)
+;; Evidence-narrowing = set intersection (future has-key? narrowing: 'unknown ∩ {P} → 'present);
+;; row-merge join = set union. Marks propagate through type rewrites unchanged (presence is
+;; orthogonal to the type dimension — e.g. map-vals rebuilds keep marks with types := W).
+;; Comparison semantics: marks NEVER become unification goals (the unify B3 pin); they are
+;; consulted ONLY by arm-level GUARDS (C_Cons containment treats 'unknown labels as
+;; non-required) and by the gated-identically projection reads (an 'unknown hit mints a fresh
+;; meta exactly like a tail miss — D24/Q7, courtesy-upgrade rejected).
+;; Display: 'unknown fields render with a `?` label suffix ({:a? Int | _}). NOTE the edge:
+;; a 'present field whose LABEL itself ends in `?` (predicate-named keys) is visually
+;; indistinguishable — accepted display-only ambiguity, revisit if it bites.
 (struct record-field (type presence) #:transparent)
 
 ;; Map a procedure over every field TYPE of a record, preserving labels/presence/tail/key-domain.
@@ -708,6 +732,24 @@
   (and (expr-Record? rec)
        (eq? (expr-Record-key-domain rec) 'nat)
        (eq? (expr-Record-tail rec) 'closed)))
+
+;; CIU T6 F1b.3 (D21): a CLOSED record ('keyword domain, 'closed tail) — the width
+;; discharge's guard shape (tuples are exact/no-width per the F1 pin; dyn-tailed
+;; pairs already have C_Cons semantics in the primary unify leg).
+(define (closed-keyword-row? rec)
+  (and (expr-Record? rec)
+       (eq? (expr-Record-key-domain rec) 'keyword)
+       (eq? (expr-Record-tail rec) 'closed)))
+
+;; CIU T6 F1b.3 (D24): mark every field 'unknown, tail → 'dyn — the dissoc-dynamic
+;; writer's row (a dynamic-key removal leaves every field's PRESENCE uncertain while
+;; its type-if-present stays a fact). The sole 'unknown producer this phase.
+(define (record-mark-all-unknown rec)
+  (expr-Record (expr-Record-key-domain rec)
+               (for/list ([fld (in-list (expr-Record-fields rec))])
+                 (cons (car fld)
+                       (record-field (record-field-type (cdr fld)) 'unknown)))
+               'dyn))
 
 ;; Type constructor: Map K V
 (struct expr-Map (k-type v-type) #:transparent #:property prop:ctor-desc-tag '(type . Map))

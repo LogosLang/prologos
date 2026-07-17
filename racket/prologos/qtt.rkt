@@ -1171,12 +1171,16 @@
               u1)]
          [_ (tu-error)]))]
     [(expr-update-in target paths fn)
+     ;; CIU T6 F1b.3: DELEGATE the type to typing-core (the map-keys/vals
+     ;; precedent) — this twin previously returned the TARGET's type unchanged,
+     ;; a pre-existing divergence from the D20/D24 record degrades (the F1b.3
+     ;; audit's C4 refutation); usage stays local.
      (let ([r1 (inferQ ctx target)]
            [r2 (inferQ ctx paths)]
            [r3 (inferQ ctx fn)])
        (match* (r1 r2 r3)
-         [((tu t1 u1) (tu _ u2) (tu _ u3))
-          (tu t1 (add-usage u1 (add-usage u2 u3)))]
+         [((tu _ u1) (tu _ u2) (tu _ u3))
+          (tu (infer ctx e) (add-usage u1 (add-usage u2 u3)))]
          [(_ _ _) (tu-error)]))]
     ;; Char
     [(expr-Char) (tu (expr-Type (lzero)) (zero-usage n))]
@@ -1264,11 +1268,14 @@
          [(tu _ u) (tu (expr-Bool) u)]
          [_ (tu-error)]))]
     [(expr-map-dissoc m k)
+     ;; CIU T6 F1b.3: DELEGATE the type (was: the SUBJECT's type unchanged — a
+     ;; pre-existing divergence that made def-bound dissoc results fail QTT
+     ;; with a miscategorized Multiplicity violation; audit C4 refutation).
      (let ([r1 (inferQ ctx m)]
            [r2 (inferQ ctx k)])
        (match* (r1 r2)
          [((tu _ u1) (tu _ u2))
-          (tu (tu-type r1) (add-usage u1 u2))]
+          (tu (infer ctx e) (add-usage u1 u2))]
          [(_ _) (tu-error)]))]
     [(expr-map-size m)
      (let ([r (inferQ ctx m)])
@@ -2725,6 +2732,13 @@
                          [((expr-app lf la) (? expr-Record? rec))
                           #:when (equal? lf (list-type-fvar))
                           (record-<:-elem? ctx rec la)]
+                         ;; CIU T6 F1b.3 (D21): the width-discharge twin (shared
+                         ;; predicates from typing-core — the mirror-drift cap).
+                         ;; Returns a plain BOOLEAN into this or-chain (the bu
+                         ;; wrap is outside), unlike the union arm's bu threading.
+                         [((? expr-Record? t-rec) (? expr-Record? t1-rec))
+                          #:when (record-width-applicable? t-rec t1-rec)
+                          (record-width-discharge? ctx t-rec t1-rec)]
                          [(t-w t1-w) (subtype? t1-w t-w)])))
               (bu #t u)
               (bu #f (zero-usage n)))]

@@ -86,10 +86,16 @@
     [(expr-Map k v) (format "3:Map:~a:~a" (union-sort-key k) (union-sort-key v))]
     ;; CIU T6 F1 (S1): structural-row key — fields are canonically sorted, so this is
     ;; deterministic → record-containing unions are commutative/idempotent under build-union-type.
+    ;; ✏ F1b.3 (D24): the PRESENCE mark joins the key as a deterministic tiebreak —
+    ;; without it, presence-twins (same types, different marks) collide on sort key
+    ;; and Racket's stable sort makes branch order INPUT-ORDER dependent, silently
+    ;; falsifying the commutativity/idempotence claim above.
     [(expr-Record kd fields tail)
      (format "3:Record:~a:~a:~a" kd
              (string-join (for/list ([fld (in-list fields)])
-                            (format "~a=~a" (car fld) (union-sort-key (record-field-type (cdr fld)))))
+                            (format "~a=~a/~a" (car fld)
+                                    (union-sort-key (record-field-type (cdr fld)))
+                                    (record-field-presence (cdr fld))))
                           ",")
              tail)]
     [(expr-PVec e) (format "3:PVec:~a" (union-sort-key e))]
@@ -131,8 +137,41 @@
 (define (build-union-type types)
   (define flat (append-map flatten-union types))
   (define sorted (sort flat string<? #:key union-sort-key))
-  (define deduped (dedup-union-components sorted))
+  (define deduped (presence-absorb-adjacent (dedup-union-components sorted)))
   (cond
     [(null? deduped) (expr-error)]
     [(= (length deduped) 1) (car deduped)]
     [else (foldr expr-union (last deduped) (drop-right deduped 1))]))
+
+;; CIU T6 F1b.3 (D24): presence absorption — a row differing from its neighbor
+;; ONLY in marks where the neighbor is 'unknown collapses into the neighbor:
+;; {P} ⊆ {P,A} at every differing label, so the 'present branch adds no
+;; information the 'unknown branch doesn't already admit. Adjacency suffices:
+;; the sort key differs only in the presence segment, so candidates sort
+;; together. (The first subsumption rule in this file — dedup is pure equal?.)
+(define (presence-absorb-adjacent cs)
+  ;; a absorbs b iff same kd/tail/labels/types and, per label,
+  ;; mark_a = mark_b OR (mark_a = 'unknown AND mark_b = 'present).
+  (define (absorbs? a b)
+    (and (expr-Record? a) (expr-Record? b)
+         (eq? (expr-Record-key-domain a) (expr-Record-key-domain b))
+         (eq? (expr-Record-tail a) (expr-Record-tail b))
+         (let ([fa (expr-Record-fields a)] [fb (expr-Record-fields b)])
+           (and (= (length fa) (length fb))
+                (andmap (lambda (pa pb)
+                          (and (eqv? (car pa) (car pb))
+                               (equal? (record-field-type (cdr pa))
+                                       (record-field-type (cdr pb)))
+                               (or (eq? (record-field-presence (cdr pa))
+                                        (record-field-presence (cdr pb)))
+                                   (and (eq? (record-field-presence (cdr pa)) 'unknown)
+                                        (eq? (record-field-presence (cdr pb)) 'present)))))
+                        fa fb)))))
+  (let loop ([cs cs] [acc '()])
+    (cond
+      [(null? cs) (reverse acc)]
+      [(and (pair? (cdr cs)) (absorbs? (car cs) (cadr cs)))
+       (loop (cons (car cs) (cddr cs)) acc)]
+      [(and (pair? (cdr cs)) (absorbs? (cadr cs) (car cs)))
+       (loop (cdr cs) acc)]
+      [else (loop (cdr cs) (cons (car cs) acc))])))

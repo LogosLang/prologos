@@ -356,9 +356,11 @@ def hm := {"a" 1 "b" "x"}
 ;;     expr-map-literal all-at-once typing; homogeneous stays exact)
 
 def dd := [map-dissoc {:a 1 :b 2} kk]
-;;79=>~ dd : { | _}
-;;   ← D20 posture: dynamic-key removal may have deleted ANY known field —
-;;     the only sound degrade is the empty dyn row
+;;79=>~ dd : {:a? Int :b? Int | _}
+;;   ← ✏ F1b.3 (D24, supersedes the D20 drop-all): labels + types RETAINED,
+;;     every presence marked 'unknown (the ? suffix) — the types stay facts
+;;     (comparison precision), presence stays uncertain (projection still
+;;     mints metas, gated-identically)
 
 ;; ============================================================
 ;; §F1b.1 — solution-set shape (D25, 2026-07-17)
@@ -414,3 +416,25 @@ def dm := [map-assoc [map-assoc {} :a 1] :b "s"]
 def dx := [map-get dm :c]
 ;;88=> dx : _ defined.
 ;;   ← the D19 projection meta scrubbed to a hole at the store boundary
+
+
+;; ============================================================
+;; §F1b.3 — D24 dissoc-presence canaries (2026-07-17). The D21 WIDTH +
+;; D24 update-in canaries live in 2026-07-17-ciu-t6-f1b3-width.prologos:
+;; appending polymorphic apps / lambda defs AFTER this file's accumulated
+;; state triggers the PRE-EXISTING order-dependent BSP union-state hang
+;; (DEFERRED.md § union-type hang — repros m322 + t-idint, worktree-
+;; verified pre-existing at 0bdfca22), so those gates run on clean state.
+;; ============================================================
+
+def wdd := [map-dissoc {:p 1 :q "s"} kk]
+;;89=> wdd : {:p? Int :q? String | _} defined.
+;;   ← D24: labels + types RETAINED under dynamic dissoc, marked 'unknown
+
+wdd
+;;90=> {:q "s", :p 1} : {:p? Int :q? String | _}
+
+wdd.q
+;;91=>~ "s" : ?
+;;   ← Q7 gated-identically: the 'unknown hit projects as a fresh meta —
+;;     the runtime value survives, the TYPE never courtesy-upgrades

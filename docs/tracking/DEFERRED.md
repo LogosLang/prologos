@@ -177,6 +177,17 @@ skip+warn policy; these lift the skips / harden the substrate.
 - **Scope of fix**: a type-lattice-convergence investigation — why the union join's `facet-merge` for `:type` is non-idempotent / non-convergent under this state (relates to SRE Track 2H type-lattice/quantale). Likely ALSO wants a **fuel bound on the typing/elaborator network** so non-convergence becomes a bounded diagnostic instead of a hang.
 - **Impact**: union types (`<A | B>`) in certain sequences hang the compiler AND the LSP (it type-checks on open) — real-program-affecting, not just foray.
 - **Workaround in place**: foray's union forms commented out (so it loads).
+- **✏ 2026-07-17 (CIU T6 F1b.3, worktree-verified PRE-EXISTING at `0bdfca22`)**: the
+  class is BROADER than the original repro — after the F1 acceptance file's
+  accumulated state (86+ commands incl. union-typed defs `hu : Int | String`),
+  BOTH (a) a polymorphic spec+app (`spec pick {A : Type} A A -> A` … `pick wn ww`)
+  AND (b) a plain annotated-lambda def (`def idint := [fn [x : Int] x]`) HANG the
+  file run (BSP non-quiescence, unbounded memory) on the PRE-F1b.3 compiler too.
+  Repro files preserved: session scratchpad `f1b3-m322.prologos` / `t-idint-pre`.
+  CONSEQUENCE: the F1b.3 width canaries live in a SEPARATE clean-state acceptance
+  file (`examples/2026-07-17-ciu-t6-f1b3-width.prologos`) rather than appended to
+  the main file. Possible connection to the transient full-suite mass-stalls
+  (2 data points) — check when this gets its session.
 - **Not blocked** — needs a dedicated debugging session on the typing propagator network.
 
 ---
