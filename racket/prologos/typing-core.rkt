@@ -47,6 +47,7 @@
          base-numeric-type refine-arith refine-arith1
          ;; Schema type helpers
          schema-field-type->expr
+         field-type->witness-tag
          schema-lookup-field
          record-<:-map?
          record-<:-pvec?         ;; CIU T6 F1a-col: Tuple→PVec α (meta-aware)
@@ -450,6 +451,71 @@
                 (loop2 (cdr args)
                        (expr-app result (schema-field-type->expr (car args))))))]))]
     [else (error 'schema-field-type->expr (format "unsupported type datum: ~a" datum))]))
+
+;; ========================================
+;; Witness tag assignment (CIU T6 F1b.5-s1, D28)
+;; ========================================
+;; Compute a per-field acceptance TAG (plain data — the field-witness.rkt
+;; grammar: (prim …) / (ctor Name) / any / (union …)) from an elaborated
+;; field-type expr, by CONSUMING subtype? so the primitive acceptance set IS
+;; the subtype closure (Nat⊂Int handled → the runtime witness never false-
+;; rejects data the static seal accepted; the D28 err-polarity invariant).
+;; whnf-first for type-alias transparency. Unwitnessable shapes (functions,
+;; type vars, unknown/abstract heads) → 'any (the D28 skip posture). Tags are
+;; plain s-expressions (no struct), so they carry into an AST node payload and
+;; serialize with zero registration. The runtime interpreter lives in
+;; field-witness.rkt (below reduction, where subtype? cannot reach).
+(define PRIM-WITNESS-SLICE
+  (list (cons 'Nat (expr-Nat))   (cons 'Int (expr-Int))     (cons 'Rat (expr-Rat))
+        (cons 'Bool (expr-Bool)) (cons 'String (expr-String)) (cons 'Char (expr-Char))
+        (cons 'Keyword (expr-Keyword)) (cons 'Symbol (expr-Symbol)) (cons 'Unit (expr-Unit))
+        (cons 'Nil (expr-Nil))
+        (cons 'Posit8 (expr-Posit8))   (cons 'Posit16 (expr-Posit16))
+        (cons 'Posit32 (expr-Posit32)) (cons 'Posit64 (expr-Posit64))
+        (cons 'Float32 (expr-Float32)) (cons 'Float64 (expr-Float64))))
+
+(define (prim-type-expr->tag t)
+  (cond [(expr-Nat? t) 'Nat] [(expr-Int? t) 'Int] [(expr-Rat? t) 'Rat]
+        [(expr-Bool? t) 'Bool] [(expr-String? t) 'String] [(expr-Char? t) 'Char]
+        [(expr-Keyword? t) 'Keyword] [(expr-Symbol? t) 'Symbol] [(expr-Unit? t) 'Unit]
+        [(expr-Nil? t) 'Nil]
+        [(expr-Posit8? t) 'Posit8] [(expr-Posit16? t) 'Posit16]
+        [(expr-Posit32? t) 'Posit32] [(expr-Posit64? t) 'Posit64]
+        [(expr-Float32? t) 'Float32] [(expr-Float64? t) 'Float64]
+        [else #f]))
+
+(define (field-type->witness-tag ft)
+  (let ([t (whnf ft)])
+    (cond
+      ;; union: ⋃ of branch tags (mirrors field-type-satisfies? some-branch)
+      [(expr-union? t)
+       (cons 'union (map field-type->witness-tag (flatten-union t)))]
+      ;; primitive: the subtype closure over the witnessable slice
+      [(prim-type-expr->tag t)
+       (cons 'prim
+             (for/list ([p (in-list PRIM-WITNESS-SLICE)]
+                        #:when (subtype? (cdr p) t))
+               (car p)))]
+      ;; refined numeric name (PosInt, …): erase to base — values are the base
+      ;; at runtime, and the refined→base edges are one-directional (a naive
+      ;; closure would be empty and reject everything)
+      [(and (expr-fvar? t) (refined-name? (bare-name (expr-fvar-name t))))
+       (field-type->witness-tag
+        (schema-field-type->expr (refined-name->base (bare-name (expr-fvar-name t)))))]
+      ;; a CONFIRMED data type (bare head OR applied container head with
+      ;; registered ctors): the tier-2 HEAD route — element args are NOT
+      ;; recursed (deferred to the walker charter). Only emit (ctor …) when the
+      ;; head genuinely has ctors, else fall to 'any (never false-reject an
+      ;; abstract/type-var field).
+      [(let-values ([(head _args) (decompose-type-app t)])
+         (and head
+              (let* ([bare (bare-name head)]
+                     [ctors (lookup-type-ctors bare)])
+                (and (pair? ctors) bare))))
+       => (lambda (bare) (list 'ctor bare))]
+      ;; functions (Pi), type vars, unknown/abstract heads, higher-kinded —
+      ;; unwitnessable → skip
+      [else 'any])))
 
 ;; Look up a field keyword in a schema's field list.
 ;; Returns the schema-field or #f.
