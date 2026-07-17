@@ -3072,10 +3072,64 @@
 (define on-network-success-count (box 0))
 (define on-network-fallback-count (box 0))
 
+;; CIU T6 F1b.2 (D26 route-soundness): post-quiescence UNTYPED-INTERIOR scan.
+;; The adoption gap class: install-from-rule's #f branch installs neither the
+;; node's typing propagator NOR its children, so the whole subtree under a
+;; rule-fn-#f / unregistered node kind carries no :type evidence — and both
+;; Role-B downward writes (the expr-ann term write and the app-rule domain
+;; write) ADOPT unconditionally at ⊥ (type-unify-or-top: bot adopts) and can
+;; only contradict at top, which a never-written position cannot reach. Net
+;; effect pre-fix: `(the Int {:a 1})` typed as Int; `[cons {:a 9} wide]`
+;; typed at the wide row (probed unsound: projection typechecks, runtime
+;; misses). This scan walks the BINDER-FREE spine of the command's expr after
+;; quiescence and reports the first interior expr position whose :type facet
+;; is still ⊥ — the driver then falls back to the imperative checker (the
+;; correctness authority), exactly as it already does for bot/top/meta roots.
+;;
+;; Boundaries (named): (1) expr-meta positions are excluded (⊥ by design
+;; until feedback); (2) the scan stops at binder nodes (lam/Pi/Sigma bodies —
+;; typing may legitimately defer body positions, and the adoption gap class
+;; is binder-free); adoption gaps UNDER a binder body remain uncaught here
+;; and die at the imperative checker only when re-routed for other reasons.
+;; Over-approximation is SAFE (re-route to imperative = pre-PPN semantics);
+;; the cost is routing, not correctness. Scheduler-independent: reads the
+;; CALM-monotone S0 fixpoint (absence-of-type AT FIXPOINT is order-free).
+(define (untyped-interior-position net tm-cid root)
+  ;; Generic transparent-struct walk (the expr-subterm-seteq shape — no
+  ;; per-node-kind exhaustiveness obligation): recurse ALL structs/pairs so
+  ;; non-expr carriers (e.g. reduce arms) are traversed, but CHECK only expr
+  ;; positions. seen-set for shared-subterm dedup.
+  (define seen (mutable-seteq))
+  (let loop ([v root] [is-root? #t])
+    (cond
+      [(set-member? seen v) #f]
+      [(expr? v)
+       (set-add! seen v)
+       (cond
+         [(expr-meta? v) #f]
+         [(and (not is-root?) (type-bot? (type-map-read net tm-cid v))) v]
+         ;; Binder boundary: the node itself is checked above; skip children.
+         [(or (expr-lam? v) (expr-Pi? v) (expr-Sigma? v)) #f]
+         [else
+          (define vec (struct->vector v))
+          (for/or ([i (in-range 1 (vector-length vec))])
+            (loop (vector-ref vec i) #f))])]
+      [(struct? v)
+       (set-add! seen v)
+       (define vec (struct->vector v))
+       (for/or ([i (in-range 1 (vector-length vec))])
+         (loop (vector-ref vec i) #f))]
+      [(pair? v) (or (loop (car v) #f) (loop (cdr v) #f))]
+      [else #f])))
+
 (define (infer-on-network/err ctx expr [loc srcloc-unknown] [names '()])
   (define net-box (current-prop-net-box))
   (cond
-    [(not net-box) type-bot]  ;; no network → signal fallback
+    ;; No network → signal fallback. MUST be a prologos-error: every driver
+    ;; gate tests only prologos-error?, so a bare lattice value here would
+    ;; leak through as the inferred type (dormant trap, F1b.2 audit).
+    [(not net-box)
+     (inference-failed-error loc "on-network: no network" (pp-expr expr names))]
     [else
      ;; Unbox the main elab-network, extract its prop-net
      (define enet (unbox net-box))
@@ -3122,6 +3176,23 @@
        [has-unsolved-dict?
         (set-box! on-network-fallback-count (add1 (unbox on-network-fallback-count)))
         (inference-failed-error loc "on-network: unsolved dict" (pp-expr expr names))]
+       ;; CIU T6 F1b.2 (D26): 5th refusal check — an interior expr position
+       ;; still ⊥ at quiescence means the network never typed that subtree
+       ;; (the rule-fn-#f / unregistered adoption gap class); the root's
+       ;; clean-looking type is an unopposed adoption, not evidence. Fall
+       ;; back to the imperative checker. This single choke point covers all
+       ;; four driver gates (eval/infer/defr/unannotated-def) + REPL/LSP.
+       ;; Computed ONLY when the four checks above pass (lazy via cond order).
+       [(and (current-persistent-registry-net-box)
+             (current-attribute-map-cell-id)
+             (untyped-interior-position
+              (unbox (current-persistent-registry-net-box))
+              (current-attribute-map-cell-id)
+              expr))
+        => (lambda (pos)
+             (set-box! on-network-fallback-count (add1 (unbox on-network-fallback-count)))
+             (inference-failed-error loc "on-network: untyped interior"
+                                     (pp-expr pos names)))]
        [else
         ;; N6a (double-emission guard): bridge on-network warnings to the
         ;; imperative warning parameters (SCAFFOLDING) ONLY on success — on

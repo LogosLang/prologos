@@ -387,3 +387,18 @@ solve-one (sol-parent "zed" y)
 solve (sol-parent x y)
 ;;84=> '[{:y "bob", :x "alice"} {:y "charlie", :x "alice"}] : _
 ;;   ← all-free queries were always echo-free; unchanged
+
+;; ============================================================
+;; §F1b.2 — route-soundness (D26, 2026-07-17)
+;; The on-network annotation-adoption gap is CLOSED: an annotation
+;; (or app-domain) over a network-untyped subtree re-routes to the
+;; imperative checker instead of being adopted unopposed.
+;; ============================================================
+
+(the Int {:a 1})
+;;85=>~ ERROR
+
+(the (Map Keyword Int) {:a 2 :b 3})
+;;86=> {:a 2, :b 3} : [Map Keyword Int]
+;;   ← sound annotations re-route to the imperative checker and PASS —
+;;     the refusal is behavior-preserving for correct code
