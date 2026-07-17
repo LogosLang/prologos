@@ -77,14 +77,15 @@
 
 ;; Save post-prelude state. Two categories:
 ;;
-;; (1) Cell-based registries (19 macros params): saved as a single vector via
+;; (1) Cell-based registries (24 macros params): saved as a single vector via
 ;;     save-macros-registry-snapshot. These are the registry contents that
-;;     register-macros-cells! uses to initialize cells each command.
+;;     register-macros-cells! uses to initialize cells each command. (24 since
+;;     CIU T6 F1b.5-s1d added schema/selection/session/strategy/process.)
 ;;
 ;; (2) Runtime config (7 namespace params + 1 global-env): saved individually
 ;;     because these are configuration, not reactive elaboration state.
 ;;
-;; Track 6 Phase 6: Consolidated 19 individual macros param saves → 1 vector.
+;; Track 6 Phase 6: Consolidated the macros param saves → 1 vector.
 (define ready-macros-snapshot         (save-macros-registry-snapshot))
 ;; namespace.rkt parameters (runtime config — NOT cell-based)
 (define ready-module-registry         (current-module-registry))

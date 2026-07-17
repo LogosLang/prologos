@@ -698,7 +698,8 @@
   (current-user-operators-cell-id        (vector-ref v 22))
   (current-macro-registry-cell-id        (vector-ref v 23)))
 
-;; Track 6 Phase 6: Save/restore all 19 macros registry PARAM VALUES for batch-worker.
+;; Track 6 Phase 6: Save/restore all macros registry PARAM VALUES for batch-worker.
+;; (24 params since CIU T6 F1b.5-s1d added schema/selection/session/strategy/process.)
 ;; Consolidates 19 individual define/parameterize bindings into a single vector.
 ;; Used by batch-worker.rkt to save post-prelude state and restore per-file.
 (define (save-macros-registry-snapshot)
@@ -720,7 +721,17 @@
           (current-functor-store)
           (current-user-precedence-groups)
           (current-user-operators)
-          (current-macro-registry)))
+          (current-macro-registry)
+          ;; CIU T6 F1b.5-s1d: the five cell-backed registry params that were
+          ;; MISSING from this snapshot (schema/selection/session/strategy/
+          ;; process) — masked today by cell-first reads, but the parameter
+          ;; fallback is load-bearing in module-loading / pre-init contexts
+          ;; (pipeline.md New-Parameter checklist). Added as a class.
+          (current-schema-registry)
+          (current-selection-registry)
+          (current-session-registry)
+          (current-strategy-registry)
+          (current-process-registry)))
 
 ;; Restore macros registry params from a saved vector.
 ;; Direct mutation (not parameterize) — caller is responsible for calling
@@ -744,7 +755,13 @@
   (current-functor-store           (vector-ref v 15))
   (current-user-precedence-groups  (vector-ref v 16))
   (current-user-operators          (vector-ref v 17))
-  (current-macro-registry          (vector-ref v 18)))
+  (current-macro-registry          (vector-ref v 18))
+  ;; CIU T6 F1b.5-s1d: the five added registry params (see save-…-snapshot)
+  (current-schema-registry         (vector-ref v 19))
+  (current-selection-registry      (vector-ref v 20))
+  (current-session-registry        (vector-ref v 21))
+  (current-strategy-registry       (vector-ref v 22))
+  (current-process-registry        (vector-ref v 23)))
 
 ;; ========================================
 ;; Schema registry: field information for schema types

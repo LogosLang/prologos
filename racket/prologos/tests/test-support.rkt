@@ -88,6 +88,13 @@
                  [current-impl-registry (current-impl-registry)]
                  [current-param-impl-registry (current-param-impl-registry)]
                  [current-capability-registry (current-capability-registry)]
+                 ;; CIU T6 F1b.5-s1d: the five registry params added to the
+                 ;; macros snapshot (pipeline.md New-Parameter checklist parity)
+                 [current-schema-registry (current-schema-registry)]
+                 [current-selection-registry (current-selection-registry)]
+                 [current-session-registry (current-session-registry)]
+                 [current-strategy-registry (current-strategy-registry)]
+                 [current-process-registry (current-process-registry)]
                  ;; Track 6 Phase 7a: network isolation (fresh network per call)
                  [current-prop-net-box              #f]
                  [current-persistent-registry-net-box #f]  ;; #f during prelude load; created below
