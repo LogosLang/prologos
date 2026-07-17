@@ -1,0 +1,38 @@
+ns prologos::data::reason :no-prelude
+
+;; ========================================
+;; Prologos Reason Type (CIU T6 F1b.5, D27)
+;; ========================================
+;; The per-field validation failure carried by validate's Result error map
+;; (E = Map Keyword Reason). Collect-all: one Reason per failed field, keyed by
+;; the field name. String payloads (the io-error convention) — display-ready,
+;; and free of the runtime qualified-ctor-minting hazard a Datum payload hits.
+
+require [prologos::data::list :as list :refer [List sort-on]]
+require [prologos::data::map-entry :refer [MapEntry entry-key]]
+require [prologos::core::map :refer [map-to-entry-list]]
+
+;; --- Foreign Keyword utilities (passthrough IR; the stdlib lacks Keyword
+;; Eq/Ord and keyword->string) — enough to render the failure map in a
+;; deterministic (sorted-by-field) order. ---
+
+foreign racket "prologos/keyword-ops" [kw-name :as keyword-name : Keyword -> String]
+foreign racket "prologos/keyword-ops" [kw-lte  :as keyword-lte  : Keyword -> Keyword -> Bool]
+
+;; --- The failure reasons ---
+
+data Reason
+  missing-required
+  check-failed : String
+  type-mismatch : String -> String
+  unexpected-field
+
+;; --- errors-to-list : render the failure map as a field-sorted entry list
+;; (champ maps print in unstable trie order — a validation UI / golden needs a
+;; deterministic order). ---
+
+spec errors-to-list [Map Keyword Reason] -> [List [MapEntry Keyword Reason]]
+defn errors-to-list [m]
+  [sort-on keyword-lte
+           [fn [e : [MapEntry Keyword Reason]] [entry-key e]]
+           [map-to-entry-list Keyword Reason m]]

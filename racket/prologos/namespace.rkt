@@ -707,6 +707,9 @@
     (imports [prologos::data::option :as opt :refer [Option none some some? none? flatten]])
     ;; Result: types + predicates unqualified; ops via result:: alias
     (imports [prologos::data::result :as result :refer [Result ok err ok? err?]])
+    ;; Reason (CIU T6 F1b.5): validation-failure type + ctors + errors-to-list
+    ;; unqualified; the Keyword shim (keyword-name/keyword-lte) via reason:: alias
+    (imports [prologos::data::reason :as reason :refer [Reason missing-required check-failed type-mismatch unexpected-field errors-to-list]])
     ;; List: full API unqualified (wins all name-conflict tiebreaks)
     (imports [prologos::data::list :refer [List nil cons foldr reduce length
                                            map filter append head tail singleton
