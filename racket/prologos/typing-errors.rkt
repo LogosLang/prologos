@@ -159,6 +159,30 @@
                (ormap search (expr-subfields x)))))))
 
 ;; ========================================
+;; CIU T6 F1b.4e (D22): seal missing-required hint (the S7 pattern)
+;; ========================================
+;; When an infer failure contains a seal boundary (expr-ann against a schema
+;; fvar) whose EXACT knowledge lacks required (undefaulted) fields, name them.
+(define (seal-residual-hint ctx e names)
+  (let search ([x e])
+    (and (expr? x)
+         (or (match x
+               [(expr-ann term (expr-fvar sname))
+                (let ([schema (lookup-schema-by-name sname)])
+                  (and schema
+                       (let ([missing (seal-missing-required ctx term schema)])
+                         (and (pair? missing)
+                              (string-append
+                               "schema seal: missing required field"
+                               (if (null? (cdr missing)) "" "s")
+                               " "
+                               (string-join (map (lambda (k) (format ":~a" k)) missing) ", ")
+                               " of " (symbol->string sname)
+                               " (fields without :default must be provided; runtime maps discharge via validate)")))))]
+               [_ #f])
+             (ormap search (expr-subfields x))))))
+
+;; ========================================
 ;; Infer with error reporting
 ;; ========================================
 ;; Returns (or/c Expr? prologos-error?)
@@ -167,7 +191,8 @@
   (let ([result (infer ctx e)])
     (if (expr-error? result)
         (inference-failed-error loc
-                                (or (closed-row-miss-hint ctx e names)  ;; S7: most specific first
+                                (or (seal-residual-hint ctx e names)    ;; F1b.4e: most specific first
+                                    (closed-row-miss-hint ctx e names)  ;; S7
                                     (if (hole-lambda-over-generic-op? e)
                                         i70-inference-hint
                                         "Could not infer type"))
@@ -272,10 +297,31 @@
                    [sub-failures (if latest
                                      (speculation-failure-sub-failures latest)
                                      '())]
-                   [provenance (build-derivation-chain sub-failures (current-command-atms))])
+                   [provenance (build-derivation-chain sub-failures (current-command-atms))]
+                   ;; CIU T6 F1b.4e: seal missing-required specificity — the
+                   ;; annotation-def route fails HERE (check/err), not
+                   ;; infer/err; when the expected type IS a schema fvar,
+                   ;; compute the missing set directly on the checked term.
+                   [seal-msg (match t*
+                               [(expr-fvar sname)
+                                ;; (schemas only — selections have NO
+                                ;; completeness residual at construction:
+                                ;; partial views by design)
+                                (let ([schema (lookup-schema-by-name sname)])
+                                  (and schema
+                                       (let ([missing (seal-missing-required ctx e schema)])
+                                         (and (pair? missing)
+                                              (string-append
+                                               "schema seal: missing required field"
+                                               (if (null? (cdr missing)) "" "s")
+                                               " "
+                                               (string-join
+                                                (map (lambda (k) (format ":~a" k)) missing) ", ")
+                                               " of " (symbol->string sname))))))]
+                               [_ #f])])
               (type-mismatch-error
                loc
-               "Type mismatch"
+               (or seal-msg "Type mismatch")
                (pp-expr t names)
                (if (expr-error? actual) "<could not infer>" (pp-expr actual names))
                (pp-expr e names)

@@ -322,3 +322,117 @@
       "def d : <Int -> String> := [fn [x : Int] [panic \"boom\"]]\n")))
   (check-true (ok? (last-result results))
               "a panic-bearing lambda def still defines silently — laziness untouched outside seals"))
+
+;; ========================================
+;; 8. F1b.4e: the fill-or-error flip (D22.3) — the residual is live
+;; ========================================
+
+(define DEFAULTED
+  (string-append
+   "ns t :no-prelude\n"
+   "schema Config\n"
+   "  :host String :default \"localhost\"\n"
+   "  :port Int :default 8080\n"))
+
+(test-case "THE aspirational payoff: def c : Config := {} fills all defaults"
+  ;; punify-p3-acceptance :264 has wanted this since March (commented out).
+  (define results
+    (run-file-string
+     (string-append
+      DEFAULTED
+      "def c : Config := {}\n"
+      "c.host\n")))
+  (define r (last-result results))
+  (check-true (ok? r) "an empty literal against an all-defaulted schema seals")
+  (check-true (regexp-match? #rx"localhost" (format "~a" r))
+              "the default must be MATERIALIZED in the runtime value (preparse fill)"))
+
+(test-case "missing-REQUIRED on the annotation route ERRORS with the named field"
+  (define results
+    (run-file-string
+     (string-append
+      PERSON
+      "def p : Person := {:age 30}\n")))
+  (define r (last-result results))
+  (check-true (prologos-error? r) "the D22.3 flip: silent width-partial acceptance is dead")
+  (check-true (regexp-match? #rx"missing required field :name" (prologos-error-message r))
+              "the residual hint names the missing field"))
+
+(test-case "annotation-route missing-DEFAULTED field fills"
+  (define results
+    (run-file-string
+     (string-append
+      "ns t :no-prelude\n"
+      "schema P2\n"
+      "  :name String\n"
+      "  :age Int :default 30\n"
+      "def p2 : P2 := {:name \"carol\"}\n"
+      "p2.age\n")))
+  (define r (last-result results))
+  (check-true (ok? r))
+  (check-true (regexp-match? #rx"30" (format "~a" r)) "the default fills on the def route"))
+
+(test-case "the-route literal fills too"
+  (define results
+    (run-file-string
+     (string-append
+      DEFAULTED
+      "[the Config {:port 9090}].host\n")))
+  (check-true (regexp-match? #rx"localhost" (format "~a" (last-result results)))
+              "direct `the Schema {…}` gets defaults (was: bypass, P5(d))"))
+
+(test-case "dyn-row non-literal: missing-required ABSORBED (gradual, D16 posture)"
+  (define results
+    (run-file-string
+     (string-append
+      PERSON
+      "def m := [map-assoc {} :name \"dave\"]\n"
+      "the Person m\n")))
+  (check-true (ok? (last-result results))
+              "a dyn row's remainder may provide :age at runtime — the tail absorbs"))
+
+(test-case "closed-row non-literal: missing-required ERRORS"
+  (define results
+    (run-file-string
+     (string-append
+      PERSON
+      "def cr := {:age 5}\n"
+      "the Person cr\n")))
+  (check-true (prologos-error? (last-result results))
+              "a closed row DEFINITELY lacks :name — exact knowledge, hard error"))
+
+(test-case ":closed schema REFUSES a dyn-row actual (the closedness scan)"
+  (define results
+    (run-file-string
+     (string-append
+      "ns t :no-prelude\n"
+      "schema Locked :closed\n"
+      "  :a Int\n"
+      "def d := [map-assoc {} :a 1]\n"
+      "the Locked d\n")))
+  (check-true (prologos-error? (last-result results))
+              "cannot verify the ABSENCE of extras on an open remainder"))
+
+(test-case "selections stay CONSTRUCTION-PARTIAL: an empty selection-typed def passes"
+  ;; Empirically decisive during 4e (test-selection-paths nameaddr-name-gated):
+  ;; `:requires` is a READ-CAPABILITY declaration, not a value-completeness
+  ;; contract — selection-typed values are partial VIEWS by design, and
+  ;; completeness is the PARENT schema seal's business. The selection residual
+  ;; is closedness-only.
+  (define results
+    (run-file-string
+     (string-append
+      PERSON
+      "selection NameOnly from Person :requires [:name]\n"
+      "def u : NameOnly := {}\n")))
+  (check-true (ok? (last-result results))
+              "no completeness residual on selection construction (partial views)"))
+
+(test-case "empty literal vs a schema with a REQUIRED field errors (map-empty base retired)"
+  (define results
+    (run-file-string
+     (string-append
+      PERSON
+      "def p : Person := {}\n")))
+  (check-true (prologos-error? (last-result results))
+              "the blanket-#t recursion base is gone — this WAS the width-partial hole"))

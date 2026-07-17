@@ -58,8 +58,11 @@
          record-width-applicable?   ;; CIU T6 F1b.3 (D21): width-discharge static guard (qtt twin + tests)
          record-width-discharge?    ;; CIU T6 F1b.3 (D21): the shared discharge (qtt twin + tests)
          schema->row                ;; CIU T6 F1b.4a (D22): schema→row up-shift projection (qtt twins + tests)
-         record-<:-schema?          ;; CIU T6 F1b.4a (D22): row-vs-schema discharge (qtt twin)
-         record-<:-selection?       ;; CIU T6 F1b.4a (D22): subset-aware row-vs-selection discharge (qtt twin)
+         record-<:-schema?          ;; CIU T6 F1b.4a (D22): per-field row-vs-schema discharge (residual-free)
+         record-seals-schema?       ;; CIU T6 F1b.4e (D22): per-field + residual (qtt twin + tests)
+         record-seals-selection?    ;; CIU T6 F1b.4e (D22): parent types + requires-subset residual (qtt twin)
+         schema-seal-residual-ok?   ;; CIU T6 F1b.4e (D22): the residual proper (tests)
+         seal-missing-required      ;; CIU T6 F1b.4e: diagnostic support (typing-errors hint)
          lookup-selection-parent-schema  ;; CIU T6 F1b.4a: shared parent resolution
          lookup-schema-by-name
          ;; Selection type helpers
@@ -584,7 +587,7 @@
 ;; fields don't stray-solve). Closes a PRE-EXISTING gap the up-shift probe
 ;; surfaced: rows vs (Map K <A|B>) annotations refused although every field
 ;; fit a branch (probe-4a-union ;;2). Consumers: record-<:-map?,
-;; record-<:-schema?, record-<:-selection?.
+;; record-<:-schema?, record-seals-schema?/-selection?.
 (define (field-type-satisfies? ctx ft vt)
   (let ([vt* (whnf vt)])
     (if (expr-union? vt*)
@@ -2967,51 +2970,37 @@
      (and (check ctx m (expr-Map kt vt))
           (check ctx k kt)
           (check ctx v vt))]
-    ;; map-assoc checked against Schema type — validate field types
+    ;; CIU T6 F1b.4e (D22): map-assoc checked against Schema type — the
+    ;; SEAL-BOUNDARY chain walk: per-entry checks + ONE residual at THIS
+    ;; boundary (no recursive re-entry with the schema expectation — the old
+    ;; recursion made the map-empty base arm the de-facto residual point,
+    ;; whose blanket #t WAS the width-partial acceptance; the flip retires it).
     [((expr-map-assoc m k v) (expr-fvar schema-name))
      #:when (lookup-schema-by-name schema-name)
      (let ([schema (lookup-schema-by-name schema-name)])
-       ;; Check that the key is a keyword and the value matches the field type
-       (and (check ctx m (expr-fvar schema-name))
-            (match k
-              [(expr-keyword kw-sym)
-               (let ([field (schema-lookup-field schema kw-sym)])
-                 (if field
-                     (check ctx v (schema-field-type->expr (schema-field-type-datum field)))
-                     ;; :closed schemas reject unknown fields; open schemas accept them
-                     (if (schema-entry-closed? schema)
-                         #f
-                         (not (expr-error? (infer ctx v))))))]
-              [_ (and (check ctx k (expr-Keyword))
-                      (not (expr-error? (infer ctx v))))])))]
-    ;; CIU T6 F1b.4a (D22): map-assoc checked against Selection type — field
-    ;; TYPES validate against the PARENT schema (a selection is a read-side
-    ;; VIEW: extra parent fields on the value are by-design, test-selection-
-    ;; paths idiom), but the recursion keeps the SELECTION fvar — selection
-    ;; identity survives to the 4e residual, whose REQUIRED set is the
-    ;; selection's subset, not the parent's (the wholesale-delegation drift
-    ;; this replaces lost that identity).
+       (check-seal-chain ctx (expr-map-assoc m k v) schema
+                         (lambda (provided open?)
+                           (schema-seal-residual-ok? schema provided open?))))]
+    ;; F1b.4e: map-assoc checked against Selection type — same walk (field
+    ;; TYPES validate against the PARENT: a selection is a read-side VIEW,
+    ;; extra parent fields by-design), but the RESIDUAL requires only the
+    ;; SELECTION's requires-subset (D22 "delegate against their SUBSET").
     [((expr-map-assoc m k v) (expr-fvar sel-name))
      #:when (lookup-selection-by-name sel-name)
      (let* ([sel (lookup-selection-by-name sel-name)]
             [schema (lookup-selection-parent-schema sel)])
        (and schema
-            (check ctx m (expr-fvar sel-name))
-            (match k
-              [(expr-keyword kw-sym)
-               (let ([field (schema-lookup-field schema kw-sym)])
-                 (if field
-                     (check ctx v (schema-field-type->expr
-                                   (schema-field-type-datum field)))
-                     (if (schema-entry-closed? schema)
-                         #f
-                         (not (expr-error? (infer ctx v))))))]
-              [_ (and (check ctx k (expr-Keyword))
-                      (not (expr-error? (infer ctx v))))])))]
-    ;; map-empty checked against Selection type — delegate to parent schema
+            (check-seal-chain ctx (expr-map-assoc m k v) schema
+                              (lambda (provided open?)
+                                (selection-seal-residual-ok? sel schema provided open?)))))]
+    ;; F1b.4e: map-empty checked against Selection type — the residual with
+    ;; EXACT empty knowledge (an empty literal seals iff the selection
+    ;; requires nothing, or everything it requires is parent-defaulted).
     [((expr-map-empty k1 v1) (expr-fvar sel-name))
      #:when (lookup-selection-by-name sel-name)
-     #t]
+     (let* ([sel (lookup-selection-by-name sel-name)]
+            [schema (lookup-selection-parent-schema sel)])
+       (and schema (selection-seal-residual-ok? sel schema '() #f)))]
     ;; CIU T6 F1b.4a (D22.8): champ-vs-selection RETIRED LOUD — a champ is a
     ;; RUNTIME map value (born only in reduction, after type-check); statically
     ;; sealing one is validate's job (F1b.5). The old unconditional #t was a
@@ -3021,10 +3010,14 @@
     [((expr-champ v) (expr-fvar sel-name))
      #:when (lookup-selection-by-name sel-name)
      #f]
-    ;; map-empty checked against Schema type — always ok (empty map is a valid partial schema)
+    ;; CIU T6 F1b.4e (D22.3): the blanket-accept base RETIRES — THIS #t was
+    ;; the width-partial acceptance (the recursion base + P5's silent-missing
+    ;; gap). An empty literal now seals iff every schema field is defaulted
+    ;; (the residual with EXACT empty knowledge). Census: zero live flips in
+    ;; gated surfaces (F1b.4 mini-audit facet 6).
     [((expr-map-empty _ _) (expr-fvar schema-name))
      #:when (lookup-schema-by-name schema-name)
-     #t]
+     (schema-seal-residual-ok? (lookup-schema-by-name schema-name) '() #f)]
     ;; CIU T6 F1b.4a (D22.8): champ-vs-schema RETIRED LOUD (see the selection
     ;; twin above — same rationale; runtime seal = validate, F1b.5).
     [((expr-champ _) (expr-fvar schema-name))
@@ -3326,12 +3319,14 @@
                   ;; stops being an inference error here.
                   [((expr-fvar sname) (? expr-Record? rec))
                    #:when (lookup-schema-by-name sname)
-                   (record-<:-schema? ctx rec (lookup-schema-by-name sname))]
-                  ;; F1b.4a: row vs SELECTION expectation — subset-aware
-                  ;; (fields outside the selection's view reject).
+                   ;; F1b.4e: per-field + the RESIDUAL (missing-required /
+                   ;; closedness) — the row-route seal boundary.
+                   (record-seals-schema? ctx rec (lookup-schema-by-name sname))]
+                  ;; F1b.4a/4e: row vs SELECTION — parent types + the
+                  ;; selection's requires-subset residual.
                   [((expr-fvar selname) (? expr-Record? rec))
                    #:when (lookup-selection-by-name selname)
-                   (record-<:-selection? ctx rec (lookup-selection-by-name selname))]
+                   (record-seals-selection? ctx rec (lookup-selection-by-name selname))]
                   ;; F1b.4a: schema-typed ACTUAL where a Map is expected — the
                   ;; free up-shift direction (D22.7): project schema→row and
                   ;; ride the EXISTING record→Map α.
@@ -3453,21 +3448,127 @@
                        (not (schema-entry-closed? schema)))))
                (expr-Record-fields rec))))
 
-;; record-<:-selection? — the selection discharge. A selection is a READ-side
-;; VIEW over fuller data (map-get gates to requires+provides; the existing
-;; test-selection-paths idiom constructs values carrying parent fields OUTSIDE
-;; the view — by design), so CONSTRUCTION validates field TYPES against the
-;; PARENT schema and does NOT reject extra parent fields. D22's "delegate
-;; against their SUBSET" scopes the 4e RESIDUAL: what a selection-typed seal
-;; REQUIRES is the selection's field subset (not the parent's full set) — this
-;; wrapper keeps selection identity so 4e can enumerate that subset.
-(define (record-<:-selection? ctx rec sel)
-  (define schema (lookup-selection-parent-schema sel))
-  (and schema (record-<:-schema? ctx rec schema)))
+;; (record-<:-selection? RETIRED at F1b.4e — superseded by record-seals-
+;; selection?, which adds the selection's requires-subset residual to the
+;; parent per-field discharge.)
 
 ;; Shared parent-schema resolution (selection entries store the schema NAME).
 (define (lookup-selection-parent-schema sel)
   (lookup-schema-by-name (selection-entry-schema-name sel)))
+
+;; ========================================
+;; CIU T6 F1b.4e (D22): the seal RESIDUAL + the boundary chain walk
+;; ========================================
+;;
+;; schema-seal-residual-ok? — runs ONCE per seal boundary. `provided` = the
+;; labels the boundary KNOWS are present; `open?` = the knowledge is
+;; open-ended (dyn tail / dynamic keys / unknown base — the remainder may
+;; provide more at runtime, the C_Cons gradual posture, D16). Rules:
+;;   missing + defaulted      → OK (literal routes are preparse-FILLED; the
+;;                              non-literal fill = validate's tabulation,
+;;                              F1b.5 — the M2 amendment: type-accepted here)
+;;   missing + required:
+;;     open?                  → ABSORBED (gradual; a runtime projection may miss)
+;;     exact knowledge        → #f — MISSING-REQUIRED, the D22.3 flip
+;;   closedness: a :closed schema REFUSES open? actuals (cannot verify the
+;;   absence of extras — the seal-time closedness scan, CUE lesson).
+(define (schema-seal-residual-ok? schema provided open?)
+  (and (or (not (schema-entry-closed? schema)) (not open?))
+       (andmap (lambda (f)
+                 (or (memq (schema-field-keyword f) provided)
+                     (and (schema-field-default-val f) #t)
+                     open?))
+               (schema-entry-fields schema))))
+
+;; The selection residual: CLOSEDNESS ONLY — selections have NO completeness
+;; requirement at construction. Empirically decisive (test-selection-paths
+;; sel-path/nameaddr-name-gated: a by-design partial value omits a
+;; requires-path field entirely): `:requires` is a READ-CAPABILITY
+;; declaration (which paths consumers may access), not a value-completeness
+;; contract; selection-typed values are PARTIAL VIEWS by design, and
+;; completeness is the PARENT schema seal's business. D22's "delegate
+;; against their SUBSET" = the residual never enumerates the parent's field
+;; set for a selection (which would break all 10 by-design width-partial
+;; sites). Runtime misses on partial views discharge via validate (F1b.5).
+(define (selection-seal-residual-ok? sel schema provided open?)
+  (or (not (schema-entry-closed? schema)) (not open?)))
+
+;; check-seal-chain — the seal-boundary walk over a LITERAL map-assoc chain:
+;; per-entry checks against the PARENT schema (types), collecting provided
+;; labels, then residual-fn ONCE with the union knowledge. A non-literal
+;; BASE contributes its row's fields residual-FREE (record-<:-schema? — the
+;; per-field 4a helper), with open?=#t for dyn tails / unknown-typed bases.
+(define (check-seal-chain ctx chain schema residual-fn)
+  (let loop ([e chain] [provided '()] [open? #f])
+    (match e
+      [(expr-map-assoc m2 k2 v2)
+       (match k2
+         [(expr-keyword kw-sym)
+          (let ([field (schema-lookup-field schema kw-sym)])
+            (and (if field
+                     (check ctx v2 (schema-field-type->expr (schema-field-type-datum field)))
+                     ;; :closed schemas reject unknown fields; open infer them
+                     (if (schema-entry-closed? schema)
+                         #f
+                         (not (expr-error? (infer ctx v2)))))
+                 (loop m2 (cons kw-sym provided) open?)))]
+         [_ ;; dynamic key: coverage unknown — may provide any field at runtime
+          (and (check ctx k2 (expr-Keyword))
+               (not (expr-error? (infer ctx v2)))
+               (loop m2 provided #t))])]
+      [(expr-map-empty _ _)
+       ;; literal-complete: EXACT knowledge
+       (residual-fn provided open?)]
+      [base
+       (let ([bt (whnf (infer ctx base))])
+         (cond
+           [(expr-error? bt) #f]
+           [(expr-Record? bt)
+            (and (record-<:-schema? ctx bt schema)
+                 (residual-fn (append provided (map car (expr-Record-fields bt)))
+                              (or open? (eq? (expr-Record-tail bt) 'dyn))))]
+           [else
+            ;; unknown-typed base (a sealed value, a Map-typed def, a meta):
+            ;; gradual — the base may provide anything
+            (residual-fn provided #t)]))])))
+
+;; F1b.4e diagnostic support (NOT part of the discharge): which REQUIRED
+;; schema fields are missing from a seal term's EXACT knowledge? Returns the
+;; missing labels, or #f when the knowledge is open (dyn tail / dynamic keys
+;; / unknown base — no missing-required claim is possible there). Consumed by
+;; the S7-style hint in typing-errors.
+(define (seal-missing-required ctx term schema)
+  (define (missing-from provided)
+    (for/list ([f (in-list (schema-entry-fields schema))]
+               #:unless (or (memq (schema-field-keyword f) provided)
+                            (schema-field-default-val f)))
+      (schema-field-keyword f)))
+  (let loop ([e term] [provided '()])
+    (match e
+      [(expr-map-assoc m2 (expr-keyword kw) _) (loop m2 (cons kw provided))]
+      [(expr-map-assoc _ _ _) #f]  ;; dynamic key → open knowledge
+      [(expr-map-empty _ _) (missing-from provided)]
+      [base
+       (let ([bt (whnf (infer ctx base))])
+         (and (expr-Record? bt)
+              (eq? (expr-Record-tail bt) 'closed)
+              (missing-from (append provided
+                                    (map car (expr-Record-fields bt))))))])))
+
+
+;; The row-vs-schema/selection SEAL discharges (per-field + residual) — the
+;; conversion-fallback + qtt-twin entry points (shared, mirror-drift cap).
+(define (record-seals-schema? ctx rec schema)
+  (and (record-<:-schema? ctx rec schema)
+       (schema-seal-residual-ok? schema (map car (expr-Record-fields rec))
+                                 (eq? (expr-Record-tail rec) 'dyn))))
+
+(define (record-seals-selection? ctx rec sel)
+  (define schema (lookup-selection-parent-schema sel))
+  (and schema
+       (record-<:-schema? ctx rec schema)
+       (selection-seal-residual-ok? sel schema (map car (expr-Record-fields rec))
+                                    (eq? (expr-Record-tail rec) 'dyn))))
 
 ;; ========================================
 ;; check-reduce: type-check a reduce (match) expression

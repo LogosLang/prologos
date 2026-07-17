@@ -2736,10 +2736,11 @@
                          ;; (shared predicates from typing-core — mirror-drift cap).
                          [((expr-fvar sname) (? expr-Record? rec))
                           #:when (lookup-schema-by-name sname)
-                          (record-<:-schema? ctx rec (lookup-schema-by-name sname))]
+                          ;; F1b.4e twins: per-field + residual (shared predicates)
+                          (record-seals-schema? ctx rec (lookup-schema-by-name sname))]
                          [((expr-fvar selname) (? expr-Record? rec))
                           #:when (lookup-selection-by-name selname)
-                          (record-<:-selection? ctx rec (lookup-selection-by-name selname))]
+                          (record-seals-selection? ctx rec (lookup-selection-by-name selname))]
                          [((? expr-Map? mt) (expr-fvar sname))
                           #:when (lookup-schema-by-name sname)
                           (record-<:-map? ctx (schema->row (lookup-schema-by-name sname))

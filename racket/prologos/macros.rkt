@@ -1779,7 +1779,52 @@
         ;; Schema construction rewrite: (SchemaName ($brace-params ...)) → (the SchemaName ($brace-params ...))
         ;; When the head is a known schema name and the rest is a brace-params map literal,
         ;; wrap in a `the` annotation so the map is type-checked against the schema.
+        ;; CIU T6 F1b.4e (D22.3): default-FILL on the ANNOTATION routes with a
+        ;; LITERAL brace body — `(the S {…})` and `(def x : S [:=] {…})` get
+        ;; inject-schema-defaults exactly like the constructor route (fill is
+        ;; syntactic here: the schema name is written at the site). Non-literal
+        ;; bodies fill at validate (F1b.5 — the M2 amendment). Recurse via
+        ;; preparse-expand-subforms directly (no head re-dispatch → no re-fire).
+        (define the-fill
+          (and (eq? (car datum) 'the)
+               (= (length datum) 3)
+               (symbol? (cadr datum))
+               (let ([sch (lookup-schema (cadr datum))])
+                 (and sch
+                      (let ([b (caddr datum)])
+                        (and (pair? b) (eq? (car b) '$brace-params)
+                             (list 'the (cadr datum)
+                                   (inject-schema-defaults sch b))))))))
+        (define def-fill
+          (and (not the-fill)
+               (eq? (car datum) 'def)
+               (or
+                ;; WS shape: (def name ($angle-type S) ($brace-params …))
+                (and (= (length datum) 4)
+                     (let ([ann (caddr datum)])
+                       (and (pair? ann) (eq? (car ann) '$angle-type)
+                            (pair? (cdr ann)) (symbol? (cadr ann)) (null? (cddr ann))
+                            (let ([sch (lookup-schema (cadr ann))])
+                              (and sch
+                                   (let ([b (cadddr datum)])
+                                     (and (pair? b) (eq? (car b) '$brace-params)
+                                          (list 'def (cadr datum) ann
+                                                (inject-schema-defaults sch b)))))))))
+                ;; sexp shape: (def name : S ($brace-params …))
+                (and (>= (length datum) 5)
+                     (eq? (list-ref datum 2) ':)
+                     (symbol? (list-ref datum 3))
+                     (let ([sch (lookup-schema (list-ref datum 3))])
+                       (and sch
+                            (let ([b (last datum)])
+                              (and (pair? b) (eq? (car b) '$brace-params)
+                                   (append (reverse (cdr (reverse datum)))
+                                           (list (inject-schema-defaults sch b)))))))))))
         (define maybe-schema (lookup-schema (car datum)))
+        (cond
+          [the-fill (preparse-expand-subforms the-fill reg depth)]
+          [def-fill (preparse-expand-subforms def-fill reg depth)]
+          [else
         (if (and maybe-schema
                  (pair? (cdr datum))
                  (null? (cddr datum)))  ;; exactly one arg (multi-arg is NOT a seal)
@@ -1807,7 +1852,7 @@
                   ;; on non-literal routes accordingly.
                   (preparse-expand-form `(the ,(car datum) ,arg) reg (+ depth 1))))
             ;; Not a schema construction — recurse into subexpressions
-            (preparse-expand-subforms datum reg depth))])]
+            (preparse-expand-subforms datum reg depth))])])]
     ;; Non-symbol list — recurse into subexpressions
     [(pair? datum)
      (preparse-expand-subforms datum reg depth)]
