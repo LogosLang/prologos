@@ -458,3 +458,24 @@
   (define last5 (list-tail results (- (length results) 5)))
   (check-true (andmap ok? last5)
               "map-keys/vals/assoc/dissoc/has-key? on a schema value succeed (project to the row)"))
+
+(test-case "F1b.7g: ?/!-suffixed keyword keys read whole (schema fields + map keys)"
+  ;; recognize-keyword now delegates to ident-continue? (was an inline charset
+  ;; omitting ?/!), so :active?/:reset! read as ONE keyword — the predicate /
+  ;; mutation naming conventions work as field names AND map keys. Pre-7g the
+  ;; schema `:active? Int` errored ("expected a keyword field name") and a map
+  ;; `{:ok? 7 :n 8}` errored (odd element count from the stray split `?`).
+  (define results
+    (run-file-string
+     (string-append
+      "ns t :no-prelude\n"
+      "schema S\n"
+      "  :active? Int\n"
+      "  :reset! Int\n"
+      "def s : S := {:active? 1 :reset! 2}\n"
+      "s.active?\n"
+      "s.reset!\n"
+      "def m := {:ok? 7 :n 8}\n"
+      "m.ok?\n")))
+  (check-true (andmap ok? results)
+              "?/!-suffixed keyword field names + map keys parse whole and project"))

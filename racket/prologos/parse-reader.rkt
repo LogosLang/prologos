@@ -516,12 +516,16 @@
              (and c2 (char-alphabetic? c2))))
       (let loop ([i (+ pos 2)])
         (define nc (rrb-char-at rrb i))
-        (if (and nc (or (char-alphabetic? nc) (char-numeric? nc)
-                        (char=? nc #\-) (char=? nc #\_)
-                        ;; ^ = path-selection rename separator (:key^alias); must stay in the
-                        ;; keyword token so validate-selection-paths can split it as it does in
-                        ;; sexp mode. Matches ident-continue? which already allows ^. (CIU T6 F3)
-                        (char=? nc #\^)))
+        ;; Keyword-continue delegates to ident-continue? — the SINGLE source of
+        ;; truth, matching the sibling keyword recognizers (#:kw / .:kw, which
+        ;; already loop on ident-continue?). This admits ?/! (the predicate /
+        ;; mutation suffix conventions: :active?, :reset!) and ^ (path-selection
+        ;; rename :key^alias, kept whole then split by validate-selection-paths).
+        ;; The LEADING char (above) stays char-alphabetic? — deliberately narrower
+        ;; than ident-start? so :=/:-foo do not collide with colon-assign. (CIU T6
+        ;; F1b.7g: was an inline charset that had drifted from ident-continue? for
+        ;; 8 chars; CIU T6 F3 added ^ inline without noticing the base divergence.)
+        (if (and nc (ident-continue? nc))
             (loop (+ i 1))
             (- i pos)))
       #f))
