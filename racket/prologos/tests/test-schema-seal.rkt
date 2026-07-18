@@ -440,3 +440,21 @@
       "def p : Person := {}\n")))
   (check-true (prologos-error? (last-result results))
               "the blanket-#t recursion base is gone — this WAS the width-partial hole"))
+
+(test-case "F1b.7e: bare map-ops on a schema value up-shift to its row (were inference-failed)"
+  ;; map-keys/assoc/dissoc/etc on a schema-typed value project the schema to its
+  ;; row (schema->row) and behave like the anon row — ROW results (map-assoc
+  ;; grows a row, not Person). Pre-7e these fell through to inference-failed.
+  (define results
+    (run-file-string
+     (string-append
+      PERSON
+      "def p : Person := {:name \"alice\" :age 30}\n"
+      "[map-keys p]\n"
+      "[map-vals p]\n"
+      "[map-assoc p :age 31]\n"
+      "[map-dissoc p :age]\n"
+      "[map-has-key? p :name]\n")))
+  (define last5 (list-tail results (- (length results) 5)))
+  (check-true (andmap ok? last5)
+              "map-keys/vals/assoc/dissoc/has-key? on a schema value succeed (project to the row)"))

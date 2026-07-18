@@ -1804,7 +1804,7 @@
      ;; Map-subject checks are STRICT against the concrete/⋃observed value type
      ;; (post-F1a.2 no unannotated literal produces an absorbing value slot; the
      ;; retired speculative-widening history: D.3 §7.6 T-3, PPN 4C T-2).
-     (let ([tm (whnf (infer ctx m))])
+     (let ([tm (schema-fvar->row-or-self (whnf (infer ctx m)))])
        (match tm
          ;; CIU T6 F1 (s2): row extension. keyword-literal key → grow the record
          ;; (right-priority, D10). Non-literal key → degrade to dictionary view (B4-gated).
@@ -1958,7 +1958,7 @@
     ;; On Nil input, returns Nil. On Map input, returns V | Nil.
     ;; On union input, extracts Map components and returns union of V's + Nil.
     [(expr-nil-safe-get m k)
-     (let ([tm (whnf (infer ctx m))])
+     (let ([tm (schema-fvar->row-or-self (whnf (infer ctx m)))])
        (match tm
          ;; Direct Nil → result is Nil
          [(expr-Nil) (expr-Nil)]
@@ -2016,7 +2016,7 @@
            (expr-error)
            (expr-Bool)))]
     [(expr-map-dissoc m k)
-     (let ([tm (whnf (infer ctx m))])
+     (let ([tm (schema-fvar->row-or-self (whnf (infer ctx m)))])
        (match tm
          ;; CIU T6 F1 (s2): keyword-literal → exact closed-row removal; dynamic key → degrade.
          [(? expr-Record? rec)
@@ -2036,13 +2036,13 @@
           (if (check ctx k kt) (expr-Map kt vt) (expr-error))]
          [_ (expr-error)]))]
     [(expr-map-size m)
-     (let ([tm (whnf (infer ctx m))])
+     (let ([tm (schema-fvar->row-or-self (whnf (infer ctx m)))])
        (match tm
          [(? expr-Record?) (expr-Nat)]   ;; CIU T6 F1 (s2)
          [(expr-Map _ _) (expr-Nat)]
          [_ (expr-error)]))]
     [(expr-map-has-key m k)
-     (let ([tm (whnf (infer ctx m))])
+     (let ([tm (schema-fvar->row-or-self (whnf (infer ctx m)))])
        (match tm
          ;; CIU T6 F1 (s2): has-key on a record — Bool if the key checks the key domain.
          [(? expr-Record? rec)
@@ -2053,7 +2053,7 @@
          [_ (expr-error)]))]
     ;; map-keys: Map K V → List K
     [(expr-map-keys m)
-     (let ([tm (whnf (infer ctx m))])
+     (let ([tm (schema-fvar->row-or-self (whnf (infer ctx m)))])
        (match tm
          ;; CIU T6 F1 (s2): keys of a record → List of its key-domain type.
          [(? expr-Record? rec)
@@ -2062,7 +2062,7 @@
          [_ (expr-error)]))]
     ;; map-vals: Map K V → List V
     [(expr-map-vals m)
-     (let ([tm (whnf (infer ctx m))])
+     (let ([tm (schema-fvar->row-or-self (whnf (infer ctx m)))])
        (match tm
          ;; CIU T6 F1 (s2): vals of a record → List of the value bound
          ;; (⋃fields; dyn rows add the remainder meta; empty → fresh meta — §12.4).
@@ -3575,6 +3575,22 @@
                        (record-field (schema-field-type->expr (schema-field-type-datum f))
                                      'present)))
                'closed))
+
+;; F1b.7e: project a schema-fvar type to its row (else identity), so the
+;; structural map-op infer arms (map-keys/vals/assoc/dissoc/has-key?/nil-safe-get/
+;; size) treat a schema value like the anonymous row it up-shifts to — their
+;; existing (? expr-Record?) arm then fires. Mirrors map-get's schema-fvar arm;
+;; reuses schema->row (the D22 carrier); yields ROW results (map-assoc→grown row,
+;; etc.), matching anon-row behavior. LOCAL by design — whnf must NOT globally
+;; unfold a schema fvar (nominal opacity: the seal + display + selection gating
+;; all depend on it staying opaque). SELECTION fvars are deliberately NOT
+;; projected here: a selection restricts reads to its :requires (the
+;; read-capability, per map-get's selection arm), which is selection-projection
+;; design — deferred (DEFERRED.md § selection projections).
+(define (schema-fvar->row-or-self tm)
+  (if (and (expr-fvar? tm) (lookup-schema-by-name (expr-fvar-name tm)))
+      (schema->row (lookup-schema-by-name (expr-fvar-name tm)))
+      tm))
 
 ;; record-<:-schema? — a keyword row (closed OR dyn) satisfies a schema
 ;; expectation on its KNOWN fields: per-field CHECK-strength (unify ∨ subtype?
