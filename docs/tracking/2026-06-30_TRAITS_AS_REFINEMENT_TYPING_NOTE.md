@@ -52,6 +52,52 @@ The Numerics track (charter D-N5) ships, **without** committing the general surf
 4. How `property` composition (membership cells + propagators) realizes the conjunctive meet on-network.
 5. The bridge to full refinement inference (`#=` over refinement domains) and its decidability story (widening/narrowing).
 
+## §8 Known consumer gap: schema `:check`/`:default` trait resolution (CIU T6 F1b.7b, 2026-07-18)
+
+A concrete, grounded consumer of "trait resolution as a reusable service" surfaced
+during CIU T6 F1b hand-testing/stress-testing. It belongs to this track because
+the fix is *general trait-dict resolution run in a non-standard context* — exactly
+the machinery §7 Q1 contemplates (a `property`/`refine` producer *reusing* trait
+resolution). Filed here to be picked up WITH this track.
+
+**The gap.** A schema field's `:check` predicate and `:default` value are baked
+`elaborate`-ONLY (elaborator.rkt, the `expr-validate` plan bake) — no `check` /
+`resolve-trait-constraints!` / `zonk` pass. So a **genuine trait method** inside a
+`:check`/`:default` (`eq?` on any `Eq` type, `div` (Div), a user-defined trait
+predicate) never gets its dictionary and stays a stuck application. Grounding
+(audit `wf_7cdee201`, HEAD `c375789b`): the resolution machinery ALL exists
+(`resolve-trait-constraints!`, `solve-meta!`, wakeup registration, no module
+cycle — only `driver.rkt` requires `elaborator.rkt`); the ONLY missing step is a
+local typing pass on the baked pred/default that GROUNDS the accessor's type-var
+meta from the field type `ft-expr` FIRST (resolve-trait-constraints! alone is a
+no-op — it gates on ground type-args), then resolves, then zonks. This is the
+audit's "candidate A" (~a bounded change at the bake, with meta-state hygiene +
+the network-less door-seal/library-load two-context path to handle).
+
+**Why deferred here (not fixed in F1b.7b).** F1b.7b shipped the CHEAP, high-value
+half (owner-ruled 2026-07-18): the `?`-suffixed comparison family (`le?`/`lt?`/
+`ge?`/`gt?`) are NOT trait methods (monomorphic `Nat Nat -> Bool`) — normalized to
+dict-free `le`/`lt`/`ge`/`gt` keywords, so those idiomatic checks now work on
+Int+Nat. What remains is genuine trait-method resolution, which is this track's
+domain. Two disciplines make deferral safe: (1) a clean **workaround** exists — wrap
+the predicate in a `spec`'d Bool function (`spec f T -> Bool` / `defn f [x] [eq? x
+…]` → `:check (f _)` resolves, because the defn goes through the full typed
+pipeline); (2) F1b.7a's guard makes the un-resolved inline form **fail loud** as
+`check-unevaluable "(eq? _ 7)"` (never silently pass — the Correct-by-Construction
+line held).
+
+**The `:default` sibling (same mechanism).** A `:default` calling a trait method
+has the identical elaborate-only gap. It is NOT a silent-unsoundness hole (unlike
+the F1b.7a `:check` bug): the def-annotation route resolves it (full pipeline);
+`validate` catches the stuck value (F1b.7b now names it `default-unevaluable`
+rather than a misleading `type-mismatch`); an unbound default errors at the bake.
+So Correct-by-Construction is satisfied and only the RESOLUTION is deferred (to
+this track, with the `:check` case) — the diagnostic already landed in 7b.
+
+**Entry gate.** Opens with this track (a general `check + resolve + zonk` service
+invocable at the schema bake). Design doc `2026-07-06_CIU_T6_F1_STRUCTURAL_RECORDS_DESIGN.md`
+§13.9 (F1b.7b) is the CIU-side record; the grounding is audit `wf_7cdee201`.
+
 ## References
 - [`2026-06-30_NUMERICS_TRACK_CHARTER.md`](2026-06-30_NUMERICS_TRACK_CHARTER.md) (origin; v1 slice), [`2026-03-28_UCS_MASTER.md`](2026-03-28_UCS_MASTER.md) (home), [`WIDENING_NARROWING_INFINITE_DOMAINS_FOR_UCS`](../research/2026-04-30_WIDENING_NARROWING_INFINITE_DOMAINS_FOR_UCS.md).
 - [`LANGUAGE_VISION.org:187,398`](principles/LANGUAGE_VISION.org), [`ERGONOMICS.org:306`](principles/ERGONOMICS.org) (`property` form).
