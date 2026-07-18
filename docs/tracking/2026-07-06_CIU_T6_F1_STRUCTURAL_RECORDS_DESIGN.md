@@ -454,6 +454,7 @@ Every slice per-change-gated (check-parens → raco make → PROBE-FIRST → tar
 | F1b.6 **POSTURE FLIP** ✅ `7bcbca69` | D23: escape-boundary HARD ERROR for D19-tagged undischarged metas at the store boundaries — strictly after F1b.3 (presence changes what "undischarged" means, D24 gradient) | D23 | the P7 def-leak probe flips to error w/ def-srcloc; exploration display unchanged |
 
 **✏ F1b.6 CLOSE (2026-07-18 — `7bcbca69`; mini-audit `wf_5eb9af3e`, 4 facets + critic @ `43be29c4`; full suite GREEN 8887/465/0):** the tightening DEPLOYED. A dyn-row POINT-PROJECTION meta escaping into a STORED type is now a HARD ERROR (def-srcloc); the F1b.2b scrub-to-hole stays for everything else. **The audit resolved the spec's under-specification + corrected 3 stale coordinates:** (1) **THE PARTITION** (the #1 correctness surface): the error set is the NARROW 2-kind {`dyn-row-projection`, `dyn-row-dynamic-projection`} (the two point-read projections), NOT all 10 `dyn-row-*` kinds — the decisive counterexample is f1b3-width's `update-in` marker (a `dyn-row-update-in` meta that MUST keep scrubbing to a hole); bulk-op result kinds (update-in/fold/values/filter/map-vals/…) are legitimately-dyn results, not undischarged observations. (2) **SCOPE = type-LOCAL walk** (not the global sweep the design's "mirror check-unresolved-trait-constraints" named): `check-escaping-projection-metas` walks the PRE-scrub stored type via the new `collect-expr-metas-deep` (zonk.rkt) and errors iff it holds a projection-kind meta. Type-local matches D23's exact wording ("a type CONTAINING a projection meta") and avoids the global sweep's over-fire on an intermediate projection meta discarded before the stored type (`def x := [const 5 m.c]`). (3) **BOUNDARIES**: only the TWO def-commit boundaries (inferred + annotated, in the existing error block before the scrub, with def-srcloc + per-path un-register) — the design's "`:1704` deferral exempt" was a stale coordinate (`:1704` is the data-type store; the transient exempt store is `:1744`), and defr/foreign/data are no-ops under the type-local walk (relations/opaque/annotated types carry no point-projection meta). **GATING is critical**: the check is NEVER at eval/infer (both consult the trait check too), so exploration stays permissive — a bare top-level `m.c` still displays its observation meta (the SAME kind that errors at a store commit). Escape hatch verified: an explicit annotation solves the meta (drops from the unsolved set); a `: _` hole annotation does NOT discharge → still errors. qtt untouched. Flips: test-route-soundness-01 (the def errors; +2 cases: exploration-permissive + escape-hatch) + f1-records marker 88. Must-stay-green: update-in, exploration display, closed-row dynamic-key. **NEXT: F1b.close.**
+| F1b.7 **RECORDS/SCHEMA HARDENING** 🔄 | Stress-test findings (§13.9): 7a `:check` soundness guard [🔴 HIGH] · 7b `:check` trait resolution · 7c `:check` door parity · 7d non-literal door `:default` · 7e Record<:Map for bare map-ops · 7f targeted diagnostics · 7g `?`-suffixed keyword keys | — | per-sub gate; F1b.close GATED on 7a |
 | F1b.close | Bench matrix (D21+D22+D24 fast paths, interleaved/worktree-pinned per the §12.7 lesson) · PIR · typed-solution-rows mini-track charter (D25.3 gates) · consolidated DEFERRED triage · roadmap/CIU-master refresh | — | the col-close gate recipe |
 
 ### §13.7 Consolidated scaffolding ledger (the cross-cluster watchout, discharged)
@@ -518,3 +519,69 @@ p0 artifacts: acceptance skeleton `examples/2026-07-17-ciu-t6-f1b5-validate.prol
 **The M2 boundary (p0 doc obligation — why validate's runtime fill does NOT re-open the refutation):** M2 refuted *preparse TYPE-level conditional fill* — a surface `if`-composition whose **branch unification** must type both arms: on dyn rows the join loses the filled field; on closed rows the type claims a field the value lacks (value/type mismatch). The failure lives in the TYPING of generated surface code. Validate's fill is a *runtime VALUE operation inside the reduction arm*: no surface `if` exists, no branch unification happens, and no type is asserted by composition — the node's type is `Result S E` by its ONE rule, and the `ok` payload is S because the arm **tabulates** (fills, witnesses, checks) before constructing `ok`. Different mechanism, no typing window. The residual corollary stands unchanged: on non-literal static routes, missing-defaulted remains type-accepted-no-fill (the 4e rule) — the VALUE materializes only when validate runs.
 
 **Watchouts carried (panel synthesis, binding):** the composed off-network mass gets ONE ledger row w/ the runtime retirement horizon (never free-ride the typing rows) · no propagator vocabulary on the tabulation loop (NRC = zero/zero/no verbatim) · "byte-parity" language demoted (parity-on-single-failure only) · golden tests via the renderer only · the skip-set-empty test is a LANDING requirement (prose ledgers = correctness-by-vigilance) · strengthened doors need the census BEFORE landing (the D22.3 lesson) · "re-homed" must cash out in s3 · `:not-checkable` omission is a NAMED bet · panic-during-`:check` disposition documented ("inherits panic semantics, v1").
+
+### §13.9 V2 — Records/Schema Hardening (F1b.7; stress-test findings, 2026-07-18)
+
+The schema/projection hand-testing + adversarial stress-test battery (`wf_9e4a15ad`,
+6 cluster testers + synthesis @ `e60ba8b4`; EVERY confirmed finding main-session
+reproduced) surfaced ONE soundness bug + a cluster of record-type usability edges the
+owner ruled IN SCOPE before F1b.close (2026-07-18) — "very important to the overall
+usability of our record types." Captured as its own tracked phase to survive longer
+sessions. No crashes / no hangs across ~120 probes; the primitive witness table,
+collect-all accumulation, `errors-to-list`, the D23 matrix, and up-shift all
+re-confirmed SOUND. The confirmed issues + subphases:
+
+| Sub | Finding (reproduced @ `e60ba8b4`) | Sev | Fix shape |
+|---|---|---|---|
+| 7a | `:check` silently PASSES any predicate not reducing to a Bool (a stuck trait method `eq?`/`le?`; a `[fn …]` check) — `validate` AND the seal ctor door accept invalid data | 🔴 HIGH | LAYER B guard: a non-`true`/`false` (stuck / non-Bool) check result must FAIL LOUD, never pass |
+| 7b | trait-method checks (`eq?`/`le?`/`lt?`/`ge?` on Int) don't RESOLVE their dict → stuck (the trait-side root of 7a's symptom) | completeness | LAYER A: resolve trait constraints on the baked pred so the idiomatic checks WORK |
+| 7c | `:check` DOOR PARITY — the annotation door (`def x : S := {…}`) + the `the S {…}` form enforce type + missing-required but SKIP `:check` (only the constructor door discharges it) | rough | enforce `:check` on all seal doors, or document the intended scoping |
+| 7d | the NON-literal ctor door (`[S m]`) drops `:default` — a promised field projects `<error> : Int` where the literal door + `validate` fill it (literal-vs-def-bound inconsistency) | 🟠 MED | non-literal door materializes defaults (route through validate's fill, or a fill step) |
+| 7e | bare map-ops on a NOMINAL schema value fail (`map-keys`/`-vals`/`-assoc`/`-dissoc`/`update-in` → "Could not infer type"); reads (`map-get`/`map-size`/dot) work; ALL fine on a structurally-identical anon row — Record<:Map doesn't fire at bare polymorphic-op application | rough | Record<:Map subsumption at the op-application boundary |
+| 7f | generic "Could not infer type" swallows the specific diagnostic on many reasonable schema mistakes (wrong-type field via `the`/application; non-map `validate` subject) — while missing-required + def-annotation paths are crisp | rough | targeted field/type-named diagnostics on the app/`the`/validate reject paths |
+| 7g | `?`-suffixed keyword keys (`:active?`) mis-parse in schema field names + map literals (the WS reader splits `:active` + `?`) — the language's own predicate convention | rough | `?`-suffix reads as one keyword token |
+
+**Order (owner-ruled 2026-07-18):** 7a FIRST (the soundness hole), then 7b, then the
+usability edges 7c–7g (per-opener sequencing). Each subphase: slice-opening mini-audit
+(the `grounding-audit` workflow when grounding-heavy) → R-lens SURGICALLY → OWNER
+DIALOGUE (prose, Q_N) → implement → per-change gate (probe-first; targeted `--tests`;
+full suite; commit). **F1b.close is GATED on 7a** — the cornerstone "records/`Map`↔schema
+correct IN PRINCIPLE" claim depends on `:check` not silently accepting invalid data;
+the PIR records the stress-test find + this phase.
+
+**7a — `:check` soundness guard (Layer B) [opening first].** Root cause (main-session
+verified, `e60ba8b4`): the check-pred is baked **`elaborate`-ONLY** (elaborator.rkt:3142
+— no `check` / `resolve-trait-constraints!`), so a trait method (`eq?`/`le?`) stays a
+STUCK application (dict unresolved) and a `[fn …]` check reduces to a function value;
+then the tabulate arm (reduction.rkt:1354) treats "not `false`, not `panic`" as PASS —
+its comment *"true OR stuck (skip per err-polarity) → the field passes"* MIS-APPLIES
+err-polarity, which governs TYPE-WITNESSING (never-false-fail a field the seal accepts),
+NOT `:check` evaluation. A user's runtime assertion that cannot be evaluated must be
+LOUD, not silently-true. The `(> _ 0)`/`(>= _ 0)` forms work because `normalize-check-pred`
+maps `>`/`>=` → dict-free `lt`/`le`; every acceptance/​test marker uses `>`-style, which
+is why the hole was invisible. Design decisions for the opener: **(i) WHERE the guard
+lives** — schema-DEFINITION time (type-check the pred → the user learns immediately the
+`:check` is malformed/unresolvable) vs the runtime tabulate arm vs BOTH (def-time = best
+UX but overlaps 7b's machinery; runtime = the cheap correct-by-construction backstop);
+**(ii) the FAILURE SHAPE** — reuse `check-failed` vs a NEW `Reason` variant
+(`check-unevaluable`/`check-error` — a pipeline touch: `data Reason` + `errors-to-list`
++ the bake/arm) distinguishing "predicate did not evaluate to a Bool" from "predicate
+returned false"; **(iii)** whether def-time guarding pulls 7b forward (type-checking the
+pred to guard it IS 7b's trait resolution). **Gate:** the trait/lambda silent-pass flips
+to a loud failure at BOTH faces (validate + ctor door); `(> _ 0)`-style stays green; a
+census confirms NO acceptance/​test regression (all use `>`-style); +regression pins for
+a stuck-trait check and a lambda check.
+
+**7b — `:check` trait resolution (Layer A).** Make the idiomatic `eq?`/`le?`/`lt?`/`ge?`
+checks WORK: resolve trait constraints on the baked pred lambda at elaborator.rkt:3142
+(currently `elaborate`-only). Needs its own grounding — how the pred lambda (`expr-lam
+'mw ft-expr body`, `$vx` at bvar 0) threads through the constraint pipeline; whether the
+Nat-side working case (`le? _ 100N` per the punify doc) reveals the resolution path. If
+7a lands the def-time guard, 7b may be a natural extension of the same type-check step.
+
+**7c–7g** open with their own mini-audits when reached; the table row is the spec seed.
+7c (door parity) couples to 7a (both are "where/when does `:check` run"). 7e (Record<:Map
+at op boundaries) + 7f (diagnostics) are typing-core surfaces; 7g is a WS-reader fix
+(the `?`-in-keyword-token class, sibling of the `<`-reader limitation). 7d is the
+non-literal-door fill gap (the M2 deferral's defaulted-field corner — the default VALUE
+is statically known even when presence is runtime).
