@@ -1,0 +1,16 @@
+;; Course-prerequisite knowledge base — the relational-demo tutorial's finale,
+;; sized for the mini engine. Try:
+;;   node ../cli.mjs prereqs.prologos 'solve (needs "CS401" req)' --trace --shuffle 20
+
+ns demo::prereqs
+
+defr prereq [?course ?requires]
+  || "CS201" "CS101"
+     "CS301" "CS201"
+     "CS301" "MA301"
+     "CS401" "CS301"
+     "MA301" "MA101"
+
+defr needs [?course ?req]
+  &> (prereq course req)
+  &> (prereq course mid) (needs mid req)

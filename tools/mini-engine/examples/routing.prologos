@@ -1,0 +1,20 @@
+;; Stratified negation-as-failure — from the WFLE acceptance file §A4.
+;; edge/blocked live in stratum S0; reachable (which negates blocked) in S1.
+;; The S1 clauses only fire after S0 has reached its Tarski fixpoint.
+;;   node ../cli.mjs routing.prologos 'solve (reachable "a" dest)' --trace
+
+ns demo::routing
+
+defr edge [?from ?to]
+  || "a" "b"
+     "b" "c"
+     "c" "d"
+     "d" "e"
+
+defr blocked [?node]
+  || "c"
+
+defr reachable [?from ?to]
+  &> (edge from to) (not (blocked to))
+  &> (edge from mid) (not (blocked mid))
+     (reachable mid to)

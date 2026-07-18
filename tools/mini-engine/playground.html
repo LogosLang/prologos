@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mini-prologos playground</title>
+<style>
+  :root{--bg:#f5f3f8;--card:#fcfbfe;--well:#ece9f2;--ink:#231f2e;--muted:#645e74;
+    --line:#dcd7e6;--accent:#5d34d8;--gold:#9a7514;--good:#177a50;--bad:#c22b45}
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#131019;--card:#1c1826;--well:#161320;--ink:#e9e6f0;--muted:#a49db8;
+      --line:#2e2940;--accent:#a98bff;--gold:#e0bc5d;--good:#48c792;--bad:#ff7089}}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 system-ui,sans-serif;padding:2rem 1.2rem}
+  main{max-width:64rem;margin:0 auto}
+  h1{font-size:1.3rem;margin:0 0 .3rem}
+  p.sub{color:var(--muted);margin:0 0 1.4rem;font-size:.9rem}
+  .grid{display:grid;grid-template-columns:1.1fr 1fr;gap:1.2rem}
+  @media (max-width:800px){.grid{grid-template-columns:1fr}}
+  label{display:block;font:600 .68rem/1 ui-monospace,monospace;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--muted);margin:0 0 .4rem}
+  textarea,input[type=text]{width:100%;box-sizing:border-box;font:13px/1.6 ui-monospace,monospace;
+    color:var(--ink);background:var(--well);border:1.5px solid var(--line);border-radius:8px;
+    padding:.7rem .9rem}
+  textarea{min-height:17rem;resize:vertical;white-space:pre;tab-size:2}
+  textarea:focus,input:focus{outline:none;border-color:var(--accent)}
+  .row{display:flex;gap:.6rem;margin:.8rem 0 0;flex-wrap:wrap}
+  button{font:600 .78rem ui-monospace,monospace;border-radius:7px;padding:.55rem .95rem;
+    cursor:pointer;border:1.5px solid var(--accent);background:var(--accent);color:var(--bg)}
+  button.ghost{background:transparent;color:var(--accent)}
+  .out{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:.7rem 1rem;
+    font:13px/1.9 ui-monospace,monospace;min-height:3rem;overflow:auto;margin-bottom:.9rem}
+  .trace{background:var(--well);border:1px solid var(--line);border-radius:8px;padding:.7rem 1rem;
+    font:12px/1.85 ui-monospace,monospace;color:var(--muted);max-height:18rem;overflow:auto}
+  .trace .gate{color:var(--gold);display:block;border-top:1.5px dashed var(--gold);
+    margin:.35rem 0 .25rem;padding-top:.25rem}
+  .ans{color:var(--accent)} .err{color:var(--bad)} .okv{color:var(--good)} .nil{color:var(--muted);font-style:italic}
+</style>
+</head>
+<body>
+<main>
+  <h1>mini-prologos playground</h1>
+  <p class="sub">A stratified bottom-up Datalog engine over the <code>defr</code> / <code>||</code> / <code>&amp;&gt;</code> / <code>solve</code>
+    subset of Prologos WS syntax. Serve this directory (<code>python3 -m http.server</code>) — ES-module
+    imports don’t load from <code>file://</code>.</p>
+  <div class="grid">
+    <div>
+      <label for="src">program</label>
+      <textarea id="src" spellcheck="false">ns demo::prereqs
+
+defr prereq [?course ?requires]
+  || "CS201" "CS101"
+     "CS301" "CS201"
+     "CS301" "MA301"
+     "CS401" "CS301"
+     "MA301" "MA101"
+
+defr needs [?course ?req]
+  &> (prereq course req)
+  &> (prereq course mid) (needs mid req)</textarea>
+      <label for="qy" style="margin-top:.8rem">query</label>
+      <input type="text" id="qy" value='solve (needs "CS401" req)' spellcheck="false">
+      <div class="row">
+        <button id="run">solve</button>
+        <button id="shuffle" class="ghost">CALM check ×20</button>
+      </div>
+    </div>
+    <div>
+      <label>answers</label>
+      <div class="out" id="ans"><span class="nil">— run the query —</span></div>
+      <label>trace (strata &amp; BSP rounds)</label>
+      <div class="trace" id="trace">Rounds of monotone joins; quiescence = Tarski fixpoint;
+negation only after the gate.</div>
+    </div>
+  </div>
+</main>
+<script type="module">
+import { parseProgram, parseQuery, evalProgram, answers, dbSignature, shuffled }
+  from './mini-prologos.mjs';
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function run() {
+  try {
+    const rels = parseProgram($('src').value);
+    const q = parseQuery($('qy').value, rels);
+    const res = evalProgram(rels);
+    const vars = q.args.filter(a => a.v !== undefined).map(a => a.v);
+    const ans = answers(q, res.DB);
+    $('ans').innerHTML = !ans.length ? '<span class="nil">nil — no answers</span>'
+      : !vars.length ? `<span class="ans">true</span> (${ans.length} match${ans.length>1?'es':''})`
+      : ans.map(e => '<span class="ans">{' + vars.map(v => ':'+v+' "'+esc(e[v])+'"').join(' ') + '}</span>').join('<br>');
+    const lines = [];
+    for (const ev of res.trace) {
+      if (ev.type === 'gate') { lines.push(`<span class="gate">⟡ S${ev.stratum-1} quiesced — gate opens → S${ev.stratum}</span>`); continue; }
+      const parts = Object.entries(ev.adds).map(([r, ts]) => `${r} +${ts.length}`);
+      lines.push(`S${ev.stratum} ${ev.factsOnly ? 'ground facts' : 'round ' + ev.round} — ${parts.join(' · ') || 'no new tuples'}`);
+    }
+    lines.push(`<b>quiescent · ${res.fires} fires · ${Object.values(res.DB).reduce((n,m)=>n+m.size,0)} tuples</b>`);
+    $('trace').innerHTML = lines.join('<br>');
+    return rels;
+  } catch (e) {
+    $('ans').innerHTML = '<span class="err">' + esc(e.message) + '</span>';
+    $('trace').textContent = '—';
+    return null;
+  }
+}
+$('run').addEventListener('click', run);
+$('shuffle').addEventListener('click', () => {
+  const rels = run(); if (!rels) return;
+  const sig0 = dbSignature(evalProgram(rels).DB);
+  let ok = true, min = Infinity, max = 0;
+  for (let t = 0; t < 20; t++) {
+    const r = evalProgram(rels, { shuffle: shuffled });
+    min = Math.min(min, r.fires); max = Math.max(max, r.fires);
+    if (dbSignature(r.DB) !== sig0) ok = false;
+  }
+  $('trace').innerHTML += `<br><span class="${ok?'okv':'err'}">CALM ×20: fire counts ${min}–${max}, fixpoint ${ok?'identical every run ✓':'DIVERGED ✗'}</span>`;
+});
+run();
+</script>
+</body>
+</html>
