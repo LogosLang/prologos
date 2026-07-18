@@ -6584,8 +6584,15 @@
 ;; Keys must be: keyword (:name), string, number, or [expr].
 ;; Bare symbols are not allowed as keys.
 (define (parse-map-literal args loc)
-  (when (odd? (length args))
-    (parse-error loc "Map literal requires an even number of elements (key-value pairs)" #f))
+  ;; s3 (CIU T6, 2026-07-18): RETURN the odd-length parse-error. It was a
+  ;; value-discarding `when` that fell through to the loop below and hard-crashed
+  ;; on `(cadr remaining)`. An odd body — `{:a 1 :b}`, or a value that left an odd
+  ;; number of tokens (e.g. an un-rewritten sentinel) — now yields the graceful
+  ;; "even number of elements" error instead of a Racket contract crash.
+  (cond
+   [(odd? (length args))
+    (parse-error loc "Map literal requires an even number of elements (key-value pairs)" #f)]
+   [else
   (define entries
     (let loop ([remaining args] [acc '()])
       (cond
@@ -6626,7 +6633,7 @@
            [else (loop (cddr remaining) (cons (cons parsed-key parsed-val) acc))])])))
   (if (prologos-error? entries)
       entries
-      (surf-map-literal entries loc)))
+      (surf-map-literal entries loc))]))
 
 ;; ========================================
 ;; PVec literal parsing

@@ -273,3 +273,13 @@
      "def b : Pt := {:x 3N :y 4N}\n"
      "eval [padd a b].x\n"))
    "4N : Nat"))
+
+;; s3 (CIU T6, 2026-07-18): an odd-length map literal yields the graceful
+;; "even number of elements" parse-error instead of a hard cadr crash (the
+;; guard used to discard its error and fall through to the crashing loop).
+(test-case "e2e/ws: odd map literal is a graceful parse-error, not a crash"
+  (define result (run-ws-last "eval {:a 1 :b}\n"))
+  (check-true (prologos-error? result)
+              (format "odd map should be a parse-error, got: ~v" result))
+  (check-true (regexp-match? #rx"even number of elements" (prologos-error-message result))
+              (format "expected the even-elements message, got: ~v" result)))
