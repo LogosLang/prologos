@@ -221,3 +221,93 @@
   (define d-result (list-ref results 3))
   (check-equal? c-result d-result
                 "c (one-line) and d (two-line) must evaluate to the same value"))
+
+;; ========================================
+;; Regression: IMPLICIT-MAP def bodies via the WS session (process-string-ws)
+;; ========================================
+;;
+;; A `def` whose body is a layout keyword-tail is an IMPLICIT MAP:
+;;
+;;     def user
+;;       :name "Alice"
+;;       :age 32
+;;
+;; The reader groups the indented lines as keyword sub-lists
+;; `(def user (:name "Alice") (:age 32))`; `rewrite-implicit-map` (a preparse
+;; DATUM rewrite) turns the keyword tail into `$brace-params`. process-file's
+;; merge path preparses the raw grouped syntax so it always worked — but the
+;; CELL pipeline (process-string-ws = the REPL/LSP interactive path) routed
+;; `def` through `parse-form-tree` (which never preparses) AND flattened the
+;; datum before the rewrite (destroying the grouping the rewrite keys on). Both
+;; are fixed in form-cells.rkt (extract-surfs-from-form-cells): an implicit-map-
+;; shaped `def` routes through the datum path, which rewrites BEFORE it flattens.
+;; run-ns-ws-* IS process-string-ws, so these exercise the fixed L2 path — they
+;; failed "def: expected ':', got :name" before the fix.
+
+(test-case "implicit-map def (flat): projects its fields via the WS session"
+  (define result
+    (run-ns-ws-last
+     (string-append
+      "ns test-impmap-flat\n"
+      "def user\n"
+      "  :name \"Alice\"\n"
+      "  :age 32\n"
+      "user.name\n")))
+  (check-true (string? result) (format "expected a value, got: ~v" result))
+  (check-true (regexp-match? #rx"Alice" result)
+              (format "expected the projected :name, got: ~v" result)))
+
+(test-case "implicit-map def (nested): nested projection resolves"
+  (define result
+    (run-ns-ws-last
+     (string-append
+      "ns test-impmap-nested\n"
+      "def user\n"
+      "  :name \"Alice\"\n"
+      "  :address\n"
+      "    :street \"Main\"\n"
+      "    :zip 12345\n"
+      "user.address.zip\n")))
+  (check-true (string? result) (format "expected a value, got: ~v" result))
+  (check-true (regexp-match? #rx"12345" result)
+              (format "expected the nested :zip, got: ~v" result)))
+
+(test-case "implicit-map def (layout list-of-maps): dash clauses build a PVec of maps"
+  (define result
+    (run-ns-ws-last
+     (string-append
+      "ns test-impmap-dash\n"
+      "def cfg\n"
+      "  :admins\n"
+      "    -\n"
+      "      :name \"Alice\"\n"
+      "      :role :super\n"
+      "    -\n"
+      "      :name \"Bob\"\n"
+      "      :role :regular\n"
+      "cfg.admins[1].name\n")))
+  (check-true (string? result) (format "expected a value, got: ~v" result))
+  (check-true (regexp-match? #rx"Bob" result)
+              (format "expected admins[1].name, got: ~v" result)))
+
+(test-case "implicit-map def parity: WS session matches the braced form"
+  (define implicit
+    (run-ns-ws-last
+     "ns test-impmap-par-a\ndef u\n  :name \"Alice\"\n  :age 32\nu.age\n"))
+  (define braced
+    (run-ns-ws-last
+     "ns test-impmap-par-b\ndef u := {:name \"Alice\" :age 32}\nu.age\n"))
+  (check-true (string? implicit) (format "implicit form must evaluate, got: ~v" implicit))
+  (check-equal? implicit braced
+                "implicit-map and braced-map defs must project identically"))
+
+;; Non-regression: the fix is scoped to `def` — the keyword tails of defn/spec/
+;; trait/property/functor are METADATA (`:properties`, `:where`, `:laws`), NOT
+;; implicit-map values, and keep their existing tree-parser / consumed-form
+;; handling. (A broader scope diverted spec-:properties through the map rewrite
+;; and silently corrupted the metadata — test-properties caught it.) A plain
+;; def with a `:=` body must also be untouched (no keyword tail to divert).
+(test-case "plain def is unaffected by the implicit-map routing (def-scoped)"
+  (define r (run-ns-ws-last "ns test-impmap-plain\ndef x := 42\nx\n"))
+  (check-true (and (string? r) (regexp-match? #rx"42" r))
+              (format "plain def must still evaluate, got: ~v" r)))

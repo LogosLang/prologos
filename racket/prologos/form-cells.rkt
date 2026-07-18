@@ -245,6 +245,42 @@
     (define stx (tree-node->stx-form node "<cell>" (or source-str "")))
     (if stx (syntax->datum stx) #f)))
 
+;; CIU T6 (WS-pipeline wiring, 2026-07-18): a verified-tag form (def/defn/spec)
+;; can carry an IMPLICIT-MAP body — the layout keyword-tail form
+;; (`def user` / `  :name "a"` / `  :age 1` → `def user {:name "a" :age 1}`).
+;; `rewrite-implicit-map` (a preparse DATUM rewrite, macros.rkt) turns the
+;; keyword tail into `$brace-params`, but `parse-form-tree` (the tree path the
+;; verified-tags arm uses) never runs preparse — so the raw `:name value` tokens
+;; reach the def form-parser as "def: expected ':', got :name". The DATUM path
+;; (the else arm) DOES preparse (preparse-expand-single). So route implicit-map-
+;; shaped verified forms through the datum path; non-implicit-map verified forms
+;; keep parse-form-tree (the on-network path). Safe by construction: for a
+;; non-implicit-map def the two paths produce identical surfs, so a false
+;; positive costs nothing; the check is `rewrite-implicit-map changes the datum`,
+;; the authoritative predicate (reused, not re-derived). This closes the
+;; Level-2 (process-string-ws / REPL) vs Level-3 (process-file merge) divergence
+;; on implicit maps — process-file's merge already carries the preparse-expanded
+;; surfs; the cell pipeline did not.
+;; A `def` whose VALUE is an implicit map (`def user` / `  :name "a"` / `  :age 1`)
+;; is the only verified-tag form whose keyword tail is a map VALUE. defn/spec/
+;; trait/property/functor keyword tails are METADATA (`:properties`, `:laws`,
+;; `:where`), which parse-form-tree / process-consumed-form already handle — so
+;; SCOPE this to `def` only. (rewrite-implicit-map's own scope is broader because
+;; in process-file's preparse it also does metadata-block grouping; the cell
+;; pipeline reaches those other forms by different paths, so diverting them here
+;; would double-apply the rewrite and corrupt the metadata — this over-fire cost
+;; test-properties 5 spec-:properties cases before the `def` scope was added.)
+;;
+;; Detect on the RAW (UN-flattened) datum: rewrite-implicit-map keys on the
+;; reader's keyword GROUPING (`(:name "a")` sub-lists), which `flatten-ws-datum`
+;; destroys — so the check must precede flattening (the datum path below rewrites
+;; before it flattens for the same reason).
+(define (implicit-map-verified-node? node line raw-map source-str)
+  (define use-node (or (hash-ref raw-map line #f) node))
+  (define d (tree-node-to-datum use-node source-str))
+  (and d (pair? d) (eq? (car d) 'def)
+       (not (equal? (rewrite-implicit-map d) d))))
+
 ;; §11.5 Opt-in: form tags where parse-form-tree is VERIFIED to produce
 ;; correct surfs (semantically identical to parse-datum, modulo srcloc format).
 ;; Each tag added here means that form type is ON-NETWORK via tree-parser.
@@ -336,7 +372,8 @@
               ;; preparse-processed; the parser's "X should have been processed
               ;; before parsing" surf is their normal representation) stays
               ;; dropped — mirrors the driver merge's exception.
-              [(memq tag tree-parser-verified-tags)
+              [(and (memq tag tree-parser-verified-tags)
+                    (not (implicit-map-verified-node? node line raw-map source-str)))
                (define surf (parse-form-tree node))
                (if (consumed-form-residue? surf)
                    acc
@@ -348,7 +385,12 @@
                       [datum (tree-node-to-datum use-node source-str)])
                  (if (not datum) acc
                      (with-handlers ([exn:fail? (lambda (e) acc)])
-                       (define flat-datum (flatten-ws-datum datum))
+                       ;; rewrite-implicit-map BEFORE flatten: the layout keyword
+                       ;; grouping (`(:name "a")`) it keys on is destroyed by
+                       ;; flatten-ws-datum. A no-op for non-implicit-map forms.
+                       ;; (process-file's merge path preparses the raw grouped
+                       ;; syntax and never flattens first — this closes the gap.)
+                       (define flat-datum (flatten-ws-datum (rewrite-implicit-map datum)))
                        (define session-datum
                          (cond
                            [(and (pair? flat-datum) (eq? (car flat-datum) 'session))
