@@ -161,12 +161,13 @@
 ;; 5. D23 groundwork: stored-type hygiene (deep scrub — the raw-meta leak)
 ;; ========================================
 
-(test-case "stored-type scrub: open-row projection meta stores as HOLE, not raw meta"
-  ;; PROBES §P7: pre-fix, `def x := [map-get m :c]` on an open row stored
-  ;; `x : ?meta1610` verbatim — a dangling meta after per-command
-  ;; reset-meta-store! (the B3 crash class). Post-F1b.2: deep scrub at the
-  ;; store boundary → `x : _ defined.`; the escape-boundary ERROR posture is
-  ;; F1b.6 (D23) — this pin is updated then.
+(test-case "F1b.6 (D23): open-row projection escaping into a stored type is a HARD ERROR"
+  ;; PROBES §P7: pre-F1b.2, `def x := [map-get m :c]` on an open row stored
+  ;; `x : ?meta` verbatim — a dangling meta after per-command reset-meta-store!
+  ;; (the B3 crash class). F1b.2 scrubbed it to `x : _ defined.` (interim
+  ;; posture); F1b.6 (D23) FLIPS the escape boundary to a HARD ERROR — a stored
+  ;; type is a commitment and a raw projection meta is asserted-unknown
+  ;; knowledge. Exploration stays permissive (see below); escape hatch = annotate.
   (define results
     (run-file-string
      (string-append
@@ -174,14 +175,50 @@
       "def m := [map-assoc [map-assoc {} :a 1] :b \"s\"]\n"
       "def x := [map-get m :c]\n"
       "x\n")))
-  (define def-line (list-ref results (- (length results) 2)))
-  (check-true (string? def-line) "the def must succeed (interim posture)")
-  (check-true (regexp-match? #rx"x : _ defined" def-line)
-              "the stored type must be a hole, not a raw ?meta")
-  (check-false (regexp-match? #rx"\\?meta" def-line)
-               "no raw meta may appear in the stored-type display")
-  (check-true (string? (last-result results))
+  (define def-result (list-ref results (- (length results) 2)))
+  (check-true (prologos-error? def-result) "the escape-boundary def must ERROR (D23)")
+  (check-true (regexp-match? #rx"undischarged open-row projection"
+                             (prologos-error-message def-result))
+              "the error names the escaping projection")
+  ;; the reference to the failed def is unbound — a prologos-error, NOT a crash
+  (check-true (prologos-error? (last-result results))
               "the later reference must not crash (no dangling meta)"))
+
+(test-case "F1b.6 (D23): exploration stays permissive — a bare top-level projection displays its meta"
+  ;; the SAME projection that ERRORS at a store commit must DISPLAY at top level
+  ;; (D19 'the meta IS the observation' for reads; the check is store-only).
+  (define r (last-result
+             (run-file-string
+              (string-append
+               "ns t :no-prelude\n"
+               "def m := [map-assoc [map-assoc {} :a 1] :b \"s\"]\n"
+               "[map-get m :c]\n"))))
+  (check-true (string? r) "a bare top-level projection must not error")
+  (check-false (regexp-match? #rx"undischarged" r)
+               "exploration is exempt from the D23 store-boundary error"))
+
+(test-case "F1b.6 (D23): the escape hatch — an explicit annotation discharges the projection"
+  ;; `def x : T := m.c` SOLVES the projection meta (checked against T), so it
+  ;; drops out of the unsolved set and the D23 check passes. A `: _` HOLE
+  ;; annotation is NOT a discharge (it stays unsolved) → still errors.
+  (define ok-results
+    (run-file-string
+     (string-append
+      "ns t :no-prelude\n"
+      "def m := [map-assoc [map-assoc {} :a 1] :b \"s\"]\n"
+      "def x : String := [map-get m :c]\n")))
+  (check-true (string? (last-result ok-results))
+              "an explicit annotation discharges the meta — the def commits")
+  (check-true (regexp-match? #rx"x : String defined" (last-result ok-results))
+              "the stored type is the annotation")
+  (define hole-results
+    (run-file-string
+     (string-append
+      "ns t :no-prelude\n"
+      "def m := [map-assoc [map-assoc {} :a 1] :b \"s\"]\n"
+      "def z : _ := [map-get m :c]\n")))
+  (check-true (prologos-error? (last-result hole-results))
+              "a `: _` hole annotation is not a discharge — still a D23 error"))
 
 ;; ========================================
 ;; 6. F1b.4-pre: the scan is UNIVERSAL (process-string contexts included)

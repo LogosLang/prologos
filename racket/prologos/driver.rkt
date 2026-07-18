@@ -200,6 +200,45 @@
   (metas-to-holes e))
 
 ;; ========================================
+;; CIU T6 F1b.6 (D23): escape-boundary posture — the tightening deployment half.
+;; ========================================
+;; A dyn-row POINT-PROJECTION meta escaping into a STORED type is a HARD ERROR:
+;; a stored type is a commitment, and a raw projection meta is asserted-unknown
+;; knowledge the compiler doesn't have — it DANGLES after the per-command meta
+;; reset and would propagate into module capture / .pnet (PROBES §P7). The
+;; foreclosed idiom (owner-accepted): `def x := m.c` as a way of NAMING an open
+;; observation. Escape hatch = an explicit annotation, which SOLVES the meta (so
+;; zonk substitutes it away and it never reaches this check). EXPLORATION stays
+;; permissive — this is consulted ONLY in the store-commit error blocks, NEVER
+;; at eval/infer, so a bare top-level `m.c` still displays its observation meta.
+;;
+;; The error set is the TWO point-read projection kinds ONLY (m.c literal-miss /
+;; m[k] dynamic-key). Bulk-op result kinds (dyn-row-update-in / -fold / -values /
+;; -filter / -map-vals / …) are NOT here — those are legitimately-dyn results and
+;; keep scrubbing to holes (F1b.2b), not undischarged observations.
+(define d23-projection-meta-kinds '(dyn-row-projection dyn-row-dynamic-projection))
+
+;; type-LOCAL (matches D23's "a type CONTAINING a projection meta"): walk the
+;; (zonked, PRE-scrub) stored type; if it contains an undischarged point-read
+;; projection meta, return a prologos-error (with def-srcloc); else #f. Precise
+;; to escape — an intermediate projection meta discarded before the stored type
+;; (e.g. `def x := [const 5 m.c]`) is NOT flagged (a global sweep would over-fire).
+(define (check-escaping-projection-metas zonked-type name def-srcloc)
+  (and (for/or ([m (in-list (collect-expr-metas-deep zonked-type))])
+         (let* ([minfo (meta-lookup (expr-meta-id m))]
+                [src (and minfo (meta-info-source minfo))])
+           (and (meta-source-info? src)
+                (memq (meta-source-info-kind src) d23-projection-meta-kinds)
+                #t)))
+       (prologos-error def-srcloc
+         (format (string-append
+                  "definition ~a stores an undischarged open-row projection: "
+                  "projecting an unknown field on an open row yields an observation "
+                  "the type checker cannot commit to a stored type. Annotate to "
+                  "discharge it — `def ~a : <type> := …`")
+                 name name))))
+
+;; ========================================
 ;; CIU T6 F1b.4c (D22/M3): seal-scoped def-forcing
 ;; ========================================
 ;; A def whose body is a SEAL APPLICATION — the constructor rewrite's
@@ -1622,13 +1661,19 @@
                  ;; CIU T6 F1b.2: deep-scrub unsolved metas -> holes BEFORE
                  ;; store (closes the D19 raw-meta leak at this site, PROBES
                  ;; §P7); scrub-before-checkQ matches the annotated path.
-                 (define zonked-type (unsolved-metas-to-holes (time-phase! zonk (freeze inferred-type))))
+                 (define pre-scrub-type (time-phase! zonk (freeze inferred-type)))
+                 (define zonked-type (unsolved-metas-to-holes pre-scrub-type))
+                 ;; CIU T6 F1b.6 (D23): a point-read projection meta escaping into
+                 ;; the stored type is a HARD ERROR — checked on the PRE-scrub type
+                 ;; (the scrub above turned OTHER unsolved metas into holes).
+                 (define proj-err (check-escaping-projection-metas pre-scrub-type name def-srcloc))
                  ;; Skip QTT for expressions with unsupported node types (Vec/Fin)
                  (define qtt-ok
                    (if (contains-unsupported-qtt? zonked-body)
                        #t
                        (time-phase! qtt (checkQ-top/err ctx-empty zonked-body zonked-type))))
                  (cond
+                   [proj-err proj-err]  ;; D23 escape error takes precedence
                    [(prologos-error? qtt-ok) qtt-ok]
                    ;; CIU T6 F1b.4c (D22/M3): seal-scoped def-forcing —
                    ;; tabulation FORCES; a failing :check errors at commit.
@@ -1810,6 +1855,11 @@
                        ;; which stored still-unsolved implicit metas RAW — a
                        ;; leak, not a protection; every stored unsolved meta
                        ;; dangles after per-command reset-meta-store!).
+                       ;; CIU T6 F1b.6 (D23): a point-read projection meta escaping
+                       ;; into the stored (annotation) type is a HARD ERROR. A real
+                       ;; annotation SOLVES the meta (the escape hatch → no error);
+                       ;; a `: _` hole annotation leaves it unsolved → errors here.
+                       (define proj-err (check-escaping-projection-metas zonked-type-raw name def-srcloc))
                        ;; 6.5. QTT multiplicity check (on zonked terms with concrete mults).
                        ;; Skip for expressions containing unsupported node types (Vec/Fin).
                        (define qtt-ok
@@ -1818,6 +1868,9 @@
                              (time-phase! qtt (checkQ-top/err ctx-empty zonked-body zonked-type
                                              srcloc-unknown (recover-name-map)))))
                        (cond
+                         ;; D23 escape error takes precedence; un-register (this
+                         ;; path pre-registered the type for recursion).
+                         [proj-err (remove-failed-definition! name) proj-err]
                          [(prologos-error? qtt-ok)
                           ;; Remove pre-registered entry on QTT failure
                           (remove-failed-definition! name)

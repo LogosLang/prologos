@@ -407,15 +407,17 @@ solve (sol-parent x y)
 
 ;; §F1b.2b — D23 groundwork: stored-type hygiene (deep scrub).
 ;; An undischarged dyn-row projection meta stores as a HOLE, never a raw
-;; dangling ?meta (the P7 leak). INTERIM posture: the def still succeeds;
-;; F1b.6 (D23) flips escape-into-storage to a hard error — update this pin.
+;; dangling ?meta (the P7 leak). F1b.6 (D23) FLIPPED escape-into-storage to a
+;; hard error — a stored type is a commitment; a raw projection meta is
+;; asserted-unknown knowledge. Escape hatch = an explicit annotation.
 
 def dm := [map-assoc [map-assoc {} :a 1] :b "s"]
 ;;87=> dm : {:a Int :b String | _} defined.
 
 def dx := [map-get dm :c]
-;;88=> dx : _ defined.
-;;   ← the D19 projection meta scrubbed to a hole at the store boundary
+;;88=>~ undischarged open-row projection
+;;   ← F1b.6 (D23): the D19 projection meta escaping into dx's stored type is a
+;;     HARD ERROR (was: scrubbed to `dx : _ defined.`); annotate to discharge
 
 
 ;; ============================================================

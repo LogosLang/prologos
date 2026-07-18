@@ -30,7 +30,8 @@
          ;; Track 10B Phase B0: call counters for frequency measurement
          current-zonk-call-counts reset-zonk-call-counts!
          ;; CIU T6 F1b.2 (D23 groundwork): deep stored-type hygiene
-         metas-to-holes expr-contains-meta-deep? expr-contains-hole-deep?)
+         metas-to-holes expr-contains-meta-deep? expr-contains-hole-deep?
+         collect-expr-metas-deep)
 
 ;; ========================================
 ;; Track 10B Phase B0: call frequency counters (gated behind parameter)
@@ -1544,6 +1545,22 @@
     [(pair? v) (or (expr-contains-meta-deep? (car v))
                    (expr-contains-meta-deep? (cdr v)))]
     [else #f]))
+
+;; Deep collector: every expr-meta node anywhere in v (the generic
+;; struct-reflection walk, mirror of expr-contains-meta-deep?). CIU T6 F1b.6
+;; (D23) reads the collected metas' source-info kind to find dyn-row PROJECTION
+;; metas escaping into a stored type. Returns a list of expr-meta structs
+;; (callers read expr-meta-id → meta-lookup → source kind).
+(define (collect-expr-metas-deep v)
+  (cond
+    [(expr-meta? v) (list v)]
+    [(struct? v)
+     (define vec (struct->vector v))
+     (for/fold ([acc '()]) ([i (in-range 1 (vector-length vec))])
+       (append (collect-expr-metas-deep (vector-ref vec i)) acc))]
+    [(pair? v) (append (collect-expr-metas-deep (car v))
+                       (collect-expr-metas-deep (cdr v)))]
+    [else '()]))
 
 ;; Deep detector: any expr-hole / expr-typed-hole anywhere in v.
 (define (expr-contains-hole-deep? v)
