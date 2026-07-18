@@ -97,6 +97,21 @@ residue-letter entries — divergent gates/double-count):
 `defr : Schema` fact-row runtime validation rides the same charter (an adapter
 over the positional discharge, parser.rkt `parse-defr-schema-typed`).
 
+**✏ 2026-07-18 (hand-testing) — the nested-`validate`-descent gap is DEMO-RELEVANT,
+may fold into Path Selection.** Hand-test verified at `f108c19b`: `[validate
+Config badcfg]` where `badcfg.server.port = "x"` returns **`ok`** (accepts the
+bad nested `:server` — the witness treats a nested-schema field's champ value as
+opaque/accept-on-uncertainty per the one-level D28 posture). ASYMMETRY worth
+noting: the STATIC seal DOES descend (a bad nested *literal* is caught at commit),
+but runtime `validate` does not — precisely the demo's headline flow (external
+data → `validate` → `Result`) would report `ok` on a config whose inner fields
+are wrong. This is items #1/#3 above (container/nested + sub-schema descent).
+Owner steer (2026-07-18): does NOT need building yet, but "could very likely be
+included in the Path Selection work" (which precedes the return to demo work) —
+so this walker-descent may graduate WITH Path Selection rather than as a
+standalone charter trigger. Entry-gate (a) [a real nested-schema demo consumer]
+is the watch.
+
 **Entry gates**: (a) a real consumer with nested/container schema shapes — the
 P-Real demo schemas are the watched trigger (checked at F1b.5-p0; list-typed
 fields would open this EARLY); (b) API compatibility is PRE-PAID: E keys are
@@ -168,6 +183,68 @@ annotate `[x : T]` or add a `spec`").
 Neither blocks records-correct-in-principle (annotate or spec is the workaround);
 the mitigation makes the workaround discoverable. Do NOT attempt the deep fixes
 in a records slice — they are their own tracks.
+
+## CIU T6: schema EXTENSION / inclusion — un-named future design track (owner brewing, hand-testing 2026-07-18)
+
+Owner wants to eventually EXTEND one schema with another (`AdminUser` = `User`
++ extra fields — flatten the parent's fields into the child), but ruled it needs
+its own **ergonomic + parse design** and time to brew (2026-07-18); a LARGER
+design question than F1b, out of scope for the current demo (nested `schema`s
+are sufficient for demo purposes — owner-confirmed).
+
+**Current state (hand-test verified `f108c19b`)**: there is NO schema-extension
+mechanism. The only schema directives are `:closed` (schema-level) + `:default`/
+`:check` (per-field, `parse-field-properties` macros.rkt). Composition today =
+**nesting only** (a schema field whose TYPE is another schema), which works well:
+deep projection `cfg.server.host` resolves through named-type AND inline
+auto-registered (`Parent__field`) sub-schemas; the static seal descends into
+nested literals. Nesting is the intended composition story for now.
+
+**The discoverability trap (candidate small pre-fix, deferred with the feature)**:
+`schema Admin :include User` is SILENTLY parsed as a field NAMED `:include` of
+type `User` (`:include` is not a directive — field names lead with `:keyword`,
+so it looks like a legit field), producing a confusing downstream
+"schema seal: missing required field :include". A user reaching for extension
+gets no hint. Options if the owner wants a near-term guard: (a) a warning/error
+when a schema field's TYPE position is itself a registered schema name AND the
+field name looks directive-ish (`:include`/`:extends`/`:from`) — heuristic, risky;
+(b) leave it until the extension feature lands and decides the real syntax.
+
+**Design surface (for when the track opens)**: syntax (`:include S`? `schema X
+from Y`? a spread?) · flatten semantics (structural row-union vs a nominal
+"extends") · field-collision rules (override? error? most-derived-wins?) ·
+`:closed` interaction (does a child of a `:closed` parent stay closed?) ·
+whether extension composes with `selection` (a view over an extended schema).
+Likely CIU (records/rows) territory; may relate to F-row's extension typing.
+
+## CIU T6: projections via `selection` — down-cast + read-capability design (Path-Selection-adjacent, hand-testing 2026-07-18)
+
+`selection` (F1b.5-s4) is a read-side capability VIEW, hand-test verified
+`f108c19b`. Owner: this projection work is "likely related design work"
+(Path Selection) and not a current demo need (2026-07-18) — DEFERRED, folds into
+the OPEN **Path Selection** owner conversation (track doc §2a OPEN note).
+
+**What works**: `selection V from S :requires [f …]` narrows the readable surface
+to its `:requires` fields — `v.name` reads on `NameOnly :requires [:name]`;
+multi-field requires works; validate on a selection enforces requires-present +
+present-field type/`:check`, accepts extra parent fields. Empty `:requires []`
+is rejected (needs ≥1 of requires/provides/includes).
+
+**Two gaps (both → Path Selection)**:
+1. **No down-cast from a parent value**: `def x : NameOnly := aPersonValue` →
+   Type mismatch (expected NameOnly, got Person). A selection value is CONSTRUCTED
+   from a map literal — you cannot narrow an existing record to a subset view.
+   The "project a subset OUT of a record" ergonomic is exactly Path Selection's
+   V4 result-shape crux; selection is a *typed view you build*, not a *projection
+   you apply*. Feeds the Path Selection co-design.
+2. **Reading a NON-requires field off a selection value fails with a CRYPTIC
+   message**: `v.age` on `NameOnly :requires [:name]` → bare "Could not infer
+   type" (the view type exposes only its `:requires` fields — semantically a
+   coherent read-capability restriction, but the diagnostic is opaque). Candidate
+   small message improvement (name the view + its readable fields), pre-close OR
+   with the Path Selection work. NOTE also an OPEN semantics question for that
+   co-design: should a selection value expose ALL parent fields it carries at
+   runtime, or stay strict to `:requires`? (current = strict).
 
 ## CIU T6 (post-F1b): typed solution rows — own mini-track (D25.3 charter home)
 
