@@ -151,7 +151,7 @@
 (test-case "higher-rank: WS mode — spec with {A : Type} and defn"
   (define result
     (run-ws (string-join
-             (list "ns test.hr1"
+             (list "ns test::hr1"
                    ""
                    "spec id {A : Type} A -> A"
                    "defn id [x] x"
@@ -163,7 +163,7 @@
 (test-case "higher-rank: WS mode — spec with {A B : Type} bare implicits"
   (define result
     (run-ws (string-join
-             (list "ns test.hr2"
+             (list "ns test::hr2"
                    ""
                    "spec const {A B : Type} A -> B -> A"
                    "defn const [x y] x"
@@ -176,7 +176,7 @@
   ;; Validate that spec with <(A :0 Type) -> ...> compiles and defines correctly
   (define result
     (run-ws (string-join
-             (list "ns test.hr3"
+             (list "ns test::hr3"
                    ""
                    "spec apply-poly <(A :0 Type) -> A -> A> -> Nat -> Nat"
                    "defn apply-poly [f n] [f Nat n]")
@@ -187,7 +187,7 @@
 (test-case "higher-rank: WS mode — implicit binder used in body"
   (define result
     (run-ws (string-join
-             (list "ns test.hr4"
+             (list "ns test::hr4"
                    ""
                    "require [prologos::data::list :refer [List nil cons]]"
                    ""
@@ -261,7 +261,7 @@
 (test-case "higher-rank: existing WS spec/defn without implicits"
   (define result
     (run-ws (string-join
-             (list "ns test.compat"
+             (list "ns test::compat"
                    ""
                    "spec double Nat -> Nat"
                    "defn double [x]"

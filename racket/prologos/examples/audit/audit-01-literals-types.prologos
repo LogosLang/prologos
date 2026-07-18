@@ -1,4 +1,4 @@
-ns examples.audit.literals-types
+ns examples::audit::literals-types
 
 ;; ========================================================================
 ;; AUDIT 01 — Literals & Base Types

@@ -1,4 +1,4 @@
-ns examples.audit.def-spec-defn
+ns examples::audit::def-spec-defn
 
 ;; ========================================================================
 ;; AUDIT 02 — def, spec, defn

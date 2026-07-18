@@ -1,4 +1,4 @@
-ns examples.prop-viz-demo
+ns examples::prop-viz-demo
 
 ;; ========================================
 ;; Propagator Visualization Demo

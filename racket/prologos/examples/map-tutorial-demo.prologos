@@ -1,4 +1,4 @@
-ns examples.map-tutorial-demo
+ns examples::map-tutorial-demo
 
 ;; ========================================================================
 ;;

@@ -867,6 +867,20 @@
 (define (process-ns-declaration datum)
   (unless (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
     (error 'ns "ns requires: (ns namespace-name) or (ns namespace-name :no-prelude)"))
+  ;; CIU T6 (2026-07-18): a `.` in a namespace name is dot-access tokenization —
+  ;; `ns examples.foray` reads as `(ns examples ($dot-access foray))`, which would
+  ;; SILENTLY drop `.foray` (the ns becomes just `examples`, colliding with any
+  ;; other `examples.*` file). Reject it with a targeted message instead of
+  ;; dropping segments. (The `.`-in-namespace convention predates dot-access on
+  ;; record fields; hierarchical namespaces now use `::`.)
+  (when (for/or ([e (in-list (cddr datum))])
+          (and (pair? e) (eq? (car e) '$dot-access)))
+    (error 'ns
+      (format (string-append
+               "namespace name cannot contain `.` (that is the record dot-access "
+               "operator). Use `::` for a hierarchical namespace (e.g. `~a::…`) "
+               "or a single segment (e.g. `~a`).")
+              (cadr datum) (cadr datum))))
   (define ns-sym (cadr datum))
   (define no-prelude?
     (and (>= (length datum) 3)

@@ -1,4 +1,4 @@
-ns examples.audit.advanced
+ns examples::audit::advanced
 
 ;; ========================================================================
 ;; AUDIT 12 — Advanced Features

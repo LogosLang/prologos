@@ -1,4 +1,4 @@
-ns examples.audit.match-if-cond
+ns examples::audit::match-if-cond
 
 ;; ========================================================================
 ;; AUDIT 04 — Pattern Matching, if, cond

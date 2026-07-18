@@ -1,4 +1,4 @@
-ns examples.audit.traits-instances
+ns examples::audit::traits-instances
 
 ;; ========================================================================
 ;; AUDIT 06 — Traits, Instances, Bundles

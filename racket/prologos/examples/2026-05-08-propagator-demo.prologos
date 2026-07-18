@@ -1,4 +1,4 @@
-ns prologos.demo.propagator-network
+ns prologos::demo::propagator-network
 
 solver wf-solver
   :semantics well-founded

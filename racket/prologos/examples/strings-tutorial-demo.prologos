@@ -1,4 +1,4 @@
-ns examples.strings-tutorial-demo
+ns examples::strings-tutorial-demo
 
 ;; ========================================================================
 ;;

@@ -1,4 +1,4 @@
-ns examples.numerics-tutorial-demo
+ns examples::numerics-tutorial-demo
 
 ;; ========================================================================
 ;;

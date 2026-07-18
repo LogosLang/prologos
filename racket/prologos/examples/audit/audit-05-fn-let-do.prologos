@@ -1,4 +1,4 @@
-ns examples.audit.fn-let-do
+ns examples::audit::fn-let-do
 
 ;; ========================================================================
 ;; AUDIT 05 — fn, let, do

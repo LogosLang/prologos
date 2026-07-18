@@ -1,4 +1,4 @@
-ns examples.foray-min
+ns examples::foray-min
 
 require [prologos::data::list :as list :refer [List nil cons map length]]
 require [prologos::data::nat  :refer [add]]

@@ -1,4 +1,4 @@
-ns examples.audit.modules-imports
+ns examples::audit::modules-imports
 
 ;; ========================================================================
 ;; AUDIT 11 — Module System

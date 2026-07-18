@@ -1,4 +1,4 @@
-ns examples.audit.narrowing-logic
+ns examples::audit::narrowing-logic
 
 ;; ========================================================================
 ;; AUDIT 08 — Narrowing & Logic Programming

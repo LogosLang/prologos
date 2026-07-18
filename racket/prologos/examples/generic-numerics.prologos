@@ -1,4 +1,4 @@
-ns examples.generic-numerics
+ns examples::generic-numerics
 
 ;; ========================================================================
 ;;

@@ -1,4 +1,4 @@
-ns examples.audit.numerics
+ns examples::audit::numerics
 
 ;; ========================================================================
 ;; AUDIT 09 — Numeric Tower

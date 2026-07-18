@@ -1,4 +1,4 @@
-ns examples.piping
+ns examples::piping
 
 ;; ========================================
 ;; Piping and Transducers — Feature Showcase

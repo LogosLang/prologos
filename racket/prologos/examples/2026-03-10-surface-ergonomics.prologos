@@ -1,4 +1,4 @@
-ns examples.surface-ergonomics
+ns examples::surface-ergonomics
 
 ;; ========================================================================
 ;;
