@@ -70,3 +70,44 @@
   (check-equal?
    (rewrite-implicit-map '(def m (:tags ($vec-literal :admin :active))))
    '(def m ($brace-params :tags ($vec-literal :admin :active)))))
+
+;; ========================================
+;; C. Map-literal VALUE rewrites (CIU T6, 2026-07-18)
+;; ========================================
+;; A keyword-headed $brace-params is a MAP LITERAL; its VALUES need the
+;; access / head-macro rewrites (denied by the blanket brace-params opacity,
+;; which broke `{:x p.x}` / `{:x [+ p.x 1]}` etc.). A symbol-headed $brace-params
+;; is a binder/kind param and stays opaque (its `->` is a kind arrow).
+
+(test-case "map-literal-brace-params?: keyword-headed yes, symbol-headed no"
+  (check-true  (map-literal-brace-params? '($brace-params :a 1)))
+  (check-false (map-literal-brace-params? '($brace-params A B : Type)))
+  (check-false (map-literal-brace-params? '($brace-params)))          ;; empty stays opaque
+  (check-false (map-literal-brace-params? '(not-brace :a 1))))
+
+(test-case "map value: dot-access folds to map-get"
+  (check-equal?
+   (preparse-expand-form '(def m ($brace-params :a pt ($dot-access x))))
+   '(def m ($brace-params :a (map-get pt :x)))))
+
+(test-case "map value: dot-access inside a bracketed app folds"
+  (check-equal?
+   (preparse-expand-form '(def m ($brace-params :a (+ p ($dot-access x) 1))))
+   '(def m ($brace-params :a (+ (map-get p :x) 1)))))
+
+(test-case "map value: nested map recurses"
+  (check-equal?
+   (preparse-expand-form '(def m ($brace-params :a ($brace-params :b p ($dot-access x)))))
+   '(def m ($brace-params :a ($brace-params :b (map-get p :x))))))
+
+(test-case "map value: multi-entry keeps even key/value alternation"
+  (check-equal?
+   (preparse-expand-form '(def m ($brace-params :a p ($dot-access x) :b q ($dot-access y))))
+   '(def m ($brace-params :a (map-get p :x) :b (map-get q :y)))))
+
+(test-case "binder brace-params stays OPAQUE (protects the -> kind arrow)"
+  ;; symbol-headed → NOT a map literal → untouched; a value rewrite would corrupt
+  ;; the kind annotation this opacity was introduced to protect.
+  (check-equal?
+   (preparse-expand-form '($brace-params A B : Type -> Type))
+   '($brace-params A B : Type -> Type)))

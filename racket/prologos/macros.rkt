@@ -327,6 +327,7 @@
          ;; Implicit map, dot-access, and introspection helpers
          rewrite-implicit-map
          rewrite-dot-access
+         map-literal-brace-params?
          rewrite-nil-dot-access
          rewrite-infix-operators
          maybe-inject-spec
@@ -1831,6 +1832,41 @@
                   [else (list item)]))))  ;; bare symbol → keep
      `(strategy ,name ,@flat-props)]))
 
+;; ========================================
+;; Map-literal value rewrites (CIU T6, 2026-07-18)
+;; ========================================
+;; $brace-params is opaque during preparse (Track 8 B3) to protect the `->`
+;; KIND arrow inside binder/kind brace-params (`{A B : Type -> Type}`). But a
+;; MAP LITERAL (`{:x p.x :y .(a + b)}`) also arrives as $brace-params, and its
+;; VALUES are expressions that need the access / infix / head-macro rewrites —
+;; which the blanket opacity denies (dot-access/mixfix/pipe/list-literal leak or
+;; crash inside map values, breaking functions that build records). The two are
+;; distinguished purely by shape: a map literal LEADS with a keyword-like key
+;; (`:x`); a binder/kind brace-params leads with a bare type-variable symbol.
+;; So gate the opacity on shape — recurse into map-literal VALUES, keep
+;; binder/kind opaque (its `->` is never reached here). String/number/computed
+;; keys are the accepted v1 limitation (they stay opaque — heterogeneous keys
+;; are their own future feature).
+(define (map-literal-brace-params? datum)
+  (and (pair? datum)
+       (eq? (car datum) '$brace-params)
+       (pair? (cdr datum))
+       (keyword-like-symbol? (cadr datum))))
+
+;; Rewrite the value expressions of a map-literal $brace-params. Map values are
+;; a FLAT token stream — a value `p.x` is `p ($dot-access x)`, TWO sibling slots
+;; — so fold the access sentinels (dot-access family) across the whole contents
+;; first (collapsing each to one datum, restoring even key/value alternation),
+;; then expand every element through preparse: head-macros ($mixfix,
+;; $list-literal, grouped $pipe-gt), bracketed apps carrying INNER access
+;; sentinels, and NESTED maps (which re-enter this gate) are all handled by that
+;; recursion. Keys pass through untouched. Caller MUST gate on
+;; map-literal-brace-params? so binder/kind `->` never reaches this.
+(define (preparse-map-literal-contents datum reg depth)
+  (define dot-folded (rewrite-dot-access (cdr datum)))
+  (cons '$brace-params
+        (map (lambda (e) (preparse-expand-form e reg depth)) dot-folded)))
+
 ;; preparse-expand-form: expand a single datum
 ;; ========================================
 ;; Tries to match the head symbol against registered macros.
@@ -1855,10 +1891,15 @@
     ;; The code inside is raw Racket, not Prologos surface syntax
     [(and (pair? datum) (eq? (car datum) '$foreign-block))
      datum]
-    ;; Track 8 B3: $brace-params — opaque during preparse.
+    ;; Track 8 B3: $brace-params — binder/kind params are opaque during preparse.
     ;; Contents are parsed later by parse-brace-param-list when consumed
-    ;; by trait/data/spec processing. Do NOT recursively expand — the ->
-    ;; inside brace params is a kind annotation, not a function arrow.
+    ;; by trait/data/spec processing. Do NOT recursively expand a BINDER — the ->
+    ;; inside it is a kind annotation, not a function arrow.
+    ;; CIU T6 (2026-07-18): a keyword-headed brace-params is a MAP LITERAL, whose
+    ;; VALUES need the access/head-macro rewrites — recurse into those (the
+    ;; binder `->` is symbol-headed, so it never reaches this arm).
+    [(map-literal-brace-params? datum)
+     (preparse-map-literal-contents datum reg depth)]
     [(and (pair? datum) (eq? (car datum) '$brace-params))
      datum]
     ;; List form — check head symbol for macros
@@ -2385,8 +2426,13 @@
      (define merged (merge-sibling-lets foreign-combined))
      (define expanded
        (map (lambda (sub)
-              ;; Track 8 B3: skip $brace-params subforms (kind annotations, not surface syntax)
-              (if (and (pair? sub) (eq? (car sub) '$brace-params))
+              ;; Track 8 B3: skip BINDER/kind $brace-params subforms (the ->
+              ;; inside is a kind annotation). CIU T6 (2026-07-18): a keyword-
+              ;; headed brace-params is a MAP LITERAL — let it through to
+              ;; preparse-expand-form (the map-literal-brace-params? arm rewrites
+              ;; its values). This is the def/defn-BODY map case.
+              (if (and (pair? sub) (eq? (car sub) '$brace-params)
+                       (not (map-literal-brace-params? sub)))
                   sub
                   (preparse-expand-form sub reg depth)))
             merged))

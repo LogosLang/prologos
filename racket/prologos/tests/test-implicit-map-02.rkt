@@ -202,3 +202,50 @@
       "  [add x 1N]\n"
       "eval [f 5N]\n")))
   (check-equal? result "6N : Nat"))
+
+;; ========================================
+;; Map-literal VALUE rewrites (CIU T6, 2026-07-18)
+;; ========================================
+;; dot-access / bracketed apps / nested maps inside map VALUES now expand
+;; (were opaque during preparse → leak/crash). This is the "functions that
+;; return records" pattern (`defn f [...] {:x [+ p.x q.x] ...}`).
+
+(test-case "e2e/ws: dot-access in a map value projects"
+  (check-equal?
+   (run-ws-last
+    (string-append
+     "def pt := {:x 3N :y 4N}\n"
+     "def m := {:a pt.x}\n"
+     "eval m.a\n"))
+   "3N : Nat"))
+
+(test-case "e2e/ws: dot-access inside a bracketed app in a map value"
+  (check-equal?
+   (run-ws-last
+    (string-append
+     "def pt := {:x 3N :y 4N}\n"
+     "def m := {:a [add pt.x pt.y]}\n"
+     "eval m.a\n"))
+   "7N : Nat"))
+
+(test-case "e2e/ws: nested map value with dot-access projects"
+  (check-equal?
+   (run-ws-last
+    (string-append
+     "def pt := {:x 3N :y 4N}\n"
+     "def m := {:a {:b pt.x}}\n"
+     "eval m.a.b\n"))
+   "3N : Nat"))
+
+(test-case "e2e/ws: function returns a record built from projected fields"
+  (check-equal?
+   (run-ws-last
+    (string-append
+     "schema Pt\n  :x Nat\n  :y Nat\n"
+     "defn padd [p : Pt, q : Pt] : Pt\n"
+     "  {:x [add p.x q.x]\n"
+     "   :y [add p.y q.y]}\n"
+     "def a : Pt := {:x 1N :y 2N}\n"
+     "def b : Pt := {:x 3N :y 4N}\n"
+     "eval [padd a b].y\n"))
+   "6N : Nat"))
