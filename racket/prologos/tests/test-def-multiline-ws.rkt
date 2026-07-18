@@ -311,3 +311,51 @@
   (define r (run-ns-ws-last "ns test-impmap-plain\ndef x := 42\nx\n"))
   (check-true (and (string? r) (regexp-match? #rx"42" r))
               (format "plain def must still evaluate, got: ~v" r)))
+
+;; ========================================
+;; Regression: INLINE dash (`- :key val`) layout for list-of-map elements
+;; ========================================
+;;
+;; A dash list element may put its first key on the SAME line as the `-`
+;; (YAML-style), with continuation keys indented under it:
+;;
+;;     :admins
+;;       - :name "Alice"
+;;         :role :super
+;;
+;; The reader leaves same-line keys FLAT while grouping continuations, giving a
+;; mixed dash clause `(- :name "Alice" (:role :super))`. process-dash-child
+;; (macros.rkt) re-groups the flat prefix so it builds the same map as the
+;; own-line form (`-` alone, all keys indented under). Strictly additive: the
+;; inline form failed to type before ("Could not infer type").
+
+(test-case "inline dash `- :key val` builds a map (parity with own-line dash)"
+  (define inline
+    (run-ns-ws-last
+     (string-append
+      "ns test-dash-inline\n"
+      "def cfg\n"
+      "  :admins\n"
+      "    - :name \"Alice\"\n"
+      "      :role :super\n"
+      "    - :name \"Bob\"\n"
+      "      :role :regular\n"
+      "cfg.admins[1].name\n")))
+  (check-true (and (string? inline) (regexp-match? #rx"Bob" inline))
+              (format "inline-dash admins[1].name, got: ~v" inline))
+  ;; Fully-inline element (`- :name "x" :n 1`) also builds a map.
+  (define full
+    (run-ns-ws-last
+     (string-append
+      "ns test-dash-full\n"
+      "def d\n  :items\n    - :name \"x\" :n 1\n    - :name \"y\" :n 2\n"
+      "d.items[1].name\n")))
+  (check-true (and (string? full) (regexp-match? #rx"y" full))
+              (format "fully-inline dash items[1].name, got: ~v" full)))
+
+(test-case "dash list of plain values keeps list semantics (not a map)"
+  (define r
+    (run-ns-ws-last
+     "ns test-dash-vals\ndef d\n  :vals\n    - 1\n    - 2\nd.vals[0]\n"))
+  (check-true (and (string? r) (regexp-match? #rx"1" r))
+              (format "dash list-of-values vals[0], got: ~v" r)))

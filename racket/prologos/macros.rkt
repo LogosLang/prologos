@@ -5114,6 +5114,34 @@
     ;; Fallback: multiple values that aren't all keyword-headed — leave as-is
     [else (list key (if (= (length vals) 1) (car vals) vals))]))
 
+;; Re-group a dash clause's LEADING flat `:kw val` run into (:kw val) sub-lists,
+;; keeping already-grouped (:kw ...) / (- ...) children as-is. This supports the
+;; inline layout `- :name "Alice"` (dash + first key on the SAME line): the WS
+;; reader leaves same-line keys FLAT (`:name "Alice"`) while grouping indented
+;; continuation lines (`(:role :super)`), yielding a mixed dash clause
+;; `(- :name "Alice" (:role :super))`. Returns the re-grouped list, or #f if the
+;; flat prefix does not pair cleanly into :kw val pairs — then the caller keeps
+;; the existing list/value semantics (so `- 1`, `- [f x]` are untouched, and a
+;; bare `:kw` with no plain value bails rather than silently mis-grouping).
+;; (YAML-style familiarity; strictly additive — only rescues clauses that fail
+;; to type today.)
+(define (regroup-inline-keywords vals)
+  (let loop ([vs vals] [acc '()])
+    (cond
+      [(null? vs) (reverse acc)]
+      ;; already-grouped keyword or dash child — keep as-is
+      [(or (keyword-headed? (car vs)) (dash-headed? (car vs)))
+       (loop (cdr vs) (cons (car vs) acc))]
+      ;; a bare `:kw` followed by a PLAIN value (not another group) → (:kw val)
+      [(and (keyword-like-symbol? (car vs))
+            (pair? (cdr vs))
+            (not (keyword-headed? (cadr vs)))
+            (not (dash-headed? (cadr vs))))
+       (loop (cddr vs) (cons (list (car vs) (cadr vs)) acc))]
+      ;; anything else (bare `:kw` with no plain value, or a non-keyword token) —
+      ;; the prefix does not pair cleanly; bail so list/value semantics stand
+      [else #f])))
+
 ;; Process one dash-headed child (- child1 child2 ...) into a PVec element.
 (define (process-dash-child child)
   (define vals (cdr child))
@@ -5121,6 +5149,13 @@
     ;; (- (:k1 v1) (:k2 v2)) — keyword children → nested map
     [(and (pair? vals) (all-keyword-or-dash-headed? vals))
      (implicit-map-children->brace-params vals)]
+    ;; (- :name "Alice" (:role :super)) — INLINE keys (same line as `-`) stay
+    ;; flat while continuations group; re-group the flat prefix, then → map.
+    ;; Fires only when the clause STARTS with a bare `:kw` AND the prefix pairs
+    ;; cleanly (else falls through to the list/value arms below).
+    [(and (pair? vals) (keyword-like-symbol? (car vals))
+          (regroup-inline-keywords vals))
+     => (lambda (regrouped) (implicit-map-children->brace-params regrouped))]
     ;; (- val) — single value
     [(and (pair? vals) (null? (cdr vals)))
      (car vals)]
