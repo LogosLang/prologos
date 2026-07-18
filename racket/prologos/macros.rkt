@@ -5988,7 +5988,15 @@
 ;; --- Preparse macro for $mixfix (the `.( )` mixfix form) ---
 (define (expand-mixfix-form datum)
   ;; datum is ($mixfix token1 token2 ...)
-  (define tokens (cdr datum))
+  ;; CIU T6 (2026-07-18): fold the access sentinels (dot-access family) in the
+  ;; token stream BEFORE pratt-parse. The mixfix expander runs at head-expansion
+  ;; time, BEFORE the subform rewrite where rewrite-dot-access normally fires, so
+  ;; an operand like `p.x` inside `.(p.x + 1)` would otherwise reach pratt-parse
+  ;; as the raw ($dot-access x) sentinel — a non-operator that pratt-parse cannot
+  ;; consume ("Unexpected token after expression"). Folding it to (map-get p :x)
+  ;; first makes it an ordinary operand. Any residue in pratt-parse's result is
+  ;; cleaned by the caller's re-expansion of this macro's output.
+  (define tokens (rewrite-dot-access (cdr datum)))
   (if (null? tokens)
       (error 'mixfix "Empty .( ) mixfix expression")
       (pratt-parse tokens (effective-operator-table) (effective-precedence-groups))))

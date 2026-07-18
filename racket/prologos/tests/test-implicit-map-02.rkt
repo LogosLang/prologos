@@ -249,3 +249,27 @@
      "def b : Pt := {:x 3N :y 4N}\n"
      "eval [padd a b].y\n"))
    "6N : Nat"))
+
+;; s2 (CIU T6, 2026-07-18): mixfix `.(...)` carrying dot-access — the mixfix
+;; expander folds the access sentinels before pratt-parse.
+(test-case "e2e/ws: mixfix .(...) with dot-access in a map value"
+  (check-equal?
+   (run-ws-last
+    (string-append
+     "def pt := {:x 3N :y 4N}\n"
+     "def m := {:a .(pt.x + pt.y)}\n"
+     "eval m.a\n"))
+   "7N : Nat"))
+
+(test-case "e2e/ws: function returns a record with mixfix-computed fields"
+  (check-equal?
+   (run-ws-last
+    (string-append
+     "schema Pt\n  :x Nat\n  :y Nat\n"
+     "defn padd [p : Pt, q : Pt] : Pt\n"
+     "  {:x .(p.x + q.x)\n"
+     "   :y .(p.y + q.y)}\n"
+     "def a : Pt := {:x 1N :y 2N}\n"
+     "def b : Pt := {:x 3N :y 4N}\n"
+     "eval [padd a b].x\n"))
+   "4N : Nat"))

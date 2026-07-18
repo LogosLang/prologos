@@ -331,3 +331,21 @@
 (test-case "e2e/ws: .{ } is not a supported form (path-selection under redesign)"
   (check-exn #rx"not currently supported|redesign"
              (lambda () (run-ws-last "eval .{2N + 3N}\n"))))
+
+;; ========================================
+;; Mixfix carrying dot-access (CIU T6, 2026-07-18)
+;; ========================================
+;; The mixfix expander runs at head-expansion time, BEFORE the subform rewrite
+;; where rewrite-dot-access normally fires — so an operand like `p.x` inside
+;; `.(p.x + 1)` reaches pratt-parse as the raw ($dot-access x) sentinel unless
+;; expand-mixfix-form folds it first. These pin the fold.
+
+(test-case "mixfix: dot-access operand folds to map-get before pratt-parse"
+  (check-equal?
+   (preparse-expand-form '($mixfix pt ($dot-access x) + ($decimal-literal 1.0)))
+   '(+ (map-get pt :x) ($decimal-literal 1.0))))
+
+(test-case "mixfix: two dot-access operands both fold"
+  (check-equal?
+   (preparse-expand-form '($mixfix p ($dot-access x) + q ($dot-access x)))
+   '(+ (map-get p :x) (map-get q :x))))
