@@ -20,7 +20,9 @@
                     'prologos::data::reason::missing-required
                     'prologos::data::reason::check-failed
                     'prologos::data::reason::type-mismatch
-                    'prologos::data::reason::unexpected-field))
+                    'prologos::data::reason::unexpected-field
+                    ;; F1b.7a: index 8 — the Layer B guard's Reason ctor
+                    'prologos::data::reason::check-unevaluable))
 
 (define (mk-subj . kvs)
   (let loop ([kvs kvs] [m (expr-map-empty (expr-hole) (expr-hole))])
@@ -90,6 +92,16 @@
   (define plan-p (list (list 'age '(prim Nat Int) #f
                              (expr-lam 'mw (expr-Int) (expr-panic (expr-string "boom"))) "Int" "(boom)" #t)))
   (check-regexp-match #rx"panic \"boom\"" (v-nf 'Checked #f plan-p (mk-subj 'age (expr-int 1)))))
+
+(test-case "validate-node/check-unevaluable-nonbool"
+  ;; F1b.7a Layer B: a pred that reduces to a non-Bool (here a [fn ..] value —
+  ;; mirrors `:check [fn [x] false]` or a stuck trait method) FAILS LOUD as
+  ;; check-unevaluable; it must never silently pass (the old `else` = pass bug).
+  (define plan-u (list (list 'age '(prim Nat Int) #f
+                             (expr-lam 'mw (expr-Int) (expr-lam 'mw (expr-Int) (expr-false)))
+                             "Int" "(fn [x] false)" #t)))
+  (define out (v-nf 'Checked #f plan-u (mk-subj 'age (expr-int 5))))
+  (check-regexp-match #rx"check-unevaluable" out))
 
 (test-case "validate-node/closed-unexpected-field"
   (define out (v-nf 'Locked #t (list (list 'a '(prim Nat Int) #f #f "Int" #f #t))

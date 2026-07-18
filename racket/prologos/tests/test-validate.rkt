@@ -94,6 +94,18 @@ schema Checked\n  :name String\n  :age Int :check (> _ 0)\n
   (check-regexp-match #rx"check-failed \"\\(> _ 0\\)\"" (result-str (list-ref rs (- (length rs) 2))))
   (check-regexp-match #rx"result::ok" (result-str (last rs))))
 
+(test-case "validate/check-unevaluable-lambda-guard"
+  ;; F1b.7a Layer B: a :check that cannot be evaluated (a [fn ..] value; a stuck
+  ;; trait method like `eq?`/`le?` pre-7b) must FAIL LOUD, never silently pass —
+  ;; validate errs (check-unevaluable), the constructor door panics at commit.
+  (define rs (run-file-string
+              "ns vtu\n
+schema Never\n  :d Int :check [fn [x : Int] false]\n
+[validate Never {:d 5}]\n
+def bad := [Never {:d 5}]\n"))
+  (check-regexp-match #rx"check-unevaluable" (result-str (list-ref rs (- (length rs) 2))))
+  (check-true (prologos-error? (last rs))))
+
 (test-case "validate/check-polarity-upper-bound-golden"
   ;; the arg-REVERSAL pin at L3: (> 10 _) → subst → (> 10 x) → normalize →
   ;; (lt x 10) — an upper bound. (`(< _ 10)` itself is unusable in WS files:

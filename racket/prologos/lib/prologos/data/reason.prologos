@@ -29,6 +29,7 @@ data Reason
   check-failed : String
   type-mismatch : String -> String
   unexpected-field
+  check-unevaluable : String
 
 ;; --- errors-to-list : render the failure map as a field-sorted entry list
 ;; (champ maps print in unstable trie order — a validation UI / golden needs a
@@ -52,6 +53,7 @@ defn render-reason
   | type-mismatch want got ->
     [str::append "expected " [str::append want [str::append ", got " got]]]
   | unexpected-field -> "unexpected field (closed schema)"
+  | check-unevaluable p -> [str::append "could not evaluate check " p]
 
 spec render-entry [MapEntry Keyword Reason] -> String
 defn render-entry [e]

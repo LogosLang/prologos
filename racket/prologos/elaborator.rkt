@@ -3066,7 +3066,10 @@
                   'prologos::data::reason::missing-required
                   'prologos::data::reason::check-failed
                   'prologos::data::reason::type-mismatch
-                  'prologos::data::reason::unexpected-field))
+                  'prologos::data::reason::unexpected-field
+                  ;; F1b.7a: the Layer B guard's Reason (index 8; the tabulate
+                  ;; arm reads it via list-ref names 8)
+                  'prologos::data::reason::check-unevaluable))
           (cond
             [(not (andmap global-env-lookup-type required-names))
              (prologos-error loc "validate requires prologos::data::result and prologos::data::reason (the prelude provides both; in a :no-prelude file `require` them explicitly)")]

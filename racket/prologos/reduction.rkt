@@ -1282,16 +1282,21 @@
 ;; nf'd AT INSERT (nf never descends into champs) and BEFORE witnessing
 ;; (the field-witness precondition). A pred that panics PROPAGATES as the
 ;; node's result ("validate inherits panic semantics, v1" — D27.3); a pred
-;; that sticks (neither true/false/panic) SKIPS per D28 err-polarity
-;; (documented divergence from stay-stuck eliminators).
+;; that STICKS or reduces to a non-Bool (a stuck trait method, an unbound
+;; name, a [fn ...] value) FAILS LOUD as check-unevaluable (F1b.7a Layer B:
+;; err-polarity's "skip stuck" governs TYPE-WITNESSING, not the user's
+;; runtime :check assertion; an un-evaluable check must never silently pass).
 (define (validate-tabulate sname closed? plan subj-champ names)
   (define c (expr-champ-racket-champ subj-champ))
-  (define ok-name         (list-ref names 2))
-  (define err-name        (list-ref names 3))
-  (define missing-name    (list-ref names 4))
-  (define checkfail-name  (list-ref names 5))
-  (define typemis-name    (list-ref names 6))
-  (define unexpected-name (list-ref names 7))
+  (define ok-name          (list-ref names 2))
+  (define err-name         (list-ref names 3))
+  (define missing-name     (list-ref names 4))
+  (define checkfail-name   (list-ref names 5))
+  (define typemis-name     (list-ref names 6))
+  (define unexpected-name  (list-ref names 7))
+  ;; F1b.7a: the Layer B guard's Reason ctor (index 8, appended in the
+  ;; elaborator required-names) — a :check that cannot be evaluated.
+  (define unevaluable-name (list-ref names 8))
   (define plan-kws (map car plan))
   ;; the ok-payload base: the subject champ rebuilt with nf'd values
   (define base-ok
@@ -1341,19 +1346,31 @@
              ;; :check pred (baked expr-lam; beta via nf)
              (define pred-result (and pred (nf (expr-app pred val))))
              (cond
+               ;; no :check on this field → passes
+               [(not pred-result)
+                (loop (cdr entries) (champ-insert okc khash kexpr val) errc any-err?)]
                ;; panic in a pred → the panic IS the node's result (D27.3)
-               [(and pred-result (expr-panic? pred-result)) pred-result]
-               [(and pred-result (expr-false? pred-result))
+               [(expr-panic? pred-result) pred-result]
+               ;; a clean Bool result: true passes, false is a check-failed
+               [(expr-true? pred-result)
+                (loop (cdr entries) (champ-insert okc khash kexpr val) errc any-err?)]
+               [(expr-false? pred-result)
                 (loop (cdr entries) okc
                       (champ-insert errc khash kexpr
                                     (expr-app (expr-fvar checkfail-name)
                                               (expr-string (or pred-str "check"))))
                       #t)]
-               ;; true OR stuck (skip per err-polarity) → the field passes
+               ;; F1b.7a (Layer B guard): the pred did NOT reduce to a Bool
+               ;; (a stuck trait method / an unbound name / a [fn …] value).
+               ;; A :check that cannot be evaluated must FAIL LOUD, never
+               ;; silently pass (the old `else` treated stuck as pass —
+               ;; err-polarity mis-applied to :check eval). Fail-closed.
                [else
-                (loop (cdr entries)
-                      (champ-insert okc khash kexpr val)
-                      errc any-err?)])])])]
+                (loop (cdr entries) okc
+                      (champ-insert errc khash kexpr
+                                    (expr-app (expr-fvar unevaluable-name)
+                                              (expr-string (or pred-str "check"))))
+                      #t)])])])]
       [else
        ;; :closed schemas: any subject key outside the plan → unexpected-field
        (define err-pair
