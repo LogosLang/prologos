@@ -479,3 +479,42 @@
       "m.ok?\n")))
   (check-true (andmap ok? results)
               "?/!-suffixed keyword field names + map keys parse whole and project"))
+
+(define (err-msg r) (and (prologos-error? r) (prologos-error-message r)))
+
+(test-case "F1b.7f: targeted schema-mistake diagnostics (was generic 'Could not infer type')"
+  (define P2
+    (string-append
+     "ns t :no-prelude\n"
+     "schema Person\n  :name String\n  :age Int\n"
+     "schema Employee\n  :id Int\n  :dept String\n"))
+  ;; (a) wrong-typed field — infer/`the` door (constructor)
+  (define ra (last-result (run-file-string (string-append P2 "def pa := [Person {:name \"a\" :age \"x\"}]\n"))))
+  (check-true (and (regexp-match? #rx"Could not infer" (or (err-msg ra) ""))
+                   (regexp-match? #rx"field :age expected Int" (or (err-msg ra) "")))
+              "wrong-typed field: prefix preserved + names :age + expected type (infer door)")
+  ;; (a) wrong-typed field — CHECK / annotation door (Q3 parity)
+  (define rc (last-result (run-file-string (string-append P2 "def pc : Person := {:name \"a\" :age \"x\"}\n"))))
+  (check-true (regexp-match? #rx"field :age expected Int" (or (err-msg rc) ""))
+              "wrong-typed field names :age on the annotation door too (Q3 shared helper)")
+  ;; (c) cross-schema `the`
+  (define rx (last-result (run-file-string (string-append P2 "def q : Person := {:name \"a\" :age 1}\nthe Employee q\n"))))
+  (check-true (regexp-match? #rx"does not satisfy schema" (or (err-msg rx) ""))
+              "cross-schema `the` names the schema mismatch")
+  ;; (b) schema value into a Map-typed parameter (narrowly-scoped app-domain)
+  (define rb (last-result (run-file-string
+                           (string-append P2 "def q : Person := {:name \"a\" :age 1}\n"
+                                          "spec getage (Map Keyword Int) -> Int\n"
+                                          "defn getage [m] [map-get m :age]\n[getage q]\n"))))
+  (check-true (regexp-match? #rx"expected parameter type" (or (err-msg rb) ""))
+              "schema value into a Map param names the parameter type")
+  ;; (d) validate on a non-map subject
+  (define rd (last-result (run-file-string
+                           (string-append
+                            "ns t :no-prelude\n"
+                            "require [prologos::data::result :refer [Result ok err ok? err?]]\n"
+                            "require [prologos::data::reason :refer [Reason missing-required check-failed type-mismatch unexpected-field errors-to-list]]\n"
+                            "schema Person\n  :name String\n  :age Int\n"
+                            "[validate Person 42]\n"))))
+  (check-true (regexp-match? #rx"validate expects a map-like subject" (or (err-msg rd) ""))
+              "validate on a non-map subject names the expectation"))

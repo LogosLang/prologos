@@ -183,6 +183,106 @@
              (ormap search (expr-subfields x))))))
 
 ;; ========================================
+;; CIU T6 F1b.7f: targeted schema-mistake diagnostics (the stress-test edge —
+;; the generic "Could not infer type" swallowed the specific error on common
+;; schema mistakes). Each is the seal-residual-hint pattern: a guarded post-hoc
+;; walk over the already-failing expr, re-deriving the type info the bare
+;; expr-error dropped, returning a string OR #f. All PRESERVE the "Could not
+;; infer type" prefix + append detail (the infer-door convention — the struct
+;; has no wanted/got field; the 7 test-firstclass-ops "Could not infer" prefix
+;; asserts pin this). Ordered most-specific-first in infer/err; shapes are
+;; (mostly) disjoint. No qtt twin: a rejected term errors at infer/err before
+;; inferQ (post-freeze) ever runs.
+;; ========================================
+
+;; (a) wrong-TYPED field in a seal (map-assoc chain against a schema fvar) —
+;; seal-missing-required is presence-only, so this names the field + expected/got.
+(define (seal-field-type-hint ctx e names)
+  (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+    (let search ([x e])
+      (and (expr? x)
+           (or (match x
+                 [(expr-ann term (expr-fvar sname))
+                  (let ([schema (lookup-schema-by-name sname)])
+                    (and schema
+                         (let ([mm (seal-first-field-type-mismatch ctx term schema)])
+                           (and mm
+                                (string-append
+                                 "Could not infer type — schema " (symbol->string sname)
+                                 ": field :" (symbol->string (car mm))
+                                 " expected " (pp-expr (cadr mm) names)
+                                 (if (caddr mm)
+                                     (string-append ", got " (pp-expr (caddr mm) names))
+                                     " (the provided value's type could not be inferred)"))))))]
+                 [_ #f])
+               (ormap search (expr-subfields x)))))))
+
+;; (c) cross-schema `the` — a VALUE whose whole type is a DIFFERENT schema fvar
+;; sealed against sname (the `the`/infer door; the def-annotation door already
+;; gives a crisp type-mismatch — this closes that door asymmetry). Scoped to a
+;; schema-fvar-typed term so it never fires on a map-assoc literal (that is (a)).
+(define (cross-schema-seal-hint ctx e names)
+  (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+    (let search ([x e])
+      (and (expr? x)
+           (or (match x
+                 [(expr-ann term (expr-fvar sname))
+                  (let ([schema (lookup-schema-by-name sname)])
+                    (and schema
+                         (let ([tt (whnf (infer ctx term))])
+                           (and (not (expr-error? tt))
+                                (expr-fvar? tt)
+                                (lookup-schema-by-name (expr-fvar-name tt))
+                                (not (eq? (expr-fvar-name tt) sname))
+                                (string-append
+                                 "Could not infer type — the " (symbol->string sname)
+                                 ": the value has type " (pp-expr tt names)
+                                 ", which does not satisfy schema " (symbol->string sname))))))]
+                 [_ #f])
+               (ormap search (expr-subfields x)))))))
+
+;; (d) validate on a NON-map subject — reuse the exact validate-subject predicate.
+(define (validate-nonmap-hint ctx e names)
+  (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+    (let search ([x e])
+      (and (expr? x)
+           (or (match x
+                 [(expr-validate _sname _closed? _plan subject _names)
+                  (let ([tm (whnf (infer ctx subject))])
+                    (and (not (expr-error? tm))
+                         (not (validate-subject-map-ish? tm))
+                         (string-append
+                          "Could not infer type — validate expects a map-like subject"
+                          " (a map, record, or schema/selection value), got "
+                          (pp-expr tm names))))]
+                 [_ #f])
+               (ormap search (expr-subfields x)))))))
+
+;; (b) a SCHEMA/RECORD value flowing into a function's non-matching parameter type
+;; (the app-domain mismatch). NARROWED to a schema/record ARG so it stays clear of
+;; the issue-#70 op-section "Could not infer" cases (whose args are numeric holes).
+(define (app-domain-schema-hint ctx e names)
+  (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+    (let search ([x e])
+      (and (expr? x)
+           (or (match x
+                 [(expr-app e1 e2)
+                  (let ([t1 (whnf (infer ctx e1))])
+                    (and (expr-Pi? t1)
+                         (let ([dom (expr-Pi-domain t1)]
+                               [at (whnf (infer ctx e2))])
+                           (and (not (expr-error? at))
+                                ;; scope gate: the argument is a schema value or a record
+                                (or (and (expr-fvar? at) (lookup-schema-by-name (expr-fvar-name at)))
+                                    (expr-Record? at))
+                                (not (check ctx e2 dom))
+                                (string-append
+                                 "Could not infer type — argument of type " (pp-expr at names)
+                                 " does not match the expected parameter type " (pp-expr dom names))))))]
+                 [_ #f])
+               (ormap search (expr-subfields x)))))))
+
+;; ========================================
 ;; Infer with error reporting
 ;; ========================================
 ;; Returns (or/c Expr? prologos-error?)
@@ -192,6 +292,10 @@
     (if (expr-error? result)
         (inference-failed-error loc
                                 (or (seal-residual-hint ctx e names)    ;; F1b.4e: most specific first
+                                    (seal-field-type-hint ctx e names)  ;; F1b.7f (a) wrong-typed field
+                                    (cross-schema-seal-hint ctx e names);; F1b.7f (c) cross-schema `the`
+                                    (validate-nonmap-hint ctx e names)  ;; F1b.7f (d) validate non-map subj
+                                    (app-domain-schema-hint ctx e names);; F1b.7f (b) schema arg vs param
                                     (closed-row-miss-hint ctx e names)  ;; S7
                                     (if (hole-lambda-over-generic-op? e)
                                         i70-inference-hint
@@ -319,6 +423,26 @@
                                                 (map (lambda (k) (format ":~a" k)) missing) ", ")
                                                " of " (symbol->string sname))))))]
                                [_ #f])]
+                   ;; CIU T6 F1b.7f (Q3): wrong-TYPED field on the check door too
+                   ;; (the annotation-def route), sharing seal-first-field-type-
+                   ;; mismatch with the infer/err hint — names the field +
+                   ;; expected/got. Ordered AFTER seal-msg (missing-required wins).
+                   [seal-type-msg
+                    (and (not seal-msg)
+                         (match t*
+                           [(expr-fvar sname)
+                            (let ([schema (lookup-schema-by-name sname)])
+                              (and schema
+                                   (let ([mm (seal-first-field-type-mismatch ctx e schema)])
+                                     (and mm
+                                          (string-append
+                                           "schema " (symbol->string sname)
+                                           ": field :" (symbol->string (car mm))
+                                           " expected " (pp-expr (cadr mm) names)
+                                           (if (caddr mm)
+                                               (string-append ", got " (pp-expr (caddr mm) names))
+                                               ""))))))]
+                           [_ #f]))]
                    ;; CIU T6 (2026-07-18): a clearer message for the common
                    ;; "unannotated parameter used in a way that needs its type"
                    ;; case — the checked term is a lambda whose domain is a hole
@@ -340,7 +464,7 @@
                           "Annotate the parameter (`[x : T]`) or add a `spec`."))])
               (type-mismatch-error
                loc
-               (or seal-msg infer-hint-msg "Type mismatch")
+               (or seal-msg seal-type-msg infer-hint-msg "Type mismatch")
                (pp-expr t names)
                (if (expr-error? actual) "<could not infer>" (pp-expr actual names))
                (pp-expr e names)

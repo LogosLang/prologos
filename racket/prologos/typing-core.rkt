@@ -64,6 +64,8 @@
          record-seals-selection?    ;; CIU T6 F1b.4e (D22): parent types + requires-subset residual (qtt twin)
          schema-seal-residual-ok?   ;; CIU T6 F1b.4e (D22): the residual proper (tests)
          seal-missing-required      ;; CIU T6 F1b.4e: diagnostic support (typing-errors hint)
+         seal-first-field-type-mismatch  ;; CIU T6 F1b.7f: wrong-field-type diagnostic (both doors)
+         validate-subject-map-ish?  ;; CIU T6 F1b.7f: reused by the validate-nonmap hint
          lookup-selection-parent-schema  ;; CIU T6 F1b.4a: shared parent resolution
          lookup-schema-by-name
          ;; Selection type helpers
@@ -1866,23 +1868,9 @@
     ;; the expr-num-lit carried-alpha precedent); the rule never re-checks it.
     [(expr-validate sname _closed? _plan subject names)
      (let ([tm (whnf (infer ctx subject))])
-       (define (map-ish? t)
-         (match t
-           [(? expr-Record? _) #t]
-           [(expr-Map _ _) #t]
-           [(expr-fvar n)
-            (and (or (lookup-schema-by-name n) (lookup-selection-by-name n)) #t)]
-           [(? expr-union? u) (ormap (lambda (b) (map-ish? (whnf b))) (flatten-union u))]
-           [(? expr-meta? _) #t]  ;; unsolved — gradual accept (the open? posture)
-           ;; holes = the post-zonk "unknown" markers (unannotated params zonk
-           ;; their domain metas to holes) — same gradual posture as metas;
-           ;; without this, defn-param subjects fail at the QTT re-infer
-           [(? expr-hole? _) #t]
-           [(? expr-typed-hole? _) #t]
-           [_ #f]))
        (cond
          [(expr-error? tm) (expr-error)]
-         [(map-ish? tm)
+         [(validate-subject-map-ish? tm)
           ;; Result S (Map Keyword Reason) — names resolved at bake:
           ;; (Result-type Reason-type ok err …)
           (expr-app (expr-app (expr-fvar (car names)) (expr-fvar sname))
@@ -3719,6 +3707,43 @@
               (eq? (expr-Record-tail bt) 'closed)
               (missing-from (append provided
                                     (map car (expr-Record-fields bt))))))])))
+
+;; CIU T6 F1b.7f diagnostic (NOT part of the discharge): the FIRST provided field
+;; of a map-assoc chain whose value type-MISMATCHES its schema field (the wrong-
+;; type case seal-missing-required cannot see — it is presence-only). Returns
+;; (list field-kw expected-type-expr actual-type-expr-or-#f) or #f. Mirrors the
+;; per-field `check` in check-seal-chain; used by the typing-errors.rkt infer/err
+;; + check/err hints to NAME the offending field on BOTH seal doors.
+(define (seal-first-field-type-mismatch ctx chain schema)
+  (let loop ([e chain])
+    (match e
+      [(expr-map-assoc m2 (expr-keyword kw-sym) v2)
+       (let ([field (schema-lookup-field schema kw-sym)])
+         (if field
+             (let ([ft (schema-field-type->expr (schema-field-type-datum field))])
+               (if (check ctx v2 ft)
+                   (loop m2)
+                   (list kw-sym ft (let ([at (infer ctx v2)])
+                                     (and (not (expr-error? at)) at)))))
+             (loop m2)))]        ;; field not in schema (open accepts / closed = other error) — skip
+      [(expr-map-assoc m2 _ v2) (loop m2)]  ;; dynamic key — skip
+      [_ #f])))
+
+;; CIU T6 F1b.7f: is a whnf'd type an acceptable validate SUBJECT (map-like)?
+;; Lifted to module level (was a local closure in the expr-validate infer rule)
+;; and PROVIDED so the typing-errors validate-nonmap hint reuses the EXACT
+;; predicate (no drift). Gradual: unsolved metas / holes accept (the open?
+;; posture — unannotated defn params zonk their domain metas to holes).
+(define (validate-subject-map-ish? t)
+  (match t
+    [(? expr-Record? _) #t]
+    [(expr-Map _ _) #t]
+    [(expr-fvar n) (and (or (lookup-schema-by-name n) (lookup-selection-by-name n)) #t)]
+    [(? expr-union? u) (ormap (lambda (b) (validate-subject-map-ish? (whnf b))) (flatten-union u))]
+    [(? expr-meta? _) #t]
+    [(? expr-hole? _) #t]
+    [(? expr-typed-hole? _) #t]
+    [_ #f]))
 
 
 ;; The row-vs-schema/selection SEAL discharges (per-field + residual) — the
