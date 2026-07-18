@@ -3051,12 +3051,14 @@
     ;; pnet serialization: exprs/symbols/sexps/booleans only — the pred is an
     ;; elaborated expr-lam (a Racket closure would serialize to an error stub).
     [(surf-validate sname subject loc)
-     (let ([entry (lookup-schema-by-name sname)])
+     (let* ([schema-entry (lookup-schema-by-name sname)]
+            [sel (and (not schema-entry) (lookup-selection-by-name sname))]
+            [parent (and sel (lookup-schema-by-name (selection-entry-schema-name sel)))])
        (cond
-         [(not entry)
-          (if (lookup-selection-by-name sname)
-              (prologos-error loc (format "validate: selection validate is not yet supported (lands at F1b.5-s4) — ~a" sname))
-              (prologos-error loc (format "validate: unknown schema ~a — declare it with `schema ~a …` first" sname sname)))]
+         [(and (not schema-entry) (not sel))
+          (prologos-error loc (format "validate: unknown schema ~a — declare it with `schema ~a …` first" sname sname))]
+         [(and sel (not parent))
+          (prologos-error loc (format "validate: selection ~a's parent schema ~a is not registered" sname (selection-entry-schema-name sel)))]
          [else
           (define required-names
             (list 'prologos::data::result::Result 'prologos::data::reason::Reason
@@ -3073,13 +3075,28 @@
              (cond
                [(prologos-error? subj) subj]
                [else
-                ;; the Result's S argument: resolve to the ns-QUALIFIED schema
-                ;; type name (F1b.5-s3) — try qualified FIRST so validate's S is
-                ;; the SAME fvar the `the`/annotation routes produce (short and
-                ;; qualified schema fvars are DISTINCT types; a short S fails to
-                ;; unify with a `def x : Schema :=` annotation and displays
-                ;; unqualified). Fall back to the as-written name (already-FQN or
-                ;; short-only-bound cases).
+                ;; F1b.5-s4: schema OR selection. A selection borrows the PARENT
+                ;; schema's fields; the plan spans the FULL parent field set (so
+                ;; the closedness scan's plan-kws covers the parent AND every
+                ;; PRESENT parent field is type + :check validated). required? per
+                ;; field: a schema requires EVERY field; a selection requires only
+                ;; its SINGLE-SEGMENT :requires (the read-capability). Deep/wildcard
+                ;; requires-paths defer to the walker charter (DEFERRED.md).
+                (define src-schema (or schema-entry parent))
+                (define fields (schema-entry-fields src-schema))
+                (define closed? (schema-entry-closed? src-schema))
+                (define req-syms
+                  (if sel
+                      (for/list ([p (in-list (selection-entry-requires-paths sel))]
+                                 #:when (and (pair? p) (null? (cdr p)) (keyword? (car p))))
+                        (string->symbol (keyword->string (car p))))
+                      '()))
+                (define (required-of kw) (or (not sel) (and (memq kw req-syms) #t)))
+                ;; the Result's S argument: resolve `sname` (the schema OR
+                ;; selection name) to its ns-QUALIFIED form (F1b.5-s3 — try
+                ;; qualified FIRST so S is the SAME fvar the `the`/annotation
+                ;; routes produce; selections are registered as types too). Fall
+                ;; back to the as-written name (already-FQN / short-only-bound).
                 (define resolved-sname
                   (cond
                     [(and (current-ns-context)
@@ -3095,7 +3112,7 @@
                          (format "<~a -> ~a>" (datum->display (cadr d)) (datum->display (caddr d)))]
                         [else (format "~a" d)]))
                 (define plan-or-err
-                  (for/fold ([acc '()]) ([f (in-list (schema-entry-fields entry))])
+                  (for/fold ([acc '()]) ([f (in-list fields)])
                     (cond
                       [(prologos-error? acc) acc]
                       [else
@@ -3131,12 +3148,13 @@
                          [else
                           (cons (list kw tag default-expr pred-expr type-str
                                       (and (schema-field-check-pred f)
-                                           (format "~a" (schema-field-check-pred f))))
+                                           (format "~a" (schema-field-check-pred f)))
+                                      (required-of kw))  ; F1b.5-s4: required-on-miss?
                                 acc)])])))
                 (if (prologos-error? plan-or-err)
                     plan-or-err
                     (expr-validate resolved-sname
-                                   (schema-entry-closed? entry)
+                                   closed?
                                    (reverse plan-or-err)
                                    subj
                                    required-names))])])]))]

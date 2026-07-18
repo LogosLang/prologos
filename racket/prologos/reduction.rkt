@@ -1309,15 +1309,23 @@
        (define pred     (cadddr entry))
        (define type-str (list-ref entry 4))
        (define pred-str (list-ref entry 5))
+       ;; F1b.5-s4: required-on-miss? — schema plans set #t for every field;
+       ;; selection plans set #t iff the field is a single-segment :requires
+       ;; (the read-capability). Absent+no-default+required → missing-required;
+       ;; absent+no-default+NOT-required → a partial-view SKIP (D22.4 amendment 2:
+       ;; :requires is a read-capability, not a completeness contract).
+       (define required? (list-ref entry 6))
        (define kexpr (expr-keyword kw))
        (define khash (equal-hash-code kexpr))
        (define found (champ-lookup c khash kexpr))
        (cond
-         ;; missing + no default → missing-required
+         ;; missing + no default
          [(and (eq? found 'none) (not default))
-          (loop (cdr entries) okc
-                (champ-insert errc khash kexpr (expr-fvar missing-name))
-                #t)]
+          (if required?
+              (loop (cdr entries) okc
+                    (champ-insert errc khash kexpr (expr-fvar missing-name))
+                    #t)
+              (loop (cdr entries) okc errc any-err?))]  ; SKIP (view: optional field)
          [else
           (define val (nf (if (eq? found 'none) default found)))
           (cond

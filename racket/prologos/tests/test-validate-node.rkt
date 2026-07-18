@@ -27,8 +27,11 @@
     (if (null? kvs) m
         (loop (cddr kvs) (expr-map-assoc m (expr-keyword (car kvs)) (cadr kvs))))))
 
-(define plan-basic (list (list 'name '(prim String) #f #f "String" #f)
-                         (list 'age  '(prim Nat Int) #f #f "Int" #f)))
+;; F1b.5-s4: plan entries carry a 7th slot required-on-miss? — #t here
+;; (schema-style: every field required). A selection sets it #f for optional
+;; (non-:requires) fields; see validate-node/selection-optional-field-skips.
+(define plan-basic (list (list 'name '(prim String) #f #f "String" #f #t)
+                         (list 'age  '(prim Nat Int) #f #f "Int" #f #t)))
 
 (define (v-nf sname closed? plan subj)
   (pp-expr (nf (expr-validate sname closed? plan subj names))))
@@ -64,8 +67,8 @@
   (check-regexp-match #rx":age \\[prologos::data::reason::type-mismatch" out))
 
 (test-case "validate-node/defaults-fill-into-ok"
-  (define plan-fill (list (list 'host '(prim String) (expr-string "localhost") #f "String" #f)
-                          (list 'port '(prim Nat Int) (expr-int 8080) #f "Int" #f)))
+  (define plan-fill (list (list 'host '(prim String) (expr-string "localhost") #f "String" #f #t)
+                          (list 'port '(prim Nat Int) (expr-int 8080) #f "Int" #f #t)))
   (define out (v-nf 'Cfg #f plan-fill (mk-subj)))
   (check-regexp-match #rx"result::ok" out)
   (check-regexp-match #rx":host \"localhost\"" out)
@@ -73,23 +76,23 @@
 
 (test-case "validate-node/check-failed"
   (define plan-chk (list (list 'age '(prim Nat Int) #f
-                               (expr-lam 'mw (expr-Int) (expr-false)) "Int" "(> _ 0)")))
+                               (expr-lam 'mw (expr-Int) (expr-false)) "Int" "(> _ 0)" #t)))
   (define out (v-nf 'Checked #f plan-chk (mk-subj 'age (expr-int 0))))
   (check-regexp-match #rx"check-failed \"\\(> _ 0\\)\"" out))
 
 (test-case "validate-node/check-passes"
   (define plan-chk (list (list 'age '(prim Nat Int) #f
-                               (expr-lam 'mw (expr-Int) (expr-true)) "Int" "(> _ 0)")))
+                               (expr-lam 'mw (expr-Int) (expr-true)) "Int" "(> _ 0)" #t)))
   (check-regexp-match #rx"result::ok" (v-nf 'Checked #f plan-chk (mk-subj 'age (expr-int 5)))))
 
 (test-case "validate-node/panic-in-pred-propagates"
   ;; D27.3: "validate inherits panic semantics, v1"
   (define plan-p (list (list 'age '(prim Nat Int) #f
-                             (expr-lam 'mw (expr-Int) (expr-panic (expr-string "boom"))) "Int" "(boom)")))
+                             (expr-lam 'mw (expr-Int) (expr-panic (expr-string "boom"))) "Int" "(boom)" #t)))
   (check-regexp-match #rx"panic \"boom\"" (v-nf 'Checked #f plan-p (mk-subj 'age (expr-int 1)))))
 
 (test-case "validate-node/closed-unexpected-field"
-  (define out (v-nf 'Locked #t (list (list 'a '(prim Nat Int) #f #f "Int" #f))
+  (define out (v-nf 'Locked #t (list (list 'a '(prim Nat Int) #f #f "Int" #f #t))
                     (mk-subj 'a (expr-int 1) 'extra (expr-int 2))))
   (check-regexp-match #rx":extra prologos::data::reason::unexpected-field" out))
 
@@ -100,9 +103,23 @@
   (check-regexp-match #rx"result::ok" out)
   (check-regexp-match #rx":extra 9" out))
 
+(test-case "validate-node/selection-optional-field-skips"
+  ;; F1b.5-s4 view semantics: a selection plan sets required?=#f for a
+  ;; non-:requires parent field. Absent+no-default+not-required is a partial-view
+  ;; SKIP (neither err nor filled); the :requires field still misses if absent.
+  (define plan-view (list (list 'name '(prim String) #f #f "String" #f #t)   ; :requires
+                          (list 'age  '(prim Nat Int) #f #f "Int" #f #f)))    ; optional (view)
+  ;; :name present, :age absent → ok (age SKIPPED, not missing-required)
+  (define ok-out (v-nf 'NameOnly #f plan-view (mk-subj 'name (expr-string "ada"))))
+  (check-regexp-match #rx"result::ok" ok-out)
+  (check-false (regexp-match? #rx"missing-required" ok-out) ":age optional — no miss")
+  ;; :name absent → err (the read-capability miss)
+  (define err-out (v-nf 'NameOnly #f plan-view (mk-subj 'age (expr-int 9))))
+  (check-regexp-match #rx":name prologos::data::reason::missing-required" err-out))
+
 (test-case "validate-node/skip-tag-accepts-anything"
   ;; an 'any tag (unwitnessable field type) never rejects — the D28 skip posture
-  (define plan-skip (list (list 'cb 'any #f #f "<Int -> Int>" #f)))
+  (define plan-skip (list (list 'cb 'any #f #f "<Int -> Int>" #f #t)))
   (check-regexp-match #rx"result::ok"
                       (v-nf 'WithFn #f plan-skip (mk-subj 'cb (expr-string "not-a-fn")))))
 
@@ -116,8 +133,8 @@
   ;; subject + each entry's default/pred — atoms pass through untouched
   (define n 0)
   (define node (expr-validate 'S #f
-                              (list (list 'a '(prim Int) (expr-int 1) (expr-lam 'mw (expr-Int) (expr-true)) "Int" "p")
-                                    (list 'b 'any #f #f "T" #f))
+                              (list (list 'a '(prim Int) (expr-int 1) (expr-lam 'mw (expr-Int) (expr-true)) "Int" "p" #t)
+                                    (list 'b 'any #f #f "T" #f #t))
                               (expr-int 99) names))
   (define out (validate-map-exprs (lambda (e) (set! n (add1 n)) e) node))
   (check-equal? n 3 "subject + one default + one pred")

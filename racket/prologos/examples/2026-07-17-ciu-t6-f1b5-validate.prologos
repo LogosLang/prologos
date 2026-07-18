@@ -130,7 +130,23 @@ def cbad2 := [Checked cm]
 ;;     (was: silent 'defined.', the violating value accepted)
 
 ;; --- s4: selections — partial-view validate ----------------------------------
-;;
-;; selection NameOnly from Person :requires [:name]
-;; [validate NameOnly {:name "hana"}]
-;; s4=> ok — view-subset residual; no parent-completeness
+;; A selection is a read-side VIEW; :requires is a READ-CAPABILITY, not a
+;; completeness contract. selection-validate: enforces the :requires fields are
+;; PRESENT (missing = the read-capability violation), validates every present
+;; parent field's type + :check, accepts extra parent fields, requires NO
+;; parent-completeness. The Result's S is the (qualified) SELECTION name.
+
+selection NameOnly from Person :requires [:name]
+;;24=> selection NameOnly from Person registered.
+
+[validate NameOnly {:name "hana"}]
+;;25=>~ prologos::data::result::ok
+;;   ← the :requires field present + type-valid → ok
+
+[validate NameOnly {:name "ada" :age 9}]
+;;26=>~ :age 9
+;;   ← extra parent field :age accepted (view over fuller data) + kept in the ok
+
+[validate NameOnly {:age 9}]
+;;27=>~ :name prologos::data::reason::missing-required
+;;   ← the :requires read-capability MISS is the selection's runtime residual

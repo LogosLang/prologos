@@ -737,7 +737,8 @@
                          (let ([d (caddr entry)]) (and d (proc d)))
                          (let ([p (cadddr entry)]) (and p (proc p)))
                          (list-ref entry 4)
-                         (list-ref entry 5)))
+                         (list-ref entry 5)
+                         (list-ref entry 6)))  ; F1b.5-s4: required-on-miss? (atom)
                  (proc (expr-validate-subject v))
                  (expr-validate-names v)))
 
