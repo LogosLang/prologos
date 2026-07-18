@@ -245,6 +245,18 @@ is rejected (needs ≥1 of requires/provides/includes).
    with the Path Selection work. NOTE also an OPEN semantics question for that
    co-design: should a selection value expose ALL parent fields it carries at
    runtime, or stay strict to `:requires`? (current = strict).
+3. **Bare map-ops on a SELECTION value** (`[map-keys s]` / `map-assoc`/`dissoc`/
+   `vals`/`has-key?`/`nil-safe-get` where `s : SomeSelection`) → "Could not infer
+   type" (folded here from F1b.7e, `311fc034`, 2026-07-19). F1b.7e fixed these on
+   SCHEMA values (a schema-fvar subject projects to its row via `schema->row`),
+   but selection fvars were deliberately NOT projected: to stay consistent with
+   `map-get`'s selection arm (which gates reads to `:requires`, the
+   read-capability), structural ops on a selection need the `:requires`-RESTRICTED
+   row projection, not the full parent row — which IS this selection-projection
+   design. Fix shape (when this opens): a `selection->requires-row` projection
+   (parent's fields filtered to the single-segment `:requires` set) applied in
+   the same 7 imperative arms `schema-fvar->row-or-self` (typing-core) already
+   touches; couples to the strict-vs-carried-fields semantics question in item 2.
 
 ## CIU T6 (post-F1b): typed solution rows — own mini-track (D25.3 charter home)
 
