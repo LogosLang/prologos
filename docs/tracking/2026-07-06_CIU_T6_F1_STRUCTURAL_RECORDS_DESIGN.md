@@ -454,7 +454,7 @@ Every slice per-change-gated (check-parens → raco make → PROBE-FIRST → tar
 | F1b.6 **POSTURE FLIP** ✅ `7bcbca69` | D23: escape-boundary HARD ERROR for D19-tagged undischarged metas at the store boundaries — strictly after F1b.3 (presence changes what "undischarged" means, D24 gradient) | D23 | the P7 def-leak probe flips to error w/ def-srcloc; exploration display unchanged |
 
 **✏ F1b.6 CLOSE (2026-07-18 — `7bcbca69`; mini-audit `wf_5eb9af3e`, 4 facets + critic @ `43be29c4`; full suite GREEN 8887/465/0):** the tightening DEPLOYED. A dyn-row POINT-PROJECTION meta escaping into a STORED type is now a HARD ERROR (def-srcloc); the F1b.2b scrub-to-hole stays for everything else. **The audit resolved the spec's under-specification + corrected 3 stale coordinates:** (1) **THE PARTITION** (the #1 correctness surface): the error set is the NARROW 2-kind {`dyn-row-projection`, `dyn-row-dynamic-projection`} (the two point-read projections), NOT all 10 `dyn-row-*` kinds — the decisive counterexample is f1b3-width's `update-in` marker (a `dyn-row-update-in` meta that MUST keep scrubbing to a hole); bulk-op result kinds (update-in/fold/values/filter/map-vals/…) are legitimately-dyn results, not undischarged observations. (2) **SCOPE = type-LOCAL walk** (not the global sweep the design's "mirror check-unresolved-trait-constraints" named): `check-escaping-projection-metas` walks the PRE-scrub stored type via the new `collect-expr-metas-deep` (zonk.rkt) and errors iff it holds a projection-kind meta. Type-local matches D23's exact wording ("a type CONTAINING a projection meta") and avoids the global sweep's over-fire on an intermediate projection meta discarded before the stored type (`def x := [const 5 m.c]`). (3) **BOUNDARIES**: only the TWO def-commit boundaries (inferred + annotated, in the existing error block before the scrub, with def-srcloc + per-path un-register) — the design's "`:1704` deferral exempt" was a stale coordinate (`:1704` is the data-type store; the transient exempt store is `:1744`), and defr/foreign/data are no-ops under the type-local walk (relations/opaque/annotated types carry no point-projection meta). **GATING is critical**: the check is NEVER at eval/infer (both consult the trait check too), so exploration stays permissive — a bare top-level `m.c` still displays its observation meta (the SAME kind that errors at a store commit). Escape hatch verified: an explicit annotation solves the meta (drops from the unsolved set); a `: _` hole annotation does NOT discharge → still errors. qtt untouched. Flips: test-route-soundness-01 (the def errors; +2 cases: exploration-permissive + escape-hatch) + f1-records marker 88. Must-stay-green: update-in, exploration display, closed-row dynamic-key. **NEXT: F1b.close.**
-| F1b.7 **RECORDS/SCHEMA HARDENING** 🔄 | Stress-test findings (§13.9): 7a `:check` soundness guard [🔴 HIGH] · 7b `:check` trait resolution · 7c `:check` door parity · 7d non-literal door `:default` · 7e Record<:Map for bare map-ops · 7f targeted diagnostics · 7g `?`-suffixed keyword keys | — | per-sub gate; F1b.close GATED on 7a |
+| F1b.7 **RECORDS/SCHEMA HARDENING** 🔄 | Stress-test findings (§13.9): **7a `:check` soundness guard ✅ `f5aaae0b`** · 7b `:check` trait resolution · 7c `:check` door parity · 7d non-literal door `:default` · 7e Record<:Map for bare map-ops · 7f targeted diagnostics · 7g `?`-suffixed keyword keys | — | per-sub gate; **7a landed → F1b.close ungated** |
 | F1b.close | Bench matrix (D21+D22+D24 fast paths, interleaved/worktree-pinned per the §12.7 lesson) · PIR · typed-solution-rows mini-track charter (D25.3 gates) · consolidated DEFERRED triage · roadmap/CIU-master refresh | — | the col-close gate recipe |
 
 ### §13.7 Consolidated scaffolding ledger (the cross-cluster watchout, discharged)
@@ -585,3 +585,22 @@ at op boundaries) + 7f (diagnostics) are typing-core surfaces; 7g is a WS-reader
 (the `?`-in-keyword-token class, sibling of the `<`-reader limitation). 7d is the
 non-literal-door fill gap (the M2 deferral's defaulted-field corner — the default VALUE
 is statically known even when presence is runtime).
+
+**✏ 7a CLOSE (2026-07-18 — `f5aaae0b`; full suite GREEN 8914/465/0):** the Layer B guard
+landed as spec'd (runtime tabulate arm + new `check-unevaluable` Reason + fail-closed).
+The tabulate check-eval is now a clean four-way (no-pred → pass · panic → propagate ·
+`expr-true?` → pass · `expr-false?` → check-failed · **else (stuck / non-Bool) →
+check-unevaluable, reject**), closing BOTH the stuck-trait and the `[fn …]` silent-pass
+at `validate` AND the seal ctor door. `[validate EqInt {:n 8}]` (`:check (eq? _ 7)`) →
+`err check-unevaluable "(eq? _ 7)"`; `def bad := [EqInt {:n 8}]` → errors at commit
+(`could not evaluate check (eq? _ 7)`). **Encoding**: `check-unevaluable : String` is a
+plain names-list widening (index 8) — NOT a struct/pnet touch (the audit's names-as-data
+lesson); prelude wired in namespace.rkt + PRELUDE in sync (hand-edited; the pre-existing
+nat/list/eq drift stays deferred). Census: zero live trait-method `:check` in the suite
+(all `>`-style) → zero regressions; the one test co-change was test-validate-node's
+hand-built `names` list (index-8 append). Pins: `test-validate-node/check-unevaluable-nonbool`
++ `test-validate/check-unevaluable-lambda-guard`. **Q1/Q2/Q3 resolved as recommended**:
+runtime guard now (def-time arrives with 7b); a NEW honest Reason variant; fail-closed.
+**NEXT: 7b** — resolve trait constraints on the baked pred (elaborator.rkt:3142, currently
+`elaborate`-only) so `eq?`/`le?`/`lt?`/`ge?` checks WORK (then a real violation becomes
+`check-failed`, not `check-unevaluable`); the runtime guard stays the permanent backstop.
