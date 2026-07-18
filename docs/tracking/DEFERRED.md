@@ -15,15 +15,18 @@ Deferral".
 
 ---
 
-## CIU T6 F1b: D23 posture-flip re-trigger pin (tightening RULED 2026-07-16)
+## ✅ RESOLVED — CIU T6 F1b: D23 posture-flip (DEPLOYED F1b.6 `7bcbca69`, 2026-07-18)
 
-**The Q4 tightening question is RULED — D23 (track doc §2a round 6): escape-boundary
-hard error** (exploratory display stays; undischarged D19 metas ERROR when escaping
-into stored types, def-srcloc in scope). Implementation = F1b.2 (groundwork) +
-F1b.6 (the flip). **THIS ENTRY IS THE RE-TRIGGER PIN**: the F1b.6 posture flip
-lands strictly AFTER F1b.3's presence activation (D24's gated-identically gradient
-defines what "undischarged" means) — if F1b.3 slips, this pin re-triggers the flip
-decision rather than letting it orphan. **Rejected-with-reason (do NOT resurrect
+**The Q4 tightening is DEPLOYED — D23 (track doc §2a round 6): escape-boundary
+hard error.** A dyn-row point-projection meta (kinds `dyn-row-projection` /
+`dyn-row-dynamic-projection` ONLY — the narrow partition; bulk-op result kinds
+keep scrubbing) escaping into a stored type is a HARD ERROR with def-srcloc, at
+the two def-commit boundaries; exploration stays permissive; escape hatch =
+explicit annotation. Implementation = F1b.2 (groundwork) + F1b.6 (the flip, via a
+type-LOCAL walk `check-escaping-projection-metas` / `collect-expr-metas-deep`).
+Full record: design doc §13.6 F1b.6 ✏ CLOSE. This pin is now historical (kept for
+the sequencing rationale below); the flip landed AFTER F1b.3's presence activation
+as required. **Rejected-with-reason (do NOT resurrect
 from this entry's old phrasing)**: (a) freeze-wide default-to-error at zonk-final —
 freeze fires in NON-display contexts (stored types driver.rkt:1704, constraint
 rendering :1579-1580/:1754-1755, capture :1349); a policy there corrupts error
