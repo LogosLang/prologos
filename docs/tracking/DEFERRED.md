@@ -81,6 +81,15 @@ residue-letter entries — divergent gates/double-count):
 3. **Sub-schema descent** (auto-registered `Parent__field` entries carry
    check/default = #f — stripped at registration; a one-level engine hitting a
    sub-schema-typed field has no defined deep disposition).
+4. **Nested / wildcard selection requires-paths** (F1b.5-s4, `0f95d544`):
+   selection-validate enforces only SINGLE-SEGMENT `:requires` (a length-1
+   keyword-path `(#:name)`) as the read-capability miss-check. A deep path
+   (`:address.zip` → `(#:address #:zip)`, incl. its top hop) or a wildcard
+   (`:address.*` → `(#:address *)`) defers — it is the SAME descent mechanism as
+   #3 applied to a selection's read-capability (descend into the `:address`
+   sub-value to check `:zip`). A selection with deep requires still gets full
+   type/:check/closedness validation at s4; only the nested read-capability miss
+   isn't caught yet. Filtered at the bake (`(null? (cdr path))` ∧ keyword head).
 
 `defr : Schema` fact-row runtime validation rides the same charter (an adapter
 over the positional discharge, parser.rkt `parse-defr-schema-typed`).
@@ -92,11 +101,13 @@ PATH-shaped from v1 (D27.3, singleton paths) so the walker extends without a
 breaking E change (product-over-paths); (c) the depth discipline designed
 (recursive schemas). 
 
-**Residue (e), honest wording (D27.5)**: the open?-absorbed missing-required
-(schema-seal-residual-ok?'s open? disjunct) is *dischargeable via validate
-(OPT-IN)*; AUTO-discharge is deferred to the blame-latch era — gate: the §3b
-blame-latch citation verified concrete at F1b.5-p0 (else re-anchor; an invented
-placeholder gate is forbidden).
+**Residue (e), honest wording (D27.5; ✏ F1b.5-s4)**: the open?-absorbed
+missing-required (schema-seal-residual-ok?'s open? disjunct) is *dischargeable
+via validate (OPT-IN)* — the OPT-IN path is now REAL (validate landed s2 for
+schemas, s4 for selections). AUTO-discharge stays deferred to the blame-latch
+era — gate: the §3b blame-latch citation verified concrete at F1b.5-p0 (else
+re-anchor; an invented placeholder gate is forbidden). s4 does NOT close this
+entry (auto-discharge is the deferred half).
 
 ## CIU T6: the cross-module schema channel — staleness + cache-hit registration (probe-found at F1b.5-p0, 2026-07-17)
 
