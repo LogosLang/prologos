@@ -258,6 +258,25 @@ is rejected (needs ≥1 of requires/provides/includes).
    the same 7 imperative arms `schema-fvar->row-or-self` (typing-core) already
    touches; couples to the strict-vs-carried-fields semantics question in item 2.
 
+## CIU T6: named-`?`-field vs presence-optional DISPLAY ambiguity (7g surfaced, owner-acknowledged 2026-07-19)
+
+F1b.7g made `?`/`!`-suffixed keyword keys read whole (`:active?` is now a valid
+field/key name). This makes a PRE-EXISTING, display-only ambiguity newly
+REACHABLE: a field literally named `active?` with presence `'present` renders
+`{:active? Bool}` — INDISTINGUISHABLE from an OPTIONAL field `active` (the D24
+presence-`'unknown` display marker appends a `?` suffix, pretty-print.rkt:439-445;
+already-documented at syntax.rkt:684-686 as "revisit if it bites"). It is
+**display-only** — flips NO parse-time behavior; the stored label is `active?`
+verbatim and the value reads/projects correctly (`s.active?` → the value). Owner
+acknowledged (7g Q2), NOT a blocker. **When it bites** (a user confused by
+`{:active? Bool}` meaning "field active?" vs "optional active"): the fix is a
+presentation-design choice in the pretty-printer — e.g. render presence-unknown
+with a distinct marker (a leading `?`, or a space, or `{:active [?] Bool}`) so the
+suffix-`?` of a real field name never collides with the presence marker. Couples
+to the D24 presence-marks display + the broader FQN-display-verbosity presentation
+question (dailies 29). Low urgency; a display-layer-only change (no reader/typing
+touch).
+
 ## CIU T6 (post-F1b): typed solution rows — own mini-track (D25.3 charter home)
 
 `solve` results carry NO type at HEAD (`expr-hole`); per-solution ROW types
