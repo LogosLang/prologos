@@ -318,10 +318,29 @@
                                                (string-join
                                                 (map (lambda (k) (format ":~a" k)) missing) ", ")
                                                " of " (symbol->string sname))))))]
-                               [_ #f])])
+                               [_ #f])]
+                   ;; CIU T6 (2026-07-18): a clearer message for the common
+                   ;; "unannotated parameter used in a way that needs its type"
+                   ;; case — the checked term is a lambda whose domain is a hole
+                   ;; (unannotated param) and inference of the body gave up
+                   ;; (actual = could-not-infer). e.g. `defn f [p] p.x` (field
+                   ;; projection) or `defn f [x] [+ x 1]` (arithmetic): both need
+                   ;; p / x to have a known type. Surgical — only fires for this
+                   ;; shape, so every other check failure keeps "Type mismatch".
+                   [infer-hint-msg
+                    (and (not seal-msg)
+                         (expr-error? actual)
+                         (expr-lam? e)
+                         (let ([dom (expr-lam-type e)])
+                           (or (expr-hole? dom) (expr-meta? dom)))
+                         (string-append
+                          "cannot infer the type of an unannotated parameter — "
+                          "it is used here in a way that requires a known type "
+                          "(e.g. field projection `.field` or arithmetic). "
+                          "Annotate the parameter (`[x : T]`) or add a `spec`."))])
               (type-mismatch-error
                loc
-               (or seal-msg "Type mismatch")
+               (or seal-msg infer-hint-msg "Type mismatch")
                (pp-expr t names)
                (if (expr-error? actual) "<could not infer>" (pp-expr actual names))
                (pp-expr e names)

@@ -338,3 +338,33 @@
     (fresh-meta ctx-empty (expr-Nat) (meta-source-info srcloc-unknown 'bare-Type "c" #f #f))
     (check-equal? (length (all-unsolved-metas)) 3)
     (check-equal? (length (primary-unsolved-metas)) 1)))
+
+;; ========================================
+;; Unannotated-param inference hint (CIU T6, 2026-07-18)
+;; ========================================
+;; An unannotated param used in a way that needs its type (field projection or
+;; arithmetic) produced a bare "Type mismatch". It now gives a hint pointing at
+;; an annotation or spec — surgically, so genuine mismatches keep "Type mismatch".
+
+(test-case "unannotated-param arithmetic: clearer 'cannot infer' message"
+  (define r (run-ns-last "(ns t)\n(defn f [x] (+ x 1))"))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (check-true (regexp-match? #rx"cannot infer the type of an unannotated parameter"
+                             (prologos-error-message r))
+              (format "got: ~v" (prologos-error-message r))))
+
+(test-case "unannotated-param projection: clearer 'cannot infer' message"
+  (define r (run-ns-last "(ns t)\n(defn g [p] (map-get p :x))"))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (check-true (regexp-match? #rx"cannot infer the type of an unannotated parameter"
+                             (prologos-error-message r))
+              (format "got: ~v" (prologos-error-message r))))
+
+(test-case "annotated param does NOT get the inference hint (control)"
+  ;; a genuine type mismatch keeps the plain "Type mismatch" message.
+  (define r (run-ns-last "(ns t)\n(def x : Int (the String \"hello\"))"))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (check-true (regexp-match? #rx"Type mismatch" (prologos-error-message r))
+              (format "got: ~v" (prologos-error-message r)))
+  (check-false (regexp-match? #rx"cannot infer the type of an unannotated"
+                              (prologos-error-message r))))
