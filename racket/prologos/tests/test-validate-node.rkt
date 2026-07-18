@@ -22,7 +22,9 @@
                     'prologos::data::reason::type-mismatch
                     'prologos::data::reason::unexpected-field
                     ;; F1b.7a: index 8 — the Layer B guard's Reason ctor
-                    'prologos::data::reason::check-unevaluable))
+                    'prologos::data::reason::check-unevaluable
+                    ;; F1b.7b: index 9 — the un-evaluable-:default diagnostic
+                    'prologos::data::reason::default-unevaluable))
 
 (define (mk-subj . kvs)
   (let loop ([kvs kvs] [m (expr-map-empty (expr-hole) (expr-hole))])
@@ -102,6 +104,16 @@
                              "Int" "(fn [x] false)" #t)))
   (define out (v-nf 'Checked #f plan-u (mk-subj 'age (expr-int 5))))
   (check-regexp-match #rx"check-unevaluable" out))
+
+(test-case "validate-node/default-unevaluable"
+  ;; F1b.7b: a filled :default that does not reduce to a clean value of the
+  ;; field type (here a stuck app — mirrors an unresolved trait method in the
+  ;; default) reads as default-unevaluable, not a mislabeled type-mismatch.
+  (define plan-d (list (list 'flag '(prim Bool)
+                             (expr-app (expr-fvar 'no-such-binding) (expr-int 5))
+                             #f "Bool" #f #t)))
+  (define out (v-nf 'DefChk #f plan-d (mk-subj)))  ; :flag missing → fills the default
+  (check-regexp-match #rx"default-unevaluable" out))
 
 (test-case "validate-node/closed-unexpected-field"
   (define out (v-nf 'Locked #t (list (list 'a '(prim Nat Int) #f #f "Int" #f #t))

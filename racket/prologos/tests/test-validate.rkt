@@ -106,6 +106,27 @@ def bad := [Never {:d 5}]\n"))
   (check-regexp-match #rx"check-unevaluable" (result-str (list-ref rs (- (length rs) 2))))
   (check-true (prologos-error? (last rs))))
 
+(test-case "validate/lever-i-comparison-family"
+  ;; F1b.7b lever (i): le?/lt?/ge?/gt? → dict-free keywords that work on Int
+  ;; (were monomorphic Nat → check-unevaluable on Int pre-7b). No arg-reversal.
+  (define rs (run-file-string
+              "ns vtli\n
+schema R\n  :n Int :check (le? _ 100)\n
+[validate R {:n 50}]\n
+[validate R {:n 200}]\n"))
+  (check-regexp-match #rx"result::ok" (result-str (list-ref rs (- (length rs) 2))))
+  (check-regexp-match #rx"check-failed \"\\(le\\? _ 100\\)\"" (result-str (last rs))))
+
+(test-case "validate/slash-eq-and-default-unevaluable"
+  ;; F1b.7b: `/=` → (not (eq ..)) (the neq target was unbound); and a trait-
+  ;; method :default reads as default-unevaluable, not a type-mismatch.
+  (define rs-ne (run-file-string
+                 "ns vtne\nschema N\n  :n Int :check (/= _ 0)\n[validate N {:n 0}]\n"))
+  (check-regexp-match #rx"check-failed \"\\(/= _ 0\\)\"" (result-str (last rs-ne)))
+  (define rs-du (run-file-string
+                 "ns vtdu\nschema D\n  :flag Bool :default [eq? 3 3]\n[validate D {}]\n"))
+  (check-regexp-match #rx"default-unevaluable" (result-str (last rs-du))))
+
 (test-case "validate/check-polarity-upper-bound-golden"
   ;; the arg-REVERSAL pin at L3: (> 10 _) → subst → (> 10 x) → normalize →
   ;; (lt x 10) — an upper bound. (`(< _ 10)` itself is unusable in WS files:

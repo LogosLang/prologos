@@ -1297,6 +1297,9 @@
   ;; F1b.7a: the Layer B guard's Reason ctor (index 8, appended in the
   ;; elaborator required-names) — a :check that cannot be evaluated.
   (define unevaluable-name (list-ref names 8))
+  ;; F1b.7b: the un-evaluable-:default diagnostic (index 9) — a filled default
+  ;; that didn't reduce to a clean value (an unresolved trait method).
+  (define default-uneval-name (list-ref names 9))
   (define plan-kws (map car plan))
   ;; the ok-payload base: the subject champ rebuilt with nf'd values
   (define base-ok
@@ -1336,11 +1339,19 @@
           (cond
             ;; type-witness (the s1 acceptance tags; skip-safe by construction)
             [(not (value-witnesses-tag? val tag))
+             ;; F1b.7b: distinguish a stuck FILLED DEFAULT from a provided-value
+             ;; type-mismatch. found='none here ⟹ val came from the default (the
+             ;; missing+no-default branch is handled above), so a witness-fail on
+             ;; it means the :default expr did not reduce to a clean value (an
+             ;; unresolved trait method — resolution deferred to the refinement
+             ;; track). Name it clearly instead of mislabeling as type-mismatch.
              (loop (cdr entries) okc
                    (champ-insert errc khash kexpr
-                                 (expr-app (expr-app (expr-fvar typemis-name)
-                                                     (expr-string type-str))
-                                           (expr-string (value-kind-string val))))
+                                 (if (eq? found 'none)
+                                     (expr-fvar default-uneval-name)
+                                     (expr-app (expr-app (expr-fvar typemis-name)
+                                                         (expr-string type-str))
+                                               (expr-string (value-kind-string val)))))
                    #t)]
             [else
              ;; :check pred (baked expr-lam; beta via nf)

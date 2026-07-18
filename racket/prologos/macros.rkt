@@ -1329,7 +1329,23 @@
      `(,(if (eq? (car datum) '<) 'lt 'le) ,@norm-args)]
     [(memq (car datum) '(== /=))
      (define norm-args (map normalize-check-pred (cdr datum)))
-     `(,(if (eq? (car datum) '==) 'eq 'neq) ,@norm-args)]
+     ;; F1b.7b: `/=` → (not (eq …)); the old `neq` target is unbound (only the
+     ;; Eq-constrained `eq-neq` exists), so a `:check (/= …)` was check-unevaluable.
+     (if (eq? (car datum) '==)
+         `(eq ,@norm-args)
+         `(not (eq ,@norm-args)))]
+    ;; F1b.7b lever (i): the `?`-suffixed comparison family → dict-free keywords
+    ;; (le/lt/ge/gt, which work uniformly on Int + Nat). le?/lt?/ge?/gt? are
+    ;; monomorphic `Nat Nat -> Bool` functions (NOT trait methods), so a
+    ;; `:check (le? _ 100)` on an Int field was a type-mismatch that stuck at
+    ;; reduction → check-unevaluable; mapping to the keyword makes it work. NO
+    ;; arg-reversal (le? a b = a ≤ b = le a b). `eq?` (a genuine Eq trait method)
+    ;; is deliberately NOT mapped — it stays a trait method (works on any Eq
+    ;; type); its bake-context resolution is lever (ii), deferred to the
+    ;; traits-as-refinement note.
+    [(memq (car datum) '(le? lt? ge? gt?))
+     (define norm-args (map normalize-check-pred (cdr datum)))
+     `(,(case (car datum) [(le?) 'le] [(lt?) 'lt] [(ge?) 'ge] [(gt?) 'gt]) ,@norm-args)]
     [else (map normalize-check-pred datum)]))
 
 ;; CIU T6 F1b.5-s3 (D29): the constructor door's :check discharge DELEGATES to
