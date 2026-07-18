@@ -144,6 +144,31 @@ exporting schemas — none exist today; the demo is single-file); (b) or the
 first stale-baked-plan incident in practice. Until then the class is documented
 here + at §13.8.
 
+## CIU T6: inference on unannotated params (projection + arithmetic) — records ergonomics (hand-testing, 2026-07-18)
+
+Two record-ergonomics soft spots found dogfooding `foray.prologos` — both are
+the SAME class (inference on an UNCONSTRAINED param), both have named deep-fix
+homes, both got a **near-term error-message mitigation** (`ff813935`: the bare
+"Type mismatch" now says "cannot infer the type of an unannotated parameter …
+annotate `[x : T]` or add a `spec`").
+
+1. **Projection on an untyped param** — `defn f [p] p.x` fails: to project `:x`
+   the checker must know `p` is a record. Today requires an annotation (`[p : T]`)
+   or a spec whose name MATCHES the defn (the owner's `point-add` hit this via a
+   `spec paint-add`/`defn point-add` name typo → bare untyped params). **Deep fix
+   = F-row**: projection-driven ROW inference — generate a constraint
+   `p : {:x _ | _}` from `p.x` and solve it structurally. Now more tractable
+   (rows exist post-F1a/F1b) but still extension-typing scope (§12.5 pins / the
+   one-solver era). Entry gate: F-row opens.
+2. **Generic `+`/arithmetic on an untyped param** — `defn f [x] [+ x 1]` fails
+   standalone (pre-existing): `+` needs `x`'s type. **Deep fix = Num Track 2**
+   (generic `Num` / constraint-as-type): constrain `x : Num`-ish from `[+ x 1]`.
+   Seed note `2026-07-02_GENERIC_NUM_TYPE_NOTE.md`. Entry gate: Num Track 2 opens.
+
+Neither blocks records-correct-in-principle (annotate or spec is the workaround);
+the mitigation makes the workaround discoverable. Do NOT attempt the deep fixes
+in a records slice — they are their own tracks.
+
 ## CIU T6 (post-F1b): typed solution rows — own mini-track (D25.3 charter home)
 
 `solve` results carry NO type at HEAD (`expr-hole`); per-solution ROW types
