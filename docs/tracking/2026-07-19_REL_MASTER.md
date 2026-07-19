@@ -42,7 +42,11 @@ relational output flows into.
 
 | # | Track | Description | Status | Artifact |
 |---|---|---|---|---|
-| (un-named) | Solve typing + NAF correctness | typed solution rows (D25.3 charter, moved from CIU) + the `not` / `&>` negation-as-failure correctness gaps (found dogfooding `foray.prologos`) | ⬜ SEED | [note](2026-07-19_REL_SOLVE_TYPING_NOTE.md) |
+| 1 (name TBD) | Relational Language Usability | NAF/guard correctness (the priority — the `not` echo + on-network open-var leak + guard crash) + typed solution rows (codata + schema projection) + schema-as-relational-facts + polish. **Held**: efficient fact representation (research). **Deferred to UCS**: `?v:Type` CLP resolution. | 🔄 Stage-3 | [design](2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md) · [seed](2026-07-19_REL_SOLVE_TYPING_NOTE.md) |
+
+> Note (2026-07-19): the seed's "`&>` inversion" framing is **superseded** — `&>`
+> is the rule-clause separator, not a negation op; the real bug is the on-network
+> NAF open-var leak. See the design doc §4.
 
 ## Sequencing (owner through-line, 2026-07-19)
 
