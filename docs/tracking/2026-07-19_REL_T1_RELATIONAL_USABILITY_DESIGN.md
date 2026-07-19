@@ -49,7 +49,7 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | **P0** | Acceptance file (`.prologos`) — covers all 3 NAF faces (`{both}` / `{neither}` / partial-drop) + ground-correct + body-local + recursive | 🔄 | `examples/2026-07-19-rel-t1-acceptance.prologos`; runs 0-errors; TARGET markers land as A.2 completes. **P0 refuted "recursion is correct"** |
 | **A.1** | Top-level goal-dispatch (echo fix): the **`not` arm** in `run-solve-goal`/`-one`/`-explain` → `solve-single-goal` | ✅ | `reduction.rkt`; guard/cut/conjunction NOT reachable at top level (mini-audit); acceptance + `test-rel-t1-naf.rkt` (3); suite 8922/0 |
 | **A.2** | NAF per-binding **belief-clear** (E-with-B) in `process-naf-request` — **FACT generators** | 🔄 core done | `naf-per-binding-mask`; `light-vehicle` `{both}`→`{bicycle}`; acceptance + `test-rel-t1-naf` (5); suite 8927/0 |
-| **A.2b** | Rule/recursive-generator NAF — generator **under-tags** the scope cell → **DFS-defer** | ⬜ | `safe-twohop`/`safe-reach`; per-binding can't enumerate (probe: collapsed value); distinct larger change (design §5 A.2 boundary) |
+| **A.2b** | Rule/recursive-generator NAF — **ROOT: tabling flattens per-branch worldviews** → **tabling worldview-preservation** (own Stage-3; DFS-defer REJECTED) | ⬜ | `safe-twohop`/`safe-reach`; producer collapses via `logic-var-read` + consumer writes flat (relations.rkt:2717/2751); substantial tabling-infra change |
 | **A.3** | Safe/floundering — **static** range-restriction gate in `install-conjunction` | ⬜ | No check exists today; Phase-0 prereq |
 | **A.4** | Guard: FFI-crash residuation + static floundering; (guard per-binding leak — scope TBD) | ⬜ | S0 fire-once shape ≠ NAF's S1 shape |
 | **B.1** | Typed solution rows — codata-observation path | ⬜ | Untyped-relation fallback; first-class |
@@ -233,10 +233,46 @@ resolves to a single collapsed value (or one entry), so `naf-per-binding-mask`
 returns `#f` and falls back to the single-bit path (`safe-twohop` `{neither}`,
 `safe-reach` partial-drop unchanged). So the boundary is not just "the NAF var is
 body-local" but "the **generator** doesn't materialize per-branch tags," which
-includes rule + recursive generators. **A.2b** = the DFS-defer for this class (route
-the relation to the DFS solver, which handles NAF correctly — the all-ground-sub-case
-precedent), OR deeper generator materialization. A.2-core is scoped to fact
-generators; A.2b is a distinct, larger change.
+includes rule + recursive generators. A.2-core is scoped to fact generators.
+
+### A.2b — ROOT CAUSE found + the principled decision (owner ruling, 2026-07-19)
+
+**ROOT CAUSE (grounded):** rule subgoals (recursive *or not*) go through the
+**tabling** path (`install-clause-propagators` relations.rkt:2451-2467; tabling is
+ON by default; recursion *requires* it to terminate), and the table producer/consumer
+boundary **discards the per-branch worldview lattice**:
+- **Producer** `install-table-producer` (relations.rkt:2727-2757): its fire reads each
+  arg via `logic-var-read` — **worldview-filtered → one collapsed value** — and writes
+  a **flat, untagged** binding tuple to the table cell (`net-cell-write table-cid (list
+  bindings)`, :2751).
+- **Consumer** `install-table-consumer` (relations.rkt:2687-2722): reads the flat
+  answers and `logic-var-write`s them to the outer scope cell under a **single**
+  `maybe-wrap-worldview` (the consumer's install-time worldview, :2717) — not
+  per-answer worldviews.
+
+So a tabled rule's output var lands on the outer scope cell **without per-branch
+fact-bit tags** (probe: `twohop`'s `c` resolves to one collapsed value), so
+`naf-per-binding-mask` returns `#f`. Fact generators skip tabling (installed with
+per-row tagging), which is why A.2-core works for them. **This is not a NAF-specific
+edge — tabling discards the worldview lattice the whole on-network machinery depends
+on**; any on-network feature needing per-branch structure over a tabled relation hits
+this.
+
+**OWNER RULING (2026-07-19):** **do NOT DFS-defer.** Deferring the hard cases to the
+DFS solver is off-network scaffolding; the mantra + the principle that **all solvers
+(DFS, on-network NAF, WF) must be correct** require the on-network NAF to be correct
+for *every* generator shape. **DFS-defer is REJECTED.**
+
+**THE PRINCIPLED FIX (A.2b):** **tabling must preserve per-branch worldviews** — each
+table answer carries its worldview bitmask; the consumer re-tags per answer instead of
+collapsing under one. This restores the tagged lattice so `naf-per-binding-mask`
+enumerates a tabled generator's bindings like a fact's, and makes the tabled-relation
+output a proper tagged lattice value (mantra-aligned: on-network, structural, the
+worldview is information the table must not throw away). It is a **substantial
+tabling-infrastructure change** (table-cell format + producer projection + consumer
+re-tagging) with cross-cutting blast radius (everything that reads tables: dissolution,
+memoization correctness, WF). **A.2b gets its own Stage-3 design pass** (grounding →
+options → adversarial critique), NOT an inline patch.
 
 ### A.3 — safe / floundering negation (a **static** range-restriction gate)
 No safety check exists anywhere today (grep-confirmed). Add a **static,
@@ -449,8 +485,8 @@ checklist-first). The roadmap row does not flip ✅ until the PIR lands.
 - **Q-name** — ✅ **RESOLVED: "Relational Language Usability."**
 
 **Still open:**
-- **Q-A4** guard scope: fix crash + static floundering now, defer guard's per-binding leak (S0 fire-once shape differs from NAF's S1)?
-- **Q-body-local** — confirm the DFS-defer for body-local-generator NAF is the chosen boundary (vs on-network body-local cell allocation, a much larger change) at A.2 implementation.
+- **A.2b (NEXT — its own Stage-3 design)** — **tabling worldview-preservation** (root cause: tabling flattens per-branch worldviews; **DFS-defer REJECTED** by owner). Own grounding + options + adversarial-critique pass; substantial tabling-infra change. Fixes rule/recursive-generator on-network NAF (`safe-twohop`/`safe-reach`).
+- **Q-A4** guard scope: fix crash + static floundering now, defer guard's per-binding leak (S0 fire-once shape differs from NAF's S1)? (Independent of A.2b.)
 - **Q-B** (Aspect B) keying: rename query-var → field, vs fresh positional Record.
 
 ---
