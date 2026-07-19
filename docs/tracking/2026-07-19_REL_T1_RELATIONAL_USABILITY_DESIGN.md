@@ -49,7 +49,7 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | **P0** | Acceptance file (`.prologos`) — covers all 3 NAF faces (`{both}` / `{neither}` / partial-drop) + ground-correct + body-local + recursive | 🔄 | `examples/2026-07-19-rel-t1-acceptance.prologos`; runs 0-errors; TARGET markers land as A.2 completes. **P0 refuted "recursion is correct"** |
 | **A.1** | Top-level goal-dispatch (echo fix): the **`not` arm** in `run-solve-goal`/`-one`/`-explain` → `solve-single-goal` | ✅ | `reduction.rkt`; guard/cut/conjunction NOT reachable at top level (mini-audit); acceptance + `test-rel-t1-naf.rkt` (3); suite 8922/0 |
 | **A.2** | NAF per-binding **belief-clear** (E-with-B) in `process-naf-request` — **FACT generators** | 🔄 core done | `naf-per-binding-mask`; `light-vehicle` `{both}`→`{bicycle}`; acceptance + `test-rel-t1-naf` (5); suite 8927/0 |
-| **A.2b** | Rule/recursive-generator NAF — **ROOT: tabling flattens per-branch worldviews** → **tabling worldview-preservation** (own Stage-3; DFS-defer REJECTED) | ⬜ | `safe-twohop`/`safe-reach`; producer collapses via `logic-var-read` + consumer writes flat (relations.rkt:2717/2751); substantial tabling-infra change |
+| **A.2b** | Rule/recursive-generator NAF — **ROOT reframed (probe-verified): the body-local-var gap**, not tabling-flattens-worldviews (that is second-order = BSP-LE Track 3). Minimal slice = **adaptive-dispatch DFS-routing** (`reachable-has-body-local-rule?` in `use-propagator?`) | ✅ | `bcd02d6d`; `safe-twohop`→`{w}`, `safe-reach`→`{y,w}` via DFS (parity-verified); A.2-core fact-NAF stays on-network; +2 tests (`test-rel-t1-naf` 7); acceptance 8/8; suite 8929/0. **SCAFFOLDING** — retirement owner BSP-LE Track 3 (on-network body-local threading + SLG completion + worldview-preservation §9.6) |
 | **A.3** | Safe/floundering — **static** range-restriction gate in `install-conjunction` | ⬜ | No check exists today; Phase-0 prereq |
 | **A.4** | Guard: FFI-crash residuation + static floundering; (guard per-binding leak — scope TBD) | ⬜ | S0 fire-once shape ≠ NAF's S1 shape |
 | **B.1** | Typed solution rows — codata-observation path | ⬜ | Untyped-relation fallback; first-class |
@@ -235,44 +235,66 @@ returns `#f` and falls back to the single-bit path (`safe-twohop` `{neither}`,
 body-local" but "the **generator** doesn't materialize per-branch tags," which
 includes rule + recursive generators. A.2-core is scoped to fact generators.
 
-### A.2b — ROOT CAUSE found + the principled decision (owner ruling, 2026-07-19)
+### A.2b — reframed + LANDED (minimal DFS-routing slice), 2026-07-19 (commit `bcd02d6d`)
 
-**ROOT CAUSE (grounded):** rule subgoals (recursive *or not*) go through the
-**tabling** path (`install-clause-propagators` relations.rkt:2451-2467; tabling is
-ON by default; recursion *requires* it to terminate), and the table producer/consumer
-boundary **discards the per-branch worldview lattice**:
-- **Producer** `install-table-producer` (relations.rkt:2727-2757): its fire reads each
-  arg via `logic-var-read` — **worldview-filtered → one collapsed value** — and writes
-  a **flat, untagged** binding tuple to the table cell (`net-cell-write table-cid (list
-  bindings)`, :2751).
-- **Consumer** `install-table-consumer` (relations.rkt:2687-2722): reads the flat
-  answers and `logic-var-write`s them to the outer scope cell under a **single**
-  `maybe-wrap-worldview` (the consumer's install-time worldview, :2717) — not
-  per-answer worldviews.
+> **This section supersedes the earlier "tabling worldview-preservation" framing.**
+> A grounding-audit (`wf_c2f8bfa3-db2`) + options-panel (`wf_9c6eb408-522`) + two
+> dynamic probes reframed the root cause: "tabling flattens per-branch worldviews"
+> is **second-order** (owned by BSP-LE Track 3); the **first-order** defect is a
+> value-correctness bug — the **body-local-var gap** — and the minimal correct fix
+> is a routing refinement, not a tabling-infra rebuild.
 
-So a tabled rule's output var lands on the outer scope cell **without per-branch
-fact-bit tags** (probe: `twohop`'s `c` resolves to one collapsed value), so
-`naf-per-binding-mask` returns `#f`. Fact generators skip tabling (installed with
-per-row tagging), which is why A.2-core works for them. **This is not a NAF-specific
-edge — tabling discards the worldview lattice the whole on-network machinery depends
-on**; any on-network feature needing per-branch structure over a tabled relation hits
-this.
+**ROOT CAUSE (probe-verified, the reframe):** the on-network ATMS engine builds
+`clause-env` from **head params only** (relations.rkt:2382-2385/2407-2410), and
+`resolve-term` returns the **bare symbol** for a non-param var (:1950-1953, treated
+as a ground atom). So a clause whose answer threads through a **body-local**
+(non-param) join/recursion variable produces an **INCOMPLETE answer set on-network**
+— *before* any worldview-tag question arises. Probe (forced on-network via a no-op
+NAF): `twohop(a,c):-edge(a,b),edge(b,c)` → **`{}`** (the join var `b` never binds);
+`reaches` (recursive) → **base case only `{y}`**. DFS baselines: `{z,w}` and
+`{y,z,w}`. Fact generators and **param-passthrough** rules (`direct(a,c):-edge(a,c)`)
+are **complete** on-network (probe-confirmed) — the defect is *specifically*
+body-local-var rule clauses. This mechanically explains the A.2-core observations:
+`safe-twohop→{neither}` because `twohop` is empty on-network; `safe-reach` drops
+`w`/`z` because `reaches` never derives them. (6th premise-refutation of the arc.)
 
-**OWNER RULING (2026-07-19):** **do NOT DFS-defer.** Deferring the hard cases to the
-DFS solver is off-network scaffolding; the mantra + the principle that **all solvers
-(DFS, on-network NAF, WF) must be correct** require the on-network NAF to be correct
-for *every* generator shape. **DFS-defer is REJECTED.**
+The earlier "tabling flattens worldviews" finding is **real but second-order**: even
+once the answer set is *complete*, tabling's producer/consumer/merge would still flatten
+the per-branch tags `naf-per-binding-mask` needs for the recursive-consumer seam. That
+is the genuine A.2b.2/A.2b.3 work — and it requires completing the on-network rule
+engine (body-local threading) + **SLG completion detection** — i.e. **BSP-LE Track 3**,
+which is ⬜ unbuilt. PUnify Part 3 §9.6 (support-set-tagged table answers;
+unconditional=∅ memoize across worlds, conditional worldview-filtered) is the citable
+prior art for that layer (`2026-03-19_PUNIFY_PART3_ATMS_SOLVER_ARCHITECTURE.md:612-620`,
+designed-but-never-built).
 
-**THE PRINCIPLED FIX (A.2b):** **tabling must preserve per-branch worldviews** — each
-table answer carries its worldview bitmask; the consumer re-tags per answer instead of
-collapsing under one. This restores the tagged lattice so `naf-per-binding-mask`
-enumerates a tabled generator's bindings like a fact's, and makes the tabled-relation
-output a proper tagged lattice value (mantra-aligned: on-network, structural, the
-worldview is information the table must not throw away). It is a **substantial
-tabling-infrastructure change** (table-cell format + producer projection + consumer
-re-tagging) with cross-cutting blast radius (everything that reads tables: dissolution,
-memoization correctness, WF). **A.2b gets its own Stage-3 design pass** (grounding →
-options → adversarial critique), NOT an inline patch.
+**OWNER RULING (revised, 2026-07-19):** the earlier "DFS-defer REJECTED / all solvers
+correct on-network *now*" ruling was made under the belief that on-network correctness
+was cheap (a tag fix). Given the true premise — on-network correctness here **requires
+building BSP-LE Track 3** — the owner's revised steer is: **take the minimal slice that
+keeps things correct and does not set BSP-LE Track 3 off in the wrong direction.**
+
+**THE LANDED FIX (A.2b minimal slice, `bcd02d6d`):** the real defect is the **adaptive
+dispatcher mis-routing** — `use-propagator?` (stratified-eval.rkt) unconditionally sends
+NAF/guard to the on-network path, but that path is incomplete for body-local-var rule
+generators. Fix = a new **Check 3**: `reachable-has-body-local-rule?` (a reachability
+walk via `transitive-pred-closure` + `collect-clause-vars` minus params) — any
+would-be-on-network query whose reachable relation graph has a rule clause with a
+body-local var routes to **DFS**, the **correct reference solver** (parity harness:
+DFS gives `safe-twohop={w}`, `safe-reach={y,w}`; on-network gives `{}` / drops `w`).
+Fact-NAF (A.2-core) and param-passthrough rules are on-network-complete and **stay**.
+This is *not* off-network scaffolding bolted on — it corrects a bug in the existing
+adaptive solver-selection (which already chooses DFS vs ATMS). It also fixes, for free,
+the latent **threshold-forced** silent-wrong case (a 4+-clause body-local rule with no
+NAF) — same predicate.
+
+**SCAFFOLDING — retirement owner BSP-LE Track 3.** When Track 3 lands on-network
+body-local threading + SLG completion (+ the §9.6 worldview-preserving table), delete
+the Check-3 predicate and those shapes flow back on-network. Logged in `DEFERRED.md`.
+
+**Verification:** acceptance 8/8 (`safe-twohop`→`{w}`, `reaches`→`{y,z,w}`,
+`safe-reach`→`{y,w}`); `test-rel-t1-naf` +2 (join + recursion routing); demo
+(`needs`/`risky-dep`) unchanged (already DFS); suite 8929/466/0.
 
 ### A.3 — safe / floundering negation (a **static** range-restriction gate)
 No safety check exists anywhere today (grep-confirmed). Add a **static,
@@ -483,10 +505,12 @@ checklist-first). The roadmap row does not flip ✅ until the PIR lands.
 - **Q-A2** invalidation fork — ✅ **RESOLVED: E-with-B** (belief-layer per-binding narrowing); verified safe (§5 A.2).
 - **Q-round** placement — ✅ **RESOLVED: between-round value-tier** stratum handler (the current NAF site); a `for/fold` over the pending set (not a broadcast — category error corrected).
 - **Q-name** — ✅ **RESOLVED: "Relational Language Usability."**
+- **A.2b** rule/recursive-generator NAF — ✅ **RESOLVED (minimal slice landed, `bcd02d6d`): adaptive-dispatch DFS-routing** (§5 A.2b). Root reframed to the body-local-var gap (probe-verified); worldview-preservation + on-network body-local threading + SLG **deferred to BSP-LE Track 3** (scaffolding retirement owner). Owner's "no DFS-defer" revised given the true premise (on-network correctness here = build Track 3).
 
 **Still open:**
-- **A.2b (NEXT — its own Stage-3 design)** — **tabling worldview-preservation** (root cause: tabling flattens per-branch worldviews; **DFS-defer REJECTED** by owner). Own grounding + options + adversarial-critique pass; substantial tabling-infra change. Fixes rule/recursive-generator on-network NAF (`safe-twohop`/`safe-reach`).
-- **Q-A4** guard scope: fix crash + static floundering now, defer guard's per-binding leak (S0 fire-once shape differs from NAF's S1)? (Independent of A.2b.)
+- **A.3 (NEXT)** — static floundering gate (range-restriction in `install-conjunction`); independent of the DFS-routing slice, smaller.
+- **BSP-LE Track 3 (deferred, scaffolding retirement)** — on-network body-local-var threading + SLG completion + §9.6 worldview-preserving tabling. Retires the A.2b Check-3 DFS-routing predicate. Grounding + options + prior-art (§9.6) captured in the `wf_c2f8bfa3-db2` / `wf_9c6eb408-522` synthesis; carry into Track 3's own Stage-3.
+- **Q-A4** guard scope: fix crash + static floundering now, defer guard's per-binding leak (S0 fire-once shape differs from NAF's S1)?
 - **Q-B** (Aspect B) keying: rename query-var → field, vs fresh positional Record.
 
 ---

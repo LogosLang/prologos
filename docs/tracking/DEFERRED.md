@@ -1235,3 +1235,33 @@ Replace 3-pass imperative preparse with propagator-native cell-based name regist
 - Implementation: `macros.rkt:2366-2460` (`preparse-expand-all`), `tools/form-deps.rkt` (SCC analysis)
 - Module-level cycle detection (related, same retirement target): `driver.rkt:1872-1874` (`loading-set` "Circular dependency detected")
 - Future track (where this retires): module-loading-on-network follow-up — PM Track 12 + post-Phase-4 + possibly PPN Track 4D coordination
+
+## Rel T1 A.2b DFS-routing scaffolding → BSP-LE Track 3 (captured 2026-07-19, commit `bcd02d6d`)
+
+The A.2b minimal slice added **Check 3** in the adaptive dispatcher
+(`stratified-eval.rkt` `use-propagator?` → `reachable-has-body-local-rule?`): a
+would-be-on-network NAF/guard query whose reachable relation graph has a **rule
+clause with a body-local (non-param) variable** routes to **DFS** (the correct
+reference solver), because the on-network ATMS rule engine cannot thread body-local
+clause vars (clause-env is param-only; `resolve-term` returns a bare symbol) →
+join/recursion generators are INCOMPLETE on-network (`twohop`→`{}`, `reaches`→base
+case only; probe-verified).
+
+**This is scaffolding with a named retirement plan.** It is honest engine-selection
+(not off-network scaffolding bolted on), but it exists only because the on-network
+rule engine is half-built.
+
+**Retirement owner: BSP-LE Track 3** (Tabling / SLG memoization, ⬜ unbuilt). When
+Track 3 lands (a) on-network **body-local-var threading** (reuse `collect-clause-vars`,
+today DFS/explain-only) + (b) **SLG completion detection** (for recursive termination)
++ (c) **worldview-preserving table answers** (PUnify Part 3 §9.6 support-set:
+unconditional=∅ memoize across worlds, conditional worldview-filtered —
+`2026-03-19_PUNIFY_PART3_ATMS_SOLVER_ARCHITECTURE.md:612-620`, designed-but-never-built),
+**delete the Check-3 predicate** and these shapes flow back on-network.
+
+### Cross-references
+
+- Landed slice: commit `bcd02d6d`; design `2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md` §5 A.2b (reframed).
+- Grounding + options synthesis (carry into Track 3's Stage-3): workflows `wf_c2f8bfa3-db2` (grounding-audit) + `wf_9c6eb408-522` (options-panel) — dailies `2026-07-19_dailies.md` LOG.
+- Prior art for the worldview layer: PUnify Part 3 §9.6 (support-set-tagged table reads).
+- The four co-change sites for the eventual on-network table format: table cell born plain (`atms.rkt:459`), tag-blind `table-answer-merge` (`atms.rkt:100-101`), `net-cell-write` tag-gate (`propagator.rkt:1993`), producer `logic-var-read`+flat-write (`relations.rkt:2743/2751`).
