@@ -25,13 +25,21 @@ defr vehicle [?type]
 defr license [?v]
   || "automobile"
 
+;; ---- A.1: top-level bare NAF goal (was echoed unevaluated; now runs via DFS) --
+;; bicycle is NOT licensed → NAF succeeds → one empty-binding answer
+;;2=> '[{}] : _
+solve (not (license "bicycle"))
+;; automobile IS licensed → NAF fails → no answers
+;;3=> nil : _
+solve (not (license "automobile"))
+
 defr light-vehicle [?v]
   &> (vehicle v) (not (license v))
 
 ;; ground queries route to DFS — CORRECT NOW (must stay green)
-;;3=> '[{}] : _
+;;5=> '[{}] : _
 solve (light-vehicle "bicycle")
-;;4=> nil : _
+;;6=> nil : _
 solve (light-vehicle "automobile")
 
 ;; free-var (on-network Tier-2): over-include {both} pre-fix

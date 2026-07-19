@@ -47,7 +47,7 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 |---|---|---|---|
 | **S3** | This design doc — Aspect-A settled (E-with-B, NTT, SRE, challenge); B/C/D open | 🔄 | **A-core LOCKED** (Q-A2 = E-with-B); B/C/D design pending |
 | **P0** | Acceptance file (`.prologos`) — covers all 3 NAF faces (`{both}` / `{neither}` / partial-drop) + ground-correct + body-local + recursive | 🔄 | `examples/2026-07-19-rel-t1-acceptance.prologos`; runs 0-errors; TARGET markers land as A.2 completes. **P0 refuted "recursion is correct"** |
-| **A.1** | Top-level goal-dispatch (echo fix): `solve`/`solve-one`/`explain` accept `not`/`guard`/`cut`/conjunction | ⬜ | Shallow; independent correctness patch |
+| **A.1** | Top-level goal-dispatch (echo fix): the **`not` arm** in `run-solve-goal`/`-one`/`-explain` → `solve-single-goal` | ✅ | `reduction.rkt`; guard/cut/conjunction NOT reachable at top level (mini-audit); acceptance + `test-rel-t1-naf.rkt` (3); suite 8922/0 |
 | **A.2** | NAF per-binding **belief-clear** (E-with-B) in `process-naf-request` + body-local-generator DFS-defer | ⬜ | **SETTLED**; the deep core build |
 | **A.3** | Safe/floundering — **static** range-restriction gate in `install-conjunction` | ⬜ | No check exists today; Phase-0 prereq |
 | **A.4** | Guard: FFI-crash residuation + static floundering; (guard per-binding leak — scope TBD) | ⬜ | S0 fire-once shape ≠ NAF's S1 shape |

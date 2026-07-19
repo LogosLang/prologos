@@ -513,6 +513,29 @@
      (define result (nf is-expr))
      (define answer (hasheq var-name result))
      (answers->prologos-expr (list answer) (list var-name))]
+    [(expr-not-goal? goal*)
+     ;; Top-level NAF goal (A.1): run via the DFS engine — solve-single-goal
+     ;; handles 'not (prove inner; empty ⇒ NAF succeeds). Mirrors the inline-unify
+     ;; arm above. Previously this fell through to the else-echo, printing the goal
+     ;; unevaluated. (A.3 adds the static floundering gate for unsafe free-var
+     ;; negation; A.1 is the dispatch fix for the reachable ground case.)
+     (define gd (goal-desc 'not (list (expr-not-goal-goal goal*))))
+     (define all-vars (collect-deep-logic-vars goal*))
+     (define query-vars
+       (let loop ([vs all-vars] [seen (hasheq)] [acc '()])
+         (cond
+           [(null? vs) (reverse acc)]
+           [(hash-ref seen (car vs) #f) (loop (cdr vs) seen acc)]
+           [else (loop (cdr vs) (hash-set seen (car vs) #t) (cons (car vs) acc))])))
+     (define store (current-relation-store))
+     (define answers
+       (parameterize ([current-is-eval-fn nf])
+         (solve-single-goal config store gd (hasheq) 0)))
+     (define converted-answers
+       (for/list ([ans (in-list answers)])
+         (for/hasheq ([qv (in-list query-vars)])
+           (values qv (solver-term->prologos-expr (walk* ans qv))))))
+     (answers->prologos-expr converted-answers query-vars)]
     ;; If the goal is not yet reduced to a goal-app, return the expression unchanged
     [else (expr-solve goal*)]))
 
@@ -608,6 +631,31 @@
      (define key (expr-keyword var-name))
      (define champ-val (champ-insert champ-empty (equal-hash-code key) key result))
      (expr-champ champ-val)]
+    [(expr-not-goal? goal*)
+     ;; Top-level NAF goal for solve-one (A.1): run via the DFS engine, return the
+     ;; first answer map bare or `none`. Mirrors the inline-unify solve-one arm.
+     (define gd (goal-desc 'not (list (expr-not-goal-goal goal*))))
+     (define all-vars (collect-deep-logic-vars goal*))
+     (define query-vars
+       (let loop ([vs all-vars] [seen (hasheq)] [acc '()])
+         (cond
+           [(null? vs) (reverse acc)]
+           [(hash-ref seen (car vs) #f) (loop (cdr vs) seen acc)]
+           [else (loop (cdr vs) (hash-set seen (car vs) #t) (cons (car vs) acc))])))
+     (define store (current-relation-store))
+     (define answers
+       (parameterize ([current-is-eval-fn nf])
+         (solve-single-goal config store gd (hasheq) 0)))
+     (if (null? answers)
+         (expr-fvar 'none)
+         (let* ([first-ans (car answers)]
+                [champ-val
+                 (for/fold ([c champ-empty])
+                           ([qv (in-list query-vars)])
+                   (define val (solver-term->prologos-expr (walk* first-ans qv)))
+                   (define key (expr-keyword qv))
+                   (champ-insert c (equal-hash-code key) key val))])
+           (expr-champ champ-val)))]
     [else (expr-solve-one goal*)]))
 
 ;; Run explain for a goal expression, returning a Prologos list of answer maps.
@@ -633,6 +681,27 @@
              (answer-result->prologos-expr r query-vars)
              r)))
      (racket-list->prologos-list prologos-maps)]
+    [(expr-not-goal? goal*)
+     ;; Explain over a top-level NAF goal (A.1): a negation has no positive
+     ;; provenance chain, so run it via the DFS engine and return plain answer maps
+     ;; (the same shape `solve` produces). Previously fell through to the else-echo.
+     (define gd (goal-desc 'not (list (expr-not-goal-goal goal*))))
+     (define all-vars (collect-deep-logic-vars goal*))
+     (define query-vars
+       (let loop ([vs all-vars] [seen (hasheq)] [acc '()])
+         (cond
+           [(null? vs) (reverse acc)]
+           [(hash-ref seen (car vs) #f) (loop (cdr vs) seen acc)]
+           [else (loop (cdr vs) (hash-set seen (car vs) #t) (cons (car vs) acc))])))
+     (define store (current-relation-store))
+     (define answers
+       (parameterize ([current-is-eval-fn nf])
+         (solve-single-goal config store gd (hasheq) 0)))
+     (define converted-answers
+       (for/list ([ans (in-list answers)])
+         (for/hasheq ([qv (in-list query-vars)])
+           (values qv (solver-term->prologos-expr (walk* ans qv))))))
+     (answers->prologos-expr converted-answers query-vars)]
     [else (expr-explain goal*)]))
 
 ;; ----------------------------------------
