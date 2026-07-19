@@ -2302,27 +2302,22 @@
 ;; Preparse surfs are FALLBACK for forms that fail parse-form-tree
 ;; (expression-level desugaring: cond, let, multi-arity defn patterns, etc.)
 (define (process-string-ws-inner-impl s)
-  ;; Step 1: Preparse — full expansion for registration + fallback surfs
+  ;; Step 1: Preparse — full expansion (registration + the surfs preparse macros
+  ;; and generated defs depend on: solver / schema / defmacro / data / trait / impl).
   (define raw-stxs (read-all-syntax-ws (open-input-string s) "<ws-string>"))
   (define expanded-stxs (preparse-expand-all raw-stxs))
   (define preparse-surfs (map parse-datum expanded-stxs))
 
-  ;; Step 2: Cell pipeline — form cells + dispatch + spec cells
-  (register-default-token-patterns!)
-  (define pt (read-to-tree s))
-  (define net-box (current-prop-net-box))
-  (define enet (unbox net-box))
-  (define-values (enet1 cell-map raw-map) (create-form-cells-from-tree pt enet))
-  (define enet2 (dispatch-form-productions enet1 cell-map))
-  (define-values (enet3 spec-map) (extract-specs-from-form-cells enet2 cell-map))
-  (set-box! net-box enet3)
-  (current-form-cell-map cell-map)
-  (current-spec-cell-map spec-map)
-
-  ;; Step 3: Cell surfs are THE output. Single-parser path.
-  ;; ONE parser (parse-datum), ONE representation. No fallback.
-  (define surfs (extract-surfs-from-form-cells enet3 cell-map
-                  #:source-str s #:raw-map raw-map))
+  ;; Step 2: merge the tree/cell pipeline with the preparse surfs — EXACTLY like
+  ;; process-file's WS path. The merge runs the cell pipeline internally (populating
+  ;; the form- + spec-cell maps) AND falls back to the preparse-expanded surf when
+  ;; the tree parser errors on a form — which is what PREPARSE MACROS need, since the
+  ;; tree parser sees them un-expanded and errors ("solver should have been expanded
+  ;; before parsing"). SC (Rel T1): the prior "cell-only, no fallback" path dropped
+  ;; preparse-macro support, so `solver` (and schema/defmacro) failed in the WS-string
+  ;; / REPL / editor eval path while `process-file` (which uses this same merge)
+  ;; worked. This restores consistency with process-file.
+  (define surfs (merge-preparse-and-tree-parser s preparse-surfs))
   (process-surfs surfs))
 
 ;; Wrapper: parameterize current-source-str and current-raw-node to prevent
