@@ -518,3 +518,34 @@
                             "[validate Person 42]\n"))))
   (check-true (regexp-match? #rx"validate expects a map-like subject" (or (err-msg rd) ""))
               "validate on a non-map subject names the expectation"))
+
+(test-case "F1b.7d: non-literal ctor door materializes :default (option A; was dropped → <error>)"
+  ;; [Cfg m] on a :default-bearing (no-:check) schema now routes through validate
+  ;; (wrap-seal-validate #:also-defaults? #t) so the default fills — was bare
+  ;; (the Cfg m) type-only → b.port projected the <error> sentinel.
+  (define CFG
+    (string-append
+     "ns t :no-prelude\n"
+     "require [prologos::data::result :refer [Result ok err ok? err?]]\n"
+     "require [prologos::data::reason :refer [Reason missing-required check-failed type-mismatch unexpected-field errors-to-list]]\n"
+     "schema Cfg\n  :host String\n  :port Int :default 8080\n"))
+  ;; the fill (the 7d payoff)
+  (define bport (last-result (run-file-string
+                              (string-append CFG "def m := [map-assoc {} :host \"h\"]\n"
+                                             "def b := [Cfg m]\nb.port\n"))))
+  (check-true (and (string? bport) (regexp-match? #rx"8080" bport))
+              (format "[Cfg m].port materializes the default 8080; got: ~v" bport))
+  (check-false (and (string? bport) (regexp-match? #rx"<error>" bport))
+               "the default is filled, not the <error> sentinel")
+  ;; the orthogonal strengthening (option A, consistent with the s3 :check door):
+  ;; a DYN subject missing a required NON-defaulted field errors at commit.
+  (define rs (last-result (run-file-string
+                           (string-append
+                            "ns t :no-prelude\n"
+                            "require [prologos::data::result :refer [Result ok err ok? err?]]\n"
+                            "require [prologos::data::reason :refer [Reason missing-required check-failed type-mismatch unexpected-field errors-to-list]]\n"
+                            "schema DCfg\n  :name String\n  :port Int :default 80\n"
+                            "def dyn := [map-assoc {} :port 9]\n"
+                            "def bad := [DCfg dyn]\n"))))
+  (check-true (prologos-error? rs)
+              "dyn subject missing a required non-defaulted field errors at commit (the A strengthening)"))

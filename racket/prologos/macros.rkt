@@ -1366,10 +1366,19 @@
 ;; the result+reason requires (the validate bake already errors loud otherwise).
 ;; The helpers subst-underscore/normalize-check-pred STAY — re-homed to the
 ;; validate plan bake (elaborator.rkt) at s2b.
-(define (wrap-seal-validate schema-entry base-form)
+(define (wrap-seal-validate schema-entry base-form #:also-defaults? [also-defaults? #f])
   (define has-checks?
     (ormap schema-field-check-pred (schema-entry-fields schema-entry)))
-  (if (not has-checks?)
+  ;; CIU T6 F1b.7d (option A): the NON-literal ctor door ALSO routes through
+  ;; validate when the schema has :default fields — validate materializes the
+  ;; defaults the type-only `(the S e)` seal accepts-but-DROPS (`[Cfg m]` →
+  ;; `b.port` was `<error>`). Scoped via the keyword so ONLY the non-literal
+  ;; ctor call site opts in; the literal + annotation doors fill at preparse
+  ;; (inject-schema-defaults) and stay has-checks?-only (byte-identical).
+  (define has-defaults?
+    (and also-defaults?
+         (ormap schema-field-default-val (schema-entry-fields schema-entry))))
+  (if (not (or has-checks? has-defaults?))
       base-form
       (let ([tmp '__schema-check-tmp]
             [sname (cadr base-form)]                             ; (the S …) → S
@@ -2007,13 +2016,17 @@
                   ;; CHECK-strength through the F1b.4a row-vs-schema discharge;
                   ;; runtime FILL is TYPE-DIRECTED and was probe-REFUTED at
                   ;; preparse — it lands in validate's tabulation). (F1b.5-s3,
-                  ;; D29) :check-bearing schemas now ALSO delegate :check + the
-                  ;; runtime fill to validate via wrap-seal-validate — the s3
-                  ;; STRENGTHENING (census: zero live :check non-literal ctors,
-                  ;; so no existing surface flips). No :check → `(the S e)`
-                  ;; unchanged (type-only, as before).
+                  ;; D29) :check-bearing schemas delegate :check + the runtime
+                  ;; fill to validate via wrap-seal-validate — the s3 STRENGTHENING.
+                  ;; CIU T6 F1b.7d (option A, #:also-defaults? #t): a :default-
+                  ;; bearing schema (even with NO :check) ALSO routes here so the
+                  ;; defaults materialize (validate fills; `[Cfg m]` → b.port =
+                  ;; 8080 was `<error>`). Census: zero live non-literal ctors on a
+                  ;; :check-or-:default schema, so no existing surface flips. No
+                  ;; :check AND no :default → `(the S e)` unchanged (type-only).
                   (preparse-expand-form
-                   (wrap-seal-validate maybe-schema `(the ,(car datum) ,arg))
+                   (wrap-seal-validate maybe-schema `(the ,(car datum) ,arg)
+                                       #:also-defaults? #t)
                    reg (+ depth 1))))
             ;; Not a schema construction — recurse into subexpressions
             (preparse-expand-subforms datum reg depth))])])]
