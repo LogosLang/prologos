@@ -11,6 +11,14 @@ This document codifies the methodology for Post-Implementation Reviews
 to conduct a PIR (Stage 5: Composition and Extension), this document
 defines /how/ to conduct one well.
 
+/The trigger is objective, not a judgment call/: a design document tracked in a
+Series Master that reaches completion gets a PIR --- always; its Stage-3 CLOSING
+PHASE (~X.close~) schedules it, and the roadmap row does not flip ✅ until it
+lands. The full PIR is written at the /tracked-unit/ level (a Track or a major
+Phase carrying its own design doc/§); sub-slices use lighter ✏ close-notes. See
+DESIGN_METHODOLOGY.org Stage 3 "Closing Phase (MANDATORY)" + Stage 5 "When to do
+a PIR."
+
 A PIR is the reflective counterpart to the research stage: where Stage 1
 asks "what do we know going in?", the PIR asks "what do we know coming
 out?" It is primarily a /technical/ review --- not a process retrospective,
