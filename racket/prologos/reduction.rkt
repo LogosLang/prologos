@@ -520,22 +520,29 @@
      ;; unevaluated. (A.3 adds the static floundering gate for unsafe free-var
      ;; negation; A.1 is the dispatch fix for the reachable ground case.)
      (define gd (goal-desc 'not (list (expr-not-goal-goal goal*))))
-     (define all-vars (collect-deep-logic-vars goal*))
-     (define query-vars
-       (let loop ([vs all-vars] [seen (hasheq)] [acc '()])
-         (cond
-           [(null? vs) (reverse acc)]
-           [(hash-ref seen (car vs) #f) (loop (cdr vs) seen acc)]
-           [else (loop (cdr vs) (hash-set seen (car vs) #t) (cons (car vs) acc))])))
-     (define store (current-relation-store))
-     (define answers
-       (parameterize ([current-is-eval-fn nf])
-         (solve-single-goal config store gd (hasheq) 0)))
-     (define converted-answers
-       (for/list ([ans (in-list answers)])
-         (for/hasheq ([qv (in-list query-vars)])
-           (values qv (solver-term->prologos-expr (walk* ans qv))))))
-     (answers->prologos-expr converted-answers query-vars)]
+     ;; A.3: static floundering gate for the top-level solve(not G) site. A bare
+     ;; top-level `not` has no positive companion goal, so any free var in the
+     ;; inner goal is unbound (floundering) — surface a clear error via expr-panic.
+     (define fl (clause-floundering-msg 'solve '() (list gd)))
+     (cond
+       [fl (expr-panic (expr-string fl))]
+       [else
+        (define all-vars (collect-deep-logic-vars goal*))
+        (define query-vars
+          (let loop ([vs all-vars] [seen (hasheq)] [acc '()])
+            (cond
+              [(null? vs) (reverse acc)]
+              [(hash-ref seen (car vs) #f) (loop (cdr vs) seen acc)]
+              [else (loop (cdr vs) (hash-set seen (car vs) #t) (cons (car vs) acc))])))
+        (define store (current-relation-store))
+        (define answers
+          (parameterize ([current-is-eval-fn nf])
+            (solve-single-goal config store gd (hasheq) 0)))
+        (define converted-answers
+          (for/list ([ans (in-list answers)])
+            (for/hasheq ([qv (in-list query-vars)])
+              (values qv (solver-term->prologos-expr (walk* ans qv))))))
+        (answers->prologos-expr converted-answers query-vars)])]
     ;; If the goal is not yet reduced to a goal-app, return the expression unchanged
     [else (expr-solve goal*)]))
 
@@ -635,27 +642,32 @@
      ;; Top-level NAF goal for solve-one (A.1): run via the DFS engine, return the
      ;; first answer map bare or `none`. Mirrors the inline-unify solve-one arm.
      (define gd (goal-desc 'not (list (expr-not-goal-goal goal*))))
-     (define all-vars (collect-deep-logic-vars goal*))
-     (define query-vars
-       (let loop ([vs all-vars] [seen (hasheq)] [acc '()])
-         (cond
-           [(null? vs) (reverse acc)]
-           [(hash-ref seen (car vs) #f) (loop (cdr vs) seen acc)]
-           [else (loop (cdr vs) (hash-set seen (car vs) #t) (cons (car vs) acc))])))
-     (define store (current-relation-store))
-     (define answers
-       (parameterize ([current-is-eval-fn nf])
-         (solve-single-goal config store gd (hasheq) 0)))
-     (if (null? answers)
-         (expr-fvar 'none)
-         (let* ([first-ans (car answers)]
-                [champ-val
-                 (for/fold ([c champ-empty])
-                           ([qv (in-list query-vars)])
-                   (define val (solver-term->prologos-expr (walk* first-ans qv)))
-                   (define key (expr-keyword qv))
-                   (champ-insert c (equal-hash-code key) key val))])
-           (expr-champ champ-val)))]
+     ;; A.3: static floundering gate (top-level solve-one(not G) site).
+     (define fl (clause-floundering-msg 'solve '() (list gd)))
+     (cond
+       [fl (expr-panic (expr-string fl))]
+       [else
+        (define all-vars (collect-deep-logic-vars goal*))
+        (define query-vars
+          (let loop ([vs all-vars] [seen (hasheq)] [acc '()])
+            (cond
+              [(null? vs) (reverse acc)]
+              [(hash-ref seen (car vs) #f) (loop (cdr vs) seen acc)]
+              [else (loop (cdr vs) (hash-set seen (car vs) #t) (cons (car vs) acc))])))
+        (define store (current-relation-store))
+        (define answers
+          (parameterize ([current-is-eval-fn nf])
+            (solve-single-goal config store gd (hasheq) 0)))
+        (if (null? answers)
+            (expr-fvar 'none)
+            (let* ([first-ans (car answers)]
+                   [champ-val
+                    (for/fold ([c champ-empty])
+                              ([qv (in-list query-vars)])
+                      (define val (solver-term->prologos-expr (walk* first-ans qv)))
+                      (define key (expr-keyword qv))
+                      (champ-insert c (equal-hash-code key) key val))])
+              (expr-champ champ-val)))])]
     [else (expr-solve-one goal*)]))
 
 ;; Run explain for a goal expression, returning a Prologos list of answer maps.
@@ -686,22 +698,29 @@
      ;; provenance chain, so run it via the DFS engine and return plain answer maps
      ;; (the same shape `solve` produces). Previously fell through to the else-echo.
      (define gd (goal-desc 'not (list (expr-not-goal-goal goal*))))
-     (define all-vars (collect-deep-logic-vars goal*))
-     (define query-vars
-       (let loop ([vs all-vars] [seen (hasheq)] [acc '()])
-         (cond
-           [(null? vs) (reverse acc)]
-           [(hash-ref seen (car vs) #f) (loop (cdr vs) seen acc)]
-           [else (loop (cdr vs) (hash-set seen (car vs) #t) (cons (car vs) acc))])))
-     (define store (current-relation-store))
-     (define answers
-       (parameterize ([current-is-eval-fn nf])
-         (solve-single-goal config store gd (hasheq) 0)))
-     (define converted-answers
-       (for/list ([ans (in-list answers)])
-         (for/hasheq ([qv (in-list query-vars)])
-           (values qv (solver-term->prologos-expr (walk* ans qv))))))
-     (answers->prologos-expr converted-answers query-vars)]
+     ;; A.3: static floundering gate for the top-level solve(not G) site. A bare
+     ;; top-level `not` has no positive companion goal, so any free var in the
+     ;; inner goal is unbound (floundering) — surface a clear error via expr-panic.
+     (define fl (clause-floundering-msg 'solve '() (list gd)))
+     (cond
+       [fl (expr-panic (expr-string fl))]
+       [else
+        (define all-vars (collect-deep-logic-vars goal*))
+        (define query-vars
+          (let loop ([vs all-vars] [seen (hasheq)] [acc '()])
+            (cond
+              [(null? vs) (reverse acc)]
+              [(hash-ref seen (car vs) #f) (loop (cdr vs) seen acc)]
+              [else (loop (cdr vs) (hash-set seen (car vs) #t) (cons (car vs) acc))])))
+        (define store (current-relation-store))
+        (define answers
+          (parameterize ([current-is-eval-fn nf])
+            (solve-single-goal config store gd (hasheq) 0)))
+        (define converted-answers
+          (for/list ([ans (in-list answers)])
+            (for/hasheq ([qv (in-list query-vars)])
+              (values qv (solver-term->prologos-expr (walk* ans qv))))))
+        (answers->prologos-expr converted-answers query-vars)])]
     [else (expr-explain goal*)]))
 
 ;; ----------------------------------------

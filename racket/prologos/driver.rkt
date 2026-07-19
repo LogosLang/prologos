@@ -815,8 +815,12 @@
                                      [(expr-defr? zonked-body)
                                       (define rel-info (expr-defr->relation-info zonked-body))
                                       (define schema-err (check-relation-schema-rows rel-info))
+                                      ;; Rel T1 A.3: static floundering gate (engine-independent,
+                                      ;; runs at defr registration before any query dispatch).
+                                      (define flounder-err (check-relation-floundering rel-info))
                                       (cond
                                         [schema-err (prologos-error #f schema-err)]
+                                        [flounder-err (prologos-error #f flounder-err)]
                                         [else
                                          (current-relation-store
                                           (relation-register (current-relation-store) rel-info))

@@ -175,3 +175,53 @@
   (check-false (string-contains? r "\"z\"")
                "the blocked target must not leak"))
 
+;; ========================================
+;; A.3 — static floundering gate: a `not`/`guard` var bound by NOTHING is unsafe.
+;; PERMISSIVE (Prolog `\+` mode discipline): head params COUNT as binders, so
+;; `p(x) :- not q(x)` is allowed (an unsafe-mode call gives the standard Prolog nil).
+;; ========================================
+
+;; A prologos-error surfaces as a struct in the results list (not a string);
+;; stringify uniformly (mirrors test-validate.rkt's result-str).
+(define (result-str r)
+  (cond [(prologos-error? r) (format "ERROR: ~a" (prologos-error-message r))]
+        [(string? r) r]
+        [else (format "~a" r)]))
+
+(test-case "A.3 Site A: defr clause with a body var bound by nothing → floundering error"
+  ;; bad(y) :- not(lic(z))  — z is bound by no positive goal → unsafe.
+  (define results
+    (run-prologos-string
+     (string-append "ns t :no-prelude\n\n"
+       "defr lic [?x]\n  || \"car\"\n\n"
+       "defr bad [?y]\n  &> (not (lic z))\n")))
+  (define s (result-str (last-result results)))
+  (check-true (string-contains? s "floundering")
+              "an unbound negation var must be flagged as floundering")
+  (check-true (string-contains? s "variable z")
+              "the offending variable is named"))
+
+(test-case "A.3 Site A (permissive): `not` over a head param registers OK; ground call is safe"
+  ;; risky(x) :- not(lic(x)) — x is a head param → permissive allows it.
+  (define results
+    (run-prologos-string
+     (string-append "ns t :no-prelude\n\n"
+       "defr lic [?x]\n  || \"car\"\n\n"
+       "defr risky [?x]\n  &> (not (lic x))\n\n"
+       "eval (solve (risky \"bike\"))\n")))  ;; bike not licensed → succeeds
+  (define s (result-str (last-result results)))
+  (check-false (string-contains? s "floundering")
+               "a head-param negation must NOT be rejected (permissive)")
+  (check-true (string-contains? s "{}")
+              "the ground safe call succeeds"))
+
+(test-case "A.3 Site B: top-level solve (not G) with a free var → floundering error"
+  (define results
+    (run-prologos-string
+     (string-append "ns t :no-prelude\n\n"
+       "defr lic [?x]\n  || \"car\"\n\n"
+       "eval (solve (not (lic v)))\n")))
+  (define s (result-str (last-result results)))
+  (check-true (string-contains? s "floundering")
+              "a top-level `not` over a free var must flag floundering"))
+

@@ -64,6 +64,9 @@
  collect-ast-vars
  ;; Clause-variable collection (used by the adaptive dispatcher's body-local check)
  collect-clause-vars
+ ;; Rel T1 A.3: static floundering / range-restriction gate
+ check-relation-floundering
+ clause-floundering-msg
  ;; Evaluation callback (set by reduction.rkt to break circular dep)
  current-is-eval-fn
  ;; Phase R4: S1 NAF handler (stratum-based, replaces naf-completions)
@@ -1399,6 +1402,57 @@
     [(expr-not-goal? expr)
      (collect-ast-vars (expr-not-goal-goal expr) vars)]
     [else (void)]))
+
+;; ----------------------------------------
+;; Rel T1 A.3: static floundering / range-restriction gate
+;; ----------------------------------------
+;; Negation-as-failure (and guard) over an UNBOUND variable is unsafe (floundering):
+;; a variable in a `not`/`guard` goal is SAFE iff it has a POSITIVE binding
+;; occurrence — a head parameter, or a positive body goal (an `app` argument, a
+;; `unify` side, or an `is` LHS). PERMISSIVE (Prolog `\+` mode discipline): head
+;; params COUNT as binders, so `p(x) :- not q(x)` is ALLOWED; an unsafe-mode call
+;; (`solve (p v)`, v free) then yields the standard Prolog unsafe-`\+` result (nil)
+;; — a runtime mode/floundering warning is deferred. Only a var bound by NOTHING is
+;; rejected here, statically, at clause registration (engine-independent) + at the
+;; top-level `solve (not G)` runner (reduction.rkt).
+
+;; Collect the vars a POSITIVE goal BINDS: `app` args (all symbols), `unify` sides,
+;; and the `is` LHS ONLY (the `is` RHS is consumed, not bound). `not`/`guard`/`cut`
+;; bind nothing.
+(define (collect-positive-binder-vars goal vars)
+  (define args (goal-desc-args goal))
+  (case (goal-desc-kind goal)
+    [(app) (for ([a (in-list (cadr args))]) (when (symbol? a) (hash-set! vars a #t)))]
+    [(unify) (for ([a (in-list args)]) (collect-solver-term-vars a vars))]
+    [(is) (when (symbol? (car args)) (hash-set! vars (car args) #t))]
+    [else (void)]))
+
+;; Return an error message for the first floundering (unbound) variable in a
+;; `not`/`guard` goal of `goals`, given the clause's head `param-names`; or #f if
+;; every gating var is positively bound. `who` names the source for the message
+;; ('solve for the top-level site, else the relation name).
+(define (clause-floundering-msg who param-names goals)
+  (define bound (make-hasheq))
+  (for ([pn (in-list param-names)]) (hash-set! bound pn #t))
+  (for ([g (in-list goals)] #:unless (memq (goal-desc-kind g) '(not guard cut)))
+    (collect-positive-binder-vars g bound))
+  (for/or ([g (in-list goals)] #:when (memq (goal-desc-kind g) '(not guard)))
+    (define gvars (make-hasheq))
+    (collect-goal-vars g gvars)
+    (for/or ([v (in-list (sort (hash-keys gvars) symbol<?))]
+             #:unless (hash-ref bound v #f))
+      (format "unsafe negation: variable ~a in a `~a` goal ~a is not bound by any positive goal (floundering)"
+              v (goal-desc-kind g)
+              (if (eq? who 'solve) "at top level" (format "of relation ~a" who))))))
+
+;; SITE A: check every clause of a relation-info; return the first floundering
+;; message or #f. Engine-independent — runs at defr registration, before dispatch,
+;; so it covers the on-network, DFS, and explain engines uniformly.
+(define (check-relation-floundering rel-info)
+  (for/or ([v (in-list (relation-info-variants rel-info))])
+    (define pnames (map param-info-name (variant-info-params v)))
+    (for/or ([ci (in-list (variant-info-clauses v))])
+      (clause-floundering-msg (relation-info-name rel-info) pnames (clause-info-goals ci)))))
 
 ;; Deep-walk an AST expression to rename logic variables using a fresh-map.
 ;; Returns a new AST expression with renamed variables.
