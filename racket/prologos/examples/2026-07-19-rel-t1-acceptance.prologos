@@ -6,15 +6,16 @@ ns rel-t1-acceptance
 ;; Run:   racket tools/run-file.rkt examples/2026-07-19-rel-t1-acceptance.prologos
 ;; Check: racket tools/run-file.rkt --check examples/2026-07-19-rel-t1-acceptance.prologos
 ;;
-;; Aspect-A fix = E-with-B (belief-layer per-binding NAF narrowing). The bug is
-;; the on-network Tier-2 single-bit collapse, with TWO faces:
-;;   {both}    over-include  (fact generator picks an unblocked binding)
-;;   {neither} over-exclude  (body-local join picks a blocked binding)
-;; Recursive / all-ground NAF route to DFS/WF and are ALREADY correct.
+;; Aspect-A NAF correctness has TWO landed fixes:
+;;   A.2-core (E-with-B, belief-layer per-binding narrowing): FACT-generator NAF,
+;;     on-network — fixes the {both} over-include (`light-vehicle` → {bicycle}).
+;;   A.2b minimal slice (adaptive-dispatch DFS-routing): NAF/guard over a RULE
+;;     generator with a body-local (non-param) join/recursion var is INCOMPLETE on
+;;     the on-network engine (a join → {}, recursion → base case only), so the
+;;     dispatcher routes those to DFS (correct). Scaffolding — retirement owner is
+;;     BSP-LE Track 3 (on-network body-local threading + SLG completion).
 ;;
-;; Markers tagged  (TARGET, post-A.2)  encode the CORRECT answer — they FAIL
-;; pre-fix (documenting the collapse) and pass once A.2 lands. Correct-now
-;; markers pass today and must keep passing.
+;; `;;N=>` markers encode the CORRECT answer and are checked by `--check`.
 ;; ============================================================================
 
 ;; ---- fact-generator NAF: the canonical repro ------------------------------
@@ -61,11 +62,11 @@ defr twohop [?a ?c]
 defr safe-twohop [?a ?c]
   &> (twohop a c) (not (blk c))
 
-;; twohop(x)={z,w}, blk={z}  (TARGET, A.2b): '[{:c "w"}] : _
-;; A.2b — the RULE generator `twohop` does NOT materialize c's per-branch tags on
-;; the shared scope cell (probe: resolves to a single collapsed value), so A.2's
-;; per-binding enumeration can't fire and it falls back to the single-bit path
-;; ({neither} = nil). Needs the DFS-defer (design §5 A.2 boundary).
+;; twohop(x)={z,w}, blk={z} → {w}. FIXED (A.2b minimal slice): `twohop` is a rule
+;; with a body-local join var `b` the on-network engine can't thread (empty on-
+;; network), so the adaptive dispatcher now routes NAF over body-local-var rules to
+;; DFS, which threads `b` correctly. Scaffolding — retires with BSP-LE Track 3.
+;;12=> '[{:c "w"}] : _
 solve (safe-twohop "x" c)
 
 ;; ---- recursive NAF: ALSO on-network (NAF forces it) — ALSO buggy ----------
@@ -73,13 +74,15 @@ defr reaches [?a ?c]
   &> (edge a c)
   &> (edge a b) (reaches b c)
 
-;; confirm the generator set: reaches(x) = {y, z, w}
+;; generator set (DFS): reaches(x) = {y, z, w}
+;;14=> '[{:c "y"} {:c "z"} {:c "w"}] : _
 solve (reaches "x" c)
 
 defr safe-reach [?a ?c]
   &> (reaches a c) (not (blk c))
 
-;; reaches(x)={y,z,w}, blk={z}  (TARGET, A.2b): '[{:c "w"} {:c "y"}] : _
-;; A.2b — same as safe-twohop: the RECURSIVE generator `reaches` under-tags c.
-;; pre-fix DROPS w (a third collapse face) — recursion does NOT save it.
+;; reaches(x)={y,z,w}, blk={z} → {y,w}. FIXED (A.2b minimal slice): recursive
+;; `reaches` has a body-local recursion var → routed to DFS (correct). Scaffolding —
+;; retires with BSP-LE Track 3.
+;;16=> '[{:c "y"} {:c "w"}] : _
 solve (safe-reach "x" c)

@@ -174,6 +174,25 @@
 ;; Allows running the entire test suite under :atms without modifying tests.
 (define current-solver-strategy-override (make-parameter #f))
 
+;; Rel T1 A.2b (SCAFFOLDING — retirement owner: BSP-LE Track 3). #t iff any
+;; relation reachable from goal-name has a clause carrying a body-local variable
+;; (a clause variable that is not one of that clause's head parameters). The
+;; on-network ATMS rule engine cannot thread such vars — clause-env is built from
+;; param names only and resolve-term returns a bare symbol for a non-param — so
+;; its answer set is INCOMPLETE for join/recursion rule generators (a join
+;; produces {}, recursion produces the base case only). The adaptive dispatcher
+;; routes these to DFS, which threads body-local vars correctly and is the correct
+;; reference solver here. When BSP-LE Track 3 lands on-network body-local threading
+;; + SLG completion, DELETE this check so these shapes flow back on-network.
+(define (reachable-has-body-local-rule? store goal-name)
+  (for*/or ([pred (in-list (transitive-pred-closure store goal-name))]
+            [ri (in-value (hash-ref store pred #f))]
+            #:when ri
+            [v (in-list (relation-info-variants ri))]
+            [ci (in-list (variant-info-clauses v))])
+    (define param-names (map param-info-name (variant-info-params v)))
+    (pair? (remove* param-names (collect-clause-vars ci param-names)))))
+
 (define (stratified-solve-goal config store goal-name goal-args query-vars)
   ;; Well-founded semantics dispatch
   (define semantics (solver-config-semantics config))
@@ -218,15 +237,24 @@
                          [c (in-list (variant-info-clauses v))]
                          [g (in-list (clause-info-goals c))])
                  (memq (goal-desc-kind g) '(not guard))))
-             (cond
-               [has-naf-or-guard? #t]  ;; ATMS required
-               [else
-                ;; Check 2: total alternatives ≥ threshold → ATMS (parallel benefit).
-                (define total-alternatives
-                  (for/sum ([v (in-list (relation-info-variants rel))])
-                    (+ (length (variant-info-facts v))
-                       (length (variant-info-clauses v)))))
-                (>= total-alternatives (solver-config-threshold config))])])]
+             ;; Check 2: total alternatives ≥ threshold → ATMS (parallel benefit).
+             (define would-use-propagator?
+               (or has-naf-or-guard?
+                   (>= (for/sum ([v (in-list (relation-info-variants rel))])
+                         (+ (length (variant-info-facts v))
+                            (length (variant-info-clauses v))))
+                       (solver-config-threshold config))))
+             ;; Check 3 (Rel T1 A.2b — SCAFFOLDING, retire w/ BSP-LE Track 3):
+             ;; the on-network rule engine cannot thread body-local (non-param)
+             ;; clause variables (clause-env is param-only; resolve-term returns a
+             ;; bare symbol for non-params), so a rule generator with a join /
+             ;; recursion var yields an INCOMPLETE answer set on-network (empty for
+             ;; a join, base-case-only for recursion). DFS threads them correctly.
+             ;; Route any would-be-on-network query whose reachable relation graph
+             ;; contains such a rule clause to DFS. Fact-NAF (A.2-core) and
+             ;; param-passthrough rules are on-network-complete and stay.
+             (and would-use-propagator?
+                  (not (reachable-has-body-local-rule? store goal-name)))])]
          [else #f]))
 
      (if use-propagator?

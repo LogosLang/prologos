@@ -48,6 +48,13 @@
    "defr vehicle [?type]\n  || \"bicycle\"\n     \"automobile\"\n\n"
    "defr license [?v]\n  || \"automobile\"\n\n"))
 
+;; A small graph world (edges + a block set) for the A.2b rule-generator cases.
+(define graph-world
+  (string-append
+   "ns t :no-prelude\n\n"
+   "defr edge [?a ?b]\n  || \"x\" \"y\"\n     \"y\" \"z\"\n     \"y\" \"w\"\n\n"
+   "defr blk [?n]\n  || \"z\"\n\n"))
+
 ;; ========================================
 ;; A.1 — top-level bare `not` goal runs (was echoed)
 ;; ========================================
@@ -121,4 +128,50 @@
               "ground unlicensed vehicle succeeds")
   (check-true (string-contains? auto-r "nil")
               "ground licensed vehicle fails"))
+
+;; ========================================
+;; A.2b — NAF over a body-local-var RULE generator routes to DFS (correct).
+;; The on-network engine can't thread body-local (non-param) clause vars, so a
+;; join/recursion rule generator is INCOMPLETE on-network; the adaptive dispatcher
+;; (stratified-eval use-propagator? reachable-has-body-local-rule?) routes these to
+;; DFS. SCAFFOLDING — retires with BSP-LE Track 3 (on-network body-local + SLG).
+;; ========================================
+
+(test-case "A.2b: NAF over a JOIN rule generator (body-local var) — routed to DFS, correct"
+  ;; twohop(a,c) :- edge(a,b), edge(b,c)   [b is a body-local join var]
+  ;; safe-twohop(a,c) :- twohop(a,c), not(blk(c))
+  ;; twohop(x)={z,w}, blk={z} => safe-twohop(x,c)={w}.
+  ;; On-network the join var b can't thread (=> {}); DFS threads it correctly.
+  (define results
+    (run-prologos-string
+     (string-append graph-world
+       "defr twohop [?a ?c]\n  &> (edge a b) (edge b c)\n\n"
+       "defr safe-twohop [?a ?c]\n  &> (twohop a c) (not (blk c))\n\n"
+       "eval (solve (safe-twohop \"x\" c))\n")))
+  (define r (last-result results))
+  (check-true (string? r))
+  (check-true (string-contains? r "\"w\"")
+              "the unblocked two-hop target must be in the solution")
+  (check-false (string-contains? r "\"z\"")
+               "the blocked target must not leak"))
+
+(test-case "A.2b: NAF over a RECURSIVE rule generator — routed to DFS, complete + correct"
+  ;; reaches(a,c) :- edge(a,c) ; edge(a,b), reaches(b,c)   [b is a body-local recursion var]
+  ;; safe-reach(a,c) :- reaches(a,c), not(blk(c))
+  ;; reaches(x)={y,z,w}, blk={z} => safe-reach(x,c)={y,w}.
+  ;; On-network reaches yields the base case only ({y}); DFS is complete.
+  (define results
+    (run-prologos-string
+     (string-append graph-world
+       "defr reaches [?a ?c]\n  &> (edge a c)\n  &> (edge a b) (reaches b c)\n\n"
+       "defr safe-reach [?a ?c]\n  &> (reaches a c) (not (blk c))\n\n"
+       "eval (solve (safe-reach \"x\" c))\n")))
+  (define r (last-result results))
+  (check-true (string? r))
+  (check-true (string-contains? r "\"y\"")
+              "the base-reachable unblocked target must be present")
+  (check-true (string-contains? r "\"w\"")
+              "the transitively-reachable unblocked target must be present (recursion not dropped)")
+  (check-false (string-contains? r "\"z\"")
+               "the blocked target must not leak"))
 

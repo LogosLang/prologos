@@ -62,6 +62,8 @@
  ;; Variable renaming helpers (for negation)
  rename-ast-vars
  collect-ast-vars
+ ;; Clause-variable collection (used by the adaptive dispatcher's body-local check)
+ collect-clause-vars
  ;; Evaluation callback (set by reduction.rkt to break circular dep)
  current-is-eval-fn
  ;; Phase R4: S1 NAF handler (stratum-based, replaces naf-completions)
