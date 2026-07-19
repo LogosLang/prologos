@@ -113,6 +113,77 @@
 ;; check provability (inner scope cell non-bot → provable), write nogood.
 ;; Registered as a stratum handler for naf-pending-cell-id.
 ;; Replaces: current-naf-completions parameter, imperative S1 evaluation.
+;;
+;; ---- A.2 (Rel T1): per-binding NAF belief-clear ----
+;; The single-shared-naf-bit clear collapses N generator bindings into ONE
+;; Boolean decision, so an open-var negation over an enumerating generator yields
+;; {both}/{neither}/partial-drop instead of the correct subset. E-with-B evaluates
+;; the negation PER enumerated binding and AND-NOTs exactly the FAILING bindings'
+;; distinguishing bits from the worldview-cache — staying in the BELIEF layer
+;; (decisions-state untouched, so it coexists with dissolution's bitmask-visible?).
+;;
+;; Applies only when the negated goal `not(goal-name args)` has EXACTLY ONE free
+;; generator var whose scope cell carries tagged bindings (fact/rule/join
+;; generators materialize per-branch tags via solver-assume). Returns the mask
+;;   (OR failing-bitmasks) & ~(OR passing-bitmasks)
+;; — clearing the failing bindings' distinguishing (fact) bits while preserving
+;; the passing bindings — or #f when the per-binding path does not apply (0 or >1
+;; free generator vars, or a non-tagged / unmaterialized var), so the caller falls
+;; back to the existing single-bit path. Per-binding provability uses DFS
+;; solve-goal (ground inner goal), no network fork.
+(define (naf-per-binding-mask forked naf-env goal-name goal-args store config)
+  ;; Classify each arg: a free generator var (tagged multi-binding scope cell,
+  ;; detected via the RAW tagged entries — NOT logic-var-read, which collapses)
+  ;; vs a ground value.
+  (define arg-info
+    (for/list ([a (in-list goal-args)])
+      (define r (resolve-term naf-env a))
+      (cond
+        [(scope-ref? r)
+         (define scope-cid (scope-ref-cid r))
+         (define var-name (scope-ref-var r))
+         (define raw (and scope-cid (net-cell-read-raw forked scope-cid)))
+         (define beta-entries
+           (and raw (tagged-cell-value? raw)
+                (for*/list ([e (in-list (tagged-cell-value-entries raw))]
+                            [sc (in-value (cdr e))]
+                            #:when (scope-cell? sc)
+                            [beta (in-value (scope-cell-ref sc var-name))]
+                            #:when (not (eq? beta scope-cell-bot)))
+                  (cons (car e) beta))))  ;; (bitmask . binding-value)
+         ;; A genuine multi-binding on-network generator has >= 2 distinct tagged
+         ;; bindings (the collapse-bug case). Fact relations materialize these;
+         ;; rule/recursive generators may NOT tag per-branch on the shared scope
+         ;; cell (they resolve to a single collapsed value / one entry) — those
+         ;; fall through to the single-bit path (A.2b: DFS-defer). 1-binding vars
+         ;; have no collapse to fix, so also fall through.
+         (if (and beta-entries (>= (length beta-entries) 2))
+             (cons 'gen beta-entries)
+             (let ([v (logic-var-read forked r)])
+               (cons 'ground (if (eq? v scope-cell-bot) r v))))]
+        [else (cons 'ground r)])))
+  (define gen-positions
+    (for/list ([ai (in-list arg-info)] [i (in-naturals)] #:when (eq? (car ai) 'gen)) i))
+  (cond
+    [(not (= (length gen-positions) 1)) #f]  ;; single free generator var only (for now)
+    [else
+     (define gen-pos (car gen-positions))
+     (define beta-entries (cdr (list-ref arg-info gen-pos)))
+     (define cfg (or config (make-solver-config)))
+     (define-values (failing passing)
+       (for/fold ([fail 0] [pass 0])
+                 ([be (in-list beta-entries)])
+         (define bm (car be))
+         (define beta (cdr be))
+         (define inner-args
+           (for/list ([ai (in-list arg-info)] [i (in-naturals)])
+             (if (= i gen-pos) beta (cdr ai))))
+         (define results (solve-goal cfg store goal-name inner-args '()))
+         (if (pair? results)
+             (values (bitwise-ior fail bm) pass)    ;; inner provable ⇒ NAF fails for β ⇒ exclude
+             (values fail (bitwise-ior pass bm)))))  ;; inner unprovable ⇒ NAF holds ⇒ keep
+     (bitwise-and failing (bitwise-not passing))]))
+
 (define (process-naf-request net pending-hash)
   ;; pending-hash: hasheq naf-aid → (hasheq 'inner-goal ... 'env ... 'naf-bit-pos ...)
   (for/fold ([main-net net])
@@ -130,9 +201,30 @@
     ;; Resolve inner goal args using S0 fixpoint values (on fork).
     ;; Install inner goal on fork — standard code path, fresh scope.
     (define inner-goal-kind (goal-desc-kind inner-goal))
-    (define inner-provable?
-      (cond
-        [(eq? inner-goal-kind 'app)
+    ;; A.2 (Rel T1): per-binding belief-clear for a free generator var in an app
+    ;; NAF; pb-mask=#f ⇒ fall back to the single-shared-bit path in the else branch.
+    (define pb-mask
+      (and (eq? inner-goal-kind 'app)
+           (naf-per-binding-mask forked naf-env
+                                 (car (goal-desc-args inner-goal))
+                                 (cadr (goal-desc-args inner-goal))
+                                 (net-cell-read main-net relation-store-cell-id)
+                                 (net-cell-read main-net config-cell-id))))
+    (cond
+      ;; A.2 per-binding path: AND-NOT the FAILING bindings' distinguishing bits
+      ;; (pb-mask=0 ⇒ every binding passed ⇒ nothing to clear).
+      [pb-mask
+       (if (zero? pb-mask)
+           main-net
+           (let ([cwv (net-cell-read main-net worldview-cache-cell-id)])
+             (net-cell-write main-net worldview-cache-cell-id
+                             (bitwise-and cwv (bitwise-not pb-mask)))))]
+      [else
+       ;; Fallback: existing single-shared-bit path — ground negated goals,
+       ;; single-binding vars, and multi-free-var goals.
+       (define inner-provable?
+         (cond
+           [(eq? inner-goal-kind 'app)
          (define goal-name (car (goal-desc-args inner-goal)))
          (define goal-args (cadr (goal-desc-args inner-goal)))
          ;; Resolve args through naf-env, reading S0 fixpoint values from fork.
@@ -240,7 +332,7 @@
           (define current-wv (net-cell-read main-net worldview-cache-cell-id))
           (define cleared-wv (bitwise-and current-wv (bitwise-not invalid-mask)))
           (net-cell-write main-net worldview-cache-cell-id cleared-wv))
-        main-net)))
+        main-net)])))
 
 ;; Register the S1 NAF handler for the NAF-pending cell.
 (register-stratum-handler! naf-pending-cell-id process-naf-request)

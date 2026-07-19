@@ -48,7 +48,8 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | **S3** | This design doc — Aspect-A settled (E-with-B, NTT, SRE, challenge); B/C/D open | 🔄 | **A-core LOCKED** (Q-A2 = E-with-B); B/C/D design pending |
 | **P0** | Acceptance file (`.prologos`) — covers all 3 NAF faces (`{both}` / `{neither}` / partial-drop) + ground-correct + body-local + recursive | 🔄 | `examples/2026-07-19-rel-t1-acceptance.prologos`; runs 0-errors; TARGET markers land as A.2 completes. **P0 refuted "recursion is correct"** |
 | **A.1** | Top-level goal-dispatch (echo fix): the **`not` arm** in `run-solve-goal`/`-one`/`-explain` → `solve-single-goal` | ✅ | `reduction.rkt`; guard/cut/conjunction NOT reachable at top level (mini-audit); acceptance + `test-rel-t1-naf.rkt` (3); suite 8922/0 |
-| **A.2** | NAF per-binding **belief-clear** (E-with-B) in `process-naf-request` + body-local-generator DFS-defer | ⬜ | **SETTLED**; the deep core build |
+| **A.2** | NAF per-binding **belief-clear** (E-with-B) in `process-naf-request` — **FACT generators** | 🔄 core done | `naf-per-binding-mask`; `light-vehicle` `{both}`→`{bicycle}`; acceptance + `test-rel-t1-naf` (5); suite 8927/0 |
+| **A.2b** | Rule/recursive-generator NAF — generator **under-tags** the scope cell → **DFS-defer** | ⬜ | `safe-twohop`/`safe-reach`; per-binding can't enumerate (probe: collapsed value); distinct larger change (design §5 A.2 boundary) |
 | **A.3** | Safe/floundering — **static** range-restriction gate in `install-conjunction` | ⬜ | No check exists today; Phase-0 prereq |
 | **A.4** | Guard: FFI-crash residuation + static floundering; (guard per-binding leak — scope TBD) | ⬜ | S0 fire-once shape ≠ NAF's S1 shape |
 | **B.1** | Typed solution rows — codata-observation path | ⬜ | Untyped-relation fallback; first-class |
@@ -221,6 +222,21 @@ introduced by this track):
 - **bm=0 gating-only success markers** cannot be belief-cleared (a bm=0 row is
   unconditionally visible, relations.rkt:2765). Fact-generator bindings are **safe**
   (non-zero bits); a narrow edge to note in the acceptance file.
+
+**Implementation note (A.2 core, 2026-07-19) — the boundary is BROADER than
+body-local NAF vars.** The A.2-core per-binding belief-clear (`naf-per-binding-mask`)
+fires for **fact generators** (`light-vehicle`: `{both}`→`{bicycle}` ✓). But a
+debug trace showed **rule/recursive generators under-tag even when the NAF var is a
+head param**: `twohop` (rule with a body-local join) and `reaches` (recursive) do
+NOT materialize the NAF var's per-branch tags on the shared scope cell — the var
+resolves to a single collapsed value (or one entry), so `naf-per-binding-mask`
+returns `#f` and falls back to the single-bit path (`safe-twohop` `{neither}`,
+`safe-reach` partial-drop unchanged). So the boundary is not just "the NAF var is
+body-local" but "the **generator** doesn't materialize per-branch tags," which
+includes rule + recursive generators. **A.2b** = the DFS-defer for this class (route
+the relation to the DFS solver, which handles NAF correctly — the all-ground-sub-case
+precedent), OR deeper generator materialization. A.2-core is scoped to fact
+generators; A.2b is a distinct, larger change.
 
 ### A.3 — safe / floundering negation (a **static** range-restriction gate)
 No safety check exists anywhere today (grep-confirmed). Add a **static,

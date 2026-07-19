@@ -86,3 +86,39 @@
                "top-level solve-one (not G) must not be echoed unevaluated")
   (check-true (string-contains? r "none")
               "solve-one of a failed NAF should be none"))
+
+;; ========================================
+;; A.2 — clause-body NAF per-binding belief-clear (FACT generator)
+;; ========================================
+
+(test-case "A.2: clause-body NAF over a FACT generator — only the unblocked binding survives"
+  ;; light-vehicle(v) :- vehicle(v), not(license(v))
+  ;; vehicle={bicycle,automobile}, license={automobile} => {bicycle} only.
+  ;; Pre-A.2 the single-shared-bit collapse over-included BOTH ({both}).
+  (define results
+    (run-prologos-string
+     (string-append world
+       "defr light-vehicle [?v]\n  &> (vehicle v) (not (license v))\n\n"
+       "eval (solve (light-vehicle lv))\n")))
+  (define r (last-result results))
+  (check-true (string? r))
+  (check-true (string-contains? r "bicycle")
+              "the unlicensed vehicle should be in the solution")
+  (check-false (string-contains? r "automobile")
+               "the licensed vehicle must NOT leak (A.2 per-binding belief-clear)"))
+
+(test-case "A.2: ground clause-body NAF queries route to DFS and stay correct"
+  (define results
+    (run-prologos-string
+     (string-append world
+       "defr light-vehicle [?v]\n  &> (vehicle v) (not (license v))\n\n"
+       "eval (solve (light-vehicle \"bicycle\"))\n"      ;; unlicensed => succeeds
+       "eval (solve (light-vehicle \"automobile\"))\n"))) ;; licensed => fails
+  (check-true (>= (length results) 2))
+  (define bicycle-r (list-ref results (- (length results) 2)))
+  (define auto-r (last results))
+  (check-true (string-contains? bicycle-r "{}")
+              "ground unlicensed vehicle succeeds")
+  (check-true (string-contains? auto-r "nil")
+              "ground licensed vehicle fails"))
+

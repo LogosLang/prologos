@@ -42,8 +42,8 @@ solve (light-vehicle "bicycle")
 ;;6=> nil : _
 solve (light-vehicle "automobile")
 
-;; free-var (on-network Tier-2): over-include {both} pre-fix
-;; (TARGET, post-A.2): '[{:lv "bicycle"}] : _
+;; free-var (on-network Tier-2, FACT generator): FIXED by A.2 core (was {both})
+;;7=> '[{:lv "bicycle"}] : _
 solve (light-vehicle lv)
 
 ;; ---- body-local join NAF: over-exclude {neither} pre-fix ------------------
@@ -61,7 +61,11 @@ defr twohop [?a ?c]
 defr safe-twohop [?a ?c]
   &> (twohop a c) (not (blk c))
 
-;; twohop(x)={z,w}, blk={z}  (TARGET, post-A.2 body-local DFS-defer): '[{:c "w"}] : _
+;; twohop(x)={z,w}, blk={z}  (TARGET, A.2b): '[{:c "w"}] : _
+;; A.2b — the RULE generator `twohop` does NOT materialize c's per-branch tags on
+;; the shared scope cell (probe: resolves to a single collapsed value), so A.2's
+;; per-binding enumeration can't fire and it falls back to the single-bit path
+;; ({neither} = nil). Needs the DFS-defer (design §5 A.2 boundary).
 solve (safe-twohop "x" c)
 
 ;; ---- recursive NAF: ALSO on-network (NAF forces it) — ALSO buggy ----------
@@ -75,6 +79,7 @@ solve (reaches "x" c)
 defr safe-reach [?a ?c]
   &> (reaches a c) (not (blk c))
 
-;; reaches(x)={y,z,w}, blk={z}  (TARGET, post-A.2): '[{:c "w"} {:c "y"}] : _
+;; reaches(x)={y,z,w}, blk={z}  (TARGET, A.2b): '[{:c "w"} {:c "y"}] : _
+;; A.2b — same as safe-twohop: the RECURSIVE generator `reaches` under-tags c.
 ;; pre-fix DROPS w (a third collapse face) — recursion does NOT save it.
 solve (safe-reach "x" c)
