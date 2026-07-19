@@ -7,6 +7,10 @@
 - **`<>` for type-level grouping** -- Pi `<(x : A) -> B>`, Sigma `<(x : A) * B>`, union `<Int | String>`.
 - **`{}` for maps and implicit binders** -- map literals `{:name "alice"}`, implicit type binders `{A B : Type}` in specs.
 
+## Reader (WS vs sexp)
+
+- **WS-reader vs sexp-reader divergence** -- the WS reader tokenizes chars the sexp reader passes through: `.` (dot-access), `?`/`!` (predicate/mutation suffixes), `<`/`>` (angle-type groups), `^` (rename). Any change to keyword/identifier tokenization, or any feature whose surface uses these chars, must be validated AND census'd in **both** reader modes -- sexp-green ≠ WS-correct (CIU T6 F1b hit it 3×: dotted-`ns`, `?`-suffixed keyword keys, `<`-in-`:check`-preds were all WS-reader-only). Tokenization recognizers must delegate to the ONE predicate (`ident-continue?`), never inline a charset -- inline charsets silently drift (the F1b.7g bug: `recognize-keyword` had drifted from `ident-continue?` for 8 chars while its siblings delegated).
+
 ## Definitions
 
 - **`spec`/`defn` for functions** -- spec declares the signature, defn provides the implementation.
