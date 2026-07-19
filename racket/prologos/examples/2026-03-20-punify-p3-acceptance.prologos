@@ -259,13 +259,13 @@ def origin : Point  := {:x 0 :y 0}
 def cfg    : Config := {:host "api.example.com" :port 443 :debug true}
 
 ;; --- D9: Construct with defaults (omit defaulted fields) ---
-;; ASPIRATIONAL — default-fill on construction
+;; LIVE since F1b.4e (annotation-door default-fill) — the March aspiration works.
 
-;; def default-cfg : Config := {}
-;; ;; => {:host "localhost" :port 8080 :debug false}
+def default-cfg : Config := {}
+;; => {:host "localhost", :port 8080, :debug false} : Config
 
-;; def partial-cfg : Config := {:port 9090}
-;; ;; => {:host "localhost" :port 9090 :debug false}
+def partial-cfg : Config := {:port 9090}
+;; => {:host "localhost", :port 9090, :debug false} : Config
 
 
 ;; ========================================================================
