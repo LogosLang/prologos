@@ -549,3 +549,48 @@
                             "def bad := [DCfg dyn]\n"))))
   (check-true (prologos-error? rs)
               "dyn subject missing a required non-defaulted field errors at commit (the A strengthening)"))
+
+(test-case "F1b.7c: `def x : S :=` COMMITMENT door discharges :check + non-literal :default; `the` stays a view"
+  (define P7C
+    (string-append
+     "ns t :no-prelude\n"
+     "require [prologos::data::result :refer [Result ok err ok? err?]]\n"
+     "require [prologos::data::reason :refer [Reason missing-required check-failed type-mismatch unexpected-field errors-to-list]]\n"
+     "schema Checked\n  :name String\n  :age Int :check (> _ 0)\n"))
+  ;; (a) LITERAL def-annotation on a :check-violating value ERRORS at commit (was silent)
+  (check-true (prologos-error?
+               (last-result (run-file-string
+                             (string-append P7C "def c : Checked := {:name \"d\" :age 0}\n"))))
+              "def c : Checked := {…:age 0} errors at commit (the 7c gap closed)")
+  ;; (b) NON-LITERAL (def-bound symbol) on a violating value ERRORS at commit
+  (check-true (prologos-error?
+               (last-result (run-file-string
+                             (string-append P7C
+                                            "def m := [map-assoc [map-assoc {} :name \"e\"] :age 0]\n"
+                                            "def c : Checked := m\n"))))
+              "def c : Checked := m (violating) errors at commit")
+  ;; (c) a satisfying :check def commits and its field reads back
+  (define cage (last-result (run-file-string
+                             (string-append P7C "def c : Checked := {:name \"f\" :age 5}\nc.age\n"))))
+  (check-true (and (string? cage) (regexp-match? #rx"5" cage))
+              (format "a satisfying :check def commits and reads; got: ~v" cage))
+  ;; (d) NON-LITERAL def-annotation :default fill (the pre-7d annotation-door drop, closed)
+  (define chost (last-result (run-file-string
+                              (string-append
+                               "ns t :no-prelude\n"
+                               "require [prologos::data::result :refer [Result ok err ok? err?]]\n"
+                               "require [prologos::data::reason :refer [Reason missing-required check-failed type-mismatch unexpected-field errors-to-list]]\n"
+                               "schema Cfg\n  :host String :default \"localhost\"\n"
+                               "def m := {}\ndef c : Cfg := m\nc.host\n"))))
+  (check-true (and (string? chost) (regexp-match? #rx"localhost" chost))
+              (format "def c : Cfg := m fills the :default (annotation-door drop closed); got: ~v" chost))
+  ;; (e) `the S {violating}` STAYS a gradual view — Q3: no :check discharge, no error
+  (check-false (prologos-error?
+                (last-result (run-file-string
+                              (string-append P7C "the Checked {:name \"g\" :age 0}\n"))))
+               "the Checked {…:age 0} stays a view (no :check discharge) — Q3")
+  ;; (f) ctor-RHS `def x : S := [S {…}]` still SELF-DISCHARGES (not double-wrapped)
+  (check-true (prologos-error?
+               (last-result (run-file-string
+                             (string-append P7C "def c : Checked := [Checked {:name \"h\" :age 0}]\n"))))
+              "def c : Checked := [Checked {…:age 0}] errors via the ctor RHS (no double-wrap)"))

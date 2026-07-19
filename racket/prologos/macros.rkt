@@ -1393,6 +1393,49 @@
         `(let ,tmp ,base-form
            (prologos::data::reason::expect-valid ,prefix (validate ,sname ,tmp))))))
 
+;; CIU T6 F1b.7c (option ii): the discharge body for the `def x : S :=`
+;; COMMITMENT door — mirrors the constructor door's wrap. A LITERAL brace body
+;; is preparse-filled (inject-schema-defaults; defaults are static), so
+;; #:also-defaults? stays #f (has-checks? gates the wrap → a no-:check/no-:default
+;; schema is byte-identical). A NON-LITERAL body cannot be preparse-filled (fill
+;; is type-directed — the M2 refutation), so #:also-defaults? #t lets validate
+;; materialize defaults at runtime (also closes the pre-7d :default drop on the
+;; annotation door). Either way base-form stays `(the S body)` so the annotated
+;; def-commit's seal-forcing gate (seal-application-body?) fires and the def's
+;; displayed type is the annotation. `the S e` is deliberately NOT routed here.
+(define (def-seal-body schema-entry sname body)
+  (define has-checks?
+    (ormap schema-field-check-pred (schema-entry-fields schema-entry)))
+  (define has-defaults?
+    (ormap schema-field-default-val (schema-entry-fields schema-entry)))
+  (define literal? (and (pair? body) (eq? (car body) '$brace-params)))
+  ;; Discharge ONLY when the schema has something to enforce (:check/:default)
+  ;; AND the body is a LITERAL map or a bare def-bound SYMBOL — the two shapes
+  ;; the identified 7c gap covers (`def c : S := {…}` / `def x : S := m`) and
+  ;; that provably static-seal-then-validate. A COMPOUND application body is
+  ;; left untouched: a ctor-call RHS `[S …]` SELF-DISCHARGES (double-wrapping it
+  ;; as `(the S <champ>)` hits the retired champ-vs-schema arm and swallows the
+  ;; panic), and an arbitrary-expression RHS is a named residual (the annotation
+  ;; still type-checks it; census: zero live `def x : CheckSchema := <expr>`).
+  (define discharge?
+    (and (or has-checks? has-defaults?)
+         (or literal? (symbol? body))))
+  (cond
+    ;; Nothing to discharge (plain schema, or a self-discharging/arbitrary RHS)
+    ;; → BYTE-IDENTICAL to the pre-7c def-fill: a literal keeps its preparse
+    ;; fill (vacuous with no defaults), else the bare body. Preserves the
+    ;; static-seal error path (7f named-field messages) + gradual dyn-absorb.
+    [(not discharge?)
+     (if literal? (inject-schema-defaults schema-entry body) body)]
+    ;; LITERAL body: defaults preparse-filled → #:also-defaults? #f (has-checks?
+    ;; gates the wrap).
+    [literal?
+     (wrap-seal-validate schema-entry
+                         (list 'the sname (inject-schema-defaults schema-entry body)))]
+    ;; SYMBOL body: validate fills defaults at runtime → #:also-defaults? #t.
+    [else
+     (wrap-seal-validate schema-entry (list 'the sname body) #:also-defaults? #t)]))
+
 ;; ========================================
 ;; Session type WS-mode desugaring (Phase S1d)
 ;; ========================================
@@ -1967,31 +2010,44 @@
                         (and (pair? b) (eq? (car b) '$brace-params)
                              (list 'the (cadr datum)
                                    (inject-schema-defaults sch b))))))))
+        ;; CIU T6 F1b.7c (option ii): the `def x : S :=` COMMITMENT door
+        ;; discharges :check + non-literal :default fill via the ONE validate
+        ;; engine, exactly like the constructor door — while `the S e` (a
+        ;; mid-expression coercion/view) STAYS gradual. This is the LAST F1b.7
+        ;; edge: the stress-test found `def c : Checked := {:age 0}` committed
+        ;; SILENTLY (the :check never ran). Option (ii) extends the D23/F1b.6
+        ;; stored-commitment boundary (a def store hard-errors on escaping
+        ;; projection metas; mid-expression `the` stays permissive — driver.rkt
+        ;; check-escaping-projection-metas fires ONLY at the two def commits)
+        ;; from projection-meta escape to :check: a stored, annotated schema
+        ;; value is a COMMITMENT and must satisfy its schema's :check. Census:
+        ;; ZERO live `def x : CheckSchema := …` surfaces flip (all :check goes
+        ;; through the ctor door today). The `the S {…}` / `the S e` forms are
+        ;; NOT touched (Q3: the line is def-commit vs mid-expression `the`).
+        ;; The branch now fires for ANY body (literal OR non-literal) when S is
+        ;; a registered schema; def-seal-body dispatches on the body shape.
         (define def-fill
           (and (not the-fill)
                (eq? (car datum) 'def)
                (or
-                ;; WS shape: (def name ($angle-type S) ($brace-params …))
+                ;; WS shape: (def name ($angle-type S) body)
                 (and (= (length datum) 4)
                      (let ([ann (caddr datum)])
                        (and (pair? ann) (eq? (car ann) '$angle-type)
                             (pair? (cdr ann)) (symbol? (cadr ann)) (null? (cddr ann))
                             (let ([sch (lookup-schema (cadr ann))])
                               (and sch
-                                   (let ([b (cadddr datum)])
-                                     (and (pair? b) (eq? (car b) '$brace-params)
-                                          (list 'def (cadr datum) ann
-                                                (inject-schema-defaults sch b)))))))))
-                ;; sexp shape: (def name : S ($brace-params …))
+                                   (list 'def (cadr datum) ann
+                                         (def-seal-body sch (cadr ann) (cadddr datum))))))))
+                ;; sexp shape: (def name : S body…)
                 (and (>= (length datum) 5)
                      (eq? (list-ref datum 2) ':)
                      (symbol? (list-ref datum 3))
                      (let ([sch (lookup-schema (list-ref datum 3))])
                        (and sch
-                            (let ([b (last datum)])
-                              (and (pair? b) (eq? (car b) '$brace-params)
-                                   (append (reverse (cdr (reverse datum)))
-                                           (list (inject-schema-defaults sch b)))))))))))
+                            (append (reverse (cdr (reverse datum)))
+                                    (list (def-seal-body sch (list-ref datum 3)
+                                                         (last datum))))))))))
         (define maybe-schema (lookup-schema (car datum)))
         (cond
           [the-fill (preparse-expand-subforms the-fill reg depth)]
