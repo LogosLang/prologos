@@ -157,6 +157,20 @@ value strata. Topology strata are sequential. See =DEVELOPMENT_LESSONS.org=
 | 4 | Trait-Dispatched Iteration (broadcast via Seq) | ⬜ | Post Track 8 |
 | 5 | Union-Aware Dispatch | ⬜ | Post Track 8 |
 
+** Rel (Relational Language)  — /The logic-programming layer: `solve`/`defr`, NAF, guards, solution-set typing/
+
+| | |
+|------------------+------|
+| *Master Roadmap* | [[file:2026-07-19_REL_MASTER.md][2026-07-19_REL_MASTER.md]] |
+| *Thesis*         | Group work related to the relational surface language + its ergonomics + correctness + typing (as distinct from the UCS constraint-solver substrate and the CIU records/rows type layer). |
+| *Status*         | Founded 2026-07-19 (owner-directed, during CIU T6 F1b.close). No tracks locked. First artifact = the un-named *Solve Typing + NAF Correctness* track's implementation note ([[file:2026-07-19_REL_SOLVE_TYPING_NOTE.md][seed]]): typed solution rows (D25.3 charter, moved from CIU) + the `not`/`&>` negation-as-failure correctness gaps (probe-grounded from `foray.prologos`). *Sequencing (owner): solve typing lands BEFORE Path Selection* — Path Selection over solution sets is its highest-value consumer. |
+
+*** Tracks
+
+| # | Track | Description | Status | Artifact |
+|---+-------+-------------+--------+----------|
+| (un-named) | Solve Typing + NAF Correctness | typed solution rows (D25.3) + `not`/`&>` NAF correctness | ⬜ SEED | [[file:2026-07-19_REL_SOLVE_TYPING_NOTE.md][note]] |
+
 ** SRE (Structural Reasoning Engine)  — /PUnify as universal structural decomposition/composition substrate/
 
 | | |

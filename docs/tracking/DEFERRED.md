@@ -277,7 +277,32 @@ to the D24 presence-marks display + the broader FQN-display-verbosity presentati
 question (dailies 29). Low urgency; a display-layer-only change (no reader/typing
 touch).
 
-## CIU T6 (post-F1b): typed solution rows — own mini-track (D25.3 charter home)
+## CIU T6: two standing WS-surface non-blockers (F1b arc hand-testing, filed 2026-07-19)
+
+Two known, low-severity surface gaps found across the F1b arc — workarounds exist,
+neither blocks records-correct-in-principle; filed so the doc-truth is honest.
+
+1. **`<`-check-preds are unusable in WS files** — a `<`-leading form (`:check (< _ 5)`)
+   is mis-read: `<` opens an angle-type reader GROUP in WS mode, so the predicate
+   never parses as a comparison. **Workaround: `(> N _)`** (reversed direction:
+   `:check (> 5 _)` means "field < 5"; the `>`/`>=` normalizer handles the arg
+   swap). Same CLASS as the 7g `?`-in-keyword-token gap (a WS-reader charset/
+   grouping issue) — the reader-level fix would let `<` inside a check pred read as
+   the operator, not the angle-group opener. Pre-existing; not records-specific.
+2. **`match` with an INLINE `validate` scrutinee fails inference** —
+   `match [validate S e] | ok v -> … | err es -> …` fails to infer the scrutinee's
+   `Result S E` type inline; **def-bind first** (`def r := [validate S e]` then
+   `match r …`) works. Route-sensitivity in the checker's inline-vs-def-bound
+   scrutinee inference (the F1a col-3/p0 literal/binding-route-sensitivity class).
+   Found at F1b.5-s2.
+
+## CIU T6 → Rel: typed solution rows — MOVED to the Rel series (2026-07-19)
+
+**Charter home is now the Rel series** ([`2026-07-19_REL_MASTER.md`](2026-07-19_REL_MASTER.md)
+→ [`2026-07-19_REL_SOLVE_TYPING_NOTE.md`](2026-07-19_REL_SOLVE_TYPING_NOTE.md)
+Problem 1), grouped with the `not`/NAF-correctness work as the first (un-named)
+Rel track. Owner (2026-07-19): solve typing sequences BEFORE Path Selection (its
+highest-value consumer). The original charter is retained below for the entry gates.
 
 `solve` results carry NO type at HEAD (`expr-hole`); per-solution ROW types
 (`List {unknown : T …}`) would make Path Selection over solution sets TYPED.
