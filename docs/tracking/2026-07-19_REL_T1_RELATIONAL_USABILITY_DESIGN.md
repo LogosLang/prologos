@@ -50,7 +50,7 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | **A.1** | Top-level goal-dispatch (echo fix): the **`not` arm** in `run-solve-goal`/`-one`/`-explain` → `solve-single-goal` | ✅ | `reduction.rkt`; guard/cut/conjunction NOT reachable at top level (mini-audit); acceptance + `test-rel-t1-naf.rkt` (3); suite 8922/0 |
 | **A.2** | NAF per-binding **belief-clear** (E-with-B) in `process-naf-request` — **FACT generators** | 🔄 core done | `naf-per-binding-mask`; `light-vehicle` `{both}`→`{bicycle}`; acceptance + `test-rel-t1-naf` (5); suite 8927/0 |
 | **A.2b** | Rule/recursive-generator NAF — **ROOT reframed (probe-verified): the body-local-var gap**, not tabling-flattens-worldviews (that is second-order = BSP-LE Track 3). Minimal slice = **adaptive-dispatch DFS-routing** (`reachable-has-body-local-rule?` in `use-propagator?`) | ✅ | `bcd02d6d`; `safe-twohop`→`{w}`, `safe-reach`→`{y,w}` via DFS (parity-verified); A.2-core fact-NAF stays on-network; +2 tests (`test-rel-t1-naf` 7); acceptance 8/8; suite 8929/0. **SCAFFOLDING** — retirement owner BSP-LE Track 3 (on-network body-local threading + SLG completion + worldview-preservation §9.6) |
-| **A.3** | Safe/floundering — **static** range-restriction gate in `install-conjunction` | ⬜ | No check exists today; Phase-0 prereq |
+| **A.3** | Safe/floundering — **static** range-restriction gate (PERMISSIVE / Prolog-mode) at **defr registration** (Site A) + top-level `solve(not G)` runners (Site B); **not** `install-conjunction` (home reframed by the A.3 audit) | ✅ | `74fa9df2`; `check-relation-floundering`; unsafe → clear error; residual (mode-dependent free-arg call) = standard Prolog `nil`, deferred; +3 tests; suite 8932/0 |
 | **A.4** | Guard: FFI-crash residuation + static floundering; (guard per-binding leak — scope TBD) | ⬜ | S0 fire-once shape ≠ NAF's S1 shape |
 | **B.1** | Typed solution rows — codata-observation path | ⬜ | Untyped-relation fallback; first-class |
 | **B.2** | Typed solution rows — schema-projection path + rename query-var → field name | ⬜ | Ties to Path-Selection `^` |
@@ -296,16 +296,44 @@ the Check-3 predicate and those shapes flow back on-network. Logged in `DEFERRED
 `safe-reach`→`{y,w}`); `test-rel-t1-naf` +2 (join + recursion routing); demo
 (`needs`/`risky-dep`) unchanged (already DFS); suite 8929/466/0.
 
-### A.3 — safe / floundering negation (a **static** range-restriction gate)
-No safety check exists anywhere today (grep-confirmed). Add a **static,
-install-time** range-restriction check in `install-conjunction`'s existing gating
-pre-scan (relations.rkt:2190): a variable appearing in a `not` (or `guard`) goal
-must also appear in a **positive** body goal. This has the positive-bound-var set
-in scope, fires **before** forking, and yields a clean compile-time error —
-whereas a dynamic S1-handler seam (`inner-vars-final`) cannot distinguish a
-safe-per-binding var from an unsafe floundering one (it lacks the positive-bound-var
-set). Phase-0 prerequisite shared by every NAF option, and the hard gate for the
-§5.G anti-join. Standard `\+` groundness discipline.
+### A.3 — safe / floundering negation (static range-restriction gate) — **LANDED** (`74fa9df2`)
+
+A variable in a `not`/`guard` goal bound by **nothing** is unsafe (floundering);
+NAF over it is ill-defined and silently mis-answers. A.3 rejects it **statically**
+with a clear error. No safety check existed anywhere before (grep-confirmed).
+
+**PERMISSIVE (Prolog `\+` mode discipline; owner ruling — Prolog-parity is the aim):**
+a `not`/`guard` var is safe iff it has a positive binding occurrence — a **head
+parameter** OR a positive body goal (an `app` arg, a `unify` side, or an `is` LHS —
+**not** the `is` RHS, which is consumed). So `p(x) :- not q(x)` is **allowed** (x is
+a param). **Residual (named, deferred):** an unsafe-mode call of such a clause
+(`solve (p v)`, v free) yields the standard Prolog unsafe-`\+` result — `nil` (probe:
+`solve (risky v)` → `nil`, *not* a fuel error) — **not** a floundering warning.
+Catching that needs a runtime mode/groundness check (query-arg groundness × which
+params occur only under `not`); deferred (WFS is available for stricter semantics later).
+
+**Home reframed (the design's `install-conjunction` proposal was REFUTED by the
+A.3 grounding audit `wf_e9ca4ffc-0b1`):** `install-conjunction` is ATMS-path-only
+AND — self-inflicted — a floundering var is a *non-param `not` var*, exactly what
+**A.2b's Check 3** treats as body-local → routes to DFS, **bypassing
+`install-conjunction`**, so a gate there fires for essentially *none* of its target
+population. Floundering-safety is a **static property of the clause text**, so the
+home is **engine-independent clause construction**:
+- **Site A** (clause-body `not`/`guard`): `check-relation-floundering` at **defr
+  registration** (driver.rkt, mirroring `check-relation-schema-rows` → `prologos-error`),
+  *before* any dispatch — covers the on-network + DFS + explain engines uniformly, and
+  moots the `install-conjunction` Phase-T reconciliation (unsafe clauses error before
+  Phase T runs).
+- **Site B** (top-level `solve`/`solve-one`/`explain` `(not G)`, the seed's actual
+  example): the three runner arms (reduction.rkt), via `expr-panic` → the existing
+  reduce-stage `prologos-error` path. *Minor cosmetic:* Site B surfaces with a
+  `panic:` prefix (reused channel) — cleanable later.
+
+Shared checker (relations.rkt): `clause-floundering-msg` + `check-relation-floundering`.
+Guard **is** covered (same rule, kind-specific var extractor); **A.4 owns** guard's
+residuation + FFI-crash (the statically-safe-but-not-yet-ground case). **Scope:**
+named-`defr` Site A + top-level Site B; inline anonymous-`rel` floundering deferred
+(rare; shares Site B's eval-time channel). Tests: `test-rel-t1-naf` +3.
 
 ### A.4 — guard
 - **FFI crash**: gate guard-fire on condition-var readiness — **residuate** when
@@ -508,9 +536,9 @@ checklist-first). The roadmap row does not flip ✅ until the PIR lands.
 - **A.2b** rule/recursive-generator NAF — ✅ **RESOLVED (minimal slice landed, `bcd02d6d`): adaptive-dispatch DFS-routing** (§5 A.2b). Root reframed to the body-local-var gap (probe-verified); worldview-preservation + on-network body-local threading + SLG **deferred to BSP-LE Track 3** (scaffolding retirement owner). Owner's "no DFS-defer" revised given the true premise (on-network correctness here = build Track 3).
 
 **Still open:**
-- **A.3 (NEXT)** — static floundering gate (range-restriction in `install-conjunction`); independent of the DFS-routing slice, smaller.
+- **A.3** — ✅ **RESOLVED (landed `74fa9df2`): static PERMISSIVE floundering gate** at defr registration (Site A) + top-level runners (Site B); `install-conjunction` home refuted (§5 A.3). Residual (mode-dependent free-arg call → standard Prolog `nil`) named + deferred.
+- **A.4 (NEXT)** — guard: FFI-crash **residuation** (reuse discrimination residuate-on-bot) + flounder terminal; guard's static floundering is already covered by A.3, so A.4 is the residuation/crash half. (Note: design coords `guard-fire 2118/2140` + `residuate-on-bot 720` are STALE per the A.3 audit — actual guard-fire `2231`, bot-leak `2212/2218`, residuate-on-bot `813-814`.)
 - **BSP-LE Track 3 (deferred, scaffolding retirement)** — on-network body-local-var threading + SLG completion + §9.6 worldview-preserving tabling. Retires the A.2b Check-3 DFS-routing predicate. Grounding + options + prior-art (§9.6) captured in the `wf_c2f8bfa3-db2` / `wf_9c6eb408-522` synthesis; carry into Track 3's own Stage-3.
-- **Q-A4** guard scope: fix crash + static floundering now, defer guard's per-binding leak (S0 fire-once shape differs from NAF's S1)?
 - **Q-B** (Aspect B) keying: rename query-var → field, vs fresh positional Record.
 
 ---
