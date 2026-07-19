@@ -1,4 +1,4 @@
-ns examples.wfle-acceptance
+ns examples::wfle-acceptance
 
 ;; ========================================================================
 ;;
@@ -74,8 +74,8 @@ defr same-pair [?x ?y]
   &> (= x y)
 
 solve (same-pair "hello" ?x)
-  
-solve (solve (same-pair "hello" r))
+
+solve (same-pair "hello" r)
 ;; => [{:r "hello"}]
 
 ;; --- A4: Negation-as-failure (ground, stratifiable) ---
@@ -84,8 +84,11 @@ defr blocked [?node]
   || "c"
 
 defr reachable [?from ?to]
-  &> (edge from to) (not (blocked to))
-  &> (edge from mid) (not (blocked mid)) (reachable mid to)
+  &> (edge from to)
+     (not (blocked to))
+  &> (edge from mid)
+     (not (blocked mid))
+     (reachable mid to)
 
 solve (reachable "a" dest)
 ;; => [{:dest "b"}] — c is blocked, so d and e unreachable
@@ -96,8 +99,10 @@ defr lookup [+key -val]
   || "host" "localhost"
      "port" "8080"
 
-eval (solve (lookup "host" v))
+solve (lookup "host" v)
 ;; => [{:v "localhost"}]
+
+solve (lookup k "localhost")
 
 
 ;; ========================================================================
@@ -294,8 +299,16 @@ explain-with wf-solver (pacifist "nixon")
 ;; Configured via :provenance key on solver config.
 ;; explain forces :full when solver says :none.
 
+
+
+defr parent-child [?parent ?child]
+  || "tom"  "bob"
+     "tom"  "liz"
+
+
+
 ;; Default explain returns full provenance (clause-id, depth, derivation tree):
-explain (parent "tom" who)
+explain (parent-child "tom" who)
 ;; => [{:who_ "bob", :provenance {:clause-id :parent/2-0, :depth 0, ...}}
 ;;     {:who_ "liz", :provenance {:clause-id :parent/2-1, :depth 0, ...}}]
 
@@ -303,7 +316,7 @@ explain (parent "tom" who)
 solver summary-solver
   :provenance summary
 
-explain-with summary-solver (parent "tom" who)
+explain-with summary-solver (parent-child "tom" who)
 ;; => [{:who_ "bob", :provenance {:clause-id :parent/2-0, :depth 0}}
 ;;     {:who_ "liz", :provenance {:clause-id :parent/2-1, :depth 0}}]
 
@@ -385,7 +398,11 @@ solve (double-int 5 r)
 ;; => [{:n_ 5, :r 10}]
 
 ;; --- F2: guard goals ---
-;; STATUS: WORKING (fixed — guard wired through parser/elaborator, 1-arg and 2-arg forms)
+;; STATUS: PARSES; but the ON-NETWORK guard does NOT filter correctly — `positive-edge`
+;;   below leaks the w=0 edge (see the expected `;; =>`). This is a PRE-EXISTING
+;;   on-network-guard bug (confirmed identical at b0b88df2, before the Rel T1 work);
+;;   it is Rel T1 **A.4** (guard residuation/crash + on-network guard correctness).
+;;   The guard is correct on the DFS path.
 ;; Generic operator `gt` dispatches at reduction time to the correct type comparison.
 ;; In WS mode, `>` is an angle-bracket delimiter, so use `gt` keyword.
 
@@ -651,3 +668,20 @@ solve (color item hue)
 
 solve (reachable "a" dest)
 ;; => confirms stratified negation works
+
+
+
+
+
+
+
+spec my-add Nat Nat -> Nat
+defn my-add [a b]
+  + a b
+
+my-add 3N 4N
+
+
+
+
+
