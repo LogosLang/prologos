@@ -46,7 +46,7 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | Phase | Description | Status | Notes |
 |---|---|---|---|
 | **S3** | This design doc — Aspect-A settled (E-with-B, NTT, SRE, challenge); B/C/D open | 🔄 | **A-core LOCKED** (Q-A2 = E-with-B); B/C/D design pending |
-| **P0** | Acceptance file (`.prologos`) — cover BOTH NAF failure faces (`{both}` over-include + `{neither}` over-exclude) + body-local-generator NAF + bm=0 edge | ⬜ | Phase-0 discipline |
+| **P0** | Acceptance file (`.prologos`) — covers all 3 NAF faces (`{both}` / `{neither}` / partial-drop) + ground-correct + body-local + recursive | 🔄 | `examples/2026-07-19-rel-t1-acceptance.prologos`; runs 0-errors; TARGET markers land as A.2 completes. **P0 refuted "recursion is correct"** |
 | **A.1** | Top-level goal-dispatch (echo fix): `solve`/`solve-one`/`explain` accept `not`/`guard`/`cut`/conjunction | ⬜ | Shallow; independent correctness patch |
 | **A.2** | NAF per-binding **belief-clear** (E-with-B) in `process-naf-request` + body-local-generator DFS-defer | ⬜ | **SETTLED**; the deep core build |
 | **A.3** | Safe/floundering — **static** range-restriction gate in `install-conjunction` | ⬜ | No check exists today; Phase-0 prereq |
@@ -138,13 +138,19 @@ generator's tagged bindings, test the negation per binding, and AND-NOT the
 in the **belief layer** (`decisions-state` untouched) — the layer a NAF
 contradiction belongs to.
 
-**The bug, restated (two faces, one cause):** the current handler collapses the
+**The bug, restated (≥3 faces, one cause):** the current handler collapses the
 generator var to ONE binding and clears ONE shared bit ⇒ **over-include `{both}`**
-(collapse picks an unblocked binding → keep the bit) or **over-exclude `{neither}`**
-(picks a blocked binding → clear the bit) — dynamically confirmed. Per-binding
-belief-clear fixes both faces at once. Recursive / all-ground NAF already route
-elsewhere (DFS / well-founded) and are correct; the fix targets the **on-network
-Tier-2 non-recursive** path where the collapse lives.
+(collapse picks an unblocked binding → keep the bit), **over-exclude `{neither}`**
+(picks a blocked binding → clear the bit), or **partial-drop** (a richer generator
+set drops the wrong subset) — all three P0-acceptance-confirmed. Per-binding
+belief-clear fixes every face at once. **Scope (corrected at P0):** NAF **forces**
+the on-network path (`has-naf-or-guard?` ⇒ `use-propagator?`, stratified-eval.rkt:216),
+so **all free-var NAF is on-network and buggy** — fact, body-local, **and recursive
+alike** (the P0 acceptance refuted an earlier "recursion routes to DFS and is
+correct" premise — that was a coincidental single-element test; `safe-reach` over
+`reaches(x)={y,z,w}` drops `w`). Only **ground queries** (0 query-vars → DFS) and
+**all-ground negated sub-goals** (the handler's existing DFS sub-case,
+relations.rkt:177-206) are already correct.
 
 **Why E-with-B and not the alternatives (the decision record):**
 - The space factored into three axes — IDENTITY (reuse fact-bit / fresh

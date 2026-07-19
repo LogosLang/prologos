@@ -1,0 +1,72 @@
+ns rel-t1-acceptance
+
+;; ============================================================================
+;; Rel Track 1 — Relational Language Usability — Aspect-A (NAF/guard) acceptance
+;; ============================================================================
+;; Run:   racket tools/run-file.rkt examples/2026-07-19-rel-t1-acceptance.prologos
+;; Check: racket tools/run-file.rkt --check examples/2026-07-19-rel-t1-acceptance.prologos
+;;
+;; Aspect-A fix = E-with-B (belief-layer per-binding NAF narrowing). The bug is
+;; the on-network Tier-2 single-bit collapse, with TWO faces:
+;;   {both}    over-include  (fact generator picks an unblocked binding)
+;;   {neither} over-exclude  (body-local join picks a blocked binding)
+;; Recursive / all-ground NAF route to DFS/WF and are ALREADY correct.
+;;
+;; Markers tagged  (TARGET, post-A.2)  encode the CORRECT answer — they FAIL
+;; pre-fix (documenting the collapse) and pass once A.2 lands. Correct-now
+;; markers pass today and must keep passing.
+;; ============================================================================
+
+;; ---- fact-generator NAF: the canonical repro ------------------------------
+defr vehicle [?type]
+  || "bicycle"
+     "automobile"
+
+defr license [?v]
+  || "automobile"
+
+defr light-vehicle [?v]
+  &> (vehicle v) (not (license v))
+
+;; ground queries route to DFS — CORRECT NOW (must stay green)
+;;3=> '[{}] : _
+solve (light-vehicle "bicycle")
+;;4=> nil : _
+solve (light-vehicle "automobile")
+
+;; free-var (on-network Tier-2): over-include {both} pre-fix
+;; (TARGET, post-A.2): '[{:lv "bicycle"}] : _
+solve (light-vehicle lv)
+
+;; ---- body-local join NAF: over-exclude {neither} pre-fix ------------------
+defr edge [?a ?b]
+  || "x" "y"
+     "y" "z"
+     "y" "w"
+
+defr blk [?n]
+  || "z"
+
+defr twohop [?a ?c]
+  &> (edge a b) (edge b c)
+
+defr safe-twohop [?a ?c]
+  &> (twohop a c) (not (blk c))
+
+;; twohop(x)={z,w}, blk={z}  (TARGET, post-A.2 body-local DFS-defer): '[{:c "w"}] : _
+solve (safe-twohop "x" c)
+
+;; ---- recursive NAF: ALSO on-network (NAF forces it) — ALSO buggy ----------
+defr reaches [?a ?c]
+  &> (edge a c)
+  &> (edge a b) (reaches b c)
+
+;; confirm the generator set: reaches(x) = {y, z, w}
+solve (reaches "x" c)
+
+defr safe-reach [?a ?c]
+  &> (reaches a c) (not (blk c))
+
+;; reaches(x)={y,z,w}, blk={z}  (TARGET, post-A.2): '[{:c "w"} {:c "y"}] : _
+;; pre-fix DROPS w (a third collapse face) — recursion does NOT save it.
+solve (safe-reach "x" c)
