@@ -215,13 +215,19 @@
   (check-true (string-contains? s "{}")
               "the ground safe call succeeds"))
 
-(test-case "A.3 Site B: top-level solve (not G) with a free var → floundering error"
+(test-case "A.3 Site B: top-level solve (not G) with a free var → warning + nil (Prolog-parity)"
+  ;; Prolog runs the query and returns the standard unsafe-`\+` result (nil); a
+  ;; non-fatal floundering warning goes to stderr (not a hard error).
+  (define err (open-output-string))
   (define results
-    (run-prologos-string
-     (string-append "ns t :no-prelude\n\n"
-       "defr lic [?x]\n  || \"car\"\n\n"
-       "eval (solve (not (lic v)))\n")))
+    (parameterize ([current-error-port err])
+      (run-prologos-string
+       (string-append "ns t :no-prelude\n\n"
+         "defr lic [?x]\n  || \"car\"\n\n"
+         "eval (solve (not (lic v)))\n"))))
   (define s (result-str (last-result results)))
-  (check-true (string-contains? s "floundering")
-              "a top-level `not` over a free var must flag floundering"))
+  (check-true (string-contains? s "nil")
+              "top-level `not` over a free var returns the standard Prolog nil (not an error)")
+  (check-true (string-contains? (get-output-string err) "floundering")
+              "a floundering warning is emitted to stderr"))
 
