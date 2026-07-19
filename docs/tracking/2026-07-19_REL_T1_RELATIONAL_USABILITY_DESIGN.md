@@ -52,6 +52,7 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | **A.2b** | Rule/recursive-generator NAF — **ROOT reframed (probe-verified): the body-local-var gap**, not tabling-flattens-worldviews (that is second-order = BSP-LE Track 3). Minimal slice = **adaptive-dispatch DFS-routing** (`reachable-has-body-local-rule?` in `use-propagator?`) | ✅ | `bcd02d6d`; `safe-twohop`→`{w}`, `safe-reach`→`{y,w}` via DFS (parity-verified); A.2-core fact-NAF stays on-network; +2 tests (`test-rel-t1-naf` 7); acceptance 8/8; suite 8929/0. **SCAFFOLDING** — retirement owner BSP-LE Track 3 (on-network body-local threading + SLG completion + worldview-preservation §9.6) |
 | **A.3** | Safe/floundering — **static** range-restriction gate (PERMISSIVE / Prolog-mode) at **defr registration** (Site A) + top-level `solve(not G)` runners (Site B); **not** `install-conjunction` (home reframed by the A.3 audit) | ✅ | `74fa9df2`; `check-relation-floundering`; unsafe → clear error; residual (mode-dependent free-arg call) = standard Prolog `nil`, deferred; +3 tests; suite 8932/0 |
 | **A.4** | Guard: FFI-crash residuation + static floundering; (guard per-binding leak — scope TBD) | ⬜ | S0 fire-once shape ≠ NAF's S1 shape |
+| **SC** | Solver config surface + WFS acceptance (owner-added, in scope): (a) fix the **preparse gap** — `solver`/preparse-macro forms fail in the WS-string/REPL/editor eval path (`process-string-ws` → "solver should have been expanded"; `process-file` works); (b) refresh `2026-03-14-wfle-acceptance.prologos` to current syntax (stale dotted `ns`) → 0-errors as a live acceptance for solver configs + WFS | ⬜ | Solver forms WORK via `process-file` (all forms verified); A.3 does NOT affect WFS (verified). Bug is `process-string-ws` preparse gap. wfle file is owner WIP |
 | **B.1** | Typed solution rows — codata-observation path | ⬜ | Untyped-relation fallback; first-class |
 | **B.2** | Typed solution rows — schema-projection path + rename query-var → field name | ⬜ | Ties to Path-Selection `^` |
 | **C.1** | schema-as-facts: rule-clause typing (facts already typed) | ⬜ | Extends `check-relation-schema-rows` |
@@ -325,9 +326,13 @@ home is **engine-independent clause construction**:
   moots the `install-conjunction` Phase-T reconciliation (unsafe clauses error before
   Phase T runs).
 - **Site B** (top-level `solve`/`solve-one`/`explain` `(not G)`, the seed's actual
-  example): the three runner arms (reduction.rkt), via `expr-panic` → the existing
-  reduce-stage `prologos-error` path. *Minor cosmetic:* Site B surfaces with a
-  `panic:` prefix (reused channel) — cleanable later.
+  example): the three runner arms (reduction.rkt). **Loudness pivot (owner ruling,
+  `393bbbbf`): Prolog-parity — WARN to stderr and return the standard unsafe-`\+`
+  result (`nil`), NOT an error.** (Initial impl hard-errored via `expr-panic`; the
+  owner preferred Prolog's run-and-return-`nil`. A `defr` clause with unsafe
+  negation *does* still hard-error at Site A — that is an authoring bug, "Prolog
+  flags singleton vars too"; a top-level query is a query.) Warnings may prove too
+  noisy — full-silent is a one-line walk-back if wanted.
 
 Shared checker (relations.rkt): `clause-floundering-msg` + `check-relation-floundering`.
 Guard **is** covered (same rule, kind-specific var extractor); **A.4 owns** guard's
