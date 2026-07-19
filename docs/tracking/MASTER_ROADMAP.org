@@ -169,7 +169,7 @@ value strata. Topology strata are sequential. See =DEVELOPMENT_LESSONS.org=
 
 | # | Track | Description | Status | Artifact |
 |---+-------+-------------+--------+----------|
-| 1 (name TBD) | Relational Language Usability | NAF/guard correctness (priority: `not` echo + on-network open-var leak + guard crash) + typed solution rows (codata + schema projection) + schema-as-relational-facts + polish. Held: fact-representation research. Deferred to UCS: `?v:Type` CLP. | 🔄 Stage-3 (design; options open) | [[file:2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md][design]] · [[file:2026-07-19_REL_SOLVE_TYPING_NOTE.md][seed]] |
+| 1 | Relational Language Usability | NAF/guard correctness (priority: `not` echo + on-network NAF single-bit collapse + guard crash) + typed solution rows (codata + schema projection) + schema-as-relational-facts + Aspect D fact-representation research (Stage 0/1) + polish. Deferred to UCS: `?v:Type` CLP. | 🔄 Stage-3 — A-core LOCKED (E-with-B) | [[file:2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md][design]] · [[file:2026-07-19_REL_SOLVE_TYPING_NOTE.md][seed]] |
 
 /Note: the seed's "=&>= inversion" framing is superseded — =&>= is the rule-clause separator, not a negation op; the real bug is the on-network NAF open-var leak (design doc §4)./
 

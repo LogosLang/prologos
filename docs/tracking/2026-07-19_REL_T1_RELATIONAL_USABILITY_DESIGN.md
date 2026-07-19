@@ -1,14 +1,16 @@
 # Rel Track 1 — Relational Language Usability (Stage-3 Design)
 
-**Series**: [Rel](2026-07-19_REL_MASTER.md) · **Track**: 1 (name provisional) ·
-**Date opened**: 2026-07-19 · **Stage**: 3 (DESIGN) — **IN PROGRESS**.
+**Series**: [Rel](2026-07-19_REL_MASTER.md) · **Track**: 1 — **Relational Language
+Usability** · **Date opened**: 2026-07-19 · **Stage**: 3 (DESIGN) — Aspect-A core
+**LOCKED**; B/C/D open.
 
-> **Status banner**: This is a WORKING Stage-3 artifact. The scope is captured;
-> the grounding is done + verified; the **design options are OPEN** and the
-> **adversarial principles challenge is a FIRST PASS** to be worked through
-> together. No implementation until the options are settled and this doc's
-> Progress Tracker shows the design phases ✅. Per the objective-PIR gate, this
-> track carries a mandatory `X.close` phase (reserved below) and gets a PIR.
+> **Status banner**: The **Aspect-A NAF invalidation fork (Q-A2) is SETTLED** —
+> **E-with-B** (belief-layer per-binding narrowing), locked after two grounding
+> audits, an adversarial options-panel, and dynamic + structural probes; the
+> mechanism is **verified safe** (§5 A.2). The NTT model, SRE lens, and adversarial
+> challenge for Aspect A are finalized. Aspects **B/C/D + polish remain in design**.
+> Implementation of Aspect A may begin (main-session + per-change gate). Per the
+> objective-PIR gate, this track carries a mandatory `X.close` phase and gets a PIR.
 
 ---
 
@@ -28,10 +30,12 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 - **Aspect C — schema-as-relational-facts + validation**: extend the already-
   realized a-priori fact typing (`defr R : Schema`) toward the relational "spec"
   vision (rule clauses, signature-as-typing-source).
+- **Aspect D — efficient fact representation + query optimization**: a deeper,
+  possibly frontier research agenda. **Stage 0/1 (research + design artifact) is in
+  scope this track**; implementation is picked up here or spun out as a separate
+  track (owner's call).
 - **Polish**: answer-set dedup, drop `_anon` wildcard keys, predicate-declaration-
   order keys.
-- **Held (do NOT start until owner asks)**: efficient fact representation + query
-  optimization — a deeper/frontier research agenda.
 - **Deferred to a later UCS track**: `?v:Type` as CLP(X) domain-constraint
   *resolution*. This track uses only the **static-typing** reading of type info.
 
@@ -41,16 +45,17 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 
 | Phase | Description | Status | Notes |
 |---|---|---|---|
-| **S3** | This design doc — scope, options, adversarial principles pass, NTT model, SRE lens | 🔄 | Options OPEN; challenge = first pass |
-| **P0** | Acceptance file (`.prologos`) exercising the target relational surface (commented targets uncommented per phase) | ⬜ | Phase-0 discipline |
+| **S3** | This design doc — Aspect-A settled (E-with-B, NTT, SRE, challenge); B/C/D open | 🔄 | **A-core LOCKED** (Q-A2 = E-with-B); B/C/D design pending |
+| **P0** | Acceptance file (`.prologos`) — cover BOTH NAF failure faces (`{both}` over-include + `{neither}` over-exclude) + body-local-generator NAF + bm=0 edge | ⬜ | Phase-0 discipline |
 | **A.1** | Top-level goal-dispatch (echo fix): `solve`/`solve-one`/`explain` accept `not`/`guard`/`cut`/conjunction | ⬜ | Shallow; independent correctness patch |
-| **A.2** | NAF per-binding isolation on the on-network path | ⬜ | The deep core; invalidation fork OPEN |
-| **A.3** | Safe/floundering negation (groundness gate) | ⬜ | No check exists today |
-| **A.4** | Guard: FFI-crash residuation + floundering; (per-binding leak — scope TBD) | ⬜ | S0 fire-once shape ≠ NAF's S1 shape |
+| **A.2** | NAF per-binding **belief-clear** (E-with-B) in `process-naf-request` + body-local-generator DFS-defer | ⬜ | **SETTLED**; the deep core build |
+| **A.3** | Safe/floundering — **static** range-restriction gate in `install-conjunction` | ⬜ | No check exists today; Phase-0 prereq |
+| **A.4** | Guard: FFI-crash residuation + static floundering; (guard per-binding leak — scope TBD) | ⬜ | S0 fire-once shape ≠ NAF's S1 shape |
 | **B.1** | Typed solution rows — codata-observation path | ⬜ | Untyped-relation fallback; first-class |
 | **B.2** | Typed solution rows — schema-projection path + rename query-var → field name | ⬜ | Ties to Path-Selection `^` |
 | **C.1** | schema-as-facts: rule-clause typing (facts already typed) | ⬜ | Extends `check-relation-schema-rows` |
 | **C.2** | signature-schema activation as a logic-var typing source | ⬜ | Currently elaborated-but-dead |
+| **D.0/1** | Efficient fact representation + query-opt — Stage 0/1 research + design artifact | ⬜ | Research-heavy; after A; impl pick-up-or-spin-out |
 | **POL** | Polish: dedup · drop `_anon` keys · declaration-order keys | ⬜ | |
 | **T** | `tests/test-rel-*.rkt` — dedicated test phase (mandatory, during impl) | ⬜ | Not a PIR follow-up |
 | **X.close** | Bench matrix · DEFERRED triage · doc-truth sweep · memory fold · **Stage-5 PIR** | ⬜ | Objective-PIR gate |
@@ -65,13 +70,21 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 - **A** NAF/guard correctness (the gating priority).
 - **B** typed solution rows (codata + schema projection).
 - **C** schema-as-relational-facts + validation (extend the realized fact typing).
+- **D** efficient fact representation + query optimization — **Stage 0/1 (research
+  + design artifact) in scope**; implementation pick-up-here-or-spin-out.
 - **Polish**: answer-set dedup; drop `_anon` wildcard keys; declaration-order keys.
 
-### Held — do NOT start until the owner explicitly asks
-- **Efficient fact representation + query optimization.** A deeper, possibly
-  frontier research agenda (query-opt + data representation for performative fact
-  queries). Prior design conversation may exist in standups; adjacent to the RPF
-  track. **Named here so it is not lost; not to be designed in this track.**
+### Aspect D scope note (owner, 2026-07-19)
+Efficient fact representation + query optimization is a **deeper, possibly frontier
+research agenda** (best-of query-optimization + data representation for performative
+fact queries). Originally marked "Held"; re-scoped by the owner as **Aspect D**:
+the **Stage 0/1 research + design artifact IS in scope this track** (survey prior
+art — standup conversation + the RPF-track adjacency + external query-opt/columnar/
+worst-case-optimal-join literature — and produce the design). **Implementation** is
+picked up here OR spun out as a separate design/impl track (owner's call at design
+time). Grounds the eventual move of the off-network fact store (currently a
+`make-parameter`, name-grained-replace merge) on-network. Sequenced AFTER the A
+correctness core (do not front-run the priority).
 
 ### Deferred to a later UCS track
 - **`?v:Type` as CLP(X) domain-constraint resolution** (FD/interval/set/bool value
@@ -114,39 +127,105 @@ bare relational goal at top level is *run*, not echoed. **Design point**: decide
 the full accepted top-level goal grammar once, applied uniformly to
 `solve`/`solve-one`/`explain` (the critic flagged all three share the gap).
 
-### A.2 — NAF per-binding isolation (the deep core) — INVALIDATION FORK **[OPEN]**
+### A.2 — NAF per-binding isolation (the deep core) — **SETTLED: E-with-B (belief-layer per-binding narrowing)**
 
-**Common to any fix**: the S1 stage must stop collapsing `v` to one binding and
-instead operate over the generator's **enumerated tagged bindings** (the raw
-`tagged-cell-value-entries`, the same structure dissolution reads at
-relations.rkt:2706), evaluating the negation **per binding, each under its own
-worldview**.
+**Decision (locked after two grounding audits, an adversarial options-panel, and
+dynamic + structural probes):** the S1 NAF handler `process-naf-request`
+generalizes its **single-shared-bit belief-clear** (the `worldview-cache` AND-NOT
+at relations.rkt:239-242) to a **per-binding belief-clear**: enumerate the
+generator's tagged bindings, test the negation per binding, and AND-NOT the
+**failing** bindings' own **fact-bits** out of the `worldview-cache`. This stays
+in the **belief layer** (`decisions-state` untouched) — the layer a NAF
+contradiction belongs to.
 
-The fork is *how a failing binding is invalidated*:
+**The bug, restated (two faces, one cause):** the current handler collapses the
+generator var to ONE binding and clears ONE shared bit ⇒ **over-include `{both}`**
+(collapse picks an unblocked binding → keep the bit) or **over-exclude `{neither}`**
+(picks a blocked binding → clear the bit) — dynamically confirmed. Per-binding
+belief-clear fixes both faces at once. Recursive / all-ground NAF already route
+elsewhere (DFS / well-founded) and are correct; the fix targets the **on-network
+Tier-2 non-recursive** path where the collapse lives.
 
-- **Option B — reuse the existing per-fact-row assumption + `solver-retract`.**
-  The generator already tags each binding with a distinct fact-row bit. For a
-  binding whose negation *fails* (inner goal provable), retract that binding's
-  fact-row aid → narrows its decisions-state component → the worldview-projection
-  (decisions-state-bitmask ONLY, propagator.rkt:975) recomputes → that row's
-  dissolution entry vanishes. No new bits. Requires threading `ctx` into the
-  NAF-pending entry.
-- **Option A — allocate per-binding NAF bits via `solver-amb`** (atms.rkt:397)
-  over the enumerated bindings, invalidate those. General (works when the
-  generator does NOT tag per-branch), but more machinery; the install-time
-  naf-bit becomes partly vestigial.
-- **Option C — compound nogood `{naf-aid ∧ fact-aid}`: RULED OUT** — nogoods are
-  NOT projected into the worldview-cache (only decisions-state is), so a compound
-  nogood leaves dissolution visibility unchanged (grounding-verified).
+**Why E-with-B and not the alternatives (the decision record):**
+- The space factored into three axes — IDENTITY (reuse fact-bit / fresh
+  `solver-amb` bit) × MECHANISM (belief-narrow the *derived* `worldview-cache` /
+  existence-narrow the *primary* `decisions-state`) × DETECTION (per-binding /
+  anti-join, §5.G). The invalidation fork is IDENTITY × MECHANISM.
+- **IDENTITY = B (reuse the existing per-fact-row bit).** Verified: the only
+  enumerating goal kind is `app` (facts + rules); facts and rules-over-facts tag
+  each binding with a **distinct, non-zero** fact-bit (2^aid, relations.rkt:2491);
+  there is **no enumerating builtin** (no `member`/`between`) → **the A-fallback is
+  unneeded** for the current language. (A's dual-bit was *intrinsic* — the
+  install-time naf-bit can't be skipped before binding-arity is known — so A was
+  principle-dominated by B; keeping A "just in case" was the belt-and-suspenders
+  red flag, avoided.)
+- **MECHANISM = belief-narrow the derived cache (NOT existence-narrow the primary).**
+  The "narrow the primary = purer" premise was **refuted by the code**: NAF *and*
+  guard invalidation have *always* direct-written the derived `worldview-cache` and
+  never touched `decisions-state` — the **established belief-narrowing idiom**, and
+  exactly what lets NAF coexist with belief-subset row-enumeration. The codebase
+  deliberately separates `decisions-state` (which assumptions **EXIST**) from
+  `worldview-cache` (which are **BELIEVED** for reads, a possible subset —
+  atms.rkt:583-596). A NAF contradiction is a per-branch **belief** statement, so
+  belief-narrowing is its layer. Existence-narrowing (Option D: a new between-round
+  `solver-retract` stratum) is a bigger, first-of-its-kind change whose projection
+  re-fire would **clobber** belief-subset enumeration — a semantic overreach. (D's
+  ordering-race, the earlier top concern, actually resolves *safely*; D was set
+  aside for the belief/existence collision + minimality, not feasibility.)
+- **Option C (compound nogood) RULED OUT** — nogoods are not projected into the
+  worldview-cache (only decisions-state is), so a compound nogood leaves
+  dissolution visibility unchanged.
 
-**Deciding factor**: whether *non-fact* (rule/computed) generators also tag
-per-branch. A one-shot probe answers it. If yes → B suffices; if no → B for
-fact-generators + A for the rest, or A uniformly.
+**Verified safe (E-with-B holds under scrutiny):**
+- The production free-var enumerator `dissolve-solver-pu` (relations.rkt:2964)
+  **honors** the belief-clear: `bitmask-visible?` (relations.rkt:2764) gates every
+  enumerated row against the E-narrowed `worldview-cache`, so a cleared binding
+  vanishes.
+- The **contingent clobber is unreachable**: the NAF handler is a **value-tier**
+  handler; its sole main-net write is `worldview-cache` (a cell with **no**
+  propagator-input dependents) → no worklist → no S0 restart → nothing narrows
+  `decisions-state` after the clear → the projection never re-fires before
+  dissolution reads (relations.rkt:239-242 / 2957 / 2964; propagator.rkt:3488-3495).
+- The belief-subset enumerator `solver-state-solve-all` that *could* have collided
+  is **dead code** (no production caller).
 
-### A.3 — safe / floundering negation
-Add the groundness gate: a negation var *bound by a generator* runs NAF
-per-binding (safe); a var *never bound* → **clear floundering error**, not a
-silent vacuous success. (Standard `\+` groundness discipline.)
+**The build (net-new machinery — not a one-liner):** `process-naf-request` today
+computes ONE `inner-provable?` boolean and clears ONE `naf-bit-pos`
+(relations.rkt:122/239). E-with-B adds: (1) enumerate the generator's tagged
+bindings (`net-cell-read-raw` + `tagged-cell-value-entries`, the same primitive
+dissolution uses at relations.rkt:2706); (2) per binding, test the negation under
+that binding's worldview; (3) map each **failing** binding → its fact-bit (2^aid);
+(4) AND-NOT those bits from `worldview-cache`. Lands at the **value-tier** NAF site
+(relations.rkt:239-242) — **not** the guard's S0-tier clear (relations.rkt:2151,
+clobber-exposed; its own safety is a separate item, §A.4).
+
+**Two pre-existing scope boundaries E/B cannot paper over** (flagged, not
+introduced by this track):
+- **Body-local-generator NAF** — `p(x) :- q(x,y), not r(y)` where the NAF var `y`
+  is a **body-local** intermediate. NAF *forces* the on-network path
+  (`has-naf-or-guard?` ⇒ `use-propagator?`, stratified-eval.rkt:216, no threshold
+  escape), but body-local `y` gets **no on-network cell** (clause-env = head params
+  only; raw-symbol args silently skipped) → the bindings E would AND-NOT never
+  materialize. **Fix path: extend the escape-valve the NAF handler already uses** —
+  it DFS-defers the all-ground sub-case today (relations.rkt:177-206) — to also
+  DFS-defer body-local-generator NAF (the DFS solver binds body-local vars via
+  clause-var freshening and handles NAF correctly). This is *not* off-network
+  scaffolding; it routes a structurally-unrepresentable-on-network shape to the
+  engine that handles it, mirroring the existing all-ground precedent.
+- **bm=0 gating-only success markers** cannot be belief-cleared (a bm=0 row is
+  unconditionally visible, relations.rkt:2765). Fact-generator bindings are **safe**
+  (non-zero bits); a narrow edge to note in the acceptance file.
+
+### A.3 — safe / floundering negation (a **static** range-restriction gate)
+No safety check exists anywhere today (grep-confirmed). Add a **static,
+install-time** range-restriction check in `install-conjunction`'s existing gating
+pre-scan (relations.rkt:2190): a variable appearing in a `not` (or `guard`) goal
+must also appear in a **positive** body goal. This has the positive-bound-var set
+in scope, fires **before** forking, and yields a clean compile-time error —
+whereas a dynamic S1-handler seam (`inner-vars-final`) cannot distinguish a
+safe-per-binding var from an unsafe floundering one (it lacks the positive-bound-var
+set). Phase-0 prerequisite shared by every NAF option, and the hard gate for the
+§5.G anti-join. Standard `\+` groundness discipline.
 
 ### A.4 — guard
 - **FFI crash**: gate guard-fire on condition-var readiness — **residuate** when
@@ -158,79 +237,114 @@ silent vacuous success. (Standard `\+` groundness discipline.)
   (fire-once), so its per-binding fix differs. **Scope decision [OPEN]**: fix
   guard crash+floundering now (demo-adjacent), defer guard's per-binding leak.
 
-### NTT model (on-network — **broadcast, NOT step-think**)
+### G (optional) — the anti-join detection reframe (a DETECTION-axis option, deferred)
 
-The first sketch used a nested `for` over bindings — imperative iteration over
-*independent* items, the `for/fold`-is-step-think smell. Corrected form: the
-per-binding negation checks are **embarrassingly parallel** (binding i's result
-is independent of binding j's) → **one broadcast propagator over the N bindings**,
-and the invalidation *emerges structurally* from contradiction rather than an
-imperative "if provable then retract."
+`gen(v), not q(v)` is structurally a relational **anti-join** `gen ▷ q`. Instead of
+the per-binding framing (N fork+quiesce evals), evaluate `q(v)` with `v` **free
+once**, collect the kill-set `K = {v : q(v) provable}`, and set-difference the
+generator's bindings against `K`. This is on the **DETECTION** axis — *orthogonal*
+to the E-vs-D invalidation MECHANISM — and composes atop E-with-B: for fact-based
+inner goals (the dominant case) it replaces N evals with **one**.
+
+- **Feasible, MEDIUM cost**: the kill-set harvester **already exists**
+  (`dissolve-solver-pu`, relations.rkt:2674 — read raw + tagged entries → rows),
+  directly callable with `query-vars = (list inner-var)`. The delta: re-target the
+  current `for/or` boolean collapse (must use raw+tagged — a plain read is
+  last-write-wins → under-populates `K`); thread the generator var + its tagged
+  scope cell into the NAF request `info` (today only `inner-goal/env/naf-bit-pos`);
+  tag-promote the generator carrier.
+- **Gated on the §A.3 static floundering gate** (free-`v` eval must be
+  range-restricted). Behaviorally trivial for the demo case (`solve (license lv)`
+  gives `K` finitely today).
+- **DEFERRED** as an optimization layered on E-with-B — revisit if per-binding fork
+  perf matters or if the anti-join's single-eval elegance is wanted for the
+  fact-table path. Not on the Aspect-A critical path.
+
+### NTT model (belief-layer per-binding narrowing in the S1 value-tier handler)
+
+**Correction to the earlier sketches (recorded honestly):** sketch 1 was a nested
+`for` (step-think); sketch 2 over-corrected to a **broadcast** — but that is a
+*category error here*. The per-binding work is a nested fork + install +
+run-to-quiescence living **inside a between-round value-tier stratum handler**,
+where a **`for/fold` over the pending set is the canonical blessed shape** (every
+stratum handler — `process-naf-request` / `process-resolution` / `process-retraction`
+— is a `for/fold`); a nested scheduler run cannot be an S0 broadcast item-fn, and
+the broadcast benchmark (light S0 items) does not transfer. Per Cell/Propagator/
+**Scheduler** orthogonality (on-network.md), the `for/fold` is the blessed realization
+**under the current scheduler**; the per-binding independence is real, so parallel
+decomposition is a **deferred scheduler-layer** concern, not "off the table."
 
 ```
--- S1 NAF stage, on-network form:
--- items = the enumerated tagged bindings of the negated goal's generator var
--- (each item is independent → broadcast, per propagator-design.md § Broadcast)
-
-stage naf : after S0 {
-  install for each pending not-goal:
-    broadcast over bindings β ∈ raw-entries(scope-cell) {          -- ALL-AT-ONCE
-      item β ⇒ with-worldview mask(β) {                            -- IN-PARALLEL, isolated
-        install inner-goal[v ↦ β] on a per-β sub-view              -- structurally emergent
-      }
-    }
-  -- contradiction (inner provable under β's worldview) STRUCTURALLY narrows
-  -- β's own component via the existing contradiction→narrow→projection chain;
-  -- no imperative "check-then-retract" — the narrowing EMERGES.  -- INFORMATION FLOW
+-- S1 NAF stage: a between-round VALUE-tier stratum handler (for/fold over pending)
+stage naf : after S0, tier value {
+  handler process-naf(pending) =
+    for/fold over (aid, {inner, env, scope}) in pending:
+      let bindings = tagged-entries(read-raw(scope))            -- [(bit_β . β)], no collapse
+      let failing  = for/fold over (bit_β, β) in bindings:
+                       with-worldview bit_β { provable = quiesce(fork, inner[v ↦ β]) }
+                       if provable then accumulate bit_β         -- negation FAILS for β
+      worldview-cache &= ~(OR failing)                          -- ONE belief-narrow write
 }
 ```
 
-**Mantra audit of this form** (the discipline that surfaced the step-think):
-- *All-at-once* — one broadcast installs all N per-binding checks; not a loop. ✔
-- *All-in-parallel* — broadcast-profile lets the scheduler decompose across
-  threads; per-binding worldviews isolate. ✔
-- *Structurally emergent* — invalidation falls out of contradiction under each
-  binding's worldview, not a control-flow `if`. ✔ **(This is the deeper challenge
-  to Option B's "call `solver-retract`": is the retract-call itself imperative
-  dispatch, or the emergent-narrowing primitive? — carry to the challenge.)**
-- *Information flow* — negation results flow through cells / decisions-state
-  narrowing, not return values. ✔
-- *On-network* — broadcast propagator + cell narrowing; between-vs-within-round
-  placement is a design point (see §SRE / threshold-consumer variants). ⚠ OPEN
+**Mantra audit (corrected):**
+- *All-at-once / all-in-parallel* — the per-binding checks are independent; the
+  `for/fold` is the scheduler-blessed shape for nested-quiesce between-round work,
+  parallel decomposition deferred to the scheduler layer (not step-think, per the
+  orthogonality principle). ✔ (scheduler-layer deferral *named*)
+- *Structurally emergent* — the enumeration falls out of the tagged-entry structure
+  the generator already produced; the handler reads state, it does not dispatch
+  control flow over events. ✔
+- *Information flow* — negation results → failing-bit set → one `worldview-cache`
+  belief-narrow write → dissolution filters. ✔
+- *On-network* — every step is `net-cell-read-raw` / `net-cell-write` on cells. ✔
+- *Belief layer (SRE, below)* — writes the **derived** `worldview-cache`, leaves the
+  **primary** `decisions-state` untouched, so it coexists with belief-subset
+  enumeration. ✔
 
-**Full NTT model + Racket-correspondence table to be completed here before A.2
+**Full NTT model + Racket-correspondence table to be completed here alongside A.2
 implementation** (propagator-track requirement).
 
-### SRE lattice lens
-- **Retraction as lattice narrowing** (structural-thinking.md): `solver-retract`
-  narrows the **primary** decisions-state lattice; the worldview-cache is the
-  **derived** projection that recomputes; dissolution reads the narrowed result.
-  Option B *is* this principle; Option A adds a parallel bit-mechanism beside it.
-- **Primary/derived**: decisions-state = primary; worldview-cache = derived
-  (propagator.rkt:975 projects one from the other). The fix must narrow the
-  primary, never patch the derived (why compound-nogood is ruled out).
-- **Monotone/CALM**: per-binding worldview isolation via `merge-set`-style tagged
-  entries is monotone; narrowing is the S(-1)-style non-monotone step, correctly
-  isolated at the stratum boundary.
-- **Threshold-consumer variant** (propagator-design.md): the per-binding
-  invalidation is a *between-round* (stratum-handler, atomic-per-round) action,
-  not a *within-round* threshold — consistent with S1 NAF running after S0
-  quiescence. **Confirm in the challenge.**
+### SRE lattice lens (belief vs existence — the corrected reading)
+- **Two lattices, deliberately separated** (atms.rkt:583-596): `decisions-state`
+  (which assumptions **EXIST**) is one lattice; `worldview-cache` (which are
+  **BELIEVED** for reads, a possible **subset**) is another — derived-but-independently-
+  writable. The earlier "worldview-cache is a pure derived projection, so narrow the
+  primary" reading was **wrong**: the belief cache is a first-class layer the codebase
+  writes directly (both NAF/guard invalidation *and* belief-subset enumeration do).
+- **A NAF contradiction is a belief narrowing, not an existence retraction.** "In
+  this branch, don't *believe* the negated goal's conclusion" narrows the *belief*
+  lattice per-binding; it does not claim the binding ceased to *exist*. So the fix
+  narrows the belief cache (E), not the existence lattice (D).
+- **Why existence-narrowing (D) is the overreach**: narrowing `decisions-state`
+  re-fires the projection (a replacement writer, propagator.rkt:955/975), which
+  overwrites the belief cache with the full existence bitmask — clobbering any
+  concurrent belief-subset. Belief coexists with belief; existence clobbers belief.
+- **Monotone/CALM**: the per-binding failing-bit set accumulates monotonically
+  within the handler; the belief-narrow is the non-monotone step, correctly isolated
+  at the S1 value-tier stratum boundary (after S0 quiescence).
+- **Between-round, value-tier**: the belief-narrow is a between-round atomic action
+  (one write per handler pass), not a within-round threshold — consistent with S1
+  running after S0 quiescence, and the reason the contingent clobber is unreachable.
 
-### Adversarial principles challenge — **FIRST PASS** (two-column; to be worked together)
+### Adversarial principles challenge — **RESOLVED** (worked through)
 
-| Decision | Column 1 — catalogue (passes?) | Column 2 — challenge (MORE aligned? risk?) |
+The first-pass challenge + an independent options-panel + dynamic/structural probes
+resolved the fork. Outcome, with the challenges that actually *moved* the decision:
+
+| Decision | Catalogue | Challenge → resolution |
 |---|---|---|
-| **Fix on-network (not DFS)** | ✔ mantra; the leak lives on-network; the correct engine | Is routing top-level NAF to DFS ever tempting as a "quick fix"? That's off-network scaffolding — name it rejected, not deferred. |
-| **Option B (retract fact-bit)** | ✔ correct-by-construction (reuses existing isolation); ✔ SRE-native (retraction=narrowing); ✔ minimal | Hidden coupling: depends on the generator tagging per-branch — for a *rule* generator it may under-isolate **silently** (works for the fact test case, hides a bug). Belt-and-suspenders smell if we ship B *and* keep a fallback "just in case." Resolve with the probe, not a dual path. |
-| **Option A (solver-amb bits)** | ✔ general | Two bit mechanisms (install-time naf-bit + per-binding amb bits); the naf-bit goes vestigial for open-var — dual-mechanism red flag. More machinery for the fact case where B is native. |
-| **The `retract`-call itself** | ✔ uses the real primitive | Is "handler checks provable, then calls retract" imperative dispatch wearing a cell hat? The deeper form = contradiction under each binding's worldview *structurally* narrows. **Challenge whether the fix should install per-binding contradiction and let narrowing emerge, vs call retract.** |
-| **Thread `ctx` into pending entry** | ✔ real dependency (retract needs decisions-cid) | Not scaffolding — but name the coupling; is there a cell that already carries it? |
-| **Guard crash → residuate + flounder** | ✔ reuses existing residuate substrate; ✔ mantra (readiness-gated, emergent ordering) | Residuation alone is unsound (silent pass) — the flounder terminal is load-bearing, not optional. Don't ship residuation without it. |
+| **Fix on-network (not DFS)** | ✔ the leak lives on-network | NAF *forces* on-network anyway; DFS-defer is reserved **only** for the structurally-unrepresentable body-local-generator shape (the existing all-ground precedent), not as a quick fix. |
+| **MECHANISM = belief-narrow (E) not existence-narrow (D)** | ✔ minimal; matches the established idiom | The "narrow the primary is purer" premise was **refuted by the code** (NAF/guard *always* belief-narrow); D's existence-narrow would **clobber** belief-subset enumeration. A NAF contradiction *is* a belief statement. **E chosen.** |
+| **IDENTITY = B (reuse fact-bit)** | ✔ reuses existing per-branch isolation; minimal | The "silently under-isolates for rule generators" risk was **probed away**: rules-over-facts tag per-branch; no computed enumerating generator exists → **A-fallback unneeded** (a dual path was the red flag; avoided). |
+| **The `retract`-call = imperative dispatch?** | (raised as the deepest mantra challenge) | **Moot under E**: E does a belief-narrow *write*, not a `solver-retract` call; the emergent-narrowing (original Option E) form needed new contradiction→belief wiring that doesn't exist, for no gain. |
+| **Guard crash → residuate + flounder** | ✔ reuses residuate substrate | Residuation alone is unsound (silent pass) — the **static** floundering gate (§A.3) is the load-bearing pair, not optional. |
 
-**Red-flag scan**: "quick fix via DFS" (off-network scaffolding — reject), "keep a
-fallback just in case" (belt-and-suspenders — resolve with the probe), "the
-naf-bit stays around" (dual mechanism — retire it where vestigial or justify).
+**Red-flag scan (clean)**: no dual path (A-fallback dropped, not kept-just-in-case);
+no off-network scaffolding (DFS-defer is the *existing precedent* for an
+unrepresentable shape, named); no belt-and-suspenders (single belief-narrow
+mechanism); the belief/existence layer choice is *named and justified*, not
+catalogued.
 
 ---
 
@@ -305,12 +419,17 @@ checklist-first). The roadmap row does not flip ✅ until the PIR lands.
 
 ---
 
-## 11. Open questions (for the co-design + adversarial rounds)
-- **Q-A2** the invalidation fork: B (retract fact-bit) + probe, vs A (solver-amb), vs the deeper emergent-narrowing form (challenge the retract-call).
-- **Q-A4** guard scope: crash+floundering now, per-binding leak deferred?
-- **Q-round** placement — between-round stratum vs within-round threshold for the per-binding invalidation.
-- **Q-B** keying: rename query-var→field vs fresh positional Record.
-- **Q-name** the track name.
+## 11. Open questions
+
+**Resolved (Aspect A):**
+- **Q-A2** invalidation fork — ✅ **RESOLVED: E-with-B** (belief-layer per-binding narrowing); verified safe (§5 A.2).
+- **Q-round** placement — ✅ **RESOLVED: between-round value-tier** stratum handler (the current NAF site); a `for/fold` over the pending set (not a broadcast — category error corrected).
+- **Q-name** — ✅ **RESOLVED: "Relational Language Usability."**
+
+**Still open:**
+- **Q-A4** guard scope: fix crash + static floundering now, defer guard's per-binding leak (S0 fire-once shape differs from NAF's S1)?
+- **Q-body-local** — confirm the DFS-defer for body-local-generator NAF is the chosen boundary (vs on-network body-local cell allocation, a much larger change) at A.2 implementation.
+- **Q-B** (Aspect B) keying: rename query-var → field, vs fresh positional Record.
 
 ---
 

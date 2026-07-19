@@ -42,7 +42,7 @@ relational output flows into.
 
 | # | Track | Description | Status | Artifact |
 |---|---|---|---|---|
-| 1 (name TBD) | Relational Language Usability | NAF/guard correctness (the priority — the `not` echo + on-network open-var leak + guard crash) + typed solution rows (codata + schema projection) + schema-as-relational-facts + polish. **Held**: efficient fact representation (research). **Deferred to UCS**: `?v:Type` CLP resolution. | 🔄 Stage-3 | [design](2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md) · [seed](2026-07-19_REL_SOLVE_TYPING_NOTE.md) |
+| 1 | Relational Language Usability | NAF/guard correctness (priority — `not` echo + on-network NAF single-bit collapse + guard crash) + typed solution rows (codata + schema projection) + schema-as-relational-facts + Aspect D fact-representation research (Stage 0/1) + polish. **Deferred to UCS**: `?v:Type` CLP resolution. | 🔄 Stage-3 — **A-core LOCKED (E-with-B)** | [design](2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md) · [seed](2026-07-19_REL_SOLVE_TYPING_NOTE.md) |
 
 > Note (2026-07-19): the seed's "`&>` inversion" framing is **superseded** — `&>`
 > is the rule-clause separator, not a negation op; the real bug is the on-network
