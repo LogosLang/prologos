@@ -231,3 +231,42 @@
   (check-true (string-contains? (get-output-string err) "floundering")
               "a floundering warning is emitted to stderr"))
 
+;; ========================================
+;; A.4 — guard: guard-bearing queries route to DFS (SCAFFOLDING, retire w/ BSP-LE
+;; Track 3). On-network guards are buggy (the single shared guard bit cannot filter
+;; per-row; the S0 belief-narrow is re-projected away; struct conditions weren't
+;; resolved). Check 4 (`reachable-has-guard?` in stratified-eval) routes them to
+;; DFS, which filters guards correctly for ground AND free-var, single AND multi-
+;; fact generators. Design for the on-network guard mechanism is captured in the
+;; BSP-LE Track 3 note.
+;; ========================================
+
+(define guard-world
+  (string-append
+   "ns t :no-prelude\n\n"
+   "defr weighted-edge [?from ?to ?weight]\n  || \"a\" \"b\" 3\n     \"b\" \"c\" 0\n     \"c\" \"d\" 5\n\n"
+   "defr positive-edge [?from ?to ?weight]\n  &> (weighted-edge from to weight) (guard [gt weight 0])\n\n"))
+
+(test-case "A.4: guard over a multi-fact generator filters per-row (routed to DFS)"
+  ;; weighted-edge = {(a,b,3),(b,c,0),(c,d,5)}; positive-edge keeps weight > 0.
+  ;; On-network the single shared guard bit leaks/over-narrows; DFS filters per-row.
+  (define results
+    (run-prologos-string
+     (string-append guard-world "eval (solve (positive-edge from to w))\n")))
+  (define s (result-str (last-result results)))
+  (check-true (string-contains? s ":w 3") "the w=3 edge (a→b) is kept")
+  (check-true (string-contains? s ":w 5") "the w=5 edge (c→d) is kept")
+  (check-false (string-contains? s ":w 0") "the w=0 edge (b→c) is filtered out"))
+
+(test-case "A.4: ground guard queries stay correct"
+  (define results
+    (run-prologos-string
+     (string-append guard-world
+       "eval (solve (positive-edge \"a\" \"b\" 3))\n"      ;; w=3 passes
+       "eval (solve (positive-edge \"b\" \"c\" 0))\n")))   ;; w=0 fails
+  (check-true (>= (length results) 2))
+  (define pass-r (result-str (list-ref results (- (length results) 2))))
+  (define fail-r (result-str (last-result results)))
+  (check-true (string-contains? pass-r "{}") "w=3 passes the guard")
+  (check-true (string-contains? fail-r "nil") "w=0 fails the guard"))
+

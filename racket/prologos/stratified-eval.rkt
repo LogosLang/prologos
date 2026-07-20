@@ -193,6 +193,27 @@
     (define param-names (map param-info-name (variant-info-params v)))
     (pair? (remove* param-names (collect-clause-vars ci param-names)))))
 
+;; Rel T1 A.4 (SCAFFOLDING — retirement owner: BSP-LE Track 3). #t iff any relation
+;; reachable from goal-name has a clause carrying a `guard` goal. Guards live only
+;; in rule clauses (`&> ... (guard ...)`), and rules table by default, so a guard's
+;; generator materializes through the on-network tabling producer/consumer — the
+;; SAME seam A.2b found unreliable (it does not reliably materialize the tabled
+;; generator's per-branch bindings on the outer scope cell). So the on-network
+;; guard belief-narrow cannot fire reliably (the answer set is context-dependently
+;; empty). DFS filters guards correctly (ground + free-var). Route guard-bearing
+;; queries to DFS. When BSP-LE Track 3 lands worldview-preserving tabling, DELETE
+;; this check and deploy the on-network guard per-binding belief-narrow (its design
+;; — struct-resolution fix + per-binding mask + between-round handler — is captured
+;; in the Track 3 implementation note).
+(define (reachable-has-guard? store goal-name)
+  (for*/or ([pred (in-list (transitive-pred-closure store goal-name))]
+            [ri (in-value (hash-ref store pred #f))]
+            #:when ri
+            [v (in-list (relation-info-variants ri))]
+            [ci (in-list (variant-info-clauses v))]
+            [g (in-list (clause-info-goals ci))])
+    (eq? (goal-desc-kind g) 'guard)))
+
 (define (stratified-solve-goal config store goal-name goal-args query-vars)
   ;; Well-founded semantics dispatch
   (define semantics (solver-config-semantics config))
@@ -253,8 +274,14 @@
              ;; Route any would-be-on-network query whose reachable relation graph
              ;; contains such a rule clause to DFS. Fact-NAF (A.2-core) and
              ;; param-passthrough rules are on-network-complete and stay.
+             ;; Check 4 (Rel T1 A.4 — SCAFFOLDING, retire w/ BSP-LE Track 3): route
+             ;; guard-bearing queries to DFS. On-network guards are blocked by the
+             ;; same tabling seam (guards live in tabled rules; tabling does not
+             ;; reliably materialize the generator's bindings), so their belief-narrow
+             ;; is unreliable. DFS filters guards correctly.
              (and would-use-propagator?
-                  (not (reachable-has-body-local-rule? store goal-name)))])]
+                  (not (reachable-has-body-local-rule? store goal-name))
+                  (not (reachable-has-guard? store goal-name)))])]
          [else #f]))
 
      (if use-propagator?

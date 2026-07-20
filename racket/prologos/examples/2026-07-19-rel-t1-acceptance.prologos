@@ -86,3 +86,20 @@ defr safe-reach [?a ?c]
 ;; retires with BSP-LE Track 3.
 ;;16=> '[{:c "y"} {:c "w"}] : _
 solve (safe-reach "x" c)
+
+;; ---- A.4: guard over a multi-fact generator (routed to DFS) ---------------
+defr weighted-edge [?from ?to ?weight]
+  || "a" "b" 3
+     "b" "c" 0
+     "c" "d" 5
+
+defr positive-edge [?from ?to ?weight]
+  &> (weighted-edge from to weight) (guard [gt weight 0])
+
+;; weighted-edge has a w=0 edge; the guard keeps weight>0. On-network the single
+;; shared guard bit cannot filter per-row (it leaks or over-narrows), so Check 4
+;; (reachable-has-guard?) routes guard-bearing queries to DFS, which filters
+;; per-row. FIXED (A.4). Scaffolding — retires with BSP-LE Track 3 (the on-network
+;; guard design is captured in the Track 3 note).
+;;19=> '[{:to "b", :w 3, :from "a"} {:to "d", :w 5, :from "c"}] : _
+solve (positive-edge from to w)
