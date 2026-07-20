@@ -52,7 +52,7 @@ These inform the BSP Pipeline Track specifically and the Series architecture gen
 | 2B-A2-future | Per-relation evaluator framework (cross-cutting) | Registration-time analysis + per-relation evaluators: fact table (current Tier 1), pattern-match, simple-clause, fallback-to-ATMS. Dispatch becomes structural (cell-ID → evaluator) rather than imperative tiering logic at query time. | ⬜ | Not a standalone track | **Cross-cutting concern** surfaced 2026-04-16 A2 scoping. The "per-relation evaluator installed at registration" pattern generalizes beyond solver: PPN Track 4C (elaboration-on-network) needs the same pattern for AST node kinds / typing rules. Recommendation: scope as part of PPN Track 4C rather than a standalone BSP-LE track. See [PPN Master §4](2026-03-26_PPN_MASTER.md) for cross-cutting BSP-LE 2B → PPN 4C lessons. |
 | 2B-A3-future | Two-context boundary bugs (longitudinal pattern 7 architectural response) | **Not a standalone BSP-LE track.** The architectural answer is parameters → cells (PM Track 12: Module Loading on Network). Moving state to per-test-forked cells gives test isolation by construction. | ⬜ | See [PM Master Track 12](2026-03-13_PROPAGATOR_MIGRATION_MASTER.md) | Longitudinal pattern 7 (6+ PIRs). Test-harness checklist in pipeline.md has failed to prevent recurrence. Architectural response is PM Track 12. Near-term tactical protection is static lint (A3-static-lint below — addendum-sized, ~1-2 days). |
 | 2B-A3-static-lint | Static lint for unclassified `make-parameter` calls | `tools/lint-parameters.rkt`: classifies each site as private / test-registered / unclassified. Baseline at `tools/parameter-lint-baseline.txt` tracks currently-accepted unclassified set; only NEW additions are flagged. | ✅ | Commit TBD | 225 parameters: 12 private, 22 test-registered, 191 baselined-unclassified. `--strict` flag for CI/audit exit code. Tactical protection while PM Track 12 pending. Obsoletes itself when PM 12 lands. |
-| 3 | Tabling | Table registry, producer/consumer propagators, SLG completion detection | ⬜ | Pending | LE Phase 6; depends on Track 2. **Retirement obligation: deletes the Rel T1 A.2b DFS-routing scaffolding** — see the Track 3 section + [DEFERRED.md](DEFERRED.md) § "Rel T1 A.2b DFS-routing scaffolding → BSP-LE Track 3" |
+| 3 | Tabling | Table registry, producer/consumer propagators, SLG completion detection | ⬜ | Pending | LE Phase 6; depends on Track 2. **Retirement obligation: deletes the Rel T1 A.2b + A.4 DFS-routing scaffolding**; **on-network seed** = [`2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md`](2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md) (tabled-generator + guard designs, prototyped). See the Track 3 section + [DEFERRED.md](DEFERRED.md). |
 | 4 | BSP Pipeline | Pipelined strata (left Kan), demand-driven forwarding (right Kan), partial barriers | ⬜ | Pending | Extends LE Phase 2.5; Kan extension architecture |
 | 5 | Solver Language | Connect solver-config knobs, pre-defined configurations, surface syntax | ⬜ | Pending | LE Phase 7; depends on all previous |
 | 6-future | General Residual Solver (lattice-parameterized) | Lift the solver's low-level primitives (`goal-desc` kinds, `clause-info`, `fact-row`, `unify-terms`, discrimination, `solve-goal`) from the relation-with-atoms model into a lattice-parameterized abstraction. Parameters: `:lattice`, `:composition`, `:decomposition`, `:facts`. | ⬜ | Not yet designed | **Cross-application insight** surfaced 2026-04-17 during PPN 4C design dialogue. PUnify, FL-Narrowing, BSP-LE (current), trait resolution, bidirectional type-checking, parse disambiguation, ATMS narrowing are all residual computations on quantales/lattices with stratified + CALM + ATMS solvers. Generalizing the solver consolidates these as instances. Hyperlattice Conjecture strengthening: "every computable function is residual computation on a lattice via the general solver." Audit of current BSP-LE 2/2B ([relations.rkt](../../racket/prologos/relations.rkt)) confirmed: HIGH-LEVEL substrate is lattice-agnostic (already reused by typing-propagators + elaborator); LOW-LEVEL search is relation-with-atoms coupled. This track lifts the low-level layer. Future tracks (PPN 5 type-directed disambiguation, FL-Narrowing refinement, future PPN residual work) inherit as instances once delivered. 4C contributes lattice specifications as example instances. |
@@ -171,6 +171,20 @@ sites** (table born plain `atms.rkt:459`; tag-blind `table-answer-merge` `:100-1
 `net-cell-write` tag-gate `propagator.rkt:1993`; producer `logic-var-read`+flat-write
 `relations.rkt:2743/2751`) are captured in [DEFERRED.md](DEFERRED.md) § "Rel T1 A.2b
 DFS-routing scaffolding → BSP-LE Track 3" and [Rel T1 design §5 A.2b](2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md).
+
+**Retirement obligation — Rel T1 A.4 guard DFS-routing scaffolding (READ BEFORE STARTING).**
+Rel T1 A.4 landed a second scaffolding check (`stratified-eval.rkt` `use-propagator?` →
+`reachable-has-guard?`, Check 4, commit `6b56397d`): guard-bearing queries route to **DFS**
+because on-network guards are incomplete — struct conditions weren't resolved, the single
+shared guard bit can't filter a multi-fact generator per-row, and an S0 belief-narrow is
+re-projected away (`worldview-cache` is derived from decisions-state). The **on-network
+guard mechanism was prototyped + verified** (struct-resolution fix + per-binding
+belief-clear + a between-round handler mirroring `process-naf-request`) and is captured,
+with the tabled-generator work above, in the seed note. When this track lands
+worldview-preserving tabling (so guard generators materialize per-branch tags), deploy the
+guard mechanism and **delete Check 4**. Seed:
+[`2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md`](2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md) (both
+issues + the prototyped designs) + [Rel T1 design §5 A.4](2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md).
 
 ### Track 4: BSP Pipeline
 

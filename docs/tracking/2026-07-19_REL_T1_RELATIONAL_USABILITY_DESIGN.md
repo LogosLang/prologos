@@ -51,7 +51,7 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | **A.2** | NAF per-binding **belief-clear** (E-with-B) in `process-naf-request` — **FACT generators** | 🔄 core done | `naf-per-binding-mask`; `light-vehicle` `{both}`→`{bicycle}`; acceptance + `test-rel-t1-naf` (5); suite 8927/0 |
 | **A.2b** | Rule/recursive-generator NAF — **ROOT reframed (probe-verified): the body-local-var gap**, not tabling-flattens-worldviews (that is second-order = BSP-LE Track 3). Minimal slice = **adaptive-dispatch DFS-routing** (`reachable-has-body-local-rule?` in `use-propagator?`) | ✅ | `bcd02d6d`; `safe-twohop`→`{w}`, `safe-reach`→`{y,w}` via DFS (parity-verified); A.2-core fact-NAF stays on-network; +2 tests (`test-rel-t1-naf` 7); acceptance 8/8; suite 8929/0. **SCAFFOLDING** — retirement owner BSP-LE Track 3 (on-network body-local threading + SLG completion + worldview-preservation §9.6) |
 | **A.3** | Safe/floundering — **static** range-restriction gate (PERMISSIVE / Prolog-mode) at **defr registration** (Site A) + top-level `solve(not G)` runners (Site B); **not** `install-conjunction` (home reframed by the A.3 audit) | ✅ | `74fa9df2`; `check-relation-floundering`; unsafe → clear error; residual (mode-dependent free-arg call) = standard Prolog `nil`, deferred; +3 tests; suite 8932/0 |
-| **A.4** | Guard: FFI-crash residuation + static floundering; (guard per-binding leak — scope TBD) | ⬜ | S0 fire-once shape ≠ NAF's S1 shape |
+| **A.4** | Guard correctness — **DFS-routing** (`reachable-has-guard?` Check 4). On-network guards have 3 bugs (struct-resolution; single-bit per-binding collapse; S0 narrow re-projected); guards live in tabled rules → inherit the tabling seam. Route to DFS (correct); on-network mechanism prototyped + deferred to Track 3. | ✅ | `6b56397d`; `positive-edge`→`{(a,b,3),(c,d,5)}`; +2 tests (`test-rel-t1-naf` 12); acceptance 9/9; suite 8934/0. **SCAFFOLDING** — retire w/ BSP-LE Track 3 ([seed](2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md)) |
 | **SC** | Solver config surface + WFS acceptance (owner-added, in scope): (a) **preparse gap FIXED** (`19d9f8ae`) — `process-string-ws` now uses `merge-preparse-and-tree-parser` like `process-file`, so `solver`/`solve-with named` work in the REPL/editor path; (b) wfle-acceptance runs **0-errors** (owner fixed the dotted `ns`); outputs verified correct **except** F2 guard (`positive-edge` leaks `w=0` — a **PRE-EXISTING on-network guard bug**, confirmed at `b0b88df2`, → **A.4**) | 🔄 SC.2 ✅ | 130 REPL/LSP/WS tests + full suite 8932/0 green. Remaining SC.1: F2 guard is A.4; optional `;;N=>` markers (blocked on A.4 for the guard rows); 2 stale `;;=>` comments (77 two-hop, 82 employees — outputs actually correct) |
 | **B.1** | Typed solution rows — codata-observation path | ⬜ | Untyped-relation fallback; first-class |
 | **B.2** | Typed solution rows — schema-projection path + rename query-var → field name | ⬜ | Ties to Path-Selection `^` |
@@ -340,15 +340,46 @@ residuation + FFI-crash (the statically-safe-but-not-yet-ground case). **Scope:*
 named-`defr` Site A + top-level Site B; inline anonymous-`rel` floundering deferred
 (rare; shares Site B's eval-time channel). Tests: `test-rel-t1-naf` +3.
 
-### A.4 — guard
-- **FFI crash**: gate guard-fire on condition-var readiness — **residuate** when
-  the var reads bot (reuse the discrimination residuate-on-bot substrate), and a
-  **flounder terminal** at quiescence (residuation alone is unsound — a never-bound
-  guard silently passes). Option "substitute like DFS" is a red herring (subst
-  keeps unbound vars; DFS's safety is from goal *ordering*).
-- **Per-binding leak**: guard shares NAF's single-bit structure but at S0
-  (fire-once), so its per-binding fix differs. **Scope decision [OPEN]**: fix
-  guard crash+floundering now (demo-adjacent), defer guard's per-binding leak.
+### A.4 — guard — **LANDED (DFS-routing, commit `6b56397d`)**
+
+> **Reframed + resolved.** The A.4 grounding-audit (`wf_ab037f07-570`) + implementation
+> found on-network guards have **three real bugs**, and that guards *always* live in
+> tabled rule clauses — so the on-network guard path inherits Issue 1's tabling seam.
+> The minimal reliable fix is DFS-routing (mirroring A.2b's Check 3); the on-network
+> guard mechanism is prototyped + captured for BSP-LE Track 3.
+
+**The three on-network guard bugs (each verified with valid probes):**
+- **(a) Struct-condition resolution**: `resolve-condition-from-net` walked only
+  `expr-app`/`pair`, not struct nodes like `expr-generic-gt`, so `[gt weight 0]` reached
+  `eval-fn` with `weight` unresolved → `nf` stuck → `truthy? [else #t]` → the guard
+  silently passed (never filtered). (The wfle "F2 crash" premise was wrong — `gt` goes
+  stuck, it does not crash; a real FFI crash needs a `foreign` primitive + unbound var +
+  `nf` eval-fn — a rare, doubly-gated mode, not F2.)
+- **(b) Single-bit per-binding collapse**: `install-conjunction` tags every fact row with
+  the ONE shared guard bit `G`, so a multi-fact generator can't be filtered per-row
+  (order-dependent leak-all / lose-all). S0 analogue of A.2-core's NAF collapse.
+- **(c) S0 belief-narrow doesn't persist**: `worldview-cache` is a derived projection of
+  decisions-state (`install-worldview-projection`), so an S0 narrow is re-projected away.
+  NAF's identical AND-NOT persists only because it runs between-round.
+
+**Landed fix — Check 4 (SCAFFOLDING, retire w/ BSP-LE Track 3)**: `reachable-has-guard?`
+in `stratified-eval.rkt` `use-propagator?` routes any would-be-on-network query whose
+reachable relation graph contains a `guard` goal to **DFS**, which filters guards
+correctly (ground + free-var, single + multi-fact). Symmetric with A.2b's Check 3.
+Verified: wfle F2 `positive-edge` → `{(a,b,3),(c,d,5)}`, `positive-edge-nat` →
+`{(a,b,3N),(c,d,5N)}`; Rel acceptance 9/9; `test-rel-t1-naf` +2; suite 8934/0.
+
+**The on-network guard mechanism (prototyped + verified, deferred to Track 3)**: the full
+on-network fix — struct-resolution + a per-binding guard belief-clear (the S0 analogue of
+`naf-per-binding-mask`, pure `eval-fn(subst)`, no fork) + a **between-round handler**
+(guard-pending cell + `process-guard-request` mirroring `process-naf-request`, because of
+bug (c)) — was built and verified working for a generator that materializes on-network
+(`f2-guard-probe` → `{3,5}`), then reverted for the simpler DFS-route. It deploys once
+Track 3 lands worldview-preserving tabling. Full design +
+[Track 3 seed](2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md) § Issue 2.
+
+**Deferred (unchanged)**: guard's genuinely-never-ground residual is standard Prolog `nil`
+(the A.3 static gate is the safety pair); a hard runtime flounder terminal is deferred.
 
 ### G (optional) — the anti-join detection reframe (a DETECTION-axis option, deferred)
 
@@ -542,8 +573,8 @@ checklist-first). The roadmap row does not flip ✅ until the PIR lands.
 
 **Still open:**
 - **A.3** — ✅ **RESOLVED (landed `74fa9df2`): static PERMISSIVE floundering gate** at defr registration (Site A) + top-level runners (Site B); `install-conjunction` home refuted (§5 A.3). Residual (mode-dependent free-arg call → standard Prolog `nil`) named + deferred.
-- **A.4 (NEXT)** — guard: FFI-crash **residuation** (reuse discrimination residuate-on-bot) + flounder terminal; guard's static floundering is already covered by A.3, so A.4 is the residuation/crash half. (Note: design coords `guard-fire 2118/2140` + `residuate-on-bot 720` are STALE per the A.3 audit — actual guard-fire `2231`, bot-leak `2212/2218`, residuate-on-bot `813-814`.)
-- **BSP-LE Track 3 (deferred, scaffolding retirement)** — on-network body-local-var threading + SLG completion + §9.6 worldview-preserving tabling. Retires the A.2b Check-3 DFS-routing predicate. Grounding + options + prior-art (§9.6) captured in the `wf_c2f8bfa3-db2` / `wf_9c6eb408-522` synthesis; carry into Track 3's own Stage-3.
+- **A.4** — guard — ✅ **RESOLVED (landed `6b56397d`): DFS-routing** (`reachable-has-guard?` Check 4, §5 A.4). 3 on-network guard bugs found (struct-resolution; single-bit per-binding collapse; S0-narrow re-projected); the F2 "crash" premise was wrong (`gt` goes stuck, not crash). On-network guard mechanism prototyped + deferred to Track 3.
+- **BSP-LE Track 3 (deferred, scaffolding retirement)** — retires BOTH the A.2b Check-3 (body-local-var rules) and A.4 Check-4 (guards) DFS-routing predicates. Work: on-network body-local-var threading + SLG completion + §9.6 worldview-preserving tabling + the prototyped on-network guard mechanism. Seed: [`2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md`](2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md) (both issues + prototyped designs); grounding/options in `wf_c2f8bfa3-db2` / `wf_9c6eb408-522` / `wf_ab037f07-570`.
 - **Q-B** (Aspect B) keying: rename query-var → field, vs fresh positional Record.
 
 ---

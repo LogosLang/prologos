@@ -1265,3 +1265,37 @@ unconditional=∅ memoize across worlds, conditional worldview-filtered —
 - Grounding + options synthesis (carry into Track 3's Stage-3): workflows `wf_c2f8bfa3-db2` (grounding-audit) + `wf_9c6eb408-522` (options-panel) — dailies `2026-07-19_dailies.md` LOG.
 - Prior art for the worldview layer: PUnify Part 3 §9.6 (support-set-tagged table reads).
 - The four co-change sites for the eventual on-network table format: table cell born plain (`atms.rkt:459`), tag-blind `table-answer-merge` (`atms.rkt:100-101`), `net-cell-write` tag-gate (`propagator.rkt:1993`), producer `logic-var-read`+flat-write (`relations.rkt:2743/2751`).
+
+## Rel T1 A.4 guard DFS-routing scaffolding → BSP-LE Track 3 (captured 2026-07-20, commit `6b56397d`)
+
+The A.4 minimal slice added **Check 4** in the adaptive dispatcher (`stratified-eval.rkt`
+`use-propagator?` → `reachable-has-guard?`): a would-be-on-network query whose reachable
+relation graph contains a `guard` goal routes to **DFS** (the correct reference solver for
+guards, ground + free-var, single + multi-fact).
+
+**Why**: on-network guards have three real bugs — (a) `resolve-condition-from-net` didn't
+recurse into struct condition exprs (`expr-generic-gt`) so the condition var stayed
+unresolved and the guard default-passed; (b) the single shared guard bit `G` can't filter
+a multi-fact generator per-row (`install-conjunction` tags every row `(G|Bi)`); (c) an S0
+belief-narrow is re-projected away (`worldview-cache` is derived from decisions-state via
+`install-worldview-projection`, `propagator.rkt:969`). AND guards live only in tabled rule
+clauses, so their generator inherits the A.2b tabling seam above.
+
+**This is scaffolding with a named retirement plan.** Honest engine-selection (guards go to
+the solver that handles them), not off-network scaffolding.
+
+**Retirement owner: BSP-LE Track 3.** The full on-network guard mechanism was **prototyped
++ verified** during A.4 (struct-resolution fix + per-binding guard belief-clear [the S0
+analogue of `naf-per-binding-mask`, a pure `eval-fn(subst)`, no fork] + a **between-round
+handler** [guard-pending cell + `process-guard-request` mirroring `process-naf-request`,
+required by bug (c)]) and reverted for the simpler DFS-route. It deploys once Track 3 lands
+worldview-preserving tabling (so guard generators materialize per-branch tags). Then
+**delete the Check-4 predicate**.
+
+### Cross-references
+
+- Landed slice: commit `6b56397d`; design [`2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md`](2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md) §5 A.4.
+- **Track 3 seed (both issues + prototyped designs)**: [`2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md`](2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md).
+- Grounding-audit: `wf_ab037f07-570` (guard machinery + fix options).
+- BSP-LE Master Track 3 retirement obligation: [`2026-03-21_BSP_LE_MASTER.md`](2026-03-21_BSP_LE_MASTER.md).
+- **Process note**: the A.4 investigation was lengthened by a WS-syntax probe error (one-line fact rows `|| 5 3` parse as one wrong-arity row → spurious empty results, masqueraded as a tabling failure). Probes need multi-line fact rows.
