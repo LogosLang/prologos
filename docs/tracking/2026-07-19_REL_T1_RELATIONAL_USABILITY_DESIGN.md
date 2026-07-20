@@ -53,8 +53,10 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | **A.3** | Safe/floundering — **static** range-restriction gate (PERMISSIVE / Prolog-mode) at **defr registration** (Site A) + top-level `solve(not G)` runners (Site B); **not** `install-conjunction` (home reframed by the A.3 audit) | ✅ | `74fa9df2`; `check-relation-floundering`; unsafe → clear error; residual (mode-dependent free-arg call) = standard Prolog `nil`, deferred; +3 tests; suite 8932/0 |
 | **A.4** | Guard correctness — **DFS-routing** (`reachable-has-guard?` Check 4). On-network guards have 3 bugs (struct-resolution; single-bit per-binding collapse; S0 narrow re-projected); guards live in tabled rules → inherit the tabling seam. Route to DFS (correct); on-network mechanism prototyped + deferred to Track 3. | ✅ | `6b56397d`; `positive-edge`→`{(a,b,3),(c,d,5)}`; +2 tests (`test-rel-t1-naf` 12); acceptance 9/9; suite 8934/0. **SCAFFOLDING** — retire w/ BSP-LE Track 3 ([seed](2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md)) |
 | **SC** | Solver config surface + WFS acceptance (owner-added, in scope): (a) **preparse gap FIXED** (`19d9f8ae`) — `process-string-ws` now uses `merge-preparse-and-tree-parser` like `process-file`, so `solver`/`solve-with named` work in the REPL/editor path; (b) wfle-acceptance runs **0-errors** (owner fixed the dotted `ns`); outputs verified correct **except** F2 guard (`positive-edge` leaks `w=0` — a **PRE-EXISTING on-network guard bug**, confirmed at `b0b88df2`, → **A.4**) | 🔄 SC.2 ✅ | 130 REPL/LSP/WS tests + full suite 8932/0 green. Remaining SC.1: F2 guard is A.4; optional `;;N=>` markers (blocked on A.4 for the guard rows); 2 stale `;;=>` comments (77 two-hop, 82 employees — outputs actually correct) |
-| **B.1** | Typed solution rows — codata-observation path | ⬜ | Untyped-relation fallback; first-class |
-| **B.2** | Typed solution rows — schema-projection path + rename query-var → field name | ⬜ | Ties to Path-Selection `^` |
+| **B (Stage-3)** | Typed solution rows — design SETTLED (§6): `Κ′` keys · schema/facts/rules type-source · `#f`-dispatch+imperative-compute · shared kernel · 5th-refusal reachability | ✅ | panel `wf_e00d9318-3b6` + R-lens; owner co-design 2026-07-20 |
+| **B0** | Shared ground/free **kernel** (§6.5) — keys-out, strip-isolated, partition-not-`set!`; refactor 3 goal-app row-build sites onto it | ⬜ | reduction.rkt; zero behavior change (Aspect-A rows byte-identical) |
+| **B1** | First typed slice — schema'd goal-app: 5 solve structs `#f` + imperative arm builds `expr-Record` (`Κ′` keys, `schema->row` types) + container-wrap + `#params==#fields` guard | ⬜ | first-green = `solve(person)[0].name : α`; typing-core + qtt (both) |
+| **B2** | Codata: un-schema'd facts → join fact-literal types; rule-relation → loose row + runtime-at-the-end; first-class-static-codata → C.1 | ⬜ | F1b.6/D23 posture; presence-refinement → C.1 |
 | **C.1** | schema-as-facts: rule-clause typing (facts already typed) | ⬜ | Extends `check-relation-schema-rows` |
 | **C.2** | signature-schema activation as a logic-var typing source | ⬜ | Currently elaborated-but-dead |
 | **D.0/1** | Efficient fact representation + query-opt — Stage 0/1 research + design artifact | ⬜ | Research-heavy; after A; impl pick-up-or-spin-out |
@@ -492,26 +494,172 @@ catalogued.
 
 ---
 
-## 6. Aspect B — typed solution rows
+## 6. Aspect B — typed solution rows — **SETTLED (Stage-3, 2026-07-20)**
 
-`solve` starts from `expr-hole`. Two first-class typing sources (owner: codata as
-first-class as schema'd):
+`solve`/`solve-with`/`solve-one`/`explain`/`explain-with` all return a bare
+`expr-hole` in both checkers (typing-core.rkt:2930-2942, qtt.rkt:2161-2183). Aspect
+B gives them a **typed per-solution row** so solve output composes with the CIU-T6-F1
+records/rows type system (project a field, feed a typed function). Settled after a
+grounding-audit (`wf_ec53bc09-c31`) + an adversarially-critiqued design-options panel
+(`wf_e00d9318-3b6`, Q1/Q2/Q4/Q5) + main-session R-lens verification + owner co-design.
 
-- **B.1 codata-observation path** — for untyped relations, the row's value types
-  are the *observed* literal types (final-coalgebra reading; the F1 `{:a 1}.a :
-  Int` machinery, one layer up). Row keys stay query-var names.
-- **B.2 schema-projection path** — for schema-typed relations, project the
-  schema's field types onto the free positions and **rename query-var → field
-  name** (owner nudge; ties to Path-Selection `^` dynamic key-rename). Bridge is
-  positional (goal-arg i ↔ param i ↔ field i), threaded *before* the ground/free
-  split collapses positions.
+### 6.0 Notation (owner, corrected 2026-07-20)
+- **`Κ`** — the *definition-time* key-name: schema field-name **XOR** the `defr`
+  predicate-argument name. Known at definition time for **every** relation (a `defr`
+  always has predicate-arg names) — NOT schema-only.
+- **`Κ′`** — the *query-var* (call-site) key-name (the `?x` the user writes).
+- **`α`** — a field type.
 
-**Prerequisite**: build the **ONE shared ground/free predicate** consumed by BOTH
-reduction and typing (entry-gate b) — do not reproduce the walk (the drift-bug
-class). This is a foundation both A.2 (per-binding enumeration) and B need.
+### 6.1 The four decisions
+| # | Decision | Resolution |
+|---|---|---|
+| **Q1 keying** | solution-row keys = `Κ` or `Κ′`? | **`Κ′` (query-var names), always** — Prolog-matching. Schema/facts supply field TYPES `α` only, never the keys. Any `Κ′→Κ` rename is owned by Path-Selection `^`, not baked into solve. |
+| **Q2 type-source** | codata vs schema | **schema-projection + fact-observation** (the F1 schema/`Map` split, one layer up). See §6.2. |
+| **Q4 where/posture** | propagator or infer rule; where | **Register the 5 solve structs `#f` (dispatch parity with records); compute the row in the imperative `infer`/`inferQ` arm** via a cycle-free `relations.rkt` import + `schema->row`. On-network *computation* is the deferred joint records+solve move (§6.7). |
+| **Q5 predicate** | shallow vs deep shared ground/free | **Shallow goal-app parity-kernel, keys-out, strip-isolated** (§6.5); deep shapes (`is`/`not`/`unify`, `expr-rel`) stay untyped (gate e) for now. |
 
-**Design points [OPEN]**: keying strategy (rename vs fresh positional Record);
-reconciling the two unbound representations (codata: "unobserved" unifies them).
+**Why `Κ′` (Q1):** it makes the static row keys *identical to the runtime champ keys
+by construction* (CbC — nothing to hand-maintain across the 6 runtime row-build sites).
+A `Κ′→Κ` rename was rejected: (a) a present-but-unground var renders as its OWN name
+as the row *value* (`ground->prologos-expr`, reduction.rkt:262), so renaming only the
+key yields `{:Κ  Κ′-value}` — an intra-row key/value desync; (b) the cache-hit gap
+(§6.10) would give the SAME relation different keys by import path — self-refuting on
+the very "schema consistency" axis a rename is chosen for; (c) it reverses D25's
+just-landed echo-deletion (rows made query-var-only). One key convention; `^` owns rename.
+
+### 6.2 The type-source split (Q2 — F1 schema/`Map`, one layer up)
+The keys are always `Κ′`; the field type `α_i` at free position *i* comes from:
+
+| Relation shape | `α_i` source | Soundness | Phase |
+|---|---|---|---|
+| **Schema'd** (`defr R : S`) | schema field type at position *i*, via `schema->row`/`schema-field-type->expr` (typing-core:3559/370) | static, sound (schema = upper bound for all runtime rows incl. rule-derived) | B1 |
+| **Un-schema'd, facts-only** (`defr R \|\| …`) | **join** of the fact-literal types at position *i* (the literals are statically present in the source) | static, sound | B2 |
+| **Un-schema'd, rule-bearing** (open) | loose static row (rows of metas / `Value`; F1b.6/D23 posture); **precise codata typing recovered at runtime "at the end"** from the actual solution-champ literals via F1's existing observe-the-value machinery | static loose + runtime precise | runtime; first-class-static → **C.1** |
+
+This IS F1's split one layer up: a schema'd relation is *inductive/data* (precise
+static, like a schema-sealed record); an un-schema'd relation is *codata/`Map`* (loose
+static + precise runtime observation, like a bare `Map`). We NEVER do unsound static
+observation of rule outputs — the runtime values carry that (owner: "if the solution
+set has a literal value, we can get the codata/observed typing at the end"). Genuinely
+first-class *static* codata for open/rule relations defers to **C.1 clause typing**.
+
+**Positional bridge (universal):** goal-arg *i* ↔ `defr`-param/field *i* ↔ `Κ′_i`.
+Because `Κ` (a param name) exists for every `defr`, the bridge is well-defined for all
+relations. It carries the TYPE only (mismatch degrades to metas, never a type-lie). It
+needs a `#params == #fields` guard — which does NOT exist today (the only registration
+arity check is fact-row-length == #fields, driver.rkt:499-501); B1 adds it at the
+`defr` branch beside `check-relation-schema-rows` (degrade to metas on mismatch).
+
+### 6.3 Where + posture (Q4) — dispatch on-network, compute imperative
+Records are typed by a `register-typing-rule! … #f` rule (map-assoc, typing-propagators
+:2373) that DELEGATES the computation to the imperative fallback (`record-extend`); a
+`#f` node is left at `⊥` and the driver's `(if (prologos-error? net-ty) (infer/err …)
+net-ty)` gate (driver.rkt:656-659) runs the imperative checker. B matches this exactly:
+
+1. **Register `expr-solve?`/`-with?`/`-one?`/`expr-explain?`/`-with?` with return-type
+   `#f`** (5 one-line `register-typing-rule!` entries) — solve is now #f-*dispatched*
+   like records, and drops out of `unhandled-expr-counts` (coverage hygiene).
+2. **Compute the row in the imperative `infer`/`inferQ` solve arms** (replace the
+   `expr-hole` at typing-core:2930-2942 + qtt:2161-2183) via a **cycle-free
+   `relations.rkt` import** (R-lens-confirmed: typing-core→reduction→relations already;
+   relations has no back-edge). `schema->row`/`lookup-schema-by-name`/`schema-field-type
+   ->expr` are ALREADY in typing-core; only the relation→schema-name hop is new.
+
+**Reachability — the composition case is covered (R-lens-verified, typing-core:3183-3211).**
+`infer-on-network/err` falls back to the imperative checker not only when the *root* is
+`⊥`, but when **any interior position is still `⊥` at quiescence** — the F1b.2/D26
+"5th refusal check" (`untyped-interior-position`). So `solve(…)[0].Κ′` — solve nested
+under a field-projection — leaves the solve subtree at `⊥`, the check fires, and the
+WHOLE expression falls back to imperative, where the new solve arm types the row and
+the composition typechecks. **B rides the exact mechanism records already ride.** No
+computed on-network rule is needed for the MVP.
+
+### 6.4 Container wrapping
+The row is the *element*; `Seq` is a comment, not a type — reuse `List`
+(`(expr-app (list-type-fvar) <row>)`), `Option`, `Answer`:
+`solve`/`solve-with` → `List<row>`; `solve-one` → `Option<row>`; `explain`/
+`explain-with` → `List<Answer<row>>` (`expr-answer-type`, syntax.rkt:1037). Uniform
+mechanical wrap across the 5 arms.
+
+### 6.5 The ONE shared ground/free kernel (Q5 — entry-gate b, CbC substrate)
+Extract from `extract-query-info` (reduction.rkt:285) a single **pure classifier** that
+emits the champ **KEYS** (not raw names) for goal-app free positions, and refactor the
+3 goal-app runtime row-build sites onto it; the new typing arm calls the SAME function.
+Returning the KEY (`(expr-keyword raw-logic-var-name)`, the exact key
+`answers->prologos-expr` uses at reduction:247) is the parity lever — keyword-wrapping
++ the goal-app no-strip policy live INSIDE this one function, so neither consumer can
+re-decide the key spelling and the type keys CANNOT drift from the runtime keys.
+
+- **Home:** `reduction.rkt` (typing-core already requires it; one-directional, cycle-free).
+- **Signature:** `(classify-goal-args whnfd-args) → (listof (or/c 'ground (free-desc)))`
+  in canonical positional order, where `free-desc` carries **BOTH** the champ-key (typing
+  parity) **AND** the raw name (runtime needs it for `hash-ref answer qv`, reduction:246).
+  *(R-lens note: the panel's `(cons champ-key position)` DROPS the name — it must carry
+  both, else "keys-out" degrades back to discipline.)*
+- **Mantra (all-at-once):** rewrite as a partition/`map` over independent positions —
+  NOT the current `set!`-accumulating loop (reduction:286-296). This is the all-at-once
+  word applied at exactly the point the CbC guarantee rests on; not cosmetic.
+- **is/not/unify + expr-rel:** stay outside the typeable fragment (deep idioms
+  `collect-deep-logic-vars` ×5 / `expr-rel` all-params ×2 untouched) → gate e. Built
+  keys-out so promotion to Q5-C (deep adapters) is a mechanical add-adapter later.
+
+### 6.6 Unbound-rep default (presence-lattice refinement → C.1)
+Row values carry two unbound reps: missing key → `(expr-fvar 'none)` (reduction:248);
+present-but-unground → own-name fvar (:262). **MVP default:** free positions type as
+`present` with their `α`/meta; a closed row. The presence-lattice refinement (missing
+→ `optional`/Option; explain's reserved keys as the first `optional` clients) **defers
+to C.1** (owner: "it can wait to C.1").
+
+### 6.7 SRE lens · mantra · Network Reality Check (honest)
+- **SRE:** the row type is a **STRUCTURAL** lattice — a product of per-field
+  (`type × presence`) lattices indexed by the `Κ′` key-set. The shared-predicate parity
+  is a **span / equalizer** (one classifier morphism, two post-composed projections
+  sharing a key-domain), NOT an α/γ Galois adjunction — name it precisely, don't reach
+  for decorative Galois vocabulary. PRIMARY = the runtime champ key-set (the row VALUES);
+  the static Record type is DERIVED and shares the SAME index by construction.
+- **Network Reality Check (honest):** the row COMPUTATION is off-network — 0
+  `net-add-propagator`, 0 `net-cell-write` produces the row; it is the imperative `infer`
+  return value. This is at **exact parity with F1 records** (which also compute
+  imperatively), not new debt. The `#f`-DISPATCH is on-network, but that does NOT make
+  the COMPUTATION on-network — keep the distinction sharp; no "on-network" vocabulary
+  for the row build.
+- **Scaffolding + retirement (NAMED):** the imperative computation is scaffolding whose
+  retirement is the **joint records+solve on-network move** — flip both the map-assoc `#f`
+  rule AND the new solve `#f` rules to *computed* rules writing the row into the `tm`
+  cell — at the **BSP-LE Track 3 / PPN-native-typing** horizon. NOT a solve-only
+  propagator (that would split the dispatch altitude — worse decomplection than honest
+  `#f`-parity). Recorded so the static path is not left a permanent island.
+
+### 6.8 Build partition + first-green slice
+- **B0** (substrate; zero behavior change): build the §6.5 kernel (keys-out,
+  strip-isolated, partition-not-`set!`), refactor the 3 goal-app runtime row-build sites
+  onto it. Green = existing Aspect-A solve rows byte-identical. This is the Q1≡Q5
+  substrate both later phases stand on.
+- **B1** (first typed slice — schema'd goal-app): register the 5 solve structs `#f`;
+  imperative arm builds `expr-Record` with `Κ′` keys (from B0) whose types `α` are
+  `schema->row`-projected positionally; wrap per-arm; add the `#params==#fields` guard.
+  **First-green slice = the composition probe:** `solve(person)[0].name : α` typechecks
+  (transitively exercises all four decisions + re-confirms the 5th-refusal fallback).
+- **B2** (codata): un-schema'd facts-relation → join fact-literal types; un-schema'd
+  rule-relation → loose row + runtime "at the end"; first-class-static-codata-for-open
+  named DEFERRED to C.1.
+
+### 6.9 Deferred / out of scope (named, not silently inherited)
+- **Cache-hit registry gap** (pre-existing, PM-Track-12-shaped): neither
+  `current-relation-store` nor `current-schema-registry` is `.pnet`-serialized
+  (pnet-serialize:544-614) nor restored on cache-hit (driver:2560-2673), so a relation
+  imported from a cached module is invisible to static lookup AND errors at runtime
+  ("Unknown relation", relations.rkt:3031). Breaks independent of B; DEFERRED, not B's bug.
+- **Two-context empty-store fidelity:** `current-relation-store` is a `make-parameter`
+  with an EMPTY default, absent from `test-support`/`batch-worker` (only driver:825
+  populates it). Failure mode is *silently-empty store → solve untyped* in
+  test/run-ns/batch contexts (NOT an unbound crash). B1 must decide: thread the store
+  into `test-support`/`batch-worker` save-restore (pipeline.md New-Parameter + Two-Context)
+  or accept the fidelity gap. **Recommend threading it** (the tests need typed solve).
+- **Deep goal shapes** (`is`/`not`/`unify`, `expr-rel`): untyped (gate e) this track.
+- **Reachability RESOLVED** (strike from any stale framing): the relation store IS
+  reachable from typing-core (cycle-free `relations.rkt` import) — "unreachable" was a
+  red herring; only the empty-store two-context gap above remains.
 
 ---
 
@@ -547,11 +695,13 @@ Proposed order (A first, per owner priority):
 3. **A.2 + A.3** NAF per-binding isolation + floundering (the core; needs the
    ONE ground/free predicate foundation).
 4. **A.4** guard crash + floundering (guard per-binding leak: scope TBD).
-5. **B + C** typed rows + schema-as-facts (share the ground/free predicate + the
-   rename machinery).
-6. **Polish**.
-7. **T** dedicated tests (interleaved, not deferred).
-8. **X.close** bench + doc-truth + PIR.
+5. **B0 → B1 → B2** typed rows (§6.8): B0 shared kernel (zero behavior change) →
+   B1 schema'd goal-app (first-green = `solve(person)[0].name : α`) → B2 codata.
+6. **C** schema-as-facts (C.1 rule-clause typing + presence-lattice refinement + C.2
+   signature-schema activation) — shares B's kernel + fact-typing.
+7. **Polish**.
+8. **T** dedicated tests (interleaved, not deferred).
+9. **X.close** bench + doc-truth + PIR.
 
 ---
 
@@ -575,12 +725,13 @@ checklist-first). The roadmap row does not flip ✅ until the PIR lands.
 - **A.3** — ✅ **RESOLVED (landed `74fa9df2`): static PERMISSIVE floundering gate** at defr registration (Site A) + top-level runners (Site B); `install-conjunction` home refuted (§5 A.3). Residual (mode-dependent free-arg call → standard Prolog `nil`) named + deferred.
 - **A.4** — guard — ✅ **RESOLVED (landed `6b56397d`): DFS-routing** (`reachable-has-guard?` Check 4, §5 A.4). 3 on-network guard bugs found (struct-resolution; single-bit per-binding collapse; S0-narrow re-projected); the F2 "crash" premise was wrong (`gt` goes stuck, not crash). On-network guard mechanism prototyped + deferred to Track 3.
 - **BSP-LE Track 3 (deferred, scaffolding retirement)** — retires BOTH the A.2b Check-3 (body-local-var rules) and A.4 Check-4 (guards) DFS-routing predicates. Work: on-network body-local-var threading + SLG completion + §9.6 worldview-preserving tabling + the prototyped on-network guard mechanism. Seed: [`2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md`](2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md) (both issues + prototyped designs); grounding/options in `wf_c2f8bfa3-db2` / `wf_9c6eb408-522` / `wf_ab037f07-570`.
-- **Q-B** (Aspect B) keying: rename query-var → field, vs fresh positional Record.
+- **Q-B** (Aspect B) — ✅ **RESOLVED (Stage-3, 2026-07-20, §6):** keys = **`Κ′` (query-var), always** (Prolog-parity; `^` owns rename); type-source = **schema-projection + fact-observation** (F1 schema/`Map` split, one layer up; rule-relation codata → runtime "at the end" / C.1); posture = **`#f`-dispatch + imperative compute** (5th-refusal reachability carries composition); shared **keys-out kernel** (§6.5); deep shapes + presence-lattice + cache-hit gap DEFERRED. Panel `wf_e00d9318-3b6` + R-lens + owner co-design.
 
 ---
 
 ## 12. References
 - Grounding: `wf_7ad61165-85d` (surface), `wf_1891cfd0-197` (NAF isolation) — dailies `2026-07-19_dailies.md` LOG.
+- Aspect-B (§6): grounding `wf_ec53bc09-c31` (solve-typing surfaces) + design-options panel `wf_e00d9318-3b6` (Q1/Q2/Q4/Q5; Q3-cluster failed, folded into §6.6) — dailies `2026-07-19_dailies.md` LOG (2026-07-20 entries).
 - Seed: [`2026-07-19_REL_SOLVE_TYPING_NOTE.md`](2026-07-19_REL_SOLVE_TYPING_NOTE.md) (its `&>` label superseded by §4).
 - Rel Master: [`2026-07-19_REL_MASTER.md`](2026-07-19_REL_MASTER.md).
 - Rules: `.claude/rules/propagator-design.md` (broadcast, set-latch, watcher/threshold variants), `.claude/rules/stratification.md` (S1 NAF), `.claude/rules/structural-thinking.md` (retraction as narrowing), `.claude/rules/on-network.md` (mantra).
