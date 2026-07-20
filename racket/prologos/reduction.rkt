@@ -51,7 +51,11 @@
          normalize-ast-to-solver-term
          ;; N6e issue #71: saturated-multi-hole-section classifier (shared by
          ;; infer/inferQ so the 3-stage guard cannot drift between stages).
-         saturated-hole-section-app?)
+         saturated-hole-section-app?
+         ;; Rel T1 Aspect B (typed solution rows) entry-gate (b): the ONE shared
+         ;; goal-app ground/free classifier + champ-key policy, consumed by BOTH
+         ;; the runtime row-build (here) and the static solve row-typing (typing-core).
+         classify-goal-args (struct-out free-arg) query-var->champ-key)
 
 ;; N4: collapse a resolved numeric literal (expr-num-lit) to its concrete node.
 ;; Local mirror of zonk's collapse-num-lit (reduction can't require zonk — cycle via
@@ -244,7 +248,7 @@
        (for/fold ([c champ-empty])
                  ([qv (in-list query-vars)])
          (define val (hash-ref answer qv #f))
-         (define key (expr-keyword qv))
+         (define key (query-var->champ-key qv))
          (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
          (champ-insert c (equal-hash-code key) key pval)))
      (expr-champ champ-val))))
@@ -278,23 +282,50 @@
      v]
     [else (expr-fvar (if (symbol? v) v 'unknown))]))
 
+;; ── Rel T1 Aspect B (typed solution rows), entry-gate (b) ──────────────────────
+;; The ONE shared ground/free classifier for goal-app args, consumed by BOTH the
+;; runtime row-build (below) AND the static solve row-typing (typing-core, B1). It
+;; is the Correct-by-Construction substrate: the free/ground split is spelled in
+;; exactly one place (classify-goal-args) and the champ KEY in exactly one place
+;; (query-var->champ-key), so the runtime row and the static row type cannot
+;; disagree on which positions are keys or on how a key is spelled.
+
+;; free-arg — a free (query) position of a goal-app: the raw logic-var NAME
+;; (runtime answer lookup) + the champ KEY (row-build + static row-type parity).
+;; Keys-out: the key is carried, not re-derived by each consumer.
+(struct free-arg (name key) #:transparent)
+
+;; query-var->champ-key — the ONE goal-app champ-key policy: keyword-wrap the raw
+;; query-var name (no strip). Consumed by classify-goal-args (the free-arg key) AND
+;; every goal-app row-build, so the key spelling lives in a single place.
+(define (query-var->champ-key name) (expr-keyword name))
+
+;; classify-goal-args — the shallow ground/free classifier for goal-app args. whnf
+;; each arg, then split at the TOP level (logic-var → free; else → ground).
+;; Non-recursive: a logic var nested inside a compound arg is treated as ground
+;; (matches the runtime split today; the typeable fragment is the top-level free
+;; positions — gate a). Returns (values goal-args free-args):
+;;   goal-args : positional — free position = raw name (symbol), ground = whnf value
+;;   free-args : (listof free-arg) in positional order
+(define (classify-goal-args args)
+  (for/fold ([gs '()] [fs '()]
+             #:result (values (reverse gs) (reverse fs)))
+            ([a (in-list args)])
+    (define a* (whnf a))
+    (cond
+      [(expr-logic-var? a*)
+       (define name (expr-logic-var-name a*))
+       (values (cons name gs)
+               (cons (free-arg name (query-var->champ-key name)) fs))]
+      [else
+       (values (cons a* gs) fs)])))
+
 ;; Extract query variable names and ground args from a goal-app's arguments.
-;; Returns (values goal-args query-vars) where:
-;;   goal-args: list of ground values or symbols (for logic vars)
-;;   query-vars: list of symbols for unbound logic variables
+;; Thin adapter over classify-goal-args, preserving the (goal-args, query-vars)
+;; contract the solver call sites use.
 (define (extract-query-info args)
-  (define goal-args '())
-  (define query-vars '())
-  (for ([a (in-list args)])
-    (let ([a* (whnf a)])
-      (cond
-        [(expr-logic-var? a*)
-         (define name (expr-logic-var-name a*))
-         (set! goal-args (cons name goal-args))
-         (set! query-vars (cons name query-vars))]
-        [else
-         (set! goal-args (cons a* goal-args))])))
-  (values (reverse goal-args) (reverse query-vars)))
+  (define-values (goal-args free-args) (classify-goal-args args))
+  (values goal-args (map free-arg-name free-args)))
 
 ;; (The bound-args echo machinery — compute-bound-args and
 ;; compute-bound-args-for-relation, which re-emitted ground call-site values
@@ -570,7 +601,7 @@
                  (for/fold ([c champ-empty])
                            ([qv (in-list query-vars)])
                    (define val (hash-ref first-answer qv #f))
-                   (define key (expr-keyword qv))
+                   (define key (query-var->champ-key qv))
                    (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
                    (champ-insert c (equal-hash-code key) key pval))])
            (expr-champ champ-val)))]
@@ -748,7 +779,7 @@
     (for/fold ([c champ-empty])
               ([qv (in-list query-vars)])
       (define val (hash-ref bindings qv #f))
-      (define key (expr-keyword qv))
+      (define key (query-var->champ-key qv))
       (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
       (champ-insert c (equal-hash-code key) key pval)))
 
