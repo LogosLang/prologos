@@ -113,14 +113,48 @@
   (check-true (string-contains? r ": String") "projected from field is typed String"))
 
 ;; ========================================
-;; B1 — un-schema'd relation stays loose (expr-hole); B2 refines the codata case
+;; B2 — codata: un-schema'd relation typing (the F1 `Map` side, one layer up)
 ;; ========================================
 
-(test-case "B1: solve over an UN-schema'd relation is still a loose hole (B2 refines)"
+;; An un-schema'd FACTS-ONLY relation (a small standalone world per case).
+(define plain-facts-world
+  (string-append
+   "ns t\n\n"
+   "defr edge [?from ?to ?weight]\n  || \"a\" \"b\" 3\n  || \"c\" \"d\" 5\n\n"))
+
+(test-case "B2: un-schema'd facts-only relation → row typed by OBSERVED literal types"
+  (define r (last-result
+             (run-prologos-string
+              (string-append plain-facts-world "solve (edge f t w)\n"))))
+  (check-true (string-contains? r "List"))
+  (check-true (string-contains? r ":f String") "f observed String from the facts")
+  (check-true (string-contains? r ":t String"))
+  (check-true (string-contains? r ":w Int")    "w observed Int from the facts")
+  (check-false (string-contains? r ": _") "an un-schema'd FACTS relation is no longer loose (B2)"))
+
+(test-case "B2: heterogeneous column → a UNION of the observed types"
   (define r (last-result
              (run-prologos-string
               (string-append
                "ns t\n\n"
-               "defr plain [?a ?b]\n  || \"x\" \"y\"\n\n"
-               "solve (plain a b)\n"))))
-  (check-true (string-contains? r ": _") "un-schema'd solve stays an untyped hole in B1"))
+               "defr mixed [?x ?y]\n  || \"a\" 1\n  || 2 \"b\"\n\n"
+               "solve (mixed x y)\n"))))
+  ;; :x observed from "a" (String) and 2 (Int) → a union of the two
+  (check-true (or (string-contains? r "String | Int") (string-contains? r "Int | String"))
+              "heterogeneous column is a union of String and Int"))
+
+(test-case "B2: field projection off an OBSERVED (un-schema'd) row is typed"
+  (define r (last-result
+             (run-prologos-string
+              (string-append plain-facts-world "(solve-one (edge f t w)).w\n"))))
+  (check-true (string-contains? r ": Int") "projected weight is Int (observed from facts)"))
+
+(test-case "B2: RULE-bearing un-schema'd relation stays loose (unsound to observe; → C.1/runtime)"
+  (define r (last-result
+             (run-prologos-string
+              (string-append
+               plain-facts-world
+               "defr ruler [?a ?b]\n  &> (edge a b _)\n\n"
+               "solve (ruler s d)\n"))))
+  (check-true (string-contains? r ": _")
+              "a rule-bearing relation is NOT statically observed (its rows exceed the facts)"))

@@ -3570,46 +3570,90 @@
                                      'present)))
                'closed))
 
-;; ── Rel T1 Aspect B (B1): typed solution rows ─────────────────────────────────
-;; goal-app-schema-row — project a SCHEMA'D relation's declared field types onto
-;; the FREE query positions of a goal-app, keyed by Κ′ (query-var names, from B0's
-;; classify-goal-args). The positional bridge: a free position at goal-arg index i
-;; ↔ schema field i (schema-entry-fields is in declared order). Returns an
-;; expr-Record (tail = 'closed for solve/solve-one, 'dyn for explain's reserved
-;; keys), or #f when the goal is not a registered schema'd relation (→ loose
-;; fallback; B2 refines the un-schema'd facts case with observed literal types).
-;; Arity mismatch (#params ≠ #fields) degrades per-field to a hole, never a crash.
-;; Row LABELS are the query-var name symbols; the runtime champ keys them with the
-;; SAME name via query-var->champ-key (Correct-by-Construction, B0).
-(define (goal-app-schema-row g* [tail 'closed])
+;; ── Rel T1 Aspect B (B1 + B2): typed solution rows ────────────────────────────
+;; observe-column-type — join a column's observed literal types into ONE type (B2
+;; codata). Dedup by equal?, then right-nest into expr-union; a homogeneous column
+;; collapses to its single type, a heterogeneous one becomes a union. Empty → hole.
+(define (observe-column-type types)
+  (define uniq
+    (let loop ([ts types] [acc '()])
+      (cond [(null? ts) (reverse acc)]
+            [(member (car ts) acc) (loop (cdr ts) acc)]
+            [else (loop (cdr ts) (cons (car ts) acc))])))
+  (or (foldr (lambda (t acc) (if acc (expr-union t acc) t)) #f uniq)
+      (expr-hole)))
+
+;; relation-column-typer — a (goal-position → field type) function for a statically-
+;; typeable relation, or #f (→ loose fallback). Two sources — the F1 schema/`Map`
+;; split, one layer up:
+;;   • schema'd relation → project the schema's declared field type at each position
+;;     (B1, inductive/data; sound — the schema is an upper bound for ALL runtime rows
+;;     including rule-derived ones). Arity mismatch (#params ≠ #fields) degrades
+;;     per-field to a hole, never a crash.
+;;   • un-schema'd FACTS-ONLY relation → observe the join of the fact-literal types
+;;     at each position (B2, codata; sound — a facts-only/CLOSED relation's rows are
+;;     all present statically, so observation is exact, not a lower bound).
+;; A RULE-bearing (open) relation returns #f: static fact-observation would be an
+;; UNSOUND lower bound (rules derive rows no fact exhibits); its precise codata
+;; typing comes at runtime "at the end" (first-class-static-codata → C.1). Row LABELS
+;; stay the query-var names Κ′ regardless of the type source.
+(define (relation-column-typer rel)
+  (define sname (relation-info-schema rel))
+  (cond
+    [sname
+     (define schema (lookup-schema-by-name sname))
+     (and schema
+          (let* ([fields (schema-entry-fields schema)] [nfields (length fields)])
+            (lambda (pos)
+              (if (< pos nfields)
+                  (schema-field-type->expr (schema-field-type-datum (list-ref fields pos)))
+                  (expr-hole)))))]
+    [else
+     ;; B2 codata — sound ONLY for facts-only (closed) relations. A `|| ` empty
+     ;; fact block registers a 0-term fact-row; such term-less facts observe
+     ;; nothing, so an all-empty relation stays loose (an "empty relation" is not a
+     ;; typed row) rather than degrading to a row of holes.
+     (define variants (relation-info-variants rel))
+     (define has-clauses? (for/or ([v (in-list variants)]) (pair? (variant-info-clauses v))))
+     (define facts
+       (filter (lambda (fr) (pair? (fact-row-terms fr)))
+               (apply append (map variant-info-facts variants))))
+     (and (not has-clauses?) (pair? facts)
+          (lambda (pos)
+            (observe-column-type
+             (for/list ([fr (in-list facts)]
+                        #:when (< pos (length (fact-row-terms fr))))
+               (infer ctx-empty (list-ref (fact-row-terms fr) pos))))))]))
+
+;; goal-app-row — the typed solution row for a goal-app: a per-position field type
+;; (schema-projection B1 / fact-observation B2) keyed by the query-var names Κ′ (from
+;; B0's classify-goal-args — the SAME free/ground split the runtime champ uses, so
+;; the type keys can't drift from the runtime keys). expr-Record with the given tail
+;; ('closed for solve/solve-one, 'dyn for explain), or #f for a non-typeable relation
+;; (unregistered / rule-bearing un-schema'd) → loose.
+(define (goal-app-row g* [tail 'closed])
   (define rel (relation-lookup (current-relation-store) (expr-goal-app-name g*)))
-  (and rel
-       (let* ([sname (relation-info-schema rel)]
-              [schema (and sname (lookup-schema-by-name sname))])
-         (and schema
-              (let* ([fields (schema-entry-fields schema)]
-                     [nfields (length fields)])
-                (define-values (_ground free-args)
-                  (classify-goal-args (expr-goal-app-args g*)))
-                (make-record
-                 'keyword
-                 (for/list ([fa (in-list free-args)])
-                   (define pos (free-arg-pos fa))
-                   (define ty (if (< pos nfields)
-                                  (schema-field-type->expr
-                                   (schema-field-type-datum (list-ref fields pos)))
-                                  (expr-hole)))  ;; out-of-range → degrade, not crash
-                   (cons (free-arg-name fa) (record-field ty 'present)))
-                 tail))))))
+  (define col-type (and rel (relation-column-typer rel)))
+  (and col-type
+       (let-values ([(_ground free-args) (classify-goal-args (expr-goal-app-args g*))])
+         ;; A ground query has NO free positions → its "rows" are empty records; a
+         ;; typed row exists only when there are solution fields to type, so a ground
+         ;; query stays loose (boolean-ish) rather than typing to List<{}>.
+         (and (pair? free-args)
+              (make-record
+               'keyword
+               (for/list ([fa (in-list free-args)])
+                 (cons (free-arg-name fa) (record-field (col-type (free-arg-pos fa)) 'present)))
+               tail)))))
 
 ;; solve-row-type — the static result type for a solve-family node. Pure structural
 ;; derivation from the goal (does NOT infer the goal — the caller does that for
 ;; effect/usage). wrapper ∈ 'list (solve/solve-with/explain*) | 'bare (solve-one,
 ;; whose runtime is the D25.4-unwrapped champ). Returns the wrapped typed row for a
-;; typeable schema'd goal-app, else expr-hole (loose fallback).
+;; typeable goal-app, else expr-hole (loose fallback).
 (define (solve-row-type g wrapper [tail 'closed])
   (define g* (whnf g))
-  (define row (and (expr-goal-app? g*) (goal-app-schema-row g* tail)))
+  (define row (and (expr-goal-app? g*) (goal-app-row g* tail)))
   (cond
     [(not row) (expr-hole)]
     [(eq? wrapper 'bare) row]

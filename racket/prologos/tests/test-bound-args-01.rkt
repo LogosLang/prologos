@@ -235,7 +235,9 @@
               "solve-one result should be a string")
   (check-true (string-contains? result "none")
               "no-solution should be none")
-  (check-false (string-contains? result "{")
+  ;; Check the VALUE only — Rel T1 Aspect B (B1) appends " : <row type>" whose record
+  ;; type contains "{"; the no-solution VALUE ("none") must still not be a map.
+  (check-false (string-contains? (car (regexp-split #rx" : " result)) "{")
                "no-solution must NOT be a map — {} is a legitimate empty dyn row (D17)"))
 
 ;; ========================================
