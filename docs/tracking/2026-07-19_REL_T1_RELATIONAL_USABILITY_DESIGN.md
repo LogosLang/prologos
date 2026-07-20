@@ -55,7 +55,7 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | **SC** | Solver config surface + WFS acceptance (owner-added, in scope): (a) **preparse gap FIXED** (`19d9f8ae`) — `process-string-ws` now uses `merge-preparse-and-tree-parser` like `process-file`, so `solver`/`solve-with named` work in the REPL/editor path; (b) wfle-acceptance runs **0-errors** (owner fixed the dotted `ns`); outputs verified correct **except** F2 guard (`positive-edge` leaks `w=0` — a **PRE-EXISTING on-network guard bug**, confirmed at `b0b88df2`, → **A.4**) | 🔄 SC.2 ✅ | 130 REPL/LSP/WS tests + full suite 8932/0 green. Remaining SC.1: F2 guard is A.4; optional `;;N=>` markers (blocked on A.4 for the guard rows); 2 stale `;;=>` comments (77 two-hop, 82 employees — outputs actually correct) |
 | **B (Stage-3)** | Typed solution rows — design SETTLED (§6): `Κ′` keys · schema/facts/rules type-source · `#f`-dispatch+imperative-compute · shared kernel · 5th-refusal reachability | ✅ | panel `wf_e00d9318-3b6` + R-lens; owner co-design 2026-07-20 |
 | **B0** | Shared ground/free **kernel** (§6.5) — keys-out, strip-isolated, partition-not-`set!`; refactor 3 goal-app row-build sites onto it | ✅ | `reduction.rkt`: `free-arg` + `query-var->champ-key` + `classify-goal-args`; `extract-query-info` delegates; 3 goal-app key-sites routed; exported for B1. Zero behavior change (probe byte-identical, acceptance 0-err); suite **8934/466/0** |
-| **B1** | First typed slice — schema'd goal-app: 5 solve structs `#f` + imperative arm builds `expr-Record` (`Κ′` keys, `schema->row` types) + container-wrap + `#params==#fields` guard | ⬜ | first-green = `solve(person)[0].name : α`; typing-core + qtt (both) |
+| **B1** | First typed slice — schema'd goal-app, ALL 5 arms: `solve-row-type`/`goal-app-schema-row` (typing-core, shared by qtt) build `expr-Record` (`Κ′` keys from B0, `schema-field-type->expr` types) + per-arm container + per-field arity-degrade; 5 solve structs registered `#f` (dispatch parity) | ✅ | `relations.rkt` require (cycle-free); **composition typed** `(solve-one q).w : Int`; containers CORRECTED to runtime (solve-one=bare, explain=`List<row \| _>` dyn, no Option/Answer); +7 tests `test-rel-t1-typed-rows.rkt`; `count-answers` helper fixed (counted type braces); suite **green** |
 | **B2** | Codata: un-schema'd facts → join fact-literal types; rule-relation → loose row + runtime-at-the-end; first-class-static-codata → C.1 | ⬜ | F1b.6/D23 posture; presence-refinement → C.1 |
 | **C.1** | schema-as-facts: rule-clause typing (facts already typed) | ⬜ | Extends `check-relation-schema-rows` |
 | **C.2** | signature-schema activation as a logic-var typing source | ⬜ | Currently elaborated-but-dead |
@@ -574,12 +574,24 @@ WHOLE expression falls back to imperative, where the new solve arm types the row
 the composition typechecks. **B rides the exact mechanism records already ride.** No
 computed on-network rule is needed for the MVP.
 
-### 6.4 Container wrapping
+### 6.4 Container wrapping — **corrected to the RUNTIME shape at B1 (CbC)**
 The row is the *element*; `Seq` is a comment, not a type — reuse `List`
-(`(expr-app (list-type-fvar) <row>)`), `Option`, `Answer`:
-`solve`/`solve-with` → `List<row>`; `solve-one` → `Option<row>`; `explain`/
-`explain-with` → `List<Answer<row>>` (`expr-answer-type`, syntax.rkt:1037). Uniform
-mechanical wrap across the 5 arms.
+(`(expr-app (list-type-fvar) <row>)`). Per-arm containers (corrected during B1
+grounding to match what the runtime VALUE actually is — the type must not lie):
+- **`solve`/`solve-with` → `List<row>`** (closed row).
+- **`solve-one` → BARE `row`** (NOT `Option<row>`). The runtime is the D25.4-unwrapped
+  bare champ (`run-solve-one-goal` returns `expr-champ` or `none`), and `expr-get` has
+  no Option arm — so `Option<row>` would both type-lie and break the `[solve-one q].x`
+  projection D25.4 exists to enable. The `none` (no-solution) case is the pre-existing
+  optimistic gap (unchanged from the prior `expr-hole`).
+- **`explain`/`explain-with` → `List<row>` with a `'dyn` tail** (NOT `List<Answer<row>>`).
+  The runtime returns plain champs (`answer-result->prologos-expr`), NOT `Answer`-wrapped
+  values — `expr-answer-type` is unused at runtime. The row carries a `'dyn` (open) tail
+  so the conditional reserved metadata keys (`:certainty`/`:cycle`/`:provenance`, WFS/
+  provenance modes) don't produce a closed-row type-lie.
+
+The wrapper is a uniform mechanical step in `solve-row-type` (`'list` vs `'bare`;
+`tail` = `'closed` for solve/solve-one, `'dyn` for explain).
 
 ### 6.5 The ONE shared ground/free kernel (Q5 — entry-gate b, CbC substrate)
 Extract from `extract-query-info` (reduction.rkt:285) a single **pure classifier** that

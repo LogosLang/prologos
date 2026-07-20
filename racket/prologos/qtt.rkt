@@ -2158,28 +2158,31 @@
        (match* (r1 r2)
          [((tu _ u1) (tu _ u2)) (tu (expr-goal-type) (add-usage u1 u2))]
          [(_ _) (tu-error)]))]
+    ;; Solve/Explain → typed solution rows (Rel T1 Aspect B, B1). Usage from the
+    ;; goal (+ solver/overrides for -with); the TYPE is the shared solve-row-type
+    ;; twin of the typing-core arms (query-var keys, schema-projected field types).
     [(expr-solve g)
      (let ([r (inferQ ctx g)])
-       (match r [(tu _ u) (tu (expr-hole) u)] [_ (tu-error)]))]
+       (match r [(tu _ u) (tu (solve-row-type g 'list) u)] [_ (tu-error)]))]
     [(expr-solve-with sv ov g)
      (define su (if sv (match (inferQ ctx sv) [(tu _ u) u] [_ (zero-usage n)]) (zero-usage n)))
      (define ou (if ov (match (inferQ ctx ov) [(tu _ u) u] [_ (zero-usage n)]) (zero-usage n)))
      (let ([rg (inferQ ctx g)])
        (match rg
-         [(tu _ ug) (tu (expr-hole) (add-usage su (add-usage ou ug)))]
+         [(tu _ ug) (tu (solve-row-type g 'list) (add-usage su (add-usage ou ug)))]
          [_ (tu-error)]))]
     [(expr-solve-one g)
      (let ([r (inferQ ctx g)])
-       (match r [(tu _ u) (tu (expr-hole) u)] [_ (tu-error)]))]
+       (match r [(tu _ u) (tu (solve-row-type g 'bare) u)] [_ (tu-error)]))]
     [(expr-explain g)
      (let ([r (inferQ ctx g)])
-       (match r [(tu _ u) (tu (expr-hole) u)] [_ (tu-error)]))]
+       (match r [(tu _ u) (tu (solve-row-type g 'list 'dyn) u)] [_ (tu-error)]))]
     [(expr-explain-with sv ov g)
      (define su (if sv (match (inferQ ctx sv) [(tu _ u) u] [_ (zero-usage n)]) (zero-usage n)))
      (define ou (if ov (match (inferQ ctx ov) [(tu _ u) u] [_ (zero-usage n)]) (zero-usage n)))
      (let ([rg (inferQ ctx g)])
        (match rg
-         [(tu _ ug) (tu (expr-hole) (add-usage su (add-usage ou ug)))]
+         [(tu _ ug) (tu (solve-row-type g 'list 'dyn) (add-usage su (add-usage ou ug)))]
          [_ (tu-error)]))]
 
     ;; ---- J eliminator ----

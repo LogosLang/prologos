@@ -2375,6 +2375,17 @@
   (register-typing-rule! expr-map-keys? 1 (list expr-map-keys-m) #f 'map-keys)
   (register-typing-rule! expr-map-vals? 1 (list expr-map-vals-m) #f 'map-vals)
 
+  ;; ===== SOLVE / EXPLAIN (Rel T1 Aspect B, B1) =====
+  ;; Return-type #f: dispatched like map-assoc, computed by the imperative fallback
+  ;; (solve-row-type). This makes solve #f-dispatched EXACTLY like records (not an
+  ;; unhandled catch-all fallthrough) — coverage hygiene + the documented retirement
+  ;; seam (flip #f→computed = the joint records+solve on-network move, BSP-LE Track 3).
+  (register-typing-rule! expr-solve? 1 (list expr-solve-goal) #f 'solve)
+  (register-typing-rule! expr-solve-with? 3 (list expr-solve-with-solver expr-solve-with-overrides expr-solve-with-goal) #f 'solve-with)
+  (register-typing-rule! expr-solve-one? 1 (list expr-solve-one-goal) #f 'solve-one)
+  (register-typing-rule! expr-explain? 1 (list expr-explain-goal) #f 'explain)
+  (register-typing-rule! expr-explain-with? 3 (list expr-explain-with-solver expr-explain-with-overrides expr-explain-with-goal) #f 'explain-with)
+
   ;; ===== SET OPERATIONS =====
   ;; Same pattern: structural ops as #f, constant ops computed.
   (register-typing-rule! expr-set-member? 2 (list expr-set-member-s expr-set-member-a) (expr-Bool) 'set-member)

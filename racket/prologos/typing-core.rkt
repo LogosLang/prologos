@@ -33,6 +33,7 @@
          "pretty-print.rkt"
          "subtype-predicate.rkt"  ;; SRE Track 1: extracted flat subtype predicate
          "sign-refinement.rkt"    ;; Numerics N5c: Sign transfer + name<->Sign/base tables
+         "relations.rkt"          ;; Rel T1 Aspect B (B1): relation store → schema-name for typed solution rows (cycle-free — relations has no typing/reduction back-edge)
 )
 
 (provide infer check is-type infer-level
@@ -59,6 +60,7 @@
          record-width-applicable?   ;; CIU T6 F1b.3 (D21): width-discharge static guard (qtt twin + tests)
          record-width-discharge?    ;; CIU T6 F1b.3 (D21): the shared discharge (qtt twin + tests)
          schema->row                ;; CIU T6 F1b.4a (D22): schema→row up-shift projection (qtt twins + tests)
+         solve-row-type             ;; Rel T1 Aspect B (B1): typed solution-row derivation (qtt twin + tests)
          record-<:-schema?          ;; CIU T6 F1b.4a (D22): per-field row-vs-schema discharge (residual-free)
          record-seals-schema?       ;; CIU T6 F1b.4e (D22): per-field + residual (qtt twin + tests)
          record-seals-selection?    ;; CIU T6 F1b.4e (D22): parent types + requires-subset residual (qtt twin)
@@ -2926,20 +2928,24 @@
 
     ;; Schema → schema-type
 
-    ;; Solve/Explain → type-unsafe (hole)
-    [(expr-solve g) (infer ctx g) (expr-hole)]
+    ;; Solve/Explain → typed solution rows (Rel T1 Aspect B, B1). Infer the goal
+    ;; for effect (errors); solve-row-type derives the row from a schema'd goal-app
+    ;; (else a loose hole — B2 refines the un-schema'd facts case). solve-one is the
+    ;; D25.4-unwrapped BARE row; explain rows carry a 'dyn tail for the conditional
+    ;; reserved metadata keys (:certainty/:cycle/:provenance).
+    [(expr-solve g) (infer ctx g) (solve-row-type g 'list)]
     [(expr-solve-with sv ov g)
      (when sv (infer ctx sv))
      (when ov (infer ctx ov))
      (infer ctx g)
-     (expr-hole)]
-    [(expr-solve-one g) (infer ctx g) (expr-hole)]
-    [(expr-explain g) (infer ctx g) (expr-hole)]
+     (solve-row-type g 'list)]
+    [(expr-solve-one g) (infer ctx g) (solve-row-type g 'bare)]
+    [(expr-explain g) (infer ctx g) (solve-row-type g 'list 'dyn)]
     [(expr-explain-with sv ov g)
      (when sv (infer ctx sv))
      (when ov (infer ctx ov))
      (infer ctx g)
-     (expr-hole)]
+     (solve-row-type g 'list 'dyn)]
 
     ;; Narrow — functional-logic narrowing: type-unsafe (hole) like solve
     [(expr-narrow func args target vars)
@@ -3563,6 +3569,51 @@
                        (record-field (schema-field-type->expr (schema-field-type-datum f))
                                      'present)))
                'closed))
+
+;; ── Rel T1 Aspect B (B1): typed solution rows ─────────────────────────────────
+;; goal-app-schema-row — project a SCHEMA'D relation's declared field types onto
+;; the FREE query positions of a goal-app, keyed by Κ′ (query-var names, from B0's
+;; classify-goal-args). The positional bridge: a free position at goal-arg index i
+;; ↔ schema field i (schema-entry-fields is in declared order). Returns an
+;; expr-Record (tail = 'closed for solve/solve-one, 'dyn for explain's reserved
+;; keys), or #f when the goal is not a registered schema'd relation (→ loose
+;; fallback; B2 refines the un-schema'd facts case with observed literal types).
+;; Arity mismatch (#params ≠ #fields) degrades per-field to a hole, never a crash.
+;; Row LABELS are the query-var name symbols; the runtime champ keys them with the
+;; SAME name via query-var->champ-key (Correct-by-Construction, B0).
+(define (goal-app-schema-row g* [tail 'closed])
+  (define rel (relation-lookup (current-relation-store) (expr-goal-app-name g*)))
+  (and rel
+       (let* ([sname (relation-info-schema rel)]
+              [schema (and sname (lookup-schema-by-name sname))])
+         (and schema
+              (let* ([fields (schema-entry-fields schema)]
+                     [nfields (length fields)])
+                (define-values (_ground free-args)
+                  (classify-goal-args (expr-goal-app-args g*)))
+                (make-record
+                 'keyword
+                 (for/list ([fa (in-list free-args)])
+                   (define pos (free-arg-pos fa))
+                   (define ty (if (< pos nfields)
+                                  (schema-field-type->expr
+                                   (schema-field-type-datum (list-ref fields pos)))
+                                  (expr-hole)))  ;; out-of-range → degrade, not crash
+                   (cons (free-arg-name fa) (record-field ty 'present)))
+                 tail))))))
+
+;; solve-row-type — the static result type for a solve-family node. Pure structural
+;; derivation from the goal (does NOT infer the goal — the caller does that for
+;; effect/usage). wrapper ∈ 'list (solve/solve-with/explain*) | 'bare (solve-one,
+;; whose runtime is the D25.4-unwrapped champ). Returns the wrapped typed row for a
+;; typeable schema'd goal-app, else expr-hole (loose fallback).
+(define (solve-row-type g wrapper [tail 'closed])
+  (define g* (whnf g))
+  (define row (and (expr-goal-app? g*) (goal-app-schema-row g* tail)))
+  (cond
+    [(not row) (expr-hole)]
+    [(eq? wrapper 'bare) row]
+    [else (expr-app (list-type-fvar) row)]))
 
 ;; F1b.7e: project a schema-fvar type to its row (else identity), so the
 ;; structural map-op infer arms (map-keys/vals/assoc/dissoc/has-key?/nil-safe-get/

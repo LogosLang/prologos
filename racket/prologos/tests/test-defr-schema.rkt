@@ -71,7 +71,12 @@
     (when (prologos-error? r)
       (fail (format "Unexpected error: ~a" (prologos-error-message r))))))
 
-(define (count-answers s) (length (regexp-match* #rx"\\{:" s)))
+;; Count solution rows ("{:...") in the result VALUE only. Rel T1 Aspect B (B1)
+;; appends a typed-row annotation " : <type>" to solve output over a schema'd
+;; relation, and the record TYPE (e.g. [List {:l String :n String}]) also contains
+;; "{:" — so counting the raw string would over-count by the type's record. Split
+;; off the " : <type>" suffix first (the value never contains " : ").
+(define (count-answers s) (length (regexp-match* #rx"\\{:" (car (regexp-split #rx" : " s)))))
 (define (last-result results) (last results))
 (define (first-error-message results)
   (for/or ([r (in-list results)])

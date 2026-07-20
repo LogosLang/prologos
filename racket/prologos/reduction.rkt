@@ -291,9 +291,10 @@
 ;; disagree on which positions are keys or on how a key is spelled.
 
 ;; free-arg — a free (query) position of a goal-app: the raw logic-var NAME
-;; (runtime answer lookup) + the champ KEY (row-build + static row-type parity).
-;; Keys-out: the key is carried, not re-derived by each consumer.
-(struct free-arg (name key) #:transparent)
+;; (runtime answer lookup + static row-type LABEL), the champ KEY (runtime
+;; row-build), and the goal-arg POSITION (the positional bridge to the relation's
+;; schema field, B1). Keys-out: name/key are carried, not re-derived by each consumer.
+(struct free-arg (name key pos) #:transparent)
 
 ;; query-var->champ-key — the ONE goal-app champ-key policy: keyword-wrap the raw
 ;; query-var name (no strip). Consumed by classify-goal-args (the free-arg key) AND
@@ -308,7 +309,7 @@
 ;;   goal-args : positional — free position = raw name (symbol), ground = whnf value
 ;;   free-args : (listof free-arg) in positional order
 (define (classify-goal-args args)
-  (for/fold ([gs '()] [fs '()]
+  (for/fold ([gs '()] [fs '()] [i 0]
              #:result (values (reverse gs) (reverse fs)))
             ([a (in-list args)])
     (define a* (whnf a))
@@ -316,9 +317,10 @@
       [(expr-logic-var? a*)
        (define name (expr-logic-var-name a*))
        (values (cons name gs)
-               (cons (free-arg name (query-var->champ-key name)) fs))]
+               (cons (free-arg name (query-var->champ-key name) i) fs)
+               (add1 i))]
       [else
-       (values (cons a* gs) fs)])))
+       (values (cons a* gs) fs (add1 i))])))
 
 ;; Extract query variable names and ground args from a goal-app's arguments.
 ;; Thin adapter over classify-goal-args, preserving the (goal-args, query-vars)
