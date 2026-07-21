@@ -57,8 +57,11 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | **B0** | Shared ground/free **kernel** (§6.5) — keys-out, strip-isolated, partition-not-`set!`; refactor 3 goal-app row-build sites onto it | ✅ | `reduction.rkt`: `free-arg` + `query-var->champ-key` + `classify-goal-args`; `extract-query-info` delegates; 3 goal-app key-sites routed; exported for B1. Zero behavior change (probe byte-identical, acceptance 0-err); suite **8934/466/0** |
 | **B1** | First typed slice — schema'd goal-app, ALL 5 arms: `solve-row-type`/`goal-app-schema-row` (typing-core, shared by qtt) build `expr-Record` (`Κ′` keys from B0, `schema-field-type->expr` types) + per-arm container + per-field arity-degrade; 5 solve structs registered `#f` (dispatch parity) | ✅ | `relations.rkt` require (cycle-free); **composition typed** `(solve-one q).w : Int`; containers CORRECTED to runtime (solve-one=bare, explain=`List<row \| _>` dyn, no Option/Answer); +7 tests `test-rel-t1-typed-rows.rkt`; `count-answers` helper fixed (counted type braces); suite **green** |
 | **B2** | Codata: un-schema'd FACTS-ONLY → row typed by the JOIN of fact-literal types; heterogeneous column → **union** (owner); RULE-bearing → loose (runtime "at the end" / C.1) | ✅ | `relation-column-typer` (schema \| codata branches) + `observe-column-type` (dedup→`expr-union`); soundness boundary = facts-only (no clauses); refactored `goal-app-schema-row`→`goal-app-row`; +4 tests; suite **green** |
-| **C.1** | schema-as-facts: rule-clause typing (facts already typed) | ⬜ | Extends `check-relation-schema-rows` |
-| **C.2** | signature-schema activation as a logic-var typing source | ⬜ | Currently elaborated-but-dead |
+| **C (Stage-3)** | Typed logic vars (`?x:Int` = Curry-Howard `Int(x)` = type) + schema-as-facts — design SETTLED (§7): reader→`(name,type-EXPR)`→`type-pred` object (2′) → driver-level BLOCKING C.1 (arm untouched) → C.2 upper-bound feed | ✅ | panel `wf_09b5988d-e72` + R-lens; owner co-design 2026-07-21 |
+| **C.a** | Representation substrate: the `type-pred` value (type-EXPR + predicate-SET list slot, NO stub) + smart-constructor `param-info` field (~15 sites untouched) | ⬜ | pure substrate, no behavior |
+| **C.b** | Reader + parser: fused `?x:Int`/`x:Int` (BOTH readers, BOTH languages, after the tokenizer-vs-parser-arm SPIKE) + `parse-rel-params` `:` branch + functional binder + sexp split + chained-`:` diagnostic | ⬜ | first end-user-visible green (parse-and-store, no typing); Level-3 testable |
+| **C.c** | C.1 rule-clause typing — **BLOCKING** driver-level 3rd sibling (A.3 precedent); closes the Aspect-B schema-branch soundness hole; new work = un-schema'd rule relations | ⬜ | routes `prologos-error`; ships with-or-before C.d |
+| **C.d** | C.2 activation — `type-pred` object → `relation-column-typer` upper-bound branch (un-schema'd rule relations typeable) | ⬜ | **C.c precedes/lands-with C.d (soundness-atomic)** |
 | **D.0/1** | Efficient fact representation + query-opt — Stage 0/1 research + design artifact | ⬜ | Research-heavy; after A; impl pick-up-or-spin-out |
 | **POL** | Polish: dedup · drop `_anon` keys · declaration-order keys | ⬜ | |
 | **T** | `tests/test-rel-*.rkt` — dedicated test phase (mandatory, during impl) | ⬜ | Not a PIR follow-up |
@@ -675,17 +678,149 @@ to C.1** (owner: "it can wait to C.1").
 
 ---
 
-## 7. Aspect C — schema-as-relational-facts + validation
+## 7. Aspect C — typed logic vars + schema-as-facts — **SETTLED (Stage-3, 2026-07-21)**
 
-- **C.1** — extend the realized a-priori fact typing to **rule clauses** (`&>`),
-  which currently register unchecked. This makes "the relational spec types both
-  records AND relations" (demo framing) true for derived tuples, and grounds typed
-  rows over rule-relations (Aspect B).
-- **C.2** — activate the **signature schema** as a logic-var typing source. Today
-  a relation's declared param types are elaborated but **dead** (never type the
-  clause vars). Activating them is the no-new-syntax way to get "typing info
-  present on the logic var" (owner Q3). An explicit `?v:Type` *static* surface is
-  a stretch (token collision forces a spaced form).
+Typed logic variables via the Curry-Howard reading, plus rule-clause typing.
+Settled after a grounding-audit (`wf_8083a27e-2a9`) + an adversarially-critiqued
+design-options panel (`wf_09b5988d-e72`, Q-C1/Q-C2/Q-C3) + main-session R-lens +
+owner co-design. **C.1** = type-check rule clauses (`&>`, currently unchecked);
+**C.2** = activate declared param types (named schema AND inline `?x:Int`) as a
+logic-var typing source.
+
+### 7.0 The vision (owner, Curry-Howard) — load-bearing
+`?x:Int` is sugar for the predicate/clause **`Int(x)`** ("x satisfies Int"). By
+Curry-Howard (predicates ARE types), that clause-constraint IS the type `x:Int`.
+ONE surface, three altitudes:
+- **static type** — `x:Int` (THIS track);
+- **runtime domain-constraint** — `Int(x)` as a goal that prunes the search (the
+  existing dead-in-WS narrowing reading + future CLP) — **DEFERRED to UCS**;
+- **refinement** — `Int@pos` (a refined predicate) — **DEFERRED** (`@` isn't a token yet).
+
+**First slice = (A)-in-(B)'s-shape** (owner-confirmed): parse into a SINGLE
+type-predicate representation (the same *general* object the runtime `Int(x)` will
+lower FROM), but evaluate ONLY its static reading now. **Owner-confirmed
+interpretation**: "one *general* type-EXPR carrier, the runtime symbol-bound node is
+its down-projection" satisfies the lock (NOT literal node-identity) — this is *more*
+Curry-Howard-faithful (the type IS the predicate at full generality) and is what
+keeps UCS un-cornered. HARD CONSTRAINT: don't design into a corner that makes the
+UCS/CLP work harder or foregone.
+
+**The reveal (grounding)**: the `?x:Type` surface is ALREADY half-built — the
+`?var:C1:C2` narrowing constraint-chain (`?x:Nat:Even` → `type-guard` domain
+constraints via a base-name→type side-table; parser.rkt:6348-6404 / elaborator.rkt
+:3276-3283 / narrowing.rkt:638-647) IS the runtime altitude. But it is **DEAD-IN-WS**
+(verified: `solve (num ?x:Even)` over facts 1,2,3 → `nil`, because WS splits
+`?x:Even` into `?x` + keyword `:Even` → 2-arg call to a 1-arg rel; works only in
+sexp where `:` is non-special). So Aspect C's static reading has a clean WS surface;
+the surface is the CLP-vision unification point.
+
+### 7.1 The composed spine (Q-C2 → Q-C1 → Q-C3)
+1. **Reader** (Q-C2) delivers a generic **`(name, type-EXPR)` pair** in BOTH readers
+   / BOTH languages and STOPS there — the reader must NOT emit a distinguished
+   type-predicate datum (that would entangle it with the representation; Decomplection).
+2. **Elaboration** (Q-C1) builds that pair into the ONE **`type-pred` value** —
+   carrying a **type-EXPR** (not a symbol) in a **predicate-SET (list) slot**, **NO
+   stub lowering fn** — stored on `param-info`.
+3. **Checker** (Q-C3) consumes that object via a **driver-level third sibling check**
+   (beside `check-relation-schema-rows` / `check-relation-floundering`, driver.rkt
+   :817), leaving the generic `expr-logic-var` infer arm (typing-core.rkt:2897 +
+   qtt.rkt:2109) **UNTOUCHED**; C.2 feeds the same object to `relation-column-typer`.
+
+### 7.2 The type-predicate representation (Q-C1 → Option 2′)
+A small first-class `type-pred` value carrying a **type-EXPR in a predicate-SET
+(list) slot**. Two load-bearing bits (the four-way panel collapsed to these):
+- **type-EXPR, not a symbol** — the Galois corner-check (R-lens-verified): a
+  type-expr projects DOWN to the type-name symbol the runtime consumer wants
+  (`value-matches-type?`, global-constraints.rkt:475, is symbol-bound), but a stored
+  *symbol* can NEVER project UP to recover `Int@pos`. This kills the two literal-reuse
+  options (desugar-to-goal; share the narrow-var side-table) — both store symbols and
+  corner refinement.
+- **a LIST (predicate-set) slot** — matches the runtime side-table's existing
+  list-per-var for conjunction (`Int(x) ∧ Even(x)`), so future goals lower without
+  re-derivation AND without inventing intersection types (which don't exist).
+- **NO stub lowering fn** — a stubbed `type-pred->clp-goal` no-op is the
+  speculative-scaffolding red flag; the lowering is written WHEN UCS consumes it.
+
+Stored on `param-info` (R-lens: **8 production sites, ~15 total** — the panel's "~56"
+was over-counted; add the field via a **smart-constructor default** so existing sites
+stay untouched).
+
+### 7.3 The fused `?x:Int` / `x:Int` syntax (Q-C2) — both languages, additive
+- The reader produces a generic `(name, type-EXPR)` pair. The blocker today is only
+  the space AFTER the colon (`x: T` already parses; `x:Int` fully-fused grabs `:Int`
+  as a keyword). **Additive**: spaced `[x : T]` / `def x : T` keep working.
+- **Convergence point [SPIKE, implementation-time]**: **tokenizer** (a priority-96
+  glued-colon recognizer — needs a test-suite reinterpretation sweep) vs **parser
+  binder/param arm** (tokenizer UNTOUCHED — additive-by-construction, no sweep). The
+  spike: does the `:Int` keyword token reach `parse-rel-params` intact after
+  flatten/param-list construction? YES → parser-arm (more correct-by-construction);
+  reshaped/stripped → tokenizer + sweep. Reinterpretation cost **MEASURED ~zero live**
+  (18 fused `ident:alpha`, ~10 the aligned `?var:Type`, 3 in comments).
+- **Both readers**: WS needs the split→pair; sexp already reads `x:Int` as ONE symbol
+  → the parser/elaborator must split+interpret it there too (no sexp-vs-WS divergence).
+- **Type slot**: single-token fused (`?x:Int`); compound/union/refinement stay
+  spaced+grouped (`[x : <List Int>]`) — a fused ident-run stops at `<`/`@`.
+- **Required NEW work**: `parse-rel-params` (parser.rkt:5219-5232) has NO `:` branch
+  — the relational companion is genuinely new (the "reuse binder machinery unchanged"
+  claim is verified-FALSE for the relational path).
+- **Chained `?x:C1:C2`**: REJECT with a diagnostic — reserve the surface for UCS.
+
+### 7.4 C.1 — rule-clause typing (BLOCKING) — closes an Aspect-B soundness hole
+`check-relation-schema-rows` checks ONLY `||` facts, never `&>` clauses (C.1 is
+genuinely new). **Hook** = a THIRD driver-level sibling at driver.rkt:817 (the A.3
+`check-relation-floundering` precedent), reading the type-rich **zonked-body**
+(`expr-defr` with `expr-clause`/`expr-goal-app`/`expr-logic-var` + mode intact — the
+runtime goal-desc form has LOST mode) + the Q-C1 objects on params; walk clause goals,
+check ground subterms via `check ctx-empty` (the check-relation-schema-rows :506
+precedent). **Q5 correction (R-lens)**: schema'd rule relations are ALREADY typed
+(`relation-column-typer` schema branch, no `has-clauses?` guard) → C.1's genuinely-new
+typing = **un-schema'd rule relations' body-derived output types** (the codata path B2
+deferred here).
+
+**C.1 MUST BE BLOCKING (owner-confirmed).** C.2's upper-bound feed **AND the
+already-shipped Aspect-B schema branch** (typing-core.rkt:3603-3610, R-lens-confirmed
+no `has-clauses?` guard) are **soundness-parasitic on C.1**: a schema'd rule relation
+whose clause body violates the schema is currently typed against a schema it violates,
+and `solve`/`explain` get an unsound static type. C.1's error routes `prologos-error`
+(blocking, like the two confirmed `:817` siblings), NOT a permissive warn. (A.3's
+*permissive* was specifically top-level *query* floundering — Prolog-parity;
+*registration* errors block.) **C.1 must ship with-or-before C.2** — never C.2 with a
+warn-only C.1 (the validated-≠-deployed / belt-and-suspenders anti-pattern).
+
+### 7.5 C.2 — activation (Q-C3 → Option A)
+The `type-pred` object feeds `relation-column-typer`'s un-schema'd (else) branch as a
+**third positional source** (a declared-type UPPER BOUND), making un-schema'd rule
+relations typeable and feeding Aspect B's typed solve rows. Two gaps closed by the
+spine: inline `[?x:Int]` doesn't parse today (§7.3's `parse-rel-params` work); and
+`expr-logic-var` infers to a hole ignoring ctx (typing-core.rkt:2897) — **Option A
+sidesteps this by never touching the arm** (a dedicated driver-level check reading the
+object), uniquely avoiding the pipeline.md `qtt.rkt:2109` double-patch.
+
+### 7.6 Build partition (soundness-atomic)
+- **C.a** — REPRESENTATION SUBSTRATE: the `type-pred` value (type-EXPR + predicate-SET
+  slot, NO stub) + the smart-constructor `param-info` field. Pure substrate, no behavior.
+- **C.b** — READER + PARSER: fused `?x:Int` / `x:Int` (both readers, both languages,
+  after the spike) + the `parse-rel-params` `:` branch (populates C.a) + the functional
+  binder path + the sexp symbol-split + the chained-colon diagnostic. **First
+  end-user-visible green**: `?x:Int`/`x:Int` parses in both readers/languages, parse-
+  and-store only, NO typing. Level-3 testable.
+- **C.c** — C.1 BLOCKING clause-check (Option A, driver-level).
+- **C.d** — C.2 activation (`relation-column-typer` upper-bound branch).
+  **HARD ORDERING: C.c precedes or lands-with C.d** (C.2 soundness-parasitic on
+  blocking C.1; or fold C.c+C.d into one soundness-atomic slice).
+- **C.T** — dedicated tests (interleaved). **C.close** — folds into `X.close`.
+
+### 7.7 Deferred (named) + watchouts
+- **Deferred to UCS/CLP**: the runtime domain-constraint reading (lower the SAME
+  `type-pred` object to the `Int(x)`/`type-guard` goal — the rejected-as-static shape,
+  correctly relocated as the future RUNTIME LOWERING TARGET) + refinement types (`Int@pos`).
+- **Scaffolding (name ONCE, track-level)**: the imperative registration-time clause
+  typing is off-network (0 propagators, 0 cell-writes) at Aspect-B parity; retirement
+  owner = on-network clause typing (PPN-successor / UCS era).
+- **Non-monotone cap (name now, so UCS isn't cornered)**: the column type =
+  join-of-positional-contributions CAPPED by the declared type (a MEET / narrowing,
+  non-monotone) → the deferred on-network reading belongs at a **RETRACTION stratum
+  S(-1)**, NOT S0 monotone (else CALM is violated).
 
 ---
 
@@ -709,8 +844,8 @@ Proposed order (A first, per owner priority):
 4. **A.4** guard crash + floundering (guard per-binding leak: scope TBD).
 5. **B0 → B1 → B2** typed rows (§6.8): B0 shared kernel (zero behavior change) →
    B1 schema'd goal-app (first-green = `solve(person)[0].name : α`) → B2 codata.
-6. **C** schema-as-facts (C.1 rule-clause typing + presence-lattice refinement + C.2
-   signature-schema activation) — shares B's kernel + fact-typing.
+6. **C.a → C.b → C.c → C.d** typed logic vars + schema-as-facts (§7.6): substrate →
+   reader/parser (first green) → BLOCKING C.1 → C.2 activation (C.c with-or-before C.d).
 7. **Polish**.
 8. **T** dedicated tests (interleaved, not deferred).
 9. **X.close** bench + doc-truth + PIR.
@@ -737,6 +872,7 @@ checklist-first). The roadmap row does not flip ✅ until the PIR lands.
 - **A.3** — ✅ **RESOLVED (landed `74fa9df2`): static PERMISSIVE floundering gate** at defr registration (Site A) + top-level runners (Site B); `install-conjunction` home refuted (§5 A.3). Residual (mode-dependent free-arg call → standard Prolog `nil`) named + deferred.
 - **A.4** — guard — ✅ **RESOLVED (landed `6b56397d`): DFS-routing** (`reachable-has-guard?` Check 4, §5 A.4). 3 on-network guard bugs found (struct-resolution; single-bit per-binding collapse; S0-narrow re-projected); the F2 "crash" premise was wrong (`gt` goes stuck, not crash). On-network guard mechanism prototyped + deferred to Track 3.
 - **BSP-LE Track 3 (deferred, scaffolding retirement)** — retires BOTH the A.2b Check-3 (body-local-var rules) and A.4 Check-4 (guards) DFS-routing predicates. Work: on-network body-local-var threading + SLG completion + §9.6 worldview-preserving tabling + the prototyped on-network guard mechanism. Seed: [`2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md`](2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md) (both issues + prototyped designs); grounding/options in `wf_c2f8bfa3-db2` / `wf_9c6eb408-522` / `wf_ab037f07-570`.
+- **Q-C** (Aspect C) — ✅ **RESOLVED (Stage-3, 2026-07-21, §7):** `?x:Int` = Curry-Howard `Int(x)` = type (owner vision); first slice = **(A)-in-(B)** with a **general type-EXPR carrier** (owner-confirmed: not literal node-reuse; runtime down-projects). Spine: reader→`(name,type-EXPR)` (both readers/langs, additive; STOP there) → elaboration builds the ONE `type-pred` value (type-EXPR + predicate-SET list slot, NO stub; Q-C1 Option 2′) → **BLOCKING** driver-level C.1 (arm untouched; Q-C3 Option A) + C.2 upper-bound feed. C.1 closes the already-shipped Aspect-B schema-branch soundness hole (soundness-parasitic); C.c with-or-before C.d. Fused-reader convergence (tokenizer vs parser-arm) gated on ONE implementation-time spike. Runtime domain-constraint + refinement DEFERRED to UCS (the same object lowers down). Panel `wf_09b5988d-e72` + R-lens + owner co-design.
 - **Q-B** (Aspect B) — ✅ **RESOLVED (Stage-3, 2026-07-20, §6):** keys = **`Κ′` (query-var), always** (Prolog-parity; `^` owns rename); type-source = **schema-projection + fact-observation** (F1 schema/`Map` split, one layer up; rule-relation codata → runtime "at the end" / C.1); posture = **`#f`-dispatch + imperative compute** (5th-refusal reachability carries composition); shared **keys-out kernel** (§6.5); deep shapes + presence-lattice + cache-hit gap DEFERRED. Panel `wf_e00d9318-3b6` + R-lens + owner co-design.
 
 ---
@@ -744,6 +880,7 @@ checklist-first). The roadmap row does not flip ✅ until the PIR lands.
 ## 12. References
 - Grounding: `wf_7ad61165-85d` (surface), `wf_1891cfd0-197` (NAF isolation) — dailies `2026-07-19_dailies.md` LOG.
 - Aspect-B (§6): grounding `wf_ec53bc09-c31` (solve-typing surfaces) + design-options panel `wf_e00d9318-3b6` (Q1/Q2/Q4/Q5; Q3-cluster failed, folded into §6.6) — dailies `2026-07-19_dailies.md` LOG (2026-07-20 entries).
+- Aspect-C (§7): grounding `wf_8083a27e-2a9` (tokenizer + C.1/C.2 surfaces) + design-options panel `wf_09b5988d-e72` (Q-C1/Q-C2/Q-C3) — dailies `2026-07-19_dailies.md` LOG (2026-07-20/21 entries). `?x:Type` CLP prior art: `docs/research/2026-03-16_NEXT_GEN_LOGIC_PROGRAMMING.tex`; refinement=traits through-line: `docs/tracking/2026-06-30_TRAITS_AS_REFINEMENT_TYPING_NOTE.md`.
 - Seed: [`2026-07-19_REL_SOLVE_TYPING_NOTE.md`](2026-07-19_REL_SOLVE_TYPING_NOTE.md) (its `&>` label superseded by §4).
 - Rel Master: [`2026-07-19_REL_MASTER.md`](2026-07-19_REL_MASTER.md).
 - Rules: `.claude/rules/propagator-design.md` (broadcast, set-latch, watcher/threshold variants), `.claude/rules/stratification.md` (S1 NAF), `.claude/rules/structural-thinking.md` (retraction as narrowing), `.claude/rules/on-network.md` (mantra).
