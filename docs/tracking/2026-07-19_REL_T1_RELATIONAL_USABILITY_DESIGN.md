@@ -58,7 +58,7 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | **B1** | First typed slice — schema'd goal-app, ALL 5 arms: `solve-row-type`/`goal-app-schema-row` (typing-core, shared by qtt) build `expr-Record` (`Κ′` keys from B0, `schema-field-type->expr` types) + per-arm container + per-field arity-degrade; 5 solve structs registered `#f` (dispatch parity) | ✅ | `relations.rkt` require (cycle-free); **composition typed** `(solve-one q).w : Int`; containers CORRECTED to runtime (solve-one=bare, explain=`List<row \| _>` dyn, no Option/Answer); +7 tests `test-rel-t1-typed-rows.rkt`; `count-answers` helper fixed (counted type braces); suite **green** |
 | **B2** | Codata: un-schema'd FACTS-ONLY → row typed by the JOIN of fact-literal types; heterogeneous column → **union** (owner); RULE-bearing → loose (runtime "at the end" / C.1) | ✅ | `relation-column-typer` (schema \| codata branches) + `observe-column-type` (dedup→`expr-union`); soundness boundary = facts-only (no clauses); refactored `goal-app-schema-row`→`goal-app-row`; +4 tests; suite **green** |
 | **C (Stage-3)** | Typed logic vars (`?x:Int` = Curry-Howard `Int(x)` = type) + schema-as-facts — design SETTLED (§7): reader→`(name,type-EXPR)`→`type-pred` object (2′) → driver-level BLOCKING C.1 (arm untouched) → C.2 upper-bound feed | ✅ | panel `wf_09b5988d-e72` + R-lens; owner co-design 2026-07-21 |
-| **C.a** | Representation substrate: the `type-pred` value (type-EXPR + predicate-SET list slot, NO stub) + smart-constructor `param-info` field (~15 sites untouched) | ⬜ | pure substrate, no behavior |
+| **C.a** | Representation substrate: the `type-pred` value (type-EXPR + predicate-SET list slot, NO stub) + smart-constructor `param-info` field (8 prod sites untouched) | ✅ | `type-pred` + `param-info` `type` field via #:name-redirect smart-ctor (§7.8; naive `#:constructor-name` form fails to compile); store-only (0 consumers); +6 tests `test-rel-t1-typed-vars.rkt`; suite 8950/468/0 |
 | **C.b** | Reader + parser: fused `?x:Int`/`x:Int` (BOTH readers, BOTH languages, after the tokenizer-vs-parser-arm SPIKE) + `parse-rel-params` `:` branch + functional binder + sexp split + chained-`:` diagnostic | ⬜ | first end-user-visible green (parse-and-store, no typing); Level-3 testable |
 | **C.c** | C.1 rule-clause typing — **BLOCKING** driver-level 3rd sibling (A.3 precedent); closes the Aspect-B schema-branch soundness hole; new work = un-schema'd rule relations | ⬜ | routes `prologos-error`; ships with-or-before C.d |
 | **C.d** | C.2 activation — `type-pred` object → `relation-column-typer` upper-bound branch (un-schema'd rule relations typeable) | ⬜ | **C.c precedes/lands-with C.d (soundness-atomic)** |
@@ -741,9 +741,14 @@ A small first-class `type-pred` value carrying a **type-EXPR in a predicate-SET
 - **NO stub lowering fn** — a stubbed `type-pred->clp-goal` no-op is the
   speculative-scaffolding red flag; the lowering is written WHEN UCS consumes it.
 
-Stored on `param-info` (R-lens: **8 production sites, ~15 total** — the panel's "~56"
-was over-counted; add the field via a **smart-constructor default** so existing sites
-stay untouched).
+Stored on `param-info` (C.a grounding-audit `wf_af338130-cf0`, honest frame: **8
+production construction sites** (all `relations.rkt`), **15 files / 78 call-occurrences
+total, ALL 2-arg, ZERO `match`/destructure sites, ZERO `struct-copy` sites** — the
+earlier "~56 over-counted" gloss was backwards, 56 is the grep-LINE count and it
+*under*-counts the 78 occurrences; but every site is 2-arg so a smart-constructor
+positional default covers 100%). Add the field via a **smart-constructor default** so
+existing sites stay untouched — see §7.8 for the exact (compile-verified) idiom, which
+is NOT the naive `#:constructor-name` same-name form (that fails to compile).
 
 ### 7.3 The fused `?x:Int` / `x:Int` syntax (Q-C2) — both languages, additive
 - The reader produces a generic `(name, type-EXPR)` pair. The blocker today is only
@@ -836,6 +841,52 @@ object), uniquely avoiding the pipeline.md `qtt.rkt:2109` double-patch.
   join-of-positional-contributions CAPPED by the declared type (a MEET / narrowing,
   non-monotone) → the deferred on-network reading belongs at a **RETRACTION stratum
   S(-1)**, NOT S0 monotone (else CALM is violated).
+
+### 7.8 C.a — grounding + implemented mechanism (LANDED)
+Grounding-audit `wf_af338130-cf0` (4 HEAD-pinned facets + completeness critic, HEAD
+`247efefa`) + main-session R-lens (empirical scratch verification). Load-bearing
+outcomes:
+
+- **`type-pred` shape (D-C.a-1)**: `(struct type-pred (preds) #:transparent)` with
+  `preds : (listof expr?)` — **ONE list slot** (the predicate SET); `?x:Int` →
+  `(type-pred (list (expr-Int)))`. Mirrors the runtime narrow-var side-table's
+  list-per-var (`global-constraints.rkt:73`), lifted symbol→expr (down-projects to the
+  symbol `value-matches-type?` `global-constraints.rkt:475` wants; up-holds a refinement
+  a bare symbol never could). No stub lowering fn, no separate "primary type" slot.
+- **Home (D-C.a-2)**: `relations.rkt`, beside `param-info` — cycle-free (relations
+  already requires `syntax.rkt` for `expr?`; C.a never calls typing-core's
+  `schema-field-type->expr`, which is what emits the `(expr-Int)`/`(expr-fvar …)`
+  type-EXPRs C.b will store).
+- **`type-pred` is NOT an AST node** → only pipeline.md **New-Struct-Field** applies,
+  **not** New-AST-node: `param-info`/`relation-info` never flow through
+  zonk/subst/reduction/pretty-print, and the relation store is **not** pnet-serialized
+  (`serialize-module-state` omits it) → no `.pnet` "impostor-vector" obligation. (The
+  AST-side type carrier a *later* sub-phase might add WOULD hit that — C.a does not.)
+- **Smart-constructor (D-C.a-3), compile-verified** — the naive form in §7.2/§7.6
+  (`#:constructor-name make-param-info` + a same-name wrapper) **FAILS TO COMPILE**
+  (`identifier already defined: param-info`). The working idiom:
+  ```racket
+  (struct param-info (name mode type)
+    #:transparent #:name param-info-desc #:constructor-name make-param-info-raw)
+  (define (param-info name mode [type #f]) (make-param-info-raw name mode type))
+  ```
+  Accessors stay `param-info-name` / `-mode` / `-type`; predicate `param-info?`;
+  transformer binding (for `match`/`struct-out`) is `param-info-desc`. It **forces two
+  provide-surface edits** at `relations.rkt:38`: `(struct-out param-info)` →
+  `(struct-out param-info-desc)` **plus** an explicit `param-info` (struct-out does not
+  re-export the wrapper). `#:auto #:auto-value #f` is the tempting shortcut —
+  **rejected**: it forbids positional construction (mutation-only), conflicting with the
+  "positional default" + immutable-value intent.
+- **`param-info` type field (D-C.a-4)**: `type` (default `#f`) holds a `type-pred` or
+  `#f`; **per-variant-per-position** (the field, not a relation+position side-table —
+  a relation carries multiple variants each with its own params, so a side-table's
+  position collides across arities). Store-only in C.a (**0 `param-info-type`
+  consumers**, verified); consumer = C.c/C.d.
+- **Verification**: `raco make driver.rkt` clean; the 3 benchmark files that construct
+  `param-info` (`benchmarks/micro/bench-{track2b-overhead,track2b-solver,solve-pipeline}`,
+  NOT exercised by the suite) compile clean; Rel acceptance 0-errors; +6 unit tests
+  `tests/test-rel-t1-typed-vars.rkt` (2-arg default, 3-arg typed, accessors, predicate,
+  `equal?`, `type-pred` round-trip); **full suite 8950/468/0**.
 
 ---
 

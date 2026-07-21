@@ -35,7 +35,12 @@
  (struct-out variant-info)
  (struct-out clause-info)
  (struct-out fact-row)
- (struct-out param-info)
+ ;; param-info uses the #:name-redirect smart-constructor idiom (Aspect C C.a):
+ ;; export struct info via the transformer binding param-info-desc, plus the wrapper
+ ;; `param-info` (struct-out does not re-export the wrapper).
+ (struct-out param-info-desc)
+ param-info
+ (struct-out type-pred)
  (struct-out goal-desc)
  ;; Relation store (parameter + operations)
  current-relation-store
@@ -494,10 +499,36 @@
 ;; Core structs
 ;; ========================================
 
-;; Parameter info: name + mode
+;; A type-predicate carried by a typed logic var / typed relational param.
+;; Rel Track 1 Aspect C, C.a (representation substrate). By Curry-Howard, `?x:Int`
+;; is the predicate `Int(x)` which IS the type `x:Int` (predicates ARE types).
+;;   preds: (listof expr?) — the predicate SET (type-EXPRs). Mirrors the runtime
+;;     narrow-var side-table's list-per-var shape (global-constraints.rkt:73) for
+;;     conjunction (Int(x) ∧ Even(x)), but LIFTED symbol→expr: a type-EXPR
+;;     down-projects to the type-name symbol runtime consumers want
+;;     (value-matches-type?, global-constraints.rkt:475) yet can carry a refinement
+;;     (Int@pos) a bare symbol never could. `?x:Int` → (type-pred (list (expr-Int))).
+;; NO stub lowering fn — the lowering to the runtime `Int(x)` goal is written WHEN
+;; UCS consumes it (design §7.2 / §7.7); a stubbed no-op would be speculative
+;; scaffolding.
+(struct type-pred (preds) #:transparent)
+
+;; Parameter info: name + mode + (optional) declared type-predicate.
 ;; name: symbol
 ;; mode: 'free | 'in | 'out
-(struct param-info (name mode) #:transparent)
+;; type: #f | type-pred — a declared type annotation (`?x:Int`), Aspect C C.a.
+;;   Store-only in C.a (0 consumers); populated by C.b (reader/parser), consumed by
+;;   C.c (C.1 clause-check) / C.d (C.2 activation).
+;; Smart-constructor (Aspect C C.a): the public `param-info` is a 2-or-3-arg wrapper
+;;   (type defaults #f) so the 8 existing 2-arg construction sites stay untouched.
+;;   The #:name-redirect idiom frees the `param-info` binding for the wrapper — the
+;;   naive same-name `#:constructor-name` form fails to compile ("identifier already
+;;   defined: param-info"). The struct-type transformer binding is `param-info-desc`
+;;   (use it for match / struct-out); accessors stay param-info-name / -mode / -type.
+(struct param-info (name mode type)
+  #:transparent #:name param-info-desc #:constructor-name make-param-info-raw)
+(define (param-info name mode [type #f])
+  (make-param-info-raw name mode type))
 
 ;; A goal descriptor (runtime representation of a relational goal)
 ;; kind: 'app | 'unify | 'is | 'not | 'cut | 'guard
