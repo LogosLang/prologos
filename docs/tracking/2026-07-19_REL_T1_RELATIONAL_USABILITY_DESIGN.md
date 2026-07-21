@@ -59,7 +59,8 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | **B2** | Codata: un-schema'd FACTS-ONLY → row typed by the JOIN of fact-literal types; heterogeneous column → **union** (owner); RULE-bearing → loose (runtime "at the end" / C.1) | ✅ | `relation-column-typer` (schema \| codata branches) + `observe-column-type` (dedup→`expr-union`); soundness boundary = facts-only (no clauses); refactored `goal-app-schema-row`→`goal-app-row`; +4 tests; suite **green** |
 | **C (Stage-3)** | Typed logic vars (`?x:Int` = Curry-Howard `Int(x)` = type) + schema-as-facts — design SETTLED (§7): reader→`(name,type-EXPR)`→`type-pred` object (2′) → driver-level BLOCKING C.1 (arm untouched) → C.2 upper-bound feed | ✅ | panel `wf_09b5988d-e72` + R-lens; owner co-design 2026-07-21 |
 | **C.a** | Representation substrate: the `type-pred` value (type-EXPR + predicate-SET list slot, NO stub) + smart-constructor `param-info` field (8 prod sites untouched) | ✅ | `b33474aa`; `type-pred` + `param-info` `type` field via #:name-redirect smart-ctor (§7.8; naive `#:constructor-name` form fails to compile); store-only (0 consumers); +6 tests `test-rel-t1-typed-vars.rkt`; suite 8950/468/0 |
-| **C.b** | Reader + parser: fused `?x:Int`/`x:Int` (BOTH readers, BOTH languages, after the tokenizer-vs-parser-arm SPIKE) + `parse-rel-params` `:` branch + functional binder + sexp split + chained-`:` diagnostic | ⬜ | first end-user-visible green (parse-and-store, no typing); Level-3 testable |
+| **C.b.1** | Reader + parser — **RELATIONAL**, both readers: fused `?x:Int` in `parse-rel-params` (WS trailing colon-symbol + sexp glued-symbol split) → `(name mode type-name)` 3-list carrier → elaboration NAME→EXPR → relations `type-pred` wrap on `param-info`; chained reject; spaced diagnostic (fused-only) | ✅ | parser-arm (tokenizer untouched, no sweep); fixes a pre-existing `?x:Int` mis-parse; +tests (parser-relational sexp + typed-vars store); suite 8959/468/0 (§7.9) |
+| **C.b.2** | Reader + parser — **FUNCTIONAL**, both readers: route fused `x:Int` to the pre-existing `binder-info.type` typed-binder path (no type-pred); WS tree-parser arm + sexp `parse-binder` arm; `:m`/`:w` multiplicity collision decision | ⬜ | deferred (owner-approved sub-phasing); functional side reuses `binder-info.type` — no type-pred |
 | **C.c** | C.1 rule-clause typing — **BLOCKING** driver-level 3rd sibling (A.3 precedent); closes the Aspect-B schema-branch soundness hole; new work = un-schema'd rule relations | ⬜ | routes `prologos-error`; ships with-or-before C.d |
 | **C.d** | C.2 activation — `type-pred` object → `relation-column-typer` upper-bound branch (un-schema'd rule relations typeable) | ⬜ | **C.c precedes/lands-with C.d (soundness-atomic)** |
 | **D.0/1** | Efficient fact representation + query-opt — Stage 0/1 research + design artifact | ⬜ | Research-heavy; after A; impl pick-up-or-spin-out |
@@ -715,12 +716,18 @@ sexp where `:` is non-special). So Aspect C's static reading has a clean WS surf
 the surface is the CLP-vision unification point.
 
 ### 7.1 The composed spine (Q-C2 → Q-C1 → Q-C3)
-1. **Reader** (Q-C2) delivers a generic **`(name, type-EXPR)` pair** in BOTH readers
-   / BOTH languages and STOPS there — the reader must NOT emit a distinguished
-   type-predicate datum (that would entangle it with the representation; Decomplection).
-2. **Elaboration** (Q-C1) builds that pair into the ONE **`type-pred` value** —
-   carrying a **type-EXPR** (not a symbol) in a **predicate-SET (list) slot**, **NO
-   stub lowering fn** — stored on `param-info`.
+1. **Reader/parser** (Q-C2) delivers a generic **`(name, type-NAME)` pair** in BOTH
+   readers / BOTH languages and STOPS there — the reader must NOT emit a distinguished
+   type-predicate datum (Decomplection). **Corrected at C.b.1 (§7.9)**: the parser
+   cannot produce an `expr?` (parser.rkt imports neither typing-core nor elaborate), so
+   the reader carries a type-**NAME symbol** (e.g. `Int`), not a type-EXPR; the
+   symbol→EXPR conversion is elaboration's job (it owns `schema-field-type->expr`).
+2. **Elaboration** (Q-C1) converts the type-NAME → a **type-EXPR** (via
+   `schema-field-type->expr`); the **`type-pred` value** — the type-EXPR in a
+   **predicate-SET (list) slot**, **NO stub lowering fn** — is wrapped at
+   relation-info construction (relations.rkt, which owns `type-pred`) and stored on
+   `param-info`. (The reader→param-info carrier is the opaque `params` list, enriched
+   to a `(name mode type)` 3-list at C.b.1.)
 3. **Checker** (Q-C3) consumes that object via a **driver-level third sibling check**
    (beside `check-relation-schema-rows` / `check-relation-floundering`, driver.rkt
    :817), leaving the generic `expr-logic-var` infer arm (typing-core.rkt:2897 +
@@ -751,18 +758,20 @@ existing sites stay untouched — see §7.8 for the exact (compile-verified) idi
 is NOT the naive `#:constructor-name` same-name form (that fails to compile).
 
 ### 7.3 The fused `?x:Int` / `x:Int` syntax (Q-C2) — both languages, additive
-- The reader produces a generic `(name, type-EXPR)` pair. The blocker today is only
-  the space AFTER the colon (`x: T` already parses; `x:Int` fully-fused grabs `:Int`
-  as a keyword). **Additive**: spaced `[x : T]` / `def x : T` keep working.
-- **Convergence point [SPIKE, implementation-time]**: **tokenizer** (a priority-96
-  glued-colon recognizer — needs a test-suite reinterpretation sweep) vs **parser
-  binder/param arm** (tokenizer UNTOUCHED — additive-by-construction, no sweep). The
-  spike: does the `:Int` keyword token reach `parse-rel-params` intact after
-  flatten/param-list construction? YES → parser-arm (more correct-by-construction);
-  reshaped/stripped → tokenizer + sweep. Reinterpretation cost **MEASURED ~zero live**
-  (18 fused `ident:alpha`, ~10 the aligned `?var:Type`, 3 in comments).
-- **Both readers**: WS needs the split→pair; sexp already reads `x:Int` as ONE symbol
-  → the parser/elaborator must split+interpret it there too (no sexp-vs-WS divergence).
+- The reader produces a generic `(name, type-NAME)` pair. **Additive**: spaced
+  `[x : T]` / `def x : T` keep working.
+- **SPIKE VERDICT (C.b.1, instrument-confirmed — see §7.9): PARSER ARM, tokenizer
+  UNTOUCHED, NO test-suite sweep.** The earlier "`x:Int` grabs `:Int` as a keyword"
+  framing was HALF-RIGHT and is corrected: the WS reader splits `?x:Int` into `?x` +
+  a **colon-prefixed SYMBOL** `:Int` (NOT a Racket keyword — `keyword? = #f`,
+  `symbol? = #t`); the sexp reader GLUES it into one symbol `?x:Int`. Both shapes
+  reach `parse-rel-params` intact; C.b.1 converges there (WS: consume the trailing
+  colon-symbol; sexp: split the glued symbol after mode extraction). Both readers, one
+  function.
+- **Both readers**: WS delivers the base symbol + a trailing colon-symbol; sexp
+  delivers one glued symbol → parse-rel-params handles BOTH (there IS a WS-vs-sexp
+  shape divergence — the same hazard that made the `?var:C1:C2` narrowing chain
+  dead-in-WS; C.b.1's split/fuse is reader-symmetric).
 - **Type slot**: single-token fused (`?x:Int`); compound/union/refinement stay
   spaced+grouped (`[x : <List Int>]`) — a fused ident-run stops at `<`/`@`.
 - **Required NEW work**: `parse-rel-params` (parser.rkt:5219-5232) has NO `:` branch
@@ -887,6 +896,54 @@ outcomes:
   NOT exercised by the suite) compile clean; Rel acceptance 0-errors; +6 unit tests
   `tests/test-rel-t1-typed-vars.rkt` (2-arg default, 3-arg typed, accessors, predicate,
   `equal?`, `type-pred` round-trip); **full suite 8950/468/0**.
+
+### 7.9 C.b.1 — reader/parser (relational, both readers) — LANDED
+Grounding-audit `wf_c8b8c25b-207` (5 facets + critic, HEAD `47049154`) + a **main-session
+instrumented spike** (a temporary `eprintf` in `parse-rel-params` on the real
+`process-file` path). Sub-phased per owner: **C.b.1 = relational both-readers** (this);
+**C.b.2 = functional both-readers** (deferred — the functional binder reuses the
+pre-existing `binder-info.type`, no type-pred).
+
+- **The corrected reader model (spike + instrument)**: WS SPLITS `?x:Int` → `?x` + a
+  colon-prefixed **SYMBOL** `:Int` (`keyword? = #f`); sexp GLUES → one symbol `?x:Int`.
+  (An initial end-to-end arity inference wrongly suggested "glued in both" — the engine
+  is **arity-lenient**, masking a leaked `:Int` param; the instrument settled it. Lesson:
+  instrument the parse, don't infer reader shape from arity.) The pre-C.b.1 baseline was
+  a **2×2 of four different wrong behaviors** (WS-rel: arity inflation; sexp-rel: name
+  corrupted to `x:Int`; WS-fn: parse-error/two-binders; sexp-fn: binder named `x:Int`).
+  C.b.1 fixes the two relational cells — a **pre-existing latent bug** (any `defr R
+  [?x:Int]` silently mis-parsed).
+- **Convergence = the PARSER ARM** (`parse-rel-params`), tokenizer **untouched**, **no
+  test-suite sweep** (the design's preferred outcome). A `colon-symbol?` helper + a
+  lookahead loop handle both shapes: WS consumes the trailing colon-symbol; sexp splits
+  the glued symbol *after* `extract-mode-annotation` (mode strip must precede the split);
+  `::` module paths are NOT type splits (empty-segment guard); chained `?x:C1:C2` →
+  reject; spaced `[?x : Int]` (bare `:`) → a guiding "use fused" diagnostic (fused-only,
+  per owner).
+- **The carrier**: the per-param element grows from a `(name . mode)` cons to a
+  `(name mode type-name)` **3-list** (untyped → type `#f`; literals stay
+  `(#:literal . value)`). This is a **New-Struct-Field-in-spirit sweep over opaque list
+  data** — the ~6 consumers reading `(cdr p)` for mode were updated to read slot 2
+  defensively (`list?`-guarded, so schema-typed 2-cons synth-params still work):
+  elaborator `surf-defr-variant` (literal-rebuild → 3-list, type-name→EXPR conversion,
+  rel-env mode) + `surf-rel` (params converted, mode), relations `expr-rel->relation-info`
+  + `expr-variant->variant-info` (type-pred wrap), and test-parser-relational's 6 param-
+  shape assertions. `reduction.rkt` reads `(car p)` only — safe. `expr-logic-var` stays
+  2-field (design-mandated).
+- **Decomplection realized**: parser emits the type-NAME symbol (no type-pred datum);
+  elaboration converts NAME→EXPR (`schema-field-type->expr`); relations wraps `type-pred`.
+  Each layer does its own job; no layer imports another's (relations has no typing-core
+  edge — that would be a cycle).
+- **Verification**: `raco make driver.rkt` clean; WS probes (arity/multi/mode/mixed +
+  name-clean connection `{:q 1}` where pre-C.b.1 was `nil` + chained/spaced rejects);
+  Rel acceptance 0-errors; tests grown — `test-parser-relational.rkt` (sexp parse-level:
+  fused split, mode+type, untyped, chained-reject; +6 sweep-fixes) and
+  `test-rel-t1-typed-vars.rkt` (direct-pipeline store proof `parse→elaborate→
+  expr-variant->variant-info` since the process-file store is module-scoped; +WS
+  name-clean + chained via output-capture); **full suite 8959/468/0**.
+- **Scaffolding / off-network**: C.b.1 is reader/parser + imperative registration-time
+  storage (0 propagators, 0 cell-writes) at Aspect-B/C.a parity — inherent to a front-end
+  phase; retirement = the on-network-typing horizon (§7.7).
 
 ---
 

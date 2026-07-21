@@ -63,6 +63,7 @@
  ;; AST → runtime conversion
  expr-defr->relation-info
  expr-rel->relation-info
+ expr-variant->variant-info
  expr->goal-desc
  ;; Variable renaming helpers (for negation)
  rename-ast-vars
@@ -930,7 +931,10 @@
          (param-info (expr-logic-var-name p)
                      (or (expr-logic-var-mode p) 'free))]
         [(and (pair? p) (symbol? (car p)))
-         (param-info (car p) (or (cdr p) 'free))]
+         ;; (name mode type-EXPR) 3-list (Aspect C C.b.1) or legacy (name . mode) cons.
+         (define md (if (and (list? p) (>= (length p) 2)) (cadr p) (cdr p)))
+         (define ty (and (list? p) (>= (length p) 3) (caddr p)))
+         (param-info (car p) (or md 'free) (and ty (type-pred (list ty))))]
         [(symbol? p) (param-info p 'free)]
         [else (param-info (gensym 'p) 'free)])))
   (define arity (length converted-params))
@@ -954,9 +958,12 @@
                      (or (expr-logic-var-mode p) 'free))]
         [(symbol? p)
          (param-info p 'free)]
-        ;; From parser: params are (name . mode) pairs
+        ;; From parser: params are (name mode type-EXPR) 3-lists (Aspect C C.b.1)
+        ;; or legacy (name . mode) conses.
         [(and (pair? p) (symbol? (car p)))
-         (param-info (car p) (or (cdr p) 'free))]
+         (define md (if (and (list? p) (>= (length p) 2)) (cadr p) (cdr p)))
+         (define ty (and (list? p) (>= (length p) 3) (caddr p)))
+         (param-info (car p) (or md 'free) (and ty (type-pred (list ty))))]
         [else
          (param-info (gensym 'p) 'free)])))
   (define-values (facts clauses)

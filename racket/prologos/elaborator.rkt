@@ -2948,10 +2948,19 @@
      ;; Build relational env from params: name → expr-logic-var
      ;; Same as defr variant elaboration — ensures ?x in clause body
      ;; resolves to (expr-logic-var 'x 'free), not (expr-logic-var '?x 'free).
+     ;; C.b.1: convert each param's fused type-NAME (3-list slot 3) → type-EXPR
+     ;; (relations.rkt wraps the type-pred). expr-logic-var stays 2-field.
+     (define params*
+       (for/list ([p (in-list params)])
+         (if (and (list? p) (>= (length p) 3) (caddr p))
+             (list (car p) (cadr p) (schema-field-type->expr (caddr p)))
+             p)))
      (define rel-env
-       (for/hasheq ([p (in-list params)])
+       (for/hasheq ([p (in-list params*)])
          (define name (if (pair? p) (car p) p))
-         (define mode (if (pair? p) (or (cdr p) 'free) 'free))
+         (define mode (if (and (list? p) (>= (length p) 2))
+                          (or (cadr p) 'free)
+                          (if (pair? p) (or (cdr p) 'free) 'free)))
          (values name (expr-logic-var name mode))))
      (let ([elab-clauses
             (for/list ([c (in-list clauses)])
@@ -2960,7 +2969,7 @@
                 (elaborate c env depth)))])
        (define first-err (findf prologos-error? elab-clauses))
        (if first-err first-err
-           (expr-rel params elab-clauses)))]
+           (expr-rel params* elab-clauses)))]
 
     ;; clause — rule clause (&> goals...)
     [(surf-clause goals loc)
@@ -3552,19 +3561,30 @@
                     [(string? literal-val) (surf-string literal-val loc)]
                     [(boolean? literal-val) (if literal-val (surf-true loc) (surf-false loc))]
                     [else (prologos-error loc (format "unsupported literal pattern: ~a" literal-val))]))
-            (values (cons (cons fresh-name 'free) cparams)
+            (values (cons (list fresh-name 'free #f) cparams)
                     (cons (surf-unify (surf-var fresh-name loc) literal-expr loc) goals))]
            [else
-            ;; Normal (name . mode) pair
-            (values (cons p cparams) goals)])))
+            ;; Normal (name mode type-name) 3-list (Aspect C C.b.1). Convert the
+            ;; type-NAME symbol → type-EXPR here — elaboration owns
+            ;; schema-field-type->expr; relations.rkt wraps the type-pred
+            ;; (Decomplection: no type-pred datum from the reader). Untyped params
+            ;; and legacy 2-conses (schema-typed synth-params) pass through unchanged.
+            (define ty-name (and (list? p) (>= (length p) 3) (caddr p)))
+            (define p* (if ty-name
+                           (list (car p) (cadr p) (schema-field-type->expr ty-name))
+                           p))
+            (values (cons p* cparams) goals)])))
      (define final-params (reverse converted-params))
      (define implicit-unify-goals (reverse implicit-goals))
 
-     ;; Build relational env from converted params: name → expr-logic-var
+     ;; Build relational env from converted params: name → expr-logic-var.
+     ;; expr-logic-var stays 2-field (name mode) — the type rides in final-params,
+     ;; NOT on the logic-var (design-mandated). Mode is slot 2 of a 3-list, or the
+     ;; cdr of a legacy cons.
      (define rel-env
        (for/hasheq ([p (in-list final-params)])
          (define name (car p))
-         (define mode (or (cdr p) 'free))
+         (define mode (or (if (and (list? p) (>= (length p) 2)) (cadr p) (cdr p)) 'free))
          (values name (expr-logic-var name mode))))
 
      ;; Prepend implicit unification goals to body.

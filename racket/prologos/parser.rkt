@@ -5201,9 +5201,20 @@
     [else
      (cons sym #f)]))
 
-;; Parse relational params: a bracket-delimited list of possibly mode-annotated names
-;; or literal pattern values.
-;; Returns list of (name . mode) pairs for variables, or (#:literal . value) for literals.
+;; A colon-prefixed symbol like `:Int`. The WS reader renders a fused type
+;; annotation's `:Type` as a SEPARATE colon-prefixed SYMBOL (not a Racket keyword);
+;; sexp glues it into the preceding symbol. Rel Track 1 Aspect C, C.b.1.
+(define (colon-symbol? x)
+  (and (symbol? x)
+       (let ([s (symbol->string x)])
+         (and (> (string-length s) 0) (char=? (string-ref s 0) #\:)))))
+
+;; Parse relational params: a bracket-delimited list of possibly mode-annotated names,
+;; each optionally carrying a fused type annotation (`?x:Int`), or literal pattern values.
+;; Returns list of (name mode type-name) 3-element lists for variables (type-name is a
+;; SYMBOL or #f), or (#:literal . value) for literals. Aspect C C.b.1 added the type slot;
+;; the type is a NAME here — elaboration converts it to a type-EXPR and relations.rkt wraps
+;; the type-pred (Decomplection: the reader emits NO type-pred datum).
 ;; Literal params are used in multi-arity defr | variants where clause heads
 ;; include pattern matching on concrete values (e.g., | [0 ?label] &> ...).
 (define (parse-rel-params params-stx loc)
@@ -5216,20 +5227,63 @@
     [(not parts)
      (prologos-error loc "defr: expected parameter list [?x ?y ...]")]
     [else
-     (for/list ([p (in-list parts)])
-       (define sym (if (syntax? p) (syntax-e p) p))
+     ;; C.b.1: fold over parts with lookahead so a WS-split trailing colon-symbol
+     ;; (`?x` then `:Int`) fuses with its preceding param; sexp delivers `?x:Int`
+     ;; glued into one symbol which we split after mode extraction. Emit uniform
+     ;; 3-lists (name mode type-name); untyped → type-name #f. Chained `?x:C1:C2`
+     ;; is rejected (reserved for UCS). `::` module paths are NOT type splits.
+     (let loop ([ps parts] [acc '()])
        (cond
-         [(symbol? sym)
-          (extract-mode-annotation sym)]
-         ;; Literal patterns: numbers, strings, booleans
-         [(exact-integer? sym)
-          (cons '#:literal sym)]
-         [(string? sym)
-          (cons '#:literal sym)]
-         [(boolean? sym)
-          (cons '#:literal sym)]
+         [(null? ps) (reverse acc)]
          [else
-          (prologos-error loc (format "defr: expected symbol or literal in params, got ~a" sym))]))]))
+          (define p (car ps))
+          (define sym (if (syntax? p) (syntax-e p) p))
+          (cond
+            [(symbol? sym)
+             (cond
+               [(colon-symbol? sym)
+                (prologos-error loc (format "defr: type annotation ~a has no parameter before it" sym))]
+               [else
+                (define nm (extract-mode-annotation sym))
+                (define base (car nm))
+                (define mode (cdr nm))
+                (define segs (string-split (symbol->string base) ":"))
+                (define all-nonempty? (andmap (lambda (s) (> (string-length s) 0)) segs))
+                (cond
+                  ;; sexp-glued chained: name:T1:T2... (all segments non-empty) → reject
+                  [(and all-nonempty? (> (length segs) 2))
+                   (prologos-error loc (format "defr: chained type annotation in ~a not supported (reserve for UCS)" base))]
+                  ;; sexp-glued single: name:Type
+                  [(and all-nonempty? (= (length segs) 2))
+                   (loop (cdr ps)
+                         (cons (list (string->symbol (car segs)) mode (string->symbol (cadr segs))) acc))]
+                  ;; base has no simple type (plain name, or a `::` module path):
+                  ;; WS may carry the type as the NEXT element (a colon-symbol).
+                  [else
+                   (define nxt (and (pair? (cdr ps))
+                                    (let ([n (car (cdr ps))]) (if (syntax? n) (syntax-e n) n))))
+                   (cond
+                     [(colon-symbol? nxt)
+                      (define tn (substring (symbol->string nxt) 1))
+                      (define after (cddr ps))
+                      (define nxt2 (and (pair? after)
+                                        (let ([n (car after)]) (if (syntax? n) (syntax-e n) n))))
+                      (cond
+                        [(= (string-length tn) 0)
+                         ;; A bare `:` (e.g. spaced `[?x : Int]`). C.b.1 is fused-only.
+                         (prologos-error loc (format "defr: use a fused type annotation `~a:Type` (a spaced/bare `:` in the param list is not supported)" base))]
+                        [(colon-symbol? nxt2)
+                         (prologos-error loc (format "defr: chained type annotation on ~a not supported (reserve for UCS)" base))]
+                        [else
+                         (loop after (cons (list base mode (string->symbol tn)) acc))])]
+                     [else
+                      (loop (cdr ps) (cons (list base mode #f) acc))])])])]
+            ;; Literal patterns: numbers, strings, booleans
+            [(exact-integer? sym) (loop (cdr ps) (cons (cons '#:literal sym) acc))]
+            [(string? sym) (loop (cdr ps) (cons (cons '#:literal sym) acc))]
+            [(boolean? sym) (loop (cdr ps) (cons (cons '#:literal sym) acc))]
+            [else
+             (prologos-error loc (format "defr: expected symbol or literal in params, got ~a" sym))])]))]))
 
 ;; Parse the body portion of a defr variant.
 ;; Body is a flat list of tokens that may contain $facts-sep and $clause-sep sentinels.
