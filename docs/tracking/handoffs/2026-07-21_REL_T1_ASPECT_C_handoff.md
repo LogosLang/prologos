@@ -31,7 +31,7 @@ AUTHORITATIVE.**
   | **C.b** | ⬜ | reader/parser: fused `?x:Int`/`x:Int` (both readers, both languages, after the SPIKE) — first green |
   | **C.c** | ⬜ | **BLOCKING** C.1 clause-check (driver-level 3rd sibling) |
   | **C.d** | ⬜ | C.2 activation (upper-bound feed); **C.c with-or-before C.d** |
-  | **C.T** | ⬜ | dedicated tests (interleaved) |
+  | *(tests)* | — | **PER-PHASE** — each of C.a–C.d brings its own test delta in its completion gate (NOT a dedicated end phase); C.c MUST include the Aspect-B-hole-closed regression (§7.4 Acceptance) |
   | Polish · Aspect D · **X.close** | ⬜ | after C — the track ✅ gates on the Stage-5 PIR |
 
 - **NEXT IMMEDIATE TASK**: **C.a** — the representation substrate. Define the
@@ -223,6 +223,13 @@ track does NOT flip ✅ until the PIR lands (objective-PIR gate).
   annotation's `{:`). Aspect C's typed defr/clause output may do the same — 9+ test
   files carry the identical `(length (regexp-match* #rx"\\{:" s))` helper (dailies
   Watching); fix = split off the ` : <type>` suffix before counting.
+- **Tests are PER-PHASE, not a dedicated end phase** (reconciled 2026-07-21 — see
+  `.claude/rules/workflow.md` "Tests are PER-PHASE"): each of C.a–C.d brings its own
+  test delta in its completion gate; the test file(s) GROW per phase (as
+  `test-rel-t1-typed-rows.rkt` did across B1/B2). **C.c MUST include the
+  Aspect-B-hole-closed regression** — a schema'd RULE relation whose clause body
+  violates the schema is REJECTED at registration (design §7.4 Acceptance). Do NOT
+  batch tests into a final phase.
 - **NEVER edit files with regex/`sed`/`python re.sub`** — corrupted `relations.rkt`
   in the A.4 arc; use the `Edit` tool for surgical changes.
 - **Conversational cadence**: checkpoint at each sub-phase boundary (~1h max

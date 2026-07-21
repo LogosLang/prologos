@@ -64,7 +64,7 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | **C.d** | C.2 activation — `type-pred` object → `relation-column-typer` upper-bound branch (un-schema'd rule relations typeable) | ⬜ | **C.c precedes/lands-with C.d (soundness-atomic)** |
 | **D.0/1** | Efficient fact representation + query-opt — Stage 0/1 research + design artifact | ⬜ | Research-heavy; after A; impl pick-up-or-spin-out |
 | **POL** | Polish: dedup · drop `_anon` keys · declaration-order keys | ⬜ | |
-| **T** | `tests/test-rel-*.rkt` — dedicated test phase (mandatory, during impl) | ⬜ | Not a PIR follow-up |
+| *(tests)* | **Per-phase** — each behavioral phase brings its own test delta in its completion gate; the test file(s) `tests/test-rel-*.rkt` GROW per phase (NOT a dedicated end phase — see workflow.md "Tests are PER-PHASE") | — | e.g. `test-rel-t1-naf.rkt`, `test-rel-t1-typed-rows.rkt` (grown across B1/B2) |
 | **X.close** | Bench matrix · DEFERRED triage · doc-truth sweep · memory fold · **Stage-5 PIR** | ⬜ | Objective-PIR gate |
 
 *(Phase letters ≠ commitment to sequence yet — see §9 Phasing. Status emoji only.)*
@@ -787,6 +787,16 @@ and `solve`/`explain` get an unsound static type. C.1's error routes `prologos-e
 *registration* errors block.) **C.1 must ship with-or-before C.2** — never C.2 with a
 warn-only C.1 (the validated-≠-deployed / belt-and-suspenders anti-pattern).
 
+**Acceptance — C.c MUST verify the Aspect-B hole is CLOSED (a named deliverable, not
+a side-effect).** A regression test: a **schema'd RULE relation whose clause body
+binds a head param to a schema-violating value** must be **REJECTED at registration**
+(blocking `prologos-error`) — e.g. `schema S :x Int` + `defr R : S &> (R "not-an-int")`
+→ registration error naming the offending clause/field, and `solve (R x)` therefore
+never returns (the relation isn't registered). Before C.c, that relation registers
+silently and `solve` hands back the schema type `{:x Int}` for runtime rows that
+violate it (the shipped-Aspect-B hole, typing-core.rkt:3603-3610). C.c is DONE only
+when this test passes AND the pre-existing schema'd-rule-relation tests still pass.
+
 ### 7.5 C.2 — activation (Q-C3 → Option A)
 The `type-pred` object feeds `relation-column-typer`'s un-schema'd (else) branch as a
 **third positional source** (a declared-type UPPER BOUND), making un-schema'd rule
@@ -808,7 +818,12 @@ object), uniquely avoiding the pipeline.md `qtt.rkt:2109` double-patch.
 - **C.d** — C.2 activation (`relation-column-typer` upper-bound branch).
   **HARD ORDERING: C.c precedes or lands-with C.d** (C.2 soundness-parasitic on
   blocking C.1; or fold C.c+C.d into one soundness-atomic slice).
-- **C.T** — dedicated tests (interleaved). **C.close** — folds into `X.close`.
+- **Tests are PER-PHASE** — C.a/C.b/C.c/C.d each bring their own test delta in their
+  completion gate (the test file grows per phase); there is NO standalone C.T phase
+  (see workflow.md "Tests are PER-PHASE"). C.b brings the parse-and-store tests (incl.
+  the three-level WS validation); C.c brings the clause-typing tests **incl. the
+  Aspect-B-hole-closed regression** (§7.4 Acceptance); C.d brings the un-schema'd
+  rule-relation typed-row tests. **C.close** — folds into `X.close`.
 
 ### 7.7 Deferred (named) + watchouts
 - **Deferred to UCS/CLP**: the runtime domain-constraint reading (lower the SAME
@@ -847,7 +862,7 @@ Proposed order (A first, per owner priority):
 6. **C.a → C.b → C.c → C.d** typed logic vars + schema-as-facts (§7.6): substrate →
    reader/parser (first green) → BLOCKING C.1 → C.2 activation (C.c with-or-before C.d).
 7. **Polish**.
-8. **T** dedicated tests (interleaved, not deferred).
+8. *(tests are per-phase — no standalone test phase; see workflow.md "Tests are PER-PHASE")*.
 9. **X.close** bench + doc-truth + PIR.
 
 ---
