@@ -191,6 +191,27 @@
   (define result (p "(defr bad [?x:Int:Even] || 5)"))
   (check-true (prologos-error? result)))
 
+;; ----------------------------------------
+;; Aspect C C.b.2 — fused `x:Int` FUNCTIONAL binders. Both readers funnel through
+;; parse-binder (parser.rkt); sexp glues `x:Int` into one symbol (split), WS delivers
+;; `(x :Int)` (2 elems). The functional side reuses the existing binder-info.type
+;; typed-λ path (no type-pred). ----------------------------------------
+
+(test-case "parse fn — fused `x:Int` → typed binder (name clean, type Int) [sexp]"
+  (define r (p "(fn (x:Int) x)"))
+  (check-true (surf-lam? r))
+  (define b (surf-lam-binder r))
+  (check-equal? (binder-info-name b) 'x)          ;; name clean (no colon)
+  (check-false (binder-info-mult b))
+  (check-true (surf-int-type? (binder-info-type b))))  ;; type slot carries Int
+
+(test-case "parse fn — bare `x` stays untyped (hole) [sexp]"
+  (define r (p "(fn (x) x)"))
+  (check-true (surf-hole? (binder-info-type (surf-lam-binder r)))))
+
+(test-case "parse fn — chained `x:Int:Even` is rejected [sexp]"
+  (check-true (prologos-error? (p "(fn (x:Int:Even) x)"))))
+
 ;; ========================================
 ;; rel — anonymous relation
 ;; ========================================

@@ -3706,6 +3706,31 @@
                     (binder-info name #f ty)))
               (parse-error loc (format "Expected variable name, got ~a" name) name)))]
 
+       ;; Aspect C C.b.2: chained fused `[x:Int:Even]` — WS delivers (x :Int :Even);
+       ;; reject (reserve for UCS), mirroring the relational C.b.1 rule.
+       [(and (>= (length parts) 3)
+             (symbol? (stx->datum (car parts)))
+             (let ([s (stx->datum (cadr parts))])
+               (and (colon-symbol? s) (not (memq s '(:0 :1 :w :m)))))
+             (colon-symbol? (stx->datum (caddr parts))))
+        (parse-error loc
+                     (format "binder: chained type annotation on ~a not supported (reserve for UCS)"
+                             (stx->datum (car parts)))
+                     d)]
+
+       ;; Aspect C C.b.2: fused `[x:Int]` — WS delivers (x :Int) where `:Int` is a
+       ;; colon-prefixed SYMBOL (not a mult `:0`/`:1`/`:w`/`:m`). Route to the existing
+       ;; typed-binder path (binder-info.type), same as the spaced `(x : T)` arm.
+       [(and (= (length parts) 2)
+             (symbol? (stx->datum (car parts)))
+             (let ([s (stx->datum (cadr parts))])
+               (and (colon-symbol? s) (not (memq s '(:0 :1 :w :m))))))
+        (let* ([name (stx->datum (car parts))]
+               [tname (substring (symbol->string (stx->datum (cadr parts))) 1)]
+               [ty (parse-datum (datum->syntax (car parts) (string->symbol tname)))])
+          (if (prologos-error? ty) ty
+              (binder-info name #f ty)))]
+
        ;; NEW: [x :m <T>] — 3 elements where second is mult, third is ($angle-type ...)
        [(and (= (length parts) 3)
              (mult-annot? (stx->datum (cadr parts)))
@@ -3742,10 +3767,25 @@
                     (binder-info name mult ty)))
               (parse-error loc (format "Expected variable name, got ~a" name) name)))]
 
-       ;; [x] — 1 element, bare param with inferred type (hole)
+       ;; [x] — 1 element: a bare param with inferred type (hole), OR a sexp-glued
+       ;; fused `x:Int` (sexp reads the fused form as ONE symbol). Aspect C C.b.2
+       ;; splits on `:` (name:Type); `::` module paths (empty segment) are not splits.
        [(and (= (length parts) 1)
              (symbol? (stx->datum (car parts))))
-        (binder-info (stx->datum (car parts)) #f (surf-hole loc))]
+        (let* ([sym (stx->datum (car parts))]
+               [segs (string-split (symbol->string sym) ":")]
+               [nonempty? (andmap (lambda (s) (> (string-length s) 0)) segs)])
+          (cond
+            [(and nonempty? (> (length segs) 2))
+             (parse-error loc
+                          (format "binder: chained type annotation in ~a not supported (reserve for UCS)" sym)
+                          sym)]
+            [(and nonempty? (= (length segs) 2))
+             (let ([ty (parse-datum (datum->syntax (car parts) (string->symbol (cadr segs))))])
+               (if (prologos-error? ty) ty
+                   (binder-info (string->symbol (car segs)) #f ty)))]
+            [else
+             (binder-info sym #f (surf-hole loc))]))]
 
        [else
         (parse-error loc

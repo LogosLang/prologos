@@ -160,3 +160,17 @@
                    (apply string-append
                           (map (lambda (r) (if (string? r) r (format "~a" r))) results))))
   (check-true (regexp-match? #rx"chained type annotation" combined)))
+
+;; ========================================
+;; C.b.2 — fused `x:Int` FUNCTIONAL binder end-to-end (WS via process-file). The
+;; functional side reuses the pre-existing binder-info.type typed-λ path (no
+;; type-pred), so the fused form types IDENTICALLY to the spaced `[fn [x : Int] x]`.
+;; ========================================
+
+(test-case "C.b.2 WS: fused `[fn [x:Int] x]` types as Int -> Int (same as spaced)"
+  (define-values (results _store)
+    (cb1-run-ws "ns t\n\ndef ff := [fn [x:Int] x]\n[ff 5]\n"))
+  ;; the binder's declared type flows into the λ type
+  (check-true (ormap (lambda (r) (regexp-match? #rx"Int -> Int" r)) results))
+  ;; applied to the declared type → Int
+  (check-true (ormap (lambda (r) (regexp-match? #rx"5 : Int" r)) results)))

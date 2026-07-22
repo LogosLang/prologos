@@ -60,7 +60,7 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | **C (Stage-3)** | Typed logic vars (`?x:Int` = Curry-Howard `Int(x)` = type) + schema-as-facts — design SETTLED (§7): reader→`(name,type-EXPR)`→`type-pred` object (2′) → driver-level BLOCKING C.1 (arm untouched) → C.2 upper-bound feed | ✅ | panel `wf_09b5988d-e72` + R-lens; owner co-design 2026-07-21 |
 | **C.a** | Representation substrate: the `type-pred` value (type-EXPR + predicate-SET list slot, NO stub) + smart-constructor `param-info` field (8 prod sites untouched) | ✅ | `b33474aa`; `type-pred` + `param-info` `type` field via #:name-redirect smart-ctor (§7.8; naive `#:constructor-name` form fails to compile); store-only (0 consumers); +6 tests `test-rel-t1-typed-vars.rkt`; suite 8950/468/0 |
 | **C.b.1** | Reader + parser — **RELATIONAL**, both readers: fused `?x:Int` in `parse-rel-params` (WS trailing colon-symbol + sexp glued-symbol split) → `(name mode type-name)` 3-list carrier → elaboration NAME→EXPR → relations `type-pred` wrap on `param-info`; chained reject; spaced diagnostic (fused-only) | ✅ | `6d793906`; parser-arm (tokenizer untouched, no sweep); fixes a pre-existing `?x:Int` mis-parse; +tests (parser-relational sexp + typed-vars store); suite 8959/468/0 (§7.9) |
-| **C.b.2** | Reader + parser — **FUNCTIONAL**, both readers: route fused `x:Int` to the pre-existing `binder-info.type` typed-binder path (no type-pred); WS tree-parser arm + sexp `parse-binder` arm; `:m`/`:w` multiplicity collision decision | ⬜ | deferred (owner-approved sub-phasing); functional side reuses `binder-info.type` — no type-pred |
+| **C.b.2** | Reader + parser — **FUNCTIONAL**, both readers: route fused `x:Int` to the pre-existing `binder-info.type` typed-binder path (no type-pred); two arms in `parse-binder` (WS `(x :Int)` 2-elem + sexp glued split); chained reject; `:0/:1/:w/:m` mult excluded | ✅ | both readers funnel through `parse-binder` (tree-parser falls back — probed); fused types identically to spaced (`Int -> Int`); +4 tests; suite 8963/468/0 (§7.10) |
 | **C.c** | C.1 rule-clause typing — **BLOCKING** driver-level 3rd sibling (A.3 precedent); closes the Aspect-B schema-branch soundness hole; new work = un-schema'd rule relations | ⬜ | routes `prologos-error`; ships with-or-before C.d |
 | **C.d** | C.2 activation — `type-pred` object → `relation-column-typer` upper-bound branch (un-schema'd rule relations typeable) | ⬜ | **C.c precedes/lands-with C.d (soundness-atomic)** |
 | **D.0/1** | Efficient fact representation + query-opt — Stage 0/1 research + design artifact | ⬜ | Research-heavy; after A; impl pick-up-or-spin-out |
@@ -944,6 +944,45 @@ pre-existing `binder-info.type`, no type-pred).
 - **Scaffolding / off-network**: C.b.1 is reader/parser + imperative registration-time
   storage (0 propagators, 0 cell-writes) at Aspect-B/C.a parity — inherent to a front-end
   phase; retirement = the on-network-typing horizon (§7.7).
+
+### 7.10 C.b.2 — reader/parser (functional, both readers) — LANDED
+The functional companion to C.b.1, reusing the C.b grounding-audit (`wf_c8b8c25b-207`
+facet-3 + critic) + main-session probes. **No new grounding-audit** — facet-3 already
+ground the functional surfaces; the one open item (the critic's "which binder parser
+runs") was **empirical**, resolved by probing.
+
+- **Path resolution (the critic's flagged unknown)**: for a functional lambda
+  `[fn [x:Int] x]`, BOTH WS contexts probed (top-level application AND `def :=` RHS) AND
+  sexp funnel through **`parse-binder` (parser.rkt:3689)** via the datum path — the WS
+  tree-parser `parse-fn-tree` (which calls `parse-binder-bracket`) **falls back** to the
+  datum path for these forms (same as defr/rel). So C.b.2 is **one function, two arms**;
+  the tree-parser `parse-binder-bracket` is NOT on the fn path — adding a fused arm there
+  would be speculative (unreached). *(If a future fn context is found to route through the
+  tree-parser, that arm becomes evidence-driven follow-up — named, not silently skipped.)*
+- **The functional side needs NO type-pred** — `binder-info` (surface-syntax.rkt:432)
+  already has a `type` slot the elaborator's `surf-lam`/`surf-pi` arms already elaborate
+  (elaborator.rkt:1108/1138/1180). So C.b.2 just ROUTES the fused form to produce the same
+  `(binder-info name #f <type-surf>)` the spaced `[x : T]` arm produces — and the fused
+  form types **identically** (verified: `[fn [x:Int] x]` → `Int -> Int` in both readers,
+  same as `[fn [x : Int] x]`; the declared type is enforced).
+- **Two arms in `parse-binder`**: WS delivers `(x :Int)` (2 elems, `:Int` a colon-SYMBOL)
+  → a new 2-elem arm keyed on a colon-symbol that is NOT a mult (`:0`/`:1`/`:w`/`:m`
+  excluded, so multiplicity annotations are untouched — `[fn [x :0 Int] x]` still parses
+  as m0); sexp glues `x:Int` into ONE symbol → the length-1 arm splits it on `:` (`::`
+  module paths excluded via the empty-segment guard). Chained `x:Int:Even` rejected in
+  both (WS 3-elem colon-symbol arm + sexp >2-segment split). The type-surf is built via
+  `parse-datum` on the type name (yields e.g. `surf-int-type` for `Int`) — identical to
+  the spaced arm.
+- **`:m`/`:w` collision (design named)**: WS `:w`/`:m`/`:0`/`:1` tokenize as
+  colon-annotations (multiplicity), never keyword — the fused-type arm excludes them, so
+  a type literally named `w`/`m`/`0`/`1` cannot be fused (use spaced). Sexp has no such
+  tokenizer reservation (a glued `x:w` splits to type `w`). The pre-existing `:m`
+  tree-parser/tokenizer asymmetry is orthogonal and left as-is.
+- **Verification**: `raco make driver.rkt` clean; WS + sexp probes (fused → `Int -> Int`,
+  type enforced, chained rejected, `:0` mult preserved); Rel acceptance 0-errors; tests —
+  `test-parser-relational` (sexp parse-level: fused `(fn (x:Int) x)` → binder type
+  `surf-int-type`, bare → `surf-hole`, chained → error) + `test-rel-t1-typed-vars` (WS
+  `[fn [x:Int] x]` → `Int -> Int` end-to-end); **full suite 8963/468/0**.
 
 ---
 
