@@ -174,3 +174,46 @@
   (check-true (ormap (lambda (r) (regexp-match? #rx"Int -> Int" r)) results))
   ;; applied to the declared type → Int
   (check-true (ormap (lambda (r) (regexp-match? #rx"5 : Int" r)) results)))
+
+;; ========================================
+;; C.c — schema ⟹ facts-only well-formedness gate (BLOCKING). A schema is a checked
+;; contract on ground fact rows; a schema on a RULE relation (`defr R : S &> …`) is a
+;; category error, rejected at registration. This closes the shipped Aspect-B hole
+;; (relation-column-typer's schema branch types by schema assuming rows conform) by
+;; rejecting the ill-formed input — the bad relation never registers.
+;; ========================================
+
+(define (cc-result-strings results)
+  (map (lambda (r) (if (prologos-error? r) (prologos-error-message r) (format "~a" r))) results))
+
+(test-case "C.c: a schema-typed RULE relation (schema + &> clauses) is REJECTED at registration"
+  (define-values (results _store)
+    (cb1-run-ws (string-append
+                 "ns t :no-prelude\n\n"
+                 "schema S\n  :x Int\n\n"
+                 "defr sr : S\n  &> (= x 5)\n")))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"facts-only" s))
+                     (cc-result-strings results))))
+
+(test-case "C.c: a schema-typed FACTS-ONLY relation still registers + schema-types its rows"
+  (define-values (results _store)
+    (cb1-run-ws (string-append
+                 "ns t :no-prelude\n\n"
+                 "schema S\n  :x Int\n\n"
+                 "defr sf : S\n  || 5\n     7\n\n"
+                 "solve (sf a)\n")))
+  (define strs (cc-result-strings results))
+  ;; solve returns the schema-typed rows; NO facts-only rejection for a facts relation
+  (check-true (ormap (lambda (s) (regexp-match? #rx"\\{:a 5\\}" s)) strs))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"facts-only" s)) strs)))
+
+(test-case "C.c: an UN-schema'd rule relation is unaffected (gate only fires for schema'd)"
+  (define-values (results _store)
+    (cb1-run-ws (string-append
+                 "ns t :no-prelude\n\n"
+                 "defr base [?x]\n  || 1\n\n"
+                 "defr r [?a]\n  &> (base ?a)\n\n"
+                 "solve (r q)\n")))
+  (define strs (cc-result-strings results))
+  (check-false (ormap (lambda (s) (regexp-match? #rx"facts-only" s)) strs))
+  (check-true (ormap (lambda (s) (regexp-match? #rx"\\{:q 1\\}" s)) strs)))

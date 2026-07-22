@@ -61,7 +61,7 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | **C.a** | Representation substrate: the `type-pred` value (type-EXPR + predicate-SET list slot, NO stub) + smart-constructor `param-info` field (8 prod sites untouched) | ✅ | `b33474aa`; `type-pred` + `param-info` `type` field via #:name-redirect smart-ctor (§7.8; naive `#:constructor-name` form fails to compile); store-only (0 consumers); +6 tests `test-rel-t1-typed-vars.rkt`; suite 8950/468/0 |
 | **C.b.1** | Reader + parser — **RELATIONAL**, both readers: fused `?x:Int` in `parse-rel-params` (WS trailing colon-symbol + sexp glued-symbol split) → `(name mode type-name)` 3-list carrier → elaboration NAME→EXPR → relations `type-pred` wrap on `param-info`; chained reject; spaced diagnostic (fused-only) | ✅ | `6d793906`; parser-arm (tokenizer untouched, no sweep); fixes a pre-existing `?x:Int` mis-parse; +tests (parser-relational sexp + typed-vars store); suite 8959/468/0 (§7.9) |
 | **C.b.2** | Reader + parser — **FUNCTIONAL**, both readers: route fused `x:Int` to the pre-existing `binder-info.type` typed-binder path (no type-pred); two arms in `parse-binder` (WS `(x :Int)` 2-elem + sexp glued split); chained reject; `:0/:1/:w/:m` mult excluded | ✅ | `c6b8e81f`; both readers funnel through `parse-binder` (tree-parser falls back — probed); fused types identically to spaced (`Int -> Int`); +4 tests; suite 8963/468/0 (§7.10) |
-| **C.c** | C.1 rule-clause typing — **BLOCKING** driver-level 3rd sibling (A.3 precedent); closes the Aspect-B schema-branch soundness hole; new work = un-schema'd rule relations | ⬜ | routes `prologos-error`; ships with-or-before C.d |
+| **C.c** | **REDESIGNED (§7.4)**: schema ⟹ facts-only BLOCKING gate (driver sibling `check-relation-schema-facts-only`). Rejects `defr R : S &> …` at registration — the clause-conformance check was DROPPED (incomplete; the hole was a schema-on-rule category error) | ✅ | complete+sound (reject ill-formed input, no typer guard); pre-check found no active schema'd-rule; +3 tests; suite 8966/468/0 (§7.11) |
 | **C.d** | C.2 activation — `type-pred` object → `relation-column-typer` upper-bound branch (un-schema'd rule relations typeable) | ⬜ | **C.c precedes/lands-with C.d (soundness-atomic)** |
 | **D.0/1** | Efficient fact representation + query-opt — Stage 0/1 research + design artifact | ⬜ | Research-heavy; after A; impl pick-up-or-spin-out |
 | **POL** | Polish: dedup · drop `_anon` keys · declaration-order keys | ⬜ | |
@@ -779,37 +779,51 @@ is NOT the naive `#:constructor-name` same-name form (that fails to compile).
   claim is verified-FALSE for the relational path).
 - **Chained `?x:C1:C2`**: REJECT with a diagnostic — reserve the surface for UCS.
 
-### 7.4 C.1 — rule-clause typing (BLOCKING) — closes an Aspect-B soundness hole
-`check-relation-schema-rows` checks ONLY `||` facts, never `&>` clauses (C.1 is
-genuinely new). **Hook** = a THIRD driver-level sibling at driver.rkt:817 (the A.3
-`check-relation-floundering` precedent), reading the type-rich **zonked-body**
-(`expr-defr` with `expr-clause`/`expr-goal-app`/`expr-logic-var` + mode intact — the
-runtime goal-desc form has LOST mode) + the Q-C1 objects on params; walk clause goals,
-check ground subterms via `check ctx-empty` (the check-relation-schema-rows :506
-precedent). **Q5 correction (R-lens)**: schema'd rule relations are ALREADY typed
-(`relation-column-typer` schema branch, no `has-clauses?` guard) → C.1's genuinely-new
-typing = **un-schema'd rule relations' body-derived output types** (the codata path B2
-deferred here).
+### 7.4 C.c — schema ⟹ facts-only (BLOCKING well-formedness gate) — **REDESIGNED 2026-07-21**
+**Superseded (do NOT implement): a "clause-conformance check."** The original C.1 was to
+type-check `&>` clause bodies against the schema/param-types and reject a clause binding a
+head param to a violating value (mechanism-B walk + `check ctx-empty` over clause subterms +
+a param-type-pred check). **DROPPED** after owner co-design. The grounding-audit
+(`wf_2f21daa9-252`) that scoped it is still valid for the code facts (hook site, precedent,
+the hole); only the *design conclusion* changed.
 
-**C.1 MUST BE BLOCKING (owner-confirmed).** C.2's upper-bound feed **AND the
-already-shipped Aspect-B schema branch** (typing-core.rkt:3603-3610, R-lens-confirmed
-no `has-clauses?` guard) are **soundness-parasitic on C.1**: a schema'd rule relation
-whose clause body violates the schema is currently typed against a schema it violates,
-and `solve`/`explain` get an unsound static type. C.1's error routes `prologos-error`
-(blocking, like the two confirmed `:817` siblings), NOT a permissive warn. (A.3's
-*permissive* was specifically top-level *query* floundering — Prolog-parity;
-*registration* errors block.) **C.1 must ship with-or-before C.2** — never C.2 with a
-warn-only C.1 (the validated-≠-deployed / belt-and-suspenders anti-pattern).
+**The redesign (owner semantic clarification — load-bearing).** A **schema** is only ever a
+checked contract on **fact relations** (fully-ground, table-like data). A **`?x:Int` on a
+rule's logic-var is NOT a static output-contract** — it is a **guard / unary constraint
+`Int(x)`** (the runtime domain-constraint altitude, DEFERRED to UCS). So there is nothing for
+C.c to statically check on rule clauses. The "Aspect-B soundness hole" only ever arose from a
+**schema sitting on a RULE relation** (`defr R : S &> …`) — under this model that is a
+**category error**, not a case to be made sound by clause-checking.
 
-**Acceptance — C.c MUST verify the Aspect-B hole is CLOSED (a named deliverable, not
-a side-effect).** A regression test: a **schema'd RULE relation whose clause body
-binds a head param to a schema-violating value** must be **REJECTED at registration**
-(blocking `prologos-error`) — e.g. `schema S :x Int` + `defr R : S &> (R "not-an-int")`
-→ registration error naming the offending clause/field, and `solve (R x)` therefore
-never returns (the relation isn't registered). Before C.c, that relation registers
-silently and `solve` hands back the schema type `{:x Int}` for runtime rows that
-violate it (the shipped-Aspect-B hole, typing-core.rkt:3603-3610). C.c is DONE only
-when this test passes AND the pre-existing schema'd-rule-relation tests still pass.
+**C.c = enforce the schema branch's own silent precondition: schema ⟹ facts-only.** A
+BLOCKING registration check rejects `defr R : S &> <clauses>`. This is **complete, sound, and
+trivial**, and it closes the hole COMPLETELY: a schema'd rule relation can never register →
+`relation-column-typer`'s schema branch (typing-core.rkt:3603-3610) only ever types
+facts-only schema'd relations, whose rows ARE checked by `check-relation-schema-rows`.
+**Rejecting the ill-formed input is STRONGER than guarding the typer** (the bad relation
+never exists, vs existing-but-typed-loose) → **no `has-clauses?` guard is added to the
+typer** (that would be belt-and-suspenders).
+
+**Refuted premise (add to the cascade): "a blocking literal-clause check closes the Aspect-B
+hole" — REFUTED.** A literal clause-conformance check is **INCOMPLETE**: it misses transitive
+bindings (`(= x y) (= y "str")`), `(is x …)` goals, and compound-term bindings — all produce
+`{:x <non-Int>}` at runtime while the static type says `{:x Int}`. Only full clause-output
+typing (huge) or a runtime guard would *truly* close it — both moot once the true
+precondition (facts-only) is enforced. (A/B-axis footnote: mechanism A `&> (R lit)` is
+call-site arg-checking of goal args — a different axis, not the hole; its example
+self-recurses and diverges. Not part of C.c.)
+
+**Hook** = a driver-level sibling `check-relation-schema-facts-only rel-info` beside
+`check-relation-schema-rows` / `check-relation-floundering`, returning #f (well-formed) or an
+error string; wired as a new arm in the registration `cond` (BLOCKING — registration runs
+only in the `[else]` arm). Fires iff `(relation-info-schema rel-info)` is non-#f AND some
+variant has clauses.
+
+**Acceptance.** `schema S :x Int` + `defr R : S &> (= x 5)` (ANY clause) → **REGISTRATION
+`prologos-error`** naming the facts-only rule. `defr R : S || <rows>` (facts only) → unchanged
+(still schema-checked + schema-typed). `defr R [?a] &> …` (un-schema'd rule) → unchanged. (NB:
+solve on an unregistered relation ERRORS `"Unknown relation"` — assert the REGISTRATION error,
+not solve behavior.)
 
 ### 7.5 C.2 — activation (Q-C3 → Option A)
 The `type-pred` object feeds `relation-column-typer`'s un-schema'd (else) branch as a
@@ -820,6 +834,17 @@ spine: inline `[?x:Int]` doesn't parse today (§7.3's `parse-rel-params` work); 
 sidesteps this by never touching the arm** (a dedicated driver-level check reading the
 object), uniquely avoiding the pipeline.md `qtt.rkt:2109` double-patch.
 
+**REFRAMED (2026-07-21, gates C.d — confirm with owner before opening C.d).** The C.c
+redesign (§7.4) reframes `?x:Int` on a **rule** var as a **guard / unary constraint
+`Int(x)`** (runtime/UCS altitude), NOT a static output-contract. So C.2/C.d's "feed the
+declared param type as a static UPPER BOUND to type un-schema'd rule relations" is really
+the guard's **static projection** — sound only once the guard prunes at runtime (UCS). Open
+question for C.d: does the `?x:Int`-rule STATIC typing DEFER to UCS (with the guard), or do
+we want a "trust the declared guard statically now" version? This likely **shrinks or defers
+C.d** — Aspect C's remaining *static* work may be just the C.c gate, with the rest of the
+`?x:Int` story living in UCS. (C.b already stores the type-preds; nothing is lost by
+deferring their static activation.)
+
 ### 7.6 Build partition (soundness-atomic)
 - **C.a** — REPRESENTATION SUBSTRATE: the `type-pred` value (type-EXPR + predicate-SET
   slot, NO stub) + the smart-constructor `param-info` field. Pure substrate, no behavior.
@@ -828,10 +853,13 @@ object), uniquely avoiding the pipeline.md `qtt.rkt:2109` double-patch.
   binder path + the sexp symbol-split + the chained-colon diagnostic. **First
   end-user-visible green**: `?x:Int`/`x:Int` parses in both readers/languages, parse-
   and-store only, NO typing. Level-3 testable.
-- **C.c** — C.1 BLOCKING clause-check (Option A, driver-level).
-- **C.d** — C.2 activation (`relation-column-typer` upper-bound branch).
-  **HARD ORDERING: C.c precedes or lands-with C.d** (C.2 soundness-parasitic on
-  blocking C.1; or fold C.c+C.d into one soundness-atomic slice).
+- **C.c** — **REDESIGNED (§7.4)**: schema ⟹ facts-only BLOCKING well-formedness gate
+  (driver-level sibling). NOT the superseded clause-conformance check. Complete + sound.
+- **C.d** — C.2 activation (`relation-column-typer` upper-bound branch) — **REFRAMED (§7.5):
+  likely shrinks/defers to UCS** now that `?x:Int` on a rule var is a guard, not a static
+  contract. The C.c → C.d "soundness-parasitic" ordering DISSOLVED with the redesign (C.c no
+  longer secures a C.d upper-bound feed; the facts-only gate stands alone). Confirm C.d scope
+  with owner before opening.
 - **Tests are PER-PHASE** — C.a/C.b/C.c/C.d each bring their own test delta in their
   completion gate (the test file grows per phase); there is NO standalone C.T phase
   (see workflow.md "Tests are PER-PHASE"). C.b brings the parse-and-store tests (incl.
@@ -983,6 +1011,33 @@ runs") was **empirical**, resolved by probing.
   `test-parser-relational` (sexp parse-level: fused `(fn (x:Int) x)` → binder type
   `surf-int-type`, bare → `surf-hole`, chained → error) + `test-rel-t1-typed-vars` (WS
   `[fn [x:Int] x]` → `Int -> Int` end-to-end); **full suite 8963/468/0**.
+
+### 7.11 C.c — schema ⟹ facts-only gate — LANDED
+Implemented the REDESIGN (§7.4), not the superseded clause-conformance check. Owner
+co-design in a side chat superseded the grounding-audit-driven design; the audit
+(`wf_2f21daa9-252`) stays valid for code facts.
+
+- **What landed**: a driver-level sibling `check-relation-schema-facts-only rel-info`
+  (driver.rkt, beside `check-relation-schema-rows`) that returns an error string iff the
+  relation has a schema AND some variant has clauses; wired FIRST in the registration `cond`
+  (before schema-rows/floundering), BLOCKING (registration runs only in `[else]`). ~20 lines,
+  0 typer edits, 0 clause-walk.
+- **Why this is better than the superseded check (the VAG win)**: rejecting the ill-formed
+  input is **complete** — a schema'd rule can never register, so the schema branch only ever
+  types facts-only schema'd relations (rows checked by check-relation-schema-rows). The
+  literal clause-check was **incomplete** (misses transitive/`is`/compound bindings). No
+  `has-clauses?` typer guard (belt-and-suspenders avoided).
+- **Pre-check (Relay Note discipline)**: grepped examples/lib/tests for a schema'd relation
+  with `&>` — **none active** (`edge:Edge`/`movies:VHS`/`package:Package` are facts-only;
+  `ruler`/`ready-to-watch`/`depends` are un-schema'd rules; the punify-p3 schema'd-rule
+  examples are all commented). So the gate breaks nothing.
+- **Verification**: `raco make` clean; probe (`defr sf : S || …` registers + solves
+  `[{:a 5}{:a 7}] : [List {:a Int}]`; `defr sr : S &> (= x 5)` → registration error
+  "must be facts-only"); Rel acceptance 0-errors; `test-defr-schema` (pre-existing schema'd
+  FACT tests) still green; +3 tests `test-rel-t1-typed-vars.rkt` (reject / facts-only-ok /
+  un-schema'd-rule-unaffected); **full suite 8966/468/0**.
+- **Refuted premise added to the cascade**: "a blocking literal-clause check closes the
+  Aspect-B hole" — REFUTED (incomplete). See §7.4.
 
 ---
 

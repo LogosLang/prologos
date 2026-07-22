@@ -509,6 +509,27 @@
                             (pp-expr ft) (pp-expr term))))])))
       #f)]))
 
+;; Rel T1 Aspect C, C.c: a schema-typed relation must be FACTS-ONLY. A schema is a
+;; checked contract on ground fact rows (table-like data); a schema on a RULE relation
+;; (`defr R : S &> …`) is a category error — relation-column-typer's schema branch
+;; (typing-core.rkt:3603-3610) types R by S assuming its rows conform, but rule clauses
+;; are not fact rows. Enforcing "schema ⟹ facts-only" is the true precondition: it is
+;; complete + sound, and closes the Aspect-B soundness hole by REJECTING the ill-formed
+;; input (the bad relation never registers, so the schema branch only ever types
+;; facts-only schema'd relations — whose rows ARE checked by check-relation-schema-rows).
+;; No typer guard is needed (rejecting the input is stronger than guarding against it).
+;; A rule relation should use `?x:Int` parameter constraints (a guard), not a schema.
+;; Returns #f (well-formed) or an error string (→ blocking prologos-error at the caller).
+(define (check-relation-schema-facts-only rel-info)
+  (define sname (relation-info-schema rel-info))
+  (and sname
+       (for/or ([v (in-list (relation-info-variants rel-info))])
+         (pair? (variant-info-clauses v)))
+       (format (string-append "defr ~a : ~a — a schema-typed relation must be facts-only "
+                              "(fully-ground rows); it has rule clauses (&>). Use `?x:Int` "
+                              "parameter constraints for a rule relation, not a schema.")
+               (relation-info-name rel-info) sname)))
+
 ;; Emit W2002 warnings for capability binders that are never used in boundary ops.
 ;; Also emit W2003 for :w caps in process headers.
 (define (check-process-cap-warnings name caps proc-body)
@@ -814,11 +835,15 @@
                                    (cond
                                      [(expr-defr? zonked-body)
                                       (define rel-info (expr-defr->relation-info zonked-body))
+                                      ;; Rel T1 C.c: schema ⟹ facts-only well-formedness gate
+                                      ;; (a schema on a rule relation is a category error).
+                                      (define schema-rule-err (check-relation-schema-facts-only rel-info))
                                       (define schema-err (check-relation-schema-rows rel-info))
                                       ;; Rel T1 A.3: static floundering gate (engine-independent,
                                       ;; runs at defr registration before any query dispatch).
                                       (define flounder-err (check-relation-floundering rel-info))
                                       (cond
+                                        [schema-rule-err (prologos-error #f schema-rule-err)]
                                         [schema-err (prologos-error #f schema-err)]
                                         [flounder-err (prologos-error #f flounder-err)]
                                         [else
