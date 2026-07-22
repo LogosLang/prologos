@@ -1296,6 +1296,28 @@ worldview-preserving tabling (so guard generators materialize per-branch tags). 
 
 - Landed slice: commit `6b56397d`; design [`2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md`](2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md) §5 A.4.
 - **Track 3 seed (both issues + prototyped designs)**: [`2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md`](2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md).
+
+## Rel T1 Aspect C, C.d — `?x:Int` runtime domain-constraint (types-as-predicates) → UCS Track 6 (captured 2026-07-21)
+
+Aspect C closed at **C.a + C.b + C.c** (owner, 2026-07-21). The remaining piece — **C.d**,
+statically activating a declared `?x:Int` param type as a typing source for un-schema'd rule
+relations — is **DEFERRED to a UCS track**, NOT a Rel T1 deliverable.
+
+**Why**: a **schema** is a checked contract on **fact relations** (static, altitude-1 — that
+IS what Rel T1 delivered: C.c's schema⟹facts-only gate + the existing fact-row checking). But
+`?x:Int` on a **rule** logic-var is a **guard / unary domain-constraint `Int(x)`** (altitude-2,
+runtime) — its "static upper bound" is really the guard's static projection, sound only once
+the guard prunes at runtime. That is constraint-solving-over-value-domains = larger UCS work.
+
+**Nothing is lost by deferring**: C.b already STORES the type-preds on `param-info`
+(`param-info-type`, 0 consumers, store-only) and shipped the fused `?x:Int` reader in both
+readers/languages. The UCS track inherits the substrate + bridges it to the existing
+(dead-in-WS) `?var:C1:C2` narrowing → `type-guard` runtime mechanism.
+
+### Cross-references
+- **Retirement owner: UCS Track 6** ([`2026-03-28_UCS_MASTER.md`](2026-03-28_UCS_MASTER.md) Progress Tracker).
+- **Handoff note (the full settled design + verified coordinates + known gaps)**: [`2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md`](2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md).
+- Rel T1 design: [`2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md`](2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md) §7.5 (RESOLVED) / §7.6 (C.d) / §7.7 (deferred + non-monotone S(-1) cap).
 - Grounding-audit: `wf_ab037f07-570` (guard machinery + fix options).
 - BSP-LE Master Track 3 retirement obligation: [`2026-03-21_BSP_LE_MASTER.md`](2026-03-21_BSP_LE_MASTER.md).
 - **Process note**: the A.4 investigation was lengthened by a WS-syntax probe error (one-line fact rows `|| 5 3` parse as one wrong-arity row → spurious empty results, masqueraded as a tabling failure). Probes need multi-line fact rows.

@@ -27,9 +27,13 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 - **Aspect B — typed solution rows**: `solve` is currently untyped (`expr-hole`).
   Type rows from two first-class sources — **codata observation** and **schema
   projection** — keyed by field name.
-- **Aspect C — schema-as-relational-facts + validation**: extend the already-
-  realized a-priori fact typing (`defr R : Schema`) toward the relational "spec"
-  vision (rule clauses, signature-as-typing-source).
+- **Aspect C — typed logic vars + schema validation** — **CLOSED (C.a+C.b+C.c,
+  2026-07-21)**: the `type-pred` substrate (C.a), the fused `?x:Int`/`x:Int` reader in
+  both readers + both languages (C.b), and the **schema ⟹ facts-only** blocking gate (C.c,
+  the highest-motivation static validation on grounded facts). The runtime
+  types-as-predicates reading (`?x:Int` = guard `Int(x)`, "C.d") is **deferred to UCS**
+  ([`2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md`](2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md),
+  UCS Track 6).
 - **Aspect D — efficient fact representation + query optimization**: a deeper,
   possibly frontier research agenda. **Stage 0/1 (research + design artifact) is in
   scope this track**; implementation is picked up here or spun out as a separate
@@ -57,12 +61,12 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | **B0** | Shared ground/free **kernel** (§6.5) — keys-out, strip-isolated, partition-not-`set!`; refactor 3 goal-app row-build sites onto it | ✅ | `reduction.rkt`: `free-arg` + `query-var->champ-key` + `classify-goal-args`; `extract-query-info` delegates; 3 goal-app key-sites routed; exported for B1. Zero behavior change (probe byte-identical, acceptance 0-err); suite **8934/466/0** |
 | **B1** | First typed slice — schema'd goal-app, ALL 5 arms: `solve-row-type`/`goal-app-schema-row` (typing-core, shared by qtt) build `expr-Record` (`Κ′` keys from B0, `schema-field-type->expr` types) + per-arm container + per-field arity-degrade; 5 solve structs registered `#f` (dispatch parity) | ✅ | `relations.rkt` require (cycle-free); **composition typed** `(solve-one q).w : Int`; containers CORRECTED to runtime (solve-one=bare, explain=`List<row \| _>` dyn, no Option/Answer); +7 tests `test-rel-t1-typed-rows.rkt`; `count-answers` helper fixed (counted type braces); suite **green** |
 | **B2** | Codata: un-schema'd FACTS-ONLY → row typed by the JOIN of fact-literal types; heterogeneous column → **union** (owner); RULE-bearing → loose (runtime "at the end" / C.1) | ✅ | `relation-column-typer` (schema \| codata branches) + `observe-column-type` (dedup→`expr-union`); soundness boundary = facts-only (no clauses); refactored `goal-app-schema-row`→`goal-app-row`; +4 tests; suite **green** |
-| **C (Stage-3)** | Typed logic vars (`?x:Int` = Curry-Howard `Int(x)` = type) + schema-as-facts — design SETTLED (§7): reader→`(name,type-EXPR)`→`type-pred` object (2′) → driver-level BLOCKING C.1 (arm untouched) → C.2 upper-bound feed | ✅ | panel `wf_09b5988d-e72` + R-lens; owner co-design 2026-07-21 |
+| **C** | Typed logic vars (`?x:Int` = Curry-Howard `Int(x)` = type) + schema validation — **CLOSED at C.a+C.b+C.c (2026-07-21)**. Static validation on grounded facts delivered; the runtime types-as-predicates reading (C.d) → UCS Track 6 | ✅ | C.a `b33474aa` · C.b.1 `6d793906` · C.b.2 `c6b8e81f` · C.c `357035d5`; C.d deferred ([UCS note](2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md)) |
 | **C.a** | Representation substrate: the `type-pred` value (type-EXPR + predicate-SET list slot, NO stub) + smart-constructor `param-info` field (8 prod sites untouched) | ✅ | `b33474aa`; `type-pred` + `param-info` `type` field via #:name-redirect smart-ctor (§7.8; naive `#:constructor-name` form fails to compile); store-only (0 consumers); +6 tests `test-rel-t1-typed-vars.rkt`; suite 8950/468/0 |
 | **C.b.1** | Reader + parser — **RELATIONAL**, both readers: fused `?x:Int` in `parse-rel-params` (WS trailing colon-symbol + sexp glued-symbol split) → `(name mode type-name)` 3-list carrier → elaboration NAME→EXPR → relations `type-pred` wrap on `param-info`; chained reject; spaced diagnostic (fused-only) | ✅ | `6d793906`; parser-arm (tokenizer untouched, no sweep); fixes a pre-existing `?x:Int` mis-parse; +tests (parser-relational sexp + typed-vars store); suite 8959/468/0 (§7.9) |
 | **C.b.2** | Reader + parser — **FUNCTIONAL**, both readers: route fused `x:Int` to the pre-existing `binder-info.type` typed-binder path (no type-pred); two arms in `parse-binder` (WS `(x :Int)` 2-elem + sexp glued split); chained reject; `:0/:1/:w/:m` mult excluded | ✅ | `c6b8e81f`; both readers funnel through `parse-binder` (tree-parser falls back — probed); fused types identically to spaced (`Int -> Int`); +4 tests; suite 8963/468/0 (§7.10) |
 | **C.c** | **REDESIGNED (§7.4)**: schema ⟹ facts-only BLOCKING gate (driver sibling `check-relation-schema-facts-only`). Rejects `defr R : S &> …` at registration — the clause-conformance check was DROPPED (incomplete; the hole was a schema-on-rule category error) | ✅ | `357035d5`; complete+sound (reject ill-formed input, no typer guard); pre-check found no active schema'd-rule; +3 tests; suite 8966/468/0 (§7.11) |
-| **C.d** | C.2 activation — `type-pred` object → `relation-column-typer` upper-bound branch (un-schema'd rule relations typeable) | ⬜ | **C.c precedes/lands-with C.d (soundness-atomic)** |
+| **C.d** | ~~C.2 activation — `type-pred` → `relation-column-typer` upper-bound~~ → **DEFERRED to UCS** | ⛔→UCS | `?x:Int` on a rule var is a GUARD `Int(x)` (runtime/UCS altitude), not a static contract → the static activation is UCS's domain-constraint work. Handoff note: [`2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md`](2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md) (UCS Track 6). C.b already STORES the type-preds — nothing lost. **Aspect C CLOSES at C.a+C.b+C.c.** |
 | **D.0/1** | Efficient fact representation + query-opt — Stage 0/1 research + design artifact | ⬜ | Research-heavy; after A; impl pick-up-or-spin-out |
 | **POL** | Polish: dedup · drop `_anon` keys · declaration-order keys | ⬜ | |
 | *(tests)* | **Per-phase** — each behavioral phase brings its own test delta in its completion gate; the test file(s) `tests/test-rel-*.rkt` GROW per phase (NOT a dedicated end phase — see workflow.md "Tests are PER-PHASE") | — | e.g. `test-rel-t1-naf.rkt`, `test-rel-t1-typed-rows.rkt` (grown across B1/B2) |
@@ -838,12 +842,17 @@ object), uniquely avoiding the pipeline.md `qtt.rkt:2109` double-patch.
 redesign (§7.4) reframes `?x:Int` on a **rule** var as a **guard / unary constraint
 `Int(x)`** (runtime/UCS altitude), NOT a static output-contract. So C.2/C.d's "feed the
 declared param type as a static UPPER BOUND to type un-schema'd rule relations" is really
-the guard's **static projection** — sound only once the guard prunes at runtime (UCS). Open
-question for C.d: does the `?x:Int`-rule STATIC typing DEFER to UCS (with the guard), or do
-we want a "trust the declared guard statically now" version? This likely **shrinks or defers
-C.d** — Aspect C's remaining *static* work may be just the C.c gate, with the rest of the
-`?x:Int` story living in UCS. (C.b already stores the type-preds; nothing is lost by
-deferring their static activation.)
+the guard's **static projection** — sound only once the guard prunes at runtime (UCS).
+
+**RESOLVED (2026-07-21, owner — Aspect C CLOSES here).** The static validation on grounded
+fact relationships (the C.c facts-only gate + the existing schema fact-row checking) was the
+**highest-motivation** work and is delivered. Types-as-predicates (`?x:Int` as a runtime
+domain-constraint `Int(x)`) is **larger design work DEFERRED to a UCS track** — captured in
+the handoff note [`2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md`](2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md)
+(UCS Track 6). So **C.d is DEFERRED to UCS, not a Rel T1 deliverable**; Aspect C = C.a + C.b
++ C.c. C.b already STORES the type-preds (0 consumers) — the UCS track inherits them, nothing
+is lost. The old C.c → C.d "soundness-parasitic" ordering DISSOLVED: the facts-only gate
+stands alone (it does not secure any C.d upper-bound feed).
 
 ### 7.6 Build partition (soundness-atomic)
 - **C.a** — REPRESENTATION SUBSTRATE: the `type-pred` value (type-EXPR + predicate-SET
@@ -855,11 +864,12 @@ deferring their static activation.)
   and-store only, NO typing. Level-3 testable.
 - **C.c** — **REDESIGNED (§7.4)**: schema ⟹ facts-only BLOCKING well-formedness gate
   (driver-level sibling). NOT the superseded clause-conformance check. Complete + sound.
-- **C.d** — C.2 activation (`relation-column-typer` upper-bound branch) — **REFRAMED (§7.5):
-  likely shrinks/defers to UCS** now that `?x:Int` on a rule var is a guard, not a static
-  contract. The C.c → C.d "soundness-parasitic" ordering DISSOLVED with the redesign (C.c no
-  longer secures a C.d upper-bound feed; the facts-only gate stands alone). Confirm C.d scope
-  with owner before opening.
+- **C.d** — **DEFERRED to UCS (§7.5 RESOLVED, 2026-07-21)**. `?x:Int` on a rule var is a
+  guard `Int(x)` (runtime domain-constraint), not a static contract → the static activation is
+  UCS's work (UCS Track 6, handoff note
+  [`2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md`](2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md)).
+  **Aspect C = C.a + C.b + C.c** (closes here). The old C.c → C.d "soundness-parasitic"
+  ordering DISSOLVED — the facts-only gate stands alone.
 - **Tests are PER-PHASE** — C.a/C.b/C.c/C.d each bring their own test delta in their
   completion gate (the test file grows per phase); there is NO standalone C.T phase
   (see workflow.md "Tests are PER-PHASE"). C.b brings the parse-and-store tests (incl.
