@@ -1185,31 +1185,35 @@ three-level WS validation + WS-Impact obligations (workflow.md).
   evidently does not route through it. Wire `defn` (and multi-arity clause
   heads) to the same fused-binder arm.
 
-- **POL.10 — `def` binds the AST, not the reduced value** *(owner, 2026-07-24)* —
-  owner ruled once-at-definition semantics; a blunt eager-nf flip was
-  **attempted and REVERTED** the same day after THREE verified semantic
-  collisions (the design inputs for the real round):
-  1. **Module-load context**: eager nf while `current-loading-set` is
-     non-empty corrupted the prelude (list module broke `List` typing
-     process-wide) — the pipeline.md two-context boundary. A
-     `current-loading-set`-empty guard fixed this one.
-  2. **Lambda-valued defs**: `def main : (Pi …) := (fn …)` — nf under the
-     binder discharges CAPABILITIES at definition time ("no instance found
-     for ReadCap", test-io-main-01). Function-valued defs need the AST/thunk
-     posture (like defn).
-  3. **Schema-annotated literal defs**: `def a : Pt := {…}` — the nf'd form
-     broke downstream consumers (test-implicit-map-02).
-  ⇒ The flip needs a **value-class-scoped design**: which whnf-heads bind
-  eagerly (solve rows / ground data yes; binder-headed values no; schema'd
-  literal forms TBD), module contexts stay AST until they support evaluation.
-  **KEPT from the attempt** (landed): the reconstructive `champ-sentinel`
-  pnet serialization (expr-champ round-trips instead of vector-impostoring —
-  the prerequisite for ANY future champ-bearing env snapshot) + its test.
-  The bind-once counter test (3 uses of a def-bound solve add zero
-  `solver_row_scans`) is the ready-made acceptance gate for the real slice.
-
-### Syntax / ergonomics cluster (WS reader/parser features)
-
+- **POL.10 — `def` binds the reduced value** — **✅ LANDED `095d8bc5`
+  (2026-07-24, second pass — owner-ruled SNAPSHOT semantics)**. `def` binds
+  the **WHNF** of its zonked body at both driver arms: evaluation runs once
+  at definition, mentions read the value. Measured: a def'd solve's
+  `solver_row_scans` is FLAT across mentions (was 4+4N); a
+  function-PRODUCING def (`[make-adder 5]`) constructs its closure once
+  (+10→+6 reduce_steps/mention — the residual is per-application beta,
+  i.e. the PARKED application-memoization question, multiplicity types as
+  its future admission knob).
+  **The first-pass post-mortem**: all three "value-class collisions" of the
+  reverted eager-**nf** attempt were nf-under-binder casualties — at WHNF
+  every one dissolves (verified: fresh-cache module loading clean, both
+  tripwire test files green, lambda defs stored bit-identically). The
+  value-class taxonomy was a MISDIAGNOSIS; the only axis that mattered was
+  reduction depth. `expr-lam` is whnf-trivial ⇒ binder-headed stays lazy by
+  IDENTITY, not carve-out.
+  **Rulings**: F1 = SNAPSHOT (a binding denotes ONE value — the `random`
+  category-error principle; a later `defr` does not change a bound solve,
+  test-pinned). Recipe-style liveness was never designed — it was the
+  defect's shadow; proper invalidation (def ← fact-store dependency
+  propagation) is **Rel T2 IVM territory**, and `def`-before-`:from`-load
+  staleness is the known cost to document there. F2 dissolved structurally:
+  effects cannot reach a def body (capability-gated, params-only ⇒ always
+  under a binder; E2001 otherwise) — nothing fires at definition time.
+  Also landed: PNET_VERSION 2→3 (snapshots may carry whnf'd values incl.
+  champ-sentinels; clean regeneration forced); nf-cache unsolved-meta guard
+  (was absent); pnet comment doc-truth. NOTE (grounding wf_85fd66bf-abe):
+  never `git stash` in this repo — owner WIP + owner stashes; A/B via
+  direct edit.
 - **POL.7 — Single-line facts with `|` separators** *(owner)* —
   `defr digits [?d]` + `|| 0 | 1 | 2 | … | 9` on one line. Today fact rows
   are newline-separated only (and a one-line multi-row literal silently
