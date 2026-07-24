@@ -3584,7 +3584,7 @@
       (expr-hole)))
 
 ;; relation-column-typer — a (goal-position → field type) function for a statically-
-;; typeable relation, or #f (→ loose fallback). Two sources — the F1 schema/`Map`
+;; typeable relation, or #f (→ loose fallback). Three sources — the F1 schema/`Map`
 ;; split, one layer up:
 ;;   • schema'd relation → project the schema's declared field type at each position
 ;;     (B1, inductive/data; sound — the schema is an upper bound for ALL runtime rows
@@ -3593,10 +3593,11 @@
 ;;   • un-schema'd FACTS-ONLY relation → observe the join of the fact-literal types
 ;;     at each position (B2, codata; sound — a facts-only/CLOSED relation's rows are
 ;;     all present statically, so observation is exact, not a lower bound).
-;; A RULE-bearing (open) relation returns #f: static fact-observation would be an
-;; UNSOUND lower bound (rules derive rows no fact exhibits); its precise codata
-;; typing comes at runtime "at the end" (first-class-static-codata → C.1). Row LABELS
-;; stay the query-var names Κ′ regardless of the type source.
+;;   • RULE-bearing relation → STATIC BODY-GOAL DATAFLOW (B3.1, design §6.10):
+;;     an UPPER-BOUND derivation — each head param's type is the union-join of every
+;;     contribution the clause bodies can bind it from. NOT output observation
+;;     (banned as unsound, §6.2); underivable positions degrade to hole, never lie.
+;; Row LABELS stay the query-var names Κ′ regardless of the type source.
 (define (relation-column-typer rel)
   (define sname (relation-info-schema rel))
   (cond
@@ -3618,12 +3619,215 @@
      (define facts
        (filter (lambda (fr) (pair? (fact-row-terms fr)))
                (apply append (map variant-info-facts variants))))
-     (and (not has-clauses?) (pair? facts)
-          (lambda (pos)
-            (observe-column-type
-             (for/list ([fr (in-list facts)]
-                        #:when (< pos (length (fact-row-terms fr))))
-               (infer ctx-empty (list-ref (fact-row-terms fr) pos))))))]))
+     (cond
+       [has-clauses? (rule-relation-column-typer (current-relation-store) rel)]
+       [(pair? facts)
+        (lambda (pos)
+          (observe-column-type
+           (for/list ([fr (in-list facts)]
+                      #:when (< pos (length (fact-row-terms fr))))
+             (infer ctx-empty (list-ref (fact-row-terms fr) pos)))))]
+       [else #f])]))
+
+;; ── Rel T1 B3.1: derived column types for RULE-bearing relations ──────────────
+;; (design §6.10, co-design settled 2026-07-24). Static body-goal dataflow:
+;; walk each clause's goal-descs, accumulating per-var type CONTRIBUTIONS —
+;;   'app:   symbol args take the callee's column types at that position
+;;           (schema → B1 projection; facts-only → B2 observation; rule →
+;;           the fixpoint table's current approximation)
+;;   'unify: var↔var records a LINK (contributions flow both ways);
+;;           var↔term contributes the term's inferred type
+;;   'is:    the LHS var takes the RHS expr's inferred type (RHS kept as AST)
+;;   'not/'guard/'cut: testing-only — contribute nothing (A.3's classification)
+;; then each head param's type = union-join of its contributions (B2's
+;; observe-column-type kernel), across clauses × variants × the relation's own
+;; fact rows (MIXED relations join the fact contribution — the old relation-
+;; global gate discarded it).
+;; RECURSION (D-B3.2): Kleene iteration over the rule CONE (all rule-bearing
+;; relations reachable via 'app deps) from ⊥ — monotone in the table, so it
+;; stabilizes; capped as a backstop, degrading to the current approximation.
+;; (Impl notes vs §6.10, recorded in the B3.1 commit: walks the registered
+;; goal-desc form rather than the AST twin — uniform with the anonymous-rel
+;; arm; raw ground values bridge to AST via ground->prologos-expr; the rare
+;; deep-normalized 'unify compound term degrades to hole per D-B3.6. Global
+;; Kleene rather than SCC-ordered — observably identical, SCC ordering is a
+;; deferred perf refinement. No cross-call cache yet — same per-invocation
+;; cost posture as the B2 branch; registration-time derivation per the D.2.d
+;; precedent is the named follow-up.)
+
+(define B3-FIXPOINT-CAP 8)
+
+;; A type contribution worth keeping (drop holes/errors — they'd pollute unions).
+(define (b3-usable-type? t)
+  (and t (not (expr-hole? t)) (not (expr-error? t))))
+
+;; Type a non-var goal-desc term: AST exprs infer directly; raw solver values
+;; bridge via ground->prologos-expr. Symbols are vars (→ no direct type).
+(define (b3-term-type t)
+  (cond
+    [(symbol? t) #f]
+    [(expr? t) (let ([ty (infer ctx-empty t)]) (and (b3-usable-type? ty) ty))]
+    [else (let ([ty (infer ctx-empty (ground->prologos-expr t))])
+            (and (b3-usable-type? ty) ty))]))
+
+;; Deterministic dedup-preserving append (keeps first occurrence order so the
+;; fixpoint's equal?-stability check is well-defined).
+(define (b3-add-types existing new-types)
+  (for/fold ([acc existing]) ([t (in-list new-types)])
+    (if (member t acc) acc (append acc (list t)))))
+
+;; Column contributions of a callee, as a vector of type lists — schema and
+;; facts-only relations resolve directly; rule-bearing ones read the fixpoint
+;; table's current approximation (#f/absent ⇒ ⊥, contributes nothing this round).
+(define (b3-callee-columns store table name)
+  (define rel (relation-lookup store name))
+  (and rel
+       (let ([variants (relation-info-variants rel)])
+         (define has-clauses?
+           (for/or ([v (in-list variants)]) (pair? (variant-info-clauses v))))
+         (cond
+           [has-clauses? (hash-ref table name #f)]
+           [(relation-info-schema rel)
+            (let ([schema (lookup-schema-by-name (relation-info-schema rel))])
+              (and schema
+                   (let ([fields (schema-entry-fields schema)])
+                     (for/vector ([f (in-list fields)])
+                       (let ([ty (schema-field-type->expr (schema-field-type-datum f))])
+                         (if (b3-usable-type? ty) (list ty) '()))))))]
+           [else (b3-fact-columns rel)]))))
+
+;; Per-position inferred fact-literal types (the B2 observation, list form).
+(define (b3-fact-columns rel)
+  (define facts
+    (filter (lambda (fr) (pair? (fact-row-terms fr)))
+            (apply append (map variant-info-facts (relation-info-variants rel)))))
+  (define arity
+    (for/fold ([m 0]) ([fr (in-list facts)]) (max m (length (fact-row-terms fr)))))
+  (and (pair? facts)
+       (for/vector ([pos (in-range arity)])
+         (for/fold ([acc '()])
+                   ([fr (in-list facts)]
+                    #:when (< pos (length (fact-row-terms fr))))
+           (let ([ty (infer ctx-empty (list-ref (fact-row-terms fr) pos))])
+             (if (b3-usable-type? ty) (b3-add-types acc (list ty)) acc))))))
+
+;; Walk ONE clause: per-var contribution env (hasheq var → type list) with
+;; var↔var unify links closed over (bounded propagation).
+(define (b3-clause-env store table clause)
+  (define env (make-hasheq))
+  (define links '())
+  (define (add! v ts)
+    (when (pair? ts)
+      (hash-set! env v (b3-add-types (hash-ref env v '()) ts))))
+  (for ([g (in-list (clause-info-goals clause))])
+    (case (goal-desc-kind g)
+      [(app)
+       (define args (goal-desc-args g))
+       (define callee-cols (b3-callee-columns store table (car args)))
+       (when callee-cols
+         (for ([a (in-list (cadr args))] [pos (in-naturals)])
+           (when (and (symbol? a) (< pos (vector-length callee-cols)))
+             (add! a (vector-ref callee-cols pos)))))]
+      [(unify)
+       (define args (goal-desc-args g))
+       (define lhs (car args))
+       (define rhs (cadr args))
+       (cond
+         [(and (symbol? lhs) (symbol? rhs))
+          (set! links (cons (cons lhs rhs) links))]
+         [(symbol? lhs)
+          (let ([ty (b3-term-type rhs)]) (when ty (add! lhs (list ty))))]
+         [(symbol? rhs)
+          (let ([ty (b3-term-type lhs)]) (when ty (add! rhs (list ty))))]
+         [else (void)])]
+      [(is)
+       (define args (goal-desc-args g))
+       (when (symbol? (car args))
+         (let ([ty (b3-term-type (cadr args))])
+           (when ty (add! (car args) (list ty)))))]
+      [else (void)]))  ;; 'not / 'guard / 'cut: testing-only
+  ;; Close contributions over var↔var links (both directions, to stability;
+  ;; bounded — each round only grows envs from a finite type population).
+  (let loop ([n 0])
+    (define changed? #f)
+    (for ([l (in-list links)])
+      (define a-ts (hash-ref env (car l) '()))
+      (define b-ts (hash-ref env (cdr l) '()))
+      (define a* (b3-add-types a-ts b-ts))
+      (define b* (b3-add-types b-ts a-ts))
+      (unless (equal? a* a-ts) (hash-set! env (car l) a*) (set! changed? #t))
+      (unless (equal? b* b-ts) (hash-set! env (cdr l) b*) (set! changed? #t)))
+    (when (and changed? (< n B3-FIXPOINT-CAP)) (loop (add1 n))))
+  env)
+
+;; Derive one relation's per-position contribution vector under `table`.
+(define (b3-derive-columns store table rel)
+  (define variants (relation-info-variants rel))
+  (define arity
+    (for/fold ([m 0]) ([v (in-list variants)])
+      (max m (length (variant-info-params v)))))
+  (define cols (make-vector arity '()))
+  ;; The relation's own fact rows contribute (mixed facts+clauses relations).
+  (let ([fc (b3-fact-columns rel)])
+    (when fc
+      (for ([pos (in-range (min arity (vector-length fc)))])
+        (vector-set! cols pos (b3-add-types (vector-ref cols pos)
+                                            (vector-ref fc pos))))))
+  ;; Clause contributions: each variant's head params read the clause envs.
+  (for ([v (in-list variants)])
+    (define pnames (map param-info-name (variant-info-params v)))
+    (for ([cl (in-list (variant-info-clauses v))])
+      (define env (b3-clause-env store table cl))
+      (for ([pn (in-list pnames)] [pos (in-naturals)])
+        (vector-set! cols pos (b3-add-types (vector-ref cols pos)
+                                            (hash-ref env pn '()))))))
+  cols)
+
+;; The rule CONE: rule-bearing relations reachable from `rel` via 'app deps
+;; (incl. itself). Schema/facts-only callees resolve directly — not in the cone.
+(define (b3-rule-cone store rel)
+  (define (rule-bearing? r)
+    (for/or ([v (in-list (relation-info-variants r))])
+      (pair? (variant-info-clauses v))))
+  (let loop ([todo (list (relation-info-name rel))] [seen '()])
+    (cond
+      [(null? todo) seen]
+      [(memq (car todo) seen) (loop (cdr todo) seen)]
+      [else
+       (define name (car todo))
+       (define r (relation-lookup store name))
+       (cond
+         [(and r (rule-bearing? r))
+          (define deps
+            (for*/list ([v (in-list (relation-info-variants r))]
+                        [cl (in-list (variant-info-clauses v))]
+                        [g (in-list (clause-info-goals cl))]
+                        #:when (eq? (goal-desc-kind g) 'app))
+              (car (goal-desc-args g))))
+          (loop (append deps (cdr todo)) (cons name seen))]
+         [else (loop (cdr todo) seen)])])))
+
+;; rule-relation-column-typer — the B3.1 entry: Kleene-iterate the cone's
+;; contribution table from ⊥ to stability (or the cap), then close over this
+;; relation's columns with the B2 union kernel.
+(define (rule-relation-column-typer store rel)
+  (define cone (b3-rule-cone store rel))
+  (define table
+    (let loop ([table (hasheq)] [round 0])
+      (define next
+        (for/hasheq ([name (in-list cone)])
+          (values name (b3-derive-columns store table (relation-lookup store name)))))
+      (if (or (>= round B3-FIXPOINT-CAP)
+              (for/and ([name (in-list cone)])
+                (equal? (hash-ref table name #f) (hash-ref next name #f))))
+          next
+          (loop next (add1 round)))))
+  (define cols (hash-ref table (relation-info-name rel) #f))
+  (and cols
+       (lambda (pos)
+         (if (< pos (vector-length cols))
+             (observe-column-type (vector-ref cols pos))
+             (expr-hole)))))
 
 ;; goal-app-row — the typed solution row for a goal-app: a per-position field type
 ;; (schema-projection B1 / fact-observation B2) keyed by the query-var names Κ′ (from
@@ -3652,14 +3856,51 @@
                  (cons (free-arg-name fa) (record-field (col-type (free-arg-pos fa)) 'present)))
                tail)))))
 
+;; anon-rel-row — B3.1 (D-B3.3): the typed row for an ANONYMOUS `rel` solve —
+;; the same walker over the inline body ("observational results share common
+;; mechanisms", owner). The rel's params are the query vars; row labels are the
+;; param names (anon-filtered, positions preserved), types from the shared
+;; derivation (rule walker when clause-bearing; B2 fact observation otherwise).
+(define (anon-rel-row g* tail)
+  (define temp-name (gensym 'anon-rel-type))
+  (define rel-info (expr-rel->relation-info g* temp-name))
+  (define variants (relation-info-variants rel-info))
+  (define has-clauses?
+    (for/or ([v (in-list variants)]) (pair? (variant-info-clauses v))))
+  (define store (hash-set (current-relation-store) temp-name rel-info))
+  (define col-type
+    (if has-clauses?
+        (rule-relation-column-typer store rel-info)
+        (let ([fc (b3-fact-columns rel-info)])
+          (and fc (lambda (pos)
+                    (if (< pos (vector-length fc))
+                        (observe-column-type (vector-ref fc pos))
+                        (expr-hole)))))))
+  (and col-type
+       (pair? variants)
+       (let* ([params (variant-info-params (car variants))]
+              [named (for/list ([p (in-list params)]
+                                [pos (in-naturals)]
+                                #:unless (anon-query-var? (param-info-name p)))
+                       (cons (param-info-name p) pos))])
+         (and (pair? named)
+              (make-record
+               'keyword
+               (for/list ([np (in-list named)])
+                 (cons (car np) (record-field (col-type (cdr np)) 'present)))
+               tail)))))
+
 ;; solve-row-type — the static result type for a solve-family node. Pure structural
 ;; derivation from the goal (does NOT infer the goal — the caller does that for
 ;; effect/usage). wrapper ∈ 'list (solve/solve-with/explain*) | 'bare (solve-one,
 ;; whose runtime is the D25.4-unwrapped champ). Returns the wrapped typed row for a
-;; typeable goal-app, else expr-hole (loose fallback).
+;; typeable goal-app or anonymous rel (B3.1), else expr-hole (loose fallback).
 (define (solve-row-type g wrapper [tail 'closed])
   (define g* (whnf g))
-  (define row (and (expr-goal-app? g*) (goal-app-row g* tail)))
+  (define row (cond
+                [(expr-goal-app? g*) (goal-app-row g* tail)]
+                [(expr-rel? g*) (anon-rel-row g* tail)]
+                [else #f]))
   (cond
     [(not row) (expr-hole)]
     [(eq? wrapper 'bare) row]

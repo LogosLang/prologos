@@ -58,7 +58,10 @@
          classify-goal-args (struct-out free-arg) query-var->champ-key
          ;; POL.2 / B3.0: anon-`_` projection exclusion — kernel-level so the
          ;; runtime champ rows and B3's static row labels stay key-agreed.
-         anon-query-var? row-query-vars)
+         anon-query-var? row-query-vars
+         ;; B3.1: raw solver ground value → AST expr, so the static body-goal
+         ;; walker can type raw literals in registered goal-descs via infer.
+         ground->prologos-expr)
 
 ;; N4: collapse a resolved numeric literal (expr-num-lit) to its concrete node.
 ;; Local mirror of zonk's collapse-num-lit (reduction can't require zonk — cycle via

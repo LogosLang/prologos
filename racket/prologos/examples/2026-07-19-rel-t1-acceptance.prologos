@@ -114,3 +114,17 @@ solve (positive-edge from _ _)
 
 ;;21=> '[{} {}]  (all-anon -> membership-style empty rows, one per solution)
 solve (positive-edge _ _ _)
+
+;; ---- B3.1: rule-relation solutions are STATICALLY TYPED (body-goal dataflow) --
+;; The B2-deferred half, delivered: rule rows derive an UPPER BOUND through the
+;; body's generators (schema/B1 + facts/B2 + rule/fixpoint sources; never output
+;; observation). Recursive rules type via the Kleene fixpoint (D-B3.2).
+;;22=> '[{:a "x", :c "z"} {:a "x", :c "w"}] : List {:a String :c String}
+solve (twohop a c)
+
+;;23=> typed via the FIXPOINT (reaches is recursive): rows keyed :c String
+solve (reaches "x" c)
+
+;;24=> anonymous rel through the SAME walker (D-B3.3): List {:v String}
+solve (rel [?v]
+       &> (edge v _))

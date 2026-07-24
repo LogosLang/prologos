@@ -149,12 +149,61 @@
               (string-append plain-facts-world "(solve-one (edge f t w)).w\n"))))
   (check-true (string-contains? r ": Int") "projected weight is Int (observed from facts)"))
 
-(test-case "B2: RULE-bearing un-schema'd relation stays loose (unsound to observe; → C.1/runtime)"
+;; FLIPPED at B3.1 (was: "rule-bearing stays loose : _"). The B3 walker now
+;; derives rule rows statically — body-goal dataflow, an UPPER BOUND through the
+;; generators (NOT output observation, which stays banned per §6.2).
+(test-case "B3.1: RULE-bearing relation gets a derived static row (body-goal dataflow)"
   (define r (last-result
              (run-prologos-string
               (string-append
                plain-facts-world
                "defr ruler [?a ?b]\n  &> (edge a b _)\n\n"
                "solve (ruler s d)\n"))))
-  (check-true (string-contains? r ": _")
-              "a rule-bearing relation is NOT statically observed (its rows exceed the facts)"))
+  (check-false (string-contains? r ": _")
+               "rule-bearing no longer falls to the loose hole")
+  (check-true (string-contains? r ":s") "row keyed by query vars")
+  (check-true (string-contains? r ":d")))
+
+(test-case "B3.1: recursive rule (transitive closure) types via the fixpoint"
+  (define r (last-result
+             (run-prologos-string
+              (string-append
+               plain-facts-world
+               "defr reach [?x ?z]\n"
+               "  &> (edge x z _)\n"
+               "  &> (edge x y _) (reach y z)\n\n"
+               "solve (reach x z)\n"))))
+  (check-false (string-contains? r ": _") "TC must not stay loose")
+  (check-true (string-contains? r ":x") "typed row keyed by query vars"))
+
+(test-case "B3.1: `=`-unify literal + `is` contributions type the bound var"
+  (define r (last-result
+             (run-prologos-string
+              (string-append
+               plain-facts-world
+               "defr tagged [?n ?tag]\n  &> (edge n _ _) (= tag \"seen\")\n\n"
+               "solve (tagged n tag)\n"))))
+  (check-true (string-contains? r ":tag String") "unify-with-literal types the var")
+  (check-true (string-contains? r ":n") "app-position var typed from callee column"))
+
+(test-case "B3.1 (D-B3.3): anonymous `rel` solves type via the same walker"
+  (define r (last-result
+             (run-prologos-string
+              (string-append
+               plain-facts-world
+               "solve (rel [?v]\n       &> (edge v _ _))\n"))))
+  (check-false (string-contains? r ": _") "anon rel no longer loose")
+  (check-true (string-contains? r ":v") "row keyed by the rel's params"))
+
+(test-case "B3.1: MIXED facts+clauses relation joins the fact contribution"
+  ;; Pre-B3.1 the relation-global has-clauses? gate discarded the fact half.
+  (define r (last-result
+             (run-prologos-string
+              (string-append
+               plain-facts-world
+               "defr mixed [?v]\n"
+               "  || 9\n"
+               "  &> (edge v _ _)\n\n"
+               "solve (mixed v)\n"))))
+  (check-false (string-contains? r ": _") "mixed relation no longer loose")
+  (check-true (string-contains? r ":v") "typed row present"))

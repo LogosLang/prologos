@@ -197,8 +197,12 @@
   (check-no-errors results)
   (define solve-result (last-result results))
   (check-true (string? solve-result))
-  ;; bad("evil") succeeds, so not fails -> empty list
-  (check-equal? solve-result "nil : _"
+  ;; bad("evil") succeeds, so not fails -> empty list.
+  ;; SNAPSHOT FLIPPED at Rel T1 B3.1: rule solves now derive a static row —
+  ;; check-ok's `x` is bound by NOTHING in the body (`not` is testing-only),
+  ;; so its field honestly degrades to a hole while the row STRUCTURE
+  ;; (List wrapper + the :y key) is known and reported (D-B3.6).
+  (check-equal? solve-result "nil : [List {:y _}]"
                 "not (bad \"evil\") should fail (evil IS bad)"))
 
 ;; ========================================

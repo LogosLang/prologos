@@ -30,16 +30,20 @@
   (check-true (string-contains? r ":b3"))
   (check-false (string-contains? r "_anon") "anon gensym keys must not appear")
   ;; 2^4 = 16 solutions; the two `_` values yield DUPLICATE rows (kept — POL.1
-  ;; dedup is out of scope here). 16 rows = 16 `{`-opens after the list-open.
-  (check-equal? (length (regexp-match* #rx"[{]" r)) 16
+  ;; dedup is out of scope here). Count braces in the VALUE part only — since
+  ;; B3.1 the printed TYPE of a rule solve is itself a row (`List {:b1 Int …}`)
+  ;; and would inflate a whole-string count.
+  (define val-part (car (regexp-split #rx" : " r)))
+  (check-equal? (length (regexp-match* #rx"[{]" val-part)) 16
                 "answer count unchanged by projection (duplicates preserved)"))
 
 (test-case "POL.2: all-anon query projects to empty rows (membership-style)"
   (define r (run-ns-ws-last (string-append FIXTURE "solve (truths _ _ _ _)")))
   (check-true (string? r))
   (check-false (string-contains? r "_anon"))
-  (check-false (string-contains? r ":b") "no named keys either")
-  (check-equal? (length (regexp-match* #rx"[{][}]" r)) 16
+  (check-false (string-contains? (car (regexp-split #rx" : " r)) ":b")
+               "no named keys in the value rows")
+  (check-equal? (length (regexp-match* #rx"[{][}]" (car (regexp-split #rx" : " r)))) 16
                 "16 empty rows — one per solution"))
 
 (test-case "POL.2: solve-one drops anon keys too (same kernel filter)"
