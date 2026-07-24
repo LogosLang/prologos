@@ -103,3 +103,14 @@ defr positive-edge [?from ?to ?weight]
 ;; guard design is captured in the Track 3 note).
 ;;19=> '[{:to "b", :w 3, :from "a"} {:to "d", :w 5, :from "c"}] : _
 solve (positive-edge from to w)
+
+;; ---- POL.2 (B3.0): anon `_` vars are projection-excluded from solution rows --
+;; `_` mints a fresh solver-visible logic var per occurrence (answer COUNT
+;; unchanged — duplicates preserved; dedup = POL.1, separate), but its
+;; `:_anonNNN` gensym key must NOT appear in any row. Kernel-level filter
+;; (reduction.rkt row-query-vars) so runtime rows + B3 static labels agree.
+;;20=> '[{:from "a"} {:from "c"}]  (no :_anon key, no :w key)
+solve (positive-edge from _ _)
+
+;;21=> '[{} {}]  (all-anon -> membership-style empty rows, one per solution)
+solve (positive-edge _ _ _)

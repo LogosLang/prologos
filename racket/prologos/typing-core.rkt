@@ -3635,10 +3635,16 @@
   (define rel (relation-lookup (current-relation-store) (expr-goal-app-name g*)))
   (define col-type (and rel (relation-column-typer rel)))
   (and col-type
-       (let-values ([(_ground free-args) (classify-goal-args (expr-goal-app-args g*))])
+       (let-values ([(_ground raw-free-args) (classify-goal-args (expr-goal-app-args g*))])
+         ;; POL.2 / B3.0: anon `_` vars are projection-excluded from the RUNTIME
+         ;; rows (reduction.rkt row-query-vars), so the STATIC labels must drop
+         ;; them too — the CbC key-agreement invariant. Same kernel predicate.
+         (define free-args
+           (filter (lambda (fa) (not (anon-query-var? (free-arg-name fa)))) raw-free-args))
          ;; A ground query has NO free positions → its "rows" are empty records; a
          ;; typed row exists only when there are solution fields to type, so a ground
-         ;; query stays loose (boolean-ish) rather than typing to List<{}>.
+         ;; (or all-anon, post-POL.2) query stays loose (boolean-ish) rather than
+         ;; typing to List<{}>.
          (and (pair? free-args)
               (make-record
                'keyword

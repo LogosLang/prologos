@@ -55,7 +55,10 @@
          ;; Rel T1 Aspect B (typed solution rows) entry-gate (b): the ONE shared
          ;; goal-app ground/free classifier + champ-key policy, consumed by BOTH
          ;; the runtime row-build (here) and the static solve row-typing (typing-core).
-         classify-goal-args (struct-out free-arg) query-var->champ-key)
+         classify-goal-args (struct-out free-arg) query-var->champ-key
+         ;; POL.2 / B3.0: anon-`_` projection exclusion — kernel-level so the
+         ;; runtime champ rows and B3's static row labels stay key-agreed.
+         anon-query-var? row-query-vars)
 
 ;; N4: collapse a resolved numeric literal (expr-num-lit) to its concrete node.
 ;; Local mirror of zonk's collapse-num-lit (reduction can't require zonk — cycle via
@@ -234,19 +237,37 @@
     [(symbol? v) (expr-fvar v)]  ;; Unresolved logic var
     [else v]))  ;; Already an AST expression
 
+;; POL.2 / B3.0 (Rel T1, 2026-07-24): anonymous `_` query vars — minted as
+;; `(gensym '_anon)` fresh logic vars at elaboration (elaborator.rkt surf-hole
+;; relational arm) — remain solver-visible FREE vars (each `_` still matches
+;; independently; answer COUNT is unchanged, duplicates preserved) but are NOT
+;; projected into solution rows: rows carry only NAMED query-var keys.
+;; The filter lives HERE, in the B0 key-policy kernel, so the runtime champ
+;; rows and the B3 static row labels stay key-agreed by construction.
+;; `_anon` is thereby a RESERVED projection-excluded name prefix.
+(define (anon-query-var? name)
+  (and (symbol? name)
+       (let ([s (symbol->string name)])
+         (and (>= (string-length s) 5)
+              (string=? (substring s 0 5) "_anon")))))
+
+(define (row-query-vars query-vars)
+  (filter (lambda (qv) (not (anon-query-var? qv))) query-vars))
+
 ;; Convert solver answer maps (list of hasheq) back to a Prologos expression.
 ;; Each answer is a hasheq mapping query variable names (symbols) to ground values.
 ;; Returns a Prologos List of Maps: '[(map :x val1 :y val2), ...]
 ;; Solution maps carry ONLY query-var keys (CIU T6 F1b.1 / D25: the bound-args
 ;; echo — ground call-site values re-emitted under '_'-suffixed relation param
 ;; names — is deleted; solutions are pure answers to the queried unknowns).
+;; POL.2: anon `_` vars are additionally excluded (row-query-vars).
 (define (answers->prologos-expr answers query-vars)
   (racket-list->prologos-list
    (for/list ([answer (in-list answers)])
      ;; Build a CHAMP map from the answer bindings
      (define champ-val
        (for/fold ([c champ-empty])
-                 ([qv (in-list query-vars)])
+                 ([qv (in-list (row-query-vars query-vars))])
          (define val (hash-ref answer qv #f))
          (define key (query-var->champ-key qv))
          (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
@@ -600,8 +621,9 @@
          (expr-fvar 'none)
          (let* ([first-answer (car answers)]
                 [champ-val
+                 ;; POL.2: anon `_` keys excluded here too (same kernel filter)
                  (for/fold ([c champ-empty])
-                           ([qv (in-list query-vars)])
+                           ([qv (in-list (row-query-vars query-vars))])
                    (define val (hash-ref first-answer qv #f))
                    (define key (query-var->champ-key qv))
                    (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
@@ -625,10 +647,11 @@
          (expr-fvar 'none)
          (let* ([first-answer (car answers)]
                 [champ-val
+                 ;; POL.2 filter + key-policy consolidation (was inline expr-keyword)
                  (for/fold ([c champ-empty])
-                           ([qv (in-list query-vars)])
+                           ([qv (in-list (row-query-vars query-vars))])
                    (define val (hash-ref first-answer qv #f))
-                   (define key (expr-keyword qv))
+                   (define key (query-var->champ-key qv))
                    (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
                    (champ-insert c (equal-hash-code key) key pval))])
            (expr-champ champ-val)))]
@@ -654,10 +677,11 @@
          (expr-fvar 'none)
          (let* ([first-ans (car answers)]
                 [champ-val
+                 ;; POL.2 filter + key-policy consolidation (was inline expr-keyword)
                  (for/fold ([c champ-empty])
-                           ([qv (in-list query-vars)])
+                           ([qv (in-list (row-query-vars query-vars))])
                    (define val (solver-term->prologos-expr (walk* first-ans qv)))
-                   (define key (expr-keyword qv))
+                   (define key (query-var->champ-key qv))
                    (champ-insert c (equal-hash-code key) key val))])
            (expr-champ champ-val)))]
     [(expr-is-goal? goal*)
@@ -695,10 +719,11 @@
          (expr-fvar 'none)
          (let* ([first-ans (car answers)]
                 [champ-val
+                 ;; POL.2 filter + key-policy consolidation (was inline expr-keyword)
                  (for/fold ([c champ-empty])
-                           ([qv (in-list query-vars)])
+                           ([qv (in-list (row-query-vars query-vars))])
                    (define val (solver-term->prologos-expr (walk* first-ans qv)))
-                   (define key (expr-keyword qv))
+                   (define key (query-var->champ-key qv))
                    (champ-insert c (equal-hash-code key) key val))])
            (expr-champ champ-val)))]
     [else (expr-solve-one goal*)]))
@@ -778,8 +803,9 @@
   ;; 1. Build base CHAMP from query variable bindings
   (define bindings (answer-result-bindings ar))
   (define base-champ
+    ;; POL.2: anon `_` keys excluded from explain rows too (same kernel filter)
     (for/fold ([c champ-empty])
-              ([qv (in-list query-vars)])
+              ([qv (in-list (row-query-vars query-vars))])
       (define val (hash-ref bindings qv #f))
       (define key (query-var->champ-key qv))
       (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
