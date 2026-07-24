@@ -36,6 +36,9 @@
  perf-inc-cell-alloc!
  perf-inc-inert-dependent-skip!
  perf-inc-prop-alloc!
+ ;; Rel T1 Aspect D D.2.b: fact-scan instrumentation
+ perf-inc-solver-row-scan!
+ perf-inc-solver-col-compare!
 
  ;; Lifecycle
  with-perf-counters
@@ -142,7 +145,12 @@
    cell-allocs            ;; cells allocated via net-new-cell
    prop-allocs            ;; PUnify Phase 1: propagators added via net-add-propagator
    ;; BSP-LE Track 2 Phase 2: inert dependent instrumentation
-   inert-dependent-skips)  ;; times filter-dependents skipped an inert assumption-tagged dependent
+   inert-dependent-skips  ;; times filter-dependents skipped an inert assumption-tagged dependent
+   ;; Rel T1 Aspect D D.2.b (2026-07-24): fact-scan instrumentation.
+   ;; These are the axes any fact-representation change moves — without them
+   ;; a representation A/B measures blind (artifact §7 N4).
+   solver-row-scans       ;; fact rows visited by a scan (DFS / tier-1 / install walk / discrimination build)
+   solver-col-compares)   ;; per-column value comparisons during fact matching
   #:mutable #:transparent)
 
 ;; Parameter: #f = disabled (default), perf-counters struct = enabled
@@ -226,13 +234,22 @@
   (let ([pc (current-perf-counters)])
     (when pc (set-perf-counters-prop-allocs! pc (add1 (perf-counters-prop-allocs pc))))))
 
+;; Rel T1 Aspect D D.2.b: fact-scan instrumentation
+(define-syntax-rule (perf-inc-solver-row-scan!)
+  (let ([pc (current-perf-counters)])
+    (when pc (set-perf-counters-solver-row-scans! pc (add1 (perf-counters-solver-row-scans pc))))))
+
+(define-syntax-rule (perf-inc-solver-col-compare!)
+  (let ([pc (current-perf-counters)])
+    (when pc (set-perf-counters-solver-col-compares! pc (add1 (perf-counters-solver-col-compares pc))))))
+
 ;; ============================================================
 ;; Lifecycle
 ;; ============================================================
 
 ;; with-perf-counters: set up fresh counters, run body, return (values result pc)
 (define-syntax-rule (with-perf-counters body ...)
-  (let ([pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)])
+  (let ([pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)])
     (parameterize ([current-perf-counters pc])
       (let ([result (begin body ...)])
         (values result pc)))))
@@ -254,7 +271,12 @@
   (set-perf-counters-resolution-cycles! pc 0)
   (set-perf-counters-prop-firings! pc 0)
   (set-perf-counters-cell-allocs! pc 0)
-  (set-perf-counters-prop-allocs! pc 0))
+  (set-perf-counters-prop-allocs! pc 0)
+  ;; D.2.b: inert-dependent-skips was MISSING from this reset since its
+  ;; introduction (BSP-LE Track 2 Phase 2) — fixed alongside the new counters.
+  (set-perf-counters-inert-dependent-skips! pc 0)
+  (set-perf-counters-solver-row-scans! pc 0)
+  (set-perf-counters-solver-col-compares! pc 0))
 
 ;; Snapshot to immutable hasheq (for JSON serialization)
 (define (perf-counters->hasheq pc)
@@ -273,7 +295,12 @@
           'resolution_cycles (perf-counters-resolution-cycles pc)
           'prop_firings      (perf-counters-prop-firings pc)
           'cell_allocs       (perf-counters-cell-allocs pc)
-          'prop_allocs       (perf-counters-prop-allocs pc)))
+          'prop_allocs       (perf-counters-prop-allocs pc)
+          ;; D.2.b: inert_dependent_skips was MISSING from emission since its
+          ;; introduction (incremented but invisible) — fixed alongside the new counters.
+          'inert_dependent_skips (perf-counters-inert-dependent-skips pc)
+          'solver_row_scans   (perf-counters-solver-row-scans pc)
+          'solver_col_compares (perf-counters-solver-col-compares pc)))
 
 ;; ============================================================
 ;; Subprocess reporting

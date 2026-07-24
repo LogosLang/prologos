@@ -70,8 +70,10 @@
   (check-equal? (hash-ref h 'infer_steps) 1)
   (check-equal? (hash-ref h 'elaborate_steps) 0)
   (check-equal? (hash-ref h 'zonk_steps) 0)
-  ;; All 16 keys present (12 original + 3 Track 7 Phase 0b + 1 PUnify Phase 1)
-  (check-equal? (length (hash-keys h)) 16))
+  ;; All 19 keys present (12 original + 3 Track 7 Phase 0b + 1 PUnify Phase 1
+  ;; + inert_dependent_skips [emission fixed in Rel T1 D.2.b — was incremented
+  ;; but never emitted] + 2 fact-scan counters [D.2.b])
+  (check-equal? (length (hash-keys h)) 19))
 
 ;; ============================================================
 ;; with-perf-counters scoping
@@ -124,7 +126,7 @@
   (define t1-off (current-inexact-monotonic-milliseconds))
   (define off-ms (- t1-off t0-off))
   ;; Enabled
-  (define pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
+  (define pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
   (define t0-on (current-inexact-monotonic-milliseconds))
   (parameterize ([current-perf-counters pc])
     (for ([_ (in-range 1000000)])
@@ -135,3 +137,34 @@
   ;; In isolation, typical ratio is ~1.2-1.5x (parameter check + struct mutation).
   (void)
   (check-equal? (perf-counters-unify-steps pc) 1000000))
+
+;; ============================================================
+;; Rel T1 Aspect D D.2.b: fact-scan counters + emission/reset fixes
+;; ============================================================
+
+(test-case "D.2.b: solver-row-scan / solver-col-compare increment and emit"
+  (define pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
+  (parameterize ([current-perf-counters pc])
+    (perf-inc-solver-row-scan!)
+    (perf-inc-solver-row-scan!)
+    (perf-inc-solver-col-compare!)
+    (perf-inc-solver-col-compare!)
+    (perf-inc-solver-col-compare!))
+  (check-equal? (perf-counters-solver-row-scans pc) 2)
+  (check-equal? (perf-counters-solver-col-compares pc) 3)
+  (define h (perf-counters->hasheq pc))
+  (check-equal? (hash-ref h 'solver_row_scans) 2)
+  (check-equal? (hash-ref h 'solver_col_compares) 3))
+
+(test-case "D.2.b regression: inert_dependent_skips is emitted and reset"
+  ;; Before D.2.b this field was incremented but MISSING from both
+  ;; perf-counters->hasheq (invisible) and perf-counters-reset! (leaked
+  ;; across resets).
+  (define pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
+  (parameterize ([current-perf-counters pc])
+    (perf-inc-inert-dependent-skip!))
+  (check-equal? (hash-ref (perf-counters->hasheq pc) 'inert_dependent_skips) 1)
+  (perf-counters-reset! pc)
+  (check-equal? (perf-counters-inert-dependent-skips pc) 0)
+  (check-equal? (perf-counters-solver-row-scans pc) 0)
+  (check-equal? (perf-counters-solver-col-compares pc) 0))

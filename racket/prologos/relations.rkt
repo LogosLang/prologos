@@ -628,6 +628,7 @@
     (for/fold ([dm (hasheq)])
               ([fr (in-list facts)]
                [fact-idx (in-naturals)])
+      (perf-inc-solver-row-scan!)
       (for/fold ([dm dm])
                 ([val (in-list (fact-row-terms fr))]
                  [pos (in-naturals)])
@@ -1410,6 +1411,7 @@
      (define fact-results
        (append-map
         (lambda (fr)
+          (perf-inc-solver-row-scan!)
           (define terms (fact-row-terms fr))
           ;; Unify resolved args with fact terms
           (define result
@@ -1418,6 +1420,7 @@
                 [(and (null? as) (null? ts)) s]
                 [(or (null? as) (null? ts)) #f]
                 [else
+                 (perf-inc-solver-col-compare!)
                  (define s* (unify-terms (car as) (car ts) s))
                  (if s* (loop (cdr as) (cdr ts) s*) #f)])))
           (if result (list result) '()))
@@ -1749,6 +1752,7 @@
            [(null? frs) (reverse acc)]
            [else
             (define fr (car frs))
+            (perf-inc-solver-row-scan!)
             (define terms (fact-row-terms fr))
             (define result
               (let inner ([as resolved-args] [ts terms] [s subst])
@@ -1756,6 +1760,7 @@
                   [(and (null? as) (null? ts)) s]
                   [(or (null? as) (null? ts)) #f]
                   [else
+                   (perf-inc-solver-col-compare!)
                    (define s* (unify-terms (car as) (car ts) s))
                    (if s* (inner (cdr as) (cdr ts) s*) #f)])))
             (if result
@@ -2473,6 +2478,7 @@
          (for/list ([fr (in-list facts)]
                     [fact-idx (in-naturals)]
                     #:when (set-member? viable-indices fact-idx))
+           (perf-inc-solver-row-scan!)
            fr))
 
        (define n-facts
@@ -2891,6 +2897,7 @@
                 (and (pair? facts) (null? clauses)
                      (let ([raw-results
                             (for/list ([fr (in-list facts)])
+                              (perf-inc-solver-row-scan!)
                               (define row (fact-row-terms fr))
                               (if (= (length row) (length effective-args))
                                   (let ([bindings
@@ -2898,6 +2905,7 @@
                                                    ([ea (in-list effective-args)]
                                                     [val (in-list row)]
                                                     #:break (not acc))
+                                           (perf-inc-solver-col-compare!)
                                            (define nval (normalize-solver-value val))
                                            (define nea (normalize-solver-value ea))
                                            (cond
