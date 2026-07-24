@@ -1375,7 +1375,7 @@
                   (eq? 'pending (car (global-env-lookup-status r))))
                 prog]  ;; still waiting
                [else
-                (define result (process-command (general-body-placeholder-surf ph)))
+                (define result (process-command/solve-guard (general-body-placeholder-surf ph)))
                 (cond
                   [(general-body-placeholder? result)
                    ;; re-deferred (self-pending) — drop the duplicate; no progress
@@ -1399,12 +1399,22 @@
 ;; Demand-retry shim for the process-file loop: a residuation-demand from the
 ;; eval arm triggers the sweep fixpoint, then ONE retry; still demanding →
 ;; the carried status-quo unbound error.
+;; POL.4 (2026-07-24): user-facing SOLVER errors (arity mismatch; unknown
+;; relation) raise the DISTINGUISHED exn:prologos-solve — converted here to a
+;; per-command prologos-error so the file/REPL continues past the offending
+;; command. Deliberately NOT a blanket exn handler: any other raise still
+;; crashes loudly (a blanket boundary would mask real compiler defects).
+(define (process-command/solve-guard surf)
+  (with-handlers ([exn:prologos-solve?
+                   (lambda (e) (prologos-error srcloc-unknown (exn-message e)))])
+    (process-command surf)))
+
 (define (process-command/demand surf)
-  (define r (process-command surf))
+  (define r (process-command/solve-guard surf))
   (if (residuation-demand? r)
       (begin
         (run-residuation-fixpoint!)
-        (let ([r2 (process-command surf)])
+        (let ([r2 (process-command/solve-guard surf)])
           (if (residuation-demand? r2) (residuation-demand-error r2) r2)))
       r))
 
@@ -2167,7 +2177,7 @@
         (for/list ([surf (in-list surfs)])
           (if (prologos-error? surf)
               surf
-              (process-command surf))))))
+              (process-command/solve-guard surf))))))
   ;; Emit formatted error diagnostics to stderr when enabled (test runner integration)
   (when (current-emit-error-diagnostics)
     (for ([r (in-list results)])
@@ -2386,7 +2396,7 @@
         (for/list ([surf (in-list surfs)])
           (if (prologos-error? surf)
               surf
-              (process-command surf))))))
+              (process-command/solve-guard surf))))))
   ;; Emit formatted error diagnostics to stderr when enabled (test runner integration)
   (when (current-emit-error-diagnostics)
     (for ([r (in-list results)])
@@ -2808,7 +2818,7 @@
        (define surfs (map parse-datum expanded-stxs))
        (for ([surf (in-list surfs)])
          (unless (prologos-error? surf)
-           (define result (process-command surf))
+           (define result (process-command/solve-guard surf))
            (when (prologos-error? result)
              (error 'imports "Error loading module ~a: ~a"
                     ns-sym (prologos-error-message result)))))

@@ -47,6 +47,9 @@
  (struct-out goal-desc)
  ;; Relation store (parameter + operations)
  current-relation-store
+ ;; POL.4: the distinguished user-facing solver exception (caught at the
+ ;; command boundary, driver.rkt)
+ exn:prologos-solve?
  make-relation-store
  relation-register
  relation-lookup
@@ -1442,7 +1445,10 @@
   (perf-inc-solver-backtrack!)
   (define rel (relation-lookup store goal-name))
   (unless rel
-    (error 'solve "Unknown relation: ~a" goal-name))
+    (raise-solve-error 'solve "Unknown relation: ~a" goal-name))
+  ;; POL.4: rule-BODY goals arity-check here (bodies always spell their args —
+  ;; the '()-enumerate convention never applies below the public entries).
+  (check-goal-arity! 'solve rel (length goal-args))
   ;; Resolve goal-args through current substitution
   (define resolved-args
     (for/list ([a (in-list goal-args)])
@@ -1559,10 +1565,45 @@
 ;; query-vars: (listof symbol) — names of unbound variables to project
 ;;
 ;; Returns: (listof hasheq) — each hasheq maps query var names to values
+;; POL.4 (owner-ruled 2026-07-24): arity mismatch is a HARD ERROR with the
+;; Prolog-style diagnostic. The engine was arity-LENIENT — a wrong-arity call
+;; silently returned nil (under-application) or leaked unbound-echo rows
+;; (over-application); the D.2.c corpus generator hit exactly this trap.
+;; Called at the public engine entries AFTER the internal `goal-args = '()`
+;; enumerate convention resolves (a 0-arg surface call enumerates via param
+;; names — preserved), and at solve-app-goal (covers rule-BODY goals on the
+;; DFS path). Multi-arity relations accept any variant's arity; the error
+;; lists every available arity, SWI-style.
+;;
+;; exn:prologos-solve — the DISTINGUISHED exception for USER-FACING solver
+;; errors (arity mismatch; unknown relation). The command boundary
+;; (driver.rkt process-command/demand) catches EXACTLY this type and converts
+;; it to a per-command prologos-error (the file/REPL continues), while every
+;; other raise still surfaces as a crash — a blanket handler there would mask
+;; real defects. Subtype of exn:fail so direct-API tests (check-exn) hold.
+(struct exn:prologos-solve exn:fail ())
+(define (raise-solve-error who fmt . args)
+  (raise (exn:prologos-solve (format "~a: ~a" who (apply format fmt args))
+                             (current-continuation-marks))))
+
+(define (check-goal-arity! who rel n-args)
+  (define arities
+    (remove-duplicates
+     (for/list ([v (in-list (relation-info-variants rel))])
+       (length (variant-info-params v)))))
+  (unless (memv n-args arities)
+    (define name (relation-info-name rel))
+    (define available
+      (for/fold ([s #f]) ([a (in-list (sort arities <))])
+        (if s (format "~a, ~a/~a" s name a) (format "~a/~a" name a))))
+    (raise-solve-error who
+      "Unknown procedure: ~a/~a — however, there are definitions for: ~a"
+      name n-args available)))
+
 (define (solve-goal config store goal-name goal-args query-vars)
   (define rel (relation-lookup store goal-name))
   (unless rel
-    (error 'solve "Unknown relation: ~a" goal-name))
+    (raise-solve-error 'solve "Unknown relation: ~a" goal-name))
 
   ;; Reconstruct proper goal-args for the DFS solver.
   ;; If goal-args is empty, the caller wants all params as query variables.
@@ -1578,6 +1619,7 @@
           (map param-info-name params))
         ;; Mix of ground and query args — already correct from reduction layer
         goal-args))
+  (check-goal-arity! 'solve rel (length effective-args))  ;; POL.4
 
   ;; Use DFS solver for all queries — handles both facts and clauses
   ;; with proper unification of ground args.
@@ -1608,7 +1650,7 @@
 
   (define rel (relation-lookup store goal-name))
   (unless rel
-    (error 'explain "Unknown relation: ~a" goal-name))
+    (raise-solve-error 'explain "Unknown relation: ~a" goal-name))
 
   ;; Same effective-args logic as solve-goal
   (define effective-args
@@ -1618,6 +1660,7 @@
                           '())])
           (map param-info-name params))
         goal-args))
+  (check-goal-arity! 'explain rel (length effective-args))  ;; POL.4
 
   ;; Run explain-app-goal which returns (listof (cons subst provenance-data))
   (define results
@@ -1757,7 +1800,7 @@
   (perf-inc-solver-backtrack!)
   (define rel (relation-lookup store goal-name))
   (unless rel
-    (error 'explain "Unknown relation: ~a" goal-name))
+    (raise-solve-error 'explain "Unknown relation: ~a" goal-name))
 
   ;; Resolve goal-args through current substitution
   (define resolved-args
@@ -3000,6 +3043,8 @@
                           '())])
           (map param-info-name params))
         goal-args))
+  (let ([rel (relation-lookup store goal-name)])  ;; POL.4
+    (when rel (check-goal-arity! 'solve rel (length effective-args))))
 
   ;; Tier 1 check: also at this level for direct callers (benchmarks, tests).
   ;; Universal dispatch (stratified-eval.rkt) checks first; this is the fallback.

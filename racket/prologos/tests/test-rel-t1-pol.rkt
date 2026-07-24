@@ -13,6 +13,7 @@
 (require rackunit
          racket/string
          "test-support.rkt"
+         (only-in "../errors.rkt" prologos-error? prologos-error-message)
          (only-in "../pnet-serialize.rkt"
                   deep-struct->serializable deep-serializable->struct)
          (only-in "../champ.rkt" champ-empty champ-insert champ-entries)
@@ -133,3 +134,43 @@
   (check-equal? (length entries) 2)
   (check-equal? (cdr (car entries)) (expr-int 1))
   (check-equal? (cdr (cadr entries)) (expr-int 2)))
+
+;; ── POL.4: arity mismatch is a HARD ERROR (owner-ruled: Prolog-style) ────────
+;; Under- and over-application both errored silently before (nil / unbound-echo
+;; rows — the D.2.c arity-lenient trap). Now: exn:prologos-solve raised at the
+;; engine entries, converted at the command boundary to a per-command ERROR so
+;; the file/REPL continues. The internal `goal-args='()` enumerate convention
+;; (0-arg surface call) is preserved.
+
+;; An arity error surfaces as a per-command prologos-error STRUCT — read its
+;; message (the run-ns-ws-last raw result is not a string for error results).
+(define (result-msg r) (if (prologos-error? r) (prologos-error-message r) r))
+
+(test-case "POL.4: under-application errors with the available-arities diagnostic"
+  (define m (result-msg (run-ns-ws-last (string-append FIXTURE "solve (truths b)"))))
+  (check-true (string-contains? m "Unknown procedure: truths/1") m)
+  (check-true (string-contains? m "definitions for: truths/4") m))
+
+(test-case "POL.4: over-application errors likewise"
+  (define m (result-msg (run-ns-ws-last (string-append FIXTURE "solve (truths b1 b2 b3 b4 b5)"))))
+  (check-true (string-contains? m "Unknown procedure: truths/5") m))
+
+(test-case "POL.4: correct arity + 0-arg enumerate both still work"
+  (define ok (run-ns-ws-last (string-append FIXTURE "solve (bool x)")))
+  (check-true (string-contains? ok ":x") "correct arity solves")
+  (define enum (run-ns-ws-last (string-append FIXTURE "solve (bool)")))
+  (check-false (string-contains? enum "Unknown procedure")
+               "0-arg surface call keeps the enumerate convention"))
+
+(test-case "POL.4: rule-BODY wrong-arity goals error too (solve-app-goal gate)"
+  (define m (result-msg
+             (run-ns-ws-last
+              (string-append FIXTURE
+                             "defr badrule [?x]\n  &> (truths x)\n"
+                             "solve (badrule v)"))))
+  (check-true (string-contains? m "Unknown procedure: truths/1") m))
+
+(test-case "POL.4: unknown relation now presents as a per-command ERROR (file continues)"
+  (define r (run-ns-ws-last (string-append FIXTURE "solve (nosuch x)\nsolve (bool y)")))
+  ;; last result = the FOLLOWING command — proof the run continued past the error
+  (check-true (string-contains? r ":y") "the command after the error still ran"))
