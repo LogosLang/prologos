@@ -128,3 +128,12 @@ solve (reaches "x" c)
 ;;24=> anonymous rel through the SAME walker (D-B3.3): List {:v String}
 solve (rel [?v]
        &> (edge v _))
+
+;; ---- POL.5: def := solve(…) binds without a spurious multiplicity violation --
+;; (the qtt goal-head inferQ poison, fixed 2026-07-24). The MOTIVATING
+;; composition: bind a rule-relation solve, project a typed field.
+;;25=> reach-one : {:a String :c String} defined.
+def reach-one := solve-one (twohop a c)
+
+;;26=> "z" : String  (def-bound rule row projects a TYPED field)
+reach-one.c

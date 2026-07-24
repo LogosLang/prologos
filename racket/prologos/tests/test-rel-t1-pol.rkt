@@ -57,6 +57,39 @@
   (check-true (string? r))
   (check-false (string-contains? r "_anon")))
 
+;; ── POL.5: def := solve(…) — the spurious multiplicity violation ─────────────
+;; The qtt expr-goal-app arm propagated the goal HEAD's inferQ failure (the
+;; head is a raw relational symbol — no inferQ arm) as tu-error, poisoning
+;; every def-bound solve into checkQ-top's generic "Multiplicity violation".
+;; Fixed 2026-07-24: the head contributes zero usage when un-inferQ-able
+;; (mirroring typing-core's discard). Owner repro: def := solve (movies …).
+
+(define POL5-FIXTURE
+  (string-append
+   "ns pol5test\n"
+   "defr edge [?a ?b]\n"
+   "  || 1 2\n"
+   "     2 3\n"
+   "defr reach [?x ?z]\n"
+   "  &> (edge x z)\n"
+   "  &> (edge x y) (reach y z)\n"))
+
+(test-case "POL.5: def binds a solve over a FACTS relation (no multiplicity violation)"
+  (define r (run-ns-ws-last (string-append POL5-FIXTURE "def frows := solve (edge a b)\nfrows")))
+  (check-true (string? r))
+  (check-false (string-contains? r "Multiplicity") r)
+  (check-true (string-contains? r ":a") "bound value holds the rows"))
+
+(test-case "POL.5: def binds a solve over a RULE relation; solve-one row projects"
+  (define r (run-ns-ws-last
+             (string-append POL5-FIXTURE
+                            "def one := solve-one (reach x z)\n"
+                            "one.z")))
+  (check-true (string? r))
+  (check-false (string-contains? r "Multiplicity") r)
+  (check-true (string-contains? r ": Int")
+              "def-bound solve-one row projects a typed field — the motivating composition"))
+
 (test-case "POL.2: STATIC row labels drop anon keys too (CbC key agreement)"
   ;; goal-app-row (typing-core) filters via the SAME kernel predicate, so on a
   ;; facts-only relation (where static rows exist since B2) the static type and

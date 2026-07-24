@@ -2134,12 +2134,18 @@
                    (match (inferQ ctx t) [(tu _ u) u] [_ (zero-usage n)])))
      (tu (expr-hole) (foldl add-usage (zero-usage n) tus))]
     [(expr-goal-app nm as)
+     ;; POL.5 (Rel T1, 2026-07-24): the goal HEAD is a RELATIONAL identifier —
+     ;; a raw symbol resolved via the relation store, not a functional binding —
+     ;; so its inferQ hits the [_ (tu-error)] fallback. The typing-core twin arm
+     ;; DISCARDS the name's infer entirely; propagating the failure here poisoned
+     ;; every `def x := solve (…)` into a spurious "Multiplicity violation"
+     ;; (checkQ-top's generic reporter — same bug class as the F1a.2 `def m0 := {}`
+     ;; fix). The head contributes ZERO usage when un-inferQ-able; args normally.
      (let ([rn (inferQ ctx nm)])
+       (define u0 (match rn [(tu _ u) u] [_ (zero-usage n)]))
        (define nus (for/list ([a (in-list as)])
                      (match (inferQ ctx a) [(tu _ u) u] [_ (zero-usage n)])))
-       (match rn
-         [(tu _ u0) (tu (expr-goal-type) (foldl add-usage u0 nus))]
-         [_ (tu-error)]))]
+       (tu (expr-goal-type) (foldl add-usage u0 nus)))]
     [(expr-unify-goal l r)
      (let ([r1 (inferQ ctx l)] [r2 (inferQ ctx r)])
        (match* (r1 r2)
