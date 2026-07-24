@@ -67,6 +67,7 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | **C.b.2** | Reader + parser — **FUNCTIONAL**, both readers: route fused `x:Int` to the pre-existing `binder-info.type` typed-binder path (no type-pred); two arms in `parse-binder` (WS `(x :Int)` 2-elem + sexp glued split); chained reject; `:0/:1/:w/:m` mult excluded | ✅ | `c6b8e81f`; both readers funnel through `parse-binder` (tree-parser falls back — probed); fused types identically to spaced (`Int -> Int`); +4 tests; suite 8963/468/0 (§7.10) |
 | **C.c** | **REDESIGNED (§7.4)**: schema ⟹ facts-only BLOCKING gate (driver sibling `check-relation-schema-facts-only`). Rejects `defr R : S &> …` at registration — the clause-conformance check was DROPPED (incomplete; the hole was a schema-on-rule category error) | ✅ | `357035d5`; complete+sound (reject ill-formed input, no typer guard); pre-check found no active schema'd-rule; +3 tests; suite 8966/468/0 (§7.11) |
 | **C.d** | ~~C.2 activation — `type-pred` → `relation-column-typer` upper-bound~~ → **DEFERRED to UCS** | ⛔→UCS | `?x:Int` on a rule var is a GUARD `Int(x)` (runtime/UCS altitude), not a static contract → the static activation is UCS's domain-constraint work. Handoff note: [`2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md`](2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md) (UCS Track 6). C.b already STORES the type-preds — nothing lost. **Aspect C CLOSES at C.a+C.b+C.c.** |
+| **B3** | **Typed solution rows for RULE-bearing relations (codata)** — the B2-deferred half, elevated by the owner (2026-07-24): *"one of the largest motivating usability aspects of all of this work"*. Today `relation-column-typer`'s rule-bearing branch yields `#f` → rule solves type as bare `_` (e.g. `solve (path x z) : _` vs facts' `List {:k Int …}`), so rule solutions cannot compose with the F1 records/row machinery (`.field`, validate, row polymorphism). Realization (static body-goal type-flow vs runtime at-the-end observation vs hybrid; recursion; unions; open-vs-closed rows) = **co-design pending** (grounding in flight) | ⬜ | Owner-priority within the POL phase; supersedes B2's "runtime at-the-end / C.1" placeholder |
 | **D.0/1** | Efficient fact representation + query-opt — Stage 0/1 research + design artifact | ✅ | **Artifact landed** `0b428424`: [`2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md`](../research/2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md) — frame F1–F7 · measured cost structure · lattice verdicts · staging ladder · **Rel T2 "Fact Store" charter seed** (§11) + §14 D.2 addendum. **Q_A–Q_D parked** for the Rel T2 charter (owner, 2026-07-24) |
 | **D.2** | Cheap-wins slice (artifact §7 NOW: N1–N6) | ✅ | D.2.a `296ac2d5` (dead tree −135 LoC + comment truth) · D.2.b `984601b9` (row-scan/col-compare counters + 2 latent fixes) · D.2.c `7ba24b2b` (fact-scale bench + corpus generator + 260-row standing E2E; **findings: Tier-2 unreachable for 1-variant fact tables; NO DFS↔Tier-2 crossover ≤1000 — Tier-2 enum ~480× slower @1000**) · D.2.d `feedc6ff` (registration-time INVERTED index on `variant-info.discrim`; Tier-2 point rows N+1→1, 0.78→0.17ms @1000). Suite 469/0 throughout; artifact §14 |
 | **POL** | Polish — **ROSTER EXPANDED to POL.1–.9** (§8, 2026-07-24): owner hand-testing list from `standup-2026-07-19.org` § "Polish points for REL" folded in. Correctness: dedup (.1) · `_anon` keys (.2) · declaration-order keys (.3) · **arity-mismatch errors** (.4) · **def-on-solve multiplicity** (.5) · **defn fused-binder last mile** (.6). Syntax: single-line `\|` facts (.7) · implicit clause groups (.8) · implicit solve (.9, ⚠ design question — co-design first) | ⬜ | §8 sequencing note; POL.9 needs owner co-design before impl |
@@ -1129,12 +1130,21 @@ three-level WS validation + WS-Impact obligations (workflow.md).
   and error-message quality under a miss all need settling. Co-design with
   the owner first; then the WS-Impact analysis.
 
+### B3 — rule-relation codata rows (tracked as its own aspect row)
+
+The owner (2026-07-24) elevated the B2-deferred rule-bearing typing to an
+aspect of its own — see the **B3** tracker row. It is the largest usability
+item in this phase: rule solutions currently type as `_` and cannot compose
+with the F1 records/row-polymorphism machinery. Sequenced ahead of the POL
+items below (owner: "one of the most important facets").
+
 ### Sequencing note (proposed, owner confirms)
 
-Correctness cluster first (POL.2 → POL.4 → POL.5/POL.6 diagnosis-led), then
-POL.1 + POL.3 (both touch row assembly — share a slice), then syntax cluster
-POL.7 → POL.8, with POL.9 opened as a design conversation in parallel.
-Per-phase tests per workflow.md; acceptance file grows a POL section.
+**B3 first** (grounding → co-design → implement), then the correctness
+cluster (POL.2 → POL.4 → POL.5/POL.6 diagnosis-led), then POL.1 + POL.3
+(both touch row assembly — share a slice), then syntax cluster POL.7 →
+POL.8, with POL.9 opened as a design conversation in parallel. Per-phase
+tests per workflow.md; acceptance file grows a POL section.
 
 ---
 
