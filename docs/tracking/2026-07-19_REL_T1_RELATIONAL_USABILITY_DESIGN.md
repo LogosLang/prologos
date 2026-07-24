@@ -1154,18 +1154,24 @@ three-level WS validation + WS-Impact obligations (workflow.md).
   unbound-echo rows `'[{:v1 "golf-cart", :v2 v2} …]`, `solve (truths b1 b2 b3
   b4 b5)` → `nil`. Target: a Prolog-style error naming the available arities
   (`Unknown procedure truths/1 — however, there are definitions for:
-  truths/4`). ⚠ Watchouts: (a) multi-arity relations are first-class
+  truths/4`). **RULED (owner, Q_1, 2026-07-24): HARD ERROR with the helpful
+  Prolog-style diagnostic** (not the A.3 warn form — a wrong-arity call is a
+  program defect, not a semantic edge). ⚠ Watchouts: (a) multi-arity relations are first-class
   (`relation-info-arity = #f`); (b) the INTERNAL `goal-args = '()` convention
   means "enumerate via param names" (bench/tests + tier-1 rely on it) — the
   arity gate belongs at the SURFACE goal sites, not inside `solve-goal`;
   (c) this is the D.2.c "arity-lenient nil trap" (artifact §14 finding 3) —
   the corpus-generator test is the standing regression gate for the fix.
-- **POL.5 — `def` on a `solve` result: multiplicity violation** *(owner
-  repro)* — `def needs-rewind := solve (movies false title year)` →
-  `ERROR: Multiplicity violation`. Diagnosis needed: likely the QTT reading
-  of the solve form / row value under `def`'s binding multiplicity (Aspect B
-  registered the 5 solve structs `#f`-dispatch + imperative-compute; the qtt
-  arm may be the unwired half). Probe first; fix at the checker seam.
+- **POL.5 — `def` on a `solve` result: multiplicity violation** — **✅ FIXED
+  `485f4e7d` (2026-07-24)**. Root cause: qtt's `expr-goal-app` arm inferQ'd
+  the goal HEAD (a raw relational symbol, no inferQ arm → tu-error fallback)
+  and PROPAGATED the failure — typing-core's twin discards it — poisoning
+  every def-bound solve into the generic "Multiplicity violation" (F1a.2 bug
+  class). Head now contributes zero usage when un-inferQ-able. The motivating
+  composition works: `def one := solve-one (reach x z)` → `one.z : Int`;
+  acceptance ;;25-26. Adjacent gap (NOT this defect): `[head rows].field`
+  "Could not infer type" = the polymorphic-head-over-record-lists inference
+  limit already named as CIU T6 Path Selection's prerequisite.
 - **POL.6 — Fused `x:Int` in `defn` params: the last mile** *(owner repro;
   adjacent to Rel but C-arc-owned)* —
   `defn my-square [x:Int] : Int  * x x` → "cannot infer the type of an
@@ -1173,6 +1179,15 @@ three-level WS validation + WS-Impact obligations (workflow.md).
   `parse-binder` (fn-binders, both readers); the `defn` param-list path
   evidently does not route through it. Wire `defn` (and multi-arity clause
   heads) to the same fused-binder arm.
+
+- **POL.10 — `def` binds the AST, not the reduced value** *(owner, 2026-07-24)* —
+  a `def` stores the zonked BODY AST (global-env-add pre-evaluation; the B3
+  grounding verified the pattern for defr and inferred it for def), so uses
+  re-reduce and the binding never holds the value. Owner: binding the reduced
+  form is "desirable and more efficient", and likely implicated in def-typing
+  issues (POL.5 shares the same def-arm seam). ⚠ Semantics-bearing (eager vs
+  lazy evaluation timing for effectful/diverging bodies) — mini-audit + a
+  short design note before flipping; sequence with/after POL.5's diagnosis.
 
 ### Syntax / ergonomics cluster (WS reader/parser features)
 
