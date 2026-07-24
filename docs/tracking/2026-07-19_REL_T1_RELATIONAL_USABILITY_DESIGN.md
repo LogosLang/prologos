@@ -1154,9 +1154,14 @@ three-level WS validation + WS-Impact obligations (workflow.md).
   unbound-echo rows `'[{:v1 "golf-cart", :v2 v2} …]`, `solve (truths b1 b2 b3
   b4 b5)` → `nil`. Target: a Prolog-style error naming the available arities
   (`Unknown procedure truths/1 — however, there are definitions for:
-  truths/4`). **RULED (owner, Q_1, 2026-07-24): HARD ERROR with the helpful
-  Prolog-style diagnostic** (not the A.3 warn form — a wrong-arity call is a
-  program defect, not a semantic edge). ⚠ Watchouts: (a) multi-arity relations are first-class
+  truths/4`). **✅ FIXED `5307be93` (2026-07-24, owner-ruled Q_1)**: HARD
+  ERROR via `check-goal-arity!` at all four engine sites (three public
+  entries post-'()-convention + solve-app-goal for rule-body goals);
+  multi-arity accepts any variant arity; SWI-style diagnostic. Presentation:
+  user-facing solver errors (arity + Unknown-relation, which previously
+  CRASHED the run) raise the distinguished `exn:prologos-solve`, converted
+  at the command boundary to a per-command error — the file/REPL continues.
+  Historical watchouts (all honored): (a) multi-arity relations are first-class
   (`relation-info-arity = #f`); (b) the INTERNAL `goal-args = '()` convention
   means "enumerate via param names" (bench/tests + tier-1 rely on it) — the
   arity gate belongs at the SURFACE goal sites, not inside `solve-goal`;
