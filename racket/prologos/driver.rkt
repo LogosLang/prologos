@@ -1718,19 +1718,25 @@
                    ;; tabulation FORCES; a failing :check errors at commit.
                    [(seal-forcing-error zonked-body def-srcloc) => values]
                    [else
-                    ;; POL.10 STATUS (2026-07-24): `def` binds the AST, NOT the
-                    ;; reduced value — an eager-nf flip was attempted and
-                    ;; REVERTED after three verified semantic collisions:
-                    ;; (1) nf at MODULE-LOAD context corrupted the prelude (the
-                    ;; two-context boundary, pipeline.md); (2) lambda-valued
-                    ;; defs (`def main := (fn …)`) discharge CAPABILITIES under
-                    ;; the binder at def time (test-io-main-01); (3) schema-
-                    ;; annotated literal defs break downstream consumers
-                    ;; (test-implicit-map-02). Eager binding needs a VALUE-CLASS
-                    ;; scoped design (which whnf-heads bind eagerly) — see
-                    ;; design §8 POL.10. The pnet champ-sentinel hardening from
-                    ;; the attempt is kept (pnet-serialize.rkt).
-                    (define bound-value zonked-body)
+                    ;; POL.10 (owner-ruled 2026-07-24, SECOND pass): `def` binds
+                    ;; the WHNF-REDUCED value — SNAPSHOT semantics. Evaluation
+                    ;; runs ONCE at definition; later mentions read the value (a
+                    ;; def'd solve no longer re-runs the solver per mention —
+                    ;; solver_row_scans flat vs 4+4N under AST-binding).
+                    ;; WHNF, NEVER nf: expr-lam is whnf-trivial, so lambda-
+                    ;; valued defs store unchanged (binder-headed stays lazy;
+                    ;; capability discharge under the binder is impossible
+                    ;; here), while function-PRODUCING bodies ([make-adder 5])
+                    ;; construct their closure once. The first-pass collisions
+                    ;; were ALL nf-under-binder casualties; at whnf every one
+                    ;; dissolves — including module loading (verified on fresh
+                    ;; caches; no loading-set guard needed). Effects cannot
+                    ;; reach a def body at all: effects are capability-gated
+                    ;; and capabilities arrive only as fn params, i.e. under a
+                    ;; binder (E2001 otherwise) — the structural effect gate.
+                    ;; Ruling trail: design §8 POL.10 (F1 = snapshot; recipe
+                    ;; invalidation = Rel T2 IVM territory).
+                    (define bound-value (time-phase! reduce (whnf zonked-body)))
                     (global-env-add name zonked-type bound-value)
                     ;; LSP Tier 2.3: record definition location
                     (register-definition-location! name def-srcloc)
@@ -1933,9 +1939,9 @@
                          [(seal-forcing-error zonked-body def-srcloc)
                           => (lambda (err) (remove-failed-definition! name) err)]
                          [else
-                          ;; POL.10: AST binding retained — eager flip
-                          ;; reverted; see the inferred-path twin's note.
-                          (define bound-value zonked-body)
+                          ;; POL.10: bind the WHNF-reduced value (snapshot) —
+                          ;; see the inferred-path twin for the full note.
+                          (define bound-value (time-phase! reduce (whnf zonked-body)))
                           (global-env-add name zonked-type bound-value)
                           ;; LSP Tier 2.3: record definition location
                           (register-definition-location! name def-srcloc)

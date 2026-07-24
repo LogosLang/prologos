@@ -3494,7 +3494,10 @@
      => values]
     [else
      (define result (nf-whnf (whnf e)))
-     (when cache
+     ;; POL.10 hardening: match whnf's Issue-#70 guard — never cache a result
+     ;; that IS an unsolved meta (its pre-solve identity would go stale after
+     ;; solve-meta!). whnf's cache had this guard; nf's lacked it.
+     (when (and cache (not (expr-meta? result)))
        (hash-set! cache e result))
      result]))
 

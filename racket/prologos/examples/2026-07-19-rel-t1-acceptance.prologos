@@ -137,3 +137,13 @@ def reach-one := solve-one (twohop a c)
 
 ;;26=> "z" : String  (def-bound rule row projects a TYPED field)
 reach-one.c
+
+;; ---- POL.10: def binds the WHNF-reduced value (SNAPSHOT semantics) ----------
+;; Owner-ruled 2026-07-24 (second pass): evaluation runs ONCE at definition;
+;; mentions read the value (a def'd solve no longer re-runs the solver).
+;; Lambda-valued defs are whnf-trivial — binder-headed stays lazy by identity.
+;;27=> twohops : {…} rows bound once
+def twohops := solve (twohop a c)
+
+;;28=> same rows on every mention (and zero additional solver work)
+twohops

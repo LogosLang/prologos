@@ -14,6 +14,8 @@
          racket/string
          "test-support.rkt"
          (only-in "../errors.rkt" prologos-error? prologos-error-message)
+         (only-in "../performance-counters.rkt"
+                  with-perf-counters perf-counters-solver-row-scans)
          (only-in "../pnet-serialize.rkt"
                   deep-struct->serializable deep-serializable->struct)
          (only-in "../champ.rkt" champ-empty champ-insert champ-entries)
@@ -110,11 +112,44 @@
   (check-true (string-contains? r ":s String") "static row keeps the named field")
   (check-false (string-contains? r "_anon") "no anon field in the static type either"))
 
-;; ── POL.10 (attempt REVERTED 2026-07-24 — see design §8): def still binds the
-;; AST. The eager-nf flip hit three semantic collisions (module-load context;
-;; lambda-valued defs discharging capabilities under the binder; schema-
-;; annotated literals) and awaits a value-class-scoped design. The pnet
-;; champ-sentinel hardening from the attempt is KEPT and gated below.
+;; ── POL.10 (LANDED 2026-07-24, second pass — owner-ruled SNAPSHOT semantics):
+;; `def` binds the WHNF-reduced value. Evaluation runs once at definition;
+;; mentions read the value. WHNF (never nf): expr-lam is whnf-trivial, so
+;; lambda-valued defs store unchanged — the first-pass collisions were all
+;; nf-under-binder casualties and dissolve at whnf. Effects cannot reach a
+;; def body (capability-gated, params-only ⇒ always under a binder).
+
+(test-case "POL.10: a def-bound solve runs the solver ONCE — mentions add no scans"
+  (define (scans-of program)
+    (define-values (_ pc) (with-perf-counters (run-ns-ws-last program)))
+    (perf-counters-solver-row-scans pc))
+  (define base (string-append POL5-FIXTURE "def rows := solve (edge a b)\n"))
+  (define with-uses (string-append base "rows\nrows\nrows"))
+  (check-equal? (scans-of with-uses) (scans-of base)
+                "three mentions of the def-bound rows must add ZERO row scans"))
+
+(test-case "POL.10: def is a SNAPSHOT — a later defr does not change a bound solve"
+  ;; Owner F1 ruling (2026-07-24): a binding denotes ONE value (the `random`
+  ;; category-error principle). Recipe-style invalidation is Rel T2 IVM work.
+  (define r (run-ns-ws-last
+             (string-append POL5-FIXTURE
+                            "def rows := solve (edge a b)\n"
+                            "defr edge [?a ?b]\n"
+                            "  || 7 8\n"
+                            "rows")))
+  (check-true (string? r))
+  (check-false (string-contains? r ":a 7")
+               "rows snapshot predates the second defr — must not see 7/8"))
+
+(test-case "POL.10: lambda-valued defs are whnf-trivial — stored & applied unchanged"
+  (define r (run-ns-ws-last
+             (string-append "ns pol10fn\n"
+                            "spec make-adder Int -> [Int -> Int]\n"
+                            "defn make-adder [n]\n"
+                            "  [fn [x : Int] [+ n x]]\n"
+                            "def add5 := [make-adder 5]\n"
+                            "[add5 37]")))
+  (check-true (string-contains? r "42") "function-producing def constructs once and applies"))
 
 (test-case "POL.10: expr-champ pnet round-trip (reconstructive champ-sentinel)"
   ;; def now binds reduced values, so champ rows can reach module env

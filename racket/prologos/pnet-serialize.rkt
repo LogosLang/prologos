@@ -71,7 +71,10 @@
 ;; regenerates Open-free, so the :579 wildcard + the 9 Open-scrutinee arms are
 ;; dead code from here and no stale cache can re-inject the deleted-at-p2 tag
 ;; (the expr-p*-if-nar months-latent class, pipeline.md).
-(define PNET_VERSION 2)
+;; 2→3 at POL.10 (2026-07-24): env-snapshots may now carry whnf-reduced def
+;; values (incl. champ-sentinels) — bump forces clean regeneration everywhere
+;; so no pre-POL.10 reader ever meets the new shapes (the F1a.2 precedent).
+(define PNET_VERSION 3)
 
 ;; ============================================================
 ;; Serialization: struct->vector + gensym tagging + foreign-proc
@@ -110,8 +113,8 @@
       ;; Replace with sentinels — these are runtime values, not module state.
       [(prop-network? v) '(runtime-prop-network)]
       [(elab-network? v) '(runtime-elab-network)]
-      ;; POL.10 (2026-07-24): expr-champ — `def` now binds REDUCED values, so
-      ;; champ-bearing solution rows reach module env-snapshots. CHAMP internal
+      ;; POL.10 (2026-07-24, landed second pass): `def` binds WHNF-reduced
+      ;; values, so champ-bearing solution rows CAN reach module env-snapshots. CHAMP internal
       ;; nodes are implementation-private (the same class as the network
       ;; sentinels above), so serialize RECONSTRUCTIVELY as the entries list;
       ;; the reader rebuilds via champ-insert with hashes RECOMPUTED —
