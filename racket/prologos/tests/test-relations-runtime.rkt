@@ -6,6 +6,7 @@
 ;;;
 
 (require rackunit
+         racket/set
          "../relations.rkt"
          "../solver.rkt"
          "../provenance.rkt")
@@ -181,3 +182,38 @@
   (define answers (explain-goal config store2 'test '() '(x) 'none))
   (check-equal? (length answers) 1)
   (check-true (answer-result? (car answers))))
+
+;; ========================================
+;; Rel T1 Aspect D, D.2.d: registration-time inverted discrimination index
+;; ========================================
+
+(test-case "D.2.d: relation-register precomputes the inverted discrimination index"
+  (define store (make-relation-store))
+  (define rel (relation-info 'parent #f
+                (list (variant-info
+                       (list (param-info 'x 'free) (param-info 'y 'free))
+                       '()
+                       (list (fact-row '("alice" "bob"))
+                             (fact-row '("bob" "carol")))))
+                #f #f))
+  ;; The 3-arg smart-ctor call above leaves discrim = #f …
+  (check-false (variant-info-discrim (car (relation-info-variants rel))))
+  ;; … and registration fills it.
+  (define store2 (relation-register store rel))
+  (define v (car (relation-info-variants (relation-lookup store2 'parent))))
+  (define idx (variant-info-discrim v))
+  (check-not-false idx "registration must attach the discrimination index")
+  ;; Inverted shape at position 0: postings "alice"→{0}, "bob"→{1}; facts are
+  ;; ground at every position, so the wildcard set is empty.
+  (define pos0 (hash-ref idx 0))
+  (check-equal? (hash-ref (car pos0) "alice") (seteq 0))
+  (check-equal? (hash-ref (car pos0) "bob") (seteq 1))
+  (check-true (set-empty? (cdr pos0)) "no wildcards for pure fact rows")
+  ;; Position 1: "bob"→{0}, "carol"→{1}.
+  (define pos1 (hash-ref idx 1))
+  (check-equal? (hash-ref (car pos1) "bob") (seteq 0))
+  (check-equal? (hash-ref (car pos1) "carol") (seteq 1))
+  ;; Idempotent: re-registering keeps the existing index (pass-through arm).
+  (define store3 (relation-register store2 (relation-lookup store2 'parent)))
+  (check-equal? (variant-info-discrim (car (relation-info-variants (relation-lookup store3 'parent))))
+                idx))
