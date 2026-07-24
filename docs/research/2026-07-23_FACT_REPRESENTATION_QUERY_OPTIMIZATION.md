@@ -838,3 +838,55 @@ flagship programs — several small `.prologos` showcases over real data.
 figures; BitWeaving per-experiment numbers; immer microbenchmarks; VLog/Nemo comparisons;
 BYODS speedups; and — most consequentially — any measurement of vectorized execution over
 32-wide persistent-trie leaves (nobody has published one).*
+
+---
+
+## 14. Addendum — the D.2 cheap-wins slice (landed 2026-07-24)
+
+Four commits: D.2.a `296ac2d5` (dead-tree retirement + comment truth) · D.2.b `984601b9`
+(fact-scan counters + emission/reset fixes) · D.2.c `7ba24b2b` (fact-scale benchmark +
+corpus generator + baseline) · D.2.d `feedc6ff` (registration-time inverted index).
+Suite 469 files / 0 failures throughout.
+
+**NOW-ladder status**: N2+N3 ✅ (the index is inverted AND built once at registration on
+`variant-info.discrim` via the C.a smart-ctor idiom; both discrimination arms are O(1)
+posting lookups). N1 ✅ *for the discrimination path* (values normalized once at build;
+the deeper fact-row-term normalization moves to Rel T2 with the representation). N4 ✅
+(+ two latent fixes: `inert_dependent_skips` was never emitted/reset; `profile-unify.rkt`
+had a 16-arg constructor against a 17-field struct). N5 ✅ (tree deleted −135 lines;
+`tabled?` documented-dead in place — removal is a 48-site struct sweep owned by Rel T2).
+N6 ✅ (`bench-fact-scale.rkt` + `gen-fact-corpus.rkt` + the standing 260-row
+`solve-scale.prologos`, the first benchmark across the 256 threshold). The §7 "ground-key
+early exit" was found **misconceived**: Tier-1 requires ≥1 binding var so an all-ground
+early exit never reaches it, and a DFS first-hit short-circuit would change duplicate-row
+membership counts — deferred to Rel T2 with dedup semantics.
+
+**Measured effect (2-variant Tier-2 probe, pre→post D.2.d)**: point-query counters
+`rows=N+1 → rows=1` (the rebuild's full-table walk is gone from the query path); wall
+0.78→0.17 ms at N=1000. Enumeration unchanged (382 vs 389 ms @ 1000) — its cost is the
+per-row assumption machinery (R2), confirming §2.5's decomposition.
+
+**New findings that SHARPEN this artifact** (all verified in code + counters):
+
+1. **§3.4 was understated: the Tier-2 fact path is unreachable BY CONSTRUCTION for pure
+   fact tables.** Var-bearing queries on single-variant facts-only relations are absorbed
+   by Tier-1 *inside `solve-goal-propagator` itself*; all-ground queries are delegated to
+   DFS (`[(null? query-vars) (solve-goal …)]`). No query shape reaches the network. The
+   Tier-2 ladder is measurable only via multi-variant relations.
+2. **There is NO DFS↔Tier-2 crossover ≤1000 rows.** Genuine Tier-2 enumeration
+   (2-variant store): 0.97ms@10 / 4.6ms@100 / 28ms@250 / 371ms@1000 (CV ≈1-2%) —
+   superlinear — vs DFS 0.77ms@1000: **~480× and diverging**. The `:auto` threshold=256
+   selects the *slower* engine for every shape that reaches Tier-2; the Tier-1 shield is
+   what accidentally protects production queries from it. R2 (worldview granularity) is
+   confirmed as the gate on any competitive on-network fact path.
+3. **The arity-lenient nil trap bit again** (dailies Watching 2b): a wrong-arity solve
+   silently returns `nil`; the corpus generator now emits arity-parameterized queries and
+   its test gates this.
+4. **DFS-side index consultation (L1) has an unresolved soundness precondition**: whether
+   `unify-terms` treats symbols on the *fact* side as variables decides whether
+   symbol-valued fact terms must live in the wildcard set. Settle before wiring the index
+   into `solve-app-goal` (Rel T2 audit item).
+
+**Baseline of record**: DFS per-query — point 2.7µs@10 / 20µs@100 / 194µs@1000 / 2.0ms@10K;
+enum 8.4µs@10 / 765µs@1000 / 8.3ms@10K (linear ✓). Captured pre-D.2.d; the counter tier is
+the durable A/B instrument (`solver_row_scans` / `solver_col_compares`).
