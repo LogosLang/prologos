@@ -1321,3 +1321,42 @@ readers/languages. The UCS track inherits the substrate + bridges it to the exis
 - Grounding-audit: `wf_ab037f07-570` (guard machinery + fix options).
 - BSP-LE Master Track 3 retirement obligation: [`2026-03-21_BSP_LE_MASTER.md`](2026-03-21_BSP_LE_MASTER.md).
 - **Process note**: the A.4 investigation was lengthened by a WS-syntax probe error (one-line fact rows `|| 5 3` parse as one wrong-arity row → spurious empty results, masqueraded as a tabling failure). Probes need multi-line fact rows.
+
+## Substitution containment defect — runtime collections as closed leaves (captured 2026-07-24, spin-out from Rel T1 POL.10)
+
+**LIVE BUG — a silent wrong answer in legal, zero-error user code.** `shift`/`subst`
+(and `zonk`/`zonk-at-depth`/`default-metas`/`nf`/`uses-bvar0?`/`occurs?`/`conv-nf`/
+`narrow-subst-bvars`) treat the six runtime collection values (`expr-champ`, `expr-hset`,
+`expr-rrb` + the three transients) as closed no-descend leaves. `subst` drops the beta
+argument; `shift` fails to renumber → silent variable capture. Verified reproduction: a
+`defn` whose lambda body is a **map literal** leaks `?bvar0 : Nat` to top level with
+**0 errors** (control differing only in the body shape gives the correct `6N`).
+
+**~37 arms across 7 traversals.** Decisive history: `nf`'s `expr-rrb` arm was changed
+from identity to **descending** six days after CHAMP landed (`9fc669bb`); the same fix
+was never applied to `expr-champ`/`expr-hset` or to any other traversal. Discipline
+recognised and repaired at exactly one site, ad hoc. `tests/test-substitution.rkt` has
+**zero** champ/Map coverage — the invariant existed only as a false comment.
+
+**Blocked on ONE OWNER RULING**: is `expr-champ` a **closed runtime value** (the F1b
+RETIRED-LOUD position ⇒ fix = stop minting under binders + NbE open-the-binder in `nf`,
+recommended) or an **open AST container** (⇒ fix = all 37 arms, keys included)?
+
+**Staging** (full analysis in the design doc): (1) NOW, days-scale, no ruling needed —
+failing regression tests + a tripwire at the three `nf`-persisting boundaries
+(`reduction.rkt:570`/`:698`/`:1458`), NOT at shift/subst and NOT at the mint;
+(2) `PLT_CS_COMPILE_LIMIT` is unset repo-wide and `shift`/`subst` (~337 arms each) fall
+back to the CS interpreter — an independent, possibly large win, UNVERIFIED in-tree;
+(3) spun-out track for the real fix.
+
+**Widened by**: any eager-`nf` re-attempt · Rel T2 Fact Store · BSP-LE Track 3 ·
+CIU T6 Path Selection · **PReduce e-graph (hard blocker — it normalizes under binders
+by construction)**.
+
+⚠ A green full suite is NOT a gate here — the suite is green with the bug live.
+
+### Cross-references
+
+- **Design doc / full analysis**: [`2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md`](2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md).
+- Surfaced by Rel T1 POL.10: commits `cf454176` (reverted trial + post-mortem), `095d8bc5` (landed whnf resolution).
+- Grounding: workflow `wf_468a6129-447`.

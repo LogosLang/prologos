@@ -287,10 +287,18 @@ surface that doesn't trip the author. A, B, B3 and POL are exactly those three.
 
 **Unowned findings worth spinning out (my recommendation, owner's call)**
 
-- **The champ-as-closed-leaf substitution defect** (§4.2). `shift`/`subst` treat
-  `expr-champ` as closed, so a champ containing `expr-bvar` silently drops beta
-  arguments. Currently only reachable via `nf`-under-binder, which we no longer do
-  — but it is a live latent correctness bug in the substitution layer.
+- **The substitution containment defect** (§4.2) — **NOW SPUN OUT, and it is a LIVE
+  BUG, not latent**: [`2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md`](../2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md)
+  + a DEFERRED.md entry. A `defn` whose lambda body is a **map literal** leaks
+  `?bvar0 : Nat` to top level with **0 errors** (verified repro; control differing only
+  in body shape gives the correct `6N`). ~**37 arms across 7 traversals** over six
+  runtime collection values; `test-substitution.rkt` has ZERO coverage of the invariant;
+  `nf` descends into `expr-rrb` but not its `expr-champ` sibling ten lines earlier.
+  **Blocked on one owner ruling** (is `expr-champ` a closed runtime value or an open AST
+  container?). Days-scale slice available with no ruling: failing tests + a tripwire at
+  the three `nf`-persisting boundaries. Also surfaced independently:
+  `PLT_CS_COMPILE_LIMIT` is unset repo-wide, so `shift`/`subst` (~337 arms) fall back to
+  the CS interpreter — possibly a large free win, UNVERIFIED in-tree.
 - **D.2 named follow-ups**: SCC-ordered (vs global Kleene) B3.1 derivation;
   registration-time caching of `relation-column-typer` per the D.2.d precedent;
   `relation-info-tabled?` field removal (a 48-site struct sweep);
