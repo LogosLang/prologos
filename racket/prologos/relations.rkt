@@ -48,18 +48,13 @@
  relation-register
  relation-lookup
  relation-store-names
- ;; Track 2B Phase 1a+1b: on-network discrimination
+ ;; Track 2B Phase 1a: on-network discrimination
+ ;; (Phase 1b discrimination TREE retired 2026-07-23, Rel T1 D.2.a — zero
+ ;;  callers; see docs/research/2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md §2.3)
  build-discrimination-data
  discrimination-data-merge
  discrimination-data-bot
- position-discriminates?
  install-discrimination-propagators
- ;; Phase 1b: discrimination tree
- (struct-out discrim-node)
- (struct-out discrim-leaf)
- build-discrimination-tree
- variant-discrimination-tree
- tree-all-indices
  ;; AST → runtime conversion
  expr-defr->relation-info
  expr-rel->relation-info
@@ -553,7 +548,12 @@
 ;; arity: nat (for single-arity; #f for multi-arity)
 ;; variants: (listof variant-info)
 ;; schema: #f or symbol (schema name)
-;; tabled?: boolean
+;; tabled?: boolean — DEAD FIELD (Rel T1 D.2.a audit, 2026-07-23): both
+;;   construction sites hardcode #f and there are zero readers; the `:tabled`
+;;   spec surface was never implemented (BSP-LE Master lists it as future work).
+;;   Kept only because ~48 direct constructor calls across tests/benchmarks
+;;   make removal a struct-field sweep, owned by the Rel T2 store rework
+;;   (see docs/research/2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md §11).
 (struct relation-info (name arity variants schema tabled?) #:transparent)
 
 ;; ========================================
@@ -566,7 +566,9 @@
 
 ;; Register a relation in the store.
 ;; Returns updated store.
-;; Track 2B Phase 1a: computes discrimination map at registration time.
+;; NOTE (Rel T1 D.2.a, 2026-07-23): plain hash-set — NO discrimination
+;; precompute happens here at present (an earlier comment claimed otherwise).
+;; Registration-time precompute is the D.2.d deliverable.
 (define (relation-register store rel)
   (hash-set store (relation-info-name rel) rel))
 
@@ -574,7 +576,7 @@
 ;; Track 2B Phase 1a: Discrimination Infrastructure
 ;; ========================================
 ;;
-;; On-network clause discrimination via broadcast propagators.
+;; On-network clause discrimination.
 ;;
 ;; Each discriminating argument position gets ONE compound discrimination
 ;; cell (Pocket Universe pattern: one cell, components indexed by clause/
@@ -582,11 +584,14 @@
 ;; expected ground value at that position. Wildcard clauses (no discriminator)
 ;; are omitted — they match any value.
 ;;
-;; At query time, ONE broadcast propagator per discriminating position reads
-;; the query argument cell + discrimination cell, compares each clause's
-;; expected value with the query arg using `equal?` (same semantics as
-;; solver-unify-terms line 175), and writes the viable set to the clause-
-;; viability cell.
+;; REALITY NOTE (Rel T1 D.2.a, 2026-07-23 — an earlier version of this header
+;; claimed "ONE broadcast propagator per position"): the free-argument arm
+;; installs plain FIRE-ONCE propagators (not broadcast), and their viability
+;; writes are read exactly once at install time (:~2590) — post-install
+;; narrowing from late-resolving args is currently unconsumed. Ground
+;; arguments DO narrow at construction time via a direct cell write. The
+;; data is also rebuilt per goal invocation, not at registration — the
+;; registration-time precompute + inverted index is the D.2.d deliverable.
 ;;
 ;; Alternatives ordering: fact rows first (indices 0..F-1), then
 ;; clauses (indices F..F+C-1). Stable; matches assumption-id allocation.
@@ -651,141 +656,6 @@
                     dm))
               dm)))))
 
-;; Check if position k has discrimination power.
-(define (position-discriminates? discrim-data pos n-alternatives)
-  (define pos-data (hash-ref discrim-data pos discrimination-data-bot))
-  (and (not (hash-empty? pos-data))
-       ;; Discriminates if not ALL alternatives are in the map
-       ;; (some are wildcards) or if values are not all identical
-       (or (< (hash-count pos-data) n-alternatives)
-           (let ([vals (hash-values pos-data)])
-             (not (for/and ([v (in-list (cdr vals))])
-                    (equal? v (car vals))))))))
-
-;; ========================================
-;; Track 2B Phase 1b: Discrimination Tree (Needed-Narrowing-Inspired)
-;; ========================================
-;;
-;; Hierarchical clause discrimination. Each level of the tree represents
-;; a Q_1 decomposition of the clause space at one argument position.
-;; The tree IS the Hasse diagram of the clause decomposition.
-;;
-;; At solve time, the tree guides propagator installation: only install
-;; discrimination propagators for positions that add narrowing power
-;; within the current viable group. Avoids redundant propagators.
-;;
-;; SRE: each tree level is a decision cell. The recursive decomposition
-;; Q_N = Q_{N-1} × Q_1 matches the tree's recursive structure.
-
-;; Tree node: discriminate at `position` using value → subtree mapping.
-;; `wildcard-indices`: clause indices with no discriminator at this position
-;; (always viable regardless of value).
-(struct discrim-node (position children wildcard-indices) #:transparent)
-;; Leaf: no further discrimination needed. `indices` = viable clause set.
-(struct discrim-leaf (indices) #:transparent)
-
-;; Score a position's discrimination power for a given set of clause indices.
-;; Returns the number of distinct GROUPS the position creates.
-;; Higher = more discriminating. 0 = no discrimination.
-(define (position-score discrim-data pos indices)
-  (define pos-data (hash-ref discrim-data pos discrimination-data-bot))
-  (if (hash-empty? pos-data) 0
-      (let ()
-        ;; Group indices by their expected value at this position
-        (define groups (make-hash))  ;; value → (listof index)
-        (define wildcards '())
-        (for ([idx (in-set indices)])
-          (define val (hash-ref pos-data idx #f))
-          (if val
-              (hash-update! groups val (lambda (lst) (cons idx lst)) '())
-              (set! wildcards (cons idx wildcards))))
-        ;; Score = number of distinct groups (excluding wildcards)
-        ;; A position that creates N groups from M indices is more discriminating
-        (hash-count groups))))
-
-;; Build a discrimination tree for a set of clause indices.
-;; `discrim-data`: (hasheq position → (hasheq clause-idx → expected-value))
-;; `indices`: seteq of clause indices to discriminate among
-;; `positions`: list of argument positions still available for discrimination
-;; Returns: discrim-node or discrim-leaf
-(define (build-discrimination-tree discrim-data indices positions)
-  (cond
-    ;; Base case: 0-1 indices — no further discrimination needed
-    [(<= (set-count indices) 1)
-     (discrim-leaf indices)]
-
-    ;; No more positions to discriminate on
-    [(null? positions)
-     (discrim-leaf indices)]
-
-    [else
-     ;; Score each remaining position
-     (define scored
-       (for/list ([pos (in-list positions)])
-         (cons (position-score discrim-data pos indices) pos)))
-     ;; Best position = highest score
-     (define best-pair
-       (for/fold ([best (car scored)])
-                 ([pair (in-list (cdr scored))])
-         (if (> (car pair) (car best)) pair best)))
-
-     (if (zero? (car best-pair))
-         ;; No position discriminates further — leaf
-         (discrim-leaf indices)
-         ;; Build tree node at best position
-         (let ()
-           (define best-pos (cdr best-pair))
-           (define pos-data (hash-ref discrim-data best-pos discrimination-data-bot))
-           (define remaining-positions (remove best-pos positions))
-
-           ;; Group indices by value at best-pos
-           (define groups (make-hash))
-           (define wildcard-indices (seteq))
-           (for ([idx (in-set indices)])
-             (define val (hash-ref pos-data idx #f))
-             (if val
-                 (hash-update! groups val
-                               (lambda (s) (set-add s idx))
-                               (seteq))
-                 (set! wildcard-indices (set-add wildcard-indices idx))))
-
-           ;; Recursively build subtrees for each group
-           ;; Wildcards are added to EVERY group (they match any value)
-           (define children
-             (for/hasheq ([(val group-indices) (in-hash groups)])
-               (define full-group (set-union group-indices wildcard-indices))
-               (values val (build-discrimination-tree discrim-data full-group remaining-positions))))
-
-           (discrim-node best-pos children wildcard-indices)))]))
-
-;; Collect all clause indices reachable from a tree node.
-(define (tree-all-indices tree-node)
-  (cond
-    [(discrim-leaf? tree-node) (discrim-leaf-indices tree-node)]
-    [(discrim-node? tree-node)
-     (define wildcards (discrim-node-wildcard-indices tree-node))
-     (for/fold ([acc wildcards])
-               ([(val subtree) (in-hash (discrim-node-children tree-node))])
-       (set-union acc (tree-all-indices subtree)))]
-    [else (seteq)]))
-
-;; Build a discrimination tree for a variant.
-;; Returns: discrim-node or discrim-leaf (or #f if no discrimination possible)
-(define (variant-discrimination-tree variant)
-  (define discrim-data (build-discrimination-data variant))
-  (define n-facts (length (variant-info-facts variant)))
-  (define n-clauses (length (variant-info-clauses variant)))
-  (define n-total (+ n-facts n-clauses))
-  (if (<= n-total 1) #f  ;; no discrimination needed for 0-1 alternatives
-      (let ()
-        (define all-indices (for/seteq ([i (in-range n-total)]) i))
-        (define all-positions
-          (for/list ([i (in-range (length (variant-info-params variant)))])
-            i))
-        (define tree (build-discrimination-tree discrim-data all-indices all-positions))
-        ;; Only return tree if it actually discriminates (not just a leaf of everything)
-        (if (discrim-leaf? tree) #f tree))))
-
 ;; Install discrimination propagators on the network.
 ;; Phase R1: discrimination data is ON-NETWORK as a cell value. Computed at
 ;; construction time (Phase 0 scaffolding); self-hosted compiler produces it
@@ -818,8 +688,8 @@
   ;; Flat propagator installation: one fire-once propagator per discriminating
   ;; position. ALL positions install propagators — ordering EMERGES from BSP
   ;; dataflow (which arg cells resolve first). Distributivity guarantees
-  ;; same result regardless of narrowing order. The discrimination tree (Phase 1b)
-  ;; is a data value for analysis/self-hosting, not an imperative installation guide.
+  ;; same result regardless of narrowing order. (The Phase 1b discrimination
+  ;; TREE was retired 2026-07-23, Rel T1 D.2.a — zero callers.)
   ;;
   ;; Phase R1: discrimination propagators READ from discrim-data cell instead
   ;; of capturing data in closures. The cell is the source of truth.
@@ -2574,10 +2444,10 @@
        (define clauses (variant-info-clauses variant))
        (define param-names (map param-info-name params))
 
-       ;; Track 2B Phase 1a: on-network discrimination via broadcast propagators.
-       ;; Install discrimination propagators that narrow the viable set based
-       ;; on bound arguments. Returns viability cell that gates clause/fact
-       ;; installation.
+       ;; Track 2B Phase 1a: on-network discrimination (fire-once propagators —
+       ;; NOT broadcast, despite an earlier comment). Ground args narrow the
+       ;; viability cell at construction time; the free-arg fire-once writes
+       ;; are read only once, below. See the discrimination header note (D.2.a).
        (define n-alternatives (+ (length facts) (length clauses)))
        ;; Phase R1: returns discrim-data-cid (on-network discrimination data cell)
        (define-values (n-discrim viability-cid _discrim-data-cid)
