@@ -683,6 +683,77 @@ to C.1** (owner: "it can wait to C.1").
   reachable from typing-core (cycle-free `relations.rkt` import) — "unreachable" was a
   red herring; only the empty-store two-context gap above remains.
 
+### 6.10 B3 — rule-relation codata rows — **SETTLED (co-design 2026-07-24)**
+
+Grounding: `wf_512dd7e3-5e8` (4 HEAD-pinned facets + critic, @ `a3e5716f`) +
+main-session R-lens (UX repro: a rule solve types `_`; `.field` on it is a HARD
+`expr-error` via map-get's catch-all; and `def rows := solve (rule…)` fails at the
+`def` itself — "Expression is not a valid type"). The gap is ONE conjunct
+(`(not has-clauses?)`, typing-core.rkt:3617-3621, relation-global); the fix seam
+is `relation-column-typer`/`goal-app-row`, which feeds all 5 solve forms × both
+checkers × the on-network `#f`-dispatch (10 sites) at once.
+
+**The owner's frame (load-bearing)**: `Map` is the CODATA/coinductive shape;
+`schema` is the INDUCTIVE side; B3 is the interplay. **The division of labor is
+PHASE-FORCED, not chosen**: the checker runs before reduction (verified: type
+stored pre-eval; `expr-champ` infers `expr-error` by F1b retired-loud posture),
+so only the static/inductive side can serve composition (`.field`, `def`-binding,
+validate); at-the-end observation — the coinductive side — is display/runtime
+truth. Both are built; neither pretends to be the other.
+
+**Decisions:**
+- **D-B3.1 — HYBRID**: (i) static body-goal dataflow = the composition channel —
+  an UPPER-BOUND derivation through the rule body's generators (never output
+  observation, per the §6.2 soundness ruling); (ii) at-the-end observation =
+  display-time refinement at the driver echo seam — fills/sharpens hole fields
+  in the DISPLAYED type from the actual result rows (exact for the result set;
+  display-only; never feeds static typing). (ii) ships as **B3.2**, after B3.1.
+- **D-B3.2 — recursion = type-level FIXPOINT** over the existing SCC machinery
+  (leaves-first; within-SCC iterate from ⊥ with union-join to stability;
+  terminates over the finite type alphabet of the program). Rationale:
+  transitive-closure-shaped rules (reachability/ancestry — the demo's core
+  queries) are exactly the recursive case; bail-to-hole would leave them
+  untyped. (Owner: shared the lean once TC was explained.)
+- **D-B3.3 — anonymous `rel` IN SCOPE** (owner: "observational results really
+  should share common mechanisms") — the same walker runs over the inline
+  `expr-rel` body; solve-row-type gains the expr-rel arm.
+- **D-B3.4 — POL.2 FIRST/JOINTLY**: the anon-`_` key drop lands at the B0
+  kernel level (one atomic change) BEFORE B3 mints static labels, so the
+  CbC static/runtime key agreement never breaks.
+- **D-B3.5 — `?x:Int` type-preds EXCLUDED** until UCS enforcement exists
+  (owner: "pretending they statically mean something when there is no
+  enforcement would be dishonest and confusing").
+- **D-B3.6 — rows are always CLOSED with Κ′ keys** (keys are statically known
+  for every relation kind — the B0 kernel); underivable field TYPES degrade
+  to hole, never lie; mixed facts+clauses relations JOIN the fact
+  contribution (today the relation-global gate discards it); ground queries
+  keep the existing loose posture.
+- **D-B3.7 — imperative-compute preserved** (Aspect B Q4); derivation cached
+  (registration-time per the D.2.d precedent, or store-version-keyed per the
+  strata precedent — measured choice at implementation); scheduler-
+  independent; zero propagator-arm changes (BSP-LE Track 3 seam untouched).
+
+**Walker spec (per goal kind — A.3's binder classification reused):**
+`'app`: symbol args take the callee's column type at that position (schema →
+B1 projection; facts-only → B2 observation; rule → SCC/fixpoint). `'unify`:
+var↔var links join both ways; var↔term infers the term. `'is`: LHS var gets
+the RHS expr's inferred type under the accumulated per-clause var-type env.
+`'not`/`'guard`/`'cut`: testing-only — contribute nothing. Per-head-param
+join across clauses × variants × fact rows → union via the B2
+`observe-column-type` kernel. **Substrate**: prefer the zonked AST twin
+(global-env, stored at defr) — the goal-desc form deep-normalizes `'unify`
+AST away; the inline AST serves the anonymous-rel arm directly.
+
+**Expected side effect**: the `def := solve(rule)` "not a valid type" failure
+dissolves (a real row type is bindable); POL.5's multiplicity violation on the
+facts-relation case remains a separate defect at the same seam.
+
+**Phasing**: **B3.0** POL.2 kernel fix (anon keys; own commit + tests) +
+acceptance targets → **B3.1** the static walker + rule branch + fixpoint +
+anonymous-rel arm + cache + flip the B2 `: _` test + stale-C.1-pointer
+cleanup (§6.2/§6.4 rows here + typing-core.rkt:3598) → **B3.2** display-time
+coinductive refinement (echo seam; scoped after B3.1 lands).
+
 ---
 
 ## 7. Aspect C — typed logic vars + schema-as-facts — **SETTLED (Stage-3, 2026-07-21)**
