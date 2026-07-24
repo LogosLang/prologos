@@ -69,7 +69,7 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | **C.d** | ~~C.2 activation — `type-pred` → `relation-column-typer` upper-bound~~ → **DEFERRED to UCS** | ⛔→UCS | `?x:Int` on a rule var is a GUARD `Int(x)` (runtime/UCS altitude), not a static contract → the static activation is UCS's domain-constraint work. Handoff note: [`2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md`](2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md) (UCS Track 6). C.b already STORES the type-preds — nothing lost. **Aspect C CLOSES at C.a+C.b+C.c.** |
 | **D.0/1** | Efficient fact representation + query-opt — Stage 0/1 research + design artifact | ✅ | **Artifact landed** `0b428424`: [`2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md`](../research/2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md) — frame F1–F7 · measured cost structure · lattice verdicts · staging ladder · **Rel T2 "Fact Store" charter seed** (§11) + §14 D.2 addendum. **Q_A–Q_D parked** for the Rel T2 charter (owner, 2026-07-24) |
 | **D.2** | Cheap-wins slice (artifact §7 NOW: N1–N6) | ✅ | D.2.a `296ac2d5` (dead tree −135 LoC + comment truth) · D.2.b `984601b9` (row-scan/col-compare counters + 2 latent fixes) · D.2.c `7ba24b2b` (fact-scale bench + corpus generator + 260-row standing E2E; **findings: Tier-2 unreachable for 1-variant fact tables; NO DFS↔Tier-2 crossover ≤1000 — Tier-2 enum ~480× slower @1000**) · D.2.d `feedc6ff` (registration-time INVERTED index on `variant-info.discrim`; Tier-2 point rows N+1→1, 0.78→0.17ms @1000). Suite 469/0 throughout; artifact §14 |
-| **POL** | Polish: dedup · drop `_anon` keys · declaration-order keys | ⬜ | |
+| **POL** | Polish — **ROSTER EXPANDED to POL.1–.9** (§8, 2026-07-24): owner hand-testing list from `standup-2026-07-19.org` § "Polish points for REL" folded in. Correctness: dedup (.1) · `_anon` keys (.2) · declaration-order keys (.3) · **arity-mismatch errors** (.4) · **def-on-solve multiplicity** (.5) · **defn fused-binder last mile** (.6). Syntax: single-line `\|` facts (.7) · implicit clause groups (.8) · implicit solve (.9, ⚠ design question — co-design first) | ⬜ | §8 sequencing note; POL.9 needs owner co-design before impl |
 | *(tests)* | **Per-phase** — each behavioral phase brings its own test delta in its completion gate; the test file(s) `tests/test-rel-*.rkt` GROW per phase (NOT a dedicated end phase — see workflow.md "Tests are PER-PHASE") | — | e.g. `test-rel-t1-naf.rkt`, `test-rel-t1-typed-rows.rkt` (grown across B1/B2) |
 | **X.close** | Bench matrix · DEFERRED triage · doc-truth sweep · memory fold · **Stage-5 PIR** | ⬜ | Objective-PIR gate |
 
@@ -1052,13 +1052,89 @@ co-design in a side chat superseded the grounding-audit-driven design; the audit
 
 ---
 
-## 8. Polish
-- **Answer-set dedup** — `solve` returns one row per derivation path (diamonds →
-  duplicate rows). Add distinct/answer-set semantics.
-- **Drop `_anon` wildcard keys** — `_` gensym keys (`:_anon1655`) leak into result
-  maps; drop anon vars from projection.
-- **Declaration-order keys** (owner) — present row keys in predicate/fact
-  declaration order, not hash order.
+## 8. Polish — the POL aspect roster
+
+**Expanded 2026-07-24** with the owner's hand-testing list (developed in
+`foray.prologos` via interactive eval; source of record:
+`docs/standups/standup-2026-07-19.org` § "Polish points for REL" — READ-ONLY).
+Ten aspects in two clusters. Each syntax aspect (POL.7–9) carries the full
+three-level WS validation + WS-Impact obligations (workflow.md).
+
+### Correctness / UX-error cluster
+
+- **POL.1 — Answer-set dedup** *(pre-existing)* — `solve` returns one row per
+  derivation path (diamonds → duplicate rows). Add distinct/answer-set
+  semantics. ⚠ Interacts with POL.4: dedup semantics also decide whether a
+  DFS first-hit short-circuit for ground goals is observable (D.2 deferred
+  exactly this — artifact §14).
+- **POL.2 — Drop `_anon` wildcard keys** *(pre-existing + owner repro)* —
+  `_` gensym keys leak into result maps:
+  `solve (truths b1 b2 b3 _)` → `'[{:b3 1, :_anon241999 1, :b2 1, :b1 1} …]`;
+  should be `'[{:b3 1, :b2 1, :b1 1} …]`. Anon vars must not be projected into
+  the solution set. (B0's key-kernel + the `:_anon<gensym>` convention are the
+  known surfaces — grounding §4.)
+- **POL.3 — Declaration-order keys** *(pre-existing, owner)* — present row keys
+  in predicate/fact declaration order, not hash order.
+- **POL.4 — Arity mismatch must ERROR** *(owner, two repros — unifies standup
+  points 2+3)* — the engine is arity-LENIENT today and both directions
+  misbehave: **under-application** `solve (truths ?b)` on 4-ary `truths` →
+  silent `nil`; **over-application** `solve (light-vehicle v1 v2)` →
+  unbound-echo rows `'[{:v1 "golf-cart", :v2 v2} …]`, `solve (truths b1 b2 b3
+  b4 b5)` → `nil`. Target: a Prolog-style error naming the available arities
+  (`Unknown procedure truths/1 — however, there are definitions for:
+  truths/4`). ⚠ Watchouts: (a) multi-arity relations are first-class
+  (`relation-info-arity = #f`); (b) the INTERNAL `goal-args = '()` convention
+  means "enumerate via param names" (bench/tests + tier-1 rely on it) — the
+  arity gate belongs at the SURFACE goal sites, not inside `solve-goal`;
+  (c) this is the D.2.c "arity-lenient nil trap" (artifact §14 finding 3) —
+  the corpus-generator test is the standing regression gate for the fix.
+- **POL.5 — `def` on a `solve` result: multiplicity violation** *(owner
+  repro)* — `def needs-rewind := solve (movies false title year)` →
+  `ERROR: Multiplicity violation`. Diagnosis needed: likely the QTT reading
+  of the solve form / row value under `def`'s binding multiplicity (Aspect B
+  registered the 5 solve structs `#f`-dispatch + imperative-compute; the qtt
+  arm may be the unwired half). Probe first; fix at the checker seam.
+- **POL.6 — Fused `x:Int` in `defn` params: the last mile** *(owner repro;
+  adjacent to Rel but C-arc-owned)* —
+  `defn my-square [x:Int] : Int  * x x` → "cannot infer the type of an
+  unannotated parameter". C.b.2 (`c6b8e81f`) wired fused binders through
+  `parse-binder` (fn-binders, both readers); the `defn` param-list path
+  evidently does not route through it. Wire `defn` (and multi-arity clause
+  heads) to the same fused-binder arm.
+
+### Syntax / ergonomics cluster (WS reader/parser features)
+
+- **POL.7 — Single-line facts with `|` separators** *(owner)* —
+  `defr digits [?d]` + `|| 0 | 1 | 2 | … | 9` on one line. Today fact rows
+  are newline-separated only (and a one-line multi-row literal silently
+  mis-parses as ONE wrong-arity row — dailies Watching 3; this aspect
+  RETIRES that trap by making the intent expressible). ⚠ WS Impact: `|` is
+  tokenized as `$pipe` (ADT literals + multi-arity `defn` clause separator)
+  — the fact-block arm must scope its `$pipe` handling to the `||` group.
+- **POL.8 — Implicit rule-clause groups in `defr`** *(owner)* — drop the
+  delimiting parens around rule-clause goals, layout-based like the
+  functional language:
+  `&> fruit-color fruit "blue"` ≡ `&> (fruit-color fruit "blue")`;
+  continuation lines indent past the `&>`; nesting by deeper indent
+  (`not` ⤷ `= color not-color`). Both spellings remain legal (additive).
+  ⚠ WS Impact: tree-parser layout rules; interacts with POL.9's grammar.
+- **POL.9 — Implicit `solve` at top level** *(owner; ⚠ DESIGN QUESTION —
+  needs co-design before implementation)* — a bare relational clause outside
+  `defr` carries an implicit `solve` (mirroring the functional language's
+  implicit `eval`): `fruit-not-of-color f "red"` ≡ `solve (…)`; anonymous
+  `rel [fruit] &> …` likewise. **The open question is grammar ambiguity**:
+  a bare `foo a b` at top level currently reads as function application —
+  disambiguation plausibly = relation-registry lookup at elaboration
+  (relations are registered before use), but forward references, shadowing,
+  and error-message quality under a miss all need settling. Co-design with
+  the owner first; then the WS-Impact analysis.
+
+### Sequencing note (proposed, owner confirms)
+
+Correctness cluster first (POL.2 → POL.4 → POL.5/POL.6 diagnosis-led), then
+POL.1 + POL.3 (both touch row assembly — share a slice), then syntax cluster
+POL.7 → POL.8, with POL.9 opened as a design conversation in parallel.
+Per-phase tests per workflow.md; acceptance file grows a POL section.
 
 ---
 
