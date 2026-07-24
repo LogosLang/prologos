@@ -12,7 +12,12 @@
 
 (require rackunit
          racket/string
-         "test-support.rkt")
+         "test-support.rkt"
+         (only-in "../pnet-serialize.rkt"
+                  deep-struct->serializable deep-serializable->struct)
+         (only-in "../champ.rkt" champ-empty champ-insert champ-entries)
+         (only-in "../syntax.rkt" expr-champ expr-champ? expr-champ-racket-champ
+                  expr-keyword expr-keyword-name expr-int))
 
 (define FIXTURE
   (string-append
@@ -103,3 +108,28 @@
   (check-true (string? r))
   (check-true (string-contains? r ":s String") "static row keeps the named field")
   (check-false (string-contains? r "_anon") "no anon field in the static type either"))
+
+;; ── POL.10 (attempt REVERTED 2026-07-24 — see design §8): def still binds the
+;; AST. The eager-nf flip hit three semantic collisions (module-load context;
+;; lambda-valued defs discharging capabilities under the binder; schema-
+;; annotated literals) and awaits a value-class-scoped design. The pnet
+;; champ-sentinel hardening from the attempt is KEPT and gated below.
+
+(test-case "POL.10: expr-champ pnet round-trip (reconstructive champ-sentinel)"
+  ;; def now binds reduced values, so champ rows can reach module env
+  ;; snapshots — the sentinel serializes entries and rebuilds via champ-insert
+  ;; (hashes recomputed at read; equal-hash-code is process-stable only).
+  (define k1 (expr-keyword 'a))
+  (define k2 (expr-keyword 'b))
+  (define c (champ-insert (champ-insert champ-empty
+                                        (equal-hash-code k1) k1 (expr-int 1))
+                          (equal-hash-code k2) k2 (expr-int 2)))
+  (define rt (deep-serializable->struct (deep-struct->serializable (expr-champ c))))
+  (check-true (expr-champ? rt) "round-trips as an expr-champ, not a vector impostor")
+  (define entries
+    (sort (map (lambda (kv) (cons (car kv) (cdr kv)))
+               (champ-entries (expr-champ-racket-champ rt)))
+          (lambda (x y) (symbol<? (expr-keyword-name (car x)) (expr-keyword-name (car y))))))
+  (check-equal? (length entries) 2)
+  (check-equal? (cdr (car entries)) (expr-int 1))
+  (check-equal? (cdr (cadr entries)) (expr-int 2)))

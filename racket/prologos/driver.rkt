@@ -1708,13 +1708,26 @@
                    ;; tabulation FORCES; a failing :check errors at commit.
                    [(seal-forcing-error zonked-body def-srcloc) => values]
                    [else
-                    (global-env-add name zonked-type zonked-body)
+                    ;; POL.10 STATUS (2026-07-24): `def` binds the AST, NOT the
+                    ;; reduced value — an eager-nf flip was attempted and
+                    ;; REVERTED after three verified semantic collisions:
+                    ;; (1) nf at MODULE-LOAD context corrupted the prelude (the
+                    ;; two-context boundary, pipeline.md); (2) lambda-valued
+                    ;; defs (`def main := (fn …)`) discharge CAPABILITIES under
+                    ;; the binder at def time (test-io-main-01); (3) schema-
+                    ;; annotated literal defs break downstream consumers
+                    ;; (test-implicit-map-02). Eager binding needs a VALUE-CLASS
+                    ;; scoped design (which whnf-heads bind eagerly) — see
+                    ;; design §8 POL.10. The pnet champ-sentinel hardening from
+                    ;; the attempt is kept (pnet-serialize.rkt).
+                    (define bound-value zonked-body)
+                    (global-env-add name zonked-type bound-value)
                     ;; LSP Tier 2.3: record definition location
                     (register-definition-location! name def-srcloc)
                     (when (current-ns-context)
                       (define fqn (qualify-name name
                                     (ns-context-current-ns (current-ns-context))))
-                      (global-env-add fqn zonked-type zonked-body)
+                      (global-env-add fqn zonked-type bound-value)
                       (register-definition-location! fqn def-srcloc))
                     (format "~a : ~a defined." name (pp-expr zonked-type))])])])])])])]
     ;; Existing annotated path (type annotation present)
@@ -1910,13 +1923,16 @@
                          [(seal-forcing-error zonked-body def-srcloc)
                           => (lambda (err) (remove-failed-definition! name) err)]
                          [else
-                          (global-env-add name zonked-type zonked-body)
+                          ;; POL.10: AST binding retained — eager flip
+                          ;; reverted; see the inferred-path twin's note.
+                          (define bound-value zonked-body)
+                          (global-env-add name zonked-type bound-value)
                           ;; LSP Tier 2.3: record definition location
                           (register-definition-location! name def-srcloc)
                           (when (current-ns-context)
                             (define fqn (qualify-name name
                                           (ns-context-current-ns (current-ns-context))))
-                            (global-env-add fqn zonked-type zonked-body)
+                            (global-env-add fqn zonked-type bound-value)
                             (register-definition-location! fqn def-srcloc))
                           (format "~a : ~a defined."
                                   name (pp-expr zonked-type))])]

@@ -1181,13 +1181,27 @@ three-level WS validation + WS-Impact obligations (workflow.md).
   heads) to the same fused-binder arm.
 
 - **POL.10 — `def` binds the AST, not the reduced value** *(owner, 2026-07-24)* —
-  a `def` stores the zonked BODY AST (global-env-add pre-evaluation; the B3
-  grounding verified the pattern for defr and inferred it for def), so uses
-  re-reduce and the binding never holds the value. Owner: binding the reduced
-  form is "desirable and more efficient", and likely implicated in def-typing
-  issues (POL.5 shares the same def-arm seam). ⚠ Semantics-bearing (eager vs
-  lazy evaluation timing for effectful/diverging bodies) — mini-audit + a
-  short design note before flipping; sequence with/after POL.5's diagnosis.
+  owner ruled once-at-definition semantics; a blunt eager-nf flip was
+  **attempted and REVERTED** the same day after THREE verified semantic
+  collisions (the design inputs for the real round):
+  1. **Module-load context**: eager nf while `current-loading-set` is
+     non-empty corrupted the prelude (list module broke `List` typing
+     process-wide) — the pipeline.md two-context boundary. A
+     `current-loading-set`-empty guard fixed this one.
+  2. **Lambda-valued defs**: `def main : (Pi …) := (fn …)` — nf under the
+     binder discharges CAPABILITIES at definition time ("no instance found
+     for ReadCap", test-io-main-01). Function-valued defs need the AST/thunk
+     posture (like defn).
+  3. **Schema-annotated literal defs**: `def a : Pt := {…}` — the nf'd form
+     broke downstream consumers (test-implicit-map-02).
+  ⇒ The flip needs a **value-class-scoped design**: which whnf-heads bind
+  eagerly (solve rows / ground data yes; binder-headed values no; schema'd
+  literal forms TBD), module contexts stay AST until they support evaluation.
+  **KEPT from the attempt** (landed): the reconstructive `champ-sentinel`
+  pnet serialization (expr-champ round-trips instead of vector-impostoring —
+  the prerequisite for ANY future champ-bearing env snapshot) + its test.
+  The bind-once counter test (3 uses of a def-bound solve add zero
+  `solver_row_scans`) is the ready-made acceptance gate for the real slice.
 
 ### Syntax / ergonomics cluster (WS reader/parser features)
 
