@@ -49,6 +49,9 @@
          definitely-not-map?
          ;; Solver normalization (for benchmarks + PUnify)
          normalize-ast-to-solver-term
+         ;; SUB.1: substitution containment tripwire (predicate + raiser) —
+         ;; docs/tracking/2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md
+         contains-open-container? assert-no-open-container!
          ;; N6e issue #71: saturated-multi-hole-section classifier (shared by
          ;; infer/inferQ so the 3-stage guard cannot drift between stages).
          saturated-hole-section-app?
@@ -504,6 +507,83 @@
        (run-narrowing-search func-name args-whnf target-whnf var-names))
      (answers->prologos-expr solutions var-names)]))
 
+;; ========================================
+;; Substitution containment tripwire (SUB.1)
+;; docs/tracking/2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md
+;; ========================================
+;; A runtime collection value (champ/hset/rrb + transients) whose contents hold
+;; a de Bruijn variable FREE w.r.t. the container boundary is the poisoned
+;; shape: shift/subst treat these containers as closed leaves (BY CONTRACT
+;; under ruling (D) — champ is a closed runtime map value), so a later beta
+;; over the enclosing binder silently drops the argument or captures. Until the
+;; SUB.3 fix (NbE open-the-binder) makes the shape unconstructible, refuse to
+;; PERSIST it at the three nf-persisting boundaries (solve/solve-one is-goal
+;; answer rows + validate base-ok) — a loud per-command error via the POL.4
+;; exn:prologos-solve pattern instead of a silent wrong answer. Deliberately
+;; NOT at shift/subst (no srcloc/command context) and NOT at the champ mint
+;; (fires on correct display-only code — driver.rkt legitimately nf's eval
+;; results for display).
+;;
+;; The walk is depth-aware INSIDE containers: a bvar bound by a binder that is
+;; itself inside the container (e.g. an answer row holding a closed lambda,
+;; champ{:f λy.bvar0} — the repro's CONTROL) is legal and must NOT fire; only
+;; a bvar pointing OUTSIDE its innermost container fires. Binder forms are the
+;; FOUR from substitution.rkt's shift (the authoritative inventory): lam, Pi,
+;; Sigma, reduce-arm. Everything else walks REFLECTIVELY (struct->vector over
+;; transparent structs + pairs/vectors/hashes/boxes) — deliberately no
+;; per-node arms, so the checker cannot itself have the missing-arm defect it
+;; guards against. Cold paths only; small answer/field terms.
+
+(define (runtime-container-value? v)
+  (or (expr-champ? v) (expr-hset? v) (expr-rrb? v)
+      (expr-trrb? v) (expr-tchamp? v) (expr-thset? v)))
+
+;; d = #f outside any container (hunting for containers); an integer = binder
+;; depth accumulated since the INNERMOST enclosing container (checking
+;; freeness w.r.t. that container's boundary).
+(define (contains-open-container? e)
+  (define (walk v d)
+    (cond
+      [(expr-bvar? v) (and d (>= (expr-bvar-index v) d))]
+      [(runtime-container-value? v)
+       ;; container boundary: contents check freeness at fresh depth 0
+       (for/or ([f (in-vector (struct->vector v) 1)]) (walk f 0))]
+      ;; the four binder forms — body positions at d+1 (or +binding-count)
+      [(expr-lam? v)
+       (or (walk (expr-lam-type v) d)
+           (walk (expr-lam-body v) (and d (add1 d))))]
+      [(expr-Pi? v)
+       (or (walk (expr-Pi-domain v) d)
+           (walk (expr-Pi-codomain v) (and d (add1 d))))]
+      [(expr-Sigma? v)
+       (or (walk (expr-Sigma-fst-type v) d)
+           (walk (expr-Sigma-snd-type v) (and d (add1 d))))]
+      [(expr-reduce? v)
+       (or (walk (expr-reduce-scrutinee v) d)
+           (for/or ([arm (in-list (expr-reduce-arms v))])
+             (walk (expr-reduce-arm-body arm)
+                   (and d (+ d (expr-reduce-arm-binding-count arm))))))]
+      ;; generic reflective descent (all expr structs are #:transparent;
+      ;; opaque values answer struct? #f and fall through to the leaf arm)
+      [(struct? v)
+       (for/or ([f (in-vector (struct->vector v) 1)]) (walk f d))]
+      [(pair? v) (or (walk (car v) d) (walk (cdr v) d))]
+      [(vector? v) (for/or ([f (in-vector v)]) (walk f d))]
+      [(hash? v) (for/or ([(hk hv) (in-hash v)]) (or (walk hk d) (walk hv d)))]
+      [(box? v) (walk (unbox v) d)]
+      [else #f]))
+  (and (walk e #f) #t))
+
+(define (assert-no-open-container! who v)
+  (when (contains-open-container? v)
+    (raise-solve-error who
+      (string-append
+       "substitution containment guard: this result contains a runtime "
+       "collection value (map/set/vector) that captures a variable bound "
+       "outside it; persisting it would produce silent wrong answers when "
+       "applied. Known defect, fix in progress — see "
+       "docs/tracking/2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md"))))
+
 ;; Run solve for a goal expression, returning a Prologos list of answer maps.
 (define (run-solve-goal goal-expr config)
   (define goal* (whnf goal-expr))
@@ -568,6 +648,8 @@
              [(symbol? var-node) (strip-mode-prefix var-node)]
              [else (gensym 'is-var)]))
      (define result (nf is-expr))
+     ;; SUB.1 tripwire: nf-persisting boundary 1 (solve is-goal answer row)
+     (assert-no-open-container! 'solve result)
      (define answer (hasheq var-name result))
      (answers->prologos-expr (list answer) (list var-name))]
     [(expr-not-goal? goal*)
@@ -696,6 +778,8 @@
              [(symbol? var-node) (strip-mode-prefix var-node)]
              [else (gensym 'is-var)]))
      (define result (nf is-expr))
+     ;; SUB.1 tripwire: nf-persisting boundary 2 (solve-one is-goal answer row)
+     (assert-no-open-container! 'solve-one result)
      (define key (expr-keyword var-name))
      (define champ-val (champ-insert champ-empty (equal-hash-code key) key result))
      (expr-champ champ-val)]
@@ -1455,7 +1539,11 @@
   ;; the ok-payload base: the subject champ rebuilt with nf'd values
   (define base-ok
     (champ-fold c
-                (lambda (k v acc) (champ-insert acc (equal-hash-code k) k (nf v)))
+                (lambda (k v acc)
+                  (define v* (nf v))
+                  ;; SUB.1 tripwire: nf-persisting boundary 3 (validate base-ok)
+                  (assert-no-open-container! 'validate v*)
+                  (champ-insert acc (equal-hash-code k) k v*))
                 champ-empty))
   ;; walk the plan: collect-all errs + fill defaults; escape on pred panic
   (let loop ([entries plan] [okc base-ok] [errc champ-empty] [any-err? #f])

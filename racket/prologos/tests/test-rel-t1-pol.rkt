@@ -209,3 +209,71 @@
   (define r (run-ns-ws-last (string-append FIXTURE "solve (nosuch x)\nsolve (bool y)")))
   ;; last result = the FOLLOWING command — proof the run continued past the error
   (check-true (string-contains? r ":y") "the command after the error still ran"))
+
+;; ── SUB.1: substitution containment tripwire (POL.10 spin-out) ───────────────
+;; docs/tracking/2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md — ruling (D).
+;; The LIVE bug: nf-under-binder mints an open champ (a lambda whose body is a
+;; map literal referencing the lambda's param); shift/subst treat containers
+;; as closed leaves, so a later beta silently drops the argument — `?bvar0`
+;; escaped to top level TYPED with 0 errors. Until SUB.3 (NbE open-the-binder)
+;; makes the shape unconstructible, the tripwire at the three nf-persisting
+;; boundaries (solve/solve-one is-goal answer rows + validate base-ok) refuses
+;; to persist it: loud per-command exn:prologos-solve, the run continues.
+;; ⚠ FLIP AT SUB.3: the poisoned cases below become correct-answer assertions
+;; (6N — see the defect doc §5 E2E) when the fix lands.
+
+(define SUBFIX
+  (string-append
+   "ns subtrip\n"
+   "spec ctrl [Map Keyword <Nat -> Nat>] -> Nat\n"
+   "defn ctrl [p]  [[get p :f] 5N]\n"
+   "spec bug [Map Keyword <Nat -> [Map Keyword Nat]>] -> Nat\n"
+   "defn bug [p]  [get [[get p :f] 5N] :a]\n"))
+
+(test-case "SUB.1: the CONTROL still computes — closed lambda in an answer row"
+  (define r (run-ns-ws-last
+             (string-append SUBFIX
+                            "[ctrl (solve-one (is ?f [fn [y : Nat] [add y 1N]]))]")))
+  (check-true (string-contains? (result-msg r) "6N") (result-msg r)))
+
+(test-case "SUB.1: poisoned solve-one is REFUSED loudly — no ?bvar escapes"
+  (define r (run-ns-ws-last
+             (string-append SUBFIX
+                            "[bug (solve-one (is ?f [fn [y : Nat] {:a y}]))]")))
+  (define m (result-msg r))
+  (check-true (prologos-error? r) "per-command error, not a silent value")
+  (check-true (string-contains? m "substitution containment") m)
+  (check-false (string-contains? m "?bvar") "the open index must not escape"))
+
+(test-case "SUB.1: poisoned solve (list form) is refused at the same guard"
+  (define r (run-ns-ws-last
+             (string-append SUBFIX
+                            "solve (is ?f [fn [y : Nat] {:a y}])")))
+  (define m (result-msg r))
+  (check-true (prologos-error? r))
+  (check-true (string-contains? m "substitution containment") m))
+
+(test-case "SUB.1: the run CONTINUES past the guard (command-boundary conversion)"
+  (define r (run-ns-ws-last
+             (string-append SUBFIX
+                            "solve (is ?f [fn [y : Nat] {:a y}])\n"
+                            "[ctrl (solve-one (is ?f [fn [y : Nat] [add y 1N]]))]")))
+  (check-true (string-contains? (result-msg r) "6N")
+              "the command after the refused one still ran"))
+
+(test-case "SUB.1: validate base-ok boundary — poisoned field refused, control ok"
+  (define VS
+    (string-append
+     "ns subtripv\n"
+     "schema FnBox\n"
+     "  :f <Nat -> [Map Keyword Nat]>\n"
+     "schema FnBox2\n"
+     "  :f <Nat -> Nat>\n"))
+  (define bad (run-ns-ws-last
+               (string-append VS "[validate FnBox {:f [fn [y : Nat] {:a y}]}]")))
+  (check-true (prologos-error? bad) "poisoned validate refuses")
+  (check-true (string-contains? (result-msg bad) "substitution containment")
+              (result-msg bad))
+  (define ok (run-ns-ws-last
+              (string-append VS "[validate FnBox2 {:f [fn [y : Nat] [add y 1N]]}]")))
+  (check-true (string-contains? (result-msg ok) "ok") (result-msg ok)))

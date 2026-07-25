@@ -50,6 +50,9 @@
  ;; POL.4: the distinguished user-facing solver exception (caught at the
  ;; command boundary, driver.rkt)
  exn:prologos-solve?
+ ;; SUB.1: the raiser, for the substitution-containment tripwire in
+ ;; reduction.rkt (docs/tracking/2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md)
+ raise-solve-error
  make-relation-store
  relation-register
  relation-lookup

@@ -182,3 +182,91 @@
 (test-case "shift: boolrec with constants unchanged"
   (check-equal? (shift 1 0 (expr-boolrec (expr-lam 'mw (expr-Bool) (expr-Nat)) (expr-zero) (expr-suc (expr-zero)) (expr-true)))
                 (expr-boolrec (expr-lam 'mw (expr-Bool) (expr-Nat)) (expr-zero) (expr-suc (expr-zero)) (expr-true))))
+
+;; ========================================
+;; Substitution containment (SUB.1, 2026-07-24)
+;; docs/tracking/2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md
+;; ========================================
+;; Ruling (D): runtime collection values (champ/hset/rrb + transients) are
+;; CLOSED runtime values — shift/subst identity on them is the CONTRACT, not
+;; the bug. The bug is that `nf` can CONSTRUCT an open container (normalizing
+;; a lambda body without opening the binder); the invariant is owned by the
+;; SUB.3 fix (NbE open-the-binder) and guarded meanwhile by the tripwire at
+;; the three nf-persisting boundaries. These tests pin (a) the closed-leaf
+;; contract, (b) the depth-aware tripwire predicate, (c) a BUG-PIN of the nf
+;; mint that FLIPS when SUB.3 lands.
+
+(require (only-in "../reduction.rkt" nf contains-open-container?)
+         (only-in "../champ.rkt" champ-empty champ-insert)
+         (only-in "../rrb.rkt" rrb-from-list))
+
+(define (mk-champ k v)
+  (expr-champ (champ-insert champ-empty (equal-hash-code k) k v)))
+(define ka (expr-keyword ':a))
+
+;; (a) the closed-leaf CONTRACT under ruling (D)
+(test-case "SUB contract: subst over a champ is identity (champ = closed value)"
+  (define c (mk-champ ka (expr-bvar 0)))
+  (check-true (eq? (subst 0 (expr-int 42) c) c)))
+
+(test-case "SUB contract: shift over a champ is identity"
+  (define c (mk-champ ka (expr-bvar 0)))
+  (check-true (eq? (shift 1 0 c) c)))
+
+(test-case "SUB contract: subst/shift over hset and rrb are identity"
+  (define h (expr-hset (champ-insert champ-empty (equal-hash-code ka) ka (expr-bvar 0))))
+  (define r (expr-rrb (rrb-from-list (list (expr-bvar 0)))))
+  (check-true (eq? (subst 0 (expr-int 42) h) h))
+  (check-true (eq? (shift 1 0 h) h))
+  (check-true (eq? (subst 0 (expr-int 42) r) r))
+  (check-true (eq? (shift 1 0 r) r)))
+
+;; (b) the tripwire predicate — depth-aware freeness w.r.t. the container
+(test-case "SUB predicate: champ holding a free bvar fires"
+  (check-true (contains-open-container? (mk-champ ka (expr-bvar 0)))))
+
+(test-case "SUB predicate: the poisoned shape under its binder fires (the repro)"
+  (check-true (contains-open-container?
+               (expr-lam 'mw (expr-Nat) (mk-champ ka (expr-bvar 0))))))
+
+(test-case "SUB predicate: champ holding a CLOSED lambda does NOT fire (the control)"
+  ;; answer row {:f λy.y} — bvar bound INSIDE the container is legal
+  (check-false (contains-open-container?
+                (mk-champ (expr-keyword ':f)
+                          (expr-lam 'mw (expr-Nat) (expr-bvar 0))))))
+
+(test-case "SUB predicate: ground champ does not fire"
+  (check-false (contains-open-container? (mk-champ ka (expr-int 42)))))
+
+(test-case "SUB predicate: bvar outside any container does not fire"
+  (check-false (contains-open-container? (expr-lam 'mw (expr-Nat) (expr-bvar 0)))))
+
+(test-case "SUB predicate: NESTED poison — champ{:f λy.champ{:a y}} fires"
+  ;; the inner champ captures y across ITS boundary even though y is bound
+  ;; within the OUTER champ — freeness is w.r.t. the innermost container
+  (check-true (contains-open-container?
+               (mk-champ (expr-keyword ':f)
+                         (expr-lam 'mw (expr-Nat)
+                                   (mk-champ ka (expr-bvar 0)))))))
+
+(test-case "SUB predicate: open bvar deeper in a container entry's spine fires"
+  ;; {:a [add y 1]} under the binder — the stuck spine holds a free bvar
+  (check-true (contains-open-container?
+               (mk-champ ka (expr-app (expr-fvar 'add) (expr-bvar 0))))))
+
+(test-case "SUB predicate: rrb holding a free bvar fires"
+  (check-true (contains-open-container?
+               (expr-rrb (rrb-from-list (list (expr-bvar 0)))))))
+
+;; (c) BUG-PIN — the ROOT: nf normalizes a lambda body without opening the
+;; binder, minting an OPEN champ from a map-literal body.
+;; ⚠ FLIP AT SUB.3: when the (D) fix (NbE open-the-binder) lands, nf must
+;; yield a body with NO open container (spine or re-abstracted champ) and this
+;; assertion inverts to check-false + a correct-application check.
+(test-case "SUB BUG-PIN: nf mints an open champ under a binder (flips at SUB.3)"
+  (define lam-with-map-body
+    (expr-lam 'mw (expr-Nat)
+              (expr-map-assoc (expr-map-empty (expr-hole) (expr-hole))
+                              ka (expr-bvar 0))))
+  (check-true (contains-open-container? (nf lam-with-map-body))
+              "nf-under-binder still mints the open champ (pre-SUB.3)"))

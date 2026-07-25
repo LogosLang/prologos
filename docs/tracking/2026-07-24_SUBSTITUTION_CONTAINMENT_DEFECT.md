@@ -1,7 +1,17 @@
 # Substitution Containment Defect — runtime collection values are treated as closed leaves
 
-**Spin-out from Rel T1 POL.10** · 2026-07-24 · HEAD `f7d5b01b` · **Status: LIVE BUG,
-reproduced; fix design settled to a fork that needs one owner ruling**
+**Spin-out from Rel T1 POL.10** · 2026-07-24 · HEAD `f7d5b01b` · **Status: RULED (D)
+(owner, 2026-07-24) — `expr-champ` is a CLOSED runtime map value; fix = NbE
+open-the-binder. SUB.1 now-slice in progress.**
+
+## Progress Tracker
+
+| Phase | Description | Status | Notes |
+|---|---|---|---|
+| **R** | The §3 owner ruling: (D) closed runtime value vs (A) open AST container | ✅ **(D)** | owner, 2026-07-24; repro + API isolation + coordinates independently re-verified at `82109163` first |
+| **SUB.1** | Now-slice: module/cache-crossing probe · tripwire at the 3 `nf`-persisting boundaries · regression tests | 🔄 | Probe (4 routes): **no surface def-store route exists today** — all blocked by independent def-seam typing gaps (see §6 note) ⇒ **no `.pnet` invalidation needed at SUB.3**; tripwire keeps that true if those gaps are later fixed |
+| **SUB.2** | `PLT_CS_COMPILE_LIMIT` in-tree measurement (owner-prioritized) | ⬜ | ~400× on synthetic 340-arm match, UNVERIFIED in-tree; precondition for any sound Pre-0 on SUB.3 |
+| **SUB.3** | The (D) fix: stop minting champs under binders + NbE open-the-binder in `nf` + re-abstraction (ONE champ-descending fn) + persists-vs-displays consumer audit | ⬜ | owner scoped IN (2026-07-24). `narrow-subst-bvars` (wider than champ) = named adjacent, decide in/out at SUB.3 open; `.pnet` invalidation OUT per the SUB.1 probe |
 
 **Severity**: a **silent wrong answer in legal, zero-error user code** — an open de Bruijn
 index escapes to top level as a typed value. Not a crash, not a type error.
@@ -100,7 +110,8 @@ body: `reduction.rkt:3544` — `[(expr-lam m t body) (expr-lam m (nf t) (nf body
 **without opening the binder**, which no dependent type checker does. That is what mints an
 open champ in the first place.
 
-**⚠ THE OWNER RULING REQUIRED — what is `expr-champ`?**
+**✅ RULED (D) — owner, 2026-07-24.** `expr-champ` is a CLOSED runtime map value; the
+fix is the NbE open-the-binder shape below. Recorded fork, for the register:
 
 - **(D) A CLOSED runtime map value** (the F1b RETIRED-LOUD position, typing-core.rkt:3149-3157:
   a champ is "a RUNTIME map value, born only in reduction, after type-check"). Then open maps
@@ -186,10 +197,20 @@ barrier **without touching `substitution.rkt`**:
 - **PReduce e-graph** — normalizes under binders by construction; this defect is a **hard
   blocker** there.
 
-**Named open question, cheap to close (~30 min), settle before final scoping**: POL.10's
-`champ-sentinel` (pnet-serialize.rkt:122/:497) already round-trips champs into `.pnet`, and
-the audit verified a **def-stored open champ** via `validate`. If that stored field can be
-*applied*, the wrong answer crosses a module boundary and enters the on-disk cache.
+**Named open question — CLOSED (SUB.1 probe, 2026-07-24, main session @ `82109163`)**:
+POL.10's `champ-sentinel` (pnet-serialize.rkt:122/:497) already round-trips champs into
+`.pnet`, and the audit verified a **def-stored open champ** via `validate`. Probe result:
+**no legal surface route def-stores the poisoned shape today** — four routes tried, all
+blocked by *independent* def-seam typing gaps: `def := (solve-one (is ?f [fn …]))`
+(annotated AND bare) → "Expression is not a valid type" (function-typed row field);
+`def := [validate S {…}]` → "Multiplicity violation" (the POL.5/F1a.2 un-arm'd-node
+class, **3rd data point**); `def := (solve-one (= ?f [fn …]))` → "not a valid type".
+The inline apply (no def) reproduces `?bvar0` but is within-command transient. Since
+`.pnet` serializes only module-level state and all caches were regenerated at
+PNET_VERSION 3 (POL.10), **the wrong answer does NOT cross a module boundary at HEAD ⇒
+no cache invalidation at SUB.3**. Caveat: empirical (4 routes), not a proof — the SUB.1
+tripwire is what makes it structural, and it must land BEFORE the def-seam typing gaps
+are ever fixed. (Those gaps are themselves adjacent findings for the POL cluster.)
 
 ## 7. Cross-references
 
