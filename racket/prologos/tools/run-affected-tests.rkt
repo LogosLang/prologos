@@ -34,6 +34,22 @@
          "bench-lib.rkt")
 
 ;; ============================================================
+;; Compile-limit adoption (Rel T1 SUB.2, owner-blessed 2026-07-24)
+;; ============================================================
+;; Raise the Racket CS machine-code compile limit for every build this runner
+;; triggers. The compiler's giant match functions (shift/subst ~340 arms each,
+;; whnf/nf ~990) exceed the default limit (10000) and fall back to the CS
+;; INTERPRETER. Measured in-tree: shift 1.27 s → 1.52 ms per 11k-node walk
+;; (~830×); full suite 211 → 173 s (−18%, all pass); compile cost +17% on the
+;; hot core. Subprocesses (raco make precompile, batch workers) inherit the
+;; env, so setting it here covers the whole pipeline. An explicit user
+;; override is respected. Manual `raco make` outside the runners needs the
+;; var in the shell (see CLAUDE.local.md + .claude/rules/testing.md).
+;; Evidence: docs/tracking/2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md §4.2.
+(unless (getenv "PLT_CS_COMPILE_LIMIT")
+  (putenv "PLT_CS_COMPILE_LIMIT" "1000000"))
+
+;; ============================================================
 ;; Skip list support
 ;; ============================================================
 
