@@ -577,6 +577,88 @@
 ;;
 ;; When a namespace context is active, def stores names both as
 ;; bare symbols (for local use) and as fully-qualified names (for export).
+;; ── Rel T1 POL.3: declaration-order keys for solve echoes (design §8) ─────────
+;; Rows are champs — hash-ordered by construction — so `solve (truths b1 b2 b3 _)`
+;; displayed `{:b3 1, :b2 1, :b1 1}`. The declaration order lives in the GOAL's
+;; positional arg list (the B0 kernel's classify-goal-args, minus POL.2's anon
+;; vars), which is available exactly here: the eval echo seam still holds the
+;; elaborated solve expression. DISPLAY-ONLY — the row VALUE stays an unordered
+;; champ (`.field`, validate, row typing all unaffected), and the reorder applies
+;; only where the goal is in hand. Named limitation: `def r := solve (…)` then
+;; `r` echoes through an fvar with no goal attached, so it stays hash-ordered —
+;; carrying the order IN the row is a representation change (Rel T2 territory).
+
+;; The ordered non-anon query-var names of a solve-family expression, or #f.
+(define (solve-echo-ordered-vars expr)
+  (define goal
+    (cond [(expr-solve? expr) (expr-solve-goal expr)]
+          [(expr-solve-one? expr) (expr-solve-one-goal expr)]
+          [(expr-solve-with? expr) (expr-solve-with-goal expr)]
+          [(expr-explain? expr) (expr-explain-goal expr)]
+          [else #f]))
+  (cond
+    [(and goal (expr-goal-app? goal))
+     (define-values (_gs free-args) (classify-goal-args (expr-goal-app-args goal)))
+     (row-query-vars (map free-arg-name free-args))]
+    [(and goal (expr-rel? goal))
+     ;; anonymous rel: declaration order = the rel's param order. At the AST
+     ;; stage params are C.b.1's raw `(name mode type)` 3-lists (param-info
+     ;; structs are minted later, at expr-rel->relation-info); accept both.
+     (row-query-vars (map (lambda (p)
+                            (cond [(pair? p) (car p)]
+                                  [(param-info? p) (param-info-name p)]
+                                  [else p]))
+                          (expr-rel-params goal)))]
+    [else #f]))
+
+;; Render one row champ with `ordered-names` first (in order), then any
+;; remaining entries (e.g. explain's reserved metadata keys) in champ order.
+;; Mirrors pp-expr's champ arm formatting exactly ("{k v, k v}").
+(define (pp-row-ordered row ordered-names)
+  (define entries (champ-entries (expr-champ-racket-champ row)))
+  (define (entry-for name)
+    (for/first ([kv (in-list entries)]
+                #:when (and (expr-keyword? (car kv))
+                            (eq? (expr-keyword-name (car kv)) name)))
+      kv))
+  (define ordered (filter values (map entry-for ordered-names)))
+  (define rest (filter (lambda (kv) (not (memq kv ordered))) entries))
+  (format "{~a}"
+          (string-join
+           (for/list ([kv (in-list (append ordered rest))])
+             (format "~a ~a" (pp-expr (car kv)) (pp-expr (cdr kv))))
+           ", ")))
+
+;; The ordered display of a solve result value, or #f to fall back to pp-expr.
+;; Custom-renders ONLY the shapes it fully understands: a bare row champ
+;; (solve-one) or a proper cons spine whose members are ALL row champs; anything
+;; else (nil, none, stuck terms, mixed lists) falls back — the echo must never
+;; drop or reshape an element it did not recognize.
+(define (pp-solve-echo-ordered val ordered-names)
+  (define (cons-head? f)
+    (and (expr-fvar? f)
+         (let ([s (symbol->string (expr-fvar-name f))])
+           (or (string=? s "cons") (regexp-match? #rx"::cons$" s)))))
+  (cond
+    [(expr-champ? val) (pp-row-ordered val ordered-names)]
+    [else
+     (let loop ([v val] [acc '()])
+       (cond
+         [(expr-nil? v)
+          ;; empty result set: fall back so it keeps displaying as `nil`
+          ;; (three e2e tests pin that; the reorder must not reshape it)
+          (and (pair? acc)
+               (format "'[~a]"
+                       (string-join (map (lambda (r) (pp-row-ordered r ordered-names))
+                                         (reverse acc))
+                                    " ")))]
+         [(and (expr-app? v)
+               (expr-app? (expr-app-func v))
+               (cons-head? (expr-app-func (expr-app-func v)))
+               (expr-champ? (expr-app-arg (expr-app-func v))))
+          (loop (expr-app-arg v) (cons (expr-app-arg (expr-app-func v)) acc))]
+         [else #f]))]))
+
 (define (process-command surf)
   ;; PPN 4C Phase 1.5: seed current-source-loc from the command's surf-node.
   ;; Elaborate-level parameterize sharpens further; this covers top-level
@@ -705,9 +787,17 @@
                                          ;; Deliberately NOT on the def/defr arms — a def's
                                          ;; announced type is the type it STORES, which is
                                          ;; the static one.
-                                         (format "~a : ~a" (pp-expr val)
-                                                 (pp-expr (refine-solve-row-type-for-display
-                                                           ty-nf val)))))))))))])]
+                                         ;; Rel T1 POL.3: solve echoes display row keys in
+                                         ;; DECLARATION order (the goal's positional query
+                                         ;; vars) — display-only, falls back to pp-expr
+                                         ;; for any shape not fully recognized.
+                                         (let* ([ovars (solve-echo-ordered-vars expr)]
+                                                [val-str (or (and ovars
+                                                                  (pp-solve-echo-ordered val ovars))
+                                                             (pp-expr val))])
+                                           (format "~a : ~a" val-str
+                                                   (pp-expr (refine-solve-row-type-for-display
+                                                             ty-nf val))))))))))))])]
 
                   ;; (infer expr) — Track 4B Phase 9: on-network first, fallback for unhandled
                   [(list 'infer expr)

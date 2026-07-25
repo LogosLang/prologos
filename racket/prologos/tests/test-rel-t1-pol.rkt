@@ -350,3 +350,54 @@
   (check-equal? (narrow-subst-bvars pi2 (list (expr-nat-val 9)) 0)
                 (expr-Pi 'mw (expr-Nat) (expr-nat-val 9))
                 "the outer slot substitutes at depth+1"))
+
+;; ── POL.3: declaration-order keys for solve echoes (design §8) ───────────────
+;; Rows are champs (hash-ordered), so `solve (truths b1 b2 b3 _)` displayed
+;; `{:b3 1, :_anon… 1, :b2 1, :b1 1}`. The declaration order lives in the goal's
+;; positional query vars (B0's classify-goal-args, minus POL.2's anons) and is
+;; applied at the eval echo seam, DISPLAY-ONLY: the row VALUE stays an unordered
+;; champ, and a def-bound echo (no goal in hand) stays hash-ordered — the named
+;; fallback, until an order-carrying row representation (Rel T2 territory).
+
+(test-case "POL.3: solve keys display in declaration order"
+  (define r (run-ns-ws-last (string-append FIXTURE "solve (truths b1 b2 b3 _)")))
+  (check-true (string? r))
+  (check-true (string-contains? r "{:b1 1, :b2 1, :b3 1}")
+              "first row in declaration order (was hash order)"))
+
+(test-case "POL.3: DECLARATION order, not alphabetical"
+  (define r (run-ns-ws-last
+             (string-append "ns p3\n"
+                            "defr za [?z ?a]\n  || 1 2\n     3 4\n"
+                            "solve (za z a)")))
+  (check-true (string-contains? r "{:z 1, :a 2}")
+              "z declared first displays first, though a < z alphabetically"))
+
+(test-case "POL.3: solve-one bare row is ordered too"
+  (define r (run-ns-ws-last (string-append FIXTURE "solve-one (truths b1 b2 b3 _)")))
+  (check-true (string-contains? r "{:b1 1, :b2 1, :b3 1}")))
+
+(test-case "POL.3: explain puts query keys first, metadata after"
+  (define r (run-ns-ws-last
+             (string-append "ns p3\n"
+                            "defr za [?z ?a]\n  || 1 2\n     3 4\n"
+                            "explain (za z a)")))
+  (check-true (string-contains? r "{:z 1, :a 2, :provenance")
+              "query keys lead; reserved metadata keys follow"))
+
+(test-case "POL.3: anonymous rel uses its param declaration order"
+  (define r (run-ns-ws-last
+             (string-append "ns p3\n"
+                            "defr za [?z ?a]\n  || 1 2\n     3 4\n"
+                            "solve (rel [q p]\n  &> (za q p))")))
+  (check-true (string-contains? r "{:q 1, :p 2}")))
+
+(test-case "POL.3: def-bound echo is the NAMED fallback (displays, unordered)"
+  (define r (run-ns-ws-last
+             (string-append "ns p3\n"
+                            "defr za [?z ?a]\n  || 1 2\n     3 4\n"
+                            "def rr := solve (za z a)\n"
+                            "rr")))
+  ;; no goal in hand at the echo — hash order; assert it still displays both keys
+  (check-true (string? r))
+  (check-true (and (string-contains? r ":z 1") (string-contains? r ":a 2"))))
