@@ -3575,6 +3575,167 @@
 ;; ========================================
 (define current-nf-cache (make-parameter #f))
 
+;; ========================================
+;; SUB.3: NbE open-the-binder normalization (ruling D)
+;; docs/tracking/2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md §3
+;; ========================================
+;; nf normalizes under binders by OPENING them: bvar0 is substituted with a
+;; deterministic depth-keyed NbE fvar (#%nbe0, #%nbe1, … — `#%` names are
+;; unwritable in surface syntax so no user collision; deterministic names keep
+;; the nf cache sound/hit-capable and display output stable), the body
+;; normalizes in that open context — whnf's container mints (map-assoc→champ,
+;; set-insert→hset, pvec→rrb) then capture only FVARS, on which shift/subst
+;; are already identity, so the champ-closed-leaf contract holds BY
+;; CONSTRUCTION — and re-abstraction converts the NbE fvar back to bvar0.
+;; A container that captured the NbE var is rebuilt as its SPINE form
+;; (map-assoc / set-insert chains, pvec-literal — the traversal-safe open
+;; representation); containers that did not are kept eq?-identical.
+
+(define current-nbe-depth (make-parameter 0))
+
+(define (nbe-fvar-name d) (string->symbol (format "#%nbe~a" d)))
+
+(define (nf-under-binder body)
+  ;; Fast path: normalize in place. When the result contains no open
+  ;; container (the overwhelmingly common case — bodies whose reduction
+  ;; mints no map/set/vec around a bound var), the in-place result is
+  ;; exactly what the NbE path would produce, at one walk instead of three.
+  ;; The detector is the SUB.1 tripwire predicate — exact and read-only —
+  ;; so this is one semantics with two execution strategies, not a dual
+  ;; path: any mint routes to the NbE open-the-binder normalization.
+  (define fast (nf body))
+  (if (nbe-scan-poisoned? fast)
+      (nbe-open-nf body)
+      fast))
+
+;; Verdict memo for the fast-path scan, eq?-keyed on the nf RESULT (the nf
+;; cache returns shared objects, so repeated normalization of the same binder
+;; body within a command re-verifies for free). Weak: entries die with their
+;; terms. Sound: a term's open-container verdict is a pure function of its
+;; identity (exprs are immutable). Caveat, pinned: TRANSIENTS are #:mutable,
+;; so a verdict on a transient-bearing term could go stale — but no surface
+;; construct can place a transient value inside a binder body (transients are
+;; bracket-protocol runtime values, not literals), and the SUB.1 tripwire at
+;; the persist boundaries guards the claim.
+(define nbe-scan-cache (make-weak-hasheq))
+
+(define (nbe-scan-poisoned? e)
+  (define cached (hash-ref nbe-scan-cache e 'miss))
+  (cond
+    [(eq? cached 'miss)
+     (define verdict (contains-open-container? e))
+     (hash-set! nbe-scan-cache e verdict)
+     verdict]
+    [else cached]))
+
+(define (nbe-open-nf body)
+  (define d (current-nbe-depth))
+  (define fv-name (nbe-fvar-name d))
+  (define opened (subst 0 (expr-fvar fv-name) body))
+  (define body*
+    (parameterize ([current-nbe-depth (add1 d)])
+      (nf opened)))
+  (re-abstract fv-name body*))
+
+;; re-abstract: fv-name → bvar(depth); free bvar i ≥ depth → i+1 (restoring
+;; the indices `subst 0` decremented at opening). Explicit arms ONLY for
+;; bvar/fvar, the four binder forms (substitution.rkt shift's authoritative
+;; inventory), and the runtime containers; every other node rebuilds
+;; GENERICALLY via struct-info + struct-type-make-constructor (all expr
+;; structs are #:transparent) — like the SUB.1 tripwire, this walker
+;; structurally cannot have the missing-arm defect it exists to fix.
+;; eq?-preserving on unchanged subtrees.
+(define (re-abstract fv-name e)
+  ;; deterministic entry order for rebuilt spines (champ order is hash-order)
+  (define (sorted-entries c)
+    (sort (champ-entries c) string<? #:key (lambda (kv) (format "~a" (car kv)))))
+  (define (walk v d)
+    (cond
+      [(expr-fvar? v)
+       (if (eq? (expr-fvar-name v) fv-name) (expr-bvar d) v)]
+      [(expr-bvar? v)
+       (let ([i (expr-bvar-index v)])
+         (if (>= i d) (expr-bvar (add1 i)) v))]
+      ;; binder forms — body positions at d+1 (or +binding-count)
+      [(expr-lam? v)
+       (let ([t* (walk (expr-lam-type v) d)]
+             [b* (walk (expr-lam-body v) (add1 d))])
+         (if (and (eq? t* (expr-lam-type v)) (eq? b* (expr-lam-body v)))
+             v
+             (expr-lam (expr-lam-mult v) t* b*)))]
+      [(expr-Pi? v)
+       (let ([dm* (walk (expr-Pi-domain v) d)]
+             [cd* (walk (expr-Pi-codomain v) (add1 d))])
+         (if (and (eq? dm* (expr-Pi-domain v)) (eq? cd* (expr-Pi-codomain v)))
+             v
+             (expr-Pi (expr-Pi-mult v) dm* cd*)))]
+      [(expr-Sigma? v)
+       (let ([f* (walk (expr-Sigma-fst-type v) d)]
+             [s* (walk (expr-Sigma-snd-type v) (add1 d))])
+         (if (and (eq? f* (expr-Sigma-fst-type v)) (eq? s* (expr-Sigma-snd-type v)))
+             v
+             (expr-Sigma f* s*)))]
+      [(expr-reduce? v)
+       (let ([sc* (walk (expr-reduce-scrutinee v) d)]
+             [arms* (for/list ([arm (in-list (expr-reduce-arms v))])
+                      (let ([b* (walk (expr-reduce-arm-body arm)
+                                      (+ d (expr-reduce-arm-binding-count arm)))])
+                        (if (eq? b* (expr-reduce-arm-body arm))
+                            arm
+                            (expr-reduce-arm (expr-reduce-arm-ctor-name arm)
+                                             (expr-reduce-arm-binding-count arm)
+                                             b*))))])
+         (if (and (eq? sc* (expr-reduce-scrutinee v))
+                  (andmap eq? arms* (expr-reduce-arms v)))
+             v
+             (expr-reduce sc* arms* (expr-reduce-structural? v))))]
+      ;; runtime containers — contents walk at the SAME depth (containers do
+      ;; not bind); a changed container rebuilds as its SPINE form
+      [(expr-champ? v)
+       (let* ([entries (sorted-entries (expr-champ-racket-champ v))]
+              [entries* (for/list ([kv (in-list entries)])
+                          (cons (walk (car kv) d) (walk (cdr kv) d)))])
+         (if (andmap (lambda (a b) (and (eq? (car a) (car b)) (eq? (cdr a) (cdr b))))
+                     entries entries*)
+             v
+             (for/fold ([acc (expr-map-empty (expr-hole) (expr-hole))])
+                       ([kv (in-list entries*)])
+               (expr-map-assoc acc (car kv) (cdr kv)))))]
+      [(expr-hset? v)
+       (let* ([entries (sorted-entries (expr-hset-racket-champ v))]
+              [elems (map car entries)]
+              [elems* (for/list ([el (in-list elems)]) (walk el d))])
+         (if (andmap eq? elems elems*)
+             v
+             (for/fold ([acc (expr-set-empty (expr-hole))])
+                       ([el (in-list elems*)])
+               (expr-set-insert acc el))))]
+      [(expr-rrb? v)
+       (let* ([elems (rrb-to-list (expr-rrb-racket-rrb v))]
+              [elems* (for/list ([el (in-list elems)]) (walk el d))])
+         (if (andmap eq? elems elems*)
+             v
+             (expr-pvec-literal elems*)))]
+      ;; transients: nothing mints them under a binder (SUB.1 tripwire guards
+      ;; the claim); their payloads are mutable Racket structures a rebuild
+      ;; cannot express — leave untouched
+      [(or (expr-trrb? v) (expr-tchamp? v) (expr-thset? v)) v]
+      ;; generic transparent-struct rebuild
+      [(struct? v)
+       (define-values (st _skipped?) (struct-info v))
+       (define vec (struct->vector v))
+       (define fields (for/list ([i (in-range 1 (vector-length vec))])
+                        (vector-ref vec i)))
+       (define fields* (for/list ([f (in-list fields)]) (walk f d)))
+       (if (andmap eq? fields fields*)
+           v
+           (apply (struct-type-make-constructor st) fields*))]
+      [(pair? v)
+       (let ([a* (walk (car v) d)] [b* (walk (cdr v) d)])
+         (if (and (eq? a* (car v)) (eq? b* (cdr v))) v (cons a* b*)))]
+      [else v]))
+  (walk e 0))
+
 (define (nf e)
   (define cache (current-nf-cache))
   (cond
@@ -3629,9 +3790,12 @@
          [(expr-nat-val? inner) (expr-nat-val (+ (expr-nat-val-n inner) 1))]
          [(expr-zero? inner)    (expr-nat-val 1)]
          [else                  (expr-suc inner)]))]
-    [(expr-lam m t body) (expr-lam m (nf t) (nf body))]
-    [(expr-Pi m dom cod) (expr-Pi m (nf dom) (nf cod))]
-    [(expr-Sigma t1 t2) (expr-Sigma (nf t1) (nf t2))]
+    ;; SUB.3 (ruling D): binder bodies normalize via NbE open-the-binder —
+    ;; never a naked (nf body), which minted OPEN champs (the substitution
+    ;; containment defect's root, formerly this arm).
+    [(expr-lam m t body) (expr-lam m (nf t) (nf-under-binder body))]
+    [(expr-Pi m dom cod) (expr-Pi m (nf dom) (nf-under-binder cod))]
+    [(expr-Sigma t1 t2) (expr-Sigma (nf t1) (nf-under-binder t2))]
     [(expr-pair e1 e2) (expr-pair (nf e1) (nf e2))]
     [(expr-Eq t e1 e2) (expr-Eq (nf t) (nf e1) (nf e2))]
 

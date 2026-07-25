@@ -197,7 +197,7 @@
 ;; mint that FLIPS when SUB.3 lands.
 
 (require (only-in "../reduction.rkt" nf contains-open-container?)
-         (only-in "../champ.rkt" champ-empty champ-insert)
+         (only-in "../champ.rkt" champ-empty champ-insert champ-entries)
          (only-in "../rrb.rkt" rrb-from-list))
 
 (define (mk-champ k v)
@@ -258,15 +258,72 @@
   (check-true (contains-open-container?
                (expr-rrb (rrb-from-list (list (expr-bvar 0)))))))
 
-;; (c) BUG-PIN — the ROOT: nf normalizes a lambda body without opening the
-;; binder, minting an OPEN champ from a map-literal body.
-;; ⚠ FLIP AT SUB.3: when the (D) fix (NbE open-the-binder) lands, nf must
-;; yield a body with NO open container (spine or re-abstracted champ) and this
-;; assertion inverts to check-false + a correct-application check.
-(test-case "SUB BUG-PIN: nf mints an open champ under a binder (flips at SUB.3)"
-  (define lam-with-map-body
+;; (c) SUB.3 (ruling D) — FLIPPED from the SUB.1 BUG-PIN: nf opens the binder
+;; NbE-style (#%nbe fvar, re-abstraction), so the normalized body carries NO
+;; open container and beta after nf computes the right value.
+
+(require (only-in "../reduction.rkt" whnf)
+         (only-in racket/match match))
+
+(define lam-with-map-body
+  (expr-lam 'mw (expr-Nat)
+            (expr-map-assoc (expr-map-empty (expr-hole) (expr-hole))
+                            ka (expr-bvar 0))))
+
+(define (champ-entries-sorted e)
+  (match e
+    [(expr-champ c)
+     (sort (champ-entries c) string<? #:key (lambda (kv) (format "~a" (car kv))))]
+    [_ #f]))
+
+(test-case "SUB.3: nf under a binder yields NO open container (flipped BUG-PIN)"
+  (define lam* (nf lam-with-map-body))
+  (check-false (contains-open-container? lam*)
+               "NbE nf must not mint an open champ")
+  ;; beta over the nf'd body computes the right map
+  (define applied (whnf (subst 0 (expr-int 42) (expr-lam-body lam*))))
+  (check-equal? (champ-entries-sorted applied)
+                (list (cons ka (expr-int 42)))
+                "the substituted value reaches the map"))
+
+(test-case "SUB.3: nested binders — both params reach the map"
+  (define inner
+    (expr-lam 'mw (expr-Nat)
+              (expr-map-assoc
+               (expr-map-assoc (expr-map-empty (expr-hole) (expr-hole))
+                               ka (expr-bvar 1))          ;; outer param
+               (expr-keyword ':b) (expr-bvar 0))))        ;; inner param
+  (define outer (expr-lam 'mw (expr-Nat) inner))
+  (define outer* (nf outer))
+  (check-false (contains-open-container? outer*))
+  (define inner* (subst 0 (expr-int 10) (expr-lam-body outer*)))
+  (define applied (whnf (subst 0 (expr-int 20) (expr-lam-body inner*))))
+  (check-equal? (champ-entries-sorted applied)
+                (list (cons ka (expr-int 10))
+                      (cons (expr-keyword ':b) (expr-int 20)))))
+
+(test-case "SUB.3: Pi codomain opens too"
+  (define pi (expr-Pi 'mw (expr-Nat)
+                      (expr-map-assoc (expr-map-empty (expr-hole) (expr-hole))
+                                      ka (expr-bvar 0))))
+  (check-false (contains-open-container? (nf pi))))
+
+(test-case "SUB.3: an OPEN KEY re-abstracts (keys are walked, not just values)"
+  (define lam-open-key
     (expr-lam 'mw (expr-Nat)
               (expr-map-assoc (expr-map-empty (expr-hole) (expr-hole))
-                              ka (expr-bvar 0))))
-  (check-true (contains-open-container? (nf lam-with-map-body))
-              "nf-under-binder still mints the open champ (pre-SUB.3)"))
+                              (expr-bvar 0) (expr-int 7))))
+  (define lam* (nf lam-open-key))
+  (check-false (contains-open-container? lam*))
+  (define applied (whnf (subst 0 ka (expr-lam-body lam*))))
+  (check-equal? (champ-entries-sorted applied)
+                (list (cons ka (expr-int 7)))))
+
+(test-case "SUB.3: a CLOSED map body still normalizes to a champ (no spine regression)"
+  (define lam-closed
+    (expr-lam 'mw (expr-Nat)
+              (expr-map-assoc (expr-map-empty (expr-hole) (expr-hole))
+                              ka (expr-int 1))))
+  (define lam* (nf lam-closed))
+  (check-true (expr-champ? (expr-lam-body lam*))
+              "closed contents keep the runtime champ representation"))

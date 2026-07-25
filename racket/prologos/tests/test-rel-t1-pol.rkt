@@ -236,32 +236,38 @@
                             "[ctrl (solve-one (is ?f [fn [y : Nat] [add y 1N]]))]")))
   (check-true (string-contains? (result-msg r) "6N") (result-msg r)))
 
-(test-case "SUB.1: poisoned solve-one is REFUSED loudly — no ?bvar escapes"
+;; ⚠ FLIPPED AT SUB.3 (ruling D — NbE open-the-binder): the formerly-poisoned
+;; shapes now compute the CORRECT answers (the defect doc §5 E2E). The SUB.1
+;; tripwire remains installed as the standing invariant guard at the three
+;; nf-persisting boundaries — these tests double as its no-false-positive
+;; gates (any tripwire fire below would surface as a prologos-error).
+
+(test-case "SUB.3: map-returning lambda through solve-one computes (was ?bvar0)"
   (define r (run-ns-ws-last
              (string-append SUBFIX
                             "[bug (solve-one (is ?f [fn [y : Nat] {:a y}]))]")))
   (define m (result-msg r))
-  (check-true (prologos-error? r) "per-command error, not a silent value")
-  (check-true (string-contains? m "substitution containment") m)
-  (check-false (string-contains? m "?bvar") "the open index must not escape"))
+  (check-false (prologos-error? r) m)
+  (check-true (string-contains? m "5N") m)
+  (check-false (string-contains? m "?bvar") "no open index escapes"))
 
-(test-case "SUB.1: poisoned solve (list form) is refused at the same guard"
+(test-case "SUB.3: solve (list form) carries the safe lambda row"
   (define r (run-ns-ws-last
              (string-append SUBFIX
                             "solve (is ?f [fn [y : Nat] {:a y}])")))
   (define m (result-msg r))
-  (check-true (prologos-error? r))
-  (check-true (string-contains? m "substitution containment") m))
+  (check-false (prologos-error? r) m)
+  (check-false (string-contains? m "?bvar") m)
+  (check-true (string-contains? m ":f") "the answer row materializes"))
 
-(test-case "SUB.1: the run CONTINUES past the guard (command-boundary conversion)"
+(test-case "SUB.3: both shapes in sequence — later commands see clean state"
   (define r (run-ns-ws-last
              (string-append SUBFIX
                             "solve (is ?f [fn [y : Nat] {:a y}])\n"
                             "[ctrl (solve-one (is ?f [fn [y : Nat] [add y 1N]]))]")))
-  (check-true (string-contains? (result-msg r) "6N")
-              "the command after the refused one still ran"))
+  (check-true (string-contains? (result-msg r) "6N") (result-msg r)))
 
-(test-case "SUB.1: validate base-ok boundary — poisoned field refused, control ok"
+(test-case "SUB.3: validate accepts map-returning-lambda fields (was refused)"
   (define VS
     (string-append
      "ns subtripv\n"
@@ -269,11 +275,10 @@
      "  :f <Nat -> [Map Keyword Nat]>\n"
      "schema FnBox2\n"
      "  :f <Nat -> Nat>\n"))
-  (define bad (run-ns-ws-last
-               (string-append VS "[validate FnBox {:f [fn [y : Nat] {:a y}]}]")))
-  (check-true (prologos-error? bad) "poisoned validate refuses")
-  (check-true (string-contains? (result-msg bad) "substitution containment")
-              (result-msg bad))
+  (define was-bad (run-ns-ws-last
+                   (string-append VS "[validate FnBox {:f [fn [y : Nat] {:a y}]}]")))
+  (check-false (prologos-error? was-bad) (result-msg was-bad))
+  (check-true (string-contains? (result-msg was-bad) "ok") (result-msg was-bad))
   (define ok (run-ns-ws-last
               (string-append VS "[validate FnBox2 {:f [fn [y : Nat] [add y 1N]]}]")))
   (check-true (string-contains? (result-msg ok) "ok") (result-msg ok)))
