@@ -9,7 +9,7 @@ open-the-binder. SUB.1 now-slice in progress.**
 | Phase | Description | Status | Notes |
 |---|---|---|---|
 | **R** | The §3 owner ruling: (D) closed runtime value vs (A) open AST container | ✅ **(D)** | owner, 2026-07-24; repro + API isolation + coordinates independently re-verified at `82109163` first |
-| **SUB.1** | Now-slice: module/cache-crossing probe · tripwire at the 3 `nf`-persisting boundaries · regression tests | 🔄 | Probe (4 routes): **no surface def-store route exists today** — all blocked by independent def-seam typing gaps (see §6 note) ⇒ **no `.pnet` invalidation needed at SUB.3**; tripwire keeps that true if those gaps are later fixed |
+| **SUB.1** | Now-slice: module/cache-crossing probe · tripwire at the 3 `nf`-persisting boundaries · regression tests | ✅ | `f19d6f56`. Probe (4 routes): **no surface def-store route exists today** — all blocked by independent def-seam typing gaps (see §6 note) ⇒ **no `.pnet` invalidation needed at SUB.3**; tripwire keeps that true if those gaps are later fixed. Depth-aware predicate (binder inventory = shift's 4 forms; reflective walk elsewhere); +12 unit (+ BUG-PIN flipping at SUB.3) + 5 E2E; suite 470/9003/0, zero false positives |
 | **SUB.2** | `PLT_CS_COMPILE_LIMIT` in-tree measurement (owner-prioritized) | ⬜ | ~400× on synthetic 340-arm match, UNVERIFIED in-tree; precondition for any sound Pre-0 on SUB.3 |
 | **SUB.3** | The (D) fix: stop minting champs under binders + NbE open-the-binder in `nf` + re-abstraction (ONE champ-descending fn) + persists-vs-displays consumer audit | ⬜ | owner scoped IN (2026-07-24). `narrow-subst-bvars` (wider than champ) = named adjacent, decide in/out at SUB.3 open; `.pnet` invalidation OUT per the SUB.1 probe |
 

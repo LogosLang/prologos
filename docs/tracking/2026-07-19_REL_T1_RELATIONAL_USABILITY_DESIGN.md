@@ -71,7 +71,7 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | **D.0/1** | Efficient fact representation + query-opt — Stage 0/1 research + design artifact | ✅ | **Artifact landed** `0b428424`: [`2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md`](../research/2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md) — frame F1–F7 · measured cost structure · lattice verdicts · staging ladder · **Rel T2 "Fact Store" charter seed** (§11) + §14 D.2 addendum. **Q_A–Q_D parked** for the Rel T2 charter (owner, 2026-07-24) |
 | **D.2** | Cheap-wins slice (artifact §7 NOW: N1–N6) | ✅ | D.2.a `296ac2d5` (dead tree −135 LoC + comment truth) · D.2.b `984601b9` (row-scan/col-compare counters + 2 latent fixes) · D.2.c `7ba24b2b` (fact-scale bench + corpus generator + 260-row standing E2E; **findings: Tier-2 unreachable for 1-variant fact tables; NO DFS↔Tier-2 crossover ≤1000 — Tier-2 enum ~480× slower @1000**) · D.2.d `feedc6ff` (registration-time INVERTED index on `variant-info.discrim`; Tier-2 point rows N+1→1, 0.78→0.17ms @1000). Suite 469/0 throughout; artifact §14 |
 | **POL** | Polish — **ROSTER EXPANDED to POL.1–.9** (§8, 2026-07-24): owner hand-testing list from `standup-2026-07-19.org` § "Polish points for REL" folded in. Correctness: dedup (.1) · `_anon` keys (.2) · declaration-order keys (.3) · **arity-mismatch errors** (.4) · **def-on-solve multiplicity** (.5) · **defn fused-binder last mile** (.6). Syntax: single-line `\|` facts (.7) · implicit clause groups (.8) · implicit solve (.9, ⚠ design question — co-design first) | ⬜ | §8 sequencing note; POL.9 needs owner co-design before impl |
-| **SUB** | **POL.10 spin-out** — the substitution containment defect (LIVE bug: open de Bruijn index escapes via runtime containers). Own doc + progress table: [`2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md`](2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md). **Owner-resequenced AHEAD of the POL remainder (2026-07-24)**; ruling **(D)** (champ = closed runtime value ⇒ NbE fix) | 🔄 | R ✅ (D) · SUB.1 now-slice 🔄 (probe: no cache crossing) · SUB.2 compile-limit ⬜ · SUB.3 fix ⬜ |
+| **SUB** | **POL.10 spin-out** — the substitution containment defect (LIVE bug: open de Bruijn index escapes via runtime containers). Own doc + progress table: [`2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md`](2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md). **Owner-resequenced AHEAD of the POL remainder (2026-07-24)**; ruling **(D)** (champ = closed runtime value ⇒ NbE fix) | 🔄 | R ✅ (D) · SUB.1 ✅ `f19d6f56` (tripwire + tests; probe: no cache crossing ⇒ no invalidation) · SUB.2 compile-limit ⬜ · SUB.3 fix ⬜ |
 | *(tests)* | **Per-phase** — each behavioral phase brings its own test delta in its completion gate; the test file(s) `tests/test-rel-*.rkt` GROW per phase (NOT a dedicated end phase — see workflow.md "Tests are PER-PHASE") | — | e.g. `test-rel-t1-naf.rkt`, `test-rel-t1-typed-rows.rkt` (grown across B1/B2) |
 | **X.close** | Bench matrix · DEFERRED triage · doc-truth sweep · memory fold · **Stage-5 PIR** | ⬜ | Objective-PIR gate |
 
@@ -1135,11 +1135,16 @@ three-level WS validation + WS-Impact obligations (workflow.md).
 
 ### Correctness / UX-error cluster
 
-- **POL.1 — Answer-set dedup** *(pre-existing)* — `solve` returns one row per
-  derivation path (diamonds → duplicate rows). Add distinct/answer-set
-  semantics. ⚠ Interacts with POL.4: dedup semantics also decide whether a
-  DFS first-hit short-circuit for ground goals is observable (D.2 deferred
-  exactly this — artifact §14).
+- **POL.1 — Answer-set dedup** *(pre-existing)* — **RULED 2026-07-24 (owner):
+  bag/multiset semantics STAYS — doc clarification only, no engine change.**
+  `solve` returns one row per derivation path; the multiplicity IS the
+  derivation count (the ATMS=provenance reading, artifact §5.6 — a duplicate
+  row is a distinct proof, ℕ-semiring provenance), and Prolog's
+  `findall`/`bagof` default is the same. Deliverable shrinks to: document
+  bag semantics as intended behavior (X.close doc-truth sweep). An explicit
+  opt-in `distinct` (the `setof` analogue) is **deferred to Rel T2**, where
+  it meets the DFS first-hit short-circuit question dedup would make
+  observable (D.2 deferred exactly this — artifact §14).
 - **POL.2 — Drop `_anon` wildcard keys** *(pre-existing + owner repro)* —
   `_` gensym keys leak into result maps:
   `solve (truths b1 b2 b3 _)` → `'[{:b3 1, :_anon241999 1, :b2 1, :b1 1} …]`;
