@@ -17,6 +17,7 @@
 
 (require racket/match
          racket/string
+         racket/list        ;; Rel T1 B3.2: remove-duplicates in the display-refiner
 
          "prelude.rkt"
          "syntax.rkt"
@@ -33,10 +34,13 @@
          "pretty-print.rkt"
          "subtype-predicate.rkt"  ;; SRE Track 1: extracted flat subtype predicate
          "sign-refinement.rkt"    ;; Numerics N5c: Sign transfer + name<->Sign/base tables
+         (only-in "champ.rkt" champ-entries)  ;; Rel T1 B3.2: display-time row observation (leaf data module, cycle-free)
          "relations.rkt"          ;; Rel T1 Aspect B (B1): relation store → schema-name for typed solution rows (cycle-free — relations has no typing/reduction back-edge)
 )
 
 (provide infer check is-type infer-level
+         ;; Rel T1 B3.2: display-time coinductive refinement (driver echo seam only)
+         refine-solve-row-type-for-display
          (struct-out no-level) (struct-out just-level)
          mark-structural-reduce! structural-reduce? structural-reduce-set
          subtype? type-key
@@ -3628,6 +3632,136 @@
                       #:when (< pos (length (fact-row-terms fr))))
              (infer ctx-empty (list-ref (fact-row-terms fr) pos)))))]
        [else #f])]))
+
+;; ── Rel T1 B3.2: display-time coinductive refinement (design §6.10 D-B3.1(ii)) ─
+;; The COINDUCTIVE half of B3, and it is DISPLAY-ONLY by construction: it refines
+;; the type ECHOED beside an eval result from the ACTUAL result rows, and its
+;; output is never stored, never re-checked, and never feeds static typing. That
+;; division is PHASE-FORCED (§6.10): the checker runs before reduction, so only
+;; the static/inductive side can serve composition (`.field`, def-binding,
+;; validate); observation is "at the end" truth about one result set.
+;;
+;; Two moves, neither of which can widen or lie:
+;;   FILL    — a statically-underivable field (hole, per D-B3.6 "never lie")
+;;             takes the observed type of the values actually present.
+;;   SHARPEN — a static union keeps only the branches actually observed
+;;             (`{:v String | Int}` displayed as `{:v String}` when this query's
+;;             rows are all Strings). This is "exact for the result set".
+;; Everything else is left alone. Observation that DISAGREES with the static type
+;; (a branch not in the union) is discarded rather than displayed — a disagreement
+;; would signal a defect elsewhere, and the echo must not paper over it.
+;;
+;; Cost posture: the refinable? gate runs first, so a fully-concrete row type (the
+;; common case — `{:x Int :z Int}`) costs one shallow field scan and NO row walk.
+
+;; A solve result's displayed type is either `[List <row>]` (solve) or a bare
+;; `<row>` (solve-one). Returns (values rebuild-fn record) or (values #f #f).
+;;
+;; The CLOSED-tail requirement is what scopes this to solution rows: per D-B3.6 a
+;; solve row is always closed with Κ′ keys, whereas an ordinary record value can
+;; be dyn-tailed — and a dyn tail means the field set itself is unknown, which is
+;; exactly the case where F1b.3's degrade DELIBERATELY dropped the field facts
+;; (`{:a 1, :b 2} : {:a _ :b _ | _}`). Refilling those holes from the value would
+;; re-assert knowledge the type system just discarded on purpose. (Cost: explain
+;; rows carry a 'dyn tail for their conditional metadata keys, so they are not
+;; refined — conservative, and named rather than silently assumed.)
+(define (display-row-type-parts ty)
+  (define (row? r) (and (expr-Record? r) (eq? (expr-Record-tail r) 'closed)))
+  (cond
+    [(and (expr-app? ty) (row? (expr-app-arg ty)))
+     (values (lambda (rec*) (expr-app (expr-app-func ty) rec*)) (expr-app-arg ty))]
+    [(row? ty) (values (lambda (rec*) rec*) ty)]
+    [else (values #f #f)]))
+
+(define (union->branches t)
+  (if (expr-union? t)
+      (append (union->branches (expr-union-left t))
+              (union->branches (expr-union-right t)))
+      (list t)))
+
+(define (refinable-field-type? t)
+  (or (expr-hole? t) (expr-union? t)))
+
+;; The runtime rows behind a displayed value: a cons spine of champs (solve), a
+;; bare champ (solve-one), or nothing observable (`nil`, `none`, a stuck term).
+(define (display-result-rows val)
+  (define (cons-head? f)
+    (and (expr-fvar? f)
+         (let ([s (symbol->string (expr-fvar-name f))])
+           (or (string=? s "cons") (regexp-match? #rx"::cons$" s)))))
+  (let loop ([v val] [acc '()] [fuel 10000])
+    (cond
+      [(zero? fuel) (reverse acc)]                 ;; cyclic/absurd term — observe what we have
+      [(expr-champ? v) (reverse (cons v acc))]     ;; bare row (solve-one)
+      [(and (expr-app? v)
+            (expr-app? (expr-app-func v))
+            (cons-head? (expr-app-func (expr-app-func v))))
+       (define head (expr-app-arg (expr-app-func v)))
+       (loop (expr-app-arg v)
+             (if (expr-champ? head) (cons head acc) acc)
+             (sub1 fuel))]
+      [else (reverse acc)])))
+
+;; label → (listof observed-type), skipping values that infer to nothing useful.
+;; `infer` RETURNS expr-error for an unobservable value (e.g. an unbound logic-var
+;; echo like `w_g1876`), so the skip is structural — no exception handling.
+(define (observe-row-field-types rows labels)
+  (define tbl (make-hasheq))
+  (for* ([row (in-list rows)]
+         [kv (in-list (champ-entries (expr-champ-racket-champ row)))])
+    (define k (car kv))
+    (when (expr-keyword? k)
+      (define label (expr-keyword-name k))
+      (when (memq label labels)
+        (define t (infer ctx-empty (cdr kv)))
+        (unless (or (expr-error? t) (expr-hole? t) (expr-meta? t))
+          (hash-update! tbl label (lambda (ts) (cons t ts)) '())))))
+  tbl)
+
+(define (refine-solve-row-type-for-display ty val)
+  (define-values (rebuild rec) (display-row-type-parts ty))
+  (cond
+    [(not rec) ty]
+    [else
+     (define fields (expr-Record-fields rec))
+     (define refinable
+       (for/list ([f (in-list fields)]
+                  #:when (refinable-field-type? (record-field-type (cdr f))))
+         (car f)))
+     (cond
+       [(null? refinable) ty]        ;; fully concrete row — zero row-walk cost
+       [else
+        (define rows (display-result-rows val))
+        (cond
+          [(null? rows) ty]          ;; empty result set observes nothing (stays honest)
+          [else
+           (define observed (observe-row-field-types rows refinable))
+           (rebuild
+            (expr-Record
+             (expr-Record-key-domain rec)
+             (for/list ([f (in-list fields)])
+               (define label (car f))
+               (define fld (cdr f))
+               (define t (record-field-type fld))
+               (define obs (hash-ref observed label '()))
+               (define t*
+                 (cond
+                   [(null? obs) t]
+                   ;; FILL: underivable field takes what is actually there
+                   [(expr-hole? t) (observe-column-type (reverse obs))]
+                   ;; SHARPEN: keep only union branches actually observed; if an
+                   ;; observation is outside the union, the two disagree — keep
+                   ;; the static type rather than display a claim we can't back.
+                   [(expr-union? t)
+                    (let* ([branches (union->branches t)]
+                           [obs-uniq (remove-duplicates obs)]
+                           [all-known? (for/and ([o (in-list obs-uniq)])
+                                         (member o branches))]
+                           [kept (filter (lambda (b) (member b obs-uniq)) branches)])
+                      (if (and all-known? (pair? kept)) (observe-column-type kept) t))]
+                   [else t]))
+               (cons label (record-field t* (record-field-presence fld))))
+             (expr-Record-tail rec)))])])]))
 
 ;; ── Rel T1 B3.1: derived column types for RULE-bearing relations ──────────────
 ;; (design §6.10, co-design settled 2026-07-24). Static body-goal dataflow:

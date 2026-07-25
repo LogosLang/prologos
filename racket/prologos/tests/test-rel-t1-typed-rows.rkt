@@ -207,3 +207,135 @@
                "solve (mixed v)\n"))))
   (check-false (string-contains? r ": _") "mixed relation no longer loose")
   (check-true (string-contains? r ":v") "typed row present"))
+
+;; ========================================
+;; B3.2 — display-time COINDUCTIVE refinement (design §6.10 D-B3.1(ii))
+;; ========================================
+;; The coinductive half of B3, and DISPLAY-ONLY by construction: the type echoed
+;; beside an eval result is refined from the ACTUAL rows, while the type that is
+;; STORED (and that governs composition) stays the static one. The division is
+;; phase-forced — the checker runs before reduction — so this can never feed
+;; static typing. Two moves: FILL a statically-underivable (hole) field from the
+;; values actually present, and SHARPEN a static union to the branches actually
+;; observed ("exact for the result set").
+
+(define het-world
+  (string-append
+   "ns t\n\n"
+   "defr mixed [?k ?v]\n"
+   "  || 1 \"a\"\n"
+   "     2 7\n\n"))
+
+(test-case "B3.2 SHARPEN: a union field displays only the branches actually observed"
+  (define r (format "~a" (last-result
+                          (run-prologos-string
+                           (string-append het-world "solve (mixed 1 v)\n")))))
+  (check-true (string-contains? r "{:v String}")
+              "the all-String result set narrows `String | Int` to `String`")
+  (check-false (string-contains? r "String | Int")))
+
+(test-case "B3.2 SHARPEN does NOT over-narrow: both branches observed → union kept"
+  (define r (format "~a" (last-result
+                          (run-prologos-string
+                           (string-append het-world "solve (mixed k v)\n")))))
+  (check-true (string-contains? r "String | Int")
+              "when the result set really is heterogeneous the union stays"))
+
+(test-case "B3.2 is DISPLAY-ONLY: a def announces the STORED (static) type"
+  ;; the def-binding arm is deliberately un-refined — a def's announced type is
+  ;; the type it stores, and that is what composition sees.
+  (define results (run-prologos-string
+                   (string-append het-world
+                                  "def r := solve (mixed 1 v)\n"
+                                  "r\n")))
+  (define def-line (format "~a" (list-ref results (- (length results) 2))))
+  (define echo-line (format "~a" (last-result results)))
+  (check-true (string-contains? def-line "String | Int")
+              "the STORED type keeps the static union")
+  (check-true (string-contains? echo-line "{:v String}")
+              "echoing the bound value refines the DISPLAY only"))
+
+(test-case "B3.2: an unobservable field keeps its hole (never invents a type)"
+  ;; `?w` is bound by nothing in the body → statically a hole (D-B3.6 never lie),
+  ;; and its runtime value is an unbound logic-var echo → nothing to observe.
+  (define r (format "~a" (last-result
+                          (run-prologos-string
+                           (string-append
+                            "ns t\n\n"
+                            "defr edge [?a ?b]\n  || 1 2\n     2 3\n\n"
+                            "defr looseparam [?x ?w]\n  &> (edge x z)\n\n"
+                            "solve (looseparam x w)\n")))))
+  (check-true (string-contains? r ":w _") "hole stays a hole when unobservable"))
+
+(test-case "B3.2: a fully-concrete row type is untouched (the zero-cost gate)"
+  (define r (format "~a" (last-result
+                          (run-prologos-string
+                           (string-append
+                            "ns t\n\n"
+                            "defr edge [?a ?b]\n  || 1 2\n     2 3\n\n"
+                            "defr twohop [?x ?z]\n  &> (edge x y) (edge y z)\n\n"
+                            "solve (twohop x z)\n")))))
+  (check-true (string-contains? r "{:x Int :z Int}")))
+
+;; Unit-level: the refiner's paths that no surface program reaches today.
+;; FILL is currently unreachable end-to-end — B3.1's walker is thorough enough
+;; that a hole field almost always means "nothing binds this var", whose runtime
+;; value is an unbound echo. The one shape that would reach it (a var unified
+;; with a pvec/map literal) is blocked by an ADJACENT pre-existing defect: such
+;; unifications yield the runtime value `unknown` (see the B3.2 close note).
+;; These pin the paths so they are correct when that defect is fixed.
+
+(require (only-in "../typing-core.rkt" refine-solve-row-type-for-display)
+         (only-in "../syntax.rkt"
+                  expr-champ expr-keyword expr-Record record-field expr-hole
+                  expr-Int expr-String expr-Bool expr-union expr-int expr-string
+                  expr-app expr-fvar expr-nil)
+         (only-in "../pretty-print.rkt" pp-expr)
+         (only-in "../champ.rkt" champ-empty champ-insert))
+
+(define (b32-row . kvs)
+  (expr-champ (for/fold ([c champ-empty]) ([kv (in-list kvs)])
+                (define k (expr-keyword (car kv)))
+                (champ-insert c (equal-hash-code k) k (cdr kv)))))
+(define (b32-list . rows)
+  (for/foldr ([acc (expr-nil)]) ([r (in-list rows)])
+    (expr-app (expr-app (expr-fvar 'cons) r) acc)))
+(define (b32-rec . fs)
+  (expr-Record 'keyword
+               (for/list ([f (in-list fs)])
+                 (cons (car f) (record-field (cdr f) 'present)))
+               'closed))
+(define (b32-List r) (expr-app (expr-fvar 'prologos::data::list::List) r))
+
+(test-case "B3.2 unit FILL: a hole field takes the observed type of the rows"
+  (check-equal? (pp-expr (refine-solve-row-type-for-display
+                          (b32-List (b32-rec (cons 'a (expr-Int)) (cons 'b (expr-hole))))
+                          (b32-list (b32-row (cons 'a (expr-int 1)) (cons 'b (expr-string "s")))
+                                    (b32-row (cons 'a (expr-int 2)) (cons 'b (expr-string "t"))))))
+                "[prologos::data::list::List {:a Int :b String}]"))
+
+(test-case "B3.2 unit FILL: heterogeneous observations join into a union"
+  (check-equal? (pp-expr (refine-solve-row-type-for-display
+                          (b32-List (b32-rec (cons 'b (expr-hole))))
+                          (b32-list (b32-row (cons 'b (expr-string "s")))
+                                    (b32-row (cons 'b (expr-int 3))))))
+                "[prologos::data::list::List {:b String | Int}]"))
+
+(test-case "B3.2 unit: observation DISAGREEING with the static union is discarded"
+  ;; a branch outside the static union would signal a defect elsewhere; the echo
+  ;; must not paper over it by displaying a claim the static side never made.
+  (check-equal? (pp-expr (refine-solve-row-type-for-display
+                          (b32-List (b32-rec (cons 'b (expr-union (expr-Int) (expr-Bool)))))
+                          (b32-list (b32-row (cons 'b (expr-string "s"))))))
+                "[prologos::data::list::List {:b Int | Bool}]"))
+
+(test-case "B3.2 unit: solve-one's BARE row refines too"
+  (check-equal? (pp-expr (refine-solve-row-type-for-display
+                          (b32-rec (cons 'b (expr-union (expr-String) (expr-Int))))
+                          (b32-row (cons 'b (expr-string "s")))))
+                "{:b String}"))
+
+(test-case "B3.2 unit: an empty result set observes nothing (type unchanged)"
+  (check-equal? (pp-expr (refine-solve-row-type-for-display
+                          (b32-List (b32-rec (cons 'b (expr-hole)))) (expr-nil)))
+                "[prologos::data::list::List {:b _}]"))

@@ -696,7 +696,18 @@
                                              (if (expr-string? (expr-panic-msg val))
                                                  (expr-string-val (expr-panic-msg val))
                                                  (pp-expr (expr-panic-msg val)))))
-                                         (format "~a : ~a" (pp-expr val) (pp-expr ty-nf))))))))))])]
+                                         ;; Rel T1 B3.2 (design §6.10 D-B3.1(ii)): the
+                                         ;; coinductive half — refine the ECHOED row type
+                                         ;; from the actual result rows (fill holes /
+                                         ;; sharpen unions, exact for THIS result set).
+                                         ;; DISPLAY ONLY: `ty-nf` itself is untouched, so
+                                         ;; nothing observed here can reach static typing.
+                                         ;; Deliberately NOT on the def/defr arms — a def's
+                                         ;; announced type is the type it STORES, which is
+                                         ;; the static one.
+                                         (format "~a : ~a" (pp-expr val)
+                                                 (pp-expr (refine-solve-row-type-for-display
+                                                           ty-nf val)))))))))))])]
 
                   ;; (infer expr) — Track 4B Phase 9: on-network first, fallback for unhandled
                   [(list 'infer expr)
