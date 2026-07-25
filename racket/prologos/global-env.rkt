@@ -23,6 +23,7 @@
 (provide global-env-lookup-type
          global-env-lookup-value
          global-env-lookup-status  ;; PPN 4C Addendum Phase 4B.3-a (DQ2): (status . payload) read; lookup-type/value project it; 4B.3-b's process-def discrimination consumes it
+         global-env-lookup-local   ;; Rel T1 POL.9c (Q_B): local-only read for the disjoint-namespace gate
          global-env-add
          global-env-add-type-only
          prealloc-def-cell!  ;; PPN 4C Addendum Phase 4B.2-b: def-bot pre-allocation (preparse sweep)
@@ -97,6 +98,14 @@
 (define (global-env-lookup-status name)
   (define mnr (current-file-module-network-ref))
   (if mnr (module-network-lookup-status mnr name) '(absent . #f)))
+
+;; Rel T1 POL.9c (Q_B): THIS module's own binding for `name`, or #f — no
+;; import cascade. The disjoint-namespace registration gate reads this so
+;; refer-imported names stay shadowable (local-only gating).
+;; Returns (cons type value) or #f.
+(define (global-env-lookup-local name)
+  (define mnr (current-file-module-network-ref))
+  (and mnr (module-network-lookup-local mnr name)))
 
 ;; Lookup the type of a global definition.
 ;; PPN 4C Addendum Phase 4B.3-a (DQ2): a PROJECTION of global-env-lookup-status

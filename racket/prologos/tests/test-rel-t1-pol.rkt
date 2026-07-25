@@ -838,3 +838,73 @@
                             "(eval six)")))
   (check-true (string? r) (result-msg r))
   (check-true (string-contains? r "6")))
+
+;; ========================================================================
+;; POL.9c — Q_B: defn/defr namespaces are DISJOINT at registration.
+;; LOCAL-only (refer-imported names stay shadowable — the prelude
+;; xor/singleton precedent); same-kind redefinition stays legal. The kind
+;; discriminator is the local env entry's value (a defr name's env value IS
+;; its expr-defr body). Named gap: multi-arity defn base names live only in
+;; the ambient multi-defn registry (no module provenance) — that collision
+;; is ungated by design.
+;; ========================================================================
+
+(test-case "POL.9c/Q_B: defr over a local defn errors, pointing at the value kind"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append "ns qb1\n"
+                                        "defn area [x:Int] : Int\n  * x x\n"
+                                        "defr area [?a]\n  || 1\n"))))
+  (check-true (string-contains? m "already defined as a function/value") m))
+
+(test-case "POL.9c/Q_B: def over a local defr errors, pointing at the relation kind"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append "ns qb2\n"
+                                        "defr speed [?s]\n  || 3\n"
+                                        "def speed := 42"))))
+  (check-true (string-contains? m "already defined as a relation") m))
+
+(test-case "POL.9c/Q_B: defn over a local defr errors too (process-def route)"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append "ns qb3\n"
+                                        "defr color [?c]\n  || \"red\"\n"
+                                        "defn color [x:Int] : Int\n  * x 2\n"))))
+  (check-true (string-contains? m "already defined as a relation") m))
+
+(test-case "POL.9c/Q_B: same-kind redefinition stays LEGAL (re-defr + def-over-def)"
+  (define r (run-ns-ws-last
+             (string-append "ns qb4\n"
+                            "defr edge [?a]\n  || 1\n"
+                            "defr edge [?a]\n  || 2\n"
+                            "def n := 1\n"
+                            "def n := 2\n"
+                            "solve (edge x)")))
+  (check-true (string? r) (result-msg r)))
+
+(test-case "POL.9c/Q_B CANARY: defr shadowing a refer-imported prelude name stays LEGAL"
+  ;; xor is refer-imported from the prelude's bool module — imports live in
+  ;; the cascade, not this module's own cell-id-map, so the LOCAL-only gate
+  ;; must not fire (the lib/examples/foray.prologos precedent).
+  (define r (run-ns-ws-last
+             (string-append "ns qb5\n"
+                            "defr xor [?p]\n  || 7\n"
+                            "solve (xor q)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "{:q 7}")))
+
+(test-case "POL.9c/Q_B: the run CONTINUES past a gate error"
+  (define r (run-ns-ws-last
+             (string-append "ns qb6\n"
+                            "defn area [x:Int] : Int\n  * x x\n"
+                            "defr area [?a]\n  || 1\n"
+                            "[+ 20 22]")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "42")))
+
+(test-case "POL.9c/Q_B: multi-arity defn BASE name gated against a prior defr"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append "ns qb7\n"
+                                        "defr nsize [?s]\n  || 3\n"
+                                        "defn nsize\n"
+                                        "  | [x] -> x\n"
+                                        "  | [x y] -> [+ x y]\n"))))
+  (check-true (string-contains? m "already defined as a relation") m))

@@ -911,6 +911,9 @@
 
                   ;; (defr name expr) — Track 4B Phase 9: on-network first, fallback for unhandled
                   [(list 'defr name expr)
+                   ;; Rel T1 POL.9c: the Q_B cross-kind gate — before any work
+                   (define qb-err (check-crosskind-collision name 'relation))
+                   (if qb-err qb-err
                    (let ([ty (time-phase! type-check
                               (let ([net-ty (infer-on-network/err ctx-empty expr)])
                                 (if (prologos-error? net-ty)
@@ -953,7 +956,7 @@
                                          (bump-relation-store-version!)
                                          (format "~a : ~a defined." name (pp-expr zonked-type))])]
                                      [else
-                                      (format "~a : ~a defined." name (pp-expr zonked-type))]))))))))]
+                                      (format "~a : ~a defined." name (pp-expr zonked-type))])))))))))]
 
                   ;; (subtype sub-key super-key) — declaration already processed in elaborator
                   [(list 'subtype sub-key super-key)
@@ -1697,7 +1700,38 @@
 ;; 3. Elaborate body (self-reference now resolves to fvar)
 ;; 4. Type-check body against type
 ;; 5. Update global env with real value
+;; ── Rel T1 POL.9c (Q_B): defn/defr namespaces are DISJOINT at registration ──
+;; The second registration of a name held by the OTHER kind errors, pointing
+;; at the first. LOCAL-only: refer-imported names stay shadowable (the
+;; prelude xor/singleton precedent — imports live in the cascade, not this
+;; module's own cell-id-map). Same-kind redefinition stays legal (REPL
+;; iteration; re-defr). A defr name's env value IS its expr-defr body, which
+;; is the kind discriminator. Named gap: multi-arity defn base names live
+;; only in the ambient multi-defn registry (no module provenance), so the
+;; multi-arity-defn ↔ defr collision is ungated — gating it would break
+;; prelude-name shadowing (local-only would be violated).
+;; Returns a prologos-error or #f.
+(define (check-crosskind-collision name incoming-kind)  ;; 'relation | 'value
+  (define local (global-env-lookup-local name))
+  (define existing-kind
+    (cond
+      [(and local (expr-defr? (cdr local))) 'relation]
+      [local 'value]
+      [else #f]))
+  (and existing-kind
+       (not (eq? existing-kind incoming-kind))
+       (prologos-error #f
+         (if (eq? incoming-kind 'relation)
+             (format "defr ~a: ~a is already defined as a function/value in this module — a name cannot be both a value and a relation. Choose a different name." name name)
+             (format "def ~a: ~a is already defined as a relation (defr) in this module — a name cannot be both a value and a relation. Choose a different name." name name)))))
+
 (define (process-def expanded)
+  ;; Rel T1 POL.9c: the Q_B cross-kind gate — before any registration.
+  ;; Covers plain defs, defn-lowered defs, and def-group clause defs.
+  (define qb-err (check-crosskind-collision (surf-def-name expanded) 'value))
+  (if qb-err qb-err (process-def/qb-checked expanded)))
+
+(define (process-def/qb-checked expanded)
   (define name (surf-def-name expanded))
   (define type-surf (surf-def-type expanded))
   (define body-surf (surf-def-body expanded))
@@ -2063,6 +2097,11 @@
 ;; 2. Process each clause's body
 ;; 3. Register dispatch table in multi-defn registry
 (define (process-def-group group)
+  ;; Rel T1 POL.9c: the Q_B gate for the multi-defn BASE name.
+  (define qb-err (check-crosskind-collision (surf-def-group-name group) 'value))
+  (if qb-err qb-err (process-def-group/qb-checked group)))
+
+(define (process-def-group/qb-checked group)
   (define name (surf-def-group-name group))
   (define defs (surf-def-group-defs group))
   (define arities (surf-def-group-arities group))
