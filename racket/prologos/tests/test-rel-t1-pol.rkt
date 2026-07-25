@@ -282,3 +282,71 @@
   (define ok (run-ns-ws-last
               (string-append VS "[validate FnBox2 {:f [fn [y : Nat] [add y 1N]]}]")))
   (check-true (string-contains? (result-msg ok) "ok") (result-msg ok)))
+
+;; ── SUB.3b: narrow-subst-bvars + narrow-match containment (the wider sibling) ─
+;; The narrowing walker's [_ expr] catch-all silently DROPPED bindings for
+;; every unlisted node (map/set/vec spines included), and narrow-match had no
+;; map/vec decomposition — so `box ?y = {:a 5N}` on `defn box [x] {:a x}`
+;; returned nil with 0 errors. Fixed: generic transparent-struct rebuild
+;; fallback + explicit Pi/Sigma binder arms (+ the lam TYPE field) in
+;; narrow-subst-bvars; entry-wise map + element-wise vec decomposition in
+;; narrow-match (logic vars inside values bind).
+
+(require (only-in "../narrowing.rkt" narrow-subst-bvars)
+         (only-in "../syntax.rkt"
+                  expr-map-assoc expr-map-empty expr-hole expr-bvar
+                  expr-nat-val expr-fst expr-Pi expr-Nat expr-map-assoc-v))
+
+(define NARFIX
+  (string-append
+   "ns subnarrow\n"
+   "spec box Nat -> [Map Keyword Nat]\n"
+   "defn box [x] {:a x}\n"
+   "spec wrap Nat -> (PVec Nat)\n"
+   "defn wrap [x] @[x 1N]\n"
+   "spec nest Nat -> [Map Keyword [Map Keyword Nat]]\n"
+   "defn nest [x] {:outer {:inner x}}\n"))
+
+(test-case "SUB.3b: map-literal RHS narrows (was nil)"
+  (define r (run-ns-ws-last (string-append NARFIX "box ?y = {:a 5N}")))
+  (check-true (string-contains? (result-msg r) ":y 5N") (result-msg r)))
+
+(test-case "SUB.3b: vec-literal RHS narrows"
+  (define r (run-ns-ws-last (string-append NARFIX "wrap ?y = @[5N 1N]")))
+  (check-true (string-contains? (result-msg r) ":y 5N") (result-msg r)))
+
+(test-case "SUB.3b: nested map RHS narrows through both levels"
+  (define r (run-ns-ws-last (string-append NARFIX "nest ?y = {:outer {:inner 7N}}")))
+  (check-true (string-contains? (result-msg r) ":y 7N") (result-msg r)))
+
+(test-case "SUB.3b: key-set mismatch does NOT match"
+  (define r (run-ns-ws-last
+             (string-append NARFIX
+                            "spec boxm Nat -> [Map Keyword Nat]\n"
+                            "defn boxm [x] {:a x :b 2N}\n"
+                            "boxm ?z = {:a 9N}")))
+  (check-true (string-contains? (result-msg r) "nil") (result-msg r)))
+
+(test-case "SUB.3b unit: the walker substitutes through a map-assoc spine"
+  (define spine (expr-map-assoc (expr-map-empty (expr-hole) (expr-hole))
+                                (expr-keyword ':a) (expr-bvar 0)))
+  (define out (narrow-subst-bvars spine (list (expr-nat-val 5)) 0))
+  (check-equal? (expr-map-assoc-v out) (expr-nat-val 5)
+                "the binding reaches the spine value"))
+
+(test-case "SUB.3b unit: generic fallback covers formerly-skipped nodes"
+  ;; expr-fst previously fell to [_ expr] — binding silently dropped
+  (define out (narrow-subst-bvars (expr-fst (expr-bvar 0))
+                                  (list (expr-nat-val 3)) 0))
+  (check-equal? out (expr-fst (expr-nat-val 3))))
+
+(test-case "SUB.3b unit: Pi codomain is a BINDER position (no capture)"
+  ;; bvar0 under the Pi codomain refers to the Pi's own var — bindings at
+  ;; depth 0 must NOT reach it; bvar1 there is the outer slot and must.
+  (define pi (expr-Pi 'mw (expr-Nat) (expr-bvar 0)))
+  (check-equal? (narrow-subst-bvars pi (list (expr-nat-val 9)) 0) pi
+                "the codomain's own var stays bound")
+  (define pi2 (expr-Pi 'mw (expr-Nat) (expr-bvar 1)))
+  (check-equal? (narrow-subst-bvars pi2 (list (expr-nat-val 9)) 0)
+                (expr-Pi 'mw (expr-Nat) (expr-nat-val 9))
+                "the outer slot substitutes at depth+1"))
