@@ -10,7 +10,7 @@ open-the-binder. SUB.1 now-slice in progress.**
 |---|---|---|---|
 | **R** | The §3 owner ruling: (D) closed runtime value vs (A) open AST container | ✅ **(D)** | owner, 2026-07-24; repro + API isolation + coordinates independently re-verified at `82109163` first |
 | **SUB.1** | Now-slice: module/cache-crossing probe · tripwire at the 3 `nf`-persisting boundaries · regression tests | ✅ | `f19d6f56`. Probe (4 routes): **no surface def-store route exists today** — all blocked by independent def-seam typing gaps (see §6 note) ⇒ **no `.pnet` invalidation needed at SUB.3**; tripwire keeps that true if those gaps are later fixed. Depth-aware predicate (binder inventory = shift's 4 forms; reflective walk elsewhere); +12 unit (+ BUG-PIN flipping at SUB.3) + 5 E2E; suite 470/9003/0, zero false positives |
-| **SUB.2** | `PLT_CS_COMPILE_LIMIT` in-tree measurement (owner-prioritized) | ⬜ | ~400× on synthetic 340-arm match, UNVERIFIED in-tree; precondition for any sound Pre-0 on SUB.3 |
+| **SUB.2** | `PLT_CS_COMPILE_LIMIT` in-tree measurement (owner-prioritized) | ✅ measured | **TRANSFERS**: shift/subst ~830×/~745× micro; suite **211→173 s (−18%), all pass**; compile +17% on the hot core; tree restored to default. §4.2 for the full numbers. **Adoption + wiring = owner decision (flagged at checkpoint)**; false-negative trap recorded (touch ≠ recompile — delete the .zo) |
 | **SUB.3** | The (D) fix: stop minting champs under binders + NbE open-the-binder in `nf` + re-abstraction (ONE champ-descending fn) + persists-vs-displays consumer audit | ⬜ | owner scoped IN (2026-07-24). `narrow-subst-bvars` (wider than champ) = named adjacent, decide in/out at SUB.3 open; `.pnet` invalidation OUT per the SUB.1 probe |
 
 **Severity**: a **silent wrong answer in legal, zero-error user code** — an open de Bruijn
@@ -150,14 +150,29 @@ belongs to the owner.
      only `exn:prologos-solve?` by explicit design) and **NOT at the mint** (it would fire
      on correct display code — `driver.rkt:689-691` legitimately nf's an eval result, so
      `[fn [a : Nat] {:x a}]` mints an open champ for display today).
-2. **`PLT_CS_COMPILE_LIMIT` — its own immediate item (hours), independent of this defect.**
-   The limit is **not set anywhere in the repo** (verified). `shift`/`subst` have ~337 arms
-   each and therefore fall back to the Racket CS **interpreter**; the audit measured a
-   standalone 340-arm match at 100,492 ns/call at the default 10000 vs **252 ns at
-   1,000,000 — ~400×**. If that transfers, it is a large win on the compiler's hottest
-   functions, invisible to existing benchmarks because every benchmark pays it uniformly.
-   ⚠ **UNVERIFIED in-tree** — measure before believing. It is also the precondition for any
-   sound Pre-0 on this fix (perf rankings can *invert* once compiled).
+2. **`PLT_CS_COMPILE_LIMIT` — MEASURED IN-TREE (SUB.2, 2026-07-24). The claim TRANSFERS,
+   and then some.** All measured on this machine, same evening, interleaved baseline:
+   - **Interpreter fallback CONFIRMED**: `shift` per-call cost is **position-INDEPENDENT**
+     (arm 1 `expr-bvar` 85µs ≈ late-arm `expr-int` 87µs) — per-call interpreter overhead,
+     not linear dispatch. Matches the audit's synthetic ~100µs.
+   - **Micro (11k-node tree walk)**: shift **1.27 s/call → 1.52 ms/call (~830×)**;
+     subst **1.31 s → 1.76 ms (~745×)** — per-node 115µs → 0.14µs.
+   - **Full suite**: **211.0/212.0 s → 173.0/173.8 s (−18% wall, all 470 files pass,
+     two runs each side)**. Tail-gated by two ~70s files, so aggregate CPU saving is
+     larger than the wall delta; biggest per-file: `test-transducer-01` 15.1→3.4 s
+     (**4.4×**). `test-validate` 67→63 s; `test-rel-t1-typed-rows` 75→72 s.
+   - **Compile cost**: hot-core cascade (substitution/reduction/typing-core/qtt/unify/
+     elaborator/zonk + dependents) 22.4 s default → 26.1 s at limit=1e6 (**+17%**);
+     substitution.zo 93→102 KB. Cheap.
+   - ⚠ **Methodology trap that cost a false negative first**: `touch FILE && raco make`
+     does NOT recompile (SHA short-circuit) — the first A-leg silently benched the OLD
+     .zo. A/B legs must **delete the `.zo`/`.dep`**, not touch. (Confirmed twice: the
+     substitution A-leg and the isolated clone leg.)
+   - **State**: tree RESTORED to default-compiled (verified: suite 212.0 s all-pass,
+     per-file timings back to baseline). **Adoption is the owner's call** — flagged at
+     the 2026-07-24 checkpoint with the wiring options (runner-level `putenv` + doc
+     line vs env-only). It is also the precondition for any sound Pre-0 on this fix
+     (demonstrated: rankings DO invert once compiled).
 3. **Spun-out track for the real fix** (D1–D3 under ruling (D), or the 37-arm sweep under
    (A)). Sequence after the compile-limit measurement. Scope in or explicitly defer the two
    adjacents: **`narrow-subst-bvars`** (narrowing.rkt:881-919) is **wider** than champ and
