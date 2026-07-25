@@ -70,7 +70,7 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | **B3** | **Typed solution rows for RULE-bearing relations (codata)** — the B2-deferred half, elevated by the owner (2026-07-24): *"one of the largest motivating usability aspects of all of this work"*. Today `relation-column-typer`'s rule-bearing branch yields `#f` → rule solves type as bare `_` (e.g. `solve (path x z) : _` vs facts' `List {:k Int …}`), so rule solutions cannot compose with the F1 records/row machinery (`.field`, validate, row polymorphism). Realization **SETTLED §6.10** (co-design 2026-07-24, grounding `wf_512dd7e3-5e8`): hybrid — static body-flow = the composition channel (D-B3.1), fixpoint recursion (D-B3.2), anon-rel in scope (D-B3.3), closed rows / hole-degrade (D-B3.6) | ✅ | **B3 COMPLETE.** B3.0 ✅ `67d96a0d` (POL.2 anon-key kernel filter, both halves atomic) · **B3.1 ✅** `0d34fa7e` (the static walker: body-goal dataflow + Kleene fixpoint [TC types!] + anon-rel arm + mixed-relation fact join) · **B3.2 ✅** `df428f7e` (display-time coinductive refinement at the eval echo seam: SHARPEN a union to the branches observed, FILL a hole from observed values; DISPLAY-ONLY — a `def` still announces its STORED static type; CLOSED-tail gate scopes it to solution rows, found by a suite regression on dyn-tailed record values). FILL has no reachable surface case today — blocked by an adjacent pre-existing defect (pvec/map-literal unify yields runtime `unknown`), named + deferred; the path is unit-pinned. +11 tests; suite 470/9040/0 |
 | **D.0/1** | Efficient fact representation + query-opt — Stage 0/1 research + design artifact | ✅ | **Artifact landed** `0b428424`: [`2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md`](../research/2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md) — frame F1–F7 · measured cost structure · lattice verdicts · staging ladder · **Rel T2 "Fact Store" charter seed** (§11) + §14 D.2 addendum. **Q_A–Q_D parked** for the Rel T2 charter (owner, 2026-07-24) |
 | **D.2** | Cheap-wins slice (artifact §7 NOW: N1–N6) | ✅ | D.2.a `296ac2d5` (dead tree −135 LoC + comment truth) · D.2.b `984601b9` (row-scan/col-compare counters + 2 latent fixes) · D.2.c `7ba24b2b` (fact-scale bench + corpus generator + 260-row standing E2E; **findings: Tier-2 unreachable for 1-variant fact tables; NO DFS↔Tier-2 crossover ≤1000 — Tier-2 enum ~480× slower @1000**) · D.2.d `feedc6ff` (registration-time INVERTED index on `variant-info.discrim`; Tier-2 point rows N+1→1, 0.78→0.17ms @1000). Suite 469/0 throughout; artifact §14 |
-| **POL** | Polish — **ROSTER EXPANDED to POL.1–.9** (§8, 2026-07-24): owner hand-testing list from `standup-2026-07-19.org` § "Polish points for REL" folded in. Correctness: dedup (.1 — **RULED doc-only: bag semantics stays**) · `_anon` keys (.2 ✅) · declaration-order keys (.3 ✅ `b0e3da9c`) · **arity-mismatch errors** (.4 ✅) · **def-on-solve multiplicity** (.5 ✅) · **defn fused-binder last mile** (.6 ✅ `0f6dc98c`). Syntax: single-line `\|` facts (.7) · implicit clause groups (.8) · implicit solve (.9, ⚠ design question — co-design first) | ⬜ | §8 sequencing note; POL.9 needs owner co-design before impl |
+| **POL** | Polish — **ROSTER EXPANDED to POL.1–.9** (§8, 2026-07-24): owner hand-testing list from `standup-2026-07-19.org` § "Polish points for REL" folded in. Correctness: dedup (.1 — **RULED doc-only: bag semantics stays**) · `_anon` keys (.2 ✅) · declaration-order keys (.3 ✅ `b0e3da9c`) · **arity-mismatch errors** (.4 ✅) · **def-on-solve multiplicity** (.5 ✅) · **defn fused-binder last mile** (.6 ✅ `0f6dc98c`). Syntax: single-line `\|` facts (.7 ✅ `f55988cc`) · implicit clause groups (.8) · implicit solve (.9, ⚠ design question — co-design first) | ⬜ | §8 sequencing note; POL.9 needs owner co-design before impl |
 | **SUB** | **POL.10 spin-out** — the substitution containment defect (LIVE bug: open de Bruijn index escapes via runtime containers). Own doc + progress table: [`2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md`](2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md). **Owner-resequenced AHEAD of the POL remainder (2026-07-24)**; ruling **(D)** (champ = closed runtime value ⇒ NbE fix) | ✅ | **BVAR half CLOSED.** R ✅ (D) · SUB.1 `f19d6f56` (tripwire, kept as the standing assertion) · SUB.2 **ADOPTED** `6323587e` (compile-limit — an independent win found here: shift ~830× micro, **suite −18%**; runner putenv) · **SUB.3a `7ea49168` — THE FIX** (NbE nf; repro 6N/5N; +6.4% suite, net 211→185) · SUB.3b `036b59f7` (narrowing containment — walker catch-all AND `narrow-match` map/vec decomposition) · hot-scan `8ec5e507` (**6.9×**/walk, differential oracle) · SUB.close (doc-truth §2.0 + 2 lesson promotions → `pipeline.md` walker discipline, `testing.md` bench traps). **META half OPEN** — zonk ×3 / `occurs?` skip on metas, reachability unverified; own slice (DEFERRED.md + defect doc §2.0) |
 | *(tests)* | **Per-phase** — each behavioral phase brings its own test delta in its completion gate; the test file(s) `tests/test-rel-*.rkt` GROW per phase (NOT a dedicated end phase — see workflow.md "Tests are PER-PHASE") | — | e.g. `test-rel-t1-naf.rkt`, `test-rel-t1-typed-rows.rkt` (grown across B1/B2) |
 | **X.close** | Bench matrix · DEFERRED triage · doc-truth sweep · memory fold · **Stage-5 PIR** | ⬜ | Objective-PIR gate |
@@ -1242,13 +1242,21 @@ three-level WS validation + WS-Impact obligations (workflow.md).
   (was absent); pnet comment doc-truth. NOTE (grounding wf_85fd66bf-abe):
   never `git stash` in this repo — owner WIP + owner stashes; A/B via
   direct edit.
-- **POL.7 — Single-line facts with `|` separators** *(owner)* —
-  `defr digits [?d]` + `|| 0 | 1 | 2 | … | 9` on one line. Today fact rows
-  are newline-separated only (and a one-line multi-row literal silently
-  mis-parses as ONE wrong-arity row — dailies Watching 3; this aspect
-  RETIRES that trap by making the intent expressible). ⚠ WS Impact: `|` is
-  tokenized as `$pipe` (ADT literals + multi-arity `defn` clause separator)
-  — the fact-block arm must scope its `$pipe` handling to the `||` group.
+- **POL.7 — Single-line facts with `|` separators** *(owner)* — **✅ FIXED
+  `f55988cc` (2026-07-25)**. `defr digits [?d]` + `|| 0 | 1 | … | 9` works
+  (the exact example → ten rows). **Two premises REFUTED by the mini-audit**
+  (probed, not inferred): the Watching-3 "one-line = single wrong-arity row"
+  claim is STALE for exact multiples (arity-chunking already existed — the
+  real trap was the PARTIAL remainder's silent dead row), and `|` was not
+  inert (it flowed into parse-datum as a garbage term → `unknown` rows).
+  Semantics: pipes = EXPLICIT rows (exact arity per segment; empty segments
+  error; continuation lines supported); no pipes = legacy chunking with the
+  partial remainder now a LOUD error. ONE shared splitter for both content
+  sites; sexp untouched by construction. Bonus pre-existing fix: WS defr body
+  errors were returned as `(list err)`, slipping the callers' bare check →
+  "Cannot elaborate:" wraps; now bare + clean diagnostics. +8 tests; suite
+  470/9054/0.
+
 - **POL.8 — Implicit rule-clause groups in `defr`** *(owner)* — drop the
   delimiting parens around rule-clause goals, layout-based like the
   functional language:
