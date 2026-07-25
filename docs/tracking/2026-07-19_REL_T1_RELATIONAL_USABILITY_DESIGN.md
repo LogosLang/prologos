@@ -1256,16 +1256,63 @@ three-level WS validation + WS-Impact obligations (workflow.md).
   continuation lines indent past the `&>`; nesting by deeper indent
   (`not` ⤷ `= color not-color`). Both spellings remain legal (additive).
   ⚠ WS Impact: tree-parser layout rules; interacts with POL.9's grammar.
-- **POL.9 — Implicit `solve` at top level** *(owner; ⚠ DESIGN QUESTION —
-  needs co-design before implementation)* — a bare relational clause outside
-  `defr` carries an implicit `solve` (mirroring the functional language's
-  implicit `eval`): `fruit-not-of-color f "red"` ≡ `solve (…)`; anonymous
-  `rel [fruit] &> …` likewise. **The open question is grammar ambiguity**:
-  a bare `foo a b` at top level currently reads as function application —
-  disambiguation plausibly = relation-registry lookup at elaboration
-  (relations are registered before use), but forward references, shadowing,
-  and error-message quality under a miss all need settling. Co-design with
-  the owner first; then the WS-Impact analysis.
+- **POL.9 — Implicit `solve` at top level** — **SETTLED (co-design 2026-07-25;
+  owner + Claude, prose round). The PAREN-GOAL design** supersedes the seed's
+  registry-lookup idea (owner-proposed; adopted with the analysis below).
+
+  **The rule (one sentence)**: *goal-ness comes from context (`defr`/`solve`/
+  `rel` bodies) or from parens (everywhere else)* — a paren group in command
+  position is a GOAL, and a top-level goal carries an implicit `solve`:
+  `(fruit-not-of-color f "red")` ≡ `solve (…)`; `foo x` / `[foo x]` stays
+  function application. This COMPLETES the existing delimiter reservation
+  (prologos-syntax.md: `()` = "special form, not application" + relational
+  goals) rather than adding a new distinction, and it composes with POL.8
+  (which drops parens where defr-body context already supplies goal-ness).
+
+  **The load-bearing argument (why paren beats registry-lookup)**:
+  free-ordering REQUIRES syntactic category-decidability. Under registry
+  lookup, `foo a b`'s CATEGORY (application vs query) is itself pending until
+  the name resolves — un-typeable, un-composable, retroactively re-categorized.
+  Under parens the category is static and only the BINDING residuates — exactly
+  the residuation pattern the driver already implements for forward-referenced
+  defs (`residuation-demand-name` + sweep-retry, PPN 4C 4B.5.a).
+
+  **Rulings (Q_A–Q_E, owner 2026-07-25)**:
+  - **Q_A** paren-goals ADOPTED over registry-lookup.
+  - **Q_B** defn/defr namespaces are DISJOINT at registration — the second
+    registration of a name held by the other kind is an ERROR pointing at the
+    first. Kills the silent-wrong-reading hazard (a Lisp-habit `(foo x)` where
+    both exist would quietly solve) and keeps the future Curry-style
+    functions-are-relations unification clean (narrowing already reads defns
+    relationally).
+  - **Q_C** scope = TOP-LEVEL commands + `def` RHS (`def r := (reach a b)` ≡
+    `:= solve (…)`, POL.10 snapshot semantics governs). **NOT general
+    expression position**: paren-goals inside `defn` bodies would make calls
+    re-query the ambient fact store from inside functions — the
+    purity/store-dependence question (recipe-liveness's bigger sibling),
+    deferred to its own design round (Rel T2/UCS-adjacent).
+  - **Q_D** forward refs: slice 1 = "Unknown relation" via the POL.4
+    `exn:prologos-solve` presentation (honest error); slice 2 (fast-follow) =
+    wire goals into the EXISTING demand-residuation loop so a goal over a
+    later-defined relation retries when the `defr` lands — free-ordering
+    behavior with no new propagator substrate.
+  - **Q_E** conjunction-by-juxtaposition (`(g1) (g2)` as a shared-var query)
+    PARKED for the POL.8 grammar round (adjacency parsing collides with
+    top-level command splitting; `rel […] &> …` already spells conjunction).
+
+  **Named costs (accepted, eyes open)**: (1) the Lisp-muscle-memory /
+  cross-reader hazard — `(f x)` = application in sexp IR but a goal in WS; an
+  INSTITUTIONALIZED WS-vs-sexp divergence on the most iconic Lisp form
+  (mitigation = the (c) diagnostics + the Q_B error; watch as a candidate
+  premise-refutation source in sexp-mode tests). (2) One character of semantic
+  weight — the echo self-corrects (rows-with-types vs a value) but docs must
+  lead with the delimiter rule.
+  **Diagnostics**: `(foo x)` where foo is a defn → "foo is a function —
+  application is written [foo x]; parens make a relational goal"; unknown →
+  POL.4 unknown-relation + arities + "define with defr". Anonymous `rel`:
+  `(rel [x] &> …)` queries; bare `rel …` stays the value. `solve-one`/`explain`
+  stay explicit (adverbs). **Impl Phase 0**: empirical census of what
+  top-level `(foo x)` does in WS today (expected: error ⇒ additive).
 
 ### B3 — rule-relation codata rows (tracked as its own aspect row)
 
