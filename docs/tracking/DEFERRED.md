@@ -1504,3 +1504,130 @@ land on the `.md` and read a claim the `.org` has already retracted — precisel
 the failure the sweep was fixing. The twins need regeneration from org-export,
 and it is worth deciding whether the `.md` exports should exist in-tree at all
 (they have no consumer that the `.org` doesn't serve).
+
+---
+
+## Rel T1 POL.9 — `not` / `=` / `is` do NOT take the implicit solve (captured 2026-07-25, X.close adversarial audit; live-probed)
+
+**A real ergonomic hazard, not cosmetic.** POL.9's `paren-goal-stx?`
+(`parser.rkt`) requires a **non-keyword** head (plus `rel`). `not`, `=` and `is`
+are parser keywords, so at top level:
+
+```
+(not (blocked "c"))
+;; => [reduce [(defr blocked …) "c"] | true -> false | false -> true] : Bool
+```
+
+— i.e. **functional Bool negation applied to a stuck goal term**, computing
+nothing useful and reporting **0 errors**. A user who has internalized "parens
+make goals" writes exactly this and gets a silently-useless answer. The explicit
+`solve (not (blocked "c"))` works (it is the A.1 deliverable).
+
+**Why it is the way it is**: the keyword exclusion is what protects `(match …)`,
+`(+ 1 2)` and `(= ?x 5)` from being read as goals; `not`/`is`/`=` ride that
+exclusion incidentally rather than by decision.
+
+**Options** (needs an owner ruling, not a unilateral fix):
+1. Whitelist the GOAL keywords (`not`, `=`, `is`) alongside `rel` in
+   `paren-goal-stx?` — smallest change; makes the surface uniform.
+2. Leave the exclusion and add a DIAGNOSTIC when a paren-`not` at command
+   position wraps a goal-app (point at `solve (not …)`).
+3. Document only (done — `.claude/rules/prologos-syntax.md` § Relational
+   syntax now carries the warning).
+
+Option 1 interacts with the functional `not` on Bool, which is why this is a
+ruling and not a patch.
+
+---
+
+## Rel T1 — the acceptance file has NO automated gate, and the POL cluster is Level-2 only (captured 2026-07-25, X.close adversarial audit)
+
+Three compounding testing gaps, verified:
+
+1. **`examples/2026-07-19-rel-t1-acceptance.prologos` is gated by nothing.**
+   No test references it (`grep -rln rel-t1-acceptance tests/` = ∅); no golden
+   exists for it; `compare-golden-for-file` has zero callers in `tests/`. Its
+   0-errors status was verified by hand every phase — a discipline, not a gate.
+   If it regresses, the suite stays green.
+2. **~13 of its 28 `;;N=>` markers are PROSE**, so even a manual `--check` run
+   cannot pass them (the checker does exact match).
+3. **The whole POL cluster is L2-only in the suite**: `test-rel-t1-pol.rkt` has
+   **0** `process-file` calls against **84** `run-ns-ws-last`. `testing.md`
+   mandates three-level WS validation for syntax features, and POL.7/8/9 are
+   syntax features. The sibling files (`-naf`, `-typed-rows`, `-typed-vars`) DO
+   call `process-file` — the pattern was available and simply not applied here.
+   L3 coverage for POL therefore rests entirely on gap (1), which is ungated.
+
+**Fix direction**: add a suite test that runs the acceptance file through
+`process-file` and asserts 0 errors (cheap, closes 1+3 at once); convert the
+prose markers to real `;;N=>` expectations or drop the `=>`; add `process-file`
+cases for the POL.8/POL.9 grammar.
+
+---
+
+## Rel T1 — `current-relation-store` is not threaded into test-support or batch-worker (captured 2026-07-25; pre-existing, design-acknowledged)
+
+`grep -c current-relation-store` = **0** in BOTH
+`racket/prologos/tests/test-support.rkt` and
+`racket/prologos/tools/batch-worker.rkt`. Consequence: in the `run-ns*` and
+batch-worker contexts the relation store is not the ambient one, so `solve`
+types as untyped where production would type it — **silently**. Design §6.9
+recommended threading it and accepted the gap.
+
+This is instance **#7** of the two-context boundary bug class that
+`pipeline.md` § "New Racket Parameter" (items 2+3) exists to prevent — the
+checklist names exactly these two files. Worth treating as an architectural
+signal rather than a seventh individual fix: the class recurs because the
+parameter set is discovered by grep rather than declared in one place.
+
+---
+
+## Rel T1 SC — the REPL/editor preparse fix shipped with no test (captured 2026-07-25, X.close audit)
+
+`19d9f8ae` fixed an owner-reported blocker (`process-string-ws` dropped
+preparse-macro support, so `solver` configs failed in the REPL/LSP path) with
++12/−17 in `driver.rkt` and **zero new tests**. The commit cites "130 REPL/LSP/WS
+tests pass" — that is pre-existing regression evidence, not a pin on the fixed
+behavior. No test anywhere spells `solver cfg` / `:tabling` (grep = 0), so the
+exact regression would not be caught again. Phase SC is also still 🔄 in the
+tracker. `workflow.md` permits a no-test commit only for "refactor with zero
+behavioral change"; this was a behavioral fix.
+
+**Fix**: add a `process-string-ws` test that defines a named `solver` config and
+runs `solve-with` against it.
+
+---
+
+## Rel T1 POL.9 Q_D slice 2 (demand-loop retry for forward-referenced relations) — unimplemented and untracked (captured 2026-07-25)
+
+The settled POL.9 design (§8, Q_D) has two slices: slice 1 = "Unknown relation"
+via the POL.4 `exn:prologos-solve` presentation (**shipped** in 9a), slice 2 =
+wire goals into the EXISTING demand-residuation loop so a goal over a
+later-defined relation retries when the `defr` lands (free-ordering behavior, no
+new propagator substrate). Slice 2 was called "fast-follow" and never built;
+`residuation-demand-name` (`driver.rkt`) is still def-path only. The POL row is
+marked ✅, which over-states completion.
+
+---
+
+## Rel T1 POL.8 — the merge FUTURE-TRAP is documented only in prose (captured 2026-07-25)
+
+Adding a `defr` arm to `driver.rkt`'s `surf-source-line` / `same-form-type?`
+(e.g. while extending the preparse/tree merge for an unrelated reason) would
+silently flip the L2 winner for `defr` to the **srcloc-STRIPPED** tree-spine
+surf, breaking POL.8's column-based layout grammar with no test failure at the
+point of change. Named in design §8 prose; not filed, not test-pinned.
+
+**Fix direction**: a test that asserts POL.8 layout still parses under
+`process-string-ws` (the L2 path) would fail loudly if the merge winner flipped.
+
+---
+
+## Rel T1 — `docs/spec/grammar.ebnf` predates the POL syntax cluster (captured 2026-07-25)
+
+The formal grammar describes none of what shipped: `clause-body = '&>' , { goal }`
+(no parenless goals, no layout), `fact-row = expr , { expr }` (no `|` row
+separators), goals always parenthesized (no implicit solve), and `rel-params` has
+no `:`-type alternative (C.b.1's fused `?x:Int`). It also still describes the
+dead-in-WS `?var:C1:C2` narrow-var surface, which now COLLIDES with C.b.1's
+spelling. The `.org`/`.md`/`.tex`/`.pdf` renderings inherit all of it.

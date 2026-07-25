@@ -261,7 +261,20 @@
     [(? expr-validate? v) (validate-map-exprs (lambda (t) (shift delta cutoff t)) v)]
     ;; Map (all non-binding)
     [(expr-Map k v) (expr-Map (shift delta cutoff k) (shift delta cutoff v))]
-    [(expr-champ _) e]  ; Racket value, no de Bruijn vars
+    ;; Runtime collection values are CLOSED leaves — no descent.
+    ;; Rel T1 SUB ruling (D), 2026-07-24: this is a CONTRACT, and it is true by
+    ;; CONSTRUCTION rather than by assertion — `nf` opens binders NbE-style
+    ;; (reduction.rkt), so a container minted under a binder can only capture
+    ;; deterministic `#%nbe` FVARS, which shift/subst are already identity on.
+    ;; ENFORCED by the SUB.1 tripwire (`contains-open-container?`) at the three
+    ;; nf-persist boundaries, not by this comment.
+    ;;   The previous comment here read "Racket value, no de Bruijn vars" — a
+    ;; FALSE assertion that made a live silent-wrong-answer bug (beta silently
+    ;; dropped arguments; shift never renumbered ⇒ variable capture) look
+    ;; intentional for months. See docs/tracking/2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md
+    ;; and .claude/rules/pipeline.md § "Exhaustive Walkers" (whose red-flag list
+    ;; names exactly that comment shape).
+    [(expr-champ _) e]
     [(expr-map-empty k v) (expr-map-empty (shift delta cutoff k) (shift delta cutoff v))]
     [(expr-map-assoc m k v) (expr-map-assoc (shift delta cutoff m) (shift delta cutoff k) (shift delta cutoff v))]
     [(expr-map-get m k) (expr-map-get (shift delta cutoff m) (shift delta cutoff k))]

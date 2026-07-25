@@ -1,9 +1,9 @@
 # Rel — Relational Language Series (Master)
 
 **Founded**: 2026-07-19 (owner-directed, during CIU T6 F1b.close).
-**Status**: newly opened; no tracks locked. First artifact = the un-named
-solve-typing/NAF track's implementation note (a Stage-3 seed):
-[`2026-07-19_REL_SOLVE_TYPING_NOTE.md`](2026-07-19_REL_SOLVE_TYPING_NOTE.md).
+**Status**: **Track 1 delivered** (all aspects + the POL polish roster + an
+interleaved spin-out); its Stage-5 PIR is what flips the roadmap row ✅.
+Track 2 ("The Fact Store") is chartered-in-seed, not opened.
 
 ## Thesis
 
@@ -42,7 +42,7 @@ relational output flows into.
 
 | # | Track | Description | Status | Artifact |
 |---|---|---|---|---|
-| 1 | Relational Language Usability | NAF/guard correctness (priority — `not` echo + on-network NAF single-bit collapse + guard crash) + typed solution rows (codata + schema projection) + schema-as-relational-facts + Aspect D fact-representation research (Stage 0/1) + polish. **Deferred to UCS**: `?v:Type` CLP resolution. | 🔄 **Aspect-A COMPLETE** (A.1 + A.2-core + A.2b + A.3 + A.4 + Phase SC, all ✅): A.2b `bcd02d6d` + A.4 `6b56397d` = adaptive-dispatch DFS-routing (body-local-var rule NAF + guards), scaffolding → BSP-LE Track 3 ([seed](2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md)); A.3 `74fa9df2`+`393bbbbf` = static PERMISSIVE floundering gate (Prolog-parity warn+`nil`); SC `19d9f8ae`+`f07f6c54` = REPL/editor solver-eval fix + wfle validation. A.4 found the wfle "F2 crash" premise was wrong (`gt` stuck, not crash); on-network guard mechanism prototyped + deferred to Track 3. **NEXT B/C/D + X.close (PIR)** — track ✅ gates on the PIR. | [design](2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md) · [seed](2026-07-19_REL_SOLVE_TYPING_NOTE.md) |
+| 1 | Relational Language Usability | NAF/guard correctness · typed solution rows (schema projection + codata + RULE-relation rows) · typed logic vars + schema-as-facts · fact-representation research (Stage 0/1 + cheap wins) · the POL polish roster. **Deferred to UCS**: `?v:Type` CLP resolution (Track 6). | 🔄 **ALL ASPECTS DELIVERED — X.close in flight.** A ✅ (A.1·A.2·A.2b·A.3·A.4·SC) · B ✅ (B0·B1·B2) · C ✅ (C.a·C.b·C.c; C.d → UCS T6) · D ✅ (artifact + D.2 a–d) · B3 ✅ (rule-relation rows, the owner's headline aspect) · POL ✅ (.1–.10, incl. the POL.7/8/9 syntax cluster) · **SUB spin-out ✅** (a LIVE silent-wrong-answer bug in `shift`/`subst`, fixed by NbE open-the-binder). Scaffolding → BSP-LE Track 3 ([seed](2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md)). **The Stage-5 PIR gates the ✅.** | [design](2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md) · [seed](2026-07-19_REL_SOLVE_TYPING_NOTE.md) · [SUB](2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md) |
 
 > Note (2026-07-19): the seed's "`&>` inversion" framing is **superseded** — `&>`
 > is the rule-clause separator, not a negation op; the real bug is the on-network

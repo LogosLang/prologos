@@ -128,6 +128,21 @@ the older parenthesized spellings remain legal everywhere.
   redefinition stays legal, and the gate is **local-only** — shadowing a
   refer-imported name (e.g. a prelude `xor`) with your own `defr` is fine.
 
+- **Solution sets are BAGS, not sets** (owner ruling, Rel T1 POL.1). `solve`
+  returns **one row per derivation path**, so duplicate rows are expected and
+  intended: the multiplicity IS the derivation count (the ATMS-as-provenance
+  reading; ℕ-semiring provenance — a duplicate row is a distinct proof). This
+  matches Prolog's `findall`/`bagof` default. Do **not** "fix" duplicate rows;
+  an opt-in `distinct` (the `setof` analogue) is deferred to Rel T2, where it
+  meets the DFS first-hit short-circuit question that dedup would make
+  observable.
+
+- ⚠ **`not` / `=` / `is` do NOT take the implicit solve.** They are parser
+  keywords, so `(not (blocked "c"))` at top level is **functional Bool
+  negation applied to a stuck goal term**, not a NAF query — it types as
+  `Bool` and computes nothing useful. Write `solve (not (blocked "c"))`
+  explicitly. (Verified 2026-07-25; tracked in DEFERRED.md.)
+
 - **Diagnostics you should expect** (they are guiding, not generic): a paren
   goal over a function → "foo is a function — application is written
   [foo …]"; a wrong arity → the SWI-style "Unknown procedure: truths/1 —

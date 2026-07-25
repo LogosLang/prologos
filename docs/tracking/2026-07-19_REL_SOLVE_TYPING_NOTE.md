@@ -55,12 +55,26 @@ defr light-vehicle [?v]  &> (vehicle v) (license v)   ;; intended: vehicle ∧ �
 Fork + BSP + nogood evaluation of `not(G)`, "inverts provability", requires S0
 quiescence). But: **(a)** the top-level `solve (not G)` SURFACE does not dispatch
 to the NAF stratum — it returns the `not` term unevaluated (even for ground `G`,
-where NAF is safe); and **(b)** the `&>` guard operator (light-vehicle = vehicle ∧
-¬license) produces the INVERTED result and fails on the intended member — its
-negation is broken or not wired to the NAF stratum.
+where NAF is safe); and **(b)** ~~the `&>` guard operator (light-vehicle = vehicle ∧
+¬license) produces the INVERTED result~~ — **REFUTED, see the correction below.**
 
-**The track investigates**: the `solve (not …)` surface → NAF-stratum dispatch; the
-`&>` guard desugaring + its negation semantics; **safe-vs-unsafe negation** (ground
+> **⚠ CORRECTION (Rel T1 §4, landed at X.close 2026-07-25 — the fix this note's
+> own §4 reserved).** `&>` is **NOT a guard operator and carries NO negation**:
+> it is the rule-clause SEPARATOR, Prolog's `:-` (tokenized `$clause-sep`). So
+> `defr light-vehicle &> (vehicle v) (license v)` is a plain positive
+> conjunction and `{:lv "automobile"}` was the CORRECT answer to what was
+> actually written; the intent was `¬license`, whose correct spelling is
+> `&> (vehicle v) (not (license v))`. The instinct ("the negation here is
+> wrong") was right; the LOCATION was wrong. Spelled correctly, it hits the
+> REAL bug — the on-network NAF single-bit collapse (one naf-bit per
+> conjunction, inherited by every enumerated binding ⇒ only {both} or
+> {neither} is expressible) — which Aspect A fixed via per-binding belief
+> narrowing (`cb0fb1e4`). This mislabel is *premise refutation #1* of the
+> track's cascade and the reason "probe before locking a premise" became a
+> standing discipline. Authoritative text: design doc §4.
+
+**The track investigated**: the `solve (not …)` surface → NAF-stratum dispatch; the
+`&>` clause-separator semantics (per the correction above); **safe-vs-unsafe negation** (ground
 `G` runs NAF; unbound `G` floods → a clear "unsafe negation" error, not a silent
 echo); and the stratification interaction (S1 NAF fires only after S0 quiesces).
 

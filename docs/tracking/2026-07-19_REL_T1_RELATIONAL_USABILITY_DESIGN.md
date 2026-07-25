@@ -1381,8 +1381,9 @@ three-level WS validation + WS-Impact obligations (workflow.md).
   diagnostic; other values → guiding value wording; env-bound `expr-defr`
   store-absent → "its defr failed to register (see the earlier error)" (the
   env write precedes the A.3/C.c gates — surfaced by punify-p3's
-  pre-existing rejections). Grounding `wf_0eb9bf57-0a9`; +13 tests;
-  acceptance ;;35-38; suite 470/9082/0. **POL.9b — the def-RHS leg ✅ `7ce02760`**: `def r := (goal)` binds the
+  pre-existing rejections). Grounding `wf_0eb9bf57-0a9`; +12 tests;
+  acceptance ;;35-36 (an earlier draft of this line said "+13" and
+  ";;35-38" — markers 37/38 never existed; corrected at X.close); suite 470/9082/0. **POL.9b — the def-RHS leg ✅ `7ce02760`**: `def r := (goal)` binds the
   solve's rows (POL.10 snapshot; B-typed; inner POL.8 layout survives via
   the := RHS-element stx splice). Realization: the preparse := rewrite
   carries + STAMPS the RHS element (`'prologos-defrhs-command` — the :=
