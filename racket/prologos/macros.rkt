@@ -3156,11 +3156,61 @@
                (maybe-inject-where maybe-injected)
                maybe-injected))
          (define expanded (preparse-expand-form maybe-where-injected))
+         ;; Rel T1 POL.9b: `def x := (…)` — carry the := RHS ELEMENT's syntax
+         ;; (its srclocs + the reader's 'prologos-paren-origin mark) through
+         ;; the def rewrite, so parse-def can give a paren-goal RHS its
+         ;; implicit solve (the Q_C def leg). Only a SINGLE element after :=
+         ;; qualifies (a multi-token RHS is the auto-wrapped application —
+         ;; bare spelling stays application/value by construction). When the
+         ;; RHS datum survived expansion unchanged, splice the ORIGINAL stx
+         ;; (full inner srclocs — POL.8 layout inside the RHS keeps working);
+         ;; when rewritten but same-headed, a 4-arg rebuild keeps loc + mark.
+         (define def-rhs-stx
+           (and (eq? head 'def)
+                (syntax? stx)
+                (let ([elems (syntax->list stx)])
+                  (and elems
+                       (let loop ([es elems])
+                         (cond
+                           [(null? es) #f]
+                           [(eq? (let ([e (car es)]) (if (syntax? e) (syntax-e e) e)) ':=)
+                            (and (pair? (cdr es)) (null? (cddr es)) (cadr es))]
+                           [else (loop (cdr es))]))))))
+         (define (rebuild-def-preserving-rhs final-datum)
+           (define (head-of d) (and (pair? d)
+                                    (let ([h (car d)])
+                                      (if (syntax? h) (syntax-e h) h))))
+           (if (and def-rhs-stx (pair? final-datum) (>= (length final-datum) 3))
+               (let* ([value (last final-datum)]
+                      [orig  (syntax->datum def-rhs-stx)]
+                      [value-stx0
+                       (cond
+                         [(equal? value orig) def-rhs-stx]
+                         [(and (pair? value) (pair? orig)
+                               (eq? (head-of value) (head-of orig)))
+                          (datum->syntax #f value def-rhs-stx def-rhs-stx)]
+                         [else #f])]
+                      ;; The := SURFACE is what makes the RHS command
+                      ;; position (Q_C). A sexp-style paren-def form
+                      ;; ((def x : T (cons …)) written in a WS file) keeps
+                      ;; application semantics — parse-def dispatches ONLY
+                      ;; on RHS elements stamped here, and only := defs
+                      ;; reach this rebuild.
+                      [value-stx
+                       (and value-stx0
+                            (syntax-property value-stx0
+                                             'prologos-defrhs-command #t))])
+                 (if value-stx
+                     (datum->syntax #f (append (drop-right final-datum 1)
+                                               (list value-stx))
+                                    stx)
+                     (datum->syntax #f final-datum stx)))
+               (datum->syntax #f final-datum stx)))
          (if (equal? expanded maybe-where-injected)
              (if (equal? maybe-where-injected datum)
                  (cons stx acc)
-                 (cons (datum->syntax #f maybe-where-injected stx) acc))
-             (cons (datum->syntax #f expanded stx) acc))]
+                 (cons (rebuild-def-preserving-rhs maybe-where-injected) acc))
+             (cons (rebuild-def-preserving-rhs expanded) acc))]
         ;; ---- Public capability — auto-export the capability type name (IO-D5) ----
         [(and (pair? datum) (eq? head 'capability))
          (when (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))

@@ -201,3 +201,10 @@ defr rg-fruits [?f]
   &> fruit-color fruit _
      not (rg-fruits fruit)
      not (blue-or-yellow fruit))
+
+;; ---- POL.9b: def RHS is command position — `def r := (goal)` binds rows ----
+;;39=> blues : List {:f String} defined. (implicit solve; POL.10 snapshot)
+def blues := (fruit-not-of-color f "red")
+
+;;40=> '[{:f "blueberry"} {:f "banana"}]
+blues

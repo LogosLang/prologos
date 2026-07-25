@@ -766,3 +766,75 @@
                                         "  &> not (fruit-color y x)\n"
                                         "(unsafe-r q)"))))
   (check-true (string-contains? m "failed to register") m))
+
+;; ========================================================================
+;; POL.9b — the def-RHS leg (Q_C): `def r := (reach a b)` ≡ `:= solve (…)`.
+;; Realization: the preparse def arm carries the := RHS element's stx
+;; (srclocs + paren-origin) through the rewrite; parse-def dispatches at all
+;; three body sites; the merge prefers the preparse surf exactly when the
+;; two spines DISAGREE in category (preparse=solve vs tree=app) — explicit
+;; `def := solve (…)` parses as solve on both spines and merges as before.
+;; ========================================================================
+
+(test-case "POL.9b: def RHS paren goal binds the solve's rows"
+  (define r (run-ns-ws-last
+             (string-append P9FIX
+                            "def blues := (fruit-color f \"blue\")\n"
+                            "blues")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry"))
+  (check-true (string-contains? r "List {:f String}")))
+
+(test-case "POL.9b: def RHS paren rel with POL.8 parenless clauses (inner layout survives)"
+  (define r (run-ns-ws-last
+             (string-append P9FIX
+                            "def nonred := (rel [f]\n"
+                            "                &> fruit-color f c\n"
+                            "                   not (= c \"red\"))\n"
+                            "nonred")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry"))
+  (check-true (string-contains? r "plum"))
+  (check-false (string-contains? r "cherry")))
+
+(test-case "POL.9b: explicit `def := solve (…)` unchanged"
+  (define r (run-ns-ws-last
+             (string-append P9FIX
+                            "def ys := solve (fruit-color f \"yellow\")\n"
+                            "ys")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "banana")))
+
+(test-case "POL.9b: paren and explicit spellings are byte-equivalent at the def seam"
+  (define paren (run-ns-ws-last
+                 (string-append P9FIX "def r := (fruit-color f \"blue\")\nr")))
+  (define expl  (run-ns-ws-last
+                 (string-append P9FIX "def r := solve (fruit-color f \"blue\")\nr")))
+  (check-equal? paren expl))
+
+(test-case "POL.9b: def-seam PARITY on bad heads (pre-existing diagnostic, pinned)"
+  ;; Both spellings hit the same pre-existing def-seam type error — the
+  ;; guiding function diagnostic does not reach the def seam yet (typing
+  ;; precedes evaluation there). Pinned so a future diagnostic fix shows.
+  (define paren (result-msg (run-ns-ws-last
+                             (string-append P9FIX "def bad := (dbl 3)"))))
+  (define expl  (result-msg (run-ns-ws-last
+                             (string-append P9FIX "def bad := solve (dbl 3)"))))
+  (check-equal? paren expl "paren spelling ≡ explicit solve spelling")
+  (check-true (string-contains? paren "not a valid type") paren))
+
+(test-case "POL.9b: bare/bracket def RHS stays application-value"
+  (define r (run-ns-ws-last
+             (string-append P9FIX
+                            "def six := [dbl 3]\n"
+                            "six")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "6")))
+
+(test-case "POL.9b: sexp def RHS paren application unchanged (divergence pinned)"
+  (define r (run-ns-last
+             (string-append "(ns p9bs)\n"
+                            "(def six (int* 2 3))\n"
+                            "(eval six)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "6")))

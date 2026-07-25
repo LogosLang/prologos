@@ -2407,6 +2407,17 @@
       [(not tree-surf) preparse-surf]
       ;; Form type mismatch → preparse (safety)
       [(not (same-form-type? preparse-surf tree-surf)) preparse-surf]
+      ;; Rel T1 POL.9b: the preparse spine is the ONLY pipeline that can see
+      ;; the reader's 'prologos-paren-origin mark (the tree spine's legacy
+      ;; def path has no source text for srcloc/property recovery). When the
+      ;; two spines DISAGREE in category — preparse parsed the def body as a
+      ;; solve (the paren-goal dispatch fired) while the tree parsed it as an
+      ;; application — preparse is authoritative. Explicit `def := solve (…)`
+      ;; parses as solve on BOTH spines, so its merge is unchanged.
+      [(and (surf-def? preparse-surf) (surf-def? tree-surf)
+            (surf-solve? (surf-def-body preparse-surf))
+            (not (surf-solve? (surf-def-body tree-surf))))
+       preparse-surf]
       ;; Spec-annotated → preparse (has spec type injected)
       [(and (surf-def? preparse-surf) (hash-ref spec-store (surf-def-name preparse-surf) #f)) preparse-surf]
       [(and (surf-defn? preparse-surf) (hash-ref spec-store (surf-defn-name preparse-surf) #f)) preparse-surf]

@@ -58,27 +58,44 @@
 ;; guiding function diagnostic; unknown → the POL.4 unknown-relation error);
 ;; the parse-level category is static, only the BINDING residuates (the
 ;; anti-registry-lookup argument, design §8 D-POL9).
-(define (parse-toplevel-datum stx)
-  (define d (stx->datum stx))
-  (define head
-    (and (pair? d)
-         (let ([h0 (car d)])
-           (let ([h (if (syntax? h0) (syntax-e h0) h0)])
-             (and (symbol? h) h)))))
+;; The command-position goal predicate: a WS paren-origin group whose head is
+;; a non-keyword symbol (or the one querying keyword, `rel`).
+(define (paren-goal-stx? stx)
   (define (dollar-sym? s)
     (let ([str (symbol->string s)])
       (and (positive? (string-length str))
            (char=? (string-ref str 0) #\$))))
-  (cond
-    [(and head
-          (syntax? stx)
-          (syntax-property stx 'prologos-paren-origin)
-          (not (dollar-sym? head))
-          (or (not (keyword? head)) (eq? head 'rel)))
-     (define loc (datum-srcloc stx))
-     (let ([g (parse-relational-goal stx)])
-       (if (prologos-error? g) g (surf-solve g loc)))]
-    [else (parse-datum stx)]))
+  (and (syntax? stx)
+       (syntax-property stx 'prologos-paren-origin)
+       (let ([d (stx->datum stx)])
+         (and (pair? d)
+              (let* ([h0 (car d)] [h (if (syntax? h0) (syntax-e h0) h0)])
+                (and (symbol? h)
+                     (not (dollar-sym? h))
+                     (or (not (keyword? h)) (eq? h 'rel))))))))
+
+;; Parse a datum at COMMAND position (top-level command or def RHS — the
+;; Q_C scope): a paren goal becomes an implicit solve; everything else
+;; parses as usual.
+(define (parse-command-datum stx)
+  (if (paren-goal-stx? stx)
+      (let ([g (parse-relational-goal stx)])
+        (if (prologos-error? g) g (surf-solve g (datum-srcloc stx))))
+      (parse-datum stx)))
+
+(define (parse-toplevel-datum stx)
+  (parse-command-datum stx))
+
+;; The def-RHS variant: dispatch ONLY for RHS elements the preparse `:=`
+;; rewrite stamped ('prologos-defrhs-command). A sexp-style paren-def form
+;; written in a WS file — `(def x : T (cons …))` — never gets the stamp,
+;; so its RHS keeps application semantics (the IR spelling embedded in WS;
+;; the institutionalized-divergence cost applies to the := surface only).
+(define (parse-defrhs-datum stx)
+  (if (and (syntax? stx)
+           (syntax-property stx 'prologos-defrhs-command))
+      (parse-command-datum stx)
+      (parse-datum stx)))
 
 ;; ========================================
 ;; Keywords: forms with special parsing rules
@@ -3846,7 +3863,9 @@
          [(not (symbol? name))
           (parse-error loc (format "def: expected name, got ~a" name) name)]
          [else
-          (let ([bd (parse-datum (cadr args))])
+          ;; Rel T1 POL.9b: the def RHS is command position (Q_C) —
+          ;; a paren goal binds the solve's rows (POL.10 snapshot governs).
+          (let ([bd (parse-defrhs-datum (cadr args))])
             (if (prologos-error? bd) bd
                 (surf-def name #f bd loc)))]))]
     ;; NEW: name <type> body — 3 elements
@@ -3858,7 +3877,7 @@
           (parse-error loc (format "def: expected name, got ~a" name) name)]
          [else
           (let ([ty (unwrap-angle-type (cadr args) loc)]
-                [bd (parse-datum (caddr args))])
+                [bd (parse-defrhs-datum (caddr args))])  ;; POL.9b: := RHS command position
             (cond
               [(prologos-error? ty) ty]
               [(prologos-error? bd) bd]
@@ -3876,7 +3895,7 @@
           (parse-error loc (format "def: expected ':', got ~a" colon) colon)]
          [else
           (let ([ty (parse-datum type-stx)]
-                [bd (parse-datum body-stx)])
+                [bd (parse-defrhs-datum body-stx)])  ;; POL.9b: := RHS command position
             (cond
               [(prologos-error? ty) ty]
               [(prologos-error? bd) bd]
