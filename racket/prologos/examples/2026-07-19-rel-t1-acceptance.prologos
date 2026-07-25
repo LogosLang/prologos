@@ -182,3 +182,22 @@ defr fruit-not-of-color2 [?fruit ?not-color]
 
 ;;34=> '[{:f "blueberry"} {:f "banana"}]
 solve (fruit-not-of-color2 f "red")
+
+;; ---- POL.9: implicit solve — parens make goals at command position ----------
+;; (owner co-design 2026-07-25). `(foo x)` at top level ≡ solve (foo x);
+;; `foo x` / `[foo x]` stays application; `rel` is the one keyword that
+;; queries. Composes with POL.8's parenless clause groups.
+
+defr rg-fruits [?f]
+  &> fruit-color f "red"
+
+;;35=> implicit solve on a paren goal: '[{:f "blueberry"} {:f "banana"}]
+(fruit-not-of-color f "red")
+
+;;36=> the composed owner example — paren rel + parenless clauses.
+;; (all fixture fruits are red or blue-or-yellow, so the answer is nil —
+;; the echo still carries the typed row: List {:fruit String})
+(rel [fruit]
+  &> fruit-color fruit _
+     not (rg-fruits fruit)
+     not (blue-or-yellow fruit))

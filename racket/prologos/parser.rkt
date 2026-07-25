@@ -17,6 +17,7 @@
          "global-env.rkt")
 
 (provide parse-datum
+         parse-toplevel-datum  ;; Rel T1 POL.9: command-position paren-goal dispatch
          parse-string
          parse-port
          current-parsing-relational-goal?
@@ -41,6 +42,43 @@
 (define (parse-relational-goal stx)
   (parameterize ([current-parsing-relational-goal? #t])
     (parse-datum stx)))
+
+;; ── Rel T1 POL.9: implicit solve — parens make goals at command position ──
+;; (owner co-design 2026-07-25; design §8 POL.9.) The WS reader marks paren
+;; groups with 'prologos-paren-origin (parse-reader.rkt lparen wrap); a marked
+;; group in COMMAND position whose head is a non-keyword symbol (or the one
+;; querying keyword, `rel`) is a GOAL carrying an implicit solve:
+;;   (fruit-not-of-color f "red")  ≡  solve (fruit-not-of-color f "red")
+;;   (rel [x] &> …)                ≡  solve (rel [x] &> …)
+;; `foo x` / `[foo x]` stays application; keyword heads keep their forms
+;; ((match …), (+ 1 2), (= ?x 5)); `$`-sentinel heads (quoted literals etc.)
+;; are never goals. Sexp mode is untouched by construction — only the WS
+;; reader attaches the property. Classification of the HEAD happens at solve
+;; time where the registries exist (relation → rows; value-bound → the
+;; guiding function diagnostic; unknown → the POL.4 unknown-relation error);
+;; the parse-level category is static, only the BINDING residuates (the
+;; anti-registry-lookup argument, design §8 D-POL9).
+(define (parse-toplevel-datum stx)
+  (define d (stx->datum stx))
+  (define head
+    (and (pair? d)
+         (let ([h0 (car d)])
+           (let ([h (if (syntax? h0) (syntax-e h0) h0)])
+             (and (symbol? h) h)))))
+  (define (dollar-sym? s)
+    (let ([str (symbol->string s)])
+      (and (positive? (string-length str))
+           (char=? (string-ref str 0) #\$))))
+  (cond
+    [(and head
+          (syntax? stx)
+          (syntax-property stx 'prologos-paren-origin)
+          (not (dollar-sym? head))
+          (or (not (keyword? head)) (eq? head 'rel)))
+     (define loc (datum-srcloc stx))
+     (let ([g (parse-relational-goal stx)])
+       (if (prologos-error? g) g (surf-solve g loc)))]
+    [else (parse-datum stx)]))
 
 ;; ========================================
 ;; Keywords: forms with special parsing rules
@@ -5532,6 +5570,66 @@
                 (if (syntax? bare) (syntax->datum bare) bare)))
       (map parse-relational-goal elems)))
 
+;; Rel T1 POL.9: regroup FLAT multi-line clause content by srcloc layout.
+;; Inside explicit parens (`(rel [x] &> …)`, single-line/sexp defr) the reader
+;; suspends indent grouping, so clause content arrives as a flat token run.
+;; This reconstructs, from per-token line/column, the same per-line nested
+;; shape the reader's indent grouping produces for unbracketed bodies — so
+;; the ONE clause grammar (parse-clause-content) serves both. Mirrors
+;; group-items semantics: line-0 (sentinel-line) elements stay flat; each
+;; later line becomes one element (single-element lines SPLICE bare); a line
+;; whose column is deeper than a previous line's nests inside it.
+(define (regroup-flat-lines-by-layout elems sent-line)
+  (define (eline e) (and (syntax? e) (syntax-line e)))
+  (define (ecol e) (and (syntax? e) (syntax-column e)))
+  ;; Partition into physical lines (elements with unknown line stick to the
+  ;; current line — conservative).
+  (define lines  ;; (listof (cons col (listof elem))), later lines only
+    (let loop ([es elems] [cur-line sent-line] [cur '()] [acc '()])
+      (cond
+        [(null? es)
+         (reverse (if (null? cur) acc (cons (reverse cur) acc)))]
+        [else
+         (define e (car es))
+         (define l (or (eline e) cur-line))
+         (if (eqv? l cur-line)
+             (loop (cdr es) cur-line (cons e cur) acc)
+             (loop (cdr es) l (list e)
+                   (if (null? cur) acc (cons (reverse cur) acc))))])))
+  ;; line-0 = the first group iff the first element's EFFECTIVE line is the
+  ;; sentinel's (elements with unknown line at the head stay on line-0).
+  (define line0 (if (and (pair? lines)
+                         (pair? elems)
+                         (eqv? (or (eline (car elems)) sent-line) sent-line))
+                    (car lines) '()))
+  (define later (if (null? line0) lines (cdr lines)))
+  ;; Build the nesting: a stack of (col . children-box); deeper lines attach
+  ;; to the nearest shallower previous line.
+  (define (materialize entry)
+    ;; entry = (list col elems children-box); children materialize first
+    (define elems* (append (cadr entry)
+                           (map materialize (reverse (unbox (caddr entry))))))
+    (if (= (length elems*) 1)
+        (car elems*)                                   ;; splice single
+        (let ([f (car (cadr entry))])                  ;; group, first elem's loc
+          (datum->syntax #f elems* (and (syntax? f) f)))))
+  (define top-entries
+    (let loop ([ls later] [stack '()] [tops '()])
+      (cond
+        [(null? ls) (reverse tops)]
+        [else
+         (define l-elems (car ls))
+         (define c (or (ecol (car l-elems)) 0))
+         (define entry (list c l-elems (box '())))
+         (let pop ([s stack])
+           (cond
+             [(and (pair? s) (>= (car (car s)) c)) (pop (cdr s))]
+             [(pair? s)
+              (set-box! (caddr (car s)) (cons entry (unbox (caddr (car s)))))
+              (loop (cdr ls) (cons entry s) tops)]
+             [else (loop (cdr ls) (list entry) (cons entry tops))]))])))
+  (append line0 (map materialize top-entries)))
+
 ;; Parse ONE clause's content (the elements after its $clause-sep sentinel).
 ;; Returns (surf-clause goals loc) or a prologos-error.
 (define (parse-clause-content sentinel content loc)
@@ -5725,35 +5823,36 @@
         (if err err
             (list (surf-facts (list (surf-fact-row parsed-terms loc)) loc)))]
 
-       ;; &> clause: rule goals — flat sentinels (sexp + single-line WS).
-       ;; Rel T1 POL.8/Q6: head-token rule, uniform with the wrapped arm; a
-       ;; further flat $clause-sep splits another clause (previously it was
-       ;; silently parsed as a garbage goal).
+       ;; &> clause: rule goals — flat sentinels (sexp + single-line WS +
+       ;; multi-line paren-wrapped bodies like `(rel [x] &> …)`).
+       ;; Rel T1 POL.8/Q6 + POL.9: ONE shared clause grammar. Each flat
+       ;; $clause-sep starts a clause (a further one previously parsed as a
+       ;; silent garbage goal); a run's content is regrouped by srcloc layout
+       ;; (parens suspend the reader's indent grouping, so multi-line content
+       ;; arrives flat — regroup-flat-lines-by-layout reconstructs the same
+       ;; per-line nested shape) and handed to parse-clause-content, which
+       ;; realizes the head-token rule for single-line runs identically.
        [(eq? first-flat-kind 'clause)
         (define (flat-clause-sep? t) (eq? (stx->datum t) '$clause-sep))
-        (define runs
-          (let loop ([toks (cdr body-tokens)] [cur '()] [acc '()])
+        (define runs  ;; (listof (cons sentinel-elem run-elems))
+          (let loop ([toks body-tokens] [cur-sent #f] [cur '()] [acc '()])
             (cond
-              [(null? toks) (reverse (cons (reverse cur) acc))]
+              [(null? toks)
+               (reverse (if cur-sent (cons (cons cur-sent (reverse cur)) acc) acc))]
               [(flat-clause-sep? (car toks))
-               (loop (cdr toks) '() (cons (reverse cur) acc))]
-              [else (loop (cdr toks) (cons (car toks) cur) acc)])))
+               (loop (cdr toks) (car toks) '()
+                     (if cur-sent (cons (cons cur-sent (reverse cur)) acc) acc))]
+              [else (loop (cdr toks) cur-sent (cons (car toks) cur) acc)])))
         (define clauses
-          (for/list ([run (in-list runs)])
-            (cond
-              [(null? run) (surf-clause '() loc)]
-              [(pol8-goal-pair? (car run))
-               ;; paren-goal sequence (Q2a: all elements parenthesized)
-               (let ([goals (parse-paren-goal-seq run)])
-                 (if (prologos-error? goals)
-                     goals
-                     (let ([err (findf prologos-error? goals)])
-                       (or err (surf-clause goals loc)))))]
-              [(pol8-bare-head? (car run))
-               ;; ONE bare goal from the whole run (Q6)
-               (let ([g (parse-relational-goal run)])
-                 (if (prologos-error? g) g (surf-clause (list g) loc)))]
-              [else (pol8-bad-head-error (car run))])))
+          (for/list ([r (in-list runs)])
+            (define sent (car r))
+            (define run  (cdr r))
+            (define sent-line (and (syntax? sent) (syntax-line sent)))
+            (define content
+              (if sent-line
+                  (regroup-flat-lines-by-layout run sent-line)
+                  run))  ;; degraded srclocs: parse-clause-content handles it
+            (parse-clause-content sent content loc)))
         (define err (findf prologos-error? clauses))
         (if err err clauses)]
 

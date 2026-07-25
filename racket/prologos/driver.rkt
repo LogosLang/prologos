@@ -2271,7 +2271,7 @@
   ;; Read raw syntax, apply pre-parse expansion, then parse
   (define raw-stxs (read-all-syntax port "<string>"))
   (define expanded-stxs (preparse-expand-all raw-stxs))
-  (define surfs (map parse-datum expanded-stxs))
+  (define surfs (map parse-toplevel-datum expanded-stxs))
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
   (define pv (provenance-counters 0 0 0 0 0 0 0 0))
   (define qs (make-quiescence-stats))
@@ -2464,7 +2464,7 @@
   ;; and generated defs depend on: solver / schema / defmacro / data / trait / impl).
   (define raw-stxs (read-all-syntax-ws (open-input-string s) "<ws-string>"))
   (define expanded-stxs (preparse-expand-all raw-stxs))
-  (define preparse-surfs (map parse-datum expanded-stxs))
+  (define preparse-surfs (map parse-toplevel-datum expanded-stxs))
 
   ;; Step 2: merge the tree/cell pipeline with the preparse surfs — EXACTLY like
   ;; process-file's WS path. The merge runs the cell pipeline internally (populating
@@ -2594,7 +2594,7 @@
        (close-input-port file-port)
        (define raw-stxs (read-all-syntax-ws (open-input-string str) path-str))
        (define expanded-stxs (preparse-expand-all raw-stxs))
-       (define preparse-surfs (map parse-datum expanded-stxs))
+       (define preparse-surfs (map parse-toplevel-datum expanded-stxs))
        (merge-preparse-and-tree-parser str preparse-surfs)]
       [else
        ;; .rkt sexp path: UNCHANGED
@@ -2602,7 +2602,9 @@
        (define raw-stxs (read-all-syntax port path-str))
        (close-input-port port)
        (define expanded-stxs (preparse-expand-all raw-stxs))
-       (map parse-datum expanded-stxs)]))
+       ;; POL.9: parse-toplevel-datum is a structural no-op here — the native
+       ;; sexp reader never attaches 'prologos-paren-origin.
+       (map parse-toplevel-datum expanded-stxs)]))
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
   (define pv (provenance-counters 0 0 0 0 0 0 0 0))
   (define qs (make-quiescence-stats))
@@ -2922,7 +2924,7 @@
              (read-all-syntax port file-str)))
        (close-input-port port)
        (define expanded-stxs (preparse-expand-all raw-stxs))
-       (define surfs (map parse-datum expanded-stxs))
+       (define surfs (map parse-toplevel-datum expanded-stxs))
        (for ([surf (in-list surfs)])
          (unless (prologos-error? surf)
            (define result (process-command/solve-guard surf))

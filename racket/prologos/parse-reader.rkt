@@ -2491,8 +2491,20 @@
                      (loop next-i
                            (cons (make-stx (cons (make-stx '$postfix-index source pl pc (+ (token-entry-start-pos item) 1) 1) wrapped-inner)
                                            source pl pc (+ (token-entry-start-pos item) 1) 1) result)))
-                   ;; Normal bracket group
-                   (loop next-i (cons (wrap-stx-list inner source) result))))]
+                   ;; Normal bracket group.
+                   ;; Rel T1 POL.9: PAREN groups carry a syntax property so the
+                   ;; parser can give command-position paren groups goal-ness
+                   ;; (design §8 POL.9: parens make a relational goal; brackets
+                   ;; stay application). Property-only — datum shape unchanged,
+                   ;; invisible to every existing match arm; the sexp reader
+                   ;; (native (…) reading) never attaches it, so sexp
+                   ;; application is untouched by construction.
+                   (let ([grp (wrap-stx-list inner source)])
+                     (loop next-i
+                           (cons (if (eq? type 'lparen)
+                                     (syntax-property grp 'prologos-paren-origin #t)
+                                     grp)
+                                 result)))))]
             ;; Angle brackets → $angle-type sentinel IF matching rangle exists
             ;; AND we're not inside a dot-lbrace/mixfix group (where < > are operators)
             [(eq? type 'langle)

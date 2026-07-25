@@ -3172,7 +3172,11 @@
          ;; If datum didn't change, preserve original syntax (keeps properties like paren-shape)
          (if (equal? expanded datum)
              (cons stx acc)
-             (cons (datum->syntax #f expanded stx) acc))])))
+             ;; Rel T1 POL.9: 4-arg form — copy the original stx's properties
+             ;; onto the rebuilt form, so a top-level paren group keeps its
+             ;; 'prologos-paren-origin mark even when a preparse rewrite
+             ;; (e.g. dot-access) fires inside it.
+             (cons (datum->syntax #f expanded stx stx) acc))])))
   ;; ============================================================
   ;; Phase 5b: Hoist data/trait-generated defs before user forms
   ;; ============================================================

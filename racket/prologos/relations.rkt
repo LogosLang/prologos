@@ -27,7 +27,11 @@
          "syntax.rkt"
          "performance-counters.rkt"
          "ctor-registry.rkt"
-         (only-in "infra-cell.rkt" merge-list-append))  ;; PPN 4C Phase 1d-F: answer accumulator merge
+         (only-in "infra-cell.rkt" merge-list-append)  ;; PPN 4C Phase 1d-F: answer accumulator merge
+         ;; Rel T1 POL.9: unknown-relation diagnostic enrichment — classify a
+         ;; non-relation head against the global env (acyclic: global-env's
+         ;; requires are infra-cell/namespace/definition-entry only).
+         (only-in "global-env.rkt" global-env-lookup-status))
 
 (provide
  ;; Core structs
@@ -1443,12 +1447,48 @@
      (expr-not-goal (rename-ast-vars (expr-not-goal-goal expr) fresh-map))]
     [else expr]))
 
+;; Rel T1 POL.9: the unknown-relation raise, enriched. A goal head that is
+;; not a registered relation but IS value-bound gets a guiding diagnostic
+;; ("foo is a function — application is written [foo x]") instead of the bare
+;; "Unknown relation" — serving both the POL.9 paren-goal sugar and explicit
+;; `solve (dbl 3)`. The relation store was already consulted (defr names are
+;; ALSO global-env-registered — driver registers the env binding first — so
+;; store-lookup must precede this classification). Rides POL.4's
+;; exn:prologos-solve → per-command conversion; the file continues.
+(define (raise-unknown-relation-error who goal-name)
+  (define status (global-env-lookup-status goal-name))
+  (define bound? (eq? (car status) 'ground))
+  (define bound-type
+    (and bound? (let ([payload (cdr status)])
+                  (and (pair? payload) (car payload)))))
+  (define bound-value
+    (and bound? (let ([payload (cdr status)])
+                  (and (pair? payload) (cdr payload)))))
+  (cond
+    ;; A defr name that is env-bound but store-absent: its registration was
+    ;; gate-rejected (schema/floundering — the env write precedes the gates).
+    ;; Point at the earlier error instead of calling it "a value".
+    [(and bound? (expr-defr? bound-value))
+     (raise-solve-error who
+       "Unknown relation: ~a — its defr failed to register (see the earlier error)"
+       goal-name)]
+    [(and bound? (expr-Pi? bound-type))
+     (raise-solve-error who
+       "~a is a function — application is written [~a …]; parens make a relational goal"
+       goal-name goal-name)]
+    [bound?
+     (raise-solve-error who
+       "~a is bound as a value, not a relation — application is written [~a …]; parens make a relational goal (define a relation with defr)"
+       goal-name goal-name)]
+    [else
+     (raise-solve-error who "Unknown relation: ~a" goal-name)]))
+
 ;; Solve an app goal: look up relation, try facts then clauses.
 (define (solve-app-goal config store goal-name goal-args subst depth)
   (perf-inc-solver-backtrack!)
   (define rel (relation-lookup store goal-name))
   (unless rel
-    (raise-solve-error 'solve "Unknown relation: ~a" goal-name))
+    (raise-unknown-relation-error 'solve goal-name))
   ;; POL.4: rule-BODY goals arity-check here (bodies always spell their args —
   ;; the '()-enumerate convention never applies below the public entries).
   (check-goal-arity! 'solve rel (length goal-args))
@@ -1606,7 +1646,7 @@
 (define (solve-goal config store goal-name goal-args query-vars)
   (define rel (relation-lookup store goal-name))
   (unless rel
-    (raise-solve-error 'solve "Unknown relation: ~a" goal-name))
+    (raise-unknown-relation-error 'solve goal-name))
 
   ;; Reconstruct proper goal-args for the DFS solver.
   ;; If goal-args is empty, the caller wants all params as query variables.
@@ -1653,7 +1693,7 @@
 
   (define rel (relation-lookup store goal-name))
   (unless rel
-    (raise-solve-error 'explain "Unknown relation: ~a" goal-name))
+    (raise-unknown-relation-error 'explain goal-name))
 
   ;; Same effective-args logic as solve-goal
   (define effective-args
@@ -1803,7 +1843,7 @@
   (perf-inc-solver-backtrack!)
   (define rel (relation-lookup store goal-name))
   (unless rel
-    (raise-solve-error 'explain "Unknown relation: ~a" goal-name))
+    (raise-unknown-relation-error 'explain goal-name))
 
   ;; Resolve goal-args through current substitution
   (define resolved-args
@@ -3037,7 +3077,9 @@
 (define (solve-goal-propagator config store goal-name goal-args query-vars)
   (define rel (relation-lookup store goal-name))
   (unless rel
-    (error 'solve-goal-propagator "Unknown relation: ~a" goal-name))
+    ;; POL.9 (adjacent fix): was a PLAIN error that escaped the POL.4
+    ;; per-command conversion and crashed the run under :atms routing.
+    (raise-unknown-relation-error 'solve goal-name))
 
   (define effective-args
     (if (null? goal-args)

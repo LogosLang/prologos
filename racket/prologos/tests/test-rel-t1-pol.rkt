@@ -650,3 +650,119 @@
                             "(solve (bare q))")))
   (check-true (string? r) (result-msg r))
   (check-true (string-contains? r "{:q 1}")))
+
+;; ========================================================================
+;; POL.9a — implicit solve: parens make goals at command position
+;; (owner co-design 2026-07-25; design §8 POL.9 — the paren-goal design).
+;; `(foo x)` at top level = solve (foo x); `foo x` / `[foo x]` = application;
+;; keyword heads keep their forms; `rel` is the one keyword that queries.
+;; The WS reader marks paren origin ('prologos-paren-origin); sexp mode is
+;; untouched by construction (the named WS-vs-sexp divergence, pinned below).
+;; Head classification happens at solve time: relation → rows; value-bound →
+;; a guiding diagnostic; unknown → the POL.4 unknown-relation error.
+;; ========================================================================
+
+(define P9FIX
+  (string-append
+   "ns p9\n"
+   "defr fruit-color [?fruit ?color]\n"
+   "  || \"blueberry\" \"blue\"\n"
+   "  || \"banana\" \"yellow\"\n"
+   "  || \"cherry\" \"red\"\n"
+   "  || \"plum\" \"purple\"\n"
+   "defr red-or-green [?f]\n"
+   "  &> fruit-color f \"red\"\n"
+   "defr blue-or-yellow [?f]\n"
+   "  &> fruit-color f \"blue\"\n"
+   "  &> fruit-color f \"yellow\"\n"
+   "defn dbl [x:Int] : Int\n"
+   "  * x 2\n"))
+
+(test-case "POL.9: a paren goal at top level carries an implicit solve (typed rows)"
+  (define r (run-ns-ws-last (string-append P9FIX "(blue-or-yellow q)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry"))
+  (check-true (string-contains? r "banana"))
+  (check-true (string-contains? r "List {:q String}")
+              "the B-machinery types the implicit solve identically"))
+
+(test-case "POL.9: the composed owner example — paren rel + POL.8 parenless clauses"
+  (define r (run-ns-ws-last
+             (string-append P9FIX
+                            "(rel [fruit]\n"
+                            "  &> fruit-color fruit _\n"
+                            "     not (red-or-green fruit)\n"
+                            "     not (blue-or-yellow fruit))")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "plum"))
+  (check-false (string-contains? r "cherry")))
+
+(test-case "POL.9: nested deeper-indent `not` works INSIDE parens (flat regrouping)"
+  (define r (run-ns-ws-last
+             (string-append P9FIX
+                            "(rel [f]\n"
+                            "  &> fruit-color f c\n"
+                            "     not\n"
+                            "       = c \"red\")")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "plum"))
+  (check-false (string-contains? r "cherry")))
+
+(test-case "POL.9: multi-clause anonymous rel inside parens is a DISJUNCTION"
+  (define r (run-ns-ws-last
+             (string-append P9FIX
+                            "solve (rel [f]\n"
+                            "       &> fruit-color f \"red\"\n"
+                            "       &> fruit-color f \"purple\")")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "cherry"))
+  (check-true (string-contains? r "plum")))
+
+(test-case "POL.9: defn head in parens → the guiding function diagnostic"
+  (define m (result-msg (run-ns-ws-last (string-append P9FIX "(dbl 3)"))))
+  (check-true (string-contains? m "dbl is a function") m)
+  (check-true (string-contains? m "[dbl") m))
+
+(test-case "POL.9: explicit solve over a defn head gets the SAME diagnostic"
+  (define m (result-msg (run-ns-ws-last (string-append P9FIX "solve (dbl 3)"))))
+  (check-true (string-contains? m "dbl is a function") m))
+
+(test-case "POL.9: zero-arg paren of a function → diagnostic (was a value echo)"
+  (define m (result-msg (run-ns-ws-last (string-append P9FIX "(dbl)"))))
+  (check-true (string-contains? m "dbl is a function") m))
+
+(test-case "POL.9: unknown head → unknown-relation; the file CONTINUES past it"
+  (define r (run-ns-ws-last (string-append P9FIX "(mystery q)\n[dbl 21]")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "42") "the command after the error still ran"))
+
+(test-case "POL.9: keyword heads keep their forms; brackets stay application"
+  (check-true (string-contains? (run-ns-ws-last (string-append P9FIX "(+ 1 2)")) "3"))
+  (check-true (string-contains? (run-ns-ws-last (string-append P9FIX "[dbl 3]")) "6")))
+
+(test-case "POL.9: sexp mode — (dbl 3) stays APPLICATION (the named divergence, pinned)"
+  (define r (run-ns-last
+             (string-append "(ns p9s)\n"
+                            "(spec sdbl Int -> Int)\n"
+                            "(defn sdbl [x] (int* x 2))\n"
+                            "(sdbl 3)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "6")))
+
+(test-case "POL.9: a preparse rewrite inside a paren goal keeps goal-ness (4-arg preserve)"
+  (define r (run-ns-ws-last
+             (string-append P9FIX
+                            "def mm := {:c \"blue\"}\n"
+                            "(fruit-color f mm.c)")))
+  ;; computed goal args don't evaluate (pre-existing semantics) → nil, but the
+  ;; command IS a solve — pinned via the row-list TYPE on the echo.
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "List {:f String}") r))
+
+(test-case "POL.9: a gate-rejected defr's solve points at the earlier error"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append P9FIX
+                                        "defr unsafe-r [?x]\n"
+                                        "  &> not (fruit-color y x)\n"
+                                        "(unsafe-r q)"))))
+  (check-true (string-contains? m "failed to register") m))
