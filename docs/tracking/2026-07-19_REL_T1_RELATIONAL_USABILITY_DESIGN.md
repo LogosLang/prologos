@@ -70,7 +70,7 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | **B3** | **Typed solution rows for RULE-bearing relations (codata)** — the B2-deferred half, elevated by the owner (2026-07-24): *"one of the largest motivating usability aspects of all of this work"*. Today `relation-column-typer`'s rule-bearing branch yields `#f` → rule solves type as bare `_` (e.g. `solve (path x z) : _` vs facts' `List {:k Int …}`), so rule solutions cannot compose with the F1 records/row machinery (`.field`, validate, row polymorphism). Realization **SETTLED §6.10** (co-design 2026-07-24, grounding `wf_512dd7e3-5e8`): hybrid — static body-flow = the composition channel (D-B3.1), fixpoint recursion (D-B3.2), anon-rel in scope (D-B3.3), closed rows / hole-degrade (D-B3.6) | ✅ | **B3 COMPLETE.** B3.0 ✅ `67d96a0d` (POL.2 anon-key kernel filter, both halves atomic) · **B3.1 ✅** `0d34fa7e` (the static walker: body-goal dataflow + Kleene fixpoint [TC types!] + anon-rel arm + mixed-relation fact join) · **B3.2 ✅** `df428f7e` (display-time coinductive refinement at the eval echo seam: SHARPEN a union to the branches observed, FILL a hole from observed values; DISPLAY-ONLY — a `def` still announces its STORED static type; CLOSED-tail gate scopes it to solution rows, found by a suite regression on dyn-tailed record values). FILL has no reachable surface case today — blocked by an adjacent pre-existing defect (pvec/map-literal unify yields runtime `unknown`), named + deferred; the path is unit-pinned. +11 tests; suite 470/9040/0 |
 | **D.0/1** | Efficient fact representation + query-opt — Stage 0/1 research + design artifact | ✅ | **Artifact landed** `0b428424`: [`2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md`](../research/2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md) — frame F1–F7 · measured cost structure · lattice verdicts · staging ladder · **Rel T2 "Fact Store" charter seed** (§11) + §14 D.2 addendum. **Q_A–Q_D parked** for the Rel T2 charter (owner, 2026-07-24) |
 | **D.2** | Cheap-wins slice (artifact §7 NOW: N1–N6) | ✅ | D.2.a `296ac2d5` (dead tree −135 LoC + comment truth) · D.2.b `984601b9` (row-scan/col-compare counters + 2 latent fixes) · D.2.c `7ba24b2b` (fact-scale bench + corpus generator + 260-row standing E2E; **findings: Tier-2 unreachable for 1-variant fact tables; NO DFS↔Tier-2 crossover ≤1000 — Tier-2 enum ~480× slower @1000**) · D.2.d `feedc6ff` (registration-time INVERTED index on `variant-info.discrim`; Tier-2 point rows N+1→1, 0.78→0.17ms @1000). Suite 469/0 throughout; artifact §14 |
-| **POL** | Polish — **ROSTER EXPANDED to POL.1–.9** (§8, 2026-07-24): owner hand-testing list from `standup-2026-07-19.org` § "Polish points for REL" folded in. Correctness: dedup (.1 — **RULED doc-only: bag semantics stays**) · `_anon` keys (.2 ✅) · declaration-order keys (.3 ✅ `b0e3da9c`) · **arity-mismatch errors** (.4 ✅) · **def-on-solve multiplicity** (.5 ✅) · **defn fused-binder last mile** (.6 ✅ `0f6dc98c`). Syntax: single-line `\|` facts (.7 ✅ `f55988cc`) · implicit clause groups (.8) · implicit solve (.9, ⚠ design question — co-design first) | ⬜ | §8 sequencing note; POL.9 needs owner co-design before impl |
+| **POL** | Polish — **ROSTER EXPANDED to POL.1–.9** (§8, 2026-07-24): owner hand-testing list from `standup-2026-07-19.org` § "Polish points for REL" folded in. Correctness: dedup (.1 — **RULED doc-only: bag semantics stays**) · `_anon` keys (.2 ✅) · declaration-order keys (.3 ✅ `b0e3da9c`) · **arity-mismatch errors** (.4 ✅) · **def-on-solve multiplicity** (.5 ✅) · **defn fused-binder last mile** (.6 ✅ `0f6dc98c`). Syntax: single-line `\|` facts (.7 ✅ `f55988cc`) · **implicit clause groups (.8 ✅ `1c3c8848` — layout-based parenless goals, §8; Q_E ruled OUT at top level in the same round)** · implicit solve (.9 — design SETTLED, impl next) | 🔄 | POL.9 impl is the last open roster item |
 | **SUB** | **POL.10 spin-out** — the substitution containment defect (LIVE bug: open de Bruijn index escapes via runtime containers). Own doc + progress table: [`2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md`](2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md). **Owner-resequenced AHEAD of the POL remainder (2026-07-24)**; ruling **(D)** (champ = closed runtime value ⇒ NbE fix) | ✅ | **BVAR half CLOSED.** R ✅ (D) · SUB.1 `f19d6f56` (tripwire, kept as the standing assertion) · SUB.2 **ADOPTED** `6323587e` (compile-limit — an independent win found here: shift ~830× micro, **suite −18%**; runner putenv) · **SUB.3a `7ea49168` — THE FIX** (NbE nf; repro 6N/5N; +6.4% suite, net 211→185) · SUB.3b `036b59f7` (narrowing containment — walker catch-all AND `narrow-match` map/vec decomposition) · hot-scan `8ec5e507` (**6.9×**/walk, differential oracle) · SUB.close (doc-truth §2.0 + 2 lesson promotions → `pipeline.md` walker discipline, `testing.md` bench traps). **META half OPEN** — zonk ×3 / `occurs?` skip on metas, reachability unverified; own slice (DEFERRED.md + defect doc §2.0) |
 | *(tests)* | **Per-phase** — each behavioral phase brings its own test delta in its completion gate; the test file(s) `tests/test-rel-*.rkt` GROW per phase (NOT a dedicated end phase — see workflow.md "Tests are PER-PHASE") | — | e.g. `test-rel-t1-naf.rkt`, `test-rel-t1-typed-rows.rkt` (grown across B1/B2) |
 | **X.close** | Bench matrix · DEFERRED triage · doc-truth sweep · memory fold · **Stage-5 PIR** | ⬜ | Objective-PIR gate |
@@ -1257,13 +1257,44 @@ three-level WS validation + WS-Impact obligations (workflow.md).
   "Cannot elaborate:" wraps; now bare + clean diagnostics. +8 tests; suite
   470/9054/0.
 
-- **POL.8 — Implicit rule-clause groups in `defr`** *(owner)* — drop the
-  delimiting parens around rule-clause goals, layout-based like the
-  functional language:
-  `&> fruit-color fruit "blue"` ≡ `&> (fruit-color fruit "blue")`;
-  continuation lines indent past the `&>`; nesting by deeper indent
-  (`not` ⤷ `= color not-color`). Both spellings remain legal (additive).
-  ⚠ WS Impact: tree-parser layout rules; interacts with POL.9's grammar.
+- **POL.8 — Implicit rule-clause groups in `defr`** *(owner)* — **✅ FIXED
+  `1c3c8848` (2026-07-25, co-design + implementation same session)**. All three owner
+  forms work verbatim: `&> fruit-color fruit "blue"` ≡ `&> (…)`; sibling
+  goals on continuation lines at the goal column; nesting by deeper indent
+  (`not` ⤷ `= color not-color`). Both spellings stay legal.
+  **Settled grammar (owner rulings Q1/Q2/Q2a/Q5/Q6)**: goal-ness comes from
+  the defr/rel-body context (the POL.9 rule's context half); the `&>` line's
+  HEAD TOKEN decides — pair → a sequence of paren goals, each element
+  parenthesized (Q2a diagnostic otherwise); symbol → ONE bare goal with
+  in-line parens as argument terms (`&> … not (= c n)` works). A grouped
+  continuation line (any pair) is a SIBLING at any indent past `&>`
+  (**Q5 lenient**); single-token lines are column-classified **LOUDLY**
+  (goal column → zero-arg sibling; deeper while the `&>`-line bare goal is
+  open → its argument; between `&>` and the goal column → mis-indent error
+  naming both columns). Flat arm (single-line WS + sexp IR — **Q6**):
+  head-token rule uniformly + flat `$clause-sep` now splits further clauses
+  (was silent garbage). `rel` bodies covered (shared `parse-defr-body`, all
+  4 call sites); paren-wrapped `(rel …)` bodies + session Offer untouched.
+  **Load-bearing findings (grounding `wf_69f4dc4c-137` + live probe)**: the
+  "WS flattens defr bodies, no columns" premise is REFUTED — per-token
+  line/column survives to `parse-defr-body`, and the reader's indent
+  grouping already builds the sibling/nesting structure (the owner's nested
+  `not` form arrived correctly grouped BEFORE any change); only the
+  sibling-vs-deeper cut directly under the `&>` line is srcloc-only.
+  **Named costs/limits, eyes open**: (1) a paren goal and a bare ≥2-token
+  line are indistinguishable post-reader (same `wrap-stx-list`, no origin
+  sentinel) — so Q5's "loud on bare misalignment" lands on single-token
+  lines, and a misaligned multi-token bare line parses as the sibling it
+  was meant to be; (2) consequently a multi-token continuation of the
+  `&>`-line goal is not expressible — parenthesize the goal (single-token
+  continuations work); (3) degraded srclocs (a preparse rewrite anywhere in
+  the defr strips inner locs — macros.rkt equal? guard) are DETECTED via
+  the impossible sentinel-column-0 marker: all-paren parses as before,
+  parenless errors with guidance; (4) FUTURE-TRAP: driver.rkt's merge
+  discards the srcloc-stripped tree-spine defr surf only because
+  `surf-source-line`/`same-form-type?` have no defr arm — adding one would
+  silently flip the L2 winner to the stripped surf (test-pinned via the L2
+  test path). +16 tests; acceptance ;;29-34; suite 470/0.
 - **POL.9 — Implicit `solve` at top level** — **SETTLED (co-design 2026-07-25;
   owner + Claude, prose round). The PAREN-GOAL design** supersedes the seed's
   registry-lookup idea (owner-proposed; adopted with the analysis below).
@@ -1305,8 +1336,12 @@ three-level WS validation + WS-Impact obligations (workflow.md).
     later-defined relation retries when the `defr` lands — free-ordering
     behavior with no new propagator substrate.
   - **Q_E** conjunction-by-juxtaposition (`(g1) (g2)` as a shared-var query)
-    PARKED for the POL.8 grammar round (adjacency parsing collides with
-    top-level command splitting; `rel […] &> …` already spells conjunction).
+    — **RULED OUT at top level, permanently (owner, POL.8 round 2026-07-25)**:
+    two adjacent paren groups are two commands, and a bare conjunctive query
+    has NO PROJECTION LIST — which variables become solution-row keys is
+    exactly what `rel [vars] &> …` declares (the B0/B3 row keys are built
+    from it). `rel` is the spelling; POL.8 makes its body pleasant
+    (parenless goals). Same ruling applies to `def` RHS.
 
   **Named costs (accepted, eyes open)**: (1) the Lisp-muscle-memory /
   cross-reader hazard — `(f x)` = application in sexp IR but a goal in WS; an
