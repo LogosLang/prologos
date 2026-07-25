@@ -169,7 +169,7 @@ value strata. Topology strata are sequential. See =DEVELOPMENT_LESSONS.org=
 
 | # | Track | Description | Status | Artifact |
 |---+-------+-------------+--------+----------|
-| 1 | Relational Language Usability | NAF/guard correctness (priority: `not` echo + on-network NAF single-bit collapse + guard crash) + typed solution rows (codata + schema projection) + schema-as-relational-facts + Aspect D fact-representation research (Stage 0/1) + polish. Deferred to UCS: `?v:Type` CLP. | 🔄 Stage-3 — A-core LOCKED (E-with-B) | [[file:2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md][design]] · [[file:2026-07-19_REL_SOLVE_TYPING_NOTE.md][seed]] |
+| 1 | Relational Language Usability | NAF/guard correctness (`not` echo + on-network NAF single-bit collapse + guard) + typed solution rows (schema projection + codata + RULE-relation rows via a static walker/Kleene fixpoint) + schema-as-relational-facts + typed logic vars + Aspect D fact-representation research (Stage 0/1 + cheap wins) + the POL polish roster (arity errors, def-on-solve, decl-order keys, `\vert` fact rows, parenless clause groups, implicit solve). Deferred to UCS: `?v:Type` CLP. Spun out: the SUB substitution-containment defect (a LIVE silent-wrong-answer bug, fixed). | 🔄 **all aspects delivered — X.close in flight; the Stage-5 PIR gates ✅** | [[file:2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md][design]] · [[file:2026-07-19_REL_SOLVE_TYPING_NOTE.md][seed]] |
 
 /Note: the seed's "=&>= inversion" framing is superseded — =&>= is the rule-clause separator, not a negation op; the real bug is the on-network NAF open-var leak (design doc §4)./
 
@@ -448,6 +448,8 @@ PRN (theory — what ARE the universal rewriting primitives?)
 | 2 | Residuation Engine — automatic backward propagators | ⬜ | R1 |
 | 3 | CDCL Integration — SAT optimization for Boolean domains | ⬜ | BSP-LE Track 2 ✅ |
 | 4 | Resource Constraints — quantale-based solving | ⬜ | For QTT multiplicities, session linearity, effect resource tracking |
+| 5 | Refinement Typing via Traits (~Type@property~) | ⬜ | Spawned from the Numerics track Q7 (2026-06-30). Refinement = constraint over an algebraic (Galois) domain; unify ~trait~ + ~property~ + refinement. Note: [[file:2026-06-30_TRAITS_AS_REFINEMENT_TYPING_NOTE.md][Traits Are Refinement Typing]] |
+| 6 | Types-as-Predicates — ~?x:Type~ domain-constrained logic vars | ⬜ | Spawned from Rel T1 Aspect C (2026-07-21). ~?x:Int~ = Curry-Howard ~Int(x)~ at the RUNTIME altitude (the static altitude shipped in Rel T1 C.a-C.c; refinement is Track 5). Inherits the ~type-pred~ substrate + fused reader; must reconcile the dead-in-WS ~?var:C1:C2~ narrowing surface. Note: [[file:2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md][Types-as-Predicates]] |
 
 *** Cross-Cutting Nature
 

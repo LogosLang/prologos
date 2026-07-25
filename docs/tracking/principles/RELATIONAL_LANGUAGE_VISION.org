@@ -700,6 +700,18 @@ database (5-6 tables, 6000+ rows each) as Prolog dictionaries --- where the
 predicate name is the table name and dictionary keys are column names ---
 yields sub-millisecond query times vs. ~30ms for equivalent SQLite queries.
 
+#+begin_quote
+*⚠ MEASURED CORRECTION (2026-07-25, Rel T1 Aspect D + X.close doc-truth).* The
+paragraph above describes *SWI-Prolog*, and was being read as a claim about
+*Prologos*. It is not one. Measured in-tree
+([[file:../../research/2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md][Fact Representation + Query Optimization]] §3): the Prologos Tier-1
+scan is linear at ≈0.062 µs/row — sub-ms breaks at ≈16K rows, and ≈62 ms is the
+extrapolation at 1M, i.e. *slower* than the SQLite figure at the scale target.
+The per-query discrimination rebuild was additionally superlinear (11.4 ms @
+20K). Treat SWI as the aspiration, not the current state; Rel T2 "The Fact
+Store" is the track chartered to close the gap.
+#+end_quote
+
 The reasons are structural:
 
 - *No parsing overhead*: No SQL parse → plan → execute pipeline. The clause
@@ -707,7 +719,13 @@ The reasons are structural:
 - *No serialization*: Terms are native in-memory data. No marshalling between
   storage format and runtime representation.
 - *First-argument indexing*: Prolog's indexing on the first argument acts as
-  a hash index. Prologos's CHAMP-backed tables go further.
+  a hash index. /(Corrected 2026-07-25: the claim that "Prologos's CHAMP-backed
+  tables go further" was FALSE — Prologos had **no index of any kind** until
+  Rel T1 D.2.d added a registration-time inverted discrimination index
+  (~feedc6ff~, 2026-07-24); ~build-discrimination-data~ had been a forward map,
+  not an index, and was rebuilt per query. The D.2.d index made Tier-2 point
+  lookups N+1 → 1 row-scans. General moded/first-position indexing is Rel T2
+  pillar 3.)/
 - *No query planning*: The clause order is the plan. With tabling, the system
   caches intermediate results automatically.
 
@@ -864,8 +882,10 @@ The database isomorphism operates at different scales:
 
 *** Regime 1: In-Memory, Small-to-Medium (< 1M facts)
 
-Pure Prologos, CHAMP-backed indices, tabling. This is where the sub-ms vs.
-30ms advantage lives. Excellent for:
+Pure Prologos, CHAMP-backed indices, tabling. This is the regime the design
+targets /(corrected 2026-07-25: the "sub-ms vs 30ms advantage" is SWI's, not
+ours — see the measured correction above; ours is the architecture, and Rel T2
+is where the performance is earned)/. Excellent for:
 - Configuration management
 - Knowledge graphs (ontologies, taxonomies)
 - Policy engines (access control, business rules)

@@ -3,7 +3,7 @@
 ## Delimiters
 
 - **`[]` for all functional contexts** -- application `[f x y]`, lambda `[fn [x : Int] body]`, partial application `[int* _ 2]`. Square brackets are the universal functional delimiter.
-- **`()` only for parser keywords** -- `(match ...)`, `(the ...)`, `(def ...)`, and relational goals inside `solve`/`defr`. These signal "special form, not application."
+- **`()` only for parser keywords and RELATIONAL GOALS** -- `(match ...)`, `(the ...)`, `(def ...)`, and goals. These signal "special form, not application." Since Rel T1 POL.9 this is load-bearing rather than conventional: **a paren group in command position IS a goal** (see § Relational syntax below).
 - **`<>` for type-level grouping** -- Pi `<(x : A) -> B>`, Sigma `<(x : A) * B>`, union `<Int | String>`.
 - **`{}` for maps and implicit binders** -- map literals `{:name "alice"}`, implicit type binders `{A B : Type}` in specs.
 
@@ -64,6 +64,75 @@
 - Trait methods: short names (`eq?`, `from`, `add`)
 - Module paths use `::` not `.` -- `str::length`, `prologos::data::nat`
 - Dot access is for map keys -- `user.name` -> `[map-get user :name]`
+
+## Relational syntax (`defr` / `rel` / goals)
+
+Landed in Rel Track 1 (POL.7/.8/.9, 2026-07-25). All three are **additive** —
+the older parenthesized spellings remain legal everywhere.
+
+- **Facts: `||` blocks, one row per line, or `|` row separators on one line.**
+  `defr digits [?d]` + `|| 0 | 1 | 2 | … | 9` is ten rows. Pipes = EXPLICIT
+  rows (each segment must match the arity exactly; an empty segment errors).
+  Without pipes, terms chunk by arity and a **partial remainder is a loud
+  error** (it used to register a silent dead row no query could match).
+
+- **Rule clauses: `&>` groups may drop the goal parens (layout decides).**
+  The `&>` line's HEAD TOKEN chooses the reading: a `(` head means the line is
+  a *sequence* of paren goals (each one parenthesized — mixing errors); a
+  symbol head means the line is **exactly one goal**, and parens inside it are
+  ARGUMENT terms (so `not (= c n)` works). Continuation lines: a line at the
+  first goal's column is a **sibling goal** (conjunction); a line indented
+  **deeper** continues the previous goal; a line between the `&>` column and
+  the goal column is a mis-indent error naming both columns.
+
+  ```
+  defr fruit-not-of-color [?fruit ?not-color]
+    &> fruit-color fruit color      ;; bare head → one goal
+       not (= color not-color)      ;; goal column → sibling goal
+
+  defr same [?fruit ?not-color]
+    &> fruit-color fruit color
+       not                          ;; sibling goal…
+         = color not-color          ;; …deeper → its argument
+  ```
+
+  Inside explicit parens (`(rel [x] &> …)`) the reader suspends indent
+  grouping, but the same grammar applies (the parser regroups by srcloc).
+  A zero-arg goal on its own line must be written `(foo)` — a lone token is
+  spliced bare by the reader and cannot be told from an argument.
+
+- **Goals carry an implicit `solve` at command position.** *Goal-ness comes
+  from context (`defr`/`solve`/`rel` bodies) or from PARENS (everywhere
+  else).* A paren group at top level or on a `def` RHS is a goal:
+
+  ```
+  (fruit-not-of-color f "red")        ;; ≡ solve (fruit-not-of-color f "red")
+  def blues := (fruit-color f "blue") ;; ≡ := solve (…)  (POL.10 snapshot)
+  ```
+
+  `foo x` and `[foo x]` stay **application**; keyword heads keep their forms
+  (`(match …)`, `(+ 1 2)`); `rel` is the one keyword that queries when
+  parenthesized. Scope is command position ONLY — top-level commands and
+  `def` RHS, **not** general expression position (a goal inside a `defn` body
+  would make calls re-query the ambient fact store; that is a deferred
+  purity question). `solve-one` / `explain` stay explicit (they are adverbs).
+
+  ⚠ **Institutionalized WS-vs-sexp divergence, accepted eyes-open**: `(f x)`
+  is a GOAL in WS but stays APPLICATION in the sexp IR (the WS reader marks
+  paren origin; the native sexp reader does not). Writing sexp fixtures —
+  including sexp-style `(def x : T (cons …))` forms embedded in `.prologos`
+  files — you get application. Watch this when authoring sexp-mode tests.
+
+- **`defn` and `defr` namespaces are DISJOINT** within a module: registering a
+  name held by the other kind is an error pointing at the first. Same-kind
+  redefinition stays legal, and the gate is **local-only** — shadowing a
+  refer-imported name (e.g. a prelude `xor`) with your own `defr` is fine.
+
+- **Diagnostics you should expect** (they are guiding, not generic): a paren
+  goal over a function → "foo is a function — application is written
+  [foo …]"; a wrong arity → the SWI-style "Unknown procedure: truths/1 —
+  however, there are definitions for: truths/4"; an unsafe negation → the
+  floundering error at `defr` registration.
 
 ## Nat vs Int
 
