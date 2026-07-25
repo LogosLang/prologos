@@ -1414,3 +1414,93 @@ by construction)**.
 - **Design doc / full analysis**: [`2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md`](2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md).
 - Surfaced by Rel T1 POL.10: commits `cf454176` (reverted trial + post-mortem), `095d8bc5` (landed whnf resolution).
 - Grounding: workflow `wf_468a6129-447`.
+
+---
+
+## Rel T1 POL.9b — the `def` seam swallows solve diagnostics + rejects row-type annotations (captured 2026-07-25, X.close triage)
+
+**PRE-EXISTING, shared by BOTH spellings** (parity-probed: the implicit
+`def r := (goal)` and the explicit `def r := solve (goal)` produce
+*byte-identical* messages, so POL.9b neither caused nor worsened this — it
+inherited it and pinned it).
+
+Two distinct gaps at the same seam:
+
+1. **Guiding diagnostics don't reach the def seam.** `def bad := (dbl 3)`
+   (or `:= solve (dbl 3)`) dies with the generic *"Expression is not a valid
+   type"* — the def arm type-checks the body BEFORE evaluation, so the runtime
+   classifier (`raise-unknown-relation-error`, relations.rkt) never fires and
+   the user never sees *"dbl is a function — application is written [dbl …]"*.
+   At top level the same program gives the good message. Fix direction: give
+   the def seam a pre-typing goal-head validation, or make the solve row-type
+   computation surface a typed error instead of a non-type.
+2. **Row-type annotations on `def` don't parse.**
+   `def r : [List {:f String}] := (goal)` → "Expression is not a valid type",
+   though the very same type is what the echo PRINTS for the unannotated def.
+
+**Pinned**: `tests/test-rel-t1-pol.rkt` § "POL.9b: def-seam PARITY on bad heads"
+asserts message EQUALITY between the two spellings, so a fix to either is
+visible immediately.
+
+**Owner**: unclaimed — a small Rel-adjacent slice; touches the driver def arm +
+typing-core's solve row-type path.
+
+---
+
+## Rel T1 POL.9c — the `defr`-against-prior-multi-arity-`defn` direction is UNGATED (captured 2026-07-25, by design)
+
+Q_B (defn/defr namespaces disjoint) gates three directions: `defr` over a local
+`def`/`defn`, `def`/`defn` over a local `defr`, and a multi-arity `defn` BASE
+name over a local `defr` (all at driver.rkt `check-crosskind-collision`).
+
+The FOURTH direction — a `defr` whose name is already a **multi-arity `defn`** —
+is deliberately **not** gated: multi-arity base names live only in the ambient
+`current-multi-defn-registry` (multi-dispatch.rkt), which carries **no module
+provenance**. Gating against it would fire on prelude multi-defns (`nth` and
+friends) and so would violate the local-only rule that keeps refer-import
+shadowing legal (the `lib/examples/foray.prologos` `xor` precedent).
+
+**Unblocks when**: the multi-defn registry gains module provenance (i.e. moves
+onto the per-module network like the def cells did in PPN 4C 4A) — at which
+point the fourth direction can be gated with the same local-only discipline.
+
+---
+
+## Un-arm'd AST node → spurious "Multiplicity violation" — 3rd data point, one instance STILL LIVE (captured 2026-07-25, promotion due)
+
+**A recurring BUG CLASS, not a single defect.** When an AST node has no `inferQ`
+arm, qtt's tu-error fallback propagates the failure and `checkQ-top` reports the
+generic *"Multiplicity violation"* — a message with no relationship to the
+actual problem. Three confirmed instances:
+
+| # | Trigger | Status |
+|---|---|---|
+| 1 | `def m0 := {}` (CIU T6 F1a.2) | fixed |
+| 2 | `def x := solve (…)` (Rel T1 POL.5, `485f4e7d`) | fixed |
+| 3 | `def x := [validate …]` (found by the SUB.1 probe, 2026-07-24) | **STILL LIVE** |
+
+**Two actions, both owed:**
+- *Fix instance 3* — the same shape as POL.5's one-arm fix.
+- *Promote the CLASS* to `DEVELOPMENT_LESSONS.org`: at 3 data points this is
+  codification-ready. The lesson is diagnostic, not just corrective — **a
+  "Multiplicity violation" on a `def` whose body is a non-lambda should be
+  suspected as an un-arm'd node before it is believed as a QTT result.** The
+  structural fix direction is the `pipeline.md` § "Exhaustive Walkers" answer
+  applied to `inferQ`: a generic fallback that contributes zero usage rather
+  than a tu-error, so a missing arm degrades to imprecision instead of a
+  false failure.
+
+---
+
+## Generated `.md` twins are STALE relative to their canonical `.org` sources (captured 2026-07-25, X.close doc-truth)
+
+`workflow.md` states `.org` is canonical and the `.md` is a generated export.
+The X.close doc-truth sweep corrected the overstated performance claims in
+`LANGUAGE_VISION.org` and `RELATIONAL_LANGUAGE_VISION.org`; their `.md` twins
+still carry the OLD text (`grep -c "30ms" RELATIONAL_LANGUAGE_VISION.md` → 2).
+
+**Why it matters**: an agent (or a person) grepping the principles directory can
+land on the `.md` and read a claim the `.org` has already retracted — precisely
+the failure the sweep was fixing. The twins need regeneration from org-export,
+and it is worth deciding whether the `.md` exports should exist in-tree at all
+(they have no consumer that the `.org` doesn't serve).
