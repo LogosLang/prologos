@@ -474,3 +474,179 @@
                             "solve (c k)")))
   (check-true (string-contains? r "{:k 7}"))
   (check-true (string-contains? r "{:k 8}")))
+
+;; ========================================================================
+;; POL.8 — implicit rule-clause groups: layout-based parenless goals in
+;; defr/rel `&>` bodies (owner co-design 2026-07-25; design §8 POL.8).
+;; Grammar: goal-ness from defr-body context; the `&>` line's head token
+;; decides (pair → paren-goal sequence, symbol → ONE bare goal); a grouped
+;; continuation line is a sibling at any indent (Q5 lenient — paren groups
+;; and bare ≥2-token lines are indistinguishable post-reader); single-token
+;; lines are column-classified LOUDLY. Both spellings stay legal.
+;; These run through process-string-ws (L2) — which also pins the tree-spine
+;; duplicate parse (srcloc-stripped, surf discarded) staying harmless.
+;; ========================================================================
+
+(define P8FIX
+  (string-append
+   "ns p8\n"
+   "defr fruit-color [?fruit ?color]\n"
+   "  || \"blueberry\" \"blue\"\n"
+   "  || \"banana\" \"yellow\"\n"
+   "  || \"cherry\" \"red\"\n"))
+
+(test-case "POL.8: bare single-goal clauses; two clauses stay a disjunction (owner form 1)"
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "defr boy [?fruit]\n"
+                            "  &> fruit-color fruit \"blue\"\n"
+                            "  &> fruit-color fruit \"yellow\"\n"
+                            "solve (boy f)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry"))
+  (check-true (string-contains? r "banana"))
+  (check-false (string-contains? r "cherry")))
+
+(test-case "POL.8: bare goal + sibling `not (…)` at the goal column (owner form 2)"
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "defr fnoc [?fruit ?not-color]\n"
+                            "  &> fruit-color fruit color\n"
+                            "     not (= color not-color)\n"
+                            "solve (fnoc f \"red\")")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry"))
+  (check-true (string-contains? r "banana"))
+  (check-false (string-contains? r "cherry")))
+
+(test-case "POL.8: nested bare `not` — deeper line is its goal argument (owner form 3)"
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "defr fnoc2 [?fruit ?not-color]\n"
+                            "  &> fruit-color fruit color\n"
+                            "     not\n"
+                            "       = color not-color\n"
+                            "solve (fnoc2 f \"red\")")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry"))
+  (check-true (string-contains? r "banana"))
+  (check-false (string-contains? r "cherry")))
+
+(test-case "POL.8: bare and paren spellings are equivalent (same rows)"
+  (define bare (run-ns-ws-last
+                (string-append P8FIX
+                               "defr b [?f]\n  &> fruit-color f \"blue\"\n"
+                               "solve (b q)")))
+  (define paren (run-ns-ws-last
+                 (string-append P8FIX
+                                "defr b [?f]\n  &> (fruit-color f \"blue\")\n"
+                                "solve (b q)")))
+  (check-equal? bare paren))
+
+(test-case "POL.8/Q5: sloppy-indent paren continuation stays a SIBLING (lenient)"
+  ;; conjunction semantics pinned: same fruit must have both colors -> nil
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "defr both [?f]\n"
+                            "  &> (fruit-color f \"blue\")\n"
+                            "        (fruit-color f \"yellow\")\n"
+                            "solve (both q)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "nil") "conjunction of two colors is unsatisfiable"))
+
+(test-case "POL.8: single-token deeper line continues the `&>`-line bare goal"
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "defr cont [?f]\n"
+                            "  &> fruit-color f\n"
+                            "       \"blue\"\n"
+                            "solve (cont q)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry")))
+
+(test-case "POL.8: zero-arg sibling goal at the goal column"
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "defr always []\n  ||\n"
+                            "defr z [?f]\n"
+                            "  &> fruit-color f \"blue\"\n"
+                            "     always\n"
+                            "solve (z q)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry")))
+
+(test-case "POL.8/Q6: single-line bare goal (flat arm)"
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "defr one [?f] &> fruit-color f \"blue\"\n"
+                            "solve (one q)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry")))
+
+(test-case "POL.8: mis-indent between `&>` and the goal column is LOUD"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append P8FIX
+                                        "defr m [?f]\n"
+                                        "  &> fruit-color f\n"
+                                        "    \"blue\"\n"))))
+  (check-true (string-contains? m "indented between") m)
+  (check-true (string-contains? m "align") m))
+
+(test-case "POL.8/Q2a: paren goal followed by a bare token on one line is LOUD"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append P8FIX
+                                        "defr q2a [?f]\n"
+                                        "  &> (fruit-color f c) not (= c \"red\")\n"))))
+  (check-true (string-contains? m "parenthesized") m)
+  (check-true (string-contains? m "not") m))
+
+(test-case "POL.8: a single token cannot extend a parenthesized goal (LOUD)"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append P8FIX
+                                        "defr x [?f]\n"
+                                        "  &> (fruit-color f \"blue\")\n"
+                                        "       q\n"))))
+  (check-true (string-contains? m "cannot extend a parenthesized goal") m))
+
+(test-case "POL.8: degraded srclocs (preparse rewrite) + parenless goals → guidance"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append P8FIX
+                                        "def mm := {:k \"blue\"}\n"
+                                        "defr d [?f]\n"
+                                        "  &> fruit-color f mm.k\n"))))
+  (check-true (string-contains? m "parenthesize") m))
+
+(test-case "POL.8: degraded srclocs with all-paren goals still parse (old path)"
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "def mm := {:k \"blue\"}\n"
+                            "defr d [?f]\n"
+                            "  &> (fruit-color f mm.k)\n"
+                            "solve (fruit-color f \"blue\")")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry") "the file continues; d registered"))
+
+(test-case "POL.8: a literal cannot head a goal line (LOUD)"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append P8FIX
+                                        "defr h [?f]\n"
+                                        "  &> \"blue\" f\n"))))
+  (check-true (string-contains? m "must start with a relation name") m))
+
+(test-case "POL.8: top-level bare `rel` body takes parenless goals (shared grammar)"
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "rel [q]\n"
+                            "  &> fruit-color q \"blue\"\n")))
+  (check-true (string? r) (result-msg r))
+  (check-false (string-contains? r "rule clause")))
+
+(test-case "POL.8/Q6 sexp: flat bare goal run is ONE goal; flat $clause-sep splits clauses"
+  (define r (run-ns-last
+             (string-append "(ns p8s)\n"
+                            "(defr gg (?x ?y) || 1 2)\n"
+                            "(defr bare (?x) &> gg x 2)\n"
+                            "(defr two (?x) &> gg x 2 &> gg x 4)\n"
+                            "(solve (bare q))")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "{:q 1}")))

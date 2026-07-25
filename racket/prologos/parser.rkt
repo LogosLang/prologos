@@ -5461,6 +5461,161 @@
                        (length terms) arity)))])]
     [else (list (row-of terms))]))
 
+;; ── Rel T1 POL.8: layout-based parenless goals in `&>` clause content ──
+;; (owner co-design 2026-07-25; design doc §8 POL.8. Both spellings stay legal.)
+;;
+;; The reader's indent grouping already delivers a clause as: the `&>` line's
+;; elements flat after the sentinel; each later physical line as exactly ONE
+;; element (a ≥2-token line wrapped into a sublist carrying its first token's
+;; line/column, a single-token line spliced bare); and deeper lines nested
+;; INSIDE their parent line's sublist. The grammar on top of that structure:
+;;
+;;   • `&>`-line content: pair-headed → a sequence of paren goals, each
+;;     element parenthesized (Q2a); symbol-headed → ONE bare goal, with
+;;     parens inside the line as argument terms (`&> not (= c n)` works).
+;;   • A grouped later line (any pair) is a SIBLING goal at any indent past
+;;     `&>` (Q5 lenient: a paren goal and a bare ≥2-token line are
+;;     indistinguishable post-reader — same wrap-stx-list, no origin
+;;     sentinel — and the head-token reading is right for both). A
+;;     pair-headed pair is a shared-line paren sequence (Q2a inside).
+;;   • A single-token later line is column-classified (Q5 loud): at the
+;;     goal column → a zero-arg sibling goal; deeper while the `&>`-line
+;;     bare goal is open → appended to its arguments; otherwise → error.
+;;   • Degraded srclocs — a preparse rewrite anywhere inside the defr
+;;     rebuilds it loc-free (macros.rkt defr arm's equal? guard), leaving
+;;     the sentinel at column #f/0, which real input never produces (`&>`
+;;     always sits at column ≥ 1 in WS bodies and inside sexp parens).
+;;     All-paren content then parses exactly as before; parenless content
+;;     errors with guidance rather than risking a silent mis-grouping.
+;;     The process-string-ws tree-spine duplicate parse (whose surf the
+;;     merge discards — driver.rkt merge-form has no defr arm) arrives
+;;     fully stripped and lands here too; returning an error surf there is
+;;     harmless.
+
+;; A reader-sentinel-wrapped datum ($nat-literal, $list-literal, …): a
+;; single TERM, not a goal group.
+(define (pol8-sentinel-headed? d)
+  (and (pair? d)
+       (let* ([h (car d)] [hd (if (syntax? h) (syntax-e h) h)])
+         (and (symbol? hd)
+              (let ([s (symbol->string hd)])
+                (and (positive? (string-length s))
+                     (char=? (string-ref s 0) #\$)))))))
+
+;; A goal-shaped group: a pair NOT headed by a reader sentinel.
+(define (pol8-goal-pair? e)
+  (define d (stx->datum e))
+  (and (pair? d) (not (pol8-sentinel-headed? d))))
+
+;; A symbol usable as a bare goal head (excludes reader sentinels like a
+;; stray $pipe / $facts-sep).
+(define (pol8-bare-head? e)
+  (define d (stx->datum e))
+  (and (symbol? d)
+       (let ([s (symbol->string d)])
+         (or (zero? (string-length s))
+             (not (char=? (string-ref s 0) #\$))))))
+
+(define (pol8-bad-head-error e)
+  (prologos-error (datum-srcloc e)
+    (format "rule clause: a goal must start with a relation name — got `~a`. Parenthesize goals, e.g. (relname arg …)."
+            (if (syntax? e) (syntax->datum e) e))))
+
+;; Parse a shared-line goal sequence: every element must be parenthesized
+;; (Q2a). Also reached when a line under a parenthesized goal nested into
+;; its group at the reader.
+(define (parse-paren-goal-seq elems)
+  (define bare (findf (lambda (e) (not (pol8-goal-pair? e))) elems))
+  (if bare
+      (prologos-error (datum-srcloc bare)
+        (format "rule clause: goals sharing a line must each be parenthesized (and a line under a parenthesized goal cannot extend it) — found bare `~a`. Parenthesize it, or put it on its own line at the goal column."
+                (if (syntax? bare) (syntax->datum bare) bare)))
+      (map parse-relational-goal elems)))
+
+;; Parse ONE clause's content (the elements after its $clause-sep sentinel).
+;; Returns (surf-clause goals loc) or a prologos-error.
+(define (parse-clause-content sentinel content loc)
+  (define (elem-line e) (and (syntax? e) (syntax-line e)))
+  (define (elem-col e) (and (syntax? e) (syntax-column e)))
+  (define (parse-degraded)
+    (if (andmap pol8-goal-pair? content)
+        (let* ([goals (map parse-relational-goal content)]
+               [err (findf prologos-error? goals)])
+          (or err (surf-clause goals loc)))
+        (prologos-error loc
+          "rule clause: parenless goals cannot be used in a defr body that also contains a form rewritten before parsing (e.g. dot-access) — parenthesize each goal in this clause.")))
+  (define sent-line (elem-line sentinel))
+  (define sent-col (elem-col sentinel))
+  (cond
+    [(null? content) (surf-clause '() loc)]
+    [(or (not sent-line) (not sent-col) (zero? sent-col)) (parse-degraded)]
+    [else
+     (define-values (line0 rest)
+       (splitf-at content (lambda (e) (eqv? (elem-line e) sent-line))))
+     (define goal-col
+       (cond [(pair? line0) (elem-col (car line0))]
+             [(pair? rest)  (elem-col (car rest))]
+             [else #f]))
+     (define line0-paren? (and (pair? line0) (pol8-goal-pair? (car line0))))
+     (cond
+       [(not goal-col) (parse-degraded)]
+       [(and (pair? line0) (not line0-paren?)
+             (not (pol8-bare-head? (car line0))))
+        (pol8-bad-head-error (car line0))]
+       [else
+        (define line0-goals (if line0-paren? (parse-paren-goal-seq line0) '()))
+        (cond
+          [(prologos-error? line0-goals) line0-goals]
+          [else
+           ;; Walk the later lines (each arrives as exactly one element).
+           ;; `pending` = the `&>`-line bare goal, open for single-token
+           ;; deeper continuations; `goals` accumulates REVERSED.
+           (let loop ([elems rest]
+                      [pending (and (pair? line0) (not line0-paren?) line0)]
+                      [goals (reverse line0-goals)])
+             (define (close-pending gs)
+               (if pending (cons (parse-relational-goal pending) gs) gs))
+             (cond
+               [(null? elems)
+                (define all (reverse (close-pending goals)))
+                (define err (findf prologos-error? all))
+                (or err (surf-clause all loc))]
+               [else
+                (define e (car elems))
+                (cond
+                  [(pol8-goal-pair? e)
+                   ;; A grouped line: sibling goal(s) at any indent (Q5 lenient).
+                   (define inner (if (syntax? e) (or (syntax->list e) (list e))
+                                     (stx->datum e)))
+                   (define new-goals
+                     (if (and (pair? inner) (pol8-goal-pair? (car inner)))
+                         (parse-paren-goal-seq inner)
+                         (list (parse-relational-goal e))))
+                   (if (prologos-error? new-goals)
+                       new-goals
+                       (loop (cdr elems) #f
+                             (append (reverse new-goals) (close-pending goals))))]
+                  [else
+                   ;; Single-token line — column-classified (Q5 loud).
+                   (define col (or (elem-col e) goal-col))
+                   (cond
+                     [(and pending (> col goal-col))
+                      (loop (cdr elems) (append pending (list e)) goals)]
+                     [(= col goal-col)
+                      (if (pol8-bare-head? e)
+                          (loop (cdr elems) #f
+                                (cons (parse-relational-goal (list e))
+                                      (close-pending goals)))
+                          (pol8-bad-head-error e))]
+                     [(< col goal-col)
+                      (prologos-error (datum-srcloc e)
+                        (format "rule clause: line at column ~a is indented between `&>` (column ~a) and the goal column (~a) — align it to column ~a for a sibling goal."
+                                col sent-col goal-col goal-col))]
+                     [else
+                      (prologos-error (datum-srcloc e)
+                        (format "rule clause: continuation at column ~a cannot extend a parenthesized goal — align it to column ~a for a sibling goal, or parenthesize the whole goal."
+                                col goal-col))])])]))])])]))
+
 ;; Parse the body portion of a defr variant.
 ;; Body is a flat list of tokens that may contain $facts-sep and $clause-sep sentinels.
 ;;
@@ -5538,12 +5693,9 @@
                  (or (findf prologos-error? all-rows)
                      (surf-facts all-rows loc)))]
               [(eq? kind 'clause)
-               (define content (cdr d))
-               (define parsed-goals (map parse-relational-goal content))
-               (define err (for/or ([p (in-list parsed-goals)])
-                             (and (prologos-error? p) p)))
-               (if err err
-                   (surf-clause parsed-goals loc))]
+               ;; Rel T1 POL.8: layout-based parenless goals (both spellings
+               ;; legal) — the sentinel stx carries the `&>` line/column.
+               (parse-clause-content (car d) (cdr d) loc)]
               [else
                ;; Non-sentinel body token — treat as bare goal
                (define parsed (parse-relational-goal tok))
@@ -5573,16 +5725,37 @@
         (if err err
             (list (surf-facts (list (surf-fact-row parsed-terms loc)) loc)))]
 
-       ;; &> clause: rule goals
+       ;; &> clause: rule goals — flat sentinels (sexp + single-line WS).
+       ;; Rel T1 POL.8/Q6: head-token rule, uniform with the wrapped arm; a
+       ;; further flat $clause-sep splits another clause (previously it was
+       ;; silently parsed as a garbage goal).
        [(eq? first-flat-kind 'clause)
-        (define goal-data (cdr body-tokens))
-        (define parsed-goals
-          (for/list ([g (in-list goal-data)])
-            (parse-relational-goal g)))
-        (define err (for/or ([p (in-list parsed-goals)])
-                      (and (prologos-error? p) p)))
-        (if err err
-            (list (surf-clause parsed-goals loc)))]
+        (define (flat-clause-sep? t) (eq? (stx->datum t) '$clause-sep))
+        (define runs
+          (let loop ([toks (cdr body-tokens)] [cur '()] [acc '()])
+            (cond
+              [(null? toks) (reverse (cons (reverse cur) acc))]
+              [(flat-clause-sep? (car toks))
+               (loop (cdr toks) '() (cons (reverse cur) acc))]
+              [else (loop (cdr toks) (cons (car toks) cur) acc)])))
+        (define clauses
+          (for/list ([run (in-list runs)])
+            (cond
+              [(null? run) (surf-clause '() loc)]
+              [(pol8-goal-pair? (car run))
+               ;; paren-goal sequence (Q2a: all elements parenthesized)
+               (let ([goals (parse-paren-goal-seq run)])
+                 (if (prologos-error? goals)
+                     goals
+                     (let ([err (findf prologos-error? goals)])
+                       (or err (surf-clause goals loc)))))]
+              [(pol8-bare-head? (car run))
+               ;; ONE bare goal from the whole run (Q6)
+               (let ([g (parse-relational-goal run)])
+                 (if (prologos-error? g) g (surf-clause (list g) loc)))]
+              [else (pol8-bad-head-error (car run))])))
+        (define err (findf prologos-error? clauses))
+        (if err err clauses)]
 
        ;; No sentinel — treat as bare goals (implicit &>)
        [else

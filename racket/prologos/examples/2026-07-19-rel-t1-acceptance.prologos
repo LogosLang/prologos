@@ -147,3 +147,38 @@ def twohops := solve (twohop a c)
 
 ;;28=> same rows on every mention (and zero additional solver work)
 twohops
+
+;; ---- POL.8: implicit rule-clause groups (layout-based parenless goals) ------
+;; (owner co-design 2026-07-25). Goal-ness from defr-body context; the `&>`
+;; line's head token decides; sibling lines at the goal column; deeper lines
+;; nest. Both spellings stay legal.
+
+defr fruit-color [?fruit ?color]
+  || "blueberry" "blue"
+  || "banana" "yellow"
+  || "cherry" "red"
+
+;;29=> bare single-goal clauses; two clauses = disjunction (owner form 1)
+defr blue-or-yellow [?fruit]
+  &> fruit-color fruit "blue"
+  &> fruit-color fruit "yellow"
+
+;;30=> '[{:f "blueberry"} {:f "banana"}]
+solve (blue-or-yellow f)
+
+;;31=> bare goal + sibling not(…) at the goal column (owner form 2)
+defr fruit-not-of-color [?fruit ?not-color]
+  &> fruit-color fruit color
+     not (= color not-color)
+
+;;32=> '[{:f "blueberry"} {:f "banana"}]  (cherry is red — excluded)
+solve (fruit-not-of-color f "red")
+
+;;33=> nested bare not — the deeper line is its goal argument (owner form 3)
+defr fruit-not-of-color2 [?fruit ?not-color]
+  &> fruit-color fruit color
+     not
+       = color not-color
+
+;;34=> '[{:f "blueberry"} {:f "banana"}]
+solve (fruit-not-of-color2 f "red")
