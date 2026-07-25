@@ -1322,6 +1322,41 @@ readers/languages. The UCS track inherits the substrate + bridges it to the exis
 - BSP-LE Master Track 3 retirement obligation: [`2026-03-21_BSP_LE_MASTER.md`](2026-03-21_BSP_LE_MASTER.md).
 - **Process note**: the A.4 investigation was lengthened by a WS-syntax probe error (one-line fact rows `|| 5 3` parse as one wrong-arity row → spurious empty results, masqueraded as a tabling failure). Probes need multi-line fact rows.
 
+## Solver term conversion drops pvec/map literals — unify with a collection literal yields `unknown` (captured 2026-07-25, surfaced by Rel T1 B3.2's mini-audit)
+
+**PRE-EXISTING, live, and a static/runtime DISAGREEMENT.** Unifying a relational
+variable with a collection LITERAL produces the runtime value `unknown`, while
+the static type is derived correctly:
+
+```
+defr mp [?x ?m]
+  &> (edge x z) (= m {:a 1})
+
+solve (mp x m)
+;; '[{:m unknown, :x 1} …] : [List {:m {:a Int} :x Int}]
+;;        ^^^^^^^ runtime            ^^^^^^^^ static — they disagree
+```
+
+Same for `(= v '[1 2])` (there the static side holes, so only the runtime
+`unknown` shows). Scalars are fine (`(= tag "lit")` → `"lit" : String`), so the
+gap is specific to the collection literals in the AST↔solver-term conversion
+(`normalize-ast-to-solver-term` / `solver-term->prologos-expr`).
+
+**Why it matters beyond cosmetics**: (a) B3.1 derives the row type correctly, so
+this is the one place where the static row type and the actual row provably
+disagree — the CbC key/type agreement B3.0 worked to preserve; (b) it BLOCKS the
+only reachable surface case of B3.2's FILL path (a hole-typed field whose values
+are ground); (c) the DEMO through-line loads records as facts (`:from`), which is
+adjacent territory.
+
+**Not chased** at discovery: B3.2's scope was the display seam, and this is a
+solver-representation defect. The B3.2 FILL path is unit-pinned so it is correct
+the day this lands.
+
+### Cross-references
+- Surfaced by: Rel T1 B3.2 mini-audit (2026-07-25), design §6.10.
+- Probe: `(= m {:a 1})` / `(= v '[1 2])` in a rule body, then `solve`.
+
 ## Substitution containment defect — runtime collections as closed leaves (captured 2026-07-24, spin-out from Rel T1 POL.10)
 
 > **✅ RESOLVED 2026-07-25 for the BVAR half** — ruling (D) + the NbE fix.
