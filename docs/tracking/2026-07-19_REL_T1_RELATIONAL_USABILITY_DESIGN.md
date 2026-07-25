@@ -70,7 +70,7 @@ enumeration). Three aspects + polish, one held research item, one UCS deferral:
 | **B3** | **Typed solution rows for RULE-bearing relations (codata)** — the B2-deferred half, elevated by the owner (2026-07-24): *"one of the largest motivating usability aspects of all of this work"*. Today `relation-column-typer`'s rule-bearing branch yields `#f` → rule solves type as bare `_` (e.g. `solve (path x z) : _` vs facts' `List {:k Int …}`), so rule solutions cannot compose with the F1 records/row machinery (`.field`, validate, row polymorphism). Realization **SETTLED §6.10** (co-design 2026-07-24, grounding `wf_512dd7e3-5e8`): hybrid — static body-flow = the composition channel (D-B3.1), fixpoint recursion (D-B3.2), anon-rel in scope (D-B3.3), closed rows / hole-degrade (D-B3.6) | 🔄 | **B3.0 ✅** `67d96a0d` (POL.2 anon-key kernel filter, both halves atomic) · **B3.1 ✅** `0d34fa7e` (the static walker: body-goal dataflow + Kleene fixpoint [TC types!] + anon-rel arm + mixed-relation fact join; B2 loose-test + e2e NAF snapshot FLIPPED; +6 tests; acceptance ;;22-24; suite 470/0). `def := solve(rule)` de-blocked to POL.5's multiplicity defect. **NEXT: B3.2** display refinement (or POL.5 first — owner call) |
 | **D.0/1** | Efficient fact representation + query-opt — Stage 0/1 research + design artifact | ✅ | **Artifact landed** `0b428424`: [`2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md`](../research/2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md) — frame F1–F7 · measured cost structure · lattice verdicts · staging ladder · **Rel T2 "Fact Store" charter seed** (§11) + §14 D.2 addendum. **Q_A–Q_D parked** for the Rel T2 charter (owner, 2026-07-24) |
 | **D.2** | Cheap-wins slice (artifact §7 NOW: N1–N6) | ✅ | D.2.a `296ac2d5` (dead tree −135 LoC + comment truth) · D.2.b `984601b9` (row-scan/col-compare counters + 2 latent fixes) · D.2.c `7ba24b2b` (fact-scale bench + corpus generator + 260-row standing E2E; **findings: Tier-2 unreachable for 1-variant fact tables; NO DFS↔Tier-2 crossover ≤1000 — Tier-2 enum ~480× slower @1000**) · D.2.d `feedc6ff` (registration-time INVERTED index on `variant-info.discrim`; Tier-2 point rows N+1→1, 0.78→0.17ms @1000). Suite 469/0 throughout; artifact §14 |
-| **POL** | Polish — **ROSTER EXPANDED to POL.1–.9** (§8, 2026-07-24): owner hand-testing list from `standup-2026-07-19.org` § "Polish points for REL" folded in. Correctness: dedup (.1) · `_anon` keys (.2) · declaration-order keys (.3) · **arity-mismatch errors** (.4) · **def-on-solve multiplicity** (.5) · **defn fused-binder last mile** (.6). Syntax: single-line `\|` facts (.7) · implicit clause groups (.8) · implicit solve (.9, ⚠ design question — co-design first) | ⬜ | §8 sequencing note; POL.9 needs owner co-design before impl |
+| **POL** | Polish — **ROSTER EXPANDED to POL.1–.9** (§8, 2026-07-24): owner hand-testing list from `standup-2026-07-19.org` § "Polish points for REL" folded in. Correctness: dedup (.1 — **RULED doc-only: bag semantics stays**) · `_anon` keys (.2 ✅) · declaration-order keys (.3) · **arity-mismatch errors** (.4 ✅) · **def-on-solve multiplicity** (.5 ✅) · **defn fused-binder last mile** (.6 ✅ `0f6dc98c`). Syntax: single-line `\|` facts (.7) · implicit clause groups (.8) · implicit solve (.9, ⚠ design question — co-design first) | ⬜ | §8 sequencing note; POL.9 needs owner co-design before impl |
 | **SUB** | **POL.10 spin-out** — the substitution containment defect (LIVE bug: open de Bruijn index escapes via runtime containers). Own doc + progress table: [`2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md`](2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md). **Owner-resequenced AHEAD of the POL remainder (2026-07-24)**; ruling **(D)** (champ = closed runtime value ⇒ NbE fix) | ✅ | **BVAR half CLOSED.** R ✅ (D) · SUB.1 `f19d6f56` (tripwire, kept as the standing assertion) · SUB.2 **ADOPTED** `6323587e` (compile-limit — an independent win found here: shift ~830× micro, **suite −18%**; runner putenv) · **SUB.3a `7ea49168` — THE FIX** (NbE nf; repro 6N/5N; +6.4% suite, net 211→185) · SUB.3b `036b59f7` (narrowing containment — walker catch-all AND `narrow-match` map/vec decomposition) · hot-scan `8ec5e507` (**6.9×**/walk, differential oracle) · SUB.close (doc-truth §2.0 + 2 lesson promotions → `pipeline.md` walker discipline, `testing.md` bench traps). **META half OPEN** — zonk ×3 / `occurs?` skip on metas, reachability unverified; own slice (DEFERRED.md + defect doc §2.0) |
 | *(tests)* | **Per-phase** — each behavioral phase brings its own test delta in its completion gate; the test file(s) `tests/test-rel-*.rkt` GROW per phase (NOT a dedicated end phase — see workflow.md "Tests are PER-PHASE") | — | e.g. `test-rel-t1-naf.rkt`, `test-rel-t1-typed-rows.rkt` (grown across B1/B2) |
 | **X.close** | Bench matrix · DEFERRED triage · doc-truth sweep · memory fold · **Stage-5 PIR** | ⬜ | Objective-PIR gate |
@@ -1184,12 +1184,25 @@ three-level WS validation + WS-Impact obligations (workflow.md).
   "Could not infer type" = the polymorphic-head-over-record-lists inference
   limit already named as CIU T6 Path Selection's prerequisite.
 - **POL.6 — Fused `x:Int` in `defn` params: the last mile** *(owner repro;
-  adjacent to Rel but C-arc-owned)* —
-  `defn my-square [x:Int] : Int  * x x` → "cannot infer the type of an
-  unannotated parameter". C.b.2 (`c6b8e81f`) wired fused binders through
-  `parse-binder` (fn-binders, both readers); the `defn` param-list path
-  evidently does not route through it. Wire `defn` (and multi-arity clause
-  heads) to the same fused-binder arm.
+  adjacent to Rel but C-arc-owned)* — **✅ FIXED `0f6dc98c` (2026-07-25)**.
+  `defn my-square [x:Int] : Int  * x x` → `my-square : Int -> Int`.
+  **Root (instrumented, not inferred)**: WS delivers the param list as the
+  TWO elements `x` + `:Int` — the shape C.b.2 already handles — but a
+  `defn`'s param list never routes through `parse-binder`;
+  `parse-defn-bare-params` mapped `binder-info` over the RAW elements, so
+  the defn silently became a TWO-parameter function whose second param was
+  named `:Int`, both hole-typed. The owner's "cannot infer" message was the
+  downstream symptom of a silently wrong arity. **Fix**: three shared fused
+  primitives (`fused-type-annot?` / `fused-annot->type-surf` /
+  `split-fused-symbol`) now serve BOTH `parse-binder` (C.b.2's arms, rerouted)
+  and a new fold in `parse-defn-bare-params` — one implementation, no second
+  copy to drift. Chained rejected (reserve for UCS), ordered before the
+  2-element arm; multiplicity annotations excluded; sexp glued form handled.
+  **Bonus**: MIXED fused+bare now works wherever inference can supply the bare
+  param (strictly more capable than the spaced form, which hard-errors on
+  mixed); mixed+arithmetic still hits the pre-existing unannotated-param
+  inference limit (same family as the DEFERRED F-row item, not a regression).
+  +9 tests; suite 470/9025/0.
 
 - **POL.10 — `def` binds the reduced value** — **✅ LANDED `095d8bc5`
   (2026-07-24, second pass — owner-ruled SNAPSHOT semantics)**. `def` binds
