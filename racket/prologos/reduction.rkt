@@ -52,6 +52,9 @@
          ;; SUB.1: substitution containment tripwire (predicate + raiser) —
          ;; docs/tracking/2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md
          contains-open-container? assert-no-open-container!
+         ;; SUB.3 hot-scan: the reflective oracle, for the differential
+         ;; contract tests ONLY (armed ≡ reflective)
+         contains-open-container?/reflective
          ;; N6e issue #71: saturated-multi-hole-section classifier (shared by
          ;; infer/inferQ so the 3-stage guard cannot drift between stages).
          saturated-hole-section-app?
@@ -541,38 +544,100 @@
 ;; d = #f outside any container (hunting for containers); an integer = binder
 ;; depth accumulated since the INNERMOST enclosing container (checking
 ;; freeness w.r.t. that container's boundary).
+;;
+;; TWO walks, ONE semantics (SUB.3 hot-scan, owner-directed 2026-07-25):
+;; the production walk carries explicit ARMS for the hot node kinds (direct
+;; accessors — struct->vector allocates a fresh vector per node, ~an order
+;; of magnitude slower than an accessor arm on the nf fast path), with the
+;; REFLECTIVE walk retained verbatim as (a) the structurally-total fallback
+;; for every un-armed node — so coverage cannot regress — and (b) the
+;; differential-testing ORACLE: the contract test asserts armed ≡ reflective
+;; over a battery with poison planted in every armed field position. Arms
+;; are pure optimization; only certain-leaf nodes (no expr-bearing fields)
+;; short-circuit to #f.
+
 (define (contains-open-container? e)
-  (define (walk v d)
-    (cond
-      [(expr-bvar? v) (and d (>= (expr-bvar-index v) d))]
-      [(runtime-container-value? v)
-       ;; container boundary: contents check freeness at fresh depth 0
-       (for/or ([f (in-vector (struct->vector v) 1)]) (walk f 0))]
-      ;; the four binder forms — body positions at d+1 (or +binding-count)
-      [(expr-lam? v)
-       (or (walk (expr-lam-type v) d)
-           (walk (expr-lam-body v) (and d (add1 d))))]
-      [(expr-Pi? v)
-       (or (walk (expr-Pi-domain v) d)
-           (walk (expr-Pi-codomain v) (and d (add1 d))))]
-      [(expr-Sigma? v)
-       (or (walk (expr-Sigma-fst-type v) d)
-           (walk (expr-Sigma-snd-type v) (and d (add1 d))))]
-      [(expr-reduce? v)
-       (or (walk (expr-reduce-scrutinee v) d)
-           (for/or ([arm (in-list (expr-reduce-arms v))])
-             (walk (expr-reduce-arm-body arm)
-                   (and d (+ d (expr-reduce-arm-binding-count arm))))))]
-      ;; generic reflective descent (all expr structs are #:transparent;
-      ;; opaque values answer struct? #f and fall through to the leaf arm)
-      [(struct? v)
-       (for/or ([f (in-vector (struct->vector v) 1)]) (walk f d))]
-      [(pair? v) (or (walk (car v) d) (walk (cdr v) d))]
-      [(vector? v) (for/or ([f (in-vector v)]) (walk f d))]
-      [(hash? v) (for/or ([(hk hv) (in-hash v)]) (or (walk hk d) (walk hv d)))]
-      [(box? v) (walk (unbox v) d)]
-      [else #f]))
-  (and (walk e #f) #t))
+  (and (occ-walk e #f) #t))
+
+;; the differential oracle (provided for the contract tests)
+(define (contains-open-container?/reflective e)
+  (and (occ-walk/reflective e #f) #t))
+
+(define (occ-walk v d)
+  (match v
+    [(expr-bvar i) (and d (>= i d))]
+    ;; certain leaves: no expr-bearing fields
+    [(or (? expr-fvar?) (? expr-int?) (? expr-nat-val?) (? expr-string?)
+         (? expr-keyword?) (? expr-true?) (? expr-false?) (? expr-zero?)
+         (? expr-unit?) (? expr-nil?) (? expr-hole?) (? expr-refl?)
+         (? expr-error?) (? expr-logic-var?))
+     #f]
+    ;; hot spines — direct accessors
+    [(expr-app f a) (or (occ-walk f d) (occ-walk a d))]
+    [(expr-pair a b) (or (occ-walk a d) (occ-walk b d))]
+    [(expr-suc p) (occ-walk p d)]
+    [(expr-fst x) (occ-walk x d)]
+    [(expr-snd x) (occ-walk x d)]
+    [(expr-map-assoc m k mv)
+     (or (occ-walk m d) (occ-walk k d) (occ-walk mv d))]
+    [(expr-map-get m k) (or (occ-walk m d) (occ-walk k d))]
+    [(expr-map-empty k mv) (or (occ-walk k d) (occ-walk mv d))]
+    [(expr-pvec-literal elems) (for/or ([el (in-list elems)]) (occ-walk el d))]
+    ;; the four binder forms — body positions at d+1 (or +binding-count)
+    [(expr-lam _ t body)
+     (or (occ-walk t d) (occ-walk body (and d (add1 d))))]
+    [(expr-Pi _ dom cod)
+     (or (occ-walk dom d) (occ-walk cod (and d (add1 d))))]
+    [(expr-Sigma t1 t2)
+     (or (occ-walk t1 d) (occ-walk t2 (and d (add1 d))))]
+    [(? expr-reduce?)
+     (or (occ-walk (expr-reduce-scrutinee v) d)
+         (for/or ([arm (in-list (expr-reduce-arms v))])
+           (occ-walk (expr-reduce-arm-body arm)
+                     (and d (+ d (expr-reduce-arm-binding-count arm))))))]
+    ;; container boundary: contents check freeness at fresh depth 0
+    [(? runtime-container-value?)
+     (for/or ([f (in-vector (struct->vector v) 1)]) (occ-walk f 0))]
+    ;; cold fallback — reflective, structurally total (recursing through the
+    ;; ARMED walk so hot nodes below a cold node use their arms)
+    [_
+     (cond
+       [(struct? v)
+        (for/or ([f (in-vector (struct->vector v) 1)]) (occ-walk f d))]
+       [(pair? v) (or (occ-walk (car v) d) (occ-walk (cdr v) d))]
+       [(vector? v) (for/or ([f (in-vector v)]) (occ-walk f d))]
+       [(hash? v) (for/or ([(hk hv) (in-hash v)]) (or (occ-walk hk d) (occ-walk hv d)))]
+       [(box? v) (occ-walk (unbox v) d)]
+       [else #f])]))
+
+;; the original fully-reflective walk, verbatim — the testing oracle
+(define (occ-walk/reflective v d)
+  (cond
+    [(expr-bvar? v) (and d (>= (expr-bvar-index v) d))]
+    [(runtime-container-value? v)
+     (for/or ([f (in-vector (struct->vector v) 1)]) (occ-walk/reflective f 0))]
+    [(expr-lam? v)
+     (or (occ-walk/reflective (expr-lam-type v) d)
+         (occ-walk/reflective (expr-lam-body v) (and d (add1 d))))]
+    [(expr-Pi? v)
+     (or (occ-walk/reflective (expr-Pi-domain v) d)
+         (occ-walk/reflective (expr-Pi-codomain v) (and d (add1 d))))]
+    [(expr-Sigma? v)
+     (or (occ-walk/reflective (expr-Sigma-fst-type v) d)
+         (occ-walk/reflective (expr-Sigma-snd-type v) (and d (add1 d))))]
+    [(expr-reduce? v)
+     (or (occ-walk/reflective (expr-reduce-scrutinee v) d)
+         (for/or ([arm (in-list (expr-reduce-arms v))])
+           (occ-walk/reflective (expr-reduce-arm-body arm)
+                                (and d (+ d (expr-reduce-arm-binding-count arm))))))]
+    [(struct? v)
+     (for/or ([f (in-vector (struct->vector v) 1)]) (occ-walk/reflective f d))]
+    [(pair? v) (or (occ-walk/reflective (car v) d) (occ-walk/reflective (cdr v) d))]
+    [(vector? v) (for/or ([f (in-vector v)]) (occ-walk/reflective f d))]
+    [(hash? v) (for/or ([(hk hv) (in-hash v)])
+                 (or (occ-walk/reflective hk d) (occ-walk/reflective hv d)))]
+    [(box? v) (occ-walk/reflective (unbox v) d)]
+    [else #f]))
 
 (define (assert-no-open-container! who v)
   (when (contains-open-container? v)

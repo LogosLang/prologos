@@ -327,3 +327,69 @@
   (define lam* (nf lam-closed))
   (check-true (expr-champ? (expr-lam-body lam*))
               "closed contents keep the runtime champ representation"))
+
+;; ── SUB.3 hot-scan: armed walk ≡ reflective oracle (differential contract) ──
+;; The production contains-open-container? carries explicit arms for hot node
+;; kinds; the fully-reflective twin is the oracle. Poison is planted in EVERY
+;; armed field position; clean twins guard the negative side. Any arm that
+;; misses a field diverges from the oracle HERE, not in production.
+
+(require (only-in "../reduction.rkt" contains-open-container?/reflective)
+         (only-in "../syntax.rkt"
+                  expr-map-get expr-suc expr-pvec-literal expr-snd
+                  expr-reduce expr-reduce-arm expr-logic-var))
+
+(define POISON (mk-champ ka (expr-bvar 0)))          ;; champ trapping a bvar
+(define CLEAN  (mk-champ ka (expr-int 1)))
+
+(define (both-agree label term)
+  (check-equal? (contains-open-container? term)
+                (contains-open-container?/reflective term)
+                label))
+
+(test-case "SUB.3 hot-scan: armed ≡ reflective over the field battery"
+  (define battery
+    (list
+     ;; poison in each armed field position
+     (expr-app POISON (expr-int 1))
+     (expr-app (expr-int 1) POISON)
+     (expr-pair POISON (expr-int 1))
+     (expr-pair (expr-int 1) POISON)
+     (expr-suc POISON)
+     (expr-fst POISON)
+     (expr-snd POISON)
+     (expr-map-assoc POISON ka (expr-int 1))
+     (expr-map-assoc (expr-map-empty (expr-hole) (expr-hole)) POISON (expr-int 1))
+     (expr-map-assoc (expr-map-empty (expr-hole) (expr-hole)) ka POISON)
+     (expr-map-get POISON ka)
+     (expr-map-get (expr-map-empty (expr-hole) (expr-hole)) POISON)
+     (expr-pvec-literal (list (expr-int 1) POISON))
+     ;; binder positions: poison + the bound/free distinction
+     (expr-lam 'mw POISON (expr-int 1))
+     (expr-lam 'mw (expr-Nat) POISON)
+     (expr-lam 'mw (expr-Nat) (mk-champ ka (expr-bvar 0)))   ;; free at champ → fires
+     (mk-champ ka (expr-lam 'mw (expr-Nat) (expr-bvar 0)))   ;; bound inside → clean
+     (expr-Pi 'mw POISON (expr-int 1))
+     (expr-Pi 'mw (expr-Nat) POISON)
+     (expr-Sigma POISON (expr-int 1))
+     (expr-Sigma (expr-Nat) POISON)
+     (expr-reduce POISON '() #f)
+     (expr-reduce (expr-int 1)
+                  (list (expr-reduce-arm 'suc 1 POISON)) #f)
+     ;; cold-fallback coverage: an un-armed node (expr-boolrec)
+     (expr-boolrec POISON (expr-int 1) (expr-int 2) (expr-int 3))
+     ;; leaves + clean twins
+     (expr-logic-var 'x 'in)
+     (expr-fvar 'f)
+     CLEAN
+     (expr-app CLEAN CLEAN)
+     (expr-lam 'mw (expr-Nat) (expr-app (expr-bvar 0) (expr-int 1)))
+     (expr-pvec-literal (list CLEAN))))
+  (for ([t (in-list battery)] [i (in-naturals)])
+    (both-agree (format "battery[~a]" i) t)))
+
+(test-case "SUB.3 hot-scan: armed detects the canonical poison + clears the control"
+  (check-true (contains-open-container? (expr-lam 'mw (expr-Nat) POISON)))
+  (check-false (contains-open-container?
+                (mk-champ (expr-keyword ':f)
+                          (expr-lam 'mw (expr-Nat) (expr-bvar 0))))))
