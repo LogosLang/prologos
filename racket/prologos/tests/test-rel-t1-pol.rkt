@@ -401,3 +401,76 @@
   ;; no goal in hand at the echo — hash order; assert it still displays both keys
   (check-true (string? r))
   (check-true (and (string-contains? r ":z 1") (string-contains? r ":a 2"))))
+
+;; ── POL.7: single-line facts with `|` row separators (design §8) ─────────────
+;; `|` tokenizes as the bare `$pipe` symbol and previously flowed into
+;; parse-datum as a GARBAGE TERM (`|| 0 | 1 | 2` silently produced `unknown`
+;; rows — probed, not inferred). Now: pipes = EXPLICIT rows (each segment must
+;; match the arity exactly; empty segments error); without pipes the
+;; pre-existing arity-chunking stands but a partial remainder is a LOUD error
+;; instead of a silent dead row (the Watching-3 spurious-empty-results trap,
+;; closed at the source). One shared splitter serves the flat and
+;; continuation-line sites. Sexp mode untouched by construction (`|` is a
+;; symbol-escape char in the Racket reader).
+
+(test-case "POL.7: the owner's digits example — ten rows from one line"
+  (define r (run-ns-ws-last
+             (string-append "ns p7\n"
+                            "defr digits [?d]\n"
+                            "  || 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9\n"
+                            "solve (digits d)")))
+  (check-true (string? r))
+  (check-true (string-contains? r "{:d 0}"))
+  (check-true (string-contains? r "{:d 9}"))
+  (check-false (string-contains? r "unknown") "no garbage `unknown` rows")
+  (check-equal? (length (regexp-match* #rx"[{]" (car (regexp-split #rx" : " r)))) 10))
+
+(test-case "POL.7: binary rows with pipes"
+  (define r (run-ns-ws-last
+             (string-append "ns p7\n"
+                            "defr e2 [?a ?b]\n  || 1 2 | 3 4\n"
+                            "solve (e2 a b)")))
+  (check-true (string-contains? r "{:a 1, :b 2}"))
+  (check-true (string-contains? r "{:a 3, :b 4}")))
+
+(test-case "POL.7: pipes work on continuation lines too"
+  (define r (run-ns-ws-last
+             (string-append "ns p7\n"
+                            "defr m [?x]\n  || 0 | 1\n     2 | 3\n"
+                            "solve (m x)")))
+  (check-equal? (length (regexp-match* #rx"[{]" (car (regexp-split #rx" : " r)))) 4))
+
+(test-case "POL.7: wrong-length pipe segment is a loud error"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append "ns p7\n"
+                                        "defr e [?a ?b]\n  || 1 2 | 3 4 5\n"))))
+  (check-true (string-contains? m "3 terms") m)
+  (check-true (string-contains? m "arity is 2") m))
+
+(test-case "POL.7: empty pipe segment is a loud error"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append "ns p7\n"
+                                        "defr e [?x]\n  || 1 | | 2\n"))))
+  (check-true (string-contains? m "empty row") m))
+
+(test-case "POL.7: a partial remainder WITHOUT pipes now errors (was a silent dead row)"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append "ns p7\n"
+                                        "defr e [?a ?b]\n  || 1 2 3 4 5\n"))))
+  (check-true (string-contains? m "5 terms do not fill rows of arity 2") m))
+
+(test-case "POL.7: legacy exact-multiple chunking still works (no pipes)"
+  (define r (run-ns-ws-last
+             (string-append "ns p7\n"
+                            "defr leg [?x]\n  || 5 3\n"
+                            "solve (leg x)")))
+  (check-true (string-contains? r "{:x 5}"))
+  (check-true (string-contains? r "{:x 3}")))
+
+(test-case "POL.7: classic multi-line facts unchanged"
+  (define r (run-ns-ws-last
+             (string-append "ns p7\n"
+                            "defr c [?k]\n  || 7\n     8\n"
+                            "solve (c k)")))
+  (check-true (string-contains? r "{:k 7}"))
+  (check-true (string-contains? r "{:k 8}")))

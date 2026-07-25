@@ -5407,6 +5407,60 @@
             [else
              (prologos-error loc (format "defr: expected symbol or literal in params, got ~a" sym))])]))]))
 
+;; ── Rel T1 POL.7: the ONE fact-line row-splitter (both fact-content sites) ────
+;; A fact line's terms may carry `|` row separators (WS tokenizes `|` as the
+;; bare `$pipe` symbol, which previously flowed into parse-datum as a GARBAGE
+;; TERM — `|| 0 | 1 | 2` silently produced `unknown` rows). Semantics:
+;;   WITH pipes  — explicit rows: each `|`-separated segment is ONE row and must
+;;                 match the declared arity EXACTLY (the user drew the row
+;;                 boundaries; a wrong-length segment is an error, not a guess).
+;;                 Empty segments (leading/trailing/doubled `|`) error.
+;;   WITHOUT     — the pre-existing arity-chunking stands (`|| 5 3` on a unary
+;;                 relation = two rows), but a PARTIAL REMAINDER is now a loud
+;;                 error instead of a silent dead row (it registered a
+;;                 wrong-arity row no query could ever match — the Watching-3
+;;                 "spurious empty results" trap, closed at the source).
+;; Sexp mode is untouched by construction: `|` is a symbol-escape char in the
+;; Racket reader, so sexp fact rows are per-form groups and never see $pipe.
+(define (facts-pipe? s)
+  (eq? (stx->datum s) '$pipe))
+
+(define (facts-terms->rows terms arity loc)
+  (define (row-of seg) (surf-fact-row (map parse-datum seg) loc))
+  (cond
+    [(null? terms) '()]
+    [(ormap facts-pipe? terms)
+     ;; explicit-rows mode: split on pipes, exact-arity segments
+     (define segments
+       (let loop ([ts terms] [cur '()] [acc '()])
+         (cond
+           [(null? ts) (reverse (cons (reverse cur) acc))]
+           [(facts-pipe? (car ts)) (loop (cdr ts) '() (cons (reverse cur) acc))]
+           [else (loop (cdr ts) (cons (car ts) cur) acc)])))
+     (cond
+       [(ormap null? segments)
+        (list (prologos-error loc "defr facts: empty row beside `|` — write a term between separators"))]
+       [(and arity (> arity 0)
+             (ormap (lambda (seg) (not (= (length seg) arity))) segments))
+        (define bad (findf (lambda (seg) (not (= (length seg) arity))) segments))
+        (list (prologos-error loc
+               (format "defr facts: a `|`-separated row has ~a term~a but the relation's arity is ~a"
+                       (length bad) (if (= (length bad) 1) "" "s") arity)))]
+       [else (map row-of segments)])]
+    [(and arity (> arity 0) (> (length terms) arity))
+     ;; legacy arity-chunking; partial remainder now errors
+     (cond
+       [(zero? (remainder (length terms) arity))
+        (let loop ([remaining terms] [acc '()])
+          (if (null? remaining)
+              (reverse acc)
+              (loop (drop remaining arity) (cons (row-of (take remaining arity)) acc))))]
+       [else
+        (list (prologos-error loc
+               (format "defr facts: ~a terms do not fill rows of arity ~a — separate rows with `|` or newlines"
+                       (length terms) arity)))])]
+    [else (list (row-of terms))]))
+
 ;; Parse the body portion of a defr variant.
 ;; Body is a flat list of tokens that may contain $facts-sep and $clause-sep sentinels.
 ;;
@@ -5468,29 +5522,8 @@
                               (or (not (pair? (stx->datum s)))
                                   (term-sentinel? s)))
                             content))
-               ;; Split flat-terms into rows based on arity.
-               ;; If arity is known and flat-terms has multiple values,
-               ;; chunk them into groups of `arity` (e.g., || "1" "2" "3" with arity 1
-               ;; becomes 3 rows, not 1 row of 3 values).
-               (define flat-rows
-                 (cond
-                   [(null? flat-terms) '()]
-                   [(and arity (> arity 0) (> (length flat-terms) arity))
-                    ;; Chunk flat-terms into groups of `arity`
-                    (let loop ([remaining flat-terms] [acc '()])
-                      (cond
-                        [(null? remaining) (reverse acc)]
-                        [(< (length remaining) arity)
-                         ;; Remainder doesn't fill a complete row — include as partial
-                         (reverse (cons (surf-fact-row (map parse-datum remaining) loc) acc))]
-                        [else
-                         (define chunk (take remaining arity))
-                         (define rest-stx (drop remaining arity))
-                         (loop rest-stx
-                               (cons (surf-fact-row (map parse-datum chunk) loc) acc))]))]
-                   [else
-                    ;; No arity or flat-terms fits in one row
-                    (list (surf-fact-row (map parse-datum flat-terms) loc))]))
+               ;; Rel T1 POL.7: one shared row-splitter for a fact line's terms.
+               (define flat-rows (facts-terms->rows flat-terms arity loc))
                (define other-rows
                  (apply append
                    (for/list ([nr (in-list nested-rows)])
@@ -5498,22 +5531,12 @@
                        (if (syntax? nr) (or (syntax->list nr) (list nr))
                            (let ([nd (stx->datum nr)])
                              (if (list? nd) nd (list nr)))))
-                     ;; Split continuation row by arity, same as flat-terms
-                     (cond
-                       [(and arity (> arity 0) (> (length items) arity))
-                        (let loop ([remaining items] [acc '()])
-                          (cond
-                            [(null? remaining) (reverse acc)]
-                            [(< (length remaining) arity)
-                             (reverse (cons (surf-fact-row (map parse-datum remaining) loc) acc))]
-                            [else
-                             (define chunk (take remaining arity))
-                             (define rest-items (drop remaining arity))
-                             (loop rest-items
-                                   (cons (surf-fact-row (map parse-datum chunk) loc) acc))]))]
-                       [else
-                        (list (surf-fact-row (map parse-datum items) loc))]))))
-               (surf-facts (append flat-rows other-rows) loc)]
+                     ;; Rel T1 POL.7: same shared row-splitter as flat-terms
+                     (facts-terms->rows items arity loc))))
+               ;; POL.7: a row-splitter error surfaces as THE result, not a row
+               (let ([all-rows (append flat-rows other-rows)])
+                 (or (findf prologos-error? all-rows)
+                     (surf-facts all-rows loc)))]
               [(eq? kind 'clause)
                (define content (cdr d))
                (define parsed-goals (map parse-relational-goal content))
@@ -5526,10 +5549,13 @@
                (define parsed (parse-relational-goal tok))
                (if (prologos-error? parsed) parsed
                    (surf-clause (list parsed) loc))])))
-        ;; Check for first error
+        ;; Check for first error. Return it BARE (not (list err)) — the callers
+        ;; check (prologos-error? body), and the sexp arms below already return
+        ;; bare; the old (list err) slipped past that check and surfaced as an
+        ;; ugly "Cannot elaborate: #(struct:prologos-error …)" wrap (POL.7).
         (define err (for/or ([r (in-list results)])
                       (and (prologos-error? r) r)))
-        (if err (list err) results)]
+        (if err err results)]
 
        ;; === Sexp mode: flat sentinel tokens (original logic) ===
 
