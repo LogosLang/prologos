@@ -3710,8 +3710,7 @@
        ;; reject (reserve for UCS), mirroring the relational C.b.1 rule.
        [(and (>= (length parts) 3)
              (symbol? (stx->datum (car parts)))
-             (let ([s (stx->datum (cadr parts))])
-               (and (colon-symbol? s) (not (memq s '(:0 :1 :w :m)))))
+             (fused-type-annot? (stx->datum (cadr parts)))
              (colon-symbol? (stx->datum (caddr parts))))
         (parse-error loc
                      (format "binder: chained type annotation on ~a not supported (reserve for UCS)"
@@ -3723,11 +3722,9 @@
        ;; typed-binder path (binder-info.type), same as the spaced `(x : T)` arm.
        [(and (= (length parts) 2)
              (symbol? (stx->datum (car parts)))
-             (let ([s (stx->datum (cadr parts))])
-               (and (colon-symbol? s) (not (memq s '(:0 :1 :w :m))))))
+             (fused-type-annot? (stx->datum (cadr parts))))
         (let* ([name (stx->datum (car parts))]
-               [tname (substring (symbol->string (stx->datum (cadr parts))) 1)]
-               [ty (parse-datum (datum->syntax (car parts) (string->symbol tname)))])
+               [ty (fused-annot->type-surf (stx->datum (cadr parts)) (car parts))])
           (if (prologos-error? ty) ty
               (binder-info name #f ty)))]
 
@@ -3772,20 +3769,12 @@
        ;; splits on `:` (name:Type); `::` module paths (empty segment) are not splits.
        [(and (= (length parts) 1)
              (symbol? (stx->datum (car parts))))
-        (let* ([sym (stx->datum (car parts))]
-               [segs (string-split (symbol->string sym) ":")]
-               [nonempty? (andmap (lambda (s) (> (string-length s) 0)) segs)])
+        (let-values ([(name ty err)
+                      (split-fused-symbol (stx->datum (car parts)) (car parts) loc "binder")])
           (cond
-            [(and nonempty? (> (length segs) 2))
-             (parse-error loc
-                          (format "binder: chained type annotation in ~a not supported (reserve for UCS)" sym)
-                          sym)]
-            [(and nonempty? (= (length segs) 2))
-             (let ([ty (parse-datum (datum->syntax (car parts) (string->symbol (cadr segs))))])
-               (if (prologos-error? ty) ty
-                   (binder-info (string->symbol (car segs)) #f ty)))]
-            [else
-             (binder-info sym #f (surf-hole loc))]))]
+            [err err]
+            [ty (binder-info name #f ty)]
+            [else (binder-info name #f (surf-hole loc))]))]
 
        [else
         (parse-error loc
@@ -4692,12 +4681,59 @@
 
   ;; Build binders with surf-hole types (to be inferred by bidirectional checking)
   (define param-elems (syntax->list params-stx))
+  ;; Rel T1 POL.6: fold FUSED type annotations in the defn param list.
+  ;; C.b.2 wired fused binders through `parse-binder` (fn-binders, both readers),
+  ;; but a `defn`'s bare param list never routes there — it mapped `binder-info`
+  ;; over the raw elements, so WS `defn f [x:Int]` (which arrives as the TWO
+  ;; elements `x` and `:Int` — instrumented, not inferred) silently became a
+  ;; TWO-parameter function whose second param was named `:Int`, both hole-typed.
+  ;; Hence the owner's "cannot infer the type of an unannotated parameter".
+  ;; This consumes the same two shapes via the SHARED fused primitives:
+  ;;   WS   — `name` followed by a colon-symbol type ⇒ one typed binder, 2 consumed
+  ;;   sexp — a single glued `name:Type` symbol ⇒ one typed binder, 1 consumed
+  ;; Bare params keep their hole type; multiplicity annotations are excluded by
+  ;; `fused-type-annot?`, so `[x :0 Int]`-style forms are untouched here.
   (define binders
-    (for/list ([e (in-list param-elems)])
-      (binder-info (syntax-e e) #f (surf-hole loc))))
+    (let loop ([es param-elems] [acc '()])
+      (cond
+        [(null? es) (reverse acc)]
+        ;; chained WS fused: name + :T1 + :T2 — reserve for UCS (C.b.1/C.b.2 rule).
+        ;; MUST precede the 2-element fused arm, which would otherwise consume the
+        ;; first annotation and silently treat `:T2` as the next parameter.
+        [(and (pair? (cdr es)) (pair? (cddr es))
+              (symbol? (stx->datum (car es)))
+              (fused-type-annot? (stx->datum (cadr es)))
+              (colon-symbol? (stx->datum (caddr es))))
+         (parse-error loc
+                      (format "defn: chained type annotation on ~a not supported (reserve for UCS)"
+                              (stx->datum (car es)))
+                      #f)]
+        ;; WS fused: name + :Type
+        [(and (pair? (cdr es))
+              (symbol? (stx->datum (car es)))
+              (fused-type-annot? (stx->datum (cadr es))))
+         (let ([ty (fused-annot->type-surf (stx->datum (cadr es)) (car es))])
+           (if (prologos-error? ty)
+               ty
+               (loop (cddr es)
+                     (cons (binder-info (stx->datum (car es)) #f ty) acc))))]
+        ;; sexp glued `name:Type`, or a plain bare param
+        [(symbol? (stx->datum (car es)))
+         (let-values ([(name ty err)
+                       (split-fused-symbol (stx->datum (car es)) (car es) loc "defn")])
+           (cond
+             [err err]
+             [ty (loop (cdr es) (cons (binder-info name #f ty) acc))]
+             [else (loop (cdr es)
+                         (cons (binder-info name #f (surf-hole loc)) acc))]))]
+        [else
+         (loop (cdr es)
+               (cons (binder-info (syntax-e (car es)) #f (surf-hole loc)) acc))])))
 
   ;; rest-args should be: <ReturnType> body  OR  : ReturnType body  OR  body (inferred)
   (cond
+    ;; POL.6: a malformed fused annotation (chained / bad type) surfaces here
+    [(prologos-error? binders) binders]
     [(null? rest-args)
      (parse-error loc "defn: missing body" #f)]
     ;; Single element after params: body only, return type is inferred (hole)
@@ -5248,6 +5284,52 @@
   (and (symbol? x)
        (let ([s (symbol->string x)])
          (and (> (string-length s) 0) (char=? (string-ref s 0) #\:)))))
+
+;; ── Fused type annotations: the ONE pair of primitives (Rel T1 C.b.2 + POL.6) ──
+;; `x:Int` reaches the parser in two shapes: WS splits it into `x` + the
+;; colon-SYMBOL `:Int`; sexp glues it into the single symbol `x:Int`. Both the
+;; binder path (parse-binder, C.b.2) and the defn param-list path
+;; (parse-defn-bare-params, POL.6) consume those shapes, so the recognizer and
+;; the type-builder live here ONCE — a second copy is how the two paths would
+;; drift (the `recognize-keyword`-vs-`ident-continue?` drift, prologos-syntax.md).
+
+;; WS shape: a colon-symbol that is a TYPE annotation, not a multiplicity.
+;; `:0`/`:1`/`:w`/`:m` stay multiplicity annotations (so `[fn [x :0 Int] x]` is
+;; untouched) — the cost, named in C.b.2: a type literally named `w`/`m`/`0`/`1`
+;; cannot be fused in WS; use the spaced form.
+(define (fused-type-annot? d)
+  (and (colon-symbol? d) (not (memq d '(:0 :1 :w :m)))))
+
+;; Build the type surf from a WS fused annotation datum (`:Int` → the surf for
+;; `Int`), via parse-datum so it is IDENTICAL to what the spaced arm produces.
+;; ctx-stx supplies srcloc context for datum->syntax.
+(define (fused-annot->type-surf annot-datum ctx-stx)
+  (parse-datum (datum->syntax ctx-stx
+                              (string->symbol
+                               (substring (symbol->string annot-datum) 1)))))
+
+;; sexp shape: split a possibly-glued `name:Type` symbol.
+;; Returns (values name-symbol type-surf-or-#f error-or-#f):
+;;   `x`           → (values 'x #f #f)                  — bare, caller supplies hole
+;;   `x:Int`       → (values 'x <surf> #f)              — fused
+;;   `x:Int:Even`  → (values #f #f <error>)             — chained, reserved for UCS
+;;   `a::b`        → (values 'a::b #f #f)               — module path, NOT a split
+(define (split-fused-symbol sym ctx-stx loc who)
+  (define segs (string-split (symbol->string sym) ":"))
+  (define nonempty? (andmap (lambda (s) (> (string-length s) 0)) segs))
+  (cond
+    [(and nonempty? (> (length segs) 2))
+     (values #f #f
+             (parse-error loc
+                          (format "~a: chained type annotation in ~a not supported (reserve for UCS)"
+                                  who sym)
+                          sym))]
+    [(and nonempty? (= (length segs) 2))
+     (let ([ty (parse-datum (datum->syntax ctx-stx (string->symbol (cadr segs))))])
+       (if (prologos-error? ty)
+           (values #f #f ty)
+           (values (string->symbol (car segs)) ty #f)))]
+    [else (values sym #f #f)]))
 
 ;; Parse relational params: a bracket-delimited list of possibly mode-annotated names,
 ;; each optionally carrying a fused type annotation (`?x:Int`), or literal pattern values.
