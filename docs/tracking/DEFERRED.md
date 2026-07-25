@@ -1324,6 +1324,25 @@ readers/languages. The UCS track inherits the substrate + bridges it to the exis
 
 ## Substitution containment defect — runtime collections as closed leaves (captured 2026-07-24, spin-out from Rel T1 POL.10)
 
+> **✅ RESOLVED 2026-07-25 for the BVAR half** — ruling (D) + the NbE fix.
+> `f19d6f56` (tripwire) · `6323587e` (compile-limit adoption, an independent win
+> found here: suite −18%) · `7ea49168` (**the fix**: NbE open-the-binder in `nf`)
+> · `036b59f7` (narrowing containment — the wider sibling) · `8ec5e507`
+> (hot-scan, 6.9×). The repro now prints `5N`/`6N` at 0 errors; the tripwire
+> stays installed as the standing invariant assertion. Full record + the
+> post-fix reading of the traversal table: defect doc §2.0.
+>
+> **STILL OPEN — the META half (own slice, not folded silently):** the fix
+> closed *de Bruijn index* containment; `zonk` / `zonk-at-depth` /
+> `default-metas` / `occurs?` skip on **metas**, which NbE says nothing about.
+> Post-fix reachability is **UNVERIFIED** — one surface probe (`def m := {:a 3}`,
+> `{:v 3.5}`) typed and displayed correctly, which only shows that route doesn't
+> reach them. `occurs?` is the higher-stakes one (an unsound occur-check admits
+> cyclic solutions). Next step is a probe of a champ carrying an *unsolved* meta
+> through zonk and through `occurs?`; also `conv-nf` (independent, unverified).
+>
+> Everything below is the ORIGINAL capture, kept as the diagnosis of record.
+
 **LIVE BUG — a silent wrong answer in legal, zero-error user code.** `shift`/`subst`
 (and `zonk`/`zonk-at-depth`/`default-metas`/`nf`/`uses-bvar0?`/`occurs?`/`conv-nf`/
 `narrow-subst-bvars`) treat the six runtime collection values (`expr-champ`, `expr-hset`,

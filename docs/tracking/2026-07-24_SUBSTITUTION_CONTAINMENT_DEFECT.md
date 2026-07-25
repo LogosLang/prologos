@@ -13,8 +13,8 @@ open-the-binder. SUB.1 now-slice in progress.**
 | **SUB.2** | `PLT_CS_COMPILE_LIMIT` in-tree measurement + adoption (owner-prioritized) | ✅ **ADOPTED** | Measured (§4.2): **TRANSFERS** — shift/subst ~830×/~745× micro; suite **211→173 s (−18%), all pass**; compile +17% hot core. **Adopted `6323587e`** (owner-blessed): runner-level putenv (run-affected-tests + bench-ab; subprocesses inherit; user override respected) + testing.md + CLAUDE.local.md notes; full CLEAN rebuild at the limit = 39 s (caveat discharged); wiring validated (suite invoked WITHOUT shell env → 470/0 in 192.7 s incl. from-clean test precompile, transducer 4.2 s). False-negative trap recorded (touch ≠ recompile — delete the .zo). **SUB.3 Pre-0 runs under this mode** |
 | **SUB.3a** | The (D) fix CORE: NbE open-the-binder in `nf` (lam/Pi/Sigma; deterministic `#%nbe` depth-keyed fvars) + re-abstraction (generic-rebuild walker, spine-rebuild for capturing containers) + fast-path/verdict-memo + pp spine-brace display + the SUB.1 test flips | ✅ | **`7ea49168` — THE BUG IS FIXED** (repro: 6N/5N, 0 errors; validate ok; display `{:a x}` preserved). Gates: suite 470/9012/0 ×4; acceptance 0-err; lint clean. Perf (adopted mode, warm): 173→184.7 s = **+6.4% suite cost**; remaining lever = explicit-arm hot scan (close-phase option). Tripwire KEPT as the standing invariant guard (assertion, not dual mechanism); consumer audit discharged empirically (goldens + corpus green) |
 | **SUB.3b** | Narrowing containment — the WIDER sibling: `narrow-subst-bvars` generic-rebuild fallback (+Pi/Sigma binder arms, +lam type field) AND `narrow-match` map/vec DECOMPOSITION (the second stacked gap: substituted spines fell to the `equal?` fallback vs champ targets) | ✅ | `036b59f7` — failing-repro-first (`box ?y = {:a 5N}` on a map-body defn returned NIL; now `'[{:y 5N}]`; vec/nested/multi-key verified; mismatch correctly nil). Sets DEFERRED, named (order-insensitive matching with logic vars = search). +7 tests incl. the Pi capture pin; all 6 narrowing test files green; suite 470/9019/0 |
-| **SUB.3-scan** | Hot-scan (owner-directed): armed walk + reflective oracle as differential contract | ✅ | `8ec5e507` — **6.9× per walk** (armed 265µs vs reflective 1825µs / 11k nodes, interleaved same-process A/B, ~0 variance). 29-term differential battery (poison in every armed field position) pins armed ≡ reflective. Suite-level wall pair NOT provable tonight (ambient drift — late-session runs 203–212 s vs the tight 173/184.7 pairs earlier); **re-confirm the suite pair in a quiet window** (expected residual ~1-2 s vs the pre-scan ~8-11 s) |
-| **SUB.close** | Doc-truth (§2 table verdicts now stale post-fix) · lesson promotions (un-arm'd-node 3rd data point; touch≠recompile; workload-poisoned-bench) · quiet-window suite pair · Rel T1 tracker/dailies fold | ⬜ | folds into Rel T1 X.close if owner prefers |
+| **SUB.3-scan** | Hot-scan (owner-directed): armed walk + reflective oracle as differential contract | ✅ | `8ec5e507`. **Measured on TWO term shapes** (interleaved same-process, best-of-5): armed-heavy **6.87×** (260 vs 1785 µs/11k-node walk); **un-armed-heavy 1.57×** (760 vs 1190 µs) — the adversarial shape, where cold nodes pay the arm dispatch before the fallback. **Armed is never slower**; the un-armed case was a live hypothesis for the suite result below and is REFUTED. 29-term differential battery pins armed ≡ reflective. ⚠ **Suite-level contribution is BELOW THE NOISE FLOOR and my earlier "~8-11 s → ~1-2 s" extrapolation is RETRACTED** — see §4.3 |
+| **SUB.close** | Doc-truth (§2.0 post-fix reading + the META-half finding) · lesson promotions · the quiet-window suite pair (ran; **result forced a retraction** — §4.3) · DEFERRED + Rel T1 tracker fold | ✅ | §2.0 added (each traversal row's post-fix status; **meta half named as OPEN + unverified**, DEFERRED.md updated). Promotions landed: **`pipeline.md` § "Exhaustive Walkers"** (the missing-arm disease, 7+ instances, + the 3-step structural answer) and **`testing.md`** (workload-validity trap + the ambient/interleaved-micro re-confirmation). §4.3 records the measurement retraction |
 
 **Severity**: a **silent wrong answer in legal, zero-error user code** — an open de Bruijn
 index escapes to top level as a typed value. Not a crash, not a type error.
@@ -55,6 +55,32 @@ counterfactual closes it — implementing the missing arm makes the same reducti
 right answer, so **the wrong output is not producible under a corrected `subst`**.
 
 ## 2. The defect, exactly
+
+> **⚠ POST-FIX STATUS (SUB.close, 2026-07-25).** This section describes HEAD as
+> of `f7d5b01b`, before the fix. It is kept as the diagnosis of record; read it
+> with §2.0 below, which states what each row means now.
+
+### 2.0 What survived the fix — the post-fix reading of the table
+
+The fix did **not** add champ arms to the traversals. Under ruling (D) it made
+the arms' skipping **correct** by removing the only thing that made it wrong:
+`nf` no longer constructs an open container, so a runtime collection value in
+any AST is closed w.r.t. its own boundary, and a closed leaf is exactly what a
+closed value deserves. Row by row:
+
+| Row(s) | Post-fix status |
+|---|---|
+| `shift`, `subst` | **SOUND NOW, unchanged code.** The skip IS the contract (D); the SUB.3a NbE normalization makes the premise true by construction, and the SUB.1 tripwire is the standing assertion at the three persist boundaries. |
+| `nf` (`expr-champ` skip vs the `expr-rrb` twin descending) | **Superseded.** The asymmetry is no longer a latent bug — the binder arms open/re-abstract, so neither arm can see an open container. The historical evidence below still stands as the origin story. |
+| `uses-bvar0?` (pp) | **Sound by the same invariant** — champs reaching pp are reduction-produced and closed. Not re-verified independently; low stakes (display only). |
+| `narrow-subst-bvars` | **FIXED (SUB.3b, `036b59f7`)** — and it was two stacked gaps, not one: the walker's catch-all AND a missing map/vec decomposition in `narrow-match`. |
+| `conv-nf` | **Not addressed.** Independent of the bvar story; unverified post-fix. |
+| `zonk`, `zonk-at-depth`, `default-metas`/`freeze`, `occurs?` | **NOT ADDRESSED — the META half.** The fix closed the *de Bruijn index* half of containment; these four skip on **metas**, which NbE says nothing about. Whether they are still reachable post-fix is **UNVERIFIED**: one surface probe (`def m := {:a 3}`, `{:v 3.5}`) displayed and typed correctly, which shows only that *that* route doesn't reach them. **Recommended follow-up** (own slice, not folded silently): probe a champ carrying an *unsolved* meta through zonk and through `occurs?`. `occurs?` is the higher-stakes one — an unsound occur-check admits cyclic solutions. |
+| `whnf`, `pp-expr`, `pnet-serialize`, SRE `ctor-desc` | Unchanged (correct / descending / absent as before). |
+
+**The one-line summary**: bvar containment is closed by construction and
+test-pinned; **meta containment is an open, separately-owned question** that this
+defect surfaced but did not fix.
 
 `shift` and `subst` treat runtime collection values as closed, no-descend leaves:
 
@@ -181,6 +207,40 @@ belongs to the owner.
    adjacents: **`narrow-subst-bvars`** (narrowing.rkt:881-919) is **wider** than champ and
    is *not* fixed by any champ-representation change; and already-written `.pnet` artifacts
    may need invalidation.
+
+### 4.3 Measurement record — and one retraction (SUB.close, 2026-07-25)
+
+**Retracted**: the SUB.3-scan claim that the hot scan would cut "~8-11 s" of
+suite time to "~1-2 s". That was an **extrapolation from a single micro**, never
+measured, and the data does not support it.
+
+What was actually measured, and what it supports:
+
+| Instrument | Result | Verdict |
+|---|---|---|
+| Interleaved same-process micro, armed-heavy term | armed 260 µs vs reflective 1785 µs = **6.87×** | Trustworthy (±0 across rounds) |
+| Same, **un-armed-heavy** term (adversarial — cold nodes pay arm dispatch first) | armed 760 µs vs reflective 1190 µs = **1.57×** | Trustworthy. **Armed is never slower** — the "arms pessimize cold terms" hypothesis is refuted |
+| Full-suite wall, armed | 203.5 / 212.0 s, then 198.6 / 204.2 s in a quieter window | **Cannot resolve the change.** Identical code varies 5.6–8.5 s run-to-run |
+| Full-suite wall, pre-scan (memo build) | 184.7 / 189.4 s | Measured ~4 h earlier in the session |
+
+The suite is ~15 s slower *after* an optimization that is faster on every shape
+measured. Since armed ≥ reflective always, the scan cannot be the cause: the
+figure is **ambient**. The evening's series drifted monotonically upward
+(173.0/173.8 early → 184.7/189.4 mid → 198.6/204.2 late) across ~6 h of
+continuous suite running, and the within-session noise floor alone (5.6–8.5 s)
+exceeds any plausible scan contribution.
+
+**Consequences for the record:**
+- The scan is justified by the micro (never a pessimization, 1.6–6.9× on the
+  work it does) and by being semantically free (differential-tested). It is
+  **not** justified by a suite-level number, and none is claimed.
+- The **SUB.3a "+6.4 % suite cost" figure (173 → 184.7 s) inherits the same
+  caveat**: it was a real measurement at the time, but ±10 s of it is
+  unattributable given the drift. The NbE fix's true steady-state cost should be
+  re-measured from a **cold machine** at X.close, alongside the bench matrix.
+- One earlier run (the intended pre-scan baseline) was **contaminated by
+  compiling mid-suite** — it came back 746 s with 1 failure and was discarded;
+  that is why no clean pre-scan pair exists. Codified in `testing.md`.
 
 ## 5. Test plan
 
