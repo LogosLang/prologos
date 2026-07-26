@@ -1540,7 +1540,20 @@ ruling and not a patch.
 
 ---
 
-## Rel T1 — the acceptance file has NO automated gate, and the POL cluster is Level-2 only (captured 2026-07-25, X.close adversarial audit)
+## ✅ RESOLVED (2026-07-25, `bb45d2a0`) — the acceptance file is now gated; POL L3 rides it. PARTIAL: POL internals still lack unit tests
+
+> **Closed**: gaps (1) and (2). `tests/test-rel-t1-acceptance.rkt` (32 cases) runs
+> the file through `process-file`, asserts 0 errors, verifies every marker, and
+> RANGE-CHECKS marker indices. All markers rewritten against actual output —
+> **30/30 pass, was 5/28**. Running `--check` also exposed that the POL.8/POL.9
+> markers were MISNUMBERED (off by one and two), which the range check now
+> catches. **Still open**: `test-rel-t1-pol.rkt` remains Level-2 throughout
+> (0 `process-file`), so the POL cluster's L3 coverage runs through the
+> acceptance gate rather than through cases of its own; and the POL parser
+> internals (`regroup-flat-lines-by-layout`, `parse-clause-content`,
+> `paren-goal-stx?`, `check-crosskind-collision`) still have ZERO unit tests.
+
+### Original entry
 
 Three compounding testing gaps, verified:
 
@@ -1582,7 +1595,15 @@ parameter set is discovered by grep rather than declared in one place.
 
 ---
 
-## Rel T1 SC — the REPL/editor preparse fix shipped with no test (captured 2026-07-25, X.close audit)
+## ✅ RESOLVED (2026-07-25, `bb45d2a0`) — SC now has its regression test
+
+> Three cases in `test-rel-t1-pol.rkt` run through `run-ns-ws-last`
+> (== `process-string-ws`, the exact path SC fixed): a NAMED `solver` config
+> with `solve-with` (the owner's literal blocker), inline `{overrides}`, and
+> the `:semantics` key. Each asserts the "should have been expanded" failure
+> cannot recur.
+
+### Original entry
 
 `19d9f8ae` fixed an owner-reported blocker (`process-string-ws` dropped
 preparse-macro support, so `solver` configs failed in the REPL/LSP path) with
@@ -1610,7 +1631,14 @@ marked ✅, which over-states completion.
 
 ---
 
-## Rel T1 POL.8 — the merge FUTURE-TRAP is documented only in prose (captured 2026-07-25)
+## ✅ RESOLVED (2026-07-25, `bb45d2a0`) — the merge FUTURE-TRAP is test-pinned
+
+> A layout canary in `test-rel-t1-pol.rkt` runs the nested-`not` form through
+> the L2 path; if the merge winner flips to the srcloc-stripped tree surf, the
+> column info is gone, the nesting collapses, and the test fails at the point
+> of change rather than silently.
+
+### Original entry
 
 Adding a `defr` arm to `driver.rkt`'s `surf-source-line` / `same-form-type?`
 (e.g. while extending the preparse/tree merge for an unrelated reason) would
