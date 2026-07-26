@@ -68,6 +68,7 @@
        [(expr-pair fst snd) (append (fv-expr fst) (fv-expr snd))]
        [(expr-fst e) (fv-expr e)]
        [(expr-snd e) (fv-expr e)]
+       [(expr-force e) (fv-expr e)]
        [(expr-ann term _type) (fv-expr term)]
        [(expr-suc pred) (fv-expr pred)]
 
