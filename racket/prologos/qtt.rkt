@@ -1205,6 +1205,49 @@
           (tu (expr-Type (lzero)) (add-usage u1 u2))]
          [(_ _) (tu-error)]))]
     [(expr-champ _) (tu (expr-Map (expr-hole) (expr-hole)) (zero-usage n))]
+
+    ;; ---- Standalone lambda in INFER position ----
+    ;; Rel T1 X.close Batch C. `inferQ` previously had a lam arm ONLY inside the
+    ;; beta-redex case (`(expr-app (expr-lam …) _)`, :301), so a lambda reached
+    ;; in infer position — e.g. as a map VALUE, `def m := {:f [fn [y : Nat] …]}`
+    ;; — fell to the catch-all, returned `tu-error`, and `checkQ-top` reported
+    ;; the generic **"Multiplicity violation"**: a message with no relation to
+    ;; the actual problem. That is the 3rd instance of the un-arm'd-node class
+    ;; (after `def m0 := {}` / CIU T6 F1a.2 and `def x := solve (…)` / POL.5).
+    ;; A BARE `def f := [fn …]` never showed it because the def seam is CHECK
+    ;; mode, where lambdas are canonical (checkQ's arm at :2257).
+    ;;
+    ;; typing-core's `infer` HAS the mirror arm (typing-core.rkt:1021) — the
+    ;; asymmetry between the twins was the defect. Here:
+    ;;   TYPE  — delegated to `infer` (qtt's documented "no drift twin" pattern,
+    ;;           as `expr-map-assoc`/`expr-validate` already do); an
+    ;;           un-inferable domain surfaces as typing-core's own `expr-error`.
+    ;;   USAGE — mirrors checkQ's lam arm: check the body in the extended ctx,
+    ;;           read the bound variable's usage off the head, solve a
+    ;;           multiplicity meta to what was observed, verify the declared
+    ;;           multiplicity permits it, and return the tail.
+    ;; A genuine multiplicity failure here is still reported as one — the fix
+    ;; removes the FALSE positive, not the real check.
+    [(expr-lam lm dom body)
+     (cond
+       ;; No domain to extend the context with — genuinely un-inferable
+       ;; (mirrors typing-core's `[(expr-hole? dom) (expr-error)]`). Check
+       ;; position still handles these via checkQ's arm.
+       [(or (expr-hole? dom) (expr-typed-hole? dom)) (tu-error)]
+       [else
+        (let ([ty (infer ctx e)])
+          (if (expr-error? ty)
+              (tu-error)
+              (match (inferQ (ctx-extend ctx dom lm) body)
+                [(tu _ u)
+                 (let ([actual (uhead u)])
+                   (when (and (mult-meta? lm)
+                              (not (mult-meta-solved? (mult-meta-id lm))))
+                     (solve-mult-meta! (mult-meta-id lm) actual))
+                   (if (or (mult-meta? lm) (compatible lm actual))
+                       (tu ty (utail u))
+                       (tu-error)))]
+                [_ (tu-error)])))])]
     [(expr-map-empty k v)
      (let ([r1 (inferQ ctx k)]
            [r2 (inferQ ctx v)])

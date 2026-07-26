@@ -1094,3 +1094,66 @@
                                 (string-append QN1FIX "def u := solve (not (blocked \"zzz\"))"))))
   (check-equal? implicit explicit
                 "the implicit goal-keyword RHS must behave exactly like the explicit solve"))
+
+;; ========================================================================
+;; X.close Batch C — the un-arm'd-node → spurious "Multiplicity violation"
+;; class, 3rd instance. `inferQ` had a lam arm ONLY inside the beta-redex
+;; case, so a lambda reached in INFER position (a map VALUE) fell to the
+;; catch-all → tu-error → checkQ-top's generic "Multiplicity violation".
+;; typing-core's `infer` has the mirror arm; the twins had diverged.
+;;
+;; NOTE the recorded repro was `def := [validate …]` — probing showed
+;; `validate` is a RED HERRING: it delegates to its subject, and the subject
+;; was the map-with-a-lambda. The defect is both narrower (any map value that
+;; is a lambda) and broader (nothing to do with schemas) than recorded.
+;; ========================================================================
+
+(test-case "Batch C: a map value that is a LAMBDA no longer dies as a multiplicity violation"
+  ;; THE ROOT, minimal — no validate, no schema.
+  (define r (run-ns-ws-last "ns bcroot\ndef m := {:f [fn [y : Nat] [add y 1N]]}\nm"))
+  (check-false (prologos-error? r) (result-msg r))
+  (check-true (string-contains? (result-msg r) ":f") (result-msg r)))
+
+(test-case "Batch C: the map's TYPE is right, not merely error-free"
+  (define r (run-ns-ws-last "ns bcty\ndef m := {:f [fn [y : Nat] {:a y}]}\nm"))
+  (check-false (prologos-error? r) (result-msg r))
+  (check-true (string-contains? (result-msg r) "Nat -> {:a Nat}")
+              (format "expected the field to carry a function type, got: ~a" (result-msg r))))
+
+(test-case "Batch C: the RECORDED instance-3 repro (def := [validate …]) now types"
+  ;; The shape as first seen (SUB.1 probe, `f19d6f56`): validate over a schema
+  ;; whose field is FUNCTION-typed. Simpler validate spellings never reproduced
+  ;; it — the lambda is what mattered.
+  (define VS (string-append "ns bcval\n"
+                            "schema FnBox\n"
+                            "  :f <Nat -> [Map Keyword Nat]>\n"))
+  (define r (run-ns-ws-last
+             (string-append VS "def vr := [validate FnBox {:f [fn [y : Nat] {:a y}]}]\nvr")))
+  (check-false (prologos-error? r) (result-msg r))
+  (check-true (string-contains? (result-msg r) "ok") (result-msg r)))
+
+(test-case "Batch C: infer-position and check-position AGREE on a legal linear lambda"
+  ;; The fix must not make infer position more permissive OR stricter than the
+  ;; canonical check-mode path. A linear binder used exactly once is legal.
+  (define bare (run-ns-ws-last "ns bcm1\ndef a := [fn [x :1 Nat] x]\na"))
+  (define inmap (run-ns-ws-last "ns bcm2\ndef a := {:f [fn [x :1 Nat] x]}\na"))
+  (check-false (prologos-error? bare) (result-msg bare))
+  (check-false (prologos-error? inmap) (result-msg inmap))
+  (check-true (string-contains? (result-msg inmap) ":1")
+              "the linear multiplicity must survive into the map's field type"))
+
+(test-case "Batch C: a GENUINE multiplicity violation in a map value still FAILS CLOSED"
+  ;; The fix removes the FALSE positive, not the check. Named limitation: in
+  ;; infer position this surfaces as "Could not infer type" rather than
+  ;; "Multiplicity violation" — inferQ's protocol has only tu / tu-error, no
+  ;; distinct multiplicity channel. Loud and sound, just less precise; pinned
+  ;; here so that if the channel is ever added, this test says so.
+  (define r (run-ns-ws-last "ns bcbad\ndef b := {:f [fn [x :1 Nat] [pair x x]]}\nb"))
+  (check-true (prologos-error? r)
+              "using a linear binder twice must still be rejected inside a map value"))
+
+(test-case "Batch C: the untouched neighbours still behave (regression guard)"
+  (define scalar (run-ns-ws-last "ns bcn1\ndef m := {:a 1}\nm"))
+  (define barefn (run-ns-ws-last "ns bcn2\ndef f := [fn [y : Nat] {:a y}]\nf"))
+  (check-false (prologos-error? scalar) (result-msg scalar))
+  (check-false (prologos-error? barefn) (result-msg barefn)))
