@@ -908,3 +908,116 @@
                                         "  | [x] -> x\n"
                                         "  | [x y] -> [+ x y]\n"))))
   (check-true (string-contains? m "already defined as a relation") m))
+
+;; ========================================================================
+;; X.close Batch A — gap-closing tests (2026-07-25).
+;; The PIR's adversarial audit found these surfaces shipped without pins.
+;; ========================================================================
+
+;; ── SC: the REPL/editor preparse-macro fix (`19d9f8ae`) ─────────────────
+;; SC fixed an owner-reported blocker — `process-string-ws` (the path the
+;; REPL/LSP use) had been made cell-pipeline-only, silently dropping
+;; preparse-macro support, so `solver` reached the tree parser unexpanded
+;; ("solver should have been expanded before parsing"). It shipped with ZERO
+;; tests; the commit cited "130 REPL/LSP/WS tests pass", which is
+;; pre-existing regression evidence, not a pin on the fixed behavior.
+;; These three run through run-ns-ws-last == process-string-ws == the exact
+;; path that was broken.
+
+(define SC-FIX
+  (string-append
+   "ns sctest\n"
+   "defr edge [?a ?b]\n"
+   "  || \"x\" \"y\"\n"
+   "     \"y\" \"z\"\n"
+   "solver cfg\n"
+   "  :tabling by-default\n"))
+
+(test-case "SC: a NAMED solver config expands and `solve-with` dispatches (the owner's blocker)"
+  (define r (run-ns-ws-last (string-append SC-FIX "solve-with cfg (edge a b)")))
+  (check-true (string? r) (result-msg r))
+  (check-false (string-contains? (format "~a" r) "should have been expanded")
+               "the `solver` preparse macro must expand on the WS-string path")
+  (check-true (string-contains? r "{:a \"x\", :b \"y\"}")))
+
+(test-case "SC: inline `solve-with {overrides}` works on the WS-string path"
+  (define r (run-ns-ws-last
+             (string-append SC-FIX "solve-with {:tabling by-default} (edge a b)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "{:a \"y\", :b \"z\"}")))
+
+(test-case "SC: the `:semantics` key expands too (WFLE-era solver form)"
+  (define r (run-ns-ws-last
+             (string-append "ns sctest2\n"
+                            "defr e [?a]\n  || 1\n"
+                            "solver wf\n  :semantics well-founded\n"
+                            "solve-with wf (e a)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "{:a 1}")))
+
+;; ── POL.8: the merge FUTURE-TRAP, test-pinned ───────────────────────────
+;; Design §8 names it in prose only: adding a `defr` arm to driver.rkt's
+;; `surf-source-line` / `same-form-type?` would silently flip the L2 merge
+;; winner to the srcloc-STRIPPED tree-spine surf — and POL.8's grammar is
+;; column-based, so it would break with no failure at the point of change.
+;; run-ns-ws-last IS the L2 path, so layout parsing here is exactly the
+;; canary: if the winner flips, the stripped surf cannot see columns and
+;; the sibling/continuation distinction collapses.
+
+(test-case "POL.8 FUTURE-TRAP canary: layout still parses on the L2 (merge) path"
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "defr canary [?fruit ?not-color]\n"
+                            "  &> fruit-color fruit color\n"
+                            "     not\n"
+                            "       = color not-color\n"
+                            "solve (canary f \"red\")")))
+  (check-true (string? r) (result-msg r))
+  ;; If the merge winner flipped to the stripped surf, the deeper line could
+  ;; not be distinguished from a sibling goal and this would not be `not`-filtered.
+  (check-true (string-contains? r "blueberry"))
+  (check-false (string-contains? r "cherry")
+               "a flipped merge winner loses column info and breaks the nesting"))
+
+;; ── POL.8/POL.9 error branches that had no coverage ─────────────────────
+
+(test-case "POL.8: an empty `&>` clause is accepted (no goals)"
+  (define r (run-ns-ws-last (string-append P8FIX "defr empt [?x]\n  &>\n")))
+  (check-false (prologos-error? r) (result-msg r)))
+
+(test-case "POL.8: a multi-token bare line at the goal column is a SIBLING goal"
+  ;; The Q5 residual: paren-origin and indent-origin groups are
+  ;; indistinguishable post-reader, so a multi-token bare line reads as the
+  ;; sibling it was meant to be. Pinned so the behavior is deliberate.
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "defr sib [?f]\n"
+                            "  &> fruit-color f \"blue\"\n"
+                            "     fruit-color f \"blue\"\n"
+                            "solve (sib q)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry")))
+
+(test-case "POL.9: `raise-unknown-relation-error` branch 3 — a NON-function value head"
+  ;; branch 1 = defr-failed-to-register, branch 2 = Pi-typed (function),
+  ;; branch 3 = bound as a non-function value. Only 1 and 2 were covered.
+  (define m (result-msg (run-ns-ws-last
+                         (string-append P9FIX
+                                        "def notafn := 42\n"
+                                        "(notafn q)"))))
+  (check-true (string-contains? m "bound as a value") m)
+  (check-true (string-contains? m "defr")
+              (format "the message should point at how to define a relation: ~a" m)))
+
+(test-case "POL.4: a MULTI-ARITY relation accepts any variant arity (arity=#f path)"
+  ;; Named as a watchout when POL.4 landed (multi-arity relations are
+  ;; first-class, relation-info-arity = #f) but never pinned.
+  (define r (run-ns-ws-last
+             (string-append "ns polma\n"
+                            "defr ma\n"
+                            "  | [?x]    || 1\n"
+                            "  | [?x ?y] || 2 3\n"
+                            "solve (ma a)")))
+  (check-true (string? r) (result-msg r))
+  (check-false (string-contains? (format "~a" r) "Unknown procedure")
+               "a valid variant arity must not trip the POL.4 gate"))
