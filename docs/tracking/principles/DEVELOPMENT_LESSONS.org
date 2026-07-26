@@ -20,12 +20,75 @@ lessons systematically, we:
 
 * Workflow Lessons
 
+** The Interactive Dynamic IS the Method (owner + Claude)
+
+/Recorded 2026-07-25 (Rel T1 PIR). Six-plus instances; it recurs on nearly
+every track, so treat it as a standing condition rather than a finding./
+
+The owner holds a **large, persistent context and vision** that spans terrain
+no single session can see. Claude can **tap vast knowledge and process text
+rapidly** but cannot hold all the pieces together at once. Neither position is
+sufficient alone, and the failure modes are complementary: Claude's designs
+under-cover what only shows up when a human *uses* the language; the owner
+cannot personally hold every coordinate, arm, and call-site the code actually
+has.
+
+What makes it work is **mutual challenge on honest ground**: assumptions named
+and then probed, disagreements resolved by evidence rather than deference, and
+both parties bound by the same principles. Concretely on Rel T1: ~45% of
+production churn (the POL roster + the SUB spin-out) originated in owner
+hand-testing, and the three largest scope changes — the POL roster expansion,
+the B3 elevation, and the C.c redesign — all came from the owner. In the other
+direction, main-session probing repeatedly refuted premises the owner and the
+design shared.
+
+**How to apply.** Treat a hand-testing pass as a **design input**, not a review
+step. When the owner challenges scope, that is the process working, not scope
+creep — capture it as a roster and sequence it. And when you disagree, say so
+with evidence: the dynamic depends on both sides actually pushing.
+
+
 For the full design-to-implementation lifecycle, see
 [[file:DESIGN_METHODOLOGY.org][DESIGN_METHODOLOGY.org]] --- the five-phase process
 (Research → Refinement → Design Iteration → Implementation → Composition)
 that governs how we approach significant features. For how lessons are
 extracted from completed work via Post-Implementation Reviews, see
 [[file:POST_IMPLEMENTATION_REVIEW.org][POST_IMPLEMENTATION_REVIEW.org]].
+
+** infer / inferQ Are Twins — a Missing Arm Makes the DIAGNOSTIC Lie
+
+/Recorded 2026-07-25 (Rel T1 X.close Batch C). Three instances; the third was
+live for a month./
+
+`typing-core`'s ~infer~ and `qtt`'s ~inferQ~ must carry arms for the same AST
+nodes. When only ~infer~ has one, ~inferQ~ falls to its catch-all, returns
+~tu-error~, and ~checkQ-top~ reports a generic **"Multiplicity violation"** —
+naming a subsystem that is working perfectly.
+
+| Instance | Trigger | Missing arm |
+|----------+---------+-------------|
+| CIU T6 F1a.2 | ~def m0 := {}~ | map-empty |
+| Rel T1 POL.5 | ~def x := solve (…)~ | goal-app head |
+| Rel T1 Batch C | ~def m := {:f [fn …]}~ | standalone ~expr-lam~ |
+
+**The diagnostic lesson (this is the one that saves the hour):** a
+*"Multiplicity violation"* on a ~def~ whose body is **not** a lambda should be
+suspected as an un-arm'd node **before** it is believed as a QTT result. Check
+whether ~inferQ~ has an arm for the body's head node; ~infer~ almost certainly
+does.
+
+**Why it hides.** The def seam type-checks in CHECK mode, where lambdas and
+many literals are canonical — so the bare form works and only the *infer*
+position (a collection value, a goal argument) fails. Batch C's node looked
+schema-specific for a month because it was first seen through ~validate~,
+which merely *delegates* to its subject.
+
+**The fix shape.** Add the arm; delegate the TYPE to ~infer~ (qtt's documented
+"no drift twin" pattern) and mirror ~checkQ~'s corresponding arm for USAGE.
+Structural direction, if this recurs a fourth time: give ~inferQ~ a generic
+fallback so a missing arm degrades to *imprecision* rather than a false
+failure — the `pipeline.md` § "Exhaustive Walkers" answer applied to the
+typing pair.
 
 ** Phase-Gated Implementation
 Break large features into lettered sub-phases (a, b, c...) with explicit

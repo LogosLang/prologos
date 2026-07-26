@@ -269,6 +269,17 @@ will not be encountered during future work.]
   never unify with ground terms --- when constructing probe goals, use
   the solver's representation, not the AST's" is a lesson.
 
+- *Design time is largely INVISIBLE to git --- treat D:I as a lower bound, or
+  drop it.* (Recorded 2026-07-25, Rel T1.) Commit-derived ratios miss co-design
+  conversation, grounding-workflow runs (~19 on Rel T1; only one carries a cost
+  record), suite runs, and reverted experiments. The metric was meaningful in
+  the project's earlier shape, when a single design document was worked through
+  point by point; it degraded as context loss across compressions pushed us to
+  **per-phase mini-designs**, which leave far less trace. So: if you cite a D:I
+  ratio, say explicitly that it is a lower bound on design --- and be willing
+  to retire the metric rather than report it as though the process had not
+  changed underneath it.
+
 - *Quantify everything possible.* Design-to-implementation ratio,
   lines per hour, tests per phase, bug-fix-to-implementation ratio.
   These baselines inform future estimation.

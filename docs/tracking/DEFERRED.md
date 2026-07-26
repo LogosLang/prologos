@@ -1473,7 +1473,19 @@ point the fourth direction can be gated with the same local-only discipline.
 
 ---
 
-## Un-arm'd AST node → spurious "Multiplicity violation" — 3rd data point, one instance STILL LIVE (captured 2026-07-25, promotion due)
+## ✅ RESOLVED (2026-07-25, X.close Batch C `cdb535ac`) — un-arm'd node → spurious "Multiplicity violation"
+
+> **Root was NOT what this entry recorded.** The trigger was logged as
+> `def := [validate …]`; probing showed `expr-validate` has a proper `inferQ`
+> arm that DELEGATES to its subject — the subject (a map whose value was a
+> LAMBDA) was the problem. `inferQ` carried an `expr-lam` arm only inside the
+> beta-redex case, so a lambda in INFER position fell to the catch-all. Fixed
+> by adding the arm (TYPE delegated to typing-core, USAGE mirroring checkQ).
+> The class is promoted to BOTH tiers: `pipeline.md` checklist item 8 (ambient,
+> actionable + the debug rule) and `DEVELOPMENT_LESSONS.org` § "infer / inferQ
+> Are Twins" (the record). Kept below for the history.
+
+## (historical) Un-arm'd AST node → spurious "Multiplicity violation" — 3rd data point (captured 2026-07-25)
 
 **A recurring BUG CLASS, not a single defect.** When an AST node has no `inferQ`
 arm, qtt's tu-error fallback propagates the failure and `checkQ-top` reports the
@@ -1484,7 +1496,7 @@ actual problem. Three confirmed instances:
 |---|---|---|
 | 1 | `def m0 := {}` (CIU T6 F1a.2) | fixed |
 | 2 | `def x := solve (…)` (Rel T1 POL.5, `485f4e7d`) | fixed |
-| 3 | `def x := [validate …]` (found by the SUB.1 probe, 2026-07-24) | **STILL LIVE** |
+| 3 | `def m := {:f [fn …]}` (first SEEN through `validate`, 2026-07-24) | ✅ fixed `cdb535ac` |
 
 **Two actions, both owed:**
 - *Fix instance 3* — the same shape as POL.5's one-arm fix.
