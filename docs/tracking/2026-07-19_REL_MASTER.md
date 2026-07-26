@@ -1,9 +1,22 @@
 # Rel — Relational Language Series (Master)
 
 **Founded**: 2026-07-19 (owner-directed, during CIU T6 F1b.close).
-**Status**: **Track 1 COMPLETE** (PIR landed 2026-07-25). Track 1 delivered (all aspects + the POL polish roster + an
-interleaved spin-out); its Stage-5 PIR is what flips the roadmap row ✅.
-Track 2 ("The Fact Store") is chartered-in-seed, not opened.
+**Status**: **Track 1 COMPLETE** (PIR landed 2026-07-25) — all aspects + the POL
+polish roster + an interleaved spin-out; its Stage-5 PIR is what flipped the
+roadmap row ✅. Track 2 ("The Fact Store") is chartered-in-seed, not opened.
+
+**Post-PIR follow-up batches** (the PIR's own action items, all closed
+2026-07-25): **A** `bb45d2a0` — test gates: the acceptance file is now GATED
+(`tests/test-rel-t1-acceptance.rkt`, 30/30 markers, which also caught them
+MISNUMBERED), SC's missing regression test, four branch pins + the POL.8 merge
+FUTURE-TRAP. **B** `b8e01255`+`3386c89a` — three owner rulings: the goal
+keywords take the implicit solve (derived from `run-solve-goal`'s dispatch so
+it cannot drift), Q_D slice 2 routed to PM 12B §11, and the
+refutation/surprise boundary defined. **C** `cdb535ac` — `inferQ`'s missing
+standalone-`expr-lam` arm; the recorded `validate` repro was a red herring and
+the root was infer/inferQ twin divergence. **D** `64d0b292` — four lesson
+promotions plus the two-tier rule (ambient one-liner + deep record) that stops
+lessons stalling in the principles docs. Suite at close: **471 / 9150 / 0**.
 
 ## Thesis
 

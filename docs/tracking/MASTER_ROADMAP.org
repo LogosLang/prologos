@@ -4,7 +4,7 @@
 #+DATE: 2026-03-21
 #+OPTIONS: toc:nil
 
-*Last updated*: 2026-05-17 (PPN 4C tropical addendum Phase 1 ATOMIC CLOSE commit ~b8405dfb~; PIR landed at [[file:2026-05-17_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_PIR.md][2026-05-17_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_PIR.md]] — both deliveries documented: foreseen tropical quantale primitive + unforeseen specialized cell type framework + Cell/Propagator/Scheduler Orthogonality principle as cross-track template for PReduce + OE + SH + PM 12 + PPN 4D)
+*Last updated*: 2026-07-25 (**Rel Track 1 COMPLETE** — all aspects + the POL polish roster + the SUB spin-out; X.close shipped with the Stage-5 [[file:2026-07-25_REL_T1_PIR.md][PIR]] and its four follow-up batches: test gates, three owner rulings, the `inferQ` standalone-lambda fix, and four lesson promotions. Prior entry: 2026-05-17, PPN 4C tropical addendum Phase 1 ATOMIC CLOSE commit ~b8405dfb~; PIR landed at [[file:2026-05-17_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_PIR.md][2026-05-17_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_PIR.md]] — both deliveries documented: foreseen tropical quantale primitive + unforeseen specialized cell type framework + Cell/Propagator/Scheduler Orthogonality principle as cross-track template for PReduce + OE + SH + PM 12 + PPN 4D)
 
 * Purpose
 
