@@ -165,7 +165,14 @@ add ?x ?y = 5N
 ;; Tries both: not(true)=false ≠ true, not(false)=true ≠ false
 [not ?b] = ?b
 
-;; A bare variable with no function call → nil (nothing to narrow)
+;; A bare variable with no function call has nothing to NARROW — there is no
+;; definitional tree to search. Since Rel T1 POL.9 (2026-07-25) this line is
+;; also no longer a narrowing query at all: parens at command position make a
+;; GOAL, so `(= ?x 5)` is now `solve (= ?x 5)` — a plain unify goal, which
+;; succeeds with `?x = 5`. Both readings agree that no narrowing happened;
+;; the goal reading just reports the unification instead of an empty search.
+;; The narrowing spelling always has a function call on the left (`[f ?x] = v`,
+;; as above).
 (= ?x 5)
 
 

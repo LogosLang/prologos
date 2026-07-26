@@ -46,20 +46,39 @@
 ;; ── Rel T1 POL.9: implicit solve — parens make goals at command position ──
 ;; (owner co-design 2026-07-25; design §8 POL.9.) The WS reader marks paren
 ;; groups with 'prologos-paren-origin (parse-reader.rkt lparen wrap); a marked
-;; group in COMMAND position whose head is a non-keyword symbol (or the one
-;; querying keyword, `rel`) is a GOAL carrying an implicit solve:
+;; group in COMMAND position whose head is a GOAL head is a GOAL carrying an
+;; implicit solve:
 ;;   (fruit-not-of-color f "red")  ≡  solve (fruit-not-of-color f "red")
 ;;   (rel [x] &> …)                ≡  solve (rel [x] &> …)
-;; `foo x` / `[foo x]` stays application; keyword heads keep their forms
-;; ((match …), (+ 1 2), (= ?x 5)); `$`-sentinel heads (quoted literals etc.)
-;; are never goals. Sexp mode is untouched by construction — only the WS
+;;   (not (blocked "c"))           ≡  solve (not (blocked "c"))
+;; `foo x` / `[foo x]` stays application; EXPRESSION keyword heads keep their
+;; forms ((match …), (the …), (+ 1 2)); `$`-sentinel heads (quoted literals
+;; etc.) are never goals. Sexp mode is untouched by construction — only the WS
 ;; reader attaches the property. Classification of the HEAD happens at solve
 ;; time where the registries exist (relation → rows; value-bound → the
 ;; guiding function diagnostic; unknown → the POL.4 unknown-relation error);
 ;; the parse-level category is static, only the BINDING residuates (the
 ;; anti-registry-lookup argument, design §8 D-POL9).
+
+;; ── The GOAL KEYWORDS (X.close Q_N1 ruling, 2026-07-25) ────────────────────
+;; Parser keywords that are ALSO top-level goal forms. This set is DERIVED
+;; from `run-solve-goal`'s dispatch (reduction.rkt): a top-level solve
+;; dispatches exactly goal-app · rel · unify (`=`) · is · not. `goal-app`
+;; needs no entry — it IS the non-keyword-head case. The other four are
+;; keywords, so without naming them here they ride the GENERAL keyword
+;; exclusion — which exists to protect EXPRESSION forms and has nothing to
+;; say about goals. Conflating "is a parser keyword" with "is not a goal" was
+;; the defect: `(not (blocked "c"))` parsed as Bool negation of a stuck goal
+;; term and returned a useless answer with ZERO errors.
+;; `guard`/`cut` are deliberately ABSENT: `run-solve-goal` does not dispatch
+;; them at top level either (they are clause-body-only — the A.1 mini-audit
+;; finding). Keeping this set equal to the dispatch set is the invariant; if
+;; a goal kind is ever added to `run-solve-goal`, add it here.
+(define goal-keywords '(rel not = is))
+(define (goal-keyword? s) (memq s goal-keywords))
+
 ;; The command-position goal predicate: a WS paren-origin group whose head is
-;; a non-keyword symbol (or the one querying keyword, `rel`).
+;; either a non-keyword symbol (a relation) or a GOAL keyword.
 (define (paren-goal-stx? stx)
   (define (dollar-sym? s)
     (let ([str (symbol->string s)])
@@ -72,7 +91,7 @@
               (let* ([h0 (car d)] [h (if (syntax? h0) (syntax-e h0) h0)])
                 (and (symbol? h)
                      (not (dollar-sym? h))
-                     (or (not (keyword? h)) (eq? h 'rel))))))))
+                     (or (not (keyword? h)) (goal-keyword? h))))))))
 
 ;; Parse a datum at COMMAND position (top-level command or def RHS — the
 ;; Q_C scope): a paren goal becomes an implicit solve; everything else

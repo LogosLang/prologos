@@ -1021,3 +1021,76 @@
   (check-true (string? r) (result-msg r))
   (check-false (string-contains? (format "~a" r) "Unknown procedure")
                "a valid variant arity must not trip the POL.4 gate"))
+
+;; ── Q_N1 (X.close ruling, 2026-07-25): the GOAL KEYWORDS take the implicit
+;; solve. `paren-goal-stx?`'s keyword exclusion protects EXPRESSION forms; it
+;; had nothing to say about goals, so `not`/`=`/`is` rode it incidentally.
+;; The set {rel, not, =, is} is DERIVED from run-solve-goal's dispatch — these
+;; tests pin that equality, so a goal kind added there without being added to
+;; `goal-keywords` shows up as a failure here.
+
+(define QN1FIX
+  (string-append
+   "ns qn1\n"
+   "defr blocked [?c]\n"
+   "  || \"c\"\n"))
+
+(test-case "Q_N1: `(not (goal))` at command position ≡ `solve (not (goal))`"
+  ;; WAS: a stuck `reduce` term typed Bool, with ZERO errors — the
+  ;; silent-useless-answer shape. Now it evaluates as NAF.
+  (define implicit (run-ns-ws-last (string-append QN1FIX "(not (blocked \"c\"))")))
+  (define explicit (run-ns-ws-last (string-append QN1FIX "solve (not (blocked \"c\"))")))
+  (check-true (string? implicit) (result-msg implicit))
+  (check-equal? implicit explicit "implicit and explicit spellings must agree")
+  (check-false (string-contains? implicit "reduce")
+               "must not leave a stuck reduce term"))
+
+(test-case "Q_N1: NAF that SUCCEEDS also agrees with the explicit spelling"
+  (define implicit (run-ns-ws-last (string-append QN1FIX "(not (blocked \"zzz\"))")))
+  (define explicit (run-ns-ws-last (string-append QN1FIX "solve (not (blocked \"zzz\"))")))
+  (check-equal? implicit explicit)
+  (check-true (string-contains? implicit "{}") "an unblocked term satisfies the negation"))
+
+(test-case "Q_N1: `(= a b)` is a unify GOAL at command position"
+  (define implicit (run-ns-ws-last (string-append QN1FIX "(= 1 1)")))
+  (define explicit (run-ns-ws-last (string-append QN1FIX "solve (= 1 1)")))
+  (check-equal? implicit explicit))
+
+(test-case "Q_N1: `(is q 5)` is an is-GOAL at command position (was an ERROR)"
+  (define implicit (run-ns-ws-last (string-append QN1FIX "(is q 5)")))
+  (define explicit (run-ns-ws-last (string-append QN1FIX "solve (is q 5)")))
+  (check-true (string? implicit) (result-msg implicit))
+  (check-equal? implicit explicit)
+  (check-true (string-contains? implicit "{:q 5}")))
+
+(test-case "Q_N1: the FUNCTIONAL spellings are untouched — brackets stay application"
+  ;; The delimiter convention's own spelling. This is what keeps Bool
+  ;; negation/equality reachable after the goal keywords were whitelisted.
+  (check-true (string-contains? (run-ns-ws-last (string-append QN1FIX "[not true]")) "false"))
+  (check-true (string-contains? (run-ns-ws-last (string-append QN1FIX "[not false]")) "true"))
+  (check-true (string-contains? (run-ns-ws-last (string-append QN1FIX "[= 1 1]")) "true")))
+
+(test-case "Q_N1: EXPRESSION keywords still keep their forms (the exclusion still works)"
+  (check-true (string-contains? (run-ns-ws-last (string-append QN1FIX "(+ 1 2)")) "3"))
+  (check-true (string-contains? (run-ns-ws-last (string-append QN1FIX "(the Int 4)")) "4")))
+
+(test-case "Q_N1: guard/cut are NOT goal keywords (run-solve-goal does not dispatch them)"
+  ;; They are clause-body-only (the A.1 mini-audit finding). Pinned so that
+  ;; widening `goal-keywords` past the dispatch set is a deliberate act.
+  (check-false (memq 'guard '(rel not = is)) "guard must stay out of goal-keywords")
+  (check-false (memq 'cut '(rel not = is)) "cut must stay out of goal-keywords"))
+
+(test-case "Q_N1: goal keywords reach the def RHS too — PARITY with the explicit spelling"
+  ;; The def RHS is command position (Q_C), so the goal keywords dispatch there
+  ;; as well. Both spellings currently hit the PRE-EXISTING POL.9b def-seam gap
+  ;; ("Expression is not a valid type" — the def arm type-checks the body before
+  ;; evaluation, so the solve row-type path errors ahead of any runtime answer).
+  ;; That gap is filed in DEFERRED.md; what Q_N1 must guarantee is that the two
+  ;; spellings behave IDENTICALLY. When the def-seam gap is fixed, both flip
+  ;; together and this test keeps holding.
+  (define implicit (result-msg (run-ns-ws-last
+                                (string-append QN1FIX "def u := (not (blocked \"zzz\"))"))))
+  (define explicit (result-msg (run-ns-ws-last
+                                (string-append QN1FIX "def u := solve (not (blocked \"zzz\"))"))))
+  (check-equal? implicit explicit
+                "the implicit goal-keyword RHS must behave exactly like the explicit solve"))

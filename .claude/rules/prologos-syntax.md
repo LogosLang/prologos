@@ -137,11 +137,19 @@ the older parenthesized spellings remain legal everywhere.
   meets the DFS first-hit short-circuit question that dedup would make
   observable.
 
-- ⚠ **`not` / `=` / `is` do NOT take the implicit solve.** They are parser
-  keywords, so `(not (blocked "c"))` at top level is **functional Bool
-  negation applied to a stuck goal term**, not a NAF query — it types as
-  `Bool` and computes nothing useful. Write `solve (not (blocked "c"))`
-  explicitly. (Verified 2026-07-25; tracked in DEFERRED.md.)
+- **The GOAL KEYWORDS take the implicit solve too**: `rel`, `not`, `=`, `is`.
+  So `(not (blocked "c"))` at top level IS a NAF query, `(= ?x 5)` a unify
+  goal, `(is q 5)` an is-goal — each identical to writing `solve (…)`. This
+  set is *derived from* what a top-level `solve` can dispatch, so it cannot
+  drift from the engine. `guard` and `cut` are deliberately excluded — a
+  top-level solve does not dispatch them either (they are clause-body-only).
+  Everything else keyword-headed stays an expression form (`(match …)`,
+  `(the …)`, `(+ 1 2)`).
+  ⚠ The functional readings live on the BRACKET spelling, which is the
+  delimiter convention's own: `[not true]` → `false`, `[= 1 1]` → `true`.
+  (Ruled 2026-07-25 at X.close Q_N1; before that these three rode the general
+  keyword exclusion incidentally and `(not (goal))` returned a stuck term with
+  zero errors.)
 
 - **Diagnostics you should expect** (they are guiding, not generic): a paren
   goal over a function → "foo is a function — application is written
