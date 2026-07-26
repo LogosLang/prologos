@@ -422,6 +422,59 @@ standalone spelling + typing (selector-as-lambda v1 vs a dedicated node); intera
 with the standalone-`def`-lambda inference gap. Plus: wildcard `*`/`**` gating on
 closed tails · stacked broadcast · empty selection · the write direction.
 
+### §5.5 Surface round 2 — rulings (owner, 2026-07-26)
+
+- **Q_S7 — RULED (a): the uniform law WINS.** `v[…]` always returns a selection
+  (nat-keyed row); element extraction moves to **`v.0`** (new `.N` lexing, both reader
+  modes, census required). Re-targets the shipped F1a-col degenerate case (`v[0]`,
+  `v[1].b` → `v.1.b`) — clean switchover, Q_P5 posture. The law in one sentence:
+  **"dot extracts the value; bracket selects a sub-structure."** Owner follow-up
+  folded in: **`v.i` (dynamic index) as the recovery for dynamic PVec indexing** —
+  see the round-2 proposal below.
+- **Q_S8 — RESOLVED.** The owner's `^_` was placeholder notation (meaning `^new-name`,
+  e.g. `host^new-host`). **But the misread is ADOPTED as a feature**: `^_` =
+  **rename-to-DERIVED-key**, the mechanical remedy the collision diagnostic points at.
+  Derivation rule = round-3 proposal below.
+- **Q_S9 — RULED: selector-as-lambda is the v1 first-classness mechanism.**
+  `.[sel]` ≡ `[fn [r] r[sel]]`; `map .[sel] coll` works via bidirectional checking
+  (probe-verified); `coll.[sel]` ≡ `map .[sel] coll`. Named residual: standalone
+  `def sel := .[…]` inherits the standalone-lambda def gap until annotated or until
+  the dedicated selector node lands (where the broadcast-propagator guarantee attaches).
+
+### §5.6 Round-2/3 proposals (Claude — pending owner ruling)
+
+Motivated by the owner's standing unease: *"it's almost always my intuition that `v.N`
+is the value at that index; `v[1 5]` would return a two-tuple of those indices;
+requiring the `^` on `[admins.0^[…]]` seems unsatisfying."*
+
+- **PR-1 — POSITIONS RENUMBER; keyword keys are IDENTITIES, nat keys are POSITIONS.**
+  A nat-keyed selection result cannot keep source indices anyway — the carrier's
+  **dense-prefix invariant** (F1 design §4.1) forbids the sparse row `{1↦B, 5↦F}`,
+  and pvec `slice`/`concat` already renumber (F1a-col col-3: "renumbered append",
+  "clamped sub-row"). So `v[1 5]` → **`⟨v.1 v.5⟩` dense, automatically — no `^`
+  needed**: elision is STRUCTURAL in the nat domain. The owner's two-tuple intuition
+  is exactly what the carrier's own invariant forces. (On `(PVec T)`: result
+  `⟨T T⟩` — the arity is statically known, mirroring the D15 observation posture.)
+- **PR-2 — the satisfying spelling for the `admins.0^` case is DOT-DESCEND, THEN
+  SELECT**: `app-config.admins.0[name^ role^]` → `⟨"Alice" :super⟩`. Dots extract
+  (no wrapping); the bracket selects on the extracted element. Mid-path `^`-elision
+  is only needed in genuinely MIXED multi-selects. (Chaining dot-then-postfix already
+  lexes: `v.a[0].b` verified at HEAD.)
+- **PR-3 — names-vs-numbers asymmetry ⇒ `v.i` dynamic indexing is SOUND.** Keyword
+  keys are NAMES (syntactic; `m.a` is literal, never variable `a`). Nat keys are
+  NUMBERS (values). A name segment on a NAT-keyed subject cannot be a literal label
+  (labels are nats), so it can only be a VARIABLE → dot on nat-keyed subjects takes an
+  index EXPRESSION (`v.i`), while dot on keyword subjects stays literal. Disjoint key
+  domains ⇒ no ambiguity. Consequences: the `record-project` dynamic-leg Int fix
+  (§3.5) becomes REQUIRED, not just a repair; computed indices `v.[+ i 1]` collide
+  with broadcast spelling — bind first or use `get` (named limit); union-typed
+  subjects demand annotation.
+- **PR-4 — `^_` derivation = full-path kebab-join from the bracket's root**:
+  `x[server.host^_ db.host^_]` → `{:server-host … :db-host …}`;
+  `admins.0.name^_` → `:admins-0-name`. Full-path (not shortest-suffix) so an
+  existing key NEVER changes when a sibling selector is added; post-derivation
+  collisions remain static errors (remedy: explicit `^name`).
+
 ---
 
 ## §6 SRE lattice lens — REQUIRED (the result shape IS lattice-shaped)
