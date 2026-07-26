@@ -46,9 +46,11 @@ The new session MUST read these documents IN THIS ORDER before doing
 any work. Reading 40 lines and saying "I have full context" is not
 acceptable.
 
-Two categories:
+Three categories — **§2a Always-Load**, **§2b Architectural Rules**,
+**§2c Session-Specific**. Each list is numbered independently; cite them as
+"§2a item 3", not a bare number.
 
-**** Always-Load (every session)
+**** §2a — Always-Load (every session)
 
 These establish the project's identity and process:
 
@@ -61,28 +63,47 @@ These establish the project's identity and process:
 7. ~docs/tracking/MASTER_ROADMAP.org~ — single source of truth for all series/tracks/design-docs/PIRs; what's done, what's active, what's next. Large (~25K tokens), but load-bearing for "how it all connects" orientation. Added 2026-04-22 after session-pain observation: re-pointing at prior art every session was a recurring tax; the roadmap is the canonical index for "where does X live."
 8. *Current series master* (the one matching the active track's series — PPN, SRE, BSP-LE, CIU, PM, etc. — see MASTER_ROADMAP.org for the list). Not ALL series masters; just the one the active track belongs to. Per-track handoff should name which one.
 
-**** Architectural Rules (every session — loaded via .claude/rules/)
+**** §2b — Architectural Rules (every session — loaded via .claude/rules/)
 
 These are automatically loaded by the rules system but MUST be
 internalized, not just present in context. Each encodes patterns that
-should be reflexes:
+should be reflexes. /This list is the COMPLETE contents of
+~.claude/rules/~ — if a file exists there and is not listed here, this
+document is stale./
 
-6. ~.claude/rules/propagator-design.md~ — fire-once, broadcast,
-   component-indexing, per-propagator worldview bitmask, cell allocation
-   efficiency. Every propagator installation evaluated against these.
-7. ~.claude/rules/on-network.md~ — the self-hosting mandate. Every
-   off-network structure is debt. Migration checklist and red flags.
-8. ~.claude/rules/structural-thinking.md~ — SRE lattice lens (6
+1. ~.claude/rules/on-network.md~ — the self-hosting mandate + **the design
+   mantra**. Every off-network structure is debt. Migration checklist and
+   red flags.
+2. ~.claude/rules/propagator-design.md~ — fire-once, broadcast,
+   component-indexing, set-latch fan-in, per-propagator worldview bitmask,
+   cell allocation efficiency. Every propagator installation evaluated
+   against these.
+3. ~.claude/rules/structural-thinking.md~ — SRE lattice lens (6
    questions), Hasse diagram optimality argument, module theory,
    structural unification (PUnify), retraction as lattice narrowing.
    THE architectural reasoning framework for all design decisions.
-9. ~.claude/rules/testing.md~ — the diagnostic protocol. TRIGGER-level
-   intervention when failures appear. Never re-run full suite for
-   diagnostics. Read the logs. Run individual tests.
-10. ~.claude/rules/pipeline.md~ — exhaustiveness checklists for new AST
-    nodes, parameters, struct fields, pattern kinds.
+4. ~.claude/rules/stratification.md~ — the strata system (S0 monotone,
+   S(-1) retraction, S1 NAF, topology); when a new stratum is and is not
+   warranted; the request-accumulator shape.
+5. ~.claude/rules/pipeline.md~ — exhaustiveness checklists for new AST
+   nodes, parameters, struct fields, pattern kinds; **§ Exhaustive Walkers**
+   (the missing-arm disease + its structural answer); **infer/inferQ are
+   twins — a missing arm makes the diagnostic lie**.
+6. ~.claude/rules/prologos-syntax.md~ — WS-mode syntax conventions and the
+   delimiter reservations. **Load-bearing for any surface/language-design
+   work** — the delimiter conventions frequently ARE the design space.
+7. ~.claude/rules/testing.md~ — the diagnostic protocol. TRIGGER-level
+   intervention when failures appear. Never re-run the full suite for
+   diagnostics. Read the logs. Run individual tests. Also the bench
+   methodology (interleaved A/B; counters over wall time).
+8. ~.claude/rules/workflow.md~ — the OPERATIONAL rules: commit/branch
+   discipline, the per-phase 5-step blocking gate, tests-are-per-phase,
+   the adversarial VAG framing, and **the two-tier lesson-promotion rule**
+   (ambient one-liner + deep record).
+9. ~.claude/rules/mempalace.md~ — guardrails for the experimental
+   semantic-search tool (recency caveats; never authoritative).
 
-**** Session-Specific (varies per handoff)
+**** §2c — Session-Specific (varies per handoff)
 
 These are specific to the work in progress:
 
@@ -142,15 +163,18 @@ that the new session should follow:
 When a new session starts with a handoff document:
 
 1. Read the handoff document FIRST (§1-§6)
-2. Read the Always-Load documents (§2a) — skim if recently read,
-   but DO read them
-3. Read EVERY Session-Specific document (§2b) — IN FULL, not sampled
-4. Summarize understanding back to the user BEFORE starting work
-5. The user validates the understanding — only then proceed
+2. Read the **§2a Always-Load** documents — skim if recently read, but DO
+   read them
+3. Internalize the **§2b Architectural Rules** — they auto-load into
+   context, which is NOT the same as having internalized them; the handoff
+   names which ones are load-bearing for this particular work
+4. Read EVERY **§2c Session-Specific** document — IN FULL, not sampled
+5. Summarize understanding back to the user BEFORE starting work
+6. The user validates the understanding — only then proceed
 
 "I have full context" requires: having read every document listed in
-§2, being able to articulate every decision in §3, and knowing every
-surprise in §4. If any of these are unclear, ASK before proceeding.
+§2 (all three of §2a/§2b/§2c), being able to articulate every decision in
+§3, and knowing every surprise in §4. If any of these are unclear, ASK before proceeding.
 
 * Cross-References
 
