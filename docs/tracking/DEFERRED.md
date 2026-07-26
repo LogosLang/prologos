@@ -1447,7 +1447,14 @@ typing-core's solve row-type path.
 
 ---
 
-## Rel T1 POL.9c — the `defr`-against-prior-multi-arity-`defn` direction is UNGATED (captured 2026-07-25, by design)
+## Rel T1 POL.9c — the `defr`-against-prior-multi-arity-`defn` direction is UNGATED (captured 2026-07-25, by design; unblocks at **PM 12/12B**)
+
+> Routed 2026-07-25: the blocker is the multi-defn registry's lack of module
+> provenance, which PM Track 12 removes by bringing it on-network — see
+> [PM 12B §11.4](2026-06-06_PM_TRACK12B_FREE_ORDERING_ON_NETWORK.md) item 1
+> and 12B §7 Q3.
+
+### Original entry
 
 Q_B (defn/defr namespaces disjoint) gates three directions: `defr` over a local
 `def`/`defn`, `def`/`defn` over a local `defr`, and a multi-arity `defn` BASE
@@ -1507,7 +1514,19 @@ and it is worth deciding whether the `.md` exports should exist in-tree at all
 
 ---
 
-## Rel T1 POL.9 — `not` / `=` / `is` do NOT take the implicit solve (captured 2026-07-25, X.close adversarial audit; live-probed)
+## ✅ RESOLVED (2026-07-25, X.close ruling Q_N1) — the goal keywords now take the implicit solve
+
+> **Owner ruled option (A)**: whitelist all three. `goal-keywords` in
+> `parser.rkt` is `{rel, not, =, is}`, **derived from `run-solve-goal`'s
+> dispatch set** so it cannot drift from the engine; `guard`/`cut` stay out
+> because a top-level solve does not dispatch them either. `(not (blocked "c"))`,
+> `(= 1 1)` and `(is q 5)` are now byte-identical to their explicit `solve`
+> spellings (test-pinned, incl. def-RHS parity). The functional readings live
+> on the bracket spelling — `[not true]`, `[= 1 1]` — which is the delimiter
+> convention's own. One corpus line changed: `narrowing-demo.prologos`'s
+> `(= ?x 5)`, whose comment was updated (it was already being used as a query).
+
+### Original entry
 
 **A real ergonomic hazard, not cosmetic.** POL.9's `paren-goal-stx?`
 (`parser.rkt`) requires a **non-keyword** head (plus `rel`). `not`, `=` and `is`
@@ -1619,7 +1638,18 @@ runs `solve-with` against it.
 
 ---
 
-## Rel T1 POL.9 Q_D slice 2 (demand-loop retry for forward-referenced relations) — unimplemented and untracked (captured 2026-07-25)
+## Rel T1 POL.9 Q_D slice 2 → **PM Track 12B § 11** (owner-routed 2026-07-25)
+
+> **Owner ruling at X.close**: this is not a Rel concern — it is the SAME
+> forward-reference-residuation problem PM Track 12B owns, arriving from a
+> second namespace. Full design capture:
+> [`2026-06-06_PM_TRACK12B_FREE_ORDERING_ON_NETWORK.md`](2026-06-06_PM_TRACK12B_FREE_ORDERING_ON_NETWORK.md) **§11**
+> (why it is not the "fast-follow" the Rel design called it — grounded;
+> the PM 12 → 12B dependency chain; the acceptance/parity gate; and the two
+> adjacent Rel T1 items that resolve there, incl. the 7th two-context instance).
+> It is the exact sibling of 12B §7 Q3 (multi-defn registry).
+
+### Original entry
 
 The settled POL.9 design (§8, Q_D) has two slices: slice 1 = "Unknown relation"
 via the POL.4 `exn:prologos-solve` presentation (**shipped** in 9a), slice 2 =

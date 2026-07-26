@@ -1331,10 +1331,15 @@ three-level WS validation + WS-Impact obligations (workflow.md).
     purity/store-dependence question (recipe-liveness's bigger sibling),
     deferred to its own design round (Rel T2/UCS-adjacent).
   - **Q_D** forward refs: slice 1 = "Unknown relation" via the POL.4
-    `exn:prologos-solve` presentation (honest error); slice 2 (fast-follow) =
-    wire goals into the EXISTING demand-residuation loop so a goal over a
-    later-defined relation retries when the `defr` lands — free-ordering
-    behavior with no new propagator substrate.
+    `exn:prologos-solve` presentation (honest error) — ✅ shipped in 9a.
+    ~~slice 2 (fast-follow) = wire goals into the EXISTING demand-residuation
+    loop~~ — **the "fast-follow" sizing was WRONG** (X.close): the demand
+    trigger keys on global-env fvar `'pending`, and a not-yet-seen `defr` name
+    is `'absent`, so relations are a SECOND NAMESPACE needing new machinery,
+    not a wiring change. **ROUTED to PM Track 12B §11** (owner, Q_N2) — the
+    same forward-reference-residuation problem 12B owns, and the exact sibling
+    of its §7 Q3 (multi-defn registry). Depends on PM 12 bringing the relation
+    store on-network.
   - **Q_E** conjunction-by-juxtaposition (`(g1) (g2)` as a shared-var query)
     — **RULED OUT at top level, permanently (owner, POL.8 round 2026-07-25)**:
     two adjacent paren groups are two commands, and a bare conjunctive query
@@ -1350,6 +1355,22 @@ three-level WS validation + WS-Impact obligations (workflow.md).
   premise-refutation source in sexp-mode tests). (2) One character of semantic
   weight — the echo self-corrects (rows-with-types vs a value) but docs must
   lead with the delimiter rule.
+  **✏ Q_N1 (X.close ruling, 2026-07-25) — the GOAL KEYWORDS take the implicit
+  solve.** POL.9 shipped excluding ALL parser keywords except `rel`, which
+  meant `not`/`=`/`is` rode the exclusion **incidentally** — and that exclusion
+  exists to protect EXPRESSION forms, saying nothing about goals. Consequence:
+  `(not (blocked "c"))` parsed as Bool negation of a stuck goal term and
+  returned a useless answer with **zero errors** (the silent-wrong shape).
+  Ruled option (A): `goal-keywords = {rel, not, =, is}`, **derived from
+  `run-solve-goal`'s dispatch set** (reduction.rkt) so the parse-level set
+  cannot drift from what the engine can actually solve; `guard`/`cut` stay out
+  because a top-level solve does not dispatch them either (the A.1 finding).
+  The functional readings live on the BRACKET spelling (`[not true]`,
+  `[= 1 1]`) — the delimiter convention's own. Corpus cost: exactly one line
+  (`narrowing-demo.prologos`'s `(= ?x 5)`, already used as a query; comment
+  updated). Empirically the three were NOT symmetric — `is` errored, `not`
+  was silently useless, only `=` had working behavior to change.
+
   **Diagnostics**: `(foo x)` where foo is a defn → "foo is a function —
   application is written [foo x]; parens make a relational goal"; unknown →
   POL.4 unknown-relation + arities + "define with defr". Anonymous `rel`:

@@ -156,3 +156,111 @@ General-body forward-ref residuation realized as genuine on-network deferred typ
 
 The 4B.5 sweep machinery (groundness passes + SCC pass + assumption-env), the A1 `current-residuation-enabled?` gates (both sites), the demand trigger, the general-body placeholder, the def-group guard — all named scaffolding in §18.21.25 with this section as the retirement target. The DEF-vs-USE residual boundary (uses of textually-later defs) dissolves under the whole-file fixpoint.
 
+
+---
+
+## §11 Relational goals must residuate too — Rel T1 POL.9 Q_D slice 2 (design capture, 2026-07-25, owner-directed)
+
+**Filed here rather than against Rel T2** because this is not a fact-store
+concern: it is the *same* forward-reference-residuation problem this track
+owns, arriving from a second namespace. Owner call at Rel T1 X.close.
+
+### §11.1 What Rel T1 delivered, and which half is missing
+
+POL.9 made a paren group in command position a GOAL carrying an implicit
+`solve` (`(reach a b)` ≡ `solve (reach a b)`). Its **load-bearing argument was
+free-ordering**, and it is worth restating because it is this track's argument:
+
+> Free ordering REQUIRES syntactic **category**-decidability. Under the
+> rejected registry-lookup design, `foo a b`'s CATEGORY (application vs query)
+> would pend on name resolution — un-typeable, un-composable, retroactively
+> re-categorized. Under parens the category is **static**, so only the
+> **BINDING** residuates.
+
+That is precisely the shape 12B wants: a *static* category with a *residuating*
+binding. POL.9 built the enabling property. **Q_D slice 2 — the part that
+exercises it — was designed and not built:**
+
+| Slice | What | Status |
+|---|---|---|
+| 1 | Unknown relation → honest error via the POL.4 `exn:prologos-solve` presentation | ✅ shipped (`ddf29351`) |
+| 2 | A goal over a **later-defined** relation **residuates** and retries when the `defr` lands | ⬜ **here** |
+
+### §11.2 Why it is NOT the "fast-follow" the Rel T1 design called it (grounded)
+
+The Rel T1 design said slice 2 would "wire goals into the EXISTING demand-
+residuation loop." **The code says otherwise**, and the mis-sizing is the
+finding:
+
+- `residuation-demand-name` (`driver.rkt:1416`) keys on **fvar names** that are
+  `'pending` in the global env or present in the general residue. That is `def`
+  machinery.
+- A `defr` writes the global env *and* the relation store (driver.rkt — env
+  write precedes the store write and the registration gates). A **not-yet-seen**
+  `defr` name is `'absent`, not `'pending` — nothing pre-allocates a def-bot
+  cell for a relation that has not been read yet.
+- So the demand trigger cannot fire for `(reach a b)` before `defr reach`
+  exists. Slice 2 needs either a pre-scan that marks later `defr` names pending,
+  or an end-of-file retry — i.e. **new machinery for a second namespace**, not a
+  wiring change.
+
+### §11.3 Why it belongs to 12B specifically
+
+It is the **exact sibling of §7 open question 3** (multi-defn-registry-on-
+network: "bring `current-multi-defn-registry` on-network (PM 12) + ground the
+base name so a forward-ref residuates"). Three registries, one shape:
+
+| Registry | On-network? | Forward-ref residuates? |
+|---|---|---|
+| def/global env | ✅ (PPN 4C 4A/4B) | ✅ NET-1 δ |
+| `current-multi-defn-registry` | ⬜ PM 12 | ⬜ §7 Q3 |
+| `current-relation-store` | ⬜ PM 12 | ⬜ **§11 (this)** |
+
+The dependency chain is 12B's canonical one: **PM 12 brings the relation store
+on-network → 12B makes a goal over a bot relation-cell residuate to fixpoint.**
+You cannot do the residuation without the cell, which is §2's whole argument for
+why 12B is separate from 12.
+
+### §11.4 Two adjacent Rel T1 items that resolve here
+
+1. **POL.9c's ungated 4th direction.** The Q_B disjointness gate cannot gate
+   `defr`-over-a-prior-**multi-arity-defn**, because the multi-defn registry
+   carries **no module provenance** — gating would break prelude-name shadowing
+   (the `xor`/`singleton` precedent). Registry-on-network (PM 12) gives it
+   provenance; then the 4th direction gates with the same local-only rule.
+2. **`current-relation-store` is threaded into neither `test-support.rkt` nor
+   `batch-worker.rkt`** (grep = 0 in each) ⇒ `solve` types as untyped, silently,
+   in those contexts. This is the **7th** instance of the two-context class that
+   `pipeline.md § New Racket Parameter` exists to prevent — and PPN 4C already
+   ruled that codification has FAILED and demanded the architectural answer.
+   Migrating the store to a cell removes the parameter, so the class cannot
+   recur for it.
+
+### §11.5 Acceptance / parity gate (for the eventual Stage 1–3)
+
+```prologos
+;; The whole point: this file must work in EITHER order.
+(reach "a" c)          ;; forward reference — currently "Unknown relation"
+defr reach [?x ?z]
+  &> edge x z
+```
+
+- Slice-2 done ⇔ the goal above returns the same rows as the reordered file.
+- Parity gate (à la 4A.c-iii-b's writer-census): every path that today raises
+  the POL.4 unknown-relation error must be shown to reach it ONLY for names no
+  `defr` in the file defines — i.e. residuation covers what the error covered.
+- Watch: `raise-unknown-relation-error` (relations.rkt) now classifies heads
+  against the global env for its diagnostics. Under residuation the "unknown"
+  branch must not fire before the fixpoint settles, or the diagnostic becomes
+  order-dependent — the exact regression this track exists to remove.
+
+### §11.6 Interim state (honest)
+
+Rel T1's POL row is marked ✅ for POL.9 (9a+9b+9c). Slice 2 is **not** in it;
+the row has been annotated rather than left over-claiming. Nothing in the corpus
+forward-references a relation today, so this is a capability gap, not a live
+defect.
+
+**Cross-reference**: Rel T1 design §8 POL.9 (Q_D); Rel T1 PIR
+[`2026-07-25_REL_T1_PIR.md`](2026-07-25_REL_T1_PIR.md) §12 action item 11;
+DEFERRED.md § "Rel T1 POL.9 Q_D slice 2".
