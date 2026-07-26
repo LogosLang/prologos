@@ -381,6 +381,47 @@ collection to iterate") · the write direction.
   conversation**; they are surface-shaped and will be ruled there.
 - Q_P4 (scope) · Q_P6 (series reconciliation) — proposals in §9, owner to ratify.
 
+### §5.4 Surface round 1 — rulings (owner, 2026-07-26)
+
+- **Q_S1 — bare names ARE the selector keys** (`x[database]`, matching dot-access).
+  Dynamic key indexing is the rarer case in a functional language; its selection
+  spelling is **DEFERRED, not ruled** — the functional forms (`get`, `get-in`) remain
+  the escape hatch. ⚠ Open consequence for shipped `v[i]` / `m[:a]` → **Q_S7**.
+- **Q_S2 — the nat-key-display concern, and its resolution path**: the owner flagged
+  that a record result keyed `0` would surprise (PVec/tuples don't display keys) and
+  proposed `admins.0^[…]` — **`^`-elision mid-path** — to get the bare inner result;
+  also proposed conditioning the keep-key rule on collection type, and pointed back at
+  the historical `*` / `**` vocabulary. Grounded: `*`/`**` are from
+  [`2026-03-02_2200_SCHEMA_SELECTION_DESIGN.md`](2026-03-02_2200_SCHEMA_SELECTION_DESIGN.md)
+  §4.4 (`*` = all fields at a level; `**` = recursive; `:address` ≡ `:address.*`),
+  carried into `#p(address.*)` / `#p(address.**)`. **Design observation (Claude)**: the
+  carrier may already answer the display concern — a selection whose kept keys are nats
+  IS a nat-keyed row, which IS the tuple (D13/Q_A: one carrier, surface presentation
+  dispatched by key domain); no per-collection conditioning needed. Working through
+  this is live (→ Q_S7's uniformity question).
+- **Q_S3 — `x[a]` is ALWAYS `{:a …}`** — no arity/length dispatch. The redundant
+  spelling `x[a^]` ≡ `x.a` is "acceptable and expected"; the motivating non-redundant
+  case is same-level value-tuples `x[a^ b^]`.
+- **Q_S4 — selectors ARE first-class values.** Both `my-selector m` and
+  `map my-selector m` must work; `[…]` / `.[…]` are the ANONYMOUS selector, "akin to
+  `rel` or `fn`". Prior efforts get a hardening re-look. Grounded at HEAD:
+  `#p(a.x) : Path` constructs (wildcard `#p(a.*)` and globstar `#p(**)` too), and
+  `[get-in m p]` evaluates — but a Path is **NOT applicable** (`[p m]` and
+  `map p rows` both fail "Could not infer type"), get-in's result types as a **leaked
+  meta** (`1 : ?meta…`), and wildcard get-in returns a silent `<error>` value.
+- **Q_S5 — key COLLISION = static error**, with a diagnostic pointing at rename.
+  (Owner wrote "pointing to `^_` as dynamic key rename" — exact `^_` semantics to
+  clarify → **Q_S8**.)
+- **Q_S6 — miss = type error / loud error with rich diagnostics** — extends the
+  closed-row-miss standard over the §3.5 four-way inconsistency.
+
+**Open after round 1**: **Q_S7** — does the uniform bracket law re-target shipped
+`v[0]`/`v[1].b` (F1a-col degenerate case) to `⟨elem⟩`, with `v.0` (new `.N` lexing)
+as element access? **Q_S8** — `^_` semantics. **Q_S9** — the anonymous selector's
+standalone spelling + typing (selector-as-lambda v1 vs a dedicated node); interaction
+with the standalone-`def`-lambda inference gap. Plus: wildcard `*`/`**` gating on
+closed tails · stacked broadcast · empty selection · the write direction.
+
 ---
 
 ## §6 SRE lattice lens — REQUIRED (the result shape IS lattice-shaped)
