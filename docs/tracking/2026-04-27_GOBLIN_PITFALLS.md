@@ -80,10 +80,11 @@ So every workaround documented below is still required.
    - warm (43 `.pnet` files): same expression → **stuck `[reduce ...]` term**, 1308 ms — **wrong, no error**
 
    The cache makes loads ~3.8× faster and silently non-reducing. Any OCapN
-   client using cached module loads gets functions that don't fire. This
-   subsumes a class of "works sometimes" flakiness. Note main now
-   gitignores `racket/prologos/data/cache/pnet/`, which hides but does not
-   fix it. **Highest-severity new item; not previously logged.**
+   client using cached module loads gets functions that don't fire.
+   **ROOT CAUSE FOUND — see entry #43 below.** It is a general Prologos
+   compiler bug, not OCapN-specific, and it subsumes finding 2 (the
+   transitive-import `BehaviorTag` degradation) as the same defect.
+   **Highest-severity new item; not previously logged.**
 2. **Transitive-import mis-elaboration, with a sharp diagnosis.** Importing
    `captp-core` alone (letting deps auto-load) yields
    `Hole ??__match-fail : ActStep`. Mechanism, now pinned: in
@@ -2109,6 +2110,145 @@ support parenthesised inner expressions; the `->` chain is implicit.
 unfamiliar to those coming from `pi-calculus`-style ASCII session
 notation. The full grammar is in `racket/prologos/macros.rkt`
 around line 1306+ (`parse-session-body`).
+
+---
+
+### #43 — `.pnet` cache-hit restore writes parameters but not cells, so every restored registry is invisible (2026-07-27, real bug, **most severe in this log**)
+
+**Symptom range**, all from one defect, depending on which modules in the
+tree are cache hits vs fresh elaborations:
+
+1. silent stuck term — `(encode-op (op-abort "bye"))` returns
+   `[reduce [op-abort "bye"] | op-start-session x y -> ...]` instead of
+   `"<8'op:abort3\"bye>"`. Type-checks fine.
+2. silent WRONG ANSWER — a cross-module `match` collapses so a non-first
+   arm is unreachable: `[tag-name t1]` and `[tag-name t2]` **both** return
+   `"one"`.
+3. hard failure — with a partially-populated cache,
+   `imports: Error loading module prologos::ocapn::syrup-wire: Type mismatch`.
+
+**Cause — a two-writer inconsistency.** Registry *readers* were migrated to
+cell-primary (`macros.rkt:6300`):
+
+```racket
+(define (read-ctor-registry)
+  (or (macros-cell-read-safe (current-ctor-registry-cell-id)) (current-ctor-registry)))
+```
+
+The parameter is consulted ONLY when no cell exists. The normal elaboration
+writer dual-writes (`macros.rkt:6294` `register-ctor!` → param + `macros-cell-write!`).
+The `.pnet` cache-hit restore (`driver.rkt:2637-2642`, and the same shape for
+every registry through `:2705`) writes **only the parameter** — no
+`macros-cell-write!` anywhere in that branch. So restored entries are
+invisible to every reader.
+
+The `.pnet` file is fine: `pnet-serialize.rkt:557-574` serializes correctly and
+`deserialize-module-state` (`:616`) returns the registries intact. Nothing is
+lost in serialization — **the restore writes to the wrong place.**
+
+Timeline shows it was *demoted*, not written wrong:
+`macros.rkt:6300` cell-primary readers = `7fec3751` (2026-03-18);
+`driver.rkt:2637` merge = `2ef600ba` (2026-03-24) — written against the
+parameter API **six days after** the readers stopped reading parameters.
+The sibling propagation path in the same file got it right
+(`driver.rkt:2969-2976` sets the param **and** calls `macros-cell-write!`).
+
+**Why a stuck `reduce`**: `try-structural-reduce` (`reduction.rkt:1294-1298`)
+does `(lookup-ctor head-name)` → `read-ctor-registry` → cell → `#f`, returns
+`#f`, and `whnf` leaves the `expr-reduce` node in place. Specs come from
+`module-info-specs`, a different channel, so the type checker is unaffected —
+hence a well-typed stuck term.
+
+**Why symptom 2** (this is finding 2 / the `BehaviorTag` bug, same cause):
+`known-name?` (`macros.rkt:9205`) and `normalize-pattern` (`:9495-9510`) both
+consult the same cell-primary registries at *elaboration* time. A miss means
+a declared type name is not "known" (→ auto-implicit free type variable, i.e.
+a phantom leading parameter) and constructor patterns degenerate to
+catch-all **variable** patterns, so the first arm swallows everything:
+
+```
+cold:    [fn [x <minirepro::tag::Tag>] [reduce x | t1 -> "one" | t2 -> "two"]]
+depwarm: [fn [x :0 <[Type 0]>] [fn [y <x>] "one"]]
+```
+
+**Precondition** (why it is not always broken): the registry cells must
+already exist when the merge runs. `init-macros-cells!` (`macros.rkt:581`)
+snapshots params→cells, but `process-file-inner` runs preparse (which is where
+all module loading happens, `macros.rkt:2666-2687`) at `driver.rkt:2471/2479`
+and only calls `init-macros-cells!` afterwards at `:2489`. So the FIRST
+`process-file` in a fresh process is safe (cell-ids still `#f` → param
+fallback); every later `process-file`, and every `process-string` /
+`process-string-ws` (which never init the cells), is exposed.
+
+**Scope: general, not OCapN-specific.** 8-line repro, one `data` + one
+`defn`, no `foreign`/imports/prelude. **14 of the 17 registries** merged on
+that path are silently dropped — every one with a cell-primary reader
+(preparse, ctor, type-meta, subtype, coercion, capability, trait, impl,
+param-impl, specialization, bundle, trait-laws, property, functor). So trait
+and impl restoration are dropped identically; `data` + `reduce` is just the
+loudest consequence.
+
+**Why upstream `main` is green — three independent accidents, not correctness:**
+1. `tools/pnet-compile.rkt:90` only generates `.pnet` for what `(ns pnet-gen)`
+   pulls in — prelude modules only; `prologos::ocapn::*` never gets one in CI.
+2. `tools/batch-worker.rkt:69` sets `(current-pnet-write-enabled? #f)`, so
+   test runs never create the missing ones either.
+3. For the prelude subset that IS a cache hit, `tests/test-support.rkt:110-115`
+   re-runs `init-persistent-registry-network!` + `init-macros-cells!` AFTER the
+   prelude load, re-snapshotting params into cells and healing exactly those
+   entries.
+
+And the one test that does exercise a cache hit,
+`tests/test-record-pnet-cache.rkt`, uses only `def` with map literals — no
+`data`, no `match`, no trait — so it asserts run-1 ≡ run-2 over precisely the
+surface that happens to be unaffected. Local dev hits the bug because
+`raco test tests/test-ocapn-*.rkt` run directly (not via batch-worker) has
+`.pnet` writes ENABLED, so run 1 populates the cache and every later run is warm.
+
+Silence is aggravated by `driver.rkt:2590` wrapping deserialization in
+`with-handlers ([exn? (lambda (_) #f)])`, and preparse Pass -1 wrapping
+`process-ns-declaration` / `process-imports` in `with-handlers ([exn:fail? void])`
+(`macros.rkt:2681`, `:2686`).
+
+**Refuted hypothesis** (recorded so it is not re-chased): the unserialized
+`imports` field on `module-network-ref` is NOT the cause. Name resolution
+across the cache boundary works — the stuck term carries the fully-resolved
+FQN `prologos::ocapn::message::op-abort`. Syncing only the ctor cell fixes the
+symptom while `imports` stays unserialized.
+
+**Fix A (validated, minimal)** — dual-write each merged registry to its cell at
+`driver.rkt:2634-2705`, mirroring what `:2971` already does for the spec store:
+`(macros-cell-write! (current-ctor-registry-cell-id) d-ctor)`. 14 additions.
+`macros-cell-write!` is already exported (`macros.rkt:369`) and no-ops when the
+cell-id or net-box is `#f`, so pre-init / module-loading contexts are
+unaffected. Validated out-of-band: forcing the param→cell sync flips
+`[reduce ...]` STUCK → `"R" : String`. Tradeoff: preserves the two-writer
+duplication, so it must be paired with a `pipeline.md` checklist entry
+("new cell-backed registry ⇒ add to the `.pnet` restore dual-write") or the
+15th registry regresses.
+
+**Fix B** — route the merge through the `register-*!` helpers (which already
+dual-write). Removes the duplication; larger change, since not every registry
+has a per-entry registrar with matching semantics.
+
+**Fix C** — retire the parameter fallback so cells are the single source of
+truth (the `cells over parameters` / PM Track 12 direction). Only option that
+kills the bug *class*. Requires the registry cells to exist before any module
+load, i.e. moving `init-macros-cells!` ahead of preparse and giving
+`process-string`/`process-string-ws` the same init.
+
+**Regression coverage is mandatory with any fix**: extend
+`test-record-pnet-cache.rkt` with (a) a `data` + `match` module asserting
+run-1 ≡ run-2 including a NON-FIRST arm, and (b) a two-module case with the
+dependency cached and the dependent fresh. Both must arrange for the cells to
+exist before the cache hit — `run-ns-*` does that naturally; the existing
+test's bespoke `parameterize` does not.
+
+**Adjacent, worth filing separately**: `pnet-stale?` (`pnet-serialize.rkt:511-517`)
+keys freshness on `"~a:~a"` of source path + mtime with no transitive-dependency
+hashing (the comment admits it), so a module's `.pnet` stays "fresh" when a
+*dependency*'s source changes. That is what generates the mixed fresh/stale
+cache states which turn this bug from latent into active.
 
 ---
 
