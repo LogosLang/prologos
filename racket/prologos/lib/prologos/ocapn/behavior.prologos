@@ -179,6 +179,35 @@ defn step-counter [state args]
 ;; a 3-deep nested match fails at IMPORT time (prologos-syntax.md).
 ;; refr-id-of precedes first-refr-in: single-pass modules, callee first (#16).
 
+;; A peer reference arrives on the wire as a TAGGED descriptor
+;; (`desc:import-object N` when the peer hands us one of its objects),
+;; not as a bare syrup-refr. Addressing it back is `desc:export N`,
+;; which listener-notify-bytes emits. Handling only syrup-refr made the
+;; greeter silently no-op on every real upstream frame.
+
+spec nat-payload SyrupValue -> [Option Nat]
+defn nat-payload [v]
+  match v
+    | syrup-nat n      -> [some n]
+    | syrup-null       -> [none Nat]
+    | syrup-bool _     -> [none Nat]
+    | syrup-int _      -> [none Nat]
+    | syrup-string _   -> [none Nat]
+    | syrup-symbol _   -> [none Nat]
+    | syrup-list _     -> [none Nat]
+    | syrup-tagged _ _ -> [none Nat]
+    | syrup-refr _     -> [none Nat]
+    | syrup-promise _  -> [none Nat]
+
+spec desc-target-of String SyrupValue -> [Option Nat]
+defn desc-target-of [tag inner]
+  match [str::eq tag "desc:import-object"]
+    | true  -> nat-payload inner
+    | false ->
+        match [str::eq tag "desc:export"]
+          | true  -> nat-payload inner
+          | false -> [none Nat]
+
 spec refr-id-of SyrupValue -> [Option Nat]
 defn refr-id-of [v]
   match v
@@ -190,7 +219,7 @@ defn refr-id-of [v]
     | syrup-string _   -> [none Nat]
     | syrup-symbol _   -> [none Nat]
     | syrup-list _     -> [none Nat]
-    | syrup-tagged _ _ -> [none Nat]
+    | syrup-tagged t inner -> desc-target-of t inner
     | syrup-promise _  -> [none Nat]
 
 spec first-refr-in [List SyrupValue] -> [Option Nat]
