@@ -14,10 +14,10 @@
 |---|---|---|---|
 | P0 | Failing-test-first: pin severities 1 + 2 + durable poisoning as tests that FAIL at HEAD | ✅ `62a1a34c` | 3 of 4 cases failed at HEAD for the right reasons; anti-masking gates asserted IN the test |
 | P1 | The restore repair — **table-driven** restore (§3.2a) covering the 14, with the 3 exclusions explicit | ✅ `e74719b0` | P0 red→green; suite 472/9173/0; acceptance 21/21 + 29/29. Severity 3 confirmed STILL live after it |
-| P2 | **Serialize the never-restored registries** + `PNET_VERSION` bump | ⏸️ | **Fixes severity 3** (§2.4). The bump also invalidates poisoned caches (§4.P2). AWAITING owner scope ruling — this is a `.pnet` FORMAT change, outside the Option-A envelope |
-| P3 | Invariant test + `pipeline.md` checklist entry | ⬜ | Must not be theater — see §4.P3 |
-| P4 | Comment truth sweep: stale header (§2.5.3), the Track 10 Phase 2d/2e prior-art note | ⬜ | Doc-truth, no behavior change |
-| X.close | Bench check, DEFERRED triage, PM 12 note + master link, PIR-lite, issue reply | ⬜ | Gates in §7 |
+| P2 | **Serialize the never-restored registries** + `PNET_VERSION` bump | ✅ `54358a5f` | Owner authorized P1+P2. Severity 3 red→green. v3→v4. Also: module-scoping created for the 7, and their value structs (incl. NESTED `schema-field`) registered in the tag table |
+| P3 | ONE restore table + cell-coverage gate driven off it | ✅ `d3660aee` | MUTATION-VERIFIED (suppressing one cell write ⇒ names `schema`). Honest limit: catches a row that declares a cell-id and fails to deliver; cannot catch a registry never added |
+| P4 | Comment truth sweep | ✅ `dd8b6c69` | 2 stale comments corrected + the seal-guard coordinate fixed (typing-core.rkt:3125-3126, not qtt.rkt) |
+| X.close | Bench check, DEFERRED triage, PIR-lite, merge to main, issue reply | 🔄 | PM 12 note + master link ✅ already. Owner wants the work MERGED TO MAIN before #78 is closed |
 
 > **Revision note (2026-07-27, post-critique)**: the phase plan grew a P2 because the adversarial critique + a controlled probe showed the issue's **severity 3 is real** and is **not** fixed by Option A (§2.4). A fix shipping only P1 would close the issue while leaving a hard module-load failure live.
 
