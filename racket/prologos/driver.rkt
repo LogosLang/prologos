@@ -2724,6 +2724,60 @@
 ;; Module Loading
 ;; ========================================
 
+;; ============================================================
+;; .pnet cache-hit registry restore (GitHub #78)
+;; ============================================================
+;;
+;; Restore deserialized registry deltas into BOTH the Racket parameter and the
+;; registry cell. Rows are `(list param cell-id-or-#f delta)`.
+;;
+;; FOLD, never assign — this is a correctness constraint, not a style choice.
+;; The .pnet round-trip pushes EVERY hash through `for/hasheq`
+;; (pnet-serialize.rkt deep-s->v / deep-serializable->struct), so an
+;; `equal?`-keyed registry with cons-pair keys (subtype / coercion /
+;; specialization) comes back as an EQ-keyed hash and a lookup with a freshly
+;; consed key MISSES. Folding entry-by-entry into the existing accumulator
+;; restores the accumulator's key-comparison semantics. Assigning the
+;; deserialized hash wholesale — to the parameter OR the cell — silently breaks
+;; those three registries.
+;;
+;; The cell write is safe for the SAME reason: the cell's merge is
+;; merge-hasheq-replace, whose [else] arm folds `new` into `old`, and `old` is
+;; the cell's value seeded from the `equal?`-based parameter. It is NOT true
+;; that "the delta's hash type doesn't matter".
+;;
+;; ALL-OR-NOTHING: every row's new parameter value is computed BEFORE anything
+;; is committed. A partial restore would otherwise leave registries 1..k-1
+;; applied and k..N not, with the module already registered and no diagnostic —
+;; preparse wraps module loading in `(with-handlers ([exn:fail? void]) ...)`
+;; (macros.rkt), so the exception would be swallowed.
+;;
+;; `macros-cell-write!` is itself a no-op when the cell-id or the persistent
+;; registry net-box is #f, so pre-init and module-loading contexts are safe.
+(define (restore-registries! rows)
+  ;; Phase 1 — compute, commit nothing.
+  (define pending
+    (for/list ([row (in-list rows)])
+      (define param   (car row))
+      (define cell-id (cadr row))
+      (define delta   (caddr row))
+      (define folded
+        (for/fold ([reg (param)]) ([(k v) (in-hash delta)])
+          ;; The non-hash arm mirrors the pre-#78 behavior at the three
+          ;; equal?-keyed sites. Note it DISCARDS any prior non-hash content
+          ;; rather than preserving it — it is a fallback that never fires
+          ;; today, not a hardening measure.
+          (if (hash? reg) (hash-set reg k v) (hash k v))))
+      (list param cell-id delta folded)))
+  ;; Phase 2 — commit.
+  (for ([p (in-list pending)])
+    (define param   (car p))
+    (define cell-id (cadr p))
+    (define delta   (caddr p))
+    (define folded  (cadddr p))
+    (param folded)
+    (when cell-id (macros-cell-write! cell-id delta))))
+
 ;; Load a module from a namespace symbol.
 ;; Returns a module-info, or raises an error.
 ;;
@@ -2809,78 +2863,60 @@
         ;; Merging preserves the caller's existing entries while adding the module's.
         ;; hash-union with last-write-wins for conflicts (same as full elaboration path
         ;; where the module's parameterize inherited and extended the caller's registry).
-        (current-preparse-registry
-         (for/fold ([reg (current-preparse-registry)]) ([(k v) (in-hash d-preparse)])
-           (hash-set reg k v)))
-        (current-ctor-registry
-         (for/fold ([reg (current-ctor-registry)]) ([(k v) (in-hash d-ctor)])
-           (hash-set reg k v)))
-        (current-type-meta
-         (for/fold ([reg (current-type-meta)]) ([(k v) (in-hash d-tmeta)])
-           (hash-set reg k v)))
-        (current-multi-defn-registry
-         (for/fold ([reg (current-multi-defn-registry)]) ([(k v) (in-hash d-multi)])
-           (hash-set reg k v)))
-        (current-subtype-registry
-         (for/fold ([reg (current-subtype-registry)]) ([(k v) (in-hash d-sub)])
-           (if (hash? reg) (hash-set reg k v) (hash k v))))
-        (current-coercion-registry
-         (for/fold ([reg (current-coercion-registry)]) ([(k v) (in-hash d-coerce)])
-           (if (hash? reg) (hash-set reg k v) (hash k v))))
-        (current-capability-registry
-         (for/fold ([reg (current-capability-registry)]) ([(k v) (in-hash d-cap)])
-           (hash-set reg k v)))
-        ;; Track 10 Phase 2e: merge 5 additional registries (now managed by load-module)
-        (when (> (length pnet-result) 11)
-          (define d-trait (list-ref pnet-result 11))
-          (define d-impl  (list-ref pnet-result 12))
-          (define d-pimpl (list-ref pnet-result 13))
-          (define d-spec-r (and (> (length pnet-result) 14) (list-ref pnet-result 14)))
-          (define d-tycon  (and (> (length pnet-result) 15) (list-ref pnet-result 15)))
-          (define d-bundle (and (> (length pnet-result) 16) (list-ref pnet-result 16)))
-          (current-trait-registry
-           (for/fold ([reg (current-trait-registry)]) ([(k v) (in-hash d-trait)])
-             (hash-set reg k v)))
-          (current-impl-registry
-           (for/fold ([reg (current-impl-registry)]) ([(k v) (in-hash d-impl)])
-             (hash-set reg k v)))
-          (current-param-impl-registry
-           (for/fold ([reg (current-param-impl-registry)]) ([(k v) (in-hash d-pimpl)])
-             (hash-set reg k v)))
-          (when d-spec-r
-            (current-specialization-registry
-             (for/fold ([reg (current-specialization-registry)]) ([(k v) (in-hash d-spec-r)])
-               (if (hash? reg) (hash-set reg k v) (hash k v)))))
-          (when d-tycon
-            (current-tycon-arity-extension
-             (for/fold ([reg (current-tycon-arity-extension)]) ([(k v) (in-hash d-tycon)])
-               (hash-set reg k v))))
-          (when d-bundle
-            (current-bundle-registry
-             (for/fold ([reg (current-bundle-registry)]) ([(k v) (in-hash d-bundle)])
-               (hash-set reg k v))))
-          ;; Phase 2f: 4 additional registries
-          (when (> (length pnet-result) 17)
-            (define d-dparam (and (> (length pnet-result) 17) (list-ref pnet-result 17)))
-            (define d-tlaws  (and (> (length pnet-result) 18) (list-ref pnet-result 18)))
-            (define d-props  (and (> (length pnet-result) 19) (list-ref pnet-result 19)))
-            (define d-funcs  (and (> (length pnet-result) 20) (list-ref pnet-result 20)))
-            (when d-dparam
-              (current-defn-param-names
-               (for/fold ([reg (current-defn-param-names)]) ([(k v) (in-hash d-dparam)])
-                 (hash-set reg k v))))
-            (when d-tlaws
-              (current-trait-laws
-               (for/fold ([reg (current-trait-laws)]) ([(k v) (in-hash d-tlaws)])
-                 (hash-set reg k v))))
-            (when d-props
-              (current-property-store
-               (for/fold ([reg (current-property-store)]) ([(k v) (in-hash d-props)])
-                 (hash-set reg k v))))
-            (when d-funcs
-              (current-functor-store
-               (for/fold ([reg (current-functor-store)]) ([(k v) (in-hash d-funcs)])
-                 (hash-set reg k v))))))
+        ;;
+        ;; GitHub #78 (2026-07-27) — restore writes BOTH the parameter AND the cell.
+        ;; The 24 registry readers are CELL-primary (macros.rkt read-* functions:
+        ;; `(or (macros-cell-read-safe cid) (param))`), and because an empty hasheq
+        ;; is TRUTHY the parameter branch is unreachable once the cells exist. A
+        ;; parameter-only restore was therefore invisible to every reader — silently:
+        ;; stuck `[reduce ...]` terms, constructor patterns degrading to catch-all
+        ;; variables (wrong answers), and the degraded elaboration then serialized
+        ;; into the dependent's own .pnet (durable poisoning). The cache-MISS path
+        ;; has always dual-written (macros.rkt register-ctor! et al), so this makes
+        ;; HIT ≡ MISS rather than introducing a new escape.
+        ;;
+        ;; TABLE-DRIVEN by design (pipeline.md § "Exhaustive Walkers: prefer the
+        ;; STRUCTURAL answer to the checklist"): adding a registry is adding a ROW,
+        ;; and a row cannot be added without stating its cell-id — or `#f`
+        ;; DELIBERATELY, for the three registries that genuinely have no cell.
+        ;; The previous shape was N hand-written parameter writes, which is exactly
+        ;; the failure mode that rule names.
+        (restore-registries!
+         (list
+          ;; param                          cell-id (#f = no cell exists)             delta
+          (list current-preparse-registry   (current-preparse-registry-cell-id)       d-preparse)
+          (list current-ctor-registry       (current-ctor-registry-cell-id)           d-ctor)
+          (list current-type-meta           (current-type-meta-cell-id)               d-tmeta)
+          ;; multi-defn has NO cell and NO cell-primary reader — parameter-only is
+          ;; CORRECT here, not an omission. (Verified: no `-cell-id` parameter
+          ;; exists for it anywhere in the tree, and it is absent from
+          ;; init-macros-cells!.)
+          (list current-multi-defn-registry #f                                        d-multi)
+          (list current-subtype-registry    (current-subtype-registry-cell-id)        d-sub)
+          (list current-coercion-registry   (current-coercion-registry-cell-id)       d-coerce)
+          (list current-capability-registry (current-capability-registry-cell-id)     d-cap)))
+        ;; Track 10 Phase 2e/2f: the remaining 10 registries.
+        ;; The former nested `(when (> (length pnet-result) N) ...)` guards were
+        ;; VESTIGIAL, not scaffolding: deserialize-module-state always returns a
+        ;; FIXED 21-element list with (hasheq)/(hash) defaults for optional slots
+        ;; (pnet-serialize.rkt), and pnet-stale?/the read path gate on EXACT
+        ;; version equality — so a shorter list can never reach here and the
+        ;; guards could never fire. Dropped with the table (#78, 2026-07-27).
+        (restore-registries!
+         (list
+          (list current-trait-registry         (current-trait-registry-cell-id)        (list-ref pnet-result 11))
+          (list current-impl-registry          (current-impl-registry-cell-id)         (list-ref pnet-result 12))
+          (list current-param-impl-registry    (current-param-impl-registry-cell-id)   (list-ref pnet-result 13))
+          (list current-specialization-registry (current-specialization-registry-cell-id) (list-ref pnet-result 14))
+          ;; tycon-arity-extension: NO cell, NO cell-primary reader — parameter-only
+          ;; is correct here (see the multi-defn note above).
+          (list current-tycon-arity-extension  #f                                      (list-ref pnet-result 15))
+          (list current-bundle-registry        (current-bundle-registry-cell-id)       (list-ref pnet-result 16))
+          ;; defn-param-names: NO cell, NO cell-primary reader — parameter-only.
+          (list current-defn-param-names       #f                                      (list-ref pnet-result 17))
+          (list current-trait-laws             (current-trait-laws-cell-id)            (list-ref pnet-result 18))
+          (list current-property-store         (current-property-store-cell-id)        (list-ref pnet-result 19))
+          (list current-functor-store          (current-functor-store-cell-id)         (list-ref pnet-result 20))))
         mod-info]
 
        [else
