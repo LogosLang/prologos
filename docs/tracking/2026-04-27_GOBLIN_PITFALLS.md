@@ -2342,3 +2342,134 @@ names that don't collide. For OCapN: avoid `refr`, `listener`,
 
 
 
+
+### #44 — A bare Int literal where `Nat` is expected fails with "Unbound variable" (2026-07-27, real bug, **misleading diagnostic**)
+
+**Symptom.** A module fails to import with
+
+```
+imports: Error loading module prologos::ocapn::captp-core: Unbound variable
+```
+
+and no identifier name, no source location, no line number. Nothing in
+the module is actually unbound. The real fault is a numeric literal
+whose type doesn't match its spec.
+
+**Minimal reproduction** (bisected 2026-07-27 down from a 132-line
+block to three lines; each variant differs only in the marked token):
+
+```
+;; FAILS — "Unbound variable"
+spec probe String -> [Option Nat]
+defn probe [s]
+  [some 1]
+
+;; LOADS FINE
+spec probe String -> [Option Nat]
+defn probe [s]
+  [some 1N]
+```
+
+Controls run in the same harness, same module, same session:
+
+| Variant | Result |
+|---|---|
+| `[some 1]` with spec `-> [Option Nat]` | `Unbound variable` |
+| `[some 1N]` with spec `-> [Option Nat]` | loads |
+| `[none Nat]` (type as term-level arg) | loads |
+| `[str::eq s "x"]` alone | loads |
+
+So it is neither `none`-with-a-type-argument nor the qualified foreign
+call — it is specifically the bare `1` against a `Nat`-typed position.
+
+**Root cause — the real bug is the module loader's error class, not the
+literal.** Bare integer literals are `Int`, not `Nat`; that part is
+documented (`.claude/rules/prologos-syntax.md` § Lists and literals) and
+is arguably working as designed. The BUG is that the *same source* is
+reported as two different error classes depending on which path
+elaborates it.
+
+Byte-identical body, two entry points:
+
+```
+;; examples/tmp-some1.prologos
+ns tmp-some1
+require [prologos::data::option :refer [Option some none]]
+spec probe String -> [Option Nat]
+defn probe [s]
+  [some 1]
+```
+
+via `process-file` — correct, fully actionable:
+
+```
+(type-mismatch-error (srcloc "<unknown>" 0 0 0) "Type mismatch"
+  "[Pi [x <String>] [prologos::data::option::Option Nat]]"
+  "[Pi [x <String>] [prologos::data::option::Option Int]]"
+  "[fn [x <String>] [prologos::data::option::some Int 1]]" '())
+```
+
+The same code reached through a module `imports`:
+
+```
+imports: Error loading module prologos::ocapn::captp-core: Unbound variable
+```
+
+A `type-mismatch-error` carrying both expected and actual types is
+converted into an `Unbound variable` report — the wrong error CLASS, not
+merely a truncated one. Nothing is unbound.
+
+This is not a general lack of error detail. The error structs do carry
+identity and position: a genuine unbound reference in the same
+`process-file` path reports
+`(unbound-variable-error (srcloc "<file>" 9 1 9) "Unbound variable" 'qe)`
+— symbol AND srcloc. Both the name and the type information exist and
+are discarded at the module-import boundary.
+
+**Cost when hit.** This ate two CI round-trips and a revert
+(`366f85ff` → `0070f1e0` → `b62288c4`). Because the message says
+"Unbound variable", the whole investigation went into import/ordering
+territory — first pitfall #16 (definition order, which WAS also
+genuinely wrong in that block and needed fixing, so the reorder
+"looked" like progress while the error stayed identical), then a
+missing `[prologos::data::string :as str :refer []]` require (also
+genuinely missing). Three independent bugs, one indistinguishable
+error message for all three. Each fix appeared not to work because the
+next bug produced the identical output.
+
+**Workaround — and the cheap instrument.** Suffix `N` on every integer
+literal in a `Nat` position: `0N`, `1N`, `5N`.
+
+The general technique matters more than this one fix. When a module
+fails to import with a bare `Unbound variable`, do NOT trust the error
+class. **Re-elaborate the same code through `process-file` instead** —
+that path reports the true error (here, the full type mismatch with
+expected and actual types). A one-file `examples/tmp-*.prologos`
+reproduction is a ~1 min instrument that turns an unnamed
+`Unbound variable` into a named, located, correctly-classified error.
+That single step would have replaced this entire bisect.
+
+If the fault only appears in module context, bisect by deleting
+definitions until it loads, then probe the survivor token by token. A
+3-line probe inserted into the real module loads in ~2 min, versus ~30
+min for a full local build and ~6 min per CI round-trip. Do this
+locally; do not bisect through CI.
+
+**Codify-it ask.** In priority order:
+
+1. **The module loader must not reclassify errors.** A
+   `type-mismatch-error` with both types in hand must not surface as
+   `Unbound variable`. This is the actual defect and it is a pure
+   error-propagation bug at the `imports` boundary — the structured
+   error already exists upstream of the point where it is flattened.
+   Fixing only this would have reduced today's cost from hours to
+   minutes, and it protects every future module-level failure, not just
+   numeric-literal ones. Highest-leverage diagnostic fix found in this
+   log: the message does not merely lack detail, it names the wrong
+   problem class and actively misdirects.
+2. **Consider elaborating the literal.** `Nat` vs `Int` differing only
+   by a suffix, with no coercion or defaulting, is a sharp edge in a
+   language that otherwise leans hard on inference. A bare non-negative
+   literal in a known-`Nat` position could reasonably elaborate to
+   `Nat`. Lower priority than (1) and a genuine design question, not an
+   obvious bug — but (1) is a bug regardless of how (2) is decided.

@@ -78,7 +78,7 @@
                  [current-spec-store (hasheq)])
     (install-module-loader!)
     (process-string shared-preamble)
-    (values (current-file-module-network-ref)
+    (values (global-env-snapshot)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -88,7 +88,7 @@
             (current-type-meta))))
 
 (define (run s)
-  (parameterize ([current-file-module-network-ref shared-global-env]
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]
