@@ -398,11 +398,12 @@
   (check-equal? (car (list-ref toks 1)) 'dot-key)
   (check-equal? (cdr (list-ref toks 1)) ".:key"))
 
-(test-case "tokenizer: .{ dot-lbrace"
+(test-case "tokenizer: .{ is RETIRED — no dot-lbrace token exists (CIU T6 P1)"
+  ;; Regression pin against re-introduction: `.{` must NOT tokenize as a
+  ;; compound token; it degrades to a bare `.` + lbrace with no special path.
   (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "x.{a b}")))
   (define toks (token-types-from-rrb tok-rrb))
-  (check-equal? (car (list-ref toks 1)) 'dot-lbrace)
-  (check-equal? (cdr (list-ref toks 1)) ".{"))
+  (check-false (assq 'dot-lbrace toks)))
 
 (test-case "tokenizer: .*field broadcast"
   (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "xs.*name")))
@@ -898,7 +899,7 @@
                [d (cond
                     [(memq type '(lbracket lparen lbrace
                                   quote-lbracket at-lbracket tilde-lbracket
-                                  hash-lbrace dot-lbrace dot-lparen))
+                                  hash-lbrace dot-lparen))
                      (+ depth 1)]
                     [(memq type '(rbracket rparen rbrace))
                      (- depth 1)]

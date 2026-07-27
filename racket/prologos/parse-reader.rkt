@@ -753,17 +753,10 @@
             (- i pos)))
       #f))
 
-(define (recognize-dot-lbrace rrb pos)
-  ;; .{
-  (define c1 (rrb-char-at rrb pos))
-  (define c2 (rrb-char-at rrb (+ pos 1)))
-  (if (and c1 c2 (char=? c1 #\.) (char=? c2 #\{))
-      2
-      #f))
-
 (define (recognize-dot-lparen rrb pos)
-  ;; .(  — mixfix entry with `( )` grouping (replaces `.{ }` for mixfix; `.{ }`
-  ;; narrows to path/selection brace-expansion). Content closes on `)`.
+  ;; .(  — mixfix entry with `( )` grouping. Content closes on `)`.
+  ;; (`.{ }` is RETIRED entirely — CIU T6 Path Selection P1, 2026-07-26; selection
+  ;;  is the postfix-bracket surface, design doc §5.9.)
   (define c1 (rrb-char-at rrb pos))
   (define c2 (rrb-char-at rrb (+ pos 1)))
   (if (and c1 c2 (char=? c1 #\.) (char=? c2 #\())
@@ -1095,9 +1088,6 @@
    (token-pattern 'dot-key (lambda (rrb pos) (recognize-dot-key rrb pos))
                   (lambda (s p l) 'dot-key) 88))
   (register-token-pattern!
-   (token-pattern 'dot-lbrace (lambda (rrb pos) (recognize-dot-lbrace rrb pos))
-                  (lambda (s p l) 'dot-lbrace) 87))
-  (register-token-pattern!
    (token-pattern 'dot-lparen (lambda (rrb pos) (recognize-dot-lparen rrb pos))
                   (lambda (s p l) 'dot-lparen) 87))
   (register-token-pattern!
@@ -1282,7 +1272,7 @@
                [new-bd (cond
                          [(memq type '(lbracket lparen lbrace langle
                                        quote-lbracket at-lbracket tilde-lbracket
-                                       hash-lbrace dot-lbrace dot-lparen))
+                                       hash-lbrace dot-lparen))
                           (+ bd 1)]
                          [(memq type '(rbracket rparen rbrace rangle))
                           (max 0 (- bd 1))]
@@ -2114,9 +2104,12 @@
 ;; Group tokens from vec[start..end) with bracket matching.
 ;; Returns (values stx-elements next-index)
 (define (mixfix-close? ct)
-  ;; Both mixfix entry forms — `.{ }` (mixfix-rbrace) and `.( )` (mixfix-rparen) —
-  ;; suppress angle-bracket grouping so `<`/`>` read as operators inside mixfix.
-  (or (eq? ct 'mixfix-rbrace) (eq? ct 'mixfix-rparen)))
+  ;; The mixfix entry form `.( )` (mixfix-rparen) suppresses angle-bracket
+  ;; grouping so `<`/`>` read as operators inside mixfix. (`.{ }`/mixfix-rbrace
+  ;; retired — CIU T6 Path Selection P1. NOTE: suppression is only wired at the
+  ;; group-items langle leg; the form-extent scanner still counts `<` as an
+  ;; opener, so `<` inside `.( )` mis-extends the form — tracked defect.)
+  (eq? ct 'mixfix-rparen))
 
 (define (group-tokens vec start end close-type source source-str)
   (let loop ([i start] [result '()])
@@ -2126,18 +2119,14 @@
        (define entry (vector-ref vec i))
        (define type (set-first (token-entry-types entry)))
        (cond
-         ;; Close on matching bracket type (mixfix-rbrace closes on rbrace)
-         [(and close-type
-               (or (eq? type close-type)
-                   (and (eq? close-type 'mixfix-rbrace) (eq? type 'rbrace))))
+         ;; Close on matching bracket type
+         [(and close-type (eq? type close-type))
           (values (reverse result) (+ i 1))]
          [(memq type '(lbracket lparen))
           (define ct (if (eq? type 'lbracket) 'rbracket 'rparen))
           (define-values (inner next-i) (group-tokens vec (+ i 1) end ct source source-str))
           (loop next-i (cons (wrap-stx-list inner source) result))]
-         ;; Angle brackets: NOT treated as brackets inside mixfix (.{...})
-         ;; In mixfix context (close-type = mixfix-rbrace), < and > are operators
-         [(and (eq? type 'langle) (not (eq? close-type 'mixfix-rbrace)))
+         [(eq? type 'langle)
           (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rangle source source-str))
           (define-values (al ac) (pos->line-col source-str (token-entry-start-pos entry)))
           (loop next-i (cons (make-stx (cons (make-stx '$angle-type source al ac (+ (token-entry-start-pos entry) 1) 1) inner)
@@ -2147,13 +2136,6 @@
           (define-values (bl bc) (pos->line-col source-str (token-entry-start-pos entry)))
           (loop next-i (cons (make-stx (cons (make-stx '$brace-params source bl bc (+ (token-entry-start-pos entry) 1) 1) inner)
                                        source bl bc (+ (token-entry-start-pos entry) 1) 1) result))]
-         [(eq? type 'dot-lbrace)
-          ;; .{a b} → ($mixfix a b)
-          ;; Use 'mixfix-rbrace so group-tokens knows < > are operators, not brackets
-          (define-values (inner next-i) (group-tokens vec (+ i 1) end 'mixfix-rbrace source source-str))
-          (define-values (ml mc) (pos->line-col source-str (token-entry-start-pos entry)))
-          (loop next-i (cons (make-stx (cons (make-stx '$mixfix source ml mc (+ (token-entry-start-pos entry) 1) 2) inner)
-                                       source ml mc (+ (token-entry-start-pos entry) 1) 2) result))]
          [(eq? type 'quote-lbracket)
           (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbracket source source-str))
           (define-values (ql qc) (pos->line-col source-str (token-entry-start-pos entry)))
@@ -2174,10 +2156,7 @@
           (define-values (hl hc) (pos->line-col source-str (token-entry-start-pos entry)))
           (loop next-i (cons (make-stx (cons (make-stx '$set-literal source hl hc (+ (token-entry-start-pos entry) 1) 2) inner)
                                        source hl hc (+ (token-entry-start-pos entry) 1) 2) result))]
-         ;; Stray closing brackets: skip. But in mixfix context, rangle is an operator.
-         [(and (memq type '(rangle langle)) (eq? close-type 'mixfix-rbrace))
-          ;; Inside .{...}: < and > are operators, emit as symbols
-          (loop (+ i 1) (cons (token-entry->stx entry source source-str) result))]
+         ;; Stray closing brackets: skip.
          [(memq type '(rbracket rparen rbrace rangle))
           (loop (+ i 1) result)]
          [else
@@ -2381,14 +2360,13 @@
             [(and (eq? type 'rangle) (> angle-depth 0)) (loop (+ i 1) (- angle-depth 1) other-depth)]
             ;; Other brackets — track depth to skip over them
             [(memq type '(lbracket lparen lbrace quote-lbracket at-lbracket
-                          tilde-lbracket hash-lbrace dot-lbrace dot-lparen))
+                          tilde-lbracket hash-lbrace dot-lparen))
              (loop (+ i 1) angle-depth (+ other-depth 1))]
             [(and (memq type '(rbracket rparen rbrace)) (> other-depth 0))
              (loop (+ i 1) angle-depth (- other-depth 1))]
             ;; Hit the current scope's closer at depth 0 → no match
             [(and close-type (not (eq? close-type 'indent-close))
                   (or (eq? type close-type)
-                      (and (eq? close-type 'mixfix-rbrace) (eq? type 'rbrace))
                       (and (eq? close-type 'mixfix-rparen) (eq? type 'rparen)))
                   (= other-depth 0))
              #f]
@@ -2454,7 +2432,6 @@
             ;; Matching close bracket
             [(and close-type (not (eq? close-type 'indent-close))
                   (or (eq? type close-type)
-                      (and (eq? close-type 'mixfix-rbrace) (eq? type 'rbrace))
                       (and (eq? close-type 'mixfix-rparen) (eq? type 'rparen))))
              (values (reverse result) (+ i 1))]
             ;; Mixfix `.( )` grouping: inside .( ), a bare ( E ) is an infix
@@ -2506,7 +2483,7 @@
                                      grp)
                                  result)))))]
             ;; Angle brackets → $angle-type sentinel IF matching rangle exists
-            ;; AND we're not inside a dot-lbrace/mixfix group (where < > are operators)
+            ;; AND we're not inside a mixfix group (where < > are operators)
             [(eq? type 'langle)
              (if (and (not (mixfix-close? close-type))
                       (has-matching-rangle? vec (+ i 1) end close-type))
@@ -2524,15 +2501,6 @@
                  (loop next-i
                        (cons (make-stx (cons (make-stx '$brace-params source bl bc (+ (token-entry-start-pos item) 1) 1) inner)
                                        source bl bc (+ (token-entry-start-pos item) 1) 1) result))))]
-            ;; Dot-brace `.{ }` is RETIRED for mixfix (replaced by `.( )`): emit
-            ;; $mixfix-retired so preparse raises a targeted migration error.
-            ;; (Path/selection brace-expansion is a separate surface: `:kw.` + `{ }`.)
-            [(eq? type 'dot-lbrace)
-             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'mixfix-rbrace source source-str qq-depth)])
-               (let-values ([(ml mc) (pos->line-col source-str (token-entry-start-pos item))])
-                 (loop next-i
-                       (cons (make-stx (cons (make-stx '$mixfix-retired source ml mc (+ (token-entry-start-pos item) 1) 2) inner)
-                                       source ml mc (+ (token-entry-start-pos item) 1) 2) result))))]
             ;; Dot-paren → $mixfix sentinel with 'mixfix-rparen (closes on `)`,
             ;; enables `( )` grouping inside — the mixfix ergonomics form).
             [(eq? type 'dot-lparen)

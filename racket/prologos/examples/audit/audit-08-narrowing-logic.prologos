@@ -50,14 +50,14 @@ my-double ?x = 6N
 ;; ========================================================================
 
 ;; --- 3a. Mixfix with unknowns ---
-.{?x + 3N} = 7N
+.(?x + 3N) = 7N
 ;; OK: '[{:x 4N, :y_ 3N}]
 
-.{1N + ?y} = 5N
+.(1N + ?y) = 5N
 ;; OK: '[{:y 4N, :x_ 1N}]
 
 ;; --- 3b. Mixfix equality (no unknowns) ---
-.{2N + 3N} = 5N
+.(2N + 3N) = 5N
 ;; OK: true : Bool
 
 

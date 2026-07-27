@@ -66,20 +66,20 @@ eval [add 10N 20N]
 ;; ========================================================================
 
 ;; --- 4a. Basic mixfix ---
-.{2N + 3N}
+.(2N + 3N)
 ;; expect: 5N : Nat
 
-.{10N - 3N}
+.(10N - 3N)
 ;; expect: 7N : Nat
 
-.{4N * 5N}
+.(4N * 5N)
 ;; expect: 20N : Nat
 
 ;; --- 4b. Mixfix comparison ---
-.{3N < 5N}
+lt 3N 5N
 ;; expect: true : Bool
 
-.{5N <= 5N}
+le 5N 5N
 ;; expect: true : Bool
 
 

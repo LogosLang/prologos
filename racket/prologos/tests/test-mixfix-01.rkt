@@ -4,7 +4,7 @@
 ;;; PROLOGOS MIXFIX SYNTAX TESTS — Part 1
 ;;; Unit tests + basic E2E for .(...) delimited infix syntax.
 ;;;
-;;; A. Tokenizer: .( produces dot-lbrace token
+;;; A. Tokenizer: .( produces dot-lparen token
 ;;; B. WS Reader: .(a + b) reads as ($mixfix a + b)
 ;;; C. Pratt Parser: ($mixfix 1 + 2 * 3) → (add 1 (mul 2 3))
 ;;; D. E2E: sexp mode ($mixfix ...)
@@ -50,10 +50,11 @@
   (check-equal? (length toks) 1)
   (check-equal? (token-type (car toks)) 'dot-lparen))
 
-(test-case "tokenize: .{ still tokenizes as dot-lbrace (retired-mixfix token)"
-  (define toks (content-tokens ".{"))
-  (check-equal? (length toks) 1)
-  (check-equal? (token-type (car toks)) 'dot-lbrace))
+(test-case "tokenize: .{ produces NO compound token (retired — CIU T6 P1)"
+  ;; With the dot-lbrace recognizer DELETED, a bare `.` fragment has no token
+  ;; match at the content-token layer — the tokenizer rejects it outright.
+  (check-exn #rx"Unexpected character"
+             (lambda () (content-tokens ".{"))))
 
 (test-case "tokenize: .(a + b) produces dot-lparen, symbols, rparen"
   (define toks (content-tokens ".(a + b)"))
@@ -328,9 +329,15 @@
     (run-ws-last "eval .(5N)\n"))
   (check-equal? result "5N : Nat"))
 
-(test-case "e2e/ws: .{ } is not a supported form (path-selection under redesign)"
-  (check-exn #rx"not currently supported|redesign"
-             (lambda () (run-ws-last "eval .{2N + 3N}\n"))))
+(test-case "e2e/ws: .{ } is fully retired — no special diagnostic, generic error only (CIU T6 P1)"
+  ;; The `.{` recognizer + $mixfix-retired error are DELETED (owner ruling
+  ;; Q_P5/D3-S5): the syntax simply does not exist. `.{2N + 3N}` degrades to a
+  ;; bare `.` + a 3-element brace group -> a generic per-command error whose
+  ;; text must NOT mention mixfix or redesign (no dedicated path remains).
+  (define result (run-ws-last "eval .{2N + 3N}\n"))
+  (check-true (prologos-error? result))
+  (check-false (regexp-match? #rx"mixfix|redesign|not currently supported"
+                              (format "~a" result))))
 
 ;; ========================================
 ;; Mixfix carrying dot-access (CIU T6, 2026-07-18)
