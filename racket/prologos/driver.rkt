@@ -2916,7 +2916,21 @@
           (list current-defn-param-names       #f                                      (list-ref pnet-result 17))
           (list current-trait-laws             (current-trait-laws-cell-id)            (list-ref pnet-result 18))
           (list current-property-store         (current-property-store-cell-id)        (list-ref pnet-result 19))
-          (list current-functor-store          (current-functor-store-cell-id)         (list-ref pnet-result 20))))
+          (list current-functor-store          (current-functor-store-cell-id)         (list-ref pnet-result 20))
+          ;; #78 P2 (.pnet v4): the 7 registries that were previously not
+          ;; serialized at all, so a cache hit had NOTHING to restore and left
+          ;; them empty in both parameter and cell. schema/selection are the
+          ;; proven-symptom pair: the record/schema seal is
+          ;; `#:when (lookup-schema-by-name ...)`-guarded (qtt.rkt), so an empty
+          ;; registry silently turns the arm off and the whole dependent module
+          ;; fails to load with a bare "Type mismatch" (#78 severity 3).
+          (list current-schema-registry         (current-schema-registry-cell-id)         (list-ref pnet-result 21))
+          (list current-selection-registry      (current-selection-registry-cell-id)      (list-ref pnet-result 22))
+          (list current-session-registry        (current-session-registry-cell-id)        (list-ref pnet-result 23))
+          (list current-strategy-registry       (current-strategy-registry-cell-id)       (list-ref pnet-result 24))
+          (list current-process-registry        (current-process-registry-cell-id)        (list-ref pnet-result 25))
+          (list current-user-operators          (current-user-operators-cell-id)          (list-ref pnet-result 26))
+          (list current-user-precedence-groups  (current-user-precedence-groups-cell-id)  (list-ref pnet-result 27))))
         mod-info]
 
        [else
@@ -2942,6 +2956,14 @@
      (define mod-trait-laws #f)
      (define mod-property-store #f)
      (define mod-functor-store #f)
+     ;; #78 P2: captured inside the parameterize, propagated back below.
+     (define mod-schema-reg #f)
+     (define mod-selection-reg #f)
+     (define mod-session-reg #f)
+     (define mod-strategy-reg #f)
+     (define mod-process-reg #f)
+     (define mod-user-ops #f)
+     (define mod-user-precs #f)
      (define mod-module-network #f)
      (parameterize ([current-ns-context #f]
                     [current-meta-store (make-hasheq)]
@@ -2966,6 +2988,24 @@
                     [current-trait-laws (current-trait-laws)]
                     [current-property-store (current-property-store)]
                     [current-functor-store (current-functor-store)]
+                    ;; #78 P2 (2026-07-27): these 7 were NOT scoped here, so a
+                    ;; module's registrations escaped to the caller's parameter
+                    ;; directly. That made `(current-X)` at serialize time the
+                    ;; process-GLOBAL accumulation — every other module's entries
+                    ;; too, and load-order dependent. Scoping them (inherit +
+                    ;; extend, exactly like the registries above) makes
+                    ;; serialize-module-state capture MODULE-SCOPED content.
+                    ;; Reader behavior is unchanged: all 7 registrars dual-write,
+                    ;; the cell write escapes this parameterize (the net-box is
+                    ;; deliberately not bound here), and the propagate-back below
+                    ;; hands the caller the same content it got before.
+                    [current-schema-registry (current-schema-registry)]
+                    [current-selection-registry (current-selection-registry)]
+                    [current-session-registry (current-session-registry)]
+                    [current-strategy-registry (current-strategy-registry)]
+                    [current-process-registry (current-process-registry)]
+                    [current-user-operators (current-user-operators)]
+                    [current-user-precedence-groups (current-user-precedence-groups)]
                     [current-spec-store (hasheq)]  ;; fresh — specs are module-local
                     [current-propagated-specs (seteq)]  ;; fresh propagated tracking
                     [current-loading-set (set-add (current-loading-set) ns-sym)]
@@ -3048,6 +3088,16 @@
        (set! mod-trait-laws (current-trait-laws))
        (set! mod-property-store (current-property-store))
        (set! mod-functor-store (current-functor-store))
+       ;; #78 P2: capture the 7 newly-scoped registries for both the
+       ;; propagate-back below AND serialize-module-state (which reads the
+       ;; parameters, i.e. this module-scoped view).
+       (set! mod-schema-reg (current-schema-registry))
+       (set! mod-selection-reg (current-selection-registry))
+       (set! mod-session-reg (current-session-registry))
+       (set! mod-strategy-reg (current-strategy-registry))
+       (set! mod-process-reg (current-process-registry))
+       (set! mod-user-ops (current-user-operators))
+       (set! mod-user-precs (current-user-precedence-groups))
 
        ;; Track 5 Phase 3b: Build module-network-ref from accumulated definitions.
        ;; Each entry in mod-env becomes a definition cell in the module's network.
@@ -3099,6 +3149,16 @@
      (current-trait-laws mod-trait-laws)
      (current-property-store mod-property-store)
      (current-functor-store mod-functor-store)
+     ;; #78 P2: hand the caller the same content it received before these 7 were
+     ;; scoped — the scoping exists so SERIALIZATION sees a module-scoped view,
+     ;; not to change what an importer ends up with.
+     (current-schema-registry mod-schema-reg)
+     (current-selection-registry mod-selection-reg)
+     (current-session-registry mod-session-reg)
+     (current-strategy-registry mod-strategy-reg)
+     (current-process-registry mod-process-reg)
+     (current-user-operators mod-user-ops)
+     (current-user-precedence-groups mod-user-precs)
 
      ;; Note: spec store is NOT globally propagated — it's carried in module-info
      ;; for selective propagation via process-imports-spec.
