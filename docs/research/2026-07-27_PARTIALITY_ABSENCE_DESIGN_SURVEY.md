@@ -151,3 +151,60 @@ Conclusion: the question is genuinely only the SURFACE. What Verse contributes i
 6. **The paper**: "failure contexts as ATMS worldviews" — the formal semantics Verse's Appendix F lacks, with bags where Verse has sequences and parallel narrowing where Verse has sequential rollback. Positioning: Prologos occupies the Verse corner *minus its admitted sacrifices* (ordering, laziness, unfinished metatheory), because the substrate Verse is still engineering is the substrate Prologos started from.
 
 **One-sentence position for the owner**: the owner's dissatisfaction with Option is vindicated by the survey, but the answer isn't nil — it's that Prologos already owns all six positions' machinery and is missing only (i) the discharge *surface* that lets ordinary functional code use goal-failure the way Verse does, and (ii) the one genuinely unexpressed corner, **explained absence** — and the project's own P2.b history says whatever ships must never be silent: quiet in the value plane, never unexplained.
+---
+
+## ✏ Addendum — round 2 (owner + Claude, 2026-07-27): KNOWN-ABSENCE, graded absence, and the UCS junction
+
+**Owner contribution**: to the three-absences taxonomy (⊥/Nil/Conflict), add
+**`known-absence`** — with the record-typing TAIL as the example. And: the ATMS
+why-not machinery "may be able to feed greater confidence to known-absence or
+plausible-absence, for potential recovery and protection of partiality"; constraint
+solving mechanisms come to mind (UCS core-thesis territory).
+
+**The refined taxonomy — a KNOWLEDGE-STATE LATTICE per key/location** (decomplected
+from representation; Nil is NOT a row in this lattice — Nil/Option/failure/panic are
+VALUE-PLANE representations a TIER chooses to carry one of these states across a
+boundary):
+
+| State | Evidence character | Existing machinery |
+|---|---|---|
+| **⊥ / unknown** | no evidence either way | metas (D19 "the meta IS the observation") · dyn tails · presence=`'unknown` (D24 dissoc marking) |
+| **plausible-absence** | absence under DEFEASIBLE assumptions — retractable | NAF ("not provable from the store NOW") · dyn-row runtime miss · a `:default`-filled slot (assumes absence of real data) — each carries an ATMS label citing its assumptions |
+| **known-absence** | absence with a MONOTONE-STABLE justification | the CLOSED tail (the λ⟨⟩-inexpressible negative fact, ours natively) · presence=`'absent` — **the reserved mark with ZERO producers today (survey M4(b)); this class IS its producer semantics** · static dissoc of a known field · a completeness declaration (Rel T1 C.c's schema⟹facts-only is one!) |
+| **Conflict** | Has-evidence ∧ Lacks-evidence in one worldview | contradiction → nogood → narrowing (Belnap `Both`; structurally present in every cell) |
+
+**The UCS junction (the owner's "general mechanism")**: D11 already names
+`HasField`/`Lacks`/`Concat` as constraint kinds for the ONE solver. Graded absence =
+**absence facts as first-class constraints with ATMS labels**: a closed tail is a
+finite Has-set plus Lacks-everything-else; a `Lacks(r,l)` over a dyn tail RESIDUATES
+until evidence arrives; Has∧Lacks = the Conflict row = nogood; **the why-not value is
+exactly the LABEL of the Lacks fact**. The trait solver, row solver, and absence
+reasoning share residuation + labels — one mechanism, which is the UCS thesis
+applied to negation.
+
+**Narrowing is the transition system**: D24's `has-key?` hook (`'unknown`→`'present`
+on positive evidence, "where courtesy arrives soundly, as narrowing") has an exact
+DUAL — `'unknown`→`'absent` on negative evidence (NAF over a declared-complete store;
+a failed has-key?; a closed-scan). Both monotone, both CALM-safe. Known-absence is
+worldview-independent (a proof); plausible-absence is assumption-tagged (the
+tagged-cell-value machinery) and auto-retracts through the ATMS when contradicted —
+**which is the "recovery" half**: dependents of a retracted absence re-fire without
+any user-written invalidation.
+
+**"Protection of partiality," concretely graded**:
+- assertive `m.field` against **proven Lacks** → a static error WITH ITS JUSTIFICATION
+  ("known absent: row closed at <srcloc>") — the existing closed-row-miss diagnostic,
+  upgraded from implicit to labeled;
+- against **plausible-absence** → the loud runtime miss CARRYING the why-not label
+  (the P2.b panic, explained);
+- against **⊥** → residuate (today's fresh meta / D23 escape-boundary discipline);
+- **defaults become defeasible assumptions** (the survey's Reiter mention, now
+  load-bearing): a `:default` may fill PLAUSIBLE absence and auto-retract when real
+  data arrives — but **filling KNOWN-absence is a type error** (claiming a value for
+  a slot proven empty): a genuinely novel type-system behavior that falls out of the
+  grading.
+
+**Disposition**: still Stage-0. The shape is now visibly track-charter-sized and
+UCS-adjacent (the one-solver junction) with CIU-T6 touchpoints (presence marks, the
+tail) and Rel touchpoints (NAF, completeness declarations). Chartering is the
+owner's call.
