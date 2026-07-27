@@ -21,8 +21,32 @@
 ;; ========================================
 ;; Shift: increase bound indices >= cutoff by delta
 ;; ========================================
+;; GitHub #58 P1 — delta = 0 is the IDENTITY, at every cutoff and for every term
+;; (open or closed). `shift`'s only effect is `(expr-bvar (+ k delta))` on
+;; qualifying bvars, and `(+ k 0) = k`; every other arm is a pure structural
+;; rebuild (this file contains exactly two conditionals, both the bvar index
+;; tests). Returning `e` itself rather than an equal? copy also preserves
+;; SHARING, which is what makes it a win rather than a wash.
+;;
+;; This is not a corner case. `subst`'s reduce-arm site (:988 below) passes the
+;; arm's `binding-count` as delta, and that is 0 for EVERY nullary constructor
+;; clause — so before this guard, every `| nil -> …` / `| zero -> …` clause did a
+;; complete walk and rebuild of the substitution argument that provably could not
+;; change a single node.
+;;
+;; The property is already asserted by the Redex model:
+;; redex/properties.rkt:144-148 "shift-identity" — (equal? e (term (shift 0 0 e))).
+;; This strengthens it from equal? to eq?.
+;;
+;; NOTE: the guard is a leading `if`, deliberately NOT a match arm. Neither
+;; walker in this file has a catch-all, so an unhandled node HARD-FAILS rather
+;; than silently skipping (the inverse of the pipeline.md § Exhaustive Walkers
+;; failure mode). Keep it that way — do not add a reflective fallback here.
 (define (shift delta cutoff e)
-  (match e
+  (cond
+    [(eqv? delta 0) e]
+    [else
+     (match e
     ;; Variables
     [(expr-bvar k)
      (if (>= k cutoff)
@@ -507,7 +531,7 @@
                           (shift delta (+ cutoff (expr-reduce-arm-binding-count arm))
                                 (expr-reduce-arm-body arm))))
                        arms)
-                  structural?)]))
+                  structural?)])]))
 
 ;; ========================================
 ;; Substitution: replace bvar(k) with s in e

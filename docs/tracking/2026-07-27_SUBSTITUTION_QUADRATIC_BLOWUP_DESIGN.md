@@ -16,8 +16,8 @@ on the whole result.
 
 | Phase | Description | Status | Notes |
 |---|---|---|---|
-| **P0** | Baseline measurement + this doc + the failing-test-first battery | ⬜ | 4 eq?-identity gates verified failing at `09d3566c` |
-| **P1** | Layer 3 — `delta = 0` early-out in `shift` | ⬜ | Redex model already asserts the property |
+| **P0** | Baseline measurement + this doc + the failing-test-first battery | ✅ | `5a2e57a3` — 11 `check-eq?` gates RED at HEAD, semantics invariants GREEN |
+| **P1** | Layer 3 — `delta = 0` early-out in `shift` | ✅ | 11 → 7 red; the 4 G2 gates flip. End-to-end delta is WITHIN NOISE (6003 → 5973 ms at N=128) — Layer 1 masks it; becomes visible after P2 |
 | **P2** | Layer 1 — whnf/nf cache key (`equal?` → `eq?`) | ⬜ | 15.3× at N=256; the biggest single win |
 | **P3** | Layer 2 — `loose-bvar-range` short-circuit, all FOUR sites | ⬜ | the issue's own finding |
 | **P4** | Doc-truth sweep | ⬜ | `bench-ab --ref`, `trivially-whnf?`, the "zero-cost" claim, the stale hset comment |
