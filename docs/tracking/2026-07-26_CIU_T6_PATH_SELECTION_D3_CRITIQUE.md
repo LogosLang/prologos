@@ -15,7 +15,7 @@
 | `D3-S5` | ✅ CONFIRMED | `tests/test-path-expressions.rkt` **20 tests PASS**; `.{`-as-selection live at :54, :66, :194, :235 |
 | `D3-S10` | ✅ CONFIRMED | `[the [List String] [map [fn [x] x] ints]]` with `ints : List Int` → **`'[1 2 3] : [List String]`, 0 errors**; both controls correctly error |
 
-> **Adjudication status: OPEN.** Each finding carries an unticked adjudication line; the owner + assistant work them together and record Accept / Accept-problem-reject-solution / Reject-with-justification / Defer-with-tracking per `CRITIQUE_METHODOLOGY.org` § The Response Format.
+> **Adjudication status: CLOSED 2026-07-26 (round 6)** — every finding dispositioned with the owner; the record + all PS amendments live in the design doc **§5.10** (the per-finding ☐ lines below are superseded by that section). Summary: **B1 ACCEPT** (miss ruled by the subject's negative information; Option-shaped Map miss; sealability qualifier) · **B2 ACCEPT-PROBLEM/SOLUTION-REPLACED [owner]** (dot-sections withdrawn; keyword-projection `map :name users` instead — zero reader work) · **S1 KEEP as P4.d [owner]** (neutral segment + soft resolution; cuttable) · **S2/S4/S6/S7/S8/S9/S11 ACCEPT** (S4 dissolved by retiring `m[:a]` outright) · **S3 ACCEPT, SPLAT STAYS [owner]** (contributions keying; `^_`=derive-all as the splat collision remedy) · **S5 ACCEPT [owner]** (P1 = WS mixfix repair + total `.{` deletion; sexp leg re-points its 20 tests at P4) · **S10 → its own in-track phase PX [owner]** · **M1 RE-RULED [owner]** (selection returns a collection; `x.a` is the single-value spelling) · **M2–M8 ACCEPT** (M3: Path kept as dynamic tier + DEFERRED entry). Cross-level correlation: ruled correctly out of scope.
 
 ---
 

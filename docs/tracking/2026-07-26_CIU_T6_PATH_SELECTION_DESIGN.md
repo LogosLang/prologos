@@ -50,13 +50,14 @@ successor) is designed-for but phased — see §9.
 |---|---|---|---|
 | G | Grounding audit + prior-art survey | ✅ | audit `wf_a62d4b88-47b`; prior art `wf_c1acb1c7-ce1`; §3/§4 |
 | S | **Surface co-design (OWNER CONVERSATION)** | ✅ | **SETTLED 2026-07-26** — five rounds (§5.4–§5.8), consolidated as **§5.9 PS1–PS15** |
-| P0 | **Acceptance file** (`examples/2026-07-XX-ciu-t6-path-selection.prologos`) — the §5.9 worked forms as commented-out targets, uncommented per phase; `--check` gated from day one (the Rel T1 Batch-A lesson) | ⬜ | workflow.md § "Acceptance file as Phase 0". Spans predicate FAMILIES of forms, not one idiom (the 7a lesson) |
-| P1 | `.{` full retirement + audit-example repair (4 files) | ⬜ | **Owner-RULED (Q_P5)**: clean switchover, NO deprecation path. Surface-independent — can land first |
-| P2 | Prerequisite defect repairs (§3.5/§3.6): `record-project` dynamic Int gate (now REQUIRED by PS10's `v.i`) · PVec loud OOB (PS8) · `expr-broadcast-get` walker gaps (whnf arm + `definitely-not-map?`) · `ground-expr?` call-site audit | ⬜ | Each behaviour change gets its own census |
-| P3 | Reader/lexer (WS-Impact section MANDATORY; both-modes census, the 7g family): `.N` segments · `.:.`/`.:[` iteration tokens · `*` splat/`[*]` · **dot-key retirement** (`.:name`→`.name`) · `.*name`→`.:.name` migration · `m[:a]` flip · `x[]`/`_[sel]` rejections · the sexp special form (PS14) | ⬜ | Censuses: dot-key users, `.*name` users, `m[:a]` users, `v[literal]` users (PS2) |
-| P4 | The selection NODE + elaboration + static typing (PS3–PS8): core-elaborator form (NOT preparse, §4.10) · keying/assembly/collision/miss · rows out (the §3.2 retype territory) · full pipeline per `pipeline.md` (files 1–8 + qtt twins + pnet + walkers — Exhaustive-Walker discipline, generic fallback) | ⬜ | The heart. Tests per-phase; probe-first |
-| P5 | Iteration `:` + first-class selectors (PS1/PS11): `.:.`/`.:[` semantics both key domains · `.[sel]`/`.name` sections as lambda sugar · empty-prefix column extraction | ⬜ | v1 adds ZERO propagators (Network Reality Check stated in advance); the broadcast-propagator node is a FUTURE upgrade with its own NTT model |
-| P6 | Migration + supersession (§9 + PS12/PS13): `#p(…)`/`get-in`/`update-in` = the dynamic tier (kept) · `selection`'s three gaps revisited on the new substrate · CIU master T2/T3 supersession recorded · DEFERRED triage | ⬜ | |
+| P0 | **Acceptance file** (`examples/2026-07-XX-ciu-t6-path-selection.prologos`) — the §5.9 worked forms as commented-out targets, uncommented per phase; `--check` gated from day one (the Rel T1 Batch-A lesson). **MUST carry function-typed forms** (D3-S11 — named-schema + keyword-projection consumers, not only top-level expressions) | ⬜ | workflow.md § "Acceptance file as Phase 0". Spans predicate FAMILIES of forms, not one idiom (the 7a lesson) |
+| P1 | **`.{` retirement, WS leg (D3-S5 split)**: repair the 4 audit files' mixfix `.{X}`→`.(X)` · **DELETE the recognizer + the `$mixfix-retired` error entirely** (owner: retire from code AND diagnostics) | ⬜ | **Owner-RULED (Q_P5 + round 6)**. The SEXP brace-select leg is NOT here — it sequences WITH P4 (tests re-pointed, never deleted) |
+| P2 | Prerequisite defect repairs (§3.5/§3.6 + D3-B1): `record-project` dynamic Int gate · PVec loud OOB · **List OOB** · **the `(Map K V)` miss → `Option`-shaped** · **`map-get`-on-nat-row `none`** · `expr-broadcast-get` walker gaps · `ground-expr?` call-site audit **+ the `expr-union` arm re-homed from CIU T2 (D3-S9; generic-fallback covers both twins)** | ⬜ | Each behaviour change gets its own census; B1 legs pinned **failing-test-first**. Counts seeded from D3-M7 |
+| P3 | Reader/lexer (WS-Impact MANDATORY; both-modes census; **ground on the TOKEN-REGISTRY inventory, priorities 92/88/87/86 — D3-S6**): `.N` segments (anchor at the DOT; numerics anchor at a DIGIT — CH-4 ruled) · `.:.`/`.:[` iteration · `*` splat/`[*]` · dot-key retirement (`.:name`→`.name`, **+ the `$nil-dot-key` twin `#.:name`**) · `.*name`→`.:.name` migration · **`m[:a]` RETIRES (error + hint; no flip — D3-S4)** · `x[]`/`_[sel]`/**`.-1`** rejections with real diagnostics · selector **round-trip printing pins** (D3-M6) · the sexp special form (PS14) | ⬜ | Censuses per D3-M7: dot-key 8+11 sites, `.*name` 7+4, `m[:kw]` 17+8, `v[literal]` 49+45 / 48 test-cases. **Sections tokens are GONE from this phase** (B2 → keyword-projection needs none) |
+| P4 | The selection NODE + elaboration + static typing (PS3–PS8 as amended §5.10): core-elaborator form (NOT preparse, §4.10) · contributions keying/assembly/collision/miss · rows out (§3.2 narrowed: keyword result type) · **P4.a the nat-keyed assembly path + PS4 renumbering** · **P4.b the closed-vs-dyn seed pin (PS15=CLOSED, test-pinned)** · **P4.c the sexp special form + re-pointing the 20 brace-select tests (D3-S5)** · **P4.d `v.i` neutral-segment + soft resolution (D3-S1; cuttable)** · full pipeline incl. **item 13: deliberate `#f` registration in typing-propagators (D3-M2)** | ⬜ | The heart. Tests per-phase; probe-first; Exhaustive-Walker discipline, generic fallback |
+| PX | **Substrate soundness (owner-ruled in-track, D3-S10)**: the concrete-codomain lambda-adoption hole — `[the [List String] [map [fn [x] x] ints]]` accepts silently. Fix shape: decomplect evidence/obligation at binder positions (`:expected` facet; lam `:type` written only from the body; disagreement → top → existing refusal) | ⬜ | Position flexible ("at some point in this track"); failing-test-first. §3.7's `map-size` class stays filed separately |
+| P5 | Iteration `:` + first-class selectors (PS1/PS11 as amended): `.:.`/`.:[` both key domains, **result carrier = source collection kind preserved (D3-S4)** · **keyword-projection coercion `map :name users` + qtt twin (+ the `[:kw m]` head arm)** · explicit lambdas as multi-select selector values · empty-prefix column extraction | ⬜ | v1 adds ZERO propagators (Network Reality Check stated in advance); the broadcast-propagator node is a FUTURE upgrade with its own NTT model |
+| P6 | Migration + supersession (§9 + PS12/PS13 as amended): `#p(…)`/`get-in`/`update-in` = the dynamic tier (kept; **Path applicability → DEFERRED entry, D3-M3**) · `selection`'s three gaps revisited · **CIU master: T2 items 2+4 superseded, 1+3 re-homed; T3 RE-CHARTERED (D3-S9)** · DEFERRED triage | ⬜ | §9's write-phase note: source-overlap disjointness is the WRITE headline (D3-S7) |
 | X.close | **MANDATORY** — bench matrix (feature microbench + E2E per testing.md) · DEFERRED triage · doc-truth sweep · memory fold · **Stage-5 PIR** | ⬜ | The track does not flip ✅ until the PIR lands |
 
 *Per `workflow.md`: tests are PER-PHASE, never a dedicated end-of-track test phase.
@@ -648,6 +649,115 @@ owner's delegation ("incorporate … with your recommendations", 2026-07-26).
   ordinary closed rows — sealable, validatable, def-storable (D23 applies).
 
 ---
+
+### §5.10 D.3 critique adjudication — round 6 (owner + Claude, 2026-07-26)
+
+**The D.3 external critique** ([record + full findings](2026-07-26_CIU_T6_PATH_SELECTION_D3_CRITIQUE.md):
+2 BLOCKING · 11 SIGNIFICANT · 8 MINOR surviving; 12 refuted) **was adjudicated in full.**
+Dispositions below amend PS1–PS15 as ✏ deltas (the PS text in §5.9 stands as written;
+where a delta conflicts, the delta WINS). Owner rulings this round are marked **[owner]**.
+
+**The two BLOCKING:**
+
+- **D3-B1 → ACCEPT.** PS8 is restated: **the miss ruling is a function of the negative
+  information the subject's type carries** — a closed row carries "lacks *l*" → static
+  error; a dyn tail carries "unknown" → D19 meta; **`(Map K V)` carries nothing about
+  presence → the result is `Option`-shaped, NEVER a bare `V`**; unbounded positional
+  carriers (PVec/List — added to PS15 per D3-M5) carry no arity → runtime miss, LOUD.
+  PS15 gains the sealability qualifier: *a selection result is a closed row only when
+  its presence information was SOURCED, not fabricated.* P2 grows the Map-miss leg,
+  the `map-get`-on-nat-row leg, and List OOB — all pinned **failing-test-first**.
+  The "closed tails" wildcard gate is restated as **support-boundedness** (D3-M5).
+- **D3-B2 → ACCEPT PROBLEM; solution REPLACED [owner].** The dot-sections are
+  **WITHDRAWN** (`map .name users` does not lex — the fold absorbs the preceding
+  token; main-session-verified). The owner's replacement: **keyword-as-projection** —
+  **`map :name users`** (the Clojure idiom). Mechanism: a CHECK-mode coercion arm —
+  a keyword literal checked against a concrete `A -> B` where `A`'s row/schema/Map
+  carries the key elaborates to the projection lambda (+ the qtt twin; + optionally
+  the application-head arm `[:name m]`). **Zero reader work**; `:name` stays an
+  ordinary Keyword everywhere a Keyword is expected (`[map-get m :name]` verified
+  unchanged). `.[sel]` as a selector literal moves to PS13 (reserved); multi-select
+  selector values are explicit lambdas in v1. PS11's "annotate" remedy corrected:
+  annotate **with a named schema** (anonymous rows are not writable types — D3-S11).
+
+**Owner rulings on the four escalated items:**
+
+- **D3-S5 (the two `.{` worlds) → ACCEPT [owner]**: repair the four audit files'
+  mixfix `.{X}` → `.(X)`; **retire `.{` COMPLETELY from code and diagnostics** (the
+  recognizer + the `$mixfix-retired` error are DELETED — the syntax simply ceases to
+  exist); the sexp brace-select's 20 tests are **RE-POINTED at the P4 sexp special
+  form, never deleted** — that leg sequences WITH P4, not first. P1 splits accordingly.
+- **D3-S1 (`v.i`) → KEEP, as a bounded sub-phase [owner criterion: fits-a-phase].**
+  The real mechanism is named and budgeted as **P4.d**: preparse emits ONE neutral
+  segment node (no keyword freeze); name resolution is SOFT (unbound is not an error
+  when the subject is keyword-keyed); the key-domain fact flows from the subject's
+  row into the segment's resolution; qtt reads usage off the same resolved domain.
+  PS10's invariant restated: *every contributed KEY is statically determined; the
+  VALUES navigated to need not be.* If P4.d drags, it is cuttable (Q_S1's `get`
+  hatch loses nothing).
+- **D3-S3 (splat) → ACCEPT; SPLAT STAYS [owner].** One cause, three fixes:
+  (a) PS3's keying is restated over **CONTRIBUTIONS** — a selector contributes one
+  keyed slot, one positional slot, or (splat) **a SET of slots from the subject's own
+  support**; the structural operators are `:`, `[`, **and `*`** (the round-5 swap
+  dropped `*` from the list — restored). PS5/PS7 consume contributions uniformly.
+  (b) The collision remedy on a splat is **`^_` = derive-ALL** (every spliced field
+  gets its full-path key: `x[server.*^_ db.*^_]` → `{:server-host … :db-host …}`,
+  collision-free by construction); `^` and `^name` on a splat = static error (no
+  single key to govern). (c) §5.7's quadrant table is stale (mid-path `*` spelling)
+  — superseded by §5.8's `:` spellings; noted, not rewritten.
+- **D3-M1 (Q_S3) → RE-RULED [owner].** The redundancy basis was gone; the owner
+  re-affirms on the correct basis: *a selection returns a sub-tree (or forest) — a
+  collection is the expected result* — and `x.a` is the deliberate single-value
+  spelling. `x[a^]` = `⟨x.a⟩` stands, now deliberately.
+
+**The substrate bug [owner]:** **D3-S10 (the concrete-codomain lambda-adoption hole)
+gets its OWN PHASE in this track** — row **PX** in §2 — "not a bug we want rolling
+around unnoticed." Fix shape (from the critique, information-flow): decomplect
+evidence from obligation at binder positions — the downward write flows to an
+`:expected` facet; the lam's `:type` facet is written only from the body's own type;
+disagreement → `type-top` → the existing top-refusal. (§3.7's `map-size` class stays
+FILED SEPARATELY as before.)
+
+**Remaining dispositions** (all ACCEPT unless noted): **S2** §3.2 narrowed to the
+keyword result type; P4 gains the nat-keyed assembly path + the closed-vs-dyn seed
+pin (PS15 says CLOSED; the `{}` seed is DYN — test-pinned at P4). **S4** `rows[:f]`
+vs `rows[:.f]` is DISSOLVED: `m[:a]`/keyword-in-bracket does NOT flip — it **RETIRES**
+(static error + hint naming `m[a]` / `get`), amending PS12; PS1 gains the `:` result
+carrier: **iteration preserves the source collection kind** (List→List, PVec→PVec,
+keyword-row→map-vals with keys kept; heterogeneous tuple→per-position row).
+**S6** P3 grounds on the **token-registry inventory** (priorities 92/88/87/86) as the
+authoritative list — the walker discipline applied to the tokenizer; `.(` is named as
+P1's repair target; `$nil-dot-key` (`#.:name`) retires WITH dot-key (its `#.name`
+form survives); CH-4 ruled: `.N` anchors at the DOT, numeric recognizers anchor at a
+DIGIT. **S7** PS7's novelty claim corrected (result-key collision is precedented —
+GraphQL `FieldsInSetCanMerge`); **source-overlap disjointness is the WRITE phase's
+headline deliverable**, named in §9. **S8** §6 owes the Q4 bridge diagram with TWO
+edges — keyword = Galois (D21); nat = **relabelling with NO adjoint** (dense-prefix
+forbids the sparse γ) — the selector is the correspondence carrier for the nat edge;
+§6 re-run lands with D.4. **S9** §9's supersession rewritten against the CIU master:
+T2 items 2+4 superseded; **item 1 (`ground-expr?` `expr-union` arm — verified live,
+0 arms in trait-resolution.rkt) re-homes to P2** beside its §3.6 twin (the generic
+transparent-struct fallback covers both structurally); item 3 (sugar audit) is P3's
+prerequisite; **T3 is RE-CHARTERED, not "kept"** (PS2/PS10 redefine its Phase-2
+example and Phase-3 criterion). **S11** PS15 reframed as *where row information
+enters a binder's type cell*; v1's abstraction direction rides **named schemas +
+keyword-projections**; **P0 MUST carry function-typed forms** (else it proves
+nothing about library usability). **M2** P4 explicitly books pipeline item 13: the
+node gets a **deliberate `#f` registration** (the `expr-solve`/`expr-map-get` idiom),
+never left unregistered; §7's instruction narrowed to "no propagator CLAIMS without
+`net-add-propagator` calls". **M3** `#p()`/`Path` = the dynamic tier, KEPT v1, with
+a DEFERRED entry for applicability/typed-Path; the PRIMARY selector representation
+is the selection AST (the sexp special form); `#p` is runtime path DATA. **M4/M8**
+doc fixes folded (presence+tail lattices added to §6.2's inventory; the unenforceable
+§6.4 sentence deleted; coordinates re-pinned: elaborator arm :2297-2298, key-ty :565,
+audit-08 count 3). **M5** folded into B1/PS15 above. **M6** P3 additionally REJECTS
+`.-1` with a real diagnostic and pins selector round-trip printing. **M7**'s counts
+land in the P2/P3 census rows (49+45 `v[literal]` sites, 48 test-cases, etc.).
+
+**Out-of-scope flag (owner call recorded as CORRECTLY out of scope)**: cross-level
+correlation inside iteration ("for each admin, pair its name with the app's name")
+has no v1 spelling — selection is subtree extraction; the shape belongs to a future
+comprehension/binding surface, noted in PS13's spirit but not reserved.
 
 ## §6 SRE lattice lens — REQUIRED (the result shape IS lattice-shaped)
 
