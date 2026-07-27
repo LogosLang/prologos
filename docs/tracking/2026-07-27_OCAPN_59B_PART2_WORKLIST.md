@@ -395,3 +395,84 @@ verified by A/B stash).
 2. **The stuck `[reduce …]` term.** Annotating through a `def` gets past
    elaboration but leaves an unreduced `reduce`. That is a reduction-side
    question, separate from the typing budget, and is still open.
+
+---
+
+## MEASURED STATUS (2026-07-27, after the greeter fix)
+
+Upstream is 24 tests. Seven of them (`third_party_handoffs`) need the Tor
+onion netlayer and therefore `stem`, which is out of scope here — upstream's
+own `test_runner.py` cannot even be imported without it, which is why this
+repo carries its own selective loader.
+
+Running **all 17 non-Tor tests** against the server (scratch runner built
+from `tools/interop/ocapn-run-tests.py` with every non-handoff test listed):
+
+```
+Ran 17 tests in 211.169s
+FAILED (errors=11)     ok: 6   ERROR: 11   FAIL: 0
+```
+
+So: **6 of 24 overall; 6 of the 17 reachable ones.**
+
+| Test | State | Gated on |
+|---|---|---|
+| `op_start_session` × 3 (version, invalid version, invalid signature) | PASS | — |
+| `op_abort` `test_abort_before_setup` | PASS | — |
+| `op_deliver` `test_deliver_with_resolver` | PASS | — |
+| `op_deliver` `test_send_deliver_no_answer_or_response` (greeter) | PASS **NEW** | — |
+| `op_listen` × 3 | ERROR | **the promise-resolver object** (swiss-num `IokCxYmMj04nos2JN1TDoY1bT8dXh6Lr`) |
+| `op_deliver` promise pipelining × 2 | timeout | **the Car Factory chain** (builder → factory → car) |
+| `op_gc` × 4 | ERROR | **emitting `op:gc-export`** — we never send one |
+| `op_start_session` crossed-hellos × 2 | timeout | **outbound connections** (we are responder-only) |
+| `third_party_handoffs` × 7 | not run | Tor / `stem` |
+
+### The cheapest remaining win: op:listen (3 tests), and it does NOT need a spawn effect
+
+All three `op_listen` tests call `make_promise_resolver_pair()` **exactly
+once per connection**, and each test opens its own connection
+(`self.netlayer.connect`). Verified by reading the upstream source, not
+assumed. So the pair does not have to be created dynamically — it can be
+**pre-seeded at `init-connection`**, exactly the way Echo and the Greeter
+already are:
+
+1. register `IokCxYmMj04nos2JN1TDoY1bT8dXh6Lr` in `swiss-num-export`;
+2. at connection init, allocate a promise at a reserved id and place a
+   resolver actor at another reserved id (`seeded-vat` already reserves ids
+   this way and sets `next-id` above them);
+3. `beh-promise-resolver`: called with no args, resolve the caller's
+   resolve-me promise with `syrup-list [<promise-desc>, <resolver-desc>]`;
+4. `beh-resolver`: called with a value, emit `eff-resolve <promise-id> value`.
+
+This is the "pre-allocated ids" option from the earlier plan, done
+STATICALLY — the ids are reserved at connection setup rather than mid-turn,
+so `step-behavior` needs no new parameter and the seven `step-*` helpers are
+untouched. Honest limitation to document when it lands: one pair per
+connection. That is sufficient for every upstream test that asks for one,
+and the dynamic version (a real `eff-spawn`) is only forced by the Car
+Factory chain, which must return a reference to something it spawns.
+
+### Revised sequencing
+
+1. **Promise resolver, statically pre-seeded** → unlocks `op_listen` × 3
+   (6 → 9). No signature change.
+2. **`op:gc-export` emission** → unlocks `op_gc` × 4 (9 → 13). Independent
+   of 1; needs reference counting on the export table, not new vat
+   machinery.
+3. **`eff-spawn` + pre-allocated ids** → Car Factory chain → promise
+   pipelining × 2 (13 → 15). This is where the signature change is actually
+   forced.
+4. **Outbound connections** → crossed-hellos × 2 (15 → 17). Separate track;
+   `mk-handshake-bytes` is reusable as initiator; what is missing is the
+   netlayer connect plus questioner-side bridge state.
+5. **Tor handoffs × 7** — out of scope by owner instruction.
+
+17 is the ceiling in this environment; 24/24 additionally requires Tor.
+
+### Diagnostic aid added
+
+`tools/interop/run-ocapn-test-server.rkt` now dumps each inbound frame as
+hex under `OCAPN_FRAME_HEX=1`. Capturing the REAL frame is what unblocked
+the greeter: the previously-recorded probe used `desc:import-object 7`, but
+the wire sends `1`, and the id collision that caused the bug only exists at
+`1`. Guessing the frame hid the bug for two sessions.
