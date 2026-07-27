@@ -221,6 +221,37 @@ defn get-payload
   | syrup-refr _       -> none
   | syrup-promise _    -> none
 
+;; Int -> Nat (clamped at 0). Structural recursion → O(n) cost.
+;; Only used for table-position decoding (small Nats) so the cost
+;; is acceptable.
+
+spec int-to-nat-loop Int Nat -> Nat
+defn int-to-nat-loop [i acc]
+  match [int-lt 0 i]
+    | false -> acc
+    | true  -> int-to-nat-loop [int- i 1] [suc acc]
+
+spec int-to-nat Int -> Nat
+defn int-to-nat [i]
+  int-to-nat-loop i zero
+
+spec wire-nat SyrupValue -> [Option Nat]
+defn wire-nat
+  | syrup-int i ->
+      match [int-lt i 0]
+        | true  -> none
+        | false -> some [int-to-nat i]
+  | syrup-nat n      -> some n
+  | syrup-null       -> none
+  | syrup-bool _     -> none
+  | syrup-string _   -> none
+  | syrup-symbol _   -> none
+  | syrup-list _     -> none
+  | syrup-tagged _ _ -> none
+  | syrup-refr _     -> none
+  | syrup-bytes _  -> none
+  | syrup-promise _  -> none
+
 ;; ========================================
 ;; Convenience constructors
 ;; ========================================

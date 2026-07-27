@@ -42,7 +42,7 @@ require [prologos::ocapn::syrup
          :refer [BehaviorTag
                  beh-cell beh-counter beh-greeter beh-echo
                  beh-adder beh-forwarder beh-fulfiller
-                 Effect eff-send-only eff-resolve eff-break
+                 Effect eff-send-only eff-send-remote eff-resolve eff-break
                  ActStep act-step
                  step-state step-return step-effects
                  step-behavior]]
@@ -322,12 +322,26 @@ defn break-promise
 ;; Effect interpretation
 ;; ========================================
 ;;
-;; Apply one Effect to the vat: a send-only enqueues; resolve/break
+;; Append to `outbound`, preserving ORDER (append, not cons — a behaviour
+;; that sends twice must have them emitted in that order).
+spec enqueue-outbound VatMsg Vat -> Vat
+defn enqueue-outbound [m v]
+  [vat [vat-next-id v] [vat-actors v] [vat-promises v] [vat-queue v] [append [vat-outbound v] [cons m nil]]]
+
+;; Apply one Effect to the vat: a send-only enqueues on the LOCAL queue;
+;; a send-remote goes straight to the outbound queue; resolve/break
 ;; settle the corresponding promise.
+;;
+;; eff-send-remote skips the actor-table lookup on purpose. Its target is
+;; the PEER's export position, which is drawn from a different counter than
+;; our actor ids and collides with them freely — see the namespace note on
+;; `data Effect` in behavior.prologos. Routing it through `send-only` would
+;; let `deliver-msg` find a same-numbered LOCAL actor and deliver there.
 
 spec apply-effect Effect Vat -> Vat
 defn apply-effect
-  | [eff-send-only t a]    v -> send-only t a v
+  | [eff-send-only   t a]  v -> send-only t a v
+  | [eff-send-remote t a]  v -> enqueue-outbound [vmsg-deliver t a none] v
   | [eff-resolve pid val]  v -> resolve-promise pid val v
   | [eff-break   pid val]  v -> break-promise   pid val v
 
@@ -371,12 +385,6 @@ defn step-after-act [target old-act new-state rv effects ap v]
 ;; against a non-existent actor would hang on its result-promise
 ;; forever. The break-reason carries the original args so callers
 ;; can debug what couldn't be delivered.
-
-;; Append to `outbound`, preserving ORDER (append, not cons — a behaviour
-;; that sends twice must have them emitted in that order).
-spec enqueue-outbound VatMsg Vat -> Vat
-defn enqueue-outbound [m v]
-  [vat [vat-next-id v] [vat-actors v] [vat-promises v] [vat-queue v] [append [vat-outbound v] [cons m nil]]]
 
 spec deliver-msg VatMsg Vat -> Vat
 defn deliver-msg [m v]

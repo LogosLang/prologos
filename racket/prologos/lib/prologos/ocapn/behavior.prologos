@@ -29,7 +29,8 @@ require [prologos::ocapn::syrup
          :refer [SyrupValue
                  syrup-null syrup-bool syrup-nat syrup-int syrup-string
                  syrup-symbol syrup-list syrup-tagged
-                 syrup-refr syrup-promise]]
+                 syrup-refr syrup-promise
+                 wire-nat]]
         [prologos::data::list   :refer [List nil cons]]
         [prologos::data::option :refer [Option none some]]
         [prologos::data::nat    :refer [add]]
@@ -56,13 +57,32 @@ data BehaviorTag
 ;; They describe what they want done as a list of Effects, which the
 ;; vat interprets atomically when the turn closes.
 
+;; TWO ID NAMESPACES, deliberately distinguished. A `Nat` target is
+;; ambiguous on its own: it can name a LOCAL actor (a key in the vat's
+;; actor table) or a REMOTE object the peer exported to us (which arrives
+;; on the wire as `desc:import-object N` and must be addressed back as
+;; `desc:export N`). Those numbers are drawn from independent counters and
+;; DO collide in practice.
+;;
+;; `deliver-msg` used to disambiguate by heuristic — "no local actor at
+;; this id, therefore it must be remote". That silently misroutes whenever
+;; the peer's id happens to match one of ours. It bit the upstream greeter
+;; test exactly: the peer delivers `<desc:import-object 1>` to the greeter,
+;; which itself sits at local actor id 1, so the greeter's reply was
+;; delivered back to the greeter instead of going out on the wire. Nothing
+;; errored; the connection simply produced no bytes and upstream timed out.
+;;
+;; So the namespace is part of the effect, not something to infer later.
 data Effect
-  ;; Send to a refr (fire-and-forget).
-  eff-send-only : Nat -> SyrupValue
+  ;; Send to a LOCAL refr (fire-and-forget) — `t` is a vat actor-table key.
+  eff-send-only   : Nat -> SyrupValue
+  ;; Send to a REMOTE object the peer exported — `t` is the peer's export
+  ;; position, straight to the outbound queue with no actor-table lookup.
+  eff-send-remote : Nat -> SyrupValue
   ;; Resolve a promise with a value (pst-fulfilled).
-  eff-resolve   : Nat -> SyrupValue
+  eff-resolve     : Nat -> SyrupValue
   ;; Break a promise with a reason (pst-broken).
-  eff-break     : Nat -> SyrupValue
+  eff-break       : Nat -> SyrupValue
 
 ;; ========================================
 ;; ActStep — what one method invocation produces
@@ -206,14 +226,21 @@ defn first-nat-in [xs]
 ;; <desc:import-object 7> is [syrup-nat 7], not a bare syrup-nat. Accept
 ;; both: the bare form is what hand-built test values use, the list form
 ;; is what the wire actually delivers.
+;; A descriptor's table position arrives as a Syrup POSITIVE INTEGER on the
+;; wire (`<18'desc:import-object1+>` — the `+` suffix), so it decodes to
+;; `syrup-int`, NOT `syrup-nat`. This arm used to return none for
+;; `syrup-int`, which is why the greeter silently found no target in a
+;; descriptor it had just been handed: length-1 list, right tag, and still
+;; `none`. Delegate to syrup's `wire-nat`, which is the ONE reader for this
+;; (it carries the negative guard); do not re-derive the conversion here.
 spec nat-payload SyrupValue -> [Option Nat]
 defn nat-payload [v]
   match v
     | syrup-nat n      -> [some n]
+    | syrup-int _      -> wire-nat v
     | syrup-list xs    -> first-nat-in xs
     | syrup-null       -> [none Nat]
     | syrup-bool _     -> [none Nat]
-    | syrup-int _      -> [none Nat]
     | syrup-string _   -> [none Nat]
     | syrup-symbol _   -> [none Nat]
     | syrup-tagged _ _ -> [none Nat]
@@ -249,10 +276,15 @@ defn first-refr-in [xs]
     | nil        -> [none Nat]
     | [cons h _] -> refr-id-of h
 
+;; The refr the greeter is handed came off the wire as a
+;; `desc:import-object` / `desc:export` descriptor, so `t` is the PEER's
+;; export position, not one of our actor ids — hence eff-send-remote.
+;; Using eff-send-only here is what made the upstream test hang: see the
+;; namespace note on `data Effect` above.
 spec greeter-send SyrupValue [Option Nat] -> ActStep
 defn greeter-send
   | state none     -> no-op state
-  | state [some t] -> act-step state syrup-null [cons [eff-send-only t [syrup-list [cons [syrup-string "Hello"] nil]]] nil]
+  | state [some t] -> act-step state syrup-null [cons [eff-send-remote t [syrup-list [cons [syrup-string "Hello"] nil]]] nil]
 
 spec step-greeter SyrupValue SyrupValue -> ActStep
 defn step-greeter [state args]

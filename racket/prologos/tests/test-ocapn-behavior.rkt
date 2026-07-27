@@ -200,3 +200,63 @@
     "(eval (step-behavior beh-counter (syrup-nat zero)
                             (syrup-tagged \"inc\" syrup-null)))")
    "ActStep"))
+
+;; ========================================
+;; Phase 59b part 3: the greeter's outbound send
+;; ========================================
+;;
+;; Two independent bugs made the upstream `test_send_deliver_no_answer_or_
+;; response` HANG (not fail) with the server emitting `62 in / 0 out`. Both
+;; are silent: no error, no diagnostic, just no bytes. Pin both.
+
+;; Bug 1 — a descriptor's table position arrives as a Syrup POSITIVE INTEGER
+;; (`<18'desc:import-object1+>` — note the `+`), so it decodes to `syrup-int`,
+;; NOT `syrup-nat`. `nat-payload` accepted only `syrup-nat` and mapped
+;; `syrup-int` to none, so the greeter found no target in the descriptor it
+;; had just been handed: right tag, length-1 list, and still none.
+(test-case "behavior/nat-payload accepts a wire INTEGER position (not just nat)"
+  (check-contains
+   (run-last "(eval (unwrap-or 99N (nat-payload (syrup-int 1))))")
+   "1N")
+  ;; nat spelling still works
+  (check-contains
+   (run-last "(eval (unwrap-or 99N (nat-payload (syrup-nat 1N))))")
+   "1N")
+  ;; a NEGATIVE integer is not a table position — wire-nat's guard holds
+  (check-contains
+   (run-last "(eval (unwrap-or 99N (nat-payload (syrup-int -1))))")
+   "99N"))
+
+(test-case "behavior/refr-id-of reads an int-payload desc:import-object"
+  (check-contains
+   (run-last
+    "(eval (unwrap-or 99N (refr-id-of (syrup-tagged \"desc:import-object\" (syrup-int 1)))))")
+   "1N"))
+
+(test-case "behavior/first-refr-in finds the descriptor in the wire arg list"
+  ;; This is the exact shape upstream delivers to the greeter.
+  (check-contains
+   (run-last
+    "(eval (unwrap-or 99N (first-refr-in (cons (syrup-tagged \"desc:import-object\" (syrup-int 1)) nil))))")
+   "1N"))
+
+;; Bug 2 — the greeter's reply target is the PEER's export position, drawn
+;; from a different counter than our local actor ids and colliding with them
+;; freely. `eff-send-only` would route it through the local actor table; the
+;; upstream test delivers `desc:import-object 1` to a greeter that itself sits
+;; at local actor id 1, so the reply went back to the greeter. The effect must
+;; name the namespace: `eff-send-remote`.
+(test-case "behavior/greeter emits a REMOTE send, not a local one"
+  ;; eff-send-remote's selector position is the peer's export id.
+  (check-contains
+   (run-last
+    "(eval (step-effects (step-behavior beh-greeter (syrup-string \"Hello\")
+                                        (syrup-list (cons (syrup-tagged \"desc:import-object\" (syrup-int 1)) nil)))))")
+   "eff-send-remote"))
+
+(test-case "behavior/greeter with no refr in args emits no effects"
+  (check-contains
+   (run-last
+    "(eval (step-effects (step-behavior beh-greeter (syrup-string \"Hello\")
+                                        (syrup-list nil))))")
+   "nil"))

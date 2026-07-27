@@ -40,15 +40,6 @@ from netlayers.testing_only_tcp import TestingOnlyTCPNetlayer
 # The crossed-hellos / op:deliver / op:gc / op:listen tests need the
 # server to drive captp-core with a swiss-num object registry (Phase 59+).
 SELECTED = [
-    # NOT YET SELECTED — test_send_deliver_no_answer_or_response (greeter).
-    # The machinery is built and verified at the connection-step level (the
-    # exact call the server makes), with the exact descriptor upstream sends:
-    #   in : op:deliver 1N [<desc:import-object 7>] false false
-    #   out: <10'op:deliver<11'desc:export7+>[5"Hello]ff>
-    # End-to-end it still does not reply, and it HANGS rather than failing,
-    # which burns the runner's 90s budget and starves tests that do pass
-    # (observed: 5 passing -> 3). Left out until the hang is diagnosed;
-    # putting it in makes CI worse, not more honest.
     ("tests.op_start_session", "OpStartSessionTest", [
         "test_captp_remote_version",
         "test_start_session_with_invalid_version",
@@ -56,6 +47,16 @@ SELECTED = [
     ]),
     ("tests.op_deliver", "OpDeliverTest", [
         "test_deliver_with_resolver",
+        # Greeter (Phase 59b part 3). Was excluded while it HUNG rather than
+        # failed, burning the runner's budget. Two bugs kept it silent, both
+        # on the "no answer position, no resolve-me" path:
+        #   1. a descriptor's table position arrives as a Syrup positive
+        #      INTEGER (`1+`), so it decodes to syrup-int; nat-payload only
+        #      accepted syrup-nat and returned none for its own target;
+        #   2. the greeter's reply target is the PEER's export position,
+        #      which collides with our local actor ids — eff-send-only routed
+        #      it back into the local actor table instead of the wire.
+        "test_send_deliver_no_answer_or_response",
     ]),
     ("tests.op_abort", "OpAbortTest", [
         "test_abort_before_setup",

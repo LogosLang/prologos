@@ -76,7 +76,9 @@ defn incoming-captp-op
 require [prologos::ocapn::promise :refer-all]
         [prologos::ocapn::pipelining :refer [pipeline-deliver]]
         [prologos::ocapn::syrup-wire :as wire :refer []]
-        [prologos::ocapn::captp-wire :refer [wire-nat]]
+        ;; wire-nat moved to prologos::ocapn::syrup (2026-07-27) — it reads a
+        ;; SyrupValue as a table position, which is a SyrupValue concern.
+        [prologos::ocapn::syrup      :refer [wire-nat]]
         [prologos::data::list :refer [append cons nil]]
 
 ;; Build the bytes for an outbound op:deliver targeting an

@@ -276,6 +276,9 @@
               [(or (eof-object? frame) (not frame))
                (printf "ocapn-test-server: peer closed after ~a frames (conn ~a)~n" n cid)]
               [else
+               (when (getenv "OCAPN_FRAME_HEX")
+                 (printf "ocapn-test-server: FRAME-HEX conn ~a n ~a: ~a~n"
+                         cid (+ n 1) (bytes->hex-string frame)))
                (define out (drive-step cid frame))
                (printf "ocapn-test-server: conn ~a frame ~a (~a in / ~a out bytes)~n"
                        cid (+ n 1) (bytes-length frame) (bytes-length out))
