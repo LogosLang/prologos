@@ -164,3 +164,60 @@ the peer never requested.
 not from reading it — the 14-agent audit, and then me, both got this wrong
 by inspection. The `71 out` vs `0 out` line in a server log settled in one
 run what two rounds of code-reading argued about.
+
+## The one blocker for 3 of the 5 objects: behaviours cannot SEND (design note)
+
+Verified state after this session: 5 of 24 upstream tests pass. The next
+three objects (Greeter, Car Factory, promise resolver) all need the same
+missing capability, so this is one piece of work, not three.
+
+**What is missing.** A behaviour can do exactly four things (`ActStep` +
+`Effect`, `behavior.prologos:59-74`): become a new state, return a value,
+`eff-send-only` to a **vat-local actor id**, or settle a promise. There is
+no way to send an `op:deliver` to a **peer export position**. Upstream's
+Greeter test requires exactly that:
+
+```python
+greeter_refr = self.remote.fetch_object(b"VMDDd1vo...")
+deliver_only_op = OpDeliver(greeter_refr, [object_to_greet], False, False)
+self.remote.send_message(deliver_only_op)
+response = self.remote.expect_message_to(object_to_greet.to_desc_export())
+self.assertEqual(response.args, ["Hello"])
+```
+
+i.e. the Greeter must ORIGINATE a frame to a descriptor the peer supplied.
+
+**Why it is not a one-liner — the layer crossing.** The vat is deliberately
+wire-agnostic; `apply-effect` (`vat.prologos:318-322`) maps Effects onto vat
+operations only. Outbound frames live in `BridgeState`'s pending-out, which
+the vat cannot reach. So a new Effect variant needs somewhere to land:
+
+  Option A — add an outbound-request queue field to `Vat`. `apply-effect`
+  appends to it; `connection-step` drains it after `run-vat` and appends
+  `listener-notify-bytes`-style frames to pending-out. Clean separation
+  preserved (the vat still never touches bytes), but it is a **struct field
+  addition**, which per `.claude/rules/pipeline.md` § "New Struct Field"
+  means: `raco make driver.rkt`, then grep for EVERY `struct-copy` AND every
+  direct `(vat ...)` constructor call tree-wide — `empty-vat`
+  (`vat.prologos:211`), `seeded-vat` (`interop-driver.prologos`), and any
+  test fixture. That checklist exists because this class of change has
+  silently broken things before; budget for it.
+
+  Option B — have the behaviour return the send request as part of its
+  return VALUE and let captp-core interpret it. Cheaper, no struct change,
+  but it overloads the return value with control information and every
+  caller of `step-behavior` must learn the convention. Rejected on the
+  mantra (information should flow structurally, not by convention), but
+  recorded because it is the tempting shortcut.
+
+Prefer A. Do it as its own phase with its own tests, not bundled with an
+object.
+
+**Then, and only then**, the objects: Greeter is ~10 lines once sending
+exists; Car Factory additionally needs a behaviour to SPAWN (a second
+missing Effect, same layer-crossing question, so design both at once); the
+promise resolver needs to return two references.
+
+**Sturdyref enlivener stays last and is a different order of work** — it
+requires outbound connections to a third party, a netlayer capability that
+does not exist at all.
