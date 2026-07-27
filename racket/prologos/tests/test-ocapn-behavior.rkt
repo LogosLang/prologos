@@ -260,3 +260,47 @@
     "(eval (step-effects (step-behavior beh-greeter (syrup-string \"Hello\")
                                         (syrup-list nil))))")
    "nil"))
+
+;; ========================================
+;; Phase 59b part 4: the promise RESOLVER
+;; ========================================
+;;
+;; Upstream's promise-resolver object hands out a (vow, resolver) pair; the
+;; peer then settles the vow by messaging the resolver with ['fulfill v] or
+;; ['break r]. beh-fulfiller cannot serve that role — it resolves with the
+;; WHOLE message, so a fulfil came back as ['fulfill ['fulfill ok]] and, worse,
+;; a BREAK came back as a FULFILL whose value happened to be ['break oh-no]:
+;; the outcome inverted. beh-resolver reads the verb.
+
+(test-case "behavior/resolver fulfils with the PAYLOAD, not the whole message"
+  (check-contains
+   (run-last
+    "(eval (step-effects (step-behavior beh-resolver (syrup-promise 6N)
+                          (syrup-list (cons (syrup-symbol \"fulfill\")
+                                       (cons (syrup-symbol \"ok\") nil))))))")
+   "eff-resolve"))
+
+(test-case "behavior/resolver BREAKS on a break verb (does not resolve)"
+  (define effs
+    (run-last
+     "(eval (step-effects (step-behavior beh-resolver (syrup-promise 6N)
+                           (syrup-list (cons (syrup-symbol \"break\")
+                                        (cons (syrup-symbol \"oh-no\") nil))))))"))
+  (check-contains effs "eff-break")
+  (check-false (string-contains? effs "eff-resolve")
+               "a break must NOT emit a resolve — that inversion was the bug"))
+
+(test-case "behavior/resolver ignores a non-list message"
+  (check-contains
+   (run-last
+    "(eval (step-effects (step-behavior beh-resolver (syrup-promise 6N) syrup-null)))")
+   "nil"))
+
+(test-case "behavior/resolver ignores an unknown verb by resolving with the payload"
+  ;; Anything that is not `break` settles as a fulfil — the permissive
+  ;; direction, matching how the peer only ever sends the two verbs.
+  (check-contains
+   (run-last
+    "(eval (step-effects (step-behavior beh-resolver (syrup-promise 6N)
+                          (syrup-list (cons (syrup-symbol \"fulfill\") nil)))))")
+   "eff-resolve"))

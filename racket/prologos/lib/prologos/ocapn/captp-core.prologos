@@ -155,17 +155,29 @@ defn outbound-from-resolution
   | pid [pst-broken     r] -> some [outbound-deliver-bytes pid [wrap-error r]]
   | pid [pst-fulfilled  v] -> some [outbound-deliver-bytes pid v]
 
-;; Phase 48: extract the syrup-shaped resolution payload from a
-;; PromiseState, ready for shipment to a listener.
-;;   pst-fulfilled v  →  some v
-;;   pst-broken    r  →  some <Error r>
+;; The COMPLETE settled message for a listener notification — the verb
+;; included, because the verb is what distinguishes the two outcomes:
+;;   pst-fulfilled v  →  some ['fulfill v]
+;;   pst-broken    r  →  some ['break r]
 ;;   pst-unresolved _ →  none (listeners aren't notified until settled)
+;;
+;; It used to return the bare VALUE, leaving each of the three call sites
+;; to wrap (or not). Two didn't, and the one that did — orphan-loop —
+;; hardcoded `fulfill`, so a BROKEN promise was reported to the peer as
+;; `['fulfill <Error r>]`: the outcome inverted, with the break reason
+;; smuggled inside as a payload. Upstream asserts on args[0], so a
+;; rejection read as an acceptance. Building the verb here keeps the
+;; three sites consistent by construction.
+;;
+;; Note this is the LISTENER channel. `outbound-from-resolution` speaks
+;; the desc:answer channel, which carries a bare <Error r>, not a verb —
+;; different shape on purpose.
 spec resolution-syrup-of-pst PromiseState -> [Option SyrupValue]
 defn resolution-syrup-of-pst [pst]
   match pst
     | pst-unresolved _ -> none
-    | pst-broken     r -> some [wrap-error r]
-    | pst-fulfilled  v -> some v
+    | pst-broken     r -> some [syrup-list [cons [syrup-symbol "break"] [cons r [nil SyrupValue]]]]
+    | pst-fulfilled  v -> some [syrup-list [cons [syrup-symbol "fulfill"] [cons v [nil SyrupValue]]]]
 
 ;; ===========================================================
 ;; Bridge state — Phase 14
@@ -2024,7 +2036,7 @@ defn orphan-loop
       match [orphan-bytes-for tgt emitted v]
         | none -> orphan-loop rest v emitted accum
         | some payload ->
-            orphan-loop rest v [cons tgt emitted] [cons [listener-notify-bytes res [wrap-fulfill payload]] accum]
+            orphan-loop rest v [cons tgt emitted] [cons [listener-notify-bytes res payload] accum]
 
 ;; ===========================================================
 ;; Phase 59b part 3: drain the vat's `outbound` into wire frames

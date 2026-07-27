@@ -41,7 +41,7 @@ require [prologos::ocapn::syrup
         [prologos::ocapn::behavior
          :refer [BehaviorTag
                  beh-cell beh-counter beh-greeter beh-echo
-                 beh-adder beh-forwarder beh-fulfiller
+                 beh-adder beh-forwarder beh-fulfiller beh-resolver
                  Effect eff-send-only eff-send-remote eff-resolve eff-break
                  ActStep act-step
                  step-state step-return step-effects

@@ -17,9 +17,13 @@ require [prologos::ocapn::captp-core :refer [ConnectionState empty-connection
                                               connection-step conn-step-state
                                               conn-step-outbound conn-state
                                               bridge-state-empty]]
-        [prologos::ocapn::vat        :refer [Vat vat Actor actor actor-table-set]]
-        [prologos::ocapn::behavior   :refer [beh-echo beh-greeter]]
-        [prologos::ocapn::syrup      :refer [syrup-null syrup-string]]
+        [prologos::ocapn::vat        :refer [Vat vat Actor actor actor-table-set
+                                             promise-table-set]]
+        [prologos::ocapn::behavior   :refer [beh-echo beh-greeter beh-cell beh-resolver]]
+        [prologos::ocapn::syrup      :refer [SyrupValue syrup-null syrup-string
+                                             syrup-list syrup-nat syrup-tagged
+                                             syrup-promise]]
+        [prologos::ocapn::promise    :refer [fresh]]
         [prologos::ocapn::captp-wire :refer [decode-op]]
         [prologos::ocapn::message    :refer [CapTPOp]]
         [prologos::ocapn::handshake  :refer [hex-to-bytes]]
@@ -69,10 +73,62 @@ defn concat-frames
 ;; ActStep returns a single value — both are unbuilt capability, not
 ;; missing behaviours.
 
+
+;; ===========================================================
+;; The promise-resolver object (upstream swiss-num
+;; IokCxYmMj04nos2JN1TDoY1bT8dXh6Lr, already mapped to export 4)
+;; ===========================================================
+;;
+;; Upstream calls it with NO arguments and expects the answer
+;;   ['fulfill [<desc:import-object VOW> <desc:import-object RESOLVER>]]
+;; then listens on VOW and settles it by messaging RESOLVER.
+;;
+;; The pair is PRE-SEEDED here rather than created per call. That is
+;; sound for the upstream suite because every test that asks for a pair
+;; asks EXACTLY ONCE, on its own fresh connection
+;; (`op_listen.py` — three tests, one `make_promise_resolver_pair()`
+;; each, each after its own `netlayer.connect`). Verified by reading the
+;; tests, not assumed.
+;;
+;; Doing it this way is what keeps the change small: creating the pair
+;; on demand would mean a behaviour allocating a promise and spawning an
+;; actor mid-turn, which needs ids that only exist AFTER the vat
+;; interprets the effects — the chicken-and-egg that forces a
+;; `step-behavior` signature change. Reserving the ids at connection
+;; setup is the same "pre-allocated ids" answer applied statically.
+;; KNOWN LIMIT: one pair per connection. The dynamic version is only
+;; forced by the Car Factory, which must return a reference to something
+;; it spawns.
+;;
+;; No new behaviours are needed:
+;;   - the object itself is `beh-cell`, which returns its state unchanged
+;;     for a list-shaped argument — and its state IS the pair;
+;;   - the resolver is `beh-fulfiller`, whose state is `syrup-promise
+;;     pid` and which emits `eff-resolve pid args` on any message.
+
+def resolver-vow-pos      : Nat := 6N
+def resolver-actor-pos    : Nat := 7N
+def promise-resolver-pos  : Nat := 4N
+
+spec import-object-desc Nat -> SyrupValue
+defn import-object-desc [n]
+  syrup-tagged "desc:import-object" [syrup-nat n]
+
+;; The value the promise-resolver object returns: the (vow, resolver) pair.
+def resolver-pair : SyrupValue :=
+  [syrup-list [cons [import-object-desc resolver-vow-pos]
+                    [cons [import-object-desc resolver-actor-pos] nil]]]
+
 spec seeded-vat Nat Nat -> Vat
-  :doc "A vat holding the Echo and Greeter actors at the export positions `fetch` hands out. next-id starts above the seeded ids so promise allocation cannot alias an actor."
+  :doc "A vat holding the Echo, Greeter and promise-resolver objects at the export positions `fetch` hands out, plus the pre-seeded (vow, resolver) pair. next-id starts above every seeded id so promise allocation cannot alias an actor."
 defn seeded-vat [echo-pos greeter-pos]
-  [vat 3N [actor-table-set echo-pos [actor beh-echo syrup-null] [actor-table-set greeter-pos [actor beh-greeter [syrup-string "Hello"]] nil]] nil nil nil]
+  [vat 8N
+       [actor-table-set echo-pos [actor beh-echo syrup-null]
+         [actor-table-set greeter-pos [actor beh-greeter [syrup-string "Hello"]]
+           [actor-table-set promise-resolver-pos [actor beh-cell resolver-pair]
+             [actor-table-set resolver-actor-pos [actor beh-resolver [syrup-promise resolver-vow-pos]] nil]]]]
+       [promise-table-set resolver-vow-pos fresh nil]
+       nil nil]
 
 def seeded-connection : ConnectionState :=
   [conn-state [seeded-vat 2N 1N] bridge-state-empty nil false]

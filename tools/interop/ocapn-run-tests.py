@@ -61,6 +61,18 @@ SELECTED = [
     ("tests.op_abort", "OpAbortTest", [
         "test_abort_before_setup",
     ]),
+    # op:listen (Phase 59b part 4). Gated on the promise-resolver object
+    # (swiss-num IokCxYmMj04nos2JN1TDoY1bT8dXh6Lr), which is now PRE-SEEDED
+    # per connection rather than created on demand: every upstream test that
+    # asks for a (vow, resolver) pair asks exactly once, on its own fresh
+    # connection. That avoids needing a behaviour to allocate a promise and
+    # spawn an actor mid-turn, which is what forces a step-behavior signature
+    # change (still required for the Car Factory).
+    ("tests.op_listen", "OpListenTest", [
+        "test_op_listen_to_promise_and_fulfill",
+        "test_op_listen_to_promise_and_break",
+        "test_op_listen_already_has_answer",
+    ]),
 ]
 
 

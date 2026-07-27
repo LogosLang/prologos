@@ -48,6 +48,9 @@ data BehaviorTag
   beh-adder
   beh-forwarder
   beh-fulfiller
+  ;; Upstream's promise RESOLVER: interprets ['fulfill v] / ['break r]
+  ;; rather than resolving with the whole message (which beh-fulfiller does).
+  beh-resolver
 
 ;; ========================================
 ;; Side-effects an actor can request
@@ -385,6 +388,53 @@ defn step-fulfiller [state args]
 ;; Dispatcher — the "ABI" for actors
 ;; ========================================
 
+;; --- resolver (upstream promise-resolver pair) ---
+;;
+;; State: `syrup-promise pid` — the vow this resolver settles.
+;; Message: `['fulfill <value>]` or `['break <reason>]`.
+;;
+;; beh-fulfiller cannot serve here: it emits `eff-resolve pid args` with the
+;; WHOLE message, so settling produced `['fulfill ['fulfill ok]]` where
+;; upstream expects `['fulfill ok]` — and a break came back as a FULFILL
+;; whose value happened to be `['break oh-no]`, inverting the outcome.
+;;
+;; Helper chain rather than a nested match: a three-deep `match` in one body
+;; does not elaborate (prologos-syntax.md § "Never write three-deep nested
+;; match").
+
+spec resolver-settle Nat String SyrupValue -> ActStep
+defn resolver-settle [pid verb payload]
+  match [str::eq verb "break"]
+    | true  -> act-step [syrup-promise pid] syrup-null [cons [eff-break pid payload] nil]
+    | false -> act-step [syrup-promise pid] syrup-null [cons [eff-resolve pid payload] nil]
+
+spec resolver-payload Nat String [List SyrupValue] -> ActStep
+defn resolver-payload [pid verb rest]
+  match rest
+    | nil        -> resolver-settle pid verb syrup-null
+    | [cons p _] -> resolver-settle pid verb p
+
+spec resolver-verb Nat [List SyrupValue] -> ActStep
+defn resolver-verb [pid xs]
+  match xs
+    | nil -> no-op [syrup-promise pid]
+    | [cons h rest] ->
+        match h
+          | syrup-symbol verb -> resolver-payload pid verb rest
+          | _                 -> no-op [syrup-promise pid]
+
+spec resolver-with-pid Nat SyrupValue -> ActStep
+defn resolver-with-pid [pid args]
+  match args
+    | syrup-list xs -> resolver-verb pid xs
+    | _             -> no-op [syrup-promise pid]
+
+spec step-resolver SyrupValue SyrupValue -> ActStep
+defn step-resolver [state args]
+  match state
+    | syrup-promise pid -> resolver-with-pid pid args
+    | _                 -> no-op state
+
 spec step-behavior BehaviorTag SyrupValue SyrupValue -> ActStep
 defn step-behavior [tag state args]
   match tag
@@ -395,3 +445,4 @@ defn step-behavior [tag state args]
     | beh-adder     -> step-adder state args
     | beh-forwarder -> step-forwarder state args
     | beh-fulfiller -> step-fulfiller state args
+    | beh-resolver  -> step-resolver state args
