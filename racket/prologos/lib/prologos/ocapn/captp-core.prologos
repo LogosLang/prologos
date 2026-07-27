@@ -2404,6 +2404,10 @@ defn connection-step [op cs]
                 ;; consumed listener entry serves no further purpose).
                 let st1   := [bs-gc-pipelined-msgs-by-emitted [pump-result-emitted pump] st0]
                   let st'   := [bs-gc-listeners-by-notified [pump-result-emitted pump] st1]
-                    let cs'   := [conn-state v' st' [pump-result-emitted pump] [or-bool [conn-aborted? cs] [op-is-abort? op]]]
+                    ;; Phase 59b part 3: carry the PUMP's vat forward, not v'.
+                    ;; drain-outbound clears vat-outbound on the pump's vat;
+                    ;; persisting v' instead discards that clear, so drained
+                    ;; messages would sit in outbound and re-emit every frame.
+                    let cs'   := [conn-state [pump-result-vat pump] st' [pump-result-emitted pump] [or-bool [conn-aborted? cs] [op-is-abort? op]]]
                       conn-step cs' [pump-result-bytes pump]
 

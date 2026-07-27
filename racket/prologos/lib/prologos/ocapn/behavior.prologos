@@ -185,16 +185,37 @@ defn step-counter [state args]
 ;; which listener-notify-bytes emits. Handling only syrup-refr made the
 ;; greeter silently no-op on every real upstream frame.
 
+spec first-nat-in [List SyrupValue] -> [Option Nat]
+defn first-nat-in [xs]
+  match xs
+    | nil        -> [none Nat]
+    | [cons h _] ->
+        match h
+          | syrup-nat n      -> [some n]
+          | syrup-null       -> [none Nat]
+          | syrup-bool _     -> [none Nat]
+          | syrup-int _      -> [none Nat]
+          | syrup-string _   -> [none Nat]
+          | syrup-symbol _   -> [none Nat]
+          | syrup-list _     -> [none Nat]
+          | syrup-tagged _ _ -> [none Nat]
+          | syrup-refr _     -> [none Nat]
+          | syrup-promise _  -> [none Nat]
+
+;; A syrup RECORD decodes as tag + an ARGUMENT LIST, so the payload of
+;; <desc:import-object 7> is [syrup-nat 7], not a bare syrup-nat. Accept
+;; both: the bare form is what hand-built test values use, the list form
+;; is what the wire actually delivers.
 spec nat-payload SyrupValue -> [Option Nat]
 defn nat-payload [v]
   match v
     | syrup-nat n      -> [some n]
+    | syrup-list xs    -> first-nat-in xs
     | syrup-null       -> [none Nat]
     | syrup-bool _     -> [none Nat]
     | syrup-int _      -> [none Nat]
     | syrup-string _   -> [none Nat]
     | syrup-symbol _   -> [none Nat]
-    | syrup-list _     -> [none Nat]
     | syrup-tagged _ _ -> [none Nat]
     | syrup-refr _     -> [none Nat]
     | syrup-promise _  -> [none Nat]
