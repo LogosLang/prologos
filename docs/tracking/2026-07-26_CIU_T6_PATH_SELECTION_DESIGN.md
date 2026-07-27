@@ -530,6 +530,48 @@ dynamic index (`v.i`, dot-only) · sections (leading-dot forms) · reserved: ran
 (future CIU track), `**`, splat respelling, nil-safe, omit-selectors
 (presence-marks era), the write direction.
 
+### §5.8 Round 4 (owner + Claude, 2026-07-26) — segment-attached `^` · the `:`-iteration variant · solve modeling
+
+- **ADOPTED — `^`-forms attach to the KEY-GENERATING segment** (owner proposal
+  `x[admins^.*[name] features^]`, soundness verified). The rule: `^`/`^name`/`^_` sit on
+  the segment the keying rule selects (= the last segment before the first structural
+  operator; = the final segment in pure paths). This SUPERSEDES PR-6's selector-final
+  corollary — for pure paths the two coincide; with a structural tail the mark stays
+  visually ON the key it governs instead of after the bracket. `^` on any OTHER segment
+  = static error. Lexing verified: `admins^` glues; `admins^.…` chains.
+  Owner's example under the rule: `x[admins^.:[name] features^]` → both elided → the
+  TUPLE `⟨[PVec {:name String}] [PVec Keyword]⟩` (display `⟨…⟩` — heterogeneous nat row,
+  not `@[…]`).
+- **PR-9 — the `:`-iteration variant (owner floated; Claude assessment: workable, with
+  named costs).** Owner finds `*`-as-iteration hard to read and wants `.*` as SPLAT.
+  The underlying insight: `*`'s March meaning is "all the FIELDS, here" (wildcard/
+  splat), NOT "for each, onward" — the two are different operations and overloading
+  `*` with both is why it read badly. Division of labour:
+  - **`*` = all-fields-HERE**: final-position `server.*` = SPLAT (fields spliced into
+    the result level); `[*]` = identity sub-select. Closed-tail-gated. Mid-path `*` is
+    ILLEGAL (its March mid-path use migrates to `:`).
+  - **`:` = along-EACH-entry** (NumPy `a[:, k]` / q `::` precedent): `admins.:.name`
+    (each's name) · `admins.:[name]` (each, sub-selected) · `rows.:[f c]`.
+  - **Grounded lexical facts**: `.:.` / `.:[` degrade to bare `|.| :` tokens today
+    (reader work needed, tokens available); ⚠ **`m.:name` ($dot-key) is LIVE** —
+    probed, returns the field — so `:`-iteration creates the one-dot hazard
+    `m.:name` (field) vs `m.:.name` (each's name) UNLESS dot-key is retired (migrate
+    `.:name` → `.name`; census owed; ERGONOMICS.org:74's `map .:name` becomes
+    `map .name`). Colon triple-duty (keyword sigil · fused `x:Int` annotations ·
+    dot-key) makes this the most census-sensitive corner of the tokenizer (the 7g
+    drift family). Sexp-mode divergence noted (keyword-glued paths).
+- **Solve-rows modeling** (owner-anticipated consumer), with `rows : List {:c String
+  :f String}` from `def rows := solve (fruit-color f c)` (or the POL.9 implicit form):
+  - `rows.:.f` → `'["apple" …] : [List String]` — one column, bare.
+  - `rows.:[f]` → `[List {:f String}]` — narrowed rows.
+  - `rows.:[f^ c^]` → `[List ⟨String String⟩]` — per-row value tuples (zip shape).
+    (PR-8's coerce-vs-error fork reappears PER-ELEMENT here.)
+  - **Empty-prefix selectors = COLUMN EXTRACTION**: a selector may begin with `:`
+    (no key-generating segment → keyless → positional, or renamed):
+    `rows[:.f^fruits :.c^colors]` → `{:fruits [List String] :colors [List String]}`
+    — the named UNZIP, one selection. Lexes today (degraded): verified.
+  - `rows.0.f` → `"apple"` (extraction); `rows[0]` → `⟨row⟩` per Q_S7a.
+
 ---
 
 ## §6 SRE lattice lens — REQUIRED (the result shape IS lattice-shaped)
