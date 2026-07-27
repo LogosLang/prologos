@@ -2709,3 +2709,71 @@ that changes runtime results. At minimum this should be a *diagnosable*
 condition — a warning when two `:refer-all` imports export the same name.
 Silent wrong answers from import order is the worst failure mode we have
 catalogued.
+
+### #47 — `.pnet` cache serves STALE code even when its mtime is NEWER than the source (2026-07-27, real bug, **silent wrong answers**)
+
+**Symptom.** You edit a `.prologos` module, the edit is definitely in the
+file, the module loads with no error — and the running system behaves as
+if the edit never happened. Every obvious check passes, including the one
+you would reach for first:
+
+```
+$ grep -n 'eff-send-only t' lib/prologos/ocapn/behavior.prologos
+205:  | state [some t] -> act-step … [syrup-list [cons [syrup-string "Hello"] nil]] …
+                                     ^^^^^^^^^^ the edit IS there
+
+$ ls -la data/cache/pnet/prologos/ocapn/behavior.pnet   # 13:53
+$ ls -la lib/prologos/ocapn/behavior.prologos           # 13:50
+                                     ^^ cache is NEWER than source
+```
+
+Cache newer than source is exactly the state that says "cache is fresh."
+It was not. The emitted output still came from the pre-edit code.
+
+**Demonstration.** Same input, same code, only the cache differs:
+
+```
+;; with the stale-but-newer cache
+"<10'op:deliver<11'desc:export7+>5\"Helloff>"     ;; args = bare string  (OLD)
+
+;; after: rm -f data/cache/pnet/prologos/ocapn/*.pnet
+"<10'op:deliver<11'desc:export7+>[5\"Hello]ff>"   ;; args = [list]       (NEW, correct)
+```
+
+**Root cause (probable).** `pnet-stale?` compares a module against its OWN
+source but does not hash TRANSITIVE DEPENDENCIES. Here `behavior.prologos`
+changed, but the consumer chain (`captp-core`, `interop-driver`) had cached
+artifacts that embedded the old `behavior` code. Loading through the
+consumer rebuilt and re-wrote `behavior.pnet` — which is why its mtime
+ended up NEWER than the source while its CONTENT was pre-edit. The mtime
+is evidence that the file was rewritten, not that it was rebuilt from
+current sources.
+
+This is adjacent to issue #78 (cache-hit restore wrote parameters but not
+cells) but distinct: #78 was about what a cache HIT restores, this is about
+failing to detect that the cache should have MISSED.
+
+**Why it is expensive.** It is silent, and mtime — the one heuristic
+everyone trusts — actively points the wrong way. Roughly an hour went into
+re-verifying behaviour code and then a live server path, both of which were
+already correct. The offline test and the live server disagreed for a while
+purely because they had different cache states.
+
+**Workaround.** When an edit to a `.prologos` module appears to have no
+effect, **delete the cache before doubting the code**:
+
+```
+rm -f data/cache/pnet/prologos/ocapn/*.pnet     # or the whole tree
+```
+
+Do this BEFORE bisecting, and specifically before concluding "my change is
+wrong." Do not trust mtime. If an offline probe and a long-running server
+disagree about identical code, suspect divergent cache state first.
+
+**Codify-it ask.** `pnet-stale?` must hash the transitive dependency set,
+not just the module's own source — a module whose dependency changed is
+stale by definition. Until then the cache can serve pre-edit behaviour with
+no error and no usable staleness signal, which is the same silent-wrong-
+answer class as #45. Filed as a follow-up on issue #78; this is the second
+independent cache defect found in one session, which argues the caching
+layer needs an audit rather than another point fix.

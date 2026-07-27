@@ -2367,7 +2367,13 @@ defn or-bool
   | false other -> other
 
 ;; Drain fuel: 5 successive turns is plenty for our test cases.
-def drain-fuel : Nat := [suc [suc [suc [suc [suc zero]]]]]
+;; Phase 59b part 3: raised 5 -> 20. Fuel is consumed per TURN, and a turn
+;; that ORIGINATES a message (the greeter sending "Hello") needs further
+;; turns for that message to reach the outbound list. 5 silently left the
+;; send undelivered on the queue with no error — see goblin-pitfalls #46.
+;; run-vat stops at quiescence, so a higher bound costs nothing when the
+;; chain is short.
+def drain-fuel : Nat := 20N
 
 ;; The single entry point.
 ;; Step:

@@ -40,6 +40,11 @@ from netlayers.testing_only_tcp import TestingOnlyTCPNetlayer
 # The crossed-hellos / op:deliver / op:gc / op:listen tests need the
 # server to drive captp-core with a swiss-num object registry (Phase 59+).
 SELECTED = [
+    ("tests.op_deliver", "OpDeliverTest", [
+        # Phase 59b part 3: the greeter SENDS to a refr we hand it. Needs
+        # Vat.outbound + the pump drain + a seeded greeter at export 1N.
+        "test_send_deliver_no_answer_or_response",
+    ]),
     ("tests.op_start_session", "OpStartSessionTest", [
         "test_captp_remote_version",
         "test_start_session_with_invalid_version",

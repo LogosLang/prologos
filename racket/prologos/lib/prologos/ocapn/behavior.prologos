@@ -202,7 +202,7 @@ defn first-refr-in [xs]
 spec greeter-send SyrupValue [Option Nat] -> ActStep
 defn greeter-send
   | state none     -> no-op state
-  | state [some t] -> act-step state syrup-null [cons [eff-send-only t [syrup-string "Hello"]] nil]
+  | state [some t] -> act-step state syrup-null [cons [eff-send-only t [syrup-list [cons [syrup-string "Hello"] nil]]] nil]
 
 spec step-greeter SyrupValue SyrupValue -> ActStep
 defn step-greeter [state args]

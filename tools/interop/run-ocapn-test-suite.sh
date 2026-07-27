@@ -48,9 +48,14 @@ if [ ! -f "$SUITE_DIR/test_runner.py" ]; then
 fi
 
 # Sanity-check Python deps.
-python3 -c "import cryptography, cffi, stem" 2>/dev/null || {
-  echo "[run-ocapn-test-suite] python deps missing — need python3-cryptography python3-cffi python3-stem"
-  echo "                       on ubuntu: apt-get install -y python3-stem"
+# NOTE: `stem` is deliberately NOT required. It is imported only by
+# upstream's onion netlayer, which these tests never use — we drive the
+# tcp-testing-only netlayer. Requiring it made the whole gate unrunnable
+# in containers where stem will not build. ocapn-run-tests.py imports the
+# netlayer directly rather than going through upstream's test_runner.py,
+# which is what pulls in onion.
+python3 -c "import cryptography, cffi" 2>/dev/null || {
+  echo "[run-ocapn-test-suite] python deps missing — need python3-cryptography python3-cffi"
   echo "                       on pip:   pip3 install cryptography cffi"
   exit 1
 }

@@ -18,8 +18,8 @@ require [prologos::ocapn::captp-core :refer [ConnectionState empty-connection
                                               conn-step-outbound conn-state
                                               bridge-state-empty]]
         [prologos::ocapn::vat        :refer [Vat vat Actor actor actor-table-set]]
-        [prologos::ocapn::behavior   :refer [beh-echo]]
-        [prologos::ocapn::syrup      :refer [syrup-null]]
+        [prologos::ocapn::behavior   :refer [beh-echo beh-greeter]]
+        [prologos::ocapn::syrup      :refer [syrup-null syrup-string]]
         [prologos::ocapn::captp-wire :refer [decode-op]]
         [prologos::ocapn::message    :refer [CapTPOp]]
         [prologos::ocapn::handshake  :refer [hex-to-bytes]]
@@ -59,18 +59,23 @@ defn concat-frames
 ;; come from the SAME counter (vat.prologos:184-186), so leaving it at
 ;; zero would let `fresh-promise` hand out id 2 and alias Echo.
 ;;
-;; Only Echo is seeded. The other four bootstrap objects need behaviours
-;; that do not exist yet (Greeter must SEND rather than construct a
-;; string; Car Factory must spawn; the resolver must return a pair), and
-;; `Effect` has no spawn or outbound-send variant to express them.
+;; Echo (swiss IO58l1la..., export 2N) and Greeter (swiss VMDDd1vo...,
+;; export 1N) are seeded. Greeter became possible in Phase 59b part 3,
+;; which gave Vat an `outbound` list so a behaviour can originate a
+;; message to a peer export position.
+;;
+;; Still unseeded: Car Factory must SPAWN and the promise resolver must
+;; return a PAIR of references. `Effect` has no spawn variant, and
+;; ActStep returns a single value — both are unbuilt capability, not
+;; missing behaviours.
 
-spec seeded-vat Nat -> Vat
-  :doc "A vat holding the Echo actor at the export position `fetch` hands out. next-id starts above the seeded ids so promise allocation cannot alias an actor."
-defn seeded-vat [echo-pos]
-  [vat 3N [actor-table-set echo-pos [actor beh-echo syrup-null] nil] nil nil nil]
+spec seeded-vat Nat Nat -> Vat
+  :doc "A vat holding the Echo and Greeter actors at the export positions `fetch` hands out. next-id starts above the seeded ids so promise allocation cannot alias an actor."
+defn seeded-vat [echo-pos greeter-pos]
+  [vat 3N [actor-table-set echo-pos [actor beh-echo syrup-null] [actor-table-set greeter-pos [actor beh-greeter [syrup-string "Hello"]] nil]] nil nil nil]
 
 def seeded-connection : ConnectionState :=
-  [conn-state [seeded-vat 2N] bridge-state-empty nil false]
+  [conn-state [seeded-vat 2N 1N] bridge-state-empty nil false]
 
 spec init-connection Nat -> Bool
   :doc "Set up fresh per-connection captp-core state for connection `cid`, with the bootstrap objects seeded."
