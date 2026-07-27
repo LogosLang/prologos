@@ -561,3 +561,73 @@ Four concrete gaps against what is shipped:
 Plus `test_valid_handoff_wait_deposit_gift` withdraws BEFORE the deposit
 arrives, so a withdrawal for an unknown gift id must be PARKED and answered
 when the deposit lands — not dropped.
+
+---
+
+## HandoffRemoteAsExporter — ATTEMPTED, REVERTED, with the real blocker found
+
+Verified first that the handoff tests run over plain TCP (correction 4 above):
+all 7 execute, no `ModuleNotFoundError`, no Tor. They fail on protocol
+behaviour. So the netlayer question is settled.
+
+Implemented the four gaps listed above — gift table re-keyed to the id BYTES
+(`data GiftEntry { gift-entry : String -> Nat }`), `deposit-gift` reading the
+id via a new `syrup-bytes-of` instead of `wire-nat`, `withdraw-gift` moved off
+the answer-pos gateway onto the resolve-me one where `rm` is in scope, the
+five-level descent through
+`sig-envelope → handoff-receive → sig-envelope → handoff-give → gift-id`, and
+`fulfill` / `break` reply builders. It compiled and the greeter/e2e probes
+stayed green.
+
+**It still produced 0 bytes**, and the reason is upstream of all of it.
+
+### The blocker: `decode-op` rejects the signed handoff descriptors
+
+The withdraw frame is 716 bytes. Fed to `decode-op` directly:
+
+```
+def d  : [Option CapTPOp] := [decode-op [hex-to-bytes "<the 716-byte frame>"]]
+def tgt : Nat := match d | none -> 99N | some op -> [unwrap-or 98N [deliver-target op]]
+   -> 99N          ;; i.e. decode-op returned NONE
+```
+
+So nothing downstream of the decoder can matter yet. The server log agrees:
+`conn 7 frame 2 (716 in / 0 out bytes)` — and with the handler in place it did
+not even emit the `break` it would have emitted on a parse failure of its own,
+because `step-connection` bails at `decode-op` returning none before any
+handler runs.
+
+What the frame contains that the smaller ones do not:
+
+- `desc:sig-envelope` wrapping another record, twice, nested;
+- a gcrypt-style s-expression signature
+  `[sig-val [eddsa [r <32 bytes>] [s <32 bytes>]]]` — nested LISTS of symbols
+  and bytestrings, not a record;
+- `desc:handoff-give` carrying a `CapTPPublicKey` record and an `OCapNPeer`
+  location record as its first two fields;
+- `desc:handoff-receive` carrying a nested signed give as its fourth.
+
+Which of those the decoder chokes on is not yet isolated — the next step is to
+bisect by feeding `decode-op` progressively larger sub-records, or to add a
+decode trace. That is the whole remaining gate for these 4 tests: the handler
+side is understood and was written once already.
+
+### Why the implementation was REVERTED rather than landed
+
+`bs-add-gift` / `bs-lookup-gift` changing from `Nat` to `String` keys breaks
+~20 assertions in `test-ocapn-bridge.rkt` that deposit Nat gift ids, and moving
+`withdraw-gift` off the answer-pos channel breaks the ones that assert a reply
+arrives there. Those tests encode the OLD (wrong) contract — upstream never
+sends an answer-pos for `withdraw-gift`, and gift ids are bytes — so they would
+have to be rewritten, not patched.
+
+Rewriting 20 assertions to unlock 0 tests, while the decoder still blocks all
+4, would leave the gift table half-migrated for no gain. That is the same
+"don't leave the tree half-migrated" call made earlier for the Vat struct.
+Reverted; the analysis above is the deliverable, and the implementation is a
+short redo once the decoder parses the frame.
+
+**Order for the next attempt**: fix `decode-op` FIRST, confirm the 716-byte
+frame decodes and the target/resolve-me come out right, and only then redo the
+handler + rewrite the bridge tests to the byte-id / resolve-me contract in the
+same commit.

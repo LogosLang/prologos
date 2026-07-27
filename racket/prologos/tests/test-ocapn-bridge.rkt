@@ -2079,9 +2079,17 @@
               (length (bs-listeners (conn-bridge-state (conn-step-state s1))))))")
    "1N"))
 
-(test-case "bridge/late op:listen carries Error wrapper on broken promise (Phase 51)"
-  ;; Broken-promise variant of the late-fire path. Reason wrapped in
-  ;; <Error _> per resolution-syrup-of-pst.
+(test-case "bridge/late op:listen reports a BREAK on a broken promise (Phase 51)"
+  ;; Broken-promise variant of the late-fire path.
+  ;;
+  ;; This used to assert an `<Error _>` wrapper and NO verb, because
+  ;; resolution-syrup-of-pst returned the bare value and left each of its
+  ;; three call sites to wrap. Upstream asserts on args[0], so a broken
+  ;; promise reaching the peer without a `break` verb — or worse, under the
+  ;; hardcoded `fulfill` that orphan-loop applied — reads as an ACCEPTANCE.
+  ;; The listener channel now carries the verb: ['break <reason>].
+  ;; (The desc:answer channel still carries a bare <Error r> — different
+  ;; shape on purpose; see outbound-from-resolution.)
   (define got
     (extract-value-bytes
      (run-last
@@ -2096,8 +2104,10 @@
                 (framed-concat (conn-step-outbound s1))))")))
   (check-true (regexp-match? #rx"desc:export7" got)
               (format "expected listener notification to peer's resolver 7; got: ~s" got))
-  (check-true (regexp-match? #rx"5'Error" got)
-              (format "expected Error wrapper on broken late-fire; got: ~s" got)))
+  (check-true (regexp-match? #rx"5'break" got)
+              (format "expected a `break` verb on broken late-fire; got: ~s" got))
+  (check-true (regexp-match? #rx"4\"oops" got)
+              (format "expected the break REASON to survive; got: ~s" got)))
 
 ;; Phase 52: gift-table scaffolding for OCapN three-vat handoff.
 ;; State-level helpers only; wire-level op:deposit-gift /
