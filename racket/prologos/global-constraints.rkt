@@ -40,6 +40,7 @@
  expr->nat-val
  resolve-var
  var-ground?
+ (rename-out [ground-expr? narrow-ground-expr?])  ;; CIU T6 P2.a: test-only export (renamed — trait-resolution exports the type-side twin)
  ;; Track 3 Phase 5: cell infrastructure for narrowing constraints
  current-narrow-prop-net-box
  current-narrow-prop-cell-read
@@ -167,7 +168,11 @@
     [(expr-app f a) (and (ground-expr? f) (ground-expr? a))]
     [(expr-pair a b) (and (ground-expr? a) (ground-expr? b))]
     [(expr-fvar _) #t]
-    [_ #t]))
+    ;; CIU T6 P2.a: generic transparent-struct fallback — logic vars inside
+    ;; unarmed compounds (unions, containers: champ/rrb/hset tries are
+    ;; #:transparent, so element descent is free) are now SEEN. Previously
+    ;; the permissive [_ #t] tail reported every unarmed node ground.
+    [_ (expr-substructs-all? expr ground-expr?)]))
 
 ;; expr->nat-val : expr → exact-nonneg-integer | #f
 ;; Extract a natural number from a Peano expression (zero/suc chain).

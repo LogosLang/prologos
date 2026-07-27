@@ -222,6 +222,12 @@
        (if sol
            (normalize-for-resolution sol)
            e))]
+    ;; CIU T6 P2.a: descend unions — a union-embedded solved meta (or PVec/Map
+    ;; shorthand) must normalize like its siblings; the ground gate + impl-key
+    ;; both consume this result (the P2 mini-audit's capture gap). Plain
+    ;; structural rebuild: component identity is preserved, so canonical
+    ;; union order is untouched.
+    [(expr-union l r) (expr-union (normalize-for-resolution l) (normalize-for-resolution r))]
     ;; Everything else: leave unchanged
     [_ e]))
 
