@@ -78,11 +78,19 @@ just Echo. Build that FIRST, not the objects. Three patches attempted the
 object-shaped framing and all three honestly reported zero tests unblocked;
 one was refuted outright for a false claim in its own comment.
 
-## Ordering (cheapest first, and why)
+## Ordering (REVISED per the correction above)
 
-1. **Echo GC** — `beh-echo` exists. Needs multi-arg and a
-   no-retention audit. Unblocks the `op_deliver` echo tests, which are the
-   largest single group.
+**0. The generalized resolve-me reply path (items 3-6) — BUILD THIS FIRST.**
+Not an object. Every remaining object needs it, and no object can pass a test
+without it. This supersedes the object-first ordering below, which was written
+before the gap was measured.
+
+Then, and only then, the objects:
+
+1. **Echo GC** — the behaviour is DONE (see correction: `step-echo` needs no
+   change). What remains is items 1-2 (seed an actor at a chosen position;
+   seed the ConnectionState) plus the no-retention/GC audit. Unblocks the
+   `op_deliver` echo tests, the largest single group.
 2. **Greeter** — needs an outbound `op:deliver` from a behaviour, i.e. the
    `Effect` path, not just a return value. First object requiring the vat to
    *originate* traffic; expect this to surface real gaps.
