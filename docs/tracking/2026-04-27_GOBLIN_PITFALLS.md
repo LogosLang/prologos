@@ -2891,3 +2891,62 @@ were two *independent* problems mashed into one entry:
 Recorded because the original entry would have sent the next reader looking
 at the `match` elaboration path, which is not where either bug lives. Both
 behaviours are now pinned in `tests/test-typing-fuel-scoping.rkt`.
+
+---
+
+### #49 — `shift`'s looseBVarRange short-circuit silently no-ops on association-pair fields (2026-07-27, real bug, **variable capture**)
+
+**Symptom.** `(shift 1 0 <record holding bvar 0>)` returns the record
+*unchanged*. De Bruijn indices that should have been renumbered are not —
+i.e. variable capture. Zero errors; the only visible signal was one assertion
+in main's `test-record-node.rkt` ("shift: recurses into a bvar field type").
+
+**Repro.**
+
+```racket
+(define r (expr-Record 'keyword (list (cons 'a (record-field (expr-bvar 0) 'present))) 'closed))
+(loose-bvar-range r)   ;; => 0   WRONG (expect 1)
+(shift 1 0 r)          ;; => r   WRONG (expect bvar 1)
+(loose-bvar-range (record-field (expr-bvar 0) 'present))  ;; => 1  correct
+```
+
+**Root cause.** The pitfall-#31 perf fix gave `shift` a Lean-4-style
+short-circuit: `(if (<= (loose-bvar-range e) cutoff) e ...)`. That makes an
+**under-report a silent wrong answer** — a node reported closed keeps its
+indices — while an over-report only wastes a walk.
+
+`loose-bvar-range` has arms for the binder forms and a generic
+transparent-struct walk for everything else, which is the
+total-by-construction shape `.claude/rules/pipeline.md` § Exhaustive Walkers
+asks for. But its field-value walker was **not total over container shapes**:
+it treated every pair as a list cell, walking the `car` and recurring on the
+`cdr` as a tail. An **association pair** `(cons key <struct>)` therefore
+dropped its value entirely.
+
+CIU T6's `expr-Record` stores exactly that shape —
+`(list (cons 'a (record-field …)))` — so every record was reported closed.
+
+**This is the Exhaustive Walkers class, one level down.** The rule says
+prefer a generic transparent-struct rebuild so a walker "cannot silently skip
+a node kind". True — but only if the *value* walker underneath is total over
+the container shapes fields use. A generic struct walk with a
+list-shaped-only value walker is still hand-armed, just at the container
+layer instead of the node layer, and it fails the same silent way.
+
+**Fix.** `value-range` is now total: struct → memo; pair → **both** halves;
+null / vector / hash / box handled; everything else 0. Regression test
+`tests/test-loose-bvar-coverage.rkt` (8 tests) pins each container shape plus
+the `shift` consequences (cutoff respected, binder depth respected, closed
+nodes untouched).
+
+**How it got in.** The short-circuit was added on the OCapN branch; the
+`expr-Record` node arrived later from `main`. Neither change is wrong on its
+own — the defect was created by the *merge*, and nothing in either side's
+tests would catch it. Only main's `test-record-node.rkt` did, and only
+because it happens to assert `shift` on a record with a bvar.
+
+**Codify-it ask.** Any short-circuit predicate guarding a transformer
+(`loose-bvar-range` for `shift`, and any future "is this closed / does this
+contain X" fast path) is a walker with the *silent* failure direction. It
+needs the same totality discipline as the transformer it guards, plus a
+differential test against the unguarded walk — not just the arms.

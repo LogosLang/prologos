@@ -77,7 +77,22 @@
     ;; Generic structural fallback for all other expr-* forms.
     [_ (generic-range e)]))
 
-;; Walk struct fields, recursing on struct or list children, taking max.
+;; Walk struct fields, recursing into any container child, taking max.
+;;
+;; This is the total-by-construction fallback the Exhaustive Walkers rule
+;; (.claude/rules/pipeline.md) asks for: a new expr-* node needs no arm here,
+;; because every field is walked generically. That only holds if `value-range`
+;; is total over the CONTAINER shapes fields actually use — an under-covered
+;; container is a SILENT wrong answer (0 = "closed"), which makes `shift`
+;; short-circuit to a no-op and leaves de Bruijn indices unrenumbered.
+;;
+;; That is not hypothetical: `range-of-list` used to walk only the CAR of each
+;; pair and recur on the cdr as if it were always a list tail, so an
+;; ASSOCIATION pair `(cons key <struct>)` dropped its value entirely. CIU T6's
+;; `expr-Record` stores exactly that shape — `(list (cons 'a (record-field …)))`
+;; — so a record holding a bvar reported range 0, `shift` no-op'd, and the bvar
+;; came back unshifted (caught by test-record-node's "shift: recurses into a
+;; bvar field type"). Keep this walker total; do not narrow it back to lists.
 (define (generic-range e)
   (cond
     [(struct? e)
@@ -87,24 +102,21 @@
      (let loop ([i 1] [r 0])
        (cond
          [(= i n) r]
-         [else
-          (define f (vector-ref vec i))
-          (define fr
-            (cond
-              [(struct? f) (loose-bvar-range f)]
-              [(pair? f) (range-of-list f)]
-              [else 0]))
-          (loop (add1 i) (max r fr))]))]
+         [else (loop (add1 i) (max r (value-range (vector-ref vec i))))]))]
     [else 0]))
 
-(define (range-of-list lst)
+;; Range of an arbitrary field VALUE. Structs go through the memo; containers
+;; are walked in both directions. Anything else contributes 0.
+(define (value-range v)
   (cond
-    [(null? lst) 0]
-    [(pair? lst)
-     (define hd (car lst))
-     (define hd-r
-       (cond [(struct? hd) (loose-bvar-range hd)]
-             [(pair? hd) (range-of-list hd)]
-             [else 0]))
-     (max hd-r (range-of-list (cdr lst)))]
+    [(struct? v) (loose-bvar-range v)]
+    ;; Both halves — proper list tails, improper tails, and assoc pairs alike.
+    [(pair? v) (max (value-range (car v)) (value-range (cdr v)))]
+    [(null? v) 0]
+    [(vector? v)
+     (for/fold ([r 0]) ([x (in-vector v)]) (max r (value-range x)))]
+    [(hash? v)
+     (for/fold ([r 0]) ([(k x) (in-hash v)])
+       (max r (value-range k) (value-range x)))]
+    [(box? v) (value-range (unbox v))]
     [else 0]))
