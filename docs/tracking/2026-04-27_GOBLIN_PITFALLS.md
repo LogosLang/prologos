@@ -2587,3 +2587,125 @@ landed — neither is a proven fix.
 **Diagnostic value regardless**: when a Prologos function silently returns
 an empty result, try importing the DEPENDENT module before its
 dependencies in the caller. If that changes the answer, this is your bug.
+
+### #46 — `run-vat` fuel exhaustion is SILENT: a half-run turn looks like a no-op (2026-07-27, real shortcoming)
+
+**Symptom.** A behaviour that sends a message appears to do nothing. No
+error, no warning, no diagnostic — the result is simply missing, and every
+value you inspect is a legitimate-looking empty list.
+
+**Reproduction** (Phase 59b part 3, cost one debug cycle):
+
+```
+def g  := [vat-spawn beh-greeter [syrup-string "Hi"] empty-vat]
+def vq := [send-only zero [syrup-list [cons [syrup-refr 7N] nil]] [alloc-vat g]]
+
+[length [vat-queue vq]]              ;; 1N  — the inbound message
+
+def v1 := [run-vat 1N vq]
+[length [vat-queue v1]]              ;; 1N  — greeter ran, ITS send is queued
+[length [vat-outbound v1]]           ;; 0N  ← looks like the send never happened
+
+def v9 := [run-vat 20N vq]
+[length [vat-queue v9]]              ;; 0N
+[length [vat-outbound v9]]           ;; 1N  ← it did happen, just needed fuel
+```
+
+**Root cause.** Fuel is consumed per TURN, and a turn that *originates* a
+message needs a second turn for that message to be processed. So the
+minimum fuel is not "number of inbound messages" but "depth of the send
+chain." When fuel runs out mid-chain the remaining messages stay on the
+queue and `run-vat` returns normally.
+
+**Why it misleads.** The intermediate state is indistinguishable from
+"the behaviour didn't fire." Both give `outbound = nil`. The
+distinguishing signal — a NON-EMPTY `vat-queue` — is the thing you would
+only think to check after you already suspect fuel. In our case the
+observable being tested was two hops from the queue, so the natural
+reading was "my new Effect arm is wrong," and the next hour went into
+re-verifying behaviour code that was already correct.
+
+**Workaround.** When a vat result is unexpectedly empty, check
+`[length [vat-queue v]]` FIRST. Non-zero means fuel, not logic. Prefer
+generous fuel (20N) in tests; the cost is bounded because run-vat stops
+at quiescence anyway.
+
+**Codify-it ask.** `run-vat` should distinguish quiescence from
+exhaustion in its RESULT, not just internally — e.g. return
+`Quiesced Vat | Exhausted Vat`, or expose a `vat-quiesced?` predicate.
+Silently returning a half-run vat makes fuel exhaustion indistinguishable
+from a logic bug, and the current signature cannot express the
+difference. This is a design shortcoming rather than a bug: the behaviour
+is intentional, but it is unobservable, and unobservable is what makes it
+expensive.
+
+### #37 RECURRENCE (2026-07-27) — wrote the broken shape despite the rule
+
+Third occurrence. Writing
+
+```
+spec first-refr-in [List SyrupValue] -> [Option Nat]
+defn first-refr-in
+  | nil        -> [none Nat]
+  | [cons h _] -> refr-id-of h
+```
+
+registered the function with arity map `(1 3)` and failed inside
+`resolve-multi-defn` with a raw Racket struct dump:
+
+```
+given: '#(struct:multi-defn-info first-refr-in (1 3)
+          #hasheq((1 . first-refr-in::1) (3 . first-refr-in::3)) #f)
+```
+
+Fixed by the documented form (`defn f [xs] match xs | …`). Recording the
+recurrence for two reasons. First, the arity map `(1 3)` is a *precise*
+signal — a phantom arity that is neither 1 nor 2 — and grepping the log
+for it is faster than re-deriving. Second, and more useful: I had read
+this rule earlier in the same session and still wrote the broken shape,
+because the function *looks* like idiomatic list recursion. The rule is
+not memorable in the abstract; the failure signature is. If you see an
+arity map with an unexpected number, come straight here.
+
+### #45 SECOND OCCURRENCE (2026-07-27) — reproducible, not a one-off
+
+Independent recurrence in the same session, different function, same
+shape: a module's behaviour depends on the CALLER's import ORDER.
+
+Identical test file, identical fuel, only the `require` order differing:
+
+```
+require [prologos::ocapn::vat :refer-all]        ;; → 0 outbound, WRONG
+        [prologos::ocapn::behavior …]
+        [prologos::ocapn::syrup …]
+        [prologos::ocapn::captp-core :refer-all]
+
+require [prologos::ocapn::captp-core :refer-all] ;; → 1 outbound, CORRECT
+        [prologos::ocapn::vat :refer-all]
+        [prologos::ocapn::behavior …]
+        [prologos::ocapn::syrup …]
+```
+
+Both orders load without error. Neither produces a warning. The wrong one
+silently yields wrong ANSWERS.
+
+The first occurrence (`25a8b941`) could be argued as a one-off. Two
+independent occurrences with different functions makes this a
+**reproducible compiler defect**, and it is the most dangerous entry in
+this log: unlike #44/#37/#46 it does not fail loudly, it returns a
+plausible wrong value. Any result computed through a module graph with
+overlapping `:refer-all` imports is suspect until the import order is
+varied.
+
+**Workaround (both occurrences).** Import `captp-core` FIRST when it is
+in the graph. More generally: when a cross-module result is unexpectedly
+empty or wrong and the logic verifies in isolation, PERMUTE THE IMPORT
+ORDER before doubting the logic. That single experiment has now been
+decisive twice.
+
+**Codify-it ask (raised in priority).** Shadowing between overlapping
+`:refer-all` imports appears to resolve differently by position in a way
+that changes runtime results. At minimum this should be a *diagnosable*
+condition — a warning when two `:refer-all` imports export the same name.
+Silent wrong answers from import order is the worst failure mode we have
+catalogued.
