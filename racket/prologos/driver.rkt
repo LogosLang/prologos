@@ -2631,27 +2631,67 @@
         ;; Merging preserves the caller's existing entries while adding the module's.
         ;; hash-union with last-write-wins for conflicts (same as full elaboration path
         ;; where the module's parameterize inherited and extended the caller's registry).
+        ;; ------------------------------------------------------------------
+        ;; CRITICAL: every registry merged here MUST also be written to its
+        ;; CELL, not just its parameter.
+        ;;
+        ;; The registry READERS are cell-primary — `read-ctor-registry`
+        ;; (macros.rkt:6300) is
+        ;;   (or (macros-cell-read-safe (current-ctor-registry-cell-id))
+        ;;       (current-ctor-registry))
+        ;; so once the cells exist the parameter is DEAD for reads. This
+        ;; block originally set parameters only (written 2026-03-24,
+        ;; `2ef600ba`, six days AFTER the readers went cell-primary in
+        ;; `7fec3751`), which made every registry entry restored from a
+        ;; .pnet cache hit invisible. Consequences ranged from a silent
+        ;; stuck `[reduce ...]` term, through a silently WRONG answer (a
+        ;; non-first match arm becoming unreachable because constructor
+        ;; patterns degrade to catch-all variables), to a hard
+        ;; "Type mismatch" at module load. See goblin-pitfalls #43.
+        ;;
+        ;; `macros-cell-write!` is a no-op when the cell-id or the
+        ;; persistent-registry net-box is #f, so the pre-init and
+        ;; module-loading contexts are unaffected.
+        ;;
+        ;; The delta written is the DESERIALIZED hash (not the merged
+        ;; result): the cells' merge is `merge-hasheq-replace`, which
+        ;; hash-sets the delta over the cell's current value and preserves
+        ;; the accumulator's hash type — so equal?-keyed registries
+        ;; (subtype / coercion / specialization) are safe (macros.rkt:591).
+        ;;
+        ;; WHEN ADDING A REGISTRY HERE: if it has a *-cell-id, it needs a
+        ;; dual-write below. Three registries deliberately have none and
+        ;; are parameter-only: multi-defn, tycon-arity-extension,
+        ;; defn-param-names.
+        ;; ------------------------------------------------------------------
         (current-preparse-registry
          (for/fold ([reg (current-preparse-registry)]) ([(k v) (in-hash d-preparse)])
            (hash-set reg k v)))
+        (macros-cell-write! (current-preparse-registry-cell-id) d-preparse)
         (current-ctor-registry
          (for/fold ([reg (current-ctor-registry)]) ([(k v) (in-hash d-ctor)])
            (hash-set reg k v)))
+        (macros-cell-write! (current-ctor-registry-cell-id) d-ctor)
         (current-type-meta
          (for/fold ([reg (current-type-meta)]) ([(k v) (in-hash d-tmeta)])
            (hash-set reg k v)))
+        (macros-cell-write! (current-type-meta-cell-id) d-tmeta)
+        ;; multi-defn: parameter-only by design (no cell) — no dual-write.
         (current-multi-defn-registry
          (for/fold ([reg (current-multi-defn-registry)]) ([(k v) (in-hash d-multi)])
            (hash-set reg k v)))
         (current-subtype-registry
          (for/fold ([reg (current-subtype-registry)]) ([(k v) (in-hash d-sub)])
            (if (hash? reg) (hash-set reg k v) (hash k v))))
+        (macros-cell-write! (current-subtype-registry-cell-id) d-sub)
         (current-coercion-registry
          (for/fold ([reg (current-coercion-registry)]) ([(k v) (in-hash d-coerce)])
            (if (hash? reg) (hash-set reg k v) (hash k v))))
+        (macros-cell-write! (current-coercion-registry-cell-id) d-coerce)
         (current-capability-registry
          (for/fold ([reg (current-capability-registry)]) ([(k v) (in-hash d-cap)])
            (hash-set reg k v)))
+        (macros-cell-write! (current-capability-registry-cell-id) d-cap)
         ;; Track 10 Phase 2e: merge 5 additional registries (now managed by load-module)
         (when (> (length pnet-result) 11)
           (define d-trait (list-ref pnet-result 11))
@@ -2660,19 +2700,25 @@
           (define d-spec-r (and (> (length pnet-result) 14) (list-ref pnet-result 14)))
           (define d-tycon  (and (> (length pnet-result) 15) (list-ref pnet-result 15)))
           (define d-bundle (and (> (length pnet-result) 16) (list-ref pnet-result 16)))
+          ;; Same cell-primary rule as the block above — see pitfall #43.
           (current-trait-registry
            (for/fold ([reg (current-trait-registry)]) ([(k v) (in-hash d-trait)])
              (hash-set reg k v)))
+          (macros-cell-write! (current-trait-registry-cell-id) d-trait)
           (current-impl-registry
            (for/fold ([reg (current-impl-registry)]) ([(k v) (in-hash d-impl)])
              (hash-set reg k v)))
+          (macros-cell-write! (current-impl-registry-cell-id) d-impl)
           (current-param-impl-registry
            (for/fold ([reg (current-param-impl-registry)]) ([(k v) (in-hash d-pimpl)])
              (hash-set reg k v)))
+          (macros-cell-write! (current-param-impl-registry-cell-id) d-pimpl)
           (when d-spec-r
             (current-specialization-registry
              (for/fold ([reg (current-specialization-registry)]) ([(k v) (in-hash d-spec-r)])
-               (if (hash? reg) (hash-set reg k v) (hash k v)))))
+               (if (hash? reg) (hash-set reg k v) (hash k v))))
+            (macros-cell-write! (current-specialization-registry-cell-id) d-spec-r))
+          ;; tycon-arity-extension: parameter-only by design (no cell).
           (when d-tycon
             (current-tycon-arity-extension
              (for/fold ([reg (current-tycon-arity-extension)]) ([(k v) (in-hash d-tycon)])
@@ -2680,13 +2726,15 @@
           (when d-bundle
             (current-bundle-registry
              (for/fold ([reg (current-bundle-registry)]) ([(k v) (in-hash d-bundle)])
-               (hash-set reg k v))))
+               (hash-set reg k v)))
+            (macros-cell-write! (current-bundle-registry-cell-id) d-bundle))
           ;; Phase 2f: 4 additional registries
           (when (> (length pnet-result) 17)
             (define d-dparam (and (> (length pnet-result) 17) (list-ref pnet-result 17)))
             (define d-tlaws  (and (> (length pnet-result) 18) (list-ref pnet-result 18)))
             (define d-props  (and (> (length pnet-result) 19) (list-ref pnet-result 19)))
             (define d-funcs  (and (> (length pnet-result) 20) (list-ref pnet-result 20)))
+            ;; defn-param-names: parameter-only by design (no cell).
             (when d-dparam
               (current-defn-param-names
                (for/fold ([reg (current-defn-param-names)]) ([(k v) (in-hash d-dparam)])
@@ -2694,15 +2742,18 @@
             (when d-tlaws
               (current-trait-laws
                (for/fold ([reg (current-trait-laws)]) ([(k v) (in-hash d-tlaws)])
-                 (hash-set reg k v))))
+                 (hash-set reg k v)))
+              (macros-cell-write! (current-trait-laws-cell-id) d-tlaws))
             (when d-props
               (current-property-store
                (for/fold ([reg (current-property-store)]) ([(k v) (in-hash d-props)])
-                 (hash-set reg k v))))
+                 (hash-set reg k v)))
+              (macros-cell-write! (current-property-store-cell-id) d-props))
             (when d-funcs
               (current-functor-store
                (for/fold ([reg (current-functor-store)]) ([(k v) (in-hash d-funcs)])
-                 (hash-set reg k v))))))
+                 (hash-set reg k v)))
+              (macros-cell-write! (current-functor-store-cell-id) d-funcs))))
         mod-info]
 
        [else
