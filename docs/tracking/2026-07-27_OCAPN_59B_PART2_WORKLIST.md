@@ -221,3 +221,63 @@ promise resolver needs to return two references.
 **Sturdyref enlivener stays last and is a different order of work** — it
 requires outbound connections to a third party, a netlayer capability that
 does not exist at all.
+
+
+## Greeter E2E: REPRODUCED OFFLINE (2026-07-27) — start here next session
+
+The greeter is implemented and the machinery is verified, but it does not
+reply end-to-end. The important result is that **the failure now
+reproduces offline in ~2 minutes**, so nobody needs to debug it through
+the live server again.
+
+**The reproduction.** Write hex-encoded frames into a `.prologos` file and
+call the server's own entry points:
+
+```
+ns tmp-stash
+require [prologos::ocapn::interop-driver :refer-all]
+
+[init-connection 10N]
+[step-connection 10N "<hex of the 62-byte deliver frame>"]
+```
+
+The two frames, byte-for-byte what upstream sends (lengths 103 and 62
+match the server log exactly):
+
+```
+fetch:   <10'op:deliver<11'desc:export0+>[5'fetch32:VMDDd1voKWarCe2GvgLbxbVFysNzRPzx]f<18'desc:import-object3+>>
+deliver: <10'op:deliver<11'desc:export1+>[<18'desc:import-object7+>]ff>
+```
+
+Result: fetch returns the correct fulfill reply; the deliver returns `""`.
+Same as the live server (`62 in / 0 out`).
+
+**What is RULED OUT** (each verified, do not re-test):
+
+| Hypothesis | Verdict |
+|---|---|
+| `decode-op` rejects the frame | NO — round-trips fine, `RAW-OK` and `VIAHEX-OK` |
+| `hex-to-bytes` corrupts it | NO — decodes identically raw vs via-hex |
+| Logic is wrong | NO — `connection-step dop seeded-connection` emits correct bytes |
+| Post-fetch state is the problem | NO — `connection-step dop [conn-step-state step1]` also emits correctly |
+| Fuel | NO — drain-fuel is 20 (was 5, #46) |
+| Greeter can't read the descriptor | FIXED — handles `syrup-refr` AND tagged `desc:import-object`/`desc:export` |
+
+So: **`connection-step` works, `step-connection` does not.** The gap is
+between them — `run-step cid op [conn-fetch cid]`.
+
+**Prime suspect.** `ocapn-conn-fetch` is `(hash-ref conn-table conn-id #f)`
+— it returns `#f`, not a ConnectionState, on a miss. If the Nat key does
+not round-trip through the FFI boundary as an `equal?`-consistent Racket
+value, every fetch misses and the greeter has no actor at 1N. Note that
+**fetch succeeding proves nothing about the stash** — `maybe-fetch` is a
+pure swiss-num lookup that needs no actor, which is exactly why the fetch
+frame replies correctly while the deliver does not.
+
+**Next probe** (untested, ~2 min): decode the frame and print
+`op-deliver`'s args to see how the descriptor is represented after
+decoding, then compare against the hand-built `dop` that works. If they
+differ, the greeter's arm does not match the decoded shape. My attempt at
+this failed on an unrelated unbound `SyrupValue` import — import
+`prologos::ocapn::syrup` explicitly rather than relying on
+`captp-wire :refer-all`.
