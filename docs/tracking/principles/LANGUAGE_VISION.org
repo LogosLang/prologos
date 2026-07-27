@@ -423,10 +423,32 @@ See [[file:../../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md][From S-E
 The relational paradigm (~defr~/~rel~/~solve~) is not just a logic programming
 feature --- it is a graph-query database language in its own right. Prolog facts
 are isomorphic to database tables; rules are composable views; subgoals are
-joins. Empirical benchmarks show in-memory logic queries returning in sub-ms
-where equivalent SQLite queries take 30ms. With tabling as materialized views,
-propagators as incremental view maintenance, and ATMS as provenance tracking,
-Prologos has the infrastructure for a serious data query platform. See
+joins.
+
+/Corrected 2026-07-25 (Rel T1 Aspect D + X.close doc-truth)./ An earlier
+version of this section claimed "in-memory logic queries return in sub-ms where
+equivalent SQLite queries take 30ms," and that the engine had first-argument
+indexing. Both were **overstated**, and the measurements are now in-tree
+([[file:../../research/2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md][Fact Representation + Query Optimization]] §3, §9): the Tier-1 scan
+is linear at ≈0.062 µs/row, so sub-ms breaks around **16K rows** and ≈62 ms is
+the extrapolated cost at 1M — i.e. at the scale target we are *slower* than the
+SQLite figure the claim was leaning on, not 30× faster. There was **no index of
+any kind** until D.2.d added a registration-time inverted discrimination index
+(2026-07-24); ~build-discrimination-data~ had been a forward map, not an index.
+Two further measured facts sharpen the picture: the per-query discrimination
+rebuild was **superlinear** (11.4 ms @ 20K), and there is **no DFS↔Tier-2
+crossover ≤1000 rows** (Tier-2 enumeration ~480× slower @1000), so the ~:auto~
+threshold of 256 points the wrong way.
+
+The *architectural* claim stands and is the interesting one: tabling as
+materialized views, propagators as incremental view maintenance, and ATMS as
+provenance tracking (the most literal of the three — PosBool why-provenance) do
+give Prologos the substrate for a serious data query platform. Realizing it is
+chartered as **Rel Track 2 "The Fact Store"** (artifact §11), whose research core
+is fact-SET-level worldview granularity — the scale unlock *and* the genuinely
+differentiated capability (speculative what-if joins over one shared index, which
+no surveyed engine expresses). The honest competitive bar is Flix, 8–13× slower
+than Soufflé. See
 [[file:RELATIONAL_LANGUAGE_VISION.org][Relational Language Vision § Relations as a Graph-Query Database Language]]
 for the full analysis and design implications.
 

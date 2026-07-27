@@ -49,13 +49,25 @@
          definitely-not-map?
          ;; Solver normalization (for benchmarks + PUnify)
          normalize-ast-to-solver-term
+         ;; SUB.1: substitution containment tripwire (predicate + raiser) —
+         ;; docs/tracking/2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md
+         contains-open-container? assert-no-open-container!
+         ;; SUB.3 hot-scan: the reflective oracle, for the differential
+         ;; contract tests ONLY (armed ≡ reflective)
+         contains-open-container?/reflective
          ;; N6e issue #71: saturated-multi-hole-section classifier (shared by
          ;; infer/inferQ so the 3-stage guard cannot drift between stages).
          saturated-hole-section-app?
          ;; Rel T1 Aspect B (typed solution rows) entry-gate (b): the ONE shared
          ;; goal-app ground/free classifier + champ-key policy, consumed by BOTH
          ;; the runtime row-build (here) and the static solve row-typing (typing-core).
-         classify-goal-args (struct-out free-arg) query-var->champ-key)
+         classify-goal-args (struct-out free-arg) query-var->champ-key
+         ;; POL.2 / B3.0: anon-`_` projection exclusion — kernel-level so the
+         ;; runtime champ rows and B3's static row labels stay key-agreed.
+         anon-query-var? row-query-vars
+         ;; B3.1: raw solver ground value → AST expr, so the static body-goal
+         ;; walker can type raw literals in registered goal-descs via infer.
+         ground->prologos-expr)
 
 ;; N4: collapse a resolved numeric literal (expr-num-lit) to its concrete node.
 ;; Local mirror of zonk's collapse-num-lit (reduction can't require zonk — cycle via
@@ -234,19 +246,37 @@
     [(symbol? v) (expr-fvar v)]  ;; Unresolved logic var
     [else v]))  ;; Already an AST expression
 
+;; POL.2 / B3.0 (Rel T1, 2026-07-24): anonymous `_` query vars — minted as
+;; `(gensym '_anon)` fresh logic vars at elaboration (elaborator.rkt surf-hole
+;; relational arm) — remain solver-visible FREE vars (each `_` still matches
+;; independently; answer COUNT is unchanged, duplicates preserved) but are NOT
+;; projected into solution rows: rows carry only NAMED query-var keys.
+;; The filter lives HERE, in the B0 key-policy kernel, so the runtime champ
+;; rows and the B3 static row labels stay key-agreed by construction.
+;; `_anon` is thereby a RESERVED projection-excluded name prefix.
+(define (anon-query-var? name)
+  (and (symbol? name)
+       (let ([s (symbol->string name)])
+         (and (>= (string-length s) 5)
+              (string=? (substring s 0 5) "_anon")))))
+
+(define (row-query-vars query-vars)
+  (filter (lambda (qv) (not (anon-query-var? qv))) query-vars))
+
 ;; Convert solver answer maps (list of hasheq) back to a Prologos expression.
 ;; Each answer is a hasheq mapping query variable names (symbols) to ground values.
 ;; Returns a Prologos List of Maps: '[(map :x val1 :y val2), ...]
 ;; Solution maps carry ONLY query-var keys (CIU T6 F1b.1 / D25: the bound-args
 ;; echo — ground call-site values re-emitted under '_'-suffixed relation param
 ;; names — is deleted; solutions are pure answers to the queried unknowns).
+;; POL.2: anon `_` vars are additionally excluded (row-query-vars).
 (define (answers->prologos-expr answers query-vars)
   (racket-list->prologos-list
    (for/list ([answer (in-list answers)])
      ;; Build a CHAMP map from the answer bindings
      (define champ-val
        (for/fold ([c champ-empty])
-                 ([qv (in-list query-vars)])
+                 ([qv (in-list (row-query-vars query-vars))])
          (define val (hash-ref answer qv #f))
          (define key (query-var->champ-key qv))
          (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
@@ -480,6 +510,145 @@
        (run-narrowing-search func-name args-whnf target-whnf var-names))
      (answers->prologos-expr solutions var-names)]))
 
+;; ========================================
+;; Substitution containment tripwire (SUB.1)
+;; docs/tracking/2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md
+;; ========================================
+;; A runtime collection value (champ/hset/rrb + transients) whose contents hold
+;; a de Bruijn variable FREE w.r.t. the container boundary is the poisoned
+;; shape: shift/subst treat these containers as closed leaves (BY CONTRACT
+;; under ruling (D) — champ is a closed runtime map value), so a later beta
+;; over the enclosing binder silently drops the argument or captures. Until the
+;; SUB.3 fix (NbE open-the-binder) makes the shape unconstructible, refuse to
+;; PERSIST it at the three nf-persisting boundaries (solve/solve-one is-goal
+;; answer rows + validate base-ok) — a loud per-command error via the POL.4
+;; exn:prologos-solve pattern instead of a silent wrong answer. Deliberately
+;; NOT at shift/subst (no srcloc/command context) and NOT at the champ mint
+;; (fires on correct display-only code — driver.rkt legitimately nf's eval
+;; results for display).
+;;
+;; The walk is depth-aware INSIDE containers: a bvar bound by a binder that is
+;; itself inside the container (e.g. an answer row holding a closed lambda,
+;; champ{:f λy.bvar0} — the repro's CONTROL) is legal and must NOT fire; only
+;; a bvar pointing OUTSIDE its innermost container fires. Binder forms are the
+;; FOUR from substitution.rkt's shift (the authoritative inventory): lam, Pi,
+;; Sigma, reduce-arm. Everything else walks REFLECTIVELY (struct->vector over
+;; transparent structs + pairs/vectors/hashes/boxes) — deliberately no
+;; per-node arms, so the checker cannot itself have the missing-arm defect it
+;; guards against. Cold paths only; small answer/field terms.
+
+(define (runtime-container-value? v)
+  (or (expr-champ? v) (expr-hset? v) (expr-rrb? v)
+      (expr-trrb? v) (expr-tchamp? v) (expr-thset? v)))
+
+;; d = #f outside any container (hunting for containers); an integer = binder
+;; depth accumulated since the INNERMOST enclosing container (checking
+;; freeness w.r.t. that container's boundary).
+;;
+;; TWO walks, ONE semantics (SUB.3 hot-scan, owner-directed 2026-07-25):
+;; the production walk carries explicit ARMS for the hot node kinds (direct
+;; accessors — struct->vector allocates a fresh vector per node, ~an order
+;; of magnitude slower than an accessor arm on the nf fast path), with the
+;; REFLECTIVE walk retained verbatim as (a) the structurally-total fallback
+;; for every un-armed node — so coverage cannot regress — and (b) the
+;; differential-testing ORACLE: the contract test asserts armed ≡ reflective
+;; over a battery with poison planted in every armed field position. Arms
+;; are pure optimization; only certain-leaf nodes (no expr-bearing fields)
+;; short-circuit to #f.
+
+(define (contains-open-container? e)
+  (and (occ-walk e #f) #t))
+
+;; the differential oracle (provided for the contract tests)
+(define (contains-open-container?/reflective e)
+  (and (occ-walk/reflective e #f) #t))
+
+(define (occ-walk v d)
+  (match v
+    [(expr-bvar i) (and d (>= i d))]
+    ;; certain leaves: no expr-bearing fields
+    [(or (? expr-fvar?) (? expr-int?) (? expr-nat-val?) (? expr-string?)
+         (? expr-keyword?) (? expr-true?) (? expr-false?) (? expr-zero?)
+         (? expr-unit?) (? expr-nil?) (? expr-hole?) (? expr-refl?)
+         (? expr-error?) (? expr-logic-var?))
+     #f]
+    ;; hot spines — direct accessors
+    [(expr-app f a) (or (occ-walk f d) (occ-walk a d))]
+    [(expr-pair a b) (or (occ-walk a d) (occ-walk b d))]
+    [(expr-suc p) (occ-walk p d)]
+    [(expr-fst x) (occ-walk x d)]
+    [(expr-snd x) (occ-walk x d)]
+    [(expr-map-assoc m k mv)
+     (or (occ-walk m d) (occ-walk k d) (occ-walk mv d))]
+    [(expr-map-get m k) (or (occ-walk m d) (occ-walk k d))]
+    [(expr-map-empty k mv) (or (occ-walk k d) (occ-walk mv d))]
+    [(expr-pvec-literal elems) (for/or ([el (in-list elems)]) (occ-walk el d))]
+    ;; the four binder forms — body positions at d+1 (or +binding-count)
+    [(expr-lam _ t body)
+     (or (occ-walk t d) (occ-walk body (and d (add1 d))))]
+    [(expr-Pi _ dom cod)
+     (or (occ-walk dom d) (occ-walk cod (and d (add1 d))))]
+    [(expr-Sigma t1 t2)
+     (or (occ-walk t1 d) (occ-walk t2 (and d (add1 d))))]
+    [(? expr-reduce?)
+     (or (occ-walk (expr-reduce-scrutinee v) d)
+         (for/or ([arm (in-list (expr-reduce-arms v))])
+           (occ-walk (expr-reduce-arm-body arm)
+                     (and d (+ d (expr-reduce-arm-binding-count arm))))))]
+    ;; container boundary: contents check freeness at fresh depth 0
+    [(? runtime-container-value?)
+     (for/or ([f (in-vector (struct->vector v) 1)]) (occ-walk f 0))]
+    ;; cold fallback — reflective, structurally total (recursing through the
+    ;; ARMED walk so hot nodes below a cold node use their arms)
+    [_
+     (cond
+       [(struct? v)
+        (for/or ([f (in-vector (struct->vector v) 1)]) (occ-walk f d))]
+       [(pair? v) (or (occ-walk (car v) d) (occ-walk (cdr v) d))]
+       [(vector? v) (for/or ([f (in-vector v)]) (occ-walk f d))]
+       [(hash? v) (for/or ([(hk hv) (in-hash v)]) (or (occ-walk hk d) (occ-walk hv d)))]
+       [(box? v) (occ-walk (unbox v) d)]
+       [else #f])]))
+
+;; the original fully-reflective walk, verbatim — the testing oracle
+(define (occ-walk/reflective v d)
+  (cond
+    [(expr-bvar? v) (and d (>= (expr-bvar-index v) d))]
+    [(runtime-container-value? v)
+     (for/or ([f (in-vector (struct->vector v) 1)]) (occ-walk/reflective f 0))]
+    [(expr-lam? v)
+     (or (occ-walk/reflective (expr-lam-type v) d)
+         (occ-walk/reflective (expr-lam-body v) (and d (add1 d))))]
+    [(expr-Pi? v)
+     (or (occ-walk/reflective (expr-Pi-domain v) d)
+         (occ-walk/reflective (expr-Pi-codomain v) (and d (add1 d))))]
+    [(expr-Sigma? v)
+     (or (occ-walk/reflective (expr-Sigma-fst-type v) d)
+         (occ-walk/reflective (expr-Sigma-snd-type v) (and d (add1 d))))]
+    [(expr-reduce? v)
+     (or (occ-walk/reflective (expr-reduce-scrutinee v) d)
+         (for/or ([arm (in-list (expr-reduce-arms v))])
+           (occ-walk/reflective (expr-reduce-arm-body arm)
+                                (and d (+ d (expr-reduce-arm-binding-count arm))))))]
+    [(struct? v)
+     (for/or ([f (in-vector (struct->vector v) 1)]) (occ-walk/reflective f d))]
+    [(pair? v) (or (occ-walk/reflective (car v) d) (occ-walk/reflective (cdr v) d))]
+    [(vector? v) (for/or ([f (in-vector v)]) (occ-walk/reflective f d))]
+    [(hash? v) (for/or ([(hk hv) (in-hash v)])
+                 (or (occ-walk/reflective hk d) (occ-walk/reflective hv d)))]
+    [(box? v) (occ-walk/reflective (unbox v) d)]
+    [else #f]))
+
+(define (assert-no-open-container! who v)
+  (when (contains-open-container? v)
+    (raise-solve-error who
+      (string-append
+       "substitution containment guard: this result contains a runtime "
+       "collection value (map/set/vector) that captures a variable bound "
+       "outside it; persisting it would produce silent wrong answers when "
+       "applied. Known defect, fix in progress — see "
+       "docs/tracking/2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md"))))
+
 ;; Run solve for a goal expression, returning a Prologos list of answer maps.
 (define (run-solve-goal goal-expr config)
   (define goal* (whnf goal-expr))
@@ -544,6 +713,8 @@
              [(symbol? var-node) (strip-mode-prefix var-node)]
              [else (gensym 'is-var)]))
      (define result (nf is-expr))
+     ;; SUB.1 tripwire: nf-persisting boundary 1 (solve is-goal answer row)
+     (assert-no-open-container! 'solve result)
      (define answer (hasheq var-name result))
      (answers->prologos-expr (list answer) (list var-name))]
     [(expr-not-goal? goal*)
@@ -600,8 +771,9 @@
          (expr-fvar 'none)
          (let* ([first-answer (car answers)]
                 [champ-val
+                 ;; POL.2: anon `_` keys excluded here too (same kernel filter)
                  (for/fold ([c champ-empty])
-                           ([qv (in-list query-vars)])
+                           ([qv (in-list (row-query-vars query-vars))])
                    (define val (hash-ref first-answer qv #f))
                    (define key (query-var->champ-key qv))
                    (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
@@ -625,10 +797,11 @@
          (expr-fvar 'none)
          (let* ([first-answer (car answers)]
                 [champ-val
+                 ;; POL.2 filter + key-policy consolidation (was inline expr-keyword)
                  (for/fold ([c champ-empty])
-                           ([qv (in-list query-vars)])
+                           ([qv (in-list (row-query-vars query-vars))])
                    (define val (hash-ref first-answer qv #f))
-                   (define key (expr-keyword qv))
+                   (define key (query-var->champ-key qv))
                    (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
                    (champ-insert c (equal-hash-code key) key pval))])
            (expr-champ champ-val)))]
@@ -654,10 +827,11 @@
          (expr-fvar 'none)
          (let* ([first-ans (car answers)]
                 [champ-val
+                 ;; POL.2 filter + key-policy consolidation (was inline expr-keyword)
                  (for/fold ([c champ-empty])
-                           ([qv (in-list query-vars)])
+                           ([qv (in-list (row-query-vars query-vars))])
                    (define val (solver-term->prologos-expr (walk* first-ans qv)))
-                   (define key (expr-keyword qv))
+                   (define key (query-var->champ-key qv))
                    (champ-insert c (equal-hash-code key) key val))])
            (expr-champ champ-val)))]
     [(expr-is-goal? goal*)
@@ -669,6 +843,8 @@
              [(symbol? var-node) (strip-mode-prefix var-node)]
              [else (gensym 'is-var)]))
      (define result (nf is-expr))
+     ;; SUB.1 tripwire: nf-persisting boundary 2 (solve-one is-goal answer row)
+     (assert-no-open-container! 'solve-one result)
      (define key (expr-keyword var-name))
      (define champ-val (champ-insert champ-empty (equal-hash-code key) key result))
      (expr-champ champ-val)]
@@ -695,10 +871,11 @@
          (expr-fvar 'none)
          (let* ([first-ans (car answers)]
                 [champ-val
+                 ;; POL.2 filter + key-policy consolidation (was inline expr-keyword)
                  (for/fold ([c champ-empty])
-                           ([qv (in-list query-vars)])
+                           ([qv (in-list (row-query-vars query-vars))])
                    (define val (solver-term->prologos-expr (walk* first-ans qv)))
-                   (define key (expr-keyword qv))
+                   (define key (query-var->champ-key qv))
                    (champ-insert c (equal-hash-code key) key val))])
            (expr-champ champ-val)))]
     [else (expr-solve-one goal*)]))
@@ -778,8 +955,9 @@
   ;; 1. Build base CHAMP from query variable bindings
   (define bindings (answer-result-bindings ar))
   (define base-champ
+    ;; POL.2: anon `_` keys excluded from explain rows too (same kernel filter)
     (for/fold ([c champ-empty])
-              ([qv (in-list query-vars)])
+              ([qv (in-list (row-query-vars query-vars))])
       (define val (hash-ref bindings qv #f))
       (define key (query-var->champ-key qv))
       (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
@@ -1426,7 +1604,11 @@
   ;; the ok-payload base: the subject champ rebuilt with nf'd values
   (define base-ok
     (champ-fold c
-                (lambda (k v acc) (champ-insert acc (equal-hash-code k) k (nf v)))
+                (lambda (k v acc)
+                  (define v* (nf v))
+                  ;; SUB.1 tripwire: nf-persisting boundary 3 (validate base-ok)
+                  (assert-no-open-container! 'validate v*)
+                  (champ-insert acc (equal-hash-code k) k v*))
                 champ-empty))
   ;; walk the plan: collect-all errs + fill defaults; escape on pred panic
   (let loop ([entries plan] [okc base-ok] [errc champ-empty] [any-err? #f])
@@ -3457,13 +3639,177 @@
 ;; ========================================
 (define current-nf-cache (make-parameter #f))
 
+;; ========================================
+;; SUB.3: NbE open-the-binder normalization (ruling D)
+;; docs/tracking/2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md §3
+;; ========================================
+;; nf normalizes under binders by OPENING them: bvar0 is substituted with a
+;; deterministic depth-keyed NbE fvar (#%nbe0, #%nbe1, … — `#%` names are
+;; unwritable in surface syntax so no user collision; deterministic names keep
+;; the nf cache sound/hit-capable and display output stable), the body
+;; normalizes in that open context — whnf's container mints (map-assoc→champ,
+;; set-insert→hset, pvec→rrb) then capture only FVARS, on which shift/subst
+;; are already identity, so the champ-closed-leaf contract holds BY
+;; CONSTRUCTION — and re-abstraction converts the NbE fvar back to bvar0.
+;; A container that captured the NbE var is rebuilt as its SPINE form
+;; (map-assoc / set-insert chains, pvec-literal — the traversal-safe open
+;; representation); containers that did not are kept eq?-identical.
+
+(define current-nbe-depth (make-parameter 0))
+
+(define (nbe-fvar-name d) (string->symbol (format "#%nbe~a" d)))
+
+(define (nf-under-binder body)
+  ;; Fast path: normalize in place. When the result contains no open
+  ;; container (the overwhelmingly common case — bodies whose reduction
+  ;; mints no map/set/vec around a bound var), the in-place result is
+  ;; exactly what the NbE path would produce, at one walk instead of three.
+  ;; The detector is the SUB.1 tripwire predicate — exact and read-only —
+  ;; so this is one semantics with two execution strategies, not a dual
+  ;; path: any mint routes to the NbE open-the-binder normalization.
+  (define fast (nf body))
+  (if (nbe-scan-poisoned? fast)
+      (nbe-open-nf body)
+      fast))
+
+;; Verdict memo for the fast-path scan, eq?-keyed on the nf RESULT (the nf
+;; cache returns shared objects, so repeated normalization of the same binder
+;; body within a command re-verifies for free). Weak: entries die with their
+;; terms. Sound: a term's open-container verdict is a pure function of its
+;; identity (exprs are immutable). Caveat, pinned: TRANSIENTS are #:mutable,
+;; so a verdict on a transient-bearing term could go stale — but no surface
+;; construct can place a transient value inside a binder body (transients are
+;; bracket-protocol runtime values, not literals), and the SUB.1 tripwire at
+;; the persist boundaries guards the claim.
+(define nbe-scan-cache (make-weak-hasheq))
+
+(define (nbe-scan-poisoned? e)
+  (define cached (hash-ref nbe-scan-cache e 'miss))
+  (cond
+    [(eq? cached 'miss)
+     (define verdict (contains-open-container? e))
+     (hash-set! nbe-scan-cache e verdict)
+     verdict]
+    [else cached]))
+
+(define (nbe-open-nf body)
+  (define d (current-nbe-depth))
+  (define fv-name (nbe-fvar-name d))
+  (define opened (subst 0 (expr-fvar fv-name) body))
+  (define body*
+    (parameterize ([current-nbe-depth (add1 d)])
+      (nf opened)))
+  (re-abstract fv-name body*))
+
+;; re-abstract: fv-name → bvar(depth); free bvar i ≥ depth → i+1 (restoring
+;; the indices `subst 0` decremented at opening). Explicit arms ONLY for
+;; bvar/fvar, the four binder forms (substitution.rkt shift's authoritative
+;; inventory), and the runtime containers; every other node rebuilds
+;; GENERICALLY via struct-info + struct-type-make-constructor (all expr
+;; structs are #:transparent) — like the SUB.1 tripwire, this walker
+;; structurally cannot have the missing-arm defect it exists to fix.
+;; eq?-preserving on unchanged subtrees.
+(define (re-abstract fv-name e)
+  ;; deterministic entry order for rebuilt spines (champ order is hash-order)
+  (define (sorted-entries c)
+    (sort (champ-entries c) string<? #:key (lambda (kv) (format "~a" (car kv)))))
+  (define (walk v d)
+    (cond
+      [(expr-fvar? v)
+       (if (eq? (expr-fvar-name v) fv-name) (expr-bvar d) v)]
+      [(expr-bvar? v)
+       (let ([i (expr-bvar-index v)])
+         (if (>= i d) (expr-bvar (add1 i)) v))]
+      ;; binder forms — body positions at d+1 (or +binding-count)
+      [(expr-lam? v)
+       (let ([t* (walk (expr-lam-type v) d)]
+             [b* (walk (expr-lam-body v) (add1 d))])
+         (if (and (eq? t* (expr-lam-type v)) (eq? b* (expr-lam-body v)))
+             v
+             (expr-lam (expr-lam-mult v) t* b*)))]
+      [(expr-Pi? v)
+       (let ([dm* (walk (expr-Pi-domain v) d)]
+             [cd* (walk (expr-Pi-codomain v) (add1 d))])
+         (if (and (eq? dm* (expr-Pi-domain v)) (eq? cd* (expr-Pi-codomain v)))
+             v
+             (expr-Pi (expr-Pi-mult v) dm* cd*)))]
+      [(expr-Sigma? v)
+       (let ([f* (walk (expr-Sigma-fst-type v) d)]
+             [s* (walk (expr-Sigma-snd-type v) (add1 d))])
+         (if (and (eq? f* (expr-Sigma-fst-type v)) (eq? s* (expr-Sigma-snd-type v)))
+             v
+             (expr-Sigma f* s*)))]
+      [(expr-reduce? v)
+       (let ([sc* (walk (expr-reduce-scrutinee v) d)]
+             [arms* (for/list ([arm (in-list (expr-reduce-arms v))])
+                      (let ([b* (walk (expr-reduce-arm-body arm)
+                                      (+ d (expr-reduce-arm-binding-count arm)))])
+                        (if (eq? b* (expr-reduce-arm-body arm))
+                            arm
+                            (expr-reduce-arm (expr-reduce-arm-ctor-name arm)
+                                             (expr-reduce-arm-binding-count arm)
+                                             b*))))])
+         (if (and (eq? sc* (expr-reduce-scrutinee v))
+                  (andmap eq? arms* (expr-reduce-arms v)))
+             v
+             (expr-reduce sc* arms* (expr-reduce-structural? v))))]
+      ;; runtime containers — contents walk at the SAME depth (containers do
+      ;; not bind); a changed container rebuilds as its SPINE form
+      [(expr-champ? v)
+       (let* ([entries (sorted-entries (expr-champ-racket-champ v))]
+              [entries* (for/list ([kv (in-list entries)])
+                          (cons (walk (car kv) d) (walk (cdr kv) d)))])
+         (if (andmap (lambda (a b) (and (eq? (car a) (car b)) (eq? (cdr a) (cdr b))))
+                     entries entries*)
+             v
+             (for/fold ([acc (expr-map-empty (expr-hole) (expr-hole))])
+                       ([kv (in-list entries*)])
+               (expr-map-assoc acc (car kv) (cdr kv)))))]
+      [(expr-hset? v)
+       (let* ([entries (sorted-entries (expr-hset-racket-champ v))]
+              [elems (map car entries)]
+              [elems* (for/list ([el (in-list elems)]) (walk el d))])
+         (if (andmap eq? elems elems*)
+             v
+             (for/fold ([acc (expr-set-empty (expr-hole))])
+                       ([el (in-list elems*)])
+               (expr-set-insert acc el))))]
+      [(expr-rrb? v)
+       (let* ([elems (rrb-to-list (expr-rrb-racket-rrb v))]
+              [elems* (for/list ([el (in-list elems)]) (walk el d))])
+         (if (andmap eq? elems elems*)
+             v
+             (expr-pvec-literal elems*)))]
+      ;; transients: nothing mints them under a binder (SUB.1 tripwire guards
+      ;; the claim); their payloads are mutable Racket structures a rebuild
+      ;; cannot express — leave untouched
+      [(or (expr-trrb? v) (expr-tchamp? v) (expr-thset? v)) v]
+      ;; generic transparent-struct rebuild
+      [(struct? v)
+       (define-values (st _skipped?) (struct-info v))
+       (define vec (struct->vector v))
+       (define fields (for/list ([i (in-range 1 (vector-length vec))])
+                        (vector-ref vec i)))
+       (define fields* (for/list ([f (in-list fields)]) (walk f d)))
+       (if (andmap eq? fields fields*)
+           v
+           (apply (struct-type-make-constructor st) fields*))]
+      [(pair? v)
+       (let ([a* (walk (car v) d)] [b* (walk (cdr v) d)])
+         (if (and (eq? a* (car v)) (eq? b* (cdr v))) v (cons a* b*)))]
+      [else v]))
+  (walk e 0))
+
 (define (nf e)
   (define cache (current-nf-cache))
   (cond
     [(and cache (hash-ref cache e #f)) => values]
     [else
      (define result (nf-whnf (whnf e)))
-     (when cache
+     ;; POL.10 hardening: match whnf's Issue-#70 guard — never cache a result
+     ;; that IS an unsolved meta (its pre-solve identity would go stale after
+     ;; solve-meta!). whnf's cache had this guard; nf's lacked it.
+     (when (and cache (not (expr-meta? result)))
        (hash-set! cache e result))
      result]))
 
@@ -3507,9 +3853,12 @@
          [(expr-nat-val? inner) (expr-nat-val (+ (expr-nat-val-n inner) 1))]
          [(expr-zero? inner)    (expr-nat-val 1)]
          [else                  (expr-suc inner)]))]
-    [(expr-lam m t body) (expr-lam m (nf t) (nf body))]
-    [(expr-Pi m dom cod) (expr-Pi m (nf dom) (nf cod))]
-    [(expr-Sigma t1 t2) (expr-Sigma (nf t1) (nf t2))]
+    ;; SUB.3 (ruling D): binder bodies normalize via NbE open-the-binder —
+    ;; never a naked (nf body), which minted OPEN champs (the substitution
+    ;; containment defect's root, formerly this arm).
+    [(expr-lam m t body) (expr-lam m (nf t) (nf-under-binder body))]
+    [(expr-Pi m dom cod) (expr-Pi m (nf dom) (nf-under-binder cod))]
+    [(expr-Sigma t1 t2) (expr-Sigma (nf t1) (nf-under-binder t2))]
     [(expr-pair e1 e2) (expr-pair (nf e1) (nf e2))]
     [(expr-Eq t e1 e2) (expr-Eq (nf t) (nf e1) (nf e2))]
 

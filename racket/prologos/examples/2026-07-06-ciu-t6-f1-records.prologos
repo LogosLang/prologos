@@ -387,8 +387,8 @@ solve-one (sol-parent "zed" y)
 ;;   ← no solution = none, never {} (D17: {} is an empty dyn row VALUE)
 
 solve (sol-parent x y)
-;;84=> '[{:y "bob", :x "alice"} {:y "charlie", :x "alice"}] : [List {:x String :y String}]
-;;   ← all-free queries were always echo-free; unchanged
+;;84=> '[{:x "alice", :y "bob"} {:x "alice", :y "charlie"}] : [List {:x String :y String}]
+;;   ← all-free queries were always echo-free; keys in DECLARATION order (Rel T1 POL.3)
 
 ;; ============================================================
 ;; §F1b.2 — route-soundness (D26, 2026-07-17)

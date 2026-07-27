@@ -44,7 +44,7 @@ solve (light-vehicle "bicycle")
 solve (light-vehicle "automobile")
 
 ;; free-var (on-network Tier-2, FACT generator): FIXED by A.2 core (was {both})
-;;7=> '[{:lv "bicycle"}] : _
+;;7=> '[{:lv "bicycle"}] : [prologos::data::list::List {:lv String}]
 solve (light-vehicle lv)
 
 ;; ---- body-local join NAF: over-exclude {neither} pre-fix ------------------
@@ -66,7 +66,7 @@ defr safe-twohop [?a ?c]
 ;; with a body-local join var `b` the on-network engine can't thread (empty on-
 ;; network), so the adaptive dispatcher now routes NAF over body-local-var rules to
 ;; DFS, which threads `b` correctly. Scaffolding — retires with BSP-LE Track 3.
-;;12=> '[{:c "w"}] : _
+;;12=> '[{:c "w"}] : [prologos::data::list::List {:c String}]
 solve (safe-twohop "x" c)
 
 ;; ---- recursive NAF: ALSO on-network (NAF forces it) — ALSO buggy ----------
@@ -75,7 +75,7 @@ defr reaches [?a ?c]
   &> (edge a b) (reaches b c)
 
 ;; generator set (DFS): reaches(x) = {y, z, w}
-;;14=> '[{:c "y"} {:c "z"} {:c "w"}] : _
+;;14=> '[{:c "y"} {:c "z"} {:c "w"}] : [prologos::data::list::List {:c String}]
 solve (reaches "x" c)
 
 defr safe-reach [?a ?c]
@@ -84,7 +84,7 @@ defr safe-reach [?a ?c]
 ;; reaches(x)={y,z,w}, blk={z} → {y,w}. FIXED (A.2b minimal slice): recursive
 ;; `reaches` has a body-local recursion var → routed to DFS (correct). Scaffolding —
 ;; retires with BSP-LE Track 3.
-;;16=> '[{:c "y"} {:c "w"}] : _
+;;16=> '[{:c "y"} {:c "w"}] : [prologos::data::list::List {:c String}]
 solve (safe-reach "x" c)
 
 ;; ---- A.4: guard over a multi-fact generator (routed to DFS) ---------------
@@ -101,5 +101,126 @@ defr positive-edge [?from ?to ?weight]
 ;; (reachable-has-guard?) routes guard-bearing queries to DFS, which filters
 ;; per-row. FIXED (A.4). Scaffolding — retires with BSP-LE Track 3 (the on-network
 ;; guard design is captured in the Track 3 note).
-;;19=> '[{:to "b", :w 3, :from "a"} {:to "d", :w 5, :from "c"}] : _
+;;19=> '[{:from "a", :to "b", :w 3} {:from "c", :to "d", :w 5}] : [prologos::data::list::List {:from String :to String :w Int}]
 solve (positive-edge from to w)
+
+;; ---- POL.2 (B3.0): anon `_` vars are projection-excluded from solution rows --
+;; `_` mints a fresh solver-visible logic var per occurrence (answer COUNT
+;; unchanged — duplicates preserved; dedup = POL.1, separate), but its
+;; `:_anonNNN` gensym key must NOT appear in any row. Kernel-level filter
+;; (reduction.rkt row-query-vars) so runtime rows + B3 static labels agree.
+;; POL.2: no :_anon key, and no :w key (the `_` position is not projected)
+;;20=> '[{:from "a"} {:from "c"}] : [prologos::data::list::List {:from String}]
+solve (positive-edge from _ _)
+
+;; all-anon -> membership-style empty rows, one per solution
+;;21=> '[{} {}] : _
+solve (positive-edge _ _ _)
+
+;; ---- B3.1: rule-relation solutions are STATICALLY TYPED (body-goal dataflow) --
+;; The B2-deferred half, delivered: rule rows derive an UPPER BOUND through the
+;; body's generators (schema/B1 + facts/B2 + rule/fixpoint sources; never output
+;; observation). Recursive rules type via the Kleene fixpoint (D-B3.2).
+;;22=> '[{:a "x", :c "z"} {:a "x", :c "w"}] : [prologos::data::list::List {:a String :c String}]
+solve (twohop a c)
+
+;; typed via the FIXPOINT (reaches is recursive): rows keyed :c String
+;;23=> '[{:c "y"} {:c "z"} {:c "w"}] : [prologos::data::list::List {:c String}]
+solve (reaches "x" c)
+
+;; anonymous rel through the SAME walker (D-B3.3)
+;;24=> '[{:v "x"} {:v "y"} {:v "y"}] : [prologos::data::list::List {:v String}]
+solve (rel [?v]
+       &> (edge v _))
+
+;; ---- POL.5: def := solve(…) binds without a spurious multiplicity violation --
+;; (the qtt goal-head inferQ poison, fixed 2026-07-24). The MOTIVATING
+;; composition: bind a rule-relation solve, project a typed field.
+;;25=> reach-one : {:a String :c String} defined.
+def reach-one := solve-one (twohop a c)
+
+;; def-bound rule row projects a TYPED field
+;;26=> "z" : String
+reach-one.c
+
+;; ---- POL.10: def binds the WHNF-reduced value (SNAPSHOT semantics) ----------
+;; Owner-ruled 2026-07-24 (second pass): evaluation runs ONCE at definition;
+;; mentions read the value (a def'd solve no longer re-runs the solver).
+;; Lambda-valued defs are whnf-trivial — binder-headed stays lazy by identity.
+;; rows bound ONCE at definition (POL.10 snapshot)
+;;27=> twohops : [prologos::data::list::List {:a String :c String}] defined.
+def twohops := solve (twohop a c)
+
+;; same rows on every mention (and zero additional solver work)
+;;28=> '[{:c "z", :a "x"} {:c "w", :a "x"}] : [prologos::data::list::List {:a String :c String}]
+twohops
+
+;; ---- POL.8: implicit rule-clause groups (layout-based parenless goals) ------
+;; (owner co-design 2026-07-25). Goal-ness from defr-body context; the `&>`
+;; line's head token decides; sibling lines at the goal column; deeper lines
+;; nest. Both spellings stay legal.
+
+;;29=> fruit-color : _ defined.
+defr fruit-color [?fruit ?color]
+  || "blueberry" "blue"
+  || "banana" "yellow"
+  || "cherry" "red"
+
+;; owner form 1 — bare single-goal clauses; two clauses = disjunction
+;;30=> blue-or-yellow : _ defined.
+defr blue-or-yellow [?fruit]
+  &> fruit-color fruit "blue"
+  &> fruit-color fruit "yellow"
+
+;;31=> '[{:f "blueberry"} {:f "banana"}] : [prologos::data::list::List {:f String}]
+solve (blue-or-yellow f)
+
+;; owner form 2 — bare goal + sibling not(…) at the goal column
+;;32=> fruit-not-of-color : _ defined.
+defr fruit-not-of-color [?fruit ?not-color]
+  &> fruit-color fruit color
+     not (= color not-color)
+
+;; cherry is red — excluded
+;;33=> '[{:f "blueberry"} {:f "banana"}] : [prologos::data::list::List {:f String}]
+solve (fruit-not-of-color f "red")
+
+;; owner form 3 — nested bare not; the deeper line is its goal argument
+;;34=> fruit-not-of-color2 : _ defined.
+defr fruit-not-of-color2 [?fruit ?not-color]
+  &> fruit-color fruit color
+     not
+       = color not-color
+
+;;35=> '[{:f "blueberry"} {:f "banana"}] : [prologos::data::list::List {:f String}]
+solve (fruit-not-of-color2 f "red")
+
+;; ---- POL.9: implicit solve — parens make goals at command position ----------
+;; (owner co-design 2026-07-25). `(foo x)` at top level ≡ solve (foo x);
+;; `foo x` / `[foo x]` stays application; `rel` is the one keyword that
+;; queries. Composes with POL.8's parenless clause groups.
+
+;;36=> rg-fruits : _ defined.
+defr rg-fruits [?f]
+  &> fruit-color f "red"
+
+;; implicit solve on a paren goal — same rows as the explicit `solve` above
+;;37=> '[{:f "blueberry"} {:f "banana"}] : [prologos::data::list::List {:f String}]
+(fruit-not-of-color f "red")
+
+;; the composed owner example — paren rel + parenless clauses. All fixture
+;; fruits are red or blue-or-yellow, so the answer is nil — the echo still
+;; carries the typed row.
+;;38=> nil : [prologos::data::list::List {:fruit String}]
+(rel [fruit]
+  &> fruit-color fruit _
+     not (rg-fruits fruit)
+     not (blue-or-yellow fruit))
+
+;; ---- POL.9b: def RHS is command position — `def r := (goal)` binds rows ----
+;; implicit solve on the RHS; POL.10 snapshot semantics govern.
+;;39=> blues : [prologos::data::list::List {:f String}] defined.
+def blues := (fruit-not-of-color f "red")
+
+;;40=> '[{:f "blueberry"} {:f "banana"}] : [prologos::data::list::List {:f String}]
+blues

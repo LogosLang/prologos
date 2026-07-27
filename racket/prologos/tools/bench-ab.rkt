@@ -26,6 +26,14 @@
          "bench-lib.rkt"
          "bench-micro.rkt")
 
+;; Compile-limit adoption (Rel T1 SUB.2, owner-blessed 2026-07-24): raise the
+;; CS machine-code compile limit for every build/run this tool spawns, so A/B
+;; comparisons run under the production compile mode (interpreted-vs-compiled
+;; rankings demonstrably invert). Full rationale + measurements: the twin
+;; putenv in run-affected-tests.rkt + the defect doc §4.2.
+(unless (getenv "PLT_CS_COMPILE_LIMIT")
+  (putenv "PLT_CS_COMPILE_LIMIT" "1000000"))
+
 ;; ============================================================
 ;; Path anchoring
 ;; ============================================================

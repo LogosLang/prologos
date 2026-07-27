@@ -45,7 +45,11 @@
          "bb-optimization.rkt"
          "cfa-analysis.rkt"
          "macros.rkt"
-         "global-env.rkt")
+         "global-env.rkt"
+         ;; SUB.3b: map/vec decomposition in narrow-match (leaf data modules,
+         ;; cycle-free — narrowing must NOT require reduction.rkt)
+         (only-in "champ.rkt" champ-entries)
+         (only-in "rrb.rkt" rrb-to-list))
 
 (provide
  ;; Core API
@@ -65,6 +69,8 @@
  ;; Helpers (for testing)
  term-from-ground-expr
  nat->term
+ ;; SUB.3b: exported for the pipeline-walker contract tests
+ narrow-subst-bvars
  ;; PAR Track 1: called by topology stratum
  eval-rhs
  bindings-to-read-fn)
@@ -890,8 +896,18 @@
                (narrow-subst-bvars a bindings depth))]
     [(expr-suc e)
      (expr-suc (narrow-subst-bvars e bindings depth))]
+    ;; Binder forms — substitution.rkt shift's authoritative inventory
+    ;; (SUB.3b: Pi/Sigma arms + the lam TYPE field were missing — a Pi/Sigma
+    ;; falling through a generic non-depth-aware walk would CAPTURE).
     [(expr-lam m t body)
-     (expr-lam m t (narrow-subst-bvars body bindings (+ depth 1)))]
+     (expr-lam m (narrow-subst-bvars t bindings depth)
+               (narrow-subst-bvars body bindings (+ depth 1)))]
+    [(expr-Pi m dom cod)
+     (expr-Pi m (narrow-subst-bvars dom bindings depth)
+              (narrow-subst-bvars cod bindings (+ depth 1)))]
+    [(expr-Sigma t1 t2)
+     (expr-Sigma (narrow-subst-bvars t1 bindings depth)
+                 (narrow-subst-bvars t2 bindings (+ depth 1)))]
     [(expr-reduce scrut arms structural?)
      (expr-reduce
       (narrow-subst-bvars scrut bindings depth)
@@ -916,6 +932,42 @@
     [(expr-nat-val _) expr] [(expr-int _) expr] [(expr-string _) expr]
     [(expr-fvar _) expr] [(expr-keyword _) expr] [(expr-logic-var _ _) expr]
     [(expr-unit) expr] [(expr-nil) expr]
+    ;; Runtime collection values are CLOSED (ruling D, the substitution
+    ;; containment fix) — no live bvars inside; keep as leaves.
+    [(? expr-champ?) expr] [(? expr-hset?) expr] [(? expr-rrb?) expr]
+    [(? expr-trrb?) expr] [(? expr-tchamp?) expr] [(? expr-thset?) expr]
+    ;; SUB.3b: the old [_ expr] catch-all SILENTLY DROPPED bindings for every
+    ;; unlisted node — map/set/vec SPINES included, so a defn whose RHS is a
+    ;; map literal narrowed to nil ({:a x} kept a raw bvar; the owner-visible
+    ;; symptom). Replaced with a GENERIC transparent-struct rebuild
+    ;; (struct-info + struct-type-make-constructor — the SUB.3a re-abstract
+    ;; posture): non-binder nodes recurse into every field at the same depth,
+    ;; so the walker cannot silently skip a node kind again. Binder forms are
+    ;; handled explicitly above (depth routing); eq?-preserving on unchanged
+    ;; subtrees.
+    [(? struct?)
+     (define-values (st _skipped?) (struct-info expr))
+     (define vec (struct->vector expr))
+     (define fields (for/list ([i (in-range 1 (vector-length vec))])
+                      (vector-ref vec i)))
+     (define fields*
+       (for/list ([f (in-list fields)])
+         (cond
+           [(struct? f) (narrow-subst-bvars f bindings depth)]
+           [(pair? f)
+            (let walk-list ([l f])
+              (cond
+                [(pair? l)
+                 (let ([a* (if (struct? (car l))
+                               (narrow-subst-bvars (car l) bindings depth)
+                               (car l))]
+                       [d* (walk-list (cdr l))])
+                   (if (and (eq? a* (car l)) (eq? d* (cdr l))) l (cons a* d*)))]
+                [else l]))]
+           [else f])))
+     (if (andmap eq? fields fields*)
+         expr
+         (apply (struct-type-make-constructor st) fields*))]
     [_ expr]))
 
 ;; ----------------------------------------
@@ -1114,11 +1166,79 @@
        ;; Unknown scrutinee — cannot narrow
        [else '()])]
 
+    ;; SUB.3b: MAP decomposition — a map result (assoc spine from a defn RHS,
+    ;; or a closed champ) matches a map target ENTRY-WISE, so logic vars
+    ;; inside VALUES bind (the owner-visible symptom: `box ?y = {:a 5N}` on
+    ;; `defn box [x] {:a x}` returned nil — the spine fell through to the
+    ;; equal? fallback against the target champ). Keys must be ground
+    ;; literals (elaborated map-literal keys are); computed keys bail to the
+    ;; fallback. Entry alignment is by sorted ground keys; values recurse
+    ;; through narrow-match-list (product semantics).
+    [(and (narrow-map-entries result) (narrow-map-entries target))
+     => (lambda (_)
+          (define r-entries (narrow-map-entries result))
+          (define t-entries (narrow-map-entries target))
+          (define (key-str kv) (format "~a" (car kv)))
+          (define rs (sort r-entries string<? #:key key-str))
+          (define ts (sort t-entries string<? #:key key-str))
+          (if (and (= (length rs) (length ts))
+                   (andmap (lambda (a b) (equal? (car a) (car b))) rs ts))
+              (narrow-match-list (map cdr rs) (map cdr ts)
+                                 subst func-name depth)
+              '()))]
+
+    ;; SUB.3b: VEC decomposition — pvec literals / rrb values match
+    ;; element-wise (same class: `defn f [x] '[x 1N]` narrowed to nil).
+    [(and (narrow-vec-elems result) (narrow-vec-elems target))
+     => (lambda (_)
+          (define rs (narrow-vec-elems result))
+          (define ts (narrow-vec-elems target))
+          (if (= (length rs) (length ts))
+              (narrow-match-list rs ts subst func-name depth)
+              '()))]
+
     ;; Structural equality fallback (handles expr-string, expr-int, etc.)
+    ;; (Sets fall through here: ground-identical sets match; sets with logic
+    ;; vars inside are order-insensitive matching = search, DEFERRED, named.)
     [(equal? result target) (list subst)]
 
     ;; No match
     [else '()]))
+
+;; SUB.3b helper: a map value's entries as (key-expr . val-expr) pairs, or #f
+;; if the value is not a map / carries a non-ground key. Champ: stored
+;; entries. Assoc spine: walked outer-to-inner with outermost-wins shadowing,
+;; keys must be ground LITERALS (no whnf here — narrowing must not require
+;; reduction.rkt; elaborated map-literal keys are already literal nodes).
+(define (narrow-ground-key? k)
+  (or (expr-keyword? k) (expr-int? k) (expr-string? k)
+      (expr-nat-val? k) (expr-true? k) (expr-false? k)))
+
+(define (narrow-map-entries e)
+  (match e
+    [(expr-champ c)
+     (define entries (champ-entries c))
+     (and (andmap (lambda (kv) (narrow-ground-key? (car kv))) entries)
+          entries)]
+    [(expr-map-empty _ _) '()]   ;; empty map: zero entries (truthy — '() ≠ #f)
+    [(expr-map-assoc _ _ _)
+     (let loop ([node e] [seen '()] [acc '()])
+       (match node
+         [(expr-map-assoc m k v)
+          (cond
+            [(not (narrow-ground-key? k)) #f]
+            [(member k seen) (loop m seen acc)]   ;; shadowed by an outer assoc
+            [else (loop m (cons k seen) (cons (cons k v) acc))])]
+         [(expr-map-empty _ _) acc]
+         [_ #f]))]
+    [_ #f]))
+
+;; SUB.3b helper: a vector value's elements as a list, or #f.
+(define (narrow-vec-elems e)
+  (match e
+    [(expr-rrb r) (rrb-to-list r)]
+    [(expr-pvec-literal elems) elems]
+    [_ #f]))
 
 ;; Match a list of result sub-fields against target sub-fields.
 (define (narrow-match-list results targets subst func-name depth)

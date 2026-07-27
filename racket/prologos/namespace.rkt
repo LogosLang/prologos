@@ -36,6 +36,7 @@
  module-network-lookup
  module-network-cascading-lookup  ;; PPN 4C Addendum Phase 4A.a (Q-4A.4 Option (b)): local + imports cascade
  module-network-lookup-status     ;; PPN 4C Addendum Phase 4B.3-a (DQ2): single cascade-truth source; cascading-lookup + lookup-type/value are projections
+ module-network-lookup-local      ;; Rel T1 POL.9c (Q_B): THIS module's own bindings only — no import cascade
  module-network-add-definition
  module-network-add-import      ;; PPN 4C Addendum Phase 4A.a (Q-4A.4 Option (b)): cons-prepend import
  module-network-write
@@ -252,6 +253,16 @@
      => (lambda (entry) (cons 'ground entry))]
     [cid (cons 'pending cid)]
     [else (cons 'absent #f)]))
+
+;; Rel T1 POL.9c (Q_B): the LOCAL half of the lookup — this module's own
+;; cell-id-map only, no import cascade. Refer-imported names are invisible
+;; here by construction (they live in the imports' mnrs), which is what
+;; makes the disjoint-namespace gate local-only (the prelude xor/singleton
+;; shadowing precedent stays legal).
+;; Returns (cons type value) or #f.
+(define (module-network-lookup-local mnr name)
+  (define cid (hash-ref (module-network-ref-cell-id-map mnr) name #f))
+  (and cid (def-entry->cons (net-cell-read (module-network-ref-prop-net mnr) cid))))
 
 ;; Add a definition cell to a module network.
 ;; Returns: (values updated-module-network-ref cell-id)

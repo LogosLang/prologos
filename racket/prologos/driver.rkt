@@ -585,6 +585,88 @@
 ;;
 ;; When a namespace context is active, def stores names both as
 ;; bare symbols (for local use) and as fully-qualified names (for export).
+;; ── Rel T1 POL.3: declaration-order keys for solve echoes (design §8) ─────────
+;; Rows are champs — hash-ordered by construction — so `solve (truths b1 b2 b3 _)`
+;; displayed `{:b3 1, :b2 1, :b1 1}`. The declaration order lives in the GOAL's
+;; positional arg list (the B0 kernel's classify-goal-args, minus POL.2's anon
+;; vars), which is available exactly here: the eval echo seam still holds the
+;; elaborated solve expression. DISPLAY-ONLY — the row VALUE stays an unordered
+;; champ (`.field`, validate, row typing all unaffected), and the reorder applies
+;; only where the goal is in hand. Named limitation: `def r := solve (…)` then
+;; `r` echoes through an fvar with no goal attached, so it stays hash-ordered —
+;; carrying the order IN the row is a representation change (Rel T2 territory).
+
+;; The ordered non-anon query-var names of a solve-family expression, or #f.
+(define (solve-echo-ordered-vars expr)
+  (define goal
+    (cond [(expr-solve? expr) (expr-solve-goal expr)]
+          [(expr-solve-one? expr) (expr-solve-one-goal expr)]
+          [(expr-solve-with? expr) (expr-solve-with-goal expr)]
+          [(expr-explain? expr) (expr-explain-goal expr)]
+          [else #f]))
+  (cond
+    [(and goal (expr-goal-app? goal))
+     (define-values (_gs free-args) (classify-goal-args (expr-goal-app-args goal)))
+     (row-query-vars (map free-arg-name free-args))]
+    [(and goal (expr-rel? goal))
+     ;; anonymous rel: declaration order = the rel's param order. At the AST
+     ;; stage params are C.b.1's raw `(name mode type)` 3-lists (param-info
+     ;; structs are minted later, at expr-rel->relation-info); accept both.
+     (row-query-vars (map (lambda (p)
+                            (cond [(pair? p) (car p)]
+                                  [(param-info? p) (param-info-name p)]
+                                  [else p]))
+                          (expr-rel-params goal)))]
+    [else #f]))
+
+;; Render one row champ with `ordered-names` first (in order), then any
+;; remaining entries (e.g. explain's reserved metadata keys) in champ order.
+;; Mirrors pp-expr's champ arm formatting exactly ("{k v, k v}").
+(define (pp-row-ordered row ordered-names)
+  (define entries (champ-entries (expr-champ-racket-champ row)))
+  (define (entry-for name)
+    (for/first ([kv (in-list entries)]
+                #:when (and (expr-keyword? (car kv))
+                            (eq? (expr-keyword-name (car kv)) name)))
+      kv))
+  (define ordered (filter values (map entry-for ordered-names)))
+  (define rest (filter (lambda (kv) (not (memq kv ordered))) entries))
+  (format "{~a}"
+          (string-join
+           (for/list ([kv (in-list (append ordered rest))])
+             (format "~a ~a" (pp-expr (car kv)) (pp-expr (cdr kv))))
+           ", ")))
+
+;; The ordered display of a solve result value, or #f to fall back to pp-expr.
+;; Custom-renders ONLY the shapes it fully understands: a bare row champ
+;; (solve-one) or a proper cons spine whose members are ALL row champs; anything
+;; else (nil, none, stuck terms, mixed lists) falls back — the echo must never
+;; drop or reshape an element it did not recognize.
+(define (pp-solve-echo-ordered val ordered-names)
+  (define (cons-head? f)
+    (and (expr-fvar? f)
+         (let ([s (symbol->string (expr-fvar-name f))])
+           (or (string=? s "cons") (regexp-match? #rx"::cons$" s)))))
+  (cond
+    [(expr-champ? val) (pp-row-ordered val ordered-names)]
+    [else
+     (let loop ([v val] [acc '()])
+       (cond
+         [(expr-nil? v)
+          ;; empty result set: fall back so it keeps displaying as `nil`
+          ;; (three e2e tests pin that; the reorder must not reshape it)
+          (and (pair? acc)
+               (format "'[~a]"
+                       (string-join (map (lambda (r) (pp-row-ordered r ordered-names))
+                                         (reverse acc))
+                                    " ")))]
+         [(and (expr-app? v)
+               (expr-app? (expr-app-func v))
+               (cons-head? (expr-app-func (expr-app-func v)))
+               (expr-champ? (expr-app-arg (expr-app-func v))))
+          (loop (expr-app-arg v) (cons (expr-app-arg (expr-app-func v)) acc))]
+         [else #f]))]))
+
 (define (process-command surf)
   ;; PPN 4C Phase 1.5: seed current-source-loc from the command's surf-node.
   ;; Elaborate-level parameterize sharpens further; this covers top-level
@@ -704,7 +786,26 @@
                                              (if (expr-string? (expr-panic-msg val))
                                                  (expr-string-val (expr-panic-msg val))
                                                  (pp-expr (expr-panic-msg val)))))
-                                         (format "~a : ~a" (pp-expr val) (pp-expr ty-nf))))))))))])]
+                                         ;; Rel T1 B3.2 (design §6.10 D-B3.1(ii)): the
+                                         ;; coinductive half — refine the ECHOED row type
+                                         ;; from the actual result rows (fill holes /
+                                         ;; sharpen unions, exact for THIS result set).
+                                         ;; DISPLAY ONLY: `ty-nf` itself is untouched, so
+                                         ;; nothing observed here can reach static typing.
+                                         ;; Deliberately NOT on the def/defr arms — a def's
+                                         ;; announced type is the type it STORES, which is
+                                         ;; the static one.
+                                         ;; Rel T1 POL.3: solve echoes display row keys in
+                                         ;; DECLARATION order (the goal's positional query
+                                         ;; vars) — display-only, falls back to pp-expr
+                                         ;; for any shape not fully recognized.
+                                         (let* ([ovars (solve-echo-ordered-vars expr)]
+                                                [val-str (or (and ovars
+                                                                  (pp-solve-echo-ordered val ovars))
+                                                             (pp-expr val))])
+                                           (format "~a : ~a" val-str
+                                                   (pp-expr (refine-solve-row-type-for-display
+                                                             ty-nf val))))))))))))])]
 
                   ;; (infer expr) — Track 4B Phase 9: on-network first, fallback for unhandled
                   [(list 'infer expr)
@@ -818,6 +919,9 @@
 
                   ;; (defr name expr) — Track 4B Phase 9: on-network first, fallback for unhandled
                   [(list 'defr name expr)
+                   ;; Rel T1 POL.9c: the Q_B cross-kind gate — before any work
+                   (define qb-err (check-crosskind-collision name 'relation))
+                   (if qb-err qb-err
                    (let ([ty (time-phase! type-check
                               (let ([net-ty (infer-on-network/err ctx-empty expr)])
                                 (if (prologos-error? net-ty)
@@ -860,7 +964,7 @@
                                          (bump-relation-store-version!)
                                          (format "~a : ~a defined." name (pp-expr zonked-type))])]
                                      [else
-                                      (format "~a : ~a defined." name (pp-expr zonked-type))]))))))))]
+                                      (format "~a : ~a defined." name (pp-expr zonked-type))])))))))))]
 
                   ;; (subtype sub-key super-key) — declaration already processed in elaborator
                   [(list 'subtype sub-key super-key)
@@ -1383,7 +1487,7 @@
                   (eq? 'pending (car (global-env-lookup-status r))))
                 prog]  ;; still waiting
                [else
-                (define result (process-command (general-body-placeholder-surf ph)))
+                (define result (process-command/solve-guard (general-body-placeholder-surf ph)))
                 (cond
                   [(general-body-placeholder? result)
                    ;; re-deferred (self-pending) — drop the duplicate; no progress
@@ -1407,12 +1511,22 @@
 ;; Demand-retry shim for the process-file loop: a residuation-demand from the
 ;; eval arm triggers the sweep fixpoint, then ONE retry; still demanding →
 ;; the carried status-quo unbound error.
+;; POL.4 (2026-07-24): user-facing SOLVER errors (arity mismatch; unknown
+;; relation) raise the DISTINGUISHED exn:prologos-solve — converted here to a
+;; per-command prologos-error so the file/REPL continues past the offending
+;; command. Deliberately NOT a blanket exn handler: any other raise still
+;; crashes loudly (a blanket boundary would mask real compiler defects).
+(define (process-command/solve-guard surf)
+  (with-handlers ([exn:prologos-solve?
+                   (lambda (e) (prologos-error srcloc-unknown (exn-message e)))])
+    (process-command surf)))
+
 (define (process-command/demand surf)
-  (define r (process-command surf))
+  (define r (process-command/solve-guard surf))
   (if (residuation-demand? r)
       (begin
         (run-residuation-fixpoint!)
-        (let ([r2 (process-command surf)])
+        (let ([r2 (process-command/solve-guard surf)])
           (if (residuation-demand? r2) (residuation-demand-error r2) r2)))
       r))
 
@@ -1594,7 +1708,38 @@
 ;; 3. Elaborate body (self-reference now resolves to fvar)
 ;; 4. Type-check body against type
 ;; 5. Update global env with real value
+;; ── Rel T1 POL.9c (Q_B): defn/defr namespaces are DISJOINT at registration ──
+;; The second registration of a name held by the OTHER kind errors, pointing
+;; at the first. LOCAL-only: refer-imported names stay shadowable (the
+;; prelude xor/singleton precedent — imports live in the cascade, not this
+;; module's own cell-id-map). Same-kind redefinition stays legal (REPL
+;; iteration; re-defr). A defr name's env value IS its expr-defr body, which
+;; is the kind discriminator. Named gap: multi-arity defn base names live
+;; only in the ambient multi-defn registry (no module provenance), so the
+;; multi-arity-defn ↔ defr collision is ungated — gating it would break
+;; prelude-name shadowing (local-only would be violated).
+;; Returns a prologos-error or #f.
+(define (check-crosskind-collision name incoming-kind)  ;; 'relation | 'value
+  (define local (global-env-lookup-local name))
+  (define existing-kind
+    (cond
+      [(and local (expr-defr? (cdr local))) 'relation]
+      [local 'value]
+      [else #f]))
+  (and existing-kind
+       (not (eq? existing-kind incoming-kind))
+       (prologos-error #f
+         (if (eq? incoming-kind 'relation)
+             (format "defr ~a: ~a is already defined as a function/value in this module — a name cannot be both a value and a relation. Choose a different name." name name)
+             (format "def ~a: ~a is already defined as a relation (defr) in this module — a name cannot be both a value and a relation. Choose a different name." name name)))))
+
 (define (process-def expanded)
+  ;; Rel T1 POL.9c: the Q_B cross-kind gate — before any registration.
+  ;; Covers plain defs, defn-lowered defs, and def-group clause defs.
+  (define qb-err (check-crosskind-collision (surf-def-name expanded) 'value))
+  (if qb-err qb-err (process-def/qb-checked expanded)))
+
+(define (process-def/qb-checked expanded)
   (define name (surf-def-name expanded))
   (define type-surf (surf-def-type expanded))
   (define body-surf (surf-def-body expanded))
@@ -1716,13 +1861,32 @@
                    ;; tabulation FORCES; a failing :check errors at commit.
                    [(seal-forcing-error zonked-body def-srcloc) => values]
                    [else
-                    (global-env-add name zonked-type zonked-body)
+                    ;; POL.10 (owner-ruled 2026-07-24, SECOND pass): `def` binds
+                    ;; the WHNF-REDUCED value — SNAPSHOT semantics. Evaluation
+                    ;; runs ONCE at definition; later mentions read the value (a
+                    ;; def'd solve no longer re-runs the solver per mention —
+                    ;; solver_row_scans flat vs 4+4N under AST-binding).
+                    ;; WHNF, NEVER nf: expr-lam is whnf-trivial, so lambda-
+                    ;; valued defs store unchanged (binder-headed stays lazy;
+                    ;; capability discharge under the binder is impossible
+                    ;; here), while function-PRODUCING bodies ([make-adder 5])
+                    ;; construct their closure once. The first-pass collisions
+                    ;; were ALL nf-under-binder casualties; at whnf every one
+                    ;; dissolves — including module loading (verified on fresh
+                    ;; caches; no loading-set guard needed). Effects cannot
+                    ;; reach a def body at all: effects are capability-gated
+                    ;; and capabilities arrive only as fn params, i.e. under a
+                    ;; binder (E2001 otherwise) — the structural effect gate.
+                    ;; Ruling trail: design §8 POL.10 (F1 = snapshot; recipe
+                    ;; invalidation = Rel T2 IVM territory).
+                    (define bound-value (time-phase! reduce (whnf zonked-body)))
+                    (global-env-add name zonked-type bound-value)
                     ;; LSP Tier 2.3: record definition location
                     (register-definition-location! name def-srcloc)
                     (when (current-ns-context)
                       (define fqn (qualify-name name
                                     (ns-context-current-ns (current-ns-context))))
-                      (global-env-add fqn zonked-type zonked-body)
+                      (global-env-add fqn zonked-type bound-value)
                       (register-definition-location! fqn def-srcloc))
                     (format "~a : ~a defined." name (pp-expr zonked-type))])])])])])])]
     ;; Existing annotated path (type annotation present)
@@ -1918,13 +2082,16 @@
                          [(seal-forcing-error zonked-body def-srcloc)
                           => (lambda (err) (remove-failed-definition! name) err)]
                          [else
-                          (global-env-add name zonked-type zonked-body)
+                          ;; POL.10: bind the WHNF-reduced value (snapshot) —
+                          ;; see the inferred-path twin for the full note.
+                          (define bound-value (time-phase! reduce (whnf zonked-body)))
+                          (global-env-add name zonked-type bound-value)
                           ;; LSP Tier 2.3: record definition location
                           (register-definition-location! name def-srcloc)
                           (when (current-ns-context)
                             (define fqn (qualify-name name
                                           (ns-context-current-ns (current-ns-context))))
-                            (global-env-add fqn zonked-type zonked-body)
+                            (global-env-add fqn zonked-type bound-value)
                             (register-definition-location! fqn def-srcloc))
                           (format "~a : ~a defined."
                                   name (pp-expr zonked-type))])]
@@ -1938,6 +2105,11 @@
 ;; 2. Process each clause's body
 ;; 3. Register dispatch table in multi-defn registry
 (define (process-def-group group)
+  ;; Rel T1 POL.9c: the Q_B gate for the multi-defn BASE name.
+  (define qb-err (check-crosskind-collision (surf-def-group-name group) 'value))
+  (if qb-err qb-err (process-def-group/qb-checked group)))
+
+(define (process-def-group/qb-checked group)
   (define name (surf-def-group-name group))
   (define defs (surf-def-group-defs group))
   (define arities (surf-def-group-arities group))
@@ -2146,7 +2318,7 @@
   ;; Read raw syntax, apply pre-parse expansion, then parse
   (define raw-stxs (read-all-syntax port "<string>"))
   (define expanded-stxs (preparse-expand-all raw-stxs))
-  (define surfs (map parse-datum expanded-stxs))
+  (define surfs (map parse-toplevel-datum expanded-stxs))
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
   (define pv (provenance-counters 0 0 0 0 0 0 0 0))
   (define qs (make-quiescence-stats))
@@ -2159,7 +2331,7 @@
         (for/list ([surf (in-list surfs)])
           (if (prologos-error? surf)
               surf
-              (process-command surf))))))
+              (process-command/solve-guard surf))))))
   ;; Emit formatted error diagnostics to stderr when enabled (test runner integration)
   (when (current-emit-error-diagnostics)
     (for ([r (in-list results)])
@@ -2282,6 +2454,17 @@
       [(not tree-surf) preparse-surf]
       ;; Form type mismatch → preparse (safety)
       [(not (same-form-type? preparse-surf tree-surf)) preparse-surf]
+      ;; Rel T1 POL.9b: the preparse spine is the ONLY pipeline that can see
+      ;; the reader's 'prologos-paren-origin mark (the tree spine's legacy
+      ;; def path has no source text for srcloc/property recovery). When the
+      ;; two spines DISAGREE in category — preparse parsed the def body as a
+      ;; solve (the paren-goal dispatch fired) while the tree parsed it as an
+      ;; application — preparse is authoritative. Explicit `def := solve (…)`
+      ;; parses as solve on BOTH spines, so its merge is unchanged.
+      [(and (surf-def? preparse-surf) (surf-def? tree-surf)
+            (surf-solve? (surf-def-body preparse-surf))
+            (not (surf-solve? (surf-def-body tree-surf))))
+       preparse-surf]
       ;; Spec-annotated → preparse (has spec type injected)
       [(and (surf-def? preparse-surf) (hash-ref spec-store (surf-def-name preparse-surf) #f)) preparse-surf]
       [(and (surf-defn? preparse-surf) (hash-ref spec-store (surf-defn-name preparse-surf) #f)) preparse-surf]
@@ -2339,7 +2522,7 @@
   ;; and generated defs depend on: solver / schema / defmacro / data / trait / impl).
   (define raw-stxs (read-all-syntax-ws (open-input-string s) "<ws-string>"))
   (define expanded-stxs (preparse-expand-all raw-stxs))
-  (define preparse-surfs (map parse-datum expanded-stxs))
+  (define preparse-surfs (map parse-toplevel-datum expanded-stxs))
 
   ;; Step 2: merge the tree/cell pipeline with the preparse surfs — EXACTLY like
   ;; process-file's WS path. The merge runs the cell pipeline internally (populating
@@ -2378,7 +2561,7 @@
         (for/list ([surf (in-list surfs)])
           (if (prologos-error? surf)
               surf
-              (process-command surf))))))
+              (process-command/solve-guard surf))))))
   ;; Emit formatted error diagnostics to stderr when enabled (test runner integration)
   (when (current-emit-error-diagnostics)
     (for ([r (in-list results)])
@@ -2469,7 +2652,7 @@
        (close-input-port file-port)
        (define raw-stxs (read-all-syntax-ws (open-input-string str) path-str))
        (define expanded-stxs (preparse-expand-all raw-stxs))
-       (define preparse-surfs (map parse-datum expanded-stxs))
+       (define preparse-surfs (map parse-toplevel-datum expanded-stxs))
        (merge-preparse-and-tree-parser str preparse-surfs)]
       [else
        ;; .rkt sexp path: UNCHANGED
@@ -2477,7 +2660,9 @@
        (define raw-stxs (read-all-syntax port path-str))
        (close-input-port port)
        (define expanded-stxs (preparse-expand-all raw-stxs))
-       (map parse-datum expanded-stxs)]))
+       ;; POL.9: parse-toplevel-datum is a structural no-op here — the native
+       ;; sexp reader never attaches 'prologos-paren-origin.
+       (map parse-toplevel-datum expanded-stxs)]))
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
   (define pv (provenance-counters 0 0 0 0 0 0 0 0))
   (define qs (make-quiescence-stats))
@@ -2848,10 +3033,10 @@
              (read-all-syntax port file-str)))
        (close-input-port port)
        (define expanded-stxs (preparse-expand-all raw-stxs))
-       (define surfs (map parse-datum expanded-stxs))
+       (define surfs (map parse-toplevel-datum expanded-stxs))
        (for ([surf (in-list surfs)])
          (unless (prologos-error? surf)
-           (define result (process-command surf))
+           (define result (process-command/solve-guard surf))
            (when (prologos-error? result)
              (error 'imports "Error loading module ~a: ~a"
                     ns-sym (prologos-error-message result)))))

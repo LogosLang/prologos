@@ -44,7 +44,10 @@
                   current-functor-store)
          (only-in "global-env.rkt" current-defn-param-names)
          (only-in "multi-dispatch.rkt" current-multi-defn-registry)
-         (only-in "foreign.rkt" parse-foreign-type make-marshaller-pair))
+         (only-in "foreign.rkt" parse-foreign-type make-marshaller-pair)
+         ;; POL.10: reconstructive champ serialization (def binds reduced values,
+         ;; so champ-bearing rows now reach module env-snapshots)
+         (only-in "champ.rkt" champ-empty champ-insert champ-entries))
 
 ;; Lib dir for resolving relative .rkt paths in foreign function re-linking
 (define pnet-lib-dir (simplify-path (build-path (syntax-source #'here) ".." "lib")))
@@ -68,7 +71,10 @@
 ;; regenerates Open-free, so the :579 wildcard + the 9 Open-scrutinee arms are
 ;; dead code from here and no stale cache can re-inject the deleted-at-p2 tag
 ;; (the expr-p*-if-nar months-latent class, pipeline.md).
-(define PNET_VERSION 2)
+;; 2→3 at POL.10 (2026-07-24): env-snapshots may now carry whnf-reduced def
+;; values (incl. champ-sentinels) — bump forces clean regeneration everywhere
+;; so no pre-POL.10 reader ever meets the new shapes (the F1a.2 precedent).
+(define PNET_VERSION 3)
 
 ;; ============================================================
 ;; Serialization: struct->vector + gensym tagging + foreign-proc
@@ -107,6 +113,16 @@
       ;; Replace with sentinels — these are runtime values, not module state.
       [(prop-network? v) '(runtime-prop-network)]
       [(elab-network? v) '(runtime-elab-network)]
+      ;; POL.10 (2026-07-24, landed second pass): `def` binds WHNF-reduced
+      ;; values, so champ-bearing solution rows CAN reach module env-snapshots. CHAMP internal
+      ;; nodes are implementation-private (the same class as the network
+      ;; sentinels above), so serialize RECONSTRUCTIVELY as the entries list;
+      ;; the reader rebuilds via champ-insert with hashes RECOMPUTED —
+      ;; equal-hash-code is process-stable only and must never be persisted.
+      [(expr-champ? v)
+       (list 'champ-sentinel
+             (for/list ([kv (in-list (champ-entries (expr-champ-racket-champ v)))])
+               (cons (deep-s->v (car kv)) (deep-s->v (cdr kv)))))]
       [(struct? v)
        (for/vector ([e (in-vector (struct->vector v))]) (deep-s->v e))]
       [(pair? v)
@@ -478,6 +494,14 @@
      (make-prop-network)]  ;; elab-network → fresh prop-network (no elab state needed)
     [(and (list? v) (= (length v) 2) (eq? (car v) 'box-sentinel))
      (box (deep-serializable->struct (cadr v)))]
+    ;; POL.10: reconstruct an expr-champ from its serialized entries list —
+    ;; hashes recomputed at read (never persisted; see the serializer arm).
+    [(and (list? v) (= (length v) 2) (eq? (car v) 'champ-sentinel))
+     (expr-champ
+      (for/fold ([c champ-empty]) ([kv (in-list (cadr v))])
+        (define k (deep-serializable->struct (car kv)))
+        (define val (deep-serializable->struct (cdr kv)))
+        (champ-insert c (equal-hash-code k) k val)))]
     [(and (list? v) (= (length v) 2) (eq? (car v) 'foreign-proc))
      ;; Re-link foreign procedure. For most procs, the expr-foreign-fn struct
      ;; that contains this proc also has source-module + racket-name fields.

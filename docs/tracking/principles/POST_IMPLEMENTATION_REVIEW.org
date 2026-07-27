@@ -119,6 +119,37 @@ skip them.
     that turned out to be false? Wrong assumptions are more dangerous
     than bugs because they're invisible until they cause problems.
 
+    **The refutation / surprise boundary (owner ruling, 2026-07-25).**
+    Several tracks maintain a running "premise-refutation cascade: N" as
+    /discipline evidence/ --- it is the standing argument for "probe before
+    locking a premise." A count used as evidence must be *reproducible by
+    someone else*, and ours was not: Rel T1 closed with **four mutually
+    inconsistent authoritative values** (a STATE head saying "9 + 1"; a LOG
+    entry double-booking slot 10; a handoff publishing 11 while its own
+    parenthetical enumerated 12), against ~29--32 by exhaustive enumeration.
+    A metric that cannot be recounted is rhetoric, not evidence.
+
+    A **REFUTATION** requires *all three*:
+    1. the premise was **recorded in a durable artifact** (design doc,
+       handoff, memory, tracking doc) **before** the work;
+    2. it was shown false **by evidence** (probe, instrumented parse,
+       independent panel, suite, owner correction) --- not by opinion;
+    3. being wrong **changed the design or the implementation**.
+
+    Everything else is a **SURPRISE**: real, worth recording in the dailies
+    and in §8, but *not counted*. Emergent behavior, a discovered capability,
+    an in-flight realization that nothing had previously asserted --- these
+    are surprises. The discriminator is: /was it written down as a premise,
+    and did being wrong change what we built?/
+
+    Two procedural corollaries:
+    - **State the count ONCE, at close, with the enumeration.** Do not
+      increment a running tally mid-flight --- that is how slot 10 got
+      double-booked. The close recount is what makes it auditable.
+    - Expect the strict definition to *shrink* the number, and let it. Under
+      it most in-flight discoveries reclassify as surprises, which typically
+      validates the smaller published figure rather than inflating it.
+
 14. *What did we learn about the problem itself?* Implementation
     always teaches things that research and design cannot. Does our
     understanding of the problem domain differ from what we started
@@ -237,6 +268,17 @@ will not be encountered during future work.]
   logic variables; ~expr-logic-var~ structs are opaque values that
   never unify with ground terms --- when constructing probe goals, use
   the solver's representation, not the AST's" is a lesson.
+
+- *Design time is largely INVISIBLE to git --- treat D:I as a lower bound, or
+  drop it.* (Recorded 2026-07-25, Rel T1.) Commit-derived ratios miss co-design
+  conversation, grounding-workflow runs (~19 on Rel T1; only one carries a cost
+  record), suite runs, and reverted experiments. The metric was meaningful in
+  the project's earlier shape, when a single design document was worked through
+  point by point; it degraded as context loss across compressions pushed us to
+  **per-phase mini-designs**, which leave far less trace. So: if you cite a D:I
+  ratio, say explicitly that it is a lower bound on design --- and be willing
+  to retire the metric rather than report it as though the process had not
+  changed underneath it.
 
 - *Quantify everything possible.* Design-to-implementation ratio,
   lines per hour, tests per phase, bug-fix-to-implementation ratio.

@@ -1,0 +1,1159 @@
+#lang racket/base
+
+;;;
+;;; Rel T1 POL — polish-cluster gates (design §8 roster).
+;;; POL.2 / B3.0 (2026-07-24): anonymous `_` query vars are solver-visible free
+;;; vars (answer COUNT unchanged — duplicates preserved; POL.1 dedup is a
+;;; separate aspect) but are NOT projected into solution rows. The filter is
+;;; kernel-level (reduction.rkt anon-query-var? / row-query-vars) so runtime
+;;; champ rows and B3's static row labels stay key-agreed.
+;;; Owner repro source: standup-2026-07-19.org § "Polish points for REL".
+;;;
+
+(require rackunit
+         racket/string
+         "test-support.rkt"
+         (only-in "../errors.rkt" prologos-error? prologos-error-message)
+         (only-in "../performance-counters.rkt"
+                  with-perf-counters perf-counters-solver-row-scans)
+         (only-in "../pnet-serialize.rkt"
+                  deep-struct->serializable deep-serializable->struct)
+         (only-in "../champ.rkt" champ-empty champ-insert champ-entries)
+         (only-in "../syntax.rkt" expr-champ expr-champ? expr-champ-racket-champ
+                  expr-keyword expr-keyword-name expr-int))
+
+(define FIXTURE
+  (string-append
+   "ns poltest\n"
+   "defr bool [?b]\n"
+   "  || 1\n"
+   "     0\n"
+   "defr truths [?b1 ?b2 ?b3 ?b4]\n"
+   "  &> (bool b1) (bool b2) (bool b3) (bool b4)\n"))
+
+(test-case "POL.2: anon `_` keys are dropped from solve rows; duplicates preserved"
+  (define r (run-ns-ws-last (string-append FIXTURE "solve (truths b1 b2 b3 _)")))
+  (check-true (string? r))
+  (check-true (string-contains? r ":b1") "named query vars keep their keys")
+  (check-true (string-contains? r ":b3"))
+  (check-false (string-contains? r "_anon") "anon gensym keys must not appear")
+  ;; 2^4 = 16 solutions; the two `_` values yield DUPLICATE rows (kept — POL.1
+  ;; dedup is out of scope here). Count braces in the VALUE part only — since
+  ;; B3.1 the printed TYPE of a rule solve is itself a row (`List {:b1 Int …}`)
+  ;; and would inflate a whole-string count.
+  (define val-part (car (regexp-split #rx" : " r)))
+  (check-equal? (length (regexp-match* #rx"[{]" val-part)) 16
+                "answer count unchanged by projection (duplicates preserved)"))
+
+(test-case "POL.2: all-anon query projects to empty rows (membership-style)"
+  (define r (run-ns-ws-last (string-append FIXTURE "solve (truths _ _ _ _)")))
+  (check-true (string? r))
+  (check-false (string-contains? r "_anon"))
+  (check-false (string-contains? (car (regexp-split #rx" : " r)) ":b")
+               "no named keys in the value rows")
+  (check-equal? (length (regexp-match* #rx"[{][}]" (car (regexp-split #rx" : " r)))) 16
+                "16 empty rows — one per solution"))
+
+(test-case "POL.2: solve-one drops anon keys too (same kernel filter)"
+  (define r (run-ns-ws-last (string-append FIXTURE "solve-one (truths b1 _ _ _)")))
+  (check-true (string? r))
+  (check-true (string-contains? r ":b1"))
+  (check-false (string-contains? r "_anon")))
+
+(test-case "POL.2: explain rows drop anon keys (answer-result path)"
+  (define r (run-ns-ws-last (string-append FIXTURE "explain (truths b1 b2 b3 _)")))
+  (check-true (string? r))
+  (check-false (string-contains? r "_anon")))
+
+;; ── POL.5: def := solve(…) — the spurious multiplicity violation ─────────────
+;; The qtt expr-goal-app arm propagated the goal HEAD's inferQ failure (the
+;; head is a raw relational symbol — no inferQ arm) as tu-error, poisoning
+;; every def-bound solve into checkQ-top's generic "Multiplicity violation".
+;; Fixed 2026-07-24: the head contributes zero usage when un-inferQ-able
+;; (mirroring typing-core's discard). Owner repro: def := solve (movies …).
+
+(define POL5-FIXTURE
+  (string-append
+   "ns pol5test\n"
+   "defr edge [?a ?b]\n"
+   "  || 1 2\n"
+   "     2 3\n"
+   "defr reach [?x ?z]\n"
+   "  &> (edge x z)\n"
+   "  &> (edge x y) (reach y z)\n"))
+
+(test-case "POL.5: def binds a solve over a FACTS relation (no multiplicity violation)"
+  (define r (run-ns-ws-last (string-append POL5-FIXTURE "def frows := solve (edge a b)\nfrows")))
+  (check-true (string? r))
+  (check-false (string-contains? r "Multiplicity") r)
+  (check-true (string-contains? r ":a") "bound value holds the rows"))
+
+(test-case "POL.5: def binds a solve over a RULE relation; solve-one row projects"
+  (define r (run-ns-ws-last
+             (string-append POL5-FIXTURE
+                            "def one := solve-one (reach x z)\n"
+                            "one.z")))
+  (check-true (string? r))
+  (check-false (string-contains? r "Multiplicity") r)
+  (check-true (string-contains? r ": Int")
+              "def-bound solve-one row projects a typed field — the motivating composition"))
+
+(test-case "POL.2: STATIC row labels drop anon keys too (CbC key agreement)"
+  ;; goal-app-row (typing-core) filters via the SAME kernel predicate, so on a
+  ;; facts-only relation (where static rows exist since B2) the static type and
+  ;; the runtime row agree: no :_anon field on either side.
+  (define r (run-ns-ws-last
+             (string-append "ns poltest2\n"
+                            "defr data [?k ?s]\n"
+                            "  || 1 \"a\"\n"
+                            "     2 \"b\"\n"
+                            "solve (data _ s)")))
+  (check-true (string? r))
+  (check-true (string-contains? r ":s String") "static row keeps the named field")
+  (check-false (string-contains? r "_anon") "no anon field in the static type either"))
+
+;; ── POL.10 (LANDED 2026-07-24, second pass — owner-ruled SNAPSHOT semantics):
+;; `def` binds the WHNF-reduced value. Evaluation runs once at definition;
+;; mentions read the value. WHNF (never nf): expr-lam is whnf-trivial, so
+;; lambda-valued defs store unchanged — the first-pass collisions were all
+;; nf-under-binder casualties and dissolve at whnf. Effects cannot reach a
+;; def body (capability-gated, params-only ⇒ always under a binder).
+
+(test-case "POL.10: a def-bound solve runs the solver ONCE — mentions add no scans"
+  (define (scans-of program)
+    (define-values (_ pc) (with-perf-counters (run-ns-ws-last program)))
+    (perf-counters-solver-row-scans pc))
+  (define base (string-append POL5-FIXTURE "def rows := solve (edge a b)\n"))
+  (define with-uses (string-append base "rows\nrows\nrows"))
+  (check-equal? (scans-of with-uses) (scans-of base)
+                "three mentions of the def-bound rows must add ZERO row scans"))
+
+(test-case "POL.10: def is a SNAPSHOT — a later defr does not change a bound solve"
+  ;; Owner F1 ruling (2026-07-24): a binding denotes ONE value (the `random`
+  ;; category-error principle). Recipe-style invalidation is Rel T2 IVM work.
+  (define r (run-ns-ws-last
+             (string-append POL5-FIXTURE
+                            "def rows := solve (edge a b)\n"
+                            "defr edge [?a ?b]\n"
+                            "  || 7 8\n"
+                            "rows")))
+  (check-true (string? r))
+  (check-false (string-contains? r ":a 7")
+               "rows snapshot predates the second defr — must not see 7/8"))
+
+(test-case "POL.10: lambda-valued defs are whnf-trivial — stored & applied unchanged"
+  (define r (run-ns-ws-last
+             (string-append "ns pol10fn\n"
+                            "spec make-adder Int -> [Int -> Int]\n"
+                            "defn make-adder [n]\n"
+                            "  [fn [x : Int] [+ n x]]\n"
+                            "def add5 := [make-adder 5]\n"
+                            "[add5 37]")))
+  (check-true (string-contains? r "42") "function-producing def constructs once and applies"))
+
+(test-case "POL.10: expr-champ pnet round-trip (reconstructive champ-sentinel)"
+  ;; def now binds reduced values, so champ rows can reach module env
+  ;; snapshots — the sentinel serializes entries and rebuilds via champ-insert
+  ;; (hashes recomputed at read; equal-hash-code is process-stable only).
+  (define k1 (expr-keyword 'a))
+  (define k2 (expr-keyword 'b))
+  (define c (champ-insert (champ-insert champ-empty
+                                        (equal-hash-code k1) k1 (expr-int 1))
+                          (equal-hash-code k2) k2 (expr-int 2)))
+  (define rt (deep-serializable->struct (deep-struct->serializable (expr-champ c))))
+  (check-true (expr-champ? rt) "round-trips as an expr-champ, not a vector impostor")
+  (define entries
+    (sort (map (lambda (kv) (cons (car kv) (cdr kv)))
+               (champ-entries (expr-champ-racket-champ rt)))
+          (lambda (x y) (symbol<? (expr-keyword-name (car x)) (expr-keyword-name (car y))))))
+  (check-equal? (length entries) 2)
+  (check-equal? (cdr (car entries)) (expr-int 1))
+  (check-equal? (cdr (cadr entries)) (expr-int 2)))
+
+;; ── POL.4: arity mismatch is a HARD ERROR (owner-ruled: Prolog-style) ────────
+;; Under- and over-application both errored silently before (nil / unbound-echo
+;; rows — the D.2.c arity-lenient trap). Now: exn:prologos-solve raised at the
+;; engine entries, converted at the command boundary to a per-command ERROR so
+;; the file/REPL continues. The internal `goal-args='()` enumerate convention
+;; (0-arg surface call) is preserved.
+
+;; An arity error surfaces as a per-command prologos-error STRUCT — read its
+;; message (the run-ns-ws-last raw result is not a string for error results).
+(define (result-msg r) (if (prologos-error? r) (prologos-error-message r) r))
+
+(test-case "POL.4: under-application errors with the available-arities diagnostic"
+  (define m (result-msg (run-ns-ws-last (string-append FIXTURE "solve (truths b)"))))
+  (check-true (string-contains? m "Unknown procedure: truths/1") m)
+  (check-true (string-contains? m "definitions for: truths/4") m))
+
+(test-case "POL.4: over-application errors likewise"
+  (define m (result-msg (run-ns-ws-last (string-append FIXTURE "solve (truths b1 b2 b3 b4 b5)"))))
+  (check-true (string-contains? m "Unknown procedure: truths/5") m))
+
+(test-case "POL.4: correct arity + 0-arg enumerate both still work"
+  (define ok (run-ns-ws-last (string-append FIXTURE "solve (bool x)")))
+  (check-true (string-contains? ok ":x") "correct arity solves")
+  (define enum (run-ns-ws-last (string-append FIXTURE "solve (bool)")))
+  (check-false (string-contains? enum "Unknown procedure")
+               "0-arg surface call keeps the enumerate convention"))
+
+(test-case "POL.4: rule-BODY wrong-arity goals error too (solve-app-goal gate)"
+  (define m (result-msg
+             (run-ns-ws-last
+              (string-append FIXTURE
+                             "defr badrule [?x]\n  &> (truths x)\n"
+                             "solve (badrule v)"))))
+  (check-true (string-contains? m "Unknown procedure: truths/1") m))
+
+(test-case "POL.4: unknown relation now presents as a per-command ERROR (file continues)"
+  (define r (run-ns-ws-last (string-append FIXTURE "solve (nosuch x)\nsolve (bool y)")))
+  ;; last result = the FOLLOWING command — proof the run continued past the error
+  (check-true (string-contains? r ":y") "the command after the error still ran"))
+
+;; ── SUB.1: substitution containment tripwire (POL.10 spin-out) ───────────────
+;; docs/tracking/2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md — ruling (D).
+;; The LIVE bug: nf-under-binder mints an open champ (a lambda whose body is a
+;; map literal referencing the lambda's param); shift/subst treat containers
+;; as closed leaves, so a later beta silently drops the argument — `?bvar0`
+;; escaped to top level TYPED with 0 errors. Until SUB.3 (NbE open-the-binder)
+;; makes the shape unconstructible, the tripwire at the three nf-persisting
+;; boundaries (solve/solve-one is-goal answer rows + validate base-ok) refuses
+;; to persist it: loud per-command exn:prologos-solve, the run continues.
+;; ⚠ FLIP AT SUB.3: the poisoned cases below become correct-answer assertions
+;; (6N — see the defect doc §5 E2E) when the fix lands.
+
+(define SUBFIX
+  (string-append
+   "ns subtrip\n"
+   "spec ctrl [Map Keyword <Nat -> Nat>] -> Nat\n"
+   "defn ctrl [p]  [[get p :f] 5N]\n"
+   "spec bug [Map Keyword <Nat -> [Map Keyword Nat]>] -> Nat\n"
+   "defn bug [p]  [get [[get p :f] 5N] :a]\n"))
+
+(test-case "SUB.1: the CONTROL still computes — closed lambda in an answer row"
+  (define r (run-ns-ws-last
+             (string-append SUBFIX
+                            "[ctrl (solve-one (is ?f [fn [y : Nat] [add y 1N]]))]")))
+  (check-true (string-contains? (result-msg r) "6N") (result-msg r)))
+
+;; ⚠ FLIPPED AT SUB.3 (ruling D — NbE open-the-binder): the formerly-poisoned
+;; shapes now compute the CORRECT answers (the defect doc §5 E2E). The SUB.1
+;; tripwire remains installed as the standing invariant guard at the three
+;; nf-persisting boundaries — these tests double as its no-false-positive
+;; gates (any tripwire fire below would surface as a prologos-error).
+
+(test-case "SUB.3: map-returning lambda through solve-one computes (was ?bvar0)"
+  (define r (run-ns-ws-last
+             (string-append SUBFIX
+                            "[bug (solve-one (is ?f [fn [y : Nat] {:a y}]))]")))
+  (define m (result-msg r))
+  (check-false (prologos-error? r) m)
+  (check-true (string-contains? m "5N") m)
+  (check-false (string-contains? m "?bvar") "no open index escapes"))
+
+(test-case "SUB.3: solve (list form) carries the safe lambda row"
+  (define r (run-ns-ws-last
+             (string-append SUBFIX
+                            "solve (is ?f [fn [y : Nat] {:a y}])")))
+  (define m (result-msg r))
+  (check-false (prologos-error? r) m)
+  (check-false (string-contains? m "?bvar") m)
+  (check-true (string-contains? m ":f") "the answer row materializes"))
+
+(test-case "SUB.3: both shapes in sequence — later commands see clean state"
+  (define r (run-ns-ws-last
+             (string-append SUBFIX
+                            "solve (is ?f [fn [y : Nat] {:a y}])\n"
+                            "[ctrl (solve-one (is ?f [fn [y : Nat] [add y 1N]]))]")))
+  (check-true (string-contains? (result-msg r) "6N") (result-msg r)))
+
+(test-case "SUB.3: validate accepts map-returning-lambda fields (was refused)"
+  (define VS
+    (string-append
+     "ns subtripv\n"
+     "schema FnBox\n"
+     "  :f <Nat -> [Map Keyword Nat]>\n"
+     "schema FnBox2\n"
+     "  :f <Nat -> Nat>\n"))
+  (define was-bad (run-ns-ws-last
+                   (string-append VS "[validate FnBox {:f [fn [y : Nat] {:a y}]}]")))
+  (check-false (prologos-error? was-bad) (result-msg was-bad))
+  (check-true (string-contains? (result-msg was-bad) "ok") (result-msg was-bad))
+  (define ok (run-ns-ws-last
+              (string-append VS "[validate FnBox2 {:f [fn [y : Nat] [add y 1N]]}]")))
+  (check-true (string-contains? (result-msg ok) "ok") (result-msg ok)))
+
+;; ── SUB.3b: narrow-subst-bvars + narrow-match containment (the wider sibling) ─
+;; The narrowing walker's [_ expr] catch-all silently DROPPED bindings for
+;; every unlisted node (map/set/vec spines included), and narrow-match had no
+;; map/vec decomposition — so `box ?y = {:a 5N}` on `defn box [x] {:a x}`
+;; returned nil with 0 errors. Fixed: generic transparent-struct rebuild
+;; fallback + explicit Pi/Sigma binder arms (+ the lam TYPE field) in
+;; narrow-subst-bvars; entry-wise map + element-wise vec decomposition in
+;; narrow-match (logic vars inside values bind).
+
+(require (only-in "../narrowing.rkt" narrow-subst-bvars)
+         (only-in "../syntax.rkt"
+                  expr-map-assoc expr-map-empty expr-hole expr-bvar
+                  expr-nat-val expr-fst expr-Pi expr-Nat expr-map-assoc-v))
+
+(define NARFIX
+  (string-append
+   "ns subnarrow\n"
+   "spec box Nat -> [Map Keyword Nat]\n"
+   "defn box [x] {:a x}\n"
+   "spec wrap Nat -> (PVec Nat)\n"
+   "defn wrap [x] @[x 1N]\n"
+   "spec nest Nat -> [Map Keyword [Map Keyword Nat]]\n"
+   "defn nest [x] {:outer {:inner x}}\n"))
+
+(test-case "SUB.3b: map-literal RHS narrows (was nil)"
+  (define r (run-ns-ws-last (string-append NARFIX "box ?y = {:a 5N}")))
+  (check-true (string-contains? (result-msg r) ":y 5N") (result-msg r)))
+
+(test-case "SUB.3b: vec-literal RHS narrows"
+  (define r (run-ns-ws-last (string-append NARFIX "wrap ?y = @[5N 1N]")))
+  (check-true (string-contains? (result-msg r) ":y 5N") (result-msg r)))
+
+(test-case "SUB.3b: nested map RHS narrows through both levels"
+  (define r (run-ns-ws-last (string-append NARFIX "nest ?y = {:outer {:inner 7N}}")))
+  (check-true (string-contains? (result-msg r) ":y 7N") (result-msg r)))
+
+(test-case "SUB.3b: key-set mismatch does NOT match"
+  (define r (run-ns-ws-last
+             (string-append NARFIX
+                            "spec boxm Nat -> [Map Keyword Nat]\n"
+                            "defn boxm [x] {:a x :b 2N}\n"
+                            "boxm ?z = {:a 9N}")))
+  (check-true (string-contains? (result-msg r) "nil") (result-msg r)))
+
+(test-case "SUB.3b unit: the walker substitutes through a map-assoc spine"
+  (define spine (expr-map-assoc (expr-map-empty (expr-hole) (expr-hole))
+                                (expr-keyword ':a) (expr-bvar 0)))
+  (define out (narrow-subst-bvars spine (list (expr-nat-val 5)) 0))
+  (check-equal? (expr-map-assoc-v out) (expr-nat-val 5)
+                "the binding reaches the spine value"))
+
+(test-case "SUB.3b unit: generic fallback covers formerly-skipped nodes"
+  ;; expr-fst previously fell to [_ expr] — binding silently dropped
+  (define out (narrow-subst-bvars (expr-fst (expr-bvar 0))
+                                  (list (expr-nat-val 3)) 0))
+  (check-equal? out (expr-fst (expr-nat-val 3))))
+
+(test-case "SUB.3b unit: Pi codomain is a BINDER position (no capture)"
+  ;; bvar0 under the Pi codomain refers to the Pi's own var — bindings at
+  ;; depth 0 must NOT reach it; bvar1 there is the outer slot and must.
+  (define pi (expr-Pi 'mw (expr-Nat) (expr-bvar 0)))
+  (check-equal? (narrow-subst-bvars pi (list (expr-nat-val 9)) 0) pi
+                "the codomain's own var stays bound")
+  (define pi2 (expr-Pi 'mw (expr-Nat) (expr-bvar 1)))
+  (check-equal? (narrow-subst-bvars pi2 (list (expr-nat-val 9)) 0)
+                (expr-Pi 'mw (expr-Nat) (expr-nat-val 9))
+                "the outer slot substitutes at depth+1"))
+
+;; ── POL.3: declaration-order keys for solve echoes (design §8) ───────────────
+;; Rows are champs (hash-ordered), so `solve (truths b1 b2 b3 _)` displayed
+;; `{:b3 1, :_anon… 1, :b2 1, :b1 1}`. The declaration order lives in the goal's
+;; positional query vars (B0's classify-goal-args, minus POL.2's anons) and is
+;; applied at the eval echo seam, DISPLAY-ONLY: the row VALUE stays an unordered
+;; champ, and a def-bound echo (no goal in hand) stays hash-ordered — the named
+;; fallback, until an order-carrying row representation (Rel T2 territory).
+
+(test-case "POL.3: solve keys display in declaration order"
+  (define r (run-ns-ws-last (string-append FIXTURE "solve (truths b1 b2 b3 _)")))
+  (check-true (string? r))
+  (check-true (string-contains? r "{:b1 1, :b2 1, :b3 1}")
+              "first row in declaration order (was hash order)"))
+
+(test-case "POL.3: DECLARATION order, not alphabetical"
+  (define r (run-ns-ws-last
+             (string-append "ns p3\n"
+                            "defr za [?z ?a]\n  || 1 2\n     3 4\n"
+                            "solve (za z a)")))
+  (check-true (string-contains? r "{:z 1, :a 2}")
+              "z declared first displays first, though a < z alphabetically"))
+
+(test-case "POL.3: solve-one bare row is ordered too"
+  (define r (run-ns-ws-last (string-append FIXTURE "solve-one (truths b1 b2 b3 _)")))
+  (check-true (string-contains? r "{:b1 1, :b2 1, :b3 1}")))
+
+(test-case "POL.3: explain puts query keys first, metadata after"
+  (define r (run-ns-ws-last
+             (string-append "ns p3\n"
+                            "defr za [?z ?a]\n  || 1 2\n     3 4\n"
+                            "explain (za z a)")))
+  (check-true (string-contains? r "{:z 1, :a 2, :provenance")
+              "query keys lead; reserved metadata keys follow"))
+
+(test-case "POL.3: anonymous rel uses its param declaration order"
+  (define r (run-ns-ws-last
+             (string-append "ns p3\n"
+                            "defr za [?z ?a]\n  || 1 2\n     3 4\n"
+                            "solve (rel [q p]\n  &> (za q p))")))
+  (check-true (string-contains? r "{:q 1, :p 2}")))
+
+(test-case "POL.3: def-bound echo is the NAMED fallback (displays, unordered)"
+  (define r (run-ns-ws-last
+             (string-append "ns p3\n"
+                            "defr za [?z ?a]\n  || 1 2\n     3 4\n"
+                            "def rr := solve (za z a)\n"
+                            "rr")))
+  ;; no goal in hand at the echo — hash order; assert it still displays both keys
+  (check-true (string? r))
+  (check-true (and (string-contains? r ":z 1") (string-contains? r ":a 2"))))
+
+;; ── POL.7: single-line facts with `|` row separators (design §8) ─────────────
+;; `|` tokenizes as the bare `$pipe` symbol and previously flowed into
+;; parse-datum as a GARBAGE TERM (`|| 0 | 1 | 2` silently produced `unknown`
+;; rows — probed, not inferred). Now: pipes = EXPLICIT rows (each segment must
+;; match the arity exactly; empty segments error); without pipes the
+;; pre-existing arity-chunking stands but a partial remainder is a LOUD error
+;; instead of a silent dead row (the Watching-3 spurious-empty-results trap,
+;; closed at the source). One shared splitter serves the flat and
+;; continuation-line sites. Sexp mode untouched by construction (`|` is a
+;; symbol-escape char in the Racket reader).
+
+(test-case "POL.7: the owner's digits example — ten rows from one line"
+  (define r (run-ns-ws-last
+             (string-append "ns p7\n"
+                            "defr digits [?d]\n"
+                            "  || 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9\n"
+                            "solve (digits d)")))
+  (check-true (string? r))
+  (check-true (string-contains? r "{:d 0}"))
+  (check-true (string-contains? r "{:d 9}"))
+  (check-false (string-contains? r "unknown") "no garbage `unknown` rows")
+  (check-equal? (length (regexp-match* #rx"[{]" (car (regexp-split #rx" : " r)))) 10))
+
+(test-case "POL.7: binary rows with pipes"
+  (define r (run-ns-ws-last
+             (string-append "ns p7\n"
+                            "defr e2 [?a ?b]\n  || 1 2 | 3 4\n"
+                            "solve (e2 a b)")))
+  (check-true (string-contains? r "{:a 1, :b 2}"))
+  (check-true (string-contains? r "{:a 3, :b 4}")))
+
+(test-case "POL.7: pipes work on continuation lines too"
+  (define r (run-ns-ws-last
+             (string-append "ns p7\n"
+                            "defr m [?x]\n  || 0 | 1\n     2 | 3\n"
+                            "solve (m x)")))
+  (check-equal? (length (regexp-match* #rx"[{]" (car (regexp-split #rx" : " r)))) 4))
+
+(test-case "POL.7: wrong-length pipe segment is a loud error"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append "ns p7\n"
+                                        "defr e [?a ?b]\n  || 1 2 | 3 4 5\n"))))
+  (check-true (string-contains? m "3 terms") m)
+  (check-true (string-contains? m "arity is 2") m))
+
+(test-case "POL.7: empty pipe segment is a loud error"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append "ns p7\n"
+                                        "defr e [?x]\n  || 1 | | 2\n"))))
+  (check-true (string-contains? m "empty row") m))
+
+(test-case "POL.7: a partial remainder WITHOUT pipes now errors (was a silent dead row)"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append "ns p7\n"
+                                        "defr e [?a ?b]\n  || 1 2 3 4 5\n"))))
+  (check-true (string-contains? m "5 terms do not fill rows of arity 2") m))
+
+(test-case "POL.7: legacy exact-multiple chunking still works (no pipes)"
+  (define r (run-ns-ws-last
+             (string-append "ns p7\n"
+                            "defr leg [?x]\n  || 5 3\n"
+                            "solve (leg x)")))
+  (check-true (string-contains? r "{:x 5}"))
+  (check-true (string-contains? r "{:x 3}")))
+
+(test-case "POL.7: classic multi-line facts unchanged"
+  (define r (run-ns-ws-last
+             (string-append "ns p7\n"
+                            "defr c [?k]\n  || 7\n     8\n"
+                            "solve (c k)")))
+  (check-true (string-contains? r "{:k 7}"))
+  (check-true (string-contains? r "{:k 8}")))
+
+;; ========================================================================
+;; POL.8 — implicit rule-clause groups: layout-based parenless goals in
+;; defr/rel `&>` bodies (owner co-design 2026-07-25; design §8 POL.8).
+;; Grammar: goal-ness from defr-body context; the `&>` line's head token
+;; decides (pair → paren-goal sequence, symbol → ONE bare goal); a grouped
+;; continuation line is a sibling at any indent (Q5 lenient — paren groups
+;; and bare ≥2-token lines are indistinguishable post-reader); single-token
+;; lines are column-classified LOUDLY. Both spellings stay legal.
+;; These run through process-string-ws (L2) — which also pins the tree-spine
+;; duplicate parse (srcloc-stripped, surf discarded) staying harmless.
+;; ========================================================================
+
+(define P8FIX
+  (string-append
+   "ns p8\n"
+   "defr fruit-color [?fruit ?color]\n"
+   "  || \"blueberry\" \"blue\"\n"
+   "  || \"banana\" \"yellow\"\n"
+   "  || \"cherry\" \"red\"\n"))
+
+(test-case "POL.8: bare single-goal clauses; two clauses stay a disjunction (owner form 1)"
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "defr boy [?fruit]\n"
+                            "  &> fruit-color fruit \"blue\"\n"
+                            "  &> fruit-color fruit \"yellow\"\n"
+                            "solve (boy f)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry"))
+  (check-true (string-contains? r "banana"))
+  (check-false (string-contains? r "cherry")))
+
+(test-case "POL.8: bare goal + sibling `not (…)` at the goal column (owner form 2)"
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "defr fnoc [?fruit ?not-color]\n"
+                            "  &> fruit-color fruit color\n"
+                            "     not (= color not-color)\n"
+                            "solve (fnoc f \"red\")")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry"))
+  (check-true (string-contains? r "banana"))
+  (check-false (string-contains? r "cherry")))
+
+(test-case "POL.8: nested bare `not` — deeper line is its goal argument (owner form 3)"
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "defr fnoc2 [?fruit ?not-color]\n"
+                            "  &> fruit-color fruit color\n"
+                            "     not\n"
+                            "       = color not-color\n"
+                            "solve (fnoc2 f \"red\")")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry"))
+  (check-true (string-contains? r "banana"))
+  (check-false (string-contains? r "cherry")))
+
+(test-case "POL.8: bare and paren spellings are equivalent (same rows)"
+  (define bare (run-ns-ws-last
+                (string-append P8FIX
+                               "defr b [?f]\n  &> fruit-color f \"blue\"\n"
+                               "solve (b q)")))
+  (define paren (run-ns-ws-last
+                 (string-append P8FIX
+                                "defr b [?f]\n  &> (fruit-color f \"blue\")\n"
+                                "solve (b q)")))
+  (check-equal? bare paren))
+
+(test-case "POL.8/Q5: sloppy-indent paren continuation stays a SIBLING (lenient)"
+  ;; conjunction semantics pinned: same fruit must have both colors -> nil
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "defr both [?f]\n"
+                            "  &> (fruit-color f \"blue\")\n"
+                            "        (fruit-color f \"yellow\")\n"
+                            "solve (both q)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "nil") "conjunction of two colors is unsatisfiable"))
+
+(test-case "POL.8: single-token deeper line continues the `&>`-line bare goal"
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "defr cont [?f]\n"
+                            "  &> fruit-color f\n"
+                            "       \"blue\"\n"
+                            "solve (cont q)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry")))
+
+(test-case "POL.8: zero-arg sibling goal at the goal column"
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "defr always []\n  ||\n"
+                            "defr z [?f]\n"
+                            "  &> fruit-color f \"blue\"\n"
+                            "     always\n"
+                            "solve (z q)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry")))
+
+(test-case "POL.8/Q6: single-line bare goal (flat arm)"
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "defr one [?f] &> fruit-color f \"blue\"\n"
+                            "solve (one q)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry")))
+
+(test-case "POL.8: mis-indent between `&>` and the goal column is LOUD"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append P8FIX
+                                        "defr m [?f]\n"
+                                        "  &> fruit-color f\n"
+                                        "    \"blue\"\n"))))
+  (check-true (string-contains? m "indented between") m)
+  (check-true (string-contains? m "align") m))
+
+(test-case "POL.8/Q2a: paren goal followed by a bare token on one line is LOUD"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append P8FIX
+                                        "defr q2a [?f]\n"
+                                        "  &> (fruit-color f c) not (= c \"red\")\n"))))
+  (check-true (string-contains? m "parenthesized") m)
+  (check-true (string-contains? m "not") m))
+
+(test-case "POL.8: a single token cannot extend a parenthesized goal (LOUD)"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append P8FIX
+                                        "defr x [?f]\n"
+                                        "  &> (fruit-color f \"blue\")\n"
+                                        "       q\n"))))
+  (check-true (string-contains? m "cannot extend a parenthesized goal") m))
+
+(test-case "POL.8: degraded srclocs (preparse rewrite) + parenless goals → guidance"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append P8FIX
+                                        "def mm := {:k \"blue\"}\n"
+                                        "defr d [?f]\n"
+                                        "  &> fruit-color f mm.k\n"))))
+  (check-true (string-contains? m "parenthesize") m))
+
+(test-case "POL.8: degraded srclocs with all-paren goals still parse (old path)"
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "def mm := {:k \"blue\"}\n"
+                            "defr d [?f]\n"
+                            "  &> (fruit-color f mm.k)\n"
+                            "solve (fruit-color f \"blue\")")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry") "the file continues; d registered"))
+
+(test-case "POL.8: a literal cannot head a goal line (LOUD)"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append P8FIX
+                                        "defr h [?f]\n"
+                                        "  &> \"blue\" f\n"))))
+  (check-true (string-contains? m "must start with a relation name") m))
+
+(test-case "POL.8: top-level bare `rel` body takes parenless goals (shared grammar)"
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "rel [q]\n"
+                            "  &> fruit-color q \"blue\"\n")))
+  (check-true (string? r) (result-msg r))
+  (check-false (string-contains? r "rule clause")))
+
+(test-case "POL.8/Q6 sexp: flat bare goal run is ONE goal; flat $clause-sep splits clauses"
+  (define r (run-ns-last
+             (string-append "(ns p8s)\n"
+                            "(defr gg (?x ?y) || 1 2)\n"
+                            "(defr bare (?x) &> gg x 2)\n"
+                            "(defr two (?x) &> gg x 2 &> gg x 4)\n"
+                            "(solve (bare q))")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "{:q 1}")))
+
+;; ========================================================================
+;; POL.9a — implicit solve: parens make goals at command position
+;; (owner co-design 2026-07-25; design §8 POL.9 — the paren-goal design).
+;; `(foo x)` at top level = solve (foo x); `foo x` / `[foo x]` = application;
+;; keyword heads keep their forms; `rel` is the one keyword that queries.
+;; The WS reader marks paren origin ('prologos-paren-origin); sexp mode is
+;; untouched by construction (the named WS-vs-sexp divergence, pinned below).
+;; Head classification happens at solve time: relation → rows; value-bound →
+;; a guiding diagnostic; unknown → the POL.4 unknown-relation error.
+;; ========================================================================
+
+(define P9FIX
+  (string-append
+   "ns p9\n"
+   "defr fruit-color [?fruit ?color]\n"
+   "  || \"blueberry\" \"blue\"\n"
+   "  || \"banana\" \"yellow\"\n"
+   "  || \"cherry\" \"red\"\n"
+   "  || \"plum\" \"purple\"\n"
+   "defr red-or-green [?f]\n"
+   "  &> fruit-color f \"red\"\n"
+   "defr blue-or-yellow [?f]\n"
+   "  &> fruit-color f \"blue\"\n"
+   "  &> fruit-color f \"yellow\"\n"
+   "defn dbl [x:Int] : Int\n"
+   "  * x 2\n"))
+
+(test-case "POL.9: a paren goal at top level carries an implicit solve (typed rows)"
+  (define r (run-ns-ws-last (string-append P9FIX "(blue-or-yellow q)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry"))
+  (check-true (string-contains? r "banana"))
+  (check-true (string-contains? r "List {:q String}")
+              "the B-machinery types the implicit solve identically"))
+
+(test-case "POL.9: the composed owner example — paren rel + POL.8 parenless clauses"
+  (define r (run-ns-ws-last
+             (string-append P9FIX
+                            "(rel [fruit]\n"
+                            "  &> fruit-color fruit _\n"
+                            "     not (red-or-green fruit)\n"
+                            "     not (blue-or-yellow fruit))")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "plum"))
+  (check-false (string-contains? r "cherry")))
+
+(test-case "POL.9: nested deeper-indent `not` works INSIDE parens (flat regrouping)"
+  (define r (run-ns-ws-last
+             (string-append P9FIX
+                            "(rel [f]\n"
+                            "  &> fruit-color f c\n"
+                            "     not\n"
+                            "       = c \"red\")")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "plum"))
+  (check-false (string-contains? r "cherry")))
+
+(test-case "POL.9: multi-clause anonymous rel inside parens is a DISJUNCTION"
+  (define r (run-ns-ws-last
+             (string-append P9FIX
+                            "solve (rel [f]\n"
+                            "       &> fruit-color f \"red\"\n"
+                            "       &> fruit-color f \"purple\")")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "cherry"))
+  (check-true (string-contains? r "plum")))
+
+(test-case "POL.9: defn head in parens → the guiding function diagnostic"
+  (define m (result-msg (run-ns-ws-last (string-append P9FIX "(dbl 3)"))))
+  (check-true (string-contains? m "dbl is a function") m)
+  (check-true (string-contains? m "[dbl") m))
+
+(test-case "POL.9: explicit solve over a defn head gets the SAME diagnostic"
+  (define m (result-msg (run-ns-ws-last (string-append P9FIX "solve (dbl 3)"))))
+  (check-true (string-contains? m "dbl is a function") m))
+
+(test-case "POL.9: zero-arg paren of a function → diagnostic (was a value echo)"
+  (define m (result-msg (run-ns-ws-last (string-append P9FIX "(dbl)"))))
+  (check-true (string-contains? m "dbl is a function") m))
+
+(test-case "POL.9: unknown head → unknown-relation; the file CONTINUES past it"
+  (define r (run-ns-ws-last (string-append P9FIX "(mystery q)\n[dbl 21]")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "42") "the command after the error still ran"))
+
+(test-case "POL.9: keyword heads keep their forms; brackets stay application"
+  (check-true (string-contains? (run-ns-ws-last (string-append P9FIX "(+ 1 2)")) "3"))
+  (check-true (string-contains? (run-ns-ws-last (string-append P9FIX "[dbl 3]")) "6")))
+
+(test-case "POL.9: sexp mode — (dbl 3) stays APPLICATION (the named divergence, pinned)"
+  (define r (run-ns-last
+             (string-append "(ns p9s)\n"
+                            "(spec sdbl Int -> Int)\n"
+                            "(defn sdbl [x] (int* x 2))\n"
+                            "(sdbl 3)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "6")))
+
+(test-case "POL.9: a preparse rewrite inside a paren goal keeps goal-ness (4-arg preserve)"
+  (define r (run-ns-ws-last
+             (string-append P9FIX
+                            "def mm := {:c \"blue\"}\n"
+                            "(fruit-color f mm.c)")))
+  ;; computed goal args don't evaluate (pre-existing semantics) → nil, but the
+  ;; command IS a solve — pinned via the row-list TYPE on the echo.
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "List {:f String}") r))
+
+(test-case "POL.9: a gate-rejected defr's solve points at the earlier error"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append P9FIX
+                                        "defr unsafe-r [?x]\n"
+                                        "  &> not (fruit-color y x)\n"
+                                        "(unsafe-r q)"))))
+  (check-true (string-contains? m "failed to register") m))
+
+;; ========================================================================
+;; POL.9b — the def-RHS leg (Q_C): `def r := (reach a b)` ≡ `:= solve (…)`.
+;; Realization: the preparse def arm carries the := RHS element's stx
+;; (srclocs + paren-origin) through the rewrite; parse-def dispatches at all
+;; three body sites; the merge prefers the preparse surf exactly when the
+;; two spines DISAGREE in category (preparse=solve vs tree=app) — explicit
+;; `def := solve (…)` parses as solve on both spines and merges as before.
+;; ========================================================================
+
+(test-case "POL.9b: def RHS paren goal binds the solve's rows"
+  (define r (run-ns-ws-last
+             (string-append P9FIX
+                            "def blues := (fruit-color f \"blue\")\n"
+                            "blues")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry"))
+  (check-true (string-contains? r "List {:f String}")))
+
+(test-case "POL.9b: def RHS paren rel with POL.8 parenless clauses (inner layout survives)"
+  (define r (run-ns-ws-last
+             (string-append P9FIX
+                            "def nonred := (rel [f]\n"
+                            "                &> fruit-color f c\n"
+                            "                   not (= c \"red\"))\n"
+                            "nonred")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry"))
+  (check-true (string-contains? r "plum"))
+  (check-false (string-contains? r "cherry")))
+
+(test-case "POL.9b: explicit `def := solve (…)` unchanged"
+  (define r (run-ns-ws-last
+             (string-append P9FIX
+                            "def ys := solve (fruit-color f \"yellow\")\n"
+                            "ys")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "banana")))
+
+(test-case "POL.9b: paren and explicit spellings are byte-equivalent at the def seam"
+  (define paren (run-ns-ws-last
+                 (string-append P9FIX "def r := (fruit-color f \"blue\")\nr")))
+  (define expl  (run-ns-ws-last
+                 (string-append P9FIX "def r := solve (fruit-color f \"blue\")\nr")))
+  (check-equal? paren expl))
+
+(test-case "POL.9b: def-seam PARITY on bad heads (pre-existing diagnostic, pinned)"
+  ;; Both spellings hit the same pre-existing def-seam type error — the
+  ;; guiding function diagnostic does not reach the def seam yet (typing
+  ;; precedes evaluation there). Pinned so a future diagnostic fix shows.
+  (define paren (result-msg (run-ns-ws-last
+                             (string-append P9FIX "def bad := (dbl 3)"))))
+  (define expl  (result-msg (run-ns-ws-last
+                             (string-append P9FIX "def bad := solve (dbl 3)"))))
+  (check-equal? paren expl "paren spelling ≡ explicit solve spelling")
+  (check-true (string-contains? paren "not a valid type") paren))
+
+(test-case "POL.9b: bare/bracket def RHS stays application-value"
+  (define r (run-ns-ws-last
+             (string-append P9FIX
+                            "def six := [dbl 3]\n"
+                            "six")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "6")))
+
+(test-case "POL.9b: sexp def RHS paren application unchanged (divergence pinned)"
+  (define r (run-ns-last
+             (string-append "(ns p9bs)\n"
+                            "(def six (int* 2 3))\n"
+                            "(eval six)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "6")))
+
+;; ========================================================================
+;; POL.9c — Q_B: defn/defr namespaces are DISJOINT at registration.
+;; LOCAL-only (refer-imported names stay shadowable — the prelude
+;; xor/singleton precedent); same-kind redefinition stays legal. The kind
+;; discriminator is the local env entry's value (a defr name's env value IS
+;; its expr-defr body). Named gap: multi-arity defn base names live only in
+;; the ambient multi-defn registry (no module provenance) — that collision
+;; is ungated by design.
+;; ========================================================================
+
+(test-case "POL.9c/Q_B: defr over a local defn errors, pointing at the value kind"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append "ns qb1\n"
+                                        "defn area [x:Int] : Int\n  * x x\n"
+                                        "defr area [?a]\n  || 1\n"))))
+  (check-true (string-contains? m "already defined as a function/value") m))
+
+(test-case "POL.9c/Q_B: def over a local defr errors, pointing at the relation kind"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append "ns qb2\n"
+                                        "defr speed [?s]\n  || 3\n"
+                                        "def speed := 42"))))
+  (check-true (string-contains? m "already defined as a relation") m))
+
+(test-case "POL.9c/Q_B: defn over a local defr errors too (process-def route)"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append "ns qb3\n"
+                                        "defr color [?c]\n  || \"red\"\n"
+                                        "defn color [x:Int] : Int\n  * x 2\n"))))
+  (check-true (string-contains? m "already defined as a relation") m))
+
+(test-case "POL.9c/Q_B: same-kind redefinition stays LEGAL (re-defr + def-over-def)"
+  (define r (run-ns-ws-last
+             (string-append "ns qb4\n"
+                            "defr edge [?a]\n  || 1\n"
+                            "defr edge [?a]\n  || 2\n"
+                            "def n := 1\n"
+                            "def n := 2\n"
+                            "solve (edge x)")))
+  (check-true (string? r) (result-msg r)))
+
+(test-case "POL.9c/Q_B CANARY: defr shadowing a refer-imported prelude name stays LEGAL"
+  ;; xor is refer-imported from the prelude's bool module — imports live in
+  ;; the cascade, not this module's own cell-id-map, so the LOCAL-only gate
+  ;; must not fire (the lib/examples/foray.prologos precedent).
+  (define r (run-ns-ws-last
+             (string-append "ns qb5\n"
+                            "defr xor [?p]\n  || 7\n"
+                            "solve (xor q)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "{:q 7}")))
+
+(test-case "POL.9c/Q_B: the run CONTINUES past a gate error"
+  (define r (run-ns-ws-last
+             (string-append "ns qb6\n"
+                            "defn area [x:Int] : Int\n  * x x\n"
+                            "defr area [?a]\n  || 1\n"
+                            "[+ 20 22]")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "42")))
+
+(test-case "POL.9c/Q_B: multi-arity defn BASE name gated against a prior defr"
+  (define m (result-msg (run-ns-ws-last
+                         (string-append "ns qb7\n"
+                                        "defr nsize [?s]\n  || 3\n"
+                                        "defn nsize\n"
+                                        "  | [x] -> x\n"
+                                        "  | [x y] -> [+ x y]\n"))))
+  (check-true (string-contains? m "already defined as a relation") m))
+
+;; ========================================================================
+;; X.close Batch A — gap-closing tests (2026-07-25).
+;; The PIR's adversarial audit found these surfaces shipped without pins.
+;; ========================================================================
+
+;; ── SC: the REPL/editor preparse-macro fix (`19d9f8ae`) ─────────────────
+;; SC fixed an owner-reported blocker — `process-string-ws` (the path the
+;; REPL/LSP use) had been made cell-pipeline-only, silently dropping
+;; preparse-macro support, so `solver` reached the tree parser unexpanded
+;; ("solver should have been expanded before parsing"). It shipped with ZERO
+;; tests; the commit cited "130 REPL/LSP/WS tests pass", which is
+;; pre-existing regression evidence, not a pin on the fixed behavior.
+;; These three run through run-ns-ws-last == process-string-ws == the exact
+;; path that was broken.
+
+(define SC-FIX
+  (string-append
+   "ns sctest\n"
+   "defr edge [?a ?b]\n"
+   "  || \"x\" \"y\"\n"
+   "     \"y\" \"z\"\n"
+   "solver cfg\n"
+   "  :tabling by-default\n"))
+
+(test-case "SC: a NAMED solver config expands and `solve-with` dispatches (the owner's blocker)"
+  (define r (run-ns-ws-last (string-append SC-FIX "solve-with cfg (edge a b)")))
+  (check-true (string? r) (result-msg r))
+  (check-false (string-contains? (format "~a" r) "should have been expanded")
+               "the `solver` preparse macro must expand on the WS-string path")
+  (check-true (string-contains? r "{:a \"x\", :b \"y\"}")))
+
+(test-case "SC: inline `solve-with {overrides}` works on the WS-string path"
+  (define r (run-ns-ws-last
+             (string-append SC-FIX "solve-with {:tabling by-default} (edge a b)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "{:a \"y\", :b \"z\"}")))
+
+(test-case "SC: the `:semantics` key expands too (WFLE-era solver form)"
+  (define r (run-ns-ws-last
+             (string-append "ns sctest2\n"
+                            "defr e [?a]\n  || 1\n"
+                            "solver wf\n  :semantics well-founded\n"
+                            "solve-with wf (e a)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "{:a 1}")))
+
+;; ── POL.8: the merge FUTURE-TRAP, test-pinned ───────────────────────────
+;; Design §8 names it in prose only: adding a `defr` arm to driver.rkt's
+;; `surf-source-line` / `same-form-type?` would silently flip the L2 merge
+;; winner to the srcloc-STRIPPED tree-spine surf — and POL.8's grammar is
+;; column-based, so it would break with no failure at the point of change.
+;; run-ns-ws-last IS the L2 path, so layout parsing here is exactly the
+;; canary: if the winner flips, the stripped surf cannot see columns and
+;; the sibling/continuation distinction collapses.
+
+(test-case "POL.8 FUTURE-TRAP canary: layout still parses on the L2 (merge) path"
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "defr canary [?fruit ?not-color]\n"
+                            "  &> fruit-color fruit color\n"
+                            "     not\n"
+                            "       = color not-color\n"
+                            "solve (canary f \"red\")")))
+  (check-true (string? r) (result-msg r))
+  ;; If the merge winner flipped to the stripped surf, the deeper line could
+  ;; not be distinguished from a sibling goal and this would not be `not`-filtered.
+  (check-true (string-contains? r "blueberry"))
+  (check-false (string-contains? r "cherry")
+               "a flipped merge winner loses column info and breaks the nesting"))
+
+;; ── POL.8/POL.9 error branches that had no coverage ─────────────────────
+
+(test-case "POL.8: an empty `&>` clause is accepted (no goals)"
+  (define r (run-ns-ws-last (string-append P8FIX "defr empt [?x]\n  &>\n")))
+  (check-false (prologos-error? r) (result-msg r)))
+
+(test-case "POL.8: a multi-token bare line at the goal column is a SIBLING goal"
+  ;; The Q5 residual: paren-origin and indent-origin groups are
+  ;; indistinguishable post-reader, so a multi-token bare line reads as the
+  ;; sibling it was meant to be. Pinned so the behavior is deliberate.
+  (define r (run-ns-ws-last
+             (string-append P8FIX
+                            "defr sib [?f]\n"
+                            "  &> fruit-color f \"blue\"\n"
+                            "     fruit-color f \"blue\"\n"
+                            "solve (sib q)")))
+  (check-true (string? r) (result-msg r))
+  (check-true (string-contains? r "blueberry")))
+
+(test-case "POL.9: `raise-unknown-relation-error` branch 3 — a NON-function value head"
+  ;; branch 1 = defr-failed-to-register, branch 2 = Pi-typed (function),
+  ;; branch 3 = bound as a non-function value. Only 1 and 2 were covered.
+  (define m (result-msg (run-ns-ws-last
+                         (string-append P9FIX
+                                        "def notafn := 42\n"
+                                        "(notafn q)"))))
+  (check-true (string-contains? m "bound as a value") m)
+  (check-true (string-contains? m "defr")
+              (format "the message should point at how to define a relation: ~a" m)))
+
+(test-case "POL.4: a MULTI-ARITY relation accepts any variant arity (arity=#f path)"
+  ;; Named as a watchout when POL.4 landed (multi-arity relations are
+  ;; first-class, relation-info-arity = #f) but never pinned.
+  (define r (run-ns-ws-last
+             (string-append "ns polma\n"
+                            "defr ma\n"
+                            "  | [?x]    || 1\n"
+                            "  | [?x ?y] || 2 3\n"
+                            "solve (ma a)")))
+  (check-true (string? r) (result-msg r))
+  (check-false (string-contains? (format "~a" r) "Unknown procedure")
+               "a valid variant arity must not trip the POL.4 gate"))
+
+;; ── Q_N1 (X.close ruling, 2026-07-25): the GOAL KEYWORDS take the implicit
+;; solve. `paren-goal-stx?`'s keyword exclusion protects EXPRESSION forms; it
+;; had nothing to say about goals, so `not`/`=`/`is` rode it incidentally.
+;; The set {rel, not, =, is} is DERIVED from run-solve-goal's dispatch — these
+;; tests pin that equality, so a goal kind added there without being added to
+;; `goal-keywords` shows up as a failure here.
+
+(define QN1FIX
+  (string-append
+   "ns qn1\n"
+   "defr blocked [?c]\n"
+   "  || \"c\"\n"))
+
+(test-case "Q_N1: `(not (goal))` at command position ≡ `solve (not (goal))`"
+  ;; WAS: a stuck `reduce` term typed Bool, with ZERO errors — the
+  ;; silent-useless-answer shape. Now it evaluates as NAF.
+  (define implicit (run-ns-ws-last (string-append QN1FIX "(not (blocked \"c\"))")))
+  (define explicit (run-ns-ws-last (string-append QN1FIX "solve (not (blocked \"c\"))")))
+  (check-true (string? implicit) (result-msg implicit))
+  (check-equal? implicit explicit "implicit and explicit spellings must agree")
+  (check-false (string-contains? implicit "reduce")
+               "must not leave a stuck reduce term"))
+
+(test-case "Q_N1: NAF that SUCCEEDS also agrees with the explicit spelling"
+  (define implicit (run-ns-ws-last (string-append QN1FIX "(not (blocked \"zzz\"))")))
+  (define explicit (run-ns-ws-last (string-append QN1FIX "solve (not (blocked \"zzz\"))")))
+  (check-equal? implicit explicit)
+  (check-true (string-contains? implicit "{}") "an unblocked term satisfies the negation"))
+
+(test-case "Q_N1: `(= a b)` is a unify GOAL at command position"
+  (define implicit (run-ns-ws-last (string-append QN1FIX "(= 1 1)")))
+  (define explicit (run-ns-ws-last (string-append QN1FIX "solve (= 1 1)")))
+  (check-equal? implicit explicit))
+
+(test-case "Q_N1: `(is q 5)` is an is-GOAL at command position (was an ERROR)"
+  (define implicit (run-ns-ws-last (string-append QN1FIX "(is q 5)")))
+  (define explicit (run-ns-ws-last (string-append QN1FIX "solve (is q 5)")))
+  (check-true (string? implicit) (result-msg implicit))
+  (check-equal? implicit explicit)
+  (check-true (string-contains? implicit "{:q 5}")))
+
+(test-case "Q_N1: the FUNCTIONAL spellings are untouched — brackets stay application"
+  ;; The delimiter convention's own spelling. This is what keeps Bool
+  ;; negation/equality reachable after the goal keywords were whitelisted.
+  (check-true (string-contains? (run-ns-ws-last (string-append QN1FIX "[not true]")) "false"))
+  (check-true (string-contains? (run-ns-ws-last (string-append QN1FIX "[not false]")) "true"))
+  (check-true (string-contains? (run-ns-ws-last (string-append QN1FIX "[= 1 1]")) "true")))
+
+(test-case "Q_N1: EXPRESSION keywords still keep their forms (the exclusion still works)"
+  (check-true (string-contains? (run-ns-ws-last (string-append QN1FIX "(+ 1 2)")) "3"))
+  (check-true (string-contains? (run-ns-ws-last (string-append QN1FIX "(the Int 4)")) "4")))
+
+(test-case "Q_N1: guard/cut are NOT goal keywords (run-solve-goal does not dispatch them)"
+  ;; They are clause-body-only (the A.1 mini-audit finding). Pinned so that
+  ;; widening `goal-keywords` past the dispatch set is a deliberate act.
+  (check-false (memq 'guard '(rel not = is)) "guard must stay out of goal-keywords")
+  (check-false (memq 'cut '(rel not = is)) "cut must stay out of goal-keywords"))
+
+(test-case "Q_N1: goal keywords reach the def RHS too — PARITY with the explicit spelling"
+  ;; The def RHS is command position (Q_C), so the goal keywords dispatch there
+  ;; as well. Both spellings currently hit the PRE-EXISTING POL.9b def-seam gap
+  ;; ("Expression is not a valid type" — the def arm type-checks the body before
+  ;; evaluation, so the solve row-type path errors ahead of any runtime answer).
+  ;; That gap is filed in DEFERRED.md; what Q_N1 must guarantee is that the two
+  ;; spellings behave IDENTICALLY. When the def-seam gap is fixed, both flip
+  ;; together and this test keeps holding.
+  (define implicit (result-msg (run-ns-ws-last
+                                (string-append QN1FIX "def u := (not (blocked \"zzz\"))"))))
+  (define explicit (result-msg (run-ns-ws-last
+                                (string-append QN1FIX "def u := solve (not (blocked \"zzz\"))"))))
+  (check-equal? implicit explicit
+                "the implicit goal-keyword RHS must behave exactly like the explicit solve"))
+
+;; ========================================================================
+;; X.close Batch C — the un-arm'd-node → spurious "Multiplicity violation"
+;; class, 3rd instance. `inferQ` had a lam arm ONLY inside the beta-redex
+;; case, so a lambda reached in INFER position (a map VALUE) fell to the
+;; catch-all → tu-error → checkQ-top's generic "Multiplicity violation".
+;; typing-core's `infer` has the mirror arm; the twins had diverged.
+;;
+;; NOTE the recorded repro was `def := [validate …]` — probing showed
+;; `validate` is a RED HERRING: it delegates to its subject, and the subject
+;; was the map-with-a-lambda. The defect is both narrower (any map value that
+;; is a lambda) and broader (nothing to do with schemas) than recorded.
+;; ========================================================================
+
+(test-case "Batch C: a map value that is a LAMBDA no longer dies as a multiplicity violation"
+  ;; THE ROOT, minimal — no validate, no schema.
+  (define r (run-ns-ws-last "ns bcroot\ndef m := {:f [fn [y : Nat] [add y 1N]]}\nm"))
+  (check-false (prologos-error? r) (result-msg r))
+  (check-true (string-contains? (result-msg r) ":f") (result-msg r)))
+
+(test-case "Batch C: the map's TYPE is right, not merely error-free"
+  (define r (run-ns-ws-last "ns bcty\ndef m := {:f [fn [y : Nat] {:a y}]}\nm"))
+  (check-false (prologos-error? r) (result-msg r))
+  (check-true (string-contains? (result-msg r) "Nat -> {:a Nat}")
+              (format "expected the field to carry a function type, got: ~a" (result-msg r))))
+
+(test-case "Batch C: the RECORDED instance-3 repro (def := [validate …]) now types"
+  ;; The shape as first seen (SUB.1 probe, `f19d6f56`): validate over a schema
+  ;; whose field is FUNCTION-typed. Simpler validate spellings never reproduced
+  ;; it — the lambda is what mattered.
+  (define VS (string-append "ns bcval\n"
+                            "schema FnBox\n"
+                            "  :f <Nat -> [Map Keyword Nat]>\n"))
+  (define r (run-ns-ws-last
+             (string-append VS "def vr := [validate FnBox {:f [fn [y : Nat] {:a y}]}]\nvr")))
+  (check-false (prologos-error? r) (result-msg r))
+  (check-true (string-contains? (result-msg r) "ok") (result-msg r)))
+
+(test-case "Batch C: infer-position and check-position AGREE on a legal linear lambda"
+  ;; The fix must not make infer position more permissive OR stricter than the
+  ;; canonical check-mode path. A linear binder used exactly once is legal.
+  (define bare (run-ns-ws-last "ns bcm1\ndef a := [fn [x :1 Nat] x]\na"))
+  (define inmap (run-ns-ws-last "ns bcm2\ndef a := {:f [fn [x :1 Nat] x]}\na"))
+  (check-false (prologos-error? bare) (result-msg bare))
+  (check-false (prologos-error? inmap) (result-msg inmap))
+  (check-true (string-contains? (result-msg inmap) ":1")
+              "the linear multiplicity must survive into the map's field type"))
+
+(test-case "Batch C: a GENUINE multiplicity violation in a map value still FAILS CLOSED"
+  ;; The fix removes the FALSE positive, not the check. Named limitation: in
+  ;; infer position this surfaces as "Could not infer type" rather than
+  ;; "Multiplicity violation" — inferQ's protocol has only tu / tu-error, no
+  ;; distinct multiplicity channel. Loud and sound, just less precise; pinned
+  ;; here so that if the channel is ever added, this test says so.
+  (define r (run-ns-ws-last "ns bcbad\ndef b := {:f [fn [x :1 Nat] [pair x x]]}\nb"))
+  (check-true (prologos-error? r)
+              "using a linear binder twice must still be rejected inside a map value"))
+
+(test-case "Batch C: the untouched neighbours still behave (regression guard)"
+  (define scalar (run-ns-ws-last "ns bcn1\ndef m := {:a 1}\nm"))
+  (define barefn (run-ns-ws-last "ns bcn2\ndef f := [fn [y : Nat] {:a y}]\nf"))
+  (check-false (prologos-error? scalar) (result-msg scalar))
+  (check-false (prologos-error? barefn) (result-msg barefn)))

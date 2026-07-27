@@ -109,7 +109,7 @@ For methodology beyond what the rules cover:
 - `WORK_STRUCTURE.org` — Series / Track / Audit hierarchy
 - `LANGUAGE_VISION.org` + `LANGUAGE_DESIGN.org` — what we're building toward
 - `DESIGN_PRINCIPLES.org` — 10 load-bearing principles (cells, decomplection, completeness, etc.)
-- `DEVELOPMENT_LESSONS.org` — distilled retros across PIRs (longitudinal patterns)
+- `DEVELOPMENT_LESSONS.org` — distilled retros across PIRs (longitudinal patterns). **~89 KB — read on demand, never auto-loaded**; its load-bearing lessons carry a one-line actionable form in `.claude/rules/*.md` (which IS ambient). Read it when a diagnostic doesn't match the subsystem it names, when a lesson is being promoted, or at a PIR.
 - `ACCEPTANCE_FILE_METHODOLOGY.org` — Phase 0 acceptance file pattern
 - `DAILIES_METHODOLOGY.org` — how to write the dailies (mutable STATE head + append-only LOG) + the Relay-Note re-grounding protocol
 
@@ -138,4 +138,5 @@ Full set + index: `docs/tracking/principles/README.org`
 | Designing a new feature | `DESIGN_METHODOLOGY.org` | the 5 stages, mantra audits |
 | Adversarial critique round | `CRITIQUE_METHODOLOGY.org` | P/R/M/S lenses, SRE lattice lens |
 | Writing a PIR | `POST_IMPLEMENTATION_REVIEW.org` | 16 questions |
+| A diagnostic names a subsystem that looks fine | `pipeline.md` (infer/inferQ twins; Exhaustive Walkers) | `DEVELOPMENT_LESSONS.org` for the full record |
 | External contributor PR | `workflow.md` § external critique | `gh pr list` for current state |

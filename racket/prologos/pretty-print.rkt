@@ -464,7 +464,25 @@
                          entries)
                     ", "))))]
     [(expr-map-empty k v) (format "{} : (Map ~a ~a)" (pp-expr k names) (pp-expr v names))]
-    [(expr-map-assoc m k v) (format "[map-assoc ~a ~a ~a]" (pp-expr m names) (pp-expr k names) (pp-expr v names))]
+    ;; SUB.3: a map-assoc SPINE rooted at map-empty renders in brace form,
+    ;; matching the champ display — under ruling (D), open maps (e.g. lambda
+    ;; bodies referencing their param) stay spines, and their display must not
+    ;; regress from `{:a y}` to `[map-assoc {} :a y]`. Chains with a non-empty
+    ;; head keep the explicit bracket form.
+    [(expr-map-assoc m k v)
+     (let loop ([node (expr-map-assoc m k v)] [acc '()])
+       (match node
+         [(expr-map-assoc m* k* v*) (loop m* (cons (cons k* v*) acc))]
+         [(expr-map-empty _ _)
+          (format "{~a}"
+                  (string-join
+                   (map (lambda (entry)
+                          (format "~a ~a"
+                                  (pp-expr (car entry) names)
+                                  (pp-expr (cdr entry) names)))
+                        acc)
+                   ", "))]
+         [_ (format "[map-assoc ~a ~a ~a]" (pp-expr m names) (pp-expr k names) (pp-expr v names))]))]
     [(expr-map-get m k) (format "[map-get ~a ~a]" (pp-expr m names) (pp-expr k names))]
     ;; CIU T6 F1b.5-s2: validate — compact display (plan is baked internals)
     [(? expr-validate? v)

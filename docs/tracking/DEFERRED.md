@@ -1321,3 +1321,383 @@ readers/languages. The UCS track inherits the substrate + bridges it to the exis
 - Grounding-audit: `wf_ab037f07-570` (guard machinery + fix options).
 - BSP-LE Master Track 3 retirement obligation: [`2026-03-21_BSP_LE_MASTER.md`](2026-03-21_BSP_LE_MASTER.md).
 - **Process note**: the A.4 investigation was lengthened by a WS-syntax probe error (one-line fact rows `|| 5 3` parse as one wrong-arity row → spurious empty results, masqueraded as a tabling failure). Probes need multi-line fact rows.
+
+## Solver term conversion drops pvec/map literals — unify with a collection literal yields `unknown` (captured 2026-07-25, surfaced by Rel T1 B3.2's mini-audit)
+
+**PRE-EXISTING, live, and a static/runtime DISAGREEMENT.** Unifying a relational
+variable with a collection LITERAL produces the runtime value `unknown`, while
+the static type is derived correctly:
+
+```
+defr mp [?x ?m]
+  &> (edge x z) (= m {:a 1})
+
+solve (mp x m)
+;; '[{:m unknown, :x 1} …] : [List {:m {:a Int} :x Int}]
+;;        ^^^^^^^ runtime            ^^^^^^^^ static — they disagree
+```
+
+Same for `(= v '[1 2])` (there the static side holes, so only the runtime
+`unknown` shows). Scalars are fine (`(= tag "lit")` → `"lit" : String`), so the
+gap is specific to the collection literals in the AST↔solver-term conversion
+(`normalize-ast-to-solver-term` / `solver-term->prologos-expr`).
+
+**Why it matters beyond cosmetics**: (a) B3.1 derives the row type correctly, so
+this is the one place where the static row type and the actual row provably
+disagree — the CbC key/type agreement B3.0 worked to preserve; (b) it BLOCKS the
+only reachable surface case of B3.2's FILL path (a hole-typed field whose values
+are ground); (c) the DEMO through-line loads records as facts (`:from`), which is
+adjacent territory.
+
+**Not chased** at discovery: B3.2's scope was the display seam, and this is a
+solver-representation defect. The B3.2 FILL path is unit-pinned so it is correct
+the day this lands.
+
+### Cross-references
+- Surfaced by: Rel T1 B3.2 mini-audit (2026-07-25), design §6.10.
+- Probe: `(= m {:a 1})` / `(= v '[1 2])` in a rule body, then `solve`.
+
+## Substitution containment defect — runtime collections as closed leaves (captured 2026-07-24, spin-out from Rel T1 POL.10)
+
+> **✅ RESOLVED 2026-07-25 for the BVAR half** — ruling (D) + the NbE fix.
+> `f19d6f56` (tripwire) · `6323587e` (compile-limit adoption, an independent win
+> found here: suite −18%) · `7ea49168` (**the fix**: NbE open-the-binder in `nf`)
+> · `036b59f7` (narrowing containment — the wider sibling) · `8ec5e507`
+> (hot-scan, 6.9×). The repro now prints `5N`/`6N` at 0 errors; the tripwire
+> stays installed as the standing invariant assertion. Full record + the
+> post-fix reading of the traversal table: defect doc §2.0.
+>
+> **STILL OPEN — the META half (own slice, not folded silently):** the fix
+> closed *de Bruijn index* containment; `zonk` / `zonk-at-depth` /
+> `default-metas` / `occurs?` skip on **metas**, which NbE says nothing about.
+> Post-fix reachability is **UNVERIFIED** — one surface probe (`def m := {:a 3}`,
+> `{:v 3.5}`) typed and displayed correctly, which only shows that route doesn't
+> reach them. `occurs?` is the higher-stakes one (an unsound occur-check admits
+> cyclic solutions). Next step is a probe of a champ carrying an *unsolved* meta
+> through zonk and through `occurs?`; also `conv-nf` (independent, unverified).
+>
+> Everything below is the ORIGINAL capture, kept as the diagnosis of record.
+
+**LIVE BUG — a silent wrong answer in legal, zero-error user code.** `shift`/`subst`
+(and `zonk`/`zonk-at-depth`/`default-metas`/`nf`/`uses-bvar0?`/`occurs?`/`conv-nf`/
+`narrow-subst-bvars`) treat the six runtime collection values (`expr-champ`, `expr-hset`,
+`expr-rrb` + the three transients) as closed no-descend leaves. `subst` drops the beta
+argument; `shift` fails to renumber → silent variable capture. Verified reproduction: a
+`defn` whose lambda body is a **map literal** leaks `?bvar0 : Nat` to top level with
+**0 errors** (control differing only in the body shape gives the correct `6N`).
+
+**~37 arms across 7 traversals.** Decisive history: `nf`'s `expr-rrb` arm was changed
+from identity to **descending** six days after CHAMP landed (`9fc669bb`); the same fix
+was never applied to `expr-champ`/`expr-hset` or to any other traversal. Discipline
+recognised and repaired at exactly one site, ad hoc. `tests/test-substitution.rkt` has
+**zero** champ/Map coverage — the invariant existed only as a false comment.
+
+**Blocked on ONE OWNER RULING**: is `expr-champ` a **closed runtime value** (the F1b
+RETIRED-LOUD position ⇒ fix = stop minting under binders + NbE open-the-binder in `nf`,
+recommended) or an **open AST container** (⇒ fix = all 37 arms, keys included)?
+
+**Staging** (full analysis in the design doc): (1) NOW, days-scale, no ruling needed —
+failing regression tests + a tripwire at the three `nf`-persisting boundaries
+(`reduction.rkt:570`/`:698`/`:1458`), NOT at shift/subst and NOT at the mint;
+(2) `PLT_CS_COMPILE_LIMIT` is unset repo-wide and `shift`/`subst` (~337 arms each) fall
+back to the CS interpreter — an independent, possibly large win, UNVERIFIED in-tree;
+(3) spun-out track for the real fix.
+
+**Widened by**: any eager-`nf` re-attempt · Rel T2 Fact Store · BSP-LE Track 3 ·
+CIU T6 Path Selection · **PReduce e-graph (hard blocker — it normalizes under binders
+by construction)**.
+
+⚠ A green full suite is NOT a gate here — the suite is green with the bug live.
+
+### Cross-references
+
+- **Design doc / full analysis**: [`2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md`](2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md).
+- Surfaced by Rel T1 POL.10: commits `cf454176` (reverted trial + post-mortem), `095d8bc5` (landed whnf resolution).
+- Grounding: workflow `wf_468a6129-447`.
+
+---
+
+## Rel T1 POL.9b — the `def` seam swallows solve diagnostics + rejects row-type annotations (captured 2026-07-25, X.close triage)
+
+**PRE-EXISTING, shared by BOTH spellings** (parity-probed: the implicit
+`def r := (goal)` and the explicit `def r := solve (goal)` produce
+*byte-identical* messages, so POL.9b neither caused nor worsened this — it
+inherited it and pinned it).
+
+Two distinct gaps at the same seam:
+
+1. **Guiding diagnostics don't reach the def seam.** `def bad := (dbl 3)`
+   (or `:= solve (dbl 3)`) dies with the generic *"Expression is not a valid
+   type"* — the def arm type-checks the body BEFORE evaluation, so the runtime
+   classifier (`raise-unknown-relation-error`, relations.rkt) never fires and
+   the user never sees *"dbl is a function — application is written [dbl …]"*.
+   At top level the same program gives the good message. Fix direction: give
+   the def seam a pre-typing goal-head validation, or make the solve row-type
+   computation surface a typed error instead of a non-type.
+2. **Row-type annotations on `def` don't parse.**
+   `def r : [List {:f String}] := (goal)` → "Expression is not a valid type",
+   though the very same type is what the echo PRINTS for the unannotated def.
+
+**Pinned**: `tests/test-rel-t1-pol.rkt` § "POL.9b: def-seam PARITY on bad heads"
+asserts message EQUALITY between the two spellings, so a fix to either is
+visible immediately.
+
+**Owner**: unclaimed — a small Rel-adjacent slice; touches the driver def arm +
+typing-core's solve row-type path.
+
+---
+
+## Rel T1 POL.9c — the `defr`-against-prior-multi-arity-`defn` direction is UNGATED (captured 2026-07-25, by design; unblocks at **PM 12/12B**)
+
+> Routed 2026-07-25: the blocker is the multi-defn registry's lack of module
+> provenance, which PM Track 12 removes by bringing it on-network — see
+> [PM 12B §11.4](2026-06-06_PM_TRACK12B_FREE_ORDERING_ON_NETWORK.md) item 1
+> and 12B §7 Q3.
+
+### Original entry
+
+Q_B (defn/defr namespaces disjoint) gates three directions: `defr` over a local
+`def`/`defn`, `def`/`defn` over a local `defr`, and a multi-arity `defn` BASE
+name over a local `defr` (all at driver.rkt `check-crosskind-collision`).
+
+The FOURTH direction — a `defr` whose name is already a **multi-arity `defn`** —
+is deliberately **not** gated: multi-arity base names live only in the ambient
+`current-multi-defn-registry` (multi-dispatch.rkt), which carries **no module
+provenance**. Gating against it would fire on prelude multi-defns (`nth` and
+friends) and so would violate the local-only rule that keeps refer-import
+shadowing legal (the `lib/examples/foray.prologos` `xor` precedent).
+
+**Unblocks when**: the multi-defn registry gains module provenance (i.e. moves
+onto the per-module network like the def cells did in PPN 4C 4A) — at which
+point the fourth direction can be gated with the same local-only discipline.
+
+---
+
+## ✅ RESOLVED (2026-07-25, X.close Batch C `cdb535ac`) — un-arm'd node → spurious "Multiplicity violation"
+
+> **Root was NOT what this entry recorded.** The trigger was logged as
+> `def := [validate …]`; probing showed `expr-validate` has a proper `inferQ`
+> arm that DELEGATES to its subject — the subject (a map whose value was a
+> LAMBDA) was the problem. `inferQ` carried an `expr-lam` arm only inside the
+> beta-redex case, so a lambda in INFER position fell to the catch-all. Fixed
+> by adding the arm (TYPE delegated to typing-core, USAGE mirroring checkQ).
+> The class is promoted to BOTH tiers: `pipeline.md` checklist item 8 (ambient,
+> actionable + the debug rule) and `DEVELOPMENT_LESSONS.org` § "infer / inferQ
+> Are Twins" (the record). Kept below for the history.
+
+## (historical) Un-arm'd AST node → spurious "Multiplicity violation" — 3rd data point (captured 2026-07-25)
+
+**A recurring BUG CLASS, not a single defect.** When an AST node has no `inferQ`
+arm, qtt's tu-error fallback propagates the failure and `checkQ-top` reports the
+generic *"Multiplicity violation"* — a message with no relationship to the
+actual problem. Three confirmed instances:
+
+| # | Trigger | Status |
+|---|---|---|
+| 1 | `def m0 := {}` (CIU T6 F1a.2) | fixed |
+| 2 | `def x := solve (…)` (Rel T1 POL.5, `485f4e7d`) | fixed |
+| 3 | `def m := {:f [fn …]}` (first SEEN through `validate`, 2026-07-24) | ✅ fixed `cdb535ac` |
+
+**Two actions, both owed:**
+- *Fix instance 3* — the same shape as POL.5's one-arm fix.
+- *Promote the CLASS* to `DEVELOPMENT_LESSONS.org`: at 3 data points this is
+  codification-ready. The lesson is diagnostic, not just corrective — **a
+  "Multiplicity violation" on a `def` whose body is a non-lambda should be
+  suspected as an un-arm'd node before it is believed as a QTT result.** The
+  structural fix direction is the `pipeline.md` § "Exhaustive Walkers" answer
+  applied to `inferQ`: a generic fallback that contributes zero usage rather
+  than a tu-error, so a missing arm degrades to imprecision instead of a
+  false failure.
+
+---
+
+## Generated `.md` twins are STALE relative to their canonical `.org` sources (captured 2026-07-25, X.close doc-truth)
+
+`workflow.md` states `.org` is canonical and the `.md` is a generated export.
+The X.close doc-truth sweep corrected the overstated performance claims in
+`LANGUAGE_VISION.org` and `RELATIONAL_LANGUAGE_VISION.org`; their `.md` twins
+still carry the OLD text (`grep -c "30ms" RELATIONAL_LANGUAGE_VISION.md` → 2).
+
+**Why it matters**: an agent (or a person) grepping the principles directory can
+land on the `.md` and read a claim the `.org` has already retracted — precisely
+the failure the sweep was fixing. The twins need regeneration from org-export,
+and it is worth deciding whether the `.md` exports should exist in-tree at all
+(they have no consumer that the `.org` doesn't serve).
+
+---
+
+## ✅ RESOLVED (2026-07-25, X.close ruling Q_N1) — the goal keywords now take the implicit solve
+
+> **Owner ruled option (A)**: whitelist all three. `goal-keywords` in
+> `parser.rkt` is `{rel, not, =, is}`, **derived from `run-solve-goal`'s
+> dispatch set** so it cannot drift from the engine; `guard`/`cut` stay out
+> because a top-level solve does not dispatch them either. `(not (blocked "c"))`,
+> `(= 1 1)` and `(is q 5)` are now byte-identical to their explicit `solve`
+> spellings (test-pinned, incl. def-RHS parity). The functional readings live
+> on the bracket spelling — `[not true]`, `[= 1 1]` — which is the delimiter
+> convention's own. One corpus line changed: `narrowing-demo.prologos`'s
+> `(= ?x 5)`, whose comment was updated (it was already being used as a query).
+
+### Original entry
+
+**A real ergonomic hazard, not cosmetic.** POL.9's `paren-goal-stx?`
+(`parser.rkt`) requires a **non-keyword** head (plus `rel`). `not`, `=` and `is`
+are parser keywords, so at top level:
+
+```
+(not (blocked "c"))
+;; => [reduce [(defr blocked …) "c"] | true -> false | false -> true] : Bool
+```
+
+— i.e. **functional Bool negation applied to a stuck goal term**, computing
+nothing useful and reporting **0 errors**. A user who has internalized "parens
+make goals" writes exactly this and gets a silently-useless answer. The explicit
+`solve (not (blocked "c"))` works (it is the A.1 deliverable).
+
+**Why it is the way it is**: the keyword exclusion is what protects `(match …)`,
+`(+ 1 2)` and `(= ?x 5)` from being read as goals; `not`/`is`/`=` ride that
+exclusion incidentally rather than by decision.
+
+**Options** (needs an owner ruling, not a unilateral fix):
+1. Whitelist the GOAL keywords (`not`, `=`, `is`) alongside `rel` in
+   `paren-goal-stx?` — smallest change; makes the surface uniform.
+2. Leave the exclusion and add a DIAGNOSTIC when a paren-`not` at command
+   position wraps a goal-app (point at `solve (not …)`).
+3. Document only (done — `.claude/rules/prologos-syntax.md` § Relational
+   syntax now carries the warning).
+
+Option 1 interacts with the functional `not` on Bool, which is why this is a
+ruling and not a patch.
+
+---
+
+## ✅ RESOLVED (2026-07-25, `bb45d2a0`) — the acceptance file is now gated; POL L3 rides it. PARTIAL: POL internals still lack unit tests
+
+> **Closed**: gaps (1) and (2). `tests/test-rel-t1-acceptance.rkt` (32 cases) runs
+> the file through `process-file`, asserts 0 errors, verifies every marker, and
+> RANGE-CHECKS marker indices. All markers rewritten against actual output —
+> **30/30 pass, was 5/28**. Running `--check` also exposed that the POL.8/POL.9
+> markers were MISNUMBERED (off by one and two), which the range check now
+> catches. **Still open**: `test-rel-t1-pol.rkt` remains Level-2 throughout
+> (0 `process-file`), so the POL cluster's L3 coverage runs through the
+> acceptance gate rather than through cases of its own; and the POL parser
+> internals (`regroup-flat-lines-by-layout`, `parse-clause-content`,
+> `paren-goal-stx?`, `check-crosskind-collision`) still have ZERO unit tests.
+
+### Original entry
+
+Three compounding testing gaps, verified:
+
+1. **`examples/2026-07-19-rel-t1-acceptance.prologos` is gated by nothing.**
+   No test references it (`grep -rln rel-t1-acceptance tests/` = ∅); no golden
+   exists for it; `compare-golden-for-file` has zero callers in `tests/`. Its
+   0-errors status was verified by hand every phase — a discipline, not a gate.
+   If it regresses, the suite stays green.
+2. **~13 of its 28 `;;N=>` markers are PROSE**, so even a manual `--check` run
+   cannot pass them (the checker does exact match).
+3. **The whole POL cluster is L2-only in the suite**: `test-rel-t1-pol.rkt` has
+   **0** `process-file` calls against **84** `run-ns-ws-last`. `testing.md`
+   mandates three-level WS validation for syntax features, and POL.7/8/9 are
+   syntax features. The sibling files (`-naf`, `-typed-rows`, `-typed-vars`) DO
+   call `process-file` — the pattern was available and simply not applied here.
+   L3 coverage for POL therefore rests entirely on gap (1), which is ungated.
+
+**Fix direction**: add a suite test that runs the acceptance file through
+`process-file` and asserts 0 errors (cheap, closes 1+3 at once); convert the
+prose markers to real `;;N=>` expectations or drop the `=>`; add `process-file`
+cases for the POL.8/POL.9 grammar.
+
+---
+
+## Rel T1 — `current-relation-store` is not threaded into test-support or batch-worker (captured 2026-07-25; pre-existing, design-acknowledged)
+
+`grep -c current-relation-store` = **0** in BOTH
+`racket/prologos/tests/test-support.rkt` and
+`racket/prologos/tools/batch-worker.rkt`. Consequence: in the `run-ns*` and
+batch-worker contexts the relation store is not the ambient one, so `solve`
+types as untyped where production would type it — **silently**. Design §6.9
+recommended threading it and accepted the gap.
+
+This is instance **#7** of the two-context boundary bug class that
+`pipeline.md` § "New Racket Parameter" (items 2+3) exists to prevent — the
+checklist names exactly these two files. Worth treating as an architectural
+signal rather than a seventh individual fix: the class recurs because the
+parameter set is discovered by grep rather than declared in one place.
+
+---
+
+## ✅ RESOLVED (2026-07-25, `bb45d2a0`) — SC now has its regression test
+
+> Three cases in `test-rel-t1-pol.rkt` run through `run-ns-ws-last`
+> (== `process-string-ws`, the exact path SC fixed): a NAMED `solver` config
+> with `solve-with` (the owner's literal blocker), inline `{overrides}`, and
+> the `:semantics` key. Each asserts the "should have been expanded" failure
+> cannot recur.
+
+### Original entry
+
+`19d9f8ae` fixed an owner-reported blocker (`process-string-ws` dropped
+preparse-macro support, so `solver` configs failed in the REPL/LSP path) with
++12/−17 in `driver.rkt` and **zero new tests**. The commit cites "130 REPL/LSP/WS
+tests pass" — that is pre-existing regression evidence, not a pin on the fixed
+behavior. No test anywhere spells `solver cfg` / `:tabling` (grep = 0), so the
+exact regression would not be caught again. Phase SC is also still 🔄 in the
+tracker. `workflow.md` permits a no-test commit only for "refactor with zero
+behavioral change"; this was a behavioral fix.
+
+**Fix**: add a `process-string-ws` test that defines a named `solver` config and
+runs `solve-with` against it.
+
+---
+
+## Rel T1 POL.9 Q_D slice 2 → **PM Track 12B § 11** (owner-routed 2026-07-25)
+
+> **Owner ruling at X.close**: this is not a Rel concern — it is the SAME
+> forward-reference-residuation problem PM Track 12B owns, arriving from a
+> second namespace. Full design capture:
+> [`2026-06-06_PM_TRACK12B_FREE_ORDERING_ON_NETWORK.md`](2026-06-06_PM_TRACK12B_FREE_ORDERING_ON_NETWORK.md) **§11**
+> (why it is not the "fast-follow" the Rel design called it — grounded;
+> the PM 12 → 12B dependency chain; the acceptance/parity gate; and the two
+> adjacent Rel T1 items that resolve there, incl. the 7th two-context instance).
+> It is the exact sibling of 12B §7 Q3 (multi-defn registry).
+
+### Original entry
+
+The settled POL.9 design (§8, Q_D) has two slices: slice 1 = "Unknown relation"
+via the POL.4 `exn:prologos-solve` presentation (**shipped** in 9a), slice 2 =
+wire goals into the EXISTING demand-residuation loop so a goal over a
+later-defined relation retries when the `defr` lands (free-ordering behavior, no
+new propagator substrate). Slice 2 was called "fast-follow" and never built;
+`residuation-demand-name` (`driver.rkt`) is still def-path only. The POL row is
+marked ✅, which over-states completion.
+
+---
+
+## ✅ RESOLVED (2026-07-25, `bb45d2a0`) — the merge FUTURE-TRAP is test-pinned
+
+> A layout canary in `test-rel-t1-pol.rkt` runs the nested-`not` form through
+> the L2 path; if the merge winner flips to the srcloc-stripped tree surf, the
+> column info is gone, the nesting collapses, and the test fails at the point
+> of change rather than silently.
+
+### Original entry
+
+Adding a `defr` arm to `driver.rkt`'s `surf-source-line` / `same-form-type?`
+(e.g. while extending the preparse/tree merge for an unrelated reason) would
+silently flip the L2 winner for `defr` to the **srcloc-STRIPPED** tree-spine
+surf, breaking POL.8's column-based layout grammar with no test failure at the
+point of change. Named in design §8 prose; not filed, not test-pinned.
+
+**Fix direction**: a test that asserts POL.8 layout still parses under
+`process-string-ws` (the L2 path) would fail loudly if the merge winner flipped.
+
+---
+
+## Rel T1 — `docs/spec/grammar.ebnf` predates the POL syntax cluster (captured 2026-07-25)
+
+The formal grammar describes none of what shipped: `clause-body = '&>' , { goal }`
+(no parenless goals, no layout), `fact-row = expr , { expr }` (no `|` row
+separators), goals always parenthesized (no implicit solve), and `rel-params` has
+no `:`-type alternative (C.b.1's fused `?x:Int`). It also still describes the
+dead-in-WS `?var:C1:C2` narrow-var surface, which now COLLIDES with C.b.1's
+spelling. The `.org`/`.md`/`.tex`/`.pdf` renderings inherit all of it.

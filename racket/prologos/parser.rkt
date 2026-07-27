@@ -17,6 +17,7 @@
          "global-env.rkt")
 
 (provide parse-datum
+         parse-toplevel-datum  ;; Rel T1 POL.9: command-position paren-goal dispatch
          parse-string
          parse-port
          current-parsing-relational-goal?
@@ -41,6 +42,79 @@
 (define (parse-relational-goal stx)
   (parameterize ([current-parsing-relational-goal? #t])
     (parse-datum stx)))
+
+;; ── Rel T1 POL.9: implicit solve — parens make goals at command position ──
+;; (owner co-design 2026-07-25; design §8 POL.9.) The WS reader marks paren
+;; groups with 'prologos-paren-origin (parse-reader.rkt lparen wrap); a marked
+;; group in COMMAND position whose head is a GOAL head is a GOAL carrying an
+;; implicit solve:
+;;   (fruit-not-of-color f "red")  ≡  solve (fruit-not-of-color f "red")
+;;   (rel [x] &> …)                ≡  solve (rel [x] &> …)
+;;   (not (blocked "c"))           ≡  solve (not (blocked "c"))
+;; `foo x` / `[foo x]` stays application; EXPRESSION keyword heads keep their
+;; forms ((match …), (the …), (+ 1 2)); `$`-sentinel heads (quoted literals
+;; etc.) are never goals. Sexp mode is untouched by construction — only the WS
+;; reader attaches the property. Classification of the HEAD happens at solve
+;; time where the registries exist (relation → rows; value-bound → the
+;; guiding function diagnostic; unknown → the POL.4 unknown-relation error);
+;; the parse-level category is static, only the BINDING residuates (the
+;; anti-registry-lookup argument, design §8 D-POL9).
+
+;; ── The GOAL KEYWORDS (X.close Q_N1 ruling, 2026-07-25) ────────────────────
+;; Parser keywords that are ALSO top-level goal forms. This set is DERIVED
+;; from `run-solve-goal`'s dispatch (reduction.rkt): a top-level solve
+;; dispatches exactly goal-app · rel · unify (`=`) · is · not. `goal-app`
+;; needs no entry — it IS the non-keyword-head case. The other four are
+;; keywords, so without naming them here they ride the GENERAL keyword
+;; exclusion — which exists to protect EXPRESSION forms and has nothing to
+;; say about goals. Conflating "is a parser keyword" with "is not a goal" was
+;; the defect: `(not (blocked "c"))` parsed as Bool negation of a stuck goal
+;; term and returned a useless answer with ZERO errors.
+;; `guard`/`cut` are deliberately ABSENT: `run-solve-goal` does not dispatch
+;; them at top level either (they are clause-body-only — the A.1 mini-audit
+;; finding). Keeping this set equal to the dispatch set is the invariant; if
+;; a goal kind is ever added to `run-solve-goal`, add it here.
+(define goal-keywords '(rel not = is))
+(define (goal-keyword? s) (memq s goal-keywords))
+
+;; The command-position goal predicate: a WS paren-origin group whose head is
+;; either a non-keyword symbol (a relation) or a GOAL keyword.
+(define (paren-goal-stx? stx)
+  (define (dollar-sym? s)
+    (let ([str (symbol->string s)])
+      (and (positive? (string-length str))
+           (char=? (string-ref str 0) #\$))))
+  (and (syntax? stx)
+       (syntax-property stx 'prologos-paren-origin)
+       (let ([d (stx->datum stx)])
+         (and (pair? d)
+              (let* ([h0 (car d)] [h (if (syntax? h0) (syntax-e h0) h0)])
+                (and (symbol? h)
+                     (not (dollar-sym? h))
+                     (or (not (keyword? h)) (goal-keyword? h))))))))
+
+;; Parse a datum at COMMAND position (top-level command or def RHS — the
+;; Q_C scope): a paren goal becomes an implicit solve; everything else
+;; parses as usual.
+(define (parse-command-datum stx)
+  (if (paren-goal-stx? stx)
+      (let ([g (parse-relational-goal stx)])
+        (if (prologos-error? g) g (surf-solve g (datum-srcloc stx))))
+      (parse-datum stx)))
+
+(define (parse-toplevel-datum stx)
+  (parse-command-datum stx))
+
+;; The def-RHS variant: dispatch ONLY for RHS elements the preparse `:=`
+;; rewrite stamped ('prologos-defrhs-command). A sexp-style paren-def form
+;; written in a WS file — `(def x : T (cons …))` — never gets the stamp,
+;; so its RHS keeps application semantics (the IR spelling embedded in WS;
+;; the institutionalized-divergence cost applies to the := surface only).
+(define (parse-defrhs-datum stx)
+  (if (and (syntax? stx)
+           (syntax-property stx 'prologos-defrhs-command))
+      (parse-command-datum stx)
+      (parse-datum stx)))
 
 ;; ========================================
 ;; Keywords: forms with special parsing rules
@@ -3710,8 +3784,7 @@
        ;; reject (reserve for UCS), mirroring the relational C.b.1 rule.
        [(and (>= (length parts) 3)
              (symbol? (stx->datum (car parts)))
-             (let ([s (stx->datum (cadr parts))])
-               (and (colon-symbol? s) (not (memq s '(:0 :1 :w :m)))))
+             (fused-type-annot? (stx->datum (cadr parts)))
              (colon-symbol? (stx->datum (caddr parts))))
         (parse-error loc
                      (format "binder: chained type annotation on ~a not supported (reserve for UCS)"
@@ -3723,11 +3796,9 @@
        ;; typed-binder path (binder-info.type), same as the spaced `(x : T)` arm.
        [(and (= (length parts) 2)
              (symbol? (stx->datum (car parts)))
-             (let ([s (stx->datum (cadr parts))])
-               (and (colon-symbol? s) (not (memq s '(:0 :1 :w :m))))))
+             (fused-type-annot? (stx->datum (cadr parts))))
         (let* ([name (stx->datum (car parts))]
-               [tname (substring (symbol->string (stx->datum (cadr parts))) 1)]
-               [ty (parse-datum (datum->syntax (car parts) (string->symbol tname)))])
+               [ty (fused-annot->type-surf (stx->datum (cadr parts)) (car parts))])
           (if (prologos-error? ty) ty
               (binder-info name #f ty)))]
 
@@ -3772,20 +3843,12 @@
        ;; splits on `:` (name:Type); `::` module paths (empty segment) are not splits.
        [(and (= (length parts) 1)
              (symbol? (stx->datum (car parts))))
-        (let* ([sym (stx->datum (car parts))]
-               [segs (string-split (symbol->string sym) ":")]
-               [nonempty? (andmap (lambda (s) (> (string-length s) 0)) segs)])
+        (let-values ([(name ty err)
+                      (split-fused-symbol (stx->datum (car parts)) (car parts) loc "binder")])
           (cond
-            [(and nonempty? (> (length segs) 2))
-             (parse-error loc
-                          (format "binder: chained type annotation in ~a not supported (reserve for UCS)" sym)
-                          sym)]
-            [(and nonempty? (= (length segs) 2))
-             (let ([ty (parse-datum (datum->syntax (car parts) (string->symbol (cadr segs))))])
-               (if (prologos-error? ty) ty
-                   (binder-info (string->symbol (car segs)) #f ty)))]
-            [else
-             (binder-info sym #f (surf-hole loc))]))]
+            [err err]
+            [ty (binder-info name #f ty)]
+            [else (binder-info name #f (surf-hole loc))]))]
 
        [else
         (parse-error loc
@@ -3819,7 +3882,9 @@
          [(not (symbol? name))
           (parse-error loc (format "def: expected name, got ~a" name) name)]
          [else
-          (let ([bd (parse-datum (cadr args))])
+          ;; Rel T1 POL.9b: the def RHS is command position (Q_C) —
+          ;; a paren goal binds the solve's rows (POL.10 snapshot governs).
+          (let ([bd (parse-defrhs-datum (cadr args))])
             (if (prologos-error? bd) bd
                 (surf-def name #f bd loc)))]))]
     ;; NEW: name <type> body — 3 elements
@@ -3831,7 +3896,7 @@
           (parse-error loc (format "def: expected name, got ~a" name) name)]
          [else
           (let ([ty (unwrap-angle-type (cadr args) loc)]
-                [bd (parse-datum (caddr args))])
+                [bd (parse-defrhs-datum (caddr args))])  ;; POL.9b: := RHS command position
             (cond
               [(prologos-error? ty) ty]
               [(prologos-error? bd) bd]
@@ -3849,7 +3914,7 @@
           (parse-error loc (format "def: expected ':', got ~a" colon) colon)]
          [else
           (let ([ty (parse-datum type-stx)]
-                [bd (parse-datum body-stx)])
+                [bd (parse-defrhs-datum body-stx)])  ;; POL.9b: := RHS command position
             (cond
               [(prologos-error? ty) ty]
               [(prologos-error? bd) bd]
@@ -4692,12 +4757,59 @@
 
   ;; Build binders with surf-hole types (to be inferred by bidirectional checking)
   (define param-elems (syntax->list params-stx))
+  ;; Rel T1 POL.6: fold FUSED type annotations in the defn param list.
+  ;; C.b.2 wired fused binders through `parse-binder` (fn-binders, both readers),
+  ;; but a `defn`'s bare param list never routes there — it mapped `binder-info`
+  ;; over the raw elements, so WS `defn f [x:Int]` (which arrives as the TWO
+  ;; elements `x` and `:Int` — instrumented, not inferred) silently became a
+  ;; TWO-parameter function whose second param was named `:Int`, both hole-typed.
+  ;; Hence the owner's "cannot infer the type of an unannotated parameter".
+  ;; This consumes the same two shapes via the SHARED fused primitives:
+  ;;   WS   — `name` followed by a colon-symbol type ⇒ one typed binder, 2 consumed
+  ;;   sexp — a single glued `name:Type` symbol ⇒ one typed binder, 1 consumed
+  ;; Bare params keep their hole type; multiplicity annotations are excluded by
+  ;; `fused-type-annot?`, so `[x :0 Int]`-style forms are untouched here.
   (define binders
-    (for/list ([e (in-list param-elems)])
-      (binder-info (syntax-e e) #f (surf-hole loc))))
+    (let loop ([es param-elems] [acc '()])
+      (cond
+        [(null? es) (reverse acc)]
+        ;; chained WS fused: name + :T1 + :T2 — reserve for UCS (C.b.1/C.b.2 rule).
+        ;; MUST precede the 2-element fused arm, which would otherwise consume the
+        ;; first annotation and silently treat `:T2` as the next parameter.
+        [(and (pair? (cdr es)) (pair? (cddr es))
+              (symbol? (stx->datum (car es)))
+              (fused-type-annot? (stx->datum (cadr es)))
+              (colon-symbol? (stx->datum (caddr es))))
+         (parse-error loc
+                      (format "defn: chained type annotation on ~a not supported (reserve for UCS)"
+                              (stx->datum (car es)))
+                      #f)]
+        ;; WS fused: name + :Type
+        [(and (pair? (cdr es))
+              (symbol? (stx->datum (car es)))
+              (fused-type-annot? (stx->datum (cadr es))))
+         (let ([ty (fused-annot->type-surf (stx->datum (cadr es)) (car es))])
+           (if (prologos-error? ty)
+               ty
+               (loop (cddr es)
+                     (cons (binder-info (stx->datum (car es)) #f ty) acc))))]
+        ;; sexp glued `name:Type`, or a plain bare param
+        [(symbol? (stx->datum (car es)))
+         (let-values ([(name ty err)
+                       (split-fused-symbol (stx->datum (car es)) (car es) loc "defn")])
+           (cond
+             [err err]
+             [ty (loop (cdr es) (cons (binder-info name #f ty) acc))]
+             [else (loop (cdr es)
+                         (cons (binder-info name #f (surf-hole loc)) acc))]))]
+        [else
+         (loop (cdr es)
+               (cons (binder-info (syntax-e (car es)) #f (surf-hole loc)) acc))])))
 
   ;; rest-args should be: <ReturnType> body  OR  : ReturnType body  OR  body (inferred)
   (cond
+    ;; POL.6: a malformed fused annotation (chained / bad type) surfaces here
+    [(prologos-error? binders) binders]
     [(null? rest-args)
      (parse-error loc "defn: missing body" #f)]
     ;; Single element after params: body only, return type is inferred (hole)
@@ -5249,6 +5361,52 @@
        (let ([s (symbol->string x)])
          (and (> (string-length s) 0) (char=? (string-ref s 0) #\:)))))
 
+;; ── Fused type annotations: the ONE pair of primitives (Rel T1 C.b.2 + POL.6) ──
+;; `x:Int` reaches the parser in two shapes: WS splits it into `x` + the
+;; colon-SYMBOL `:Int`; sexp glues it into the single symbol `x:Int`. Both the
+;; binder path (parse-binder, C.b.2) and the defn param-list path
+;; (parse-defn-bare-params, POL.6) consume those shapes, so the recognizer and
+;; the type-builder live here ONCE — a second copy is how the two paths would
+;; drift (the `recognize-keyword`-vs-`ident-continue?` drift, prologos-syntax.md).
+
+;; WS shape: a colon-symbol that is a TYPE annotation, not a multiplicity.
+;; `:0`/`:1`/`:w`/`:m` stay multiplicity annotations (so `[fn [x :0 Int] x]` is
+;; untouched) — the cost, named in C.b.2: a type literally named `w`/`m`/`0`/`1`
+;; cannot be fused in WS; use the spaced form.
+(define (fused-type-annot? d)
+  (and (colon-symbol? d) (not (memq d '(:0 :1 :w :m)))))
+
+;; Build the type surf from a WS fused annotation datum (`:Int` → the surf for
+;; `Int`), via parse-datum so it is IDENTICAL to what the spaced arm produces.
+;; ctx-stx supplies srcloc context for datum->syntax.
+(define (fused-annot->type-surf annot-datum ctx-stx)
+  (parse-datum (datum->syntax ctx-stx
+                              (string->symbol
+                               (substring (symbol->string annot-datum) 1)))))
+
+;; sexp shape: split a possibly-glued `name:Type` symbol.
+;; Returns (values name-symbol type-surf-or-#f error-or-#f):
+;;   `x`           → (values 'x #f #f)                  — bare, caller supplies hole
+;;   `x:Int`       → (values 'x <surf> #f)              — fused
+;;   `x:Int:Even`  → (values #f #f <error>)             — chained, reserved for UCS
+;;   `a::b`        → (values 'a::b #f #f)               — module path, NOT a split
+(define (split-fused-symbol sym ctx-stx loc who)
+  (define segs (string-split (symbol->string sym) ":"))
+  (define nonempty? (andmap (lambda (s) (> (string-length s) 0)) segs))
+  (cond
+    [(and nonempty? (> (length segs) 2))
+     (values #f #f
+             (parse-error loc
+                          (format "~a: chained type annotation in ~a not supported (reserve for UCS)"
+                                  who sym)
+                          sym))]
+    [(and nonempty? (= (length segs) 2))
+     (let ([ty (parse-datum (datum->syntax ctx-stx (string->symbol (cadr segs))))])
+       (if (prologos-error? ty)
+           (values #f #f ty)
+           (values (string->symbol (car segs)) ty #f)))]
+    [else (values sym #f #f)]))
+
 ;; Parse relational params: a bracket-delimited list of possibly mode-annotated names,
 ;; each optionally carrying a fused type annotation (`?x:Int`), or literal pattern values.
 ;; Returns list of (name mode type-name) 3-element lists for variables (type-name is a
@@ -5325,6 +5483,275 @@
             [else
              (prologos-error loc (format "defr: expected symbol or literal in params, got ~a" sym))])]))]))
 
+;; ── Rel T1 POL.7: the ONE fact-line row-splitter (both fact-content sites) ────
+;; A fact line's terms may carry `|` row separators (WS tokenizes `|` as the
+;; bare `$pipe` symbol, which previously flowed into parse-datum as a GARBAGE
+;; TERM — `|| 0 | 1 | 2` silently produced `unknown` rows). Semantics:
+;;   WITH pipes  — explicit rows: each `|`-separated segment is ONE row and must
+;;                 match the declared arity EXACTLY (the user drew the row
+;;                 boundaries; a wrong-length segment is an error, not a guess).
+;;                 Empty segments (leading/trailing/doubled `|`) error.
+;;   WITHOUT     — the pre-existing arity-chunking stands (`|| 5 3` on a unary
+;;                 relation = two rows), but a PARTIAL REMAINDER is now a loud
+;;                 error instead of a silent dead row (it registered a
+;;                 wrong-arity row no query could ever match — the Watching-3
+;;                 "spurious empty results" trap, closed at the source).
+;; Sexp mode is untouched by construction: `|` is a symbol-escape char in the
+;; Racket reader, so sexp fact rows are per-form groups and never see $pipe.
+(define (facts-pipe? s)
+  (eq? (stx->datum s) '$pipe))
+
+(define (facts-terms->rows terms arity loc)
+  (define (row-of seg) (surf-fact-row (map parse-datum seg) loc))
+  (cond
+    [(null? terms) '()]
+    [(ormap facts-pipe? terms)
+     ;; explicit-rows mode: split on pipes, exact-arity segments
+     (define segments
+       (let loop ([ts terms] [cur '()] [acc '()])
+         (cond
+           [(null? ts) (reverse (cons (reverse cur) acc))]
+           [(facts-pipe? (car ts)) (loop (cdr ts) '() (cons (reverse cur) acc))]
+           [else (loop (cdr ts) (cons (car ts) cur) acc)])))
+     (cond
+       [(ormap null? segments)
+        (list (prologos-error loc "defr facts: empty row beside `|` — write a term between separators"))]
+       [(and arity (> arity 0)
+             (ormap (lambda (seg) (not (= (length seg) arity))) segments))
+        (define bad (findf (lambda (seg) (not (= (length seg) arity))) segments))
+        (list (prologos-error loc
+               (format "defr facts: a `|`-separated row has ~a term~a but the relation's arity is ~a"
+                       (length bad) (if (= (length bad) 1) "" "s") arity)))]
+       [else (map row-of segments)])]
+    [(and arity (> arity 0) (> (length terms) arity))
+     ;; legacy arity-chunking; partial remainder now errors
+     (cond
+       [(zero? (remainder (length terms) arity))
+        (let loop ([remaining terms] [acc '()])
+          (if (null? remaining)
+              (reverse acc)
+              (loop (drop remaining arity) (cons (row-of (take remaining arity)) acc))))]
+       [else
+        (list (prologos-error loc
+               (format "defr facts: ~a terms do not fill rows of arity ~a — separate rows with `|` or newlines"
+                       (length terms) arity)))])]
+    [else (list (row-of terms))]))
+
+;; ── Rel T1 POL.8: layout-based parenless goals in `&>` clause content ──
+;; (owner co-design 2026-07-25; design doc §8 POL.8. Both spellings stay legal.)
+;;
+;; The reader's indent grouping already delivers a clause as: the `&>` line's
+;; elements flat after the sentinel; each later physical line as exactly ONE
+;; element (a ≥2-token line wrapped into a sublist carrying its first token's
+;; line/column, a single-token line spliced bare); and deeper lines nested
+;; INSIDE their parent line's sublist. The grammar on top of that structure:
+;;
+;;   • `&>`-line content: pair-headed → a sequence of paren goals, each
+;;     element parenthesized (Q2a); symbol-headed → ONE bare goal, with
+;;     parens inside the line as argument terms (`&> not (= c n)` works).
+;;   • A grouped later line (any pair) is a SIBLING goal at any indent past
+;;     `&>` (Q5 lenient: a paren goal and a bare ≥2-token line are
+;;     indistinguishable post-reader — same wrap-stx-list, no origin
+;;     sentinel — and the head-token reading is right for both). A
+;;     pair-headed pair is a shared-line paren sequence (Q2a inside).
+;;   • A single-token later line is column-classified (Q5 loud): at the
+;;     goal column → a zero-arg sibling goal; deeper while the `&>`-line
+;;     bare goal is open → appended to its arguments; otherwise → error.
+;;   • Degraded srclocs — a preparse rewrite anywhere inside the defr
+;;     rebuilds it loc-free (macros.rkt defr arm's equal? guard), leaving
+;;     the sentinel at column #f/0, which real input never produces (`&>`
+;;     always sits at column ≥ 1 in WS bodies and inside sexp parens).
+;;     All-paren content then parses exactly as before; parenless content
+;;     errors with guidance rather than risking a silent mis-grouping.
+;;     The process-string-ws tree-spine duplicate parse (whose surf the
+;;     merge discards — driver.rkt merge-form has no defr arm) arrives
+;;     fully stripped and lands here too; returning an error surf there is
+;;     harmless.
+
+;; A reader-sentinel-wrapped datum ($nat-literal, $list-literal, …): a
+;; single TERM, not a goal group.
+(define (pol8-sentinel-headed? d)
+  (and (pair? d)
+       (let* ([h (car d)] [hd (if (syntax? h) (syntax-e h) h)])
+         (and (symbol? hd)
+              (let ([s (symbol->string hd)])
+                (and (positive? (string-length s))
+                     (char=? (string-ref s 0) #\$)))))))
+
+;; A goal-shaped group: a pair NOT headed by a reader sentinel.
+(define (pol8-goal-pair? e)
+  (define d (stx->datum e))
+  (and (pair? d) (not (pol8-sentinel-headed? d))))
+
+;; A symbol usable as a bare goal head (excludes reader sentinels like a
+;; stray $pipe / $facts-sep).
+(define (pol8-bare-head? e)
+  (define d (stx->datum e))
+  (and (symbol? d)
+       (let ([s (symbol->string d)])
+         (or (zero? (string-length s))
+             (not (char=? (string-ref s 0) #\$))))))
+
+(define (pol8-bad-head-error e)
+  (prologos-error (datum-srcloc e)
+    (format "rule clause: a goal must start with a relation name — got `~a`. Parenthesize goals, e.g. (relname arg …)."
+            (if (syntax? e) (syntax->datum e) e))))
+
+;; Parse a shared-line goal sequence: every element must be parenthesized
+;; (Q2a). Also reached when a line under a parenthesized goal nested into
+;; its group at the reader.
+(define (parse-paren-goal-seq elems)
+  (define bare (findf (lambda (e) (not (pol8-goal-pair? e))) elems))
+  (if bare
+      (prologos-error (datum-srcloc bare)
+        (format "rule clause: goals sharing a line must each be parenthesized (and a line under a parenthesized goal cannot extend it) — found bare `~a`. Parenthesize it, or put it on its own line at the goal column."
+                (if (syntax? bare) (syntax->datum bare) bare)))
+      (map parse-relational-goal elems)))
+
+;; Rel T1 POL.9: regroup FLAT multi-line clause content by srcloc layout.
+;; Inside explicit parens (`(rel [x] &> …)`, single-line/sexp defr) the reader
+;; suspends indent grouping, so clause content arrives as a flat token run.
+;; This reconstructs, from per-token line/column, the same per-line nested
+;; shape the reader's indent grouping produces for unbracketed bodies — so
+;; the ONE clause grammar (parse-clause-content) serves both. Mirrors
+;; group-items semantics: line-0 (sentinel-line) elements stay flat; each
+;; later line becomes one element (single-element lines SPLICE bare); a line
+;; whose column is deeper than a previous line's nests inside it.
+(define (regroup-flat-lines-by-layout elems sent-line)
+  (define (eline e) (and (syntax? e) (syntax-line e)))
+  (define (ecol e) (and (syntax? e) (syntax-column e)))
+  ;; Partition into physical lines (elements with unknown line stick to the
+  ;; current line — conservative).
+  (define lines  ;; (listof (cons col (listof elem))), later lines only
+    (let loop ([es elems] [cur-line sent-line] [cur '()] [acc '()])
+      (cond
+        [(null? es)
+         (reverse (if (null? cur) acc (cons (reverse cur) acc)))]
+        [else
+         (define e (car es))
+         (define l (or (eline e) cur-line))
+         (if (eqv? l cur-line)
+             (loop (cdr es) cur-line (cons e cur) acc)
+             (loop (cdr es) l (list e)
+                   (if (null? cur) acc (cons (reverse cur) acc))))])))
+  ;; line-0 = the first group iff the first element's EFFECTIVE line is the
+  ;; sentinel's (elements with unknown line at the head stay on line-0).
+  (define line0 (if (and (pair? lines)
+                         (pair? elems)
+                         (eqv? (or (eline (car elems)) sent-line) sent-line))
+                    (car lines) '()))
+  (define later (if (null? line0) lines (cdr lines)))
+  ;; Build the nesting: a stack of (col . children-box); deeper lines attach
+  ;; to the nearest shallower previous line.
+  (define (materialize entry)
+    ;; entry = (list col elems children-box); children materialize first
+    (define elems* (append (cadr entry)
+                           (map materialize (reverse (unbox (caddr entry))))))
+    (if (= (length elems*) 1)
+        (car elems*)                                   ;; splice single
+        (let ([f (car (cadr entry))])                  ;; group, first elem's loc
+          (datum->syntax #f elems* (and (syntax? f) f)))))
+  (define top-entries
+    (let loop ([ls later] [stack '()] [tops '()])
+      (cond
+        [(null? ls) (reverse tops)]
+        [else
+         (define l-elems (car ls))
+         (define c (or (ecol (car l-elems)) 0))
+         (define entry (list c l-elems (box '())))
+         (let pop ([s stack])
+           (cond
+             [(and (pair? s) (>= (car (car s)) c)) (pop (cdr s))]
+             [(pair? s)
+              (set-box! (caddr (car s)) (cons entry (unbox (caddr (car s)))))
+              (loop (cdr ls) (cons entry s) tops)]
+             [else (loop (cdr ls) (list entry) (cons entry tops))]))])))
+  (append line0 (map materialize top-entries)))
+
+;; Parse ONE clause's content (the elements after its $clause-sep sentinel).
+;; Returns (surf-clause goals loc) or a prologos-error.
+(define (parse-clause-content sentinel content loc)
+  (define (elem-line e) (and (syntax? e) (syntax-line e)))
+  (define (elem-col e) (and (syntax? e) (syntax-column e)))
+  (define (parse-degraded)
+    (if (andmap pol8-goal-pair? content)
+        (let* ([goals (map parse-relational-goal content)]
+               [err (findf prologos-error? goals)])
+          (or err (surf-clause goals loc)))
+        (prologos-error loc
+          "rule clause: parenless goals cannot be used in a defr body that also contains a form rewritten before parsing (e.g. dot-access) — parenthesize each goal in this clause.")))
+  (define sent-line (elem-line sentinel))
+  (define sent-col (elem-col sentinel))
+  (cond
+    [(null? content) (surf-clause '() loc)]
+    [(or (not sent-line) (not sent-col) (zero? sent-col)) (parse-degraded)]
+    [else
+     (define-values (line0 rest)
+       (splitf-at content (lambda (e) (eqv? (elem-line e) sent-line))))
+     (define goal-col
+       (cond [(pair? line0) (elem-col (car line0))]
+             [(pair? rest)  (elem-col (car rest))]
+             [else #f]))
+     (define line0-paren? (and (pair? line0) (pol8-goal-pair? (car line0))))
+     (cond
+       [(not goal-col) (parse-degraded)]
+       [(and (pair? line0) (not line0-paren?)
+             (not (pol8-bare-head? (car line0))))
+        (pol8-bad-head-error (car line0))]
+       [else
+        (define line0-goals (if line0-paren? (parse-paren-goal-seq line0) '()))
+        (cond
+          [(prologos-error? line0-goals) line0-goals]
+          [else
+           ;; Walk the later lines (each arrives as exactly one element).
+           ;; `pending` = the `&>`-line bare goal, open for single-token
+           ;; deeper continuations; `goals` accumulates REVERSED.
+           (let loop ([elems rest]
+                      [pending (and (pair? line0) (not line0-paren?) line0)]
+                      [goals (reverse line0-goals)])
+             (define (close-pending gs)
+               (if pending (cons (parse-relational-goal pending) gs) gs))
+             (cond
+               [(null? elems)
+                (define all (reverse (close-pending goals)))
+                (define err (findf prologos-error? all))
+                (or err (surf-clause all loc))]
+               [else
+                (define e (car elems))
+                (cond
+                  [(pol8-goal-pair? e)
+                   ;; A grouped line: sibling goal(s) at any indent (Q5 lenient).
+                   (define inner (if (syntax? e) (or (syntax->list e) (list e))
+                                     (stx->datum e)))
+                   (define new-goals
+                     (if (and (pair? inner) (pol8-goal-pair? (car inner)))
+                         (parse-paren-goal-seq inner)
+                         (list (parse-relational-goal e))))
+                   (if (prologos-error? new-goals)
+                       new-goals
+                       (loop (cdr elems) #f
+                             (append (reverse new-goals) (close-pending goals))))]
+                  [else
+                   ;; Single-token line — column-classified (Q5 loud).
+                   (define col (or (elem-col e) goal-col))
+                   (cond
+                     [(and pending (> col goal-col))
+                      (loop (cdr elems) (append pending (list e)) goals)]
+                     [(= col goal-col)
+                      (if (pol8-bare-head? e)
+                          (loop (cdr elems) #f
+                                (cons (parse-relational-goal (list e))
+                                      (close-pending goals)))
+                          (pol8-bad-head-error e))]
+                     [(< col goal-col)
+                      (prologos-error (datum-srcloc e)
+                        (format "rule clause: line at column ~a is indented between `&>` (column ~a) and the goal column (~a) — align it to column ~a for a sibling goal."
+                                col sent-col goal-col goal-col))]
+                     [else
+                      (prologos-error (datum-srcloc e)
+                        (format "rule clause: continuation at column ~a cannot extend a parenthesized goal — align it to column ~a for a sibling goal, or parenthesize the whole goal."
+                                col goal-col))])])]))])])]))
+
 ;; Parse the body portion of a defr variant.
 ;; Body is a flat list of tokens that may contain $facts-sep and $clause-sep sentinels.
 ;;
@@ -5386,29 +5813,8 @@
                               (or (not (pair? (stx->datum s)))
                                   (term-sentinel? s)))
                             content))
-               ;; Split flat-terms into rows based on arity.
-               ;; If arity is known and flat-terms has multiple values,
-               ;; chunk them into groups of `arity` (e.g., || "1" "2" "3" with arity 1
-               ;; becomes 3 rows, not 1 row of 3 values).
-               (define flat-rows
-                 (cond
-                   [(null? flat-terms) '()]
-                   [(and arity (> arity 0) (> (length flat-terms) arity))
-                    ;; Chunk flat-terms into groups of `arity`
-                    (let loop ([remaining flat-terms] [acc '()])
-                      (cond
-                        [(null? remaining) (reverse acc)]
-                        [(< (length remaining) arity)
-                         ;; Remainder doesn't fill a complete row — include as partial
-                         (reverse (cons (surf-fact-row (map parse-datum remaining) loc) acc))]
-                        [else
-                         (define chunk (take remaining arity))
-                         (define rest-stx (drop remaining arity))
-                         (loop rest-stx
-                               (cons (surf-fact-row (map parse-datum chunk) loc) acc))]))]
-                   [else
-                    ;; No arity or flat-terms fits in one row
-                    (list (surf-fact-row (map parse-datum flat-terms) loc))]))
+               ;; Rel T1 POL.7: one shared row-splitter for a fact line's terms.
+               (define flat-rows (facts-terms->rows flat-terms arity loc))
                (define other-rows
                  (apply append
                    (for/list ([nr (in-list nested-rows)])
@@ -5416,38 +5822,28 @@
                        (if (syntax? nr) (or (syntax->list nr) (list nr))
                            (let ([nd (stx->datum nr)])
                              (if (list? nd) nd (list nr)))))
-                     ;; Split continuation row by arity, same as flat-terms
-                     (cond
-                       [(and arity (> arity 0) (> (length items) arity))
-                        (let loop ([remaining items] [acc '()])
-                          (cond
-                            [(null? remaining) (reverse acc)]
-                            [(< (length remaining) arity)
-                             (reverse (cons (surf-fact-row (map parse-datum remaining) loc) acc))]
-                            [else
-                             (define chunk (take remaining arity))
-                             (define rest-items (drop remaining arity))
-                             (loop rest-items
-                                   (cons (surf-fact-row (map parse-datum chunk) loc) acc))]))]
-                       [else
-                        (list (surf-fact-row (map parse-datum items) loc))]))))
-               (surf-facts (append flat-rows other-rows) loc)]
+                     ;; Rel T1 POL.7: same shared row-splitter as flat-terms
+                     (facts-terms->rows items arity loc))))
+               ;; POL.7: a row-splitter error surfaces as THE result, not a row
+               (let ([all-rows (append flat-rows other-rows)])
+                 (or (findf prologos-error? all-rows)
+                     (surf-facts all-rows loc)))]
               [(eq? kind 'clause)
-               (define content (cdr d))
-               (define parsed-goals (map parse-relational-goal content))
-               (define err (for/or ([p (in-list parsed-goals)])
-                             (and (prologos-error? p) p)))
-               (if err err
-                   (surf-clause parsed-goals loc))]
+               ;; Rel T1 POL.8: layout-based parenless goals (both spellings
+               ;; legal) — the sentinel stx carries the `&>` line/column.
+               (parse-clause-content (car d) (cdr d) loc)]
               [else
                ;; Non-sentinel body token — treat as bare goal
                (define parsed (parse-relational-goal tok))
                (if (prologos-error? parsed) parsed
                    (surf-clause (list parsed) loc))])))
-        ;; Check for first error
+        ;; Check for first error. Return it BARE (not (list err)) — the callers
+        ;; check (prologos-error? body), and the sexp arms below already return
+        ;; bare; the old (list err) slipped past that check and surfaced as an
+        ;; ugly "Cannot elaborate: #(struct:prologos-error …)" wrap (POL.7).
         (define err (for/or ([r (in-list results)])
                       (and (prologos-error? r) r)))
-        (if err (list err) results)]
+        (if err err results)]
 
        ;; === Sexp mode: flat sentinel tokens (original logic) ===
 
@@ -5465,16 +5861,38 @@
         (if err err
             (list (surf-facts (list (surf-fact-row parsed-terms loc)) loc)))]
 
-       ;; &> clause: rule goals
+       ;; &> clause: rule goals — flat sentinels (sexp + single-line WS +
+       ;; multi-line paren-wrapped bodies like `(rel [x] &> …)`).
+       ;; Rel T1 POL.8/Q6 + POL.9: ONE shared clause grammar. Each flat
+       ;; $clause-sep starts a clause (a further one previously parsed as a
+       ;; silent garbage goal); a run's content is regrouped by srcloc layout
+       ;; (parens suspend the reader's indent grouping, so multi-line content
+       ;; arrives flat — regroup-flat-lines-by-layout reconstructs the same
+       ;; per-line nested shape) and handed to parse-clause-content, which
+       ;; realizes the head-token rule for single-line runs identically.
        [(eq? first-flat-kind 'clause)
-        (define goal-data (cdr body-tokens))
-        (define parsed-goals
-          (for/list ([g (in-list goal-data)])
-            (parse-relational-goal g)))
-        (define err (for/or ([p (in-list parsed-goals)])
-                      (and (prologos-error? p) p)))
-        (if err err
-            (list (surf-clause parsed-goals loc)))]
+        (define (flat-clause-sep? t) (eq? (stx->datum t) '$clause-sep))
+        (define runs  ;; (listof (cons sentinel-elem run-elems))
+          (let loop ([toks body-tokens] [cur-sent #f] [cur '()] [acc '()])
+            (cond
+              [(null? toks)
+               (reverse (if cur-sent (cons (cons cur-sent (reverse cur)) acc) acc))]
+              [(flat-clause-sep? (car toks))
+               (loop (cdr toks) (car toks) '()
+                     (if cur-sent (cons (cons cur-sent (reverse cur)) acc) acc))]
+              [else (loop (cdr toks) cur-sent (cons (car toks) cur) acc)])))
+        (define clauses
+          (for/list ([r (in-list runs)])
+            (define sent (car r))
+            (define run  (cdr r))
+            (define sent-line (and (syntax? sent) (syntax-line sent)))
+            (define content
+              (if sent-line
+                  (regroup-flat-lines-by-layout run sent-line)
+                  run))  ;; degraded srclocs: parse-clause-content handles it
+            (parse-clause-content sent content loc)))
+        (define err (findf prologos-error? clauses))
+        (if err err clauses)]
 
        ;; No sentinel — treat as bare goals (implicit &>)
        [else

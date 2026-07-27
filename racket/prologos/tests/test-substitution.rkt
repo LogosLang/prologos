@@ -182,3 +182,214 @@
 (test-case "shift: boolrec with constants unchanged"
   (check-equal? (shift 1 0 (expr-boolrec (expr-lam 'mw (expr-Bool) (expr-Nat)) (expr-zero) (expr-suc (expr-zero)) (expr-true)))
                 (expr-boolrec (expr-lam 'mw (expr-Bool) (expr-Nat)) (expr-zero) (expr-suc (expr-zero)) (expr-true))))
+
+;; ========================================
+;; Substitution containment (SUB.1, 2026-07-24)
+;; docs/tracking/2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md
+;; ========================================
+;; Ruling (D): runtime collection values (champ/hset/rrb + transients) are
+;; CLOSED runtime values — shift/subst identity on them is the CONTRACT, not
+;; the bug. The bug is that `nf` can CONSTRUCT an open container (normalizing
+;; a lambda body without opening the binder); the invariant is owned by the
+;; SUB.3 fix (NbE open-the-binder) and guarded meanwhile by the tripwire at
+;; the three nf-persisting boundaries. These tests pin (a) the closed-leaf
+;; contract, (b) the depth-aware tripwire predicate, (c) a BUG-PIN of the nf
+;; mint that FLIPS when SUB.3 lands.
+
+(require (only-in "../reduction.rkt" nf contains-open-container?)
+         (only-in "../champ.rkt" champ-empty champ-insert champ-entries)
+         (only-in "../rrb.rkt" rrb-from-list))
+
+(define (mk-champ k v)
+  (expr-champ (champ-insert champ-empty (equal-hash-code k) k v)))
+(define ka (expr-keyword ':a))
+
+;; (a) the closed-leaf CONTRACT under ruling (D)
+(test-case "SUB contract: subst over a champ is identity (champ = closed value)"
+  (define c (mk-champ ka (expr-bvar 0)))
+  (check-true (eq? (subst 0 (expr-int 42) c) c)))
+
+(test-case "SUB contract: shift over a champ is identity"
+  (define c (mk-champ ka (expr-bvar 0)))
+  (check-true (eq? (shift 1 0 c) c)))
+
+(test-case "SUB contract: subst/shift over hset and rrb are identity"
+  (define h (expr-hset (champ-insert champ-empty (equal-hash-code ka) ka (expr-bvar 0))))
+  (define r (expr-rrb (rrb-from-list (list (expr-bvar 0)))))
+  (check-true (eq? (subst 0 (expr-int 42) h) h))
+  (check-true (eq? (shift 1 0 h) h))
+  (check-true (eq? (subst 0 (expr-int 42) r) r))
+  (check-true (eq? (shift 1 0 r) r)))
+
+;; (b) the tripwire predicate — depth-aware freeness w.r.t. the container
+(test-case "SUB predicate: champ holding a free bvar fires"
+  (check-true (contains-open-container? (mk-champ ka (expr-bvar 0)))))
+
+(test-case "SUB predicate: the poisoned shape under its binder fires (the repro)"
+  (check-true (contains-open-container?
+               (expr-lam 'mw (expr-Nat) (mk-champ ka (expr-bvar 0))))))
+
+(test-case "SUB predicate: champ holding a CLOSED lambda does NOT fire (the control)"
+  ;; answer row {:f λy.y} — bvar bound INSIDE the container is legal
+  (check-false (contains-open-container?
+                (mk-champ (expr-keyword ':f)
+                          (expr-lam 'mw (expr-Nat) (expr-bvar 0))))))
+
+(test-case "SUB predicate: ground champ does not fire"
+  (check-false (contains-open-container? (mk-champ ka (expr-int 42)))))
+
+(test-case "SUB predicate: bvar outside any container does not fire"
+  (check-false (contains-open-container? (expr-lam 'mw (expr-Nat) (expr-bvar 0)))))
+
+(test-case "SUB predicate: NESTED poison — champ{:f λy.champ{:a y}} fires"
+  ;; the inner champ captures y across ITS boundary even though y is bound
+  ;; within the OUTER champ — freeness is w.r.t. the innermost container
+  (check-true (contains-open-container?
+               (mk-champ (expr-keyword ':f)
+                         (expr-lam 'mw (expr-Nat)
+                                   (mk-champ ka (expr-bvar 0)))))))
+
+(test-case "SUB predicate: open bvar deeper in a container entry's spine fires"
+  ;; {:a [add y 1]} under the binder — the stuck spine holds a free bvar
+  (check-true (contains-open-container?
+               (mk-champ ka (expr-app (expr-fvar 'add) (expr-bvar 0))))))
+
+(test-case "SUB predicate: rrb holding a free bvar fires"
+  (check-true (contains-open-container?
+               (expr-rrb (rrb-from-list (list (expr-bvar 0)))))))
+
+;; (c) SUB.3 (ruling D) — FLIPPED from the SUB.1 BUG-PIN: nf opens the binder
+;; NbE-style (#%nbe fvar, re-abstraction), so the normalized body carries NO
+;; open container and beta after nf computes the right value.
+
+(require (only-in "../reduction.rkt" whnf)
+         (only-in racket/match match))
+
+(define lam-with-map-body
+  (expr-lam 'mw (expr-Nat)
+            (expr-map-assoc (expr-map-empty (expr-hole) (expr-hole))
+                            ka (expr-bvar 0))))
+
+(define (champ-entries-sorted e)
+  (match e
+    [(expr-champ c)
+     (sort (champ-entries c) string<? #:key (lambda (kv) (format "~a" (car kv))))]
+    [_ #f]))
+
+(test-case "SUB.3: nf under a binder yields NO open container (flipped BUG-PIN)"
+  (define lam* (nf lam-with-map-body))
+  (check-false (contains-open-container? lam*)
+               "NbE nf must not mint an open champ")
+  ;; beta over the nf'd body computes the right map
+  (define applied (whnf (subst 0 (expr-int 42) (expr-lam-body lam*))))
+  (check-equal? (champ-entries-sorted applied)
+                (list (cons ka (expr-int 42)))
+                "the substituted value reaches the map"))
+
+(test-case "SUB.3: nested binders — both params reach the map"
+  (define inner
+    (expr-lam 'mw (expr-Nat)
+              (expr-map-assoc
+               (expr-map-assoc (expr-map-empty (expr-hole) (expr-hole))
+                               ka (expr-bvar 1))          ;; outer param
+               (expr-keyword ':b) (expr-bvar 0))))        ;; inner param
+  (define outer (expr-lam 'mw (expr-Nat) inner))
+  (define outer* (nf outer))
+  (check-false (contains-open-container? outer*))
+  (define inner* (subst 0 (expr-int 10) (expr-lam-body outer*)))
+  (define applied (whnf (subst 0 (expr-int 20) (expr-lam-body inner*))))
+  (check-equal? (champ-entries-sorted applied)
+                (list (cons ka (expr-int 10))
+                      (cons (expr-keyword ':b) (expr-int 20)))))
+
+(test-case "SUB.3: Pi codomain opens too"
+  (define pi (expr-Pi 'mw (expr-Nat)
+                      (expr-map-assoc (expr-map-empty (expr-hole) (expr-hole))
+                                      ka (expr-bvar 0))))
+  (check-false (contains-open-container? (nf pi))))
+
+(test-case "SUB.3: an OPEN KEY re-abstracts (keys are walked, not just values)"
+  (define lam-open-key
+    (expr-lam 'mw (expr-Nat)
+              (expr-map-assoc (expr-map-empty (expr-hole) (expr-hole))
+                              (expr-bvar 0) (expr-int 7))))
+  (define lam* (nf lam-open-key))
+  (check-false (contains-open-container? lam*))
+  (define applied (whnf (subst 0 ka (expr-lam-body lam*))))
+  (check-equal? (champ-entries-sorted applied)
+                (list (cons ka (expr-int 7)))))
+
+(test-case "SUB.3: a CLOSED map body still normalizes to a champ (no spine regression)"
+  (define lam-closed
+    (expr-lam 'mw (expr-Nat)
+              (expr-map-assoc (expr-map-empty (expr-hole) (expr-hole))
+                              ka (expr-int 1))))
+  (define lam* (nf lam-closed))
+  (check-true (expr-champ? (expr-lam-body lam*))
+              "closed contents keep the runtime champ representation"))
+
+;; ── SUB.3 hot-scan: armed walk ≡ reflective oracle (differential contract) ──
+;; The production contains-open-container? carries explicit arms for hot node
+;; kinds; the fully-reflective twin is the oracle. Poison is planted in EVERY
+;; armed field position; clean twins guard the negative side. Any arm that
+;; misses a field diverges from the oracle HERE, not in production.
+
+(require (only-in "../reduction.rkt" contains-open-container?/reflective)
+         (only-in "../syntax.rkt"
+                  expr-map-get expr-suc expr-pvec-literal expr-snd
+                  expr-reduce expr-reduce-arm expr-logic-var))
+
+(define POISON (mk-champ ka (expr-bvar 0)))          ;; champ trapping a bvar
+(define CLEAN  (mk-champ ka (expr-int 1)))
+
+(define (both-agree label term)
+  (check-equal? (contains-open-container? term)
+                (contains-open-container?/reflective term)
+                label))
+
+(test-case "SUB.3 hot-scan: armed ≡ reflective over the field battery"
+  (define battery
+    (list
+     ;; poison in each armed field position
+     (expr-app POISON (expr-int 1))
+     (expr-app (expr-int 1) POISON)
+     (expr-pair POISON (expr-int 1))
+     (expr-pair (expr-int 1) POISON)
+     (expr-suc POISON)
+     (expr-fst POISON)
+     (expr-snd POISON)
+     (expr-map-assoc POISON ka (expr-int 1))
+     (expr-map-assoc (expr-map-empty (expr-hole) (expr-hole)) POISON (expr-int 1))
+     (expr-map-assoc (expr-map-empty (expr-hole) (expr-hole)) ka POISON)
+     (expr-map-get POISON ka)
+     (expr-map-get (expr-map-empty (expr-hole) (expr-hole)) POISON)
+     (expr-pvec-literal (list (expr-int 1) POISON))
+     ;; binder positions: poison + the bound/free distinction
+     (expr-lam 'mw POISON (expr-int 1))
+     (expr-lam 'mw (expr-Nat) POISON)
+     (expr-lam 'mw (expr-Nat) (mk-champ ka (expr-bvar 0)))   ;; free at champ → fires
+     (mk-champ ka (expr-lam 'mw (expr-Nat) (expr-bvar 0)))   ;; bound inside → clean
+     (expr-Pi 'mw POISON (expr-int 1))
+     (expr-Pi 'mw (expr-Nat) POISON)
+     (expr-Sigma POISON (expr-int 1))
+     (expr-Sigma (expr-Nat) POISON)
+     (expr-reduce POISON '() #f)
+     (expr-reduce (expr-int 1)
+                  (list (expr-reduce-arm 'suc 1 POISON)) #f)
+     ;; cold-fallback coverage: an un-armed node (expr-boolrec)
+     (expr-boolrec POISON (expr-int 1) (expr-int 2) (expr-int 3))
+     ;; leaves + clean twins
+     (expr-logic-var 'x 'in)
+     (expr-fvar 'f)
+     CLEAN
+     (expr-app CLEAN CLEAN)
+     (expr-lam 'mw (expr-Nat) (expr-app (expr-bvar 0) (expr-int 1)))
+     (expr-pvec-literal (list CLEAN))))
+  (for ([t (in-list battery)] [i (in-naturals)])
+    (both-agree (format "battery[~a]" i) t)))
+
+(test-case "SUB.3 hot-scan: armed detects the canonical poison + clears the control"
+  (check-true (contains-open-container? (expr-lam 'mw (expr-Nat) POISON)))
+  (check-false (contains-open-container?
+                (mk-champ (expr-keyword ':f)
+                          (expr-lam 'mw (expr-Nat) (expr-bvar 0))))))

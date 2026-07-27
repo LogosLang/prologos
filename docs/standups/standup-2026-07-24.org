@@ -1,0 +1,119 @@
+#+TITLE: Standup — 2026-07-24
+#+DATE: 2026-07-24
+
+* Yesterday (since 2026-07-19 standup)
+
+The full **Rel Track 1** arc: the track opened at Aspect-A grounding and ran
+through A → B → C → D → B3 → the POL roster, then absorbed an owner-directed
+**spin-out** (the substitution containment defect) that turned out to be a LIVE
+silent-wrong-answer bug in legal user code — fixed, with a compiler-wide perf
+adoption falling out of the same investigation. Suite GREEN throughout
+(470 files / 0 failures; ~9019 tests at close). Full session log:
+~docs/tracking/standups/2026-07-19_dailies.md~ (rolled to
+~2026-07-24_dailies.md~).
+
+** Rel T1 Aspect A — NAF/guard correctness COMPLETE
+
+- **A.1** (~80a2963d~) top-level bare-~not~ echo → runs via DFS.
+- **A.2-core** (~cb0fb1e4~) E-with-B belief-layer per-binding clear for fact-NAF
+  (on-network) — the ~foray~ ~{both}~ repro fixed.
+- **A.2b** (~bcd02d6d~) + **A.4** (~6b56397d~) — body-local-var rule NAF and
+  guards routed to DFS (correct); both are NAMED SCAFFOLDING whose retirement
+  owner is **BSP-LE Track 3** (seed ~2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md~,
+  carrying the prototyped-and-verified on-network guard mechanism).
+- **A.3** (~74fa9df2~ + ~393bbbbf~) static PERMISSIVE floundering gate.
+- **SC** (~19d9f8ae~ + ~f07f6c54~) solver-config + the REPL/editor ~solver~-eval
+  fix (preparse-macro support was being dropped in ~process-string-ws~).
+
+** Rel T1 Aspects B + C — typed solution rows and typed logic vars
+
+- **B** (~949d3be7~ · ~be20e7e0~ · ~68291d62~): ~solve~ output now composes with
+  the F1 records/rows type system — schema'd relations project schema types,
+  un-schema'd fact relations get observed literal types (heterogeneous → union).
+- **C CLOSED at C.a+C.b+C.c** (~b33474aa~ · ~6d793906~ · ~c6b8e81f~ · ~357035d5~):
+  the ~type-pred~ substrate, the fused ~?x:Int~ / ~x:Int~ reader (BOTH readers,
+  BOTH languages, parser-arm — no tokenizer sweep), and the schema ⟹ facts-only
+  blocking gate. **C.d (types-as-predicates) deferred to UCS Track 6** with a
+  handoff note (~2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md~).
+
+** Rel T1 Aspect D — fact representation + query optimization (research)
+
+- Stage-0/1 artifact ~0b428424~
+  (~docs/research/2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md~): frame
+  F1–F7, measured cost structure, lattice verdicts, and the **Rel T2 "The Fact
+  Store" charter seed** (§11) that subsumes the old RPF list + the DEMO P3 wedge.
+- **D.2 cheap wins** (~296ac2d5~ · ~984619b9~ · ~7ba24b2b~ · ~feedc6ff~): dead-tree
+  retirement, fact-scan counters, a fact-scale bench + corpus generator, and a
+  registration-time INVERTED discrimination index.
+- Two findings that reshape Rel T2: the Tier-2 fact path is **unreachable by
+  construction** for single-variant fact tables, and there is **no DFS↔Tier-2
+  crossover ≤1000 rows** (Tier-2 ~480× slower @1000) — the ~:auto~ threshold of
+  256 points the wrong way, and R2 (fact-SET-level worldview granularity) is the
+  real gate.
+
+** Rel T1 B3 — rule-relation solves are statically TYPED (the headline aspect)
+
+- **B3.0** (~67d96a0d~) anon ~_~ keys dropped from solution rows (POL.2), both
+  halves atomic to keep static/runtime key agreement.
+- **B3.1** (~0d34fa7e~) the static body-goal dataflow walker:
+  ~solve (path x z) : List {:x Int :z Int}~, recursion typed via a Kleene
+  fixpoint (transitive closure works), anonymous ~rel~ through the same walker.
+  Rule solutions now compose with ~.field~, ~def~-binding, and validate.
+- **B3.2** (display-time refinement) remains open.
+
+** Rel T1 POL roster (partial) — the hand-testing list from the 07-19 standup
+
+- **POL.4** (~5307be93~) arity mismatch is a HARD ERROR with the SWI-style
+  diagnostic; user-facing solver errors now raise a distinguished exception
+  converted at the command boundary, so the file/REPL continues instead of
+  crashing.
+- **POL.5** (~485f4e7d~) the ~def := solve(…)~ "Multiplicity violation" — one
+  qtt match arm was propagating the goal head's inferQ failure.
+- **POL.10** (~095d8bc5~) ~def~ binds the **WHNF-reduced** value (SNAPSHOT
+  semantics). The key finding: ~whnf~ vs ~nf~ was the only axis that mattered —
+  an earlier eager-~nf~ attempt hit three "value-class collisions" that ALL
+  dissolve at whnf (~expr-lam~ is whnf-trivial, so binder-headed values stay lazy
+  by identity).
+- **POL.1 ruled**: bag/multiset semantics STAYS (row multiplicity = derivation
+  count); doc clarification only, explicit ~distinct~ → Rel T2.
+
+** The substitution containment spin-out (SUB) — a LIVE bug, found and fixed
+
+Resequenced ahead of the POL remainder. ~shift~/~subst~ treated ~expr-champ~ as a
+closed leaf, so a lambda whose body was a map literal silently dropped its beta
+argument — ~?bvar0 : Nat~ printed at top level with **0 errors**.
+
+- **Ruling (D)**: ~expr-champ~ IS a closed runtime value; the fix makes the
+  invariant true by construction rather than policing it.
+- **SUB.1** (~f19d6f56~) tripwire at the three ~nf~-persisting boundaries —
+  silent-wrong became loud-refuse; a probe closed the cache question (no route
+  def-stores the poisoned shape ⇒ no ~.pnet~ invalidation needed).
+- **SUB.3a** (~7ea49168~) **the fix**: ~nf~ opens binders NbE-style (deterministic
+  ~#%nbe~ fvars), normalizes, and re-abstracts — containers can only capture
+  fvars, which ~shift~/~subst~ already treat as identity.
+- **SUB.3b** (~036b59f7~) the wider sibling in the narrowing subsystem: a
+  catch-all was silently dropping bindings, AND ~narrow-match~ had no map/vec
+  decomposition — ~box ?y = {:a 5N}~ returned ~nil~. Both fixed.
+- **Hot-scan** (~8ec5e507~) the fast-path scan got explicit arms with the
+  reflective walk retained as fallback + differential oracle: **6.9× per walk**.
+
+** PLT_CS_COMPILE_LIMIT adopted — an 18% suite win, found in passing (~6323587e~)
+
+The compiler's giant match functions (~shift~/~subst~ ~340 arms; ~whnf~/~nf~ ~990)
+exceed Racket CS's default machine-code compile limit and were falling back to
+the **interpreter**. Measured in-tree: ~shift~ ~830× faster compiled; full suite
+**211 → 173 s (−18%)**; compile cost +17% on the hot core. Now set by the test
+and bench runners themselves (subprocesses inherit), with the manual-build note
+in ~testing.md~. A methodology trap is recorded with it: ~touch FILE && raco make~
+does NOT recompile (SHA short-circuit) — it produced a false negative first.
+
+* Today
+
+- **SUB.close** — doc-truth on the defect doc, lesson promotions, the
+  quiet-window suite re-confirm.
+- **POL.6** — fused ~x:Int~ in ~defn~ params (the C.b.2 last mile), then B3.2,
+  POL.3, the syntax cluster (POL.7 → POL.8), and POL.9 co-design.
+- Then **X.close** — bench matrix, DEFERRED triage, doc-truth sweep, memory
+  fold, and the Stage-5 PIR that gates Rel T1 ✅.
+
+* Conversations

@@ -17,7 +17,19 @@ These are the always-touch files. No exceptions.
 5. `pretty-print.rkt` — `pp-expr` display + `uses-bvar0?` recursion
 6. `pnet-serialize.rkt` — `reg0!` / `reg1!` / `regN!` (or the `auto-cache!` block) for auto-cache serialization. **REQUIRED post-PM 10** — module caching depends on this. (Pre-PM-10 checklists missed this; don't.) **Failure mode is MISLEADING (Numerics Q11, 2026-07-01)**: an unregistered node in a cached library body does NOT error at cache read — the reader's unknown-tag fallback silently returns a raw **vector** (pnet-serialize.rkt `[else v]` arm), which then fails the first struct `match` to touch it, arbitrarily far away (Q11 hit `subst`), with an error that PRINTS like the real struct (`#(struct:expr-… …)`). If a match "with the right arm" fails on a node that "exists", suspect a deserialized vector impostor and check the registration FIRST. Note also: the gap stays latent until the node first appears in — or is first INVOKED from — a cached module body (`expr-p*-if-nar` sat unregistered for months; `expr-generic-from-rat` was registered-adjacent but only detonated when a cached body using it was first beta-reduced).
 7. `typing-core.rkt` — `infer` / `check` / `is-type` / `infer-level` cases
-8. `qtt.rkt` — `inferQ` / `checkQ` cases (must parallel typing-core)
+8. `qtt.rkt` — `inferQ` / `checkQ` cases (must parallel typing-core). **"Must
+   parallel" is load-bearing and the failure is a LYING DIAGNOSTIC**: when
+   `infer` has an arm and `inferQ` doesn't, `inferQ` falls to its catch-all →
+   `tu-error` → `checkQ-top` reports a generic **"Multiplicity violation"**,
+   naming a subsystem that is working perfectly. 3 instances (`def m0 := {}`,
+   `def x := solve (…)`, `def m := {:f [fn …]}` — the last live for a month).
+   It hides because the def seam checks in CHECK mode, where lambdas and many
+   literals are canonical, so only the INFER position (a collection value, a
+   goal argument) fails. **Debug rule**: a "Multiplicity violation" on a `def`
+   whose body is not a lambda is an un-arm'd node until proven otherwise —
+   check `inferQ` before believing QTT. **Fix shape**: add the arm, delegating
+   the TYPE to `infer` (the "no drift twin" pattern) and mirroring `checkQ`'s
+   arm for USAGE. See `DEVELOPMENT_LESSONS.org` § "infer / inferQ Are Twins."
 
 ### User-facing surface syntax — add these if the node has surface form
 
@@ -51,6 +63,60 @@ Nodes produced only by elaboration/inference (no user surface syntax, no user wr
 - Targeted tests for the module via `racket tools/run-affected-tests.rkt --tests tests/test-X.rkt` (uses scoped precompile to refresh test `.zo` linklets after production export changes)
 - Probe file (if one exists for the current track) before AND after the change
 - Full suite as regression gate (not for diagnostics)
+
+## Exhaustive Walkers: prefer the STRUCTURAL answer to the checklist
+
+The checklists above are discipline — a human (or agent) remembering to touch N
+sites. Every checklist in this file exists because that discipline failed at
+least once. For **AST walkers specifically there is a structural alternative**,
+and it should be the default.
+
+**The failure mode** (promoted 2026-07-25, Rel T1 SUB — 7+ instances, all
+silent): a hand-armed walker meets a node kind it has no arm for, and the
+catch-all does the WRONG thing quietly. Observed in-tree:
+
+| Walker | The miss | Consequence |
+|---|---|---|
+| `shift` / `subst` | `expr-champ` as a "closed leaf" (a comment asserting an invariant nothing enforced) | beta silently drops arguments; `shift` never renumbers ⇒ variable capture |
+| `nf` | skipped `expr-champ` while DESCENDING its `expr-rrb` sibling 10 lines later — the rrb arm was fixed 6 days after CHAMP landed and the fix never propagated | open containers constructed under binders |
+| `narrow-subst-bvars` | `[_ expr]` catch-all | bindings dropped for map/set/vec spines ⇒ a narrowing query returned `nil` with 0 errors |
+| `zonk` ×3, `occurs?`, `uses-bvar0?`, `conv-nf` | same container family | unzonked metas, unsound occur-check, display drift |
+
+The common signature: **a green full suite proves nothing here.** The suite was
+green with a live silent-wrong-answer bug for months. Only failing-test-first
+found it.
+
+**The structural answer — use in this order:**
+
+1. **Generic transparent-struct rebuild as the FALLBACK.** All `expr-*` structs
+   are `#:transparent`, so a walker can recurse generically:
+   `struct-info` + `struct->vector` to read fields,
+   `struct-type-make-constructor` to rebuild, `eq?`-preserving when nothing
+   changed. Explicit arms are then needed ONLY where semantics differ from
+   "recurse into every field" — i.e. **binder forms** (depth routing) and any
+   node with genuinely special handling. A walker written this way *cannot*
+   silently skip a node kind. Three uses in-tree: the SUB.1 containment
+   tripwire, SUB.3a's `re-abstract`, SUB.3b's `narrow-subst-bvars`.
+2. **The binder inventory is `substitution.rkt`'s `shift`** — the authoritative
+   list (today: `expr-lam`, `expr-Pi`, `expr-Sigma`, `expr-reduce`'s arms via
+   `binding-count`). Any walker that routes depth MUST cover exactly these; a
+   depth-blind generic walk over a binder form **captures** (caught in SUB.3b:
+   `narrow-subst-bvars` had no Pi/Sigma arms — now test-pinned).
+3. **If perf forces explicit arms, keep the generic twin as a DIFFERENTIAL
+   ORACLE.** Arms are ~an order of magnitude faster (`struct->vector` allocates
+   per node — measured 6.9× on the SUB hot scan), so arms are legitimate on hot
+   paths. Then: retain the reflective walk, export it, and write a contract test
+   asserting `armed ≡ reflective` over a battery that plants the target
+   condition in **every armed field position** (plus bound-vs-free binder cases
+   and one cold-fallback node). A missing field diverges in the test, not in
+   production. Keep the reflective walk as the fallback arm too, so coverage is
+   total by construction and the arms are pure optimization.
+
+**Red flags**: a comment asserting an invariant with no enforcement ("Racket
+value, no de Bruijn vars"); a `[_ e]` / `[else e]` catch-all in a transforming
+walker; a fix applied to one member of a container family (champ/hset/rrb +
+transients) but not its siblings; "the suite is green" offered as evidence that a
+walker is complete.
 
 ## New Racket Parameter
 

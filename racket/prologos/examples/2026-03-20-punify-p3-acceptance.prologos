@@ -485,7 +485,7 @@ m.b
 ;; --- G10: Chained postfix indexing ---
 ;; WORKS — chained postfix indexing on nested lists
 
-def matrix := (cons '[1 2 3] (cons '[4 5 6] (cons '[7 8 9] nil)))
+def matrix := [cons '[1 2 3] [cons '[4 5 6] [cons '[7 8 9] nil]]]
 
 matrix[0][1]
 ;; => 2

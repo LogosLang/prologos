@@ -742,6 +742,26 @@ compliant instance.
 /Goal/: Execute the phased roadmap, shipping complete and sound solutions
 at each phase, raising design issues as they surface.
 
+*** The mini-audit routinely REFUTES the design's own premise
+
+/Recorded 2026-07-25 (Rel T1 PIR). Recurs on nearly every track — expect it./
+
+A sub-phase mini-audit's most valuable output is not confirmation; it is the
+premise it kills. Rel T1: POL.8's entire foundation ("WS flattens defr bodies,
+no column info") was FALSE — per-token srclocs survive, and the reader already
+built most of the target structure. A.3's designed home for the floundering
+gate was refuted by the author's *own* A.2b change, landed the same session.
+C.c's audit-driven check was refuted as incomplete and the owner redesigned it
+smaller and sound.
+
+**How to apply.** Budget for refutation rather than treating it as rework: open
+each sub-phase assuming one load-bearing premise is wrong, and probe the
+premise *before* building on it. A design doc's claim about code is a
+hypothesis with an expiry date — coordinates drift, and adjacent phases
+invalidate each other. This is the same discipline as "instrument the parse,
+never infer reader shape," generalized: **probing changes the ruling, not just
+the facts.**
+
 *** What this looks like
 
 - Work through the roadmap phase by phase

@@ -620,7 +620,12 @@
 
 ;; BSP-LE Track 2B Phase R1: well-known cell-ids for solver data.
 ;; Cell-id 2: relation store (hasheq relation-name → relation-info).
-;; Merge: hash-union (monotone accumulation, CALM-safe).
+;; Merge: ⚠ per-key LAST-WRITE-WINS (an earlier comment claimed "hash-union,
+;; monotone, CALM-safe" — FALSE: hash-set replaces the value under an existing
+;; key, so the merge is order-dependent at the value level and is NOT a
+;; join-semilattice; it is also not SRE-registered). Lawful-join replacement
+;; is owned by the Rel T2 fact-store rework (see
+;; docs/research/2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md §5.1).
 ;; Written once at query start; in self-hosted compiler, written by defr processing.
 ;; Component-indexed by relation name: goal-installation propagators declare
 ;; #:component-paths (list (cons relation-store-cell-id goal-name)).

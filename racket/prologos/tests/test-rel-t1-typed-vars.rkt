@@ -217,3 +217,89 @@
   (define strs (cc-result-strings results))
   (check-false (ormap (lambda (s) (regexp-match? #rx"facts-only" s)) strs))
   (check-true (ormap (lambda (s) (regexp-match? #rx"\\{:q 1\\}" s)) strs)))
+
+;; ========================================
+;; POL.6 — fused `x:Int` in `defn` param lists (the C.b.2 last mile)
+;; ========================================
+;; C.b.2 wired fused binders through `parse-binder` (fn-binders, both readers),
+;; but a `defn`'s param list never routes there: `parse-defn-bare-params` mapped
+;; binder-info over the RAW elements. WS delivers `defn f [x:Int]` as the TWO
+;; elements `x` and `:Int` (instrumented on the real process-file path, not
+;; inferred), so the defn silently became a TWO-parameter function whose second
+;; param was named `:Int` — both hole-typed. Owner symptom: "cannot infer the
+;; type of an unannotated parameter". Fixed by folding the flat param list
+;; through the SHARED fused primitives (`fused-type-annot?` /
+;; `fused-annot->type-surf` / `split-fused-symbol`) that parse-binder now also
+;; uses — one implementation, both paths.
+
+(test-case "POL.6 WS: fused `defn my-square [x:Int]` types + computes (the owner repro)"
+  (define-values (results _store)
+    (cb1-run-ws "ns t\n\ndefn my-square [x:Int] : Int\n  * x x\n[my-square 7]\n"))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"my-square : Int -> Int" r)) results)
+              "the fused annotation reaches the binder type")
+  (check-true (ormap (lambda (r) (regexp-match? #rx"49 : Int" r)) results))
+  (check-false (ormap (lambda (r) (regexp-match? #rx"cannot infer" r)) results)))
+
+(test-case "POL.6 WS: fused types IDENTICALLY to the spaced defn form"
+  (define-values (fused _s1)
+    (cb1-run-ws "ns t\n\ndefn f [x:Int] : Int\n  x\n"))
+  (define-values (spaced _s2)
+    (cb1-run-ws "ns t\n\ndefn f [x : Int] : Int\n  x\n"))
+  (define (sig rs) (filter (lambda (r) (regexp-match? #rx"f :" r)) rs))
+  (check-equal? (sig fused) (sig spaced)
+                "fused and spaced defn params must produce the same signature"))
+
+(test-case "POL.6 WS: multi-param fused, and the arity is RIGHT (not silently +1)"
+  (define-values (results _store)
+    (cb1-run-ws "ns t\n\ndefn add2 [a:Int b:Int] : Int\n  + a b\n[add2 3 4]\n"))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"add2 : Int Int -> Int" r)) results)
+              "two params, both Int — the pre-fix bug made this 3-ary with a `:Int` param")
+  (check-true (ormap (lambda (r) (regexp-match? #rx"7 : Int" r)) results)))
+
+(test-case "POL.6 WS: the declared type is ENFORCED, not merely parsed"
+  (define-values (results _store)
+    (cb1-run-ws "ns t\n\ndefn sq [x:Int] : Int\n  * x x\n[sq \"nope\"]\n"))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"(?i:error|mismatch|infer)" r))
+                     (cc-result-strings results))
+              "applying a String to an Int-declared param must fail"))
+
+(test-case "POL.6 WS: MIXED fused + bare — bare infers where it can (strictly > spaced)"
+  ;; the spaced form hard-errors on mixed ("defn: expected 'name <type>'");
+  ;; the fused fold leaves the bare param hole-typed, so ordinary bidirectional
+  ;; inference applies — here the return type supplies it.
+  (define-values (results _store)
+    (cb1-run-ws "ns t\n\ndefn m [a:Int b] : Int\n  b\n[m 1 9]\n"))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"m : Int Int -> Int" r)) results)
+              "the bare param is inferred from the return type")
+  (check-true (ormap (lambda (r) (regexp-match? #rx"9 : Int" r)) results)))
+
+(test-case "POL.6 WS: bare defn params still hole-type (no regression)"
+  (define-values (results _store)
+    (cb1-run-ws "ns t\n\nspec idf Int -> Int\ndefn idf [x]\n  x\n[idf 4]\n"))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"4 : Int" r)) results)))
+
+(test-case "POL.6 WS: multiplicity annotations are UNTOUCHED by the fused fold"
+  (define-values (results _store)
+    (cb1-run-ws "ns t\n\ndefn mf [x :0 <Int> y <Int>] : Int\n  y\n"))
+  (check-true (ormap (lambda (r) (regexp-match? #rx":0" r)) results)
+              "the :0 multiplicity survives (fused-type-annot? excludes :0/:1/:w/:m)"))
+
+(test-case "POL.6 WS: chained `[x:Int:Even]` is REJECTED (reserve for UCS)"
+  (define-values (results _store)
+    (cb1-run-ws "ns t\n\ndefn ch [x:Int:Even] : Int\n  x\n"))
+  (define strs (cc-result-strings results))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"chained type annotation" r)) strs)
+              "same posture as C.b.1/C.b.2")
+  (check-true (ormap (lambda (r) (regexp-match? #rx"UCS" r)) strs)))
+
+(test-case "POL.6 sexp: glued `(defn sq (x:Int) ...)` splits and types"
+  (define results
+    (parameterize ([current-ns-context #f]
+                   [current-module-registry (hasheq)]
+                   [current-lib-paths (list cb1-lib-dir)]
+                   [current-relation-store (make-relation-store)])
+      (install-module-loader!)
+      (map (lambda (r) (format "~a" r))
+           (process-string "(ns p6s) (defn sq (x:Int) : Int (int* x x)) (sq 6)"))))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"sq : Int -> Int" r)) results))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"36 : Int" r)) results)))

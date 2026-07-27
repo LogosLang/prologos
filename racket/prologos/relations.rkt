@@ -27,12 +27,19 @@
          "syntax.rkt"
          "performance-counters.rkt"
          "ctor-registry.rkt"
-         (only-in "infra-cell.rkt" merge-list-append))  ;; PPN 4C Phase 1d-F: answer accumulator merge
+         (only-in "infra-cell.rkt" merge-list-append)  ;; PPN 4C Phase 1d-F: answer accumulator merge
+         ;; Rel T1 POL.9: unknown-relation diagnostic enrichment — classify a
+         ;; non-relation head against the global env (acyclic: global-env's
+         ;; requires are infra-cell/namespace/definition-entry only).
+         (only-in "global-env.rkt" global-env-lookup-status))
 
 (provide
  ;; Core structs
  (struct-out relation-info)
- (struct-out variant-info)
+ ;; variant-info uses the C.a #:name-redirect smart-ctor idiom (D.2.d added the
+ ;; optional `discrim` field): struct-out the DESC binding + the wrapper ctor.
+ (struct-out variant-info-desc)
+ variant-info
  (struct-out clause-info)
  (struct-out fact-row)
  ;; param-info uses the #:name-redirect smart-constructor idiom (Aspect C C.a):
@@ -44,22 +51,23 @@
  (struct-out goal-desc)
  ;; Relation store (parameter + operations)
  current-relation-store
+ ;; POL.4: the distinguished user-facing solver exception (caught at the
+ ;; command boundary, driver.rkt)
+ exn:prologos-solve?
+ ;; SUB.1: the raiser, for the substitution-containment tripwire in
+ ;; reduction.rkt (docs/tracking/2026-07-24_SUBSTITUTION_CONTAINMENT_DEFECT.md)
+ raise-solve-error
  make-relation-store
  relation-register
  relation-lookup
  relation-store-names
- ;; Track 2B Phase 1a+1b: on-network discrimination
+ ;; Track 2B Phase 1a: on-network discrimination
+ ;; (Phase 1b discrimination TREE retired 2026-07-23, Rel T1 D.2.a — zero
+ ;;  callers; see docs/research/2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md §2.3)
  build-discrimination-data
  discrimination-data-merge
  discrimination-data-bot
- position-discriminates?
  install-discrimination-propagators
- ;; Phase 1b: discrimination tree
- (struct-out discrim-node)
- (struct-out discrim-leaf)
- build-discrimination-tree
- variant-discrimination-tree
- tree-all-indices
  ;; AST → runtime conversion
  expr-defr->relation-info
  expr-rel->relation-info
@@ -546,14 +554,27 @@
 ;; params: (listof param-info)
 ;; clauses: (listof clause-info) — rule clauses (&>)
 ;; facts: (listof fact-row) — ground facts (||)
-(struct variant-info (params clauses facts) #:transparent)
+;; discrim: #f | the registration-time INVERTED discrimination index
+;;   (D.2.d — see build-discrimination-data). Optional-with-default via the
+;;   C.a #:name-redirect smart-ctor idiom (design §7.8) so the ~50 existing
+;;   3-arg constructor sites across tests/benchmarks stay untouched;
+;;   relation-register fills it. Match/struct-out use `variant-info-desc`.
+(struct variant-info (params clauses facts discrim)
+  #:transparent #:name variant-info-desc #:constructor-name make-variant-info-raw)
+(define (variant-info params clauses facts [discrim #f])
+  (make-variant-info-raw params clauses facts discrim))
 
 ;; A registered relation
 ;; name: symbol
 ;; arity: nat (for single-arity; #f for multi-arity)
 ;; variants: (listof variant-info)
 ;; schema: #f or symbol (schema name)
-;; tabled?: boolean
+;; tabled?: boolean — DEAD FIELD (Rel T1 D.2.a audit, 2026-07-23): both
+;;   construction sites hardcode #f and there are zero readers; the `:tabled`
+;;   spec surface was never implemented (BSP-LE Master lists it as future work).
+;;   Kept only because ~48 direct constructor calls across tests/benchmarks
+;;   make removal a struct-field sweep, owned by the Rel T2 store rework
+;;   (see docs/research/2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md §11).
 (struct relation-info (name arity variants schema tabled?) #:transparent)
 
 ;; ========================================
@@ -566,15 +587,33 @@
 
 ;; Register a relation in the store.
 ;; Returns updated store.
-;; Track 2B Phase 1a: computes discrimination map at registration time.
+;; D.2.d (2026-07-24): computes the INVERTED discrimination index ONCE here —
+;; a store write — instead of per query install (the rebuild was measured
+;; superlinear: 11.4ms@20K rows, artifact §2.5 term c). Variants that already
+;; carry an index pass through. Phase-0 scaffolding note: the self-hosted form
+;; is a derivation propagator watching the relation-store cell (artifact §5.3);
+;; this registration-time hook is its imperative precursor.
 (define (relation-register store rel)
-  (hash-set store (relation-info-name rel) rel))
+  (define rel*
+    (if (for/or ([v (in-list (relation-info-variants rel))])
+          (not (variant-info-discrim v)))
+        (relation-info
+         (relation-info-name rel) (relation-info-arity rel)
+         (for/list ([v (in-list (relation-info-variants rel))])
+           (if (variant-info-discrim v)
+               v
+               (variant-info (variant-info-params v) (variant-info-clauses v)
+                             (variant-info-facts v)
+                             (build-discrimination-data v))))
+         (relation-info-schema rel) (relation-info-tabled? rel))
+        rel))
+  (hash-set store (relation-info-name rel*) rel*))
 
 ;; ========================================
 ;; Track 2B Phase 1a: Discrimination Infrastructure
 ;; ========================================
 ;;
-;; On-network clause discrimination via broadcast propagators.
+;; On-network clause discrimination.
 ;;
 ;; Each discriminating argument position gets ONE compound discrimination
 ;; cell (Pocket Universe pattern: one cell, components indexed by clause/
@@ -582,11 +621,14 @@
 ;; expected ground value at that position. Wildcard clauses (no discriminator)
 ;; are omitted — they match any value.
 ;;
-;; At query time, ONE broadcast propagator per discriminating position reads
-;; the query argument cell + discrimination cell, compares each clause's
-;; expected value with the query arg using `equal?` (same semantics as
-;; solver-unify-terms line 175), and writes the viable set to the clause-
-;; viability cell.
+;; REALITY NOTE (Rel T1 D.2.a, 2026-07-23 — an earlier version of this header
+;; claimed "ONE broadcast propagator per position"): the free-argument arm
+;; installs plain FIRE-ONCE propagators (not broadcast), and their viability
+;; writes are read exactly once at install time (:~2590) — post-install
+;; narrowing from late-resolving args is currently unconsumed. Ground
+;; arguments DO narrow at construction time via a direct cell write. The
+;; data is also rebuilt per goal invocation, not at registration — the
+;; registration-time precompute + inverted index is the D.2.d deliverable.
 ;;
 ;; Alternatives ordering: fact rows first (indices 0..F-1), then
 ;; clauses (indices F..F+C-1). Stable; matches assumption-id allocation.
@@ -595,196 +637,89 @@
 ;; registrations add components). Self-hosting: derivation propagator
 ;; watches relation registry cell.
 
-;; A discrimination-data value: hasheq clause-idx → expected-value.
-;; Stored as the value of a discrimination cell at position k.
-;; Clauses not in the map are wildcards (match any value).
+;; A discrimination-data value (D.2.d INVERTED shape):
+;;   (hasheq position → (cons postings wildcards))
+;; where postings  = (hash normalized-value → (seteq alternative-idx ...))
+;;                   [equal?-keyed — values are strings/ints/symbols/structs]
+;;       wildcards = (seteq alternative-idx ...) — alternatives with NO
+;;                   discriminator at this position (match any value).
+;; Ground-arg viability at a position is O(1):
+;;   (set-union (hash-ref postings v (seteq)) wildcards)
+;; Pre-D.2.d this was the FORWARD map position → (idx → expected-value),
+;; scanned O(F+C) per lookup AND rebuilt per query install (measured
+;; superlinear — 11.4ms@20K rows). It is now built ONCE at registration
+;; (relation-register) and carried on variant-info.discrim.
 (define discrimination-data-bot (hasheq))
 
 (define (discrimination-data-merge old new)
   (if (eq? old discrimination-data-bot) new
       (if (eq? new discrimination-data-bot) old
-          ;; hash-union: new clauses add to existing
+          ;; hash-union at the position level: new positions add to existing
           (for/fold ([acc old]) ([(k v) (in-hash new)])
             (hash-set acc k v)))))
 
-;; Build discrimination data for each position from a variant's facts + clauses.
-;; Returns: (hasheq position → discrimination-data)
-;; where discrimination-data = (hasheq clause-idx → expected-ground-value)
+;; Build the inverted discrimination index from a variant's facts + clauses.
+;; Alternatives ordering: fact rows first (0..F-1), then clauses (F..F+C-1) —
+;; stable; matches assumption-id allocation (see the header note above).
+;; Values are normalized ONCE here (normalize-at-ingest — the boundary
+;; discipline at normalize-solver-value's definition).
 (define (build-discrimination-data variant)
   (define params (variant-info-params variant))
   (define facts (variant-info-facts variant))
   (define clauses (variant-info-clauses variant))
   (define param-names (map param-info-name params))
   (define n-facts (length facts))
+  (define n-alts (+ n-facts (length clauses)))
+  (define all-idx (for/seteq ([i (in-range n-alts)]) i))
 
-  ;; Fact rows: each row contributes its ground value at each position.
-  ;; Phase 5: normalize at boundary (PPN insight) — AST nodes → raw values.
-  (define from-facts
-    (for/fold ([dm (hasheq)])
+  ;; postings-map: hasheq pos → (hash value → seteq idx)
+  ;; covered-map:  hasheq pos → seteq idx  (alternatives keyed at pos)
+  (define (add-post pm pos val idx)
+    (define pd (hash-ref pm pos (hash)))
+    (hash-set pm pos (hash-set pd val (set-add (hash-ref pd val (seteq)) idx))))
+  (define (add-cov cm pos idx)
+    (hash-set cm pos (set-add (hash-ref cm pos (seteq)) idx)))
+
+  ;; Fact rows: ground at EVERY position.
+  (define-values (post-f cov-f)
+    (for/fold ([pm (hasheq)] [cm (hasheq)])
               ([fr (in-list facts)]
                [fact-idx (in-naturals)])
-      (for/fold ([dm dm])
+      (perf-inc-solver-row-scan!)
+      (for/fold ([pm pm] [cm cm])
                 ([val (in-list (fact-row-terms fr))]
                  [pos (in-naturals)])
-        (define pos-data (hash-ref dm pos discrimination-data-bot))
-        (hash-set dm pos (hash-set pos-data fact-idx (normalize-solver-value val))))))
+        (values (add-post pm pos (normalize-solver-value val) fact-idx)
+                (add-cov cm pos fact-idx)))))
 
-  ;; Clauses: peek at first unify goal for discriminating value
-  (for/fold ([dm from-facts])
-            ([ci (in-list clauses)]
-             [clause-idx (in-naturals n-facts)])
-    (define goals (clause-info-goals ci))
-    (if (null? goals)
-        dm  ;; no goals = wildcard (not added to discrimination data)
-        (let ([first-goal (car goals)])
-          (if (eq? (goal-desc-kind first-goal) 'unify)
-              (let* ([args (goal-desc-args first-goal)]
-                     [lhs (car args)]
-                     [rhs (cadr args)])
-                (define param-pos
-                  (for/or ([pname (in-list param-names)]
-                           [pos (in-naturals)])
-                    (and (equal? pname lhs) pos)))
-                (if (and param-pos (not (symbol? rhs)))
-                    (let ([pos-data (hash-ref dm param-pos discrimination-data-bot)])
-                      (hash-set dm param-pos (hash-set pos-data clause-idx (normalize-solver-value rhs))))
-                    dm))
-              dm)))))
+  ;; Clauses: peek at the first unify goal for a discriminating (pos . value);
+  ;; clauses without one are wildcards everywhere (uncovered ⇒ in wildcards).
+  (define-values (post-all cov-all)
+    (for/fold ([pm post-f] [cm cov-f])
+              ([ci (in-list clauses)]
+               [clause-idx (in-naturals n-facts)])
+      (define goals (clause-info-goals ci))
+      (define hit  ;; (cons pos normalized-value) | #f
+        (and (pair? goals)
+             (let ([first-goal (car goals)])
+               (and (eq? (goal-desc-kind first-goal) 'unify)
+                    (let* ([args (goal-desc-args first-goal)]
+                           [lhs (car args)]
+                           [rhs (cadr args)])
+                      (define param-pos
+                        (for/or ([pname (in-list param-names)]
+                                 [pos (in-naturals)])
+                          (and (equal? pname lhs) pos)))
+                      (and param-pos (not (symbol? rhs))
+                           (cons param-pos (normalize-solver-value rhs))))))))
+      (if hit
+          (values (add-post pm (car hit) (cdr hit) clause-idx)
+                  (add-cov cm (car hit) clause-idx))
+          (values pm cm))))
 
-;; Check if position k has discrimination power.
-(define (position-discriminates? discrim-data pos n-alternatives)
-  (define pos-data (hash-ref discrim-data pos discrimination-data-bot))
-  (and (not (hash-empty? pos-data))
-       ;; Discriminates if not ALL alternatives are in the map
-       ;; (some are wildcards) or if values are not all identical
-       (or (< (hash-count pos-data) n-alternatives)
-           (let ([vals (hash-values pos-data)])
-             (not (for/and ([v (in-list (cdr vals))])
-                    (equal? v (car vals))))))))
-
-;; ========================================
-;; Track 2B Phase 1b: Discrimination Tree (Needed-Narrowing-Inspired)
-;; ========================================
-;;
-;; Hierarchical clause discrimination. Each level of the tree represents
-;; a Q_1 decomposition of the clause space at one argument position.
-;; The tree IS the Hasse diagram of the clause decomposition.
-;;
-;; At solve time, the tree guides propagator installation: only install
-;; discrimination propagators for positions that add narrowing power
-;; within the current viable group. Avoids redundant propagators.
-;;
-;; SRE: each tree level is a decision cell. The recursive decomposition
-;; Q_N = Q_{N-1} × Q_1 matches the tree's recursive structure.
-
-;; Tree node: discriminate at `position` using value → subtree mapping.
-;; `wildcard-indices`: clause indices with no discriminator at this position
-;; (always viable regardless of value).
-(struct discrim-node (position children wildcard-indices) #:transparent)
-;; Leaf: no further discrimination needed. `indices` = viable clause set.
-(struct discrim-leaf (indices) #:transparent)
-
-;; Score a position's discrimination power for a given set of clause indices.
-;; Returns the number of distinct GROUPS the position creates.
-;; Higher = more discriminating. 0 = no discrimination.
-(define (position-score discrim-data pos indices)
-  (define pos-data (hash-ref discrim-data pos discrimination-data-bot))
-  (if (hash-empty? pos-data) 0
-      (let ()
-        ;; Group indices by their expected value at this position
-        (define groups (make-hash))  ;; value → (listof index)
-        (define wildcards '())
-        (for ([idx (in-set indices)])
-          (define val (hash-ref pos-data idx #f))
-          (if val
-              (hash-update! groups val (lambda (lst) (cons idx lst)) '())
-              (set! wildcards (cons idx wildcards))))
-        ;; Score = number of distinct groups (excluding wildcards)
-        ;; A position that creates N groups from M indices is more discriminating
-        (hash-count groups))))
-
-;; Build a discrimination tree for a set of clause indices.
-;; `discrim-data`: (hasheq position → (hasheq clause-idx → expected-value))
-;; `indices`: seteq of clause indices to discriminate among
-;; `positions`: list of argument positions still available for discrimination
-;; Returns: discrim-node or discrim-leaf
-(define (build-discrimination-tree discrim-data indices positions)
-  (cond
-    ;; Base case: 0-1 indices — no further discrimination needed
-    [(<= (set-count indices) 1)
-     (discrim-leaf indices)]
-
-    ;; No more positions to discriminate on
-    [(null? positions)
-     (discrim-leaf indices)]
-
-    [else
-     ;; Score each remaining position
-     (define scored
-       (for/list ([pos (in-list positions)])
-         (cons (position-score discrim-data pos indices) pos)))
-     ;; Best position = highest score
-     (define best-pair
-       (for/fold ([best (car scored)])
-                 ([pair (in-list (cdr scored))])
-         (if (> (car pair) (car best)) pair best)))
-
-     (if (zero? (car best-pair))
-         ;; No position discriminates further — leaf
-         (discrim-leaf indices)
-         ;; Build tree node at best position
-         (let ()
-           (define best-pos (cdr best-pair))
-           (define pos-data (hash-ref discrim-data best-pos discrimination-data-bot))
-           (define remaining-positions (remove best-pos positions))
-
-           ;; Group indices by value at best-pos
-           (define groups (make-hash))
-           (define wildcard-indices (seteq))
-           (for ([idx (in-set indices)])
-             (define val (hash-ref pos-data idx #f))
-             (if val
-                 (hash-update! groups val
-                               (lambda (s) (set-add s idx))
-                               (seteq))
-                 (set! wildcard-indices (set-add wildcard-indices idx))))
-
-           ;; Recursively build subtrees for each group
-           ;; Wildcards are added to EVERY group (they match any value)
-           (define children
-             (for/hasheq ([(val group-indices) (in-hash groups)])
-               (define full-group (set-union group-indices wildcard-indices))
-               (values val (build-discrimination-tree discrim-data full-group remaining-positions))))
-
-           (discrim-node best-pos children wildcard-indices)))]))
-
-;; Collect all clause indices reachable from a tree node.
-(define (tree-all-indices tree-node)
-  (cond
-    [(discrim-leaf? tree-node) (discrim-leaf-indices tree-node)]
-    [(discrim-node? tree-node)
-     (define wildcards (discrim-node-wildcard-indices tree-node))
-     (for/fold ([acc wildcards])
-               ([(val subtree) (in-hash (discrim-node-children tree-node))])
-       (set-union acc (tree-all-indices subtree)))]
-    [else (seteq)]))
-
-;; Build a discrimination tree for a variant.
-;; Returns: discrim-node or discrim-leaf (or #f if no discrimination possible)
-(define (variant-discrimination-tree variant)
-  (define discrim-data (build-discrimination-data variant))
-  (define n-facts (length (variant-info-facts variant)))
-  (define n-clauses (length (variant-info-clauses variant)))
-  (define n-total (+ n-facts n-clauses))
-  (if (<= n-total 1) #f  ;; no discrimination needed for 0-1 alternatives
-      (let ()
-        (define all-indices (for/seteq ([i (in-range n-total)]) i))
-        (define all-positions
-          (for/list ([i (in-range (length (variant-info-params variant)))])
-            i))
-        (define tree (build-discrimination-tree discrim-data all-indices all-positions))
-        ;; Only return tree if it actually discriminates (not just a leaf of everything)
-        (if (discrim-leaf? tree) #f tree))))
+  ;; Assemble: per-position (postings . wildcards).
+  (for/hasheq ([(pos pd) (in-hash post-all)])
+    (values pos (cons pd (set-subtract all-idx (hash-ref cov-all pos (seteq)))))))
 
 ;; Install discrimination propagators on the network.
 ;; Phase R1: discrimination data is ON-NETWORK as a cell value. Computed at
@@ -798,11 +733,16 @@
 ;; Returns: (values new-network viability-cid discrim-data-cid)
 (define (install-discrimination-propagators net variant resolved-args n-alternatives)
   ;; Phase R1: Allocate discrimination-data cell and write data.
-  ;; Carrier: hasheq position → (hasheq clause-idx → expected-value)
-  ;; Merge: hash-union (positions accumulate). For Phase 0 this cell is
-  ;; written once (construction-time). Self-hosting: derivation propagator
-  ;; watches relation-store cell, computes data, writes reactively.
-  (define discrim-data (build-discrimination-data variant))
+  ;; Carrier: hasheq position → (postings . wildcards)  [D.2.d inverted shape]
+  ;; Merge: hash-union at position level. For Phase 0 this cell is written
+  ;; once (construction-time). Self-hosting: derivation propagator watches
+  ;; relation-store cell, computes data, writes reactively.
+  ;; D.2.d: the index is PRECOMPUTED at registration (variant-info.discrim);
+  ;; the build-on-the-fly arm exists ONLY for stores assembled without
+  ;; relation-register (hand-rolled test fixtures) — the production defr path
+  ;; always registers, so production queries never rebuild.
+  (define discrim-data
+    (or (variant-info-discrim variant) (build-discrimination-data variant)))
   (define-values (net0 discrim-data-cid)
     (net-new-cell net discrim-data discrimination-data-merge))
 
@@ -818,8 +758,8 @@
   ;; Flat propagator installation: one fire-once propagator per discriminating
   ;; position. ALL positions install propagators — ordering EMERGES from BSP
   ;; dataflow (which arg cells resolve first). Distributivity guarantees
-  ;; same result regardless of narrowing order. The discrimination tree (Phase 1b)
-  ;; is a data value for analysis/self-hosting, not an imperative installation guide.
+  ;; same result regardless of narrowing order. (The Phase 1b discrimination
+  ;; TREE was retired 2026-07-23, Rel T1 D.2.a — zero callers.)
   ;;
   ;; Phase R1: discrimination propagators READ from discrim-data cell instead
   ;; of capturing data in closures. The cell is the source of truth.
@@ -827,37 +767,30 @@
     (for/fold ([n net1])
               ([pos (in-naturals)]
                [arg (in-list resolved-args)])
-      (define pos-data (hash-ref discrim-data pos discrimination-data-bot))
+      (define pos-entry (hash-ref discrim-data pos #f))
       (cond
-        [(hash-empty? pos-data) n]  ;; no discriminators at this position
+        [(not pos-entry) n]  ;; no discriminators at this position
         [(or (scope-ref? arg) (cell-id? arg))
          ;; Free argument: install fire-once propagator that fires when arg resolves.
          ;; Phase R1: reads discrim-data cell at fire time (on-network).
          (define arg-cid (if (scope-ref? arg) (scope-ref-cid arg) arg))
          (define fire-pos pos)  ;; capture position for fire function
-         (define fire-n-alts n-alternatives)
          (define (discrim-fire net)
            (define dd (net-cell-read net discrim-data-cid))
-           (define pd (hash-ref dd fire-pos discrimination-data-bot))
+           (define pe (hash-ref dd fire-pos #f))
            (define arg-val
              (let ([raw (net-cell-read net arg-cid)])
                (if (scope-cell? raw)
                    (let ([var-name (and (scope-ref? arg) (scope-ref-var arg))])
                      (if var-name (scope-cell-ref raw var-name) raw))
                    raw)))
-           (if (or (eq? arg-val scope-cell-bot) (not arg-val))
+           (if (or (not pe) (eq? arg-val scope-cell-bot) (not arg-val))
                net  ;; arg not yet resolved — residuate (no write)
-               (let ([viable
-                      ;; Phase 5: normalize arg-val for comparison (discrimination
-                      ;; data already normalized at boundary)
-                      (for/seteq ([(clause-idx expected) (in-hash pd)]
-                                  #:when (equal? expected (normalize-solver-value arg-val)))
-                        clause-idx)])
-                 (define wildcards
-                   (for/seteq ([i (in-range fire-n-alts)]
-                               #:when (not (hash-has-key? pd i)))
-                     i))
-                 (define full-viable (set-union viable wildcards))
+               ;; D.2.d: O(1) inverted lookup (was an O(F+C) per-entry scan
+               ;; with per-entry re-normalization).
+               (let ([full-viable
+                      (set-union (hash-ref (car pe) (normalize-solver-value arg-val) (seteq))
+                                 (cdr pe))])
                  (net-cell-write net viability-cid full-viable))))
          (define-values (n2 _pid)
            (net-add-fire-once-propagator n (list arg-cid discrim-data-cid)
@@ -866,16 +799,11 @@
          n2]
         [else
          ;; Ground argument: narrow immediately via cell write.
-         ;; Phase 5: both sides normalized for comparison.
-         (define viable
-           (for/seteq ([(clause-idx expected) (in-hash pos-data)]
-                       #:when (equal? expected (normalize-solver-value arg)))
-             clause-idx))
-         (define wildcards
-           (for/seteq ([i (in-range n-alternatives)]
-                       #:when (not (hash-has-key? pos-data i)))
-             i))
-         (define full-viable (set-union viable wildcards))
+         ;; D.2.d: O(1) inverted lookup — normalize the arg ONCE (was
+         ;; re-normalized per posting entry).
+         (define full-viable
+           (set-union (hash-ref (car pos-entry) (normalize-solver-value arg) (seteq))
+                      (cdr pos-entry)))
          (net-cell-write n viability-cid full-viable)])))
 
   (values net-final viability-cid discrim-data-cid))
@@ -1519,12 +1447,51 @@
      (expr-not-goal (rename-ast-vars (expr-not-goal-goal expr) fresh-map))]
     [else expr]))
 
+;; Rel T1 POL.9: the unknown-relation raise, enriched. A goal head that is
+;; not a registered relation but IS value-bound gets a guiding diagnostic
+;; ("foo is a function — application is written [foo x]") instead of the bare
+;; "Unknown relation" — serving both the POL.9 paren-goal sugar and explicit
+;; `solve (dbl 3)`. The relation store was already consulted (defr names are
+;; ALSO global-env-registered — driver registers the env binding first — so
+;; store-lookup must precede this classification). Rides POL.4's
+;; exn:prologos-solve → per-command conversion; the file continues.
+(define (raise-unknown-relation-error who goal-name)
+  (define status (global-env-lookup-status goal-name))
+  (define bound? (eq? (car status) 'ground))
+  (define bound-type
+    (and bound? (let ([payload (cdr status)])
+                  (and (pair? payload) (car payload)))))
+  (define bound-value
+    (and bound? (let ([payload (cdr status)])
+                  (and (pair? payload) (cdr payload)))))
+  (cond
+    ;; A defr name that is env-bound but store-absent: its registration was
+    ;; gate-rejected (schema/floundering — the env write precedes the gates).
+    ;; Point at the earlier error instead of calling it "a value".
+    [(and bound? (expr-defr? bound-value))
+     (raise-solve-error who
+       "Unknown relation: ~a — its defr failed to register (see the earlier error)"
+       goal-name)]
+    [(and bound? (expr-Pi? bound-type))
+     (raise-solve-error who
+       "~a is a function — application is written [~a …]; parens make a relational goal"
+       goal-name goal-name)]
+    [bound?
+     (raise-solve-error who
+       "~a is bound as a value, not a relation — application is written [~a …]; parens make a relational goal (define a relation with defr)"
+       goal-name goal-name)]
+    [else
+     (raise-solve-error who "Unknown relation: ~a" goal-name)]))
+
 ;; Solve an app goal: look up relation, try facts then clauses.
 (define (solve-app-goal config store goal-name goal-args subst depth)
   (perf-inc-solver-backtrack!)
   (define rel (relation-lookup store goal-name))
   (unless rel
-    (error 'solve "Unknown relation: ~a" goal-name))
+    (raise-unknown-relation-error 'solve goal-name))
+  ;; POL.4: rule-BODY goals arity-check here (bodies always spell their args —
+  ;; the '()-enumerate convention never applies below the public entries).
+  (check-goal-arity! 'solve rel (length goal-args))
   ;; Resolve goal-args through current substitution
   (define resolved-args
     (for/list ([a (in-list goal-args)])
@@ -1540,6 +1507,7 @@
      (define fact-results
        (append-map
         (lambda (fr)
+          (perf-inc-solver-row-scan!)
           (define terms (fact-row-terms fr))
           ;; Unify resolved args with fact terms
           (define result
@@ -1548,6 +1516,7 @@
                 [(and (null? as) (null? ts)) s]
                 [(or (null? as) (null? ts)) #f]
                 [else
+                 (perf-inc-solver-col-compare!)
                  (define s* (unify-terms (car as) (car ts) s))
                  (if s* (loop (cdr as) (cdr ts) s*) #f)])))
           (if result (list result) '()))
@@ -1639,10 +1608,45 @@
 ;; query-vars: (listof symbol) — names of unbound variables to project
 ;;
 ;; Returns: (listof hasheq) — each hasheq maps query var names to values
+;; POL.4 (owner-ruled 2026-07-24): arity mismatch is a HARD ERROR with the
+;; Prolog-style diagnostic. The engine was arity-LENIENT — a wrong-arity call
+;; silently returned nil (under-application) or leaked unbound-echo rows
+;; (over-application); the D.2.c corpus generator hit exactly this trap.
+;; Called at the public engine entries AFTER the internal `goal-args = '()`
+;; enumerate convention resolves (a 0-arg surface call enumerates via param
+;; names — preserved), and at solve-app-goal (covers rule-BODY goals on the
+;; DFS path). Multi-arity relations accept any variant's arity; the error
+;; lists every available arity, SWI-style.
+;;
+;; exn:prologos-solve — the DISTINGUISHED exception for USER-FACING solver
+;; errors (arity mismatch; unknown relation). The command boundary
+;; (driver.rkt process-command/demand) catches EXACTLY this type and converts
+;; it to a per-command prologos-error (the file/REPL continues), while every
+;; other raise still surfaces as a crash — a blanket handler there would mask
+;; real defects. Subtype of exn:fail so direct-API tests (check-exn) hold.
+(struct exn:prologos-solve exn:fail ())
+(define (raise-solve-error who fmt . args)
+  (raise (exn:prologos-solve (format "~a: ~a" who (apply format fmt args))
+                             (current-continuation-marks))))
+
+(define (check-goal-arity! who rel n-args)
+  (define arities
+    (remove-duplicates
+     (for/list ([v (in-list (relation-info-variants rel))])
+       (length (variant-info-params v)))))
+  (unless (memv n-args arities)
+    (define name (relation-info-name rel))
+    (define available
+      (for/fold ([s #f]) ([a (in-list (sort arities <))])
+        (if s (format "~a, ~a/~a" s name a) (format "~a/~a" name a))))
+    (raise-solve-error who
+      "Unknown procedure: ~a/~a — however, there are definitions for: ~a"
+      name n-args available)))
+
 (define (solve-goal config store goal-name goal-args query-vars)
   (define rel (relation-lookup store goal-name))
   (unless rel
-    (error 'solve "Unknown relation: ~a" goal-name))
+    (raise-unknown-relation-error 'solve goal-name))
 
   ;; Reconstruct proper goal-args for the DFS solver.
   ;; If goal-args is empty, the caller wants all params as query variables.
@@ -1658,6 +1662,7 @@
           (map param-info-name params))
         ;; Mix of ground and query args — already correct from reduction layer
         goal-args))
+  (check-goal-arity! 'solve rel (length effective-args))  ;; POL.4
 
   ;; Use DFS solver for all queries — handles both facts and clauses
   ;; with proper unification of ground args.
@@ -1688,7 +1693,7 @@
 
   (define rel (relation-lookup store goal-name))
   (unless rel
-    (error 'explain "Unknown relation: ~a" goal-name))
+    (raise-unknown-relation-error 'explain goal-name))
 
   ;; Same effective-args logic as solve-goal
   (define effective-args
@@ -1698,6 +1703,7 @@
                           '())])
           (map param-info-name params))
         goal-args))
+  (check-goal-arity! 'explain rel (length effective-args))  ;; POL.4
 
   ;; Run explain-app-goal which returns (listof (cons subst provenance-data))
   (define results
@@ -1837,7 +1843,7 @@
   (perf-inc-solver-backtrack!)
   (define rel (relation-lookup store goal-name))
   (unless rel
-    (error 'explain "Unknown relation: ~a" goal-name))
+    (raise-unknown-relation-error 'explain goal-name))
 
   ;; Resolve goal-args through current substitution
   (define resolved-args
@@ -1879,6 +1885,7 @@
            [(null? frs) (reverse acc)]
            [else
             (define fr (car frs))
+            (perf-inc-solver-row-scan!)
             (define terms (fact-row-terms fr))
             (define result
               (let inner ([as resolved-args] [ts terms] [s subst])
@@ -1886,6 +1893,7 @@
                   [(and (null? as) (null? ts)) s]
                   [(or (null? as) (null? ts)) #f]
                   [else
+                   (perf-inc-solver-col-compare!)
                    (define s* (unify-terms (car as) (car ts) s))
                    (if s* (inner (cdr as) (cdr ts) s*) #f)])))
             (if result
@@ -2574,10 +2582,10 @@
        (define clauses (variant-info-clauses variant))
        (define param-names (map param-info-name params))
 
-       ;; Track 2B Phase 1a: on-network discrimination via broadcast propagators.
-       ;; Install discrimination propagators that narrow the viable set based
-       ;; on bound arguments. Returns viability cell that gates clause/fact
-       ;; installation.
+       ;; Track 2B Phase 1a: on-network discrimination (fire-once propagators —
+       ;; NOT broadcast, despite an earlier comment). Ground args narrow the
+       ;; viability cell at construction time; the free-arg fire-once writes
+       ;; are read only once, below. See the discrimination header note (D.2.a).
        (define n-alternatives (+ (length facts) (length clauses)))
        ;; Phase R1: returns discrim-data-cid (on-network discrimination data cell)
        (define-values (n-discrim viability-cid _discrim-data-cid)
@@ -2603,6 +2611,7 @@
          (for/list ([fr (in-list facts)]
                     [fact-idx (in-naturals)]
                     #:when (set-member? viable-indices fact-idx))
+           (perf-inc-solver-row-scan!)
            fr))
 
        (define n-facts
@@ -3021,6 +3030,7 @@
                 (and (pair? facts) (null? clauses)
                      (let ([raw-results
                             (for/list ([fr (in-list facts)])
+                              (perf-inc-solver-row-scan!)
                               (define row (fact-row-terms fr))
                               (if (= (length row) (length effective-args))
                                   (let ([bindings
@@ -3028,6 +3038,7 @@
                                                    ([ea (in-list effective-args)]
                                                     [val (in-list row)]
                                                     #:break (not acc))
+                                           (perf-inc-solver-col-compare!)
                                            (define nval (normalize-solver-value val))
                                            (define nea (normalize-solver-value ea))
                                            (cond
@@ -3066,7 +3077,9 @@
 (define (solve-goal-propagator config store goal-name goal-args query-vars)
   (define rel (relation-lookup store goal-name))
   (unless rel
-    (error 'solve-goal-propagator "Unknown relation: ~a" goal-name))
+    ;; POL.9 (adjacent fix): was a PLAIN error that escaped the POL.4
+    ;; per-command conversion and crashed the run under :atms routing.
+    (raise-unknown-relation-error 'solve goal-name))
 
   (define effective-args
     (if (null? goal-args)
@@ -3075,6 +3088,8 @@
                           '())])
           (map param-info-name params))
         goal-args))
+  (let ([rel (relation-lookup store goal-name)])  ;; POL.4
+    (when rel (check-goal-arity! 'solve rel (length effective-args))))
 
   ;; Tier 1 check: also at this level for direct callers (benchmarks, tests).
   ;; Universal dispatch (stratified-eval.rkt) checks first; this is the fallback.
