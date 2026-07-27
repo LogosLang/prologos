@@ -18,7 +18,7 @@ on the whole result.
 |---|---|---|---|
 | **P0** | Baseline measurement + this doc + the failing-test-first battery | ✅ | `5a2e57a3` — 11 `check-eq?` gates RED at HEAD, semantics invariants GREEN |
 | **P1** | Layer 3 — `delta = 0` early-out in `shift` | ✅ | 11 → 7 red; the 4 G2 gates flip. End-to-end delta is WITHIN NOISE (6003 → 5973 ms at N=128) — Layer 1 masks it; becomes visible after P2 |
-| **P2** | Layer 1 — whnf/nf cache key (`equal?` → `eq?`) | ⬜ | 15.3× at N=256; the biggest single win |
+| **P2** | Layer 1 — whnf/nf cache key (`equal?` → `eq?`) | ✅ | **15.7× at N=256** and growing. All THREE per-command caches fixed (nf, whnf, nat-value — same defect, same family). Full suite **474 / 9209 / 1**, the 1 being this track's own P3 gates |
 | **P3** | Layer 2 — `loose-bvar-range` short-circuit, all FOUR sites | ⬜ | the issue's own finding |
 | **P4** | Doc-truth sweep | ⬜ | `bench-ab --ref`, `trivially-whnf?`, the "zero-cost" claim, the stale hset comment |
 | **X.close** | Bench matrix · DEFERRED triage · PIR · close #58 with contributor credit | ⬜ | PIR is the objective gate |

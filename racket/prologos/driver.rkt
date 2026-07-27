@@ -705,10 +705,30 @@
   ;; ns net-box still needed for per-command namespace cells. (prelude-env
   ;; box retired at 4A.c-iii-a3 — global-env-add is always-mnr.)
   (parameterize ([current-ns-prop-net-box (current-prop-net-box)]          ;; Phase 3c: activate ns cell writes (auto-reverts)
-                 [current-nf-cache (make-hash)]         ;; per-command nf memoization
-                 [current-whnf-cache (make-hash)]       ;; per-command whnf memoization
+                 ;; GitHub #58 P2 — these three MUST stay `hasheq`, never `hash`.
+                 ;;
+                 ;; They are keyed on expr TREES of unbounded depth. Racket's
+                 ;; `equal-hash-code` is DEPTH-BOUNDED, so a family of deep terms
+                 ;; that share a prefix collapses to a handful of buckets — measured
+                 ;; on a tail-recursive accumulator: 17 distinct hash values for ANY
+                 ;; N (98.3% collision at N=1024). Every probe then degenerates into
+                 ;; a linear scan running full structural `equal?` against O(N)
+                 ;; resident keys, each comparison O(N) — so an `equal?`-keyed cache
+                 ;; over growing terms is O(N^3) and the memo costs vastly more than
+                 ;; the work it saves (measured 15.3x at N=256, and GROWING with N;
+                 ;; `hasheq` benchmarked indistinguishable from no cache at all).
+                 ;;
+                 ;; `eq?` keying is SOUND here, not merely faster: no expr struct is
+                 ;; #:mutable (`grep -c '#:mutable' syntax.rkt` = 0), so a memo of a
+                 ;; pure function keyed on identity is correct. It is also strictly
+                 ;; conservative — it can only lose hits, never return a wrong one.
+                 ;; Same argument `nbe-scan-cache` (reduction.rkt:3727) already ships.
+                 ;;
+                 ;; See docs/tracking/2026-07-27_SUBSTITUTION_QUADRATIC_BLOWUP_DESIGN.md
+                 [current-nf-cache (make-hasheq)]         ;; per-command nf memoization
+                 [current-whnf-cache (make-hasheq)]       ;; per-command whnf memoization
                  [current-reduction-fuel (box 1000000)]  ;; 1M step limit
-                 [current-nat-value-cache (make-hash)]  ;; per-command nat-value memoization
+                 [current-nat-value-cache (make-hasheq)]  ;; per-command nat-value memoization
                  [current-narrow-var-constraints (hasheq)] ;; Phase 3c: per-command constraint chain
                  [current-coercion-warnings '()]         ;; per-command coercion warnings
                  [current-deprecation-warnings '()]      ;; per-command deprecation warnings
