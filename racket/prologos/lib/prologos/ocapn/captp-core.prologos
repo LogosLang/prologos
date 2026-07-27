@@ -29,6 +29,7 @@ require [prologos::ocapn::message :refer-all]
         [prologos::ocapn::syrup   :refer-all]
         [prologos::data::option   :refer [Option some none]]
         [prologos::data::nat      :refer [nat-eq?]]
+        [prologos::data::string   :as str :refer []]
 
 spec incoming-captp-op CapTPOp Vat -> Vat
   :doc "Apply an inbound CapTPOp to the vat. Phase 11. (Stateless wrt BridgeState; Phase 25 questioner-side answers are handled by captp-incoming-with-state.)"
@@ -1168,6 +1169,119 @@ defn maybe-bootstrap-method [tgt args ap v st]
                   | none -> [none BridgeStep]
                   | some name -> dispatch-bootstrap-method-name name rest ap v st
 
+;; ===========================================================
+;; Phase 59b: the `fetch` bootstrap method + resolve-me replies
+;; ===========================================================
+;;
+;; Every test in the upstream ocapn-test-suite starts by fetching an
+;; object from the peer's bootstrap object by swiss-num:
+;;
+;;   <op:deliver <desc:export 0> ['fetch <swiss-num-bytes>] false <rm>>
+;;
+;; and awaits the answer on the RESOLVE-ME descriptor (not on an
+;; answer-pos):
+;;
+;;   <op:deliver <desc:export rm> ['fulfill <desc:import-object N>] false false>
+;;
+;; That resolve-me reply path did not exist: captp-incoming-with-state's
+;; op-deliver arm discarded `rm`, and dispatch-deliver routes only via
+;; answer-pos. This block adds it WITHOUT touching dispatch-deliver or
+;; its callers — `incoming-deliver` tries the fetch path first and falls
+;; through to the pre-existing routing.
+;;
+;; The swiss-nums are fixed by the test-suite README. Mapping them to
+;; export positions is a REGISTRY, and a proper one belongs on the
+;; network (a hash-union cell keyed by swiss-num). This closed function
+;; is scaffolding: it is the smallest thing that unblocks `fetch_object`,
+;; which every remaining upstream test calls before doing anything else.
+;; Retirement plan: replace with a cell once the objects themselves are
+;; registered as vat actors (the behaviours are separate work — Greeter
+;; and Echo exist as beh-greeter / beh-echo, the other three do not).
+
+spec swiss-num-export String -> [Option Nat]
+  :doc "Map an upstream test-suite swiss-num to our export position."
+defn swiss-num-export [s]
+  match [str::eq s "VMDDd1voKWarCe2GvgLbxbVFysNzRPzx"]
+    | true  -> [some 1N]
+    | false ->
+        match [str::eq s "IO58l1laTyhcrgDKbEzFOO32MDd6zE5w"]
+          | true  -> [some 2N]
+          | false ->
+              match [str::eq s "JadQ0++RzsD4M+40uLxTWVaVqM10DcBJ"]
+                | true  -> [some 3N]
+                | false ->
+                    match [str::eq s "IokCxYmMj04nos2JN1TDoY1bT8dXh6Lr"]
+                      | true  -> [some 4N]
+                      | false ->
+                          match [str::eq s "gi02I1qghIwPiKGKleCQAOhpy3ZtYRpB"]
+                            | true  -> [some 5N]
+                            | false -> [none Nat]
+
+;; The swiss-num arrives as a Syrup bytestring.
+spec fetch-swiss-of SyrupValue -> [Option String]
+defn fetch-swiss-of
+  | syrup-bytes b    -> some b
+  | syrup-string s   -> some s
+  | syrup-null       -> [none String]
+  | syrup-bool _     -> [none String]
+  | syrup-nat _      -> [none String]
+  | syrup-int _      -> [none String]
+  | syrup-symbol _   -> [none String]
+  | syrup-list _     -> [none String]
+  | syrup-tagged _ _ -> [none String]
+  | syrup-refr _     -> [none String]
+  | syrup-promise _  -> [none String]
+
+;; <op:deliver <desc:export rm> ['fulfill <desc:import-object xid>] f f>
+spec fetch-reply-bytes Nat Nat -> String
+defn fetch-reply-bytes [rm-pos xid]
+  listener-notify-bytes rm-pos [syrup-list [cons [syrup-symbol "fulfill"] [cons [syrup-tagged "desc:import-object" [syrup-nat xid]] [nil SyrupValue]]]]
+
+;; Queue the reply and record that the peer now holds a reference to
+;; the fetched export (so a later op:gc-export decrements correctly).
+spec do-fetch Nat Nat Vat BridgeState -> BridgeStep
+defn do-fetch [rm-pos xid v st]
+  bridge-step v [bs-append-pending-out [fetch-reply-bytes rm-pos xid] [bs-incr-export xid st]]
+
+spec fetch-with-swiss String [Option Nat] Vat BridgeState -> [Option BridgeStep]
+defn fetch-with-swiss [swiss rm v st]
+  match [swiss-num-export swiss]
+    | none -> [none BridgeStep]
+    | some xid ->
+        match rm
+          | none        -> [none BridgeStep]
+          | some rm-pos -> some [do-fetch rm-pos xid v st]
+
+spec fetch-from-rest [List SyrupValue] [Option Nat] Vat BridgeState -> [Option BridgeStep]
+defn fetch-from-rest [rest rm v st]
+  match rest
+    | nil -> [none BridgeStep]
+    | cons swiss-syr _ ->
+        match [fetch-swiss-of swiss-syr]
+          | none       -> [none BridgeStep]
+          | some swiss -> fetch-with-swiss swiss rm v st
+
+spec fetch-from-name String [List SyrupValue] [Option Nat] Vat BridgeState -> [Option BridgeStep]
+defn fetch-from-name [name rest rm v st]
+  match [str::eq name "fetch"]
+    | false -> [none BridgeStep]
+    | true  -> fetch-from-rest rest rm v st
+
+;; Gateway: target must be the bootstrap object (export 0) and args a
+;; list whose head is the symbol `fetch`. Returns None to fall through.
+spec maybe-fetch Nat SyrupValue [Option Nat] Vat BridgeState -> [Option BridgeStep]
+defn maybe-fetch [tgt args rm v st]
+  match [nat-eq? tgt zero]
+    | false -> [none BridgeStep]
+    | true ->
+        let xs := [syrup-list-or-nil args]
+          match xs
+            | nil -> [none BridgeStep]
+            | cons head rest ->
+                match [syrup-symbol-name head]
+                  | none      -> [none BridgeStep]
+                  | some name -> fetch-from-name name rest rm v st
+
 ;; dispatch-deliver: route an op:deliver. Phase 52b adds a pre-check
 ;; for bootstrap-method calls (target = 0, args[0] = method-symbol);
 ;; falling through goes to the normal answer-pos routing:
@@ -1186,6 +1300,21 @@ defn dispatch-deliver [tgt args ap v st]
               match [bs-lookup-question remote st]
                 | some local -> deliver-with-fresh-pid tgt args local v st
                 | none       -> deliver-allocate tgt args remote v st
+
+;; Phase 59b: inbound op:deliver entry — try the resolve-me `fetch` path
+;; first, then fall through to the answer-pos routing above (which itself
+;; pre-checks the gift bootstrap methods).
+;;
+;; MUST be defined AFTER dispatch-deliver: module elaboration is
+;; single-pass top-to-bottom, so a callee has to already be in scope
+;; (goblin-pitfalls #16). Placing this before dispatch-deliver compiles
+;; nothing and fails at import with
+;;   Error loading module prologos::ocapn::captp-core: Unbound variable
+spec incoming-deliver Nat SyrupValue [Option Nat] [Option Nat] Vat BridgeState -> BridgeStep
+defn incoming-deliver [tgt args ap rm v st]
+  match [maybe-fetch tgt args rm v st]
+    | some step -> step
+    | none      -> dispatch-deliver tgt args ap v st
 
 ;; Phase 38: wire-level promise pipelining (responder side).
 ;;
@@ -1290,12 +1419,14 @@ defn bs-handle-listen-with-late-fire [tgt resolver v st]
 spec captp-incoming-with-state CapTPOp Vat BridgeState -> BridgeStep
   :doc "Apply an inbound CapTPOp to (Vat, BridgeState). Phase 14 + 15 + 25 + 34b. Implements the responder side of CapTPSession (prologos::ocapn::protocols, Phase 53)."
 defn captp-incoming-with-state
-  | [op-deliver tgt args ap _rm] v st ->
+  | [op-deliver tgt args ap rm] v st ->
       ;; Phase 34b: inbound args may contain refrs peer is sharing
       ;; with us (desc:export / desc:answer in nested positions).
       ;; Each occurrence increments imports-refcount so release-import
       ;; can later emit op:gc-export.
-      dispatch-deliver tgt args ap v
+      ;; Phase 59b: `rm` (resolve-me) is now threaded instead of
+      ;; discarded — incoming-deliver needs it for the `fetch` reply.
+      incoming-deliver tgt args ap rm v
         [bs-incr-imports [extract-refrs-from-args args] st]
   | [op-deliver-only tgt args] v st ->
       ;; Phase 34b: same import-bookkeeping for fire-and-forget deliveries.
