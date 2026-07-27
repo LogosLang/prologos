@@ -1,7 +1,8 @@
-# CIU Track 6 — Path Selection (Stage-3 Design, D.1 DRAFT)
+# CIU Track 6 — Path Selection (Stage-3 Design, **D.2**)
 
-**Status**: **Stage-3 DRAFT.** Grounding ✅ · prior art ✅ · **the SURFACE is OPEN** (§5 —
-owner co-design conversation pending, deliberately not pre-empted here).
+**Status**: **Stage-3 D.2 — the SURFACE IS SETTLED** (five co-design rounds, owner-ruled
+2026-07-26; consolidated spec = **§5.9 PS1–PS15**; §5.1–§5.8 remain as the conversation
+record). Implementation opens at P0 (acceptance file) per §2.
 **Series / Track**: CIU Series → **Track 6** (Anonymous Records & Collections & Path Selection).
 **Date opened**: 2026-07-26 · **Owner**: Zee Larson
 **Predecessor**: [`2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md`](2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md)
@@ -48,14 +49,15 @@ successor) is designed-for but phased — see §9.
 | Phase | Description | Status | Notes |
 |---|---|---|---|
 | G | Grounding audit + prior-art survey | ✅ | audit `wf_a62d4b88-47b`; prior art `wf_c1acb1c7-ce1`; §3/§4 |
-| S | **Surface co-design (OWNER CONVERSATION)** | 🔄 | **§5 — THE OPEN PIECE.** Blocks every phase below except P1 |
-| P1 | `.{` full retirement + audit-example repair | ⬜ | **Owner-RULED 2026-07-26**: clean switchover, NO deprecation/diagnostic path. Surface-independent — can land first |
-| P2 | Prerequisite defect repairs (§3.5) | ⬜ | tuple dynamic Int index · PVec silent OOB · the walker gaps. Each needs its own census |
-| P3 | The selection NODE + elaboration | ⬜ | shape pending §5 |
-| P4 | Result typing (the seed retype, §3.2) | ⬜ | shape pending §5 |
-| P5 | Broadcast | ⬜ | shape pending §5 |
-| P6 | Migration + supersession (§9) | ⬜ | `#p(…)` · `get-in`/`update-in` · `.*` · `selection` · CIU T2/T3 |
-| X.close | **MANDATORY** — bench matrix · DEFERRED triage · doc-truth sweep · memory fold · **Stage-5 PIR** | ⬜ | The track does not flip ✅ until the PIR lands |
+| S | **Surface co-design (OWNER CONVERSATION)** | ✅ | **SETTLED 2026-07-26** — five rounds (§5.4–§5.8), consolidated as **§5.9 PS1–PS15** |
+| P0 | **Acceptance file** (`examples/2026-07-XX-ciu-t6-path-selection.prologos`) — the §5.9 worked forms as commented-out targets, uncommented per phase; `--check` gated from day one (the Rel T1 Batch-A lesson) | ⬜ | workflow.md § "Acceptance file as Phase 0". Spans predicate FAMILIES of forms, not one idiom (the 7a lesson) |
+| P1 | `.{` full retirement + audit-example repair (4 files) | ⬜ | **Owner-RULED (Q_P5)**: clean switchover, NO deprecation path. Surface-independent — can land first |
+| P2 | Prerequisite defect repairs (§3.5/§3.6): `record-project` dynamic Int gate (now REQUIRED by PS10's `v.i`) · PVec loud OOB (PS8) · `expr-broadcast-get` walker gaps (whnf arm + `definitely-not-map?`) · `ground-expr?` call-site audit | ⬜ | Each behaviour change gets its own census |
+| P3 | Reader/lexer (WS-Impact section MANDATORY; both-modes census, the 7g family): `.N` segments · `.:.`/`.:[` iteration tokens · `*` splat/`[*]` · **dot-key retirement** (`.:name`→`.name`) · `.*name`→`.:.name` migration · `m[:a]` flip · `x[]`/`_[sel]` rejections · the sexp special form (PS14) | ⬜ | Censuses: dot-key users, `.*name` users, `m[:a]` users, `v[literal]` users (PS2) |
+| P4 | The selection NODE + elaboration + static typing (PS3–PS8): core-elaborator form (NOT preparse, §4.10) · keying/assembly/collision/miss · rows out (the §3.2 retype territory) · full pipeline per `pipeline.md` (files 1–8 + qtt twins + pnet + walkers — Exhaustive-Walker discipline, generic fallback) | ⬜ | The heart. Tests per-phase; probe-first |
+| P5 | Iteration `:` + first-class selectors (PS1/PS11): `.:.`/`.:[` semantics both key domains · `.[sel]`/`.name` sections as lambda sugar · empty-prefix column extraction | ⬜ | v1 adds ZERO propagators (Network Reality Check stated in advance); the broadcast-propagator node is a FUTURE upgrade with its own NTT model |
+| P6 | Migration + supersession (§9 + PS12/PS13): `#p(…)`/`get-in`/`update-in` = the dynamic tier (kept) · `selection`'s three gaps revisited on the new substrate · CIU master T2/T3 supersession recorded · DEFERRED triage | ⬜ | |
+| X.close | **MANDATORY** — bench matrix (feature microbench + E2E per testing.md) · DEFERRED triage · doc-truth sweep · memory fold · **Stage-5 PIR** | ⬜ | The track does not flip ✅ until the PIR lands |
 
 *Per `workflow.md`: tests are PER-PHASE, never a dedicated end-of-track test phase.
 A behavioural phase shipping +0 tests is INCOMPLETE.*
@@ -572,11 +574,84 @@ dynamic index (`v.i`, dot-only) · sections (leading-dot forms) · reserved: ran
     — the named UNZIP, one selection. Lexes today (degraded): verified.
   - `rows.0.f` → `"apple"` (extraction); `rows[0]` → `⟨row⟩` per Q_S7a.
 
+### §5.9 THE SETTLED SURFACE (D.2 — owner-ruled across rounds 1–5, 2026-07-26)
+
+**Rounds 1–4 = §5.4–§5.8; round 5 rulings: PR-9 ADOPTED (`:` iteration · `*` splat ·
+dot-key retired) and PR-8 → STATIC ERROR.** Items marked ⊳ were adopted under the
+owner's delegation ("incorporate … with your recommendations", 2026-07-26).
+
+- **PS1 — the operator core.** `.` DESCENDS-and-drops (extraction) · `[…]` SELECTS
+  (keeps/assembles; always returns a row) · `:` ITERATES ("along each entry" — the
+  NumPy `a[:, k]` / q `::` reading): per-element on nat-keyed subjects, per-VALUE
+  (map-vals) on keyword-keyed ones. No operator has two meanings.
+- **PS2 — the uniform law**: *dot extracts the value; bracket selects a
+  sub-structure.* `v[…]` ALWAYS returns a selection; `v.0` is element extraction
+  (new `.N` lexing). Re-targets the shipped F1a-col degenerate case (`v[0]` →
+  `⟨elem⟩`; `v[1].b` → `v.1.b`) — clean switchover + census (Q_S7a).
+- **PS3 — keying**: a selector's kept key = the last segment of its path BEFORE the
+  first structural operator (`:` or `[`) — the deepest node addressed AS A WHOLE.
+  Pure path → last segment. Empty prefix (selector starts at `:`) → keyless
+  (column extraction; renameable).
+- **PS4 — key domains**: keyword keys are IDENTITIES (survive selection); nat keys
+  are POSITIONS (renumber dense — the carrier's dense-prefix invariant makes
+  "keeping" source indices impossible; `v[1 5]` → `⟨v.1 v.5⟩` automatically).
+- **PS5 — assembly**: all-keyword → record (canonical field order; value display may
+  keep selection order) · all-positional → tuple (WRITTEN selector order) · **mixed →
+  STATIC ERROR** (PR-8 ruled; conservative over the coercion reading — R's lesson
+  applied precisely: R's bite was shape-by-runtime-arity, coercion's would be
+  shape-by-non-local-static-scan; the error keeps every selector's contribution
+  locally derivable). Diagnostic names the remedies: `^` / `^name` / `^_`.
+  Applies identically per-element inside `.:[…]`.
+- **PS6 — the `^` family attaches to the KEY-GENERATING segment** (owner rule,
+  round 4): `^` elides · `^name` renames · `^_` derives. On any other segment =
+  static error. `^_` derivation = full-path kebab-join from the bracket's root
+  (`server.host^_` → `:server-host`); post-derivation collisions stay errors.
+- **PS7 — collision = static error** (Q_S5), diagnostic pointing at `^name`/`^_`.
+  We check what the field ships unchecked (`Control.Lens.Unsound` et al.) — a named
+  design goal.
+- **PS8 — miss = loud** (Q_S6): closed-row miss = type error with the rich
+  field-naming diagnostic; dyn-tail miss = the D19 fresh meta (D23 escape-boundary
+  unchanged); PVec runtime OOB becomes LOUD (P2); tuple OOB stays static.
+  Wildcards/splat only on CLOSED tails.
+- **PS9 — `*` = all-fields-HERE** (the March wildcard meaning, both halves): final
+  position = SPLAT (fields spliced into the result level; collisions → PS7);
+  `[*]` = identity sub-select (`x[server[*]]` ≡ `x[server]`). Mid-path `*` is
+  ILLEGAL — that meaning lives in `:` now.
+- **PS10 — dynamism is DOT-ONLY** ⊳: brackets are 100% literal/static (what makes
+  selection fully typable). `v.i` = dynamic index via the names-vs-numbers
+  asymmetry (a name segment on a nat-keyed subject can only be a variable);
+  requires the P2 Int-gate fix. Computed indices: bind first or `[get v e]`.
+  Dynamic KEYWORD lookup stays `get`/`get-in` (Q_S1).
+- **PS11 — first-class selectors = lambda sugar (v1)**: `.[sel]` ≡
+  `[fn [r] r[sel]]`; `.name` = the simple section (heals ERGONOMICS `.:name` →
+  `map .name users`). Works in argument/application position TODAY (bidirectional
+  checking, probe-verified); standalone `def sel := .[…]` inherits the
+  standalone-lambda gap (annotate) — named, not hidden. FUTURE: a dedicated
+  selector node carrying the one-broadcast-propagator/one-fire/one-merge guarantee
+  (NTT model required THEN; v1 adds zero propagators).
+- **PS12 — retirements + migrations** (all clean-switchover, each with census):
+  `.{` (Q_P5, + the 4 broken audit files) · **`$dot-key`** (`m.:name` → `m.name`;
+  frees `.:`) · old broadcast **`.*name` → `.:.name`** (expr-broadcast-get surface
+  superseded) · `m[:a]` flips from extraction to selection · `x[]` = static error
+  (hint: `{}`) · `_[sel]` rejected (hint: `.[sel]`).
+- **PS13 — reserved slots** (grammar leaves room; NOT built): ranges as nat-domain
+  selectors (**future CIU track**, owner-owned designs) · `**` globstar (typed
+  static-expansion story exists; deferred) · splat respellings beyond final-`*` ·
+  nil-safe selection (`?.`-family) · omit-selectors (presence-marks era) · the
+  WRITE direction (decided now, built later: v1 is READ-ONLY; overlap legal for
+  reads; the disjointness check arrives with writes).
+- **PS14 — sexp mode gets an explicit special form** for selection (postfix
+  adjacency is WS-only; the paren-goals institutionalized-divergence precedent).
+- **PS15 — subjects**: closed rows exact · dyn rows known-exact/unknown-meta ·
+  `(Map K V)` uniform V per field · schema/selection fvars via `schema->row` (the
+  F1b.7e projection; selections intersect `:requires`). Selection results are
+  ordinary closed rows — sealable, validatable, def-storable (D23 applies).
+
 ---
 
 ## §6 SRE lattice lens — REQUIRED (the result shape IS lattice-shaped)
 
-*Provisional; completes when §5 settles.*
+*Completed against the settled surface (PS1–PS15).*
 
 1. **Classification**: STRUCTURAL. A selection result is a row (labelled product of
    per-field VALUE lattices) indexed by a support set + key-domain + tail — the *same*
@@ -596,11 +671,15 @@ dynamic index (`v.i`, dot-only) · sections (leading-dot forms) · reserved: ran
 
 ## §7 NTT model — REQUIRED if propagators/cells are added
 
-Pending §5. Trigger: if broadcast lands as §4.6's *one broadcast propagator, one fire, one
-merge* guarantee, it is a propagator design and the NTT model is mandatory before
-implementation (`workflow.md`). Note the Network Reality Check: F1b added **zero**
-propagators; a broadcast selection would be Track 6's first, and that claim must be
-`net-add-broadcast-propagator`-real, not vocabulary.
+**Resolved posture (PS11)**: v1 adds **ZERO propagators and zero cells** — the selection
+node is typed imperatively through the existing arms, iteration/sections are lambda
+sugar riding `map`'s existing machinery. The Network Reality Check for P4/P5 is stated
+in advance: no `net-add-propagator` calls, no cell writes, no trace — and the phases'
+commits must say so plainly (no propagator vocabulary). **The NTT model becomes
+MANDATORY at the future dedicated-selector-node upgrade**, whose whole point is the
+*one broadcast propagator, one fire, one merge* guarantee — that claim must be
+`net-add-broadcast-propagator`-real, not vocabulary, and it gets its own mini-design
+with the NTT model before any code.
 
 ## §8 Risks
 
@@ -614,7 +693,7 @@ propagators; a broadcast selection would be Track 6's first, and that claim must
 - **R5 — the `.{` retirement is a behaviour change with live users** (§3.8); P1 needs its
   own census even though the owner has ruled the disposition.
 
-## §9 Scope proposals (owner to ratify)
+## §9 Scope (ratified with D.2 under the round-5 delegation)
 
 - **IN**: the surface + result typing + broadcast; the §3.5 prerequisite defects (they ARE
   the degenerate case the design generalizes); P1.
