@@ -1310,11 +1310,10 @@ defn dispatch-deliver [tgt args ap v st]
 ;; (goblin-pitfalls #16). Placing this before dispatch-deliver compiles
 ;; nothing and fails at import with
 ;;   Error loading module prologos::ocapn::captp-core: Unbound variable
-spec incoming-deliver Nat SyrupValue [Option Nat] [Option Nat] Vat BridgeState -> BridgeStep
-defn incoming-deliver [tgt args ap rm v st]
-  match [maybe-fetch tgt args rm v st]
-    | some step -> step
-    | none      -> dispatch-deliver tgt args ap v st
+;; NOTE (Phase 59b part 2): the definition MOVED below
+;; `bs-handle-listen-with-late-fire` — see the resolve-me section there.
+;; It cannot live here any more, because the resolve-me arm calls that
+;; helper and single-pass elaboration requires the callee first.
 
 ;; Phase 38: wire-level promise pipelining (responder side).
 ;;
@@ -1391,6 +1390,68 @@ defn bs-handle-listen-with-late-fire [tgt resolver v st]
           | none         -> bs-add-listener tgt resolver st
           | some payload ->
               bs-append-pending-out [listener-notify-bytes resolver payload] st
+
+;; ===========================================================
+;; Phase 59b part 2: the resolve-me reply path for NON-fetch delivers
+;; ===========================================================
+;;
+;; Upstream's op:deliver tests reply via the resolve-me descriptor with
+;; answer_position = false:
+;;
+;;   <op:deliver <desc:export N> ['foo args] false <desc:export RM>>
+;;   <op:deliver <desc:export RM> ['fulfill <result>] false false>
+;;
+;; Part 1 built that reply for `fetch` only. For every other deliver
+;; `rm` was dropped at dispatch-deliver and, with no answer-pos, the
+;; behaviour's return value was discarded at step-after-act — so the
+;; peer waited forever.
+;;
+;; The key realization (and a correction to the part-2 worklist, which
+;; claimed a promise→resolver table and a settled-promise emitter both
+;; had to be BUILT): they already exist, as the op:listen machinery.
+;; A resolve-me descriptor IS a listener on the answer promise —
+;; `bs-add-listener` records pid → resolver export position, and
+;; pump-outbound already emits `listener-notify-bytes` when that promise
+;; settles. So this path is a composition of existing parts, not new
+;; infrastructure.
+;;
+;; Using bs-handle-listen-with-late-fire (rather than bs-add-listener
+;; directly) is deliberate: it also covers the promise-already-settled
+;; case by staging the notification on pending-out. That cannot happen
+;; for a promise allocated one line earlier, but the helper is the
+;; correct-by-construction entry point and costs nothing here.
+
+spec deliver-resolve-me Nat SyrupValue Nat Vat BridgeState -> BridgeStep
+  :doc "op:deliver with answer-pos=none and resolve-me=some. Allocate a local answer promise, register the peer's resolver position as a listener on it, then deliver."
+defn deliver-resolve-me [tgt args rm-pos v st]
+  let alloc := [fresh-promise v]
+    deliver-with-fresh-pid tgt args [alloc-id alloc] [alloc-vat alloc]
+      [bs-handle-listen-with-late-fire [alloc-id alloc] rm-pos [alloc-vat alloc] st]
+
+;; Inbound op:deliver entry. Order of attempts:
+;;   1. the `fetch` bootstrap path (part 1) — consumes rm itself
+;;   2. answer-pos routing, when the peer gave one
+;;   3. resolve-me routing, when it gave rm instead
+;;   4. plain pass-through (neither) — return value genuinely unwanted
+;;
+;; MUST be defined AFTER dispatch-deliver AND after
+;; bs-handle-listen-with-late-fire: single-pass elaboration needs every
+;; callee already in scope (goblin-pitfalls #16). Defining it earlier
+;; fails at import with the nameless
+;;   Error loading module prologos::ocapn::captp-core: Unbound variable
+;; (goblin-pitfalls #44 — that message is a lie; it can equally be a
+;; type mismatch, so bisect rather than trusting the error class).
+spec incoming-deliver Nat SyrupValue [Option Nat] [Option Nat] Vat BridgeState -> BridgeStep
+defn incoming-deliver [tgt args ap rm v st]
+  match [maybe-fetch tgt args rm v st]
+    | some step -> step
+    | none ->
+        match ap
+          | some _ -> dispatch-deliver tgt args ap v st
+          | none ->
+              match rm
+                | none        -> dispatch-deliver tgt args ap v st
+                | some rm-pos -> deliver-resolve-me tgt args rm-pos v st
 
 
 ;; Phase 53: captp-incoming-with-state's match arms are the
