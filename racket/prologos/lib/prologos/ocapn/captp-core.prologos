@@ -1281,15 +1281,6 @@ defn maybe-fetch [tgt args rm v st]
                   | none      -> [none BridgeStep]
                   | some name -> fetch-from-name name rest rm v st
 
-;; Inbound op:deliver: try the resolve-me `fetch` path first, then the
-;; pre-existing answer-pos routing (which itself pre-checks the gift
-;; bootstrap methods).
-spec incoming-deliver Nat SyrupValue [Option Nat] [Option Nat] Vat BridgeState -> BridgeStep
-defn incoming-deliver [tgt args ap rm v st]
-  match [maybe-fetch tgt args rm v st]
-    | some step -> step
-    | none      -> dispatch-deliver tgt args ap v st
-
 ;; dispatch-deliver: route an op:deliver. Phase 52b adds a pre-check
 ;; for bootstrap-method calls (target = 0, args[0] = method-symbol);
 ;; falling through goes to the normal answer-pos routing:
@@ -1308,6 +1299,21 @@ defn dispatch-deliver [tgt args ap v st]
               match [bs-lookup-question remote st]
                 | some local -> deliver-with-fresh-pid tgt args local v st
                 | none       -> deliver-allocate tgt args remote v st
+
+;; Phase 59b: inbound op:deliver entry — try the resolve-me `fetch` path
+;; first, then fall through to the answer-pos routing above (which itself
+;; pre-checks the gift bootstrap methods).
+;;
+;; MUST be defined AFTER dispatch-deliver: module elaboration is
+;; single-pass top-to-bottom, so a callee has to already be in scope
+;; (goblin-pitfalls #16). Placing this before dispatch-deliver compiles
+;; nothing and fails at import with
+;;   Error loading module prologos::ocapn::captp-core: Unbound variable
+spec incoming-deliver Nat SyrupValue [Option Nat] [Option Nat] Vat BridgeState -> BridgeStep
+defn incoming-deliver [tgt args ap rm v st]
+  match [maybe-fetch tgt args rm v st]
+    | some step -> step
+    | none      -> dispatch-deliver tgt args ap v st
 
 ;; Phase 38: wire-level promise pipelining (responder side).
 ;;
