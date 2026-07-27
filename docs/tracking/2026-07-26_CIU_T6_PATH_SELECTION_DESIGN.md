@@ -50,12 +50,12 @@ successor) is designed-for but phased — see §9.
 |---|---|---|---|
 | G | Grounding audit + prior-art survey | ✅ | audit `wf_a62d4b88-47b`; prior art `wf_c1acb1c7-ce1`; §3/§4 |
 | S | **Surface co-design (OWNER CONVERSATION)** | ✅ | **SETTLED 2026-07-26** — five rounds (§5.4–§5.8), consolidated as **§5.9 PS1–PS15** |
-| P0 | **Acceptance file** (`examples/2026-07-XX-ciu-t6-path-selection.prologos`) — the §5.9 worked forms as commented-out targets, uncommented per phase; `--check` gated from day one (the Rel T1 Batch-A lesson). **MUST carry function-typed forms** (D3-S11 — named-schema + keyword-projection consumers, not only top-level expressions) | ⬜ | workflow.md § "Acceptance file as Phase 0". Spans predicate FAMILIES of forms, not one idiom (the 7a lesson) |
+| P0 | **Acceptance file** (`examples/2026-07-26-ciu-t6-path-selection.prologos`) — IDEAL Prologos syntax throughout [owner]; not-yet-working forms COMMENTED until their phase lands; `--check` gated from day one (the Rel T1 Batch-A lesson). Charter [owner, round 6b]: the `app-config` nested record · **broadcast over PVecs of same-shaped records** · **solve result sets** · **typing pins throughout** (markers carry types) · **function-typed forms** (D3-S11: named-schema + keyword-projection consumers) · **the standalone-def seam family pinned** (`def add5 := [+ 5 _]` et al., commented + the working argument/annotated forms as markers). **At X.close the file PROMOTES to a suite-gated regression test** (the F1 `test-*-acceptance.rkt` clone pattern) | ✅ | `--check` 21/21, 0 errors @ P0 landing; §A–§G: guild-hall config · party PVec · quest-board solve rows · the add5 family · typing pins | workflow.md § "Acceptance file as Phase 0". Spans predicate FAMILIES of forms, not one idiom (the 7a lesson) |
 | P1 | **`.{` retirement, WS leg (D3-S5 split)**: repair the 4 audit files' mixfix `.{X}`→`.(X)` · **DELETE the recognizer + the `$mixfix-retired` error entirely** (owner: retire from code AND diagnostics) | ⬜ | **Owner-RULED (Q_P5 + round 6)**. The SEXP brace-select leg is NOT here — it sequences WITH P4 (tests re-pointed, never deleted) |
 | P2 | Prerequisite defect repairs (§3.5/§3.6 + D3-B1): `record-project` dynamic Int gate · PVec loud OOB · **List OOB** · **the `(Map K V)` miss → `Option`-shaped** · **`map-get`-on-nat-row `none`** · `expr-broadcast-get` walker gaps · `ground-expr?` call-site audit **+ the `expr-union` arm re-homed from CIU T2 (D3-S9; generic-fallback covers both twins)** | ⬜ | Each behaviour change gets its own census; B1 legs pinned **failing-test-first**. Counts seeded from D3-M7 |
 | P3 | Reader/lexer (WS-Impact MANDATORY; both-modes census; **ground on the TOKEN-REGISTRY inventory, priorities 92/88/87/86 — D3-S6**): `.N` segments (anchor at the DOT; numerics anchor at a DIGIT — CH-4 ruled) · `.:.`/`.:[` iteration · `*` splat/`[*]` · dot-key retirement (`.:name`→`.name`, **+ the `$nil-dot-key` twin `#.:name`**) · `.*name`→`.:.name` migration · **`m[:a]` RETIRES (error + hint; no flip — D3-S4)** · `x[]`/`_[sel]`/**`.-1`** rejections with real diagnostics · selector **round-trip printing pins** (D3-M6) · the sexp special form (PS14) | ⬜ | Censuses per D3-M7: dot-key 8+11 sites, `.*name` 7+4, `m[:kw]` 17+8, `v[literal]` 49+45 / 48 test-cases. **Sections tokens are GONE from this phase** (B2 → keyword-projection needs none) |
 | P4 | The selection NODE + elaboration + static typing (PS3–PS8 as amended §5.10): core-elaborator form (NOT preparse, §4.10) · contributions keying/assembly/collision/miss · rows out (§3.2 narrowed: keyword result type) · **P4.a the nat-keyed assembly path + PS4 renumbering** · **P4.b the closed-vs-dyn seed pin (PS15=CLOSED, test-pinned)** · **P4.c the sexp special form + re-pointing the 20 brace-select tests (D3-S5)** · **P4.d `v.i` neutral-segment + soft resolution (D3-S1; cuttable)** · full pipeline incl. **item 13: deliberate `#f` registration in typing-propagators (D3-M2)** | ⬜ | The heart. Tests per-phase; probe-first; Exhaustive-Walker discipline, generic fallback |
-| PX | **Substrate soundness (owner-ruled in-track, D3-S10)**: the concrete-codomain lambda-adoption hole — `[the [List String] [map [fn [x] x] ints]]` accepts silently. Fix shape: decomplect evidence/obligation at binder positions (`:expected` facet; lam `:type` written only from the body; disagreement → top → existing refusal) | ⬜ | Position flexible ("at some point in this track"); failing-test-first. §3.7's `map-size` class stays filed separately |
+| PX | **The binder-seam phase (owner-ruled in-track; WIDENED round 6b)**: (a) the D3-S10 concrete-codomain lambda-adoption hole — `[the [List String] [map [fn [x] x] ints]]` accepts silently; fix = decomplect evidence/obligation at binder positions (`:expected` facet; lam `:type` written only from the body; disagreement → top → existing refusal). (b) **the standalone-def seam** — `def f := [fn …]` / `def add5 := [int+ 5 _]` fail even when the body DETERMINES the types; body-directed inference for the monomorphic + row-lambda cases; the trait-op case (`[+ 5 _]`) honest residue (may need defaulting/residuation → Num T2/F-row; annotated-only fallback) | ⬜ | Position flexible; failing-test-first. §3.7's `map-size` class stays filed separately |
 | P5 | Iteration `:` + first-class selectors (PS1/PS11 as amended): `.:.`/`.:[` both key domains, **result carrier = source collection kind preserved (D3-S4)** · **keyword-projection coercion `map :name users` + qtt twin (+ the `[:kw m]` head arm)** · explicit lambdas as multi-select selector values · empty-prefix column extraction | ⬜ | v1 adds ZERO propagators (Network Reality Check stated in advance); the broadcast-propagator node is a FUTURE upgrade with its own NTT model |
 | P6 | Migration + supersession (§9 + PS12/PS13 as amended): `#p(…)`/`get-in`/`update-in` = the dynamic tier (kept; **Path applicability → DEFERRED entry, D3-M3**) · `selection`'s three gaps revisited · **CIU master: T2 items 2+4 superseded, 1+3 re-homed; T3 RE-CHARTERED (D3-S9)** · DEFERRED triage | ⬜ | §9's write-phase note: source-overlap disjointness is the WRITE headline (D3-S7) |
 | X.close | **MANDATORY** — bench matrix (feature microbench + E2E per testing.md) · DEFERRED triage · doc-truth sweep · memory fold · **Stage-5 PIR** | ⬜ | The track does not flip ✅ until the PIR lands |
@@ -758,6 +758,29 @@ land in the P2/P3 census rows (49+45 `v[literal]` sites, 48 test-cases, etc.).
 correlation inside iteration ("for each admin, pair its name with the app's name")
 has no v1 spelling — selection is subtree extraction; the shape belongs to a future
 comprehension/binding surface, noted in PS13's spirit but not reserved.
+
+**Round 6b — the standalone-def seam, widened by an owner data point (2026-07-26).**
+Owner hand-use: `def add5 := [+ 5 _]` fails ("Could not infer type — hint (issue
+#70) …"). Probed at HEAD, the boundary is the **def-RHS seam itself, not numerics**:
+- `def add5 := [+ 5 _]` (trait-op section) — FAILS with the #70 hint;
+- **`def add5c := [int+ 5 _]` — the CONCRETE-op section the #70 hint itself
+  recommends — ALSO FAILS** in def position (the second
+  diagnostic-recommends-an-impossible-fix instance, after the row-annotation hint);
+- `def getname := [fn [r] r.name]` (the row cousin) — FAILS;
+- ALL THREE work in ARGUMENT position (`map [+ 5 _] xs` → `List Int`, probed) and
+  under an ANNOTATED def (`def add5b : <Int -> Int> := [+ 5 _]` → works).
+
+So {trait sections · concrete sections · row lambdas · selector values} are ONE
+family: a def-RHS binder with no expected type does not infer its param type even
+when the BODY fully determines it (`int+` is monomorphic `Int Int -> Int` — that
+case needs no residuation, only body-directed inference). **Owner ruling: fix this
+aspect alongside the typing work — PX WIDENS to the binder-seam phase**: (a) the
+D3-S10 adoption hole; (b) standalone-def inference for body-determined cases
+(monomorphic sections + row lambdas whose body pins the row); honest residue: the
+trait-op case (`[+ 5 _]`) may additionally need numeric defaulting or a residuated
+constraint (the Num Track 2 / F-row seam) — if so, it lands annotated-only in this
+track with the deep fix pointed at its owning track. P0 pins the whole family
+(commented) + the working argument-position and annotated forms (markers).
 
 ## §6 SRE lattice lens — REQUIRED (the result shape IS lattice-shaped)
 
