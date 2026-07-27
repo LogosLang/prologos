@@ -2473,3 +2473,79 @@ locally; do not bisect through CI.
    literal in a known-`Nat` position could reasonably elaborate to
    `Nat`. Lower priority than (1) and a genuine design question, not an
    obvious bug — but (1) is a bug regardless of how (2) is decided.
+
+### #45 — A module function's BEHAVIOUR depends on what the CALLER's namespace imports (2026-07-27, real bug, **severe**)
+
+**Symptom.** The same function, called with byte-identical arguments in the
+same sequence, returns different results depending on which *unrelated*
+modules the calling namespace has imported. No error, no warning — just a
+different answer.
+
+**Minimal reproduction.** Two runs, identical frames, identical call
+sequence, fresh connection id each, differing ONLY in the preamble:
+
+```
+;; preamble A (minimal)
+(ns pmin)
+(imports (prologos::ocapn::interop-driver :refer-all))
+(imports (prologos::data::string :as str :refer ()))
+
+;; preamble B (larger) — adds captp-core, message, syrup,
+;; core::collections, option
+```
+
+Then, in both, the same three calls:
+
+```
+(eval (init-connection N))
+(eval (str::length (step-connection N "<fetch frame hex>")))
+(eval (str::length (step-connection N "<deliver frame hex>")))
+```
+
+Result:
+
+| Preamble | fetch call | deliver call |
+|---|---|---|
+| A (minimal) | 71 | **0** |
+| B (larger)  | 71 | **41** |
+
+`step-connection` is defined in `prologos::ocapn::interop-driver`, which
+BOTH preambles import identically. The extra imports in B are not used by
+the probe at all. Yet B gets bytes and A gets none.
+
+**Confirmed not:** nondeterminism (three separate processes agree per
+configuration), reduction fuel (100× makes no difference), argument shape,
+connection id, or ordering within the process. Each was tested and
+eliminated.
+
+**Why this is severe.** It breaks the basic guarantee that a module's
+exported function means the same thing to every caller. Any test that
+passes with a rich preamble can fail in production with a lean one, and the
+failure is SILENT — the caller gets a well-typed empty result rather than
+an error. Debugging from the call site is nearly impossible, because
+nothing at the call site is wrong.
+
+**Relationship to issue #78.** The signature matches: "cached module loads
+give you functions that don't fire." #78 was the `.pnet` cache-hit restore
+writing parameters but not cells; that fix landed today. This may be a
+second instance of the same class — registry/cell state that depends on
+which modules were loaded and in what order — or the remaining half of the
+same defect. Worth investigating together.
+
+**Caveat, stated because it matters.** Adding the two modules that differed
+(`prologos::ocapn::syrup`, `prologos::core::collections`) to the OCapN test
+server's preamble did NOT fix the server, which still fails the same way.
+So the import set is *a* lever on the behaviour but is not the whole story;
+the minimal repro above is solid and reproducible, the general rule is not
+yet characterised. Do not assume "import more modules" is the fix — that
+change was reverted rather than landed.
+
+**Codify-it ask.** Two things:
+1. A function's behaviour must not depend on the caller's import set. If
+   resolution genuinely needs more context, that is a load-order bug to
+   fix, not a property to document.
+2. Until then, when a Prologos function silently returns an empty/default
+   result and the call site looks correct, **vary the caller's preamble**
+   as a diagnostic. It is not an obvious thing to try, and here it was the
+   only variable that moved the outcome after twelve other hypotheses had
+   been eliminated.
