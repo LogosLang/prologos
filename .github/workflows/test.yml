@@ -40,5 +40,5 @@ jobs:
       - name: Pre-compile modules
         run: cd racket/prologos && raco make driver.rkt
 
-      - name: Run full test suite (skipped: heavy reduction perf tests)
+      - name: "Run full test suite (skipped: heavy reduction perf tests)"
         run: cd racket/prologos && racket tools/run-affected-tests.rkt --all --no-record
