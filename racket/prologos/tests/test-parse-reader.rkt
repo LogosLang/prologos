@@ -488,6 +488,64 @@
   (check-equal? (bracket-depth-at bd-rrb 0) 1)
   (check-equal? (bracket-depth-at bd-rrb 2) 0))
 
+;; Helper: bracket depth after the LAST token of a string. If > 0, the
+;; form-extent layer treats every following top-level line as a
+;; continuation — the silent-swallow defect class (2026-07-26).
+(define (final-bracket-depth s)
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string s)))
+  (define bd-rrb (make-bracket-depth-rrb tok-rrb))
+  (car (rrb-get bd-rrb (- (rrb-size bd-rrb) 1))))
+
+(test-case "bracket-depth: < inside mixfix .( ) is an operator, not an opener"
+  ;; The `.( 3N < 5N )` swallow: `<` counted +1 with no matching `>` left
+  ;; depth 1 after `)`, so all following lines were eaten as continuation.
+  (check-equal? (final-bracket-depth ".( 3N < 5N )") 0))
+
+(test-case "bracket-depth: > inside mixfix .( ) is an operator"
+  (check-equal? (final-bracket-depth ".( 5N > 3N )") 0))
+
+(test-case "bracket-depth: < and > as operators inside mixfix stay balanced mid-form"
+  ;; a < b > c inside .( ): neither angle counts; depth 1 throughout, 0 after )
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string ".( a < b > c )")))
+  (define bd-rrb (make-bracket-depth-rrb tok-rrb))
+  ;; tokens: .( a < b > c )  — indices 0..6
+  (check-equal? (car (rrb-get bd-rrb 0)) 1)   ;; .(
+  (check-equal? (car (rrb-get bd-rrb 2)) 1)   ;; < (operator, no bump)
+  (check-equal? (car (rrb-get bd-rrb 4)) 1)   ;; > (operator, no drop)
+  (check-equal? (car (rrb-get bd-rrb 6)) 0))  ;; )
+
+(test-case "bracket-depth: unmatched < inside plain brackets is an operator"
+  ;; [< 3N 5N] — group-items reads `<` as operator (no matching rangle);
+  ;; the extent scan must agree or the same swallow occurs.
+  (check-equal? (final-bracket-depth "[< 3N 5N]") 0))
+
+(test-case "bracket-depth: matched angle group still counts as opener"
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "<Int | String>")))
+  (define bd-rrb (make-bracket-depth-rrb tok-rrb))
+  (check-equal? (car (rrb-get bd-rrb 0)) 1)  ;; < opens
+  (check-equal? (car (rrb-get bd-rrb (- (rrb-size bd-rrb) 1))) 0))  ;; > closes
+
+(test-case "bracket-depth: multi-line angle group keeps continuation depth"
+  ;; A matched `<` spanning a newline must still hold depth > 0 at the
+  ;; line boundary so the continuation line joins the form.
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "<(x : A)\n -> B>")))
+  (define bd-rrb (make-bracket-depth-rrb tok-rrb))
+  ;; token 0 = `<`; depth after the `)` closing (x : A) must still be 1
+  (check-equal? (car (rrb-get bd-rrb 0)) 1)
+  (define n (rrb-size bd-rrb))
+  (check-equal? (car (rrb-get bd-rrb (- n 1))) 0)   ;; final > closes all
+  (check-equal? (car (rrb-get bd-rrb (- n 2))) 1))  ;; B still inside <>
+
+(test-case "bracket-depth: bracket group inside mixfix restores mixfix context"
+  ;; .( [id 3N] < 5N ) — `<` after the nested [ ] pops back to the mixfix
+  ;; frame, so it is still an operator.
+  (check-equal? (final-bracket-depth ".( [id 3N] < 5N )") 0))
+
+(test-case "bracket-depth: nested paren inside mixfix is nested mixfix"
+  ;; .( (1N < 2N) ) — `(` directly inside .( ) opens a nested mixfix group
+  ;; (group-items' lparen-in-mixfix leg), so `<` inside it stays an operator.
+  (check-equal? (final-bracket-depth ".( (1N < 2N) )") 0))
+
 
 ;; ============================================================
 ;; Phase 1c: Tree-builder

@@ -206,10 +206,10 @@ ns examples::audit::numerics
 ;; expect: 20N : Nat
 
 ;; --- 5b. Generic comparison ---
-lt 3N 5N
+.( 3N < 5N )
 ;; expect: true : Bool
 
-le 5N 5N
+.( 5N <= 5N )
 ;; expect: true : Bool
 
 

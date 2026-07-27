@@ -39,10 +39,10 @@ ns examples::audit::traits-instances
 ;; expect: 20N : Nat
 
 ;; --- 1d. Generic comparison ---
-lt 3N 5N
+.( 3N < 5N )
 ;; expect: true : Bool
 
-le 5N 5N
+.( 5N <= 5N )
 ;; expect: true : Bool
 
 ;; --- 1e. Generic equality (= inside mixfix) ---

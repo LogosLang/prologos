@@ -76,10 +76,10 @@ eval [add 10N 20N]
 ;; expect: 20N : Nat
 
 ;; --- 4b. Mixfix comparison ---
-lt 3N 5N
+.( 3N < 5N )
 ;; expect: true : Bool
 
-le 5N 5N
+.( 5N <= 5N )
 ;; expect: true : Bool
 
 

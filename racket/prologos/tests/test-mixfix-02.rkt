@@ -343,3 +343,78 @@
       "      | .(h :: t) -> h\n"
       "      | nil -> 99N\n")))
   (check-equal? result "99N : Nat"))
+
+;; ========================================
+;; J. Mixfix comparison operators + form extent (2026-07-26 swallow fix)
+;; ========================================
+;;
+;; `.( 3N < 5N )` used to SWALLOW every following top-level line: the
+;; form-extent bracket-depth scanner counted the operator `<` as an angle
+;; opener (unconditionally), leaving depth 1 after `)` so all later lines
+;; read as bracket continuations. The scanner now mirrors group-items'
+;; mixfix suppression + matched-rangle lookahead. These tests pin BOTH the
+;; operator result AND the no-swallow property (following commands run).
+
+(test-case "e2e/ws: .( 3N < 5N ) → true via Ord dispatch"
+  (check-equal? (run-ws-last ".( 3N < 5N )\n") "true : Bool"))
+
+(test-case "e2e/ws: .( 5N <= 5N ) → true via Ord dispatch"
+  (check-equal? (run-ws-last ".( 5N <= 5N )\n") "true : Bool"))
+
+(test-case "e2e/ws: .( 5N > 3N ) → true via Ord dispatch"
+  (check-equal? (run-ws-last ".( 5N > 3N )\n") "true : Bool"))
+
+(test-case "e2e/ws: .( 3N < 5N ) does NOT swallow following top-level lines"
+  (define results
+    (run-ws (string-append
+             ".( 3N < 5N )\n"
+             "\n"
+             "def swallow-marker := 42\n"
+             "\n"
+             "swallow-marker\n")))
+  ;; All three commands must produce output — the defect ate lines 2+3.
+  (check-equal? (length results) 3 (format "commands swallowed: ~a" results))
+  (check-equal? (car results) "true : Bool")
+  (check-equal? (last results) "42 : Int"))
+
+(test-case "e2e/ws: .( 5N > 3N ) does NOT swallow following top-level lines"
+  (define results
+    (run-ws (string-append
+             ".( 5N > 3N )\n"
+             "\n"
+             "def swallow-marker2 := 7\n"
+             "\n"
+             "swallow-marker2\n")))
+  (check-equal? (length results) 3 (format "commands swallowed: ~a" results))
+  (check-equal? (car results) "true : Bool")
+  (check-equal? (last results) "7 : Int"))
+
+(test-case "e2e/ws: unmatched < inside plain brackets does not swallow"
+  ;; [< 3N 5N] is an ERROR (`<` is not a bound function — use `lt`), but it
+  ;; must fail LOUDLY on its own line; following commands still run.
+  (define results
+    (run-ws (string-append
+             "[< 3N 5N]\n"
+             "\n"
+             "def swallow-marker3 := 9\n"
+             "\n"
+             "swallow-marker3\n")))
+  (check-equal? (length results) 3 (format "commands swallowed: ~a" results))
+  ;; The first result is an error VALUE (unbound-variable-error struct),
+  ;; not a success string — the loud failure.
+  (check-true (string-contains? (format "~a" (car results)) "Unbound")
+              (format "expected loud unbound-variable error for [< ...]: ~a" (car results)))
+  (check-equal? (last results) "9 : Int"))
+
+(test-case "e2e/ws: angle Pi type after a mixfix comparison still parses"
+  ;; Guards the other direction: the matched-rangle lookahead must still
+  ;; count genuine angle groups, including after a mixfix form.
+  (define results
+    (run-ws (string-append
+             ".( 3N < 5N )\n"
+             "\n"
+             "def j-id : <(x : Nat) -> Nat> := [fn [x : Nat] x]\n"
+             "\n"
+             "[j-id 3N]\n")))
+  (check-equal? (length results) 3 (format "commands swallowed: ~a" results))
+  (check-equal? (last results) "3N : Nat"))

@@ -1262,25 +1262,84 @@
 
 ;; Build bracket-depth RRB from token RRB.
 ;; Returns: RRB of (cons bracket-depth qq-depth) per token.
+;;
+;; `<`/`>` are NOT unconditional openers/closers — they double as operators.
+;; The grouping layer (group-items) decides: inside mixfix `.( )` they are
+;; operators by fiat; elsewhere `<` opens an angle group only when a matching
+;; `>` exists in scope (has-matching-rangle?). The extent scan here MUST make
+;; the same call, else an operator-`<` leaves the running depth >0 at end of
+;; line and every following top-level line is silently swallowed as a
+;; bracket continuation (the `.( 3N < 5N )` / `[< 3N 5N]` defect, 2026-07-26).
+;; A frame stack tracks the innermost group kind + its closer to mirror the
+;; grouping layer's context.
 (define (make-bracket-depth-rrb token-rrb)
   (define n (rrb-size token-rrb))
-  (let loop ([i 0] [bd 0] [qd 0] [result rrb-empty])
+  ;; Lookahead twin of has-matching-rangle? over the token RRB: is there a
+  ;; matching rangle for a langle at `start`, before the enclosing group's
+  ;; closer? Skips balanced nested groups; nested angles via angle-depth.
+  (define (langle-matched? start close-type)
+    (let loop ([i start] [angle-depth 0] [other-depth 0])
+      (cond
+        [(>= i n) #f]
+        [else
+         (define type (set-first (token-entry-types (rrb-get token-rrb i))))
+         (cond
+           [(and (eq? type 'rangle) (= angle-depth 0) (= other-depth 0)) #t]
+           [(eq? type 'langle) (loop (+ i 1) (+ angle-depth 1) other-depth)]
+           [(and (eq? type 'rangle) (> angle-depth 0))
+            (loop (+ i 1) (- angle-depth 1) other-depth)]
+           [(memq type '(lbracket lparen lbrace quote-lbracket at-lbracket
+                         tilde-lbracket hash-lbrace dot-lparen))
+            (loop (+ i 1) angle-depth (+ other-depth 1))]
+           [(and (memq type '(rbracket rparen rbrace)) (> other-depth 0))
+            (loop (+ i 1) angle-depth (- other-depth 1))]
+           ;; Hit the enclosing group's closer at depth 0 → no match
+           [(and close-type (eq? type close-type) (= other-depth 0)) #f]
+           [else (loop (+ i 1) angle-depth other-depth)])])))
+  ;; Frames: (cons kind closer). kind ∈ {mixfix paren bracket brace angle};
+  ;; a `(` directly inside mixfix opens a NESTED mixfix group (group-items'
+  ;; lparen-in-mixfix leg), so operator suppression continues through it.
+  (let loop ([i 0] [bd 0] [qd 0] [frames '()] [result rrb-empty])
     (if (>= i n)
         result
         (let* ([entry (rrb-get token-rrb i)]
                [type (set-first (token-entry-types entry))]
-               [new-bd (cond
-                         [(memq type '(lbracket lparen lbrace langle
-                                       quote-lbracket at-lbracket tilde-lbracket
-                                       hash-lbrace dot-lparen))
-                          (+ bd 1)]
-                         [(memq type '(rbracket rparen rbrace rangle))
-                          (max 0 (- bd 1))]
-                         [else bd])]
-               ;; qq-depth: backtick increments, comma in qq context decrements
-               ;; (simplified — full qq handling in Phase 2/reader macros)
-               [new-qd qd])
-          (loop (+ i 1) new-bd new-qd
+               [in-mixfix? (and (pair? frames) (eq? (car (car frames)) 'mixfix))])
+          (define-values (new-bd new-frames)
+            (cond
+              [(eq? type 'dot-lparen)
+               (values (+ bd 1) (cons (cons 'mixfix 'rparen) frames))]
+              [(eq? type 'lparen)
+               (values (+ bd 1)
+                       (cons (cons (if in-mixfix? 'mixfix 'paren) 'rparen) frames))]
+              [(memq type '(lbracket quote-lbracket at-lbracket tilde-lbracket))
+               (values (+ bd 1) (cons (cons 'bracket 'rbracket) frames))]
+              [(memq type '(lbrace hash-lbrace))
+               (values (+ bd 1) (cons (cons 'brace 'rbrace) frames))]
+              [(eq? type 'langle)
+               ;; Operator inside mixfix; opener only when a matching `>`
+               ;; exists in the enclosing scope (agrees with group-items).
+               (if (or in-mixfix?
+                       (not (langle-matched?
+                             (+ i 1)
+                             (and (pair? frames) (cdr (car frames))))))
+                   (values bd frames)
+                   (values (+ bd 1) (cons (cons 'angle 'rangle) frames)))]
+              [(eq? type 'rangle)
+               (if in-mixfix?
+                   (values bd frames)  ;; operator inside mixfix
+                   (if (> bd 0)
+                       (values (- bd 1) (cdr frames))
+                       (values 0 '())))]
+              [(memq type '(rbracket rparen rbrace))
+               (if (> bd 0)
+                   (values (- bd 1) (cdr frames))
+                   (values 0 '()))]
+              [else (values bd frames)]))
+          ;; qq-depth: backtick increments, comma in qq context decrements
+          ;; (simplified — full qq handling in Phase 2/reader macros)
+          (define new-qd qd)
+          (loop (+ i 1) new-bd new-qd new-frames
                 (rrb-push result (cons new-bd new-qd)))))))
 
 ;; Get bracket-depth at a given token index
@@ -2087,80 +2146,15 @@
 ;; depth-first within a form's subtree, then apply sequential bracket
 ;; matching. The tree structure is preserved in cells for Track 2+.
 
-;; Flatten a parse-tree-node depth-first into ordered token-entries
-(define (flatten-tokens node)
-  (define children (parse-tree-node-children node))
-  (define n (rrb-size children))
-  (let loop ([i 0] [result '()])
-    (if (>= i n)
-        (reverse result)
-        (let ([child (rrb-get children i)])
-          (cond
-            [(token-entry? child) (loop (+ i 1) (cons child result))]
-            [(parse-tree-node? child)
-             (loop (+ i 1) (append (reverse (flatten-tokens child)) result))]
-            [else (loop (+ i 1) result)])))))
-
-;; Group tokens from vec[start..end) with bracket matching.
-;; Returns (values stx-elements next-index)
+;; The mixfix entry form `.( )` (mixfix-rparen) suppresses angle-bracket
+;; grouping so `<`/`>` read as operators inside mixfix. (`.{ }`/mixfix-rbrace
+;; retired — CIU T6 Path Selection P1.) The form-extent scanner
+;; (make-bracket-depth-rrb) applies the same suppression via its frame stack —
+;; the two layers must agree or operator-`<` inside `.( )` mis-extends the
+;; form across lines (fixed 2026-07-26; legacy flatten-tokens/group-tokens
+;; pair deleted then — dead since group-items superseded them).
 (define (mixfix-close? ct)
-  ;; The mixfix entry form `.( )` (mixfix-rparen) suppresses angle-bracket
-  ;; grouping so `<`/`>` read as operators inside mixfix. (`.{ }`/mixfix-rbrace
-  ;; retired — CIU T6 Path Selection P1. NOTE: suppression is only wired at the
-  ;; group-items langle leg; the form-extent scanner still counts `<` as an
-  ;; opener, so `<` inside `.( )` mis-extends the form — tracked defect.)
   (eq? ct 'mixfix-rparen))
-
-(define (group-tokens vec start end close-type source source-str)
-  (let loop ([i start] [result '()])
-    (cond
-      [(>= i end) (values (reverse result) end)]
-      [else
-       (define entry (vector-ref vec i))
-       (define type (set-first (token-entry-types entry)))
-       (cond
-         ;; Close on matching bracket type
-         [(and close-type (eq? type close-type))
-          (values (reverse result) (+ i 1))]
-         [(memq type '(lbracket lparen))
-          (define ct (if (eq? type 'lbracket) 'rbracket 'rparen))
-          (define-values (inner next-i) (group-tokens vec (+ i 1) end ct source source-str))
-          (loop next-i (cons (wrap-stx-list inner source) result))]
-         [(eq? type 'langle)
-          (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rangle source source-str))
-          (define-values (al ac) (pos->line-col source-str (token-entry-start-pos entry)))
-          (loop next-i (cons (make-stx (cons (make-stx '$angle-type source al ac (+ (token-entry-start-pos entry) 1) 1) inner)
-                                       source al ac (+ (token-entry-start-pos entry) 1) 1) result))]
-         [(eq? type 'lbrace)
-          (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbrace source source-str))
-          (define-values (bl bc) (pos->line-col source-str (token-entry-start-pos entry)))
-          (loop next-i (cons (make-stx (cons (make-stx '$brace-params source bl bc (+ (token-entry-start-pos entry) 1) 1) inner)
-                                       source bl bc (+ (token-entry-start-pos entry) 1) 1) result))]
-         [(eq? type 'quote-lbracket)
-          (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbracket source source-str))
-          (define-values (ql qc) (pos->line-col source-str (token-entry-start-pos entry)))
-          (loop next-i (cons (make-stx (cons (make-stx '$list-literal source ql qc (+ (token-entry-start-pos entry) 1) 2) inner)
-                                       source ql qc (+ (token-entry-start-pos entry) 1) 2) result))]
-         [(eq? type 'at-lbracket)
-          (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbracket source source-str))
-          (define-values (al ac) (pos->line-col source-str (token-entry-start-pos entry)))
-          (loop next-i (cons (make-stx (cons (make-stx '$vec-literal source al ac (+ (token-entry-start-pos entry) 1) 2) inner)
-                                       source al ac (+ (token-entry-start-pos entry) 1) 2) result))]
-         [(eq? type 'tilde-lbracket)
-          (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbracket source source-str))
-          (define-values (tl tc) (pos->line-col source-str (token-entry-start-pos entry)))
-          (loop next-i (cons (make-stx (cons (make-stx '$lseq-literal source tl tc (+ (token-entry-start-pos entry) 1) 2) inner)
-                                       source tl tc (+ (token-entry-start-pos entry) 1) 2) result))]
-         [(eq? type 'hash-lbrace)
-          (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbrace source source-str))
-          (define-values (hl hc) (pos->line-col source-str (token-entry-start-pos entry)))
-          (loop next-i (cons (make-stx (cons (make-stx '$set-literal source hl hc (+ (token-entry-start-pos entry) 1) 2) inner)
-                                       source hl hc (+ (token-entry-start-pos entry) 1) 2) result))]
-         ;; Stray closing brackets: skip.
-         [(memq type '(rbracket rparen rbrace rangle))
-          (loop (+ i 1) result)]
-         [else
-          (loop (+ i 1) (cons (token-entry->stx entry source source-str) result))])])))
 
 (define (wrap-stx-list elems source)
   (if (null? elems)
