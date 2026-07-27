@@ -320,7 +320,13 @@
 
     ;; Set (all non-binding)
     [(expr-Set a) (expr-Set (shift delta cutoff a))]
-    [(expr-hset _) e]  ; Racket value, no de Bruijn vars
+    ;; Same contract as the expr-champ arm above (ruling (D), SUB.3a): a runtime
+    ;; collection value is closed w.r.t. its own boundary, ENFORCED by the SUB.1
+    ;; tripwire rather than by this comment. The stale "Racket value, no de
+    ;; Bruijn vars" wording that used to sit here is the exact false-assertion
+    ;; shape the track's own rule red-flags; dd285174 swept it from the champ arm
+    ;; and missed this sibling (removed 2026-07-27, GitHub #58 P4).
+    [(expr-hset _) e]
     [(expr-set-empty a) (expr-set-empty (shift delta cutoff a))]
     [(expr-set-insert s a) (expr-set-insert (shift delta cutoff s) (shift delta cutoff a))]
     [(expr-set-member s a) (expr-set-member (shift delta cutoff s) (shift delta cutoff a))]

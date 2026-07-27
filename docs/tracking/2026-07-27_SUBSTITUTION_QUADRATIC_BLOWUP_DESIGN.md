@@ -20,7 +20,7 @@ on the whole result.
 | **P1** | Layer 3 — `delta = 0` early-out in `shift` | ✅ | 11 → 7 red; the 4 G2 gates flip. End-to-end delta is WITHIN NOISE (6003 → 5973 ms at N=128) — Layer 1 masks it; becomes visible after P2 |
 | **P2** | Layer 1 — whnf/nf cache key (`equal?` → `eq?`) | ✅ | **15.7× at N=256** and growing. All THREE per-command caches fixed (nf, whnf, nat-value — same defect, same family). Full suite **474 / 9209 / 1**, the 1 being this track's own P3 gates |
 | **P3** | Layer 2 — `loose-bvar-range` short-circuit, all FOUR sites | ✅ | **LINEAR SCALING RESTORED — exponent 3.1 → 1.0.** N=256: 49 775 → 19 ms (**2 620×**). New `loose-bvar.rkt`; guard on both `shift` and `subst`. All 22 gates green incl. the differential oracle |
-| **P4** | Doc-truth sweep | 🔄 | `bench-ab --ref` ✅ · `trivially-whnf?` ✅ · new pipeline.md § cache-key hazard ✅ · still: the "zero-cost" header claim, the stale hset comment |
+| **P4** | Doc-truth sweep | ✅ | 5 corrections: `bench-ab --ref` (never existed, 2 rules files instructed it) · `trivially-whnf?` (name never existed) · the "~5 ns zero-cost" counter claim (measured 43.3 ns) · the stale hset false-assertion comment · NEW `pipeline.md` § cache-key-on-an-AST-node hazard |
 | **X.close** | Bench matrix · DEFERRED triage · PIR · close #58 with contributor credit | ⬜ | PIR is the objective gate |
 
 ---
