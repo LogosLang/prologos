@@ -26,7 +26,8 @@
          (prefix-in tc: "../typing-core.rkt")
          "../namespace.rkt"
          "../trait-resolution.rkt"
-         "../parse-reader.rkt")
+         "../parse-reader.rkt"
+         "test-support.rkt")
 
 ;; ========================================
 ;; Shared Fixture (prelude loaded once)
@@ -42,14 +43,18 @@
                 shared-impl-reg
                 shared-param-impl-reg
                 shared-bundle-reg)
+  ;; Seed from the ONCE-per-subprocess prelude snapshot rather than reloading all
+  ;; 39 prelude modules. The registry family must be seeded TOGETHER: a preloaded
+  ;; module registry means modules are not re-loaded, so seeding only
+  ;; `current-module-registry` leaves the trait/impl registries empty.
   (parameterize ([current-file-module-network-ref (make-module-network)]
                  [current-ns-context #f]
-                 [current-module-registry (hasheq)]
+                 [current-module-registry prelude-module-registry]
                  [current-lib-paths (list lib-dir)]
-                 [current-preparse-registry (current-preparse-registry)]
-                 [current-trait-registry (current-trait-registry)]
-                 [current-impl-registry (current-impl-registry)]
-                 [current-param-impl-registry (current-param-impl-registry)]
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry]
+                 [current-param-impl-registry prelude-param-impl-registry]
                  [current-bundle-registry (current-bundle-registry)])
     (install-module-loader!)
     (process-string "(ns test-string-ops)")

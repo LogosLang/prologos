@@ -40,13 +40,13 @@
     #:exists 'truncate)
   (define results
     (parameterize ([current-ns-context #f]
-                   [current-module-registry (hasheq)]
+                   [current-module-registry prelude-module-registry]
                    [current-lib-paths (list lib-dir)]
                    [current-relation-store (make-relation-store)]
-                   [current-preparse-registry (current-preparse-registry)]
-                   [current-trait-registry (current-trait-registry)]
-                   [current-impl-registry (current-impl-registry)]
-                   [current-param-impl-registry (current-param-impl-registry)]
+                   [current-preparse-registry prelude-preparse-registry]
+                   [current-trait-registry prelude-trait-registry]
+                   [current-impl-registry prelude-impl-registry]
+                   [current-param-impl-registry prelude-param-impl-registry]
                    [current-bundle-registry (current-bundle-registry)]
                    [current-defn-param-names (hasheq)])
       (install-module-loader!)

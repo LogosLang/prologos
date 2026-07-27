@@ -21,7 +21,8 @@
          "../global-env.rkt"
          "../namespace.rkt"
          "../metavar-store.rkt"
-         "../syntax.rkt")
+         "../syntax.rkt"
+         "test-support.rkt")
 
 ;; ========================================
 ;; Helpers
@@ -31,7 +32,11 @@
   (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
-                 [current-module-registry (hasheq)]
+                 [current-module-registry prelude-module-registry]
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry]
+                 [current-param-impl-registry prelude-param-impl-registry]
                  )
     (process-string-ws s)
     (lookup-session name)))
@@ -40,7 +45,11 @@
   (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
-                 [current-module-registry (hasheq)]
+                 [current-module-registry prelude-module-registry]
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry]
+                 [current-param-impl-registry prelude-param-impl-registry]
                  )
     (define results (process-string-ws s))
     (if (list? results) results (list results))))
