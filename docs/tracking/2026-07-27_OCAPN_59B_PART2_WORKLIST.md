@@ -467,7 +467,8 @@ Factory chain, which must return a reference to something it spawns.
    netlayer connect plus questioner-side bridge state.
 5. **Tor handoffs × 7** — out of scope by owner instruction.
 
-17 is the ceiling in this environment; 24/24 additionally requires Tor.
+**CORRECTION (same day, after reading the handoff tests): 17 is NOT the
+ceiling — 24 is.** See "All 24 are reachable over TCP" below.
 
 ### Diagnostic aid added
 
@@ -476,3 +477,87 @@ hex under `OCAPN_FRAME_HEX=1`. Capturing the REAL frame is what unblocked
 the greeter: the previously-recorded probe used `desc:import-object 7`, but
 the wire sends `1`, and the id collision that caused the bug only exists at
 `1`. Guessing the frame hid the bug for two sessions.
+
+---
+
+## CORRECTION 4 (2026-07-27) — all 24 are reachable over TCP; Tor is not required
+
+The status section above says the 7 `third_party_handoffs` tests "need the
+Tor onion netlayer" and that 17 is the ceiling here. **Both claims are
+wrong**, and the error was inferring the requirement from a symptom instead
+of reading the tests.
+
+The symptom: upstream's `test_runner.py` does `from netlayers.onion import
+OnionNetlayer` **unconditionally**, so the module fails to import without
+`stem` — regardless of which netlayer you actually intend to use. That is a
+property of the RUNNER, not of the handoff tests.
+
+The tests themselves:
+
+- `tests/third_party_handoffs.py` contains **zero** references to onion,
+  Tor, or `stem` (verified by grep).
+- `HandoffTestCase._create_new_netlayer` is `type(self.netlayer)()` — it
+  clones whatever netlayer class is in use. It is netlayer-AGNOSTIC by
+  construction.
+- `TestingOnlyTCPNetlayer()` constructs with no arguments (binds
+  `127.0.0.1:0`, i.e. a kernel-assigned port), and exposes everything the
+  handoff tests use: `.location` (an `OCapNPeer` with `tcp-testing-only`
+  transport plus host/port hints), `.connect()`, and `.accept()`.
+
+So a second TCP netlayer instance stands in for the third party, and the
+whole handoff suite runs over plain local TCP. This repo's own selective
+loader (`tools/interop/ocapn-run-tests.py`) already sidesteps the onion
+import, so no upstream patch is needed either.
+
+### Real blocker map — all 24 tests
+
+| Capability | Unlocks | Needs outbound? |
+|---|---|---|
+| *(shipped)* | 6 | — |
+| **Exporter-side gift handling** | 4 (`HandoffRemoteAsExporter`) | **No** |
+| **Promise-resolver object** (statically pre-seeded) | 3 (`op_listen`) | **No** |
+| **`op:gc-export` emission** | 4 (`op_gc`) | **No** |
+| **Car Factory chain** (`eff-spawn`) | 2 (pipelining) | **No** |
+| **Sturdyref enlivener** | 1 (`HandoffRemoteAsGifter`) | sends on an EXISTING inbound session |
+| **Outbound connections** | 4 (2 crossed-hellos + 2 `HandoffRemoteAsReciever`) | **Yes** |
+
+**11 of the 18 remaining tests need no outbound-connection capability at
+all.** That was the single thing I had been treating as the big gate; it is
+worth 4 tests, and it is the LAST thing to build, not the first.
+
+### `HandoffRemoteAsExporter` — full spec (4 tests, all inbound)
+
+Both sessions are the suite dialling US (`self.netlayer.connect` +
+`self.other_netlayer.connect`). Required behaviour on the bootstrap object:
+
+- `['deposit-gift' <gift-id> <gift-refr>]` — record the gift.
+- `['withdraw-gift' <signed-handoff-receive>]` — reply on the caller's
+  **resolve-me** descriptor with `['fulfill <desc:import-object>]`, or
+  `['break' …]` when rejected.
+
+Four concrete gaps against what is shipped:
+
+1. **Gift ids are BYTE STRINGS** (`b"my-gift"`), not Nats.
+   `dispatch-deposit-gift-rest` runs `wire-nat` on the id and silently
+   bridges through unchanged when it returns none, so no gift is ever
+   recorded. `bs-add-gift` / `bs-lookup-gift` are `Nat`-keyed and must key
+   on the id bytes. `syrup-bytes : String` already carries them.
+2. **`withdraw-gift`'s argument is a `desc:sig-envelope`** wrapping a
+   `desc:handoff-receive` (which itself wraps the signed
+   `desc:handoff-give` that carries the gift id) — NOT a bare gift id.
+   `dispatch-withdraw-gift-rest` currently runs `wire-nat` straight on that
+   envelope.
+3. **The reply channel is resolve-me, not answer-pos.** Upstream sends
+   `answer_position=False, resolve_me_desc=…` and awaits
+   `expect_promise_resolution`. `withdraw-with-gid` replies via `ap` and
+   drops the message when `ap` is none — which is always. The Phase 59b
+   `fetch` path already builds exactly the right reply shape; reuse it.
+4. **Rejection cases must reply `break`**, not stay silent: a replayed
+   handoff-count and a bad signature each expect
+   `args[0] == Symbol("break")`. That needs per-(receiving-session,
+   side-id) handoff-count tracking and Ed25519 verification — we already
+   sign the handshake via `crypto-ffi`, so the verify primitive is at hand.
+
+Plus `test_valid_handoff_wait_deposit_gift` withdraws BEFORE the deposit
+arrives, so a withdrawal for an unknown gift id must be PARKED and answered
+when the deposit lands — not dropped.
