@@ -15,7 +15,11 @@ ns prologos::ocapn::interop-driver
 
 require [prologos::ocapn::captp-core :refer [ConnectionState empty-connection
                                               connection-step conn-step-state
-                                              conn-step-outbound]]
+                                              conn-step-outbound conn-state
+                                              bridge-state-empty]]
+        [prologos::ocapn::vat        :refer [Vat vat Actor actor actor-table-set]]
+        [prologos::ocapn::behavior   :refer [beh-echo]]
+        [prologos::ocapn::syrup      :refer [syrup-null]]
         [prologos::ocapn::captp-wire :refer [decode-op]]
         [prologos::ocapn::message    :refer [CapTPOp]]
         [prologos::ocapn::handshake  :refer [hex-to-bytes]]
@@ -35,10 +39,43 @@ defn concat-frames
   | nil        -> ""
   | cons h t   -> str::append h [concat-frames t]
 
+;; ===========================================================
+;; Phase 59b part 2: seed the bootstrap objects
+;; ===========================================================
+;;
+;; The upstream suite calls `fetch_object` before anything else, and
+;; `swiss-num-export` (captp-core) maps the Echo swiss-num
+;; "IO58l1laTyhcrgDKbEzFOO32MDd6zE5w" to export position 2N. The bridge
+;; uses a wire export position DIRECTLY as the vat's actor-table key, so
+;; an actor sitting at vat actor id 2N is already reachable from
+;; <desc:export 2> — routing needs no new code. What was missing was
+;; only the seeding: init-connection stashed `empty-connection`, whose
+;; vat has zero actors, so every fetched reference pointed at nothing.
+;;
+;; `vat-spawn` cannot be used here because it hands out the shared
+;; next-id counter rather than accepting a chosen id, so the actor is
+;; placed directly with `actor-table-set`. next-id is then set ABOVE the
+;; highest seeded id, which is load-bearing: actor ids and promise ids
+;; come from the SAME counter (vat.prologos:184-186), so leaving it at
+;; zero would let `fresh-promise` hand out id 2 and alias Echo.
+;;
+;; Only Echo is seeded. The other four bootstrap objects need behaviours
+;; that do not exist yet (Greeter must SEND rather than construct a
+;; string; Car Factory must spawn; the resolver must return a pair), and
+;; `Effect` has no spawn or outbound-send variant to express them.
+
+spec seeded-vat Nat -> Vat
+  :doc "A vat holding the Echo actor at the export position `fetch` hands out. next-id starts above the seeded ids so promise allocation cannot alias an actor."
+defn seeded-vat [echo-pos]
+  [vat 3N [actor-table-set echo-pos [actor beh-echo syrup-null] nil] nil nil]
+
+def seeded-connection : ConnectionState :=
+  [conn-state [seeded-vat 2N] bridge-state-empty nil false]
+
 spec init-connection Nat -> Bool
-  :doc "Set up fresh per-connection captp-core state for connection `cid`."
+  :doc "Set up fresh per-connection captp-core state for connection `cid`, with the bootstrap objects seeded."
 defn init-connection [cid]
-  conn-stash cid empty-connection
+  conn-stash cid seeded-connection
 
 ;; Force the stash side effect — matching the Bool result drives its
 ;; evaluation — then return the concatenated outbound bytes.
