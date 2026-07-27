@@ -182,33 +182,43 @@ defn promise-table-set [k s entries]
 ;; ========================================
 
 data Vat
-  ;; vat next-id actors promises queue
-  vat : Nat -> [List ActorEntry] -> [List PromiseEntry] -> [List VatMsg]
+  ;; vat next-id actors promises queue outbound
+  ;; `outbound` = messages whose target is NOT a local actor (Phase 59b
+  ;; part 3). The vat stays wire-agnostic: it records "could not deliver
+  ;; this", the bridge decides that means "send to peer". Before this
+  ;; field deliver-msg SILENTLY DROPPED them, which is why a behaviour
+  ;; could never originate outbound traffic.
+  vat : Nat -> [List ActorEntry] -> [List PromiseEntry] -> [List VatMsg] -> [List VatMsg]
 
 ;; Selectors.
 
 spec vat-next-id Vat -> Nat
 defn vat-next-id
-  | vat n _ _ _ -> n
+  | vat n _ _ _ _ -> n
 
 spec vat-actors Vat -> List ActorEntry
 defn vat-actors
-  | vat _ a _ _ -> a
+  | vat _ a _ _ _ -> a
 
 spec vat-promises Vat -> List PromiseEntry
 defn vat-promises
-  | vat _ _ p _ -> p
+  | vat _ _ p _ _ -> p
 
 spec vat-queue Vat -> List VatMsg
 defn vat-queue
-  | vat _ _ _ q -> q
+  | vat _ _ _ q _ -> q
+
+;; Phase 59b part 3: messages the vat could not deliver locally.
+spec vat-outbound Vat -> List VatMsg
+defn vat-outbound
+  | vat _ _ _ _ o -> o
 
 ;; ========================================
 ;; Construction
 ;; ========================================
 
 ;; Empty vat: no actors, no promises, no queue, next-id = 0.
-def empty-vat : Vat := [vat zero nil nil nil]
+def empty-vat : Vat := [vat zero nil nil nil nil]
 
 ;; ========================================
 ;; Allocation result — concrete struct
@@ -240,20 +250,20 @@ defn alloc-id
 
 spec vat-spawn BehaviorTag SyrupValue Vat -> Allocated
 defn vat-spawn
-  | tag init-state [vat n acts proms q] ->
-      allocated [vat [suc n] [actor-table-set n [actor tag init-state] acts] proms q] n
+  | tag init-state [vat n acts proms q ob] ->
+      allocated [vat [suc n] [actor-table-set n [actor tag init-state] acts] proms q ob] n
 
 spec fresh-promise Vat -> Allocated
 defn fresh-promise
-  | vat n acts proms q ->
-      allocated [vat [suc n] acts [promise-table-set n fresh proms] q] n
+  | vat n acts proms q ob ->
+      allocated [vat [suc n] acts [promise-table-set n fresh proms] q ob] n
 
 ;; enqueue-msg: append a VatMsg at the END of the queue (FIFO).
 
 spec enqueue-msg VatMsg Vat -> Vat
 defn enqueue-msg
-  | m [vat n acts proms q] ->
-      vat n acts proms [append q [cons m nil]]
+  | m [vat n acts proms q ob] ->
+      vat n acts proms [append q [cons m nil]] ob
 
 ;; ========================================
 ;; Sending
@@ -288,25 +298,25 @@ defn send-only [target args v]
 
 spec resolve-promise Nat SyrupValue Vat -> Vat
 defn resolve-promise
-  | pid val [vat n acts proms q] ->
+  | pid val [vat n acts proms q ob] ->
       match [promise-table-get pid proms]
-        | none -> [vat n acts proms q]   ;; unknown promise, no-op
+        | none -> [vat n acts proms q ob]   ;; unknown promise, no-op
         | some s ->
             match [resolved? s]
-              | true  -> [vat n acts proms q]   ;; already settled, monotone no-op
+              | true  -> [vat n acts proms q ob]   ;; already settled, monotone no-op
               | false ->
-                  [vat n acts [promise-table-set pid [fulfill val s] proms] q]
+                  [vat n acts [promise-table-set pid [fulfill val s] proms] q ob]
 
 spec break-promise Nat SyrupValue Vat -> Vat
 defn break-promise
-  | pid reason [vat n acts proms q] ->
+  | pid reason [vat n acts proms q ob] ->
       match [promise-table-get pid proms]
-        | none -> [vat n acts proms q]
+        | none -> [vat n acts proms q ob]
         | some s ->
             match [resolved? s]
-              | true  -> [vat n acts proms q]
+              | true  -> [vat n acts proms q ob]
               | false ->
-                  [vat n acts [promise-table-set pid [break reason s] proms] q]
+                  [vat n acts [promise-table-set pid [break reason s] proms] q ob]
 
 ;; ========================================
 ;; Effect interpretation
@@ -346,7 +356,7 @@ defn send [target args v]
 spec step-after-act Nat Actor SyrupValue SyrupValue [List Effect] [Option Nat] Vat -> Vat
 defn step-after-act [target old-act new-state rv effects ap v]
   let acts1 := [actor-table-set target [actor [actor-tag old-act] new-state] [vat-actors v]]
-    let v1 := [vat [vat-next-id v] acts1 [vat-promises v] [vat-queue v]]
+    let v1 := [vat [vat-next-id v] acts1 [vat-promises v] [vat-queue v] [vat-outbound v]]
       let v2 := [apply-effects effects v1]
         match ap
           | none -> v2
@@ -362,6 +372,12 @@ defn step-after-act [target old-act new-state rv effects ap v]
 ;; forever. The break-reason carries the original args so callers
 ;; can debug what couldn't be delivered.
 
+;; Append to `outbound`, preserving ORDER (append, not cons — a behaviour
+;; that sends twice must have them emitted in that order).
+spec enqueue-outbound VatMsg Vat -> Vat
+defn enqueue-outbound [m v]
+  [vat [vat-next-id v] [vat-actors v] [vat-promises v] [vat-queue v] [append [vat-outbound v] [cons m nil]]]
+
 spec deliver-msg VatMsg Vat -> Vat
 defn deliver-msg [m v]
   let target := [vmsg-target m]
@@ -370,7 +386,13 @@ defn deliver-msg [m v]
         match [actor-table-get target [vat-actors v]]
           | none ->
               match ap
-                | none     -> v
+                ;; Phase 59b part 3: no longer DROPPED. A send-only whose
+                ;; target is not a local actor is exactly a behaviour
+                ;; originating a message to a peer export position.
+                | none     -> enqueue-outbound m v
+                ;; ap = some still breaks: sending to a peer AND awaiting
+                ;; an answer is an outbound QUESTION (needs an entry in the
+                ;; outbound-questions table) and is NOT built.
                 | some pid -> break-promise pid args v
           | some a ->
               let s := [step-behavior [actor-tag a] [actor-state a] args]
@@ -389,7 +411,7 @@ defn step-vat [v]
   match [vat-queue v]
     | nil -> none
     | cons m rest ->
-        let v1 := [vat [vat-next-id v] [vat-actors v] [vat-promises v] rest]
+        let v1 := [vat [vat-next-id v] [vat-actors v] [vat-promises v] rest [vat-outbound v]]
           some [deliver-msg m v1]
 
 ;; ========================================

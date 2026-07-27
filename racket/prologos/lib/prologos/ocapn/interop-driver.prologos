@@ -67,7 +67,7 @@ defn concat-frames
 spec seeded-vat Nat -> Vat
   :doc "A vat holding the Echo actor at the export position `fetch` hands out. next-id starts above the seeded ids so promise allocation cannot alias an actor."
 defn seeded-vat [echo-pos]
-  [vat 3N [actor-table-set echo-pos [actor beh-echo syrup-null] nil] nil nil]
+  [vat 3N [actor-table-set echo-pos [actor beh-echo syrup-null] nil] nil nil nil]
 
 def seeded-connection : ConnectionState :=
   [conn-state [seeded-vat 2N] bridge-state-empty nil false]
