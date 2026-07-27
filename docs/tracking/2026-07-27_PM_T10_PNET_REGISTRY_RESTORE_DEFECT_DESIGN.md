@@ -116,6 +116,25 @@ Why this over 14 hand-written pairs:
 
 **Registries covered (14)** — `preparse`, `ctor`, `type-meta`, `subtype`, `coercion`, `capability`, `trait`, `impl`, `param-impl`, `specialization`, `bundle`, `trait-laws`, `property-store`, `functor-store`. Independently derived three ways: our census, the critic's, and the contributor's diff — all three agree.
 
+#### 3.2a Upgrade under consideration — the TABLE-DRIVEN form (verified feasible)
+
+`pipeline.md` § "Exhaustive Walkers: prefer the STRUCTURAL answer to the checklist" says a hand-maintained N-site list *is* the failure mode, and §3.5's mantra audit already admits this design fails "structurally emergent." A table-driven restore dissolves both:
+
+```racket
+;; row = (param  cell-id  pnet-index).  cell-id #f => parameter-only, on purpose.
+(define RESTORE-TABLE
+  (list (list current-preparse-registry (current-preparse-registry-cell-id) 4)
+        (list current-ctor-registry     (current-ctor-registry-cell-id)     5)
+        …
+        (list current-multi-defn-registry #f 7)))   ;; explicit: no cell exists
+```
+
+Adding a registry becomes **adding a row**, and a row cannot be added without stating its cell-id (or `#f` deliberately) — the 15th-registry regression becomes unrepresentable rather than checklist-guarded.
+
+**Prerequisite, verified independently (twice)**: the block's nested `(when (> (length pnet-result) N) …)` and per-registry `(when d-X …)` guards are **all dead**. `deserialize-module-state` always returns a **fixed 21-element list** with `(hasheq)`/`(hash)` defaults for optional slots (`pnet-serialize.rkt:699-722`), and the version gate is **exact equality** (`:589`, `:672`), so backward compatibility with a shorter list is impossible by construction. Removing them is safe and deletes ~50 lines of vestigial scaffolding.
+
+**Decision**: pending the critique's M-lens. The trade is *structural correctness* (and the mantra-audit failure repaired) against *a wider diff for a defect repair*. Note the guards are **vestigial, not scaffolding** — under an exact version gate they can never fire — so "keep them for safety" would itself be a red-flag rationalization.
+
 **Explicitly NOT covered (3)**, parameter-only and correct as such: `multi-defn-registry`, `tycon-arity-extension`, `defn-param-names`. Verified: `git grep 'current-{multi-defn-registry,tycon-arity-extension,defn-param-names}-cell-id'` → **empty**; none appears in `init-macros-cells!`.
 
 ### 3.3 Why not cherry-pick `0befd6b5`
@@ -157,6 +176,24 @@ Three cases, all of which must **FAIL at HEAD** before P1:
 ⇒ the test must reach a state where the cells are **genuinely ignorant** of the module: a fresh subprocess for the warm run, or a namespace never loaded before in that process, or `process-string` (never inits cells).
 
 Also: `infrastructure-stale?` (`pnet-serialize.rkt:574-578`) invalidates every `.pnet` when `driver_rkt.zo` is newer, and the runner mirrors it — so the test **must control cache freshness explicitly** or it silently proves nothing.
+
+#### P0 recipe — VALIDATED in-process, no subprocess (2026-07-27)
+
+A third masking mechanism was found while validating: **resetting the cells alone does NOT work**, because `init-macros-cells!` re-seeds from the *parameters*, and the parameters are polluted by the cache-hit restore itself. The working recipe needs **both** halves:
+
+1. Capture **clean parameter snapshots** (`current-ctor-registry`, `current-type-meta`, `current-preparse-registry`) *before* any lib load.
+2. Prime the cache (run 1).
+3. For run 2: `parameterize` to the clean snapshots, then `(current-persistent-registry-net-box #f)` → `init-persistent-registry-network!` → re-init **all four** cell families (`init-macros-cells!`, `init-warning-cells!`, `init-narrow-cells!` [from `global-constraints.rkt`, not `narrowing.rkt`], `init-attribute-map-cell!`). Omitting any one crashes with `net-cell-reset: unknown cell`.
+4. Assert the cells are genuinely ignorant (`(hash-ref (read-ctor-registry) 't1 #f)` → `#f`) — **this assertion is the anti-masking gate and must be in the test**, not just the setup.
+
+Measured at HEAD with this recipe:
+
+| Case | Consumer | Result at HEAD |
+|---|---|---|
+| Severity 1 | `process-string` | `[reduce minirepro::tag::t2 \| t1 -> "one" \| t2 -> "two"] : String` — **STUCK** |
+| Severity 2 | `process-file`, fresh dependent over cached dep | `"one" : String` for `[use-name t2]` — **WRONG** |
+
+Both are deterministic and subprocess-free, so they run under the batch worker without the spawn/timeout/collection-path hazards.
 
 ### P1 — The repair
 
