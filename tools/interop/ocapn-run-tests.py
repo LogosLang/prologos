@@ -45,6 +45,9 @@ SELECTED = [
         "test_start_session_with_invalid_version",
         "test_start_session_with_invalid_signature",
     ]),
+    ("tests.op_deliver", "OpDeliverTest", [
+        "test_deliver_with_resolver",
+    ]),
     ("tests.op_abort", "OpAbortTest", [
         "test_abort_before_setup",
     ]),

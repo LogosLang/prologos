@@ -1990,6 +1990,16 @@ defn prepend-pending-out [pending pr]
 ;; elaborate (prologos-syntax.md). So the non-recursive decision helpers
 ;; come first and the single recursive loop calls them.
 
+;; The resolve-me reply carries ['fulfill <value>], per upstream's
+;; expect_promise_resolution which asserts args[0] is fulfill|break.
+;; do-fetch wraps its own reply inline; this is the same shape for the
+;; general deliver path. (Audit mechanism 7 — I omitted it in 520d4605
+;; and the peer rejected the reply with an args[0] assertion.)
+spec wrap-fulfill SyrupValue -> SyrupValue
+  :doc "Wrap a resolution value as the ['fulfill v] payload of a resolve-me reply."
+defn wrap-fulfill [v]
+  [syrup-list [cons [syrup-symbol "fulfill"] [cons v [nil SyrupValue]]]]
+
 spec orphan-payload-for Nat Vat -> [Option SyrupValue]
   :doc "The resolution payload for pid, if that promise exists and has settled."
 defn orphan-payload-for [pid v]
@@ -2012,7 +2022,7 @@ defn orphan-loop
       match [orphan-bytes-for tgt emitted v]
         | none -> orphan-loop rest v emitted accum
         | some payload ->
-            orphan-loop rest v [cons tgt emitted] [cons [listener-notify-bytes res payload] accum]
+            orphan-loop rest v [cons tgt emitted] [cons [listener-notify-bytes res [wrap-fulfill payload]] accum]
 
 spec pump-outbound Vat BridgeState [List Nat] -> PumpResult
   :doc "Walk the question table; emit bytes for newly-resolved promises plus any pending-out bytes (e.g. handshake reply). Phase 42: also delivers pipelined msgs locally to actors when applicable; the resulting Vat is in the PumpResult. Phase 48: also emits listener-notification bytes for any registered op:listen targeting a settled pid. Phase 59b part 2: a second pass covers listeners whose promise has no question-table entry (the resolve-me case)."

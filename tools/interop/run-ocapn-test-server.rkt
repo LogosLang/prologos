@@ -86,7 +86,6 @@
 (imports (prologos::ocapn::message :refer-all))
 (imports (prologos::ocapn::captp-wire :refer-all))
 (imports (prologos::ocapn::syrup-wire :refer-all))
-(imports (prologos::ocapn::captp-core :refer-all))
 (imports (prologos::ocapn::pipelining :refer (promise-queue-length)))
 (imports (prologos::ocapn::captp-interop-helpers :refer (framed-concat)))
 (imports (prologos::data::list :refer (List nil cons)))
@@ -94,6 +93,7 @@
 (imports (prologos::data::string :as str :refer ()))
 (imports (prologos::ocapn::handshake :refer-all))
 (imports (prologos::ocapn::interop-driver :refer-all))
+(imports (prologos::ocapn::captp-core :refer-all))
 ")
 
 (printf "ocapn-test-server: loading Prologos OCapN modules~n") (flush-output)
