@@ -12,9 +12,9 @@
 
 | Phase | Description | Status | Notes |
 |---|---|---|---|
-| P0 | Failing-test-first: pin severities 1 + 2 + **3** + durable poisoning as tests that FAIL at HEAD | ⬜ | Must defeat **three** masking mechanisms (§4.3); recipe VALIDATED |
-| P1 | The restore repair — **table-driven** restore (§3.2a) covering the 14, with the 3 exclusions explicit | ⬜ | Fixes severities 1 + 2. Fold-not-assign is load-bearing (§3.2) |
-| P2 | **Serialize the never-restored registries** + `PNET_VERSION` bump | ⬜ | **Fixes severity 3** (§2.4). The bump also invalidates poisoned caches (§4.P2) |
+| P0 | Failing-test-first: pin severities 1 + 2 + durable poisoning as tests that FAIL at HEAD | ✅ `62a1a34c` | 3 of 4 cases failed at HEAD for the right reasons; anti-masking gates asserted IN the test |
+| P1 | The restore repair — **table-driven** restore (§3.2a) covering the 14, with the 3 exclusions explicit | ✅ `e74719b0` | P0 red→green; suite 472/9173/0; acceptance 21/21 + 29/29. Severity 3 confirmed STILL live after it |
+| P2 | **Serialize the never-restored registries** + `PNET_VERSION` bump | ⏸️ | **Fixes severity 3** (§2.4). The bump also invalidates poisoned caches (§4.P2). AWAITING owner scope ruling — this is a `.pnet` FORMAT change, outside the Option-A envelope |
 | P3 | Invariant test + `pipeline.md` checklist entry | ⬜ | Must not be theater — see §4.P3 |
 | P4 | Comment truth sweep: stale header (§2.5.3), the Track 10 Phase 2d/2e prior-art note | ⬜ | Doc-truth, no behavior change |
 | X.close | Bench check, DEFERRED triage, PM 12 note + master link, PIR-lite, issue reply | ⬜ | Gates in §7 |
@@ -82,6 +82,15 @@ after folding into (hash):     subtype-entry ← the fold REPAIRS it
 Mechanism: the record/schema **seal** needs the schema entry to fire; `schema-registry` is never serialized, so a cache hit provides it via neither parameter nor cell, the seal arm does not fire, and the annotation mismatches. The contributor's reported string (`imports: Error loading module <M>: Type mismatch`) matches exactly — they were most likely seeing this.
 
 **Consequence for scope — the important one**: severity 3 is **NOT fixed by Option A**. The dual-write repairs the 14 *serialized* registries; this failure needs the never-serialized registries to be **serialized in the first place**. See the new P2 (§4).
+
+**Re-confirmed AFTER P1 landed** (`e74719b0`), with a cold control in the same session:
+
+| Post-P1 | Result |
+|---|---|
+| WARM (hit) | `imports: Error loading module minirepro::schseal: Type mismatch` — still broken |
+| COLD (miss) | correct |
+
+⚠ **A trap worth recording, because it nearly produced a false "fixed" claim.** The *first* post-P1 measurement returned the correct answer, which looked like P1 having fixed severity 3. It had not: recompiling `driver.rkt` for P1 made `compiled/driver_rkt.zo` newer than `sch.pnet`, so `infrastructure-stale?` invalidated the cache and the run silently took the **MISS** path — which produces the correct answer by construction. That run then *rewrote* the cache, so the next run hit and failed. This is exactly the hazard the grounding audit flagged ("any repro or regression test MUST control the `driver_rkt.zo`-vs-`.pnet` mtime ordering or it will silently prove nothing"), and it applies to **any** measurement taken right after a compile. **Every cache-hit measurement needs an explicit hit assertion** (`pnet-stale?` → `#f`), which is why P0 carries one; P2's tests must too.
 
 ### 2.5 Additions the issue does not carry
 
