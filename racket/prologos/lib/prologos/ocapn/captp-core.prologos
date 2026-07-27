@@ -1967,12 +1967,59 @@ defn prepend-pending-out [pending pr]
               [pump-result-emitted pr]
 
 ;; Public top-level pump.
+;; ===========================================================
+;; Phase 59b part 2: orphan-listener emission
+;; ===========================================================
+;;
+;; pump-loop walks bs-questions and reaches listener-bytes-for-pid only
+;; INSIDE that per-QEntry walk. So a listener whose promise has NO
+;; question-table entry is never consulted, and the promise settles
+;; silently. That is exactly the resolve-me case: deliver-resolve-me
+;; allocates an answer promise and registers a listener, but the peer
+;; used resolve_me_desc instead of an answer position, so there is no
+;; QEntry and nothing ever emits.
+;;
+;; Do NOT "fix" this by synthesizing a QEntry to reuse the existing
+;; walk: a QEntry means "the peer asked via answer-position", and the
+;; pump would then emit an answer-position resolution the peer never
+;; requested.
+;;
+;; Split into three definitions rather than one nested match because
+;; module elaboration is single-pass (no mutual recursion between
+;; top-level defns) and a 3-deep nested match in one body does not
+;; elaborate (prologos-syntax.md). So the non-recursive decision helpers
+;; come first and the single recursive loop calls them.
+
+spec orphan-payload-for Nat Vat -> [Option SyrupValue]
+  :doc "The resolution payload for pid, if that promise exists and has settled."
+defn orphan-payload-for [pid v]
+  match [lookup-promise pid v]
+    | none     -> [none SyrupValue]
+    | some pst -> resolution-syrup-of-pst pst
+
+spec orphan-bytes-for Nat [List Nat] Vat -> [Option SyrupValue]
+  :doc "As orphan-payload-for, but None if pid was already emitted this round (one-shot: a promise settles exactly once)."
+defn orphan-bytes-for [pid emitted v]
+  match [member-nat? pid emitted]
+    | true  -> [none SyrupValue]
+    | false -> orphan-payload-for pid v
+
+spec orphan-loop [List Listener] Vat [List Nat] [List String] -> PumpResult
+  :doc "Emit listener-notification bytes for settled promises carrying a listener that pump-loop did not already cover."
+defn orphan-loop
+  | nil v emitted accum -> pump-result v accum emitted
+  | [cons [listener tgt res] rest] v emitted accum ->
+      match [orphan-bytes-for tgt emitted v]
+        | none -> orphan-loop rest v emitted accum
+        | some payload ->
+            orphan-loop rest v [cons tgt emitted] [cons [listener-notify-bytes res payload] accum]
+
 spec pump-outbound Vat BridgeState [List Nat] -> PumpResult
-  :doc "Walk the question table; emit bytes for newly-resolved promises plus any pending-out bytes (e.g. handshake reply). Phase 42: also delivers pipelined msgs locally to actors when applicable; the resulting Vat is in the PumpResult. Phase 48: also emits listener-notification bytes for any registered op:listen targeting a settled pid."
+  :doc "Walk the question table; emit bytes for newly-resolved promises plus any pending-out bytes (e.g. handshake reply). Phase 42: also delivers pipelined msgs locally to actors when applicable; the resulting Vat is in the PumpResult. Phase 48: also emits listener-notification bytes for any registered op:listen targeting a settled pid. Phase 59b part 2: a second pass covers listeners whose promise has no question-table entry (the resolve-me case)."
 defn pump-outbound [v st emitted]
-  prepend-pending-out [bs-pending-out st]
-    [pump-loop [bs-questions st] v
-      [bs-pipelined-msgs st] [bs-listeners st] emitted nil]
+  let base := [pump-loop [bs-questions st] v [bs-pipelined-msgs st] [bs-listeners st] emitted nil]
+    prepend-pending-out [bs-pending-out st]
+      [orphan-loop [bs-listeners st] [pump-result-vat base] [pump-result-emitted base] [pump-result-bytes base]]
 
 ;; Convenience helper for tests / callers that want the first
 ;; emitted byte-string (or a default if nothing was emitted).
