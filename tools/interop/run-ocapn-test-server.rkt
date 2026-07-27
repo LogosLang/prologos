@@ -206,7 +206,7 @@
 (define (drive-init! cid)
   (call-with-semaphore validate-sema
     (lambda ()
-      (run-prologos (format "(eval (init-connection ~a))" cid)))))
+      (run-prologos (format "(eval (init-connection ~aN))" cid)))))
 
 ;; Returns the outbound wire bytes for one frame, or #"" if the step
 ;; produced nothing / failed. A step that errors (e.g. an op captp-core
@@ -221,7 +221,7 @@
                          #"")])
         (define results
           (run-prologos
-           (format "(eval (step-connection ~a ~s))"
+           (format "(eval (step-connection ~aN ~s))"
                    cid (bytes->hex-string frame-bytes))))
         (define r (and (pair? results) (last results)))
         (cond
