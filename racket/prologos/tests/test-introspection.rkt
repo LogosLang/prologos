@@ -39,9 +39,7 @@
 
 ;; Run sexp-mode code
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry prelude-preparse-registry]
@@ -156,8 +154,6 @@
 
 (test-case "expand-full: defn with spec shows spec-inject step"
   (parameterize ([current-spec-store (hasheq)]
-                 [current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
                  [current-preparse-registry prelude-preparse-registry])
     (process-spec '(spec my-id Nat -> Nat))
     (define steps (preparse-expand-full '(defn my-id [x] x)))
@@ -178,8 +174,6 @@
 (test-case "expand-full: where-clause defn shows where-inject step"
   ;; Set up a trait and spec with where clause
   (parameterize ([current-spec-store (hasheq)]
-                 [current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
                  [current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry prelude-trait-registry]
                  [current-impl-registry prelude-impl-registry]
@@ -331,8 +325,6 @@
 
 (test-case "introspection/specs: spec store accessible"
   (parameterize ([current-spec-store (hasheq)]
-                 [current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
                  [current-preparse-registry prelude-preparse-registry])
     (process-spec '(spec test-fn Nat -> Nat))
     (define store (current-spec-store))
@@ -341,8 +333,6 @@
 
 (test-case "introspection/specs: spec-entry-type-datums accessible"
   (parameterize ([current-spec-store (hasheq)]
-                 [current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
                  [current-preparse-registry prelude-preparse-registry])
     (process-spec '(spec test-fn Nat Nat -> Bool))
     (define entry (lookup-spec 'test-fn))
@@ -412,8 +402,8 @@
 (test-case "pp-datum: $rest-param sentinel"
   (check-equal? (pp-datum '($rest-param xs)) "...xs"))
 
-(test-case "pp-datum: $approx-literal sentinel"
-  (check-equal? (pp-datum '($approx-literal 3.14)) "~3.14"))
+(test-case "pp-datum: $lseq-literal sentinel"
+  (check-equal? (pp-datum '($lseq-literal 1 2)) "~[1 2]"))
 
 (test-case "pp-datum: regular list"
   (check-equal? (pp-datum '(add 1 2)) "(add 1 2)"))

@@ -1,4 +1,4 @@
-ns examples.numerics-tutorial-demo
+ns examples::numerics-tutorial-demo
 
 ;; ========================================================================
 ;;
@@ -111,7 +111,7 @@ defn nat-double
 ;;
 ;; Three ways to do Int arithmetic:
 ;;   1. Primitives:  [int+ 3 4]         — fast built-in ops
-;;   2. Mixfix:      .{3 + 4}           — infix syntax via traits
+;;   2. Mixfix:      .(3 + 4)           — infix syntax via traits
 ;;   3. Generic:     [plus 3 4]          — trait-dispatched wrappers
 
 ;; --- Literals ---
@@ -122,7 +122,7 @@ defn nat-double
 (the Int 0)
 ;; => 0 : Int
 
-;; TIP: Bare numbers are Int. Use 42N for Nat, 3/7 for Rat, ~3.14 for Posit.
+;; TIP: Bare numbers are Int. Use 42N for Nat, 3/7 for Rat; decimals (3.14) are Posit32.
 
 
 ;; --- Primitive Arithmetic ---
@@ -152,25 +152,25 @@ defn nat-double
 ;; => 7 : Int
 
 
-;; --- Mixfix Arithmetic (.{...}) ---
+;; --- Mixfix Arithmetic (.(...)) ---
 ;;
-;; The .{...} syntax gives familiar infix notation.
+;; The .(...) syntax gives familiar infix notation.
 ;; Under the hood, operators dispatch through traits (Add, Sub, Mul, etc.)
 ;; so the same syntax works for Int, Rat, and Posit values.
 
-.{3 + 4}
+.(3 + 4)
 ;; => 7 : Int
 
-.{10 - 3}
+.(10 - 3)
 ;; => 7 : Int
 
-.{6 * 7}
+.(6 * 7)
 ;; => 42 : Int
 
-.{17 / 5}
+.(17 / 5)
 ;; => 3 : Int
 
-.{2 + 3 * 4}
+.(2 + 3 * 4)
 ;; => 14 : Int  (precedence: * before +)
 
 
@@ -182,10 +182,10 @@ defn nat-double
 [int-eq 3 3]
 ;; => true : Bool
 
-.{3 < 5}
+.(3 < 5)
 ;; => true : Bool
 
-.{3 == 3}
+.(3 == 3)
 ;; => true : Bool
 
 
@@ -196,19 +196,19 @@ defn nat-double
 [int+ answer 8]
 ;; => 50 : Int
 
-.{answer * answer}
+.(answer * answer)
 ;; => 1764 : Int
 
 spec square-int Int -> Int
 defn square-int [x]
-  .{x * x}
+  .(x * x)
 
 [square-int 7]
 ;; => 49 : Int
 
 spec abs-diff Int Int -> Int
 defn abs-diff [x y]
-  [int-abs .{x - y}]
+  [int-abs .(x - y)]
 
 [abs-diff 3 10]
 ;; => 7 : Int
@@ -466,52 +466,52 @@ defn recip [x]
 ;; Each numeric operation has a corresponding trait. Traits let you write
 ;; GENERIC code that works across number types:
 ;;
-;;   trait Add {A}  →  + : A → A → A     (via .{x + y})
-;;   trait Sub {A}  →  - : A → A → A     (via .{x - y})
-;;   trait Mul {A}  →  * : A → A → A     (via .{x * y})
+;;   trait Add {A}  →  + : A → A → A     (via .(x + y))
+;;   trait Sub {A}  →  - : A → A → A     (via .(x - y))
+;;   trait Mul {A}  →  * : A → A → A     (via .(x * y))
 ;;   trait Neg {A}  →  negate : A → A
 ;;   trait Abs {A}  →  abs : A → A
-;;   trait Div {A}  →  / : A → A → A     (via .{x / y})
-;;   trait Eq  {A}  →  == : A → A → Bool (via .{x == y})
+;;   trait Div {A}  →  / : A → A → A     (via .(x / y))
+;;   trait Eq  {A}  →  == : A → A → Bool (via .(x == y))
 ;;   trait Ord {A}  →  compare : A → A → Ordering
 ;;
-;; The .{...} mixfix syntax dispatches through traits automatically.
+;; The .(...) mixfix syntax dispatches through traits automatically.
 ;; You rarely need to call trait methods directly.
 
 ;; --- Mixfix works across types ---
 
 ;; Int:
-.{10 + 20}
+.(10 + 20)
 ;; => 30 : Int
 
 ;; Rat:
-.{1/3 + 1/6}
+.(1/3 + 1/6)
 ;; => 1/2 : Rat
 
 ;; Nat:
-.{3N + 4N}
+.(3N + 4N)
 ;; => 7N : Nat
 
 ;; Comparison works the same way:
-.{3 == 3}
+.(3 == 3)
 ;; => true : Bool
 
-.{1/2 == 2/4}
+.(1/2 == 2/4)
 ;; => true : Bool
 
-.{3 < 5}
+.(3 < 5)
 ;; => true : Bool
 
 
-;; --- Generic wrappers (prefix form) ---
+;; --- First-class operators ---
 ;;
-;; The prelude provides `plus`, `minus`, `times`, `divide` as prefix
-;; wrappers for the trait operations:
+;; Since Numerics N6e, the operator names are first-class values that
+;; dispatch through traits — use them directly (no prefix wrappers needed):
 
-[plus 10 20]
+[+ 10 20]
 ;; => 30 : Int
 
-[times 6 7]
+[* 6 7]
 ;; => 42 : Int
 
 
@@ -677,44 +677,44 @@ defn generic-double [add-d x]
 ;; The posit ↔ rational bridge is the key to understanding posit values.
 
 
-;; --- Decimal Posit Literals: ~3.14 ---
+;; --- Decimal Posit Literals: 3.14 ---
 ;;
-;; The ~ prefix creates approximate (Posit32) literals.
-;; With decimal syntax, you can write familiar constants:
+;; Bare decimal literals are approximate (Posit32) values (N6b).
+;; Familiar constants just work:
 
-~3.14
-;; => [posit32 1284463657] : Posit32  (π approximation)
+3.14
+;; => 3.14 : Posit32  (π approximation)
 
-~2.718
-;; => [posit32 1256143716] : Posit32  (e approximation)
+2.718
+;; => 2.718 : Posit32  (e approximation)
 
-~0.5
-;; => [posit32 939524096] : Posit32  (1/2 exactly)
+0.5
+;; => 0.5 : Posit32  (1/2 exactly)
 
 ;; Decimal syntax converts to exact rationals internally:
-;; ~3.14 → exact 157/50, then encoded as nearest Posit32.
+;; 3.14 → exact 157/50, then encoded as nearest Posit32.
 ;; This means no floating-point rounding during parsing!
 
 ;; Arithmetic with decimal posits:
-[p32+ ~1.5 ~2.5]
-;; => [posit32 1342177280] : Posit32  (4.0)
+[p32+ 1.5 2.5]
+;; => 4.0 : Posit32
 
-[p32* ~3.14 ~3.14]
-;; => [posit32 1507593919] : Posit32  (≈ 9.86, π²)
+[p32* 3.14 3.14]
+;; => 9.8596 : Posit32  (≈ π²)
 
 ;; Mix with integer/fraction posit literals:
-[p32+ ~42 ~0.5]
-;; => [posit32 1699741696] : Posit32  (42.5)
+[p32+ 42.0 0.5]
+;; => 42.5 : Posit32
 
 
 ;; ---- Trait instances for Posits ---
 
-;; Posits have full trait instances — mixfix .{} works directly:
-.{(posit8 64) + (posit8 64)}
+;; Posits have full trait instances — mixfix .() works directly:
+.([posit8 64] + [posit8 64])
 ;; => [posit8 72] : Posit8  (1.0 + 1.0 = 2.0)
 
-.{~3.14 * ~3.14}
-;; => [posit32 1507593919] : Posit32  (≈ 9.86, π²)
+.(3.14 * 3.14)
+;; => 9.8596 : Posit32  (≈ π²)
 
 
 ;; ────────────────────────────────────────────────────────────
@@ -777,11 +777,11 @@ defn generic-double [add-d x]
 ;; => 10 : Int
 
 ;; Square every element with mixfix:
-[map Int Int (fn [x : Int] .{x * x}) [int-range 1 6]]
+[map Int Int (fn [x : Int] .(x * x)) [int-range 1 6]]
 ;; => '[1 4 9 16 25] : [prologos::data::list::List Int]
 
 ;; Sum of squares:
-[sum [map Int Int (fn [x : Int] .{x * x}) [int-range 1 6]]]
+[sum [map Int Int (fn [x : Int] .(x * x)) [int-range 1 6]]]
 ;; => 55 : Int  (1² + 2² + 3² + 4² + 5² = 55)
 
 
@@ -789,7 +789,7 @@ defn generic-double [add-d x]
 ;; YOUR TURN: Compute the sum of the first 100 integers.
 ;; Hint: [sum [int-range 1 101]]
 ;; The answer should be 5050 (Gauss's famous formula: n(n+1)/2).
-;; Can you verify? .{100 * 101 / 2}
+;; Can you verify? .(100 * 101 / 2)
 ;; ────────────────────────────────────────────────────────────
 
 
@@ -971,7 +971,7 @@ defn collatz-len [n steps]
 
 spec pythagorean? Int -> Int -> Int -> Bool
 defn pythagorean? [a b c]
-  .{a * a + b * b == c * c}
+  .(a * a + b * b == c * c)
 
 [pythagorean? 3 4 5]
 ;; => true : Bool
@@ -1140,16 +1140,16 @@ as-posit
 ;;
 ;; RECOMMENDED FOR COMPUTATION:
 ;;
-;; Int   42              .{x + y}, .{x * y}, int+, int-, int*, int/
+;; Int   42              .(x + y), .(x * y), int+, int-, int*, int/
 ;;                       nth-int, take-int, drop-int, length-int
 ;;
-;; Rat   3/7             .{x + y}, rat+, rat-, rat*, rat/
+;; Rat   3/7             .(x + y), rat+, rat-, rat*, rat/
 ;;
-;; Posit ~3.14           .{x + y}, p{N}+, p{N}-, p{N}*, p{N}/
+;; Posit 3.14 / 2.5p8           .(x + y), p{N}+, p{N}-, p{N}*, p{N}/
 ;;       (posit8 64)     (N = 8, 16, 32, 64)
 ;;
 ;; GENERIC:
-;;   Mixfix .{x + y}     dispatches through Add/Sub/Mul/Div/Eq/Ord traits
+;;   Mixfix .(x + y)     dispatches through Add/Sub/Mul/Div/Eq/Ord traits
 ;;   plus/minus/times     prefix wrappers for trait-dispatched arithmetic
 ;;   sum/product          generic folds over lists
 ;;   int-range            generate [start..end) as List Int

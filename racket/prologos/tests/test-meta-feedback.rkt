@@ -6,11 +6,11 @@
 
 (require rackunit
          rackunit/text-ui
-         prologos/propagator
-         prologos/typing-propagators
-         prologos/syntax
-         prologos/prelude
-         prologos/type-lattice)
+         "../propagator.rkt"
+         "../typing-propagators.rkt"
+         "../syntax.rkt"
+         "../prelude.rkt"
+         "../type-lattice.rkt")
 
 (define meta-feedback-tests
   (test-suite
@@ -79,6 +79,23 @@
      (check-equal? (type-family (expr-Bool)) 'other)
      (check-equal? (type-family (expr-String)) 'other)
      (check-equal? (type-family type-bot) 'other))
+
+   ;; N5f (§8a fix 2): the fvar/FQN branch classifies by EXACT last-segment,
+   ;; not substring — so arbitrary user type names no longer over-match.
+   (test-case "type-family: fvar/FQN branch — exact match, no substring over-match (N5f)"
+     ;; refined names → exact (regression guards; all 7 have base Int/Rat)
+     (check-equal? (type-family (expr-fvar 'PosInt)) 'exact)
+     (check-equal? (type-family (expr-fvar 'NonZeroInt)) 'exact)
+     (check-equal? (type-family (expr-fvar 'NonZeroRat)) 'exact)
+     ;; FQN-qualified refined name → exact (exercises last-segment extraction)
+     (check-equal? (type-family (expr-fvar 'prologos::data::refined-int::PosInt)) 'exact)
+     ;; the N5f fix: user types that SUBSTRING-over-matched before are now 'other
+     (check-equal? (type-family (expr-fvar 'Position)) 'other)   ;; was 'approximate (⊃"Posit")
+     (check-equal? (type-family (expr-fvar 'NonZero))  'other)   ;; was 'exact       (⊃"Zero")
+     (check-equal? (type-family (expr-fvar 'Rateable)) 'other)   ;; was 'exact       (⊃"Rat")
+     ;; builtin numeric names as fvars (defensive no-regress path) → correct family
+     (check-equal? (type-family (expr-fvar 'Float32)) 'approximate)
+     (check-equal? (type-family (expr-fvar 'Int))     'exact))
 
    (test-case "coercion-detection: cross-family → warning"
      (parameterize ([current-attribute-map-cell-id #f])

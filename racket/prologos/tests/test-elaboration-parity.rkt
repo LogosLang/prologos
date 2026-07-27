@@ -226,14 +226,297 @@
                        #:expected 'unchanged))
 
 ;; ========================================
-;; Phase 10 — Union types via ATMS (cell-based TMS)
+;; PPN 4C 2A.a (2026-05-20) — retraction-parity axis
 ;; ========================================
+;;
+;; Verifies the cell-driven S(-1) retraction infrastructure (D.3 §8.7.a)
+;; doesn't regress elaboration semantics relative to the pre-2A.a box-based
+;; mechanism. The new path:
+;;   record-assumption-retraction (pure) → retraction-stratum-request cell-13
+;;   → BSP outer-loop's value-tier processing → process-retraction handler
+;;   → scoped cells cleaned via net-cell-replace → S0 restart via worklist
+;;
+;; These integration smoke tests exercise expressions that traverse the
+;; elaboration pipeline; if retraction infrastructure broke (handler not
+;; firing, cell not auto-clearing, scoped-cell-replace not cascading), the
+;; observable elaboration result would diverge. Direct mechanism tests live
+;; in tests/test-retraction-stratum.rkt sections 7-9.
 
-(parity-test-skip 'union-narrow-by-constraint "Phase 10"
-                  "let x := (the <Int | String> 0) in [eq? x 0]"
-  (check-parity-equal? 'union-narrow-by-constraint
-                       "let x := (the <Int | String> 0) in [eq? x 0]"
+(parity-test 'retraction-baseline-simple "PPN 4C 2A.a"
+             "[int+ 2 3]"
+  ;; Baseline arithmetic — no speculation, no retraction. Verifies the new
+  ;; infrastructure doesn't break basic flow (e.g., handler over-firing or
+  ;; corrupting the prop-net on dormant retraction cell).
+  (check-parity-equal? 'retraction-baseline-simple
+                       "[int+ 2 3]"
+                       #:expected '5))
+
+(parity-test 'retraction-baseline-polymorphic "PPN 4C 2A.a"
+             "[(fn [x] x) 3N]"
+  ;; Polymorphic identity — exercises type-meta resolution + propagator
+  ;; cascade. Stresses the same code path that with-speculative-rollback
+  ;; touches (elab-net rewrap, prop-net snapshot semantics) without
+  ;; actually triggering retraction. Verifies the rewrap pattern in
+  ;; record-assumption-retraction's caller didn't introduce regressions.
+  (check-parity-equal? 'retraction-baseline-polymorphic
+                       "[(fn [x] x) 3N]"
+                       #:expected '3N))
+
+(parity-test 'retraction-baseline-annotation "PPN 4C 2A.a"
+             "(the Int 42)"
+  ;; Type ascription — exercises the typing path where with-speculative-rollback
+  ;; can be invoked (typing-core.rkt:1205 area for map-assoc, etc.). Confirms
+  ;; that elaboration still produces expected type post-2A.a.
+  (check-parity-equal? 'retraction-baseline-annotation
+                       "(the Int 42)"
                        #:expected-type 'Int))
+
+;; ========================================
+;; PPN 4C 2A.b (2026-05-20) — resolution-parity axis
+;; ========================================
+;;
+;; Verifies the cell-driven L2 resolution infrastructure (D.3 §8.7.b)
+;; doesn't regress elaboration semantics relative to the pre-2A.b ready-queue
+;; mechanism. The new path:
+;;   readiness latch → resolution-stratum-request cell-14 (was per-command param)
+;;   → BSP outer-loop's value-tier processing → process-resolution handler
+;;   → executor (current-resolution-executor-pure) invokes resolution actions
+;;   on enet via box-bridge → updated state in box
+;;
+;; Architectural-honesty framing (§8.7.b.3): unlike 2A.a's pure process-retraction,
+;; this handler MUST box-bridge to elab-net. Parity tests verify the bridge
+;; preserves semantics; box-bridge retirement gated on Parent Phase 4 + PM 12.
+;;
+;; FALSIFICATION COVERAGE: this axis intentionally uses only language-primitive
+;; baseline cases (run-ns-last harness binds an empty prelude env, so prelude
+;; functions like eq-check are unbound at the symbol-table layer). End-to-end
+;; falsification — verifying process-resolution actually fires + the handler
+;; reaches the executor + dict-meta solves + elaboration completes — is covered
+;; by:
+;;   (a) tests/test-readiness-propagator.rkt line 291 integration test —
+;;       solves a dep meta and verifies actions appear in cell-14 via
+;;       read-ready-queue-actions (exercises the full readiness latch → cell-14
+;;       chain end-to-end at the API level).
+;;   (b) tests/test-trait-resolution.rkt — broad trait dispatch coverage that
+;;       inherently exercises process-resolution because trait resolution
+;;       cascades through readiness latches.
+;;   (c) The full suite — many tests exercise trait dispatch via process-string-ws
+;;       which DOES bind the prelude env (unlike run-ns-last).
+;; If process-resolution misfires (handler not registered, cell-14 not drained,
+;; executor unset), (a) + (b) + (c) all fail visibly.
+
+(parity-test 'resolution-baseline-arithmetic "PPN 4C 2A.b"
+             "[int+ 1 2]"
+  ;; Baseline arithmetic — primitive int+, no trait dispatch. Confirms the new
+  ;; handler infrastructure doesn't break basic elaboration flow (e.g., handler
+  ;; over-firing, polluting prop-net on dormant resolution cell, or causing
+  ;; spurious value-tier work for non-trait-using expressions).
+  (check-parity-equal? 'resolution-baseline-arithmetic
+                       "[int+ 1 2]"
+                       #:expected '3))
+
+(parity-test 'resolution-baseline-polymorphic "PPN 4C 2A.b"
+             "[(fn [x] x) 3N]"
+  ;; Polymorphic identity — exercises type-meta resolution + propagator cascade.
+  ;; Stresses the same elaboration codepath that constraint readiness latches
+  ;; build atop, without requiring prelude-bound trait methods. Verifies the
+  ;; resolution-stratum-request cell (cell-14) doesn't cause spurious value-tier
+  ;; work on dormant constraints.
+  (check-parity-equal? 'resolution-baseline-polymorphic
+                       "[(fn [x] x) 3N]"
+                       #:expected '3N))
+
+(parity-test 'resolution-baseline-annotation "PPN 4C 2A.b"
+             "(the Int 42)"
+  ;; Type ascription — exercises check-path where readiness latches can fire
+  ;; for inferred constraints. Confirms elaboration produces expected type
+  ;; post-2A.b (mirror of retraction-baseline-annotation, axis above).
+  (check-parity-equal? 'resolution-baseline-annotation
+                       "(the Int 42)"
+                       #:expected-type 'Int))
+
+;; ========================================
+;; PPN 4C 2A.c (2026-05-20) — orchestration-parity axis
+;; ========================================
+;;
+;; Verifies the BSP outer-loop's value-tier orchestration (2A.a's
+;; process-retraction + 2A.b's process-resolution + S1 NAF + classify-inhabit)
+;; is observationally equivalent to the pre-2A sequential orchestrator
+;; (run-stratified-resolution-pure) for RETRACTION-HEAVY workloads.
+;;
+;; THE FALSIFICATION TEST for D.3 §8.7.4's "S(-1) runs POST-S0" timing concern:
+;;
+;;   Pre-2A sequential loop:      cleanup → S0 → L2 → ...
+;;                                (S(-1) runs BEFORE S0)
+;;
+;;   Post-2A BSP outer-loop:      S0 fires on potentially-stale state →
+;;                                S(-1) cleans → restart-from-outer-loop →
+;;                                S0 fires on cleaned state → ...
+;;                                (S(-1) runs AFTER S0 quiescence)
+;;
+;; The 2A model adds one "extra round" of S0 firing on pre-cleanup state per
+;; outer-loop iteration. Correctness argument (§8.7.4): worldview-filtering at
+;; `net-cell-read` should hide stale entries from propagators firing under a
+;; retracted assumption bitmask. S(-1)'s subsequent cleanup is COMPACTION (not
+;; correctness). If worldview-filtering DOESN'T preserve correctness, these
+;; tests fail because the "wrong" branch's stale entries contaminate the
+;; correct branch's elaboration result.
+;;
+;; The retraction trigger: `def x : <T1 | T2> := value` invokes
+;; `check ctx value (expr-union T1 T2)` at typing-core.rkt:2385, which uses
+;; `with-speculative-rollback` to try T1 (registering hyp-id, writing under
+;; hyp-bitmask), and on failure calls `record-assumption-retraction` (which
+;; writes to cell-13 → process-retraction handler fires → S(-1) cleanup runs
+;; POST-S0 per the 2A model). Then T2 is tried.
+;;
+;; Falsification posture: if the `(ns t)` bootstrap pattern works in the
+;; run-ns-last harness, these tests serve as direct falsification of §8.7.4.
+;; If not, the axis falls back to baseline + this NOTE pointing to
+;; tests/test-punify-integration.rkt:228 (uses local run-last that DOES
+;; bootstrap correctly; exercises `(def x : <Int | Bool> := "hello")`
+;; contradiction-driven retraction path end-to-end).
+
+(parity-test 'orchestration-union-no-retraction "PPN 4C 2A.c"
+             "(ns t) (def x : <Int | String> := 42) x"
+  ;; Baseline: Int branch of <Int | String> succeeds first; no retraction.
+  ;; Confirms the union-check + speculation path produces correct elaboration
+  ;; under 2A.b's handler-based orchestration without exercising the post-S0
+  ;; S(-1) timing concern. (Compare with -with-retraction below.)
+  (check-parity-equal? 'orchestration-union-no-retraction
+                       "(ns t) (def x : <Int | String> := 42) x"
+                       #:expected '42))
+
+(parity-test 'orchestration-union-with-retraction "PPN 4C 2A.c"
+             "(ns t) (def x : <Int | String> := \"hello\") x"
+  ;; FALSIFICATION CASE for §8.7.4: Int branch fails (assigning "hello" to Int)
+  ;; → `with-speculative-rollback` calls `record-assumption-retraction` (writes
+  ;; to cell-13) → BSP outer-loop's value-tier processes process-retraction
+  ;; AFTER S0 quiescence → restart-from-outer-loop → S0 fires again with
+  ;; retracted bits filtered out via worldview → String branch succeeds.
+  ;;
+  ;; If S(-1) post-S0 timing is wrong (worldview-filtering doesn't hide stale
+  ;; entries from the failed Int branch), the String branch elaboration could:
+  ;;   - Pick up contaminating type information from the retracted Int hyp
+  ;;   - Produce wrong final type for `x` (e.g., type-top contradiction)
+  ;;   - Fail entirely with "type mismatch" error
+  ;; Expected: `"hello"` value with String component of union type retained.
+  (check-parity-equal? 'orchestration-union-with-retraction
+                       "(ns t) (def x : <Int | String> := \"hello\") x"
+                       #:expected "hello"))
+
+(parity-test 'orchestration-union-flipped-with-retraction "PPN 4C 2A.c"
+             "(ns t) (def x : <String | Int> := 42) x"
+  ;; Symmetric variant of above: union order flipped so left branch is String
+  ;; (fails for value 42) and right branch is Int (succeeds). Verifies the
+  ;; retraction path doesn't have a left/right asymmetry. Together with the
+  ;; pair above, this triangulates the BSP outer-loop's value-tier behavior
+  ;; under retraction: works for both branch orderings, both successful and
+  ;; retracted cases.
+  (check-parity-equal? 'orchestration-union-flipped-with-retraction
+                       "(ns t) (def x : <String | Int> := 42) x"
+                       #:expected '42))
+
+;; ========================================
+;; PPN 4C 3A.c.3-R7 (2026-05-22) — union-inhabitation parity axis
+;; ========================================
+;;
+;; Per addendum §9.3.5.5 Decision 2 (D' resolution: 4 active axes + 1
+;; skip-gated) and §9.3.7 R7 mini-design. Validates the on-network
+;; mechanism's user-facing behavior end-to-end:
+;;
+;;   R7's inline-emit at type-map-write detects union → emits cell-15
+;;   request → process-fork-on-union handler decomposes via N branch
+;;   propagators wrapped at per-branch worldview → contradictions
+;;   narrow worldview-cache via S(-1) per 3A.b → surviving branches'
+;;   bits remain → classifier PRESERVED as the original union
+;;
+;; Non-committing semantics: this is the LOAD-BEARING property. A sexp
+;; first-success commit would return the value with the FIRST branch's
+;; type only — narrowing the classifier away from the union. The R7
+;; mechanism preserves the union as the classifier (only contradicted
+;; branches narrow; multi-success branches coexist).
+;;
+;; Axes:
+;;   - preserved:      single-success branch; classifier retained
+;;   - flipped:        branch-order symmetry (left-fail-right-succeed)
+;;   - multi-success:  LOAD-BEARING DISCRIMINATOR — sexp first-success
+;;                     would FAIL this axis (narrows to first branch)
+;;   - all-fail:       exhaustion produces type error
+;;   - narrowing:      skip-gated → PPN Track 5 (occurrence typing)
+
+(parity-test 'union-inhabitation-preserved "PPN 4C 3A.c.3-R7"
+             "(ns t) (def x : <Int | String> := 42) x"
+  ;; Int branch succeeds; non-committing preserves classifier as union.
+  ;; Discriminating: a sexp first-success commit returns "42 : Int" only;
+  ;; this axis requires "Int | String" substring to be present in the
+  ;; pretty-printed type annotation.
+  (check-parity-equal? 'union-inhabitation-preserved
+                       "(ns t) (def x : <Int | String> := 42) x"
+                       #:expected '42
+                       #:expected-type "Int | String"))
+
+(parity-test 'union-inhabitation-flipped "PPN 4C 3A.c.3-R7"
+             "(ns t) (def x : <String | Int> := 42) x"
+  ;; Branch-order symmetry: left-fail-right-succeed produces same shape.
+  ;; pp-expr preserves SOURCE ORDER (pretty-print.rkt:632-633 emits
+  ;; "~a | ~a" without sorting); expected type substring matches input
+  ;; order "String | Int".
+  (check-parity-equal? 'union-inhabitation-flipped
+                       "(ns t) (def x : <String | Int> := 42) x"
+                       #:expected '42
+                       #:expected-type "String | Int"))
+
+(parity-test 'union-inhabitation-multi-success "PPN 4C 3A.c.3-R7"
+             "(ns t) (def x : <Nat | Int> := 0N) x"
+  ;; LOAD-BEARING DISCRIMINATOR per §9.3.5.5. Value 0N is BOTH Nat (direct
+  ;; literal) AND Int (via subtype Nat <: Int — established at SRE Track 2H).
+  ;; Under R7's non-committing semantics, both branches succeed AND the
+  ;; classifier remains "Nat | Int" (neither branch narrows). A sexp
+  ;; first-success commit returns "0N : Nat" only — FAILS the "Nat | Int"
+  ;; substring match. This axis is what proves on-network non-committing
+  ;; vs any first-success-commit alternative.
+  (check-parity-equal? 'union-inhabitation-multi-success
+                       "(ns t) (def x : <Nat | Int> := 0N) x"
+                       #:expected '0N
+                       #:expected-type "Nat | Int"))
+
+(parity-test 'union-inhabitation-all-fail "PPN 4C 3A.c.3-R7"
+             "(ns t) (def x : <Int | Bool> := \"hello\") x"
+  ;; All branches contradict ("hello" is neither Int nor Bool). Under R7's
+  ;; non-committing semantics, both branch propagators write contradiction
+  ;; sentinels; worldview-cache narrows away both branch bits via S(-1)
+  ;; (3A.b's process-fork-contradiction); union exhaustion produces an
+  ;; error via typing-errors.rkt:78 (the path that stays alive per
+  ;; §9.3.5.4; Parent Phase 4 owns its retirement). x's def doesn't
+  ;; complete; trailing reference surfaces as unbound-variable error
+  ;; (run-ns-last returns the LAST expression's result; union-exhaustion
+  ;; error appears earlier in the stream but is not the final result).
+  ;;
+  ;; The unbound-variable result is the downstream symptom of failed def
+  ;; — IS the parity-test-observable proof that union exhaustion happened.
+  ;; For direct union-exhaustion error-shape testing, see
+  ;; test-union-types-atms.rkt mechanism tests (which assert on cell-16
+  ;; narrowing + worldview-cache state directly, not surface result).
+  (check-parity-equal? 'union-inhabitation-all-fail
+                       "(ns t) (def x : <Int | Bool> := \"hello\") x"
+                       #:expected "Unbound variable"))
+
+;; ========================================
+;; PPN Track 5 (occurrence typing) — narrowing axis (skip-gated)
+;; ========================================
+;;
+;; Originally framed as `union-narrow-by-constraint` at Phase 10. Per
+;; §9.3.5.5 Decision 2 reframing: narrowing of a union to a single
+;; component via constraint propagation (`[int+ x 1]` constraining x to
+;; Int when x : <Int | String>) IS occurrence typing — PPN Track 5
+;; territory, NOT Phase 3A.c scope. The skip-gated entry preserves the
+;; intent and points to the proper track for resurrection.
+
+(parity-test-skip 'union-inhabitation-narrowing "PPN Track 5 (occurrence typing)"
+                  "let x := (the <Int | String> 0) in [int+ x 1]"
+  (check-parity-equal? 'union-inhabitation-narrowing
+                       "let x := (the <Int | String> 0) in [int+ x 1]"
+                       #:expected '1))
 
 ;; ========================================
 ;; Phase 9b — γ hole-fill inhabitant synthesis
@@ -254,3 +537,96 @@
   (check-parity-equal? 'error-provenance-chain
                        "[int+ \"a\" 3]"
                        #:expected-type 'type-top))
+
+;; PPN 4C addendum Phase 3C.d.4 (2026-05-24) — KR-1 regression-detection canary
+;;
+;; Per addendum §9.5.5.5 deliverable 4 + §9.5.4.14 KR-1 + §9.5.5 (c) ESCALATE-
+;; with-substrate decision: skip-gated canary preserves regression-detection
+;; capability across Phase 11b deferral period.
+;;
+;; KR-1 named drift: pre-3C.c rendering of `(def x <Nat | Bool> "hello")`
+;; produced `[diagnosis] retract:` lines via build-derivation-chain's
+;; format-context-diagnosis. Under 3C.c's new (listof derivation-chain) shape,
+;; these diagnosis lines DISAPPEAR (the sexp translator at error-explanation.rkt:
+;; 391+ produces per-step `because:` lines only — ATMS state queries deferred
+;; per §9.5.4.4 Q-C.4 lock + §9.5.4.13 KR-1 analysis).
+;;
+;; Restoration decision history (3 options weighed at 3C.d.0 mini-design,
+;; persisted at §9.5.5.4 Q-D.1):
+;;   (a) RESTORE at 3C.d via ATMS state queries — REJECTED (inverts 3C.c
+;;       design intent; render-time staleness hazard; KR-3 grows)
+;;   (b) ESCALATE to Phase 11b with timeline commitment — REJECTED (unbounded
+;;       deferral; "pragmatic" rationalization anti-pattern)
+;;   (c) ESCALATE-with-substrate — LOCKED. Pays tracking debt up-front:
+;;       (i) DEFERRED.md entry; (ii) this skip-gated canary; (iii) Phase 11b
+;;       parent design row update; (iv) chain's assumption-ids enrichment.
+;;
+;; SHAPE DEPENDENCY (D-3C.d-7 mitigation):
+;;   The `[diagnosis] retract:` substring assertion captures the PRE-3C.c
+;;   rendering shape. Phase 11b's restoration may produce DIFFERENT diagnosis
+;;   rendering (e.g., trace-monoidal-category-theory-grounded; LSP-serialized;
+;;   structured-data path). When Phase 11b lands, this canary MUST be updated
+;;   alongside the restoration to reflect Phase 11b's chosen shape.
+;;
+;; RE-EVALUATION at Phase 11b open:
+;;   Phase 11b mini-design re-weighs (a)/(b)/(c) variants with trace-monoidal-
+;;   category-theory framing as research input. The (c)+substrate option preserved
+;;   here is NOT a commitment to Phase 11b's design; it's a RESTORATION CANARY
+;;   that captures the regression for whichever restoration shape Phase 11b
+;;   chooses.
+;;
+;; Cross-references: addendum §9.5.4.14 (KR-1 named drift) + §9.5.5
+;; (3C.d mini-design) + §9.5.5.4 Q-D.1 (3-column adversarial lock) +
+;; §9.5.5.13 (3C.d.3 empirical findings + (β.3.i) decision context).
+
+(parity-test-skip 'union-diagnosis-restoration "Phase 11b"
+                  "(def x <Nat | Bool> \"hello\")"
+  (check-parity-equal? 'union-diagnosis-restoration
+                       "(def x <Nat | Bool> \"hello\")"
+                       ;; Pre-3C.c rendering produced "[diagnosis] retract: x : <Nat | Bool>"
+                       ;; via format-context-diagnosis. KR-1 regression: this line DISAPPEARS
+                       ;; under 3C.c's new chain shape. Phase 11b restores via ATMS state
+                       ;; queries at render time (or alternative shape; see body comment).
+                       #:expected "[diagnosis] retract:"))
+
+;; ========================================
+;; Phase 1C-vi — tropical-fuel-counter-parity (D.4 reframed; §15 axis)
+;; ========================================
+;;
+;; Per §15 (D.4 CANONICAL): tropical-fuel-counter-parity axis.
+;; "OLD counter exhaustion (struct-field-based) vs NEW cell exhaustion (on-write
+;; predicate at cell layer) at equivalent points for representative workloads."
+;;
+;; Under D.4 + 1C-iv-b retirement: OLD struct-field counter is RETIRED. "Parity"
+;; reframes to regression-vs-historical-baseline (per §10.0.7 F9 + γ3-a
+;; resolution): elaboration outputs for representative workloads should match
+;; pre-Phase-1 baseline behavior, demonstrating that the cell-API substrate +
+;; on-write predicate produce equivalent semantics to what the OLD counter +
+;; inline-check produced.
+;;
+;; The Pre-0 S4 probe baseline (data/benchmarks/tropical-pre0-baseline-2026-04-26.txt
+;; §S4) captured 28 commands across the probe workload. The probe is now run
+;; under D.4 production code; if its output matches the baseline output, the
+;; tropical-fuel-counter-parity axis holds.
+;;
+;; These tests assert SMALL representative elaboration outputs (single
+;; expressions; NOT the full 28-command probe — that's handled at 1C-vi
+;; Commit 2's probe + acceptance run). They demonstrate the on-network cell-
+;; mechanism produces correct outputs across workloads that previously stressed
+;; the OLD struct-field counter exhaustion path.
+
+(parity-test 'tropical-fuel-simple-arithmetic "Phase 1C-vi"
+             "[int+ 2 3]"
+  (check-parity-equal? 'tropical-fuel-simple-arithmetic
+                       "[int+ 2 3]"
+                       #:expected '5))
+
+(parity-test 'tropical-fuel-polymorphic-id "Phase 1C-vi"
+             "[(fn [x] x) 3N]"
+  ;; Polymorphic identity application — exercises type-meta resolution
+  ;; (per axis 5 baseline); inheritable fuel-consumption pattern. Under
+  ;; D.4: cell-API decrement at every reduce-step; on-write predicate
+  ;; ensures exhaustion routes through cell layer if budget exceeded.
+  (check-parity-equal? 'tropical-fuel-polymorphic-id
+                       "[(fn [x] x) 3N]"
+                       #:expected '3N))

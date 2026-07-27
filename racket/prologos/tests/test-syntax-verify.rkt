@@ -20,9 +20,7 @@
          "../multi-dispatch.rkt")
 
 (define (run-ns s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry prelude-preparse-registry]
@@ -36,9 +34,7 @@
     (process-string s)))
 
 (define (run-file path)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry prelude-preparse-registry]
@@ -80,10 +76,10 @@
      (eval m)")))
   (check-contains result "Map"))
 
-;; Test: Approx literal ~1.5 works (Posit32)
+;; Test: bare decimal 1.5 infers Posit32 (N6b)
 (test-case "syntax/approx-literal"
   (define result (run-ns-last (string-append preamble
-    "(infer ~1.5)")))
+    "(infer 1.5)")))
   (check-contains result "Posit32"))
 
 ;; Test: List literal '[1 2 3] works

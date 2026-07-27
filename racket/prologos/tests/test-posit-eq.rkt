@@ -33,9 +33,7 @@
 ;; ========================================
 
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry prelude-preparse-registry]
@@ -66,10 +64,11 @@
   (define result (whnf (expr-p32-eq (expr-posit32 posit32-one) (expr-posit32 posit32-zero))))
   (check-true (expr-false? result)))
 
-(test-case "posit-eq/p32-eq-nar-not-equal"
-  ;; NaR != NaR (IEEE-style: NaN ≠ NaN)
+(test-case "posit-eq/p32-eq-nar-reflexive"
+  ;; NaR == NaR (2022 Posit Standard: NaR is reflexive — total order, N6d-iii).
+  ;; (Contrast IEEE Float NaN != NaN; posits and floats differ per their standards.)
   (define result (whnf (expr-p32-eq (expr-posit32 posit32-nar) (expr-posit32 posit32-nar))))
-  (check-true (expr-false? result)))
+  (check-true (expr-true? result)))
 
 ;; ========================================
 ;; AST-level reduction tests (Posit8)
@@ -83,9 +82,10 @@
   (define result (whnf (expr-p8-eq (expr-posit8 posit8-one) (expr-posit8 posit8-zero))))
   (check-true (expr-false? result)))
 
-(test-case "posit-eq/p8-eq-nar"
+(test-case "posit-eq/p8-eq-nar-reflexive"
+  ;; NaR == NaR (2022 Posit Standard: reflexive) — N6d-iii.
   (define result (whnf (expr-p8-eq (expr-posit8 posit8-nar) (expr-posit8 posit8-nar))))
-  (check-true (expr-false? result)))
+  (check-true (expr-true? result)))
 
 ;; ========================================
 ;; AST-level reduction tests (Posit16, Posit64)
@@ -143,10 +143,10 @@
 
 (test-case "posit-eq/trait-eq-posit32"
   (define result (run (string-append preamble
-    "(eval (Eq-eq? Posit32 Posit32--Eq--dict ~1 ~1))")))
+    "(eval (Eq-eq? Posit32 Posit32--Eq--dict 1.0 1.0))")))
   (check-contains result "true"))
 
 (test-case "posit-eq/trait-eq-posit32-false"
   (define result (run (string-append preamble
-    "(eval (Eq-eq? Posit32 Posit32--Eq--dict ~1 ~2))")))
+    "(eval (Eq-eq? Posit32 Posit32--Eq--dict 1.0 2.0))")))
   (check-contains result "false"))

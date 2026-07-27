@@ -20,9 +20,7 @@
 
 ;; Helper: run prologos code with namespace system active
 (define (run-ns s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry prelude-preparse-registry]
@@ -35,9 +33,7 @@
 ;; sharing the module registry so the second can require the first.
 ;; Returns the results from the second module.
 (define (run-ns-pair s1 s2)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry prelude-preparse-registry]
@@ -56,10 +52,9 @@
                           [(not (null? (ns-context-auto-exports ctx)))
                            (reverse (ns-context-auto-exports ctx))]
                           [else '()])]
-               [mi (module-info ns-sym exports (current-prelude-env) #f (hasheq) (hasheq) (hasheq) (hasheq) #f)])
+               [mi (module-info ns-sym exports (hasheq) #f (hasheq) (hasheq) (hasheq) (hasheq) #f)])
           (register-module! ns-sym mi))))
     ;; Reset for second module
-    (current-prelude-env (hasheq))
     (current-ns-context #f)
     (process-string s2)))
 
@@ -143,11 +138,13 @@
 
 
 (test-case "eq/eq-neq-type-check"
-  ;; eq-neq : Pi(A :0 Type 0). (Eq A) -> A -> A -> Bool
-  ;; After deftype expansion: (-> A (-> A Bool)) is Eq A
-  (check-equal?
-   (last (run-ns "(ns eq8)\n(imports [prologos::core::eq :refer [eq-neq]])\n(check eq-neq : (Pi (A :0 (Type 0)) (-> (-> A (-> A Bool)) (-> A (-> A Bool)))))"))
-   "OK"))
+  ;; N6e E1: bare `eq-neq` auto-instantiates (type + Eq-dict holes), so the raw
+  ;; polymorphic Pi is no longer ascribable to a bare reference (the all-m0 nil
+  ;; precedent). Assert the instantiated value shape instead.
+  (check-true
+   (string-contains?
+    (format "~a" (last (run-ns "(ns eq8)\n(imports [prologos::core::eq :refer [eq-neq]])\n(infer eq-neq)")))
+    "Bool")))
 
 
 ;; ========================================

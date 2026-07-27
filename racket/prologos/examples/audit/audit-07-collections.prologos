@@ -1,4 +1,4 @@
-ns examples.audit.collections
+ns examples::audit::collections
 
 ;; ========================================================================
 ;; AUDIT 07 — Collections & Operations

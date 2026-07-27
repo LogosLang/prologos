@@ -63,23 +63,20 @@
 (test-case "nil value infer → Nil (without List constructor)"
   (with-fresh-meta-env
     ;; When List nil constructor is NOT in global env, expr-nil infers to Nil
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
+    (parameterize ([current-file-module-network-ref (make-module-network)])
       (check-equal? (tc:infer ctx-empty (expr-nil))
                     (expr-Nil)
                     "nil : Nil (no list constructor)"))))
 
 (test-case "nil value check against Nil"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
+    (parameterize ([current-file-module-network-ref (make-module-network)])
       (check-true (tc:check ctx-empty (expr-nil) (expr-Nil))
                   "nil checks as Nil"))))
 
 (test-case "nil-check typing returns Bool"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
+    (parameterize ([current-file-module-network-ref (make-module-network)])
       (check-equal? (tc:infer ctx-empty (expr-nil-check (expr-nil)))
                     (expr-Bool)
                     "nil? : _ → Bool"))))
@@ -215,8 +212,7 @@
 (define-values (shared-global-env shared-ns-context shared-module-reg
                 shared-trait-reg shared-impl-reg shared-param-impl-reg
                 shared-bundle-reg)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
+  (parameterize ([current-file-module-network-ref (make-module-network)]
                  [current-ns-context #f]
                  [current-module-registry (make-hash)]
                  [current-lib-paths (list lib-dir)]
@@ -227,7 +223,7 @@
                  [current-bundle-registry (current-bundle-registry)])
     (install-module-loader!)
     (process-string "(ns test-nil-type)")
-    (values (current-prelude-env)
+    (values (global-env-snapshot)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -237,7 +233,7 @@
 
 ;; Run sexp code using shared environment
 (define (run s)
-  (parameterize ([current-prelude-env shared-global-env]
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list lib-dir)]
@@ -256,7 +252,7 @@
   (call-with-output-file tmp #:exists 'replace
     (lambda (out) (display s out)))
   (define result
-    (parameterize ([current-prelude-env shared-global-env]
+    (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                    [current-ns-context shared-ns-context]
                    [current-module-registry shared-module-reg]
                    [current-lib-paths (list lib-dir)]

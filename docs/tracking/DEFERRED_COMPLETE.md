@@ -369,3 +369,16 @@ work on all collection types via auto-resolved trait dicts. 8 native AST primiti
 - ~~`cut` not in parser keyword list~~ — RESOLVED (commit `a863f20`)
 - ~~Anonymous `rel` + `solve` integration~~ — RESOLVED (commit `14c3d2b`)
 - ~~Trait dispatch in relational `is`-goals and `guard` conditions~~ — RESOLVED (commit `78f978e`)
+
+---
+
+## Mixed-Type Maps — Resolved
+
+### Type Narrowing for `map-get` — RESOLVED by CIU T6 F1a structural records (2026-07-16 triage)
+- "When key is statically known, narrow return type" is delivered by structural row typing:
+  keyword-literal maps mint rows, so `{:a 1 :b "x"}.a : Int` (CIU T6 F1a-core, commit `589fb067`);
+  mixed-key literals type `(Map K ⋃observed)` (D18, commit `6a2bc9d5`).
+- Annotated `(Map K <union>)` dictionaries deliberately keep the uniform V (D18: "dictionaries
+  stay honest") — per-key narrowing is the ROW path, by design, not a pending Map feature.
+- Source: `docs/tracking/2026-02-22_MIXED_TYPE_MAPS.md`; triaged out of DEFERRED.md at the
+  CIU T6 F1b opening per workflow.md § "DEFERRED.md triage at track start".

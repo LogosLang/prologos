@@ -1411,6 +1411,71 @@ This is the polynomial functor's data-dependent arity: the number of output posi
 3. Is `:foreach` sufficient for data-dependent instantiation, or do we need full dependent types in network declarations? (The polynomial functor's Σ-type expressiveness.)
 4. Should `rewrite` rules compose with `bridge` declarations? (A bridge that also rewrites — e.g., a domain-crossing transformation.) Or should composition be explicit via `stratification`?
 
+## 17b. Proposed Extension from PPN 4C Addendum Phase 4A (Env-Network)
+
+PPN 4C Addendum Phase 4A mini-design (2026-05-26) modeled the per-file env-network in NTT syntax (see [PPN 4C Phase 9+ Addendum design §18.15.6](2026-04-21_PPN_4C_PHASE_9_DESIGN.md)) and surfaced an NTT gap: the existing `bridge` form (§6) models **cross-DOMAIN bridges within a single prop-network**, but does NOT model **cross-NETWORK bridges between separate prop-network instances**.
+
+### 17b.1 The Gap
+
+Today's `net-add-cross-domain-propagator` (propagator.rkt:4361) installs α/γ propagators between two cells WITHIN ONE prop-network — connecting different lattice domains (TypeExpr, MultExpr, etc.). This is the substrate for 6+ existing Galois bridges (type↔mult, session↔type, session↔effect, type↔capability, parse bridges).
+
+The NTT `bridge` form (§6) models this correctly: `:from`, `:to`, `:alpha`, `:gamma`, `:preserves` — all assuming within-network composition.
+
+**What's NOT modeled**: bridges between SEPARATE prop-network instances. Examples surfacing in the codebase:
+- `module-network-ref` (namespace.rkt:114) — per-module persistent prop-network; cross-module reads via function-call (`module-network-lookup`), NOT via propagator-installed bridge
+- Per-file mnr (proposed for PPN 4C Addendum Phase 4A) — same shape, currently uses function-call for cross-file access
+- Future PPN Track 8 incremental editing — reactive cross-network deps would benefit from propagator-installed cross-network bridges (edit in file A's env → wake dependent propagators in file B's elab-network)
+- Future SH Series distributed runtime — cross-node module access via session-typed protocols
+
+### 17b.2 Proposed `cross-network-bridge` Form (Sketch)
+
+```prologos
+cross-network-bridge ModuleAImportsB
+  :from-network module-B-env       ;; source prop-network instance
+  :to-network   module-A-env       ;; destination prop-network instance
+  :imports      [name → name mapping]  ;; or :everything
+  :access       :function-call     ;; per PM Track 6 Phase 7d module-network-lookup pattern
+  ;; :access :reactive             ;; future PPN Track 8 use case — propagator-installed
+```
+
+| Keyword | Type | Default | Description |
+|---------|------|---------|-------------|
+| `:from-network` | Network instance | required | Source prop-network instance |
+| `:to-network` | Network instance | required | Destination prop-network instance |
+| `:imports` | Symbol map or `:everything` | required | Name mapping (renaming, qualification, restriction) |
+| `:access` | `Symbol` | `:function-call` | `:function-call` (synchronous read; per-command lifecycle) OR `:reactive` (propagator-installed; reactive deps across networks; PPN Track 8 use case) |
+| `:alpha` | `Fn : L → M` | identity | Optional name/value transformation (if domains differ) |
+| `:preserves` | `[Structure ...]` | `[]` | Same as within-network bridges |
+
+### 17b.3 Distinction from `bridge`
+
+| | `bridge` (§6) | `cross-network-bridge` (§17b proposed) |
+|---|---|---|
+| Operates on | Cells within ONE prop-network | Cells across SEPARATE prop-network instances |
+| Crosses | Lattice domain boundary | Network instance boundary |
+| Primitive | `net-add-cross-domain-propagator` | (new — extend primitive OR new primitive) |
+| Existing use | type↔mult, type↔capability, session↔type, etc. | module-network-lookup, PPN 4C Phase 4A per-file mnr |
+| Reactive default | Yes (propagator-installed) | `:function-call` (today's pattern); `:reactive` future |
+
+### 17b.4 Open Design Questions
+
+1. Should `:access :reactive` reuse `net-add-cross-domain-propagator` (extend to cross-network), or introduce a separate primitive?
+2. How does cross-network reactive access compose with BSP scheduling? (Each network has its own scheduler instance; cross-network wake events need ordering discipline.)
+3. Does `:imports` need full module-system semantics (qualification, renaming, restriction)? Or is name mapping sufficient at NTT level?
+4. Composition: can cross-network bridges compose with within-network bridges? (E.g., file A's env-network → file B's env-network → type-domain bridge → mult-domain in B's elab-network.)
+5. Lifecycle: what happens to a `:reactive` cross-network bridge when the source network is fork'd or serialized?
+
+### 17b.5 First Concrete Use Cases
+
+- **PPN 4C Addendum Phase 4A** (immediate): per-file mnr → cross-file env access via `:function-call` mode. Sufficient for per-command elaboration scope.
+- **PPN Track 8** (incremental editing): per-file mnr → elab-network in dependents file via `:reactive` mode. Edit propagates structurally.
+- **PPN Track 11** (LSP integration): cross-file dep graph via reactive bridges + cell-dependents API.
+- **SH Series distributed runtime** (future): cross-node module access via session-typed `cross-network-bridge` (marshaled propagator-network references).
+
+### 17b.6 Status
+
+DESIGN NOTE — NTT gap flagged for future NTT design work. Not blocking PPN 4C Phase 4A (Phase 4A uses existing `module-network-lookup` function-call pattern, sufficient for per-command scope). Should be addressed during NTT design resumption (gated on PPN Track 4 completion per MASTER_ROADMAP.org).
+
 ## 18. Next Steps
 
 1. **Continue design iteration**: Address open questions through discussion.

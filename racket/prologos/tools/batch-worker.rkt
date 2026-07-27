@@ -77,14 +77,15 @@
 
 ;; Save post-prelude state. Two categories:
 ;;
-;; (1) Cell-based registries (19 macros params): saved as a single vector via
+;; (1) Cell-based registries (24 macros params): saved as a single vector via
 ;;     save-macros-registry-snapshot. These are the registry contents that
-;;     register-macros-cells! uses to initialize cells each command.
+;;     register-macros-cells! uses to initialize cells each command. (24 since
+;;     CIU T6 F1b.5-s1d added schema/selection/session/strategy/process.)
 ;;
 ;; (2) Runtime config (7 namespace params + 1 global-env): saved individually
 ;;     because these are configuration, not reactive elaboration state.
 ;;
-;; Track 6 Phase 6: Consolidated 19 individual macros param saves → 1 vector.
+;; Track 6 Phase 6: Consolidated the macros param saves → 1 vector.
 (define ready-macros-snapshot         (save-macros-registry-snapshot))
 ;; namespace.rkt parameters (runtime config — NOT cell-based)
 (define ready-module-registry         (current-module-registry))
@@ -94,9 +95,7 @@
 (define ready-module-loader           (current-module-loader))
 (define ready-spec-propagation-handler (current-spec-propagation-handler))
 (define ready-foreign-handler         (current-foreign-handler))
-;; global-env.rkt
-(define ready-global-env              (current-prelude-env))
-(define ready-module-defs-content     (current-module-definitions-content))  ;; Track 6 Phase 7d
+;; global-env.rkt — Layer-2 params retired (4A.c-iii-e); resolution is the mnr cascade.
 ;; Track 7 Phase 6g: Snapshot persistent registry network CONTENTS (not box identity).
 ;; Each test file gets a fresh box with the post-prelude network contents,
 ;; preventing cross-file leakage via box mutation.
@@ -222,21 +221,13 @@
          [current-module-loader           ready-module-loader]
          [current-spec-propagation-handler ready-spec-propagation-handler]
          [current-foreign-handler         ready-foreign-handler]
-         ;; global-env.rkt
-         [current-prelude-env              ready-global-env]
-         [current-module-definitions-content ready-module-defs-content]  ;; Track 6 Phase 7d
          [current-persistent-registry-net-box
           (and ready-persistent-registry-net-contents
                (box ready-persistent-registry-net-contents))]  ;; Track 7 Phase 6g: fresh box per file
-         [current-definition-cells-content (hasheq)]   ;; Phase 3a: fresh per-file
-         [current-definition-cell-ids      (hasheq)]   ;; Phase 3a: fresh per-file
-         [current-definition-dependencies  (hasheq)]   ;; Phase 3b: fresh per-file
-         [current-cross-module-deps        '()]         ;; Track 5 Phase 4: fresh per-file
-         [current-prelude-env-prop-net-box  #f]          ;; Phase 3a: no stale cell writes
+         [current-file-module-network-ref  (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
          [current-ns-prop-net-box          #f]          ;; Phase 3c: no stale ns cell writes
          [current-module-registry-cell-id  #f]          ;; Phase 3c: fresh per-file
          [current-ns-context-cell-id       #f]          ;; Phase 3c: fresh per-file
-         [current-defn-param-names-cell-id #f]          ;; Phase 3c: fresh per-file
          ;; tree-parser.rkt — §11 PPN Track 3: fresh per file
          [current-source-str              ""]
          [current-raw-node                #f]
@@ -256,7 +247,9 @@
          [current-hasmethod-cell-map-cell-id   #f]
          [current-constraint-status-cell-id    #f]
          [current-error-descriptor-cell-id     #f]
-         [current-ready-queue-cell-id          #f]
+         ;; PPN 4C 2A.b (2026-05-20): current-ready-queue-cell-id parameter
+         ;; RETIRED — replaced by well-known resolution-stratum-request-cell-id
+         ;; (cell-14, allocated in make-prop-network).
          ;; Track 4B Phase 6b: global attribute-map cell — reset per file
          [current-attribute-map-cell-id       #f]
          ;; errors.rkt — emit formatted errors to stderr for failure logs

@@ -1,0 +1,145 @@
+#+TITLE: Dailies Methodology — Intent, Cadence, and Format
+#+SUBTITLE: How Claude writes the dailies log for re-grounding and human digestion
+#+AUTHOR: The Prologos Project
+#+DATE: 2026-07-19
+
+* Purpose
+
+The dailies (~docs/tracking/standups/YYYY-MM-DD_dailies.md~) are Claude's running
+report-out — the counterpart to the owner's standups. They serve THREE jobs:
+
+1. /Decision log + surprise journal/ — captured WHILE fresh (the PIR
+   methodology's "collect during implementation, not after"). Git preserves the
+   WHAT; the dailies preserve the WHY.
+2. /Re-grounding surface/ — a fresh, compacted, or REWOUND session reconstructs
+   "where are we, why, and what's next" from the LATEST dailies (+ design doc +
+   memory). On-disk is authoritative.
+3. /PIR raw material/ — the went-wrong / where-we-got-lucky / wrong-assumptions
+   sections of a PIR are bounded by the quality of the dailies. See
+   [[file:POST_IMPLEMENTATION_REVIEW.org][POST_IMPLEMENTATION_REVIEW.org]].
+
+Codified 2026-07-19 from a survey of ~55 past dailies (Feb–Jul 2026): the format
+had drifted by mimicry (the ~## CHECKPOINT N~ shape was a one-off rewind artifact
+that propagated), producing files from 46 to 6601 lines with the current state
+often thousands of lines down. This doc fixes the format so it stops drifting.
+
+* The structure: a mutable STATE head + an append-only LOG
+
+The load-bearing insight: a dailies does TWO jobs that want OPPOSITE structures —
+a current-state surface (latest-at-top, mutable) and a decision journal
+(chronological, immutable). /Separate them./
+
+** The STATE head — top of file, OVERWRITE in place, always current
+
+The re-grounding surface and the relay-note seed. It NEVER grows; it is REPLACED
+on each update. It is the DERIVED, mutable projection; the log below is the
+PRIMARY, immutable record (the primary/derived split, [[file:DESIGN_PRINCIPLES.org][DESIGN_PRINCIPLES.org]]).
+
+#+begin_example
+## 📍 STATE  (overwrite in place — always current)
+- HEAD `hash` · Suite N/M/0 · Working tree: owner-WIP only, stage only mine
+- **Where we are**: <one sentence — the current position>
+- **NEXT**: <the single resume target>
+- **Open / blockers**: <short list>
+- **Watching**: <medium-term pattern — N data points → promotion gate>
+#+end_example
+
+The ~NEXT~ line is the single most-reached-for datum on resume — keep it a fixed
+slot. ~Watching~ (patterns needing 2–3 more data points before codification to a
+principles doc) lives here because it IS current-state.
+
+** The LOG — below the head, APPEND per commit, newest at the BOTTOM
+
+The immutable decision/surprise journal. One entry per commit. Identified by the
+OUTCOME headline + commit hash — NEVER a sequential integer (integers carry no
+information and drift under rewinds/interleaving; the corpus has duplicate and
+out-of-order "CHECKPOINT 13"s and twelve identical "CHECKPOINT for next session"
+headers a ~grep '^## '~ cannot disambiguate).
+
+#+begin_example
+### <outcome headline> — `hash`  (date)
+- **Why / decision**: the load-bearing rationale + the alternatives rejected
+- **Surprise / correction**: (if any)
+- **Next**: (a per-entry micro-handoff, so a mid-file rewind still has one)
+#+end_example
+
+Keep entries BOUNDED and WHY-forward. Do NOT restate the diff (that is ~git
+show~); do NOT paste file:line inventories or per-sub-phase metrics tables (one
+suite line lives in the STATE head). Bold lead-in labels (~**Why**~ / ~**Surprise**~
+/ ~**Fix**~ / ~**Key finding**~ / ~**Next**~) are the primary readability aid — they
+let a reader jump to the reasoning past the mechanics.
+
+* Cadence — when to write
+
+- /Created at session start/ — the owner says "open the next working day
+  interval," which spawns a standup + a dailies; the dailies opens with its STATE
+  head SEEDED from the prior file's STATE head (a copy-forward, NOT a re-recap).
+- /Every commit triggers a dailies write/ — append a LOG entry AND refresh the
+  STATE head (HEAD / suite / NEXT). Not batched — capture the WHY while fresh.
+- /Also write on a decision, surprise, correction, or blocker/ even without a
+  commit — the things that will not be legible from git later.
+- /Prior dailies are READ-ONLY/ (like the standups). Only the current file's
+  STATE head is overwritten; the log is append-only.
+
+* File rolling — keep each file digestible
+
+The corpus's worst failure is giant files (one dailies spanning 2+ weeks / 20+
+sessions, up to 6601 lines) — "read the latest dailies to re-ground" breaks when
+the current state is thousands of lines down. Roll a NEW dailies file when the
+current one hits any of:
+
+- a soft cap of ~400–500 lines, OR
+- a track/topic shift, OR
+- a rewind.
+
+The STATE head makes rolling cheap: seed the new file's head from the old file's
+head; the old file's log stays as immutable history. "Day" = creation-to-creation
+(a file may span calendar dates), but bounded by these roll triggers — the
+interval is no longer open-ended.
+
+* Relay Notes — the re-grounding mechanism after a REWIND
+
+When the owner rewinds the conversation (for context headroom), the resuming turn
+has no chat history of the intervening work — ON-DISK IS AUTHORITATIVE. A RELAY
+NOTE is the crystallized re-grounding blob the owner pastes into the resumed
+turn. It is GENERATED FROM the STATE head (same content, expanded), NOT a thing
+that accumulates in the dailies body.
+
+The observed high-value shape:
+
+- ⚠ RUN ~git log~ + ~git status~ FIRST — on-disk is ahead of the chat.
+- HEAD ~hash~ + the recent commit chain.
+- THE ARC — the owner's through-line (why this work matters).
+- WHAT'S DONE — the landed slices, hash-anchored.
+- READ TO CATCH UP — the ordered hot-load (design doc §, dailies, memory).
+- SURPRISES / STANDING FINDINGS — highest re-derivation risk.
+- RESUME TARGET — the single next action.
+- DISCIPLINES — the per-change gate, commit conventions, owner-dialogue style.
+
+Discipline: a resuming session re-grounds from git + docs FIRST, then trusts the
+relay note as a MAP, not authority — coordinates drift, so re-grep. Relay notes
+are the rewind sibling of the compact/fresh-session protocol in
+[[file:HANDOFF_PROTOCOL.org][HANDOFF_PROTOCOL.org]]; if more than one ever shares a surface, SUPERSEDED-tag the
+stale ones.
+
+* Anti-patterns (from the survey — do NOT reintroduce)
+
+- Latest-state-at-the-bottom (fixed by the STATE head).
+- Giant-file sprawl (fixed by rolling).
+- Sequential-integer checkpoint identity (drifts; use outcome-headline + hash).
+- Mechanical diff-restatement / file:line inventories / per-sub-phase metrics
+  tables (that is ~git show~'s job; the head carries the one suite line).
+- The Lessons-Distillation ritual block at the TOP interrupting the state→work
+  flow — run the codification scan as a periodic separate pass, not per-commit.
+- Duplicate identical H2/H3 headers (defeat grep navigation).
+
+* Cross-references
+
+- [[file:POST_IMPLEMENTATION_REVIEW.org][POST_IMPLEMENTATION_REVIEW.org]] — the dailies are the PIR's decision-log +
+  surprise-journal source.
+- [[file:HANDOFF_PROTOCOL.org][HANDOFF_PROTOCOL.org]] — the compact/fresh-session continuation protocol (relay
+  notes are the rewind sibling).
+- ~.claude/rules/workflow.md~ — the operational cadence rules (commits trigger
+  dailies; open-next-day) that point to this doc as the format spec.
+- [[file:DESIGN_PRINCIPLES.org][DESIGN_PRINCIPLES.org]] — primary/derived (the STATE head is derived; the log is
+  primary).

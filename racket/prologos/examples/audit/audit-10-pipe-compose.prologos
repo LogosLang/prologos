@@ -1,4 +1,4 @@
-ns examples.audit.pipe-compose
+ns examples::audit::pipe-compose
 
 ;; ========================================================================
 ;; AUDIT 10 — Pipe, Compose, Transducers

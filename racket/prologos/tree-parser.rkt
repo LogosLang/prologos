@@ -236,7 +236,14 @@
             [(and (exact-integer? n) (string-contains? lex "/")) (surf-rat-lit n loc)]
             [(and (exact-integer? n) (>= n 0)) (surf-int-lit n loc)]
             [(exact-integer? n) (surf-int-lit n loc)]
-            [(rational? n) (surf-rat-lit n loc)]
+            [(rational? n)
+             ;; N6b: origin from the LEXEME (compat path): slash → fraction,
+             ;; e/E → exponent, else (dotted/inexact) → decimal.
+             (surf-num-lit (inexact->exact n) #f
+                           (cond [(string-contains? lex "/") 'fraction]
+                                 [(or (string-contains? lex "e") (string-contains? lex "E")) 'exponent]
+                                 [else 'decimal])
+                           loc)]
             [else (surf-var s loc)]))]
 
     ;; Nat literal: 42N
@@ -326,7 +333,32 @@
    "not" surf-not
    ;; Nat
    "suc" surf-suc
+   ;; Cross-width Float conversions (Numerics N3e-rest)
+   "float-finite?" surf-float-finite  "float-to-rat" surf-float-to-rat
+   "float-to-int" surf-float-to-int   "float-to-float32" surf-float-to-float32
    ))
+
+;; (N6e-E3) Explicit-hole section over a builtin op keyword (D-N6E.1):
+;; [int* _ 2] → (fn [$_0] [int* $_0 2]) — the lambda wraps the KEYWORD, so
+;; sections inherit head-position semantics (auto-widening join for generics).
+;; Plain _ (surf-hole) only, left-to-right; mirrors the surf-app placeholder
+;; desugar ($_N names, hole-domain binders). parse-keyword-section in
+;; parser.rkt is the datum-route twin — keep behaviors in lockstep.
+(define (build-op-section ctor parsed-args loc)
+  (define n (for/sum ([a (in-list parsed-args)]) (if (surf-hole? a) 1 0)))
+  (define names
+    (for/list ([i (in-range n)]) (string->symbol (format "$_~a" i))))
+  (define filled
+    (let loop ([as parsed-args] [ns names])
+      (cond
+        [(null? as) '()]
+        [(surf-hole? (car as))
+         (cons (surf-var (car ns) loc) (loop (cdr as) (cdr ns)))]
+        [else (cons (car as) (loop (cdr as) ns))])))
+  (foldr (lambda (nm acc)
+           (surf-lam (binder-info nm #f (surf-hole loc)) acc loc))
+         (apply ctor (append filled (list loc)))
+         names))
 
 ;; ========================================
 ;; Stub implementations for form parsing
@@ -617,7 +649,8 @@
                    item]
                   [(and (pair? item)
                         (not (memq (car item) '($brace-params $angle-type $list-literal
-                                                $nat-literal $rat-literal $approx-literal $decimal-literal
+                                                $nat-literal $rat-literal $decimal-literal $float-literal
+                                                $exp-literal $posit-literal  ;; N6b
                                                 $set-literal $vec-literal $foreign-block
                                                 $typed-hole $solver-config quote $quote)))
                         (>= (length item) 2)
@@ -1377,7 +1410,12 @@
        [(and head-lex (member head-lex '("solve" "solve-one" "defr" "rel" "facts"
                                          "session" "defproc" "proc" "spawn" "spawn-with"
                                          "capability" "with-cap" "with-transient"
-                                         "assert" "retract" "explain")))
+                                         "assert" "retract" "explain"
+                                         ;; CIU T6 F1b.5-s2: validate lives in the
+                                         ;; datum parser (load-bearing for validate
+                                         ;; NESTED in def/defn bodies — freestanding
+                                         ;; bare exprs pick preparse unconditionally)
+                                         "validate")))
         (parse-error-result loc (format "~a: expression keyword handled by preparse" head-lex))]
        ;; Built-in binary operations: int+, int-, etc.
        [(and head-lex (hash-has-key? builtin-binary-ops head-lex))
@@ -1386,6 +1424,10 @@
                   [b (parse-form-tree (cadr args))])
               (cond [(prologos-error? a) a]
                     [(prologos-error? b) b]
+                    ;; (N6e-E3) explicit-hole section: [int* _ 2] → lambda
+                    [(or (surf-hole? a) (surf-hole? b))
+                     (build-op-section (hash-ref builtin-binary-ops head-lex)
+                                       (list a b) loc)]
                     [else ((hash-ref builtin-binary-ops head-lex) a b loc)]))
             (parse-application-tree children loc))]
        ;; Built-in unary operations
@@ -1393,7 +1435,11 @@
         (if (= (length args) 1)
             (let ([a (parse-form-tree (car args))])
               (if (prologos-error? a) a
-                  ((hash-ref builtin-unary-ops head-lex) a loc)))
+                  (if (surf-hole? a)
+                      ;; (N6e-E3) explicit-hole section: [negate _] → lambda
+                      (build-op-section (hash-ref builtin-unary-ops head-lex)
+                                        (list a) loc)
+                      ((hash-ref builtin-unary-ops head-lex) a loc))))
             (parse-application-tree children loc))]
        ;; Default: check for pipe/compose operators in children (mid-expression)
        ;; These are handled by preparse's expand-pipe-block/expand-compose-sexp,
@@ -1561,16 +1607,22 @@
     [else (surf-app (car parsed) (cdr parsed) loc)]))
 
 (define (parse-list-literal-tree args loc)
-  ;; '[1 2 3] → (cons 1 (cons 2 (cons 3 nil)))
-  (let loop ([remaining args])
-    (if (null? remaining)
-        (surf-nil loc)
-        (let ([elem (parse-form-tree (car remaining))])
-          (if (prologos-error? elem) elem
-              (let ([rest-list (loop (cdr remaining))])
-                (if (prologos-error? rest-list) rest-list
-                    (surf-app (surf-var 'cons loc)
-                              (list elem rest-list) loc))))))))
+  ;; CIU T6 F1a-col-2 (D15): non-empty '[…] keeps its literal-extent identity
+  ;; (surf-list-literal) so typing can see all elements at once — homogeneous
+  ;; literals still type (List T); heterogeneous ones mint 'nat rows. Empty
+  ;; '[] stays surf-nil. (The sexp-mode $list-literal sentinel + varargs
+  ;; builders keep the legacy cons-chain lowering: sexp is internal IR, and
+  ;; varargs collect into DECLARED (List A) params where a row would
+  ;; immediately α back.)
+  (if (null? args)
+      (surf-nil loc)
+      (let loop ([remaining args] [acc '()])
+        (if (null? remaining)
+            (surf-list-literal (reverse acc) loc)
+            (let ([elem (parse-form-tree (car remaining))])
+              (if (prologos-error? elem)
+                  elem
+                  (loop (cdr remaining) (cons elem acc))))))))
 
 (define (parse-quote-tree args loc)
   (parse-error-result loc "quote: not yet implemented"))

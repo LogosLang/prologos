@@ -557,6 +557,7 @@
 (provide
  (struct-out form-pipeline-value)
  form-pipeline-merge
+ form-pipeline-meet      ;; SRE Track 2I Phase 8a (2026-04-30)
  advance-pipeline
  run-form-pipeline
  rewrite-tree)
@@ -597,6 +598,63 @@
    ;; are preserved from the other side (union of keys, merge of shared values).
    (type-map-merge (form-pipeline-value-type-map old)
                    (form-pipeline-value-type-map new))))
+
+;; SRE Track 2I Phase 8a (2026-04-30): form-pipeline-meet — sister of
+;; form-pipeline-merge. Defines the lattice meet on the form-pipeline-value
+;; Pocket Universe wrapper.
+;;
+;; Decisions per Phase 8 mini-design (Q1):
+;;   - transforms: set-intersect (canonical Boolean meet on the powerset
+;;     embedded sub-lattice)
+;;   - tree-node: equal-shared-or-#f (idempotent + commutative)
+;;   - registrations: filter-intersection with dedup (set-intersection on lists)
+;;   - source-pos: prefer-one (preserves provenance; same as merge)
+;;   - type-map: per-key intersection with equal-only on shared values
+;;
+;; The wrapper IS algebraically consistent under these choices (each field
+;; satisfies idempotent + commutative). Whether the declared Heyting status
+;; (form-cells.rkt:510) holds on the wrapper under THIS meet is the
+;; empirical question Phase 8c sweep answers.
+;;
+;; Pre-Phase-8a: form-cells.rkt:508 declared 'has-meet prop-confirmed but no
+;; meet function existed. 5th Scaffolding-Hides-Truth instance — declared
+;; without backing. Phase 8a corrects.
+(define (form-pipeline-meet old new)
+  (form-pipeline-value
+   ;; transforms: set-intersection (canonical Boolean meet)
+   (set-intersect (form-pipeline-value-transforms old)
+                  (form-pipeline-value-transforms new))
+   ;; tree-node: equal-shared-or-#f
+   (cond
+     [(equal? (form-pipeline-value-tree-node old)
+              (form-pipeline-value-tree-node new))
+      (form-pipeline-value-tree-node old)]
+     [else #f])
+   ;; registrations: filter-intersection with dedup
+   (let* ([new-set (form-pipeline-value-registrations new)])
+     (remove-duplicates
+      (filter (lambda (r) (member r new-set))
+              (form-pipeline-value-registrations old))))
+   ;; source-pos: prefer-one (provenance, not lattice)
+   (or (form-pipeline-value-source-pos old)
+       (form-pipeline-value-source-pos new))
+   ;; type-map: per-key intersection with equal-only
+   (type-map-meet (form-pipeline-value-type-map old)
+                  (form-pipeline-value-type-map new))))
+
+;; SRE Track 2I Phase 8a: type-map meet — pointwise intersection.
+;; Keys present in BOTH; for shared keys, equal-only (otherwise drop).
+;; Conservative: ensures idempotent + commutative on the type-map field.
+(define (type-map-meet old-tm new-tm)
+  (cond
+    [(and (hash? old-tm) (hash? new-tm))
+     (for/fold ([result (hasheq)]) ([(k v) (in-hash old-tm)])
+       (cond
+         [(and (hash-has-key? new-tm k)
+               (equal? v (hash-ref new-tm k)))
+          (hash-set result k v)]
+         [else result]))]
+    [else (hasheq)]))
 
 ;; PPN Track 4 Phase 1b: type-map merge — pointwise union of hasheq maps.
 ;; For shared keys, uses equal?-based identity (Phase 2 will wire in type-lattice-merge

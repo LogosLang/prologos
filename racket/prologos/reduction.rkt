@@ -13,11 +13,13 @@
 (require racket/match
          racket/list
          racket/string
+         racket/flonum
          "prelude.rkt"
          "syntax.rkt"
          "substitution.rkt"
          "global-env.rkt"
          "posit-impl.rkt"
+         "float-impl.rkt"
          "performance-counters.rkt"
          "macros.rkt"
          "metavar-store.rkt"
@@ -36,13 +38,40 @@
          "narrowing.rkt"
          "definitional-tree.rkt"
          "constraint-propagators.rkt"
-         "prop-observatory.rkt")  ;; Observatory: capture user network runs
+         "prop-observatory.rkt"  ;; Observatory: capture user network runs
+         "field-witness.rkt")    ;; CIU T6 F1b.5-s2: the runtime witness interpreter (below reduction; cycle-safe)
 
 (provide whnf nf nf-whnf conv conv-nf
          current-nf-cache current-whnf-cache
          current-reduction-fuel current-nat-value-cache
+         ;; CIU T6 F1b.5-s2: the degradation guard (exemption-list membership
+         ;; is test-pinned — the D22/P6 silent-value-loss class)
+         definitely-not-map?
          ;; Solver normalization (for benchmarks + PUnify)
-         normalize-ast-to-solver-term)
+         normalize-ast-to-solver-term
+         ;; N6e issue #71: saturated-multi-hole-section classifier (shared by
+         ;; infer/inferQ so the 3-stage guard cannot drift between stages).
+         saturated-hole-section-app?
+         ;; Rel T1 Aspect B (typed solution rows) entry-gate (b): the ONE shared
+         ;; goal-app ground/free classifier + champ-key policy, consumed by BOTH
+         ;; the runtime row-build (here) and the static solve row-typing (typing-core).
+         classify-goal-args (struct-out free-arg) query-var->champ-key)
+
+;; N4: collapse a resolved numeric literal (expr-num-lit) to its concrete node.
+;; Local mirror of zonk's collapse-num-lit (reduction can't require zonk — cycle via
+;; solver). Returns #f if `ty` is not a concrete numeric type (caller keeps the node).
+(define (num-lit->concrete val integral? ty)
+  (cond
+    [(expr-Int? ty)     (expr-int val)]
+    [(expr-Nat? ty)     (expr-nat-val val)]
+    [(expr-Rat? ty)     (expr-rat val)]
+    [(expr-Posit8? ty)  (expr-posit8  (posit8-encode  val))]
+    [(expr-Posit16? ty) (expr-posit16 (posit16-encode val))]
+    [(expr-Posit32? ty) (expr-posit32 (posit32-encode val))]
+    [(expr-Posit64? ty) (expr-posit64 (posit64-encode val))]
+    [(expr-Float32? ty) (expr-float32 (flsingle (exact->inexact val)))]
+    [(expr-Float64? ty) (expr-float64 (exact->inexact val))]
+    [else #f]))
 
 ;; ========================================
 ;; Helpers for building Prologos List values in reduction
@@ -124,31 +153,6 @@
 ;; Convert a non-negative Racket integer to a native Nat value.
 (define (racket-nat->expr n)
   (expr-nat-val n))
-
-;; ========================================
-;; Helpers for ATMS list ↔ assumption-id set conversion
-;; ========================================
-
-;; Convert a Prologos List of expr-assumption-id-val → hasheq (assumption-id → #t)
-;; Returns #f if the list can't be fully unwrapped (stuck or wrong types).
-(define (prologos-list->assumption-set e)
-  (define elems (prologos-list->racket-list e))
-  (and elems
-       (let loop ([es elems] [acc (hasheq)])
-         (cond
-           [(null? es) acc]
-           [else
-            (let ([e* (whnf (car es))])
-              (if (expr-assumption-id-val? e*)
-                  (loop (cdr es)
-                        (hash-set acc (expr-assumption-id-val-aid-value e*) #t))
-                  #f))]))))
-
-;; Convert a hasheq (assumption-id → #t) → Prologos List of expr-assumption-id-val
-(define (assumption-set->prologos-list aset)
-  (racket-list->prologos-list
-   (for/list ([(aid _) (in-hash aset)])
-     (expr-assumption-id-val aid))))
 
 ;; ========================================
 ;; Helpers for relational solve/explain (Phase 7 Sub-phase E)
@@ -233,9 +237,10 @@
 ;; Convert solver answer maps (list of hasheq) back to a Prologos expression.
 ;; Each answer is a hasheq mapping query variable names (symbols) to ground values.
 ;; Returns a Prologos List of Maps: '[(map :x val1 :y val2), ...]
-;; Optional bound-args: list of (symbol . expr) pairs for ground function arguments
-;; with spec parameter names suffixed with '_'. Added to each solution map.
-(define (answers->prologos-expr answers query-vars [bound-args '()])
+;; Solution maps carry ONLY query-var keys (CIU T6 F1b.1 / D25: the bound-args
+;; echo — ground call-site values re-emitted under '_'-suffixed relation param
+;; names — is deleted; solutions are pure answers to the queried unknowns).
+(define (answers->prologos-expr answers query-vars)
   (racket-list->prologos-list
    (for/list ([answer (in-list answers)])
      ;; Build a CHAMP map from the answer bindings
@@ -243,17 +248,10 @@
        (for/fold ([c champ-empty])
                  ([qv (in-list query-vars)])
          (define val (hash-ref answer qv #f))
-         (define key (expr-keyword qv))
+         (define key (query-var->champ-key qv))
          (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
          (champ-insert c (equal-hash-code key) key pval)))
-     ;; Add bound (ground) args with _ suffix param names
-     (define champ-with-bound
-       (for/fold ([c champ-val])
-                 ([ba (in-list bound-args)])
-         (define key (expr-keyword (car ba)))
-         (define pval (ground->prologos-expr (cdr ba)))
-         (champ-insert c (equal-hash-code key) key pval)))
-     (expr-champ champ-with-bound))))
+     (expr-champ champ-val))))
 
 ;; Convert a ground solver value back to a Prologos AST expression.
 ;; If the value is already an AST expression, return it directly.
@@ -284,92 +282,59 @@
      v]
     [else (expr-fvar (if (symbol? v) v 'unknown))]))
 
-;; Extract query variable names and ground args from a goal-app's arguments.
-;; Returns (values goal-args query-vars) where:
-;;   goal-args: list of ground values or symbols (for logic vars)
-;;   query-vars: list of symbols for unbound logic variables
-(define (extract-query-info args)
-  (define goal-args '())
-  (define query-vars '())
-  (for ([a (in-list args)])
-    (let ([a* (whnf a)])
-      (cond
-        [(expr-logic-var? a*)
-         (define name (expr-logic-var-name a*))
-         (set! goal-args (cons name goal-args))
-         (set! query-vars (cons name query-vars))]
-        [else
-         (set! goal-args (cons a* goal-args))])))
-  (values (reverse goal-args) (reverse query-vars)))
+;; ── Rel T1 Aspect B (typed solution rows), entry-gate (b) ──────────────────────
+;; The ONE shared ground/free classifier for goal-app args, consumed by BOTH the
+;; runtime row-build (below) AND the static solve row-typing (typing-core, B1). It
+;; is the Correct-by-Construction substrate: the free/ground split is spelled in
+;; exactly one place (classify-goal-args) and the champ KEY in exactly one place
+;; (query-var->champ-key), so the runtime row and the static row type cannot
+;; disagree on which positions are keys or on how a key is spelled.
 
-;; ========================================
-;; Bound-argument tracking for narrowing/solve output
-;; ========================================
+;; free-arg — a free (query) position of a goal-app: the raw logic-var NAME
+;; (runtime answer lookup + static row-type LABEL), the champ KEY (runtime
+;; row-build), and the goal-arg POSITION (the positional bridge to the relation's
+;; schema field, B1). Keys-out: name/key are carried, not re-derived by each consumer.
+(struct free-arg (name key pos) #:transparent)
 
-;; compute-bound-args : symbol (listof expr) -> (listof (cons symbol expr))
-;; For each function parameter whose corresponding argument is ground (not a
-;; logic variable), create a (param-name_ . ground-value) pair.  These are
-;; added to narrowing/solve results so the user can see which concrete values
-;; were bound to which parameters.
-;;
-;; Uses the defn param-name registry (user-facing names from defn declarations)
-;; first, falling back to peel-lambda-names from the function body.
-;;
-;; Example: `add ?y 3N = 5N` where defn add [x y]
-;;   arg 0 = ?y  → logic var → skipped
-;;   arg 1 = 3N  → ground, param 'y → (:y_ . 3N)
-(define (compute-bound-args func-name args-whnf)
-  ;; Try user-facing param names from defn registry first.
-  ;; Try FQN first, then short name (strip module prefix).
-  (define registry-names
-    (or (lookup-defn-param-names func-name)
-        (let ([short (ctor-short-name func-name)])
-          (and (not (eq? short func-name))
-               (lookup-defn-param-names short)))))
-  (define param-names
+;; query-var->champ-key — the ONE goal-app champ-key policy: keyword-wrap the raw
+;; query-var name (no strip). Consumed by classify-goal-args (the free-arg key) AND
+;; every goal-app row-build, so the key spelling lives in a single place.
+(define (query-var->champ-key name) (expr-keyword name))
+
+;; classify-goal-args — the shallow ground/free classifier for goal-app args. whnf
+;; each arg, then split at the TOP level (logic-var → free; else → ground).
+;; Non-recursive: a logic var nested inside a compound arg is treated as ground
+;; (matches the runtime split today; the typeable fragment is the top-level free
+;; positions — gate a). Returns (values goal-args free-args):
+;;   goal-args : positional — free position = raw name (symbol), ground = whnf value
+;;   free-args : (listof free-arg) in positional order
+(define (classify-goal-args args)
+  (for/fold ([gs '()] [fs '()] [i 0]
+             #:result (values (reverse gs) (reverse fs)))
+            ([a (in-list args)])
+    (define a* (whnf a))
     (cond
-      [registry-names registry-names]
-      [else '()]))
-  (cond
-    ;; Arity mismatch — function may have extra dict params or be partially applied
-    [(not (= (length param-names) (length args-whnf))) '()]
-    [else
-     (for/list ([pn (in-list param-names)]
-                [arg (in-list args-whnf)]
-                ;; Only include ground (non-logic-var) args
-                #:when (not (expr-logic-var? arg))
-                ;; Skip dict parameters (trait method convention)
-                #:when (not (eq? pn 'dict)))
-       (cons (string->symbol
-              (string-append (symbol->string pn) "_"))
-             arg))]))
+      [(expr-logic-var? a*)
+       (define name (expr-logic-var-name a*))
+       (values (cons name gs)
+               (cons (free-arg name (query-var->champ-key name) i) fs)
+               (add1 i))]
+      [else
+       (values (cons a* gs) fs (add1 i))])))
 
-;; compute-bound-args-for-relation : symbol (listof any) (listof symbol) -> (listof (cons symbol expr))
-;; Like compute-bound-args but for relations (solve). Uses param-info from the
-;; relation store to get parameter names.
-(define (compute-bound-args-for-relation rel-name goal-args query-vars)
-  (define store (current-relation-store))
-  (define rel (relation-lookup store rel-name))
-  (cond
-    [(not rel) '()]
-    [else
-     (define variants (relation-info-variants rel))
-     (cond
-       [(null? variants) '()]
-       [else
-        (define params (variant-info-params (car variants)))
-        (cond
-          [(not (= (length params) (length goal-args))) '()]
-          [else
-           (for/list ([pi (in-list params)]
-                      [arg (in-list goal-args)]
-                      ;; Only include ground (non-logic-var) args
-                      #:when (not (symbol? arg))
-                      #:when (not (and (expr-logic-var? arg)
-                                       (memq (expr-logic-var-name arg) query-vars))))
-             (cons (string->symbol
-                    (string-append (symbol->string (param-info-name pi)) "_"))
-                   arg))])])]))
+;; Extract query variable names and ground args from a goal-app's arguments.
+;; Thin adapter over classify-goal-args, preserving the (goal-args, query-vars)
+;; contract the solver call sites use.
+(define (extract-query-info args)
+  (define-values (goal-args free-args) (classify-goal-args args))
+  (values goal-args (map free-arg-name free-args)))
+
+;; (The bound-args echo machinery — compute-bound-args and
+;; compute-bound-args-for-relation, which re-emitted ground call-site values
+;; into solution maps under '_'-suffixed param names — was DELETED at CIU T6
+;; F1b.1 (D25). Solution maps carry only query-var keys. The defn param-name
+;; registry (global-env.rkt lookup-defn-param-names) is unrelated
+;; infrastructure and survives: macros/LSP/pnet caching consume it.)
 
 ;; Phase 5b: Constructor inversion — structurally match a constructor expression
 ;; containing logic variables against a concrete target value.
@@ -494,7 +459,7 @@
      (define ctor-solutions
        (narrow-constructor-match func-expr target-expr var-names))
      (if (pair? ctor-solutions)
-         (answers->prologos-expr ctor-solutions var-names '())
+         (answers->prologos-expr ctor-solutions var-names)
          (expr-fvar 'nil))]
     ;; Phase 2d: multi-candidate dispatch — try each candidate independently
     [(and (list? func-name) (eq? (car func-name) 'multi-dispatch))
@@ -506,20 +471,14 @@
         (for/list ([cp (in-list candidates)])
           (run-narrowing-search (cdr cp) args-whnf target-whnf var-names))))
      (define unique (remove-duplicates all-solutions equal?))
-     ;; Bound args: use first candidate's param names (all instances share arity)
-     (define bound-args
-       (if (null? candidates) '()
-           (compute-bound-args (cdr (car candidates)) args-whnf)))
-     (answers->prologos-expr unique var-names bound-args)]
+     (answers->prologos-expr unique var-names)]
     [else
      ;; Single-candidate dispatch (standard path)
      (define args-whnf (map whnf all-args))
      (define target-whnf (whnf target-expr))
      (define solutions
        (run-narrowing-search func-name args-whnf target-whnf var-names))
-     ;; Bound args: extract spec param names for ground arguments
-     (define bound-args (compute-bound-args func-name args-whnf))
-     (answers->prologos-expr solutions var-names bound-args)]))
+     (answers->prologos-expr solutions var-names)]))
 
 ;; Run solve for a goal expression, returning a Prologos list of answer maps.
 (define (run-solve-goal goal-expr config)
@@ -533,9 +492,7 @@
      (define answers
        (parameterize ([current-is-eval-fn nf])
          (stratified-solve-goal config store rel-name goal-args query-vars)))
-     ;; Bound args: show ground arguments with parameter names from relation definition
-     (define bound-args (compute-bound-args-for-relation rel-name goal-args query-vars))
-     (answers->prologos-expr answers query-vars bound-args)]
+     (answers->prologos-expr answers query-vars)]
     [(expr-rel? goal*)
      ;; Anonymous relation — create temporary relation-info and solve
      (define temp-name (gensym 'anon-rel))
@@ -551,7 +508,7 @@
      (define answers
        (parameterize ([current-is-eval-fn nf])
          (stratified-solve-goal config store temp-name goal-args query-vars)))
-     (answers->prologos-expr answers query-vars '())]
+     (answers->prologos-expr answers query-vars)]
     [(expr-unify-goal? goal*)
      ;; Inline = goal: normalize both sides to solver representation,
      ;; collect query vars, run unification, format answer.
@@ -577,7 +534,7 @@
        (for/list ([ans (in-list answers)])
          (for/hasheq ([qv (in-list query-vars)])
            (values qv (solver-term->prologos-expr (walk* ans qv))))))
-     (answers->prologos-expr converted-answers query-vars '())]
+     (answers->prologos-expr converted-answers query-vars)]
     [(expr-is-goal? goal*)
      ;; Inline is goal: evaluate expr, bind to var, return single-answer list.
      (define var-node (expr-is-goal-var goal*))
@@ -588,11 +545,46 @@
              [else (gensym 'is-var)]))
      (define result (nf is-expr))
      (define answer (hasheq var-name result))
-     (answers->prologos-expr (list answer) (list var-name) '())]
+     (answers->prologos-expr (list answer) (list var-name))]
+    [(expr-not-goal? goal*)
+     ;; Top-level NAF goal (A.1): run via the DFS engine — solve-single-goal
+     ;; handles 'not (prove inner; empty ⇒ NAF succeeds). Mirrors the inline-unify
+     ;; arm above. Previously this fell through to the else-echo, printing the goal
+     ;; unevaluated. (A.3 adds the static floundering gate for unsafe free-var
+     ;; negation; A.1 is the dispatch fix for the reachable ground case.)
+     (define gd (goal-desc 'not (list (expr-not-goal-goal goal*))))
+     ;; A.3: floundering check for the top-level solve(not G) site. A bare top-level
+     ;; `not` has no positive companion goal, so a free var in the inner goal is
+     ;; unbound (floundering). Prolog-parity (owner ruling): WARN to stderr and
+     ;; return the standard unsafe-`\+` result (`nil`), NOT an error. (A `defr` clause
+     ;; with unsafe negation still hard-errors at registration — that is an authoring
+     ;; bug; here it is a query, and Prolog runs queries.)
+     (define fl (clause-floundering-msg 'solve '() (list gd)))
+     (when fl (fprintf (current-error-port) "warning: ~a\n" fl))
+     (define all-vars (collect-deep-logic-vars goal*))
+     (define query-vars
+       (let loop ([vs all-vars] [seen (hasheq)] [acc '()])
+         (cond
+           [(null? vs) (reverse acc)]
+           [(hash-ref seen (car vs) #f) (loop (cdr vs) seen acc)]
+           [else (loop (cdr vs) (hash-set seen (car vs) #t) (cons (car vs) acc))])))
+     (define store (current-relation-store))
+     (define answers
+       (parameterize ([current-is-eval-fn nf])
+         (solve-single-goal config store gd (hasheq) 0)))
+     (define converted-answers
+       (for/list ([ans (in-list answers)])
+         (for/hasheq ([qv (in-list query-vars)])
+           (values qv (solver-term->prologos-expr (walk* ans qv))))))
+     (answers->prologos-expr converted-answers query-vars)]
     ;; If the goal is not yet reduced to a goal-app, return the expression unchanged
     [else (expr-solve goal*)]))
 
-;; Run solve-one for a goal expression, returning Option (first answer or none).
+;; Run solve-one for a goal expression, returning THE solution map bare, or
+;; `none` when there is no solution (CIU T6 F1b.1 / D25.4: the `some` wrapper
+;; is unwrapped so `[solve-one q].x` projects directly; `none` — the existing
+;; missing-binding fvar — stays the no-solution value; never `{}`, which since
+;; D17 reads as a legitimate empty dyn-row value).
 (define (run-solve-one-goal goal-expr config)
   (define goal* (whnf goal-expr))
   (cond
@@ -606,24 +598,15 @@
          (stratified-solve-goal config store rel-name goal-args query-vars)))
      (if (null? answers)
          (expr-fvar 'none)
-         ;; Wrap first answer in 'some' — include bound args
          (let* ([first-answer (car answers)]
-                [bound-args (compute-bound-args-for-relation rel-name goal-args query-vars)]
                 [champ-val
                  (for/fold ([c champ-empty])
                            ([qv (in-list query-vars)])
                    (define val (hash-ref first-answer qv #f))
-                   (define key (expr-keyword qv))
+                   (define key (query-var->champ-key qv))
                    (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
-                   (champ-insert c (equal-hash-code key) key pval))]
-                ;; Add bound args
-                [champ-with-bound
-                 (for/fold ([c champ-val])
-                           ([ba (in-list bound-args)])
-                   (define key (expr-keyword (car ba)))
-                   (define pval (ground->prologos-expr (cdr ba)))
                    (champ-insert c (equal-hash-code key) key pval))])
-           (expr-app (expr-fvar 'some) (expr-champ champ-with-bound))))]
+           (expr-champ champ-val)))]
     [(expr-rel? goal*)
      ;; Anonymous relation — create temporary relation-info and solve-one
      (define temp-name (gensym 'anon-rel))
@@ -648,7 +631,7 @@
                    (define key (expr-keyword qv))
                    (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
                    (champ-insert c (equal-hash-code key) key pval))])
-           (expr-app (expr-fvar 'some) (expr-champ champ-val))))]
+           (expr-champ champ-val)))]
     [(expr-unify-goal? goal*)
      ;; Inline = goal for solve-one: unify, return first answer or none.
      (define lhs (expr-unify-goal-lhs goal*))
@@ -676,7 +659,7 @@
                    (define val (solver-term->prologos-expr (walk* first-ans qv)))
                    (define key (expr-keyword qv))
                    (champ-insert c (equal-hash-code key) key val))])
-           (expr-app (expr-fvar 'some) (expr-champ champ-val))))]
+           (expr-champ champ-val)))]
     [(expr-is-goal? goal*)
      ;; Inline is goal for solve-one: evaluate expr, return (some {:var result}).
      (define var-node (expr-is-goal-var goal*))
@@ -688,7 +671,36 @@
      (define result (nf is-expr))
      (define key (expr-keyword var-name))
      (define champ-val (champ-insert champ-empty (equal-hash-code key) key result))
-     (expr-app (expr-fvar 'some) (expr-champ champ-val))]
+     (expr-champ champ-val)]
+    [(expr-not-goal? goal*)
+     ;; Top-level NAF goal for solve-one (A.1): run via the DFS engine, return the
+     ;; first answer map bare or `none`. Mirrors the inline-unify solve-one arm.
+     (define gd (goal-desc 'not (list (expr-not-goal-goal goal*))))
+     ;; A.3: floundering warning (Prolog-parity) — warn to stderr, return the
+     ;; standard unsafe-`\+` result (`none`), NOT an error.
+     (define fl (clause-floundering-msg 'solve '() (list gd)))
+     (when fl (fprintf (current-error-port) "warning: ~a\n" fl))
+     (define all-vars (collect-deep-logic-vars goal*))
+     (define query-vars
+       (let loop ([vs all-vars] [seen (hasheq)] [acc '()])
+         (cond
+           [(null? vs) (reverse acc)]
+           [(hash-ref seen (car vs) #f) (loop (cdr vs) seen acc)]
+           [else (loop (cdr vs) (hash-set seen (car vs) #t) (cons (car vs) acc))])))
+     (define store (current-relation-store))
+     (define answers
+       (parameterize ([current-is-eval-fn nf])
+         (solve-single-goal config store gd (hasheq) 0)))
+     (if (null? answers)
+         (expr-fvar 'none)
+         (let* ([first-ans (car answers)]
+                [champ-val
+                 (for/fold ([c champ-empty])
+                           ([qv (in-list query-vars)])
+                   (define val (solver-term->prologos-expr (walk* first-ans qv)))
+                   (define key (expr-keyword qv))
+                   (champ-insert c (equal-hash-code key) key val))])
+           (expr-champ champ-val)))]
     [else (expr-solve-one goal*)]))
 
 ;; Run explain for a goal expression, returning a Prologos list of answer maps.
@@ -705,63 +717,44 @@
      (define results
        (parameterize ([current-is-eval-fn nf])
          (stratified-explain-goal config store rel-name goal-args query-vars prov-level)))
-     (define bound-args (compute-bound-args-for-relation rel-name goal-args query-vars))
+     ;; All production explain results are answer-result structs (D4). The legacy
+     ;; wf-explained-answer / answer-record arms were dead code (zero producers)
+     ;; and were deleted at CIU T6 F1b.1 along with the bound-args echo.
      (define prologos-maps
        (for/list ([r (in-list results)])
-         (cond
-           [(answer-result? r)
-            (answer-result->prologos-expr r query-vars bound-args)]
-           ;; Legacy fallback: wf-explained-answer (should no longer occur after full migration)
-           [(wf-explained-answer? r)
-            (define bindings (wf-explained-answer-bindings r))
-            (define certainty (wf-explained-answer-certainty r))
-            (define explanation (wf-explained-answer-explanation r))
-            (define base-champ
-              (for/fold ([c champ-empty])
-                        ([qv (in-list query-vars)])
-                (define val (hash-ref bindings qv #f))
-                (define key (expr-keyword qv))
-                (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
-                (champ-insert c (equal-hash-code key) key pval)))
-            (define with-bound
-              (for/fold ([c base-champ])
-                        ([ba (in-list bound-args)])
-                (define key (expr-keyword (car ba)))
-                (define pval (ground->prologos-expr (cdr ba)))
-                (champ-insert c (equal-hash-code key) key pval)))
-            (define cert-key (expr-keyword 'certainty))
-            (define with-cert
-              (champ-insert with-bound (equal-hash-code cert-key) cert-key
-                            (expr-keyword certainty)))
-            (if (and (wf-undeterminacy-explanation? explanation)
-                     (eq? certainty 'unknown))
-                (let* ([cycle-key (expr-keyword 'cycle)]
-                       [cycle-preds (wf-undeterminacy-explanation-cycle-predicates explanation)]
-                       [cycle-expr (racket-list->prologos-list
-                                    (map (lambda (p) (expr-string (symbol->string p)))
-                                         cycle-preds))])
-                  (expr-champ
-                   (champ-insert with-cert (equal-hash-code cycle-key) cycle-key cycle-expr)))
-                (expr-champ with-cert))]
-           ;; Legacy fallback: answer-record
-           [(answer-record? r)
-            (define bindings (answer-record-bindings r))
-            (define base-champ
-              (for/fold ([c champ-empty])
-                        ([qv (in-list query-vars)])
-                (define val (hash-ref bindings qv #f))
-                (define key (expr-keyword qv))
-                (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
-                (champ-insert c (equal-hash-code key) key pval)))
-            (define with-bound
-              (for/fold ([c base-champ])
-                        ([ba (in-list bound-args)])
-                (define key (expr-keyword (car ba)))
-                (define pval (ground->prologos-expr (cdr ba)))
-                (champ-insert c (equal-hash-code key) key pval)))
-            (expr-champ with-bound)]
-           [else r])))
+         (if (answer-result? r)
+             (answer-result->prologos-expr r query-vars)
+             r)))
      (racket-list->prologos-list prologos-maps)]
+    [(expr-not-goal? goal*)
+     ;; Explain over a top-level NAF goal (A.1): a negation has no positive
+     ;; provenance chain, so run it via the DFS engine and return plain answer maps
+     ;; (the same shape `solve` produces). Previously fell through to the else-echo.
+     (define gd (goal-desc 'not (list (expr-not-goal-goal goal*))))
+     ;; A.3: floundering check for the top-level solve(not G) site. A bare top-level
+     ;; `not` has no positive companion goal, so a free var in the inner goal is
+     ;; unbound (floundering). Prolog-parity (owner ruling): WARN to stderr and
+     ;; return the standard unsafe-`\+` result (`nil`), NOT an error. (A `defr` clause
+     ;; with unsafe negation still hard-errors at registration — that is an authoring
+     ;; bug; here it is a query, and Prolog runs queries.)
+     (define fl (clause-floundering-msg 'solve '() (list gd)))
+     (when fl (fprintf (current-error-port) "warning: ~a\n" fl))
+     (define all-vars (collect-deep-logic-vars goal*))
+     (define query-vars
+       (let loop ([vs all-vars] [seen (hasheq)] [acc '()])
+         (cond
+           [(null? vs) (reverse acc)]
+           [(hash-ref seen (car vs) #f) (loop (cdr vs) seen acc)]
+           [else (loop (cdr vs) (hash-set seen (car vs) #t) (cons (car vs) acc))])))
+     (define store (current-relation-store))
+     (define answers
+       (parameterize ([current-is-eval-fn nf])
+         (solve-single-goal config store gd (hasheq) 0)))
+     (define converted-answers
+       (for/list ([ans (in-list answers)])
+         (for/hasheq ([qv (in-list query-vars)])
+           (values qv (solver-term->prologos-expr (walk* ans qv))))))
+     (answers->prologos-expr converted-answers query-vars)]
     [else (expr-explain goal*)]))
 
 ;; ----------------------------------------
@@ -771,47 +764,51 @@
 ;; Convert an answer-result struct to a Prologos CHAMP expression.
 ;; Structure: bindings at top level, :certainty/:cycle at top level (WF only),
 ;; :provenance as nested map (when present).
-(define (answer-result->prologos-expr ar query-vars bound-args)
+;;
+;; Reserved-key guard (CIU T6 F1b.1 / D25.2 interim): the metadata keys
+;; :certainty/:cycle/:provenance are inserted AFTER the query-var bindings and
+;; champ-insert overwrites on equal keys — so a query variable that happens to
+;; share a reserved name would be silently CLOBBERED. The guard skips the
+;; metadata insert on collision: the user's binding wins (solve never inserts
+;; these keys, so this also keeps the same query behaving identically under
+;; solve and explain). The proper fix — provenance in a wrapper record beside
+;; the solutions, not merged into each row — is the explain restructure
+;; (DEFERRED.md § explain restructure), which inherits this pin.
+(define (answer-result->prologos-expr ar query-vars)
   ;; 1. Build base CHAMP from query variable bindings
   (define bindings (answer-result-bindings ar))
   (define base-champ
     (for/fold ([c champ-empty])
               ([qv (in-list query-vars)])
       (define val (hash-ref bindings qv #f))
-      (define key (expr-keyword qv))
+      (define key (query-var->champ-key qv))
       (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
       (champ-insert c (equal-hash-code key) key pval)))
 
-  ;; 2. Add bound args (ground args that were already specified in the query)
-  (define with-bound
-    (for/fold ([c base-champ])
-              ([ba (in-list bound-args)])
-      (define key (expr-keyword (car ba)))
-      (define pval (ground->prologos-expr (cdr ba)))
-      (champ-insert c (equal-hash-code key) key pval)))
-
-  ;; 3. Add :certainty if present (WF semantics only)
+  ;; 2. Add :certainty if present (WF semantics only; skipped if a query var
+  ;;    claims the name — the binding wins)
   (define with-certainty
     (let ([cert (answer-result-certainty ar)])
-      (if cert
+      (if (and cert (not (memq 'certainty query-vars)))
           (let ([k (expr-keyword 'certainty)])
-            (champ-insert with-bound (equal-hash-code k) k (expr-keyword cert)))
-          with-bound)))
+            (champ-insert base-champ (equal-hash-code k) k (expr-keyword cert)))
+          base-champ)))
 
-  ;; 4. Add :cycle if present (WF unknown only)
+  ;; 3. Add :cycle if present (WF unknown only; binding wins on collision)
   (define with-cycle
     (let ([cyc (answer-result-cycle ar)])
-      (if cyc
+      (if (and cyc (not (memq 'cycle query-vars)))
           (let* ([k (expr-keyword 'cycle)]
                  [cycle-expr (racket-list->prologos-list
                               (map (lambda (p) (expr-string (symbol->string p))) cyc))])
             (champ-insert with-certainty (equal-hash-code k) k cycle-expr))
           with-certainty)))
 
-  ;; 5. Add :provenance if present (provenance level >= :summary)
+  ;; 4. Add :provenance if present (provenance level >= :summary; binding wins
+  ;;    on collision)
   (define with-provenance
     (let ([prov (answer-result-provenance ar)])
-      (if prov
+      (if (and prov (not (memq 'provenance query-vars)))
           (let ([k (expr-keyword 'provenance)])
             (champ-insert with-cycle (equal-hash-code k) k
                           (provenance-data->prologos-expr prov)))
@@ -986,6 +983,13 @@
        [else #f])]
     [else #f]))
 
+;; Widen a Float32 literal to Float64 (the only float subtype edge, N3d): a
+;; single-precision value is exactly representable as a double, so the flonum is
+;; unchanged. Returns #f when no widening applies (target=32, or already f64).
+(define (try-coerce-to-float target-width e)
+  (and (= target-width 64) (expr-float32? e)
+       (expr-float64 (expr-float32-val e))))
+
 ;; ========================================
 ;; Stuck-term reduction helpers
 ;; ========================================
@@ -1071,6 +1075,26 @@
             [(not (equal? a* a)) (whnf (ctor a*))]
             [else (ctor a)])))))
 
+;; Float reducers (Numerics N3b): no width-coercion (cross-family is N3d);
+;; just reduce operands then re-apply, mirroring the posit no-coercion branch.
+(define (reduce-float-binary target-width ctor a b)
+  (let ([a* (whnf a)] [b* (whnf b)])
+    (let ([ca (or (try-coerce-to-float target-width a*) a*)]
+          [cb (or (try-coerce-to-float target-width b*) b*)])
+      (cond
+        [(or (not (eq? ca a*)) (not (eq? cb b*))) (whnf (ctor ca cb))]
+        [(not (equal? a* a)) (whnf (ctor a* b))]
+        [(not (equal? b* b)) (whnf (ctor a b*))]
+        [else (ctor a b)]))))
+
+(define (reduce-float-unary target-width ctor a)
+  (let ([a* (whnf a)])
+    (let ([ca (or (try-coerce-to-float target-width a*) a*)])
+      (cond
+        [(not (eq? ca a*)) (whnf (ctor ca))]
+        [(not (equal? a* a)) (whnf (ctor a*))]
+        [else (ctor a)]))))
+
 ;; Extract the Racket-level exact rational value from a concrete numeric literal.
 ;; Returns #f for non-literal/non-numeric expressions.
 (define (literal->rational e)
@@ -1081,6 +1105,8 @@
     [(expr-posit16? e) (posit16-decode (expr-posit16-val e))]
     [(expr-posit32? e) (posit32-decode (expr-posit32-val e))]
     [(expr-posit64? e) (posit64-decode (expr-posit64-val e))]
+    [(expr-float32? e) (inexact->exact (expr-float32-val e))]
+    [(expr-float64? e) (inexact->exact (expr-float64-val e))]
     [else
      (let ([nv (nat-value e)])
        (and nv nv))]))
@@ -1095,6 +1121,8 @@
     [(expr-posit16? e) 'p16]
     [(expr-posit32? e) 'p32]
     [(expr-posit64? e) 'p64]
+    [(expr-float32? e) 'f32]
+    [(expr-float64? e) 'f64]
     [else #f]))
 
 
@@ -1108,7 +1136,30 @@
     [(p16) (expr-posit16 (posit16-encode val))]
     [(p32) (expr-posit32 (posit32-encode val))]
     [(p64) (expr-posit64 (posit64-encode val))]
+    [(f32) (expr-float32 (flsingle (exact->inexact val)))]
+    [(f64) (expr-float64 (exact->inexact val))]
     [else #f]))
+
+;; NaN/Inf-safe flonum extraction: Float literals pass their flonum through
+;; (so +inf.0/+nan.0 survive — these have NO exact rational representation);
+;; exact/posit literals go via the exact rational then ->inexact.
+(define (literal->flonum e)
+  (cond
+    [(expr-float32? e) (expr-float32-val e)]
+    [(expr-float64? e) (expr-float64-val e)]
+    [else (let ([r (literal->rational e)]) (and r (exact->inexact r)))]))
+
+;; Coerce a concrete numeric literal to a target type tag, NaN/Inf-safe.
+;; Float targets coerce via flonums DIRECTLY — round-tripping +inf.0/+nan.0
+;; through inexact->exact (as the exact path does) crashes the reducer.
+;; Non-float targets are only reached when both operands are exact/posit
+;; (type-tag-join never yields an exact/posit tag once a Float operand is
+;; present), so the exact rational path there is always NaN/Inf-free.
+(define (coerce-literal e tag)
+  (cond
+    [(eq? tag 'f32) (let ([fv (literal->flonum e)]) (and fv (expr-float32 (flsingle fv))))]
+    [(eq? tag 'f64) (let ([fv (literal->flonum e)]) (and fv (expr-float64 fv)))]
+    [else (let ([r (literal->rational e)]) (and r (rational->literal r tag)))]))
 
 ;; Type-tag ranking for numeric-join at reduction level.
 ;; Exact: nat(0) < int(1) < rat(2). Posit: p8(10) < p16(11) < p32(12) < p64(13).
@@ -1116,6 +1167,7 @@
   (case tag
     [(nat) 0] [(int) 1] [(rat) 2]
     [(p8) 10] [(p16) 11] [(p32) 12] [(p64) 13]
+    [(f32) 20] [(f64) 21]
     [else -1]))
 
 ;; Compute the join type tag for two type tags.
@@ -1133,6 +1185,12 @@
      (if (>= (type-tag-rank t2) (type-tag-rank 'p32)) t2 'p32)]
     [(and (memq t1 '(p8 p16 p32 p64)) (memq t2 '(nat int rat)))
      (if (>= (type-tag-rank t1) (type-tag-rank 'p32)) t1 'p32)]
+    ;; Float family (Numerics N3d): widen within-float; exact+float PRESERVES the
+    ;; float width (no clamp); posit+float = no join (→ #f → stuck/type error).
+    [(and (memq t1 '(f32 f64)) (memq t2 '(f32 f64)))
+     (if (> (type-tag-rank t1) (type-tag-rank t2)) t1 t2)]
+    [(and (memq t1 '(nat int rat)) (memq t2 '(f32 f64))) t2]
+    [(and (memq t1 '(f32 f64)) (memq t2 '(nat int rat))) t1]
     [else #f]))
 
 ;; Reduce a generic binary operation: reduce both operands, retry.
@@ -1169,10 +1227,12 @@
               ;; Non-Nat same type: the same-type iota rules in whnf will handle it.
               ;; Retry via whnf so the pattern-match iota rules fire.
               [else (whnf (ctor a* b*))])]
-           ;; Different types — coerce both to join type, retry
+           ;; Different types — coerce both to join type, retry.
+           ;; coerce-literal is NaN/Inf-safe (a Float operand carrying +inf.0/
+           ;; +nan.0 cannot round-trip through an exact rational).
            [else
-            (let ([ca (rational->literal (literal->rational a*) join)]
-                  [cb (rational->literal (literal->rational b*) join)])
+            (let ([ca (coerce-literal a* join)]
+                  [cb (coerce-literal b* join)])
               (if (and ca cb)
                   (whnf (ctor ca cb))
                   (ctor a* b*)))]))]
@@ -1194,6 +1254,27 @@
        a*]
       [(not (equal? a* a)) (whnf (ctor a*))]
       [else (ctor a)])))
+
+;; ========================================
+;; N6e issue #71: recognize a SATURATED multi-hole explicit-hole SECTION
+;; application — a spine whose ultimate head is a chain of >=2 nested HOLE-domain
+;; lambdas, applied to at least that many args (e.g. `[[- _ _] 10 3]` =
+;; ((λ$_0. λ$_1. body) 10 3)). Such a form can't be typed by unwrapping one lambda
+;; per app node: after the first beta-app the inner λ is a bare hole-lambda in
+;; INFER position → expr-error. whnf fully collapses it to a lambda-free concrete
+;; form the ordinary rules type. The >=2-hole guard leaves single-hole sections
+;; AND single-beta let-expansion untouched; the saturation guard leaves
+;; under-applied (def-RHS) sections a loud error (E3 contract preserved).
+(define (saturated-hole-section-app? e)
+  (let loop ([spine e] [nargs 0])
+    (match spine
+      [(expr-app f _) (loop f (add1 nargs))]
+      [(expr-lam _ _ _)
+       (let count ([b spine] [k 0])
+         (match b
+           [(expr-lam _ d bb) #:when (expr-hole? d) (count bb (add1 k))]
+           [_ (and (>= k 2) (>= nargs k))]))]
+      [_ #f])))
 
 ;; ========================================
 ;; Structural pattern matching for reduce
@@ -1310,6 +1391,137 @@
 ;; A value is "definitely not a map" if it cannot possibly be a CHAMP map
 ;; at runtime. Used by map-get to return none instead of a stuck term
 ;; when applied to non-map values from union-typed expressions.
+;; ============================================================
+;; CIU T6 F1b.5-s2 (D27/D28): the validate runtime TABULATION.
+;; ============================================================
+;; Force all observations, fill-or-err, positive witness (the ESOP framing).
+;; COLLECT-ALL: per-field checks are independent observations — never
+;; fail-fast (D27.4, API-pinned). Per-field failure precedence: missing →
+;; type-mismatch → check-failed (one Reason per field; the map holds one
+;; value per key). Ctor minting is PAYLOAD-ONLY over FQN heads (the
+;; foreign.rkt marshal-out contract; the dual-arity match tolerance —
+;; NEVER mint a partial type-arg chain, it silently sticks). Values are
+;; nf'd AT INSERT (nf never descends into champs) and BEFORE witnessing
+;; (the field-witness precondition). A pred that panics PROPAGATES as the
+;; node's result ("validate inherits panic semantics, v1" — D27.3); a pred
+;; that STICKS or reduces to a non-Bool (a stuck trait method, an unbound
+;; name, a [fn ...] value) FAILS LOUD as check-unevaluable (F1b.7a Layer B:
+;; err-polarity's "skip stuck" governs TYPE-WITNESSING, not the user's
+;; runtime :check assertion; an un-evaluable check must never silently pass).
+(define (validate-tabulate sname closed? plan subj-champ names)
+  (define c (expr-champ-racket-champ subj-champ))
+  (define ok-name          (list-ref names 2))
+  (define err-name         (list-ref names 3))
+  (define missing-name     (list-ref names 4))
+  (define checkfail-name   (list-ref names 5))
+  (define typemis-name     (list-ref names 6))
+  (define unexpected-name  (list-ref names 7))
+  ;; F1b.7a: the Layer B guard's Reason ctor (index 8, appended in the
+  ;; elaborator required-names) — a :check that cannot be evaluated.
+  (define unevaluable-name (list-ref names 8))
+  ;; F1b.7b: the un-evaluable-:default diagnostic (index 9) — a filled default
+  ;; that didn't reduce to a clean value (an unresolved trait method).
+  (define default-uneval-name (list-ref names 9))
+  (define plan-kws (map car plan))
+  ;; the ok-payload base: the subject champ rebuilt with nf'd values
+  (define base-ok
+    (champ-fold c
+                (lambda (k v acc) (champ-insert acc (equal-hash-code k) k (nf v)))
+                champ-empty))
+  ;; walk the plan: collect-all errs + fill defaults; escape on pred panic
+  (let loop ([entries plan] [okc base-ok] [errc champ-empty] [any-err? #f])
+    (cond
+      [(pair? entries)
+       (define entry (car entries))
+       (define kw       (car entry))
+       (define tag      (cadr entry))
+       (define default  (caddr entry))
+       (define pred     (cadddr entry))
+       (define type-str (list-ref entry 4))
+       (define pred-str (list-ref entry 5))
+       ;; F1b.5-s4: required-on-miss? — schema plans set #t for every field;
+       ;; selection plans set #t iff the field is a single-segment :requires
+       ;; (the read-capability). Absent+no-default+required → missing-required;
+       ;; absent+no-default+NOT-required → a partial-view SKIP (D22.4 amendment 2:
+       ;; :requires is a read-capability, not a completeness contract).
+       (define required? (list-ref entry 6))
+       (define kexpr (expr-keyword kw))
+       (define khash (equal-hash-code kexpr))
+       (define found (champ-lookup c khash kexpr))
+       (cond
+         ;; missing + no default
+         [(and (eq? found 'none) (not default))
+          (if required?
+              (loop (cdr entries) okc
+                    (champ-insert errc khash kexpr (expr-fvar missing-name))
+                    #t)
+              (loop (cdr entries) okc errc any-err?))]  ; SKIP (view: optional field)
+         [else
+          (define val (nf (if (eq? found 'none) default found)))
+          (cond
+            ;; type-witness (the s1 acceptance tags; skip-safe by construction)
+            [(not (value-witnesses-tag? val tag))
+             ;; F1b.7b: distinguish a stuck FILLED DEFAULT from a provided-value
+             ;; type-mismatch. found='none here ⟹ val came from the default (the
+             ;; missing+no-default branch is handled above), so a witness-fail on
+             ;; it means the :default expr did not reduce to a clean value (an
+             ;; unresolved trait method — resolution deferred to the refinement
+             ;; track). Name it clearly instead of mislabeling as type-mismatch.
+             (loop (cdr entries) okc
+                   (champ-insert errc khash kexpr
+                                 (if (eq? found 'none)
+                                     (expr-fvar default-uneval-name)
+                                     (expr-app (expr-app (expr-fvar typemis-name)
+                                                         (expr-string type-str))
+                                               (expr-string (value-kind-string val)))))
+                   #t)]
+            [else
+             ;; :check pred (baked expr-lam; beta via nf)
+             (define pred-result (and pred (nf (expr-app pred val))))
+             (cond
+               ;; no :check on this field → passes
+               [(not pred-result)
+                (loop (cdr entries) (champ-insert okc khash kexpr val) errc any-err?)]
+               ;; panic in a pred → the panic IS the node's result (D27.3)
+               [(expr-panic? pred-result) pred-result]
+               ;; a clean Bool result: true passes, false is a check-failed
+               [(expr-true? pred-result)
+                (loop (cdr entries) (champ-insert okc khash kexpr val) errc any-err?)]
+               [(expr-false? pred-result)
+                (loop (cdr entries) okc
+                      (champ-insert errc khash kexpr
+                                    (expr-app (expr-fvar checkfail-name)
+                                              (expr-string (or pred-str "check"))))
+                      #t)]
+               ;; F1b.7a (Layer B guard): the pred did NOT reduce to a Bool
+               ;; (a stuck trait method / an unbound name / a [fn …] value).
+               ;; A :check that cannot be evaluated must FAIL LOUD, never
+               ;; silently pass (the old `else` treated stuck as pass —
+               ;; err-polarity mis-applied to :check eval). Fail-closed.
+               [else
+                (loop (cdr entries) okc
+                      (champ-insert errc khash kexpr
+                                    (expr-app (expr-fvar unevaluable-name)
+                                              (expr-string (or pred-str "check"))))
+                      #t)])])])]
+      [else
+       ;; :closed schemas: any subject key outside the plan → unexpected-field
+       (define err-pair
+         (if closed?
+             (champ-fold c
+                         (lambda (k v acc-pair)
+                           (if (and (expr-keyword? k)
+                                    (memq (expr-keyword-name k) plan-kws))
+                               acc-pair
+                               (cons (champ-insert (car acc-pair) (equal-hash-code k) k
+                                                   (expr-fvar unexpected-name))
+                                     #t)))
+                         (cons errc any-err?))
+             (cons errc any-err?)))
+       (if (cdr err-pair)
+           (expr-app (expr-fvar err-name) (expr-champ (car err-pair)))
+           (expr-app (expr-fvar ok-name) (expr-champ okc)))])))
+
 (define (definitely-not-map? e)
   (not (or (expr-champ? e)          ;; IS a map runtime value
            (expr-fvar? e)           ;; could resolve to a map
@@ -1318,14 +1530,26 @@
            (expr-app? e)            ;; application, could produce a map
            (expr-hole? e)           ;; hole, unknown
            (expr-typed-hole? e)    ;; typed hole, unknown
-           (expr-Open? e)           ;; Open type — unknown value at runtime
            (expr-map-empty? e)      ;; map constructor
            (expr-map-assoc? e)      ;; map operation
            (expr-map-get? e)        ;; nested map-get
            (expr-get? e)            ;; generic get, could return a map
            (expr-nil-safe-get? e)  ;; nested nil-safe-get
            (expr-map-dissoc? e)     ;; map operation
-           (expr-error? e))))       ;; error propagation
+           (expr-get-in? e)         ;; dynamic path navigation — could return a map
+           (expr-update-in? e)      ;; dynamic path update — its result IS a map
+           (expr-error? e)          ;; error propagation
+           ;; CIU T6 F1b.4c (D22): a PANIC must propagate stuck, never degrade
+           ;; — the :check bridge's failure value was swallowed to `none` by
+           ;; map-get (and to nil by nil-safe-get) under projection, hiding
+           ;; the violation entirely (PROBES §P4). Mirrors the expr-error
+           ;; exemption directly above.
+           (expr-panic? e)
+           ;; CIU T6 F1b.5-s2: a stuck validate must propagate stuck (its
+           ;; reduced result is ok/err over a champ — map-adjacent); the
+           ;; D22/P6 silent-value-loss class, decided explicitly per
+           ;; pipeline.md core item 4.
+           (expr-validate? e))))
 
 ;; ========================================
 ;; Weak Head Normal Form
@@ -1343,7 +1567,14 @@
     [(and cache (hash-ref cache e #f)) => values]
     [else
      (define result (whnf-impl e))
-     (when cache
+     ;; Issue #70 (N6e-E5): do NOT cache a result that is an (unsolved) meta —
+     ;; a meta whnf'd before its solve would otherwise pin the UNRESOLVED meta
+     ;; in the per-command cache, permanently masking the solution from every
+     ;; later whnf in the same command (exposed by the deferred spine walk,
+     ;; which legitimately whnfs metas after mid-command container solves).
+     ;; A SOLVED meta's whnf returns its solution (concrete) and caches fine —
+     ;; solutions are solve-once permanent.
+     (when (and cache (not (expr-meta? result)))
        (hash-set! cache e result))
      result]))
 
@@ -1366,11 +1597,13 @@
       (expr-Bool? e) (expr-String? e) (expr-Char? e) (expr-Keyword? e)
       (expr-Unit? e) (expr-Nil? e) (expr-Symbol? e) (expr-Path? e)
       (expr-Posit8? e) (expr-Posit16? e) (expr-Posit32? e) (expr-Posit64? e)
+      (expr-Float32? e) (expr-Float64? e)
       (expr-Quire8? e) (expr-Quire16? e) (expr-Quire32? e) (expr-Quire64? e)
       ;; Type constructors (compound type formers — no reduction rule)
       (expr-Pi? e) (expr-Sigma? e) (expr-Type? e)
       (expr-Vec? e) (expr-Eq? e) (expr-Fin? e)
       (expr-Map? e) (expr-Set? e) (expr-PVec? e)
+      (expr-Record? e)  ;; structural row type — a compound type former, no reduction rule
       (expr-TVec? e) (expr-TMap? e) (expr-TSet? e)
       ;; Value constructors (canonical forms)
       (expr-true? e) (expr-false? e) (expr-zero? e) (expr-nat-val? e)
@@ -1378,6 +1611,7 @@
       (expr-int? e) (expr-rat? e) (expr-string? e) (expr-char? e)
       (expr-keyword? e) (expr-symbol? e)
       (expr-posit8? e) (expr-posit16? e) (expr-posit32? e) (expr-posit64? e)
+      (expr-float32? e) (expr-float64? e)
       ;; Structural forms (not reducible at head)
       (expr-lam? e) (expr-pair? e) (expr-union? e)
       (expr-vcons? e) (expr-vnil? e)
@@ -1387,18 +1621,22 @@
       (expr-tycon? e)
       ;; Logic engine types (ground)
       (expr-net-type? e) (expr-cell-id-type? e) (expr-prop-id-type? e)
-      (expr-uf-type? e) (expr-atms-type? e) (expr-assumption-id-type? e)
+      (expr-uf-type? e)
       (expr-table-store-type? e) (expr-solver-type? e) (expr-goal-type? e)
       (expr-derivation-type? e)
-      (expr-schema-type? e) (expr-answer-type? e) (expr-relation-type? e)
+      (expr-answer-type? e) (expr-relation-type? e)
       ;; Error / holes (stuck)
-      (expr-error? e) (expr-hole? e) (expr-typed-hole? e) (expr-Open? e)))
+      (expr-error? e) (expr-hole? e) (expr-typed-hole? e)))
 
 (define (whnf-impl e)
   (perf-inc-reduce!)
   ;; Fast path: trivially-WHNF expressions bypass the full match.
   ;; Cost: ~0.5μs (struct predicate checks) vs ~150μs (match fallthrough).
   (cond
+    ;; Numerics N5de: type-lattice sentinels (from on-network type-unify-or-top merges) are
+    ;; symbols, not exprs; pass through so a compound type carrying a nested type-top/bot
+    ;; doesn't crash reduction. (Full on-network refinement handling → future PPN track, §15.)
+    [(or (eq? e 'type-top) (eq? e 'type-bot)) e]
     [(whnf-trivial? e) e]
     [else
      ;; Check fuel
@@ -1755,6 +1993,76 @@
      (let ([v* (whnf v)])
        (if (equal? v* v) e (whnf (expr-p16-if-nar t nc vc v*))))]
 
+    ;; ---- Float32/Float64 iota rules (Numerics N3b) ----
+    ;; Compute when both args are float literals; comparisons → Bool.
+    [(expr-f32-add (expr-float32 a) (expr-float32 b)) (expr-float32 (float32-add a b))]
+    [(expr-f32-sub (expr-float32 a) (expr-float32 b)) (expr-float32 (float32-sub a b))]
+    [(expr-f32-mul (expr-float32 a) (expr-float32 b)) (expr-float32 (float32-mul a b))]
+    [(expr-f32-div (expr-float32 a) (expr-float32 b)) (expr-float32 (float32-div a b))]
+    [(expr-f32-neg (expr-float32 a)) (expr-float32 (float32-neg a))]
+    [(expr-f32-abs (expr-float32 a)) (expr-float32 (float32-abs a))]
+    [(expr-f32-sqrt (expr-float32 a)) (expr-float32 (float32-sqrt a))]
+    [(expr-f32-lt (expr-float32 a) (expr-float32 b)) (if (float32-lt? a b) (expr-true) (expr-false))]
+    [(expr-f32-le (expr-float32 a) (expr-float32 b)) (if (float32-le? a b) (expr-true) (expr-false))]
+    [(expr-f32-eq (expr-float32 a) (expr-float32 b)) (if (float32-eq? a b) (expr-true) (expr-false))]
+    [(expr-f64-add (expr-float64 a) (expr-float64 b)) (expr-float64 (float64-add a b))]
+    [(expr-f64-sub (expr-float64 a) (expr-float64 b)) (expr-float64 (float64-sub a b))]
+    [(expr-f64-mul (expr-float64 a) (expr-float64 b)) (expr-float64 (float64-mul a b))]
+    [(expr-f64-div (expr-float64 a) (expr-float64 b)) (expr-float64 (float64-div a b))]
+    [(expr-f64-neg (expr-float64 a)) (expr-float64 (float64-neg a))]
+    [(expr-f64-abs (expr-float64 a)) (expr-float64 (float64-abs a))]
+    [(expr-f64-sqrt (expr-float64 a)) (expr-float64 (float64-sqrt a))]
+    [(expr-f64-lt (expr-float64 a) (expr-float64 b)) (if (float64-lt? a b) (expr-true) (expr-false))]
+    [(expr-f64-le (expr-float64 a) (expr-float64 b)) (if (float64-le? a b) (expr-true) (expr-false))]
+    [(expr-f64-eq (expr-float64 a) (expr-float64 b)) (if (float64-eq? a b) (expr-true) (expr-false))]
+    ;; Float stuck-term reduction: reduce operands
+    [(expr-f32-add a b) (reduce-float-binary 32 expr-f32-add a b)]
+    [(expr-f32-sub a b) (reduce-float-binary 32 expr-f32-sub a b)]
+    [(expr-f32-mul a b) (reduce-float-binary 32 expr-f32-mul a b)]
+    [(expr-f32-div a b) (reduce-float-binary 32 expr-f32-div a b)]
+    [(expr-f32-lt a b) (reduce-float-binary 32 expr-f32-lt a b)]
+    [(expr-f32-le a b) (reduce-float-binary 32 expr-f32-le a b)]
+    [(expr-f32-eq a b) (reduce-float-binary 32 expr-f32-eq a b)]
+    [(expr-f32-neg a) (reduce-float-unary 32 expr-f32-neg a)]
+    [(expr-f32-abs a) (reduce-float-unary 32 expr-f32-abs a)]
+    [(expr-f32-sqrt a) (reduce-float-unary 32 expr-f32-sqrt a)]
+    [(expr-f64-add a b) (reduce-float-binary 64 expr-f64-add a b)]
+    [(expr-f64-sub a b) (reduce-float-binary 64 expr-f64-sub a b)]
+    [(expr-f64-mul a b) (reduce-float-binary 64 expr-f64-mul a b)]
+    [(expr-f64-div a b) (reduce-float-binary 64 expr-f64-div a b)]
+    [(expr-f64-lt a b) (reduce-float-binary 64 expr-f64-lt a b)]
+    [(expr-f64-le a b) (reduce-float-binary 64 expr-f64-le a b)]
+    [(expr-f64-eq a b) (reduce-float-binary 64 expr-f64-eq a b)]
+    [(expr-f64-neg a) (reduce-float-unary 64 expr-f64-neg a)]
+    [(expr-f64-abs a) (reduce-float-unary 64 expr-f64-abs a)]
+    [(expr-f64-sqrt a) (reduce-float-unary 64 expr-f64-sqrt a)]
+
+    ;; ---- Cross-width Float conversions (Numerics N3e-rest) ----
+    ;; Value cases for BOTH float widths. `rational?` guards exclude NaN/±Inf so
+    ;; float-to-rat / float-to-int never hit `inexact->exact` on a non-rational.
+    ;; float-finite? : Float -> Bool
+    [(expr-float-finite (expr-float64 v)) (if (rational? v) (expr-true) (expr-false))]
+    [(expr-float-finite (expr-float32 v)) (if (rational? v) (expr-true) (expr-false))]
+    ;; float-to-rat : Float -> Rat (finite only; NaN/±Inf → falls through to stuck)
+    [(expr-float-to-rat (expr-float64 v)) #:when (rational? v) (expr-rat (inexact->exact v))]
+    [(expr-float-to-rat (expr-float32 v)) #:when (rational? v) (expr-rat (inexact->exact v))]
+    ;; float-to-int : Float -> Int (truncate toward zero; finite only)
+    [(expr-float-to-int (expr-float64 v)) #:when (rational? v) (expr-int (inexact->exact (truncate v)))]
+    [(expr-float-to-int (expr-float32 v)) #:when (rational? v) (expr-int (inexact->exact (truncate v)))]
+    ;; float-to-float32 : Float -> Float32 (narrowing; total — flsingle handles NaN/±Inf)
+    [(expr-float-to-float32 (expr-float64 v)) (expr-float32 (flsingle v))]
+    [(expr-float-to-float32 (expr-float32 v)) (expr-float32 v)]
+    ;; Stuck-term reduction: reduce operand then retry. NaN/±Inf float-to-rat /
+    ;; float-to-int reach here (value guard failed) and stay stuck without crashing.
+    [(expr-float-finite a)
+     (let ([a* (whnf a)]) (if (equal? a* a) (expr-float-finite a) (whnf (expr-float-finite a*))))]
+    [(expr-float-to-rat a)
+     (let ([a* (whnf a)]) (if (equal? a* a) (expr-float-to-rat a) (whnf (expr-float-to-rat a*))))]
+    [(expr-float-to-int a)
+     (let ([a* (whnf a)]) (if (equal? a* a) (expr-float-to-int a) (whnf (expr-float-to-int a*))))]
+    [(expr-float-to-float32 a)
+     (let ([a* (whnf a)]) (if (equal? a* a) (expr-float-to-float32 a) (whnf (expr-float-to-float32 a*))))]
+
     ;; ---- Posit32 iota rules: compute when arguments are posit32 literals ----
 
     ;; Binary arithmetic on literals
@@ -2097,6 +2405,30 @@
     [(expr-generic-abs (expr-posit32 a)) (expr-posit32 (posit32-abs a))]
     [(expr-generic-abs (expr-posit64 a)) (expr-posit64 (posit64-abs a))]
 
+    ;; ---- Float same-type generic arith (Numerics N3d) ----
+    [(expr-generic-add (expr-float32 a) (expr-float32 b)) (expr-float32 (float32-add a b))]
+    [(expr-generic-add (expr-float64 a) (expr-float64 b)) (expr-float64 (float64-add a b))]
+    [(expr-generic-sub (expr-float32 a) (expr-float32 b)) (expr-float32 (float32-sub a b))]
+    [(expr-generic-sub (expr-float64 a) (expr-float64 b)) (expr-float64 (float64-sub a b))]
+    [(expr-generic-mul (expr-float32 a) (expr-float32 b)) (expr-float32 (float32-mul a b))]
+    [(expr-generic-mul (expr-float64 a) (expr-float64 b)) (expr-float64 (float64-mul a b))]
+    [(expr-generic-div (expr-float32 a) (expr-float32 b)) (expr-float32 (float32-div a b))]
+    [(expr-generic-div (expr-float64 a) (expr-float64 b)) (expr-float64 (float64-div a b))]
+    [(expr-generic-lt (expr-float32 a) (expr-float32 b)) (if (float32-lt? a b) (expr-true) (expr-false))]
+    [(expr-generic-lt (expr-float64 a) (expr-float64 b)) (if (float64-lt? a b) (expr-true) (expr-false))]
+    [(expr-generic-le (expr-float32 a) (expr-float32 b)) (if (float32-le? a b) (expr-true) (expr-false))]
+    [(expr-generic-le (expr-float64 a) (expr-float64 b)) (if (float64-le? a b) (expr-true) (expr-false))]
+    [(expr-generic-gt (expr-float32 a) (expr-float32 b)) (if (float32-lt? b a) (expr-true) (expr-false))]
+    [(expr-generic-gt (expr-float64 a) (expr-float64 b)) (if (float64-lt? b a) (expr-true) (expr-false))]
+    [(expr-generic-ge (expr-float32 a) (expr-float32 b)) (if (float32-le? b a) (expr-true) (expr-false))]
+    [(expr-generic-ge (expr-float64 a) (expr-float64 b)) (if (float64-le? b a) (expr-true) (expr-false))]
+    [(expr-generic-eq (expr-float32 a) (expr-float32 b)) (if (float32-eq? a b) (expr-true) (expr-false))]
+    [(expr-generic-eq (expr-float64 a) (expr-float64 b)) (if (float64-eq? a b) (expr-true) (expr-false))]
+    [(expr-generic-negate (expr-float32 a)) (expr-float32 (float32-neg a))]
+    [(expr-generic-negate (expr-float64 a)) (expr-float64 (float64-neg a))]
+    [(expr-generic-abs (expr-float32 a)) (expr-float32 (float32-abs a))]
+    [(expr-generic-abs (expr-float64 a)) (expr-float64 (float64-abs a))]
+
     ;; generic-from-int: Int -> TargetType conversion based on target type
     [(expr-generic-from-int (expr-Int) (expr-int v))  (expr-int v)]             ; identity
     [(expr-generic-from-int (expr-Rat) (expr-int v))  (expr-rat v)]             ; Int -> Rat
@@ -2104,6 +2436,8 @@
     [(expr-generic-from-int (expr-Posit16) (expr-int v)) (expr-posit16 (posit16-encode v))]
     [(expr-generic-from-int (expr-Posit32) (expr-int v)) (expr-posit32 (posit32-encode v))]
     [(expr-generic-from-int (expr-Posit64) (expr-int v)) (expr-posit64 (posit64-encode v))]
+    [(expr-generic-from-int (expr-Float32) (expr-int v)) (expr-float32 (flsingle (exact->inexact v)))]  ; Int -> Float32 (N3e)
+    [(expr-generic-from-int (expr-Float64) (expr-int v)) (expr-float64 (exact->inexact v))]              ; Int -> Float64 (N3e)
 
     ;; generic-from-rat: Rat -> TargetType conversion based on target type
     [(expr-generic-from-rat (expr-Rat) (expr-rat v))  (expr-rat v)]             ; identity
@@ -2111,6 +2445,8 @@
     [(expr-generic-from-rat (expr-Posit16) (expr-rat v)) (expr-posit16 (posit16-encode v))]
     [(expr-generic-from-rat (expr-Posit32) (expr-rat v)) (expr-posit32 (posit32-encode v))]
     [(expr-generic-from-rat (expr-Posit64) (expr-rat v)) (expr-posit64 (posit64-encode v))]
+    [(expr-generic-from-rat (expr-Float32) (expr-rat v)) (expr-float32 (flsingle (exact->inexact v)))]  ; Rat -> Float32 (N3e, DEMO-P1)
+    [(expr-generic-from-rat (expr-Float64) (expr-rat v)) (expr-float64 (exact->inexact v))]              ; Rat -> Float64 (N3e, DEMO-P1)
 
     ;; ---- Generic arithmetic stuck-term reduction ----
     ;; Binary ops: reduce operands
@@ -2154,6 +2490,17 @@
          (if (eq? result 'none)
              (expr-error)
              (whnf result))))]
+
+    ;; CIU T6 F1b.5-s2 (D27): validate — the runtime tabulation redex.
+    ;; Subject whnf's to exactly two classes (spines/map-empty collapse to
+    ;; champs): champ → tabulate; stuck → the node stays stuck (the map-get
+    ;; [else e] precedent; safe at top level, pp arm renders it).
+    [(expr-validate sname closed? plan subject names)
+     (let ([subj* (whnf subject)])
+       (cond
+         [(expr-champ? subj*) (validate-tabulate sname closed? plan subj* names)]
+         [(equal? subj* subject) e]
+         [else (whnf (expr-validate sname closed? plan subj* names))]))]
     ;; Generic get: dispatch by collection type
     [(expr-get coll key)
      (let ([c* (whnf coll)])
@@ -2363,6 +2710,14 @@
          (expr-champ (tchamp-freeze t))))]
 
     ;; ---- PVec stuck-term reduction ----
+    ;; CIU T6 F1a-col: literal-extent node lowers to the push chain (runtime identical).
+    ;; The seed's elem-type slot is reduction-ignored (see the pvec-empty arm above).
+    [(expr-pvec-literal elems)
+     (whnf (for/fold ([acc (expr-pvec-empty (expr-hole))]) ([el (in-list elems)])
+             (expr-pvec-push acc el)))]
+    ;; CIU T6 F1a-col-2: the list literal's runtime IS its elaborated cons chain.
+    [(expr-list-literal _ chain) (whnf chain)]
+    [(expr-map-literal _ _ chain) (whnf chain)]
     [(expr-pvec-push v x)
      (let ([v* (whnf v)])
        (if (equal? v* v) e (whnf (expr-pvec-push v* x))))]
@@ -2542,6 +2897,43 @@
     [(expr-map-dissoc m k)
      (let ([m* (whnf m)])
        (if (equal? m* m) e (whnf (expr-map-dissoc m* k))))]
+    ;; ---- Dynamic path ops (2026-07-16 P6 value-loss fix) ----
+    ;; These previously reduced only in nf; with no whnf arm a dynamic
+    ;; update-in/get-in result was whnf-stuck, and map-get's graceful
+    ;; degradation silently converted it to none (see definitely-not-map?,
+    ;; which now also exempts both nodes for the genuinely-stuck case).
+    ;; Semantics mirror the nf arms at whnf strength.
+    [(expr-get-in target paths)
+     (let ([nt (whnf target)]
+           [np (whnf paths)])
+       (cond
+         [(and (expr-path? np) (pair? (expr-path-branches np)))
+          (foldl (lambda (seg acc) (whnf (expr-map-get acc seg)))
+                 nt (car (expr-path-branches np)))]
+         [(and (equal? nt target) (equal? np paths)) e]
+         [else (expr-get-in nt np)]))]
+    [(expr-update-in target paths fn)
+     (let ([nt (whnf target)]
+           [np (whnf paths)])
+       (cond
+         [(and (expr-path? np) (pair? (expr-path-branches np)))
+          ;; F1b.3 (D24 guard): a ZERO-segment dynamic path would apply fn to
+          ;; the WHOLE map (spine keys can vanish — P6), which the D24 typing
+          ;; posture (labels stable, 'present) cannot cover. Host error, per
+          ;; the path-ops empty-path precedent. (Inside build, null segs is
+          ;; the legitimate recursion base — the guard is entry-only.)
+          (when (null? (car (expr-path-branches np)))
+            (error 'update-in "dynamic path has zero segments — an empty path would replace the entire map"))
+          (let build ([base nt] [segs (car (expr-path-branches np))])
+            (cond
+              [(null? segs) (whnf (expr-app fn base))]
+              [else
+               (let* ([key (car segs)]
+                      [sub (whnf (expr-map-get base key))]
+                      [updated (build sub (cdr segs))])
+                 (whnf (expr-map-assoc base key updated)))]))]
+         [(and (equal? nt target) (equal? np paths)) e]
+         [else (expr-update-in nt np fn)]))]
     [(expr-map-size m)
      (let ([m* (whnf m)])
        (if (equal? m* m) e (whnf (expr-map-size m*))))]
@@ -2830,141 +3222,6 @@
               [(not (equal? id* id)) (whnf (expr-uf-value store id*))]
               [else e])]))]
 
-    ;; ---- ATMS ----
-    ;; Type constructors and runtime wrappers are self-values
-    [(expr-atms-type) e]
-    [(expr-assumption-id-type) e]
-    [(expr-atms-store _) e]
-    [(expr-assumption-id-val _) e]
-
-    ;; atms-new : PropNetwork -> ATMS
-    ;; BSP-LE Track 2 Phase 5.7: ATMS operations use solver-state (cell-based)
-    [(expr-atms-new network)
-     (let ([network* (whnf network)])
-       (match network*
-         [(expr-prop-network rnet)
-          (expr-atms-store (make-solver-state rnet))]
-         [_ (if (equal? network* network) e (whnf (expr-atms-new network*)))]))]
-
-    ;; atms-assume : ATMS -> Keyword -> A -> [ATMS * AssumptionId]
-    [(expr-atms-assume store name datum)
-     (let ([store* (whnf store)])
-       (match store*
-         [(expr-atms-store rstore)
-          (let ([name* (whnf name)] [datum* (whnf datum)])
-            (define sym (if (expr-keyword? name*)
-                            (expr-keyword-name name*)
-                            'unknown))
-            (define-values (new-ss aid) (solver-state-assume rstore sym datum*))
-            (expr-pair (expr-atms-store new-ss) (expr-assumption-id-val aid)))]
-         [_ (if (equal? store* store) e (whnf (expr-atms-assume store* name datum)))]))]
-
-    ;; atms-retract : ATMS -> AssumptionId -> ATMS
-    [(expr-atms-retract store aid)
-     (let ([store* (whnf store)] [aid* (whnf aid)])
-       (match* (store* aid*)
-         [((expr-atms-store rstore) (expr-assumption-id-val raid))
-          (expr-atms-store (solver-state-retract rstore raid))]
-         [(_ _)
-          (cond
-            [(not (equal? store* store)) (whnf (expr-atms-retract store* aid))]
-            [(not (equal? aid* aid)) (whnf (expr-atms-retract store aid*))]
-            [else e])]))]
-
-    ;; atms-nogood : ATMS -> List AssumptionId -> ATMS
-    [(expr-atms-nogood store aids)
-     (let ([store* (whnf store)])
-       (match store*
-         [(expr-atms-store rstore)
-          (let ([aset (prologos-list->assumption-set (whnf aids))])
-            (if aset
-                (expr-atms-store (solver-state-add-nogood rstore aset))
-                ;; List not yet reducible
-                (if (equal? store* store) e (whnf (expr-atms-nogood store* aids)))))]
-         [_ (if (equal? store* store) e (whnf (expr-atms-nogood store* aids)))]))]
-
-    ;; atms-amb : ATMS -> List A -> [ATMS * List AssumptionId]
-    [(expr-atms-amb store alternatives)
-     (let ([store* (whnf store)])
-       (match store*
-         [(expr-atms-store rstore)
-          (let ([alt-list (prologos-list->racket-list (whnf alternatives))])
-            (if alt-list
-                (let-values ([(new-ss hyps) (solver-state-amb rstore alt-list)])
-                  (expr-pair (expr-atms-store new-ss)
-                             (racket-list->prologos-list (map expr-assumption-id-val hyps))))
-                ;; List not yet reducible
-                (if (equal? store* store) e (whnf (expr-atms-amb store* alternatives)))))]
-         [_ (if (equal? store* store) e (whnf (expr-atms-amb store* alternatives)))]))]
-
-    ;; atms-solve-all : ATMS -> CellId -> List _
-    [(expr-atms-solve-all store goal)
-     (let ([store* (whnf store)] [goal* (whnf goal)])
-       (match* (store* goal*)
-         [((expr-atms-store rstore) (expr-cell-id cid))
-          (racket-list->prologos-list (solver-state-solve-all rstore cid))]
-         [(_ _)
-          (cond
-            [(not (equal? store* store)) (whnf (expr-atms-solve-all store* goal))]
-            [(not (equal? goal* goal)) (whnf (expr-atms-solve-all store goal*))]
-            [else e])]))]
-
-    ;; atms-read : ATMS -> CellId -> _
-    [(expr-atms-read store cell)
-     (let ([store* (whnf store)] [cell* (whnf cell)])
-       (match* (store* cell*)
-         [((expr-atms-store rstore) (expr-cell-id cid))
-          (let ([val (solver-state-read-cell rstore cid)])
-            (if (eq? val 'bot) (expr-hole) val))]
-         [(_ _)
-          (cond
-            [(not (equal? store* store)) (whnf (expr-atms-read store* cell))]
-            [(not (equal? cell* cell)) (whnf (expr-atms-read store cell*))]
-            [else e])]))]
-
-    ;; atms-write : ATMS -> CellId -> A -> List AssumptionId -> ATMS
-    ;; NOTE: solver-state-write-cell doesn't take a support set — it writes
-    ;; directly to the prop-network cell. The support semantics change:
-    ;; under solver-state, worldview filtering is via tagged-cell-value bitmasks
-    ;; (Phase 4), not per-value support sets. For now, support is ignored.
-    [(expr-atms-write store cell val support)
-     (let ([store* (whnf store)] [cell* (whnf cell)])
-       (match* (store* cell*)
-         [((expr-atms-store rstore) (expr-cell-id cid))
-          (let ([val* (whnf val)]
-                [sup (prologos-list->assumption-set (whnf support))])
-            (if sup
-                (expr-atms-store (solver-state-write-cell rstore cid val*))
-                ;; Support list not yet reducible
-                (if (equal? store* store) e (whnf (expr-atms-write store* cell val support)))))]
-         [(_ _)
-          (cond
-            [(not (equal? store* store)) (whnf (expr-atms-write store* cell val support))]
-            [(not (equal? cell* cell)) (whnf (expr-atms-write store cell* val support))]
-            [else e])]))]
-
-    ;; atms-consistent : ATMS -> List AssumptionId -> Bool
-    [(expr-atms-consistent store aids)
-     (let ([store* (whnf store)])
-       (match store*
-         [(expr-atms-store rstore)
-          (let ([aset (prologos-list->assumption-set (whnf aids))])
-            (if aset
-                (if (solver-state-consistent? rstore aset) (expr-true) (expr-false))
-                (if (equal? store* store) e (whnf (expr-atms-consistent store* aids)))))]
-         [_ (if (equal? store* store) e (whnf (expr-atms-consistent store* aids)))]))]
-
-    ;; atms-worldview : ATMS -> List AssumptionId -> ATMS
-    [(expr-atms-worldview store aids)
-     (let ([store* (whnf store)])
-       (match store*
-         [(expr-atms-store rstore)
-          (let ([aset (prologos-list->assumption-set (whnf aids))])
-            (if aset
-                (expr-atms-store (solver-state-with-worldview rstore aset))
-                (if (equal? store* store) e (whnf (expr-atms-worldview store* aids)))))]
-         [_ (if (equal? store* store) e (whnf (expr-atms-worldview store* aids)))]))]
-
     ;; ---- Tabling (SLG-style memoization) ----
 
     ;; Type constructor and runtime wrapper are self-values
@@ -3071,7 +3328,6 @@
     [(expr-solver-type) e]
     [(expr-goal-type) e]
     [(expr-derivation-type) e]
-    [(expr-schema-type _) e]
     [(expr-answer-type _) e]
     [(expr-relation-type _) e]
     [(expr-cut) e]
@@ -3090,7 +3346,6 @@
     [(expr-is-goal _ _) e]
     [(expr-not-goal _) e]
     [(expr-guard _ _) e]
-    [(expr-schema _ _) e]
     ;; Solve/Explain iota rules: reduce goal then dispatch to runtime solver
     [(expr-solve goal)
      (run-solve-goal goal default-solver-config)]
@@ -3182,6 +3437,15 @@
      (let ([sol (meta-solution/cell-id cell-id id)])
        (if sol (whnf sol) e))]
 
+    ;; N4: numeric literal — collapse to its concrete node once alpha is solved (so
+    ;; primitive ops reducing their args see concrete values); stuck if unsolved.
+    [(expr-num-lit val integral? _origin alpha)
+     (define resolved
+       (match alpha
+         [(expr-meta id cell-id) (or (meta-solution/cell-id cell-id id) alpha)]
+         [_ alpha]))
+     (or (num-lit->concrete val integral? resolved) e)]
+
     ;; Everything else is already in WHNF
     [_ e]))
 
@@ -3223,8 +3487,14 @@
     [(expr-Type _) e]
     [(expr-hole) e]
     [(expr-typed-hole _) e]
-    [(expr-Open) e]
     [(expr-meta _ _) e]
+    ;; N4: numeric literal — collapse when alpha solved (mirror whnf); else identity.
+    [(expr-num-lit val integral? _origin alpha)
+     (define resolved
+       (match alpha
+         [(expr-meta id cell-id) (or (meta-solution/cell-id cell-id id) alpha)]
+         [_ alpha]))
+     (or (num-lit->concrete val integral? resolved) e)]
     [(expr-error) e]
     [(? ns-context?) e]  ;; namespace metadata — pass-through
     [(expr-panic msg) (expr-panic (nf msg))]  ;; reduce msg, stay stuck
@@ -3363,6 +3633,37 @@
     ;; Posit32 normalization
     [(expr-Posit32) e]
     [(expr-posit32 _) e]
+    ;; Float (Numerics N3) — leaf normalization
+    [(expr-Float32) e]
+    [(expr-float32 _) e]
+    [(expr-Float64) e]
+    [(expr-float64 _) e]
+    ;; Float ops (Numerics N3b)
+    [(expr-f32-add a b) (expr-f32-add (nf a) (nf b))]
+    [(expr-f32-sub a b) (expr-f32-sub (nf a) (nf b))]
+    [(expr-f32-mul a b) (expr-f32-mul (nf a) (nf b))]
+    [(expr-f32-div a b) (expr-f32-div (nf a) (nf b))]
+    [(expr-f32-neg a) (expr-f32-neg (nf a))]
+    [(expr-f32-abs a) (expr-f32-abs (nf a))]
+    [(expr-f32-sqrt a) (expr-f32-sqrt (nf a))]
+    [(expr-f32-lt a b) (expr-f32-lt (nf a) (nf b))]
+    [(expr-f32-le a b) (expr-f32-le (nf a) (nf b))]
+    [(expr-f32-eq a b) (expr-f32-eq (nf a) (nf b))]
+    [(expr-f64-add a b) (expr-f64-add (nf a) (nf b))]
+    [(expr-f64-sub a b) (expr-f64-sub (nf a) (nf b))]
+    [(expr-f64-mul a b) (expr-f64-mul (nf a) (nf b))]
+    [(expr-f64-div a b) (expr-f64-div (nf a) (nf b))]
+    [(expr-f64-neg a) (expr-f64-neg (nf a))]
+    [(expr-f64-abs a) (expr-f64-abs (nf a))]
+    [(expr-f64-sqrt a) (expr-f64-sqrt (nf a))]
+    [(expr-f64-lt a b) (expr-f64-lt (nf a) (nf b))]
+    [(expr-f64-le a b) (expr-f64-le (nf a) (nf b))]
+    [(expr-f64-eq a b) (expr-f64-eq (nf a) (nf b))]
+    ;; Cross-width Float conversions (Numerics N3e-rest)
+    [(expr-float-finite a) (expr-float-finite (nf a))]
+    [(expr-float-to-rat a) (expr-float-to-rat (nf a))]
+    [(expr-float-to-int a) (expr-float-to-int (nf a))]
+    [(expr-float-to-float32 a) (expr-float-to-float32 (nf a))]
     [(expr-p32-add a b) (expr-p32-add (nf a) (nf b))]
     [(expr-p32-sub a b) (expr-p32-sub (nf a) (nf b))]
     [(expr-p32-mul a b) (expr-p32-mul (nf a) (nf b))]
@@ -3462,6 +3763,9 @@
      (cond
        [(and (expr-path? np) (pair? (expr-path-branches np)))
         (define segs (car (expr-path-branches np)))
+        ;; F1b.3 (D24 guard): entry-only zero-segment error (see the whnf arm).
+        (when (null? segs)
+          (error 'update-in "dynamic path has zero segments — an empty path would replace the entire map"))
         (define (build base segs)
           (cond
             [(null? segs) (nf (expr-app nf-fn base))]
@@ -3469,7 +3773,10 @@
              (define key (car segs))
              (define sub (nf (expr-map-get base key)))
              (define updated (build sub (cdr segs)))
-             (expr-map-assoc base key updated)]))
+             ;; 2026-07-16: normalize the spine (was returned as a raw
+             ;; map-assoc stuck term, leaving map-keys/map-size stuck on
+             ;; dynamic update-in results — the P6 wart).
+             (nf (expr-map-assoc base key updated))]))
         (build nt segs)]
        [else (expr-update-in nt np nf-fn)])]
     [(expr-broadcast-get target fields)
@@ -3528,12 +3835,17 @@
     [(expr-String) e]
     [(expr-string _) e]
 
+    ;; Record/tuple type normalization: normalize field types
+    [(? expr-Record? rec) (record-map-field-types nf rec)]
     ;; Map normalization
     [(expr-Map k v) (expr-Map (nf k) (nf v))]
     [(expr-champ _) e]
     [(expr-map-empty k v) (expr-map-empty (nf k) (nf v))]
     [(expr-map-assoc m k v) (expr-map-assoc (nf m) (nf k) (nf v))]
     [(expr-map-get m k) (expr-map-get (nf m) (nf k))]
+    ;; CIU T6 F1b.5-s2: a validate that survived whnf is stuck — nf the
+    ;; expr slots (subject + plan defaults/preds) via the single helper
+    [(? expr-validate? v) (validate-map-exprs nf v)]
     [(expr-get c k) (expr-get (nf c) (nf k))]
     [(expr-nil-safe-get m k) (expr-nil-safe-get (nf m) (nf k))]
     [(expr-nil-check a) (expr-nil-check (nf a))]
@@ -3563,6 +3875,10 @@
      (expr-rrb (rrb-from-list (map nf (rrb-to-list r))))]
     [(expr-pvec-empty a) (expr-pvec-empty (nf a))]
     [(expr-pvec-push v x) (expr-pvec-push (nf v) (nf x))]
+    [(expr-pvec-literal elems) (expr-pvec-literal (map nf elems))]
+    [(expr-list-literal elems chain) (expr-list-literal (map nf elems) (nf chain))]
+    [(expr-map-literal keys vals chain)
+     (expr-map-literal (map nf keys) (map nf vals) (nf chain))]
     [(expr-pvec-nth v i) (expr-pvec-nth (nf v) (nf i))]
     [(expr-pvec-update v i x) (expr-pvec-update (nf v) (nf i) (nf x))]
     [(expr-pvec-length v) (expr-pvec-length (nf v))]
@@ -3631,23 +3947,6 @@
     [(expr-uf-union st id1 id2) (expr-uf-union (nf st) (nf id1) (nf id2))]
     [(expr-uf-value st id) (expr-uf-value (nf st) (nf id))]
 
-    ;; ATMS: type constructors and wrappers are self-values
-    [(expr-atms-type) e]
-    [(expr-assumption-id-type) e]
-    [(expr-atms-store _) e]
-    [(expr-assumption-id-val _) e]
-    ;; Operations: structural recursion into fields
-    [(expr-atms-new net) (expr-atms-new (nf net))]
-    [(expr-atms-assume st name datum) (expr-atms-assume (nf st) (nf name) (nf datum))]
-    [(expr-atms-retract st aid) (expr-atms-retract (nf st) (nf aid))]
-    [(expr-atms-nogood st aids) (expr-atms-nogood (nf st) (nf aids))]
-    [(expr-atms-amb st alts) (expr-atms-amb (nf st) (nf alts))]
-    [(expr-atms-solve-all st goal) (expr-atms-solve-all (nf st) (nf goal))]
-    [(expr-atms-read st cell) (expr-atms-read (nf st) (nf cell))]
-    [(expr-atms-write st cell val sup) (expr-atms-write (nf st) (nf cell) (nf val) (nf sup))]
-    [(expr-atms-consistent st aids) (expr-atms-consistent (nf st) (nf aids))]
-    [(expr-atms-worldview st aids) (expr-atms-worldview (nf st) (nf aids))]
-
     ;; Tabling: type constructor + runtime wrapper are self-values
     [(expr-table-store-type) e]
     [(expr-table-store-val _) e]
@@ -3666,7 +3965,7 @@
 
     ;; Relational language (Phase 7)
     [(expr-solver-type) e] [(expr-goal-type) e] [(expr-derivation-type) e] [(expr-cut) e]
-    [(expr-schema-type _) e] [(expr-logic-var _ _) e]
+    [(expr-logic-var _ _) e]
     [(expr-answer-type t) (if t (expr-answer-type (nf t)) e)]
     [(expr-relation-type pts) (expr-relation-type (map nf pts))]
     [(expr-solver-config m) (expr-solver-config (nf m))]
@@ -3681,7 +3980,6 @@
     [(expr-is-goal v ex) (expr-is-goal (nf v) (nf ex))]
     [(expr-not-goal g) (expr-not-goal (nf g))]
     [(expr-guard cond goal) (expr-guard (nf cond) (and goal (nf goal)))]
-    [(expr-schema nm fs) (expr-schema nm (map nf fs))]
     [(expr-solve g) (expr-solve (nf g))]
     [(expr-solve-with sv ov g) (expr-solve-with (and sv (nf sv)) (and ov (nf ov)) (nf g))]
     [(expr-solve-one g) (expr-solve-one (nf g))]

@@ -46,11 +46,27 @@
 
 (require rackunit
          racket/list
+         racket/set
          racket/string
          "../driver.rkt"          ;; loads both domains via register-domain!
          "../sre-core.rkt"
+         (only-in "../sre-sample-generator.rkt" generate-domain-samples)  ;; Phase 7c
          "../sre-property-sweep.rkt"
-         "../syntax.rkt")
+         "../syntax.rkt"
+         "../sessions.rkt"        ;; Phase 7c: sess-end, sess-svar for session sweep
+         "../surface-rewrite.rkt"  ;; Phase 8: form-pipeline-value, form-pipeline-meet
+         "../tropical-fuel.rkt"   ;; Phase 1V Commit 7 (§11.X.6 F15): tropical-fuel
+                                  ;; SRE domain registration only fires when this
+                                  ;; module is required (propagator.rkt requires
+                                  ;; only the primitives per F14 cycle-break);
+                                  ;; lookup-domain 'tropical-fuel resolves cleanly
+                                  ;; after this require
+         (only-in "../form-cells.rkt"
+                  form-cell-bot form-cell-merge-fn form-cell-meet-fn
+                  spec-cell-bot spec-cell-merge-fn spec-cell-meet-fn
+                  spec-cell-value spec-cell-value? spec-cell-value-name
+                  spec-cell-value-type-surf spec-cell-value-metadata
+                  spec-cell-value-top?))
 
 ;; ============================================================================
 ;; Shared fixture: the Phase 3 sweep runs ONCE at module load
@@ -84,15 +100,16 @@
 ;; Shape and sanity tests
 ;; ============================================================================
 
-(test-case "Phase 3: run-sd-sweep returns 6 findings (3 properties × 2 relations)"
-  (check-equal? (length phase3-findings) 6))
+(test-case "Phase 3: run-sd-sweep returns N×len(properties) findings (Phase 9: default = all 10)"
+  ;; Default property list is `all-sweep-properties` (Phase 9). 2 relations × that.
+  (check-equal? (length phase3-findings) (* 2 (length all-sweep-properties))))
 
 (test-case "Phase 3: each finding has correct shape"
   (for ([f (in-list phase3-findings)])
     (check-true (sd-finding? f))
     (check-eq? (sd-finding-domain-name f) 'type)
-    (check-true (memq (sd-finding-relation f) '(equality subtype)))
-    (check-true (memq (sd-finding-property f) '(distributive sd-vee sd-wedge)))
+    (check-not-false (memq (sd-finding-relation f) '(equality subtype)))
+    (check-not-false (memq (sd-finding-property f) all-sweep-properties))
     (check-true (positive? (sd-finding-sample-count f)))))
 
 (test-case "Phase 3: distributive findings carry axiom-*; SD findings carry sd-evidence"
@@ -144,8 +161,9 @@
 (test-case "Phase 3: format-sd-findings produces well-formed markdown"
   (define md (format-sd-findings phase3-findings))
   (define lines (string-split md "\n"))
-  ;; Header + separator + 6 finding rows = 8 lines
-  (check-equal? (length lines) 8)
+  ;; Header + separator + len(all-sweep-properties)×2-relations finding rows
+  (check-equal? (length lines)
+                (+ 2 (* 2 (length all-sweep-properties))))
   ;; Header has expected columns
   (check-true (string-contains? (first lines) "Domain"))
   (check-true (string-contains? (first lines) "Property"))
@@ -168,3 +186,435 @@
       (check-true (positive? total))
       (check-true (<= 0 fired total))
       (check-true (<= 0 held fired)))))
+
+;; ============================================================================
+;; SRE Track 2I Phase 7c: session domain sweep tests
+;; ============================================================================
+;;
+;; Phase 7a wired session-meet-registry; Phase 7b extended generator with
+;; #:cross-domain-atoms; Phase 7c integrates session sweep mechanism.
+;;
+;; Like Phase 3 sweep, depth-0 keeps these tests fast. Wider-sample session
+;; findings are produced by `racket sre-property-sweep.rkt` and captured
+;; into design doc § Phase 7 Findings as a versioned artifact.
+
+(define realistic-session-atoms
+  (list (sess-end) (sess-svar 0)))  ;; Phase 7 Q2: terminal + de Bruijn variable
+
+(define session-domain-for-sweep (lookup-domain 'session))
+
+;; depth-0: sess-bot + sess-top + (sess-end) + (sess-svar 0) = 4 samples
+;; (after sentinel-filter for components: 2 atoms — sess-end + sess-svar 0).
+;; 64 triples per check × 3 checks (distributive + sd-vee + sd-wedge) = 192 calls.
+;; Plus type cross-domain pool feeds session ctors' type slots.
+(define phase7-findings
+  (run-sd-sweep session-domain-for-sweep
+                '(equality)
+                realistic-session-atoms
+                #:max-depth 0
+                #:cross-domain-atoms (hasheq 'type realistic-type-atoms)))
+
+(test-case "Phase 7a: session-sre-domain has meet-registry wired"
+  ;; Verifies the meet-registry Phase 7a addition: sre-domain-meet returns
+  ;; non-#f for the equality relation on session domain (it didn't pre-7a).
+  (define meet-fn (sre-domain-meet session-domain-for-sweep 'equality))
+  (check-not-false meet-fn))
+
+(test-case "Phase 7b: generate-domain-samples accepts cross-domain-atoms"
+  (define samples
+    (generate-domain-samples session-domain-for-sweep
+                             #:max-depth 0
+                             #:base-values realistic-session-atoms
+                             #:cross-domain-atoms (hasheq 'type realistic-type-atoms)))
+  (check-true (positive? (length samples))))
+
+(test-case "Phase 7c: run-sd-sweep on session×equality returns len(all-sweep-properties) findings"
+  ;; 3 properties (distributive, sd-vee, sd-wedge) × 1 relation (equality) = 3.
+  (check-equal? (length phase7-findings) (length all-sweep-properties)))
+
+(test-case "Phase 7c: each session finding has correct shape"
+  (for ([f (in-list phase7-findings)])
+    (check-true (sd-finding? f))
+    (check-eq? (sd-finding-domain-name f) 'session)
+    (check-eq? (sd-finding-relation f) 'equality)
+    (check-not-false (memq (sd-finding-property f) all-sweep-properties))
+    (check-true (positive? (sd-finding-sample-count f)))))
+
+(test-case "Phase 7c: session sweep evidence types"
+  ;; distributive → axiom-* shape; SD → sd-evidence struct.
+  (for ([f (in-list phase7-findings)])
+    (define ev (sd-finding-evidence f))
+    (case (sd-finding-property f)
+      [(distributive)
+       (check-true (or (axiom-confirmed? ev)
+                       (axiom-refuted? ev)
+                       (eq? ev axiom-untested)))]
+      [(sd-vee sd-wedge)
+       (check-true (sd-evidence? ev))])))
+
+(test-case "Phase 7c: format-sd-findings handles session findings"
+  (define md (format-sd-findings phase7-findings))
+  (define lines (string-split md "\n"))
+  ;; Header + separator + len(all-sweep-properties) finding rows
+  (check-equal? (length lines)
+                (+ 2 (length all-sweep-properties)))
+  (check-true (string-contains? (first lines) "Domain"))
+  ;; All rows mention "session"
+  (for ([line (in-list (drop lines 2))])
+    (check-true (string-prefix? line "|"))
+    (check-true (string-contains? line "session"))))
+
+;; ============================================================================
+;; SRE Track 2I Phase 8: form-cell + spec-cell domain sweep tests
+;; ============================================================================
+;;
+;; Phase 8 differs from Phases 6-7: form-cell has no ctor-descs (Pocket
+;; Universe wrapper, not ctor-decomposable). Sweep is depth-0 on hand-picked
+;; atoms only.
+;;
+;; Phase 8a: form-pipeline-meet defined (sister of form-pipeline-merge);
+;; form-cell-meet-registry wired.
+;; Phase 8b: realistic-form-cell-atoms — mix of constant-metadata atoms
+;; (vary transforms) + vary-metadata atoms (test wrapper-vs-embedded
+;; distinction empirically).
+;; Phase 8c: sweep + tests on form-cell × equality at depth-0.
+;; Phase 8d: spec-cell mirror.
+
+;; --- form-cell atoms (Q2 mix design) ---
+;; Constant-metadata atoms: vary transforms only — test embedded Boolean lattice
+(define form-cell-atom-bot form-cell-bot)  ;; (seteq) transforms; default metadata
+(define form-cell-atom-tagged
+  (form-pipeline-value (seteq 'tagged) #f '() #f (hasheq)))
+(define form-cell-atom-grouped
+  (form-pipeline-value (seteq 'grouped) #f '() #f (hasheq)))
+(define form-cell-atom-tagged+grouped
+  (form-pipeline-value (seteq 'tagged 'grouped) #f '() #f (hasheq)))
+(define form-cell-atom-done
+  (form-pipeline-value (seteq 'done) #f '() #f (hasheq)))
+;; Vary-metadata atoms: same transforms, different metadata — surface
+;; wrapper-vs-embedded distinction
+(define form-cell-atom-tagged-with-node
+  (form-pipeline-value (seteq 'tagged) 'mock-tree-node-A '((reg-1 . val-1)) 'pos-A (hasheq)))
+(define form-cell-atom-tagged-with-other-node
+  (form-pipeline-value (seteq 'tagged) 'mock-tree-node-B '((reg-2 . val-2)) 'pos-B (hasheq)))
+
+(define realistic-form-cell-atoms
+  (list form-cell-atom-bot
+        form-cell-atom-tagged
+        form-cell-atom-grouped
+        form-cell-atom-tagged+grouped
+        form-cell-atom-done
+        form-cell-atom-tagged-with-node
+        form-cell-atom-tagged-with-other-node))
+
+(define form-cell-domain-for-sweep (lookup-domain 'form-cell))
+
+(test-case "Phase 8a: form-cell-sre-domain has meet-registry wired"
+  (define meet-fn (sre-domain-meet form-cell-domain-for-sweep 'equality))
+  (check-not-false meet-fn))
+
+(test-case "Phase 8a: form-pipeline-meet on transforms is set-intersection"
+  (define a (form-pipeline-value (seteq 'tagged 'grouped) #f '() #f (hasheq)))
+  (define b (form-pipeline-value (seteq 'grouped 'v0-0) #f '() #f (hasheq)))
+  (define m (form-pipeline-meet a b))
+  ;; Intersection of transforms = {'grouped}
+  (check-equal? (form-pipeline-value-transforms m) (seteq 'grouped)))
+
+(test-case "Phase 8a: form-pipeline-meet on equal atoms is idempotent"
+  (define a (form-pipeline-value (seteq 'tagged) 'node-X '((r1 . v1)) 'pos1 (hasheq)))
+  (define m (form-pipeline-meet a a))
+  (check-equal? (form-pipeline-value-transforms m) (seteq 'tagged))
+  (check-equal? (form-pipeline-value-tree-node m) 'node-X))
+
+(test-case "Phase 8a: form-pipeline-meet on different tree-nodes returns #f node"
+  (define a (form-pipeline-value (seteq 'tagged) 'node-A '() #f (hasheq)))
+  (define b (form-pipeline-value (seteq 'tagged) 'node-B '() #f (hasheq)))
+  (define m (form-pipeline-meet a b))
+  ;; Tree-nodes differ → meet's tree-node is #f (no shared node)
+  (check-false (form-pipeline-value-tree-node m)))
+
+(define phase8-form-findings
+  (run-sd-sweep form-cell-domain-for-sweep
+                '(equality)
+                realistic-form-cell-atoms
+                #:max-depth 0
+                ;; form-cell top-value defaults to #f (no real top defined);
+                ;; skip bot-top inclusion to avoid #f reaching merge/meet.
+                #:include-bot-top #f))
+
+(test-case "Phase 8c: form-cell sweep returns len(all-sweep-properties) findings"
+  (check-equal? (length phase8-form-findings) (length all-sweep-properties)))
+
+(test-case "Phase 8c: each form-cell finding has correct shape"
+  (for ([f (in-list phase8-form-findings)])
+    (check-true (sd-finding? f))
+    (check-eq? (sd-finding-domain-name f) 'form-cell)
+    (check-eq? (sd-finding-relation f) 'equality)
+    (check-not-false (memq (sd-finding-property f) all-sweep-properties))))
+
+;; --- spec-cell atoms (Phase 8d) ---
+(define spec-cell-atom-bot spec-cell-bot)
+(define spec-cell-atom-foo-Int
+  (spec-cell-value 'foo 'mock-Int-surf #f #f))
+(define spec-cell-atom-foo-Bool
+  (spec-cell-value 'foo 'mock-Bool-surf #f #f))
+(define spec-cell-atom-bar-Int
+  (spec-cell-value 'bar 'mock-Int-surf #f #f))
+(define spec-cell-atom-top
+  (spec-cell-value #f #f #f #t))  ;; collision-top
+
+(define realistic-spec-cell-atoms
+  (list spec-cell-atom-bot
+        spec-cell-atom-foo-Int
+        spec-cell-atom-foo-Bool
+        spec-cell-atom-bar-Int
+        spec-cell-atom-top))
+
+(define spec-cell-domain-for-sweep (lookup-domain 'spec-cell))
+
+(test-case "Phase 8d: spec-cell-sre-domain has meet-registry wired"
+  (define meet-fn (sre-domain-meet spec-cell-domain-for-sweep 'equality))
+  (check-not-false meet-fn))
+
+(test-case "Phase 8d: spec-cell-meet bot ⊓ x = bot"
+  (define m (spec-cell-meet-fn spec-cell-atom-bot spec-cell-atom-foo-Int))
+  (check-eq? (spec-cell-value-type-surf m) #f))  ;; bot
+
+(test-case "Phase 8d: spec-cell-meet top ⊓ x = x"
+  (define m (spec-cell-meet-fn spec-cell-atom-top spec-cell-atom-foo-Int))
+  (check-equal? m spec-cell-atom-foo-Int))
+
+(test-case "Phase 8d: spec-cell-meet idempotent on equal"
+  (define m (spec-cell-meet-fn spec-cell-atom-foo-Int spec-cell-atom-foo-Int))
+  (check-equal? m spec-cell-atom-foo-Int))
+
+(test-case "Phase 8d: spec-cell-meet different specs = bot"
+  (define m (spec-cell-meet-fn spec-cell-atom-foo-Int spec-cell-atom-foo-Bool))
+  (check-eq? (spec-cell-value-type-surf m) #f))  ;; bot
+
+(define phase8-spec-findings
+  (run-sd-sweep spec-cell-domain-for-sweep
+                '(equality)
+                realistic-spec-cell-atoms
+                #:max-depth 0
+                ;; spec-cell HAS a real top-value (collision); but our atoms
+                ;; already include both top and bot explicitly. Skip default
+                ;; bot-top inclusion to avoid duplication.
+                #:include-bot-top #f))
+
+(test-case "Phase 8d: spec-cell sweep returns len(all-sweep-properties) findings"
+  (check-equal? (length phase8-spec-findings) (length all-sweep-properties)))
+
+(test-case "Phase 8d: each spec-cell finding has correct shape"
+  (for ([f (in-list phase8-spec-findings)])
+    (check-true (sd-finding? f))
+    (check-eq? (sd-finding-domain-name f) 'spec-cell)
+    (check-eq? (sd-finding-relation f) 'equality)))
+
+;; ============================================================================
+;; PPN 4C Tropical Quantale Addendum — Phase 1V Commit 7 (§11.X.6):
+;; tropical-fuel domain sweep tests
+;; ============================================================================
+;;
+;; Wires Track 2I's `all-sweep-properties` infrastructure to the tropical-fuel
+;; SRE domain. Empirically verifies the DECLARED algebraic properties at the
+;; 1B-iii registration site (`tropical-fuel.rkt:99-113`) against generated
+;; samples. Closes the §11.3 item #3 obligation (Track 2I now closed per user).
+;;
+;; tropical-fuel is an atomic numeric domain (extended-real [0, +inf.0]) with
+;; ZERO ctor-descs (no constructor decomposition). Sample generator produces
+;; depth-0-only samples (bot + top + base-values), which is exactly what we
+;; want for a numeric chain. Mirrors form-cell + spec-cell patterns (Phase 8c/d)
+;; in using depth-0 + hand-picked atoms; differs in including bot/top as valid
+;; lattice elements (numeric chain, not bounded-below #f-sentinel).
+;;
+;; Lawvere natural-order naming (per tropical-fuel.rkt:88-121):
+;; - bot = 0 (natural-order smallest; Lawvere lattice TOP)
+;; - top = +inf.0 (natural-order largest; Lawvere lattice BOT — algebraic
+;;   contradiction)
+;; - merge = min (Lawvere join, ⊕) — has +inf.0 as join-unit, 0 as absorbing
+;; - meet = max (Lawvere meet, ⋀) — has 0 as meet-unit, +inf.0 as absorbing
+;;
+;; Per §11.X.6 F16: this naming inverts relative to standard SRE join-unit
+;; semantics (where bot is the join-unit). The sweep may surface this as
+;; REFUTE for some Boolean-flavored properties (has-pseudo-complement-abs,
+;; relatively-/sectionally-/has-complement) — chains aren't Boolean. Those
+;; refutations are STRUCTURALLY EXPECTED for a chain and are NOT assertion
+;; targets per δ1 (only declared-and-swept properties get assertions).
+
+(define realistic-tropical-fuel-atoms
+  ;; §11.X.6 α1: 5 finite representatives + bot (0) + top (+inf.0) via
+  ;; include-bot-top?=#t → 7 atoms at depth-0; spans small/medium/large.
+  '(1 5 10 100 1000))
+
+(define tropical-fuel-domain-for-sweep (lookup-domain 'tropical-fuel))
+
+;; depth-0: bot (0) + top (+inf.0) + 5 base atoms = 7 samples
+;; 7^3 = 343 triples per property × 20 properties × 1 relation ≈ 6860 checks.
+;; Expected wall: < 5 sec (per §11.X.6 F13).
+(define phase1v-tropical-fuel-findings
+  (run-sd-sweep tropical-fuel-domain-for-sweep
+                '(equality)
+                realistic-tropical-fuel-atoms
+                #:max-depth 0
+                #:include-bot-top #t))
+
+(test-case "Phase 1V (§11.X.6): tropical-fuel-sre-domain registered + has merge-registry"
+  ;; F15 verification: domain registers cleanly when tropical-fuel.rkt is required.
+  (check-not-false tropical-fuel-domain-for-sweep)
+  (check-eq? (sre-domain-name tropical-fuel-domain-for-sweep) 'tropical-fuel)
+  ;; tropical-fuel.rkt:69-79: both merge + meet registries defined for 'equality
+  (define merge-fn
+    ((sre-domain-merge-registry tropical-fuel-domain-for-sweep) 'equality))
+  (define meet-fn (sre-domain-meet tropical-fuel-domain-for-sweep 'equality))
+  (check-not-false merge-fn)
+  (check-not-false meet-fn))
+
+(test-case "Phase 1V (§11.X.6): tropical-fuel sweep returns 20 findings (len all-sweep-properties × 1 relation)"
+  (check-equal? (length phase1v-tropical-fuel-findings)
+                (length all-sweep-properties)))
+
+(test-case "Phase 1V (§11.X.6): each tropical-fuel finding has correct shape"
+  (for ([f (in-list phase1v-tropical-fuel-findings)])
+    (check-true (sd-finding? f))
+    (check-eq? (sd-finding-domain-name f) 'tropical-fuel)
+    (check-eq? (sd-finding-relation f) 'equality)
+    (check-not-false (memq (sd-finding-property f) all-sweep-properties))
+    (check-true (positive? (sd-finding-sample-count f)))))
+
+;; --- Assertable confirmations (δ1: only on DECLARED-AND-SWEPT properties) ---
+;; Per §11.X.6 F9 overlap analysis: 3 of tropical-fuel's 11 declared properties
+;; (distributive + has-pseudo-complement-rel + has-pseudo-complement-abs) are
+;; directly covered by the sweep. The other 8 declared properties (commutative-
+;; /associative-/idempotent-join + has-meet + quantale family + residuated)
+;; are verified at 1B-iii via C1+C2+C3 axiom tests in test-tropical-fuel.rkt.
+;; The 17 bonus swept properties (modular, sd-vee, sd-wedge, etc.) are
+;; FINDINGS for the captured artifact (data/benchmarks/...) — NOT assertion
+;; targets, since refutations for un-declared properties (e.g., chains aren't
+;; relatively-complemented) are structurally expected.
+
+(define (find-tropical-fuel-finding prop)
+  (findf (lambda (f)
+           (and (eq? (sd-finding-relation f) 'equality)
+                (eq? (sd-finding-property f) prop)))
+         phase1v-tropical-fuel-findings))
+
+(test-case "Phase 1V (§11.X.6 δ1): tropical-fuel × equality is distributive (CONFIRM declared)"
+  ;; tropical-fuel.rkt:106 declares `'distributive prop-confirmed`.
+  ;; Chains are structurally distributive (min/max over a total order).
+  ;; F11 critical halt-and-investigate if this REFUTES.
+  (define f (find-tropical-fuel-finding 'distributive))
+  (check-not-false f)
+  (check-true (axiom-confirmed? (sd-finding-evidence f))
+              "tropical-fuel × equality MUST be distributive per registration + chain structure"))
+
+(test-case "Phase 1V (§11.X.6 δ1): tropical-fuel × equality has-pseudo-complement-rel (CONFIRM declared)"
+  ;; tropical-fuel.rkt:113 declares `'has-pseudo-complement prop-confirmed`.
+  ;; The RELATIVE pseudo-complement (exists x: a ⊓ x ≤ b) — for a chain under
+  ;; meet=max, ALWAYS exists (x=top always works, since max(a, top) = top ≥ b).
+  (define f (find-tropical-fuel-finding 'has-pseudo-complement-rel))
+  (check-not-false f)
+  (check-true (or (axiom-confirmed? (sd-finding-evidence f))
+                  ;; pc-rel-evidence: detailed variant — confirmed status
+                  (and (pc-rel-evidence? (sd-finding-evidence f))
+                       (eq? (pc-rel-evidence-status (sd-finding-evidence f)) 'confirmed)))
+              "tropical-fuel × equality has-pseudo-complement-rel should CONFIRM per registration"))
+
+(test-case "Phase 1V (§11.X.6 δ1): tropical-fuel × equality has-pseudo-complement-abs (CONFIRM declared)"
+  ;; tropical-fuel.rkt:113 declares `'has-pseudo-complement prop-confirmed`.
+  ;; Empirical surface (§11.X.6.1 — initial F16 concern about naming-inversion
+  ;; refuted by measurement): the SRE sweep's has-pseudo-complement-abs check
+  ;; CONFIRMS for all 7 atoms (7/7 — 100% non-vacuity). The sweep's check
+  ;; aligns with the registration's quantale-theoretic declaration even under
+  ;; Lawvere natural-order naming (bot=0, top=+inf.0). F16 mini-design concern
+  ;; was over-cautious — the implementation validates the declaration empirically.
+  (define f (find-tropical-fuel-finding 'has-pseudo-complement-abs))
+  (check-not-false f)
+  (check-true (or (axiom-confirmed? (sd-finding-evidence f))
+                  (and (pc-rel-evidence? (sd-finding-evidence f))
+                       (eq? (pc-rel-evidence-status (sd-finding-evidence f)) 'confirmed)))
+              "tropical-fuel × equality has-pseudo-complement-abs should CONFIRM per registration"))
+
+;; ============================================================================
+;; Phase 9a: extended sweep harness — all 10 properties + untested-reason +
+;; variety-placement summary
+;; ============================================================================
+
+(test-case "Phase 9a / Phase 11-15: all-sweep-properties has 20 algebraic properties"
+  (check-equal? (length all-sweep-properties) 20)  ;; Phase 15: +1 admits-day-doubling
+  (check-not-false (memq 'anti-exchange-on-J all-sweep-properties))
+  (check-not-false (memq 'trivial-congruence-valid all-sweep-properties))
+  (check-not-false (memq 'total-congruence-valid all-sweep-properties))
+  (check-not-false (memq 'mult-forgetful-congruence-valid all-sweep-properties))
+  (check-not-false (memq 'erasure-congruence-valid all-sweep-properties))
+  (check-not-false (memq 'admits-day-doubling all-sweep-properties))  ;; Phase 15
+  (check-not-false (memq 'distributive all-sweep-properties))
+  (check-not-false (memq 'sd-vee all-sweep-properties))
+  (check-not-false (memq 'sd-wedge all-sweep-properties))
+  (check-not-false (memq 'modular all-sweep-properties))
+  (check-not-false (memq 'has-pseudo-complement-rel all-sweep-properties))
+  (check-not-false (memq 'has-pseudo-complement-abs all-sweep-properties))
+  (check-not-false (memq 'stone-identity all-sweep-properties))
+  (check-not-false (memq 'whitmans-condition all-sweep-properties))
+  (check-not-false (memq 'relatively-complemented all-sweep-properties))
+  (check-not-false (memq 'sectionally-complemented all-sweep-properties))
+  (check-not-false (memq 'breadth-bound all-sweep-properties))
+  (check-not-false (memq 'has-complement all-sweep-properties))  ;; Phase 11
+  (check-not-false (memq 'no-m3-sublattice all-sweep-properties))  ;; Phase 12
+  (check-not-false (memq 'no-n5-sublattice all-sweep-properties)))  ;; Phase 12
+
+(test-case "Phase 9a: each finding has untested-reason field (#f when tested)"
+  (for ([f (in-list phase3-findings)])
+    (define ev (sd-finding-evidence f))
+    (define ur (sd-finding-untested-reason f))
+    (cond
+      ;; If tested (status confirmed/refuted), untested-reason should be #f
+      [(or (axiom-confirmed? ev)
+           (axiom-refuted? ev))
+       (check-false ur)])))
+
+(test-case "Phase 9a: untested-reason 'no-relation for missing relation"
+  ;; session domain has no 'subtype relation in meet-registry → should
+  ;; produce findings with untested-reason = 'no-relation.
+  (define session-domain (lookup-domain 'session))
+  (define session-with-bogus-rel
+    (run-sd-sweep session-domain
+                  '(equality subtype)  ;; subtype not in session meet-registry
+                  realistic-session-atoms
+                  #:max-depth 0
+                  #:cross-domain-atoms (hasheq 'type realistic-type-atoms)))
+  ;; All findings on the 'subtype relation should have untested-reason = 'no-relation
+  (define subtype-findings
+    (filter (λ (f) (eq? (sd-finding-relation f) 'subtype)) session-with-bogus-rel))
+  (check-true (positive? (length subtype-findings)))
+  (for ([f (in-list subtype-findings)])
+    (check-eq? (sd-finding-untested-reason f) 'no-relation)
+    (check-eq? (sd-finding-evidence f) axiom-untested)))
+
+(test-case "Phase 9a: format-variety-placement-summary produces well-formed table"
+  (define md (format-variety-placement-summary phase3-findings))
+  (define lines (string-split md "\n"))
+  ;; Header + separator + 1 row per (domain, relation) = 4 lines for type×{eq,sub}
+  (check-true (>= (length lines) 4))
+  ;; Header has the variety columns
+  (check-true (string-contains? (first lines) "SD"))
+  (check-true (string-contains? (first lines) "Modular"))
+  (check-true (string-contains? (first lines) "Distributive"))
+  (check-true (string-contains? (first lines) "Heyting"))
+  (check-true (string-contains? (first lines) "Stone"))
+  (check-true (string-contains? (first lines) "Boolean"))
+  (check-true (string-contains? (first lines) "(W)"))
+  ;; Separator line
+  (check-true (string-prefix? (second lines) "|---"))
+  ;; All data rows start with "| type"
+  (for ([line (in-list (drop lines 2))])
+    (check-true (string-prefix? line "| type"))))
+
+(test-case "Phase 9a: explicit #:properties override produces narrower sweep"
+  (define td (lookup-domain 'type))
+  (define narrow-findings
+    (run-sd-sweep td '(equality) realistic-type-atoms
+                  #:max-depth 0
+                  #:properties '(distributive)))
+  (check-equal? (length narrow-findings) 1)
+  (check-eq? (sd-finding-property (first narrow-findings)) 'distributive))

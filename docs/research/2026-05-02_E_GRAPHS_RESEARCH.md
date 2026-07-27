@@ -148,22 +148,33 @@ For Prologos: β/δ/ι reduction rules are the immediate target; structural-deco
 
 ## §3 Theoretical grounding
 
-### §3.1 Adhesive category theory and e-graphs
+### §3.1 Categorical foundations of e-graphs (two complementary frames)
 
-**Theorem (Biondo, Castelnovo, Gadducci CALCO 2025)**: e-graphs form an adhesive category.
+*Note (amended 2026-05-09)*: this section was originally written under the single-frame Biondo-et-al. paraphrase. Substrate research that session (`docs/research/utm-fl/outputs/preduce-adhesive-rewriting-substrate-internal-research.md` §2.C1 + §2.C1.alt) established **two complementary categorical frames** for e-graphs, with the *enrichment* frame being a strictly better fit for our substrate. Both are recorded here.
 
-**What adhesive means** (Lack-Sobocinski 2005): a category is **adhesive** if pushouts along monomorphisms exist and satisfy a "van Kampen" condition that ensures pushout squares compose well. Adhesive categories axiomatize the conditions for DPO (Double-Pushout) graph rewriting to be well-behaved.
+**Frame A — M-adhesive (Biondo–Castelnovo–Gadducci, CALCO 2025, [arXiv:2503.13678](https://arxiv.org/abs/2503.13678))**: the category `EGG` of e-term graphs is `T_Σ`-adhesive (a form of M-adhesive, not full adhesive in the Lack–Sobociski sense). `T_Σ` is a restricted class of monomorphisms (regular monos pullback-stable on the equivalence quotient).
 
-**Consequences for e-graphs**:
-- DPO rewrite rules over e-graphs are well-behaved (rule application has the expected algebraic properties)
-- Equality saturation can be understood as iterated DPO rewriting
-- Confluence and parallelism analysis tools for adhesive categories apply directly
-- Critical pair analysis transfers (when do two rule applications conflict?)
-- Local Church-Rosser, parallelism, concurrency theorems all transfer
+**What M-adhesive means** (Ehrig-Golas-Habel-Lambers-Orejas 2012, 2014; Heindel 2009): the van Kampen condition is restricted to a designated class `M` of monos rather than all monos. Adhesivity = strict `Mono(X)`-adhesivity; quasiadhesivity = strict `Reg(X)`-adhesivity. **Neither holds for `EGG`.** The EGG rule format used by `egg`/`egglog` is *left-linear* (identity on the left leg, regular mono on the right), which sits in the "left-linear M-adhesive theory still under development" frontier per Biondo et al. §1 + §7 (their own admission).
 
-This is the foundational result that connects e-graph theory to the mature graph-transformation literature. Prior to CALCO 2025, e-graph rewriting was understood operationally (algorithm + invariant) but not categorically grounded in a way that gave systematic transfer of theorems.
+**Consequences under Frame A**:
+- DPO rule application is well-defined
+- Equality saturation = iterated DPO rewriting with NACs (the EGG rule format requires negative application conditions to terminate; Biondo §6)
+- Standard DPO transfer theorems on parallelism / causality / critical-pair analysis are *not yet* established for the EGG-specific left-linear M-adhesive case (open per Biondo §7; Baldan-Castelnovo-Corradini-Gadducci CONCUR 2024 is the active state-of-the-art)
 
-**For Prologos**: SRE Track 2D already uses DPO rewriting via adhesive structure (parse trees as adhesive, per [`2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md`](2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md)). E-graphs being adhesive means the same theoretical machinery applies to PReduce's e-class cells and rewrite rules. We don't need a separate framework; the SRE foundations transfer.
+**Frame B — Semilattice-enriched SMC (Tiurin–Barrett–Ghica–Hu, LICS 2025, [arXiv:2406.15882](https://arxiv.org/abs/2406.15882))**: e-graphs are morphisms in **Cartesian categories enriched over semilattices** (or more generally semilattice-enriched symmetric monoidal categories). Headline theorem (6.5) is a **full equivalence of categories**:
+
+> `SMT⁺(Σ, E) ≃ MEHypI(Σ)/S, E`.
+
+Hom-sets carry the structure of a semilattice (the join `+` IS the e-class "f or g" combinator); composition and tensor distribute over `+` (Definition 2.5 enrichment axioms). EDPOI rewriting on e-hypergraphs is sound and complete.
+
+**Why Frame B is the better fit for our substrate**:
+- **Categorical primitive is *enrichment*, not adhesivity**. The semilattice enrichment is intrinsic to our lattice-valued cells — we don't add machinery, we recognize what we already have.
+- **The theory is closed**, not at the active-research frontier. EDPOI for Cartesian SMC has full equivalence; parallelism/causality theorems transfer cleanly.
+- **Bindings come for free**: Moss–Tiurin 2025 ([arXiv:2505.00807](https://arxiv.org/abs/2505.00807)) extends TBGH — not Biondo — to closed symmetric monoidal categories for λ-binders.
+- **Multi-dim cost extends naturally**: quantale-enrichment generalizes semilattice-enrichment; Russo 2010 Q-modules supply the residuation API ([arXiv:1002.0968](https://arxiv.org/abs/1002.0968)).
+- **Bonchi et al. *String diagram rewrite theory I/II/III* (JACM 2022, MSCS 2022 × 2)** supply the supporting rewriting infrastructure; III contains decidability of DPOI confluence for terminating systems.
+
+**For Prologos / PReduce**: Frame B is the *primary* working categorical frame (per substrate-research note's recommendation, 2026-05-09). SRE Track 2D's parse-tree presheaf category is semilattice-enriched; PReduce's e-class subsystem is also semilattice-enriched; the cross-system transfer goes through *shared enrichment* rather than per-theorem audit. Frame A is retained as a useful comparison point. The original framing of this section — "e-graphs are adhesive; SRE foundations transfer" — was directionally right but **overstated** the adhesivity claim and **understated** the per-theorem-audit obligation under Frame A. Under Frame B, the transfer is unified through enrichment.
 
 ### §3.2 E-graphs as quotient modules
 
@@ -224,9 +235,9 @@ This matters for Prologos because:
 
 **Production users**: Cranelift's mid-end optimizations (acyclic variant, see §4.3); SPORES (linear algebra); Tensat (tensor compilation); Diospyros (vectorization); Fast Fourier Transform synthesis. egg's reach is significant.
 
-**Limitations**: in-memory data structure; no incremental persistence story prior to Schlatt 2026; pattern matching is term-rewriting-style rather than higher-order; binding handling is hand-rolled per-application.
+**Limitations**: in-memory data structure; no incremental persistence story prior to Merckx et al. 2026; pattern matching is term-rewriting-style rather than higher-order; binding handling is hand-rolled per-application.
 
-**For Prologos**: egg is the design reference. We won't link against it (we're on a different substrate), but its operational shapes guide our cell layout and rebuild scheduling. Notable: egg's batched-rebuild matches our BSP-round semantics — propagators fire concurrently within a round, then the merge happens at the round boundary. This is structurally aligned.
+**For Prologos**: egg is the design reference. We won't link against it (we're on a different substrate), but its operational shapes guide our cell layout. **(Amended 2026-06-10, Track 0.1 SM2 lock)**: the earlier claim that "egg's batched-rebuild matches our BSP-round semantics" overstated the analogy — in the locked design ([D.1 §2](../tracking/2026-06-10_PREDUCE_TRACK01_DESIGN.md)) congruence closure is NOT a batched repair pass at all; it is S0 signature-set watchers whose invariant holds structurally at the quiescent fixpoint. What genuinely aligns with egg is concurrent firing within a round with merge at the boundary; the deferred-rebuild shape itself was evaluated and rejected (stratification's admission test answers "S0").
 
 ### §4.2 egglog
 
@@ -259,17 +270,17 @@ This matters for Prologos because:
 
 This is the closest existing-system analog to Prologos's "the substrate IS the IR" position. The eqsat MLIR dialect makes e-graph state into a first-class IR construct; we make it cell-state on the propagator network. Both move e-graphs from "tool you call" to "structure that lives inside the compilation substrate."
 
-### §4.6 Schlatt 2026: persistent compiler abstraction
+### §4.6 Merckx et al. 2026: persistent compiler abstraction
 
-**Schlatt et al.** "E-Graphs as a Persistent Compiler Abstraction" ([arXiv:2602.16707](https://arxiv.org/abs/2602.16707), February 2026) proposes representing e-graphs natively in the compiler's IR rather than as a separate optimization phase. Key insight: if the e-graph persists throughout compilation, equality information discovered during one phase is available to all subsequent phases. This avoids the "information loss" problem where an early phase discovers equalities that a later phase could use but cannot access.
+**Merckx et al.** (Merckx, Lopoukhine, Coward, Cheng, De Suer, Grosser) "E-Graphs as a Persistent Compiler Abstraction" ([arXiv:2602.16707](https://arxiv.org/abs/2602.16707), February 2026; attribution corrected 2026-06-10 — previously mis-cited throughout as "Schlatt"; ID WebSearch-verified) proposes representing e-graphs natively in the compiler's IR rather than as a separate optimization phase. Key insight: if the e-graph persists throughout compilation, equality information discovered during one phase is available to all subsequent phases. This avoids the "information loss" problem where an early phase discovers equalities that a later phase could use but cannot access.
 
 The implementation (using xDSL and MLIR) introduces an `eqsat` dialect that represents e-graph equivalence classes directly in the IR. Pattern rewriting can be interleaved with other compiler transformations, with the e-graph maintaining all discovered equalities.
 
-**For Prologos**: Schlatt 2026 is the architectural cousin closest to our setting. Their `eqsat` dialect role is filled in our setting by e-class cells on the propagator network. Their persistence story (e-graph persists through compilation) maps to our cell-state persistence (`.pnet` round-trip + content-addressing). They report that persistent e-graphs unlock optimizations across phase boundaries; we get the same benefit by virtue of the unified-substrate architecture, not as a separate add-on.
+**For Prologos**: Merckx et al. 2026 is the architectural cousin closest to our setting. Their `eqsat` dialect role is filled in our setting by e-class cells on the propagator network. Their persistence story (e-graph persists through compilation) maps to our cell-state persistence (`.pnet` round-trip + content-addressing). They report that persistent e-graphs unlock optimizations across phase boundaries; we get the same benefit by virtue of the unified-substrate architecture, not as a separate add-on.
 
 ### §4.7 Production maturity assessment
 
-Equality saturation moved from "specialized tool" to "general compiler infrastructure" between 2021 (egg) and 2026 (Schlatt persistent abstraction; eqsat MLIR dialect). The frontier is moving, but production integration is still uneven:
+Equality saturation moved from "specialized tool" to "general compiler infrastructure" between 2021 (egg) and 2026 (Merckx et al. persistent abstraction; eqsat MLIR dialect). The frontier is moving, but production integration is still uneven:
 
 | System | E-graph maturity | Persistence | Integration depth |
 |---|---|---|---|
@@ -278,10 +289,10 @@ Equality saturation moved from "specialized tool" to "general compiler infrastru
 | Cranelift | Acyclic only | None (per-function) | Compiler-internal |
 | DialEgg | Research | None | MLIR plug-in |
 | eqsat MLIR | Research | Per-dialect | First-class IR |
-| Schlatt 2026 | Research | Cross-phase | First-class IR |
+| Merckx et al. 2026 | Research | Cross-phase | First-class IR |
 | **Prologos PReduce target** | First-class | Cross-session via `.pnet` | Substrate-level |
 
-The trend line points where Prologos is heading. Schlatt 2026 is the closest existing peer; PReduce's combination of substrate-level integration + cross-session persistence + tropical-quantale extraction + BSP-LE speculation is novel.
+The trend line points where Prologos is heading. Merckx et al. 2026 is the closest existing peer; PReduce's combination of substrate-level integration + cross-session persistence + tropical-quantale extraction + BSP-LE speculation is novel.
 
 ---
 
@@ -321,13 +332,13 @@ Worth experimenting once the substrate is in place. Not a near-term track.
 
 ### §5.5 Persistent compiler abstraction (revisited)
 
-Schlatt 2026 (cited in §4.6) deserves mention here as well — it's the closest peer to Prologos's vision. Three pieces:
+Merckx et al. 2026 (cited in §4.6) deserves mention here as well — it's the closest peer to Prologos's vision. Three pieces:
 
 1. **E-graph persistence across compilation phases**: equality information from earlier phases available to later phases.
 2. **First-class IR construct**: the `eqsat` dialect makes e-graph state visible in the IR, not hidden in a separate optimization engine.
 3. **Cross-pass interleaving**: rewrites can be applied alongside lowering, type inference, etc., rather than as a phase.
 
-Prologos PReduce's "substrate IS the IR" position generalizes all three. Phases ARE strata in our setting; cross-phase information flow IS cell-state propagation; first-class IR construct IS cell-id assignment. Schlatt 2026 is the proof-of-concept that persistent e-graphs unlock cross-phase optimization; PReduce extends it to cross-session persistence via `.pnet`.
+Prologos PReduce's "substrate IS the IR" position generalizes all three. Phases ARE strata in our setting; cross-phase information flow IS cell-state propagation; first-class IR construct IS cell-id assignment. Merckx et al. 2026 is the proof-of-concept that persistent e-graphs unlock cross-phase optimization; PReduce extends it to cross-session persistence via `.pnet`.
 
 ---
 
@@ -399,14 +410,14 @@ For PReduce: we expect comparable signatures, with CHAMP overhead adding a const
 
 The keystone realization: **each e-class is a cell on the propagator network**. Specifically:
 
-- **Cell value**: the e-class state — set of e-nodes, representative, accumulated cost, equivalence-witness provenance
-- **Merge function**: union-find merge — when two cells are unioned, take the union of e-node sets, resolve cost via tropical-min, accumulate provenance
-- **Cell-id assignment**: structural hash of the canonical representative — content-addressing built in
+- **Cell value**: the e-class state — componentwise-ACI product `{best | alts | canonical | provenance}` (amended 2026-06-10 per [D.1 §2](../tracking/2026-06-10_PREDUCE_TRACK01_DESIGN.md))
+- **Merge function**: componentwise joins — `best` per-Q argmin, `alts` e-node set-union, `canonical` min-join over allocation-order, `provenance` monotone accumulation
+- **Cell-id / keys** (amended 2026-06-10, D3 three-key separation): the original "cell-id = structural hash of the canonical representative" is CIRCULAR once classes merge. Three separate keys: union-find canonical NAME (allocation-order id), cost-best FORM (per-Q argmin), content-address KEY (structural hash — hashcons + `.pnet`)
 - **Parent-pointer structure**: bidirectional cell references (e-class cell has parent-list as compound-component; updated monotonically)
 
-Per SRE lattice lens (Q1): e-class cell is **structural** (multiple components: e-node set, representative, cost, provenance). NTT declaration: `:lattice :structural :order :refinement`.
+Per SRE lattice lens (Q1): e-class cell is **structural** (multiple components). NTT declaration (amended 2026-06-10, supersedes `:order :refinement` which had no substrate realization): `:lattice :structural :enrichment :semilattice [:Q-module Q]`, Q-polymorphic per owner D7.
 
-The refinement-poset structure (`A ≤ B` iff every term in A is in B) is critical — it's what extraction's residuation walks. The poset is **not** a lattice because it has no joins in general (two unrelated e-classes have no common refinement); it's a meet-semilattice (intersections always exist). Cost-extraction operates on the meet-semilattice via residuation.
+The refinement-poset observation (`A ≤ B` iff every term in A is in B; a meet-semilattice, not a lattice) remains mathematically informative but is NO LONGER the cell declaration — the cell is a join-semilattice product where merge IS the order. Extraction walks the e-node child-DAG via Track-4 cost propagators; residuation supplies cost-provenance (per the 2026-06-02 sweep correction, it is not an NP-escaping DAG extractor).
 
 ### §7.2 Hashcons via CHAMP structural sharing
 
@@ -482,7 +493,7 @@ The four levels compose because they're different lenses on the same propagator-
 
 ### §7.7 `.pnet` content-addressing for cross-session persistence
 
-Schlatt 2026's persistent-compiler-abstraction story extends across sessions for free in our setting:
+Merckx et al. 2026's persistent-compiler-abstraction story extends across sessions for free in our setting:
 
 - Each e-class cell has a structural hash (CHAMP-derived)
 - `.pnet` serialization preserves cell IDs (when SH Track 1 lands; design context for PReduce Track 0.3)
@@ -621,7 +632,7 @@ For Prologos: the scheduler IS the propagator scheduler; schedule expressions co
 - Cranelift acyclic e-graphs [egraphs.org meeting](https://egraphs.org/meeting/2025-08-21-dialegg)
 - DialEgg (CGO 2025). [Conference page](https://2025.cgo.org/details/cgo-2025-papers/44/DialEgg-Dialect-Agnostic-MLIR-Optimizer-using-Equality-Saturation-with-Egglog)
 - eqsat MLIR dialect. [arXiv:2505.09363](https://arxiv.org/html/2505.09363v1)
-- Schlatt, A., et al. (2026). E-Graphs as a Persistent Compiler Abstraction. [arXiv:2602.16707](https://arxiv.org/abs/2602.16707)
+- Merckx, J., Lopoukhine, A., Coward, S., Cheng, J., De Suer, B., Grosser, T. (2026). E-Graphs as a Persistent Compiler Abstraction. [arXiv:2602.16707](https://arxiv.org/abs/2602.16707)
 
 ### §9.4 Recent advances
 - E-Graphs Modulo Theories (2024). [arXiv:2504.14340](https://arxiv.org/html/2504.14340)

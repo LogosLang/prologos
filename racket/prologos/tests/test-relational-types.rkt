@@ -61,10 +61,9 @@
                 (expr-Type (lzero))
                 "Relation type : Type 0"))
 
-(test-case "Schema type formation"
-  (check-equal? (tc:infer ctx-empty (expr-schema-type 'Person))
-                (expr-Type (lzero))
-                "(Schema Person) : Type 0"))
+;; "Schema type formation" test DELETED (CIU T6 F1b.4d): expr-schema-type was
+;; tombstoned with expr-schema — the dormant second schema realization (zero
+;; producers; type-as-witness stands per D22). See syntax.rkt's tombstone.
 
 ;; ========================================
 ;; Runtime wrapper: solver-config
@@ -164,10 +163,8 @@
                   (expr-rel '() '()))
                 (expr-hole)))
 
-(test-case "schema infers as schema-type"
-  (check-equal? (tc:infer ctx-empty
-                  (expr-schema 'Person '()))
-                (expr-schema-type 'Person)))
+;; "schema infers as schema-type" test DELETED (CIU T6 F1b.4d): the
+;; expr-schema family is tombstoned (see above / syntax.rkt).
 
 ;; ========================================
 ;; QTT inferQ

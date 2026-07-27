@@ -1,4 +1,4 @@
-ns examples.sudoku-solver-demo
+ns examples::sudoku-solver-demo
 
 ;; ========================================================================
 ;;

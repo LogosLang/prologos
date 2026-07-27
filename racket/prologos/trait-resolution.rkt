@@ -65,6 +65,10 @@
     [(expr-PVec a) (ground-expr? a)]
     [(expr-Set a) (ground-expr? a)]
     [(expr-Map k v) (and (ground-expr? k) (ground-expr? v))]
+    ;; CIU T6 F1 (S2): a record is ground iff all field types are — else the [_ #t]
+    ;; default would misreport a meta-bearing record ({:a ?T}) as ground.
+    [(? expr-Record? rec)
+     (andmap (lambda (fld) (ground-expr? (record-field-type (cdr fld)))) (expr-Record-fields rec))]
     [_ #t]))  ;; atoms, fvar, bvar, tycon, etc. are always ground
 
 ;; ========================================
@@ -90,13 +94,10 @@
     [(expr-cell-id-type) "CellId"]
     [(expr-prop-id-type) "PropId"]
     [(expr-uf-type) "UnionFind"]
-    [(expr-atms-type) "ATMS"]
-    [(expr-assumption-id-type) "AssumptionId"]
     [(expr-table-store-type) "TableStore"]
     [(expr-solver-type) "Solver"]
     [(expr-goal-type) "Goal"]
     [(expr-derivation-type) "DerivationTree"]
-    [(expr-schema-type name) (format "Schema:~a" name)]
     [(expr-answer-type _) "Answer"]
     [(expr-relation-type _) "Relation"]
     ;; HKT: unapplied type constructor

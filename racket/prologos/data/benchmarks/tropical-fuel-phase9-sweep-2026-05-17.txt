@@ -1,0 +1,66 @@
+;; SRE Track 2I Phase 9b — Comprehensive lattice variety sweep
+;; Generated via: racket tools/run-phase9-sweep.rkt --domain tropical-fuel --depth 0
+;; Sweeps tropical-fuel × 1 depths × 11 properties
+;;
+;; sweeping tropical-fuel × (equality) at depth 0... (0.0s, 20 findings)
+;; Sweep total: 0.0s wall time. 20 tagged findings.
+
+cpu time: 0 real time: 0 gc time: 0
+## Phase 9 Findings — Comprehensive Lattice Variety Sweep
+
+**Generated**: by `tools/run-phase9-sweep.rkt`
+**Sweep params**: per-ctor-count 2, depth ∈ {0 (ground), 1 (wider)}
+**Domains × relations swept**:
+- `type × (equality subtype)`
+- `session × (equality)`
+- `form-cell × (equality)`
+- `spec-cell × (equality)`
+- `tropical-fuel × (equality)`
+
+### Variety-placement summary
+
+Each row places a `(domain × relation × depth)` lattice into the PTF lattice hierarchy. ✓ = property holds empirically; ✗ = refuted with witness; — = untested (no relation in registry, or property not testable on these samples). `(W)` = Whitman's W (free-lattice membership criterion, Nation 1982 Theorem 5.55/6.9).
+
+| Domain | Relation | Depth | SD | Modular | Distributive | Heyting | Stone | Boolean | (W) | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|
+| tropical-fuel | equality | ground | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | ✓ | — |
+
+### Per-finding detail
+
+Witnesses are footnoted (W1, W2, ...) below the table. Non-vacuity % surfaces evidence-strength asymmetries (e.g., SD-vee 3.5% vs SD-wedge 91.4% on type×equality wider — most SD-vee triples don't fire the hypothesis non-trivially).
+
+| Domain | Relation | Depth | Property | Samples | Status | Triples | Hypothesis fired | Conclusion held | Non-vacuity % | Witness |
+|---|---|---|---|---|---|---|---|---|---|---|
+| tropical-fuel | equality | ground | distributive | 7 | confirmed | 343 | 343 | 343 | 100.0% | — |
+| tropical-fuel | equality | ground | sd-vee | 7 | confirmed | 343 | 119 | 119 | 34.7% | — |
+| tropical-fuel | equality | ground | sd-wedge | 7 | confirmed | 343 | 161 | 161 | 46.9% | — |
+| tropical-fuel | equality | ground | modular | 7 | confirmed | 343 | 196 | 196 | 57.1% | — |
+| tropical-fuel | equality | ground | has-pseudo-complement-rel | 7 | confirmed | 49 | 49 | 49 | 100.0% | — |
+| tropical-fuel | equality | ground | has-pseudo-complement-abs | 7 | confirmed | 7 | 7 | 7 | 100.0% | — |
+| tropical-fuel | equality | ground | stone-identity | 7 | refuted | — | — | — | — | (W1) |
+| tropical-fuel | equality | ground | whitmans-condition | 7 | confirmed | 2401 | 1778 | 1778 | 74.1% | — |
+| tropical-fuel | equality | ground | relatively-complemented | 7 | refuted | — | — | — | — | (W2) |
+| tropical-fuel | equality | ground | sectionally-complemented | 7 | refuted | — | — | — | — | (W3) |
+| tropical-fuel | equality | ground | breadth-bound | 7 | confirmed | 7 | 7 | 7 | 100.0% | — |
+| tropical-fuel | equality | ground | has-complement | 7 | refuted | 1 | 1 | 0 | 100.0% | (W4) |
+| tropical-fuel | equality | ground | no-m3-sublattice | 7 | confirmed | 0 | 0 | 0 | n/a | — |
+| tropical-fuel | equality | ground | no-n5-sublattice | 7 | confirmed | 21 | 0 | 0 | 0.0% | — |
+| tropical-fuel | equality | ground | anti-exchange-on-J | 7 | confirmed | 180 | 30 | 30 | 16.7% | — |
+| tropical-fuel | equality | ground | trivial-congruence-valid | 7 | confirmed | 2401 | 49 | 49 | 2.0% | — |
+| tropical-fuel | equality | ground | total-congruence-valid | 7 | confirmed | 2401 | 2401 | 2401 | 100.0% | — |
+| tropical-fuel | equality | ground | mult-forgetful-congruence-valid | 7 | untested | 0 | 0 | 0 | n/a | — |
+| tropical-fuel | equality | ground | erasure-congruence-valid | 7 | untested | 0 | 0 | 0 | n/a | — |
+| tropical-fuel | equality | ground | admits-day-doubling | 7 | refuted | 21 | 0 | 0 | 0.0% | (W5) |
+
+### Witness footnotes
+
+**W1**: `'(0 0 0 0)`
+
+**W2**: `'(5 0 1)`
+
+**W3**: `'(1 1)`
+
+**W4**: `1`
+
+**W5**: `'no-incomparable-pairs`
+

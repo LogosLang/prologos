@@ -197,17 +197,19 @@ provides the native key-value interface without this wrapping.</p></div>
 <h2 class="part-header">Part I — The MapEntry Bridge Type</h2>
 <section class="module-container">
 <div class="module-badge">prologos::data::map-entry</div>
-<h3 class="section-title">MapEntry — Key-Value Pair Type</h3>
-<div class="prose"><p>A simple product type representing a key-value pair.
+<div class="prose"><p>========================================
+Prologos MapEntry — Key-Value Entry Type
+========================================
+A simple product type representing a key-value pair.
 Used as the element type when iterating over Maps
 via Seqable/Foldable traits, bridging the 2-type-param
-<code>Map K V</code> to the 1-type-param trait world:</p>
-<p>  <code>Map K V  →  Seqable over (MapEntry K V)</code></p>
+Map K V to the 1-type-param trait world:
+  Map K V  --&gt;  Seqable over (MapEntry K V)</p>
 <p>Constructors:
-  <code>mk-entry : K -&gt; V -&gt; MapEntry K V</code></p>
+  mk-entry : K -&gt; V -&gt; MapEntry K V</p>
 <p>Accessors:
-  <code>entry-key : MapEntry K V -&gt; K</code>
-  <code>entry-val : MapEntry K V -&gt; V</code></p></div>
+  entry-key : MapEntry K V -&gt; K
+  entry-val : MapEntry K V -&gt; V</p></div>
 <pre><code class="prologos"><span class="hl-kw">data</span> <span class="hl-ty">MapEntry</span> {<span class="hl-ty">K</span> <span class="hl-ty">V</span>}
   mk-entry : <span class="hl-ty">K</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">V</span></code></pre>
 <div class="prose"><p>Extract the key from a MapEntry.</p></div>
@@ -221,23 +223,24 @@ via Seqable/Foldable traits, bridging the 2-type-param
   <span class="hl-kw">match</span> e
     | mk-entry _ v <span class="hl-op">-&gt;</span> v</code></pre>
 </section>
-<h2 class="part-header">Part II — The Keyed Trait Instance</h2>
+<h2 class="part-header">Part II — Keyed Instance and Map Operations</h2>
 <section class="module-container">
-<div class="module-badge">prologos::core::keyed-map</div>
-<h3 class="section-title">Keyed Instance for Map</h3>
-<div class="prose"><p>The <code>Keyed</code> trait provides the natural key-value interface:
-  <code>kv-get    : Map K V -&gt; K -&gt; Option V</code>
-  <code>kv-assoc  : Map K V -&gt; K -&gt; V -&gt; Map K V</code>
-  <code>kv-dissoc : Map K V -&gt; K -&gt; Map K V</code></p>
-<p>This is how you interact with maps when you know you're working
-with a map. The trait-based interface avoids the need to pattern
-match on MapEntry — you just use keys directly.</p>
-<p>Keyed is a three-method trait, so the dict is a nested Sigma:
-  <code>(pair kv-get (pair kv-assoc kv-dissoc))</code></p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::keyed-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Keyed</span>]]
+<div class="module-badge">prologos::core::map</div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::collection-traits <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Keyed</span>]]
 <span class="hl-kw">require</span> [prologos::data::option      <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]
-
-(<span class="hl-kw">spec</span> <span class="hl-ty">Map--Keyed--dict</span> (<span class="hl-ty">Keyed</span> <span class="hl-ty">Map</span>))
+<span class="hl-kw">require</span> [prologos::data::list        <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons foldr]]
+<span class="hl-kw">require</span> [prologos::data::map-entry   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">MapEntry</span> mk-entry entry-key entry-val]]
+<span class="hl-kw">require</span> [prologos::data::lseq        <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span> lseq-nil]]
+<span class="hl-kw">require</span> [prologos::data::lseq-ops    <span class="hl-kwlit">:refer</span> [list-to-lseq lseq-to-list]]</code></pre>
+<div class="prose"><p>========================================
+Keyed instance for Map
+========================================
+kv-get    : Map K V -&gt; K -&gt; Option V  (wraps map-has-key? + map-get)
+kv-assoc  : Map K V -&gt; K -&gt; V -&gt; Map K V  (delegates to map-assoc)
+kv-dissoc : Map K V -&gt; K -&gt; Map K V  (delegates to map-dissoc)</p>
+<p>Keyed is a three-method trait, so the dict is a nested Sigma:
+(pair kv-get (pair kv-assoc kv-dissoc))</p></div>
+<pre><code class="prologos">(<span class="hl-kw">spec</span> <span class="hl-ty">Map--Keyed--dict</span> (<span class="hl-ty">Keyed</span> <span class="hl-ty">Map</span>))
 (<span class="hl-kw">def</span> <span class="hl-ty">Map--Keyed--dict</span>
   (pair</code></pre>
 <div class="prose"><p>kv-get : Pi(K :0 Type) Pi(V :0 Type) Map K V -&gt; K -&gt; Option V</p></div>
@@ -252,21 +255,14 @@ match on MapEntry — you just use keys directly.</p>
 <div class="prose"><p>kv-dissoc : Pi(K :0 Type) Pi(V :0 Type) Map K V -&gt; K -&gt; Map K V</p></div>
 <pre><code class="prologos">      (<span class="hl-kw">fn</span> (<span class="hl-ty">K</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">V</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (m : (<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>)) (<span class="hl-kw">fn</span> (k : <span class="hl-ty">K</span>)
         (map-dissoc m k))))))))</code></pre>
-</section>
-<h2 class="part-header">Part III — Map Operations</h2>
-<section class="module-container">
-<div class="module-badge">prologos::core::map-ops</div>
-<h3 class="section-title">Derived Operations</h3>
-<div class="prose"><p><code>map-map-vals</code>, <code>map-fold-entries</code>, and <code>map-filter-entries</code> are
-native AST primitives (parser keywords) that reduce via <code>champ-fold</code>
-in the reduction engine. This module provides derived operations
-built on those primitives.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::list      <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons foldr]]
-<span class="hl-kw">require</span> [prologos::data::map-entry <span class="hl-kwlit">:refer</span> [<span class="hl-ty">MapEntry</span> mk-entry entry-key entry-val]]
-<span class="hl-kw">require</span> [prologos::data::lseq      <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span> lseq-nil]]
-<span class="hl-kw">require</span> [prologos::data::lseq-ops  <span class="hl-kwlit">:refer</span> [list-to-lseq lseq-to-list]]</code></pre>
-<h3 class="section-title">Filtering and Projection</h3>
-<div class="prose"><p>map-filter-vals : (V -&gt; Bool) -&gt; Map K V -&gt; Map K V
+<div class="prose"><p>========================================
+Map Operations
+========================================
+map-map-vals, map-fold-entries, map-filter-entries are now native AST
+primitives (parser keywords). They reduce via champ-fold in the
+reduction engine.</p>
+<p>Remaining functions use native primitives where possible.</p>
+<p>map-filter-vals : (V -&gt; Bool) -&gt; Map K V -&gt; Map K V
 Keeps only entries whose value satisfies pred.
 Uses native map-filter-entries with a key-ignoring predicate.</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> map-filter-vals {<span class="hl-ty">K</span> <span class="hl-ty">V</span> : <span class="hl-ty">Type</span>} [<span class="hl-op">-&gt;</span> <span class="hl-ty">V</span> <span class="hl-ty">Bool</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>]
@@ -280,19 +276,19 @@ Uses native map-filter-entries with a key-ignoring predicate.</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> map-vals-list {<span class="hl-ty">K</span> <span class="hl-ty">V</span> : <span class="hl-ty">Type</span>} [<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">V</span>]
 <span class="hl-kw">defn</span> map-vals-list [m]
   map-vals m</code></pre>
-<h3 class="section-title">Merging</h3>
 <div class="prose"><p>map-merge : Map K V -&gt; Map K V -&gt; Map K V
 Merge two maps. Right map wins on key collision.
 Uses native map-fold-entries to fold over m2's entries.</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> map-merge {<span class="hl-ty">K</span> <span class="hl-ty">V</span> : <span class="hl-ty">Type</span>} [<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>]
 <span class="hl-kw">defn</span> map-merge [m1 m2]
   map-fold-entries [<span class="hl-kw">fn</span> acc k v [map-assoc acc k v]] m1 m2</code></pre>
-<h3 class="section-title">LSeq Bridge Functions</h3>
-<div class="prose"><p>Bridge the 2-type-param <code>Map K V</code> to the 1-type-param
-Seqable/Buildable world via <code>MapEntry K V</code> as the element type.
-All conversions flow through LSeq as the pivot representation.</p>
-<p>Uses sexp-mode bodies because constructing MapEntry/LSeq/List
-values requires explicit type arguments.</p>
+<div class="prose"><p>========================================
+Map &lt;-&gt; LSeq Bridge Functions
+========================================
+Bridge the 2-type-param Map K V to the 1-type-param Seqable/Buildable
+world via MapEntry K V as the element type.</p>
+<p>Uses sexp-mode bodies (like lseq-ops.prologos) because constructing
+MapEntry/LSeq/List values requires explicit type arguments.</p>
 <p>map-to-entry-list : Map K V -&gt; List (MapEntry K V)
 Convert a map to a list of key-value entries.
 Uses native map-fold-entries to avoid key-list intermediary.</p></div>

@@ -1,4 +1,4 @@
-ns examples.fc-trait-rel-dom
+ns examples::fc-trait-rel-dom
 
 ;; ========================================================================
 ;;

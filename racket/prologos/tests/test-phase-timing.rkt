@@ -65,12 +65,10 @@
 (test-case "phase-timing: process-string emits PHASE-TIMINGS to stderr"
   ;; Capture stderr from process-string
   (define err-str
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      (with-output-to-string
-        (λ ()
-          (parameterize ([current-error-port (current-output-port)])
-            (process-string "(def x : Nat 0N)"))))))
+    (with-output-to-string
+      (λ ()
+        (parameterize ([current-error-port (current-output-port)])
+          (process-string "(def x : Nat 0N)")))))
   ;; Should contain PHASE-TIMINGS prefix
   (check-true (string-contains? err-str "PHASE-TIMINGS:")
               (format "Expected PHASE-TIMINGS in stderr, got: ~a" err-str))
@@ -100,9 +98,7 @@
 
 (test-case "phase-timing: multiple commands accumulate"
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-phase-timings pt])
+  (parameterize ([current-phase-timings pt])
     ;; Process multiple commands — timings accumulate via +
     (with-output-to-string
       (λ ()

@@ -29,9 +29,7 @@
 
 ;; Run without prelude, suppress stderr, return all results.
 (define (run-simple s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-error-port (open-output-nowhere)])
+  (parameterize ([current-error-port (open-output-nowhere)])
     (process-string s)))
 
 ;; Run with prelude, suppress stderr, return last result.

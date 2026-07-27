@@ -42,8 +42,7 @@
                 shared-impl-reg
                 shared-param-impl-reg
                 shared-schema-reg)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
+  (parameterize ([current-file-module-network-ref (make-module-network)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -58,7 +57,7 @@
                  [current-schema-registry (hasheq)])
     (install-module-loader!)
     (process-string shared-preamble)
-    (values (current-prelude-env)
+    (values (global-env-snapshot)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -67,7 +66,7 @@
             (current-schema-registry))))
 
 (define (run s)
-  (parameterize ([current-prelude-env shared-global-env]
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -218,3 +217,39 @@
   (check-true (expr-app? result))
   (check-true (expr-fvar? (expr-app-func result)))
   (check-true (expr-Nat? (expr-app-arg result))))
+
+;; CIU T6 F1b.5-s1: the canonical angle forms + the two-list-drift arms.
+
+(test-case "schema-types/field-type-helper-union"
+  ;; ($union A B C) — the normalized <A | B | C> — converts to a
+  ;; right-nested expr-union (the surf-union foldr shape).
+  (define result (schema-field-type->expr '($union Int String Bool)))
+  (check-true (expr-union? result))
+  (check-true (expr-Int? (expr-union-left result)))
+  (define right (expr-union-right result))
+  (check-true (expr-union? right))
+  (check-true (expr-String? (expr-union-left right)))
+  (check-true (expr-Bool? (expr-union-right right))))
+
+(test-case "schema-types/field-type-helper-arrow"
+  ;; ($arrow A B) — the normalized <A -> B> — converts to a non-dependent
+  ;; Pi at 'mw (the surf-arrow default mult).
+  (define result (schema-field-type->expr '($arrow Int Int)))
+  (check-true (expr-Pi? result))
+  (check-true (expr-Int? (expr-Pi-domain result)))
+  (check-true (expr-Int? (expr-Pi-codomain result))))
+
+(test-case "schema-types/field-type-helper-quire"
+  ;; Quire arms were missing pre-s1 (the two-list drift): Quire fields
+  ;; minted bare fvars instead of their type constructors.
+  (check-true (expr-Quire8? (schema-field-type->expr 'Quire8)))
+  (check-true (expr-Quire64? (schema-field-type->expr 'Quire64))))
+
+(test-case "schema-types/field-type-helper-bare-fallback-preserved"
+  ;; The guarded resolution must fall through to a BARE fvar in contexts
+  ;; with no ns-context and no global-env binding (unit tests, :no-prelude)
+  ;; — the pre-s1 pinned behavior for unknown user types.
+  (parameterize ([current-ns-context #f])
+    (define result (schema-field-type->expr 'TotallyUnknownType))
+    (check-true (expr-fvar? result))
+    (check-equal? (expr-fvar-name result) 'TotallyUnknownType)))

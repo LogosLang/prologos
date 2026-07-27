@@ -15,6 +15,435 @@ Deferral".
 
 ---
 
+## ✅ RESOLVED — CIU T6 F1b: D23 posture-flip (DEPLOYED F1b.6 `7bcbca69`, 2026-07-18)
+
+**The Q4 tightening is DEPLOYED — D23 (track doc §2a round 6): escape-boundary
+hard error.** A dyn-row point-projection meta (kinds `dyn-row-projection` /
+`dyn-row-dynamic-projection` ONLY — the narrow partition; bulk-op result kinds
+keep scrubbing) escaping into a stored type is a HARD ERROR with def-srcloc, at
+the two def-commit boundaries; exploration stays permissive; escape hatch =
+explicit annotation. Implementation = F1b.2 (groundwork) + F1b.6 (the flip, via a
+type-LOCAL walk `check-escaping-projection-metas` / `collect-expr-metas-deep`).
+Full record: design doc §13.6 F1b.6 ✏ CLOSE. This pin is now historical (kept for
+the sequencing rationale below); the flip landed AFTER F1b.3's presence activation
+as required. **Rejected-with-reason (do NOT resurrect
+from this entry's old phrasing)**: (a) freeze-wide default-to-error at zonk-final —
+freeze fires in NON-display contexts (stored types driver.rkt:1704, constraint
+rendering :1579-1580/:1754-1755, capture :1349); a policy there corrupts error
+messages and capture, verified blast radius; (b) the constraint-store realization
+of the obligation — the constraint struct's equational rendering + retry-only
+failed-transitions do not fit an unsolved-observation obligation (the meta store
+already records provenance at mint; a second record is duplication). The
+refusal-relax half (meta-V from dyn rows) moved to § F-carrier below.
+
+## CIU T6 F-carrier: the Q_E(b) carrier unification — consolidated retirement home (D26 stub charter, 2026-07-17)
+
+The ONE coherent future carrier change (D16): bounded dyn tails carrying `(K,V)`,
+key-domain generalization beyond `keyword`/`nat` (heterogeneous key-types:
+strings, maps, arbitrary keys — owner-flagged 2026-07-15), and `expr-Map`
+dissolution into the row carrier. Stub tracker row: F1 design doc §2. Sequencing
+vs F-row (they interact via the bounded-tail Galois end-state, design doc §12.5
+pin 3) is decided by whichever opens first. **Everything that retires here, with
+entry gates** (round-6 rulings, track doc §2a):
+
+1. **Covariant/label-keyed depth** (D21 deferral) — triggers: row-type
+   annotations become user-writable (the PROBES P8 forward surfaces), OR
+   supertype-typed fields (generic `Num`, unions) in expected-row positions.
+   Upgrade = local realization swap at the D21 fallback arm; can NEVER ride
+   C_Cons (`'sub` goals are pure unify pairs).
+2. **The unify-internal width slice** (D21 non-coverage) — gate: evidence of a
+   REAL production population of row-vs-row width events bypassing check
+   (PROBES P8: zero today; D15 homogeneity semantics DEPEND on the failure —
+   any unify-side width needs a direction carrier, which is F-carrier work).
+3. **T refusal-relax** (D23 deferral): solve `V := ⋃knowns ∪ ?fresh` from dyn
+   rows — gate: the union-behavior probe (union-containing-free-meta vs a later
+   exact type) pinned at the refusal-leg comments (typing-core record-<:-map?/
+   record-<:-elem?).
+4. **Annotation-derived bounds** for D19 metas — no machinery exists at HEAD
+   (meta-info.constraints is dead-threaded); becomes expressible once tails
+   carry bounds.
+5. **Heterogeneous key-types** (absorbs the former standalone entry): `expr-Map`
+   survives as the dictionary type until here; the carrier's key-domain slot is
+   where the generalization lands; D17's `{}` keyword-commitment is one
+   recoverable seed site.
+
+## CIU T6 F1b.5: the deep-walker charter — ONE mechanism, one entry (D27.5, 2026-07-17)
+
+Validate v1 is ONE-LEVEL with STRUCTURAL depth symmetry (it consumes the same
+field-set enumeration as `schema->row` — never a second one-level implementation).
+THREE deferrals are ONE walker mechanism and live in THIS single entry (never
+residue-letter entries — divergent gates/double-count):
+
+1. **Container/nested-seal traversal depth** (the driver top-node class — def-forcing
+   + eval arm see only top nodes; a seal nested in a pair/list escapes both).
+2. **Tier-2 element recursion** (`(List Int)` fields checking each element).
+   HONEST reason (D28 corrected the false one): `ctor-meta` ALREADY carries
+   field-types/params/rec-flags runtime-readable (macros.rkt `ctor-meta` +
+   `lookup-ctor`) — what is unbuilt is the param-substitution + recursion +
+   depth discipline (recursive-schema edge), NOT metadata.
+3. **Sub-schema descent** (auto-registered `Parent__field` entries carry
+   check/default = #f — stripped at registration; a one-level engine hitting a
+   sub-schema-typed field has no defined deep disposition).
+4. **Nested / wildcard selection requires-paths** (F1b.5-s4, `0f95d544`):
+   selection-validate enforces only SINGLE-SEGMENT `:requires` (a length-1
+   keyword-path `(#:name)`) as the read-capability miss-check. A deep path
+   (`:address.zip` → `(#:address #:zip)`, incl. its top hop) or a wildcard
+   (`:address.*` → `(#:address *)`) defers — it is the SAME descent mechanism as
+   #3 applied to a selection's read-capability (descend into the `:address`
+   sub-value to check `:zip`). A selection with deep requires still gets full
+   type/:check/closedness validation at s4; only the nested read-capability miss
+   isn't caught yet. Filtered at the bake (`(null? (cdr path))` ∧ keyword head).
+
+`defr : Schema` fact-row runtime validation rides the same charter (an adapter
+over the positional discharge, parser.rkt `parse-defr-schema-typed`).
+
+**✏ 2026-07-18 (hand-testing) — the nested-`validate`-descent gap is DEMO-RELEVANT,
+may fold into Path Selection.** Hand-test verified at `f108c19b`: `[validate
+Config badcfg]` where `badcfg.server.port = "x"` returns **`ok`** (accepts the
+bad nested `:server` — the witness treats a nested-schema field's champ value as
+opaque/accept-on-uncertainty per the one-level D28 posture). ASYMMETRY worth
+noting: the STATIC seal DOES descend (a bad nested *literal* is caught at commit),
+but runtime `validate` does not — precisely the demo's headline flow (external
+data → `validate` → `Result`) would report `ok` on a config whose inner fields
+are wrong. This is items #1/#3 above (container/nested + sub-schema descent).
+Owner steer (2026-07-18): does NOT need building yet, but "could very likely be
+included in the Path Selection work" (which precedes the return to demo work) —
+so this walker-descent may graduate WITH Path Selection rather than as a
+standalone charter trigger. Entry-gate (a) [a real nested-schema demo consumer]
+is the watch.
+
+**Entry gates**: (a) a real consumer with nested/container schema shapes — the
+P-Real demo schemas are the watched trigger (checked at F1b.5-p0; list-typed
+fields would open this EARLY); (b) API compatibility is PRE-PAID: E keys are
+PATH-shaped from v1 (D27.3, singleton paths) so the walker extends without a
+breaking E change (product-over-paths); (c) the depth discipline designed
+(recursive schemas). 
+
+**Residue (e), honest wording (D27.5; ✏ F1b.5-s4)**: the open?-absorbed
+missing-required (schema-seal-residual-ok?'s open? disjunct) is *dischargeable
+via validate (OPT-IN)* — the OPT-IN path is now REAL (validate landed s2 for
+schemas, s4 for selections). AUTO-discharge stays deferred to the blame-latch
+era — gate: the §3b blame-latch citation verified concrete at F1b.5-p0 (else
+re-anchor; an invented placeholder gate is forbidden). s4 does NOT close this
+entry (auto-discharge is the deferred half).
+
+## CIU T6: the cross-module schema channel — staleness + cache-hit registration (probe-found at F1b.5-p0, 2026-07-17)
+
+PRE-EXISTING class, probe-verified at `6584b443` (F1b.5-p0 agents; full record
+design doc §13.8 ✏ items 6-7). THREE coupled gaps, ONE channel fix:
+
+1. **No cross-module cache invalidation**: `.pnet` validity = own source mtime +
+   `driver_rkt.zo` stamp ONLY (`source-hash-for-module`'s own comment concedes
+   no content/dep hashing). Schema-derived data baked into a USING module's AST
+   (defaults + :check chains TODAY via inject-schema-defaults/wrap-schema-checks;
+   validate's baked plans from F1b.5-s2) goes silently stale when the DEFINING
+   module's schema changes. update-deps' edge graph feeds test selection only.
+2. **Schemas are not serialized into `.pnet` and not re-registered on cache-hit**
+   (zero schema tokens in pnet-serialize's 17-registry list; no register-schema!
+   on the cache-hit merge path) → A-cache-hit + B-cache-miss ⇒ `lookup-schema`
+   = #f ⇒ the existing inject/wrap SILENTLY NO-OP. Cross-module schemas are
+   COLD-LOAD-ONLY today. (Validate's elaboration bake errors LOUD on the miss —
+   better diagnosability, same underlying gap.)
+3. **The registry parameter is off three save/restore lists** (batch-worker
+   restore, test-support parameterize, the macros 19-param snapshot) — masked
+   by cell-first reads + the cell-id riding save-macros-cell-ids. The list
+   insertions land as the F1b.5-s1 hygiene rider; THIS entry keeps the
+   structural fix.
+
+**Fix shape (one channel)**: serialize the schema registry into `.pnet` (the
+ctor-registry precedent: serialize + cache-hit merge + load-module capture/
+re-propagation) + dep participation in the cache key (content/dep hashing at
+source-hash-for-module — its comment already names the full implementation).
+**Entry gates**: (a) first REAL cross-module schema consumer (a library module
+exporting schemas — none exist today; the demo is single-file); (b) or the
+first stale-baked-plan incident in practice. Until then the class is documented
+here + at §13.8.
+
+## CIU T6: inference on unannotated params (projection + arithmetic) — records ergonomics (hand-testing, 2026-07-18)
+
+Two record-ergonomics soft spots found dogfooding `foray.prologos` — both are
+the SAME class (inference on an UNCONSTRAINED param), both have named deep-fix
+homes, both got a **near-term error-message mitigation** (`ff813935`: the bare
+"Type mismatch" now says "cannot infer the type of an unannotated parameter …
+annotate `[x : T]` or add a `spec`").
+
+1. **Projection on an untyped param** — `defn f [p] p.x` fails: to project `:x`
+   the checker must know `p` is a record. Today requires an annotation (`[p : T]`)
+   or a spec whose name MATCHES the defn (the owner's `point-add` hit this via a
+   `spec paint-add`/`defn point-add` name typo → bare untyped params). **Deep fix
+   = F-row**: projection-driven ROW inference — generate a constraint
+   `p : {:x _ | _}` from `p.x` and solve it structurally. Now more tractable
+   (rows exist post-F1a/F1b) but still extension-typing scope (§12.5 pins / the
+   one-solver era). Entry gate: F-row opens.
+2. **Generic `+`/arithmetic on an untyped param** — `defn f [x] [+ x 1]` fails
+   standalone (pre-existing): `+` needs `x`'s type. **Deep fix = Num Track 2**
+   (generic `Num` / constraint-as-type): constrain `x : Num`-ish from `[+ x 1]`.
+   Seed note `2026-07-02_GENERIC_NUM_TYPE_NOTE.md`. Entry gate: Num Track 2 opens.
+
+Neither blocks records-correct-in-principle (annotate or spec is the workaround);
+the mitigation makes the workaround discoverable. Do NOT attempt the deep fixes
+in a records slice — they are their own tracks.
+
+## CIU T6: schema EXTENSION / inclusion — un-named future design track (owner brewing, hand-testing 2026-07-18)
+
+Owner wants to eventually EXTEND one schema with another (`AdminUser` = `User`
++ extra fields — flatten the parent's fields into the child), but ruled it needs
+its own **ergonomic + parse design** and time to brew (2026-07-18); a LARGER
+design question than F1b, out of scope for the current demo (nested `schema`s
+are sufficient for demo purposes — owner-confirmed).
+
+**Current state (hand-test verified `f108c19b`)**: there is NO schema-extension
+mechanism. The only schema directives are `:closed` (schema-level) + `:default`/
+`:check` (per-field, `parse-field-properties` macros.rkt). Composition today =
+**nesting only** (a schema field whose TYPE is another schema), which works well:
+deep projection `cfg.server.host` resolves through named-type AND inline
+auto-registered (`Parent__field`) sub-schemas; the static seal descends into
+nested literals. Nesting is the intended composition story for now.
+
+**The discoverability trap (candidate small pre-fix, deferred with the feature)**:
+`schema Admin :include User` is SILENTLY parsed as a field NAMED `:include` of
+type `User` (`:include` is not a directive — field names lead with `:keyword`,
+so it looks like a legit field), producing a confusing downstream
+"schema seal: missing required field :include". A user reaching for extension
+gets no hint. Options if the owner wants a near-term guard: (a) a warning/error
+when a schema field's TYPE position is itself a registered schema name AND the
+field name looks directive-ish (`:include`/`:extends`/`:from`) — heuristic, risky;
+(b) leave it until the extension feature lands and decides the real syntax.
+
+**Design surface (for when the track opens)**: syntax (`:include S`? `schema X
+from Y`? a spread?) · flatten semantics (structural row-union vs a nominal
+"extends") · field-collision rules (override? error? most-derived-wins?) ·
+`:closed` interaction (does a child of a `:closed` parent stay closed?) ·
+whether extension composes with `selection` (a view over an extended schema).
+Likely CIU (records/rows) territory; may relate to F-row's extension typing.
+
+## CIU T6: projections via `selection` — down-cast + read-capability design (Path-Selection-adjacent, hand-testing 2026-07-18)
+
+`selection` (F1b.5-s4) is a read-side capability VIEW, hand-test verified
+`f108c19b`. Owner: this projection work is "likely related design work"
+(Path Selection) and not a current demo need (2026-07-18) — DEFERRED, folds into
+the OPEN **Path Selection** owner conversation (track doc §2a OPEN note).
+
+**What works**: `selection V from S :requires [f …]` narrows the readable surface
+to its `:requires` fields — `v.name` reads on `NameOnly :requires [:name]`;
+multi-field requires works; validate on a selection enforces requires-present +
+present-field type/`:check`, accepts extra parent fields. Empty `:requires []`
+is rejected (needs ≥1 of requires/provides/includes).
+
+**Two gaps (both → Path Selection)**:
+1. **No down-cast from a parent value**: `def x : NameOnly := aPersonValue` →
+   Type mismatch (expected NameOnly, got Person). A selection value is CONSTRUCTED
+   from a map literal — you cannot narrow an existing record to a subset view.
+   The "project a subset OUT of a record" ergonomic is exactly Path Selection's
+   V4 result-shape crux; selection is a *typed view you build*, not a *projection
+   you apply*. Feeds the Path Selection co-design.
+2. **Reading a NON-requires field off a selection value fails with a CRYPTIC
+   message**: `v.age` on `NameOnly :requires [:name]` → bare "Could not infer
+   type" (the view type exposes only its `:requires` fields — semantically a
+   coherent read-capability restriction, but the diagnostic is opaque). Candidate
+   small message improvement (name the view + its readable fields), pre-close OR
+   with the Path Selection work. NOTE also an OPEN semantics question for that
+   co-design: should a selection value expose ALL parent fields it carries at
+   runtime, or stay strict to `:requires`? (current = strict).
+3. **Bare map-ops on a SELECTION value** (`[map-keys s]` / `map-assoc`/`dissoc`/
+   `vals`/`has-key?`/`nil-safe-get` where `s : SomeSelection`) → "Could not infer
+   type" (folded here from F1b.7e, `311fc034`, 2026-07-19). F1b.7e fixed these on
+   SCHEMA values (a schema-fvar subject projects to its row via `schema->row`),
+   but selection fvars were deliberately NOT projected: to stay consistent with
+   `map-get`'s selection arm (which gates reads to `:requires`, the
+   read-capability), structural ops on a selection need the `:requires`-RESTRICTED
+   row projection, not the full parent row — which IS this selection-projection
+   design. Fix shape (when this opens): a `selection->requires-row` projection
+   (parent's fields filtered to the single-segment `:requires` set) applied in
+   the same 7 imperative arms `schema-fvar->row-or-self` (typing-core) already
+   touches; couples to the strict-vs-carried-fields semantics question in item 2.
+
+## CIU T6: named-`?`-field vs presence-optional DISPLAY ambiguity (7g surfaced, owner-acknowledged 2026-07-19)
+
+F1b.7g made `?`/`!`-suffixed keyword keys read whole (`:active?` is now a valid
+field/key name). This makes a PRE-EXISTING, display-only ambiguity newly
+REACHABLE: a field literally named `active?` with presence `'present` renders
+`{:active? Bool}` — INDISTINGUISHABLE from an OPTIONAL field `active` (the D24
+presence-`'unknown` display marker appends a `?` suffix, pretty-print.rkt:439-445;
+already-documented at syntax.rkt:684-686 as "revisit if it bites"). It is
+**display-only** — flips NO parse-time behavior; the stored label is `active?`
+verbatim and the value reads/projects correctly (`s.active?` → the value). Owner
+acknowledged (7g Q2), NOT a blocker. **When it bites** (a user confused by
+`{:active? Bool}` meaning "field active?" vs "optional active"): the fix is a
+presentation-design choice in the pretty-printer — e.g. render presence-unknown
+with a distinct marker (a leading `?`, or a space, or `{:active [?] Bool}`) so the
+suffix-`?` of a real field name never collides with the presence marker. Couples
+to the D24 presence-marks display + the broader FQN-display-verbosity presentation
+question (dailies 29). Low urgency; a display-layer-only change (no reader/typing
+touch).
+
+## CIU T6: two standing WS-surface non-blockers (F1b arc hand-testing, filed 2026-07-19)
+
+Two known, low-severity surface gaps found across the F1b arc — workarounds exist,
+neither blocks records-correct-in-principle; filed so the doc-truth is honest.
+
+1. **`<`-check-preds are unusable in WS files** — a `<`-leading form (`:check (< _ 5)`)
+   is mis-read: `<` opens an angle-type reader GROUP in WS mode, so the predicate
+   never parses as a comparison. **Workaround: `(> N _)`** (reversed direction:
+   `:check (> 5 _)` means "field < 5"; the `>`/`>=` normalizer handles the arg
+   swap). Same CLASS as the 7g `?`-in-keyword-token gap (a WS-reader charset/
+   grouping issue) — the reader-level fix would let `<` inside a check pred read as
+   the operator, not the angle-group opener. Pre-existing; not records-specific.
+2. **`match` with an INLINE `validate` scrutinee fails inference** —
+   `match [validate S e] | ok v -> … | err es -> …` fails to infer the scrutinee's
+   `Result S E` type inline; **def-bind first** (`def r := [validate S e]` then
+   `match r …`) works. Route-sensitivity in the checker's inline-vs-def-bound
+   scrutinee inference (the F1a col-3/p0 literal/binding-route-sensitivity class).
+   Found at F1b.5-s2.
+
+## CIU T6 → Rel: typed solution rows — MOVED to the Rel series (2026-07-19)
+
+**Charter home is now the Rel series** ([`2026-07-19_REL_MASTER.md`](2026-07-19_REL_MASTER.md)
+→ [`2026-07-19_REL_SOLVE_TYPING_NOTE.md`](2026-07-19_REL_SOLVE_TYPING_NOTE.md)
+Problem 1), grouped with the `not`/NAF-correctness work as the first (un-named)
+Rel track. Owner (2026-07-19): solve typing sequences BEFORE Path Selection (its
+highest-value consumer). The original charter is retained below for the entry gates.
+
+`solve` results carry NO type at HEAD (`expr-hole`); per-solution ROW types
+(`List {unknown : T …}`) would make Path Selection over solution sets TYPED.
+Chartered at F1b close, NOT inside F1b — the naive version is broken (solution-row
+labels are NOT statically derivable: args are whnf'd before the ground/free split;
+anonymous `_` vars become gensym-named keys — PROBES/panel Q5-B). **Entry gates**:
+(a) define the typeable-goal fragment; (b) ONE shared ground/free predicate
+consumed by reduction AND typing (never a reproduced walk); (c) the two-context/
+relation-registry audit (incl. relations from cached `.pnet` bodies); (d) reconcile
+the TWO unbound representations (unresolved var → own-name fvar vs missing key →
+`none` — presence-`'optional`/Option candidates; explain's reserved keys = the
+first `'optional` clients); (e) display posture vs D23 (untyped relations ⇒ rows
+of metas).
+
+## CIU T6 (post-F1b): explain restructure — provenance beside the rows
+
+Explain's reserved `:certainty`/`:cycle` keys merge into the SAME champ namespace
+as query-var keys (reduction.rkt explain merges) — the right eventual shape is a
+wrapper record `{:solutions […] :certainty …}` (provenance beside the rows, not
+merged in). Inherits the D25.2 interim clobber guard as a pin — LANDED at F1b.1
+(commit `83784ef9`), realized as **binding-wins-on-collision** (the metadata
+insert is skipped when a query var claims a reserved name; covers all THREE
+reserved keys certainty/cycle/provenance — provenance is the live one under
+default semantics; skip keeps solve/explain treating the same query
+identically, vs reject which would make explain stricter). Not blocked; open
+when the explain surface next gets attention.
+
+## Numerics N6d-i follow-ups: method-wrapper derive skip-set remediation
+
+Four items deferred from the auto-derive design (Numerics design doc §9d D-N6.5;
+grounding-audit 2026-07-02 at HEAD `c8a425f7`). The derive ships with a
+skip+warn policy; these lift the skips / harden the substrate.
+
+### 1. Lift the `add`/`sub`/`join`/`reduce` derive skips (spec-clobber remediation)
+
+- **Scope narrowed 2026-07-02**: the N6d-i derive shipped an elaborator
+  resolution reorder (`elaborator.rkt`: where-context arm moved BEFORE the
+  own-namespace arm) that STRUCTURALLY fixes the *capture* class — a bare
+  trait-method call inside a `where`-constrained body (e.g. `[leq x y]` in
+  `impl Lattice (Map K V) where (Lattice V)`, `[narrow x y]` in propagator) now
+  resolves via the where-dict, not a same-named derived wrapper, restoring the
+  pre-derive behavior for ALL methods. So capture is NO LONGER a reason to skip.
+- **The remaining skip reason = spec-CLOBBER only** (issue #66): the derive
+  skips `add`/`sub`/`join`/`reduce` because each collides with an existing
+  NON-trait top-level def+spec of the same name — nat's `add`/`sub` (`impl Add
+  Nat` body calls the *imported* nat `add`, an unconstrained context the reorder
+  doesn't touch) + their concrete `spec add Nat Nat -> Nat`; string-ops `join`;
+  list `reduce`. A derived generic `spec add {A} … where (Add A)` overwrites the
+  concrete spec in the bare-name spec store → wrong implicit-arg counts.
+- **Remediation**: fix the bare-name spec-store clobber (issue #66 — FQN-keyed
+  or module-scoped specs), then the skips lift cleanly. Low urgency (generic
+  `+ - *` keywords cover bare-call ergonomics; `mul`/`eq?`/`compare`/`neg`/`abs`
+  already derive first-class fine).
+
+### 2. Spec-store bare-name keying — silent clobber (structural defect) [issue #66]
+
+- **What**: the spec registry keys by BARE symbol with silent last-write-wins:
+  `register-spec!` (`macros.rkt:480-482`), import spec-propagation
+  (`driver.rkt:2810-2811`), and implicit-hole counting strips FQNs before
+  lookup (`elaborator.rkt:567-576`). Two same-named specs from different
+  modules (e.g. nat's `add` vs a generic `add`; a derived `reduce` vs
+  `list.prologos`'s `reduce`) overwrite each other in any module importing
+  both — the loser's call sites get WRONG implicit-argument counts, silently.
+- **Fix direction**: FQN-keyed spec store (or module-scoped shadowing with
+  deliberate resolution order). Crosses the module system — candidate for a
+  PM-series follow-up. Blocks item 1's clean resolution.
+
+### 3. Zero-arg / output-position-only trait methods as context-resolved values
+
+- **What**: the derive's argument-position rule excludes constants (`zero`,
+  `one`, `bot`, `top`, `empty-coll`) and output-only methods (`from-integer :
+  Int -> A`). Structurally: bare-reference auto-apply requires all-m0 binders
+  (`elaborator.rkt:541-542`) but where-dict params are mw (`macros.rkt:4213`),
+  and there is no argument to unify the type var against. Expected-type-directed
+  constraint resolution (`def z : Float64 := zero`) is UNPROVEN at HEAD — no
+  machinery confirmed for solving an output-position constraint meta from the
+  checking direction before `resolve-trait-constraints!`.
+- **Fix direction**: a checking-mode resolution path (the N4 context-typing
+  shape applied to constraint metas). Natural home: the UCS trait re-engineering
+  track (`2026-06-30_TRAITS_AS_REFINEMENT_TYPING_NOTE.md`) or a dedicated
+  probe+mini-design. Also lifts the `from-integer`/`from-rational` exclusions
+  (whose names additionally collide with hard arity-2 parser keywords —
+  `parser.rkt:1961-1974` — so they may want distinct wrapper names regardless).
+- **N6f dependency (2026-07-02)**: the `sum`/`product` explicit-dict → where-constraint
+  modernization (Num Track 1 N6f, D-N6.5 filing) is BLOCKED here — their bodies call the
+  nullary identity accessor (`[AdditiveIdentity-zero id-dict]` / `[MultiplicativeIdentity-one …]`,
+  `core/algebra.prologos:117,129`), which needs `zero`/`one` resolved from the where-context
+  (exactly this item). N6f-a retired the `plus/minus/times/divide/negate-fn/abs-fn` wrappers
+  (commit `a556f38e`) but LEFT `sum`/`product` explicit-dict pending this resolution.
+
+### 4. Registry silent-overwrite: no duplicate-binding diagnostics [issue #67]
+
+- **What**: every collision surface found by the N6d-i audit fails SILENTLY —
+  trait registry (`macros.rkt:6228-6231`), spec store, import shadowing
+  (`namespace.rkt:833` "MUST BE LAST — shadowing depends on ordering") are all
+  hash-set overwrite with no duplicate-binding error or warning.
+- **Fix direction**: an opt-in (or default-on) duplicate-binding diagnostic at
+  registration time. Cheap hardening; would have made the N6d-i collision
+  census mechanical instead of forensic. The derive's cross-trait-duplicate
+  warning (modeled on HKT-9's ambiguity check, `elaborator.rkt:165-176`) is the
+  first slice.
+
+---
+
+## BUG: Union-type checking hangs the type-checker (BSP non-quiescence)
+
+- **Found**: 2026-06-29 hunting a `foray.prologos` type-check hang (DEMO Series session).
+- **Symptom**: the typing propagator network NEVER quiesces — infinite BSP firing in `attribute-map-merge-fn` (`typing-propagators.rkt:440`), the `:type`-facet union join not reaching a fixpoint. `run-to-quiescence-bsp` loops forever (no fuel bound on the elaborator/typing network → a HANG, not a bounded error).
+- **Minimal repro** (ORDER-DEPENDENT): a `.prologos` file with, in this order — `def x : <Int | String> := 42` / `x` / `the <Int | String> "0"` — hangs. Reordering (`def x` ; `the …` ; `x`) completes; the same shape with plain `Int` completes; each form alone completes. So it is the union-type join under specific accumulated network state.
+- **Scope of fix**: a type-lattice-convergence investigation — why the union join's `facet-merge` for `:type` is non-idempotent / non-convergent under this state (relates to SRE Track 2H type-lattice/quantale). Likely ALSO wants a **fuel bound on the typing/elaborator network** so non-convergence becomes a bounded diagnostic instead of a hang.
+- **Impact**: union types (`<A | B>`) in certain sequences hang the compiler AND the LSP (it type-checks on open) — real-program-affecting, not just foray.
+- **Workaround in place**: foray's union forms commented out (so it loads).
+- **✏ 2026-07-17 (CIU T6 F1b.3, worktree-verified PRE-EXISTING at `0bdfca22`)**: the
+  class is BROADER than the original repro — after the F1 acceptance file's
+  accumulated state (86+ commands incl. union-typed defs `hu : Int | String`),
+  BOTH (a) a polymorphic spec+app (`spec pick {A : Type} A A -> A` … `pick wn ww`)
+  AND (b) a plain annotated-lambda def (`def idint := [fn [x : Int] x]`) HANG the
+  file run (BSP non-quiescence, unbounded memory) on the PRE-F1b.3 compiler too.
+  Repro files preserved: session scratchpad `f1b3-m322.prologos` / `t-idint-pre`.
+  CONSEQUENCE: the F1b.3 width canaries live in a SEPARATE clean-state acceptance
+  file (`examples/2026-07-17-ciu-t6-f1b3-width.prologos`) rather than appended to
+  the main file. Possible connection to the transient full-suite mass-stalls
+  (2 data points) — check when this gets its session.
+- **Not blocked** — needs a dedicated debugging session on the typing propagator network.
+
+---
+
+## Tooling: Extend bench-ab.rkt with --refs for multi-way A/B/C+ comparison
+
+- **GitHub Issue**: [#63](https://github.com/LogosLang/prologos/issues/63) (PRIMARY surface; queryable; linkable from PRs)
+- **MASTER_ROADMAP.org**: forward-references at OE Series Track 1 (weighted parsing) + PReduce Track 4 (cost-guided extraction)
+- **Origin**: PPN 4C Tropical Quantale Addendum 1C-vi A/B/C report (2026-05-16; `docs/tracking/2026-05-16_TROPICAL_1C_VI_ABC_REPORT.md`); design doc §13.7 cross-track note flagged as "small tool enhancement"
+- **Scope**: `tools/bench-ab.rkt` currently supports A/B (`--ref HEAD~1`); extend with `--refs` accepting multiple commit refs for multi-way comparison; markdown table generation option
+- **Consumed by**: OE Series Track 1 (weighted parsing with cost-extraction variants); PReduce Track 4 (cost-guided extraction with multiple strategies); future PAR tracks (parallel scheduler variants comparison)
+- **Not in scope for 1C-vi**: A and B baselines for THIS addendum's report are captured data files (OLD struct-field counter RETIRED at 1C-iv-b; live A re-measurement structurally impossible); a markdown report sufficed (β3 resolution per §10.0.7)
+- **Multi-surface tracking discipline**: this entry is part of a dual-surface pattern (Issue + MASTER_ROADMAP forward-refs + this entry, all cross-referenced) — codification candidate from §10.0.7 ("Multi-surface tracking with cross-references is more durable than DEFERRED.md alone"; user observation: "capturing in deferred is not meaningful follow up and likely will be work lost")
+- **Estimated scope**: ~50-100 LoC + tests
+- **Not blocked on anything** — can be implemented when a consuming track has the multi-variant comparison need
+
+---
+
 ## HIGH PRIORITY: Propagator/Cell Allocation Efficiency Track
 
 ### Design Track for Efficient Prop/Cell Allocation
@@ -231,9 +660,8 @@ Deferral".
 
 ## Mixed-Type Maps
 
-### Type Narrowing for `map-get`
-- When key is statically known, narrow return type
-- Source: `docs/tracking/2026-02-22_MIXED_TYPE_MAPS.md`
+*(Type Narrowing for `map-get` — RESOLVED by CIU T6 F1a structural records; moved to
+DEFERRED_COMPLETE.md at the 2026-07-16 F1b-opening triage.)*
 
 ### Pattern Matching for Union Values
 - Convenience forms for matching on union values
@@ -364,6 +792,16 @@ Deferral".
 | Per-domain factory callbacks (3) | 4C addendum S2.d-followup audit (2026-04-25) | ⬜ flagged | `current-prop-fresh-mult-cell` (driver.rkt:2600), `current-prop-fresh-level-cell` (similar), `current-prop-fresh-sess-cell` (similar). Each is a Racket parameter holding a fresh-cell allocation closure. Used in fresh-X-meta legacy fallback path for pre-init test contexts. | Set at module-load with default `#f`; populated by driver.rkt during init. Read in fresh-X-meta legacy path (when universe is not initialized — bare-metavar-store tests not loading elaborator-network.rkt). | **PM Track 12 retires**: when test fixture infrastructure goes on-network, the pre-init fallback paths can collapse entirely — tests would call `init-meta-universes!` at setup. S2.e reviews whether these fallbacks remain needed; if not, retires before PM 12. Per D.3 §7.5.14.1 + §7.5.14.3. |
 | `current-prop-mult-cell-write` write callback (1) | 4C addendum S2.c-iv adversarial VAG (2026-04-24) | ⬜ flagged | Racket parameter holding mult-cell write closure (driver.rkt:2605 → `elab-mult-cell-write`). Used in solve-mult-meta! legacy path. Note: level/session don't have analogous write callbacks — they use direct `elab-cell-write` in their legacy paths. Asymmetry is mult-specific (legacy artifact). | Set at module-load; read in solve-mult-meta! legacy fallback path only. Post-S2.c-iv mult universe-active, legacy path dead → callback becomes unread. | **PM Track 12 retires** with mult store/champ-box. S2.e could retire earlier (no PM 12 dependency for the callback itself; only the data store it writes to). Per D.3 §7.5.14.3. |
 
+### parameter-lint baseline refresh (2026-06-01, during PPN 4C 4A.c-iii-c)
+
+The 4A.c-iii-c -c gate surfaced that `racket tools/lint-parameters.rkt --strict` had been **silently failing** on **16 NEW unbaselined exported params** that accumulated across recent tracks without a baseline refresh (the guard rusted — it isn't wired into pre-commit/CI, so nothing ran it). Confirmed -c is lint-NEUTRAL (introduced zero new flags); the 16 are pre-existing drift, NOT -c's doing. Handled (separate from 4A.c, as orthogonal infra hygiene):
+
+- **Triage**: all 16 have cross-module uses (3–68 each) → none cleanly private-izable; they are per-command-reset (via `reset-meta-store!` network recreation) / per-`elaborate` (`current-source-loc`) state, not per-test-isolation params → test-registering would mis-classify them. So **all 16 are irreducible exported state → genuine PM Track 12 (params→cells) agenda**; no avoidable debt to classify away.
+- **`--save-baseline`** (commit alongside this entry): accepted the 16 as known-debt AND cleaned **18 stale entries** for params retired by earlier tracks (`current-speculation-stack` [1A-iii], `current-{level,mult,sess}-meta-{store,champ-box}` [S2.e-iv-c], `current-retracted-assumptions` [2B], `current-prop-{id-map,meta-info}-*` / `-mult-cell-write` / `-fresh-{level,mult,sess}-cell`, `current-ready-queue-cell-id`, `current-resolution-executor`, `current-in-stratified-resolution?`). Baseline now = 186 (accurate current unclassified set); `--strict` GREEN (NEW: 0). NOT laundered into -c (separate honest commit + this capture).
+- **The 16 baselined params** (PM Track 12 cell-migration targets): the meta-universe per-domain cluster `current-{type,mult,level,session}-meta-universe-cell-id` + `current-{type,mult,level,session}-universe-merge` + `current-{type,mult,meta-solve}-universe-contradicts?` + `current-worldview-hasse-registry-handle` (from the S2.* universe migrations) + `current-domain-classification-lookup` (Phase 1f). The others (`current-source-loc`, `current-process-id`, `current-clock-cell-id`) are already tracked in the registry table above.
+- **Stale DEFERRED rows**: the per-domain meta-store/champ-box/factory/write-callback rows above (S2.d-followup, 2026-04-25) describe params now RETIRED (confirmed by the baseline's stale-entry cleanup) — mark done in a future DEFERRED tidy.
+- **Meta (operationalization)**: the guard rusted because `--strict` isn't run automatically. Decide later whether to wire it into the pre-commit hook / CI (else it re-rusts) — small follow-up, not 4A.c. Architectural endpoint: PM Track 12 migrates these to cells and obsoletes the lint entirely.
+
 ### PM Track 12 design input from PPN 4C Phase 1e-α (2026-04-20) — submodule-scope primitive
 
 Phase 1e-α's η split of `merge-hasheq-union` surfaced a scope conflation in the current architecture that PM Track 12 is positioned to resolve. Core finding (from [PPN 4C D.3 §6.14.2](2026-04-17_PPN_TRACK4C_DESIGN.md)):
@@ -440,6 +878,26 @@ For every entry in this section, PM 12 needs:
 ### Registries NOT (yet) catalogued
 
 Existing pre-4C off-network registries (`register-domain!`, `register-typing-rule!`, `register-stratum-handler!`, `register-topology-handler!`, various Racket parameters across `prelude.rkt`, `namespace.rkt`, module-registry, trait-registry, etc.) are NOT itemized here — would require a separate cross-track audit. Deferred to PM Track 12's opening scoping phase, which will produce the comprehensive inventory. The discipline codified here (append per track) prevents 4C's additions from disappearing into that audit.
+
+---
+
+## Free Ordering on Network (PM Track 12B)
+
+**Status**: ⬜ NOT STARTED — Stage-0 pre-design capture (2026-06-06). Full implementation note: [`2026-06-06_PM_TRACK12B_FREE_ORDERING_ON_NETWORK.md`](2026-06-06_PM_TRACK12B_FREE_ORDERING_ON_NETWORK.md). Master row: [PM Master § Track 12B](2026-03-13_PROPAGATOR_MIGRATION_MASTER.md).
+
+**What**: achieve full **order independence** by retiring the imperative FREE_ORDERING multi-pass preparse (Pass −1/0/1/1.5/2 pre-registrations + the Phase-5b generated-decl hoist) and replacing it with uniform **on-network forward-ref residuation** — every forward reference residuates to fixpoint on the network. The multi-pass + hoist + synchronously-consulted off-network registries ARE the order-dependency scaffolding the lattice-fixpoint North Star wants to dissolve (`2026-02-28_1800_FREE_ORDERING.md`). Builds on PPN 4C Addendum Phase 4B's NET-1 δ residuation substrate.
+
+**Why 12B not 12**: PM Track 12 is the mechanical registries→cells migration; PM 12B makes forward-refs *residuate* against those cells and *deletes* the imperative multi-pass. 12B **consumes** 12.
+
+**Scaffolding to retire** (grounded @ HEAD `9cc752ea`; full inventory in the note §3):
+- Pass-0/1 pre-registrations (`macros.rkt:2390–2460`); Phase-5b hoist (`:2876–2903`); the post-expansion **generated-name seeding** gap (Pass-1.5 is pre-expansion → can't see ctor/accessor names).
+- The 3 synchronous typing env-reads (`typing-propagators.rkt:1771/2475/2644`, all NET-2) → wait on NET-1 cells (**the cross-network seam**; A3-narrow / §6 boundary).
+- Forward-ref-gating off-network registries: `current-multi-defn-registry` (the multi-clause base-name permanently-`'pending` landmine), `current-relation-store` (defr), capability/schema/selection registries.
+- The `loading-set` cross-module cycle check (`driver.rkt:~2132`) → lattice-fixpoint cycle diagnosis (PPN 4C addendum §18.11).
+
+**Dependencies**: PM Track 12 (registries→cells, hard); PPN 4C Addendum Phase 4C/4D (cross-network seam + §6 diagnosis); PPN 4C Addendum Phase 4B (the NET-1 δ substrate). **NOT NTT** (speculative future syntax, not an implementation dependency — cross-network access is implemented directly in Racket).
+
+**Origin / why deferred (genuine-dependency, not Let-Pain-Drive)**: PPN 4C Addendum Phase 4B.4 mini-design grounding (2026-06-06) established empirically that type-only producers (selection/capability/session) **already** forward-resolve via the imperative multi-pass — so the free-ordering work for them is *retiring* the scaffolding, which needs PM 12's cells + the 4C/4D cross-network seam. The pain is real; the substrate is the blocker. 4B.4 keeps only the annotated-path forward-ref residuation (tractable on the existing NET-1 δ); everything else lands here.
 
 ---
 
@@ -660,49 +1118,206 @@ Existing pre-4C off-network registries (`register-domain!`, `register-typing-rul
 
 ---
 
-## PPN 4C tropical addendum: hybrid pivot scaffolding retirement (per-decrement fuel-cost cell migration under SH Series runtime)
+## PPN 4C tropical addendum: hybrid pivot scaffolding retirement — RETIRED-PER-D.4-CANONICAL (2026-05-14)
 
-**Origin**: PPN 4C Phase 9+10+11 Tropical Quantale Addendum D.3 (2026-04-26). The addendum's Phase 1C ships a HYBRID PIVOT architecture for the canonical BSP fuel substrate per [D.3 §10](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md). The hybrid:
-- PRESERVES the existing struct field `prop-net-cold-fuel` + macro `prop-network-fuel` + inline `(<= fuel 0)` check at decrement sites (per-decrement HOT PATH; ~30-40 ns per cycle)
-- ALLOCATES the canonical fuel-cost-cell + fuel-budget-cell at well-known IDs (cell-id 11/12)
-- INSTALLS threshold propagator (load-bearing for non-decrement-site paths only — per D.3 §10.A)
-- Cell value updated at SEMANTIC TRANSITIONS only (per D.3 §10.B Cell Staleness Contract), NOT per-decrement
+**Status (2026-05-14)**: RETIRED. The hybrid pivot SCAFFOLDING never shipped. Under the D.4 architectural reframing (Cell/Propagator/Scheduler Orthogonality principle codified `6a628bc7`), the §13.6 Pre-0 spike (commit `7b681b9e`) directly measured the specialized cell type framework's fast-path performance and falsified the hybrid pivot's empirical motivation (Pre-0 R-19 extrapolation). The cell IS the live state under D.4 canonical — no scaffolding to retire later.
 
-**Why scaffolding (empirically forced, not stylistic)**:
+**Spike results that falsified the hybrid motivation**:
+- W1+ specialized cell-write (with realistic dispatch overhead): **6.4 ns/call** (target ≤ 30 ns; ~4× under)
+- W3 GC at 5×100k decrements: **0.000 ms major-GC** (target ZERO; structurally guaranteed by direct fixnum mutation)
+- W3 alloc (10×100k decrements): **1.1 KB** (vs Pre-0 A7.3 struct-copy 6251 KB — **5700× memory improvement**)
+- W4 specialized cell-read: **0.8 ns/call** (target ≤ 15 ns)
+- W1+ + W4 per-decrement cycle: **7.3 ns** (target ≤ 45 ns)
 
-The hybrid pivot INVERTS the Cell-as-Single-Source-of-Truth principle ([DESIGN_PRINCIPLES.org § Propagator-First Infrastructure](principles/DESIGN_PRINCIPLES.org)) at the per-decrement timescale. The inversion is empirically forced by [Pre-0 Finding 19](2026-04-26_TROPICAL_ADDENDUM_PRE0_PLAN.md):
-- R3 measured ZERO major GC during 100k decrements under struct-copy decrement workload
-- Full cell-based path (per-decrement cell-write) would generate tagged-cell-value entries at 100k+ ops/sec → MAJOR GC pressure under the current Racket runtime
-- The hybrid pivot is the ONLY architecture preserving R3's GC-friendly property
+**What this entry would have tracked** (preserved for historical record): under D.3 hybrid pivot, the per-decrement fuel-cost cell migration was scaffolded as off-network struct field (PRIMARY) + cell (DERIVED via lazy sync). The retirement was deferred to SH Series runtime infrastructure. The discipline added a four-surface tracking matrix (this DEFERRED.md entry + GitHub Issue #55 + D.3 §10.1.A retirement plan + Q-1B-6 falsification gate) to ensure the scaffolding wasn't forgotten.
 
-**Specific blocker**: Racket runtime GC behavior at per-decrement cell-write rate.
-
-**Retirement trigger**: SH Series (self-hosted Prologos) runtime infrastructure that makes per-decrement cell-write GC-friendly via (a) cheaper GC characteristics for tagged-cell-value entries, (b) lighter cell representation, OR (c) object pooling for tagged-cell-value entries.
-
-**Retirement scope** (when triggered):
-1. Migrate per-decrement decrement sites (4 sites in `racket/prologos/propagator.rkt` per Q-Audit-1) from struct-copy to cell-write
-2. Migrate inline check sites (11 sites) from inline `(<= fuel 0)` to threshold-propagator-emergent contradiction detection
-3. Retire `prop-network-fuel` macro (`propagator.rkt:399`) + `prop-net-cold-fuel` struct field (`propagator.rkt:337`)
-4. Cell becomes PRIMARY for fuel-cost tracking (matches D.1 original full-migration design intent)
-5. Update D.3 §14.4 Q5 + dependent Qs to revert dual-classification → single (cell PRIMARY)
-6. Retire D.3 §10.A "threshold propagator's role under hybrid" — propagator becomes load-bearing per-decrement
-7. Retire D.3 §10.B "Cell Staleness Contract" — `net-fuel-cost-read` becomes the only API (no staleness)
-
-**Verification at retirement**:
-- Re-microbench M7 + M8 + M13 + R3 to verify per-decrement cell-write under SH Series stays at acceptable cost (target: ~30-40 ns total cycle, matching current hybrid; ZERO major GC at 100k decrements)
-- Full suite GREEN within variance band
-- V-tier parity tests: counter-vs-cell exhaustion equivalence at semantic-phase boundaries
-
-**Estimated retirement scope**: ~250-400 LoC migration (per D.1 §10.4 original sub-phase plan, which retired under D.2 hybrid pivot — recoverable as the future migration scope).
+**Why this is RETIRED rather than DELETED**: the entry serves as a record of the alternative design considered + the discipline applied. The discipline itself (four-surface tracking; falsification gate before locking in a principle-violating commit) is valid prophylactically for future tracks; this entry serves as a worked example. The "Hot-Load Is a Protocol, Not a Prioritization" pattern from DEVELOPMENT_LESSONS.org applies: don't delete the historical record of design alternatives considered.
 
 **Cross-references**:
-- [GitHub Issue #55](https://github.com/LogosLang/prologos/issues/55) — operational tracking surface (queryable, linkable from PRs, dashboard-visible)
-- [D.3 §10.1 acknowledgment](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) (principle inversion + scaffolding-with-retirement-plan)
-- [D.3 §10.A Threshold propagator role under hybrid](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md)
-- [D.3 §10.B Cell Staleness Contract](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md)
-- [D.3 §14.4 Q5 dual classification](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md)
-- [D.2.SC self-critique finding P1](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_SELF_CRITIQUE.md)
-- [Pre-0 plan §12.6 Finding 19](2026-04-26_TROPICAL_ADDENDUM_PRE0_PLAN.md) — R3 zero-major-GC empirical baseline
-- [MASTER_ROADMAP.org § OE Series + § SH Series](MASTER_ROADMAP.org)
+- [GitHub Issue #55](https://github.com/LogosLang/prologos/issues/55) — closed as "superseded by D.4 principled on-network design"
+- [D.4 design doc](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) §10 — D.4 canonical direct migration (replaces D.3 hybrid)
+- [D.4 design doc](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) §13.6 — Pre-0 spike plan + result
+- [§4.6 Specialized cell type framework](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) — the canonical D.4 architecture
+- Spike implementation: `racket/prologos/benchmarks/micro/bench-specialized-cell-spike.rkt` (throwaway; commit `7b681b9e`)
+- Spike result data: `racket/prologos/data/benchmarks/tropical-spike-d4-2026-05-14.txt`
+- D.3 historical sections marked RETIRED-PER-D.4-CANONICAL: §10.1.A (Honest framing + retirement plan), §10.A (Threshold propagator role under hybrid), §10.B (Cell Staleness Contract), §14.4 Q5 (dual classification)
+- [DESIGN_PRINCIPLES.org § Cell / Propagator / Scheduler Orthogonality](principles/DESIGN_PRINCIPLES.org)
+- [DEVELOPMENT_LESSONS.org § Cell/Propagator/Scheduler Orthogonality](principles/DEVELOPMENT_LESSONS.org)
 
-**Dual-surface tracking rationale**: GitHub Issue #55 provides operational visibility (queryable, linkable from PRs, surfaces in repo dashboards); this DEFERRED.md entry is the in-repo single-source-of-truth for design-time tracking. When SH Series runtime work begins, both surfaces flag this scaffolding for retirement.
+---
+
+## PPN 4C addendum 3C.c-VAG named drift (KR-1/2/3) + 3C.d.3a empirical probe artifact
+
+**Status (2026-05-24)**: NAMED DRIFT — escalated to Phase 11b per addendum §9.5.5.4 Q-D.1 (c) ESCALATE-with-substrate decision. Tracking debt paid up-front via:
+1. This DEFERRED.md entry
+2. Skip-gated parity test `'union-diagnosis-restoration "Phase 11b"` at [`tests/test-elaboration-parity.rkt`](../../racket/prologos/tests/test-elaboration-parity.rkt) (3C.d.4 deliverable 4)
+3. Parent D.3 Phase 11b row "Scope addition (2026-05-24) — KR-1/2/3 absorption" (3C.d.4 deliverable 7)
+4. Test rename at [`tests/test-provenance-errors.rkt`](../../racket/prologos/tests/test-provenance-errors.rkt):359 reflecting partial deferral (3C.d.4 deliverable 5)
+
+**Source**: PPN 4C addendum [§9.5.4.14 KR-1/2/3 named drift](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) (captured at 3C.c-VAG close 2026-05-24, commit `25f4343c`) + [§9.5.5 Phase 3C.d mini-design](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) Q-D.1 lock + [§9.5.5.13 empirical findings](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) (commit `ebf56b80`).
+
+### KR-1: Diagnosis-line UX regression (union error rendering)
+
+**Pre-3C.c behavior**: `(def x <Nat | Bool> "hello")` produced rendered error output including `[diagnosis] retract: x : <Nat | Bool>` line via `build-derivation-chain`'s `format-context-diagnosis` (typing-errors.rkt:173-280).
+
+**Post-3C.c behavior**: under the new `(listof derivation-chain)` shape (Q-B.2 + Q-C.6 flip), per-step `because: <name>` lines render via `derivation-step-assumption-names`. The `[diagnosis] retract:` line is GONE. ATMS state queries (`solver-state-explain-hypothesis`, `solver-state-minimal-diagnoses`) at render time DEFERRED per §9.5.4.4 Q-C.4 lock.
+
+**Restoration decision (3C.d.0 Q-D.1)**: 3 options weighed via 3-column adversarial framing:
+- (a) RESTORE at 3C.d via ATMS state queries — REJECTED (inverts 3C.c design intent; render-time staleness hazard; KR-3 grows)
+- (b) ESCALATE to Phase 11b with timeline commitment — REJECTED (unbounded deferral; "pragmatic" rationalization)
+- (c) ESCALATE-with-substrate — LOCKED
+
+**Phase 11b inheritance**: Phase 11b mini-design RE-WEIGHS (a)/(b)/(c) variants with trace-monoidal-category-theory framing (Joyal-Street-Verity 1996; Hasegawa 1997; Abramsky-Haghverdi-Scott 2002) as research input. The skip-gated canary's `[diagnosis] retract:` substring assertion captures the PRE-3C.c shape; Phase 11b's chosen restoration shape may differ — canary updated alongside restoration.
+
+**Restoration path infrastructure (per §9.5.5.1 T2 audit)**: `solver-state-explain-hypothesis`, `solver-state-assumptions`, `solver-state-minimal-diagnoses`, `nogood-explanation` struct, `assumption` struct, `greedy-hitting-set` algorithm all present + battle-tested. `build-derivation-chain` + `format-context-diagnosis` + `format-atms-conflict` (typing-errors.rkt:173-280) STILL IN PRODUCTION for the NON-union path (type-mismatch-error). Restoration would be MECHANICAL GLUE (~50-100 LoC) re-calling existing helpers in union path — NOT new infrastructure.
+
+### KR-2: Derivation-step field sparsity for sexp-fed steps
+
+**Description**: Under `(listof derivation-chain)` shape, derivation-step has 5 fields: `propagator-id` + `srcloc` + `assumption-ids` + `assumption-names` + `residual-cost`. The sexp translator (`derivation-chain-for/union-check` at [`error-explanation.rkt`](../../racket/prologos/error-explanation.rkt):391+) hardcodes `propagator-id=#f` + `srcloc=#f` for sexp-fed steps (no propagator; speculation-failure doesn't track srcloc). 2/5 fields are `#f` for sexp-fed steps.
+
+**Enrichment path**: when sexp typing unifies on-network (PPN Track 4D "Attribute Grammar Substrate Unification" + Phase 11b), sexp-fed steps gain propagator-id + srcloc STRUCTURALLY. The fields are forward-compatible (LSP-ready; per §9.5.2.2 Q-A.8 invariant); no breaking change required at restoration.
+
+**Phase 11b inheritance**: enrichment naturally lands when Phase 11b implements general `derivation-chain-for(position, tag)` primitive (per parent D.3 Phase 11b row scope).
+
+### KR-3: Two-shape error infrastructure (union new shape + non-union old shape coexist)
+
+**Description**: post-3C.c, two error-rendering shapes coexist:
+- **Union path** (3C.c shipped): `union-exhaustion-error` with `derivation-chain: (listof derivation-chain)` field (`errors.rkt`:135); per-step `because: <name>` rendering.
+- **Non-union path** (pre-3C.c unchanged): `type-mismatch-error` with `provenance: (listof string)` field (`errors.rkt`:65); `because: <line>` rendering plus `[diagnosis] retract:` lines via `build-derivation-chain` + `format-context-diagnosis`.
+
+**Unification target**: Phase 11b's general `derivation-chain-for(position, tag)` primitive unifies both shapes via single API. Trace-monoidal-category-theory framing (Joyal-Street-Verity 1996) provides theoretical grounding for the general chain construction.
+
+**Phase 11b inheritance**: design + implement unified API; retire dual shapes atomically.
+
+### 3C.d.3a empirical probe artifact
+
+**Artifact**: `racket/prologos/data/probes/2026-05-24-3C-d-3-w1-empirical-probe.rkt` (Racket source, runs via `racket file.rkt`) + `racket/prologos/data/probes/2026-05-24-3C-d-3-w1-empirical-output.txt` (captured stdout).
+
+**Purpose**: Three regimes × five scenarios capturing empirical W1 srcloc state at 3C.d.3 close. Critical finding (Scenario B): W1 dispatch chain threads parameterized `current-source-loc` through `process-fork-on-union` → propagator-struct → `static-reverse-walk` → derivation-step end-to-end. Empirical evidence FLIPPED pre-empirical (β.3.ii) leaning to (β.3.i) post-empirical (see addendum §9.5.5.13.2).
+
+**Phase 11b use**: re-runnable empirical baseline. When Phase 11b mini-design opens, the probe can be re-run to:
+- Verify current dispatch-chain srcloc state (regression sanity-check)
+- Compare pre-Phase-11b vs post-Phase-11b srcloc threading
+- Audit production sexp-path srcloc readiness (currently #f BY DESIGN per D-3C.c-1; Phase 11b restoration changes this)
+
+**Probe design**: uses `(module+ main)` pattern so the check-stdout-clean pre-commit hook's dynamic-require doesn't see intentional stdout output. New convention for `.rkt` artifacts in `data/probes/`.
+
+### Cross-references
+
+- Source design: PPN 4C addendum [§9.5.4.14 (KR-1/2/3 named drift)](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§9.5.5 (3C.d mini-design)](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§9.5.5.13 (3C.d.3 empirical findings)](2026-04-21_PPN_4C_PHASE_9_DESIGN.md)
+- 3-column adversarial Q-D.1 lock: [§9.5.5.4](2026-04-21_PPN_4C_PHASE_9_DESIGN.md)
+- Parent D.3 Phase 11b row: [PPN Track 4C D.3](2026-04-17_PPN_TRACK4C_DESIGN.md) Progress Tracker Phase 11b (2026-05-24 scope addition)
+- Skip-gated canary: [`tests/test-elaboration-parity.rkt`](../../racket/prologos/tests/test-elaboration-parity.rkt) `'union-diagnosis-restoration "Phase 11b"`
+- Test rename: [`tests/test-provenance-errors.rkt`](../../racket/prologos/tests/test-provenance-errors.rkt) "renders per-step assumption-names (diagnosis lines deferred to Phase 11b — see KR-1)"
+- Restoration substrate (still live for non-union path): [`typing-errors.rkt:173-280`](../../racket/prologos/typing-errors.rkt) (`build-derivation-chain` + `format-context-diagnosis` + `format-atms-conflict`)
+- Phase 11b research input: trace monoidal category theory (Joyal-Street-Verity 1996, Hasegawa 1997, Abramsky-Haghverdi-Scott 2002 — see parent D.3 Phase 11b row)
+
+## FREE_ORDERING migration to propagator-native module loading — captured at PPN 4C Phase 4 mini-design (2026-05-25)
+
+The `macros.rkt:2366-2460` `preparse-expand-all` 3-pass mechanism + `tools/form-deps.rkt` SCC analysis delivers **name-level residuation at preparse time** (3-pass pre-registration of declaration names: ns/imports → no-dep declarations → spec+impl → main loop). Per Audit C (PPN 4C addendum §18.10.4): this is imperative scaffolding that delivers name-level residuation; Phase 4 introduces value-level residuation at elaboration time; the two layers compose.
+
+**User direction (2026-05-25)**: *"having an imperative multi-pass parsing would be a regression for the lattice-fixpoint compiler that we hold as our North Star vision. This work should likely also migrate and be updated to our propagator-native approaches. Sounds like work to be done on module-loading on network, though; not in current scope."*
+
+**Scope clarification**: FREE_ORDERING migration is **scaffolding with retirement plan** — to be migrated to propagator-native cell-based name registration in module-loading-on-network follow-up work. NOT in Phase 4 scope. Phase 4 preserves the preparse layer; module-loading-on-network work retires it.
+
+### Migration target
+
+Replace 3-pass imperative preparse with propagator-native cell-based name registration:
+- Declaration names (data/trait/deftype/defmacro/bundle/property/functor + spec + impl) write to registry cells at preparse-equivalent time
+- Body elaboration residuates on registry cells for name resolution
+- Module-level cycle detection becomes lattice-fixpoint diagnostic per §18.11 cyclic definitions handling principle
+
+### Cross-references
+
+- Source audit: PPN 4C addendum [§18.10.4 (FREE_ORDERING at preparse layer)](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§18.5 (PM 12 boundary)](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) + [§18.11 (cyclic definitions principle)](2026-04-21_PPN_4C_PHASE_9_DESIGN.md)
+- Original FREE_ORDERING design: [`2026-02-28_1800_FREE_ORDERING.md`](2026-02-28_1800_FREE_ORDERING.md)
+- Literate book context: [`2026-02-28_1400_LITERATE_BOOK_SYSTEM.md`](2026-02-28_1400_LITERATE_BOOK_SYSTEM.md) Phase 5a/5b/5c
+- Implementation: `macros.rkt:2366-2460` (`preparse-expand-all`), `tools/form-deps.rkt` (SCC analysis)
+- Module-level cycle detection (related, same retirement target): `driver.rkt:1872-1874` (`loading-set` "Circular dependency detected")
+- Future track (where this retires): module-loading-on-network follow-up — PM Track 12 + post-Phase-4 + possibly PPN Track 4D coordination
+
+## Rel T1 A.2b DFS-routing scaffolding → BSP-LE Track 3 (captured 2026-07-19, commit `bcd02d6d`)
+
+The A.2b minimal slice added **Check 3** in the adaptive dispatcher
+(`stratified-eval.rkt` `use-propagator?` → `reachable-has-body-local-rule?`): a
+would-be-on-network NAF/guard query whose reachable relation graph has a **rule
+clause with a body-local (non-param) variable** routes to **DFS** (the correct
+reference solver), because the on-network ATMS rule engine cannot thread body-local
+clause vars (clause-env is param-only; `resolve-term` returns a bare symbol) →
+join/recursion generators are INCOMPLETE on-network (`twohop`→`{}`, `reaches`→base
+case only; probe-verified).
+
+**This is scaffolding with a named retirement plan.** It is honest engine-selection
+(not off-network scaffolding bolted on), but it exists only because the on-network
+rule engine is half-built.
+
+**Retirement owner: BSP-LE Track 3** (Tabling / SLG memoization, ⬜ unbuilt). When
+Track 3 lands (a) on-network **body-local-var threading** (reuse `collect-clause-vars`,
+today DFS/explain-only) + (b) **SLG completion detection** (for recursive termination)
++ (c) **worldview-preserving table answers** (PUnify Part 3 §9.6 support-set:
+unconditional=∅ memoize across worlds, conditional worldview-filtered —
+`2026-03-19_PUNIFY_PART3_ATMS_SOLVER_ARCHITECTURE.md:612-620`, designed-but-never-built),
+**delete the Check-3 predicate** and these shapes flow back on-network.
+
+### Cross-references
+
+- Landed slice: commit `bcd02d6d`; design `2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md` §5 A.2b (reframed).
+- Grounding + options synthesis (carry into Track 3's Stage-3): workflows `wf_c2f8bfa3-db2` (grounding-audit) + `wf_9c6eb408-522` (options-panel) — dailies `2026-07-19_dailies.md` LOG.
+- Prior art for the worldview layer: PUnify Part 3 §9.6 (support-set-tagged table reads).
+- The four co-change sites for the eventual on-network table format: table cell born plain (`atms.rkt:459`), tag-blind `table-answer-merge` (`atms.rkt:100-101`), `net-cell-write` tag-gate (`propagator.rkt:1993`), producer `logic-var-read`+flat-write (`relations.rkt:2743/2751`).
+
+## Rel T1 A.4 guard DFS-routing scaffolding → BSP-LE Track 3 (captured 2026-07-20, commit `6b56397d`)
+
+The A.4 minimal slice added **Check 4** in the adaptive dispatcher (`stratified-eval.rkt`
+`use-propagator?` → `reachable-has-guard?`): a would-be-on-network query whose reachable
+relation graph contains a `guard` goal routes to **DFS** (the correct reference solver for
+guards, ground + free-var, single + multi-fact).
+
+**Why**: on-network guards have three real bugs — (a) `resolve-condition-from-net` didn't
+recurse into struct condition exprs (`expr-generic-gt`) so the condition var stayed
+unresolved and the guard default-passed; (b) the single shared guard bit `G` can't filter
+a multi-fact generator per-row (`install-conjunction` tags every row `(G|Bi)`); (c) an S0
+belief-narrow is re-projected away (`worldview-cache` is derived from decisions-state via
+`install-worldview-projection`, `propagator.rkt:969`). AND guards live only in tabled rule
+clauses, so their generator inherits the A.2b tabling seam above.
+
+**This is scaffolding with a named retirement plan.** Honest engine-selection (guards go to
+the solver that handles them), not off-network scaffolding.
+
+**Retirement owner: BSP-LE Track 3.** The full on-network guard mechanism was **prototyped
++ verified** during A.4 (struct-resolution fix + per-binding guard belief-clear [the S0
+analogue of `naf-per-binding-mask`, a pure `eval-fn(subst)`, no fork] + a **between-round
+handler** [guard-pending cell + `process-guard-request` mirroring `process-naf-request`,
+required by bug (c)]) and reverted for the simpler DFS-route. It deploys once Track 3 lands
+worldview-preserving tabling (so guard generators materialize per-branch tags). Then
+**delete the Check-4 predicate**.
+
+### Cross-references
+
+- Landed slice: commit `6b56397d`; design [`2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md`](2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md) §5 A.4.
+- **Track 3 seed (both issues + prototyped designs)**: [`2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md`](2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md).
+
+## Rel T1 Aspect C, C.d — `?x:Int` runtime domain-constraint (types-as-predicates) → UCS Track 6 (captured 2026-07-21)
+
+Aspect C closed at **C.a + C.b + C.c** (owner, 2026-07-21). The remaining piece — **C.d**,
+statically activating a declared `?x:Int` param type as a typing source for un-schema'd rule
+relations — is **DEFERRED to a UCS track**, NOT a Rel T1 deliverable.
+
+**Why**: a **schema** is a checked contract on **fact relations** (static, altitude-1 — that
+IS what Rel T1 delivered: C.c's schema⟹facts-only gate + the existing fact-row checking). But
+`?x:Int` on a **rule** logic-var is a **guard / unary domain-constraint `Int(x)`** (altitude-2,
+runtime) — its "static upper bound" is really the guard's static projection, sound only once
+the guard prunes at runtime. That is constraint-solving-over-value-domains = larger UCS work.
+
+**Nothing is lost by deferring**: C.b already STORES the type-preds on `param-info`
+(`param-info-type`, 0 consumers, store-only) and shipped the fused `?x:Int` reader in both
+readers/languages. The UCS track inherits the substrate + bridges it to the existing
+(dead-in-WS) `?var:C1:C2` narrowing → `type-guard` runtime mechanism.
+
+### Cross-references
+- **Retirement owner: UCS Track 6** ([`2026-03-28_UCS_MASTER.md`](2026-03-28_UCS_MASTER.md) Progress Tracker).
+- **Handoff note (the full settled design + verified coordinates + known gaps)**: [`2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md`](2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md).
+- Rel T1 design: [`2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md`](2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md) §7.5 (RESOLVED) / §7.6 (C.d) / §7.7 (deferred + non-monotone S(-1) cap).
+- Grounding-audit: `wf_ab037f07-570` (guard machinery + fix options).
+- BSP-LE Master Track 3 retirement obligation: [`2026-03-21_BSP_LE_MASTER.md`](2026-03-21_BSP_LE_MASTER.md).
+- **Process note**: the A.4 investigation was lengthened by a WS-syntax probe error (one-line fact rows `|| 5 3` parse as one wrong-arity row → spurious empty results, masqueraded as a tabling failure). Probes need multi-line fact rows.

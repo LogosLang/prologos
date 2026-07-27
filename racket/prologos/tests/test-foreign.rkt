@@ -31,9 +31,17 @@
 ;; Helpers
 ;; ========================================
 
-(define (run-ns s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
+;; Shared per-call environment for foreign tests. Extracted so run-ns and the
+;; foreign-write-(b) mnr assertion share ONE parameterize block.
+(define (call-in-ns-env thunk)
+  (parameterize (;; PPN 4C Addendum Phase 4A.c-ii-b: isolate the per-file mnr PER
+                 ;; call (matching the current-prelude-env reset). The batch-worker
+                 ;; binds ONE current-file-module-network-ref for the whole file;
+                 ;; without this reset, foreign defs written to the mnr by
+                 ;; foreign-write-(b) would leak across test cases (an earlier bare
+                 ;; `add1` decl would shadow a later alias's "original hidden"
+                 ;; assertion). Mirrors the test-support.rkt fresh-per-run pattern.
+                 [current-file-module-network-ref (make-module-network)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -45,10 +53,32 @@
                  [current-multi-defn-registry (current-multi-defn-registry)]
                  [current-spec-store (hasheq)])
     (install-module-loader!)
-    (process-string s)))
+    (thunk)))
+
+(define (run-ns s)
+  (call-in-ns-env (lambda () (process-string s))))
 
 (define (run-ns-last s)
   (last (run-ns s)))
+
+(test-case "foreign/write-b-mnr-cascade-reachable"
+  ;; A foreign def must be reachable via the per-file mnr cascade — the resolution
+  ;; path (module-network-cascading-lookup walks Layer-1). Both bare and FQN keys
+  ;; must be present (the cascade is exact-symbol, no FQN->bare alias) and resolve
+  ;; to the same entry. PPN 4C Addendum Phase 4A.c-iii-a: foreign defs now reach the
+  ;; mnr via the always-mnr global-env-add (the old foreign-write-(b)
+  ;; global-env-add-to-mnr! folded in); Layer-2 is no longer written, so the prior
+  ;; "value-equivalent to Layer-2" assertion is replaced by bare==FQN.
+  (call-in-ns-env
+   (lambda ()
+     (process-string "(ns test::fw-mnr)\n(foreign racket \"racket/base\" (add1 :as increment : Nat -> Nat))")
+     (define mnr (current-file-module-network-ref))
+     (define casc-bare (module-network-cascading-lookup mnr 'increment))
+     (define casc-fqn  (module-network-cascading-lookup mnr 'test::fw-mnr::increment))
+     (check-true (and casc-bare #t) "foreign alias reachable via mnr cascade (bare)")
+     (check-true (and casc-fqn #t)  "foreign alias reachable via mnr cascade (FQN)")
+     (check-equal? casc-bare casc-fqn
+                   "bare and FQN keys resolve to the same foreign entry"))))
 
 (define (check-contains actual substr [msg #f])
   (check-true (string-contains? actual substr)

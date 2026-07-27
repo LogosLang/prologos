@@ -28,9 +28,7 @@
 ;; Run with caps pre-loaded, return LAST result string
 ;; (warnings are appended to the result string by the driver)
 (define (run-with-caps s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-module-registry (hasheq)]
                  [current-capability-registry (hasheq)]

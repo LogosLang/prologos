@@ -26,9 +26,7 @@
 ;; Helper: run prologos code in a fresh environment
 (define (run s)
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      (process-string s))))
+    (process-string s)))
 
 ;; Helper: run prologos code and return the first result
 (define (run-first s)
@@ -41,9 +39,7 @@
 ;; Helper: run code with namespace system active (for module loading)
 (define (run-ns s)
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                   [current-ns-context #f]
+    (parameterize ([current-ns-context #f]
                    [current-module-registry prelude-module-registry]
                    [current-lib-paths (list prelude-lib-dir)]
                    [current-preparse-registry prelude-preparse-registry])

@@ -270,9 +270,7 @@
 
 ;; Helper to run with clean global env
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (process-string s)))
+  (process-string s))
 
 (test-case "rat surface: eval literal"
   (check-equal? (run "(eval (rat 3/7))")
@@ -343,12 +341,10 @@
                 '("OK")))
 
 (test-case "rat surface: def + eval"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(def x <Rat> (rat 3/7))\n(eval x)")])
-      (check-equal? (length result) 2)
-      (check-true (string-contains? (car result) "x : Rat defined"))
-      (check-equal? (cadr result) "3/7 : Rat"))))
+  (let ([result (process-string "(def x <Rat> (rat 3/7))\n(eval x)")])
+    (check-equal? (length result) 2)
+    (check-true (string-contains? (car result) "x : Rat defined"))
+    (check-equal? (cadr result) "3/7 : Rat")))
 
 (test-case "rat surface: nested arithmetic"
   (check-equal? (run "(eval (rat+ (rat* (rat 1/2) (rat 2/3)) (rat 1/6)))")

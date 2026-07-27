@@ -237,7 +237,7 @@
   (check-equal? (pp-expr (expr-Quire64) '()) "Quire64" "pp Quire64")
   (check-equal? (pp-expr (expr-quire32-val 0) '()) "[quire32-val 0]" "pp quire32-val(0)")
   (check-equal? (pp-expr (expr-quire32-fma (expr-quire32-val 0) (expr-posit32 1073741824) (expr-posit32 1073741824)) '())
-                "[q32-fma [quire32-val 0] [posit32 1073741824] [posit32 1073741824]]"
+                "[q32-fma [quire32-val 0] 1.0 1.0]"
                 "pp q32-fma")
   (check-equal? (pp-expr (expr-quire32-to (expr-quire32-val 1)) '())
                 "[q32-to [quire32-val 1]]"
@@ -248,9 +248,7 @@
 ;; ========================================
 
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (process-string s)))
+  (process-string s))
 
 (test-case "quire32 surface: type check"
   (check-equal? (run "(check Quire32 <(Type 0)>)")
@@ -266,7 +264,7 @@
 
 (test-case "quire32 surface: to converts back to posit"
   (check-equal? (run "(eval (q32-to (q32-fma q32-zero (posit32 1073741824) (posit32 1073741824))))")
-                '("[posit32 1073741824] : Posit32")))
+                '("1.0 : Posit32")))
 
 (test-case "quire32 surface: check quire-zero type"
   (check-equal? (run "(check q32-zero <Quire32>)")
@@ -282,15 +280,13 @@
 
 (test-case "quire32 surface: dot product 1*2 + 3*1 = 5"
   (check-equal? (run "(eval (q32-to (q32-fma (q32-fma q32-zero (posit32 1073741824) (posit32 1207959552)) (posit32 1275068416) (posit32 1073741824))))")
-                '("[posit32 1375731712] : Posit32")))
+                '("5.0 : Posit32")))
 
 (test-case "quire32 surface: def + eval"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(def q <Quire32> (q32-fma q32-zero (posit32 1073741824) (posit32 1073741824)))\n(eval (q32-to q))")])
-      (check-equal? (length result) 2)
-      (check-true (string-contains? (car result) "q : Quire32 defined"))
-      (check-equal? (cadr result) "[posit32 1073741824] : Posit32"))))
+  (let ([result (process-string "(def q <Quire32> (q32-fma q32-zero (posit32 1073741824) (posit32 1073741824)))\n(eval (q32-to q))")])
+    (check-equal? (length result) 2)
+    (check-true (string-contains? (car result) "q : Quire32 defined"))
+    (check-equal? (cadr result) "1.0 : Posit32")))
 
 ;; Test other widths at surface level
 
@@ -300,7 +296,7 @@
   (check-equal? (run "(eval q8-zero)")
                 '("[quire8-val 0] : Quire8"))
   (check-equal? (run "(eval (q8-to (q8-fma q8-zero (posit8 64) (posit8 64))))")
-                '("[posit8 64] : Posit8")))
+                '("1p8 : Posit8")))
 
 (test-case "quire16 surface: type + zero + fma + to"
   (check-equal? (run "(check Quire16 <(Type 0)>)")
@@ -308,7 +304,7 @@
   (check-equal? (run "(eval q16-zero)")
                 '("[quire16-val 0] : Quire16"))
   (check-equal? (run "(eval (q16-to (q16-fma q16-zero (posit16 16384) (posit16 16384))))")
-                '("[posit16 16384] : Posit16")))
+                '("1p16 : Posit16")))
 
 (test-case "quire64 surface: type + zero + fma + to"
   (check-equal? (run "(check Quire64 <(Type 0)>)")
@@ -316,4 +312,4 @@
   (check-equal? (run "(eval q64-zero)")
                 '("[quire64-val 0] : Quire64"))
   (check-equal? (run "(eval (q64-to (q64-fma q64-zero (posit64 4611686018427387904) (posit64 4611686018427387904))))")
-                '("[posit64 4611686018427387904] : Posit64")))
+                '("1p : Posit64")))

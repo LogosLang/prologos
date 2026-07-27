@@ -1,0 +1,442 @@
+ns f1-records-acceptance :no-prelude
+
+;; ============================================================================
+;; CIU Track 6 F1 — Structural Record Typing: ACCEPTANCE FILE (Phase 0)
+;; Design: docs/tracking/2026-07-06_CIU_T6_F1_STRUCTURAL_RECORDS_DESIGN.md §4.7
+;;
+;; Expectations use `;;N=>` (exact) / `;;N=>~` (contains) markers checked by
+;;   racket tools/run-file.rkt --check examples/2026-07-06-ciu-t6-f1-records.prologos
+;; N = the result index printed by run-file.rkt. Current expectations = PRE-F1a
+;; baseline behavior; each F1a slice flips the marked lines (F1a targets are on
+;; the adjacent `;;   F1a:` comment lines).
+;; ============================================================================
+
+;; --- fixtures -------------------------------------------------------------
+
+schema Point
+  :x Posit32
+  :y Posit32
+
+;;0=>~ Point : [Type 0] defined.
+
+def q := {:a 1}
+;;1=>~ q : {:a Int}
+
+q.a
+;;2=> 1 : Int
+
+;; --- V5: arithmetic on a projected field (errors pre-F1a) ------------------
+
++ q.a 1
+;;3=> 2 : Int
+
+;; --- nested records ---------------------------------------------------------
+
+def m := {:a {:a1 1} :b {:b1 11}}
+;;4=>~ m : {:a {:a1 Int} :b {:b1 Int}}
+
+m.a.a1
+;;5=> 1 : Int
+
+;; --- heterogeneous literal: per-field beats uniform-join --------------------
+
+def het := {:n 1 :s "x"}
+;;6=>~ het : {:n Int :s String}
+
+het.n
+;;7=> 1 : Int
+
+het.s
+;;8=> "x" : String
+
+;; het.z   ← F1a: closed-row miss = type error naming available fields; add at s2
+
+;; --- annotated + schema paths (MUST STAY GREEN — already concrete today) ----
+
+def am : (Map Keyword Int) := {:a 1}
+;;9=>~ Map Keyword Int
+
+am.a
+;;10=> 1 : Int
+
+def p : Point := {:x 1.0 :y 2.0}
+;;11=>~ Point
+
+p.x
+;;12=> 1.0 : Posit32
+
+;; --- annotation-satisfaction canaries (the Record<:Map subsumption arm) -----
+
+spec idm (Map Keyword Int) -> (Map Keyword Int)
+defn idm [mm] mm
+;;13=>~ idm
+
+idm {:a 1}
+;;14=> {:a 1} : [Map Keyword Int]
+
+def r := {:a 1 :b 2}
+;;15=>~ r : {:a Int :b Int}
+
+idm r
+;;16=> {:a 1, :b 2} : [Map Keyword Int]
+;;   ← THE regression canary: inferred-map-vs-Map-annotation must stay green
+;;     when r infers {:a Int :b Int} (via V := ⋃fields union-join)
+
+;; --- map-op surfaces at :no-prelude (WS wiring probe + F1a-s3 targets) ------
+
+map-assoc q :b "hi"
+;;17=> {:a 1, :b "hi"} : {:a Int :b String}
+
+map-dissoc q :a
+;;18=> {} : {}
+
+map-keys het
+;;19=> '[:n :s] : [List Keyword]
+
+map-vals het
+;;20=> '[1 "x"] : [List Int | String]
+
+map-size het
+;;21=>~ Nat
+
+map-has-key? het :n
+;;22=>~ Bool
+
+nil-safe-get q :a
+;;23=> 1 : Int | Nil
+
+get-in m #p(a.a1)
+;;24=> 1 : Int
+
+;; --- empty literal stays legacy in F1a (deliberate, design §4.2) ------------
+
+def e : (Map Keyword Int) := {}
+;;25=>~ Map Keyword Int
+
+foreign racket "racket/base" :as time
+  [current-inexact-monotonic-milliseconds :as ms : Float64]
+
+[time/ms]
+
+.((3.14p + 3.13p) * 40)
+
+;; --- closed-row miss (F1a-s2): projecting an absent field is a type error ---
+;; (appended at file END so the ;;N=> indices above don't renumber)
+het.z
+;;28=>~ field :z is not present in the record {:n Int :s String}; available fields: :n :s
+
+
+;; --- F1a-s3: fold/filter/map-vals + union arms + B4 dynamic keys -------------
+;; (appended at file END; indices continue from the forms above)
+
+map-map-vals [fn [x : Int] [int* x 2]] q
+;;29=> {:a 2} : {:a Int}
+;;   ← label-preserving: map-vals touches values only, labels are static
+
+map-filter-entries [fn [k : Keyword] [fn [v : Int] true]] q
+;;30=> {:a 1} : [Map Keyword Int]
+;;   ← dictionary-view degrade: the surviving field set isn't static (dyn tail at F1a.2)
+
+map-fold-entries [fn [b : Int] [fn [k : Keyword] [fn [v : Int] [int+ b v]]]] 0 q
+;;31=> 1 : Int
+
+map-get [nil-safe-get m :a] :a1
+;;32=> 1 : Int
+;;   ← union arm: Record component projects; Nil component filtered (Q5)
+
+nil-safe-get [nil-safe-get m :a] :a1
+;;33=> 1 : Int | Nil
+
+map-map-vals [fn [x : <Int | String>] 7] het
+;;34=> {:n 7, :s 7} : {:n Int :s Int}
+;;   ← f consumes ⋃fields (Int|String); labels preserved, uniform result type
+
+map-vals [map-dissoc q :a]
+;;35=>~ nil : [List ?
+;;   ← F1a.2 p1b flip: dissoc-to-{} is the EMPTY closed row; its value bound is
+;;     a fresh meta now (Q6), not Open (deleted). Meta id varies → contains-pin.
+;;   ← Q6 empty corner: ⋃∅ stays Open-ish in F1a (dyn tail replaces at F1a.2)
+
+;; --- B4: dynamic keys — Keyword-typed degrades, non-Keyword rejects ----------
+
+def kk := :a
+;;36=>~ kk : Keyword
+
+map-assoc q kk 5
+;;37=> {:a 5} : {:a Int | _}
+;;   ← F1a.2 p1b flip (D16): dynamic-key extension keeps the KNOWN fields and
+;;     flips the tail to 'dyn — strictly more informative than (Map Keyword Open).
+;;   ← dynamic Keyword key: degrade to dictionary view (Open survives F1a per D7)
+
+map-assoc q "strkey" 5
+;;38=>~ ERROR
+;;   ← B4: non-Keyword dynamic key stays a type error (today's rejection preserved)
+
+;; --- F1a-col-1 (D15): tuples — heterogeneous @[…] mints 'nat rows ------------
+
+@[1 2 3]
+;;39=> @[1 2 3] : [PVec Int]
+;;   ← homogeneous literals UNCHANGED (the D15 collapse; behavior-preservation pin)
+
+@[1 "a" true]
+;;40=> @[1 "a" true] : ⟨Int String Bool⟩
+;;   ← tuple-by-default (Q_D): heterogeneous fixed literal mints a closed 'nat row
+
+def t2 := @[1 "a"]
+;;41=>~ t2 : ⟨Int String⟩
+
+t2[0]
+;;42=> 1 : Int
+;;   ← positional projection; bare Int index accepted (Q_col-C)
+
+t2[1]
+;;43=> "a" : String
+
+def tr := @[{:a 1} {:b 2}]
+;;44=>~ tr : ⟨{:a Int} {:b Int}⟩
+;;   ← the owner-scratch shape: tuple of different-shape records
+
+tr[1].b
+;;45=> 2 : Int
+;;   ← chained positional-then-keyword projection (v[1].b; v[1.b] awaits the
+;;     Path Selection design conversation)
+
+spec idp (PVec <Int | String>) -> (PVec <Int | String>)
+defn idp [pp] pp
+;;46=>~ idp
+
+idp t2
+;;47=> @[1 "a"] : [PVec Int | String]
+;;   ← the Tuple→PVec α: an inferred tuple flows where a uniform PVec is expected
+
+def vv : (PVec <Int | String>) := @[1 "a"]
+;;48=>~ PVec Int | String
+;;   ← C2 pin: annotated heterogeneous literal (each element vs the union)
+
+t2[5]
+;;49=>~ ERROR
+;;   ← out-of-bounds positional projection on a closed tuple = type error
+
+;; ============================================================
+;; F1a-col-3 — tuple-op dispositions across the pvec ops
+;; (EXACT where the position structure is static — closed tuples
+;;  have static length; the ⋃-positions uniform view where not)
+;; ============================================================
+
+def tp := @[1 "a" true]
+;;50=>~ tp : ⟨Int String Bool⟩
+
+[pvec-nth tp 1N]
+;;51=> "a" : String
+;;   ← EXACT positional projection through pvec-nth (Nat literal index)
+
+[pvec-push tp 2]
+;;52=> @[1 "a" true 2] : ⟨Int String Bool Int⟩
+;;   ← push grows the row (type-changing)
+
+[pvec-pop tp]
+;;53=> @[1 "a"] : ⟨Int String⟩
+;;   ← pop drops the LAST position (rrb-pop semantics)
+
+[pvec-concat tp tp]
+;;54=> @[1 "a" true 1 "a" true] : ⟨Int String Bool Int String Bool⟩
+;;   ← ground×ground renumbered append (M1-style; residuated Concat = F-row)
+
+[pvec-slice tp 1N 3N]
+;;55=> @["a" true] : ⟨String Bool⟩
+;;   ← literal bounds: clamped half-open sub-row, renumbered from 0
+
+[pvec-update tp 0N "x"]
+;;56=> @["x" "a" true] : ⟨String String Bool⟩
+;;   ← literal in-bounds update is a type-CHANGING per-position replace
+
+[pvec-to-list tp]
+;;57=> '[1 "a" true] : [List Bool | Int | String]
+;;   ← uniform view (List ⋃positions) — the escape-hatch view, deliberately
+;;     NOT row-identity (a row-typed cons list would grow the pinned
+;;     S10-at-list-level value-stall surface)
+
+[pvec-map [fn [x : <Int | String | Bool>] 1] tp]
+;;58=> @[1 1 1] : ⟨Int Int Int⟩
+;;   ← map is position-preserving (constant-W row; f consumes ⋃positions)
+
+[pvec-filter [fn [x : <Int | String | Bool>] true] tp]
+;;59=> @[1 "a" true] : [PVec Bool | Int | String]
+;;   ← filter degrades: the surviving position set isn't static
+
+[pvec-from-list [pvec-to-list tp]]
+;;60=> @[1 "a" true] : [PVec Bool | Int | String]
+;;   ← the round-trip is type-lossy exactly at the to-list step (by design);
+;;     from-list on a DIRECT row-typed list is row-identity (prelude test)
+
+def MyVec := (PVec Int)
+;;61=>~ MyVec
+
+def av : MyVec := @[1 2 3]
+;;62=>~ av
+
+[pvec-nth av 1N]
+;;63=> 2 : Int
+;;   ← col-3 whnf discipline: ALIASED PVec subjects flow through the pvec ops
+;;     (pre-col-3 the 11 arms matched the raw inferred type and errored)
+
+[pvec-nth tp 9N]
+;;64=>~ ERROR
+;;   ← static out-of-bounds on a closed tuple = type error (closed-row miss)
+
+[pvec-nth tp 1]
+;;65=>~ ERROR
+;;   ← pvec-* keeps the Nat-only index discipline (the pvec-* runtime is
+;;     nat-value-only; Int literal indices are v[i]/expr-get territory)
+
+;; ============================================================
+;; F1a.2 p0 — pins of today's flows around the Open deletion
+;; (D16-D20 locked; see design doc §12. ;;66 is the D17 FLIP
+;;  TARGET: it works today via {}'s open key-domain meta and
+;;  becomes a type error at p1b when {} commits to keyword —
+;;  the annotated form ;;67 is the escape hatch and survives.)
+;; ============================================================
+
+def sm := [map-assoc {} "str" 1]
+;;66=>~ ERROR
+;;   ← D17 FLIPPED (p1b): bare {} is the keyword-committed empty dyn row now —
+;;     string keys need the annotation form (;;67 below, the signed escape hatch)
+
+def am : (Map String Int) := {}
+;;67=>~ am : [Map String Int]
+;;   ← the annotation form: the D17 escape hatch, must survive p1b
+
+def dk := :a
+;;68=>~ dk
+
+[map-get {:a 1 :b 2} dk]
+;;69=> 1 : Int
+;;   ← homogeneous dynamic-key get (⋃ collapses to Int) — must survive
+
+def hu := [map-get {:a 1 :b "s"} dk]
+;;70=>~ hu
+;;   ← heterogeneous dynamic-key get DEF — the F1a.2 p0 checkQ/check
+;;     whole-union fix (was a spurious Multiplicity violation)
+
+hu
+;;71=> 1 : Int | String
+
+def bu := [pvec-nth @[1 "a" true] [pvec-length @[1N]]]
+;;72=>~ bu
+
+bu
+;;73=> "a" : Bool | Int | String
+;;   ← bare-union-typed def via dynamic positional projection (same fix)
+
+;; ============================================================
+;; F1a.2 p1b — the dyn tail is LIVE (D16-D20; Open is no longer
+;; minted anywhere; the node itself is deleted at p2)
+;; ============================================================
+
+def dm := {}
+;;74=>~ dm : { | _}
+;;   ← D17: bare {} = the keyword-committed empty dyn row
+
+def dm2 := [map-assoc [map-assoc {} :a 1] :b "s"]
+;;75=> dm2 : {:a Int :b String | _} defined.
+;;   ← assoc chains onto {} grow EXACT rows (the D17 payoff — pre-flip these
+;;     were (Map Keyword Open) and every projection came back Open)
+
+dm2.a
+;;76=> 1 : Int
+
+[map-get dm2 :zz]
+;;77=>~ : ?
+;;   ← D19: unknown-field projection on a dyn row = fresh meta type (the value
+;;     is a runtime miss, exactly as on any dictionary); NOT a closed-row error
+
+def hm := {"a" 1 "b" "x"}
+;;78=> hm : [Map String Int | String] defined.
+;;   ← D18: heterogeneous mixed-key literal — value slot = ⋃observed (the
+;;     expr-map-literal all-at-once typing; homogeneous stays exact)
+
+def dd := [map-dissoc {:a 1 :b 2} kk]
+;;79=>~ dd : {:a? Int :b? Int | _}
+;;   ← ✏ F1b.3 (D24, supersedes the D20 drop-all): labels + types RETAINED,
+;;     every presence marked 'unknown (the ? suffix) — the types stay facts
+;;     (comparison precision), presence stays uncertain (projection still
+;;     mints metas, gated-identically)
+
+;; ============================================================
+;; §F1b.1 — solution-set shape (D25, 2026-07-17)
+;; Solutions carry query-var keys ONLY (the bound-args echo — ground
+;; call-site values under '_'-suffixed param names — is deleted);
+;; solve-one returns the BARE solution map, or none (never {}: that
+;; is a legitimate empty dyn row under D17).
+;; ============================================================
+
+defr sol-parent [?a ?b]
+  || "alice" "bob"
+  || "alice" "charlie"
+
+solve (sol-parent "alice" y)
+;;81=> '[{:y "bob"} {:y "charlie"}] : [List {:y String}]
+;;   ← the D25 payoff: pure answer rows, no :a_ echo, no "alice" re-emission
+
+solve-one (sol-parent "alice" y)
+;;82=> {:y "bob"} : {:y String}
+;;   ← D25.4: the BARE solution map — [solve-one q].y projects directly
+
+solve-one (sol-parent "zed" y)
+;;83=> none : {:y String}
+;;   ← no solution = none, never {} (D17: {} is an empty dyn row VALUE)
+
+solve (sol-parent x y)
+;;84=> '[{:y "bob", :x "alice"} {:y "charlie", :x "alice"}] : [List {:x String :y String}]
+;;   ← all-free queries were always echo-free; unchanged
+
+;; ============================================================
+;; §F1b.2 — route-soundness (D26, 2026-07-17)
+;; The on-network annotation-adoption gap is CLOSED: an annotation
+;; (or app-domain) over a network-untyped subtree re-routes to the
+;; imperative checker instead of being adopted unopposed.
+;; ============================================================
+
+(the Int {:a 1})
+;;85=>~ ERROR
+
+(the (Map Keyword Int) {:a 2 :b 3})
+;;86=> {:a 2, :b 3} : [Map Keyword Int]
+;;   ← sound annotations re-route to the imperative checker and PASS —
+;;     the refusal is behavior-preserving for correct code
+
+;; §F1b.2b — D23 groundwork: stored-type hygiene (deep scrub).
+;; An undischarged dyn-row projection meta stores as a HOLE, never a raw
+;; dangling ?meta (the P7 leak). F1b.6 (D23) FLIPPED escape-into-storage to a
+;; hard error — a stored type is a commitment; a raw projection meta is
+;; asserted-unknown knowledge. Escape hatch = an explicit annotation.
+
+def dm := [map-assoc [map-assoc {} :a 1] :b "s"]
+;;87=> dm : {:a Int :b String | _} defined.
+
+def dx := [map-get dm :c]
+;;88=>~ undischarged open-row projection
+;;   ← F1b.6 (D23): the D19 projection meta escaping into dx's stored type is a
+;;     HARD ERROR (was: scrubbed to `dx : _ defined.`); annotate to discharge
+
+
+;; ============================================================
+;; §F1b.3 — D24 dissoc-presence canaries (2026-07-17). The D21 WIDTH +
+;; D24 update-in canaries live in 2026-07-17-ciu-t6-f1b3-width.prologos:
+;; appending polymorphic apps / lambda defs AFTER this file's accumulated
+;; state triggers the PRE-EXISTING order-dependent BSP union-state hang
+;; (DEFERRED.md § union-type hang — repros m322 + t-idint, worktree-
+;; verified pre-existing at 0bdfca22), so those gates run on clean state.
+;; ============================================================
+
+def wdd := [map-dissoc {:p 1 :q "s"} kk]
+;;89=> wdd : {:p? Int :q? String | _} defined.
+;;   ← D24: labels + types RETAINED under dynamic dissoc, marked 'unknown
+
+wdd
+;;90=> {:q "s", :p 1} : {:p? Int :q? String | _}
+
+wdd.q
+;;91=>~ "s" : ?
+;;   ← Q7 gated-identically: the 'unknown hit projects as a fresh meta —
+;;     the runtime value survives, the TYPE never courtesy-upgrades

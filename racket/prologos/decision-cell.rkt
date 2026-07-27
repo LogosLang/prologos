@@ -10,7 +10,7 @@
 ;;;   merge = set-intersection (narrowing)
 ;;;
 ;;; A decision cell tracks which alternatives survive at a choice point.
-;;; Each `atms-amb` call creates one group-level decision cell on the
+;;; Each `solver-amb` call creates one group-level decision cell on the
 ;;; outer network. Alternatives = constructors (SRE structural lattice).
 ;;; Nogoods narrow decision cells by eliminating alternatives.
 ;;;

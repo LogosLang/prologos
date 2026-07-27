@@ -1,0 +1,57 @@
+ns benchmarks::comparative::records-typing :no-prelude
+
+;; Benchmark: RECORDS-PATH typing throughput (A/B-able across the F1b boundary).
+;; Uses ONLY F1a-era operations that exist at the pre-F1b baseline (aa01707d):
+;; anonymous Map literals, dot-projection, assoc/dissoc, annotated (Map K V)
+;; subsumption (the record→Map α + the paths F1b's D21 width / D22 seal
+;; check-conversion-fallback arms instrument). NO schema / seal / validate
+;; (those are F1b-new → not A/B-able; see records-seal-validate.prologos).
+;; Stresses: infer/unify on record rows + annotated-subsumption fallback arms.
+
+;; --- literal construction + projection (row inference + field lookup) ---
+def p1 := {:name "alice" :age 30 :city "nyc"}
+p1.name
+p1.age
+p1.city
+
+def p2 := {:x 1 :y 2 :z 3}
+p2.x
+p2.y
+p2.z
+
+;; --- chained / nested projection (deep row lookup) ---
+def nested := {:a {:b {:c 42}} :k "v"}
+nested.a.b.c
+nested.k
+
+;; --- assoc (row-grow) + dissoc (row-shrink) + re-projection ---
+def q0 := [map-assoc {} :one 1]
+def q1 := [map-assoc q0 :two 2]
+def q2 := [map-assoc q1 :three 3]
+q2.one
+q2.three
+def q3 := [map-dissoc q2 :two]
+q3.one
+q3.three
+
+;; --- annotated (Map K V) subsumption — the record→Map α + width fallback ---
+def m1 : (Map Keyword Int) := {:a 1 :b 2 :c 3}
+def m2 : (Map Keyword Int) := {:p 10 :q 20}
+def m3 : (Map Keyword String) := {:h "x" :w "y"}
+
+;; --- union-valued annotated subsumption (the field-type-satisfies? path) ---
+def mu : (Map Keyword <Int | String>) := {:i 7 :s "seven"}
+
+;; --- repeated to build deterministic volume (each re-runs the arms) ---
+def r1 := {:f1 1 :f2 2 :f3 3 :f4 4}
+r1.f1
+r1.f4
+def r2 : (Map Keyword Int) := {:g1 1 :g2 2 :g3 3 :g4 4}
+def r3 := [map-assoc [map-assoc [map-assoc {} :s1 1] :s2 2] :s3 3]
+r3.s2
+
+def big := {:aa 1 :bb 2 :cc 3 :dd 4 :ee 5 :ff 6 :gg 7 :hh 8}
+big.aa
+big.ee
+big.hh
+def bigm : (Map Keyword Int) := {:aa 1 :bb 2 :cc 3 :dd 4 :ee 5 :ff 6 :gg 7 :hh 8}

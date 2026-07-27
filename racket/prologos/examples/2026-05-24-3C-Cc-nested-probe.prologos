@@ -1,0 +1,51 @@
+;; PPN 4C Phase 3C.c.6 — nested-scenario exploratory probe (2026-05-24)
+;;
+;; AUDIT FINDING (this probe): no SIMPLE scenario triggers nested speculation
+;; in the current codebase. Tested:
+;;
+;;   N1: nested union TYPE `<<Nat | Bool> | String>` — flatten-union-local
+;;       flattens to atomic [Nat, Bool, String]; per-branch checks are atomic
+;;       (no nested with-speculative-rollback); chains empty
+;;
+;;   N2: `<(Nat -> Bool) | String>` — parse error (-> not recognized in this
+;;       syntax position); attempted to trigger function-position speculation
+;;
+;;   N3: `<(Nat * Bool) | String>` — parse error (* not recognized); attempted
+;;       to trigger Sigma-position speculation
+;;
+;;   N4: triple-nested `<<<Nat|Bool>|String>|Int> "x"` — String branch matches
+;;       (success), not an error scenario
+;;
+;; ROOT CAUSE:
+;;   - Post-T-2 (PPN 4C 1A-iii Path T-2 "Open by Design"), map-assoc's
+;;     with-speculative-rollback was retired
+;;   - flat union check pattern is atomic by construction (each branch check
+;;     is a single kernel `check` call without recursive speculation)
+;;   - Remaining with-speculative-rollback callers (typing-core.rkt:1291/
+;;     1325/2439 union-read disambiguation, qtt.rkt:2425 Church fold) fire
+;;     under specific patterns not easily exercised via simple def
+;;
+;; CONSEQUENCE FOR 3C.c.6 ACCEPTANCE:
+;;   The §9.5.4.7.2 nested scenario assertion is structurally validated via
+;;   the SYNTHETIC unit tests T-C.c-1.4 + T-C.c-1.5 in test-error-explanation
+;;   (DFS pre-order flatten of synthetic speculation-failure forest produces
+;;   correct chain structure). Real-world nested scenarios are RARE under
+;;   current codebase; richness path validated via translator correctness,
+;;   not by end-to-end probe.
+;;
+;;   E2E nested validation deferred to:
+;;   - 3C.d's discriminating axes work (where richer scenarios may arise)
+;;   - Phase 11b general derivation infrastructure (where non-union paths
+;;     + ATMS state queries broaden the test surface)
+;;
+;; Run: process-file on this file. Observe derivation-chain field content.
+;; Result: all chains empty (atomic branches; no nested speculation in
+;; current codebase patterns).
+
+ns probe-3c-cc-nested
+
+;; -- N1: nested union TYPE (flatten → atomic branches; no nesting) --
+def n1 <<Nat | Bool> | String> 3.14
+
+;; -- N4: deeper nesting; String branch matches "x" → success (not an error) --
+def n4 <<<Nat | Bool> | String> | Int> "x"

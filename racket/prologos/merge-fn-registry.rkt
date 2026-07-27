@@ -38,7 +38,12 @@
          lookup-merge-fn-domain
          merge-fn-registry-size
          ;; Testing support: reset the registry between tests
-         reset-merge-fn-registry!)
+         reset-merge-fn-registry!
+         ;; Testing support: snapshot/restore so a test that resets this
+         ;; process-global registry can leave it as it found it — preventing
+         ;; cross-test pollution within a long-lived batch worker.
+         save-merge-fn-registry-snapshot
+         restore-merge-fn-registry!)
 
 ;; ========================================
 ;; Registry storage (SCAFFOLDING — PM Track 12)
@@ -109,3 +114,19 @@
 ;; at module load time and should not be unregistered.
 (define (reset-merge-fn-registry!)
   (hash-clear! scaffolding-merge-fn-registry))
+
+;; Snapshot / restore — SCAFFOLDING, for test isolation. The registry is
+;; process-global and is populated at module load (top-level registrations that
+;; do NOT re-fire once a module is cached). A test that calls
+;; reset-merge-fn-registry! therefore wipes the production registrations for
+;; every sibling test that shares the same batch-worker process. Snapshot at
+;; file top and restore at file bottom so such a test leaves the registry as it
+;; found it. hash-copy preserves the eq?-keyed function-object identities, so
+;; the restore is exact.
+(define (save-merge-fn-registry-snapshot)
+  (hash-copy scaffolding-merge-fn-registry))
+
+(define (restore-merge-fn-registry! snapshot)
+  (hash-clear! scaffolding-merge-fn-registry)
+  (for ([(merge-fn domain-name) (in-hash snapshot)])
+    (hash-set! scaffolding-merge-fn-registry merge-fn domain-name)))

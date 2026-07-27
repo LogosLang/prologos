@@ -17,8 +17,15 @@
          racket/list
          racket/set
          racket/path
-         "infra-cell.rkt"    ;; merge-replace, merge-hasheq-replace, mod-status, net-new-mod-status-cell
-         "propagator.rkt")   ;; make-prop-network, net-cell-read, net-cell-write
+         "infra-cell.rkt"    ;; merge-replace, merge-hasheq-replace, mod-status, net-new-mod-status-cell, net-new-cell-with-merge
+         "propagator.rkt"    ;; make-prop-network, net-cell-read, net-cell-write
+         ;; PPN 4C Addendum Phase 4A.b-ii: per-name cell value is a def-entry
+         ;; (STRUCTURAL type × value); the mnr API wraps (cons type value) → def-entry
+         ;; on write and unwraps on read. definition-entry.rkt is a PURE LEAF under LWW
+         ;; (no type-lattice require), so this require is acyclic (cf. 4A.a M1 (γ)).
+         (only-in "definition-entry.rkt"
+                  def-entry def-entry? def-entry-type def-entry-value
+                  def-bot def-collision def-entry-merge))
 
 (provide
  ;; Module info
@@ -27,11 +34,21 @@
  (struct-out module-network-ref)
  make-module-network
  module-network-lookup
+ module-network-cascading-lookup  ;; PPN 4C Addendum Phase 4A.a (Q-4A.4 Option (b)): local + imports cascade
+ module-network-lookup-status     ;; PPN 4C Addendum Phase 4B.3-a (DQ2): single cascade-truth source; cascading-lookup + lookup-type/value are projections
  module-network-add-definition
+ module-network-add-import      ;; PPN 4C Addendum Phase 4A.a (Q-4A.4 Option (b)): cons-prepend import
  module-network-write
+ module-network-install-fire-once  ;; PPN 4C Addendum Phase 4B.3-b (§18.21.22): install a fire-once δ propagator on the mnr's prop-net
  module-network-set-status
  module-network-status
  module-network-materialize
+ module-network-cascade-materialize  ;; PPN 4C Addendum Phase 4A.c-ii-a (D2 Path Y): own cells + imports cascade (values)
+ module-network-cascade-names        ;; PPN 4C Addendum Phase 4A.c-ii-a (D2 Path Y): own + imports cascade (keys only)
+ module-network-from-snapshot   ;; PPN 4C Addendum Phase 4A.c-i (RISK 1): rebuild mnr from .pnet env-snapshot
+ ;; PPN 4C Addendum Phase 4A.a (Q-4A.5): per-file mnr parameter. Define-only
+ ;; at 4A.a (no reader); 4A.b flips global-env-lookup-* to consume it.
+ current-file-module-network-ref
  ;; Module lifecycle constants (re-exported from infra-cell.rkt)
  mod-loading
  mod-loaded
@@ -115,31 +132,137 @@
   (prop-net          ;; prop-network: persistent network with definition cells
    cell-id-map      ;; hasheq: symbol → cell-id (definition name → cell)
    mod-status-cell  ;; cell-id: lifecycle monitoring (mod-loading → mod-loaded → mod-stale)
-   dep-edges        ;; hasheq: symbol → (listof dep-edge-info) (Track 5 Phase 4)
-   snapshot-hash)   ;; hasheq or #f: materialized env snapshot (belt-and-suspenders, Phases 3-4)
+   ;; PPN 4C Addendum Phase 4B.1: the `dep-edges` field RETIRED (write-only;
+   ;; zero production consumers; the dep-recording machinery retired outright).
+   snapshot-hash    ;; hasheq or #f: materialized env snapshot (belt-and-suspenders, Phases 3-4)
+   imports)         ;; (listof module-network-ref): shared-by-reference imports (PPN 4C Addendum Phase 4A.a, Q-4A.4 Option (b)). cons-prepend (newest first); cascading-lookup walks local then imports in list-order (last-write-wins shadowing matches today's hash-set-overwrite). IN-MEMORY ONLY — not serialized (pnet-serialize extracts module-info fields, not the mnr struct); SH Track 1 needs name-reference serialization when .pnet becomes network-as-value.
   #:transparent)
 
 ;; Create a fresh module network for a module about to be loaded.
-;; Returns: module-network-ref with empty cell-id-map, no dep-edges,
+;; Returns: module-network-ref with empty cell-id-map, empty imports,
 ;; and mod-status initialized to mod-loading.
 (define (make-module-network)
   (define net0 (make-prop-network))
   (define-values (net1 status-cid) (net-new-mod-status-cell net0 mod-loading))
-  (module-network-ref net1 (hasheq) status-cid (hasheq) #f))
+  (module-network-ref net1 (hasheq) status-cid #f '()))
+
+;; Add an imported module's network as a shared-by-reference import.
+;; PPN 4C Addendum Phase 4A.a (Q-4A.4 Option (b)): cons-prepend (newest
+;; first) so cascading-lookup's list-order walk yields last-write-wins
+;; shadowing — matching today's hash-set-overwrite at the driver import.
+;; Holds a REFERENCE to imp's mnr (no copy of imp's cells/definitions).
+;; Consumed by driver.rkt's import-handler at 4A.c (replaces the copy at
+;; lines 1857-1869). O(1) per import; cascade cost is O(imports) per miss.
+;; Returns: updated module-network-ref.
+(define (module-network-add-import mnr imp)
+  (struct-copy module-network-ref mnr
+    [imports (cons imp (module-network-ref-imports mnr))]))
+
+;; ========================================
+;; def-entry value adapter (PPN 4C Addendum Phase 4A.b-ii, §18.17.10)
+;; ========================================
+;; The per-name cell's canonical value is a `def-entry` (STRUCTURAL type × value),
+;; merged by def-entry-merge (LWW). The mnr API presents the legacy
+;; (cons type value) to all downstream consumers (audit-verified 0 ripple): the
+;; WRITE adapter wraps cons → def-entry; the READ adapter unwraps def-entry → cons.
+;; def-entry is thus fully ENCAPSULATED in this module's mnr API.
+
+;; WRITE adapter: (cons type value) → def-entry. A def-entry / def-bot / infra-bot
+;; passes through unchanged (idempotent — callers may pass either shape).
+(define (cons->def-entry v)
+  (if (pair? v) (def-entry (car v) (cdr v)) v))
+
+;; READ adapter: def-entry → (cons type value); def-bot / 'infra-bot (no
+;; definition) → #f. def-collision is the unreachable forward-compat ⊤ under LWW
+;; — error loudly if it ever surfaces (a real finding). A non-conforming shape
+;; also errors (Correct-by-Construction: surface a missed write path, don't absorb).
+(define (def-entry->cons v)
+  (cond
+    [(or (eq? v 'infra-bot) (eq? v def-bot)) #f]
+    [(def-entry? v) (cons (def-entry-type v) (def-entry-value v))]
+    [(eq? v def-collision)
+     (error 'def-entry->cons "def-collision surfaced (unreachable under LWW): a definition cell holds the ⊤")]
+    [else
+     (error 'def-entry->cons "unexpected cell value (expected def-entry / def-bot / infra-bot): ~v" v)]))
 
 ;; Look up a definition cell's value in a module network.
-;; Returns: (cons type value) or #f if not found.
+;; Returns: (cons type value) or #f if not found. (4A.b-ii: cell holds a def-entry;
+;; the read adapter unwraps it.)
 (define (module-network-lookup mnr name)
   (define cid (hash-ref (module-network-ref-cell-id-map mnr) name #f))
   (and cid
-       (let ([val (net-cell-read (module-network-ref-prop-net mnr) cid)])
-         (if (eq? val 'infra-bot) #f val))))
+       (def-entry->cons (net-cell-read (module-network-ref-prop-net mnr) cid))))
+
+;; Cascading lookup: walk the local cell-id-map, then imports in list-order.
+;; PPN 4C Addendum Phase 4A.a (Q-4A.4 Option (b) share-by-reference + Q1
+;; cons-prepend): local definitions shadow imports; among imports, the
+;; cons-front (newest, per module-network-add-import) shadows older — the
+;; list-order walk yields last-write-wins shadowing matching today's
+;; hash-set-overwrite at the driver import (driver.rkt:1857-1869).
+;; Recurses into imports so transitive imports (e.g., prelude reached via
+;; the import chain at 4A.c) are found.
+;;
+;; Q2 LOCKED (§18.16.5): NO cycle protection. Trusts the structural
+;; invariant that `imports` is acyclic-by-construction — the loading-set
+;; check (driver.rkt:1872-1874) gates module-load cycles today; cross-module
+;; cycles are diagnosed at the loading layer (§18.11.3 — lattice-fixpoint
+;; diagnosis in the future module-loading-on-network track), NOT here. The
+;; no-self-edit invariant is maintained at 4A.c's import handler (write site),
+;; not defended at this lookup site (Correct-by-Construction: invariants live
+;; where they're maintained, not where they're consumed).
+;;
+;; Returns: (cons type value) or #f — same contract as module-network-lookup.
+;; (At 4A.a, per-name cells still hold (cons type value); 4A.b's read-flip
+;; and Q3's STRUCTURAL DefinitionEntry change the cell value shape, at which
+;; point this helper's return follows the cell value.)
+;;
+;; PPN 4C Addendum Phase 4B.3-a (DQ2, §18.21.21): now a GROUND-PROJECTION of
+;; module-network-lookup-status (the single cascade-truth source). Behavior-exact:
+;; ground → the (cons type value) entry; pending/absent → #f (the old #f-on-miss).
+(define (module-network-cascading-lookup mnr name)
+  (define s (module-network-lookup-status mnr name))
+  (and (eq? (car s) 'ground) (cdr s)))
+
+;; PPN 4C Addendum Phase 4B.3-a (DQ2, §18.21.21): the SINGLE cascade-truth source.
+;; Walks local-ground → import-ground → local-pending → absent, returning
+;; (cons status payload):
+;;   'ground  . (cons type value)  — resolves (locally, or ground via an import)
+;;   'pending . cid                — a LOCAL def-bot cell (pre-allocated, not yet
+;;                                    defined); cid is the def-bot cell-id, which
+;;                                    4B.3-b's δ residuation propagator :reads
+;;   'absent  . #f                 — unknown name (a genuine typo)
+;; module-network-cascading-lookup (above) + global-env-lookup-type/value are
+;; PROJECTIONS of this — Correct-by-Construction: ONE walk → no two-walk drift
+;; (D-4B3-1). The pending/absent split is computed here but UNCONSUMED until
+;; 4B.3-b (the projections collapse both → #f, preserving today's behavior).
+;; Reuses module-network-lookup's local read (def-entry->cons), so the
+;; def-bot→#f collapse AND the def-collision/non-conforming loud-error path are
+;; parity-exact with the pre-factoring cascade. The import sub-walk uses the
+;; cascading-lookup projection (ground-only), so a name def-bot LOCALLY but
+;; ground in an IMPORT resolves to the import (local-entry #f → import-ground
+;; fires BEFORE the 'pending branch) — import-shadowing preserved.
+(define (module-network-lookup-status mnr name)
+  (define cid (hash-ref (module-network-ref-cell-id-map mnr) name #f))
+  (define local-entry
+    (and cid (def-entry->cons (net-cell-read (module-network-ref-prop-net mnr) cid))))
+  (cond
+    [local-entry (cons 'ground local-entry)]
+    [(for/or ([imp (in-list (module-network-ref-imports mnr))])
+       (module-network-cascading-lookup imp name))
+     => (lambda (entry) (cons 'ground entry))]
+    [cid (cons 'pending cid)]
+    [else (cons 'absent #f)]))
 
 ;; Add a definition cell to a module network.
 ;; Returns: (values updated-module-network-ref cell-id)
 (define (module-network-add-definition mnr name initial-value)
   (define net (module-network-ref-prop-net mnr))
-  (define-values (net* cid) (net-new-replace-cell net initial-value))
+  ;; PPN 4C Addendum Phase 4A.b-ii: the cell's canonical value is a def-entry,
+  ;; merged by def-entry-merge (LWW; def-collision is the unreachable forward-compat
+  ;; ⊤ → #:contradicts?). The write adapter wraps the caller's (cons type value).
+  (define-values (net* cid)
+    (net-new-cell-with-merge net def-entry-merge (cons->def-entry initial-value)
+                             (lambda (v) (eq? v def-collision))))
   (values
    (struct-copy module-network-ref mnr
      [prop-net net*]
@@ -152,8 +275,30 @@
   (define cid (hash-ref (module-network-ref-cell-id-map mnr) name #f))
   (unless cid
     (error 'module-network-write "no cell for ~a" name))
+  ;; PPN 4C Addendum Phase 4A.b-ii: write adapter wraps (cons type value) → def-entry.
   (struct-copy module-network-ref mnr
-    [prop-net (net-cell-write (module-network-ref-prop-net mnr) cid value)]))
+    [prop-net (net-cell-write (module-network-ref-prop-net mnr) cid (cons->def-entry value))]))
+
+;; PPN 4C Addendum Phase 4B.3-b (§18.21.22): install a fire-once propagator on
+;; the mnr's prop-net (NET-1) and struct-copy the updated net back. GENERIC /
+;; domain-agnostic — it takes the input/output cids + the fire-fn; the δ-specific
+;; def-entry fire-fn is built by the caller (driver.rkt, which has expr-fvar +
+;; def-entry in scope — namespace.rkt has no expr-fvar). The referent INPUT cell
+;; is 'definition-entry = #:classification 'structural, so the caller MUST pass
+;; #:component-paths or net-add-propagator's enforce-component-paths! hard-errors
+;; (propagator.rkt:1411-1431). fire-once = the LWW exactly-once write (the δ is
+;; the sole writer of the referrer's def-entry cell, §18.21.20 DQ1). Installed
+;; per-command OUTSIDE any BSP fire round → scheduled on the mnr worklist
+;; (propagator.rkt:2320-2323) → fired by the file-end drive (drive-file-mnr!).
+;; Returns the updated mnr; the caller threads it back via
+;; (current-file-module-network-ref ...).
+(define (module-network-install-fire-once mnr input-cids output-cids fire-fn
+                                          #:component-paths [cpaths '()])
+  (define-values (net* _pid)
+    (net-add-fire-once-propagator (module-network-ref-prop-net mnr)
+                                  input-cids output-cids fire-fn
+                                  #:component-paths cpaths))
+  (struct-copy module-network-ref mnr [prop-net net*]))
 
 ;; Update the module status cell (e.g., mod-loading → mod-loaded).
 ;; Returns: updated module-network-ref
@@ -172,7 +317,102 @@
 ;; Returns: hasheq of symbol → (cons type value)
 (define (module-network-materialize mnr)
   (for/hasheq ([(name cid) (in-hash (module-network-ref-cell-id-map mnr))])
-    (values name (net-cell-read (module-network-ref-prop-net mnr) cid))))
+    (values name (def-entry->cons (net-cell-read (module-network-ref-prop-net mnr) cid)))))
+
+;; Materialize the FULL cascade of an mnr: its own definition cells PLUS all
+;; its imports' cascades (recursively). PPN 4C Addendum Phase 4A.c-ii-a (D2
+;; Path Y): the VALUES view of definitions visible THROUGH this mnr.
+;; Shadowing matches module-network-cascading-lookup — a module's own cells
+;; shadow its imports, and (within imports) the cons-front newest shadows
+;; older. Realized by materializing imports oldest-first (reverse the
+;; cons-prepend list) then local cells last; the final hash-set wins.
+;; 'infra-bot cells are skipped (no definition), matching module-network-lookup.
+;; Q2 (§18.16.5): NO cycle protection — trusts the acyclic-imports invariant,
+;; same as module-network-cascading-lookup.
+;; Returns: hasheq symbol → (cons type value).
+(define (module-network-cascade-materialize mnr)
+  (define net (module-network-ref-prop-net mnr))
+  (define from-imports
+    (for/fold ([acc (hasheq)])
+              ([imp (in-list (reverse (module-network-ref-imports mnr)))])
+      (for/fold ([a acc])
+                ([(k v) (in-hash (module-network-cascade-materialize imp))])
+        (hash-set a k v))))
+  (for/fold ([acc from-imports])
+            ([(name cid) (in-hash (module-network-ref-cell-id-map mnr))])
+    (define v (net-cell-read net cid))
+    (if (or (eq? v 'infra-bot) (eq? v def-bot)) acc (hash-set acc name (def-entry->cons v)))))
+
+;; Keys-only counterpart of module-network-cascade-materialize: the set of
+;; definition names visible through this mnr (own + imports, recursive),
+;; WITHOUT materializing cell values. PPN 4C Addendum Phase 4A.c-ii-a (D2
+;; Path Y): for the hot find-fqn-for-local-name path, which needs FQN keys,
+;; not values (§18.18.3 perf note). 'infra-bot cells skipped to match the
+;; cascade-materialize key set. Dedup via a hasheq-as-set accumulator (no
+;; racket/list dependency). Shadowing is irrelevant for a key set (a name in
+;; both local and imports appears once).
+;; Returns: (listof symbol), de-duplicated.
+(define (module-network-cascade-names mnr)
+  (define (go m acc)
+    (define net (module-network-ref-prop-net m))
+    (define acc1
+      (for/fold ([a acc])
+                ([(name cid) (in-hash (module-network-ref-cell-id-map m))])
+        ;; PPN 4C Addendum Phase 4B.2-a: skip def-bot too. A pre-allocated
+        ;; but-unground name (def-bot cell, from the 4B.2-b pre-alloc sweep)
+        ;; must NOT leak into the keys-view — mirror cascade-materialize
+        ;; (the values-view, :288) + def-entry->cons (:179) which both treat
+        ;; def-bot ≡ 'infra-bot ("no definition yet"). Makes pre-alloc a true
+        ;; keys-view no-op (was: only 'infra-bot skipped → def-bot leaked into
+        ;; global-env-names → repl :env display).
+        (define v (net-cell-read net cid))
+        (if (or (eq? v 'infra-bot) (eq? v def-bot))
+            a
+            (hash-set a name #t))))
+    (for/fold ([a acc1])
+              ([imp (in-list (module-network-ref-imports m))])
+      (go imp a)))
+  (hash-keys (go mnr (hasheq))))
+
+;; Reconstruct a module-network-ref from a materialized env snapshot
+;; (hasheq name → (cons type value)). PPN 4C Addendum Phase 4A.c-i (RISK 1):
+;; `.pnet`-cached modules restore a flat env-snapshot, NOT a live mnr
+;; (driver.rkt sets module-network #f on the .pnet hit). This rebuilds the
+;; mnr's cells from that snapshot so share-by-reference (4A.c-ii-b) can
+;; reference the cached module's mnr instead of copying its exports.
+;; Status is set to mod-loaded (a reconstructed module IS loaded).
+;;
+;; INTERIM precursor to SH Track 1 (`.pnet` network-as-value, gated on PPN
+;; Track 4): SH Track 1 will deserialize the mnr DIRECTLY, retiring this
+;; snapshot-reconstruction. The env mnr is cell-only (no propagators; single
+;; named merge-replace) so it round-trips trivially — the reconstruction logic
+;; here is exactly what SH Track 1's deserialize does internally. Cost: once
+;; per module per process (cached in current-module-registry); moves cost from
+;; per-import-copy to once-per-module-reconstruction + O(1) imports.
+(define (module-network-from-snapshot snapshot)
+  (define mnr0
+    (for/fold ([mnr (make-module-network)])
+              ([(name entry) (in-hash snapshot)])
+      (define-values (mnr* _cid) (module-network-add-definition mnr name entry))
+      mnr*))
+  (module-network-set-status mnr0 mod-loaded))
+
+;; ========================================
+;; Per-file module network (PPN 4C Addendum Phase 4A.a, Q-4A.5)
+;; ========================================
+;; Holds the currently-elaborating file's module-network-ref — the in-flight
+;; counterpart to loaded modules' mnr (which live in current-module-registry).
+;; Q-4A.1 Option B-revised: each file (loaded AND in-flight) owns an mnr; this
+;; parameter selects "which mnr is current" (identity, not contents — cells
+;; live on (module-network-ref-prop-net mnr)).
+;;
+;; LIFECYCLE (Q-4A.5 + M2 §18.16.5): DEFINE-ONLY at 4A.a — no production reader
+;; yet, so default #f is never consumed. 4A.b flips global-env-lookup-type/value
+;; to read from this mnr via module-network-cascading-lookup, and adds the
+;; parameterize entries to test-support.rkt (6 sites) + tools/batch-worker.rkt
+;; per pipeline.md "New Racket Parameter" (deferred per capture-gap discipline;
+;; obligation captured at design §3 tracker row 4A.b).
+(define current-file-module-network-ref (make-parameter #f))
 
 ;; ========================================
 ;; Module Registry — caches loaded modules
@@ -467,6 +707,9 @@
     (imports [prologos::data::option :as opt :refer [Option none some some? none? flatten]])
     ;; Result: types + predicates unqualified; ops via result:: alias
     (imports [prologos::data::result :as result :refer [Result ok err ok? err?]])
+    ;; Reason (CIU T6 F1b.5): validation-failure type + ctors + errors-to-list
+    ;; unqualified; the Keyword shim (keyword-name/keyword-lte) via reason:: alias
+    (imports [prologos::data::reason :as reason :refer [Reason missing-required check-failed type-mismatch unexpected-field check-unevaluable default-unevaluable errors-to-list render-failures expect-valid]])
     ;; List: full API unqualified (wins all name-conflict tiebreaks)
     (imports [prologos::data::list :refer [List nil cons foldr reduce length
                                            map filter append head tail singleton
@@ -482,12 +725,19 @@
                                            nth-int take-int drop-int length-int]])
 
     ;; ---- Core traits (type class definitions) ----
-    (imports [prologos::core::eq :refer [Eq eq-check eq-neq nat-eq Char--Eq--dict String--Eq--dict]])
-    (imports [prologos::core::ord :refer [Ord ord-compare PartialOrd PartialOrd-partial-compare
+    ;; N6d-i: derived bare-name method wrappers (eq?, compare, mul, div, neg,
+    ;; abs) added to the curated refers — spec propagation is refer-gated, and
+    ;; the wrappers' where-constraint spec entries drive call-site dict holes.
+    ;; (add/sub/join/reduce are derive-skipped; see DEFERRED.md N6d-i.)
+    (imports [prologos::core::eq :refer [Eq eq? eq-check eq-neq nat-eq Char--Eq--dict String--Eq--dict]])
+    (imports [prologos::core::ord :refer [Ord compare ord-compare PartialOrd partial-compare PartialOrd-partial-compare
                                           nat-ord ord-lt ord-le ord-gt ord-ge ord-eq
                                           ord-min ord-max Char--Ord--dict String--Ord--dict]])
-    (imports [prologos::core::arithmetic :refer [Add Sub Mul Div Neg Abs String--Add--dict]])
-    (imports [prologos::core::conversions :refer [From Into TryFrom FromInt FromRat]])
+    (imports [prologos::core::arithmetic :refer [Add Sub Mul Div Neg Abs mul div neg abs + - * / negate String--Add--dict]])
+    (imports [prologos::core::conversions :refer [From Into TryFrom FromInt FromRat
+                                                  ToFloat64 ToFloat32 ToPosit8 ToPosit16 ToPosit32 ToPosit64 ToRat ToInt
+                                                  to-float64 to-float32 to-posit8 to-posit16 to-posit32 to-posit64 to-rat to-int
+                                                  to-float to-posit]])
     (imports [prologos::core::algebra :refer-all])
     (imports [prologos::core::lattice :refer-all])
     (imports [prologos::core::collection-traits :refer [Reducible Collection]])
@@ -511,9 +761,12 @@
     ;; Note: pvec-map, pvec-filter, pvec-fold, set-fold, set-filter,
     ;; map-fold-entries, map-filter-entries, map-map-vals are now native
     ;; parser keywords — no need to import from ops modules.
-    ;; pvec: pvec-any?, pvec-all?, pvec-from-list-fn, pvec-to-list-fn
+    ;; pvec: pvec-any?, pvec-all?, pvec-from-list-fn, pvec-to-list-fn,
+    ;;       pvec-nth-int, pvec-length-int, pvec-take-int, pvec-drop-int
     (imports [prologos::core::pvec :refer [pvec-any? pvec-all?
-                                           pvec-from-list-fn pvec-to-list-fn]])
+                                           pvec-from-list-fn pvec-to-list-fn
+                                           pvec-nth-int pvec-length-int
+                                           pvec-take-int pvec-drop-int]])
     ;; map: map-filter-vals, map-keys-list, map-vals-list, map-merge,
     ;;      map-to-entry-list, map-seq, map-from-seq
     (imports [prologos::core::map  :refer [map-filter-vals map-keys-list
@@ -614,11 +867,39 @@
 (define (process-ns-declaration datum)
   (unless (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
     (error 'ns "ns requires: (ns namespace-name) or (ns namespace-name :no-prelude)"))
+  ;; CIU T6 (2026-07-18): a `.` in a namespace name is dot-access tokenization —
+  ;; `ns examples.foray` reads as `(ns examples ($dot-access foray))`, which would
+  ;; SILENTLY drop `.foray` (the ns becomes just `examples`, colliding with any
+  ;; other `examples.*` file). Reject it with a targeted message instead of
+  ;; dropping segments. (The `.`-in-namespace convention predates dot-access on
+  ;; record fields; hierarchical namespaces now use `::`.)
+  (when (for/or ([e (in-list (cddr datum))])
+          (and (pair? e) (eq? (car e) '$dot-access)))
+    (error 'ns
+      (format (string-append
+               "namespace name cannot contain `.` (that is the record dot-access "
+               "operator). Use `::` for a hierarchical namespace (e.g. `~a::…`) "
+               "or a single segment (e.g. `~a`).")
+              (cadr datum) (cadr datum))))
   (define ns-sym (cadr datum))
   (define no-prelude?
     (and (>= (length datum) 3)
          (memq ':no-prelude (cddr datum))))
   (current-ns-context (make-empty-ns-context ns-sym))
+  ;; PPN 4C Addendum Phase 4A.c-ii-b: the `ns` declaration is the import-set unit
+  ;; boundary. Reset the in-flight mnr's IMPORTS to empty (keeping own per-name
+  ;; defs in cell-id-map) so each independent `ns` starts with a fresh import
+  ;; set — the auto-imports below (action-1) then wire THIS ns's modules. Without
+  ;; this, multiple run-ns calls sharing one mnr (e.g. the batch-worker's per-file
+  ;; binding, tools/batch-worker.rkt:233) would ACCUMULATE imports across
+  ;; independent ns's (a full-prelude ns leaking into a later :no-prelude ns).
+  ;; Own defs are PRESERVED so inline cross-string module defs (mod-a's defn
+  ;; imported by mod-b) and shared-fixture define-then-use still resolve.
+  (let ([cur (current-file-module-network-ref)])
+    (current-file-module-network-ref
+     (if cur
+         (struct-copy module-network-ref cur [imports '()])
+         (make-module-network))))
   ;; Decide what to auto-import
   (define skip-prelude?
     (or no-prelude?
@@ -686,6 +967,19 @@
 
      ;; Load the module if not already loaded
      (define mod (ensure-module-loaded ns-sym))
+
+     ;; PPN 4C Addendum Phase 4A.c-ii-b (action-1, RF-2 guard): wire the imported
+     ;; module's mnr as a share-by-reference import into the in-flight file's mnr,
+     ;; so the cascade reaches its defs (replacing the per-import copy at the driver
+     ;; import-handler, retired at ii-b-cut-flip). Behavior-preserving while Layer-2
+     ;; is still active (cascade and Layer-2 agree on the value); becomes the sole
+     ;; resolution path at the flip. Lazy-init (RF/lifecycle): the file unit-boundary
+     ;; binds the mnr (process-file / process-string-ws / fixture shared scope) before
+     ;; preparse runs imports, so this `or` normally finds the bound mnr.
+     (when (and mod (module-info-module-network mod))
+       (current-file-module-network-ref
+        (module-network-add-import (or (current-file-module-network-ref) (make-module-network))
+                                   (module-info-module-network mod))))
 
      ;; Process directives
      (let loop ([dirs directives])

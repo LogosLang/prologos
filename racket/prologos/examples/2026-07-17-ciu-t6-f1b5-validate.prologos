@@ -1,0 +1,152 @@
+;; ============================================================================
+;; CIU T6 F1b.5 — VALIDATE acceptance (skeleton laid at p0, 2026-07-17)
+;;
+;; The Result-returning runtime tabulation face (D27–D29, track doc §2a round
+;; 7; design doc §13.8). Sections fill in per slice — commented target
+;; expressions uncommented as slices land (the F1a acceptance pattern).
+;; Lives apart from the main/seal files per the hang discipline (DEFERRED.md
+;; § union-type hang): clean state here. Suite gate lands with s2.
+;; ============================================================================
+
+ns f1b5-validate-acceptance :no-prelude
+
+;; --- schemas (register today; exercised by the slices) ----------------------
+
+schema Person
+  :name String
+  :age Int
+;;0=> Person : [Type 0] defined.
+
+schema Cfg
+  :host String :default "localhost"
+  :port Int :default 8080
+;;1=> Cfg : [Type 0] defined.
+
+schema Checked
+  :name String
+  :age Int :check (> _ 0)
+;;2=> Checked : [Type 0] defined.
+
+;; --- s1: field-type repairs (angle-sentinel + bare-head qualification) ------
+;; Rich-field schemas register AND construct after the s1 repairs (pre-s1:
+;; both classes registered but EVERY construction failed — the p0 probes).
+;; Container-field ((List Int)) coverage lives in the prelude-loaded rackunit
+;; file (tests/test-schema-field-construction.rkt) — this file is :no-prelude.
+
+schema WithUnion
+  :v <Int | String>
+;;3=> WithUnion : [Type 0] defined.
+
+def wi : WithUnion := {:v 3}
+;;4=> wi : f1b5-validate-acceptance::WithUnion defined.
+
+wi.v
+;;5=> 3 : Int | String
+;;   ← the union field converts (pre-s1: mangled $angle-type/$pipe sentinels)
+
+def ws : WithUnion := {:v "x"}
+;;6=> ws : f1b5-validate-acceptance::WithUnion defined.
+
+schema WithFn
+  :name String
+  :cb <Int -> Int>
+;;7=> WithFn : [Type 0] defined.
+
+spec idi Int -> Int
+defn idi [x] x
+;;8=> idi : Int -> Int defined.
+
+def wf : WithFn := {:name "a" :cb idi}
+;;9=> wf : f1b5-validate-acceptance::WithFn defined.
+;;   ← arrow fields are EXPRESSIBLE + constructible (type-witness at runtime
+;;     = the D28 skip set; the skip-set-empty test governs)
+
+[wf.cb 4]
+;;10=> 4 : Int
+
+;; --- s2: the node — freestanding validate (THE DEMO BEAT) -------------------
+;; (:no-prelude file: the bake requires the result + reason modules in scope —
+;;  without them `[validate …]` errors loud. Champ displays are trie-order, so
+;;  ok/err markers are =>~ fragments by design; deterministic err rendering is
+;;  errors-to-list's job.)
+
+require [prologos::data::result :refer [Result ok err ok? err?]]
+require [prologos::data::reason :refer [Reason missing-required check-failed type-mismatch unexpected-field errors-to-list]]
+
+def m := [map-assoc [map-assoc {} :name "alice"] :age 30]
+;;11=> m : {:age Int :name String | _} defined.
+
+[validate Person m]
+;;12=>~ prologos::data::result::ok
+;;   ← THE DEMO BEAT: the runtime tabulation face — a def-bound dyn row
+;;     validates to ok : Result Person (Map Keyword Reason)
+
+def bad := [map-assoc [map-assoc {} :name "bob"] :age "x"]
+;;13=> bad : {:age String :name String | _} defined.
+
+[validate Person bad]
+;;14=>~ type-mismatch "Int" "String"
+;;   ← err with STRUCTURAL field identity (the map key) + expected/got payload
+
+[validate Cfg {}]
+;;15=>~ :host "localhost"
+;;   ← defaults FILL in the runtime tabulation — the non-literal fill debt
+;;     discharged (M2's preparse refutation routed here, as designed)
+
+[validate Checked {:name "dave" :age 0}]
+;;16=>~ check-failed "(> _ 0)"
+;;   ← :check as a RECOVERABLE Result err — not a panic (D22.4 → D29)
+
+[validate Checked {:name "fred" :age 5}]
+;;17=>~ prologos::data::result::ok
+
+[err? [validate Person bad]]
+;;18=> true : Bool
+
+[validate Nope {}]
+;;19=>~ unknown schema Nope
+;;   ← the loud bake error (srcloc'd; converts the old silent classes)
+
+;; --- s3: the door flip — constructor = static-seal + validate + abort -------
+;; wrap-schema-checks (the panic bridge) is DELETED. Both constructor doors on a
+;; :check schema now delegate :check discharge to validate + abort (expect-valid);
+;; byte-parity message on single failures; the qualified schema type preserved.
+
+def cbad := [Checked {:name "dave" :age 0}]
+;;20=>~ sealed definition forced at commit
+;;   ← LITERAL door: was the wrap-schema-checks if/panic bridge, now
+;;     validate∘expect-valid — same error, byte-parity message
+
+def cgood := [Checked {:name "fred" :age 5}]
+;;21=> cgood : f1b5-validate-acceptance::Checked defined.
+;;   ← a satisfying def commits; the qualified schema type is preserved
+
+def cm := [map-assoc [map-assoc {} :name "eve"] :age 0]
+;;22=> cm : {:age Int :name String | _} defined.
+
+def cbad2 := [Checked cm]
+;;23=>~ sealed definition forced at commit
+;;   ← NON-LITERAL door STRENGTHENING (D29): [Checked cm] runs :check at commit
+;;     (was: silent 'defined.', the violating value accepted)
+
+;; --- s4: selections — partial-view validate ----------------------------------
+;; A selection is a read-side VIEW; :requires is a READ-CAPABILITY, not a
+;; completeness contract. selection-validate: enforces the :requires fields are
+;; PRESENT (missing = the read-capability violation), validates every present
+;; parent field's type + :check, accepts extra parent fields, requires NO
+;; parent-completeness. The Result's S is the (qualified) SELECTION name.
+
+selection NameOnly from Person :requires [:name]
+;;24=> selection NameOnly from Person registered.
+
+[validate NameOnly {:name "hana"}]
+;;25=>~ prologos::data::result::ok
+;;   ← the :requires field present + type-valid → ok
+
+[validate NameOnly {:name "ada" :age 9}]
+;;26=>~ :age 9
+;;   ← extra parent field :age accepted (view over fuller data) + kept in the ok
+
+[validate NameOnly {:age 9}]
+;;27=>~ :name prologos::data::reason::missing-required
+;;   ← the :requires read-capability MISS is the selection's runtime residual

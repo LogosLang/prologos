@@ -1,4 +1,4 @@
-ns examples.prop-viz-demo
+ns examples::prop-viz-demo
 
 ;; ========================================
 ;; Propagator Visualization Demo
@@ -29,4 +29,4 @@ int-range 1 5
 ;; plus infrastructure cells (constraint store, registries, etc.).
 ;; Subsystem coloring:  green = type-inference, gray = infrastructure.
 
-map [plus 1 _] [int-range 1 10]
+map [+ 1 _] [int-range 1 10]

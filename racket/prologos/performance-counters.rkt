@@ -134,7 +134,10 @@
    solver-unifies
    zonk-steps
    ;; Track 7 Phase 0b: per-command instrumentation counters
-   resolution-cycles      ;; iterations of run-stratified-resolution! loop
+   resolution-cycles      ;; PPN 4C 2B (2026-05-20): now counts BSP outer-loop
+                          ;; iterations (process-resolution handler firings).
+                          ;; Was: iterations of retired run-stratified-resolution!
+                          ;; / run-stratified-resolution-pure wrapper.
    prop-firings           ;; propagator firings in run-to-quiescence
    cell-allocs            ;; cells allocated via net-new-cell
    prop-allocs            ;; PUnify Phase 1: propagators added via net-add-propagator

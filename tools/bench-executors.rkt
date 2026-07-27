@@ -71,12 +71,13 @@
   (define start (current-inexact-monotonic-milliseconds))
   (parameterize ([p:current-parallel-executor executor-val]
                  [p:current-use-bsp-scheduler? #t]
-                 [current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
                  [current-lib-paths (list lib-dir)]
-                 [current-mult-meta-store (make-hasheq)]
+                 ;; PPN 4C S2.e-iv-c (2026-04-25): current-mult-meta-store binding
+                 ;; removed — the mult-meta store migrated onto a compound universe
+                 ;; cell and is now set up by reset-meta-store! (invoked per-command
+                 ;; by process-command), not by a hand-bound parameter.
                  [current-relation-store (make-relation-store)]
                  [current-preparse-registry (current-preparse-registry)]
                  [current-trait-registry (current-trait-registry)]

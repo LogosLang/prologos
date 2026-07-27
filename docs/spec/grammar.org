@@ -720,13 +720,20 @@ def val : Datum [datum-nat 10]
 
 ** Partial Application
 
-Numbered placeholders =_1=, =_2= enable positional reordering:
+Partials are ALWAYS explicit-hole sections (D-N6E.1): each =_= marks its
+OWN position (left-to-right, one lambda parameter per hole, desugared at
+the immediately-enclosing bracket group). Under-application (=[+ 7]=) is
+an ERROR, never an implicit partial. Sections work over ordinary function
+heads AND op keywords (Numerics N6e-E3) — a keyword section wraps the
+keyword, so =[+ 7 _]= keeps head-position auto-widening.
 
 #+begin_src prologos
-;; Wildcard _ fills rightmost position
+;; Each _ fills its own position
 [add 1N _]           ;; fn x -> add 1N x
+[int* _ 2]           ;; fn x -> int* x 2   (keyword section)
+[+ 7 _]              ;; fn x -> + 7 x      (auto-widening preserved)
 
-;; Numbered holes for reordering
+;; Numbered holes for reordering (surf-app heads)
 [div _2 _1]          ;; fn x y -> div y x
 #+end_src
 

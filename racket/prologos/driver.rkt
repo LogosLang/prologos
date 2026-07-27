@@ -25,6 +25,11 @@
          "pretty-print.rkt"
          "typing-errors.rkt"
          "global-env.rkt"
+         ;; PPN 4C Addendum Phase 4B.3-b (§18.21.22): the δ residuation fire-fn
+         ;; constructs/inspects def-entry values directly (net-cell-write inside a
+         ;; fire-fn bypasses the mnr's cons↔def-entry adapters). Pure leaf → no cycle.
+         (only-in "definition-entry.rkt"
+                  def-entry def-entry? def-entry-type def-entry-value)
          "macros.rkt"
          "sexp-readtable.rkt"
          "parse-reader.rkt"  ;; unified reader: WS-mode + sexp re-exports
@@ -83,6 +88,7 @@
 (provide process-command
          process-file
          process-string
+         process-string/return-net    ;; PPN 4C Addendum Phase 3C.b.5.b — net-returning variant for cell-state inspection
          process-string-ws
          load-module
          install-module-loader!
@@ -162,19 +168,19 @@
 ;; When a type has holes, is-type will fail, but check will still work.
 ;; ========================================
 (define (type-contains-hole? e)
-  (match e
-    [(expr-hole) #t]
-    [(expr-typed-hole _) #t]
-    [(expr-Pi _ a b) (or (type-contains-hole? a) (type-contains-hole? b))]
-    [(expr-Sigma a b) (or (type-contains-hole? a) (type-contains-hole? b))]
-    [(expr-app f x) (or (type-contains-hole? f) (type-contains-hole? x))]
-    [(expr-lam _ a b) (or (type-contains-hole? a) (type-contains-hole? b))]
-    [_ #f]))
+  ;; CIU T6 F1b.2 (D23 groundwork): DEEP (generic walk in zonk.rkt) — the
+  ;; historical Pi/Sigma/app/lam-only recursion missed holes embedded in
+  ;; unions/rows/Maps, mis-gating consumers.
+  (expr-contains-hole-deep? e))
 
 ;; Replace expr-hole with fresh metavariables in a type expression.
 ;; This allows holes in type annotations (e.g., return type of pattern-compiled
 ;; functions) to be solved via unification during type checking.
 (define (holes-to-metas e)
+  ;; DELIBERATELY SHALLOW (F1b.2 decision): deepening this converts holes
+  ;; inside e.g. (Map _ Int) annotations into solvable metas — an
+  ;; annotation-FEATURE change, not stored-type hygiene; out of the D23
+  ;; groundwork's scope. Holes it misses stay check-wildcards (safe).
   (match e
     [(expr-hole) (fresh-meta ctx-empty (expr-Type 0) "type-hole")]
     [(expr-typed-hole _) e]
@@ -188,13 +194,88 @@
 ;; Prevents dangling meta references in stored types (metas are cleared
 ;; between commands by reset-meta-store!).
 (define (unsolved-metas-to-holes e)
-  (match e
-    [(expr-meta _ _) (expr-hole)]
-    [(expr-Pi m a b) (expr-Pi m (unsolved-metas-to-holes a) (unsolved-metas-to-holes b))]
-    [(expr-Sigma a b) (expr-Sigma (unsolved-metas-to-holes a) (unsolved-metas-to-holes b))]
-    [(expr-app f x) (expr-app (unsolved-metas-to-holes f) (unsolved-metas-to-holes x))]
-    [(expr-lam m a b) (expr-lam m (unsolved-metas-to-holes a) (unsolved-metas-to-holes b))]
-    [_ e]))
+  ;; CIU T6 F1b.2 (D23 groundwork): DEEP (generic transformer in zonk.rkt).
+  ;; The shallow version missed metas inside unions/record rows — the D19
+  ;; raw-meta leak (PROBES §P7: stored types carried dangling ?metas).
+  (metas-to-holes e))
+
+;; ========================================
+;; CIU T6 F1b.6 (D23): escape-boundary posture — the tightening deployment half.
+;; ========================================
+;; A dyn-row POINT-PROJECTION meta escaping into a STORED type is a HARD ERROR:
+;; a stored type is a commitment, and a raw projection meta is asserted-unknown
+;; knowledge the compiler doesn't have — it DANGLES after the per-command meta
+;; reset and would propagate into module capture / .pnet (PROBES §P7). The
+;; foreclosed idiom (owner-accepted): `def x := m.c` as a way of NAMING an open
+;; observation. Escape hatch = an explicit annotation, which SOLVES the meta (so
+;; zonk substitutes it away and it never reaches this check). EXPLORATION stays
+;; permissive — this is consulted ONLY in the store-commit error blocks, NEVER
+;; at eval/infer, so a bare top-level `m.c` still displays its observation meta.
+;;
+;; The error set is the TWO point-read projection kinds ONLY (m.c literal-miss /
+;; m[k] dynamic-key). Bulk-op result kinds (dyn-row-update-in / -fold / -values /
+;; -filter / -map-vals / …) are NOT here — those are legitimately-dyn results and
+;; keep scrubbing to holes (F1b.2b), not undischarged observations.
+(define d23-projection-meta-kinds '(dyn-row-projection dyn-row-dynamic-projection))
+
+;; type-LOCAL (matches D23's "a type CONTAINING a projection meta"): walk the
+;; (zonked, PRE-scrub) stored type; if it contains an undischarged point-read
+;; projection meta, return a prologos-error (with def-srcloc); else #f. Precise
+;; to escape — an intermediate projection meta discarded before the stored type
+;; (e.g. `def x := [const 5 m.c]`) is NOT flagged (a global sweep would over-fire).
+(define (check-escaping-projection-metas zonked-type name def-srcloc)
+  (and (for/or ([m (in-list (collect-expr-metas-deep zonked-type))])
+         (let* ([minfo (meta-lookup (expr-meta-id m))]
+                [src (and minfo (meta-info-source minfo))])
+           (and (meta-source-info? src)
+                (memq (meta-source-info-kind src) d23-projection-meta-kinds)
+                #t)))
+       (prologos-error def-srcloc
+         (format (string-append
+                  "definition ~a stores an undischarged open-row projection: "
+                  "projecting an unknown field on an open row yields an observation "
+                  "the type checker cannot commit to a stored type. Annotate to "
+                  "discharge it — `def ~a : <type> := …`")
+                 name name))))
+
+;; ========================================
+;; CIU T6 F1b.4c (D22/M3): seal-scoped def-forcing
+;; ========================================
+;; A def whose body is a SEAL APPLICATION — the constructor rewrite's
+;; elaborated shape: an expr-ann against a schema fvar, optionally under the
+;; :check beta-redex app(lam(_,hole,<boolrec…panic…>), ann(_, fvar S)) — is
+;; nf'd at commit: tabulation FORCES (the D22 co-design ruling), so a failing
+;; :check pred errors at DEFINITION time with def-srcloc (mirroring the eval
+;; arm's top-node conversion, driver eval case) instead of silently defining
+;; and later swallowing to `none` under projection (PROBES §P4). The forcing
+;; is a CHECK only — the stored body stays the unreduced redex (storage
+;; semantics unchanged); laziness for every non-seal def body is untouched
+;; (shape-gated). Named non-coverage (the eval arm's own top-node class): a
+;; seal application NESTED deeper in a body (inside a pair/list) is not
+;; forced here — runtime discharge for those is validate's job (F1b.5).
+(define (seal-application-body? body)
+  (define (schema-ann? e)
+    (and (expr-ann? e)
+         (let ([t (expr-ann-type e)])
+           (and (expr-fvar? t)
+                (lookup-schema-by-name (expr-fvar-name t))
+                #t))))
+  (or (schema-ann? body)
+      (and (expr-app? body)
+           (expr-lam? (expr-app-func body))
+           (schema-ann? (expr-app-arg body)))))
+
+;; Returns a prologos-error when the forced seal body panics; #f otherwise
+;; (usable directly as a cond => guard).
+(define (seal-forcing-error zonked-body def-srcloc)
+  (and (seal-application-body? zonked-body)
+       (let ([forced (nf (rewrite-specializations zonked-body))])
+         (and (expr-panic? forced)
+              (prologos-error def-srcloc
+                (format "panic: ~a (sealed definition forced at commit)"
+                        (if (expr-string? (expr-panic-msg forced))
+                            (expr-string-val (expr-panic-msg forced))
+                            (pp-expr (expr-panic-msg forced)))))))))
 
 ;; Check if an elaborated type contains unsolved metas (level-meta, mult-meta, or expr-meta).
 ;; When a type has unsolved metas (from implicit parameter inference), is-type may fail
@@ -202,14 +283,10 @@
 ;; (e.g., Option (List A) where List A : Type 1 but Option expects Type 0).
 ;; These types will be properly checked during the body type-check phase.
 (define (type-contains-meta? e)
-  (match e
-    [(expr-meta _ _) #t]
-    [(expr-Type l) (level-meta? l)]
-    [(expr-Pi m a b) (or (mult-meta? m) (type-contains-meta? a) (type-contains-meta? b))]
-    [(expr-Sigma a b) (or (type-contains-meta? a) (type-contains-meta? b))]
-    [(expr-app f x) (or (type-contains-meta? f) (type-contains-meta? x))]
-    [(expr-lam m a b) (or (mult-meta? m) (type-contains-meta? a) (type-contains-meta? b))]
-    [_ #f]))
+  ;; CIU T6 F1b.2 (D23 groundwork): DEEP (generic walk in zonk.rkt) — keeps
+  ;; the ty-ok gate + residuation admissibility consistent with the deep
+  ;; scrub (shallow detection under a deep scrub would mis-gate).
+  (expr-contains-meta-deep? e))
 
 ;; Check if an expression contains node types that the QTT module
 ;; doesn't handle yet: expr-reduce (structural PM), Vec, Fin constructors/eliminators.
@@ -400,6 +477,59 @@
     [(proc-solve _t cont) (proc-body-used-caps cont)]
     [_ (set)]))
 
+;; Type-check the fact rows of a schema-typed relation against the schema's field
+;; types. Returns #f if all rows are well-typed (or the relation has no schema /
+;; no facts), or an error-message string on the first offending row. Fact-row
+;; terms are ground literals, so they are checked in the empty context.
+(define (check-relation-schema-rows rel-info)
+  (define sname (relation-info-schema rel-info))
+  (define entry (and sname (lookup-schema-by-name sname)))
+  (cond
+    [(not entry) #f]
+    [else
+     (define fields (schema-entry-fields entry))
+     (define n (length fields))
+     (define rname (relation-info-name rel-info))
+     (or
+      (for/or ([variant (in-list (relation-info-variants rel-info))])
+        (for/or ([fr (in-list (variant-info-facts variant))]
+                 [ri (in-naturals 1)])
+          (define terms (fact-row-terms fr))
+          (cond
+            [(not (= (length terms) n))
+             (format "defr ~a : ~a — fact row ~a has ~a value(s) but schema ~a has ~a field(s)"
+                     rname sname ri (length terms) sname n)]
+            [else
+             (for/or ([term (in-list terms)]
+                      [fld (in-list fields)])
+               (define ft (schema-field-type->expr (schema-field-type-datum fld)))
+               (and (not (check ctx-empty term ft))
+                    (format "defr ~a : ~a — field :~a expects ~a, got ~a"
+                            rname sname (schema-field-keyword fld)
+                            (pp-expr ft) (pp-expr term))))])))
+      #f)]))
+
+;; Rel T1 Aspect C, C.c: a schema-typed relation must be FACTS-ONLY. A schema is a
+;; checked contract on ground fact rows (table-like data); a schema on a RULE relation
+;; (`defr R : S &> …`) is a category error — relation-column-typer's schema branch
+;; (typing-core.rkt:3603-3610) types R by S assuming its rows conform, but rule clauses
+;; are not fact rows. Enforcing "schema ⟹ facts-only" is the true precondition: it is
+;; complete + sound, and closes the Aspect-B soundness hole by REJECTING the ill-formed
+;; input (the bad relation never registers, so the schema branch only ever types
+;; facts-only schema'd relations — whose rows ARE checked by check-relation-schema-rows).
+;; No typer guard is needed (rejecting the input is stronger than guarding against it).
+;; A rule relation should use `?x:Int` parameter constraints (a guard), not a schema.
+;; Returns #f (well-formed) or an error string (→ blocking prologos-error at the caller).
+(define (check-relation-schema-facts-only rel-info)
+  (define sname (relation-info-schema rel-info))
+  (and sname
+       (for/or ([v (in-list (relation-info-variants rel-info))])
+         (pair? (variant-info-clauses v)))
+       (format (string-append "defr ~a : ~a — a schema-typed relation must be facts-only "
+                              "(fully-ground rows); it has rule clauses (&>). Use `?x:Int` "
+                              "parameter constraints for a rule relation, not a schema.")
+               (relation-info-name rel-info) sname)))
+
 ;; Emit W2002 warnings for capability binders that are never used in boundary ops.
 ;; Also emit W2003 for :w caps in process headers.
 (define (check-process-cap-warnings name caps proc-body)
@@ -460,25 +590,34 @@
   ;; Elaborate-level parameterize sharpens further; this covers top-level
   ;; warnings/errors that fire outside elaborate (e.g., from process-command
   ;; bookkeeping before elaborate runs).
-  (parameterize ([current-source-loc (or (surf-node-srcloc surf) (current-source-loc))])
+  (parameterize ([current-source-loc (or (surf-node-srcloc surf) (current-source-loc))]
+                 ;; 4B.5.a: the ORIGINAL surf — stored by general-body
+                 ;; placeholders; the sweep re-runs it (full fidelity).
+                 [current-processing-surf surf])
     (reset-meta-store!)  ;; clear metavariables from previous command
+    (reset-warning-cells!)  ;; clear per-command warning cells: they are mis-homed on
+                            ;; the grows-forever persistent registry net, which
+                            ;; reset-meta-store! does NOT rebuild — so without this
+                            ;; they leak across commands / run-ns-ws-last calls / tests.
   ;; Track 7 Phase 3: Registry cells (macros, warnings, narrowing) now live in the
   ;; persistent registry network — no per-command cell creation needed.
-  ;; Per-definition and namespace cells still created per-command in elab-network.
-  (register-global-env-cells! (current-prop-net-box) (current-prop-new-infra-cell))
+  ;; PPN 4C Addendum Phase 4A.c-iii-a2: register-global-env-cells! retired
+  ;; (the mnr is the authoritative per-name store since 4A.b). Namespace cells
+  ;; still created per-command in elab-network.
   (register-namespace-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   ;; Phase D: Initialize ATMS for dependency-directed error tracking.
   (when (not (current-command-atms))
     (current-command-atms (box (make-solver-state (make-prop-network)))))
   (init-speculation-tracking!)
-  ;; Track 7 Phase 5: Initialize retraction tracking for S(-1) stratum.
-  (when (not (current-retracted-assumptions))
-    (current-retracted-assumptions (box (seteq))))
+  ;; PPN 4C 2B (2026-05-20): retraction tracking via `current-retracted-assumptions`
+  ;; box RETIRED. S(-1) retraction now uses cell-13 (`retraction-stratum-request-cell-id`)
+  ;; written by `record-assumption-retraction` (pure, 2A.a) and processed by
+  ;; `process-retraction` BSP value-tier handler. Per D.3 §8.8.4 deliverable 8.
   ;; Track 7 Phase 3: macros/warnings/narrow net-box scoping removed — reads/writes
   ;; go directly to the persistent registry network, not through per-command elab-network.
-  ;; prelude-env and ns net-boxes still needed for per-definition cells.
-  (parameterize ([current-prelude-env-prop-net-box (current-prop-net-box)]  ;; Phase 3a: activate cell writes (auto-reverts)
-                 [current-ns-prop-net-box (current-prop-net-box)]          ;; Phase 3c: activate ns cell writes (auto-reverts)
+  ;; ns net-box still needed for per-command namespace cells. (prelude-env
+  ;; box retired at 4A.c-iii-a3 — global-env-add is always-mnr.)
+  (parameterize ([current-ns-prop-net-box (current-prop-net-box)]          ;; Phase 3c: activate ns cell writes (auto-reverts)
                  [current-nf-cache (make-hash)]         ;; per-command nf memoization
                  [current-whnf-cache (make-hash)]       ;; per-command whnf memoization
                  [current-reduction-fuel (box 1000000)]  ;; 1M step limit
@@ -528,6 +667,20 @@
                   ;; unhandled expression kinds (ATMS ops, narrowing, auto-implicits).
                   ;; Fallback is diagnostic — logged for SRE coverage tracking.
                   [(list 'eval expr)
+                   ;; PPN 4C Addendum Phase 4B.5.a (§18.21.26 W4 revised): the
+                   ;; DATA-driven demand trigger — a USE referencing pending /
+                   ;; deferred names returns the demand sentinel; the
+                   ;; process-file loop sweeps + retries (uses resolve against
+                   ;; the residue-so-far; textually-later defs stay the 4C
+                   ;; boundary, erroring with the carried status-quo text).
+                   (cond
+                     [(residuation-demand-name expr)
+                      => (lambda (nm)
+                           (residuation-demand
+                            (unbound-variable-error
+                             (or (surf-node-srcloc surf) srcloc-unknown)
+                             "Unbound variable" nm)))]
+                     [else
                    (let ([ty (time-phase! type-check
                               (let ([net-ty (infer-on-network/err ctx-empty expr)])
                                 (if (prologos-error? net-ty)
@@ -551,7 +704,7 @@
                                              (if (expr-string? (expr-panic-msg val))
                                                  (expr-string-val (expr-panic-msg val))
                                                  (pp-expr (expr-panic-msg val)))))
-                                         (format "~a : ~a" (pp-expr val) (pp-expr ty-nf))))))))))]
+                                         (format "~a : ~a" (pp-expr val) (pp-expr ty-nf))))))))))])]
 
                   ;; (infer expr) — Track 4B Phase 9: on-network first, fallback for unhandled
                   [(list 'infer expr)
@@ -678,20 +831,36 @@
                                  (car te)
                                  (begin
                                    (let ([zonked-body (time-phase! zonk (freeze expr))]
-                                       [zonked-type (time-phase! zonk (freeze ty))])
-                                   (global-env-add (current-prelude-env) name zonked-type zonked-body)
+                                       ;; CIU T6 F1b.2: deep meta scrub (stored-type discipline)
+                                       [zonked-type (unsolved-metas-to-holes (time-phase! zonk (freeze ty)))])
+                                   (global-env-add name zonked-type zonked-body)
                                    (when (current-ns-context)
                                      (define fqn (qualify-name name
                                                    (ns-context-current-ns (current-ns-context))))
-                                     (global-env-add (current-prelude-env) fqn zonked-type zonked-body))
-                                   ;; Convert zonked defr body to runtime relation-info
-                                   ;; and register in the global relation store
-                                   (when (expr-defr? zonked-body)
-                                     (define rel-info (expr-defr->relation-info zonked-body))
-                                     (current-relation-store
-                                      (relation-register (current-relation-store) rel-info))
-                                     (bump-relation-store-version!))
-                                   (format "~a : ~a defined." name (pp-expr zonked-type)))))))))]
+                                     (global-env-add fqn zonked-type zonked-body))
+                                   ;; Convert zonked defr body to runtime relation-info,
+                                   ;; type-check schema-typed fact rows, and register.
+                                   (cond
+                                     [(expr-defr? zonked-body)
+                                      (define rel-info (expr-defr->relation-info zonked-body))
+                                      ;; Rel T1 C.c: schema ⟹ facts-only well-formedness gate
+                                      ;; (a schema on a rule relation is a category error).
+                                      (define schema-rule-err (check-relation-schema-facts-only rel-info))
+                                      (define schema-err (check-relation-schema-rows rel-info))
+                                      ;; Rel T1 A.3: static floundering gate (engine-independent,
+                                      ;; runs at defr registration before any query dispatch).
+                                      (define flounder-err (check-relation-floundering rel-info))
+                                      (cond
+                                        [schema-rule-err (prologos-error #f schema-rule-err)]
+                                        [schema-err (prologos-error #f schema-err)]
+                                        [flounder-err (prologos-error #f flounder-err)]
+                                        [else
+                                         (current-relation-store
+                                          (relation-register (current-relation-store) rel-info))
+                                         (bump-relation-store-version!)
+                                         (format "~a : ~a defined." name (pp-expr zonked-type))])]
+                                     [else
+                                      (format "~a : ~a defined." name (pp-expr zonked-type))]))))))))]
 
                   ;; (subtype sub-key super-key) — declaration already processed in elaborator
                   [(list 'subtype sub-key super-key)
@@ -701,9 +870,9 @@
                   ;; Install the selection name as a type in the global env.
                   [(list 'selection name-fqn name-short schema-name)
                    ;; Install under both FQN and short name
-                   (global-env-add-type-only (current-prelude-env) name-fqn (expr-Type 0))
+                   (global-env-add-type-only name-fqn (expr-Type 0))
                    (unless (eq? name-fqn name-short)
-                     (global-env-add-type-only (current-prelude-env) name-short (expr-Type 0)))
+                     (global-env-add-type-only name-short (expr-Type 0)))
                    (format "selection ~a from ~a registered." name-short schema-name)]
 
                   ;; (capability name-fqn name-short cap-type) — capability declaration
@@ -712,9 +881,9 @@
                   ;; Dependent caps: cap-type = Pi(p :0 T, ... (expr-Type 0)).
                   [(list 'capability name-fqn name-short cap-type)
                    ;; Install under both FQN and short name
-                   (global-env-add-type-only (current-prelude-env) name-fqn cap-type)
+                   (global-env-add-type-only name-fqn cap-type)
                    (unless (eq? name-fqn name-short)
-                     (global-env-add-type-only (current-prelude-env) name-short cap-type))
+                     (global-env-add-type-only name-short cap-type))
                    (format "capability ~a registered." name-short)]
 
                   ;; (cap-closure name) — transitive capability closure query
@@ -820,11 +989,11 @@
                   ;; Register the session name as a type in the global env
                   [(list 'session name sess-body)
                    ;; Install as a type-level binding (like capability/selection)
-                   (global-env-add-type-only (current-prelude-env) name (expr-Type 0))
+                   (global-env-add-type-only name (expr-Type 0))
                    (when (current-ns-context)
                      (define fqn (qualify-name name
                                    (ns-context-current-ns (current-ns-context))))
-                     (global-env-add-type-only (current-prelude-env) fqn (expr-Type 0)))
+                     (global-env-add-type-only fqn (expr-Type 0)))
                    (format "session ~a defined." name)]
 
                   ;; Phase S3+S5a: Process definition
@@ -859,11 +1028,11 @@
                             (when (pair? caps)
                               (check-process-cap-warnings name caps proc-body))
                             ;; Register in global env
-                            (global-env-add-type-only (current-prelude-env) name (expr-Type 0))
+                            (global-env-add-type-only name (expr-Type 0))
                             (when (current-ns-context)
                               (define fqn (qualify-name name
                                             (ns-context-current-ns (current-ns-context))))
-                              (global-env-add-type-only (current-prelude-env) fqn (expr-Type 0)))
+                              (global-env-add-type-only fqn (expr-Type 0)))
                             ;; S7c: Register in process registry for spawn
                             (register-process! name
                               (process-entry name resolved-sess proc-body caps srcloc-unknown))
@@ -879,7 +1048,7 @@
                                       name (pp-session resolved-sess)))])]
                         [else
                          ;; No resolved session — register without type-checking for now
-                         (global-env-add-type-only (current-prelude-env) name (expr-Type 0))
+                         (global-env-add-type-only name (expr-Type 0))
                          ;; S7c: Register in process registry (no resolved session for execution)
                          (register-process! name
                            (process-entry name #f proc-body caps srcloc-unknown))
@@ -889,7 +1058,7 @@
                       ;; S5c: Check for dead/ambient authority warnings
                       (when (pair? caps)
                         (check-process-cap-warnings name caps proc-body))
-                      (global-env-add-type-only (current-prelude-env) name (expr-Type 0))
+                      (global-env-add-type-only name (expr-Type 0))
                       ;; S7c: Register in process registry (no session type for execution)
                       (register-process! name
                         (process-entry name #f proc-body caps srcloc-unknown))
@@ -1040,7 +1209,11 @@
     (when (and cap nb)
       (set-box! cap (unbox nb))))
   ;; Append warnings to result string (if any)
-  (define coercion-warns (reverse (read-coercion-warnings)))
+  ;; N6a dedupe (SCAFFOLDING — retired when the warning cells move to a
+  ;; set-union merge under the §12 re-home): one displayed line per distinct
+  ;; (from,to) coercion per command; the structs are #:transparent so
+  ;; equal?-dedup is exactly (from,to) identity.
+  (define coercion-warns (remove-duplicates (reverse (read-coercion-warnings))))
   (define deprecation-warns (reverse (read-deprecation-warnings)))
   (define capability-warns (reverse (read-capability-warnings)))
   (define all-warning-strs
@@ -1056,6 +1229,364 @@
       (string-join
        (cons result all-warning-strs)
        "\n")))))  ;; PPN 4C Phase 1.5: close parameterize
+
+;; ============================================================
+;; PPN 4C Addendum Phase 4B.3-b (§18.21.22): forward bare-ref residuation
+;; ============================================================
+;; The ACTIVE flip — the env READ becomes cell-at-bot residuation on NET-1 (the
+;; per-file mnr). When `def x := a` references a not-yet-defined same-file `a`,
+;; process-def installs a δ fire-once propagator on the mnr (:reads a's cell,
+;; :writes x's cell(s)) and DEFERS its own commit; the δ is the SOLE writer (LWW
+;; exactly-once). The file-end drive (drive-file-mnr!) fires the δ when `a`
+;; grounds; the DQ5 post-drive sweep finalizes the deferred result.
+
+;; Gate (DQ4): residuation is enabled ONLY within process-file (where the drive +
+;; the finalize sweep run). #f elsewhere (process-string / REPL / module-load) →
+;; a forward ref errors immediately at the referencing site, status quo.
+;; PPN 4C Addendum Phase 4B.5.a (§18.21.26): the parameter MOVED to
+;; global-env.rkt (a leaf) so elaborate-var's pending-aware arm reads it
+;; without a require cycle. driver.rkt consumes it via the global-env require.
+
+;; ========================================
+;; PPN 4C Addendum Phase 4B.5.a (§18.21.26 revised): general-body residuation
+;; ========================================
+;;
+;; `def a := [f b]` (body NOT a bare var) with forward referents: the
+;; command-time elaboration is the DETECTOR (elaborate-var's pending arm lets
+;; a known pending def-head resolve as a normal fvar; the post-elaborate scan
+;; below finds the pending referents — exact scoping, exact diagnostics). The
+;; COMMIT is deferred: the placeholder stores the ORIGINAL SURF (an elaborated
+;; body would carry dangling expr-metas across reset-meta-store! — the R5
+;; hazard); the SWEEP re-runs process-command on the stored surf when the
+;; referents ground (process-command's own reset IS the fresh context). The
+;; sweep is the imperative stand-in for 4C's whole-file fixpoint — NAMED
+;; SCAFFOLDING; retirement = on-network deferred typing (PM 12B note §10).
+
+;; The residue: outstanding general-body placeholders (box of list) + the
+;; completions map (eq-keyed mutable hasheq: placeholder → final result).
+;; Bound per-file in process-file's parameterize; #f elsewhere.
+(define current-general-residue (make-parameter #f))
+(define current-general-completions (make-parameter #f))
+
+;; The general-body deferred-commit placeholder (positional in results, like
+;; residuation-placeholder). surf = the ORIGINAL surf command (re-run by the
+;; sweep); pending-referents = the bare names 'pending at detection time.
+(struct general-body-placeholder (name srcloc surf pending-referents) #:transparent)
+
+;; The demand sentinel: a top-level USE whose elaboration references pending /
+;; deferred names. The process-file loop catches it, runs the sweep fixpoint
+;; over the residue-so-far, retries the command ONCE; still demanding → the
+;; carried status-quo unbound error is the result. (§18.21.25.3: uses resolve
+;; against everything defined-or-deferred SO FAR; textually-later defs stay
+;; the named 4C boundary.)
+(struct residuation-demand (error) #:transparent)
+
+;; Collect every expr-fvar name in an elaborated expression. GENERIC
+;; REFLECTIVE walk (struct->vector over the transparent expr structs) rather
+;; than a mirrored per-node case list — exhaustive over current AND future
+;; nodes by construction (§18.21.26 W5, revised). Over-collection (e.g.,
+;; fvars inside meta contexts) is harmless: the pending FILTER below discards
+;; anything that is not a seeded same-file def-head.
+(define (collect-fvar-names e)
+  (let walk ([v e] [acc (seteq)])
+    (cond
+      [(expr-fvar? v) (set-add acc (expr-fvar-name v))]
+      [(struct? v)
+       (let ([vec (struct->vector v)])
+         (for/fold ([a acc]) ([i (in-range 1 (vector-length vec))])
+           (walk (vector-ref vec i) a)))]
+      [(pair? v) (walk (cdr v) (walk (car v) acc))]
+      [(vector? v) (for/fold ([a acc]) ([x (in-vector v)]) (walk x a))]
+      [(hash? v) (for/fold ([a acc]) ([(k x) (in-hash v)]) (walk x (walk k a)))]
+      [else acc])))
+
+;; The pending referents of an elaborated expression: fvar names whose
+;; def-entry cell is 'pending (a seeded same-file def-head awaiting its
+;; definition). exclude: names to omit — the def's OWN name(s) on the
+;; ANNOTATED path (the pre-register supplies the self type). The INFERRED
+;; path does NOT exclude self (inferred self-recursion is broken today —
+;; probe 2026-06-10; self-pending stalls in 4B.5.a [file-end unbound,
+;; status-quo-equivalent] and becomes a size-1 SCC for 4B.5.b's pass).
+(define (pending-referent-names e #:exclude [exclude '()])
+  (for/list ([nm (in-set (collect-fvar-names e))]
+             #:when (and (not (memq nm exclude))
+                         (eq? 'pending (car (global-env-lookup-status nm)))))
+    nm))
+
+;; Demand-trigger check for a top-level USE: a referenced name is 'pending OR
+;; has an outstanding (uncompleted) placeholder — the latter catches deferred
+;; ANNOTATED defs whose pre-register reads 'ground-with-#f (typing against T
+;; is fine for DEFS, but a USE would evaluate to a stuck term — sweep first).
+(define (residuation-demand-name e)
+  (and (current-residuation-enabled?)
+       (current-general-residue)
+       (let ([residue-names
+              (for/seteq ([ph (in-list (unbox (current-general-residue)))]
+                          #:unless (and (current-general-completions)
+                                        (hash-has-key? (current-general-completions) ph)))
+                (general-body-placeholder-name ph))])
+         (for/first ([nm (in-set (collect-fvar-names e))]
+                     #:when (or (eq? 'pending (car (global-env-lookup-status nm)))
+                                (set-member? residue-names nm)
+                                (let-values ([(_p short) (split-qualified-name nm)])
+                                  (set-member? residue-names short))))
+           nm))))
+
+;; In-def-group guard (§18.21.26.3): clause-level residuation is NOT supported
+;; (the group's findf flattening would swallow a placeholder; genuine
+;; multi-arity is PM 12B's). Inside process-def-group, a clause body with
+;; pending referents gets the status-quo unbound error instead of deferring.
+(define current-in-def-group? (make-parameter #f))
+
+;; The original surf of the command being processed (set by process-command) —
+;; what the placeholder stores and the sweep re-runs.
+(define current-processing-surf (make-parameter #f))
+
+;; Try to defer a general-body def whose elaborated body references pending
+;; names. Returns: #f (nothing pending — proceed normally) | a
+;; general-body-placeholder (deferred; pushed to the residue) | a
+;; prologos-error (in-def-group guard). Called post-elaboration on BOTH
+;; process-def paths.
+(define (try-defer-general-body name def-srcloc elaborated-body exclude)
+  (and (current-residuation-enabled?)
+       (current-general-residue)
+       (current-processing-surf)
+       (let ([pending (pending-referent-names elaborated-body #:exclude exclude)])
+         (and (pair? pending)
+              (if (current-in-def-group?)
+                  (unbound-variable-error def-srcloc "Unbound variable" (car pending))
+                  (let ([ph (general-body-placeholder
+                             name def-srcloc (current-processing-surf) pending)])
+                    (set-box! (current-general-residue)
+                              (cons ph (unbox (current-general-residue))))
+                    ph))))))
+
+;; The acyclic general-body sweep: semi-naive re-evaluation over the residue.
+;; Each pass re-runs (process-command stored-surf) for every outstanding
+;; placeholder whose pending referents are no longer 'pending (ground via the
+;; drive/a prior completion, or absent via a failed referent — the re-run then
+;; errors properly). A re-run that RE-DEFERS (e.g. inferred self-pending) is
+;; not progress: its duplicate placeholder is dropped, the original stays
+;; outstanding (4B.5.b's SCC residue). Returns #t iff ≥1 completion happened.
+(define (run-general-residuation-sweep!)
+  (and (current-general-residue) (current-general-completions)
+       (let loop ([any-progress? #f])
+         (define completions (current-general-completions))
+         (define outstanding
+           (for/list ([ph (in-list (reverse (unbox (current-general-residue))))]
+                      #:unless (hash-has-key? completions ph))
+             ph))
+         (define progressed?
+           (for/fold ([prog #f]) ([ph (in-list outstanding)])
+             (cond
+               [(for/or ([r (in-list (general-body-placeholder-pending-referents ph))])
+                  (eq? 'pending (car (global-env-lookup-status r))))
+                prog]  ;; still waiting
+               [else
+                (define result (process-command (general-body-placeholder-surf ph)))
+                (cond
+                  [(general-body-placeholder? result)
+                   ;; re-deferred (self-pending) — drop the duplicate; no progress
+                   (set-box! (current-general-residue)
+                             (remq result (unbox (current-general-residue))))
+                   prog]
+                  [else
+                   (hash-set! completions ph result)
+                   #t])])))
+         (if progressed? (loop #t) any-progress?))))
+
+;; Drive NET-1 + sweep, alternating to fixpoint: a sweep completion writes
+;; cells that may unblock bare-ref δs (drive), whose fires may unblock sweep
+;; items — and vice versa. Terminates: completions are monotone, bounded by
+;; the residue; the drive is O(diff)-idempotent.
+(define (run-residuation-fixpoint!)
+  (drive-file-mnr!)
+  (when (run-general-residuation-sweep!)
+    (run-residuation-fixpoint!)))
+
+;; Demand-retry shim for the process-file loop: a residuation-demand from the
+;; eval arm triggers the sweep fixpoint, then ONE retry; still demanding →
+;; the carried status-quo unbound error.
+(define (process-command/demand surf)
+  (define r (process-command surf))
+  (if (residuation-demand? r)
+      (begin
+        (run-residuation-fixpoint!)
+        (let ([r2 (process-command surf)])
+          (if (residuation-demand? r2) (residuation-demand-error r2) r2)))
+      r))
+
+;; The deferred-commit placeholder: occupies the residuated command's slot in the
+;; process-file results list (positional). The DQ5 sweep replaces each with the
+;; finalized result. Neither a string nor a prologos-error, so the
+;; error-diagnostics loop skips it and the sweep finds it unambiguously.
+;; 4B.4.a (§18.21.24): + `annotation` (the captured zonked annotation T for an
+;; ANNOTATED residuation; #f for inferred) + `referent` (the resolved referent
+;; name) — carried for the finalize-time TC-(a) type-obligation check.
+(struct residuation-placeholder (name srcloc annotation referent) #:transparent)
+
+;; 4B.4.a (§18.21.24): pre-check + capture the annotation for an ANNOTATED
+;; forward-ref residuation. Returns the captured zonked-T when the def may
+;; residuate, or 'reject to fall through to the annotated [else] (which then
+;; handles the case exactly as today — behavior preserved). Reject cases:
+;;   - the name is a registered data-type/ctor/schema (the opaque branch: its
+;;     value stays #f forever — a δ residuating on it would never finalize);
+;;     NAME-keyed, replicating the [else]'s data-type-def? (body shape is NOT
+;;     a reliable signal — §18.21.24.1)
+;;   - T fails to elaborate or is not a well-formed type (the [else]
+;;     re-elaborates + reports with full diagnostics — error-path parity at the
+;;     cost of a double elaboration on the error path only)
+;;   - T contains holes or unsolved metas (their metas die at reset-meta-store!
+;;     before the file-end drive; NAMED boundary — status-quo behavior)
+(define (residuation-annotated-type-or-reject name type-surf)
+  (define-values (_pfx short-name) (split-qualified-name name))
+  (define data-type-def?
+    (or (lookup-type-ctors name)
+        (and short-name (lookup-type-ctors short-name))
+        (lookup-ctor name)
+        (and short-name (lookup-ctor short-name))
+        (lookup-schema name)
+        (and short-name (lookup-schema short-name))))
+  (cond
+    [data-type-def? 'reject]
+    [else
+     (define type (elaborate type-surf))
+     (cond
+       [(prologos-error? type) 'reject]
+       [(or (type-contains-hole? type) (type-contains-meta? type)) 'reject]
+       [(prologos-error? (is-type/err ctx-empty type)) 'reject]
+       [else (freeze type)])]))  ;; zonk at capture time (T is ground → stable)
+
+;; Try to residuate a forward bare-ref. Returns a residuation-placeholder (and
+;; installs the δ) iff `body-surf` is a bare-var reference to a PENDING same-file
+;; def-head and residuation is enabled; else #f (no side effect). `name` = the def
+;; being defined (the referrer); `def-srcloc` = its location (for the unbound case).
+;; 4B.4.a (§18.21.24): `type-surf` = the def's surface annotation or #f. Both
+;; paths residuate; the ANNOTATED δ RE-SUPPLIES the captured zonked-T
+;; (def-entry-merge's :type is new-wins — writing the referent's type would
+;; clobber the annotation), while the INFERRED δ takes the referent's type
+;; (4B.3-b behavior, unchanged). The annotated pre-checks live in
+;; residuation-annotated-type-or-reject; 'reject → #f (fall through to the
+;; [else], which pre-registers + reports exactly as today).
+(define (try-forward-ref-residuation name type-surf body-surf def-srcloc)
+  (and (current-residuation-enabled?)
+       (surf-var? body-surf)
+       (let ([referent (surf-var-name body-surf)])
+         (define referent-status (global-env-lookup-status referent))
+         ;; pending-def-head signal: the BARE name's status (Pass 1.5 seeds bare
+         ;; names; a never-defined typo is absent → not pending → not residuated).
+         (and (eq? (car referent-status) 'pending)
+              (let ([captured-T (and type-surf
+                                     (residuation-annotated-type-or-reject name type-surf))])
+                (and (not (eq? captured-T 'reject))
+                     (let* (;; :reads the BARE referent cell — already seeded by Pass
+                            ;; 1.5; it grounds when the referent's own def commits. The
+                            ;; STORED form uses the resolved (own-ns FQN) NAME for parity.
+                            [referent-cid (cdr referent-status)]
+                            [ns (and (current-ns-context)
+                                     (ns-context-current-ns (current-ns-context)))]
+                            ;; DQ3: qualify-name = the elaborator own-ns branch that
+                            ;; wins for an own-ns def-head (the resolve-name
+                            ;; generalization for import-shadowing is PM 12B scope,
+                            ;; D-4B3-8/9).
+                            [resolved-referent (if ns (qualify-name referent ns) referent)]
+                            [resolved-ref-expr (expr-fvar resolved-referent)]
+                            ;; Option A (§18.21.22): the δ writes the SAME cell set
+                            ;; process-def's commit would — bare `name` always +
+                            ;; `foo::name` under ns — parity-exact, both ground
+                            ;; together (the DQ5 sweep is then unambiguous). Pass 1.5
+                            ;; seeded only bare names → lazy-pre-alloc the FQN.
+                            [referrer-fqn (and ns (qualify-name name ns))]
+                            [_pre (when referrer-fqn (prealloc-def-cell! referrer-fqn))]
+                            [write-cids
+                             (cons (cdr (global-env-lookup-status name))
+                                   (if referrer-fqn
+                                       (list (cdr (global-env-lookup-status referrer-fqn)))
+                                       '()))]
+                            ;; the δ: referent ground → write the deferred commit to
+                            ;; the referrer cell(s); def-bot → no-op (residuate).
+                            ;; :type = the captured annotation T when annotated
+                            ;; (RE-SUPPLY — D-4B4a-1: merge :type is new-wins, so the
+                            ;; referent's type would clobber T), else the referent's
+                            ;; type (inferred). Uses the `net` PARAMETER for
+                            ;; read+write (never a captured net —
+                            ;; propagator-design.md fire-function rule).
+                            [fire-fn
+                             (lambda (net)
+                               (define referent-entry (net-cell-read net referent-cid))
+                               (if (def-entry? referent-entry)
+                                   (let ([v (def-entry (or captured-T
+                                                           (def-entry-type referent-entry))
+                                                       resolved-ref-expr)])
+                                     (for/fold ([n net]) ([wc (in-list write-cids)])
+                                       (net-cell-write n wc v)))
+                                   net))])
+                       ;; install on the mnr; #:component-paths REQUIRED (the input
+                       ;; cell is 'structural — enforce-component-paths!). :value is
+                       ;; the facet the deferred commit depends on; def-bot→def-entry
+                       ;; is opaque to pu-value-diff, so the wake is unconditional and
+                       ;; the path is the Correct-by-Construction gate (§18.21.22 ①).
+                       ;; Thread the mnr back.
+                       (current-file-module-network-ref
+                        (module-network-install-fire-once
+                         (current-file-module-network-ref)
+                         (list referent-cid) write-cids fire-fn
+                         #:component-paths (list (cons referent-cid ':value))))
+                       (residuation-placeholder name def-srcloc
+                                                 captured-T resolved-referent))))))))
+
+;; DQ5 post-drive finalize sweep: replace each residuation-placeholder in the
+;; results list (positional, in place) with its finalized result — cell ground →
+;; "x : T defined." (matching the immediate-path string); still def-bot →
+;; unbound-variable-error (the immediate→file-end shift for a forward-ref that
+;; never grounds). Run AFTER drive-file-mnr! and BEFORE the error-diagnostics loop
+;; (so the file-end error is diagnosed like an immediate typo). Reads groundness
+;; via the 4B.3-a status API (by name) — the single cascade-truth source.
+;; 4B.4.a TC-(a) (§18.21.24): for an ANNOTATED residuation ('ground + annotation
+;; carried), run the deferred type-obligation — the annotated path's check/err of
+;; the stored (expr-fvar referent) against T, post-drive when the referent is
+;; ground. Mismatch → remove-failed-definition! + the chk error in the slot
+;; (file-end type error; parity with the immediate annotated path). The success
+;; string pp's the CELL's type (the on-network truth — for annotated, T by
+;; construction: the δ re-supplied it).
+(define (finalize-residuations results)
+  (for/list ([r (in-list results)])
+    (cond
+      ;; 4B.5.a (§18.21.26): general-body placeholders finalize from the
+      ;; completions map (the sweep already ran — the fixpoint precedes this
+      ;; walk). Never-completed → file-end unbound on the first still-pending
+      ;; referent (DQ5 style; .b upgrades the stalled-cycle case to the
+      ;; §18.11 cycle diagnostic).
+      [(general-body-placeholder? r)
+       (or (and (current-general-completions)
+                (hash-ref (current-general-completions) r #f))
+           (unbound-variable-error
+            (or (general-body-placeholder-srcloc r) srcloc-unknown)
+            "Unbound variable"
+            (or (for/first ([n (in-list (general-body-placeholder-pending-referents r))]
+                            #:when (eq? 'pending (car (global-env-lookup-status n))))
+                  n)
+                (car (general-body-placeholder-pending-referents r)))))]
+      [else
+    (if (residuation-placeholder? r)
+        (let* ([name (residuation-placeholder-name r)]
+               [s (global-env-lookup-status name)])
+          (if (eq? (car s) 'ground)
+              (let* ([T (residuation-placeholder-annotation r)]
+                     [chk (and T (check/err ctx-empty
+                                            (expr-fvar (residuation-placeholder-referent r))
+                                            T
+                                            (or (residuation-placeholder-srcloc r)
+                                                srcloc-unknown)
+                                            (recover-name-map)))])
+                (cond
+                  [(prologos-error? chk)
+                   (remove-failed-definition! name)
+                   chk]
+                  [else (format "~a : ~a defined." name (pp-expr (car (cdr s))))]))
+              (unbound-variable-error (residuation-placeholder-srcloc r)
+                                      "Unbound variable" name)))
+        r)])))
 
 ;; Process a def command with split elaboration for recursive support.
 ;; 1. Elaborate type first
@@ -1076,9 +1607,23 @@
       (define fqn (qualify-name name
                     (ns-context-current-ns (current-ns-context))))
       (register-definition-location! fqn def-srcloc)))
-  ;; Phase 3b: Record dependencies during elaboration/type-checking.
-  (parameterize ([current-elaborating-name name])
+  ;; PPN 4C Addendum Phase 4B.1: dep-recording retired — the
+  ;; (parameterize ([current-elaborating-name name]) ...) wrapper removed.
+  ;; PPN 4C Addendum Phase 4B.3-b (§18.21.22) + 4B.4.a (§18.21.24): forward
+  ;; bare-ref residuation (the ACTIVE flip), BOTH paths. If the body is a
+  ;; bare-var reference to a PENDING (def-bot) same-file def, install a δ on
+  ;; NET-1 + DEFER the commit (the δ is the sole writer → LWW exactly-once;
+  ;; 4B.4.a: the resid short-circuit also skips the annotated [else]'s
+  ;; pre-register, so the referrer stays def-bot/'pending until the δ fires);
+  ;; resid = the placeholder the file-end DQ5 sweep finalizes (+ the TC-(a)
+  ;; type-obligation for annotated). #f → fall through to normal elaboration
+  ;; (general body, ground/absent ref, annotated reject cases [data-type /
+  ;; holes / malformed — §18.21.24.3], or residuation disabled).
+  ;; try-forward-ref-residuation has NO side effect when it returns #f.
+  (define resid
+    (try-forward-ref-residuation name type-surf body-surf def-srcloc))
   (cond
+    [resid resid]
     ;; Sprint 10: Type-inferred def (no type annotation)
     [(not type-surf)
      ;; IO-D5: If this is `main`, provision SysCap into capability scope.
@@ -1092,6 +1637,13 @@
          (elaborate body-surf))))
      (cond
        [(prologos-error? body) body]
+       ;; 4B.5.a (§18.21.26): general-body deferral — the elaborated body
+       ;; references pending same-file def-heads (the pending arm let them
+       ;; resolve). Defer the typing + commit to the sweep (re-run of the
+       ;; stored surf when the referents ground). NO self-exclusion on the
+       ;; inferred path (self-pending stalls → file-end unbound in .a,
+       ;; status-quo-equivalent; the 4B.5.b SCC pass owns it).
+       [(try-defer-general-body name def-srcloc body '()) => values]
        [else
         ;; Track 4B Phase 9: on-network first, fallback for unhandled
         (define inferred-type
@@ -1143,22 +1695,34 @@
                 [else
                  ;; freeze FIRST, then specialize, then QTT on zonked terms
                  (define zonked-body (rewrite-specializations (time-phase! zonk (freeze body))))
-                 (define zonked-type (time-phase! zonk (freeze inferred-type)))
+                 ;; CIU T6 F1b.2: deep-scrub unsolved metas -> holes BEFORE
+                 ;; store (closes the D19 raw-meta leak at this site, PROBES
+                 ;; §P7); scrub-before-checkQ matches the annotated path.
+                 (define pre-scrub-type (time-phase! zonk (freeze inferred-type)))
+                 (define zonked-type (unsolved-metas-to-holes pre-scrub-type))
+                 ;; CIU T6 F1b.6 (D23): a point-read projection meta escaping into
+                 ;; the stored type is a HARD ERROR — checked on the PRE-scrub type
+                 ;; (the scrub above turned OTHER unsolved metas into holes).
+                 (define proj-err (check-escaping-projection-metas pre-scrub-type name def-srcloc))
                  ;; Skip QTT for expressions with unsupported node types (Vec/Fin)
                  (define qtt-ok
                    (if (contains-unsupported-qtt? zonked-body)
                        #t
                        (time-phase! qtt (checkQ-top/err ctx-empty zonked-body zonked-type))))
                  (cond
+                   [proj-err proj-err]  ;; D23 escape error takes precedence
                    [(prologos-error? qtt-ok) qtt-ok]
+                   ;; CIU T6 F1b.4c (D22/M3): seal-scoped def-forcing —
+                   ;; tabulation FORCES; a failing :check errors at commit.
+                   [(seal-forcing-error zonked-body def-srcloc) => values]
                    [else
-                    (global-env-add (current-prelude-env) name zonked-type zonked-body)
+                    (global-env-add name zonked-type zonked-body)
                     ;; LSP Tier 2.3: record definition location
                     (register-definition-location! name def-srcloc)
                     (when (current-ns-context)
                       (define fqn (qualify-name name
                                     (ns-context-current-ns (current-ns-context))))
-                      (global-env-add (current-prelude-env) fqn zonked-type zonked-body)
+                      (global-env-add fqn zonked-type zonked-body)
                       (register-definition-location! fqn def-srcloc))
                     (format "~a : ~a defined." name (pp-expr zonked-type))])])])])])])]
     ;; Existing annotated path (type annotation present)
@@ -1167,6 +1731,14 @@
      (define type (time-phase! elaborate (elaborate type-surf)))
      (cond
        [(prologos-error? type) type]
+       ;; 4B.5.a type-position guard (§18.21.26.3): type-position forward-refs
+       ;; stay unsupported (PM 12B). Without this, the pending arm would let a
+       ;; pending name elaborate in TYPE position and fail later with degraded
+       ;; diagnostics — preserve the status-quo unbound error.
+       [(and (current-residuation-enabled?)
+             (let ([p (pending-referent-names type)]) (and (pair? p) (car p))))
+        => (lambda (nm)
+             (unbound-variable-error def-srcloc "Unbound variable" nm))]
        [else
         ;; 2. Check type is well-formed
         ;; Sprint 10: Skip is-type for types with holes (bare-param defn).
@@ -1187,11 +1759,11 @@
             'def-type-annotation
             (format "~a : ~a" name (pp-expr type*)))
            ;; 3. Pre-register for recursive references
-           (global-env-add-type-only (current-prelude-env) name type*)
+           (global-env-add-type-only name type*)
            (when (current-ns-context)
              (define fqn (qualify-name name
                            (ns-context-current-ns (current-ns-context))))
-             (global-env-add-type-only (current-prelude-env) fqn type*))
+             (global-env-add-type-only fqn type*))
            ;; Check if this is a data type or constructor definition.
            ;; Both are opaque with native constructors — the Church-encoded bodies
            ;; can't be type-checked against the new Type 0 annotation.
@@ -1209,14 +1781,15 @@
            ;; body is never used at runtime. The type annotation is all we need.
            (cond
              [data-type-def?
-              (let ([zonked-type (time-phase! zonk (freeze type))])
-                (global-env-add-type-only (current-prelude-env) name zonked-type)
+              ;; CIU T6 F1b.2: deep meta scrub (stored-type discipline)
+              (let ([zonked-type (unsolved-metas-to-holes (time-phase! zonk (freeze type)))])
+                (global-env-add-type-only name zonked-type)
                 ;; LSP Tier 2.3: record definition location
                 (register-definition-location! name def-srcloc)
                 (when (current-ns-context)
                   (define fqn (qualify-name name
                                 (ns-context-current-ns (current-ns-context))))
-                  (global-env-add-type-only (current-prelude-env) fqn zonked-type)
+                  (global-env-add-type-only fqn zonked-type)
                   (register-definition-location! fqn def-srcloc))
                 (format "~a : ~a defined." name (pp-expr zonked-type)))]
              [else
@@ -1234,6 +1807,30 @@
                  ;; Remove pre-registered entry on elaboration failure
                  (remove-failed-definition! name)
                  body]
+                ;; 4B.5.a (§18.21.26): annotated general-body deferral. Exclude
+                ;; SELF (bare + own-FQN) — the pre-register supplies the self
+                ;; type (today's working recursion mechanism, preserved). The
+                ;; pre-register STAYS in ('ground-with-#f is benign under
+                ;; placeholder-keyed completion tracking: referencing defs type
+                ;; against T; the demand trigger is residue-aware for USES) —
+                ;; but it is RE-WRITTEN META-FREE below: type* may hold
+                ;; holes→metas that dangle after reset-meta-store! (the stored-
+                ;; type discipline).
+                [(try-defer-general-body name def-srcloc body
+                   (if (current-ns-context)
+                       (list name (qualify-name name
+                                    (ns-context-current-ns (current-ns-context))))
+                       (list name)))
+                 => (lambda (ph)
+                      (when (general-body-placeholder? ph)
+                        (define safe-ty (unsolved-metas-to-holes (freeze type*)))
+                        (global-env-add-type-only name safe-ty)
+                        (when (current-ns-context)
+                          (global-env-add-type-only
+                           (qualify-name name
+                             (ns-context-current-ns (current-ns-context)))
+                           safe-ty)))
+                      ph)]
                 [else
                  ;; 5. Check body against type (use type* which has metas instead of holes)
                  ;; Sprint 9: pass recovered name map for de Bruijn recovery in errors
@@ -1290,7 +1887,16 @@
                        ;; Convert any unsolved metas back to holes (prevents dangling refs).
                        (define zonked-body (rewrite-specializations (time-phase! zonk (freeze body))))
                        (define zonked-type-raw (time-phase! zonk (freeze type*)))
-                       (define zonked-type (if has-holes? (unsolved-metas-to-holes zonked-type-raw) zonked-type-raw))
+                       (define zonked-type (unsolved-metas-to-holes zonked-type-raw))
+                       ;; ^ CIU T6 F1b.2: UNCONDITIONAL (was has-holes?-gated,
+                       ;; which stored still-unsolved implicit metas RAW — a
+                       ;; leak, not a protection; every stored unsolved meta
+                       ;; dangles after per-command reset-meta-store!).
+                       ;; CIU T6 F1b.6 (D23): a point-read projection meta escaping
+                       ;; into the stored (annotation) type is a HARD ERROR. A real
+                       ;; annotation SOLVES the meta (the escape hatch → no error);
+                       ;; a `: _` hole annotation leaves it unsolved → errors here.
+                       (define proj-err (check-escaping-projection-metas zonked-type-raw name def-srcloc))
                        ;; 6.5. QTT multiplicity check (on zonked terms with concrete mults).
                        ;; Skip for expressions containing unsupported node types (Vec/Fin).
                        (define qtt-ok
@@ -1299,22 +1905,30 @@
                              (time-phase! qtt (checkQ-top/err ctx-empty zonked-body zonked-type
                                              srcloc-unknown (recover-name-map)))))
                        (cond
+                         ;; D23 escape error takes precedence; un-register (this
+                         ;; path pre-registered the type for recursion).
+                         [proj-err (remove-failed-definition! name) proj-err]
                          [(prologos-error? qtt-ok)
                           ;; Remove pre-registered entry on QTT failure
                           (remove-failed-definition! name)
                           qtt-ok]
+                         ;; CIU T6 F1b.4c (D22/M3): seal-scoped def-forcing
+                         ;; (see the inferred-path twin) — un-register like
+                         ;; the QTT-failure arm above.
+                         [(seal-forcing-error zonked-body def-srcloc)
+                          => (lambda (err) (remove-failed-definition! name) err)]
                          [else
-                          (global-env-add (current-prelude-env) name zonked-type zonked-body)
+                          (global-env-add name zonked-type zonked-body)
                           ;; LSP Tier 2.3: record definition location
                           (register-definition-location! name def-srcloc)
                           (when (current-ns-context)
                             (define fqn (qualify-name name
                                           (ns-context-current-ns (current-ns-context))))
-                            (global-env-add (current-prelude-env) fqn zonked-type zonked-body)
+                            (global-env-add fqn zonked-type zonked-body)
                             (register-definition-location! fqn def-srcloc))
                           (format "~a : ~a defined."
                                   name (pp-expr zonked-type))])]
-                      )])])])])])])])))  ;; extra ) closes Phase 3b parameterize
+                      )])])])])])])]))
 
 ;; ========================================
 ;; Process a multi-body defn group
@@ -1353,11 +1967,14 @@
       (register-macros-cells! (current-prop-net-box) (current-prop-new-infra-cell))
       (register-warning-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   (register-narrow-cells! (current-prop-net-box) (current-prop-new-infra-cell))
-      (register-global-env-cells! (current-prop-net-box) (current-prop-new-infra-cell))
       (register-namespace-cells! (current-prop-net-box) (current-prop-new-infra-cell))
       (init-speculation-tracking!)
-      (parameterize ([current-prelude-env-prop-net-box (current-prop-net-box)]
-                     [current-ns-prop-net-box (current-prop-net-box)])
+      ;; 4B.5.a (§18.21.26.3): clause-level residuation NOT supported (the
+      ;; findf flattening below would swallow a placeholder; genuine
+      ;; multi-arity → PM 12B). The guard makes a pending-referent clause
+      ;; error with the status-quo unbound text instead of deferring.
+      (parameterize ([current-ns-prop-net-box (current-prop-net-box)]
+                     [current-in-def-group? #t])
         (process-def def))))
   ;; Check for errors
   (define first-err (findf prologos-error? results))
@@ -1468,9 +2085,61 @@
   ;; Track 10B Phase A1: always scope a fresh network per call.
   ;; Network is always present (with-fresh-meta-env creates it), but each
   ;; process-string call gets its OWN scoped network to prevent leaks.
+  ;; PPN 4C Addendum Phase 4A.c-ii-b: the in-flight mnr is NOT scoped here —
+  ;; the `ns` declaration is the compilation-unit boundary (it resets the mnr,
+  ;; see process-ns-declaration), so a shared-fixture's no-`ns` continuation
+  ;; runs accumulate defs while each independent `ns` run gets a fresh mnr.
   (parameterize ([current-prop-net-box (box (make-elaboration-network))])
     (reset-meta-store!)
     (process-string-inner s)))
+
+;; PPN 4C Addendum Phase 3C.b.5.b (2026-05-23): process-string/return-net.
+;;
+;; Net-returning variant of process-string: returns BOTH the elaboration
+;; `results` list (same as process-string) AND the final `elab-network`
+;; post-elaboration. The elab-network is suitable for cell-state inspection
+;; via `elab-cell-read` (or `(net-cell-read (elab-network-prop-net net) ...)`)
+;; — e.g., cell-19 union-derivation-chains for Phase 3C.b chain-storage
+;; assertions; cell-15 fork-on-union-request state; etc.
+;;
+;; NOTE: the returned value satisfies `elab-network?` (NOT `prop-network?`).
+;; The elab-network struct wraps a prop-network plus elaboration-layer state
+;; (per elab-network-types.rkt:62). Use `elab-cell-read` for cell access;
+;; use `elab-network-prop-net` to extract the inner prop-network when
+;; prop-network-specific APIs are needed.
+;;
+;; ARCHITECTURE — preserves Cell/Propagator/Scheduler Orthogonality
+;; (DESIGN_PRINCIPLES.org): the network is a READ-TIME view over on-network
+;; state at quiescence; no observer-set activation; no scheduler coupling.
+;; Caller receives the post-elaboration snapshot for static inspection.
+;;
+;; USE CASE (Phase 3C.b.5.c): 4-axis parity tests in test-elaboration-parity.rkt
+;; consume the returned elab-network via `(elab-cell-read net union-derivation-
+;; chains-cell-id)` to assert on cell-19 chain population shape (positive axes)
+;; or absence (negative axes). The test-substring-matching mechanism in
+;; `check-parity-equal?` is insufficient for structural state assertions.
+;;
+;; FUTURE CONSUMERS (per §9.5.1.7 cross-track captures):
+;;   - Phase 11b diagnostics — net inspection for `derivation-chain-for(position, tag)`
+;;   - PPN Track 8 LSP — diagnostic payload construction from network state
+;;   - SH Series Track 1+4 LHC — `.pnet` round-trip + native diagnostic primitive
+;;   - Track 4D substrate work — unified attribute-grammar substrate inspection
+;;
+;; IMPLEMENTATION (mirror of `process-string` body with box capture):
+;; The `current-prop-net-box` parameter is set to a FRESH box per call (same
+;; isolation semantic as `process-string`); after `process-string-inner` returns,
+;; the box is captured via `unbox` BEFORE the parameterize scope ends. Caller
+;; receives the box's value (the elaborated network) alongside results.
+;;
+;; D-3C.b.5.b-1 drift risk (per §9.5.3.9.4): if a future PM 12 / Track 4D
+;; refactor reshapes process-string's box management, this function co-evolves.
+;; Located IMMEDIATELY adjacent to process-string so refactors find both.
+(define (process-string/return-net s)
+  (define net-box (box (make-elaboration-network)))
+  (parameterize ([current-prop-net-box net-box])
+    (reset-meta-store!)
+    (let ([results (process-string-inner s)])
+      (values results (unbox net-box)))))
 
 (define (process-string-inner s)
   (define port (open-input-string s))
@@ -1513,6 +2182,8 @@
 ;; This is the path that .prologos files use — the primary design target.
 (define (process-string-ws s)
   ;; Track 10B Phase A1: always scope a fresh network per call.
+  ;; PPN 4C Addendum Phase 4A.c-ii-b: in-flight mnr scoping is at the `ns`
+  ;; declaration (process-ns-declaration), not here — see process-string.
   (parameterize ([current-prop-net-box (box (make-elaboration-network))])
     (reset-meta-store!)
     (process-string-ws-inner s)))
@@ -1620,11 +2291,38 @@
 
   ;; Apply merge-form to each preparse surf, using tree-by-line for lookup.
   ;; Preparse ordering preserved (Pass 5b hoisting for generated defs).
+  ;;
+  ;; (N6e-E5.2, issue #69(b)) Preparse ERROR surfs are NO LONGER silently
+  ;; dropped. Previously the #:when filter vanished any preparse-mangled form
+  ;; (and often the file tail) with zero diagnostics — and ALSO discarded the
+  ;; tree parser's successful recovery of that form, because tree surfs only
+  ;; surface via the preparse spine. Now: recovery-first — if the tree parser
+  ;; parsed the errored form's source line, use the tree surf; otherwise KEEP
+  ;; the error surf, which downstream already reports (results passthrough +
+  ;; emit-error-diagnostic).
+  ;;
+  ;; EXCEPTION — consumed-form residue: ns/require/provide are PREPARSE-
+  ;; processed (side effects); the parser's "X should have been processed
+  ;; before parsing" surf is their NORMAL representation, not a user error.
+  ;; That class stays dropped (it was the old blanket filter's one legitimate
+  ;; customer — keeping it would inject phantom error entries and shift the
+  ;; positional results consumers).
+  (define (consumed-form-residue? s)
+    (and (prologos-error? s)
+         (let ([m (prologos-error-message s)])
+           (and (string? m)
+                (string-suffix? m "should have been processed before parsing")))))
   (for/list ([s (in-list preparse-surfs)]
-             #:when (not (prologos-error? s)))
-    (define line (surf-source-line s))
-    (define tree-match (and line (hash-ref tree-by-line line #f)))
-    (merge-form s tree-match)))
+             #:unless (consumed-form-residue? s))
+    (cond
+      [(prologos-error? s)
+       (define line (loc->line (prologos-error-srcloc s)))
+       (define tree-match (and line (hash-ref tree-by-line line #f)))
+       (or tree-match s)]
+      [else
+       (define line (surf-source-line s))
+       (define tree-match (and line (hash-ref tree-by-line line #f)))
+       (merge-form s tree-match)])))
 
 ;; PPN Track 3 Phase 4: Cell pipeline runs alongside merge.
 ;; Merge remains the surf source (proven, handles all forms).
@@ -1637,27 +2335,22 @@
 ;; Preparse surfs are FALLBACK for forms that fail parse-form-tree
 ;; (expression-level desugaring: cond, let, multi-arity defn patterns, etc.)
 (define (process-string-ws-inner-impl s)
-  ;; Step 1: Preparse — full expansion for registration + fallback surfs
+  ;; Step 1: Preparse — full expansion (registration + the surfs preparse macros
+  ;; and generated defs depend on: solver / schema / defmacro / data / trait / impl).
   (define raw-stxs (read-all-syntax-ws (open-input-string s) "<ws-string>"))
   (define expanded-stxs (preparse-expand-all raw-stxs))
   (define preparse-surfs (map parse-datum expanded-stxs))
 
-  ;; Step 2: Cell pipeline — form cells + dispatch + spec cells
-  (register-default-token-patterns!)
-  (define pt (read-to-tree s))
-  (define net-box (current-prop-net-box))
-  (define enet (unbox net-box))
-  (define-values (enet1 cell-map raw-map) (create-form-cells-from-tree pt enet))
-  (define enet2 (dispatch-form-productions enet1 cell-map))
-  (define-values (enet3 spec-map) (extract-specs-from-form-cells enet2 cell-map))
-  (set-box! net-box enet3)
-  (current-form-cell-map cell-map)
-  (current-spec-cell-map spec-map)
-
-  ;; Step 3: Cell surfs are THE output. Single-parser path.
-  ;; ONE parser (parse-datum), ONE representation. No fallback.
-  (define surfs (extract-surfs-from-form-cells enet3 cell-map
-                  #:source-str s #:raw-map raw-map))
+  ;; Step 2: merge the tree/cell pipeline with the preparse surfs — EXACTLY like
+  ;; process-file's WS path. The merge runs the cell pipeline internally (populating
+  ;; the form- + spec-cell maps) AND falls back to the preparse-expanded surf when
+  ;; the tree parser errors on a form — which is what PREPARSE MACROS need, since the
+  ;; tree parser sees them un-expanded and errors ("solver should have been expanded
+  ;; before parsing"). SC (Rel T1): the prior "cell-only, no fallback" path dropped
+  ;; preparse-macro support, so `solver` (and schema/defmacro) failed in the WS-string
+  ;; / REPL / editor eval path while `process-file` (which uses this same merge)
+  ;; worked. This restores consistency with process-file.
+  (define surfs (merge-preparse-and-tree-parser s preparse-surfs))
   (process-surfs surfs))
 
 ;; Wrapper: parameterize current-source-str and current-raw-node to prevent
@@ -1667,12 +2360,9 @@
                  [current-raw-node #f])
     (process-string-ws-inner-impl s)))
 
-;; PPN Track 3: merge cell surfs with preparse surfs.
-;; Uses preparse surfs as base (proven, complete).
-;; Cell pipeline provides: form cell infrastructure, spec cells, registration.
-;; As cell-path form handlers improve, surfs will shift from preparse to cells.
-(define (merge-cell-surfs-with-preparse cell-surfs preparse-surfs cell-map)
-  (filter (lambda (s) (not (prologos-error? s))) preparse-surfs))
+;; (N6e-E5.2) merge-cell-surfs-with-preparse DELETED — dead code (zero
+;; callers; it was a bare error-swallowing filter, the same defect class as
+;; the merge-preparse-and-tree-parser #:when fixed above).
 
 (define (process-surfs surfs)
   ;; Common tail for both old and new paths.
@@ -1707,11 +2397,61 @@
 ;; ========================================
 ;; Process all commands from a file
 ;; ========================================
-(define (process-file path #:verbose [verbose? #f])
+;; PPN 4C Addendum Phase 4B.2-c (§18.21.19 Q1, Option C): drive the in-flight
+;; per-file mnr (NET-1) to quiescence at the FILE-unit boundary. TODAY this is a
+;; LIVE NO-OP — an empty fixpoint: the mnr has ZERO propagators installed, so the
+;; scheduler returns the net unchanged (eq?), and the zero-NET-2 invariant
+;; (§18.21.19.1 D1) makes driving it provably fire NO NET-2 typing handler. 4B.3
+;; installs the δ residuation propagators this same drive then runs — with NO
+;; flag-flip (behavior emerges from what's installed; this is an empty fixpoint,
+;; NOT the "validated≠deployed" anti-pattern). Scheduler-agnostic via
+;; current-quiescence-scheduler (Cell/Propagator/Scheduler Orthogonality). Reads
+;; the FINAL mnr (the param accumulates defs through the form loop) and writes the
+;; driven prop-net back only when it actually changed (true no-op otherwise).
+;; Option C: process-file only at 4B.2; module-load + string-path drive are 4B.3
+;; (δ-dependent timing + the rebuilt-vs-in-flight module-load asymmetry).
+(define (drive-file-mnr!)
+  (define mnr (current-file-module-network-ref))
+  (when mnr
+    (define net (module-network-ref-prop-net mnr))
+    (define driven ((current-quiescence-scheduler) net))
+    (unless (eq? driven net)
+      (current-file-module-network-ref
+       (struct-copy module-network-ref mnr [prop-net driven])))))
+
+(define (process-file path #:verbose [verbose? #f] #:source-dir [source-dir #f])
+  ;; Resource-path anchoring (relative-path fix, 2026-06-29): a .prologos program's
+  ;; relative `read-file`/`read-csv` paths resolve against the SOURCE FILE's
+  ;; directory (location-independent, mirroring module resolution against an
+  ;; absolute lib root) — NOT the ambient process CWD (which differs between
+  ;; run-file.rkt [repo root] and the LSP/REPL [editor's dir]). Absolutize `path`
+  ;; FIRST (against cwd-at-call) so process-file-inner can re-open the source after
+  ;; current-directory is re-anchored; `source-dir` overrides the anchor for the LSP
+  ;; diagnostics path (which processes a temp copy whose dir is not the real dir).
+  (define abs-path (path->complete-path path))
+  (define-values (file-dir _fname _must-dir) (split-path abs-path))
+  (define anchor-dir (or source-dir (and (path? file-dir) file-dir)))
   ;; Track 10B Phase A1: always scope a fresh network per call.
-  (parameterize ([current-prop-net-box (box (make-elaboration-network))])
+  ;; PPN 4C Addendum Phase 4A.c-ii-b (lifecycle): bind the in-flight mnr at the
+  ;; FILE unit boundary so import edges wired during preparse (action-1) persist
+  ;; into elaboration. INHERIT-OR-CREATE: a fixture may pre-bind the mnr with a
+  ;; prelude snapshot-import (test-support / run-ws at *:94) and call process-file
+  ;; — unconditional (make-module-network) would CLOBBER that prelude. (or ...)
+  ;; inherits the fixture's mnr value when present; creates fresh for standalone
+  ;; process-file (param default #f). Behavior-preserving while Layer-2 is active.
+  (parameterize ([current-prop-net-box (box (make-elaboration-network))]
+                 [current-file-module-network-ref
+                  (or (current-file-module-network-ref) (make-module-network))]
+                 ;; PPN 4C Addendum Phase 4B.3-b (§18.21.22 DQ4): residuation is
+                 ;; process-file-only — the drive + the finalize sweep run here.
+                 [current-residuation-enabled? #t]
+                 ;; 4B.5.a (§18.21.26): the general-body residue + completions
+                 ;; (per-file lifetime; scaffolding tier — PM 12B §10 retires).
+                 [current-general-residue (box '())]
+                 [current-general-completions (make-hasheq)]
+                 [current-directory (or anchor-dir (current-directory))])
     (reset-meta-store!)
-    (process-file-inner path #:verbose verbose?)))
+    (process-file-inner abs-path #:verbose verbose?)))
 
 (define (process-file-inner path #:verbose [verbose? #f])
   (define path-str (if (string? path) path (path->string path)))
@@ -1763,7 +2503,9 @@
               ;; Track 7 Phase 0b: per-command snapshot/delta when verbose
               (let* ([snap-before (if verbose? (perf-counters-snapshot (current-perf-counters)) #f)]
                      [t0 (if verbose? (current-inexact-monotonic-milliseconds) 0)]
-                     [result (process-command surf)]
+                     ;; 4B.5.a: demand-aware — a USE of pending/deferred names
+                     ;; triggers the sweep fixpoint + one retry (§18.21.26 W4).
+                     [result (process-command/demand surf)]
                      [_ (when verbose?
                           (define snap-after (perf-counters-snapshot (current-perf-counters)))
                           (define elapsed (- (current-inexact-monotonic-milliseconds) t0))
@@ -1775,9 +2517,21 @@
                                   s)))
                           (emit-verbose-command! cmd-i form-str snap-before snap-after elapsed))])
                 result))))))
+  ;; PPN 4C Addendum Phase 4B.2-c (§18.21.19 Q1): drive NET-1 (the per-file mnr)
+  ;; at the file-unit boundary — all defs are written, the mnr is final. LIVE
+  ;; NO-OP today (zero propagators); 4B.3's δ residuation propagators run here.
+  ;; 4B.5.a (§18.21.26): drive + general-body sweep, alternated to fixpoint —
+  ;; a sweep completion can unblock a bare-ref δ and vice versa.
+  (run-residuation-fixpoint!)
+  ;; PPN 4C Addendum Phase 4B.3-b (§18.21.22 DQ5): post-drive finalize sweep —
+  ;; replace each residuation-placeholder (positional, in place) with its
+  ;; finalized result (cell ground → "x : T defined."; still def-bot → unbound
+  ;; error). BEFORE the diagnostics loop, so a never-grounded forward-ref's
+  ;; file-end unbound error is emitted like an immediate typo.
+  (define final-results (finalize-residuations results))
   ;; Emit formatted error diagnostics to stderr when enabled (test runner integration)
   (when (current-emit-error-diagnostics)
-    (for ([r (in-list results)])
+    (for ([r (in-list final-results)])
       (when (prologos-error? r)
         (emit-error-diagnostic r))))
   (when pc (print-perf-report! pc))
@@ -1786,7 +2540,7 @@
   (print-memory-report! (measure-memory-after mem-before))
   (print-cell-metrics-report! (collect-cell-metrics))
   (print-quiescence-stats! qs)
-  results)
+  final-results)
 
 ;; ========================================
 ;; Module Loading
@@ -1809,22 +2563,11 @@
   ;; Return early if cached — but still import env into caller
   (cond
     [cached
-     ;; Import ALL of the cached module's definitions into the caller's global env.
-     ;; Without this, modules loaded in nested parameterize scopes (which start
-     ;; with fresh empty envs) can't see definitions from previously-cached modules.
-     (for ([(k v) (in-hash (module-info-env-snapshot cached))])
-       (current-prelude-env
-        (hash-set (current-prelude-env) k v)))
-     ;; Track 6 Phase 7d: populate module-definitions-content from module-network-ref.
-     ;; The module network is the authoritative source (Track 5); this hasheq is the
-     ;; materialized lookup cache. Belt-and-suspenders: both paths active during validation.
-     (define mnr (module-info-module-network cached))
-     (when mnr
-       (for ([(name cid) (in-hash (module-network-ref-cell-id-map mnr))])
-         (define val (net-cell-read (module-network-ref-prop-net mnr) cid))
-         (unless (eq? val 'infra-bot)
-           (current-module-definitions-content
-            (hash-set (current-module-definitions-content) name val)))))
+     ;; PPN 4C Addendum Phase 4A.c-ii-b cut-flip: Layer-2 copy loops RETIRED.
+     ;; Pre-cut-flip these flattened the cached module's env-snapshot into
+     ;; current-prelude-env + current-module-definitions-content. Now the importer's
+     ;; in-flight mnr gets this module wired as a share-by-reference import (action-1,
+     ;; namespace.rkt process-imports-spec) → cascade-reachable without copying.
      cached]
     [else
      ;; 2. Check for circular dependencies
@@ -1872,12 +2615,17 @@
                        (hasheq)    ;; type-aliases
                        d-specs
                        d-locs
-                       #f))        ;; module-network
+                       ;; PPN 4C Addendum Phase 4A.c-i (RISK 1): reconstruct the
+                       ;; mnr from the deserialized env-snapshot (.pnet stores the
+                       ;; flat snapshot, not a live network). Was #f; share-by-
+                       ;; reference (4A.c-ii-b) needs a non-#f mnr to reference.
+                       ;; UNUSED until 4A.c-ii-b (no behavior change at 4A.c-i).
+                       ;; Interim precursor to SH Track 1 (.pnet network-as-value).
+                       (module-network-from-snapshot d-env-relinked)))
         ;; Register in module registry
         (register-module! ns-sym mod-info)
-        ;; Import into caller's env (use relinked version)
-        (for ([(k v) (in-hash d-env-relinked)])
-          (current-prelude-env (hash-set (current-prelude-env) k v)))
+        ;; PPN 4C Addendum Phase 4A.c-ii-b cut-flip: Layer-2 copy loop RETIRED
+        ;; (importer wires this module's reconstructed mnr as an import via action-1).
         ;; Track 10 Phase 2e: MERGE registries (not SET).
         ;; The deserialized registry contains this module's contributions + its deps.
         ;; Merging preserves the caller's existing entries while adding the module's.
@@ -1981,9 +2729,7 @@
      (define mod-property-store #f)
      (define mod-functor-store #f)
      (define mod-module-network #f)
-     (parameterize ([current-prelude-env (hasheq)]
-                    [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
-                    [current-ns-context #f]
+     (parameterize ([current-ns-context #f]
                     [current-meta-store (make-hasheq)]
                     [current-preparse-registry (current-preparse-registry)]
                     [current-ctor-registry (current-ctor-registry)]
@@ -2016,19 +2762,13 @@
                     ;; module-network-ref (Track 5).
                     [current-prop-net-box (box (make-prop-network))]
                     ;; Track 6 Phase 1a: id-map is now a field of elab-network (no separate box)
-                    ;; Track 5 Phase 3a: Module loading now uses cell path.
-                    ;; process-command sets current-prelude-env-prop-net-box to
-                    ;; (current-prop-net-box) in its inner parameterize, so
-                    ;; global-env-add writes to Layer 1 cells. Definitions
-                    ;; accumulate in current-definition-cells-content (persists
-                    ;; across commands). global-env-snapshot merges both layers.
+                    ;; PPN 4C Addendum Phase 4A: module loading accumulates defs into
+                    ;; the in-flight per-file mnr via always-mnr global-env-add (a1);
+                    ;; the mnr cascade is the resolution source (4A.b cut-flip). The
+                    ;; Layer-2 params retired at 4A.c-iii-e.
                     [current-module-registry-cell-id #f]
                     [current-ns-context-cell-id #f]
-                    [current-defn-param-names-cell-id #f]
-                    [current-definition-cells-content (hasheq)]
-                    [current-definition-cell-ids (hasheq)]
-                    [current-definition-dependencies (hasheq)]  ;; Phase 3b
-                    [current-cross-module-deps '()]  ;; Track 5 Phase 4
+                    [current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: per-module mnr (fresh per module-load)
                     ;; Phase A: fresh meta-info CHAMP per module
                     [current-prop-meta-info-box #f]
                     ;; PPN 4C S2.e-iv-c (2026-04-25): champ-box parameter
@@ -2104,23 +2844,13 @@
                            ([(name entry) (in-hash mod-env)])
                    (define-values (mnr* cid) (module-network-add-definition mnr name entry))
                    (values mnr* (void))))
-               ;; Mark loaded, store snapshot hash, and populate dep-edges
+               ;; Mark loaded + store snapshot hash. PPN 4C Addendum Phase 4B.1:
+               ;; the dep-edges field + the cross-module-deps dep-edge-hash builder
+               ;; RETIRED (write-only; zero production consumers).
                (let* ([mnr1 (module-network-set-status mnr-final mod-loaded)]
                       [snap (module-network-materialize mnr1)]
-                      ;; Track 5 Phase 4: Build dep-edges from recorded cross-module deps.
-                      ;; Groups edges by destination name → list of (src-name . source).
-                      [dep-edge-hash
-                       (for/fold ([h (hasheq)])
-                                 ([dep (in-list (current-cross-module-deps))])
-                         (define dst-name (car dep))
-                         (define src-name (cadr dep))
-                         (define source (caddr dep))
-                         (hash-set h dst-name
-                                   (cons (cons src-name source)
-                                         (hash-ref h dst-name '()))))]
                       [mnr2 (struct-copy module-network-ref mnr1
-                               [snapshot-hash snap]
-                               [dep-edges dep-edge-hash])])
+                               [snapshot-hash snap])])
                  ;; Phase 3d dual-path validation removed in Phase 5b — 0 mismatches
                  ;; across 7147 tests (200+ modules) over Phases 3-4.
                  mnr2))))
@@ -2199,20 +2929,11 @@
      ;; 6. Register
      (register-module! ns-sym mi)
 
-     ;; 7. Import ALL of module's definitions into the CALLER's global env.
-     ;; This includes transitive dependencies (from modules the loaded module
-     ;; itself required), which are needed for reduction/evaluation — function
-     ;; bodies may reference cross-module globals that must be unfoldable.
-     (for ([(k v) (in-hash mod-env)])
-       (current-prelude-env
-        (hash-set (current-prelude-env) k v)))
-     ;; Track 6 Phase 7d: populate module-definitions-content from module-network-ref.
-     (when mod-module-network
-       (for ([(name cid) (in-hash (module-network-ref-cell-id-map mod-module-network))])
-         (define val (net-cell-read (module-network-ref-prop-net mod-module-network) cid))
-         (unless (eq? val 'infra-bot)
-           (current-module-definitions-content
-            (hash-set (current-module-definitions-content) name val)))))
+     ;; PPN 4C Addendum Phase 4A.c-ii-b cut-flip: the two Layer-2 copy loops RETIRED.
+     ;; Pre-cut-flip they flattened mod-env (incl. transitive deps) into
+     ;; current-prelude-env + current-module-definitions-content for the caller.
+     ;; Now the caller wires this module's mnr as a share-by-reference import
+     ;; (action-1) → cascade-reachable (transitive via fat module mnrs) without copying.
 
      ;; Track 10 Phase 1b: serialize successful elaboration to .pnet
      ;; Track 10 Phase 2d: only write .pnet if write is enabled.
@@ -2403,7 +3124,6 @@
   (register-macros-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   (register-warning-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   (register-narrow-cells! (current-prop-net-box) (current-prop-new-infra-cell))
-  (register-global-env-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   (register-namespace-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   (define type-surf (parse-datum type-sexp))
   (when (prologos-error? type-surf)
@@ -2470,13 +3190,19 @@
   (define val (expr-foreign-fn prologos-name effective-proc full-arity '() full-marshal-in marshal-out
                                module-path-str racket-name))
 
-  ;; Register in global env with full type (including capability Pi binders)
-  (global-env-add (current-prelude-env) prologos-name full-type val)
+  ;; Register in global env with full type (including capability Pi binders).
+  ;; 4A.c-iii-a: global-env-add is now always-mnr (folds in the old
+  ;; foreign-write-(b) global-env-add-to-mnr!), so foreign defs reach the mnr here.
+  ;; CIU T6 F1b.2: deep meta scrub (stored-type discipline)
+  (define full-type-stored (unsolved-metas-to-holes full-type))
+  (global-env-add prologos-name full-type-stored val)
 
   ;; Also register FQN if in a namespace
   (when (current-ns-context)
     (define fqn (qualify-name prologos-name (ns-context-current-ns (current-ns-context))))
-    (global-env-add (current-prelude-env) fqn full-type val)
+    ;; FQN mirrors bare: the cascade is exact-symbol (no FQN->bare alias), so
+    ;; BOTH keys are mnr-materialized (always-mnr global-env-add) to resolve.
+    (global-env-add fqn full-type-stored val)
     ;; Auto-export the foreign binding (must update current-ns-context —
     ;; ns-context-add-auto-export returns a new struct, does not mutate)
     (current-ns-context
@@ -2570,14 +3296,13 @@
    (define-values (pnet* pid) (net-add-propagator pnet input-ids output-ids fire-fn))
    (values (struct-copy elab-network enet [prop-net pnet*]) pid)))
 
-;; Track 6 Phase 1a: Install id-map access callbacks.
-(current-prop-id-map-read elab-network-id-map)
-(current-prop-id-map-set elab-network-id-map-set)
-
-;; Track 6 Phase 5a: Install meta-info access callbacks.
-;; Meta-info CHAMP now lives in elab-network struct → captured with network snapshot.
-(current-prop-meta-info-read elab-network-meta-info)
-(current-prop-meta-info-set elab-network-meta-info-set)
+;; PPN 4C 2A.a (2026-05-20): STUB callback installs RETIRED.
+;; `current-prop-id-map-read/set` + `current-prop-meta-info-read/set` were STUB
+;; parameters (Track 8 B2b migration) with zero production consumers. The
+;; parameters themselves + these installs are retired in 2A.a. Direct struct
+;; accessors `elab-network-id-map`/`elab-network-id-map-set` +
+;; `elab-network-meta-info`/`elab-network-meta-info-set` are the canonical API.
+;; See D.3 §8.7.a.3 deliverable 5.
 
 ;; Track 6 Phase 6: reset-elab-network-command-state callback REMOVED by Track 7 Phase 6.
 ;; current-persistent-base-network was never activated; Track 7's persistent
@@ -2597,10 +3322,6 @@
 ;; Track 3 Phase 5: Install narrowing cell callbacks.
 (current-narrow-prop-cell-write elab-cell-write)
 (current-narrow-prop-cell-read elab-cell-read)
-
-;; Phase 3a: Install global-env cell callbacks.
-(current-prelude-env-prop-cell-write elab-cell-write)
-(current-prelude-env-prop-new-cell elab-new-infra-cell)
 
 ;; Phase 3c: Install namespace cell callbacks.
 (current-ns-prop-cell-write elab-cell-write)
@@ -2630,9 +3351,11 @@
 (current-prop-run-quiescence run-to-quiescence)
 (current-prop-unwrap-net elab-network-prop-net)
 ;; Track 7 post-fix: rewrap preserves eq? identity when prop-net unchanged.
-;; Critical for progress detection in run-stratified-resolution-pure, which
-;; uses (eq? enet-s2 enet-s0) to detect whether resolution made progress.
-;; Without this, struct-copy always creates a new struct, breaking eq?.
+;; PPN 4C 2B (2026-05-20): rewrap eq? identity also load-bearing for BSP
+;; outer-loop progress detection — `(pair? (prop-network-worklist after-value-tier))`
+;; + `(not (eq? after-value-tier value-result))` at propagator.rkt:3110. Without
+;; eq? preservation, struct-copy always creates a new struct, breaking the BSP
+;; outer-loop's "no progress" termination signal.
 (current-prop-rewrap-net
  (lambda (enet pnet*)
    (if (eq? pnet* (elab-network-prop-net enet))
@@ -2708,11 +3431,12 @@
             net*)
           net)])))  ;; mult cell not in id-map — skip (test context)
 
-;; Track 7 Phase 7a: Install unified resolution executor from resolution.rkt.
-;; Replaces 3 individual callbacks (trait, hasmethod, constraint retry)
-;; with a single dispatcher that calls resolution functions directly.
-(current-resolution-executor resolution-execute-action!)
-;; Track 7 Phase 7b: Pure resolution executor for solve-meta! pure chain.
+;; PPN 4C 2B (2026-05-20): `current-resolution-executor` (imperative variant)
+;; RETIRED — was the dispatcher used by `run-stratified-resolution!` + the
+;; retired imperative orchestrator path. Sole remaining executor is the pure
+;; variant below (consumed by `process-resolution` BSP value-tier handler).
+;; Per D.3 §8.8.4 deliverable 8.
+;; Track 7 Phase 7b: Pure resolution executor for process-resolution handler.
 (current-resolution-executor-pure resolution-execute-action-pure)
 ;; Track 8D: Pure resolution bridge factories — traits and hasmethods resolve
 ;; during S0 quiescence via pure (pnet → pnet) fire functions. No enet-box.

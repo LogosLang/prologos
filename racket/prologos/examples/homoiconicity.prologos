@@ -1,4 +1,4 @@
-ns examples.homoiconicity
+ns examples::homoiconicity
 
 ;; ========================================================================
 ;; Homoiconicity in Prologos: A Spiral Tour

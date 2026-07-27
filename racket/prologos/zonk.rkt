@@ -19,13 +19,19 @@
          "substitution.rkt"
          "performance-counters.rkt"
          "solver.rkt"
-         (only-in "namespace.rkt" ns-context?))
+         (only-in "posit-impl.rkt" posit8-encode posit16-encode posit32-encode posit64-encode)  ;; N4: literal collapse encoders
+         (only-in racket/flonum flsingle)  ;; N4: Float32 collapse rounding
+         (only-in "namespace.rkt" ns-context?)
+         (only-in "prelude.rkt" level-meta? mult-meta?))  ;; F1b.2: deep meta detector
 
 (provide zonk zonk-ctx zonk-final freeze zonk-at-depth
          ;; Phase 10 diagnostics
          freeze-substitution-counts reset-freeze-counts!
          ;; Track 10B Phase B0: call counters for frequency measurement
-         current-zonk-call-counts reset-zonk-call-counts!)
+         current-zonk-call-counts reset-zonk-call-counts!
+         ;; CIU T6 F1b.2 (D23 groundwork): deep stored-type hygiene
+         metas-to-holes expr-contains-meta-deep? expr-contains-hole-deep?
+         collect-expr-metas-deep)
 
 ;; ========================================
 ;; Track 10B Phase B0: call frequency counters (gated behind parameter)
@@ -45,10 +51,32 @@
 ;; ========================================
 ;; Zonk: substitute solved metavariables
 ;; ========================================
+;; N4: collapse a resolved numeric literal to its concrete node for type `ty`.
+;; Returns #f if `ty` is not a concrete numeric type (caller keeps the transient
+;; expr-num-lit). Encoders mirror the elaborate-time literal paths (posit-encode,
+;; exact->inexact / flsingle). Representability is validated in check-mode; here we
+;; trust the resolved type (Int ⇒ val integral, Nat ⇒ integral + nonneg).
+(define (collapse-num-lit val integral? ty)
+  (cond
+    [(expr-Int? ty)     (expr-int val)]
+    [(expr-Nat? ty)     (expr-nat-val val)]
+    [(expr-Rat? ty)     (expr-rat val)]
+    [(expr-Posit8? ty)  (expr-posit8  (posit8-encode  val))]
+    [(expr-Posit16? ty) (expr-posit16 (posit16-encode val))]
+    [(expr-Posit32? ty) (expr-posit32 (posit32-encode val))]
+    [(expr-Posit64? ty) (expr-posit64 (posit64-encode val))]
+    [(expr-Float32? ty) (expr-float32 (flsingle (exact->inexact val)))]
+    [(expr-Float64? ty) (expr-float64 (exact->inexact val))]
+    [else #f]))
+
 (define (zonk e)
   (perf-inc-zonk!)
   (zonk-count! 'zonk)
   (match e
+    ;; Numerics N5de: type-lattice sentinels (from on-network type-unify-or-top) are symbols,
+    ;; not exprs — pass through so an on-network refined-fvar merge that yields type-top/bot
+    ;; doesn't crash zonk. (On-network refinement handling is a future PPN track, design §15.)
+    [(or 'type-top 'type-bot) e]
     ;; THE KEY CASE: metavariable — follow solution recursively
     ;; PM 8F Phase 3: use cell-id fast path (skips 82ns id-map lookup)
     [(expr-meta id cell-id)
@@ -56,6 +84,13 @@
        (if sol
            (zonk sol)       ; recursive: solution may contain more metas
            e))]             ; unsolved: leave as-is
+
+    ;; N4: numeric literal — zonk its type meta; collapse if resolved to a concrete
+    ;; numeric type, else keep the transient node (defaulted later in default-metas).
+    [(expr-num-lit val integral? origin alpha)
+     (let ([za (zonk alpha)])
+       (or (collapse-num-lit val integral? za)
+           (expr-num-lit val integral? origin za)))]
 
     ;; Atoms — return unchanged
     [(expr-bvar _) e]
@@ -74,7 +109,6 @@
     [(expr-Type l) (expr-Type (zonk-level l))]
     [(expr-hole) e]
     [(expr-typed-hole _) e]
-    [(expr-Open) e]
     [(expr-error) e]
 
     ;; Non-expression atoms that can leak into type expressions via meta solutions.
@@ -162,6 +196,36 @@
     ;; Posit32 (all non-binding)
     [(expr-Posit32) e]
     [(expr-posit32 _) e]
+    [(expr-Float32) e]
+    [(expr-float32 _) e]
+    [(expr-Float64) e]
+    [(expr-float64 _) e]
+    ;; Float ops (Numerics N3b)
+    [(expr-f32-add a b) (expr-f32-add (zonk a) (zonk b))]
+    [(expr-f32-sub a b) (expr-f32-sub (zonk a) (zonk b))]
+    [(expr-f32-mul a b) (expr-f32-mul (zonk a) (zonk b))]
+    [(expr-f32-div a b) (expr-f32-div (zonk a) (zonk b))]
+    [(expr-f32-neg a) (expr-f32-neg (zonk a))]
+    [(expr-f32-abs a) (expr-f32-abs (zonk a))]
+    [(expr-f32-sqrt a) (expr-f32-sqrt (zonk a))]
+    [(expr-f32-lt a b) (expr-f32-lt (zonk a) (zonk b))]
+    [(expr-f32-le a b) (expr-f32-le (zonk a) (zonk b))]
+    [(expr-f32-eq a b) (expr-f32-eq (zonk a) (zonk b))]
+    [(expr-f64-add a b) (expr-f64-add (zonk a) (zonk b))]
+    [(expr-f64-sub a b) (expr-f64-sub (zonk a) (zonk b))]
+    [(expr-f64-mul a b) (expr-f64-mul (zonk a) (zonk b))]
+    [(expr-f64-div a b) (expr-f64-div (zonk a) (zonk b))]
+    [(expr-f64-neg a) (expr-f64-neg (zonk a))]
+    [(expr-f64-abs a) (expr-f64-abs (zonk a))]
+    [(expr-f64-sqrt a) (expr-f64-sqrt (zonk a))]
+    [(expr-f64-lt a b) (expr-f64-lt (zonk a) (zonk b))]
+    [(expr-f64-le a b) (expr-f64-le (zonk a) (zonk b))]
+    [(expr-f64-eq a b) (expr-f64-eq (zonk a) (zonk b))]
+    ;; Cross-width Float conversions (Numerics N3e-rest)
+    [(expr-float-finite a) (expr-float-finite (zonk a))]
+    [(expr-float-to-rat a) (expr-float-to-rat (zonk a))]
+    [(expr-float-to-int a) (expr-float-to-int (zonk a))]
+    [(expr-float-to-float32 a) (expr-float-to-float32 (zonk a))]
     [(expr-p32-add a b) (expr-p32-add (zonk a) (zonk b))]
     [(expr-p32-sub a b) (expr-p32-sub (zonk a) (zonk b))]
     [(expr-p32-mul a b) (expr-p32-mul (zonk a) (zonk b))]
@@ -235,6 +299,10 @@
     ;; String
     [(expr-String) e]
     [(expr-string _) e]
+    ;; Record/tuple type: zonk field types
+    [(? expr-Record? rec) (record-map-field-types zonk rec)]
+    ;; CIU T6 F1b.5-s2: validate — exprs via the single helper
+    [(? expr-validate? v) (validate-map-exprs zonk v)]
     ;; Map
     [(expr-Map k v) (expr-Map (zonk k) (zonk v))]
     [(expr-champ _) e]
@@ -267,6 +335,10 @@
     [(expr-rrb _) e]
     [(expr-pvec-empty a) (expr-pvec-empty (zonk a))]
     [(expr-pvec-push v x) (expr-pvec-push (zonk v) (zonk x))]
+    [(expr-pvec-literal elems) (expr-pvec-literal (map zonk elems))]
+    [(expr-list-literal elems chain) (expr-list-literal (map zonk elems) (zonk chain))]
+    [(expr-map-literal keys vals chain)
+     (expr-map-literal (map zonk keys) (map zonk vals) (zonk chain))]
     [(expr-pvec-nth v i) (expr-pvec-nth (zonk v) (zonk i))]
     [(expr-pvec-update v i x) (expr-pvec-update (zonk v) (zonk i) (zonk x))]
     [(expr-pvec-length v) (expr-pvec-length (zonk v))]
@@ -350,22 +422,6 @@
      (expr-uf-union (zonk st) (zonk id1) (zonk id2))]
     [(expr-uf-value st id) (expr-uf-value (zonk st) (zonk id))]
 
-    ;; ATMS
-    [(expr-atms-type) e]
-    [(expr-assumption-id-type) e]
-    [(expr-atms-store _) e]
-    [(expr-assumption-id-val _) e]
-    [(expr-atms-new net) (expr-atms-new (zonk net))]
-    [(expr-atms-assume a nm d) (expr-atms-assume (zonk a) (zonk nm) (zonk d))]
-    [(expr-atms-retract a aid) (expr-atms-retract (zonk a) (zonk aid))]
-    [(expr-atms-nogood a aids) (expr-atms-nogood (zonk a) (zonk aids))]
-    [(expr-atms-amb a alts) (expr-atms-amb (zonk a) (zonk alts))]
-    [(expr-atms-solve-all a g) (expr-atms-solve-all (zonk a) (zonk g))]
-    [(expr-atms-read a c) (expr-atms-read (zonk a) (zonk c))]
-    [(expr-atms-write a c v s) (expr-atms-write (zonk a) (zonk c) (zonk v) (zonk s))]
-    [(expr-atms-consistent a aids) (expr-atms-consistent (zonk a) (zonk aids))]
-    [(expr-atms-worldview a aids) (expr-atms-worldview (zonk a) (zonk aids))]
-
     ;; Tabling
     [(expr-table-store-type) e]
     [(expr-table-store-val _) e]
@@ -383,7 +439,7 @@
 
     ;; Relational language (Phase 7)
     [(expr-solver-type) e] [(expr-goal-type) e] [(expr-derivation-type) e] [(expr-cut) e]
-    [(expr-schema-type _) e] [(expr-logic-var _ _) e]
+    [(expr-logic-var _ _) e]
     [(expr-answer-type t) (expr-answer-type (zonk t))]
     [(expr-relation-type pts) (expr-relation-type (map zonk pts))]
     [(expr-solver-config m)
@@ -398,7 +454,6 @@
     [(expr-unify-goal l r) (expr-unify-goal (zonk l) (zonk r))]
     [(expr-is-goal v ex) (expr-is-goal (zonk v) (zonk ex))]
     [(expr-not-goal g) (expr-not-goal (zonk g))]
-    [(expr-schema nm fs) (expr-schema nm (map zonk fs))]
     [(expr-solve g) (expr-solve (zonk g))]
     [(expr-solve-with sv ov g) (expr-solve-with (and sv (zonk sv)) (and ov (zonk ov)) (zonk g))]
     [(expr-solve-one g) (expr-solve-one (zonk g))]
@@ -490,6 +545,8 @@
 (define (zonk-at-depth depth e)
   (zonk-count! (if (= depth 0) 'zonk-at-depth-0 'zonk-at-depth-1))
   (match e
+    ;; Numerics N5de: type-lattice sentinels pass through (see zonk).
+    [(or 'type-top 'type-bot) e]
     ;; THE KEY CASE: metavariable — follow solution and shift by accumulated depth
     ;; PM 8F Phase 3: use cell-id fast path (same as zonk)
     [(expr-meta id cell-id)
@@ -500,6 +557,13 @@
                  (shift depth 0 zonked-sol)
                  zonked-sol))
            e))]  ; unsolved: leave as-is
+
+    ;; N4: numeric literal — resolve its type meta at depth; collapse if concrete,
+    ;; else keep the transient node (a collapsed literal has no bound vars → no shift).
+    [(expr-num-lit val integral? origin alpha)
+     (let ([za (zonk-at-depth depth alpha)])
+       (or (collapse-num-lit val integral? za)
+           (expr-num-lit val integral? origin za)))]
 
     ;; Atoms — return unchanged
     [(expr-bvar _) e]
@@ -518,7 +582,6 @@
     [(expr-Type l) (expr-Type (zonk-level l))]
     [(expr-hole) e]
     [(expr-typed-hole _) e]
-    [(expr-Open) e]
     [(expr-error) e]
     [(? ns-context?) e]
 
@@ -610,6 +673,36 @@
     ;; Posit32 (all non-binding)
     [(expr-Posit32) e]
     [(expr-posit32 _) e]
+    [(expr-Float32) e]
+    [(expr-float32 _) e]
+    [(expr-Float64) e]
+    [(expr-float64 _) e]
+    ;; Float ops (Numerics N3b)
+    [(expr-f32-add a b) (expr-f32-add (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-f32-sub a b) (expr-f32-sub (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-f32-mul a b) (expr-f32-mul (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-f32-div a b) (expr-f32-div (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-f32-neg a) (expr-f32-neg (zonk-at-depth depth a))]
+    [(expr-f32-abs a) (expr-f32-abs (zonk-at-depth depth a))]
+    [(expr-f32-sqrt a) (expr-f32-sqrt (zonk-at-depth depth a))]
+    [(expr-f32-lt a b) (expr-f32-lt (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-f32-le a b) (expr-f32-le (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-f32-eq a b) (expr-f32-eq (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-f64-add a b) (expr-f64-add (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-f64-sub a b) (expr-f64-sub (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-f64-mul a b) (expr-f64-mul (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-f64-div a b) (expr-f64-div (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-f64-neg a) (expr-f64-neg (zonk-at-depth depth a))]
+    [(expr-f64-abs a) (expr-f64-abs (zonk-at-depth depth a))]
+    [(expr-f64-sqrt a) (expr-f64-sqrt (zonk-at-depth depth a))]
+    [(expr-f64-lt a b) (expr-f64-lt (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-f64-le a b) (expr-f64-le (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    [(expr-f64-eq a b) (expr-f64-eq (zonk-at-depth depth a) (zonk-at-depth depth b))]
+    ;; Cross-width Float conversions (Numerics N3e-rest)
+    [(expr-float-finite a) (expr-float-finite (zonk-at-depth depth a))]
+    [(expr-float-to-rat a) (expr-float-to-rat (zonk-at-depth depth a))]
+    [(expr-float-to-int a) (expr-float-to-int (zonk-at-depth depth a))]
+    [(expr-float-to-float32 a) (expr-float-to-float32 (zonk-at-depth depth a))]
     [(expr-p32-add a b) (expr-p32-add (zonk-at-depth depth a) (zonk-at-depth depth b))]
     [(expr-p32-sub a b) (expr-p32-sub (zonk-at-depth depth a) (zonk-at-depth depth b))]
     [(expr-p32-mul a b) (expr-p32-mul (zonk-at-depth depth a) (zonk-at-depth depth b))]
@@ -685,6 +778,10 @@
     ;; String
     [(expr-String) e]
     [(expr-string _) e]
+    ;; Record/tuple type: zonk field types at depth
+    [(? expr-Record? rec) (record-map-field-types (lambda (t) (zonk-at-depth depth t)) rec)]
+    ;; CIU T6 F1b.5-s2: validate — exprs via the single helper
+    [(? expr-validate? v) (validate-map-exprs (lambda (t) (zonk-at-depth depth t)) v)]
     ;; Map
     [(expr-Map k v) (expr-Map (zonk-at-depth depth k) (zonk-at-depth depth v))]
     [(expr-champ _) e]
@@ -717,6 +814,13 @@
     [(expr-rrb _) e]
     [(expr-pvec-empty a) (expr-pvec-empty (zonk-at-depth depth a))]
     [(expr-pvec-push v x) (expr-pvec-push (zonk-at-depth depth v) (zonk-at-depth depth x))]
+    [(expr-pvec-literal elems) (expr-pvec-literal (map (lambda (e) (zonk-at-depth depth e)) elems))]
+    [(expr-list-literal elems chain)
+     (expr-list-literal (map (lambda (e) (zonk-at-depth depth e)) elems) (zonk-at-depth depth chain))]
+    [(expr-map-literal keys vals chain)
+     (expr-map-literal (map (lambda (e) (zonk-at-depth depth e)) keys)
+                       (map (lambda (e) (zonk-at-depth depth e)) vals)
+                       (zonk-at-depth depth chain))]
     [(expr-pvec-nth v i) (expr-pvec-nth (zonk-at-depth depth v) (zonk-at-depth depth i))]
     [(expr-pvec-update v i x) (expr-pvec-update (zonk-at-depth depth v) (zonk-at-depth depth i) (zonk-at-depth depth x))]
     [(expr-pvec-length v) (expr-pvec-length (zonk-at-depth depth v))]
@@ -802,24 +906,6 @@
      (expr-uf-union (zonk-at-depth depth st) (zonk-at-depth depth id1) (zonk-at-depth depth id2))]
     [(expr-uf-value st id) (expr-uf-value (zonk-at-depth depth st) (zonk-at-depth depth id))]
 
-    ;; ATMS
-    [(expr-atms-type) e]
-    [(expr-assumption-id-type) e]
-    [(expr-atms-store _) e]
-    [(expr-assumption-id-val _) e]
-    [(expr-atms-new net) (expr-atms-new (zonk-at-depth depth net))]
-    [(expr-atms-assume a nm d)
-     (expr-atms-assume (zonk-at-depth depth a) (zonk-at-depth depth nm) (zonk-at-depth depth d))]
-    [(expr-atms-retract a aid) (expr-atms-retract (zonk-at-depth depth a) (zonk-at-depth depth aid))]
-    [(expr-atms-nogood a aids) (expr-atms-nogood (zonk-at-depth depth a) (zonk-at-depth depth aids))]
-    [(expr-atms-amb a alts) (expr-atms-amb (zonk-at-depth depth a) (zonk-at-depth depth alts))]
-    [(expr-atms-solve-all a g) (expr-atms-solve-all (zonk-at-depth depth a) (zonk-at-depth depth g))]
-    [(expr-atms-read a c) (expr-atms-read (zonk-at-depth depth a) (zonk-at-depth depth c))]
-    [(expr-atms-write a c v s)
-     (expr-atms-write (zonk-at-depth depth a) (zonk-at-depth depth c) (zonk-at-depth depth v) (zonk-at-depth depth s))]
-    [(expr-atms-consistent a aids) (expr-atms-consistent (zonk-at-depth depth a) (zonk-at-depth depth aids))]
-    [(expr-atms-worldview a aids) (expr-atms-worldview (zonk-at-depth depth a) (zonk-at-depth depth aids))]
-
     ;; Tabling
     [(expr-table-store-type) e]
     [(expr-table-store-val _) e]
@@ -837,7 +923,7 @@
 
     ;; Relational language (Phase 7)
     [(expr-solver-type) e] [(expr-goal-type) e] [(expr-derivation-type) e] [(expr-cut) e]
-    [(expr-schema-type _) e] [(expr-logic-var _ _) e]
+    [(expr-logic-var _ _) e]
     [(expr-answer-type t) (expr-answer-type (zonk-at-depth depth t))]
     [(expr-relation-type pts) (expr-relation-type (map (lambda (p) (zonk-at-depth depth p)) pts))]
     [(expr-solver-config m)
@@ -852,7 +938,6 @@
     [(expr-unify-goal l r) (expr-unify-goal (zonk-at-depth depth l) (zonk-at-depth depth r))]
     [(expr-is-goal v ex) (expr-is-goal (zonk-at-depth depth v) (zonk-at-depth depth ex))]
     [(expr-not-goal g) (expr-not-goal (zonk-at-depth depth g))]
-    [(expr-schema nm fs) (expr-schema nm (map (lambda (f) (zonk-at-depth depth f)) fs))]
     [(expr-solve g) (expr-solve (zonk-at-depth depth g))]
     [(expr-solve-with sv ov g) (expr-solve-with (and sv (zonk-at-depth depth sv)) (and ov (zonk-at-depth depth ov)) (zonk-at-depth depth g))]
     [(expr-solve-one g) (expr-solve-one (zonk-at-depth depth g))]
@@ -972,6 +1057,19 @@
   (match e
     [(expr-Type l) (expr-Type (zonk-level-default l))]
     [(expr-meta _ _) e]
+    ;; N4: unsolved numeric literal (zonk already collapsed solved ones) → default by
+    ;; NOTATION ORIGIN (N6b: decimal→Posit32, fraction→Rat, exponent→Int/Posit32 —
+    ;; num-lit-default-type). Defensive: also collapse if alpha turns out solved
+    ;; (e.g. a default-metas call without a preceding zonk).
+    [(expr-num-lit val integral? origin alpha)
+     (define resolved
+       (match alpha
+         [(expr-meta id cell-id)
+          (let ([sol (meta-solution/cell-id cell-id id)])
+            (if sol (zonk sol) alpha))]
+         [_ alpha]))
+     (or (collapse-num-lit val integral? resolved)
+         (collapse-num-lit val integral? (num-lit-default-type origin integral?)))]
     [(expr-bvar _) e]
     [(expr-fvar _) e]
     [(expr-zero) e]
@@ -987,7 +1085,6 @@
     [(expr-nil) e]
     [(expr-hole) e]
     [(expr-typed-hole _) e]
-    [(expr-Open) e]
     [(expr-error) e]
     [(? ns-context?) e]
     [(expr-lam m t body) (expr-lam (zonk-mult-default m) (default-metas t) (default-metas body))]
@@ -1064,6 +1161,36 @@
     ;; Posit32 (all non-binding)
     [(expr-Posit32) e]
     [(expr-posit32 _) e]
+    [(expr-Float32) e]
+    [(expr-float32 _) e]
+    [(expr-Float64) e]
+    [(expr-float64 _) e]
+    ;; Float ops (Numerics N3b)
+    [(expr-f32-add a b) (expr-f32-add (default-metas a) (default-metas b))]
+    [(expr-f32-sub a b) (expr-f32-sub (default-metas a) (default-metas b))]
+    [(expr-f32-mul a b) (expr-f32-mul (default-metas a) (default-metas b))]
+    [(expr-f32-div a b) (expr-f32-div (default-metas a) (default-metas b))]
+    [(expr-f32-neg a) (expr-f32-neg (default-metas a))]
+    [(expr-f32-abs a) (expr-f32-abs (default-metas a))]
+    [(expr-f32-sqrt a) (expr-f32-sqrt (default-metas a))]
+    [(expr-f32-lt a b) (expr-f32-lt (default-metas a) (default-metas b))]
+    [(expr-f32-le a b) (expr-f32-le (default-metas a) (default-metas b))]
+    [(expr-f32-eq a b) (expr-f32-eq (default-metas a) (default-metas b))]
+    [(expr-f64-add a b) (expr-f64-add (default-metas a) (default-metas b))]
+    [(expr-f64-sub a b) (expr-f64-sub (default-metas a) (default-metas b))]
+    [(expr-f64-mul a b) (expr-f64-mul (default-metas a) (default-metas b))]
+    [(expr-f64-div a b) (expr-f64-div (default-metas a) (default-metas b))]
+    [(expr-f64-neg a) (expr-f64-neg (default-metas a))]
+    [(expr-f64-abs a) (expr-f64-abs (default-metas a))]
+    [(expr-f64-sqrt a) (expr-f64-sqrt (default-metas a))]
+    [(expr-f64-lt a b) (expr-f64-lt (default-metas a) (default-metas b))]
+    [(expr-f64-le a b) (expr-f64-le (default-metas a) (default-metas b))]
+    [(expr-f64-eq a b) (expr-f64-eq (default-metas a) (default-metas b))]
+    ;; Cross-width Float conversions (Numerics N3e-rest)
+    [(expr-float-finite a) (expr-float-finite (default-metas a))]
+    [(expr-float-to-rat a) (expr-float-to-rat (default-metas a))]
+    [(expr-float-to-int a) (expr-float-to-int (default-metas a))]
+    [(expr-float-to-float32 a) (expr-float-to-float32 (default-metas a))]
     [(expr-p32-add a b) (expr-p32-add (default-metas a) (default-metas b))]
     [(expr-p32-sub a b) (expr-p32-sub (default-metas a) (default-metas b))]
     [(expr-p32-mul a b) (expr-p32-mul (default-metas a) (default-metas b))]
@@ -1133,6 +1260,11 @@
     ;; String
     [(expr-String) e]
     [(expr-string _) e]
+    ;; Record/tuple type: default metas in field types
+    [(? expr-Record? rec) (record-map-field-types default-metas rec)]
+    ;; CIU T6 F1b.5-s2: validate — the SILENT function (catch-all passthrough);
+    ;; a missed arm here would leave unsolved metas in plan exprs un-defaulted
+    [(? expr-validate? v) (validate-map-exprs default-metas v)]
     ;; Map
     [(expr-Map k v) (expr-Map (default-metas k) (default-metas v))]
     [(expr-champ _) e]
@@ -1164,6 +1296,10 @@
     [(expr-rrb _) e]
     [(expr-pvec-empty a) (expr-pvec-empty (default-metas a))]
     [(expr-pvec-push v x) (expr-pvec-push (default-metas v) (default-metas x))]
+    [(expr-pvec-literal elems) (expr-pvec-literal (map default-metas elems))]
+    [(expr-list-literal elems chain) (expr-list-literal (map default-metas elems) (default-metas chain))]
+    [(expr-map-literal keys vals chain)
+     (expr-map-literal (map default-metas keys) (map default-metas vals) (default-metas chain))]
     [(expr-pvec-nth v i) (expr-pvec-nth (default-metas v) (default-metas i))]
     [(expr-pvec-update v i x) (expr-pvec-update (default-metas v) (default-metas i) (default-metas x))]
     [(expr-pvec-length v) (expr-pvec-length (default-metas v))]
@@ -1249,22 +1385,6 @@
      (expr-uf-union (default-metas st) (default-metas id1) (default-metas id2))]
     [(expr-uf-value st id) (expr-uf-value (default-metas st) (default-metas id))]
 
-    ;; ATMS
-    [(expr-atms-type) e]
-    [(expr-assumption-id-type) e]
-    [(expr-atms-store _) e]
-    [(expr-assumption-id-val _) e]
-    [(expr-atms-new net) (expr-atms-new (default-metas net))]
-    [(expr-atms-assume a nm d) (expr-atms-assume (default-metas a) (default-metas nm) (default-metas d))]
-    [(expr-atms-retract a aid) (expr-atms-retract (default-metas a) (default-metas aid))]
-    [(expr-atms-nogood a aids) (expr-atms-nogood (default-metas a) (default-metas aids))]
-    [(expr-atms-amb a alts) (expr-atms-amb (default-metas a) (default-metas alts))]
-    [(expr-atms-solve-all a g) (expr-atms-solve-all (default-metas a) (default-metas g))]
-    [(expr-atms-read a c) (expr-atms-read (default-metas a) (default-metas c))]
-    [(expr-atms-write a c v s) (expr-atms-write (default-metas a) (default-metas c) (default-metas v) (default-metas s))]
-    [(expr-atms-consistent a aids) (expr-atms-consistent (default-metas a) (default-metas aids))]
-    [(expr-atms-worldview a aids) (expr-atms-worldview (default-metas a) (default-metas aids))]
-
     ;; Tabling
     [(expr-table-store-type) e]
     [(expr-table-store-val _) e]
@@ -1282,7 +1402,7 @@
 
     ;; Relational language (Phase 7)
     [(expr-solver-type) e] [(expr-goal-type) e] [(expr-derivation-type) e] [(expr-cut) e]
-    [(expr-schema-type _) e] [(expr-logic-var _ _) e]
+    [(expr-logic-var _ _) e]
     [(expr-answer-type t) (expr-answer-type (default-metas t))]
     [(expr-relation-type pts) (expr-relation-type (map default-metas pts))]
     [(expr-solver-config m)
@@ -1297,7 +1417,6 @@
     [(expr-unify-goal l r) (expr-unify-goal (default-metas l) (default-metas r))]
     [(expr-is-goal v ex) (expr-is-goal (default-metas v) (default-metas ex))]
     [(expr-not-goal g) (expr-not-goal (default-metas g))]
-    [(expr-schema nm fs) (expr-schema nm (map default-metas fs))]
     [(expr-solve g) (expr-solve (default-metas g))]
     [(expr-solve-with sv ov g) (expr-solve-with (and sv (default-metas sv)) (and ov (default-metas ov)) (default-metas g))]
     [(expr-solve-one g) (expr-solve-one (default-metas g))]
@@ -1373,3 +1492,84 @@
   (map (lambda (binding)
          (cons (zonk (car binding)) (cdr binding)))
        ctx))
+
+;; ============================================================
+;; CIU T6 F1b.2 (D23 groundwork): deep stored-type hygiene
+;; ============================================================
+;;
+;; The driver's stored-type discipline ("stored unsolved metas dangle after
+;; reset-meta-store!" — every stored expr-meta is dangling by construction
+;; under per-command reset) needs a DEEP walk: the driver's historical
+;; Pi/Sigma/app/lam-only recursion missed metas embedded in unions, record
+;; rows, Maps, literal-extent nodes, etc. (the D19 raw-meta leak, PROBES
+;; §P7). Per the S2 walker lesson (don't hand-roll another per-node-kind
+;; walker), these are GENERIC transparent-struct walks: zero per-node arms,
+;; immune to the new-AST-node drift class. The transformer rebuilds via
+;; struct reflection, preserving eq?-sharing on unchanged subtrees; opaque /
+;; non-transparent structs (srclocs etc.) pass through untouched.
+
+;; Replace every unsolved expr-meta with expr-hole, deeply.
+;; (Callers run this post-freeze, so solved metas are already collapsed —
+;; any surviving expr-meta is unsolved.)
+(define (metas-to-holes v)
+  (cond
+    [(expr-meta? v) (expr-hole)]
+    [(struct? v)
+     (define-values (st _skipped) (struct-info v))
+     (cond
+       [st
+        (define vec (struct->vector v))
+        (define n (vector-length vec))
+        (define fields
+          (for/list ([i (in-range 1 n)])
+            (metas-to-holes (vector-ref vec i))))
+        (if (for/and ([i (in-range 1 n)] [f (in-list fields)])
+              (eq? f (vector-ref vec i)))
+            v
+            (apply (struct-type-make-constructor st) fields))]
+       [else v])]
+    [(pair? v)
+     (define a (metas-to-holes (car v)))
+     (define d (metas-to-holes (cdr v)))
+     (if (and (eq? a (car v)) (eq? d (cdr v))) v (cons a d))]
+    [else v]))
+
+;; Deep detector: any expr-meta / level-meta / mult-meta anywhere in v.
+(define (expr-contains-meta-deep? v)
+  (cond
+    [(or (expr-meta? v) (level-meta? v) (mult-meta? v)) #t]
+    [(struct? v)
+     (define vec (struct->vector v))
+     (for/or ([i (in-range 1 (vector-length vec))])
+       (expr-contains-meta-deep? (vector-ref vec i)))]
+    [(pair? v) (or (expr-contains-meta-deep? (car v))
+                   (expr-contains-meta-deep? (cdr v)))]
+    [else #f]))
+
+;; Deep collector: every expr-meta node anywhere in v (the generic
+;; struct-reflection walk, mirror of expr-contains-meta-deep?). CIU T6 F1b.6
+;; (D23) reads the collected metas' source-info kind to find dyn-row PROJECTION
+;; metas escaping into a stored type. Returns a list of expr-meta structs
+;; (callers read expr-meta-id → meta-lookup → source kind).
+(define (collect-expr-metas-deep v)
+  (cond
+    [(expr-meta? v) (list v)]
+    [(struct? v)
+     (define vec (struct->vector v))
+     (for/fold ([acc '()]) ([i (in-range 1 (vector-length vec))])
+       (append (collect-expr-metas-deep (vector-ref vec i)) acc))]
+    [(pair? v) (append (collect-expr-metas-deep (car v))
+                       (collect-expr-metas-deep (cdr v)))]
+    [else '()]))
+
+;; Deep detector: any expr-hole / expr-typed-hole anywhere in v.
+(define (expr-contains-hole-deep? v)
+  (cond
+    [(or (expr-hole? v) (expr-typed-hole? v)) #t]
+    [(struct? v)
+     (define vec (struct->vector v))
+     (for/or ([i (in-range 1 (vector-length vec))])
+       (expr-contains-hole-deep? (vector-ref vec i)))]
+    [(pair? v) (or (expr-contains-hole-deep? (car v))
+                   (expr-contains-hole-deep? (cdr v)))]
+    [else #f]))

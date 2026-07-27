@@ -176,87 +176,136 @@ ol.toc-chapters a:hover { text-decoration: underline; }
 <h1 class="chapter-title">Identity Elements and Algebraic Structure</h1>
 <div class="prose"><p>This chapter covers the algebraic infrastructure that ties
 arithmetic traits together:</p>
-<p>  • <strong>AdditiveIdentity</strong> — the zero element for each type
-  • <strong>MultiplicativeIdentity</strong> — the one element for each type
-  • <strong>Num</strong> and <strong>Fractional</strong> bundles — grouped constraints
-  • <strong>Algebraic laws</strong> — property declarations for testing</p>
+<p>  * <strong>AdditiveIdentity</strong> --- the zero element for each type
+  * <strong>MultiplicativeIdentity</strong> --- the one element for each type
+  * <strong>Num</strong> and <strong>Fractional</strong> bundles --- grouped constraints
+  * <strong>Generic arithmetic</strong> --- first-class wrappers (plus, minus,
+    times, divide, negate-fn, abs-fn) formerly in generic-operations
+  * <strong>Sum/product/int-range</strong> --- generic folds using identity traits,
+    formerly in generic-operations
+  * <strong>Algebraic laws</strong> --- property declarations for testing</p>
 <p>The identity traits are single-method traits where the method
-is a *value*, not a function — the dictionary IS the zero/one
+is a *value*, not a function --- the dictionary IS the zero/one
 element itself. This enables <code>sum</code> and <code>product</code> to work
 generically over any numeric type.</p></div>
-<h2 class="part-header">Part I — Identity Traits</h2>
 <section class="module-container">
-<div class="module-badge">prologos::core::additive-identity-trait</div>
-<h3 class="section-title">AdditiveIdentity — The Zero Element</h3>
+<div class="module-badge">prologos::core::algebra</div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::arithmetic <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Add</span> <span class="hl-ty">Add-add</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Sub-sub</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Mul-mul</span>
+                                            <span class="hl-ty">Div</span> <span class="hl-ty">Div-div</span> <span class="hl-ty">Neg</span> <span class="hl-ty">Neg-neg</span> <span class="hl-ty">Abs</span> <span class="hl-ty">Abs-abs</span>]]
+<span class="hl-kw">require</span> [prologos::core::eq         <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Eq</span>]]
+<span class="hl-kw">require</span> [prologos::core::ord        <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ord</span>]]
+<span class="hl-kw">require</span> [prologos::core::conversions   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">FromInt</span> <span class="hl-ty">FromRat</span>]]
+<span class="hl-kw">require</span> [prologos::data::list       <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons reduce]]</code></pre>
+<div class="prose"><p>========================================
+Num Bundle
+========================================
+(Num A) expands to:
+  (Add A) (Sub A) (Mul A) (Neg A) (Eq A) (Ord A) (Abs A) (FromInt A)</p>
+<p>Applicable types:
+  Int — all 8 traits have Int impls
+  Rat — all 8 traits have Rat impls (after loading instances)
+  Nat — FAILS (lacks Neg, Abs, FromInt → no-instance-error)
+  Posit — FAILS until Phase 3f adds FromInt Posit impls</p></div>
+<pre><code class="prologos"><span class="hl-kw">bundle</span> <span class="hl-ty">Num</span> <span class="hl-op">:=</span> (<span class="hl-ty">Add</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Neg</span> <span class="hl-ty">Eq</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Abs</span> <span class="hl-ty">FromInt</span>)</code></pre>
+<div class="prose"><p>========================================
+Fractional Bundle
+========================================
+(Fractional A) expands to Num's 8 + (Div A) (FromRat A) = 10 constraints</p>
+<p>Applicable types:
+  Rat — all 10 traits have Rat impls</p></div>
+<pre><code class="prologos"><span class="hl-kw">bundle</span> <span class="hl-ty">Fractional</span> <span class="hl-op">:=</span> (<span class="hl-ty">Num</span> <span class="hl-ty">Div</span> <span class="hl-ty">FromRat</span>)</code></pre>
+<div class="prose"><p>========================================
+AdditiveIdentity Trait — additive zero
+========================================
+AdditiveIdentity A = A (single-method: dict IS the zero element)
+Generated: deftype AdditiveIdentity, accessor AdditiveIdentity-zero</p></div>
 <pre><code class="prologos"><span class="hl-kw">trait</span> <span class="hl-ty">AdditiveIdentity</span> {<span class="hl-ty">A</span>}
   zero : <span class="hl-ty">A</span></code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::multiplicative-identity-trait</div>
-<h3 class="section-title">MultiplicativeIdentity — The One Element</h3>
+<div class="prose"><p>========================================
+MultiplicativeIdentity Trait — multiplicative one
+========================================
+MultiplicativeIdentity A = A (single-method: dict IS the one element)
+Generated: deftype MultiplicativeIdentity, accessor MultiplicativeIdentity-one</p></div>
 <pre><code class="prologos"><span class="hl-kw">trait</span> <span class="hl-ty">MultiplicativeIdentity</span> {<span class="hl-ty">A</span>}
   one : <span class="hl-ty">A</span></code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::identity-instances</div>
-<h3 class="section-title">Identity Instances</h3>
-<div class="prose"><p>The dictionary IS the identity element (single-method trait
-where the method is a value, not a function).</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::additive-identity-trait       <span class="hl-kwlit">:refer</span> [<span class="hl-ty">AdditiveIdentity</span>]]
-<span class="hl-kw">require</span> [prologos::core::multiplicative-identity-trait  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">MultiplicativeIdentity</span>]]</code></pre>
-<h3 class="section-title">Additive Identity (zero)</h3>
+<div class="prose"><p>========================================
+AdditiveIdentity Instances (zero)
+========================================
+The dict IS the zero element (single-method trait where method = value).</p></div>
 <pre><code class="prologos">(<span class="hl-kw">def</span> <span class="hl-ty">Int--AdditiveIdentity--dict</span> : [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">Int</span>] <span class="hl-num">0</span>)
 (<span class="hl-kw">def</span> <span class="hl-ty">Rat--AdditiveIdentity--dict</span> : [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">Rat</span>] <span class="hl-num">0/1</span>)
 (<span class="hl-kw">def</span> <span class="hl-ty">Nat--AdditiveIdentity--dict</span> : [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">Nat</span>] <span class="hl-num">0<span class="hl-ty">N</span></span>)</code></pre>
-<h3 class="section-title">Multiplicative Identity (one)</h3>
+<div class="prose"><p>========================================
+MultiplicativeIdentity Instances (one)
+========================================
+The dict IS the one element.</p></div>
 <pre><code class="prologos">(<span class="hl-kw">def</span> <span class="hl-ty">Int--MultiplicativeIdentity--dict</span> : [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">Int</span>] <span class="hl-num">1</span>)
 (<span class="hl-kw">def</span> <span class="hl-ty">Rat--MultiplicativeIdentity--dict</span> : [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">Rat</span>] <span class="hl-num">1/1</span>)
 (<span class="hl-kw">def</span> <span class="hl-ty">Nat--MultiplicativeIdentity--dict</span> : [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">Nat</span>] <span class="hl-num">1<span class="hl-ty">N</span></span>)</code></pre>
-<h3 class="section-title">Posit Identity Instances</h3>
+<div class="prose"><p>========================================
+Posit8 Identity Instances
+========================================</p></div>
 <pre><code class="prologos">(<span class="hl-kw">def</span> <span class="hl-ty">Posit8--AdditiveIdentity--dict</span> : [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">Posit8</span>] [posit8 <span class="hl-num">0</span>])
-(<span class="hl-kw">def</span> <span class="hl-ty">Posit8--MultiplicativeIdentity--dict</span> : [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">Posit8</span>] [posit8 <span class="hl-num">64</span>])
-
-(<span class="hl-kw">def</span> <span class="hl-ty">Posit16--AdditiveIdentity--dict</span> : [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">Posit16</span>] [posit16 <span class="hl-num">0</span>])
-(<span class="hl-kw">def</span> <span class="hl-ty">Posit16--MultiplicativeIdentity--dict</span> : [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">Posit16</span>] [posit16 <span class="hl-num">16384</span>])
-
-(<span class="hl-kw">def</span> <span class="hl-ty">Posit32--AdditiveIdentity--dict</span> : [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">Posit32</span>] [posit32 <span class="hl-num">0</span>])
-(<span class="hl-kw">def</span> <span class="hl-ty">Posit32--MultiplicativeIdentity--dict</span> : [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">Posit32</span>] [posit32 <span class="hl-num">1073741824</span>])
-
-(<span class="hl-kw">def</span> <span class="hl-ty">Posit64--AdditiveIdentity--dict</span> : [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">Posit64</span>] [posit64 <span class="hl-num">0</span>])
+(<span class="hl-kw">def</span> <span class="hl-ty">Posit8--MultiplicativeIdentity--dict</span> : [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">Posit8</span>] [posit8 <span class="hl-num">64</span>])</code></pre>
+<div class="prose"><p>========================================
+Posit16 Identity Instances
+========================================</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> <span class="hl-ty">Posit16--AdditiveIdentity--dict</span> : [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">Posit16</span>] [posit16 <span class="hl-num">0</span>])
+(<span class="hl-kw">def</span> <span class="hl-ty">Posit16--MultiplicativeIdentity--dict</span> : [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">Posit16</span>] [posit16 <span class="hl-num">16384</span>])</code></pre>
+<div class="prose"><p>========================================
+Posit32 Identity Instances
+========================================</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> <span class="hl-ty">Posit32--AdditiveIdentity--dict</span> : [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">Posit32</span>] [posit32 <span class="hl-num">0</span>])
+(<span class="hl-kw">def</span> <span class="hl-ty">Posit32--MultiplicativeIdentity--dict</span> : [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">Posit32</span>] [posit32 <span class="hl-num">1073741824</span>])</code></pre>
+<div class="prose"><p>========================================
+Posit64 Identity Instances
+========================================</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> <span class="hl-ty">Posit64--AdditiveIdentity--dict</span> : [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">Posit64</span>] [posit64 <span class="hl-num">0</span>])
 (<span class="hl-kw">def</span> <span class="hl-ty">Posit64--MultiplicativeIdentity--dict</span> : [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">Posit64</span>] [posit64 <span class="hl-num">4611686018427387904</span>])</code></pre>
-</section>
-<h2 class="part-header">Part II — Numeric Bundles</h2>
-<section class="module-container">
-<div class="module-badge">prologos::core::numeric-bundles</div>
-<h3 class="section-title">Num and Fractional Bundles</h3>
-<div class="prose"><p>Bundles are syntactic sugar for multiple trait constraints.
-<code>(Num A)</code> expands to 8 constraints; <code>(Fractional A)</code> adds 2 more.</p>
-<p><strong>Num A</strong> works for: Int, Rat, Posit8–64
-<strong>Fractional A</strong> works for: Rat, Posit8–64
-Nat fails Num (lacks Neg, Abs, FromInt).</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::add-trait     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Add</span>]]
-<span class="hl-kw">require</span> [prologos::core::sub-trait     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Sub</span>]]
-<span class="hl-kw">require</span> [prologos::core::mul-trait     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Mul</span>]]
-<span class="hl-kw">require</span> [prologos::core::div-trait     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Div</span>]]
-<span class="hl-kw">require</span> [prologos::core::neg-trait     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Neg</span>]]
-<span class="hl-kw">require</span> [prologos::core::abs-trait     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Abs</span>]]
-<span class="hl-kw">require</span> [prologos::core::eq-trait      <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Eq</span>]]
-<span class="hl-kw">require</span> [prologos::core::ord-trait     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ord</span>]]
-<span class="hl-kw">require</span> [prologos::core::fromint-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">FromInt</span>]]
-<span class="hl-kw">require</span> [prologos::core::fromrat-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">FromRat</span>]]</code></pre>
-<div class="prose"><p>(Num A) = (Add Sub Mul Neg Eq Ord Abs FromInt) A</p></div>
-<pre><code class="prologos"><span class="hl-kw">bundle</span> <span class="hl-ty">Num</span> <span class="hl-op">:=</span> (<span class="hl-ty">Add</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Neg</span> <span class="hl-ty">Eq</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Abs</span> <span class="hl-ty">FromInt</span>)</code></pre>
-<div class="prose"><p>(Fractional A) = Num A + (Div FromRat) A = 10 constraints</p></div>
-<pre><code class="prologos"><span class="hl-kw">bundle</span> <span class="hl-ty">Fractional</span> <span class="hl-op">:=</span> (<span class="hl-ty">Num</span> <span class="hl-ty">Div</span> <span class="hl-ty">FromRat</span>)</code></pre>
-</section>
-<h2 class="part-header">Part III — Algebraic Laws</h2>
-<section class="module-container">
-<div class="module-badge">prologos::core::algebraic-laws</div>
-<h3 class="section-title">Property Declarations</h3>
-<div class="prose"><p>These are metadata-only in Phase 1: they register in the property
-store but do not generate code. Phase 2 (QuickCheck) will execute
-<code>:holds</code> clauses as randomized tests.</p></div>
-<pre><code class="prologos">(<span class="hl-kw">ns</span> prologos::core::algebraic-laws <span class="hl-kwlit">:no-prelude</span>)</code></pre>
+<div class="prose"><p>========================================
+sum — generic additive fold over a list
+========================================
+sum [Add A] [AdditiveIdentity A] (List A) -&gt; A
+Uses the AdditiveIdentity dict as the zero element and Add-add for accumulation.
+Left fold (reduce) for efficiency.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> sum [<span class="hl-ty">Add</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Sum a list using generic addition and an additive identity as zero"</span>
+<span class="hl-kw">defn</span> sum [add-dict id-dict xs]
+  reduce <span class="hl-ty">A</span> <span class="hl-ty">A</span> [<span class="hl-kw">fn</span> acc x [<span class="hl-ty">Add-add</span> add-dict acc x]] [<span class="hl-ty">AdditiveIdentity-zero</span> id-dict] xs</code></pre>
+<div class="prose"><p>========================================
+product — generic multiplicative fold over a list
+========================================
+product [Mul A] [MultiplicativeIdentity A] (List A) -&gt; A
+Uses MultiplicativeIdentity dict as one, Mul-mul for accumulation.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> product [<span class="hl-ty">Mul</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Multiply a list using generic multiplication and a multiplicative identity as one"</span>
+<span class="hl-kw">defn</span> product [mul-dict id-dict xs]
+  reduce <span class="hl-ty">A</span> <span class="hl-ty">A</span> [<span class="hl-kw">fn</span> acc x [<span class="hl-ty">Mul-mul</span> mul-dict acc x]] [<span class="hl-ty">MultiplicativeIdentity-one</span> id-dict] xs</code></pre>
+<div class="prose"><p>========================================
+int-range — generate a list of integers [start .. end-1]
+========================================
+int-range : Int -&gt; Int -&gt; List Int</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> int-range <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">Int</span>]
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Generate a list of integers from start (inclusive) to end (exclusive)"</span>
+<span class="hl-kw">defn</span> int-range [start end]
+  <span class="hl-kw">if</span> [int-lt start end]
+    cons <span class="hl-ty">Int</span> start [int-range [int+ start <span class="hl-num">1</span>] end]
+    nil <span class="hl-ty">Int</span></code></pre>
+<div class="prose"><p>========================================
+First-Class Generic Arithmetic — RETIRED (N6f)
+========================================
+Since Numerics N6e-E2, the operator names themselves ARE first-class values:
+<code>reduce + 0 xs</code> and <code>map negate xs</code> work directly (in head position at arity 2,
+<code>[+ a b]</code> is the auto-widening keyword; everywhere else <code>+</code> denotes the lawful
+same-type Add function). Explicit-hole sections also work: <code>[map [int* _ 2] xs]</code>,
+<code>[+ 7 _]</code> (N6e-E3). The old prefix wrappers (plus/minus/times/divide/negate-fn/
+abs-fn) are retired — use the operator names directly.</p>
+<p>========================================
+Algebraic laws — standard property declarations
+========================================
+These are metadata-only in Phase 1: they register in the property store
+but do not generate code. Phase 2 (QuickCheck) will execute :holds
+clauses as randomized tests.</p></div>
 <h3 class="section-title">Semigroup / Monoid / Group</h3>
 <pre><code class="prologos">(<span class="hl-kw">property</span> semigroup-laws ($brace-params <span class="hl-ty">A</span> : (<span class="hl-ty">Type</span> <span class="hl-num">0</span>))
   (- <span class="hl-kwlit">:name</span> <span class="hl-str">"associativity"</span>

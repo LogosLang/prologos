@@ -23,6 +23,7 @@
          "reduction.rkt"
          "unify.rkt"
          "typing-core.rkt"
+         "sign-refinement.rkt"  ;; Numerics N5de: refined-name?/refined-name->base
          "metavar-store.rkt"
          "elab-speculation-bridge.rkt"
          "global-env.rkt"
@@ -164,6 +165,8 @@
 
     ;; ---- Free variable: look up global environment ----
     ;; Global references do not consume local linear resources.
+    ;; Numerics N5de: nominal-erased refined numeric types are built-in types (: Type 0).
+    [(expr-fvar (? refined-name? _)) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-fvar name)
      (let ([ty (global-env-lookup-type name)])
        (if ty
@@ -174,8 +177,13 @@
     [(expr-Type l) (tu (expr-Type (lsuc l)) (zero-usage n))]
     [(expr-Nat) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-Bool) (tu (expr-Type (lzero)) (zero-usage n))]
-    ;; Open : Type 0 (PPN 4C T-2, 2026-04-23)
-    [(expr-Open) (tu (expr-Type (lzero)) (zero-usage n))]
+    ;; CIU T6 F1a.2 p0 (bug fix): an UNSOLVED meta reaching inferQ in a
+    ;; type-argument position (e.g. bare {}'s key-domain meta through
+    ;; map-empty's inferQ) must not tu-error — it made `def m0 := {}` die as a
+    ;; spurious "Multiplicity violation" (checkQ-top's generic reporter).
+    ;; Mirrors checkQ's blanket expr-meta pass; type args are erased (m0-scaled)
+    ;; by their consumers, so Type-0 + zero usage is the honest answer.
+    [(expr-meta _ _) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-zero) (tu (expr-Nat) (zero-usage n))]
     [(expr-nat-val _) (tu (expr-Nat) (zero-usage n))]
     [(expr-true) (tu (expr-Bool) (zero-usage n))]
@@ -199,6 +207,11 @@
     ;; Posit32
     [(expr-Posit32) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-posit32 _) (tu (expr-Posit32) (zero-usage n))]
+    ;; Float (Numerics N3)
+    [(expr-Float32) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-float32 _) (tu (expr-Float32) (zero-usage n))]
+    [(expr-Float64) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-float64 _) (tu (expr-Float64) (zero-usage n))]
     ;; Posit64
     [(expr-Posit64) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-posit64 _) (tu (expr-Posit64) (zero-usage n))]
@@ -263,16 +276,25 @@
 
     ;; ---- Annotation: ann(e, T) ----
     [(expr-ann e1 t)
-     (if (is-type ctx t)
-         (let ([r (checkQ ctx e1 t)])
-           (match r
-             [(bu #t u) (tu t u)]
-             [_ (tu-error)]))
-         (tu-error))]
+     ;; Numerics N5de: ascription to a refined numeric type = erased narrowing cast (mirror typing-core).
+     (let ([tw (whnf t)])
+       (cond
+         [(and (expr-fvar? tw) (refined-name? (expr-fvar-name tw)))
+          (let ([r (checkQ ctx e1 (if (eq? (refined-name->base (expr-fvar-name tw)) 'Int) (expr-Int) (expr-Rat)))])
+            (match r [(bu #t u) (tu t u)] [_ (tu-error)]))]
+         [(is-type ctx t)
+          (let ([r (checkQ ctx e1 t)])
+            (match r [(bu #t u) (tu t u)] [_ (tu-error)]))]
+         [else (tu-error)]))]
 
     ;; ---- Application ----
     ;; Usage = U_func + pi * U_arg
     [(expr-app e1 e2)
+     (cond
+       ;; Issue #71 (Stage-2 twin of typing-core): a saturated multi-hole section
+       ;; → whnf-reduce then inferQ the lambda-free concrete form. Same guard.
+       [(saturated-hole-section-app? e) (inferQ ctx (whnf e))]
+       [else
      (match e1
        ;; Special case: app(lam(m, dom, body), arg) — beta-typed application
        ;; This supports let-expansion: (let x := v body) = app(lam(m, dom, body), v)
@@ -307,7 +329,7 @@
                      (tu (subst 0 e2 b) (add-usage u1 (scale-usage m u2)))]
                     [_ (tu-error)]))]
                [_ (tu-error)])]
-            [_ (tu-error)]))])]
+            [_ (tu-error)]))])])]
 
     ;; ---- fst ----
     [(expr-fst e1)
@@ -512,36 +534,40 @@
            [r2 (inferQ ctx b)])
        (match* (r1 r2)
          [((tu t1 u1) (tu t2 u2))
-          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
-              (tu t1 (add-usage u1 u2))
-              (tu-error))]
+          (let ([j (numeric-join t1 t2)])          ;; N5de: base via numeric-join (mixed refined+bare OK); sign via transfer
+            (if (and j (concrete-numeric-type? j))
+                (tu (refine-arith t1 t2 j sign-transfer-add) (add-usage u1 u2))
+                (tu-error)))]
          [(_ _) (tu-error)]))]
     [(expr-generic-sub a b)
      (let ([r1 (inferQ ctx a)]
            [r2 (inferQ ctx b)])
        (match* (r1 r2)
          [((tu t1 u1) (tu t2 u2))
-          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
-              (tu t1 (add-usage u1 u2))
-              (tu-error))]
+          (let ([j (numeric-join t1 t2)])
+            (if (and j (concrete-numeric-type? j))
+                (tu (refine-arith t1 t2 j sign-transfer-sub) (add-usage u1 u2))
+                (tu-error)))]
          [(_ _) (tu-error)]))]
     [(expr-generic-mul a b)
      (let ([r1 (inferQ ctx a)]
            [r2 (inferQ ctx b)])
        (match* (r1 r2)
          [((tu t1 u1) (tu t2 u2))
-          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
-              (tu t1 (add-usage u1 u2))
-              (tu-error))]
+          (let ([j (numeric-join t1 t2)])
+            (if (and j (concrete-numeric-type? j))
+                (tu (refine-arith t1 t2 j sign-transfer-mul) (add-usage u1 u2))
+                (tu-error)))]
          [(_ _) (tu-error)]))]
     [(expr-generic-div a b)
      (let ([r1 (inferQ ctx a)]
            [r2 (inferQ ctx b)])
        (match* (r1 r2)
          [((tu t1 u1) (tu t2 u2))
-          (if (and (equal? t1 t2) (divisible-numeric-type? t1))
-              (tu t1 (add-usage u1 u2))
-              (tu-error))]
+          (let ([j (numeric-join t1 t2)])
+            (if (and j (divisible-numeric-type? j))
+                (tu (refine-arith t1 t2 j sign-transfer-div) (add-usage u1 u2))
+                (tu-error)))]
          [(_ _) (tu-error)]))]
 
     ;; Binary comparison: infer both args, return Bool
@@ -550,66 +576,74 @@
            [r2 (inferQ ctx b)])
        (match* (r1 r2)
          [((tu t1 u1) (tu t2 u2))
-          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
-              (tu (expr-Bool) (add-usage u1 u2))
-              (tu-error))]
+          (let ([j (numeric-join t1 t2)])
+            (if (and j (concrete-numeric-type? j))
+                (tu (expr-Bool) (add-usage u1 u2))
+                (tu-error)))]
          [(_ _) (tu-error)]))]
     [(expr-generic-le a b)
      (let ([r1 (inferQ ctx a)]
            [r2 (inferQ ctx b)])
        (match* (r1 r2)
          [((tu t1 u1) (tu t2 u2))
-          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
-              (tu (expr-Bool) (add-usage u1 u2))
-              (tu-error))]
+          (let ([j (numeric-join t1 t2)])
+            (if (and j (concrete-numeric-type? j))
+                (tu (expr-Bool) (add-usage u1 u2))
+                (tu-error)))]
          [(_ _) (tu-error)]))]
     [(expr-generic-gt a b)
      (let ([r1 (inferQ ctx a)]
            [r2 (inferQ ctx b)])
        (match* (r1 r2)
          [((tu t1 u1) (tu t2 u2))
-          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
-              (tu (expr-Bool) (add-usage u1 u2))
-              (tu-error))]
+          (let ([j (numeric-join t1 t2)])
+            (if (and j (concrete-numeric-type? j))
+                (tu (expr-Bool) (add-usage u1 u2))
+                (tu-error)))]
          [(_ _) (tu-error)]))]
     [(expr-generic-ge a b)
      (let ([r1 (inferQ ctx a)]
            [r2 (inferQ ctx b)])
        (match* (r1 r2)
          [((tu t1 u1) (tu t2 u2))
-          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
-              (tu (expr-Bool) (add-usage u1 u2))
-              (tu-error))]
+          (let ([j (numeric-join t1 t2)])
+            (if (and j (concrete-numeric-type? j))
+                (tu (expr-Bool) (add-usage u1 u2))
+                (tu-error)))]
          [(_ _) (tu-error)]))]
     [(expr-generic-eq a b)
      (let ([r1 (inferQ ctx a)]
            [r2 (inferQ ctx b)])
        (match* (r1 r2)
          [((tu t1 u1) (tu t2 u2))
-          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
-              (tu (expr-Bool) (add-usage u1 u2))
-              (tu-error))]
+          (let ([j (numeric-join t1 t2)])
+            (if (and j (concrete-numeric-type? j))
+                (tu (expr-Bool) (add-usage u1 u2))
+                (tu-error)))]
          [(_ _) (tu-error)]))]
     [(expr-generic-mod a b)
      (let ([r1 (inferQ ctx a)]
            [r2 (inferQ ctx b)])
        (match* (r1 r2)
          [((tu t1 u1) (tu t2 u2))
-          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
-              (tu t1 (add-usage u1 u2))
-              (tu-error))]
+          (let ([j (numeric-join t1 t2)])          ;; N5de: mod unrefined — result is the base
+            (if (and j (concrete-numeric-type? j))
+                (tu j (add-usage u1 u2))
+                (tu-error)))]
          [(_ _) (tu-error)]))]
 
     ;; Unary: infer arg, return same type
     [(expr-generic-negate a)
      (let ([r (inferQ ctx a)])
        (match r
-         [(tu t u) (if (negatable-numeric-type? t) (tu t u) (tu-error))]
+         [(tu t u) (let ([bt (base-numeric-type t)])
+                     (if (negatable-numeric-type? bt) (tu (refine-arith1 t bt sign-transfer-neg) u) (tu-error)))]
          [_ (tu-error)]))]
     [(expr-generic-abs a)
      (let ([r (inferQ ctx a)])
        (match r
-         [(tu t u) (if (concrete-numeric-type? t) (tu t u) (tu-error))]
+         [(tu t u) (let ([bt (base-numeric-type t)])
+                     (if (concrete-numeric-type? bt) (tu (refine-arith1 t bt sign-transfer-abs) u) (tu-error)))]
          [_ (tu-error)]))]
 
     ;; Generic conversion: from-integer TargetType val, from-rational TargetType val
@@ -808,6 +842,76 @@
                    [_ (tu-error)]))]
               [_ (tu-error)]))]
          [_ (tu-error)]))]
+
+    ;; ---- Float32/Float64 ops (Numerics N3b) ----
+    [(expr-f32-add a b)
+     (let ([r1 (checkQ ctx a (expr-Float32))] [r2 (checkQ ctx b (expr-Float32))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Float32) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f32-sub a b)
+     (let ([r1 (checkQ ctx a (expr-Float32))] [r2 (checkQ ctx b (expr-Float32))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Float32) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f32-mul a b)
+     (let ([r1 (checkQ ctx a (expr-Float32))] [r2 (checkQ ctx b (expr-Float32))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Float32) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f32-div a b)
+     (let ([r1 (checkQ ctx a (expr-Float32))] [r2 (checkQ ctx b (expr-Float32))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Float32) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f32-neg a)
+     (let ([r (inferQ ctx a)]) (match r [(tu (expr-Float32) u) (tu (expr-Float32) u)] [_ (tu-error)]))]
+    [(expr-f32-abs a)
+     (let ([r (inferQ ctx a)]) (match r [(tu (expr-Float32) u) (tu (expr-Float32) u)] [_ (tu-error)]))]
+    [(expr-f32-sqrt a)
+     (let ([r (inferQ ctx a)]) (match r [(tu (expr-Float32) u) (tu (expr-Float32) u)] [_ (tu-error)]))]
+    [(expr-f32-lt a b)
+     (let ([r1 (checkQ ctx a (expr-Float32))] [r2 (checkQ ctx b (expr-Float32))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f32-le a b)
+     (let ([r1 (checkQ ctx a (expr-Float32))] [r2 (checkQ ctx b (expr-Float32))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f32-eq a b)
+     (let ([r1 (checkQ ctx a (expr-Float32))] [r2 (checkQ ctx b (expr-Float32))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f64-add a b)
+     (let ([r1 (checkQ ctx a (expr-Float64))] [r2 (checkQ ctx b (expr-Float64))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Float64) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f64-sub a b)
+     (let ([r1 (checkQ ctx a (expr-Float64))] [r2 (checkQ ctx b (expr-Float64))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Float64) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f64-mul a b)
+     (let ([r1 (checkQ ctx a (expr-Float64))] [r2 (checkQ ctx b (expr-Float64))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Float64) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f64-div a b)
+     (let ([r1 (checkQ ctx a (expr-Float64))] [r2 (checkQ ctx b (expr-Float64))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Float64) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f64-neg a)
+     (let ([r (inferQ ctx a)]) (match r [(tu (expr-Float64) u) (tu (expr-Float64) u)] [_ (tu-error)]))]
+    [(expr-f64-abs a)
+     (let ([r (inferQ ctx a)]) (match r [(tu (expr-Float64) u) (tu (expr-Float64) u)] [_ (tu-error)]))]
+    [(expr-f64-sqrt a)
+     (let ([r (inferQ ctx a)]) (match r [(tu (expr-Float64) u) (tu (expr-Float64) u)] [_ (tu-error)]))]
+    [(expr-f64-lt a b)
+     (let ([r1 (checkQ ctx a (expr-Float64))] [r2 (checkQ ctx b (expr-Float64))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f64-le a b)
+     (let ([r1 (checkQ ctx a (expr-Float64))] [r2 (checkQ ctx b (expr-Float64))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+    [(expr-f64-eq a b)
+     (let ([r1 (checkQ ctx a (expr-Float64))] [r2 (checkQ ctx b (expr-Float64))])
+       (match* (r1 r2) [((bu #t u1) (bu #t u2)) (tu (expr-Bool) (add-usage u1 u2))] [(_ _) (tu-error)]))]
+
+    ;; ---- Cross-width Float conversions (Numerics N3e-rest): arg Float32 OR Float64 ----
+    [(expr-float-finite a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu ta u) #:when (let ([w (whnf ta)]) (or (expr-Float32? w) (expr-Float64? w))) (tu (expr-Bool) u)] [_ (tu-error)]))]
+    [(expr-float-to-rat a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu ta u) #:when (let ([w (whnf ta)]) (or (expr-Float32? w) (expr-Float64? w))) (tu (expr-Rat) u)] [_ (tu-error)]))]
+    [(expr-float-to-int a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu ta u) #:when (let ([w (whnf ta)]) (or (expr-Float32? w) (expr-Float64? w))) (tu (expr-Int) u)] [_ (tu-error)]))]
+    [(expr-float-to-float32 a)
+     (let ([r (inferQ ctx a)])
+       (match r [(tu ta u) #:when (let ([w (whnf ta)]) (or (expr-Float32? w) (expr-Float64? w))) (tu (expr-Float32) u)] [_ (tu-error)]))]
 
     ;; ---- Posit32 binary operations ----
     ;; Binary ops: Posit32 -> Posit32 -> Posit32
@@ -1067,12 +1171,16 @@
               u1)]
          [_ (tu-error)]))]
     [(expr-update-in target paths fn)
+     ;; CIU T6 F1b.3: DELEGATE the type to typing-core (the map-keys/vals
+     ;; precedent) — this twin previously returned the TARGET's type unchanged,
+     ;; a pre-existing divergence from the D20/D24 record degrades (the F1b.3
+     ;; audit's C4 refutation); usage stays local.
      (let ([r1 (inferQ ctx target)]
            [r2 (inferQ ctx paths)]
            [r3 (inferQ ctx fn)])
        (match* (r1 r2 r3)
-         [((tu t1 u1) (tu _ u2) (tu _ u3))
-          (tu t1 (add-usage u1 (add-usage u2 u3)))]
+         [((tu _ u1) (tu _ u2) (tu _ u3))
+          (tu (infer ctx e) (add-usage u1 (add-usage u2 u3)))]
          [(_ _ _) (tu-error)]))]
     ;; Char
     [(expr-Char) (tu (expr-Type (lzero)) (zero-usage n))]
@@ -1080,6 +1188,14 @@
     ;; String
     [(expr-String) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-string _) (tu (expr-String) (zero-usage n))]
+    ;; Record/tuple type formation (CIU T6 F1): Type 0; usage = sum over field-type usages
+    [(expr-Record _ fields _)
+     (let loop ([fs fields] [acc (zero-usage n)])
+       (if (null? fs)
+           (tu (expr-Type (lzero)) acc)
+           (match (inferQ ctx (record-field-type (cdr (car fs))))
+             [(tu _ u) (loop (cdr fs) (add-usage acc u))]
+             [_ (tu-error)])))]
     ;; Map
     [(expr-Map k v)
      (let ([r1 (inferQ ctx k)]
@@ -1094,7 +1210,12 @@
            [r2 (inferQ ctx v)])
        (match* (r1 r2)
          [((tu _ u1) (tu _ u2))
-          (tu (expr-Map k v) (scale-usage 'm0 (add-usage u1 u2)))]  ;; type args are erased
+          ;; CIU T6 F1a.2 p1b: a Record v-slot (the record/dyn-row literal seed)
+          ;; delegates the TYPE to infer (the S4 pattern) — the seed's type IS
+          ;; the row, and checkQ-top's fallback must see it (not (Map ?km row),
+          ;; whose meta K the pure α key-gate rightly refuses).
+          (tu (if (expr-Record? v) (infer ctx e) (expr-Map k v))
+              (scale-usage 'm0 (add-usage u1 u2)))]  ;; type args are erased
          [(_ _) (tu-error)]))]
     [(expr-map-assoc m k v)
      (let ([r1 (inferQ ctx m)]
@@ -1102,7 +1223,10 @@
            [r3 (inferQ ctx v)])
        (match* (r1 r2 r3)
          [((tu _ u1) (tu _ u2) (tu _ u3))
-          (tu (tu-type r1) (add-usage u1 (add-usage u2 u3)))]
+          ;; CIU T6 F1 (S4): delegate the TYPE to typing-core unconditionally (records GROW —
+          ;; the old (tu-type r1) returned the un-extended type = the §6 divergence bug class);
+          ;; usage stays local.
+          (tu (infer ctx e) (add-usage u1 (add-usage u2 u3)))]
          [(_ _ _) (tu-error)]))]
     [(expr-map-get m k)
      (let ([r1 (inferQ ctx m)]
@@ -1112,7 +1236,8 @@
           ;; map-get returns the value type V from Map K V
           (match t1
             [(expr-Map _ vt) (tu vt (add-usage u1 u2))]
-            ;; Schema/selection type: infer result type from typing-core, track usage
+            ;; CIU T6 F1 (s2): record/schema/selection — delegate result type to typing-core
+            [(? expr-Record?) (tu (infer ctx e) (add-usage u1 u2))]
             [(expr-fvar name)
              #:when (or (lookup-schema-by-name name) (lookup-selection-by-name name))
              (let ([result-type (infer ctx e)])
@@ -1128,6 +1253,16 @@
           (let ([result-type (infer ctx e)])
             (tu result-type (add-usage u1 u2)))]
          [(_ _) (tu-error)]))]
+
+    ;; CIU T6 F1b.5-s2: validate — the expr-get delegate pattern: subject
+    ;; usage at natural multiplicity; type from typing-core's infer arm.
+    ;; Plan exprs are BAKED CLOSED (elaborated in empty env — no free vars
+    ;; into user context), so they contribute no usage. No checkQ arm needed
+    ;; (checkQ's conversion fallback covers check position).
+    [(expr-validate _ _ _ subject _)
+     (match (inferQ ctx subject)
+       [(tu _ u) (tu (infer ctx e) u)]
+       [_ (tu-error)])]
     [(expr-nil-safe-get m k)
      (let ([r1 (inferQ ctx m)]
            [r2 (inferQ ctx k)])
@@ -1143,11 +1278,14 @@
          [(tu _ u) (tu (expr-Bool) u)]
          [_ (tu-error)]))]
     [(expr-map-dissoc m k)
+     ;; CIU T6 F1b.3: DELEGATE the type (was: the SUBJECT's type unchanged — a
+     ;; pre-existing divergence that made def-bound dissoc results fail QTT
+     ;; with a miscategorized Multiplicity violation; audit C4 refutation).
      (let ([r1 (inferQ ctx m)]
            [r2 (inferQ ctx k)])
        (match* (r1 r2)
          [((tu _ u1) (tu _ u2))
-          (tu (tu-type r1) (add-usage u1 u2))]
+          (tu (infer ctx e) (add-usage u1 u2))]
          [(_ _) (tu-error)]))]
     [(expr-map-size m)
      (let ([r (inferQ ctx m)])
@@ -1284,17 +1422,64 @@
      (let ([r1 (inferQ ctx v)]
            [r2 (inferQ ctx x)])
        (match* (r1 r2)
-         [((tu _ u1) (tu _ u2))
-          (tu (tu-type r1) (add-usage u1 u2))]
+         [((tu t1 u1) (tu _ u2))
+          ;; CIU T6 F1a-col-3: a tuple subject makes push type-CHANGING (the row grows) —
+          ;; delegate the type to infer (the §6 divergence class / S4 pattern), usage local.
+          ;; PVec subjects keep the exact echo (result type = subject type).
+          (if (expr-Record? (whnf t1))
+              (tu (infer ctx e) (add-usage u1 u2))
+              (tu t1 (add-usage u1 u2)))]
          [(_ _) (tu-error)]))]
+    ;; CIU T6 F1a-col-2: list-literal twin — same delegation; usage from elems
+    ;; (the chain re-elaborates the same source elements; counting BOTH would
+    ;; double-count usage, so the chain contributes none).
+    [(expr-list-literal elems chain)
+     (let ([result-type (infer ctx e)])
+       (if (expr-error? result-type)
+           (tu-error)
+           (let loop ([es elems] [u (zero-usage n)])
+             (if (null? es)
+                 (tu result-type u)
+                 (match (inferQ ctx (car es))
+                   [(tu _ ue) (loop (cdr es) (add-usage u ue))]
+                   [_ (tu-error)])))))]
+    ;; CIU T6 F1a.2 p1b (D18): map-literal twin — type delegates to infer
+    ;; (keys-unify + ⋃vals lives there once); usage sums keys + vals; the chain
+    ;; re-elaborates the same source entries, so it contributes NO usage
+    ;; (the col-2 double-count lesson).
+    [(expr-map-literal keys vals chain)
+     (let ([result-type (infer ctx e)])
+       (if (expr-error? result-type)
+           (tu-error)
+           (let loop ([es (append keys vals)] [u (zero-usage n)])
+             (if (null? es)
+                 (tu result-type u)
+                 (match (inferQ ctx (car es))
+                   [(tu _ ue) (loop (cdr es) (add-usage u ue))]
+                   [_ (tu-error)])))))]
+    ;; CIU T6 F1a-col: literal-extent node — type delegates to infer (the
+    ;; homogeneity/tuple decision lives there once); usage sums the elements.
+    [(expr-pvec-literal elems)
+     (let ([result-type (infer ctx e)])
+       (if (expr-error? result-type)
+           (tu-error)
+           (let loop ([es elems] [u (zero-usage n)])
+             (if (null? es)
+                 (tu result-type u)
+                 (match (inferQ ctx (car es))
+                   [(tu _ ue) (loop (cdr es) (add-usage u ue))]
+                   [_ (tu-error)])))))]
     [(expr-pvec-nth v i)
      (let ([r1 (inferQ ctx v)]
            [r2 (inferQ ctx i)])
        (match* (r1 r2)
          [((tu t1 u1) (tu _ u2))
           ;; pvec-nth returns the ELEMENT TYPE, not PVec
-          (match t1
+          (match (whnf t1)
             [(expr-PVec a) (tu a (add-usage u1 u2))]
+            ;; CIU T6 F1a-col-3: tuple — delegate the positional projection to infer
+            ;; (record-project lives there once); usage local.
+            [(? expr-Record?) (tu (infer ctx e) (add-usage u1 u2))]
             [_ (tu-error)])]
          [(_ _) (tu-error)]))]
     [(expr-pvec-update v i x)
@@ -1302,8 +1487,12 @@
            [r2 (inferQ ctx i)]
            [r3 (inferQ ctx x)])
        (match* (r1 r2 r3)
-         [((tu _ u1) (tu _ u2) (tu _ u3))
-          (tu (tu-type r1) (add-usage u1 (add-usage u2 u3)))]
+         [((tu t1 u1) (tu _ u2) (tu _ u3))
+          ;; CIU T6 F1a-col-3: tuple → type-changing (per-position replace / degrade) —
+          ;; delegate to infer (§6 divergence class); PVec keeps the echo.
+          (if (expr-Record? (whnf t1))
+              (tu (infer ctx e) (add-usage u1 (add-usage u2 u3)))
+              (tu t1 (add-usage u1 (add-usage u2 u3))))]
          [(_ _ _) (tu-error)]))]
     [(expr-pvec-length v)
      (let ([r (inferQ ctx v)])
@@ -1313,28 +1502,43 @@
     [(expr-pvec-pop v)
      (let ([r (inferQ ctx v)])
        (match r
-         [(tu _ u) (tu (tu-type r) u)]
+         ;; CIU T6 F1a-col-3: tuple → the row SHRINKS — delegate (§6 class); PVec echoes.
+         [(tu t1 u)
+          (if (expr-Record? (whnf t1))
+              (tu (infer ctx e) u)
+              (tu t1 u))]
          [_ (tu-error)]))]
     [(expr-pvec-concat v1 v2)
      (let ([r1 (inferQ ctx v1)]
            [r2 (inferQ ctx v2)])
        (match* (r1 r2)
-         [((tu _ u1) (tu _ u2))
-          (tu (tu-type r1) (add-usage u1 u2))]
+         [((tu t1 u1) (tu _ u2))
+          ;; CIU T6 F1a-col-3: tuple → row append / degrade — delegate (§6 class).
+          (if (expr-Record? (whnf t1))
+              (tu (infer ctx e) (add-usage u1 u2))
+              (tu t1 (add-usage u1 u2)))]
          [(_ _) (tu-error)]))]
     [(expr-pvec-slice v lo hi)
      (let ([r1 (inferQ ctx v)]
            [r2 (inferQ ctx lo)]
            [r3 (inferQ ctx hi)])
        (match* (r1 r2 r3)
-         [((tu _ u1) (tu _ u2) (tu _ u3))
-          (tu (tu-type r1) (add-usage u1 (add-usage u2 u3)))]
+         [((tu t1 u1) (tu _ u2) (tu _ u3))
+          ;; CIU T6 F1a-col-3: tuple → sub-row / degrade — delegate (§6 class).
+          (if (expr-Record? (whnf t1))
+              (tu (infer ctx e) (add-usage u1 (add-usage u2 u3)))
+              (tu t1 (add-usage u1 (add-usage u2 u3))))]
          [(_ _ _) (tu-error)]))]
     ;; pvec-to-list : PVec A → List A
     [(expr-pvec-to-list v)
      (let ([r (inferQ ctx v)])
        (match r
          [(tu (expr-PVec a) u) (tu (expr-app (list-type-fvar) a) u)]
+         ;; CIU T6 F1a-col-3: tuple → delegate to infer ((List ⋃positions)). MUST come
+         ;; before the resolution fallback below, which would silently ECHO the row
+         ;; itself as the "List" result type (wrong type, no error).
+         [(tu t1 u) #:when (expr-Record? (whnf t1))
+          (tu (infer ctx e) u)]
          [(tu _ u) (tu (tu-type r) u)]  ;; fallback if type not fully resolved
          [_ (tu-error)]))]
     ;; pvec-from-list : List A → PVec A
@@ -1352,9 +1556,17 @@
            [ri (inferQ ctx init)])
        (match* (rv ri)
          [((tu tv uv) (tu tb ui))
-          (match tv
+          (match (whnf tv)
             [(expr-PVec a)
              (let* ([ef (expr-Pi 'mw tb (expr-Pi 'mw (shift 1 0 a) (shift 2 0 tb)))]
+                    [rf (inferQ-or-checkQ ctx f ef)])
+               (match rf
+                 [(tu _ uf) (tu tb (add-usage (add-usage uf ui) uv))]
+                 [_ (tu-error)]))]
+            ;; CIU T6 F1a-col-3: fold over a tuple — uniform view (typing-core mirror)
+            [(? closed-nat-row? rec)
+             (let* ([v (record-value-bound ctx rec "tuple-fold")]
+                    [ef (expr-Pi 'mw tb (expr-Pi 'mw (shift 1 0 v) (shift 2 0 tb)))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
                  [(tu _ uf) (tu tb (add-usage (add-usage uf ui) uv))]
@@ -1368,9 +1580,18 @@
            [rv (inferQ ctx vec)])
        (match rv
          [(tu tv uv)
-          (match tv
+          (match (whnf tv)
             [(expr-PVec a)
              (let* ([rf (inferQ-or-checkQ ctx f (expr-Pi 'mw a (shift 1 0 result-type)))])
+               (match rf
+                 [(tu _ uf) (tu result-type (add-usage uf uv))]
+                 [_ (tu-error)]))]
+            ;; CIU T6 F1a-col-3: map over a tuple — f consumes ⋃positions; the
+            ;; position-preserving result type comes from infer (the map-map-vals
+            ;; qtt-mirror pattern).
+            [(? closed-nat-row? rec)
+             (let ([rf (inferQ-or-checkQ ctx f
+                         (expr-Pi 'mw (record-value-bound ctx rec "tuple-map") (shift 1 0 result-type)))])
                (match rf
                  [(tu _ uf) (tu result-type (add-usage uf uv))]
                  [_ (tu-error)]))]
@@ -1381,11 +1602,19 @@
      (let ([rv (inferQ ctx vec)])
        (match rv
          [(tu tv uv)
-          (match tv
+          (match (whnf tv)
             [(expr-PVec a)
              (let ([rp (inferQ-or-checkQ ctx pred (expr-Pi 'mw a (expr-Bool)))])
                (match rp
                  [(tu _ up) (tu (expr-PVec a) (add-usage up uv))]
+                 [_ (tu-error)]))]
+            ;; CIU T6 F1a-col-3: filter on a tuple → (PVec ⋃positions) degrade
+            ;; (typing-core mirror)
+            [(? closed-nat-row? rec)
+             (let* ([v (record-value-bound ctx rec "tuple-filter")]
+                    [rp (inferQ-or-checkQ ctx pred (expr-Pi 'mw v (expr-Bool)))])
+               (match rp
+                 [(tu _ up) (tu (expr-PVec v) (add-usage up uv))]
                  [_ (tu-error)]))]
             [_ (tu-error)])]
          [_ (tu-error)]))]
@@ -1432,6 +1661,16 @@
                (match rf
                  [(tu _ uf) (tu tb (add-usage (add-usage uf ui) um))]
                  [_ (tu-error)]))]
+            ;; CIU T6 F1 (s3): fold over a record — uniform view (K=Keyword, V=⋃fields)
+            [(? expr-Record? rec)
+             (let* ([v (record-value-bound ctx rec "dyn-row-fold")]
+                    [ef (expr-Pi 'mw tb
+                          (expr-Pi 'mw (shift 1 0 (expr-Keyword))
+                            (expr-Pi 'mw (shift 2 0 v) (shift 3 0 tb))))]
+                    [rf (inferQ-or-checkQ ctx f ef)])
+               (match rf
+                 [(tu _ uf) (tu tb (add-usage (add-usage uf ui) um))]
+                 [_ (tu-error)]))]
             [_ (tu-error)])]
          [(_ _) (tu-error)]))]
     ;; map-filter-entries : (K → V → Bool) → Map K V → Map K V
@@ -1445,6 +1684,14 @@
                          (expr-Pi 'mw k (expr-Pi 'mw (shift 1 0 v) (expr-Bool))))])
                (match rp
                  [(tu _ up) (tu (expr-Map k v) (add-usage up um))]
+                 [_ (tu-error)]))]
+            ;; CIU T6 F1 (s3): filter on a record → dictionary view (mirrors typing-core)
+            [(? expr-Record? rec)
+             (let* ([v (record-value-bound ctx rec "dyn-row-filter")]
+                    [rp (inferQ-or-checkQ ctx pred
+                          (expr-Pi 'mw (expr-Keyword) (expr-Pi 'mw (shift 1 0 v) (expr-Bool))))])
+               (match rp
+                 [(tu _ up) (tu (expr-Map (expr-Keyword) v) (add-usage up um))]
                  [_ (tu-error)]))]
             [_ (tu-error)])]
          [_ (tu-error)]))]
@@ -1460,6 +1707,13 @@
                (match rf
                  [(tu _ uf) (tu result-type (add-usage uf um))]
                  [_ (tu-error)]))]
+            ;; CIU T6 F1 (s3): map-vals over a record — f consumes ⋃fields; type from infer
+            [(? expr-Record? rec)
+             (let ([rf (inferQ-or-checkQ ctx f
+                         (expr-Pi 'mw (record-value-bound ctx rec "dyn-row-map-vals") (shift 1 0 result-type)))])
+               (match rf
+                 [(tu _ uf) (tu result-type (add-usage uf um))]
+                 [_ (tu-error)]))]
             [_ (tu-error)])]
          [_ (tu-error)]))]
 
@@ -1468,10 +1722,12 @@
     [(expr-transient coll)
      (let ([r (inferQ ctx coll)])
        (match r
-         [(tu tc u) (match tc
+         [(tu tc u) (match (whnf tc)
                       [(expr-PVec a) (tu (expr-TVec a) u)]
                       [(expr-Map k v) (tu (expr-TMap k v) u)]
                       [(expr-Set a) (tu (expr-TSet a) u)]
+                      ;; CIU T6 F1a-col-3: tuple → uniform transient view (typing-core mirror)
+                      [(? closed-nat-row? rec) (tu (expr-TVec (record-value-bound ctx rec "tuple-transient")) u)]
                       [_ (tu-error)])]
          [_ (tu-error)]))]
     [(expr-persist coll)
@@ -1754,106 +2010,6 @@
           (tu (infer ctx e) (add-usage u1 u2))]
          [(_ _) (tu-error)]))]
 
-    ;; ---- ATMS type constructors ----
-    [(expr-atms-type) (tu (expr-Type (lzero)) (zero-usage n))]
-    [(expr-assumption-id-type) (tu (expr-Type (lzero)) (zero-usage n))]
-    ;; Runtime wrappers
-    [(expr-atms-store _) (tu (expr-atms-type) (zero-usage n))]
-    [(expr-assumption-id-val _) (tu (expr-assumption-id-type) (zero-usage n))]
-
-    ;; ---- ATMS operations ----
-
-    ;; atms-new : PropNetwork -> ATMS
-    [(expr-atms-new net)
-     (let ([r1 (inferQ ctx net)])
-       (match r1
-         [(tu _ u) (tu (expr-atms-type) u)]
-         [_ (tu-error)]))]
-
-    ;; atms-assume : ATMS -> A -> A -> [ATMS * AssumptionId]
-    [(expr-atms-assume a nm d)
-     (let ([r1 (inferQ ctx a)]
-           [r2 (inferQ ctx nm)]
-           [r3 (inferQ ctx d)])
-       (match* (r1 r2 r3)
-         [((tu _ u1) (tu _ u2) (tu _ u3))
-          (tu (infer ctx e) (add-usage u1 (add-usage u2 u3)))]
-         [(_ _ _) (tu-error)]))]
-
-    ;; atms-retract : ATMS -> AssumptionId -> ATMS
-    [(expr-atms-retract a aid)
-     (let ([r1 (inferQ ctx a)]
-           [r2 (inferQ ctx aid)])
-       (match* (r1 r2)
-         [((tu _ u1) (tu _ u2))
-          (tu (expr-atms-type) (add-usage u1 u2))]
-         [(_ _) (tu-error)]))]
-
-    ;; atms-nogood : ATMS -> List AssumptionId -> ATMS
-    [(expr-atms-nogood a aids)
-     (let ([r1 (inferQ ctx a)]
-           [r2 (inferQ ctx aids)])
-       (match* (r1 r2)
-         [((tu _ u1) (tu _ u2))
-          (tu (expr-atms-type) (add-usage u1 u2))]
-         [(_ _) (tu-error)]))]
-
-    ;; atms-amb : ATMS -> List A -> [ATMS * _]
-    [(expr-atms-amb a alts)
-     (let ([r1 (inferQ ctx a)]
-           [r2 (inferQ ctx alts)])
-       (match* (r1 r2)
-         [((tu _ u1) (tu _ u2))
-          (tu (infer ctx e) (add-usage u1 u2))]
-         [(_ _) (tu-error)]))]
-
-    ;; atms-solve-all : ATMS -> CellId -> _
-    [(expr-atms-solve-all a g)
-     (let ([r1 (inferQ ctx a)]
-           [r2 (inferQ ctx g)])
-       (match* (r1 r2)
-         [((tu _ u1) (tu _ u2))
-          (tu (infer ctx e) (add-usage u1 u2))]
-         [(_ _) (tu-error)]))]
-
-    ;; atms-read : ATMS -> CellId -> _
-    [(expr-atms-read a c)
-     (let ([r1 (inferQ ctx a)]
-           [r2 (inferQ ctx c)])
-       (match* (r1 r2)
-         [((tu _ u1) (tu _ u2))
-          (tu (infer ctx e) (add-usage u1 u2))]
-         [(_ _) (tu-error)]))]
-
-    ;; atms-write : ATMS -> CellId -> A -> List AssumptionId -> ATMS
-    [(expr-atms-write a c v s)
-     (let ([r1 (inferQ ctx a)]
-           [r2 (inferQ ctx c)]
-           [r3 (inferQ ctx v)]
-           [r4 (inferQ ctx s)])
-       (match* (r1 r2 r3 r4)
-         [((tu _ u1) (tu _ u2) (tu _ u3) (tu _ u4))
-          (tu (expr-atms-type) (add-usage u1 (add-usage u2 (add-usage u3 u4))))]
-         [(_ _ _ _) (tu-error)]))]
-
-    ;; atms-consistent? : ATMS -> List AssumptionId -> Bool
-    [(expr-atms-consistent a aids)
-     (let ([r1 (inferQ ctx a)]
-           [r2 (inferQ ctx aids)])
-       (match* (r1 r2)
-         [((tu _ u1) (tu _ u2))
-          (tu (expr-Bool) (add-usage u1 u2))]
-         [(_ _) (tu-error)]))]
-
-    ;; atms-worldview : ATMS -> List AssumptionId -> ATMS
-    [(expr-atms-worldview a aids)
-     (let ([r1 (inferQ ctx a)]
-           [r2 (inferQ ctx aids)])
-       (match* (r1 r2)
-         [((tu _ u1) (tu _ u2))
-          (tu (expr-atms-type) (add-usage u1 u2))]
-         [(_ _) (tu-error)]))]
-
     ;; ---- Tabling type constructor + wrapper ----
     [(expr-table-store-type) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-table-store-val _) (tu (expr-table-store-type) (zero-usage n))]
@@ -1937,7 +2093,6 @@
     [(expr-goal-type) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-derivation-type) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-cut) (tu (expr-goal-type) (zero-usage n))]
-    [(expr-schema-type _) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-answer-type t)
      (if t
          (let ([r (inferQ ctx t)])
@@ -2003,32 +2158,31 @@
        (match* (r1 r2)
          [((tu _ u1) (tu _ u2)) (tu (expr-goal-type) (add-usage u1 u2))]
          [(_ _) (tu-error)]))]
-    [(expr-schema nm fs)
-     (define fus (for/list ([f (in-list fs)])
-                   (match (inferQ ctx f) [(tu _ u) u] [_ (zero-usage n)])))
-     (tu (expr-schema-type nm) (foldl add-usage (zero-usage n) fus))]
+    ;; Solve/Explain → typed solution rows (Rel T1 Aspect B, B1). Usage from the
+    ;; goal (+ solver/overrides for -with); the TYPE is the shared solve-row-type
+    ;; twin of the typing-core arms (query-var keys, schema-projected field types).
     [(expr-solve g)
      (let ([r (inferQ ctx g)])
-       (match r [(tu _ u) (tu (expr-hole) u)] [_ (tu-error)]))]
+       (match r [(tu _ u) (tu (solve-row-type g 'list) u)] [_ (tu-error)]))]
     [(expr-solve-with sv ov g)
      (define su (if sv (match (inferQ ctx sv) [(tu _ u) u] [_ (zero-usage n)]) (zero-usage n)))
      (define ou (if ov (match (inferQ ctx ov) [(tu _ u) u] [_ (zero-usage n)]) (zero-usage n)))
      (let ([rg (inferQ ctx g)])
        (match rg
-         [(tu _ ug) (tu (expr-hole) (add-usage su (add-usage ou ug)))]
+         [(tu _ ug) (tu (solve-row-type g 'list) (add-usage su (add-usage ou ug)))]
          [_ (tu-error)]))]
     [(expr-solve-one g)
      (let ([r (inferQ ctx g)])
-       (match r [(tu _ u) (tu (expr-hole) u)] [_ (tu-error)]))]
+       (match r [(tu _ u) (tu (solve-row-type g 'bare) u)] [_ (tu-error)]))]
     [(expr-explain g)
      (let ([r (inferQ ctx g)])
-       (match r [(tu _ u) (tu (expr-hole) u)] [_ (tu-error)]))]
+       (match r [(tu _ u) (tu (solve-row-type g 'list 'dyn) u)] [_ (tu-error)]))]
     [(expr-explain-with sv ov g)
      (define su (if sv (match (inferQ ctx sv) [(tu _ u) u] [_ (zero-usage n)]) (zero-usage n)))
      (define ou (if ov (match (inferQ ctx ov) [(tu _ u) u] [_ (zero-usage n)]) (zero-usage n)))
      (let ([rg (inferQ ctx g)])
        (match rg
-         [(tu _ ug) (tu (expr-hole) (add-usage su (add-usage ou ug)))]
+         [(tu _ ug) (tu (solve-row-type g 'list 'dyn) (add-usage su (add-usage ou ug)))]
          [_ (tu-error)]))]
 
     ;; ---- J eliminator ----
@@ -2055,6 +2209,9 @@
     ;; ---- Vec/Fin type constructors: zero usage for types ----
     [(expr-Vec _ _) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-Fin _) (tu (expr-Type (lzero)) (zero-usage n))]
+
+    ;; ---- N4: numeric literal in infer position → DEFAULT type (Int if integral else Rat); zero usage ----
+    [(expr-num-lit _ integral? origin _) (tu (num-lit-default-type origin integral?) (zero-usage n))]
 
     ;; ---- Fallback ----
     [_ (tu-error)]))
@@ -2134,13 +2291,22 @@
 
     ;; ---- Open: α-semantic wildcard (PPN 4C T-2, 2026-04-23) ----
     ;; Open unifies in both directions with zero resource usage.
-    ;; Mirrors typing-core check behavior. See syntax.rkt expr-Open.
-    [((expr-Open) _) (bu #t (zero-usage n))]
-    [(_ (expr-Open)) (bu #t (zero-usage n))]
 
     ;; ---- Meta expression: optimistically succeed with zero usage ----
     ;; A metavariable (from implicit arg insertion) doesn't consume resources.
     [((expr-meta _ _) _) (bu #t (zero-usage n))]
+
+    ;; ---- N4: context-typed numeric literal — mirror typing-core check: resolve alpha
+    ;; ---- from the expected type + validate representability. Zero resource usage.
+    [((expr-num-lit exact-val integral? _origin alpha) T)
+     (cond
+       [(concrete-numeric-type? T)
+        (bu (and (num-lit-representable? exact-val integral? T)
+                 (unify-ok? (unify ctx alpha T)))
+            (zero-usage n))]
+       [(expr-meta? T)
+        (bu (unify-ok? (unify ctx alpha T)) (zero-usage n))]
+       [else (bu #f (zero-usage n))])]
 
     ;; ---- Symbol literal: check against Symbol type ----
     [((expr-symbol _) (expr-Symbol)) (bu #t (zero-usage n))]
@@ -2175,9 +2341,11 @@
 
     ;; ---- Map constructors: check against Schema type (fvar) ----
     ;; Schema types are opaque fvar types backed by maps; QTT tracks usage normally.
+    ;; CIU T6 F1b.4a (D22.8): the champ twin RETIRED LOUD (mirror of
+    ;; typing-core — runtime maps seal via validate, F1b.5; fails closed).
     [((expr-champ _) (expr-fvar name))
      #:when (lookup-schema-by-name name)
-     (bu #t (zero-usage n))]
+     (bu #f (zero-usage n))]
     [((expr-map-empty _ _) (expr-fvar name))
      #:when (lookup-schema-by-name name)
      ;; Type args of map-empty are erased (m0) — zero usage, same as (expr-champ)
@@ -2194,9 +2362,11 @@
          [(_ _ _) (bu #f (zero-usage n))]))]
     ;; ---- Map constructors: check against Selection type (fvar) ----
     ;; Selection types delegate to parent schema at value level.
+    ;; CIU T6 F1b.4a (D22.8): the champ twin RETIRED LOUD (mirror of
+    ;; typing-core; runtime maps seal via validate, F1b.5; fails closed).
     [((expr-champ _) (expr-fvar name))
      #:when (lookup-selection-by-name name)
-     (bu #t (zero-usage n))]
+     (bu #f (zero-usage n))]
     [((expr-map-empty _ _) (expr-fvar name))
      #:when (lookup-selection-by-name name)
      (bu #t (zero-usage n))]
@@ -2240,16 +2410,62 @@
          [((bu #t u1) (bu #t u2))
           (bu #t (add-usage u1 u2))]
          [(_ _) (bu #f (zero-usage n))]))]
+    ;; CIU T6 F1a-col-2: list literal vs (List A) — each element against A in
+    ;; CHECK mode. Load-bearing: operator values / sections (int+, [_ * 2]) only
+    ;; elaborate with an expected type (issue-#76 class); the inferQ fallback
+    ;; would run them in INFER mode and fail (test-prim-op-firstclass).
+    [((expr-list-literal elems _) expected)
+     #:when (match (whnf expected)
+              [(expr-app f _) (equal? f (list-type-fvar))]
+              [_ #f])
+     (match (whnf expected)
+       [(expr-app _ a)
+        (let loop ([es elems] [u (zero-usage n)])
+          (if (null? es)
+              (bu #t u)
+              (match (checkQ ctx (car es) a)
+                [(bu #t ue) (loop (cdr es) (add-usage u ue))]
+                [_ (bu #f (zero-usage n))])))])]
+    ;; CIU T6 F1a.2 p1b (D18): map literal vs (Map K V) — keys against K, values
+    ;; against V in CHECK mode (the issue-#76 operator-value class).
+    [((expr-map-literal keys vals _) (expr-Map kt vt))
+     (let loop ([es (map (lambda (k) (cons k kt)) keys)] [u (zero-usage n)]
+                [rest (map (lambda (v) (cons v vt)) vals)])
+       (cond
+         [(and (null? es) (null? rest)) (bu #t u)]
+         [(null? es) (loop rest u '())]
+         [else
+          (match (checkQ ctx (caar es) (cdar es))
+            [(bu #t ue) (loop (cdr es) (add-usage u ue) rest)]
+            [_ (bu #f (zero-usage n))])]))]
+    ;; CIU T6 F1a-col: literal vs (PVec A) — each element against A (C2 mirror)
+    [((expr-pvec-literal elems) (expr-PVec a))
+     (let loop ([es elems] [u (zero-usage n)])
+       (if (null? es)
+           (bu #t u)
+           (match (checkQ ctx (car es) a)
+             [(bu #t ue) (loop (cdr es) (add-usage u ue))]
+             [_ (bu #f (zero-usage n))])))]
     ;; pvec-fold : check f, init, vec — result type is expected-type
     [((expr-pvec-fold f init vec) expected-type)
      (let ([rv (inferQ ctx vec)]
            [ri (checkQ ctx init expected-type)])
        (match* (rv ri)
          [((tu tv uv) (bu #t ui))
-          (match tv
+          (match (whnf tv)
             [(expr-PVec a)
              (let* ([ef (expr-Pi 'mw expected-type
                           (expr-Pi 'mw (shift 1 0 a) (shift 2 0 expected-type)))]
+                    [rf (inferQ-or-checkQ ctx f ef)])
+               (match rf
+                 [(tu _ uf) (bu #t (add-usage (add-usage uf ui) uv))]
+                 [_ (bu #f (zero-usage n))]))]
+            ;; CIU T6 F1a-col-3: fold over a tuple in CHECK mode — uniform view
+            ;; (the issue-#76 class: checked positions must not fall to inferQ)
+            [(? closed-nat-row? rec)
+             (let* ([v (record-value-bound ctx rec "tuple-fold")]
+                    [ef (expr-Pi 'mw expected-type
+                          (expr-Pi 'mw (shift 1 0 v) (shift 2 0 expected-type)))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
                  [(tu _ uf) (bu #t (add-usage (add-usage uf ui) uv))]
@@ -2261,9 +2477,19 @@
      (let ([rv (inferQ ctx vec)])
        (match rv
          [(tu tv uv)
-          (match* (tv (whnf expected-type))
+          (match* ((whnf tv) (whnf expected-type))
             [((expr-PVec a) (expr-PVec b))
              (let ([rf (inferQ-or-checkQ ctx f (expr-Pi 'mw a (shift 1 0 b)))])
+               (match rf
+                 [(tu _ uf)
+                  (bu (check ctx (expr-pvec-map f vec) expected-type)
+                      (add-usage uf uv))]
+                 [_ (bu #f (zero-usage n))]))]
+            ;; CIU T6 F1a-col-3: tuple source checked against (PVec B) — f consumes
+            ;; ⋃positions (typing-core check-arm mirror; issue-#76 class)
+            [((? closed-nat-row? rec) (expr-PVec b))
+             (let ([rf (inferQ-or-checkQ ctx f
+                         (expr-Pi 'mw (record-value-bound ctx rec "tuple-map") (shift 1 0 b)))])
                (match rf
                  [(tu _ uf)
                   (bu (check ctx (expr-pvec-map f vec) expected-type)
@@ -2276,9 +2502,19 @@
      (let ([rv (inferQ ctx vec)])
        (match rv
          [(tu tv uv)
-          (match tv
+          (match (whnf tv)
             [(expr-PVec a)
              (let ([rp (inferQ-or-checkQ ctx pred (expr-Pi 'mw a (expr-Bool)))])
+               (match rp
+                 [(tu _ up)
+                  (bu (check ctx (expr-pvec-filter pred vec) expected-type)
+                      (add-usage up uv))]
+                 [_ (bu #f (zero-usage n))]))]
+            ;; CIU T6 F1a-col-3: tuple — pred consumes ⋃positions; the result check
+            ;; delegates (the (PVec ⋃) degrade meets the annotation via the α)
+            [(? closed-nat-row? rec)
+             (let* ([v (record-value-bound ctx rec "tuple-filter")]
+                    [rp (inferQ-or-checkQ ctx pred (expr-Pi 'mw v (expr-Bool)))])
                (match rp
                  [(tu _ up)
                   (bu (check ctx (expr-pvec-filter pred vec) expected-type)
@@ -2332,6 +2568,16 @@
                (match rf
                  [(tu _ uf) (bu #t (add-usage (add-usage uf ui) um))]
                  [_ (bu #f (zero-usage n))]))]
+            ;; CIU T6 F1 (s3): fold over a record — uniform view (K=Keyword, V=⋃fields)
+            [(? expr-Record? rec)
+             (let* ([ef (expr-Pi 'mw expected-type
+                          (expr-Pi 'mw (shift 1 0 (expr-Keyword))
+                            (expr-Pi 'mw (shift 2 0 (record-value-bound ctx rec "dyn-row-fold"))
+                                     (shift 3 0 expected-type))))]
+                    [rf (inferQ-or-checkQ ctx f ef)])
+               (match rf
+                 [(tu _ uf) (bu #t (add-usage (add-usage uf ui) um))]
+                 [_ (bu #f (zero-usage n))]))]
             [_ (bu #f (zero-usage n))])]
          [(_ _) (bu #f (zero-usage n))]))]
     ;; map-filter-entries : check against Map K V
@@ -2343,6 +2589,17 @@
             [(expr-Map k v)
              (let ([rp (inferQ-or-checkQ ctx pred
                          (expr-Pi 'mw k (expr-Pi 'mw (shift 1 0 v) (expr-Bool))))])
+               (match rp
+                 [(tu _ up)
+                  (bu (check ctx (expr-map-filter-entries pred map) expected-type)
+                      (add-usage up um))]
+                 [_ (bu #f (zero-usage n))]))]
+            ;; CIU T6 F1 (s3): filter on a record — pred consumes the uniform view;
+            ;; the final type check delegates to typing-core (dictionary-view result)
+            [(? expr-Record? rec)
+             (let* ([v (record-value-bound ctx rec "dyn-row-filter")]
+                    [rp (inferQ-or-checkQ ctx pred
+                          (expr-Pi 'mw (expr-Keyword) (expr-Pi 'mw (shift 1 0 v) (expr-Bool))))])
                (match rp
                  [(tu _ up)
                   (bu (check ctx (expr-map-filter-entries pred map) expected-type)
@@ -2361,6 +2618,17 @@
                (match rf
                  [(tu _ uf)
                   (bu (and (unify-ok? (unify ctx k k2))
+                           (check ctx (expr-map-map-vals f map) expected-type))
+                      (add-usage uf um))]
+                 [_ (bu #f (zero-usage n))]))]
+            ;; CIU T6 F1 (s3): record source vs Map result — keys are Keyword;
+            ;; f consumes ⋃fields; final check delegates to typing-core
+            [((? expr-Record? rec) (expr-Map k w))
+             (let ([rf (inferQ-or-checkQ ctx f
+                         (expr-Pi 'mw (record-value-bound ctx rec "dyn-row-map-vals") (shift 1 0 w)))])
+               (match rf
+                 [(tu _ uf)
+                  (bu (and (unify-ok? (unify ctx k (expr-Keyword)))
                            (check ctx (expr-map-map-vals f map) expected-type))
                       (add-usage uf um))]
                  [_ (bu #f (zero-usage n))]))]
@@ -2417,10 +2685,6 @@
     ;; ---- UnionFind runtime wrapper ----
     [((expr-uf-store _) (expr-uf-type)) (bu #t (zero-usage n))]
 
-    ;; ---- ATMS runtime wrappers ----
-    [((expr-atms-store _) (expr-atms-type)) (bu #t (zero-usage n))]
-    [((expr-assumption-id-val _) (expr-assumption-id-type)) (bu #t (zero-usage n))]
-
     ;; ---- Tabling runtime wrapper ----
     [((expr-table-store-val _) (expr-table-store-type)) (bu #t (zero-usage n))]
 
@@ -2429,12 +2693,32 @@
 
     ;; ---- Union type: checkQ(G, e, A | B) ----
     ;; Phase 5: speculative rollback with network fork/restore.
+    ;; CIU T6 F1a.2 p0 (bug fix, p3 perf-refit): a term whose INFERRED type is
+    ;; the WHOLE union (a dynamic ⋃ projection) can never re-derive it branch-
+    ;; wise — both branches fail and every bare-union-typed def died as a
+    ;; spurious "Multiplicity violation". The branch split stays EXACTLY as it
+    ;; always was (left rollback-probed, right bare — zero new hot-path cost;
+    ;; the p0 version rollback-wrapped the right branch and paid a meta-snapshot
+    ;; + fork on every successful right-branch check, a measured +7% on typing-
+    ;; dominated programs). The whole-union conversion runs only on the BOTH-
+    ;; FAIL path; a failed bare right branch rarely solves metas (branch types
+    ;; are concrete), and the attempt itself re-unifies — accepted posture,
+    ;; pinned by the p0 tests.
     [(_ (expr-union l r))
      (let ([rl (with-speculative-rollback
                  (lambda () (checkQ ctx e l))
                  (lambda (r) (and (bu? r) (bu-ok? r)))
                  "union-checkQ-left")])
-       (or rl (checkQ ctx e r)))]
+       (or rl
+           (let ([rr (checkQ ctx e r)])
+             (if (and (bu? rr) (bu-ok? rr))
+                 rr
+                 (match (inferQ ctx e)
+                   [(tu t1 u)
+                    #:when (and (not (expr-error? t1))
+                                (unify-ok? (unify ctx (expr-union l r) t1)))
+                    (bu #t u)]
+                   [_ (bu #f (zero-usage n))])))))]
 
     ;; ---- Conversion fallback ----
     ;; Phase 3e: added cumulativity + within-family subtyping (consistent with check)
@@ -2447,6 +2731,46 @@
                        (match* ((whnf t) (whnf t1))
                          [((expr-Type l1) (expr-Type l2))
                           (level<=? l2 l1)]
+                         ;; CIU T6 F1 (B2): reach the Record<:Map subsumption from the QTT pass
+                         ;; too (checkQ's fallback is a DUPLICATE of check's — mirror the arm).
+                         [((? expr-Map? mt) (? expr-Record? rec))
+                          (record-<:-map? ctx rec (expr-Map-k-type mt) (expr-Map-v-type mt))]
+                         ;; CIU T6 F1a-col-3 (B2 completion): the Tuple→PVec and Tuple→List
+                         ;; α arms were missing here — ground cases were rescued by the unify
+                         ;; classifier above, but a meta element type ((PVec ?A)) reached from
+                         ;; the QTT pass could not solve ?A. Mirror check's fallback exactly.
+                         [((? expr-PVec? pt) (? expr-Record? rec))
+                          (record-<:-pvec? ctx rec (expr-PVec-elem-type pt))]
+                         [((expr-app lf la) (? expr-Record? rec))
+                          #:when (equal? lf (list-type-fvar))
+                          (record-<:-elem? ctx rec la)]
+                         ;; CIU T6 F1b.4a (D22): the row-vs-schema/selection
+                         ;; discharge twins + the schema-actual up-shift twins
+                         ;; (shared predicates from typing-core — mirror-drift cap).
+                         [((expr-fvar sname) (? expr-Record? rec))
+                          #:when (lookup-schema-by-name sname)
+                          ;; F1b.4e twins: per-field + residual (shared predicates)
+                          (record-seals-schema? ctx rec (lookup-schema-by-name sname))]
+                         [((expr-fvar selname) (? expr-Record? rec))
+                          #:when (lookup-selection-by-name selname)
+                          (record-seals-selection? ctx rec (lookup-selection-by-name selname))]
+                         [((? expr-Map? mt) (expr-fvar sname))
+                          #:when (lookup-schema-by-name sname)
+                          (record-<:-map? ctx (schema->row (lookup-schema-by-name sname))
+                                          (expr-Map-k-type mt) (expr-Map-v-type mt))]
+                         [((? expr-Record? t-rec) (expr-fvar sname))
+                          #:when (and (lookup-schema-by-name sname)
+                                      (record-width-applicable?
+                                       t-rec (schema->row (lookup-schema-by-name sname))))
+                          (record-width-discharge?
+                           ctx t-rec (schema->row (lookup-schema-by-name sname)))]
+                         ;; CIU T6 F1b.3 (D21): the width-discharge twin (shared
+                         ;; predicates from typing-core — the mirror-drift cap).
+                         ;; Returns a plain BOOLEAN into this or-chain (the bu
+                         ;; wrap is outside), unlike the union arm's bu threading.
+                         [((? expr-Record? t-rec) (? expr-Record? t1-rec))
+                          #:when (record-width-applicable? t-rec t1-rec)
+                          (record-width-discharge? ctx t-rec t1-rec)]
                          [(t-w t1-w) (subtype? t1-w t-w)])))
               (bu #t u)
               (bu #f (zero-usage n)))]

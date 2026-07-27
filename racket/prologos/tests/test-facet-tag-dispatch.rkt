@@ -14,11 +14,11 @@
 ;;;
 
 (require rackunit
-         prologos/propagator
-         prologos/typing-propagators
-         prologos/syntax
-         prologos/type-lattice
-         prologos/classify-inhabit)
+         "../propagator.rkt"
+         "../typing-propagators.rkt"
+         "../syntax.rkt"
+         "../type-lattice.rkt"
+         "../classify-inhabit.rkt")
 
 ;; ============================================================
 ;; Reader semantics

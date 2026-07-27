@@ -32,35 +32,9 @@
  ;; Core structs
  (struct-out assumption-id)
  (struct-out assumption)
- (struct-out supported-value)
- (struct-out tms-cell)
- (struct-out atms)              ;; DEPRECATED — Phase 5.6: use solver-context
- ;; Construction
- atms-empty                     ;; DEPRECATED — Phase 5.6: use make-solver-context
- ;; Assumption management
- atms-assume
- atms-retract
- ;; Nogood management
- atms-add-nogood
- atms-consistent?
- ;; Worldview
- atms-with-worldview
- ;; Choice points
- atms-amb
- ;; TMS cell operations
- atms-read-cell
- atms-write-cell
- ;; Solving
- atms-solve-all
- ;; Explanation / derivation chains
+ ;; Explanation / derivation chains (shared with solver-context)
  (struct-out nogood-explanation)
- atms-explain-hypothesis
- atms-explain
- ;; GDE-2: Minimal diagnoses
- atms-minimal-diagnoses
- atms-conflict-graph
- ;; Helpers
- assumption-id-hash
+ ;; Helpers (shared with solver-context)
  hash-subset?
 
  ;; ============================================================
@@ -138,35 +112,9 @@
 ;; datum: the value this assumption asserts (opaque Racket value)
 (struct assumption (name datum) #:transparent)
 
-;; A value tagged with its justification (support set)
-;; value: any Racket value (the lattice/data value)
-;; support: hasheq assumption-id → #t (the assumptions that justify this value)
-(struct supported-value (value support) #:transparent)
-
-;; A TMS cell: holds multiple contingent values
-;; values: list of supported-value (newest first)
-;; dependents: hasheq prop-id → #t (propagators watching this cell)
-(struct tms-cell (values dependents) #:transparent)
-
-;; The persistent ATMS
-;; network: prop-network (underlying computation engine)
-;; assumptions: hasheq assumption-id → assumption
-;; nogoods: list of hasheq (each is assumption-id → #t, a bad assumption set)
-;; tms-cells: hasheq cell-id → tms-cell
-;; next-assumption: Nat (monotonic counter for fresh IDs)
-;; believed: hasheq assumption-id → #t (current worldview)
-;; amb-groups: list of (list assumption-id) — one group per amb call
-(struct atms
-  (network assumptions nogoods tms-cells next-assumption believed amb-groups)
-  #:transparent)
-
 ;; ========================================
 ;; Helpers
 ;; ========================================
-
-;; Identity hash for assumption-ids (same pattern as cell-id-hash)
-(define (assumption-id-hash aid)
-  (assumption-id-n aid))
 
 ;; Check if all keys in small-hash exist in big-hash (set subset)
 (define (hash-subset? small big)
@@ -191,169 +139,6 @@
     (values aid #t)))
 
 ;; ========================================
-;; Construction
-;; ========================================
-
-;; Create an empty ATMS, optionally wrapping a PropNetwork.
-(define (atms-empty [network #f])
-  (atms (or network (make-prop-network))
-        (hasheq)    ;; assumptions
-        '()         ;; nogoods
-        (hasheq)    ;; tms-cells
-        0           ;; next-assumption
-        (hasheq)    ;; believed
-        '()))       ;; amb-groups
-
-;; ========================================
-;; Assumption management
-;; ========================================
-
-;; Create a new assumption. Returns (values new-atms assumption-id).
-;; The assumption is automatically added to the believed set.
-(define (atms-assume a name datum)
-  (define aid (assumption-id (atms-next-assumption a)))
-  (define asn (assumption name datum))
-  (values
-   (struct-copy atms a
-     [assumptions (hash-set (atms-assumptions a) aid asn)]
-     [next-assumption (+ 1 (atms-next-assumption a))]
-     [believed (hash-set (atms-believed a) aid #t)])
-   aid))
-
-;; Retract an assumption: remove from believed set.
-;; The assumption still exists in the assumptions map (for history/nogoods).
-(define (atms-retract a aid)
-  (struct-copy atms a
-    [believed (hash-remove (atms-believed a) aid)]))
-
-;; ========================================
-;; Nogood management
-;; ========================================
-
-;; Record a nogood: a set of assumptions known to be inconsistent.
-;; nogood-set: hasheq assumption-id → #t
-(define (atms-add-nogood a nogood-set)
-  (struct-copy atms a
-    [nogoods (cons nogood-set (atms-nogoods a))]))
-
-;; Check if an assumption set is consistent (avoids all nogoods).
-;; assumption-set: hasheq assumption-id → #t
-(define (atms-consistent? a assumption-set)
-  (not (for/or ([ng (in-list (atms-nogoods a))])
-         (hash-subset? ng assumption-set))))
-
-;; ========================================
-;; Worldview management
-;; ========================================
-
-;; Switch worldview: returns new ATMS with different believed set.
-;; new-believed: hasheq assumption-id → #t
-(define (atms-with-worldview a new-believed)
-  (struct-copy atms a [believed new-believed]))
-
-;; ========================================
-;; Choice points (amb)
-;; ========================================
-
-;; Create a choice point with n alternatives.
-;; Each alternative gets a fresh assumption. Mutual exclusion nogoods
-;; are recorded for every pair of alternatives.
-;;
-;; Returns (values new-atms (list assumption-id ...))
-;; The assumption-ids correspond 1:1 with the alternatives.
-(define (atms-amb a alternatives)
-  ;; 1. Create fresh assumptions, one per alternative
-  (define-values (a* hyps-rev)
-    (for/fold ([a a] [hs '()])
-              ([alt (in-list alternatives)]
-               [i (in-naturals)])
-      (define-values (a2 hid) (atms-assume a (string->symbol (format "h~a" i)) alt))
-      (values a2 (cons hid hs))))
-  (define hyps (reverse hyps-rev))
-  ;; 2. Record mutual exclusion: every pair of hypotheses is a nogood
-  (define a**
-    (for*/fold ([a a*])
-               ([i (in-range (length hyps))]
-                [j (in-range (+ i 1) (length hyps))])
-      (define h1 (list-ref hyps i))
-      (define h2 (list-ref hyps j))
-      (atms-add-nogood a (hasheq h1 #t h2 #t))))
-  ;; 3. Record amb group for solve-all enumeration
-  (define a***
-    (struct-copy atms a**
-      [amb-groups (append (atms-amb-groups a**) (list hyps))]))
-  (values a*** hyps))
-
-;; ========================================
-;; TMS cell operations
-;; ========================================
-
-;; Read the value from a TMS cell under the current worldview.
-;; Finds the first supported value whose support ⊆ believed.
-;; Returns 'bot if no compatible value exists.
-;; cell-key: any hashable key (typically a cell-id)
-(define (atms-read-cell a cell-key)
-  (define tc (hash-ref (atms-tms-cells a) cell-key #f))
-  (if (not tc)
-      'bot
-      (let loop ([svs (tms-cell-values tc)])
-        (cond
-          [(null? svs) 'bot]
-          [(hash-subset? (supported-value-support (car svs)) (atms-believed a))
-           (supported-value-value (car svs))]
-          [else (loop (cdr svs))]))))
-
-;; Write a supported value to a TMS cell.
-;; value: the data value
-;; support: hasheq assumption-id → #t
-;; cell-key: any hashable key (typically a cell-id)
-(define (atms-write-cell a cell-key value support)
-  (define sv (supported-value value support))
-  (define tc (hash-ref (atms-tms-cells a) cell-key
-                       (tms-cell '() (hasheq))))
-  (define tc* (struct-copy tms-cell tc
-                [values (cons sv (tms-cell-values tc))]))
-  (struct-copy atms a
-    [tms-cells (hash-set (atms-tms-cells a) cell-key tc*)]))
-
-;; ========================================
-;; Solving
-;; ========================================
-
-;; Enumerate all consistent worldviews from amb groups and collect
-;; the goal cell's value under each.
-;;
-;; Algorithm:
-;;   1. Compute Cartesian product of amb-groups (one assumption per group)
-;;   2. Filter for consistency (no nogood subset of the worldview)
-;;   3. For each consistent worldview, read the goal cell's value
-;;   4. Collect distinct answers (deduplicated)
-;;
-;; Returns a list of distinct values (possibly empty).
-(define (atms-solve-all a goal-cell-key)
-  (define groups (atms-amb-groups a))
-  (cond
-    [(null? groups)
-     ;; No amb: just read the cell under current worldview
-     (define val (atms-read-cell a goal-cell-key))
-     (if (eq? val 'bot) '() (list val))]
-    [else
-     ;; Enumerate all combinations
-     (define combos (cartesian-product groups))
-     (define answers
-       (for/fold ([acc '()])
-                 ([combo (in-list combos)])
-         (define believed (aids->set combo))
-         (if (atms-consistent? a believed)
-             (let* ([a* (atms-with-worldview a believed)]
-                    [val (atms-read-cell a* goal-cell-key)])
-               (if (or (eq? val 'bot) (member val acc))
-                   acc
-                   (cons val acc)))
-             acc)))
-     (reverse answers)]))
-
-;; ========================================
 ;; Explanation / derivation chains
 ;; ========================================
 
@@ -363,59 +148,9 @@
 ;;   — the OTHER assumptions in the nogood (excluding the queried hypothesis)
 (struct nogood-explanation (nogood-set conflicting-assumptions) #:transparent)
 
-;; Given an ATMS and a hypothesis-id, return all nogoods containing that hypothesis.
-;; For each matching nogood, resolves the conflicting assumptions (all assumptions
-;; in the nogood other than the queried one) with their metadata.
-;; Returns: (listof nogood-explanation)
-(define (atms-explain-hypothesis a hypothesis-id)
-  (for/list ([ng (in-list (atms-nogoods a))]
-             #:when (hash-has-key? ng hypothesis-id))
-    (define others
-      (for/list ([(aid _) (in-hash ng)]
-                 #:when (not (equal? aid hypothesis-id)))
-        (cons aid (hash-ref (atms-assumptions a) aid #f))))
-    (nogood-explanation ng others)))
-
-;; Return all nogoods that are violated under the current believed set.
-;; Each violated nogood is returned as a nogood-explanation with full
-;; assumption metadata for all members.
-;; Returns: (listof nogood-explanation)
-(define (atms-explain a)
-  (for/list ([ng (in-list (atms-nogoods a))]
-             #:when (hash-subset? ng (atms-believed a)))
-    (define members
-      (for/list ([(aid _) (in-hash ng)])
-        (cons aid (hash-ref (atms-assumptions a) aid #f))))
-    (nogood-explanation ng members)))
-
 ;; ========================================
-;; GDE-2: Minimal diagnoses (hitting-set)
+;; Hitting-set helper (shared with modern solver-context API)
 ;; ========================================
-
-;; A diagnosis is a set of assumptions whose retraction resolves all conflicts.
-;; A MINIMAL diagnosis is one where no proper subset also resolves all conflicts.
-;;
-;; Algorithm: greedy hitting-set (de Kleer & Williams 1987, simplified).
-;; For each violated nogood, we must retract at least one assumption from it.
-;; This is the classic minimum hitting-set problem (NP-hard in general, but
-;; our nogoods are small — typically 2-3 assumptions — so greedy works well).
-;;
-;; Phase 0: Greedy approach — iteratively pick the assumption that appears
-;; in the most unhit nogoods. This gives a good (often minimal) diagnosis.
-;;
-;; Returns: (listof hasheq) — each hasheq is assumption-id → #t (a diagnosis).
-;; Currently returns a single greedy diagnosis. Future: enumerate all minimal.
-(define (atms-minimal-diagnoses a)
-  (define violated
-    (for/list ([ng (in-list (atms-nogoods a))]
-               #:when (hash-subset? ng (atms-believed a)))
-      ng))
-  (cond
-    [(null? violated) '()]  ;; No conflicts → no diagnosis needed
-    [else
-     ;; Greedy hitting set: pick assumption in most nogoods
-     (define diagnosis (greedy-hitting-set violated))
-     (if (hash-empty? diagnosis) '() (list diagnosis))]))
 
 ;; Greedy hitting-set: repeatedly pick the assumption appearing in the most
 ;; unhit nogoods until all nogoods are hit.
@@ -446,24 +181,6 @@
                        #:when (not (hash-has-key? ng best-aid)))
               ng))
           (loop new-remaining (hash-set diagnosis best-aid #t))])])))
-
-;; Return the conflict graph: assumptions participating in violated nogoods.
-;; Returns: hasheq assumption-id → (listof hasheq)
-;;   Each key is an assumption-id that appears in at least one violated nogood.
-;;   Each value is the list of violated nogoods containing that assumption.
-(define (atms-conflict-graph a)
-  (define violated
-    (for/list ([ng (in-list (atms-nogoods a))]
-               #:when (hash-subset? ng (atms-believed a)))
-      ng))
-  (define graph (make-hasheq))
-  (for ([ng (in-list violated)])
-    (for ([(aid _) (in-hash ng)])
-      (hash-set! graph aid (cons ng (hash-ref graph aid '())))))
-  ;; Convert to immutable
-  (for/hasheq ([(aid ngs) (in-hash graph)])
-    (values aid (reverse ngs))))
-
 
 ;; ========================================
 ;; Phase 5.6: Solver Context
@@ -581,10 +298,103 @@
                   (nogood-add nogood-empty nogood-set)))
 
 ;; Create a choice point with N alternatives.
-;; Creates N assumptions, adds them as components of the compound decisions cell,
-;; records pairwise mutual-exclusion nogoods.
+;; Creates N assumptions, adds them as components of the compound decisions cell.
+;;
+;; ============================================================================
+;; M0 — PPN 4C Phase 3B.A (2026-05-22): #:mutual-exclusion? semantic dispatch
+;; ============================================================================
+;;
+;; This primitive supports TWO architecturally-distinct semantics, selected by
+;; the #:mutual-exclusion? keyword. Both semantics share Step 1 (N fresh
+;; assumption allocation + eager worldview-cache update via solver-assume);
+;; they DIVERGE at Step 2 (whether N·(N−1)/2 pairwise mutex nogoods are
+;; recorded).
+;;
+;; (i) The two semantics:
+;;
+;;   #:mutual-exclusion? = #t (DEFAULT — CLASSICAL ATMS)
+;;     Logical: EXACTLY ONE of {h_0, h_1, ..., h_{N−1}} is true.
+;;     Constraint: disjunction + pairwise mutual exclusion.
+;;     Encoding: N aids + N·(N−1)/2 pairwise nogoods recorded.
+;;     Use cases: BSP-LE 2 multi-clause selection; NAF; classical disjunctive
+;;     choice points where the system must commit to ONE answer.
+;;
+;;   #:mutual-exclusion? = #f (NON-COMMITTING)
+;;     Logical: AT LEAST ONE of {h_0, h_1, ..., h_{N−1}} is true; multiple may.
+;;     Constraint: disjunction only (no mutual exclusion).
+;;     Encoding: N aids; NO mutex nogoods.
+;;     Use cases: union-type inhabitation (e : A | B succeeds if any branch
+;;     succeeds — multiple may); γ hole-fill multi-candidate; parametric trait
+;;     resolution candidate enumeration. All share the at-least-one semantic.
+;;
+;;   Type-theory grounding (per §9.4.1.1): non-committing inhabitation aligns
+;;   with Frisch-Castagna semantic subtyping ([[e : A | B]] = [[e]] ∈ [[A]] ∪
+;;   [[B]]); Tobin-Hochstadt-Felleisen Typed Racket occurrence typing; Scala 3
+;;   hard unions; Castagna 2022.
+;;
+;; (ii) When to use which:
+;;
+;;   Use CLASSICAL (#t) when the caller's semantic requires the system to
+;;   COMMIT to exactly one branch at quiescence — e.g., a Datalog choice rule,
+;;   classical SAT disjunction, or NAF's "exactly one of the negated facts
+;;   must fail". The pairwise nogoods enforce that any worldview claiming
+;;   multiple branches simultaneously is inconsistent.
+;;
+;;   Use NON-COMMITTING (#f) when the caller's semantic allows MULTIPLE
+;;   branches to coexist — e.g., union-type inhabitation, multi-candidate
+;;   trait resolution, γ hole-fill candidate enumeration. The absence of
+;;   mutex nogoods means worldviews with multiple branch bits set remain
+;;   consistent; per-branch isolation comes from wrap-with-worldview tagging
+;;   at the propagator layer, not from solver-state-consistent? checks.
+;;
+;; (iii) Substrate distinction:
+;;
+;;   The ONLY observable difference between the two semantics is the contents
+;;   of solver-context-nogoods-cid (the nogoods accumulator cell). Under #t,
+;;   that cell accumulates the mutex pairs; under #f, it doesn't grow from
+;;   this call. Both modes are observable via solver-state-consistent?,
+;;   solver-explain*, solver-state-solve-all, solver-state-minimal-diagnoses
+;;   — and ONLY via those readers. Under non-committing, the suppressed mutex
+;;   nogoods would have been STRUCTURALLY INERT under the current Phase 3A
+;;   reader patterns (verified §9.4.3.1 A2). M0 closes the architectural debt
+;;   of writing inert nogoods that would only become observable under a
+;;   misuse (e.g., calling solve-all on a non-committing amb-group).
+;;
+;; (iv) M0 is NOT scaffolding — it IS the architecturally-correct substrate
+;;      answer at this layer.
+;;
+;;   Per §9.4.2.9.3: "M0 is NOT scaffolding — it's the architecturally-correct
+;;   minimal substrate fix at this layer." The audit-driven re-examination
+;;   (§9.4.2.9.1) refuted the original M1 framing of "worldview-cache role
+;;   overload" (A2 finding: worldview-cache is structurally "set of currently
+;;   believed aids" under BOTH classical and non-committing — no role
+;;   overload). The real debt was the inert mutex nogoods; M0 removes them.
+;;
+;;   Multi-consumer survey (§9.4.2.9.1 finding 4): 5 multi-candidate consumers
+;;   share the at-least-one non-committing semantic: Phase 3A union-type
+;;   inhabitation, Phase 7 parametric trait resolution, Phase 9b γ hole-fill,
+;;   PReduce 1 e-class candidate extraction, BSP-LE 6 future general residual
+;;   solver. M0 serves all 5; M1's "real decomplection" claim was weakened by
+;;   §9.4.2.7-§9.4.2.8 A6 branch-check viability tension. M1 + M3 unification
+;;   deferred to PPN Track 4D (substrate unification thesis); see Track 4D
+;;   vision research §5.5 for the deferred scope capture.
+;;
+;; ============================================================================
+;; Historical retirement note (Phase 3B.0, 2026-05-22):
+;;
+;;   An experimental `current-gray-code-aid-ordering?` parameter (commit
+;;   `98cbbc3d`) A/B tested the Hyperlattice Conjecture's CHAMP-sharing claim
+;;   under Realization B; the n=10 × 5 workloads measurement produced ALL
+;;   DELTAS WITHIN ±1.5% (per §9.4.2.10 falsification evaluation). Scaffolding
+;;   retired at `0eaa9506`; data at `data/benchmarks/fork-on-union-gray-code-
+;;   2026-05-22.txt`; resurrect from `98cbbc3d` if future tracks (Phase 9b
+;;   under fork-and-rejoin, PReduce, BSP-LE 6) need similar A/B work under a
+;;   DIFFERENT mechanism (the negative result is mechanism-coupled per
+;;   §9.4.2.10.4 — bounds Conjecture's claim, doesn't refute it).
+;; ============================================================================
+;;
 ;; Returns: (values new-network (listof assumption-id))
-(define (solver-amb ctx net alternatives)
+(define (solver-amb ctx net alternatives #:mutual-exclusion? [mutual-exclusion? #t])
   ;; 1. Create fresh assumptions, one per alternative
   (define-values (net1 hyps-rev)
     (for/fold ([n net] [hs '()])
@@ -593,13 +403,23 @@
       (define-values (n2 hid) (solver-assume ctx n (string->symbol (format "h~a" i)) alt))
       (values n2 (cons hid hs))))
   (define hyps (reverse hyps-rev))
-  ;; 2. Record mutual exclusion: every pair of hypotheses is a nogood
+  ;; 2. Record mutual exclusion: every pair of hypotheses is a nogood.
+  ;; PPN 4C Phase 3B.A (2026-05-22): conditional on #:mutual-exclusion?.
+  ;; Under classical (#t, default): pairwise nogoods enforce exactly-one.
+  ;; Under non-committing (#f): mutex nogoods structurally INERT under
+  ;; current Phase 3A architecture (verified §9.4.3.1 A2 — every reader of
+  ;; solver-context-nogoods-cid filters by criteria that exclude Phase 3A
+  ;; branch aids). Suppression is zero-behavior-change for non-committing
+  ;; callers; closes the architectural debt of writing inert nogoods.
   (define net2
-    (for*/fold ([n net1])
-               ([i (in-range (length hyps))]
-                [j (in-range (+ i 1) (length hyps))])
-      (solver-add-nogood ctx n (hasheq (list-ref hyps i) #t
-                                        (list-ref hyps j) #t))))
+    (cond
+      [mutual-exclusion?
+       (for*/fold ([n net1])
+                  ([i (in-range (length hyps))]
+                   [j (in-range (+ i 1) (length hyps))])
+         (solver-add-nogood ctx n (hasheq (list-ref hyps i) #t
+                                           (list-ref hyps j) #t)))]
+      [else net1]))
   (values net2 hyps))
 
 ;; Check consistency: are all decision cell components non-empty?
@@ -688,7 +508,8 @@
 ;;
 ;; Convenience wrapper that mirrors the old atms calling convention
 ;; (take state, return state) for easy migration. The solver-state
-;; is what gets stored in expr-atms-store — it replaces the atms struct.
+;; replaces the atms struct as the canonical hypothetical-reasoning
+;; substrate (surface ATMS AST retired in 1A-iii-c).
 ;;
 ;; ctx: solver-context (immutable phone book)
 ;; net: prop-network (the computation substrate, evolves with each operation)
@@ -719,10 +540,34 @@
   (solver-state (solver-state-ctx ss) net* (solver-state-key-map ss) (solver-state-amb-groups ss)))
 
 ;; Amb: returns (values new-solver-state (listof assumption-id))
-(define (solver-state-amb ss alternatives)
-  (define-values (net* hyps) (solver-amb (solver-state-ctx ss) (solver-state-net ss) alternatives))
+;;
+;; PPN 4C Phase 3B.A M0 (2026-05-22): wrapper around solver-amb.
+;;
+;; Semantic dispatch via #:mutual-exclusion? — see solver-amb (atms.rkt:316+)
+;; for the full M0 architectural rationale: (i) the two semantics (classical
+;; exactly-one vs non-committing at-least-one) with type-theory citations;
+;; (ii) when to use which; (iii) substrate distinction (mutex nogoods vs
+;; none); (iv) why M0 is NOT scaffolding (multi-consumer survey).
+;;
+;; Q2(b) (§9.4.3.2): the `solver-state-amb-groups` APPEND is ALSO conditional
+;; on the flag — the two semantics ARE coupled at this API. Under non-
+;; committing (#f), the amb-group entry would be semantically misleading for
+;; `solver-state-solve-all`'s cartesian product (which treats each group as
+;; pick-one). Skipping the append keeps solve-all semantically correct for
+;; its current (classical-only) usage; future non-committing callers don't
+;; get misleading "pick-one" enumeration. See §9.4.3.4 D-3B.A-amb-groups-
+;; coupling for the drift risk mitigation discussion.
+(define (solver-state-amb ss alternatives #:mutual-exclusion? [mutual-exclusion? #t])
+  (define-values (net* hyps)
+    (solver-amb (solver-state-ctx ss) (solver-state-net ss) alternatives
+                #:mutual-exclusion? mutual-exclusion?))
+  (define new-amb-groups
+    (if mutual-exclusion?
+        (append (solver-state-amb-groups ss) (list hyps))
+        ;; Non-committing: skip amb-groups append (per Q2(b)).
+        (solver-state-amb-groups ss)))
   (values (solver-state (solver-state-ctx ss) net* (solver-state-key-map ss)
-                        (append (solver-state-amb-groups ss) (list hyps)))
+                        new-amb-groups)
           hyps))
 
 ;; Consistent?: returns boolean

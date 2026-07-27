@@ -44,8 +44,7 @@
                 shared-impl-reg
                 shared-param-impl-reg
                 shared-bundle-reg)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
+  (parameterize ([current-file-module-network-ref (make-module-network)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list lib-dir)]
@@ -56,7 +55,7 @@
                  [current-bundle-registry (current-bundle-registry)])
     (install-module-loader!)
     (process-string "(ns test-eq-let-surface)")
-    (values (current-prelude-env)
+    (values (global-env-snapshot)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -66,7 +65,7 @@
 
 ;; Run sexp code using shared environment
 (define (run s)
-  (parameterize ([current-prelude-env shared-global-env]
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list lib-dir)]
@@ -85,7 +84,7 @@
   (call-with-output-file tmp #:exists 'replace
     (lambda (out) (display s out)))
   (define result
-    (parameterize ([current-prelude-env shared-global-env]
+    (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                    [current-ns-context shared-ns-context]
                    [current-module-registry shared-module-reg]
                    [current-lib-paths (list lib-dir)]
@@ -115,9 +114,9 @@
   (check-true (string-contains? result "false")))
 
 (test-case "eq-surface/ws: Nat equality true"
-  ;; [plus 1N 2N] = 3N → true
+  ;; [+ 1N 2N] = 3N → true
   (define result
-    (run-ws-last "ns test-eq-nat-t\n[plus 1N 2N] = 3N\n"))
+    (run-ws-last "ns test-eq-nat-t\n[+ 1N 2N] = 3N\n"))
   (check-true (string? result))
   (check-true (string-contains? result "true")))
 
@@ -160,9 +159,9 @@
   (check-true (string-contains? result "true")))
 
 (test-case "let-eq/ws: let with plus equality in value"
-  ;; Inside a function body: let r := [plus 1N 2N] = 3N → r is true
+  ;; Inside a function body: let r := [+ 1N 2N] = 3N → r is true
   (define result
-    (run-ws-last "ns test-let-eq2\nspec test-fn2 Nat -> Bool\ndefn test-fn2 [u]\n  let r := [plus 1N 2N] = 3N\n  r\n[test-fn2 zero]\n"))
+    (run-ws-last "ns test-let-eq2\nspec test-fn2 Nat -> Bool\ndefn test-fn2 [u]\n  let r := [+ 1N 2N] = 3N\n  r\n[test-fn2 zero]\n"))
   (check-true (string? result))
   (check-true (string-contains? result "true")))
 

@@ -4,7 +4,7 @@
 #+DATE: 2026-03-21
 #+OPTIONS: toc:nil
 
-*Last updated*: 2026-05-02 (staleness sweep — series-header lines, missing tracks, SH + UCS top-level promotion, naming consistency)
+*Last updated*: 2026-05-17 (PPN 4C tropical addendum Phase 1 ATOMIC CLOSE commit ~b8405dfb~; PIR landed at [[file:2026-05-17_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_PIR.md][2026-05-17_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_PIR.md]] — both deliveries documented: foreseen tropical quantale primitive + unforeseen specialized cell type framework + Cell/Propagator/Scheduler Orthogonality principle as cross-track template for PReduce + OE + SH + PM 12 + PPN 4D)
 
 * Purpose
 
@@ -143,7 +143,7 @@ value strata. Topology strata are sequential. See =DEVELOPMENT_LESSONS.org=
 |------------------+------|
 | *Master Roadmap* | [[file:2026-03-21_CIU_MASTER.md][2026-03-21_CIU_MASTER.md]] |
 | *Thesis*         | Syntactic sugar generates trait constraints resolved on the propagator network — not constructor-specific dispatch. User-defined collections participate in all syntax automatically. |
-| *Status*         | Track 0 complete. Tracks 1–2 pre-Track 8; Tracks 3–5 post-Track 8. |
+| *Status*         | Track 0 complete. Tracks 1–2 pre-Track 8; Tracks 3–5 post-Track 8. *Track 6 🔄* (Anonymous Records & Collections & Path Selection): D1–D20 locked ([[file:2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md][track doc]] §2a); *F1a-core ✅ · F1a-col ✅ · F1a.2 ✅* (2026-07-16): literals + collections mint structural rows, the dyn tail is live, ~expr-Open~ DELETED (D1-b done); suite 8682/455/0, acceptance 78/78 ([[file:2026-07-06_CIU_T6_F1_STRUCTURAL_RECORDS_DESIGN.md][F1 design]] §11a–d/§12.7 close notes; [[file:2026-07-06_CIU_T6_F1_STAGE3_CRITIQUE_D3.md][D.3 critique]]). *F1b Stage-3 ✅ CLOSED 2026-07-17* (D21–D26, track doc §2a round 6); *F1b.1–.4 ✅ THE SEAL LIVE* (the Map→schema seal, D22 — four doors one engine, fill-or-error, ~expr-schema~ tombstoned; suite 8790/459/0). *F1b.5 (VALIDATE) ✅ 2026-07-18* — the Result-returning runtime tabulation face, p0→s4 complete (D27–D29, round 7 + §13.8: ~expr-validate~ node · E=~Result S (Map Keyword Reason)~ · skip-witness polarity table · full-delegate — ~wrap-schema-checks~ DELETED; ~[validate Person m]~ → ok/err; non-literal fill + ~:check~ discharged; selection-validate; suite 8885/465/0, acceptance 28/28). *F1b.6 (D23 escape-boundary posture flip) ✅ 2026-07-18* (`7bcbca69`; a dyn-row point-projection meta escaping into a STORED type = hard error; narrow 2-kind partition; type-local walk; exploration stays permissive; suite 8887). *F1b.7 (RECORDS/SCHEMA HARDENING) ✅ 2026-07-19* (§13.9; 7 edges from an adversarial stress-test — 7a ~:check~ soundness guard [the HIGH bug: a non-Bool ~:check~ silently accepted invalid data], 7b comparison-family, 7c ~:check~ door parity [the `def x : S :=` COMMITMENT door discharges], 7d non-literal ~:default~ fill, 7e schema-value map-ops, 7f targeted diagnostics, 7g ~?~/~!~ keyword keys; suite 8917/465/0). *F1b.close ✅ 2026-07-19* — bench matrix (+0.4% deterministic, no wall regression; a records-focused A/B confirms the RECORDS path is not regressed [Δ≈0], §13.10 + PIR §7), PIR ([[file:2026-07-19_CIU_T6_F1B_PIR.md][CIU T6 F1b PIR]] — the first formal PIR in ~2 months; the mini-audit-refutes-premise rhythm elevated), typed-solution-rows charter → Rel, doc-truth sweep, DEFERRED triage. **F1b (the records/Map↔schema/validate CORNERSTONE) COMPLETE.** Ladder = F1 design doc §13.6/§13.8/§13.9. Track 6 remains 🔄 — Path Selection surface = the OPEN owner design conversation (track doc §2a). |
 | *Origin*         | [[file:2026-03-20_COLLECTION_INTERFACE_AUDIT.md][Collection Interface Audit]], [[file:2026-03-20_COLLECTION_INTERFACE_UNIFICATION_DESIGN.md][Unification Design]] |
 
 *** Tracks
@@ -156,6 +156,22 @@ value strata. Topology strata are sequential. See =DEVELOPMENT_LESSONS.org=
 | 3 | Trait-Dispatched Access (~surf-get~ generates constraints) | ⬜ | Post Track 8 |
 | 4 | Trait-Dispatched Iteration (broadcast via Seq) | ⬜ | Post Track 8 |
 | 5 | Union-Aware Dispatch | ⬜ | Post Track 8 |
+
+** Rel (Relational Language)  — /The logic-programming layer: `solve`/`defr`, NAF, guards, solution-set typing/
+
+| | |
+|------------------+------|
+| *Master Roadmap* | [[file:2026-07-19_REL_MASTER.md][2026-07-19_REL_MASTER.md]] |
+| *Thesis*         | Group work related to the relational surface language + its ergonomics + correctness + typing (as distinct from the UCS constraint-solver substrate and the CIU records/rows type layer). |
+| *Status*         | Founded 2026-07-19 (owner-directed, during CIU T6 F1b.close). No tracks locked. First artifact = the un-named *Solve Typing + NAF Correctness* track's implementation note ([[file:2026-07-19_REL_SOLVE_TYPING_NOTE.md][seed]]): typed solution rows (D25.3 charter, moved from CIU) + the `not`/`&>` negation-as-failure correctness gaps (probe-grounded from `foray.prologos`). *Sequencing (owner): solve typing lands BEFORE Path Selection* — Path Selection over solution sets is its highest-value consumer. |
+
+*** Tracks
+
+| # | Track | Description | Status | Artifact |
+|---+-------+-------------+--------+----------|
+| 1 | Relational Language Usability | NAF/guard correctness (priority: `not` echo + on-network NAF single-bit collapse + guard crash) + typed solution rows (codata + schema projection) + schema-as-relational-facts + Aspect D fact-representation research (Stage 0/1) + polish. Deferred to UCS: `?v:Type` CLP. | 🔄 Stage-3 — A-core LOCKED (E-with-B) | [[file:2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md][design]] · [[file:2026-07-19_REL_SOLVE_TYPING_NOTE.md][seed]] |
+
+/Note: the seed's "=&>= inversion" framing is superseded — =&>= is the rule-clause separator, not a negation op; the real bug is the on-network NAF open-var leak (design doc §4)./
 
 ** SRE (Structural Reasoning Engine)  — /PUnify as universal structural decomposition/composition substrate/
 
@@ -272,6 +288,7 @@ PM Track 10                      =   SRE Track 6 (module loading)
 - *SH (Self-Hosting) Series* ✅ opened 2026-04-30 — see [[file:2026-04-30_SH_MASTER.md][SH Master]]. Stage 0/1 founding done; implementation tracks 1-10 ⬜ gate on PReduce delivery (Track 4) + PPN Track 4 completion.
 - *PReduce Series* ✅ opened 2026-05-02 — see [[file:2026-05-02_PREDUCE_MASTER.md][PReduce Master]]. Cross-series dependency for SH; gates implementation tracks on PPN 4C Phase 1B.
 - *PM Track 12+*: Module-load-time infrastructure on network (domain/ctor/property registrations as cell writes). See PM Master Track 8 audit section.
+- *PM Track 12B — Free Ordering on Network* ⬜ Stage-0 pre-design capture (2026-06-06) — see [[file:2026-06-06_PM_TRACK12B_FREE_ORDERING_ON_NETWORK.md][implementation note]] + [[file:2026-03-13_PROPAGATOR_MIGRATION_MASTER.md][PM Master § Track 12B]]. Retire the imperative FREE_ORDERING multi-pass + Phase-5b hoist → uniform on-network forward-ref residuation (full order-independence). Consumes PM 12 (registries→cells) + the PPN 4C 4C/4D cross-network seam; NOT NTT. Origin: PPN 4C Addendum Phase 4B.4 mini-design grounding.
 
 *Theory (ongoing, fed by application tracks):*
 - PRN: Hyperlattice rewriting formalism (grows from PPN + SRE + PReduce)
@@ -442,7 +459,7 @@ UCS sits between SRE/PRN (the rewriting substrate) and BSP-LE (the search infras
 |------------------+------|
 | *Thesis*         | Parsing IS attribute evaluation IS propagator fixpoint (Engelfriet-Heyker). The multi-phase 14-file pipeline collapses to registered rewrite rules on the network. User-defined grammar extensions as typed hyperedge replacement rules — more powerful than Lisp macros. |
 | *Master Roadmap* | [[file:2026-03-26_PPN_MASTER.md][2026-03-26_PPN_MASTER.md]] |
-| *Status*         | Tracks 0, 1, 2, 2B, 3, 4A, 4B complete. Track 4C 🔄 (D.2 hybrid pivot committed; Pre-0 100% complete; Phase 1C ready). Tracks 3.5, 4D, 5-9 pending. PRIORITY: prerequisite to future syntax/language design work. |
+| *Status*         | Tracks 0, 1, 2, 2B, 3, 4A, 4B complete. Track 4C 🔄 (tropical addendum D.4 CANONICAL committed 2026-05-14 per §13.6 spike PASS, commit ~7b681b9e~; specialized cell type framework canonical; D.3 hybrid pivot scaffolding retired before shipping; Stage 4 implementation ready). Tracks 3.5, 4D, 5-9 pending. PRIORITY: prerequisite to future syntax/language design work. |
 | *Origin*         | [[file:../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md][Hypergraph Rewriting Research]], [[file:../research/2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md][Tropical Optimization Research]] |
 | *Contributes to PRN* | Parse lattice design, ambiguity resolution, bidirectional type↔parse flow |
 
@@ -458,7 +475,7 @@ UCS sits between SRE/PRN (the rewriting substrate) and BSP-LE (the search infras
 | 3.5 | Grammar Form research + speculative design | ⬜ | [[file:../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md][Grammar form research]]. Multi-view spec, DPO structural preservation. Can interleave with Track 4. |
 | 4A | Elaboration as attribute evaluation — typing on-network | ✅ [[file:2026-04-04_PPN_TRACK4_DESIGN.md][Design D.4]] [[file:2026-04-04_PPN_TRACK4_PIR.md][PIR]] | 46% on-network typing, ephemeral PU, SRE typing domain (~150 entries) |
 | 4B | Full attribute evaluation — typing + constraints + mult + warnings | ✅ [[file:2026-04-05_PPN_TRACK4B_DESIGN.md][Design D.2]] [[file:2026-04-07_PPN_TRACK4B_PIR.md][PIR]] | All 5 attribute domains on-network, 7578 tests GREEN, 6 imperative bridges as scaffolding |
-| 4C | Elaboration completely on-network — 9 axes | 🔄 [[file:2026-04-17_PPN_TRACK4C_AUDIT.md][Audit]] [[file:2026-04-17_PPN_TRACK4C_DESIGN.md][Design D.1]] + [[file:2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md][Tropical Addendum D.2]] | Mantra north star, NTT guiderails, BSP-LE 2+2B substrate. Tropical fuel cell + multi-quantale composition. Pre-0 100% complete; Phase 1C hybrid pivot ready. |
+| 4C | Elaboration completely on-network — 9 axes | 🔄 [[file:2026-04-17_PPN_TRACK4C_AUDIT.md][Audit]] [[file:2026-04-17_PPN_TRACK4C_DESIGN.md][Design D.1]] + [[file:2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md][Tropical Addendum D.4 CANONICAL]] + [[file:2026-05-17_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_PIR.md][Tropical Addendum PIR]] | Mantra north star, NTT guiderails, BSP-LE 2+2B substrate. **Tropical Addendum Phase 1 ATOMIC CLOSE 2026-05-17** (commit ~b8405dfb~; 26 days, ~64 commits, +310 tests, −4.6s wall, 4 codifications graduated, Cell/Propagator/Scheduler Orthogonality principle codified, cross-track template for PReduce + OE + SH + PM 12 + PPN 4D). Phase 1E + Phase 2 + Phase 3 + Phase V + parent CHAMP retirement remain. **Standalone scheduler O(diff) fix** (2026-06-03, surfaced by 4B Probe 2 = Q-4B.9): ~fire-and-collect-writes~ now uses an eq?-pruned CHAMP structural diff (O(network-size)→O(network-diff)); bench 22.3×→0.6 flat, suite 8342/0. See [[file:2026-06-03_SCHEDULER_ODIFF_OPTIMIZATION.md][Scheduler O(diff) design + PIR-lite]]. |
 | 4D | *Attribute Grammar Substrate Unification* | ⬜ | [[file:../research/2026-04-22_ATTRIBUTE_GRAMMAR_UNIFICATION_VISION.md][Vision Research]]. Collapse fragmented typing/elaboration/reduction subsystems. Prereq: 4C complete + T-3 landed + PM Track 12. Multi-month scope. |
 | 5 | Type-directed disambiguation | ⬜ | Track 4. Backward type→parse via Galois bridges. Bilattice (gfp/elimination). |
 | 6 | Error recovery as lattice repair (OE) | ⬜ | Track 3. Tropical semiring optimization. |
@@ -491,14 +508,14 @@ trajectory.
 | *Thesis*         | Correctness (join-semilattice) and optimization (min-plus tropical semiring) are two enrichments on the same network. Cells carry both a value and a cost. The tropical merge keeps cheapest derivations. Cost-bounded exploration replaces flat fuel limits with problem-aware thresholds. |
 | *Status*         | Stage 0 research. |
 | *Origin*         | [[file:../research/2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md][Tropical Optimization Research]], [[file:../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md][Hypergraph Rewriting Research §5]] |
-| *Scaffolding caveat* | This addendum lands the OE primitive (tropical quantale) under HYBRID PIVOT scaffolding pattern (cell substrate co-exists with off-network fast-path; per [[file:2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md][D.3 §10.1.A]] + [[https://github.com/LogosLang/prologos/issues/55][Issue #55]] + [[file:DEFERRED.md][DEFERRED.md]]). **Future OE tracks design TO TARGET full cell-substrate (per D.1 original framing), NOT the scaffolding pattern.** Per-track empirical justification + retirement plan with specific blocker required if hybrid pattern is needed; otherwise default to full-cell architecture. The hybrid is bounded scaffolding for THIS addendum's runtime constraints, NOT the architectural template OE Series should propagate. |
+| *Architectural discipline (D.4 CANONICAL 2026-05-14)* | OE Series + future PReduce inherit the Cell/Propagator/Scheduler Orthogonality principle ([[file:principles/DESIGN_PRINCIPLES.org][DESIGN_PRINCIPLES.org § Cell / Propagator / Scheduler Orthogonality]]) — optimizations live at the cell or propagator layer, NOT the scheduler. The PPN 4C tropical addendum's specialized cell type framework (D.4 §4.6, validated by §13.6 Pre-0 spike commit ~7b681b9e~: W1+ = 6.4 ns/call with realistic dispatch + zero major-GC at 100k decrements) is the FIRST PRODUCTION LANDING establishing the canonical pattern — `:tier 'hot` + `:storage 'monotone-counter` + `:fires-on 'threshold-crossing` + `:on-write-check` declared at cell registration, with the cell mechanism dispatching accordingly. Future OE tracks target this framework from the start; scheduler-coupled optimizations are anti-patterns (see [[../../.claude/rules/propagator-design.md][propagator-design.md § Cell / Propagator / Scheduler Orthogonality]]). The D.3 hybrid pivot SCAFFOLDING (off-network struct field as live state + cell as derived) never shipped — the §13.6 spike falsified its empirical motivation (Pre-0 R-19 extrapolation). |
 
 *** Research Tracks (Proposed)
 
 | Track | Description | Status | Touches |
 |-------+-------------+--------+---------|
 | 0 | Tropical semiring lattice design + cell product enrichment | ⬜ | All series (cross-cutting) |
-| 1 | Weighted parsing (Goodman semiring framework on PPN) | ⬜ | PPN Track 2 |
+| 1 | Weighted parsing (Goodman semiring framework on PPN) | ⬜ | PPN Track 2; *measurement tooling*: when this track ships with multiple cost-extraction variants to compare, benefits from [[https://github.com/LogosLang/prologos/issues/63][Issue #63 (bench-ab.rkt --refs for multi-way A/B/C+ comparison)]] — surfaced by PPN 4C tropical addendum 1C-vi A/B/C report (2026-05-16); cross-referenced from DEFERRED.md |
 | 2 | Cost-weighted rewriting (tropical extraction on e-graphs) | ⬜ → consumed by PReduce Series | First instantiation in PPN 4C tropical addendum (Phase 1B); PReduce Track 4 inherits |
 | 3 | Cost-bounded exploration (replace fuel limits with tropical thresholds) | ⬜ | BSP-LE, NTT stratification |
 | 4 | Weighted constraint solving (tropical enrichment on LE/NF-Narrowing) | ⬜ | BSP-LE, FL-Narrowing |
@@ -532,7 +549,7 @@ function) that plugs into PPN, PM, SRE, or BSP-LE.
 | 1 | E-class cell substrate — cell type + hashcons + union-find on cells | ⬜ | PPN 4C Phase 1B + Track 0.1 |
 | 2 | First IN-fragment rewrite-rule kind (β-reduction) | ⬜ | Track 1 |
 | 3 | First adhesive-DPO rewrite-rule kind (ι/case-selection, structural) | ⬜ | Track 1 |
-| 4 | Cost-guided extraction — tropical-quantale residuation on e-class poset | ⬜ | Track 1 + PPN 4C Phase 1B residuation operator |
+| 4 | Cost-guided extraction — tropical-quantale residuation on e-class poset | ⬜ | Track 1 + PPN 4C Phase 1B residuation operator; *measurement tooling*: when this track ships with multiple cost-extraction strategies to compare, benefits from [[https://github.com/LogosLang/prologos/issues/63][Issue #63 (bench-ab.rkt --refs for multi-way A/B/C+ comparison)]] — surfaced by PPN 4C tropical addendum 1C-vi A/B/C report (2026-05-16); cross-referenced from DEFERRED.md |
 | 5 | Persistence — content-addressed e-class storage + ~.pnet~ round-trip | ⬜ | Track 1 + Track 0.3 |
 | 6 | Speculative reduction — cost-bounded ATMS branching | ⬜ | Track 1 + BSP-LE 2B |
 | 7 | Effect-stratum boundary protocol — opaque cells for FFI + effects | ⬜ | Track 1 + Architecture AD |
@@ -623,6 +640,24 @@ Track 9 (founded 2026-03-21) was the first Stage-1 research; the vision since en
 | 3 | Retire Track 2 scaffolding via propagator-native callbacks | ⬜ | — | Tracked as [[https://github.com/LogosLang/prologos/issues/37][#37]]. Cell-subscription replaces procedure-shape boundary. Open design questions (cell identity, multi-arg dispatch, synchronization, worldview, retraction). |
 
 Future tracks (not yet scheduled): reverse-direction lambda passing, compound type marshaling (PVec/Map/Set/Sigma/custom data), effect-typed FFI (capabilities), additional language backends (JS/Python/Wasm/C ABI), module system polyglot, cost-aware FFI (tropical-quantale fuel for foreign call cost). See [[file:2026-04-28_FFI_MASTER.md][FFI Master]] for full vision and discipline.
+
+** Num  — /Numerics systems of Prologos: tower, refinement, literals, ergonomics, generic numeric polymorphism/
+
+| | |
+|------------------+------|
+| *Master Roadmap* | [[file:2026-07-02_NUM_MASTER.md][2026-07-02_NUM_MASTER.md]] |
+| *Thesis*         | Home for all work on the numerics systems of Prologos — numeric tower (Nat/Int/Rat/Posit/Float), refinement-via-trait, literal + display models, numeric ergonomics, and the type-system treatment of numeric polymorphism. Long-lived container; numerics-specific priors (Feb tower, ergonomics audit, coercion/subtyping) are inputs, not separate efforts. |
+| *Status*         | Founded 2026-07-02, seeded from the in-flight Numerics track. Track 1 (Tower Completion & Refinement) ✅ complete (N1–N6; N6f done 2026-07-02) → DEMO P1. Track 2 (Generic ~Num~) proposed (impl-note seed). |
+| *Origin*         | Spawned from DEMO Track 1 (the dependency-resolver demo's JSON numbers); resume+revise of the [[file:2026-02-19_NUMERICS_TOWER_ROADMAP.md][2026-02-19 Numerics Tower]]. |
+
+*** Tracks
+
+| Track | Description | Status | Design / seed |
+|-------+-------------+--------+---------------|
+| 1 | Numerics Tower Completion & Refinement (Float primitive, refinement-via-trait, literal model, display, exponent lexing, ergonomics) | ✅ N1–N6 complete (N6f done) → DEMO P1 | [[file:2026-06-30_NUMERICS_TRACK_CHARTER.md][Charter]] · [[file:2026-06-30_NUMERICS_TRACK_STAGE3_DESIGN.md][Stage-3 D.2]] |
+| 2 | Generic ~Num~ — constraint-as-type numeric functions (~spec square Num -> Num~); keyword→trait routing; heterogeneous multi-arg via relational NumJoin | ⬜ proposed (seed note) | [[file:2026-07-02_GENERIC_NUM_TYPE_NOTE.md][Seed note]] |
+
+Cross-series: general ~Type@property~ refinement surface → UCS track 5 ([[file:2026-06-30_TRAITS_AS_REFINEMENT_TYPING_NOTE.md][note]]); numeric typing on-network → future PPN track ([[file:2026-06-30_NUMERICS_ON_NETWORK_PPN_NOTE.md][note]]); DEMO P1 unblocks after Track 1.
 
 ** SH (Self-Hosting)  — /Architectural endpoint: Prologos compiler as a propagator-network value, native via LLVM/
 
@@ -729,7 +764,9 @@ or the project roadmap reaches them.
 | [[file:2026-03-05_IO_LIBRARY_DESIGN_V2.md][IO Library V2]] | Design/research | Extended IO: Bytes type, binary IO, SQLite FFI |
 | [[file:2026-03-01_1200_IO_LIBRARY_DESIGN.md][IO Library V1]] | Superseded by V2 | Original IO design |
 | [[file:2026-03-19_TRACK10_DESIGN_NOTES.org][Track 10 Design Notes (Provenance)]] | Notes only | Two-tier provenance, LSP integration; scoped under Propagator Migration Track 10 |
-| [[file:2026-03-06_1400_RELATIONAL_FACT_DESIGN.md][Relational Fact Design]] | Design discussion | Captured from mobile session |
+| [[file:2026-03-06_1400_RELATIONAL_FACT_DESIGN.md][Relational Fact Design]] | Design discussion | Captured from mobile session; prior art for RPF / DEMO P3 |
+| [[file:2026-06-28_DEPENDENCY_RESOLVER_DEMO_DESIGN.md][Dependency-Resolver Demo (DEMO Track 1)]] | D.2 — Stage-3 critique complete; **P0 ✅** (runs 0 errors L3); P1 blocked on Numerics | Multi-paradigm dogfooding demo (Process+Relational+Functional via `schema`). P0 surfaced+fixed: schema-typed `defr`, `_` wildcard, `data` ADT ctors, relative paths, REPL parity. Drives: pure-Prologos JSON parser, `:from` runtime fact-load slice, `Validation` applicative, named session composition, `explain` (proven L3). *Spawns* **RPF** (fact representation = SQLite prereq) + **Numerics track** (below). Channel delegation → future PL series. |
+| [[file:2026-06-30_NUMERICS_TRACK_CHARTER.md][Numerics Track]] ([[file:2026-06-30_NUMERICS_TRACK_STAGE3_DESIGN.md][Stage-3 D.2]], critique-adjudicated) | **Stage-3 design complete + adversarially critiqued** 2026-06-30; impl next (N0 audits → N1 lex + N2a posit-display → N3 Float → N4 literals → N5 *function-level* refinement → N6). Spawns: UCS track 5 ([[file:2026-06-30_TRAITS_AS_REFINEMENT_TYPING_NOTE.md][traits-as-refinement]]); future-PPN on-network retirement ([[file:2026-06-30_NUMERICS_ON_NETWORK_PPN_NOTE.md][note]]) |**Resumes + revises** [[file:2026-02-19_NUMERICS_TOWER_ROADMAP.md][2026-02-19 Numerics Tower]] (Phases 1–3f ✅; Phase 4 Float ⬜). Owner decisions: `Float` = **full compute primitive** (revises FFI-only vision); numeric tower → **refinement-via-`trait`** (not subtyping); fix Posit display + exponent lexing + ergonomics (folds [[file:2026-02-22_NUMERICS_ERGONOMICS_AUDIT.org][ergonomics audit]]). **Blocks DEMO P1.** High-risk: re-architects completed subtyping tower; `numeric-join` + the single subsumption point are load-bearing for ALL subtyping. |
 | [[file:2026-03-03_PATH_ALGEBRA_DESIGN.md][Path Algebra]] | Superseded | Extended by First-Class Paths |
 | [[file:2026-03-02_2200_SCHEMA_SELECTION_DESIGN.md][Schema/Selection]] | Implemented | Part of First-Class Traits |
 
@@ -776,6 +813,8 @@ See =docs/research/= for the full set.
 | [[file:../research/2026-04-30_SELF_HOSTING_PATH_AND_BOOTSTRAP.md][Self-Hosting Path + Bootstrap Stages]] | 2026-04-30 | 0-1 | SH Series companion (path note); A → A.5 → B → C trajectory |
 | [[file:../research/2026-04-30_PROPAGATOR_NETWORK_AS_SUPEROPTIMIZING_COMPILER.md][Propagator Network as Super-Optimizing Compiler]] | 2026-04-30 | 0-1 | SH Series companion (deep research); 12-dim comparison |
 | [[file:../research/2026-05-02_CONCURRENCY_PRIMITIVES_LLVM_SUBSTRATE.md][Concurrency Primitives for LLVM Substrate]] | 2026-05-02 | 1 | SH Track 6 (runtime services); collaborator's Zig-kernel branch |
+| [[file:../research/2026-05-05_ASYNCHRONOUS_PROGRAMMING_QUANTALE_RESEARCH_PROGRAM.md][Asynchronous Programming on a Quantale-Enriched Propagator Substrate]] | 2026-05-05 | 0-1 | Foundational research synthesis (~75K words / 110 pages, 8 era surveys + synthesis chapter); informs L2 multi-network runtime, S8b deferred async runtime, quantale-enriched cc(D) realisation; argues propagator networks instantiate Saraswat's cc(D) family with quantale extension as frontier hypothesis |
+| [[file:../research/2026-05-05_MULTIPARTY_PROTOCOLS_AS_POLYNOMIAL_FUNCTORS_RESEARCH_PROGRAM.md][Multi-Party Protocols as Polynomial Functors over a Quantale-Valued Propagator Runtime]] | 2026-05-05 | 0-1 | Stage 0/1 research synthesis (~66K words / 100 pages, 8 era/topic surveys + synthesis chapter with strong-lean architectural target); diagnoses MPST projection-with-merge as OO-multiple-inheritance with same algebraic defects; argues multi-party protocols as polynomial functors over LCCC, role projection as opcartesian fibration lift, behaviour as coalgebras, realizability as quantale-valued propagator-network fixpoint, composition as polynomial-functor composition product (conjunctive refinement at protocol level); informs eventual MPST design, NTT extensions, distributed concurrent runtime efforts. Companion to async-programming research artifact. |
 | Network Type Theory for Prologos | — | 1-2 ⬜ | NTT Research Doc 2 (pending) |
 | Language Design: Network Type Ergonomics | — | 2 ⬜ | NTT Research Doc 3 (pending) |
 | Engineering: Self-Hosting via Network Types | — | 1-2 ⬜ | NTT Research Doc 4 (pending) |
@@ -833,7 +872,7 @@ For per-series detail see the priority ordering inside the SRE section above.
 #+begin_example
   Active (in flight):
    - SRE Track 2I             (SD∨/SD∧ checks; Phase 4 corrective + Phase 3 close)
-   - PPN 4C addendum Phase 1C (tropical fuel substrate; Pre-0 100% complete; hybrid pivot ready)
+   - PPN 4C addendum Phase 1B + 1C (tropical fuel substrate + specialized cell type framework; D.4 CANONICAL per §13.6 spike PASS commit ~7b681b9e~; Stage 4 implementation ready)
    - PReduce Track 0          (series founding research synthesis; sub-deliverables 0.1, 0.2, 0.3)
 
   Recently completed (since 2026-04-15):
@@ -885,7 +924,7 @@ For per-series detail see the priority ordering inside the SRE section above.
                                  │     └──→ SRE Tracks 2B, 2C, 2E, 3-7 ⬜
                                  │
   SRE Track 2H ✅ (Heyting) ───┴──→ PPN Track 4A / 4B ✅
-                                     PPN Track 4C 🔄 (tropical addendum D.2)
+                                     PPN Track 4C 🔄 (tropical addendum D.4 CANONICAL)
                                      │
                                      ├──→ PReduce Series ✅ (founded 2026-05-02)
                                      │     ├──→ Track 0 sub-deliverables (architectural sketch / rule taxonomy / .pnet+LLVM interface)

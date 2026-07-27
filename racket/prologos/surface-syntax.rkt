@@ -152,6 +152,22 @@
  ;; Posit32 surface forms
  (struct-out surf-posit32-type)
  (struct-out surf-posit32)
+ ;; Float surface types (Numerics N3)
+ (struct-out surf-float32-type)
+ (struct-out surf-float64-type)
+ ;; Float value literal (Numerics N3c)
+ (struct-out surf-float-lit)
+ (struct-out surf-posit-lit)
+ ;; Float ops (Numerics N3b)
+ (struct-out surf-f32-add) (struct-out surf-f32-sub) (struct-out surf-f32-mul) (struct-out surf-f32-div)
+ (struct-out surf-f32-neg) (struct-out surf-f32-abs) (struct-out surf-f32-sqrt)
+ (struct-out surf-f32-lt) (struct-out surf-f32-le) (struct-out surf-f32-eq)
+ (struct-out surf-f64-add) (struct-out surf-f64-sub) (struct-out surf-f64-mul) (struct-out surf-f64-div)
+ (struct-out surf-f64-neg) (struct-out surf-f64-abs) (struct-out surf-f64-sqrt)
+ (struct-out surf-f64-lt) (struct-out surf-f64-le) (struct-out surf-f64-eq)
+ ;; Cross-width Float conversions (Numerics N3e-rest)
+ (struct-out surf-float-finite) (struct-out surf-float-to-rat)
+ (struct-out surf-float-to-int) (struct-out surf-float-to-float32)
  (struct-out surf-p32-add)
  (struct-out surf-p32-sub)
  (struct-out surf-p32-mul)
@@ -202,8 +218,8 @@
  (struct-out surf-quire64-zero)
  (struct-out surf-quire64-fma)
  (struct-out surf-quire64-to)
- ;; Approximate literal (~N)
- (struct-out surf-approx-literal)
+ ;; N4b: polymorphic numeric literal (bare decimal/fraction)
+ (struct-out surf-num-lit)
  ;; Symbol surface forms
  (struct-out surf-symbol-type)
  (struct-out surf-symbol)
@@ -248,7 +264,7 @@
  (struct-out surf-set-diff)
  (struct-out surf-set-to-list)
  ;; Persistent Vector (PVec)
- (struct-out surf-pvec-type) (struct-out surf-pvec-literal)
+ (struct-out surf-pvec-type) (struct-out surf-pvec-literal) (struct-out surf-list-literal)
  (struct-out surf-pvec-empty) (struct-out surf-pvec-push)
  (struct-out surf-pvec-nth) (struct-out surf-pvec-update)
  (struct-out surf-pvec-length) (struct-out surf-pvec-pop)
@@ -275,12 +291,6 @@
  (struct-out surf-uf-type) (struct-out surf-uf-empty)
  (struct-out surf-uf-make-set) (struct-out surf-uf-find)
  (struct-out surf-uf-union) (struct-out surf-uf-value)
- ;; ATMS (hypothetical reasoning)
- (struct-out surf-atms-type) (struct-out surf-assumption-id-type)
- (struct-out surf-atms-new) (struct-out surf-atms-assume) (struct-out surf-atms-retract)
- (struct-out surf-atms-nogood) (struct-out surf-atms-amb) (struct-out surf-atms-solve-all)
- (struct-out surf-atms-read) (struct-out surf-atms-write)
- (struct-out surf-atms-consistent) (struct-out surf-atms-worldview)
  ;; Tabling (SLG-style memoization)
  (struct-out surf-table-store-type)
  (struct-out surf-table-new) (struct-out surf-table-register) (struct-out surf-table-add)
@@ -291,6 +301,7 @@
  (struct-out surf-clause) (struct-out surf-facts) (struct-out surf-fact-row)
  (struct-out surf-goal-app) (struct-out surf-unify) (struct-out surf-not) (struct-out surf-is)
  (struct-out surf-guard) (struct-out surf-cut)
+ (struct-out surf-validate)
  (struct-out surf-solve) (struct-out surf-solve-one) (struct-out surf-solve-with)
  (struct-out surf-explain) (struct-out surf-explain-with)
  ;; Narrowing (Phase 1e)
@@ -298,7 +309,7 @@
  ;; Constraints (Phase 3c)
  (struct-out surf-all-different) (struct-out surf-element)
  (struct-out surf-cumulative) (struct-out surf-minimize)
- (struct-out surf-schema) (struct-out surf-solver)
+ (struct-out surf-solver)
  ;; Relational type constructors
  (struct-out surf-solver-type) (struct-out surf-goal-type)
  (struct-out surf-derivation-type) (struct-out surf-answer-type)
@@ -697,6 +708,42 @@
 ;; Posit32 type: Posit32
 (struct surf-posit32-type (srcloc) #:transparent)
 
+;; Float types (Numerics N3): Float32, Float64 (`f` literals + ops added later)
+(struct surf-float32-type (srcloc) #:transparent)
+(struct surf-float64-type (srcloc) #:transparent)
+;; Float value literal (Numerics N3c): val = exact rational, width ∈ {32, 64}
+(struct surf-float-lit (val width srcloc) #:transparent)
+;; Posit value literal (Numerics N6b): 2p8 / 3.14p16 / 1.5e-3p64 —
+;; val = exact rational, width ∈ {8, 16, 32, 64}. Eager posit-encode at
+;; elaborate (mirrors surf-float-lit / the ~-path; NOT context-typed).
+(struct surf-posit-lit (val width srcloc) #:transparent)
+;; Float arithmetic + comparison ops (Numerics N3b)
+(struct surf-f32-add (a b srcloc) #:transparent)
+(struct surf-f32-sub (a b srcloc) #:transparent)
+(struct surf-f32-mul (a b srcloc) #:transparent)
+(struct surf-f32-div (a b srcloc) #:transparent)
+(struct surf-f32-neg (a srcloc) #:transparent)
+(struct surf-f32-abs (a srcloc) #:transparent)
+(struct surf-f32-sqrt (a srcloc) #:transparent)
+(struct surf-f32-lt (a b srcloc) #:transparent)
+(struct surf-f32-le (a b srcloc) #:transparent)
+(struct surf-f32-eq (a b srcloc) #:transparent)
+(struct surf-f64-add (a b srcloc) #:transparent)
+(struct surf-f64-sub (a b srcloc) #:transparent)
+(struct surf-f64-mul (a b srcloc) #:transparent)
+(struct surf-f64-div (a b srcloc) #:transparent)
+(struct surf-f64-neg (a srcloc) #:transparent)
+(struct surf-f64-abs (a srcloc) #:transparent)
+(struct surf-f64-sqrt (a srcloc) #:transparent)
+(struct surf-f64-lt (a b srcloc) #:transparent)
+(struct surf-f64-le (a b srcloc) #:transparent)
+(struct surf-f64-eq (a b srcloc) #:transparent)
+;; Cross-width Float conversions (Numerics N3e-rest) — keyword float-finite? etc.
+(struct surf-float-finite (a srcloc) #:transparent)
+(struct surf-float-to-rat (a srcloc) #:transparent)
+(struct surf-float-to-int (a srcloc) #:transparent)
+(struct surf-float-to-float32 (a srcloc) #:transparent)
+
 ;; Posit32 literal: (posit32 <integer>)
 (struct surf-posit32 (val srcloc) #:transparent)
 
@@ -792,9 +839,15 @@
 (struct surf-quire64-fma (q a b srcloc) #:transparent)
 (struct surf-quire64-to (q srcloc) #:transparent)
 
-;; Approximate literal: ~N → nearest Posit32 (default), width-aware in check context
-;; val is an exact rational (integer or fraction)
-(struct surf-approx-literal (val srcloc) #:transparent)
+;; (N6c) surf-approx-literal REMOVED — ~N deprecated; posit values come from
+;; bare decimals (Posit32, N6b) or pNN literals (surf-posit-lit).
+
+;; N4b: polymorphic numeric literal (bare decimal/fraction/non-integral-exp).
+;; val = exact rational; integral? = (integer? val); origin = the notation the
+;; literal was written in ('decimal | 'fraction | 'exponent — N6b, drives the
+;; unconstrained default via num-lit-default-type); srcloc LAST (the
+;; surf-node-srcloc last-field invariant). Elaborates to expr-num-lit.
+(struct surf-num-lit (val integral? origin srcloc) #:transparent)
 
 ;; ========================================
 ;; Symbol type and literal (for code-as-data)
@@ -862,6 +915,8 @@
 ;; Persistent Vector (PVec)
 ;; ========================================
 (struct surf-pvec-type (elem srcloc) #:transparent)          ; PVec A type
+;; CIU T6 F1a-col-2 (D15): list literal with literal-extent identity ('[…], tree route)
+(struct surf-list-literal (elems srcloc) #:transparent)
 (struct surf-pvec-literal (elems srcloc) #:transparent)      ; @[e1 e2 ...] literal — elems is a list of parsed surface exprs
 (struct surf-pvec-empty (elem-type srcloc) #:transparent)    ; (pvec-empty A)
 (struct surf-pvec-push (v x srcloc) #:transparent)           ; (pvec-push v x)
@@ -918,20 +973,6 @@
 (struct surf-uf-union     (store id1 id2 srcloc) #:transparent)        ; (uf-union store id1 id2)
 (struct surf-uf-value     (store id srcloc) #:transparent)             ; (uf-value store id)
 
-;; ---- ATMS (hypothetical reasoning) ----
-(struct surf-atms-type          (srcloc) #:transparent)                       ; ATMS
-(struct surf-assumption-id-type (srcloc) #:transparent)                       ; AssumptionId
-(struct surf-atms-new           (network srcloc) #:transparent)               ; (atms-new net)
-(struct surf-atms-assume        (atms name datum srcloc) #:transparent)       ; (atms-assume atms name datum)
-(struct surf-atms-retract       (atms aid srcloc) #:transparent)              ; (atms-retract atms aid)
-(struct surf-atms-nogood        (atms aids srcloc) #:transparent)             ; (atms-nogood atms aids)
-(struct surf-atms-amb           (atms alternatives srcloc) #:transparent)     ; (atms-amb atms alts)
-(struct surf-atms-solve-all     (atms goal srcloc) #:transparent)             ; (atms-solve-all atms goal)
-(struct surf-atms-read          (atms cell srcloc) #:transparent)             ; (atms-read atms cell)
-(struct surf-atms-write         (atms cell val support srcloc) #:transparent) ; (atms-write atms cell val support)
-(struct surf-atms-consistent    (atms aids srcloc) #:transparent)             ; (atms-consistent? atms aids)
-(struct surf-atms-worldview     (atms aids srcloc) #:transparent)             ; (atms-worldview atms aids)
-
 ;; ---- Tabling (SLG-style memoization) ----
 (struct surf-table-store-type   (srcloc) #:transparent)                       ; TableStore
 (struct surf-table-new          (network srcloc) #:transparent)               ; (table-new net)
@@ -970,6 +1011,10 @@
 (struct surf-guard            (condition goal srcloc) #:transparent)
 ;; Cut: (cut) — committed choice, prunes remaining alternatives
 (struct surf-cut              (srcloc) #:transparent)
+;; Validate (CIU T6 F1b.5-s2, D27): [validate SchemaName e] — the runtime
+;; tabulation face. schema-name = raw symbol (resolved at the elaboration
+;; bake); srcloc LAST (the surf-node-srcloc reflection convention).
+(struct surf-validate         (schema-name subject srcloc) #:transparent)
 ;; Solve: (solve (goal))
 (struct surf-solve            (goal srcloc) #:transparent)
 ;; Solve-one: (solve-one (goal)) — returns first answer or none
@@ -997,7 +1042,6 @@
 ;; :minimize ?cost: branch-and-bound minimization
 (struct surf-minimize         (cost-var srcloc) #:transparent)
 ;; Schema: schema name :field Type ...
-(struct surf-schema           (name fields srcloc) #:transparent)
 ;; Solver: solver name :key val ...
 (struct surf-solver           (name options srcloc) #:transparent)
 

@@ -46,8 +46,7 @@
                 shared-impl-reg
                 shared-param-impl-reg
                 shared-bundle-reg)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
+  (parameterize ([current-file-module-network-ref (make-module-network)]
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
                  [current-lib-paths (list lib-dir)]
@@ -59,7 +58,7 @@
     (install-module-loader!)
     ;; Set up a basic namespace with prelude
     (process-string "(ns test-implicit-map)")
-    (values (current-prelude-env)
+    (values (global-env-snapshot)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -69,7 +68,7 @@
 
 ;; Run sexp code using shared environment
 (define (run s)
-  (parameterize ([current-prelude-env shared-global-env]
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list lib-dir)]
@@ -88,7 +87,7 @@
   (call-with-output-file tmp #:exists 'replace
     (lambda (out) (display s out)))
   (define result
-    (parameterize ([current-prelude-env shared-global-env]
+    (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                    [current-ns-context shared-ns-context]
                    [current-module-registry shared-module-reg]
                    [current-lib-paths (list lib-dir)]
@@ -203,3 +202,84 @@
       "  [add x 1N]\n"
       "eval [f 5N]\n")))
   (check-equal? result "6N : Nat"))
+
+;; ========================================
+;; Map-literal VALUE rewrites (CIU T6, 2026-07-18)
+;; ========================================
+;; dot-access / bracketed apps / nested maps inside map VALUES now expand
+;; (were opaque during preparse → leak/crash). This is the "functions that
+;; return records" pattern (`defn f [...] {:x [+ p.x q.x] ...}`).
+
+(test-case "e2e/ws: dot-access in a map value projects"
+  (check-equal?
+   (run-ws-last
+    (string-append
+     "def pt := {:x 3N :y 4N}\n"
+     "def m := {:a pt.x}\n"
+     "eval m.a\n"))
+   "3N : Nat"))
+
+(test-case "e2e/ws: dot-access inside a bracketed app in a map value"
+  (check-equal?
+   (run-ws-last
+    (string-append
+     "def pt := {:x 3N :y 4N}\n"
+     "def m := {:a [add pt.x pt.y]}\n"
+     "eval m.a\n"))
+   "7N : Nat"))
+
+(test-case "e2e/ws: nested map value with dot-access projects"
+  (check-equal?
+   (run-ws-last
+    (string-append
+     "def pt := {:x 3N :y 4N}\n"
+     "def m := {:a {:b pt.x}}\n"
+     "eval m.a.b\n"))
+   "3N : Nat"))
+
+(test-case "e2e/ws: function returns a record built from projected fields"
+  (check-equal?
+   (run-ws-last
+    (string-append
+     "schema Pt\n  :x Nat\n  :y Nat\n"
+     "defn padd [p : Pt, q : Pt] : Pt\n"
+     "  {:x [add p.x q.x]\n"
+     "   :y [add p.y q.y]}\n"
+     "def a : Pt := {:x 1N :y 2N}\n"
+     "def b : Pt := {:x 3N :y 4N}\n"
+     "eval [padd a b].y\n"))
+   "6N : Nat"))
+
+;; s2 (CIU T6, 2026-07-18): mixfix `.(...)` carrying dot-access — the mixfix
+;; expander folds the access sentinels before pratt-parse.
+(test-case "e2e/ws: mixfix .(...) with dot-access in a map value"
+  (check-equal?
+   (run-ws-last
+    (string-append
+     "def pt := {:x 3N :y 4N}\n"
+     "def m := {:a .(pt.x + pt.y)}\n"
+     "eval m.a\n"))
+   "7N : Nat"))
+
+(test-case "e2e/ws: function returns a record with mixfix-computed fields"
+  (check-equal?
+   (run-ws-last
+    (string-append
+     "schema Pt\n  :x Nat\n  :y Nat\n"
+     "defn padd [p : Pt, q : Pt] : Pt\n"
+     "  {:x .(p.x + q.x)\n"
+     "   :y .(p.y + q.y)}\n"
+     "def a : Pt := {:x 1N :y 2N}\n"
+     "def b : Pt := {:x 3N :y 4N}\n"
+     "eval [padd a b].x\n"))
+   "4N : Nat"))
+
+;; s3 (CIU T6, 2026-07-18): an odd-length map literal yields the graceful
+;; "even number of elements" parse-error instead of a hard cadr crash (the
+;; guard used to discard its error and fall through to the crashing loop).
+(test-case "e2e/ws: odd map literal is a graceful parse-error, not a crash"
+  (define result (run-ws-last "eval {:a 1 :b}\n"))
+  (check-true (prologos-error? result)
+              (format "odd map should be a parse-error, got: ~v" result))
+  (check-true (regexp-match? #rx"even number of elements" (prologos-error-message result))
+              (format "expected the even-elements message, got: ~v" result)))

@@ -38,6 +38,10 @@
          "decision-cell.rkt"  ;; BSP-LE Track 2: commitment cell + nogood lattice
          "merge-fn-registry.rkt"  ;; PPN 4C Phase 1c: Tier 3 domain inheritance
          "source-location.rkt"  ;; PPN 4C Phase 1.5: current-source-loc for on-network srcloc
+         "tropical-fuel-primitives.rkt"  ;; D.4 1V-6 F14 retirement (§11.X.5):
+                                          ;; algebraic primitives leaf module
+                                          ;; (cycle-safe; tropical-fuel.rkt re-exports
+                                          ;; for backward compat with other consumers)
          racket/future         ;; for future, touch, processor-count
          racket/set            ;; PAR Track 1: set-union for decomp-request cell
          racket/async-channel  ;; Phase 2d: buffered channel for streaming results
@@ -62,7 +66,7 @@
  prop-network-worklist
  prop-network-next-cell-id
  prop-network-next-prop-id
- prop-network-fuel
+ ;; prop-network-fuel — RETIRED at 1C-iv-b (macro retired alongside struct field)
  prop-network-contradiction
  prop-network-merge-fns
  prop-network-contradiction-fns
@@ -86,6 +90,41 @@
  net-cell-read
  net-cell-write
  net-cell-replace  ;; Track 7 post-fix: bypass merge for S(-1) retraction
+ ;; D.4 1B-ii: specialized cell type framework (per §9.2.A Shape 2)
+ (struct-out specialized-cell-meta)
+ net-register-specialized-cell
+ ;; D.4 1B-iv: canonical tropical fuel cells (shadow mode in Phase 1B;
+ ;; Phase 1C migrates consumers to use them)
+ fuel-cell-id
+ fuel-budget-cell-id
+ ;; PPN 4C Phase 2A.0 (2026-05-19): stratum-request cells + merges
+ retraction-stratum-request-cell-id
+ resolution-stratum-request-cell-id
+ retraction-stratum-merge
+ resolution-stratum-merge
+ ;; PPN 4C Phase 3A.0 (2026-05-22): fork-on-union stratum-request cells + merges
+ fork-on-union-request-cell-id
+ fork-contradiction-request-cell-id
+ fork-on-union-request-merge
+ fork-contradiction-request-merge
+ ;; PPN 4C Phase 3A.c (2026-05-22): decomposed-positions guard cell + merge
+ ;; (FP3 per §9.3.5.3 — idempotence guard for classifier-watcher's fork-on-union
+ ;; request emission; prevents re-decomposition of already-forked positions)
+ decomposed-positions-cell-id
+ decomposed-positions-merge
+ ;; PPN 4C Phase 3C.b.1 (2026-05-23): per-position contradicted-aids LATCH
+ ;; (cell-18) + per-position chain STORAGE (cell-19) for Propagator-First
+ ;; Diagnostics. Per addendum §9.5.3.3 refined option (d) — set-latch +
+ ;; threshold-fire-once pattern (propagator-design.md canonical).
+ contradicted-branch-aids-cell-id
+ union-derivation-chains-cell-id
+ contradicted-branch-aids-merge
+ union-derivation-chains-merge
+ ;; D.4 1C-ii-b: Variant B local-var fuel helpers (sequential schedulers)
+ ;; Per §10.3.A + §10.0.3 + §10.0.4 F3. Exported for direct unit testing;
+ ;; primary consumers are #1/#2/#4/#5 inside propagator.rkt.
+ init-fuel-local-var!
+ flush-fuel-local-var!
  net-remove-propagator-from-dependents  ;; Track 4B P2: remove ONE propagator from cell dependents
  net-clear-dependents  ;; Track 4B Phase 6b P3: remove all dependents from a cell
  ;; Propagator operations
@@ -234,7 +273,9 @@
  make-trace-accumulator
  ;; B2f Phase 0: Quiescence cell-write instrumentation
  current-quiescence-write-counter
- current-quiescence-change-counter)
+ current-quiescence-change-counter
+ ;; scheduler O(diff) S-b: debug-gated D-S.3 invariant check
+ current-check-fire-invariants?)
 
 ;; ========================================
 ;; Structs
@@ -250,7 +291,43 @@
 ;; dependents: champ-root (prop-id → dependent-entry)
 ;;   PPN Track 4 Phase 1a: component-indexed propagator firing
 ;;   BSP-LE Track 2 Phase 2: assumption-tagged dependents (emergent dissolution)
-(struct prop-cell (value dependents) #:transparent)
+;; meta: #f | specialized-cell-meta — D.4 1B-ii specialized cell type framework
+;;   #f (default) = regular cell, takes generic net-cell-write path
+;;   specialized-cell-meta value = specialized cell, takes fast-path dispatch when
+;;     conditions hold (per §9.2.B). See net-register-specialized-cell.
+(struct prop-cell (value dependents meta) #:transparent)
+
+;; D.4 1B-ii: Specialized cell-meta (per §9.2.A + §9.2.0.5).
+;; Struct name `specialized-cell-meta` (rather than just `cell-meta`) avoids
+;; collision with `prop-observatory.rkt`'s pre-existing `cell-meta` struct
+;; (different concept — observability metadata vs framework dispatch config).
+;; Per-cell declarations for storage strategy, fire-on policy, and inline
+;; on-write/on-read predicates. specialized-cell-meta = #f on regular cells (default);
+;; specialized-cell-meta value triggers fast-path dispatch in net-cell-write when its
+;; tier/storage conditions hold and the network is not under speculation.
+;;
+;; Fields:
+;; - tier: 'hot | 'warm | 'cold — storage tier; current dispatch checks 'hot
+;; - storage: 'general | 'monotone-counter — storage strategy; current
+;;   dispatch checks 'monotone-counter
+;; - fires-on: 'any-change | 'threshold-crossing — dependent notification
+;;   policy; 'threshold-crossing skips dep enqueuing unless on-write-check
+;;   fires (signaling threshold crossed this write)
+;; - on-write-check: #f | (old new net → boolean) — inline predicate; if
+;;   returns truthy, dispatch writes contradiction structurally
+;; - on-read-check: #f | (val net → boolean) — reserved for future
+;;   read-time dispatch (not used in 1B-ii)
+;;
+;; Storage strategy + fire-on policy enums initially shipped: 'general +
+;; 'monotone-counter; 'any-change + 'threshold-crossing. Future tracks
+;; extend per "Let pain drive design."
+;; D.4 1V-2 Item #1 (§11.X.2 α1): merge-fn cached on cell-meta to eliminate
+;; per-call champ-lookup in net-cell-write fast path. Closes §13.7 1B-ii
+;; unilateral gate revision (≤ 3 ns/cycle target). Registry remains
+;; source-of-truth for slow path (regular cells; meta=#f); meta cache is
+;; fast-path-only. No redundancy on single code path (per γ1 + F13).
+(struct specialized-cell-meta (tier storage fires-on on-write-check on-read-check merge-fn)
+  #:transparent)
 
 ;; BSP-LE Track 2 Phase 2: Dependent entry with component-path + assumption tag.
 ;; paths: #f | symbol | (listof component-path-or-#f)
@@ -332,8 +409,35 @@
 ;; Hot: mutated every worklist iteration (worklist, fuel)
 ;; Warm: mutated per cell-write (cells, contradiction)
 ;; Cold: mutated only at allocation/setup time (all other fields)
-(struct prop-net-hot (worklist fuel) #:transparent)
-(struct prop-net-warm (cells contradiction) #:transparent)
+;; D.4 1C-iv-b RETIREMENT: `fuel` field retired (was: (worklist fuel)).
+;; Cell-as-canonical under D.4 specialized cell type framework: fuel-cell-id
+;; in `(prop-net-warm cells ...)` IS the live state. Macro `prop-network-fuel`
+;; retired in this same commit. All consumers migrated to cell-API at 1C-iv-a.
+(struct prop-net-hot (worklist) #:transparent)
+;; D.4 1B-ii: under-speculation? — scheduler-maintained cache of speculation
+;; state for specialized cell fast-path dispatch (per §9.2.0.5 Q-1B-ii-α A2).
+;; #f = no speculation; #t = under speculation (current-worldview-bitmask non-zero).
+;; Refreshed by the BSP scheduler at round entry by reading
+;; (current-worldview-bitmask). Constraint: fresh per BSP round entry;
+;; specialized cells must be scheduler-state cells (written by scheduler
+;; at round/phase boundaries, not by fire functions inside a speculation
+;; parameterize block). See DESIGN_PRINCIPLES.org § Scheduler-State Cells.
+;; D.4 1V-3 Item #1-bis (§11.X.3 α1/β1): fuel-cell-cache — cached prop-cell
+;; direct-ref for fuel-cell-id (id=11). Bypasses cells-map CHAMP traversal for
+;; the well-known fuel cell on hot read/write paths (precedent: under-speculation?
+;; cache from 1B-ii). Write-through at 8 sites (WT-1..WT-8 per §11.X.3 + §11.X.3.1).
+;; Value: prop-cell? at runtime (set post fuel-cell registration); #f before
+;; registration / under early-init state. Cells-map CHAMP remains source-of-truth
+;; (γ1 dual-storage rationale + F13 from §11.X.2).
+;;
+;; D.4 1V-5 Item #1-quater (§11.X.4 α1/β1/γ-B): worldview-cache-cache — cached
+;; prop-cell direct-ref for worldview-cache-cell-id (id=1). Second instance of
+;; the "well-known direct-ref cache on prop-net-warm" pattern (validates the
+;; "Specialized Cell Type Framework as Cross-Track Template" codification from
+;; Commit 4). Bypasses cells-map CHAMP traversal for worldview-cache reads on
+;; speculation paths + tagged-cell-value branches. Same WT-* enumeration as
+;; fuel-cell-cache (8 explicit + 2 inherited per §11.X.3.1).
+(struct prop-net-warm (cells contradiction under-speculation? fuel-cell-cache worldview-cache-cache) #:transparent)
 (struct prop-net-cold (merge-fns contradiction-fns widen-fns
                        propagators next-cell-id next-prop-id
                        cell-decomps pair-decomps cell-dirs
@@ -396,8 +500,10 @@
 ;; the hot/warm/cold inner struct layout. 18 files use these accessors.
 (define-syntax-rule (prop-network-worklist net)
   (prop-net-hot-worklist (prop-network-hot net)))
-(define-syntax-rule (prop-network-fuel net)
-  (prop-net-hot-fuel (prop-network-hot net)))
+;; D.4 1C-iv-b RETIREMENT (2026-05-16): `prop-network-fuel` macro retired
+;; alongside the `fuel` field of prop-net-hot struct. All consumers migrated
+;; to cell-API (net-cell-read net fuel-cell-id) at 1C-iv-a. Cell IS the live
+;; state under D.4 specialized cell type framework.
 (define-syntax-rule (prop-network-cells net)
   (prop-net-warm-cells (prop-network-warm net)))
 (define-syntax-rule (prop-network-contradiction net)
@@ -555,7 +661,7 @@
 ;;
 ;; NOTE: hard-coded cell-IDs are a known debt. A future track may explore
 ;; dynamic cell-ID allocation for strata (see BSP-LE Master "Open Questions" #6
-;; cell-metadata-driven scheduling). For now, 6-9 is the natural contiguous
+;; specialized-cell-metadata-driven scheduling). For now, 6-9 is the natural contiguous
 ;; allocation after the 6 well-known cells (0-5).
 (define constraint-propagators-topology-cell-id (cell-id 6))
 (define elaborator-topology-cell-id (cell-id 7))
@@ -569,6 +675,266 @@
 ;; actions per §6.15.8 Q2. Phase 9 joint design item (§6.15.6): narrowing
 ;; requests gain worldview assumption-id overlay later.
 (define classify-inhabit-request-cell-id (cell-id 10))
+
+;; D.4 1B-iv: canonical tropical fuel cells (per §4.3 + §9.2.0.7 Q-1B-iv-β).
+;; fuel-cell-id holds REMAINING fuel (Option A per §9.2.0.6 Q-1B-iii-α);
+;; initial value = budget (the `fuel` parameter to make-prop-network).
+;; Decrements via (- current n) under Phase 1C migration; operational
+;; exhaustion at (<= remaining 0) via cell on-write-check.
+;; fuel-budget-cell-id preserves the original budget for cost-so-far
+;; derivation: cost = budget - remaining.
+;;
+;; SHADOW MODE during Phase 1B-iv: cells are registered + initialized
+;; to budget; production fuel decrements continue using prop-net-hot.fuel
+;; (the existing native mechanism). Phase 1C migrates production
+;; consumers to read/write the cells; at that point prop-net-hot.fuel +
+;; the prop-network-fuel macro RETIRE.
+(define fuel-cell-id (cell-id 11))
+(define fuel-budget-cell-id (cell-id 12))
+
+;; PPN 4C Phase 2A.0 (2026-05-19): stratum-request cells for orchestration
+;; unification. Per addendum design §8.7. These cells accumulate work from
+;; propagator writes during BSP rounds; the corresponding stratum handler
+;; (process-retraction, process-resolution) reads + processes between rounds;
+;; BSP outer-loop auto-clears via the handler's #:reset-value.
+;;
+;; Allocated as §4.6 specialized cells (tier 'warm + storage 'general +
+;; fires-on 'any-change) via make-warm-general-meta in specialized-cells.rkt.
+;;
+;; Handlers register in metavar-store.rkt (loads before relations.rkt per
+;; driver.rkt require order). Resulting value-tier iteration order:
+;; [S(-1) retraction, L2 resolution, S1 NAF, classify-inhabit] — see §8.7.1.
+(define retraction-stratum-request-cell-id (cell-id 13))
+(define resolution-stratum-request-cell-id (cell-id 14))
+
+;; PPN 4C Phase 3A.0 (2026-05-22): stratum-request cells for fork-on-union
+;; orchestration. Per addendum design §9.3.1.6 + §9.3.2. These cells accumulate
+;; work from propagator writes during BSP rounds; the corresponding stratum
+;; handler (process-fork-on-union, process-fork-contradiction) reads + processes
+;; between rounds; BSP outer-loop auto-clears via the handler's #:reset-value.
+;;
+;; cell-id 15: fork-on-union-request — hash-union merge; per-position
+;;   fork-on-union firing requests written by per-position classifier-watcher
+;;   (installed at 3A.c). Handler `process-fork-on-union` (stub at 3A.0; body
+;;   at 3A.a) consumes requests, decomposes via flatten-union, allocates N aids
+;;   via solver-state-amb, initializes worldview-cache branch bits, installs
+;;   N branch check propagators wrapped at branch worldviews.
+;;
+;; cell-id 16: fork-contradiction-request — set-union merge; aid-set
+;;   accumulator for branch contradictions written by branch contradiction
+;;   watcher (installed at 3A.b). Handler `process-fork-contradiction` (stub at
+;;   3A.0; body at 3A.b) atomically narrows worldview-cache per BSP round.
+;;
+;; Mirrors 2A.0 pattern (retraction-stratum-request-cell-id + resolution-
+;; stratum-request-cell-id at cell-id 13/14). Allocated as §4.6 specialized
+;; cells (warm + general + any-change) via net-register-specialized-cell.
+;; Handlers register in typing-propagators.rkt (close to 3c-iii
+;; process-classify-inhabit-request precedent).
+(define fork-on-union-request-cell-id (cell-id 15))
+(define fork-contradiction-request-cell-id (cell-id 16))
+
+;; cell-id 17: decomposed-positions — set-union merge; per-position guard
+;;   tracking which expression positions have ALREADY been decomposed by the
+;;   process-fork-on-union handler. Written by the handler after decomposing
+;;   (one (seteq position) write per fork firing); read by the per-position
+;;   classifier-watcher (installed at 3A.c.3) to gate request emission.
+;;
+;; Per §9.3.5.3 (Decision 1 FP3 resolution): this guard cell makes idempotence
+;; STRUCTURAL — once a position is decomposed, subsequent classifier-watcher
+;; fires for the same position become no-ops (without consuming any fire-once
+;; flag, since the watcher uses plain net-add-propagator). Resolves the
+;; re-decomposition defect that broke FP1 (plain net-add-propagator without
+;; guard) and the silent coverage gap of FP2 (net-add-fire-once-propagator
+;; consumes flag on first non-union fire).
+;;
+;; NOT a stratum-request cell — no handler registered for cell-17; it's a
+;; READ-by-watcher / WRITE-by-handler guard. Persists across BSP rounds within
+;; a command; resets between commands via reset-meta-store! reconstruction.
+;; SRE domain: 'monotone-set (Tier 2 registration below at line 796-block).
+(define decomposed-positions-cell-id (cell-id 17))
+
+;; PPN 4C Phase 3C.b.1 (2026-05-23): cell-18 + cell-19 for Propagator-First
+;; Diagnostics chain-emission (Phase 3C.b). Per addendum design §9.5.3.3
+;; refined option (d) — per-fork threshold-fire-once propagator + per-position
+;; monotone latch cell. See `error-explanation.rkt` (3C.a foundation) for the
+;; `static-reverse-walk` primitive these cells feed; 3C.b.3 wraps it as
+;; `derivation-chain-for/union-contradict`.
+;;
+;; cell-18: contradicted-branch-aids — per-position aid-set LATCH for the
+;;   threshold-fire-once propagator. Shape: (hasheq position → (seteq aid)).
+;;   Hash-union across positions; set-union per-position aid-set. MONOTONE
+;;   (positions only added; per-position aid-sets only grow). PERSISTS ACROSS
+;;   BSP ROUNDS within a command (NOT reset by stratum handler) — the cell IS
+;;   the latch for the set-latch + threshold pattern (propagator-design.md §
+;;   Set-Latch for Fan-In Readiness). Written by `make-branch-contradiction-
+;;   watcher-fire-fn` (3C.b.2 fan-out alongside cell-16 write); read by the
+;;   per-fork threshold propagator (3C.b.4 install at process-fork-on-union).
+;;
+;; cell-19: union-derivation-chains — per-position chain STORAGE. Shape:
+;;   (hasheq position → derivation-chain). Hash-union: each position gets ONE
+;;   chain per fork-on-union event (threshold-fire-once subsumes idempotence;
+;;   per-key "new wins" is idempotent in practice). Written by per-fork
+;;   threshold action (3C.b.4); read by 3C.c bridge in check/err to populate
+;;   union-exhaustion-error.derivation-chain. NOT a stratum-request cell
+;;   (no handler).
+;;
+;; Per Q-B.1.iii cascading simplification: NO separate emitted-chains tracker
+;; cell needed (fire-once propagator semantic subsumes per-position emit-once
+;; guard). 2 cells (cell-18 + cell-19) replace what option (c) plan envisioned
+;; as 3 (latch + chain-storage + emitted-chains tracker).
+(define contradicted-branch-aids-cell-id (cell-id 18))
+(define union-derivation-chains-cell-id (cell-id 19))
+
+;; Merges for the 2A.0 stratum-request cells. Local definitions per
+;; propagator.rkt's existing pattern (cf. naf-pending-merge at line 622,
+;; topology-request-merge at line 686). Defined locally because
+;; propagator.rkt cannot require infra-cell.rkt (circular dependency —
+;; infra-cell.rkt depends on propagator.rkt).
+(define (retraction-stratum-merge old new)
+  ;; Set-valued accumulator of retracted assumption-ids. Set-union is
+  ;; commutative, associative, idempotent — CALM-safe.
+  (set-union old new))
+(define (resolution-stratum-merge old new)
+  ;; List-valued accumulator of resolution action descriptors. Append is
+  ;; associative but NOT commutative; for resolution actions, order may
+  ;; carry intent (e.g., trait-dispatch before usage-finalization).
+  ;; PPN 4C 2A.b (2026-05-20): current-ready-queue-cell-id parameter
+  ;; RETIRED — this cell IS its replacement. Same shape (list with append).
+  (append old new))
+
+;; PPN 4C Phase 3A.0 (2026-05-22): merges for fork-on-union stratum-request
+;; cells. Local definitions per 2A.0 pattern (cf. retraction-stratum-merge +
+;; resolution-stratum-merge above). Defined locally because propagator.rkt
+;; cannot require infra-cell.rkt (circular dependency).
+
+(define (fork-on-union-request-merge old new)
+  ;; Hash-union: per-position fork-on-union requests keyed by expression
+  ;; position. Multiple positions can have pending fork-on-union work in the
+  ;; same BSP round; each is a separate entry. Within a position, the
+  ;; threshold-fire-once classifier-watcher (installed at 3A.c) ensures one
+  ;; request per (position, decomposition) — so per-key merge is "new wins"
+  ;; (idempotent for the typical case where the entry's value doesn't change
+  ;; once written). CALM-safe under monotone hash-union for distinct keys.
+  (cond
+    [(not (hash? old)) new]
+    [(not (hash? new)) old]
+    [else
+     (for/fold ([acc old]) ([(k v) (in-hash new)])
+       (hash-set acc k v))]))
+
+(define (fork-contradiction-request-merge old new)
+  ;; Set-valued accumulator of contradicted branch aids. Set-union is
+  ;; commutative, associative, idempotent — CALM-safe. Mirrors
+  ;; retraction-stratum-merge (eq-based seteq since aids are gensym-keyed
+  ;; assumption-id structs).
+  (set-union old new))
+
+;; PPN 4C Phase 3A.c (2026-05-22): merge for decomposed-positions guard cell.
+;; Set-valued accumulator of expression positions that the
+;; process-fork-on-union handler has already decomposed. Set-union is
+;; commutative, associative, idempotent — CALM-safe. Eq-based seteq since
+;; positions are eq?-comparable AST expression values.
+;;
+;; Structurally identical to retraction-stratum-merge + fork-contradiction-
+;; request-merge (all 3 implement `'monotone-set` per Tier 2 registration
+;; below) but defined as a separate function so the merge's SEMANTIC role
+;; (decomposed-positions tracking, not retraction or branch contradiction)
+;; is preserved at the call site. Per workflow.md "belt-and-suspenders is a
+;; blocking red flag" + structural-thinking.md cell-allocation efficiency:
+;; separate functions for separate concerns even when bodies are identical.
+(define (decomposed-positions-merge old new)
+  (set-union old new))
+
+;; PPN 4C Phase 3C.b.1 (2026-05-23): merge for cell-18 contradicted-branch-aids
+;; LATCH. Hash-union across positions; set-union per-position aid-set.
+;; Per addendum §9.5.3.3 refined option (d) — cell IS the latch for the
+;; set-latch + threshold pattern. Monotone: positions only added; per-position
+;; aid-sets only grow under set-union. CALM-safe. Local definition per
+;; propagator.rkt's existing pattern (cf. fork-on-union-request-merge at line
+;; 768 — propagator.rkt cannot require infra-cell.rkt due to cycle); Tier 2
+;; reverse-lookup registration links to 'monotone-set domain below.
+(define (contradicted-branch-aids-merge old new)
+  (cond
+    [(not (hash? old)) new]
+    [(not (hash? new)) old]
+    [else
+     (for/fold ([acc old]) ([(position aid-set) (in-hash new)])
+       (hash-update acc position
+                    (lambda (existing) (set-union existing aid-set))
+                    (seteq)))]))
+
+;; PPN 4C Phase 3C.b.1 (2026-05-23): merge for cell-19 union-derivation-chains
+;; per-position chain STORAGE. Hash-union: each position gets ONE chain per
+;; fork-on-union event (threshold-fire-once subsumes idempotence). Per-key
+;; "new wins" is idempotent in practice (chain shape stable per position).
+;; Structurally equivalent to merge-hasheq-replace (infra-cell.rkt) —
+;; registered under 'hasheq-replace domain via Tier 2 reverse-lookup below.
+;; Local definition per propagator.rkt's existing pattern (cycle constraint
+;; with infra-cell.rkt).
+(define (union-derivation-chains-merge old new)
+  (cond
+    [(not (hash? old)) new]
+    [(not (hash? new)) old]
+    [else
+     (for/fold ([acc old]) ([(position chain) (in-hash new)])
+       (hash-set acc position chain))]))
+
+;; PPN 4C Phase 3A.b cleanup (2026-05-22): SRE Tier 2 registrations.
+;;
+;; The retraction-stratum-merge + fork-contradiction-request-merge merges
+;; are structurally `merge-set-union` (defined in infra-cell.rkt). Both
+;; implement the `'monotone-set` SRE domain (registered at
+;; infra-cell-sre-registrations.rkt:130-142 with `merge-set-union` as its
+;; equality merge). We define them locally here because propagator.rkt
+;; cannot require infra-cell.rkt (cycle: infra-cell requires propagator).
+;;
+;; The Tier 2 reverse-lookup registry links function-object identity
+;; (eq?) to domain name; registering BOTH local merges with `'monotone-set`
+;; gives cell-13 + cell-16 Tier 3 domain inheritance — the cells get
+;; classified as `'monotone-set` at allocation, gaining:
+;;   - SRE-validated algebraic properties (comm + assoc + idem)
+;;   - Structural classification for `:component-paths` enforcement
+;;   - Architectural alignment with the set-latch fan-in pattern
+;;     (propagator-design.md § Set-Latch for Fan-In Readiness)
+;;
+;; Note (Phase 3A.b post-implementation cleanup): in 3A.0, cell-16's merge
+;; was defined inline without Tier 2 registration — a "check codebase for
+;; existing helpers" miss per the just-graduated codification
+;; (DEVELOPMENT_LESSONS.org). Same gap pre-existed for cell-13. This block
+;; closes both gaps without changing behavior.
+;;
+;; Architectural follow-up: PM Track 12 (parameters → cells) will retire
+;; merge-fn-registry; merge-fn-domain linkage will then flow through SRE
+;; directly. Until then, this duplicate-registration pattern (one merge fn
+;; per consumer site, all registered to the same `'monotone-set` domain)
+;; is the principled bridge.
+(register-merge-fn!/lattice retraction-stratum-merge #:for-domain 'monotone-set)
+(register-merge-fn!/lattice fork-contradiction-request-merge #:for-domain 'monotone-set)
+;; PPN 4C Phase 3A.c (2026-05-22): cell-17 guard cell's merge.
+(register-merge-fn!/lattice decomposed-positions-merge #:for-domain 'monotone-set)
+
+;; PPN 4C Phase 3C.b.1 (2026-05-23): cell-18 latch implements 'monotone-set
+;; in the per-position aid-set sense (hash-union across positions is monotone;
+;; per-position set-union is monotone). Tier 2 reverse-lookup gives cell-18
+;; the 'monotone-set classification at allocation, gaining SRE-validated
+;; algebraic properties (comm + assoc + idem) + structural classification.
+;; Mirrors cell-13/16/17 Tier 2 registration pattern.
+(register-merge-fn!/lattice contradicted-branch-aids-merge #:for-domain 'monotone-set)
+;; cell-19 chain storage: per-position new-wins. Register under existing
+;; 'hasheq-replace domain (defined at infra-cell-sre-registrations.rkt:73-83
+;; with merge-hasheq-replace as its equality merge). union-derivation-chains-
+;; merge is structurally equivalent to merge-hasheq-replace; registration links
+;; cell-19 to the 'hasheq-replace classification at allocation.
+(register-merge-fn!/lattice union-derivation-chains-merge #:for-domain 'hasheq-replace)
+
+;; D.4 1V-6 F14 retirement (§11.X.5): the inlined duplicate
+;; `tropical-fuel-merge-for-cell` has been RETIRED. The cycle
+;; propagator.rkt → tropical-fuel.rkt → sre-core.rkt → propagator.rkt
+;; is broken by extracting algebraic primitives to the leaf module
+;; tropical-fuel-primitives.rkt (zero non-Racket deps). propagator.rkt
+;; now requires tropical-fuel-primitives.rkt directly and uses
+;; tropical-fuel-merge at the canonical fuel cell registration sites.
+
 (define (classify-inhabit-request-merge old new)
   (if (hash? old)
       (if (hash? new)
@@ -618,48 +984,53 @@
   ;; Pre-allocated with empty set as initial value and set-union as merge.
   (define req-cid decomp-request-cell-id)
   (define req-h (cell-id-hash req-cid))
-  (define req-cell (prop-cell (set) champ-empty))  ;; empty set, no dependents
+  (define req-cell (prop-cell (set) champ-empty #f))  ;; empty set, no dependents
   ;; BSP-LE Track 2 Phase 4: cell-id 1 is the worldview bitmask cache.
   ;; Pre-allocated with 0 (no speculation) and bitwise-ior as merge.
   (define wv-cid worldview-cache-cell-id)
   (define wv-h (cell-id-hash wv-cid))
-  (define wv-cell (prop-cell 0 champ-empty))  ;; 0 = no assumptions, no dependents
+  (define wv-cell (prop-cell 0 champ-empty #f))  ;; 0 = no assumptions, no dependents
   ;; BSP-LE Track 2B Phase R1: cell-id 2 = relation store, cell-id 3 = config.
   ;; Pre-allocated with bot values. Written by solve-goal-propagator at query start.
   (define rs-cid relation-store-cell-id)
   (define rs-h (cell-id-hash rs-cid))
-  (define rs-cell (prop-cell (hasheq) champ-empty))  ;; empty store, no dependents
+  (define rs-cell (prop-cell (hasheq) champ-empty #f))  ;; empty store, no dependents
   (define cfg-cid config-cell-id)
   (define cfg-h (cell-id-hash cfg-cid))
-  (define cfg-cell (prop-cell #f champ-empty))  ;; #f = no config yet, no dependents
+  (define cfg-cell (prop-cell #f champ-empty #f))  ;; #f = no config yet, no dependents
   ;; BSP-LE Track 2B Phase R4: cell-id 4 = NAF-pending (S1 request accumulator).
   (define naf-cid naf-pending-cell-id)
   (define naf-h (cell-id-hash naf-cid))
-  (define naf-cell (prop-cell (hasheq) champ-empty))  ;; empty registry, no dependents
+  (define naf-cell (prop-cell (hasheq) champ-empty #f))  ;; empty registry, no dependents
   ;; Phase 2c: cell-id 5 = pool configuration.
   (define pc-cid pool-config-cell-id)
   (define pc-h (cell-id-hash pc-cid))
-  (define pc-cell (prop-cell #f champ-empty))  ;; #f = no pool config yet
+  (define pc-cell (prop-cell #f champ-empty #f))  ;; #f = no pool config yet
   ;; A1: cells 6-9 = per-subsystem topology request cells.
   ;; All SET-valued with set-union merge; initial value empty set.
   (define cp-cid constraint-propagators-topology-cell-id)
   (define cp-h  (cell-id-hash cp-cid))
-  (define cp-cell (prop-cell (set) champ-empty))
+  (define cp-cell (prop-cell (set) champ-empty #f))
   (define elab-cid elaborator-topology-cell-id)
   (define elab-h  (cell-id-hash elab-cid))
-  (define elab-cell (prop-cell (set) champ-empty))
+  (define elab-cell (prop-cell (set) champ-empty #f))
   (define narr-cid narrowing-topology-cell-id)
   (define narr-h  (cell-id-hash narr-cid))
-  (define narr-cell (prop-cell (set) champ-empty))
+  (define narr-cell (prop-cell (set) champ-empty #f))
   (define sre-cid sre-topology-cell-id)
   (define sre-h  (cell-id-hash sre-cid))
-  (define sre-cell (prop-cell (set) champ-empty))
+  (define sre-cell (prop-cell (set) champ-empty #f))
   ;; PPN 4C Phase 3c-iii: cell-id 10 = classify-inhabit residuation request.
   (define cir-cid classify-inhabit-request-cell-id)
   (define cir-h (cell-id-hash cir-cid))
-  (define cir-cell (prop-cell (hasheq) champ-empty))  ;; empty hasheq, no dependents
-  (prop-network
-   (prop-net-hot '() fuel)
+  (define cir-cell (prop-cell (hasheq) champ-empty #f))  ;; empty hasheq, no dependents
+  ;; D.4 1B-iv: bare network with 11 well-known pre-allocated cells (ids 0-10).
+  ;; Below, we extend with canonical tropical fuel cells (ids 11+12).
+  (define base-net
+   (prop-network
+   ;; D.4 1C-iv-b RETIREMENT: prop-net-hot now 1-arg (fuel field retired).
+   ;; fuel arg is written to fuel-cell-id / fuel-budget-cell-id cells below.
+   (prop-net-hot '())
    (prop-net-warm (for/fold ([acc champ-empty])
                             ([pair (in-list (list (cons req-h (cons req-cid req-cell))
                                                   (cons wv-h (cons wv-cid wv-cell))
@@ -673,7 +1044,10 @@
                                                   (cons sre-h (cons sre-cid sre-cell))
                                                   (cons cir-h (cons cir-cid cir-cell))))])
                     (champ-insert acc (car pair) (cadr pair) (cddr pair)))
-                  #f)
+                  #f   ;; contradiction
+                  #f   ;; under-speculation? (D.4 1B-ii; scheduler refreshes at BSP round entry)
+                  #f   ;; fuel-cell-cache (D.4 1V-3 Item #1-bis; set post fuel-cell registration below)
+                  #f)  ;; worldview-cache-cache (D.4 1V-5 Item #1-quater; set below after worldview-cache-cell registration)
    (prop-net-cold (for/fold ([acc champ-empty])
                             ([pair (in-list (list (cons req-h (cons req-cid decomp-request-merge))
                                                   (cons wv-h (cons wv-cid worldview-cache-merge))
@@ -695,17 +1069,207 @@
                   champ-empty        ;;   cell-decomps
                   champ-empty        ;;   pair-decomps
                   champ-empty        ;;   cell-dirs
-                  champ-empty)))     ;;   cell-domains (PPN 4C Phase 1c)
+                  champ-empty)))     ;;   cell-domains (PPN 4C Phase 1c) — closes: prop-net-cold, prop-network, (define base-net
+  ;; D.4 1B-iv: register canonical tropical fuel cells (shadow mode per §9.2.0.7
+  ;; Q-1B-iv-α; nothing in production reads/writes these until Phase 1C migrates).
+  ;; fuel-cell holds REMAINING fuel (Option A per §9.2.0.6 Q-1B-iii-α);
+  ;; initial = `fuel` parameter (= budget); decrements via Phase 1C migration;
+  ;; operational exhaustion at (<= remaining 0) via on-write-check predicate.
+  (define-values (net1 actual-fuel-cid)
+    (net-register-specialized-cell base-net fuel tropical-fuel-merge
+      #:tier 'hot
+      #:storage 'monotone-counter
+      #:fires-on 'threshold-crossing
+      #:on-write-check (lambda (old new net) (<= new 0))
+      #:domain 'tropical-fuel))
+  (unless (equal? actual-fuel-cid fuel-cell-id)
+    (error 'make-prop-network
+           "fuel-cell-id allocation drift: expected ~a, got ~a (D-1B-iv-6)"
+           fuel-cell-id actual-fuel-cid))
+  ;; fuel-budget-cell preserves the original budget for cost derivation
+  ;; (cost = budget - remaining). Cold tier; written rarely (only at allocation).
+  (define-values (net2 actual-budget-cid)
+    (net-register-specialized-cell net1 fuel tropical-fuel-merge
+      #:tier 'cold
+      #:storage 'general
+      #:fires-on 'any-change
+      #:domain 'tropical-fuel))
+  (unless (equal? actual-budget-cid fuel-budget-cell-id)
+    (error 'make-prop-network
+           "fuel-budget-cell-id allocation drift: expected ~a, got ~a (D-1B-iv-6)"
+           fuel-budget-cell-id actual-budget-cid))
+  ;; PPN 4C Phase 2A.0 (2026-05-19): register stratum-request cells.
+  ;; cell-id 13: retraction-stratum-request (S(-1) handler input). Set-valued.
+  ;; cell-id 14: resolution-stratum-request (L2 handler input). List-valued.
+  ;; Per §8.7.3 §4.6 framework declarations (warm + general + any-change).
+  ;; Handlers register in metavar-store.rkt + invoke from BSP outer-loop;
+  ;; until 2A.a + 2A.b wire handlers, cells exist as empty accumulators
+  ;; (no behavior change vs pre-2A.0).
+  (define-values (net3 actual-retraction-cid)
+    ;; PPN 4C 2A.a (2026-05-20): cell init + merge use seteq (eq-based) to
+    ;; match the assumption-id (gensym) convention. Mirrors prior box-based
+    ;; mechanism (current-retracted-assumptions, retired in 2B).
+    (net-register-specialized-cell net2 (seteq) retraction-stratum-merge
+      #:tier 'warm
+      #:storage 'general
+      #:fires-on 'any-change))
+  (unless (equal? actual-retraction-cid retraction-stratum-request-cell-id)
+    (error 'make-prop-network
+           "retraction-stratum-request-cell-id allocation drift: expected ~a, got ~a"
+           retraction-stratum-request-cell-id actual-retraction-cid))
+  (define-values (net4 actual-resolution-cid)
+    (net-register-specialized-cell net3 '() resolution-stratum-merge
+      #:tier 'warm
+      #:storage 'general
+      #:fires-on 'any-change))
+  (unless (equal? actual-resolution-cid resolution-stratum-request-cell-id)
+    (error 'make-prop-network
+           "resolution-stratum-request-cell-id allocation drift: expected ~a, got ~a"
+           resolution-stratum-request-cell-id actual-resolution-cid))
+  ;; PPN 4C Phase 3A.0 (2026-05-22): register fork-on-union stratum-request
+  ;; cells. Per addendum design §9.3.1.6 + §9.3.2. cell-id 15:
+  ;; fork-on-union-request (per-position decomposition requests; hash-union
+  ;; merge). cell-id 16: fork-contradiction-request (aid-set accumulator for
+  ;; branch contradictions; set-union merge). Handlers register in
+  ;; typing-propagators.rkt (process-fork-on-union, process-fork-contradiction
+  ;; — stubs at 3A.0, bodies wired at 3A.a + 3A.b). Until handlers wire bodies,
+  ;; cells exist as empty accumulators (no behavior change vs pre-3A.0).
+  (define-values (net5 actual-fork-on-union-cid)
+    (net-register-specialized-cell net4 (hasheq) fork-on-union-request-merge
+      #:tier 'warm
+      #:storage 'general
+      #:fires-on 'any-change))
+  (unless (equal? actual-fork-on-union-cid fork-on-union-request-cell-id)
+    (error 'make-prop-network
+           "fork-on-union-request-cell-id allocation drift: expected ~a, got ~a"
+           fork-on-union-request-cell-id actual-fork-on-union-cid))
+  (define-values (net6 actual-fork-contradiction-cid)
+    ;; Cell init + merge use seteq (eq-based) to match the assumption-id
+    ;; (gensym) convention. Mirrors retraction-stratum cell.
+    (net-register-specialized-cell net5 (seteq) fork-contradiction-request-merge
+      #:tier 'warm
+      #:storage 'general
+      #:fires-on 'any-change))
+  (unless (equal? actual-fork-contradiction-cid fork-contradiction-request-cell-id)
+    (error 'make-prop-network
+           "fork-contradiction-request-cell-id allocation drift: expected ~a, got ~a"
+           fork-contradiction-request-cell-id actual-fork-contradiction-cid))
+  ;; PPN 4C Phase 3A.c.1 (2026-05-22): register decomposed-positions guard
+  ;; cell. Per addendum design §9.3.5 (Decision 1 FP3 resolution). cell-id 17:
+  ;; decomposed-positions guard (per-position set of already-forked expression
+  ;; positions; set-union merge). Read by classifier-watcher (installed at
+  ;; 3A.c.3) to gate request emission; written by process-fork-on-union
+  ;; handler after decomposing (3A.c.3 wires the write). NOT a stratum-request
+  ;; cell — no handler registered for it. Until 3A.c.3 wires watcher + handler
+  ;; write, cell exists as an empty seteq accumulator (no behavior change vs
+  ;; pre-3A.c.1).
+  (define-values (net7 actual-decomposed-positions-cid)
+    ;; Cell init + merge use seteq (eq-based) to match expression position
+    ;; (AST node) eq? convention. Mirrors retraction-stratum + fork-contradiction
+    ;; cell shapes; SRE-classified as 'monotone-set via Tier 2 registration.
+    (net-register-specialized-cell net6 (seteq) decomposed-positions-merge
+      #:tier 'warm
+      #:storage 'general
+      #:fires-on 'any-change))
+  (unless (equal? actual-decomposed-positions-cid decomposed-positions-cell-id)
+    (error 'make-prop-network
+           "decomposed-positions-cell-id allocation drift: expected ~a, got ~a"
+           decomposed-positions-cell-id actual-decomposed-positions-cid))
+  ;; PPN 4C Phase 3C.b.1 (2026-05-23): allocate cell-18 contradicted-branch-aids
+  ;; latch + cell-19 union-derivation-chains storage. Per addendum §9.5.3.3
+  ;; refined option (d). cell-18 init: (hasheq) — accumulates per-position
+  ;; aid-set entries as watchers fan-out (3C.b.2). cell-19 init: (hasheq) —
+  ;; populated by per-fork threshold action (3C.b.4). Until 3C.b.2 wires
+  ;; watcher fan-out + 3C.b.4 installs threshold propagator, both cells exist
+  ;; as empty accumulators (no behavior change vs pre-3C.b.1).
+  (define-values (net8 actual-contradicted-branch-aids-cid)
+    (net-register-specialized-cell net7 (hasheq) contradicted-branch-aids-merge
+      #:tier 'warm
+      #:storage 'general
+      #:fires-on 'any-change))
+  (unless (equal? actual-contradicted-branch-aids-cid contradicted-branch-aids-cell-id)
+    (error 'make-prop-network
+           "contradicted-branch-aids-cell-id allocation drift: expected ~a, got ~a"
+           contradicted-branch-aids-cell-id actual-contradicted-branch-aids-cid))
+  (define-values (net9 actual-union-derivation-chains-cid)
+    (net-register-specialized-cell net8 (hasheq) union-derivation-chains-merge
+      #:tier 'warm
+      #:storage 'general
+      #:fires-on 'any-change))
+  (unless (equal? actual-union-derivation-chains-cid union-derivation-chains-cell-id)
+    (error 'make-prop-network
+           "union-derivation-chains-cell-id allocation drift: expected ~a, got ~a"
+           union-derivation-chains-cell-id actual-union-derivation-chains-cid))
+  ;; D.4 1V-3 Item #1-bis (§11.X.3 step 3): set fuel-cell-cache on prop-net-warm.
+  ;; D.4 1V-5 Item #1-quater (§11.X.4 step 3): set worldview-cache-cache on prop-net-warm.
+  ;; Both cells now registered (worldview-cache at base-net; fuel-cell at net2);
+  ;; look up each once and cache the prop-cell direct-refs. Write-through at
+  ;; 8 sites (WT-1..WT-8) maintains consistency for both fields in parallel.
+  ;; 3C.b.1: latest cells CHAMP is net9 (after cell-18 + cell-19 allocations);
+  ;; the cached fuel + worldview-cache prop-cells were allocated earlier
+  ;; (fuel at net2; worldview-cache at base-net) — shared via CHAMP structural
+  ;; sharing into net9's cells map. Direct-refs lookup from net9's cells CHAMP
+  ;; retrieves the original prop-cells.
+  (let* ([fc-h (cell-id-hash fuel-cell-id)]
+         [fc-cell (champ-lookup (prop-network-cells net9) fc-h fuel-cell-id)]
+         [wv-h (cell-id-hash worldview-cache-cell-id)]
+         [wv-cell (champ-lookup (prop-network-cells net9) wv-h worldview-cache-cell-id)])
+    (struct-copy prop-network net9
+      [warm (struct-copy prop-net-warm (prop-network-warm net9)
+              [fuel-cell-cache fc-cell]
+              [worldview-cache-cache wv-cell])])))
 
 ;; Track 10 Phase 3: Fork a prop-network for subnetwork isolation.
 ;; Shares all CHAMP fields (cells, propagators, registries) via structural sharing.
 ;; Resets hot state (worklist, fuel) and contradiction.
 ;; O(1): two struct allocations. All data shared until child writes (CoW).
 (define (fork-prop-network net [fuel 1000000])
-  (prop-network
-   (prop-net-hot '() fuel)                              ;; fresh worklist + fuel
-   (prop-net-warm (prop-network-cells net) #f)          ;; shared cells, no contradiction
-   (prop-network-cold net)))                            ;; shared: merge-fns, propagators, etc.
+  ;; D.4 1C-iv-a (§10.0.6 γ1): fork-prop-network cell-reset.
+  ;; Sub-network gets fresh worklist + new fuel budget. Cells are SHARED with
+  ;; parent via CHAMP structural sharing (prop-network-cells net) — under D.4,
+  ;; this would leak parent's fuel-cell-id + fuel-budget-cell-id values into
+  ;; the sub-run, VIOLATING β1 lockstep at fork boundary (sub-run sees stale
+  ;; cell values relative to fresh struct-field fuel).
+  ;;
+  ;; Fix: explicitly reset BOTH fuel-cell-id and fuel-budget-cell-id to the new
+  ;; fuel value via net-cell-write (which triggers on-write-check if fuel ≤ 0
+  ;; — same semantic as initial allocation). Sub-network's cells now reflect
+  ;; the fresh budget at fork boundary; β1 lockstep preserved.
+  ;;
+  ;; D-1C-iv-1 (drift risk): missing one cell-write would leak parent's value
+  ;; — covered by test "1C-iv (1) fork-prop-network cell-reset" in
+  ;; test-tropical-fuel.rkt.
+  (define forked
+    (prop-network
+     ;; D.4 1C-iv-b RETIREMENT: prop-net-hot now 1-arg (fuel field retired);
+     ;; fuel arg is written to fuel-cell-id / fuel-budget-cell-id cells via
+     ;; net-cell-reset below (γ1; D-1C-iv-1).
+     (prop-net-hot '())                                   ;; fresh worklist
+     (prop-net-warm (prop-network-cells net) #f #f #f #f) ;; shared cells, no contradiction, no speculation (D.4 1B-ii), fuel-cell-cache=#f (set post-reset; D.4 1V-3 Item #1-bis), worldview-cache-cache=#f (set post-fork; D.4 1V-5 Item #1-quater)
+     (prop-network-cold net)))                            ;; shared: merge-fns, propagators, etc.
+  ;; Reset both fuel cells to new fuel value (γ1; D-1C-iv-1 mitigation).
+  ;; Use net-cell-reset (NOT net-cell-write): the merge function is `min`
+  ;; (tropical-fuel-merge); under merge, (min parent-remaining new-fuel) wins
+  ;; the lower value — so net-cell-write would LEAK parent's possibly-lower
+  ;; remaining value into the forked sub-network. net-cell-reset bypasses
+  ;; merge and writes the value directly, which is the correct semantic for
+  ;; "reset to fresh budget at fork boundary."
+  (define forked+cell (net-cell-reset forked fuel-cell-id fuel))
+  (define forked+both (net-cell-reset forked+cell fuel-budget-cell-id fuel))
+  ;; D.4 1V-3 Item #1-bis (§11.X.3 step 5): set fuel-cell-cache on prop-net-warm
+  ;; after fork-reset. The fuel cell is now updated (forked+both has the new value
+  ;; under WT-3 via net-cell-reset); look up the fresh prop-cell and cache it.
+  ;; D.4 1V-5 Item #1-quater (§11.X.4 step 5): set worldview-cache-cache too.
+  ;; The worldview-cache-cell is SHARED with parent (cells map shared via
+  ;; structural sharing); the cached prop-cell ref is the same as parent's.
+  (let* ([fc-h (cell-id-hash fuel-cell-id)]
+         [fc-cell (champ-lookup (prop-network-cells forked+both) fc-h fuel-cell-id)]
+         [wv-h (cell-id-hash worldview-cache-cell-id)]
+         [wv-cell (champ-lookup (prop-network-cells forked+both) wv-h worldview-cache-cell-id)])
+    (struct-copy prop-network forked+both
+      [warm (struct-copy prop-net-warm (prop-network-warm forked+both)
+              [fuel-cell-cache fc-cell]
+              [worldview-cache-cache wv-cell])])))
 
 ;; Track 10 Phase 3b: Ergonomic fork macro for test isolation.
 ;;
@@ -753,9 +1317,55 @@
   (define local-id (prop-network-next-cell-id net))
   (define id (cell-id (if (zero? ns) local-id
                           (+ (arithmetic-shift ns 32) local-id))))
-  (define cell (prop-cell initial-value champ-empty))
+  (define cell (prop-cell initial-value champ-empty #f))
   (define h (cell-id-hash id))
   ;; Tier 3 domain resolution: override else inherited from merge-fn else #f
+  (define resolved-domain
+    (or explicit-domain (lookup-merge-fn-domain merge-fn)))
+  (define net*
+    (struct-copy prop-network net
+      [warm (struct-copy prop-net-warm (prop-network-warm net)
+              [cells (champ-insert (prop-network-cells net) h id cell)])]
+      [cold (struct-copy prop-net-cold (prop-network-cold net)
+              [merge-fns (champ-insert (prop-network-merge-fns net) h id merge-fn)]
+              [next-cell-id (+ 1 (prop-network-next-cell-id net))]
+              [cell-domains (if resolved-domain
+                                (champ-insert (prop-network-cell-domains net)
+                                              h id resolved-domain)
+                                (prop-network-cell-domains net))])]))
+  (values
+   (if contradicts?
+       (struct-copy prop-network net*
+         [cold (struct-copy prop-net-cold (prop-network-cold net*)
+                 [contradiction-fns
+                  (champ-insert (prop-network-contradiction-fns net*)
+                                h id contradicts?)])])
+       net*)
+   id))
+
+;; D.4 1B-ii: Register a specialized cell with framework metadata.
+;; Returns (values net cell-id). Equivalent to net-new-cell but stores
+;; specialized-cell-meta on the prop-cell, enabling fast-path dispatch in net-cell-write.
+;;
+;; Per §9.2.0.5 Q-1B-ii-γ (Shape 2): specialized-cell-meta + registration API live in
+;; propagator.rkt; specialized-cells.rkt provides convenience constructors.
+(define (net-register-specialized-cell net initial-value merge-fn
+                                       #:tier tier
+                                       #:storage storage
+                                       #:fires-on fires-on
+                                       #:on-write-check [on-write-check #f]
+                                       #:on-read-check [on-read-check #f]
+                                       #:contradicts? [contradicts? #f]
+                                       #:domain [explicit-domain #f])
+  (perf-inc-cell-alloc!)
+  (define ns (current-cell-id-namespace))
+  (define local-id (prop-network-next-cell-id net))
+  (define id (cell-id (if (zero? ns) local-id
+                          (+ (arithmetic-shift ns 32) local-id))))
+  ;; D.4 1V-2 Item #1: pass merge-fn into struct (cached for fast-path use)
+  (define meta (specialized-cell-meta tier storage fires-on on-write-check on-read-check merge-fn))
+  (define cell (prop-cell initial-value champ-empty meta))
+  (define h (cell-id-hash id))
   (define resolved-domain
     (or explicit-domain (lookup-merge-fn-domain merge-fn)))
   (define net*
@@ -833,7 +1443,7 @@
   (define local-id (prop-network-next-cell-id net))
   (define id (cell-id (if (zero? ns) local-id
                           (+ (arithmetic-shift ns 32) local-id))))
-  (define cell (prop-cell top-value champ-empty))
+  (define cell (prop-cell top-value champ-empty #f))
   (define h (cell-id-hash id))
   ;; PPN 4C Phase 1c: Tier 3 domain inheritance (meet-fn functions as merge-fn for lookup).
   (define resolved-domain
@@ -896,7 +1506,7 @@
       (define h (cell-id-hash id))
       (define initial-value (car spec))
       (define merge-fn (cadr spec))
-      (define cell (prop-cell initial-value champ-empty))
+      (define cell (prop-cell initial-value champ-empty #f))
       (tchamp-insert! t-cells h id cell)
       (tchamp-insert! t-merge h id merge-fn)
       (when (and (pair? (cddr spec)) (caddr spec))
@@ -949,8 +1559,20 @@
 ;; Falls back to TMS-transparent read for backward compatibility during migration.
 ;; Errors on unknown cell-id.
 (define (net-cell-read net cid)
-  (define cell (champ-lookup (prop-network-cells net)
-                              (cell-id-hash cid) cid))
+  ;; D.4 1V-3 Item #1-bis (§11.X.3 step 6): fuel-cell-id short-circuit.
+  ;; D.4 1V-5 Item #1-quater (§11.X.4 step 6): worldview-cache-cell-id short-circuit
+  ;; (parallel to fuel-cell-id; mirrors Item #1-bis pattern).
+  ;; Use cached prop-cell direct-ref on prop-net-warm; bypasses cells-map CHAMP
+  ;; traversal for these well-known cells. Falls back to champ-lookup if the
+  ;; respective cache is #f (early init) OR cid is neither well-known.
+  ;; The `and` forms short-circuit the cache access when cid doesn't match.
+  (define cell
+    (or (and (eq? cid fuel-cell-id)
+             (prop-net-warm-fuel-cell-cache (prop-network-warm net)))
+        (and (eq? cid worldview-cache-cell-id)
+             (prop-net-warm-worldview-cache-cache (prop-network-warm net)))
+        (champ-lookup (prop-network-cells net)
+                      (cell-id-hash cid) cid)))
   (if (eq? cell 'none)
       (error 'net-cell-read "unknown cell: ~a" cid)
       (let ([v (prop-cell-value cell)])
@@ -962,14 +1584,16 @@
            ;; not entries from sibling clauses. Without this, all propagators sharing
            ;; a network would see the same (cache cell) bitmask, destroying isolation.
            ;; Fallback: worldview cache cell (for network-wide worldview).
+           ;; D.4 1V-5 Item #1-quater (§11.X.4 step 9 / F2 PRIMARY): use cached
+           ;; worldview-cache-cache direct-ref instead of inline champ-lookup.
+           ;; Defensive #f-check per D-1V-4-3: cache may be #f if uninitialized
+           ;; (early init pre-make-prop-network completion).
            (define per-prop-wv (current-worldview-bitmask))
            (define wv-bitmask
              (if (not (zero? per-prop-wv))
                  per-prop-wv
-                 (let ([wv-cell (champ-lookup (prop-network-cells net)
-                                              (cell-id-hash worldview-cache-cell-id)
-                                              worldview-cache-cell-id)])
-                   (if (eq? wv-cell 'none) 0 (prop-cell-value wv-cell)))))
+                 (let ([wv-cell (prop-net-warm-worldview-cache-cache (prop-network-warm net))])
+                   (if wv-cell (prop-cell-value wv-cell) 0))))
            ;; Phase 11: extract domain merge from cell's merge-fn for
            ;; same-specificity entry merging (e.g., union type Nat+Bool→Type 0).
            ;; The merge-fn is make-tagged-merge(domain-merge). When called with
@@ -995,8 +1619,16 @@
 ;; Used for commit operations and provenance inspection where
 ;; the full tms-cell-value tree is needed.
 (define (net-cell-read-raw net cid)
-  (define cell (champ-lookup (prop-network-cells net)
-                              (cell-id-hash cid) cid))
+  ;; D.4 1V-5 Item #1-quater (§11.X.4 step 8 / F9): fuel-cell-id +
+  ;; worldview-cache-cell-id short-circuits (symmetric to net-cell-read).
+  ;; Bypasses cells-map CHAMP traversal for these well-known cells.
+  (define cell
+    (or (and (eq? cid fuel-cell-id)
+             (prop-net-warm-fuel-cell-cache (prop-network-warm net)))
+        (and (eq? cid worldview-cache-cell-id)
+             (prop-net-warm-worldview-cache-cache (prop-network-warm net)))
+        (champ-lookup (prop-network-cells net)
+                      (cell-id-hash cid) cid)))
   (if (eq? cell 'none)
       (error 'net-cell-read-raw "unknown cell: ~a" cid)
       (prop-cell-value cell)))
@@ -1137,10 +1769,23 @@
   (define cell (champ-lookup cells h cid))
   (when (eq? cell 'none)
     (error 'net-cell-reset "unknown cell: ~a" cid))
-  (define new-cell (prop-cell new-val (prop-cell-dependents cell)))
+  (define new-cell (prop-cell new-val (prop-cell-dependents cell) (prop-cell-meta cell)))
+  ;; D.4 1V-3 Item #1-bis (§11.X.3 WT-3): cache update on cell-reset.
+  ;; Inherits old cache if cid != fuel-cell-id. WT-5 (promote-cell-to-tagged)
+  ;; + WT-7 (fork-prop-network) inherit through this path.
   (struct-copy prop-network net
     [warm (struct-copy prop-net-warm (prop-network-warm net)
-            [cells (champ-insert cells h cid new-cell)])]))
+            [cells (champ-insert cells h cid new-cell)]
+            [fuel-cell-cache
+             (if (eq? cid fuel-cell-id)
+                 new-cell
+                 (prop-net-warm-fuel-cell-cache (prop-network-warm net)))]
+            ;; D.4 1V-5 Item #1-quater (§11.X.4 step 15 / WT-* parallel update):
+            ;; worldview-cache-cache update at the same write-through site.
+            [worldview-cache-cache
+             (if (eq? cid worldview-cache-cell-id)
+                 new-cell
+                 (prop-net-warm-worldview-cache-cache (prop-network-warm net)))])]))
 
 ;; BSP-LE Track 2 Phase 5.9b: Promote a cell to tagged-cell-value.
 ;; The current value becomes the base; entries start empty.
@@ -1178,10 +1823,23 @@
       (let* ([deps (prop-cell-dependents cell)]
              [ph (prop-id-hash pid)]
              [new-deps (champ-delete deps ph pid)]
-             [new-cell (prop-cell (prop-cell-value cell) new-deps)])
+             [new-cell (prop-cell (prop-cell-value cell) new-deps (prop-cell-meta cell))])
+        ;; D.4 1V-3 Item #1-bis (§11.X.3 WT-6a): cache update on dependents update.
+        ;; Cell's value unchanged but dependents CHAMP changed → new prop-cell;
+        ;; cache holds the prop-cell reference, so it needs updating.
         (struct-copy prop-network net
           [warm (struct-copy prop-net-warm (prop-network-warm net)
-                  [cells (champ-insert cells h cid new-cell)])]))))
+                  [cells (champ-insert cells h cid new-cell)]
+                  [fuel-cell-cache
+                   (if (eq? cid fuel-cell-id)
+                       new-cell
+                       (prop-net-warm-fuel-cell-cache (prop-network-warm net)))]
+               ;; D.4 1V-5 Item #1-quater (§11.X.4 step 15 / WT-* parallel update):
+               ;; worldview-cache-cache update at the same write-through site.
+               [worldview-cache-cache
+                   (if (eq? cid worldview-cache-cell-id)
+                       new-cell
+                       (prop-net-warm-worldview-cache-cache (prop-network-warm net)))])]))))
 
 ;; Track 4B Phase 6b P3: Clear all dependents from a cell.
 ;; The cell RETAINS its value — only the dependents CHAMP is emptied.
@@ -1195,22 +1853,135 @@
   (define cell (champ-lookup cells h cid))
   (if (eq? cell 'none)
       net  ;; unknown cell — no-op (defensive)
-      (let ([new-cell (prop-cell (prop-cell-value cell) champ-empty)])
+      (let ([new-cell (prop-cell (prop-cell-value cell) champ-empty (prop-cell-meta cell))])
+        ;; D.4 1V-3 Item #1-bis (§11.X.3 WT-6b): cache update on clear-dependents.
+        ;; Same as WT-6a: cell value unchanged but dependents changed → new prop-cell.
         (struct-copy prop-network net
           [warm (struct-copy prop-net-warm (prop-network-warm net)
-                  [cells (champ-insert cells h cid new-cell)])]))))
+                  [cells (champ-insert cells h cid new-cell)]
+                  [fuel-cell-cache
+                   (if (eq? cid fuel-cell-id)
+                       new-cell
+                       (prop-net-warm-fuel-cell-cache (prop-network-warm net)))]
+               ;; D.4 1V-5 Item #1-quater (§11.X.4 step 15 / WT-* parallel update):
+               ;; worldview-cache-cache update at the same write-through site.
+               [worldview-cache-cache
+                   (if (eq? cid worldview-cache-cell-id)
+                       new-cell
+                       (prop-net-warm-worldview-cache-cache (prop-network-warm net)))])]))))
 
 ;; Otherwise: updates the cell, enqueues dependent propagators, and
 ;; optionally checks the contradiction predicate.
 (define (net-cell-write net cid new-val)
   (define cells (prop-network-cells net))
   (define h (cell-id-hash cid))
-  (define cell (champ-lookup cells h cid))
+  ;; D.4 1V-3 Item #1-bis (§11.X.3 step 7): fuel-cell-id short-circuit.
+  ;; D.4 1V-5 Item #1-quater (§11.X.4 step 7): worldview-cache-cell-id short-circuit.
+  ;; Use cached prop-cell direct-refs; bypass cells-map CHAMP traversal for
+  ;; well-known cells. Cells map STILL needed for the subsequent champ-insert
+  ;; (write-through to source-of-truth per γ1).
+  (define cell
+    (or (and (eq? cid fuel-cell-id)
+             (prop-net-warm-fuel-cell-cache (prop-network-warm net)))
+        (and (eq? cid worldview-cache-cell-id)
+             (prop-net-warm-worldview-cache-cache (prop-network-warm net)))
+        (champ-lookup cells h cid)))
   (when (eq? cell 'none)
     (error 'net-cell-write "unknown cell: ~a" cid))
   ;; B2f Phase 0: count every write attempt
   (define wc (current-quiescence-write-counter))
   (when wc (set-box! wc (add1 (unbox wc))))
+  ;; D.4 1B-ii: Specialized cell fast-path dispatch (per §9.2.A + §9.2.B).
+  ;; If cell has specialized-cell-meta + tier='hot + storage='monotone-counter and the
+  ;; network is not under speculation (cached in prop-net-warm.under-speculation?
+  ;; per §9.2.0.5 Q-1B-ii-α A2-scheduler-refresh), take the fast path:
+  ;; - Run on-write-check inline; if truthy, write contradiction structurally
+  ;; - Otherwise: struct-copy cell + champ-insert + apply fire-on policy
+  ;;   ('threshold-crossing skips dep enqueuing; 'any-change enqueues all)
+  ;; The slow path (existing body below) handles all other cells unchanged.
+  (define meta (prop-cell-meta cell))
+  (define fast-path?
+    (and meta
+         (eq? (specialized-cell-meta-tier meta) 'hot)
+         (eq? (specialized-cell-meta-storage meta) 'monotone-counter)
+         (not (prop-net-warm-under-speculation? (prop-network-warm net)))))
+  (cond
+    [fast-path?
+     ;; Apply merge fn per §9.2.B sketch — preserves CALM-safety (merge=min
+     ;; for tropical-fuel; min ensures the lowest value wins under concurrent
+     ;; writes, matching the Lawvere join semantic).
+     ;; D.4 1V-2 Item #1 (§11.X.2 α1/γ1): use cached merge-fn from cell-meta
+     ;; instead of per-call champ-lookup. Closes §13.7 1B-ii gate.
+     (define merge-fn (specialized-cell-meta-merge-fn meta))
+     (let* ([old-val (prop-cell-value cell)]
+            [merged (merge-fn old-val new-val)])
+       (cond
+         [(or (eq? merged old-val) (equal? merged old-val))
+          net]  ;; No change — return same network (critical for termination)
+         [else
+          (define on-write (specialized-cell-meta-on-write-check meta))
+          (define contradicted? (and on-write (on-write old-val merged net)))
+          (define cc (current-quiescence-change-counter))
+          (when cc (set-box! cc (add1 (unbox cc))))
+          (let* ([new-cell (struct-copy prop-cell cell [value merged])]
+                 [new-cells (champ-insert cells h cid new-cell)])
+            (cond
+              [contradicted?
+               ;; Structural contradiction — record cell-id on prop-net-warm
+               ;; D.4 1V-3 Item #1-bis (§11.X.3 WT-1a): cache update on fast-path
+               ;; contradicted branch. Inherits old cache if cid != fuel-cell-id.
+               (struct-copy prop-network net
+                 [warm (struct-copy prop-net-warm (prop-network-warm net)
+                         [cells new-cells]
+                         [contradiction cid]
+                         [fuel-cell-cache
+                          (if (eq? cid fuel-cell-id)
+                              new-cell
+                              (prop-net-warm-fuel-cell-cache (prop-network-warm net)))]
+                      ;; D.4 1V-5 Item #1-quater (§11.X.4 step 15 / WT-* parallel update):
+                      ;; worldview-cache-cache update at the same write-through site.
+                      [worldview-cache-cache
+                          (if (eq? cid worldview-cache-cell-id)
+                              new-cell
+                              (prop-net-warm-worldview-cache-cache (prop-network-warm net)))])])]
+              [else
+               ;; Apply fire-on policy
+               (define fire-on (specialized-cell-meta-fires-on meta))
+               (define new-wl
+                 (cond
+                   [(eq? fire-on 'threshold-crossing)
+                    ;; on-write returned #f → threshold not crossed this write
+                    ;; → skip dependent enqueuing (per §9.2.A fire-on policy)
+                    (prop-network-worklist net)]
+                   [else
+                    ;; 'any-change (default) — enqueue all dependents
+                    (define deps-champ (prop-cell-dependents cell))
+                    (append (champ-keys deps-champ)
+                            (prop-network-worklist net))]))
+               ;; D.4 1V-3 Item #1-bis (§11.X.3 WT-1b): cache update on fast-path
+               ;; non-contradicted branch. Inherits old cache if cid != fuel-cell-id.
+               (struct-copy prop-network net
+                 [warm (struct-copy prop-net-warm (prop-network-warm net)
+                         [cells new-cells]
+                         [fuel-cell-cache
+                          (if (eq? cid fuel-cell-id)
+                              new-cell
+                              (prop-net-warm-fuel-cell-cache (prop-network-warm net)))]
+                      ;; D.4 1V-5 Item #1-quater (§11.X.4 step 15 / WT-* parallel update):
+                      ;; worldview-cache-cache update at the same write-through site.
+                      [worldview-cache-cache
+                          (if (eq? cid worldview-cache-cell-id)
+                              new-cell
+                              (prop-net-warm-worldview-cache-cache (prop-network-warm net)))])]
+                 [hot (struct-copy prop-net-hot (prop-network-hot net)
+                        [worklist new-wl])])]))]))]
+    [else
+     (net-cell-write/slow-path net cid new-val cells h cell)]))
+
+;; D.4 1B-ii: slow-path body of net-cell-write extracted as helper so the
+;; specialized fast-path can short-circuit cleanly. Body unchanged from
+;; pre-1B-ii except for the helper-extraction wrapper.
+(define (net-cell-write/slow-path net cid new-val cells h cell)
   (define merge-fn
     (champ-lookup (prop-network-merge-fns net) h cid))
   (define old-val (prop-cell-value cell))
@@ -1227,14 +1998,14 @@
        ;; concurrently, each sees its own bitmask, writes are tagged distinctly.
        ;; Fallback: read worldview cache cell (for network-wide worldview, e.g.,
        ;; elab-speculation-bridge sequential speculation).
+       ;; D.4 1V-5 Item #1-quater (§11.X.4 step 11 / F2 PRIMARY): use cached
+       ;; worldview-cache-cache direct-ref instead of inline champ-lookup.
        (define per-prop-wv (current-worldview-bitmask))
        (define wv-bitmask
          (if (not (zero? per-prop-wv))
              per-prop-wv
-             (let ([wv-cell (champ-lookup cells
-                                          (cell-id-hash worldview-cache-cell-id)
-                                          worldview-cache-cell-id)])
-               (if (eq? wv-cell 'none) 0 (prop-cell-value wv-cell)))))
+             (let ([wv-cell (prop-net-warm-worldview-cache-cache (prop-network-warm net))])
+               (if wv-cell (prop-cell-value wv-cell) 0))))
        ;; Wrap as a DELTA tagged-cell-value (base=new-val, entry if worldview non-zero).
        ;; The merge function combines old+delta correctly without entry duplication.
        (if (zero? wv-bitmask)
@@ -1295,9 +2066,21 @@
              [contradicted?
               (and (not (eq? cfn 'none))   ;; cell has a contradicts? fn
                    (cfn merged))]          ;; the merged value is contradictory
+             ;; D.4 1V-3 Item #1-bis (§11.X.3 WT-2 per §11.X.3.1 F14): cache update
+             ;; on slow-path main struct-copy (contradicted branch inherits from net*).
              [net* (struct-copy prop-network net
                      [warm (struct-copy prop-net-warm (prop-network-warm net)
-                             [cells new-cells])]
+                             [cells new-cells]
+                             [fuel-cell-cache
+                              (if (eq? cid fuel-cell-id)
+                                  new-cell
+                                  (prop-net-warm-fuel-cell-cache (prop-network-warm net)))]
+                          ;; D.4 1V-5 Item #1-quater (§11.X.4 step 15 / WT-* parallel update):
+                          ;; worldview-cache-cache update at the same write-through site.
+                          [worldview-cache-cache
+                              (if (eq? cid worldview-cache-cell-id)
+                                  new-cell
+                                  (prop-net-warm-worldview-cache-cache (prop-network-warm net)))])]
                      [hot (struct-copy prop-net-hot (prop-network-hot net)
                             [worklist new-wl])])])
         (if contradicted?
@@ -1331,9 +2114,22 @@
              [contradicted?
               (and (not (eq? cfn 'none))
                    (cfn new-val))]
+             ;; D.4 1V-3 Item #1-bis (§11.X.3 WT-8 per §11.X.3.1 F15): defensive
+             ;; cache update in net-cell-replace (S(-1) retraction). Fuel-cell not
+             ;; typically retracted; invariant preservation in case of future use.
              [net* (struct-copy prop-network net
                      [warm (struct-copy prop-net-warm (prop-network-warm net)
-                             [cells new-cells])]
+                             [cells new-cells]
+                             [fuel-cell-cache
+                              (if (eq? cid fuel-cell-id)
+                                  new-cell
+                                  (prop-net-warm-fuel-cell-cache (prop-network-warm net)))]
+                          ;; D.4 1V-5 Item #1-quater (§11.X.4 step 15 / WT-* parallel update):
+                          ;; worldview-cache-cache update at the same write-through site.
+                          [worldview-cache-cache
+                              (if (eq? cid worldview-cache-cell-id)
+                                  new-cell
+                                  (prop-net-warm-worldview-cache-cache (prop-network-warm net)))])]
                      [hot (struct-copy prop-net-hot (prop-network-hot net)
                             [worklist new-wl])])])
         (if contradicted?
@@ -1369,12 +2165,17 @@
 ;; Track 8 C5a: Global scheduler override.
 ;; When #t, ALL run-to-quiescence calls use BSP scheduling instead of Gauss-Seidel.
 ;; This is the correct level for a full A/B comparison — it catches every quiescence
-;; invocation (unify.rkt, elab-speculation.rkt, bridges, tabling, not just metavar-store).
+;; invocation (unify.rkt, bridges, tabling, not just metavar-store).
+;; PPN 4C Phase 3A.d (2026-05-22): elab-speculation.rkt retired (zero callers; stranded).
 (define current-use-bsp-scheduler? (make-parameter #t))  ;; PAR Track 1 Phase 5: BSP is the default
 
-;; CALM topology guard: when #t, fire functions must not modify network topology.
-;; net-add-propagator and net-new-cell will error during BSP fire rounds.
-;; Topology changes require stratum boundaries (stratification).
+;; CALM topology guard: #t only during a fire-and-collect-writes fire round.
+;; NOT an error gate — net-new-cell and net-add-propagator ARE allowed in-fire
+;; (the new cell/propagator is captured and applied by the topology stratum
+;; between rounds; see the contract at the top of this file). The flag is read
+;; by decomposition dispatchers (emit a topology request vs decompose inline)
+;; and by net-add-propagator (defer worklist scheduling). Set at exactly one
+;; site: fire-and-collect-writes' parameterize.
 (define current-bsp-fire-round? (make-parameter #f))
 
 ;; BSP-LE Track 2 Phase 2 CORRECTION: current-assumption-viable? REMOVED.
@@ -1413,6 +2214,15 @@
 (define current-quiescence-write-counter (make-parameter #f))
 (define current-quiescence-change-counter (make-parameter #f))
 
+;; Scheduler O(diff) S-b: debug-gated D-S.3 invariant check. When #t,
+;; fire-and-collect-writes errors if a mid-fire-created cell carries decomp/
+;; domain metadata (cell-domains/cell-decomps) or any pair-decomp was written
+;; in-fire — exactly the metadata bulk-merge-writes' new-cell path would DROP.
+;; Default #f => zero production cost. Turn on in tests to enforce the invariant
+;; (decomposition runs in the topology stratum between rounds, not in-fire; see
+;; docs/tracking/2026-06-03_SCHEDULER_ODIFF_OPTIMIZATION.md §7.1).
+(define current-check-fire-invariants? (make-parameter #f))
+
 ;; ========================================
 ;; Propagator Operations
 ;; ========================================
@@ -1440,7 +2250,20 @@
                             #:assumption [assumption-id #f]
                             #:decision-cell [decision-cell-id #f]
                             #:flags [flags 0]
-                            #:srcloc [srcloc #f])  ;; PPN 4C Phase 1.5: on-network srcloc
+                            ;; PPN 4C Phase 3C.d.1 (W1, 2026-05-24): default to
+                            ;; (current-source-loc) — Phase 1.5 completion. Phase 1.5
+                            ;; built the slots (struct field + wrapper + parameter
+                            ;; + kwarg) but missed the install-time default. W1
+                            ;; closes the wiring gap: callers within elaborate's
+                            ;; parameterize scope get AST-node srcloc; callers
+                            ;; outside (module-load, synthetic test) get #f
+                            ;; naturally (identical to pre-W1). W1 audit verified
+                            ;; safety across 181 production install sites (zero
+                            ;; hostile values) — see addendum §9.5.5.1. Phase 1.5
+                            ;; (α)+(η) hybrid preserved: srcloc stored in propagator
+                            ;; STRUCT FIELD at install time, NOT closure ((ε)
+                            ;; rejection precedent honored).
+                            #:srcloc [srcloc (current-source-loc)])
   ;; PPN 4C Phase 1f (2026-04-20): structural-enforcement check.
   ;; For each input cell whose domain is classified 'structural, require
   ;; :component-paths declared for that cell. Unclassified domains skip
@@ -1520,7 +2343,10 @@
                                       #:component-paths [cpaths '()]
                                       #:assumption [assumption-id #f]
                                       #:decision-cell [decision-cell-id #f]
-                                      #:srcloc [srcloc #f])  ;; PPN 4C Phase 1.5
+                                      ;; PPN 4C Phase 3C.d.1 (W1, 2026-05-24): default
+                                      ;; to (current-source-loc) — see net-add-propagator
+                                      ;; for full W1 rationale + audit reference.
+                                      #:srcloc [srcloc (current-source-loc)])
   ;; Flags: scheduler implements fire-once. No closure wrapper.
   (define flags (bitwise-ior PROP-FIRE-ONCE
                              (if (null? inputs) PROP-EMPTY-INPUTS 0)))
@@ -1605,7 +2431,10 @@
                                       #:component-paths [component-paths '()]
                                       #:assumption [assumption-id #f]
                                       #:decision-cell [decision-cell-id #f]
-                                      #:srcloc [srcloc #f])  ;; PPN 4C Phase 1.5
+                                      ;; PPN 4C Phase 3C.d.1 (W1, 2026-05-24): default
+                                      ;; to (current-source-loc) — see net-add-propagator
+                                      ;; for full W1 rationale + audit reference.
+                                      #:srcloc [srcloc (current-source-loc)])
   (define profile (broadcast-profile items item-fn result-merge-fn))
   (define fire-fn
     (lambda (net)
@@ -1804,6 +2633,61 @@
                                      (prop-network-contradiction final) '())))
               final)))))
 
+;; ============================================================
+;; 1C-ii-b Variant B local-var fuel helpers (D.4 CANONICAL 2026-05-16)
+;; ============================================================
+;;
+;; Per §10.3.A Variant B + §10.0.3 + §10.0.4 (audit-refined):
+;; sequential schedulers use a local-var box pattern that defers cell-write to
+;; phase boundaries. The cell IS the live state at every observation point;
+;; the local-var box is the scheduler's internal SCRATCH register (not a cache
+;; of off-network state).
+;;
+;; Used by:
+;;   - run-to-quiescence-drain (#1; init only per §10.0.4 F3 Option A;
+;;     cell-write ADDED after existing finalize struct-copy)
+;;   - run-to-quiescence-inner/traced (#2; same pattern as #1)
+;;   - run-widen-phase (#4; init + flush at phase exit/contradiction/exhaustion)
+;;   - run-narrow-phase (#5; same pattern as #4)
+;;
+;; Per §10.0.4 F3 Option A: helper is used at init for all 4 sequential
+;; schedulers. Helper is also used at flush for #4 + #5 (no worklist
+;; interleaving). For #1 + #2, the existing finalize struct-copy already
+;; sets fuel-field alongside worklist; the helper is NOT called at finalize
+;; — instead, a `(net-cell-write n* fuel-cell-id (unbox remaining-fuel))`
+;; is added after the existing struct-copy for β1 lockstep with the cell.
+;;
+;; β1 lockstep retirement obligation (D-1C-ii-b-1): the struct-field write
+;; inside `flush-fuel-local-var!` retires at 1C-iv alongside the
+;; prop-net-hot-fuel struct field itself. Post-1C-iv, the helper will only
+;; write the cell.
+
+;; Initialize a local-var box from the cell. Returns mutable box with the
+;; current remaining-fuel value (Option A semantic: cell stores REMAINING).
+;; Read source is the cell (NOT prop-network-fuel macro) — under β1 lockstep
+;; both equal each other; cell-read is the architecturally-correct read source
+;; under D.4. At 1C-iv (field retirement), this reads from the only live state.
+(define (init-fuel-local-var! net)
+  (box (net-cell-read net fuel-cell-id)))
+
+;; Flush a local-var box to BOTH the cell AND the struct-field (β1 lockstep).
+;; Used at sequential-phase boundaries (entry+exit for #4+#5; exhaustion path
+;; for all 4). Returns updated net.
+;;
+;; D-1C-ii-b-1 (retirement obligation): the struct-field write retires at
+;; 1C-iv. Post-1C-iv, this helper will only call net-cell-write.
+;;
+;; The on-write check at the cell layer ((<= new 0) per Option A) fires
+;; contradiction structurally if remaining-fuel reaches zero — no separate
+;; exhaustion check needed in the helper.
+(define (flush-fuel-local-var! net local-fuel-box)
+  ;; D.4 1C-iv-b RETIREMENT (D-1C-ii-b-1): struct-field write retired alongside
+  ;; the `fuel` field of prop-net-hot. Helper now writes ONLY the cell (which IS
+  ;; the live state under D.4). On-write-check fires contradiction structurally
+  ;; if final-fuel ≤ 0 (Option A exhaustion semantic).
+  (define final-fuel (unbox local-fuel-box))
+  (net-cell-write net fuel-cell-id final-fuel))
+
 ;; Inner loop: no tracing.
 ;; BSP-LE Track 0 Phase 3c: mutable worklist/fuel drain pattern.
 ;; Strip hot fields into mutable boxes before the loop. Propagator fire
@@ -1812,16 +2696,22 @@
 ;; per iteration for worklist/fuel management.
 (define (run-to-quiescence-inner net)
   ;; Fast path: nothing to do — return same object (eq? identity).
+  ;; D.4 1C-iii (§10.0.5 α1+β2): removed redundant [(<= (prop-network-fuel net) 0) net]
+  ;; clause; upstream contradiction check covers fuel exhaustion via cell on-write-check
+  ;; writing 'tropical-fuel-exhausted contradiction-cell-id structurally.
   (cond
     [(prop-network-contradiction net) net]
-    [(<= (prop-network-fuel net) 0) net]
     [(null? (prop-network-worklist net)) net]
     [else (run-to-quiescence-drain net)]))
 
 ;; Mutable drain loop — only entered when there IS work to do.
 (define (run-to-quiescence-drain net)
   (define wl (box (prop-network-worklist net)))
-  (define remaining-fuel (box (prop-network-fuel net)))
+  ;; D.4 1C-ii-b (#1 init): read source migrated from struct-field to cell.
+  ;; Per §10.0.4 F3 Option A: helper used at init only for #1+#2 (finalize
+  ;; struct-copy below already writes fuel-field together with worklist;
+  ;; cell-write added after for β1 lockstep).
+  (define remaining-fuel (init-fuel-local-var! net))
   ;; B2f Phase 0: cell-write instrumentation
   (define write-count (box 0))
   (define change-count (box 0))
@@ -1829,16 +2719,21 @@
   ;; net-cell-write appends new dependents to the network's own worklist field;
   ;; we drain those into the box after each fire.
   (define net0 (struct-copy prop-network net
-                 [hot (prop-net-hot '() 0)]))
+                 [hot (prop-net-hot '())]))   ;; D.4 1C-iv-b: 1-arg prop-net-hot
   (define (finalize n)
     ;; B2f Phase 0: emit stats if non-trivial
     (define wc (unbox write-count))
     (define cc (unbox change-count))
     (when (> wc 0)
       (perf-record-quiescence-writes! wc cc))
-    ;; Reconstitute the hot fields from the mutable boxes.
-    (struct-copy prop-network n
-      [hot (prop-net-hot (unbox wl) (unbox remaining-fuel))]))
+    ;; D.4 1C-iv-b RETIREMENT (D-1C-ii-b-1; D-1C-ii-b-6 asymmetry retired):
+    ;; struct-field fuel write retired alongside the field itself. Finalize
+    ;; reconstitutes worklist via struct-copy (1-arg prop-net-hot); cell-write
+    ;; for fuel state. β1 lockstep retires; cell IS the sole live state.
+    (define n*
+      (struct-copy prop-network n
+        [hot (prop-net-hot (unbox wl))]))   ;; 1-arg
+    (net-cell-write n* fuel-cell-id (unbox remaining-fuel)))
   (parameterize ([current-quiescence-write-counter write-count]
                  [current-quiescence-change-counter change-count])
     (let loop ([net net0])
@@ -1863,18 +2758,24 @@
                  (set-box! wl (append new-wl-entries (unbox wl))))
                ;; Clear net*'s worklist so it doesn't accumulate across iterations.
                (loop (struct-copy prop-network net*
-                       [hot (prop-net-hot '() 0)]))))]))))
+                       [hot (prop-net-hot '())]))))]))))   ;; D.4 1C-iv-b: 1-arg
 
 ;; Inner loop with tracing: returns (cons final-net fired-pids-list).
 ;; Same mutable worklist/fuel drain pattern as run-to-quiescence-inner.
 (define (run-to-quiescence-inner/traced net)
   (define wl (box (prop-network-worklist net)))
-  (define remaining-fuel (box (prop-network-fuel net)))
+  ;; D.4 1C-ii-b (#2 init per §10.0.4 F3 Option A): helper read from cell.
+  (define remaining-fuel (init-fuel-local-var! net))
   (define net0 (struct-copy prop-network net
-                 [hot (prop-net-hot '() 0)]))
+                 [hot (prop-net-hot '())]))   ;; D.4 1C-iv-b: 1-arg
   (define (finalize n fired)
-    (cons (struct-copy prop-network n
-            [hot (prop-net-hot (unbox wl) (unbox remaining-fuel))])
+    ;; D.4 1C-iv-b RETIREMENT (D-1C-ii-b-1; mirrors run-to-quiescence-drain):
+    ;; struct-field fuel write retired alongside the field itself. Cell IS the
+    ;; sole live state.
+    (define n*
+      (struct-copy prop-network n
+        [hot (prop-net-hot (unbox wl))]))   ;; 1-arg
+    (cons (net-cell-write n* fuel-cell-id (unbox remaining-fuel))
           (reverse fired)))
   (let loop ([net net0] [fired '()])
     (cond
@@ -1894,7 +2795,7 @@
              (unless (null? new-wl-entries)
                (set-box! wl (append new-wl-entries (unbox wl))))
              (loop (struct-copy prop-network net*
-                     [hot (prop-net-hot '() 0)])
+                     [hot (prop-net-hot '())])   ;; D.4 1C-iv-b: 1-arg
                    (cons pid fired))))])))
 
 ;; ========================================
@@ -1951,14 +2852,12 @@
                               (prop-id-hash pid) pid))
   (when (eq? prop 'none)
     (error 'fire-and-collect-writes "unknown propagator: ~a" pid))
-  (define snapshot-next-id (prop-network-next-cell-id snapshot-net))
   ;; Fire propagator against snapshot (with CALM topology guard).
   ;; Phase 2b: set cell-id namespace for parallel-safe cell allocation.
   (define result-net
     (parameterize ([current-bsp-fire-round? #t]
                    [current-cell-id-namespace namespace-idx])
       (fire-propagator prop snapshot-net)))  ;; PPN 4C Phase 1.5
-  (define result-next-id (prop-network-next-cell-id result-net))
   ;; Diff output cells for value writes (correct delta for merge-based cells).
   ;; A1: previously added decomp-request-cell-id unconditionally as a catch-all
   ;; for topology writes. No longer needed — topology cells are each propagator's
@@ -1977,51 +2876,63 @@
       (if (equal? old new)
           writes
           (cons (cons cid new) writes))))
-  ;; Also check for undeclared writes (e.g., contradiction writes to input cells).
-  ;; These are captured as direct-set operations (bypass merge in bulk-merge-writes)
-  ;; to avoid double-merging with non-idempotent merge functions like append.
+  ;; Scheduler O(network-diff): replace the two O(network-size) champ-fold scans
+  ;; (undeclared-writes + new-cells) with ONE eq?-pruned champ-diff over the cells
+  ;; CHAMP. Identical sub-tries share structure and are eq?-skipped wholesale, so
+  ;; the cost is O(changed), not O(network-size). The diff returns result-side
+  ;; CHANGED (present in snap, value differs) and NEW (absent from snap) cells;
+  ;; classification (value/undeclared/new) stays HERE, not in the diff. Note:
+  ;; "present in snap" <=> "existing cell" (every snapshot cell has id < next-id),
+  ;; so the structural diff subsumes the old (< (cell-id-n cid) snapshot-next-id)
+  ;; watermark. same? compares prop-cell VALUE so dependents-only entry changes
+  ;; are not reported (matching the retired undeclared fold). See
+  ;; docs/tracking/2026-06-03_SCHEDULER_ODIFF_OPTIMIZATION.md §7.
+  (define output-set (for/hasheq ([cid (in-list output-cids)]) (values cid #t)))
+  (define-values (diff-changed diff-new)
+    (champ-diff (prop-network-cells snapshot-net)
+                (prop-network-cells result-net)
+                (lambda (old-cell new-cell)
+                  (equal? (prop-cell-value old-cell) (prop-cell-value new-cell)))))
+  ;; Existing cells whose VALUE changed and are NOT declared outputs → undeclared
+  ;; (direct-set, bypass merge). Declared-output changes are already in
+  ;; value-writes (→ merge); skip them here.
   (define undeclared-writes
-    (let ([snap-cells (prop-network-cells snapshot-net)]
-          [result-cells (prop-network-cells result-net)]
-          [output-set (for/hasheq ([cid (in-list output-cids)]) (values cid #t))])
-      (if (eq? snap-cells result-cells)
-          '()
-          (champ-fold/hash
-           result-cells
-           (lambda (h cid cell acc)
-             (cond
-               [(hash-has-key? output-set cid) acc]  ;; Already in value-writes
-               [(< (cell-id-n cid) snapshot-next-id) ;; Existing cell, not new
-                (let ([old-cell (champ-lookup snap-cells h cid)])
-                  (if (eq? old-cell 'none)
-                      acc
-                      (let ([old-val (prop-cell-value old-cell)]
-                            [new-val (prop-cell-value cell)])
-                        (if (equal? old-val new-val)
-                            acc
-                            (cons (cons cid new-val) acc)))))]
-               [else acc]))
-           '()))))  ;; Phase 2b: Capture new cells via CHAMP diff (replaces range-based scan).
-  ;; With per-propagator cell-id namespaces, range scanning doesn't work —
-  ;; namespaced IDs are sparse. CHAMP diff finds cells in result not in snapshot.
-  ;; O(new cells) via structural comparison of persistent hash-array-mapped tries.
+    (for/fold ([acc '()]) ([p (in-list diff-changed)])
+      (if (hash-has-key? output-set (car p))
+          acc
+          (cons (cons (car p) (prop-cell-value (cdr p))) acc))))
+  ;; New cells (absent from snapshot) → 6-tuple with cold-side fn registries,
+  ;; exactly as the retired new-cells fold built it.
   (define new-cells
-    (let ([snap-cells (prop-network-cells snapshot-net)]
-          [result-cells (prop-network-cells result-net)])
-      (if (eq? snap-cells result-cells)
-          '()  ;; No new cells — common case, zero overhead (same CHAMP node)
-          (champ-fold/hash
-           result-cells
-           (lambda (h cid cell acc)
-             (if (not (eq? 'none (champ-lookup snap-cells h cid)))
-                 acc  ;; Cell existed in snapshot — not new
-                 ;; New cell: extract merge-fn, contra-fn, widen-fn, cell-dir
-                 (let ([merge-fn (champ-lookup (prop-network-merge-fns result-net) h cid)]
-                       [contra-fn (champ-lookup (prop-network-contradiction-fns result-net) h cid)]
-                       [widen-fn (champ-lookup (prop-network-widen-fns result-net) h cid)]
-                       [cell-dir (champ-lookup (prop-network-cell-dirs result-net) h cid)])
-                   (cons (list cid cell merge-fn contra-fn widen-fn cell-dir) acc))))
-           '()))))
+    (for/list ([p (in-list diff-new)])
+      (define cid (car p))
+      (define cell (cdr p))
+      (define h (cell-id-hash cid))
+      (list cid cell
+            (champ-lookup (prop-network-merge-fns result-net) h cid)
+            (champ-lookup (prop-network-contradiction-fns result-net) h cid)
+            (champ-lookup (prop-network-widen-fns result-net) h cid)
+            (champ-lookup (prop-network-cell-dirs result-net) h cid))))
+  ;; D-S.3 invariant (debug-gated, default off → zero production cost): decomp/
+  ;; domain metadata is never produced for a mid-fire-created cell — decomposition
+  ;; runs in the topology stratum between rounds, not in-fire (§7.1). If a future
+  ;; caller violates this, the entry bulk-merge-writes would silently DROP is
+  ;; caught LOUDLY here. cell-domains/cell-decomps are cell-id-keyed; pair-decomps
+  ;; is a memo set keyed by cell-pair → assert it wasn't mutated in-fire at all.
+  (when (current-check-fire-invariants?)
+    (for ([p (in-list diff-new)])
+      (define cid (car p))
+      (define h (cell-id-hash cid))
+      (unless (eq? 'none (champ-lookup (prop-network-cell-domains result-net) h cid))
+        (error 'fire-and-collect-writes
+               "D-S.3 invariant: mid-fire cell ~a carries a cell-domains entry (bulk-merge-writes would drop it)" cid))
+      (unless (eq? 'none (champ-lookup (prop-network-cell-decomps result-net) h cid))
+        (error 'fire-and-collect-writes
+               "D-S.3 invariant: mid-fire cell ~a carries a cell-decomps entry (would be dropped)" cid)))
+    (unless (eq? (prop-network-pair-decomps result-net)
+                 (prop-network-pair-decomps snapshot-net))
+      (error 'fire-and-collect-writes
+             "D-S.3 invariant: pair-decomps mutated in-fire (would be dropped)")))
   ;; PAR Track 1: Capture new propagators via next-prop-id comparison.
   ;; Propagators created during BSP are NOT on the worklist (deferred).
   ;; The topology stratum adds them to the canonical network and schedules them.
@@ -2264,11 +3175,39 @@
 ;; topology is stable so its fork sees the complete network.
 (define stratum-handlers (box '()))
 
+;; PPN 4C Addendum Phase 4B.2-c (§18.21.19 Q4): the cell-id indices a fresh
+;; make-prop-network pre-allocates. The zero-NET-2 invariant (§18.21.19.1 D1 —
+;; driving a network that has ONLY the pre-allocated cells, e.g. the per-file
+;; module-network-ref, fires no stratum handler because process-tier reads each
+;; handler's request cell from the net + skips on empty) is CONTINGENT on every
+;; registered handler's request cell being pre-allocated. A handler on a
+;; non-pre-allocated cell would CRASH at the drive (process-tier's net-cell-read
+;; of the absent cell errors "unknown cell"). Computed once from a canonical
+;; fresh network (ACTUAL presence via the cells CHAMP keys — no contiguity
+;; assumption). 4B.2 is the first phase to DRIVE a non-elaboration network (the
+;; mnr), so this latent fragility becomes load-bearing here.
+(define preallocated-cell-ns
+  (for/hasheqv ([k (in-list (champ-keys (prop-network-cells (make-prop-network))))])
+    (values (cell-id-n k) #t)))
+
 (define (register-stratum-handler! request-cell-id handler-fn
                                    #:tier [tier 'value]
                                    #:reset-value [reset-value (hasheq)])
   (unless (memq tier '(topology value))
     (error 'register-stratum-handler! "tier must be 'topology or 'value, got ~a" tier))
+  ;; PPN 4C Addendum Phase 4B.2-c (§18.21.19 Q4): superset-contingency guard —
+  ;; catch a mis-registered handler at REGISTRATION (module-load), loudly +
+  ;; structurally, rather than as a cryptic "unknown cell" crash when the mnr is
+  ;; driven (the zero-NET-2 invariant's prerequisite).
+  (unless (hash-has-key? preallocated-cell-ns (cell-id-n request-cell-id))
+    (error 'register-stratum-handler!
+           (string-append
+            "request cell ~a is NOT pre-allocated by make-prop-network. Driving a "
+            "network that has only the pre-allocated cells (e.g. the per-file "
+            "module-network-ref, PPN 4C Addendum 4B.2) would crash on the handler's "
+            "net-cell-read of the absent cell. Pre-allocate the request cell in "
+            "make-prop-network alongside the other stratum-request cells.")
+           request-cell-id))
   (set-box! stratum-handlers
             (append (unbox stratum-handlers)
                     (list (list request-cell-id handler-fn tier reset-value)))))
@@ -2326,7 +3265,10 @@
     [(and (zero? worldview)
           (pair? (prop-network-worklist net))
           (not (prop-network-contradiction net))
-          (> (prop-network-fuel net) 0)
+          ;; D.4 1C-iv-a (§10.0.6 β1 γ1): migrated `(> (prop-network-fuel net) 0)`
+          ;; → cell-API direct read. Preserves "fuel positive" precondition for
+          ;; Tier 1 fast-path eligibility (per §10.0.5 γ3 deferred → §10.0.6 β1 γ1).
+          (> (net-cell-read net fuel-cell-id) 0)
           ;; No pending NAF/stratum requests
           (let ([naf-p (net-cell-read net naf-pending-cell-id)])
             (or (not naf-p) (and (hash? naf-p) (hash-empty? naf-p))))
@@ -2361,16 +3303,22 @@
      (let ([fired-set (make-hasheq)])
       ;; Outer loop: value stratum → topology stratum → repeat
       (let outer-loop ([net net] [outer-round 0])
+       ;; D.4 1C-iv-a (§10.0.6 D-1C-iii-5 retirement; FULL β2):
+       ;; typing-propagators.rkt:2269 migrated to cell-API at 1C-iv-a → β1
+       ;; lockstep restored at substitution boundary → upstream
+       ;; `(prop-network-contradiction net)` now covers fuel exhaustion via
+       ;; cell on-write-check writing 'tropical-fuel-exhausted contradiction-cell-id
+       ;; structurally. The transitional struct-field check at this site (kept
+       ;; at 1C-iii partial β2) is no longer load-bearing; full β2 applies.
        (cond
          [(prop-network-contradiction net) net]
-         [(<= (prop-network-fuel net) 0) net]
          [else
           ;; VALUE STRATUM: BSP inner loop with fire-once optimization
           (define value-result
             (let inner-loop ([net net] [round-number 0])
+              ;; D.4 1C-iv-a: same full β2 (D-1C-iii-5 retirement) as outer.
               (cond
                 [(prop-network-contradiction net) net]
-                [(<= (prop-network-fuel net) 0) net]
                 [(null? (prop-network-worklist net)) net]
              [else
               (let* ([raw-pids (dedup-pids (prop-network-worklist net))]
@@ -2378,13 +3326,28 @@
                      [pids (filter (lambda (pid) (not (hash-has-key? fired-set pid)))
                                    raw-pids)]
                      [n (length pids)]
+                     ;; D.4 1B-ii: refresh prop-net-warm.under-speculation? from
+                     ;; current-worldview-bitmask parameter. Scheduler-maintained
+                     ;; cache for specialized cell fast-path dispatch (per §9.2.0.5
+                     ;; Q-1B-ii-α A2-scheduler-refresh). Constraint: fresh per BSP
+                     ;; round entry; specialized cells must be scheduler-state cells.
+                     ;; D.4 1C-iv-b RETIREMENT (D-1C-ii-a-1): the [fuel (- ...)]
+                     ;; struct-field clause retired alongside the prop-net-hot fuel
+                     ;; field itself. Cell-write below is now the SOLE production
+                     ;; update pattern (cell IS the live state under D.4). The
+                     ;; on-write-check (<= new 0) fires contradiction structurally
+                     ;; if exhausted. Option A semantic: cell stores REMAINING fuel.
                      [snapshot (struct-copy prop-network net
                                  [hot (struct-copy prop-net-hot (prop-network-hot net)
-                                        [worklist '()]
-                                        [fuel (- (prop-network-fuel net) n)])])]
+                                        [worklist '()])]
+                                 [warm (struct-copy prop-net-warm (prop-network-warm net)
+                                         [under-speculation?
+                                          (not (zero? (current-worldview-bitmask)))])])]
+                     [snapshot+fuel (net-cell-write snapshot fuel-cell-id
+                                                    (- (net-cell-read net fuel-cell-id) n))]
                      ;; R1: time fire phase
                      [t-fire-start (current-inexact-monotonic-milliseconds)]
-                     [all-writes (executor snapshot pids)]
+                     [all-writes (executor snapshot+fuel pids)]
                      [t-fire-end (current-inexact-monotonic-milliseconds)]
                      ;; R1: time merge phase
                      ;; Phase 2b: tree-reduce for large worklists (hypercube all-reduce).
@@ -2396,9 +3359,9 @@
                      [merged (if (and tree-threshold (>= n tree-threshold))
                                  (let ([combined (tree-reduce-fire-results all-writes #t)])
                                    (if combined
-                                       (bulk-merge-writes snapshot (list combined))
-                                       snapshot))
-                                 (bulk-merge-writes snapshot all-writes))]
+                                       (bulk-merge-writes snapshot+fuel (list combined))
+                                       snapshot+fuel))
+                                 (bulk-merge-writes snapshot+fuel all-writes))]
                      [t-merge-end (current-inexact-monotonic-milliseconds)]
                      ;; Apply deferred propagators
                      [deferred-props (collect-deferred-propagators all-writes)]
@@ -2454,7 +3417,7 @@
                       (for/fold ([acc acc])
                                 ([w (in-list writes)])
                         (cons (cell-diff (car w)
-                                         (net-cell-read snapshot (car w))
+                                         (net-cell-read snapshot+fuel (car w))
                                          (cdr w)
                                          pid)
                               acc))))
@@ -2483,9 +3446,20 @@
                  (define reset-val (stratum-handler-reset-val entry))
                  (define pending (net-cell-read net req-cid))
                  (cond
+                   ;; PPN 4C 2A.b (2026-05-20): empty-list check added for
+                   ;; list-merge stratum-request cells (e.g., resolution-stratum-
+                   ;; request, cell-14). Without this guard, a list-valued
+                   ;; request cell at its initial '() state would still fire
+                   ;; the handler (returning net unchanged) AND trigger
+                   ;; net-cell-reset, breaking eq? identity for callers that
+                   ;; rely on "no-op when nothing pending" semantics
+                   ;; (e.g., test-readiness-propagator.rkt:469
+                   ;; "eq? identity: run-to-quiescence returns same network when
+                   ;; already quiescent"). Pattern mirrors hash/set empty checks.
                    [(or (not pending)
                         (and (hash? pending) (hash-empty? pending))
-                        (and (set? pending) (set-empty? pending)))
+                        (and (set? pending) (set-empty? pending))
+                        (and (list? pending) (null? pending)))
                     (process net (cdr remaining))]
                    [else
                     (define processed (handler-fn net pending))
@@ -2871,8 +3845,10 @@
   (null? (prop-network-worklist net)))
 
 ;; How much fuel remains?
+;; D.4 1C-iv-a: migrated to cell-API per §10.0.6 (was `(prop-network-fuel net)`).
+;; Reads directly from fuel-cell-id (Option A: cell stores REMAINING fuel).
 (define (net-fuel-remaining net)
-  (prop-network-fuel net))
+  (net-cell-read net fuel-cell-id))
 
 ;; ========================================
 ;; Widening Support (Phase 6a)
@@ -2937,14 +3913,14 @@
     (cond
       [(and (tagged-cell-value? old-val) (not (tagged-cell-value? new-val)))
        ;; Same per-propagator bitmask logic as net-cell-write
+       ;; D.4 1V-5 Item #1-quater (§11.X.4 step 13 / F2 PRIMARY): use cached
+       ;; worldview-cache-cache direct-ref instead of inline champ-lookup.
        (define per-prop-wv (current-worldview-bitmask))
        (define wv-bitmask
          (if (not (zero? per-prop-wv))
              per-prop-wv
-             (let ([wv-cell (champ-lookup cells
-                                          (cell-id-hash worldview-cache-cell-id)
-                                          worldview-cache-cell-id)])
-               (if (eq? wv-cell 'none) 0 (prop-cell-value wv-cell)))))
+             (let ([wv-cell (prop-net-warm-worldview-cache-cache (prop-network-warm net))])
+               (if wv-cell (prop-cell-value wv-cell) 0))))
        (if (zero? wv-bitmask)
            (tagged-cell-value new-val '())
            (tagged-cell-value (tagged-cell-value-base old-val)
@@ -2972,9 +3948,22 @@
              [contradicted?
               (and (not (eq? cfn 'none))
                    (cfn final-val))]
+             ;; D.4 1V-3 Item #1-bis (§11.X.3 WT-4): defensive cache update in
+             ;; net-cell-write-widen. Fuel-cell isn't typically a widening cell;
+             ;; invariant preservation for future scope expansion.
              [net* (struct-copy prop-network net
                      [warm (struct-copy prop-net-warm (prop-network-warm net)
-                             [cells new-cells])]
+                             [cells new-cells]
+                             [fuel-cell-cache
+                              (if (eq? cid fuel-cell-id)
+                                  new-cell
+                                  (prop-net-warm-fuel-cell-cache (prop-network-warm net)))]
+                          ;; D.4 1V-5 Item #1-quater (§11.X.4 step 15 / WT-* parallel update):
+                          ;; worldview-cache-cache update at the same write-through site.
+                          [worldview-cache-cache
+                              (if (eq? cid worldview-cache-cell-id)
+                                  new-cell
+                                  (prop-net-warm-worldview-cache-cache (prop-network-warm net)))])]
                      [hot (struct-copy prop-net-hot (prop-network-hot net)
                             [worklist new-wl])])])
         (if contradicted?
@@ -2986,37 +3975,55 @@
 ;; Internal: run one phase of widening fixpoint iteration.
 ;; Uses net-cell-write-widen instead of net-cell-write for propagator output.
 ;; Returns network at quiescence (or contradiction/fuel exhaustion).
+;;
+;; D.4 1C-ii-b Variant B (per §10.3.A + §10.0.3 + §10.0.4): recursive → loop
+;; refactor with box-pattern fuel tracking. The entry guard check at the
+;; former line `(<= (prop-network-fuel net) 0)` migrates to box check
+;; `(<= (unbox local-fuel) 0)` — preempted from 1C-iii per Q-1C-ii-b-α α2 +
+;; D-1C-ii-b-2. β1 lockstep at flush points only (mid-loop struct-field is
+;; stale; observation-point invariant). Cell IS canonical source for init
+;; per §10.0.4 F3.
 (define (run-widen-phase net)
-  (cond
-    [(prop-network-contradiction net) net]
-    [(<= (prop-network-fuel net) 0) net]
-    [(null? (prop-network-worklist net)) net]
-    [else
-     (let* ([pid (car (prop-network-worklist net))]
-            [rest (cdr (prop-network-worklist net))]
-            [net* (struct-copy prop-network net
-                    [hot (struct-copy prop-net-hot (prop-network-hot net)
-                           [worklist rest]
-                           [fuel (sub1 (prop-network-fuel net))])])]
-            [prop (champ-lookup (prop-network-propagators net*)
-                                (prop-id-hash pid) pid)])
-       (if (eq? prop 'none)
-           (run-widen-phase net*)
-           ;; Fire propagator, but capture writes and apply via net-cell-write-widen
-           (let* ([result-net (fire-propagator prop net*)]  ;; PPN 4C Phase 1.5
-                  ;; Diff output cells to find changes
-                  [writes (for/fold ([ws '()])
-                                    ([cid (in-list (propagator-outputs prop))])
-                            (let ([old (net-cell-read net* cid)]
-                                  [new (net-cell-read result-net cid)])
-                              (if (equal? old new)
-                                  ws
-                                  (cons (cons cid new) ws))))]
-                  ;; Apply writes via widening-aware writer
-                  [net** (for/fold ([n net*])
-                                   ([w (in-list writes)])
-                           (net-cell-write-widen n (car w) (cdr w)))])
-             (run-widen-phase net**))))]))
+  ;; Init local-var box from cell (β1 lockstep — at this observation point
+  ;; the cell value equals the struct-field value under post-1C-ii-a
+  ;; invariant).
+  (define local-fuel (init-fuel-local-var! net))
+  (let loop ([net net])
+    (cond
+      [(prop-network-contradiction net) (flush-fuel-local-var! net local-fuel)]
+      ;; Preempted check site (from 1C-iii scope per D-1C-ii-b-2): box check.
+      [(<= (unbox local-fuel) 0) (flush-fuel-local-var! net local-fuel)]
+      [(null? (prop-network-worklist net)) (flush-fuel-local-var! net local-fuel)]
+      [else
+       (let* ([pid (car (prop-network-worklist net))]
+              [rest (cdr (prop-network-worklist net))]
+              ;; Per-fire box decrement (replaces struct-copy [fuel (sub1 ...)]).
+              ;; β1 lockstep transitional: struct-field is NOT updated per-fire
+              ;; (mid-loop staleness; flush at exit restores lockstep).
+              [_ (set-box! local-fuel (sub1 (unbox local-fuel)))]
+              ;; Worklist update via struct-copy; fuel field NOT touched mid-loop.
+              [net* (struct-copy prop-network net
+                      [hot (struct-copy prop-net-hot (prop-network-hot net)
+                             [worklist rest])])]
+              [prop (champ-lookup (prop-network-propagators net*)
+                                  (prop-id-hash pid) pid)])
+         (if (eq? prop 'none)
+             (loop net*)
+             ;; Fire propagator, but capture writes and apply via net-cell-write-widen
+             (let* ([result-net (fire-propagator prop net*)]  ;; PPN 4C Phase 1.5
+                    ;; Diff output cells to find changes
+                    [writes (for/fold ([ws '()])
+                                      ([cid (in-list (propagator-outputs prop))])
+                              (let ([old (net-cell-read net* cid)]
+                                    [new (net-cell-read result-net cid)])
+                                (if (equal? old new)
+                                    ws
+                                    (cons (cons cid new) ws))))]
+                    ;; Apply writes via widening-aware writer
+                    [net** (for/fold ([n net*])
+                                     ([w (in-list writes)])
+                             (net-cell-write-widen n (car w) (cdr w)))])
+               (loop net**))))])))
 
 ;; Internal: create a snapshot for narrow-phase firing.
 ;; Widening-point cells get a passthrough merge: (lambda (old new) new)
@@ -3039,81 +4046,92 @@
 ;; Strategy: fire propagators against a snapshot where widening-point cells
 ;; have passthrough merge, so we capture the raw transfer function output.
 ;; Then apply narrow(old, raw_new) at widening points.
+;;
+;; D.4 1C-ii-b Variant B (mirrors run-widen-phase per §10.3.A + §10.0.3 +
+;; §10.0.4): recursive → loop refactor with box-pattern fuel tracking. Entry
+;; guard check migrates to box check (preempted from 1C-iii per
+;; Q-1C-ii-b-α α2 + D-1C-ii-b-2). β1 lockstep at flush points only.
 (define (run-narrow-phase net)
-  (cond
-    [(prop-network-contradiction net) net]
-    [(<= (prop-network-fuel net) 0) net]
-    [(null? (prop-network-worklist net)) net]
-    [else
-     (let* ([pid (car (prop-network-worklist net))]
-            [rest (cdr (prop-network-worklist net))]
-            [net* (struct-copy prop-network net
-                    [hot (struct-copy prop-net-hot (prop-network-hot net)
-                           [worklist rest]
-                           [fuel (sub1 (prop-network-fuel net))])])]
-            [prop (champ-lookup (prop-network-propagators net*)
-                                (prop-id-hash pid) pid)])
-       (if (eq? prop 'none)
-           (run-narrow-phase net*)
-           ;; Fire propagator against a snapshot with passthrough merge for widen cells
-           (let* ([snapshot (make-narrow-snapshot net*)]
-                  [result-net (fire-propagator prop snapshot)]  ;; PPN 4C Phase 1.5
-                  ;; Diff output cells — snapshot has passthrough merge, so
-                  ;; we see the raw transfer function output
-                  [writes (for/fold ([ws '()])
-                                    ([cid (in-list (propagator-outputs prop))])
-                            (let ([old (net-cell-read net* cid)]
-                                  [new (net-cell-read result-net cid)])
-                              (if (equal? old new)
-                                  ws
-                                  (cons (cons cid new) ws))))]
-                  ;; Apply writes: at widen-points use narrow-fn, otherwise merge
-                  [net** (for/fold ([n net*])
-                                   ([w (in-list writes)])
-                           (let* ([cid (car w)]
-                                  [new-val (cdr w)]
-                                  [h (cell-id-hash cid)]
-                                  [wentry (champ-lookup
-                                           (prop-network-widen-fns n) h cid)])
-                             (if (eq? wentry 'none)
-                                 ;; Normal cell: use standard write
-                                 (net-cell-write n cid new-val)
-                                 ;; Widening point: apply narrow(old, raw_new)
-                                 (let* ([cell (champ-lookup
-                                               (prop-network-cells n) h cid)]
-                                        [old-val (prop-cell-value cell)]
-                                        [narrowed ((cdr wentry) old-val new-val)])
-                                   (if (equal? narrowed old-val)
-                                       n
-                                       (let* ([new-cell
-                                               (struct-copy prop-cell cell
-                                                 [value narrowed])]
-                                              [new-cells
-                                               (champ-insert
-                                                (prop-network-cells n)
-                                                h cid new-cell)]
-                                              [deps (champ-keys
-                                                     (prop-cell-dependents cell))]
-                                              [new-wl
-                                               (append deps
-                                                       (prop-network-worklist n))]
-                                              [cfn (champ-lookup
-                                                    (prop-network-contradiction-fns n)
-                                                    h cid)]
-                                              [contradicted?
-                                               (and (not (eq? cfn 'none))
-                                                    (cfn narrowed))]
-                                              [n* (struct-copy prop-network n
-                                                    [warm (struct-copy prop-net-warm (prop-network-warm n)
-                                                            [cells new-cells])]
-                                                    [hot (struct-copy prop-net-hot (prop-network-hot n)
-                                                           [worklist new-wl])])])
-                                         (if contradicted?
-                                             (struct-copy prop-network n*
-                                               [warm (struct-copy prop-net-warm (prop-network-warm n*)
-                                                       [contradiction cid])])
-                                             n*)))))))])
-             (run-narrow-phase net**))))]))
+  ;; Init local-var box from cell (β1 lockstep at observation point).
+  (define local-fuel (init-fuel-local-var! net))
+  (let loop ([net net])
+    (cond
+      [(prop-network-contradiction net) (flush-fuel-local-var! net local-fuel)]
+      ;; Preempted check site (from 1C-iii scope per D-1C-ii-b-2): box check.
+      [(<= (unbox local-fuel) 0) (flush-fuel-local-var! net local-fuel)]
+      [(null? (prop-network-worklist net)) (flush-fuel-local-var! net local-fuel)]
+      [else
+       (let* ([pid (car (prop-network-worklist net))]
+              [rest (cdr (prop-network-worklist net))]
+              ;; Per-fire box decrement (replaces struct-copy [fuel (sub1 ...)]).
+              [_ (set-box! local-fuel (sub1 (unbox local-fuel)))]
+              ;; Worklist update via struct-copy; fuel field NOT touched mid-loop.
+              [net* (struct-copy prop-network net
+                      [hot (struct-copy prop-net-hot (prop-network-hot net)
+                             [worklist rest])])]
+              [prop (champ-lookup (prop-network-propagators net*)
+                                  (prop-id-hash pid) pid)])
+         (if (eq? prop 'none)
+             (loop net*)
+             ;; Fire propagator against a snapshot with passthrough merge for widen cells
+             (let* ([snapshot (make-narrow-snapshot net*)]
+                    [result-net (fire-propagator prop snapshot)]  ;; PPN 4C Phase 1.5
+                    ;; Diff output cells — snapshot has passthrough merge, so
+                    ;; we see the raw transfer function output
+                    [writes (for/fold ([ws '()])
+                                      ([cid (in-list (propagator-outputs prop))])
+                              (let ([old (net-cell-read net* cid)]
+                                    [new (net-cell-read result-net cid)])
+                                (if (equal? old new)
+                                    ws
+                                    (cons (cons cid new) ws))))]
+                    ;; Apply writes: at widen-points use narrow-fn, otherwise merge
+                    [net** (for/fold ([n net*])
+                                     ([w (in-list writes)])
+                             (let* ([cid (car w)]
+                                    [new-val (cdr w)]
+                                    [h (cell-id-hash cid)]
+                                    [wentry (champ-lookup
+                                             (prop-network-widen-fns n) h cid)])
+                               (if (eq? wentry 'none)
+                                   ;; Normal cell: use standard write
+                                   (net-cell-write n cid new-val)
+                                   ;; Widening point: apply narrow(old, raw_new)
+                                   (let* ([cell (champ-lookup
+                                                 (prop-network-cells n) h cid)]
+                                          [old-val (prop-cell-value cell)]
+                                          [narrowed ((cdr wentry) old-val new-val)])
+                                     (if (equal? narrowed old-val)
+                                         n
+                                         (let* ([new-cell
+                                                 (struct-copy prop-cell cell
+                                                   [value narrowed])]
+                                                [new-cells
+                                                 (champ-insert
+                                                  (prop-network-cells n)
+                                                  h cid new-cell)]
+                                                [deps (champ-keys
+                                                       (prop-cell-dependents cell))]
+                                                [new-wl
+                                                 (append deps
+                                                         (prop-network-worklist n))]
+                                                [cfn (champ-lookup
+                                                      (prop-network-contradiction-fns n)
+                                                      h cid)]
+                                                [contradicted?
+                                                 (and (not (eq? cfn 'none))
+                                                      (cfn narrowed))]
+                                                [n* (struct-copy prop-network n
+                                                      [warm (struct-copy prop-net-warm (prop-network-warm n)
+                                                              [cells new-cells])]
+                                                      [hot (struct-copy prop-net-hot (prop-network-hot n)
+                                                             [worklist new-wl])])])
+                                           (if contradicted?
+                                               (struct-copy prop-network n*
+                                                 [warm (struct-copy prop-net-warm (prop-network-warm n*)
+                                                         [contradiction cid])])
+                                               n*)))))))])
+               (loop net**))))])))
 
 ;; Run the network to quiescence with widening/narrowing.
 ;;
@@ -3128,18 +4146,20 @@
 (define (run-to-quiescence-widen net #:max-rounds [max-rounds 100])
   ;; Phase 1: widen to quiescence
   (define widened (run-widen-phase net))
-  (when (or (prop-network-contradiction widened)
-            (<= (prop-network-fuel widened) 0))
+  ;; D.4 1C-iii (§10.0.5 α1+β2): simplified or-disjuncts — removed redundant
+  ;; `(<= (prop-network-fuel widened) 0)` disjunct; the adjacent
+  ;; `(prop-network-contradiction widened)` already covers fuel exhaustion
+  ;; via cell on-write-check writing contradiction-cell-id structurally.
+  (when (prop-network-contradiction widened)
     (void))  ;; early exit conditions handled by return below
-  (if (or (prop-network-contradiction widened)
-          (<= (prop-network-fuel widened) 0))
+  (if (prop-network-contradiction widened)
       widened
       ;; Phase 2: narrowing iterations
       (let loop ([net widened] [rounds 0])
+        ;; D.4 1C-iii (§10.0.5 α1+β2): removed redundant fuel check clause.
         (cond
           [(>= rounds max-rounds) net]
           [(prop-network-contradiction net) net]
-          [(<= (prop-network-fuel net) 0) net]
           [else
            ;; Re-fire all propagators to see if narrowing produces changes
            ;; Schedule all propagators that have widening-point outputs
@@ -3150,10 +4170,23 @@
                [hot (struct-copy prop-net-hot (prop-network-hot net)
                       [worklist all-prop-ids])]))
            (define narrowed (run-narrow-phase net-with-wl))
-           ;; Check if narrowing changed anything by comparing cell values
-           (if (equal? (prop-network-cells narrowed)
-                       (prop-network-cells net))
-               narrowed  ;; No change — converged
+           ;; Check if narrowing changed anything by comparing DATA cell values.
+           ;;
+           ;; D.4 1C-ii-b: exclude scheduler-state cells (fuel-cell-id +
+           ;; fuel-budget-cell-id) from the convergence comparison. Per Cell/
+           ;; Propagator/Scheduler Orthogonality, the fuel cell IS scheduler-
+           ;; state — its value changes per narrow round (every flush updates
+           ;; it). If we included it in the equal? check, the convergence
+           ;; signal would never fire (cells map always differs by cell-11
+           ;; between rounds), exhausting fuel even when data cells stabilized.
+           (define (data-cells-only cells)
+             (champ-delete
+              (champ-delete cells
+                            (cell-id-hash fuel-cell-id) fuel-cell-id)
+              (cell-id-hash fuel-budget-cell-id) fuel-budget-cell-id))
+           (if (equal? (data-cells-only (prop-network-cells narrowed))
+                       (data-cells-only (prop-network-cells net)))
+               narrowed  ;; Data cells converged — no semantic change
                (loop narrowed (+ rounds 1)))]))))
 
 ;; ========================================
@@ -3288,16 +4321,20 @@
 
 ;; Resolve effective worldview bitmask for a pnet-level read. Per-prop
 ;; bitmask (non-zero) takes priority; otherwise read worldview-cache cell
-;; for network-wide committed bitmask. Defensive against missing cache
-;; cell (early init or test contexts).
+;; for network-wide committed bitmask.
+;;
+;; worldview-cache-cell-id is structurally always allocated by
+;; make-prop-network (cell-id 1; see line 732). The previous
+;; with-handlers wrapper guarded a structurally-impossible failure and
+;; cost ~127 ns/call. Retired per Move B+ pattern (PPN 4C S2.c-iii
+;; precedent).
 (define (resolve-worldview-bitmask/pnet pnet)
   (define per-prop-wv (current-worldview-bitmask))
   (cond
     [(and per-prop-wv (not (zero? per-prop-wv))) per-prop-wv]
     [else
-     (with-handlers ([exn:fail? (lambda (_) 0)])
-       (define v (net-cell-read pnet worldview-cache-cell-id))
-       (if (number? v) v 0))]))
+     (define v (net-cell-read pnet worldview-cache-cell-id))
+     (if (number? v) v 0)]))
 
 ;; compound-cell-component-ref/pnet pnet cell-id component-key [default]
 ;; Read a component's UNWRAPPED value from a compound cell. Returns

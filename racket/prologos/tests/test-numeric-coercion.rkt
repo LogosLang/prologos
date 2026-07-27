@@ -11,6 +11,7 @@
 ;;;
 
 (require racket/string
+         racket/list
          rackunit
          "../syntax.rkt"
          "../prelude.rkt"
@@ -20,9 +21,7 @@
 
 ;; Helper: run through process-string (sexp mode)
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (process-string s)))
+  (process-string s))
 
 ;; ========================================
 ;; Within exact family: Nat + Int → Int
@@ -47,7 +46,7 @@
 ;; ========================================
 
 (test-case "coercion/int+rat"
-  ;; 3 + 1/2 → 7/2 : Rat
+  ;; 3 + 1/2 → 3.5 : Rat
   (check-equal? (run "(eval (+ 3 1/2))")
                 '("7/2 : Rat")))
 
@@ -87,48 +86,53 @@
 ;; Cross-family: exact + Posit32 → Posit32
 ;; ========================================
 
+;; N6a values-only policy: literal operands no longer warn — the exact result
+;; strings drop their warning line; the value-operand twin locks the full
+;; normalized warning text.
+
 (test-case "coercion/int+p32"
-  ;; 42 + ~1.0 → Posit32, with coercion warning
-  (define result (run "(eval (+ 42 ~1.0))"))
+  ;; 42 + 1.0 → Posit32; literal operand → silent (N6a)
+  (define result (run "(eval (+ 42 1.0))"))
   (check-equal? result
-                (list (format "[posit32 ~a] : Posit32\nwarning: implicit coercion from Int to Posit32 (loss of exactness)"
-                              (posit32-encode 43)))))
+                '("43.0 : Posit32")))
+
+(test-case "coercion/int-value+p32"
+  ;; VALUE operand: warns, with the canonical normalized text (exact-side → join)
+  (define result (run "(def n : Int 42)(eval (+ n 1.0))"))
+  (check-equal? (last result)
+                "43.0 : Posit32\nwarning: implicit coercion from Int to Posit32 (loss of exactness)"))
 
 (test-case "coercion/rat+p32"
-  ;; 1/2 + ~0.5 → Posit32, with coercion warning
-  (define result (run "(eval (+ 1/2 ~0.5))"))
+  ;; 1/2 + 0.5 → Posit32; literal operand → silent (N6a)
+  (define result (run "(eval (+ 1/2 0.5))"))
   (check-equal? result
-                (list (format "[posit32 ~a] : Posit32\nwarning: implicit coercion from Rat to Posit32 (loss of exactness)"
-                              (posit32-encode 1)))))
+                '("1.0 : Posit32")))
 
 (test-case "coercion/nat+p32"
-  ;; 3N + ~1.0 → Posit32, with coercion warning
-  (define result (run "(eval (+ 3N ~1.0))"))
+  ;; 3N + 1.0 → Posit32; literal operand → silent (N6a)
+  (define result (run "(eval (+ 3N 1.0))"))
   (check-equal? result
-                (list (format "[posit32 ~a] : Posit32\nwarning: implicit coercion from Nat to Posit32 (loss of exactness)"
-                              (posit32-encode 4)))))
+                '("4.0 : Posit32")))
 
 ;; ========================================
 ;; Cross-family: exact + Posit64 → Posit64
 ;; ========================================
 
 (test-case "coercion/int+p64"
-  ;; 42 + p64-literal → Posit64, with coercion warning
-  ;; Use from-integer to get a p64 value, then add
+  ;; 10 + p64-value → Posit64; the exact-side operand (10) is a literal → silent (N6a)
   (define result (run "(eval (+ 10 (from-integer <Posit64> 5)))"))
   (check-equal? result
-                (list (format "[posit64 ~a] : Posit64\nwarning: implicit coercion from Int to Posit64 (loss of exactness)"
-                              (posit64-encode 15)))))
+                '("15p : Posit64")))
 
 ;; ========================================
 ;; Within posit family: P8 + P32 → P32
 ;; ========================================
 
 (test-case "coercion/p8+p32"
-  ;; from-integer Posit8 2 + ~3.0 → Posit32
-  (define result (run "(eval (+ (from-integer <Posit8> 2) ~3.0))"))
+  ;; from-integer Posit8 2 + 3.0 → Posit32
+  (define result (run "(eval (+ (from-integer <Posit8> 2) 3.0))"))
   (check-equal? result
-                (list (format "[posit32 ~a] : Posit32" (posit32-encode 5)))))
+                '("5.0 : Posit32")))
 
 ;; ========================================
 ;; Type inference checks
@@ -143,7 +147,7 @@
   (check-true (string-contains? result "Rat") "Int+Rat should infer as Rat"))
 
 (test-case "coercion/infer-int+p32"
-  (define result (car (run "(infer (+ 42 ~1.0))")))
+  (define result (car (run "(infer (+ 42 1.0))")))
   (check-true (string-contains? result "Posit32") "Int+Posit32 should infer as Posit32"))
 
 ;; ========================================
@@ -155,10 +159,10 @@
                 '("3/2 : Rat")))
 
 (test-case "coercion/nat*p32"
-  (define result (run "(eval (* 2N ~3.0))"))
+  ;; literal operand → silent (N6a)
+  (define result (run "(eval (* 2N 3.0))"))
   (check-equal? result
-                (list (format "[posit32 ~a] : Posit32\nwarning: implicit coercion from Nat to Posit32 (loss of exactness)"
-                              (posit32-encode 6)))))
+                '("6.0 : Posit32")))
 
 ;; ========================================
 ;; Division with coercion
@@ -182,5 +186,5 @@
                 '("13/14 : Rat")))
 
 (test-case "coercion/same-p32-add"
-  (check-equal? (run "(eval (+ ~1.0 ~2.0))")
-                (list (format "[posit32 ~a] : Posit32" (posit32-encode 3)))))
+  (check-equal? (run "(eval (+ 1.0 2.0))")
+                '("3.0 : Posit32")))

@@ -187,17 +187,17 @@
   (check-true (posit8-lt? #x40 #x48) "1 < 2")
   (check-false (posit8-lt? #x48 #x40) "not 2 < 1")
   (check-false (posit8-lt? #x40 #x40) "not 1 < 1")
-  ;; NaR comparisons are always false
-  (check-false (posit8-lt? 128 #x40) "NaR not < 1")
+  ;; 2022 Posit Standard (N6d-iii): NaR is the least element — NaR < real, real not < NaR
+  (check-true  (posit8-lt? 128 #x40) "NaR < 1 (NaR least)")
   (check-false (posit8-lt? #x40 128) "1 not < NaR")
   ;; <=
   (check-true (posit8-le? #x40 #x40) "1 <= 1")
   (check-true (posit8-le? 0 #x40) "0 <= 1")
-  (check-false (posit8-le? 128 #x40) "NaR not <= 1")
+  (check-true  (posit8-le? 128 #x40) "NaR <= 1 (NaR least)")   ; 2022 standard, N6d-iii
   ;; Equality
   (check-true (posit8-eq? #x40 #x40) "1 == 1")
   (check-false (posit8-eq? #x40 #x48) "1 != 2")
-  (check-false (posit8-eq? 128 128) "NaR != NaR"))
+  (check-true (posit8-eq? 128 128) "NaR == NaR (reflexive)"))  ; 2022 standard, N6d-iii
 
 ;; ========================================
 ;; Conversion
@@ -212,7 +212,7 @@
 ;; Display
 ;; ========================================
 
-(test-case "posit8-display"
-  (check-equal? (posit8-display 0) "0" "display 0")
-  (check-equal? (posit8-display 128) "NaR" "display NaR")
-  (check-equal? (posit8-display #x40) "1" "display 1"))
+(test-case "posit8 shortest-decimal (N6c: legacy posit8-display retired)"
+  (check-equal? (posit-shortest-decimal 8 0) "0" "display 0")
+  (check-equal? (posit-shortest-decimal 8 128) "NaR" "display NaR")
+  (check-equal? (posit-shortest-decimal 8 #x40) "1" "display 1"))

@@ -1,0 +1,141 @@
+
+=== §13.6 Pre-0 SPIKE: Specialized Cell Type Framework Falsification Test ===
+
+Reference Pre-0 baselines (2026-04-26; tropical-pre0-baseline-2026-04-26.txt):
+  M7  struct-copy decrement:           24 ns/call  →  W1 target ≤ 30 ns
+  M13 prop-network-fuel access:         6 ns/call  →  W4 target ≤ 15 ns
+  R3  100k decrement GC profile:        0.00 ms / 0.0%%  →  W3 target = 0 major-GC
+  A7.3 100k decrement memory:           6251 KB alloc, -0.3 KB retain
+
+W1: Specialized cell-write FAST PATH (no-spec, no threshold crossing)
+  W1.1 specialized-cell-write n=1 (no crossing): 2.5 ns/call (50000 calls)
+  W1.2 specialized-cell-write n=100 (no crossing): 2.3 ns/call (50000 calls)
+  W1.3 specialized-cell-write n=10000 (no crossing): 2.2 ns/call (50000 calls)
+  W1 crossing-count verification (should be 0): 0
+
+W1+: Specialized cell-write WITH dispatch overhead (realistic upper bound)
+  W1+.1 specialized-cell-write WITH dispatch n=1: 7.8 ns/call (50000 calls)
+
+W2: Specialized cell-write THRESHOLD CROSSING (rare event)
+  W2.1 specialized-cell-write (threshold crossing; includes reset): 2.2 ns/call (50000 calls)
+  W2 crossing-count verification (should be 50000): 50100
+
+W3: Specialized cell-write GC profile (100k decrements)
+  W3.1 specialized-cell-write 100k decrements GC profile: wall=0.241 ms  gc=0.000 ms (0.0%)  (n=5)
+  W3.2 specialized-cell-write 100k decrements alloc/retain: wall=0.234 ms  alloc=1.1 KB  retain=-0.1 KB  (n=10)
+
+W4: Specialized cell-read (direct field access)
+  W4.1 specialized-cell-read: 0.9 ns/call (50000 calls)
+
+W5: Specialized cell-write under speculation (tagged-cell-value fallback)
+  REFERENCE-ONLY: under D.4 the fast path falls through to existing generic
+  cell-write under speculation. Prior BSP-LE 2B + ATMS benchmarks establish
+  generic cell-write at ~500-1000 ns/call under speculation worldview.
+  Not re-measured here (would require full prop-network integration).
+  Per D.3.EC MG2: multi-worldview cell-write deferred to Phase 3A measurement.
+
+BASELINE STABILITY CHECK: simplified struct-copy in same context
+  Pre-0 M7 (nested prop-network + prop-net-hot struct-copy): 24 ns/call
+  This B.M7: single flat struct-copy with result captured (different shape;
+             primary purpose is context-stability anchor, not direct compare).
+  B.M7.1 struct-copy decrement n=1 (result captured): 6.2 ns/call (50000 calls)
+  B.M7.2 NESTED struct-copy (mirrors real M7 pattern; result captured): 6.1 ns/call (50000 calls)
+
+=== §13.6.A OPTION 13 DEFERRED-WRITE SPIKE ===
+
+W1-O13: Per-fire local-var decrement + threshold check
+  Target: <= 5 ns/call (estimate: 2-4 ns)
+  W1-O13a function-call per-fire: 2.1 ns/call (50000 calls)
+  W1-O13b macro-inline per-fire: 2.2 ns/call (50000 calls)
+
+W2a-O13: Per-round cell-read at entry
+  Target: ≤ 15 ns/call
+  W2a-O13.1 cell-read at round entry: 1.3 ns/call (50000 calls)
+
+W2b-O13: Per-round cell-write at exit
+  Target: ≤ 15 ns/call (using specialized cell-write fast path)
+  W2b-O13.1 cell-write at round exit: 1.3 ns/call (50000 calls)
+
+W3-O13: Amortized per-fire cost across round of N fires
+  Target: ≤ 3 ns/cycle at N=100
+  Compares function-call (W3-O13a) vs macro-inline (W3-O13b) variants
+  W3-O13a.1 function-call: N=10 fires/round: 28.4 ns/call (5000 calls)
+  W3-O13a.2 function-call: N=100 fires/round: 222.2 ns/call (500 calls)
+  W3-O13a.3 function-call: N=1000 fires/round: 2719.7 ns/call (50 calls)
+  W3-O13b.1 macro-inline: N=10 fires/round: 24.8 ns/call (5000 calls)
+  W3-O13b.2 macro-inline: N=100 fires/round: 214.4 ns/call (500 calls)
+  W3-O13b.3 macro-inline: N=1000 fires/round: 2197.3 ns/call (50 calls)
+
+  W3-O13a function-call amortized per-fire:
+    N=10:    2.84 ns/cycle
+    N=100:   2.22 ns/cycle
+    N=1000:  2.72 ns/cycle
+  W3-O13b macro-inline amortized per-fire:
+    N=10:    2.48 ns/cycle
+    N=100:   2.14 ns/cycle
+    N=1000:  2.20 ns/cycle
+
+W4-O13: Exhaustion-path cost (flush + contradiction-write)
+  Target: ≤ 50 ns/call (rare; once per workload typically)
+  W4-O13.1 exhaustion flush + contradiction: 2.3 ns/call (10000 calls)
+  W4-O13 crossing-count verification (should be 10100): 10100
+
+=== §13.6.A OPTION 13 DECISION EVALUATION ===
+
+  W1-O13a function-call per-fire:           2.1 ns/call
+  W1-O13b macro-inline per-fire:            2.2 ns/call
+  W2a-O13 round-entry cell-read:            1.3 ns/call
+  W2b-O13 round-exit cell-write:            1.3 ns/call
+  W3-O13a function-call amortized N=100:    2.22 ns/cycle
+  W3-O13b macro-inline amortized N=100:     2.14 ns/cycle
+  W4-O13 exhaustion flush + contradiction:  2.3 ns/call
+
+  Targets per §13.6.A:
+    W1-O13a (fn-call) ≤ 5 ns:        ✓ PASS (2.1)
+    W1-O13b (macro) ≤ 5 ns:          ✓ PASS (2.2)
+    W2a-O13 ≤ 15 ns:                  ✓ PASS (1.3)
+    W2b-O13 ≤ 15 ns:                  ✓ PASS (1.3)
+    W3-O13a N=100 ≤ 3 ns:             ✓ PASS (2.22)
+    W3-O13b N=100 ≤ 3 ns:             ✓ PASS (2.14)
+    W4-O13 ≤ 50 ns:                   ✓ PASS (2.3)
+
+  A/B/C COMPARISON:
+    A (current native struct-copy; B.M7.2):       6.1 ns/cycle
+    B (D.4 per-fire cell-write w/ dispatch; W1+): 7.8 ns/cycle
+    C-fn (Option 13 function-call N=100):         2.22 ns/cycle
+    C-macro (Option 13 + Option 14 macro N=100):  2.14 ns/cycle
+
+  Option 14 specialization (macro vs fn-call savings at N=100): 0.08 ns/cycle
+    → SKIP Option 14 (savings < 0.5 ns/cycle; not worth complexity)
+
+=== §13.6.A DECISION: ✓ PASS
+    → Option 13 canonical for Phase 1C
+    → BSP fire sites migrate to deferred-write pattern
+    → D.4 per-fire pattern (Option Y) NOT implemented; reference only
+=== END §13.6.A SPIKE ===
+
+=== DECISION EVALUATION ===
+
+  W1  specialized cell-write FAST PATH (avg):          2.3 ns/call
+  W1+ specialized cell-write WITH dispatch overhead:   7.8 ns/call (realistic upper bound)
+  W2  specialized cell-write THRESHOLD CROSSING:       2.2 ns/call
+  W3  GC time during 5×100k decrements:                0.000 ms (major-GC = NO)
+  W3  alloc / retain (10×100k decrements):             1.1 KB / -0.1 KB
+  W4  specialized cell-read:                           0.9 ns/call
+  W1+ + W4 per-decrement cycle (realistic):            8.7 ns
+  B.M7.1 single struct-copy (result captured):         6.2 ns/call
+  B.M7.2 NESTED struct-copy (mirrors real M7):         6.1 ns/call (Pre-0 M7: 24 ns)
+
+  Targets per §13.6 (evaluated against W1+ realistic upper bound):
+    W1+ ≤ 30 ns (with dispatch): ✓ PASS (7.8)
+    W2 ≤ 200 ns:                 ✓ PASS (2.2)
+    W3 zero major-GC:            ✓ PASS (0.000 ms)
+    W4 ≤ 15 ns:                  ✓ PASS (0.9)
+    W1+W4 ≤ 45 ns (realistic):   ✓ PASS (8.7)
+
+=== DECISION: ✓ PASS
+    → D.4 canonical (specialized cell type framework feasible)
+    → D.3 hybrid pivot retires before shipping
+    → Issue #55 + DEFERRED.md entry close as "superseded by D.4"
+=== END SPIKE ===
+

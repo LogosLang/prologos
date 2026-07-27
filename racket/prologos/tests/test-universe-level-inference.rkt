@@ -88,43 +88,35 @@
 
 (test-case "unify-level/meta-vs-concrete"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      (define lm (fresh-level-meta "test"))
-      ;; Unify Type(?l) vs Type(0)
-      (define t1 (expr-Type lm))
-      (define t2 (expr-Type (lzero)))
-      (check-equal? (unify ctx-empty t1 t2) #t)
-      (check-true (level-meta-solved? (level-meta-id lm)))
-      (check-equal? (level-meta-solution (level-meta-id lm)) (lzero)))))
+    (define lm (fresh-level-meta "test"))
+    ;; Unify Type(?l) vs Type(0)
+    (define t1 (expr-Type lm))
+    (define t2 (expr-Type (lzero)))
+    (check-equal? (unify ctx-empty t1 t2) #t)
+    (check-true (level-meta-solved? (level-meta-id lm)))
+    (check-equal? (level-meta-solution (level-meta-id lm)) (lzero))))
 
 (test-case "unify-level/two-metas"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      (define lm1 (fresh-level-meta "a"))
-      (define lm2 (fresh-level-meta "b"))
-      (define t1 (expr-Type lm1))
-      (define t2 (expr-Type lm2))
-      (check-equal? (unify ctx-empty t1 t2) #t)
-      ;; One should be solved to the other
-      (check-true (level-meta-solved? (level-meta-id lm1))))))
+    (define lm1 (fresh-level-meta "a"))
+    (define lm2 (fresh-level-meta "b"))
+    (define t1 (expr-Type lm1))
+    (define t2 (expr-Type lm2))
+    (check-equal? (unify ctx-empty t1 t2) #t)
+    ;; One should be solved to the other
+    (check-true (level-meta-solved? (level-meta-id lm1)))))
 
 (test-case "unify-level/lsuc-vs-lsuc"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      (define t1 (expr-Type (lsuc (lzero))))
-      (define t2 (expr-Type (lsuc (lzero))))
-      (check-equal? (unify ctx-empty t1 t2) #t))))
+    (define t1 (expr-Type (lsuc (lzero))))
+    (define t2 (expr-Type (lsuc (lzero))))
+    (check-equal? (unify ctx-empty t1 t2) #t)))
 
 (test-case "unify-level/mismatch-rejects"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      (define t1 (expr-Type (lzero)))
-      (define t2 (expr-Type (lsuc (lzero))))
-      (check-equal? (unify ctx-empty t1 t2) #f))))
+    (define t1 (expr-Type (lzero)))
+    (define t2 (expr-Type (lsuc (lzero))))
+    (check-equal? (unify ctx-empty t1 t2) #f)))
 
 ;; ========================================
 ;; Unit tests: lmax / level<=? with level-metas
@@ -167,9 +159,7 @@
 
 ;; Helper: run prologos code with namespace system active
 (define (run-ns s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry prelude-preparse-registry])

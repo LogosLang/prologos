@@ -22,9 +22,7 @@
 
 ;; Helper: run sexp-mode pipeline
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
@@ -34,9 +32,7 @@
 
 ;; Helper: run and return session entry
 (define (run-get-session s name)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
@@ -173,9 +169,7 @@
 
 (test-case "e2e sexp: dual of async session"
   (define result
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                   [current-ns-context #f]
+    (parameterize ([current-ns-context #f]
                    [current-session-registry (hasheq)]
                    [current-strategy-registry (hasheq)]
                    [current-module-registry (hasheq)]
@@ -193,9 +187,7 @@
 
 (test-case "e2e sexp: proc-send against async-send type-checks"
   (define result
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                   [current-ns-context #f]
+    (parameterize ([current-ns-context #f]
                    [current-session-registry (hasheq)]
                    [current-strategy-registry (hasheq)]
                    [current-module-registry (hasheq)]
@@ -211,9 +203,7 @@
 
 (test-case "e2e sexp: proc-recv against async-recv type-checks"
   (define result
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                   [current-ns-context #f]
+    (parameterize ([current-ns-context #f]
                    [current-session-registry (hasheq)]
                    [current-strategy-registry (hasheq)]
                    [current-module-registry (hasheq)]

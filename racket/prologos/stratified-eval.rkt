@@ -174,6 +174,46 @@
 ;; Allows running the entire test suite under :atms without modifying tests.
 (define current-solver-strategy-override (make-parameter #f))
 
+;; Rel T1 A.2b (SCAFFOLDING — retirement owner: BSP-LE Track 3). #t iff any
+;; relation reachable from goal-name has a clause carrying a body-local variable
+;; (a clause variable that is not one of that clause's head parameters). The
+;; on-network ATMS rule engine cannot thread such vars — clause-env is built from
+;; param names only and resolve-term returns a bare symbol for a non-param — so
+;; its answer set is INCOMPLETE for join/recursion rule generators (a join
+;; produces {}, recursion produces the base case only). The adaptive dispatcher
+;; routes these to DFS, which threads body-local vars correctly and is the correct
+;; reference solver here. When BSP-LE Track 3 lands on-network body-local threading
+;; + SLG completion, DELETE this check so these shapes flow back on-network.
+(define (reachable-has-body-local-rule? store goal-name)
+  (for*/or ([pred (in-list (transitive-pred-closure store goal-name))]
+            [ri (in-value (hash-ref store pred #f))]
+            #:when ri
+            [v (in-list (relation-info-variants ri))]
+            [ci (in-list (variant-info-clauses v))])
+    (define param-names (map param-info-name (variant-info-params v)))
+    (pair? (remove* param-names (collect-clause-vars ci param-names)))))
+
+;; Rel T1 A.4 (SCAFFOLDING — retirement owner: BSP-LE Track 3). #t iff any relation
+;; reachable from goal-name has a clause carrying a `guard` goal. Guards live only
+;; in rule clauses (`&> ... (guard ...)`), and rules table by default, so a guard's
+;; generator materializes through the on-network tabling producer/consumer — the
+;; SAME seam A.2b found unreliable (it does not reliably materialize the tabled
+;; generator's per-branch bindings on the outer scope cell). So the on-network
+;; guard belief-narrow cannot fire reliably (the answer set is context-dependently
+;; empty). DFS filters guards correctly (ground + free-var). Route guard-bearing
+;; queries to DFS. When BSP-LE Track 3 lands worldview-preserving tabling, DELETE
+;; this check and deploy the on-network guard per-binding belief-narrow (its design
+;; — struct-resolution fix + per-binding mask + between-round handler — is captured
+;; in the Track 3 implementation note).
+(define (reachable-has-guard? store goal-name)
+  (for*/or ([pred (in-list (transitive-pred-closure store goal-name))]
+            [ri (in-value (hash-ref store pred #f))]
+            #:when ri
+            [v (in-list (relation-info-variants ri))]
+            [ci (in-list (variant-info-clauses v))]
+            [g (in-list (clause-info-goals ci))])
+    (eq? (goal-desc-kind g) 'guard)))
+
 (define (stratified-solve-goal config store goal-name goal-args query-vars)
   ;; Well-founded semantics dispatch
   (define semantics (solver-config-semantics config))
@@ -218,15 +258,30 @@
                          [c (in-list (variant-info-clauses v))]
                          [g (in-list (clause-info-goals c))])
                  (memq (goal-desc-kind g) '(not guard))))
-             (cond
-               [has-naf-or-guard? #t]  ;; ATMS required
-               [else
-                ;; Check 2: total alternatives ≥ threshold → ATMS (parallel benefit).
-                (define total-alternatives
-                  (for/sum ([v (in-list (relation-info-variants rel))])
-                    (+ (length (variant-info-facts v))
-                       (length (variant-info-clauses v)))))
-                (>= total-alternatives (solver-config-threshold config))])])]
+             ;; Check 2: total alternatives ≥ threshold → ATMS (parallel benefit).
+             (define would-use-propagator?
+               (or has-naf-or-guard?
+                   (>= (for/sum ([v (in-list (relation-info-variants rel))])
+                         (+ (length (variant-info-facts v))
+                            (length (variant-info-clauses v))))
+                       (solver-config-threshold config))))
+             ;; Check 3 (Rel T1 A.2b — SCAFFOLDING, retire w/ BSP-LE Track 3):
+             ;; the on-network rule engine cannot thread body-local (non-param)
+             ;; clause variables (clause-env is param-only; resolve-term returns a
+             ;; bare symbol for non-params), so a rule generator with a join /
+             ;; recursion var yields an INCOMPLETE answer set on-network (empty for
+             ;; a join, base-case-only for recursion). DFS threads them correctly.
+             ;; Route any would-be-on-network query whose reachable relation graph
+             ;; contains such a rule clause to DFS. Fact-NAF (A.2-core) and
+             ;; param-passthrough rules are on-network-complete and stay.
+             ;; Check 4 (Rel T1 A.4 — SCAFFOLDING, retire w/ BSP-LE Track 3): route
+             ;; guard-bearing queries to DFS. On-network guards are blocked by the
+             ;; same tabling seam (guards live in tabled rules; tabling does not
+             ;; reliably materialize the generator's bindings), so their belief-narrow
+             ;; is unreliable. DFS filters guards correctly.
+             (and would-use-propagator?
+                  (not (reachable-has-body-local-rule? store goal-name))
+                  (not (reachable-has-guard? store goal-name)))])]
          [else #f]))
 
      (if use-propagator?

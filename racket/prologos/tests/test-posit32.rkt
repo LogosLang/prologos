@@ -119,9 +119,10 @@
   (check-equal? (whnf (expr-p32-le (expr-posit32 1073741824) (expr-posit32 1073741824)))
                 (expr-true)
                 "1 <= 1")
+  ;; NaR < every real (2022 Posit Standard: NaR is the least element) — N6d-iii
   (check-equal? (whnf (expr-p32-lt (expr-posit32 2147483648) (expr-posit32 1073741824)))
-                (expr-false)
-                "NaR not < 1"))
+                (expr-true)
+                "NaR < 1 (NaR least)"))
 
 ;; ========================================
 ;; Core AST: Conversion
@@ -188,26 +189,24 @@
 
 (test-case "posit32 pretty-printing"
   (check-equal? (pp-expr (expr-Posit32) '()) "Posit32" "pp Posit32")
-  (check-equal? (pp-expr (expr-posit32 1073741824) '()) "[posit32 1073741824]" "pp posit32(one)")
+  (check-equal? (pp-expr (expr-posit32 1073741824) '()) "1.0" "pp posit32(one)")
   (check-equal? (pp-expr (expr-p32-add (expr-posit32 1073741824) (expr-posit32 1207959552)) '())
-                "[p32+ [posit32 1073741824] [posit32 1207959552]]" "pp p32+"))
+                "[p32+ 1.0 2.0]" "pp p32+"))
 
 ;; ========================================
 ;; Surface syntax: End-to-end via process-string
 ;; ========================================
 
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (process-string s)))
+  (process-string s))
 
 (test-case "posit32 surface: eval literal"
   (check-equal? (run "(eval (posit32 1073741824))")
-                '("[posit32 1073741824] : Posit32")))
+                '("1.0 : Posit32")))
 
 (test-case "posit32 surface: arithmetic 1+1=2"
   (check-equal? (run "(eval (p32+ (posit32 1073741824) (posit32 1073741824)))")
-                '("[posit32 1207959552] : Posit32")))
+                '("2.0 : Posit32")))
 
 (test-case "posit32 surface: check type"
   (check-equal? (run "(check (posit32 1073741824) <Posit32>)")
@@ -218,16 +217,14 @@
                 '("OK")))
 
 (test-case "posit32 surface: def + eval"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(def one <Posit32> (posit32 1073741824))\n(eval one)")])
-      (check-equal? (length result) 2)
-      (check-true (string-contains? (car result) "one : Posit32 defined"))
-      (check-equal? (cadr result) "[posit32 1073741824] : Posit32"))))
+  (let ([result (process-string "(def one <Posit32> (posit32 1073741824))\n(eval one)")])
+    (check-equal? (length result) 2)
+    (check-true (string-contains? (car result) "one : Posit32 defined"))
+    (check-equal? (cadr result) "1.0 : Posit32")))
 
 (test-case "posit32 surface: negation"
   (check-equal? (run "(eval (p32-neg (posit32 1073741824)))")
-                '("[posit32 3221225472] : Posit32")))
+                '("-1.0 : Posit32")))
 
 (test-case "posit32 surface: comparison"
   (check-equal? (run "(eval (p32-lt (posit32 1073741824) (posit32 1207959552)))")
@@ -235,7 +232,7 @@
 
 (test-case "posit32 surface: from-nat"
   (check-equal? (run "(eval (p32-from-nat (suc (suc zero))))")
-                '("[posit32 1207959552] : Posit32")))
+                '("2.0 : Posit32")))
 
 (test-case "posit32 surface: if-nar on NaR"
   (check-equal? (run "(eval (p32-if-nar Nat zero (suc zero) (posit32 2147483648)))")
@@ -247,15 +244,13 @@
 
 (test-case "posit32 surface: NaR propagation"
   (check-equal? (run "(eval (p32+ (posit32 2147483648) (posit32 1073741824)))")
-                '("[posit32 2147483648] : Posit32")))
+                '("NaR : Posit32")))
 
 (test-case "posit32 surface: division by zero -> NaR"
   (check-equal? (run "(eval (p32/ (posit32 1073741824) (posit32 0)))")
-                '("[posit32 2147483648] : Posit32")))
+                '("NaR : Posit32")))
 
 (test-case "posit32 surface: defn with Posit32"
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (let ([result (process-string "(defn p32-double [x <Posit32>] <Posit32>\n  (p32+ x x))\n(eval (p32-double (posit32 1073741824)))")])
-      (check-equal? (length result) 2)
-      (check-equal? (cadr result) "[posit32 1207959552] : Posit32"))))
+  (let ([result (process-string "(defn p32-double [x <Posit32>] <Posit32>\n  (p32+ x x))\n(eval (p32-double (posit32 1073741824)))")])
+    (check-equal? (length result) 2)
+    (check-equal? (cadr result) "2.0 : Posit32")))

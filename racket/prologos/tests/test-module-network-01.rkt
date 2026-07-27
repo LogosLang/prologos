@@ -12,7 +12,17 @@
 (require rackunit
          "../propagator.rkt"
          "../infra-cell.rkt"
-         "../namespace.rkt")
+         "../namespace.rkt"
+         "../global-env.rkt"  ;; PPN 4C Addendum Phase 4A.c-ii-a: external-definitions-* tests + 4B.2-b prealloc-def-cell!
+         "../definition-entry.rkt"  ;; PPN 4C Addendum Phase 4B.2-a: def-bot (pre-alloc keys-leak test)
+         "../macros.rkt"  ;; PPN 4C Addendum Phase 4B.2-b: preparse-expand-all + current-preparse-registry (pass integration test)
+         ;; 2026-06-29 flake fix: own the precondition for the structural-domain
+         ;; "#:component-paths hard-errors" test (~line 488). That guard needs the
+         ;; classification-lookup wiring AND the 'definition-entry -> 'structural
+         ;; registration, both otherwise driver-exclusive — a silent no-op under
+         ;; bare `raco test`.
+         "../infra-cell-sre-registrations.rkt"
+         "../phase1d-registrations.rkt")
 
 ;; ========================================
 ;; 1. Module Lifecycle Lattice
@@ -53,7 +63,6 @@
   (define mnr (make-module-network))
   (check-equal? (module-network-status mnr) mod-loading)
   (check-equal? (module-network-ref-cell-id-map mnr) (hasheq))
-  (check-equal? (module-network-ref-dep-edges mnr) (hasheq))
   (check-false  (module-network-ref-snapshot-hash mnr)))
 
 (test-case "module-network-add-definition: adds a cell, lookup works"
@@ -110,6 +119,471 @@
   (define mnr3 (module-network-write mnr2 'x (cons 'Int 100)))
   (check-equal? (module-network-lookup mnr3 'x) (cons 'Int 100))
   (check-equal? (module-network-lookup mnr3 'y) (cons 'Int 20)))
+
+;; ========================================
+;; 2b. Imports field + cascading lookup (PPN 4C Addendum Phase 4A.a)
+;; ========================================
+;; Q-4A.4 Option (b) share-by-reference: mnr.imports holds REFERENCES to
+;; imported mnrs; module-network-cascading-lookup walks local then imports.
+;; Q1 cons-prepend (newest first) → last-write-wins shadowing.
+
+(test-case "make-module-network: imports defaults to empty"
+  (define mnr (make-module-network))
+  (check-equal? (module-network-ref-imports mnr) '()))
+
+(test-case "module-network-add-import: cons-prepends (newest first)"
+  (define base (make-module-network))
+  (define imp-a (make-module-network))
+  (define imp-b (make-module-network))
+  (define m1 (module-network-add-import base imp-a))
+  (define m2 (module-network-add-import m1 imp-b))
+  ;; cons-prepend: imp-b (newest) at front, imp-a after
+  (check-equal? (module-network-ref-imports m2) (list imp-b imp-a)))
+
+(test-case "cascading-lookup: local hit (no imports)"
+  (define mnr0 (make-module-network))
+  (define-values (mnr1 _c) (module-network-add-definition mnr0 'foo (cons 'Int 1)))
+  (check-equal? (module-network-cascading-lookup mnr1 'foo) (cons 'Int 1)))
+
+(test-case "cascading-lookup: miss returns #f"
+  (define mnr (make-module-network))
+  (check-equal? (module-network-cascading-lookup mnr 'absent) #f))
+
+(test-case "cascading-lookup: one-level import hit"
+  ;; imp defines bar; local imports imp; lookup bar cascades into imp
+  (define imp0 (make-module-network))
+  (define-values (imp1 _c) (module-network-add-definition imp0 'bar (cons 'String "from-imp")))
+  (define local0 (make-module-network))
+  (define local1 (module-network-add-import local0 imp1))
+  (check-equal? (module-network-cascading-lookup local1 'bar) (cons 'String "from-imp"))
+  ;; local has no own defs → miss for a name nowhere
+  (check-equal? (module-network-cascading-lookup local1 'nope) #f))
+
+(test-case "cascading-lookup: transitive (two-level) import hit"
+  ;; grandparent defines deep; parent imports grandparent; local imports parent
+  (define gp0 (make-module-network))
+  (define-values (gp1 _c) (module-network-add-definition gp0 'deep (cons 'Bool #t)))
+  (define parent0 (make-module-network))
+  (define parent1 (module-network-add-import parent0 gp1))
+  (define local0 (make-module-network))
+  (define local1 (module-network-add-import local0 parent1))
+  (check-equal? (module-network-cascading-lookup local1 'deep) (cons 'Bool #t)))
+
+(test-case "cascading-lookup: local shadows import (same name)"
+  ;; both local and imp define dup; local wins (walked first)
+  (define imp0 (make-module-network))
+  (define-values (imp1 _ci) (module-network-add-definition imp0 'dup (cons 'Int 'from-import)))
+  (define local0 (make-module-network))
+  (define-values (local1 _cl) (module-network-add-definition local0 'dup (cons 'Int 'from-local)))
+  (define local2 (module-network-add-import local1 imp1))
+  (check-equal? (module-network-cascading-lookup local2 'dup) (cons 'Int 'from-local)))
+
+(test-case "cascading-lookup: newest import shadows older (cons-prepend order)"
+  ;; imp-old and imp-new both define same name; imp-new added last (cons-front) wins
+  (define imp-old0 (make-module-network))
+  (define-values (imp-old1 _co) (module-network-add-definition imp-old0 'shared (cons 'Int 'old)))
+  (define imp-new0 (make-module-network))
+  (define-values (imp-new1 _cn) (module-network-add-definition imp-new0 'shared (cons 'Int 'new)))
+  (define local0 (make-module-network))
+  (define local1 (module-network-add-import local0 imp-old1))  ;; older first
+  (define local2 (module-network-add-import local1 imp-new1))  ;; newer cons-front
+  ;; list-order walk hits imp-new1 (front) first → 'new wins (last-write-wins)
+  (check-equal? (module-network-cascading-lookup local2 'shared) (cons 'Int 'new)))
+
+;; ========================================
+;; 2b-cascade. Cascade materialize/names (PPN 4C Addendum Phase 4A.c-ii-a, D2 Path Y)
+;; ========================================
+;; module-network-cascade-materialize = VALUES view of own cells + imports
+;; (recursive); module-network-cascade-names = keys-only counterpart. Shadowing
+;; matches module-network-cascading-lookup. Backs external-definitions-snapshot
+;; / external-definition-names (excludes the LOCAL caller's own cells, applied
+;; one level up — these helpers materialize a GIVEN mnr in full).
+
+(define (sorted-syms xs) (sort xs symbol<?))
+
+(test-case "cascade-materialize: local only == module-network-materialize"
+  (define mnr0 (make-module-network))
+  (define-values (mnr1 _c1) (module-network-add-definition mnr0 'foo (cons 'Int 1)))
+  (define-values (mnr2 _c2) (module-network-add-definition mnr1 'bar (cons 'String "hi")))
+  (check-equal? (module-network-cascade-materialize mnr2)
+                (module-network-materialize mnr2)))
+
+(test-case "cascade-materialize: one-level import merges own + imported"
+  (define imp0 (make-module-network))
+  (define-values (imp1 _ci) (module-network-add-definition imp0 'ibar (cons 'String "imp")))
+  (define local0 (make-module-network))
+  (define-values (local1 _cl) (module-network-add-definition local0 'lfoo (cons 'Int 1)))
+  (define local2 (module-network-add-import local1 imp1))
+  (check-equal? (module-network-cascade-materialize local2)
+                (hasheq 'lfoo (cons 'Int 1) 'ibar (cons 'String "imp"))))
+
+(test-case "cascade-materialize: transitive (two-level) flattens all"
+  (define gp0 (make-module-network))
+  (define-values (gp1 _cg) (module-network-add-definition gp0 'deep (cons 'Bool #t)))
+  (define parent0 (make-module-network))
+  (define-values (parent1 _cp) (module-network-add-definition parent0 'mid (cons 'Int 5)))
+  (define parent2 (module-network-add-import parent1 gp1))
+  (define local0 (make-module-network))
+  (define-values (local1 _cl) (module-network-add-definition local0 'top (cons 'Int 9)))
+  (define local2 (module-network-add-import local1 parent2))
+  (check-equal? (module-network-cascade-materialize local2)
+                (hasheq 'top (cons 'Int 9) 'mid (cons 'Int 5) 'deep (cons 'Bool #t))))
+
+(test-case "cascade-materialize: local shadows import (same name → local value)"
+  (define imp0 (make-module-network))
+  (define-values (imp1 _ci) (module-network-add-definition imp0 'dup (cons 'Int 'from-import)))
+  (define local0 (make-module-network))
+  (define-values (local1 _cl) (module-network-add-definition local0 'dup (cons 'Int 'from-local)))
+  (define local2 (module-network-add-import local1 imp1))
+  (check-equal? (hash-ref (module-network-cascade-materialize local2) 'dup)
+                (cons 'Int 'from-local)))
+
+(test-case "cascade-materialize: newest import shadows older (cons-prepend order)"
+  (define imp-old0 (make-module-network))
+  (define-values (imp-old1 _co) (module-network-add-definition imp-old0 'shared (cons 'Int 'old)))
+  (define imp-new0 (make-module-network))
+  (define-values (imp-new1 _cn) (module-network-add-definition imp-new0 'shared (cons 'Int 'new)))
+  (define local0 (make-module-network))
+  (define local1 (module-network-add-import local0 imp-old1))  ;; older first
+  (define local2 (module-network-add-import local1 imp-new1))  ;; newer cons-front
+  (check-equal? (hash-ref (module-network-cascade-materialize local2) 'shared)
+                (cons 'Int 'new)))
+
+(test-case "cascade-names: keys match cascade-materialize keys (transitive)"
+  (define gp0 (make-module-network))
+  (define-values (gp1 _cg) (module-network-add-definition gp0 'deep (cons 'Bool #t)))
+  (define parent0 (make-module-network))
+  (define-values (parent1 _cp) (module-network-add-definition parent0 'mid (cons 'Int 5)))
+  (define parent2 (module-network-add-import parent1 gp1))
+  (define local0 (make-module-network))
+  (define-values (local1 _cl) (module-network-add-definition local0 'top (cons 'Int 9)))
+  (define local2 (module-network-add-import local1 parent2))
+  (check-equal? (sorted-syms (module-network-cascade-names local2))
+                (sorted-syms (hash-keys (module-network-cascade-materialize local2))))
+  (check-equal? (sorted-syms (module-network-cascade-names local2))
+                (sorted-syms '(top mid deep))))
+
+(test-case "cascade-names: dedups a name present in both local and import"
+  (define imp0 (make-module-network))
+  (define-values (imp1 _ci) (module-network-add-definition imp0 'dup (cons 'Int 'i)))
+  (define local0 (make-module-network))
+  (define-values (local1 _cl) (module-network-add-definition local0 'dup (cons 'Int 'l)))
+  (define local2 (module-network-add-import local1 imp1))
+  (check-equal? (module-network-cascade-names local2) '(dup)))
+
+(test-case "cascade-names/materialize: empty mnr → empty"
+  (define mnr (make-module-network))
+  (check-equal? (module-network-cascade-names mnr) '())
+  (check-equal? (module-network-cascade-materialize mnr) (hasheq)))
+
+;; PPN 4C Addendum Phase 4B.2-a: a def-bot cell (pre-allocated but unground,
+;; the shape the 4B.2-b preparse sweep installs) is "no definition yet" — it
+;; must be EXCLUDED from cascade-names (the keys-view), matching the values-view
+;; (cascade-materialize) + the read adapter (def-entry->cons: def-bot → #f).
+;; Regression guard for the keys-leak: before the namespace.rkt:305 fix,
+;; cascade-names skipped only 'infra-bot, so a def-bot cell LEAKED into the
+;; names key set (→ global-env-names → repl :env display). Pre-alloc must be a
+;; true keys-view no-op (it FAILS pre-fix, PASSES post-fix).
+(test-case "cascade-names: EXCLUDES a def-bot (pre-allocated, unground) cell (4B.2-a keys-leak)"
+  (define-values (mnr1 _c1)
+    (module-network-add-definition (make-module-network) 'realdef (cons 'Int 1)))
+  ;; pre-allocate an unground name as a def-bot cell (the 4B.2-b sweep shape)
+  (define-values (mnr2 _c2)
+    (module-network-add-definition mnr1 'pending def-bot))
+  ;; the def-bot cell reads as #f (no definition) — lookup agrees with absent
+  (check-equal? (module-network-cascading-lookup mnr2 'pending) #f)
+  ;; keys-view EXCLUDES 'pending (the fix) — only the ground 'realdef is visible
+  (check-equal? (module-network-cascade-names mnr2) '(realdef))
+  ;; names-view and values-view AGREE (no asymmetry; the leak is closed)
+  (check-equal? (sorted-syms (module-network-cascade-names mnr2))
+                (sorted-syms (hash-keys (module-network-cascade-materialize mnr2)))))
+
+;; ========================================
+;; 2g. def-bot pre-allocation (PPN 4C Addendum Phase 4B.2-b, §18.21.19)
+;; ========================================
+;; prealloc-def-cell! (global-env.rkt) seeds a def-bot cell IF the name is
+;; absent — idempotent, ORDER-INSENSITIVE (FREE_ORDERING), never clobbers a
+;; real value, and a def-bot cell reads #f (= same Unbound as absent) so it is
+;; BEHAVIOR-PRESERVING. The preparse-expand-all Pass 1.5 wires it for every
+;; user def/defn name.
+
+(test-case "prealloc-def-cell!: a pre-allocated name has a cell but reads #f (def-bot)"
+  (parameterize ([current-file-module-network-ref (make-module-network)])
+    (prealloc-def-cell! 'pend)
+    (define mnr (current-file-module-network-ref))
+    (check-true (hash-has-key? (module-network-ref-cell-id-map mnr) 'pend))  ;; cell exists
+    (check-equal? (module-network-cascading-lookup mnr 'pend) #f)))           ;; reads #f = unbound
+
+(test-case "prealloc-def-cell!: ORDER-INSENSITIVE (FREE_ORDERING — same name set, any order)"
+  (define (prealloc-in-order names)
+    (parameterize ([current-file-module-network-ref (make-module-network)])
+      (for ([n (in-list names)]) (prealloc-def-cell! n))
+      (current-file-module-network-ref)))
+  (define fwd (prealloc-in-order '(aa bb cc)))
+  (define rev (prealloc-in-order '(cc bb aa)))
+  ;; same NAME SET regardless of source order (cell-ids may differ; the observable does not)
+  (check-equal? (sorted-syms (hash-keys (module-network-ref-cell-id-map fwd)))
+                (sorted-syms (hash-keys (module-network-ref-cell-id-map rev))))
+  (check-equal? (sorted-syms (hash-keys (module-network-ref-cell-id-map fwd)))
+                (sorted-syms '(aa bb cc)))
+  (for ([n '(aa bb cc)])
+    (check-equal? (module-network-cascading-lookup fwd n) #f)
+    (check-equal? (module-network-cascading-lookup rev n) #f)))
+
+(test-case "prealloc-def-cell!: idempotent — re-pre-alloc reuses the same cell"
+  (parameterize ([current-file-module-network-ref (make-module-network)])
+    (prealloc-def-cell! 'z)
+    (define cid1 (hash-ref (module-network-ref-cell-id-map (current-file-module-network-ref)) 'z))
+    (prealloc-def-cell! 'z)
+    (define cid2 (hash-ref (module-network-ref-cell-id-map (current-file-module-network-ref)) 'z))
+    (check-equal? cid1 cid2)))
+
+(test-case "prealloc-def-cell!: does NOT clobber an existing real value (present → no-op)"
+  (parameterize ([current-file-module-network-ref (make-module-network)])
+    (global-env-add 'y 'Int 42)               ;; real value first (def-bot is the merge identity)
+    (prealloc-def-cell! 'y)                    ;; pre-alloc after — must NOT overwrite
+    (check-equal? (module-network-cascading-lookup (current-file-module-network-ref) 'y)
+                  (cons 'Int 42))))            ;; preserved
+
+;; Pass-integration: the preparse-expand-all Pass 1.5 actually pre-allocs
+;; (otherwise a head-match bug would be invisible — pre-alloc is behavior-
+;; preserving, so the suite wouldn't catch it). Mirrors test-defmacro's
+;; direct preparse-expand-all pattern.
+(test-case "preparse-expand-all: pre-allocates def-bot cells for user def/defn (incl. def-)"
+  (parameterize ([current-file-module-network-ref (make-module-network)]
+                 [current-preparse-registry (current-preparse-registry)])
+    (preparse-expand-all (list (datum->syntax #f '(def aa := 1))
+                               (datum->syntax #f '(defn bb [x] x))
+                               (datum->syntax #f '(def- cc := 2))))  ;; private suffix too
+    (define mnr (current-file-module-network-ref))
+    (for ([n '(aa bb cc)])
+      (check-true (hash-has-key? (module-network-ref-cell-id-map mnr) n))   ;; pre-allocated
+      ;; behavior-preserving: a pre-allocated-but-unground name reads #f (Unbound)
+      (check-equal? (module-network-cascading-lookup mnr n) #f))))
+
+;; ========================================
+;; 2g-status. Three-way status lookup (PPN 4C Addendum Phase 4B.3-a, DQ2, §18.21.21)
+;; ========================================
+;; module-network-lookup-status is the SINGLE cascade-truth source — it walks
+;; local-ground → import-ground → local-pending → absent and returns
+;; (cons status payload): 'ground . (type . value) / 'pending . cid / 'absent . #f.
+;; module-network-cascading-lookup + global-env-lookup-type/value are PROJECTIONS
+;; of it (behavior-preserving; the pending/absent split is computed but unconsumed
+;; until 4B.3-b). These tests are the 4B.3-a gate: status-shape + projection-
+;; agreement + cascade-order-agreement (the two-walk-drift guard, D-4B3-1).
+
+(test-case "module-network-lookup-status: three-way shape (ground / pending / absent)"
+  (define-values (mnr1 _cg) (module-network-add-definition (make-module-network) 'g (cons 'Int 7)))
+  (define-values (mnr2 pend-cid) (module-network-add-definition mnr1 'p def-bot))
+  (check-equal? (module-network-lookup-status mnr2 'g) (cons 'ground (cons 'Int 7)))   ;; ground → entry
+  (check-equal? (module-network-lookup-status mnr2 'p) (cons 'pending pend-cid))       ;; pending → the def-bot cid
+  (check-equal? (module-network-lookup-status mnr2 'nope) (cons 'absent #f)))          ;; absent → #f
+
+(test-case "4B.3-a: projections agree with the pre-factoring lookups (ground / pending / absent)"
+  (define-values (mnr1 _cg) (module-network-add-definition (make-module-network) 'g (cons 'Int 7)))
+  (define-values (mnr2 _cp) (module-network-add-definition mnr1 'p def-bot))
+  ;; cascading-lookup: ground → entry; pending + absent BOTH collapse → #f (today's behavior)
+  (check-equal? (module-network-cascading-lookup mnr2 'g) (cons 'Int 7))
+  (check-equal? (module-network-cascading-lookup mnr2 'p) #f)
+  (check-equal? (module-network-cascading-lookup mnr2 'nope) #f)
+  ;; global-env-lookup-type/value: ground → type/value; pending + absent → #f
+  (parameterize ([current-file-module-network-ref mnr2])
+    (check-equal? (global-env-lookup-type 'g) 'Int)
+    (check-equal? (global-env-lookup-value 'g) 7)
+    (check-false (global-env-lookup-type 'p))
+    (check-false (global-env-lookup-value 'p))
+    (check-false (global-env-lookup-type 'nope))
+    (check-false (global-env-lookup-value 'nope))
+    ;; global-env-lookup-status (the 4B.3-b consumer API): same three-way
+    (check-equal? (global-env-lookup-status 'g) (cons 'ground (cons 'Int 7)))
+    (check-equal? (car (global-env-lookup-status 'p)) 'pending)
+    (check-equal? (global-env-lookup-status 'nope) (cons 'absent #f)))
+  ;; no in-flight mnr → 'absent (matches the pre-factoring (and mnr ...) #f-on-no-mnr)
+  (parameterize ([current-file-module-network-ref #f])
+    (check-equal? (global-env-lookup-status 'g) (cons 'absent #f))
+    (check-false (global-env-lookup-type 'g))))
+
+(test-case "4B.3-a: cascade-order — def-bot-local-but-ground-in-import resolves to the IMPORT (D-4B3-1 two-walk guard)"
+  (define-values (imp1 _ci) (module-network-add-definition (make-module-network) 'shared (cons 'Str "imp")))
+  ;; (A) local def-bot + import ground → the walk (local-ground? NO → import-ground? YES)
+  ;;     must resolve to the IMPORT, NOT report 'pending — import-shadowing preserved.
+  (define-values (loc1 _cl) (module-network-add-definition (make-module-network) 'shared def-bot))
+  (define loc2 (module-network-add-import loc1 imp1))
+  (check-equal? (module-network-lookup-status loc2 'shared) (cons 'ground (cons 'Str "imp")))
+  (check-equal? (module-network-cascading-lookup loc2 'shared) (cons 'Str "imp"))  ;; projection agrees
+  ;; (B) local GROUND shadows import-ground (local real value wins, walked first)
+  (define-values (loc3 _cl3) (module-network-add-definition (make-module-network) 'shared (cons 'Str "loc")))
+  (define loc4 (module-network-add-import loc3 imp1))
+  (check-equal? (module-network-lookup-status loc4 'shared) (cons 'ground (cons 'Str "loc")))
+  ;; (C) local def-bot + name ABSENT in imports → genuine local forward-ref = 'pending
+  (define-values (loc5 pend-cid) (module-network-add-definition (make-module-network) 'fwd def-bot))
+  (define loc6 (module-network-add-import loc5 imp1))
+  (check-equal? (module-network-lookup-status loc6 'fwd) (cons 'pending pend-cid)))
+
+;; ========================================
+;; 2h. NET-1 drive + zero-NET-2 invariant (PPN 4C Addendum Phase 4B.2-c, §18.21.19)
+;; ========================================
+;; Driving the per-file mnr (NET-1) is a structural NO-OP at 4B.2: the mnr has
+;; ZERO propagators installed, so the scheduler returns the net unchanged, and
+;; every NET-2 typing handler is skipped (process-tier reads its EMPTY request
+;; cell). The superset-contingency guard (register-stratum-handler!) keeps that
+;; invariant safe — every handler's request cell is pre-allocated by
+;; make-prop-network (else the drive would crash on an absent cell).
+
+(test-case "zero-NET-2: driving a fresh def-bot-only mnr is a structural no-op (D1)"
+  ;; make-module-network → make-prop-network: all stratum-request cells
+  ;; pre-allocated EMPTY, zero propagators. Driving (through the production
+  ;; scheduler = BSP by default) fires no handler (the empty-guard skips each)
+  ;; and returns the SAME net (eq?) — empty worklist. A missing handler cell
+  ;; would crash here (process-tier net-cell-read), so this also exercises the
+  ;; superset invariant for every handler loaded in this test image.
+  (define-values (mnr1 _a) (module-network-add-definition (make-module-network) 'a def-bot))
+  (define-values (mnr2 _b) (module-network-add-definition mnr1 'b def-bot))
+  (define net (module-network-ref-prop-net mnr2))
+  (check-eq? (run-to-quiescence net) net))
+
+(test-case "register-stratum-handler!: rejects a non-pre-allocated request cell (4B.2-c guard)"
+  ;; cell-id 999 is NOT pre-allocated by make-prop-network → registering a handler
+  ;; on it must ERROR (the guard fires BEFORE the set-box!, so no box pollution),
+  ;; rather than crash later when the mnr is driven over the absent cell.
+  (check-exn exn:fail?
+    (lambda () (register-stratum-handler! (cell-id 999) (lambda (net pending) net)))))
+
+;; ========================================
+;; 2i. δ residuation install (PPN 4C Addendum Phase 4B.3-b, §18.21.22)
+;; ========================================
+;; The ACTIVE flip's mechanism in isolation: a fire-once δ on NET-1 :reads the
+;; referent's def-entry cell, :writes the referrer cell. Before the referent
+;; grounds, the referrer stays def-bot (residuates); when the referent grounds
+;; (def-bot → def-entry) the drive fires the δ → the referrer becomes a def-entry.
+;; D1 structural guard: def-entry cells are cids ≥21 (disjoint from reserved
+;; stratum cells 0-19 + mod-status 20); the δ writes ONLY the referrer def-entry
+;; cell, so the NET-2 zero-invariant (no stratum-request cell touched) holds.
+
+(test-case "4B.3-b δ: referent grounds → referrer gets a def-entry; D1 cids ≥21"
+  (define-values (mnr1 ref-cid) (module-network-add-definition (make-module-network) 'a def-bot))
+  (define-values (mnr2 rer-cid) (module-network-add-definition mnr1 'x def-bot))
+  ;; D1 structural guard: def-entry cells land ≥21 (reserved 0-19 + mod-status 20)
+  (check-true (>= (cell-id-n ref-cid) 21))
+  (check-true (>= (cell-id-n rer-cid) 21))
+  ;; install the δ (referent ground → copy a def-entry to the referrer). The input
+  ;; cell is 'definition-entry = #:classification 'structural → #:component-paths
+  ;; is REQUIRED, else net-add-propagator hard-errors (enforce-component-paths!).
+  (define mnr3
+    (module-network-install-fire-once mnr2 (list ref-cid) (list rer-cid)
+      (lambda (net)
+        (define e (net-cell-read net ref-cid))
+        (if (def-entry? e)
+            (net-cell-write net rer-cid (def-entry (def-entry-type e) (def-entry-value e)))
+            net))
+      #:component-paths (list (cons ref-cid ':value))))
+  ;; pending: the referrer is still def-bot (the δ residuates — referent unground)
+  (check-eq? (net-cell-read (module-network-ref-prop-net mnr3) rer-cid) def-bot)
+  ;; ground the referent (def-bot → def-entry) + drive → the δ fires once
+  (define mnr4 (module-network-write mnr3 'a (cons 'NatT 'theval)))
+  (define driven (run-to-quiescence (module-network-ref-prop-net mnr4)))
+  (define rer-val (net-cell-read driven rer-cid))
+  (check-true (def-entry? rer-val))            ;; the referrer is now a def-entry
+  (check-equal? (def-entry-type rer-val) 'NatT)
+  (check-equal? (def-entry-value rer-val) 'theval))
+
+(test-case "4B.3-b δ: install on a structural cell WITHOUT #:component-paths hard-errors"
+  ;; the §18.21.22 ① finding: 'definition-entry is #:classification 'structural,
+  ;; so enforce-component-paths! requires a declared path for the input cell.
+  (define-values (mnr1 ref-cid) (module-network-add-definition (make-module-network) 'a def-bot))
+  (define-values (mnr2 rer-cid) (module-network-add-definition mnr1 'x def-bot))
+  (check-exn exn:fail?
+    (lambda ()
+      (module-network-install-fire-once mnr2 (list ref-cid) (list rer-cid)
+        (lambda (net) net)))))
+
+;; ========================================
+;; 2e. external-definitions view (PPN 4C Addendum Phase 4A.c-ii-a, D2 Path Y)
+;; ========================================
+;; external-definitions-snapshot (values) / external-definition-names (keys),
+;; defined in global-env.rkt: Layer-2 base (prelude ∪ module-defs) overlaid by
+;; current-file-mnr's IMPORTS cascade, EXCLUDING the file's own (local) cells.
+;; The exclusion is the defining (Y) property — these consumers must see only
+;; EXTERNAL defs (prelude + imported), never the file's own mid-elaboration defs.
+
+(test-case "external-definitions-snapshot: cascade-only, EXCLUDES local cells (RF-5)"
+  ;; RF-5 (§18.18.7-b): Layer-2 base retired. external-* = imports cascade only,
+  ;; excluding the file's own (local) cells. local mnr has 'localdef + EMPTY
+  ;; imports → external view is EMPTY (localdef is local; no Layer-2 base).
+  (define-values (local1 _cl)
+    (module-network-add-definition (make-module-network) 'localdef (cons 'Int 99)))
+  (parameterize ([current-file-module-network-ref local1])
+    (check-equal? (external-definitions-snapshot) (hasheq))
+    (check-equal? (external-definition-names) '())))
+
+(test-case "external-definitions-snapshot: imports cascade, excludes local (RF-5)"
+  (define-values (imp1 _ci)
+    (module-network-add-definition (make-module-network) 'impdef (cons 'String "imp")))
+  (define-values (local1 _cl)
+    (module-network-add-definition (make-module-network) 'localdef (cons 'Int 99)))
+  (define local2 (module-network-add-import local1 imp1))
+  (parameterize ([current-file-module-network-ref local2])
+    ;; import's impdef only; 'localdef EXCLUDED (local); no Layer-2 base
+    (check-equal? (external-definitions-snapshot)
+                  (hasheq 'impdef (cons 'String "imp")))
+    (check-equal? (sorted-syms (external-definition-names)) (sorted-syms '(impdef)))))
+
+(test-case "external-definition-names: keys match external-definitions-snapshot (RF-5)"
+  (define-values (imp1 _ci)
+    (module-network-add-definition (make-module-network) 'impdef (cons 'Int 7)))
+  (define local2 (module-network-add-import (make-module-network) imp1))
+  (parameterize ([current-file-module-network-ref local2])
+    (check-equal? (sorted-syms (external-definition-names))
+                  (sorted-syms (hash-keys (external-definitions-snapshot))))))
+
+(test-case "external-definitions-snapshot: no current-file-mnr → empty (RF-5)"
+  ;; RF-5: no mnr → no cascade → empty (the Layer-2-only fallback retired).
+  (parameterize ([current-file-module-network-ref #f])
+    (check-equal? (external-definitions-snapshot) (hasheq))
+    (check-equal? (external-definition-names) '())))
+
+;; RF-5 (§18.18.7-b): global-env-snapshot is cascade-only (own cells + imports),
+;; the FULL env (unlike external-*, which EXCLUDES local). The Layer-2 base
+;; (current-prelude-env ∪ current-module-definitions-content) retired — a seeded
+;; current-prelude-env is NO LONGER read; the 2nd assertion is the regression guard.
+(test-case "global-env-snapshot: cascade-only — own + imports, Layer-2 base ignored (RF-5)"
+  (define-values (imp1 _ci)
+    (module-network-add-definition (make-module-network) 'impdef (cons 'String "imp")))
+  (define-values (local1 _cl)
+    (module-network-add-definition (make-module-network) 'localdef (cons 'Int 99)))
+  (define local2 (module-network-add-import local1 imp1))
+  ;; cascade supplies own 'localdef + import 'impdef
+  (parameterize ([current-file-module-network-ref local2])
+    (check-equal? (global-env-snapshot)
+                  (hasheq 'localdef (cons 'Int 99) 'impdef (cons 'String "imp"))))
+  ;; EMPTY imports → cascade = own cells only → just 'localdef. (The RF-5 seed of
+  ;; current-prelude-env retired in 4A.c-iii-e — the param no longer exists;
+  ;; global-env-snapshot is cascade-only, the Layer-2 base is gone.)
+  (parameterize ([current-file-module-network-ref local1])
+    (check-equal? (global-env-snapshot)
+                  (hasheq 'localdef (cons 'Int 99)))))
+
+;; ========================================
+;; 2c. Reconstruction from snapshot (PPN 4C Addendum Phase 4A.c-i, RISK 1)
+;; ========================================
+;; module-network-from-snapshot rebuilds an mnr from a flat env-snapshot
+;; (the .pnet-cache restore shape) so share-by-reference can reference it.
+
+(test-case "module-network-from-snapshot: round-trips a snapshot"
+  (define snap (hasheq 'foo (cons 'Int 1) 'bar (cons 'String "hi") 'baz (cons 'Bool #t)))
+  (define mnr (module-network-from-snapshot snap))
+  ;; materialize back == original snapshot (all cells reconstructed)
+  (check-equal? (module-network-materialize mnr) snap)
+  ;; reconstructed module is loaded
+  (check-equal? (module-network-status mnr) mod-loaded)
+  ;; cascading-lookup finds reconstructed entries
+  (check-equal? (module-network-cascading-lookup mnr 'foo) (cons 'Int 1))
+  (check-equal? (module-network-cascading-lookup mnr 'absent) #f))
+
+(test-case "module-network-from-snapshot: empty snapshot → empty mnr (loaded)"
+  (define mnr (module-network-from-snapshot (hasheq)))
+  (check-equal? (module-network-materialize mnr) (hasheq))
+  (check-equal? (module-network-status mnr) mod-loaded))
 
 ;; ========================================
 ;; 3. Shadow-Cell Cross-Network Prototype
@@ -245,45 +719,6 @@
   (define snap (module-network-materialize mnr4))
   (check-equal? (hash-count snap) 3))
 
-;; ============================================================
-;; Phase 4: Cross-module dependency edges
-;; ============================================================
-
-(test-case "module-network-ref: dep-edges populated from cross-module deps"
-  ;; Simulate what driver.rkt does: accumulate cross-module deps during
-  ;; module loading, then populate dep-edges in the module-network-ref.
-  (define mnr0 (make-module-network))
-  (define-values (mnr1 _c1) (module-network-add-definition mnr0 'add (cons 'fn 'add-impl)))
-  (define-values (mnr2 _c2) (module-network-add-definition mnr1 'double (cons 'fn 'double-impl)))
-  (define mnr3 (module-network-set-status mnr2 mod-loaded))
-
-  ;; Simulate cross-module deps: double depends on add (same-file)
-  ;; and on nat::zero (from module)
-  (define deps '((double add same-file)
-                 (double nat::zero module)))
-
-  ;; Build dep-edge hash (same logic as driver.rkt)
-  (define dep-edge-hash
-    (for/fold ([h (hasheq)])
-              ([dep (in-list deps)])
-      (define dst-name (car dep))
-      (define src-name (cadr dep))
-      (define source (caddr dep))
-      (hash-set h dst-name
-                (cons (cons src-name source)
-                      (hash-ref h dst-name '())))))
-
-  ;; Attach to module-network-ref
-  (define mnr4 (struct-copy module-network-ref mnr3
-                  [dep-edges dep-edge-hash]))
-
-  ;; Verify dep-edges
-  (check-equal? (hash-count (module-network-ref-dep-edges mnr4)) 1)
-  (define double-deps (hash-ref (module-network-ref-dep-edges mnr4) 'double '()))
-  (check-equal? (length double-deps) 2)
-  ;; Both edges present (order depends on fold)
-  (check-not-false (member (cons 'add 'same-file) double-deps))
-  (check-not-false (member (cons 'nat::zero 'module) double-deps))
-
-  ;; 'add has no recorded deps
-  (check-equal? (hash-ref (module-network-ref-dep-edges mnr4) 'add '()) '()))
+;; PPN 4C Addendum Phase 4B.1: the "dep-edges populated from cross-module deps"
+;; test-case RETIRED — the dep-edges field + the dep-recording machinery it
+;; tested were retired outright (zero production consumers).

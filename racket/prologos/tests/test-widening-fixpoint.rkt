@@ -133,7 +133,7 @@
   (check-true (and (number? b-val) (< b-val +inf.0))
               (format "B should be finite, got ~a" b-val))
   ;; Should not have exhausted fuel
-  (check-true (> (prop-network-fuel result) 0)))
+  (check-true (> (net-cell-read result fuel-cell-id) 0)))
 
 ;; ========================================
 ;; 5. Narrowing Precision Recovery
@@ -179,7 +179,7 @@
         (net-cell-write net b-id a))))
   ;; max-rounds = 5 should terminate without burning all fuel
   (define result (run-to-quiescence-widen net3 #:max-rounds 5))
-  (check-true (> (prop-network-fuel result) 0)))
+  (check-true (> (net-cell-read result fuel-cell-id) 0)))
 
 ;; ========================================
 ;; 7. No-Widening-Points: Same as run-to-quiescence

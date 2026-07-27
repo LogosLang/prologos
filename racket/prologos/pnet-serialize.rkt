@@ -64,7 +64,11 @@
 ;; .pnet format version
 ;; ============================================================
 
-(define PNET_VERSION 1)
+;; CIU T6 F1a.2 p1b: 1→2 in the SAME commit as the Open mint-flip — every cache
+;; regenerates Open-free, so the :579 wildcard + the 9 Open-scrutinee arms are
+;; dead code from here and no stale cache can re-inject the deleted-at-p2 tag
+;; (the expr-p*-if-nar months-latent class, pipeline.md).
+(define PNET_VERSION 2)
 
 ;; ============================================================
 ;; Serialization: struct->vector + gensym tagging + foreign-proc
@@ -189,7 +193,7 @@
   ;; --- Zero-arg (atoms) ---
   (reg0! expr-zero) (reg0! expr-refl) (reg0! expr-Nat) (reg0! expr-Bool)
   (reg0! expr-true) (reg0! expr-false) (reg0! expr-Unit) (reg0! expr-unit)
-  (reg0! expr-Nil) (reg0! expr-nil) (reg0! expr-hole) (reg0! expr-Open) (reg0! expr-error)
+  (reg0! expr-Nil) (reg0! expr-nil) (reg0! expr-hole) (reg0! expr-error)
   (reg0! expr-Int) (reg0! expr-Rat) (reg0! expr-Char) (reg0! expr-String)
   (reg0! expr-Keyword) (reg0! lzero)
 
@@ -210,7 +214,16 @@
   (reg2! expr-ann (expr-unit) (expr-Unit))
   (reg2! expr-Sigma (expr-Nat) (expr-Nat))
   (reg2! expr-meta 'test-meta #f)
+  (regN! expr-num-lit 1/2 #f 'fraction #f)  ;; N4: transient numeric literal (rarely serialized); N6b: +origin
   (reg2! expr-Map (expr-Nat) (expr-Nat))
+  ;; CIU T6 F1: the structural-row type + its field struct. BOTH must register
+  ;; (F2 vector-impostor detonates on a MISSING registration under a stale .pnet cache).
+  (reg2! record-field (expr-Nat) 'present)
+  (reg3! expr-Record 'keyword '() 'closed)
+  ;; CIU T6 F1b.5-s2: the validate tabulation node — SAME-COMMIT registration
+  ;; (the vector-impostor rule). Payload = symbols/booleans/sexps/exprs only
+  ;; (preds are expr-lams, NEVER Racket closures — those serialize to stubs).
+  (regN! expr-validate 'S #f '() (expr-unit) '())
   (reg1! expr-Set (expr-Nat))
   (reg2! expr-union (expr-Nat) (expr-Int))
   (reg2! expr-get (expr-unit) (expr-keyword 'k))
@@ -284,7 +297,8 @@
   ;; --- Additional types from frequency analysis ---
   ;; Posit types
   (when (with-handlers ([exn? (lambda (_) #f)]) (expr-Posit8) #t)
-    (reg0! expr-Posit8) (reg0! expr-Posit16) (reg0! expr-Posit32) (reg0! expr-Posit64))
+    (reg0! expr-Posit8) (reg0! expr-Posit16) (reg0! expr-Posit32) (reg0! expr-Posit64)
+    (reg0! expr-Float32) (reg0! expr-Float64))
 
   ;; Int/Rat operations (appear in foreign function types)
   (when (with-handlers ([exn? (lambda (_) #f)]) (expr-int-add (expr-zero) (expr-zero)) #t)
@@ -337,12 +351,32 @@
   ;; Posit types + ops (4 widths)
   (auto-cache! expr-Posit8) (auto-cache! expr-Posit16) (auto-cache! expr-Posit32) (auto-cache! expr-Posit64)
   (auto-cache! expr-posit8 0) (auto-cache! expr-posit16 0) (auto-cache! expr-posit32 0) (auto-cache! expr-posit64 0)
+  ;; Float (Numerics N3)
+  (auto-cache! expr-Float32) (auto-cache! expr-Float64)
+  (auto-cache! expr-float32 0) (auto-cache! expr-float64 0)
   (for ([ops (list (list expr-p8-add expr-p8-sub expr-p8-mul expr-p8-div expr-p8-eq expr-p8-lt expr-p8-le expr-p8-neg expr-p8-abs expr-p8-from-int expr-p8-from-rat expr-p8-to-rat)
                    (list expr-p16-add expr-p16-sub expr-p16-mul expr-p16-div expr-p16-eq expr-p16-lt expr-p16-le expr-p16-neg expr-p16-abs expr-p16-from-int expr-p16-from-rat expr-p16-to-rat)
                    (list expr-p32-add expr-p32-sub expr-p32-mul expr-p32-div expr-p32-eq expr-p32-lt expr-p32-le expr-p32-neg expr-p32-abs expr-p32-from-int expr-p32-from-rat expr-p32-to-rat)
-                   (list expr-p64-add expr-p64-sub expr-p64-mul expr-p64-div expr-p64-eq expr-p64-lt expr-p64-le expr-p64-neg expr-p64-abs expr-p64-from-int expr-p64-from-rat expr-p64-to-rat))])
+                   (list expr-p64-add expr-p64-sub expr-p64-mul expr-p64-div expr-p64-eq expr-p64-lt expr-p64-le expr-p64-neg expr-p64-abs expr-p64-from-int expr-p64-from-rat expr-p64-to-rat)
+                   ;; Float ops (Numerics N3b)
+                   (list expr-f32-add expr-f32-sub expr-f32-mul expr-f32-div expr-f32-eq expr-f32-lt expr-f32-le expr-f32-neg expr-f32-abs expr-f32-sqrt)
+                   (list expr-f64-add expr-f64-sub expr-f64-mul expr-f64-div expr-f64-eq expr-f64-lt expr-f64-le expr-f64-neg expr-f64-abs expr-f64-sqrt))])
     (for ([op ops])
       (auto-cache! op d) (auto-cache! op d d)))
+  ;; Cross-width Float conversions (Numerics N3e-rest) — unary
+  (for ([op (list expr-float-finite expr-float-to-rat expr-float-to-int expr-float-to-float32)])
+    (auto-cache! op d))
+  ;; Posit if-nar eliminators (Numerics Q11) — arity 4: (tp nar-case val-case v).
+  ;; First library use is conversions.prologos; without this registration the
+  ;; .pnet reader's unknown-tag fallback returns a raw VECTOR that then fails
+  ;; every struct match downstream (subst is the first to throw).
+  (for ([op (list expr-p8-if-nar expr-p16-if-nar expr-p32-if-nar expr-p64-if-nar)])
+    (auto-cache! op d d d d))
+  ;; Generic conversion dispatch nodes (Numerics N3e Path B) — arity 2:
+  ;; (target-type arg). Same landmine class as if-nar above: first INVOKED
+  ;; library use is the Q11 Posit->Float instances.
+  (for ([op (list expr-generic-from-rat expr-generic-from-int)])
+    (auto-cache! op d d))
   ;; Int/Rat ops
   (for ([op (list expr-int-add expr-int-sub expr-int-mul expr-int-div expr-int-lt expr-int-eq)])
     (auto-cache! op d d))
@@ -351,6 +385,11 @@
   (for ([op (list expr-rat-add expr-rat-sub expr-rat-mul expr-rat-div expr-rat-lt expr-rat-le expr-rat-eq)])
     (auto-cache! op d d))
   (for ([op (list expr-rat-neg expr-rat-abs)])
+    (auto-cache! op d))
+  ;; Rat projections (Numerics N6d-ii: first cached-lib-body use via to-int/to-rat
+  ;; Rat leg [int/ [rat-numer x] [rat-denom x]]; unregistered => raw-vector impostor
+  ;; landmine, pipeline.md item 6).
+  (for ([op (list expr-rat-numer expr-rat-denom)])
     (auto-cache! op d))
   ;; Collection ops
   (auto-cache! expr-set-empty d) (auto-cache! expr-set-insert d d) (auto-cache! expr-set-member d d)
@@ -361,9 +400,16 @@
   (auto-cache! expr-map-has-key d d) (auto-cache! expr-map-keys d) (auto-cache! expr-map-vals d)
   (auto-cache! expr-map-fold-entries d d d) (auto-cache! expr-map-filter-entries d d)
   (auto-cache! expr-pvec-empty d) (auto-cache! expr-pvec-push d d)
+  (auto-cache! expr-pvec-literal (list d))  ;; CIU T6 F1a-col: literal-extent node (elems list)
+  (auto-cache! expr-list-literal (list d) d)  ;; CIU T6 F1a-col-2: elems list + chain
+  (auto-cache! expr-map-literal (list d) (list d) d)  ;; CIU T6 F1a.2 p1b-pre: keys + vals + chain
   (auto-cache! expr-pvec-nth d d) (auto-cache! expr-pvec-update d d d)
   (auto-cache! expr-pvec-length d) (auto-cache! expr-pvec-fold d d d)
   (auto-cache! expr-pvec-map d d) (auto-cache! expr-pvec-from-list d) (auto-cache! expr-pvec-to-list d)
+  ;; Path algebra + first-class path values (pipeline.md item 6 — were UNREGISTERED →
+  ;; raw-vector impostor crash when a cached library body carries them; CIU Track 6 F2)
+  (auto-cache! expr-get-in d d) (auto-cache! expr-update-in d d d) (auto-cache! expr-broadcast-get d d)
+  (auto-cache! expr-path d) (auto-cache! expr-Path)
   ;; Other
   (auto-cache! expr-from-int d d) (auto-cache! expr-from-nat d d)
   (auto-cache! expr-Symbol)

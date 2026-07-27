@@ -19,6 +19,24 @@ trait infrastructure, with a Posit-dominance rule for mixed exact/approximate
 computation, and compile-time specialization to recover the performance of
 parser keywords.
 
+* Resolution Status (Num Series Track 1 — 2026-07-02)
+
+This audit's recommendations landed through the Numerics track (N1–N6):
+- *Problem 1 (parser keywords not generic)* + *Problem 2 (no symbolic generic operators)* +
+  *Problem 3 (keywords not HOF-passable)* → ✅ *N6e*: ~+ - * / negate abs~ are first-class
+  trait-backed values; head-position ~[+ a b]~ auto-widens (~numeric-join~), value position is
+  the same-type trait fn; explicit-hole sections work (~[map [int* _ 2] xs]~).
+- *Problem 4 (no Posit dominance rule)* → ✅ *N3d*: ~numeric-join~ (approximate dominates exact;
+  Float a new rank family; Posit↔Float no-join, explicit conversion only).
+- *Problem 5 (identity traits incomplete for Posit)* → ✅ *N6d*: full Add/Sub/Mul/Div/Neg/Abs/Eq/Ord
+  + identity dicts for Posit and Float.
+- *Problem 6 (decimal literals require tilde ceremony)* → ✅ *N6b/N6c*: bare decimals default
+  *Posit32*; the ~~~ sigil removed; ~pNN~ for explicit posit width, ~f~/~f32~/~f64~ for Float.
+- *Decisions 1–2 (generic trait-dispatched operators + Posit dominance)* → adopted (N6e Q1 pin + N3d).
+  Remaining decisions/gaps folded into the [[file:2026-06-30_NUMERICS_TRACK_STAGE3_DESIGN.md][Numerics Track Stage-3]] where applicable.
+
+The detailed audit below is retained as the historical design input.
+
 * Current State: What Exists
 
 ** Numeric Types (4 Families)

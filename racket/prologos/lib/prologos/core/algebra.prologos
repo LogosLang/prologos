@@ -96,6 +96,16 @@ trait MultiplicativeIdentity {A}
 (def Posit64--MultiplicativeIdentity--dict : [MultiplicativeIdentity Posit64] [posit64 4611686018427387904])
 
 ;; ========================================
+;; Float32 / Float64 Identity Instances (Numerics N6d-iii)
+;; ========================================
+;; f-suffix literals — bare 0.0/1.0 now default to Posit32 (D-N6.1).
+
+(def Float32--AdditiveIdentity--dict : [AdditiveIdentity Float32] 0.0f32)
+(def Float32--MultiplicativeIdentity--dict : [MultiplicativeIdentity Float32] 1.0f32)
+(def Float64--AdditiveIdentity--dict : [AdditiveIdentity Float64] 0.0f64)
+(def Float64--MultiplicativeIdentity--dict : [MultiplicativeIdentity Float64] 1.0f64)
+
+;; ========================================
 ;; sum — generic additive fold over a list
 ;; ========================================
 ;; sum [Add A] [AdditiveIdentity A] (List A) -> A
@@ -131,41 +141,12 @@ defn int-range [start end]
     nil Int
 
 ;; ========================================
-;; First-Class Generic Arithmetic
+;; First-Class Generic Arithmetic — RETIRED (Num Track 1, N6f, 2026-07-02)
 ;; ========================================
-;; Parser keywords (+, -, *, /, negate, abs) dispatch at the AST level
-;; and can't be passed to higher-order functions like reduce, map, fold.
-;; These wrappers are proper first-class values.
-
-spec plus [Add A] A -> A -> A
-  :doc "First-class addition — pass to higher-order functions like reduce, map"
-defn plus [dict x y]
-  Add-add dict x y
-
-spec minus [Sub A] A -> A -> A
-  :doc "First-class subtraction"
-defn minus [dict x y]
-  Sub-sub dict x y
-
-spec times [Mul A] A -> A -> A
-  :doc "First-class multiplication"
-defn times [dict x y]
-  Mul-mul dict x y
-
-spec divide [Div A] A -> A -> A
-  :doc "First-class division"
-defn divide [dict x y]
-  Div-div dict x y
-
-spec negate-fn [Neg A] A -> A
-  :doc "First-class negation"
-defn negate-fn [dict x]
-  Neg-neg dict x
-
-spec abs-fn [Abs A] A -> A
-  :doc "First-class absolute value"
-defn abs-fn [dict x]
-  Abs-abs dict x
+;; The old prefix wrappers (plus/minus/times/divide/negate-fn/abs-fn) are
+;; retired: since Numerics N6e-E2 the operator names themselves ARE first-class
+;; values — `reduce + 0 xs`, `map negate xs`, `[map [int* _ 2] xs]` — so the
+;; wrappers were redundant. Use the operator names directly.
 
 ;; ========================================
 ;; Algebraic laws — standard property declarations

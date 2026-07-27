@@ -23,12 +23,264 @@
          "pretty-print.rkt"
          "global-env.rkt"
          "elab-speculation-bridge.rkt"
-         "atms.rkt")
+         "atms.rkt"
+         ;; PPN 4C 3C.c.3 (2026-05-24): translator + struct constructor for
+         ;; union-exhaustion-error.derivation-chain field shape flip per
+         ;; §9.5.4.4 Q-B.2 + Q-C.6 lock (per-branch list of derivation-chain).
+         "error-explanation.rkt"
+         ;; PPN 4C 3C.c.3 (2026-05-24): cell-19 write per §9.5.4.4 Q-C.1 (f)
+         ;; multi-writer scaffolding (sexp check/err is the SECOND writer to
+         ;; cell-19 alongside on-network 3C.b handler; retires at Track 4D).
+         ;; Direct net-cell-write per user direction (NOT propagator wrapper).
+         "propagator.rkt"
+         "elab-network-types.rkt"
+         ;; current-prop-net-box defined in metavar-store.rkt; (only-in)
+         ;; pattern follows typing-propagators.rkt:28 precedent.
+         (only-in "metavar-store.rkt" current-prop-net-box))
 
 (provide infer/err
          check/err
          is-type/err
          checkQ-top/err)
+
+;; ========================================
+;; Issue #70 diagnostic (N6e-C stopgap).
+;; ========================================
+;; A "Could not infer type" whose expr contains a HOLE-domain lambda (an
+;; unannotated `fn` / `_`-section) wrapping a generic numeric op (+ - * / < …)
+;; is almost always the #70 gap: the op's numeric type can't be inferred while
+;; its operand (the lambda param) is still an unsolved element meta — map/filter
+;; type the fn arg before the container that would solve it. Detect that shape
+;; and append an actionable hint. Best-effort structural walk, runs ONLY on the
+;; already-failing error path; purely additive text (no soundness effect). The
+;; real fix (container-before-fn ordering; option B) is scheduled for N6e-E5 —
+;; see issue #70 + design doc §12 / §9d E5.
+(define (generic-op-node? x)
+  (or (expr-generic-add? x) (expr-generic-sub? x) (expr-generic-mul? x)
+      (expr-generic-div? x) (expr-generic-mod? x)
+      (expr-generic-lt? x) (expr-generic-le? x) (expr-generic-gt? x)
+      (expr-generic-ge? x) (expr-generic-eq? x)
+      (expr-generic-negate? x) (expr-generic-abs? x)
+      ;; N6e-E4: the cross-width float conversions are the same #70 class —
+      ;; their rules INFER-and-test the operand (float-type?), so they can't
+      ;; solve a hole-lambda's meta either (unlike check-mode rules like int*).
+      (expr-float-finite? x) (expr-float-to-rat? x)
+      (expr-float-to-int? x) (expr-float-to-float32? x)))
+
+;; Immediate sub-exprs of a transparent expr struct (also recursing into list /
+;; pair fields). Non-expr fields ignored; an exotic container just yields no
+;; hint, never an error.
+(define (expr-subfields x)
+  (if (expr? x)
+      (let ([v (struct->vector x)])
+        (let loop ([i 1] [acc '()])
+          (if (>= i (vector-length v))
+              (reverse acc)
+              (let ([f (vector-ref v i)])
+                (loop (add1 i)
+                      (cond
+                        [(expr? f) (cons f acc)]
+                        [(list? f) (append (reverse (filter expr? f)) acc)]
+                        [(pair? f)
+                         (append (reverse (filter expr? (list (car f) (cdr f)))) acc)]
+                        [else acc]))))))
+      '()))
+
+;; Does e contain an expr-lam with a HOLE domain whose body-subtree contains a
+;; generic op? Single pass tracking "am I inside a hole-lambda".
+(define (hole-lambda-over-generic-op? e)
+  (let search ([x e] [in-hole-lam? #f])
+    (cond
+      [(and in-hole-lam? (generic-op-node? x)) #t]
+      [(expr-lam? x)
+       (or (search (expr-lam-type x) #f)
+           (search (expr-lam-body x)
+                   (or in-hole-lam? (expr-hole? (expr-lam-type x)))))]
+      [else (ormap (lambda (s) (search s in-hole-lam?)) (expr-subfields x))])))
+
+(define i70-inference-hint
+  (string-append
+   "Could not infer type"
+   " — hint (issue #70): a generic numeric op (+, -, *, /, <, …) over an"
+   " unannotated parameter can't infer its numeric type here; annotate the"
+   " parameter (e.g. [fn [x : Int] …]) or use a concrete-op section (e.g."
+   " [int* _ 2] / [int+ _ 1])."))
+
+;; ========================================
+;; CIU T6 F1a-s3 (S7): closed-row-miss diagnostic.
+;; ========================================
+;; A failing expr containing a projection (map-get / get) of a KEYWORD-LITERAL
+;; key out of a RECORD-typed sub-expr that LACKS that key gets the rich
+;; "field :b is not present …" message naming the available fields. Same
+;; contract as the #70 hint above: best-effort post-hoc walk, runs ONLY on the
+;; already-failing error path, purely additive text. The walk re-infers the
+;; map sub-expr at the CALLER's ctx — a node under a binder whose map mentions
+;; bvars simply fails to infer (or isn't a Record) → no hint, never a wrong one;
+;; any exception is swallowed to the plain message.
+
+;; x is a projection node? → (m . k), else #f
+(define (projection-parts x)
+  (cond
+    [(expr-map-get? x) (cons (expr-map-get-m x) (expr-map-get-k x))]
+    [(expr-get? x) (cons (expr-get-coll x) (expr-get-key x))]
+    [else #f]))
+
+(define (format-closed-row-miss rec kw names)
+  (define labels (map car (expr-Record-fields rec)))
+  (define shown (if (> (length labels) 6) (take labels 6) labels))
+  (define more (- (length labels) (length shown)))
+  (string-append
+   "Could not infer type — field :" (symbol->string kw)
+   " is not present in the record " (pp-expr rec names)
+   (if (null? labels)
+       " (the record has no fields)"
+       (string-append
+        "; available fields: "
+        (string-join (map (lambda (l) (string-append ":" (symbol->string l))) shown) " ")
+        (if (> more 0) (format " (+~a more)" more) "")))))
+
+(define (closed-row-miss-hint ctx e names)
+  (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+    (let search ([x e])
+      (and (expr? x)
+           (or (let ([mk (projection-parts x)])
+                 (and mk
+                      (expr-keyword? (cdr mk))
+                      (let ([tm (whnf (infer ctx (car mk)))])
+                        (and (expr-Record? tm)
+                             (eq? (expr-Record-key-domain tm) 'keyword)
+                             ;; CIU T6 F1a.2 p1a: CLOSED rows only — a miss on a
+                             ;; 'dyn row is legal (D19: fresh meta; the field may
+                             ;; live in the remainder), so the closed-row-miss
+                             ;; hint would be misleading there.
+                             (eq? (expr-Record-tail tm) 'closed)
+                             (not (record-lookup-field tm (expr-keyword-name (cdr mk))))
+                             (format-closed-row-miss tm (expr-keyword-name (cdr mk)) names)))))
+               (ormap search (expr-subfields x)))))))
+
+;; ========================================
+;; CIU T6 F1b.4e (D22): seal missing-required hint (the S7 pattern)
+;; ========================================
+;; When an infer failure contains a seal boundary (expr-ann against a schema
+;; fvar) whose EXACT knowledge lacks required (undefaulted) fields, name them.
+(define (seal-residual-hint ctx e names)
+  (let search ([x e])
+    (and (expr? x)
+         (or (match x
+               [(expr-ann term (expr-fvar sname))
+                (let ([schema (lookup-schema-by-name sname)])
+                  (and schema
+                       (let ([missing (seal-missing-required ctx term schema)])
+                         (and (pair? missing)
+                              (string-append
+                               "schema seal: missing required field"
+                               (if (null? (cdr missing)) "" "s")
+                               " "
+                               (string-join (map (lambda (k) (format ":~a" k)) missing) ", ")
+                               " of " (symbol->string sname)
+                               " (fields without :default must be provided; runtime maps discharge via validate)")))))]
+               [_ #f])
+             (ormap search (expr-subfields x))))))
+
+;; ========================================
+;; CIU T6 F1b.7f: targeted schema-mistake diagnostics (the stress-test edge —
+;; the generic "Could not infer type" swallowed the specific error on common
+;; schema mistakes). Each is the seal-residual-hint pattern: a guarded post-hoc
+;; walk over the already-failing expr, re-deriving the type info the bare
+;; expr-error dropped, returning a string OR #f. All PRESERVE the "Could not
+;; infer type" prefix + append detail (the infer-door convention — the struct
+;; has no wanted/got field; the 7 test-firstclass-ops "Could not infer" prefix
+;; asserts pin this). Ordered most-specific-first in infer/err; shapes are
+;; (mostly) disjoint. No qtt twin: a rejected term errors at infer/err before
+;; inferQ (post-freeze) ever runs.
+;; ========================================
+
+;; (a) wrong-TYPED field in a seal (map-assoc chain against a schema fvar) —
+;; seal-missing-required is presence-only, so this names the field + expected/got.
+(define (seal-field-type-hint ctx e names)
+  (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+    (let search ([x e])
+      (and (expr? x)
+           (or (match x
+                 [(expr-ann term (expr-fvar sname))
+                  (let ([schema (lookup-schema-by-name sname)])
+                    (and schema
+                         (let ([mm (seal-first-field-type-mismatch ctx term schema)])
+                           (and mm
+                                (string-append
+                                 "Could not infer type — schema " (symbol->string sname)
+                                 ": field :" (symbol->string (car mm))
+                                 " expected " (pp-expr (cadr mm) names)
+                                 (if (caddr mm)
+                                     (string-append ", got " (pp-expr (caddr mm) names))
+                                     " (the provided value's type could not be inferred)"))))))]
+                 [_ #f])
+               (ormap search (expr-subfields x)))))))
+
+;; (c) cross-schema `the` — a VALUE whose whole type is a DIFFERENT schema fvar
+;; sealed against sname (the `the`/infer door; the def-annotation door already
+;; gives a crisp type-mismatch — this closes that door asymmetry). Scoped to a
+;; schema-fvar-typed term so it never fires on a map-assoc literal (that is (a)).
+(define (cross-schema-seal-hint ctx e names)
+  (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+    (let search ([x e])
+      (and (expr? x)
+           (or (match x
+                 [(expr-ann term (expr-fvar sname))
+                  (let ([schema (lookup-schema-by-name sname)])
+                    (and schema
+                         (let ([tt (whnf (infer ctx term))])
+                           (and (not (expr-error? tt))
+                                (expr-fvar? tt)
+                                (lookup-schema-by-name (expr-fvar-name tt))
+                                (not (eq? (expr-fvar-name tt) sname))
+                                (string-append
+                                 "Could not infer type — the " (symbol->string sname)
+                                 ": the value has type " (pp-expr tt names)
+                                 ", which does not satisfy schema " (symbol->string sname))))))]
+                 [_ #f])
+               (ormap search (expr-subfields x)))))))
+
+;; (d) validate on a NON-map subject — reuse the exact validate-subject predicate.
+(define (validate-nonmap-hint ctx e names)
+  (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+    (let search ([x e])
+      (and (expr? x)
+           (or (match x
+                 [(expr-validate _sname _closed? _plan subject _names)
+                  (let ([tm (whnf (infer ctx subject))])
+                    (and (not (expr-error? tm))
+                         (not (validate-subject-map-ish? tm))
+                         (string-append
+                          "Could not infer type — validate expects a map-like subject"
+                          " (a map, record, or schema/selection value), got "
+                          (pp-expr tm names))))]
+                 [_ #f])
+               (ormap search (expr-subfields x)))))))
+
+;; (b) a SCHEMA/RECORD value flowing into a function's non-matching parameter type
+;; (the app-domain mismatch). NARROWED to a schema/record ARG so it stays clear of
+;; the issue-#70 op-section "Could not infer" cases (whose args are numeric holes).
+(define (app-domain-schema-hint ctx e names)
+  (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+    (let search ([x e])
+      (and (expr? x)
+           (or (match x
+                 [(expr-app e1 e2)
+                  (let ([t1 (whnf (infer ctx e1))])
+                    (and (expr-Pi? t1)
+                         (let ([dom (expr-Pi-domain t1)]
+                               [at (whnf (infer ctx e2))])
+                           (and (not (expr-error? at))
+                                ;; scope gate: the argument is a schema value or a record
+                                (or (and (expr-fvar? at) (lookup-schema-by-name (expr-fvar-name at)))
+                                    (expr-Record? at))
+                                (not (check ctx e2 dom))
+                                (string-append
+                                 "Could not infer type — argument of type " (pp-expr at names)
+                                 " does not match the expected parameter type " (pp-expr dom names))))))]
+                 [_ #f])
+               (ormap search (expr-subfields x)))))))
 
 ;; ========================================
 ;; Infer with error reporting
@@ -39,7 +291,15 @@
   (let ([result (infer ctx e)])
     (if (expr-error? result)
         (inference-failed-error loc
-                                "Could not infer type"
+                                (or (seal-residual-hint ctx e names)    ;; F1b.4e: most specific first
+                                    (seal-field-type-hint ctx e names)  ;; F1b.7f (a) wrong-typed field
+                                    (cross-schema-seal-hint ctx e names);; F1b.7f (c) cross-schema `the`
+                                    (validate-nonmap-hint ctx e names)  ;; F1b.7f (d) validate non-map subj
+                                    (app-domain-schema-hint ctx e names);; F1b.7f (b) schema arg vs param
+                                    (closed-row-miss-hint ctx e names)  ;; S7
+                                    (if (hole-lambda-over-generic-op? e)
+                                        i70-inference-hint
+                                        "Could not infer type"))
                                 (pp-expr e names))
         result)))
 
@@ -61,6 +321,17 @@
 ;; Phase 7a: per-branch re-checking — each branch gets its own speculative check
 ;;           for branch-specific "got: ..." messages
 ;; Phase D3: derivation chains from sub-failures within each branch
+;; PPN 4C 3C.c.3 (2026-05-24): union path REWORKED per §9.5.4 mini-design:
+;;   - Per-branch chain now constructed via derivation-chain-for/union-check
+;;     (3C.c.1 translator); build-derivation-chain's union-type path RETIRES
+;;     per Q9 mandate (non-union path retained for type-mismatch-error /
+;;     Phase 11b scope)
+;;   - Cell-19 (union-derivation-chains-cell-id) WRITTEN via direct elab-cell-
+;;     write on (current-prop-net-box) — multi-writer scaffolding with on-
+;;     network 3C.b handler; retires at Track 4D (Q-C.1 (f) lock; D-3C.c-9
+;;     honest scaffolding framing)
+;;   - union-exhaustion-error.derivation-chain field shape FLIPS atomically
+;;     to (listof derivation-chain) per Q-B.2 + Q-C.6 locks
 (define (check/err ctx e t [loc srcloc-unknown] [names '()])
   (if (check ctx e t)
       #t
@@ -70,7 +341,8 @@
             ;; Union: produce enriched error with per-branch details
             (let* ([branches (flatten-union-local t*)]
                    [branch-strs (map (lambda (b) (pp-expr b names)) branches)]
-                   ;; Phase D3: collect per-branch mismatch AND derivation chain
+                   ;; Phase D3+3C.c.3: collect per-branch mismatch AND structured
+                   ;; derivation-chain (struct from error-explanation.rkt)
                    [branch-info
                     (for/list ([br (in-list branches)])
                       ;; Try check against this specific branch (speculatively)
@@ -80,38 +352,119 @@
                           values  ;; identity: #t = success, #f = failure
                           (format "union-branch-~a" (pp-expr br names))))
                       (if ok?
-                          (list "matched" '())
-                          ;; Per-branch failure: get sub-failures + infer actual type
+                          ;; PPN 4C 3C.c.3: "matched" branches get empty
+                          ;; derivation-chain struct (was '()). Per-branch list
+                          ;; shape (Q-C.6); empty struct semantics preserved.
+                          (list "matched" (derivation-chain '()))
+                          ;; Per-branch failure: get sub-failures + translate
+                          ;; via 3C.c.1 primitive (NOT build-derivation-chain
+                          ;; — union-type path retires per Q9). Atomic case
+                          ;; has empty sub-failures → empty chain (matches UX
+                          ;; parity per §9.5.4.7.1); nested case populates.
                           (let* ([latest (get-latest-speculation-failure)]
-                                 [sub-failures
-                                  (if latest
-                                      (speculation-failure-sub-failures latest)
-                                      '())]
-                                 [chain (build-derivation-chain sub-failures (current-command-atms))]
+                                 [sub-failures (if latest
+                                                   (speculation-failure-sub-failures latest)
+                                                   '())]
+                                 [chain (derivation-chain-for/union-check sub-failures)]
                                  [actual (infer ctx e)])
                             (list (if (expr-error? actual)
                                       "<could not infer>"
                                       (pp-expr actual names))
                                   chain))))]
                    [branch-mismatches (map car branch-info)]
-                   [derivation-chain (map cadr branch-info)])
+                   [branch-chains (map cadr branch-info)])
+              ;; PPN 4C 3C.c.3: write cell-19 (multi-writer scaffolding per
+              ;; §9.5.4.4 Q-C.1 (f) lean). Direct elab-cell-write (NOT
+              ;; propagator wrapper) per user direction — pretending sexp is
+              ;; a propagator would set bad precedent; honest scaffolding
+              ;; preferable. Defensive on missing net-box (test contexts
+              ;; without elab-network).
+              (define net-box (current-prop-net-box))
+              (when net-box
+                (set-box! net-box
+                          (elab-cell-write (unbox net-box)
+                                           union-derivation-chains-cell-id
+                                           (hasheq loc branch-chains))))
               (union-exhaustion-error
                loc
                (pp-expr t names)  ;; message field = full union type string (for help line)
                branch-strs
                branch-mismatches
                (pp-expr e names)
-               derivation-chain))
+               branch-chains))
             ;; Non-union: collect provenance from speculation failures
+            ;; (Phase 11b scope — build-derivation-chain's non-union path
+            ;; retained until Phase 11b extends static-walk-based primitive
+            ;; to non-union cases. Q9 union-only retirement.)
             (let* ([actual (infer ctx e)]
                    [latest (get-latest-speculation-failure)]
                    [sub-failures (if latest
                                      (speculation-failure-sub-failures latest)
                                      '())]
-                   [provenance (build-derivation-chain sub-failures (current-command-atms))])
+                   [provenance (build-derivation-chain sub-failures (current-command-atms))]
+                   ;; CIU T6 F1b.4e: seal missing-required specificity — the
+                   ;; annotation-def route fails HERE (check/err), not
+                   ;; infer/err; when the expected type IS a schema fvar,
+                   ;; compute the missing set directly on the checked term.
+                   [seal-msg (match t*
+                               [(expr-fvar sname)
+                                ;; (schemas only — selections have NO
+                                ;; completeness residual at construction:
+                                ;; partial views by design)
+                                (let ([schema (lookup-schema-by-name sname)])
+                                  (and schema
+                                       (let ([missing (seal-missing-required ctx e schema)])
+                                         (and (pair? missing)
+                                              (string-append
+                                               "schema seal: missing required field"
+                                               (if (null? (cdr missing)) "" "s")
+                                               " "
+                                               (string-join
+                                                (map (lambda (k) (format ":~a" k)) missing) ", ")
+                                               " of " (symbol->string sname))))))]
+                               [_ #f])]
+                   ;; CIU T6 F1b.7f (Q3): wrong-TYPED field on the check door too
+                   ;; (the annotation-def route), sharing seal-first-field-type-
+                   ;; mismatch with the infer/err hint — names the field +
+                   ;; expected/got. Ordered AFTER seal-msg (missing-required wins).
+                   [seal-type-msg
+                    (and (not seal-msg)
+                         (match t*
+                           [(expr-fvar sname)
+                            (let ([schema (lookup-schema-by-name sname)])
+                              (and schema
+                                   (let ([mm (seal-first-field-type-mismatch ctx e schema)])
+                                     (and mm
+                                          (string-append
+                                           "schema " (symbol->string sname)
+                                           ": field :" (symbol->string (car mm))
+                                           " expected " (pp-expr (cadr mm) names)
+                                           (if (caddr mm)
+                                               (string-append ", got " (pp-expr (caddr mm) names))
+                                               ""))))))]
+                           [_ #f]))]
+                   ;; CIU T6 (2026-07-18): a clearer message for the common
+                   ;; "unannotated parameter used in a way that needs its type"
+                   ;; case — the checked term is a lambda whose domain is a hole
+                   ;; (unannotated param) and inference of the body gave up
+                   ;; (actual = could-not-infer). e.g. `defn f [p] p.x` (field
+                   ;; projection) or `defn f [x] [+ x 1]` (arithmetic): both need
+                   ;; p / x to have a known type. Surgical — only fires for this
+                   ;; shape, so every other check failure keeps "Type mismatch".
+                   [infer-hint-msg
+                    (and (not seal-msg)
+                         (expr-error? actual)
+                         (expr-lam? e)
+                         (let ([dom (expr-lam-type e)])
+                           (or (expr-hole? dom) (expr-meta? dom)))
+                         (string-append
+                          "cannot infer the type of an unannotated parameter — "
+                          "it is used here in a way that requires a known type "
+                          "(e.g. field projection `.field` or arithmetic). "
+                          "Annotate the parameter (`[x : T]`) or add a `spec`."))])
               (type-mismatch-error
                loc
-               "Type mismatch"
+               (or seal-msg seal-type-msg infer-hint-msg "Type mismatch")
                (pp-expr t names)
                (if (expr-error? actual) "<could not infer>" (pp-expr actual names))
                (pp-expr e names)

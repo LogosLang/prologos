@@ -326,7 +326,13 @@
           (define pnet* (net-cell-write pnet worldview-cache-cell-id cleared-wv))
           (set-box! elab-net-box (struct-copy elab-network enet [prop-net pnet*])))
         ;; Record retraction for S(-1) GC pass.
-        (record-assumption-retraction! hyp-id)
+        ;; PPN 4C 2A.a (2026-05-20): pure functional API; caller commits via
+        ;; set-box! at the existing imperative boundary. Writes to cell-id 13
+        ;; (retraction-stratum-request); BSP outer-loop's value-tier processing
+        ;; invokes process-retraction handler. See D.3 §8.7.a.3.
+        (when (and elab-net-box hyp-id)
+          (set-box! elab-net-box
+                    (record-assumption-retraction (unbox elab-net-box) hyp-id)))
         ;; Phase D2: Extract sub-failures (failures added during this thunk)
         ;; The box stores newest-first, so new failures are at the front.
         (define-values (sub-failures support-set)

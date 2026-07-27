@@ -42,8 +42,7 @@
                 shared-param-impl-reg
                 shared-ctor-reg
                 shared-type-meta)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
+  (parameterize ([current-file-module-network-ref (make-module-network)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -57,7 +56,7 @@
                  [current-spec-store (hasheq)])
     (install-module-loader!)
     (process-string "(ns test-termination)")
-    (values (current-prelude-env)
+    (values (global-env-snapshot)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -68,7 +67,7 @@
 
 ;; Helper: extract DT and analyze termination for a prelude function.
 (define (analyze-prelude-func fqn)
-  (parameterize ([current-prelude-env shared-global-env]
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                  [current-ctor-registry shared-ctor-reg]
                  [current-type-meta shared-type-meta])
     (define body (global-env-lookup-value fqn))
@@ -80,7 +79,7 @@
 
 ;; Helper: run sexp code using shared environment.
 (define (run s)
-  (parameterize ([current-prelude-env shared-global-env]
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -375,7 +374,7 @@
   (check-true (string-contains? result "nil")))
 
 (test-case "pipeline/get-termination-class: caches result"
-  (parameterize ([current-prelude-env shared-global-env]
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                  [current-termination-registry (hasheq)]
                  [current-ctor-registry shared-ctor-reg]
                  [current-type-meta shared-type-meta])
@@ -388,7 +387,7 @@
     (check-equal? class2 'terminating)))
 
 (test-case "pipeline/get-function-fuel: terminating gets full fuel"
-  (parameterize ([current-prelude-env shared-global-env]
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                  [current-termination-registry (hasheq)]
                  [current-ctor-registry shared-ctor-reg]
                  [current-type-meta shared-type-meta])
@@ -396,7 +395,7 @@
     (check-equal? fuel 50)))  ;; NARROW-DEPTH-LIMIT
 
 (test-case "pipeline/get-termination-class: unknown for missing"
-  (parameterize ([current-prelude-env shared-global-env]
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                  [current-termination-registry (hasheq)])
     (define class (get-termination-class 'no-such-function))
     (check-equal? class 'non-narrowable)))

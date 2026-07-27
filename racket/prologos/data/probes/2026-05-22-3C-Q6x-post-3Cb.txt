@@ -1,0 +1,27 @@
+PERF-COUNTERS:{"cell_allocs":153,"constraint_count":0,"constraint_retries":0,"elaborate_steps":14,"infer_steps":44,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":17,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":14,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":3,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":8,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":14,"atms_nogood_count":11,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":11,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":45,"mem_after_bytes":143880112,"mem_before_bytes":142751144,"mem_retained_bytes":1128968}
+CELL-METRICS:{"cells":42,"propagators":0}
+(list
+ (union-exhaustion-error
+  (srcloc "<unknown>" 0 0 0)
+  "Nat | Bool"
+  '("Nat" "Bool")
+  '("String" "String")
+  "\"hello\""
+  '(() ()))
+ (union-exhaustion-error
+  (srcloc "<unknown>" 0 0 0)
+  "Int | Bool"
+  '("Int" "Bool")
+  '("String" "String")
+  "\"world\""
+  '(() ()))
+ (union-exhaustion-error
+  (srcloc "<unknown>" 0 0 0)
+  "Nat | Bool | String"
+  '("Nat" "Bool" "String")
+  '("Posit32" "Posit32" "Posit32")
+  "[posit32 1284463657]"
+  '(() () ())))

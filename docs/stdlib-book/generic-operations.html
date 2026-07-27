@@ -174,32 +174,45 @@ ol.toc-chapters a:hover { text-decoration: underline; }
 <nav class="chapter-nav"><a href="identity-and-algebra.html">← Identity And Algebra</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="type-conversions.html">Type Conversions →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
 <article>
 <h1 class="chapter-title">Generic Operations</h1>
-<div class="prose"><p>This chapter collects several modules that provide generic
-operations over collections and numbers:</p>
-<p>  • <strong>generic-ops</strong> — HKT-dispatched collection operations
-    (gmap, gfilter, gfold, etc.) — the prototype that led to
-    the refined versions in collection-fns
-  • <strong>generic-arith</strong> — first-class wrappers around parser
-    keyword arithmetic (plus, minus, times, divide, etc.)
-  • <strong>generic-numeric-ops</strong> — sum, product, int-range using
-    identity traits
-  • <strong>seq-functions</strong> — operations using the Seq trait interface
-  • <strong>type-functors</strong> — named type abstractions (Xf, AppResult)</p></div>
-<h2 class="part-header">Part I — Generic Collection Operations</h2>
+<div class="prose"><p>This chapter provides HKT-dispatched collection operations
+and Seq protocol functions:</p>
+<p>  * <strong>gmap, gfilter, gfold, glength, gconcat</strong> --- generic
+    operations over any collection implementing Seqable,
+    Buildable, or Foldable
+  * <strong>gany?, gall?, gto-list</strong> --- generic predicates and
+    conversion
+  * <strong>seq-length, seq-drop, seq-any?, seq-all?, seq-find</strong> ---
+    operations using the Seq trait interface (first/rest/empty?)</p>
+<p>Generic arithmetic (the first-class operators <code>+ - * / negate abs</code>)
+and numeric folds (sum, product, int-range) are in the
+identity-and-algebra chapter. Type functors are in the
+collection-traits chapter.</p></div>
 <section class="module-container">
 <div class="module-badge">prologos::core::generic-ops</div>
-<h3 class="section-title">HKT-Dispatched Collection Operations</h3>
-<div class="prose"><p>These operate on any collection type implementing Seqable,
-Buildable, or Foldable. Named with <code>g</code> prefix to avoid
-shadowing the collection-fns versions.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::seqable-trait    <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Seqable</span>]]
-<span class="hl-kw">require</span> [prologos::core::buildable-trait  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Buildable</span> <span class="hl-ty">Buildable-from-seq</span>]]
-<span class="hl-kw">require</span> [prologos::core::foldable-trait   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Foldable</span>]]
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::collection-traits <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Seqable</span>]]
+<span class="hl-kw">require</span> [prologos::core::collection-traits <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Buildable</span> <span class="hl-ty">Buildable-from-seq</span>]]
+<span class="hl-kw">require</span> [prologos::core::collection-traits <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Foldable</span>]]
+<span class="hl-kw">require</span> [prologos::core::collection-traits <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Seq</span> seq-first seq-rest seq-empty?]]
 <span class="hl-kw">require</span> [prologos::data::lseq             <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span>]]
 <span class="hl-kw">require</span> [prologos::data::lseq-ops         <span class="hl-kwlit">:refer</span> [lseq-map lseq-filter lseq-length
                                                   lseq-append lseq-to-list]]
-<span class="hl-kw">require</span> [prologos::data::list             <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span>]]</code></pre>
-<div class="prose"><p>gmap : (A -&gt; B) -&gt; C A -&gt; C B</p></div>
+<span class="hl-kw">require</span> [prologos::data::list             <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> cons nil]]
+<span class="hl-kw">require</span> [prologos::data::option           <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none some? unwrap-or map]]</code></pre>
+<div class="prose"><p>========================================
+Generic Collection Operations (HKT-dispatched)
+========================================
+These operate on any collection type that implements the appropriate
+HKT traits (Seqable, Buildable, Foldable). The compiler automatically
+resolves the type constructor C from the argument type and dispatches
+to the correct trait instance.</p>
+<p>The pattern is: to-seq -&gt; lseq-op -&gt; from-seq</p>
+<p>Implementation note: Single-method trait dicts ($seq, $foldable) are
+called directly with explicit type args because the elaborator only
+auto-inserts implicit args for global fvars, not local lambda params.
+Multi-method trait accessors (Buildable-from-seq) are global fvars
+and get C auto-inserted, but need the element type A passed explicitly
+since it comes after the dict param (not a leading m0 position).</p>
+<p>gmap : (A -&gt; B) -&gt; C A -&gt; C B</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> gmap {<span class="hl-ty">A</span> <span class="hl-ty">B</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} [<span class="hl-ty">Seqable</span> <span class="hl-ty">C</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Buildable</span> <span class="hl-ty">C</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">B</span>]
 <span class="hl-kw">defn</span> gmap [$seq $build f xs]
   <span class="hl-ty">Buildable-from-seq</span> $build <span class="hl-ty">B</span> [lseq-map <span class="hl-ty">A</span> <span class="hl-ty">B</span> f [$seq <span class="hl-ty">A</span> xs]]</code></pre>
@@ -231,98 +244,20 @@ shadowing the collection-fns versions.</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> gto-list {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} [<span class="hl-ty">Seqable</span> <span class="hl-ty">C</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]
 <span class="hl-kw">defn</span> gto-list [$seq xs]
   lseq-to-list [$seq <span class="hl-ty">A</span> xs]</code></pre>
-</section>
-<h2 class="part-header">Part II — First-Class Arithmetic</h2>
-<section class="module-container">
-<div class="module-badge">prologos::core::generic-arith</div>
-<h3 class="section-title">First-Class Generic Arithmetic</h3>
-<div class="prose"><p>Parser keywords (+, -, *, /, negate, abs) dispatch at the AST
-level and can't be passed to higher-order functions like reduce,
-map, or fold. These wrappers are proper first-class values.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::add-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Add</span> <span class="hl-ty">Add-add</span>]]
-<span class="hl-kw">require</span> [prologos::core::sub-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Sub</span> <span class="hl-ty">Sub-sub</span>]]
-<span class="hl-kw">require</span> [prologos::core::mul-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Mul</span> <span class="hl-ty">Mul-mul</span>]]
-<span class="hl-kw">require</span> [prologos::core::div-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Div</span> <span class="hl-ty">Div-div</span>]]
-<span class="hl-kw">require</span> [prologos::core::neg-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Neg</span> <span class="hl-ty">Neg-neg</span>]]
-<span class="hl-kw">require</span> [prologos::core::abs-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Abs</span> <span class="hl-ty">Abs-abs</span>]]
-
-<span class="hl-kw">spec</span> plus [<span class="hl-ty">Add</span> <span class="hl-ty">A</span>] <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
-  <span class="hl-kwlit">:doc</span> <span class="hl-str">"First-class addition — pass to higher-order functions like reduce, map"</span>
-<span class="hl-kw">defn</span> plus [dict x y]
-  <span class="hl-ty">Add-add</span> dict x y
-
-<span class="hl-kw">spec</span> minus [<span class="hl-ty">Sub</span> <span class="hl-ty">A</span>] <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
-  <span class="hl-kwlit">:doc</span> <span class="hl-str">"First-class subtraction"</span>
-<span class="hl-kw">defn</span> minus [dict x y]
-  <span class="hl-ty">Sub-sub</span> dict x y
-
-<span class="hl-kw">spec</span> times [<span class="hl-ty">Mul</span> <span class="hl-ty">A</span>] <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
-  <span class="hl-kwlit">:doc</span> <span class="hl-str">"First-class multiplication"</span>
-<span class="hl-kw">defn</span> times [dict x y]
-  <span class="hl-ty">Mul-mul</span> dict x y
-
-<span class="hl-kw">spec</span> divide [<span class="hl-ty">Div</span> <span class="hl-ty">A</span>] <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
-  <span class="hl-kwlit">:doc</span> <span class="hl-str">"First-class division"</span>
-<span class="hl-kw">defn</span> divide [dict x y]
-  <span class="hl-ty">Div-div</span> dict x y
-
-<span class="hl-kw">spec</span> negate-fn [<span class="hl-ty">Neg</span> <span class="hl-ty">A</span>] <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
-  <span class="hl-kwlit">:doc</span> <span class="hl-str">"First-class negation"</span>
-<span class="hl-kw">defn</span> negate-fn [dict x]
-  <span class="hl-ty">Neg-neg</span> dict x
-
-<span class="hl-kw">spec</span> abs-fn [<span class="hl-ty">Abs</span> <span class="hl-ty">A</span>] <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
-  <span class="hl-kwlit">:doc</span> <span class="hl-str">"First-class absolute value"</span>
-<span class="hl-kw">defn</span> abs-fn [dict x]
-  <span class="hl-ty">Abs-abs</span> dict x</code></pre>
-</section>
-<h2 class="part-header">Part III — Numeric Fold Operations</h2>
-<section class="module-container">
-<div class="module-badge">prologos::core::generic-numeric-ops</div>
-<h3 class="section-title">Sum, Product, and Range</h3>
-<div class="prose"><p>Generic folds over lists using identity traits for the
-initial value. Also provides <code>int-range</code> for generating
-integer sequences.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::list                            <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons reduce]]
-<span class="hl-kw">require</span> [prologos::core::add-trait                       <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Add</span> <span class="hl-ty">Add-add</span>]]
-<span class="hl-kw">require</span> [prologos::core::mul-trait                       <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Mul</span> <span class="hl-ty">Mul-mul</span>]]
-<span class="hl-kw">require</span> [prologos::core::additive-identity-trait         <span class="hl-kwlit">:refer</span> [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">AdditiveIdentity-zero</span>]]
-<span class="hl-kw">require</span> [prologos::core::multiplicative-identity-trait   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">MultiplicativeIdentity-one</span>]]</code></pre>
-<div class="prose"><p>sum : (Add A) (AdditiveIdentity A) -&gt; List A -&gt; A</p></div>
-<pre><code class="prologos"><span class="hl-kw">spec</span> sum [<span class="hl-ty">Add</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
-  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Sum a list using generic addition and an additive identity as zero"</span>
-<span class="hl-kw">defn</span> sum [add-dict id-dict xs]
-  reduce <span class="hl-ty">A</span> <span class="hl-ty">A</span> [<span class="hl-kw">fn</span> acc x [<span class="hl-ty">Add-add</span> add-dict acc x]] [<span class="hl-ty">AdditiveIdentity-zero</span> id-dict] xs</code></pre>
-<div class="prose"><p>product : (Mul A) (MultiplicativeIdentity A) -&gt; List A -&gt; A</p></div>
-<pre><code class="prologos"><span class="hl-kw">spec</span> product [<span class="hl-ty">Mul</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
-  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Multiply a list using generic multiplication and a multiplicative identity as one"</span>
-<span class="hl-kw">defn</span> product [mul-dict id-dict xs]
-  reduce <span class="hl-ty">A</span> <span class="hl-ty">A</span> [<span class="hl-kw">fn</span> acc x [<span class="hl-ty">Mul-mul</span> mul-dict acc x]] [<span class="hl-ty">MultiplicativeIdentity-one</span> id-dict] xs</code></pre>
-<div class="prose"><p>int-range : Int -&gt; Int -&gt; List Int</p></div>
-<pre><code class="prologos"><span class="hl-kw">spec</span> int-range <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">Int</span>]
-  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Generate a list of integers from start (inclusive) to end (exclusive)"</span>
-<span class="hl-kw">defn</span> int-range [start end]
-  <span class="hl-kw">if</span> [int-lt start end]
-    cons <span class="hl-ty">Int</span> start [int-range [int+ start <span class="hl-num">1</span>] end]
-    nil <span class="hl-ty">Int</span></code></pre>
-</section>
-<h2 class="part-header">Part IV — Seq Functions</h2>
-<section class="module-container">
-<div class="module-badge">prologos::core::seq-functions</div>
-<h3 class="section-title">Generic Seq Functions</h3>
-<div class="prose"><p>Operations using the Seq trait interface (first/rest/empty?).
-All take an explicit Seq dictionary. When auto-resolution is
-available, the dict param becomes implicit.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::seq-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Seq</span> seq-first seq-rest seq-empty?]]
-<span class="hl-kw">require</span> [prologos::data::option <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none some? unwrap-or map]]
-<span class="hl-kw">require</span> [prologos::data::list <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> cons nil]]</code></pre>
-<div class="prose"><p>seq-length : Seq S -&gt; S A -&gt; Nat</p></div>
+<div class="prose"><p>========================================
+Generic Seq Functions
+========================================
+All take an explicit Seq dictionary.
+When auto-resolution is available, the dict param becomes implicit.</p>
+<p>seq-length : Seq S -&gt; S A -&gt; Nat
+Count the elements in a sequence</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> seq-length [<span class="hl-ty">Seq</span> <span class="hl-ty">S</span>] [<span class="hl-ty">S</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>
 <span class="hl-kw">defn</span> seq-length [dict xs]
   <span class="hl-kw">if</span> [seq-empty? dict xs]
     zero
     suc [seq-length dict [seq-rest dict xs]]</code></pre>
-<div class="prose"><p>seq-drop : Seq S -&gt; Nat -&gt; S A -&gt; S A</p></div>
+<div class="prose"><p>seq-drop : Seq S -&gt; Nat -&gt; S A -&gt; S A
+Drop the first n elements</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> seq-drop [<span class="hl-ty">Seq</span> <span class="hl-ty">S</span>] <span class="hl-ty">Nat</span> [<span class="hl-ty">S</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">S</span> <span class="hl-ty">A</span>]
 <span class="hl-kw">defn</span> seq-drop [dict n xs]
   <span class="hl-kw">match</span> n
@@ -331,7 +266,8 @@ available, the dict param becomes implicit.</p></div>
         <span class="hl-kw">if</span> [seq-empty? dict xs]
           xs
           seq-drop dict k [seq-rest dict xs]</code></pre>
-<div class="prose"><p>seq-any? : Seq S -&gt; [A -&gt; Bool] -&gt; S A -&gt; Bool</p></div>
+<div class="prose"><p>seq-any? : Seq S -&gt; [A -&gt; Bool] -&gt; S A -&gt; Bool
+True if any element satisfies the predicate</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> seq-any? [<span class="hl-ty">Seq</span> <span class="hl-ty">S</span>] [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">S</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
 <span class="hl-kw">defn</span> seq-any? [dict pred xs]
   <span class="hl-kw">if</span> [seq-empty? dict xs]
@@ -339,7 +275,8 @@ available, the dict param becomes implicit.</p></div>
     <span class="hl-kw">if</span> [unwrap-or false [map pred [seq-first dict xs]]]
       true
       seq-any? dict pred [seq-rest dict xs]</code></pre>
-<div class="prose"><p>seq-all? : Seq S -&gt; [A -&gt; Bool] -&gt; S A -&gt; Bool</p></div>
+<div class="prose"><p>seq-all? : Seq S -&gt; [A -&gt; Bool] -&gt; S A -&gt; Bool
+True if all elements satisfy the predicate</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> seq-all? [<span class="hl-ty">Seq</span> <span class="hl-ty">S</span>] [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">S</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
 <span class="hl-kw">defn</span> seq-all? [dict pred xs]
   <span class="hl-kw">if</span> [seq-empty? dict xs]
@@ -347,7 +284,8 @@ available, the dict param becomes implicit.</p></div>
     <span class="hl-kw">if</span> [unwrap-or true [map pred [seq-first dict xs]]]
       seq-all? dict pred [seq-rest dict xs]
       false</code></pre>
-<div class="prose"><p>seq-find : Seq S -&gt; [A -&gt; Bool] -&gt; S A -&gt; Option A</p></div>
+<div class="prose"><p>seq-find : Seq S -&gt; [A -&gt; Bool] -&gt; S A -&gt; Option A
+Find the first element satisfying the predicate</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> seq-find [<span class="hl-ty">Seq</span> <span class="hl-ty">S</span>] [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">S</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>]
 <span class="hl-kw">defn</span> seq-find [dict pred xs]
   <span class="hl-kw">if</span> [seq-empty? dict xs]
@@ -357,25 +295,6 @@ available, the dict param becomes implicit.</p></div>
         seq-first dict xs
         seq-find dict pred [seq-rest dict xs]
       none <span class="hl-ty">A</span></code></pre>
-</section>
-<h2 class="part-header">Part V — Type Functors</h2>
-<section class="module-container">
-<div class="module-badge">prologos::core::type-functors</div>
-<h3 class="section-title">Named Type Abstractions</h3>
-<div class="prose"><p>Type functors are metadata-only: they register in the functor
-store and as deftypes for transparent expansion. The <code>:compose</code>
-and <code>:identity</code> features are reserved for future phases.</p></div>
-<pre><code class="prologos">(<span class="hl-kw">ns</span> prologos::core::type-functors <span class="hl-kwlit">:no-prelude</span>)</code></pre>
-<div class="prose"><p>Xf A B = forall R. (R -&gt; B -&gt; R) -&gt; R -&gt; A -&gt; R
-A transducer: transforms A-reductions into B-reductions.</p></div>
-<pre><code class="prologos">(<span class="hl-kw">functor</span> <span class="hl-ty">Xf</span> ($brace-params <span class="hl-ty">A</span> : (<span class="hl-ty">Type</span> <span class="hl-num">0</span>) <span class="hl-ty">B</span> : (<span class="hl-ty">Type</span> <span class="hl-num">0</span>))
-  <span class="hl-kwlit">:unfolds</span> &lt;(<span class="hl-ty">S</span> :0 <span class="hl-ty">Type</span>) <span class="hl-op">-&gt;</span> [<span class="hl-ty">S</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span>&gt;
-  ($brace-params <span class="hl-kwlit">:doc</span> <span class="hl-str">"A transducer: transforms A-reductions into B-reductions"</span>))</code></pre>
-<div class="prose"><p>AppResult A = Either String A
-A computation that may fail with a string error.</p></div>
-<pre><code class="prologos">(<span class="hl-kw">functor</span> <span class="hl-ty">AppResult</span> ($brace-params <span class="hl-ty">A</span> : (<span class="hl-ty">Type</span> <span class="hl-num">0</span>))
-  <span class="hl-kwlit">:unfolds</span> (<span class="hl-ty">Either</span> <span class="hl-ty">String</span> <span class="hl-ty">A</span>)
-  ($brace-params <span class="hl-kwlit">:doc</span> <span class="hl-str">"A computation that may fail with a string error"</span>))</code></pre>
 </section>
 </article>
 <nav class="bottom-nav"><a href="identity-and-algebra.html">← Identity And Algebra</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="type-conversions.html">Type Conversions →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>

@@ -1,4 +1,4 @@
-ns examples.audit.numerics
+ns examples::audit::numerics
 
 ;; ========================================================================
 ;; AUDIT 09 — Numeric Tower
@@ -168,27 +168,27 @@ ns examples.audit.numerics
 ;; ========================================================================
 
 ;; --- 4a. Posit literals ---
-~3.14
+3.14
 ;; expect: posit32 value : Posit32
 
-~42
+42.0
 ;; expect: posit32 value : Posit32
 
-~0.5
+0.5
 ;; expect: posit32 value : Posit32
 
 ;; --- 4b. Posit32 ops ---
-[p32+ ~1.0 ~2.0]
-;; expect: posit32 ~3.0 : Posit32
+[p32+ 1.0 2.0]
+;; expect: 3.0 : Posit32
 
-[p32* ~2.0 ~3.0]
-;; expect: posit32 ~6.0 : Posit32
+[p32* 2.0 3.0]
+;; expect: 6.0 : Posit32
 
-[p32-neg ~3.14]
-;; expect: posit32 ~-3.14 : Posit32
+[p32-neg 3.14]
+;; expect: -3.14 : Posit32
 
-[p32-abs [p32-neg ~3.14]]
-;; expect: posit32 ~3.14 : Posit32
+[p32-abs [p32-neg 3.14]]
+;; expect: 3.14 : Posit32
 
 
 ;; ========================================================================

@@ -39,7 +39,7 @@
 (test-case "make-infra-state: wraps existing prop-network"
   (define net (make-prop-network 5000))
   (define is (make-infra-state net))
-  (check-equal? (prop-network-fuel (solver-state-net (infra-state-atms is))) 5000))
+  (check-equal? (net-cell-read (solver-state-net (infra-state-atms is)) fuel-cell-id) 5000))
 
 (test-case "make-infra-state: with initial names"
   (define names (hasheq 'foo (cell-id 0)))

@@ -302,6 +302,167 @@
           [else #f]))  ;; no dot found — not a decimal
       #f))
 
+(define (recognize-exp-literal rrb pos)
+  ;; Exponent literal (Numerics N1): [-]?digit+(.digit+)?[eE][+-]?digit+
+  ;; ONLY matches when an exponent is actually present — otherwise returns #f so
+  ;; plain numbers/decimals/arrows fall through to recognize-number /
+  ;; recognize-decimal-literal / recognize-negative-number / session-arrow.
+  ;; Classified as 'number → value via #e → EXACT (Int if integral, Rat if not),
+  ;; bypassing the decimal-literal → Posit32 path (bare 3.14 stays Posit32 = N4).
+  (define c0 (rrb-char-at rrb pos))
+  (define neg?
+    (and c0 (char=? c0 #\-)
+         (let ([c1 (rrb-char-at rrb (+ pos 1))])
+           (and c1 (char-numeric? c1)))
+         ;; same delimiter gate as recognize-negative-number (so x-1e3 stays ident)
+         (or (= pos 0)
+             (let ([prev (rrb-char-at rrb (- pos 1))])
+               (and prev (or (char=? prev #\space) (char=? prev #\newline)
+                             (char=? prev #\tab) (char=? prev #\()
+                             (char=? prev #\[) (char=? prev #\{)
+                             (char=? prev #\<)))))))
+  (define start (if neg? (+ pos 1) pos))
+  (define s0 (rrb-char-at rrb start))
+  (and s0 (char-numeric? s0)
+       (let* ([i (let loop ([i (+ start 1)])  ;; integer-part digits
+                   (define nc (rrb-char-at rrb i))
+                   (if (and nc (char-numeric? nc)) (loop (+ i 1)) i))]
+              [i (let ([dot (rrb-char-at rrb i)]      ;; optional .digit+
+                       [d1 (rrb-char-at rrb (+ i 1))])
+                   (if (and dot (char=? dot #\.) d1 (char-numeric? d1))
+                       (let loop ([j (+ i 2)])
+                         (define nc (rrb-char-at rrb j))
+                         (if (and nc (char-numeric? nc)) (loop (+ j 1)) j))
+                       i))]
+              [ec (rrb-char-at rrb i)])             ;; REQUIRE [eE][+-]?digit+
+         (and ec (or (char=? ec #\e) (char=? ec #\E))
+              (let* ([j (+ i 1)]
+                     [sgn (rrb-char-at rrb j)]
+                     [k (if (and sgn (or (char=? sgn #\+) (char=? sgn #\-))) (+ j 1) j)]
+                     [d (rrb-char-at rrb k)])
+                (and d (char-numeric? d)
+                     (let loop ([m (+ k 1)])
+                       (define nc (rrb-char-at rrb m))
+                       (if (and nc (char-numeric? nc)) (loop (+ m 1)) (- m pos)))))))))
+
+(define (recognize-float-literal rrb pos)
+  ;; Float literal (Numerics N3c): [-]?digit+(.digit+)?([eE][+-]?digit+)? f (32|64)?
+  ;; REQUIRES the trailing `f` (optionally `f32`/`f64`); only fires when present so
+  ;; bare numbers/decimals/exponents fall through (bare 3.14 stays Posit32 = N4).
+  ;; Classified 'float-literal → ($float-literal <exact-rational> <width>) → Float.
+  (define c0 (rrb-char-at rrb pos))
+  (define neg?
+    (and c0 (char=? c0 #\-)
+         (let ([c1 (rrb-char-at rrb (+ pos 1))])
+           (and c1 (char-numeric? c1)))
+         ;; same delimiter gate as recognize-negative-number (so x-3.0f stays ident)
+         (or (= pos 0)
+             (let ([prev (rrb-char-at rrb (- pos 1))])
+               (and prev (or (char=? prev #\space) (char=? prev #\newline)
+                             (char=? prev #\tab) (char=? prev #\()
+                             (char=? prev #\[) (char=? prev #\{)
+                             (char=? prev #\<)))))))
+  (define start (if neg? (+ pos 1) pos))
+  (define s0 (rrb-char-at rrb start))
+  (and s0 (char-numeric? s0)
+       (let* ([i (let loop ([i (+ start 1)])         ;; integer-part digits
+                   (define nc (rrb-char-at rrb i))
+                   (if (and nc (char-numeric? nc)) (loop (+ i 1)) i))]
+              [i (let ([dot (rrb-char-at rrb i)]      ;; optional .digit+
+                       [d1 (rrb-char-at rrb (+ i 1))])
+                   (if (and dot (char=? dot #\.) d1 (char-numeric? d1))
+                       (let loop ([j (+ i 2)])
+                         (define nc (rrb-char-at rrb j))
+                         (if (and nc (char-numeric? nc)) (loop (+ j 1)) j))
+                       i))]
+              [i (let ([ec (rrb-char-at rrb i)])      ;; optional [eE][+-]?digit+
+                   (if (and ec (or (char=? ec #\e) (char=? ec #\E)))
+                       (let* ([j (+ i 1)]
+                              [sgn (rrb-char-at rrb j)]
+                              [k (if (and sgn (or (char=? sgn #\+) (char=? sgn #\-))) (+ j 1) j)]
+                              [d (rrb-char-at rrb k)])
+                         (if (and d (char-numeric? d))
+                             (let loop ([m (+ k 1)])
+                               (define nc (rrb-char-at rrb m))
+                               (if (and nc (char-numeric? nc)) (loop (+ m 1)) m))
+                             i))   ;; 'e' without exponent digits → no exp consumed
+                       i))]
+              [fc (rrb-char-at rrb i)])               ;; REQUIRE the `f` suffix
+         (and fc (char=? fc #\f)
+              (let* ([j (+ i 1)]
+                     [cj (rrb-char-at rrb j)]
+                     [cj1 (rrb-char-at rrb (+ j 1))]
+                     [j2 (cond
+                           [(and cj cj1 (char=? cj #\3) (char=? cj1 #\2)) (+ j 2)]
+                           [(and cj cj1 (char=? cj #\6) (char=? cj1 #\4)) (+ j 2)]
+                           [else j])]
+                     [after (rrb-char-at rrb j2)])
+                ;; trailing guard: the suffix must end the token (no alnum after)
+                (and (or (not after)
+                         (not (or (char-numeric? after) (char-alphabetic? after))))
+                     (- j2 pos)))))))
+
+(define (recognize-posit-literal rrb pos)
+  ;; Posit literal (Numerics N6b; bare `p` = Posit64 added for Float symmetry):
+  ;;   [-]?digit+(.digit+)?([eE][+-]?digit+)? p (8|16|32|64)?
+  ;; Bare `p` → Posit64 (mirrors bare `f` = Float64); explicit p8/p16/p32/p64; no
+  ;; suffix at all = Posit32 (D-N6.1 compute default). Mirrors recognize-float-literal.
+  ;; Classified 'posit-literal → ($posit-literal <exact-rational> <width>) → Posit.
+  (define c0 (rrb-char-at rrb pos))
+  (define neg?
+    (and c0 (char=? c0 #\-)
+         (let ([c1 (rrb-char-at rrb (+ pos 1))])
+           (and c1 (char-numeric? c1)))
+         ;; same delimiter gate as recognize-negative-number (so x-3.0p8 stays ident)
+         (or (= pos 0)
+             (let ([prev (rrb-char-at rrb (- pos 1))])
+               (and prev (or (char=? prev #\space) (char=? prev #\newline)
+                             (char=? prev #\tab) (char=? prev #\()
+                             (char=? prev #\[) (char=? prev #\{)
+                             (char=? prev #\<)))))))
+  (define start (if neg? (+ pos 1) pos))
+  (define s0 (rrb-char-at rrb start))
+  (and s0 (char-numeric? s0)
+       (let* ([i (let loop ([i (+ start 1)])         ;; integer-part digits
+                   (define nc (rrb-char-at rrb i))
+                   (if (and nc (char-numeric? nc)) (loop (+ i 1)) i))]
+              [i (let ([dot (rrb-char-at rrb i)]      ;; optional .digit+
+                       [d1 (rrb-char-at rrb (+ i 1))])
+                   (if (and dot (char=? dot #\.) d1 (char-numeric? d1))
+                       (let loop ([j (+ i 2)])
+                         (define nc (rrb-char-at rrb j))
+                         (if (and nc (char-numeric? nc)) (loop (+ j 1)) j))
+                       i))]
+              [i (let ([ec (rrb-char-at rrb i)])      ;; optional [eE][+-]?digit+
+                   (if (and ec (or (char=? ec #\e) (char=? ec #\E)))
+                       (let* ([j (+ i 1)]
+                              [sgn (rrb-char-at rrb j)]
+                              [k (if (and sgn (or (char=? sgn #\+) (char=? sgn #\-))) (+ j 1) j)]
+                              [d (rrb-char-at rrb k)])
+                         (if (and d (char-numeric? d))
+                             (let loop ([m (+ k 1)])
+                               (define nc (rrb-char-at rrb m))
+                               (if (and nc (char-numeric? nc)) (loop (+ m 1)) m))
+                             i))   ;; 'e' without exponent digits → no exp consumed
+                       i))]
+              [pc (rrb-char-at rrb i)])               ;; REQUIRE the `p` suffix
+         (and pc (char=? pc #\p)
+              (let* ([j (+ i 1)]
+                     [cj (rrb-char-at rrb j)]
+                     [cj1 (rrb-char-at rrb (+ j 1))]
+                     [j2 (cond
+                           [(and cj cj1 (char=? cj #\1) (char=? cj1 #\6)) (+ j 2)]
+                           [(and cj cj1 (char=? cj #\3) (char=? cj1 #\2)) (+ j 2)]
+                           [(and cj cj1 (char=? cj #\6) (char=? cj1 #\4)) (+ j 2)]
+                           [(and cj (char=? cj #\8)) (+ j 1)]
+                           [else j])]                  ;; bare `p` → Posit64 (like bare `f`)
+                     [after (and j2 (rrb-char-at rrb j2))])
+                (and j2
+                     ;; trailing guard: the suffix must end the token (no alnum after)
+                     (or (not after)
+                         (not (or (char-numeric? after) (char-alphabetic? after))))
+                     (- j2 pos)))))))
+
 (define (recognize-string rrb pos)
   ;; String: " ... " with escape handling
   (define c (rrb-char-at rrb pos))
@@ -355,8 +516,16 @@
              (and c2 (char-alphabetic? c2))))
       (let loop ([i (+ pos 2)])
         (define nc (rrb-char-at rrb i))
-        (if (and nc (or (char-alphabetic? nc) (char-numeric? nc)
-                        (char=? nc #\-) (char=? nc #\_)))
+        ;; Keyword-continue delegates to ident-continue? — the SINGLE source of
+        ;; truth, matching the sibling keyword recognizers (#:kw / .:kw, which
+        ;; already loop on ident-continue?). This admits ?/! (the predicate /
+        ;; mutation suffix conventions: :active?, :reset!) and ^ (path-selection
+        ;; rename :key^alias, kept whole then split by validate-selection-paths).
+        ;; The LEADING char (above) stays char-alphabetic? — deliberately narrower
+        ;; than ident-start? so :=/:-foo do not collide with colon-assign. (CIU T6
+        ;; F1b.7g: was an inline charset that had drifted from ident-continue? for
+        ;; 8 chars; CIU T6 F3 added ^ inline without noticing the base divergence.)
+        (if (and nc (ident-continue? nc))
             (loop (+ i 1))
             (- i pos)))
       #f))
@@ -398,16 +567,18 @@
       2
       #f))
 
-(define (recognize-tilde-number rrb pos)
-  ;; ~42 or ~3/7 or ~3.14 (approx-literal)
+;; (N6c) `~N` approximate literals are REMOVED — bare decimals are Posit32
+;; (N6b), other widths use pNN literals (2.5p8). `~[` (LSeq) survives via
+;; recognize-tilde-lbracket above. The recognizer is KEPT solely so stale
+;; tilde-numeric input gets a migration hint instead of silent mis-tokenizing.
+(define (recognize-removed-tilde-number rrb pos)
   (define c1 (rrb-char-at rrb pos))
   (define c2 (rrb-char-at rrb (+ pos 1)))
   (if (and c1 c2 (char=? c1 #\~)
            (or (char-numeric? c2)
-               (and (char=? c2 #\-) ;; negative: ~-5
+               (and (char=? c2 #\-)
                     (let ([c3 (rrb-char-at rrb (+ pos 2))])
                       (and c3 (char-numeric? c3))))))
-      ;; Scan forward for the full number (including trailing N for Nat)
       (let loop ([i (+ pos 1)])
         (define c (rrb-char-at rrb i))
         (if (and c (or (char-numeric? c) (char=? c #\.) (char=? c #\/)
@@ -587,6 +758,15 @@
   (define c1 (rrb-char-at rrb pos))
   (define c2 (rrb-char-at rrb (+ pos 1)))
   (if (and c1 c2 (char=? c1 #\.) (char=? c2 #\{))
+      2
+      #f))
+
+(define (recognize-dot-lparen rrb pos)
+  ;; .(  — mixfix entry with `( )` grouping (replaces `.{ }` for mixfix; `.{ }`
+  ;; narrows to path/selection brace-expansion). Content closes on `)`.
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\.) (char=? c2 #\())
       2
       #f))
 
@@ -851,6 +1031,25 @@
   (register-token-pattern!
    (token-pattern 'session-op (lambda (rrb pos) (recognize-session-op rrb pos))
                   (lambda (s p l) 'symbol) 96))  ;; ?, ! standalone
+  ;; Exponent literals (Numerics N1): 1e10, 1.5e-3, -1.5e-3 → exact (Int/Rat).
+  ;; Priority 97 so it wins over negative-number (96), decimal-literal (75) and
+  ;; number (70) for exponent-bearing lexemes; only fires when an exponent is
+  ;; present, so plain numbers/decimals/arrows are unaffected.
+  (register-token-pattern!
+   (token-pattern 'exp-literal (lambda (rrb pos) (recognize-exp-literal rrb pos))
+                  (lambda (s p l) 'number) 97))
+  ;; Float literals (Numerics N3c): 3.14f, 3.14f32, 1.5e-3f64 → Float.
+  ;; Priority 98 so it wins over exp-literal (97) and below, consuming the
+  ;; trailing `f`/`f32`/`f64` in one token; only fires when the `f` suffix is present.
+  (register-token-pattern!
+   (token-pattern 'float-literal (lambda (rrb pos) (recognize-float-literal rrb pos))
+                  (lambda (s p l) 'float-literal) 98))
+  ;; Posit literals (Numerics N6b): 2p8, 3.14p16, 1.5e-3p64 → Posit{8,16,32,64}.
+  ;; p32 accepted on input for explicitness though display emits bare (Posit32
+  ;; is the bare-decimal default width). Suffix space disjoint from `f`.
+  (register-token-pattern!
+   (token-pattern 'posit-literal (lambda (rrb pos) (recognize-posit-literal rrb pos))
+                  (lambda (s p l) 'posit-literal) 99))
   (register-token-pattern!
    (token-pattern 'negative-number (lambda (rrb pos) (recognize-negative-number rrb pos))
                   (lambda (rrb pos len)
@@ -899,6 +1098,9 @@
    (token-pattern 'dot-lbrace (lambda (rrb pos) (recognize-dot-lbrace rrb pos))
                   (lambda (s p l) 'dot-lbrace) 87))
   (register-token-pattern!
+   (token-pattern 'dot-lparen (lambda (rrb pos) (recognize-dot-lparen rrb pos))
+                  (lambda (s p l) 'dot-lparen) 87))
+  (register-token-pattern!
    (token-pattern 'broadcast-access (lambda (rrb pos) (recognize-broadcast-access rrb pos))
                   (lambda (s p l) 'broadcast-access) 87))
   (register-token-pattern!
@@ -911,9 +1113,14 @@
   (register-token-pattern!
    (token-pattern 'tilde-lbracket (lambda (rrb pos) (recognize-tilde-lbracket rrb pos))
                   (lambda (s p l) 'tilde-lbracket) 85))
+  ;; (N6c) ~N approximate literals removed — the pattern now raises a
+  ;; migration hint (fires on the production tokenizer, any entry path)
   (register-token-pattern!
-   (token-pattern 'tilde-number (lambda (rrb pos) (recognize-tilde-number rrb pos))
-                  (lambda (s p l) 'approx-literal) 86))  ;; higher priority than tilde-lbracket
+   (token-pattern 'tilde-number (lambda (rrb pos) (recognize-removed-tilde-number rrb pos))
+                  (lambda (s p l)
+                    (error 'prologos-reader
+                           "`~~` approximate literals were removed — bare decimals are Posit32 (3.14); use pNN literals for other widths (3.14p16, or 3.14p for Posit64)"))
+                  86))
   ;; Backtick and comma (quasiquote/unquote)
   (register-token-pattern!
    (token-pattern 'backtick (lambda (rrb pos) (recognize-backtick rrb pos))
@@ -1075,7 +1282,7 @@
                [new-bd (cond
                          [(memq type '(lbracket lparen lbrace langle
                                        quote-lbracket at-lbracket tilde-lbracket
-                                       hash-lbrace dot-lbrace))
+                                       hash-lbrace dot-lbrace dot-lparen))
                           (+ bd 1)]
                          [(memq type '(rbracket rparen rbrace rangle))
                           (max 0 (- bd 1))]
@@ -1588,7 +1795,8 @@
          [(equal? lexeme "||") '$facts-sep]
          [(equal? lexeme "&>") '$clause-sep]
          [else sym])]
-      [(number) (or (string->number lexeme) (string->symbol lexeme))]
+      ;; #e prefix → exact (Numerics N1: exponent literals; idempotent for plain int/rat)
+      [(number) (or (string->number (string-append "#e" lexeme)) (string->number lexeme) (string->symbol lexeme))]
       [(string)
        ;; Strip surrounding quotes if present (old reader returned raw content)
        (if (and (>= (string-length lexeme) 2)
@@ -1605,11 +1813,6 @@
        ;; Parse as exact rational: "3.14" → 157/50, "-3.14" → -157/50
        (define exact-str (string-append "#e" lexeme))
        (or (string->number exact-str) (string->number lexeme) lexeme)]
-      [(approx-literal)
-       (define num-str (substring lexeme 1))
-       ;; Parse as exact: prepend #e to get exact rational (3.14 → 157/50)
-       (define exact-str (string-append "#e" num-str))
-       (or (string->number exact-str) (string->number num-str) lexeme)]
       [(pipe) '$pipe]
       [(pipe-right) '$pipe-gt]
       [(facts-sep) '$facts-sep]
@@ -1662,15 +1865,20 @@
     (define entry (rrb-get disamb-rrb i))
     (define type (set-first (token-entry-types entry)))
     (define lexeme (token-entry-lexeme entry))
-    ;; Reject negative Nats (-3N, ~-3N)
+    ;; Reject negative Nats (-3N)
     (when (and (eq? type 'nat-literal)
                (string-contains? lexeme "-"))
       (error 'tokenize-string "Negative Nat literal not allowed: ~a" lexeme))
-    (when (and (eq? type 'approx-literal)
-               (let ([num-str (substring lexeme 1)])
-                 (and (string-contains? num-str "-")
-                      (string-suffix? num-str "N"))))
-      (error 'tokenize-string "Negative Nat literal not allowed: ~a" lexeme))
+    ;; (N6c) Reject stray ~ with a migration hint: `~N` approximate literals
+    ;; were removed (`~[` LSeq is tokenized earlier and never reaches here).
+    (when (and (eq? type 'symbol)
+               (or (equal? lexeme "~")
+                   (and (string-prefix? lexeme "~")
+                        (> (string-length lexeme) 1)
+                        (let ([c (string-ref lexeme 1)])
+                          (or (char-numeric? c) (char=? c #\-))))))
+      (error 'prologos-reader
+             "`~~` approximate literals were removed — bare decimals are Posit32 (3.14); use pNN literals for other widths (3.14p16, or 3.14p for Posit64)"))
     ;; Reject standalone & (must use &> for rule clauses)
     (when (and (eq? type 'symbol) (equal? lexeme "&"))
       (error 'prologos-reader "Unexpected & — use &> for rule clauses"))
@@ -1769,7 +1977,8 @@
                   [(string=? lexeme "->") '->]
                   [(string=? lexeme "->>") '->>]
                   [else (string->symbol lexeme)])]
-      [(number) (or (string->number lexeme) (string->symbol lexeme))]
+      ;; #e prefix → exact (Numerics N1: exponent literals; idempotent for plain int/rat)
+      [(number) (or (string->number (string-append "#e" lexeme)) (string->number lexeme) (string->symbol lexeme))]
       [(nat-literal) (string->number (substring lexeme 0 (- (string-length lexeme) 1)))]
       [(string) (if (and (>= (string-length lexeme) 2)
                          (char=? (string-ref lexeme 0) #\")
@@ -1855,6 +2064,16 @@
         (make-stx (list (make-stx '$rat-literal source line col pos1 0)
                         (make-stx value source line col pos1 span))
                   source line col pos1 span)]
+       ;; N6b: NON-INTEGRAL exponent lexeme (1.5e-3) → ($exp-literal n). The
+       ;; exp-literal token identity is erased at tokenize (its classifier
+       ;; returns 'number), so like the `/` case above the LEXEME is the only
+       ;; carrier of notation origin. Integral exponents (1e10) stay bare —
+       ;; they parse as exact integers → Int (structural; D8-consistent).
+       [(and (exact? value) (not (integer? value))
+             (or (string-contains? lexeme "e") (string-contains? lexeme "E")))
+        (make-stx (list (make-stx '$exp-literal source line col pos1 0)
+                        (make-stx value source line col pos1 span))
+                  source line col pos1 span)]
        [else (make-stx value source line col pos1 span)])]
     [(rest-param)
      (if (string=? lexeme "...")
@@ -1894,6 +2113,11 @@
 
 ;; Group tokens from vec[start..end) with bracket matching.
 ;; Returns (values stx-elements next-index)
+(define (mixfix-close? ct)
+  ;; Both mixfix entry forms — `.{ }` (mixfix-rbrace) and `.( )` (mixfix-rparen) —
+  ;; suppress angle-bracket grouping so `<`/`>` read as operators inside mixfix.
+  (or (eq? ct 'mixfix-rbrace) (eq? ct 'mixfix-rparen)))
+
 (define (group-tokens vec start end close-type source source-str)
   (let loop ([i start] [result '()])
     (cond
@@ -2157,14 +2381,15 @@
             [(and (eq? type 'rangle) (> angle-depth 0)) (loop (+ i 1) (- angle-depth 1) other-depth)]
             ;; Other brackets — track depth to skip over them
             [(memq type '(lbracket lparen lbrace quote-lbracket at-lbracket
-                          tilde-lbracket hash-lbrace dot-lbrace))
+                          tilde-lbracket hash-lbrace dot-lbrace dot-lparen))
              (loop (+ i 1) angle-depth (+ other-depth 1))]
             [(and (memq type '(rbracket rparen rbrace)) (> other-depth 0))
              (loop (+ i 1) angle-depth (- other-depth 1))]
             ;; Hit the current scope's closer at depth 0 → no match
             [(and close-type (not (eq? close-type 'indent-close))
                   (or (eq? type close-type)
-                      (and (eq? close-type 'mixfix-rbrace) (eq? type 'rbrace)))
+                      (and (eq? close-type 'mixfix-rbrace) (eq? type 'rbrace))
+                      (and (eq? close-type 'mixfix-rparen) (eq? type 'rparen)))
                   (= other-depth 0))
              #f]
             [else (loop (+ i 1) angle-depth other-depth)])])])))
@@ -2229,8 +2454,18 @@
             ;; Matching close bracket
             [(and close-type (not (eq? close-type 'indent-close))
                   (or (eq? type close-type)
-                      (and (eq? close-type 'mixfix-rbrace) (eq? type 'rbrace))))
+                      (and (eq? close-type 'mixfix-rbrace) (eq? type 'rbrace))
+                      (and (eq? close-type 'mixfix-rparen) (eq? type 'rparen))))
              (values (reverse result) (+ i 1))]
+            ;; Mixfix `.( )` grouping: inside .( ), a bare ( E ) is an infix
+            ;; grouping → nested $mixfix (reuses nested-mixfix re-expansion, like
+            ;; the old nested .{ }). `[ ]` stays a plain function-application list.
+            [(and (eq? type 'lparen) (eq? close-type 'mixfix-rparen))
+             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'mixfix-rparen source source-str qq-depth)])
+               (let-values ([(ml mc) (pos->line-col source-str (token-entry-start-pos item))])
+                 (loop next-i
+                       (cons (make-stx (cons (make-stx '$mixfix source ml mc (+ (token-entry-start-pos item) 1) 1) inner)
+                                       source ml mc (+ (token-entry-start-pos item) 1) 1) result))))]
             ;; Square/round brackets — check for postfix index (xs[0] with no space)
             [(memq type '(lbracket lparen))
              (define is-postfix?
@@ -2261,7 +2496,7 @@
             ;; Angle brackets → $angle-type sentinel IF matching rangle exists
             ;; AND we're not inside a dot-lbrace/mixfix group (where < > are operators)
             [(eq? type 'langle)
-             (if (and (not (eq? close-type 'mixfix-rbrace))
+             (if (and (not (mixfix-close? close-type))
                       (has-matching-rangle? vec (+ i 1) end close-type))
                  (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rangle source source-str qq-depth)])
                    (let-values ([(al ac) (pos->line-col source-str (token-entry-start-pos item))])
@@ -2277,9 +2512,19 @@
                  (loop next-i
                        (cons (make-stx (cons (make-stx '$brace-params source bl bc (+ (token-entry-start-pos item) 1) 1) inner)
                                        source bl bc (+ (token-entry-start-pos item) 1) 1) result))))]
-            ;; Dot-brace → $mixfix sentinel (uses 'mixfix-rbrace to suppress angle brackets)
+            ;; Dot-brace `.{ }` is RETIRED for mixfix (replaced by `.( )`): emit
+            ;; $mixfix-retired so preparse raises a targeted migration error.
+            ;; (Path/selection brace-expansion is a separate surface: `:kw.` + `{ }`.)
             [(eq? type 'dot-lbrace)
              (let-values ([(inner next-i) (group-items vec (+ i 1) end 'mixfix-rbrace source source-str qq-depth)])
+               (let-values ([(ml mc) (pos->line-col source-str (token-entry-start-pos item))])
+                 (loop next-i
+                       (cons (make-stx (cons (make-stx '$mixfix-retired source ml mc (+ (token-entry-start-pos item) 1) 2) inner)
+                                       source ml mc (+ (token-entry-start-pos item) 1) 2) result))))]
+            ;; Dot-paren → $mixfix sentinel with 'mixfix-rparen (closes on `)`,
+            ;; enables `( )` grouping inside — the mixfix ergonomics form).
+            [(eq? type 'dot-lparen)
+             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'mixfix-rparen source source-str qq-depth)])
                (let-values ([(ml mc) (pos->line-col source-str (token-entry-start-pos item))])
                  (loop next-i
                        (cons (make-stx (cons (make-stx '$mixfix source ml mc (+ (token-entry-start-pos item) 1) 2) inner)
@@ -2381,11 +2626,33 @@
                                          (make-stx num-val source vl vc spos (- epos spos)))
                                    source vl vc spos (- epos spos))
                          result))]
-            ;; Approx-literal compound token: ~42 → ($approx-literal 42)
-            [(eq? type 'approx-literal)
+            ;; (N6c) approx-literal compound-token arm removed (~N deprecated)
+            ;; Posit-literal compound token (Numerics N6b): 3.14p16 → ($posit-literal 157/50 16)
+            [(eq? type 'posit-literal)
              (define lex (token-entry-lexeme item))
-             (define num-str (substring lex 1))
-             ;; Parse as exact rational: 3.14 → 157/50 (matching old reader)
+             (define len (string-length lex))
+             (define lc (string-ref lex (- len 1)))
+             (define-values (num-str width)
+               (cond
+                 [(and (>= len 3) (char=? lc #\6)
+                       (char=? (string-ref lex (- len 2)) #\1)
+                       (char=? (string-ref lex (- len 3)) #\p))
+                  (values (substring lex 0 (- len 3)) 16)]
+                 [(and (>= len 3) (char=? lc #\2)
+                       (char=? (string-ref lex (- len 2)) #\3)
+                       (char=? (string-ref lex (- len 3)) #\p))
+                  (values (substring lex 0 (- len 3)) 32)]
+                 [(and (>= len 3) (char=? lc #\4)
+                       (char=? (string-ref lex (- len 2)) #\6)
+                       (char=? (string-ref lex (- len 3)) #\p))
+                  (values (substring lex 0 (- len 3)) 64)]
+                 [(and (>= len 2) (char=? lc #\8)
+                       (char=? (string-ref lex (- len 2)) #\p))
+                  (values (substring lex 0 (- len 2)) 8)]
+                 [(char=? lc #\p)  ;; bare `p` → Posit64 (mirrors bare `f` = Float64)
+                  (values (substring lex 0 (- len 1)) 64)]
+                 [else (values lex 32)]))  ;; unreachable: recognizer emits p8/16/32/64/bare-p
+             ;; exact rational like decimal/approx; posit encoding at elaborate
              (define num-val (or (string->number (string-append "#e" num-str))
                                  (string->number num-str)
                                  (string->symbol num-str)))
@@ -2393,28 +2660,43 @@
              (define epos (token-entry-end-pos item))
              (define-values (vl vc) (pos->line-col source-str spos))
              (loop (+ i 1)
-                   (cons (make-stx (list (make-stx '$approx-literal source vl vc (+ spos 1) 1)
-                                         (make-stx num-val source vl (+ vc 1) (+ spos 2) (- epos spos 1)))
-                                   source vl vc (+ spos 1) (- epos spos))
+                   (cons (make-stx (list (make-stx '$posit-literal source vl vc (+ spos 1) 1)
+                                         (make-stx num-val source vl vc spos (- epos spos))
+                                         (make-stx width source vl vc spos (- epos spos)))
+                                   source vl vc spos (- epos spos))
                          result))]
-            ;; Tilde prefix: ~ followed by token → $approx-literal sentinel
-            ;; ~42 → ($approx-literal 42), ~[1 2] handled by tilde-lbracket
-            [(and (eq? type 'symbol)
-                  (equal? (token-entry-lexeme item) "~")
-                  (< (+ i 1) end)
-                  (let ([next (vector-ref vec (+ i 1))])
-                    (and (token-entry? next)
-                         ;; Adjacent: no whitespace gap
-                         (= (token-entry-end-pos item)
-                            (token-entry-start-pos next)))))
-             (let* ([next-item (vector-ref vec (+ i 1))]
-                    [next-stx (token-entry->stx next-item source source-str)])
-               (define-values (vl vc) (pos->line-col source-str (token-entry-start-pos item)))
-               (loop (+ i 2)
-                     (cons (make-stx (list (make-stx '$approx-literal source vl vc (+ (token-entry-start-pos item) 1) 1)
-                                           next-stx)
-                                     source vl vc (+ (token-entry-start-pos item) 1) 1)
-                           result)))]
+            ;; Float-literal compound token (Numerics N3c): 3.14f → ($float-literal 157/50 64)
+            [(eq? type 'float-literal)
+             (define lex (token-entry-lexeme item))
+             (define len (string-length lex))
+             (define lc (string-ref lex (- len 1)))
+             (define-values (num-str width)
+               (cond
+                 [(and (>= len 3) (char=? lc #\2)
+                       (char=? (string-ref lex (- len 2)) #\3)
+                       (char=? (string-ref lex (- len 3)) #\f))
+                  (values (substring lex 0 (- len 3)) 32)]
+                 [(and (>= len 3) (char=? lc #\4)
+                       (char=? (string-ref lex (- len 2)) #\6)
+                       (char=? (string-ref lex (- len 3)) #\f))
+                  (values (substring lex 0 (- len 3)) 64)]
+                 [(char=? lc #\f) (values (substring lex 0 (- len 1)) 64)]
+                 [else (values lex 64)]))
+             ;; exact rational (157/50) like decimal/approx; Float conversion at elaborate
+             (define num-val (or (string->number (string-append "#e" num-str))
+                                 (string->number num-str)
+                                 (string->symbol num-str)))
+             (define spos (token-entry-start-pos item))
+             (define epos (token-entry-end-pos item))
+             (define-values (vl vc) (pos->line-col source-str spos))
+             (loop (+ i 1)
+                   (cons (make-stx (list (make-stx '$float-literal source vl vc (+ spos 1) 1)
+                                         (make-stx num-val source vl vc spos (- epos spos))
+                                         (make-stx width source vl vc spos (- epos spos)))
+                                   source vl vc spos (- epos spos))
+                         result))]
+            ;; (N6c) adjacent-tilde $approx-literal arm removed (~N deprecated;
+            ;; a stray ~ symbol is rejected at tokenize-time with a migration hint)
             ;; Backtick prefix: ` followed by element → $quasiquote sentinel
             [(eq? type 'backtick)
              (if (< (+ i 1) end)

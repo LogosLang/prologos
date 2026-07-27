@@ -43,9 +43,7 @@
 
 ;; Process WS-mode and return functor from store
 (define (functor-for-ws name s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-spec-store (hasheq)]
+  (parameterize ([current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
                  [current-type-meta (hasheq)]
@@ -119,9 +117,7 @@
 
 (test-case "ws functor: registers as deftype"
   ;; A parameterized functor should auto-register as a deftype
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-spec-store (hasheq)]
+  (parameterize ([current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
                  [current-type-meta (hasheq)]

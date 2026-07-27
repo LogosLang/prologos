@@ -1,4 +1,4 @@
-ns examples.surface-ergonomics
+ns examples::surface-ergonomics
 
 ;; ========================================================================
 ;;
@@ -115,9 +115,9 @@ add ?x ?y = 7N
 
 spec sum-of-doubles Int -> Int
 defn sum-of-doubles [n]
-  let a := .{n + n}
-  let b := .{a + a}
-  let c := .{a + b}
+  let a := .(n + n)
+  let b := .(a + a)
+  let c := .(a + b)
   c
 
 [sum-of-doubles 3]
@@ -125,8 +125,8 @@ defn sum-of-doubles [n]
 
 spec chain-add Int Int -> Int
 defn chain-add [x y]
-  let s := .{x + y}
-  let d := .{s + s}
+  let s := .(x + y)
+  let d := .(s + s)
   d
 
 [chain-add 3 4]
@@ -135,7 +135,7 @@ defn chain-add [x y]
 ;; Sequential lets with = as equality check:
 spec check-sum Int Int Int -> Bool
 defn check-sum [a b expected]
-  let s := .{a + b}
+  let s := .(a + b)
   s = expected
 
 [check-sum 3 4 7]
@@ -185,19 +185,19 @@ add 5N ?y = 8N
 ;; Now the narrowing engine resolves trait dispatch to concrete
 ;; instances, then narrows through the instance body.
 ;;
-;;   .{1N + ?y} = 3N   -- + resolves to Nat's Add instance (= add)
+;;   .(1N + ?y) = 3N   -- + resolves to Nat's Add instance (= add)
 ;;                      -- narrows through add's definitional tree
 ;;                      -- finds :y = 2N
 
 ;; Mixfix arithmetic narrowing through trait dispatch:
-.{1N + ?y} = 5N
+.(1N + ?y) = 5N
 ;; '{:y 4N, :x_ 1N} : _
 
-.{?x + 3N} = 7N
+.(?x + 3N) = 7N
 ;; '{:x 4N, :y_ 3N} : _
 
 ;; This composes with = as equality check:
-.{2N + 3N} = 5N
+.(2N + 3N) = 5N
 ;; true : Bool (no ?vars, so this is an equality check)
 
 
@@ -345,7 +345,7 @@ spec sum-first-two (List Int) -> Int
 defn sum-first-two [xs]
   let a := xs[0]
   let b := xs[1]
-  .{a + b}
+  .(a + b)
 
 [sum-first-two nums]
 ;; 300 : Int
@@ -383,7 +383,7 @@ add ?x ?y = 5N
 ;; All (x, y) pairs summing to 5
 
 ;; Trait-dispatch narrowing:
-.{?a + 2N} = 5N
+.(?a + 2N) = 5N
 ;; Resolves + to nat-add, finds a = 3N
 
 
@@ -430,7 +430,7 @@ spec sum-first-two-vals (List (Map Keyword Int)) -> Int
 defn sum-first-two-vals [rs]
   let v1 := rs[0][:val]
   let v2 := rs[1][:val]
-  .{v1 + v2}
+  .(v1 + v2)
 
 [sum-first-two-vals records]
 ;; 300 : Int
@@ -453,7 +453,7 @@ records[2][:val] = 300
 add ?x ?y = 5N
 
 ;; "What number added to 3 gives 7 via trait dispatch?"
-.{?x + 3N} = 7N
+.(?x + 3N) = 7N
 
 
 ;; ========================================================================

@@ -2,13 +2,13 @@
 
 ;;;
 ;;; PROLOGOS MIXFIX SYNTAX TESTS — Part 1
-;;; Unit tests + basic E2E for .{...} delimited infix syntax.
+;;; Unit tests + basic E2E for .(...) delimited infix syntax.
 ;;;
-;;; A. Tokenizer: .{ produces dot-lbrace token
-;;; B. WS Reader: .{a + b} reads as ($mixfix a + b)
+;;; A. Tokenizer: .( produces dot-lbrace token
+;;; B. WS Reader: .(a + b) reads as ($mixfix a + b)
 ;;; C. Pratt Parser: ($mixfix 1 + 2 * 3) → (add 1 (mul 2 3))
 ;;; D. E2E: sexp mode ($mixfix ...)
-;;; E. E2E: WS mode (.{...})
+;;; E. E2E: WS mode (.(...))
 ;;;
 
 (require rackunit
@@ -45,17 +45,22 @@
             (not (memq (token-type t) '(newline eof))))
           (tokenize-string s)))
 
-(test-case "tokenize: .{ produces dot-lbrace token"
+(test-case "tokenize: .( produces dot-lparen token"
+  (define toks (content-tokens ".("))
+  (check-equal? (length toks) 1)
+  (check-equal? (token-type (car toks)) 'dot-lparen))
+
+(test-case "tokenize: .{ still tokenizes as dot-lbrace (retired-mixfix token)"
   (define toks (content-tokens ".{"))
   (check-equal? (length toks) 1)
   (check-equal? (token-type (car toks)) 'dot-lbrace))
 
-(test-case "tokenize: .{a + b} produces dot-lbrace, symbols, rbrace"
-  (define toks (content-tokens ".{a + b}"))
-  (check-equal? (token-type (car toks)) 'dot-lbrace)
-  (check-equal? (token-type (last toks)) 'rbrace))
+(test-case "tokenize: .(a + b) produces dot-lparen, symbols, rparen"
+  (define toks (content-tokens ".(a + b)"))
+  (check-equal? (token-type (car toks)) 'dot-lparen)
+  (check-equal? (token-type (last toks)) 'rparen))
 
-(test-case "tokenize: .{ does not conflict with .ident"
+(test-case "tokenize: .( does not conflict with .ident"
   (define toks (content-tokens ".name"))
   (check-equal? (token-type (car toks)) 'dot-access)
   (check-equal? (token-value (car toks)) 'name))
@@ -64,27 +69,27 @@
 ;; B. WS Reader tests
 ;; ========================================
 
-(test-case "reader: .{a + b} reads as ($mixfix a + b)"
-  (define forms (read-all-forms-string ".{a + b}"))
+(test-case "reader: .(a + b) reads as ($mixfix a + b)"
+  (define forms (read-all-forms-string ".(a + b)"))
   (check-equal? (length forms) 1)
   (define form (car forms))
   (check-true (pair? form))
   (check-equal? (car form) '$mixfix)
   (check-equal? (cdr form) '(a + b)))
 
-(test-case "reader: .{1 + 2 * 3} reads as ($mixfix 1 + 2 * 3)"
-  (define forms (read-all-forms-string ".{1 + 2 * 3}"))
+(test-case "reader: .(1 + 2 * 3) reads as ($mixfix 1 + 2 * 3)"
+  (define forms (read-all-forms-string ".(1 + 2 * 3)"))
   (define form (car forms))
   (check-equal? (car form) '$mixfix)
   (check-equal? (length (cdr form)) 5))
 
-(test-case "reader: .{} reads as ($mixfix)"
-  (define forms (read-all-forms-string ".{}"))
+(test-case "reader: .() reads as ($mixfix)"
+  (define forms (read-all-forms-string ".()"))
   (define form (car forms))
   (check-equal? form '($mixfix)))
 
-(test-case "reader: .{[f x] + [g y]} reads with nested brackets"
-  (define forms (read-all-forms-string ".{[f x] + [g y]}"))
+(test-case "reader: .([f x] + [g y]) reads with nested brackets"
+  (define forms (read-all-forms-string ".([f x] + [g y])"))
   (define form (car forms))
   (check-equal? (car form) '$mixfix)
   (check-equal? (length (cdr form)) 3)
@@ -194,8 +199,7 @@
                 shared-impl-reg
                 shared-param-impl-reg
                 shared-bundle-reg)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
+  (parameterize ([current-file-module-network-ref (make-module-network)]
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
                  [current-lib-paths (list lib-dir)]
@@ -207,7 +211,7 @@
     (install-module-loader!)
     ;; Set up a basic namespace with prelude
     (process-string "(ns test-mixfix)")
-    (values (current-prelude-env)
+    (values (global-env-snapshot)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -217,7 +221,7 @@
 
 ;; Run sexp code using shared environment
 (define (run s)
-  (parameterize ([current-prelude-env shared-global-env]
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list lib-dir)]
@@ -236,7 +240,7 @@
   (call-with-output-file tmp #:exists 'replace
     (lambda (out) (display s out)))
   (define result
-    (parameterize ([current-prelude-env shared-global-env]
+    (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                    [current-ns-context shared-ns-context]
                    [current-module-registry shared-module-reg]
                    [current-lib-paths (list lib-dir)]
@@ -274,35 +278,74 @@
   (check-equal? result "6N : Nat"))
 
 ;; ========================================
-;; E. E2E tests: WS mode (.{...})
+;; E. E2E tests: WS mode (.(...))
 ;; ========================================
 
-(test-case "e2e/ws: basic .{1 + 2}"
+(test-case "e2e/ws: basic .(1 + 2)"
   (define result
-    (run-ws-last "eval .{1N + 2N}\n"))
+    (run-ws-last "eval .(1N + 2N)\n"))
   (check-equal? result "3N : Nat"))
 
-(test-case "e2e/ws: precedence .{1 + 2 * 3}"
+(test-case "e2e/ws: precedence .(1 + 2 * 3)"
   (define result
-    (run-ws-last "eval .{1N + 2N * 3N}\n"))
+    (run-ws-last "eval .(1N + 2N * 3N)\n"))
   (check-equal? result "7N : Nat"))
 
-(test-case "e2e/ws: left-associative .{1 + 2 + 3}"
+(test-case "e2e/ws: left-associative .(1 + 2 + 3)"
   (define result
-    (run-ws-last "eval .{1N + 2N + 3N}\n"))
+    (run-ws-last "eval .(1N + 2N + 3N)\n"))
   (check-equal? result "6N : Nat"))
 
-(test-case "e2e/ws: nested brackets .{[+ 1N 2N] + 3N}"
+(test-case "e2e/ws: nested brackets .([+ 1N 2N] + 3N)"
   (define result
-    (run-ws-last "eval .{[+ 1N 2N] + 3N}\n"))
+    (run-ws-last "eval .([+ 1N 2N] + 3N)\n"))
   (check-equal? result "6N : Nat"))
 
-(test-case "e2e/ws: comparison .{1 < 2}"
+(test-case "e2e/ws: comparison .(1 < 2)"
   (define result
-    (run-ws-last "eval .{1N < 2N}\n"))
+    (run-ws-last "eval .(1N < 2N)\n"))
   (check-equal? result "true : Bool"))
 
-(test-case "e2e/ws: equality .{3 == 3}"
+(test-case "e2e/ws: equality .(3 == 3)"
   (define result
-    (run-ws-last "eval .{3N == 3N}\n"))
+    (run-ws-last "eval .(3N == 3N)\n"))
   (check-equal? result "true : Bool"))
+
+;; --- .( ) grouping + retirement of .{ } (Numerics ergonomics) ---
+
+(test-case "e2e/ws: grouping overrides precedence .((1 + 2) * 3) = 9 (vs 7 ungrouped)"
+  (define result
+    (run-ws-last "eval .((1N + 2N) * 3N)\n"))
+  (check-equal? result "9N : Nat"))
+
+(test-case "e2e/ws: deep nested grouping .(((1 + 2) * 2) + 1) = 7"
+  (define result
+    (run-ws-last "eval .(((1N + 2N) * 2N) + 1N)\n"))
+  (check-equal? result "7N : Nat"))
+
+(test-case "e2e/ws: single operand .(5) = 5"
+  (define result
+    (run-ws-last "eval .(5N)\n"))
+  (check-equal? result "5N : Nat"))
+
+(test-case "e2e/ws: .{ } is not a supported form (path-selection under redesign)"
+  (check-exn #rx"not currently supported|redesign"
+             (lambda () (run-ws-last "eval .{2N + 3N}\n"))))
+
+;; ========================================
+;; Mixfix carrying dot-access (CIU T6, 2026-07-18)
+;; ========================================
+;; The mixfix expander runs at head-expansion time, BEFORE the subform rewrite
+;; where rewrite-dot-access normally fires — so an operand like `p.x` inside
+;; `.(p.x + 1)` reaches pratt-parse as the raw ($dot-access x) sentinel unless
+;; expand-mixfix-form folds it first. These pin the fold.
+
+(test-case "mixfix: dot-access operand folds to map-get before pratt-parse"
+  (check-equal?
+   (preparse-expand-form '($mixfix pt ($dot-access x) + ($decimal-literal 1.0)))
+   '(+ (map-get pt :x) ($decimal-literal 1.0))))
+
+(test-case "mixfix: two dot-access operands both fold"
+  (check-equal?
+   (preparse-expand-form '($mixfix p ($dot-access x) + q ($dot-access x)))
+   '(+ (map-get p :x) (map-get q :x))))

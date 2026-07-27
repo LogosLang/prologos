@@ -49,8 +49,7 @@
                 shared-param-impl-reg
                 shared-capability-reg
                 shared-subtype-reg)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
+  (parameterize ([current-file-module-network-ref (make-module-network)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -78,7 +77,7 @@
 ;; Helper: run code and return (values results cap-result)
 ;; Uses current-module-cap-result to capture the inference result.
 (define (run-and-infer s)
-  (parameterize ([current-prelude-env shared-global-env]
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -94,7 +93,7 @@
 
 ;; Standard run (for tests that don't need cap-result)
 (define (run s)
-  (parameterize ([current-prelude-env shared-global-env]
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -264,7 +263,7 @@
           (string-contains? (exn-message e) "sneaky-fn")
           (string-contains? (exn-message e) "WriteCap")))
    (lambda ()
-     (parameterize ([current-prelude-env
+     (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot
                      ;; Env with two functions:
                      ;; write-fn: declares WriteCap (type + body)
                      ;; sneaky-fn: declares ReadCap but body references write-fn
@@ -282,7 +281,7 @@
                                 (expr-fvar 'Nat)))
                             ;; body references write-fn → call graph has edge
                             (expr-lam 'mw (expr-fvar 'Nat)
-                              (expr-app (expr-fvar 'write-fn) (expr-bvar 0)))))]
+                              (expr-app (expr-fvar 'write-fn) (expr-bvar 0)))))))]
                     [current-capability-registry shared-capability-reg]
                     [current-subtype-registry shared-subtype-reg]
                     [current-module-cap-result #f])

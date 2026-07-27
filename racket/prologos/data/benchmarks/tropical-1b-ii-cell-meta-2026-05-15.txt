@@ -1,0 +1,18 @@
+=== CW1-CW3: 1B-ii PER-CYCLE AMORTIZED MICROBENCH (§13.7 PRIMARY GATE) ===
+
+
+CW1: Generic cell-write cost (baseline; meta=#f slow path)
+  CW1 generic net-cell-write (slow path; meta=#f): 0.110 μs/call (10000 calls)
+
+CW2: Specialized cell-write cost (fast path; production CHAMP-based)
+  CW2 specialized net-cell-write (fast path): 0.256 μs/call (10000 calls)
+
+CW3: Per-cycle amortized at N=100 (§13.7 GATE: ≤ 3 ns/cycle)
+  CW3 round-of-N=100 (1 write + 100 local-var inc): 0.298 μs/call (5000 calls)
+
+CW gate verdict (§13.7 1B-ii primary: per-cycle amortized ≤ 3 ns at N=100):
+  CW1 generic cell-write (slow path):  110.5 ns/call
+  CW2 specialized cell-write (fast path):  256.2 ns/call
+  CW3 round-of-N=100 total:  298.4 ns (1 write + 100 local-vars)
+  → Per-cycle amortized:  2.98 ns/cycle  →  ✓ PASS (gate: ≤ 3 ns)
+  Secondary (informational): production W1+ (CW2) = 256.2 ns; expected 50-70 ns per Q-1B-ii-β CHAMP-based

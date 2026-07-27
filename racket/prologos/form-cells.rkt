@@ -44,6 +44,9 @@
  annotate-surfs-with-specs
  ;; Phase 6: Merge function (exposed for testing / validation)
  form-cell-merge-fn
+ ;; SRE Track 2I Phase 8a: form-cell meet + bot exposed for empirical testing
+ form-cell-meet-fn
+ form-cell-bot
  ;; §12: SRE domain registrations
  form-cell-sre-domain
  spec-cell-sre-domain
@@ -51,6 +54,8 @@
  ;; Phase 3a: Spec cells
  (struct-out spec-cell-value)
  spec-cell-merge-fn
+ ;; SRE Track 2I Phase 8d: spec-cell meet exposed for empirical testing
+ spec-cell-meet-fn
  create-spec-cell
  write-spec-cell
  read-spec-cell
@@ -193,7 +198,12 @@
     (case tag
       ;; Category 1: produce generated defs (registration + N defs)
       [(data)     (process-data datum)]
-      [(trait)    (process-trait datum)]
+      ;; N6d-i: map preparse-expand-form like the impl arm (parity with the
+      ;; file-mode trait arm, macros.rkt) — trait output now includes derived
+      ;; method wrappers whose deftype-macro sub-forms need expansion.
+      [(trait)    (let ([defs (process-trait datum)])
+                    (for/list ([d (in-list defs)])
+                      (preparse-expand-form d)))]
       [(impl)     (let ([defs (process-impl datum)])
                     (for/list ([d (in-list defs)])
                       (preparse-expand-form d)))]
@@ -235,6 +245,42 @@
     (define stx (tree-node->stx-form node "<cell>" (or source-str "")))
     (if stx (syntax->datum stx) #f)))
 
+;; CIU T6 (WS-pipeline wiring, 2026-07-18): a verified-tag form (def/defn/spec)
+;; can carry an IMPLICIT-MAP body — the layout keyword-tail form
+;; (`def user` / `  :name "a"` / `  :age 1` → `def user {:name "a" :age 1}`).
+;; `rewrite-implicit-map` (a preparse DATUM rewrite, macros.rkt) turns the
+;; keyword tail into `$brace-params`, but `parse-form-tree` (the tree path the
+;; verified-tags arm uses) never runs preparse — so the raw `:name value` tokens
+;; reach the def form-parser as "def: expected ':', got :name". The DATUM path
+;; (the else arm) DOES preparse (preparse-expand-single). So route implicit-map-
+;; shaped verified forms through the datum path; non-implicit-map verified forms
+;; keep parse-form-tree (the on-network path). Safe by construction: for a
+;; non-implicit-map def the two paths produce identical surfs, so a false
+;; positive costs nothing; the check is `rewrite-implicit-map changes the datum`,
+;; the authoritative predicate (reused, not re-derived). This closes the
+;; Level-2 (process-string-ws / REPL) vs Level-3 (process-file merge) divergence
+;; on implicit maps — process-file's merge already carries the preparse-expanded
+;; surfs; the cell pipeline did not.
+;; A `def` whose VALUE is an implicit map (`def user` / `  :name "a"` / `  :age 1`)
+;; is the only verified-tag form whose keyword tail is a map VALUE. defn/spec/
+;; trait/property/functor keyword tails are METADATA (`:properties`, `:laws`,
+;; `:where`), which parse-form-tree / process-consumed-form already handle — so
+;; SCOPE this to `def` only. (rewrite-implicit-map's own scope is broader because
+;; in process-file's preparse it also does metadata-block grouping; the cell
+;; pipeline reaches those other forms by different paths, so diverting them here
+;; would double-apply the rewrite and corrupt the metadata — this over-fire cost
+;; test-properties 5 spec-:properties cases before the `def` scope was added.)
+;;
+;; Detect on the RAW (UN-flattened) datum: rewrite-implicit-map keys on the
+;; reader's keyword GROUPING (`(:name "a")` sub-lists), which `flatten-ws-datum`
+;; destroys — so the check must precede flattening (the datum path below rewrites
+;; before it flattens for the same reason).
+(define (implicit-map-verified-node? node line raw-map source-str)
+  (define use-node (or (hash-ref raw-map line #f) node))
+  (define d (tree-node-to-datum use-node source-str))
+  (and d (pair? d) (eq? (car d) 'def)
+       (not (equal? (rewrite-implicit-map d) d))))
+
 ;; §11.5 Opt-in: form tags where parse-form-tree is VERIFIED to produce
 ;; correct surfs (semantically identical to parse-datum, modulo srcloc format).
 ;; Each tag added here means that form type is ON-NETWORK via tree-parser.
@@ -265,6 +311,16 @@
   '(eval check infer def defn defn-multi spec
     strategy session defproc defr solver subtype selection capability foreign))
 
+;; (N6e-E5.2) Consumed-form residue: ns/require/provide are PREPARSE-processed
+;; (side effects); the parser's "X should have been processed before parsing"
+;; surf is their normal representation, not a user error. Mirror of the
+;; predicate in driver.rkt's merge-preparse-and-tree-parser — keep in lockstep.
+(define (consumed-form-residue? s)
+  (and (prologos-error? s)
+       (let ([m (prologos-error-message s)])
+         (and (string? m)
+              (regexp-match? #rx"should have been processed before parsing$" m)))))
+
 ;; §11 TREE-CANONICAL extraction rewrite
 (define (extract-surfs-from-form-cells enet cell-map
                                         #:source-str [source-str #f]
@@ -282,8 +338,25 @@
             (cond
               ;; Side-effect-only: no surfs
               [(memq tag '(ns imports exports spec deftype bundle defmacro property
-                           functor schema precedence-group specialize))
+                           functor precedence-group specialize))
                acc]
+              ;; `schema` is NOT purely side-effect-only — besides registering its
+              ;; fields, it defines an opaque type `(def Name : (Type 0) (Type 0))`
+              ;; (same pattern as `data`). Emit that def so the type binds in the env,
+              ;; matching process-file's merge path. Without it the cell/REPL path
+              ;; leaves the schema type unbound, so a schema-typed `defr R : Schema`
+              ;; can't elaborate and is silently dropped. (Field registration already
+              ;; happened in preparse-expand-all; nested sub-schema defs are a follow-on.)
+              [(eq? tag 'schema)
+               (let* ([raw-node (hash-ref raw-map line #f)]
+                      [use-node (or raw-node node)]
+                      [datum (and use-node (tree-node-to-datum use-node source-str))]
+                      [flat (and datum (flatten-ws-datum datum))])
+                 (if (and (pair? flat) (>= (length flat) 2) (symbol? (cadr flat)))
+                     (let ([surfs (defs-to-surfs
+                                   (list `(def ,(cadr flat) : (Type 0) (Type 0))))])
+                       (if (null? surfs) acc (cons (cons line surfs) acc)))
+                     acc))]
               ;; Generated-def forms: process-consumed-form returns sexp lists
               [(memq tag '(data trait impl))
                (define gen-defs (process-consumed-form tag node))
@@ -292,11 +365,19 @@
                      (if (null? surfs) acc
                          (cons (cons line surfs) acc))))]
               ;; §11 opt-in: verified forms use tree-parser, rest datum
-              [(memq tag tree-parser-verified-tags)
+              ;; (N6e-E5.2, issue #69(b)) parse ERRORS are KEPT (were silently
+              ;; dropped — the L2 sibling of the driver merge swallow): the
+              ;; error surf flows into the results and is reported downstream.
+              ;; EXCEPTION: consumed-form residue (ns/require/provide are
+              ;; preparse-processed; the parser's "X should have been processed
+              ;; before parsing" surf is their normal representation) stays
+              ;; dropped — mirrors the driver merge's exception.
+              [(and (memq tag tree-parser-verified-tags)
+                    (not (implicit-map-verified-node? node line raw-map source-str)))
                (define surf (parse-form-tree node))
-               (if (not (prologos-error? surf))
-                   (cons (cons line (list surf)) acc)
-                   acc)]
+               (if (consumed-form-residue? surf)
+                   acc
+                   (cons (cons line (list surf)) acc))]
               ;; Datum conversion for unverified forms
               [else
                (let* ([raw-node (hash-ref raw-map line #f)]
@@ -304,7 +385,12 @@
                       [datum (tree-node-to-datum use-node source-str)])
                  (if (not datum) acc
                      (with-handlers ([exn:fail? (lambda (e) acc)])
-                       (define flat-datum (flatten-ws-datum datum))
+                       ;; rewrite-implicit-map BEFORE flatten: the layout keyword
+                       ;; grouping (`(:name "a")`) it keys on is destroyed by
+                       ;; flatten-ws-datum. A no-op for non-implicit-map forms.
+                       ;; (process-file's merge path preparses the raw grouped
+                       ;; syntax and never flattens first — this closes the gap.)
+                       (define flat-datum (flatten-ws-datum (rewrite-implicit-map datum)))
                        (define session-datum
                          (cond
                            [(and (pair? flat-datum) (eq? (car flat-datum) 'session))
@@ -316,7 +402,12 @@
                        (define norm-datum (normalize-ws-tokens eq-datum))
                        (define expanded (preparse-expand-single norm-datum))
                        (define s (parse-datum (datum->syntax #f expanded)))
-                       (if (prologos-error? s) acc
+                       ;; (N6e-E5.2) parse errors KEPT — see the verified-tags
+                       ;; arm above (incl. the consumed-form-residue exception).
+                       ;; (The no-datum + exn arms still skip: those fire on
+                       ;; legitimate non-form content.)
+                       (if (consumed-form-residue? s)
+                           acc
                            (cons (cons line (list s)) acc)))))])))))  ;; close
   ;; Sort by source line, flatten surf lists
   (define sorted (sort pairs < #:key car))
@@ -398,6 +489,35 @@
 
 ;; Bot value for spec cells
 (define spec-cell-bot (spec-cell-value #f #f #f #f))
+
+;; SRE Track 2I Phase 8d (2026-04-30): spec-cell-meet-fn — lattice meet
+;; (greatest lower bound) on spec-cell-value. Sister of spec-cell-merge-fn.
+;; Pre-Phase-8d: spec-cell-sre-domain had no meet-registry; declared
+;; properties only included comm/assoc/idem-join (no has-meet declared, so
+;; no Scaffolding-Hides-Truth pre-condition like form-cell had). Phase 8d
+;; adds the meet so empirical sweep on spec-cell can run Phase 5/6 checks.
+;;
+;; Semantics dual to merge:
+;;   - bot ⊓ x = bot (bot absorbs in meet; dual to bot ⊔ x = x in merge)
+;;   - top ⊓ x = x (top is identity in meet; dual to top ⊔ x = top in merge)
+;;   - x ⊓ x = x (idempotent on equal)
+;;   - x ⊓ y = bot when x ≠ y and both ≠ top (no common information)
+(define (spec-cell-meet-fn old new)
+  (cond
+    ;; Top cases FIRST (top is identity in meet — dual to top-absorbs in
+    ;; merge). Order matters: top values have type-surf=#f too, so we must
+    ;; classify them as top BEFORE checking type-surf for bot.
+    [(spec-cell-value-top? old) new]
+    [(spec-cell-value-top? new) old]
+    ;; Bot cases: bot absorbs in meet
+    [(not (spec-cell-value-type-surf old)) old]   ; old is bot → bot
+    [(not (spec-cell-value-type-surf new)) new]   ; new is bot → bot
+    ;; Same name + same type → idempotent
+    [(and (eq? (spec-cell-value-name old) (spec-cell-value-name new))
+          (equal? (spec-cell-value-type-surf old) (spec-cell-value-type-surf new)))
+     old]
+    ;; Different specs: meet = bot (no common information)
+    [else spec-cell-bot]))
 
 ;; Merge function for spec cells:
 ;; - bot ⊔ x = x
@@ -483,6 +603,22 @@
             (lambda () (error 'form-cell-merge-registry
                               "no merge for relation: ~a" rel-name))))
 
+;; SRE Track 2I Phase 8a (2026-04-30): form-cell-meet-fn / form-cell-meet-registry.
+;; Sister of form-cell-merge-fn — wires form-pipeline-meet (defined in
+;; surface-rewrite.rkt) into the SRE registry.
+;; Pre-Phase-8a: form-cell-sre-domain declared 'has-meet prop-confirmed but
+;; no actual meet function existed (5th Scaffolding-Hides-Truth instance).
+(define (form-cell-meet-fn old new)
+  (form-pipeline-meet old new))
+
+(define form-cell-meet-table
+  (hasheq 'equality form-cell-meet-fn))
+
+(define (form-cell-meet-registry rel-name)
+  (hash-ref form-cell-meet-table rel-name
+            (lambda () (error 'form-cell-meet-registry
+                              "no meet for relation: ~a" rel-name))))
+
 (define form-cell-bot
   (form-pipeline-value (seteq) #f '() #f (hasheq)))
 
@@ -496,6 +632,7 @@
   (make-sre-domain
     #:name 'form-cell
     #:merge-registry form-cell-merge-registry
+    #:meet-registry form-cell-meet-registry  ;; Phase 8a — backs declared 'has-meet
     #:contradicts? form-cell-contradicts?
     #:bot? form-cell-bot?
     #:bot-value form-cell-bot
@@ -507,7 +644,7 @@
                         'idempotent-join   prop-confirmed
                         'has-meet          prop-confirmed
                         'distributive      prop-confirmed
-                        'has-pseudo-complement prop-confirmed
+                        'has-pseudo-complement-rel prop-confirmed  ;; renamed Phase 5 (Q1)
                         'has-complement    prop-refuted))))
 
 (register-domain! form-cell-sre-domain)
@@ -516,6 +653,15 @@
 ;; Merge: set-once with collision = top (D.5 F4)
 (define spec-cell-merge-table
   (hasheq 'equality spec-cell-merge-fn))
+
+;; SRE Track 2I Phase 8d: spec-cell-meet-registry (sister of spec-cell-merge-table).
+(define spec-cell-meet-table
+  (hasheq 'equality spec-cell-meet-fn))
+
+(define (spec-cell-meet-registry rel-name)
+  (hash-ref spec-cell-meet-table rel-name
+            (lambda () (error 'spec-cell-meet-registry
+                              "no meet for relation: ~a" rel-name))))
 
 (define (spec-cell-merge-registry rel-name)
   (hash-ref spec-cell-merge-table rel-name
@@ -534,16 +680,19 @@
   (make-sre-domain
     #:name 'spec-cell
     #:merge-registry spec-cell-merge-registry
+    #:meet-registry spec-cell-meet-registry  ;; Phase 8d
     #:contradicts? spec-cell-contradicts?
     #:bot? spec-cell-bot?
     #:bot-value spec-cell-bot
     #:top-value (spec-cell-value #f #f #f #t)  ;; top value (collision)
     ;; Track 2H: declared-properties nested by relation
+    ;; Phase 8d: 'has-meet now backed by spec-cell-meet-fn.
     #:declared-properties
     (hasheq
       'equality (hasheq 'commutative-join  prop-confirmed
                         'associative-join  prop-confirmed
-                        'idempotent-join   prop-confirmed))))
+                        'idempotent-join   prop-confirmed
+                        'has-meet          prop-confirmed))))
 
 (register-domain! spec-cell-sre-domain)
 

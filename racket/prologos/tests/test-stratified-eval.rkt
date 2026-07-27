@@ -44,9 +44,7 @@
     (lambda (out) (display content out))
     #:exists 'truncate)
   (define results
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                   [current-ns-context #f]
+    (parameterize ([current-ns-context #f]
                    [current-module-registry (hasheq)]
                    [current-lib-paths (list lib-dir)]
                    [current-relation-store (make-relation-store)]
@@ -68,8 +66,10 @@
     (when (prologos-error? r)
       (fail (format "Unexpected error: ~a" (prologos-error-message r))))))
 
+;; Count solution rows ("{:") in the VALUE only — Rel T1 Aspect B appends a typed-row
+;; annotation " : <type>" whose record type also contains "{:"; split it off first.
 (define (count-answers result-str)
-  (length (regexp-match* #rx"\\{:" result-str)))
+  (length (regexp-match* #rx"\\{:" (car (regexp-split #rx" : " result-str)))))
 
 ;; ========================================
 ;; Phase S1: Dependency Extraction

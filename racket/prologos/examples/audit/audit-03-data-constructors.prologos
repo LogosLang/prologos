@@ -1,4 +1,4 @@
-ns examples.audit.data-constructors
+ns examples::audit::data-constructors
 
 ;; ========================================================================
 ;; AUDIT 03 — Data Types & Constructors

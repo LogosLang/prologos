@@ -79,11 +79,7 @@
                 prelude-preparse-registry
                 prelude-capability-registry
                 prelude-persistent-registry-net-box)  ;; Track 7 Phase 6d
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
-                 [current-definition-cells-content (hasheq)]  ;; Phase 3a
-                 [current-definition-dependencies (hasheq)]  ;; Phase 3b
-                 [current-cross-module-deps '()]  ;; Track 5 Phase 4
+  (parameterize ([current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -92,15 +88,20 @@
                  [current-impl-registry (current-impl-registry)]
                  [current-param-impl-registry (current-param-impl-registry)]
                  [current-capability-registry (current-capability-registry)]
+                 ;; CIU T6 F1b.5-s1d: the five registry params added to the
+                 ;; macros snapshot (pipeline.md New-Parameter checklist parity)
+                 [current-schema-registry (current-schema-registry)]
+                 [current-selection-registry (current-selection-registry)]
+                 [current-session-registry (current-session-registry)]
+                 [current-strategy-registry (current-strategy-registry)]
+                 [current-process-registry (current-process-registry)]
                  ;; Track 6 Phase 7a: network isolation (fresh network per call)
                  [current-prop-net-box              #f]
                  [current-persistent-registry-net-box #f]  ;; #f during prelude load; created below
-                 [current-prelude-env-prop-net-box   #f]
                  [current-ns-prop-net-box           #f]
-                 [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
-                 [current-defn-param-names-cell-id  #f])
+                 )
     (install-module-loader!)
     (process-string "(ns prelude-cache)\n")
     ;; Track 7 Phase 6d: Initialize persistent registry network from post-prelude params.
@@ -131,11 +132,7 @@
   ;; Track 10 Phase 3c: Network isolation via fork.
   ;; Network-related params replaced by with-forked-network (8 params → 1 fork).
   ;; Registry params remain until Phase 6 migrates them to cells.
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
-                 [current-definition-cells-content (hasheq)]  ;; Phase 3a
-                 [current-definition-dependencies (hasheq)]  ;; Phase 3b
-                 [current-cross-module-deps '()]  ;; Track 5 Phase 4
+  (parameterize ([current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -145,21 +142,16 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 10 Phase 3c: fork replaces 8 network params
                  [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
-                 [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
-                 [current-defn-param-names-cell-id  #f])
+                 )
     (with-forked-network current-prop-net-box
       (install-module-loader!)
       (last (process-string s)))))
 
 ;; Process a string and return ALL results (list).
 (define (run-ns-all s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
-                 [current-definition-cells-content (hasheq)]  ;; Phase 3a
-                 [current-definition-dependencies (hasheq)]  ;; Phase 3b
-                 [current-cross-module-deps '()]  ;; Track 5 Phase 4
+  (parameterize ([current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -169,10 +161,9 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 10 Phase 3c: fork replaces 8 network params
                  [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
-                 [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
-                 [current-defn-param-names-cell-id  #f])
+                 )
     (with-forked-network current-prop-net-box
       (install-module-loader!)
       (process-string s))))
@@ -184,11 +175,7 @@
 ;; This is the path that .prologos files use.
 
 (define (run-ns-ws-last s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
-                 [current-definition-cells-content (hasheq)]  ;; Phase 3a
-                 [current-definition-dependencies (hasheq)]  ;; Phase 3b
-                 [current-cross-module-deps '()]  ;; Track 5 Phase 4
+  (parameterize ([current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -198,20 +185,15 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 10 Phase 3c: fork replaces 8 network params
                  [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
-                 [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
-                 [current-defn-param-names-cell-id  #f])
+                 )
     (with-forked-network current-prop-net-box
       (install-module-loader!)
       (last (process-string-ws s)))))
 
 (define (run-ns-ws-all s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
-                 [current-definition-cells-content (hasheq)]  ;; Phase 3a
-                 [current-definition-dependencies (hasheq)]  ;; Phase 3b
-                 [current-cross-module-deps '()]  ;; Track 5 Phase 4
+  (parameterize ([current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -221,10 +203,9 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 10 Phase 3c: fork replaces 8 network params
                  [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
-                 [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
-                 [current-defn-param-names-cell-id  #f])
+                 )
     (with-forked-network current-prop-net-box
       (install-module-loader!)
       (process-string-ws s))))
@@ -237,18 +218,13 @@
 (define (run-simple-capture-stderr s)
   (define stderr-out (open-output-string))
   (define results
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
-                   [current-definition-cells-content (hasheq)]  ;; Phase 3a
-                   [current-definition-dependencies (hasheq)]  ;; Phase 3b
-                   [current-cross-module-deps '()]  ;; Track 5 Phase 4
+    (parameterize ([current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.b: fresh per-file mnr
                    [current-error-port stderr-out]
                    ;; Track 10 Phase 3c: fork replaces 8 network params
                    [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
-                   [current-definition-cell-ids       (hasheq)]
                    [current-module-registry-cell-id   #f]
                    [current-ns-context-cell-id        #f]
-                   [current-defn-param-names-cell-id  #f])
+                   )
       (with-forked-network current-prop-net-box
         (process-string s))))
   (cons results (get-output-string stderr-out)))

@@ -1,0 +1,9 @@
+[
+  {"name": "app",    "version": "1.0.0", "license": "MIT"},
+  {"name": "left",   "version": "2.1.0", "license": "MIT"},
+  {"name": "right",  "version": "1.5.0", "license": "Apache-2.0"},
+  {"name": "shared", "version": "3.0.0", "license": "MIT"},
+  {"name": "logger", "version": "0.9.0", "license": "GPL-3.0"},
+  {"name": "util",   "version": "4.2.1", "license": "MIT"},
+  {"name": "fmt",    "version": "1.0.3", "license": "LGPL-2.1"}
+]

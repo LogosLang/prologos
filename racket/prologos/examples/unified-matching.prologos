@@ -1,4 +1,4 @@
-ns examples.unified-matching
+ns examples::unified-matching
 
 ;; ========================================================================
 ;; Unified Pattern Matching — Feature Capstone

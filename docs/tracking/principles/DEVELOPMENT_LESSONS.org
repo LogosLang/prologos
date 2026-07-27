@@ -511,6 +511,121 @@ and commit messages when used to justify keeping old code paths. Use
 the deferral to be specific, tracked, and justified — rather than
 rationalized.
 
+** Scaffolding-Hides-Truth — Principled Refactor Surfaces Real Facts
+
+When defensive guards, hardcoded constants, or callback parameters are
+introduced as scaffolding (often for "safety" or "backward-compat"),
+they don't merely add overhead — they actively hide architectural,
+algebraic, or structural facts from observation. The system's true
+posture is masked because the scaffolding's behavior MIXES with the
+underlying mechanism, producing observed results that conflate the two.
+The principled refactor that retires the scaffolding doesn't just clean
+up — it /surfaces facts the scaffolding was hiding/.
+
+*The pattern* (3 data points across SRE Track 2I, 2026-04-30):
+
+1. *Phase 2a* — ~with-handlers~ silent-skip in the property-sample
+   generator (~sre-sample-generator.rkt~). Was scaffolding "for safety"
+   against reconstruction failures of compounds with sentinel-component
+   inputs. /Hidden truth/: lattice sentinels (bot/top) are NOT valid
+   structural components — feeding them through reconstruction produces
+   malformed values. The principled fix (per-component-spec pools that
+   filter sentinels) revealed the structural distinction between
+   "valid lattice elements" and "valid structural components." Without
+   the refactor, the scaffolding silently swallowed the malformed
+   compounds and made all downstream analysis lattice-incomplete.
+
+2. *Phase 3c* — always-installed ~current-lattice-subtype-fn~ callback
+   in the type lattice. Was scaffolding "for principled extensibility"
+   added in Track 2H. /Hidden truth/: under PPN 4C T-3 Commit B's
+   union-aware merge, the type lattice under equality merge IS
+   distributive on hand-picked-6 (216/216 triples). Track 2G had found
+   "type lattice not distributive" — correct AT THE TIME, before T-3
+   restored distributivity. The callback's mixed semantics (subtype-aware
+   meet under all relations) hid that restoration. Phase 3c retired the
+   callback for per-relation ~meet-registry~ dispatch, surfacing the
+   true post-T-3 algebraic posture.
+
+3. *Phase 4* — hardcoded ~'equality~ constant in
+   ~test-distributive~ / ~test-sd-{vee,wedge}/detailed~ for join lookup.
+   Was scaffolding from Phase 1+2 era when only equality-relation joins
+   existed. /Hidden truth/: per-relation merge-registry has existed
+   since Track 2F; the property-test functions never adopted per-relation
+   join dispatch. Pre-Phase-4 sweeps mixed lattices (meet from relation
+   R, join from equality), producing meaningless results for non-equality
+   relations. Phase 4 retired the hardcoded constant for explicit ~join-fn~
+   parameter, mirroring Phase 3c's ~meet-fn~ discipline.
+
+*The general statement*: an algebraic, structural, or behavioral
+posture is a property of the system's actual semantics under principled
+dispatch, /not/ a property "as observed under whatever scaffolding is
+currently in place." Scaffolding does not just slow things down; it
+falsifies observations. When you remove it, the observations change —
+sometimes confirming what the design intended, sometimes refuting it.
+Both outcomes are findings worth surfacing.
+
+*The discipline*:
+- When scaffolding is introduced (with-handlers, callback parameter,
+  hardcoded constant, defensive guard), name it explicitly as
+  scaffolding with retirement plan in the design doc — NOT as
+  "for safety" or "for backward-compat" without justification.
+- When a track changes core merge/meet/dispatch semantics, the
+  algebraic-property declarations on affected domains should be
+  re-validated, not just inherited from prior status. A merge-changing
+  track is implicitly a property-status-changing track.
+- The "principled refactor" of scaffolding-laden code is itself a
+  source of architectural insight. Plan for and look for the bonus
+  findings; do not treat them as surprises that derail the phase.
+
+*Discovered in*: SRE Track 2I 2026-04-30 (3 data points within a
+single track + day, codified after the third hit). See
+[[file:../2026-04-30_SRE_TRACK2I_SD_CHECKS_DESIGN.md][SRE Track 2I design doc]] for the
+full instances. The pattern was historically called "Move B+" after
+its first instance in PPN 4C S2.c-iii (the corrective sub-phase that
+dropped a ~with-handlers~ wrapper preserved from PM 8F era), but that
+name was opaque — graduated 2026-04-30 to the descriptive name.
+
+*Red-flag phrases*: "for safety", "for backward-compat", "defensive
+guard", "preserved from prior architecture", "always-installed
+callback for extensibility." Each is a candidate for scaffolding-hides-
+truth analysis.
+
+** Scaffolding-Hides-Scope — Sub-form: Registration Erases Design Body Qualifiers
+
+Scaffolding-Hides-Truth has a sub-form distinct enough to call out:
+when the SCAFFOLDING is a registration declaration that elides scope
+qualifiers the design body acknowledges. The design body knows the
+property holds with caveats; the registration declares it
+unconditionally. Phase 4's wider-sample sweep (2026-04-30) is the
+canonical instance.
+
+*Instance*: Track 2H's design body § Phase 7 line 107 explicitly
+hedged "distributivity scope (F7): conjectured but not yet verified
+for binder substitution." But the registration at ~unify.rkt:96~
+declared ~'distributive prop-confirmed~ unconditionally. The Phase 4
+wider-sample sweep refuted distributivity at the binder boundary —
+empirically confirming Track 2H's F7 conjecture, AND surfacing that
+the registration was over-broad relative to the design body.
+
+*The general statement*: if the design body has a scope qualifier
+(only on ground sublattice; only for first-order types; only when
+metas are solved; ...), the registration MUST encode that qualifier.
+A boolean property declaration on a domain that has structurally
+distinct sub-domains is incomplete. The property registry's
+granularity is itself a design concern.
+
+*Sister concern*: this surfaces the property-registry-granularity
+gap. Boolean per-(domain, relation) declarations cannot express
+"true on sub-lattice A, false on sub-lattice B." Scope-aware property
+declarations are an open design consideration — at minimum, they
+belong in scope of any track that does cross-sub-lattice dispatch
+(currently: in-flight PPN 4C work).
+
+*Discovered in*: SRE Track 2I Phase 4 (2026-04-30). Sister of
+Scaffolding-Hides-Truth above; codified together at the parent
+pattern's graduation moment. See [[file:../2026-04-30_SRE_TRACK2I_SD_CHECKS_DESIGN.md][SRE Track 2I design doc]] § Phase 3
+Findings for the empirical data + Discussion-phase considerations.
+
 ** CALM Requires Fixed Topology — Dynamic Topology Requires Stratification
 
 The CALM theorem (Consistency As Logical Monotonicity) guarantees that
@@ -538,9 +653,16 @@ the decomposition that would detect the violation never materialized.
 *The invariant*: Within a stratum, the network topology is FIXED.
 Propagator fire functions may only write cell values
 (=net-cell-write=). Creating cells (=net-new-cell=) or propagators
-(=net-add-propagator=) requires a stratum boundary. A dynamic guard
-(=current-bsp-fire-round?=) enforces this — violation produces an
-immediate error rather than a silent wrong result.
+(=net-add-propagator=) requires a stratum boundary. *Mechanism (corrected
+2026-06-03)*: =current-bsp-fire-round?= is NOT an error gate — it is a
+DISPATCH DISCRIMINATOR. Decomposition dispatchers read it and emit a topology
+REQUEST when in-fire (decomposing inline only under DFS); =net-add-propagator=
+reads it to DEFER worklist scheduling. =net-new-cell= and =net-add-propagator=
+are ALLOWED in-fire and CAPTURED (applied by the topology stratum between
+rounds) — they do NOT error. (The earlier "guard produces an immediate error"
+framing, and the stale code comment at =propagator.rkt:2170-2171=, were
+inaccurate; verified during the scheduler O(diff) work — see
+=docs/tracking/2026-06-03_SCHEDULER_ODIFF_OPTIMIZATION.md= §7.1.)
 
 *The architectural pattern*: Separate two fixpoints.
 1. *Topology fixpoint*: what cells and propagators exist. The set of
@@ -566,9 +688,14 @@ stratum (BSP over expanded topology) → repeat until neither changes.
   CALM guard will catch it at the API level, preventing silent
   incorrectness.
 
-This is the Correct-by-Construction principle applied to scheduling:
-the guard makes the invariant structural (error on violation) rather
-than maintained by discipline (hoping fire functions don't add cells).
+This is the Correct-by-Construction principle applied to scheduling: the
+dispatcher self-gate makes *decomposition* structural (request-emission, not
+an inline topology change in-fire). Note (2026-06-03): the flag does NOT
+hard-error on a rogue in-fire =net-new-cell=, so the narrower invariant "a
+mid-fire-created cell carries no decomp/domain metadata" is convention-
+maintained — the scheduler O(diff) work added a debug-mode assert
+(=current-check-fire-invariants?=) that makes a violation LOUD, and validated
+the invariant holds suite-wide.
 
 See commit =af35f5e= (CALM topology guard implementation).
 
@@ -1031,6 +1158,98 @@ point is explicit at every audit-driven scope expansion.
   re-capture
 - Wide is the principled response that prevents drift
 
+** Mini-Audit Must Verify Carrier Capability AND Check For Existing Helpers
+
+When a mini-design cites a precedent or applies an architectural
+pattern (e.g., "Realization B applies here"; "this fits the X
+pattern"; "we use existing primitive Y"), the mini-audit must verify
+TWO independent questions:
+
+1. *Carrier capability*: does the SPECIFIC cell / structure / module
+   in question actually support the architectural pattern being
+   applied? (Not "does the precedent demonstrate the pattern works"
+   — the local carrier may have a different capability profile.)
+2. *Existing helpers*: does the codebase already have a helper /
+   primitive that closes the capability gap? (Not "let's design a
+   new mechanism for this need" — grep for the helper first.)
+
+Either gap, missed at mini-audit time, costs at least one halted
+implementation cycle.
+
+*Pattern observed across 3 data points* (PPN 4C addendum):
+
+1. *S2.c-iii ~with-handlers~ wrapper preservation* (2026-04-24):
+   mini-audit catalogued "all 9 dispatch functions converted ✓" but
+   didn't check whether the inherited ~with-handlers~ wrapper from
+   PM 8F was preventing the option-4 perf claim (~302 ns/call) from
+   landing. Architecture's SHAPE preserved without its BENEFIT.
+   External user challenge surfaced; Move B+ corrected. See
+   ~workflow.md~ "Microbench claim verification" + DESIGN_METHODOLOGY
+   adversarial VAG codification.
+
+2. *2A.b handler-as-scaffolding* (2026-05-20): mini-design
+   recommended an ad-hoc handler-mechanism extension. Audit didn't
+   surface that the deeper concern was the handler-mechanism itself
+   (PM Track 13 spin-off territory). User challenge reframed; new PM
+   track captured the concern at the right level.
+
+3. *3A.b carrier-capability + missed helper* (2026-05-22): mini-design
+   cited "BSP-LE 2/2B Realization B applies" but didn't verify (a)
+   whether the SPECIFIC attribute-map carrier supported
+   ~tagged-cell-value~, AND (b) whether ~promote-cell-to-tagged~
+   (propagator.rkt:1579, used at 5 production sites in relations.rkt)
+   existed. Implementation halted at E2E test failure. Audit surfaced
+   both gaps; Option E fixed. See PPN 4C Phase 9 design §9.3.4.
+
+*The principle*: a precedent demonstrates a pattern WORKS in some
+context. It does NOT demonstrate the pattern APPLIES in the new
+context. Mini-audit must independently verify the LOCAL carrier and
+LOCAL helpers — even when (especially when) confident the pattern
+applies.
+
+*Process discipline*: at mini-audit time, for each cited precedent
+or applied pattern, run TWO grep / Read passes:
+
+1. *Carrier verification*: read the SPECIFIC carrier's merge function,
+   struct definition, and access API. Verify it supports the pattern's
+   capability requirements (e.g., for Realization B: does the carrier
+   support tagged-cell-value, or does it need ~promote-cell-to-tagged~
+   first?).
+2. *Helper enumeration*: grep for primitives / helpers in the
+   ballpark of the capability need. Existing helpers usually have
+   doc-strings naming the precondition ("Must be called BEFORE
+   speculative writes under a non-zero worldview" — propagator.rkt:1581)
+   that name the exact gap the mini-audit might miss.
+
+*Why this matters*: the cost of these two greps is ~5 minutes per
+audit. The cost of missing them is at least one halted
+implementation cycle, one mini-design revision, and one test-run
+diagnostic round (typically 1-2 hours of work + context switching).
+The asymmetry strongly favors running the checks.
+
+*Adversarial 3-column framing IS necessary but not sufficient* —
+all three data points had adversarial framing applied at their
+relevant gate, and all three drifted past it. The adversarial column
+catches drift WHEN the question is asked; the carrier-capability and
+existing-helper questions must be asked EXPLICITLY (catalogue
+question 2 in the mini-audit checklist), not left to general
+adversarial framing.
+
+*E2E tests are mini-audit power tools*: the 3A.b carrier-capability
+gap was caught by an E2E test failure in ~5 minutes. The
+grep-based mini-audit missed it. E2E tests that exercise the
+specific architectural property (per-branch isolation, tagged-aware
+reads, etc.) provide empirical confirmation that mini-audit static
+checks cannot.
+
+*Discovered in*: PPN 4C addendum cross-arc (3 data points across
+S2.c-iii / 2A.b / 3A.b). User-articulated framing during 3A.b audit
+review (2026-05-22): *"Let's audit the code that these decisions
+touch on first, to ground our context to the reality of the
+codebase."* Graduation threshold met (3 data points + user
+direction). Codification here makes the carrier-capability +
+existing-helper checks an explicit mini-audit step.
+
 ** Sed-Deletion of Parameterize Bindings Is Error-Prone for Last-Binding Lines
 
 When sed-deleting parameterize bindings, MUST use 2-pass pattern:
@@ -1258,3 +1477,359 @@ function body. Always factor into a chain. Codified in
 question-table mapping) and Phase 21 (commit ~c8782e9~, pipelining
 helpers). Two occurrences within a single track was the threshold
 for codifying as a workaround.
+** Cell / Propagator / Scheduler Orthogonality — Codified Architectural Principle
+
+When optimization pressure surfaces on the propagator substrate, the natural
+temptation is to reach for whatever's easy to implement in the current
+scheduler. The hybrid pivot's "Option E (BSP-aware piggyback)" was an
+example: piggyback the threshold check into BSP's worklist drain pass.
+Easy to implement; wrong layer.
+
+*The principle* (codified in [[file:DESIGN_PRINCIPLES.org][DESIGN_PRINCIPLES.org § Cell / Propagator /
+Scheduler Orthogonality]]): the architecture has three orthogonal layers
+(Cell, Propagator, Scheduler), and optimizations should be located at the
+layer that owns the concern. Mixing layers breaks scheduler-portability
+(violates CALM's order-independence in practice) and creates re-implementation
+debt for every new scheduler.
+
+*The discipline*: when an optimization is tempting because "it's easy to
+implement in scheduler X," that's a red flag. The optimization is at the
+wrong layer. Find the equivalent optimization at the cell or propagator
+level — even if it's harder to implement initially, it preserves portability
+across all current and future schedulers (Gauss-Seidel, BSP, Zig-LLVM,
+self-hosted runtime, future distributed runtime).
+
+*Origin*: PPN 4C tropical addendum D.3.EC critique review (2026-05-14). The
+user articulated the orthogonality principle in response to the hybrid pivot
+exploration. The principle rejected "Option E (BSP-aware piggyback)" and
+motivated a redesign of Phase 1B/1C toward on-network optimized cell type
+(storage strategy + fire-on policy at cell + propagator level).
+
+*Application going forward* (prophylactic discipline):
+- *PReduce series*: e-graph cost extraction inherits the cell-level
+  monotone-counter optimization pattern; no scheduler coupling
+- *OE Series*: cost-bounded exploration uses cell-level specialized storage;
+  no BSP-specific piggybacking
+- *SH Series*: self-hosted scheduler runs existing networks unchanged
+- *Future tracks*: every optimization decision passes the "does this couple
+  to scheduler-specific behavior?" test BEFORE implementation
+
+*Anti-pattern catch* (apply at design and implementation time):
+- "This is easy to add to BSP's worklist drain" → red flag; move to cell/prop layer
+- "This cell behaves differently under sequential vs parallel" → CALM violation
+- "Porting to scheduler X requires re-implementing this optimization" → wrong layer
+- "The scheduler needs to know about this special cell type" → cell-mech should be opaque to scheduler
+
+Codified 2026-05-14 from a single user-articulated insight during external
+critique resolution. Treated as foundational architectural principle (added
+to DESIGN_PRINCIPLES.org as a top-level principle, not just a watching-list
+candidate) because the alternative — hybrid pivot scaffolding propagating
+across PReduce/OE/SH Series — would have created compounding architectural
+debt across multiple multi-month tracks. The cost of codifying now is one
+session; the cost of re-deriving for each track is multi-session × N tracks.
+
+See:
+- [[file:DESIGN_PRINCIPLES.org][DESIGN_PRINCIPLES.org § Cell / Propagator / Scheduler Orthogonality]] — the canonical principle
+- [[../../.claude/rules/propagator-design.md][propagator-design.md § Cell / Propagator / Scheduler Orthogonality]] — propagator-level operational rule
+- [[../../.claude/rules/on-network.md][on-network.md § Cell / Propagator / Scheduler Orthogonality]] — on-network constraint extension
+
+** Cache Projection Should Model Read-Side + Write-Side Independently
+
+When projecting performance savings from caching a hot cell or struct
+field, model BOTH read-side AND write-side savings independently based
+on actual access patterns. Don't project one side and assume the other
+contributes similarly — they're often asymmetric, especially under
+deferred-write architectures where reads dominate the hot path.
+
+*The trap*: a projection anchored only on write-side cost (e.g., "we
+save X ns/call on cell-write") undermodels the win when the cell is
+read-heavy on a hot loop. PPN 4C 1V-3 Item #1-bis projected ~0.3 ns/cycle
+savings (write-side only); actual savings were ~1.82 ns/cycle (~6×).
+The unmodeled side: the BSP convergence check at `propagator.rkt:2670`
+fires `(net-cell-read net fuel-cell-id)` every iteration. Auxiliary
+per-call metrics confirmed it: cell-read -85% (74 → 11 ns/call);
+check-site -86% (77 → 11 ns/call) — neither was in the projection.
+
+*The discipline*:
+1. /Enumerate access patterns separately/: how many reads vs writes per
+   representative cycle, and where do they fire on the hot path?
+2. /Project read-side savings/ based on read-call cost reduction
+   (e.g., champ-lookup elimination → ~20-40 ns/call savings × per-cycle
+   read frequency)
+3. /Project write-side savings/ based on write-call cost reduction
+   (rarer under Option-13-style deferred-write architectures)
+4. /Sum independently, don't average/ — read-heavy and write-heavy cases
+   amortize differently at different N
+5. /Verify with auxiliary per-call measurements/ alongside amortized
+   cycle cost — the amortized number can DILUTE per-primitive savings
+
+*Symptom of the trap*: when actual savings exceed projection by >2×,
+suspect the projection over-weighted one side. Under-projecting opens
+the door to "the gate is unreachable; let's relax it" arguments;
+Item #1-bis would have appeared insufficient under the ~0.3 ns/cycle
+projection but is comfortably gate-passing under corrected modeling.
+Honest projections preserve the gate's correctness signal.
+
+*Codification status*: 1 data point (PPN 4C Item #1-bis, 2026-05-17).
+Strong methodological case — the 6× discrepancy is concrete and
+traceable to the specific unmodeled read-side savings.
+
+See:
+- PPN 4C Tropical Addendum D.4 §11.X.3.2 — Item #1-bis implementation
+  results showing the projection-vs-actual breakdown
+- DEVELOPMENT_LESSONS.org § "Microbench-Claim Verification Pays Off
+  Across Sub-Phase Arcs" — companion discipline (re-microbench validates
+  projections post-implementation)
+
+** Cache Write-Through With Persistent CHAMP: Explicit Audit List IS the Drift Mitigation
+
+When adding a struct-field cache that mirrors a persistent CHAMP entry,
+the audit must enumerate ALL mutation sites that update that entry. The
+enumeration list (WT-1, WT-2, ..., WT-N) IS the implementation checklist
+AND the drift mitigation — there's no separate test that catches a
+missed site; the enumeration discipline IS the test.
+
+*The trap*: persistent CHAMP semantics mean writes return a NEW network
+with a NEW cells map. A cached prop-cell reference goes STALE the moment
+any code path updates the entry without also updating the cache. The
+cache invalidation problem is structural; consistency requires
+write-through at EVERY mutation site.
+
+*Pattern* (PPN 4C 1V-3 Item #1-bis, 2026-05-17): the fuel-cell-cache on
+prop-net-warm required write-through at 8 explicit sites + 2 inherited
+via delegation. Explicit: WT-1a/1b (net-cell-write fast-path 2 branches),
+WT-2 (net-cell-write/slow-path), WT-3 (net-cell-reset), WT-4 (net-cell-
+write-widen defensive), WT-6a/6b (net-clear-dependents + net-remove-
+propagator-from-dependents), WT-8 (net-cell-replace defensive).
+Inherited: WT-5 (promote-cell-to-tagged → WT-3), WT-7 (fork-prop-network
+→ WT-3 ×2). Sister precedent: 1B-ii `under-speculation?` cache (simpler
+case; only one WRITE site at BSP fire-and-collect-writes refresh).
+
+*The discipline*:
+1. /Enumerate all code paths that mutate the cached entry/ — grep for
+   `struct-copy <containing-struct>` + the `(<cell-struct> ...)`
+   constructor sites + indirect mutation via delegation
+2. /Classify each site as EXPLICIT or INHERITED/ — explicit sites need
+   inline cache update; inherited sites flow through delegation naturally
+3. /Add the conditional update inline at each EXPLICIT site/ — pattern:
+   `[<cache-field> (if (eq? cid <well-known-id>) new-cell (<accessor> <warm>))]`
+4. /Verify with cache consistency tests/ — read after each mutation kind
+   (write/reset/fork/promote/dependents-change) returns expected value;
+   cache identity matches champ-lookup result for the well-known id
+
+*Why explicit enumeration*: persistent CHAMP write-through is not type-
+checked. A missed site produces silent cache inconsistency (cached value
+doesn't match cells-map source-of-truth). The audit list IS the
+implementation checklist — there's no compiler help here. Pre-implementation
+enumeration is also the drift mitigation against future code paths that
+add new mutation sites without updating the cache; those future paths
+will appear in the next sub-phase's audit as a new WT-N site.
+
+*Codification status*: 1 data point with concrete enumeration discipline.
+Reusable for any future struct-field cache mirroring CHAMP entries —
+PReduce e-class cell-cache, PM 12 module-registry-cache, etc.
+
+See:
+- PPN 4C Tropical Addendum D.4 §11.X.3 + §11.X.3.1 — full enumeration
+  with audit findings (WT-1 through WT-8 + inherited)
+- DESIGN_PRINCIPLES.org § "Specialized Cell Type Framework as
+  Cross-Track Template" — broader pattern Item #1-bis instantiates
+
+** "Spike Validates Feasibility, Not Optimality" — Distinguish Acceptable from Best
+
+When a Pre-0 spike PASSES its decision criteria, the verdict is "the
+architecture is FEASIBLE at acceptable cost" — NOT "the architecture is
+OPTIMAL." A passing spike doesn't foreclose better alternatives; it only
+forecloses worse-than-target alternatives. Stage 3 should continue surfacing
+refinements even after the spike PASSES.
+
+*Pattern* (1 data point, PPN 4C tropical addendum 2026-05-15): the §13.6
+spike PASSED with W1+ = 6.4 ns/call (≤ 30 ns target, ~4× under). The verdict
+was "D.4 canonical." During Phase 1B mini-design, a friend's question about
+fuel-cell write semantics surfaced an architectural lever (Option 13
+deferred-write at round boundaries) that the spike hadn't tested. Option 13
+estimates ~2 ns/cycle amortized — ~3× better than the spike's 6.4 ns. The
+spike validated D.4 (Option Y per-fire) as feasible; it did NOT validate
+that Option Y was optimal vs Option 13 deferred-write.
+
+*The lesson*: a passing Pre-0 spike doesn't close design exploration. It
+narrows the field to "architectures that pass the spike's criteria"; further
+refinement may surface better-performing architectures within that field.
+Stage 3 critique rounds should continue past the spike's PASS verdict.
+
+*The discipline*:
+- Don't treat a spike PASS as "design closed"
+- Continue surfacing refinements + alternative-within-architecture during
+  Stage 3 + Phase mini-design
+- Friend-/external-question/-driven exploration is especially valuable
+  AFTER a spike PASS (the spike's data informs the exploration; the
+  question's outside-perspective surfaces what the spike's framing missed)
+
+*The complementary pattern* (per-phase measurement gates): each
+sub-phase boundary in Stage 4 should explicitly measure the design's
+performance assumptions and compare against ALTERNATIVES (A/B/C structure).
+The §13.7 Per-Phase Measurement Plan codifies this for PPN 4C tropical
+addendum. The pattern: design assumptions about performance need explicit
+gates that catch divergences early.
+
+Origin: PPN 4C Tropical Addendum Phase 1B mini-design 2026-05-15. The
+friend's question "what increments the fuel cell" surfaced the
+spike-validates-feasibility-not-optimality gap; the Option 13 deferred-write
+refinement followed. Watching list: 1 data point; ~1-2 more for graduation
+(future tracks where a Pre-0 spike PASSES but subsequent design exploration
+finds a better-performing alternative within the architecture).
+
+See:
+- PPN 4C Tropical Addendum D.4 §13.6 (spike) + §13.6.A (Option 13 spike) +
+  §13.7 (per-phase measurement plan)
+- DESIGN_PRINCIPLES.org § Cell/Propagator/Scheduler Orthogonality §
+  Scheduler-State Cells
+
+** Per-Phase Measurement Plan with A/B/C Structure
+
+When a design's correctness rests on assumptions about performance (e.g.,
+"Option 13 achieves ~2 ns/cycle amortized"), the implementation plan should
+EXPLICITLY name the measurements that validate each assumption at each
+sub-phase boundary. This is stronger than the existing "per-phase
+microbench" discipline (`workflow.md` "Benchmark after infrastructure
+phases") because it names CONCRETE comparisons (A/B/C variants) and
+DECISION RULES (PASS/FAIL/INVESTIGATE), rather than ad-hoc per-phase
+measurements.
+
+*Pattern* (1 data point, PPN 4C tropical addendum 2026-05-15): the §13.7
+Per-Phase Measurement Plan establishes A/B/C variants for the fuel-cost
+write pattern (A = current struct-copy / B = D.4 per-fire / C = Option 13
+deferred-write); each Phase 1B + 1C sub-phase has a microbench gate that
+validates the C variant against B (post-Phase-1B reference) and A (current
+baseline). Measurement work is ~30-60 min per sub-phase × ~6 sub-phases =
+~3-6 hours total — but catches regressions when they're cheap to address.
+
+*The principle*: design assumptions about performance need EXPLICIT
+measurement gates, not ad-hoc validation. The gate's structure:
+
+- *What's measured* (specific microbench + name)
+- *When* (which sub-phase boundary)
+- *Against what target* (PASS criterion; numeric)
+- *Decision rule* (PASS → continue; FAIL → stop + investigate;
+  INVESTIGATE → resolve before next sub-phase)
+- *Comparison structure* (A/B/C variants when multiple alternatives are
+  in scope)
+
+*Why A/B/C rather than just A/B*: when refinements emerge during Stage 4
+(e.g., Option 13 surfaced post-spike), three-variant comparison (current
+baseline + spike-validated alternative + production refinement) shows
+where the savings come from. With only A/B, the source of the perf delta
+is ambiguous; with A/B/C, each delta is attributable.
+
+*The complementary pattern*: see "Spike Validates Feasibility, Not
+Optimality" above — the per-phase measurement plan is the discipline that
+catches alternatives that improve on the spike's verdict.
+
+Origin: PPN 4C Tropical Addendum Phase 1B mini-design 2026-05-15. The
+user's discipline ask: "make sure that we are measuring things at
+appropriate places throughout the design to validate our assumptions...
+A/B/C test various approaches/assumptions." Watching list: 1 data point;
+~1-2 more for graduation.
+
+See:
+- PPN 4C Tropical Addendum D.4 §13.7 — canonical example with full A/B/C
+  structure across Phase 1B + 1C
+- `workflow.md` "Benchmark after infrastructure phases" — the existing
+  per-phase microbench discipline (this lesson refines + makes concrete)
+- DEVELOPMENT_LESSONS.org § "Microbench-Claim Verification Pays Off Across
+  Sub-Phase Arcs" — the post-implementation verification discipline (this
+  lesson extends to per-sub-phase verification)
+
+** Empirical Falsification as Audit Complement
+
+When a mini-audit's reasoning meets a pre-implementation architectural
+decision, run a falsification test (probe / microbench / A/B comparison)
+with pre-committed criteria BEFORE locking the choice. Audit reasoning is
+inference under uncertainty; empirical tests are evidence. The pairing
+catches what either alone misses.
+
+How to apply:
+- Identify the load-bearing assumption in the audit
+- Design the smallest test that would refute it
+- Pre-commit interpretation rules (what counts as confirm/refute/inconclusive)
+- Run; document the result honestly (negative results are findings, not failures)
+
+5 data points across PPN 4C addendum Phase 3 arc: Q6.x WS-mode chain
+baseline (§9.5.1.2); 3C.b.5.c synthetic-E2E pivot (§9.5.3.9.4); 3C.c.6
+atomic verbatim parity (§9.5.4.7.2); 3C.d.0 F1 W1-status (§9.5.5.3);
+3C.d.3 Scenario B post-empirical decision flip (§9.5.5.13).
+
+Promoted at PPN 4C Phase 3V (2026-05-24).
+
+** Audit-Precedes-Implementation REFRAMING Discipline
+
+When a mini-audit surfaces a fact the mini-design didn't anticipate,
+REFRAME the design before implementing — don't power through with the
+original plan plus a footnote. The audit's job is to RESHAPE scope, not
+just confirm it.
+
+How to apply:
+- When audit reveals an unanticipated finding, STOP implementation
+- Decide: reframe (modify design intent), defer (out of scope with capture),
+  or override (with explicit rationale persisted in design doc)
+- Persist the reframe in the design doc; never bury in commit message alone
+- Re-run mini-design dialogue if scope shifts non-trivially
+
+4 data points across PPN 4C addendum Phase 3 arc: 3C.d.0 F1 reframe of
+W1-status pre-implementation; 3C.d.2 (γ+) audit-driven SKIP of synthetic
+axes already covered; 3C.d.3 (β.3.i) post-empirical decision flip from
+(β.3.ii); 3V cross-PHASE methodology drift surfacing earning 4th data
+point (§9.6.6).
+
+Promoted at PPN 4C Phase 3V (2026-05-24).
+
+** Dynamic Workflow Is the Generalization of Audit-Delegation — Amplifier, Not Replacement
+
+The =Workflow= tool (deterministic multi-phase multi-agent
+orchestration) is the generalization of the already-promoted
+audit-delegation pattern: it adds multi-phase orchestration (audit →
+design → critique → respond), structured-output schemas, and an
+adversarial critique panel as a first-class phase. It is a
+*critique-and-audit AMPLIFIER, not a design-and-implement replacement.*
+
+*The core positive (1 strong data point)*: an adversarial
+completeness-critic agent caught a LOAD-BEARING flaw in the workflow
+/author's own/ design — the workflow's dry-run instruction said "drop
+just Layer-2," which leaves the copy loops live and so cannot ATTRIBUTE
+residuals=0 to the new write (a recurrence of the §18.18.6.9
+misdiagnosis). The author's blind spot was surfaced by the independent
+adversarial layer. This is the central argument for the pattern: running
+critique lenses BLIND and in parallel /enforces/ the independence that
+solo sequential critique erodes by anchoring (lens 4 reads like lens 1).
+
+*The cautions*:
+1. *Worktree-HEAD provisioning defect* (2nd data point — see also
+   §18.18.6.10): =isolation: 'worktree'= agents have twice been
+   provisioned at a STALE base (~26-36 commits behind), SILENTLY — masked
+   because absolute-path reader agents in the same run resolve to the
+   main checkout at HEAD. Delegated empirical work MUST verify its HEAD
+   SHA. Prefer diff-back (workflow returns a patch; main session lands it
+   at the known-good HEAD).
+2. *Disproportionality*: ~1.96M tokens / 12 agents for a ~4-line change —
+   Tier-2 spend on Tier-0/1 work. The critique found real things, but a
+   ~2-audit + 3-lens panel would have caught the same load-bearing
+   findings at ~1/3 the cost. Start lean; escalate by stakes/breadth.
+3. *Co-design tension*: the workflow autonomously front-ran the
+   mini-design that is normally co-designed with the user; the user
+   reviewed at the END. Acceptable for a LOCKED-approach step (grounding
+   + hardening a settled decision); for OPEN architectural questions the
+   workflow must STOP at options+critiques and return them, not
+   self-resolve.
+
+*The rule*: delegate the "multiple independent minds" work (audits,
+critique rounds, mechanical migrations, research sweeps); keep the "one
+shared evolving understanding" work (mini-design dialogue, novel
+implementation, decision-locking) conversational. The workflow produces
+material for a decision; the human + main session makes the decision and
+lands the code.
+
+Origin: PPN 4C Addendum 4A.c-ii-b foreign-write-(b) dynamic-workflow
+experiment (2026-05-30, §18.18.6.13). See DESIGN_METHODOLOGY.org §
+"Delegation vs Co-Design (Dynamic Workflows)" (the appropriateness
+distinction + scale tiers) + ~.claude/rules/workflow.md~ § "Dynamic-workflow
+code-state discipline" / "Diff-back" (the operational reflexes).

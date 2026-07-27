@@ -107,9 +107,12 @@
 ;; ========================================
 
 ;; cfa-collect-constraints : → (listof cfa-constraint)
-;; Walk all definitions in current-prelude-env and collect flow constraints.
+;; Walk all external definitions (prelude + imported) and collect flow constraints.
 (define (cfa-collect-constraints)
-  (define env (current-prelude-env))
+  ;; PPN 4C Addendum Phase 4A.c-ii-a (D2 Path Y): external defs via the cascade
+  ;; source, NOT raw (current-prelude-env). Pre-4A.c-ii-b: imports empty → equals
+  ;; current-prelude-env view; post-flip transparently follows the imports cascade.
+  (define env (external-definitions-snapshot))
   (define constraints '())
 
   (define (emit! c) (set! constraints (cons c constraints)))
@@ -258,7 +261,10 @@
 ;; Arity-based fallback: enumerate all function definitions with matching arity.
 ;; Excludes constructors and non-function entries.
 (define (cfa-get-candidates-for-arity target-arity)
-  (define env (current-prelude-env))
+  ;; PPN 4C Addendum Phase 4A.c-ii-a (D2 Path Y): external defs via the cascade
+  ;; source. This site was MISSED by §18.18.1 RISK 2 (which named only
+  ;; cfa-collect-constraints); the re-grounding audit caught it (R-A).
+  (define env (external-definitions-snapshot))
   (for/list ([(name entry) (in-hash env)]
              #:when (cdr entry)  ;; has a value (not type-only)
              #:when (not (lookup-ctor-flexible name))  ;; not a constructor

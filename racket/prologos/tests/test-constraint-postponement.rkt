@@ -57,7 +57,10 @@
 
 (test-case "constraint-store/collect-meta-ids-follows-solved"
   (with-fresh-meta-env
-    (parameterize ([current-resolution-executor #f])  ;; Track 7 Phase 7a: disable resolution
+    ;; PPN 4C 2B (2026-05-20): migrated from `current-resolution-executor` (imperative
+    ;; param, retired) to `current-resolution-executor-pure`. process-resolution
+    ;; handler short-circuits on unset pure executor — same disable semantic.
+    (parameterize ([current-resolution-executor-pure #f])
       (define m1 (fresh-meta ctx-empty (expr-hole) "a"))
       (define m2 (fresh-meta ctx-empty (expr-hole) "b"))
       ;; Solve m1 to contain m2
@@ -80,39 +83,35 @@
 
 (test-case "wakeup/solving-meta-retries-constraint"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      ;; Create a meta and a postponed constraint: ?m vs Nat
-      (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
-      (define mid (expr-meta-id m))
-      ;; Create an applied-meta term: (app ?m zero) — non-pattern, will postpone
-      (define flex-term (expr-app m (expr-zero)))
-      (define result (unify ctx-empty flex-term (expr-Nat)))
-      (check-equal? result 'postponed)
-      (check-equal? (length (all-postponed-constraints)) 1)
-      ;; Now solve ?m to (fn [x] Nat) — i.e., a constant function returning Nat
-      ;; This should trigger wakeup and retry the constraint:
-      ;; zonk((app ?m zero)) → (app (fn [x] Nat) zero) → whnf → Nat
-      ;; unify(Nat, Nat) → #t → constraint becomes 'solved
-      (solve-meta! mid (expr-lam 'mw (expr-hole) (expr-Nat)))
-      (check-equal? (length (all-postponed-constraints)) 0)
-      (check-equal? (length (all-failed-constraints)) 0))))
+    ;; Create a meta and a postponed constraint: ?m vs Nat
+    (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
+    (define mid (expr-meta-id m))
+    ;; Create an applied-meta term: (app ?m zero) — non-pattern, will postpone
+    (define flex-term (expr-app m (expr-zero)))
+    (define result (unify ctx-empty flex-term (expr-Nat)))
+    (check-equal? result 'postponed)
+    (check-equal? (length (all-postponed-constraints)) 1)
+    ;; Now solve ?m to (fn [x] Nat) — i.e., a constant function returning Nat
+    ;; This should trigger wakeup and retry the constraint:
+    ;; zonk((app ?m zero)) → (app (fn [x] Nat) zero) → whnf → Nat
+    ;; unify(Nat, Nat) → #t → constraint becomes 'solved
+    (solve-meta! mid (expr-lam 'mw (expr-hole) (expr-Nat)))
+    (check-equal? (length (all-postponed-constraints)) 0)
+    (check-equal? (length (all-failed-constraints)) 0)))
 
 (test-case "wakeup/constraint-fails-on-retry"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      ;; Create a meta and postpone: (app ?m zero) vs Bool
-      (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
-      (define mid (expr-meta-id m))
-      (define flex-term (expr-app m (expr-zero)))
-      (define result (unify ctx-empty flex-term (expr-Bool)))
-      (check-equal? result 'postponed)
-      ;; Solve ?m to (fn [x] Nat) — now (app (fn [x] Nat) zero) → Nat
-      ;; But the constraint expected Bool, so Nat ≠ Bool → failed
-      (solve-meta! mid (expr-lam 'mw (expr-hole) (expr-Nat)))
-      (check-equal? (length (all-postponed-constraints)) 0)
-      (check-equal? (length (all-failed-constraints)) 1))))
+    ;; Create a meta and postpone: (app ?m zero) vs Bool
+    (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
+    (define mid (expr-meta-id m))
+    (define flex-term (expr-app m (expr-zero)))
+    (define result (unify ctx-empty flex-term (expr-Bool)))
+    (check-equal? result 'postponed)
+    ;; Solve ?m to (fn [x] Nat) — now (app (fn [x] Nat) zero) → Nat
+    ;; But the constraint expected Bool, so Nat ≠ Bool → failed
+    (solve-meta! mid (expr-lam 'mw (expr-hole) (expr-Nat)))
+    (check-equal? (length (all-postponed-constraints)) 0)
+    (check-equal? (length (all-failed-constraints)) 1)))
 
 ;; ========================================
 ;; Unit tests: three-valued unify
@@ -120,22 +119,18 @@
 
 (test-case "unify/flex-app-non-pattern-postpones"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
-      ;; (app ?m zero) — zero is not a bvar, pattern check fails → postpone
-      (define flex-term (expr-app m (expr-zero)))
-      (check-equal? (unify ctx-empty flex-term (expr-Nat)) 'postponed))))
+    (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
+    ;; (app ?m zero) — zero is not a bvar, pattern check fails → postpone
+    (define flex-term (expr-app m (expr-zero)))
+    (check-equal? (unify ctx-empty flex-term (expr-Nat)) 'postponed)))
 
 (test-case "unify/flex-app-with-bvar-solves"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
-      ;; (app ?m (bvar 0)) — bvar is a pattern arg → should solve
-      (define flex-term (expr-app m (expr-bvar 0)))
-      (check-equal? (unify ctx-empty flex-term (expr-Nat)) #t)
-      (check-true (meta-solved? (expr-meta-id m))))))
+    (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
+    ;; (app ?m (bvar 0)) — bvar is a pattern arg → should solve
+    (define flex-term (expr-app m (expr-bvar 0)))
+    (check-equal? (unify ctx-empty flex-term (expr-Nat)) #t)
+    (check-true (meta-solved? (expr-meta-id m)))))
 
 ;; ========================================
 ;; Integration tests: multi-param implicit inference
@@ -143,9 +138,7 @@
 
 ;; Helper: run prologos code with namespace system active
 (define (run-ns s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry prelude-preparse-registry])

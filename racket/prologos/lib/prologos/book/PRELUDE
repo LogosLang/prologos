@@ -34,6 +34,9 @@
 (imports [prologos::data::option :as opt :refer [Option none some some? none? flatten]])
 ;; Result: types + predicates unqualified; ops via result:: alias
 (imports [prologos::data::result :as result :refer [Result ok err ok? err?]])
+;; Reason (CIU T6 F1b.5): validation-failure type + ctors + errors-to-list
+;; unqualified; the Keyword shim (keyword-name/keyword-lte) via reason:: alias
+(imports [prologos::data::reason :as reason :refer [Reason missing-required check-failed type-mismatch unexpected-field check-unevaluable default-unevaluable errors-to-list render-failures expect-valid]])
 ;; List: full API unqualified (wins all name-conflict tiebreaks)
 (imports [prologos::data::list :refer [List nil cons foldr reduce length
                                        map filter append head tail singleton
@@ -48,12 +51,15 @@
                                        delete find-index]])
 
 ;; ---- Core traits (type class definitions) ----
-(imports [prologos::core::eq :refer [Eq eq-neq nat-eq Char--Eq--dict String--Eq--dict]])
-(imports [prologos::core::ord :refer [Ord PartialOrd PartialOrd-partial-compare
+(imports [prologos::core::eq :refer [Eq eq? eq-neq nat-eq Char--Eq--dict String--Eq--dict]])
+(imports [prologos::core::ord :refer [Ord compare PartialOrd partial-compare PartialOrd-partial-compare
                                       nat-ord ord-lt ord-le ord-gt ord-ge ord-eq
                                       ord-min ord-max Char--Ord--dict String--Ord--dict]])
-(imports [prologos::core::arithmetic :refer [Add Sub Mul Div Neg Abs String--Add--dict]])
-(imports [prologos::core::conversions :refer [From Into TryFrom FromInt FromRat]])
+(imports [prologos::core::arithmetic :refer [Add Sub Mul Div Neg Abs mul div neg abs + - * / negate String--Add--dict]])
+(imports [prologos::core::conversions :refer [From Into TryFrom FromInt FromRat
+                                              ToFloat64 ToFloat32 ToPosit8 ToPosit16 ToPosit32 ToPosit64 ToRat ToInt
+                                              to-float64 to-float32 to-posit8 to-posit16 to-posit32 to-posit64 to-rat to-int
+                                              to-float to-posit]])
 (imports [prologos::core::algebra :refer-all])
 (imports [prologos::core::lattice :refer-all])
 (imports [prologos::core::collection-traits :refer [Reducible Collection]])
@@ -77,9 +83,12 @@
 ;; Note: pvec-map, pvec-filter, pvec-fold, set-fold, set-filter,
 ;; map-fold-entries, map-filter-entries, map-map-vals are now native
 ;; parser keywords — no need to import from ops modules.
-;; pvec: pvec-any?, pvec-all?, pvec-from-list-fn, pvec-to-list-fn
+;; pvec: pvec-any?, pvec-all?, pvec-from-list-fn, pvec-to-list-fn,
+;;       pvec-nth-int, pvec-length-int, pvec-take-int, pvec-drop-int
 (imports [prologos::core::pvec :refer [pvec-any? pvec-all?
-                                       pvec-from-list-fn pvec-to-list-fn]])
+                                       pvec-from-list-fn pvec-to-list-fn
+                                       pvec-nth-int pvec-length-int
+                                       pvec-take-int pvec-drop-int]])
 ;; map: map-filter-vals, map-keys-list, map-vals-list, map-merge,
 ;;      map-to-entry-list, map-seq, map-from-seq
 (imports [prologos::core::map  :refer [map-filter-vals map-keys-list
@@ -92,8 +101,9 @@
 ;; ---- Collection conversions (now in prologos::core::collections) ----
 
 ;; ---- Generic numeric operations + first-class arithmetic ----
-;; sum, product, int-range, plus, minus, times, divide, negate-fn, abs-fn
-;; are now in prologos::core::algebra (loaded via :refer-all above)
+;; sum, product, int-range are in prologos::core::algebra (loaded via :refer-all above)
+;; (the plus/minus/times/divide/negate-fn/abs-fn wrappers were retired in N6f —
+;;  use the first-class operator names + - * / negate abs directly)
 
 ;; ---- Instance registration (side-effect only, :refer []) ----
 ;; eq-instances + eq-numeric-instances merged into prologos::core::eq

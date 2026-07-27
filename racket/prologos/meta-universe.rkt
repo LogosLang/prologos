@@ -290,13 +290,14 @@
   (cond
     [(and per-prop-wv (not (zero? per-prop-wv))) per-prop-wv]
     [else
-     ;; Fallback: read worldview-cache cell for network-wide committed bitmask.
-     ;; Use a defensive read — if the cache cell is missing (early init),
-     ;; default to 0. elab-cell-read raises on unknown cell-ids; catch with
-     ;; a handler.
-     (with-handlers ([exn:fail? (lambda (_) 0)])
-       (define v (elab-cell-read enet worldview-cache-cell-id))
-       (if (number? v) v 0))]))
+     ;; Read worldview-cache cell for network-wide committed bitmask.
+     ;; worldview-cache-cell-id is structurally always allocated by
+     ;; make-prop-network (cell-id 1; see propagator.rkt:732). The
+     ;; previous with-handlers wrapper guarded a structurally-impossible
+     ;; failure and cost ~127 ns/call (E2a vs E2b in bench-attribute-
+     ;; record.rkt). Retired per Move B+ pattern (PPN 4C S2.c-iii precedent).
+     (define v (elab-cell-read enet worldview-cache-cell-id))
+     (if (number? v) v 0)]))
 
 ;; compound-cell-component-write enet cell-id component-key value → enet*
 ;;   Write a value for `component-key` into the compound cell. Wraps the

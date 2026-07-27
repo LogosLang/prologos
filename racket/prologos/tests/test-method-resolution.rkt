@@ -31,17 +31,13 @@
 ;; ========================================
 
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (process-string s)))
+  (process-string s))
 
 (define (run-first s) (car (run s)))
 (define (run-last s) (last (run s)))
 
 (define (run-ns s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry prelude-preparse-registry]
@@ -320,20 +316,22 @@
   (check-true (string-contains? (last result-strings) "false")
               (format "Expected false (not equal of equals) in: ~a" (last result-strings))))
 
-(test-case "e2e/unresolved-method-error"
-  ;; Bare method name without where constraint → unbound variable error
+(test-case "e2e/bare-method-resolves-via-derived-wrapper"
+  ;; N6d-i CONTRACT CHANGE: bare trait-method names are now first-class derived
+  ;; wrappers, so a bare `eq?` on a concrete-typed argument resolves via the
+  ;; wrapper's `where (Eq A)` (A:=Nat; Eq Nat exists) — NO explicit where clause
+  ;; needed. (Pre-N6d-i this was an unbound-variable error: methods had no
+  ;; top-level binding.) `eq?` is prelude-exported, so it is in scope here.
   (define results (run-ns
     (string-append
       "(ns method-test-8)\n"
       "(imports [prologos::core::eq :refer [Eq Eq-eq?]])\n"
-      ;; No where clause — eq? is not in scope
-      "(spec bad-fn Nat -> Bool)\n"
-      "(defn bad-fn [x]\n"
+      "(spec good-fn Nat -> Bool)\n"
+      "(defn good-fn [x]\n"
       "  (eq? x x))\n")))
-  ;; Should produce an error
   (define errors (filter prologos-error? results))
-  (check-true (not (null? errors))
-              (format "Expected an unbound variable error, got: ~a" results)))
+  (check-true (null? errors)
+              (format "Expected eq? to resolve via its derived wrapper, got errors: ~a" results)))
 
 (test-case "e2e/error-format-is-helpful"
   ;; E1005 format test

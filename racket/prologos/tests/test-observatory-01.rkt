@@ -304,9 +304,9 @@
   (check-not-eq? meta-c 'none)
   (check-eq? (cell-meta-subsystem meta-a) 'user)
   (check-eq? (cell-meta-domain meta-a) 'lattice)
-  (check-equal? (cell-meta-label meta-a) "cell-11")  ;; PPN 4C 3c-iii: cell-ids 0-10 pre-allocated (0-5 well-known, 6-9 topology, 10 classify-inhabit-request)
-  (check-equal? (cell-meta-label meta-b) "cell-12")
-  (check-equal? (cell-meta-label meta-c) "cell-13"))
+  (check-equal? (cell-meta-label meta-a) "cell-20")  ;; PPN 4C 3C.b.1: cell-ids 0-19 pre-allocated (0-17 as before + 18=contradicted-branch-aids, 19=union-derivation-chains)
+  (check-equal? (cell-meta-label meta-b) "cell-21")
+  (check-equal? (cell-meta-label meta-c) "cell-22"))
 
 ;; ========================================
 ;; 11. Multiple captures accumulate

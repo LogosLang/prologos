@@ -132,24 +132,12 @@
 ;; 4. Negative Approximate Literals (Phase B.2)
 ;; ========================================
 
-(test-case "neg-lit/tokenize: ~-42 (tilde neg int)"
-  (define toks (tokenize-string "~-42"))
-  (check-equal? (tok-type toks 1) 'approx-literal)
-  (check-equal? (tok-val toks 1) -42))
-
-(test-case "neg-lit/tokenize: ~-3.14 (tilde neg decimal)"
-  (define toks (tokenize-string "~-3.14"))
-  (check-equal? (tok-type toks 1) 'approx-literal)
-  (check-equal? (tok-val toks 1) -157/50))
-
-(test-case "neg-lit/tokenize: ~-3/7 (tilde neg fraction)"
-  (define toks (tokenize-string "~-3/7"))
-  (check-equal? (tok-type toks 1) 'approx-literal)
-  (check-equal? (tok-val toks 1) -3/7))
-
-(test-case "neg-lit/tokenize: ~-3N errors"
-  (check-exn exn:fail?
-    (lambda () (tokenize-string "~-3N"))))
+(test-case "neg-lit/tokenize: ~N forms are rejected with a migration hint (N6c)"
+  ;; ~ approximate literals were removed; negatives included.
+  (for ([src (in-list (list "~-42" "~-3.14" "~-3/7" "~-3N"))])
+    (check-exn (regexp "approximate literals were removed")
+               (lambda () (tokenize-string src))
+               (format "~a should raise the migration hint" src))))
 
 ;; ========================================
 ;; 5. Non-Regression: Arrows Still Work
@@ -191,8 +179,8 @@
 ;; 7. End-to-End: WS-Mode Eval
 ;; ========================================
 
-(test-case "neg-lit/e2e: decimal -3.14 produces Posit32"
-  ;; In WS mode, -3.14 → decimal-literal(-157/50) → surf-approx-literal → expr-posit32
+(test-case "neg-lit/e2e: decimal -3.14 is polymorphic (N6b: Posit32 default)"
+  ;; -3.14 → $decimal-literal(-157/50) → surf-num-lit 'decimal → unconstrained Posit32
   (check-contains
    (run-ns-last
     (string-append

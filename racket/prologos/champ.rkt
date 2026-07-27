@@ -22,6 +22,7 @@
          champ-vals
          champ-entries
          champ-equal?
+         champ-diff
          champ-insert-join
          ;; Transient builder (hash-table-based, legacy)
          (struct-out tchamp-root)
@@ -448,6 +449,115 @@
                                  (and (not (eq? v2 'none))
                                       (equal? v v2)))))
                         #t)))
+
+;; ========================================
+;; Structural diff (eq?-pruned)
+;; ========================================
+
+;; champ-diff : snap-root result-root (snap-val result-val -> bool)
+;;            -> (values changed new)
+;;
+;; Returns the keys whose entry in `result` is NEW (absent from `snap`) or
+;; CHANGED (present in snap but `same?` reports the values differ), as two lists
+;; of (key . result-value) pairs: (values changed new).
+;;
+;; O(changed): identical sub-tries are skipped wholesale via `eq?` at every
+;; node. A `result` produced by `snap` + O(writes) persistent inserts shares
+;; structure, so untouched sub-nodes are `eq?` and pruned. This generalizes the
+;; root-level `(eq? snap result)` short-circuit down through the trie.
+;;
+;; PRECONDITION (not asserted): result keys ⊇ snap keys (monotone growth) —
+;; keys deleted from snap are NOT reported. Holds for the propagator network's
+;; cells map (cells are never removed during a fire).
+;;
+;; PRECONDITION: both CHAMPs are persistent (every reachable node edit=#f). The
+;; eq?-prune is sound only when an `eq?` node-pair has identical content; an
+;; owned (transient, in-place-mutated) node could be `eq?` with changed content.
+;; The propagator fire path satisfies this (net-cell-write uses persistent
+;; champ-insert; owned-transient builders freeze before exposing the network).
+;; `champ-all-persistent?` can assert it in debug builds.
+;;
+;; `same?` is caller-supplied so this stays value-agnostic (e.g. the cells map
+;; compares prop-cell VALUE, ignoring dependents-only entry changes).
+(define (champ-diff snap-root result-root same?)
+  (champ-node-diff (champ-root-node snap-root)
+                   (champ-root-node result-root)
+                   0 same? '() '()))
+
+;; Classify one (hash,key,result-val) against snap subtree `sn` (rooted at
+;; `level`): NEW (absent), unchanged (same?), or CHANGED.
+(define (champ-diff-classify sn h k v level same? changed new)
+  (define sv (node-lookup sn h k level))
+  (cond
+    [(eq? sv 'none) (values changed (cons (cons k v) new))]
+    [(or (eq? sv v) (same? sv v)) (values changed new)]
+    [else (values (cons (cons k v) changed) new)]))
+
+;; Collect every entry of result subtree `rsub`, classifying each against `sn`
+;; (snap node at `level`). Used where snap has data/empty at a slot result grew.
+(define (champ-diff-collect sn rsub level same? changed new)
+  (define res
+    (node-fold/hash rsub
+      (lambda (h k v acc)
+        (define-values (c* n*)
+          (champ-diff-classify sn h k v level same? (car acc) (cdr acc)))
+        (cons c* n*))
+      (cons changed new)))
+  (values (car res) (cdr res)))
+
+(define (champ-node-diff sn rn level same? changed new)
+  (cond
+    [(eq? sn rn) (values changed new)]                       ; PRUNE — the win
+    [(champ-collision? rn)
+     ;; result is a collision: classify each entry against snap (node-lookup
+     ;; dispatches whether sn is a node or a collision).
+     (for/fold ([c changed] [nw new]) ([e (in-list (champ-collision-entries rn))])
+       (champ-diff-classify sn (champ-collision-hash rn) (car e) (cdr e)
+                            level same? c nw))]
+    [else
+     ;; result is a champ-node. Snap may be a champ-node or a collision; a
+     ;; collision snap has no child slots (its keys are reached via node-lookup).
+     (define rdm (champ-node-datamap rn))
+     (define rnm (champ-node-nodemap rn))
+     (define rarr (champ-node-content rn))
+     (define rdc (popcount rdm))
+     ;; (a) result data entries
+     (define-values (c1 n1)
+       (let loop ([i 0] [c changed] [nw new])
+         (if (>= i rdc)
+             (values c nw)
+             (let ([e (vector-ref rarr i)])
+               (define-values (c* nw*)
+                 (champ-diff-classify sn (de-hash e) (de-key e) (de-val e)
+                                      level same? c nw))
+               (loop (+ i 1) c* nw*)))))
+     ;; (b) result child nodes, paired with snap by bit so deeper sub-tries prune
+     (define-values (sdm snm sarr)
+       (if (champ-collision? sn)
+           (values 0 0 #())
+           (values (champ-node-datamap sn) (champ-node-nodemap sn)
+                   (champ-node-content sn))))
+     (let loop ([bi 0] [c c1] [nw n1])
+       (cond
+         [(>= bi 32) (values c nw)]
+         [else
+          (define bit (arithmetic-shift 1 bi))
+          (cond
+            [(zero? (bitwise-and rnm bit)) (loop (+ bi 1) c nw)]   ; no result child
+            [else
+             (define r-child (vector-ref rarr (node-index rdm rnm bit)))
+             (cond
+               [(not (zero? (bitwise-and snm bit)))
+                ;; snap has a child here → recurse (eq?-pruned within)
+                (define s-child (vector-ref sarr (node-index sdm snm bit)))
+                (define-values (c* nw*)
+                  (champ-node-diff s-child r-child (+ level 1) same? c nw))
+                (loop (+ bi 1) c* nw*)]
+               [else
+                ;; snap has data/empty here → collect the result subtree
+                (define-values (c* nw*)
+                  (champ-diff-collect sn r-child level same? c nw))
+                (loop (+ bi 1) c* nw*)])])]))]))
 
 ;; ========================================
 ;; Lattice-aware insert (join on collision)

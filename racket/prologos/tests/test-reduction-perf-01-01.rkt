@@ -28,9 +28,7 @@
 
 ;; Helper: run prologos code with namespace system active
 (define (run-ns s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry prelude-preparse-registry]
@@ -68,23 +66,23 @@
 ;; Decimal posit literals
 ;; ========================================
 
-(test-case "perf: decimal posit ~3.14 evaluates"
+(test-case "perf: decimal posit 3.14 evaluates"
   (define results
     (run-ns "(ns test.decimal :no-prelude)
-(eval ~3.14)"))
+(eval 3.14)"))
   (check-true (ormap (lambda (r)
                         (and (string? r)
                              (string-contains? r "Posit32")))
                       results)
-              "~3.14 should produce a Posit32"))
+              "3.14 should produce a Posit32"))
 
 (test-case "perf: decimal posit arithmetic"
   (define results
     (run-ns "(ns test.decimal-arith :no-prelude)
-(eval (p32+ ~1.5 ~2.5))"))
+(eval (p32+ 1.5 2.5))"))
   ;; 1.5 + 2.5 = 4.0
   (check-true (ormap (lambda (r)
                         (and (string? r)
                              (string-contains? r "Posit32")))
                       results)
-              "~1.5 + ~2.5 should produce a Posit32"))
+              "1.5 + 2.5 should produce a Posit32"))

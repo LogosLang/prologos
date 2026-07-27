@@ -50,7 +50,7 @@
          (only-in "session-runtime.rkt"
                   choice-lattice-merge
                   msg-lattice-merge)
-         (only-in "session-lattice.rkt" session-lattice-merge)
+         (only-in "session-lattice.rkt" session-lattice-merge session-lattice-meet)  ;; Phase 7a
          (only-in "io-bridge.rkt" io-state-merge)
          (only-in "effect-position.rkt" eff-pos-merge)
          ;; Capability
@@ -71,7 +71,11 @@
          ;; registration using the extended register/minimal helper.
          (only-in "mult-lattice.rkt"
                   mult-lattice-merge mult-lattice-contradicts?
-                  mult-bot mult-bot?))
+                  mult-bot mult-bot?)
+         ;; PPN 4C Addendum Phase 4A.a (Q3 §18.15.5): STRUCTURAL DefinitionEntry.
+         ;; M1 (γ): leaf module definition-entry.rkt (NOT namespace.rkt — would
+         ;; cycle: namespace → type-lattice → reduction → ns-context?). See M1.
+         (only-in "definition-entry.rkt" def-entry-merge def-bot def-collision))
 
 ;; ============================================================
 ;; Helper: minimal-declaration SRE domain + Tier 2 link
@@ -170,8 +174,34 @@
                   (lambda (v) #f) #f)
 (register/minimal 'session-message msg-lattice-merge
                   (lambda (v) #f) #f)
-(register/minimal 'session session-lattice-merge
-                  (lambda (v) #f) #f)
+;; SRE Track 2I Phase 7a (2026-04-30): 'session needs meet-registry so empirical
+;; sweep can run Phase 5/6 algebraic-property checks. The pre-7a `register/minimal`
+;; only set merge-registry — leaving meet-registry #f. session-lattice-meet has
+;; existed since Track 2G but was never wired into the registry. We use a richer
+;; helper here that includes meet-registry while keeping the same minimal-otherwise
+;; shape (bot/top values, etc., remain #f as pre-7a).
+;;
+;; Note: session-propagators.rkt also defines a richer session-sre-domain (with
+;; bot=sess-bot, dual-pairs, declared-properties), but it's not in the production
+;; load chain (no module currently requires session-propagators.rkt for its body).
+;; Bringing it in would be a separate consolidation track.
+(let* ([d (make-sre-domain
+           #:name 'session
+           #:merge-registry (lambda (r)
+                              (case r
+                                [(equality) session-lattice-merge]
+                                [else (error 'phase1d-registration
+                                             "no merge for relation: ~a" r)]))
+           #:meet-registry (lambda (r)
+                             (case r
+                               [(equality) session-lattice-meet]
+                               [else (error 'phase1d-registration
+                                            "no meet for relation: ~a" r)]))
+           #:contradicts? (lambda (v) #f)
+           #:bot? (lambda (v) #f)
+           #:bot-value #f)])
+  (register-domain! d)
+  (register-merge-fn!/lattice session-lattice-merge #:for-domain 'session))
 (register/minimal 'io-state io-state-merge
                   (lambda (v) #f) #f)
 (register/minimal 'effect-position eff-pos-merge
@@ -249,3 +279,25 @@
                   mult-bot? mult-bot
                   #:classification 'value
                   #:contradicts? mult-lattice-contradicts?)
+
+;; ============================================================
+;; DefinitionEntry — STRUCTURAL (PPN 4C Addendum Phase 4A.a, Q3 §18.15.5)
+;; ============================================================
+;; Per-name definition cell value: :type + :value sub-components merged
+;; pointwise by def-entry-merge (attribute-map-merge-fn precedent — single
+;; merge fn with internal dispatch, NOT sre-decompose sub-cells). Domain bot
+;; is def-bot; def-collision is ⊤ (#:contradicts?). #:classification 'structural
+;; enables Phase 1f :component-paths enforcement for propagators reading
+;; definition-entry cells.
+;;
+;; M1 (γ): def-entry-merge lives in leaf module definition-entry.rkt (NOT
+;; namespace.rkt — layering cycle via type-lattice → reduction → ns-context?).
+;;
+;; LIVE since 4A.b-ii (2026-06-01): the per-file mnr's per-name cells hold a
+;; def-entry value, merged by this domain's def-entry-merge (namespace.rkt's mnr
+;; API wraps/unwraps via the cons↔def-entry adapters). Registered at 4A.a; 4A.b-ii
+;; activated it by migrating the mnr writers/readers to def-entry. Not inert.
+(register/minimal 'definition-entry def-entry-merge
+                  (lambda (v) (eq? v def-bot)) def-bot
+                  #:classification 'structural
+                  #:contradicts? (lambda (v) (eq? v def-collision)))

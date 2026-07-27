@@ -21,7 +21,16 @@
          "../errors.rkt"
          "../performance-counters.rkt"
          "../source-location.rkt"
-         "../atms.rkt")
+         "../atms.rkt"
+         ;; PPN 4C 3C.c.3 (2026-05-24): derivation-chain + derivation-step
+         ;; struct accessors for union-exhaustion-error.derivation-chain field
+         ;; (post-Q-B.2 flip to (listof derivation-chain) per §9.5.4.4)
+         "../error-explanation.rkt"
+         ;; PPN 4C 3C.c.6 (2026-05-24): cell-19 observability test —
+         ;; net-cell-read for union-derivation-chains-cell-id; elab-cell-read
+         ;; via elab-network-types
+         (only-in "../propagator.rkt" union-derivation-chains-cell-id)
+         (only-in "../elab-network-types.rkt" elab-cell-read))
 
 ;; ========================================
 ;; Test Helpers
@@ -29,9 +38,7 @@
 
 ;; Run without prelude, suppress stderr, return all results
 (define (run-simple s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-error-port (open-output-nowhere)])
+  (parameterize ([current-error-port (open-output-nowhere)])
     (process-string s)))
 
 ;; Run with prelude, suppress stderr, return last result
@@ -51,9 +58,7 @@
 (define (run-simple-with-stderr s)
   (define stderr-out (open-output-string))
   (define results
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                   [current-error-port stderr-out])
+    (parameterize ([current-error-port stderr-out])
       (process-string s)))
   (cons results (get-output-string stderr-out)))
 
@@ -79,7 +84,11 @@
   ;; Angle-bracket union syntax works without prelude
   (define result (run-simple "(def x <Nat | Bool> \"hello\")"))
   (check-true (union-exhaustion-error? (last result)))
-  (check-true (list? (union-exhaustion-error-derivation-chain (last result)))))
+  ;; PPN 4C 3C.c.3: field shape is (listof derivation-chain) per Q-B.2 flip
+  (define chains (union-exhaustion-error-derivation-chain (last result)))
+  (check-true (list? chains) "Field is a list (per-branch shape per Q-C.6)")
+  (check-true (andmap derivation-chain? chains)
+              "All list entries are derivation-chain structs (3C.a foundation)"))
 
 (test-case "union branch mismatch produces per-branch info"
   (define result (run-simple "(def x <Nat | Bool> \"hello\")"))
@@ -138,12 +147,18 @@
   (check-true (string-contains? formatted "because: nested union left branch failed")))
 
 (test-case "union exhaustion format includes 'because:' for non-empty chains"
+  ;; PPN 4C 3C.c.3 (2026-05-24): per Q-B.2 + Q-C.6, field shape is
+  ;; (listof derivation-chain). Construct chain with one step containing
+  ;; the speculation label as assumption-name; verify format-error renders
+  ;; "because: <name>".
+  (define step (derivation-step #f #f '() (list "tried branch Nat") #f))
   (define err
     (union-exhaustion-error srcloc-unknown "Nat | Bool"
                             '("Nat" "Bool")
                             '("Bool" "Nat")
                             "\"hello\""
-                            '(("tried branch Nat") ())))
+                            (list (derivation-chain (list step))
+                                  (derivation-chain '()))))
   (define formatted (format-error err))
   (check-true (string-contains? formatted "because: tried branch Nat"))
   (check-true (string-contains? formatted "tried Nat")))
@@ -189,9 +204,7 @@
 
 ;; Helper: Run a command through the driver, return speculation failures list.
 (define (run-and-get-failures s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-error-port (open-output-nowhere)])
+  (parameterize ([current-error-port (open-output-nowhere)])
     (define failures-box (box '()))
     (parameterize ([current-speculation-failures failures-box])
       (process-string s)
@@ -228,9 +241,40 @@
   (define results (car pair))
   (define err (last results))
   (check-true (union-exhaustion-error? err))
-  ;; Check derivation chain — should contain ATMS-derived info
-  (define chain (union-exhaustion-error-derivation-chain err))
-  (check-true (list? chain)))
+  ;; PPN 4C 3C.c.3: field shape is (listof derivation-chain) per Q-B.2 + Q-C.6
+  (define chains (union-exhaustion-error-derivation-chain err))
+  (check-true (list? chains))
+  (check-true (andmap derivation-chain? chains)
+              "All chains are derivation-chain structs"))
+
+;; ========================================
+;; PPN 4C Phase 3C.c.6 (2026-05-24): cell-19 observability — sexp check/err
+;; writes cell-19 via direct elab-cell-write per Q-C.1 (f) multi-writer
+;; scaffolding. Verifies the on-network store is populated from the sexp
+;; path (validates D-3C.b.5-6 deployment gap closure).
+;; ========================================
+
+(test-case "3C.c: sexp check/err writes cell-19 for union all-branch-contradict"
+  ;; Use process-string/return-net (3C.b.5.b infrastructure) to inspect the
+  ;; post-elaboration network state. Cell-19 should contain a per-position
+  ;; entry with (listof derivation-chain) for the union-exhaustion scenario.
+  (define-values (_results net)
+    (process-string/return-net "(def x <Nat | Bool> \"hello\")"))
+  (define cell-19-val
+    (elab-cell-read net union-derivation-chains-cell-id))
+  (check-true (hash? cell-19-val) "cell-19 is a hash")
+  ;; The hash should have at least one entry (the union position)
+  (check-true (positive? (hash-count cell-19-val))
+              "cell-19 has at least one entry (sexp check/err wrote it)")
+  ;; The first entry's value should be (listof derivation-chain) — per Q-C.6 shape
+  (define entries (hash->list cell-19-val))
+  (define first-entry-value (cdr (first entries)))
+  (check-true (list? first-entry-value)
+              "cell-19 entry value is a list (per-branch shape per Q-C.6)")
+  (check-true (andmap derivation-chain? first-entry-value)
+              "all entries are derivation-chain structs (3C.a foundation)")
+  (check-equal? (length first-entry-value) 2
+                "binary union → 2 per-branch chains (Nat + Bool)"))
 
 (test-case "GDE-1: context assumption for check command"
   ;; (check expr : Type) should also create a context assumption.
@@ -306,20 +350,105 @@
   ;; Specifically, should NOT have "because: [diagnosis]"
   (check-false (string-contains? formatted "because: [diagnosis]")))
 
-(test-case "GDE-3: union error format renders diagnosis in derivation chain"
-  ;; Construct a union-exhaustion-error with diagnosis in chain
+(test-case "GDE-3: union error format renders per-step assumption-names (diagnosis lines deferred to Phase 11b — see KR-1)"
+  ;; PPN 4C 3C.c.3 (2026-05-24): under Q-B.2 + Q-C.6 (listof derivation-chain)
+  ;; shape, format-error renders per-step "because: <name>" via derivation-
+  ;; step-assumption-names. The OLD inline "[diagnosis]" string convention
+  ;; (build-derivation-chain's format-context-diagnosis appended strings to
+  ;; chain) retires alongside build-derivation-chain's union-type path per Q9.
+  ;; Diagnosis info under new architecture is queryable via ATMS state at
+  ;; render time — deferred to Phase 11b general derivation infrastructure
+  ;; (see §9.5.4.4 adversarial framing on lost richness). For 3C.c.3 minimum:
+  ;; chain renders step assumption-names; diagnosis-line testing deferred.
+  (define step-1 (derivation-step #f #f '() (list "tried branch Nat") #f))
+  (define step-2 (derivation-step #f #f '() (list "tried branch Bool") #f))
   (define err
     (union-exhaustion-error srcloc-unknown "Nat | Bool"
                             '("Nat" "Bool")
                             '("Bool" "Nat")
                             "\"hello\""
-                            '(("tried branch Nat" "[diagnosis] retract: x : Nat | Bool")
-                              ("tried branch Bool"))))
+                            (list (derivation-chain (list step-1))
+                                  (derivation-chain (list step-2)))))
   (define formatted (format-error err))
-  ;; Diagnosis line should appear without "because:" prefix
-  (check-true (string-contains? formatted "[diagnosis] retract: x : Nat | Bool"))
-  (check-false (string-contains? formatted "because: [diagnosis]")))
+  ;; Per-step "because:" lines render with assumption-names
+  (check-true (string-contains? formatted "because: tried branch Nat"))
+  (check-true (string-contains? formatted "because: tried branch Bool"))
+  ;; Old [diagnosis] inline format NOT preserved under new struct shape; testing
+  ;; deferred to Phase 11b ATMS state query infrastructure (see §9.5.4.4
+  ;; adversarial framing on lost richness — ATMS conflicts + minimal diagnoses
+  ;; queryable via solver-state at render time, structured data path)
+  )
 
 (test-case "GDE-3: successful def produces no diagnosis in provenance"
   (define result (last (run-simple "(def x : Nat 0N)")))
   (check-false (prologos-error? result)))
+
+;; ========================================
+;; Suite 9: PPN 4C 3C.d.3 — Integration axes per (β.3.i) split (2026-05-24)
+;; ========================================
+;;
+;; Per addendum §9.5.5.5 deliverable 3 + §9.5.5.13 (β.3.i) post-empirical
+;; decision: integration axes split across two test files per (β.3.i)
+;; placement.
+;;
+;; This suite holds the /non-union-no-chain integration axis (KR-3 boundary):
+;;
+;;   /non-union-no-chain — type-mismatch-error has no derivation-chain field;
+;;                         provenance is (listof string). Tests against
+;;                         `(def x : Nat true)` per probe Scenario C3.
+;;
+;; CROSS-REFERENCE — /srcloc-presence axis lives in
+;; tests/test-union-types-atms.rkt as TWO complementary tests
+;; (per (β.3.i) split + §9.5.5.13.3):
+;;
+;;   union-all-contradict-chain/srcloc-empirical-baseline
+;;       (no parameterize; asserts srcloc=#f baseline per Scenario A)
+;;
+;;   union-all-contradict-chain/srcloc-presence-via-parameterize
+;;       (parameterize-wrap; asserts srcloc=test-loc per Scenario B —
+;;        tests W1 dispatch-chain coherence through process-fork-on-union)
+;;
+;; Why /srcloc-presence is NOT here: production sexp annotated unions go
+;; through the sexp translator (derivation-chain-for/union-check at
+;; error-explanation.rkt:391+) which hardcodes srcloc=#f BY DESIGN
+;; (D-3C.c-1) AND produces empty chains for atomic checks. Empirical
+;; probe (data/probes/2026-05-24-3C-d-3-w1-empirical-{probe.rkt,output.txt})
+;; Scenario C1 + C2 confirms: production sexp path cannot satisfy
+;; /srcloc-presence today. Production-path srcloc threading via surf-node
+;; → process-command parameterize is Phase 11b scope (gated on sexp
+;; translator retirement / Track 4D unification).
+;;
+;; The synthetic-E2E layer DOES exercise the W1 dispatch chain mechanically
+;; (per Scenario B empirical confirmation); hence /srcloc-presence lives
+;; at the synthetic-E2E layer in test-union-types-atms.rkt.
+
+(test-case "PPN 4C 3C.d.3: /non-union-no-chain — type-mismatch-error has no derivation-chain field (KR-3 boundary)"
+  ;; Per probe Scenario C3 at §9.5.5.13.1 — `(def x : Nat true)` produces a
+  ;; type-mismatch-error (not a union-exhaustion-error). KR-3 boundary
+  ;; (two-shape error infrastructure named at §9.5.4.14):
+  ;;   - union path        → union-exhaustion-error (4-field struct with
+  ;;                          derivation-chain field per errors.rkt:135)
+  ;;   - non-union path    → type-mismatch-error (4-field struct WITHOUT
+  ;;                          derivation-chain field per errors.rkt:65;
+  ;;                          provenance is (listof string) instead)
+  ;;
+  ;; This test asserts the boundary preservation:
+  ;;   (a) result is a type-mismatch-error (not union shape);
+  ;;   (b) result is NOT a union-exhaustion-error (KR-3 boundary — no
+  ;;       derivation-chain field via struct-type identity);
+  ;;   (c) provenance field is a list (KR-3 old-shape: (listof string)).
+  ;;
+  ;; This is distinct from Suite 1's "type-mismatch-error has provenance
+  ;; field" (which proves field PRESENCE). Suite 9 proves the BOUNDARY
+  ;; (chain field ABSENCE under non-union path) — discriminating power
+  ;; against future regressions that might add a derivation-chain field
+  ;; to type-mismatch-error inadvertently (KR-3 unification at Phase 11b
+  ;; should be explicit, not accidental).
+  (define result (last (run-simple "(def x : Nat true)")))
+  (check-true (type-mismatch-error? result)
+              "result is a type-mismatch-error (non-union path)")
+  (check-false (union-exhaustion-error? result)
+               "result is NOT a union-exhaustion-error (KR-3 boundary: no derivation-chain field)")
+  (define prov (type-mismatch-error-provenance result))
+  (check-true (list? prov)
+              "type-mismatch-error.provenance is a list (KR-3 old-shape: (listof string))"))

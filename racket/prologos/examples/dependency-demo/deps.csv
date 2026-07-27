@@ -1,0 +1,8 @@
+package,dep
+app,left
+app,right
+left,shared
+right,shared
+right,logger
+shared,util
+logger,fmt

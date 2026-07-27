@@ -82,8 +82,7 @@
 
 (test-case "typing: expr-tycon Eq has kind Type -> Type (via extension)"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
+    (parameterize ([current-file-module-network-ref (make-module-network)]
                    [current-tycon-arity-extension (hasheq 'Eq 1)])
       (define kind (tc:infer '() (expr-tycon 'Eq)))
       (check-true (expr-Pi? kind))
@@ -93,8 +92,7 @@
 
 (test-case "typing: expr-tycon From has kind Type -> Type -> Type (via extension)"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
+    (parameterize ([current-file-module-network-ref (make-module-network)]
                    [current-tycon-arity-extension (hasheq 'From 2)])
       (define kind (tc:infer '() (expr-tycon 'From)))
       (check-true (expr-Pi? kind))
@@ -108,8 +106,7 @@
 
 (test-case "unify: (app ?F Nat) vs (app (tycon Eq) Nat) → ?F = Eq"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
+    (parameterize ([current-file-module-network-ref (make-module-network)]
                    [current-tycon-arity-extension (hasheq 'Eq 1)])
       (define m (fresh-meta ctx-empty (expr-Type (lzero)) "F"))
       (check-true (unify ctx-empty
@@ -132,8 +129,7 @@
                 shared-impl-reg
                 shared-param-impl-reg
                 shared-tycon-ext)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
+  (parameterize ([current-file-module-network-ref (make-module-network)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -148,7 +144,7 @@
                  [current-tycon-arity-extension (current-tycon-arity-extension)])
     (install-module-loader!)
     (process-string shared-preamble)
-    (values (current-prelude-env)
+    (values (global-env-snapshot)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -157,7 +153,7 @@
             (current-tycon-arity-extension))))
 
 (define (run s)
-  (parameterize ([current-prelude-env shared-global-env]
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]

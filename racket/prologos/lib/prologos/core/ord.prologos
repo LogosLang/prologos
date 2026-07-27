@@ -219,3 +219,44 @@ spec ord-compare [Ord A] A A -> Ordering
   :doc "Generic comparison: returns lt-ord, eq-ord, or gt-ord"
 defn ord-compare [dict x y]
   dict x y
+
+;; ========================================
+;; Ord / PartialOrd Float32 / Float64 (Numerics N6d-iii)
+;; ========================================
+;; Ord = TOTAL order (IEEE 754 §5.10 totalOrder spirit): finite/±Inf by value,
+;; NaN as a single TOP equivalence class — lawful (reflexive/total/antisymmetric)
+;; so sorting/containers work. NaN test = [not [f_-eq x x]] (NaN is the only value
+;; not equal to itself; ±Inf equals itself). PartialOrd = IEEE operator-honest:
+;; NaN is incomparable (none). The two coexist: Ord for containers, PartialOrd for
+;; operator-faithful comparison; raw f_-lt/eq prims keep IEEE < / ==.
+;; NOTE (per-standard divergence): Ord Posit is a FULL total order incl. NaR (least);
+;; Ord Float places NaN at the TOP as an equivalence class — different families,
+;; different (correct) standards.
+
+impl Ord Float32
+  defn compare [x : Float32  y : Float32] <Ordering>
+    if [not [f32-eq x x]]
+      [if [not [f32-eq y y]] eq-ord gt-ord]
+      [if [not [f32-eq y y]] lt-ord
+        [if [f32-lt x y] lt-ord
+          [if [f32-lt y x] gt-ord eq-ord]]]
+
+impl Ord Float64
+  defn compare [x : Float64  y : Float64] <Ordering>
+    if [not [f64-eq x x]]
+      [if [not [f64-eq y y]] eq-ord gt-ord]
+      [if [not [f64-eq y y]] lt-ord
+        [if [f64-lt x y] lt-ord
+          [if [f64-lt y x] gt-ord eq-ord]]]
+
+impl PartialOrd Float32
+  defn partial-compare [x : Float32  y : Float32] <[Option Ordering]>
+    if [f32-lt x y] [some Ordering lt-ord]
+      [if [f32-lt y x] [some Ordering gt-ord]
+        [if [f32-eq x y] [some Ordering eq-ord] [none Ordering]]]
+
+impl PartialOrd Float64
+  defn partial-compare [x : Float64  y : Float64] <[Option Ordering]>
+    if [f64-lt x y] [some Ordering lt-ord]
+      [if [f64-lt y x] [some Ordering gt-ord]
+        [if [f64-eq x y] [some Ordering eq-ord] [none Ordering]]]

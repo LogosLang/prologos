@@ -8,6 +8,14 @@
 
 ---
 
+> **⚠ Superseded/updated by Num Series Track 1 (2026-06-30 → 2026-07-02).** This Feb
+> roadmap predates the Numerics track. Current state: **Phase 4 (Float) ✅ DONE** and
+> *broadened* — Float is a full user-facing compute primitive, not FFI-only (Numerics N3).
+> Also revised since: bare decimals default to **Posit32** (not Rat; D-N6.1); the `~` sigil
+> was **removed** (bare decimal = Posit32, `pNN` for width, `f`/`f32`/`f64` for Float;
+> N6b/N6c); generic `+ - * /` operators + refinement-via-trait landed (N5/N6e). See the
+> [Num Series Master](2026-07-02_NUM_MASTER.md) + [Numerics Track Stage-3](2026-06-30_NUMERICS_TRACK_STAGE3_DESIGN.md).
+
 ## Status Legend
 
 - ✅ **Done** — implemented, tested, merged
@@ -284,9 +292,11 @@ The Prologos numerics tower follows three design principles:
 
 ---
 
-## Phase 4: Float32/Float64 ⬜ NOT STARTED
+## Phase 4: Float32/Float64 ✅ DONE (Numerics Track 1, N3)
 
-**Goal**: IEEE 754 floating-point types for C FFI interop.
+**Goal**: IEEE 754 floating-point types — landed as a **full user-facing compute primitive**
+(arithmetic, literals, tower rank, FFI marshal, Posit↔Float conversions), broadening the
+original FFI-only goal. See the [Numerics Track Stage-3](2026-06-30_NUMERICS_TRACK_STAGE3_DESIGN.md) §2 tracker (N3a–g).
 **Guide reference**: Section 3.3
 **Dependencies**: Phase 3a pattern (13 AST nodes per width), Phase 3e (subtyping), Phase 3f (From/TryFrom)
 

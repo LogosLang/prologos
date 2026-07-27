@@ -14,6 +14,12 @@
          "../merge-fn-registry.rkt"
          "../propagator.rkt")
 
+;; Snapshot the process-global merge-fn registry at file load and restore it at
+;; file end (last form below): the reset-merge-fn-registry! calls below otherwise
+;; wipe production registrations for sibling tests in the same batch worker
+;; (SRE-registry batch state-isolation flake, 2026-06-29).
+(define merge-fn-registry-snapshot-at-load (save-merge-fn-registry-snapshot))
+
 ;; Fresh dummy merge functions — distinct identities per test.
 (define (make-test-merge-fn)
   (lambda (old new) new))
@@ -106,3 +112,6 @@
   (reset-merge-fn-registry!)
   ;; Not an allocated cell-id
   (check-false (lookup-cell-domain (fresh-net) (cell-id 999999))))
+
+;; Restore production registrations wiped by the resets above (see snapshot at top).
+(restore-merge-fn-registry! merge-fn-registry-snapshot-at-load)

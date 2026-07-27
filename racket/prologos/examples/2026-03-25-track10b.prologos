@@ -291,9 +291,9 @@ def g2 := [- 10 3]                    ;; 7 : Int
 ;; (subtype coercion may not be automatic yet)
 
 ;; Posit approximate arithmetic
-def p1 := ~3.14
-def p2 := ~2.71
-;; IDEAL: [+ p1 p2]                   ;; ~5.85 : Posit32 via generic arithmetic
+def p1 := 3.14
+def p2 := 2.71
+;; IDEAL: [+ p1 p2]                   ;; 5.85 : Posit32 via generic arithmetic
 ;; WORKING:
 ;; (Posit generic arithmetic may need explicit instance)
 

@@ -133,6 +133,19 @@
  (struct-out expr-p64-from-nat)
  (struct-out expr-p64-to-rat) (struct-out expr-p64-from-rat) (struct-out expr-p64-from-int)
  (struct-out expr-p64-if-nar)
+ ;; Float (IEEE-754 binary floats — Numerics N3)
+ (struct-out expr-Float32) (struct-out expr-float32)
+ (struct-out expr-Float64) (struct-out expr-float64)
+ ;; Float arithmetic + comparison ops (Numerics N3b)
+ (struct-out expr-f32-add) (struct-out expr-f32-sub) (struct-out expr-f32-mul) (struct-out expr-f32-div)
+ (struct-out expr-f32-neg) (struct-out expr-f32-abs) (struct-out expr-f32-sqrt)
+ (struct-out expr-f32-lt) (struct-out expr-f32-le) (struct-out expr-f32-eq)
+ (struct-out expr-f64-add) (struct-out expr-f64-sub) (struct-out expr-f64-mul) (struct-out expr-f64-div)
+ (struct-out expr-f64-neg) (struct-out expr-f64-abs) (struct-out expr-f64-sqrt)
+ (struct-out expr-f64-lt) (struct-out expr-f64-le) (struct-out expr-f64-eq)
+ ;; Cross-width Float conversions (Numerics N3e-rest)
+ (struct-out expr-float-finite) (struct-out expr-float-to-rat)
+ (struct-out expr-float-to-int) (struct-out expr-float-to-float32)
  ;; Quire accumulators (exact product sums for posit types)
  (struct-out expr-Quire8) (struct-out expr-quire8-val)
  (struct-out expr-quire8-fma) (struct-out expr-quire8-to)
@@ -150,6 +163,11 @@
  (struct-out expr-Char) (struct-out expr-char)
  ;; String type (opaque atomic type for UTF-8 text)
  (struct-out expr-String) (struct-out expr-string)
+ ;; Anonymous structural record / tuple type (CIU T6 F1; internal-only — inferred, not parsed)
+ (struct-out expr-Record) (struct-out record-field)
+ (struct-out expr-validate) validate-map-exprs
+ record-map-field-types make-record record-extend record-lookup-field record-remove
+ closed-nat-row? closed-keyword-row? record-mark-all-unknown
  ;; Map (persistent hash map)
  (struct-out expr-Map) (struct-out expr-champ)
  (struct-out expr-map-empty) (struct-out expr-map-assoc)
@@ -168,7 +186,7 @@
  (struct-out expr-set-to-list)
  ;; Persistent Vector (PVec)
  (struct-out expr-PVec) (struct-out expr-rrb) (struct-out expr-pvec-empty)
- (struct-out expr-pvec-push) (struct-out expr-pvec-nth) (struct-out expr-pvec-update)
+ (struct-out expr-pvec-push) (struct-out expr-pvec-literal) (struct-out expr-list-literal) (struct-out expr-map-literal) (struct-out expr-pvec-nth) (struct-out expr-pvec-update)
  (struct-out expr-pvec-length) (struct-out expr-pvec-pop)
  (struct-out expr-pvec-concat) (struct-out expr-pvec-slice)
  (struct-out expr-pvec-to-list) (struct-out expr-pvec-from-list)
@@ -198,14 +216,6 @@
  (struct-out expr-uf-empty) (struct-out expr-uf-make-set)
  (struct-out expr-uf-find) (struct-out expr-uf-union)
  (struct-out expr-uf-value)
- ;; ATMS (persistent assumption-based truth maintenance)
- (struct-out expr-atms-type) (struct-out expr-assumption-id-type)
- (struct-out expr-atms-store) (struct-out expr-assumption-id-val)
- (struct-out expr-atms-new) (struct-out expr-atms-assume)
- (struct-out expr-atms-retract) (struct-out expr-atms-nogood)
- (struct-out expr-atms-amb) (struct-out expr-atms-solve-all)
- (struct-out expr-atms-read) (struct-out expr-atms-write)
- (struct-out expr-atms-consistent) (struct-out expr-atms-worldview)
  ;; Tabling (SLG-style memoization)
  (struct-out expr-table-store-type) (struct-out expr-table-store-val)
  (struct-out expr-table-new) (struct-out expr-table-register)
@@ -220,7 +230,7 @@
  (struct-out expr-goal-app) (struct-out expr-logic-var) (struct-out expr-unify-goal) (struct-out expr-is-goal) (struct-out expr-not-goal)
  ;; Narrowing (Phase 1e)
  (struct-out expr-narrow)
- (struct-out expr-relation-type) (struct-out expr-schema) (struct-out expr-schema-type)
+ (struct-out expr-relation-type)
  (struct-out expr-solve) (struct-out expr-solve-with) (struct-out expr-solve-one) (struct-out expr-goal-type)
  (struct-out expr-explain) (struct-out expr-explain-with)
  (struct-out expr-solver-config) (struct-out expr-solver-type)
@@ -285,11 +295,14 @@
  ;; both directions (bidirectional trust). Narrowing at use site is per-reference,
  ;; never globally pinned. Contrast with expr-hole (inference hole; gets solved)
  ;; and type-top (lattice contradiction sentinel). Display: "Open".
- (struct-out expr-Open)
  ;; Panic (runtime abort — inhabits any type)
  (struct-out expr-panic)
  ;; Metavariable (to be solved during elaboration/unification)
  (struct-out expr-meta)
+ ;; N4: context-typed polymorphic numeric literal (transient)
+ (struct-out expr-num-lit)
+ num-lit-default-type  ;; N6b: the origin-keyed unconstrained-default rule
+
  ;; Reduce (ML-style pattern matching — desugared in type checker)
  (struct-out expr-reduce)
  (struct-out expr-reduce-arm)
@@ -525,6 +538,47 @@
 (struct expr-p64-if-nar (type nar-case normal-case val) #:transparent)
 
 ;; ========================================
+;; Float (IEEE-754 binary floats — interop numeric, Numerics N3)
+;; Float32 = single precision, Float64 = double precision. Value `val` is a
+;; Racket flonum (f64 = double; f32 = single-flonum). +nan.0/+inf.0/-inf.0 are
+;; native flonum values. Ops + `f` literals are added in later N3 sub-phases.
+;; ========================================
+
+(struct expr-Float32 () #:transparent)
+(struct expr-float32 (val) #:transparent)
+(struct expr-Float64 () #:transparent)
+(struct expr-float64 (val) #:transparent)
+;; Float arithmetic + comparison ops (Numerics N3b) — mirror the Posit op shape.
+;; Binary ops carry (a b); unary ops carry (a). lt/le/eq are typed to Bool.
+(struct expr-f32-add (a b) #:transparent)
+(struct expr-f32-sub (a b) #:transparent)
+(struct expr-f32-mul (a b) #:transparent)
+(struct expr-f32-div (a b) #:transparent)
+(struct expr-f32-neg (a) #:transparent)
+(struct expr-f32-abs (a) #:transparent)
+(struct expr-f32-sqrt (a) #:transparent)
+(struct expr-f32-lt (a b) #:transparent)
+(struct expr-f32-le (a b) #:transparent)
+(struct expr-f32-eq (a b) #:transparent)
+(struct expr-f64-add (a b) #:transparent)
+(struct expr-f64-sub (a b) #:transparent)
+(struct expr-f64-mul (a b) #:transparent)
+(struct expr-f64-div (a b) #:transparent)
+(struct expr-f64-neg (a) #:transparent)
+(struct expr-f64-abs (a) #:transparent)
+(struct expr-f64-sqrt (a) #:transparent)
+(struct expr-f64-lt (a b) #:transparent)
+(struct expr-f64-le (a b) #:transparent)
+(struct expr-f64-eq (a b) #:transparent)
+;; Cross-width Float conversions (Numerics N3e-rest) — accept Float32 OR Float64.
+;; `float-finite?` : Float -> Bool ; float-to-rat : Float -> Rat (NaN/±Inf stuck);
+;; float-to-int : Float -> Int (truncate) ; float-to-float32 : Float -> Float32.
+(struct expr-float-finite (a) #:transparent)      ; Float -> Bool  (keyword: float-finite?)
+(struct expr-float-to-rat (a) #:transparent)      ; Float -> Rat
+(struct expr-float-to-int (a) #:transparent)      ; Float -> Int
+(struct expr-float-to-float32 (a) #:transparent)  ; Float -> Float32
+
+;; ========================================
 ;; Quire accumulators (exact product sums for posit types)
 ;; ========================================
 ;; A quire accumulates exact sums of products.  Runtime value is an exact
@@ -594,6 +648,155 @@
 ;; Map (persistent hash map, backed by CHAMP)
 ;; ========================================
 
+;; Anonymous structural-row TYPE node (CIU T6 F1 — internal-only: inferred + displayed, NOT parsed).
+;; ONE carrier, TWO surface presentations keyed by key-domain (D13/Q_A): a record ('keyword) or a
+;; tuple ('nat). Deliberately carries NO prop:ctor-desc-tag — a keyed/variable-width row cannot register
+;; in the fixed-arity positional ctor-desc registry; width subsumption is F1b (erasure-mode), not the walk.
+;;   ✏ F1b.3 (D21, 2026-07-17): CONFIRMED under its strict reading — width landed as the
+;;   erasure-mode discharge in check's conversion fallback (record-width-* below), NOT the walk
+;;   and NOT unify/classify (a width rule in unify would CORRUPT the D15 literal-homogeneity
+;;   probes, which rely on closed row-vs-row unify failing — PROBES P8).
+;;   key-domain : 'keyword | 'nat   (F1a-core mints 'keyword only; 'nat = tuples, F1a-col.
+;;                                   Q_B: homogeneous-key-domain — a row is ALL-keyword or ALL-nat.)
+;;   fields     : canonical assoc ((label . record-field) ...); label = keyword-symbol | Nat,
+;;                sorted by symbol<? / < per domain (smart-constructor-enforced).
+;;   tail       : 'closed | 'dyn    (F1a mints 'closed; 'dyn = F1a.2; ρ row-meta = F-row.)
+(struct expr-Record (key-domain fields tail) #:transparent)
+;; A single field/slot: its type + presence mark.
+;;
+;; PRESENCE LATTICE (D24, F1b.3 — the points-map + joins, declared here per the S-lens
+;; obligation). A mark denotes a subset of {P(resent), A(bsent)} — what is known about the
+;; field's runtime membership; the TYPE is the field's type-if-present (a fact regardless):
+;;   'present  = {P}      (positive evidence: literal mint, assoc — record-extend's
+;;                         overwrite-to-'present on assoc IS the evidence-narrowing join)
+;;   'absent   = {A}      (reserved: negative evidence / Lacks facts — F-carrier-era)
+;;   'unknown  = {P,A}    (no evidence either way: the dissoc-dynamic writer, F1b.3)
+;;   'optional = {P,A}    (reserved: same POINT as 'unknown, distinguished by PROVENANCE —
+;;                         schema-declared optionality, schema-optional-keys era)
+;;   (contradiction = {} has no mark: presence conflicts surface as type-level conflicts)
+;; Evidence-narrowing = set intersection (future has-key? narrowing: 'unknown ∩ {P} → 'present);
+;; row-merge join = set union. Marks propagate through type rewrites unchanged (presence is
+;; orthogonal to the type dimension — e.g. map-vals rebuilds keep marks with types := W).
+;; Comparison semantics: marks NEVER become unification goals (the unify B3 pin); they are
+;; consulted ONLY by arm-level GUARDS (C_Cons containment treats 'unknown labels as
+;; non-required) and by the gated-identically projection reads (an 'unknown hit mints a fresh
+;; meta exactly like a tail miss — D24/Q7, courtesy-upgrade rejected).
+;; Display: 'unknown fields render with a `?` label suffix ({:a? Int | _}). NOTE the edge:
+;; a 'present field whose LABEL itself ends in `?` (predicate-named keys) is visually
+;; indistinguishable — accepted display-only ambiguity, revisit if it bites.
+(struct record-field (type presence) #:transparent)
+
+;; Map a procedure over every field TYPE of a record, preserving labels/presence/tail/key-domain.
+;; The single reconstruction point used by all the pipeline recursions (shift/subst/zonk/nf/…), so the
+;; `fields` list-spine walk lives in ONE place (labels + presence are not exprs — only types recurse).
+(define (record-map-field-types proc rec)
+  (expr-Record (expr-Record-key-domain rec)
+               (for/list ([fld (in-list (expr-Record-fields rec))])
+                 (cons (car fld)
+                       (record-field (proc (record-field-type (cdr fld)))
+                                     (record-field-presence (cdr fld)))))
+               (expr-Record-tail rec)))
+
+;; ============================================================
+;; expr-validate — the runtime schema-tabulation node (CIU T6 F1b.5-s2, D27)
+;; ============================================================
+;; Minted at ELABORATION from `[validate SchemaName e]` with the per-field
+;; plan fully BAKED (the schema registry is preparse/elaboration-time state;
+;; the whnf memo cache forbids registry reads at reduce time, and lazy baking
+;; is structurally impossible — typing can't rewrite immutable exprs and
+;; reduction can't reach typing-core). Reduces (ONE arm) to
+;; `ok filled-champ` / `err reason-champ` — payload-only ctor apps per the
+;; documented dual-arity runtime contract (foreign.rkt marshal-out precedent).
+;;
+;;   schema-name : symbol           (as resolved at bake — display + errors)
+;;   closed?     : boolean          (:closed schema → unexpected-field scan)
+;;   plan        : (listof (list kw tag default-expr pred-expr type-str pred-str))
+;;                 kw = stripped field-name symbol; tag = the s1 witness tag
+;;                 (plain sexp — field-witness.rkt grammar); default-expr /
+;;                 pred-expr = elaborated exprs or #f (pred = an expr-lam,
+;;                 NEVER a Racket closure — pnet serializes procedures to
+;;                 error stubs); type-str / pred-str = display strings baked
+;;                 for Reason payloads
+;;   subject     : expr
+;;   names       : (list Result-type Reason-type ok err missing-required
+;;                       check-failed type-mismatch unexpected-field)
+;;                 — eight FQN symbols resolved at bake (types first: the
+;;                 typing rule builds Result S (Map Keyword Reason) from them;
+;;                 the rest are the arm's runtime ctor heads)
+(struct expr-validate (schema-name closed? plan subject names) #:transparent)
+
+;; Map proc over every EXPR slot of a validate node (subject + per-field
+;; default/pred), preserving all atoms — the record-map-field-types pattern:
+;; the plan-spine walk lives in ONE place for shift/subst/zonk/nf/pp.
+(define (validate-map-exprs proc v)
+  (expr-validate (expr-validate-schema-name v)
+                 (expr-validate-closed? v)
+                 (for/list ([entry (in-list (expr-validate-plan v))])
+                   (list (car entry)
+                         (cadr entry)
+                         (let ([d (caddr entry)]) (and d (proc d)))
+                         (let ([p (cadddr entry)]) (and p (proc p)))
+                         (list-ref entry 4)
+                         (list-ref entry 5)
+                         (list-ref entry 6)))  ; F1b.5-s4: required-on-miss? (atom)
+                 (proc (expr-validate-subject v))
+                 (expr-validate-names v)))
+
+;; SMART CONSTRUCTOR (D6 §4.1): the ONLY row producer. Dedups labels right-priority
+;; (later entries win — Clojure/D10 assoc overwrite) and re-canonicalizes the field order
+;; (keyword labels by symbol<?, nat labels by <), so structural `equal?` is a valid identity.
+(define (make-record key-domain fields tail)
+  (define ht (make-hash))
+  (for ([f (in-list fields)]) (hash-set! ht (car f) f))  ;; last write wins
+  (define less?
+    (if (eq? key-domain 'keyword)
+        (lambda (a b) (symbol<? (car a) (car b)))
+        (lambda (a b) (< (car a) (car b)))))
+  (expr-Record key-domain (sort (hash-values ht) less?) tail))
+
+;; Right-priority row extension (D10 assoc): add/overwrite one field, re-canonicalize.
+(define (record-extend rec label field-type)
+  (make-record (expr-Record-key-domain rec)
+               (append (expr-Record-fields rec)             ;; new field LAST → wins on collision
+                       (list (cons label (record-field field-type 'present))))
+               (expr-Record-tail rec)))
+
+;; Look up a field by label; returns the record-field or #f.
+(define (record-lookup-field rec label)
+  (for/first ([f (in-list (expr-Record-fields rec))] #:when (eqv? (car f) label)) (cdr f)))
+
+;; Remove a field by label (exact closed-row removal, D10 dissoc); re-canonicalize.
+(define (record-remove rec label)
+  (make-record (expr-Record-key-domain rec)
+               (filter (lambda (f) (not (eqv? (car f) label))) (expr-Record-fields rec))
+               (expr-Record-tail rec)))
+
+;; CIU T6 F1a-col-3: a CLOSED tuple ('nat domain, 'closed tail). The EXACT tuple-op
+;; typing arms require BOTH — explicit forward-necessary guards (the B3 precedent),
+;; so a future 'dyn tail or a 'keyword row never mis-dispatches into an exact arm.
+(define (closed-nat-row? rec)
+  (and (expr-Record? rec)
+       (eq? (expr-Record-key-domain rec) 'nat)
+       (eq? (expr-Record-tail rec) 'closed)))
+
+;; CIU T6 F1b.3 (D21): a CLOSED record ('keyword domain, 'closed tail) — the width
+;; discharge's guard shape (tuples are exact/no-width per the F1 pin; dyn-tailed
+;; pairs already have C_Cons semantics in the primary unify leg).
+(define (closed-keyword-row? rec)
+  (and (expr-Record? rec)
+       (eq? (expr-Record-key-domain rec) 'keyword)
+       (eq? (expr-Record-tail rec) 'closed)))
+
+;; CIU T6 F1b.3 (D24): mark every field 'unknown, tail → 'dyn — the dissoc-dynamic
+;; writer's row (a dynamic-key removal leaves every field's PRESENCE uncertain while
+;; its type-if-present stays a fact). The sole 'unknown producer this phase.
+(define (record-mark-all-unknown rec)
+  (expr-Record (expr-Record-key-domain rec)
+               (for/list ([fld (in-list (expr-Record-fields rec))])
+                 (cons (car fld)
+                       (record-field (record-field-type (cdr fld)) 'unknown)))
+               'dyn))
+
 ;; Type constructor: Map K V
 (struct expr-Map (k-type v-type) #:transparent #:property prop:ctor-desc-tag '(type . Map))
 
@@ -651,6 +854,21 @@
 (struct expr-rrb (racket-rrb) #:transparent)                  ; runtime wrapper (opaque Racket rrb-root)
 (struct expr-pvec-empty (elem-type) #:transparent)            ; pvec-empty(A) : PVec A
 (struct expr-pvec-push (v x) #:transparent)                   ; pvec-push : PVec A → A → PVec A
+;; CIU T6 F1a-col (D15): literal-extent node for non-empty @[…] literals. Typed
+;; ALL-AT-ONCE: homogeneous (element types unify) → (PVec T) exactly as the old
+;; meta-seeded chain; heterogeneous → a closed 'nat row (tuple-by-default, Q_D).
+;; Reduction lowers to the pvec-push chain (runtime identical). Explicit
+;; [pvec-push v x] chains and empty @[] keep today's meta-seeded semantics.
+(struct expr-pvec-literal (elems) #:transparent)              ; @[e0 e1 …] (non-empty)
+;; CIU T6 F1a-col-2 (D15): list-literal twin. Carries BOTH the element exprs
+;; (typed all-at-once) and the elaborated cons/nil CHAIN (the runtime value —
+;; cons/nil are prelude constructors, so the chain is built at elaboration).
+(struct expr-list-literal (elems chain) #:transparent)        ; '[e0 e1 …] (non-empty, tree route)
+;; CIU T6 F1a.2 p1b-pre (D18): mixed-key map literal, typed ALL-AT-ONCE — keys
+;; unify to K, values give the OBSERVED uniform bound ⋃vals (the D15 literal-
+;; extent mechanism at the Map domain). The chain is the legacy assoc build
+;; (runtime reads only the chain; its metas default at zonk-final).
+(struct expr-map-literal (keys vals chain) #:transparent)     ; {k v …} with ≥1 non-keyword key
 (struct expr-pvec-nth (v i) #:transparent)                    ; pvec-nth : PVec A → Nat → A
 (struct expr-pvec-update (v i x) #:transparent)               ; pvec-update : PVec A → Nat → A → PVec A
 (struct expr-pvec-length (v) #:transparent)                   ; pvec-length : PVec A → Nat
@@ -746,26 +964,6 @@
 ;; ATMS (persistent assumption-based truth maintenance, de Kleer 1986)
 ;; ========================================
 
-;; Type constructors
-(struct expr-atms-type () #:transparent)                          ; ATMS : Type 0
-(struct expr-assumption-id-type () #:transparent)                 ; AssumptionId : Type 0
-
-;; Runtime wrappers (opaque Racket values from atms.rkt)
-(struct expr-atms-store (store-value) #:transparent)              ; wrapped atms
-(struct expr-assumption-id-val (aid-value) #:transparent)         ; wrapped assumption-id
-
-;; Operations
-(struct expr-atms-new (network) #:transparent)                    ; PropNetwork -> ATMS
-(struct expr-atms-assume (atms name datum) #:transparent)         ; ATMS -> Keyword -> A -> [ATMS * AssumptionId]
-(struct expr-atms-retract (atms aid) #:transparent)               ; ATMS -> AssumptionId -> ATMS
-(struct expr-atms-nogood (atms aids) #:transparent)               ; ATMS -> List AssumptionId -> ATMS
-(struct expr-atms-amb (atms alternatives) #:transparent)          ; ATMS -> List A -> [ATMS * List AssumptionId]
-(struct expr-atms-solve-all (atms goal) #:transparent)            ; ATMS -> CellId -> List _
-(struct expr-atms-read (atms cell) #:transparent)                 ; ATMS -> CellId -> _ (type-unsafe)
-(struct expr-atms-write (atms cell val support) #:transparent)    ; ATMS -> CellId -> A -> List AssumptionId -> ATMS
-(struct expr-atms-consistent (atms aids) #:transparent)           ; ATMS -> List AssumptionId -> Bool
-(struct expr-atms-worldview (atms aids) #:transparent)            ; ATMS -> List AssumptionId -> ATMS
-
 ;; ---- Tabling (SLG-style memoization) ----
 ;; Type constructor
 (struct expr-table-store-type () #:transparent)                           ; TableStore
@@ -806,8 +1004,19 @@
 ;; vars: (listof symbol) — the ?-prefixed narrowing variable names
 (struct expr-narrow (func args target vars) #:transparent)
 (struct expr-relation-type (param-types) #:transparent)         ; type of a relation
-(struct expr-schema (name fields) #:transparent)                ; named closed validated map
-(struct expr-schema-type (name) #:transparent)                  ; type constructor for schema
+;; expr-schema / expr-schema-type — DELETED (CIU T6 F1b.4d, 2026-07-17). The
+;; history: a dormant SECOND schema realization ("named closed validated map"
+;; + its type constructor) from a road not taken — sealing was once conceived
+;; as WRAPPING the value in a witness node. The shipped realization is the
+;; registry + opaque-fvar approach (schema-entry in macros.rkt; the type is a
+;; type-only (Type 0) def), and D22 ruled TYPE-AS-WITNESS stands: sealedness
+;; is a fact of the typing derivation, values stay uniform champs (a wrapper
+;; node would fork the value representation, fight the MLstruct nominality
+;; pin, and duplicate fact-carrying the row TYPES already do). The nodes had
+;; ZERO producers, were pnet-UNREGISTERED (a latent vector-impostor hazard,
+;; pipeline.md rule 6), and their ~30 pipeline identity arms were pure drift
+;; surface. Deleted with the full-arm sweep per the expr-Open tombstone
+;; pattern (F1a.2 p2).
 ;; Solve family (4)
 (struct expr-solve (goal) #:transparent)                        ; → Seq (Map Keyword Value)
 (struct expr-solve-with (solver overrides goal) #:transparent)  ; parameterized solve
@@ -936,28 +1145,22 @@
 (struct expr-hole () #:transparent)
 
 ;; ========================================
-;; Open type (PPN 4C T-2, 2026-04-23)
+;; expr-Open — DELETED (CIU T6 F1a.2 p2, 2026-07-15). The two-role history:
 ;; ========================================
-;; "Open by Design" — universal type for unannotated heterogeneous Map values.
-;; α-semantic (per T-2 Decision 2): compatible with any type in both directions.
-;; - check ctx v (expr-Open) = #t always (any value fits Open)
-;; - check ctx e T where (infer e) = (expr-Open) succeeds via unify Open T = T
-;; - unify with Open absorbs to the other side, never fails
-;; - is-type ctx (expr-Open) = #t; infer-level = (lzero)
-;;
-;; No user-writable surface syntax — Open only arises from elaboration
-;; (surf-map-literal without annotation). Users wanting narrow types annotate
-;; explicitly (e.g., (Map Keyword Int) or (Map Keyword <Int | String>)).
-;; The schema system provides structured validation when needed.
-;;
-;; Distinct from:
-;; - expr-hole: inference hole that gets solved to a specific type
-;; - type-top: lattice-level contradiction sentinel
-;; - expr-typed-hole: user conversation hole (??)
-;;
-;; Reference: PPN 4C Phase 9+10+11 Addendum D.3 §7.6.7 T-2 decision (2026-04-23),
-;; overriding docs/tracking/2026-03-20_COLLECTION_INTERFACE_UNIFICATION_DESIGN.md §8 D7.
-(struct expr-Open () #:transparent)
+;; "Open by Design" (PPN 4C T-2, 2026-04-23) was the universal α-semantic value
+;; type for unannotated map literals — absorbing in both directions in
+;; check/checkQ/unify. The frontier research (F1 §3b) identified its two
+;; formalized roles: (1) Sekiyama–Igarashi's ★ DYNAMIC ROW TAIL — the
+;; unify-wildcard absorption WAS the C_ConsL/C_ConsR consistency rules, coarsely
+;; rendered (unconditional, not row-scoped, absorbed metas without solving);
+;; (2) the polarized-subtyping &{} NEGATIVE TOP (the empty observation set —
+;; "nothing has been asked of this value yet"). Both roles RELOCATED into the
+;; structural row carrier's 'dyn tail (D7/D16, design doc §12): absorption is
+;; row-scoped C_Cons in unify's classifier + the knowns-only pure α; the
+;; negative-top reading is the empty dyn row {| _} that bare {} now seeds
+;; (D17); unknown-field projection mints a fresh meta (D19) instead of
+;; absorbing. Deleted only AFTER the relocation (D1-b) — no deletion before
+;; relocation, per the load-bearing annotation-satisfaction chain.
 
 ;; ========================================
 ;; Typed hole (?? or ??name — reports expected type to stderr)
@@ -980,6 +1183,35 @@
      (eq-hash-code (expr-meta-id a)))
    (define (hash2-proc a _rec)
      (+ 17 (eq-hash-code (expr-meta-id a))))])
+
+;; ========================================
+;; N4: context-typed polymorphic numeric literal (transient).
+;; Collapses to a concrete numeric node once its type meta `alpha` resolves
+;; (check-mode, from context) or defaults (see num-lit-default-type below).
+;; `val` = exact rational; `integral?` = whether val is an integer; `origin` =
+;; the NOTATION the literal was written in ('decimal | 'fraction | 'exponent) —
+;; N6b: drives the unconstrained default (notation is unrecoverable from the
+;; value: 157/50 written as a fraction stays Rat; 3.14 written as a decimal
+;; defaults Posit32); `alpha` = a fresh type meta (expr-meta). Never reaches
+;; a .pnet cache (collapsed at freeze).
+(struct expr-num-lit (val integral? origin alpha) #:transparent)
+
+;; N6b (D-N6.1): the unconstrained-default rule, keyed on notation origin.
+;; Lives here (not typing-core/zonk) so all four default sites — typing-core
+;; infer, qtt inferQ, zonk default-metas, typing-propagators install — share
+;; ONE definition without require cycles.
+;;   'decimal  → Posit32  (decimal notation = approximate intent; includes 3.0 —
+;;               integral VALUE, decimal NOTATION; context-typing to Int still works)
+;;   'fraction → Rat      (intentional fractional use)
+;;   'exponent → Int if integral else Posit32 (1e10 stays Int — structurally it
+;;               never becomes a num-lit in WS; defensive here — 1.5e-3 → Posit32)
+;;   fallback  → old Int/Rat rule (defensive; no producer emits other origins)
+(define (num-lit-default-type origin integral?)
+  (case origin
+    [(decimal)  (expr-Posit32)]
+    [(fraction) (expr-Rat)]
+    [(exponent) (if integral? (expr-Int) (expr-Posit32))]
+    [else       (if integral? (expr-Int) (expr-Rat))]))
 
 ;; ========================================
 ;; Reduce (ML-style pattern matching — desugared in type checker)
@@ -1079,6 +1311,14 @@
       (expr-p64-neg? x) (expr-p64-abs? x) (expr-p64-sqrt? x)
       (expr-p64-lt? x) (expr-p64-le? x) (expr-p64-eq? x)
       (expr-p64-from-nat? x) (expr-p64-to-rat? x) (expr-p64-from-rat? x) (expr-p64-from-int? x) (expr-p64-if-nar? x)
+      (expr-Float32? x) (expr-float32? x) (expr-Float64? x) (expr-float64? x)
+      (expr-f32-add? x) (expr-f32-sub? x) (expr-f32-mul? x) (expr-f32-div? x)
+      (expr-f32-neg? x) (expr-f32-abs? x) (expr-f32-sqrt? x)
+      (expr-f32-lt? x) (expr-f32-le? x) (expr-f32-eq? x)
+      (expr-f64-add? x) (expr-f64-sub? x) (expr-f64-mul? x) (expr-f64-div? x)
+      (expr-f64-neg? x) (expr-f64-abs? x) (expr-f64-sqrt? x)
+      (expr-f64-lt? x) (expr-f64-le? x) (expr-f64-eq? x)
+      (expr-float-finite? x) (expr-float-to-rat? x) (expr-float-to-int? x) (expr-float-to-float32? x)
       (expr-Int? x) (expr-int? x)
       (expr-int-add? x) (expr-int-sub? x) (expr-int-mul? x)
       (expr-int-div? x) (expr-int-mod? x)
@@ -1099,6 +1339,8 @@
       (expr-Keyword? x) (expr-keyword? x)
       (expr-Char? x) (expr-char? x)
       (expr-String? x) (expr-string? x)
+      (expr-Record? x)
+      (expr-validate? x)
       (expr-Map? x) (expr-champ? x) (expr-map-empty? x)
       (expr-map-assoc? x) (expr-map-get? x) (expr-nil-safe-get? x) (expr-map-dissoc? x)
       (expr-map-size? x) (expr-map-has-key? x)
@@ -1109,7 +1351,7 @@
       (expr-set-intersect? x) (expr-set-diff? x)
       (expr-set-to-list? x)
       (expr-PVec? x) (expr-rrb? x) (expr-pvec-empty? x)
-      (expr-pvec-push? x) (expr-pvec-nth? x) (expr-pvec-update? x)
+      (expr-pvec-push? x) (expr-pvec-literal? x) (expr-list-literal? x) (expr-map-literal? x) (expr-pvec-nth? x) (expr-pvec-update? x)
       (expr-pvec-length? x) (expr-pvec-pop? x)
       (expr-pvec-concat? x) (expr-pvec-slice? x)
       (expr-pvec-to-list? x) (expr-pvec-from-list? x)
@@ -1132,15 +1374,13 @@
       (expr-net-add-prop? x) (expr-net-run? x)
       (expr-net-snapshot? x) (expr-net-contradiction? x)
       (expr-uf-type? x) (expr-uf-store? x)
-      (expr-atms-type? x) (expr-assumption-id-type? x)
-      (expr-atms-store? x) (expr-assumption-id-val? x)
       (expr-table-store-type? x) (expr-table-store-val? x)
       (expr-solver-type? x) (expr-goal-type? x) (expr-derivation-type? x)
-      (expr-schema-type? x) (expr-answer-type? x) (expr-relation-type? x)
+      (expr-answer-type? x) (expr-relation-type? x)
       (expr-solver-config? x) (expr-cut? x)
       (expr-opaque? x)
       (expr-panic? x)
-      (expr-hole? x) (expr-typed-hole? x) (expr-Open? x) (expr-meta? x) (expr-reduce? x)
+      (expr-hole? x) (expr-typed-hole? x) (expr-meta? x) (expr-num-lit? x) (expr-reduce? x)
       (expr-union? x) (expr-tycon? x) (expr-error? x)))
 
 ;; ========================================

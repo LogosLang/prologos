@@ -1,0 +1,105 @@
+ns rel-t1-acceptance
+
+;; ============================================================================
+;; Rel Track 1 — Relational Language Usability — Aspect-A (NAF/guard) acceptance
+;; ============================================================================
+;; Run:   racket tools/run-file.rkt examples/2026-07-19-rel-t1-acceptance.prologos
+;; Check: racket tools/run-file.rkt --check examples/2026-07-19-rel-t1-acceptance.prologos
+;;
+;; Aspect-A NAF correctness has TWO landed fixes:
+;;   A.2-core (E-with-B, belief-layer per-binding narrowing): FACT-generator NAF,
+;;     on-network — fixes the {both} over-include (`light-vehicle` → {bicycle}).
+;;   A.2b minimal slice (adaptive-dispatch DFS-routing): NAF/guard over a RULE
+;;     generator with a body-local (non-param) join/recursion var is INCOMPLETE on
+;;     the on-network engine (a join → {}, recursion → base case only), so the
+;;     dispatcher routes those to DFS (correct). Scaffolding — retirement owner is
+;;     BSP-LE Track 3 (on-network body-local threading + SLG completion).
+;;
+;; `;;N=>` markers encode the CORRECT answer and are checked by `--check`.
+;; ============================================================================
+
+;; ---- fact-generator NAF: the canonical repro ------------------------------
+defr vehicle [?type]
+  || "bicycle"
+     "automobile"
+
+defr license [?v]
+  || "automobile"
+
+;; ---- A.1: top-level bare NAF goal (was echoed unevaluated; now runs via DFS) --
+;; bicycle is NOT licensed → NAF succeeds → one empty-binding answer
+;;2=> '[{}] : _
+solve (not (license "bicycle"))
+;; automobile IS licensed → NAF fails → no answers
+;;3=> nil : _
+solve (not (license "automobile"))
+
+defr light-vehicle [?v]
+  &> (vehicle v) (not (license v))
+
+;; ground queries route to DFS — CORRECT NOW (must stay green)
+;;5=> '[{}] : _
+solve (light-vehicle "bicycle")
+;;6=> nil : _
+solve (light-vehicle "automobile")
+
+;; free-var (on-network Tier-2, FACT generator): FIXED by A.2 core (was {both})
+;;7=> '[{:lv "bicycle"}] : _
+solve (light-vehicle lv)
+
+;; ---- body-local join NAF: over-exclude {neither} pre-fix ------------------
+defr edge [?a ?b]
+  || "x" "y"
+     "y" "z"
+     "y" "w"
+
+defr blk [?n]
+  || "z"
+
+defr twohop [?a ?c]
+  &> (edge a b) (edge b c)
+
+defr safe-twohop [?a ?c]
+  &> (twohop a c) (not (blk c))
+
+;; twohop(x)={z,w}, blk={z} → {w}. FIXED (A.2b minimal slice): `twohop` is a rule
+;; with a body-local join var `b` the on-network engine can't thread (empty on-
+;; network), so the adaptive dispatcher now routes NAF over body-local-var rules to
+;; DFS, which threads `b` correctly. Scaffolding — retires with BSP-LE Track 3.
+;;12=> '[{:c "w"}] : _
+solve (safe-twohop "x" c)
+
+;; ---- recursive NAF: ALSO on-network (NAF forces it) — ALSO buggy ----------
+defr reaches [?a ?c]
+  &> (edge a c)
+  &> (edge a b) (reaches b c)
+
+;; generator set (DFS): reaches(x) = {y, z, w}
+;;14=> '[{:c "y"} {:c "z"} {:c "w"}] : _
+solve (reaches "x" c)
+
+defr safe-reach [?a ?c]
+  &> (reaches a c) (not (blk c))
+
+;; reaches(x)={y,z,w}, blk={z} → {y,w}. FIXED (A.2b minimal slice): recursive
+;; `reaches` has a body-local recursion var → routed to DFS (correct). Scaffolding —
+;; retires with BSP-LE Track 3.
+;;16=> '[{:c "y"} {:c "w"}] : _
+solve (safe-reach "x" c)
+
+;; ---- A.4: guard over a multi-fact generator (routed to DFS) ---------------
+defr weighted-edge [?from ?to ?weight]
+  || "a" "b" 3
+     "b" "c" 0
+     "c" "d" 5
+
+defr positive-edge [?from ?to ?weight]
+  &> (weighted-edge from to weight) (guard [gt weight 0])
+
+;; weighted-edge has a w=0 edge; the guard keeps weight>0. On-network the single
+;; shared guard bit cannot filter per-row (it leaks or over-narrows), so Check 4
+;; (reachable-has-guard?) routes guard-bearing queries to DFS, which filters
+;; per-row. FIXED (A.4). Scaffolding — retires with BSP-LE Track 3 (the on-network
+;; guard design is captured in the Track 3 note).
+;;19=> '[{:to "b", :w 3, :from "a"} {:to "d", :w 5, :from "c"}] : _
+solve (positive-edge from to w)

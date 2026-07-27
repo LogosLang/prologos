@@ -16,9 +16,7 @@
 
 ;; Helper: run through process-string (sexp mode)
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (car (process-string s))))
+  (car (process-string s)))
 
 ;; ========================================
 ;; from-integer: identity cases
@@ -36,21 +34,22 @@
 
 (test-case "from-integer/int-to-posit32"
   (define result (run "(eval (from-integer Posit32 42))"))
-  (check-true (string-contains? result "posit32")
-              (format "expected posit32, got: ~a" result))
-  (check-true (string-contains? result (number->string (posit32-encode 42)))))
+  (check-true (string-contains? result "Posit32")
+              (format "expected Posit32, got: ~a" result))
+  ;; Numerics N2: posit displays as ~<decimal>. from-integer 42 → ~42.
+  (check-true (string-contains? result "42.0")))
 
 (test-case "from-integer/int-to-posit8"
   (define result (run "(eval (from-integer Posit8 1))"))
-  (check-true (string-contains? result "posit8")))
+  (check-true (string-contains? result "Posit8")))
 
 (test-case "from-integer/int-to-posit16"
   (define result (run "(eval (from-integer Posit16 100))"))
-  (check-true (string-contains? result "posit16")))
+  (check-true (string-contains? result "Posit16")))
 
 (test-case "from-integer/int-to-posit64"
   (define result (run "(eval (from-integer Posit64 42))"))
-  (check-true (string-contains? result "posit64")))
+  (check-true (string-contains? result "Posit64")))
 
 ;; ========================================
 ;; from-rational: identity case
@@ -65,13 +64,14 @@
 
 (test-case "from-rational/rat-to-posit32"
   (define result (run "(eval (from-rational Posit32 3/7))"))
-  (check-true (string-contains? result "posit32")
-              (format "expected posit32, got: ~a" result))
-  (check-true (string-contains? result (number->string (posit32-encode 3/7)))))
+  (check-true (string-contains? result "Posit32")
+              (format "expected Posit32, got: ~a" result))
+  ;; N6c: shortest decimal of posit32(3/7) displays bare (sigil-free).
+  (check-true (string-contains? result (posit-shortest-decimal 32 (posit32-encode 3/7)))))
 
 (test-case "from-rational/rat-to-posit8"
   (define result (run "(eval (from-rational Posit8 1/2))"))
-  (check-true (string-contains? result "posit8")))
+  (check-true (string-contains? result "Posit8")))
 
 ;; ========================================
 ;; Type inference

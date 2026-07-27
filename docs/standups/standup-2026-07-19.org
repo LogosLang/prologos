@@ -1,0 +1,87 @@
+#+TITLE: Standup — 2026-07-19
+#+DATE: 2026-07-19
+
+* Yesterday (since 2026-06-29 standup)
+
+A long, productive interval spanning ~3 weeks and two full arcs: the
+**numerics ergonomics** work that unblocked the demo, and the **CIU Track 6
+records / ~Map~⇄~schema~ / ~validate~ cornerstone** — which closed with the
+first formal PIR in ~2 months. Along the way: two new series founded (Num, Rel)
+and the dailies + PIR process formalized. Suite GREEN throughout (8917/465/0 at
+close). Full session log: ~docs/tracking/standups/2026-07-05_dailies.md~.
+
+** Num Series founded + Numerics Track 1 COMPLETE → unblocked DEMO P1 (~0965daab~ …)
+
+- New **Num Series** (~2026-07-02_NUM_MASTER.md~) — home for all
+  numerics-systems work; linked in ~MASTER_ROADMAP.org~ § Active Series.
+- **Track 1** (Numerics — Float / refinement-via-trait / tower / literals /
+  ergonomics) finished N3e→N6f: bare ~3.14~ = default Posit32; ~~~ display sigil
+  deprecated; ~pXX~ Posit literals; ~to-float~/~to-float32~ coercion families;
+  duplicate implicit-coercion warnings fixed. Unblocks the demo's P1.
+- **Track 2 (proposed)** — generic ~Num~ type (constraint-as-type numeric fns),
+  seed ~2026-07-02_GENERIC_NUM_TYPE_NOTE.md~; grounding-audited (homogeneous
+  ~square~ tractable, heterogeneous multi-arg = net-new). Deferred to its own
+  track, out of focus for the demo.
+- ~gh issue #76~ filed (section over a fully-specced fn doesn't infer in a
+  no-expected-type position); the ~pow~/~map~ "could not infer" report
+  reconciled = the known REPL session-persistence bug, not a code bug.
+
+** CIU Track 6 opened — Path Selection & anonymous-record (~Map~) typing (~ca4dbb73~)
+
+- Design doc ~2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md~; added as CIU Track 6.
+- **Locked D1–D5**: ~Map~ IS the anonymous **open record** type (retire the
+  internal ~Open~ type); ~Map~ ⇄ ~schema~ interop both directions; unify Map +
+  schema as one structural-record notion; WS-first (regression-test in WS).
+- Grounding audit: annotated maps already project concretely; the job was making
+  the *unannotated* literal's value type concrete instead of ~Open~.
+
+** CIU T6 F1 — the records cornerstone (F1a → F1b → close → PIR)
+
+- **F1a** — retired ~Open~; ~{:a 1}.a : Int~ (structural ~Map~ typing) via
+  generalizing schema's per-field projection to anonymous literals.
+- **F1b** — the ~Map~↔~schema~ **SEAL** (four doors, one engine, D22); the
+  runtime ~validate~ face (~Result S (Map Keyword Reason)~, collect-all,
+  D27–D29); the D23 escape-boundary tightening; the 7a–7g **hardening**
+  (targeted diagnostics for common schema mistakes; door-parity across
+  literal/annotation/ctor/~the~).
+- **F1b.close** — whole-arc bench matrix (**+0.4% deterministic work, no wall
+  regression**; perf-worktree-pinned, owner-WIP tree untouched); a
+  records-path A/B (Δ≈0 — records path not regressed); the **PIR**
+  (~2026-07-19_CIU_T6_F1B_PIR.md~, methodology-first from the 16 questions).
+  The headline meta-learning: **the mini-audit-refutes-premise rhythm** (7/7 in
+  F1b.7, ~11/arc) — grounding-audit → R-lens → owner-dialogue turned
+  premise-refutation into a proactive pre-implementation gate.
+- Two lessons promoted to rules: benchmarking mechanics/obligation
+  (~testing.md~/~workflow.md~); WS-reader-vs-sexp divergence (~prologos-syntax.md~).
+
+** Process formalization — dailies methodology + the PIR gate
+
+- **Dailies methodology codified** (~DAILIES_METHODOLOGY.org~) — a mutable STATE
+  head + an append-only LOG, after a survey of ~55 past dailies found the format
+  had drifted (files 46→6601 lines, current-state buried at the bottom).
+- **The objective PIR trigger + the mandatory ~X.close~ phase** codified
+  (~DESIGN_METHODOLOGY.org~ Stage 5 + Stage 3; ~POST_IMPLEMENTATION_REVIEW.org~;
+  ~workflow.md~): a design tracked in a Series Master that completes GETS a PIR;
+  the roadmap row does not flip ✅ until the PIR lands.
+
+** Rel Series founded — the relational surface language (~2a53f06c~)
+
+- New **Rel Series** (~2026-07-19_REL_MASTER.md~) for the relational
+  surface-language layer — distinct from the UCS solver *substrate* and the CIU
+  records *type layer*. First (un-named) track seed
+  ~2026-07-19_REL_SOLVE_TYPING_NOTE.md~: **typed solution rows** (D25.3 charter,
+  moved from CIU) + **~not~ / ~&>~ NAF correctness** (probe-grounded from
+  ~foray.prologos~: ~solve (not …)~ echoes unevaluated even for ground goals;
+  ~&>~ guard returns the inverted member). Owner sequencing: **solve typing
+  BEFORE Path Selection** (its highest-value consumer).
+
+* Today
+
+Opening the **Rel first track** Stage-3 design conversation (solve typing + NAF
+correctness), with an expanded scope surfaced this morning — typed rows as
+codata/coinductive observation (reusing the F1 record mechanisms), ~schema~-as-
+relational-facts + validation (a-priori static typing of relational data), and
+~?logic-var:Type~ domain constraints as a further typing source. Per the entry
+gate: grounding audit over the logic engine first, then co-design.
+
+* Conversations

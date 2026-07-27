@@ -1,18 +1,21 @@
 #lang racket/base
 
 ;;;
-;;; test-retraction-stratum.rkt — Track 7 Phase 5: S(-1) retraction + tagged entry tests
+;;; test-retraction-stratum.rkt — Track 7 Phase 5 + PPN 4C 2A.a (2026-05-20)
 ;;;
 ;;; Validates:
 ;;; 1. tagged-entry infrastructure: wrap, unwrap, mixed tagged/untagged
 ;;; 2. retract-hasheq-entries: filter by assumption-id in hasheq cells
 ;;; 3. retract-hasheq-list-entries: filter list elements in wakeup cells
-;;; 4. run-retraction-stratum!: depth-0 fast path, assumption tracking
-;;; 5. record-assumption-retraction!: set accumulation + clearing
-;;; Post-fix: run-retraction-stratum! now uses net-cell-replace (bypass merge)
-;;; to write cleaned values. Previously used elab-cell-write (merge-based)
-;;; which unioned cleaned values with old, restoring retracted entries.
-;;; Bug discovered by these tests; fix: net-cell-replace in propagator.rkt.
+;;; 4. (NEW 2A.a) record-assumption-retraction: pure function writes to cell
+;;; 5. (NEW 2A.a) process-retraction: BSP value-tier handler on scoped cells
+;;; 6. (NEW 2A.a) Integration via run-to-quiescence: full cell-driven path
+;;;
+;;; Migrated from box-based API (record-assumption-retraction! +
+;;; run-retraction-stratum!) to cell-based API (record-assumption-retraction
+;;; pure function + process-retraction handler registered on cell-id 13) per
+;;; PPN 4C 2A.a (D.3 §8.7.a). Box-based mechanism retires in 2B alongside
+;;; run-stratified-resolution-pure.
 ;;;
 
 (require rackunit
@@ -22,6 +25,7 @@
          "../metavar-store.rkt"
          "../syntax.rkt"
          "../propagator.rkt"
+         "../cell-ops.rkt"
          "../driver.rkt")
 
 ;; ========================================
@@ -196,52 +200,45 @@
   (check-equal? (tagged-entry-value (car (hash-ref result 'meta3))) 'w4))
 
 ;; ========================================
-;; 7. run-retraction-stratum! — depth-0 fast path + tracking
+;; 7. record-assumption-retraction — pure function API tests
+;; (PPN 4C 2A.a, 2026-05-20: migrated from box-based bang API)
 ;; ========================================
 
-(test-case "run-retraction-stratum!: depth-0 fast path (no retracted assumptions)"
+(test-case "record-assumption-retraction: writes aid to retraction-stratum-request cell"
   (with-fresh-meta-env
-    ;; Initialize retraction tracking with empty set
-    (parameterize ([current-retracted-assumptions (box (seteq))])
-      ;; Should be a no-op — no assumptions retracted
-      (run-retraction-stratum!)
-      ;; Verify scoped cells are untouched
-      (check-not-false (current-constraint-cell-id)))))
+    (define enet0 (unbox (current-prop-net-box)))
+    (define enet1 (record-assumption-retraction enet0 'a1))
+    (define pnet (elab-network-prop-net enet1))
+    (check-equal? (net-cell-read pnet retraction-stratum-request-cell-id)
+                  (seteq 'a1))))
 
-(test-case "run-retraction-stratum!: #f retracted-assumptions box (no tracking)"
+(test-case "record-assumption-retraction: ignores #f assumption-id"
   (with-fresh-meta-env
-    ;; current-retracted-assumptions defaults to #f in with-fresh-meta-env
-    ;; run-retraction-stratum! should be a no-op (not crash)
-    (run-retraction-stratum!)))
+    (define enet0 (unbox (current-prop-net-box)))
+    (define enet1 (record-assumption-retraction enet0 #f))
+    ;; #f passes through: returns enet unchanged
+    (check-eq? enet0 enet1)
+    ;; Cell still empty (initial set)
+    (check-true (set-empty?
+                  (net-cell-read (elab-network-prop-net enet1)
+                                 retraction-stratum-request-cell-id)))))
 
-(test-case "record-assumption-retraction!: accumulates in set"
-  (define retracted-box (box (seteq)))
-  (parameterize ([current-retracted-assumptions retracted-box])
-    (record-assumption-retraction! 'a1)
-    (record-assumption-retraction! 'a2)
-    (check-equal? (set-count (unbox retracted-box)) 2)
-    (check-true (set-member? (unbox retracted-box) 'a1))
-    (check-true (set-member? (unbox retracted-box) 'a2))))
-
-(test-case "record-assumption-retraction!: ignores #f assumption-id"
-  (define retracted-box (box (seteq)))
-  (parameterize ([current-retracted-assumptions retracted-box])
-    (record-assumption-retraction! #f)
-    (check-true (set-empty? (unbox retracted-box)))))
-
-(test-case "record-assumption-retraction!: no-op when box is #f"
-  ;; Should not crash when retraction tracking is disabled
-  (parameterize ([current-retracted-assumptions #f])
-    (record-assumption-retraction! 'a1)))
-
-(test-case "run-retraction-stratum!: clears retracted set after processing"
+(test-case "record-assumption-retraction: multiple writes accumulate via set-union merge"
   (with-fresh-meta-env
-    (define retracted-box (box (seteq)))
-    (parameterize ([current-retracted-assumptions retracted-box])
-      (record-assumption-retraction! 'a1)
-      (run-retraction-stratum!)
-      ;; Retracted set should be cleared
-      (check-true (set-empty? (unbox retracted-box))))))
+    (define enet0 (unbox (current-prop-net-box)))
+    (define enet1 (record-assumption-retraction enet0 'a1))
+    (define enet2 (record-assumption-retraction enet1 'a2))
+    (define pnet (elab-network-prop-net enet2))
+    (check-equal? (net-cell-read pnet retraction-stratum-request-cell-id)
+                  (seteq 'a1 'a2))))
+
+(test-case "record-assumption-retraction: idempotent for same aid (set semantics)"
+  (with-fresh-meta-env
+    (define enet0 (unbox (current-prop-net-box)))
+    (define enet1 (record-assumption-retraction enet0 'a1))
+    (define enet2 (record-assumption-retraction enet1 'a1))
+    (define pnet (elab-network-prop-net enet2))
+    (check-equal? (set-count (net-cell-read pnet retraction-stratum-request-cell-id)) 1)))
 
 (test-case "scoped-cell-ids: returns 11 non-#f cell IDs after reset-meta-store!"
   (with-fresh-meta-env
@@ -252,122 +249,167 @@
     (check-false (memq #f ids))))
 
 ;; ========================================
-;; 8. S(-1) retraction integration (post-fix: uses net-cell-replace)
+;; 8. process-retraction handler — direct invocation tests
+;; (PPN 4C 2A.a, 2026-05-20: NEW; pure on prop-net, only scoped cells)
 ;; ========================================
 
-(test-case "run-retraction-stratum!: retracts tagged entries from constraint cell"
+(test-case "process-retraction: empty set is no-op (pointer-equal return)"
   (with-fresh-meta-env
-    (parameterize ([current-retracted-assumptions (box (seteq))])
-      (define net-box (current-prop-net-box))
-      (define write-fn (current-prop-cell-write))
-      (define read-fn (current-prop-cell-read))
-      (define cstore-cid (current-constraint-cell-id))
+    (define pnet (elab-network-prop-net (unbox (current-prop-net-box))))
+    (define pnet* (process-retraction pnet (set)))
+    (check-eq? pnet pnet*)))
 
-      ;; Write entries with different assumptions
-      (define aid1 (gensym 'assumption))
-      (define enet0 (unbox net-box))
-      (define enet1
-        (write-fn enet0 cstore-cid
-                  (hasheq 'c1 (tagged-entry 'constraint-1 aid1)
-                          'c2 (tagged-entry 'constraint-2 #f))))
-      (set-box! net-box enet1)
-
-      ;; Record retraction and run S(-1)
-      (record-assumption-retraction! aid1)
-      (run-retraction-stratum!)
-
-      ;; c1 retracted (aid1), c2 survives (#f = unconditional)
-      (define result (read-fn (unbox net-box) cstore-cid))
-      (check-equal? (hash-count result) 1)
-      (check-false (hash-has-key? result 'c1))
-      (check-true (hash-has-key? result 'c2)))))
-
-(test-case "run-retraction-stratum!: retracts tagged entries from wakeup cell"
+(test-case "process-retraction: retracts tagged entries from constraint cell"
   (with-fresh-meta-env
-    (parameterize ([current-retracted-assumptions (box (seteq))])
-      (define net-box (current-prop-net-box))
-      (define write-fn (current-prop-cell-write))
-      (define read-fn (current-prop-cell-read))
-      (define wakeup-cid (current-wakeup-registry-cell-id))
+    (define net-box (current-prop-net-box))
+    (define cstore-cid (current-constraint-cell-id))
+    (define aid1 (gensym 'assumption))
 
-      ;; Write wakeup entries (hasheq-list: meta-id → (listof tagged-entry))
-      (define aid1 (gensym 'assumption))
-      (define enet0 (unbox net-box))
-      (define enet1
-        (write-fn enet0 wakeup-cid
-                  (hasheq 'meta-A (list (tagged-entry 'cid-1 aid1)
-                                        (tagged-entry 'cid-2 #f)))))
-      (set-box! net-box enet1)
+    ;; Write tagged entries via elab-cell-write
+    (define enet0 (unbox net-box))
+    (define enet1
+      (elab-cell-write enet0 cstore-cid
+                       (hasheq 'c1 (tagged-entry 'constraint-1 aid1)
+                               'c2 (tagged-entry 'constraint-2 #f))))
+    (set-box! net-box enet1)
 
-      ;; Record retraction
-      (record-assumption-retraction! aid1)
-      (run-retraction-stratum!)
+    ;; Apply process-retraction directly on prop-net
+    (define pnet (elab-network-prop-net (unbox net-box)))
+    (define pnet* (process-retraction pnet (seteq aid1)))
 
-      ;; cid-1 retracted, cid-2 survives
-      (define result (read-fn (unbox net-box) wakeup-cid))
-      (define entries (hash-ref result 'meta-A '()))
-      (check-equal? (length entries) 1)
-      (check-equal? (tagged-entry-value (car entries)) 'cid-2))))
+    ;; c1 retracted (aid1), c2 survives (#f = unconditional)
+    (define result (net-cell-read pnet* cstore-cid))
+    (check-equal? (hash-count result) 1)
+    (check-false (hash-has-key? result 'c1))
+    (check-true (hash-has-key? result 'c2))))
 
-(test-case "run-retraction-stratum!: multi-assumption retraction"
+(test-case "process-retraction: retracts tagged entries from wakeup cell"
   (with-fresh-meta-env
-    (parameterize ([current-retracted-assumptions (box (seteq))])
-      (define net-box (current-prop-net-box))
-      (define write-fn (current-prop-cell-write))
-      (define read-fn (current-prop-cell-read))
-      (define cstore-cid (current-constraint-cell-id))
+    (define net-box (current-prop-net-box))
+    (define wakeup-cid (current-wakeup-registry-cell-id))
+    (define aid1 (gensym 'assumption))
 
-      (define aid1 (gensym 'a))
-      (define aid2 (gensym 'a))
-      (define aid3 (gensym 'a))
+    (define enet0 (unbox net-box))
+    (define enet1
+      (elab-cell-write enet0 wakeup-cid
+                       (hasheq 'meta-A (list (tagged-entry 'cid-1 aid1)
+                                             (tagged-entry 'cid-2 #f)))))
+    (set-box! net-box enet1)
 
-      (define enet0 (unbox net-box))
-      (define enet1
-        (write-fn enet0 cstore-cid
-                  (hasheq 'c1 (tagged-entry 'v1 aid1)
-                          'c2 (tagged-entry 'v2 aid2)
-                          'c3 (tagged-entry 'v3 aid3))))
-      (set-box! net-box enet1)
+    (define pnet (elab-network-prop-net (unbox net-box)))
+    (define pnet* (process-retraction pnet (seteq aid1)))
 
-      ;; Retract aid1 and aid3
-      (record-assumption-retraction! aid1)
-      (record-assumption-retraction! aid3)
-      (run-retraction-stratum!)
+    (define result (net-cell-read pnet* wakeup-cid))
+    (define entries (hash-ref result 'meta-A '()))
+    (check-equal? (length entries) 1)
+    (check-equal? (tagged-entry-value (car entries)) 'cid-2)))
 
-      ;; Only c2 survives
-      (define result (read-fn (unbox net-box) cstore-cid))
-      (check-equal? (hash-count result) 1)
-      (check-true (hash-has-key? result 'c2)))))
-
-(test-case "run-retraction-stratum!: successive retractions are independent"
+(test-case "process-retraction: multi-assumption retraction"
   (with-fresh-meta-env
-    (parameterize ([current-retracted-assumptions (box (seteq))])
-      (define net-box (current-prop-net-box))
-      (define write-fn (current-prop-cell-write))
-      (define read-fn (current-prop-cell-read))
-      (define cstore-cid (current-constraint-cell-id))
+    (define net-box (current-prop-net-box))
+    (define cstore-cid (current-constraint-cell-id))
 
-      (define aid1 (gensym 'a))
-      (define aid2 (gensym 'a))
+    (define aid1 (gensym 'a))
+    (define aid2 (gensym 'a))
+    (define aid3 (gensym 'a))
 
-      ;; First round: write c1 (aid1) and c2 (aid2)
-      (set-box! net-box
-        (write-fn (unbox net-box) cstore-cid
-                  (hasheq 'c1 (tagged-entry 'v1 aid1)
-                          'c2 (tagged-entry 'v2 aid2))))
+    (define enet0 (unbox net-box))
+    (define enet1
+      (elab-cell-write enet0 cstore-cid
+                       (hasheq 'c1 (tagged-entry 'v1 aid1)
+                               'c2 (tagged-entry 'v2 aid2)
+                               'c3 (tagged-entry 'v3 aid3))))
+    (set-box! net-box enet1)
 
-      ;; First retraction: retract aid1
-      (record-assumption-retraction! aid1)
-      (run-retraction-stratum!)
-      (check-equal? (hash-count (read-fn (unbox net-box) cstore-cid)) 1)
+    (define pnet (elab-network-prop-net (unbox net-box)))
+    (define pnet* (process-retraction pnet (seteq aid1 aid3)))
 
-      ;; Second round: add c3 (aid2)
-      (set-box! net-box
-        (write-fn (unbox net-box) cstore-cid
-                  (hasheq 'c3 (tagged-entry 'v3 aid2))))
-      (check-equal? (hash-count (read-fn (unbox net-box) cstore-cid)) 2)
+    (define result (net-cell-read pnet* cstore-cid))
+    (check-equal? (hash-count result) 1)
+    (check-true (hash-has-key? result 'c2))))
 
-      ;; Second retraction: retract aid2
-      (record-assumption-retraction! aid2)
-      (run-retraction-stratum!)
-      (check-equal? (hash-count (read-fn (unbox net-box) cstore-cid)) 0))))
+(test-case "process-retraction: untagged entries survive retraction"
+  (with-fresh-meta-env
+    (define net-box (current-prop-net-box))
+    (define cstore-cid (current-constraint-cell-id))
+    (define aid1 (gensym 'a))
+
+    (define enet0 (unbox net-box))
+    (define enet1
+      (elab-cell-write enet0 cstore-cid
+                       (hasheq 'c1 'raw-untagged-value
+                               'c2 (tagged-entry 'v2 aid1))))
+    (set-box! net-box enet1)
+
+    (define pnet (elab-network-prop-net (unbox net-box)))
+    (define pnet* (process-retraction pnet (seteq aid1)))
+
+    (define result (net-cell-read pnet* cstore-cid))
+    (check-equal? (hash-count result) 1)
+    (check-equal? (hash-ref result 'c1) 'raw-untagged-value)))
+
+;; ========================================
+;; 9. Integration: record + run-to-quiescence triggers handler via BSP outer-loop
+;; (PPN 4C 2A.a, 2026-05-20: full cell-driven path end-to-end)
+;; ========================================
+
+(test-case "integration: record + run-to-quiescence retracts scoped cells via handler"
+  (with-fresh-meta-env
+    (define net-box (current-prop-net-box))
+    (define cstore-cid (current-constraint-cell-id))
+    (define aid1 (gensym 'assumption))
+
+    ;; Setup: write tagged entries
+    (define enet0 (unbox net-box))
+    (define enet1
+      (elab-cell-write enet0 cstore-cid
+                       (hasheq 'c1 (tagged-entry 'v1 aid1)
+                               'c2 (tagged-entry 'v2 #f))))
+    (set-box! net-box enet1)
+
+    ;; Write aid to retraction cell via pure record-assumption-retraction
+    (set-box! net-box (record-assumption-retraction (unbox net-box) aid1))
+
+    ;; Run to quiescence: BSP outer-loop's value-tier processing invokes
+    ;; process-retraction handler; it reads cell-13, retracts scoped cells,
+    ;; auto-clears cell-13 to (set) via #:reset-value.
+    (define pnet (elab-network-prop-net (unbox net-box)))
+    (define pnet* (run-to-quiescence pnet))
+
+    ;; Verify scoped cell cleaned via handler
+    (define result (net-cell-read pnet* cstore-cid))
+    (check-equal? (hash-count result) 1)
+    (check-true (hash-has-key? result 'c2))
+
+    ;; Verify retraction-stratum-request cell auto-cleared
+    (check-true (set-empty?
+                  (net-cell-read pnet* retraction-stratum-request-cell-id)))))
+
+(test-case "integration: multi-aid retraction via cell accumulation"
+  (with-fresh-meta-env
+    (define net-box (current-prop-net-box))
+    (define cstore-cid (current-constraint-cell-id))
+
+    (define aid1 (gensym 'a))
+    (define aid2 (gensym 'a))
+
+    (define enet0 (unbox net-box))
+    (define enet1
+      (elab-cell-write enet0 cstore-cid
+                       (hasheq 'c1 (tagged-entry 'v1 aid1)
+                               'c2 (tagged-entry 'v2 aid2)
+                               'c3 (tagged-entry 'v3 #f))))
+    (set-box! net-box enet1)
+
+    ;; Accumulate two retraction writes (set-union merge)
+    (set-box! net-box (record-assumption-retraction (unbox net-box) aid1))
+    (set-box! net-box (record-assumption-retraction (unbox net-box) aid2))
+
+    ;; Quiescence triggers handler with combined set {aid1, aid2}
+    (define pnet (elab-network-prop-net (unbox net-box)))
+    (define pnet* (run-to-quiescence pnet))
+
+    ;; Only c3 (unconditional) survives
+    (define result (net-cell-read pnet* cstore-cid))
+    (check-equal? (hash-count result) 1)
+    (check-true (hash-has-key? result 'c3))))

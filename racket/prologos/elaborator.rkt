@@ -9,6 +9,7 @@
 (require racket/match
          racket/list
          racket/string
+         racket/flonum
          "prelude.rkt"
          "syntax.rkt"
          "source-location.rkt"
@@ -29,7 +30,14 @@
          "global-constraints.rkt" ;; Phase 3c: for current-narrow-var-constraints
          "sessions.rkt"          ;; Phase S3: session type constructors (elaboration target)
          "solver.rkt"            ;; Solver configuration (make-solver-config)
-         "processes.rkt")        ;; Phase S3: process constructors (elaboration target)
+         "processes.rkt"        ;; Phase S3: process constructors (elaboration target)
+         "sign-refinement.rkt"   ;; Numerics N5de: refined-name? recognizer
+         ;; CIU T6 F1b.5-s2 (A2-e): the validate plan bake — witness tags +
+         ;; field-type conversion (typing-core) and pred-datum re-entry
+         ;; (parser). Both edges grep-verified cycle-free; raco make = proof.
+         (only-in "typing-core.rkt" field-type->witness-tag schema-field-type->expr
+                  lookup-schema-by-name lookup-selection-by-name)
+         (only-in "parser.rkt" parse-datum))
 
 (provide elaborate
          elaborate-top-level
@@ -529,21 +537,41 @@
 
 ;; Auto-apply holes for a bare variable whose type has ALL m0 parameters.
 ;; e.g., nil : Pi(A :0 Type 0, List A) → (app (fvar nil) hole)
-;; Only applies when ALL Pi binders are m0 (fully implicit).
-;; For mixed types (like cons : Pi(A :0 Type 0, A -> List A -> List A)),
-;; we don't auto-apply — the user must use application syntax.
+;; Applies when ALL Pi binders are m0 (fully implicit).
+;; N6e E1: ALSO applies to the implicit PREFIX of a where-constrained name —
+;; leading m0 type binders + their mw dict binders (counted via the spec's
+;; where-constraints, same as the application path's implicit-param-count) —
+;; provided explicit params remain (the result is a function value). This is
+;; what makes derived trait methods / to-X / any where-constrained fn honest
+;; first-class values in argument position ([map abs xs], [map to-float64 xs]):
+;; previously the all-m0 gate left them as raw fvars whose erased type binders
+;; consumed the HOF's arguments (silent garbage).
+;; Pure-m0-mixed names WITHOUT where-constraints (like cons : Pi(A :0, A -> …))
+;; stay un-applied — the long-standing decision; use application syntax/sections.
 (define (maybe-auto-apply-implicits fvar-expr resolved-name loc env depth)
   (define ftype (global-env-lookup-type resolved-name))
   (if ftype
       (let ([mults (collect-pi-mults ftype)])
-        (if (and (not (null? mults))
-                 (andmap (lambda (m) (eq? m 'm0)) mults))
-            ;; All params are implicit → auto-apply with Pi-chain-walking tagging
-            (insert-implicits-with-tagging fvar-expr ftype (length mults)
-                                           resolved-name loc env
-                                           #:depth depth
-                                           #:default-kind 'implicit)
-            fvar-expr))
+        (cond
+          [(and (not (null? mults))
+                (andmap (lambda (m) (eq? m 'm0)) mults))
+           ;; All params are implicit → auto-apply with Pi-chain-walking tagging
+           (insert-implicits-with-tagging fvar-expr ftype (length mults)
+                                          resolved-name loc env
+                                          #:depth depth
+                                          #:default-kind 'implicit)]
+          [(not (null? mults))
+           ;; N6e E1: where-constrained prefix instantiation.
+           (let ([n-imp (implicit-param-count ftype resolved-name)]
+                 [n-m0 (leading-m0-count mults)])
+             (if (and (> n-imp n-m0)              ;; has where-constraint dicts
+                      (< n-imp (length mults)))   ;; explicit params remain → fn value
+                 (insert-implicits-with-tagging fvar-expr ftype n-imp
+                                                resolved-name loc env
+                                                #:depth depth
+                                                #:default-kind 'implicit)
+                 fvar-expr))]
+          [else fvar-expr]))
       fvar-expr))
 
 ;; Given a function's global type and the number of user-supplied args,
@@ -697,6 +725,22 @@
                           [else 'free])
                         'free)])
          (expr-logic-var stripped mode))]
+      ;; Phase D: resolve bare trait method names from where-context.
+      ;; This MUST come before namespace/global resolution so that `add` inside
+      ;; a `where (Add A)` body resolves through the dict parameter, not the
+      ;; concrete global `prologos::data::nat::add`.
+      ;; N6d-i: it must ALSO come before own-namespace resolution. Before the
+      ;; auto-derived method wrappers existed, trait methods had no top-level
+      ;; binding, so the own-ns arm below missed them and where-context won for
+      ;; a bare method call inside a constrained body (e.g. `[leq x y]` inside
+      ;; `impl Lattice (Map K V) where (Lattice V)` → `Lattice-leq V dict`). The
+      ;; derive adds a top-level `leq` wrapper in the module's own namespace, so
+      ;; without this ordering the own-ns arm would capture it and (in point-free
+      ;; position) fail trait resolution against an unsolved var. where-context
+      ;; only fires for methods of ACTIVE where-constraints, so putting it first
+      ;; is a no-op for every other name — own-ns priority (below) is preserved.
+      [(resolve-method-from-where name env depth)
+       => (lambda (resolved) resolved)]
       ;; Own-namespace definition takes priority over imports (including prelude).
       ;; This ensures `def map ...` in `ns foo` resolves to `foo::map`, not the
       ;; prelude's `prologos::data::list::map`.
@@ -708,12 +752,6 @@
             (if auto-apply?
                 (maybe-auto-apply-implicits (expr-fvar own-fqn) own-fqn loc env depth)
                 (expr-fvar own-fqn)))]
-      ;; Phase D: resolve bare trait method names from where-context.
-      ;; This MUST come before namespace/global resolution so that `add` inside
-      ;; a `where (Add A)` body resolves through the dict parameter, not the
-      ;; concrete global `prologos::data::nat::add`.
-      [(resolve-method-from-where name env depth)
-       => (lambda (resolved) resolved)]
       ;; When namespace context is active, try FQN resolution (imports, refer-map).
       [(and (current-ns-context)
             (let ([resolved (resolve-name name (current-ns-context))])
@@ -758,7 +796,55 @@
       ;; first-class. Mirrors the `suc` pattern above.
       [(primitive-op-eta-expansion name)
        => (lambda (e) e)]
-      [else (unbound-variable-error loc "Unbound variable" name)])))
+      ;; PPN 4C Addendum Phase 4B.5.a (§18.21.26 W1): pending-aware resolution.
+      ;; A name that failed ALL ground resolution above but is a KNOWN def-head
+      ;; awaiting its definition (Pass-1.5 def-bot cell → 'pending) resolves as
+      ;; a normal fvar; typing + commit residuate via the general-body sweep
+      ;; (driver.rkt — the command-time elaboration is the DETECTOR; the sweep
+      ;; re-runs the def when its referents ground). TAIL position is load-
+      ;; bearing: only names that would have been Unbound reach here — the
+      ;; import-shadow arms (D-4B3-8) and the multi-defn "must be applied" arm
+      ;; above keep their behavior (an arity-dispatched base name errors
+      ;; informatively rather than residuating on its never-grounding base
+      ;; cell). Gated to process-file (DQ4) — all other contexts see the
+      ;; status-quo unbound error below.
+      [(and (current-residuation-enabled?)
+            (eq? (car (global-env-lookup-status name)) 'pending))
+       (expr-fvar name)]
+      ;; Numerics N5de: nominal-erased refined numeric types (PosInt/…) are built-in nominal types.
+      [(refined-name? name) (expr-fvar name)]
+      [else (unbound-variable-error
+             loc
+             (or (hash-ref unbound-op-hint-table name #f) "Unbound variable")
+             name)])))
+
+;; (N6e-E5.3) Op-spelling hints for KNOWN op-like names that reach the unbound
+;; fallback: keywords with no value form (mod, quire ops, p*-if-nar), and the
+;; angle-bracket-conflicted comparison spellings. The hint rides the error's
+;; message field (rendered by errors.rkt when non-default). NOTE: bare `lt`
+;; and `eq` never reach here — they resolve to String foreign fns (the
+;; silent-shadow class, filed separately); bare `<` never reaches elaboration
+;; (issue #69(a) reader tokenization).
+(define unbound-op-hint-table
+  (let ([cmp-hint
+         (string-append
+          "hint: as a first-class value use ord-lt/ord-le/ord-gt/ord-ge "
+          "(trait comparisons), or a keyword section like [le _ _]")]
+        [angle-hint
+         (string-append
+          "hint: comparison keywords are spelled lt/le/gt/ge in Prologos "
+          "(< and <= conflict with angle-bracket syntax); values: "
+          "ord-lt/ord-le/ord-gt/ord-ge")]
+        [quire-hint "hint: quire ops are keyword-only (no first-class value form)"]
+        [if-nar-hint "hint: p*-if-nar is keyword-only (no first-class value form)"])
+    (hasheq
+     'mod "hint: mod is a keyword; for a first-class value use the section [mod _ _]"
+     'le cmp-hint 'gt cmp-hint 'ge cmp-hint
+     '<= angle-hint '>= angle-hint '> angle-hint
+     'q8-fma quire-hint 'q16-fma quire-hint 'q32-fma quire-hint 'q64-fma quire-hint
+     'q8-to quire-hint 'q16-to quire-hint 'q32-to quire-hint 'q64-to quire-hint
+     'p8-if-nar if-nar-hint 'p16-if-nar if-nar-hint
+     'p32-if-nar if-nar-hint 'p64-if-nar if-nar-hint)))
 
 ;; ========================================
 ;; Primitive operators as first-class values
@@ -825,7 +911,111 @@
    ;; Rat conversions
    'from-int  (lambda () (eta-unary  (expr-Int) expr-from-int))
    'rat-numer (lambda () (eta-unary  (expr-Rat) expr-rat-numer))
-   'rat-denom (lambda () (eta-unary  (expr-Rat) expr-rat-denom))))
+   'rat-denom (lambda () (eta-unary  (expr-Rat) expr-rat-denom))
+
+   ;; ---- Numerics N6e-E4 (Q2 pin): posit + float families ----
+   ;; Same shapes as the int/rat entries: arithmetic/comparisons take the
+   ;; width's type as both operand domains (comparisons return Bool via the
+   ;; node's typing rule); conversions take their ARGUMENT type as domain
+   ;; (the from-nat / rat-numer precedent). Exclusions per the E4 pin:
+   ;; quire ops (nullary/odd arities) + p*-if-nar (arity-4 type-param shape).
+
+   ;; Posit8: arithmetic Posit8 -> Posit8 -> Posit8; comparisons -> Bool
+   'p8+          (lambda () (eta-binary (expr-Posit8) expr-p8-add))
+   'p8-          (lambda () (eta-binary (expr-Posit8) expr-p8-sub))
+   'p8*          (lambda () (eta-binary (expr-Posit8) expr-p8-mul))
+   'p8/          (lambda () (eta-binary (expr-Posit8) expr-p8-div))
+   'p8-neg       (lambda () (eta-unary  (expr-Posit8) expr-p8-neg))
+   'p8-abs       (lambda () (eta-unary  (expr-Posit8) expr-p8-abs))
+   'p8-sqrt      (lambda () (eta-unary  (expr-Posit8) expr-p8-sqrt))
+   'p8-lt        (lambda () (eta-binary (expr-Posit8) expr-p8-lt))
+   'p8-le        (lambda () (eta-binary (expr-Posit8) expr-p8-le))
+   'p8-eq        (lambda () (eta-binary (expr-Posit8) expr-p8-eq))
+   'p8-from-nat  (lambda () (eta-unary  (expr-Nat)    expr-p8-from-nat))
+   'p8-to-rat    (lambda () (eta-unary  (expr-Posit8) expr-p8-to-rat))
+   'p8-from-rat  (lambda () (eta-unary  (expr-Rat)    expr-p8-from-rat))
+   'p8-from-int  (lambda () (eta-unary  (expr-Int)    expr-p8-from-int))
+
+   ;; Posit16
+   'p16+         (lambda () (eta-binary (expr-Posit16) expr-p16-add))
+   'p16-         (lambda () (eta-binary (expr-Posit16) expr-p16-sub))
+   'p16*         (lambda () (eta-binary (expr-Posit16) expr-p16-mul))
+   'p16/         (lambda () (eta-binary (expr-Posit16) expr-p16-div))
+   'p16-neg      (lambda () (eta-unary  (expr-Posit16) expr-p16-neg))
+   'p16-abs      (lambda () (eta-unary  (expr-Posit16) expr-p16-abs))
+   'p16-sqrt     (lambda () (eta-unary  (expr-Posit16) expr-p16-sqrt))
+   'p16-lt       (lambda () (eta-binary (expr-Posit16) expr-p16-lt))
+   'p16-le       (lambda () (eta-binary (expr-Posit16) expr-p16-le))
+   'p16-eq       (lambda () (eta-binary (expr-Posit16) expr-p16-eq))
+   'p16-from-nat (lambda () (eta-unary  (expr-Nat)     expr-p16-from-nat))
+   'p16-to-rat   (lambda () (eta-unary  (expr-Posit16) expr-p16-to-rat))
+   'p16-from-rat (lambda () (eta-unary  (expr-Rat)     expr-p16-from-rat))
+   'p16-from-int (lambda () (eta-unary  (expr-Int)     expr-p16-from-int))
+
+   ;; Posit32
+   'p32+         (lambda () (eta-binary (expr-Posit32) expr-p32-add))
+   'p32-         (lambda () (eta-binary (expr-Posit32) expr-p32-sub))
+   'p32*         (lambda () (eta-binary (expr-Posit32) expr-p32-mul))
+   'p32/         (lambda () (eta-binary (expr-Posit32) expr-p32-div))
+   'p32-neg      (lambda () (eta-unary  (expr-Posit32) expr-p32-neg))
+   'p32-abs      (lambda () (eta-unary  (expr-Posit32) expr-p32-abs))
+   'p32-sqrt     (lambda () (eta-unary  (expr-Posit32) expr-p32-sqrt))
+   'p32-lt       (lambda () (eta-binary (expr-Posit32) expr-p32-lt))
+   'p32-le       (lambda () (eta-binary (expr-Posit32) expr-p32-le))
+   'p32-eq       (lambda () (eta-binary (expr-Posit32) expr-p32-eq))
+   'p32-from-nat (lambda () (eta-unary  (expr-Nat)     expr-p32-from-nat))
+   'p32-to-rat   (lambda () (eta-unary  (expr-Posit32) expr-p32-to-rat))
+   'p32-from-rat (lambda () (eta-unary  (expr-Rat)     expr-p32-from-rat))
+   'p32-from-int (lambda () (eta-unary  (expr-Int)     expr-p32-from-int))
+
+   ;; Posit64
+   'p64+         (lambda () (eta-binary (expr-Posit64) expr-p64-add))
+   'p64-         (lambda () (eta-binary (expr-Posit64) expr-p64-sub))
+   'p64*         (lambda () (eta-binary (expr-Posit64) expr-p64-mul))
+   'p64/         (lambda () (eta-binary (expr-Posit64) expr-p64-div))
+   'p64-neg      (lambda () (eta-unary  (expr-Posit64) expr-p64-neg))
+   'p64-abs      (lambda () (eta-unary  (expr-Posit64) expr-p64-abs))
+   'p64-sqrt     (lambda () (eta-unary  (expr-Posit64) expr-p64-sqrt))
+   'p64-lt       (lambda () (eta-binary (expr-Posit64) expr-p64-lt))
+   'p64-le       (lambda () (eta-binary (expr-Posit64) expr-p64-le))
+   'p64-eq       (lambda () (eta-binary (expr-Posit64) expr-p64-eq))
+   'p64-from-nat (lambda () (eta-unary  (expr-Nat)     expr-p64-from-nat))
+   'p64-to-rat   (lambda () (eta-unary  (expr-Posit64) expr-p64-to-rat))
+   'p64-from-rat (lambda () (eta-unary  (expr-Rat)     expr-p64-from-rat))
+   'p64-from-int (lambda () (eta-unary  (expr-Int)     expr-p64-from-int))
+
+   ;; Float32
+   'f32+         (lambda () (eta-binary (expr-Float32) expr-f32-add))
+   'f32-         (lambda () (eta-binary (expr-Float32) expr-f32-sub))
+   'f32*         (lambda () (eta-binary (expr-Float32) expr-f32-mul))
+   'f32/         (lambda () (eta-binary (expr-Float32) expr-f32-div))
+   'f32-neg      (lambda () (eta-unary  (expr-Float32) expr-f32-neg))
+   'f32-abs      (lambda () (eta-unary  (expr-Float32) expr-f32-abs))
+   'f32-sqrt     (lambda () (eta-unary  (expr-Float32) expr-f32-sqrt))
+   'f32-lt       (lambda () (eta-binary (expr-Float32) expr-f32-lt))
+   'f32-le       (lambda () (eta-binary (expr-Float32) expr-f32-le))
+   'f32-eq       (lambda () (eta-binary (expr-Float32) expr-f32-eq))
+
+   ;; Float64
+   'f64+         (lambda () (eta-binary (expr-Float64) expr-f64-add))
+   'f64-         (lambda () (eta-binary (expr-Float64) expr-f64-sub))
+   'f64*         (lambda () (eta-binary (expr-Float64) expr-f64-mul))
+   'f64/         (lambda () (eta-binary (expr-Float64) expr-f64-div))
+   'f64-neg      (lambda () (eta-unary  (expr-Float64) expr-f64-neg))
+   'f64-abs      (lambda () (eta-unary  (expr-Float64) expr-f64-abs))
+   'f64-sqrt     (lambda () (eta-unary  (expr-Float64) expr-f64-sqrt))
+   'f64-lt       (lambda () (eta-binary (expr-Float64) expr-f64-lt))
+   'f64-le       (lambda () (eta-binary (expr-Float64) expr-f64-le))
+   'f64-eq       (lambda () (eta-binary (expr-Float64) expr-f64-eq))
+
+   ;; Cross-width Float conversions (N3e-rest keywords). Their TYPING rules are
+   ;; width-polymorphic (float-type?, Float32 OR Float64), but eta needs one
+   ;; concrete domain: Float64 (the wider) — Float32 arguments subsume via the
+   ;; registered Float32<:Float64 widening (value-exact, NaN/Inf-preserving).
+   'float-finite?    (lambda () (eta-unary (expr-Float64) expr-float-finite))
+   'float-to-rat     (lambda () (eta-unary (expr-Float64) expr-float-to-rat))
+   'float-to-int     (lambda () (eta-unary (expr-Float64) expr-float-to-int))
+   'float-to-float32 (lambda () (eta-unary (expr-Float64) expr-float-to-float32))))
 
 ;; Look up a primitive-op name and return the eta-expanded expr-lam, or #f.
 ;; Called from elaborate-var as a final fallback before "Unbound variable".
@@ -877,7 +1067,13 @@
 
     ;; Type hole (inferred during checking)
     [(surf-hole loc)
-     (expr-hole)]
+     ;; `_` in a relational goal (solve/explain/defr body) is the anonymous
+     ;; don't-care variable — a FRESH logic var per occurrence (so `(p a _)` /
+     ;; `(q _ b)` don't alias and a lone `_` matches any value). In functional
+     ;; context it stays a hole (partial application / type to be inferred).
+     (if (current-relational-fallback?)
+         (expr-logic-var (gensym '_anon) 'free)
+         (expr-hole))]
 
     ;; Typed hole (?? or ??name — reports expected type)
     [(surf-typed-hole name _)
@@ -1291,6 +1487,12 @@
     ;; ---- Rat ----
     [(surf-rat-type loc) (expr-Rat)]
     [(surf-rat-lit v loc) (expr-rat v)]
+    ;; N4b: polymorphic numeric literal → expr-num-lit with a FRESH type meta (alpha),
+    ;; resolved from context in check-mode or defaulted (N6b: by notation origin) in zonk.
+    [(surf-num-lit v integral? origin loc)
+     (expr-num-lit v integral? origin
+       (fresh-meta ctx-empty (expr-hole)
+         (meta-source-info loc 'num-lit-type "polymorphic numeric literal" #f (env->name-stack env))))]
     [(surf-rat-add a b loc)
      (let ([ea (elaborate a env depth)]
            [eb (elaborate b env depth)])
@@ -1586,6 +1788,87 @@
     ;; ---- Posit32 ----
     [(surf-posit32-type loc) (expr-Posit32)]
     [(surf-posit32 v loc) (expr-posit32 v)]
+    ;; ---- Float types (Numerics N3) ----
+    [(surf-float32-type loc) (expr-Float32)]
+    [(surf-float64-type loc) (expr-Float64)]
+    ;; ---- Float value literal (Numerics N3c) — exact rational → IEEE flonum ----
+    ;; f32 rounds to single precision at construction (flsingle); f64 is the double.
+    [(surf-float-lit v w loc)
+     (if (= w 32)
+         (expr-float32 (flsingle (exact->inexact v)))
+         (expr-float64 (exact->inexact v)))]
+    ;; ---- Posit value literal (Numerics N6b) — exact rational → posit bits ----
+    ;; Round-to-nearest-even posit encode (silent, per D-N6.4: literals never warn).
+    [(surf-posit-lit v w loc)
+     (case w
+       [(8)  (expr-posit8  (posit8-encode v))]
+       [(16) (expr-posit16 (posit16-encode v))]
+       [(32) (expr-posit32 (posit32-encode v))]
+       [else (expr-posit64 (posit64-encode v))])]
+    ;; ---- Float ops (Numerics N3b) ----
+    [(surf-f32-add a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f32-add ea eb)]))]
+    [(surf-f32-sub a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f32-sub ea eb)]))]
+    [(surf-f32-mul a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f32-mul ea eb)]))]
+    [(surf-f32-div a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f32-div ea eb)]))]
+    [(surf-f32-neg a loc)
+     (let ([ea (elaborate a env depth)]) (if (prologos-error? ea) ea (expr-f32-neg ea)))]
+    [(surf-f32-abs a loc)
+     (let ([ea (elaborate a env depth)]) (if (prologos-error? ea) ea (expr-f32-abs ea)))]
+    [(surf-f32-sqrt a loc)
+     (let ([ea (elaborate a env depth)]) (if (prologos-error? ea) ea (expr-f32-sqrt ea)))]
+    [(surf-f32-lt a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f32-lt ea eb)]))]
+    [(surf-f32-le a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f32-le ea eb)]))]
+    [(surf-f32-eq a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f32-eq ea eb)]))]
+    [(surf-f64-add a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f64-add ea eb)]))]
+    [(surf-f64-sub a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f64-sub ea eb)]))]
+    [(surf-f64-mul a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f64-mul ea eb)]))]
+    [(surf-f64-div a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f64-div ea eb)]))]
+    [(surf-f64-neg a loc)
+     (let ([ea (elaborate a env depth)]) (if (prologos-error? ea) ea (expr-f64-neg ea)))]
+    [(surf-f64-abs a loc)
+     (let ([ea (elaborate a env depth)]) (if (prologos-error? ea) ea (expr-f64-abs ea)))]
+    [(surf-f64-sqrt a loc)
+     (let ([ea (elaborate a env depth)]) (if (prologos-error? ea) ea (expr-f64-sqrt ea)))]
+    [(surf-f64-lt a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f64-lt ea eb)]))]
+    [(surf-f64-le a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f64-le ea eb)]))]
+    [(surf-f64-eq a b loc)
+     (let ([ea (elaborate a env depth)] [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea] [(prologos-error? eb) eb] [else (expr-f64-eq ea eb)]))]
+    ;; Cross-width Float conversions (Numerics N3e-rest)
+    [(surf-float-finite a loc)
+     (let ([ea (elaborate a env depth)]) (if (prologos-error? ea) ea (expr-float-finite ea)))]
+    [(surf-float-to-rat a loc)
+     (let ([ea (elaborate a env depth)]) (if (prologos-error? ea) ea (expr-float-to-rat ea)))]
+    [(surf-float-to-int a loc)
+     (let ([ea (elaborate a env depth)]) (if (prologos-error? ea) ea (expr-float-to-int ea)))]
+    [(surf-float-to-float32 a loc)
+     (let ([ea (elaborate a env depth)]) (if (prologos-error? ea) ea (expr-float-to-float32 ea)))]
     [(surf-p32-add a b loc)
      (let ([ea (elaborate a env depth)]
            [eb (elaborate b env depth)])
@@ -1795,11 +2078,7 @@
      (let ([eq (elaborate q env depth)])
        (if (prologos-error? eq) eq (expr-quire64-to eq)))]
 
-    ;; Approximate literal: ~N → default Posit32
-    ;; Context-aware width selection happens in the type checker (check mode).
-    ;; At elaboration time, we default to Posit32.
-    [(surf-approx-literal v loc)
-     (expr-posit32 (posit32-encode (if (exact? v) v (inexact->exact v))))]
+    ;; (N6c) surf-approx-literal arm removed (~N deprecated)
 
     ;; ---- Symbol type and literal ----
     [(surf-symbol-type loc)
@@ -1841,35 +2120,51 @@
      ;; Elaborate to nested map-assoc on map-empty.
      ;; entries is a list of (parsed-key . parsed-val) pairs.
      ;; Key type uses a fresh meta (keys are typically homogeneous, unified from entries).
-     ;; Value type uses (expr-Open) — "Open by Design" (PPN 4C T-2, 2026-04-23).
-     ;; Per ergonomics direction: unannotated heterogeneous map values are opaque
-     ;; (α-semantic — see syntax.rkt expr-Open docstring). Annotated maps
-     ;; (e.g., `(Map K Int)` or `(Map K <Int | String>)`) check strictly against
-     ;; the annotation via the ann-check path; annotation narrows value types.
-     ;; Schema system provides structured per-field validation.
+     ;; CIU T6 F1 (s2): elaborate entries FIRST, then classify — an all-keyword-literal literal
+     ;; seeds a structural RECORD (value type = a growing (expr-Record); infer projects per field);
+     ;; anything else (empty {}, or any non-keyword key) keeps the legacy Open dictionary seed.
+     ;; CIU T6 F1a.2 p1b (THE mint-flip — expr-Open is no longer seeded):
+     ;;   empty {}        → the D17 keyword-committed empty DYN row riding the
+     ;;                     v-type slot (string-keyed maps use the annotation
+     ;;                     form, which stays (Map K V) — the signed escape hatch);
+     ;;   all-keyword     → the F1a-s2 closed-record seed (unchanged);
+     ;;   any non-keyword → expr-map-literal, typed ALL-AT-ONCE (D18: keys unify
+     ;;                     to K, values = ⋃observed); the chain (runtime + zonk
+     ;;                     fallback) seeds a fresh VALUE meta, not Open.
+     ;; NB: the D17 keyword commitment lives in the ROW's key-domain (the row is
+     ;; what unannotated flows observe); the seed's K slot stays a fresh META so
+     ;; the annotation escape hatch ((Map String V) := {}) can still claim it
+     ;; through the B1 empty-seed arm (which unifies ONLY the key types).
      (if (null? entries)
-         ;; Empty map: fresh meta for key, Open for value type
-         (let ([km (fresh-meta ctx-empty (expr-hole)
-                     (meta-source-info loc 'map-key-type "key type of empty map literal" #f (env->name-stack env)))])
-           (expr-map-empty km (expr-Open)))
-         ;; Non-empty: elaborate all entries, then fold into map-assoc
-         (let ([km (fresh-meta ctx-empty (expr-hole)
-                     (meta-source-info loc 'map-key-type "key type of map literal" #f (env->name-stack env)))])
-           (let loop ([remaining entries]
-                      [result (expr-map-empty km (expr-Open))])
-             (cond
-               [(null? remaining)
-                result]
-               [else
-                (define entry (car remaining))
-                (define ek (elaborate (car entry) env depth))
-                (define ev (elaborate (cdr entry) env depth))
-                (cond
-                  [(prologos-error? ek) ek]
-                  [(prologos-error? ev) ev]
-                  [else
-                   (loop (cdr remaining)
-                         (expr-map-assoc result ek ev))])]))))]
+         (expr-map-empty (fresh-meta ctx-empty (expr-hole)
+                           (meta-source-info loc 'map-key-type "key type of empty map literal" #f (env->name-stack env)))
+                         (expr-Record 'keyword '() 'dyn))
+         (let build ([remaining entries] [acc '()])
+           (cond
+             [(null? remaining)
+              (let* ([elab (reverse acc)]
+                     [all-keyword? (andmap (lambda (p) (expr-keyword? (car p))) elab)])
+                (if all-keyword?
+                    (for/fold ([result (expr-map-empty (expr-Keyword)
+                                                       (expr-Record 'keyword '() 'closed))])
+                              ([p (in-list elab)])
+                      (expr-map-assoc result (car p) (cdr p)))
+                    (let* ([km (fresh-meta ctx-empty (expr-hole)
+                                 (meta-source-info loc 'map-key-type "key type of map literal" #f (env->name-stack env)))]
+                           [vm (fresh-meta ctx-empty (expr-hole)
+                                 (meta-source-info loc 'map-val-type "value type of map literal" #f (env->name-stack env)))]
+                           [chain (for/fold ([result (expr-map-empty km vm)])
+                                            ([p (in-list elab)])
+                                    (expr-map-assoc result (car p) (cdr p)))])
+                      (expr-map-literal (map car elab) (map cdr elab) chain))))]
+             [else
+              (define entry (car remaining))
+              (define ek (elaborate (car entry) env depth))
+              (define ev (elaborate (cdr entry) env depth))
+              (cond
+                [(prologos-error? ek) ek]
+                [(prologos-error? ev) ev]
+                [else (build (cdr remaining) (cons (cons ek ev) acc))])])))]
 
     [(surf-map-empty k v loc)
      (let ([ek (elaborate k env depth)]
@@ -2172,20 +2467,41 @@
        (cond [(prologos-error? ea) ea]
              [else (expr-PVec ea)]))]
 
+    ;; CIU T6 F1a-col-2 (D15): '[…] (tree route, non-empty) → literal-extent node.
+    ;; The elems drive all-at-once typing; the CHAIN (cons/nil surf chain, with
+    ;; implicit args inserted by its own elaboration) is the runtime value.
+    ;; Elements elaborate twice (once standalone, once inside the chain) — both
+    ;; from the same source; typing reads elems, reduction reads the chain.
+    [(surf-list-literal elems loc)
+     (let loop ([remaining elems] [acc '()])
+       (cond
+         [(null? remaining)
+          (let ([chain (elaborate (make-varargs-list-literal elems loc) env depth)])
+            (if (prologos-error? chain)
+                chain
+                (expr-list-literal (reverse acc) chain)))]
+         [else
+          (define ex (elaborate (car remaining) env depth))
+          (cond
+            [(prologos-error? ex) ex]
+            [else (loop (cdr remaining) (cons ex acc))])]))]
+
     [(surf-pvec-literal elems loc)
-     ;; Desugar @[e1 e2 e3] → pvec-push(pvec-push(pvec-push(pvec-empty(meta), e1), e2), e3)
-     (let ([am (fresh-meta ctx-empty (expr-hole)
-                 (meta-source-info loc 'pvec-elem-type "element type of PVec literal" #f (env->name-stack env)))])
-       (let loop ([remaining elems]
-                  [result (expr-pvec-empty am)])
-         (cond
-           [(null? remaining) result]
-           [else
-            (define ex (elaborate (car remaining) env depth))
-            (cond
-              [(prologos-error? ex) ex]
-              [else (loop (cdr remaining)
-                          (expr-pvec-push result ex))])])))]
+     ;; CIU T6 F1a-col (D15): non-empty @[…] → the literal-extent node (typed
+     ;; all-at-once: homogeneous → PVec T as before; heterogeneous → 'nat row).
+     ;; Empty @[] keeps the legacy meta seed (the {}-stays-legacy analog).
+     (if (null? elems)
+         (expr-pvec-empty
+          (fresh-meta ctx-empty (expr-hole)
+            (meta-source-info loc 'pvec-elem-type "element type of PVec literal" #f (env->name-stack env))))
+         (let loop ([remaining elems] [acc '()])
+           (cond
+             [(null? remaining) (expr-pvec-literal (reverse acc))]
+             [else
+              (define ex (elaborate (car remaining) env depth))
+              (cond
+                [(prologos-error? ex) ex]
+                [else (loop (cdr remaining) (cons ex acc))])])))]
 
     [(surf-pvec-empty a loc)
      (let ([ea (elaborate a env depth)])
@@ -2510,84 +2826,6 @@
              [(prologos-error? ei) ei]
              [else (expr-uf-value es ei)]))]
 
-    ;; ---- ATMS (hypothetical reasoning) ----
-    [(surf-atms-type _loc) (expr-atms-type)]
-    [(surf-assumption-id-type _loc) (expr-assumption-id-type)]
-
-    [(surf-atms-new network loc)
-     (let ([en (elaborate network env depth)])
-       (if (prologos-error? en) en
-           (expr-atms-new en)))]
-
-    [(surf-atms-assume atms name datum loc)
-     (let ([ea (elaborate atms env depth)]
-           [en (elaborate name env depth)]
-           [ed (elaborate datum env depth)])
-       (cond [(prologos-error? ea) ea]
-             [(prologos-error? en) en]
-             [(prologos-error? ed) ed]
-             [else (expr-atms-assume ea en ed)]))]
-
-    [(surf-atms-retract atms aid loc)
-     (let ([ea (elaborate atms env depth)]
-           [ei (elaborate aid env depth)])
-       (cond [(prologos-error? ea) ea]
-             [(prologos-error? ei) ei]
-             [else (expr-atms-retract ea ei)]))]
-
-    [(surf-atms-nogood atms aids loc)
-     (let ([ea (elaborate atms env depth)]
-           [el (elaborate aids env depth)])
-       (cond [(prologos-error? ea) ea]
-             [(prologos-error? el) el]
-             [else (expr-atms-nogood ea el)]))]
-
-    [(surf-atms-amb atms alternatives loc)
-     (let ([ea (elaborate atms env depth)]
-           [el (elaborate alternatives env depth)])
-       (cond [(prologos-error? ea) ea]
-             [(prologos-error? el) el]
-             [else (expr-atms-amb ea el)]))]
-
-    [(surf-atms-solve-all atms goal loc)
-     (let ([ea (elaborate atms env depth)]
-           [eg (elaborate goal env depth)])
-       (cond [(prologos-error? ea) ea]
-             [(prologos-error? eg) eg]
-             [else (expr-atms-solve-all ea eg)]))]
-
-    [(surf-atms-read atms cell loc)
-     (let ([ea (elaborate atms env depth)]
-           [ec (elaborate cell env depth)])
-       (cond [(prologos-error? ea) ea]
-             [(prologos-error? ec) ec]
-             [else (expr-atms-read ea ec)]))]
-
-    [(surf-atms-write atms cell val support loc)
-     (let ([ea (elaborate atms env depth)]
-           [ec (elaborate cell env depth)]
-           [ev (elaborate val env depth)]
-           [es (elaborate support env depth)])
-       (cond [(prologos-error? ea) ea]
-             [(prologos-error? ec) ec]
-             [(prologos-error? ev) ev]
-             [(prologos-error? es) es]
-             [else (expr-atms-write ea ec ev es)]))]
-
-    [(surf-atms-consistent atms aids loc)
-     (let ([ea (elaborate atms env depth)]
-           [el (elaborate aids env depth)])
-       (cond [(prologos-error? ea) ea]
-             [(prologos-error? el) el]
-             [else (expr-atms-consistent ea el)]))]
-
-    [(surf-atms-worldview atms aids loc)
-     (let ([ea (elaborate atms env depth)]
-           [el (elaborate aids env depth)])
-       (cond [(prologos-error? ea) ea]
-             [(prologos-error? el) el]
-             [else (expr-atms-worldview ea el)]))]
-
     ;; ---- Tabling operations ----
 
     [(surf-table-store-type loc)
@@ -2710,10 +2948,19 @@
      ;; Build relational env from params: name → expr-logic-var
      ;; Same as defr variant elaboration — ensures ?x in clause body
      ;; resolves to (expr-logic-var 'x 'free), not (expr-logic-var '?x 'free).
+     ;; C.b.1: convert each param's fused type-NAME (3-list slot 3) → type-EXPR
+     ;; (relations.rkt wraps the type-pred). expr-logic-var stays 2-field.
+     (define params*
+       (for/list ([p (in-list params)])
+         (if (and (list? p) (>= (length p) 3) (caddr p))
+             (list (car p) (cadr p) (schema-field-type->expr (caddr p)))
+             p)))
      (define rel-env
-       (for/hasheq ([p (in-list params)])
+       (for/hasheq ([p (in-list params*)])
          (define name (if (pair? p) (car p) p))
-         (define mode (if (pair? p) (or (cdr p) 'free) 'free))
+         (define mode (if (and (list? p) (>= (length p) 2))
+                          (or (cadr p) 'free)
+                          (if (pair? p) (or (cdr p) 'free) 'free)))
          (values name (expr-logic-var name mode))))
      (let ([elab-clauses
             (for/list ([c (in-list clauses)])
@@ -2722,7 +2969,7 @@
                 (elaborate c env depth)))])
        (define first-err (findf prologos-error? elab-clauses))
        (if first-err first-err
-           (expr-rel params elab-clauses)))]
+           (expr-rel params* elab-clauses)))]
 
     ;; clause — rule clause (&> goals...)
     [(surf-clause goals loc)
@@ -2805,6 +3052,127 @@
     ;; solve — bare solve
     ;; Goal is elaborated in relational-fallback mode: unresolved names become
     ;; free query variables (expr-logic-var with mode 'free).
+    ;; CIU T6 F1b.5-s2 (D27): the validate BAKE. The per-field plan resolves
+    ;; fully AT ELABORATION — the schema registry is preparse/elaboration
+    ;; state, the whnf memo cache forbids registry reads at reduce time, and
+    ;; lazy baking is structurally impossible (typing can't rewrite immutable
+    ;; exprs; reduction can't reach typing-core). Payload is final before
+    ;; pnet serialization: exprs/symbols/sexps/booleans only — the pred is an
+    ;; elaborated expr-lam (a Racket closure would serialize to an error stub).
+    [(surf-validate sname subject loc)
+     (let* ([schema-entry (lookup-schema-by-name sname)]
+            [sel (and (not schema-entry) (lookup-selection-by-name sname))]
+            [parent (and sel (lookup-schema-by-name (selection-entry-schema-name sel)))])
+       (cond
+         [(and (not schema-entry) (not sel))
+          (prologos-error loc (format "validate: unknown schema ~a — declare it with `schema ~a …` first" sname sname))]
+         [(and sel (not parent))
+          (prologos-error loc (format "validate: selection ~a's parent schema ~a is not registered" sname (selection-entry-schema-name sel)))]
+         [else
+          (define required-names
+            (list 'prologos::data::result::Result 'prologos::data::reason::Reason
+                  'prologos::data::result::ok 'prologos::data::result::err
+                  'prologos::data::reason::missing-required
+                  'prologos::data::reason::check-failed
+                  'prologos::data::reason::type-mismatch
+                  'prologos::data::reason::unexpected-field
+                  ;; F1b.7a: the Layer B guard's Reason (index 8; the tabulate
+                  ;; arm reads it via list-ref names 8)
+                  'prologos::data::reason::check-unevaluable
+                  ;; F1b.7b: the un-evaluable-:default diagnostic (index 9)
+                  'prologos::data::reason::default-unevaluable))
+          (cond
+            [(not (andmap global-env-lookup-type required-names))
+             (prologos-error loc "validate requires prologos::data::result and prologos::data::reason (the prelude provides both; in a :no-prelude file `require` them explicitly)")]
+            [else
+             (define subj (elaborate subject env depth))
+             (cond
+               [(prologos-error? subj) subj]
+               [else
+                ;; F1b.5-s4: schema OR selection. A selection borrows the PARENT
+                ;; schema's fields; the plan spans the FULL parent field set (so
+                ;; the closedness scan's plan-kws covers the parent AND every
+                ;; PRESENT parent field is type + :check validated). required? per
+                ;; field: a schema requires EVERY field; a selection requires only
+                ;; its SINGLE-SEGMENT :requires (the read-capability). Deep/wildcard
+                ;; requires-paths defer to the walker charter (DEFERRED.md).
+                (define src-schema (or schema-entry parent))
+                (define fields (schema-entry-fields src-schema))
+                (define closed? (schema-entry-closed? src-schema))
+                (define req-syms
+                  (if sel
+                      (for/list ([p (in-list (selection-entry-requires-paths sel))]
+                                 #:when (and (pair? p) (null? (cdr p)) (keyword? (car p))))
+                        (string->symbol (keyword->string (car p))))
+                      '()))
+                (define (required-of kw) (or (not sel) (and (memq kw req-syms) #t)))
+                ;; the Result's S argument: resolve `sname` (the schema OR
+                ;; selection name) to its ns-QUALIFIED form (F1b.5-s3 — try
+                ;; qualified FIRST so S is the SAME fvar the `the`/annotation
+                ;; routes produce; selections are registered as types too). Fall
+                ;; back to the as-written name (already-FQN / short-only-bound).
+                (define resolved-sname
+                  (cond
+                    [(and (current-ns-context)
+                          (let ([q (qualify-name sname (ns-context-current-ns (current-ns-context)))])
+                            (and (global-env-lookup-type q) q)))
+                     => values]
+                    [(global-env-lookup-type sname) sname]
+                    [else sname]))
+                (define (datum->display d)
+                  (cond [(and (pair? d) (eq? (car d) '$union))
+                         (format "<~a>" (string-join (map datum->display (cdr d)) " | "))]
+                        [(and (pair? d) (eq? (car d) '$arrow))
+                         (format "<~a -> ~a>" (datum->display (cadr d)) (datum->display (caddr d)))]
+                        [else (format "~a" d)]))
+                (define plan-or-err
+                  (for/fold ([acc '()]) ([f (in-list fields)])
+                    (cond
+                      [(prologos-error? acc) acc]
+                      [else
+                       (define kw (schema-field-keyword f))
+                       (define ft-expr (schema-field-type->expr (schema-field-type-datum f)))
+                       (define tag (field-type->witness-tag ft-expr))
+                       (define type-str (datum->display (schema-field-type-datum f)))
+                       ;; defaults: stored raw datums → parse + elaborate CLOSED
+                       ;; (env '() — defaults reference globals only)
+                       (define default-expr
+                         (let ([dv (schema-field-default-val f)])
+                           (and dv
+                                (let ([s (parse-datum (datum->syntax #f dv))])
+                                  (if (prologos-error? s) s (elaborate s '() 0))))))
+                       ;; :check preds: the bridge's lowering re-homed (D29):
+                       ;; subst _ → $vx, normalize ops (>/>= REVERSE args),
+                       ;; parse + elaborate with $vx at bvar 0, wrap
+                       ;; expr-lam 'mw (the suc-eta direct-construction
+                       ;; precedent — no junk mult-metas)
+                       (define pred-expr
+                         (let ([cp (schema-field-check-pred f)])
+                           (and cp
+                                (let* ([body-datum (normalize-check-pred (subst-underscore cp '$vx))]
+                                       [body-surf (parse-datum (datum->syntax #f body-datum))])
+                                  (if (prologos-error? body-surf)
+                                      body-surf
+                                      (let ([body (elaborate body-surf (env-extend '() '$vx 0) 1)])
+                                        (if (prologos-error? body) body
+                                            (expr-lam 'mw ft-expr body))))))))
+                       (cond
+                         [(prologos-error? default-expr) default-expr]
+                         [(prologos-error? pred-expr) pred-expr]
+                         [else
+                          (cons (list kw tag default-expr pred-expr type-str
+                                      (and (schema-field-check-pred f)
+                                           (format "~a" (schema-field-check-pred f)))
+                                      (required-of kw))  ; F1b.5-s4: required-on-miss?
+                                acc)])])))
+                (if (prologos-error? plan-or-err)
+                    plan-or-err
+                    (expr-validate resolved-sname
+                                   closed?
+                                   (reverse plan-or-err)
+                                   subj
+                                   required-names))])])]))]
+
     [(surf-solve goal loc)
      (let ([eg (parameterize ([current-relational-fallback? #t])
                  (elaborate goal env depth))])
@@ -3139,8 +3507,8 @@
                 (expr-foreign-fn fn-name rkt-proc arity '() marshal-in marshal-out #f #f))
 
               ;; Register the type in global-env so the infer case can find it
-              (current-prelude-env
-               (global-env-add (current-prelude-env) fn-name full-type foreign-fn-val))
+              ;; (4A.c-iii-a: global-env-add is always-mnr; no env rebind)
+              (global-env-add fn-name full-type foreign-fn-val)
 
               ;; Elaborate capture expressions (they reference variables in scope)
               (define elab-cap-exprs
@@ -3193,19 +3561,30 @@
                     [(string? literal-val) (surf-string literal-val loc)]
                     [(boolean? literal-val) (if literal-val (surf-true loc) (surf-false loc))]
                     [else (prologos-error loc (format "unsupported literal pattern: ~a" literal-val))]))
-            (values (cons (cons fresh-name 'free) cparams)
+            (values (cons (list fresh-name 'free #f) cparams)
                     (cons (surf-unify (surf-var fresh-name loc) literal-expr loc) goals))]
            [else
-            ;; Normal (name . mode) pair
-            (values (cons p cparams) goals)])))
+            ;; Normal (name mode type-name) 3-list (Aspect C C.b.1). Convert the
+            ;; type-NAME symbol → type-EXPR here — elaboration owns
+            ;; schema-field-type->expr; relations.rkt wraps the type-pred
+            ;; (Decomplection: no type-pred datum from the reader). Untyped params
+            ;; and legacy 2-conses (schema-typed synth-params) pass through unchanged.
+            (define ty-name (and (list? p) (>= (length p) 3) (caddr p)))
+            (define p* (if ty-name
+                           (list (car p) (cadr p) (schema-field-type->expr ty-name))
+                           p))
+            (values (cons p* cparams) goals)])))
      (define final-params (reverse converted-params))
      (define implicit-unify-goals (reverse implicit-goals))
 
-     ;; Build relational env from converted params: name → expr-logic-var
+     ;; Build relational env from converted params: name → expr-logic-var.
+     ;; expr-logic-var stays 2-field (name mode) — the type rides in final-params,
+     ;; NOT on the logic-var (design-mandated). Mode is slot 2 of a 3-list, or the
+     ;; cdr of a legacy cons.
      (define rel-env
        (for/hasheq ([p (in-list final-params)])
          (define name (car p))
-         (define mode (or (cdr p) 'free))
+         (define mode (or (if (and (list? p) (>= (length p) 2)) (cadr p) (cdr p)) 'free))
          (values name (expr-logic-var name mode))))
 
      ;; Prepend implicit unification goals to body.

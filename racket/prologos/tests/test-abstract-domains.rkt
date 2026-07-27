@@ -52,11 +52,11 @@
       "(eval (Lattice-bot Sign--Lattice--dict))"))
     "sign-bot"))
 
-(test-case "Sign: join neg pos = top"
+(test-case "Sign: join neg pos = nonzero"
   (check-contains
     (run-ns-last (string-append sign-preamble
       "(eval (Lattice-join Sign--Lattice--dict sign-neg sign-pos))"))
-    "sign-top"))
+    "sign-nonzero"))
 
 (test-case "Sign: join neg neg = neg"
   (check-contains
@@ -70,11 +70,11 @@
       "(eval (Lattice-join Sign--Lattice--dict sign-bot sign-pos))"))
     "sign-pos"))
 
-(test-case "Sign: join zero neg = top"
+(test-case "Sign: join zero neg = nonpos"
   (check-contains
     (run-ns-last (string-append sign-preamble
       "(eval (Lattice-join Sign--Lattice--dict sign-zero sign-neg))"))
-    "sign-top"))
+    "sign-nonpos"))
 
 (test-case "Sign: leq bot neg = true"
   (check-contains

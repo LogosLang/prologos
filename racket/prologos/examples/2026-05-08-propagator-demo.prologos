@@ -1,0 +1,29 @@
+ns prologos::demo::propagator-network
+
+solver wf-solver
+  :semantics well-founded
+
+defr edge [?from ?to]
+  || "a" "b"
+     "b" "c"
+     "c" "d"
+     "b" "e"
+
+defr vertex [?v]
+  || "a"
+     "b"
+     "c"
+     "d"
+     "e"
+     "f"
+
+defr path [?from ?to]
+  &> (edge from to)
+  &> (edge from mid) (path mid to)
+
+defr unreachable-from-a [?x]
+  &> (vertex x) (not (path "a" x))
+
+solve (path "a" dest)
+
+solve-with wf-solver (unreachable-from-a x)

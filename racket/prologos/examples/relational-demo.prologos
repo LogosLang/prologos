@@ -1,4 +1,4 @@
-ns examples.relational-demo
+ns examples::relational-demo
 
 ;; ========================================================================
 ;;

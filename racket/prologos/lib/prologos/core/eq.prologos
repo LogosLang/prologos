@@ -1,7 +1,7 @@
 ns prologos::core::eq
 
 require [prologos::data::nat      :refer [nat-eq?]]
-require [prologos::data::bool     :refer [not bool-eq and]]
+require [prologos::data::bool     :refer [not bool-eq and or]]
 require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]]
 require [prologos::data::option   :refer [Option some none]]
 ;; NOTE: prologos::data::list NOT imported here to avoid circular dependency
@@ -162,3 +162,18 @@ defn option-eq [eq-a x y]
 
 ;; list-eq: deferred to prologos::core::list (Phase 3a) to avoid
 ;; circular dependency with prologos::data::list.
+
+;; ========================================
+;; Eq Float32 / Float64 (Numerics N6d-iii) — TOTAL equality
+;; ========================================
+;; IEEE fl= gives NaN != NaN (non-reflexive). The Eq TRAIT must be reflexive for
+;; containers/dedup, so NaN == NaN here (one NaN equivalence class); +0.0 == -0.0
+;; via fl=. The raw f{32,64}-eq prims keep the IEEE operator semantics.
+
+impl Eq Float32
+  defn eq? [x : Float32  y : Float32] <Bool>
+    or [f32-eq x y] [and [not [f32-eq x x]] [not [f32-eq y y]]]
+
+impl Eq Float64
+  defn eq? [x : Float64  y : Float64] <Bool>
+    or [f64-eq x y] [and [not [f64-eq x x]] [not [f64-eq y y]]]

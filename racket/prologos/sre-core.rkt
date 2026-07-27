@@ -21,7 +21,12 @@
          racket/set
          racket/string
          "propagator.rkt"
-         "ctor-registry.rkt")
+         "ctor-registry.rkt"
+         (only-in "syntax.rkt"
+                  expr-Pi expr-Pi? expr-Pi-mult expr-Pi-domain expr-Pi-codomain
+                  expr-Sigma expr-Sigma? expr-Sigma-fst-type expr-Sigma-snd-type
+                  expr-lam expr-lam? expr-lam-mult expr-lam-type expr-lam-body
+                  expr-union expr-union? expr-union-left expr-union-right))
 
 (provide
  ;; Domain spec
@@ -58,6 +63,44 @@
  ;; Track 2I Phase 2: detailed SD evidence for vacuous-vs-non-vacuous reporting
  (struct-out sd-evidence)
  test-sd-vee/detailed test-sd-wedge/detailed
+ ;; Track 2I Phase 5: pseudo-complement family
+ lattice-leq?
+ (struct-out pc-rel-evidence)
+ test-pseudo-complement-rel test-pseudo-complement-rel/detailed
+ test-pseudo-complement-abs
+ test-relatively-complemented
+ test-stone-identity
+ ;; Track 2I Phase 6: free-lattice membership + modularity
+ (struct-out modular-evidence)
+ test-modular test-modular/detailed
+ (struct-out whitman-evidence)
+ test-whitmans-condition test-whitmans-condition/detailed
+ test-breadth-bound
+ test-sectionally-complemented
+ ;; Phase 11: has-complement (Boolean placement)
+ (struct-out complement-evidence)
+ test-has-complement test-has-complement/detailed
+ ;; Phase 12: M3 / N5 sublattice detection (Birkhoff 9.2)
+ (struct-out m3-evidence)
+ (struct-out n5-evidence)
+ test-no-m3-sublattice test-no-m3-sublattice/detailed
+ test-no-n5-sublattice test-no-n5-sublattice/detailed
+ lattice-incomparable? sublattice-closed?
+ ;; Phase 13: Convex geometry / anti-exchange (AGT 2003)
+ (struct-out anti-exchange-evidence)
+ test-anti-exchange test-anti-exchange/detailed
+ sample-join-irreducibles sample-closure-on-J
+ ;; Phase 14: Targeted congruence tests
+ (struct-out congruence-evidence)
+ test-trivial-congruence test-trivial-congruence/detailed
+ test-total-congruence test-total-congruence/detailed
+ test-mult-forgetful-congruence test-mult-forgetful-congruence/detailed
+ test-erasure-congruence test-erasure-congruence/detailed
+ forget-mult-norm m0-erasure-norm
+ trivial-equiv? total-equiv? mult-forgetful-equiv? erasure-equiv?
+ ;; Phase 15: Day's doubling / inflation detection (Adaricheva-Nation 2017)
+ (struct-out dd-evidence)
+ test-admits-day-doubling test-admits-day-doubling/detailed
  infer-domain-properties
  ;; Track 2G: implication rules + resolution
  (struct-out implication-rule)
@@ -327,24 +370,31 @@
 
 ;; Test distributivity: a ⊔ (b ⊓ c) = (a ⊔ b) ⊓ (a ⊔ c)
 ;; Requires meet-fn. Returns axiom-untested if no meet available.
-(define (test-distributive domain samples meet-fn)
-  (if (not meet-fn)
-      axiom-untested
-      (let ([join ((sre-domain-merge-registry domain) 'equality)])
-        (for/fold ([status (axiom-confirmed 0)])
-                  ([a (in-list samples)]
-                   #:break (axiom-refuted? status))
-          (for/fold ([st status])
-                    ([b (in-list samples)]
-                     #:break (axiom-refuted? st))
-            (for/fold ([st2 st])
-                      ([c (in-list samples)]
-                       #:break (axiom-refuted? st2))
-              (define lhs (join a (meet-fn b c)))
-              (define rhs (meet-fn (join a b) (join a c)))
-              (if (equal? lhs rhs)
-                  (axiom-confirmed (+ (axiom-confirmed-count st2) 1))
-                  (axiom-refuted (list a b c)))))))))
+;;
+;; SRE Track 2I Phase 4 (Scaffolding-Hides-Truth corrective, 2026-04-30):
+;; join-fn is now an explicit parameter (was hardcoded `'equality` lookup
+;; from sre-domain-merge-registry, which mixed lattices when meet-fn came
+;; from a non-equality relation). Callers must derive both meet-fn and
+;; join-fn from the SAME relation to avoid lattice-mixing.
+(define (test-distributive domain samples meet-fn join-fn)
+  (cond
+    [(not meet-fn) axiom-untested]
+    [(not join-fn) axiom-untested]
+    [else
+     (for/fold ([status (axiom-confirmed 0)])
+               ([a (in-list samples)]
+                #:break (axiom-refuted? status))
+       (for/fold ([st status])
+                 ([b (in-list samples)]
+                  #:break (axiom-refuted? st))
+         (for/fold ([st2 st])
+                   ([c (in-list samples)]
+                    #:break (axiom-refuted? st2))
+           (define lhs (join-fn a (meet-fn b c)))
+           (define rhs (meet-fn (join-fn a b) (join-fn a c)))
+           (if (equal? lhs rhs)
+               (axiom-confirmed (+ (axiom-confirmed-count st2) 1))
+               (axiom-refuted (list a b c))))))]))
 
 ;; ========================================================================
 ;; SRE Track 2I: Semidistributivity (Jónsson-Kiefer 1962)
@@ -391,11 +441,15 @@
   #:transparent)
 
 ;; Detailed SD∨: a ⊔ b = a ⊔ c ⇒ a ⊔ b = a ⊔ (b ⊓ c)
-(define (test-sd-vee/detailed domain samples meet-fn)
+;;
+;; SRE Track 2I Phase 4 (Scaffolding-Hides-Truth corrective, 2026-04-30):
+;; join-fn is now an explicit parameter; callers must pair it with a meet-fn
+;; from the SAME relation to avoid lattice-mixing (see test-distributive).
+(define (test-sd-vee/detailed domain samples meet-fn join-fn)
   (cond
-    [(not meet-fn) (sd-evidence 'untested 0 0 0 #f)]
+    [(or (not meet-fn) (not join-fn))
+     (sd-evidence 'untested 0 0 0 #f)]
     [else
-     (define join ((sre-domain-merge-registry domain) 'equality))
      (let/ec return
        (define-values (total fired held)
          (for*/fold ([t 0] [f 0] [h 0])
@@ -403,15 +457,15 @@
                      [b (in-list samples)]
                      [c (in-list samples)])
            (define t* (+ t 1))
-           (define ab (join a b))
-           (define ac (join a c))
+           (define ab (join-fn a b))
+           (define ac (join-fn a c))
            (cond
              [(not (equal? ab ac))
               ;; Hypothesis fails — vacuously satisfied
               (values t* f h)]
              [else
               ;; Hypothesis holds — check conclusion
-              (define conclusion (join a (meet-fn b c)))
+              (define conclusion (join-fn a (meet-fn b c)))
               (cond
                 [(equal? ab conclusion)
                  (values t* (+ f 1) (+ h 1))]
@@ -421,11 +475,11 @@
        (sd-evidence 'confirmed total fired held #f))]))
 
 ;; Detailed SD∧ (dual): a ⊓ b = a ⊓ c ⇒ a ⊓ b = a ⊓ (b ⊔ c)
-(define (test-sd-wedge/detailed domain samples meet-fn)
+(define (test-sd-wedge/detailed domain samples meet-fn join-fn)
   (cond
-    [(not meet-fn) (sd-evidence 'untested 0 0 0 #f)]
+    [(or (not meet-fn) (not join-fn))
+     (sd-evidence 'untested 0 0 0 #f)]
     [else
-     (define join ((sre-domain-merge-registry domain) 'equality))
      (let/ec return
        (define-values (total fired held)
          (for*/fold ([t 0] [f 0] [h 0])
@@ -439,7 +493,7 @@
              [(not (equal? ab ac))
               (values t* f h)]
              [else
-              (define conclusion (meet-fn a (join b c)))
+              (define conclusion (meet-fn a (join-fn b c)))
               (cond
                 [(equal? ab conclusion)
                  (values t* (+ f 1) (+ h 1))]
@@ -454,20 +508,1195 @@
 ;; ------------------------------------------------------------------------
 
 ;; Test SD∨: a ⊔ b = a ⊔ c ⇒ a ⊔ b = a ⊔ (b ⊓ c)
-(define (test-sd-vee domain samples meet-fn)
-  (define ev (test-sd-vee/detailed domain samples meet-fn))
+;; Phase 4: thread join-fn through to /detailed variant.
+(define (test-sd-vee domain samples meet-fn join-fn)
+  (define ev (test-sd-vee/detailed domain samples meet-fn join-fn))
   (case (sd-evidence-status ev)
     [(confirmed) (axiom-confirmed (sd-evidence-total-checked ev))]
     [(refuted)   (axiom-refuted (sd-evidence-witness ev))]
     [(untested)  axiom-untested]))
 
 ;; Test SD∧ (dual of SD∨): a ⊓ b = a ⊓ c ⇒ a ⊓ b = a ⊓ (b ⊔ c)
-(define (test-sd-wedge domain samples meet-fn)
-  (define ev (test-sd-wedge/detailed domain samples meet-fn))
+(define (test-sd-wedge domain samples meet-fn join-fn)
+  (define ev (test-sd-wedge/detailed domain samples meet-fn join-fn))
   (case (sd-evidence-status ev)
     [(confirmed) (axiom-confirmed (sd-evidence-total-checked ev))]
     [(refuted)   (axiom-refuted (sd-evidence-witness ev))]
     [(untested)  axiom-untested]))
+
+;; ========================================================================
+;; SRE Track 2I Phase 5: Pseudo-complement family checks
+;; ========================================================================
+;;
+;; Adds empirical checks for pseudo-complement variants relevant to
+;; Heyting / Stone algebra structure on our lattices. Per Phase 5
+;; mini-design (2026-04-30):
+;;
+;;   - test-pseudo-complement-rel : relative pseudo-complement (Heyting →);
+;;     a → b = ⋁{x : x ∧ a ≤ b}. Combined with distributivity ⇒ Heyting.
+;;   - test-pseudo-complement-abs : absolute pseudo-complement (= a → ⊥);
+;;     ¬a = ⋁{x : x ∧ a = ⊥}. The meet-zero sense.
+;;
+;; Calling discipline (Phase 4 Scaffolding-Hides-Truth #3): explicit
+;; meet-fn AND join-fn from the SAME relation. Caller derives both via
+;; sre-domain-meet + sre-domain-merge-registry.
+;;
+;; Q1 disambiguation (Phase 5 mini-design 2026-04-30): the existing
+;; 'has-pseudo-complement registry symbol is RENAMED to
+;; 'has-pseudo-complement-rel (Track 2H meant the relative form when
+;; combining with distributive → Heyting). 'has-pseudo-complement-abs
+;; is added as a sibling.
+
+;; Lattice partial-order helper: x ≤ y iff x ∧ y = x.
+(define (lattice-leq? x y meet-fn)
+  (equal? (meet-fn x y) x))
+
+;; ------------------------------------------------------------------------
+;; pc-rel-evidence: detailed evidence for relative pseudo-complement check
+;; (parallels sd-evidence; non-vacuity is informationally rich here)
+;; ------------------------------------------------------------------------
+;;
+;;   status            — 'confirmed | 'refuted | 'untested
+;;   total-checked     — total (a, b) pairs iterated
+;;   hypothesis-fired  — pairs where {x : x ∧ a ≤ b} non-empty (non-vacuous)
+;;   conclusion-held   — pairs where the candidate join satisfies the axiom
+;;                       (i.e., relative pseudo-complement EXISTS for (a, b)
+;;                       on this sample set)
+;;   witness           — (list a b) on refute; #f on confirmed/untested
+(struct pc-rel-evidence
+  (status
+   total-checked
+   hypothesis-fired
+   conclusion-held
+   witness)
+  #:transparent)
+
+;; Test relative pseudo-complement: a → b exists for all (a, b)?
+;;
+;; Implementation:
+;;   1. For each (a, b), collect samples {x : x ∧ a ≤ b}.
+;;   2. If empty (vacuous), continue with non-fired count.
+;;   3. Else, candidate := join of all such x.
+;;   4. Verify: candidate ∧ a ≤ b. If yes, candidate IS the supremum
+;;      (and is in the set ⇒ is the maximum ⇒ relative pseudo-complement
+;;      exists empirically). If no, the supremum of the set isn't in the
+;;      set ⇒ no maximum ⇒ relative pseudo-complement does not exist on
+;;      this sample.
+;;
+;; Sample-set sensitivity: ground sublattice (6 atoms) is exhaustive for
+;; atomic types; wider samples may falsely refute when true PC exists
+;; outside sample. Flag in interpretation.
+(define (test-pseudo-complement-rel/detailed domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn))
+     (pc-rel-evidence 'untested 0 0 0 #f)]
+    [else
+     (let/ec return
+       (define-values (total fired held)
+         (for*/fold ([t 0] [f 0] [h 0])
+                    ([a (in-list samples)]
+                     [b (in-list samples)])
+           (define t* (+ t 1))
+           ;; Step 1: collect candidates {x : x ∧ a ≤ b}
+           (define candidates
+             (for/list ([x (in-list samples)]
+                        #:when (lattice-leq? (meet-fn x a) b meet-fn))
+               x))
+           (cond
+             [(null? candidates)
+              ;; Vacuous: no x satisfies x ∧ a ≤ b. Hypothesis didn't fire.
+              (values t* f h)]
+             [else
+              ;; Step 2: candidate := join of all such x
+              (define candidate
+                (foldl join-fn (first candidates) (rest candidates)))
+              ;; Step 3: verify candidate ∧ a ≤ b (axiom)
+              (cond
+                [(lattice-leq? (meet-fn candidate a) b meet-fn)
+                 (values t* (+ f 1) (+ h 1))]
+                [else
+                 (return (pc-rel-evidence 'refuted t* (+ f 1) h (list a b)))])])))
+       (pc-rel-evidence 'confirmed total fired held #f))]))
+
+;; Backward-compat wrapper: simple axiom shape for registry consumption.
+(define (test-pseudo-complement-rel domain samples meet-fn join-fn)
+  (define ev (test-pseudo-complement-rel/detailed domain samples meet-fn join-fn))
+  (case (pc-rel-evidence-status ev)
+    [(confirmed) (axiom-confirmed (pc-rel-evidence-total-checked ev))]
+    [(refuted)   (axiom-refuted (pc-rel-evidence-witness ev))]
+    [(untested)  axiom-untested]))
+
+;; ========================================================================
+;; SRE Track 2I Phase 6: Free-lattice membership + modularity checks
+;; ========================================================================
+;;
+;; Three+ algebraic-property checks anchored on Nation's central work:
+;;
+;;   - test-modular         : a ≤ c ⇒ a ∨ (b ∧ c) = (a ∨ b) ∧ c
+;;     Modular law (Dedekind 1900). Level between SD and distributive in
+;;     the PTF hierarchy (§3.3). Forbidden sublattice: pentagon N₅.
+;;
+;;   - test-whitmans-condition (W) : a ∧ b ≤ c ∨ d ⇒ one of {a ≤ c∨d,
+;;     b ≤ c∨d, a∧b ≤ c, a∧b ≤ d}. Whitman 1941. FL membership criterion
+;;     when combined with SD (Theorem 5.55/6.9, Nation 1982). High
+;;     theoretic alignment with Nation's central work in *Free Lattices*.
+;;
+;;   - test-breadth-bound k : maximum antichain width ≤ k. Theorem 1.21
+;;     corollary (Jónsson-Kiefer-Nation 1962): SD lattices have breadth ≤ 4
+;;     on finite sublattices. Parameterized via #:max-width (default 4).
+;;     FIRST Hasse-structural property check in Track 2I — exploits
+;;     antichain enumeration via incomparability adjacency.
+;;
+;;   - test-sectionally-complemented : every c ∈ [⊥, b] has d ∈ [⊥, b]
+;;     with c ∧ d = ⊥, c ∨ d = b. Grätzer's *General Lattice Theory*
+;;     definition. Distinct from (and weaker than) Phase 5b's
+;;     test-relatively-complemented (which uses interval bottom a, not ⊥).
+;;     Forward: rel-complemented ⇒ sect-complemented. Reverse fails.
+
+;; ------------------------------------------------------------------------
+;; Phase 6: modular-evidence (parallel to sd-evidence; non-vacuity rich)
+;; ------------------------------------------------------------------------
+;;
+;; status            — 'confirmed | 'refuted | 'untested
+;; total-checked     — total (a, b, c) triples iterated
+;; hypothesis-fired  — triples where a ≤ c (non-vacuous)
+;; conclusion-held   — triples where hypothesis fired AND conclusion held
+;; witness           — (list a b c) on refute; #f on confirmed/untested
+(struct modular-evidence
+  (status total-checked hypothesis-fired conclusion-held witness)
+  #:transparent)
+
+;; Test modular law: a ≤ c ⇒ a ∨ (b ∧ c) = (a ∨ b) ∧ c
+;; Hypothesis a ≤ c provides non-vacuity gating.
+(define (test-modular/detailed domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn))
+     (modular-evidence 'untested 0 0 0 #f)]
+    [else
+     (let/ec return
+       (define-values (total fired held)
+         (for*/fold ([t 0] [f 0] [h 0])
+                    ([a (in-list samples)]
+                     [b (in-list samples)]
+                     [c (in-list samples)])
+           (define t* (+ t 1))
+           (cond
+             [(not (lattice-leq? a c meet-fn))
+              ;; Hypothesis fails — vacuously satisfied
+              (values t* f h)]
+             [else
+              (define lhs (join-fn a (meet-fn b c)))
+              (define rhs (meet-fn (join-fn a b) (join-fn a c)))
+              (cond
+                [(equal? lhs rhs)
+                 (values t* (+ f 1) (+ h 1))]
+                [else
+                 (return (modular-evidence 'refuted t* (+ f 1) h (list a b c)))])])))
+       (modular-evidence 'confirmed total fired held #f))]))
+
+(define (test-modular domain samples meet-fn join-fn)
+  (define ev (test-modular/detailed domain samples meet-fn join-fn))
+  (case (modular-evidence-status ev)
+    [(confirmed) (axiom-confirmed (modular-evidence-total-checked ev))]
+    [(refuted)   (axiom-refuted (modular-evidence-witness ev))]
+    [(untested)  axiom-untested]))
+
+;; ------------------------------------------------------------------------
+;; Phase 6: whitman-evidence + Whitman's condition (W)
+;; ------------------------------------------------------------------------
+;;
+;; (W): a ∧ b ≤ c ∨ d ⇒ one of {a ≤ c∨d, b ≤ c∨d, a∧b ≤ c, a∧b ≤ d}
+;; Whitman 1941. FL membership criterion (with SD: Theorem 5.55, Nation 1982).
+;;
+;; O(N⁴) sweep — heavy at wider sample but tractable (depth-1 N=58 → 11.3M).
+;; Hypothesis non-vacuity matters; /detailed surfaces it.
+(struct whitman-evidence
+  (status total-checked hypothesis-fired conclusion-held witness)
+  #:transparent)
+
+(define (test-whitmans-condition/detailed domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn))
+     (whitman-evidence 'untested 0 0 0 #f)]
+    [else
+     (let/ec return
+       (define-values (total fired held)
+         (for*/fold ([t 0] [f 0] [h 0])
+                    ([a (in-list samples)]
+                     [b (in-list samples)]
+                     [c (in-list samples)]
+                     [d (in-list samples)])
+           (define t* (+ t 1))
+           (define ab (meet-fn a b))
+           (define cd (join-fn c d))
+           (cond
+             [(not (lattice-leq? ab cd meet-fn))
+              ;; Hypothesis a∧b ≤ c∨d fails — vacuously satisfied
+              (values t* f h)]
+             [else
+              ;; Hypothesis holds — check disjunctive conclusion
+              (define conc-1 (lattice-leq? a cd meet-fn))
+              (define conc-2 (lattice-leq? b cd meet-fn))
+              (define conc-3 (lattice-leq? ab c meet-fn))
+              (define conc-4 (lattice-leq? ab d meet-fn))
+              (cond
+                [(or conc-1 conc-2 conc-3 conc-4)
+                 (values t* (+ f 1) (+ h 1))]
+                [else
+                 (return (whitman-evidence 'refuted t* (+ f 1) h (list a b c d)))])])))
+       (whitman-evidence 'confirmed total fired held #f))]))
+
+(define (test-whitmans-condition domain samples meet-fn join-fn)
+  (define ev (test-whitmans-condition/detailed domain samples meet-fn join-fn))
+  (case (whitman-evidence-status ev)
+    [(confirmed) (axiom-confirmed (whitman-evidence-total-checked ev))]
+    [(refuted)   (axiom-refuted (whitman-evidence-witness ev))]
+    [(untested)  axiom-untested]))
+
+;; ------------------------------------------------------------------------
+;; Phase 6: Breadth bound (Jónsson-Kiefer-Nation 1962, Theorem 1.21 corollary)
+;; ------------------------------------------------------------------------
+;;
+;; Breadth ≤ k iff no (k+1)-element antichain exists. SD lattices satisfy
+;; breadth ≤ 4 on finite sublattices. Implementation: search for any
+;; (k+1)-element antichain by enumerating size-(k+1) subsets and checking
+;; pairwise incomparability. If found → breadth > k → refuted with witness.
+;;
+;; FIRST Hasse-structural property check in Track 2I — uses incomparability
+;; adjacency directly (no Hasse edge between two elements ⟺ incomparable).
+;;
+;; Cost: O(N^(k+1)) for the search. At k=4, N=6: 7776 (cheap). N=58: 656M
+;; (heavy but feasible).
+(define (test-breadth-bound domain samples meet-fn #:max-width [k 4])
+  (cond
+    [(not meet-fn) axiom-untested]
+    [else
+     ;; Helper: are all elements in the list pairwise incomparable?
+     (define (antichain? elts)
+       (for*/and ([x (in-list elts)]
+                  [y (in-list elts)]
+                  #:when (not (eq? x y)))
+         (and (not (lattice-leq? x y meet-fn))
+              (not (lattice-leq? y x meet-fn)))))
+     ;; Search for any (k+1)-element antichain among samples
+     (define antichain-found
+       (let loop ([picks '()] [pool samples] [remaining (+ k 1)])
+         (cond
+           [(zero? remaining) (and (antichain? picks) picks)]
+           [(null? pool) #f]
+           [else
+            (or (loop (cons (car pool) picks) (cdr pool) (- remaining 1))
+                (loop picks (cdr pool) remaining))])))
+     (cond
+       [antichain-found
+        (axiom-refuted antichain-found)]  ;; breadth > k
+       [else
+        (axiom-confirmed (length samples))])]))  ;; breadth ≤ k
+
+;; ------------------------------------------------------------------------
+;; Phase 6: Sectionally complemented (Grätzer's General Lattice Theory)
+;; ------------------------------------------------------------------------
+;;
+;; A bounded lattice is sectionally complemented iff for every b and every
+;; c ∈ [⊥, b], ∃ d ∈ [⊥, b] with c ∧ d = ⊥ AND c ∨ d = b.
+;;
+;; DISTINCT FROM Phase 5b's test-relatively-complemented (which uses
+;; interval bottom a as meet target; sectional uses ⊥). Forward implication:
+;; relatively-complemented ⇒ sectionally-complemented.
+(define (test-sectionally-complemented domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn)) axiom-untested]
+    [else
+     (define bot (sre-domain-bot-value domain))
+     (let/ec return
+       (define count
+         (for/fold ([k 0])
+                   ([b (in-list samples)])
+           (for/fold ([k2 k])
+                     ([c (in-list samples)]
+                      #:when (lattice-leq? c b meet-fn))
+             ;; c ∈ [⊥, b]; search for d ∈ [⊥, b] with c ∧ d = ⊥, c ∨ d = b
+             (define d-found?
+               (for/or ([d (in-list samples)])
+                 (and (lattice-leq? d b meet-fn)
+                      (equal? (meet-fn c d) bot)
+                      (equal? (join-fn c d) b))))
+             (cond
+               [d-found? (+ k2 1)]
+               [else
+                (return (axiom-refuted (list b c)))]))))
+       (axiom-confirmed count))]))
+
+;; ========================================================================
+;; SRE Track 2I Phase 11: has-complement empirical check (Boolean placement)
+;; ========================================================================
+;;
+;; A bounded lattice has complements iff for every element `a`, there
+;; exists `x` with `a ∧ x = ⊥` AND `a ∨ x = ⊤`. Combined with distributive
+;; + has-pseudo-complement-rel (Heyting), has-complement gives Boolean.
+;;
+;; The existing implication rule `heyting + has-complement ⇒ boolean`
+;; (`standard-implication-rules`, ~line 1063) consumes this empirical value.
+;; Phase 11 fills the source side of that rule.
+;;
+;; Calling discipline (Phase 4): explicit meet-fn AND join-fn from same relation.
+;;
+;; /detailed variant rationale (Phase 11 mini-design 2026-05-08): non-vacuity
+;; ratio is informative. Distinguishes:
+;;   - strong-empirical-Boolean (high non-vacuity, confirms)
+;;   - weak-empirical-Boolean (low non-vacuity, confirms only on tested elements)
+;;   - concrete-refutation (refute witness names which atom has no complement)
+;; Same shape as Phase 4's SD-vee 3.5% vs SD-wedge 91.4% asymmetry: had we
+;; not tracked non-vacuity, the structural insight would have been invisible.
+
+;; complement-evidence: detailed evidence for has-complement check.
+;; Same 5-field shape as sd-evidence / pc-rel-evidence / modular-evidence /
+;; whitman-evidence (uniform extract-detailed-fields handling).
+;;
+;;   status            — 'confirmed | 'refuted | 'untested
+;;   total-checked     — total `a` iterated
+;;   hypothesis-fired  — `a` where bot AND top reachable (= check non-vacuous)
+;;   conclusion-held   — `a` with successful complement candidate found
+;;   witness           — refute-witness `a` (the element with no complement); #f on confirmed/untested
+(struct complement-evidence
+  (status
+   total-checked
+   hypothesis-fired
+   conclusion-held
+   witness)
+  #:transparent)
+
+(define (test-has-complement/detailed domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn))
+     (complement-evidence 'untested 0 0 0 #f)]
+    [else
+     (define bot (sre-domain-bot-value domain))
+     (define top (sre-domain-top-value domain))
+     ;; Sanity: domain bot/top must be present in lattice for axiom to be checkable.
+     ;; If either is #f (e.g., form-cell domain pre-Phase-8 fix), all checks vacuous.
+     (cond
+       [(or (not bot) (not top))
+        (complement-evidence 'untested (length samples) 0 0 #f)]
+       [else
+        (let/ec return
+          (define-values (total fired held)
+            (for/fold ([t 0] [f 0] [h 0])
+                      ([a (in-list samples)])
+              (define t* (+ t 1))
+              ;; Hypothesis non-vacuity: bot AND top must be reachable for `a`'s
+              ;; complement check. We check by sample membership (whether bot/top
+              ;; are in samples) AND that a meets bot to bot (sanity).
+              (cond
+                [(not (and (member bot samples) (member top samples)))
+                 ;; bot or top missing from sample → vacuous for this a
+                 (values t* f h)]
+                [else
+                 ;; Hypothesis fires; search for complement
+                 (define complement-found?
+                   (for/or ([x (in-list samples)])
+                     (and (equal? (meet-fn a x) bot)
+                          (equal? (join-fn a x) top))))
+                 (cond
+                   [complement-found?
+                    (values t* (+ f 1) (+ h 1))]
+                   [else
+                    (return (complement-evidence 'refuted t* (+ f 1) h a))])])))
+          (complement-evidence 'confirmed total fired held #f))])]))
+
+;; Backward-compat wrapper: simple axiom shape for registry consumption.
+;; Witness is wrapped in a list per convention (format-property-profile
+;; maps over axiom-refuted-witness expecting list shape; detailed evidence
+;; carries the bare atom for richness).
+(define (test-has-complement domain samples meet-fn join-fn)
+  (define ev (test-has-complement/detailed domain samples meet-fn join-fn))
+  (case (complement-evidence-status ev)
+    [(confirmed) (axiom-confirmed (complement-evidence-total-checked ev))]
+    [(refuted)   (axiom-refuted (list (complement-evidence-witness ev)))]
+    [(untested)  axiom-untested]))
+
+;; ========================================================================
+;; SRE Track 2I Phase 12: M3 / N5 sublattice detection (Birkhoff 9.2)
+;; ========================================================================
+;;
+;; Birkhoff's theorem (Theorem 9.2): a lattice is distributive iff it
+;; contains neither M3 nor N5 as a sublattice. Phase 12 is the empirical
+;; sublattice-detection counterpart — concrete witnesses (5-element
+;; sublattices) Nation immediately recognizes.
+;;
+;; M3 (the diamond): 5 elements {⊥', ⊤', m1, m2, m3} with m1, m2, m3
+;; pairwise-incomparable, m_i ∧ m_j = ⊥' for all i≠j, m_i ∨ m_j = ⊤'.
+;;
+;; N5 (the pentagon): 5 elements {⊥', ⊤', a, b, c} with b < a (covering
+;; pair), c incomparable with both, a ∨ c = b ∨ c = ⊤', a ∧ c = b ∧ c = ⊥'.
+;;
+;; Direct construction (NOT 5-tuple enumeration which is C(N,5) ≈ 4.5M
+;; subsets at N=58, prohibitive):
+;; - M3: enumerate antichain-of-3 triples; verify common pairwise
+;;   meet/join. O(N³) ≈ 30k iterations at N=58, ~20-30 sec per tuple.
+;; - N5: enumerate ordered comparable pairs (b<a); for each, iterate
+;;   incomparable c with common bounds. O(N³) similar.
+;;
+;; Both: closure verification post-construction (the 5-element witness
+;; must be CLOSED under meet/join with itself). Distinguishes
+;; "antichain-shape exists" from "embedded sublattice exists."
+
+(struct m3-evidence
+  (status            ;; 'confirmed | 'refuted | 'untested
+   total-checked     ;; total antichains-of-3 enumerated
+   hypothesis-fired  ;; antichains where common pairwise meet/join exist
+   conclusion-held   ;; antichains where the M3 axiom does NOT hold (confirms property)
+   witness)          ;; (list ⊥' ⊤' m1 m2 m3) on refute; #f otherwise
+  #:transparent)
+
+(struct n5-evidence
+  (status
+   total-checked     ;; total comparable pairs (b<a) enumerated
+   hypothesis-fired  ;; pairs where at least one incomparable c exists
+   conclusion-held   ;; pairs with no N5-completing c (confirms property)
+   witness)          ;; (list ⊥' ⊤' a b c) on refute; #f otherwise
+  #:transparent)
+
+;; Helper: x and y are incomparable iff neither ≤ the other.
+(define (lattice-incomparable? x y meet-fn)
+  (and (not (lattice-leq? x y meet-fn))
+       (not (lattice-leq? y x meet-fn))))
+
+;; Helper: verify a 5-element subset is closed under meet/join.
+;; Returns #t if closed, #f otherwise.
+(define (sublattice-closed? elems meet-fn join-fn)
+  (define elem-set (apply set elems))
+  (for/and ([x (in-list elems)])
+    (for/and ([y (in-list elems)])
+      (and (set-member? elem-set (meet-fn x y))
+           (set-member? elem-set (join-fn x y))))))
+
+;; M3 detection via antichain-of-3 enumeration.
+;;
+;; For each (a, b, c) where the three are pairwise-incomparable:
+;;   1. Compute pairwise meets ab, ac, bc; verify all equal (= ⊥')
+;;   2. Compute pairwise joins ab', ac', bc'; verify all equal (= ⊤')
+;;   3. Verify {⊥', ⊤', a, b, c} is closed under meet/join
+;;   4. Verify ⊥' ≠ a, b, c and ⊤' ≠ a, b, c (genuine 5-element sublattice)
+;;   5. Refute with witness (⊥', ⊤', a, b, c) on first match
+(define (test-no-m3-sublattice/detailed domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn))
+     (m3-evidence 'untested 0 0 0 #f)]
+    [else
+     (let/ec return
+       (define-values (total fired held)
+         (for*/fold ([t 0] [f 0] [h 0])
+                    ([a (in-list samples)]
+                     [b (in-list samples)]
+                     [c (in-list samples)]
+                     #:when (and (not (equal? a b))
+                                 (not (equal? a c))
+                                 (not (equal? b c))
+                                 ;; Canonicalize: a < b < c by hash-code
+                                 ;; to avoid permutation duplicates
+                                 (< (equal-hash-code a) (equal-hash-code b))
+                                 (< (equal-hash-code b) (equal-hash-code c))
+                                 (lattice-incomparable? a b meet-fn)
+                                 (lattice-incomparable? a c meet-fn)
+                                 (lattice-incomparable? b c meet-fn)))
+           (define t* (+ t 1))
+           ;; Hypothesis: pairwise meets/joins all equal
+           (define m-ab (meet-fn a b))
+           (define m-ac (meet-fn a c))
+           (define m-bc (meet-fn b c))
+           (define j-ab (join-fn a b))
+           (define j-ac (join-fn a c))
+           (define j-bc (join-fn b c))
+           (cond
+             [(and (equal? m-ab m-ac) (equal? m-ab m-bc)
+                   (equal? j-ab j-ac) (equal? j-ab j-bc))
+              ;; Hypothesis fires: M3 SHAPE candidate
+              (define bot-prime m-ab)
+              (define top-prime j-ab)
+              (cond
+                ;; Sanity: ⊥' and ⊤' distinct from a, b, c
+                [(or (equal? bot-prime a) (equal? bot-prime b) (equal? bot-prime c)
+                     (equal? top-prime a) (equal? top-prime b) (equal? top-prime c)
+                     (equal? bot-prime top-prime))
+                 (values t* (+ f 1) (+ h 1))]
+                ;; Closure check: {⊥', ⊤', a, b, c} closed under meet/join
+                [(sublattice-closed? (list bot-prime top-prime a b c) meet-fn join-fn)
+                 ;; Genuine M3 sublattice — refute
+                 (return (m3-evidence 'refuted t* (+ f 1) h
+                                       (list bot-prime top-prime a b c)))]
+                [else
+                 ;; Antichain shape but NOT closed; property holds for this triple
+                 (values t* (+ f 1) (+ h 1))])]
+             [else
+              ;; Hypothesis didn't fire (pairwise meets/joins not common)
+              (values t* f h)])))
+       (m3-evidence 'confirmed total fired held #f))]))
+
+(define (test-no-m3-sublattice domain samples meet-fn join-fn)
+  (define ev (test-no-m3-sublattice/detailed domain samples meet-fn join-fn))
+  (case (m3-evidence-status ev)
+    [(confirmed) (axiom-confirmed (m3-evidence-total-checked ev))]
+    [(refuted)   (axiom-refuted (m3-evidence-witness ev))]
+    [(untested)  axiom-untested]))
+
+;; N5 detection via ordered comparable-pair enumeration.
+;;
+;; For each ordered pair (b, a) with b < a (strictly), iterate c incomparable
+;; with both. Verify a ∨ c = b ∨ c (= ⊤') AND a ∧ c = b ∧ c (= ⊥').
+;; If yes AND closure + distinctness hold, refute.
+(define (test-no-n5-sublattice/detailed domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn))
+     (n5-evidence 'untested 0 0 0 #f)]
+    [else
+     (let/ec return
+       (define-values (total fired held)
+         (for*/fold ([t 0] [f 0] [h 0])
+                    ([a (in-list samples)]
+                     [b (in-list samples)]
+                     #:when (and (not (equal? a b))
+                                 (lattice-leq? b a meet-fn)
+                                 (not (lattice-leq? a b meet-fn))))
+           (define t* (+ t 1))
+           ;; Iterate c incomparable with both a and b
+           (define c-witness
+             (for/or ([c (in-list samples)]
+                      #:when (and (not (equal? c a))
+                                  (not (equal? c b))
+                                  (lattice-incomparable? c a meet-fn)
+                                  (lattice-incomparable? c b meet-fn)))
+               (define j-ac (join-fn a c))
+               (define j-bc (join-fn b c))
+               (define m-ac (meet-fn a c))
+               (define m-bc (meet-fn b c))
+               (cond
+                 [(and (equal? j-ac j-bc) (equal? m-ac m-bc))
+                  ;; N5 shape candidate: {m-ac, j-ac, a, b, c}
+                  (define bot-prime m-ac)
+                  (define top-prime j-ac)
+                  (cond
+                    [(or (equal? bot-prime a) (equal? bot-prime b) (equal? bot-prime c)
+                         (equal? top-prime a) (equal? top-prime b) (equal? top-prime c)
+                         (equal? bot-prime top-prime))
+                     #f]
+                    [(sublattice-closed? (list bot-prime top-prime a b c) meet-fn join-fn)
+                     (list bot-prime top-prime a b c)]  ;; witness
+                    [else #f])]
+                 [else #f])))
+           (cond
+             [c-witness
+              (return (n5-evidence 'refuted t* (+ f 1) h c-witness))]
+             [else
+              ;; b<a pair found; whether incomparable c existed is encoded
+              ;; in whether we entered for/or; conservatively count as
+              ;; hypothesis fired if any incomparable c existed at all.
+              ;; (Note: simplified — for/or returning #f doesn't distinguish
+              ;; "no incomparable c" from "all incomparable c's failed axiom".
+              ;; We count this pair as hypothesis-fired when at least one
+              ;; incomparable c exists; check via separate scan.)
+              (define has-incomparable-c?
+                (for/or ([c (in-list samples)])
+                  (and (not (equal? c a))
+                       (not (equal? c b))
+                       (lattice-incomparable? c a meet-fn)
+                       (lattice-incomparable? c b meet-fn))))
+              (if has-incomparable-c?
+                  (values t* (+ f 1) (+ h 1))
+                  (values t* f h))])))
+       (n5-evidence 'confirmed total fired held #f))]))
+
+(define (test-no-n5-sublattice domain samples meet-fn join-fn)
+  (define ev (test-no-n5-sublattice/detailed domain samples meet-fn join-fn))
+  (case (n5-evidence-status ev)
+    [(confirmed) (axiom-confirmed (n5-evidence-total-checked ev))]
+    [(refuted)   (axiom-refuted (n5-evidence-witness ev))]
+    [(untested)  axiom-untested]))
+
+;; ========================================================================
+;; SRE Track 2I Phase 13: Convex geometry / anti-exchange characterization
+;; ========================================================================
+;;
+;; Adaricheva-Gorbunov-Tumanov 2003 (recommended in Nation's lattice notes
+;; ch11): a finite lattice L is join-semidistributive (SD∨ + SD∧) if and
+;; only if its dual yields a convex geometry — i.e., the canonical closure
+;; operator on join-irreducibles satisfies the anti-exchange property:
+;;
+;;   For all A ⊆ J(L), for all distinct x, y ∈ J(L) with x, y ∉ cl(A):
+;;       y ∈ cl(A ∪ {x})  ⇒  x ∉ cl(A ∪ {y})
+;;
+;; where cl(A) = {x ∈ J(L) : x ≤ ⋁A} is downward-closure-on-J.
+;;
+;; Per Phase 13 mini-design (2026-05-08): bounded-subset enumeration at
+;; k=2 default (sample-limitation honest scope). Forward implication
+;; rule sd-vee + sd-wedge ⇒ anti-exchange-on-J DELIBERATELY NOT encoded
+;; (matches Phase 12 Birkhoff-9.2-forward precedent — empirical
+;; comparison across all 10 tuples gives more information for Nation
+;; than implication-derived auto-confirmations would).
+
+;; Enumerate join-irreducibles of the sample.
+;; x is join-irreducible iff x ≠ bot AND no a, b ∈ samples exist with
+;; a < x AND b < x AND a ∨ b = x. We exclude bot by convention.
+(define (sample-join-irreducibles samples bot meet-fn join-fn)
+  (filter
+   (lambda (x)
+     (and (not (equal? x bot))
+          (not (for/or ([a (in-list samples)])
+                 (and (not (equal? a x))
+                      (lattice-leq? a x meet-fn)
+                      (for/or ([b (in-list samples)])
+                        (and (not (equal? b x))
+                             (lattice-leq? b x meet-fn)
+                             (equal? (join-fn a b) x))))))))
+   samples))
+
+;; Closure operator on J(L): cl(A) = {x ∈ J : x ≤ ⋁A}.
+;; A is a list of join-irreducibles. Empty A: ⋁∅ = ⊥, cl(∅) = ∅
+;; (since join-irreducibles exclude ⊥).
+(define (sample-closure-on-J A J meet-fn join-fn)
+  (cond
+    [(null? A) '()]
+    [else
+     (define joinA (foldl join-fn (first A) (rest A)))
+     (filter (lambda (x) (lattice-leq? x joinA meet-fn)) J)]))
+
+;; ------------------------------------------------------------------------
+;; anti-exchange-evidence: detailed evidence (5-field per Phase 11 pattern)
+;; ------------------------------------------------------------------------
+;;
+;;   status            — 'confirmed | 'refuted | 'untested
+;;   total-checked     — total (A, x, y) triples enumerated
+;;   hypothesis-fired  — triples where y ∈ cl(A ∪ {x}) (the "if" fires)
+;;   conclusion-held   — triples where additionally x ∉ cl(A ∪ {y})
+;;                       (i.e., axiom satisfied given hypothesis)
+;;   witness           — (list A x y) on refute; #f on confirmed/untested
+(struct anti-exchange-evidence
+  (status
+   total-checked
+   hypothesis-fired
+   conclusion-held
+   witness)
+  #:transparent)
+
+;; Enumerate subsets of J of bounded size (size 0 to k inclusive).
+;; Returns a list of subsets (each a list).
+(define (bounded-subsets J k)
+  (cond
+    [(or (zero? k) (null? J))
+     (list '())]
+    [else
+     (define rest-subsets (bounded-subsets (cdr J) k))
+     (define rest-bounded-1 (bounded-subsets (cdr J) (- k 1)))
+     (append rest-subsets
+             (map (lambda (s) (cons (car J) s)) rest-bounded-1))]))
+
+;; Test anti-exchange axiom on join-irreducibles closure (AGT 2003).
+;;
+;; For each subset A of J(L) with |A| ≤ max-subset-size, for each
+;; (x, y) pair from J(L) \ cl(A) with x ≠ y: verify the implication
+;;     y ∈ cl(A ∪ {x})  ⇒  x ∉ cl(A ∪ {y})
+;;
+;; Sample-set sensitivity: bounded subset size + sample-bounded J(L)
+;; means we get bounded confidence. Refutation on bounded-subset = real
+;; refutation. Confirmation on bounded-subset = bounded confirmation.
+(define (test-anti-exchange/detailed domain samples meet-fn join-fn
+                                     #:max-subset-size [max-subset-size 2])
+  (cond
+    [(or (not meet-fn) (not join-fn))
+     (anti-exchange-evidence 'untested 0 0 0 #f)]
+    [else
+     (define bot (sre-domain-bot-value domain))
+     (define J (sample-join-irreducibles samples bot meet-fn join-fn))
+     (let/ec return
+       (define-values (total fired held)
+         (for*/fold ([t 0] [f 0] [h 0])
+                    ([A (in-list (bounded-subsets J max-subset-size))])
+           (define clA (sample-closure-on-J A J meet-fn join-fn))
+           (define non-members
+             (filter (lambda (z) (not (member z clA))) J))
+           (for*/fold ([t* t] [f* f] [h* h])
+                      ([x (in-list non-members)]
+                       [y (in-list non-members)])
+             (cond
+               [(equal? x y) (values t* f* h*)]
+               [else
+                (define t** (+ t* 1))
+                (define cl-Ax (sample-closure-on-J (cons x A) J meet-fn join-fn))
+                (cond
+                  [(member y cl-Ax)
+                   ;; Hypothesis fired: y ∈ cl(A ∪ {x})
+                   (define cl-Ay (sample-closure-on-J (cons y A) J meet-fn join-fn))
+                   (cond
+                     [(member x cl-Ay)
+                      ;; Anti-exchange violated: x ALSO in cl(A ∪ {y})
+                      (return
+                       (anti-exchange-evidence 'refuted t** (+ f* 1) h*
+                                               (list A x y)))]
+                     [else
+                      ;; Conclusion held: x ∉ cl(A ∪ {y})
+                      (values t** (+ f* 1) (+ h* 1))])]
+                  [else
+                   ;; Hypothesis didn't fire (vacuous)
+                   (values t** f* h*)])]))))
+       (anti-exchange-evidence 'confirmed total fired held #f))]))
+
+(define (test-anti-exchange domain samples meet-fn join-fn
+                            #:max-subset-size [max-subset-size 2])
+  (define ev (test-anti-exchange/detailed domain samples meet-fn join-fn
+                                          #:max-subset-size max-subset-size))
+  (case (anti-exchange-evidence-status ev)
+    [(confirmed) (axiom-confirmed (anti-exchange-evidence-total-checked ev))]
+    [(refuted)   (axiom-refuted (anti-exchange-evidence-witness ev))]
+    [(untested)  axiom-untested]))
+
+;; ========================================================================
+;; SRE Track 2I Phase 14: Targeted congruence tests
+;; ========================================================================
+;;
+;; Per Phase 14 mini-design (2026-05-08): test SPECIFIC candidate
+;; congruences (not full Con(L) — explosive). For each candidate ~,
+;; verify the congruence axiom on samples:
+;;
+;;   (a ~ b) ∧ (c ~ d)  ⇒  (a ∧ c) ~ (b ∧ d)  ∧  (a ∨ c) ~ (b ∨ d)
+;;
+;; Candidates (Q1 decision):
+;;   - trivial         — identity (a~b iff a=b); vacuous-by-construction
+;;   - total           — single class (a~b for all); vacuous-by-construction
+;;   - mult-forgetful  — type-domain only; strips ALL mult from binders
+;;   - erasure-equiv   — type-domain only; strips m0 ONLY (QTT erasure)
+;;
+;; Phase 14 ground-only sweep (Q5 time-budget pragma): atomic samples
+;; have no Pi/Sigma/lam compounds, so mult-forgetful and erasure-equiv
+;; both DEGENERATE to identity at ground sublattice. Honest scope-bound:
+;; framework-wiring + sanity confirmation; substantive empirical content
+;; for type-domain candidates deferred to wider-sample post-meeting.
+;;
+;; No forward implication rule (matches Phase 12+13 sample-unsound
+;; discipline). Subdirectly-irreducible characterization classical
+;; Nation territory; explicitly NOT claimed.
+
+(struct congruence-evidence
+  (status total-checked hypothesis-fired conclusion-held witness)
+  #:transparent)
+
+;; Generic congruence axiom check, parameterized by an equivalence
+;; predicate `equiv-fn`. O(N⁴) on sample size.
+(define (test-congruence-axiom/detailed domain samples meet-fn join-fn equiv-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn))
+     (congruence-evidence 'untested 0 0 0 #f)]
+    [else
+     (let/ec return
+       (define-values (total fired held)
+         (for*/fold ([t 0] [f 0] [h 0])
+                    ([a (in-list samples)]
+                     [b (in-list samples)]
+                     [c (in-list samples)]
+                     [d (in-list samples)])
+           (define t* (+ t 1))
+           (cond
+             [(not (and (equiv-fn a b) (equiv-fn c d)))
+              ;; Hypothesis didn't fire (a~b or c~d false)
+              (values t* f h)]
+             [else
+              ;; Hypothesis fired: check conclusion
+              (define meet-lhs (meet-fn a c))
+              (define meet-rhs (meet-fn b d))
+              (define join-lhs (join-fn a c))
+              (define join-rhs (join-fn b d))
+              (cond
+                [(and (equiv-fn meet-lhs meet-rhs)
+                      (equiv-fn join-lhs join-rhs))
+                 (values t* (+ f 1) (+ h 1))]
+                [else
+                 (return
+                  (congruence-evidence 'refuted t* (+ f 1) h
+                                       (list a b c d)))])])))
+       (congruence-evidence 'confirmed total fired held #f))]))
+
+;; Trivial congruence: identity. Vacuously confirmed.
+(define (trivial-equiv? a b) (equal? a b))
+
+;; Total congruence: all-equivalent. Vacuously confirmed.
+(define (total-equiv? a b) #t)
+
+;; Mult-forgetful normalization: recursively strip multiplicity from
+;; Pi and lam binders by replacing with sentinel 'mforget. Sigma has
+;; no mult field. Type-domain only — for non-type values, returns
+;; the input unchanged (acts as identity → equiv-fn degenerates to
+;; trivial for non-type domains; expected per applicability gating).
+(define (forget-mult-norm v)
+  (cond
+    [(expr-Pi? v)
+     (expr-Pi 'mforget
+              (forget-mult-norm (expr-Pi-domain v))
+              (forget-mult-norm (expr-Pi-codomain v)))]
+    [(expr-lam? v)
+     (expr-lam 'mforget
+               (forget-mult-norm (expr-lam-type v))
+               (forget-mult-norm (expr-lam-body v)))]
+    [(expr-Sigma? v)
+     (expr-Sigma (forget-mult-norm (expr-Sigma-fst-type v))
+                 (forget-mult-norm (expr-Sigma-snd-type v)))]
+    [(expr-union? v)
+     (expr-union (forget-mult-norm (expr-union-left v))
+                 (forget-mult-norm (expr-union-right v)))]
+    [else v]))
+
+(define (mult-forgetful-equiv? a b)
+  (equal? (forget-mult-norm a) (forget-mult-norm b)))
+
+;; Erasure-equiv normalization: recursively replace m0 with sentinel
+;; 'erased; preserve m1 and mw distinct. Models QTT type erasure.
+(define (m0-erasure-norm v)
+  (cond
+    [(expr-Pi? v)
+     (expr-Pi (if (eq? (expr-Pi-mult v) 'm0) 'erased (expr-Pi-mult v))
+              (m0-erasure-norm (expr-Pi-domain v))
+              (m0-erasure-norm (expr-Pi-codomain v)))]
+    [(expr-lam? v)
+     (expr-lam (if (eq? (expr-lam-mult v) 'm0) 'erased (expr-lam-mult v))
+               (m0-erasure-norm (expr-lam-type v))
+               (m0-erasure-norm (expr-lam-body v)))]
+    [(expr-Sigma? v)
+     (expr-Sigma (m0-erasure-norm (expr-Sigma-fst-type v))
+                 (m0-erasure-norm (expr-Sigma-snd-type v)))]
+    [(expr-union? v)
+     (expr-union (m0-erasure-norm (expr-union-left v))
+                 (m0-erasure-norm (expr-union-right v)))]
+    [else v]))
+
+(define (erasure-equiv? a b)
+  (equal? (m0-erasure-norm a) (m0-erasure-norm b)))
+
+;; Wrappers: each candidate gets its own /detailed + axiom-* shape.
+
+(define (test-trivial-congruence/detailed domain samples meet-fn join-fn)
+  (test-congruence-axiom/detailed domain samples meet-fn join-fn trivial-equiv?))
+
+(define (test-trivial-congruence domain samples meet-fn join-fn)
+  (define ev (test-trivial-congruence/detailed domain samples meet-fn join-fn))
+  (case (congruence-evidence-status ev)
+    [(confirmed) (axiom-confirmed (congruence-evidence-total-checked ev))]
+    [(refuted)   (axiom-refuted (congruence-evidence-witness ev))]
+    [(untested)  axiom-untested]))
+
+(define (test-total-congruence/detailed domain samples meet-fn join-fn)
+  (test-congruence-axiom/detailed domain samples meet-fn join-fn total-equiv?))
+
+(define (test-total-congruence domain samples meet-fn join-fn)
+  (define ev (test-total-congruence/detailed domain samples meet-fn join-fn))
+  (case (congruence-evidence-status ev)
+    [(confirmed) (axiom-confirmed (congruence-evidence-total-checked ev))]
+    [(refuted)   (axiom-refuted (congruence-evidence-witness ev))]
+    [(untested)  axiom-untested]))
+
+;; Mult-forgetful: type-domain-only (returns axiom-untested with reason
+;; 'congruence-not-applicable-to-domain on non-type domains).
+(define (test-mult-forgetful-congruence/detailed domain samples meet-fn join-fn)
+  (cond
+    [(not (eq? (sre-domain-name domain) 'type))
+     (congruence-evidence 'untested 0 0 0 #f)]
+    [else
+     (test-congruence-axiom/detailed domain samples meet-fn join-fn
+                                     mult-forgetful-equiv?)]))
+
+(define (test-mult-forgetful-congruence domain samples meet-fn join-fn)
+  (cond
+    [(not (eq? (sre-domain-name domain) 'type)) axiom-untested]
+    [else
+     (define ev (test-mult-forgetful-congruence/detailed
+                 domain samples meet-fn join-fn))
+     (case (congruence-evidence-status ev)
+       [(confirmed) (axiom-confirmed (congruence-evidence-total-checked ev))]
+       [(refuted)   (axiom-refuted (congruence-evidence-witness ev))]
+       [(untested)  axiom-untested])]))
+
+(define (test-erasure-congruence/detailed domain samples meet-fn join-fn)
+  (cond
+    [(not (eq? (sre-domain-name domain) 'type))
+     (congruence-evidence 'untested 0 0 0 #f)]
+    [else
+     (test-congruence-axiom/detailed domain samples meet-fn join-fn
+                                     erasure-equiv?)]))
+
+(define (test-erasure-congruence domain samples meet-fn join-fn)
+  (cond
+    [(not (eq? (sre-domain-name domain) 'type)) axiom-untested]
+    [else
+     (define ev (test-erasure-congruence/detailed
+                 domain samples meet-fn join-fn))
+     (case (congruence-evidence-status ev)
+       [(confirmed) (axiom-confirmed (congruence-evidence-total-checked ev))]
+       [(refuted)   (axiom-refuted (congruence-evidence-witness ev))]
+       [(untested)  axiom-untested])]))
+
+;; ========================================================================
+;; SRE Track 2I Phase 15: Day's doubling / inflation detection
+;; ========================================================================
+;;
+;; Per Adaricheva-Nation 2017 ("Inflation of finite lattices along
+;; all-or-nothing sets"). Generalizes Day's 1970 interval-doubling
+;; construction. An "all-or-nothing" pair (s₁, s₂) is a pair of
+;; incomparable elements such that every external element x is
+;; consistently positioned w.r.t. BOTH s₁ and s₂: either x ≤ s₁ AND
+;; x ≤ s₂, or x ≥ s₁ AND x ≥ s₂, or x is incomparable to both.
+;;
+;; If such a pair exists, the lattice ADMITS inflation along that pair
+;; (Adaricheva-Nation 2017). The check is sample-bounded: detection
+;; confirms admittance; absence on sample is refuted-on-sample (not
+;; theorem-strength refutation).
+;;
+;; Phase 12+13 discipline: NO forward implication rule (sample-unsound
+;; either direction). Phase 15 differs in confirmation/refutation
+;; semantics — existence-claim shape: ONE witness = confirmed; no
+;; witness across all pairs = refuted-on-sample.
+;;
+;; Witness format: (s₁ s₂ dependency-pattern) where dependency-pattern
+;; is a list of (external side) entries (truncated to first 5 for log
+;; readability). Side ∈ '(above below incomparable).
+
+(struct dd-evidence
+  (status
+   total-pairs            ; pairs (s₁, s₂) iterated
+   hypothesis-fired       ; pairs that were incomparable (non-vacuous)
+   conclusion-held        ; pairs that satisfied all-or-nothing
+   witness)               ; (s₁ s₂ dep-pattern) on confirmed; #f otherwise
+  #:transparent)
+
+;; Classify external element x's side w.r.t. pair (s1, s2).
+;; Returns 'above | 'below | 'incomparable | 'split (if x is on
+;; different sides of s1 vs s2 — violates all-or-nothing).
+(define (dd-classify-side x s1 s2 meet-fn)
+  (define x-leq-s1 (lattice-leq? x s1 meet-fn))
+  (define x-leq-s2 (lattice-leq? x s2 meet-fn))
+  (define s1-leq-x (lattice-leq? s1 x meet-fn))
+  (define s2-leq-x (lattice-leq? s2 x meet-fn))
+  (cond
+    ;; x ≤ both
+    [(and x-leq-s1 x-leq-s2) 'below]
+    ;; both ≤ x
+    [(and s1-leq-x s2-leq-x) 'above]
+    ;; x incomparable with both
+    [(and (not x-leq-s1) (not x-leq-s2)
+          (not s1-leq-x) (not s2-leq-x))
+     'incomparable]
+    ;; mixed: violates all-or-nothing
+    [else 'split]))
+
+;; Detailed Phase 15 check: empirical existence of all-or-nothing pair.
+;;
+;; Algorithm (Option B per Phase 15 mini-design):
+;;   For each pair (s1, s2) of distinct, incomparable samples:
+;;     Hypothesis-fired (incomparable pair, non-vacuous).
+;;     Check: ∀ external x ∈ samples \ {s1, s2}, classify-side ≠ 'split.
+;;     If all external x consistent: confirmed witness (return early).
+;;   If no pair satisfied: refuted-on-sample.
+(define (test-admits-day-doubling/detailed domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn))
+     (dd-evidence 'untested 0 0 0 #f)]
+    [else
+     (let/ec return
+       (define-values (total fired held)
+         (for*/fold ([t 0] [f 0] [h 0])
+                    ([s1 (in-list samples)]
+                     [s2 (in-list samples)]
+                     ;; Canonicalize: s1 < s2 by hash to avoid permutation duplicates
+                     #:when (and (not (equal? s1 s2))
+                                 (< (equal-hash-code s1) (equal-hash-code s2))))
+           (define t* (+ t 1))
+           (cond
+             [(not (lattice-incomparable? s1 s2 meet-fn))
+              ;; Hypothesis didn't fire (pair is comparable — vacuous)
+              (values t* f h)]
+             [else
+              ;; Hypothesis fires: pair is incomparable
+              ;; Check all-or-nothing: every external x classified non-'split
+              (define dep-pattern
+                (for/list ([x (in-list samples)]
+                           #:when (and (not (equal? x s1))
+                                       (not (equal? x s2))))
+                  (cons x (dd-classify-side x s1 s2 meet-fn))))
+              (define any-split?
+                (for/or ([entry (in-list dep-pattern)])
+                  (eq? (cdr entry) 'split)))
+              (cond
+                [any-split?
+                 ;; Pair fails all-or-nothing — keep searching
+                 (values t* (+ f 1) h)]
+                [else
+                 ;; Witness found: confirmed
+                 (define truncated-pattern
+                   (for/list ([entry (in-list dep-pattern)]
+                              [i (in-naturals)]
+                              #:when (< i 5))
+                     entry))
+                 (return (dd-evidence 'confirmed t* (+ f 1) (+ h 1)
+                                      (list s1 s2 truncated-pattern)))])])))
+       ;; Iterated all pairs without finding witness — refuted-on-sample.
+       ;; Note: this differs from existential refutation. We confirm if
+       ;; ANY pair satisfies; refute if NO pair satisfies. Sample-bounded.
+       (cond
+         [(zero? fired)
+          ;; No pair was even incomparable — vacuously refuted; report so.
+          (dd-evidence 'refuted total fired held 'no-incomparable-pairs)]
+         [else
+          (dd-evidence 'refuted total fired held
+                       'no-all-or-nothing-pair-on-sample)]))]))
+
+(define (test-admits-day-doubling domain samples meet-fn join-fn)
+  (define ev (test-admits-day-doubling/detailed domain samples meet-fn join-fn))
+  (case (dd-evidence-status ev)
+    [(confirmed) (axiom-confirmed (dd-evidence-total-pairs ev))]
+    [(refuted)
+     ;; Witness convention: confirmed → (list s1 s2 dep-pattern);
+     ;; refuted-on-sample → symbol marker. Wrap symbol in list to satisfy
+     ;; axiom-refuted-witness contract (format-property-profile maps over it).
+     (define w (dd-evidence-witness ev))
+     (axiom-refuted (if (list? w) w (list w)))]
+    [(untested)  axiom-untested]))
+
+;; Compute absolute pseudo-complement candidate ¬a on a sample set.
+;; Returns the candidate (the join of all x with x ∧ a = ⊥), or #f if
+;; no such x exists in samples. Used by test-stone-identity below.
+;; Sample-set sensitive — returns sample-witness PC, may differ from
+;; lattice-theoretic PC if true PC is outside sample.
+(define (compute-abs-pc-candidate a samples meet-fn join-fn bot)
+  (define candidates
+    (for/list ([x (in-list samples)]
+               #:when (equal? (meet-fn x a) bot))
+      x))
+  (cond
+    [(null? candidates) #f]
+    [else (foldl join-fn (first candidates) (rest candidates))]))
+
+;; Test Stone identity: ¬a ∨ ¬¬a = ⊤ for all a (where ¬ is absolute pc).
+;;
+;; Stone algebras = distributive pseudo-complemented + Stone identity.
+;; Connects to intermediate logic (Gödel-Dummett, between intuitionistic
+;; and classical). The identity says: for every element a, the lattice
+;; is "covered" by a's pseudo-complement and its double-complement —
+;; the closure-under-double-negation is the whole lattice.
+;;
+;; Conditional check: only meaningful if has-pseudo-complement-rel
+;; confirms. The check itself just runs; callers gate via property
+;; registry inspection. Untested only when meet-fn or join-fn is #f.
+;;
+;; Sample-set sensitivity: per-atom; if pc-abs(a) doesn't exist on
+;; sample for some a, that atom is skipped (not refuted). Refutation
+;; only on a witness where ¬a ∨ ¬¬a ≠ ⊤ explicitly.
+(define (test-stone-identity domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn)) axiom-untested]
+    [else
+     (define bot (sre-domain-bot-value domain))
+     (define top (sre-domain-top-value domain))
+     (let/ec return
+       (define checked
+         (for/fold ([k 0])
+                   ([a (in-list samples)])
+           (define neg-a (compute-abs-pc-candidate a samples meet-fn join-fn bot))
+           (cond
+             [(not neg-a) k]   ; pc-abs of a not in sample; skip
+             [else
+              (define neg-neg-a
+                (compute-abs-pc-candidate neg-a samples meet-fn join-fn bot))
+              (cond
+                [(not neg-neg-a) k]
+                [else
+                 (define stone-result (join-fn neg-a neg-neg-a))
+                 (cond
+                   [(equal? stone-result top) (+ k 1)]
+                   [else
+                    (return (axiom-refuted (list a neg-a neg-neg-a stone-result)))])])])))
+       (axiom-confirmed checked))]))
+
+;; Test relatively complemented: every interval [a, b] is complemented?
+;;
+;; A lattice L is relatively complemented if for every interval [a, b] in L
+;; and every c ∈ [a, b], there exists d ∈ [a, b] (the relative complement
+;; of c) such that c ∧ d = a and c ∨ d = b.
+;;
+;; This is **Nation's primary terminology** (Notes on Lattice Theory ch4
+;; partition lattice Eq X, ch10 Theorem 10.10 Dilworth 1950 PCF lattices,
+;; ch11 Theorem 11.3 geometric lattices). Distinct from Heyting's relative
+;; pseudo-complement (a → b operator). This is the INTERVAL-WISE version
+;; of complementation.
+;;
+;; Implementation:
+;;   For each (a, b) with a ≤ b in samples (the interval [a, b]):
+;;     For each c with a ≤ c ≤ b in samples:
+;;       Search samples for d satisfying:
+;;         a ≤ d ≤ b (d in interval)
+;;         c ∧ d = a (meet)
+;;         c ∨ d = b (join)
+;;       If no such d found in samples, refuted with witness (a, b, c).
+;;
+;; Cost: O(N^4) worst case (intervals × c × d-search). At N=6 (ground), 1296
+;; iterations — cheap. At N=58 (depth-1), 11.3M — heavy but tractable.
+;;
+;; Sample-set sensitivity: similar to pseudo-complement-rel — may falsely
+;; refute when true relative complement exists outside sample but candidate
+;; d isn't drawn. Ground sublattice (6 atoms) is exhaustive for atomic
+;; types; flag in interpretation for wider sweeps.
+(define (test-relatively-complemented domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn)) axiom-untested]
+    [else
+     (let/ec return
+       (define count
+         (for*/fold ([k 0])
+                    ([a (in-list samples)]
+                     [b (in-list samples)]
+                     #:when (lattice-leq? a b meet-fn))  ; only valid intervals
+           (for/fold ([k2 k])
+                     ([c (in-list samples)]
+                      #:when (and (lattice-leq? a c meet-fn)
+                                  (lattice-leq? c b meet-fn)))
+             (define d-found?
+               (for/or ([d (in-list samples)])
+                 (and (lattice-leq? a d meet-fn)
+                      (lattice-leq? d b meet-fn)
+                      (equal? (meet-fn c d) a)
+                      (equal? (join-fn c d) b))))
+             (cond
+               [d-found? (+ k2 1)]
+               [else
+                (return (axiom-refuted (list a b c)))]))))
+       (axiom-confirmed count))]))
+
+;; Test absolute pseudo-complement: ¬a exists for all a?
+;; ¬a = ⋁{x : x ∧ a = ⊥} = max element disjoint from a in meet.
+;;
+;; Implementation parallels test-pseudo-complement-rel but with the
+;; bottom element of the lattice as the "b" target (semantically
+;; equivalent to test-pseudo-complement-rel with b=⊥; we provide a
+;; direct check for clarity + cases where rel-form check isn't run).
+(define (test-pseudo-complement-abs domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn)) axiom-untested]
+    [else
+     (define bot (sre-domain-bot-value domain))
+     (let/ec return
+       (define count
+         (for/fold ([k 0])
+                   ([a (in-list samples)])
+           (define candidates
+             (for/list ([x (in-list samples)]
+                        #:when (equal? (meet-fn x a) bot))
+               x))
+           (cond
+             [(null? candidates) (+ k 1)] ;; vacuous (no disjoint x in sample)
+             [else
+              (define candidate
+                (foldl join-fn (first candidates) (rest candidates)))
+              (cond
+                [(equal? (meet-fn candidate a) bot)
+                 (+ k 1)]
+                [else
+                 (return (axiom-refuted (list a)))])])))
+       (axiom-confirmed count))]))
 
 ;; Infer properties for a domain from sample values.
 ;; SRE Track 2H: #:relation selects which sub-hash to work with.
@@ -498,23 +1727,128 @@
   (define props-2
     (update-property props-1 'idempotent-join
                      (test-idempotent-join domain samples)))
+  ;; Phase 4: look up join-fn per relation (mirrors meet-fn discipline);
+  ;; both must come from the same relation to avoid lattice-mixing.
+  (define merge-registry (sre-domain-merge-registry domain))
+  (define join-fn (and merge-registry (merge-registry relation-name)))
   (define props-3
-    (if meet-fn
+    (if (and meet-fn join-fn)
         (update-property props-2 'distributive
-                         (test-distributive domain samples meet-fn))
+                         (test-distributive domain samples meet-fn join-fn))
         props-2))
-  ;; Track 2I: SD∨ and SD∧ (require meet-fn; otherwise untested)
+  ;; Track 2I: SD∨ and SD∧ (require meet-fn AND join-fn; otherwise untested)
   (define props-4
-    (if meet-fn
+    (if (and meet-fn join-fn)
         (update-property props-3 'sd-vee
-                         (test-sd-vee domain samples meet-fn))
+                         (test-sd-vee domain samples meet-fn join-fn))
         props-3))
   (define props-5
-    (if meet-fn
+    (if (and meet-fn join-fn)
         (update-property props-4 'sd-wedge
-                         (test-sd-wedge domain samples meet-fn))
+                         (test-sd-wedge domain samples meet-fn join-fn))
         props-4))
-  props-5)
+  ;; Phase 5: pseudo-complement family (require meet-fn AND join-fn)
+  (define props-6
+    (if (and meet-fn join-fn)
+        (update-property props-5 'has-pseudo-complement-rel
+                         (test-pseudo-complement-rel domain samples meet-fn join-fn))
+        props-5))
+  (define props-7
+    (if (and meet-fn join-fn)
+        (update-property props-6 'has-pseudo-complement-abs
+                         (test-pseudo-complement-abs domain samples meet-fn join-fn))
+        props-6))
+  ;; Phase 5b: relatively-complemented (Nation's primary terminology)
+  (define props-8
+    (if (and meet-fn join-fn)
+        (update-property props-7 'relatively-complemented
+                         (test-relatively-complemented domain samples meet-fn join-fn))
+        props-7))
+  ;; Phase 5c: Stone identity (gated semantically on has-pseudo-complement-rel
+  ;; confirming — but we run unconditionally; the result is informative only
+  ;; if rel-pc also confirms. The implication rule below ensures stone-algebra
+  ;; only derives when both confirm.)
+  (define props-9
+    (if (and meet-fn join-fn)
+        (update-property props-8 'stone-identity
+                         (test-stone-identity domain samples meet-fn join-fn))
+        props-8))
+  ;; Phase 6: modular law (Dedekind 1900)
+  (define props-10
+    (if (and meet-fn join-fn)
+        (update-property props-9 'modular
+                         (test-modular domain samples meet-fn join-fn))
+        props-9))
+  ;; Phase 6: Whitman's condition (W) — FL membership criterion (Nation 1982)
+  (define props-11
+    (if (and meet-fn join-fn)
+        (update-property props-10 'whitmans-condition
+                         (test-whitmans-condition domain samples meet-fn join-fn))
+        props-10))
+  ;; Phase 6: breadth bound (Jónsson-Kiefer-Nation 1962, default k=4)
+  (define props-12
+    (if meet-fn
+        (update-property props-11 'breadth-bound
+                         (test-breadth-bound domain samples meet-fn))
+        props-11))
+  ;; Phase 6: sectionally complemented (Grätzer; weaker than relatively-complemented)
+  (define props-13
+    (if (and meet-fn join-fn)
+        (update-property props-12 'sectionally-complemented
+                         (test-sectionally-complemented domain samples meet-fn join-fn))
+        props-12))
+  ;; Phase 11: has-complement (Boolean placement; combines with heyting via
+  ;; the existing implication rule heyting + has-complement ⇒ boolean)
+  (define props-14
+    (if (and meet-fn join-fn)
+        (update-property props-13 'has-complement
+                         (test-has-complement domain samples meet-fn join-fn))
+        props-13))
+  ;; Phase 12: M3 / N5 sublattice detection (Birkhoff 9.2 forbidden-sublattice)
+  (define props-15
+    (if (and meet-fn join-fn)
+        (update-property props-14 'no-m3-sublattice
+                         (test-no-m3-sublattice domain samples meet-fn join-fn))
+        props-14))
+  (define props-16
+    (if (and meet-fn join-fn)
+        (update-property props-15 'no-n5-sublattice
+                         (test-no-n5-sublattice domain samples meet-fn join-fn))
+        props-15))
+  ;; Phase 13: anti-exchange-on-J (AGT 2003 — convex geometry duality)
+  (define props-17
+    (if (and meet-fn join-fn)
+        (update-property props-16 'anti-exchange-on-J
+                         (test-anti-exchange domain samples meet-fn join-fn))
+        props-16))
+  ;; Phase 14: targeted congruence tests
+  (define props-18
+    (if (and meet-fn join-fn)
+        (update-property props-17 'trivial-congruence-valid
+                         (test-trivial-congruence domain samples meet-fn join-fn))
+        props-17))
+  (define props-19
+    (if (and meet-fn join-fn)
+        (update-property props-18 'total-congruence-valid
+                         (test-total-congruence domain samples meet-fn join-fn))
+        props-18))
+  (define props-20
+    (if (and meet-fn join-fn)
+        (update-property props-19 'mult-forgetful-congruence-valid
+                         (test-mult-forgetful-congruence domain samples meet-fn join-fn))
+        props-19))
+  (define props-21
+    (if (and meet-fn join-fn)
+        (update-property props-20 'erasure-congruence-valid
+                         (test-erasure-congruence domain samples meet-fn join-fn))
+        props-20))
+  ;; Phase 15: Day's doubling / inflation detection (Adaricheva-Nation 2017)
+  (define props-22
+    (if (and meet-fn join-fn)
+        (update-property props-21 'admits-day-doubling
+                         (test-admits-day-doubling domain samples meet-fn join-fn))
+        props-21))
+  props-22)
 
 ;; ========================================================================
 ;; SRE Track 2G Phase 6: Implication Rules (Derive Composite Properties)
@@ -533,7 +1867,7 @@
 (define standard-implication-rules
   (list
    (implication-rule 'heyting
-                     '(distributive has-pseudo-complement)
+                     '(distributive has-pseudo-complement-rel)  ;; renamed Phase 5 (Q1 disambiguation)
                      'heyting)
    (implication-rule 'boolean
                      '(heyting has-complement)
@@ -546,7 +1880,31 @@
                      'sd-vee)
    (implication-rule 'distributive→sd-wedge
                      '(distributive)
-                     'sd-wedge)))
+                     'sd-wedge)
+   ;; SRE Track 2I Phase 5c: Stone algebra = distributive + has-pseudo-complement-rel + stone-identity
+   (implication-rule 'stone-algebra
+                     '(distributive has-pseudo-complement-rel stone-identity)
+                     'stone-algebra)
+   ;; SRE Track 2I Phase 6: codify hierarchy SD ⊃ modular ⊃ distributive
+   (implication-rule 'distributive→modular
+                     '(distributive)
+                     'modular)
+   ;; SRE Track 2I Phase 6: relative ⇒ sectional (principal ideals are intervals)
+   (implication-rule 'rel-comp→sect-comp
+                     '(relatively-complemented)
+                     'sectionally-complemented)
+   ;; SRE Track 2I Phase 12 NOTE (2026-05-08): the Birkhoff 9.2 forward
+   ;; implication `no-m3 + no-n5 ⇒ distributive` would seem natural, but
+   ;; is UNSOUND on sample-restricted checks. Birkhoff's theorem applies
+   ;; to the FULL lattice; a sample that fails to contain a closed M3/N5
+   ;; sublattice does NOT mean the lattice it's drawn from is distributive.
+   ;; Phase 12's empirical findings: type wider refutes distributive (per
+   ;; Phase 4 triple check) BUT confirms no-M3 + no-N5 (sample doesn't
+   ;; happen to contain closed forbidden sublattices). Both are honest
+   ;; sample-level data; one does NOT empirically derive the other on
+   ;; samples. Birkhoff's theorem is referenced in the design doc as
+   ;; structural connection; it does not fire as a derivation rule here.
+   ))
 
 ;; Derive composite properties from atomic ones.
 ;; Reads source properties, writes derived property using property-value-join.
@@ -572,9 +1930,15 @@
 
 ;; Full property resolution: declare → infer → derive implications.
 ;; Called at domain registration time. Returns final properties hash.
-(define (resolve-domain-properties domain samples #:meet-fn [meet-fn #f])
+;; Phase 4: thread #:relation through to infer-domain-properties so
+;; join-fn lookup uses the right per-relation merge.
+(define (resolve-domain-properties domain samples
+                                   #:meet-fn [meet-fn #f]
+                                   #:relation [relation-name 'equality])
   (define after-inference
-    (infer-domain-properties domain samples #:meet-fn meet-fn))
+    (infer-domain-properties domain samples
+                             #:meet-fn meet-fn
+                             #:relation relation-name))
   (derive-composite-properties after-inference))
 
 ;; ========================================================================
@@ -605,22 +1969,91 @@
 
 ;; Run full property resolution and report diagnostic.
 ;; Returns: (values final-properties report-string)
-(define (resolve-and-report-properties domain samples #:meet-fn [meet-fn #f])
+;; Phase 4: thread #:relation through; look up join-fn per relation for
+;; the test-{distributive,sd-vee,sd-wedge} dispatch (avoids lattice-mixing).
+(define (resolve-and-report-properties domain samples
+                                       #:meet-fn [meet-fn #f]
+                                       #:relation [relation-name 'equality])
   ;; Step 1: Infer (produces inference evidence)
   (define after-inference
-    (infer-domain-properties domain samples #:meet-fn meet-fn))
-  ;; Step 2: Build evidence map for reporting
+    (infer-domain-properties domain samples
+                             #:meet-fn meet-fn
+                             #:relation relation-name))
+  ;; Step 2: Build evidence map for reporting (Phase 4: per-relation join-fn)
+  (define merge-registry (sre-domain-merge-registry domain))
+  (define join-fn (and merge-registry (merge-registry relation-name)))
   (define evidence
     (for/hasheq ([prop (in-list '(commutative-join associative-join idempotent-join
-                                  distributive sd-vee sd-wedge))])
+                                  distributive sd-vee sd-wedge
+                                  has-pseudo-complement-rel has-pseudo-complement-abs
+                                  relatively-complemented stone-identity
+                                  ;; Phase 6 additions
+                                  modular whitmans-condition breadth-bound
+                                  sectionally-complemented
+                                  ;; Phase 11: Boolean placement
+                                  has-complement
+                                  ;; Phase 12: Birkhoff forbidden-sublattice
+                                  no-m3-sublattice no-n5-sublattice
+                                  ;; Phase 13: AGT 2003 anti-exchange
+                                  anti-exchange-on-J
+                                  ;; Phase 14: targeted congruences
+                                  trivial-congruence-valid
+                                  total-congruence-valid
+                                  mult-forgetful-congruence-valid
+                                  erasure-congruence-valid
+                                  ;; Phase 15: Day's doubling / inflation (Adaricheva-Nation 2017)
+                                  admits-day-doubling))])
       (define test-fn
         (case prop
           [(commutative-join) test-commutative-join]
           [(associative-join) test-associative-join]
           [(idempotent-join) test-idempotent-join]
-          [(distributive) (lambda (d s) (test-distributive d s meet-fn))]
-          [(sd-vee)       (lambda (d s) (test-sd-vee d s meet-fn))]
-          [(sd-wedge)     (lambda (d s) (test-sd-wedge d s meet-fn))]
+          [(distributive) (lambda (d s) (test-distributive d s meet-fn join-fn))]
+          [(sd-vee)       (lambda (d s) (test-sd-vee d s meet-fn join-fn))]
+          [(sd-wedge)     (lambda (d s) (test-sd-wedge d s meet-fn join-fn))]
+          ;; Phase 5: pseudo-complement family
+          [(has-pseudo-complement-rel)
+           (lambda (d s) (test-pseudo-complement-rel d s meet-fn join-fn))]
+          [(has-pseudo-complement-abs)
+           (lambda (d s) (test-pseudo-complement-abs d s meet-fn join-fn))]
+          ;; Phase 5b: relatively-complemented (Nation's term)
+          [(relatively-complemented)
+           (lambda (d s) (test-relatively-complemented d s meet-fn join-fn))]
+          ;; Phase 5c: Stone identity
+          [(stone-identity)
+           (lambda (d s) (test-stone-identity d s meet-fn join-fn))]
+          ;; Phase 6: free-lattice membership + modularity family
+          [(modular)
+           (lambda (d s) (test-modular d s meet-fn join-fn))]
+          [(whitmans-condition)
+           (lambda (d s) (test-whitmans-condition d s meet-fn join-fn))]
+          [(breadth-bound)
+           (lambda (d s) (test-breadth-bound d s meet-fn))]
+          [(sectionally-complemented)
+           (lambda (d s) (test-sectionally-complemented d s meet-fn join-fn))]
+          ;; Phase 11: has-complement (Boolean placement)
+          [(has-complement)
+           (lambda (d s) (test-has-complement d s meet-fn join-fn))]
+          ;; Phase 12: M3 / N5 sublattice detection
+          [(no-m3-sublattice)
+           (lambda (d s) (test-no-m3-sublattice d s meet-fn join-fn))]
+          [(no-n5-sublattice)
+           (lambda (d s) (test-no-n5-sublattice d s meet-fn join-fn))]
+          ;; Phase 13: AGT 2003 anti-exchange-on-J
+          [(anti-exchange-on-J)
+           (lambda (d s) (test-anti-exchange d s meet-fn join-fn))]
+          ;; Phase 14: targeted congruences
+          [(trivial-congruence-valid)
+           (lambda (d s) (test-trivial-congruence d s meet-fn join-fn))]
+          [(total-congruence-valid)
+           (lambda (d s) (test-total-congruence d s meet-fn join-fn))]
+          [(mult-forgetful-congruence-valid)
+           (lambda (d s) (test-mult-forgetful-congruence d s meet-fn join-fn))]
+          [(erasure-congruence-valid)
+           (lambda (d s) (test-erasure-congruence d s meet-fn join-fn))]
+          ;; Phase 15: Day's doubling / inflation
+          [(admits-day-doubling)
+           (lambda (d s) (test-admits-day-doubling d s meet-fn join-fn))]
           [else (lambda (d s) axiom-untested)]))
       (values prop (test-fn domain samples))))
   ;; Step 3: Derive composite properties

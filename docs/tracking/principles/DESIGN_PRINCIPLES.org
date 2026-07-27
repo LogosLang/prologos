@@ -727,3 +727,442 @@ a stateful "fire once" propagator --- but preserves full observability.
 | Instance registry | =hash-set!= on mutable parameter | Cell write to CHAMP-backed registry cell |
 | IO effects | Execute during AST walk | Collect ordering in session cells; execute at barrier |
 
+
+* Cell / Propagator / Scheduler Orthogonality
+
+The architecture has three distinct, orthogonal concerns:
+
+- *Cell*: state storage + read/write API; declares lattice + merge function +
+  (optionally) storage strategy
+- *Propagator*: computational rule; reads cells, writes cells; declares
+  dependencies + fire-pattern
+- *Scheduler*: runs propagators against cells; determines firing order,
+  parallelism, round structure
+
+Per the CALM theorem (Consistency As Logical Monotonicity), monotone
+computation on a fixed topology converges to the same fixpoint regardless of
+evaluation order. The order IS the scheduler's concern; the computation is
+the cell + propagator's concern. *These layers must remain orthogonal* —
+mixing them creates coupling that destroys portability AND violates the
+separation-of-concerns the CALM theorem rests on.
+
+** The Portability Argument
+
+A CALM-compliant network can be run by ARBITRARY schedulers — same semantics,
+different execution strategies. We have already demonstrated this with three
+scheduler implementations:
+- Gauss-Seidel (sequential fixpoint iteration)
+- BSP (sync barrier between rounds)
+- Sequential BFS-like BSP
+
+An experimental Zig+LLVM scheduler is exploring early lowering with a
+scheduler written outside the BEAM. Future self-hosted Prologos may have its
+own scheduler with different parallelism characteristics. /All of these
+schedulers run the same network with the same semantics/.
+
+The portability is load-bearing for the project's vision: Prologos networks
+should be RUNNABLE across language boundaries (Racket prototype, Zig+LLVM
+lowering, self-hosted runtime, future distributed runtime). Coupling
+computation to scheduler-specific behavior makes each scheduler port a
+re-implementation rather than a substitution.
+
+** Optimization Location Rule
+
+Optimizations should be located AT THE LAYER THAT OWNS THE CONCERN:
+
+| Concern | Optimization Examples | Layer |
+|---------+----------------------+-------|
+| State storage strategy | Hot/warm/cold cells; specialized storage for monotone counters; unboxed-fixnum fast-path under no-speculation | Cell |
+| Fire-pattern | Fire-once propagators; broadcast (1 propagator, N items); set-latch fan-in; threshold-gated firing | Propagator |
+| Dependency notification | Skip per-write notification for monotone-counter cells; only notify on threshold crossing | Cell + Propagator (cell declares fire-on policy; propagator declares fire-pattern) |
+| Scheduling efficiency | BSP barriers; round-robin vs priority; work-stealing across threads; LLVM-lowered firing | Scheduler |
+
+*Mixing layers is the anti-pattern*. Specifically:
+
+- *Anti-pattern*: piggybacking optimization into scheduler-specific machinery
+  (e.g., "the threshold check piggybacks into BSP's worklist drain pass")
+  — couples to BSP; Gauss-Seidel can't replicate; loses portability
+- *Anti-pattern*: cell semantics depending on scheduler-specific execution
+  mode (e.g., "this cell behaves differently under sequential vs parallel
+  schedulers") — violates CALM's order-independence
+- *Anti-pattern*: propagator dependencies that fire-pattern-vary by scheduler
+  (e.g., "this propagator fires immediately under sequential, lazily under
+  BSP") — same problem
+
+** Implications for Design
+
+1. *Multiple schedulers run the same network identically* — Gauss-Seidel,
+   BSP, Zig-LLVM, future distributed runtime all produce equivalent fixpoints
+   when given the same cell+propagator network
+
+2. *The scheduler stays thin* — its smarts are about scheduling EFFICIENCY
+   (parallelism, work distribution, round structure), not computation
+   BEHAVIOR (when does which propagator fire on what cell state)
+
+3. *Cell + Propagator declarations are sufficient* to specify the
+   computation; the scheduler only needs to know "fire propagators when
+   their input cells change" — the dependency graph + lattice merge are
+   complete specification
+
+4. *Optimization patterns survive scheduler changes* — fire-once, broadcast,
+   set-latch, monotone-counter cells (etc.) work under any scheduler
+   because they're declared at cell + propagator level
+
+5. *Future schedulers inherit existing optimizations* — when a new scheduler
+   is built, it doesn't have to re-implement cell/propagator optimizations;
+   they're already part of the network specification
+
+** Relationship to Other Principles
+
+- *Propagators as Universal Computational Substrate*: the universality
+  argument relies on scheduler-independence. If networks are
+  scheduler-coupled, they're not a universal substrate; they're a specific
+  scheduler's specific computational model. The Hyperlattice Conjecture
+  rests on this orthogonality.
+
+- *Propagator-First Infrastructure*: building infrastructure as cells + 
+  propagators is only load-bearing if those cells + propagators are
+  scheduler-neutral. Otherwise, each scheduler's reimplementation breaks
+  the infrastructure.
+
+- *Decomplection*: this principle IS decomplection applied to the
+  computation/runtime boundary. The computation (cells + propagators) is
+  decomplected from the runtime (scheduler).
+
+- *Correct by Construction*: scheduler-independent semantics make wrong
+  semantics hard to express. A network that runs correctly under
+  Gauss-Seidel but wrongly under BSP has a layering violation; the
+  principle catches the class of bugs structurally.
+
+** Where the Distributed-Concurrent Runtime Lives
+
+The distributed-concurrent runtime concept (multi-process, multi-node,
+async I/O, message-passing between propagator networks across machines)
+belongs at the *scheduler + networking* layer, NOT in the propagator
+network itself. The network specifies WHAT computation; the runtime
+specifies HOW it executes across hardware.
+
+Concretely:
+- Per-network parallelism (multiple cores running one network) →
+  scheduler concern (work distribution within one BSP round, or
+  Gauss-Seidel sub-round)
+- Cross-network communication (two networks exchanging information) →
+  scheduler + cell-API concern (cells are the boundary; the scheduler
+  marshals values across)
+- Async I/O integration → scheduler concern (the scheduler awaits I/O
+  events between propagator firings)
+
+This separation defers the distributed-concurrent runtime to the
+self-hosted era (post-PPN 4C, post-SH Series) without coupling it to
+the current network design. Future runtimes inherit the current
+networks unchanged.
+
+** Anti-Pattern: Scheduler-Coupled Optimization
+
+A specific recurring temptation: when an optimization is "easy to
+implement in scheduler X," reach for it. This usually couples the
+optimization to scheduler X's specific machinery. /Resist this
+temptation/. Find the equivalent optimization at the cell or propagator
+level — even if it's harder to implement initially, it preserves
+portability.
+
+Historical example (rejected, 2026-05-14): during the PPN 4C tropical
+fuel addendum design, an "Option E (BSP-aware piggyback)" was proposed
+that would piggyback the threshold check into BSP's worklist-drain
+pass. This was rejected after the user articulated the orthogonality
+principle: BSP-specific piggybacking would not survive porting to
+Gauss-Seidel or Zig-LLVM scheduler. The correct optimization (cell-level
+specialized-storage + propagator-level fire-on-threshold-crossing) was
+adopted instead.
+
+** When to Codify a Scheduler-Specific Optimization
+
+There are legitimate scheduler-level optimizations — work-stealing,
+NUMA-aware placement, GC integration. These belong at the scheduler
+layer because the layer owns the concern. The test:
+
+- Does the optimization affect the SEMANTICS of the network (which
+  propagators fire on which cell states)? → must be at cell/propagator
+  level
+- Does the optimization only affect the EFFICIENCY (when/where/how firings
+  happen, with same final fixpoint)? → can be at scheduler level
+
+If the optimization changes semantics, it's at the wrong layer.
+
+** Scheduler-State Cells (refined 2026-05-15 from PPN 4C tropical addendum)
+
+A cell category clarified during the PPN 4C tropical addendum Phase 1B
+mini-design: **scheduler-state cells** are cells the SCHEDULER writes
+(not any fire function). They differ from **propagator-state cells**
+(written by fire functions during computation) and **topology-state cells**
+(written by the topology stratum between BSP rounds).
+
+*** The three cell categories
+
+| Category | Written by | Examples | Permits scheduler-side write-batching? |
+|---|---|---|---|
+| Propagator-state | Fire functions (in parallel during BSP rounds) | Type cells, constraint cells, scope cells, classify-inhabit-request cell | NO — writes are individually consequential outputs |
+| Scheduler-state | The scheduler directly (outside any propagator fire) | Fuel-cost cell (PPN 4C tropical addendum), worklist-cache cell (BSP-LE Track 2B), future BSP-round-counter cell | YES — scheduler can batch its own writes |
+| Topology-state | The topology stratum (between BSP rounds) | Decomposition-request cell (PAR Track 1), dependency-edge cells | NO — writes are inputs to the next BSP round |
+
+*** Why scheduler-state cells permit deferred-write optimization
+
+Propagator-state cells have writes that must be individually consequential
+— they're outputs of computation that downstream propagators react to.
+Aggregating or deferring writes would break the dataflow semantics.
+
+Scheduler-state cells are the scheduler's own bookkeeping (computational
+cost tracking, worklist management, round-counter, etc.). The scheduler can
+batch its own writes (e.g., maintain a local working register and flush to
+the cell at well-defined boundaries) without breaking anyone else's
+observation. **Observers see the cell value at the points where they fire**
+— which is between BSP rounds. The scheduler's mid-round local-var
+optimization is invisible to observers.
+
+*** The deferred-write pattern — two variants (canonical example: fuel-cost cell under Option 13)
+
+A scheduler-side optimization for hot scheduler-state cells. The pattern has
+TWO variants depending on the scheduler's loop structure (refined 2026-05-15
+after auditing the production scheduler architecture):
+
+**** Variant A — Round-entry batch decrement (parallel BSP main loop)
+
+For schedulers that have a natural "round" structure where a batch of N
+propagators is identified before firing (parallel BSP main loop):
+
+#+begin_src
+;; Inside the BSP outer loop: pop worklist → pids of length n
+;; BEFORE workers spin up: single cell-write at round entry
+(define new-fuel-cost (+ (net-cell-read net fuel-cost-cell-id) n))
+(define snapshot (net-cell-write base-snapshot fuel-cost-cell-id new-fuel-cost))
+;; Cell's on-write predicate runs here; if exhausted, contradiction routes
+;; structurally. Workers fire against snapshot but don't touch fuel-cost.
+(executor snapshot pids)  ; parallel
+#+end_src
+
+Cost: ~6 ns per BSP round (one cell-write); amortized over N=100 fires per
+round = **~0.06 ns/cycle**. The dominant per-fire cost is the propagator-fire
+itself, not anything related to fuel.
+
+**** Variant B — Local-var + cell-write at phase boundaries (sequential schedulers)
+
+For schedulers that have a sequential per-fire loop without natural batching:
+
+#+begin_src
+;; At sequential-phase entry — pull cell value into local-var
+(define local-fuel-cost (box (net-cell-read net fuel-cost-cell-id)))
+(define budget (net-cell-read net fuel-budget-cell-id))
+
+;; Per fire (inline, in the loop body): hot path; ~2 ns/cycle
+(define new-cost (+ (unbox local-fuel-cost) 1))
+(set-box! local-fuel-cost new-cost)
+(when (>= new-cost budget)
+  ;; Flush + contradict (rare; on exhaustion only)
+  (set! net (net-cell-write net fuel-cost-cell-id new-cost))
+  (return-from-phase net))
+
+;; At phase exit (no exhaustion): flush local-var → cell
+(set! net (net-cell-write net fuel-cost-cell-id (unbox local-fuel-cost)))
+#+end_src
+
+Cost: ~2.16 ns/cycle amortized at typical N (measured via spike); applies to
+sequential schedulers (Gauss-Seidel, widening, narrowing — all per-fire
+loops). The cell is canonical at all observation points; the local-var is
+scheduler-internal SCRATCH.
+
+**** Scheduler/variant assignment
+
+| Scheduler | Loop structure | Variant |
+|---|---|---|
+| Parallel BSP (production default) | Round-entry batch of N propagators | A |
+| Gauss-Seidel sequential | Per-fire loop | B |
+| Widening/narrowing phases | Per-fire loop | B |
+| Sequential BFS-like BSP | Per-fire loop | B |
+| Future Zig-LLVM scheduler | Per-loop-batch (likely) | A or hybrid |
+
+The scheduler CHOOSES the variant fitting its loop structure. Both variants
+preserve the orthogonality principle: the cell mechanism's behavior is
+unchanged; the scheduler's choice of WHEN to invoke `net-cell-write` is the
+scheduler's own concern.
+
+*** Why this preserves orthogonality (not a violation)
+
+- *Cell layer*: unchanged. The cell mechanism's behavior is identical
+  whether `net-cell-write` is called per-fire or per-round. The on-write
+  check runs at write time (deferred or immediate, scheduler's choice).
+- *Propagator layer*: unchanged. No propagators reference the scheduler-state
+  cell during normal computation; they read it (if they do) at fire-time,
+  which is at round boundaries — where the cell is current.
+- *Scheduler layer*: the scheduler CHOOSES when to invoke `net-cell-write`.
+  This choice is the scheduler's concern. Other schedulers (Gauss-Seidel,
+  Zig-LLVM, future) can choose their own strategies (per-update, per-batch,
+  per-round) — the cell behaves identically under each.
+
+This is exactly the case the principle's *"can be at scheduler level"* rule
+permits: efficiency optimization with same final fixpoint, no semantic
+change. The scheduler-cell coupling is at the WRITE-SITE layer (the
+scheduler knows it should write to fuel-cost when firing); this is
+appropriate because fuel-cost IS a scheduler concern.
+
+*** Anti-pattern (NOT scheduler-state cell)
+
+A cell that propagators write to during fires is a propagator-state cell.
+Trying to apply deferred-write optimization to it would break dataflow —
+propagators downstream would see stale values during the round, missing the
+updates the upstream propagators just made. CALM's order-independence
+guarantees only work when fire-function writes are visible per BSP round's
+merge semantics.
+
+*** Cross-reference
+
+- PPN 4C Tropical Addendum D.4 §10.3.A — canonical example (fuel-cost cell
+  with Option 13 deferred-write pattern)
+- PPN 4C Tropical Addendum D.4 §13.6.A — Option 13 spike plan (validates
+  ~2 ns/cycle amortized estimate)
+- PPN 4C Tropical Addendum D.4 §13.7 — per-phase measurement gates (A/B/C
+  validation throughout Stage 4)
+
+** Provenance
+
+Articulated by user during PPN 4C tropical addendum D.3.EC critique
+review (2026-05-14). The user observed: "We've explored three scheduler
+implementations without changes to the network computation... given our
+CALM-compliant network architecture, it is conceivable that we could
+have arbitrary number of different schedulers to run the same network —
+even in different languages. This could make Prologos highly portable if
+done correctly... The problem I see, is about coupling too much on the
+scheduler, complecting what should be orthogonal — making a thin scheduler
+and portability more tricky."
+
+This insight rejected the hybrid pivot's "Option E (BSP-aware piggyback)"
+and motivated a redesign of Phase 1B/1C toward on-network optimized cell
+type (storage strategy + fire-on policy at cell + propagator level, NOT
+at scheduler level). The reframing applies prophylactically to future
+PReduce, OE, and SH Series tracks.
+
+** Cross-References
+
+- [[../../research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md][PAR Series: Parallel Propagator Scheduling]]
+- [[../2026-03-27_PAR_MASTER.md][PAR Master]] — CALM-compliant scheduling
+- [[../2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md][BSP-LE Track 0]] — cell-level hot/cold split (storage strategy at cell layer)
+- [[../../.claude/rules/propagator-design.md][propagator-design.md]] — propagator-level optimization patterns (fire-once, broadcast, set-latch)
+- [[../../.claude/rules/on-network.md][on-network.md]] — the on-network mandate (which this principle extends with the orthogonality requirement)
+
+* Specialized Cell Type Framework as Cross-Track Template
+
+The specialized cell type framework codified in PPN 4C (per the tropical
+quantale addendum design doc §4.6) is a /cross-track template/ for
+cell-layer optimization. It is the practical instantiation of [[*Cell
+/ Propagator / Scheduler Orthogonality][Cell/Propagator/Scheduler
+Orthogonality]] for hot-path cell access — declaring optimization
+properties at the CELL layer, scheduler-agnostic by construction.
+
+** Three layers of the framework
+
+1. *cell-meta declarations* (per-cell properties):
+   - ~:tier 'hot|warm|cold~ — storage tier dispatch (originally BSP-LE
+     Track 0 prop-net hot/cold split, extended to cell-meta)
+   - ~:storage 'monotone-counter|general|...~ — specialized storage
+     strategy (e.g., direct-fixnum-mutation under no-speculation)
+   - ~:fires-on 'threshold-crossing|any-change~ — fire-pattern policy
+     (skip dependent enqueuing when threshold not crossed)
+   - ~:on-write-check predicate~ — inline check at write time (replaces
+     separate threshold propagator)
+   - ~:on-read-check predicate~ — inline check at read time (for derived
+     properties)
+   - ~:merge-fn~ cached — eliminates per-call champ-lookup on fast paths
+     (added by 1V-3 Item #1)
+
+2. *Well-known direct-ref caches on prop-net-warm* (network-layer
+   bookkeeping):
+   - Cached prop-cell direct-refs for well-known cell-ids that are hot
+     on the convergence/init/flush paths
+   - First instance: ~under-speculation?~ (1B-ii; boolean cache of
+     ~current-worldview-bitmask~ for fast-path dispatch)
+   - Second instance: ~fuel-cell-cache~ (1V-3 Item #1-bis; prop-cell
+     direct-ref for fuel-cell-id; bypasses cells-map CHAMP traversal)
+   - Future instances follow the same shape: struct field + write-through
+     at enumerated mutation sites + eq?-short-circuit at read/write entry
+
+3. *Write-through discipline at enumerated mutation sites*:
+   - Every code path that mutates the cached entry updates the cache
+     atomically with the persistent CHAMP update (~struct-copy
+     prop-net-warm [cells new-cells] [<cache> new-cell]~)
+   - The audit list (WT-1, WT-2, ...) is the implementation checklist
+     AND the drift mitigation (per the codified
+     [[file:DEVELOPMENT_LESSONS.org][~"Cache Write-Through With Persistent CHAMP"~]] lesson)
+   - Inherited sites (via delegation, e.g., ~promote-cell-to-tagged~
+     calls ~net-cell-reset~) flow through naturally without separate
+     update
+
+** Why cross-track template
+
+The framework's design rests on three principles that are universal across
+future tracks:
+
+- *Cell/Propagator/Scheduler Orthogonality* — optimization at the CELL
+  layer survives any scheduler (Gauss-Seidel, BSP, Zig-LLVM, future
+  distributed runtime)
+- *Persistent CHAMP source-of-truth* — caches mirror well-known entries;
+  the CHAMP remains primary; dual-storage is principled (γ1)
+- *Forward-compatibility with multi-dimensional cost extensions* —
+  quantale-of-bridges composition (per the addendum §4.2) lets future
+  cost dimensions (MemoryCostQ, MessageCountQ) instantiate as additional
+  Q-modules with their own cache fields on prop-net-warm
+
+** Cross-track applicability
+
+- *PReduce*: e-class cell substrate can adopt ~:tier 'hot~ + specialized
+  storage for e-class-id cells; cost-extraction via tropical-quantale
+  residuation extends the multi-dimensional pattern
+- *PM Track 12* (parameters → cells for module loading): hot module-load
+  cells (module-registry, current-namespace) use the cached-direct-ref
+  pattern on prop-net-warm (or equivalent context-state struct)
+- *OE Series* (Optimization Enrichment / weighted parsing): cost-bounded
+  parsing inherits the cell-meta declaration pattern + multi-dimensional
+  cost composition
+- *SH Series* (Self-Hosting): native-substrate implementation of the
+  framework establishes the runtime contract for LLVM-lowered cells
+
+** Measurement-driven gate discipline (post-Phase-1V Item #1+#1-bis)
+
+The framework's performance characteristics calibrate against a
+production CHAMP-dispatch structural floor (~4 ns/cycle at Var-A N=100
+per PPN 4C 1V-3 measurement-driven gate re-calibration). Future tracks
+adopting the framework baseline against this floor, with further
+optimization gated by track-specific architectural conversations (not
+the framework's responsibility).
+
+The honest reality: cell-layer optimization wins are bounded by the
+network primitives' inherent overhead (CHAMP dispatch + immutable
+struct-copy + worldview filtering under speculation). Optimizations
+beyond this floor require architectural redesign (mutable scheduler-state
+intermediate; CHAMP-to-vector replacement) which is by definition
+out-of-scope for cell-layer work.
+
+** Provenance
+
+Articulated as a cross-track template at user direction (2026-05-17)
+during PPN 4C Tropical Addendum Phase 1V Commit 3b close. The user
+noted: "The architectural demonstration of both a scheduler/compiler
+specialized cell will be good precedent not only for PReduce, but also
+PM 12 and others; the tropical algebraic structure serves well as a
+first test for us to extend towards a multi-dimensional cost optimization
+for future tracks."
+
+Codified as a top-level principle (not just a watching-list candidate)
+because the framework's reusability across PReduce + PM 12 + OE + SH
+Series justifies upfront anchoring. Each future track adopting the
+framework saves the cost of re-deriving the cache discipline + cell-meta
+declarations + write-through enumeration.
+
+** Cross-References
+
+- PPN 4C Tropical Addendum D.4 §4.6 — specialized cell type framework
+  NTT model (canonical source)
+- PPN 4C Tropical Addendum D.4 §11.X.2 + §11.X.3 — Items #1 + #1-bis
+  implementations (cell-meta-merge-fn cache + prop-net-warm fuel-cell-cache)
+- [[file:DEVELOPMENT_LESSONS.org][DEVELOPMENT_LESSONS.org § "Cache Write-Through With Persistent CHAMP"]] — the write-through enumeration discipline
+- [[file:DEVELOPMENT_LESSONS.org][DEVELOPMENT_LESSONS.org § "Cache Projection Should Model Read-Side + Write-Side Independently"]] — projection methodology lesson
+- [[*Cell / Propagator / Scheduler Orthogonality][Cell/Propagator/Scheduler Orthogonality]] — the foundational architectural
+  principle this framework instantiates

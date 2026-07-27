@@ -8,6 +8,9 @@
 
 (require racket/match
          racket/string
+         racket/flonum
+         racket/math
+         "posit-impl.rkt"
          "prelude.rkt"
          "syntax.rkt"
          "sessions.rkt"
@@ -48,6 +51,58 @@
       candidate))
 
 ;; ========================================
+;; Q10-complete numeric display (Numerics N2; sigil-free N6c)
+;; ========================================
+;;
+;; "Display = a re-readable literal of the same value."
+;;   - Posit32 → <shortest-decimal>, bare (decimal notation IS Posit32 post-N6b);
+;;     integral values force a `.0` so they re-read as Posit32, not Int
+;;   - Posit8/16/64 → <shortest-decimal>pNN (mirrors Float32's `2.5f32`)
+;;   - Float64 → <shortest-decimal>f  ;  Float32 → <shortest-decimal>f32
+;;   - Rat    → plain exact notation (fractions; integral Rat displays bare —
+;;     re-reads as Int, which widens back via Int <: Rat)
+;; Non-finite floats + NaR have no reader literal; we print the bare name
+;; (+nan.0 / +inf.0 / -inf.0 / NaR) — display-only, does not round-trip.
+
+;; Float64 display: `<decimal>f` for finite, bare name for non-finite.
+(define (float64->display v)
+  (cond
+    [(nan? v) "+nan.0"]
+    [(= v +inf.0) "+inf.0"]
+    [(= v -inf.0) "-inf.0"]
+    ;; number->string already yields the shortest round-tripping double decimal.
+    [else (string-append (number->string v) "f")]))
+
+;; Float32 display: `<decimal>f32` for finite, bare name for non-finite.
+;; v is a flonum that is exactly single-representable (flsingle-rounded).
+(define (float32->display v)
+  (cond
+    [(nan? v) "+nan.0"]
+    [(= v +inf.0) "+inf.0"]
+    [(= v -inf.0) "-inf.0"]
+    [else
+     (string-append
+      (shortest-decimal (inexact->exact v)
+                        (lambda (q) (flsingle (exact->inexact q)))
+                        v)
+      "f32")]))
+
+;; Posit display (N6c, sigil-free): Posit32 bare (integral → forced `.0`);
+;; Posit64 → `<d>p` (symmetry with Float64's `<d>f`); Posit8/16 → `<d>pNN`
+;; (integral mantissa re-reads via the pNN integer shape, e.g. `2p8`).
+;; NaR = bare name, all widths (no reader form).
+(define (posit->display n v)
+  (let ([s (posit-shortest-decimal n v)])
+    (cond
+      [(string=? s "NaR") "NaR"]
+      [(= n 32)
+       (if (or (string-contains? s ".") (string-contains? s "e"))
+           s
+           (string-append s ".0"))]
+      [(= n 64) (string-append s "p")]  ;; Posit64 → bare `p` (symmetry with Float64's `f`)
+      [else (string-append s "p" (number->string n))])))
+
+;; ========================================
 ;; Pretty-print expressions
 ;; ========================================
 
@@ -76,13 +131,13 @@
     [(expr-nil) "nil"]
     [(expr-hole) "_"]
     [(expr-typed-hole name) (if name (format "??~a" name) "??")]
-    [(expr-Open) "Open"]
     ;; PPN Track 4 Phase 4b: cell-id fast path (cells authoritative)
     [(expr-meta id cell-id)
      (let ([sol (meta-solution/cell-id cell-id id)])
        (if sol
            (pp-expr sol names)
            (format "?~a" id)))]
+    [(expr-num-lit val _ _ _) (format "~a" val)]  ;; N4: transient literal (usually collapsed pre-display)
     [(expr-error) "<error>"]
 
     ;; Unapplied type constructor (HKT)
@@ -221,7 +276,7 @@
 
     ;; Posit8
     [(expr-Posit8) "Posit8"]
-    [(expr-posit8 v) (format "[posit8 ~a]" v)]
+    [(expr-posit8 v) (posit->display 8 v)]
     [(expr-p8-add a b) (format "[p8+ ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p8-sub a b) (format "[p8- ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p8-mul a b) (format "[p8* ~a ~a]" (pp-expr a names) (pp-expr b names))]
@@ -242,7 +297,7 @@
 
     ;; Posit16
     [(expr-Posit16) "Posit16"]
-    [(expr-posit16 v) (format "[posit16 ~a]" v)]
+    [(expr-posit16 v) (posit->display 16 v)]
     [(expr-p16-add a b) (format "[p16+ ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p16-sub a b) (format "[p16- ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p16-mul a b) (format "[p16* ~a ~a]" (pp-expr a names) (pp-expr b names))]
@@ -263,7 +318,37 @@
 
     ;; Posit32
     [(expr-Posit32) "Posit32"]
-    [(expr-posit32 v) (format "[posit32 ~a]" v)]
+    [(expr-posit32 v) (posit->display 32 v)]
+    [(expr-Float32) "Float32"]
+    [(expr-float32 v) (float32->display v)]
+    [(expr-Float64) "Float64"]
+    [(expr-float64 v) (float64->display v)]
+    ;; Float ops (Numerics N3b)
+    [(expr-f32-add a b) (format "[f32+ ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-f32-sub a b) (format "[f32- ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-f32-mul a b) (format "[f32* ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-f32-div a b) (format "[f32/ ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-f32-neg a) (format "[f32-neg ~a]" (pp-expr a names))]
+    [(expr-f32-abs a) (format "[f32-abs ~a]" (pp-expr a names))]
+    [(expr-f32-sqrt a) (format "[f32-sqrt ~a]" (pp-expr a names))]
+    [(expr-f32-lt a b) (format "[f32-lt ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-f32-le a b) (format "[f32-le ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-f32-eq a b) (format "[f32-eq ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-f64-add a b) (format "[f64+ ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-f64-sub a b) (format "[f64- ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-f64-mul a b) (format "[f64* ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-f64-div a b) (format "[f64/ ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-f64-neg a) (format "[f64-neg ~a]" (pp-expr a names))]
+    [(expr-f64-abs a) (format "[f64-abs ~a]" (pp-expr a names))]
+    [(expr-f64-sqrt a) (format "[f64-sqrt ~a]" (pp-expr a names))]
+    [(expr-f64-lt a b) (format "[f64-lt ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-f64-le a b) (format "[f64-le ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    [(expr-f64-eq a b) (format "[f64-eq ~a ~a]" (pp-expr a names) (pp-expr b names))]
+    ;; Cross-width Float conversions (Numerics N3e-rest)
+    [(expr-float-finite a) (format "[float-finite? ~a]" (pp-expr a names))]
+    [(expr-float-to-rat a) (format "[float-to-rat ~a]" (pp-expr a names))]
+    [(expr-float-to-int a) (format "[float-to-int ~a]" (pp-expr a names))]
+    [(expr-float-to-float32 a) (format "[float-to-float32 ~a]" (pp-expr a names))]
     [(expr-p32-add a b) (format "[p32+ ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p32-sub a b) (format "[p32- ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p32-mul a b) (format "[p32* ~a ~a]" (pp-expr a names) (pp-expr b names))]
@@ -284,7 +369,7 @@
 
     ;; Posit64
     [(expr-Posit64) "Posit64"]
-    [(expr-posit64 v) (format "[posit64 ~a]" v)]
+    [(expr-posit64 v) (posit->display 64 v)]
     [(expr-p64-add a b) (format "[p64+ ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p64-sub a b) (format "[p64- ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-p64-mul a b) (format "[p64* ~a ~a]" (pp-expr a names) (pp-expr b names))]
@@ -345,6 +430,25 @@
     ;; String
     [(expr-String) "String"]
     [(expr-string val) (format "~s" val)]
+    ;; Record/tuple structural-row type (CIU T6 F1): keyword-domain → {:a Int :b String};
+    ;; nat-domain → ⟨Int String⟩ (tuple, F1a-col). dyn tail → trailing " | _" (F1a.2).
+    [(expr-Record kd fields tail)
+     (let ([body (string-join
+                  (for/list ([fld (in-list fields)])
+                    (if (eq? kd 'keyword)
+                        ;; F1b.3 (D24): 'unknown marks display as a `?` label
+                        ;; suffix ({:a? Int | _}). Known edge: a 'present field
+                        ;; whose label itself ends in `?` is indistinguishable
+                        ;; (accepted display-only ambiguity, syntax.rkt spec).
+                        (format ":~a~a ~a" (car fld)
+                                (if (eq? (record-field-presence (cdr fld)) 'unknown) "?" "")
+                                (pp-expr (record-field-type (cdr fld)) names))
+                        (pp-expr (record-field-type (cdr fld)) names)))
+                  " ")]
+           [dyn (if (eq? tail 'dyn) " | _" "")])
+       (if (eq? kd 'keyword)
+           (format "{~a~a}" body dyn)
+           (format "⟨~a~a⟩" body dyn)))]
     ;; Map
     [(expr-Map k v) (format "[Map ~a ~a]" (pp-expr k names) (pp-expr v names))]
     [(expr-champ c)
@@ -362,6 +466,11 @@
     [(expr-map-empty k v) (format "{} : (Map ~a ~a)" (pp-expr k names) (pp-expr v names))]
     [(expr-map-assoc m k v) (format "[map-assoc ~a ~a ~a]" (pp-expr m names) (pp-expr k names) (pp-expr v names))]
     [(expr-map-get m k) (format "[map-get ~a ~a]" (pp-expr m names) (pp-expr k names))]
+    ;; CIU T6 F1b.5-s2: validate — compact display (plan is baked internals)
+    [(? expr-validate? v)
+     (format "[validate ~a ~a]"
+             (expr-validate-schema-name v)
+             (pp-expr (expr-validate-subject v) names))]
     [(expr-get c k) (format "[get ~a ~a]" (pp-expr c names) (pp-expr k names))]
     [(expr-nil-safe-get m k) (format "[nil-safe-get ~a ~a]" (pp-expr m names) (pp-expr k names))]
     [(expr-nil-check a) (format "[nil? ~a]" (pp-expr a names))]
@@ -396,6 +505,14 @@
            (string-append "@[" (string-join elems " ") "]")))]
     [(expr-pvec-empty a) (format "@[] : [PVec ~a]" (pp-expr a names))]
     [(expr-pvec-push v x) (format "[pvec-push ~a ~a]" (pp-expr v names) (pp-expr x names))]
+    [(expr-pvec-literal elems)
+     (format "@[~a]" (string-join (map (lambda (e) (pp-expr e names)) elems) " "))]
+    [(expr-list-literal elems _)
+     (format "'[~a]" (string-join (map (lambda (e) (pp-expr e names)) elems) " "))]
+    [(expr-map-literal keys vals _)
+     (format "{~a}" (string-join (for/list ([k (in-list keys)] [v (in-list vals)])
+                                   (format "~a ~a" (pp-expr k names) (pp-expr v names)))
+                                 " "))]
     [(expr-pvec-fold f init vec) (format "[pvec-fold ~a ~a ~a]" (pp-expr f names) (pp-expr init names) (pp-expr vec names))]
     [(expr-pvec-map f vec) (format "[pvec-map ~a ~a]" (pp-expr f names) (pp-expr vec names))]
     [(expr-pvec-filter pred vec) (format "[pvec-filter ~a ~a]" (pp-expr pred names) (pp-expr vec names))]
@@ -460,7 +577,7 @@
     [(expr-net-type) "PropNetwork"]
     [(expr-cell-id-type) "CellId"]
     [(expr-prop-id-type) "PropId"]
-    [(expr-prop-network v) (format "#<prop-network ~a>" (prop-network-fuel v))]
+    [(expr-prop-network v) (format "#<prop-network ~a>" (net-cell-read v fuel-cell-id))]  ;; D.4 1C-iv-a: cell-API
     [(expr-cell-id v) (format "#<cell-id ~a>" (cell-id-n v))]
     [(expr-prop-id v) (format "#<prop-id ~a>" (prop-id-n v))]
     [(expr-net-new fuel) (format "[net-new ~a]" (pp-expr fuel names))]
@@ -493,35 +610,6 @@
     [(expr-uf-value st id)
      (format "[uf-value ~a ~a]" (pp-expr st names) (pp-expr id names))]
 
-    ;; ATMS
-    [(expr-atms-type) "ATMS"]
-    [(expr-assumption-id-type) "AssumptionId"]
-    [(expr-atms-store v)
-     (format "#<atms ~a>" (if (solver-state? v)
-                              (hash-count (solver-state-assumptions v))
-                              (if (atms? v) (hash-count (atms-assumptions v)) 0)))]
-    [(expr-assumption-id-val v)
-     (format "#<assumption-id ~a>" (assumption-id-n v))]
-    [(expr-atms-new net) (format "[atms-new ~a]" (pp-expr net names))]
-    [(expr-atms-assume a nm d)
-     (format "[atms-assume ~a ~a ~a]" (pp-expr a names) (pp-expr nm names) (pp-expr d names))]
-    [(expr-atms-retract a aid)
-     (format "[atms-retract ~a ~a]" (pp-expr a names) (pp-expr aid names))]
-    [(expr-atms-nogood a aids)
-     (format "[atms-nogood ~a ~a]" (pp-expr a names) (pp-expr aids names))]
-    [(expr-atms-amb a alts)
-     (format "[atms-amb ~a ~a]" (pp-expr a names) (pp-expr alts names))]
-    [(expr-atms-solve-all a g)
-     (format "[atms-solve-all ~a ~a]" (pp-expr a names) (pp-expr g names))]
-    [(expr-atms-read a c)
-     (format "[atms-read ~a ~a]" (pp-expr a names) (pp-expr c names))]
-    [(expr-atms-write a c v s)
-     (format "[atms-write ~a ~a ~a ~a]" (pp-expr a names) (pp-expr c names) (pp-expr v names) (pp-expr s names))]
-    [(expr-atms-consistent a aids)
-     (format "[atms-consistent? ~a ~a]" (pp-expr a names) (pp-expr aids names))]
-    [(expr-atms-worldview a aids)
-     (format "[atms-worldview ~a ~a]" (pp-expr a names) (pp-expr aids names))]
-
     ;; Tabling
     [(expr-table-store-type) "TableStore"]
     [(expr-table-store-val v)
@@ -550,7 +638,6 @@
     [(expr-goal-type) "Goal"]
     [(expr-derivation-type) "DerivationTree"]
     [(expr-cut) "cut"]
-    [(expr-schema-type n) (format "(Schema ~a)" n)]
     [(expr-answer-type t)
      (if t (format "(Answer ~a)" (pp-expr t names)) "Answer")]
     [(expr-relation-type pts)
@@ -580,8 +667,6 @@
      (format "(is ~a ~a)" (pp-expr v names) (pp-expr ex names))]
     [(expr-not-goal g)
      (format "(not ~a)" (pp-expr g names))]
-    [(expr-schema nm fs)
-     (format "(schema ~a ~a fields)" nm (length fs))]
     [(expr-solve g)
      (format "(solve ~a)" (pp-expr g names))]
     [(expr-solve-with sv ov g)
@@ -621,7 +706,7 @@
 
     ;; Rat
     [(expr-Rat) "Rat"]
-    [(expr-rat v) (number->string v)]
+    [(expr-rat v) (number->string v)]  ;; (N6c) plain exact notation — D-N6.3 revert
     [(expr-rat-add a b) (format "[rat+ ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-rat-sub a b) (format "[rat- ~a ~a]" (pp-expr a names) (pp-expr b names))]
     [(expr-rat-mul a b) (format "[rat* ~a ~a]" (pp-expr a names) (pp-expr b names))]
@@ -902,7 +987,6 @@
     [(expr-Type _) #f]
     [(expr-hole) #f]
     [(expr-typed-hole _) #f]
-    [(expr-Open) #f]
     [(expr-meta _ _) #f]
     [(expr-error) #f]
     [(expr-tycon _) #f]
@@ -910,6 +994,7 @@
     [(expr-lam _ t body) (or (uses-bvar0? t) (uses-bvar0? body))]
     [(expr-Pi _ dom cod) (or (uses-bvar0? dom) (uses-bvar0? cod))]
     [(expr-Sigma t1 t2) (or (uses-bvar0? t1) (uses-bvar0? t2))]
+    [(? expr-Record? rec) (for/or ([fld (in-list (expr-Record-fields rec))]) (uses-bvar0? (record-field-type (cdr fld))))]
     [(expr-app f a) (or (uses-bvar0? f) (uses-bvar0? a))]
     [(expr-pair e1 e2) (or (uses-bvar0? e1) (uses-bvar0? e2))]
     [(expr-fst e1) (uses-bvar0? e1)]
@@ -964,6 +1049,36 @@
     [(expr-p16-if-nar t nc vc v) (or (uses-bvar0? t) (uses-bvar0? nc) (uses-bvar0? vc) (uses-bvar0? v))]
     [(expr-Posit32) #f]
     [(expr-posit32 _) #f]
+    [(expr-Float32) #f]
+    [(expr-float32 _) #f]
+    [(expr-Float64) #f]
+    [(expr-float64 _) #f]
+    ;; Float ops (Numerics N3b)
+    [(expr-f32-add a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-f32-sub a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-f32-mul a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-f32-div a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-f32-neg a) (uses-bvar0? a)]
+    [(expr-f32-abs a) (uses-bvar0? a)]
+    [(expr-f32-sqrt a) (uses-bvar0? a)]
+    [(expr-f32-lt a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-f32-le a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-f32-eq a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-f64-add a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-f64-sub a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-f64-mul a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-f64-div a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-f64-neg a) (uses-bvar0? a)]
+    [(expr-f64-abs a) (uses-bvar0? a)]
+    [(expr-f64-sqrt a) (uses-bvar0? a)]
+    [(expr-f64-lt a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-f64-le a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    [(expr-f64-eq a b) (or (uses-bvar0? a) (uses-bvar0? b))]
+    ;; Cross-width Float conversions (Numerics N3e-rest)
+    [(expr-float-finite a) (uses-bvar0? a)]
+    [(expr-float-to-rat a) (uses-bvar0? a)]
+    [(expr-float-to-int a) (uses-bvar0? a)]
+    [(expr-float-to-float32 a) (uses-bvar0? a)]
     [(expr-p32-add a b) (or (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-p32-sub a b) (or (uses-bvar0? a) (uses-bvar0? b))]
     [(expr-p32-mul a b) (or (uses-bvar0? a) (uses-bvar0? b))]
@@ -1034,6 +1149,12 @@
     [(expr-map-empty k v) (or (uses-bvar0? k) (uses-bvar0? v))]
     [(expr-map-assoc m k v) (or (uses-bvar0? m) (uses-bvar0? k) (uses-bvar0? v))]
     [(expr-map-get m k) (or (uses-bvar0? m) (uses-bvar0? k))]
+    ;; CIU T6 F1b.5-s2: validate — subject + plan expr slots
+    [(? expr-validate? v)
+     (or (uses-bvar0? (expr-validate-subject v))
+         (for/or ([entry (in-list (expr-validate-plan v))])
+           (or (and (caddr entry) (uses-bvar0? (caddr entry)))
+               (and (cadddr entry) (uses-bvar0? (cadddr entry))))))]
     [(expr-get c k) (or (uses-bvar0? c) (uses-bvar0? k))]
     [(expr-nil-safe-get m k) (or (uses-bvar0? m) (uses-bvar0? k))]
     [(expr-nil-check a) (uses-bvar0? a)]
@@ -1059,6 +1180,10 @@
     [(expr-rrb _) #f]
     [(expr-pvec-empty a) (uses-bvar0? a)]
     [(expr-pvec-push v x) (or (uses-bvar0? v) (uses-bvar0? x))]
+    [(expr-pvec-literal elems) (ormap uses-bvar0? elems)]
+    [(expr-list-literal elems chain) (or (ormap uses-bvar0? elems) (uses-bvar0? chain))]
+    [(expr-map-literal keys vals chain)
+     (or (ormap uses-bvar0? keys) (ormap uses-bvar0? vals) (uses-bvar0? chain))]
     [(expr-pvec-fold f init vec) (or (uses-bvar0? f) (uses-bvar0? init) (uses-bvar0? vec))]
     [(expr-pvec-map f vec) (or (uses-bvar0? f) (uses-bvar0? vec))]
     [(expr-pvec-filter pred vec) (or (uses-bvar0? pred) (uses-bvar0? vec))]
@@ -1133,22 +1258,6 @@
     [(expr-uf-union st id1 id2) (or (uses-bvar0? st) (uses-bvar0? id1) (uses-bvar0? id2))]
     [(expr-uf-value st id) (or (uses-bvar0? st) (uses-bvar0? id))]
 
-    ;; ATMS
-    [(expr-atms-type) #f]
-    [(expr-assumption-id-type) #f]
-    [(expr-atms-store _) #f]
-    [(expr-assumption-id-val _) #f]
-    [(expr-atms-new net) (uses-bvar0? net)]
-    [(expr-atms-assume a nm d) (or (uses-bvar0? a) (uses-bvar0? nm) (uses-bvar0? d))]
-    [(expr-atms-retract a aid) (or (uses-bvar0? a) (uses-bvar0? aid))]
-    [(expr-atms-nogood a aids) (or (uses-bvar0? a) (uses-bvar0? aids))]
-    [(expr-atms-amb a alts) (or (uses-bvar0? a) (uses-bvar0? alts))]
-    [(expr-atms-solve-all a g) (or (uses-bvar0? a) (uses-bvar0? g))]
-    [(expr-atms-read a c) (or (uses-bvar0? a) (uses-bvar0? c))]
-    [(expr-atms-write a c v s) (or (uses-bvar0? a) (uses-bvar0? c) (uses-bvar0? v) (uses-bvar0? s))]
-    [(expr-atms-consistent a aids) (or (uses-bvar0? a) (uses-bvar0? aids))]
-    [(expr-atms-worldview a aids) (or (uses-bvar0? a) (uses-bvar0? aids))]
-
     ;; Tabling
     [(expr-table-store-type) #f]
     [(expr-table-store-val _) #f]
@@ -1165,7 +1274,7 @@
 
     ;; Relational language (Phase 7)
     [(expr-solver-type) #f] [(expr-goal-type) #f] [(expr-derivation-type) #f] [(expr-cut) #f]
-    [(expr-schema-type _) #f] [(expr-logic-var _ _) #f]
+    [(expr-logic-var _ _) #f]
     [(expr-answer-type t) (and t (uses-bvar0? t))]
     [(expr-relation-type pts) (ormap uses-bvar0? pts)]
     [(expr-solver-config m) (uses-bvar0? m)]
@@ -1179,7 +1288,6 @@
     [(expr-unify-goal l r) (or (uses-bvar0? l) (uses-bvar0? r))]
     [(expr-is-goal v ex) (or (uses-bvar0? v) (uses-bvar0? ex))]
     [(expr-not-goal g) (uses-bvar0? g)]
-    [(expr-schema nm fs) (ormap uses-bvar0? fs)]
     [(expr-solve g) (uses-bvar0? g)]
     [(expr-solve-with sv ov g) (or (and sv (uses-bvar0? sv)) (and ov (uses-bvar0? ov)) (uses-bvar0? g))]
     [(expr-solve-one g) (uses-bvar0? g)]
@@ -1459,9 +1567,7 @@
          [(and (eq? h '$rest-param) (pair? (cdr d)) (null? (cddr d)))
           (format "...~a" (pp-datum (cadr d)))]
 
-         ;; ($approx-literal val) → ~val
-         [(and (eq? h '$approx-literal) (pair? (cdr d)) (null? (cddr d)))
-          (format "~~~a" (pp-datum (cadr d)))]
+         ;; (N6c) $approx-literal pp-datum case removed (~N deprecated)
 
          ;; ($list-tail expr) — standalone (shouldn't appear outside $list-literal)
          [(and (eq? h '$list-tail) (pair? (cdr d)) (null? (cddr d)))

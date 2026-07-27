@@ -33,9 +33,7 @@
 ;; ========================================
 
 (define (run-ns s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry prelude-preparse-registry]
@@ -82,10 +80,9 @@
   (define forms (read-all-forms-string "~[1, 2, 3]"))
   (check-equal? forms '(($lseq-literal 1 2 3))))
 
-(test-case "reader: WS ~42 still produces approx-literal"
-  ;; Ensure ~N approx literals still work after adding ~[ support
-  (define forms (read-all-forms-string "~42"))
-  (check-equal? forms '(($approx-literal 42))))
+(test-case "reader: WS ~42 is rejected (N6c: ~N removed; ~[ unaffected)"
+  (check-exn (regexp "approximate literals were removed")
+             (lambda () (read-all-forms-string "~42"))))
 
 ;; ========================================
 ;; Reader tests: sexp reader ~[] support
@@ -101,10 +98,9 @@
   (define result (prologos-sexp-read in))
   (check-equal? result '($lseq-literal)))
 
-(test-case "sexp: ~42 still produces approx-literal"
+(test-case "sexp: ~42 is rejected (N6c: ~N removed; ~[ unaffected)"
   (define in (open-input-string "~42"))
-  (define result (prologos-sexp-read in))
-  (check-equal? result '($approx-literal 42)))
+  (check-exn exn:fail? (lambda () (prologos-sexp-read in))))
 
 ;; ========================================
 ;; Preparse macro expansion tests

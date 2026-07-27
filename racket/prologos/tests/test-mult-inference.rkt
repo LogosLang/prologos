@@ -104,43 +104,35 @@
 
 (test-case "unify-mult/meta-vs-concrete"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      (define mm (fresh-mult-meta "test"))
-      ;; Unify Pi(?m, Nat, Nat) vs Pi(mw, Nat, Nat)
-      (define t1 (expr-Pi mm (expr-Nat) (expr-Nat)))
-      (define t2 (expr-Pi 'mw (expr-Nat) (expr-Nat)))
-      (check-equal? (unify ctx-empty t1 t2) #t)
-      (check-true (mult-meta-solved? (mult-meta-id mm)))
-      (check-equal? (mult-meta-solution (mult-meta-id mm)) 'mw))))
+    (define mm (fresh-mult-meta "test"))
+    ;; Unify Pi(?m, Nat, Nat) vs Pi(mw, Nat, Nat)
+    (define t1 (expr-Pi mm (expr-Nat) (expr-Nat)))
+    (define t2 (expr-Pi 'mw (expr-Nat) (expr-Nat)))
+    (check-equal? (unify ctx-empty t1 t2) #t)
+    (check-true (mult-meta-solved? (mult-meta-id mm)))
+    (check-equal? (mult-meta-solution (mult-meta-id mm)) 'mw)))
 
 (test-case "unify-mult/two-metas"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      (define mm1 (fresh-mult-meta "a"))
-      (define mm2 (fresh-mult-meta "b"))
-      (define t1 (expr-Pi mm1 (expr-Nat) (expr-Nat)))
-      (define t2 (expr-Pi mm2 (expr-Nat) (expr-Nat)))
-      (check-equal? (unify ctx-empty t1 t2) #t)
-      ;; One should be solved to the other
-      (check-true (mult-meta-solved? (mult-meta-id mm1))))))
+    (define mm1 (fresh-mult-meta "a"))
+    (define mm2 (fresh-mult-meta "b"))
+    (define t1 (expr-Pi mm1 (expr-Nat) (expr-Nat)))
+    (define t2 (expr-Pi mm2 (expr-Nat) (expr-Nat)))
+    (check-equal? (unify ctx-empty t1 t2) #t)
+    ;; One should be solved to the other
+    (check-true (mult-meta-solved? (mult-meta-id mm1)))))
 
 (test-case "unify-mult/ground-match"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      (define t1 (expr-Pi 'm1 (expr-Nat) (expr-Nat)))
-      (define t2 (expr-Pi 'm1 (expr-Nat) (expr-Nat)))
-      (check-equal? (unify ctx-empty t1 t2) #t))))
+    (define t1 (expr-Pi 'm1 (expr-Nat) (expr-Nat)))
+    (define t2 (expr-Pi 'm1 (expr-Nat) (expr-Nat)))
+    (check-equal? (unify ctx-empty t1 t2) #t)))
 
 (test-case "unify-mult/ground-mismatch-rejects"
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-      (define t1 (expr-Pi 'm0 (expr-Nat) (expr-Nat)))
-      (define t2 (expr-Pi 'm1 (expr-Nat) (expr-Nat)))
-      (check-equal? (unify ctx-empty t1 t2) #f))))
+    (define t1 (expr-Pi 'm0 (expr-Nat) (expr-Nat)))
+    (define t2 (expr-Pi 'm1 (expr-Nat) (expr-Nat)))
+    (check-equal? (unify ctx-empty t1 t2) #f)))
 
 ;; ========================================
 ;; Integration tests: multiplicity inference in user code
@@ -149,9 +141,7 @@
 ;; Helper: run prologos code with namespace system active
 (define (run-ns s)
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                   [current-ns-context #f]
+    (parameterize ([current-ns-context #f]
                    [current-module-registry prelude-module-registry]
                    [current-lib-paths (list prelude-lib-dir)]
                    [current-preparse-registry prelude-preparse-registry])

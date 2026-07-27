@@ -49,13 +49,39 @@
                   merge-classify-inhabit
                   classify-inhabit-contradiction?)
          (only-in "qtt.rkt" zero-usage single-usage add-usage scale-usage)  ;; Track 4B Phase 4
-         (only-in "typing-core.rkt" numeric-join)  ;; Phase T: generic op return types
+         (only-in "typing-core.rkt" numeric-join numeric-type-name
+                  refine-arith refine-arith1 base-numeric-type
+                  negatable-numeric-type? concrete-numeric-type? divisible-numeric-type?
+                  bare-exact-literal?)  ;; Phase T + N5de sign transfer + N6a warning policy
+         (only-in "sign-refinement.rkt"
+                  sign-transfer-add sign-transfer-sub sign-transfer-mul sign-transfer-div
+                  sign-transfer-neg sign-transfer-abs
+                  refined-name?)  ;; N5de sign transfer; N5f: refined-name? drives the exact classifier
          (only-in "warnings.rkt" emit-coercion-warning!)  ;; Phase 9 prep: coercion bridge
          (only-in "trait-resolution.rkt" resolve-trait-constraints!)  ;; Phase 9: parametric bridge
-         ;; Note (PPN 4C Path T-3 Commit A.2-a, 2026-04-22): imports from
-         ;; atms.rkt (assumption-id, assumption-id-n, solver-state-assume,
-         ;; solver-state?) removed — were only used by the pre-T-3 expr-union
-         ;; install case's worldview-bitmask branching, now retired.
+         ;; Note (PPN 4C Path T-3 Commit A.2-a, 2026-04-22): pre-T-3 expr-union
+         ;; install case's worldview-bitmask branching retired (atms.rkt imports
+         ;; were removed). PPN 4C Phase 3A.a (2026-05-22) re-introduces atms.rkt
+         ;; imports for the on-network fork-on-union mechanism — but for a
+         ;; different (non-imperative) purpose: per-branch worldview tagging on
+         ;; shared carrier (Realization B), not the pre-T-3 imperative branching.
+         (only-in "atms.rkt" assumption-id-n solver-state-amb)
+         ;; PPN 4C Phase 3A.a (2026-05-22): per-command ATMS box for fresh-aid
+         ;; allocation. Per-command scope verified at audit §9.3.2.4 / driver.rkt:464.
+         (only-in "elab-speculation-bridge.rkt" current-command-atms)
+         ;; PPN 4C Phase 3C.b.4 (2026-05-23): chain-construction wrapper for
+         ;; per-fork threshold-fire propagator. Wraps 3C.a's static-reverse-walk;
+         ;; enriches with assumption-names; consumed by threshold body to write
+         ;; structured derivation-chain into cell-19 (union-derivation-chains-cell-id).
+         (only-in "error-explanation.rkt" derivation-chain-for/union-contradict)
+         ;; PPN 4C Phase 3A.a (2026-05-22): flatten-union for N-ary decomposition.
+         (only-in "union-types.rkt" flatten-union)
+         ;; PPN 4C Phase 3A.b (2026-05-22): tagged-cell-value accessors for the
+         ;; tagged-attribute-map-read-with-base-merge helper. Used to inspect
+         ;; per-branch entries explicitly when reading at branch worldview
+         ;; positions other than the branch's own write position.
+         (only-in "decision-cell.rkt"
+                  tagged-cell-value? tagged-cell-value-base tagged-cell-value-entries)
          "elab-network-types.rkt"
          "errors.rkt"
          "pretty-print.rkt"
@@ -99,12 +125,30 @@
  type-map-read
  type-map-write
  type-map-write-unified  ;; PPN 4C Path T-3 Commit A.2-b: Role B equality-enforce write
+ ;; PPN 4C Phase 3A.b (2026-05-22): defensive helper for branch propagators that
+ ;; need to read attribute-map at positions OTHER than their fork's union position.
+ ;; Staged for Phase 9b multi-candidate γ hole-fill cross-position read need.
+ tagged-attribute-map-read-with-base-merge
  term-map-read
  term-map-write
  ;; PPN 4C Phase 3c-iii: cross-tag residuation infrastructure.
  type-of-expr
  make-classify-inhabit-residuation-fire-fn
  process-classify-inhabit-request
+ ;; PPN 4C Phase 3A.a (2026-05-22): fork-on-union mechanism API.
+ ;; Exposed for: (i) test-union-types-atms.rkt direct + E2E testing;
+ ;; (ii) future 3A.c classifier-watcher install that writes to cell-15.
+ make-branch-check-fire-fn
+ make-branch-contradiction-watcher-fire-fn  ;; PPN 4C Phase 3A.b — per-branch contradiction watcher
+ make-fork-chain-threshold-fire-fn          ;; PPN 4C Phase 3C.b.4 — per-fork threshold-fire (chain emission)
+ process-fork-on-union
+ process-fork-contradiction
+ ;; PPN 4C Phase 3A.c.3-R7 (2026-05-22): union-detection lives inline in
+ ;; type-map-write (helper `maybe-emit-fork-on-union-request`). The earlier
+ ;; classifier-watcher API (make-classifier-watcher-fire-fn + install-
+ ;; classifier-watcher; 3A.c.2 commit 4e8e9ad4) was retired in 3A.c.3-R7.c
+ ;; per addendum §9.3.7. Phase 9b γ multi-candidate watcher (if a use case
+ ;; surfaces) can resurrect the pattern from git history.
  ;; Track 4B Phase 6b: Fire-once propagator pattern (now in propagator.rkt, re-exported)
  net-add-fire-once-propagator
  ;; Phase 2 (D.4): Propagator-native typing
@@ -549,8 +593,45 @@
   (define tm (net-cell-read net tm-cid))
   (that-read tm position ':type))
 
+;; PPN 4C Phase 3A.c.3-R7 (2026-05-22): inline union-detection helper.
+;;
+;; Centralized at the :type write API (R7 — see addendum §9.3.7). Replaces
+;; the rejected classifier-watcher mechanism (3A.c.2 helpers; see §9.3.7
+;; for retirement decision). When type-val is a union and the position is
+;; not already in the decomposed-positions guard (cell-17), emit a fork-on-
+;; union decomposition request to cell-15. The process-fork-on-union handler
+;; (3A.a) consumes the request between BSP rounds and decomposes via N
+;; branch propagators.
+;;
+;; Data Orientation: the union value IS the trigger; emission happens at
+;; the moment the data is written, NOT via a watcher observing the data
+;; later. Zero extra propagator wakes — predicate check is O(1) struct-tag
+;; check inline with existing write.
+;;
+;; cell-17 guard (FP3 per §9.3.5.3): idempotence is structural. Handler
+;; writes (seteq position) to cell-17 when it decomposes (Step 5 of
+;; process-fork-on-union); subsequent writes to position's :type with a
+;; (possibly refined) union check the guard and skip emission.
+;;
+;; Coverage: per R7.a audit (§9.3.7.5), 47 production :type write sites
+;; flow through type-map-write or type-map-write-unified (which delegates
+;; to type-map-write). The 2 direct net-cell-write bypasses at typing-
+;; propagators.rkt:987 + :1055 write 'classify-inhabit-contradiction
+;; SYMBOL (not expr-union struct); R7's (expr-union? type-val) check
+;; correctly skips them.
+(define (maybe-emit-fork-on-union-request net tm-cid position type-val)
+  (cond
+    [(not (expr-union? type-val)) net]
+    [(set-member? (net-cell-read net decomposed-positions-cell-id) position) net]
+    [else
+     (define components (flatten-union type-val))
+     (define request-info (hasheq 'components components 'tm-cid tm-cid))
+     (net-cell-write net fork-on-union-request-cell-id
+                     (hasheq position request-info))]))
+
 (define (type-map-write net tm-cid position type-val)
-  (that-write net tm-cid position ':type type-val))
+  (define net1 (that-write net tm-cid position ':type type-val))
+  (maybe-emit-fork-on-union-request net1 tm-cid position type-val))
 
 ;; PPN 4C Path T-3 Commit A.2-b (2026-04-22): Role B equality-enforcement write.
 ;;
@@ -570,6 +651,81 @@
 (define (type-map-write-unified net tm-cid position expected)
   (define current (type-map-read net tm-cid position))
   (type-map-write net tm-cid position (type-unify-or-top current expected)))
+
+;; PPN 4C Phase 3A.b (2026-05-22): tagged-attribute-map-read-with-base-merge.
+;;
+;; Defensive helper for branch propagators that need to read attribute-map at
+;; positions OTHER than their fork's union position. Per §9.3.4 Q1 (build the
+;; helper now to design for Phase 9b γ hole-fill multi-candidate need).
+;;
+;; THE PROBLEM the helper closes:
+;; Under Realization B (in-place worldview tagging on shared carrier per
+;; §9.3.1.2), `promote-cell-to-tagged` is called on the attribute-map cell at
+;; fork-on-union entry. Subsequent branch writes (under wrap-with-worldview)
+;; become tagged entries at branch worldviews. The default `net-cell-read` via
+;; `tagged-cell-read` returns the matching entry ALONE — it does NOT merge
+;; with base. For a branch propagator that needs to see "base + my-branch's
+;; delta" semantics at a position the branch did NOT write to, the default
+;; read misses the base content.
+;;
+;; THE FIX:
+;; Read the raw tagged-cell-value (via net-cell-read-raw, bypassing filter),
+;; explicitly merge base with all entries whose bitmask is subset of the
+;; current worldview via attribute-map-merge-fn, then perform standard
+;; that-read on the merged hasheq. Position-local fast path: if the cell holds
+;; a plain hasheq (pre-promote OR no entries match current wv), falls through
+;; to direct hasheq lookup with no overhead.
+;;
+;; USAGE:
+;;   (tagged-attribute-map-read-with-base-merge net tm-cid position facet)
+;;     → value at (position, facet), with base correctly overlaid by branch entries
+;;
+;; CURRENT 3A.b CONSUMERS:
+;; None — `make-branch-check-fire-fn` only reads at the union position (safe under
+;; default tagged-cell-read). The helper is staged DEFENSIVELY for Phase 9b
+;; multi-candidate γ hole-fill, where the candidate-check propagator may need to
+;; read attribute-map at positions other than the hole position. See §9.3.4.8
+;; cross-track captures.
+;;
+;; CONTRACT: callers wrapping at non-zero worldview should use this helper for
+;; reads at positions they did NOT themselves write to. For reads at the same
+;; position the caller writes (3A.a make-branch-check-fire-fn pattern), the
+;; default net-cell-read + that-read suffices because the read targets the
+;; entry the caller wrote.
+(define (tagged-attribute-map-read-with-base-merge net tm-cid position facet)
+  (define raw (net-cell-read-raw net tm-cid))
+  (cond
+    [(tagged-cell-value? raw)
+     ;; Compute current worldview (per-propagator override OR worldview-cache cell)
+     (define per-prop-wv (current-worldview-bitmask))
+     (define wv (if (not (zero? per-prop-wv))
+                    per-prop-wv
+                    (net-cell-read net worldview-cache-cell-id)))
+     (cond
+       [(zero? wv)
+        ;; No active worldview — read base directly (fast path)
+        (define base (tagged-cell-value-base raw))
+        (if (hash? base) (that-read base position facet) (facet-bot facet))]
+       [else
+        ;; Merge base with all entries whose bm is subset of wv,
+        ;; via attribute-map-merge-fn — preserves "base + my-branch delta" semantics
+        (define base (tagged-cell-value-base raw))
+        (define merged
+          (for/fold ([acc base])
+                    ([entry (in-list (tagged-cell-value-entries raw))])
+            (define entry-bm (car entry))
+            (define entry-val (cdr entry))
+            (if (= (bitwise-and entry-bm wv) entry-bm)
+                (cond
+                  [(not (hash? acc)) entry-val]
+                  [(not (hash? entry-val)) acc]
+                  [else (attribute-map-merge-fn acc entry-val)])
+                acc)))
+        (if (hash? merged) (that-read merged position facet) (facet-bot facet))])]
+    [(hash? raw)
+     ;; Plain attribute-map (pre-promote or never branched) — fast path
+     (that-read raw position facet)]
+    [else (facet-bot facet)]))
 
 ;; PPN 4C Phase 3c-ii: term-map-read/write are symmetric helpers for the
 ;; INHABITANT layer. :term routes to the inhabitant layer of the :type facet
@@ -622,6 +778,12 @@
      (expr-fvar-name type-val)]
     [else #f]))
 
+;; N5f: last segment of a possibly-::-qualified type name → bare symbol
+;; ('prologos::data::refined-int::PosInt → 'PosInt; bare 'PosInt → 'PosInt).
+(define (fvar-name-last-segment name)
+  (define segs (string-split (symbol->string name) "::"))
+  (if (null? segs) name (string->symbol (list-ref segs (sub1 (length segs))))))
+
 ;; Type family classifier for coercion detection.
 ;; exact = arbitrary-precision (Int, Nat, Rat and subtypes)
 ;; approximate = machine-precision (Posit*, Float*)
@@ -635,22 +797,31 @@
     [(expr-Posit16? type-val) 'approximate]
     [(expr-Posit32? type-val) 'approximate]
     [(expr-Posit64? type-val) 'approximate]
-    ;; FQN types (from global env)
+    [(expr-Float32? type-val) 'approximate]
+    [(expr-Float64? type-val) 'approximate]
+    ;; FQN types (from global env): classify by EXACT last-segment, not substring.
+    ;; N5f (§8a fix 2): substring over-matched arbitrary names (Position⊃"Posit",
+    ;; NonZero⊃"Zero", Rateable⊃"Rat"). refined-name? is the authoritative refined
+    ;; whitelist (all 7 refined names have base Int/Rat = exact); the builtin numeric
+    ;; names are a defensive no-regress case — approximate/exact builtins normally
+    ;; arrive as structs above, but an FQN alias reaching here still classifies right.
     [(expr-fvar? type-val)
-     (define s (symbol->string (expr-fvar-name type-val)))
+     (define seg (fvar-name-last-segment (expr-fvar-name type-val)))
      (cond
-       [(or (string-contains? s "Rat") (string-contains? s "NegInt")
-            (string-contains? s "PosInt") (string-contains? s "Zero")
-            (string-contains? s "NegRat") (string-contains? s "PosRat"))
-        'exact]
-       [(or (string-contains? s "Posit") (string-contains? s "Float"))
-        'approximate]
+       [(refined-name? seg) 'exact]
+       [(memq seg '(Posit8 Posit16 Posit32 Posit64 Float32 Float64)) 'approximate]
+       [(memq seg '(Int Nat Rat)) 'exact]
        [else 'other])]
     [else 'other]))
 
 ;; S2 coercion-detection propagator: reads both arg types at a generic
 ;; op position. If they're from different families (exact vs approximate),
 ;; writes a coercion warning to :warnings. P2 fire-once.
+;; N6a: (a) values-only policy — a bare exact LITERAL operand never warns
+;; (mirrors numeric-join/warn!); (b) normalized text — exact-side type →
+;; JOIN type (mirroring the imperative wording exactly; previously raw
+;; operand types in argument order, e.g. "Int to Posit8" where the
+;; imperative said "Int to Posit32").
 (define (make-coercion-detection-fire-fn tm-cid position arg1-pos arg2-pos)
   (lambda (net)
     (define tm (net-cell-read net tm-cid))
@@ -663,9 +834,20 @@
        (define f2 (type-family t2))
        (cond
          [(and (not (eq? f1 'other)) (not (eq? f2 'other)) (not (eq? f1 f2)))
-          ;; Cross-family: emit coercion warning
-          (define warning (list 'coercion-warning (pp-expr t1) (pp-expr t2)))
-          (that-write net tm-cid position ':warnings (list warning))]
+          ;; Cross-family: identify the exact side (operand expr + type)
+          (define exact-first? (eq? f1 'exact))
+          (define exact-t (if exact-first? t1 t2))
+          (define exact-operand (if exact-first? arg1-pos arg2-pos))
+          (cond
+            ;; values-only: bare exact literal → no warning
+            [(bare-exact-literal? exact-operand) net]
+            [else
+             (define j (numeric-join t1 t2))
+             (define warning
+               (list 'coercion-warning
+                     (numeric-type-name exact-t)
+                     (if j (numeric-type-name j) (pp-expr (if exact-first? t2 t1)))))
+             (that-write net tm-cid position ':warnings (list warning))])]
          [else net])])))
 
 ;; Constraint-creation propagator: builds initial constraint domain from
@@ -892,6 +1074,478 @@
 (register-stratum-handler! classify-inhabit-request-cell-id
                            process-classify-inhabit-request)
 
+;; ============================================================
+;; PPN 4C Phase 3A.0 (2026-05-22): Fork-on-Union Stratum Handlers
+;; ============================================================
+;;
+;; Per addendum design §9.3.1.6 + §9.3.2. Stratum handlers for fork-on-union
+;; orchestration cells (cell-15 fork-on-union-request, cell-16
+;; fork-contradiction-request). Bodies are no-op stubs at 3A.0; full bodies
+;; wire at 3A.a (process-fork-on-union) + 3A.b (process-fork-contradiction).
+;;
+;; 3A.0 charter: establish the registration SHAPE without behavior change vs
+;; pre-3A.0 baseline. Drift risk D-3A.0-handler-no-op-leak — stubs MUST
+;; return net unchanged. Verified via probe diff = 0 vs baseline.
+;;
+;; Architectural model (per §9.3.1.2): BSP-LE 2/2B Realization B — in-place
+;; worldview tagging on shared carrier; NOT fork-and-rejoin (S1 NAF style).
+
+;; Per-branch check propagator factory (PPN 4C Phase 3A.a, 2026-05-22).
+;;
+;; Structurally parallel to make-classify-inhabit-residuation-fire-fn (line 841)
+;; — but parameterized by branch's COMPONENT (closed over) instead of reading
+;; classifier from cell. Each branch installs ONE of these wrapped via
+;; wrap-with-worldview at the branch's aid-bit-position; fires under branch
+;; worldview; reads e's INHABITANT (synthesized type) via worldview-filtered
+;; read; checks subtype against the branch component; writes contradiction
+;; sentinel tagged at branch wv (via cell merge) if incompatible.
+;;
+;; The contradiction sentinel ('classify-inhabit-contradiction) is what 3A.b's
+;; B2-broadcast contradiction watcher detects to write to cell-16.
+(define (make-branch-check-fire-fn tm-cid position component)
+  (lambda (net)
+    (define tm (net-cell-read net tm-cid))
+    (define record (if (hash? tm) (hash-ref tm position (hasheq)) (hasheq)))
+    ;; Read INHABITANT layer (classify-inhabit-value's inhabitant field).
+    ;; Note: net-cell-read filters tagged entries by current-worldview-bitmask
+    ;; (set by wrap-with-worldview wrapper) — so under branch wv we see
+    ;; branch-tagged inhabitant + outer base inhabitant (most-specific match).
+    (define cinhab-val (if (hash? record) (hash-ref record ':type classify-inhabit-bot-value) classify-inhabit-bot-value))
+    (define inhabitant (classify-inhabit-value-inhabitant-or-bot cinhab-val))
+    (cond
+      [(eq? inhabitant 'bot) net]  ;; defer — inhabitant not yet populated under this wv
+      [(classify-inhabit-contradiction? cinhab-val) net]  ;; already contradicted
+      [else
+       (define inhabitant-type (type-of-expr inhabitant))
+       (cond
+         [(type-bot? inhabitant-type) net]  ;; can't classify locally
+         [(subtype? inhabitant-type component) net]  ;; compatible — branch survives
+         [else
+          ;; Incompatible: inhabitant's type does NOT inhabit branch component.
+          ;; Write contradiction sentinel under branch wv (wrap-with-worldview
+          ;; sets current-worldview-bitmask at fire time → net-cell-write tags
+          ;; the entry at branch wv). 3A.b watcher detects this + writes branch
+          ;; aid to cell-16 → process-fork-contradiction narrows worldview-cache.
+          (net-cell-write net tm-cid
+            (hasheq position (hasheq ':type 'classify-inhabit-contradiction)))])])))
+
+;; cell-15 handler: process-fork-on-union — PPN 4C Phase 3A.a (2026-05-22).
+;; Consumes per-position fork-on-union decomposition requests written by the
+;; classifier-watcher (3A.c). For each request entry:
+;;   1. Flatten union into N components via flatten-union (N-ary decomp)
+;;   2. Allocate N fresh aids via solver-state-amb (per-command via
+;;      current-command-atms; aids are integer-tagged assumption-id structs)
+;;   3. Initialize worldview-cache (set N branch bits) — bitwise-or with
+;;      current worldview; non-committing semantics retains successful branches
+;;      until 3A.b's contradiction watcher narrows failed branches
+;;   4. Install N branch check propagators (one per component); each wrapped
+;;      at branch worldview via wrap-with-worldview(aid-bit-pos); fires when
+;;      e's INHABITANT changes (via :component-paths); writes contradiction
+;;      sentinel tagged at branch wv if incompatible
+;;
+;; Request entry shape (written by 3A.c classifier-watcher; for now test-stubbed):
+;;   pending-hash : (hasheq position → request-info)
+;;   request-info : (hasheq 'components (listof TypeExpr)
+;;                          'tm-cid CellId
+;;                          'source-loc (or srcloc #f))
+;;
+;; Idempotence: BSP outer-loop's #:reset-value (hasheq) clears cell-15 after
+;; handler runs. Threshold-fire-once at classifier-watcher (3A.c) prevents
+;; duplicate requests per (position, decomposition).
+;;
+;; Per §9.3.1.6 architecture (Realization B — in-place worldview tagging on
+;; shared carrier; NOT fork-and-rejoin). Per OQ4: Level 1 (Tarski) termination
+;; conditional on worldview filter correctness (3A parity axis validates).
+(define (process-fork-on-union net pending-hash)
+  (cond
+    [(or (not (hash? pending-hash)) (zero? (hash-count pending-hash))) net]
+    [else
+     (for/fold ([n net]) ([(position request-info) (in-hash pending-hash)])
+       (define components (hash-ref request-info 'components #f))
+       (define tm-cid (hash-ref request-info 'tm-cid #f))
+       (cond
+         [(or (not components) (not tm-cid) (null? components)) n]  ;; defensive: malformed request
+         [else
+          ;; Step 1: allocate N aids via current-command-atms
+          (define atms-box (current-command-atms))
+          (cond
+            [(not atms-box) n]  ;; defensive: no atms set (shouldn't happen in production)
+            [else
+             (define atms (unbox atms-box))
+             (define labels
+               (for/list ([i (in-naturals)] [_ (in-list components)])
+                 (format "branch-~a-at-~v" i position)))
+             ;; PPN 4C Phase 3B.A M0 (2026-05-22): pass #:mutual-exclusion? #f
+             ;; for non-committing semantic. Union-type inhabitation is at-least-
+             ;; one (any branch that succeeds keeps its inhabitant); classical
+             ;; mutex nogoods (exactly-one) would be semantically wrong and were
+             ;; structurally inert under the prior code path (verified §9.4.3.1
+             ;; A2). Per Q2(b), amb-groups append also skipped — solve-all
+             ;; semantic correctness preserved. See §9.4.3 for full rationale.
+             (define-values (atms* aids)
+               (solver-state-amb atms labels #:mutual-exclusion? #f))
+             (set-box! atms-box atms*)
+             ;; Step 2: initialize worldview-cache (set all N branch bits)
+             (define branch-mask
+               (for/fold ([mask 0]) ([aid (in-list aids)])
+                 (bitwise-ior mask (arithmetic-shift 1 (assumption-id-n aid)))))
+             (define current-wv (net-cell-read n worldview-cache-cell-id))
+             (define n1 (net-cell-write n worldview-cache-cell-id
+                                         (bitwise-ior current-wv branch-mask)))
+             ;; Step 2.5 (PPN 4C Phase 3A.b — Option E per §9.3.4):
+             ;; Promote attribute-map cell to tagged-cell-value BEFORE installing
+             ;; branch propagators. This is the LOAD-BEARING step that enables
+             ;; per-branch isolation under wrap-with-worldview. Without it,
+             ;; attribute-map writes under branch worldviews would merge into
+             ;; the plain hasheq base (no tagging), and per-branch contradictions
+             ;; would be globally visible (the bug Phase 3A.b's prior session
+             ;; surfaced via E2E test failure).
+             ;;
+             ;; The pattern mirrors relations.rkt's 5 production sites (NAF :2034,
+             ;; guard :2079, fact-row :2481, multi-clause :2564, additional :2944).
+             ;; `promote-cell-to-tagged` is idempotent (no-op if already tagged)
+             ;; and atomically rewrites the cell's merge-fn to
+             ;; `(make-tagged-merge attribute-map-merge-fn)` — preserving original
+             ;; merge semantics for the both-plain case while enabling tagged
+             ;; entry composition under wrap-with-worldview.
+             (define n2 (promote-cell-to-tagged n1 tm-cid))
+             ;; Step 3: install N branch check propagators (per branch, wrapped at branch wv).
+             ;; Each check writes contradiction sentinel at branch wv under post-Step-2.5
+             ;; promoted tagged-cell-value semantics — entries tagged at branch-bit, isolated
+             ;; from sibling branches.
+             (define n3
+               (for/fold ([acc n2]) ([component (in-list components)] [aid (in-list aids)])
+                 (define bit-pos (assumption-id-n aid))
+                 (define-values (acc* _pid)
+                   (net-add-propagator acc (list tm-cid) (list tm-cid)
+                     (wrap-with-worldview
+                       (make-branch-check-fire-fn tm-cid position component)
+                       bit-pos)
+                     #:component-paths (list (cons tm-cid (cons position ':term)))))
+                 acc*))
+             ;; Step 4 (PPN 4C Phase 3A.b — per §9.3.4.6 step 3):
+             ;; Install N fire-once contradiction watchers (one per branch), each
+             ;; wrapped at its branch worldview. Each watcher reads attribute-map
+             ;; under its branch wv (via tagged-cell-value subset filtering),
+             ;; detects 'classify-inhabit-contradiction sentinel, writes (seteq aid)
+             ;; to cell-16 (fork-contradiction-request-cell-id; set-union merge
+             ;; accumulates aids from all branches that contradicted). The
+             ;; process-fork-contradiction handler then atomically narrows
+             ;; worldview-cache via bitwise-AND-with-NOT-mask.
+             ;;
+             ;; Why N fire-once (not 1 broadcast): broadcast reads inputs ONCE
+             ;; at fire time (no per-item worldview dispatch). N fire-once
+             ;; propagators wrapped at per-branch worldviews matches relations.rkt
+             ;; pattern and enables BSP parallel decomposition.
+             ;; Step 4 — captured as n4 for Step 5's cell-17 guard write
+             ;; PPN 4C Phase 3C.b.5.c BUGFIX (2026-05-23): cell-18 added to OUTPUTS
+             ;; list. 3C.b.2's watcher fan-out writes to BOTH cell-16 + cell-18 in
+             ;; its fire-fn body, but only cell-16 was declared as output. Per
+             ;; propagator.rkt:2848-2871 + :2971-2989, writes to UNDECLARED output
+             ;; cells use `struct-copy` direct-set (bypassing merge) "to avoid
+             ;; double-merging with non-idempotent merge functions like append".
+             ;;
+             ;; This made cell-18 effectively LAST-WRITE-WINS for multiple watcher
+             ;; fires in the same BSP round: when watcher-0 + watcher-1 both fire,
+             ;; their cell-18 writes go through bulk-merge-writes's undeclared-
+             ;; writes path → for/fold applies them sequentially via direct-set →
+             ;; only the LAST write survives (typically aid-0). cell-18 was thus
+             ;; de facto last-write-wins instead of monotone accumulation,
+             ;; defeating its purpose as the threshold-fire latch.
+             ;;
+             ;; Diagnosed at 3C.b.5.c via E2E probe (cell-18 had only aid-0 even
+             ;; though worldview-cache went to 0 = both bits cleared, proving
+             ;; both watchers fired + cell-16 received both aids via the merge-
+             ;; path). Verified by reading propagator.rkt's fire-and-collect-
+             ;; writes (line 2833) + bulk-merge-writes (line 2971).
+             ;;
+             ;; The fix: declare cell-18 as a watcher output. Writes route
+             ;; through fire-result.value-writes (line 2839-2846) → applied via
+             ;; net-cell-write (line 2968) → cell-18's merge function
+             ;; (contradicted-branch-aids-merge) ACCUMULATES per-position aid-
+             ;; sets via set-union, as designed at 3C.b.1.
+             (define n4
+               (for/fold ([acc n3]) ([aid (in-list aids)])
+                 (define bit-pos (assumption-id-n aid))
+                 (define-values (acc* _pid)
+                   (net-add-fire-once-propagator acc
+                     (list tm-cid)
+                     (list fork-contradiction-request-cell-id
+                           contradicted-branch-aids-cell-id)        ;; 3C.b.5.c bugfix
+                     (wrap-with-worldview
+                       (make-branch-contradiction-watcher-fire-fn tm-cid position aid)
+                       bit-pos)
+                     #:component-paths (list (cons tm-cid (cons position ':type)))
+                     #:assumption aid))
+                 acc*))
+             ;; Step 4.5 (PPN 4C Phase 3C.b.4, 2026-05-23): per-fork threshold-fire
+             ;; propagator for chain emission. Per addendum §9.5.3.3 refined option (d).
+             ;;
+             ;; Reads cell-18 (contradicted-branch-aids latch); closes over THIS
+             ;; fork's (position, branch-aid-set, request-info); fires when all
+             ;; branch aids are in cell-18's per-position entry (subset check);
+             ;; action: build derivation chain via 3C.b.3 wrapper + write to cell-19
+             ;; (union-derivation-chains storage; 3C.c consumes from check/err).
+             ;;
+             ;; NOT fire-once: predicate may not be met on first cell-18 change
+             ;; (branches may contradict across multiple BSP rounds). Stays
+             ;; installed; structural idempotence via cell-18 stability after all
+             ;; watchers fire (each fire-once) + defensive cell-19 emit-once guard.
+             ;;
+             ;; :component-paths precision: fires only on THIS position's cell-18
+             ;; entry change (sibling positions / concurrent forks don't wake it).
+             (define branch-aid-set (apply seteq aids))
+             (define-values (n5 _chain-pid)
+               (net-add-propagator n4
+                 (list contradicted-branch-aids-cell-id)         ;; input: cell-18 latch
+                 (list union-derivation-chains-cell-id)          ;; output: cell-19 storage
+                 (make-fork-chain-threshold-fire-fn position branch-aid-set request-info)
+                 #:component-paths (list (cons contradicted-branch-aids-cell-id position))))
+             ;; Step 5 (PPN 4C Phase 3A.c.3-R7, 2026-05-22): FP3 guard write.
+             ;;
+             ;; Mark this position as decomposed so subsequent :type writes that
+             ;; happen to yield a union (e.g., refinement from branch propagators
+             ;; OR upstream propagators re-firing) do NOT trigger re-emission of
+             ;; the fork-on-union request via R7's inline check in type-map-write.
+             ;;
+             ;; cell-17 (decomposed-positions-cell-id) is a 'monotone-set domain
+             ;; cell with merge-set-union semantics — writing the same position
+             ;; twice is idempotent. The on-network guard makes R7's idempotence
+             ;; STRUCTURAL (Correct by Construction) rather than relying on
+             ;; flag-guard semantics or downstream dedup.
+             (net-cell-write n5 decomposed-positions-cell-id (seteq position))])]))]))
+
+;; PPN 4C Phase 3A.b (2026-05-22): per-branch contradiction watcher factory.
+;;
+;; Fire function reads attribute-map at the union position UNDER the branch
+;; worldview (wrap-with-worldview parameterizes current-worldview-bitmask
+;; before fire; net-cell-read filters tagged-cell-value entries by subset
+;; semantics). Detects 'classify-inhabit-contradiction sentinel set by
+;; make-branch-check-fire-fn on incompatible subtype check; emits the
+;; branch aid to cell-16 (fork-contradiction-request-cell-id).
+;;
+;; Per-branch isolation: under branch-i's wv=bit-i, tagged-cell-read returns
+;; entries with bm subset of bit-i. Branch-j's writes (bm=bit-j) have bm
+;; NOT subset of bit-i (disjoint bits) — invisible. Only branch-i's writes
+;; matter. This is the load-bearing correctness property post-Step-2.5
+;; promote-cell-to-tagged.
+;;
+;; Fire-once via net-add-fire-once-propagator: per-branch watcher fires AT MOST
+;; once after the check propagator writes the contradiction. Idempotent under
+;; cell-16's set-union merge (writing the same (seteq aid) twice is a no-op
+;; under set semantics). Self-cleans dependents after firing per fire-once.
+;; PPN 4C Phase 3C.b.4 (2026-05-23): per-fork threshold-fire propagator factory
+;; for chain emission. Per addendum §9.5.3.3 refined option (d) — set-latch +
+;; threshold canonical pattern from .claude/rules/propagator-design.md.
+;;
+;; The threshold propagator is installed PER FORK at process-fork-on-union
+;; (step 4.5, between watcher install and cell-17 guard write). It reads cell-18
+;; (contradicted-branch-aids-cell-id) — the monotone per-position aid-set
+;; LATCH populated by 3C.b.2 watcher fan-out. Closes over (position,
+;; branch-aid-set, request-info) for the specific fork it's emitted for.
+;;
+;; FIRE SEMANTICS — NOT fire-once (intentional):
+;;   The threshold uses plain `net-add-propagator` (NOT
+;;   net-add-fire-once-propagator) because the THRESHOLD CONDITION may not
+;;   be met on the first cell-18 change. fire-once would self-clean after
+;;   the first invocation regardless of whether the predicate held — but
+;;   the predicate becomes true only AFTER ALL N branches have contradicted
+;;   (which may span multiple BSP rounds if branches contradict at different
+;;   times). The threshold must STAY INSTALLED to re-evaluate as cell-18 grows.
+;;
+;; STRUCTURAL IDEMPOTENCE (Q-B.1.iii landing under option (d)):
+;;   After all watchers fire (each is fire-once + self-cleans), cell-18
+;;   STABILIZES at its position entry; no further writes trigger re-evaluation.
+;;   The threshold's body therefore fires AT MOST ONCE in practice — when
+;;   the LAST watcher completes the subset. DEFENSIVE GUARD via cell-19
+;;   emit-once check (hash-has-key?) handles the edge case where cell-18
+;;   would re-trigger (shouldn't happen given watcher fire-once + stable
+;;   monotone cell, but defensive against future fan-in extensions).
+;;
+;; COMPONENT-PATHS PRECISION:
+;;   Declares :component-paths (list (cons contradicted-branch-aids-cell-id
+;;   position)) so the threshold fires only when ITS position's aid-set
+;;   changes — sibling position changes (other concurrent forks) don't
+;;   wake it. Per §7.5.12.5 design-doc correction: flat hasheq cells emit
+;;   bare position keys in pu-value-diff; declaration uses cons-pair shape.
+;;
+;; AID IDENTITY NORMALIZATION (D-3C.b-7 precedent from 3C.b.3):
+;;   branch-aid-set contains canonical aid instances (preserved eq? identity
+;;   through closure capture in watcher); cell-18 entries contain those
+;;   same canonical instances (watcher writes (seteq aid)). For subset
+;;   check, normalize BOTH to integer aid-ns to avoid eq?-vs-equal? hazard
+;;   should the canonical-identity invariant ever break (e.g., per-command
+;;   ATMS reset between forks). Pattern mirrors the wrapper at 3C.b.3.
+(define (make-fork-chain-threshold-fire-fn position branch-aid-set request-info)
+  (define branch-aid-ns
+    (for/seteqv ([aid (in-set branch-aid-set)]) (assumption-id-n aid)))
+  (lambda (net)
+    ;; Threshold check: is the full branch-aid-set ⊆ cell-18's position entry?
+    (define cell-18-val (net-cell-read net contradicted-branch-aids-cell-id))
+    (define position-aids (hash-ref cell-18-val position (seteq)))
+    (define position-aid-ns
+      (for/seteqv ([aid (in-set position-aids)]) (assumption-id-n aid)))
+    (cond
+      [(not (subset? branch-aid-ns position-aid-ns))
+       ;; Not all branches contradicted yet — return net unchanged (threshold
+       ;; stays installed; will be re-evaluated on next cell-18 write).
+       net]
+      [else
+       ;; All branches contradicted. Defensive idempotence guard via cell-19
+       ;; presence check (subsumed by structural stability of cell-18 post-
+       ;; watcher-completion; defensive against future fan-in extensions).
+       (define cell-19-val (net-cell-read net union-derivation-chains-cell-id))
+       (cond
+         [(hash-has-key? cell-19-val position)
+          ;; Already emitted for this position — no-op (true Q-B.1.iii
+          ;; subsumption preserved + defensive)
+          net]
+         [else
+          ;; All branches contradicted + not yet emitted: build PER-BRANCH chain
+          ;; list (per Q-C.6 lock — addendum §9.5.4.3 lean (a)) + write.
+          ;;
+          ;; Per-branch list shape aligns cell-19 with union-exhaustion-error's
+          ;; (listof derivation-chain) field shape (Q-B.2 lock). Sexp path
+          ;; (3C.c.3 check/err writer) produces per-branch list naturally; this
+          ;; writer iterates the wrapper N times (one per branch-aid) to match.
+          ;;
+          ;; PPN 4C 3C.c.2 (2026-05-24): adjusted from single aggregated chain
+          ;; to per-branch list per §9.5.4.3 Q-C.6 audit-surfaced finding. Cost:
+          ;; N walks instead of 1 (negligible — error paths not hot; diagnostic
+          ;; richness justifies). Honest correction of missed-audit at 3C.b VAG,
+          ;; not scope creep — same wrapper API used iteratively.
+          (define per-branch-chains
+            (for/list ([aid (in-set branch-aid-set)])
+              (derivation-chain-for/union-contradict net (seteq aid) request-info)))
+          (net-cell-write net union-derivation-chains-cell-id
+                          (hasheq position per-branch-chains))])])))
+
+(define (make-branch-contradiction-watcher-fire-fn tm-cid position aid)
+  (lambda (net)
+    (define tm (net-cell-read net tm-cid))
+    (define record (if (hash? tm) (hash-ref tm position (hasheq)) (hasheq)))
+    (define cinhab-val (if (hash? record)
+                           (hash-ref record ':type classify-inhabit-bot-value)
+                           classify-inhabit-bot-value))
+    (cond
+      [(classify-inhabit-contradiction? cinhab-val)
+       ;; PPN 4C Phase 3C.b.2 (2026-05-23): fan-out write to cell-16
+       ;; (existing transient narrowing handler input) AND cell-18 (NEW
+       ;; persistent latch for per-fork threshold-fire-once propagator at
+       ;; 3C.b.4). Per addendum design §9.5.3.3 refined option (d).
+       ;;
+       ;; cell-16 (fork-contradiction-request-cell-id): set-union merge;
+       ;;   transient (#:reset-value (seteq) between BSP rounds); feeds the
+       ;;   process-fork-contradiction handler that atomically narrows
+       ;;   worldview-cache via AND-NOT-mask. UNCHANGED from 3A.b.
+       ;; cell-18 (contradicted-branch-aids-cell-id): hash-union with
+       ;;   set-union per-position; PERSISTS across BSP rounds within command
+       ;;   (the latch for set-latch + threshold pattern per
+       ;;   .claude/rules/propagator-design.md). Payload shape:
+       ;;   (hasheq position (seteq aid)) — hash-union merge accumulates
+       ;;   per-position aid-sets monotonically; threshold-fire-once
+       ;;   propagator (3C.b.4) reads cell-18 + fires when (subset?
+       ;;   branch-aid-set (hash-ref cell-18-val position)).
+       ;;
+       ;; Both writes are monotone (CALM-safe); order doesn't matter;
+       ;; idempotent under repeated fires (but fire-once self-cleans so this
+       ;; shouldn't recur). Existing handlers (process-fork-contradiction)
+       ;; stay SINGLE-CONCERN — fan-out is at the watcher layer, not handler.
+       ;; D-3C.b-6: watcher fan-out coupling pattern (codification candidate;
+       ;; future readers install separate propagators reading cell-16, NOT
+       ;; extending this watcher — bounded to 2-cell minimum).
+       (let* ([n1 (net-cell-write net fork-contradiction-request-cell-id (seteq aid))]
+              [n2 (net-cell-write n1 contradicted-branch-aids-cell-id
+                                  (hasheq position (seteq aid)))])
+         n2)]
+      [else net])))
+
+;; cell-16 handler: process-fork-contradiction — PPN 4C Phase 3A.b (2026-05-22).
+;;
+;; Consumes accumulated aid-set (set of branch assumption-ids that the per-branch
+;; contradiction watchers wrote to cell-16 during the prior BSP round). For each
+;; contradicted aid, computes its bit position; atomically narrows the
+;; worldview-cache by bitwise-AND-with-NOT-mask:
+;;
+;;   worldview-cache = worldview-cache & (bitwise-not contradicted-bits)
+;;
+;; This clears the contradicted branches' bits from the active worldview.
+;; Subsequent propagators wrapped at those branches' worldviews will read
+;; worldview-cache and (in conjunction with the per-propagator wrap-with-worldview
+;; bitmask check) become inert — the branches are structurally retracted.
+;;
+;; Mirrors 2A.a process-retraction pattern (atomic narrowing handler that runs
+;; BETWEEN BSP rounds; one-pass over the accumulated set). BSP outer-loop's
+;; #:reset-value (seteq) (registered at 3A.0) clears cell-16 after the handler
+;; returns, preparing for the next BSP round's accumulation.
+;;
+;; Atomicity: stratum handlers run between BSP rounds, NOT during them. The
+;; in-round writes to cell-16 from per-branch watchers all accumulate via
+;; set-union merge; the handler reads the fully-accumulated set once and
+;; performs a single narrowing write. No racing — handler runs atomically
+;; per round.
+;;
+;; Non-committing inhabitation semantics (per OQ1 §9.3.1.3): surviving branches'
+;; bits REMAIN set in worldview-cache after narrowing. Only contradicted
+;; branches' bits clear. Multi-success branches coexist.
+(define (process-fork-contradiction net contradiction-aid-set)
+  (cond
+    [(or (not (set? contradiction-aid-set))
+         (set-empty? contradiction-aid-set)) net]
+    [else
+     ;; Compute mask of contradicted bits
+     (define contradicted-bits
+       (for/fold ([mask 0]) ([aid (in-set contradiction-aid-set)])
+         (bitwise-ior mask (arithmetic-shift 1 (assumption-id-n aid)))))
+     ;; Read current worldview, compute narrowed worldview
+     (define current-wv (net-cell-read net worldview-cache-cell-id))
+     (define narrowed-wv (bitwise-and current-wv (bitwise-not contradicted-bits)))
+     ;; Idempotent — no write if no actual narrowing happens
+     (cond
+       [(= current-wv narrowed-wv) net]
+       [else (net-cell-write net worldview-cache-cell-id narrowed-wv)])]))
+
+;; Register handlers at module load. Per addendum design §9.3 deliverable 2
+;; (cell-15) + deliverable 5 (cell-16). #:tier 'value places them in the
+;; BSP outer-loop's value-tier stratum iteration alongside other elaboration
+;; concerns (process-classify-inhabit-request, process-retraction,
+;; process-resolution). #:reset-value matches each cell's initial value type
+;; (hasheq for cell-15; seteq for cell-16) — BSP outer-loop auto-clears after
+;; the handler returns, preparing for the next BSP round's accumulation.
+(register-stratum-handler! fork-on-union-request-cell-id
+                           process-fork-on-union
+                           #:tier 'value
+                           #:reset-value (hasheq))
+(register-stratum-handler! fork-contradiction-request-cell-id
+                           process-fork-contradiction
+                           #:tier 'value
+                           #:reset-value (seteq))
+
+;; ============================================================
+;; PPN 4C Phase 3A.c (2026-05-22): Union-detection at type-write API
+;; ============================================================
+;;
+;; ARCHITECTURAL HISTORY: Phase 3A.c originally designed a per-position
+;; classifier-watcher propagator (commit `4e8e9ad4`, 3A.c.2) per addendum
+;; §9.3.5.3 Decision 1's β.1 universal install + FP3 guard. The 3A.c.3
+;; attempt to invoke the watchers universally at install-typing-network
+;; broke 11 polymorphic-trait-dispatch tests via fuel exhaustion
+;; (~45-100 watcher wake-ups per polymorphic call consumed
+;; TYPING-FUEL-LIMIT budget that trait-resolution needed).
+;;
+;; R8 empirical fuel test (2026-05-22, §9.3.6.8) confirmed H-compound-4
+;; fuel pressure as the leading mechanism. The architecture (β.1 + FP3)
+;; was correct; the WATCHER MECHANISM was wasteful.
+;;
+;; R7 reframe (§9.3.7, this is the implemented form): centralize the
+;; union-detection inline in `type-map-write` (the canonical :type write
+;; API). Zero extra propagator wakes — the predicate check fires inline
+;; with the existing write. See `maybe-emit-fork-on-union-request` helper
+;; at line 585+ (above) for the implementation. The classifier-watcher
+;; helpers (3A.c.2) were retired in 3A.c.3-R7.c as superseded; the pattern
+;; remains available in git history (commit `4e8e9ad4`) for Phase 9b γ
+;; multi-candidate use case if it materializes.
+
 ;; Meta-solution output propagator: watches one meta's :term facet
 ;; (INHABITANT layer — the meta's SOLUTION per §6.15.8 Q6). Writes
 ;; (meta-id . solution) to the output cell when resolved.
@@ -945,9 +1599,30 @@
            net  ;; all usages compatible — no warnings
            (that-write net tm-cid expr-pos ':warnings violations))])))
 
+;; N6a: enumerate an expr's subterms as an eq-set, for scoping the
+;; post-quiescence warning harvest to the current command's tree.
+;; GENERIC transparent-struct walk — deliberately shape-agnostic: no
+;; per-node-kind exhaustiveness obligation (the pipeline.md trap), and a
+;; superset is harmless since the set is used only for membership
+;; filtering of attr-map positions (which are exactly expr objects).
+(define (expr-subterm-seteq root)
+  (define seen (mutable-seteq))
+  (let loop ([v root])
+    (cond
+      [(and (struct? v) (not (set-member? seen v)))
+       (set-add! seen v)
+       (define vec (struct->vector v))
+       (for ([i (in-range 1 (vector-length vec))])
+         (loop (vector-ref vec i)))]
+      [(pair? v) (loop (car v)) (loop (cdr v))]
+      [else (void)]))
+  seen)
+
 ;; Warning-collection propagator: reads all :warnings facets from
 ;; the attribute map and writes the collected set to an output cell.
 ;; Fires at S2 after all warning producers have written.
+;; N6a: RETIRED from production (infer-on-network now does a scoped
+;; post-quiescence read); kept exported for tests (test-meta-feedback).
 (define (make-warning-collection-fire-fn tm-cid output-cid)
   (lambda (net)
     (define tm (net-cell-read net tm-cid))
@@ -1414,21 +2089,42 @@
          #:component-paths child-type-paths))
      net*]
     [else
-     ;; Constant return type
+     ;; Constant return type. Install children (if any) first.
      (define net-with-children
        (for/fold ([n net]) ([child-fn (in-list children)])
          (install-typing-network n tm-cid (child-fn e) ctx-pos)))
-     ;; PPN 4C Phase 3e/follow-up (2026-04-20): literal-fire writes a constant
-     ;; and does NOT read any cell. Inputs = (list) — no dependencies. The
-     ;; propagator still fires exactly once via the scheduler's initial-firing
-     ;; path (net-add-propagator unconditionally enqueues pid at install time).
-     ;; No :component-paths needed (empty input list means no structural
-     ;; inputs to enforce). Cleaner than the (cons tm-cid #f) whole-cell
-     ;; declaration that misleadingly suggested it watches everything.
-     (define-values (net* _pid)
-       (net-add-propagator net-with-children (list) (list tm-cid)
-                           (make-literal-fire-fn tm-cid e ret-type)))
-     net*]))
+     (cond
+       [(null? children)
+        ;; True literal (arity 0): no operands to watch — fast path, write the
+        ;; constant once. PPN 4C Phase 3e/follow-up (2026-04-20): literal-fire writes
+        ;; a constant and reads no cell; inputs = (list) — fires once via initial-firing.
+        (define-values (net* _pid)
+          (net-add-propagator net-with-children (list) (list tm-cid)
+                              (make-literal-fire-fn tm-cid e ret-type)))
+        net*]
+       [else
+        ;; N4b (Option B): constant-return op WITH operands — watch each child's :type
+        ;; and FORWARD a child type-top to the op position instead of masking it. A
+        ;; context-typed num-lit operand whose default collides with the expected
+        ;; operand type produces type-top at that child; forwarding it makes the
+        ;; on-network result non-clean, so the imperative fallback runs (its op rule
+        ;; checks operands + solves the literal's meta). Concrete/marker operands keep
+        ;; clean child :types → no type-top → the constant ret-type is written as before.
+        (define child-exprs (map (lambda (fn) (fn e)) children))
+        (define child-type-paths
+          (map (lambda (c) (cons tm-cid (cons c ':type))) child-exprs))
+        (define-values (net* _pid)
+          (net-add-propagator net-with-children (list tm-cid) (list tm-cid)
+            (lambda (net)
+              (define child-types
+                (map (lambda (c) (type-map-read net tm-cid c)) child-exprs))
+              (cond
+                [(ormap type-bot? child-types) net]  ;; wait for all children
+                [(ormap type-top? child-types)
+                 (type-map-write net tm-cid e type-top)]
+                [else (type-map-write net tm-cid e ret-type)]))
+            #:component-paths child-type-paths))
+        net*])]))
 
 ;; Register ALL known expression kinds.
 ;; Called once at module load time.
@@ -1453,6 +2149,10 @@
   (register-typing-rule! expr-unit? 0 '() (expr-Unit) 'unit-literal)
   (register-typing-rule! expr-nil? 0 '() (expr-Nil) 'nil-literal)
   (register-typing-rule! expr-refl? 0 '() #f 'refl)  ;; dependent: Eq a a
+  ;; CIU T6 F1b.5-s2: validate — deliberate #f return-type (the refl pattern):
+  ;; position stays ⊥ → the refusal checks re-route to the imperative checker
+  ;; (which owns the rule); registering suppresses unhandled-expr-counts noise.
+  (register-typing-rule! expr-validate? 0 '() #f 'validate)
   (register-typing-rule! expr-hole? 0 '() #f 'hole)
   (register-typing-rule! expr-error? 0 '() #f 'error)
   (register-typing-rule! expr-cut? 0 '() #f 'cut)
@@ -1462,6 +2162,8 @@
   (register-typing-rule! expr-posit16? 0 '() (expr-Posit16) 'posit16-literal)
   (register-typing-rule! expr-posit32? 0 '() (expr-Posit32) 'posit32-literal)
   (register-typing-rule! expr-posit64? 0 '() (expr-Posit64) 'posit64-literal)
+  (register-typing-rule! expr-float32? 0 '() (expr-Float32) 'float32-literal)
+  (register-typing-rule! expr-float64? 0 '() (expr-Float64) 'float64-literal)
 
   ;; Quire literals
   (register-typing-rule! expr-quire8-val? 0 '() (expr-Quire8) 'quire8-literal)
@@ -1475,6 +2177,7 @@
   ;; ===== TYPE CONSTRUCTORS → Type(lzero) =====
   (for ([pred (list expr-Char? expr-Symbol? expr-Keyword? expr-Unit? expr-Nil?
                    expr-Posit8? expr-Posit16? expr-Posit32? expr-Posit64?
+                   expr-Float32? expr-Float64?
                    expr-Quire8? expr-Quire16? expr-Quire32? expr-Quire64?
                    expr-Rat? expr-Path? expr-goal-type? expr-solver-type?
                    expr-derivation-type?)]
@@ -1590,6 +2293,42 @@
   (register-typing-rule! expr-p32-from-rat? 1 (list expr-p32-from-rat-a) (expr-Posit32) 'p32-from-rat)
   (register-typing-rule! expr-p32-from-int? 1 (list expr-p32-from-int-a) (expr-Posit32) 'p32-from-int)
 
+  ;; ===== FLOAT32 OPS (Numerics N3b) =====
+  (register-binary-ops!
+   (list (list expr-f32-add? expr-f32-add-a expr-f32-add-b 'f32-add)
+         (list expr-f32-sub? expr-f32-sub-a expr-f32-sub-b 'f32-sub)
+         (list expr-f32-mul? expr-f32-mul-a expr-f32-mul-b 'f32-mul)
+         (list expr-f32-div? expr-f32-div-a expr-f32-div-b 'f32-div))
+   (expr-Float32))
+  (register-unary-ops!
+   (list (list expr-f32-neg? expr-f32-neg-a 'f32-neg)
+         (list expr-f32-abs? expr-f32-abs-a 'f32-abs)
+         (list expr-f32-sqrt? expr-f32-sqrt-a 'f32-sqrt))
+   (expr-Float32))
+  (register-binary-ops!
+   (list (list expr-f32-lt? expr-f32-lt-a expr-f32-lt-b 'f32-lt)
+         (list expr-f32-le? expr-f32-le-a expr-f32-le-b 'f32-le)
+         (list expr-f32-eq? expr-f32-eq-a expr-f32-eq-b 'f32-eq))
+   (expr-Bool))
+
+  ;; ===== FLOAT64 OPS (Numerics N3b) =====
+  (register-binary-ops!
+   (list (list expr-f64-add? expr-f64-add-a expr-f64-add-b 'f64-add)
+         (list expr-f64-sub? expr-f64-sub-a expr-f64-sub-b 'f64-sub)
+         (list expr-f64-mul? expr-f64-mul-a expr-f64-mul-b 'f64-mul)
+         (list expr-f64-div? expr-f64-div-a expr-f64-div-b 'f64-div))
+   (expr-Float64))
+  (register-unary-ops!
+   (list (list expr-f64-neg? expr-f64-neg-a 'f64-neg)
+         (list expr-f64-abs? expr-f64-abs-a 'f64-abs)
+         (list expr-f64-sqrt? expr-f64-sqrt-a 'f64-sqrt))
+   (expr-Float64))
+  (register-binary-ops!
+   (list (list expr-f64-lt? expr-f64-lt-a expr-f64-lt-b 'f64-lt)
+         (list expr-f64-le? expr-f64-le-a expr-f64-le-b 'f64-le)
+         (list expr-f64-eq? expr-f64-eq-a expr-f64-eq-b 'f64-eq))
+   (expr-Bool))
+
   ;; ===== POSIT64 ARITHMETIC =====
   (register-binary-ops!
    (list (list expr-p64-add? expr-p64-add-a expr-p64-add-b 'p64-add)
@@ -1636,6 +2375,17 @@
   (register-typing-rule! expr-map-keys? 1 (list expr-map-keys-m) #f 'map-keys)
   (register-typing-rule! expr-map-vals? 1 (list expr-map-vals-m) #f 'map-vals)
 
+  ;; ===== SOLVE / EXPLAIN (Rel T1 Aspect B, B1) =====
+  ;; Return-type #f: dispatched like map-assoc, computed by the imperative fallback
+  ;; (solve-row-type). This makes solve #f-dispatched EXACTLY like records (not an
+  ;; unhandled catch-all fallthrough) — coverage hygiene + the documented retirement
+  ;; seam (flip #f→computed = the joint records+solve on-network move, BSP-LE Track 3).
+  (register-typing-rule! expr-solve? 1 (list expr-solve-goal) #f 'solve)
+  (register-typing-rule! expr-solve-with? 3 (list expr-solve-with-solver expr-solve-with-overrides expr-solve-with-goal) #f 'solve-with)
+  (register-typing-rule! expr-solve-one? 1 (list expr-solve-one-goal) #f 'solve-one)
+  (register-typing-rule! expr-explain? 1 (list expr-explain-goal) #f 'explain)
+  (register-typing-rule! expr-explain-with? 3 (list expr-explain-with-solver expr-explain-with-overrides expr-explain-with-goal) #f 'explain-with)
+
   ;; ===== SET OPERATIONS =====
   ;; Same pattern: structural ops as #f, constant ops computed.
   (register-typing-rule! expr-set-member? 2 (list expr-set-member-s expr-set-member-a) (expr-Bool) 'set-member)
@@ -1651,18 +2401,32 @@
   ;; Binary arithmetic: numeric-join of both operand types.
   ;; Comparisons: always Bool.
   ;; Unary: identity (same as operand type).
-  (define (generic-arithmetic-ret ts) (numeric-join (car ts) (cadr ts)))
   (define (generic-comparison-ret ts) (expr-Bool))
-  (define (generic-unary-ret ts) (car ts))
+  ;; N5de sign-preserving arithmetic on the on-network typing path (mirrors typing-core.rkt:859-913).
+  ;; SCAFFOLDING BRIDGE: the on-network ret-fn calls the imperative refine-arith; native cell-flow
+  ;; refinement is deferred to the PPN track (§15). numeric-join → base; refine-arith re-refines the
+  ;; sign (bare operands ⇒ sign-top ⇒ bare base). mod is unrefined; unary guard-fail returns operand t.
+  (define (make-arith-ret transfer2 div?)
+    (lambda (ts)
+      (let ([j (numeric-join (car ts) (cadr ts))])
+        (and j (or (not div?) (divisible-numeric-type? j))
+             (refine-arith (car ts) (cadr ts) j transfer2)))))
+  (define (generic-mod-ret ts) (numeric-join (car ts) (cadr ts)))
+  (define (generic-negate-ret ts)
+    (let* ([t (car ts)] [tb (base-numeric-type t)])
+      (if (negatable-numeric-type? tb) (refine-arith1 t tb sign-transfer-neg) t)))
+  (define (generic-abs-ret ts)
+    (let* ([t (car ts)] [tb (base-numeric-type t)])
+      (if (concrete-numeric-type? tb) (refine-arith1 t tb sign-transfer-abs) t)))
 
-  ;; Binary arithmetic ops: return type = numeric-join(a, b)
-  (for ([info (list (list expr-generic-add? expr-generic-add-a expr-generic-add-b 'generic-add)
-                    (list expr-generic-sub? expr-generic-sub-a expr-generic-sub-b 'generic-sub)
-                    (list expr-generic-mul? expr-generic-mul-a expr-generic-mul-b 'generic-mul)
-                    (list expr-generic-div? expr-generic-div-a expr-generic-div-b 'generic-div)
-                    (list expr-generic-mod? expr-generic-mod-a expr-generic-mod-b 'generic-mod))])
+  ;; Binary arithmetic ops: refine-arith(numeric-join(a,b)) via the per-op Sign transfer.
+  (for ([info (list (list expr-generic-add? expr-generic-add-a expr-generic-add-b 'generic-add (make-arith-ret sign-transfer-add #f))
+                    (list expr-generic-sub? expr-generic-sub-a expr-generic-sub-b 'generic-sub (make-arith-ret sign-transfer-sub #f))
+                    (list expr-generic-mul? expr-generic-mul-a expr-generic-mul-b 'generic-mul (make-arith-ret sign-transfer-mul #f))
+                    (list expr-generic-div? expr-generic-div-a expr-generic-div-b 'generic-div (make-arith-ret sign-transfer-div #t))
+                    (list expr-generic-mod? expr-generic-mod-a expr-generic-mod-b 'generic-mod generic-mod-ret))])
     (register-typing-rule! (car info) 2 (list (cadr info) (caddr info))
-                           generic-arithmetic-ret (cadddr info)))
+                           (list-ref info 4) (cadddr info)))
 
   ;; Comparison ops: return type = Bool
   (for ([info (list (list expr-generic-lt? expr-generic-lt-a expr-generic-lt-b 'generic-lt)
@@ -1673,11 +2437,11 @@
     (register-typing-rule! (car info) 2 (list (cadr info) (caddr info))
                            generic-comparison-ret (cadddr info)))
 
-  ;; Unary ops: return type = same as operand
+  ;; Unary ops: N5de sign transfer (generic-negate-ret / generic-abs-ret defined above).
   (register-typing-rule! expr-generic-negate? 1 (list expr-generic-negate-a)
-                         generic-unary-ret 'generic-negate)
+                         generic-negate-ret 'generic-negate)
   (register-typing-rule! expr-generic-abs? 1 (list expr-generic-abs-a)
-                         generic-unary-ret 'generic-abs)
+                         generic-abs-ret 'generic-abs)
 
   ;; Conversion: return type = target-type field (first child EXPRESSION).
   ;; generic-from-int(target-type, arg) → target-type
@@ -1750,6 +2514,11 @@
       ;; Zero propagator overhead: no dependents entry, no scheduling, no cleanup.
       [(expr-int _)    (type-map-write net tm-cid e (expr-Int))]
       [(expr-nat-val _)(type-map-write net tm-cid e (expr-Nat))]
+      ;; N4: numeric literal — on-network runs only in INFER position (no check-on-network),
+      ;; so write its DEFAULT type (N6b: keyed on notation origin via num-lit-default-type);
+      ;; annotated/context positions are typed function-level by the check arm (which
+      ;; solves alpha, collapsed at zonk).
+      [(expr-num-lit _ integral? origin _) (type-map-write net tm-cid e (num-lit-default-type origin integral?))]
       [(expr-true)     (type-map-write net tm-cid e (expr-Bool))]
       [(expr-false)    (type-map-write net tm-cid e (expr-Bool))]
 
@@ -2229,7 +2998,15 @@
     (current-attribute-map-cell-id cid)
     (set-box! prn-box pnet*)))
 
-(define (infer-on-network pnet expr ctx-val)
+;; CIU T6 F1b.4-pre: /full returns SIX values — the classic four PLUS the
+;; post-quiescence net that holds the attribute map (net5: in persistent mode
+;; it is also re-boxed into the prn; in per-command fallback mode it is the
+;; only holder) and the attribute-map cell id for THIS run. The extra two are
+;; what makes the untyped-interior scan (5th refusal check) UNIVERSAL across
+;; contexts — it reads the net typing actually ran on, with no dependence on
+;; the global arming chain (init-attribute-map-cell! is process-file-only;
+;; process-string/fixture contexts run the per-command fallback cell).
+(define (infer-on-network/full pnet expr ctx-val)
   ;; 1. Get the GLOBAL attribute-map cell from the persistent registry network.
   ;; If not initialized (e.g., test context), create per-command.
   (define prn-box (current-persistent-registry-net-box))
@@ -2242,54 +3019,73 @@
       [else
        (define-values (n c) (net-new-cell pnet (hasheq) attribute-map-merge-fn))
        (values n c #f)]))
-  ;; 2. Create per-command output cells (meta solutions + warnings)
+  ;; 2. Create per-command output cell (meta solutions).
+  ;; N6a (warning-accumulation fix): the per-command warning-output cell +
+  ;; its whole-map fire-once collection propagator are RETIRED. The old
+  ;; collection fire folded over EVERY position in the attribute map — on
+  ;; the PERSISTENT attr-map this harvested :warnings facets deposited by
+  ;; ALL prior commands (facet values persist by design; P3 clears
+  ;; dependents only), re-attaching stale warnings to every later result.
+  ;; Its firing round was also expression-shape-dependent (own-facet
+  ;; harvest sometimes landed one command late). Warnings are now read
+  ;; directly post-quiescence, scoped to the current command's expr tree
+  ;; (step 5 below). make-warning-collection-fire-fn stays exported (tests).
   (define-values (net1 output-cid)
     (net-new-cell net0 '() meta-solution-merge))
-  (define-values (net1b warning-output-cid)
-    (net-new-cell net1 '() merge-list-append))
   ;; 3. Install ALL attribute propagators (typing + constraints + usage + meta-bridge)
   (parameterize ([current-meta-solution-output-cell-id output-cid])
-    (define net2 (install-typing-network net1b tm-cid expr ctx-val))
-    ;; Phase 7: Install warning-collection propagator (S2, P2 fire-once).
-    ;; Reads all :warnings facets, writes to warning output cell.
-    ;; PPN 4C Phase 3e: genuine whole-cell read — the collection fire iterates
-    ;; every position's :warnings facet. Declared as (cons tm-cid #f) per the
-    ;; propagator.rkt filter convention — explicit whole-cell watch, passes
-    ;; Phase 1f structural enforcement. Design question per §6.15.5: could this
-    ;; be split into per-position warning-emitters? The warning-collection
-    ;; aggregates multi-position findings at elaboration close (S2 stratum),
-    ;; so component-paths per known-positions list isn't natural — new
-    ;; warning positions are emitted dynamically during elaboration. Accepted
-    ;; as whole-cell read.
-    (define-values (net2w _w-pid)
-      (net-add-fire-once-propagator net2 (list tm-cid) (list warning-output-cid)
-        (make-warning-collection-fire-fn tm-cid warning-output-cid) tm-cid
-        #:component-paths (list (cons tm-cid #f))))
+    (define net2w (install-typing-network net1 tm-cid expr ctx-val))
     ;; 4. Run to quiescence with fuel limit (save/restore for main network)
-    (define saved-fuel (prop-network-fuel net2w))
-    (define net2-limited
-      (struct-copy prop-network net2w
-        [hot (struct-copy prop-net-hot (prop-network-hot net2w)
-               [fuel TYPING-FUEL-LIMIT])]))
+    ;; D.4 1C-iv-a (§10.0.6 D-1C-iii-5 retirement obligation; D-1C-iv-2 mitigation):
+    ;; migrated from struct-copy substitution to cell-API. Pre-migration: writes
+    ;; STRUCT-FIELD via struct-copy [fuel TYPING-FUEL-LIMIT] WITHOUT cell-write
+    ;; → β1 lockstep VIOLATED mid-bounded-run → BSP sites 2+3 needed transitional
+    ;; struct-field check (D-1C-iii-5). Post-migration: writes cell directly via
+    ;; net-cell-reset (bypasses merge; same semantic as fork-prop-network init);
+    ;; β1 lockstep preserved at boundary (cell IS the live state).
+    ;;
+    ;; net-cell-reset is the correct primitive: under tropical-fuel-merge (=min),
+    ;; net-cell-write would (min current TYPING-FUEL-LIMIT) and the smaller wins —
+    ;; if current < TYPING-FUEL-LIMIT, we'd inherit a smaller budget than intended.
+    ;; net-cell-reset bypasses merge: the bounded run gets exactly TYPING-FUEL-LIMIT
+    ;; budget regardless of current.
+    (define saved-fuel (net-cell-read net2w fuel-cell-id))
+    (define net2-limited (net-cell-reset net2w fuel-cell-id TYPING-FUEL-LIMIT))
     (define net3 (run-to-quiescence-bsp net2-limited))
-    ;; Restore fuel
-    (define net3-restored
-      (struct-copy prop-network net3
-        [hot (struct-copy prop-net-hot (prop-network-hot net3)
-               [fuel saved-fuel])]))
+    ;; Restore fuel (cell-API; bypass merge to write saved-fuel directly).
+    (define net3-restored (net-cell-reset net3 fuel-cell-id saved-fuel))
     ;; 5. Read results
     (define root-type (type-map-read net3-restored tm-cid expr))
     (define meta-solutions (net-cell-read net3-restored output-cid))
-    (define warnings (net-cell-read net3-restored warning-output-cid))
+    ;; N6a: scoped post-quiescence warning harvest — read the attr-map ONCE
+    ;; and extract :warnings facets ONLY at positions belonging to the
+    ;; current command's expr tree. Deterministic (post-fixpoint cell read),
+    ;; immune to stale facets from prior commands / module loads.
+    (define warnings
+      (let ([tm (net-cell-read net3-restored tm-cid)])
+        (if (not (hash? tm))
+            '()
+            (let ([scope (expr-subterm-seteq expr)])
+              (for/fold ([acc '()])
+                        ([(pos record) (in-hash tm)])
+                (if (and (set-member? scope pos) (hash? record))
+                    (let ([ws (hash-ref record ':warnings '())])
+                      (if (null? ws) acc (append acc ws)))
+                    acc))))))
     ;; 6. P3 cleanup: clear dependents from all cells.
     (define net4 (net-clear-dependents net3-restored tm-cid))
     (define net5 (net-clear-dependents net4 output-cid))
-    (define net6 (net-clear-dependents net5 warning-output-cid))
     ;; 7. Rebox the persistent network if we used it.
     (when use-persistent?
-      (set-box! prn-box net6))
+      (set-box! prn-box net5))
     ;; Return: cleaned network, root type, meta solutions, warnings
-    (values (if use-persistent? pnet net6) root-type meta-solutions warnings)))
+    (values (if use-persistent? pnet net5) root-type meta-solutions warnings net5 tm-cid)))
+
+;; Stable 4-value surface (tests + any external callers): drops the scan pair.
+(define (infer-on-network pnet expr ctx-val)
+  (define-values (ret root-type meta-solutions warnings _scan-net _scan-cid)
+    (infer-on-network/full pnet expr ctx-val))
+  (values ret root-type meta-solutions warnings))
 
 ;; ============================================================
 ;; Production Entry Point: infer-on-network/err
@@ -2305,18 +3101,73 @@
 (define on-network-success-count (box 0))
 (define on-network-fallback-count (box 0))
 
+;; CIU T6 F1b.2 (D26 route-soundness): post-quiescence UNTYPED-INTERIOR scan.
+;; The adoption gap class: install-from-rule's #f branch installs neither the
+;; node's typing propagator NOR its children, so the whole subtree under a
+;; rule-fn-#f / unregistered node kind carries no :type evidence — and both
+;; Role-B downward writes (the expr-ann term write and the app-rule domain
+;; write) ADOPT unconditionally at ⊥ (type-unify-or-top: bot adopts) and can
+;; only contradict at top, which a never-written position cannot reach. Net
+;; effect pre-fix: `(the Int {:a 1})` typed as Int; `[cons {:a 9} wide]`
+;; typed at the wide row (probed unsound: projection typechecks, runtime
+;; misses). This scan walks the BINDER-FREE spine of the command's expr after
+;; quiescence and reports the first interior expr position whose :type facet
+;; is still ⊥ — the driver then falls back to the imperative checker (the
+;; correctness authority), exactly as it already does for bot/top/meta roots.
+;;
+;; Boundaries (named): (1) expr-meta positions are excluded (⊥ by design
+;; until feedback); (2) the scan stops at binder nodes (lam/Pi/Sigma bodies —
+;; typing may legitimately defer body positions, and the adoption gap class
+;; is binder-free); adoption gaps UNDER a binder body remain uncaught here
+;; and die at the imperative checker only when re-routed for other reasons.
+;; Over-approximation is SAFE (re-route to imperative = pre-PPN semantics);
+;; the cost is routing, not correctness. Scheduler-independent: reads the
+;; CALM-monotone S0 fixpoint (absence-of-type AT FIXPOINT is order-free).
+(define (untyped-interior-position net tm-cid root)
+  ;; Generic transparent-struct walk (the expr-subterm-seteq shape — no
+  ;; per-node-kind exhaustiveness obligation): recurse ALL structs/pairs so
+  ;; non-expr carriers (e.g. reduce arms) are traversed, but CHECK only expr
+  ;; positions. seen-set for shared-subterm dedup.
+  (define seen (mutable-seteq))
+  (let loop ([v root] [is-root? #t])
+    (cond
+      [(set-member? seen v) #f]
+      [(expr? v)
+       (set-add! seen v)
+       (cond
+         [(expr-meta? v) #f]
+         [(and (not is-root?) (type-bot? (type-map-read net tm-cid v))) v]
+         ;; Binder boundary: the node itself is checked above; skip children.
+         [(or (expr-lam? v) (expr-Pi? v) (expr-Sigma? v)) #f]
+         [else
+          (define vec (struct->vector v))
+          (for/or ([i (in-range 1 (vector-length vec))])
+            (loop (vector-ref vec i) #f))])]
+      [(struct? v)
+       (set-add! seen v)
+       (define vec (struct->vector v))
+       (for/or ([i (in-range 1 (vector-length vec))])
+         (loop (vector-ref vec i) #f))]
+      [(pair? v) (or (loop (car v) #f) (loop (cdr v) #f))]
+      [else #f])))
+
 (define (infer-on-network/err ctx expr [loc srcloc-unknown] [names '()])
   (define net-box (current-prop-net-box))
   (cond
-    [(not net-box) type-bot]  ;; no network → signal fallback
+    ;; No network → signal fallback. MUST be a prologos-error: every driver
+    ;; gate tests only prologos-error?, so a bare lattice value here would
+    ;; leak through as the inferred type (dormant trap, F1b.2 audit).
+    [(not net-box)
+     (inference-failed-error loc "on-network: no network" (pp-expr expr names))]
     [else
      ;; Unbox the main elab-network, extract its prop-net
      (define enet (unbox net-box))
      (define pnet (elab-network-prop-net enet))
      (define ctx-val (context-cell-value ctx (length ctx)))
-     ;; Run typing on the MAIN network (returns 4 values since Phase 7)
-     (define-values (pnet* root-type meta-solutions warnings)
-       (infer-on-network pnet expr ctx-val))
+     ;; Run typing on the MAIN network (/full also returns the post-quiescence
+     ;; scan net + attribute-cell id for the universal 5th refusal check)
+     (define-values (pnet* root-type meta-solutions warnings scan-net scan-cid)
+       (infer-on-network/full pnet expr ctx-val))
      ;; Rebox the updated elab-network (attribute-map cell now on main network)
      (set-box! net-box (elab-network-rewrap enet pnet*))
      ;; Bridge meta solutions to imperative meta-store (SCAFFOLDING until Phase 9)
@@ -2327,10 +3178,6 @@
        (define solution (cdr pair))
        (unless (meta-solved? meta-id)
          (solve-meta! meta-id solution)))
-     ;; Bridge on-network warnings to imperative warning parameters (SCAFFOLDING)
-     (for ([w (in-list warnings)])
-       (when (and (list? w) (pair? w) (eq? (car w) 'coercion-warning))
-         (emit-coercion-warning! (cadr w) (caddr w))))
      ;; Parametric trait resolution bridge (SCAFFOLDING)
      ;; Resolves parametric constraints (Seqable, Foldable, Reducible) where
      ;; monomorphic on-network resolution succeeded for type-args but the
@@ -2359,7 +3206,32 @@
        [has-unsolved-dict?
         (set-box! on-network-fallback-count (add1 (unbox on-network-fallback-count)))
         (inference-failed-error loc "on-network: unsolved dict" (pp-expr expr names))]
+       ;; CIU T6 F1b.2 (D26): 5th refusal check — an interior expr position
+       ;; still ⊥ at quiescence means the network never typed that subtree
+       ;; (the rule-fn-#f / unregistered adoption gap class); the root's
+       ;; clean-looking type is an unopposed adoption, not evidence. Fall
+       ;; back to the imperative checker. This single choke point covers all
+       ;; four driver gates (eval/infer/defr/unannotated-def) + REPL/LSP.
+       ;; Computed ONLY when the four checks above pass (lazy via cond order).
+       ;; F1b.4-pre: UNCONDITIONAL — scan-net/scan-cid come from /full, so the
+       ;; check runs in EVERY context (persistent AND per-command fallback),
+       ;; closing the two-context soundness divergence (wrong-typed sealed
+       ;; literals passed silently in process-string contexts when the global
+       ;; arming chain was absent — F1b.4 mini-audit headline finding).
+       [(untyped-interior-position scan-net scan-cid expr)
+        => (lambda (pos)
+             (set-box! on-network-fallback-count (add1 (unbox on-network-fallback-count)))
+             (inference-failed-error loc "on-network: untyped interior"
+                                     (pp-expr pos names)))]
        [else
+        ;; N6a (double-emission guard): bridge on-network warnings to the
+        ;; imperative warning parameters (SCAFFOLDING) ONLY on success — on
+        ;; any fallback branch above, the driver re-runs the imperative
+        ;; infer/err, whose numeric-join/warn! emits its own coercion
+        ;; warnings; bridging here too would emit the same coercion twice.
+        (for ([w (in-list warnings)])
+          (when (and (list? w) (pair? w) (eq? (car w) 'coercion-warning))
+            (emit-coercion-warning! (cadr w) (caddr w))))
         (set-box! on-network-success-count (add1 (unbox on-network-success-count)))
         root-type])]))
 

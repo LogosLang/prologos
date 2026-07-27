@@ -29,9 +29,7 @@
 ;; ========================================
 
 (define (run-ns-last s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry prelude-preparse-registry]
@@ -154,8 +152,8 @@
     (define defs
       (process-trait '(trait Mappable ($brace-params F : Type -> Type)
                         (fmap : (-> Nat Nat) -> (F Nat) -> (F Nat)))))
-    ;; Should produce 1 accessor def
-    (check-equal? (length defs) 1)
+    ;; 1 accessor + 1 derived wrapper (N6d-i: F appears in the `(F Nat)` domain)
+    (check-equal? (length defs) 2)
     ;; Trait should be registered
     (define tm (lookup-trait 'Mappable))
     (check-true (trait-meta? tm))
@@ -172,7 +170,7 @@
                  [current-trait-registry (hasheq)])
     (define defs
       (process-trait '(trait Eq ($brace-params A) (eq? : A -> A -> Bool))))
-    (check-equal? (length defs) 1)
+    (check-equal? (length defs) 2)  ;; 1 accessor + 1 derived wrapper (N6d-i)
     (define tm (lookup-trait 'Eq))
     (define params (trait-meta-params tm))
     (check-equal? (length params) 1)

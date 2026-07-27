@@ -29,24 +29,33 @@ The project has accumulated multiple concrete strata across tracks. Some use the
 
 ### On the elaborator network (metavar-store.rkt, PM Series)
 
-These strata predate the generalized `register-stratum-handler!` mechanism. They are invoked sequentially from the main resolution loop (`run-stratified-resolution!`), not via the BSP outer loop's stratum iteration. See `docs/tracking/principles/DESIGN_PRINCIPLES.org` § "Stratified Propagator Networks" for design framing.
+**UNIFIED onto the generalized mechanism (PPN 4C 2B, 2026-05-20).** These strata originally predated `register-stratum-handler!` and were invoked sequentially from `run-stratified-resolution!`. That loop is RETIRED (it was confirmed dead code per PM Track 8 A5 + R3 external critique, 2026-04-18 — zero production callers); the strata now run as uniform BSP stratum handlers. See `docs/tracking/principles/DESIGN_PRINCIPLES.org` § "Stratified Propagator Networks" for design framing.
 
-| Stratum | Kind | Introduced | Mechanism | Purpose |
+| Stratum | Kind | Introduced | Mechanism (current) | Purpose |
 |---|---|---|---|---|
-| **S(-1) Retraction** | non-monotone narrowing | PM Track 7 Phase 5 | `run-retraction-stratum!` (sequential, invoked from resolution loop) | Clean scoped cell entries for retracted assumptions; assumptions set can only shrink |
-| **L1 Readiness** | readiness scan for constraints | PM Track 2 Phase 4 | `collect-ready-constraints-via-cells` (pure scan, observation only) | Identify constraints whose dependencies are now ground → produce action descriptors |
-| **L2 Resolution** | non-monotone action interpreter | PM Track 2 Phase 4 | Action interpreter loop (executes descriptors from L1) | Trait lookup, instance commitment, unification retry — mutating commitments |
-| **Stratum 3 (verification)** | session/effect verification (planned/referenced) | Architecture A+D (effect-executor.rkt:54) | Referenced in comments; implementation details vary | Ordering verification for effectful computation |
+| **S(-1) Retraction** | non-monotone narrowing | PM Track 7 Phase 5; unified PPN 4C 2B (2026-05-20) | `process-retraction` registered via `register-stratum-handler!` on the retraction request cell (cell-13 writes via pure `record-assumption-retraction`) | Clean scoped cell entries for retracted assumptions; assumptions set can only shrink |
+| **L1 Readiness** | readiness scan for constraints | PM Track 2 Phase 4 | `collect-ready-constraints-via-cells` (pure scan, observation only) feeding the resolution handler's request cell (cell-14) | Identify constraints whose dependencies are now ground → produce action descriptors |
+| **L2 Resolution** | non-monotone action interpreter | PM Track 2 Phase 4; unified PPN 4C 2B (2026-05-20) | `process-resolution` registered via `register-stratum-handler!` on the resolution request cell | Trait lookup, instance commitment, unification retry — mutating commitments |
+| **Stratum 3 (verification)** | session/effect verification (planned/referenced) | Architecture A+D (effect-executor.rkt:53-54) | COMMENT-ONLY — referenced in comments; no realization exists | Ordering verification for effectful computation |
 
-### The generalization gap
+### The generalization gap (largely closed 2026-05-20)
 
-- **S0 + Topology + S1 NAF** use the BSP scheduler's general outer loop.
-- **S(-1), L1, L2** use `run-stratified-resolution!`'s sequential invocation.
-- **Stratum 3** is referenced in design but not fully realized.
+- **S0 + Topology + S1 NAF + S(-1) + L2** all use the BSP scheduler's general outer loop via `register-stratum-handler!` (8 production registration sites across elaborator-network.rkt, metavar-store.rkt, narrowing.rkt, relations.rkt, propagator.rkt, typing-propagators.rkt).
+- **Stratum 3** is referenced in design but not realized at all (comment-only at effect-executor.rkt:53-54) — any design that "hands off to Stratum 3" (e.g., PReduce Track 7) is designing against an unbuilt boundary and must say so.
 
-These two orchestration mechanisms (BSP outer loop vs `run-stratified-resolution!`) solve the same problem — sequence strata according to fixpoint requirements — in two different places. Unifying them is a legitimate architectural follow-up: the BSP scheduler's stratum mechanism is strictly more general (request-accumulator cell + handler), and the metavar-store's sequential strata could be recast as stratum handlers on the same base.
+(Amended 2026-06-10, PReduce SM4 F3a: the legacy `register-topology-handler!` box was
+RETIRED 2026-04-16 — topology handlers are `register-stratum-handler! #:tier 'topology`
+(propagator.rkt:3153-3159, :3193-3197). The earlier "kept separate" note was stale.)
 
-Topology's `register-topology-handler!` is also a legacy box that predates `register-stratum-handler!`. Functionally equivalent, but kept separate for now — a small cleanup candidate.
+**Tier vocabulary (2026-06-10, normative)**: handlers register with `#:tier 'value` or
+`#:tier 'topology`; "strata" in claim-counting contexts means rule-DISPATCH strata (S0,
+S(-1)); other handlers are tier-ordered INSTANCES of existing kinds. The PReduce Track 0.1
+stratum-assignment table (D.1 §5.1) is the worked normative example — this file + that
+table are the single source for stratum semantics; series masters carry claims + pointers
+only. CAUTION (verified 2026-06-10): handler ordering is silent registration append-order
+(propagator.rkt:3213) and the process-tier window auto-resets request cells unconditionally
+(:3466-3468) — an explicit `#:after` declaration + keep-pending idiom are REQUIRED substrate
+work before any order-sensitive handler pair lands (PReduce Track 1/5).
 
 ### Termination guarantees (from GÖDEL_COMPLETENESS.org)
 
@@ -138,7 +147,11 @@ Structural narrowing (discrimination: "which alternatives' argument patterns mat
 The infrastructure is ready to support additional strata without new primitives:
 
 - **S2 well-founded semantics**: odd NAF cycles (`p :- not q. q :- not p.`) require a three-valued fixpoint at a higher stratum than S1. The well-founded engine (`wf-engine.rkt`) currently runs as a separate solver; it could be unified as a stratum on the same base.
-- **Cost-bounded exploration**: tropical thresholds for resource-aware search. A "cost exceeded" request triggers pruning.
+- **Cost-bounded exploration** — **DISSOLVED 2026-06-10 (PReduce SM4 F3b)**: realized at
+  the CELL layer by PPN 4C Phase 1B (fuel `#:on-write-check` writes contradiction
+  structurally, propagator.rkt:1083/:1898-1953; "no separate threshold propagator" per
+  D.4); pruning = the existing contradiction → nogood → worldview-narrowing machinery.
+  Not a stratum, by this file's own admission test.
 - **Constraint activation levels**: constraint propagators that fire only when their dependencies reach a readiness threshold. Currently ad-hoc; could be a stratum.
 - **Self-hosted compiler passes**: each pass (parsing, type inference, code generation) is stratum-separable. Running them as BSP strata on the same base gives incremental-compilation for free via cell persistence.
 
@@ -146,29 +159,30 @@ The infrastructure is ready to support additional strata without new primitives:
 
 1. **Topology handler → general strata list** (small): replace `register-topology-handler!` with `register-stratum-handler!` using a reserved topology request-cell-id. Remove the legacy `topology-handlers` box and special-cased BSP iteration. Functional equivalence; removes an inconsistency.
 
-2. **Elaborator strata (S(-1), L1, L2) → BSP scheduler strata** (larger): `run-retraction-stratum!` and the readiness/resolution strata in `metavar-store.rkt` are currently invoked sequentially from `run-stratified-resolution!`. Recasting them as BSP stratum handlers on the same base would give a single orchestration mechanism across solver and elaborator. Scope: medium; requires reconciling the two networks' scheduling semantics.
+2. **Elaborator strata (S(-1), L1, L2) → BSP scheduler strata** — ✅ DONE (PPN 4C 2B, 2026-05-20): `run-retraction-stratum!` and `run-stratified-resolution!` retired; S(-1) lives as `process-retraction`, L2 as `process-resolution`, both registered via `register-stratum-handler!`. Single orchestration mechanism across solver and elaborator achieved.
 
 3. **Stratum 3 (verification)** — referenced in `effect-executor.rkt` but not fully realized. Future Architecture AD continuation work.
 
 ## References
 
 ### Solver network (BSP scheduler strata)
-- `racket/prologos/propagator.rkt`:
-  - `stratum-handlers` box (line 2439)
-  - `register-stratum-handler!` (line 2441)
-  - BSP outer loop stratum processing (line 2665)
-  - `topology-handlers` box + `register-topology-handler!` (lines 2420-2423, legacy)
-- `racket/prologos/relations.rkt`:
-  - S1 NAF handler `process-naf-request` (~line 115)
-  - `register-stratum-handler!` call (~line 245)
 
-### Elaborator network (sequential strata in resolution loop)
+(Coordinates re-verified 2026-06-10; they drift — re-grep before trusting.)
+
+- `racket/prologos/propagator.rkt`:
+  - `stratum-handlers` box (~line 3176)
+  - `register-stratum-handler!` (~line 3193)
+  - `topology-handlers` box + `register-topology-handler!` (legacy)
+- `racket/prologos/relations.rkt`:
+  - S1 NAF handler `process-naf-request` + `register-stratum-handler!` call (~line 246)
+
+### Elaborator network (unified BSP stratum handlers since PPN 4C 2B, 2026-05-20)
 - `racket/prologos/metavar-store.rkt`:
-  - S(-1) Retraction: `run-retraction-stratum!` (~line 1392), `record-assumption-retraction!` (~line 1336)
-  - L1 Readiness: `collect-ready-constraints-via-cells` (~line 904, "Readiness Scan (Stratum 1)")
-  - L2 Resolution: action interpreter (~line 984, "Action Interpreter (Stratum 2)")
-  - Main loop: `run-stratified-resolution!` (invokes S(-1) at ~line 1873)
-- `racket/prologos/effect-executor.rkt:54`: Stratum 3 (verification) — referenced, not fully realized
+  - S(-1) Retraction: `process-retraction` (~line 1600), registered at ~line 1617 on `retraction-stratum-request-cell-id`; pure `record-assumption-retraction` writes requests to cell-13
+  - L1 Readiness: `collect-ready-constraints-via-cells` (pure scan)
+  - L2 Resolution: `process-resolution`, registered at ~line 1677 on `resolution-stratum-request-cell-id`
+  - `run-retraction-stratum!` and `run-stratified-resolution!`: RETIRED (do not cite)
+- `racket/prologos/effect-executor.rkt:53-54`: Stratum 3 (verification) — COMMENT-ONLY, not realized
 
 ### Design references
 - BSP-LE Track 2B PIR §9.6, §12.8 — architectural contribution of generalized stratification

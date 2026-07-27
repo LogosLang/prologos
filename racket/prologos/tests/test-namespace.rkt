@@ -162,24 +162,8 @@
   (check-equal? (ns->path-segments 'prologos::core)
                 '("prologos" "core")))
 
-;; ========================================
-;; Global Env Import
-;; ========================================
-
-(test-case "global-env-import-module"
-  (define mod-env
-    (hasheq 'test.mod::foo (cons (expr-Nat) (expr-zero))
-            'test.mod::bar (cons (expr-Bool) (expr-true))))
-  (define result
-    (global-env-import-module (hasheq)
-                              '(foo bar)
-                              mod-env
-                              qualify-name
-                              'test.mod))
-  (check-true (hash-has-key? result 'test.mod::foo))
-  (check-true (hash-has-key? result 'test.mod::bar))
-  (check-equal? (car (hash-ref result 'test.mod::foo)) (expr-Nat))
-  (check-equal? (cdr (hash-ref result 'test.mod::foo)) (expr-zero)))
+;; (Global Env Import test RETIRED at 4A-VAG, 2026-06-01: global-env-import-module
+;; was retired — superseded by 4A.c share-by-reference imports.)
 
 ;; ========================================
 ;; Elaboration with Namespace Context
@@ -187,8 +171,9 @@
 
 (test-case "elaboration resolves via namespace"
   ;; Set up: global env has a fully-qualified name
-  (parameterize ([current-prelude-env
-                  (hasheq 'prologos::data::nat::add (cons (expr-Nat) (expr-zero)))]
+  (parameterize ([current-file-module-network-ref
+                  (module-network-from-snapshot
+                   (hasheq 'prologos::data::nat::add (cons (expr-Nat) (expr-zero))))]
                  [current-module-registry (hasheq)]
                  [current-ns-context
                   (ns-context-add-refer
@@ -199,8 +184,9 @@
     (check-equal? result (expr-fvar 'prologos::data::nat::add))))
 
 (test-case "elaboration resolves via alias"
-  (parameterize ([current-prelude-env
-                  (hasheq 'prologos::data::nat::add (cons (expr-Nat) (expr-zero)))]
+  (parameterize ([current-file-module-network-ref
+                  (module-network-from-snapshot
+                   (hasheq 'prologos::data::nat::add (cons (expr-Nat) (expr-zero))))]
                  [current-module-registry (hasheq)]
                  [current-ns-context
                   (ns-context-add-alias
@@ -212,8 +198,9 @@
 
 (test-case "elaboration backward-compatible without ns-context"
   ;; When current-ns-context is #f, old behavior is preserved
-  (parameterize ([current-prelude-env
-                  (hasheq 'myname (cons (expr-Nat) (expr-zero)))]
+  (parameterize ([current-file-module-network-ref
+                  (module-network-from-snapshot
+                   (hasheq 'myname (cons (expr-Nat) (expr-zero))))]
                  [current-ns-context #f])
     (define result (elaborate (surf-var 'myname srcloc-unknown)))
     (check-equal? result (expr-fvar 'myname))))

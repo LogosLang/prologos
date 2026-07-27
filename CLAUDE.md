@@ -111,6 +111,7 @@ For methodology beyond what the rules cover:
 - `DESIGN_PRINCIPLES.org` — 10 load-bearing principles (cells, decomplection, completeness, etc.)
 - `DEVELOPMENT_LESSONS.org` — distilled retros across PIRs (longitudinal patterns)
 - `ACCEPTANCE_FILE_METHODOLOGY.org` — Phase 0 acceptance file pattern
+- `DAILIES_METHODOLOGY.org` — how to write the dailies (mutable STATE head + append-only LOG) + the Relay-Note re-grounding protocol
 
 Full set + index: `docs/tracking/principles/README.org`
 
@@ -133,6 +134,7 @@ Full set + index: `docs/tracking/principles/README.org`
 | Running tests / benchmarks | `testing.md` § benchmarking | `tools/` directory |
 | Committing / branching / PR | `workflow.md` | hook discipline + commit-message style |
 | Resuming after compact | `HANDOFF_PROTOCOL.org` | latest dailies + active design doc |
+| Writing dailies / after a rewind | `DAILIES_METHODOLOGY.org` | the STATE head + Relay-Note protocol |
 | Designing a new feature | `DESIGN_METHODOLOGY.org` | the 5 stages, mantra audits |
 | Adversarial critique round | `CRITIQUE_METHODOLOGY.org` | P/R/M/S lenses, SRE lattice lens |
 | Writing a PIR | `POST_IMPLEMENTATION_REVIEW.org` | 16 questions |

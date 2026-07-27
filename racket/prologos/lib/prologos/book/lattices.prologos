@@ -383,7 +383,7 @@ impl GaloisConnection Interval Bool
 
 module prologos::core::abstract-domains
 
-require [prologos::data::sign :refer [Sign sign-bot sign-neg sign-zero sign-pos sign-top]]
+require [prologos::data::sign :refer [Sign sign-bot sign-neg sign-zero sign-pos sign-nonpos sign-nonzero sign-nonneg sign-top]]
 require [prologos::data::parity :refer [Parity parity-bot parity-even parity-odd parity-top]]
 require [prologos::core::lattice :refer [Lattice HasTop GaloisConnection Interval interval-bot interval-top mk-interval]]
 require [prologos::core::eq :refer [Eq Eq-eq?]]
@@ -394,64 +394,79 @@ require [prologos::data::refined-rat :refer [PosRat pos-rat NegRat neg-rat]]
 require [prologos::data::bool :refer [and or]]
 
 ;; ========================================
-;; Lattice Sign
+;; Sign atom accessors (the Q₃ 3-bit view: neg? zero? pos?)
 ;; ========================================
-;; join = least upper bound in the 5-element lattice
-;; bot = sign-bot (unreachable / no info)
-;; leq = lattice ordering
+
+defn sign-has-neg [s <Sign>] <Bool>
+  match s
+    | sign-bot -> false
+    | sign-neg -> true
+    | sign-zero -> false
+    | sign-pos -> false
+    | sign-nonpos -> true
+    | sign-nonzero -> true
+    | sign-nonneg -> false
+    | sign-top -> true
+
+defn sign-has-zero [s <Sign>] <Bool>
+  match s
+    | sign-bot -> false
+    | sign-neg -> false
+    | sign-zero -> true
+    | sign-pos -> false
+    | sign-nonpos -> true
+    | sign-nonzero -> false
+    | sign-nonneg -> true
+    | sign-top -> true
+
+defn sign-has-pos [s <Sign>] <Bool>
+  match s
+    | sign-bot -> false
+    | sign-neg -> false
+    | sign-zero -> false
+    | sign-pos -> true
+    | sign-nonpos -> false
+    | sign-nonzero -> true
+    | sign-nonneg -> true
+    | sign-top -> true
+
+;; Reconstruct a Sign element from atom membership (neg?, zero?, pos?).
+defn sign-from-atoms [hn <Bool> hz <Bool> hp <Bool>] <Sign>
+  match hn
+    | true ->
+        match hz
+          | true ->
+              match hp
+                | true -> sign-top
+                | false -> sign-nonpos
+          | false ->
+              match hp
+                | true -> sign-nonzero
+                | false -> sign-neg
+    | false ->
+        match hz
+          | true ->
+              match hp
+                | true -> sign-nonneg
+                | false -> sign-zero
+          | false ->
+              match hp
+                | true -> sign-pos
+                | false -> sign-bot
+
+;; ========================================
+;; Lattice Sign — 8-element powerset ℘({neg,zero,pos}); join = ∪, leq = ⊆
+;; ========================================
+;; join/leq computed pointwise over the 3 atoms (the Q₃ 3-bit test):
+;; a⊔b = atoms(a)∪atoms(b);  a⊑b ⟺ atoms(a)⊆atoms(b).
 
 impl Lattice Sign
   defn bot [] <Sign>
     sign-bot
   defn join [a <Sign> b <Sign>] <Sign>
-    match a
-      | sign-bot -> b
-      | sign-top -> sign-top
-      | sign-neg -> match b
-          | sign-bot -> sign-neg
-          | sign-neg -> sign-neg
-          | sign-zero -> sign-top
-          | sign-pos -> sign-top
-          | sign-top -> sign-top
-      | sign-zero -> match b
-          | sign-bot -> sign-zero
-          | sign-neg -> sign-top
-          | sign-zero -> sign-zero
-          | sign-pos -> sign-top
-          | sign-top -> sign-top
-      | sign-pos -> match b
-          | sign-bot -> sign-pos
-          | sign-neg -> sign-top
-          | sign-zero -> sign-top
-          | sign-pos -> sign-pos
-          | sign-top -> sign-top
+    sign-from-atoms [or [sign-has-neg a] [sign-has-neg b]] [or [sign-has-zero a] [sign-has-zero b]] [or [sign-has-pos a] [sign-has-pos b]]
   defn leq [a <Sign> b <Sign>] <Bool>
-    match a
-      | sign-bot -> true
-      | sign-top -> match b
-          | sign-top -> true
-          | sign-bot -> false
-          | sign-neg -> false
-          | sign-zero -> false
-          | sign-pos -> false
-      | sign-neg -> match b
-          | sign-neg -> true
-          | sign-top -> true
-          | sign-bot -> false
-          | sign-zero -> false
-          | sign-pos -> false
-      | sign-zero -> match b
-          | sign-zero -> true
-          | sign-top -> true
-          | sign-bot -> false
-          | sign-neg -> false
-          | sign-pos -> false
-      | sign-pos -> match b
-          | sign-pos -> true
-          | sign-top -> true
-          | sign-bot -> false
-          | sign-neg -> false
-          | sign-zero -> false
+    and [if [sign-has-neg a] [sign-has-neg b] true] [and [if [sign-has-zero a] [sign-has-zero b] true] [if [sign-has-pos a] [sign-has-pos b] true]]
 
 ;; ========================================
 ;; HasTop Sign
@@ -544,13 +559,18 @@ impl GaloisConnection Interval Sign
           if [rat-lt 0/1 lo] sign-pos
             [if [rat-lt hi 0/1] sign-neg
               [if [and [rat-eq lo 0/1] [rat-eq hi 0/1]] sign-zero
-                sign-top]]
+                [if [rat-eq lo 0/1] sign-nonneg
+                  [if [rat-eq hi 0/1] sign-nonpos
+                    sign-top]]]]
   defn gamma [s <Sign>] <Interval>
     match s
       | sign-bot  -> interval-bot
       | sign-neg  -> mk-interval neg-inf -1/1
       | sign-zero -> mk-interval 0/1 0/1
       | sign-pos  -> mk-interval 1/1 pos-inf
+      | sign-nonpos -> mk-interval neg-inf 0/1
+      | sign-nonzero -> mk-interval neg-inf pos-inf
+      | sign-nonneg -> mk-interval 0/1 pos-inf
       | sign-top  -> mk-interval neg-inf pos-inf
 
 ;; ========================================

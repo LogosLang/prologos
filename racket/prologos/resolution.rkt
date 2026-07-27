@@ -5,7 +5,8 @@
 ;;;
 ;;; Extracted from driver.rkt (trait/hasmethod callbacks) and unify.rkt
 ;;; (constraint retry callback). These are the S2 resolution functions
-;;; called by execute-resolution-actions! in metavar-store.rkt.
+;;; consumed by process-resolution BSP value-tier handler in metavar-store.rkt
+;;; via the current-resolution-executor-pure parameter (PPN 4C 2A.b + 2B).
 ;;;
 ;;; Breaking circular deps: metavar-store.rkt cannot import unify.rkt
 ;;; or driver.rkt directly. This module bridges the gap — it imports

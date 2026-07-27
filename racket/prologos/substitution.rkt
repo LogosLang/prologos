@@ -58,8 +58,8 @@
     [(expr-Type _) e]
     [(expr-hole) e]
     [(expr-typed-hole _) e]
-    [(expr-Open) e]
     [(expr-meta _ _) e]
+    [(expr-num-lit _ _ _ _) e]
     [(expr-error) e]
     [(? ns-context?) e]  ;; namespace metadata — pass-through
 
@@ -173,6 +173,36 @@
     ;; Posit32 (all non-binding)
     [(expr-Posit32) e]
     [(expr-posit32 _) e]
+    [(expr-Float32) e]
+    [(expr-float32 _) e]
+    [(expr-Float64) e]
+    [(expr-float64 _) e]
+    ;; Float ops (Numerics N3b) — recurse into operands
+    [(expr-f32-add a b) (expr-f32-add (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-f32-sub a b) (expr-f32-sub (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-f32-mul a b) (expr-f32-mul (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-f32-div a b) (expr-f32-div (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-f32-neg a) (expr-f32-neg (shift delta cutoff a))]
+    [(expr-f32-abs a) (expr-f32-abs (shift delta cutoff a))]
+    [(expr-f32-sqrt a) (expr-f32-sqrt (shift delta cutoff a))]
+    [(expr-f32-lt a b) (expr-f32-lt (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-f32-le a b) (expr-f32-le (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-f32-eq a b) (expr-f32-eq (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-f64-add a b) (expr-f64-add (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-f64-sub a b) (expr-f64-sub (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-f64-mul a b) (expr-f64-mul (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-f64-div a b) (expr-f64-div (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-f64-neg a) (expr-f64-neg (shift delta cutoff a))]
+    [(expr-f64-abs a) (expr-f64-abs (shift delta cutoff a))]
+    [(expr-f64-sqrt a) (expr-f64-sqrt (shift delta cutoff a))]
+    [(expr-f64-lt a b) (expr-f64-lt (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-f64-le a b) (expr-f64-le (shift delta cutoff a) (shift delta cutoff b))]
+    [(expr-f64-eq a b) (expr-f64-eq (shift delta cutoff a) (shift delta cutoff b))]
+    ;; Cross-width Float conversions (Numerics N3e-rest)
+    [(expr-float-finite a) (expr-float-finite (shift delta cutoff a))]
+    [(expr-float-to-rat a) (expr-float-to-rat (shift delta cutoff a))]
+    [(expr-float-to-int a) (expr-float-to-int (shift delta cutoff a))]
+    [(expr-float-to-float32 a) (expr-float-to-float32 (shift delta cutoff a))]
     [(expr-p32-add a b) (expr-p32-add (shift delta cutoff a) (shift delta cutoff b))]
     [(expr-p32-sub a b) (expr-p32-sub (shift delta cutoff a) (shift delta cutoff b))]
     [(expr-p32-mul a b) (expr-p32-mul (shift delta cutoff a) (shift delta cutoff b))]
@@ -246,6 +276,10 @@
     [(expr-String) e]
     [(expr-string _) e]
 
+    ;; Record/tuple type: recurse into field TYPES only (labels/presence/tail carry no vars)
+    [(? expr-Record? rec) (record-map-field-types (lambda (t) (shift delta cutoff t)) rec)]
+    ;; CIU T6 F1b.5-s2: validate — non-binding; exprs via the single helper
+    [(? expr-validate? v) (validate-map-exprs (lambda (t) (shift delta cutoff t)) v)]
     ;; Map (all non-binding)
     [(expr-Map k v) (expr-Map (shift delta cutoff k) (shift delta cutoff v))]
     [(expr-champ _) e]  ; Racket value, no de Bruijn vars
@@ -279,6 +313,13 @@
     [(expr-rrb _) e]
     [(expr-pvec-empty a) (expr-pvec-empty (shift delta cutoff a))]
     [(expr-pvec-push v x) (expr-pvec-push (shift delta cutoff v) (shift delta cutoff x))]
+    [(expr-pvec-literal elems) (expr-pvec-literal (map (lambda (e) (shift delta cutoff e)) elems))]
+    [(expr-list-literal elems chain)
+     (expr-list-literal (map (lambda (e) (shift delta cutoff e)) elems) (shift delta cutoff chain))]
+    [(expr-map-literal keys vals chain)
+     (expr-map-literal (map (lambda (e) (shift delta cutoff e)) keys)
+                       (map (lambda (e) (shift delta cutoff e)) vals)
+                       (shift delta cutoff chain))]
     [(expr-pvec-nth v i) (expr-pvec-nth (shift delta cutoff v) (shift delta cutoff i))]
     [(expr-pvec-update v i x) (expr-pvec-update (shift delta cutoff v) (shift delta cutoff i) (shift delta cutoff x))]
     [(expr-pvec-length v) (expr-pvec-length (shift delta cutoff v))]
@@ -364,24 +405,6 @@
      (expr-uf-union (shift delta cutoff st) (shift delta cutoff id1) (shift delta cutoff id2))]
     [(expr-uf-value st id) (expr-uf-value (shift delta cutoff st) (shift delta cutoff id))]
 
-    ;; ATMS (all non-binding)
-    [(expr-atms-type) e]
-    [(expr-assumption-id-type) e]
-    [(expr-atms-store _) e]
-    [(expr-assumption-id-val _) e]
-    [(expr-atms-new net) (expr-atms-new (shift delta cutoff net))]
-    [(expr-atms-assume a nm d)
-     (expr-atms-assume (shift delta cutoff a) (shift delta cutoff nm) (shift delta cutoff d))]
-    [(expr-atms-retract a aid) (expr-atms-retract (shift delta cutoff a) (shift delta cutoff aid))]
-    [(expr-atms-nogood a aids) (expr-atms-nogood (shift delta cutoff a) (shift delta cutoff aids))]
-    [(expr-atms-amb a alts) (expr-atms-amb (shift delta cutoff a) (shift delta cutoff alts))]
-    [(expr-atms-solve-all a g) (expr-atms-solve-all (shift delta cutoff a) (shift delta cutoff g))]
-    [(expr-atms-read a c) (expr-atms-read (shift delta cutoff a) (shift delta cutoff c))]
-    [(expr-atms-write a c v s)
-     (expr-atms-write (shift delta cutoff a) (shift delta cutoff c) (shift delta cutoff v) (shift delta cutoff s))]
-    [(expr-atms-consistent a aids) (expr-atms-consistent (shift delta cutoff a) (shift delta cutoff aids))]
-    [(expr-atms-worldview a aids) (expr-atms-worldview (shift delta cutoff a) (shift delta cutoff aids))]
-
     ;; Tabling (all non-binding)
     [(expr-table-store-type) e]
     [(expr-table-store-val _) e]
@@ -402,7 +425,6 @@
     [(expr-goal-type) e]
     [(expr-derivation-type) e]
     [(expr-cut) e]
-    [(expr-schema-type _) e]
     [(expr-answer-type t) (expr-answer-type (shift delta cutoff t))]
     [(expr-relation-type pts) (expr-relation-type (map (lambda (p) (shift delta cutoff p)) pts))]
     [(expr-solver-config m) (expr-solver-config (shift delta cutoff m))]
@@ -417,7 +439,6 @@
     [(expr-unify-goal l r) (expr-unify-goal (shift delta cutoff l) (shift delta cutoff r))]
     [(expr-is-goal v ex) (expr-is-goal (shift delta cutoff v) (shift delta cutoff ex))]
     [(expr-not-goal g) (expr-not-goal (shift delta cutoff g))]
-    [(expr-schema nm fs) (expr-schema nm (map (lambda (f) (shift delta cutoff f)) fs))]
     [(expr-solve g) (expr-solve (shift delta cutoff g))]
     [(expr-solve-with sv ov g) (expr-solve-with (and sv (shift delta cutoff sv)) (and ov (shift delta cutoff ov)) (shift delta cutoff g))]
     [(expr-solve-one g) (expr-solve-one (shift delta cutoff g))]
@@ -537,8 +558,8 @@
     [(expr-Type _) e]
     [(expr-hole) e]
     [(expr-typed-hole _) e]
-    [(expr-Open) e]
     [(expr-meta _ _) e]
+    [(expr-num-lit _ _ _ _) e]
     [(expr-error) e]
     [(? ns-context?) e]
 
@@ -643,6 +664,36 @@
     ;; Posit32 (all non-binding)
     [(expr-Posit32) e]
     [(expr-posit32 _) e]
+    [(expr-Float32) e]
+    [(expr-float32 _) e]
+    [(expr-Float64) e]
+    [(expr-float64 _) e]
+    ;; Float ops (Numerics N3b) — recurse into operands
+    [(expr-f32-add a b) (expr-f32-add (subst k s a) (subst k s b))]
+    [(expr-f32-sub a b) (expr-f32-sub (subst k s a) (subst k s b))]
+    [(expr-f32-mul a b) (expr-f32-mul (subst k s a) (subst k s b))]
+    [(expr-f32-div a b) (expr-f32-div (subst k s a) (subst k s b))]
+    [(expr-f32-neg a) (expr-f32-neg (subst k s a))]
+    [(expr-f32-abs a) (expr-f32-abs (subst k s a))]
+    [(expr-f32-sqrt a) (expr-f32-sqrt (subst k s a))]
+    [(expr-f32-lt a b) (expr-f32-lt (subst k s a) (subst k s b))]
+    [(expr-f32-le a b) (expr-f32-le (subst k s a) (subst k s b))]
+    [(expr-f32-eq a b) (expr-f32-eq (subst k s a) (subst k s b))]
+    [(expr-f64-add a b) (expr-f64-add (subst k s a) (subst k s b))]
+    [(expr-f64-sub a b) (expr-f64-sub (subst k s a) (subst k s b))]
+    [(expr-f64-mul a b) (expr-f64-mul (subst k s a) (subst k s b))]
+    [(expr-f64-div a b) (expr-f64-div (subst k s a) (subst k s b))]
+    [(expr-f64-neg a) (expr-f64-neg (subst k s a))]
+    [(expr-f64-abs a) (expr-f64-abs (subst k s a))]
+    [(expr-f64-sqrt a) (expr-f64-sqrt (subst k s a))]
+    [(expr-f64-lt a b) (expr-f64-lt (subst k s a) (subst k s b))]
+    [(expr-f64-le a b) (expr-f64-le (subst k s a) (subst k s b))]
+    [(expr-f64-eq a b) (expr-f64-eq (subst k s a) (subst k s b))]
+    ;; Cross-width Float conversions (Numerics N3e-rest)
+    [(expr-float-finite a) (expr-float-finite (subst k s a))]
+    [(expr-float-to-rat a) (expr-float-to-rat (subst k s a))]
+    [(expr-float-to-int a) (expr-float-to-int (subst k s a))]
+    [(expr-float-to-float32 a) (expr-float-to-float32 (subst k s a))]
     [(expr-p32-add a b) (expr-p32-add (subst k s a) (subst k s b))]
     [(expr-p32-sub a b) (expr-p32-sub (subst k s a) (subst k s b))]
     [(expr-p32-mul a b) (expr-p32-mul (subst k s a) (subst k s b))]
@@ -716,6 +767,10 @@
     [(expr-String) e]
     [(expr-string _) e]
 
+    ;; Record/tuple type: recurse into field TYPES only
+    [(? expr-Record? rec) (record-map-field-types (lambda (t) (subst k s t)) rec)]
+    ;; CIU T6 F1b.5-s2: validate — non-binding; exprs via the single helper
+    [(? expr-validate? v) (validate-map-exprs (lambda (t) (subst k s t)) v)]
     ;; Map (all non-binding)
     [(expr-Map kt vt) (expr-Map (subst k s kt) (subst k s vt))]
     [(expr-champ _) e]
@@ -749,6 +804,13 @@
     [(expr-rrb _) e]
     [(expr-pvec-empty a) (expr-pvec-empty (subst k s a))]
     [(expr-pvec-push v x) (expr-pvec-push (subst k s v) (subst k s x))]
+    [(expr-pvec-literal elems) (expr-pvec-literal (map (lambda (e) (subst k s e)) elems))]
+    [(expr-list-literal elems chain)
+     (expr-list-literal (map (lambda (e) (subst k s e)) elems) (subst k s chain))]
+    [(expr-map-literal keys vals chain)
+     (expr-map-literal (map (lambda (e) (subst k s e)) keys)
+                       (map (lambda (e) (subst k s e)) vals)
+                       (subst k s chain))]
     [(expr-pvec-nth v i) (expr-pvec-nth (subst k s v) (subst k s i))]
     [(expr-pvec-update v i x) (expr-pvec-update (subst k s v) (subst k s i) (subst k s x))]
     [(expr-pvec-length v) (expr-pvec-length (subst k s v))]
@@ -834,24 +896,6 @@
      (expr-uf-union (subst k s st) (subst k s id1) (subst k s id2))]
     [(expr-uf-value st id) (expr-uf-value (subst k s st) (subst k s id))]
 
-    ;; ATMS (all non-binding)
-    [(expr-atms-type) e]
-    [(expr-assumption-id-type) e]
-    [(expr-atms-store _) e]
-    [(expr-assumption-id-val _) e]
-    [(expr-atms-new net) (expr-atms-new (subst k s net))]
-    [(expr-atms-assume a nm d)
-     (expr-atms-assume (subst k s a) (subst k s nm) (subst k s d))]
-    [(expr-atms-retract a aid) (expr-atms-retract (subst k s a) (subst k s aid))]
-    [(expr-atms-nogood a aids) (expr-atms-nogood (subst k s a) (subst k s aids))]
-    [(expr-atms-amb a alts) (expr-atms-amb (subst k s a) (subst k s alts))]
-    [(expr-atms-solve-all a g) (expr-atms-solve-all (subst k s a) (subst k s g))]
-    [(expr-atms-read a c) (expr-atms-read (subst k s a) (subst k s c))]
-    [(expr-atms-write a c v sup)
-     (expr-atms-write (subst k s a) (subst k s c) (subst k s v) (subst k s sup))]
-    [(expr-atms-consistent a aids) (expr-atms-consistent (subst k s a) (subst k s aids))]
-    [(expr-atms-worldview a aids) (expr-atms-worldview (subst k s a) (subst k s aids))]
-
     ;; Tabling (all non-binding)
     [(expr-table-store-type) e]
     [(expr-table-store-val _) e]
@@ -872,7 +916,6 @@
     [(expr-goal-type) e]
     [(expr-derivation-type) e]
     [(expr-cut) e]
-    [(expr-schema-type _) e]
     [(expr-answer-type t) (expr-answer-type (subst k s t))]
     [(expr-relation-type pts) (expr-relation-type (map (lambda (p) (subst k s p)) pts))]
     [(expr-solver-config m) (expr-solver-config (subst k s m))]
@@ -887,7 +930,6 @@
     [(expr-unify-goal l r) (expr-unify-goal (subst k s l) (subst k s r))]
     [(expr-is-goal v ex) (expr-is-goal (subst k s v) (subst k s ex))]
     [(expr-not-goal g) (expr-not-goal (subst k s g))]
-    [(expr-schema nm fs) (expr-schema nm (map (lambda (f) (subst k s f)) fs))]
     [(expr-solve g) (expr-solve (subst k s g))]
     [(expr-solve-with sv ov g) (expr-solve-with (and sv (subst k s sv)) (and ov (subst k s ov)) (subst k s g))]
     [(expr-solve-one g) (expr-solve-one (subst k s g))]

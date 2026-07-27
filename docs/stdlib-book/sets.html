@@ -192,18 +192,23 @@ higher-order functions over sets.</p></div>
 <h2 class="part-header">Part I — Core Set Operations</h2>
 <section class="module-container">
 <div class="module-badge">prologos::data::set</div>
-<h3 class="section-title">Constructors and Set Algebra</h3>
-<div class="prose"><p>The fundamental set operations (<code>set-empty</code>, <code>set-insert</code>,
-<code>set-member?</code>, etc.) are built-in AST keywords. This module
-provides derived constructors and algebraic operations.</p>
-<p>Note: <code>set-singleton</code> and <code>set-from-list</code> use sexp-mode <code>def</code>
-because <code>set-empty</code> needs the type argument at runtime for the
-CHAMP trie, so <code>A</code> must be <code>:w</code> (not <code>:0</code> erased).</p></div>
 <pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::list <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons reduce]]</code></pre>
-<div class="prose"><p>Create a singleton set containing one element.</p></div>
+<div class="prose"><p>========================================
+Prologos Set — Persistent Hash Set
+========================================
+Built on the CHAMP trie (same as Map), with #t sentinel values.
+Core operations are AST-level keywords:
+  Set, set-empty, set-insert, set-member?, set-delete,
+  set-size, set-union, set-intersect, set-diff, set-to-list</p>
+<p>This module provides derived set-algebra operations.</p>
+<p>Create a singleton set containing one element.
+(Uses sexp def: set-empty needs the type arg at runtime for the CHAMP trie,
+so A must be :w not :0.)</p></div>
 <pre><code class="prologos">(<span class="hl-kw">def</span> set-singleton : (<span class="hl-ty">Pi</span> (<span class="hl-ty">A</span> <span class="hl-kwlit">:w</span> (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> (<span class="hl-ty">Set</span> <span class="hl-ty">A</span>)))
   (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> <span class="hl-kwlit">:w</span> (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (a : <span class="hl-ty">A</span>) (set-insert (set-empty <span class="hl-ty">A</span>) a))))</code></pre>
-<div class="prose"><p>Build a set from a list of elements.</p></div>
+<div class="prose"><p>Build a set from a list of elements.
+(Uses sexp def: same :w requirement for A, plus match-based fold avoids
+implicit-arg complications with reduce.)</p></div>
 <pre><code class="prologos">(<span class="hl-kw">def</span> set-from-list : (<span class="hl-ty">Pi</span> (<span class="hl-ty">A</span> <span class="hl-kwlit">:w</span> (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-op">-&gt;</span> (<span class="hl-ty">List</span> <span class="hl-ty">A</span>) (<span class="hl-ty">Set</span> <span class="hl-ty">A</span>)))
   (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> <span class="hl-kwlit">:w</span> (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">List</span> <span class="hl-ty">A</span>))
     (<span class="hl-kw">the</span> (<span class="hl-ty">Set</span> <span class="hl-ty">A</span>)
@@ -216,74 +221,73 @@ set-symmetric-diff s1 s2 = union (diff s1 s2) (diff s2 s1)</p></div>
 <span class="hl-kw">defn</span> set-symmetric-diff [s1 s2]
   set-union [set-diff s1 s2] [set-diff s2 s1]</code></pre>
 </section>
-<h2 class="part-header">Part II — Trait Instances</h2>
+<h2 class="part-header">Part II — Trait Instances and Operations</h2>
 <section class="module-container">
-<div class="module-badge">prologos::core::seqable-set</div>
-<h3 class="section-title">Seqable Instance</h3>
-<div class="prose"><p>Converts a Set to an LSeq by materializing to a List (via native
-<code>set-to-list</code>), then wrapping with <code>list-to-lseq</code>. Element order
-is determined by the CHAMP trie's internal hash ordering — it is
-*not* insertion-ordered.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::seqable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Seqable</span>]]
-<span class="hl-kw">require</span> [prologos::data::lseq          <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span>]]
-<span class="hl-kw">require</span> [prologos::data::lseq-ops      <span class="hl-kwlit">:refer</span> [list-to-lseq]]
-<span class="hl-kw">require</span> [prologos::data::list           <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span>]]
-
-(<span class="hl-kw">def</span> <span class="hl-ty">Set--Seqable--dict</span> : [<span class="hl-ty">Seqable</span> <span class="hl-ty">Set</span>]
+<div class="module-badge">prologos::core::set</div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::collection-traits <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Seqable</span>
+                                                    <span class="hl-ty">Buildable</span>
+                                                    <span class="hl-ty">Foldable</span>
+                                                    <span class="hl-ty">Reducible</span>
+                                                    <span class="hl-ty">Setlike</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq            <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq-ops        <span class="hl-kwlit">:refer</span> [list-to-lseq lseq-to-list]]
+<span class="hl-kw">require</span> [prologos::data::list             <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons foldr]]</code></pre>
+<div class="prose"><p>========================================
+Seqable instance for Set
+========================================
+to-seq : Set A -&gt; LSeq A
+Converts via set-to-list -&gt; list-to-lseq.</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> <span class="hl-ty">Set--Seqable--dict</span> : [<span class="hl-ty">Seqable</span> <span class="hl-ty">Set</span>]
   (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (s : (<span class="hl-ty">Set</span> <span class="hl-ty">A</span>))
     (list-to-lseq <span class="hl-ty">A</span> (set-to-list s)))))</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::foldable-set</div>
-<h3 class="section-title">Foldable Instance</h3>
-<div class="prose"><p>Uses native <code>set-fold</code> (a left fold via <code>champ-fold</code>) for O(n)
-traversal without List conversion.</p>
-<p><strong>Argument flip</strong>: <code>set-fold</code> is accumulator-first <code>(B -&gt; A -&gt; B)</code>,
-but Foldable's fold method is element-first <code>(A -&gt; B -&gt; B)</code>. We
-flip the arguments, just like the PVec Foldable instance.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::foldable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Foldable</span>]]
-
-(<span class="hl-kw">def</span> set-foldable : [<span class="hl-ty">Foldable</span> <span class="hl-ty">Set</span>]
-  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">B</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (f : (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-ty">B</span>))) (<span class="hl-kw">fn</span> (z : <span class="hl-ty">B</span>) (<span class="hl-kw">fn</span> (s : (<span class="hl-ty">Set</span> <span class="hl-ty">A</span>))
-    (set-fold (<span class="hl-kw">fn</span> (acc : <span class="hl-ty">B</span>) (<span class="hl-kw">fn</span> (elem : <span class="hl-ty">A</span>) (f elem acc))) z s)))))))</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::buildable-set</div>
-<h3 class="section-title">Buildable Instance</h3>
-<div class="prose"><p>Builds a Set from a lazy sequence by materializing to a List
-(via <code>lseq-to-list</code>), then folding with <code>set-insert</code>.</p>
-<p><strong>Why not <code>set-from-list</code>?</strong> Because <code>set-from-list</code> declares
-<code>A :w</code> (runtime type arg for the CHAMP trie), but the Buildable
-trait binding uses <code>A :0</code> (erased). Instead we fold manually
-using <code>set-insert</code> + <code>set-empty</code> which have erased type args
-at the QTT level.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::buildable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Buildable</span>]]
-<span class="hl-kw">require</span> [prologos::data::lseq            <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span>]]
-<span class="hl-kw">require</span> [prologos::data::lseq-ops        <span class="hl-kwlit">:refer</span> [lseq-to-list]]
-<span class="hl-kw">require</span> [prologos::data::list             <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> foldr]]
-
-(<span class="hl-kw">spec</span> <span class="hl-ty">Set--Buildable--dict</span> (<span class="hl-ty">Buildable</span> <span class="hl-ty">Set</span>))
+<div class="prose"><p>========================================
+Buildable Set Instance
+========================================
+from-seq   : LSeq A -&gt; Set A  (via lseq-to-list -&gt; foldr with set-insert)
+empty-coll : Set A             (via set-empty)
+conj       : Set A -&gt; A -&gt; Set A  (via set-insert, O(log n))</p>
+<p>Buildable is a three-method trait, so the dict is a nested Sigma pair.
+Note: Can't call set-from-list directly because it declares A :w,
+but the trait binding uses A :0 (erased). Instead we fold manually
+using set-insert + set-empty which have erased type args at QTT level.</p></div>
+<pre><code class="prologos">(<span class="hl-kw">spec</span> <span class="hl-ty">Set--Buildable--dict</span> (<span class="hl-ty">Buildable</span> <span class="hl-ty">Set</span>))
 (<span class="hl-kw">def</span> <span class="hl-ty">Set--Buildable--dict</span>
   (pair
     (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>))
       (foldr <span class="hl-ty">A</span> (<span class="hl-ty">Set</span> <span class="hl-ty">A</span>) (<span class="hl-kw">fn</span> (a : <span class="hl-ty">A</span>) (<span class="hl-kw">fn</span> (acc : (<span class="hl-ty">Set</span> <span class="hl-ty">A</span>)) (set-insert acc a))) (set-empty <span class="hl-ty">A</span>) (lseq-to-list <span class="hl-ty">A</span> xs))))
-    (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (set-empty <span class="hl-ty">A</span>))))</code></pre>
-</section>
-<section class="module-container">
-<div class="module-badge">prologos::core::setlike-set</div>
-<h3 class="section-title">Setlike Instance</h3>
-<div class="prose"><p>The <code>Setlike</code> trait provides the natural set-membership interface:
-  <code>set-member? : Set A -&gt; A -&gt; Bool</code>
-  <code>set-insert  : Set A -&gt; A -&gt; Set A</code>
-  <code>set-remove  : Set A -&gt; A -&gt; Set A</code></p>
-<p>All three methods delegate directly to AST primitives. Note that
-<code>set-remove</code> maps to the AST keyword <code>set-delete</code> (the trait uses
-a more standard name).</p>
+    (pair
+      (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (set-empty <span class="hl-ty">A</span>))
+      (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (s : (<span class="hl-ty">Set</span> <span class="hl-ty">A</span>)) (<span class="hl-kw">fn</span> (x : <span class="hl-ty">A</span>) (set-insert s x)))))))</code></pre>
+<div class="prose"><p>========================================
+Foldable instance for Set
+========================================
+Uses native set-fold (left fold via champ-fold) for O(n) traversal
+without List conversion.</p>
+<p>Note: set-fold is accumulator-first (B -&gt; A -&gt; B), but Foldable's
+fold method is element-first (A -&gt; B -&gt; B). We flip the arguments.</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> set-foldable : [<span class="hl-ty">Foldable</span> <span class="hl-ty">Set</span>]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">B</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (f : (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-ty">B</span>))) (<span class="hl-kw">fn</span> (z : <span class="hl-ty">B</span>) (<span class="hl-kw">fn</span> (s : (<span class="hl-ty">Set</span> <span class="hl-ty">A</span>))
+    (set-fold (<span class="hl-kw">fn</span> (acc : <span class="hl-ty">B</span>) (<span class="hl-kw">fn</span> (elem : <span class="hl-ty">A</span>) (f elem acc))) z s)))))))</code></pre>
+<div class="prose"><p>========================================
+Reducible instance for Set
+========================================
+Uses native set-fold (left fold via CHAMP trie traversal) for
+O(n) traversal without List conversion.</p>
+<p>set-fold : (B -&gt; A -&gt; B) -&gt; B -&gt; Set A -&gt; B
+Reducible : Pi [A :0 Type] Pi [B :0 Type] (B -&gt; A -&gt; B) -&gt; B -&gt; Set A -&gt; B</p>
+<p>The function signature matches directly: accumulator-first.</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> set-reducible : [<span class="hl-ty">Reducible</span> <span class="hl-ty">Set</span>]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">B</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (f : (<span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>))) (<span class="hl-kw">fn</span> (z : <span class="hl-ty">B</span>) (<span class="hl-kw">fn</span> (s : (<span class="hl-ty">Set</span> <span class="hl-ty">A</span>))
+    (set-fold f z s)))))))</code></pre>
+<div class="prose"><p>========================================
+Setlike instance for Set
+========================================
+set-member? : Set A -&gt; A -&gt; Bool   (delegates to AST set-member?)
+set-insert  : Set A -&gt; A -&gt; Set A  (delegates to AST set-insert)
+set-remove  : Set A -&gt; A -&gt; Set A  (delegates to AST set-delete)</p>
 <p>Setlike is a three-method trait, so the dict is a nested Sigma:
-  <code>(pair set-member? (pair set-insert set-remove))</code></p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::setlike-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Setlike</span>]]
-
-(<span class="hl-kw">spec</span> <span class="hl-ty">Set--Setlike--dict</span> (<span class="hl-ty">Setlike</span> <span class="hl-ty">Set</span>))
+(pair set-member? (pair set-insert set-remove))</p></div>
+<pre><code class="prologos">(<span class="hl-kw">spec</span> <span class="hl-ty">Set--Setlike--dict</span> (<span class="hl-ty">Setlike</span> <span class="hl-ty">Set</span>))
 (<span class="hl-kw">def</span> <span class="hl-ty">Set--Setlike--dict</span>
   (pair</code></pre>
 <div class="prose"><p>set-member? : Pi(A :0 Type) Set A -&gt; A -&gt; Bool</p></div>
@@ -296,17 +300,13 @@ a more standard name).</p>
 <div class="prose"><p>set-remove : Pi(A :0 Type) Set A -&gt; A -&gt; Set A</p></div>
 <pre><code class="prologos">      (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (s : (<span class="hl-ty">Set</span> <span class="hl-ty">A</span>)) (<span class="hl-kw">fn</span> (a : <span class="hl-ty">A</span>)
         (set-delete s a)))))))</code></pre>
-</section>
-<h2 class="part-header">Part III — Derived Operations</h2>
-<section class="module-container">
-<div class="module-badge">prologos::core::set-ops</div>
-<h3 class="section-title">Higher-Order Set Functions</h3>
-<div class="prose"><p><code>set-fold</code> and <code>set-filter</code> are native AST primitives (parser
-keywords) that reduce via <code>champ-fold</code> in the reduction engine.
-This module provides derived operations and function wrappers
-built on those primitives.</p></div>
-<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::list    <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> foldr]]</code></pre>
-<div class="prose"><p>set-map : (A -&gt; B) -&gt; Set A -&gt; Set B
+<div class="prose"><p>========================================
+Set Operations
+========================================
+set-fold, set-filter are now native AST primitives
+(parser keywords). They reduce via champ-fold in the reduction engine.
+set-map, set-any?, and set-all? use native set-fold.</p>
+<p>set-map : (A -&gt; B) -&gt; Set A -&gt; Set B
 Applies f to every element, collecting results into a new set.
 Uses native set-fold to avoid List conversion.</p></div>
 <pre><code class="prologos"><span class="hl-kw">spec</span> set-map {<span class="hl-ty">A</span> <span class="hl-ty">B</span> : <span class="hl-ty">Type</span>} [<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Set</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Set</span> <span class="hl-ty">B</span>]

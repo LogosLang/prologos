@@ -24,7 +24,7 @@
 (test-case "table-store-empty: wraps provided network"
   (define net (make-prop-network 5000))
   (define ts (table-store-empty net))
-  (check-equal? (prop-network-fuel (table-store-network ts)) 5000))
+  (check-equal? (net-cell-read (table-store-network ts) fuel-cell-id) 5000))
 
 ;; ========================================
 ;; Registration

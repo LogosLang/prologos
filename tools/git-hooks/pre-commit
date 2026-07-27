@@ -1,24 +1,31 @@
 #!/usr/bin/env bash
 #
-# pre-commit — paren balance check on staged .rkt files
+# pre-commit — fast lint gates on staged .rkt files
 #
-# Runs tools/check-parens.sh on every .rkt file in the staged set.
-# Each check is ~100ms (read-syntax via Racket); fast enough for a
-# pre-commit gate. Blocks the commit if any file has unbalanced
-# delimiters, with the exact line:column from Racket's reader.
+# Two gates, both fast (each ~1s for typical staged set):
+#   1. tools/check-parens.sh        — delimiter balance via Racket's reader
+#   2. tools/check-stdout-clean.rkt — module-load stdout pollution
 #
 # Bypass: git commit --no-verify  (emergencies only).
 #
 # Per ~/.claude/rules/workflow.md, hooks should never be skipped
 # routinely — failures indicate real bugs that must be fixed.
 #
-# Origin: surfaced 2026-04-27 after commit d7bd97a4 (S2.e-iv-c
-# mechanical sed surgery) introduced unbalanced parens in 5
-# bench files outside the targeted-tests verification scope, breaking
-# `raco pkg install` and downstream CI on every open PR. PR #29
-# from kumavis fixed the immediate bug; this hook prevents recurrence.
+# Origin:
+#   - check-parens: surfaced 2026-04-27 after commit d7bd97a4 (S2.e-iv-c
+#     mechanical sed surgery) introduced unbalanced parens in 5 bench
+#     files outside targeted-tests verification, breaking `raco pkg install`
+#     and downstream CI on every open PR. PR #29 fixed the immediate bug;
+#     this hook prevents recurrence.
+#   - check-stdout-clean: surfaced 2026-04-28 — VS Code LSP failed with
+#     "Header must provide a Content-Length property" because 5 top-level
+#     (verify-rewrite-rule ...) calls in sre-rewrite.rkt printed #t to
+#     stdout at module load, corrupting LSP's JSON-RPC framing. Commit
+#     1fe1422f fixed; this hook prevents recurrence.
 
 set -e
+
+RACKET="/Applications/Racket v9.0/bin/racket"
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 if [ -z "$REPO_ROOT" ]; then
@@ -34,6 +41,13 @@ if [ -z "$files" ]; then
   exit 0
 fi
 
-# Run check-parens.sh on the staged files. The script accepts a
-# space-separated file list as positional args.
-exec "$REPO_ROOT/tools/check-parens.sh" $files
+# Gate 1: paren balance on the staged files
+"$REPO_ROOT/tools/check-parens.sh" $files
+
+# Gate 2: stdout-clean check on the staged files
+# Skip if no production .rkt files staged (the racket script also filters,
+# but checking here saves a Racket startup when only tests/benchmarks staged)
+prod_files=$(echo "$files" | grep -v -E '/(tests|benchmarks|examples|tools|lib)/' || true)
+if [ -n "$prod_files" ]; then
+  "$RACKET" "$REPO_ROOT/tools/check-stdout-clean.rkt" $prod_files
+fi

@@ -21,15 +21,11 @@
 
 ;; Helper to run with clean global env (sexp mode, no prelude)
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (process-string s)))
+  (process-string s))
 
 ;; Helper to run with prelude (needed for nat-eq?, etc.)
 (define (run-ns s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (process-string (string-append "(ns test) " s))))
+  (process-string (string-append "(ns test) " s)))
 
 ;; ========================================
 ;; Eval: union + find (requires prelude for nat-eq?)

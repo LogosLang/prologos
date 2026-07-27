@@ -34,7 +34,13 @@
          "../prop-observatory.rkt"
          "../observatory-serialize.rkt")
 
-(provide run-lsp-server)
+(provide run-lsp-server
+         ;; PPN 4C Addendum Phase 4A.c-iii-d: test seam for the cross-command REPL
+         ;; regression test (tests/test-lsp-repl-01.rkt). The LSP eval path had no
+         ;; suite coverage — the Level-3 gap that let the 4A.b regression land invisibly.
+         make-initial-state
+         get-or-create-session!
+         eval-in-session-raw!)
 
 ;; ============================================================
 ;; Server state
@@ -92,8 +98,7 @@
 
 ;; Per-URI REPL session state. Definitions accumulate across evals.
 (struct repl-session
-  (global-env              ; hasheq: name → (cons type value)
-   ns-context              ; ns-context or #f
+  (ns-context              ; ns-context or #f
    module-registry         ; hasheq: ns-sym → module-info
    trait-registry          ; hasheq
    impl-registry           ; hasheq
@@ -101,8 +106,13 @@
    preparse-registry       ; hasheq
    capability-registry     ; hasheq
    spec-store              ; hasheq
-   definition-cells        ; hasheq (Phase 3a)
-   definition-deps         ; hasheq (Phase 3b)
+   ;; PPN 4C Addendum Phase 4B.1: the `definition-deps` field RETIRED
+   ;; (store-only — read back into current-definition-dependencies + written;
+   ;; never consumed to drive a feature, never serialized; dep-recording retired).
+   mnr                     ; module-network-ref (PPN 4C 4A.c-iii-d): on-network def store;
+                           ;   persists cross-command defs. Replaces the retired global-env/
+                           ;   definition-cells param-snapshot fields — the mnr IS the live store
+                           ;   (global-env-add writes it; resolution reads it via the cascade).
    ) #:mutable)
 
 ;; Load prelude once and cache registries (mirrors test-support.rkt pattern).
@@ -117,9 +127,7 @@
       (simplify-path (build-path here-dir ".." "lib")))
     (define prelude-obs (make-observatory (hasheq 'source "prelude")))
     (define-values (mod-reg trait-reg impl-reg param-impl-reg preparse-reg cap-reg mod-cap-cache)
-      (parameterize ([current-prelude-env (hasheq)]
-                     [current-definition-cells-content (hasheq)]
-                     [current-definition-dependencies (hasheq)]
+      (parameterize ([current-file-module-network-ref (make-module-network)]  ;; PPN 4C Addendum Phase 4A.c-iii-e: fresh mnr (prelude load)
                      [current-ns-context #f]
                      [current-module-registry (hasheq)]
                      [current-lib-paths (list lib-dir)]
@@ -162,7 +170,6 @@
      (define pc (lsp-state-prelude-cache state))
      (define session
        (repl-session
-        (hasheq)                                    ; global-env (fresh)
         #f                                          ; ns-context
         (prelude-cache-module-registry pc)           ; module-registry
         (prelude-cache-trait-registry pc)             ; trait-registry
@@ -171,8 +178,7 @@
         (prelude-cache-preparse-registry pc)           ; preparse-registry
         (prelude-cache-capability-registry pc)         ; capability-registry
         (hasheq)                                    ; spec-store
-        (hasheq)                                    ; definition-cells (Phase 3a)
-        (hasheq)))                                  ; definition-deps (Phase 3b)
+        (make-module-network)))                     ; mnr (PPN 4C 4A.c-iii-d): fresh on-network def store; (ns repl) below wires the prelude in
      ;; Initialize the session with a namespace declaration to load prelude
      (eval-in-session-raw! state session "(ns repl)\n")
      (hash-set! sessions uri session)
@@ -204,9 +210,12 @@
     ([exn:fail?
       (lambda (e)
         (set! results (list (prologos-error #f (exn-message e)))))])
-    (parameterize ([current-prelude-env           (repl-session-global-env session)]
-                   [current-definition-cells-content (repl-session-definition-cells session)]
-                   [current-definition-dependencies  (repl-session-definition-deps session)]
+    (parameterize (;; PPN 4C Addendum Phase 4A.c-iii-d: the session-persistent mnr IS the REPL
+                   ;; def store. Inherit-or-create from the session field (mirrors process-file's
+                   ;; lifecycle at driver.rkt:1766) + write back below — this carries cross-command
+                   ;; defs (cmd1 `def x` resolves in cmd2). global-env-add writes this mnr.
+                   [current-file-module-network-ref
+                    (or (repl-session-mnr session) (make-module-network))]
                    [current-ns-context           (repl-session-ns-context session)]
                    [current-module-registry       (repl-session-module-registry session)]
                    [current-lib-paths             (list (prelude-cache-lib-dir pc))]
@@ -217,11 +226,14 @@
                    [current-capability-registry    (repl-session-capability-registry session)]
                    [current-spec-store             (repl-session-spec-store session)]
                    [current-error-port             (open-output-nowhere)]
+                   ;; stdout is the LSP channel — keep eval'd top-level IO off it.
+                   ;; (Future: capture into the returned result instead of discarding.)
+                   [current-output-port            (open-output-nowhere)]
                    [current-definition-locations   (hasheq)])
       (install-module-loader!)
       (set! results (process-string-ws code))
-      ;; Snapshot state back into session (definitions accumulate)
-      (set-repl-session-global-env!           session (current-prelude-env))
+      ;; Snapshot state back into session (definitions accumulate in the mnr)
+      (set-repl-session-mnr!                  session (current-file-module-network-ref))
       (set-repl-session-ns-context!           session (current-ns-context))
       (set-repl-session-module-registry!      session (current-module-registry))
       (set-repl-session-trait-registry!        session (current-trait-registry))
@@ -229,9 +241,7 @@
       (set-repl-session-param-impl-registry!   session (current-param-impl-registry))
       (set-repl-session-preparse-registry!      session (current-preparse-registry))
       (set-repl-session-capability-registry!    session (current-capability-registry))
-      (set-repl-session-spec-store!             session (current-spec-store))
-      (set-repl-session-definition-cells!       session (current-definition-cells-content))
-      (set-repl-session-definition-deps!        session (current-definition-dependencies))))
+      (set-repl-session-spec-store!             session (current-spec-store))))
   results)
 
 ;; Log a message to stderr (not stdout — stdout is the LSP channel).
@@ -380,7 +390,14 @@
      (define code (hash-ref params 'code ""))
      (lsp-log state "REPL loadFile for ~a" uri)
      (define session (get-or-create-session! state uri))
-     (define results (eval-in-session! state session code))
+     ;; Anchor the program's relative resource paths (read-file) at the source
+     ;; file's directory (location-independent), not the editor's process CWD.
+     (define src-dir (source-dir-of (uri->path uri)))
+     (define results
+       (if src-dir
+           (parameterize ([current-directory src-dir])
+             (eval-in-session! state session code))
+           (eval-in-session! state session code)))
      (respond! (hasheq 'results results))]
 
     ;; ---- REPL: Type of expression (Tier 4) ----
@@ -391,7 +408,10 @@
      (define session (get-or-create-session! state uri))
      ;; Try global-env lookup first, then wrap in infer
      (define sym (string->symbol code))
-     (define entry (hash-ref (repl-session-global-env session) sym #f))
+     ;; PPN 4C Addendum Phase 4A.c-iii-d: resolve via the session's on-network mnr
+     ;; (the def store), not the retired repl-session-global-env param-snapshot field.
+     (define entry (let ([mnr (repl-session-mnr session)])
+                     (and mnr (module-network-cascading-lookup mnr sym))))
      (cond
        [(and entry (pair? entry))
         (respond! (hasheq 'type (pp-expr (car entry))))]
@@ -518,6 +538,11 @@
                    [current-definition-locations (hasheq)]
                    ;; Suppress process-file perf/phase/memory/diagnostic noise
                    [current-error-port (open-output-nowhere)]
+                   ;; CRITICAL: stdout IS the LSP JSON-RPC channel. A document with
+                   ;; top-level IO (e.g. `[println …]`) would have process-file write
+                   ;; to stdout during elaboration, corrupting message framing
+                   ;; ("Header must provide a Content-Length property"). Redirect it.
+                   [current-output-port (open-output-nowhere)]
                    ;; Visualization Phase 1: capture BSP rounds
                    [current-bsp-observer bsp-observe]
                    ;; Observatory: capture all subsystem networks
@@ -529,7 +554,7 @@
         #:exists 'replace)
       (with-handlers ([exn:fail? (lambda (e)
                                    (set! errors (cons (prologos-error #f (exn-message e)) errors)))])
-        (define results (process-file tmp-path))
+        (define results (process-file tmp-path #:source-dir (source-dir-of file-path)))
         ;; Extract errors from the result list
         (for ([r (in-list (or results '()))])
           (when (prologos-error? r)
@@ -537,7 +562,7 @@
       (delete-file tmp-path)
       ;; Capture definition locations, type env, and spec store before parameterize exits
       (set! captured-def-locs (current-definition-locations))
-      (set! captured-type-env (current-prelude-env))
+      (set! captured-type-env (hasheq))  ;; PPN 4C Addendum Phase 4A.c-iii-e: current-prelude-env retired; file-save hover/completion functional restore (capture the file's env from process-file's internal mnr) → PPN Track 11
       (set! captured-spec-store (current-spec-store))
       ;; Visualization Phase 3: capture propagator network trace
       (define net-box (current-prop-net-box))
@@ -993,9 +1018,11 @@
   (define repl-state
     (cond
       [session
-       (define env (repl-session-global-env session))
+       ;; PPN 4C Addendum Phase 4A.c-iii-d: count the session mnr's own definitions
+       ;; (cell-id-map = user defs; prelude lives in the mnr's imports, not own cells).
+       (define mnr (repl-session-mnr session))
        (hasheq 'active #t
-               'evalCount (hash-count env)
+               'evalCount (if mnr (hash-count (module-network-ref-cell-id-map mnr)) 0)
                'lastResult (json-null))]
       [else
        (hasheq 'active #f
@@ -1121,6 +1148,16 @@
      ;; Handle percent-encoded characters
      (regexp-replace* #rx"%20" raw " ")]
     [else uri]))
+
+;; Directory of a path/string (absolutized); #f if undeterminable (e.g. empty/untitled).
+;; Anchors a .prologos program's relative resource paths (read-file) at its source
+;; directory rather than the ambient process CWD (relative-path fix, 2026-06-29).
+(define (source-dir-of path-or-string)
+  (with-handlers ([exn:fail? (lambda (_e) #f)])
+    (and path-or-string
+         (not (equal? path-or-string ""))
+         (let-values ([(d _n _dd) (split-path (path->complete-path path-or-string))])
+           (and (path? d) d)))))
 
 ;; Convert /path/to/file.prologos → file:///path/to/file.prologos
 (define (path->uri path)

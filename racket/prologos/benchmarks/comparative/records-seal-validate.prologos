@@ -1,0 +1,58 @@
+ns benchmarks::records-seal-validate :no-prelude
+
+;; Benchmark: the F1b FEATURE cost — seal + validate deterministic work (HEAD-ONLY:
+;; schema/seal/validate did NOT exist pre-F1b, so this is a single-point baseline
+;; for FUTURE tracks to A/B against, NOT a cross-boundary A/B). The last block
+;; contrasts validate against the hand-rolled per-field check it replaces
+;; (the feature-vs-manual "A/B" — same conformance work, two surfaces).
+
+require [prologos::data::result :refer [Result ok err ok? err?]]
+require [prologos::data::reason :refer [Reason missing-required check-failed type-mismatch unexpected-field errors-to-list]]
+
+schema Person
+  :name String
+  :age Int
+
+schema Cfg
+  :host String :default "localhost"
+  :port Int :default 8080
+
+schema Checked
+  :name String
+  :age Int :check (> _ 0)
+
+;; --- the SEAL doors (static discharge cost) ---
+def a1 : Person := {:name "alice" :age 30}
+def a2 := [Person {:name "bob" :age 25}]
+the Person {:name "carol" :age 40}
+def c1 : Cfg := {}
+c1.host
+def cg := [Checked {:name "dave" :age 5}]
+
+;; --- VALIDATE (runtime tabulation cost) — ok + err + fill + :check ---
+def m := [map-assoc [map-assoc {} :name "eve"] :age 20]
+[validate Person m]
+def bad := [map-assoc [map-assoc {} :name "fred"] :age "x"]
+[validate Person bad]
+[validate Cfg {}]
+[validate Checked {:name "gina" :age 0}]
+[validate Checked {:name "hank" :age 9}]
+
+;; --- validate repeated over several rows (the demo/E2E shape: rows → validate) ---
+;; (explicit per-row rather than [map [validate Person _] rows]: mapping an
+;;  unannotated-domain eta over a def-bound row-list hits the F-row inference
+;;  gap — a records-ergonomics edge, DEFERRED, not part of this cost measurement)
+[validate Person {:name "i" :age 1}]
+[validate Person {:name "j" :age 2}]
+[validate Person {:name "k" :age 3}]
+
+;; --- selection-validate ---
+selection NameOnly from Person :requires [:name]
+[validate NameOnly {:name "leo" :age 7}]
+
+;; --- feature-vs-manual contrast: the SAME conformance check, hand-rolled ---
+;; (what a user writes WITHOUT validate: explicit map-get + per-field guard)
+def manual-ok := [map-has-key? m :name]
+def manual-ok2 := [map-has-key? m :age]
+[map-get m :name]
+[map-get m :age]

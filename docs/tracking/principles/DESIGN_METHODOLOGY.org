@@ -703,6 +703,40 @@ Codified 2026-04-21 during PPN 4C Phase 9+10+11 addendum D.1 review ---
 D.1 placed the tracker at §16, and the user flagged the placement as a
 design-document hygiene issue. Applied to D.2 (tracker moved to §3).
 
+*** Closing Phase (MANDATORY)
+
+Every phased Stage-3 design MUST include a CLOSING PHASE --- the ~X.close~
+slice --- as the FINAL row of its Progress Tracker. The closing phase is a
+first-class, named phase (not an afterthought): it reserves space for the
+finalize work and, critically, *schedules the Stage-5 PIR*.
+
+The closing phase carries:
+- the *bench matrix* (per-semantic-axis, baseline-vs-HEAD; interleaved or
+  worktree-pinned per the §12.7 lesson when owner-WIP occupies the tree)
+- the *DEFERRED triage* (mark now-complete items; file new deferrals)
+- the *doc-truth sweep* (roadmap + Series-Master refresh; stale-comment cleanup;
+  aspirational-comment reconciliation)
+- the *memory fold* (project memory for context recovery)
+- *the Stage-5 PIR* --- the tracked unit's one full PIR
+
+/Why mandatory (structural, not disciplinary)/: a named ~.close~ row is the
+STRUCTURAL guard against skipping the PIR --- an unshipped ~.close~ is a visible
+"not done yet" signal in the tracker that anyone (including future-you) can see.
+Relying on discipline alone to "remember the PIR" fails: it is exactly the step
+most easily missed at the end of a long track, when the code is green and the
+work /feels/ done. Make the close a phase, and the tracker enforces it.
+
+The ~.close~ is itself NOT complete until its PIR (Stage 5) is written. A track
+whose ~.close~ shipped everything /except/ the PIR is a track with an open loop,
+not a closed one --- see [[*Stage 5: Composition and Extension][Stage 5]] "When
+to do a PIR" for the objective trigger.
+
+Codified 2026-07-19 (owner, during CIU T6 F1b.close) after observing that the
+PIR trigger was subjective ("for significant features") and no Stage-3 design
+was required to reserve space for the close --- both of which let the PIR be
+under-scoped or missed. F1b.close (F1 design doc §13.6 ladder) is the first
+compliant instance.
+
 ** Stage 4: Implementation
 
 /Goal/: Execute the phased roadmap, shipping complete and sound solutions
@@ -1535,15 +1569,29 @@ and anti-patterns --- see [[file:POST_IMPLEMENTATION_REVIEW.org][POST_IMPLEMENTA
 
 **** When to do a PIR
 
-Not every change warrants a PIR. Use one when:
-- The feature spanned multiple phases or sub-phases
-- The implementation took more than a single session
-- The work involved architectural decisions (new AST nodes, new
-  infrastructure files, new cross-cutting concerns)
-- You learned something that future work should benefit from
+/The objective trigger (not a judgment call)/: a design document TRACKED in a
+Series Master that reaches COMPLETION gets a PIR --- *always*. The PIR is the
+load-bearing signal that the work is genuinely /done/: reviewed and reviewable,
+not merely "code landed + suite green." A completed tracked design with no PIR
+is an *open loop, not a finished one* --- and the roadmap / Series-Master row
+does NOT flip ✅ until the PIR lands (see ~workflow.md~).
 
-Skip for routine bug fixes, single-file changes, or features that
-followed established patterns without surprises.
+/Granularity/: the full PIR is written at the level of the *tracked unit* --- a
+Track, or a major Phase carrying its own design document or design-doc section
+(e.g. CIU T6 F1b, tracked via §13). Sub-slices of that unit (F1b.1, F1b.4a, ...)
+use lighter ✏ close-notes / PIR-lite (the §11c pattern), NOT a separate full
+PIR --- but the tracked unit's completion is not "done" until its one full PIR
+is written.
+
+/Secondary heuristics/ (a change that is not a tracked-unit completion but still
+warrants a PIR): it spanned multiple phases, took more than a single session,
+involved architectural decisions (new AST nodes, new infrastructure files, new
+cross-cutting concerns), or taught something future work should benefit from.
+
+Skip a PIR only for genuinely routine work *outside* a tracked design: single-file
+bug fixes, established-pattern changes without surprises. If it has a tracked
+design document/§ in a Series Master and it completed, it is not routine ---
+it gets a PIR.
 
 **** Artifacts
 
@@ -1620,6 +1668,73 @@ benefit is that every subsystem handles every node consistently. This
 enforced consistency is a design methodology in itself: if a feature
 can't be expressed through the pipeline, it's a signal that the
 feature's abstraction is wrong.
+
+** Delegation vs Co-Design (Dynamic Workflows)
+
+The =Workflow= tool (deterministic multi-agent orchestration) is the
+generalization of the audit-delegation pattern. The organizing
+principle for when to reach for it:
+
+#+begin_quote
+Delegate the /multiple independent minds/ work to a dynamic workflow;
+keep the /one shared evolving understanding/ work conversational.
+#+end_quote
+
+*Good fit (delegate to a workflow)* — tasks that decompose into
+independent parallel work and synthesize:
+- *Stage 1 research sweeps* (human steers/refines the question; the
+  workflow sweeps + verifies + synthesizes; the human judges the result)
+- *Stage 2 mini-audits / reality-checks* (parallel facets grounded
+  against code — the promoted audit-delegation pattern)
+- *Stage 3 adversarial critique rounds* (P/R/M/S lenses + completeness
+  critic run BLIND to each other, then reconciled by grounded-pushback
+  synthesis — the parallelism /enforces/ the lens-independence that solo
+  sequential critique erodes by anchoring)
+- *Mechanical code migrations* — a /discovered work-list/ transformed by
+  a /known recipe/, verified per-item (NOT novel-design implementation)
+- *Completeness/coverage sweeps* ("what did we miss across this surface?")
+  and *parity/divergence verification* (run N equivalent paths, diff them)
+
+*Co-design (keep conversational, high-touch)* — tasks that need one
+shared, evolving understanding between contributor and user:
+- *Mini-design dialogue for OPEN architectural questions* (the cycling
+  between design intent and code reality WITH the user)
+- *Novel-design implementation* (the per-phase cadence, the gate, commit
+  discipline — see "Conversational Implementation Cadence")
+- *Decision-locking* (the user's deliberation is load-bearing)
+
+*The decision-boundary guardrail*: a workflow produces /material for a
+decision/; the human + main session /makes and locks the decision and
+lands the code/. No workflow autonomously closes a phase, locks a Q, or
+commits to main. Co-design is preserved at the decision boundary even
+when the labor is delegated.
+
+*Scale tiers* (panel size ∝ blast-radius × breadth × uncertainty;
+*start lean, escalate only when justified*):
+- *Tier 0 — no workflow*: routine, small, or novel-implementation work →
+  solo + conversation.
+- *Tier 1 — light (~2-4 agents)*: ground an audit, or a focused critique
+  pass, on a moderate-stakes step.
+- *Tier 2 — full panel (~6-12 agents)*: high blast-radius architecture —
+  full audit fan-out + multi-lens adversarial critique + completeness
+  critic.
+- *Implementation is never a workflow tier* (except verified-base
+  mechanical migration, per ~.claude/rules/workflow.md~ § "Diff-back").
+
+For high-stakes per-phase mini-design /openings/: fan out the AUDIT (and
+optionally an adversarial pre-critique of the proposed approach), but
+keep the Q-resolution and decision-locking in dialogue. The draft stays
+co-designed; its grounding and its challenge get delegated.
+
+*Provenance*: codified 2026-05-30 from the PPN 4C Addendum 4A.c-ii-b
+foreign-write-(b) dynamic-workflow experiment (§18.18.6.13). The run
+validated the critique-amplifier value (an adversarial completeness-critic
+agent caught a load-bearing flaw in the workflow /author's own/ dry-run
+design) and surfaced the cautions (the worktree-HEAD provisioning defect;
+~1.96M tokens / 12 agents spent on a ~4-line change = Tier-2 spend on
+Tier-0/1 work). See ~.claude/rules/workflow.md~ § "Dynamic-workflow
+code-state discipline" + DEVELOPMENT_LESSONS.org § "Dynamic Workflow Is
+the Generalization of Audit-Delegation."
 
 * Anti-Patterns
 

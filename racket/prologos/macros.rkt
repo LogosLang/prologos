@@ -193,6 +193,11 @@
          register-schema!
          lookup-schema
          parse-schema-fields
+         qualify-type-datum
+         ;; CIU T6 F1b.5-s2: re-homed to the validate plan bake (D29 — the
+         ;; bridge's pred-lowering helpers gain their second consumer)
+         subst-underscore
+         normalize-check-pred
          ;; Selection registry
          current-selection-registry
          read-selection-registry
@@ -322,6 +327,7 @@
          ;; Implicit map, dot-access, and introspection helpers
          rewrite-implicit-map
          rewrite-dot-access
+         map-literal-brace-params?
          rewrite-nil-dot-access
          rewrite-infix-operators
          maybe-inject-spec
@@ -697,7 +703,8 @@
   (current-user-operators-cell-id        (vector-ref v 22))
   (current-macro-registry-cell-id        (vector-ref v 23)))
 
-;; Track 6 Phase 6: Save/restore all 19 macros registry PARAM VALUES for batch-worker.
+;; Track 6 Phase 6: Save/restore all macros registry PARAM VALUES for batch-worker.
+;; (24 params since CIU T6 F1b.5-s1d added schema/selection/session/strategy/process.)
 ;; Consolidates 19 individual define/parameterize bindings into a single vector.
 ;; Used by batch-worker.rkt to save post-prelude state and restore per-file.
 (define (save-macros-registry-snapshot)
@@ -719,7 +726,17 @@
           (current-functor-store)
           (current-user-precedence-groups)
           (current-user-operators)
-          (current-macro-registry)))
+          (current-macro-registry)
+          ;; CIU T6 F1b.5-s1d: the five cell-backed registry params that were
+          ;; MISSING from this snapshot (schema/selection/session/strategy/
+          ;; process) — masked today by cell-first reads, but the parameter
+          ;; fallback is load-bearing in module-loading / pre-init contexts
+          ;; (pipeline.md New-Parameter checklist). Added as a class.
+          (current-schema-registry)
+          (current-selection-registry)
+          (current-session-registry)
+          (current-strategy-registry)
+          (current-process-registry)))
 
 ;; Restore macros registry params from a saved vector.
 ;; Direct mutation (not parameterize) — caller is responsible for calling
@@ -743,7 +760,13 @@
   (current-functor-store           (vector-ref v 15))
   (current-user-precedence-groups  (vector-ref v 16))
   (current-user-operators          (vector-ref v 17))
-  (current-macro-registry          (vector-ref v 18)))
+  (current-macro-registry          (vector-ref v 18))
+  ;; CIU T6 F1b.5-s1d: the five added registry params (see save-…-snapshot)
+  (current-schema-registry         (vector-ref v 19))
+  (current-selection-registry      (vector-ref v 20))
+  (current-session-registry        (vector-ref v 21))
+  (current-strategy-registry       (vector-ref v 22))
+  (current-process-registry        (vector-ref v 23)))
 
 ;; ========================================
 ;; Schema registry: field information for schema types
@@ -842,8 +865,64 @@
             (define-values (default-val check-pred rest)
               (parse-field-properties (cddr pairs)))
             (loop rest
-                  (cons (schema-field kw-name type-datum default-val check-pred) fields))])])))
+                  (cons (schema-field kw-name
+                                      (normalize-field-type-datum type-datum (or parent-name 'schema))
+                                      default-val check-pred)
+                        fields))])])))
   (values fields auto-subs))
+
+;; CIU T6 F1b.5-s1 (D27.6): normalize WS angle-type reader sentinels in schema
+;; field type datums at REGISTRATION. The WS reader emits `<...>` as
+;; ($angle-type ...) with `|` lexed to $pipe; ANNOTATIONS process these via
+;; the parser's unwrap-angle-type/parse-infix-type, but schema fields are
+;; stored as raw datums and bypassed that path — pre-s1 the sentinels leaked
+;; into the registry (and qualify-type-datum ns-qualified them), so every
+;; construction against an angle-typed field failed (the p0 probes,
+;; 2026-07-17). Canonical stored forms ($-heads are qualification-exempt):
+;;   <A | B | C>   →  ($union A B C)           (flattened)
+;;   <A -> B -> C> →  ($arrow A ($arrow B C))  (right-assoc)
+;;   <A>           →  A
+;; Dependent shapes (Pi binders, Sigma `*`) are NOT supported in schema field
+;; position — loud error at declaration (honest refusal; richer field types
+;; are F-carrier/walker-era work).
+(define (normalize-field-type-datum datum schema-name)
+  (cond
+    [(and (pair? datum) (eq? (car datum) '$angle-type))
+     (normalize-angle-parts (cdr datum) schema-name)]
+    [(list? datum)
+     (map (lambda (d) (normalize-field-type-datum d schema-name)) datum)]
+    [else datum]))
+
+(define (normalize-angle-parts parts schema-name)
+  (define (split-on tok lst)
+    (let loop ([rest lst] [cur '()] [acc '()])
+      (cond
+        [(null? rest) (reverse (cons (reverse cur) acc))]
+        [(eq? (car rest) tok) (loop (cdr rest) '() (cons (reverse cur) acc))]
+        [else (loop (cdr rest) (cons (car rest) cur) acc)])))
+  (define (segment->datum seg)
+    (cond
+      [(null? seg)
+       (error 'schema (format "schema ~a: empty type segment in <...> field type" schema-name))]
+      [(null? (cdr seg)) (normalize-field-type-datum (car seg) schema-name)]
+      [else (normalize-field-type-datum seg schema-name)]))
+  (cond
+    ;; union: <A | B | ...>
+    [(memq '$pipe parts)
+     (cons '$union (map segment->datum (split-on '$pipe parts)))]
+    ;; arrow: <A -> B -> C> (right-assoc)
+    [(memq '-> parts)
+     (let build ([segs (split-on '-> parts)])
+       (if (null? (cdr segs))
+           (segment->datum (car segs))
+           (list '$arrow (segment->datum (car segs)) (build (cdr segs)))))]
+    ;; single type: <A>
+    [(and (pair? parts) (null? (cdr parts)))
+     (segment->datum parts)]
+    [else
+     (error 'schema
+            (format "schema ~a: unsupported <...> field type shape ~a — schema fields support unions <A | B> and arrows <A -> B>; dependent types are not supported in schema field position"
+                    schema-name parts))]))
 
 
 ;; Parse optional field-level properties after a field's type datum.
@@ -873,13 +952,25 @@
 (define builtin-type-names
   '(Nat Int Rat Bool String Char Keyword Unit Nil Symbol Type
     Posit8 Posit16 Posit32 Posit64 Quire8 Quire16 Quire32 Quire64
-    List PVec Map Set Option Result Pair LSeq Value))
+    ;; CIU T6 F1b.5-s1: Float32/Float64 were MISSING here (the two-list drift
+    ;; vs typing-core's schema-field-type->expr case table) — a Float-typed
+    ;; field under ns context was qualified past its conversion arm.
+    Float32 Float64
+    List PVec Map Set Option Result Pair LSeq Value
+    ;; Numerics N5de: nominal-erased refined numeric types (Q6; base Int/Rat at runtime)
+    PosInt NegInt Zero NonZeroInt PosRat NegRat NonZeroRat))
 (define (qualify-type-datum datum ns-ctx)
   (cond
     [(symbol? datum)
-     (if (memq datum builtin-type-names)
-         datum
-         (qualify-name datum (ns-context-current-ns ns-ctx)))]
+     (cond
+       [(memq datum builtin-type-names) datum]
+       ;; CIU T6 F1b.5-s1: reader/normalizer sentinels ($union, $arrow — any
+       ;; $-headed atom) and operator atoms are STRUCTURE, not user type
+       ;; names — never ns-qualify them (pre-s1 this minted ns::$angle-type
+       ;; corruption in stored field datums, p0 probes).
+       [(string-prefix? (symbol->string datum) "$") datum]
+       [(eq? datum '->) datum]
+       [else (qualify-name datum (ns-context-current-ns ns-ctx))])]
     [(list? datum)
      (map (lambda (d) (qualify-type-datum d ns-ctx)) datum)]
     [else datum]))
@@ -1207,8 +1298,13 @@
                           missing-defaults))))
 
 ;; ========================================
-;; Schema check-pred wrapping helpers
+;; Schema check-pred lowering helpers
 ;; ========================================
+;; subst-underscore + normalize-check-pred lower a `:check` datum to a Bool
+;; expression. Since F1b.5-s2b they serve the validate PLAN bake (elaborator.rkt)
+;; — their original consumer, the wrap-schema-checks panic bridge, was retired at
+;; F1b.5-s3 (D29; the door now delegates :check to validate via wrap-seal-validate
+;; below). Kept provided.
 
 ;; Substitute all occurrences of the symbol _ in a datum tree.
 (define (subst-underscore datum replacement)
@@ -1233,31 +1329,112 @@
      `(,(if (eq? (car datum) '<) 'lt 'le) ,@norm-args)]
     [(memq (car datum) '(== /=))
      (define norm-args (map normalize-check-pred (cdr datum)))
-     `(,(if (eq? (car datum) '==) 'eq 'neq) ,@norm-args)]
+     ;; F1b.7b: `/=` → (not (eq …)); the old `neq` target is unbound (only the
+     ;; Eq-constrained `eq-neq` exists), so a `:check (/= …)` was check-unevaluable.
+     (if (eq? (car datum) '==)
+         `(eq ,@norm-args)
+         `(not (eq ,@norm-args)))]
+    ;; F1b.7b lever (i): the `?`-suffixed comparison family → dict-free keywords
+    ;; (le/lt/ge/gt, which work uniformly on Int + Nat). le?/lt?/ge?/gt? are
+    ;; monomorphic `Nat Nat -> Bool` functions (NOT trait methods), so a
+    ;; `:check (le? _ 100)` on an Int field was a type-mismatch that stuck at
+    ;; reduction → check-unevaluable; mapping to the keyword makes it work. NO
+    ;; arg-reversal (le? a b = a ≤ b = le a b). `eq?` (a genuine Eq trait method)
+    ;; is deliberately NOT mapped — it stays a trait method (works on any Eq
+    ;; type); its bake-context resolution is lever (ii), deferred to the
+    ;; traits-as-refinement note.
+    [(memq (car datum) '(le? lt? ge? gt?))
+     (define norm-args (map normalize-check-pred (cdr datum)))
+     `(,(case (car datum) [(le?) 'le] [(lt?) 'lt] [(ge?) 'ge] [(gt?) 'gt]) ,@norm-args)]
     [else (map normalize-check-pred datum)]))
 
-;; Wrap a base-form datum with nested if/panic checks for all checked fields.
-;; Returns the wrapped datum, or base-form if no checks needed.
-(define (wrap-schema-checks schema-entry base-form)
-  (define fields (schema-entry-fields schema-entry))
-  (define checked-fields
-    (filter (lambda (f) (schema-field-check-pred f)) fields))
-  (if (null? checked-fields)
+;; CIU T6 F1b.5-s3 (D29): the constructor door's :check discharge DELEGATES to
+;; validate — the panic BRIDGE (the retired wrap-schema-checks if/panic fold) is
+;; gone. base-form is the static seal `(the S {aug|arg})`; when S carries :check
+;; fields, wrap it as
+;;   (let __schema-check-tmp base-form
+;;     (prologos::data::reason::expect-valid "S" (validate S __schema-check-tmp)))
+;; so the seal still statically type-checks base-form (the `the` boundary — Q_B
+;; keep-the-seal: wrong-typed literal fields stay a STATIC error) AND
+;; runtime-discharges :check through the ONE validate engine; expect-valid aborts
+;; with a panic carrying the byte-parity failure message on failure. No :check →
+;; base-form UNCHANGED (no-:check doors stay byte-identical: prelude-independent,
+;; display markers + the exact-marker census preserved). Applies to BOTH ctor
+;; doors; the let skeleton keeps the arg a schema-ann so seal-application-body?'s
+;; beta-redex gate fires body-independently at the def-forcing catch sites.
+;; expect-valid is emitted FQN, so a :no-prelude :check-schema constructor needs
+;; the result+reason requires (the validate bake already errors loud otherwise).
+;; The helpers subst-underscore/normalize-check-pred STAY — re-homed to the
+;; validate plan bake (elaborator.rkt) at s2b.
+(define (wrap-seal-validate schema-entry base-form #:also-defaults? [also-defaults? #f])
+  (define has-checks?
+    (ormap schema-field-check-pred (schema-entry-fields schema-entry)))
+  ;; CIU T6 F1b.7d (option A): the NON-literal ctor door ALSO routes through
+  ;; validate when the schema has :default fields — validate materializes the
+  ;; defaults the type-only `(the S e)` seal accepts-but-DROPS (`[Cfg m]` →
+  ;; `b.port` was `<error>`). Scoped via the keyword so ONLY the non-literal
+  ;; ctor call site opts in; the literal + annotation doors fill at preparse
+  ;; (inject-schema-defaults) and stay has-checks?-only (byte-identical).
+  (define has-defaults?
+    (and also-defaults?
+         (ormap schema-field-default-val (schema-entry-fields schema-entry))))
+  (if (not (or has-checks? has-defaults?))
       base-form
-      (let ([tmp '__schema-check-tmp])
-        (define body
-          (foldr (lambda (f inner)
-                   (define kw-sym (schema-field-keyword f))
-                   (define access `(map-get ,tmp ,(string->symbol (format ":~a" kw-sym))))
-                   (define pred-raw (schema-field-check-pred f))
-                   (define pred-subst (subst-underscore pred-raw access))
-                   (define pred-norm (normalize-check-pred pred-subst))
-                   (define schema-name (schema-entry-name schema-entry))
-                   (define msg (format "~a: field :~a failed check ~a" schema-name kw-sym pred-raw))
-                   `(if ,pred-norm ,inner (panic ,msg)))
-                 tmp
-                 checked-fields))
-        `(let ,tmp ,base-form ,body))))
+      (let ([tmp '__schema-check-tmp]
+            [sname (cadr base-form)]                             ; (the S …) → S
+            [prefix (symbol->string (schema-entry-name schema-entry))])
+        ;; The def/eval TYPE renders via validate's unwrapped S, i.e. the SHORT
+        ;; schema name — matching validate's own display convention (`Result
+        ;; Person …`, test-validate.rkt-locked at s2). A `:check` ctor def thus
+        ;; shows `x : Checked defined.` where a non-:check sibling (via the
+        ;; `the`/def routes, unflipped) shows the qualified name; this reflects
+        ;; the real discharge path and cannot be re-annotated (`(the Schema
+        ;; <app>)` is seal-special → refuses a non-map subject).
+        `(let ,tmp ,base-form
+           (prologos::data::reason::expect-valid ,prefix (validate ,sname ,tmp))))))
+
+;; CIU T6 F1b.7c (option ii): the discharge body for the `def x : S :=`
+;; COMMITMENT door — mirrors the constructor door's wrap. A LITERAL brace body
+;; is preparse-filled (inject-schema-defaults; defaults are static), so
+;; #:also-defaults? stays #f (has-checks? gates the wrap → a no-:check/no-:default
+;; schema is byte-identical). A NON-LITERAL body cannot be preparse-filled (fill
+;; is type-directed — the M2 refutation), so #:also-defaults? #t lets validate
+;; materialize defaults at runtime (also closes the pre-7d :default drop on the
+;; annotation door). Either way base-form stays `(the S body)` so the annotated
+;; def-commit's seal-forcing gate (seal-application-body?) fires and the def's
+;; displayed type is the annotation. `the S e` is deliberately NOT routed here.
+(define (def-seal-body schema-entry sname body)
+  (define has-checks?
+    (ormap schema-field-check-pred (schema-entry-fields schema-entry)))
+  (define has-defaults?
+    (ormap schema-field-default-val (schema-entry-fields schema-entry)))
+  (define literal? (and (pair? body) (eq? (car body) '$brace-params)))
+  ;; Discharge ONLY when the schema has something to enforce (:check/:default)
+  ;; AND the body is a LITERAL map or a bare def-bound SYMBOL — the two shapes
+  ;; the identified 7c gap covers (`def c : S := {…}` / `def x : S := m`) and
+  ;; that provably static-seal-then-validate. A COMPOUND application body is
+  ;; left untouched: a ctor-call RHS `[S …]` SELF-DISCHARGES (double-wrapping it
+  ;; as `(the S <champ>)` hits the retired champ-vs-schema arm and swallows the
+  ;; panic), and an arbitrary-expression RHS is a named residual (the annotation
+  ;; still type-checks it; census: zero live `def x : CheckSchema := <expr>`).
+  (define discharge?
+    (and (or has-checks? has-defaults?)
+         (or literal? (symbol? body))))
+  (cond
+    ;; Nothing to discharge (plain schema, or a self-discharging/arbitrary RHS)
+    ;; → BYTE-IDENTICAL to the pre-7c def-fill: a literal keeps its preparse
+    ;; fill (vacuous with no defaults), else the bare body. Preserves the
+    ;; static-seal error path (7f named-field messages) + gradual dyn-absorb.
+    [(not discharge?)
+     (if literal? (inject-schema-defaults schema-entry body) body)]
+    ;; LITERAL body: defaults preparse-filled → #:also-defaults? #f (has-checks?
+    ;; gates the wrap).
+    [literal?
+     (wrap-seal-validate schema-entry
+                         (list 'the sname (inject-schema-defaults schema-entry body)))]
+    ;; SYMBOL body: validate fills defaults at runtime → #:also-defaults? #t.
+    [else
+     (wrap-seal-validate schema-entry (list 'the sname body) #:also-defaults? #t)]))
 
 ;; ========================================
 ;; Session type WS-mode desugaring (Phase S1d)
@@ -1723,6 +1900,41 @@
                   [else (list item)]))))  ;; bare symbol → keep
      `(strategy ,name ,@flat-props)]))
 
+;; ========================================
+;; Map-literal value rewrites (CIU T6, 2026-07-18)
+;; ========================================
+;; $brace-params is opaque during preparse (Track 8 B3) to protect the `->`
+;; KIND arrow inside binder/kind brace-params (`{A B : Type -> Type}`). But a
+;; MAP LITERAL (`{:x p.x :y .(a + b)}`) also arrives as $brace-params, and its
+;; VALUES are expressions that need the access / infix / head-macro rewrites —
+;; which the blanket opacity denies (dot-access/mixfix/pipe/list-literal leak or
+;; crash inside map values, breaking functions that build records). The two are
+;; distinguished purely by shape: a map literal LEADS with a keyword-like key
+;; (`:x`); a binder/kind brace-params leads with a bare type-variable symbol.
+;; So gate the opacity on shape — recurse into map-literal VALUES, keep
+;; binder/kind opaque (its `->` is never reached here). String/number/computed
+;; keys are the accepted v1 limitation (they stay opaque — heterogeneous keys
+;; are their own future feature).
+(define (map-literal-brace-params? datum)
+  (and (pair? datum)
+       (eq? (car datum) '$brace-params)
+       (pair? (cdr datum))
+       (keyword-like-symbol? (cadr datum))))
+
+;; Rewrite the value expressions of a map-literal $brace-params. Map values are
+;; a FLAT token stream — a value `p.x` is `p ($dot-access x)`, TWO sibling slots
+;; — so fold the access sentinels (dot-access family) across the whole contents
+;; first (collapsing each to one datum, restoring even key/value alternation),
+;; then expand every element through preparse: head-macros ($mixfix,
+;; $list-literal, grouped $pipe-gt), bracketed apps carrying INNER access
+;; sentinels, and NESTED maps (which re-enter this gate) are all handled by that
+;; recursion. Keys pass through untouched. Caller MUST gate on
+;; map-literal-brace-params? so binder/kind `->` never reaches this.
+(define (preparse-map-literal-contents datum reg depth)
+  (define dot-folded (rewrite-dot-access (cdr datum)))
+  (cons '$brace-params
+        (map (lambda (e) (preparse-expand-form e reg depth)) dot-folded)))
+
 ;; preparse-expand-form: expand a single datum
 ;; ========================================
 ;; Tries to match the head symbol against registered macros.
@@ -1747,10 +1959,15 @@
     ;; The code inside is raw Racket, not Prologos surface syntax
     [(and (pair? datum) (eq? (car datum) '$foreign-block))
      datum]
-    ;; Track 8 B3: $brace-params — opaque during preparse.
+    ;; Track 8 B3: $brace-params — binder/kind params are opaque during preparse.
     ;; Contents are parsed later by parse-brace-param-list when consumed
-    ;; by trait/data/spec processing. Do NOT recursively expand — the ->
-    ;; inside brace params is a kind annotation, not a function arrow.
+    ;; by trait/data/spec processing. Do NOT recursively expand a BINDER — the ->
+    ;; inside it is a kind annotation, not a function arrow.
+    ;; CIU T6 (2026-07-18): a keyword-headed brace-params is a MAP LITERAL, whose
+    ;; VALUES need the access/head-macro rewrites — recurse into those (the
+    ;; binder `->` is symbol-headed, so it never reaches this arm).
+    [(map-literal-brace-params? datum)
+     (preparse-map-literal-contents datum reg depth)]
     [(and (pair? datum) (eq? (car datum) '$brace-params))
      datum]
     ;; List form — check head symbol for macros
@@ -1777,20 +1994,98 @@
         ;; Schema construction rewrite: (SchemaName ($brace-params ...)) → (the SchemaName ($brace-params ...))
         ;; When the head is a known schema name and the rest is a brace-params map literal,
         ;; wrap in a `the` annotation so the map is type-checked against the schema.
+        ;; CIU T6 F1b.4e (D22.3): default-FILL on the ANNOTATION routes with a
+        ;; LITERAL brace body — `(the S {…})` and `(def x : S [:=] {…})` get
+        ;; inject-schema-defaults exactly like the constructor route (fill is
+        ;; syntactic here: the schema name is written at the site). Non-literal
+        ;; bodies fill at validate (F1b.5 — the M2 amendment). Recurse via
+        ;; preparse-expand-subforms directly (no head re-dispatch → no re-fire).
+        (define the-fill
+          (and (eq? (car datum) 'the)
+               (= (length datum) 3)
+               (symbol? (cadr datum))
+               (let ([sch (lookup-schema (cadr datum))])
+                 (and sch
+                      (let ([b (caddr datum)])
+                        (and (pair? b) (eq? (car b) '$brace-params)
+                             (list 'the (cadr datum)
+                                   (inject-schema-defaults sch b))))))))
+        ;; CIU T6 F1b.7c (option ii): the `def x : S :=` COMMITMENT door
+        ;; discharges :check + non-literal :default fill via the ONE validate
+        ;; engine, exactly like the constructor door — while `the S e` (a
+        ;; mid-expression coercion/view) STAYS gradual. This is the LAST F1b.7
+        ;; edge: the stress-test found `def c : Checked := {:age 0}` committed
+        ;; SILENTLY (the :check never ran). Option (ii) extends the D23/F1b.6
+        ;; stored-commitment boundary (a def store hard-errors on escaping
+        ;; projection metas; mid-expression `the` stays permissive — driver.rkt
+        ;; check-escaping-projection-metas fires ONLY at the two def commits)
+        ;; from projection-meta escape to :check: a stored, annotated schema
+        ;; value is a COMMITMENT and must satisfy its schema's :check. Census:
+        ;; ZERO live `def x : CheckSchema := …` surfaces flip (all :check goes
+        ;; through the ctor door today). The `the S {…}` / `the S e` forms are
+        ;; NOT touched (Q3: the line is def-commit vs mid-expression `the`).
+        ;; The branch now fires for ANY body (literal OR non-literal) when S is
+        ;; a registered schema; def-seal-body dispatches on the body shape.
+        (define def-fill
+          (and (not the-fill)
+               (eq? (car datum) 'def)
+               (or
+                ;; WS shape: (def name ($angle-type S) body)
+                (and (= (length datum) 4)
+                     (let ([ann (caddr datum)])
+                       (and (pair? ann) (eq? (car ann) '$angle-type)
+                            (pair? (cdr ann)) (symbol? (cadr ann)) (null? (cddr ann))
+                            (let ([sch (lookup-schema (cadr ann))])
+                              (and sch
+                                   (list 'def (cadr datum) ann
+                                         (def-seal-body sch (cadr ann) (cadddr datum))))))))
+                ;; sexp shape: (def name : S body…)
+                (and (>= (length datum) 5)
+                     (eq? (list-ref datum 2) ':)
+                     (symbol? (list-ref datum 3))
+                     (let ([sch (lookup-schema (list-ref datum 3))])
+                       (and sch
+                            (append (reverse (cdr (reverse datum)))
+                                    (list (def-seal-body sch (list-ref datum 3)
+                                                         (last datum))))))))))
         (define maybe-schema (lookup-schema (car datum)))
+        (cond
+          [the-fill (preparse-expand-subforms the-fill reg depth)]
+          [def-fill (preparse-expand-subforms def-fill reg depth)]
+          [else
         (if (and maybe-schema
                  (pair? (cdr datum))
-                 (let ([arg (cadr datum)])
-                   (and (pair? arg) (eq? (car arg) '$brace-params)))
-                 (null? (cddr datum)))  ;; exactly one arg: the brace-params
-            ;; Phase 5b: inject default values for missing fields
-            ;; Phase 5c: wrap with :check assertions
-            (let* ([augmented (inject-schema-defaults maybe-schema (cadr datum))]
-                   [the-form `(the ,(car datum) ,augmented)]
-                   [wrapped (wrap-schema-checks maybe-schema the-form)])
-              (preparse-expand-form wrapped reg (+ depth 1)))
+                 (null? (cddr datum)))  ;; exactly one arg (multi-arg is NOT a seal)
+            (let ([arg (cadr datum)])
+              (if (and (pair? arg) (eq? (car arg) '$brace-params))
+                  ;; LITERAL route: Phase 5b default injection (STAYS preparse —
+                  ;; fill is static here, the field set is syntactically known),
+                  ;; then the static seal `(the S aug)` + (F1b.5-s3, D29) the
+                  ;; :check discharge DELEGATED to validate via wrap-seal-validate
+                  ;; (the panic bridge retired). No :check → the-form unchanged.
+                  (let* ([augmented (inject-schema-defaults maybe-schema arg)]
+                         [the-form `(the ,(car datum) ,augmented)]
+                         [wrapped (wrap-seal-validate maybe-schema the-form)])
+                    (preparse-expand-form wrapped reg (+ depth 1)))
+                  ;; NON-LITERAL route — the constructor form `[SchemaName e]`.
+                  ;; The static seal `(the S e)` stays TYPE-ONLY (per-field
+                  ;; CHECK-strength through the F1b.4a row-vs-schema discharge;
+                  ;; runtime FILL is TYPE-DIRECTED and was probe-REFUTED at
+                  ;; preparse — it lands in validate's tabulation). (F1b.5-s3,
+                  ;; D29) :check-bearing schemas delegate :check + the runtime
+                  ;; fill to validate via wrap-seal-validate — the s3 STRENGTHENING.
+                  ;; CIU T6 F1b.7d (option A, #:also-defaults? #t): a :default-
+                  ;; bearing schema (even with NO :check) ALSO routes here so the
+                  ;; defaults materialize (validate fills; `[Cfg m]` → b.port =
+                  ;; 8080 was `<error>`). Census: zero live non-literal ctors on a
+                  ;; :check-or-:default schema, so no existing surface flips. No
+                  ;; :check AND no :default → `(the S e)` unchanged (type-only).
+                  (preparse-expand-form
+                   (wrap-seal-validate maybe-schema `(the ,(car datum) ,arg)
+                                       #:also-defaults? #t)
+                   reg (+ depth 1))))
             ;; Not a schema construction — recurse into subexpressions
-            (preparse-expand-subforms datum reg depth))])]
+            (preparse-expand-subforms datum reg depth))])])]
     ;; Non-symbol list — recurse into subexpressions
     [(pair? datum)
      (preparse-expand-subforms datum reg depth)]
@@ -2216,8 +2511,13 @@
      (define merged (merge-sibling-lets foreign-combined))
      (define expanded
        (map (lambda (sub)
-              ;; Track 8 B3: skip $brace-params subforms (kind annotations, not surface syntax)
-              (if (and (pair? sub) (eq? (car sub) '$brace-params))
+              ;; Track 8 B3: skip BINDER/kind $brace-params subforms (the ->
+              ;; inside is a kind annotation). CIU T6 (2026-07-18): a keyword-
+              ;; headed brace-params is a MAP LITERAL — let it through to
+              ;; preparse-expand-form (the map-literal-brace-params? arm rewrites
+              ;; its values). This is the def/defn-BODY map case.
+              (if (and (pair? sub) (eq? (car sub) '$brace-params)
+                       (not (map-literal-brace-params? sub)))
                   sub
                   (preparse-expand-form sub reg depth)))
             merged))
@@ -2458,6 +2758,32 @@
                   (auto-export-name! (cadr eff-datum)))]
         [(impl) (process-impl eff-datum)]
         [else (void)])))
+
+  ;; ============================================================
+  ;; Pass 1.5: def-bot pre-allocation (PPN 4C Addendum Phase 4B.2-b, §18.21.19)
+  ;; ============================================================
+  ;; Pre-allocate a def-bot cell on the in-flight mnr for every USER def/defn
+  ;; NAME (incl. private def-/defn-), source-order, ORDER-INSENSITIVELY (the
+  ;; FREE_ORDERING guard — prealloc-def-cell! reads only cell-id-map key
+  ;; presence, never a cell value). A def-bot cell reads #f via the lookup
+  ;; adapter (= the SAME "Unbound variable" as an absent name), so this is
+  ;; BEHAVIOR-PRESERVING: a forward-ref still errors at 4B.2 (def-bot → #f);
+  ;; 4B.3's δ residuation propagator turns the def-bot read into a wait — this
+  ;; pass lays the cells that propagator resides on. Runs over the INPUT stxs
+  ;; (pre-expansion / pre-hoist → USER names only, NOT data/trait-GENERATED
+  ;; defs — those are Pass-2-regenerated; widening to them is 4B.4). A SEPARATE
+  ;; pass (not a Pass-0 case-arm) so a pre-alloc failure is LOUD — Pass 0's
+  ;; `with-handlers` would silently swallow it (§18.21.19 Q2, scaffolding-hides-
+  ;; truth). prealloc-def-cell! never clobbers a real value (def-bot is the
+  ;; merge identity); the mnr is bound throughout preparse (inside process-file's
+  ;; current-file-module-network-ref parameterize) — lazy-init covers the rest.
+  (for ([stx (in-list stxs)])
+    (define datum (syntax->datum stx))
+    (define head (and (pair? datum) (car datum)))
+    (define eff-head (or (and head (private-form-base head)) head))
+    (when (memq eff-head '(def defn))
+      (for ([name (in-list (extract-defined-name datum eff-head))])
+        (prealloc-def-cell! name))))
 
   ;; Track names generated by data/trait for Phase 5b reordering.
   ;; After the main loop, data type defs + ctor defs and trait accessor
@@ -4692,9 +5018,15 @@
            (values (drop-right elems 1) (cadr last-elem))
            ;; No tail: terminate with nil
            (values elems 'nil)))
-     (foldr (lambda (elem rest) `(cons ,elem ,rest))
-            tail
-            proper-elems)]))
+     ;; CIU T6 F1a-col-2 (D15): NO-TAIL literals keep their literal-extent
+     ;; identity — hand off to the parser ($list-literal-parse case, mirroring
+     ;; $vec-literal) which builds surf-list-literal for all-at-once typing.
+     ;; TAIL-syntax literals ('[a b | rest]) keep the legacy cons rewrite.
+     (if (eq? tail 'nil)
+         (cons '$list-literal-parse proper-elems)
+         (foldr (lambda (elem rest) `(cons ,elem ,rest))
+                tail
+                proper-elems))]))
 
 ;; lseq literal: ~[1 2 3] → nested lseq-cell with thunks
 ;; The WS reader produces ($lseq-literal e1 e2 ...).
@@ -4913,6 +5245,34 @@
     ;; Fallback: multiple values that aren't all keyword-headed — leave as-is
     [else (list key (if (= (length vals) 1) (car vals) vals))]))
 
+;; Re-group a dash clause's LEADING flat `:kw val` run into (:kw val) sub-lists,
+;; keeping already-grouped (:kw ...) / (- ...) children as-is. This supports the
+;; inline layout `- :name "Alice"` (dash + first key on the SAME line): the WS
+;; reader leaves same-line keys FLAT (`:name "Alice"`) while grouping indented
+;; continuation lines (`(:role :super)`), yielding a mixed dash clause
+;; `(- :name "Alice" (:role :super))`. Returns the re-grouped list, or #f if the
+;; flat prefix does not pair cleanly into :kw val pairs — then the caller keeps
+;; the existing list/value semantics (so `- 1`, `- [f x]` are untouched, and a
+;; bare `:kw` with no plain value bails rather than silently mis-grouping).
+;; (YAML-style familiarity; strictly additive — only rescues clauses that fail
+;; to type today.)
+(define (regroup-inline-keywords vals)
+  (let loop ([vs vals] [acc '()])
+    (cond
+      [(null? vs) (reverse acc)]
+      ;; already-grouped keyword or dash child — keep as-is
+      [(or (keyword-headed? (car vs)) (dash-headed? (car vs)))
+       (loop (cdr vs) (cons (car vs) acc))]
+      ;; a bare `:kw` followed by a PLAIN value (not another group) → (:kw val)
+      [(and (keyword-like-symbol? (car vs))
+            (pair? (cdr vs))
+            (not (keyword-headed? (cadr vs)))
+            (not (dash-headed? (cadr vs))))
+       (loop (cddr vs) (cons (list (car vs) (cadr vs)) acc))]
+      ;; anything else (bare `:kw` with no plain value, or a non-keyword token) —
+      ;; the prefix does not pair cleanly; bail so list/value semantics stand
+      [else #f])))
+
 ;; Process one dash-headed child (- child1 child2 ...) into a PVec element.
 (define (process-dash-child child)
   (define vals (cdr child))
@@ -4920,6 +5280,13 @@
     ;; (- (:k1 v1) (:k2 v2)) — keyword children → nested map
     [(and (pair? vals) (all-keyword-or-dash-headed? vals))
      (implicit-map-children->brace-params vals)]
+    ;; (- :name "Alice" (:role :super)) — INLINE keys (same line as `-`) stay
+    ;; flat while continuations group; re-group the flat prefix, then → map.
+    ;; Fires only when the clause STARTS with a bare `:kw` AND the prefix pairs
+    ;; cleanly (else falls through to the list/value arms below).
+    [(and (pair? vals) (keyword-like-symbol? (car vals))
+          (regroup-inline-keywords vals))
+     => (lambda (regrouped) (implicit-map-children->brace-params regrouped))]
     ;; (- val) — single value
     [(and (pair? vals) (null? (cdr vals)))
      (car vals)]
@@ -5675,7 +6042,7 @@
                (loop result new-chain-rhs)])])])))
 
   (if (= len 0)
-      (error 'mixfix "Empty .{} expression")
+      (error 'mixfix "Empty .( ) mixfix expression")
       (let ([result (parse-expr 0)])
         (unless (at-end?)
           (error 'mixfix "Unexpected token after expression: ~a" (peek)))
@@ -5703,13 +6070,27 @@
                 ([(k v) (in-hash user-groups)])
         (hash-set h k v))))
 
-;; --- Preparse macro for $mixfix ---
+;; --- Preparse macro for $mixfix (the `.( )` mixfix form) ---
 (define (expand-mixfix-form datum)
   ;; datum is ($mixfix token1 token2 ...)
-  (define tokens (cdr datum))
+  ;; CIU T6 (2026-07-18): fold the access sentinels (dot-access family) in the
+  ;; token stream BEFORE pratt-parse. The mixfix expander runs at head-expansion
+  ;; time, BEFORE the subform rewrite where rewrite-dot-access normally fires, so
+  ;; an operand like `p.x` inside `.(p.x + 1)` would otherwise reach pratt-parse
+  ;; as the raw ($dot-access x) sentinel — a non-operator that pratt-parse cannot
+  ;; consume ("Unexpected token after expression"). Folding it to (map-get p :x)
+  ;; first makes it an ordinary operand. Any residue in pratt-parse's result is
+  ;; cleaned by the caller's re-expansion of this macro's output.
+  (define tokens (rewrite-dot-access (cdr datum)))
   (if (null? tokens)
-      (error 'mixfix "Empty .{} expression")
+      (error 'mixfix "Empty .( ) mixfix expression")
       (pratt-parse tokens (effective-operator-table) (effective-precedence-groups))))
+
+;; `.{ }` is RETIRED for mixfix (replaced by `.( )`). The WS reader emits
+;; $mixfix-retired for dot-lbrace so preparse can raise a targeted migration error.
+(define (expand-mixfix-retired datum)
+  (error 'mixfix
+         "`.{ … }` is not currently supported — postfix path-selection is under redesign"))
 
 ;; Track 10 Phase 2c: register built-in expanders in the lookup table FIRST,
 ;; then register them in the preparse registry (which stores symbols, not closures).
@@ -5722,6 +6103,7 @@
 (register-built-in-expander! 'expand-pipe-block expand-pipe-block)
 (register-built-in-expander! 'expand-compose-sexp expand-compose-sexp)
 (register-built-in-expander! 'expand-mixfix-form expand-mixfix-form)
+(register-built-in-expander! 'expand-mixfix-retired expand-mixfix-retired)
 
 ;; Register built-in pre-parse macros at module load time.
 ;; Phase 2c: register-preparse-macro! now stores SYMBOLS (from built-in-expander-table)
@@ -5735,6 +6117,7 @@
 (register-preparse-macro! '$pipe-gt expand-pipe-block)
 (register-preparse-macro! '$compose expand-compose-sexp)
 (register-preparse-macro! '$mixfix expand-mixfix-form)
+(register-preparse-macro! '$mixfix-retired expand-mixfix-retired)
 ;; $quote: code-as-data — 'expr → ($quote expr) → Datum constructor chain
 ;; Walks the quoted datum and emits Datum constructor calls.
 ;; Requires prologos::data::datum to be loaded for the constructors to resolve.
@@ -6085,6 +6468,29 @@
 (register-subtype-pair! 'Posit16 'Posit32)
 (register-subtype-pair! 'Posit16 'Posit64)
 (register-subtype-pair! 'Posit32 'Posit64)
+(register-subtype-pair! 'Float32 'Float64)
+;; Numerics N5de: nominal-erased refined numeric types (Q6 erasure ⇒ identity coercion,
+;; like capabilities). Seeded here (replacing the deleted `subtype PosInt Int` decls) so
+;; subtype? recognizes them everywhere (SRE structural walk + base-numeric-type). No auto
+;; transitive closure at register-subtype-pair! ⇒ seed transitive edges explicitly.
+;; base edges → Int/Rat:
+(register-subtype-pair! 'PosInt 'Int)
+(register-subtype-pair! 'NegInt 'Int)
+(register-subtype-pair! 'Zero 'Int)
+(register-subtype-pair! 'NonZeroInt 'Int)
+(register-subtype-pair! 'PosRat 'Rat)
+(register-subtype-pair! 'NegRat 'Rat)
+(register-subtype-pair! 'NonZeroRat 'Rat)
+;; transitive Int-family → Rat:
+(register-subtype-pair! 'PosInt 'Rat)
+(register-subtype-pair! 'NegInt 'Rat)
+(register-subtype-pair! 'Zero 'Rat)
+(register-subtype-pair! 'NonZeroInt 'Rat)
+;; same-base sign edges (Sign ⊆): Pos/Neg ⊑ NonZero (Zero ⊄ NonZero):
+(register-subtype-pair! 'PosInt 'NonZeroInt)
+(register-subtype-pair! 'NegInt 'NonZeroInt)
+(register-subtype-pair! 'PosRat 'NonZeroRat)
+(register-subtype-pair! 'NegRat 'NonZeroRat)
 
 ;; ========================================
 ;; Capability registry (Capabilities as Types)
@@ -6537,7 +6943,9 @@
                   ;; Propagator / ATMS / Relational ground types
                   PropNetwork CellId PropId UnionFind
                   ATMS AssumptionId TableStore
-                  Solver Goal Derivation))
+                  Solver Goal Derivation
+                  ;; Numerics N5de: nominal-erased refined numeric types (concrete, not tyvars)
+                  PosInt NegInt Zero NonZeroInt PosRat NegRat NonZeroRat))
       (lookup-ctor sym)       ;; user-defined constructor → known
       (lookup-type-ctors sym) ;; user-defined type → known
       (lookup-trait sym)      ;; trait → known (not a variable)
@@ -7047,6 +7455,46 @@
      #t]
     [else #f]))
 
+;; ---- Normalize the raw constructor clause list before parse-data-ctor ----
+;; The WS reader emits single-line `data X := c1 | c2 ...` as a FLAT token stream
+;; `(:= c1 $pipe c2 ...)` and `data X | c1 | c2` as `($pipe c1 ...)`, with no
+;; grouping. Mapping parse-data-ctor over those flat tokens treats `:=`/`$pipe`
+;; (and trailing field-type atoms) as constructor names — field-bearing ctors
+;; bind with wrong arity and field types leak as phantom nullary ctors. `defn`
+;; avoids this via group-defn-pipes; `data` had no equivalent. We strip a leading
+;; `:=` separator and split on `$pipe` into proper (Name field...) clauses.
+;; Indented / bare-juxtaposition / sexp forms (already one-clause-per-element,
+;; no `:=`/`$pipe`) pass through unchanged.
+(define (data-ctor-list-has-pipe? lst)
+  (and (pair? lst)
+       (or (memq '$pipe lst)
+           (and (pair? (car lst)) (eq? (car (car lst)) '$pipe)))))
+
+;; A split-on-pipe segment that is a single already-parenthesized clause comes
+;; back double-wrapped: `(suc Nat)` → `((suc Nat))`. Unwrap so parse-data-ctor
+;; sees `(suc Nat)`. Leave `(zero)` / `(jbool Bool)` untouched.
+(define (unwrap-data-ctor-segment seg)
+  (if (and (pair? seg) (null? (cdr seg)) (pair? (car seg)))
+      (car seg)
+      seg))
+
+(define data-bar-sym (string->symbol "|"))
+
+(define (normalize-data-ctor-clauses raw-ctors0)
+  ;; The merge reader emits `|` as `$pipe`; the cell (process-string-ws) reader
+  ;; keeps it as the literal `|` symbol. Canonicalize literal `|` → `$pipe` so
+  ;; both pipelines normalize identically.
+  (define raw-ctors
+    (if (list? raw-ctors0)
+        (map (lambda (x) (if (eq? x data-bar-sym) '$pipe x)) raw-ctors0)
+        raw-ctors0))
+  (cond
+    [(and (pair? raw-ctors) (eq? (car raw-ctors) ':=))
+     (map unwrap-data-ctor-segment (split-on-pipe (cdr raw-ctors)))]
+    [(data-ctor-list-has-pipe? raw-ctors)
+     (map unwrap-data-ctor-segment (split-on-pipe raw-ctors))]
+    [else raw-ctors]))
+
 ;; Main data processing function
 ;; Returns a list of s-expression datums: ((def ...) (def ...) ...)
 (define (process-data datum)
@@ -7076,7 +7524,8 @@
          (values tn ps rest)])))
 
   ;; Zero-constructor types are allowed (uninhabited types like Never/Void)
-  (define ctors (map parse-data-ctor raw-ctors))
+  ;; Normalize WS separator forms (`:=` / `$pipe`) into proper clauses first.
+  (define ctors (map parse-data-ctor (normalize-data-ctor-clauses raw-ctors)))
   ;; ctors = ((name . (field-types ...)) ...)
 
   ;; ---- Generate the type definition ----
@@ -7447,8 +7896,99 @@
 
       `(def ,accessor-name : ,accessor-type ,accessor-body)))
 
-  ;; Return the accessor defs (deftype was already processed via process-deftype)
-  accessor-defs)
+  ;; ---- N6d-i: derive bare-name constrained method wrappers ----
+  ;; Each derivable method `m : sig` also gets a top-level generic function
+  ;;   m : Pi(params :0) -> (T params...) -> sig      (= the accessor's type)
+  ;; with the accessor's body, PLUS a bare-name spec-entry whose
+  ;; where-constraints make call sites insert the type + dict implicit holes
+  ;; (elaborator implicit-param-count = leading-m0 + spec where-constraints).
+  ;; The dict meta's trait constraint then registers from the Pi domain.
+  ;; Rule: derive iff EVERY trait param occurs in an argument (domain)
+  ;; position of the method type — constants (zero/one/top/empty-coll) and
+  ;; output-position-only methods (from/try-from/into/from-integer/
+  ;; from-rational, alpha/gamma) are excluded structurally: their type var
+  ;; cannot be solved from call arguments. See DEFERRED.md § "Numerics
+  ;; N6d-i follow-ups" item 3 for the expected-type-resolution future.
+  ;; Skip-set: method names whose derivation would capture or clobber
+  ;; existing same-named bindings (own-module import capture; bare-name
+  ;; spec-store overwrite — issues #66/#67). Census-seeded 2026-07-02:
+  ;;   add/sub — arithmetic.prologos refers nat's add/sub and the Nat impl
+  ;;             bodies call them bare (capture → self-referential dicts);
+  ;;   join    — string-ops join (spec clobber; heavily used);
+  ;;   reduce  — data/list reduce (spec clobber).
+  ;; Lifting these = DEFERRED.md § "Numerics N6d-i follow-ups" item 1.
+  (define derive-skip-methods '(add sub join reduce))
+
+  ;; Domain (argument-position) sub-datums of a method type: strip Pi
+  ;; wrappers into the body, then collect nested prefix-arrow domains;
+  ;; tolerate flat infix (d1 ... -> cod) from raw angle-type datums.
+  (define (method-domain-datums t)
+    (cond
+      [(and (list? t) (= (length t) 3) (memq (car t) '(Pi pi)))
+       (method-domain-datums (caddr t))]
+      [(and (list? t) (= (length t) 3) (eq? (car t) '->))
+       (cons (cadr t) (method-domain-datums (caddr t)))]
+      [(and (list? t) (memq '-> (if (null? t) '() (cdr t))))
+       ;; flat infix: segments before the LAST -> are domains
+       (let loop ([xs t] [cur '()] [segs '()])
+         (cond
+           [(null? xs)
+            (let ([all (reverse (cons (reverse cur) segs))])
+              (apply append (map (lambda (s) s) (reverse (cdr (reverse all))))))]
+           [(eq? (car xs) '->) (loop (cdr xs) '() (cons (reverse cur) segs))]
+           [else (loop (cdr xs) (cons (car xs) cur) segs)]))]
+      [else '()]))
+
+  (define (datum-mentions? t sym)
+    (cond
+      [(eq? t sym) #t]
+      [(pair? t) (or (datum-mentions? (car t) sym) (datum-mentions? (cdr t) sym))]
+      [else #f]))
+
+  (define (derivable-method? method)
+    (define mname (trait-method-name method))
+    (and (not (memq mname derive-skip-methods))
+         (not (null? params))
+         (let ([doms (method-domain-datums (trait-method-type-datum method))])
+           (for/and ([p (in-list params)])
+             (for/or ([d (in-list doms)])
+               (datum-mentions? d (car p)))))))
+
+  (define derived-wrapper-defs
+    (for/list ([method (in-list methods)]
+               [i (in-naturals)]
+               #:when (derivable-method? method))
+      (define method-name (trait-method-name method))
+      (define method-type (trait-method-type-datum method))
+      (define wrapper-type
+        (build-nested-pi
+         param-pi-bindings
+         (build-arrow-type (list applied-trait-type) method-type)))
+      (define dict-var 'dict)
+      (define projection
+        (if (= n-methods 1)
+            dict-var
+            (build-sigma-accessor n-methods i dict-var)))
+      (define inner-fn
+        `(fn (,dict-var : ,applied-trait-type) ,projection))
+      (define wrapper-body
+        (if (null? params)
+            inner-fn
+            (build-nested-fn param-pi-bindings inner-fn)))
+      ;; Bare-name spec entry: the where-constraints count drives call-site
+      ;; implicit-hole insertion (type vars + dict). Idempotent (hash-set) —
+      ;; safe under the preparse Pass-0 double-run.
+      (register-spec! method-name
+                      (spec-entry (list (list applied-trait-type '-> method-type))
+                                  #f #f srcloc-unknown
+                                  (list applied-trait-type)
+                                  params
+                                  #f (hasheq)))
+      `(def ,method-name : ,wrapper-type ,wrapper-body)))
+
+  ;; Return accessor defs + derived bare-name wrappers
+  ;; (deftype was already processed via process-deftype)
+  (append accessor-defs derived-wrapper-defs))
 
 ;; ========================================
 ;; Property declarations
@@ -8644,12 +9184,17 @@
     Posit16 posit16 p16+ p16- p16* p16/ p16-neg p16-abs p16-sqrt p16-lt p16-le p16-from-nat p16-if-nar
     Posit32 posit32 p32+ p32- p32* p32/ p32-neg p32-abs p32-sqrt p32-lt p32-le p32-from-nat p32-if-nar
     Posit64 posit64 p64+ p64- p64* p64/ p64-neg p64-abs p64-sqrt p64-lt p64-le p64-from-nat p64-if-nar
+    Float32 float32 f32+ f32- f32* f32/ f32-neg f32-abs f32-sqrt f32-lt f32-le f32-eq
+    Float64 float64 f64+ f64- f64* f64/ f64-neg f64-abs f64-sqrt f64-lt f64-le f64-eq
+    float-finite? float-to-rat float-to-int float-to-float32
     Quire8 q8-zero q8-fma q8-to
     Quire16 q16-zero q16-fma q16-to
     Quire32 q32-zero q32-fma q32-to
     Quire64 q64-zero q64-fma q64-to
     Int int int+ int- int* int/ int-mod int-neg int-abs int-lt int-le int-eq from-nat
     Rat rat rat+ rat- rat* rat/ rat-neg rat-abs rat-lt rat-le rat-eq from-int rat-numer rat-denom
+    ;; Numerics N5de: nominal-erased refined numeric types (concrete built-ins, not free tyvars)
+    PosInt NegInt Zero NonZeroInt PosRat NegRat NonZeroRat
     Keyword Map map-empty map-assoc map-get map-dissoc map-size map-has-key? map-keys map-vals
     Set set-empty set-insert set-member? set-delete set-size set-union set-intersect set-diff set-to-list
     PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice pvec-to-list pvec-from-list pvec-fold pvec-map pvec-filter

@@ -41,8 +41,7 @@
                 shared-param-impl-reg
                 shared-ctor-reg
                 shared-type-meta)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
+  (parameterize ([current-file-module-network-ref (make-module-network)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -56,7 +55,7 @@
                  [current-spec-store (hasheq)])
     (install-module-loader!)
     (process-string shared-preamble)
-    (values (current-prelude-env)
+    (values (global-env-snapshot)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -68,7 +67,7 @@
 ;; Helper: process a definition string and extract the def-tree for the given name.
 ;; Returns the extracted tree (or #f if the function has no pattern matching).
 (define (extract-tree-for name s)
-  (parameterize ([current-prelude-env shared-global-env]
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -84,7 +83,7 @@
 
 ;; Helper: process WS-mode string and extract tree.
 (define (extract-tree-ws name s)
-  (parameterize ([current-prelude-env shared-global-env]
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]

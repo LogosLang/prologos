@@ -43,9 +43,7 @@
     (lambda (out) (display content out))
     #:exists 'truncate)
   (define results
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                   [current-ns-context #f]
+    (parameterize ([current-ns-context #f]
                    [current-module-registry (hasheq)]
                    [current-lib-paths (list lib-dir)]
                    [current-relation-store (make-relation-store)]
@@ -66,8 +64,10 @@
       (fail (format "Unexpected error: ~a" (prologos-error-message r))))))
 
 ;; Count occurrences of "{:" in a result string to determine answer count.
+;; Count solution rows ("{:") in the VALUE only — Rel T1 Aspect B appends a typed-row
+;; annotation " : <type>" whose record type also contains "{:"; split it off first.
 (define (count-answers result-str)
-  (length (regexp-match* #rx"\\{:" result-str)))
+  (length (regexp-match* #rx"\\{:" (car (regexp-split #rx" : " result-str)))))
 
 ;; Get the last non-error result from the results list.
 (define (last-result results)

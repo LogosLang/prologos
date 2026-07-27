@@ -40,8 +40,7 @@
                 shared-param-impl-reg
                 shared-preparse-reg
                 shared-cap-reg)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
+  (parameterize ([current-file-module-network-ref (make-module-network)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -52,7 +51,7 @@
                  [current-capability-registry prelude-capability-registry])
     (install-module-loader!)
     (process-string "(ns test-mult-prop)\n")
-    (values (current-prelude-env)
+    (values (global-env-snapshot)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -62,7 +61,7 @@
             (current-capability-registry))))
 
 (define (run code)
-  (parameterize ([current-prelude-env shared-global-env]
+  (parameterize ([current-file-module-network-ref (module-network-add-import (make-module-network) (module-network-from-snapshot shared-global-env))]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-trait-registry shared-trait-reg]

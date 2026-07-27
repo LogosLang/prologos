@@ -1,0 +1,38 @@
+PERF-COUNTERS:{"cell_allocs":1295,"constraint_count":0,"constraint_retries":0,"elaborate_steps":119,"infer_steps":55,"meta_created":16,"meta_solved":15,"prop_allocs":0,"prop_firings":0,"reduce_steps":317,"resolution_cycles":15,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":65,"zonk_steps":244}
+PHASE-TIMINGS:{"elaborate_ms":36,"parse_ms":0,"qtt_ms":39,"reduce_ms":86,"trait_resolve_ms":0,"type_check_ms":66,"zonk_ms":2}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":62,"mem_after_bytes":123793072,"mem_before_bytes":120384072,"mem_retained_bytes":3409000}
+CELL-METRICS:{"cells":56,"propagators":0}
+Running probe: racket/prologos/examples/2026-04-22-1A-iii-probe.prologos
+Setting current-bsp-observer to accumulate fires per BSP round...
+
+'("p1-x : Int defined." "42 : Int" "p1-y : String defined." "\"hello\" : String" "p1-z : Int defined." "10 : Int" "p1-inc : Int -> Int defined." "42 : Int" "p2-double : Int -> Int defined." "42 : Int" "p2-compose : [Int -> Int] [Int -> Int] Int -> Int defined." "21 : Int" "p3-my-map : [Map Keyword Open] defined." "{:name \"alice\", :age 30} : [Map Keyword Open]" "\"alice\" : Open" "30 : Open" "p4-nested : [Map Keyword Open] defined." "{:data {:y \"two\", :x 1}, :flag true} : [Map Keyword Open]" "p5-list : [prologos::data::list::List Int] defined." "'[1 2 3 4 5] : [prologos::data::list::List Int]" "[prologos::data::option::some Int 1] : [prologos::data::option::Option Int]" "[prologos::data::option::some [prologos::data::list::List Int] '[2 3 4 5]] : [prologos::data::option::Option [prologos::data::list::List Int]]" "p5-chain : Int defined." "16 : Int" "p6-id : [Pi [x :0 <[Type 0]>] x -> x] defined." "99 : Int" "\"world\" : String" "true : Bool")
+
+============================================================
+BSP-ROUND FIRES DISTRIBUTION (Variant A; parallel BSP main loop)
+============================================================
+BSP rounds executed:    54
+Total propagator fires: 281
+
+Fires per round summary:
+  Mean:  5.20
+  Min:   1
+  P25:   1
+  P50:   3
+  P75:   5
+  P95:   21
+  Max:   51
+
+Distribution histogram (fires-per-round bucket → round count):
+  1        :    14  ██████████████
+  2-5      :    27  ███████████████████████████
+  6-10     :     9  █████████
+  11-25    :     2  ██
+  26-50    :     1  █
+  51-100   :     1  █
+
+Cross-reference:
+  - bench-tropical-fuel.rkt Section 4.5: amortized cost at synthetic N
+  - A/B/C report (1C-vi Commit 2): use these N values to compute
+    production-realistic amortized cost
+============================================================

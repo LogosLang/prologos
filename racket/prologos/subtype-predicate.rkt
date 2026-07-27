@@ -32,6 +32,8 @@
                   ctor-desc-arity))
 
 (provide subtype?
+         record-subtypes-map?   ;; CIU T6 F1: record → Map α (also used by unify's classifier)
+         record-subtypes-pvec?  ;; CIU T6 F1a-col: tuple → PVec α (pure; unify + walks)
          type-key
          subtype-lattice-merge
          build-union-type-with-absorption  ;; SRE Track 2H Phase 2
@@ -117,6 +119,13 @@
     [(equal? t1 t2) #t]
     ;; Flat fast path: 9 hardcoded edges + registry
     [(flat-subtype? t1 t2) #t]
+    ;; CIU T6 F1 (s2): the structural-record → Map Galois α, reachable from NESTED
+    ;; positions (e.g. (List Record) <: (List Map) via the covariant List walk).
+    ;; This is the record→Map bridge, NOT a record<:record judgment (D11 preserved);
+    ;; in subtype context V is always concrete, so no meta-solving is needed.
+    [(and (expr-Record? t1) (expr-Map? t2)) (record-subtypes-map? t1 t2)]
+    ;; CIU T6 F1a-col: the tuple→PVec α (same bridge, positional domain).
+    [(and (expr-Record? t1) (expr-PVec? t2)) (record-subtypes-pvec? t1 t2)]
     ;; SRE structural path: only if BOTH are compound types.
     ;; Atoms (expr-Nat, expr-Int, expr-Bool, etc.) skip the structural
     ;; path entirely — eliminates 1.85μs overhead from sre-constructor-tag.
@@ -124,6 +133,35 @@
           (sre-structural-subtype-check t1 t2)) #t]
     ;; Not a subtype
     [else #f]))
+
+;; Pure structural record→Map: every label fits K, every field type <: V.
+;; Empty record satisfies any (Map K V) (Q6). Keyword-domain labels need a Keyword key type.
+;; CIU T6 F1a.2 p1a (D16): the knowns-only check IS the C_ConsL absorption for
+;; 'dyn-tailed rows — the unknown remainder is absorbed under the S–I consistency
+;; posture, so tail-blindness here is DELIBERATE dyn semantics, not an oversight
+;; (§12.4). The meta-solving sibling record-<:-map? in typing-core, by contrast,
+;; REFUSES to solve a meta V from a dyn row (⋃knowns would over-commit).
+(define (record-subtypes-map? rec mp)
+  (define kt (expr-Map-k-type mp))
+  (define vt (expr-Map-v-type mp))
+  ;; CIU T6 F1a-col key-gate fix (audit must-fix): the key type must match the
+  ;; row's key DOMAIN — previously non-keyword domains skipped the gate, letting
+  ;; a 'nat tuple "satisfy" (Map String V).
+  (and (case (expr-Record-key-domain rec)
+         [(keyword) (expr-Keyword? kt)]
+         [(nat) (or (expr-Nat? kt) (expr-Int? kt))]
+         [else #f])
+       (andmap (lambda (f) (subtype? (record-field-type (cdr f)) vt))
+               (expr-Record-fields rec))))
+
+;; CIU T6 F1a-col: pure structural tuple→PVec α — 'nat rows only; every position
+;; type <: the element type. (The meta-aware sibling record-<:-pvec? lives in
+;; typing-core; this one serves subtype?/structural walks/unify's classifier.)
+(define (record-subtypes-pvec? rec pv)
+  (and (eq? (expr-Record-key-domain rec) 'nat)
+       (let ([at (expr-PVec-elem-type pv)])
+         (andmap (lambda (f) (subtype? (record-field-type (cdr f)) at))
+                 (expr-Record-fields rec)))))
 
 ;; Flat subtype check: the original 9 edges + registry (fast path, no cells)
 (define (flat-subtype? t1 t2)
@@ -137,6 +175,8 @@
     [((expr-Posit16) (expr-Posit32)) #t]
     [((expr-Posit16) (expr-Posit64)) #t]
     [((expr-Posit32) (expr-Posit64)) #t]
+    ;; Float family (Numerics N3d): within-Float widening (NO Posit↔Float edge)
+    [((expr-Float32) (expr-Float64)) #t]
     [(_ _)
      (let ([k1 (type-key t1)] [k2 (type-key t2)])
        (and k1 k2 (subtype-pair? k1 k2)))]))
@@ -165,6 +205,11 @@
 (define (structural-subtype-ground? domain t1 t2)
   (cond
     [(equal? t1 t2) #t]
+    ;; CIU T6 F1 (s2): record→Map α inside a covariant component (e.g. the element of
+    ;; (List Record) <: (List Map)), reached via this component recursion — NOT subtype?.
+    [(and (expr-Record? t1) (expr-Map? t2)) (record-subtypes-map? t1 t2)]
+    ;; CIU T6 F1a-col: tuple→PVec α inside covariant components.
+    [(and (expr-Record? t1) (expr-PVec? t2)) (record-subtypes-pvec? t1 t2)]
     [else
      (define tag1 (sre-constructor-tag domain t1))
      (define tag2 (sre-constructor-tag domain t2))
@@ -294,6 +339,16 @@
 ;; ========================================
 ;; Heyting pseudo-complement: ¬a = max{x | x ⊓ a ≤ ⊥}
 ;; For ground types: the union of all context types incompatible with `type`.
+;;
+;; DISAMBIGUATION (SRE Track 2I Phase 5, 2026-04-30): this function computes
+;; the **context-relative absolute pseudo-complement** (¬a) — 1-arg over a
+;; supplied context list — for error-reporting use. Distinct from the
+;; **lattice-theoretic relative pseudo-complement** (a → b, the Heyting →
+;; operator) tested empirically by `test-pseudo-complement-rel` in sre-core.rkt.
+;; In a Heyting algebra, the relative form generalizes (a → ⊥ = ¬a). For our
+;; finite-context error-reporting purposes the 1-arg form is sufficient and
+;; cheaper. See sre-core.rkt for the empirical lattice-theoretic check used
+;; in the SRE algebraic-property registry.
 ;;
 ;; SCAFFOLDING (M2, F6): This is a function over a list of context types.
 ;; The permanent solution is ATMS-derived: when a cell reaches type-top,

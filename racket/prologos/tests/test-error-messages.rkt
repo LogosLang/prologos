@@ -32,9 +32,7 @@
 ;; Helper: process commands and return results
 ;; ========================================
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (process-string s)))
+  (process-string s))
 
 (define (run-first s)
   (car (run s)))
@@ -44,9 +42,7 @@
 
 (define (run-ns s)
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                   [current-ns-context #f]
+    (parameterize ([current-ns-context #f]
                    [current-module-registry prelude-module-registry]
                    [current-lib-paths (list prelude-lib-dir)]
                    [current-preparse-registry prelude-preparse-registry])
@@ -194,11 +190,12 @@
   ;; the created meta should have meta-source-info, not a bare string.
   ;; Note: maybe-auto-apply-implicits only fires when ALL params are m0.
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env
-                    (global-env-add (hasheq) 'test-fn
-                      ;; All-implicit: Pi(A :0 Type, B :0 A, Nat)
-                      (expr-Pi 'm0 (expr-Type (lzero)) (expr-Pi 'm0 (expr-bvar 0) (expr-Nat)))
-                      (expr-lam 'm0 (expr-Type (lzero)) (expr-lam 'm0 (expr-bvar 0) (expr-zero))))])
+    (parameterize ([current-file-module-network-ref
+                    (module-network-from-snapshot
+                     (hasheq 'test-fn
+                       ;; All-implicit: Pi(A :0 Type, B :0 A, Nat)
+                       (cons (expr-Pi 'm0 (expr-Type (lzero)) (expr-Pi 'm0 (expr-bvar 0) (expr-Nat)))
+                             (expr-lam 'm0 (expr-Type (lzero)) (expr-lam 'm0 (expr-bvar 0) (expr-zero))))))])
       ;; Elaborate a bare reference to test-fn (should auto-apply with meta-source-info)
       (define result (elaborate (surf-var 'test-fn (srcloc "test.prl" 5 3 7))))
       (check-false (prologos-error? result))
@@ -216,11 +213,12 @@
   ;; The meta created should have the name map containing "x" from the lambda binder.
   ;; Note: maybe-auto-apply-implicits only fires when ALL params are m0.
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env
-                    (global-env-add (hasheq) 'impl-fn
-                      ;; All-implicit: Pi(A :0 Type, B :0 A, Nat)
-                      (expr-Pi 'm0 (expr-Type (lzero)) (expr-Pi 'm0 (expr-bvar 0) (expr-Nat)))
-                      (expr-lam 'm0 (expr-Type (lzero)) (expr-lam 'm0 (expr-bvar 0) (expr-zero))))])
+    (parameterize ([current-file-module-network-ref
+                    (module-network-from-snapshot
+                     (hasheq 'impl-fn
+                       ;; All-implicit: Pi(A :0 Type, B :0 A, Nat)
+                       (cons (expr-Pi 'm0 (expr-Type (lzero)) (expr-Pi 'm0 (expr-bvar 0) (expr-Nat)))
+                             (expr-lam 'm0 (expr-Type (lzero)) (expr-lam 'm0 (expr-bvar 0) (expr-zero))))))])
       ;; Elaborate (fn [x <Nat>] impl-fn) — inside the lambda body, env has "x"
       (define result (elaborate (surf-lam
                                   (binder-info 'x 'mw (surf-nat-type srcloc-unknown))
@@ -275,9 +273,7 @@
   ;; We need a simpler case that triggers failed constraints
   ;; Let's use a known case: applying a function to wrong implicit type
   (with-fresh-meta-env
-    (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                   [current-ns-context #f]
+    (parameterize ([current-ns-context #f]
                    [current-module-registry prelude-module-registry]
                    [current-lib-paths (list prelude-lib-dir)]
                    [current-preparse-registry prelude-preparse-registry])
@@ -342,3 +338,33 @@
     (fresh-meta ctx-empty (expr-Nat) (meta-source-info srcloc-unknown 'bare-Type "c" #f #f))
     (check-equal? (length (all-unsolved-metas)) 3)
     (check-equal? (length (primary-unsolved-metas)) 1)))
+
+;; ========================================
+;; Unannotated-param inference hint (CIU T6, 2026-07-18)
+;; ========================================
+;; An unannotated param used in a way that needs its type (field projection or
+;; arithmetic) produced a bare "Type mismatch". It now gives a hint pointing at
+;; an annotation or spec — surgically, so genuine mismatches keep "Type mismatch".
+
+(test-case "unannotated-param arithmetic: clearer 'cannot infer' message"
+  (define r (run-ns-last "(ns t)\n(defn f [x] (+ x 1))"))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (check-true (regexp-match? #rx"cannot infer the type of an unannotated parameter"
+                             (prologos-error-message r))
+              (format "got: ~v" (prologos-error-message r))))
+
+(test-case "unannotated-param projection: clearer 'cannot infer' message"
+  (define r (run-ns-last "(ns t)\n(defn g [p] (map-get p :x))"))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (check-true (regexp-match? #rx"cannot infer the type of an unannotated parameter"
+                             (prologos-error-message r))
+              (format "got: ~v" (prologos-error-message r))))
+
+(test-case "annotated param does NOT get the inference hint (control)"
+  ;; a genuine type mismatch keeps the plain "Type mismatch" message.
+  (define r (run-ns-last "(ns t)\n(def x : Int (the String \"hello\"))"))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (check-true (regexp-match? #rx"Type mismatch" (prologos-error-message r))
+              (format "got: ~v" (prologos-error-message r)))
+  (check-false (regexp-match? #rx"cannot infer the type of an unannotated"
+                              (prologos-error-message r))))

@@ -18,9 +18,7 @@
 
 ;; Helper: run through process-string (sexp mode)
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)])
-    (car (process-string s))))
+  (car (process-string s)))
 
 ;; ========================================
 ;; Int arithmetic
@@ -94,23 +92,24 @@
 ;; ========================================
 
 (test-case "generic-arith/p32-add"
-  (define result (run "(eval (+ ~1 ~2))"))
-  (check-true (string-contains? result "posit32")
-              (format "expected posit32, got: ~a" result))
-  (check-true (string-contains? result (number->string (posit32-encode 3)))
-              (format "expected encoding of 3, got: ~a" result)))
+  (define result (run "(eval (+ 1.0 2.0))"))
+  (check-true (string-contains? result "Posit32")
+              (format "expected Posit32, got: ~a" result))
+  ;; Numerics N2: posit displays as ~<decimal>. ~1 + ~2 = ~3.
+  (check-true (string-contains? result "3.0")
+              (format "expected ~~3, got: ~a" result)))
 
 (test-case "generic-arith/p32-mul"
-  (define result (run "(eval (* ~3 ~4))"))
-  (check-true (string-contains? result "posit32"))
-  (check-true (string-contains? result (number->string (posit32-encode 12)))))
+  (define result (run "(eval (* 3.0 4.0))"))
+  (check-true (string-contains? result "Posit32"))
+  (check-true (string-contains? result "12.0")))
 
 (test-case "generic-arith/p32-negate"
-  (define result (run "(eval (negate ~5))"))
-  (check-true (string-contains? result "posit32")))
+  (define result (run "(eval (negate 5.0))"))
+  (check-true (string-contains? result "Posit32")))
 
 (test-case "generic-arith/p32-lt"
-  (check-true (string-contains? (run "(eval (lt ~1 ~2))") "true")))
+  (check-true (string-contains? (run "(eval (lt 1.0 2.0))") "true")))
 
 ;; ========================================
 ;; Type inference
@@ -123,7 +122,7 @@
   (check-true (string-contains? (run "(infer (+ 1/2 1/3))") "Rat")))
 
 (test-case "generic-arith/infer-p32-add"
-  (check-true (string-contains? (run "(infer (+ ~1 ~2))") "Posit32")))
+  (check-true (string-contains? (run "(infer (+ 1.0 2.0))") "Posit32")))
 
 (test-case "generic-arith/infer-int-lt"
   (check-true (string-contains? (run "(infer (lt 3 4))") "Bool")))

@@ -1,0 +1,145 @@
+;; ============================================================================
+;; CIU T6 F1b.4 — D22 SEAL acceptance (2026-07-17)
+;;
+;; The Map→schema seal end-to-end in WS: the four doors (constructor literal +
+;; non-literal, def-annotation, mid-expression `the`), the up-shift, the
+;; :check forcing + swallow repair, the fill-or-error residual, and the
+;; selections-are-partial-views pin. Lives apart from the main F1 acceptance
+;; file per the hang discipline (DEFERRED.md § union-type hang): clean state
+;; here. Suite-gated by tests/test-f1b4-seal-acceptance.rkt.
+;; ============================================================================
+
+ns f1b4-seal-acceptance :no-prelude
+
+;; :no-prelude — since F1b.5-s3 a :check-schema constructor door delegates its
+;; :check discharge to validate (D29), so it needs result + reason in scope
+;; (the Checked door below; the bake errors loud otherwise).
+require [prologos::data::result :refer [Result ok err ok? err?]]
+require [prologos::data::reason :refer [Reason missing-required check-failed type-mismatch unexpected-field]]
+
+;; --- schemas ----------------------------------------------------------------
+
+schema Person
+  :name String
+  :age Int
+;;0=> Person : [Type 0] defined.
+
+schema Cfg
+  :host String :default "localhost"
+  :port Int :default 8080
+;;1=> Cfg : [Type 0] defined.
+
+schema Checked
+  :name String
+  :age Int :check (> _ 0)
+;;2=> Checked : [Type 0] defined.
+
+schema Locked :closed
+  :a Int
+;;3=> Locked : [Type 0] defined.
+
+;; --- F1b.4a: def-bound rows SEAL via `the` (was: inference error) -----------
+
+def m := [map-assoc [map-assoc {} :name "alice"] :age 30]
+;;4=> m : {:age Int :name String | _} defined.
+
+the Person m
+;;5=> {:name "alice", :age 30} : f1b4-seal-acceptance::Person
+;;   ← the row-vs-schema discharge: per-field CHECK-strength on the knowns
+
+def bad := [map-assoc [map-assoc {} :name "bob"] :age "x"]
+;;6=> bad : {:age String :name String | _} defined.
+
+the Person bad
+;;7=>~ ERROR
+;;   ← :age String vs Int rejects through the discharge
+
+;; --- F1b.4a: the free up-shift (schema value where Map expected) ------------
+
+def p : Person := {:name "carol" :age 25}
+;;8=> p : f1b4-seal-acceptance::Person defined.
+
+def mv : (Map Keyword <Int | String>) := p
+;;9=> mv : [Map Keyword Int | String] defined.
+;;   ← schema->row feeding the record→Map α (union-V per-field satisfaction)
+
+;; --- F1b.4b: the constructor form generalizes to non-literals ---------------
+
+[Person m]
+;;10=> {:name "alice", :age 30} : f1b4-seal-acceptance::Person
+;;   ← [SchemaName e] = a seal application (type-only for non-literals;
+;;     runtime fill/checks for non-literals = validate, F1b.5)
+
+[Person 42]
+;;11=>~ ERROR
+;;   ← no row to discharge
+
+;; --- F1b.4c: :check forcing + the swallow repair ----------------------------
+
+def cbad := [Checked {:name "dave" :age 0}]
+;;12=>~ sealed definition forced at commit
+;;   ← tabulation FORCES: the violating def ERRORS (was: silent 'defined.')
+
+def cgood := [Checked {:name "fred" :age 5}]
+;;13=> cgood : f1b4-seal-acceptance::Checked defined.
+;;   ← F1b.5-s3: the :check door delegates to validate; the qualified schema type
+;;     is preserved (validate resolves S to the ns-qualified name)
+
+cgood.age
+;;14=> 5 : Int
+
+[map-get [Checked {:name "eve" :age 0}] :name]
+;;15=>~ panic
+;;   ← the swallow is DEAD: the stuck panic stays visible (was: none : String)
+
+;; --- F1b.4e: fill-or-error ---------------------------------------------------
+
+def c : Cfg := {}
+;;16=> c : f1b4-seal-acceptance::Cfg defined.
+;;   ← the March-era aspirational payoff (punify-p3 ;;264): all defaults fill
+
+c.host
+;;17=> "localhost" : String
+;;   ← the default is MATERIALIZED in the runtime value (preparse fill)
+
+def p2 : Person := {:age 30}
+;;18=>~ missing required field :name
+;;   ← THE FLIP: silent width-partial acceptance is dead; the residual NAMES it
+
+[the Cfg {:port 9090}].host
+;;19=> "localhost" : String
+;;   ← direct `the Schema {…}` fills too (was: bypass)
+
+def partial := [map-assoc {} :name "gil"]
+;;20=> partial : {:name String | _} defined.
+
+the Person partial
+;;21=> {:name "gil"} : f1b4-seal-acceptance::Person
+;;   ← dyn-row ABSORB: the remainder may provide :age at runtime (D16 gradual)
+
+def cr := {:age 5}
+;;22=> cr : {:age Int} defined.
+
+the Person cr
+;;23=>~ missing required field :name
+;;   ← a CLOSED row definitely lacks it — exact knowledge, hard error
+
+def d1 := [map-assoc {} :a 1]
+;;24=> d1 : {:a Int | _} defined.
+
+the Locked d1
+;;25=>~ ERROR
+;;   ← :closed schema refuses an open remainder (the closedness scan)
+
+;; --- selections: partial VIEWS (no completeness residual) -------------------
+
+selection NameOnly from Person :requires [:name]
+;;26=> selection NameOnly from Person registered.
+
+def u : NameOnly := {}
+;;27=> u : f1b4-seal-acceptance::NameOnly defined.
+;;   ← :requires is a READ-capability declaration; construction stays partial
+
+def u2 : NameOnly := {:name "hana" :age 9}
+;;28=> u2 : f1b4-seal-acceptance::NameOnly defined.
+;;   ← extra parent fields accepted (a view over fuller data)

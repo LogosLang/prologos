@@ -8,7 +8,8 @@
 ;;;
 ;;; Uses current-use-bsp-scheduler? (propagator.rkt level) to override
 ;;; ALL run-to-quiescence calls globally — not just the stratified loop,
-;;; but also unify.rkt, elab-speculation.rkt, bridges, tabling, etc.
+;;; but also unify.rkt, bridges, tabling, etc.
+;;; (PPN 4C Phase 3A.d: elab-speculation.rkt retired; zero callers/stranded.)
 ;;;
 
 (require racket/list

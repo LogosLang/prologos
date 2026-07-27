@@ -15,7 +15,7 @@
 ;;
 ;;   `Nat → Int → Rat` (all lossless via From)
 ;;   `Posit8 → Posit16 → Posit32 → Posit64` (lossless widening via From)
-;;   `Posit{N} → Rat` (lossless via From — every posit has exact rational form)
+;;   `Posit{N} → Rat` (via TryFrom — finite posits have an exact rational form; NaR → none)
 ;;   `Rat → Posit{N}` (lossy via TryFrom — precision may be lost)
 ;;   `Int → Posit{N}` (lossy via TryFrom — large integers lose precision)
 
@@ -96,29 +96,12 @@ impl From Posit32 Posit64
     p64-from-rat [p32-to-rat x]
 
 ;; ========================================
-;; Cross-family: Posit -> Rat (lossless)
+;; Cross-family: Posit -> Rat (via TryFrom — finite only)
 ;; ========================================
-;; Every finite posit has an exact rational representation.
-
-;; Posit8 -> Rat
-impl From Posit8 Rat
-  defn from [x : Posit8] <Rat>
-    p8-to-rat x
-
-;; Posit16 -> Rat
-impl From Posit16 Rat
-  defn from [x : Posit16] <Rat>
-    p16-to-rat x
-
-;; Posit32 -> Rat
-impl From Posit32 Rat
-  defn from [x : Posit32] <Rat>
-    p32-to-rat x
-
-;; Posit64 -> Rat
-impl From Posit64 Rat
-  defn from [x : Posit64] <Rat>
-    p64-to-rat x
+;; Every FINITE posit has an exact rational representation; NaR does NOT.
+;; So Posit{N} -> Rat is TryFrom (NaR -> none, finite -> some), not From — see
+;; the TryFrom section below and core/conversions.prologos. (Migrated from the
+;; earlier total-but-NaR-unsafe From instances in Num Track 1 N6f.)
 
 ;; ========================================
 ;; TryFrom Trait — fallible conversion from A to B

@@ -9,7 +9,19 @@
 (require racket/list
          racket/match
          racket/string
-         "source-location.rkt")
+         "source-location.rkt"
+         ;; PPN 4C 3C.c.3 (2026-05-24): derivation-chain struct accessors for
+         ;; union-exhaustion-error.derivation-chain field (Q-B.2 flip to
+         ;; (listof derivation-chain) per §9.5.4.4 + §9.5.4.5.1 lean α).
+         ;;
+         ;; CYCLE NOTE: initial 3C.c.3 attempt required error-explanation.rkt
+         ;; directly, which created a cycle (errors → error-explanation →
+         ;; propagator → reduction → errors). Resolved by extracting the
+         ;; structs to a leaf module derivation-chain-types.rkt; both errors.rkt
+         ;; and error-explanation.rkt require it. error-explanation.rkt re-
+         ;; exports the structs via (struct-out ...) for backward compat with
+         ;; existing consumers (test files etc.).
+         "derivation-chain-types.rkt")
 
 (provide
  ;; Error structs
@@ -109,9 +121,17 @@
 ;; branches: (listof string) — pretty-printed branch types
 ;; branch-mismatches: (listof string) — per-branch actual type or "<could not infer>"
 ;; expr-str: string — pretty-printed expression
-;; Phase D3: derivation-chain: (listof (listof string)) — per-branch list of
-;;   sub-failure labels showing what nested speculation paths were tried.
-;;   Empty list = no chain info (backward compatible).
+;; PPN 4C 3C.c.3 (2026-05-24): derivation-chain field type FLIPPED per
+;;   §9.5.4.4 Q-B.2 (atomic with field flip) + §9.5.4.3 Q-C.6 (per-branch):
+;;   derivation-chain: (listof derivation-chain) — per-branch list of
+;;     derivation-chain structs (from error-explanation.rkt 3C.a foundation).
+;;     Each chain captures the per-branch speculation tree as structured data;
+;;     atomic checks have empty chains (matches today's UX byte-for-byte);
+;;     nested speculation populates chain steps with assumption-ids, names,
+;;     srcloc (when available). Format-error renders per-branch.
+;;     Empty list = no chain info (no atomic-case UX change).
+;;   PRE-3C.c.3 shape was (listof (listof string)) — pre-formatted strings;
+;;     retired alongside build-derivation-chain's union-type path per Q9.
 (struct union-exhaustion-error prologos-error
   (branches branch-mismatches expr-str derivation-chain) #:transparent)
 
@@ -136,10 +156,16 @@
              (format "    ~a" step)
              (format "    because: ~a" step))))
       "\n")]
-    [(unbound-variable-error _ _ name)
+    [(unbound-variable-error _ uv-msg name)
      (string-join
-      (list (format "Error at ~a" loc-str)
-            (format "  Unbound variable: ~a" name))
+      (append
+       (list (format "Error at ~a" loc-str)
+             (format "  Unbound variable: ~a" name))
+       ;; (N6e-E5.3) a non-default message is a HINT (e.g. op-spelling
+       ;; guidance from elaborate-var) — render it; the default stays as-is.
+       (if (equal? uv-msg "Unbound variable")
+           '()
+           (list (format "  ~a" uv-msg))))
       "\n")]
     [(multiplicity-error _ _ variable declared actual)
      (string-join
@@ -263,25 +289,39 @@
             (format "  = help: use the qualified accessor name to disambiguate (e.g., ~a-~a)"
                     (car trait-names) method-name))
       "\n")]
-    ;; Phase 6+D4: E1006 — Union type exhaustion with optional derivation chains
-    [(union-exhaustion-error _ _ branches branch-mismatches expr-str derivation-chain)
+    ;; Phase 6+D4+3C.c.3 (2026-05-24): E1006 — Union type exhaustion with
+    ;; derivation-chain structs (per Q-B.2 flip + Q-C.6 per-branch shape).
+    ;; chains: (listof derivation-chain) — per-branch chain list. Each chain's
+    ;; steps render as "because: <assumption-names>" lines. Empty chains render
+    ;; no "because:" lines (matches atomic UX pre-3C.c byte-for-byte per
+    ;; §9.5.4.7.1). Nested speculation produces non-empty chains with structured
+    ;; step data.
+    ;;
+    ;; ATMS state queries (conflicts via solver-state-explain-hypothesis +
+    ;; diagnoses via solver-state-minimal-diagnoses) DEFERRED — Phase 11b
+    ;; scope for general derivation infrastructure. format-error currently
+    ;; renders per-step assumption-names only; richness for context-conflict
+    ;; scenarios lives in the structured data (LSP/PNET consumers query ATMS
+    ;; themselves via the chain's assumption-ids).
+    [(union-exhaustion-error _ _ branches branch-mismatches expr-str chains)
      (string-join
       (append
        (list (format "error[E1006]: expression does not match any branch of union type")
              (format "  --> ~a" loc-str))
-       ;; Per-branch lines with optional derivation chain sub-lines
-       (let ([chains (if (and derivation-chain (pair? derivation-chain))
-                         derivation-chain
-                         (make-list (length branches) '()))])
+       ;; Per-branch lines with derivation chain step sub-lines (if any)
+       (let ([chain-list (if (and chains (pair? chains))
+                             chains
+                             (make-list (length branches) (derivation-chain '())))])
          (apply append
            (for/list ([br (in-list branches)]
                       [mm (in-list branch-mismatches)]
-                      [chain (in-list chains)])
+                      [chain (in-list chain-list)])
+             (define steps (if (derivation-chain? chain)
+                               (derivation-chain-steps chain)
+                               '()))
              (cons (format "  tried ~a — type mismatch (got: ~a)" br mm)
-                   (for/list ([step (in-list chain)])
-                     (if (string-prefix? step "[diagnosis]")
-                         (format "    ~a" step)
-                         (format "    because: ~a" step)))))))
+                   (for/list ([step (in-list steps)])
+                     (format "    because: ~a" (format-derivation-step step)))))))
        (list (format "  in expression: ~a" expr-str)
              (format "  = help: expression must match at least one branch of ~a" msg)))
       "\n")]
@@ -297,6 +337,22 @@
   (cond
     [(string? v) v]
     [else (format "~a" v)]))
+
+;; PPN 4C 3C.c.3 (2026-05-24): format a single derivation-step for error rendering.
+;; Renders the step's assumption-names joined; falls back to "<unknown>" when
+;; step has no names (defensive — shouldn't happen for properly-constructed
+;; chains via derivation-chain-for/union-check or /union-contradict).
+;;
+;; Per §9.5.4.5 sketch: future ATMS state queries (conflicts via
+;; solver-state-explain-hypothesis + diagnoses via solver-state-minimal-
+;; diagnoses) would extend this — currently deferred to Phase 11b general
+;; derivation infrastructure. LSP/PNET consumers querying ATMS themselves
+;; via the step's assumption-ids is the structured-data path.
+(define (format-derivation-step step)
+  (define names (derivation-step-assumption-names step))
+  (cond
+    [(pair? names) (string-join names ", ")]
+    [else "<unknown>"]))
 
 ;; ========================================
 ;; Diagnostic Emission

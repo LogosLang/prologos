@@ -55,6 +55,11 @@
     Posit16 posit16 p16+ p16- p16* p16/ p16-neg p16-abs p16-sqrt p16-lt p16-le p16-eq p16-from-nat p16-to-rat p16-from-rat p16-from-int p16-if-nar
     Posit32 posit32 p32+ p32- p32* p32/ p32-neg p32-abs p32-sqrt p32-lt p32-le p32-eq p32-from-nat p32-to-rat p32-from-rat p32-from-int p32-if-nar
     Posit64 posit64 p64+ p64- p64* p64/ p64-neg p64-abs p64-sqrt p64-lt p64-le p64-eq p64-from-nat p64-to-rat p64-from-rat p64-from-int p64-if-nar
+    ;; Float ops (Numerics N3b) — Float32/Float64 type names dispatch as type-symbols
+    f32+ f32- f32* f32/ f32-neg f32-abs f32-sqrt f32-lt f32-le f32-eq
+    f64+ f64- f64* f64/ f64-neg f64-abs f64-sqrt f64-lt f64-le f64-eq
+    ;; Cross-width Float conversions (Numerics N3e-rest)
+    float-finite? float-to-rat float-to-int float-to-float32
     Quire8 q8-zero q8-fma q8-to
     Quire16 q16-zero q16-fma q16-to
     Quire32 q32-zero q32-fma q32-to
@@ -480,14 +485,18 @@
     [(exact-integer? d)
      (surf-int-lit d loc)]
 
-    ;; Bare fraction (rational literal, e.g. 3/7)
+    ;; Bare fraction (rational literal, e.g. 3/7). Input set: sexp fractions +
+    ;; (pre-N6b) WS non-integral exponents; WS exponents now carry their own
+    ;; $exp-literal sentinel, so this arm is unambiguously fraction-origin.
     [(and (number? d) (exact? d) (rational? d) (not (integer? d)))
-     (surf-rat-lit d loc)]
+     (surf-num-lit d #f 'fraction loc)]
 
-    ;; Inexact number (e.g. 3.14 from sexp mode) → Posit32 (approximate)
-    ;; Racket's reader produces inexact floats for decimals; convert to exact for Posit encoding.
+    ;; Inexact number (e.g. 3.14 from sexp mode) → decimal-origin polymorphic
+    ;; (N6b default: Posit32). Racket's reader produces inexact floats for
+    ;; decimals AND exponents in sexp mode — both bucket to 'decimal (same
+    ;; Posit32 default; the documented sexp/WS exponent asymmetry).
     [(and (number? d) (inexact? d))
-     (surf-approx-literal (inexact->exact d) loc)]
+     (let ([ex (inexact->exact d)]) (surf-num-lit ex (integer? ex) 'decimal loc))]
 
     ;; String literal → surf-string
     [(string? d)
@@ -519,6 +528,8 @@
     [(Posit16) (surf-posit16-type loc)]
     [(Posit32) (surf-posit32-type loc)]
     [(Posit64) (surf-posit64-type loc)]
+    [(Float32) (surf-float32-type loc)]
+    [(Float64) (surf-float64-type loc)]
     [(Quire8) (surf-quire8-type loc)]
     [(Quire16) (surf-quire16-type loc)]
     [(Quire32) (surf-quire32-type loc)]
@@ -539,8 +550,6 @@
     [(CellId) (surf-cell-id-type loc)]
     [(PropId) (surf-prop-id-type loc)]
     [(UnionFind) (surf-uf-type loc)]
-    [(ATMS) (surf-atms-type loc)]
-    [(AssumptionId) (surf-assumption-id-type loc)]
     [(TableStore) (surf-table-store-type loc)]
     [(Solver) (surf-solver-type loc)]
     [(Goal) (surf-goal-type loc)]
@@ -592,6 +601,71 @@
 ;; ========================================
 ;; Parse list forms: (op arg ...)
 ;; ========================================
+;; (N6e-E3) Explicit-hole sections over keyword heads (D-N6E.1).
+;; [+ 7 _] and [int* _ 2] desugar to hole-domain lambdas WRAPPING THE KEYWORD,
+;; so sections inherit head-position semantics (e.g. auto-widening numeric-join
+;; for the generic ops). Plain _ only, left-to-right; holes count only at the
+;; immediately-enclosing bracket group (direct args — nested groups desugar
+;; their own). Mirrors the surf-app placeholder desugar (macros.rkt
+;; expand-expression): same $_N names, same hole-domain lambda construction,
+;; so keyword sections behave exactly like [f _ 2] over ordinary heads.
+;; Exclusions: quire ops + p*-if-nar (odd arities — the same pin that keeps
+;; them out of the eta-table), literal-constructor keywords (int, rat, p8 …
+;; take datums, not expressions). Match/defn PATTERNS are unaffected — they
+;; parse via parse-single-pattern, which never routes through parse-list.
+(define sectionable-op-keywords
+  (for/hasheq ([sym (in-list
+                     (append
+                      '(int+ int- int* int/ int-mod int-neg int-abs
+                        int-lt int-le int-eq
+                        rat+ rat- rat* rat/ rat-neg rat-abs
+                        rat-lt rat-le rat-eq rat-numer rat-denom
+                        + - * / lt le gt ge eq mod negate abs
+                        from-integer from-rational from-nat from-int
+                        suc pair fst snd not map-get map-assoc
+                        ;; N6e-E4: cross-width float conversions — the SECTION
+                        ;; form is the width-polymorphic complement to the
+                        ;; Float64-domained eta values (a section's hole domain
+                        ;; defers to the container; the keyword rule accepts
+                        ;; Float32 OR Float64).
+                        float-finite? float-to-rat float-to-int
+                        float-to-float32)
+                      (for*/list ([w (in-list '("p8" "p16" "p32" "p64"))]
+                                  [op (in-list '("+" "-" "*" "/" "-neg" "-abs"
+                                                 "-sqrt" "-lt" "-le" "-eq"
+                                                 "-from-nat" "-to-rat"
+                                                 "-from-rat" "-from-int"))])
+                        (string->symbol (string-append w op)))
+                      (for*/list ([w (in-list '("f32" "f64"))]
+                                  [op (in-list '("+" "-" "*" "/" "-neg" "-abs"
+                                                 "-sqrt" "-lt" "-le" "-eq"))])
+                        (string->symbol (string-append w op)))))])
+    (values sym #t)))
+
+;; Section rewrite: replace each top-level _ arg with a fresh $_i name, parse
+;; the substituted form through the normal keyword arm (no holes remain, so
+;; the hook does not re-fire), then wrap the result in hole-domain lambdas
+;; (one per hole, left-to-right — curried, like the surf-app desugar).
+(define (parse-keyword-section head-stx args loc)
+  (define (hole? a) (eq? (stx->datum a) '_))
+  (define n-holes (for/sum ([a (in-list args)]) (if (hole? a) 1 0)))
+  (define names
+    (for/list ([i (in-range n-holes)])
+      (string->symbol (format "$_~a" i))))
+  (define new-args
+    (let loop ([as args] [ns names])
+      (cond
+        [(null? as) '()]
+        [(hole? (car as)) (cons (car ns) (loop (cdr as) (cdr ns)))]
+        [else (cons (car as) (loop (cdr as) ns))])))
+  (define inner (parse-list (cons head-stx new-args) loc #f))
+  (if (prologos-error? inner)
+      inner
+      (foldr (lambda (nm acc)
+               (surf-lam (binder-info nm #f (surf-hole loc)) acc loc))
+             inner
+             names)))
+
 (define (parse-list elems loc stx)
   ;; elems is either a list of syntax objects or plain datums
   ;; Normalize: if stx is a syntax object, get the list of syntax children
@@ -631,27 +705,53 @@
      (if (= (length args) 1)
          (let ([v (stx->datum (car args))])
            (if (and (number? v) (exact? v) (rational? v))
-               (surf-rat-lit v loc)
+               ;; N4b: genuine fraction → polymorphic; integer-valued slash (0/1, 6/3) stays concrete Rat.
+               (if (integer? v) (surf-rat-lit v loc) (surf-num-lit v #f 'fraction loc))
                (parse-error loc (format "rat literal requires an exact rational, got: ~a" v) #f)))
          (parse-error loc "rat literal requires exactly one argument" #f))]
 
-    ;; $approx-literal sentinel: ~N → surf-approx-literal
-    [(and (symbol? head) (eq? head '$approx-literal))
-     (if (= (length args) 1)
-         (let ([v (stx->datum (car args))])
-           (if (and (number? v) (or (exact? v) (inexact? v)))
-               (surf-approx-literal (if (exact? v) v (inexact->exact v)) loc)
-               (parse-error loc (format "~~ requires a numeric argument, got: ~a" v) #f)))
-         (parse-error loc "~~ requires exactly one argument" #f))]
+    ;; (N6c) $approx-literal sentinel removed (~N deprecated; pNN + bare decimals)
 
-    ;; $decimal-literal sentinel: 3.14 → surf-approx-literal (bare decimal = Posit32)
+    ;; $decimal-literal sentinel: 3.14 → decimal-origin polymorphic literal
+    ;; (N6b default: Posit32 — decimal notation = approximate intent; incl. 3.0)
     [(and (symbol? head) (eq? head '$decimal-literal))
      (if (= (length args) 1)
          (let ([v (stx->datum (car args))])
            (if (and (number? v) (exact? v) (rational? v))
-               (surf-approx-literal v loc)
+               (surf-num-lit v (integer? v) 'decimal loc)
                (parse-error loc (format "decimal literal requires a numeric argument, got: ~a" v) #f)))
          (parse-error loc "decimal literal requires exactly one argument" #f))]
+
+    ;; $exp-literal sentinel (N6b): WS non-integral exponent (1.5e-3) → exponent-origin
+    ;; polymorphic literal (default: Posit32). Integral exponents (1e10) never get here —
+    ;; they arrive as exact integers → surf-int-lit (structurally Int).
+    [(and (symbol? head) (eq? head '$exp-literal))
+     (if (= (length args) 1)
+         (let ([v (stx->datum (car args))])
+           (if (and (number? v) (exact? v) (rational? v))
+               (surf-num-lit v (integer? v) 'exponent loc)
+               (parse-error loc (format "exponent literal requires a numeric argument, got: ~a" v) #f)))
+         (parse-error loc "exponent literal requires exactly one argument" #f))]
+
+    ;; $posit-literal sentinel (Numerics N6b): 2p8 / 3.14p16 / 3.14p64 → surf-posit-lit
+    [(and (symbol? head) (eq? head '$posit-literal))
+     (if (= (length args) 2)
+         (let ([v (stx->datum (car args))]
+               [w (stx->datum (cadr args))])
+           (if (and (number? v) (exact? v) (rational? v) (memv w '(8 16 32 64)))
+               (surf-posit-lit v w loc)
+               (parse-error loc (format "posit literal requires (exact-rational width 8|16|32|64), got: ~a ~a" v w) #f)))
+         (parse-error loc "posit literal requires exactly two arguments (value width)" #f))]
+
+    ;; $float-literal sentinel (Numerics N3c): 3.14f / 3.14f32 / 3.14f64 → surf-float-lit
+    [(and (symbol? head) (eq? head '$float-literal))
+     (if (= (length args) 2)
+         (let ([v (stx->datum (car args))]
+               [w (stx->datum (cadr args))])
+           (if (and (number? v) (exact? v) (rational? v) (memv w '(32 64)))
+               (surf-float-lit v w loc)
+               (parse-error loc (format "float literal requires (exact-rational width 32|64), got: ~a ~a" v w) #f)))
+         (parse-error loc "float literal requires exactly two arguments (value width)" #f))]
 
     ;; $foreign-block sentinel: foreign escape block
     ;; ($foreign-block racket (code-datums...) (captures...) (exports...))
@@ -675,10 +775,24 @@
     [(and (symbol? head) (eq? head '$vec-literal))
      (parse-pvec-literal args loc)]
 
+    ;; CIU T6 F1a-col-2 (D15): $list-literal-parse sentinel — a no-tail '[…]
+    ;; handed through by preparse with its literal-extent identity intact.
+    [(and (symbol? head) (eq? head '$list-literal-parse))
+     (parse-surf-list-literal args loc)]
+
     ;; $typed-hole sentinel: ?? or ??name → surf-typed-hole
     [(and (symbol? head) (eq? head '$typed-hole))
      (define hole-name (if (pair? args) (stx->datum (car args)) #f))
      (surf-typed-hole hole-name loc)]
+
+    ;; (N6e-E3) Explicit-hole SECTION over an op keyword: [+ 7 _], [int* _ 2].
+    ;; Desugars to a hole-domain lambda wrapping the keyword form (see
+    ;; parse-keyword-section above). Fires only for whitelisted op keywords
+    ;; with a top-level _ among the direct args.
+    [(and (symbol? head)
+          (hash-ref sectionable-op-keywords head #f)
+          (ormap (lambda (a) (eq? (stx->datum a) '_)) args))
+     (parse-keyword-section head-stx args loc)]
 
     ;; Keyword-headed forms
     [(symbol? head)
@@ -915,6 +1029,27 @@
                 [(prologos-error? t) t]
                 [(prologos-error? e) e]
                 [else (surf-ann t e loc)])))]
+
+       ;; CIU T6 F1b.5-s2 (D27, the A2-e attachment): [validate SchemaName e]
+       ;; → surf-validate; the plan bakes at ELABORATION (registry live).
+       ;; `_` subject = explicit eta (a keyword arm bypasses the parse-time
+       ;; section machinery, so [map [validate P _] rows] needs it here —
+       ;; the parse-keyword-section $_i + surf-hole-binder convention).
+       [(validate)
+        (or (check-arity 'validate args 2 loc)
+            (let ([sname (stx->datum (car args))])
+              (cond
+                [(not (symbol? sname))
+                 (prologos-error loc (format "validate: expected a schema name, got ~a" sname))]
+                [(eq? (stx->datum (cadr args)) '_)
+                 (surf-lam (binder-info '$_0 #f (surf-hole loc))
+                           (surf-validate sname (surf-var '$_0 loc) loc)
+                           loc)]
+                [else
+                 (let ([subj (parse-datum (cadr args))])
+                   (if (prologos-error? subj)
+                       subj
+                       (surf-validate sname subj loc)))])))]
 
        ;; (Type n)
        [(Type)
@@ -1469,6 +1604,94 @@
               (if (and (exact-integer? v) (<= 0 v 4294967295))
                   (surf-posit32 v loc)
                   (parse-error loc "posit32 literal must be an integer 0–4294967295, got ~a" v))))]
+       ;; ---- Float ops (Numerics N3b) ----
+       [(f32+)
+        (or (check-arity 'f32+ args 2 loc)
+            (let ([a (parse-datum (car args))] [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a] [(prologos-error? b) b] [else (surf-f32-add a b loc)])))]
+       [(f32-)
+        (or (check-arity 'f32- args 2 loc)
+            (let ([a (parse-datum (car args))] [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a] [(prologos-error? b) b] [else (surf-f32-sub a b loc)])))]
+       [(f32*)
+        (or (check-arity 'f32* args 2 loc)
+            (let ([a (parse-datum (car args))] [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a] [(prologos-error? b) b] [else (surf-f32-mul a b loc)])))]
+       [(f32/)
+        (or (check-arity 'f32/ args 2 loc)
+            (let ([a (parse-datum (car args))] [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a] [(prologos-error? b) b] [else (surf-f32-div a b loc)])))]
+       [(f32-neg)
+        (or (check-arity 'f32-neg args 1 loc)
+            (let ([a (parse-datum (car args))]) (if (prologos-error? a) a (surf-f32-neg a loc))))]
+       [(f32-abs)
+        (or (check-arity 'f32-abs args 1 loc)
+            (let ([a (parse-datum (car args))]) (if (prologos-error? a) a (surf-f32-abs a loc))))]
+       [(f32-sqrt)
+        (or (check-arity 'f32-sqrt args 1 loc)
+            (let ([a (parse-datum (car args))]) (if (prologos-error? a) a (surf-f32-sqrt a loc))))]
+       [(f32-lt)
+        (or (check-arity 'f32-lt args 2 loc)
+            (let ([a (parse-datum (car args))] [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a] [(prologos-error? b) b] [else (surf-f32-lt a b loc)])))]
+       [(f32-le)
+        (or (check-arity 'f32-le args 2 loc)
+            (let ([a (parse-datum (car args))] [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a] [(prologos-error? b) b] [else (surf-f32-le a b loc)])))]
+       [(f32-eq)
+        (or (check-arity 'f32-eq args 2 loc)
+            (let ([a (parse-datum (car args))] [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a] [(prologos-error? b) b] [else (surf-f32-eq a b loc)])))]
+       [(f64+)
+        (or (check-arity 'f64+ args 2 loc)
+            (let ([a (parse-datum (car args))] [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a] [(prologos-error? b) b] [else (surf-f64-add a b loc)])))]
+       [(f64-)
+        (or (check-arity 'f64- args 2 loc)
+            (let ([a (parse-datum (car args))] [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a] [(prologos-error? b) b] [else (surf-f64-sub a b loc)])))]
+       [(f64*)
+        (or (check-arity 'f64* args 2 loc)
+            (let ([a (parse-datum (car args))] [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a] [(prologos-error? b) b] [else (surf-f64-mul a b loc)])))]
+       [(f64/)
+        (or (check-arity 'f64/ args 2 loc)
+            (let ([a (parse-datum (car args))] [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a] [(prologos-error? b) b] [else (surf-f64-div a b loc)])))]
+       [(f64-neg)
+        (or (check-arity 'f64-neg args 1 loc)
+            (let ([a (parse-datum (car args))]) (if (prologos-error? a) a (surf-f64-neg a loc))))]
+       [(f64-abs)
+        (or (check-arity 'f64-abs args 1 loc)
+            (let ([a (parse-datum (car args))]) (if (prologos-error? a) a (surf-f64-abs a loc))))]
+       [(f64-sqrt)
+        (or (check-arity 'f64-sqrt args 1 loc)
+            (let ([a (parse-datum (car args))]) (if (prologos-error? a) a (surf-f64-sqrt a loc))))]
+       [(f64-lt)
+        (or (check-arity 'f64-lt args 2 loc)
+            (let ([a (parse-datum (car args))] [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a] [(prologos-error? b) b] [else (surf-f64-lt a b loc)])))]
+       [(f64-le)
+        (or (check-arity 'f64-le args 2 loc)
+            (let ([a (parse-datum (car args))] [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a] [(prologos-error? b) b] [else (surf-f64-le a b loc)])))]
+       [(f64-eq)
+        (or (check-arity 'f64-eq args 2 loc)
+            (let ([a (parse-datum (car args))] [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a] [(prologos-error? b) b] [else (surf-f64-eq a b loc)])))]
+       ;; Cross-width Float conversions (Numerics N3e-rest)
+       [(float-finite?)
+        (or (check-arity 'float-finite? args 1 loc)
+            (let ([a (parse-datum (car args))]) (if (prologos-error? a) a (surf-float-finite a loc))))]
+       [(float-to-rat)
+        (or (check-arity 'float-to-rat args 1 loc)
+            (let ([a (parse-datum (car args))]) (if (prologos-error? a) a (surf-float-to-rat a loc))))]
+       [(float-to-int)
+        (or (check-arity 'float-to-int args 1 loc)
+            (let ([a (parse-datum (car args))]) (if (prologos-error? a) a (surf-float-to-int a loc))))]
+       [(float-to-float32)
+        (or (check-arity 'float-to-float32 args 1 loc)
+            (let ([a (parse-datum (car args))]) (if (prologos-error? a) a (surf-float-to-float32 a loc))))]
        [(p32+)
         (or (check-arity 'p32+ args 2 loc)
             (let ([a (parse-datum (car args))]
@@ -2544,101 +2767,6 @@
                 [(prologos-error? id) id]
                 [else (surf-uf-value st id loc)])))]
 
-       ;; ---- ATMS operations ----
-       ;; (atms-new network)
-       [(atms-new)
-        (or (check-arity 'atms-new args 1 loc)
-            (let ([net (parse-datum (car args))])
-              (if (prologos-error? net) net
-                  (surf-atms-new net loc))))]
-       ;; (atms-assume atms name datum)
-       [(atms-assume)
-        (or (check-arity 'atms-assume args 3 loc)
-            (let ([a (parse-datum (car args))]
-                  [name (parse-datum (cadr args))]
-                  [datum (parse-datum (caddr args))])
-              (cond
-                [(prologos-error? a) a]
-                [(prologos-error? name) name]
-                [(prologos-error? datum) datum]
-                [else (surf-atms-assume a name datum loc)])))]
-       ;; (atms-retract atms aid)
-       [(atms-retract)
-        (or (check-arity 'atms-retract args 2 loc)
-            (let ([a (parse-datum (car args))]
-                  [aid (parse-datum (cadr args))])
-              (cond
-                [(prologos-error? a) a]
-                [(prologos-error? aid) aid]
-                [else (surf-atms-retract a aid loc)])))]
-       ;; (atms-nogood atms aids)
-       [(atms-nogood)
-        (or (check-arity 'atms-nogood args 2 loc)
-            (let ([a (parse-datum (car args))]
-                  [aids (parse-datum (cadr args))])
-              (cond
-                [(prologos-error? a) a]
-                [(prologos-error? aids) aids]
-                [else (surf-atms-nogood a aids loc)])))]
-       ;; (atms-amb atms alternatives)
-       [(atms-amb)
-        (or (check-arity 'atms-amb args 2 loc)
-            (let ([a (parse-datum (car args))]
-                  [alts (parse-datum (cadr args))])
-              (cond
-                [(prologos-error? a) a]
-                [(prologos-error? alts) alts]
-                [else (surf-atms-amb a alts loc)])))]
-       ;; (atms-solve-all atms goal)
-       [(atms-solve-all)
-        (or (check-arity 'atms-solve-all args 2 loc)
-            (let ([a (parse-datum (car args))]
-                  [goal (parse-datum (cadr args))])
-              (cond
-                [(prologos-error? a) a]
-                [(prologos-error? goal) goal]
-                [else (surf-atms-solve-all a goal loc)])))]
-       ;; (atms-read atms cell)
-       [(atms-read)
-        (or (check-arity 'atms-read args 2 loc)
-            (let ([a (parse-datum (car args))]
-                  [cell (parse-datum (cadr args))])
-              (cond
-                [(prologos-error? a) a]
-                [(prologos-error? cell) cell]
-                [else (surf-atms-read a cell loc)])))]
-       ;; (atms-write atms cell val support)
-       [(atms-write)
-        (or (check-arity 'atms-write args 4 loc)
-            (let ([a (parse-datum (car args))]
-                  [cell (parse-datum (cadr args))]
-                  [val (parse-datum (caddr args))]
-                  [sup (parse-datum (cadddr args))])
-              (cond
-                [(prologos-error? a) a]
-                [(prologos-error? cell) cell]
-                [(prologos-error? val) val]
-                [(prologos-error? sup) sup]
-                [else (surf-atms-write a cell val sup loc)])))]
-       ;; (atms-consistent? atms aids)
-       [(atms-consistent?)
-        (or (check-arity 'atms-consistent? args 2 loc)
-            (let ([a (parse-datum (car args))]
-                  [aids (parse-datum (cadr args))])
-              (cond
-                [(prologos-error? a) a]
-                [(prologos-error? aids) aids]
-                [else (surf-atms-consistent a aids loc)])))]
-       ;; (atms-worldview atms aids)
-       [(atms-worldview)
-        (or (check-arity 'atms-worldview args 2 loc)
-            (let ([a (parse-datum (car args))]
-                  [aids (parse-datum (cadr args))])
-              (cond
-                [(prologos-error? a) a]
-                [(prologos-error? aids) aids]
-                [else (surf-atms-worldview a aids loc)])))]
-
        ;; ---- Tabling operations ----
        ;; (table-new network)
        [(table-new)
@@ -3578,6 +3706,31 @@
                     (binder-info name #f ty)))
               (parse-error loc (format "Expected variable name, got ~a" name) name)))]
 
+       ;; Aspect C C.b.2: chained fused `[x:Int:Even]` — WS delivers (x :Int :Even);
+       ;; reject (reserve for UCS), mirroring the relational C.b.1 rule.
+       [(and (>= (length parts) 3)
+             (symbol? (stx->datum (car parts)))
+             (let ([s (stx->datum (cadr parts))])
+               (and (colon-symbol? s) (not (memq s '(:0 :1 :w :m)))))
+             (colon-symbol? (stx->datum (caddr parts))))
+        (parse-error loc
+                     (format "binder: chained type annotation on ~a not supported (reserve for UCS)"
+                             (stx->datum (car parts)))
+                     d)]
+
+       ;; Aspect C C.b.2: fused `[x:Int]` — WS delivers (x :Int) where `:Int` is a
+       ;; colon-prefixed SYMBOL (not a mult `:0`/`:1`/`:w`/`:m`). Route to the existing
+       ;; typed-binder path (binder-info.type), same as the spaced `(x : T)` arm.
+       [(and (= (length parts) 2)
+             (symbol? (stx->datum (car parts)))
+             (let ([s (stx->datum (cadr parts))])
+               (and (colon-symbol? s) (not (memq s '(:0 :1 :w :m))))))
+        (let* ([name (stx->datum (car parts))]
+               [tname (substring (symbol->string (stx->datum (cadr parts))) 1)]
+               [ty (parse-datum (datum->syntax (car parts) (string->symbol tname)))])
+          (if (prologos-error? ty) ty
+              (binder-info name #f ty)))]
+
        ;; NEW: [x :m <T>] — 3 elements where second is mult, third is ($angle-type ...)
        [(and (= (length parts) 3)
              (mult-annot? (stx->datum (cadr parts)))
@@ -3614,10 +3767,25 @@
                     (binder-info name mult ty)))
               (parse-error loc (format "Expected variable name, got ~a" name) name)))]
 
-       ;; [x] — 1 element, bare param with inferred type (hole)
+       ;; [x] — 1 element: a bare param with inferred type (hole), OR a sexp-glued
+       ;; fused `x:Int` (sexp reads the fused form as ONE symbol). Aspect C C.b.2
+       ;; splits on `:` (name:Type); `::` module paths (empty segment) are not splits.
        [(and (= (length parts) 1)
              (symbol? (stx->datum (car parts))))
-        (binder-info (stx->datum (car parts)) #f (surf-hole loc))]
+        (let* ([sym (stx->datum (car parts))]
+               [segs (string-split (symbol->string sym) ":")]
+               [nonempty? (andmap (lambda (s) (> (string-length s) 0)) segs)])
+          (cond
+            [(and nonempty? (> (length segs) 2))
+             (parse-error loc
+                          (format "binder: chained type annotation in ~a not supported (reserve for UCS)" sym)
+                          sym)]
+            [(and nonempty? (= (length segs) 2))
+             (let ([ty (parse-datum (datum->syntax (car parts) (string->symbol (cadr segs))))])
+               (if (prologos-error? ty) ty
+                   (binder-info (string->symbol (car segs)) #f ty)))]
+            [else
+             (binder-info sym #f (surf-hole loc))]))]
 
        [else
         (parse-error loc
@@ -5073,9 +5241,20 @@
     [else
      (cons sym #f)]))
 
-;; Parse relational params: a bracket-delimited list of possibly mode-annotated names
-;; or literal pattern values.
-;; Returns list of (name . mode) pairs for variables, or (#:literal . value) for literals.
+;; A colon-prefixed symbol like `:Int`. The WS reader renders a fused type
+;; annotation's `:Type` as a SEPARATE colon-prefixed SYMBOL (not a Racket keyword);
+;; sexp glues it into the preceding symbol. Rel Track 1 Aspect C, C.b.1.
+(define (colon-symbol? x)
+  (and (symbol? x)
+       (let ([s (symbol->string x)])
+         (and (> (string-length s) 0) (char=? (string-ref s 0) #\:)))))
+
+;; Parse relational params: a bracket-delimited list of possibly mode-annotated names,
+;; each optionally carrying a fused type annotation (`?x:Int`), or literal pattern values.
+;; Returns list of (name mode type-name) 3-element lists for variables (type-name is a
+;; SYMBOL or #f), or (#:literal . value) for literals. Aspect C C.b.1 added the type slot;
+;; the type is a NAME here — elaboration converts it to a type-EXPR and relations.rkt wraps
+;; the type-pred (Decomplection: the reader emits NO type-pred datum).
 ;; Literal params are used in multi-arity defr | variants where clause heads
 ;; include pattern matching on concrete values (e.g., | [0 ?label] &> ...).
 (define (parse-rel-params params-stx loc)
@@ -5088,20 +5267,63 @@
     [(not parts)
      (prologos-error loc "defr: expected parameter list [?x ?y ...]")]
     [else
-     (for/list ([p (in-list parts)])
-       (define sym (if (syntax? p) (syntax-e p) p))
+     ;; C.b.1: fold over parts with lookahead so a WS-split trailing colon-symbol
+     ;; (`?x` then `:Int`) fuses with its preceding param; sexp delivers `?x:Int`
+     ;; glued into one symbol which we split after mode extraction. Emit uniform
+     ;; 3-lists (name mode type-name); untyped → type-name #f. Chained `?x:C1:C2`
+     ;; is rejected (reserved for UCS). `::` module paths are NOT type splits.
+     (let loop ([ps parts] [acc '()])
        (cond
-         [(symbol? sym)
-          (extract-mode-annotation sym)]
-         ;; Literal patterns: numbers, strings, booleans
-         [(exact-integer? sym)
-          (cons '#:literal sym)]
-         [(string? sym)
-          (cons '#:literal sym)]
-         [(boolean? sym)
-          (cons '#:literal sym)]
+         [(null? ps) (reverse acc)]
          [else
-          (prologos-error loc (format "defr: expected symbol or literal in params, got ~a" sym))]))]))
+          (define p (car ps))
+          (define sym (if (syntax? p) (syntax-e p) p))
+          (cond
+            [(symbol? sym)
+             (cond
+               [(colon-symbol? sym)
+                (prologos-error loc (format "defr: type annotation ~a has no parameter before it" sym))]
+               [else
+                (define nm (extract-mode-annotation sym))
+                (define base (car nm))
+                (define mode (cdr nm))
+                (define segs (string-split (symbol->string base) ":"))
+                (define all-nonempty? (andmap (lambda (s) (> (string-length s) 0)) segs))
+                (cond
+                  ;; sexp-glued chained: name:T1:T2... (all segments non-empty) → reject
+                  [(and all-nonempty? (> (length segs) 2))
+                   (prologos-error loc (format "defr: chained type annotation in ~a not supported (reserve for UCS)" base))]
+                  ;; sexp-glued single: name:Type
+                  [(and all-nonempty? (= (length segs) 2))
+                   (loop (cdr ps)
+                         (cons (list (string->symbol (car segs)) mode (string->symbol (cadr segs))) acc))]
+                  ;; base has no simple type (plain name, or a `::` module path):
+                  ;; WS may carry the type as the NEXT element (a colon-symbol).
+                  [else
+                   (define nxt (and (pair? (cdr ps))
+                                    (let ([n (car (cdr ps))]) (if (syntax? n) (syntax-e n) n))))
+                   (cond
+                     [(colon-symbol? nxt)
+                      (define tn (substring (symbol->string nxt) 1))
+                      (define after (cddr ps))
+                      (define nxt2 (and (pair? after)
+                                        (let ([n (car after)]) (if (syntax? n) (syntax-e n) n))))
+                      (cond
+                        [(= (string-length tn) 0)
+                         ;; A bare `:` (e.g. spaced `[?x : Int]`). C.b.1 is fused-only.
+                         (prologos-error loc (format "defr: use a fused type annotation `~a:Type` (a spaced/bare `:` in the param list is not supported)" base))]
+                        [(colon-symbol? nxt2)
+                         (prologos-error loc (format "defr: chained type annotation on ~a not supported (reserve for UCS)" base))]
+                        [else
+                         (loop after (cons (list base mode (string->symbol tn)) acc))])]
+                     [else
+                      (loop (cdr ps) (cons (list base mode #f) acc))])])])]
+            ;; Literal patterns: numbers, strings, booleans
+            [(exact-integer? sym) (loop (cdr ps) (cons (cons '#:literal sym) acc))]
+            [(string? sym) (loop (cdr ps) (cons (cons '#:literal sym) acc))]
+            [(boolean? sym) (loop (cdr ps) (cons (cons '#:literal sym) acc))]
+            [else
+             (prologos-error loc (format "defr: expected symbol or literal in params, got ~a" sym))])]))]))
 
 ;; Parse the body portion of a defr variant.
 ;; Body is a flat list of tokens that may contain $facts-sep and $clause-sep sentinels.
@@ -5150,14 +5372,15 @@
                ;; Content after sentinel head. In WS mode, continuation rows
                ;; at deeper indentation become nested sublists within the $facts-sep.
                ;; Flat terms = first row, nested pairs = subsequent rows.
-               ;; Note: $nat-literal, $decimal-literal, $approx-literal wrapped terms
+               ;; Note: $nat-literal, $decimal-literal, ... wrapped terms
                ;; are pairs but are single terms, not nested rows.
                (define content (cdr d))  ;; list of syntax objects
                (define (term-sentinel? s)
                  (define sd (stx->datum s))
                  (and (pair? sd)
                       (let ([h (if (syntax? (car sd)) (syntax-e (car sd)) (car sd))])
-                        (memq h '($nat-literal $decimal-literal $approx-literal)))))
+                        (memq h '($nat-literal $decimal-literal $float-literal
+                                  $exp-literal $posit-literal)))))  ;; N6b (+N6c: $approx-literal removed)
                (define-values (flat-terms nested-rows)
                  (partition (lambda (s)
                               (or (not (pair? (stx->datum s)))
@@ -5321,20 +5544,62 @@
         (if err err
             (surf-defr name #f variants loc))]
 
-       ;; Single-arity: (defr name [params] body...)
+       ;; Single-arity: (defr name [params] body...)  OR  (defr name : Schema body...)
        [else
-        (define params-stx (car rest))
-        (define body-tokens (cdr rest))
-        (define params (parse-rel-params params-stx loc))
+        ;; Schema-typed form: the `:` reads as a bare symbol token between the
+        ;; relation name and the schema name; arity + (field-named) params are
+        ;; derived from the named schema (registered by preparse before parse).
         (cond
-          [(and (list? params) (ormap prologos-error? params))
-           (findf prologos-error? params)]
-          [(prologos-error? params) params]
+          [(eq? (and (pair? rest) (stx->datum (car rest))) ':)
+           (parse-defr-schema-typed name (cdr rest) loc)]
           [else
-           (define param-arity (if (list? params) (length params) #f))
-           (define body (parse-defr-body body-tokens loc #:arity param-arity))
+           (define params-stx (car rest))
+           (define body-tokens (cdr rest))
+           (define params (parse-rel-params params-stx loc))
+           (cond
+             [(and (list? params) (ormap prologos-error? params))
+              (findf prologos-error? params)]
+             [(prologos-error? params) params]
+             [else
+              (define param-arity (if (list? params) (length params) #f))
+              (define body (parse-defr-body body-tokens loc #:arity param-arity))
+              (if (prologos-error? body) body
+                  (surf-defr name #f (list (surf-defr-variant params body loc)) loc))])])])]))
+
+;; Parse a schema-typed defr body: (defr name : Schema body...).
+;; `after-colon` is the token list following the `:` (= (SchemaName body...)).
+;; The named schema is already registered (preparse-expand-all runs before parse),
+;; so we derive arity from its field count and synthesize field-named, free-mode
+;; params — this drives correct fact-row splitting (parse-defr-body #:arity) AND
+;; query-matching arity. Fact rows are type-checked positionally against the schema
+;; field types during type-checking (typing-core/qtt expr-defr case).
+(define (parse-defr-schema-typed name after-colon loc)
+  (cond
+    [(null? after-colon)
+     (prologos-error loc (format "defr ~a: expected a schema name after ':'" name))]
+    [else
+     (define schema-name (stx->datum (car after-colon)))
+     (cond
+       [(not (symbol? schema-name))
+        (prologos-error loc (format "defr ~a: expected a schema name after ':', got ~a" name schema-name))]
+       [else
+        (define entry (lookup-schema schema-name))
+        (cond
+          [(not entry)
+           (prologos-error loc (format "defr ~a : ~a — unknown schema ~a (declare it with `schema ~a ...` first)"
+                                       name schema-name schema-name schema-name))]
+          [else
+           (define fields (schema-entry-fields entry))
+           ;; field-named, free-mode params; arity = field count
+           (define synth-params (for/list ([f (in-list fields)]) (cons (schema-field-keyword f) #f)))
+           (define schema-arity (length synth-params))
+           ;; schema reference surf — elaborates to (expr-fvar SchemaName);
+           ;; expr-defr->relation-info reads its name (relations.rkt:786-791)
+           (define schema-surf (parse-datum (car after-colon)))
+           (define body-tokens (cdr after-colon))
+           (define body (parse-defr-body body-tokens loc #:arity schema-arity))
            (if (prologos-error? body) body
-               (surf-defr name #f (list (surf-defr-variant params body loc)) loc))])])]))
+               (surf-defr name schema-surf (list (surf-defr-variant synth-params body loc)) loc))])])]))
 
 ;; (rel [params] body...) — anonymous relation
 (define (parse-rel args loc)
@@ -6413,8 +6678,15 @@
 ;; Keys must be: keyword (:name), string, number, or [expr].
 ;; Bare symbols are not allowed as keys.
 (define (parse-map-literal args loc)
-  (when (odd? (length args))
-    (parse-error loc "Map literal requires an even number of elements (key-value pairs)" #f))
+  ;; s3 (CIU T6, 2026-07-18): RETURN the odd-length parse-error. It was a
+  ;; value-discarding `when` that fell through to the loop below and hard-crashed
+  ;; on `(cadr remaining)`. An odd body — `{:a 1 :b}`, or a value that left an odd
+  ;; number of tokens (e.g. an un-rewritten sentinel) — now yields the graceful
+  ;; "even number of elements" error instead of a Racket contract crash.
+  (cond
+   [(odd? (length args))
+    (parse-error loc "Map literal requires an even number of elements (key-value pairs)" #f)]
+   [else
   (define entries
     (let loop ([remaining args] [acc '()])
       (cond
@@ -6455,7 +6727,7 @@
            [else (loop (cddr remaining) (cons (cons parsed-key parsed-val) acc))])])))
   (if (prologos-error? entries)
       entries
-      (surf-map-literal entries loc)))
+      (surf-map-literal entries loc))]))
 
 ;; ========================================
 ;; PVec literal parsing
@@ -6476,6 +6748,20 @@
   (if (prologos-error? parsed-elems)
       parsed-elems
       (surf-set-literal parsed-elems loc)))
+
+;; CIU T6 F1a-col-2: '[…] literal (no tail) → surf-list-literal (all-at-once typing).
+;; Empty '[] stays the plain nil value (parity with the legacy rewrite).
+(define (parse-surf-list-literal args loc)
+  (if (null? args)
+      (surf-var 'nil loc)
+      (let loop ([remaining args] [acc '()])
+        (cond
+          [(null? remaining) (surf-list-literal (reverse acc) loc)]
+          [else
+           (define parsed (parse-datum (car remaining)))
+           (if (prologos-error? parsed)
+               parsed
+               (loop (cdr remaining) (cons parsed acc)))]))))
 
 (define (parse-pvec-literal args loc)
   (define parsed-elems

@@ -110,11 +110,12 @@
   ;; Params should have mode annotations extracted
   (define params (surf-defr-variant-params v))
   (check-equal? (length params) 2)
-  ;; ?x → (x . free)
+  ;; ?x → (x free #f)  [Aspect C C.b.1: 3-list carrier (name mode type); untyped type = #f]
   (check-equal? (car (car params)) 'x)
-  (check-equal? (cdr (car params)) 'free)
+  (check-equal? (cadr (car params)) 'free)
+  (check-false (caddr (car params)))
   (check-equal? (car (cadr params)) 'y)
-  (check-equal? (cdr (cadr params)) 'free)
+  (check-equal? (cadr (cadr params)) 'free)
   ;; Body should contain a facts block
   (define body (surf-defr-variant-body v))
   (check-equal? (length body) 1)
@@ -142,20 +143,74 @@
   (define result (p "(defr lookup [+key -val] &> (table key val))"))
   (check-true (surf-defr? result))
   (define params (surf-defr-variant-params (car (surf-defr-variants result))))
-  ;; +key → (key . in)
+  ;; +key → (key in #f)
   (check-equal? (car (car params)) 'key)
-  (check-equal? (cdr (car params)) 'in)
-  ;; -val → (val . out)
+  (check-equal? (cadr (car params)) 'in)
+  ;; -val → (val out #f)
   (check-equal? (car (cadr params)) 'val)
-  (check-equal? (cdr (cadr params)) 'out))
+  (check-equal? (cadr (cadr params)) 'out))
 
 (test-case "parse defr — bare params (no mode)"
   (define result (p "(defr simple [a b] &> (rel1 a b))"))
   (check-true (surf-defr? result))
   (define params (surf-defr-variant-params (car (surf-defr-variants result))))
-  ;; bare a → (a . #f)
+  ;; bare a → (a #f #f)
   (check-equal? (car (car params)) 'a)
-  (check-false (cdr (car params))))
+  (check-false (cadr (car params))))
+
+;; ----------------------------------------
+;; Aspect C C.b.1 — fused type annotations `?x:Int` (SEXP reader: `?x:Int` reads
+;; as ONE glued symbol; parse-rel-params splits it after mode extraction).
+;; The type slot carries the type-NAME symbol at parse time (elaboration converts
+;; it to a type-EXPR). ----------------------------------------
+
+(test-case "parse defr — fused `?x:Int` splits to (x free Int) [sexp]"
+  (define result (p "(defr rr [?x:Int] || 5)"))
+  (check-true (surf-defr? result))
+  (define params (surf-defr-variant-params (car (surf-defr-variants result))))
+  (check-equal? (length params) 1)          ;; NOT arity 2 — the :Int does not leak
+  (check-equal? (car (car params)) 'x)       ;; name clean (no colon)
+  (check-equal? (cadr (car params)) 'free)
+  (check-equal? (caddr (car params)) 'Int))  ;; type-NAME symbol
+
+(test-case "parse defr — mode + fused type `+k:Int` → (k in Int) [sexp]"
+  (define result (p "(defr mm [+k:Int -v:String] &> (t k v))"))
+  (define params (surf-defr-variant-params (car (surf-defr-variants result))))
+  (check-equal? (length params) 2)
+  (check-equal? (car (car params)) 'k)
+  (check-equal? (cadr (car params)) 'in)
+  (check-equal? (caddr (car params)) 'Int)
+  (check-equal? (caddr (cadr params)) 'String))
+
+(test-case "parse defr — untyped param keeps type slot #f [sexp]"
+  (define result (p "(defr uu [?x] || 5)"))
+  (define params (surf-defr-variant-params (car (surf-defr-variants result))))
+  (check-false (caddr (car params))))
+
+(test-case "parse defr — chained `?x:Int:Even` is rejected [sexp]"
+  (define result (p "(defr bad [?x:Int:Even] || 5)"))
+  (check-true (prologos-error? result)))
+
+;; ----------------------------------------
+;; Aspect C C.b.2 — fused `x:Int` FUNCTIONAL binders. Both readers funnel through
+;; parse-binder (parser.rkt); sexp glues `x:Int` into one symbol (split), WS delivers
+;; `(x :Int)` (2 elems). The functional side reuses the existing binder-info.type
+;; typed-λ path (no type-pred). ----------------------------------------
+
+(test-case "parse fn — fused `x:Int` → typed binder (name clean, type Int) [sexp]"
+  (define r (p "(fn (x:Int) x)"))
+  (check-true (surf-lam? r))
+  (define b (surf-lam-binder r))
+  (check-equal? (binder-info-name b) 'x)          ;; name clean (no colon)
+  (check-false (binder-info-mult b))
+  (check-true (surf-int-type? (binder-info-type b))))  ;; type slot carries Int
+
+(test-case "parse fn — bare `x` stays untyped (hole) [sexp]"
+  (define r (p "(fn (x) x)"))
+  (check-true (surf-hole? (binder-info-type (surf-lam-binder r)))))
+
+(test-case "parse fn — chained `x:Int:Even` is rejected [sexp]"
+  (check-true (prologos-error? (p "(fn (x:Int:Even) x)"))))
 
 ;; ========================================
 ;; rel — anonymous relation
@@ -169,7 +224,7 @@
   (define params (surf-rel-params inner))
   (check-equal? (length params) 1)
   (check-equal? (car (car params)) 'x)
-  (check-equal? (cdr (car params)) 'free))
+  (check-equal? (cadr (car params)) 'free))
 
 (test-case "parse rel — anonymous with facts"
   (define result (p "(eval (rel [?x ?y] || \"a\" \"b\"))"))

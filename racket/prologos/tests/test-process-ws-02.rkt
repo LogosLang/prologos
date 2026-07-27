@@ -22,9 +22,7 @@
 
 ;; Helper: set up a session in sexp mode, then process a WS defproc
 (define (run-defproc-ws session-sexp defproc-ws)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
@@ -35,9 +33,7 @@
 
 ;; Helper: run both session and defproc in WS mode
 (define (run-all-ws ws-string)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]

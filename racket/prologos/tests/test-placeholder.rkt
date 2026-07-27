@@ -24,9 +24,7 @@
 ;; ========================================
 
 (define (run s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-multi-defn-registry (hasheq)])
+  (parameterize ([current-multi-defn-registry (hasheq)])
     (process-string s)))
 
 (define (run-first s) (car (run s)))

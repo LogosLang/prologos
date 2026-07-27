@@ -113,7 +113,7 @@
                           'idempotent-join  prop-confirmed
                           'has-meet         prop-confirmed
                           'distributive     prop-confirmed
-                          'has-pseudo-complement prop-confirmed))
+                          'has-pseudo-complement-rel prop-confirmed))  ;; renamed Phase 5 (Q1 disambiguation)
     #:operations
       (hasheq 'tensor (hasheq 'name 'tensor
                                'fn type-tensor-core
@@ -238,6 +238,11 @@
        (or (eq? (expr-meta-id e) id)
            (let ([sol (meta-solution (expr-meta-id e))])
              (and sol (check sol))))]
+      ;; CIU T6 F1 (S2): the generic struct->vector walk below stops at the `fields`
+      ;; LIST (a list is not a struct) — recurse into field types explicitly.
+      [(expr-Record? e)
+       (for/or ([fld (in-list (expr-Record-fields e))])
+         (check (record-field-type (cdr fld))))]
       [(struct? e)
        (let ([v (struct->vector e)])
          (for/or ([i (in-range 1 (vector-length v))])
@@ -567,12 +572,88 @@
       [(expr-typed-hole? a) '(ok)]
       [(expr-typed-hole? b) '(ok)]
 
-      ;; Open: α-semantic wildcard (PPN 4C T-2, 2026-04-23)
-      ;; Open unifies with anything in both directions. Distinct from expr-hole
-      ;; (which is an inference hole that gets solved) — Open stays Open
-      ;; globally but never blocks unification at a use site. See syntax.rkt.
-      [(expr-Open? a) '(ok)]
-      [(expr-Open? b) '(ok)]
+
+      ;; CIU T6 F1 (s2): record → Map coercion (records subsume to the dyn-tailed Map view, Q_E).
+      ;; In F1a a record is ALWAYS the inferred/value side and the Map the expected side, so the coercion
+      ;; fires in EITHER argument ordering — but always checks record-subtypes-map?(the-record, the-map)
+      ;; (a uniform Map is never a specific record). Pure (subtype?-based, no meta-solving): a concrete-V
+      ;; map (the polymorphic-cons / nested-annotation case) reconciles here; a meta-V map returns #f and
+      ;; falls through to check-subsumption's meta-solving arm at the top level.
+      [(and (expr-Record? a) (expr-Map? b) (record-subtypes-map? a b)) '(ok)]
+      [(and (expr-Map? a) (expr-Record? b) (record-subtypes-map? b a)) '(ok)]
+      ;; CIU T6 F1a-col: tuple→PVec α coercion (directional; always record→PVec)
+      [(and (expr-Record? a) (expr-PVec? b) (record-subtypes-pvec? a b)) '(ok)]
+      [(and (expr-PVec? a) (expr-Record? b) (record-subtypes-pvec? b a)) '(ok)]
+
+      ;; CIU T6 F1a-s3 (B3): Record-vs-Record with the SAME key-domain, SAME label-set,
+      ;; and SAME tail, but field TYPES that differ → decompose to per-field 'sub goals so
+      ;; field metas get solved (e.g. {:a Option ?m} vs {:a Option Int}). Ground-identical
+      ;; records already short-circuit at the equal? fast-path above; a DIFFERENT label-set
+      ;; falls through to [else '(conv)] (the F1a-col flavor-B union-widen case, deferred).
+      ;; key-domain + tail equality are EXPLICIT guards — forward-necessary so a future
+      ;; 'nat tuple or 'dyn tail never mis-decomposes here. Zip ONLY record-field TYPES;
+      ;; `presence` is not an expr and must never become a unification GOAL — but
+      ;; presence-consulting GUARDS inside arms ARE the sanctioned mechanism (✏ F1b.3/D24:
+      ;; the C_Cons containment relaxation below consults marks; THIS arm stays
+      ;; presence-BLIND by design — same-label-set rows unify on types, marks don't gate;
+      ;; the presence dimension narrows by evidence, never by unification). Sorted-zip is
+      ;; label-correct because make-record canonicalizes field order (syntax.rkt).
+      [(and (expr-Record? a) (expr-Record? b)
+            (eq? (expr-Record-key-domain a) (expr-Record-key-domain b))
+            (eq? (expr-Record-tail a) (expr-Record-tail b))
+            (equal? (map car (expr-Record-fields a))
+                    (map car (expr-Record-fields b))))
+       (list 'sub (map (lambda (fa fb)
+                         (cons (record-field-type (cdr fa)) (record-field-type (cdr fb))))
+                       (expr-Record-fields a) (expr-Record-fields b)))]
+
+      ;; CIU T6 F1a.2 p1a (C_Cons row-vs-row): Record-vs-Record, same key-domain,
+      ;; at least ONE 'dyn tail — S–I consistency. Shared labels decompose to
+      ;; per-field 'sub goals (metas SOLVE — the solve-first D16 posture; partial-
+      ;; failure commitment is the pre-existing B3 'sub posture). A 'dyn tail
+      ;; absorbs the other side's extra labels; a CLOSED side asserts total
+      ;; knowledge, so it must CONTAIN every dyn-known label (a dyn-known field
+      ;; absent from a closed row is a conflict → fall through to '(conv)).
+      ;; dyn-vs-dyn with the SAME label-set rides the B3 arm above (tail eq);
+      ;; this arm takes dyn-vs-closed and dyn-vs-dyn with differing labels.
+      ;; Both-sides-concrete pattern: bare metas hit flex-rigid below, applied
+      ;; metas hit flex-app later — never this arm.
+      ;;
+      ;; ✏ F1b.3 (D24, the acceptance-preserving guard): containment REQUIRES
+      ;; only presence≠'unknown labels — an 'unknown label (presence uncertain:
+      ;; the dissoc-dynamic marks) must not be demanded of a closed row, else a
+      ;; marked row would be MORE restrictive than the D20 empty `{| _}` it
+      ;; replaces. The relaxation is presence-consulting GUARD logic (the
+      ;; sanctioned mechanism per the B3 pin below), symmetric in a/b. The
+      ;; 'sub zip below still emits type goals for SHARED labels regardless of
+      ;; marks — retained type = type-IF-present, a fact; unifying two
+      ;; conditional facts is sound conjunction (co-signed at F1b.3).
+      ;;
+      ;; ✏ F1b.3 (D21 pointer): typing-core's record-width-discharge? is the
+      ;; ONE sanctioned caller that feeds this arm a deliberately tail-RELAXED
+      ;; expected row (closed→dyn on a copy) — erasure-mode width rides the
+      ;; C_Cons semantics here; nothing else may relax tails to reach this arm.
+      [(and (expr-Record? a) (expr-Record? b)
+            (eq? (expr-Record-key-domain a) (expr-Record-key-domain b))
+            (or (eq? (expr-Record-tail a) 'dyn) (eq? (expr-Record-tail b) 'dyn))
+            (let ([required
+                   (lambda (rec)
+                     (for/list ([f (in-list (expr-Record-fields rec))]
+                                #:unless (eq? (record-field-presence (cdr f)) 'unknown))
+                       (car f)))]
+                  [labels (lambda (rec) (map car (expr-Record-fields rec)))])
+              (let ([la-req (required a)] [lb-req (required b)]
+                    [la (labels a)] [lb (labels b)])
+                (and (or (eq? (expr-Record-tail b) 'dyn)
+                         (andmap (lambda (l) (memv l lb)) la-req))
+                     (or (eq? (expr-Record-tail a) 'dyn)
+                         (andmap (lambda (l) (memv l la)) lb-req))))))
+       (let ([fb (expr-Record-fields b)])
+         (list 'sub
+               (for/list ([fa (in-list (expr-Record-fields a))]
+                          #:when (assv (car fa) fb))
+                 (cons (record-field-type (cdr fa))
+                       (record-field-type (cdr (assv (car fa) fb)))))))]
 
       ;; Same unsolved meta
       [(and (expr-meta? a) (expr-meta? b)

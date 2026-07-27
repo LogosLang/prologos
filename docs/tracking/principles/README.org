@@ -21,6 +21,7 @@ philosophy, conventions, and accumulated wisdom. These documents are
 | [[file:ERGONOMICS.org]] | Progressive disclosure, surface syntax, UX |
 | [[file:DEVELOPMENT_LESSONS.org]] | Accumulated implementation wisdom |
 | [[file:POST_IMPLEMENTATION_REVIEW.org]] | PIR methodology: questions, format, data collection |
+| [[file:DAILIES_METHODOLOGY.org]] | Dailies format (STATE head + append LOG) + Relay-Note re-grounding |
 | [[file:RELATIONAL_LANGUAGE_VISION.org]] | Logic programming surface syntax and semantics |
 | [[file:MISC.org]] | Miscellaneous notes and preferences |
 

@@ -13,7 +13,10 @@
 ;;
 ;; Requirements:
 ;; - Emacs 29.1+ with treesit support
-;; - libtree-sitter-prologos.dylib installed in ~/.emacs.d/tree-sitter/
+;; - The prologos tree-sitter grammar installed in ~/.emacs.d/tree-sitter/.
+;;   Build + install it with editors/tree-sitter-prologos/install.sh
+;;   (rerun after grammar.js changes; a stale grammar makes Emacs 31 disable
+;;   font-lock features with a treesit-font-lock-rules-mismatch warning).
 ;;
 ;; Features:
 ;; - Tree-sitter based font-lock (4 levels)
@@ -54,16 +57,28 @@
    '((string) @font-lock-string-face)
 
    ;; Level 2: keywords (grammar keywords + identifier-matched keywords)
+   ;; The token list below MUST be a subset of the grammar's anonymous
+   ;; ("named": false) tokens in src/node-types.json — referencing a token the
+   ;; installed grammar lacks makes Emacs 31 disable the whole `keyword' feature
+   ;; (treesit-font-lock-rules-mismatch).  Regenerate the list after grammar
+   ;; changes (and rebuild the grammar via install.sh).
    :language 'prologos
    :feature 'keyword
-   '(["defn" "def" "data" "deftype" "match" "fn"
-      "ns" "imports" "exports" "provide" "require" ":refer"] @font-lock-keyword-face)
+   '(["def" "defn" "defmacro" "spec" "data" "deftype" "match" "fn"
+      "trait" "impl" "bundle" "property" "functor" "foreign"
+      "relation" "clause" "subtype" "capability"
+      "ns" "imports" "exports" "provide" "require"
+      "the" "let" "do" "if" "cond" "when" "check" "eval" "infer" "where"
+      ":refer" ":as" ":all" ":no-prelude"] @font-lock-keyword-face)
 
    :language 'prologos
    :feature 'keyword
    :override t
    '(((identifier) @font-lock-keyword-face
-      (:match "\\`\\(?:def\\|defn\\|data\\|deftype\\|match\\|fn\\|ns\\|provide\\|require\\|the\\|let\\|do\\|if\\|forall\\|exists\\|check\\|eval\\|infer\\|defmacro\\|spec\\|relation\\|clause\\|query\\|foreign\\|trait\\|impl\\|schema\\|defr\\|solver\\|solve-one\\|solve-with\\|explain\\|explain-with\\|rel\\)\\'"
+      ;; Keywords the grammar does NOT yet tokenize (schema/defr/rel/solve/
+      ;; explain/forall/exists/query and friends) — matched as identifiers here
+      ;; until they gain proper grammar rules (see the grammar-tokens follow-up).
+      (:match "\\`\\(?:def\\|defn\\|data\\|deftype\\|match\\|fn\\|ns\\|provide\\|require\\|the\\|let\\|do\\|if\\|forall\\|exists\\|check\\|eval\\|infer\\|defmacro\\|spec\\|relation\\|clause\\|query\\|foreign\\|trait\\|impl\\|schema\\|defr\\|solve\\|solver\\|solve-one\\|solve-with\\|explain\\|explain-with\\|rel\\)\\'"
               @font-lock-keyword-face)))
    ;; TODO: When the tree-sitter grammar adds `foreign` declarations,
    ;; add structural rules for :as aliases, racket language identifier,

@@ -259,12 +259,7 @@
   (printf "  D2: Per-module timing breakdown (loading from scratch):\n")
   (define prelude-modules
     (for/list ([(k v) (in-hash prelude-module-registry)]) k))
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-definition-cells-content (hasheq)]
-                 [current-definition-dependencies (hasheq)]
-                 [current-cross-module-deps '()]
-                 [current-ns-context #f]
+  (parameterize ([current-ns-context #f]
                  [current-module-registry (hasheq)]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry (current-preparse-registry)]
@@ -274,12 +269,10 @@
                  [current-capability-registry (current-capability-registry)]
                  [current-prop-net-box              #f]
                  [current-persistent-registry-net-box #f]
-                 [current-prelude-env-prop-net-box   #f]
                  [current-ns-prop-net-box           #f]
-                 [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
-                 [current-defn-param-names-cell-id  #f])
+                 )
     (install-module-loader!)
     ;; Sort module names for consistent output
     (define sorted-modules (sort prelude-modules symbol<?))
@@ -310,12 +303,7 @@
 ;; D1: Full (process-string "(ns bench)") — expensive, few iterations
 (let ()
   (bench "D1: process-string \"(ns bench)\" (full prelude)" 3
-    (parameterize ([current-prelude-env (hasheq)]
-                   [current-module-definitions-content (hasheq)]
-                   [current-definition-cells-content (hasheq)]
-                   [current-definition-dependencies (hasheq)]
-                   [current-cross-module-deps '()]
-                   [current-ns-context #f]
+    (parameterize ([current-ns-context #f]
                    [current-module-registry (hasheq)]
                    [current-lib-paths (list prelude-lib-dir)]
                    [current-preparse-registry (current-preparse-registry)]
@@ -325,12 +313,10 @@
                    [current-capability-registry (current-capability-registry)]
                    [current-prop-net-box              #f]
                    [current-persistent-registry-net-box #f]
-                   [current-prelude-env-prop-net-box   #f]
                    [current-ns-prop-net-box           #f]
-                   [current-definition-cell-ids       (hasheq)]
                    [current-module-registry-cell-id   #f]
                    [current-ns-context-cell-id        #f]
-                   [current-defn-param-names-cell-id  #f])
+                   )
       (install-module-loader!)
       (with-output-to-string
         (lambda ()
@@ -440,12 +426,7 @@
 ;; G1: Time to restore state from prelude-module-registry (run-ns-last pattern)
 (let ()
   (bench "G1: run-ns-last state restoration (parameterize + install-module-loader!)" 100
-    (parameterize ([current-prelude-env (hasheq)]
-                   [current-module-definitions-content (hasheq)]
-                   [current-definition-cells-content (hasheq)]
-                   [current-definition-dependencies (hasheq)]
-                   [current-cross-module-deps '()]
-                   [current-ns-context #f]
+    (parameterize ([current-ns-context #f]
                    [current-module-registry prelude-module-registry]
                    [current-lib-paths (list prelude-lib-dir)]
                    [current-preparse-registry prelude-preparse-registry]
@@ -454,12 +435,10 @@
                    [current-param-impl-registry prelude-param-impl-registry]
                    [current-prop-net-box              #f]
                    [current-persistent-registry-net-box prelude-persistent-registry-net-box]
-                   [current-prelude-env-prop-net-box   #f]
                    [current-ns-prop-net-box           #f]
-                   [current-definition-cell-ids       (hasheq)]
                    [current-module-registry-cell-id   #f]
                    [current-ns-context-cell-id        #f]
-                   [current-defn-param-names-cell-id  #f])
+                   )
       (install-module-loader!)
       (void))))
 

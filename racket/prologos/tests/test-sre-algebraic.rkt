@@ -143,7 +143,7 @@
   ;; unions; the always-installed callback hid that this restored distributivity.
   ;; Phase 3c's principled refactor surfaces the post-Track-2H truth.
   (define td (lookup-domain 'type))
-  (define result (test-distributive td type-samples type-lattice-meet))
+  (define result (test-distributive td type-samples type-lattice-meet type-lattice-merge))
   (check-true (axiom-confirmed? result))
   ;; All 6³ = 216 triples confirm distributivity on type-samples.
   (check-eq? (axiom-confirmed-count result) 216))
@@ -162,21 +162,21 @@
 ;; 7. Implication Rules
 ;; ========================================
 
-(test-case "implications: distributive + has-pseudo-complement → heyting"
+(test-case "implications: distributive + has-pseudo-complement-rel → heyting"
   (define props (hasheq 'distributive prop-confirmed
-                        'has-pseudo-complement prop-confirmed))
+                        'has-pseudo-complement-rel prop-confirmed))
   (define derived (derive-composite-properties props))
   (check-eq? (hash-ref derived 'heyting) prop-confirmed))
 
 (test-case "implications: distributive refuted → heyting refuted"
   (define props (hasheq 'distributive prop-refuted
-                        'has-pseudo-complement prop-confirmed))
+                        'has-pseudo-complement-rel prop-confirmed))
   (define derived (derive-composite-properties props))
   (check-eq? (hash-ref derived 'heyting) prop-refuted))
 
 (test-case "implications: heyting + has-complement → boolean"
   (define props (hasheq 'distributive prop-confirmed
-                        'has-pseudo-complement prop-confirmed
+                        'has-pseudo-complement-rel prop-confirmed
                         'has-complement prop-confirmed))
   (define derived (derive-composite-properties props))
   (check-eq? (hash-ref derived 'heyting) prop-confirmed)
@@ -184,7 +184,7 @@
 
 (test-case "implications: heyting refuted → boolean refuted"
   (define props (hasheq 'distributive prop-refuted
-                        'has-pseudo-complement prop-confirmed
+                        'has-pseudo-complement-rel prop-confirmed
                         'has-complement prop-confirmed))
   (define derived (derive-composite-properties props))
   (check-eq? (hash-ref derived 'heyting) prop-refuted)
@@ -207,11 +207,24 @@
   ;; Derived: distributive ⇒ sd-vee + sd-wedge fire (Phase 1 implication rules).
   (check-eq? (hash-ref final 'sd-vee) prop-confirmed)
   (check-eq? (hash-ref final 'sd-wedge) prop-confirmed)
-  ;; heyting requires has-pseudo-complement (not declared/inferred for equality
-  ;; relation here) → sources-incomplete → derived-value = unknown.
-  ;; boolean requires heyting → also unknown.
-  (check-eq? (hash-ref final 'heyting) prop-unknown)
-  (check-eq? (hash-ref final 'boolean) prop-unknown))
+  ;; Phase 5 finding (2026-04-30): pseudo-complement-rel empirically CONFIRMS
+  ;; on the type domain × equality ground sublattice. Combined with distributive
+  ;; (Phase 3c finding), heyting derives confirmed via the implication rule.
+  ;; This is a NEW empirical claim about type×equality reaching Heyting on ground —
+  ;; previously only declared for type×subtype (Track 2H). Caveat: holds on
+  ;; the type-samples ground sublattice only; wider sample including binders
+  ;; refutes distributive (per Phase 3 wider-sample sweep) — Heyting reach is
+  ;; ground-sublattice-only.
+  (check-eq? (hash-ref final 'heyting) prop-confirmed)
+  ;; Phase 11 finding (2026-05-08): has-complement is now empirically swept;
+  ;; type×equality refutes has-complement (Heyting but NOT Boolean — at least
+  ;; one atom has no complement on the ground sublattice). The implication
+  ;; rule heyting + has-complement ⇒ boolean derives boolean prop-refuted.
+  ;; This is a new architectural data point: type×equality lives at Heyting
+  ;; but does not reach Boolean. Caveat: ground sublattice only; wider sample
+  ;; with binders refutes distributive → Heyting reach already known
+  ;; ground-sublattice-only.
+  (check-eq? (hash-ref final 'boolean) prop-refuted))
 
 (test-case "resolve-and-report: produces report string"
   (define td (lookup-domain 'type))
@@ -220,10 +233,13 @@
   (check-true (string? report))
   (check-true (string-contains? report "type"))
   (check-true (string-contains? report "prop-confirmed"))
-  ;; Phase 3c: equality lattice is distributive (no refutations on these samples).
-  ;; Heyting/boolean derived-unknown (sources incomplete). Report contains
-  ;; prop-unknown for the underived composite properties.
-  (check-true (string-contains? report "prop-unknown")))
+  ;; Phase 11 (2026-05-08): with has-complement now empirically swept,
+  ;; the type×equality report contains BOTH prop-confirmed (most properties)
+  ;; AND prop-refuted (has-complement refuted ⇒ boolean refuted via
+  ;; the implication rule). Pre-Phase-11 it contained prop-unknown for
+  ;; boolean (derivation source incomplete). Phase 11's empirical sweep
+  ;; closed that gap; fewer prop-unknown entries remain.
+  (check-true (string-contains? report "prop-refuted")))
 
 ;; ========================================
 ;; 9. Property-Gated Behavior
@@ -269,15 +285,15 @@
 
 (test-case "test-sd-vee: returns axiom-untested when no meet-fn supplied"
   (define td (lookup-domain 'type))
-  (check-eq? (test-sd-vee td type-samples #f) axiom-untested))
+  (check-eq? (test-sd-vee td type-samples #f type-lattice-merge) axiom-untested))
 
 (test-case "test-sd-wedge: returns axiom-untested when no meet-fn supplied"
   (define td (lookup-domain 'type))
-  (check-eq? (test-sd-wedge td type-samples #f) axiom-untested))
+  (check-eq? (test-sd-wedge td type-samples #f type-lattice-merge) axiom-untested))
 
 (test-case "test-sd-vee: passes on type domain (with meet)"
   (define td (lookup-domain 'type))
-  (define result (test-sd-vee td type-samples type-lattice-meet))
+  (define result (test-sd-vee td type-samples type-lattice-meet type-lattice-merge))
   ;; Should be axiom-confirmed or axiom-refuted (not untested) since meet-fn provided.
   ;; The empirical answer for type-equality on these samples is recorded in Phase 3.
   ;; For Phase 1, we just assert the function returns one of the structured outcomes.
@@ -285,7 +301,7 @@
 
 (test-case "test-sd-wedge: passes on type domain (with meet)"
   (define td (lookup-domain 'type))
-  (define result (test-sd-wedge td type-samples type-lattice-meet))
+  (define result (test-sd-wedge td type-samples type-lattice-meet type-lattice-merge))
   (check-true (or (axiom-confirmed? result) (axiom-refuted? result))))
 
 (test-case "implication rule: distributive ⇒ sd-vee fires"
@@ -342,7 +358,7 @@
 
 (test-case "sd-evidence: untested when no meet-fn"
   (define td (lookup-domain 'type))
-  (define ev (test-sd-vee/detailed td type-samples #f))
+  (define ev (test-sd-vee/detailed td type-samples #f type-lattice-merge))
   (check-eq? (sd-evidence-status ev) 'untested)
   (check-eq? (sd-evidence-total-checked ev) 0)
   (check-eq? (sd-evidence-hypothesis-fired ev) 0)
@@ -351,7 +367,7 @@
 
 (test-case "sd-evidence: confirmed populates counts"
   (define td (lookup-domain 'type))
-  (define ev (test-sd-vee/detailed td type-samples type-lattice-meet))
+  (define ev (test-sd-vee/detailed td type-samples type-lattice-meet type-lattice-merge))
   ;; Status either 'confirmed or 'refuted (not 'untested) since meet-fn provided.
   (check-true (or (eq? (sd-evidence-status ev) 'confirmed)
                   (eq? (sd-evidence-status ev) 'refuted)))
@@ -366,8 +382,8 @@
 
 (test-case "sd-evidence: backward-compat wrappers translate correctly"
   (define td (lookup-domain 'type))
-  (define ev-vee (test-sd-vee/detailed td type-samples type-lattice-meet))
-  (define wrap-vee (test-sd-vee td type-samples type-lattice-meet))
+  (define ev-vee (test-sd-vee/detailed td type-samples type-lattice-meet type-lattice-merge))
+  (define wrap-vee (test-sd-vee td type-samples type-lattice-meet type-lattice-merge))
   ;; If detailed = confirmed, wrapper = axiom-confirmed
   (case (sd-evidence-status ev-vee)
     [(confirmed) (check-true (axiom-confirmed? wrap-vee))]
@@ -376,7 +392,7 @@
 
 (test-case "sd-evidence: total-checked = |samples|³ on confirmed (full sweep)"
   (define td (lookup-domain 'type))
-  (define ev (test-sd-vee/detailed td type-samples type-lattice-meet))
+  (define ev (test-sd-vee/detailed td type-samples type-lattice-meet type-lattice-merge))
   ;; Either confirmed (full sweep, total = n³) or refuted (short-circuit, total < n³)
   (define n (length type-samples))
   (case (sd-evidence-status ev)
@@ -440,7 +456,7 @@
 (test-case "sd-evidence with generated samples: produces structured outcome"
   (define td (lookup-domain 'type))
   (define gen-samples (generate-domain-samples td #:max-depth 1 #:per-ctor-count 2))
-  (define ev (test-sd-vee/detailed td gen-samples type-lattice-meet))
+  (define ev (test-sd-vee/detailed td gen-samples type-lattice-meet type-lattice-merge))
   (check-true (or (eq? (sd-evidence-status ev) 'confirmed)
                   (eq? (sd-evidence-status ev) 'refuted)))
   ;; Total checked equals |samples|³ on confirmed; less or equal on refuted
@@ -585,3 +601,560 @@
 ;; SRE Track 2I Phase 3 sweep tests live in tests/test-sre-sd-properties.rkt
 ;; (separate file due to O(N³) sweep cost — keeps this file fast for the
 ;; thread-pool worker dispatch).
+
+;; ========================================
+;; SRE Track 2I Phase 5: Pseudo-complement family checks
+;; ========================================
+
+(test-case "Phase 5: lattice-leq? helper"
+  ;; x ≤ y iff x ∧ y = x. On type lattice ground sublattice.
+  (check-true (lattice-leq? (expr-Int) (expr-Int) type-lattice-meet))
+  (check-true (lattice-leq? type-bot (expr-Int) type-lattice-meet))
+  (check-true (lattice-leq? (expr-Int) type-top type-lattice-meet)))
+
+(test-case "Phase 5: test-pseudo-complement-rel returns axiom-untested without meet/join"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-pseudo-complement-rel td type-samples #f type-lattice-merge)
+             axiom-untested)
+  (check-eq? (test-pseudo-complement-rel td type-samples type-lattice-meet #f)
+             axiom-untested))
+
+(test-case "Phase 5: test-pseudo-complement-rel/detailed returns pc-rel-evidence struct"
+  (define td (lookup-domain 'type))
+  (define ev (test-pseudo-complement-rel/detailed
+              td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (pc-rel-evidence? ev))
+  (check-not-false (memq (pc-rel-evidence-status ev) '(confirmed refuted)))
+  (check-true (positive? (pc-rel-evidence-total-checked ev))))
+
+(test-case "Phase 5: test-pseudo-complement-rel wrapper translates to axiom-*"
+  (define td (lookup-domain 'type))
+  (define result (test-pseudo-complement-rel
+                  td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (or (axiom-confirmed? result) (axiom-refuted? result))))
+
+(test-case "Phase 5: test-pseudo-complement-abs returns axiom-* (untested without fns)"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-pseudo-complement-abs td type-samples #f type-lattice-merge)
+             axiom-untested)
+  (define result (test-pseudo-complement-abs
+                  td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (or (axiom-confirmed? result) (axiom-refuted? result))))
+
+(test-case "Phase 5: implication distributive + has-pseudo-complement-rel → heyting"
+  ;; Verify the renamed implication rule fires correctly.
+  (define props (hasheq 'distributive prop-confirmed
+                        'has-pseudo-complement-rel prop-confirmed))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'heyting) prop-confirmed))
+
+(test-case "Phase 5: implication distributive refuted → heyting refuted (renamed property)"
+  (define props (hasheq 'distributive prop-refuted
+                        'has-pseudo-complement-rel prop-confirmed))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'heyting) prop-refuted))
+
+(test-case "Phase 5: infer-domain-properties produces pseudo-complement entries"
+  ;; With meet-fn provided, both rel and abs entries should appear in output.
+  (define td (lookup-domain 'type))
+  (define props (infer-domain-properties td type-samples
+                                         #:meet-fn type-lattice-meet
+                                         #:relation 'equality))
+  (check-true (hash-has-key? props 'has-pseudo-complement-rel))
+  (check-true (hash-has-key? props 'has-pseudo-complement-abs)))
+
+;; Phase 5b: relatively-complemented (Nation's primary term)
+
+(test-case "Phase 5b: test-relatively-complemented untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-relatively-complemented td type-samples #f type-lattice-merge)
+             axiom-untested)
+  (check-eq? (test-relatively-complemented td type-samples type-lattice-meet #f)
+             axiom-untested))
+
+(test-case "Phase 5b: test-relatively-complemented returns axiom-* on type domain"
+  (define td (lookup-domain 'type))
+  (define result (test-relatively-complemented
+                  td type-samples type-lattice-meet type-lattice-merge))
+  ;; Result is one of confirmed/refuted (not untested since both fns provided).
+  (check-true (or (axiom-confirmed? result) (axiom-refuted? result))))
+
+(test-case "Phase 5b: infer-domain-properties produces relatively-complemented entry"
+  (define td (lookup-domain 'type))
+  (define props (infer-domain-properties td type-samples
+                                         #:meet-fn type-lattice-meet
+                                         #:relation 'equality))
+  (check-true (hash-has-key? props 'relatively-complemented)))
+
+;; Phase 5c: Stone identity (¬a ∨ ¬¬a = ⊤) — Stone algebra extension
+
+(test-case "Phase 5c: test-stone-identity untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-stone-identity td type-samples #f type-lattice-merge)
+             axiom-untested)
+  (check-eq? (test-stone-identity td type-samples type-lattice-meet #f)
+             axiom-untested))
+
+(test-case "Phase 5c: test-stone-identity returns axiom-* on type domain"
+  (define td (lookup-domain 'type))
+  (define result (test-stone-identity
+                  td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (or (axiom-confirmed? result) (axiom-refuted? result))))
+
+(test-case "Phase 5c: implication distributive + has-pc-rel + stone-identity ⇒ stone-algebra"
+  ;; All three sources confirmed → derived stone-algebra confirmed.
+  (define props (hasheq 'distributive prop-confirmed
+                        'has-pseudo-complement-rel prop-confirmed
+                        'stone-identity prop-confirmed))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'stone-algebra) prop-confirmed))
+
+(test-case "Phase 5c: stone-algebra refuted when any source refuted"
+  (define props (hasheq 'distributive prop-confirmed
+                        'has-pseudo-complement-rel prop-confirmed
+                        'stone-identity prop-refuted))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'stone-algebra) prop-refuted))
+
+(test-case "Phase 5c: infer-domain-properties produces stone-identity entry"
+  (define td (lookup-domain 'type))
+  (define props (infer-domain-properties td type-samples
+                                         #:meet-fn type-lattice-meet
+                                         #:relation 'equality))
+  (check-true (hash-has-key? props 'stone-identity)))
+
+;; ========================================
+;; SRE Track 2I Phase 6: Free-lattice membership + modularity
+;; ========================================
+
+(test-case "Phase 6: test-modular untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-modular td type-samples #f type-lattice-merge) axiom-untested)
+  (check-eq? (test-modular td type-samples type-lattice-meet #f) axiom-untested))
+
+(test-case "Phase 6: test-modular/detailed returns modular-evidence struct"
+  (define td (lookup-domain 'type))
+  (define ev (test-modular/detailed
+              td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (modular-evidence? ev))
+  (check-not-false (memq (modular-evidence-status ev) '(confirmed refuted)))
+  (check-true (positive? (modular-evidence-total-checked ev))))
+
+(test-case "Phase 6: test-modular wrapper translates to axiom-*"
+  (define td (lookup-domain 'type))
+  (define result (test-modular td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (or (axiom-confirmed? result) (axiom-refuted? result))))
+
+(test-case "Phase 6: test-whitmans-condition untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-whitmans-condition td type-samples #f type-lattice-merge)
+             axiom-untested))
+
+(test-case "Phase 6: test-whitmans-condition/detailed returns whitman-evidence"
+  (define td (lookup-domain 'type))
+  (define ev (test-whitmans-condition/detailed
+              td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (whitman-evidence? ev))
+  (check-not-false (memq (whitman-evidence-status ev) '(confirmed refuted)))
+  ;; Whitman's W is O(N⁴): for type-samples N=6, total = 1296.
+  (check-true (positive? (whitman-evidence-total-checked ev))))
+
+(test-case "Phase 6: test-breadth-bound returns axiom-* with default k=4"
+  (define td (lookup-domain 'type))
+  (define result (test-breadth-bound td type-samples type-lattice-meet))
+  (check-true (or (axiom-confirmed? result) (axiom-refuted? result))))
+
+(test-case "Phase 6: test-breadth-bound parameterized via #:max-width"
+  ;; A 6-element flat lattice with all atoms incomparable would have width = #atoms.
+  ;; type-samples = (type-bot type-top Int Bool Nat String); the 4 atoms
+  ;; (Int, Bool, Nat, String) are pairwise incomparable under the FLAT meet
+  ;; (subtype absent at this layer's type-lattice-meet). So with k=3, the
+  ;; 4-atom antichain refutes; with k=4, it confirms (no 5-element antichain).
+  (define td (lookup-domain 'type))
+  (define result-k3 (test-breadth-bound td type-samples type-lattice-meet
+                                        #:max-width 3))
+  (check-true (axiom-refuted? result-k3))
+  (define result-k4 (test-breadth-bound td type-samples type-lattice-meet
+                                        #:max-width 4))
+  (check-true (axiom-confirmed? result-k4)))
+
+(test-case "Phase 6: test-sectionally-complemented untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-sectionally-complemented td type-samples #f type-lattice-merge)
+             axiom-untested))
+
+(test-case "Phase 6: test-sectionally-complemented returns axiom-*"
+  (define td (lookup-domain 'type))
+  (define result (test-sectionally-complemented
+                  td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (or (axiom-confirmed? result) (axiom-refuted? result))))
+
+(test-case "Phase 6: implication distributive ⇒ modular"
+  (define props (hasheq 'distributive prop-confirmed))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'modular) prop-confirmed))
+
+(test-case "Phase 6: implication relatively-complemented ⇒ sectionally-complemented"
+  (define props (hasheq 'relatively-complemented prop-confirmed))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'sectionally-complemented) prop-confirmed))
+
+(test-case "Phase 6: infer-domain-properties produces all 4 Phase-6 entries"
+  (define td (lookup-domain 'type))
+  (define props (infer-domain-properties td type-samples
+                                         #:meet-fn type-lattice-meet
+                                         #:relation 'equality))
+  (check-true (hash-has-key? props 'modular))
+  (check-true (hash-has-key? props 'whitmans-condition))
+  (check-true (hash-has-key? props 'breadth-bound))
+  (check-true (hash-has-key? props 'sectionally-complemented)))
+
+;; ========================================
+;; SRE Track 2I Phase 11: has-complement empirical check (Boolean placement)
+;; ========================================
+
+(test-case "Phase 11: test-has-complement untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-has-complement td type-samples #f type-lattice-merge)
+             axiom-untested)
+  (check-eq? (test-has-complement td type-samples type-lattice-meet #f)
+             axiom-untested))
+
+(test-case "Phase 11: test-has-complement/detailed returns complement-evidence struct"
+  (define td (lookup-domain 'type))
+  (define ev (test-has-complement/detailed
+              td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (complement-evidence? ev))
+  (check-not-false (memq (complement-evidence-status ev) '(confirmed refuted untested)))
+  (check-true (>= (complement-evidence-total-checked ev) 0))
+  (check-true (<= (complement-evidence-conclusion-held ev)
+                  (complement-evidence-hypothesis-fired ev)))
+  (check-true (<= (complement-evidence-hypothesis-fired ev)
+                  (complement-evidence-total-checked ev))))
+
+(test-case "Phase 11: test-has-complement wrapper translates to axiom-*"
+  (define td (lookup-domain 'type))
+  (define result (test-has-complement
+                  td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (or (axiom-confirmed? result)
+                  (axiom-refuted? result)
+                  (eq? result axiom-untested))))
+
+(test-case "Phase 11: implication heyting + has-complement ⇒ boolean (existing rule activated)"
+  ;; All sources confirmed → boolean confirmed.
+  (define props (hasheq 'distributive prop-confirmed
+                        'has-pseudo-complement-rel prop-confirmed
+                        'has-complement prop-confirmed))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'heyting) prop-confirmed)
+  (check-eq? (hash-ref derived 'boolean) prop-confirmed))
+
+(test-case "Phase 11: boolean refuted when has-complement refuted"
+  (define props (hasheq 'distributive prop-confirmed
+                        'has-pseudo-complement-rel prop-confirmed
+                        'has-complement prop-refuted))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'heyting) prop-confirmed)
+  (check-eq? (hash-ref derived 'boolean) prop-refuted))
+
+(test-case "Phase 11: infer-domain-properties produces has-complement entry"
+  (define td (lookup-domain 'type))
+  (define props (infer-domain-properties td type-samples
+                                         #:meet-fn type-lattice-meet
+                                         #:relation 'equality))
+  (check-true (hash-has-key? props 'has-complement)))
+
+;; ========================================
+;; SRE Track 2I Phase 12: M3 / N5 sublattice detection (Birkhoff 9.2)
+;; ========================================
+
+(test-case "Phase 12: test-no-m3-sublattice untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-no-m3-sublattice td type-samples #f type-lattice-merge)
+             axiom-untested)
+  (check-eq? (test-no-m3-sublattice td type-samples type-lattice-meet #f)
+             axiom-untested))
+
+(test-case "Phase 12: test-no-n5-sublattice untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-no-n5-sublattice td type-samples #f type-lattice-merge)
+             axiom-untested)
+  (check-eq? (test-no-n5-sublattice td type-samples type-lattice-meet #f)
+             axiom-untested))
+
+(test-case "Phase 12: test-no-m3-sublattice/detailed returns m3-evidence struct"
+  (define td (lookup-domain 'type))
+  (define ev (test-no-m3-sublattice/detailed
+              td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (m3-evidence? ev))
+  (check-not-false (memq (m3-evidence-status ev) '(confirmed refuted untested)))
+  (check-true (>= (m3-evidence-total-checked ev) 0)))
+
+(test-case "Phase 12: test-no-n5-sublattice/detailed returns n5-evidence struct"
+  (define td (lookup-domain 'type))
+  (define ev (test-no-n5-sublattice/detailed
+              td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (n5-evidence? ev))
+  (check-not-false (memq (n5-evidence-status ev) '(confirmed refuted untested)))
+  (check-true (>= (n5-evidence-total-checked ev) 0)))
+
+(test-case "Phase 12: lattice-incomparable? helper"
+  ;; type-bot ≤ everything; type-bot is comparable to all atoms.
+  (check-false (lattice-incomparable? type-bot (expr-Int) type-lattice-meet))
+  (check-false (lattice-incomparable? (expr-Int) type-bot type-lattice-meet))
+  ;; Two distinct atoms are incomparable in the equality lattice.
+  (check-true (lattice-incomparable? (expr-Int) (expr-Bool) type-lattice-meet)))
+
+(test-case "Phase 12: NO Birkhoff forward implication rule (sample-unsound)"
+  ;; The natural-seeming implication `no-m3 + no-n5 ⇒ distributive` would be
+  ;; UNSOUND on sample-restricted checks (Birkhoff applies to FULL lattice,
+  ;; not arbitrary samples). Phase 12 deliberately omits this implication
+  ;; rule; empirical sweep results stand on their own. Verify: with both
+  ;; sources confirmed, distributive remains prop-unknown (no rule fires).
+  (define props (hasheq 'no-m3-sublattice prop-confirmed
+                        'no-n5-sublattice prop-confirmed))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'distributive prop-unknown) prop-unknown))
+
+(test-case "Phase 12: infer-domain-properties produces no-m3 + no-n5 entries"
+  (define td (lookup-domain 'type))
+  (define props (infer-domain-properties td type-samples
+                                         #:meet-fn type-lattice-meet
+                                         #:relation 'equality))
+  (check-true (hash-has-key? props 'no-m3-sublattice))
+  (check-true (hash-has-key? props 'no-n5-sublattice)))
+
+;; ========================================
+;; SRE Track 2I Phase 13: Convex geometry / anti-exchange (AGT 2003)
+;; ========================================
+
+(test-case "Phase 13: test-anti-exchange untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-anti-exchange td type-samples #f type-lattice-merge)
+             axiom-untested)
+  (check-eq? (test-anti-exchange td type-samples type-lattice-meet #f)
+             axiom-untested))
+
+(test-case "Phase 13: test-anti-exchange/detailed returns anti-exchange-evidence struct"
+  (define td (lookup-domain 'type))
+  (define ev (test-anti-exchange/detailed
+              td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (anti-exchange-evidence? ev))
+  (check-not-false (memq (anti-exchange-evidence-status ev)
+                         '(confirmed refuted untested)))
+  (check-true (>= (anti-exchange-evidence-total-checked ev) 0)))
+
+(test-case "Phase 13: sample-join-irreducibles excludes bot"
+  (define td (lookup-domain 'type))
+  (define J (sample-join-irreducibles
+             type-samples type-bot type-lattice-meet type-lattice-merge))
+  (check-false (member type-bot J))
+  ;; Atomic types Int, Bool, Nat, String should be join-irreducible
+  ;; (no smaller-pair joins to them in the equality lattice on type-samples).
+  (check-not-false (member (expr-Int) J))
+  (check-not-false (member (expr-Bool) J)))
+
+(test-case "Phase 13: sample-closure-on-J of empty set is empty"
+  (define td (lookup-domain 'type))
+  (define J (sample-join-irreducibles
+             type-samples type-bot type-lattice-meet type-lattice-merge))
+  (check-equal? (sample-closure-on-J '() J type-lattice-meet type-lattice-merge)
+                '()))
+
+(test-case "Phase 13: NO AGT 2003 forward implication rule (sample-unsound)"
+  ;; AGT 2003 iff: SD ⇔ anti-exchange-on-J. The forward implication
+  ;; `sd-vee + sd-wedge ⇒ anti-exchange-on-J` would be sample-unsound
+  ;; (matches Phase 12 Birkhoff-9.2-forward precedent). Phase 13
+  ;; deliberately omits the rule; independent empirical measurement
+  ;; preserves bidirectional iff data for Nation. Verify: with both
+  ;; SD sources confirmed, anti-exchange-on-J remains prop-unknown.
+  (define props (hasheq 'sd-vee prop-confirmed
+                        'sd-wedge prop-confirmed))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'anti-exchange-on-J prop-unknown) prop-unknown))
+
+(test-case "Phase 13: infer-domain-properties produces anti-exchange-on-J entry"
+  (define td (lookup-domain 'type))
+  (define props (infer-domain-properties td type-samples
+                                         #:meet-fn type-lattice-meet
+                                         #:relation 'equality))
+  (check-true (hash-has-key? props 'anti-exchange-on-J)))
+
+;; ========================================
+;; SRE Track 2I Phase 14: Targeted congruence tests
+;; ========================================
+
+(test-case "Phase 14: trivial-equiv? = identity"
+  (check-true (trivial-equiv? (expr-Int) (expr-Int)))
+  (check-false (trivial-equiv? (expr-Int) (expr-Bool))))
+
+(test-case "Phase 14: total-equiv? always #t"
+  (check-true (total-equiv? (expr-Int) (expr-Bool)))
+  (check-true (total-equiv? type-bot type-top)))
+
+(test-case "Phase 14: forget-mult-norm strips Pi mult to 'mforget"
+  (define pi-m1 (expr-Pi 'm1 (expr-Int) (expr-Bool)))
+  (define pi-mw (expr-Pi 'mw (expr-Int) (expr-Bool)))
+  (define pi-m0 (expr-Pi 'm0 (expr-Int) (expr-Bool)))
+  ;; All three normalize to the same form
+  (check-equal? (forget-mult-norm pi-m1) (forget-mult-norm pi-mw))
+  (check-equal? (forget-mult-norm pi-mw) (forget-mult-norm pi-m0))
+  ;; mult-forgetful-equiv? uses normalize
+  (check-true (mult-forgetful-equiv? pi-m1 pi-mw))
+  (check-true (mult-forgetful-equiv? pi-m1 pi-m0))
+  ;; Different domain → not equiv
+  (check-false (mult-forgetful-equiv?
+                pi-m1 (expr-Pi 'm1 (expr-Bool) (expr-Bool)))))
+
+(test-case "Phase 14: m0-erasure-norm strips ONLY m0"
+  (define pi-m1 (expr-Pi 'm1 (expr-Int) (expr-Bool)))
+  (define pi-mw (expr-Pi 'mw (expr-Int) (expr-Bool)))
+  (define pi-m0 (expr-Pi 'm0 (expr-Int) (expr-Bool)))
+  ;; m1 and mw stay distinct
+  (check-not-equal? (m0-erasure-norm pi-m1) (m0-erasure-norm pi-mw))
+  ;; m0 normalizes to 'erased (distinct from m1, mw)
+  (check-not-equal? (m0-erasure-norm pi-m0) (m0-erasure-norm pi-m1))
+  ;; Identity for non-m0
+  (check-equal? (m0-erasure-norm pi-m1) pi-m1)
+  ;; erasure-equiv? uses normalize
+  (check-false (erasure-equiv? pi-m1 pi-mw))
+  (check-false (erasure-equiv? pi-m0 pi-m1)))
+
+(test-case "Phase 14: test-trivial-congruence untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-trivial-congruence td type-samples #f type-lattice-merge)
+             axiom-untested)
+  (check-eq? (test-trivial-congruence td type-samples type-lattice-meet #f)
+             axiom-untested))
+
+(test-case "Phase 14: test-trivial-congruence vacuously confirms"
+  ;; Identity congruence: always valid (a~b iff a=b; lattice ops respect identity).
+  (define td (lookup-domain 'type))
+  (define result (test-trivial-congruence
+                  td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (axiom-confirmed? result)))
+
+(test-case "Phase 14: test-total-congruence vacuously confirms"
+  ;; Total congruence: all-equivalent; lattice ops always stay in single class.
+  (define td (lookup-domain 'type))
+  (define result (test-total-congruence
+                  td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (axiom-confirmed? result)))
+
+(test-case "Phase 14: test-mult-forgetful-congruence axiom-untested on non-type domains"
+  ;; Type-domain-only candidate; non-type returns axiom-untested.
+  (define sd (lookup-domain 'session))
+  (when sd
+    (define meet-fn (sre-domain-meet sd 'equality))
+    (define merge (sre-domain-merge-registry sd))
+    (define join-fn (and merge (merge 'equality)))
+    (when (and meet-fn join-fn)
+      (check-eq? (test-mult-forgetful-congruence sd '() meet-fn join-fn)
+                 axiom-untested))))
+
+(test-case "Phase 14: test-mult-forgetful-congruence on type ground sublattice"
+  ;; Atomic samples have no Pi/Sigma/lam compounds → degenerates to trivial
+  ;; → vacuously confirms. Honest scope-bound per Phase 14 mini-design Q5.
+  (define td (lookup-domain 'type))
+  (define result (test-mult-forgetful-congruence
+                  td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (axiom-confirmed? result)))
+
+(test-case "Phase 14: test-erasure-congruence on type ground sublattice"
+  (define td (lookup-domain 'type))
+  (define result (test-erasure-congruence
+                  td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (axiom-confirmed? result)))
+
+(test-case "Phase 14: NO forward implication rule (sample-unsound)"
+  ;; Phase 14 deliberately omits any forward implication from candidate-
+  ;; congruence-validity to subdirectly-irreducible characterization.
+  ;; The classical Nation territory (full Con(L) → SI) requires global
+  ;; Con(L), which targeted candidates cannot capture. Verify: with all 4
+  ;; candidates confirmed, no derived 'subdirectly-irreducible appears.
+  (define props (hasheq 'trivial-congruence-valid prop-confirmed
+                        'total-congruence-valid prop-confirmed
+                        'mult-forgetful-congruence-valid prop-confirmed
+                        'erasure-congruence-valid prop-confirmed))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'subdirectly-irreducible prop-unknown)
+             prop-unknown))
+
+(test-case "Phase 14: infer-domain-properties produces all 4 congruence entries"
+  (define td (lookup-domain 'type))
+  (define props (infer-domain-properties td type-samples
+                                         #:meet-fn type-lattice-meet
+                                         #:relation 'equality))
+  (check-true (hash-has-key? props 'trivial-congruence-valid))
+  (check-true (hash-has-key? props 'total-congruence-valid))
+  (check-true (hash-has-key? props 'mult-forgetful-congruence-valid))
+  (check-true (hash-has-key? props 'erasure-congruence-valid)))
+
+;; ========================================
+;; SRE Track 2I Phase 15: Day's doubling / inflation detection
+;; (Adaricheva-Nation 2017 — all-or-nothing pair detection)
+;; ========================================
+
+(test-case "Phase 15: test-admits-day-doubling untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-admits-day-doubling td type-samples #f type-lattice-merge)
+             axiom-untested)
+  (check-eq? (test-admits-day-doubling td type-samples type-lattice-meet #f)
+             axiom-untested))
+
+(test-case "Phase 15: test-admits-day-doubling/detailed returns dd-evidence struct"
+  (define td (lookup-domain 'type))
+  (define ev (test-admits-day-doubling/detailed
+              td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (dd-evidence? ev))
+  (check-not-false (memq (dd-evidence-status ev) '(confirmed refuted untested)))
+  (check-true (>= (dd-evidence-total-pairs ev) 0)))
+
+(test-case "Phase 15: test-admits-day-doubling wrapper translates to axiom-*"
+  (define td (lookup-domain 'type))
+  (define result (test-admits-day-doubling
+                  td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (or (axiom-confirmed? result) (axiom-refuted? result))))
+
+(test-case "Phase 15: dd-evidence witness structure (when confirmed)"
+  ;; If a witness is found, it has shape (s1 s2 dependency-pattern)
+  ;; where dependency-pattern is a list of (external . side) pairs.
+  (define td (lookup-domain 'type))
+  (define ev (test-admits-day-doubling/detailed
+              td type-samples type-lattice-meet type-lattice-merge))
+  (when (eq? (dd-evidence-status ev) 'confirmed)
+    (define witness (dd-evidence-witness ev))
+    (check-true (list? witness))
+    (check-eq? (length witness) 3)
+    (define dep-pattern (third witness))
+    (check-true (list? dep-pattern))
+    ;; Each entry is (external . side); side ∈ {above, below, incomparable}
+    (for ([entry (in-list dep-pattern)])
+      (check-true (pair? entry))
+      (check-not-false (memq (cdr entry) '(above below incomparable))))))
+
+(test-case "Phase 15: NO forward implication rule (sample-unsound, Phase 12+13 precedent)"
+  ;; Phase 15 deliberately does not introduce forward implications from
+  ;; admits-day-doubling. Empirical-positive findings only; matches
+  ;; sample-unsound discipline of Phase 12 (Birkhoff) and Phase 13 (AGT iff).
+  (define props (hasheq 'admits-day-doubling prop-confirmed))
+  (define derived (derive-composite-properties props))
+  ;; No new derived property keys beyond admits-day-doubling itself.
+  (check-eq? (hash-ref derived 'inflated-from-smaller prop-unknown) prop-unknown))
+
+(test-case "Phase 15: infer-domain-properties produces admits-day-doubling entry"
+  (define td (lookup-domain 'type))
+  (define props (infer-domain-properties td type-samples
+                                         #:meet-fn type-lattice-meet
+                                         #:relation 'equality))
+  (check-true (hash-has-key? props 'admits-day-doubling)))
+
+(test-case "Phase 15: refuted carries reason marker (no-incomparable-pairs vs no-pair-on-sample)"
+  ;; If refuted, witness is a symbol distinguishing the two refutation modes.
+  (define td (lookup-domain 'type))
+  (define ev (test-admits-day-doubling/detailed
+              td type-samples type-lattice-meet type-lattice-merge))
+  (when (eq? (dd-evidence-status ev) 'refuted)
+    (check-not-false
+     (memq (dd-evidence-witness ev)
+           '(no-incomparable-pairs no-all-or-nothing-pair-on-sample)))))

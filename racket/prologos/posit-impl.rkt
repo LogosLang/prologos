@@ -20,7 +20,10 @@
 ;;;
 
 (require racket/match
-         racket/list)
+         racket/list
+         racket/format   ; ~r for sig-digit decimal formatting
+         racket/math     ; log for magnitude computation
+         racket/flonum)  ; flsingle for Float32 round-trip encoding
 
 (provide
  ;; ---- Posit8 ----
@@ -32,7 +35,6 @@
  posit8-eq? posit8-lt? posit8-le?
  posit8-nar? posit8-zero?
  posit8-from-nat posit8-to-rational
- posit8-display
  ;; ---- Posit16 ----
  posit16-zero posit16-one posit16-neg-one posit16-nar
  posit16-maxpos posit16-minpos
@@ -42,7 +44,6 @@
  posit16-eq? posit16-lt? posit16-le?
  posit16-nar? posit16-zero?
  posit16-from-nat posit16-to-rational
- posit16-display
  ;; ---- Posit32 ----
  posit32-zero posit32-one posit32-neg-one posit32-nar
  posit32-maxpos posit32-minpos
@@ -52,7 +53,6 @@
  posit32-eq? posit32-lt? posit32-le?
  posit32-nar? posit32-zero?
  posit32-from-nat posit32-to-rational
- posit32-display
  ;; ---- Posit64 ----
  posit64-zero posit64-one posit64-neg-one posit64-nar
  posit64-maxpos posit64-minpos
@@ -62,14 +62,18 @@
  posit64-eq? posit64-lt? posit64-le?
  posit64-nar? posit64-zero?
  posit64-from-nat posit64-to-rational
- posit64-display
  ;; ---- Quire (exact accumulators) ----
  quire8-fma quire8-to
  quire16-fma quire16-to
  quire32-fma quire32-to
  quire64-fma quire64-to
  ;; ---- Widening (Phase 3e) ----
- posit-widen)
+ posit-widen
+ ;; ---- Q10-complete numeric display (Numerics N2) ----
+ sig-digits-string shortest-decimal
+ posit-shortest-decimal
+ ;; generic width-parameterized codecs (for display helpers / tests)
+ posit-encode posit-decode)
 
 ;; ========================================
 ;; Global parameters (2022 Standard)
@@ -342,17 +346,25 @@
               [result (inexact->exact (sqrt (exact->inexact va)))])
          (posit-encode n result))])))
 
+;; Numerics N6d-iii: comparison per the 2022 Posit Standard's TOTAL order —
+;; NaR == NaR (reflexive), NaR is the LEAST element (NaR < every real). The
+;; shipped code EXCLUDED NaR (non-reflexive, off-spec); this makes Eq/Ord Posit
+;; lawful. Posit encoding is canonical (one bit pattern per value, unique 0/NaR),
+;; so raw bit equality IS value equality including NaR==NaR.
 (define (posit-eq? n a b)
-  (let ([nar (posit-nar-val n)])
-    (and (not (= a nar)) (not (= b nar)) (= a b))))
+  (= a b))
 
 (define (posit-lt? n a b)
   (let ([nar (posit-nar-val n)])
-    (and (not (= a nar)) (not (= b nar)) (< (u->s n a) (u->s n b)))))
+    (cond [(= a nar) (not (= b nar))]   ; NaR < real (least); NaR not < NaR
+          [(= b nar) #f]                 ; real not < NaR
+          [else (< (u->s n a) (u->s n b))])))
 
 (define (posit-le? n a b)
   (let ([nar (posit-nar-val n)])
-    (and (not (= a nar)) (not (= b nar)) (<= (u->s n a) (u->s n b)))))
+    (cond [(= a nar) #t]                 ; NaR <= everything (least)
+          [(= b nar) #f]                 ; real not <= NaR
+          [else (<= (u->s n a) (u->s n b))])))
 
 (define (posit-from-nat n k)
   (posit-encode n k))
@@ -360,13 +372,61 @@
 (define (posit-to-rational n v)
   (posit-decode n v))
 
-(define (posit-display n v)
+;; ========================================
+;; Q10-complete numeric display (Numerics N2)
+;; ========================================
+;;
+;; "Display = a re-readable marked literal of the same value."
+;;
+;; The core algorithm computes the FEWEST significant decimal digits whose
+;; formatted + re-parsed + re-encoded value equals the target stored rep.
+;; The re-encode check is the correctness guarantee: any formatting quirk
+;; self-corrects by trying more digits until the round-trip is exact.
+
+;; Format flonum x with d significant digits as a positional decimal string.
+;; d ≥ 1. Uses ~r's exact-places mode; the number of decimal places is derived
+;; from the magnitude so the result carries exactly d significant digits.
+(define (sig-digits-string x d)
+  (if (zero? x)
+      "0"
+      (let* ([mag (inexact->exact (floor (/ (log (abs x)) (log 10))))]
+             [places (max 0 (- d 1 mag))])
+        (~r x #:precision (list '= places) #:notation 'positional))))
+
+;; Shortest round-tripping decimal string for a value.
+;;   exact-r : the exact rational value the target represents
+;;   encode  : exact-rational -> stored-rep (e.g. posit-encode, flsingle∘exact->inexact)
+;;   target  : the stored rep we must round-trip back to
+;; Returns the fewest-significant-digit decimal string that re-encodes to target.
+(define (shortest-decimal exact-r encode target)
+  (if (integer? exact-r)
+      (number->string exact-r)
+      (let ([x (exact->inexact exact-r)])
+        (let loop ([d 1])
+          (if (> d 18)
+              (number->string x)                  ; fallback: shortest double decimal
+              (let* ([s (sig-digits-string x d)]
+                     [p (string->number s)])
+                (if (and p (equal? (encode (inexact->exact p)) target))
+                    s
+                    (loop (add1 d)))))))))
+
+;; Posit display: shortest bare decimal that re-encodes to bits v.
+;; Width marking (`pNN` suffix / forced `.0` for bare Posit32) is added by
+;; the caller (pretty-print posit->display); this returns the bare
+;; decimal (or "NaR" / integer string).
+(define (posit-shortest-decimal n v)
   (let ([r (posit-decode n v)])
     (cond
       [(eq? r 'nar) "NaR"]
       [(zero? r) "0"]
       [(integer? r) (number->string r)]
-      [else (number->string (exact->inexact r))])))
+      [else (shortest-decimal r (lambda (q) (posit-encode n q)) v)])))
+
+;; (N6c) Retired with the ~ sigil: the legacy posit-display alias and the
+;; N2 Rat terminating-decimal display (rat-terminates? / rat->display-string).
+;; Rat displays as plain exact notation (number->string) — its decimal form
+;; would re-read as Posit32 post-N6b. See pretty-print.rkt.
 
 ;; ========================================
 ;; Posit8 wrappers (backward-compatible)
@@ -395,7 +455,6 @@
 (define (posit8-le? a b) (posit-le? 8 a b))
 (define (posit8-from-nat n) (posit-from-nat 8 n))
 (define (posit8-to-rational v) (posit-to-rational 8 v))
-(define (posit8-display v) (posit-display 8 v))
 
 ;; ========================================
 ;; Posit16 wrappers
@@ -424,7 +483,6 @@
 (define (posit16-le? a b) (posit-le? 16 a b))
 (define (posit16-from-nat n) (posit-from-nat 16 n))
 (define (posit16-to-rational v) (posit-to-rational 16 v))
-(define (posit16-display v) (posit-display 16 v))
 
 ;; ========================================
 ;; Posit32 wrappers
@@ -453,7 +511,6 @@
 (define (posit32-le? a b) (posit-le? 32 a b))
 (define (posit32-from-nat n) (posit-from-nat 32 n))
 (define (posit32-to-rational v) (posit-to-rational 32 v))
-(define (posit32-display v) (posit-display 32 v))
 
 ;; ========================================
 ;; Posit64 wrappers
@@ -482,7 +539,6 @@
 (define (posit64-le? a b) (posit-le? 64 a b))
 (define (posit64-from-nat n) (posit-from-nat 64 n))
 (define (posit64-to-rational v) (posit-to-rational 64 v))
-(define (posit64-display v) (posit-display 64 v))
 
 ;; ========================================
 ;; Quire accumulators (exact product sums)
