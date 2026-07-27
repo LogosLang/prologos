@@ -96,6 +96,35 @@
               "  | t2 -> \"two\"\n")
              out)))
 
+;; ---- Severity 3 fixture: a schema module + a module that SEALS against it ----
+;; `schema-registry` is one of the registries never serialized into .pnet at all
+;; (P2). The record/schema seal is implemented as `#:when (lookup-schema-by-name
+;; sname)`-guarded arms in qtt.rkt — with the registry empty the guard fails, the
+;; arm never fires, and the annotation falls through to a generic mismatch, so
+;; the whole dependent module fails to LOAD.
+(define sch-ns 'pnet78sch)
+(define seal-ns 'pnet78seal)
+
+(call-with-output-file (build-path temp-lib-dir "pnet78sch.prologos") #:exists 'replace
+  (lambda (out)
+    (display (string-append
+              "ns pnet78sch\n"
+              "\n"
+              "schema Person\n"
+              "  :name String\n"
+              "  :age Int\n")
+             out)))
+
+(call-with-output-file (build-path temp-lib-dir "pnet78seal.prologos") #:exists 'replace
+  (lambda (out)
+    (display (string-append
+              "ns pnet78seal\n"
+              "\n"
+              "imports (pnet78sch :refer-all)\n"
+              "\n"
+              "def sealed : Person := {:name \"x\" :age 1}\n")
+             out)))
+
 (define (write-driver! name body)
   (define p (build-path temp-lib-dir (string-append name ".prologos")))
   (call-with-output-file p #:exists 'replace (lambda (o) (display body o)))
@@ -108,9 +137,17 @@
         (format "~a" r))))
 
 ;; ---- CLEAN parameter snapshots, captured BEFORE any lib load (defeats M2) ----
-(define clean-ctor     (current-ctor-registry))
-(define clean-tmeta    (current-type-meta))
-(define clean-preparse (current-preparse-registry))
+;; EVERY registry the fixture can populate must be listed. `reset-registry-cells!`
+;; re-seeds ALL 24 cells from their CURRENT parameters, so a registry left off
+;; this list keeps its polluted parameter, the reseeded cell inherits it, and the
+;; corresponding case silently PASSES while its bug is live. (Observed while
+;; writing this file: omitting `current-schema-registry` made the severity-3 case
+;; pass at a commit where severity 3 was verifiably still broken.)
+(define clean-ctor      (current-ctor-registry))
+(define clean-tmeta     (current-type-meta))
+(define clean-preparse  (current-preparse-registry))
+(define clean-schema    (current-schema-registry))
+(define clean-selection (current-selection-registry))
 
 ;; Is the ctor cell genuinely ignorant of the lib's constructors?
 (define (cells-ignorant?)
@@ -151,7 +188,9 @@
   (begin0
     (parameterize ([current-ctor-registry clean-ctor]
                    [current-type-meta clean-tmeta]
-                   [current-preparse-registry clean-preparse])
+                   [current-preparse-registry clean-preparse]
+                   [current-schema-registry clean-schema]
+                   [current-selection-registry clean-selection])
       (reset-registry-cells!)
       (with-common-params thunk))
     ;; Restore, so later tests in this file are unaffected.
@@ -234,7 +273,52 @@
   (check-true (ormap (lambda (s) (string-contains? s "\"two\"")) out)
               (format "expected \"two\": ~a" out)))
 
+;; ========================================
+;; Severity 3 — a cache hit must not turn a schema SEAL into a hard load failure
+;; ========================================
+;; This is the issue's third severity, which the design first deleted and then
+;; retracted: it is real, and it is NOT fixed by the restore repair (P1),
+;; because `schema-registry` is never serialized into the .pnet at all. The
+;; seal is `#:when (lookup-schema-by-name sname)`-guarded (qtt.rkt); with the
+;; registry empty the guard fails, the arm never fires, and the annotation
+;; falls through to a generic mismatch that fails the whole module load.
+
+(define sch-cache-path  (pnet-path-for-module sch-ns))
+(define seal-cache-path (pnet-path-for-module seal-ns))
+(when (file-exists? sch-cache-path) (delete-file sch-cache-path))
+(when (file-exists? seal-cache-path) (delete-file seal-cache-path))
+
+(define sch-prime-driver
+  (write-driver! "pnet78-schprime" "ns p78schp\n\nimports (pnet78sch :refer-all)\n\ndef warm : Person := {:name \"a\" :age 2}\n"))
+(define sch-prime-out
+  (result-strings (with-common-params (lambda () (process-file sch-prime-driver)))))
+
+(test-case "#78 setup: the schema module elaborates from source and writes its .pnet"
+  (check-false (ormap (lambda (s) (string-contains? s "ERROR")) sch-prime-out)
+               (format "schema priming had errors: ~a" sch-prime-out))
+  (check-true (file-exists? sch-cache-path)
+              (format "expected a cache at ~a" sch-cache-path)))
+
+(test-case "#78 severity 3: a schema seal still works when the schema module comes from cache"
+  (when (file-exists? seal-cache-path) (delete-file seal-cache-path))
+  (define drv (write-driver! "pnet78-sev3" "ns p78s3seal\n\nimports (pnet78seal :refer-all)\n\nsealed\n"))
+  (define out
+    (run-with-ignorant-cells
+     (lambda ()
+       (check-true (cells-ignorant?)
+                   "anti-masking FAILED: the ctor cell already knows the fixture lib")
+       (check-false (pnet-stale? sch-ns (build-path temp-lib-dir "pnet78sch.prologos"))
+                    "the SCHEMA module must be a cache HIT; a MISS re-elaborates it and proves nothing")
+       ;; A failed module load RAISES out of process-file; capture it so the
+       ;; assertions below report the diagnosis instead of an opaque exception.
+       (with-handlers ([exn:fail? (lambda (e) (list (format "ERROR: ~a" (exn-message e))))])
+         (result-strings (process-file drv))))))
+  (check-false (ormap (lambda (s) (string-contains? s "Type mismatch")) out)
+               (format "HARD LOAD FAILURE (#78 severity 3) — schema registry absent after cache hit: ~a" out))
+  (check-false (ormap (lambda (s) (string-contains? s "ERROR")) out)
+               (format "expected a clean load: ~a" out)))
+
 ;; ---- Cleanup ----
-(when (file-exists? dep-cache-path) (delete-file dep-cache-path))
-(when (file-exists? use-cache-path) (delete-file use-cache-path))
+(for ([p (in-list (list dep-cache-path use-cache-path sch-cache-path seal-cache-path))])
+  (when (file-exists? p) (delete-file p)))
 (delete-directory/files temp-lib-dir #:must-exist? #f)
