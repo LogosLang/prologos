@@ -98,10 +98,14 @@
 
 ;; ---- Severity 3 fixture: a schema module + a module that SEALS against it ----
 ;; `schema-registry` is one of the registries never serialized into .pnet at all
-;; (P2). The record/schema seal is implemented as `#:when (lookup-schema-by-name
-;; sname)`-guarded arms in qtt.rkt — with the registry empty the guard fails, the
-;; arm never fires, and the annotation falls through to a generic mismatch, so
-;; the whole dependent module fails to LOAD.
+;; (P2). An all-keyword literal `{:name "x" :age 1}` elaborates to a map-assoc
+;; CHAIN, so the arm that must fire is the seal-boundary guard
+;; `#:when (lookup-schema-by-name schema-name)` at typing-core.rkt:3125-3126
+;; (NOT the expr-Record arms in qtt.rkt, which this shape never reaches). With
+;; the registry empty the guard fails, no arm between it and the catch-all
+;; matches, and the catch-all reports a bare "Type mismatch" — itself a
+;; fingerprint of registry-absence, since the specific seal diagnostics are
+;; computed only when the lookup SUCCEEDS. The module then fails to LOAD.
 (define sch-ns 'pnet78sch)
 (define seal-ns 'pnet78seal)
 
@@ -278,10 +282,15 @@
 ;; ========================================
 ;; This is the issue's third severity, which the design first deleted and then
 ;; retracted: it is real, and it is NOT fixed by the restore repair (P1),
-;; because `schema-registry` is never serialized into the .pnet at all. The
-;; seal is `#:when (lookup-schema-by-name sname)`-guarded (qtt.rkt); with the
-;; registry empty the guard fails, the arm never fires, and the annotation
-;; falls through to a generic mismatch that fails the whole module load.
+;; because `schema-registry` is never serialized into the .pnet at all. An
+;; all-keyword literal `{:name "x" :age 1}` elaborates to a map-assoc CHAIN,
+;; so the arm that must fire is the seal-boundary guard
+;; `#:when (lookup-schema-by-name schema-name)` at typing-core.rkt:3125-3126
+;; (NOT the expr-Record arms in qtt.rkt, which this shape never reaches).
+;; With the registry empty the guard fails, no arm between it and the catch-all
+;; matches, and the catch-all reports a bare "Type mismatch" — a message that
+;; is itself a fingerprint of registry-absence, since the specific seal
+;; diagnostics are only computed when the lookup SUCCEEDS.
 
 (define sch-cache-path  (pnet-path-for-module sch-ns))
 (define seal-cache-path (pnet-path-for-module seal-ns))

@@ -124,6 +124,12 @@
 ;; module-definitions-content, doesn't run spec-propagation-handler, doesn't create
 ;; module-network-ref. Batch worker saves this incomplete state → test files break.
 ;; Fix: make cache-hit path a COMPLETE replacement for full elaboration side effects.
+;; [2026-07-27, GitHub #78] This 2026-03 note named the right invariant — "a
+;; COMPLETE replacement for full elaboration side effects" — and it stayed
+;; unmet for four months in two further ways, both silent: the restore wrote
+;; registry PARAMETERS while every reader had gone cell-primary (P1), and seven
+;; registries were not serialized at all (P2). The invariant is now gated by
+;; tests/test-pnet-registry-restore.rkt rather than by this comment.
 ;; Phase 2e: enabled with absolute paths. Root cause was relative pnet-cache-dir
 ;; resolving differently in batch workers (project root) vs direct runs (racket/prologos/).
 ;; Phase 2e: absolute path fix got further (15 vs 8 files). Still failing.
@@ -2876,10 +2882,15 @@
 
      (cond
        [pnet-result
-        ;; .pnet hit: reconstruct module-info + propagate registries
-        ;; Destructure: first 11 are the core fields. Additional fields
-        ;; (trait, impl, param-impl, specialization) are serialized but NOT
-        ;; restored — they're outer-scope state, not load-module-managed.
+        ;; .pnet hit: reconstruct module-info + propagate registries.
+        ;; Destructure the module-info fields here; ALL registry slots are
+        ;; restored by pnet-restore-rows below.
+        ;;
+        ;; (This comment used to claim trait/impl/param-impl/specialization were
+        ;; "serialized but NOT restored — outer-scope state, not
+        ;; load-module-managed". That was stale by four registries: all four
+        ;; ARE restored, and were even before #78. Corrected 2026-07-27 — a
+        ;; scope enumeration derived from the old text would have been wrong.)
         (define d-env       (list-ref pnet-result 0))
         (define d-specs     (list-ref pnet-result 1))
         (define d-locs      (list-ref pnet-result 2))
