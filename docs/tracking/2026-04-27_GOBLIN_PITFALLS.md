@@ -102,15 +102,37 @@ So every workaround documented below is still required.
    Commit `9d166ce4` (2026-06-01) deleted `current-prelude-env`,
    `current-module-definitions-content`, `current-definition-cells-content`
    as part of params→cells; main swept its own tests, ours were never swept.
-   **37 OCapN test files + `tools/interop` still reference it** and fail at
-   load with `unbound identifier`. This is not a rename: the shared-fixture
-   pattern (elaborate the OCapN modules once, reuse across ~150 cases) has
-   **no supported replacement** — `test-support.rkt` exports only
-   `run-ns-*`, which builds a fresh `current-file-module-network-ref` per
-   call, i.e. a full OCapN module load *per test case* (~3 s warm, ~20 s
-   cold). Re-enabling the OCapN suite needs a cached-module-network fixture
-   that does not currently exist. This is pitfall #12/#40's fixture
-   fragility recurring a **third** time, now as a hard break.
+   **37 OCapN test files + `tools/interop` still referenced it** and failed
+   at load with `unbound identifier` — `raco setup` could not compile them,
+   which took the whole interop CI job down before it ran anything. This is
+   pitfall #12/#40's fixture fragility recurring a **third** time, now as a
+   hard break.
+
+   **RESOLVED (commit `4ae90b3c`).** An earlier revision of this entry
+   claimed the shared-fixture pattern had "no supported replacement" and
+   that the suite would need a full OCapN module load per test case. That
+   was **wrong, and worth recording as a diagnosis error**: it reasoned
+   from `test-support.rkt`'s exports (only `run-ns-*`, which builds a fresh
+   mnr per call) instead of from the type. `module-network-ref` is an
+   **immutable struct** (`namespace.rkt`, `#:transparent`, `struct-copy`-based),
+   so it caches exactly like the retired env did. Probe before migrating:
+   capture `(current-file-module-network-ref)` after the preamble load,
+   re-parameterize it per test → **4.7 s load once, then ~140 ms/call,
+   correct values**. The migration is 3 mechanical edits per file:
+
+   ```
+   [current-prelude-env (hasheq)] + [current-module-definitions-content (hasheq)]
+     -> [current-file-module-network-ref (make-module-network)]
+   (values (current-prelude-env) ...)  -> (values (current-file-module-network-ref) ...)
+   [current-prelude-env  shared-global-env] -> [current-file-module-network-ref shared-global-env]
+   ```
+
+   Verified green in CI: all 12 `@endo/ocapn` cross-impl phases plus the
+   Phase 58.c/58.d upstream-suite gate pass on the migrated suite.
+
+   **Lesson**: "the extension point I used was retired" is not the same
+   claim as "no extension point exists." Check the replacement's *type*
+   before concluding a pattern is dead — the answer here was one probe away.
 
 ### The cost of the workarounds, measured
 
@@ -173,8 +195,15 @@ except (c)#16's truncated capability extraction and the (a) closed-world
 behaviour registry. The blockers to a *correct* one are the (b) silent-wrong
 class, led by the new `.pnet` finding. The blocker to an *efficient* one is
 no longer the reducer wall it was in May — it is a ~100× constant factor.
-The blocker to *shipping* is prosaic and immediate: the test suite cannot
-run until the fixture is migrated off the retired `current-prelude-env`.
+The blocker to *shipping* was prosaic and immediate — the suite could not
+run until the fixture came off the retired `current-prelude-env`; that is
+done (`4ae90b3c`) and interop CI is green again.
+
+One structural caveat on that green: CI checks out fresh and `.pnet` is
+gitignored, so **every CI run takes the cold path.** CI is therefore
+constitutionally blind to new finding 1 (cache unsoundness) — a green
+interop run does not clear it. Any gate for that bug has to populate the
+cache first and then re-run.
 
 ---
 
