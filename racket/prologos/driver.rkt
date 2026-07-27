@@ -87,6 +87,12 @@
          (only-in "ctor-registry.rkt" lookup-ctor-desc))
 
 (provide process-command
+         ;; #78: exported so the regression test can drive its cell-coverage
+         ;; assertion off the PRODUCTION table rather than a copy of it — a
+         ;; hand-copied list in a test cannot detect an omission from a
+         ;; different hand-written list in production.
+         pnet-restore-rows
+         restore-registries!   ;; the unit that table drives; exported for the same test
          process-file
          process-string
          process-string/return-net    ;; PPN 4C Addendum Phase 3C.b.5.b — net-returning variant for cell-state inspection
@@ -2754,13 +2760,59 @@
 ;;
 ;; `macros-cell-write!` is itself a no-op when the cell-id or the persistent
 ;; registry net-box is #f, so pre-init and module-loading contexts are safe.
+;; THE registry restore table — the single source of truth for which
+;; deserialized slot goes to which parameter and cell.
+;;
+;; `d` is deserialize-module-state's returned list (fixed length; see
+;; pnet-serialize.rkt). Each row is `(list name param cell-id-or-#f delta)`.
+;; `name` exists so tests can report which registry regressed.
+;;
+;; A row with cell-id #f is a DELIBERATE parameter-only restore: that registry
+;; genuinely has no cell and no cell-primary reader. Every other row MUST reach
+;; its cell, or the registry is invisible to every reader (GitHub #78).
+;; tests/test-pnet-registry-restore.rkt drives its coverage assertion off THIS
+;; function, so a row added here is covered by construction — the point of
+;; making it a table rather than N hand-written writes (pipeline.md
+;; § "Exhaustive Walkers").
+(define (pnet-restore-rows d)
+  (list
+   ;; name                      param                          cell-id (#f = no cell)                    delta
+   (list 'preparse              current-preparse-registry      (current-preparse-registry-cell-id)       (list-ref d 4))
+   (list 'ctor                  current-ctor-registry          (current-ctor-registry-cell-id)           (list-ref d 5))
+   (list 'type-meta             current-type-meta              (current-type-meta-cell-id)               (list-ref d 6))
+   ;; multi-defn / tycon-arity-extension / defn-param-names have NO cell and no
+   ;; cell-primary reader anywhere in the tree — parameter-only is CORRECT for
+   ;; them, not an omission.
+   (list 'multi-defn            current-multi-defn-registry    #f                                        (list-ref d 7))
+   (list 'subtype               current-subtype-registry       (current-subtype-registry-cell-id)        (list-ref d 8))
+   (list 'coercion              current-coercion-registry      (current-coercion-registry-cell-id)       (list-ref d 9))
+   (list 'capability            current-capability-registry    (current-capability-registry-cell-id)     (list-ref d 10))
+   (list 'trait                 current-trait-registry         (current-trait-registry-cell-id)          (list-ref d 11))
+   (list 'impl                  current-impl-registry          (current-impl-registry-cell-id)           (list-ref d 12))
+   (list 'param-impl            current-param-impl-registry    (current-param-impl-registry-cell-id)     (list-ref d 13))
+   (list 'specialization        current-specialization-registry (current-specialization-registry-cell-id) (list-ref d 14))
+   (list 'tycon-arity           current-tycon-arity-extension  #f                                        (list-ref d 15))
+   (list 'bundle                current-bundle-registry        (current-bundle-registry-cell-id)         (list-ref d 16))
+   (list 'defn-param-names      current-defn-param-names       #f                                        (list-ref d 17))
+   (list 'trait-laws            current-trait-laws             (current-trait-laws-cell-id)              (list-ref d 18))
+   (list 'property-store        current-property-store         (current-property-store-cell-id)          (list-ref d 19))
+   (list 'functor-store         current-functor-store          (current-functor-store-cell-id)           (list-ref d 20))
+   ;; #78 P2 (.pnet v4): previously not serialized at all.
+   (list 'schema                current-schema-registry        (current-schema-registry-cell-id)         (list-ref d 21))
+   (list 'selection             current-selection-registry     (current-selection-registry-cell-id)      (list-ref d 22))
+   (list 'session               current-session-registry       (current-session-registry-cell-id)        (list-ref d 23))
+   (list 'strategy              current-strategy-registry      (current-strategy-registry-cell-id)       (list-ref d 24))
+   (list 'process               current-process-registry       (current-process-registry-cell-id)        (list-ref d 25))
+   (list 'user-operators        current-user-operators         (current-user-operators-cell-id)          (list-ref d 26))
+   (list 'user-precedence-groups current-user-precedence-groups (current-user-precedence-groups-cell-id) (list-ref d 27))))
+
 (define (restore-registries! rows)
   ;; Phase 1 — compute, commit nothing.
   (define pending
     (for/list ([row (in-list rows)])
-      (define param   (car row))
-      (define cell-id (cadr row))
-      (define delta   (caddr row))
+      (define param   (cadr row))
+      (define cell-id (caddr row))
+      (define delta   (cadddr row))
       (define folded
         (for/fold ([reg (param)]) ([(k v) (in-hash delta)])
           ;; The non-hash arm mirrors the pre-#78 behavior at the three
@@ -2881,56 +2933,8 @@
         ;; DELIBERATELY, for the three registries that genuinely have no cell.
         ;; The previous shape was N hand-written parameter writes, which is exactly
         ;; the failure mode that rule names.
-        (restore-registries!
-         (list
-          ;; param                          cell-id (#f = no cell exists)             delta
-          (list current-preparse-registry   (current-preparse-registry-cell-id)       d-preparse)
-          (list current-ctor-registry       (current-ctor-registry-cell-id)           d-ctor)
-          (list current-type-meta           (current-type-meta-cell-id)               d-tmeta)
-          ;; multi-defn has NO cell and NO cell-primary reader — parameter-only is
-          ;; CORRECT here, not an omission. (Verified: no `-cell-id` parameter
-          ;; exists for it anywhere in the tree, and it is absent from
-          ;; init-macros-cells!.)
-          (list current-multi-defn-registry #f                                        d-multi)
-          (list current-subtype-registry    (current-subtype-registry-cell-id)        d-sub)
-          (list current-coercion-registry   (current-coercion-registry-cell-id)       d-coerce)
-          (list current-capability-registry (current-capability-registry-cell-id)     d-cap)))
-        ;; Track 10 Phase 2e/2f: the remaining 10 registries.
-        ;; The former nested `(when (> (length pnet-result) N) ...)` guards were
-        ;; VESTIGIAL, not scaffolding: deserialize-module-state always returns a
-        ;; FIXED 21-element list with (hasheq)/(hash) defaults for optional slots
-        ;; (pnet-serialize.rkt), and pnet-stale?/the read path gate on EXACT
-        ;; version equality — so a shorter list can never reach here and the
-        ;; guards could never fire. Dropped with the table (#78, 2026-07-27).
-        (restore-registries!
-         (list
-          (list current-trait-registry         (current-trait-registry-cell-id)        (list-ref pnet-result 11))
-          (list current-impl-registry          (current-impl-registry-cell-id)         (list-ref pnet-result 12))
-          (list current-param-impl-registry    (current-param-impl-registry-cell-id)   (list-ref pnet-result 13))
-          (list current-specialization-registry (current-specialization-registry-cell-id) (list-ref pnet-result 14))
-          ;; tycon-arity-extension: NO cell, NO cell-primary reader — parameter-only
-          ;; is correct here (see the multi-defn note above).
-          (list current-tycon-arity-extension  #f                                      (list-ref pnet-result 15))
-          (list current-bundle-registry        (current-bundle-registry-cell-id)       (list-ref pnet-result 16))
-          ;; defn-param-names: NO cell, NO cell-primary reader — parameter-only.
-          (list current-defn-param-names       #f                                      (list-ref pnet-result 17))
-          (list current-trait-laws             (current-trait-laws-cell-id)            (list-ref pnet-result 18))
-          (list current-property-store         (current-property-store-cell-id)        (list-ref pnet-result 19))
-          (list current-functor-store          (current-functor-store-cell-id)         (list-ref pnet-result 20))
-          ;; #78 P2 (.pnet v4): the 7 registries that were previously not
-          ;; serialized at all, so a cache hit had NOTHING to restore and left
-          ;; them empty in both parameter and cell. schema/selection are the
-          ;; proven-symptom pair: the record/schema seal is
-          ;; `#:when (lookup-schema-by-name ...)`-guarded (qtt.rkt), so an empty
-          ;; registry silently turns the arm off and the whole dependent module
-          ;; fails to load with a bare "Type mismatch" (#78 severity 3).
-          (list current-schema-registry         (current-schema-registry-cell-id)         (list-ref pnet-result 21))
-          (list current-selection-registry      (current-selection-registry-cell-id)      (list-ref pnet-result 22))
-          (list current-session-registry        (current-session-registry-cell-id)        (list-ref pnet-result 23))
-          (list current-strategy-registry       (current-strategy-registry-cell-id)       (list-ref pnet-result 24))
-          (list current-process-registry        (current-process-registry-cell-id)        (list-ref pnet-result 25))
-          (list current-user-operators          (current-user-operators-cell-id)          (list-ref pnet-result 26))
-          (list current-user-precedence-groups  (current-user-precedence-groups-cell-id)  (list-ref pnet-result 27))))
+        ;; #78: ONE table drives the whole restore (see pnet-restore-rows).
+        (restore-registries! (pnet-restore-rows pnet-result))
         mod-info]
 
        [else

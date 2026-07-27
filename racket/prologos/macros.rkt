@@ -367,6 +367,7 @@
          current-user-operators-cell-id
          current-macro-registry-cell-id
          macros-cell-write!
+         macros-cell-read-safe   ;; #78: read-only accessor, exported for the restore-table coverage test
          register-macros-cells!
          init-macros-cells!
          ;; Track 6 Phase 6: Snapshot/restore for batch-worker

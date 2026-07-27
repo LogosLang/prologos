@@ -318,6 +318,53 @@
   (check-false (ormap (lambda (s) (string-contains? s "ERROR")) out)
                (format "expected a clean load: ~a" out)))
 
+;; ========================================
+;; The 15th-registry guard — driven off the PRODUCTION table
+;; ========================================
+;; A hand-copied list of registries in this file could not detect an omission
+;; from a *different* hand-written list in driver.rkt — that version of this
+;; test would be theater. So it enumerates `pnet-restore-rows` itself: every row
+;; that declares a cell-id must actually deliver its delta into that cell.
+;; Adding a registry to the production table therefore extends this assertion by
+;; construction; adding one with a #f cell-id is a deliberate, visible choice.
+
+(test-case "#78 invariant: every restore-table row with a cell-id writes its cell"
+  (define saved-ids (save-macros-cell-ids))
+  (define saved-box (current-persistent-registry-net-box))
+  (define failures
+    (parameterize ([current-ctor-registry clean-ctor]
+                   [current-type-meta clean-tmeta]
+                   [current-preparse-registry clean-preparse]
+                   [current-schema-registry clean-schema]
+                   [current-selection-registry clean-selection])
+      (reset-registry-cells!)
+      ;; Build the rows AFTER the reset: the table captures cell-ids by
+      ;; evaluating `(current-X-cell-id)`, and the reset mints new ones.
+      ;; A synthetic delta per row, keyed by the row's own name so a failure
+      ;; names the registry.
+      (define probe-rows (pnet-restore-rows (build-list 40 (lambda (i) (hasheq)))))
+      (check-true (> (length probe-rows) 20)
+                  (format "expected the full restore table, got ~a rows" (length probe-rows)))
+      (for/list ([row (in-list probe-rows)]
+                 [i (in-naturals)]
+                 #:when (caddr row)                      ;; declares a cell-id
+                 #:unless (let* ([name (car row)]
+                                 [param (cadr row)]
+                                 [cid (caddr row)]
+                                 [probe-key (string->symbol (format "~a-probe-key" name))]
+                                 [delta (hasheq probe-key 'probe-value)])
+                            ;; Restore JUST this row, then read the cell back.
+                            (restore-registries! (list (list name param cid delta)))
+                            (define cell-val (macros-cell-read-safe cid))
+                            (and (hash? cell-val)
+                                 (eq? (hash-ref cell-val probe-key #f) 'probe-value)))
+                 )
+        (car row))))
+  (restore-macros-cell-ids! saved-ids)
+  (current-persistent-registry-net-box saved-box)
+  (check-equal? failures '()
+                (format "restore-table rows declare a cell-id but their delta never reached the cell: ~a" failures)))
+
 ;; ---- Cleanup ----
 (for ([p (in-list (list dep-cache-path use-cache-path sch-cache-path seal-cache-path))])
   (when (file-exists? p) (delete-file p)))
