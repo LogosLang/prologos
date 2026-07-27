@@ -125,7 +125,18 @@
 ;;       compiled/driver_rkt.zo to EXIST (see below), so with no compiled dir it
 ;;       reports "not stale" and a poisoned cache stays live. The version gate
 ;;       is exact equality, so the bump is the only reliable sweep.
-(define PNET_VERSION 4)
+;;
+;; v4 -> v5 (2026-07-27, the prelude-snapshot test migration): 34 test files moved
+;; from reloading the prelude per test case to seeding from test-support.rkt's
+;; once-per-subprocess snapshot. Existing local caches written under the old
+;; per-test-fresh-registry regime do NOT survive that change — both the main
+;; checkout and the worktree had a green suite before the migration and a failing
+;; test-io-session-01.rkt after it, purely from a stale cache; deleting the cache
+;; fixed both, and two consecutive runs then stayed green. `pnet-stale?` did not
+;; catch it, and the cache is gitignored/local, so no one would pull a good one.
+;; The version gate is exact equality, so the bump is the reliable sweep — same
+;; reasoning as the v3 -> v4 bump for #78. Costs one ~3s regeneration per machine.
+(define PNET_VERSION 5)
 
 ;; ============================================================
 ;; Serialization: struct->vector + gensym tagging + foreign-proc
