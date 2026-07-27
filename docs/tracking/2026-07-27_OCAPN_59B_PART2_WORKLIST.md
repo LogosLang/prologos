@@ -350,3 +350,48 @@ mode via `run-last`; the same logic in a WS `.prologos` file through
 `process-file` returns `true`. A shared root cause in Option-returning
 calls under sexp/eval is the strongest available lead for making
 `test.yml` green.
+
+---
+
+## RESOLVED (2026-07-27) — the shared root cause was a compiler bug, not an OCapN one
+
+The lead above was right that the four failing suite files and the
+`decode-op` probe shared a root cause, and wrong about what it was. It is
+not "Option-returning calls under sexp/eval". Full write-up in
+goblin-pitfalls **#48**; the short version:
+
+`infer-on-network/full` (`typing-propagators.rkt`) runs the on-network
+typing pass under a deliberately small budget, `TYPING-FUEL-LIMIT = 200`.
+Exhausting it makes the fuel cell record a **contradiction** on the
+network. The bounded run restored the fuel *value* afterwards but not the
+contradiction *marker* — and `unify`'s top-level wrapper downgrades **any**
+successful unification to `#f` while the network carries a contradiction.
+So one over-budget typing run made every later unification in the same
+command fail. Instrumented: `unify Vat Vat` → core returns `#t`, wrapper
+returns `#f`; `check e ⇐ T` failing while `infer e` returned exactly `T`.
+
+The budget is crossed by ordinary code — measured, one `let` binding of
+list operations costs ~74 fuel, four cost ~211 — so this fired constantly.
+
+**Fixed** by saving/restoring the contradiction marker on the same boundary
+as the fuel value (only when the marker is the fuel cell, so a genuine
+contradiction still propagates). Audited: `fork-prop-network` already
+builds a fresh warm with `contradiction = #f`, so fork-based bounded runs
+were never affected; the in-place typing run was the only leak site.
+
+**Result**: `test-ocapn-pipeline`, `test-ocapn-e2e`, `test-ocapn-bridge`,
+`test-ocapn-vat` all pass — 183 tests. Regression test
+`tests/test-typing-fuel-scoping.rkt` (7 tests; 4 fail without the fix,
+verified by A/B stash).
+
+### Two things this did NOT fix
+
+1. **Inline `match` in infer position never type-checks.** A bare
+   `(match (cons 1 nil) | nil -> 0 | cons hd _ -> hd)` — no `let`, 34 of 200
+   fuel — fails identically. It needs a checking context;
+   `(the Int (match …))` works. This is what goblin-pitfalls #30 actually
+   hit, and #30's "7+ binding let-chain" framing was wrong on both counts
+   (correction appended to that entry).
+2. **The stuck `[reduce …]` term.** Annotating through a `def` gets past
+   elaboration but leaves an unreduced `reduce`. That is a reduction-side
+   question, separate from the typing budget, and is still open.

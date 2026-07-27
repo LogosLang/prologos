@@ -159,6 +159,8 @@
  make-parallel-fire-all
  ;; Convenience queries
  net-contradiction?
+ net-contradiction-cell
+ net-set-contradiction
  net-quiescent?
  net-fuel-remaining
  ;; Descending cells (WFLE Phase 1)
@@ -3844,6 +3846,23 @@
 ;; Has the network encountered a contradiction?
 (define (net-contradiction? net)
   (and (prop-network-contradiction net) #t))
+
+;; Which cell recorded the contradiction (or #f)?
+(define (net-contradiction-cell net)
+  (prop-network-contradiction net))
+
+;; Set the contradiction marker to `v` (a cell-id, or #f to clear).
+;;
+;; This is the counterpart to the fuel cell-API: a caller that deliberately
+;; runs a FUEL-BOUNDED sub-computation saves the marker beforehand and restores
+;; it afterwards, so that its own budget exhaustion is not observable as a
+;; semantic contradiction by anything downstream. Exhausting a deliberately
+;; small budget is an expected control-flow outcome, not an inconsistency in
+;; the information the network carries — the two must not share a channel.
+(define (net-set-contradiction net v)
+  (struct-copy prop-network net
+    [warm (struct-copy prop-net-warm (prop-network-warm net)
+            [contradiction v])]))
 
 ;; Is the network quiescent (worklist empty)?
 (define (net-quiescent? net)

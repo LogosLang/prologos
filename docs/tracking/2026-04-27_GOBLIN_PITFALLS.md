@@ -2777,3 +2777,117 @@ no error and no usable staleness signal, which is the same silent-wrong-
 answer class as #45. Filed as a follow-up on issue #78; this is the second
 independent cache defect found in one session, which argues the caching
 layer needs an audit rather than another point fix.
+
+---
+
+### #48 — Typing-budget exhaustion is reported as "Could not infer type" and poisons every later unification in the command (2026-07-27, real bug, **root cause of #30 and of 4 failing test files**)
+
+**Symptom.** An ordinary expression fails with a bare
+
+```
+Could not infer type
+Expression: [[fn [x <_>] [[fn [y <_>] ... ]]]]
+```
+
+naming the whole let-chain, with `<unknown>` source location, no offending
+sub-term, and no hint. Whether it fires depends on the *size* of the
+expression, not on anything type-relevant: a 4-binding `let` fails where the
+same 4-binding `let` minus one operation succeeds. Types that print
+identically fail to unify with each other.
+
+**Repro.** Prelude only, no OCapN:
+
+```
+(eval (let (a0 (cons 1 (cons 2 (cons 3 nil)))
+            a1 (reverse a0)
+            a2 (append a1 a1)
+            a3 (reverse a2))
+        (length a3)))
+```
+
+Drop one binding and it type-checks.
+
+**Root cause.** `infer-on-network/full` (`typing-propagators.rkt`) runs the
+on-network typing pass to quiescence under a deliberately small budget,
+`TYPING-FUEL-LIMIT = 200`. When the budget runs out, the fuel cell's
+`on-write-check` records a **contradiction** on the network — the structural
+realization of "cost-bounded exploration" per
+`.claude/rules/stratification.md`. The bounded run restored the fuel *value*
+afterwards but never the contradiction *marker*.
+
+That marker is then read by the top-level `unify` wrapper (`unify.rkt`),
+which downgrades **any** successful unification to `#f` while the network
+carries a contradiction:
+
+```racket
+;; If unify-core said #t or 'postponed but network has contradiction → downgrade to #f
+[(and (not (eq? result #f)) (punify-has-contradiction?)) #f]
+```
+
+So one fuel-exhausted typing run made every *later* unification in the same
+command fail, no matter what it was unifying. Instrumented, the failing case
+showed `unify Vat Vat` → `unify-core` returns `#t` → wrapper returns `#f`,
+and `check e ⇐ T` failing while `infer e` returned exactly `T`.
+
+The budget is small enough that **ordinary code crosses it**: measured, one
+`let` binding of list operations costs ~74 fuel, four cost ~211. So this was
+not an exotic path — it fired constantly, and the resulting mistyping was
+silent except for the misleading message.
+
+**Two distinct defects here**, worth separating:
+
+1. *The leak.* Budget exhaustion is a control-flow outcome of a sub-run, not
+   an inconsistency in the information the network carries. The two must not
+   share a channel. Fixed by saving/restoring the contradiction marker on the
+   same boundary as the fuel value (only when the marker is the fuel cell, so
+   a genuine contradiction still propagates).
+2. *The diagnostic.* Even with the leak closed, a resource limit surfacing as
+   "Could not infer type" with no location and no mention of fuel is a bad
+   failure mode. Anything that consults `punify-has-contradiction?` cannot
+   currently distinguish "ran out of budget" from "these types conflict".
+   Still open.
+
+**Fix.** `net-set-contradiction` / `net-contradiction-cell` primitives in
+`propagator.rkt`; save/restore at the bounded run in `typing-propagators.rkt`.
+Regression test: `tests/test-typing-fuel-scoping.rkt` (7 tests; 4 fail without
+the fix, verified by A/B).
+
+**What it unblocked.** `test-ocapn-pipeline`, `test-ocapn-e2e`,
+`test-ocapn-bridge`, `test-ocapn-vat` — 183 tests that had been failing with
+"Could not infer type".
+
+**How it hid.** Three properties conspired: the trigger is expression *size*,
+so it looks like an inference-capability limit; the message names inference,
+so it points at the type-checker; and the failure is a false *negative* in
+`unify`, so adding type annotations often makes it go away (fewer unifications
+needed), which reads as confirmation that inference was the problem.
+
+**Codify-it ask.** A "resource budget exhausted" outcome deserves its own
+channel, distinct from the semantic-contradiction lattice. Any future
+fuel-bounded sub-run will re-introduce this bug shape otherwise.
+
+---
+
+### #30 CORRECTION (2026-07-27) — the hypothesis was wrong on both counts
+
+#30 recorded that "`match` inside a 7+ binding `let`-chain triggers
+elaborator inference failure" and hypothesised that `match` type-checking
+"goes through a different inference path" that "can't propagate downward to
+the outer let-bindings" in a deep chain. Both halves are wrong, and they
+were two *independent* problems mashed into one entry:
+
+- **let-DEPTH is irrelevant.** A bare `(match (cons 1 nil) | nil -> 0 | cons
+  hd _ -> hd)` with no `let` at all, consuming 34 of 200 fuel, fails
+  identically. `match` in **infer** position has no motive to synthesize; it
+  needs a checking context. `(the Int (match ...))` works; so does binding it
+  where the type is known. That limitation is real and still open, but it has
+  nothing to do with chain depth.
+- **What the `length` / `nth` workarounds actually bought was staying under
+  the fuel budget** (#48). They are cheaper than `match`, so the same chain
+  stopped crossing 200 fuel. The `defn`-helper workaround worked for both
+  reasons at once: it supplies a checking context *and* splits the expression
+  into two smaller typing runs.
+
+Recorded because the original entry would have sent the next reader looking
+at the `match` elaboration path, which is not where either bug lives. Both
+behaviours are now pinned in `tests/test-typing-fuel-scoping.rkt`.
