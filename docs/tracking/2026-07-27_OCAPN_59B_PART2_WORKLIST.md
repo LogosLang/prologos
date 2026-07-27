@@ -281,3 +281,72 @@ differ, the greeter's arm does not match the decoded shape. My attempt at
 this failed on an unrelated unbound `SyrupValue` import — import
 `prologos::ocapn::syrup` explicitly rather than relying on
 `captp-wire :refer-all`.
+
+
+## CORRECTION 3 (2026-07-27, later still) — the FFI-stash suspect is REFUTED
+
+The "prime suspect" recorded above (ocapn-conn-fetch returning #f on a key
+miss) is **WRONG**. Do not chase it.
+
+Decisive test — both objects driven through the SAME `step-connection`
+path, same session, only the target differing:
+
+```
+[init-connection 20N]
+[step-connection 20N "<hex of echo deliver, 65 bytes>"]
+  -> "<10'op:deliver<11'desc:export3+>[7'fulfill[2\"hi]]ff>"   ECHO WORKS
+
+[init-connection 21N]
+[step-connection 21N "<hex of greeter deliver, 62 bytes>"]
+  -> ""                                                        GREETER FAILS
+```
+
+Echo finds its actor at 2N through the stash, so the stash, the FFI key
+round-trip, and `conn-fetch` are all FINE.
+
+Seeding is also fine, verified directly:
+
+```
+def v := [seeded-vat 2N 1N]
+[length [vat-actors v]]                     -> 2N
+actor-table-get 1N -> ACTOR-AT-1 ; 2N -> ACTOR-AT-2
+```
+
+**So the remaining difference is the FRAME SHAPE, not the plumbing.**
+The echo frame carries a resolve-me descriptor
+(`f<18'desc:import-object3+>`); the greeter frame has `ff` — NO answer
+position and NO resolve-me. That is the one axis left that distinguishes
+a working call from a failing one, and it is where the next session should
+start: trace `dispatch-deliver`'s `ap = none` arm through to whether the
+pump's drain stage is actually reached when there is neither a question
+nor a listener to pump.
+
+Note this sits awkwardly against the earlier finding that
+`connection-step dop seeded-connection` DOES emit correct bytes for the
+same frame shape. Both observations are recorded as made; reconciling them
+is the first job, and one of the two probes must differ from what I
+believed it did.
+
+## Secondary finding — a top-level `match` over `Option` fails to infer
+
+While probing, this failed to elaborate:
+
+```
+match [decode-op [hex-to-bytes "…"]]
+  | none   -> syrup-null
+  | some op -> args-of op
+```
+
+with `Could not infer type` on the whole `reduce` form. Binding through a
+`def` with an explicit `[Option CapTPOp]` annotation elaborates, but then
+leaves a STUCK `[reduce decoded | none -> … | some x -> …]` term rather
+than reducing.
+
+This matters beyond the probe: **it is the same failure signature as the
+four failing OCapN suite files** (`test-ocapn-{vat,bridge,e2e,pipeline}`),
+which all fail with `Could not infer type` on expressions of the shape
+`fulfilled? (unwrap-or fresh (lookup-promise …))`. Those tests are sexp
+mode via `run-last`; the same logic in a WS `.prologos` file through
+`process-file` returns `true`. A shared root cause in Option-returning
+calls under sexp/eval is the strongest available lead for making
+`test.yml` green.
