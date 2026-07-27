@@ -475,6 +475,61 @@ requiring the `^` on `[admins.0^[…]]` seems unsatisfying."*
   existing key NEVER changes when a sibling selector is added; post-derivation
   collisions remain static errors (remedy: explicit `^name`).
 
+### §5.7 Round 3 — the `*`-segment recast (Claude proposal, 2026-07-26; owner unease was the trigger)
+
+**Trigger (owner)**: `.[…]` is at odds with the algebra — `.` means extract, `[` means
+keep; iteration is neither. And the three admins targets (`@["Alice" "Bob"]` /
+`{:admins @[…]}` / `{:admins @[{:name …}…]}`) were not equally easy to spell.
+
+**PR-5 — `*` IS the iteration operator, as a PATH SEGMENT.** `admins.*.name` = "for
+each entry of admins, its name" — the owner's OWN 2026-03-02 vocabulary
+(`depts.*.projects`), and a compositional generalization of the SHIPPED `.*name`
+broadcast (First-Class Paths 7b: `admins.*name` ≡ new `admins.*.name`). `.[…]`
+broadcast is RETIRED from the design. `*` = "each entry" uniformly: per-element on
+nat-keyed subjects, per-VALUE on keyword-keyed subjects (map-vals — answers Q_S12
+with the same one rule). Stacking is just two segments (`matrix.*.*.x`) — the J
+wrap-vs-add trap dissolves. Dynamic `v.i` (PR-3) sits beside it: `v.*` = all, `v.i`
+= one, `v.0` = literal.
+
+**PR-6 — the keying rule, refined once**: a selector's kept key = the last segment of
+the path **up to the first structural operator (`*` or `[`)** — i.e. the deepest node
+the selector addresses AS A WHOLE. For pure paths this coincides with the round-2
+last-segment rule (`server.host` → `:host`); with iteration it names the collection
+(`admins.*.name` → `:admins`), which is what reads correctly. Corollary: `^`/`^n`/`^_`
+attach selector-FINAL and govern the selector's contributed key (mid-path `^` is
+superseded by PR-2 dot-descend).
+
+**The four quadrants, minimal spellings, no `^` needed:**
+| want | spelling | result |
+|---|---|---|
+| bare leaf values | `x.admins.*.name` | `@["Alice" "Bob"]` |
+| keyed leaf values | `x[admins.*.name]` | `{:admins @["Alice" "Bob"]}` |
+| keyed sub-records | `x[admins.*[name]]` | `{:admins @[{:name "Alice"} …]}` |
+| bare sub-records | `x.admins.*[name]` | `@[{:name "Alice"} …]` |
+
+**PR-7 — `.[…]` is FREED and becomes the anonymous-selector literal** (Q_S9's
+spelling): `.[name role]` ≡ `[fn [r] r[name role]]`; the simple section is `.name`
+(`map .name admins` — heals `ERGONOMICS.org:74`'s `.:name` aspiration). Leading dot
+= "subject pending", one reading everywhere.
+
+**Named costs**: (i) the `*`-SPLAT proposal (§ round-2 reply) CONFLICTS with
+`*`-iteration in final position — recommend splat is DEFERRED/re-spelled (it was
+Claude's proposal, not an owner need); (ii) `.*` reader work + `.*name` migration
+(already owed in P6); (iii) `*` on dyn tails stays forbidden (the wildcard gate).
+
+**PR-8 — the mixed-`^` question (owner re-floated)**: when one selector at a level
+elides, do siblings COERCE to positional (owner lean — one `^` ⇒ the level is a
+tuple) or is mixing a STATIC ERROR (Claude rec — remedy: elide/rename the rest)?
+Note: the owner's original draft line `[database^ features.1]` is all-positional
+under EITHER rule (nat-ending selectors contribute positionally per PR-1).
+
+**The first-principles needs basis** (owner asked for it): descend `.` · keep/assemble
+`[…]` · each `*` · key disposition {keep default, `^` drop, `^n` rename, `^_` derive,
+selector-final} · assembly rule (record | tuple | PR-8) · extraction (all-dots) ·
+dynamic index (`v.i`, dot-only) · sections (leading-dot forms) · reserved: ranges
+(future CIU track), `**`, splat respelling, nil-safe, omit-selectors
+(presence-marks era), the write direction.
+
 ---
 
 ## §6 SRE lattice lens — REQUIRED (the result shape IS lattice-shaped)
