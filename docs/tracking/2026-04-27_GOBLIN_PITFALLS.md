@@ -2549,3 +2549,41 @@ change was reverted rather than landed.
    as a diagnostic. It is not an obvious thing to try, and here it was the
    only variable that moved the outcome after twelve other hypotheses had
    been eliminated.
+
+#### #45 addendum — the variable is IMPORT ORDER, and the culprit module is `captp-core`
+
+Bisected to a single import, then to its position. All runs identical except
+the caller's preamble; `step-connection` lives in `interop-driver`:
+
+| Caller preamble | deliver call |
+|---|---|
+| interop-driver only | **0** |
+| + `prologos::ocapn::syrup` | 0 |
+| + `prologos::core::collections` | 0 |
+| + `prologos::ocapn::message` | 0 |
+| + `prologos::ocapn::captp-core` | **41** |
+
+So exactly one module matters, and then ORDER decides the outcome:
+
+| Order | deliver call |
+|---|---|
+| `interop-driver` THEN `captp-core` | **41** |
+| `captp-core` THEN `interop-driver` | **0** |
+
+`interop-driver` itself imports `captp-core`. So importing the DEPENDENCY
+before the DEPENDENT in the caller's namespace breaks the dependent's
+exported function — silently. That is a load-order defect in module
+resolution, and it is the sharpest statement of this bug.
+
+**But it does not fully explain the OCapN server**, and that gap is
+recorded rather than glossed: the server's preamble was reordered to put
+`interop-driver` first (ahead of `captp-core`) and it STILL emits 0 on the
+deliver frame. The server's preamble has ~12 modules with others
+interleaved, so either a different module reintroduces the bad order
+transitively, or the server hits a second instance of the same class. Both
+the import-set experiment and the reorder experiment were reverted, not
+landed — neither is a proven fix.
+
+**Diagnostic value regardless**: when a Prologos function silently returns
+an empty result, try importing the DEPENDENT module before its
+dependencies in the caller. If that changes the answer, this is your bug.
