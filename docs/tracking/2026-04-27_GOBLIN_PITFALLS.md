@@ -32,9 +32,160 @@ Prologos team to look at.
 
 ---
 
+## CHECKUP 2026-07-27 — status audit after merging 700 commits of `main`
+
+Re-audit of this log after merging `origin/main` (branch point `68f4564f`,
+2026-05-02 → main tip `9bff07ff`, 2026-07-22) into the OCapN branch, on
+Racket 9.0. Read this section before trusting any entry below.
+
+### What `main` fixed: nothing in this log
+
+Of the 11 load-bearing items checked against main's 700 commits: **zero
+were addressed.** This is a structural fact, not a search gap — main spent
+the quarter on typing and the record/collection layer (CIU Track 6, 115
+commits), propagator internals (PPN 4C, 167), Numerics (70), Rel T1 (36).
+The four subsystems every bug here lives in — **WS reader/layout,
+match-lowering, the elaborator's inference for `data`, and reducer
+performance** — received no attention. Issues #45/#58/#60/#61 remain OPEN.
+`PReduce` (the reducer replacement) is **docs-only**: DESIGN COMPLETE
+2026-06-10, Tracks 1–9 not started.
+
+So every workaround documented below is still required.
+
+### Status corrections — entries in this log are STALE
+
+- **#31 and #27 (decode perf) are substantially FIXED — by our own branch,
+  not main.** Commit `4f6b3f0c` (2026-05-06, *two days after* #31 was
+  logged) added `racket/prologos/loose-bvar.rkt` — a `looseBVarRange`
+  short-circuit on `shift`. Recorded effect (`b9718184`):
+  `test-bridge-perf` **~150 s → 16.7 s**, `test-reduction-perf-02-01`
+  51 s → 7.9 s, `test-ocapn-vat` 158 s → 22.4 s. Re-measured here on the
+  post-merge toolchain: the #31 repro (50-byte 4-arity `op:deliver` with two
+  nested sub-records) decodes in **~1 s**, down from the logged 150,321 ms.
+  Both entries still read as open BLOCKERs; they are not. **Residual: still
+  ~100× slower than a real decoder (<10 ms), so it remains a
+  throughput ceiling — but not a wall.**
+  This fix is the recommended fix for upstream issue **#58** (O(N²)
+  substitution blow-up), which is still open — worth filing there.
+- **#11 (Racket 9 `thread #:pool 'own`)**: upstream issue #53 was **closed
+  with no code fix** — Racket 9.0 is now the declared floor (`info.rkt`,
+  all three CI workflows). Our `with-handlers` fence in `driver.rkt` survived
+  the merge and is the *only* fence; keep it only if Racket 8 still matters.
+
+### New findings from this checkup
+
+1. **`.pnet` module cache is UNSOUND — silent wrong results.** Reproduced
+   A/B, same script, only the cache differing:
+   - cold (no `.pnet`): `(encode-op (op-abort "bye"))` → `"<8'op:abort3\"bye>" : String`, 5017 ms — **correct**
+   - warm (43 `.pnet` files): same expression → **stuck `[reduce ...]` term**, 1308 ms — **wrong, no error**
+
+   The cache makes loads ~3.8× faster and silently non-reducing. Any OCapN
+   client using cached module loads gets functions that don't fire. This
+   subsumes a class of "works sometimes" flakiness. Note main now
+   gitignores `racket/prologos/data/cache/pnet/`, which hides but does not
+   fix it. **Highest-severity new item; not previously logged.**
+2. **Transitive-import mis-elaboration, with a sharp diagnosis.** Importing
+   `captp-core` alone (letting deps auto-load) yields
+   `Hole ??__match-fail : ActStep`. Mechanism, now pinned: in
+   `step-behavior : BehaviorTag SyrupValue SyrupValue -> ActStep`, the first
+   parameter is elaborated as **`String`**, not `BehaviorTag`, so every
+   `beh-*` constructor arm fails to match. Type identity for the locally
+   declared `data BehaviorTag` is lost across the module-load boundary —
+   unifying #12 (ctor registry lost → arms don't fire) and #33 (type
+   identity via `:refer-all`) into one mechanism. Workaround: import the
+   whole dependency tree as explicit top-level `imports` in dependency
+   order (see `tools/interop/run-ocapn-test-server.rkt`). Main reworked this
+   substrate (module-network cascade, Phase 4A/4B) for the *value/type*
+   half; the **ctor-metadata half is untouched** (`d-ctor` sites in
+   `driver.rkt`: zero commits).
+3. **The merge broke our test harness: `current-prelude-env` was retired.**
+   Commit `9d166ce4` (2026-06-01) deleted `current-prelude-env`,
+   `current-module-definitions-content`, `current-definition-cells-content`
+   as part of params→cells; main swept its own tests, ours were never swept.
+   **37 OCapN test files + `tools/interop` still reference it** and fail at
+   load with `unbound identifier`. This is not a rename: the shared-fixture
+   pattern (elaborate the OCapN modules once, reuse across ~150 cases) has
+   **no supported replacement** — `test-support.rkt` exports only
+   `run-ns-*`, which builds a fresh `current-file-module-network-ref` per
+   call, i.e. a full OCapN module load *per test case* (~3 s warm, ~20 s
+   cold). Re-enabling the OCapN suite needs a cached-module-network fixture
+   that does not currently exist. This is pitfall #12/#40's fixture
+   fragility recurring a **third** time, now as a hard break.
+
+### The cost of the workarounds, measured
+
+In the 6,424-line OCapN implementation:
+
+| Cost | Count | Caused by |
+|---|---|---|
+| `defn`s in `captp-core.prologos` (helper-chain factoring) | 153 | #30, #16, nested-`match` import failures |
+| explicit `[nil T]` / `[none T]` type-arg sites | 92 | #5, #32, #33 |
+| hand-written exhaustive 11-constructor `SyrupValue` matches | 38 | closed-world `data` + #26 |
+
+`captp-core.prologos` is 2,128 lines for what Goblins expresses far more
+compactly; the delta is mostly these three columns.
+
+### The honest blocker taxonomy
+
+**(a) Architectural — will not be "fixed", must be designed around.**
+The `## Scope` items: no mutation, no value-typed `Any`, closed-world
+`data`. Consequence: the actor table cannot be `Refr → (Args -> Action)`,
+so it is a compile-time `BehaviorTag` enum — a Prologos OCapN node can only
+host behaviours enumerated when the compiler ran, which is in tension with
+what a capability protocol is for. Adding the 4 remaining test objects
+(Car Factory, Promise resolver, Sturdyref enlivener) means extending that
+enum and re-running the AST pipeline.
+
+**(b) Correctness-critical language bugs — silent wrong answers.**
+#42 (pattern var silently resolves to an in-scope constructor — in a
+*gift-deposit* handler, i.e. a capability being substituted for the wrong
+value), #18 (multi-arity dispatch ignores the 2nd arg for 0-arity ctor
+patterns), #37 (phantom 2nd parameter; `spec` is documentation, inferred
+type wins), #21/#36 (layout → holes / silent wrong arity), plus new
+finding 1 (`.pnet`). Five of these compile clean and misbehave later.
+**Single highest-leverage upstream fix: hard-error when a `defn`'s inferred
+type disagrees with its `spec`, and when a body elaborates to a hole.**
+That one gate catches #21, #36, and #37 at the definition site.
+
+**(c) Expressiveness gaps that forfeit the reason to use Prologos.**
+#4 — `rec`/`Mu` session types are in the grammar but not the elaborator, so
+CapTP (`μX. &> {deliver:X, listen:X, abort:end}`) must be decomposed into
+finite sub-protocols and stream-level well-typedness is unproven. Session-typed
+protocol conformance is the strongest argument for writing OCapN in
+Prologos rather than Racket, and it cannot currently be cashed in.
+#32 — sum types don't survive a module boundary, so the protocol's natural
+`op:*` tagged union becomes single-constructor god-structs (this is *why*
+`BridgeState` has 9 fields), which #36 then punishes with unbreakable
+long lines.
+#16 — single-pass modules, no mutual recursion, forced
+`extract-refrs-from-args ↔ extract-refrs-from-list` to be broken with
+`shallow-refr`: **deeply nested capabilities are not registered.** That is a
+correctness reduction in the capability-extraction path, not an
+inconvenience.
+
+**(d) Throughput.** #27/#31 as corrected above: ~1 s per 50-byte frame.
+Fine for tests, not for a node.
+
+### Verdict
+
+Nothing in the language now makes a *working* OCapN client impossible
+except (c)#16's truncated capability extraction and the (a) closed-world
+behaviour registry. The blockers to a *correct* one are the (b) silent-wrong
+class, led by the new `.pnet` finding. The blocker to an *efficient* one is
+no longer the reducer wall it was in May — it is a ~100× constant factor.
+The blocker to *shipping* is prosaic and immediate: the test suite cannot
+run until the fixture is migrated off the retired `current-prelude-env`.
+
+---
+
 ## Pitfalls
 
 (populated as encountered, newest first; each entry dated)
+
+**Status flags added 2026-07-27** — see the CHECKUP section above before
+relying on any entry: **#27, #31 are substantially FIXED** (by
+`4f6b3f0c`, not by main); **#11**'s upstream issue was closed wontfix.
+All other entries verified STILL OPEN against main as of `9bff07ff`.
 
 ---
 
