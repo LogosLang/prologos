@@ -1439,6 +1439,18 @@ the day this lands.
 > cyclic solutions). Next step is a probe of a champ carrying an *unsolved* meta
 > through zonk and through `occurs?`; also `conv-nf` (independent, unverified).
 >
+> ⚠ **NEW COUPLING — GitHub #58 P3 (`94cfbcbd`, 2026-07-27) constrains this slice.**
+> `loose-bvar.rkt` memoizes each term's loose-bvar range in a weak **`eq?`-keyed**
+> table, sound today precisely *because* `shift`/`subst` are the identity on
+> `expr-meta` (substitution.rkt:49, :542) — so a term containing an unsolved meta
+> correctly reports range 0. But a meta's SOLUTION lives off-node in
+> metavar-store and is filled in mid-command while the expr node's identity stays
+> fixed. **The moment any walker learns to follow meta solutions, that memo goes
+> stale-by-construction** and must be invalidated on `solve-meta!`
+> (`clear-loose-bvar-cache!` is exported for exactly this). Do not land the META
+> half without revisiting it. Recorded in loose-bvar.rkt's memo comment too, so
+> the constraint is visible at the code as well as here.
+>
 > Everything below is the ORIGINAL capture, kept as the diagnosis of record.
 
 **LIVE BUG — a silent wrong answer in legal, zero-error user code.** `shift`/`subst`
@@ -1764,3 +1776,48 @@ separators), goals always parenthesized (no implicit solve), and `rel-params` ha
 no `:`-type alternative (C.b.1's fused `?x:Int`). It also still describes the
 dead-in-WS `?var:C1:C2` narrow-var surface, which now COLLIDES with C.b.1's
 spelling. The `.org`/`.md`/`.tex`/`.pdf` renderings inherit all of it.
+
+---
+
+## Substitution / reduction perf — spin-offs from GitHub #58 (captured 2026-07-27)
+
+Three items surfaced by the #58 grounding audit + implementation that were
+deliberately NOT swept into the fix. #58 itself is CLOSED (P0–P4: `5a2e57a3`,
+`3fce3ed0`, `cf1791ce`, `94cfbcbd`, `4a2bbee3`); design doc
+`2026-07-27_SUBSTITUTION_QUADRATIC_BLOWUP_DESIGN.md`.
+
+### 1. `substS` in sessions.rkt has the SAME O(N²) shape, unfixed
+
+`racket/prologos/sessions.rkt:85-86` — `(substS cont (add1 k) (shift 1 0 e))` is
+the identical binder-crossing re-shift that #58 fixed in `substitution.rkt`, but
+it lives outside that file and was left alone. It is a **fourth walker in the
+same family** (with `shift`, `subst`, `zonk-at-depth`); the grounding critic
+flagged the family as "already out of sync".
+
+**Why deferred, not effort-avoidance**: session types are not on any measured hot
+path today, and #58's scope was the reducer. The fix is mechanical once wanted —
+`shift-arg`'s guard applies verbatim. **Do it when session-typed code gets a real
+workload**, or fold it into any track that touches `sessions.rkt`.
+
+### 2. `zonk-at-depth` re-shifts per meta occurrence
+
+`racket/prologos/zonk.rkt:557` does `(shift depth 0 zonked-sol)` once per meta
+occurrence, with depth incremented at each binder (:590/:592/:594). Same shape:
+a solution term re-walked once per occurrence. Unmeasured — it may be entirely
+fine, since solutions are usually small. **Measure before fixing**; #58's whole
+lesson is that the layer you assume is the cost usually isn't.
+
+### 3. The whnf/nf cache is now `eq?`-keyed — its hit rate is UNMEASURED
+
+#58 P2 (`cf1791ce`) changed all three per-command caches from `equal?` to `eq?`
+keying, which was a 15.7× win at N=256 and suite-neutral. But it necessarily
+**loses structural hits**: on the accumulator workload `hasheq` benchmarked
+indistinguishable from *no cache at all*, which is the honest reading that the
+cache was doing nothing useful there — not evidence it does nothing useful
+anywhere. Nobody has measured the hit rate on type-checking-heavy workloads with
+genuinely repeated structural subterms.
+
+**If it turns out to matter**, the principled fix is a memoized cheap structural
+hash (or hash-consing — survey option #4), **not** reverting to the O(N³)
+`equal?` key. Cheap first probe: add hit/miss counters to `whnf` and run the
+comparative bench.

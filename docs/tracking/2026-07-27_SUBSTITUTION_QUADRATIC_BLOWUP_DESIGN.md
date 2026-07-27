@@ -5,7 +5,7 @@ blow-up — `shift` walks growing accumulator on every binder traversal"*, filed
 kumavis 2026-05-04, assigned to hierophantos, labels `performance` / `interpreter` /
 `substitution`.
 
-**Status**: Stage-3 design settled; implementation in progress.
+**Status**: P0–P4 COMPLETE. Merging to `main`, then closing the issue. PIR skipped by owner ruling.
 **Baseline HEAD**: `09d3566c` · **Branch**: `on2-substitution-blowup-732521`
 **Owner ruling (2026-07-27)**: fix **all three layers** + the doc-truth sweep; close #58
 on the whole result.
@@ -21,7 +21,7 @@ on the whole result.
 | **P2** | Layer 1 — whnf/nf cache key (`equal?` → `eq?`) | ✅ | **15.7× at N=256** and growing. All THREE per-command caches fixed (nf, whnf, nat-value — same defect, same family). Full suite **474 / 9209 / 1**, the 1 being this track's own P3 gates |
 | **P3** | Layer 2 — `loose-bvar-range` short-circuit, all FOUR sites | ✅ | **LINEAR SCALING RESTORED — exponent 3.1 → 1.0.** N=256: 49 775 → 19 ms (**2 620×**). New `loose-bvar.rkt`; guard on both `shift` and `subst`. All 22 gates green incl. the differential oracle |
 | **P4** | Doc-truth sweep | ✅ | 5 corrections: `bench-ab --ref` (never existed, 2 rules files instructed it) · `trivially-whnf?` (name never existed) · the "~5 ns zero-cost" counter claim (measured 43.3 ns) · the stale hset false-assertion comment · NEW `pipeline.md` § cache-key-on-an-AST-node hazard |
-| **X.close** | Bench matrix · DEFERRED triage · PIR · close #58 with contributor credit | ⬜ | PIR is the objective gate |
+| **X.close** | DEFERRED triage · dailies · merge to `main` · close #58 with contributor credit | 🔄 | **PIR SKIPPED — owner ruling 2026-07-27** (minor fix, not a full design track). Triage + dailies ✅ |
 
 ---
 
