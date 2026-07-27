@@ -2024,12 +2024,38 @@ defn orphan-loop
         | some payload ->
             orphan-loop rest v [cons tgt emitted] [cons [listener-notify-bytes res [wrap-fulfill payload]] accum]
 
+;; ===========================================================
+;; Phase 59b part 3: drain the vat's `outbound` into wire frames
+;; ===========================================================
+;;
+;; `vat-outbound` holds messages a behaviour sent whose target is not a
+;; local actor — i.e. a peer export position. The vat deliberately makes
+;; no wire judgement; this is where "could not deliver locally" becomes
+;; "send to the peer". Each becomes an op:deliver with answer-pos and
+;; resolve-me both false, which is the shape upstream's
+;; `expect_message_to` matches.
+;;
+;; MUST be defined BEFORE pump-outbound (single-pass modules, #16).
+
+spec outbound-loop [List VatMsg] [List String] -> [List String]
+defn outbound-loop
+  | nil acc -> acc
+  | [cons m rest] acc ->
+      outbound-loop rest [append acc [cons [listener-notify-bytes [vmsg-target m] [vmsg-args m]] nil]]
+
+spec clear-outbound Vat -> Vat
+defn clear-outbound [v]
+  [vat [vat-next-id v] [vat-actors v] [vat-promises v] [vat-queue v] nil]
+
+spec drain-outbound PumpResult -> PumpResult
+defn drain-outbound [pr]
+  pump-result [clear-outbound [pump-result-vat pr]] [outbound-loop [vat-outbound [pump-result-vat pr]] [pump-result-bytes pr]] [pump-result-emitted pr]
+
 spec pump-outbound Vat BridgeState [List Nat] -> PumpResult
   :doc "Walk the question table; emit bytes for newly-resolved promises plus any pending-out bytes (e.g. handshake reply). Phase 42: also delivers pipelined msgs locally to actors when applicable; the resulting Vat is in the PumpResult. Phase 48: also emits listener-notification bytes for any registered op:listen targeting a settled pid. Phase 59b part 2: a second pass covers listeners whose promise has no question-table entry (the resolve-me case)."
 defn pump-outbound [v st emitted]
   let base := [pump-loop [bs-questions st] v [bs-pipelined-msgs st] [bs-listeners st] emitted nil]
-    prepend-pending-out [bs-pending-out st]
-      [orphan-loop [bs-listeners st] [pump-result-vat base] [pump-result-emitted base] [pump-result-bytes base]]
+    drain-outbound [prepend-pending-out [bs-pending-out st] [orphan-loop [bs-listeners st] [pump-result-vat base] [pump-result-emitted base] [pump-result-bytes base]]]
 
 ;; Convenience helper for tests / callers that want the first
 ;; emitted byte-string (or a default if nothing was emitted).
