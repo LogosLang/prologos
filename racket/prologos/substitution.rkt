@@ -14,6 +14,7 @@
 (require racket/match
          "prelude.rkt"
          "syntax.rkt"
+         (only-in "loose-bvar.rkt" loose-bvar-range loose-bvar-range-cached)
          (only-in "namespace.rkt" ns-context?))
 
 (provide shift subst open-expr)
@@ -21,6 +22,7 @@
 ;; ========================================
 ;; Shift: increase bound indices >= cutoff by delta
 ;; ========================================
+
 ;; GitHub #58 P1 — delta = 0 is the IDENTITY, at every cutoff and for every term
 ;; (open or closed). `shift`'s only effect is `(expr-bvar (+ k delta))` on
 ;; qualifying bvars, and `(+ k 0) = k`; every other arm is a pure structural
@@ -45,6 +47,11 @@
 (define (shift delta cutoff e)
   (cond
     [(eqv? delta 0) e]
+    ;; #58 P3 — CONSULT-ONLY prune. If we already know this subtree's loose-bvar
+    ;; range (because `shift-arg` seeded it), skip the subtree whole. Never
+    ;; computes, so a term we have not seen costs one failed pointer lookup
+    ;; rather than a second full walk.
+    [(let ([r (loose-bvar-range-cached e)]) (and r (<= r cutoff))) e]
     [else
      (match e
     ;; Variables
@@ -537,8 +544,45 @@
 ;; Substitution: replace bvar(k) with s in e
 ;; When going under a binder, k increases and s is shifted up
 ;; ========================================
+;; GitHub #58 P3 — the loose-bvar-range short-circuit, THE issue's own finding.
+;;
+;; `shift-arg` replaces the four `(shift D 0 s)` calls below. When `s` is CLOSED
+;; it returns `s` itself: shifting a term with no free de Bruijn variable cannot
+;; change it, so the walk and the rebuild are both pure waste.
+;;
+;; WHERE THE GUARD LIVES IS THE WHOLE DESIGN, and it was measured, not guessed.
+;; A whole-tree property costs a whole-tree walk to compute, so a guard can NEVER
+;; pay for itself on a term that is walked once — it just walks twice. Putting
+;; this test inside `shift` (which is what the issue's proposed fix does, and
+;; what the first cut of this phase did) therefore taxes every one-shot shift in
+;; the compiler: it regressed the full suite ~25%, 198.6 s -> 240.9 s, while every
+;; micro looked fine. Micro-optimizing the walk did not help, because the walk is
+;; not the problem — walking AT ALL is.
+;;
+;; So the guard goes exactly where the REPETITION is, which is these four sites
+;; and nowhere else. `subst` re-shifts the SAME `s` once per binder crossing and,
+;; at :988, once PER REDUCE ARM — the multiplier the issue's 3-site enumeration
+;; misses. The memo then makes the repetition free three ways over:
+;;   - A-arm reduce node: one range computation, A skipped walks.
+;;   - nested binders: a closed `s` is passed through unchanged, so the next
+;;     level's lookup is a memo HIT on the same object — B levels, one walk.
+;;   - across accumulator iterations: s_{i+1} = cons(x, s_i) and s_i's range is
+;;     already memoized, so each step is O(1). THIS is what turns O(N^2) into O(N).
+;; Meanwhile `shift`'s own callers (unify, zonk, sessions, type-lattice) pay
+;; nothing, because `shift` itself is left unguarded apart from P1's delta=0.
+(define (shift-arg delta s)
+  (if (eqv? (loose-bvar-range s) 0) s (shift delta 0 s)))
+
 (define (subst k s e)
-  (match e
+  (cond
+    ;; Same consult-only prune: `subst k s e` is the identity on `e` when no
+    ;; variable free in `e` has an index at or above k. This is the arm that
+    ;; catches the residual kumavis identified in their step 2 — a body with the
+    ;; accumulator already EMBEDDED in it, which `subst` would otherwise re-walk
+    ;; in full on every iteration.
+    [(let ([r (loose-bvar-range-cached e)]) (and r (<= r k))) e]
+    [else
+     (match e
     ;; Variables
     [(expr-bvar n)
      (cond
@@ -570,11 +614,11 @@
 
     ;; Binding forms: increase k, shift s up by 1
     [(expr-lam m t body)
-     (expr-lam m (subst k s t) (subst (add1 k) (shift 1 0 s) body))]
+     (expr-lam m (subst k s t) (subst (add1 k) (shift-arg 1 s) body))]
     [(expr-Pi m dom cod)
-     (expr-Pi m (subst k s dom) (subst (add1 k) (shift 1 0 s) cod))]
+     (expr-Pi m (subst k s dom) (subst (add1 k) (shift-arg 1 s) cod))]
     [(expr-Sigma t1 t2)
-     (expr-Sigma (subst k s t1) (subst (add1 k) (shift 1 0 s) t2))]
+     (expr-Sigma (subst k s t1) (subst (add1 k) (shift-arg 1 s) t2))]
 
     ;; Non-binding forms
     [(expr-app e1 e2)
@@ -1009,10 +1053,10 @@
                          (expr-reduce-arm
                           (expr-reduce-arm-ctor-name arm)
                           bc
-                          (subst (+ k bc) (shift bc 0 s)
+                          (subst (+ k bc) (shift-arg bc s)
                                  (expr-reduce-arm-body arm))))
                        arms)
-                  structural?)]))
+                  structural?)])]))
 
 ;; ========================================
 ;; Open: substitute s for bvar(0)

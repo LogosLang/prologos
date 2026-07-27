@@ -24,7 +24,8 @@
 (require rackunit
          "../prelude.rkt"
          "../syntax.rkt"
-         "../substitution.rkt")
+         "../substitution.rkt"
+         "../loose-bvar.rkt")
 
 ;; ========================================
 ;; Term builders
@@ -71,23 +72,46 @@
   (check-eq? (shift 0 0 e) e))
 
 ;; ========================================
-;; G1 — closed arguments short-circuit  (P3 gate)
+;; G1 — a term with a KNOWN range short-circuits  (P3 gate)
+;;
+;; The guard inside `shift` is CONSULT-ONLY: it prunes a subtree whose range is
+;; already memoized and never computes one, because computing a whole-tree
+;; property on a term walked once costs a second walk and buys nothing (measured:
+;; ~25% of full-suite wall time when `shift` computed at every node).
+;;
+;; Production seeds the memo at exactly the sites where the answer gets reused —
+;; `shift-arg`, substitution.rkt's wrapper on the four places `subst` re-shifts
+;; its argument. These tests model that by calling `loose-bvar-range` first,
+;; which is precisely what `shift-arg` does. G4 below then checks the same
+;; property END-TO-END through `subst`, with no manual seeding — that is the
+;; user-visible contract, and the one the issue is actually about.
 ;; ========================================
 
-(test-case "G1: (shift 1 0 CLOSED) returns its input eq?-identical"
+(test-case "G1: a CLOSED term with a known range short-circuits, eq?-identical"
   (define e (closed-chain 40))
+  (void (loose-bvar-range e))            ; what shift-arg does in production
   (check-eq? (shift 1 0 e) e))
 
-(test-case "G1: (shift delta cutoff CLOSED) short-circuits at every delta/cutoff"
+(test-case "G1: known-range CLOSED term short-circuits at every delta/cutoff"
   (define e (closed-chain 25))
+  (void (loose-bvar-range e))
   (for* ([d (in-range 1 4)] [c (in-range 0 4)])
     (check-eq? (shift d c e) e)))
 
 (test-case "G1: cutoff above the term's loose range also short-circuits"
   ;; loose range of (open-chain M 2) is 3, so any cutoff >= 3 is the identity.
   (define e (open-chain 20 2))
+  (check-equal? (loose-bvar-range e) 3)
   (check-eq? (shift 1 3 e) e)
   (check-eq? (shift 1 9 e) e))
+
+(test-case "G1: an UNSEEDED term is still correct — the guard is an optimization"
+  ;; Consult-only means a cold term is simply walked. That must not change the
+  ;; ANSWER, only the sharing. This pins the guard as semantically invisible.
+  (clear-loose-bvar-cache!)
+  (define e (closed-chain 12))
+  (check-equal? (shift 1 0 e) e)
+  (check-equal? (shift 3 2 e) e))
 
 ;; ========================================
 ;; G4 — subst does not rebuild a closed argument  (P3 gate)
@@ -207,8 +231,13 @@
           (expr-ann (expr-nat-val 1) (expr-Nat))
           (expr-union (expr-Nat) (expr-Bool))))
   (for ([e (in-list closed-shapes)])
+    (void (loose-bvar-range e))          ; seed, as `shift-arg` does in production
     (check-eq? (shift 1 0 e) e
-               (format "closed term was rebuilt instead of short-circuited: ~a" e))))
+               (format "closed term was rebuilt instead of short-circuited: ~a" e))
+    ;; and the range must actually be 0 — otherwise the eq? above passed for the
+    ;; wrong reason (e.g. a bogus range that happened to be <= the cutoff).
+    (check-equal? (loose-bvar-range e) 0
+                  (format "expected a closed term to have range 0: ~a" e))))
 
 (test-case "DIFFERENTIAL: nested binder depths route the cutoff correctly"
   ;; lam(lam(bvar N)) — the inner bvar is loose iff N >= 2.
@@ -219,3 +248,70 @@
                                          (expr-bvar (if (>= n 2) (add1 n) n)))))
     (check-equal? (shift 1 0 e) expected
                   (format "depth routing wrong for bvar ~a" n))))
+
+;; ========================================
+;; ORACLE — the memoized/armed range must equal the naive reflective reference.
+;;
+;; `.claude/rules/pipeline.md` § Exhaustive Walkers: "retain the reflective walk,
+;; export it, and write a contract test asserting armed == reflective over a
+;; battery that plants the target condition in EVERY armed field position (plus
+;; bound-vs-free binder cases and one cold-fallback node)."
+;;
+;; loose-bvar-range/reference shares no code with the memoized path except the
+;; `under` helper, so a divergence here catches BOTH a wrong explicit arm and a
+;; stale memo entry — in the test, not in production.
+;; ========================================
+
+(define (oracle-battery)
+  (append
+   ;; every armed field position, loose bvar planted in each
+   (planted 0) (planted 1) (planted 3)
+   ;; bound-vs-free at each binder
+   (list (expr-lam 'mw (expr-Nat) (expr-bvar 0))        ; bound
+         (expr-lam 'mw (expr-Nat) (expr-bvar 1))        ; free
+         (expr-Pi 'mw (expr-Nat) (expr-bvar 0))
+         (expr-Pi 'mw (expr-Nat) (expr-bvar 1))
+         (expr-Sigma (expr-Nat) (expr-bvar 0))
+         (expr-Sigma (expr-Nat) (expr-bvar 1))
+         ;; nested binders — the depth-routing cases
+         (expr-lam 'mw (expr-Nat) (expr-lam 'mw (expr-Nat) (expr-bvar 0)))
+         (expr-lam 'mw (expr-Nat) (expr-lam 'mw (expr-Nat) (expr-bvar 1)))
+         (expr-lam 'mw (expr-Nat) (expr-lam 'mw (expr-Nat) (expr-bvar 2)))
+         (expr-lam 'mw (expr-Nat) (expr-lam 'mw (expr-Nat) (expr-bvar 5)))
+         ;; reduce: per-arm binding-count discharge, incl. the nullary arm
+         (expr-reduce (expr-bvar 0)
+                      (list (expr-reduce-arm 'nil 0 (expr-bvar 0))
+                            (expr-reduce-arm 'cons 2 (expr-bvar 2))
+                            (expr-reduce-arm 'other 3 (expr-bvar 7)))
+                      #f)
+         (expr-reduce (expr-nil) (list (expr-reduce-arm 'nil 0 (expr-nil))) #f)
+         ;; a COLD-FALLBACK node — no explicit arm, must route through the
+         ;; generic field walk identically in both implementations
+         (expr-Eq (expr-Nat) (expr-bvar 2) (expr-nil))
+         (expr-vcons (expr-Nat) (expr-zero) (expr-bvar 4) (expr-vnil (expr-Nat)))
+         ;; closed and deep
+         (closed-chain 30)
+         (open-chain 30 2))))
+
+(test-case "ORACLE: memoized range == naive reflective reference, whole battery"
+  (for ([e (in-list (oracle-battery))])
+    (check-equal? (loose-bvar-range e) (loose-bvar-range/reference e)
+                  (format "range disagreement on ~a" e))))
+
+(test-case "ORACLE: memo is stable — a second call agrees with the first"
+  ;; Guards the memo itself: a term's range must not change once cached, and
+  ;; clearing the cache must reproduce the same answer.
+  (for ([e (in-list (oracle-battery))])
+    (define first-call (loose-bvar-range e))
+    (check-equal? (loose-bvar-range e) first-call)
+    (clear-loose-bvar-cache!)
+    (check-equal? (loose-bvar-range e) first-call
+                  (format "range changed after cache clear on ~a" e))))
+
+(test-case "ORACLE: the guard never fires when a loose bvar is in range"
+  ;; The unsafe direction, stated directly: if reference says there IS a free
+  ;; bvar at or above the cutoff, shift MUST NOT return its input eq?.
+  (for* ([e (in-list (oracle-battery))] [cutoff (in-range 0 4)])
+    (when (> (loose-bvar-range/reference e) cutoff)
+      (check-false (eq? (shift 1 cutoff e) e)
+                   (format "guard skipped a term with a free bvar >= ~a: ~a" cutoff e)))))

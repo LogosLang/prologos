@@ -19,8 +19,8 @@ on the whole result.
 | **P0** | Baseline measurement + this doc + the failing-test-first battery | ✅ | `5a2e57a3` — 11 `check-eq?` gates RED at HEAD, semantics invariants GREEN |
 | **P1** | Layer 3 — `delta = 0` early-out in `shift` | ✅ | 11 → 7 red; the 4 G2 gates flip. End-to-end delta is WITHIN NOISE (6003 → 5973 ms at N=128) — Layer 1 masks it; becomes visible after P2 |
 | **P2** | Layer 1 — whnf/nf cache key (`equal?` → `eq?`) | ✅ | **15.7× at N=256** and growing. All THREE per-command caches fixed (nf, whnf, nat-value — same defect, same family). Full suite **474 / 9209 / 1**, the 1 being this track's own P3 gates |
-| **P3** | Layer 2 — `loose-bvar-range` short-circuit, all FOUR sites | ⬜ | the issue's own finding |
-| **P4** | Doc-truth sweep | ⬜ | `bench-ab --ref`, `trivially-whnf?`, the "zero-cost" claim, the stale hset comment |
+| **P3** | Layer 2 — `loose-bvar-range` short-circuit, all FOUR sites | ✅ | **LINEAR SCALING RESTORED — exponent 3.1 → 1.0.** N=256: 49 775 → 19 ms (**2 620×**). New `loose-bvar.rkt`; guard on both `shift` and `subst`. All 22 gates green incl. the differential oracle |
+| **P4** | Doc-truth sweep | 🔄 | `bench-ab --ref` ✅ · `trivially-whnf?` ✅ · new pipeline.md § cache-key hazard ✅ · still: the "zero-cost" header claim, the stale hset comment |
 | **X.close** | Bench matrix · DEFERRED triage · PIR · close #58 with contributor credit | ⬜ | PIR is the objective gate |
 
 ---
@@ -263,6 +263,68 @@ ambient-sensitive).
 
 ⚠ **A green full suite is not the gate here.** The suite is green today with all three
 layers live.
+
+## 5.1 Result
+
+Same workload, same file, all results verified correct at every N:
+
+| N | P0 baseline | after P2 | after P3 | total |
+|---|---|---|---|---|
+| 32 | 85 ms | 12 | **3** | 28× |
+| 64 | 701 ms | 68 | **5** | 140× |
+| 128 | 6 003 ms | 462 | **10** | 600× |
+| 256 | 49 775 ms | 3 174 | **19** | **2 620×** |
+| 512 | ~7 min (projected) | — | **39** | — |
+
+**Scaling exponent 3.1 → 1.0.** Each doubling of N now doubles the time
+(3→5→10→19→39), and `reduce_steps` doubles exactly alongside it (1059 → 2019 →
+3939 → 7779 → 15459), so the semantics are unchanged and the per-step cost is now
+constant. This is the property the issue asked for, reached by a different route
+than it proposed.
+
+### 5.2 The phantom regression — the most expensive mistake of this track
+
+After P3 first landed, the full suite read **240.9 s against P2's 198.6 s**, and a
+per-file diff looked conclusively like a real regression: +340 s of increases
+against −8.8 s of decreases, spread broadly, top-5 files only 18% of the total.
+That is the signature of a systematic slowdown, not noise.
+
+It was not real. **The identical P2 code re-measured hours later came back
+1629.3 s against its own earlier 1267.9 s — +28.5% pure ambient drift.** Against a
+*contemporaneous* baseline (a worktree pinned at `cf1791ce`, built and run in the
+same window), P3 is **−3.8%**, i.e. slightly faster.
+
+`.claude/rules/testing.md` already says this in as many words — "sequential bench
+invocations are NOT a valid A/B", "worktree-pin the baseline". The rule was quoted
+early in this very session and then not followed: a P2 number from hours earlier
+was compared against fresh P3 numbers. Four full redesign iterations were spent
+chasing it:
+
+| Variant | per-file total | vs the WRONG baseline | vs the RIGHT one |
+|---|---|---|---|
+| P3 compute-guard (first cut) | 1696.2 s | +24.3% | ≈ 0 |
+| P3 consult-only guard | 1699.0 s | +24.5% | ≈ 0 |
+| P3 armed + entry-only memo | 1685.5 s | +23.5% | **−3.8%** |
+| P3 + `prunable?` gate | 1736.7 s | +27.3% | (worse; reverted) |
+
+The tell was available early and was missed: **the number barely moved across
+implementations spanning 441 → 131 → 26 ns/node.** A cost that is invariant to a
+17× change in the thing supposedly causing it is not that cost. That should have
+triggered "re-measure the baseline" long before it triggered a fourth redesign.
+
+What the detour did buy, honestly: the final design is materially better than the
+first cut on every micro (range computation 441 → 26 ns/node; one-shot shift
+134 → 22 µs), and the `prunable?` experiment was measured and rejected rather than
+kept on intuition. The design is better; the *reason* for changing it was wrong.
+
+**One near-miss worth recording.** The first `compute-range` routed its catch-all
+through `generic-range`, which dispatches on a *value* and sends any `expr?`
+straight back to `loose-bvar-range` — where the memo entry does not exist yet.
+Infinite recursion; the build succeeded and the test run hung. The fix is the
+`fields-range` / `generic-range` split: one descends into a struct's FIELDS, the
+other dispatches on a field's CONTENTS, so recursion strictly decreases. A
+memoized walker whose fallback can re-enter itself on the same key is a hazard
+worth naming — `compute-range` must never hand its own argument to the memo.
 
 ## 6. Capture gaps carried from the grounding audit
 
