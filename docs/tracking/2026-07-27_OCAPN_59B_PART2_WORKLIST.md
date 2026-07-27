@@ -26,13 +26,57 @@ this. Swiss-nums are ASCII.
 | Car Factory builder | `JadQ0++RzsD4M+40uLxTWVaVqM10DcBJ` | no args → returns a Car Factory object | no |
 | Car Factory | (returned, not fetched) | takes a sequence of `(model, color)` symbol pairs; spawns one Car per item | no |
 | Car | (returned, not fetched) | no args → `"Vroom! I'm a <color> <model> car!"` | no |
-| Echo GC | `IO58l1laTyhcrgDKbEzFOO32MDd6zE5w` | any number of args → returns them in order; must NOT retain refs; GC after each call | close — `beh-echo` exists, but it is single-arg and retention/GC is unaddressed |
+| Echo GC | `IO58l1laTyhcrgDKbEzFOO32MDd6zE5w` | any number of args → returns them in order; must NOT retain refs; GC after each call | **behaviour DONE** — see correction below; retention/GC unaddressed |
 | Greeter | `VMDDd1voKWarCe2GvgLbxbVFysNzRPzx` | takes a refr; sends `"Hello"` to it as `op:deliver`; discards the promise, retains nothing | close — `beh-greeter` exists but *constructs* greetings rather than sending to a refr; the spec here is outbound-send, which is different |
 | Promise resolver | `IokCxYmMj04nos2JN1TDoY1bT8dXh6Lr` | no args → returns (promise, resolver); resolver takes `break`\|`fulfill` + value | no |
 | Sturdyref enlivener | `gi02I1qghIwPiKGKleCQAOhpy3ZtYRpB` | takes a sturdyref; connects to the peer, gets a live ref, returns it | no — needs OUTBOUND connections |
 
 Note the swiss-num in our own test locator is the Car Factory builder's
 (`JadQ0++…`); it is the peer designator AND a fetchable object.
+
+## CORRECTION (2026-07-27, verified by execution — supersedes the table above)
+
+A 14-agent audit at HEAD `20dd7a7b` measured this properly and disproved two
+claims made in the first draft of this doc. Both corrections make the work
+*differently* shaped, not merely bigger, so they matter before anyone starts.
+
+**1. "beh-echo exists but it is single-arg" was WRONG.** `step-echo`
+(`behavior.prologos:104-106`) is `defn step-echo [state args]` with body
+`act-step state args nil` — it performs ZERO destructuring of `args` and
+returns it verbatim. It is already shape-agnostic: an N-element syrup-list in
+the args slot comes back as that same list. This was confirmed by driving the
+upstream test's own payload through it, not by reading. **No behaviour change
+is needed for Echo.** Do not "fix" step-echo; there is nothing to fix.
+
+**2. The gap is SEVEN mechanisms, not "add an object".** To pass the single
+Echo-only upstream test (`test_deliver_with_resolver`):
+
+| # | Mechanism | Exists |
+|---|---|---|
+| 1 | Place an actor at a chosen export position | no (~20 lines; `actor-table-set` at `vat.prologos:160-162` is public) |
+| 2 | Seed a per-connection ConnectionState from the server init path | no (~20 lines; `conn-state` ctor at `captp-core.prologos:1949-1950` is public) |
+| 3 | Thread `rm` into the NON-fetch inbound deliver path | no — `rm` is dropped at `dispatch-deliver` (`:1291-1302`) |
+| 4 | Allocate a local answer promise when `ap = none` | no — return value is discarded at `step-after-act` (`vat.prologos:346-354`) |
+| 5 | Resolver table: local promise-id → peer resolver export position | no |
+| 6 | Pump stage emitting notifications for settled promises NOT in `bs-questions` | no — `listener-bytes-for-pid` is only reachable via the inbound question table |
+| 7 | Reusable fulfill-wrapping helper (value → `[syrup-list 'fulfill, value]`) | no |
+| — | Tag-parameterized op:deliver emitter for reply bytes | **yes** |
+
+Items 3-7 are the real work and are the half the first draft missed entirely:
+upstream's Echo test replies via `resolve_me_desc` with
+`answer_position=False`, and **the resolve-me reply path does not exist for
+non-fetch delivers.** Phase 59b part 1 built it for `fetch` only.
+
+**3. Routing needs no new code.** An earlier claim that "no export-position
+allocator or position→actor table exists" OVERSTATES it: the export position
+IS the actor-table key, so once an actor is seeded at a position, inbound
+delivery to that position already routes.
+
+**Consequence for sequencing.** Items 3-6 are one coherent piece of work — the
+generalized resolve-me reply path — and every remaining object needs it, not
+just Echo. Build that FIRST, not the objects. Three patches attempted the
+object-shaped framing and all three honestly reported zero tests unblocked;
+one was refuted outright for a false claim in its own comment.
 
 ## Ordering (cheapest first, and why)
 
