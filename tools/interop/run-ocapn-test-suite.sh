@@ -93,12 +93,13 @@ EXPECTED_PASS=4
 
 echo "[run-ocapn-test-suite] running selected tests against $LOCATOR"
 echo "[run-ocapn-test-suite] milestone: >= $EXPECTED_PASS of the selected tests must pass"
+echo "[run-ocapn-test-suite] (op_deliver entries are DIAGNOSTIC — not counted in the milestone)"
 echo "----------------------------------------------------------------"
 
 # The selective runner (ocapn-run-tests.py) lives in this repo; it
 # chdir's into the suite dir itself. CapTP version "1.0" matches what
 # the upstream tests assert on.
-OCAPN_TEST_SUITE_DIR="$SUITE_DIR" timeout 90 python3 -u \
+OCAPN_TEST_SUITE_DIR="$SUITE_DIR" timeout 240 python3 -u \
   "$REPO_ROOT/tools/interop/ocapn-run-tests.py" \
   "$LOCATOR" "1.0" 2>&1 | tee /tmp/ocapn-suite-output.txt || true
 SUITE_EXIT=${PIPESTATUS[0]}

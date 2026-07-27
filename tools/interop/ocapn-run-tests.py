@@ -48,6 +48,17 @@ SELECTED = [
     ("tests.op_abort", "OpAbortTest", [
         "test_abort_before_setup",
     ]),
+    # DIAGNOSTIC (Phase 59b part 1). These are NOT expected to pass yet —
+    # they are here to measure how far the new `fetch` reply path gets.
+    # fetch_object is the first thing every one of them does, so their
+    # failure mode tells us whether fetch works:
+    #   * error/timeout AT fetch  -> the resolve-me reply is wrong
+    #   * gets past fetch, fails later -> fetch works; the objects don't answer
+    # run-ocapn-test-suite.sh gates on EXPECTED_PASS, which stays at 4, so
+    # these cannot turn CI red while they are still failing.
+    ("tests.op_deliver", "OpDeliverTest", [
+        "test_deliver_with_resolver",
+    ]),
 ]
 
 
