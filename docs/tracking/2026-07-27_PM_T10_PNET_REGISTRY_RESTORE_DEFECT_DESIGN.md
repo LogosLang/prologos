@@ -12,11 +12,14 @@
 
 | Phase | Description | Status | Notes |
 |---|---|---|---|
-| P0 | Failing-test-first: pin severities 1 + 2 + durable poisoning as tests that FAIL at HEAD | ⬜ | Must defeat two masking mechanisms (§4.3) |
-| P1 | The restore repair: `restore-registry!` helper + 14 call sites + 3 annotated exclusions | ⬜ | Fold-not-assign is load-bearing (§3.2) |
-| P2 | Invariant test (param ≡ cell over the 14) + `pipeline.md` checklist entry | ⬜ | The anti-regression-for-the-15th-registry guard |
-| P3 | Comment truth sweep: stale header (§2.5), the Track 10 Phase 2d/2e prior-art note | ⬜ | Doc-truth, no behavior change |
+| P0 | Failing-test-first: pin severities 1 + 2 + **3** + durable poisoning as tests that FAIL at HEAD | ⬜ | Must defeat **three** masking mechanisms (§4.3); recipe VALIDATED |
+| P1 | The restore repair — **table-driven** restore (§3.2a) covering the 14, with the 3 exclusions explicit | ⬜ | Fixes severities 1 + 2. Fold-not-assign is load-bearing (§3.2) |
+| P2 | **Serialize the never-restored registries** + `PNET_VERSION` bump | ⬜ | **Fixes severity 3** (§2.4). The bump also invalidates poisoned caches (§4.P2) |
+| P3 | Invariant test + `pipeline.md` checklist entry | ⬜ | Must not be theater — see §4.P3 |
+| P4 | Comment truth sweep: stale header (§2.5.3), the Track 10 Phase 2d/2e prior-art note | ⬜ | Doc-truth, no behavior change |
 | X.close | Bench check, DEFERRED triage, PM 12 note + master link, PIR-lite, issue reply | ⬜ | Gates in §7 |
+
+> **Revision note (2026-07-27, post-critique)**: the phase plan grew a P2 because the adversarial critique + a controlled probe showed the issue's **severity 3 is real** and is **not** fixed by Option A (§2.4). A fix shipping only P1 would close the issue while leaving a hard module-load failure live.
 
 ---
 
@@ -63,14 +66,28 @@ after folding into (hash):     subtype-entry ← the fold REPAIRS it
 
 **Consequence — load-bearing for the fix**: the existing `(if (hash? reg) (hash-set reg k v) (hash k v))` fold at the three sites (`driver.rkt:2824`, `:2827`, `:2850`) is **not defensive noise; it is the repair**. Any refactor that assigns the deserialized hash wholesale — to the parameter *or* to the cell — silently breaks those three lookups. The cell side is safe for the *same* reason and only that reason: `merge-hasheq-replace` (`infra-cell.rkt:141-149`) folds `new` into `acc = old`, and `old` is the cell's value seeded from the `equal?`-based parameter (`macros.rkt:593/595/615`, seed stored verbatim at `propagator.rkt:1325`). It is **not** true that "the delta's hash type doesn't matter."
 
-### 2.4 DELETION — severity 3 is not supported at HEAD
+### 2.4 ~~DELETION~~ → **RETRACTED**: severity 3 is REAL, by a different mechanism (2026-07-27, adversarial critique)
 
-The issue's third severity ("hard failure … `Type mismatch` with a partially-populated cache") has no supporting path here: the version gate is **exact equality** on both staleness check and read (`pnet-serialize.rkt:589`, `:672`); the serializer always writes all 24 fields; the deserializer always returns a fixed 21-element list with defaults — so every length guard on both sides is dead/always-true and cannot over-index. A deserialize exception is swallowed to `#f` and falls through to **correct full elaboration** (`driver.rkt:2768`). We do **not** inherit this claim.
+**This section previously deleted the issue's severity 3. That deletion was WRONG and is retracted.** The narrow analysis below is still correct, but the *conclusion* drawn from it was not — I refuted one mechanism and concluded the symptom was unsupported, without testing the symptom itself. Recorded in full because it is the exact failure mode our own Watching list names ("a recorded repro can be a red herring" — here, in the *asserting-absence* direction).
+
+*What remains true*: there is no **index/partiality** path to a hard failure. The version gate is exact equality (`pnet-serialize.rkt:589`, `:672`); the deserializer always returns a fixed 21-element list with defaults (`:699-722`); so every length guard on both sides is dead and cannot over-index. A deserialize exception is swallowed to `#f` and falls through to correct full elaboration (`driver.rkt:2768`).
+
+*What is nonetheless true*: **severity 3 reproduces, with the issue's exact error string**, via the **never-serialized `schema` registry** (§2.5.2) — not via a short cache list. Measured with a cold control:
+
+| Cache state | `def sealed : Person := {:name "x" :age 1}` in a fresh module over a cached schema module |
+|---|---|
+| **WARM** (hit) | `imports: Error loading module minirepro::schseal: Type mismatch` — **hard load failure** |
+| **COLD** (miss) | `{:name "x", :age 1} : minirepro::sch::Person` — correct |
+
+Mechanism: the record/schema **seal** needs the schema entry to fire; `schema-registry` is never serialized, so a cache hit provides it via neither parameter nor cell, the seal arm does not fire, and the annotation mismatches. The contributor's reported string (`imports: Error loading module <M>: Type mismatch`) matches exactly — they were most likely seeing this.
+
+**Consequence for scope — the important one**: severity 3 is **NOT fixed by Option A**. The dual-write repairs the 14 *serialized* registries; this failure needs the never-serialized registries to be **serialized in the first place**. See the new P2 (§4).
 
 ### 2.5 Additions the issue does not carry
 
-1. **N10 — a third silent-wrong-answer channel.** `known-type-name?` (`macros.rkt:6982-7000`) ORs `lookup-schema` and `lookup-selection`; **both registries are never serialized at all** (0 occurrences in `pnet-serialize.rkt`). A miss makes a concrete type name classify as a type *variable* and auto-generalize into an implicit `{A : Type}` binder. **Confidence: code-verified, symptom UNPROVEN** — two probes (sexp `process-string`; two-module WS with cold control) produced *identical* cold/warm output. The first probe's error was a **red herring** (my test's syntax, not the gap — cold control errored identically). Filed separately, not fixed here (§5.2).
-2. **The never-restored 7.** 24 cells exist; 17 registry slots are serialized; 14 are cell-backed. Of the 10 cells with no slot, `spec-store` + `propagated-specs` *are* covered (spec-propagation handler dual-writes on every import, `driver.rkt:3146-3154` ← `namespace.rkt:1023-1024`), and `macro-registry` is inert (`register-macro!` has zero production callers). **Live gap = exactly 7**: schema, selection, session, strategy, process, user-precedence-groups, user-operators. Option A **cannot** touch these — there is nothing in the `.pnet` to write.
+1. **N10 — a third silent-wrong-answer channel, now ESCALATED to a hard failure.** `known-type-name?` (`macros.rkt:6982-7000`) ORs `lookup-schema` and `lookup-selection`; **both registries are never serialized at all** (0 occurrences in `pnet-serialize.rkt`). A miss makes a concrete type name classify as a type *variable* and auto-generalize into an implicit `{A : Type}` binder. My first two probes of *this* channel came back null and I recorded "symptom unproven" — **that was under-powered probing**: I tested only the soft auto-generalization channel. The **seal** channel is the hard one, and it reproduces as a hard module-load failure (§2.4). Lesson: a null probe refutes the *probe*, not the *gap*.
+2. **The never-restored 7.** 24 cells exist; 17 registry slots are serialized; 14 are cell-backed. Of the 10 cells with no slot, `spec-store` + `propagated-specs` *are* covered (spec-propagation handler dual-writes on every import, `driver.rkt:3146-3154` ← `namespace.rkt:1023-1024`), and `macro-registry` is inert (`register-macro!` has zero production callers). **Live gap = exactly 7**: schema, selection, session, strategy, process, user-precedence-groups, user-operators.
+   - ⚠ **The earlier claim "Option A cannot touch these — there is nothing in the `.pnet` to write" is HALF WRONG and is corrected here.** It is right that the *restore* cannot write what was never *serialized*. But (a) the correct fix is to **serialize them** (new P2), and (b) for **user-operators** the source data is *already in the `.pnet`*: specs are serialized (`pnet-serialize.rkt:596-600`, index 3) and `:mixfix` lives in `spec-entry` metadata, from which `process-spec` derives the operator registration (`macros.rkt:3913-3915` → `maybe-register-mixfix-operator`). What a cache hit loses is only the **derived** registration, because the hit path never re-runs `process-spec` — re-derivable exactly as the spec-propagation handler already re-derives spec-store entries.
 3. **The restore block's own header comment is stale**, under-counting by four: `driver.rkt:2774-2776` says trait/impl/param-impl/specialization are "serialized but NOT restored" — all four *are* restored 30-70 lines below. Any scope enumeration derived from that comment is wrong.
 
 ### 2.6 Landing-tree hazard (workflow discipline, new polarity)
@@ -133,7 +150,7 @@ Adding a registry becomes **adding a row**, and a row cannot be added without st
 
 **Prerequisite, verified independently (twice)**: the block's nested `(when (> (length pnet-result) N) …)` and per-registry `(when d-X …)` guards are **all dead**. `deserialize-module-state` always returns a **fixed 21-element list** with `(hasheq)`/`(hash)` defaults for optional slots (`pnet-serialize.rkt:699-722`), and the version gate is **exact equality** (`:589`, `:672`), so backward compatibility with a shorter list is impossible by construction. Removing them is safe and deletes ~50 lines of vestigial scaffolding.
 
-**Decision**: pending the critique's M-lens. The trade is *structural correctness* (and the mantra-audit failure repaired) against *a wider diff for a defect repair*. Note the guards are **vestigial, not scaffolding** — under an exact version gate they can never fire — so "keep them for safety" would itself be a red-flag rationalization.
+**Decision: ADOPTED** (2026-07-27). The critique's maintainability lens raised this as **BLOCKING** — independently of my own derivation — on exactly the `pipeline.md` grounds: the design had recorded "structurally emergent ✗" and then resolved it by pointing at out-of-scope Option C, when an in-scope structural fix exists inside Option A's envelope. Two agreeing derivations plus a rule that names this failure mode is enough. The guards are **vestigial, not scaffolding** — under an exact version gate they can never fire — so "keep them for safety" would itself be a red-flag rationalization. The table also makes P1's all-or-nothing restore and P3's non-theatrical invariant test straightforward.
 
 **Explicitly NOT covered (3)**, parameter-only and correct as such: `multi-defn-registry`, `tycon-arity-extension`, `defn-param-names`. Verified: `git grep 'current-{multi-defn-registry,tycon-arity-extension,defn-param-names}-cell-id'` → **empty**; none appears in `init-macros-cells!`.
 
@@ -173,7 +190,13 @@ Three cases, all of which must **FAIL at HEAD** before P1:
 - Run 1's cache-**miss** elaboration dual-writes the lib's entries into the live cells, so run 2's cells already know them.
 - `process-file` re-runs `init-macros-cells!` *after* preparse, re-seeding cells from the (now lib-inclusive) parameters.
 
-⇒ the test must reach a state where the cells are **genuinely ignorant** of the module: a fresh subprocess for the warm run, or a namespace never loaded before in that process, or `process-string` (never inits cells).
+⇒ the test must reach a state where the cells **exist but are genuinely ignorant** of the module.
+
+⚠ **Two of the three escape routes originally listed here were WRONG** (caught by the critique, confirmed by probe):
+- *"`process-string` (never inits cells)"* — **backwards as a standalone route.** If cells never exist, `macros-cell-read-safe` returns `#f` and the parameter fallback is **live**, which is precisely what *masks* the defect. `process-string` is useful only *after* cells have been created and made ignorant.
+- *"a fresh subprocess for the warm run"* — **maximally masked** for `process-file`. In the first `process-file` of a fresh process the net-box is `#f` for the whole preparse window in which every restore happens, so the parameter fallback carries it and the answer is correct.
+
+The defect's actual precondition, stated plainly: **a module load that happens while the registry cell-ids are non-`#f`.**
 
 Also: `infrastructure-stale?` (`pnet-serialize.rkt:574-578`) invalidates every `.pnet` when `driver_rkt.zo` is newer, and the runner mirrors it — so the test **must control cache freshness explicitly** or it silently proves nothing.
 
@@ -195,15 +218,27 @@ Measured at HEAD with this recipe:
 
 Both are deterministic and subprocess-free, so they run under the batch worker without the spawn/timeout/collection-path hazards.
 
-### P1 — The repair
+### P1 — The restore repair (severities 1 + 2)
 
-`restore-registry!` helper + 14 call sites + 3 annotated `#f`-cell exclusions. P0's tests flip to green.
+Table-driven restore per §3.2a, covering the 14, with the 3 exclusions as explicit `#f`-cell rows. P0's severity-1 and severity-2 cases flip to green.
 
-### P2 — Anti-regression for the 15th registry
+**Two hazards the critique surfaced, to handle here**:
+- **Partial-restore swallowing.** An exception mid-restore leaves registries 1..k-1 restored and k..14 not, with the module already registered and **zero diagnostic** — because preparse wraps `process-imports` in `(with-handlers ([exn:fail? void]))` (`macros.rkt:2686`). (Note: *not* the `with-handlers` at `driver.rkt:2768`, which wraps only `deserialize-module-state` — the critique mis-cited this; the hazard is real via the preparse handler.) The table-driven form makes an all-or-nothing restore easy: build every row's new value first, then commit.
+- **The `(if (hash? reg) …)` guard is NOT "strictly more defensive."** On a non-hash accumulator it **discards the parameter's entire prior content** and restarts from a one-entry hash. Correcting §3.2's claim: it is a *data-losing* fallback that happens never to fire today. Keep it only where it already exists (the 3 `equal?`-keyed sites), and do not advertise it as hardening.
 
-An **invariant test**: after a cache hit, for each of the 14 (parameter, cell) pairs, every key in the parameter is present in the cell. This converts "remember to dual-write" from discipline into a gate. Plus the `pipeline.md` checklist entry (honestly labelled as the *weaker* half).
+### P2 — Serialize the never-restored registries + `PNET_VERSION` bump (severity 3)
 
-### P3 — Comment truth sweep
+Add the live never-serialized registries to `serialize-module-state` / `deserialize-module-state` and to the restore table. `schema` and `selection` are the proven-symptom pair (§2.4) and are the minimum; `session`, `strategy`, `process`, `user-precedence-groups` follow the same shape. **`user-operators` is different** — it is *derivable* from the already-serialized specs (§2.5.2), so prefer re-deriving it (mirroring the spec-propagation handler) over serializing a second copy of the same information.
+
+**The `PNET_VERSION` bump is required, for two independent reasons**:
+1. **Format change** — new fields.
+2. **Poison invalidation** — §2.2 documents durable on-disk corruption, and `infrastructure-stale?` is **not** a reliable invalidator: it requires `compiled/driver_rkt.zo` to *exist* (`pnet-serialize.rkt:574-578`), so with no compiled dir it returns `#f` (not stale) and poisoned caches stay live *after* the fix ships. The version bump is the only reliable sweep.
+
+### P3 — Anti-regression for the 15th registry (must not be theater)
+
+The naive form — "assert param ≡ cell for the 14 pairs" — is **not a gate**: (a) it cannot catch a *15th* registry, because a hand-enumerated list in the test cannot detect an omission from a *different* hand-enumerated list in `driver.rkt`; and (b) as specified it can pass at HEAD, since after any `process-file` the re-seed makes cell ⊇ param regardless. Under the table-driven form (§3.2a) the honest version is instead: assert **every row of `RESTORE-TABLE` with a non-`#f` cell-id lands in its cell** after a cache hit, driven *from the table itself* — so a new row is covered by construction and a row added with a `#f` cell-id is a deliberate, visible choice. The `pipeline.md` entry stays as the weaker, human half.
+
+### P4 — Comment truth sweep
 
 Correct the stale block header (§2.5.3) and the Track 10 Phase 2d/2e prior-art note at `driver.rkt:117-127`, which already recorded this exact incompleteness class ("make cache-hit path a COMPLETE replacement for full elaboration side effects") and should not be left implying the problem is still open.
 
