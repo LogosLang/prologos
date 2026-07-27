@@ -122,3 +122,45 @@ later anyway.
 progress meter; extend it as objects land, and raise `EXPECTED_PASS` in
 `tools/interop/run-ocapn-test-suite.sh` (currently 4) in the same commit.
 Do not raise it speculatively.
+
+## CORRECTION 2 (2026-07-27, later — I was wrong about "phantom")
+
+Commit `20e959eb` claimed **two of the seven mechanisms were phantom**
+because the op:listen machinery already provided them. That was half right
+and half wrong, and the wrong half is load-bearing.
+
+- **Mechanism 5 (resolver table) — genuinely phantom.** `bs-add-listener`
+  records pid → resolver export position. Confirmed by use.
+- **Mechanism 6 (emit for settled promises NOT in the inbound question
+  table) — REAL. The audit was right; I was wrong to dismiss it.**
+
+Why: `pump-outbound` → `pump-loop` walks `[bs-questions st]`
+(`captp-core.prologos:1913`) and reaches `listener-bytes-for-pid` only
+*inside* that walk, per QEntry (`:1882`). So a listener is only ever
+consulted for a promise that ALSO has a question-table entry.
+`deliver-resolve-me` allocates an answer promise and registers a listener
+but adds no question entry — so the pump never visits that pid, the promise
+settles silently, and zero bytes go out.
+
+**Observed exactly this**, driving the real upstream suite:
+
+```
+conn 1 frame 2 (103 in / 71 out bytes)   <- fetch reply: WORKS
+conn 1 frame 3 ( 81 in /  0 out bytes)   <- echo deliver: silent
+```
+
+The fetch path works because `do-fetch` bypasses the pump entirely — it
+stages its reply directly onto pending-out. The deliver path cannot, because
+the reply value only exists after the vat runs the actor.
+
+**So the remaining work is one thing**, and it is mechanism 6 as originally
+written: a pump stage that emits `listener-notify-bytes` for settled
+promises carrying a listener but no question entry. Do NOT try to fake a
+question entry to reuse the existing walk — a QEntry means "the peer asked
+via answer-position", and the pump would emit an answer-position resolution
+the peer never requested.
+
+**Method note.** Both corrections in this doc came from *running the thing*,
+not from reading it — the 14-agent audit, and then me, both got this wrong
+by inspection. The `71 out` vs `0 out` line in a server log settled in one
+run what two rounds of code-reading argued about.
