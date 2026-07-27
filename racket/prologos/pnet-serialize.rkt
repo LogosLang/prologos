@@ -52,9 +52,37 @@
 ;; Lib dir for resolving relative .rkt paths in foreign function re-linking
 (define pnet-lib-dir (simplify-path (build-path (syntax-source #'here) ".." "lib")))
 
+;; Resolve a `foreign racket "…"` module-path string to a dynamic-require
+;; spec. THE canonical resolver — used by BOTH resolution sites: fresh
+;; elaboration (driver.rkt handle-foreign-decl) and the .pnet re-link below.
+;; The two sites drifting apart is how the worktree defect stayed hidden.
+;;
+;; - "….rkt"      → file relative to the RUNNING compiler's source directory
+;; - "prologos/X" → the RUNNING compiler's own X.rkt — NEVER the installed
+;;   collection. The collection resolves to the MAIN checkout, so in a git
+;;   worktree it instantiates a SECOND compiler (its own syntax.rkt struct
+;;   identities) and IR passthrough values fail the foreign module's own
+;;   predicates ("keyword-name: expected a Keyword value, got
+;;   #(struct:expr-keyword …)"). Two-instance class, 3rd sighting 2026-07-26;
+;;   cf. testing.md "relative path, never prologos/X". In the main checkout
+;;   the rewrite resolves to the identical file — no behavior change there.
+;; - anything else ("racket/base", "racket/math") → collection path, unchanged.
+(define (foreign-module-path->require-spec module-path-str)
+  (cond
+    [(regexp-match? #rx"\\.rkt$" module-path-str)
+     (simplify-path (build-path pnet-lib-dir ".." module-path-str))]
+    [(regexp-match? #rx"^prologos/" module-path-str)
+     (simplify-path
+      (build-path pnet-lib-dir ".."
+                  (string-append (substring module-path-str
+                                            (string-length "prologos/"))
+                                 ".rkt")))]
+    [else (string->symbol module-path-str)]))
+
 (provide serialize-module-state
          deserialize-module-state
          relink-foreign-marshallers!
+         foreign-module-path->require-spec
          pnet-stale?
          pnet-path-for-module
          ;; For testing
@@ -284,11 +312,8 @@
                  (not (eq? source-module #f))
                  (not (eq? racket-name #f)))
             (with-handlers ([exn? (lambda (_) proc)])  ;; fallback to stub
-              (define mod-path
-                (if (regexp-match? #rx"\\.rkt$" source-module)
-                    (simplify-path (build-path pnet-lib-dir ".." source-module))
-                    (string->symbol source-module)))
-              (dynamic-require mod-path racket-name))
+              (dynamic-require (foreign-module-path->require-spec source-module)
+                               racket-name))
             proc))  ;; no source-module → keep the stub
       ;; Check if the re-linked proc has fewer args than arity.
       ;; This happens when :requires (Cap) adds capability token args.

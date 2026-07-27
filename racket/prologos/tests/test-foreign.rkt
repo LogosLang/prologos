@@ -544,3 +544,42 @@
       (foreign racket \"racket/base\" (length :as rkt-length : (List Int) -> Nat))
       (eval (rkt-length (rkt-reverse (cons Int (int 1) (cons Int (int 2) (cons Int (int 3) (nil Int)))))))"))
    "3N : Nat"))
+
+;; ========================================
+;; foreign-module-path->require-spec — the canonical foreign module resolver
+;; (pnet-serialize.rkt; shared by handle-foreign-decl + the .pnet re-link).
+;; Worktree two-instance defect, 2026-07-26: "prologos/X" must resolve to the
+;; RUNNING compiler's own X.rkt, never the installed collection — in a git
+;; worktree the collection is the MAIN checkout, a second compiler instance
+;; whose struct predicates reject this instance's IR values.
+;; ========================================
+
+(require (only-in "../pnet-serialize.rkt" foreign-module-path->require-spec))
+
+;; Helper: this test file lives in tests/, the compiler sources one level up.
+(define (running-driver-path)
+  (simplify-path (build-path (path-only (syntax-source #'here)) ".." "driver.rkt")))
+
+(test-case "foreign resolver: prologos/X → running compiler's own file, not the collection"
+  (define spec (foreign-module-path->require-spec "prologos/keyword-ops"))
+  (check-pred path? spec "must be a filesystem path, not a collection symbol")
+  ;; The resolved file must live in THIS compiler's source directory (the
+  ;; directory containing driver.rkt), wherever this checkout/worktree is.
+  (check-equal? (path-only spec) (path-only (running-driver-path)))
+  (check-equal? (file-name-from-path spec) (string->path "keyword-ops.rkt")))
+
+(test-case "foreign resolver: .rkt paths resolve relative to the running source dir"
+  (define spec (foreign-module-path->require-spec "keyword-ops.rkt"))
+  (check-pred path? spec)
+  (check-equal? (file-name-from-path spec) (string->path "keyword-ops.rkt"))
+  (check-equal? (path-only spec) (path-only (running-driver-path))))
+
+(test-case "foreign resolver: external collection paths stay on the collection route"
+  (check-equal? (foreign-module-path->require-spec "racket/base") 'racket/base))
+
+(test-case "foreign resolver: resolved prologos/X module shares the running instance"
+  ;; End-to-end instance-identity pin: dynamic-require the resolved path and
+  ;; feed it an expr-keyword built by THIS instance's syntax.rkt. Under the
+  ;; collection route this raises (two-instance predicate rejection).
+  (define kw-name (dynamic-require (foreign-module-path->require-spec "prologos/keyword-ops") 'kw-name))
+  (check-equal? (kw-name (expr-keyword 'age)) "age"))

@@ -73,7 +73,8 @@
          "prop-observatory.rkt"   ;; Observatory: capture protocol
          (only-in "pnet-serialize.rkt"   ;; Track 10: .pnet serialization
                   serialize-module-state deserialize-module-state
-                  pnet-stale? relink-foreign-marshallers!)
+                  pnet-stale? relink-foreign-marshallers!
+                  foreign-module-path->require-spec)
          ;; SRE Track 2I Phase 3c (2026-04-30): subtype? import retired alongside
          ;; the install-lattice-subtype-fn! call (was its only use). Per-relation
          ;; meet registration in unify.rkt's type-sre-domain replaced the callback.
@@ -3325,13 +3326,13 @@
                zonked-type
                foreign-caps)))
 
-  ;; dynamic-require the Racket function using its ORIGINAL Racket name
-  ;; For .rkt file paths, resolve relative to the prologos source directory.
-  ;; For collection paths like "racket/base", convert to symbol.
-  (define rkt-mod-path
-    (if (regexp-match? #rx"\\.rkt$" module-path-str)
-        (simplify-path (build-path prologos-lib-dir ".." module-path-str))
-        (string->symbol module-path-str)))
+  ;; dynamic-require the Racket function using its ORIGINAL Racket name.
+  ;; Resolution goes through THE canonical resolver (pnet-serialize.rkt's
+  ;; foreign-module-path->require-spec) — shared with the .pnet re-link path
+  ;; so the two sites cannot drift. "prologos/X" resolves to the RUNNING
+  ;; compiler's own X.rkt, never the installed collection (the worktree
+  ;; two-instance defect, 2026-07-26 — see the resolver's comment).
+  (define rkt-mod-path (foreign-module-path->require-spec module-path-str))
   (define rkt-proc
     (with-handlers ([exn:fail? (lambda (e)
                                  (error 'foreign "Cannot import ~a from ~a: ~a"
