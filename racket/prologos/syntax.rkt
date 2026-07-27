@@ -308,6 +308,7 @@
  (struct-out expr-reduce-arm)
  ;; Union types
  (struct-out expr-union)
+ expr-substructs-all?   ;; CIU T6 P2.a: generic containment-descent helper (pipeline.md § Exhaustive Walkers)
  ;; Unapplied type constructor (HKT support)
  (struct-out expr-tycon)
  builtin-tycon-arity
@@ -1426,3 +1427,28 @@
 ;; ctx-len: number of bindings in context
 (define (ctx-len ctx)
   (length ctx))
+
+
+;; ============================================================
+;; CIU T6 P2.a — generic transparent-struct descent for READ-ONLY
+;; containment predicates (pipeline.md § Exhaustive Walkers).
+;; ============================================================
+;; Applies `pred` to every sub-value of a struct or list spine; non-struct
+;; atoms (symbols, numbers, strings, …) are vacuously TRUE. All runtime
+;; container internals (champ/rrb/hset tries) are #:transparent, so element
+;; descent falls out of the same walk. A predicate using this as its
+;; catch-all CANNOT silently skip a node kind — the structural answer to the
+;; [_ #t] permissive-tail disease (7+ in-tree instances, all silent).
+;; NOTE: read-only — no rebuild, no depth routing; do NOT use this for
+;; transforming walkers (those need the binder inventory from shift).
+(define (expr-substructs-all? e pred)
+  (cond
+    ;; pair covers proper lists too (the cdr chain re-enters via pred→fallback)
+    [(pair? e) (and (pred (car e)) (pred (cdr e)))]
+    ;; champ/rrb tries store entries in raw VECTORS — descend them
+    [(vector? e) (for/and ([x (in-vector e)]) (pred x))]
+    [(struct? e)
+     (let ([v (struct->vector e)])
+       (for/and ([i (in-range 1 (vector-length v))])
+         (pred (vector-ref v i))))]
+    [else #t]))

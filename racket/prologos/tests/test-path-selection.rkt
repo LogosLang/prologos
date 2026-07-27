@@ -1,0 +1,185 @@
+#lang racket/base
+
+;;;
+;;; CIU T6 Path Selection — the track's test file (created P2.a, grown per phase).
+;;; P2.a: prerequisite repairs — the record-project Int gate, the pvec-nth
+;;; discipline guard, the ground-expr? twin fallbacks, and the
+;;; expr-broadcast-get walker-safety arms.
+;;; Design: docs/tracking/2026-07-26_CIU_T6_PATH_SELECTION_DESIGN.md §2 P2 + §5.10.
+;;;
+
+(require rackunit
+         racket/list
+         racket/file
+         racket/runtime-path
+         "../macros.rkt"
+         "../prelude.rkt"
+         "../syntax.rkt"
+         "../metavar-store.rkt"
+         "../parser.rkt"
+         "../elaborator.rkt"
+         "../pretty-print.rkt"
+         "../global-env.rkt"
+         "../driver.rkt"
+         "../reduction.rkt"
+         "../namespace.rkt"
+         (prefix-in tr: "../trait-resolution.rkt")
+         (prefix-in u: "../unify.rkt")
+         (prefix-in gc: "../global-constraints.rkt")
+         "../parse-reader.rkt")
+
+(define-runtime-path lib-dir "../lib")
+
+;; ---- Shared fixture (loaded once; :no-prelude — @[…]/pvec-* are parser keywords) ----
+(define-values (shared-global-env shared-ns-context shared-module-reg
+                shared-trait-reg shared-impl-reg shared-param-impl-reg
+                shared-bundle-reg)
+  (parameterize ([current-file-module-network-ref (make-module-network)]
+                 [current-ns-context #f]
+                 [current-module-registry (hasheq)]
+                 [current-lib-paths (list lib-dir)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (current-trait-registry)]
+                 [current-impl-registry (current-impl-registry)]
+                 [current-param-impl-registry (current-param-impl-registry)]
+                 [current-bundle-registry (current-bundle-registry)])
+    (install-module-loader!)
+    (process-string "(ns path-selection-test :no-prelude)")
+    (values (global-env-snapshot) (current-ns-context) (current-module-registry)
+            (current-trait-registry) (current-impl-registry)
+            (current-param-impl-registry) (current-bundle-registry))))
+
+(define (run-ws s)
+  (define tmp (make-temporary-file "prologos-pathsel-~a.prologos"))
+  (call-with-output-file tmp #:exists 'replace
+    (lambda (out) (display s out)))
+  (define result
+    (parameterize ([current-file-module-network-ref
+                    (module-network-add-import (make-module-network)
+                                               (module-network-from-snapshot shared-global-env))]
+                   [current-ns-context shared-ns-context]
+                   [current-module-registry shared-module-reg]
+                   [current-trait-registry shared-trait-reg]
+                   [current-impl-registry shared-impl-reg]
+                   [current-param-impl-registry shared-param-impl-reg]
+                   [current-bundle-registry shared-bundle-reg])
+      (process-file (path->string tmp))))
+  (delete-file tmp)
+  (map (lambda (r) (format "~a" r)) result))
+
+(define (run-ws-last s) (last (run-ws s)))
+
+;; ============================================================
+;; P2.a — record-project dynamic Int gate (D3-S1 prerequisite for PS10)
+;; ============================================================
+
+(test-case "tuple dynamic index: Int VARIABLE degrades to ⋃positions (was: ERROR)"
+  ;; `def i := 1` is Int by the language's own convention (prologos-syntax.md
+  ;; § Nat vs Int); the literal leg's comment claims to mirror expr-get's
+  ;; Nat-or-Int gate — the dynamic leg now actually does.
+  (define r (run-ws-last "(ns path-selection-test :no-prelude)\ndef tr := @[1 \"a\" true]\ndef i := 1\ntr[i]"))
+  (check-regexp-match #rx"Bool \\| Int \\| String" r))
+
+(test-case "tuple dynamic index: Nat variable still degrades to ⋃positions (pin)"
+  (define r (run-ws-last "(ns path-selection-test :no-prelude)\ndef tr := @[1 \"a\" true]\ndef n : Nat := 1N\ntr[n]"))
+  (check-regexp-match #rx"Bool \\| Int \\| String" r))
+
+(test-case "pvec-nth on a tuple: Int VARIABLE stays REJECTED (the census-hazard pin)"
+  ;; The pvec-* runtime is Nat-value-only (F1a-col discipline). Before P2.a this
+  ;; rejection rode record-project's Nat-only dynamic leg; widening that leg
+  ;; alone would silently flip this to accepted-then-runtime-stall — so
+  ;; pvec-nth's Record leg carries its OWN gate, pinned here.
+  (define r (run-ws-last "(ns path-selection-test :no-prelude)\ndef tr := @[1 \"a\" true]\ndef j := 1\n[pvec-nth tr j]"))
+  (check-regexp-match #rx"error|Error|ERROR" r))
+
+(test-case "pvec-nth on a tuple: Nat variable union-degrade still works (pin)"
+  (define r (run-ws-last "(ns path-selection-test :no-prelude)\ndef tr := @[1 \"a\" true]\ndef n : Nat := 1N\n[pvec-nth tr n]"))
+  (check-regexp-match #rx"Bool \\| Int \\| String" r))
+
+;; ============================================================
+;; P2.a — ground-expr? twins: the generic transparent-struct fallback
+;; (pipeline.md § Exhaustive Walkers; the D3-S9 re-homed CIU T2 item)
+;; ============================================================
+
+(define ?m1 (expr-meta 990001 #f))
+(define ?m2 (expr-meta 990002 #f))
+
+(test-case "twin B (trait-resolution): a union of unsolved metas is NOT ground"
+  (check-false (tr:ground-expr? (expr-union ?m1 ?m2))))
+
+(test-case "twin B: a union nested under an armed arm is NOT ground"
+  (check-false (tr:ground-expr? (expr-app (expr-fvar 'List) (expr-union ?m1 ?m2)))))
+
+(test-case "twin B: unarmed compound nodes carrying a meta are NOT ground"
+  ;; expr-Vec / expr-fst / expr-ann all fell to [_ #t] before the fallback.
+  (check-false (tr:ground-expr? (expr-Vec ?m1 (expr-nat-val 3))))
+  (check-false (tr:ground-expr? (expr-fst ?m1)))
+  (check-false (tr:ground-expr? (expr-ann ?m1 (expr-Nat)))))
+
+(test-case "twin B: ground atoms + armed nodes stay ground (must-not-change pins)"
+  (check-true (tr:ground-expr? (expr-fvar 'Int)))
+  (check-true (tr:ground-expr? (expr-union (expr-Nat) (expr-String))))
+  (check-true (tr:ground-expr? (expr-app (expr-fvar 'List) (expr-Nat)))))
+
+(test-case "twin B: mult/level metas do NOT gate type-groundness (ruled + pinned)"
+  ;; Dict params use mw; mult/level metas commonly stay unsolved until final
+  ;; zonk — making them gate would starve trait resolution. The generic descent
+  ;; bottoms out in their numeric id fields, so they report ground.
+  (check-true (tr:ground-expr? (expr-Type (level-meta 990003))))
+  (check-true (tr:ground-expr? (expr-Pi (mult-meta 990004) (expr-Nat) (expr-Nat)))))
+
+(test-case "twin A (global-constraints): a logic var inside an unarmed compound is NOT ground"
+  (define lv (expr-logic-var 'x 'free))
+  (check-false (gc:narrow-ground-expr? (expr-union lv (expr-Nat))))
+  (check-false (gc:narrow-ground-expr? (expr-fst lv))))
+
+(test-case "twin A: a logic var inside a CHAMP container is NOT ground (element descent)"
+  (define lv (expr-logic-var 'x 'free))
+  (define champ-lv
+    (whnf (expr-map-assoc (expr-map-empty (expr-Keyword) (expr-Nat))
+                          (expr-keyword 'a) lv)))
+  (define champ-ok
+    (whnf (expr-map-assoc (expr-map-empty (expr-Keyword) (expr-Nat))
+                          (expr-keyword 'a) (expr-nat-val 1))))
+  (check-true (expr-champ? champ-lv))
+  (check-false (gc:narrow-ground-expr? champ-lv))
+  (check-true (gc:narrow-ground-expr? champ-ok)))
+
+;; ============================================================
+;; P2.a — normalize-for-resolution: unions now descend (the audit's capture gap)
+;; ============================================================
+
+(test-case "normalize-for-resolution descends into unions (PVec shorthand pin)"
+  (check-equal? (u:normalize-for-resolution
+                 (expr-union (expr-PVec (expr-Nat)) (expr-Nat)))
+                (expr-union (expr-app (expr-tycon 'PVec) (expr-Nat))
+                            (expr-Nat))))
+
+;; ============================================================
+;; P2.a — expr-broadcast-get walker safety (whnf + definitely-not-map?)
+;; ============================================================
+
+(define champ-alice
+  (whnf (expr-map-assoc (expr-map-empty (expr-Keyword) (expr-String))
+                        (expr-keyword 'name) (expr-string "alice"))))
+
+(define bg-live
+  ;; (broadcast-get (cons {:name "alice"} nil) :name) — reducible.
+  (expr-broadcast-get
+   (expr-app (expr-app (expr-fvar 'cons) champ-alice) (expr-fvar 'nil))
+   (list (expr-keyword 'name))))
+
+(test-case "broadcast-get: whnf now reduces it (was: [_ e] fallthrough, nf-only)"
+  (define w (whnf bg-live))
+  (check-false (eq? w bg-live))
+  (check-equal? w (nf bg-live)))
+
+(test-case "broadcast-get: a STUCK broadcast no longer degrades map-get to `none`"
+  ;; definitely-not-map? now exempts expr-broadcast-get like its two path
+  ;; siblings (the 2026-07-16 value-loss fix left it out): map-get over a stuck
+  ;; broadcast stays STUCK instead of fabricating (expr-fvar 'none).
+  (define bg-stuck (expr-broadcast-get (expr-fvar 'unknown-list)
+                                       (list (expr-keyword 'name))))
+  (check-false (definitely-not-map? bg-stuck))
+  (define r (whnf (expr-map-get bg-stuck (expr-keyword 'k))))
+  (check-false (equal? r (expr-fvar 'none))))

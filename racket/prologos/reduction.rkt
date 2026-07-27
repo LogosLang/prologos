@@ -1720,6 +1720,10 @@
            (expr-map-dissoc? e)     ;; map operation
            (expr-get-in? e)         ;; dynamic path navigation — could return a map
            (expr-update-in? e)      ;; dynamic path update — its result IS a map
+           ;; CIU T6 P2.a: the third path sibling, left out of the 2026-07-16
+           ;; fix — a stuck broadcast's elements could be maps; degrading a
+           ;; map-get over it to `none` fabricated absence.
+           (expr-broadcast-get? e)
            (expr-error? e)          ;; error propagation
            ;; CIU T6 F1b.4c (D22): a PANIC must propagate stuck, never degrade
            ;; — the :check bridge's failure value was swallowed to `none` by
@@ -3117,6 +3121,44 @@
                  (whnf (expr-map-assoc base key updated)))]))]
          [(and (equal? nt target) (equal? np paths)) e]
          [else (expr-update-in nt np fn)]))]
+    ;; CIU T6 P2.a: broadcast-get at whnf strength — the 2026-07-16 P6
+    ;; value-loss fix (siblings above) left this node out; with no whnf arm a
+    ;; broadcast result was whnf-stuck and map-get's graceful degradation
+    ;; silently converted it to none. Mirrors the nf arm (:~4133) at whnf
+    ;; strength: walk the cons spine, per-element chained map-get.
+    [(expr-broadcast-get target fields)
+     (let ([nt (whnf target)])
+       (define (extract-field elem)
+         (foldl (lambda (fld acc) (whnf (expr-map-get acc fld))) elem fields))
+       (define (list-nil*? x)
+         (or (expr-nil? x)
+             (and (expr-fvar? x)
+                  (let ([s (symbol->string (expr-fvar-name x))])
+                    (or (string=? s "nil") (string-suffix? s "::nil"))))
+             (and (expr-app? x) (expr-fvar? (expr-app-func x))
+                  (let ([s (symbol->string (expr-fvar-name (expr-app-func x)))])
+                    (or (string=? s "nil") (string-suffix? s "::nil"))))))
+       (define (list-cons*? x)
+         (and (expr-app? x) (expr-app? (expr-app-func x))
+              (let ([inner (expr-app-func (expr-app-func x))])
+                (define (cons-fvar? v)
+                  (and (expr-fvar? v)
+                       (let ([s (symbol->string (expr-fvar-name v))])
+                         (or (string=? s "cons") (string-suffix? s "::cons")))))
+                (or (cons-fvar? inner)
+                    (and (expr-app? inner) (cons-fvar? (expr-app-func inner)))))))
+       (define (map-over lst)
+         (cond
+           [(list-nil*? lst) lst]
+           [(list-cons*? lst)
+            (let* ([head-elem (expr-app-arg (expr-app-func lst))]
+                   [tail-lst (whnf (expr-app-arg lst))])
+              (expr-app (expr-app (expr-fvar 'cons) (extract-field head-elem))
+                        (map-over tail-lst)))]
+           ;; stuck target: return SELF (eq?-preserving) so callers see no
+           ;; progress and definitely-not-map?'s exemption keeps map-get honest
+           [else (if (eq? nt target) e (expr-broadcast-get lst fields))]))
+       (map-over nt))]
     [(expr-map-size m)
      (let ([m* (whnf m)])
        (if (equal? m* m) e (whnf (expr-map-size m*))))]

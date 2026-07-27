@@ -69,7 +69,12 @@
     ;; default would misreport a meta-bearing record ({:a ?T}) as ground.
     [(? expr-Record? rec)
      (andmap (lambda (fld) (ground-expr? (record-field-type (cdr fld)))) (expr-Record-fields rec))]
-    [_ #t]))  ;; atoms, fvar, bvar, tycon, etc. are always ground
+    ;; CIU T6 P2.a (D3-S9): generic transparent-struct fallback replaces the
+    ;; permissive [_ #t] tail — unarmed compounds (union, Vec, fst, ann, …)
+    ;; DESCEND instead of defaulting ground; atoms bottom out vacuously true.
+    ;; mult/level metas inside Pi/Type slots bottom out at their numeric ids →
+    ;; ground (deliberate: they must not starve trait resolution; test-pinned).
+    [_ (expr-substructs-all? e ground-expr?)]))
 
 ;; ========================================
 ;; Core expression → impl key string
