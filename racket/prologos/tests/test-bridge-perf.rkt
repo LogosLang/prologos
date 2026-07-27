@@ -34,7 +34,7 @@
 ")
 
 (define-values (env nsc mr tr ir pir cr tm)
-  (parameterize ([current-prelude-env (hasheq)] [current-module-definitions-content (hasheq)]
+  (parameterize ([current-file-module-network-ref (make-module-network)]
                  [current-ns-context #f] [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)] [current-preparse-registry prelude-preparse-registry]
                  [current-ctor-registry (current-ctor-registry)] [current-type-meta (current-type-meta)]
@@ -42,12 +42,12 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  [current-multi-defn-registry (current-multi-defn-registry)] [current-spec-store (hasheq)])
     (install-module-loader!) (process-string preamble)
-    (values (current-prelude-env) (current-ns-context) (current-module-registry)
+    (values (current-file-module-network-ref) (current-ns-context) (current-module-registry)
             (current-trait-registry) (current-impl-registry) (current-param-impl-registry)
             (current-ctor-registry) (current-type-meta))))
 
 (define (run s)
-  (parameterize ([current-prelude-env env] [current-ns-context nsc]
+  (parameterize ([current-file-module-network-ref env] [current-ns-context nsc]
                  [current-module-registry mr] [current-lib-paths (list prelude-lib-dir)]
                  [current-preparse-registry (current-preparse-registry)]
                  [current-trait-registry tr] [current-impl-registry ir]

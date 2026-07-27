@@ -48,8 +48,7 @@
 
 (test-case "ocapn-acceptance/file elaborates clean via process-file"
   (define results
-    (parameterize ([current-prelude-env (hasheq)]
-                   [current-module-definitions-content (hasheq)]
+    (parameterize ([current-file-module-network-ref (make-module-network)]
                    [current-ns-context #f]
                    [current-module-registry prelude-module-registry]
                    [current-lib-paths (list prelude-lib-dir)]
@@ -98,8 +97,7 @@
                 shared-param-impl-reg
                 shared-ctor-reg
                 shared-type-meta)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
+  (parameterize ([current-file-module-network-ref (make-module-network)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -113,7 +111,7 @@
                  [current-spec-store (hasheq)])
     (install-module-loader!)
     (process-string shared-preamble)
-    (values (current-prelude-env)
+    (values (current-file-module-network-ref)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -123,7 +121,7 @@
             (current-type-meta))))
 
 (define (run s)
-  (parameterize ([current-prelude-env shared-global-env]
+  (parameterize ([current-file-module-network-ref shared-global-env]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]

@@ -99,8 +99,7 @@
 (printf "ocapn-test-server: loading Prologos OCapN modules~n") (flush-output)
 
 (define-values (g-env g-ns g-mods g-traits g-impls g-pimpls g-ctors g-tmeta)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
+  (parameterize ([current-file-module-network-ref (make-module-network)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -114,7 +113,7 @@
                  [current-spec-store (hasheq)])
     (install-module-loader!)
     (process-string preamble)
-    (values (current-prelude-env)
+    (values (current-file-module-network-ref)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -124,7 +123,7 @@
             (current-type-meta))))
 
 (define (run-prologos s)
-  (parameterize ([current-prelude-env g-env]
+  (parameterize ([current-file-module-network-ref g-env]
                  [current-ns-context g-ns]
                  [current-module-registry g-mods]
                  [current-lib-paths (list prelude-lib-dir)]
