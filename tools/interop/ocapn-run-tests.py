@@ -72,6 +72,7 @@ SELECTED = [
     #   invalid_signature        -> real Ed25519 verification of the receive
     ("tests.third_party_handoffs", "HandoffRemoteAsExporter", [
         "test_valid_handoff",
+        "test_handoff_receive_invalid_handoff_count",
     ]),
     # op:listen (Phase 59b part 4). Gated on the promise-resolver object
     # (swiss-num IokCxYmMj04nos2JN1TDoY1bT8dXh6Lr), which is now PRE-SEEDED

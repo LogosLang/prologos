@@ -1356,6 +1356,73 @@ defn handoff-receive-gift-id [v]
     | none    -> [none String]
     | some sg -> signed-give-gift-id sg
 
+;; A handoff-receive is single-use. Its identity is
+;; (receiving-session, receiving-side, handoff-count) — args 0, 1 and 2 of the
+;; desc:handoff-receive — and upstream's invalid-handoff-count test replays
+;; exactly that triple (re-depositing the gift first, so gift-consumption alone
+;; does NOT catch it) and requires a `break`.
+;;
+;; The used-set is stored IN THE GIFT TABLE under a reserved "used:" key
+;; prefix. That overloads one String->Nat table with two namespaces, which is a
+;; real tradeoff taken deliberately: the alternative is an 11th BridgeState
+;; field, and every `bridge-state` pattern in this module would have to change
+;; for a set that the driver already seeds and publishes alongside the gifts.
+;; The prefix cannot collide with a gift id, because gift ids come from the
+;; peer as opaque bytes and this key is only ever CONSTRUCTED here.
+
+spec nat-digits-of Nat -> String
+defn nat-digits-of [n]
+  str::from-int [from-nat n]
+
+spec handoff-identity-parts String String Nat -> String
+defn handoff-identity-parts [sess side count]
+  str::append "used:"
+    [str::append sess [str::append "|" [str::append side [str::append "|" [nat-digits-of count]]]]]
+
+spec handoff-count-of SyrupValue -> [Option Nat]
+defn handoff-count-of [hr]
+  match [nth-syrup [record-args-of "desc:handoff-receive" hr] 2N]
+    | none   -> [none Nat]
+    | some c -> wire-nat c
+
+spec handoff-side-of SyrupValue -> [Option String]
+defn handoff-side-of [hr]
+  match [nth-syrup [record-args-of "desc:handoff-receive" hr] 1N]
+    | none   -> [none String]
+    | some v -> syrup-bytes-of v
+
+spec handoff-session-of SyrupValue -> [Option String]
+defn handoff-session-of [hr]
+  match [nth-syrup [record-args-of "desc:handoff-receive" hr] zero]
+    | none   -> [none String]
+    | some v -> syrup-bytes-of v
+
+spec handoff-identity-with-side SyrupValue String String -> [Option String]
+defn handoff-identity-with-side [hr sess side]
+  match [handoff-count-of hr]
+    | none   -> [none String]
+    | some c -> some [handoff-identity-parts sess side c]
+
+spec handoff-identity-with-session SyrupValue String -> [Option String]
+defn handoff-identity-with-session [hr sess]
+  match [handoff-side-of hr]
+    | none      -> [none String]
+    | some side -> handoff-identity-with-side hr sess side
+
+spec handoff-identity-of SyrupValue -> [Option String]
+  :doc "The single-use identity of a desc:handoff-receive: session|side|count."
+defn handoff-identity-of [hr]
+  match [handoff-session-of hr]
+    | none      -> [none String]
+    | some sess -> handoff-identity-with-session hr sess
+
+;; From the SIGNED receive upstream sends.
+spec withdraw-identity-of SyrupValue -> [Option String]
+defn withdraw-identity-of [signed-receive]
+  match [sig-envelope-object signed-receive]
+    | none    -> [none String]
+    | some hr -> handoff-identity-of hr
+
 ;; The whole descent, from the signed handoff-receive upstream sends.
 spec withdraw-gift-id SyrupValue -> [Option String]
 defn withdraw-gift-id [signed-receive]
@@ -1375,23 +1442,40 @@ defn withdraw-break-bytes [rm-pos reason]
 
 ;; A withdrawal CONSUMES its gift, so replaying the same handoff cannot succeed
 ;; twice — which is exactly what upstream's invalid-handoff-count test checks.
-spec do-withdraw Nat String Nat Vat BridgeState -> BridgeStep
-defn do-withdraw [rm-pos gid xid v st]
+spec do-withdraw Nat String String Nat Vat BridgeState -> BridgeStep
+defn do-withdraw [rm-pos gid ident xid v st]
   bridge-step v
     [bs-append-pending-out [withdraw-fulfill-bytes rm-pos xid]
-      [bs-remove-gift gid [bs-incr-export xid st]]]
+      [bs-add-gift ident zero
+        [bs-remove-gift gid [bs-incr-export xid st]]]]
 
-spec withdraw-known-gid Nat String Vat BridgeState -> BridgeStep
-defn withdraw-known-gid [rm-pos gid v st]
+spec withdraw-known-gid Nat String String Vat BridgeState -> BridgeStep
+defn withdraw-known-gid [rm-pos gid ident v st]
   match [bs-lookup-gift gid st]
     | none     -> bridge-step v [bs-append-pending-out [withdraw-break-bytes rm-pos "no-such-gift"] st]
-    | some xid -> do-withdraw rm-pos gid xid v st
+    | some xid -> do-withdraw rm-pos gid ident xid v st
+
+;; A handoff-receive is SINGLE-USE. Consuming the gift is not enough on its
+;; own: upstream's invalid-handoff-count test re-deposits the gift before
+;; replaying the same receive, so the gift is present again and the replay
+;; would succeed. The (session, side, count) identity is what must not repeat.
+spec withdraw-with-identity Nat String String Vat BridgeState -> BridgeStep
+defn withdraw-with-identity [rm-pos gid ident v st]
+  match [bs-lookup-gift ident st]
+    | some _ -> bridge-step v [bs-append-pending-out [withdraw-break-bytes rm-pos "replayed-handoff"] st]
+    | none   -> withdraw-known-gid rm-pos gid ident v st
+
+spec withdraw-with-gid Nat String SyrupValue Vat BridgeState -> BridgeStep
+defn withdraw-with-gid [rm-pos gid signed-receive v st]
+  match [withdraw-identity-of signed-receive]
+    | none       -> bridge-step v [bs-append-pending-out [withdraw-break-bytes rm-pos "malformed-handoff"] st]
+    | some ident -> withdraw-with-identity rm-pos gid ident v st
 
 spec withdraw-with-receive Nat SyrupValue Vat BridgeState -> BridgeStep
 defn withdraw-with-receive [rm-pos signed-receive v st]
   match [withdraw-gift-id signed-receive]
     | none     -> bridge-step v [bs-append-pending-out [withdraw-break-bytes rm-pos "malformed-handoff"] st]
-    | some gid -> withdraw-known-gid rm-pos gid v st
+    | some gid -> withdraw-with-gid rm-pos gid signed-receive v st
 
 spec withdraw-from-rest [List SyrupValue] [Option Nat] Vat BridgeState -> [Option BridgeStep]
 defn withdraw-from-rest [rest rm v st]
