@@ -22,7 +22,7 @@ require [prologos::ocapn::captp-core :refer [ConnectionState empty-connection
                                               bridge-state-empty]]
         [prologos::ocapn::vat        :refer [Vat vat Actor actor actor-table-set
                                              promise-table-set]]
-        [prologos::ocapn::behavior   :refer [beh-echo beh-greeter beh-cell beh-resolver]]
+        [prologos::ocapn::behavior   :refer [beh-echo beh-greeter beh-cell beh-resolver beh-car-factory-builder]]
         [prologos::ocapn::syrup      :refer [SyrupValue syrup-null syrup-string
                                              syrup-list syrup-nat syrup-tagged
                                              syrup-promise]]
@@ -120,6 +120,9 @@ defn concat-frames
 def resolver-vow-pos      : Nat := 6N
 def resolver-actor-pos    : Nat := 7N
 def promise-resolver-pos  : Nat := 4N
+;; The swiss-num JadQ0++… maps to export 3 in `swiss-num-export`; this is
+;; the object that has to be sitting there for the Car Factory chain.
+def car-factory-builder-pos : Nat := 3N
 
 spec import-object-desc Nat -> SyrupValue
 defn import-object-desc [n]
@@ -136,8 +139,9 @@ defn seeded-vat [echo-pos greeter-pos]
   [vat 8N
        [actor-table-set echo-pos [actor beh-echo syrup-null]
          [actor-table-set greeter-pos [actor beh-greeter [syrup-string "Hello"]]
-           [actor-table-set promise-resolver-pos [actor beh-cell resolver-pair]
-             [actor-table-set resolver-actor-pos [actor beh-resolver [syrup-promise resolver-vow-pos]] nil]]]]
+           [actor-table-set car-factory-builder-pos [actor beh-car-factory-builder syrup-null]
+             [actor-table-set promise-resolver-pos [actor beh-cell resolver-pair]
+               [actor-table-set resolver-actor-pos [actor beh-resolver [syrup-promise resolver-vow-pos]] nil]]]]]
        [promise-table-set resolver-vow-pos fresh nil]
        nil nil]
 

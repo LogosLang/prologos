@@ -36,6 +36,11 @@ import {
   decodeSyrup,
 } from './node_modules/@endo/ocapn/src/syrup/js-representation.js';
 
+// The op:deliver args slot is a LIST -- the OCapN wire form, and what
+// upstream's own suite iterates. Racket used to send a bare value there,
+// which this script was written against; unwrapping one level here reads
+// both, so the fixture no longer pins the older (unparseable) shape.
+const argsHead = (a) => Array.isArray(a) ? a[0] : (a && Array.isArray(a.values)) ? a.values[0] : a;
 const port = Number(process.argv[2]);
 if (!Number.isInteger(port) || port < 1) {
   process.stderr.write(`peer-questioner: bad port ${process.argv[2]}\n`);
@@ -126,7 +131,7 @@ const summarize = () => {
 
   // reply.values = [target, args, answer-pos, resolver]
   const replyTarget = reply.values[0];
-  const replyArgs   = reply.values[1];
+  const replyArgs   = argsHead(reply.values[1]);
 
   let replyTargetPos = null;
   if (replyTarget && replyTarget.label === 'desc:answer'

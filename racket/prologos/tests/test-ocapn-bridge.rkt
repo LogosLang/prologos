@@ -55,6 +55,7 @@
 (imports (prologos::data::option :refer (Option some none unwrap-or)))
 (imports (prologos::data::string :as str :refer ()))
 (imports (prologos::ocapn::handshake :refer (hex-to-bytes)))
+(imports (prologos::ocapn::interop-driver :refer (seeded-connection)))
 ")
 
 (define-values (shared-global-env
@@ -171,7 +172,10 @@
   (read (open-input-string (cadr m))))
 
 (test-case "bridge/outbound-deliver-bytes builds canonical op:deliver record"
-  ;; pid=0, args="hi" should produce <op:deliver <desc:answer 0> "hi" false false>
+  ;; pid=0, args="hi" produces <op:deliver <desc:answer 0> ["hi"] false false>.
+  ;; The args slot is a LIST -- a peer iterates it, so a bare value there
+  ;; raises inside its receive loop. This expectation used to encode the
+  ;; unwrapped form; that was the bug, not the contract.
   (define got
     (extract-value-bytes
      (run-last
@@ -181,7 +185,7 @@
      (run-last
       "(eval (encode-record \"op:deliver\"
                               (cons (syrup-tagged \"desc:answer\" (syrup-nat zero))
-                                (cons (syrup-string \"hi\")
+                                (cons (syrup-list (cons (syrup-string \"hi\") nil))
                                   (cons (syrup-bool false)
                                     (cons (syrup-bool false) nil))))))")))
   (check-equal? got expected))
@@ -616,7 +620,7 @@
 (test-case "bridge/dispatch-incoming-answer: unknown qpos is a no-op"
   (define got
     (run-last
-     "(eval (let ((step (dispatch-incoming-answer (suc zero) syrup-null (none Nat) empty-vat bridge-state-empty)))
+     "(eval (let ((step (dispatch-incoming-answer (suc zero) syrup-null (none Nat) (none Nat) empty-vat bridge-state-empty)))
               (queue-length (bridge-step-vat step))))"))
   (check-contains got "0N"))
 
@@ -629,7 +633,7 @@
               (let ((local-pid (alloc-id alloc)))
                 (let ((v0 (alloc-vat alloc)))
                   (let ((st0 (bs-add-outbound-question (suc zero) local-pid bridge-state-empty)))
-                    (let ((step (dispatch-incoming-answer (suc zero) (syrup-string \"hello-back\") (none Nat) v0 st0)))
+                    (let ((step (dispatch-incoming-answer (suc zero) (syrup-string \"hello-back\") (none Nat) (none Nat) v0 st0)))
                       (lookup-promise local-pid (bridge-step-vat step))))))))"))
   ;; lookup-promise returns Option PromiseState; want some pst-fulfilled
   (check-contains got "some")
@@ -920,9 +924,11 @@
   (define expected
     (extract-value-bytes
      (run-last
+      ;; The Error record sits INSIDE the args list -- that slot is always a
+      ;; list, because a peer iterates it.
       "(eval (encode-record \"op:deliver\"
                               (cons (syrup-tagged \"desc:answer\" (syrup-nat zero))
-                                (cons (syrup-tagged \"Error\" (syrup-string \"oops\"))
+                                (cons (syrup-list (cons (syrup-tagged \"Error\" (syrup-string \"oops\")) nil))
                                   (cons (syrup-bool false)
                                     (cons (syrup-bool false) nil))))))")))
   (check-equal? got expected))
@@ -2502,3 +2508,91 @@
                  (framed-concat (conn-step-outbound cstep))))"
        greeter-vat greet-args)))
     "gc-answers")))
+
+;; ========================================
+;; Promise pipelining — the Car Factory chain
+;; ========================================
+;;
+;; Real wire frames, exactly as upstream's suite emits them (verified against
+;; its own encoder). The chain is builder -> factory -> car -> string, and the
+;; peer never waits for a link to resolve before addressing the next, so every
+;; message after the first targets an answer that does not exist yet.
+
+(define f1 "<10'op:deliver<11'desc:export0+>[5'fetch32:JadQ0++RzsD4M+40uLxTWVaVqM10DcBJ]0+<18'desc:import-object0+>>")
+(define f2 "<10'op:deliver<11'desc:answer0+>[]1+<18'desc:import-object1+>>")
+(define f3 "<10'op:deliver<11'desc:answer1+>[[3'red9'zoomracer]]2+<18'desc:import-object2+>>")
+(define f4 "<10'op:deliver<11'desc:answer2+>[]f<18'desc:import-object3+>>")
+(define b3 "<10'op:deliver<11'desc:answer1+>[[1+2+3+4+5+]]2+<18'desc:import-object2+>>")
+
+(test-case "pipeline/each link answers with a NEW object, addressed by the next"
+  ;; Link 1 fetches the builder; link 2 asks it for a factory; link 3 asks the
+  ;; factory for a car. Each answer must be a fresh export the peer can address.
+  (define out
+    (extract-value-bytes
+     (run-last
+      (format
+       "(eval (let (r1 (connection-step (unwrap-or (op-abort \"x\") (decode-op ~s)) seeded-connection)
+                     r2 (connection-step (unwrap-or (op-abort \"x\") (decode-op ~s)) (conn-step-state r1))
+                     r3 (connection-step (unwrap-or (op-abort \"x\") (decode-op ~s)) (conn-step-state r2))
+                     r4 (connection-step (unwrap-or (op-abort \"x\") (decode-op ~s)) (conn-step-state r3)))
+                 (framed-concat (conn-step-outbound r4))))"
+       f1 f2 f3 f4))))
+  ;; The final answer goes to the drive op's resolve-me, export 3.
+  (check-contains out "desc:export3+")
+  (check-contains out "fulfill")
+  (check-contains out "Vroom! I am a red zoomracer car!"))
+
+(test-case "pipeline/a broken link breaks the rest of the chain"
+  ;; The factory is given [1 2 3 4 5] instead of (color model), so its answer
+  ;; BREAKS -- and the message already pipelined behind it must break too,
+  ;; rather than going unanswered. Saying nothing is the one response that is
+  ;; definitely wrong: the peer is waiting on a resolve-me.
+  (define out
+    (extract-value-bytes
+     (run-last
+      (format
+       "(eval (let (r1 (connection-step (unwrap-or (op-abort \"x\") (decode-op ~s)) seeded-connection)
+                     r2 (connection-step (unwrap-or (op-abort \"x\") (decode-op ~s)) (conn-step-state r1))
+                     r3 (connection-step (unwrap-or (op-abort \"x\") (decode-op ~s)) (conn-step-state r2))
+                     r4 (connection-step (unwrap-or (op-abort \"x\") (decode-op ~s)) (conn-step-state r3)))
+                 (framed-concat (conn-step-outbound r4))))"
+       f1 f2 b3 f4))))
+  (check-contains out "desc:export3+")
+  (check-contains out "break")
+  (check-false (string-contains? out "Vroom")))
+
+(test-case "pipeline/a returned <Error r> BREAKS the answer, it does not fulfill it"
+  ;; The vat-level convention the chain relies on. A behaviour cannot emit
+  ;; eff-break against its own answer -- it never learns that promise's id --
+  ;; so returning <Error r> is how it signals failure. Fulfilling with an
+  ;; error-shaped value instead would tell the peer `['fulfill <Error ...>]`
+  ;; where it expects `['break reason]`; both settle, so only a peer that
+  ;; checks which one it got can tell the difference.
+  (check-contains
+   (run-last
+    "(eval (lookup-promise (alloc-id (fresh-promise empty-vat))
+             (settle-answer (alloc-id (fresh-promise empty-vat))
+               (syrup-tagged \"Error\" (syrup-string \"nope\"))
+               (alloc-vat (fresh-promise empty-vat)))))")
+   "pst-broken")
+  ;; A plain value still fulfills.
+  (check-contains
+   (run-last
+    "(eval (lookup-promise (alloc-id (fresh-promise empty-vat))
+             (settle-answer (alloc-id (fresh-promise empty-vat))
+               (syrup-string \"ok\")
+               (alloc-vat (fresh-promise empty-vat)))))")
+   "pst-fulfilled"))
+
+(test-case "pipeline/the op:deliver args slot is always a LIST"
+  ;; A peer iterates that slot directly, so a bare value there raises inside
+  ;; its receive loop and it drops the connection -- surfacing on OUR side as
+  ;; a write error several frames later, pointing at the transport rather than
+  ;; at the frame that caused it.
+  (check-contains
+   (run-last "(eval (outbound-deliver-bytes zero (syrup-tagged \"Error\" (syrup-string \"x\"))))")
+   "[<5'Error1")
+  ;; An already-list payload is passed through unchanged, not double-wrapped.
+  (check-contains
+   (run-last "(eval (outbound-deliver-bytes zero (syrup-list (cons (syrup-string \"a\") nil))))")
+   "[1"))

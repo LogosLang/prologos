@@ -191,14 +191,14 @@
 (test-case "behavior/step-behavior dispatches on tag"
   (check-contains
    (run-last
-    "(eval (step-behavior beh-echo syrup-null (syrup-string \"hi\")))")
+    "(eval (step-behavior beh-echo syrup-null (syrup-string \"hi\") zero))")
    "ActStep"))
 
 (test-case "behavior/step-behavior dispatches counter"
   (check-contains
    (run-last
     "(eval (step-behavior beh-counter (syrup-nat zero)
-                            (syrup-tagged \"inc\" syrup-null)))")
+                            (syrup-tagged \"inc\" syrup-null) zero))")
    "ActStep"))
 
 ;; ========================================
@@ -251,14 +251,14 @@
   (check-contains
    (run-last
     "(eval (step-effects (step-behavior beh-greeter (syrup-string \"Hello\")
-                                        (syrup-list (cons (syrup-tagged \"desc:import-object\" (syrup-int 1)) nil)))))")
+                                        (syrup-list (cons (syrup-tagged \"desc:import-object\" (syrup-int 1)) nil)) zero)))")
    "eff-send-remote"))
 
 (test-case "behavior/greeter with no refr in args emits no effects"
   (check-contains
    (run-last
     "(eval (step-effects (step-behavior beh-greeter (syrup-string \"Hello\")
-                                        (syrup-list nil))))")
+                                        (syrup-list nil) zero)))")
    "nil"))
 
 ;; ========================================
@@ -277,7 +277,7 @@
    (run-last
     "(eval (step-effects (step-behavior beh-resolver (syrup-promise 6N)
                           (syrup-list (cons (syrup-symbol \"fulfill\")
-                                       (cons (syrup-symbol \"ok\") nil))))))")
+                                       (cons (syrup-symbol \"ok\") nil))) zero)))")
    "eff-resolve"))
 
 (test-case "behavior/resolver BREAKS on a break verb (does not resolve)"
@@ -285,7 +285,7 @@
     (run-last
      "(eval (step-effects (step-behavior beh-resolver (syrup-promise 6N)
                            (syrup-list (cons (syrup-symbol \"break\")
-                                        (cons (syrup-symbol \"oh-no\") nil))))))"))
+                                        (cons (syrup-symbol \"oh-no\") nil))) zero)))"))
   (check-contains effs "eff-break")
   (check-false (string-contains? effs "eff-resolve")
                "a break must NOT emit a resolve — that inversion was the bug"))
@@ -293,7 +293,7 @@
 (test-case "behavior/resolver ignores a non-list message"
   (check-contains
    (run-last
-    "(eval (step-effects (step-behavior beh-resolver (syrup-promise 6N) syrup-null)))")
+    "(eval (step-effects (step-behavior beh-resolver (syrup-promise 6N) syrup-null zero)))")
    "nil"))
 
 (test-case "behavior/resolver ignores an unknown verb by resolving with the payload"
@@ -302,5 +302,5 @@
   (check-contains
    (run-last
     "(eval (step-effects (step-behavior beh-resolver (syrup-promise 6N)
-                          (syrup-list (cons (syrup-symbol \"fulfill\") nil)))))")
+                          (syrup-list (cons (syrup-symbol \"fulfill\") nil)) zero)))")
    "eff-resolve"))

@@ -51,6 +51,15 @@ data BehaviorTag
   ;; Upstream's promise RESOLVER: interprets ['fulfill v] / ['break r]
   ;; rather than resolving with the whole message (which beh-fulfiller does).
   beh-resolver
+  ;; The Car Factory chain (upstream's promise-pipelining tests). Three
+  ;; behaviours, each of which RETURNS A NEW OBJECT rather than a value:
+  ;;   builder --()--------------> a car factory
+  ;;   factory --([color model])-> a car
+  ;;   car     --()--------------> "Vroom! I am a <color> <model> car!"
+  ;; This is what `eff-spawn` exists for; see the note on `data Effect`.
+  beh-car-factory-builder
+  beh-car-factory
+  beh-car
 
 ;; ========================================
 ;; Side-effects an actor can request
@@ -86,6 +95,20 @@ data Effect
   eff-resolve     : Nat -> SyrupValue
   ;; Break a promise with a reason (pst-broken).
   eff-break       : Nat -> SyrupValue
+  ;; Create a NEW actor at a caller-chosen id: (id, behaviour, initial state).
+  ;;
+  ;; The id is not invented by the behaviour — `step-behavior` is handed the
+  ;; vat's next free id, and the behaviour names that. So the vat and the
+  ;; behaviour agree by construction rather than by convention, and the
+  ;; behaviour can put a reference to the actor it is about to create INTO its
+  ;; own return value, which is the whole point: the Car Factory chain answers
+  ;; with objects, not values.
+  ;;
+  ;; CONSTRAINT, stated rather than hidden: at most ONE spawn per turn. Two
+  ;; would both name the same id and the second would overwrite the first.
+  ;; Lifting it means handing the behaviour a supply of ids rather than one,
+  ;; which none of the behaviours here need.
+  eff-spawn       : Nat -> BehaviorTag -> SyrupValue
 
 ;; ========================================
 ;; ActStep — what one method invocation produces
@@ -446,8 +469,131 @@ defn step-resolver [state args]
     | syrup-promise pid -> resolver-with-pid pid args
     | _                 -> no-op state
 
-spec step-behavior BehaviorTag SyrupValue SyrupValue -> ActStep
-defn step-behavior [tag state args]
+;; ========================================
+;; (color, model) — the Car Factory's one argument shape
+;; ========================================
+;;
+;; Its own type rather than a raw pair, so "is this a well-formed car spec?"
+;; is answered once, in `pair-of-symbols`, and the two callers cannot disagree
+;; about it. Upstream drives the malformed case deliberately ([1 2 3 4 5]) and
+;; requires a BREAK, so the rejection path is load-bearing, not defensive.
+
+data ColorModel
+  color-model : String -> String
+
+spec cm-color ColorModel -> String
+defn cm-color [c]
+  match c
+    | color-model a _ -> a
+
+spec cm-model ColorModel -> String
+defn cm-model [c]
+  match c
+    | color-model _ b -> b
+
+spec cm-syrup ColorModel -> SyrupValue
+defn cm-syrup [c]
+  syrup-list [cons [syrup-symbol [cm-color c]] [cons [syrup-symbol [cm-model c]] nil]]
+
+spec sym-name SyrupValue -> [Option String]
+defn sym-name [v]
+  match v
+    | syrup-symbol s -> some s
+    | _              -> [none String]
+
+spec two-syms-with-color String SyrupValue [List SyrupValue] -> [Option ColorModel]
+defn two-syms-with-color [c b tail]
+  match tail
+    | [cons _ _] -> [none ColorModel]
+    | nil ->
+        match [sym-name b]
+          | none -> [none ColorModel]
+          | some m -> some [color-model c m]
+
+spec two-syms-tail SyrupValue SyrupValue [List SyrupValue] -> [Option ColorModel]
+defn two-syms-tail [a b tail]
+  match [sym-name a]
+    | none -> [none ColorModel]
+    | some c -> two-syms-with-color c b tail
+
+;; Exactly two symbols, no more and no fewer.
+spec two-syms [List SyrupValue] -> [Option ColorModel]
+defn two-syms [xs]
+  match xs
+    | nil -> [none ColorModel]
+    | [cons a rest] ->
+        match rest
+          | nil -> [none ColorModel]
+          | [cons b tail] -> two-syms-tail a b tail
+
+spec pair-of-symbols SyrupValue -> [Option ColorModel]
+defn pair-of-symbols [v]
+  match v
+    | syrup-list xs -> two-syms xs
+    | _             -> [none ColorModel]
+
+;; The factory's args are a LIST whose first element is the (color model) pair.
+spec first-pair-of-symbols SyrupValue -> [Option ColorModel]
+defn first-pair-of-symbols [args]
+  match args
+    | syrup-list xs ->
+        match xs
+          | nil -> [none ColorModel]
+          | [cons h _] -> pair-of-symbols h
+    | _ -> [none ColorModel]
+
+;; ========================================
+;; The Car Factory chain
+;; ========================================
+;;
+;; Upstream's promise-pipelining tests walk a three-link chain in which every
+;; answer is a NEW OBJECT: builder -> factory -> car -> string. The peer never
+;; waits for a link to resolve before addressing the next one, so the whole
+;; chain travels as pipelined messages against unresolved answers.
+;;
+;; Each link answers with `<desc:export ID>` — a reference the peer can
+;; address — and creates the actor behind it via `eff-spawn` at the id the vat
+;; handed us. The reply and the actor therefore name the same id without any
+;; coordination step.
+
+;; A reference to one of our own objects, as the peer must address it.
+spec export-desc Nat -> SyrupValue
+defn export-desc [n]
+  syrup-tagged "desc:export" [syrup-nat n]
+
+;; --- car ---
+;; State: [syrup-symbol color, syrup-symbol model]. Any message -> the string.
+;; Upstream asserts the exact text, including "I am" (not "I'm").
+spec car-vroom String String -> SyrupValue
+defn car-vroom [color model]
+  syrup-string [str::append "Vroom! I am a " [str::append color [str::append " " [str::append model " car!"]]]]
+
+spec step-car SyrupValue SyrupValue -> ActStep
+defn step-car [state args]
+  match [pair-of-symbols state]
+    | none -> act-step state [syrup-string "Vroom! I am a car!"] nil
+    | some cm -> act-step state [car-vroom [cm-color cm] [cm-model cm]] nil
+
+;; --- car factory ---
+;; Args: [[color model]] — ONE argument which is a two-symbol list.
+;; Anything else is an error: upstream drives exactly that case and requires
+;; the answer to BREAK, which is what makes the pipelined-break test meaningful.
+spec step-car-factory SyrupValue SyrupValue Nat -> ActStep
+defn step-car-factory [state args fresh]
+  match [first-pair-of-symbols args]
+    | none -> act-step state [syrup-tagged "Error" [syrup-string "car factory expects (color model)"]] nil
+    | some cm -> act-step state [export-desc fresh] [cons [eff-spawn fresh beh-car [cm-syrup cm]] nil]
+
+;; --- car factory builder ---
+;; Any message -> a new car factory.
+spec step-car-factory-builder SyrupValue SyrupValue Nat -> ActStep
+defn step-car-factory-builder [state args fresh]
+  act-step state [export-desc fresh] [cons [eff-spawn fresh beh-car-factory syrup-null] nil]
+
+;; `fresh` is the vat's next free actor id, handed in so a behaviour can name
+;; the object it is about to create in its own return value (see `eff-spawn`).
+spec step-behavior BehaviorTag SyrupValue SyrupValue Nat -> ActStep
+defn step-behavior [tag state args fresh]
   match tag
     | beh-cell      -> step-cell state args
     | beh-counter   -> step-counter state args
@@ -457,3 +603,6 @@ defn step-behavior [tag state args]
     | beh-forwarder -> step-forwarder state args
     | beh-fulfiller -> step-fulfiller state args
     | beh-resolver  -> step-resolver state args
+    | beh-car-factory-builder -> step-car-factory-builder state args fresh
+    | beh-car-factory -> step-car-factory state args fresh
+    | beh-car       -> step-car state args

@@ -239,7 +239,10 @@
                 (format "Node peer-bidirectional exited non-zero. stderr=~s" child-stderr))
   (check-true (regexp-match? #rx"\"ok\":true" child-stdout)
               (format "expected Node summary ok:true; got: ~s" child-stdout))
-  (check-true (regexp-match? #rx"\"saw_reply_to_node_q\":\"node-q\"" child-stdout)
+  ;; The args slot is a LIST on the wire, so the reply reads back as
+  ;; ["node-q"] rather than "node-q". This assertion used to pin the bare
+  ;; form, which no peer could parse -- upstream iterates that slot.
+  (check-true (regexp-match? #rx"\"saw_reply_to_node_q\":\\[\"node-q\"\\]" child-stdout)
               (format "expected Node to see reply 'node-q' to its question; got: ~s"
                       child-stdout))
   (check-true (regexp-match? #rx"\"saw_racket_q_args\":\"racket-q\"" child-stdout)

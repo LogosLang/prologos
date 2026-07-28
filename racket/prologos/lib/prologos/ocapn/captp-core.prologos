@@ -89,11 +89,29 @@ require [prologos::ocapn::promise :refer-all]
 ;; This is the canonical OCapN shape for "the result of
 ;; question pid is args" — sent by the answering peer after a
 ;; deliver completes locally.
+;; The ARGS slot of an op:deliver is a LIST, always. A peer iterates it
+;; directly (`for arg in record.args[1]`), so a bare value there is not a
+;; tolerable variation — it raises inside the peer's receive loop, the peer
+;; drops the connection, and OUR next write fails with "error writing to
+;; stream port" several frames later. The symptom points at the transport; the
+;; cause is this slot.
+;;
+;; Answers reach here already-wrapped from the listener path (`['fulfill v]`),
+;; but the question-table path passed the resolution value straight through —
+;; including `<Error …>` for a broken promise, which is a record. Wrapping a
+;; non-list here is the fix, not a workaround: every other producer of this
+;; slot in this module already wraps.
+spec as-args-list SyrupValue -> SyrupValue
+defn as-args-list [v]
+  match v
+    | syrup-list _ -> v
+    | _            -> [syrup-list [cons v nil]]
+
 spec outbound-deliver-bytes Nat SyrupValue -> String
 defn outbound-deliver-bytes [pid args]
   wire::encode-record "op:deliver"
     [cons [syrup-tagged "desc:answer" [syrup-nat pid]]
-      [cons args
+      [cons [as-args-list args]
         [cons [syrup-bool false]
           [cons [syrup-bool false] nil]]]]
 
@@ -1867,28 +1885,49 @@ spec do-fetch Nat Nat Vat BridgeState -> BridgeStep
 defn do-fetch [rm-pos xid v st]
   bridge-step v [bs-append-pending-out [fetch-reply-bytes rm-pos xid] [bs-incr-export xid st]]
 
-spec fetch-with-swiss String [Option Nat] Vat BridgeState -> [Option BridgeStep]
-defn fetch-with-swiss [swiss rm v st]
+;; A PIPELINED fetch also carries an answer position, and the peer starts
+;; addressing that answer immediately — before, and regardless of, the
+;; resolve-me reply. So the answer needs a local promise of its own, resolved
+;; with the very object the reply names.
+;;
+;; Resolving it rather than leaving it pending is what makes the pipelining
+;; work: `pipelined-target-of` below reads the resolved value back out to find
+;; the actor a queued message should go to. A pending promise would just
+;; accumulate messages that nothing later dispatches.
+spec do-fetch-pipelined Nat Nat Nat Vat BridgeState -> BridgeStep
+defn do-fetch-pipelined [rm-pos xid apos v st]
+  let alloc := [fresh-promise v]
+    bridge-step [resolve-promise [alloc-id alloc] [syrup-tagged "desc:export" [syrup-nat xid]] [alloc-vat alloc]]
+      [bs-add-question apos [alloc-id alloc] [bs-append-pending-out [fetch-reply-bytes rm-pos xid] [bs-incr-export xid st]]]
+
+spec fetch-with-ap String Nat [Option Nat] Vat BridgeState -> [Option BridgeStep]
+defn fetch-with-ap [swiss rm-pos ap v st]
   match [swiss-num-export swiss]
     | none -> [none BridgeStep]
     | some xid ->
-        match rm
-          | none        -> [none BridgeStep]
-          | some rm-pos -> some [do-fetch rm-pos xid v st]
+        match ap
+          | none      -> some [do-fetch rm-pos xid v st]
+          | some apos -> some [do-fetch-pipelined rm-pos xid apos v st]
 
-spec fetch-from-rest [List SyrupValue] [Option Nat] Vat BridgeState -> [Option BridgeStep]
-defn fetch-from-rest [rest rm v st]
+spec fetch-with-swiss String [Option Nat] [Option Nat] Vat BridgeState -> [Option BridgeStep]
+defn fetch-with-swiss [swiss rm ap v st]
+  match rm
+    | none        -> [none BridgeStep]
+    | some rm-pos -> fetch-with-ap swiss rm-pos ap v st
+
+spec fetch-from-rest [List SyrupValue] [Option Nat] [Option Nat] Vat BridgeState -> [Option BridgeStep]
+defn fetch-from-rest [rest rm ap v st]
   match rest
     | nil -> [none BridgeStep]
     | cons swiss-syr _ ->
         match [fetch-swiss-of swiss-syr]
           | none       -> [none BridgeStep]
-          | some swiss -> fetch-with-swiss swiss rm v st
+          | some swiss -> fetch-with-swiss swiss rm ap v st
 
-spec fetch-from-name String [List SyrupValue] [Option Nat] Vat BridgeState -> [Option BridgeStep]
-defn fetch-from-name [name rest rm v st]
+spec fetch-from-name String [List SyrupValue] [Option Nat] [Option Nat] Vat BridgeState -> [Option BridgeStep]
+defn fetch-from-name [name rest rm ap v st]
   match [str::eq name "fetch"]
-    | true  -> fetch-from-rest rest rm v st
+    | true  -> fetch-from-rest rest rm ap v st
     | false ->
         match [str::eq name "withdraw-gift"]
           | true  -> withdraw-from-rest rest rm v st
@@ -1896,8 +1935,8 @@ defn fetch-from-name [name rest rm v st]
 
 ;; Gateway: target must be the bootstrap object (export 0) and args a
 ;; list whose head is the symbol `fetch`. Returns None to fall through.
-spec maybe-fetch Nat SyrupValue [Option Nat] Vat BridgeState -> [Option BridgeStep]
-defn maybe-fetch [tgt args rm v st]
+spec maybe-fetch Nat SyrupValue [Option Nat] [Option Nat] Vat BridgeState -> [Option BridgeStep]
+defn maybe-fetch [tgt args rm ap v st]
   match [nat-eq? tgt zero]
     | false -> [none BridgeStep]
     | true ->
@@ -1907,7 +1946,7 @@ defn maybe-fetch [tgt args rm v st]
             | cons head rest ->
                 match [syrup-symbol-name head]
                   | none      -> [none BridgeStep]
-                  | some name -> fetch-from-name name rest rm v st
+                  | some name -> fetch-from-name name rest rm ap v st
 
 ;; dispatch-deliver: route an op:deliver. Phase 52b adds a pre-check
 ;; for bootstrap-method calls (target = 0, args[0] = method-symbol);
@@ -1983,11 +2022,6 @@ defn dispatch-pipeline-on-our-q [qpos args ap v st]
 ;; semantics; the disambiguation is which table holds `qpos`. (No
 ;; overlap: outbound q-pos ids are allocated by us, inbound by peer.)
 ;; Unknown to both = drop.
-spec dispatch-incoming-answer Nat SyrupValue [Option Nat] Vat BridgeState -> BridgeStep
-defn dispatch-incoming-answer [qpos args ap v st]
-  match [bs-lookup-outbound-question qpos st]
-    | none      -> dispatch-pipeline-on-our-q qpos args ap v st
-    | some pid  -> bridge-step [resolve-promise pid args v] st
 
 ;; Phase 51: op:listen late-registration handling.
 ;;
@@ -2020,6 +2054,8 @@ defn bs-handle-listen-with-late-fire [tgt resolver v st]
 
 ;; ===========================================================
 ;; Phase 59b part 2: the resolve-me reply path for NON-fetch delivers
+
+
 ;; ===========================================================
 ;;
 ;; Upstream's op:deliver tests reply via the resolve-me descriptor with
@@ -2055,6 +2091,33 @@ defn deliver-resolve-me [tgt args rm-pos v st]
     deliver-with-fresh-pid tgt args [alloc-id alloc] [alloc-vat alloc]
       [bs-handle-listen-with-late-fire [alloc-id alloc] rm-pos [alloc-vat alloc] st]
 
+;; BOTH an answer position and a resolve-me — the pipelining shape.
+;;
+;; The two are not alternatives, and treating them as such is what broke the
+;; Car Factory chain. The resolve-me is where the ANSWER goes; the answer
+;; position is what the peer will ADDRESS NEXT, without waiting for that
+;; answer. Handling only the first leaves the chain with nothing to pipeline
+;; onto; handling only the second sends the peer a reply it cannot read.
+;;
+;; That second failure is worth spelling out, because it does not look like a
+;; parse error from here: answering on `<desc:answer N>` puts the value bare in
+;; the args slot, and upstream ITERATES that slot. A bare record raises inside
+;; the peer's receive loop, so the peer drops the connection and our next write
+;; fails with "error writing to stream port" — a symptom that points at the
+;; transport, several frames after the frame that actually caused it.
+spec deliver-resolve-me-with-answer Nat SyrupValue Nat Nat Vat BridgeState -> BridgeStep
+defn deliver-resolve-me-with-answer [tgt args rm-pos apos v st]
+  let alloc := [fresh-promise v]
+    deliver-with-fresh-pid tgt args [alloc-id alloc] [alloc-vat alloc]
+      [bs-add-question apos [alloc-id alloc]
+        [bs-handle-listen-with-late-fire [alloc-id alloc] rm-pos [alloc-vat alloc] st]]
+
+spec deliver-with-answer-pos Nat SyrupValue Nat [Option Nat] Vat BridgeState -> BridgeStep
+defn deliver-with-answer-pos [tgt args apos rm v st]
+  match rm
+    | none        -> dispatch-deliver tgt args [some apos] v st
+    | some rm-pos -> deliver-resolve-me-with-answer tgt args rm-pos apos v st
+
 ;; Inbound op:deliver entry. Order of attempts:
 ;;   1. the `fetch` bootstrap path (part 1) — consumes rm itself
 ;;   2. answer-pos routing, when the peer gave one
@@ -2070,11 +2133,11 @@ defn deliver-resolve-me [tgt args rm-pos v st]
 ;; type mismatch, so bisect rather than trusting the error class).
 spec incoming-deliver Nat SyrupValue [Option Nat] [Option Nat] Vat BridgeState -> BridgeStep
 defn incoming-deliver [tgt args ap rm v st]
-  match [maybe-fetch tgt args rm v st]
+  match [maybe-fetch tgt args rm ap v st]
     | some step -> step
     | none ->
         match ap
-          | some _ -> dispatch-deliver tgt args ap v st
+          | some apos -> deliver-with-answer-pos tgt args apos rm v st
           | none ->
               match rm
                 | none        -> dispatch-deliver tgt args ap v st
@@ -2086,6 +2149,95 @@ defn listen-after-settle [tgt resolver step]
   bridge-step [bridge-step-vat step]
     [bs-handle-listen-with-late-fire tgt resolver
       [bridge-step-vat step] [bridge-step-state step]]
+;; ===========================================================
+;; Pipelining onto an answer that is ALREADY one of our objects
+;; ===========================================================
+;;
+;; A pipelined chain (upstream's Car Factory) addresses each link's answer
+;; before that answer resolves — and often before the previous link's reply has
+;; even been read. Our side resolves those answers immediately, because the
+;; object is already here.
+;;
+;; That creates a shape `pipeline-deliver` cannot serve: it queues onto an
+;; UNRESOLVED promise and drops onto a resolved one, so a message arriving
+;; after the answer settled is silently discarded — which is exactly every
+;; message in the chain.
+;;
+;; When the answer has resolved to `<desc:export N>` and N is one of our
+;; actors, the honest reading is that the peer is addressing THAT ACTOR. So
+;; dispatch it as an ordinary deliver, which already knows how to allocate an
+;; answer for `ap`, reply to `rm`, and run the actor. The chain then works link
+;; by link with no pipelining-specific machinery: each link's answer resolves
+;; to the next object, and the next message routes through this same door.
+
+spec resolved-export-of Nat Vat -> [Option Nat]
+defn resolved-export-of [pid v]
+  match [lookup-promise pid v]
+    | none -> [none Nat]
+    | some pst ->
+        match pst
+          | pst-fulfilled val -> syrup-as-export-target val
+          | _                 -> [none Nat]
+
+spec local-actor-for-question Nat Vat BridgeState -> [Option Nat]
+  :doc "The actor a pipelined deliver on question `qpos` should go to, if any."
+defn local-actor-for-question [qpos v st]
+  match [bs-lookup-question qpos st]
+    | none     -> [none Nat]
+    | some pid -> resolved-export-of pid v
+
+;; A BROKEN link breaks the rest of the chain.
+;;
+;; Pipelining means the peer has already sent messages addressed to answers
+;; that do not exist yet. When one of those answers breaks, every message
+;; queued behind it is undeliverable — and saying nothing is the one response
+;; that is definitely wrong, because the peer is waiting on a resolve-me that
+;; will never be written. So the reason is forwarded down the chain: each
+;; message on a broken answer breaks its own answer with the same reason.
+spec broken-reason-of Nat Vat -> [Option SyrupValue]
+defn broken-reason-of [pid v]
+  match [lookup-promise pid v]
+    | none -> [none SyrupValue]
+    | some pst ->
+        match pst
+          | pst-broken r -> some r
+          | _            -> [none SyrupValue]
+
+spec question-break-reason Nat Vat BridgeState -> [Option SyrupValue]
+defn question-break-reason [qpos v st]
+  match [bs-lookup-question qpos st]
+    | none     -> [none SyrupValue]
+    | some pid -> broken-reason-of pid v
+
+;; `['break reason]` — the two-element shape a peer reads as a rejection.
+spec break-notify-bytes Nat SyrupValue -> String
+defn break-notify-bytes [rm-pos r]
+  listener-notify-bytes rm-pos [syrup-list [cons [syrup-symbol "break"] [cons r nil]]]
+
+spec forward-break Nat SyrupValue [Option Nat] Vat BridgeState -> BridgeStep
+defn forward-break [qpos r rm v st]
+  match rm
+    | none        -> bridge-step v st
+    | some rm-pos -> bridge-step v [bs-append-pending-out [break-notify-bytes rm-pos r] st]
+
+spec pipeline-or-break Nat SyrupValue [Option Nat] [Option Nat] Vat BridgeState -> BridgeStep
+defn pipeline-or-break [qpos args ap rm v st]
+  match [question-break-reason qpos v st]
+    | none   -> dispatch-pipeline-on-our-q qpos args ap v st
+    | some r -> forward-break qpos r rm v st
+
+spec dispatch-pipeline-or-forward Nat SyrupValue [Option Nat] [Option Nat] Vat BridgeState -> BridgeStep
+defn dispatch-pipeline-or-forward [qpos args ap rm v st]
+  match [local-actor-for-question qpos v st]
+    | none     -> pipeline-or-break qpos args ap rm v st
+    | some xid -> incoming-deliver xid args ap rm v st
+
+spec dispatch-incoming-answer Nat SyrupValue [Option Nat] [Option Nat] Vat BridgeState -> BridgeStep
+defn dispatch-incoming-answer [qpos args ap rm v st]
+  match [bs-lookup-outbound-question qpos st]
+    | none      -> dispatch-pipeline-or-forward qpos args ap rm v st
+    | some pid  -> bridge-step [resolve-promise pid args v] st
+
 
 ;; Phase 53: captp-incoming-with-state's match arms are the
 ;; concrete realization of the `CapTPSession` session type
@@ -2166,7 +2318,7 @@ defn captp-incoming-with-state
       ;; promise tied to that q-pos. Also append to gc-answers audit
       ;; log so callers can inspect what was released.
       bridge-step v [bs-remove-question pos [bs-add-gc-answer pos st]]
-  | [op-deliver-to-answer qpos args ap _rm] v st ->
+  | [op-deliver-to-answer qpos args ap rm] v st ->
       ;; Phase 25 questioner-side: peer is replying to our question
       ;; with pos `qpos`. Look up `qpos` in BridgeState's
       ;; outbound-questions; if found, resolve the corresponding
@@ -2177,8 +2329,10 @@ defn captp-incoming-with-state
       ;; refrs with us in their reply); increment imports-refcount.
       ;; Phase 45: ap threaded so dispatch-pipeline-on-our-q can
       ;; record the queued deliver's answer-pos for break-forwarding.
-      dispatch-incoming-answer qpos args ap v
+      dispatch-incoming-answer qpos args ap rm v
         [bs-incr-imports [extract-refrs-from-args args] st]
+
+
 
 ;; ===========================================================
 ;; Phase 41: resolution-value inspection + forwarding

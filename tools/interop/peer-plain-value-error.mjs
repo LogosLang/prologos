@@ -39,6 +39,10 @@ import {
   decodeSyrup,
 } from './node_modules/@endo/ocapn/src/syrup/js-representation.js';
 
+// The op:deliver args slot is a LIST -- the OCapN wire form, and what
+// upstream's own suite iterates. Racket used to send a bare value there,
+// which this script was written against; unwrapping one level reads both.
+const argsHead = (a) => Array.isArray(a) ? a[0] : (a && Array.isArray(a.values)) ? a.values[0] : a;
 const port = Number(process.argv[2]);
 if (!Number.isInteger(port) || port < 1) {
   process.stderr.write(`peer-plain-value-error: bad port ${process.argv[2]}\n`);
@@ -138,12 +142,12 @@ const summarize = () => {
 
   // Q1 reply args is the plain string (echoed verbatim).
   const replyEchoesString = replyToQ1
-    && replyToQ1.values && replyToQ1.values[1] === Q1_PAYLOAD;
+    && replyToQ1.values && argsHead(replyToQ1.values[1]) === Q1_PAYLOAD;
 
   // Error answer args is <Error "deliver-to-non-callable">.
-  const errorIsErrorWrapped = errorAnswer && isErrorFrame(errorAnswer.values[1]);
-  const errorReason = errorIsErrorWrapped && errorAnswer.values[1].values
-    ? errorAnswer.values[1].values[0] : null;
+  const errorIsErrorWrapped = errorAnswer && isErrorFrame(argsHead(errorAnswer.values[1]));
+  const errorReason = errorIsErrorWrapped && argsHead(errorAnswer.values[1]).values
+    ? argsHead(errorAnswer.values[1]).values[0] : null;
 
   const ok = !!(session && replyToQ1 && errorAnswer
     && replyEchoesString && errorIsErrorWrapped

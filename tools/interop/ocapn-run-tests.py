@@ -57,6 +57,13 @@ SELECTED = [
         #      which collides with our local actor ids — eff-send-only routed
         #      it back into the local actor table instead of the wire.
         "test_send_deliver_no_answer_or_response",
+        # Promise pipelining (Phase 59b part 10). The Car Factory chain:
+        # builder -> factory -> car -> string, every link answering with a NEW
+        # OBJECT, and the peer never waiting for a link to resolve before
+        # addressing the next. Needs `eff-spawn` so a behaviour can name the
+        # object it is about to create in its own return value.
+        "test_deliver_promise_pipeline",
+        "test_promise_pipeline_with_break",
     ]),
     ("tests.op_abort", "OpAbortTest", [
         "test_abort_before_setup",

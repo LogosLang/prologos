@@ -35,6 +35,10 @@ import {
   decodeSyrup,
 } from './node_modules/@endo/ocapn/src/syrup/js-representation.js';
 
+// The op:deliver args slot is a LIST -- the OCapN wire form, and what
+// upstream's own suite iterates. Racket used to send a bare value there,
+// which this script was written against; unwrapping one level reads both.
+const argsHead = (a) => Array.isArray(a) ? a[0] : (a && Array.isArray(a.values)) ? a.values[0] : a;
 const port = Number(process.argv[2]);
 if (!Number.isInteger(port) || port < 1) {
   process.stderr.write(`peer-pipelining: bad port ${process.argv[2]}\n`);
@@ -129,7 +133,7 @@ const summarize = () => {
 
   // Verify the echoed args carry Q1's payload (proves Q1 dispatched
   // through the echo actor — Q2 didn't poison the bridge state).
-  const echoedPayload = replyToQ1 ? replyToQ1.values[1] : null;
+  const echoedPayload = replyToQ1 ? argsHead(replyToQ1.values[1]) : null;
   const payloadMatches = echoedPayload === Q1_PAYLOAD;
 
   const sessionLocator = session && Array.isArray(session.values)

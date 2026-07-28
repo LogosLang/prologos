@@ -222,13 +222,25 @@ defn desc-is-answer?
 ;;   - `desc:answer N`    -> `some N`
 ;;   - anything else      -> `none`
 
+;; Both spellings of an answer position are accepted, because both occur.
+;;
+;; `<desc:answer N>` is what this codebase wrote for years. But the ANSWER
+;; POSITION slot of op:deliver carries a BARE INTEGER on the wire — upstream
+;; reads slot 2 raw and writes it raw — so every pipelined message from a real
+;; peer arrived with its answer position silently DROPPED to `none`, which
+;; reads downstream as "fire and forget" rather than as an error. The Car
+;; Factory chain works link by link with the tagged form and not at all with
+;; the bare one; that asymmetry is what this arm closes.
+;;
+;; `false` (and `null`, for compat) remain the absent sentinel, so a bare
+;; integer is unambiguous.
 spec unwrap-opt-desc SyrupValue -> [Option Nat]
 defn unwrap-opt-desc
   | syrup-null         -> none
   | syrup-bool _       -> none
   | syrup-tagged _ p   -> wire-nat p
-  | syrup-nat _        -> none
-  | syrup-int _        -> none
+  | syrup-nat n        -> some n
+  | syrup-int i        -> wire-nat [syrup-int i]
   | syrup-string _     -> none
   | syrup-symbol _     -> none
   | syrup-list _       -> none

@@ -36,6 +36,11 @@ import {
   decodeSyrup,
 } from './node_modules/@endo/ocapn/src/syrup/js-representation.js';
 
+// The op:deliver args slot is a LIST -- the OCapN wire form, and what
+// upstream's own suite iterates. Racket used to send a bare value there,
+// which this script was written against; unwrapping one level here reads
+// both, so the fixture no longer pins the older (unparseable) shape.
+const argsHead = (a) => Array.isArray(a) ? a[0] : (a && Array.isArray(a.values)) ? a.values[0] : a;
 const port = Number(process.argv[2]);
 if (!Number.isInteger(port) || port < 1) {
   process.stderr.write(`peer-break-forwarding: bad port ${process.argv[2]}\n`);
@@ -139,12 +144,12 @@ const summarize = () => {
   const breakForward = findDeliverToAnswer(Q2_QUEUED_AP);
 
   // Check both have <Error "rejected"> as the args field.
-  const replyArgsAreError = replyToQ1 && isErrorFrame(replyToQ1.values[1]);
-  const breakArgsAreError = breakForward && isErrorFrame(breakForward.values[1]);
-  const replyReason = replyArgsAreError && replyToQ1.values[1].values
-    ? replyToQ1.values[1].values[0] : null;
-  const breakReason = breakArgsAreError && breakForward.values[1].values
-    ? breakForward.values[1].values[0] : null;
+  const replyArgsAreError = replyToQ1 && isErrorFrame(argsHead(replyToQ1.values[1]));
+  const breakArgsAreError = breakForward && isErrorFrame(argsHead(breakForward.values[1]));
+  const replyReason = replyArgsAreError && argsHead(replyToQ1.values[1]).values
+    ? argsHead(replyToQ1.values[1]).values[0] : null;
+  const breakReason = breakArgsAreError && argsHead(breakForward.values[1]).values
+    ? argsHead(breakForward.values[1]).values[0] : null;
 
   const ok = !!(session && replyToQ1 && breakForward
     && replyArgsAreError && breakArgsAreError

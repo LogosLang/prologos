@@ -43,12 +43,15 @@ require [prologos::ocapn::syrup
                  beh-cell beh-counter beh-greeter beh-echo
                  beh-adder beh-forwarder beh-fulfiller beh-resolver
                  Effect eff-send-only eff-send-remote eff-resolve eff-break
+                 eff-spawn
+                 beh-car-factory-builder beh-car-factory beh-car
                  ActStep act-step
                  step-state step-return step-effects
                  step-behavior]]
         [prologos::data::list   :refer [List nil cons append]]
         [prologos::data::option :refer [Option none some]]
         [prologos::data::nat    :refer [add nat-eq?]]
+        [prologos::data::string :as str :refer []]
 
 ;; ========================================
 ;; Actor records
@@ -338,12 +341,27 @@ defn enqueue-outbound [m v]
 ;; `data Effect` in behavior.prologos. Routing it through `send-only` would
 ;; let `deliver-msg` find a same-numbered LOCAL actor and deliver there.
 
+;; next-id becomes `suc id` rather than a max, because `id` IS the next-id the
+;; behaviour was handed — the two cannot be out of order by construction. If a
+;; future caller passes an arbitrary id that stops being true and this needs a
+;; max; the one-spawn-per-turn constraint on `eff-spawn` is the same fact seen
+;; from the other side.
+spec place-actor Nat BehaviorTag SyrupValue Vat -> Vat
+defn place-actor [id tag st v]
+  vat [suc id] [actor-table-set id [actor tag st] [vat-actors v]] [vat-promises v] [vat-queue v] [vat-outbound v]
+
 spec apply-effect Effect Vat -> Vat
 defn apply-effect
   | [eff-send-only   t a]  v -> send-only t a v
   | [eff-send-remote t a]  v -> enqueue-outbound [vmsg-deliver t a none] v
   | [eff-resolve pid val]  v -> resolve-promise pid val v
   | [eff-break   pid val]  v -> break-promise   pid val v
+  ;; The id was handed to the behaviour as the vat's next free id (see
+  ;; `eff-spawn` in behavior.prologos), so placing the actor there and bumping
+  ;; next-id past it keeps the two in step. `vat-spawn` cannot be reused: it
+  ;; picks the id itself, and the behaviour has already published this one in
+  ;; its return value.
+  | [eff-spawn id tag st]  v -> place-actor id tag st v
 
 spec apply-effects [List Effect] Vat -> Vat
 defn apply-effects
@@ -367,6 +385,34 @@ defn send [target args v]
 ;; Apply the result of a single act-step to the vat: store new actor
 ;; state, run effects, settle answer promise.
 
+;; A behaviour signals failure by RETURNING `<Error reason>` — it has no other
+;; way to, since the answer promise is allocated by the vat and the behaviour
+;; never learns its id, so it cannot emit `eff-break` against it.
+;;
+;; Without this the promise is FULFILLED with an error-shaped value, and the
+;; peer is told `['fulfill <Error …>]` where it expects `['break reason]`. The
+;; difference is invisible locally (both settle, both answer) and only shows up
+;; against a peer that checks which one it got — upstream's pipelined-break
+;; test does exactly that, and it is the case where being wrong matters most,
+;; because a broken link is supposed to break the rest of the chain.
+;;
+;; `<Error r>` is the same wrapper `wrap-error` produces on the way out, so the
+;; convention is one shape, read consistently in both directions.
+spec error-reason-of SyrupValue -> [Option SyrupValue]
+defn error-reason-of [v]
+  match v
+    | syrup-tagged t p ->
+        match [str::eq t "Error"]
+          | true  -> some p
+          | false -> [none SyrupValue]
+    | _ -> [none SyrupValue]
+
+spec settle-answer Nat SyrupValue Vat -> Vat
+defn settle-answer [pid rv v]
+  match [error-reason-of rv]
+    | none   -> resolve-promise pid rv v
+    | some r -> break-promise pid r v
+
 spec step-after-act Nat Actor SyrupValue SyrupValue [List Effect] [Option Nat] Vat -> Vat
 defn step-after-act [target old-act new-state rv effects ap v]
   let acts1 := [actor-table-set target [actor [actor-tag old-act] new-state] [vat-actors v]]
@@ -374,7 +420,7 @@ defn step-after-act [target old-act new-state rv effects ap v]
       let v2 := [apply-effects effects v1]
         match ap
           | none -> v2
-          | some pid -> resolve-promise pid rv v2
+          | some pid -> settle-answer pid rv v2
 
 ;; deliver: look up the target actor, run its behaviour, integrate
 ;; effects, settle the answer-promise (if any) with the return value.
@@ -403,7 +449,7 @@ defn deliver-msg [m v]
                 ;; outbound-questions table) and is NOT built.
                 | some pid -> break-promise pid args v
           | some a ->
-              let s := [step-behavior [actor-tag a] [actor-state a] args]
+              let s := [step-behavior [actor-tag a] [actor-state a] args [vat-next-id v]]
                 step-after-act target a [step-state s] [step-return s] [step-effects s] ap v
 
 ;; ========================================

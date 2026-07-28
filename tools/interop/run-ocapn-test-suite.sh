@@ -107,7 +107,7 @@ LOCATOR="ocapn://JadQ0++RzsD4M+40uLxTWVaVqM10DcBJ.tcp-testing-only?host=127.0.0.
 #   op_start_session: remote_version, invalid_version, invalid_signature
 #   op_abort:         abort_before_setup
 #   op_deliver:       deliver_with_resolver  (Phase 59b part 2)
-EXPECTED_PASS=17
+EXPECTED_PASS=19
 
 echo "[run-ocapn-test-suite] running selected tests against $LOCATOR"
 echo "[run-ocapn-test-suite] milestone: >= $EXPECTED_PASS of the selected tests must pass"
