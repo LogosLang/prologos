@@ -1082,3 +1082,63 @@ shipped so far responds on a connection the peer opened.
 Items 1–3 are a coherent piece; item 4 is a small rule that sits on top and
 cannot be tested until they exist. This is a distinct shape of work from
 everything above, all of which was request/response on an existing connection.
+
+
+---
+
+## 23 of 24 (2026-07-28). The last one: HandoffRemoteAsGifter
+
+Landed after the scoping above, each behind a green full suite:
+
+| # | What | Interop |
+|---|---|---|
+| p11 | outbound connections — the server can dial (`d4c30999`) | 19 |
+| p12 | crossed-hellos mitigation (`19dd613c`) | 19 → 21 |
+| p13 | third-party handoff, RECEIVER side (`52e50718`) | 21 → 23 |
+
+### What the last test needs, and why it is NOT more dialling
+
+`test_provides_valid_handoff_give` (`third_party_handoffs.py:390`). Both
+sessions are ones the TEST opened to us (`:366`, `:368`) — `r2g` and `e2g`.
+The sturdyref at `:392` names `e2g_session`'s own location, and the test never
+`accept()`s a socket for it. So the enlivener must **reuse the existing
+connection whose peer location matches**, not dial a new one. A dial there
+completes in-kernel against an unaccepted listen backlog and then blocks with
+zero bytes — which is exactly the symptom p11 started from.
+
+The pieces, ordered:
+
+1. **Location → open connection table.** We already extract a peer's location
+   from its `op:start-session` (`location-of-start-session`, added for
+   crossed-hellos) and already key `half-open-dials` by exactly those bytes.
+   This is the same key on the accepted side: record `location → (cid . out-port)`
+   in `handle-connection`, and have the enlivener consult it before dialling.
+2. **Cross-connection send.** The enliven arrives on `r2g`; the `fetch` must go
+   out on `e2g`. `run-step-inner` returns bytes for the current socket only
+   (`interop-driver.prologos`), so this needs the server to write to another
+   connection's port — the first time anything here does that.
+3. **Track the fetch answer.** Upstream replies `['fulfill <desc:import-object N>]`
+   to our resolve-me (`:410-416`); N is the object we then gift.
+4. **Deposit + answer.** `deposit-gift-bytes` ALREADY EXISTS
+   (`captp-interop-helpers.prologos:304-310`) and matches the shape `:446-447`
+   pins. Caveat found in review: it emits the gid as `syrup-nat`, which this
+   test accepts (`:462` only requires self-consistency) but would NOT round-trip
+   through our own `handoff-give-gift-id`, which demands `syrup-bytes-of`.
+5. **Build and sign the handoff-give.** Signing exists now (p13:
+   `sign-bytes` + the gcrypt `[sig-val [eddsa …]]` builder). The give's
+   `exporter-location` must be the peer's OWN location bytes — NOT
+   `ocapn-peer-bytes`, because our encoder writes hints as a syrup LIST
+   (`handshake.prologos:143`) while Python writes a dict, and `:459` compares
+   via `OCapNPeer.__eq__` → `to_syrup()`. Copy the bytes; do not re-encode.
+
+Two further findings from the audit that this work should not re-derive:
+
+- **Export position 5 has no vat actor.** `swiss-num-export` maps
+  `gi02I1qgh…` → `5N` (`captp-core.prologos:1426`), but `seeded-vat` seeds
+  1, 2, 3, 4, 7 only. The enliven deliver currently reaches nothing; the dial
+  fires because the driver intercepts it in `run-step` BEFORE
+  `connection-step`. Answering the enliven (piece 4) needs a real actor there.
+- A stale comment at `handshake.prologos:226-228` claims the SyrupValue model
+  cannot handle `{}` dicts. It can (`syrup-wire.prologos` decode + a
+  `syrup-dict` arm in `re-encode`); the comment predates that and should be
+  deleted rather than believed.
