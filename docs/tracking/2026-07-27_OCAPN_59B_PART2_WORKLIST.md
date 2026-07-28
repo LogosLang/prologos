@@ -754,3 +754,36 @@ was the single file timing out at the runner's 120s limit on CI. Split into
 `test-ocapn-bridge.rkt` (69) + `test-ocapn-bridge-02.rkt` (78), ~38s each.
 `.claude/rules/testing.md` asks for ~20 cases / ~30s per file for exactly this
 reason.
+
+### Cross-connection gift store — design note (next piece)
+
+The mechanism is easy; the LAYERING is the decision. `ocapn-conn-ffi.rkt` is
+the template: a Racket-side `make-hash` exposed through `foreign racket`, 38
+lines total.
+
+The wrinkle: `withdraw-known-gid` lives in `captp-core.prologos`, which is a
+PURE library module — it threads `BridgeState` through and performs no effects.
+Having it call an FFI store directly would put I/O in the pure core, which is
+the wrong layer and would make every bridge test depend on process-global
+state.
+
+Preferred shape — keep `captp-core` pure, put the global in the driver:
+
+1. `ocapn-gift-ffi.rkt` — `gift-put : String -> Nat -> Bool`,
+   `gift-all : ... -> [List GiftEntry]` (passthrough of the opaque list, the
+   same trick the ConnectionState stash uses).
+2. `interop-driver.prologos`, in `step-connection`, around the existing
+   `connection-step` call:
+   - BEFORE: seed the fetched `ConnectionState`'s gift table from the global
+     store, so a withdraw on conn 1 sees a deposit made on conn 0;
+   - AFTER: publish any gift the step ADDED back to the global store.
+
+That is the same in-then-out shape `run-step` already uses for the
+ConnectionState itself, so it needs no new concept — and `captp-core` stays a
+pure function of its inputs, which is what keeps the 147 bridge tests
+meaningful.
+
+Rejected alternative: threading a store handle through `captp-incoming-with-
+state`. It would touch every caller and put the global in the type of every
+bridge operation, to no benefit — the gift table is the ONLY exporter-global
+state in the protocol.
