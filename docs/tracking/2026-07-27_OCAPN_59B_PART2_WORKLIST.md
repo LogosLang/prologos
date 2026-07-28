@@ -987,3 +987,40 @@ Step 1 is the gate and must be verified FIRST. Without it every signature check
 fails, and it fails as "bad signature" rather than as an error — which would
 look like working rejection while actually rejecting everything, including the
 three exporter tests that currently pass.
+
+### DONE (2026-07-28, `96ce659c` + `ce1e25da`) — interop 12 -> 13
+
+All four `HandoffRemoteAsExporter` tests pass. The plan above held, with one
+defect it did not predict.
+
+**The second defect: `syrup-bytes` emitted a UTF-8 length prefix.** Building
+the gate turned up a bug the +12 analysis had masked. Our `syrup-bytes` holds
+raw bytes as one code point per byte (Latin-1) — what `hex-to-bytes` and the
+frame FFI produce, and what `decode-bytes-tail` slices back out by code point.
+`encode` measured that with `str::bytes-length`, which re-encodes those code
+points AS TEXT: a 32-byte Ed25519 key is 32 code points but **51** UTF-8 bytes,
+so we wrote `51:` in front of 32 bytes.
+
+That is an OUTBOUND bug, not a round-trip artefact — it had simply never been
+reached, because everything we emit today is ASCII, where the two measures
+agree. Which is also why the entire suite was green over it. `syrup-string` /
+`syrup-symbol` keep `str::bytes-length`; they hold text and the spec wants
+UTF-8 there. My first pass changed all three and two existing UTF-8 tests
+correctly caught it.
+
+**Where the receiver key comes from — worth stating, because it is what makes
+exporter-side verification possible at all.** It travels INSIDE the thing being
+verified: handoff-give arg0 is the receiver's public key, the gifter having
+named it when it made the give. So no prior connection to the receiver is
+needed, and nothing has to be looked up.
+
+**Confirmed in Python before writing any Prologos**: the exact three inputs
+(re-encoded handoff-receive bytes, `q` from the nested give, r ++ s from the
+envelope) verify against the captured frame. Settling the shape first meant the
+helper chain was written once.
+
+**Two traps cost time and are now filed** (goblin-pitfalls #50 and #47's second
+occurrence): a multi-line continuation inside a `match` arm fails at import
+with a bare "Type mismatch" while the file itself processes clean; and deleting
+one module's `.pnet` does not invalidate the consumers that embedded its body —
+only `rm -rf data/cache/pnet` does.
