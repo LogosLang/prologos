@@ -322,6 +322,118 @@
                 #"\"" r #">"))
 
 ;; ========================================
+;; Third-party handoff: the GIFTER side
+;; ========================================
+;;
+;; Here BOTH sessions are ones the peer opened to us. The sturdyref names the
+;; exporter session's own location and the peer never accepts a socket for it,
+;; so the enlivener must REUSE the open connection whose peer location matches
+;; rather than dial — a dial completes against an unaccepted listen backlog and
+;; then blocks with zero bytes.
+;;
+;; That means writing to a connection other than the one being serviced, which
+;; is the first thing here to do so: the enliven arrives on one session and the
+;; `fetch` must go out on another.
+
+;; peer location bytes -> (vector out-port their-gcrypt-pubkey their-side-id)
+(define open-conns (make-hash))
+
+(define pubkey-by-port (make-hasheq))
+
+(define (record-open-conn! frame cout)
+  (hash-set! open-conns (location-of-start-session frame)
+             (vector cout (record-field frame 1) (side-id-of-start-session frame)))
+  (hash-set! pubkey-by-port cout (record-field frame 1)))
+
+;; Enliven requests awaiting the exporter's answer, keyed by the resolve-me
+;; export we asked it to reply to.
+(define pending-enlivens (make-hash))
+(define enliven-slot (box 900))
+(define (next-enliven-slot!)
+  (set-box! enliven-slot (add1 (unbox enliven-slot)))
+  (unbox enliven-slot))
+
+(define (syrup-nat n)
+  (bytes-append (string->bytes/latin-1 (number->string n)) #"+"))
+
+(define (desc-record tag n)
+  (bytes-append #"<" (syrup-symbol tag) (syrup-nat n) #">"))
+
+;; The enliven arrived on `cout`; the exporter is whichever open connection
+;; carries the location the sturdyref names.
+(define (try-enliven! frame cout)
+  (define i (find-subbytes frame #"<15'ocapn-sturdyref"))
+  (define rm (find-subbytes frame #"<18'desc:import-object"))
+  (when (and i rm)
+    (define sr (subbytes frame i (syrup-skip frame i)))
+    (define loc (record-field sr 0))
+    (define swiss (record-field sr 1))
+    (define exporter (hash-ref open-conns loc #f))
+    (define rm-pos (record-field (subbytes frame rm (syrup-skip frame rm)) 0))
+    (when exporter
+      (define slot (next-enliven-slot!))
+      (hash-set! pending-enlivens slot (vector cout rm-pos loc exporter))
+      (printf "ocapn-test-server: enliven -> fetch on the exporter session (slot ~a)~n" slot)
+      (write-frame (vector-ref exporter 0)
+                   (bytes-append #"<" (syrup-symbol "op:deliver")
+                                 (desc-record "desc:export" 0)
+                                 #"[" (syrup-symbol "fetch") swiss #"]"
+                                 #"f" (desc-record "desc:import-object" slot) #">")))))
+
+;; The exporter answered our fetch. Deposit a gift naming the object it gave
+;; us, then answer the original enliven with a signed handoff-give.
+;;
+;; Field values are pinned by upstream's own assertions
+;; (third_party_handoffs.py:458-462): receiver-key is the ENLIVENING peer's
+;; key, while exporter-location / session / gifter-side all belong to the
+;; EXPORTER session -- and gifter-side is OUR side-id, because from the
+;; exporter's point of view we are the gifter.
+(define (try-fetch-answer! frame)
+  (define hit
+    (for/first ([(slot v) (in-hash pending-enlivens)]
+                #:when (find-subbytes frame (bytes-append #"<11'desc:export" (syrup-nat slot))))
+      (cons slot v)))
+  (when hit
+    (define slot (car hit))
+    (define v (cdr hit))
+    (hash-remove! pending-enlivens slot)
+    (define r2g-out (vector-ref v 0))
+    (define rm-pos (vector-ref v 1))
+    (define loc (vector-ref v 2))
+    (define exporter (vector-ref v 3))
+    (define obj (let ([i (find-subbytes frame #"<18'desc:import-object")])
+                  (and i (record-field (subbytes frame i (syrup-skip frame i)) 0))))
+    (when obj
+      (define gid #"prologos-gift")
+      ;; Deposit at the exporter.
+      (write-frame (vector-ref exporter 0)
+                   (bytes-append #"<" (syrup-symbol "op:deliver")
+                                 (desc-record "desc:export" 0)
+                                 #"[" (syrup-symbol "deposit-gift")
+                                 (syrup-bytestring gid)
+                                 #"<" (syrup-symbol "desc:export") obj #">"
+                                 #"]ff>"))
+      ;; Answer the enliven with the signed give. The exporter-location is the
+      ;; peer's OWN location bytes, copied -- not re-encoded: our encoder writes
+      ;; hints as a syrup list where Python writes a dict, and the assertion
+      ;; compares encoded forms.
+      (define give
+        (bytes-append #"<" (syrup-symbol "desc:handoff-give")
+                      (hash-ref pubkey-by-port r2g-out #"")      ; receiver-key
+                      loc                                        ; exporter-location
+                      (syrup-bytestring (session-id-of (vector-ref exporter 2)))
+                      (syrup-bytestring our-side-id)             ; gifter-side
+                      (syrup-bytestring gid)
+                      #">"))
+      (define env (bytes-append #"<" (syrup-symbol "desc:sig-envelope")
+                                give (gcrypt-sig (sign-with-our-key give)) #">"))
+      (printf "ocapn-test-server: answering enliven with a signed handoff-give~n")
+      (write-frame r2g-out
+                   (bytes-append #"<" (syrup-symbol "op:deliver")
+                                 #"<" (syrup-symbol "desc:export") rm-pos #">"
+                                 #"[" (syrup-symbol "fulfill") env #"]ff>")))))
+
+;; ========================================
 ;; Third-party handoff: the RECEIVER side
 ;; ========================================
 ;;
@@ -523,6 +635,8 @@
              (printf "ocapn-test-server: FRAME-HEX conn ~a n ~a: ~a~n"
                      cid (+ n 1) (bytes->hex-string frame)))
            (note-handoff-give! frame)
+           (try-enliven! frame cout)
+           (try-fetch-answer! frame)
            (define out (drive-step cid frame))
            (printf "ocapn-test-server: conn ~a frame ~a (~a in / ~a out bytes)~n"
                    cid (+ n 1) (bytes-length frame) (bytes-length out))
@@ -585,6 +699,7 @@
           (drive-init! cid)
           (printf "ocapn-test-server: inbound start-session accepted (conn ~a); driving captp-core~n"
                   cid)
+          (record-open-conn! first-frame cout)
           (run-frame-loop cin cout cid)]
          [else
           (printf "ocapn-test-server: inbound start-session REJECTED (~a bytes); sending op:abort~n"

@@ -1142,3 +1142,48 @@ Two further findings from the audit that this work should not re-derive:
   cannot handle `{}` dicts. It can (`syrup-wire.prologos` decode + a
   `syrup-dict` arm in `re-encode`); the comment predates that and should be
   deleted rather than believed.
+
+
+---
+
+## 24 of 24 (2026-07-28)
+
+`HandoffRemoteAsGifter` landed as `p14`. The scoping above held, including its
+central claim: the fix was connection REUSE, not another dial. Both sessions
+are ones the peer opened, and it never accepts a socket for the location its
+sturdyref names.
+
+The five pieces, as built:
+
+1. `open-conns`, keyed by peer location bytes — the same key
+   `half-open-dials` uses, extracted the same way (`location-of-start-session`,
+   originally added for crossed-hellos).
+2. Cross-connection write: the enliven arrives on one session, the `fetch`
+   goes out on the exporter's. First thing here to write to a socket other
+   than the one being serviced.
+3. `pending-enlivens`, keyed by the resolve-me export we ask the exporter to
+   answer on — so the fetch answer identifies its own request with no
+   correlation table beyond the slot number.
+4. Deposit, then answer. Built inline rather than through
+   `deposit-gift-bytes`: that helper emits the gid as `syrup-nat`, and a gift
+   id is a bytestring everywhere else in this module.
+5. The give's field values are each pinned by an upstream assertion
+   (`third_party_handoffs.py:458-462`), and they do not all come from the same
+   session — `receiver-key` is the ENLIVENING peer's key while
+   `exporter-location` / `session` / `gifter-side` belong to the EXPORTER
+   session. `gifter-side` is OUR side-id, because from the exporter's point of
+   view we are the gifter. Getting receiver-key from the exporter connection
+   was the one bug in this piece.
+
+`exporter-location` is the peer's own location bytes COPIED, never re-encoded:
+our encoder writes hints as a syrup list where Python writes a dict, and the
+assertion compares encoded forms.
+
+### Still true, still worth doing
+
+- **Export position 5 has no vat actor.** The enlivener works because the
+  server intercepts the deliver; nothing answers at the vat level. That is a
+  real gap, not a style point — any future object at position 5 will find the
+  position occupied by nothing.
+- The stale comment at `handshake.prologos:226-228` denying dict support
+  should be deleted.

@@ -97,6 +97,12 @@ SELECTED = [
         "test_valid_handoff_without_prior_connection",
         "test_valid_handoff_with_prior_connection",
     ]),
+    # Third-party handoff, GIFTER side (Phase 59b part 14). Both sessions are
+    # ones the peer opened, so the enlivener REUSES the open connection whose
+    # peer location the sturdyref names rather than dialling a new one.
+    ("tests.third_party_handoffs", "HandoffRemoteAsGifter", [
+        "test_provides_valid_handoff_give",
+    ]),
     # op:listen (Phase 59b part 4). Gated on the promise-resolver object
     # (swiss-num IokCxYmMj04nos2JN1TDoY1bT8dXh6Lr), which is now PRE-SEEDED
     # per connection rather than created on demand: every upstream test that
