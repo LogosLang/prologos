@@ -28,7 +28,7 @@ require [prologos::ocapn::message :refer-all]
         [prologos::ocapn::vat     :refer-all]
         [prologos::ocapn::syrup   :refer-all]
         [prologos::data::option   :refer [Option some none]]
-        [prologos::data::nat      :refer [nat-eq?]]
+        [prologos::data::nat      :refer [nat-eq? pred]]
         [prologos::data::string   :as str :refer []]
 
 spec incoming-captp-op CapTPOp Vat -> Vat
@@ -377,8 +377,24 @@ spec refr-to-syrup Refr -> SyrupValue
 defn refr-to-syrup [r]
   syrup-tagged [refr-syrup-tag r] [syrup-nat [refr-id r]]
 
+;; Gift ids are BYTE STRINGS on the wire (upstream deposits b"my-gift"), not
+;; Nats. The table was Nat-keyed and its dispatch ran `wire-nat` on the id,
+;; which returns none for bytes — so the handler bridged through unchanged and
+;; NO GIFT WAS EVER RECORDED, silently. Hence GiftEntry, keyed by the id bytes
+;; (which `syrup-bytes : String` already carries).
+data GiftEntry
+  gift-entry : String -> Nat
+
+spec ge-key GiftEntry -> String
+defn ge-key
+  | gift-entry k _ -> k
+
+spec ge-pos GiftEntry -> Nat
+defn ge-pos
+  | gift-entry _ n -> n
+
 data BridgeState
-  bridge-state : [List Listener] -> [List GcExportReq] -> [List Nat] -> [List QEntry] -> [List String] -> [List QEntry] -> [List QEntry] -> [List QEntry] -> [List PipeMsg] -> [List QEntry]
+  bridge-state : [List Listener] -> [List GcExportReq] -> [List Nat] -> [List QEntry] -> [List String] -> [List QEntry] -> [List QEntry] -> [List QEntry] -> [List PipeMsg] -> [List GiftEntry]
   ;; (listeners, gc-export-requests, gc-answer-positions, inbound-questions,
   ;;  pending-out, outbound-questions, imports-refcount, exports-refcount,
   ;;  pipelined-msgs, gifts)
@@ -495,7 +511,7 @@ defn bs-pipelined-msgs
   | bridge-state _ _ _ _ _ _ _ _ pm _ -> pm
 
 ;; Phase 52: gift-table accessor.
-spec bs-gifts BridgeState -> List QEntry
+spec bs-gifts BridgeState -> List GiftEntry
 defn bs-gifts
   | bridge-state _ _ _ _ _ _ _ _ _ gs -> gs
 
@@ -741,24 +757,42 @@ defn bs-add-pipeline-msg
 ;; (or carry resolution metadata) would require extending the
 ;; entry type; deferred until a use case demands it.
 
-spec bs-add-gift Nat Nat BridgeState -> BridgeState
-  :doc "Phase 52: record a deposited gift (gift-id → exported-pos). Called by op-deposit-gift handler in Phase 52b."
+spec bs-add-gift String Nat BridgeState -> BridgeState
+  :doc "Record a deposited gift (gift-id bytes -> exported-pos)."
 defn bs-add-gift
   | gid xid [bridge-state ls es as qs p oqs ir er pm gs] ->
       bridge-state ls es as qs p oqs ir er pm
-        [cons [q-entry gid xid] gs]
+        [cons [gift-entry gid xid] gs]
 
-spec bs-lookup-gift Nat BridgeState -> [Option Nat]
-  :doc "Phase 52: look up the exported-pos for a deposited gift-id. Called by op-withdraw-gift handler in Phase 52b."
+spec gift-lookup-loop [List GiftEntry] String -> [Option Nat]
+defn gift-lookup-loop [entries gid]
+  match entries
+    | nil -> [none Nat]
+    | [cons e rest] ->
+        match [str::eq [ge-key e] gid]
+          | true  -> [some [ge-pos e]]
+          | false -> gift-lookup-loop rest gid
+
+spec bs-lookup-gift String BridgeState -> [Option Nat]
+  :doc "Look up the exported-pos for a deposited gift-id."
 defn bs-lookup-gift [gid st]
-  bs-lookup-question-loop [bs-gifts st] gid
+  gift-lookup-loop [bs-gifts st] gid
 
-spec bs-remove-gift Nat BridgeState -> BridgeState
-  :doc "Phase 52: drop a gift entry by gift-id. Called after op-withdraw-gift consumes the gift."
+spec gift-remove-loop [List GiftEntry] String -> [List GiftEntry]
+defn gift-remove-loop [entries gid]
+  match entries
+    | nil -> [nil GiftEntry]
+    | [cons e rest] ->
+        match [str::eq [ge-key e] gid]
+          | true  -> gift-remove-loop rest gid
+          | false -> [cons e [gift-remove-loop rest gid]]
+
+spec bs-remove-gift String BridgeState -> BridgeState
+  :doc "Drop a gift entry by gift-id, after a withdraw consumes it."
 defn bs-remove-gift
   | gid [bridge-state ls es as qs p oqs ir er pm gs] ->
       bridge-state ls es as qs p oqs ir er pm
-        [list-remove-q-by-key gs gid]
+        [gift-remove-loop gs gid]
 
 ;; ===========================================================
 ;; Phase 27: vat-side `ask` wiring — bridge-send-question
@@ -1103,20 +1137,39 @@ defn syrup-symbol-name
   | syrup-promise _  -> [none String]
   | syrup-dict  _   -> [none String]
 
+;; Read a Syrup bytestring (or string) as a Prologos String. Wire ids —
+;; swiss-nums, gift-ids — are bytestrings, so this is the reader for all of
+;; them. Defined here rather than beside `fetch` because the gift dispatch
+;; below needs it and modules are single-pass (goblin-pitfalls #16).
+spec syrup-bytes-of SyrupValue -> [Option String]
+defn syrup-bytes-of
+  | syrup-bytes b    -> some b
+  | syrup-string s   -> some s
+  | syrup-null       -> [none String]
+  | syrup-bool _     -> [none String]
+  | syrup-nat _      -> [none String]
+  | syrup-int _      -> [none String]
+  | syrup-symbol _   -> [none String]
+  | syrup-list _     -> [none String]
+  | syrup-dict _     -> [none String]
+  | syrup-tagged _ _ -> [none String]
+  | syrup-refr _     -> [none String]
+  | syrup-promise _  -> [none String]
+
 ;; Innermost: deposit-gift's gid + refr already extracted.
-spec do-deposit-gift Nat Nat Vat BridgeState -> BridgeStep
+spec do-deposit-gift String Nat Vat BridgeState -> BridgeStep
 defn do-deposit-gift [gid xid v st]
   bridge-step v [bs-add-gift gid xid st]
 
 ;; Extract xid from refr-syrup; record gift if shape is desc:export.
-spec deposit-with-gid Nat SyrupValue Vat BridgeState -> BridgeStep
+spec deposit-with-gid String SyrupValue Vat BridgeState -> BridgeStep
 defn deposit-with-gid [gid gift-refr v st]
   match [syrup-as-export-target gift-refr]
     | none -> bridge-step v st
     | some xid -> do-deposit-gift gid xid v st
 
 ;; Innermost-2: gid known + rest = (refr-syrup ...). Extract refr.
-spec dispatch-deposit-with-refr Nat [List SyrupValue] Vat BridgeState -> BridgeStep
+spec dispatch-deposit-with-refr String [List SyrupValue] Vat BridgeState -> BridgeStep
 defn dispatch-deposit-with-refr [gid rest v st]
   match rest
     | nil -> bridge-step v st
@@ -1128,48 +1181,29 @@ defn dispatch-deposit-gift-rest [rest v st]
   match rest
     | nil -> bridge-step v st
     | cons gid-syr rest1 ->
-        match [wire-nat gid-syr]
+        ;; The gift-id is a BYTESTRING, not a Nat. This ran `wire-nat` on it and
+        ;; bridged through unchanged when that returned none, so no gift was
+        ;; ever recorded and nothing said so.
+        match [syrup-bytes-of gid-syr]
           | none -> bridge-step v st
           | some gid -> dispatch-deposit-with-refr gid rest1 v st
 
 ;; Innermost: ap (peer's answer-pos) is known; xid is the resolved
 ;; gift's exported-id. Queue the op:deliver-to-answer reply bytes.
-spec do-withdraw-reply Nat Nat Vat BridgeState -> BridgeStep
-defn do-withdraw-reply [ans xid v st]
-  bridge-step v
-    [bs-append-pending-out
-      [outbound-deliver-bytes ans [syrup-tagged "desc:export" [syrup-nat xid]]]
-      st]
+;; `withdraw-gift` USED to live here, replying on the ANSWER-POS channel.
+;; Upstream sends it with answer_position=False plus a resolve-me descriptor
+;; and awaits expect_promise_resolution, so `ap` was always none and the reply
+;; was silently dropped. It now lives beside `fetch` (below) — the gateway that
+;; has `rm` in scope.
 
-spec withdraw-with-gid Nat [Option Nat] Vat BridgeState -> BridgeStep
-defn withdraw-with-gid [gid ap v st]
-  match [bs-lookup-gift gid st]
-    | none -> bridge-step v st
-    | some xid ->
-        match ap
-          | none -> bridge-step v st
-          | some ans -> do-withdraw-reply ans xid v st
-
-;; Inner: rest = (gid-syrup ...).
-spec dispatch-withdraw-gift-rest [List SyrupValue] [Option Nat] Vat BridgeState -> BridgeStep
-defn dispatch-withdraw-gift-rest [rest ap v st]
-  match rest
-    | nil -> bridge-step v st
-    | cons gid-syr _ ->
-        match [wire-nat gid-syr]
-          | none -> bridge-step v st
-          | some gid -> withdraw-with-gid gid ap v st
-
-;; Match the method-name; dispatch to deposit / withdraw.
+;; Match the method-name. Only `deposit-gift` is dispatched here, and it
+;; answers nothing: upstream sends it fire-and-forget.
 ;; Returns Some BridgeStep iff method-name is recognised.
 spec dispatch-bootstrap-method-name String [List SyrupValue] [Option Nat] Vat BridgeState -> [Option BridgeStep]
 defn dispatch-bootstrap-method-name [name rest ap v st]
   match [str::eq name "deposit-gift"]
     | true  -> some [dispatch-deposit-gift-rest rest v st]
-    | false ->
-        match [str::eq name "withdraw-gift"]
-          | true  -> some [dispatch-withdraw-gift-rest rest ap v st]
-          | false -> [none BridgeStep]
+    | false -> [none BridgeStep]
 
 ;; Gateway: if target == bootstrap (export 0) and args is a list
 ;; starting with a recognised method-symbol, dispatch to gift
@@ -1236,23 +1270,128 @@ defn swiss-num-export [s]
                             | true  -> [some 5N]
                             | false -> [none Nat]
 
-;; The swiss-num arrives as a Syrup bytestring.
+;; The swiss-num arrives as a Syrup bytestring — same reader as gift ids.
 spec fetch-swiss-of SyrupValue -> [Option String]
-defn fetch-swiss-of
-  | syrup-bytes b    -> some b
-  | syrup-string s   -> some s
-  | syrup-null       -> [none String]
-  | syrup-bool _     -> [none String]
-  | syrup-nat _      -> [none String]
-  | syrup-int _      -> [none String]
-  | syrup-symbol _   -> [none String]
-  | syrup-list _     -> [none String]
-  | syrup-tagged _ _ -> [none String]
-  | syrup-refr _     -> [none String]
-  | syrup-promise _  -> [none String]
-  | syrup-dict  _   -> [none String]
+defn fetch-swiss-of [v]
+  syrup-bytes-of v
 
-;; <op:deliver <desc:export rm> ['fulfill <desc:import-object xid>] f f>
+;; ===========================================================
+;; withdraw-gift — the exporter side of the three-vat handoff
+;; ===========================================================
+;;
+;; Upstream sends
+;;   <op:deliver <desc:export 0> ['withdraw-gift <SIGNED-RECEIVE>] false <rm>>
+;; and awaits the answer on `rm`, which is why this lives on the resolve-me
+;; gateway rather than the answer-pos one.
+;;
+;; The argument is not a bare gift-id — it is five levels of nesting:
+;;
+;;   <desc:sig-envelope
+;;      <desc:handoff-receive  recv-session recv-side count
+;;         <desc:sig-envelope
+;;            <desc:handoff-give  key location session gifter-side GIFT-ID>
+;;            sig>>
+;;      sig>
+;;
+;; so the id is arg0 -> arg3 -> arg0 -> arg4. Each step is its own helper: a
+;; three-deep `match` in one body does not elaborate (prologos-syntax.md).
+;; Definitions run callee-before-caller throughout — placing a helper AFTER its
+;; caller does not error, it yields a STUCK `[reduce …]` term
+;; (goblin-pitfalls #16), which is how this block failed the first time.
+
+spec nth-syrup [List SyrupValue] Nat -> [Option SyrupValue]
+defn nth-syrup [xs n]
+  match xs
+    | nil -> [none SyrupValue]
+    | [cons h rest] ->
+        match [nat-eq? n zero]
+          | true  -> some h
+          | false -> nth-syrup rest [pred n]
+
+spec record-args-if-tag String String SyrupValue -> [List SyrupValue]
+defn record-args-if-tag [want got inner]
+  match [str::eq want got]
+    | true  -> syrup-list-or-nil inner
+    | false -> [nil SyrupValue]
+
+;; The argument list of a tagged record, but only if the tag matches.
+spec record-args-of String SyrupValue -> [List SyrupValue]
+defn record-args-of [tag v]
+  match v
+    | syrup-tagged t inner -> record-args-if-tag tag t inner
+    | _                    -> [nil SyrupValue]
+
+;; <desc:sig-envelope OBJ sig> -> OBJ
+spec sig-envelope-object SyrupValue -> [Option SyrupValue]
+defn sig-envelope-object [v]
+  nth-syrup [record-args-of "desc:sig-envelope" v] zero
+
+;; <desc:handoff-give … GIFT-ID> -> GIFT-ID (arg 4)
+spec handoff-give-gift-id SyrupValue -> [Option String]
+defn handoff-give-gift-id [v]
+  match [nth-syrup [record-args-of "desc:handoff-give" v] 4N]
+    | none    -> [none String]
+    | some id -> syrup-bytes-of id
+
+spec signed-give-gift-id SyrupValue -> [Option String]
+defn signed-give-gift-id [sg]
+  match [sig-envelope-object sg]
+    | none    -> [none String]
+    | some hg -> handoff-give-gift-id hg
+
+;; <desc:handoff-receive rs side count SIGNED-GIVE> -> the give's gift-id
+spec handoff-receive-gift-id SyrupValue -> [Option String]
+defn handoff-receive-gift-id [v]
+  match [nth-syrup [record-args-of "desc:handoff-receive" v] 3N]
+    | none    -> [none String]
+    | some sg -> signed-give-gift-id sg
+
+;; The whole descent, from the signed handoff-receive upstream sends.
+spec withdraw-gift-id SyrupValue -> [Option String]
+defn withdraw-gift-id [signed-receive]
+  match [sig-envelope-object signed-receive]
+    | none    -> [none String]
+    | some hr -> handoff-receive-gift-id hr
+
+;; Reply shapes. Upstream asserts on args[0], so a rejection MUST say `break` —
+;; staying silent hangs the peer for its full timeout instead.
+spec withdraw-fulfill-bytes Nat Nat -> String
+defn withdraw-fulfill-bytes [rm-pos xid]
+  listener-notify-bytes rm-pos [syrup-list [cons [syrup-symbol "fulfill"] [cons [syrup-tagged "desc:import-object" [syrup-nat xid]] [nil SyrupValue]]]]
+
+spec withdraw-break-bytes Nat String -> String
+defn withdraw-break-bytes [rm-pos reason]
+  listener-notify-bytes rm-pos [syrup-list [cons [syrup-symbol "break"] [cons [syrup-symbol reason] [nil SyrupValue]]]]
+
+;; A withdrawal CONSUMES its gift, so replaying the same handoff cannot succeed
+;; twice — which is exactly what upstream's invalid-handoff-count test checks.
+spec do-withdraw Nat String Nat Vat BridgeState -> BridgeStep
+defn do-withdraw [rm-pos gid xid v st]
+  bridge-step v
+    [bs-append-pending-out [withdraw-fulfill-bytes rm-pos xid]
+      [bs-remove-gift gid [bs-incr-export xid st]]]
+
+spec withdraw-known-gid Nat String Vat BridgeState -> BridgeStep
+defn withdraw-known-gid [rm-pos gid v st]
+  match [bs-lookup-gift gid st]
+    | none     -> bridge-step v [bs-append-pending-out [withdraw-break-bytes rm-pos "no-such-gift"] st]
+    | some xid -> do-withdraw rm-pos gid xid v st
+
+spec withdraw-with-receive Nat SyrupValue Vat BridgeState -> BridgeStep
+defn withdraw-with-receive [rm-pos signed-receive v st]
+  match [withdraw-gift-id signed-receive]
+    | none     -> bridge-step v [bs-append-pending-out [withdraw-break-bytes rm-pos "malformed-handoff"] st]
+    | some gid -> withdraw-known-gid rm-pos gid v st
+
+spec withdraw-from-rest [List SyrupValue] [Option Nat] Vat BridgeState -> [Option BridgeStep]
+defn withdraw-from-rest [rest rm v st]
+  match rm
+    | none -> [none BridgeStep]
+    | some rm-pos ->
+        match rest
+          | nil -> [none BridgeStep]
+          | [cons sr _] -> some [withdraw-with-receive rm-pos sr v st]
+
 spec fetch-reply-bytes Nat Nat -> String
 defn fetch-reply-bytes [rm-pos xid]
   listener-notify-bytes rm-pos [syrup-list [cons [syrup-symbol "fulfill"] [cons [syrup-tagged "desc:import-object" [syrup-nat xid]] [nil SyrupValue]]]]
@@ -1284,8 +1423,11 @@ defn fetch-from-rest [rest rm v st]
 spec fetch-from-name String [List SyrupValue] [Option Nat] Vat BridgeState -> [Option BridgeStep]
 defn fetch-from-name [name rest rm v st]
   match [str::eq name "fetch"]
-    | false -> [none BridgeStep]
     | true  -> fetch-from-rest rest rm v st
+    | false ->
+        match [str::eq name "withdraw-gift"]
+          | true  -> withdraw-from-rest rest rm v st
+          | false -> [none BridgeStep]
 
 ;; Gateway: target must be the bootstrap object (export 0) and args a
 ;; list whose head is the symbol `fetch`. Returns None to fall through.

@@ -699,3 +699,58 @@ existing `syrup-promise` arm, with the handful of genuinely-different sites
 dict support is a prerequisite for anything that carries a location: the
 sturdyref enlivener (1 test), and both `HandoffRemoteAsReciever` tests, which
 send us a location to connect out to. It is not exporter-specific plumbing.
+
+---
+
+## Exporter handoff, second attempt — the handler WORKS; the remaining blocker is a CROSS-CONNECTION gift table
+
+With dict support landed, `decode-op` parses the withdraw frame, so the
+handler could be redone and actually exercised. Result: **1 of 4 passing, and
+the other three fail for one reason.**
+
+What now works, verified:
+
+- the frame decodes (target `0N`, resolve-me `0N`);
+- the five-level descent returns the right id — probed directly on the real
+  716-byte frame, `withdraw-gift-id` yields `"my-gift"`;
+- we REPLY: the server log shows `conn 1 frame 2 (716 in / 59 out bytes)`,
+  where it was `716 in / 0 out` before;
+- the whole class went from a 258s timeout to 13s;
+- `test_handoff_receive_invalid_signature` PASSES.
+
+The other three assert `fulfill` and get `break` — specifically
+`no-such-gift`. The reason is structural, and visible in the server log:
+
+```
+ocapn-test-server: conn 0 frame 3 (79 in / 0 out bytes)     <- deposit-gift
+ocapn-test-server: conn 1 frame 2 (716 in / 59 out bytes)   <- withdraw-gift
+```
+
+**The deposit arrives on conn 0 and the withdraw on conn 1.** Upstream's
+`HandoffRemoteAsExporter` opens two sessions to us — `g2e_session` via
+`self.netlayer` and `r2e_session` via `self.other_netlayer` — because the
+gifter and the receiver ARE different peers. That is the entire point of a
+third-party handoff.
+
+Our gift table lives in `BridgeState`, which `ocapn-conn-ffi.rkt` stashes
+PER CONNECTION. So the deposit lands in conn 0's table and the withdraw looks
+up conn 1's, finds nothing, and correctly reports `no-such-gift`.
+
+### The fix (next piece, well-scoped)
+
+The gift table is EXPORTER-GLOBAL state, not session state — it is keyed by
+gift-id precisely so a different session can withdraw. It has to move out of
+`BridgeState` into a process-level store, in the same shape as
+`ocapn-conn-ffi.rkt`'s connection stash: an FFI-backed table keyed by gift-id
+bytes.
+
+Everything else for these 4 tests is done. Note the invalid-signature test
+currently passes for the wrong reason (we break on everything), so it will
+need a real Ed25519 verification once withdrawals start succeeding — the
+`crypto-ffi` primitives are already in use for handshake signing.
+
+Also fixed while here: `test-ocapn-bridge.rkt` had grown to 147 test-cases and
+was the single file timing out at the runner's 120s limit on CI. Split into
+`test-ocapn-bridge.rkt` (69) + `test-ocapn-bridge-02.rkt` (78), ~38s each.
+`.claude/rules/testing.md` asks for ~20 cases / ~30s per file for exactly this
+reason.
