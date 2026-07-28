@@ -28,6 +28,7 @@
          (prefix-in gc: "../global-constraints.rkt")
          "../errors.rkt"
          "../champ.rkt"
+         "test-support.rkt"
          "../parse-reader.rkt")
 
 (define-runtime-path lib-dir "../lib")
@@ -94,6 +95,60 @@
   result)
 
 (define (run-ws-raw-last s) (last (run-ws-raw s)))
+
+;; ---- Second fixture: WITH prelude (cached via test-support) ----
+;; Needed by the slice-3 List tests: under :no-prelude the `List` TYPE does not
+;; exist, so `def xs := [pvec-to-list …]` dies with not-a-type-error and every
+;; later line is `Unbound variable` — which a prologos-error? assertion
+;; CANNOT tell from the loud miss it means to pin (observed: a false green).
+(define-values (pre-global-env pre-ns-context pre-module-reg
+                pre-trait-reg pre-impl-reg pre-param-impl-reg
+                pre-bundle-reg)
+  (parameterize ([current-file-module-network-ref (make-module-network)]
+                 [current-ns-context #f]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry]
+                 [current-param-impl-registry prelude-param-impl-registry]
+                 [current-bundle-registry (current-bundle-registry)])
+    (install-module-loader!)
+    (process-string "(ns path-selection-pre)")
+    (values (global-env-snapshot) (current-ns-context) (current-module-registry)
+            (current-trait-registry) (current-impl-registry)
+            (current-param-impl-registry) (current-bundle-registry))))
+
+(define (run-ws-pre-raw s)
+  (define tmp (make-temporary-file "prologos-pathselpre-~a.prologos"))
+  (call-with-output-file tmp #:exists 'replace
+    (lambda (out) (display s out)))
+  (define result
+    (parameterize ([current-file-module-network-ref
+                    (module-network-add-import (make-module-network)
+                                               (module-network-from-snapshot pre-global-env))]
+                   [current-ns-context pre-ns-context]
+                   [current-module-registry pre-module-reg]
+                   [current-lib-paths (list prelude-lib-dir)]
+                   [current-preparse-registry prelude-preparse-registry]
+                   [current-trait-registry pre-trait-reg]
+                   [current-impl-registry pre-impl-reg]
+                   [current-param-impl-registry pre-param-impl-reg]
+                   [current-bundle-registry pre-bundle-reg])
+      (process-file (path->string tmp))))
+  (delete-file tmp)
+  result)
+
+(define (run-ws-pre s) (map (lambda (r) (format "~a" r)) (run-ws-pre-raw s)))
+(define (run-ws-pre-last s) (last (run-ws-pre s)))
+
+;; Guard against the false-green class above: the PRELUDE fixture must actually
+;; give us a typed List def, or every downstream assertion is meaningless.
+(test-case "fixture sanity: the prelude fixture stores a typed List def"
+  (define r (run-ws-pre "def xs0 := [pvec-to-list @[10 20 30]]\nxs0\n"))
+  (check-false (ormap (lambda (x) (regexp-match? #rx"not-a-type|Unbound" x)) r)
+               "prelude fixture broken — List type unavailable")
+  (check-regexp-match #rx"List" (last r)))
 
 ;; ============================================================
 ;; P2.a — record-project dynamic Int gate (D3-S1 prerequisite for PS10)
@@ -260,6 +315,46 @@
               "def tr := @[1 \"a\" true]\n"
               "[pvec-nth tr [pvec-length @[1N 2N 3N 4N 5N]]]\n")))
   (check-true (prologos-error? r)))
+
+;; ---------- SLICE 3 — the List-leg split (round 8b) ----------
+;;
+;; expr-get's List arm CONFLATED "index is not a literal" with OOB — both fell
+;; to one `(expr-error)`. Consequence: a lambda body indexing a ground list was
+;; DESTROYED to `<error>` at definition time (a live silent-wrong-value bug).
+;; The split: non-literal index → STUCK (mirrors the rrb arm); true OOB → LOUD.
+
+(test-case "P2.b A10: List runtime OOB via expr-get is LOUD"
+  (define r (run-ws-pre-raw
+             (string-append
+              "def xs := [pvec-to-list @[10 20 30]]\n"
+              "[get xs 5]\n")))
+  (check-false (prologos-error? (first r)) "the def itself must succeed")
+  (check-true (prologos-error? (last r))))
+
+(test-case "P2.b A10b: the loud List OOB names index and length"
+  (define r (run-ws-pre-last
+             (string-append
+              "def xs := [pvec-to-list @[10 20 30]]\n"
+              "[get xs 5]\n")))
+  (check-regexp-match #rx"out of bounds" r))
+
+(test-case "P2.b A11 (the live bug): nf no longer destroys a get-on-List under a binder"
+  ;; The conflation's observable: POL.10 STORES the whnf value, so the stored
+  ;; lambda body is intact and application works — but the nf DISPLAY descends
+  ;; under the binder, hits `[get xs i]` with i a bvar (non-literal index), and
+  ;; collapses it to `<error>`. The displayed body is a silent lie about the
+  ;; stored value. After the split: non-literal stays a STUCK get, so the
+  ;; display shows the real body. The application pin must hold BOTH before
+  ;; and after (it is the must-not-break half).
+  (define r (run-ws-pre
+             (string-append
+              "def xs := [pvec-to-list @[10 20 30]]\n"
+              "def f := [fn [i : Nat] [get xs i]]\n"
+              "f\n"
+              "[f 1N]\n")))
+  (check-false (regexp-match? #rx"<error>" (third r))
+               "the DISPLAYED lambda body must not be nf-destroyed")
+  (check-regexp-match #rx"20 : Int" (last r)))
 
 ;; THE DEF SEAMS (Q_N5, both — driver.rkt:1907 inferred, :2112 annotated).
 (test-case "P2.b A7: a panic-valued def is COUNTED at the inferred def seam (was: silent)"

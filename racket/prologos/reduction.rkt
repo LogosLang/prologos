@@ -2742,14 +2742,25 @@
                       (format "get: index ~a out of bounds for PVec of length ~a"
                               n (rrb-size r))))]))]
          ;; List (cons chain) → walk to nth
+         ;; CIU T6 P2.b slice 3: the SPLIT. This arm CONFLATED "index is not a
+         ;; literal" with "out of bounds" — both fell to one `(expr-error)`.
+         ;; The non-literal half was a LIVE bug: nf descends under binders, so
+         ;; a lambda body `[get xs i]` (i a bvar) was destroyed to `<error>`
+         ;; in the DISPLAY while the stored whnf value stayed intact — a
+         ;; silent lie about the value. Non-literal now stays STUCK (mirroring
+         ;; the rrb arm above); true OOB joins the assertive tier, LOUD.
          [_
           (let ([elems (prologos-list->racket-list c*)])
             (if elems
                 (let* ([k* (whnf key)]
                        [n (index-value k*)])
-                  (if (and n (< n (length elems)))
-                      (whnf (list-ref elems n))
-                      (expr-error)))
+                  (cond
+                    [(not n) (expr-get c* k*)]
+                    [(< n (length elems)) (whnf (list-ref elems n))]
+                    [else (expr-panic
+                           (expr-string
+                            (format "get: index ~a out of bounds for List of length ~a"
+                                    n (length elems))))]))
                 ;; Not yet reduced → try reducing
                 (if (not (equal? c* coll))
                     (whnf (expr-get c* key))
