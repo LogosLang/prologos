@@ -104,7 +104,13 @@ echo "----------------------------------------------------------------"
 # The selective runner (ocapn-run-tests.py) lives in this repo; it
 # chdir's into the suite dir itself. CapTP version "1.0" matches what
 # the upstream tests assert on.
-OCAPN_TEST_SUITE_DIR="$SUITE_DIR" timeout 90 python3 -u \
+# Budget: each selected test costs ~3s locally but ~25s on a GitHub runner
+# (every step-connection is a process-string that re-loads modules). The old
+# 90s budget fit 5 tests and silently truncated the run at 6 when the count
+# grew to 9 — the suite reported MILESTONE NOT MET for a TIMEOUT, not a
+# failure. Raise the budget whenever EXPECTED_PASS grows; the job itself has
+# timeout-minutes: 30, so this stays well inside it.
+OCAPN_TEST_SUITE_DIR="$SUITE_DIR" timeout 600 python3 -u \
   "$REPO_ROOT/tools/interop/ocapn-run-tests.py" \
   "$LOCATOR" "1.0" 2>&1 | tee /tmp/ocapn-suite-output.txt || true
 SUITE_EXIT=${PIPESTATUS[0]}

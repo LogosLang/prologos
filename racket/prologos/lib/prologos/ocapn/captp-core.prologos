@@ -961,6 +961,7 @@ defn shallow-refr
   | syrup-symbol _     -> [nil Refr]
   | syrup-refr _       -> [nil Refr]
   | syrup-promise _    -> [nil Refr]
+  | syrup-dict    _   -> [nil Refr]
   | syrup-bytes _      -> [nil Refr]
   | syrup-list _       -> [nil Refr]    ;; SHALLOW: nested lists not walked
   | syrup-tagged tag p -> [extract-refrs-from-tagged tag p]
@@ -989,6 +990,7 @@ defn extract-refrs-from-args
   | syrup-symbol _     -> [nil Refr]
   | syrup-refr _       -> [nil Refr]
   | syrup-promise _    -> [nil Refr]
+  | syrup-dict    _   -> [nil Refr]
   | syrup-bytes _      -> [nil Refr]
   | syrup-list xs      -> [walk-toplevel-list xs]
   | syrup-tagged tag p -> [extract-refrs-from-tagged tag p]
@@ -1039,6 +1041,7 @@ defn syrup-as-export-target
   | syrup-refr _     -> [none Nat]
   | syrup-bytes _    -> [none Nat]
   | syrup-promise _  -> [none Nat]
+  | syrup-dict  _   -> [none Nat]
   | syrup-tagged tag p ->
       match [str::eq tag "desc:export"]
         | true  -> tagged-payload-as-nat p
@@ -1081,6 +1084,7 @@ defn syrup-list-or-nil
   | syrup-refr _     -> [nil SyrupValue]
   | syrup-bytes _    -> [nil SyrupValue]
   | syrup-promise _  -> [nil SyrupValue]
+  | syrup-dict  _   -> [nil SyrupValue]
 
 ;; Helper: extract a syrup-symbol's name (Some s), or None if the
 ;; SyrupValue isn't a symbol.
@@ -1097,6 +1101,7 @@ defn syrup-symbol-name
   | syrup-refr _     -> [none String]
   | syrup-bytes _    -> [none String]
   | syrup-promise _  -> [none String]
+  | syrup-dict  _   -> [none String]
 
 ;; Innermost: deposit-gift's gid + refr already extracted.
 spec do-deposit-gift Nat Nat Vat BridgeState -> BridgeStep
@@ -1245,6 +1250,7 @@ defn fetch-swiss-of
   | syrup-tagged _ _ -> [none String]
   | syrup-refr _     -> [none String]
   | syrup-promise _  -> [none String]
+  | syrup-dict  _   -> [none String]
 
 ;; <op:deliver <desc:export rm> ['fulfill <desc:import-object xid>] f f>
 spec fetch-reply-bytes Nat Nat -> String
@@ -1586,6 +1592,7 @@ defn syrup-as-answer-target
   | syrup-refr _     -> [none Nat]
   | syrup-bytes _    -> [none Nat]
   | syrup-promise _  -> [none Nat]
+  | syrup-dict  _   -> [none Nat]
   | syrup-tagged tag p ->
       match [str::eq tag "desc:answer"]
         | true  -> tagged-payload-as-nat p

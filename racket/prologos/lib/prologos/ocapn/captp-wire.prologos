@@ -194,6 +194,7 @@ defn unwrap-desc
   | syrup-refr _     -> none
   | syrup-bytes _  -> none
   | syrup-promise _  -> none
+  | syrup-dict  _   -> none
 
 ;; Phase 25: discriminate desc:export from desc:answer. Returns true
 ;; iff `v` is a `syrup-tagged "desc:answer" ...` form. Used by the
@@ -213,6 +214,7 @@ defn desc-is-answer?
   | syrup-refr _       -> false
   | syrup-bytes _      -> false
   | syrup-promise _    -> false
+  | syrup-dict    _   -> false
 
 ;; Same shape but for an Option-wrapped descriptor:
 ;;   - `syrup-bool false` -> `none`  (canonical absent sentinel)
@@ -233,6 +235,7 @@ defn unwrap-opt-desc
   | syrup-refr _       -> none
   | syrup-bytes _    -> none
   | syrup-promise _    -> none
+  | syrup-dict    _   -> none
 
 ;; ===========================================================
 ;; Per-op dispatchers
@@ -278,6 +281,7 @@ defn dispatch-gc-export
   | syrup-refr _   -> none
   | syrup-bytes _ -> none
   | syrup-promise _ -> none
+  | syrup-dict _   -> none
 
 spec dispatch-deliver-only-args [List SyrupValue] -> [Option CapTPOp]
 defn dispatch-deliver-only-args [xs]
@@ -304,6 +308,7 @@ defn dispatch-deliver-only
   | syrup-refr _   -> none
   | syrup-bytes _ -> none
   | syrup-promise _ -> none
+  | syrup-dict _   -> none
 
 spec dispatch-listen-args [List SyrupValue] -> [Option CapTPOp]
 defn dispatch-listen-args [xs]
@@ -333,6 +338,7 @@ defn dispatch-listen
   | syrup-refr _   -> none
   | syrup-bytes _ -> none
   | syrup-promise _ -> none
+  | syrup-dict _   -> none
 
 ;; If the deliver's target is a `desc:answer N`, build an
 ;; op-deliver-to-answer (peer is replying to OUR question N).
@@ -374,6 +380,7 @@ defn dispatch-deliver
   | syrup-refr _   -> none
   | syrup-bytes _ -> none
   | syrup-promise _ -> none
+  | syrup-dict _   -> none
 
 spec dispatch-start-session-args [List SyrupValue] -> [Option CapTPOp]
 defn dispatch-start-session-args [xs]
@@ -400,6 +407,7 @@ defn dispatch-start-session
   | syrup-refr _   -> none
   | syrup-bytes _ -> none
   | syrup-promise _ -> none
+  | syrup-dict _   -> none
 
 ;; (Phase 52b note: dispatch-deposit-gift / dispatch-withdraw-gift
 ;; were removed on 2026-05-18. The OCapN canonical model dispatches
@@ -449,6 +457,7 @@ defn syrup-to-op
   | syrup-refr _             -> none
   | syrup-bytes _          -> none
   | syrup-promise _          -> none
+  | syrup-dict          _   -> none
 
 ;; ===========================================================
 ;; Public top-level decode

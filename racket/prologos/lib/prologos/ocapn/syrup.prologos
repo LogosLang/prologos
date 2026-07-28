@@ -46,6 +46,21 @@ data SyrupValue
   ;; payloads, raw blobs, etc.
   syrup-bytes  : String
   syrup-list   : List SyrupValue
+  ;; A Syrup DICTIONARY — wire form `{ k1 v1 k2 v2 ... }`.
+  ;;
+  ;; Represented as a FLAT alternating key/value list rather than an assoc
+  ;; list: the flat form reuses `List SyrupValue`, so every existing list
+  ;; helper, `encode-many` and `decode-many-loop` all apply unchanged. Order
+  ;; is preserved exactly as decoded — Syrup canonicalises by sorted key on
+  ;; the wire, and since we neither re-sort nor re-order, re-encoding a
+  ;; decoded dict is byte-identical.
+  ;;
+  ;; This was the last unimplemented Syrup form we needed, and its absence was
+  ;; invisible until it wasn't: `OCapNPeer` carries its netlayer hints as a
+  ;; dict (`{4"host9"127.0.0.14"port5"22116}`), so EVERY frame carrying a
+  ;; location — third-party handoffs, sturdyrefs — died at the first `{` with
+  ;; decode-op returning `none` and no diagnostic.
+  syrup-dict   : List SyrupValue
   ;; tagged label + payload (payload can itself be a syrup-list)
   syrup-tagged : String -> SyrupValue
   ;; An object reference, vat-local position. The peer's import/export
@@ -75,6 +90,7 @@ defn null?
   | syrup-bytes _      -> false
   | syrup-refr _       -> false
   | syrup-promise _    -> false
+  | syrup-dict    _   -> false
 
 spec bool? SyrupValue -> Bool
 defn bool?
@@ -89,6 +105,7 @@ defn bool?
   | syrup-bytes _      -> false
   | syrup-refr _       -> false
   | syrup-promise _    -> false
+  | syrup-dict    _   -> false
 
 spec refr? SyrupValue -> Bool
 defn refr?
@@ -103,6 +120,7 @@ defn refr?
   | syrup-bytes _      -> false
   | syrup-refr _       -> true
   | syrup-promise _    -> false
+  | syrup-dict    _   -> false
 
 spec promise? SyrupValue -> Bool
 defn promise?
@@ -117,6 +135,7 @@ defn promise?
   | syrup-bytes _      -> false
   | syrup-refr _       -> false
   | syrup-promise _    -> true
+  | syrup-dict _       -> false
 
 spec tagged? SyrupValue -> Bool
 defn tagged?
@@ -131,6 +150,7 @@ defn tagged?
   | syrup-bytes _      -> false
   | syrup-refr _       -> false
   | syrup-promise _    -> false
+  | syrup-dict    _   -> false
 
 ;; ========================================
 ;; Selectors
@@ -150,6 +170,7 @@ defn get-nat
   | syrup-bytes _      -> none
   | syrup-refr _       -> none
   | syrup-promise _    -> none
+  | syrup-dict    _   -> none
 
 spec get-string SyrupValue -> Option String
 defn get-string
@@ -164,6 +185,7 @@ defn get-string
   | syrup-bytes _      -> none
   | syrup-refr _       -> none
   | syrup-promise _    -> none
+  | syrup-dict    _   -> none
 
 spec get-refr SyrupValue -> Option Nat
 defn get-refr
@@ -178,6 +200,7 @@ defn get-refr
   | syrup-bytes _      -> none
   | syrup-refr id      -> some id
   | syrup-promise _    -> none
+  | syrup-dict    _   -> none
 
 spec get-promise SyrupValue -> Option Nat
 defn get-promise
@@ -192,6 +215,7 @@ defn get-promise
   | syrup-bytes _      -> none
   | syrup-refr _       -> none
   | syrup-promise id   -> some id
+  | syrup-dict _       -> [none Nat]
 
 spec get-tag SyrupValue -> Option String
 defn get-tag
@@ -206,6 +230,7 @@ defn get-tag
   | syrup-bytes _      -> none
   | syrup-refr _       -> none
   | syrup-promise _    -> none
+  | syrup-dict    _   -> none
 
 spec get-payload SyrupValue -> Option SyrupValue
 defn get-payload
@@ -220,6 +245,7 @@ defn get-payload
   | syrup-bytes _      -> none
   | syrup-refr _       -> none
   | syrup-promise _    -> none
+  | syrup-dict    _   -> none
 
 ;; Int -> Nat (clamped at 0). Structural recursion → O(n) cost.
 ;; Only used for table-position decoding (small Nats) so the cost
@@ -251,6 +277,7 @@ defn wire-nat
   | syrup-refr _     -> none
   | syrup-bytes _  -> none
   | syrup-promise _  -> none
+  | syrup-dict  _   -> none
 
 ;; ========================================
 ;; Convenience constructors

@@ -193,3 +193,55 @@
   (check-contains
    (run-last "(eval (encode (syrup-string \"αβγ\")))")
    "6\\\""))
+
+;; ========================================
+;; Syrup DICTIONARIES — `{ k1 v1 k2 v2 ... }`
+;; ========================================
+;;
+;; The last unimplemented Syrup form, and its absence was invisible until it
+;; wasn't: `decode-at` dispatched on n / t / f / [ / < / digits and fell to
+;; `none` on anything else, so EVERY frame carrying an OCapN location — which
+;; expresses its netlayer hints as a dict — failed to decode, with no
+;; diagnostic. That is what blocked the third-party-handoff tests.
+
+(test-case "syrup-wire/decode an empty dict `{}`"
+  (check-contains
+   (run-last "(eval (decode-value \"{}\"))") "syrup-dict"))
+
+(test-case "syrup-wire/decode a one-entry dict"
+  (check-contains
+   (run-last "(eval (decode-value \"{4\\\"host9\\\"127.0.0.1}\"))") "syrup-dict"))
+
+(test-case "syrup-wire/roundtrip a dict is BYTE-IDENTICAL"
+  ;; We neither re-sort nor re-order, so re-encoding a decoded dict reproduces
+  ;; the exact input bytes. Syrup canonicalises by sorted key on the wire; the
+  ;; peer already sent it canonical, so preserving order preserves canonicity.
+  (check-contains
+   (run-last
+    "(eval (encode (unwrap-or syrup-null (decode-value \"{4\\\"host9\\\"127.0.0.14\\\"port5\\\"22116}\"))))")
+   "{4\\\"host9\\\"127.0.0.14\\\"port5\\\"22116}"))
+
+(test-case "syrup-wire/a dict nested inside a record decodes"
+  ;; This is the shape that actually failed: <ocapn-peer ... {hints}>.
+  (check-contains
+   (run-last
+    "(eval (decode-value \"<10'ocapn-peer16'tcp-testing-only{4\\\"host9\\\"127.0.0.1}>\"))")
+   "syrup-tagged"))
+
+(test-case "syrup-wire/a dict IS encodable; a dict holding a refr is NOT"
+  ;; encodable? must recurse into a dict rather than reject it outright — the
+  ;; mechanical arm-migration initially cloned `false` from the promise arm,
+  ;; which would have made every location-bearing frame unencodable.
+  (check-contains
+   (run-last "(eval (encodable? (syrup-dict (cons (syrup-symbol \"k\") (cons (syrup-nat 1N) nil)))))")
+   "true")
+  (check-contains
+   (run-last "(eval (encodable? (syrup-dict (cons (syrup-symbol \"k\") (cons (syrup-refr 3N) nil)))))")
+   "false"))
+
+(test-case "syrup-wire/a dict is not a promise and has no promise id"
+  ;; Both mis-cloned by the mechanical pass off the syrup-promise arm.
+  (check-contains
+   (run-last "(eval (promise? (syrup-dict nil)))") "false")
+  (check-contains
+   (run-last "(eval (get-promise (syrup-dict nil)))") "none"))

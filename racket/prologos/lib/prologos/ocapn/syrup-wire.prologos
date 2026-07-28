@@ -88,9 +88,11 @@ defn encode [v]
     | syrup-symbol s     -> str::append [str::from-int [str::bytes-length s]] [str::append "'" s]
     | syrup-bytes b      -> str::append [str::from-int [str::bytes-length b]] [str::append ":" b]
     | syrup-list xs      -> str::append "[" [str::append [encode-many encode xs] "]"]
+    | syrup-dict xs      -> str::append "{" [str::append [encode-many encode xs] "}"]
     | syrup-tagged tag p -> str::append "<" [str::append [encode [syrup-symbol tag]] [str::append [encode p] ">"]]
     | syrup-refr _       -> ""
     | syrup-promise _    -> ""
+    | syrup-dict    _   -> ""
 
 ;; ===========================================================
 ;; Encodability check
@@ -125,6 +127,10 @@ defn encodable?
   | syrup-tagged _ p  -> encodable? p
   | syrup-refr _      -> false
   | syrup-promise _   -> false
+  ;; A dict IS encodable; whether it encodes depends on its CONTENTS, exactly
+  ;; as for a list. (The mechanical pass cloned `false` from the promise arm
+  ;; above, which would have made every location-bearing frame unencodable.)
+  | syrup-dict xs     -> all-encodable encodable? xs
 
 spec encode-safe SyrupValue -> Option String
   :doc "Encode if v contains no naked refr/promise; else `none`."
@@ -367,6 +373,7 @@ defn decode-record-with [dec s i]
                 | syrup-tagged _ _ -> none
                 | syrup-refr _    -> none
                 | syrup-promise _ -> none
+                | syrup-dict _   -> none
 
 ;; --- Top-level decoder: parse one syrup-value at offset i ---
 ;;
@@ -399,6 +406,17 @@ defn decode-at [s i]
                                       | some [decoded-many xs e] ->
                                           some [decoded [syrup-list xs] e]
                                 | false ->
+                                 match [int-eq cc 123]
+                                  | true  ->
+                                      ;; `{` k1 v1 k2 v2 ... `}` — a DICTIONARY.
+                                      ;; Same element loop as a list, terminator
+                                      ;; `}` (125); the flat alternating result IS
+                                      ;; the representation (see syrup.prologos).
+                                      match [decode-many-loop decode-at s [int+ i 1] 125]
+                                        | none -> none
+                                        | some [decoded-many xs e] ->
+                                            some [decoded [syrup-dict xs] e]
+                                  | false ->
                                     match [int-eq cc 60]
                                       | true  -> decode-record-with decode-at s [int+ i 1]
                                       | false ->

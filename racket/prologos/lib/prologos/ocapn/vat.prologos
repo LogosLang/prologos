@@ -31,7 +31,7 @@ require [prologos::ocapn::syrup
          :refer [SyrupValue
                  syrup-null syrup-bool syrup-nat syrup-int syrup-string
                  syrup-symbol syrup-list syrup-tagged
-                 syrup-refr syrup-promise]]
+                 syrup-refr syrup-promise syrup-dict]]
         [prologos::ocapn::promise
          :refer [PromiseState
                  pst-unresolved pst-fulfilled pst-broken
