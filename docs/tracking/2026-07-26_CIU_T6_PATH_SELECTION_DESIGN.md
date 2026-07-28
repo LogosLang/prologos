@@ -52,7 +52,7 @@ successor) is designed-for but phased — see §9.
 | S | **Surface co-design (OWNER CONVERSATION)** | ✅ | **SETTLED 2026-07-26** — five rounds (§5.4–§5.8), consolidated as **§5.9 PS1–PS15** |
 | P0 | **Acceptance file** (`examples/2026-07-26-ciu-t6-path-selection.prologos`) — IDEAL Prologos syntax throughout [owner]; not-yet-working forms COMMENTED until their phase lands; `--check` gated from day one (the Rel T1 Batch-A lesson). Charter [owner, round 6b]: the `app-config` nested record · **broadcast over PVecs of same-shaped records** · **solve result sets** · **typing pins throughout** (markers carry types) · **function-typed forms** (D3-S11: named-schema + keyword-projection consumers) · **the standalone-def seam family pinned** (`def add5 := [+ 5 _]` et al., commented + the working argument/annotated forms as markers). **At X.close the file PROMOTES to a suite-gated regression test** (the F1 `test-*-acceptance.rkt` clone pattern) | ✅ | `--check` 21/21, 0 errors @ P0 landing; §A–§G: guild-hall config · party PVec · quest-board solve rows · the add5 family · typing pins | workflow.md § "Acceptance file as Phase 0". Spans predicate FAMILIES of forms, not one idiom (the 7a lesson) |
 | P1 | **`.{` retirement, WS leg (D3-S5 split)**: repair the 4 audit files' mixfix `.{X}`→`.(X)` · **DELETE the recognizer + the `$mixfix-retired` error entirely** (owner: retire from code AND diagnostics) | ✅ | `d18648f0` — recognizer + both grouping arms + error path + dead mixfix-rbrace closer legs all deleted; audit-06/-08/-09 → 0 errors, audit-12 runs (3 pre-existing quote-section errors unmasked); `<`-in-`.( )` mis-extension found + spawned as its own task (capability loss on 2 audit lines NAMED, converted to `lt`/`le`); suite 9150/471/0 | **Owner-RULED (Q_P5 + round 6)**. The SEXP brace-select leg is NOT here — it sequences WITH P4 (tests re-pointed, never deleted) |
-| P2 | Prerequisite defect repairs, SPLIT at the mini-audit (`wf_2c99bc25-940`): **P2.a ✅ `ad75e57a`** — record-project Int gate (+ the pvec-nth discipline guard the audit found: widening alone would have silently flipped the Nat-only discipline, suite-invisible) · ground-expr? twins → generic transparent-struct fallback (`expr-substructs-all?` in syntax.rkt; union-of-metas defect closed; mult/level-meta posture ruled+pinned) · normalize-for-resolution union descent (the upstream capture gap) · broadcast-get whnf arm + definitely-not-map? exemption (minimal scope; bare-meta typing = P5). 14 tests failing-first; suite 9164/472/0. **P2.b ⬜ RULED (c) — the TWO-TIER PRINCIPLE (owner, round 7; spec in §5.10)**: PVec OOB (TWO divergent silent legs: expr-get→`<error>`, pvec-nth→stuck; + pvec-update/pop siblings) · List OOB · Map-miss shape (census: Option-wrap ≈ 35-40 tests + 6 stdlib×2 book twins + ~24 corpus sites, ergonomics ~5:1 against; keep-V-runtime-LOUD ≈ 2 test pins but needs the type-fork + has the top-node-only panic-counting bound; the runtime arm is TYPE-BLIND — rows/dicts share the champ) · map-get-on-nat-row (project-vs-refuse) | 🔄 | B1 legs stay failing-test-first; the map-tutorial TEACHES error-on-miss 3× (doc-truth rider) |
+| P2 | Prerequisite defect repairs, SPLIT at the mini-audit (`wf_2c99bc25-940`): **P2.a ✅ `ad75e57a`** — record-project Int gate (+ the pvec-nth discipline guard the audit found: widening alone would have silently flipped the Nat-only discipline, suite-invisible) · ground-expr? twins → generic transparent-struct fallback (`expr-substructs-all?` in syntax.rkt; union-of-metas defect closed; mult/level-meta posture ruled+pinned) · normalize-for-resolution union descent (the upstream capture gap) · broadcast-get whnf arm + definitely-not-map? exemption (minimal scope; bare-meta typing = P5). 14 tests failing-first; suite 9164/472/0. **P2.b 🔄 RULED (c) — the TWO-TIER PRINCIPLE (owner, round 7), REALIZATION CORRECTED at the mini-audit (`wf_c89b3532-8a7`, round 8 — 3 premises refuted, all main-session re-probed)**. The principle stands; the mechanism is now the **CARRIED-ALPHA slot** (elaboration mints a fresh meta → type-check solves it from the subject's row → zonk materializes it), NOT an "elaboration-time mark" (elaborate has no typing env). Scope, as ruled round 8: Map-miss (dyn residue only — closed rows are ALREADY loud, with a better diagnostic than a panic can give) · `pvec-nth` OOB · `expr-get` PVec **:2706** + List **:2717** OOB · **the DEF SEAM** (Q_N5 — `driver.rkt:1907` has NO panic check; P2.b is unobservable without it) · **SITE 7** (Q_N6 — `[map-get tup <nat>]` on a PRESENT position fabricates `none`; `definitely-not-map?` has no `expr-rrb?` arm; prefer the STRUCTURAL default over a sixth exemption). SPLIT OUT (Q_N7, each named): `pvec-update`/`tvec-update!` (write-shaped + an incoherent `Indexed` instance) · `pvec-pop`-on-empty (partial-on-empty) · `pvec-slice` (silent clamp → §3.7's class) | 🔄 | Failing-test-first is MANDATORY, not optional: **5 of the 6 sites have ZERO coverage in either direction** (every in-tree OOB pin is a closed tuple erroring at ELABORATION), so the flip is suite-invisible both ways. Break set is literally 2 pins (`test-map.rkt:126`, `:141`). Doc-truth rider: the map-tutorial TEACHES error-on-miss **4×** (:103 :143 :246 :498) — (c) makes it true; a FIFTH site (`syntax.rkt:812`) points the opposite way and is corrected in this phase |
 | P3 | Reader/lexer (WS-Impact MANDATORY; both-modes census; **ground on the TOKEN-REGISTRY inventory, priorities 92/88/87/86 — D3-S6**): `.N` segments (anchor at the DOT; numerics anchor at a DIGIT — CH-4 ruled) · `.:.`/`.:[` iteration · `*` splat/`[*]` · dot-key retirement (`.:name`→`.name`, **+ the `$nil-dot-key` twin `#.:name`**) · `.*name`→`.:.name` migration · **`m[:a]` RETIRES (error + hint; no flip — D3-S4)** · `x[]`/`_[sel]`/**`.-1`** rejections with real diagnostics · selector **round-trip printing pins** (D3-M6) · the sexp special form (PS14) | ⬜ | Censuses per D3-M7: dot-key 8+11 sites, `.*name` 7+4, `m[:kw]` 17+8, `v[literal]` 49+45 / 48 test-cases. **Sections tokens are GONE from this phase** (B2 → keyword-projection needs none) |
 | P4 | The selection NODE + elaboration + static typing (PS3–PS8 as amended §5.10): core-elaborator form (NOT preparse, §4.10) · contributions keying/assembly/collision/miss · rows out (§3.2 narrowed: keyword result type) · **P4.a the nat-keyed assembly path + PS4 renumbering** · **P4.b the closed-vs-dyn seed pin (PS15=CLOSED, test-pinned)** · **P4.c the sexp special form + re-pointing the 20 brace-select tests (D3-S5)** · **P4.d `v.i` neutral-segment + soft resolution (D3-S1; cuttable)** · full pipeline incl. **item 13: deliberate `#f` registration in typing-propagators (D3-M2)** | ⬜ | The heart. Tests per-phase; probe-first; Exhaustive-Walker discipline, generic fallback |
 | PX | **The binder-seam phase (owner-ruled in-track; WIDENED round 6b)**: (a) the D3-S10 concrete-codomain lambda-adoption hole — `[the [List String] [map [fn [x] x] ints]]` accepts silently; fix = decomplect evidence/obligation at binder positions (`:expected` facet; lam `:type` written only from the body; disagreement → top → existing refusal). (b) **the standalone-def seam** — `def f := [fn …]` / `def add5 := [int+ 5 _]` fail even when the body DETERMINES the types; body-directed inference for the monomorphic + row-lambda cases; the trait-op case (`[+ 5 _]`) honest residue (may need defaulting/residuation → Num T2/F-row; annotated-only fallback) | ⬜ | Position flexible; failing-test-first. §3.7's `map-size` class stays filed separately |
@@ -810,6 +810,143 @@ trait-op case (`[+ 5 _]`) may additionally need numeric defaulting or a residuat
 constraint (the Num Track 2 / F-row seam) — if so, it lands annotated-only in this
 track with the deep fix pointed at its owning track. P0 pins the whole family
 (commented) + the working argument-position and annotated forms (markers).
+
+**Round 8 — the P2.b mini-audit REFUTES three of round 7's premises (2026-07-27).**
+Audit `wf_c89b3532-8a7` (6 read-only facets + completeness critic), every load-bearing
+claim below **re-probed on the main thread** before it entered this section. Round 7's
+*principle* (the two-tier split) stands unchanged and is NOT re-opened; what follows
+corrects its **realization**, which was specified against facts that do not hold.
+
+⚠ **HEAD moved during the audit**: `8d2eb340` → `6a444cba` (36 commits, fast-forward —
+the concurrent `<`-mixfix task plus an issue-#58 perf arc; suite 233 s → 96 s,
+`PNET_VERSION` 4→5). `reduction.rkt` / `typing-core.rkt` / `syntax.rkt` /
+`elaborator.rkt` are **untouched** (all six site coordinates hold); `driver.rkt`
+(+306/−94) and `pnet-serialize.rkt` (+136) churned. **Re-pinned**: the panic seam
+`774-780` → **`driver.rkt:808-814`**; the D19 route-soundness pin `:196` →
+**`test-route-soundness-01.rkt:200`** (test-case opens `:191`). Two round-7 site
+coordinates pointed at comment lines: expr-get RRB OOB is **`:2706`** (not 2701),
+List OOB **`:2717`** (not 2709); the other four (2674, 2769, 2777, 2800) are exact.
+
+*Refuted:*
+
+- **R1 — the stated mechanism does not exist.** "An **elaboration-time** strictness
+  mark on **Map-typed** subjects" is not realizable: `elaborate`'s env is a
+  name→de-Bruijn-depth alist and nothing else (`elaborator.rkt:1027`, `:89-99`).
+  Elaboration cannot know a subject is Map-typed. Neither cited precedent is a mark:
+  **D22 stamps nothing** (a driver-side *shape recognizer* over the already-elaborated
+  body, `driver.rkt:269-278`) and **`validate` is a whole new node kind**
+  (`syntax.rkt:727`). Their pipeline cost differs ≈ **11 files : 0** — D22 was nearly
+  free only because `expr-panic` was already fully registered.
+- **R2 — "a Racket raise would crash the file" is FALSE.** `exn:prologos-solve`
+  (`relations.rkt:1627`) is already raised *from inside* `reduction.rkt:644` at three
+  boundaries and converted to a counted per-command error at `driver.rkt:1545`, file
+  continuing. The real (unnamed) hazard: it subtypes `exn:fail`, and **four of six
+  target sites sit inside `with-handlers ([exn:fail? …])`** — a nested raise is
+  swallowed into exactly the silent value P2.b removes.
+- **R3 — the loud path is not "top-node-bounded"; at the def seam it is ABSENT.**
+  Probed: `def d := [boom 2]` → `d : Int defined.`, **zero errors** (`driver.rkt:1907`
+  has no panic check between `whnf` and `global-env-add`). P2.b's motivating case IS a
+  def. Compounding: both precedents force with `nf` (`:285`, `:804`) while the def seam
+  uses `whnf` and is *committed* to that (`:1893-1895`, POL.10).
+- **R4 — the `[map-get tup 1N]` claim is INVERTED IN BOTH HALVES.** Probed on
+  `def tp := @[1 "a" true] : ⟨Int String Bool⟩`: the **present** position returns
+  `none : String` — a fabricated library value at the projected type, and
+  `def m1 := [map-get tp 1N]` **commits it silently** (`m1 : String defined.`, 0
+  errors); the **OOB** position is *already* loud (`ERROR: Could not infer type`).
+  Mechanism: a tuple's runtime rep is `expr-rrb` and `definitely-not-map?`
+  (`reduction.rkt:1707-1738`) has **no `expr-rrb?` arm**, so map-get falls to
+  `:3074`'s `(expr-fvar 'none)`. **This is SITE 7** and it is worse than the six: it
+  invents a legitimate `none` rather than an `<error>` sentinel. Latent-but-live — it
+  detonates the moment PS2 desugars nat-keyed extraction into `map-get`.
+- **R5 — the six-site enumeration under-counts by ≥3** (the recurring failure mode):
+  site 7 above · `expr-tvec-update!` OOB (`:2998` — the **fifth** `with-handlers`;
+  round 7's prose accounts for four) · `pvec-slice` silently **CLAMPS** out-of-range
+  bounds with no guard at all (`:2807-2812` → `rrb.rkt:305-309`).
+- **R6 — doc-truth miscount**: the map tutorial teaches error-on-miss **4×**, not 3×
+  (`examples/map-tutorial-demo.prologos:103, :143, :246, :498`). A **fifth** doc-truth
+  site points the *opposite* way: `syntax.rkt:812`'s own comment promises
+  `Option Value` for `expr-get` — a node this ruling places in the ASSERTIVE tier.
+
+*Survived (re-verified, do not re-litigate):* type-blindness is real (all three seeds
+reduce to the same `expr-champ`; both type args wildcarded at `reduction.rkt:2669`) ·
+both D19 pins exist, and `;;77` is a genuine automated gate
+(`examples/2026-07-06-ciu-t6-f1-records.prologos:349`) · `expr-panic` is fully
+pipeline-registered incl. `pnet-serialize.rkt:286`, surviving the churn · the break set
+is *literally* 2 pins.
+
+*Three qualifiers that matter more than that number:*
+
+1. **Five of the six sites have ZERO test coverage in either direction.** Every OOB pin
+   in-tree is on a CLOSED TUPLE and errors at *elaboration*, never reaching reduction
+   (`tests/test-tuple-ops.rkt:188-201`; the records acceptance `;;64`); `test-pvec.rkt`
+   reduction cases are 100 % in-bounds. The flip is **suite-invisible both ways** — P2.b
+   must SHIP failing-test-first coverage, not flip 2 assertions.
+2. **An unnamed THIRD dyn-row pin is the discriminating case**:
+   `tests/test-route-soundness-01.rkt:204-215` commits a miss into
+   `def x : String := [map-get m :c]`. The mark MUST key on the **subject's**
+   row-openness, never on the def's annotated type — else this pin breaks.
+3. **Guards insulate at REDUCTION but NOT at typing.** Probed:
+   `[if [map-has-key? r :zzz] [map-get r :zzz] 0]` on a closed record **errors today**,
+   from the *untaken* branch. So the strictness decision may only take effect when the
+   marked node is REDUCED. (The honest tier survives this today only because its bodies
+   are polymorphic — `Map K V`, `PVec A` — a type-shape accident, not a guarantee.)
+
+**Round 8 rulings [owner]:**
+
+- **Q_N4 — MECHANISM: the CARRIED-ALPHA pattern** (`expr-num-lit`'s, the third in-tree
+  channel the design never named). Elaboration mints the node carrying a **fresh meta**
+  — *type-blind, so no typing env is needed*; the **type checker solves** it from the
+  subject's row (`elaborator.rkt:1493` → `typing-core.rkt:3070` → `zonk.rkt:1064` is
+  the worked template); **zonk materializes** it into the term reduction sees. The
+  design's intent restated correctly: not a mark *decided* at elaboration, but a
+  strictness **SLOT opened** at elaboration and **resolved at type-check**. It is
+  naturally guard-aware (qualifier 3) because it only bites when the node reduces.
+  ⇒ **The POLARITY question DISSOLVES**: `syntax.rkt` has **zero `#:auto` fields**
+  across all 344 `expr-*` structs, so there is no "unmarked" state to assign a default
+  to — every construction site must declare, as a compile-time arity error. Fail-loud
+  by construction. Cost is honest: `pipeline.md` § New Struct Field applies in full
+  (repo-wide `struct-copy` AND direct-constructor grep; `pnet-serialize.rkt:307`'s
+  `reg2! expr-get` becomes `reg3!`).
+- **Q_N5 — the DEF SEAM is IN SCOPE.** P2.b is unobservable without it (R3). Must
+  respect the whnf-never-nf commitment — this is not a one-liner.
+- **Q_N6 — SITE 7 is IN SCOPE.** The tuple-`none` fabrication (R4). Preferred fix is
+  **structural**, not a sixth exemption: `definitely-not-map?` is a hand-maintained
+  NEGATIVE inclusion list patched five times by exemption, each patch's own comment
+  recording a silent-value-loss bug found afterward (`:1721-1738`; P2.a added one).
+  Site 7 is the sixth instance of that class — exactly the hand-armed-walker
+  anti-pattern `pipeline.md` § Exhaustive Walkers says to replace with a structural
+  default. Also note `grep -c expr-error driver.rkt` → **0**: no seam converts a runtime
+  `expr-error`, so the silence is STRUCTURAL and any fix must add a driver-seam
+  conversion or route through `expr-panic` (which already has one). ⚠ "Make
+  `expr-error` loud" is WRONG — it has ~200 type-level sites plus four NaR arithmetic
+  producers with their own pins (`:2074/:2145/:2286/:2357`); edit *these arms*.
+- **Q_N7 — the OOB family SPLITS** (owner: the three pvec sites are not one tier).
+  **IN P2.b (assertive/read):** `pvec-nth` OOB · `expr-get` PVec OOB · `expr-get` List
+  OOB. **NOT in P2.b, each named with its reason** — *proposed dispositions, owner to
+  confirm at the P2.b checkpoint*: `pvec-update` OOB is **write-shaped in a read-only
+  v1**, and its sole stdlib caller `pvec-idx-update`
+  (`lib/prologos/core/pvec.prologos:92-94`) is **UNGUARDED** while its `idx-nth`
+  sibling is guarded and its List sibling's documented contract is *"if out of bounds,
+  return unchanged"* (`lib/prologos/core/list.prologos:95`) — same `Indexed` dict,
+  divergent behaviour, no test. Today's stuck-`e` satisfies **neither** contract, so
+  the arm is **already incoherent**; that is a trait-coherence ruling, not a P2.b one.
+  `expr-tvec-update!` OOB follows `pvec-update` (its transient twin). `pvec-pop`-on-empty
+  is a **partial function on an empty carrier** — no key, no index, a different failure
+  class. `pvec-slice`'s silent clamp is filed alongside §3.7's `map-size` class.
+  ⇒ This is the one place "zero stdlib churn" was factually at risk; splitting keeps it true.
+- **SRCLOC, named not solved**: a loud runtime miss would be **locationless**
+  (`expr-map-get`/`expr-get` carry no srcloc; `reduction.rkt` has zero
+  `current-source-loc` refs; the panic path passes `#f` at `driver.rkt:809`). The
+  existing static diagnostic — *"field :zzz is not present in the record {:a Int};
+  available fields: :a"* — is the **quality bar**, and for statically-known CLOSED
+  records the assertive tier is **already loud with a better message than a panic can
+  give**. The six sites are the **DYNAMIC RESIDUE ONLY** (`Map K V` dicts, dyn rows,
+  PVec/List of non-static length); sizing P2.b as "six silent sites" overstates it.
+- **Test-authoring trap (load-bearing for P2.b's own tests):** `expr-panic` is
+  bottom-like in CHECK mode only — `infer` returns `(expr-error)` for it
+  (`typing-core.rkt:2616` vs `:3000`; `qtt.rkt:1786` vs `:2285`). A bare top-level
+  `[panic "…"]` dies at infer with *"Could not infer type"*, **not** `panic:`. Reduction-
+  produced panics are unaffected. Any test that writes a bare panic will mislead.
 
 ## §6 SRE lattice lens — REQUIRED (the result shape IS lattice-shaped)
 

@@ -809,7 +809,7 @@
 
 ;; Operations
 (struct expr-map-assoc (m k v) #:transparent)                 ; assoc : Map K V → K → V → Map K V
-(struct expr-get (coll key) #:transparent)                     ; get : Collection → Key → Option Value (type-directed)
+(struct expr-get (coll key) #:transparent)                     ; get : Collection → Key → Value (type-directed; ASSERTIVE tier — error if missing/OOB)
 (struct expr-map-get (m k) #:transparent)                     ; get : Map K V → K → V (error if missing)
 (struct expr-nil-safe-get (m k) #:transparent)                ; nil-safe-get : (Map K V | Nil) → K → (V | Nil)
 (struct expr-map-dissoc (m k) #:transparent)                  ; dissoc : Map K V → K → Map K V
