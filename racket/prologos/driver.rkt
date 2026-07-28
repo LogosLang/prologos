@@ -2224,11 +2224,47 @@
 ;; be a hard error, never a warning. The whole point of capability-secure
 ;; design is that authority is explicit; silent leaks defeat the purpose.
 
+;; Memo for run-post-compilation-inference!, keyed on what the analysis actually
+;; depends on: WHICH env (the mnr identity) and WHETHER it has been written to
+;; (the monotone generation counter). Same pair => same call graph => same
+;; result, so the analysis can be skipped and its result re-applied.
+;;
+;; This matters because the analysis is whole-program and ran on EVERY command:
+;; run-capability-inference rebuilds the call graph, allocates a propagator cell
+;; per function and runs to fixpoint. Profiling the OCapN server — which does
+;; one process-string per wire frame — put it at 76% of a frame, against 19%
+;; for the actual protocol work. Most commands (any `(eval ...)`) define
+;; nothing, so they cannot change the call graph.
+;;
+;; The mnr is part of the key because restoring a module-network SNAPSHOT swaps
+;; the visible env without going through global-env-add, so the generation alone
+;; would not notice. Generation alone is monotone, so it can never cause a false
+;; SKIP; pairing it with mnr identity closes the snapshot case too.
+(define cap-inference-memo (box #f))   ;; #f | (vector mnr generation result)
+
 (define (run-post-compilation-inference!)
   ;; Fast path: skip if no capability types exist
   ;; Track 6 Phase 8b: read from parameter (this runs outside elaboration context)
   (when (not (hash-empty? (current-capability-registry)))
+    (define mnr (current-file-module-network-ref))
+    (define gen (global-env-generation))
+    (define memo (unbox cap-inference-memo))
+    (define hit?
+      (and (vector? memo)
+           (eq? (vector-ref memo 0) mnr)
+           (= (vector-ref memo 1) gen)))
+    (cond
+      [hit?
+       ;; Nothing that the analysis reads has changed — re-apply the result the
+       ;; last run computed. (Re-applying matters: current-module-cap-result is
+       ;; a parameter downstream consumers read.)
+       (current-module-cap-result (vector-ref memo 2))]
+      [else (run-post-compilation-inference!/uncached mnr gen)])))
+
+(define (run-post-compilation-inference!/uncached mnr gen)
+  (let ()
     (define result (run-capability-inference))
+    (set-box! cap-inference-memo (vector mnr gen result))
     (current-module-cap-result result)
     ;; Check all entries in the global env for authority roots.
     ;; An authority root is a function whose type declares capability requirements

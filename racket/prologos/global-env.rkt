@@ -28,6 +28,7 @@
          global-env-add-type-only
          prealloc-def-cell!  ;; PPN 4C Addendum Phase 4B.2-b: def-bot pre-allocation (preparse sweep)
          global-env-remove!
+         global-env-generation
          global-env-names
          global-env-snapshot
          ;; PPN 4C Addendum Phase 4A.c-ii-a (D2 Path Y): external-only read source
@@ -167,7 +168,31 @@
 ;; (PPN Track 11). Returns void (no caller uses the return).
 ;; The 4A.c-ii-b foreign-write-(b) helper (global-env-add-to-mnr!) folded in here:
 ;; the box-free global-env-add now carries the mnr write for foreign defs too.
+;; ========================================
+;; Definition generation counter
+;; ========================================
+;;
+;; Bumped by every write to the global env. Lets a whole-program analysis ask
+;; "could the program have changed since I last ran?" without diffing the env.
+;;
+;; Why it exists: run-capability-inference (capability-inference.rkt) rebuilds
+;; the entire call graph, allocates a propagator cell per function and runs to
+;; fixpoint — ON EVERY COMMAND. Profiling the OCapN server showed that as 76%
+;; of the cost of processing one wire frame, against 19% for the actual work.
+;; But a command that defines nothing cannot change the call graph, and most
+;; commands define nothing.
+;;
+;; Monotone and process-wide, so a stale value can never cause a FALSE SKIP:
+;; any write moves it forward. Callers pair it with the mnr identity, since the
+;; visible env is (mnr, generation) — restoring a snapshot swaps the env without
+;; writing through here.
+(define global-env-generation-box (box 0))
+(define (global-env-generation) (unbox global-env-generation-box))
+(define (bump-global-env-generation!)
+  (set-box! global-env-generation-box (add1 (unbox global-env-generation-box))))
+
 (define (global-env-add name type value)
+  (bump-global-env-generation!)
   (mnr-add-or-update! name (cons type value)))
 
 ;; Pre-register only the type (value = #f) for recursive definitions.
@@ -175,6 +200,7 @@
 ;; type checking. After checking, call global-env-add with the real value.
 ;; PPN 4C Addendum Phase 4A.c-iii-a: always-mnr (see global-env-add).
 (define (global-env-add-type-only name type)
+  (bump-global-env-generation!)
   (mnr-add-or-update! name (cons type #f)))
 
 ;; Remove a definition from all layers on failure.
@@ -184,6 +210,7 @@
 ;; but the name→cid mapping is removed, so cascading-lookup misses). Matches the
 ;; pre-4A.b "remove from cells-content hash + #f sentinel" visibility semantics.
 (define (global-env-remove! name)
+  (bump-global-env-generation!)
   ;; PPN 4C Addendum Phase 4A.c-iii-b: mnr-only. The Layer-2a/2b hash-removes
   ;; retired — the mnr cascade is the sole resolution source; current-prelude-env
   ;; / -module-definitions-content are unwritten (empty) in production.
