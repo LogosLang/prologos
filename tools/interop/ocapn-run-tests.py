@@ -95,6 +95,13 @@ SELECTED = [
         "test_gc_export_with_multiple_refrences",
         "test_gc_export_with_multiple_refrences_in_different_messages",
     ]),
+    # op:gc-answers (Phase 59b part 9). The greeter's outbound send is now a
+    # real question -- fresh promise + a beh-resolver actor exported as the
+    # resolve-me -- so the peer can answer it, and once it settles the answer
+    # entry is released.
+    ("tests.op_gc", "OpGcAnswersTest", [
+        "test_gc_answer",
+    ]),
     ("tests.op_listen", "OpListenTest", [
         "test_op_listen_to_promise_and_fulfill",
         "test_op_listen_to_promise_and_break",

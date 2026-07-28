@@ -2444,3 +2444,61 @@
                          (op-deliver (suc (suc zero)) args none none) empty-vat bridge-state-empty))
               (length (bs-pending-out (bridge-step-state step)))))")
    "0N"))
+
+;; ========================================
+;; Outbound sends are questions; op:gc-answers
+;; ========================================
+
+(define greeter-vat
+  "(vat (suc (suc zero)) (actor-table-set (suc zero) (actor beh-greeter (syrup-string \"Hello\")) nil) nil nil nil)")
+
+(define greet-args
+  "(syrup-list (cons (syrup-tagged \"desc:import-object\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero))))))))) nil))")
+
+(test-case "outbound/a send carries a bare-int answer position and a resolve-me"
+  ;; The greeter is told to greet an object the peer exported to us. Its send
+  ;; used to go out with answer-pos and resolve-me both false, so the result
+  ;; had nowhere to go and the peer had nowhere to reply. Both slots are now
+  ;; filled.
+  ;;
+  ;; The answer position is a BARE INTEGER, not <desc:answer N>: the peer reads
+  ;; slot 2 raw and writes it raw, so a wrapped position comes back as a record
+  ;; and never compares equal to the position we name in op:gc-answers.
+  (define out
+    (extract-value-bytes
+     (run-last
+      (format
+       "(eval (let (cs0 (conn-state ~a bridge-state-empty nil false)
+                     cstep (connection-step (op-deliver (suc zero) ~a none none) cs0))
+                 (framed-concat (conn-step-outbound cstep))))"
+       greeter-vat greet-args))))
+  (check-contains out "op:deliver")
+  (check-contains out "desc:export7+")
+  (check-contains out "Hello")
+  (check-contains out "desc:import-object")
+  ;; NOT the wrapped form -- that is the whole point of the bare int.
+  (check-false (regexp-match? #rx"Hello\\]<11'desc:answer" out)))
+
+(test-case "outbound/the send registers an answer-table entry"
+  (check-contains
+   (run-last
+    (format
+     "(eval (let (cs0 (conn-state ~a bridge-state-empty nil false)
+                   s1 (connection-step (op-deliver (suc zero) ~a none none) cs0))
+               (length (bs-outbound-questions (conn-bridge-state (conn-step-state s1))))))"
+     greeter-vat greet-args))
+   "1N"))
+
+(test-case "outbound/nothing settled means no op:gc-answers frame at all"
+  ;; An empty <op:gc-answers []> is legal but pure noise. The greeting's own
+  ;; step has an outstanding question, so it must not name one.
+  (check-false
+   (string-contains?
+    (extract-value-bytes
+     (run-last
+      (format
+       "(eval (let (cs0 (conn-state ~a bridge-state-empty nil false)
+                     cstep (connection-step (op-deliver (suc zero) ~a none none) cs0))
+                 (framed-concat (conn-step-outbound cstep))))"
+       greeter-vat greet-args)))
+    "gc-answers")))

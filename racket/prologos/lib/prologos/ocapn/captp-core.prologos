@@ -80,6 +80,7 @@ require [prologos::ocapn::promise :refer-all]
         ;; SyrupValue as a table position, which is a SyrupValue concern.
         [prologos::ocapn::syrup      :refer [wire-nat]]
         [prologos::ocapn::crypto     :refer [verify-raw]]
+        [prologos::ocapn::behavior   :refer [beh-resolver]]
         [prologos::data::list :refer [append cons nil]]
 
 ;; Build the bytes for an outbound op:deliver targeting an
@@ -123,6 +124,30 @@ defn outbound-question-bytes [tgt-export args our-q-pos]
       [cons args
         [cons [syrup-tagged "desc:answer" [syrup-nat our-q-pos]]
           [cons [syrup-bool false] nil]]]]
+
+;; Phase 59b part 9: an outbound ASK — us delivering to a peer export and
+;; wanting the result back.
+;;   <op:deliver <desc:export tgt> args ANSWER-POS <desc:import-object R>>
+;;
+;; Two things differ from `outbound-question-bytes` above, and both matter on
+;; the wire:
+;;
+;;   * the answer position is a BARE INTEGER, not `<desc:answer N>`. Upstream
+;;     reads slot 2 raw (`answer_position = record.args[2]`) and its own
+;;     encoder writes it raw, so a wrapped position comes back as a record and
+;;     never compares equal to the position we later name in op:gc-answers.
+;;   * slot 3 carries a resolve-me: `<desc:import-object R>`, where R is an
+;;     object WE export for the peer to push the resolution to. The peer
+;;     addresses it back as `<desc:export R>`. Without it the peer has nowhere
+;;     to answer, and `exported_resolve_me_desc` is False.
+spec outbound-ask-bytes Nat SyrupValue Nat Nat -> String
+defn outbound-ask-bytes [tgt args apos rpos]
+  wire::encode-record "op:deliver" [cons [syrup-tagged "desc:export" [syrup-nat tgt]] [cons args [cons [syrup-nat apos] [cons [syrup-tagged "desc:import-object" [syrup-nat rpos]] nil]]]]
+
+;; <op:gc-answers [pos …]> — one list, unlike op:gc-exports' two.
+spec gc-answers-bytes [List SyrupValue] -> String
+defn gc-answers-bytes [ps]
+  wire::encode-record "op:gc-answers" [cons [syrup-list ps] nil]
 
 ;; Wrap a SyrupValue in the canonical "broken-promise reason"
 ;; record `<Error r>`. Phase 17.
@@ -2643,6 +2668,113 @@ defn orphan-loop
             orphan-loop rest v [cons tgt emitted] [cons [listener-notify-bytes res payload] accum]
 
 ;; ===========================================================
+;; Phase 59b part 9: outbound sends become real QUESTIONS
+;; ===========================================================
+;;
+;; `vat-outbound` holds messages a behaviour sent to a peer export. Part 3
+;; emitted them with answer-pos and resolve-me both false — enough for the
+;; peer to receive, but the result was dropped on the floor and the peer had
+;; nowhere to reply.
+;;
+;; Each one now becomes a question we can be answered about:
+;;   * a fresh local promise `pid`, registered in bs-outbound-questions, whose
+;;     position IS `pid` (the 1:1 mapping the rest of this module assumes);
+;;   * a fresh local actor at `R` running `beh-resolver` with `pid` in its
+;;     state — so when the peer delivers `['fulfill v]` to `<desc:export R>`,
+;;     ORDINARY inbound routing lands it on that actor and `eff-resolve pid v`
+;;     settles the promise. No special-casing on the receive side.
+;;
+;; The drain runs in `connection-step`, not inside `pump-outbound`, because it
+;; must update BridgeState and PumpResult carries none. `drain-outbound` then
+;; finds the queue already empty.
+
+data OutDrain
+  out-drain : Vat -> BridgeState -> [List String]
+
+spec od-vat OutDrain -> Vat
+defn od-vat [d]
+  match d
+    | out-drain v _ _ -> v
+
+spec od-state OutDrain -> BridgeState
+defn od-state [d]
+  match d
+    | out-drain _ st _ -> st
+
+spec od-bytes OutDrain -> [List String]
+defn od-bytes [d]
+  match d
+    | out-drain _ _ bs -> bs
+
+spec drain-questions [List VatMsg] Vat BridgeState [List String] -> OutDrain
+defn drain-questions [ms v st acc]
+  match ms
+    | nil -> out-drain v st acc
+    | [cons m rest] ->
+        let pa := [fresh-promise v]
+          let pid := [alloc-id pa]
+            let ra := [vat-spawn beh-resolver [syrup-promise pid] [alloc-vat pa]]
+              drain-questions rest [alloc-vat ra] [bs-add-outbound-question pid pid st] [append acc [cons [outbound-ask-bytes [vmsg-target m] [vmsg-args m] pid [alloc-id ra]] [nil String]]]
+
+;; ===========================================================
+;; op:gc-answers — releasing questions we no longer need answered
+;; ===========================================================
+;;
+;; Once an outbound question's promise has SETTLED, the answer-table entry has
+;; done its job and the peer can forget it. Emit `<op:gc-answers [pos …]>` and
+;; drop the entry, so the next pass does not re-emit.
+
+spec q-settled? QEntry Vat -> Bool
+defn q-settled? [e v]
+  match [lookup-promise [qe-val e] v]
+    | none -> false
+    | some pst ->
+        match pst
+          | pst-unresolved _ -> false
+          | _                -> true
+
+spec qpos-if-settled QEntry Vat [List SyrupValue] -> [List SyrupValue]
+defn qpos-if-settled [e v acc]
+  match [q-settled? e v]
+    | false -> acc
+    | true  -> [cons [syrup-nat [qe-key e]] acc]
+
+spec settled-qpos-loop [List QEntry] Vat [List SyrupValue] -> [List SyrupValue]
+defn settled-qpos-loop [es v acc]
+  match es
+    | nil -> acc
+    | [cons e rest] -> settled-qpos-loop rest v [qpos-if-settled e v acc]
+
+spec unsettled-q-loop [List QEntry] Vat [List QEntry] -> [List QEntry]
+defn unsettled-q-loop [es v acc]
+  match es
+    | nil -> acc
+    | [cons e rest] ->
+        match [q-settled? e v]
+          | true  -> unsettled-q-loop rest v acc
+          | false -> unsettled-q-loop rest v [cons e acc]
+
+spec bs-set-outbound-questions [List QEntry] BridgeState -> BridgeState
+defn bs-set-outbound-questions
+  | oqs2 [bridge-state ls es as qs p oqs ir er pm gs] ->
+      bridge-state ls es as qs p oqs2 ir er pm gs
+
+;; Nothing settled this step means no frame at all — an empty
+;; `<op:gc-answers []>` is legal but pure noise.
+spec gc-answers-frames [List SyrupValue] -> [List String]
+defn gc-answers-frames [ps]
+  match ps
+    | nil -> [nil String]
+    | [cons _ _] -> [cons [gc-answers-bytes ps] [nil String]]
+
+;; Stage the drained ask-bytes for the pump to flush, in order.
+spec prepend-pending-list [List String] BridgeState -> BridgeState
+defn prepend-pending-list [bs st]
+  match bs
+    | nil -> st
+    | [cons b rest] -> prepend-pending-list rest [bs-append-pending-out b st]
+
+;; ===========================================================
 ;; Phase 59b part 3: drain the vat's `outbound` into wire frames
 ;; ===========================================================
 ;;
@@ -2664,6 +2796,16 @@ defn outbound-loop
 spec clear-outbound Vat -> Vat
 defn clear-outbound [v]
   [vat [vat-next-id v] [vat-actors v] [vat-promises v] [vat-queue v] nil]
+
+;; Defined HERE, not with the rest of the drain above, only because it calls
+;; `clear-outbound` and modules are single-pass: a callee placed after its
+;; caller does not error, it leaves a STUCK `[reduce …]` term
+;; (goblin-pitfalls #16).
+spec drain-vat-questions Vat BridgeState -> OutDrain
+  :doc "Turn every queued outbound send into a question; clears vat-outbound."
+defn drain-vat-questions [v st]
+  let d := [drain-questions [vat-outbound v] v st [nil String]]
+    out-drain [clear-outbound [od-vat d]] [od-state d] [od-bytes d]
 
 spec drain-outbound PumpResult -> PumpResult
 defn drain-outbound [pr]
@@ -3009,9 +3151,16 @@ defn connection-step [op cs]
     | true  -> conn-step cs nil
     | false ->
         let bs    := [captp-incoming-with-state op [conn-vat cs] [conn-bridge-state cs]]
-          let v'    := [run-vat drain-fuel [bridge-step-vat bs]]
-            let st0   := [bs-clear-pending-out [bridge-step-state bs]]
-              let pump  := [pump-outbound v' [bridge-step-state bs] [conn-emitted cs]]
+          let v0    := [run-vat drain-fuel [bridge-step-vat bs]]
+            ;; Phase 59b part 9: turn queued outbound sends into QUESTIONS
+            ;; before the pump runs. This must happen here, not inside
+            ;; pump-outbound, because it updates BridgeState and PumpResult
+            ;; carries none. It also clears vat-outbound, so the pump's own
+            ;; drain finds nothing left to do.
+            let drain := [drain-vat-questions v0 [bridge-step-state bs]]
+              let v'    := [od-vat drain]
+                let st0   := [bs-clear-pending-out [prepend-pending-list [od-bytes drain] [od-state drain]]]
+                  let pump  := [pump-outbound v' [prepend-pending-list [od-bytes drain] [od-state drain]] [conn-emitted cs]]
                 ;; Phase 47: GC pipelined-msgs whose pid has been
                 ;; emitted (forwarding/break-forward/plain-value-error
                 ;; bytes already produced); the queue no longer needs
@@ -3020,12 +3169,17 @@ defn connection-step [op cs]
                 ;; Phase 48: GC listeners that have been notified
                 ;; (one-shot: a promise settles exactly once, so a
                 ;; consumed listener entry serves no further purpose).
-                let st1   := [bs-gc-pipelined-msgs-by-emitted [pump-result-emitted pump] st0]
-                  let st'   := [bs-gc-listeners-by-notified [pump-result-emitted pump] st1]
-                    ;; Phase 59b part 3: carry the PUMP's vat forward, not v'.
-                    ;; drain-outbound clears vat-outbound on the pump's vat;
-                    ;; persisting v' instead discards that clear, so drained
-                    ;; messages would sit in outbound and re-emit every frame.
-                    let cs'   := [conn-state [pump-result-vat pump] st' [pump-result-emitted pump] [or-bool [conn-aborted? cs] [op-is-abort? op]]]
-                      conn-step cs' [pump-result-bytes pump]
+                    let st1   := [bs-gc-pipelined-msgs-by-emitted [pump-result-emitted pump] st0]
+                      let st2   := [bs-gc-listeners-by-notified [pump-result-emitted pump] st1]
+                        ;; op:gc-answers: outbound questions whose promise has
+                        ;; settled are finished business — name them once, then
+                        ;; drop the entries so the next step cannot re-emit.
+                        let gcqs  := [settled-qpos-loop [bs-outbound-questions st2] [pump-result-vat pump] [nil SyrupValue]]
+                          let st'   := [bs-set-outbound-questions [unsettled-q-loop [bs-outbound-questions st2] [pump-result-vat pump] [nil QEntry]] st2]
+                            ;; Phase 59b part 3: carry the PUMP's vat forward, not v'.
+                            ;; drain-outbound clears vat-outbound on the pump's vat;
+                            ;; persisting v' instead discards that clear, so drained
+                            ;; messages would sit in outbound and re-emit every frame.
+                            let cs'   := [conn-state [pump-result-vat pump] st' [pump-result-emitted pump] [or-bool [conn-aborted? cs] [op-is-abort? op]]]
+                              conn-step cs' [append [pump-result-bytes pump] [gc-answers-frames gcqs]]
 
