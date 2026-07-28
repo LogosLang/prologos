@@ -754,13 +754,19 @@ Also attempted while here, and REVERTED: splitting `test-ocapn-bridge.rkt`
 per-file limit on CI.
 
 **The split made CI worse — 1 timeout became 2, with BOTH halves over the
-limit**, each costing more on CI than the whole file had. The dominant cost is
-PER FILE, not per test: every file re-elaborates the OCapN module chain through
-its shared fixture, so splitting paid that fixed cost twice. Locally the split
-measured as neutral (38s + 39s against 73s unsplit), which is exactly why it
-looked free and got pushed — the fixed cost is small on this machine and large
-on a GitHub runner, and I generalised from the local number without checking
-the ratio held.
+limit.**
+
+My first explanation was "the dominant cost is per FILE, so splitting paid it
+twice". **That is wrong**, and it went into a commit message, `.skip-tests`
+and this doc before I checked the arithmetic. Measured afterwards: the shared
+fixture costs **8.8s** (same preamble, one trivial test) and each test ~**0.40s**
+— so splitting added ~9s to a >300s file, under 3%. The model checks out
+exactly against the local split (8.8×2 + 59 = 77s; measured 38+39 = 77s).
+
+Both halves timed out for a much duller reason: half of >300s is still over
+the 120s limit. No large fixed cost is needed to explain it, and the local
+numbers actively argue against one. I asserted a mechanism when all I had was
+a correlation.
 
 The real lever already existed and was merely unreachable: `batch-worker.rkt`
 has always supported `--file-timeout`, but `run-affected-tests.rkt` never
@@ -768,9 +774,32 @@ passed it through, so the 120s default could not be raised from CI. Plumbed it
 through and set `--file-timeout 300` in `test.yml`. That default dates from
 when "slowest normal tests ~17s"; these tests are legitimately heavier.
 
-`.claude/rules/testing.md`'s ~20-cases/~30s guidance stays right in general —
-but splitting only helps once the fixed per-file cost is small, and here it is
-not.
+`.claude/rules/testing.md`'s ~20-cases/~30s guidance stays right in general.
+Splitting just cannot help when the file is 4x over budget — it divides the
+variable cost but not the overrun.
+
+### What is actually slow, as far as it has been established
+
+The disproportion is in PER-TEST cost on CI. The suite overall runs 2.3x
+slower there (942s vs 402s local) while this file runs >4.4x slower (>300s vs
+68s) — about 1.9s/test against 0.40s here.
+
+Ruled out locally, each measured, none of them reproducing it:
+
+| hypothesis | result |
+|---|---|
+| CPU contention (3 burners / 4 cores) | 68.7s vs 67.5s idle — no effect |
+| Oversubscription (7 burners / 4 cores) | 67.7s — no effect |
+| Cold `.pnet` caches (all 15 deleted) | 63.3s — no effect |
+| Fixture dominance | 8.8s of 68s — not dominant |
+
+Remaining candidate: runner resources. Peak RSS is **497 MB** for one run, so
+4 concurrent batch workers want ~2 GB — comfortable on this 16-core-GB box,
+much less so on a smaller runner, where GC pressure would fall hardest on
+allocation-heavy propagator-network tests. That is a HYPOTHESIS. Confirming it
+means instrumenting the CI job itself (log peak RSS and core count there);
+more local runs cannot settle it, which is the lesson from the three rows
+above.
 
 ### Cross-connection gift store — design note (next piece)
 

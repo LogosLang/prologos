@@ -102,11 +102,11 @@ jobs:
         run: cd racket/prologos && raco test tests/test-ocapn-bootstrap-gift-interop.rkt
 
       - name: Run the CapTP bridge suite (partitioned out of the batch runner)
-        # 147 test-cases, each elaborating the whole OCapN module chain. ~73s
-        # locally but >300s under the main suite's 4 contending batch workers
-        # on a 2-core runner, so it is skipped there (tests/.skip-tests) and
-        # run here with the job's budget to itself. Splitting the file was
-        # tried and made it worse — the cost is per FILE, so it got paid twice.
+        # 147 test-cases. ~68s locally but >300s on the runner, so it is
+        # skipped in the batch suite (tests/.skip-tests) and run here with the
+        # job's budget to itself. See that file for the measurements: the
+        # disproportion is in per-TEST cost on CI, not in the per-file fixture
+        # (8.8s), and splitting the file was tried and made things worse.
         run: cd racket/prologos && raco test tests/test-ocapn-bridge.rkt
 
       - name: Install deps for OCapN test suite

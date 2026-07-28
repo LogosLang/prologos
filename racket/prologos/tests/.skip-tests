@@ -27,10 +27,26 @@ test-reduction-perf-02-02.rkt  # fib 20 exponential recursion; now ~122s
 #
 # Two things were tried first and are recorded so they are not retried:
 #   - SPLITTING it in two made CI WORSE (1 timeout -> 2, both halves over the
-#     limit). The dominant cost is per FILE, so splitting paid it twice.
+#     limit). NOT because the per-file cost dominates — that was my first
+#     explanation and it is wrong. MEASURED: the shared fixture costs 8.8s
+#     (same preamble, one trivial test) and each test ~0.40s, so splitting
+#     added ~9s to a >300s file, under 3%. Both halves timed out for a duller
+#     reason: half of >300s is still over the 120s limit then in force.
 #   - Raising the per-file budget to 300s (the runner now plumbs
 #     --file-timeout through to batch-worker.rkt, which is a real gap closed)
 #     was still not enough.
+#
+# What is actually disproportionate is the PER-TEST cost on CI: the suite
+# overall runs 2.3x slower there (942s vs 402s) but this file runs >4.4x
+# slower (>300s vs 68s), which works out to ~1.9s/test against 0.40s here.
+# Ruled out locally, each measured, none reproducing it: CPU contention
+# (3 burners on 4 cores, 68.7s vs 67.5s idle), oversubscription (7 burners,
+# 67.7s), and cold .pnet caches (all 15 deleted, 63.3s). The remaining
+# candidate is runner resources — peak RSS is 497MB per run, so 4 concurrent
+# workers want ~2GB, comfortable on this 16GB box and much less so on a
+# smaller runner where GC would hit allocation-heavy propagator tests hardest.
+# That is a hypothesis; pinning it needs instrumenting the CI job (log peak
+# RSS + core count there), not more local runs.
 #
 # So this is the documented partition case from .claude/rules/testing.md:
 # "when test infrastructure mismatches a test's needs, partition rather than
