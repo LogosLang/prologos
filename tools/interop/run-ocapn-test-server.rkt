@@ -241,6 +241,72 @@
 ;; ========================================
 
 ;; ========================================
+;; Crossed hellos
+;; ========================================
+;;
+;; Two peers can dial each other at the same moment and end up with two
+;; sessions where there should be one. CapTP breaks the tie with a rule both
+;; sides can evaluate independently and agree on without another round trip:
+;; sort the two SIDE-IDS as octet strings, and abort the connection DIALLED BY
+;; whichever sorts first.
+;;
+;; A side-id is SHA-256 applied twice to the gcrypt-encoded public key — and
+;; that encoding is byte-for-byte field 1 of the `op:start-session` frame
+;; already in hand, so this needs no key parsing and no re-encoding: slice the
+;; field out and hash it. (Verified against upstream's own `our_side_id` in
+;; utils/captp.py:113-123, which hashes exactly those bytes.)
+;;
+;; The peer is identified by its LOCATION bytes, not by host:port. Field 0 of a
+;; sturdyref and field 2 of an `op:start-session` are the same `<ocapn-peer …>`
+;; record and slice to identical bytes, so the two sides of the match are
+;; directly comparable. host:port would be wrong: ephemeral ports get reused
+;; across tests in a long-running server.
+
+;; Skip one Syrup value beginning at `i`; return the index just past it.
+(define (syrup-skip bs i)
+  (define b (bytes-ref bs i))
+  (cond
+    [(or (= b 60) (= b 91) (= b 123))            ; < [ {
+     (define close (cond [(= b 60) 62] [(= b 91) 93] [else 125]))
+     (let loop ([j (add1 i)])
+       (if (= (bytes-ref bs j) close) (add1 j) (loop (syrup-skip bs j))))]
+    [(or (= b 110) (= b 116) (= b 102)) (add1 i)] ; n t f
+    [else
+     (let loop ([j i])
+       (define c (bytes-ref bs j))
+       (cond
+         [(and (>= c 48) (<= c 57)) (loop (add1 j))]
+         [(or (= c 43) (= c 45)) (add1 j)]        ; + -
+         [else                                    ; " ' :
+          (+ j 1 (string->number (bytes->string/latin-1 (subbytes bs i j))))]))]))
+
+;; Field `n` of a record, as raw bytes. `<label f0 f1 …>` — the label is
+;; skipped, so n=0 is the first argument.
+(define (record-field bs n)
+  (let loop ([i (syrup-skip bs 1)] [k 0])        ; 1 = past '<', then the label
+    (define j (syrup-skip bs i))
+    (if (= k n) (subbytes bs i j) (loop j (add1 k)))))
+
+(define (side-id-of-start-session frame)
+  (sha256-bytes (sha256-bytes (record-field frame 1))))
+
+(define (location-of-start-session frame) (record-field frame 2))
+
+;; Outgoing connections whose handshake is still one-sided, by peer location.
+(define half-open-dials (make-hash))
+
+(define our-side-id (side-id-of-start-session start-session-bytes))
+
+;; `<op:abort "reason">`. Built directly rather than through captp-wire: this
+;; runs on the accept thread before any connection state exists, and the frame
+;; is two atoms.
+(define (build-abort-bytes reason)
+  (define r (string->bytes/latin-1 reason))
+  (bytes-append #"<8'op:abort"
+                (string->bytes/latin-1 (number->string (bytes-length r)))
+                #"\"" r #">"))
+
+;; ========================================
 ;; Outbound connections
 ;; ========================================
 ;;
@@ -299,6 +365,11 @@
                            (printf "ocapn-test-server: dial exn: ~a~n" (exn-message e)))])
           (define-values (din dout) (tcp-connect host (string->number port)))
           (write-frame dout start-session-bytes)
+          ;; The peer may dial us back before answering. Keep this connection
+          ;; addressable by the location we dialled, so the crossed-hellos rule
+          ;; can abort it from the accepting thread.
+          (hash-set! half-open-dials (record-field (string->bytes/latin-1 sr) 0)
+                     (cons din dout))
           (define cid (next-conn-id!))
           (drive-init! cid)
           (let loop ([n 0])
@@ -320,6 +391,34 @@
   (for ([sr (in-list (ocapn-dial-drain '()))])
     (dial-sturdyref! sr)))
 
+;; The post-handshake frame loop. Factored out of `handle-connection` so the
+;; crossed-hellos winner can enter it too, after aborting the losing socket.
+(define (run-frame-loop cin cout cid)
+      (let loop ([n 1])
+        (define frame (with-handlers ([exn:fail?
+                                       (lambda (e)
+                                         (printf "ocapn-test-server: read-frame exn after ~a frames: ~a~n"
+                                                 n (exn-message e))
+                                         #f)])
+                        (read-frame cin)))
+        (cond
+          [(or (eof-object? frame) (not frame))
+           (printf "ocapn-test-server: peer closed after ~a frames (conn ~a)~n" n cid)]
+          [else
+           (when (getenv "OCAPN_FRAME_HEX")
+             (printf "ocapn-test-server: FRAME-HEX conn ~a n ~a: ~a~n"
+                     cid (+ n 1) (bytes->hex-string frame)))
+           (define out (drive-step cid frame))
+           (printf "ocapn-test-server: conn ~a frame ~a (~a in / ~a out bytes)~n"
+                   cid (+ n 1) (bytes-length frame) (bytes-length out))
+           (when (> (bytes-length out) 0)
+             (write-frame cout out))
+           ;; A step may have queued an outbound connection (the sturdyref
+           ;; enlivener is the only thing that does).
+           (drain-dials!)
+           (loop (+ n 1))]))
+)
+
 (define (handle-connection cin cout)
   (with-handlers ([exn:fail? (lambda (e)
                                (printf "ocapn-test-server: handler exn: ~a~n"
@@ -340,35 +439,38 @@
        (printf "ocapn-test-server: peer closed before sending start-session~n")]
       [else
        (define abort-reply (validate-incoming first-frame))
+       (define crossed
+         (and (zero? (bytes-length abort-reply))
+              (hash-ref half-open-dials (location-of-start-session first-frame) #f)))
        (cond
+         ;; Crossed hellos: we already dialled this peer and it has dialled us
+         ;; back. Exactly one of the two connections dies, and which one is
+         ;; decided by the side-ids alone -- so the peer reaches the same
+         ;; verdict without another round trip.
+         [crossed
+          (define theirs (side-id-of-start-session first-frame))
+          (define ours-first? (bytes<? our-side-id theirs))
+          (printf "ocapn-test-server: crossed hellos; aborting the ~a connection~n"
+                  (if ours-first? "OUTGOING" "incoming"))
+          (define abort-bytes (build-abort-bytes "crossed hellos"))
+          (cond
+            [ours-first?
+             ;; Our dial loses: abort the socket WE opened, and let this one live.
+             (with-handlers ([exn:fail? void])
+               (write-frame (cdr crossed) abort-bytes))
+             (hash-remove! half-open-dials (location-of-start-session first-frame))
+             (let ([cid (next-conn-id!)])
+               (drive-init! cid)
+               (run-frame-loop cin cout cid))]
+            [else
+             ;; Their dial loses: abort the socket THEY opened.
+             (write-frame cout abort-bytes)])]
          [(zero? (bytes-length abort-reply))
           (define cid (next-conn-id!))
           (drive-init! cid)
           (printf "ocapn-test-server: inbound start-session accepted (conn ~a); driving captp-core~n"
                   cid)
-          (let loop ([n 1])
-            (define frame (with-handlers ([exn:fail?
-                                           (lambda (e)
-                                             (printf "ocapn-test-server: read-frame exn after ~a frames: ~a~n"
-                                                     n (exn-message e))
-                                             #f)])
-                            (read-frame cin)))
-            (cond
-              [(or (eof-object? frame) (not frame))
-               (printf "ocapn-test-server: peer closed after ~a frames (conn ~a)~n" n cid)]
-              [else
-               (when (getenv "OCAPN_FRAME_HEX")
-                 (printf "ocapn-test-server: FRAME-HEX conn ~a n ~a: ~a~n"
-                         cid (+ n 1) (bytes->hex-string frame)))
-               (define out (drive-step cid frame))
-               (printf "ocapn-test-server: conn ~a frame ~a (~a in / ~a out bytes)~n"
-                       cid (+ n 1) (bytes-length frame) (bytes-length out))
-               (when (> (bytes-length out) 0)
-                 (write-frame cout out))
-               ;; A step may have queued an outbound connection (the sturdyref
-               ;; enlivener is the only thing that does).
-               (drain-dials!)
-               (loop (+ n 1))]))]
+          (run-frame-loop cin cout cid)]
          [else
           (printf "ocapn-test-server: inbound start-session REJECTED (~a bytes); sending op:abort~n"
                   (bytes-length abort-reply))
