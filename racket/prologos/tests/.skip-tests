@@ -19,3 +19,21 @@ test-reduction-perf-02-02.rkt  # fib 20 exponential recursion; now ~122s
 # listed here now hard-fail if Node deps are missing rather than
 # silently exiting and crashing the batch-worker. Both test.yml
 # and interop.yml install Node + npm interop deps.)
+
+# test-ocapn-bridge.rkt — 147 test-cases, each of which elaborates the whole
+# OCapN module chain through the shared fixture. ~73s locally but >300s on a
+# 2-core GitHub runner: a >4x ratio where the suite overall is ~2.3x, so it is
+# disproportionately hurt by 4 batch workers contending on a small box.
+#
+# Two things were tried first and are recorded so they are not retried:
+#   - SPLITTING it in two made CI WORSE (1 timeout -> 2, both halves over the
+#     limit). The dominant cost is per FILE, so splitting paid it twice.
+#   - Raising the per-file budget to 300s (the runner now plumbs
+#     --file-timeout through to batch-worker.rkt, which is a real gap closed)
+#     was still not enough.
+#
+# So this is the documented partition case from .claude/rules/testing.md:
+# "when test infrastructure mismatches a test's needs, partition rather than
+# patch". It runs in full via `raco test` in interop.yml, where it has the
+# job's 30-minute budget to itself and no worker contention.
+test-ocapn-bridge.rkt  # 147 cases; >300s under batch-worker contention — runs in interop.yml

@@ -101,6 +101,14 @@ jobs:
       - name: Run bootstrap-gift wire-shape test (Phase 52b — gift handoff bootstrap-method dispatch cross-impl)
         run: cd racket/prologos && raco test tests/test-ocapn-bootstrap-gift-interop.rkt
 
+      - name: Run the CapTP bridge suite (partitioned out of the batch runner)
+        # 147 test-cases, each elaborating the whole OCapN module chain. ~73s
+        # locally but >300s under the main suite's 4 contending batch workers
+        # on a 2-core runner, so it is skipped there (tests/.skip-tests) and
+        # run here with the job's budget to itself. Splitting the file was
+        # tried and made it worse — the cost is per FILE, so it got paid twice.
+        run: cd racket/prologos && raco test tests/test-ocapn-bridge.rkt
+
       - name: Install deps for OCapN test suite
         run: |
           # The ocapn-test-suite needs cryptography, cffi, and stem.
