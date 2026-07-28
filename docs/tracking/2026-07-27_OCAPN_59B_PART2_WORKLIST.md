@@ -833,3 +833,62 @@ Rejected alternative: threading a store handle through `captp-incoming-with-
 state`. It would touch every caller and put the global in the type of every
 bridge operation, to no benefit — the gift table is the ONLY exporter-global
 state in the protocol.
+
+---
+
+## Where the time actually goes (profiled 2026-07-28)
+
+The interop tests are slow because of TWO fixed per-command costs, neither of
+which is protocol work. The OCapN server runs one `process-string` per wire
+frame, so both are paid per frame.
+
+### 1. The memory report forced two major GCs per command — FIXED
+
+`measure-memory-before` / `measure-memory-after` each called
+`(collect-garbage 'major)`, unconditionally, at all three driver call sites.
+Measured on `test-ocapn-bridge.rkt` (147 cases, each a `process-string`):
+**64.1s with, 28.1s without — 2.3x**, all of it instrumentation. Now gated
+behind `PROLOGOS_MEM_STATS_GC` (off by default; `bench-ab.rkt` opts in).
+
+### 2. Whole-program capability inference re-runs on EVERY command — OPEN
+
+Profiling one `step-connection` (117ms):
+
+| | share of total |
+|---|---|
+| `run-post-compilation-inference!` | **76%** |
+| ⤷ `run-capability-inference` | 96% of that |
+| `process-command` (the actual protocol work) | **19%** |
+| `module-network-from-snapshot` (fixture) | 6% |
+
+`run-capability-inference` (capability-inference.rkt:255) does, from scratch,
+per command:
+
+1. builds the full call graph over the entire global env;
+2. allocates a propagator network with **one cell per function in the whole
+   program**;
+3. installs a propagator per call edge;
+4. runs it to fixpoint.
+
+Then `run-post-compilation-inference!` additionally iterates every entry of
+`(global-env-snapshot)` to re-check authority roots.
+
+The trigger is just `(not (hash-empty? (current-capability-registry)))` — 18
+entries here, coming from `prologos::core::capabilities`, which the OCapN
+modules import. **So any program that merely imports that module pays
+whole-program re-analysis on every single command**, including commands that
+define nothing.
+
+That last point is the lever: `step-connection` is an `(eval …)`. It adds no
+definitions, so it cannot change the call graph, so the analysis result cannot
+change. The obvious fixes, cheapest first:
+
+- **skip when the command defined nothing** — an eval-only command can't alter
+  the call graph;
+- **cache on an env generation counter** — recompute only when the global env
+  actually changed;
+- **make it incremental** — it is already a propagator network, so this is the
+  on-network-shaped answer, but it is much more work than the first two.
+
+Expect the first option alone to take `step-connection` from ~117ms to ~25ms,
+which would turn the 13s exporter-handoff run into roughly 3s.
