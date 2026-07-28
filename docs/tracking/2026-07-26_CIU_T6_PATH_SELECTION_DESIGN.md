@@ -4,12 +4,16 @@
 > is replaced by the Path Selection redesign:
 > **spec** [`docs/research/2026-07-28_path-selection-spec.md`](../research/2026-07-28_path-selection-spec.md)
 > · **implementation design** [`2026-07-28_CIU_T6_PATH_SELECTION_D4.md`](2026-07-28_CIU_T6_PATH_SELECTION_D4.md)
-> (D4 §1.2 carries the per-ruling supersession table — PS4/PS5/PS8 survive,
-> PS6/PS7 generalize, the rest are replaced/superseded). This document stays
+> (D4 §1.2 carries the authoritative per-ruling supersession table — several
+> rulings survive, PS6 generalizes, PS7 is amended to Ruling B, and the rest
+> are replaced/superseded; consult the table rather than any summary). This document stays
 > as the RECORD of rounds 1–8b and of the landed P0–P2 implementation, which
 > stands in full as D4's substrate. Do not implement from this document.
 
-**Status**: **Stage-3 D.2 — the SURFACE IS SETTLED** (five co-design rounds, owner-ruled
+**Status**: ⚠ **SUPERSEDED 2026-07-28** — kept as the RECORD of rounds 1–8b and
+of the landed P0–P2 implementation. Implementation proceeds from **D4**, not
+from this document. *(Historical status line follows.)* **Stage-3 D.2 — the
+SURFACE WAS SETTLED** (five co-design rounds, owner-ruled
 2026-07-26; consolidated spec = **§5.9 PS1–PS15**; §5.1–§5.8 remain as the conversation
 record). Implementation opens at P0 (acceptance file) per §2.
 **Series / Track**: CIU Series → **Track 6** (Anonymous Records & Collections & Path Selection).
@@ -53,7 +57,11 @@ successor) is designed-for but phased — see §9.
 
 ---
 
-## §2 Progress Tracker
+## §2 Progress Tracker  ⚠ HISTORICAL
+
+> Rows **P0–P2 are the landed record** (they stand as D4's substrate). Rows P3
+> onward were **re-planned as D4's ladder** on 2026-07-28 and are NOT the live
+> plan — see D4's Progress Tracker.
 
 | Phase | Description | Status | Notes |
 |---|---|---|---|
@@ -584,7 +592,7 @@ dynamic index (`v.i`, dot-only) · sections (leading-dot forms) · reserved: ran
     — the named UNZIP, one selection. Lexes today (degraded): verified.
   - `rows.0.f` → `"apple"` (extraction); `rows[0]` → `⟨row⟩` per Q_S7a.
 
-### §5.9 THE SETTLED SURFACE (D.2 — owner-ruled across rounds 1–5, 2026-07-26)
+### §5.9 ⚠ SUPERSEDED (see D4 §1.2) — THE THEN-SETTLED SURFACE (D.2, rounds 1–5)
 
 **Rounds 1–4 = §5.4–§5.8; round 5 rulings: PR-9 ADOPTED (`:` iteration · `*` splat ·
 dot-key retired) and PR-8 → STATIC ERROR.** Items marked ⊳ were adopted under the

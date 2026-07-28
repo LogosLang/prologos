@@ -67,15 +67,15 @@ anonymous-record typing that unlocked it.
 | `x{…}` | select block; postfix juxtaposition, **no space** | — | **[ADOPTED]** |
 | `.k` | nominal access (deeper level) | 1 | **[ADOPTED]** |
 | `.N` | ordinal access (index) | 1 | **[ADOPTED]** |
-| `:s` | broadcast: map one step `s` over this level, preserving its shape | ω | **[ADOPTED]** (vector); **[RECOMMENDED]** map-generic (§3.2.3) |
+| `:s` | broadcast: map one step `s` over this level, preserving its shape | ω | **[ADOPTED]** — incl. map-generic (§3.2.3, ruled 2026-07-28) |
 | `k^` | key operator, continuation *empty*: dissolve/splice (mid-path) or mark keyless (leaf) | — | **[ADOPTED]** |
 | `k^k'` | key operator, continuation *label*: rename `k → k'` | — | **[ADOPTED]** |
 | `p^_` | key operator, continuation *synth*: key from surviving path, e.g. `a.b^_ ⇒ :a-b` | — | **[ADOPTED]** |
 | `{a b}` | nominal n-ary selection (keys preserved) | — | **[ADOPTED]** |
 | `{N M}` | ordinal n-ary selection (fresh indices, selection order) | — | **[ADOPTED]** |
-| `.*` | row-splat: include all keys of the focus into the enclosing block | — | **[ADOPTED]** block position; path position **[OPEN]**, subsumed if `:` goes map-generic |
+| `.*` | row-splat: include all keys of the focus into the enclosing block | — | **[ADOPTED]** block position; path position **SUBSUMED** by map-generic `:` (ruled) |
 | `*` | flatten one vector layer, postfix: `…:diags*:msg` | ω·ω→ω | **[ADOPTED]** |
-| `<` | disclose/unwrap, in-step | — | **[PROPOSED]**, bare form only (§3.7) |
+| `<` | disclose/unwrap, in-step | — | **[ADOPTED v1]**, bare form only (§3.7) |
 | `?φ` | filter | 0\|1 | **[DEFERRED]** (§7.1–7.2) |
 | `#` | dedupe (collection → set) | — | **[DEFERRED]** (§7.1) |
 | `..k` | recursive descent | — | **[DEFERRED]**, as schema-elaborated sugar (§7.4) |
@@ -434,16 +434,23 @@ selection ever crosses into the process surface.
 
 ## 8. Open questions
 
-1. **Map-generic `:`** (§3.2.3) — the ruling the splat consolidation and §5.4
-   hang on. Recommended: yes.
-2. **Map output key ordering** in keyed blocks: source order vs selection
-   order (`x{b a}`). Must be pinned before result equality is testable.
+1. **Map-generic `:`** (§3.2.3) — ✅ **RESOLVED: YES** (owner 2026-07-28;
+   D4 §3). Path-position `.*` is subsumed; `.*name`'s migration target is
+   `:name`; §5.4 row-map typing is in.
+2. **Map output key ordering** — ✅ **RESOLVED: carrier-determined**
+   (owner 2026-07-28; D4 ruling 2c). Neither source nor selection order is
+   representable in the shipped carriers (type rows are canonically sorted —
+   load-bearing for `equal?`-as-row-identity; values are champ-hash ordered).
+   **Derived from §1.1's own key-sort thesis**: nominal key IDENTITY carries
+   the meaning, order does not.
 3. **Nominal → ordinal demotion order**: if a Map's keys are dropped into a
    tuple (keyless broadcast over a Map, or a future map-`^`), which element
    order? Requires a canonical key order or a prohibition.
 4. **`*` on Map layers** — is there a nominal join (merge of `{ρ {ρ' ·}}`),
    or is `*` vector-only forever? v1: vector-only.
-5. **`<` adoption** (§3.7) — bare disclose in or out.
+5. **`<` adoption** (§3.7) — ✅ **RESOLVED: ADOPTED in v1**, bare form,
+   spelled `:<` in broadcast composition (owner 2026-07-28; D4 §3). It is
+   also the designed unwrap remedy that makes honest nesting (§3.3) livable.
 6. **Idempotent self-merge (L7)**: do *syntactically identical* sibling
    branches merge quietly (GraphQL merges same-name/same-args fields; the test
    is on selector syntax, not leaf values, so L5 naturality permits it), or is

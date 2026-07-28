@@ -35,7 +35,8 @@ Trigger is fiddly (≥2 top-level keys, or ≥2 dash items with a multi-line
 thing — it is a PARSE/layout seam, not typing. Found while running the Path
 Selection spec's Appendix fixtures (4 of its `def X :=` forms hit this).
 Workaround in corpus files: use the `def X` (no `:=`) implicit-map form.
-Owner ruled 2026-07-28: file as an issue. Adjacent context: the
+Owner ruled 2026-07-28: filed as **issue #80**
+(https://github.com/LogosLang/prologos/issues/80, OPEN). Adjacent context: the
 implicit-map-def WS path was touched by the 2026-07-18 hand-testing arc
 (`ff31d237` — process-string-ws parity), so the seam has history.
 

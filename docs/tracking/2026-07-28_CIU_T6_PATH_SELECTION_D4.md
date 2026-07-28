@@ -80,13 +80,14 @@ points at the QTT semiring), the **equational theory L1–L7** as test material,
 ### §1.3 What landed and stands (nothing unwinds)
 
 - **P0** acceptance file (`examples/2026-07-26-ciu-t6-path-selection.prologos`):
-  its 21 WORKING markers pin P1/P2 substrate and stay a regression instrument;
-  its commented old-syntax §B/§C targets are superseded (see §5.P0).
+  **AUGMENTED at D4.P0 (`e2674208`) to 28 markers**; they pin P1/P2 substrate and
+  stay a regression instrument. The old-syntax §B/§C targets were replaced with
+  the phase-tagged spec corpus (see §5.P0).
 - **P1** `.{` retirement: what died was `.{`-as-MIXFIX (the `.( )` sibling).
   The spec's mid-path sub-block spelling `server^.{…}` is a DIFFERENT, NEW
   construct — today it reads as a loose `|.|` + `$brace-params` and errors
   end-to-end (`cfg.server.{host port}` → "Bare symbol 'host' not allowed as
-  map key"). Its grouping is NEW P1 work (Batch-3 ruling pending).
+  map key"). Its grouping is NEW P1 work — **RULED 3a**: a `dot-lbrace` compound token (§3).
 - **P2** (5 slices, `ad75e57a`→`ac89341f`): the two-tier principle IS the
   grade-1 substrate — loud assertive misses (Map key / PVec / List / dynamic
   tuple OOB, both def seams), site 7's projection, the carried-alpha slot,
@@ -176,7 +177,11 @@ adaptation is recorded here with its reason.
 - **`v[0]` keeps its current working semantics for now** — the PS2 flip is
   canceled; no census-flip of `v[literal]` sites.
 
-**The D5-critique batch rulings [owner, 2026-07-28]:**
+**The D5-critique batch rulings [owner, 2026-07-28]** — note: the "D5 critique"
+was a 13-agent adversarial workflow (`wf_2cef0199-18a`, 6 lenses +
+refute-by-default verifiers) adjudicated conversationally; it has **no
+standalone document**. Its surviving, R-lens-verified findings are recorded in
+§2.3 (the carrier table), the rulings below, and §8 (risks):
 - **Notation = translation, not spec-editing (Batch 1, option b).** The spec
   keeps its idealized notation; the CORPUS FILE is the adaptation layer,
   written in HEAD's printed forms via the §2.3 translation table. §5.P0's
@@ -268,8 +273,8 @@ adaptation is recorded here with its reason.
 
 **Carried from the P3 mini-audit [owner, 2026-07-28], still standing:**
 - `#:keyword` retires with the `#.:name` twin (`#.name` survives).
-- `^` splitting is P4-parser-side via POL.6 `split-fused-symbol` — no second
-  splitter.
+- `^` splitting is **P3**-parser-side via POL.6 `split-fused-symbol` — no second
+  splitter (P1 does NOT touch `^`; see §5.P1 item 4 and §5.P3).
 - `.-1` = classifier-level rejection; negative bracket/`get` payloads = a
   static error at the grouping seat alongside `m[:a]`.
 - ~~`.:.`/`.:[` tokens defer to P5~~ — **MOOT**: the new broadcast is bare
@@ -295,8 +300,10 @@ is what it is.
 - **P6's DECISION is due at P3** (blocks are what make demand observable);
   its IMPLEMENTATION may land later or post-v1 — see §5.P6 for why it is
   staged rather than absorbed.
-- **Gate**: spec **Q2** (map output-key ordering) blocks P3's result-equality
-  tests. It is the only OPEN question on the critical path.
+- **Gate**: NONE open on the critical path. Spec Q2 was DISSOLVED by ruling 2c
+  (carrier order, thesis-derived); the only open question is **Q8 (the lexical
+  grammar), which is ANSWERED BY §5.P1** — its own deliverable, not a blocker on
+  anything upstream.
 
 ---
 
@@ -304,48 +311,47 @@ is what it is.
 
 ### §5.P0 — Acceptance corpus
 
-**Intent [owner, 2026-07-28]: AUGMENT the existing acceptance file** —
+**✅ LANDED `e2674208` — 28/28 markers, 0 errors** (was 21/21).
+
+**Intent [owner]: AUGMENT the existing acceptance file** —
 `examples/2026-07-26-ciu-t6-path-selection.prologos` — with the spec's §10
-examples and Appendix fixtures. One file, not two: it already holds the P0
-charter (nested config, PVec-of-records, solve rows, typing pins,
-function-typed forms) and its **21 working markers are live P1/P2 substrate
-regression**. A second file would split the instrument and duplicate fixtures.
+examples and Appendix fixtures. One file, not two: it already held the P0
+charter and its working markers are live P1/P2 substrate regression.
 
-**Work**:
-- **Reconcile fixtures**: the file's `app-config` and the spec's Appendix
-  `app-config` are the same shape from different drafts — converge on the
-  spec's (it is normative and the §10 results are computed against it),
-  keeping any extra fields the existing markers depend on. Same for the party
-  PVec vs the spec's `users`. Add the fixtures with no counterpart:
-  `build`, `regions`, `strings`, `m`, `events`, `tree`.
-- **Replace the superseded target block**: the commented §B/§C old-syntax
-  targets (bracket-select, `.:.` iteration, `[*]`) are dead surface — delete
-  them with a one-line note pointing at this document, and add the §10 corpus
-  in their place, commented per phase.
-- **Section the corpus by phase** so uncommenting is mechanical: §10.1
-  reshaping/splice/provenance (P3) · §10.2 broadcast/fusion/honest nesting
-  (P4) · §10.3 Ruling B/factoring/SoA (P5) · §10.4 flatten + the W1 border
-  (P4) · §10.5 map-generic (P4, Q1 ✅) · §10.6 transposes (**v2 — stays
-  commented permanently**, with the §7.3 pointer) · §10.7 meet rule (P4) ·
-  §10.8 W4 (permanently commented, the exit noted).
-- **Negatives pin ERROR CLASS, not message text**, until spec Q8 settles
-  wording (the established `;;N=>~ ERROR` marker idiom).
+**What landed**:
+- **All 7 spec Appendix fixtures load** (`users` · `build` · `regions` ·
+  `strings` · `m` · `events` · `tree`). Layout bodies use the `def X`
+  implicit-map form — the `def X :=` form hits **issue #80** (filed).
+  `now`/`env` stubs carry indicative values (the staged-demand ruling 4a).
+- **Fixture convergence**: `app-config` gained `:date [now]` and
+  `:url [env "DATABASE_URL"]` per the spec Appendix; its marker was
+  re-transcribed.
+- **The dead old-bracket-surface targets were REPLACED** with the phase-tagged
+  spec corpus in HEAD notation: §B blocks [P3] · §C splat + Ruling B [P4/P5] ·
+  §D broadcast [P4] · §I the §10.2–§10.8 corpus (incl. disclose `:<`). §10.6
+  transposes and §10.8 recursion stay PERMANENTLY commented with their
+  v2/exit pointers.
+- **The `v[0]` NOTE was corrected** — the PS2 flip is canceled, so that pin is
+  now a MUST-NOT-BREAK regression, not a flip warning.
+- **Two fixture outputs double as §2.3 carrier documentation**: `users`
+  exhibits the literal-arm 1-tuple collapse (which ruling 2a routes around),
+  and `events` pins the het-tuple carrier that the 2b split's first rule
+  targets.
 
-**Normativity**: the corpus is executable spec (spec §10: "intended as
-executable test vectors"). Any divergence between file and spec is a bug in
-one of them — resolved by ruling, never by quietly editing the marker.
+**Normativity protocol (refined by ruling, Batch 1)**: the corpus is executable
+spec. Divergence between file and spec in **NOTATION** is transcription —
+resolved by the §2.3 table. Divergence in **RESULT** is semantics — resolved by
+ruling, **never by quietly editing a marker**.
 
-**Open here**: the spec fixture's computed leaves (`:date [now]`,
-`:url [env …]`) force EAGERLY until §5.P6 — so the §1.3 demand property gets a
-marker COMMENT, not an assertion, in v1. The forced values are indicative
-(spec §10 preamble), so every other §10 result is unaffected.
+**Still open here**: the spec fixture's computed leaves force EAGERLY until
+§5.P6, so the §1.3 demand property is a marker COMMENT, not an assertion, in
+v1. Forced values are indicative (spec §10 preamble), so every other §10 result
+is unaffected.
 
-**At X.close**: the file promotes to a suite-gated regression test (the
-existing charter, unchanged).
+**At X.close**: the file promotes to a suite-gated regression test.
 
-**Test delta**: the augmented file + its `--check` gate (currently 21/21;
-expect the count to grow only by forms that WORK at P0 — everything else
-lands commented). Status: ⬜.
+**Test delta**: the augmented file + its `--check` gate — **28/28** (from
+21/21); records acceptance unchanged at 89/89; zero production code touched.
 
 ### §5.P1 — The lexical seams + the retirement batch
 
@@ -353,21 +359,31 @@ lands commented). Status: ⬜.
 
 **(a) The seams** (spec §2.2 / Q8 — the precise grammar is THIS phase's
 deliverable):
-1. **Brace adjacency**: `x{…}` (no space) = select block vs `{…}` = literal.
+1. **`.{` = a `dot-lbrace` COMPOUND TOKEN** (ruling 3a) at the dot band — the
+   `dot-lparen` (`.( `) precedent, prefix-disjoint from the audited band
+   {rest-89 · dot-key-88 · dot-lparen-87 · broadcast-87 · dot-access-86}.
+   `.` uniformly means DESCEND, so `server.{host port}` is descend-then-select.
+   ⚠ **This is a NEW OPENER** → the THREE-layer co-update is MANDATORY (frame
+   dispatch + langle skip-set + group-items — the `31d27c83` lesson). Today it
+   reads as a loose `|.|` + separate `$brace-params` and errors end-to-end.
+2. **Brace adjacency**: `x{…}` (no space) = select block vs `{…}` = literal.
    Mechanism: the positional adjacency test (end-pos == start-pos), same as
    postfix-index (parse-reader.rkt:2441-2450). **Census obligation first**:
    every SPACED `f {…}` in the corpus whose meaning must NOT change, and every
    adjacent `x{…}` that currently parses as application-of-literal.
-2. **Colon adjacency**: `x:s` broadcast vs `:s` keyword vs `x : T`/`x:Int`
+3. **Colon adjacency**: `x:s` broadcast vs `:s` keyword vs `x : T`/`x:Int`
    annotations. Adjacency + a focus-bearing left context selects broadcast.
    **The annotation collision is the sharp edge**: the census must cover every
    fused `ident:Ident` in annotation position (POL.6 territory) before the
    grammar is fixed. `:{` (lone-colon + brace) is the broadcast-block shape —
    detectable at grouping (probe-verified).
-3. **Keyword-trailing `*`**: `:diags*` must split into `:diags` + flatten-`*`
+4. **Keyword-trailing `*`**: `:diags*` must split into `:diags` + flatten-`*`
    in selector context. (`*` stays in `ident-continue?` generally — the split
    is contextual, not a charset change; the F1b.7g drift rule applies.)
-4. `^` is NOT touched here (parser-side split at P3, per the standing ruling).
+5. `^` is NOT touched here (parser-side split at P3, per the standing ruling).
+6. ⚠ **`:<` (disclose, ADOPTED v1 — Q5)**: `<` is a WS **angle-group opener**
+   (the mixfix-swallow family). `users:<{…}` gets a **mandatory probe row** in
+   the Q8 grammar even though disclose's SEMANTICS land at P4.
 
 **(b) The retirement batch** (carried from the old P3 row, all censuses fresh
 from the audit): dot-key `.:name` (2 live) + `#.:name`/`#:keyword` twins ·
@@ -437,12 +453,43 @@ assertions); L4/collision negative pins. Status: ⬜.
 
 ### §5.P4 — Broadcast ω
 
-**Intent**: `:s` one-step extent (§3.2.1) · fusion L1 (consecutive `:` share a
-spine — an ELABORATION-level rewrite, so the layer count is structural) ·
-**map-generic `:`** (Q1 adopted; §5.4 row-map typing; Specter ALL/MAP-VALS
-collapse) · postfix `*` flatten (vector layers only — Q4 open) · `.*`
-row-splat (block position; path position subsumed by Q1) · the §5.3 meet rule
-for heterogeneous vectors (coinductive: every element offers the observation).
+**Intent** — the COMPLETE P4 contract (each item tagged with its ruling):
+- `:s` **one-step extent** (spec §3.2.1) · **L1 fusion** — under the step-list
+  node (4b) consecutive `:` sharing one spine is a STRUCTURAL FACT of the step
+  list, not an elaboration rewrite; the layer count is unfused-ω-steps.
+- **map-generic `:`** (Q1 ✅) — keys preserved, values mapped; Specter
+  ALL/MAP-VALS collapse into one operator.
+- **`*` flatten** — vector layers only in v1 (spec Q4 answer kept).
+- **`.*` row-splat** — block position; path position is subsumed by Q1.
+- **THE 2b HETEROGENEITY SPLIT** (NOT the spec's single meet rule — see §3):
+  · **het tuple** (`⟨row₁ row₂ …⟩`, positions statically known — what `@[…]`
+    literals produce, pinned by the `events` fixture): broadcast projects
+    **per-position, EXACTLY**; a miss is an error **naming the position**.
+    No meet is computed. Strictly stronger than the spec's rule here.
+  · **PVec-of-union** (`[PVec <A|B>]`, length unknown — reachable only via
+    annotation today): the spec's rule over **union components** — every
+    component must offer the key (**keys ⋂**), result field type = **⋃**.
+    This is **NEW machinery** (`row-meet` has zero in-tree hits): budget it.
+  · ⚠ **POLARITY**: the in-tree union projection arm is filter-on-miss
+    (optimistic) and is CORRECT for a single `get` on one union-typed value;
+    broadcast projects EVERY element, so **all-must-offer** is the sound
+    polarity here. Two operations, two polarities — do not "unify" them.
+  · A §10.7-style fixture where components offer the key at DIFFERENT types is
+    owed — today's `events` fixture cannot discriminate the two rules.
+- **DISCLOSE `<` / `:<`** (Q5 ✅ v1, bare form) — in-step unwrap, so it never
+  interacts with broadcast extent. P1 owes its angle-opener probe row.
+- **DYN-TAIL = SUPPORT-BOUNDEDNESS** (4d): closed row → per-field ·
+  `(Map K V)` → uniform V→V′ · **dyn tail → loud STATIC error** naming the
+  remedies (seal / validate / annotate).
+- **Row-map typing PER-FIELD** (4c) — broadcast bodies are selector STEPS, not
+  arbitrary terms, so per-field precision is cheap; do NOT desugar map-generic
+  `:` to `map-map-vals`+lambda (that collapses to constant-W over ⋃ and would
+  violate the per-position exactness just ruled). ⚠ Probe the pre-existing
+  `def := [map-map-vals …]` → "Multiplicity violation" lying-diagnostic if the
+  lowering touches that node.
+- **Realized on the STEP-LIST NODE** (4b): typing WALKS the steps; reduction
+  LOWERS per step onto shipped machinery (`get`, `pvec-map`, `map-map-vals`).
+  **`expr-broadcast-get` RETIRES** with `.*name` — it is not repaired.
 
 **Grounded**: the meet rule's error case is the *typing* side of the P2 loud
 tier — the runtime side already errors loudly. Result-shape computation =
