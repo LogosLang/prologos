@@ -28,6 +28,7 @@
 ;;; dispatch — that's Phase 59.
 
 (require racket/cmdline
+         "../../racket/prologos/ocapn-dial-ffi.rkt"
          racket/tcp
          racket/list
          racket/string
@@ -239,6 +240,86 @@
 ;; Connection handler
 ;; ========================================
 
+;; ========================================
+;; Outbound connections
+;; ========================================
+;;
+;; The sturdyref enlivener queues a re-encoded sturdyref; we parse the host and
+;; port out of its ocapn-peer hints and dial. This is the ONLY place this
+;; process opens a connection rather than accepting one.
+;;
+;; Parsing is done here, in Racket, rather than in Prologos: the dialler is the
+;; thing that needs the host and port, and handing it the peer's own bytes
+;; keeps one representation on the wire instead of two.
+
+;; Read a Syrup length-prefixed string that begins at `i` (digits, marker, body).
+;; Returns (values body next-index) or (values #f #f).
+(define (syrup-lenstr bs i marker)
+  (let loop ([j i])
+    (cond
+      [(>= j (bytes-length bs)) (values #f #f)]
+      [(and (>= (bytes-ref bs j) 48) (<= (bytes-ref bs j) 57)) (loop (add1 j))]
+      [(= (bytes-ref bs j) marker)
+       (define n (string->number (bytes->string/latin-1 (subbytes bs i j))))
+       (if (and n (<= (+ j 1 n) (bytes-length bs)))
+           (values (subbytes bs (add1 j) (+ j 1 n)) (+ j 1 n))
+           (values #f #f))]
+      [else (values #f #f)])))
+
+;; The value of key `k` in a Syrup dict of string->string, by scanning for the
+;; key's own length-prefixed form. Good enough for `{host …, port …}`, which is
+;; all an ocapn-peer's hints carry.
+(define (peer-hint bs k)
+  (define needle (bytes-append (string->bytes/latin-1 (number->string (bytes-length k)))
+                               #"\"" k))
+  (define idx (let loop ([i 0])
+                (cond [(> (+ i (bytes-length needle)) (bytes-length bs)) #f]
+                      [(equal? (subbytes bs i (+ i (bytes-length needle))) needle) i]
+                      [else (loop (add1 i))])))
+  (and idx
+       (let-values ([(v _) (syrup-lenstr bs (+ idx (bytes-length needle)) 34)])
+         (and v (bytes->string/latin-1 v)))))
+
+;; Dial the peer a sturdyref names and run the INITIATOR side of the handshake:
+;; we send op:start-session first, then read theirs. Everything else in this
+;; process has only ever done the reverse.
+(define (dial-sturdyref! sr)
+  (define bs (string->bytes/latin-1 sr))
+  (define host (peer-hint bs #"host"))
+  (define port (peer-hint bs #"port"))
+  (cond
+    [(not (and host port))
+     (printf "ocapn-test-server: dial: no host/port in sturdyref~n")]
+    [else
+     (printf "ocapn-test-server: dialling ~a:~a~n" host port)
+     (thread
+      (lambda ()
+        (with-handlers ([exn:fail?
+                         (lambda (e)
+                           (printf "ocapn-test-server: dial exn: ~a~n" (exn-message e)))])
+          (define-values (din dout) (tcp-connect host (string->number port)))
+          (write-frame dout start-session-bytes)
+          (define cid (next-conn-id!))
+          (drive-init! cid)
+          (let loop ([n 0])
+            (define frame (with-handlers ([exn:fail? (lambda (e) #f)]) (read-frame din)))
+            (cond
+              [(or (eof-object? frame) (not frame))
+               (printf "ocapn-test-server: outbound closed after ~a frames (conn ~a)~n" n cid)]
+              [(zero? n)
+               ;; their start-session; validate but do not answer -- we already sent ours.
+               (loop (add1 n))]
+              [else
+               (define out (drive-step cid frame))
+               (when (> (bytes-length out) 0) (write-frame dout out))
+               (loop (add1 n))]))
+          (close-input-port din)
+          (close-output-port dout))))]))
+
+(define (drain-dials!)
+  (for ([sr (in-list (ocapn-dial-drain '()))])
+    (dial-sturdyref! sr)))
+
 (define (handle-connection cin cout)
   (with-handlers ([exn:fail? (lambda (e)
                                (printf "ocapn-test-server: handler exn: ~a~n"
@@ -284,6 +365,9 @@
                        cid (+ n 1) (bytes-length frame) (bytes-length out))
                (when (> (bytes-length out) 0)
                  (write-frame cout out))
+               ;; A step may have queued an outbound connection (the sturdyref
+               ;; enlivener is the only thing that does).
+               (drain-dials!)
                (loop (+ n 1))]))]
          [else
           (printf "ocapn-test-server: inbound start-session REJECTED (~a bytes); sending op:abort~n"

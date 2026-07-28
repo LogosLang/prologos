@@ -44,6 +44,11 @@ SELECTED = [
         "test_captp_remote_version",
         "test_start_session_with_invalid_version",
         "test_start_session_with_invalid_signature",
+        # Crossed hellos: NOT yet in the gate. Dialling out works (the enlivener
+        # queues, the server connects and sends op:start-session), but the
+        # mitigation itself -- deciding which of two crossed sessions loses, and
+        # aborting it -- is not built. Adding them here before that would turn a
+        # known gap into a red gate.
     ]),
     ("tests.op_deliver", "OpDeliverTest", [
         "test_deliver_with_resolver",
