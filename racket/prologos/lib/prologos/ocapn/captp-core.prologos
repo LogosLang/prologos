@@ -1442,6 +1442,98 @@ defn withdraw-break-bytes [rm-pos reason]
 
 ;; A withdrawal CONSUMES its gift, so replaying the same handoff cannot succeed
 ;; twice — which is exactly what upstream's invalid-handoff-count test checks.
+;; ===========================================================
+;; PARKED withdrawals — a withdraw that arrives before its deposit
+;; ===========================================================
+;;
+;; Upstream's wait_deposit_gift withdraws on the RECEIVER's connection and only
+;; then deposits on the GIFTER's, and still expects an answer on the receiver's
+;; resolve-me. Answering the deposit directly would mean writing bytes to a
+;; connection we are not currently stepping, which the server cannot do.
+;;
+;; It does not have to. Upstream explicitly accepts a PROMISE in the answer and
+;; then sends `op:listen` on it — and that listen IS a step on the receiver's
+;; connection, arriving after the deposit has landed. So:
+;;
+;;   1. withdraw, gift absent  -> allocate promise P, answer
+;;                                ['fulfill <desc:import-promise P>], park it;
+;;   2. deposit (other conn)   -> records the gift in the exporter-global table,
+;;                                nothing needs to reach the receiver yet;
+;;   3. op:listen on P         -> settle P from the parked gift-id, then the
+;;                                EXISTING late-fire path notifies, because it
+;;                                already fires immediately for a settled
+;;                                promise.
+;;
+;; The park entry encodes the promise id in its KEY ("park:<P>:<gift-id>") so
+;; finding a park by promise takes ONE prefix comparison. Keying by gift-id and
+;; storing P as the value would need a two-condition scan, and that is a
+;; three-deep `match` in one body, which does not elaborate
+;; (prologos-syntax.md).
+
+def park-prefix : String := "park:"
+
+spec park-prefix-for Nat -> String
+defn park-prefix-for [p]
+  str::append park-prefix [str::append [nat-digits-of p] ":"]
+
+spec park-key-for Nat String -> String
+defn park-key-for [p gid]
+  str::append [park-prefix-for p] gid
+
+;; The gift-id parked against promise `p`, if any. One prefix test per entry.
+spec parked-gid-loop [List GiftEntry] String -> [Option String]
+defn parked-gid-loop [entries pfx]
+  match entries
+    | nil -> [none String]
+    | [cons e rest] ->
+        match [str::starts-with? [ge-key e] pfx]
+          | true  -> some [str::slice [ge-key e] [str::length pfx] [str::length [ge-key e]]]
+          | false -> parked-gid-loop rest pfx
+
+spec parked-gid-for Nat BridgeState -> [Option String]
+defn parked-gid-for [p st]
+  parked-gid-loop [bs-gifts st] [park-prefix-for p]
+
+;; Settle a parked promise now that its gift has been deposited. Consumes both
+;; the park entry and the gift, and counts the export the peer now holds.
+spec do-settle-parked Nat String Nat Vat BridgeState -> BridgeStep
+defn do-settle-parked [p gid xid v st]
+  bridge-step [resolve-promise p [syrup-tagged "desc:import-object" [syrup-nat xid]] v]
+    [bs-remove-gift [park-key-for p gid]
+      [bs-remove-gift gid [bs-incr-export xid st]]]
+
+spec settle-parked-with-gid Nat String Vat BridgeState -> BridgeStep
+defn settle-parked-with-gid [p gid v st]
+  match [bs-lookup-gift gid st]
+    | none     -> bridge-step v st          ;; deposit still has not arrived
+    | some xid -> do-settle-parked p gid xid v st
+
+spec settle-parked Nat Vat BridgeState -> BridgeStep
+  :doc "If `p` is a parked withdrawal whose gift has since been deposited, resolve it."
+defn settle-parked [p v st]
+  match [parked-gid-for p st]
+    | none     -> bridge-step v st
+    | some gid -> settle-parked-with-gid p gid v st
+
+;; <op:deliver <desc:export rm> ['fulfill <desc:import-promise P>] f f>
+spec withdraw-promise-bytes Nat Nat -> String
+defn withdraw-promise-bytes [rm-pos p]
+  listener-notify-bytes rm-pos [syrup-list [cons [syrup-symbol "fulfill"] [cons [syrup-tagged "desc:import-promise" [syrup-nat p]] [nil SyrupValue]]]]
+
+spec park-reply Nat String String Nat Vat BridgeState -> BridgeStep
+defn park-reply [rm-pos gid ident p v2 st]
+  bridge-step v2
+    [bs-append-pending-out [withdraw-promise-bytes rm-pos p]
+      [bs-add-gift [park-key-for p gid] zero
+        [bs-add-gift ident zero st]]]
+
+;; The receive is consumed at PARK time, not at settle time: it has been acted
+;; upon, so a replay of the same (session, side, count) must still be refused.
+spec withdraw-park Nat String String Vat BridgeState -> BridgeStep
+defn withdraw-park [rm-pos gid ident v st]
+  let alloc := [fresh-promise v]
+    park-reply rm-pos gid ident [alloc-id alloc] [alloc-vat alloc] st
+
 spec do-withdraw Nat String String Nat Vat BridgeState -> BridgeStep
 defn do-withdraw [rm-pos gid ident xid v st]
   bridge-step v
@@ -1452,7 +1544,9 @@ defn do-withdraw [rm-pos gid ident xid v st]
 spec withdraw-known-gid Nat String String Vat BridgeState -> BridgeStep
 defn withdraw-known-gid [rm-pos gid ident v st]
   match [bs-lookup-gift gid st]
-    | none     -> bridge-step v [bs-append-pending-out [withdraw-break-bytes rm-pos "no-such-gift"] st]
+    ;; Not a failure: the gifter may simply not have deposited yet. Answer with
+    ;; a promise and park it (see § PARKED withdrawals above).
+    | none     -> withdraw-park rm-pos gid ident v st
     | some xid -> do-withdraw rm-pos gid ident xid v st
 
 ;; A handoff-receive is SINGLE-USE. Consuming the gift is not enough on its
@@ -1710,6 +1804,12 @@ defn incoming-deliver [tgt args ap rm v st]
                 | some rm-pos -> deliver-resolve-me tgt args rm-pos v st
 
 
+spec listen-after-settle Nat Nat BridgeStep -> BridgeStep
+defn listen-after-settle [tgt resolver step]
+  bridge-step [bridge-step-vat step]
+    [bs-handle-listen-with-late-fire tgt resolver
+      [bridge-step-vat step] [bridge-step-state step]]
+
 ;; Phase 53: captp-incoming-with-state's match arms are the
 ;; concrete realization of the `CapTPSession` session type
 ;; (see `prologos::ocapn::protocols`):
@@ -1765,8 +1865,12 @@ defn captp-incoming-with-state
       ;; sees it AND stage an immediate notification on pending-out
       ;; — without this, a "late" op:listen never fires because the
       ;; promise's pump pass already happened.
-      bridge-step v
-        [bs-handle-listen-with-late-fire tgt resolver v st]
+      ;;
+      ;; Phase 59b p6: settle a PARKED withdrawal first. This step is on the
+      ;; receiver's connection, and by now the gift may have been deposited on
+      ;; the gifter's — settling here makes the promise settled, so the
+      ;; late-fire path below notifies without any cross-connection write.
+      listen-after-settle tgt resolver [settle-parked tgt v st]
   | [op-gc-export pos cnt] v st ->
       ;; Phase 36: peer dropped k references to our export N.
       ;; Decrement exports-refcount[N] by k (saturating at 0) AND
