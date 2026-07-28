@@ -25,10 +25,10 @@ rulings, censuses and test delta live in its own section.
 | **P1** | **Lexical seams + the retirement batch** — brace/colon adjacency, keyword-trailing `*`; dot-key + `.*name` + `m[:a]` retirements; `x[]`/`_[sel]`/`.-1` rejections; round-trip pins. Answers spec Q8 | ⬜ | §5.P1 · censuses fresh from `wf_2830f0aa-9a4` |
 | **P2** | **Grade-1 core** — `.k`/`.N` access + bare-path extraction, on the landed P2 substrate | ⬜ | §5.P2 · `.N` has an end-to-end head start via `(get expr N)` |
 | **P3** | **Blocks** — `x{…}`, projection-by-default, `^` (3 continuations), L4 sort homogeneity, **HONEST NESTING (n-tuples at every n — ruled 2a)**, **STRICT merge** (the §3.6 waypoint) | ⬜ | §5.P3 · Q2 gate RESOLVED (2c: carrier order, thesis-derived) |
-| **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) | ⬜ | §5.P4 · node strategy + row-map depth = Batch-4 rulings |
+| **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | ⬜ | §5.P4 · step-list node (4b) · per-field row-map (4c) |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | §5.P5 · L1–L5 law battery |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | §5.PX · position flexible |
-| **P6** | **Demand semantics** — the §1.3-vs-POL.10 staging decision, then (if in) lazy leaves | ⬜ | §5.P6 · decision due by P3 |
+| **P6** | **Demand semantics** — RULED STAGED (4a): spec tag amended, X.close gated; lazy-leaf design = own post-v1 phase | ⬜ | §5.P6 |
 | **X.close** | **MANDATORY** — bench matrix · DEFERRED triage · doc-truth sweep · memory fold · **Stage-5 PIR** | ⬜ | §5.X · the track does not flip ✅ without the PIR |
 
 *Per `workflow.md`: tests are PER-PHASE (each phase's section states its own
@@ -218,13 +218,53 @@ adaptation is recorded here with its reason.
   would contradict the spec's foundation. Corpus markers transcribe to champ
   order (deterministic per key set). §5.P3's gate is REMOVED.
 
+**The Batch-3/4 rulings [owner, 2026-07-28 — all as recommended]:**
+- **3a — `.{` ADOPTED** as the mid-path sub-block: a `dot-lbrace` compound
+  token at the dot band (the `dot-lparen` precedent; prefix-disjoint; P1 owns
+  the THREE-layer opener co-update). `.` uniformly means DESCEND.
+- **3b — brace adjacency with HEAD-SYMBOL PRECEDENCE**: known reader-form
+  heads (`racket{…}`, future language ids) recognized BEFORE the select-block
+  rule; spaced `{…}` is never a block. P1 census = three buckets (spaced ·
+  adjacent reader-form head · adjacent select-block); the 10 FFI sites +
+  `test-foreign-block.rkt` become round-trip pins; guiding diagnostic on
+  selecting from a reader-form head.
+- **3c — multi-digit `:N`: lean keyword-index token, DECIDED BY PROBE at
+  P1's Q8 review** (`{:10 v}` probe + both-modes `:digits` census).
+- **3d — colon seam resolved by POSITION**: broadcast is expression-position
+  only; annotation colons live in binder/head contexts. P1 census VERIFIES
+  the disjointness (Rel T1 typed-var sites `?x:Int` especially).
+- **4a — demand semantics STAGED**: spec §1.3 tag amended to
+  [ADOPTED — staged]; an X.close gate row added; lazy leaves = own post-v1
+  design (§5.P6). The static half (copattern typing never forces) is true at
+  v1 regardless.
+- **4b — the STEP-LIST NODE**: one selection node family carrying the step
+  list (keys · ordinals · broadcast markers · `^` continuations · blocks ·
+  disclose). Typing WALKS the steps (per-position tuple exactness, the union
+  meet, grade-layer counting structural — L1 fusion becomes a fact, not a
+  rewrite). Reduction LOWERS per step onto shipped machinery (`get`,
+  `pvec-map`, `map-map-vals`). `expr-broadcast-get` RETIRES with `.*name`
+  rather than being repaired. The P3 mini-audit prices the struct before code.
+- **4c — row-map typing PER-FIELD in v1**: broadcast bodies are selector
+  steps, not arbitrary terms — per-field is cheap; the weakening arrives
+  (explicitly) with first-class selectors. The `def := [map-map-vals …]`
+  qtt lying-diagnostic (pre-existing) gets a P4 probe.
+- **4d — dyn-tail: SUPPORT-BOUNDEDNESS carries** (the old surface's surviving
+  D3-M5 principle): closed row → per-field · `(Map K V)` → uniform V→V′ ·
+  dyn tail → loud static error naming the remedies (seal / validate /
+  annotate).
+- **Q5 — DISCLOSE `<` ADOPTED IN v1 [owner]**, bare form, spelled `:<` in
+  broadcast composition; lands at P4 (in-step). ⚠ P1 grammar obligation:
+  `<` is a WS angle-group opener (the mixfix-swallow family) — `users:<{…}`
+  gets a mandatory probe row in Q8.
+- **Q4** — `*` stays vector-only in v1 (spec's own answer). **Q6/Q7** — moot
+  under P3's strict waypoint; deferred to P5's mini-audit.
+
 **Open, GATING (spec §8):**
-- **Q2 — map output-key ordering** in keyed blocks (source order vs selection
-  order): gates §5.P3 (the first phase testing keyed-block result equality).
-- Q4 (`*` on Map layers — v1: vector-only), Q5 (`<` disclose in/out),
-  Q6 (idempotent self-merge L7), Q7 (spine identity residuals),
-  Q8 (the precise lexical grammar — §5.P1's deliverable).
-- Keyword-projection disposition (§2.3). Demand-semantics staging (§2.2).
+- **Q8** (the precise lexical grammar) — §5.P1's own DELIVERABLE, reviewed
+  with the owner before landing; carries the 3c probe decision + the `:<`
+  angle-opener row.
+- Keyword-projection disposition (§2.4) — revisit when P4 lands broadcast
+  (likely subsumed by `users:name`).
 
 **Carried from the P3 mini-audit [owner, 2026-07-28], still standing:**
 - `#:keyword` retires with the `#.:name` twin (`#.name` survives).
@@ -449,8 +489,11 @@ anything claims v1-complete. Status: ⬜.
 
 Bench matrix (feature microbench + E2E per testing.md — priced against the P2
 baseline) · DEFERRED triage · doc-truth sweep (incl. the old doc's banner, the
-map tutorial, `prologos-syntax.md`'s selection section) · memory fold ·
-**Stage-5 PIR** (the track does not flip ✅ without it). Status: ⬜.
+map tutorial, `prologos-syntax.md`'s selection section) · **the §1.3 demand
+GATE (ruling 4a): v1 may not be declared complete without the staged-demand
+status re-stated in the PIR and the lazy-leaf phase chartered or explicitly
+re-deferred by the owner** · memory fold · **Stage-5 PIR** (the track does not
+flip ✅ without it). Status: ⬜.
 
 ---
 

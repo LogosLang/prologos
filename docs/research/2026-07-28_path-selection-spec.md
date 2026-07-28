@@ -47,7 +47,7 @@ The idiom `ssl^.enabled^ssl` (dissolve two levels, resurrect one name) is the
 canonical demonstration: real reshaping wants to keep some ancestry and
 dissolve the rest *in the same query*.
 
-### 1.3 Selection is demand **[ADOPTED]**
+### 1.3 Selection is demand **[ADOPTED — staged; runtime laziness lands per D4 §5.P6, gated at X.close]**
 
 Map leaves may be computed (`[now]`, `[env "DATABASE_URL"]`). A selection is a
 *demand specification*: unselected computed leaves are never forced. In the
@@ -138,7 +138,7 @@ spine: semantically `fmap g ∘ fmap f = fmap (g ∘ f)`. Surface consequence:
 same outer vector. This law is the reason the layer-counting rule of §3.1
 speaks of *unfused* ω steps.
 
-**3.2.3 Map-generic broadcast.** **[RECOMMENDED — awaiting ruling; §8 Q1]**
+**3.2.3 Map-generic broadcast.** **[ADOPTED — owner 2026-07-28 (was §8 Q1)]**
 `x:s` where `x` is a Map: apply `s` to every value, preserve the keys.
 
 ```prologos
@@ -251,7 +251,7 @@ can become a meaning later without breaking a working program — get the error
 surface right first. Errors for the mergeable-but-unimplemented cases SHOULD
 print the factored (normalized) spelling as the suggested rewrite.
 
-### 3.7 Disclose `<` **[PROPOSED — bare form only]**
+### 3.7 Disclose `<` **[ADOPTED v1 — bare form only; owner 2026-07-28 (was §8 Q5)]**
 
 An in-step unwrap: `users:<{0.userName^}` ≡ per element, apply the block, take
 `.0`. Its virtue is positional: it lives *inside* the step and therefore never
