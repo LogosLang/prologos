@@ -3026,3 +3026,46 @@ into a helper. Do not carry `defn`-body layout into an arm. Related to
 prologos-syntax.md § "Keep multi-arg applications on a single line", but that
 entry is about arguments being re-read as sibling forms; this is the same
 family with a different symptom and a diagnostic that names neither.
+
+---
+
+### #51 — CI ran an INTERPRETED compiler, and the interop gate failed rather than merely lagged (2026-07-28, real bug, **CI-only failure with no local repro**)
+
+**Symptom.** The OCapN interop gate reported **14 passed / 1 errored** on CI
+while the same commit passed **17/17** locally, on the same test list. Every
+upstream test took 27–45 s on CI against ~0.14 s locally — a 200× gap, which
+is not what general CI slowness looks like (the unit suite runs ~2.3× slower
+there).
+
+**Cause.** Racket CS has a default compile limit of 10000; the compiler's giant
+match functions (`whnf`/`nf` ~990 arms, `shift`/`subst` ~340) exceed it and
+**fall back to the interpreter**. `tools/run-affected-tests.rkt` and
+`tools/bench-ab.rkt` `putenv` `PLT_CS_COMPILE_LIMIT` for themselves, but CI
+precompiles with a bare `raco make`, which does not — and the `.zo` that step
+produces is interpreted for every step after it.
+
+**Why it FAILS rather than lags.** Upstream's tests carry their own wall-clock
+budgets (15 s for a GC round trip), and the Racket server spends nearly all its
+time in reduction. Measured on this suite:
+
+| build | result | wall |
+|---|---|---|
+| compiled | 17/17 | 13.6 s |
+| interpreted | 14 passed + 1 error | ~10 min |
+
+**How it was confirmed.** Not by inference from the timings — by rebuilding
+locally WITHOUT the limit, which reproduced **14 / 1 exactly**: same test
+erroring, same counts. That is what turned "CI is slow" into a diagnosis.
+
+**The trap while confirming it.** `raco make` short-circuits on a source SHA,
+so re-running it with the env var set does NOT rebuild — the interpreted `.zo`
+survives and the "fix" appears not to work. You must `rm -rf compiled` to force
+a true recompile. This is the same hazard `testing.md` documents for A/B
+measurement; it bites just as hard when restoring a build.
+
+**Rule.** A CI-only failure with no local reproduction is a reason to check the
+BUILD ENVIRONMENT before the code. An interpreted build is a different program,
+not a slower one. Fixed by setting `env: PLT_CS_COMPILE_LIMIT: 1000000` at job
+level in all three workflows (job level, because the precompile STEP is what
+needs it) and exporting it from `run-ocapn-test-suite.sh` so the gate does not
+depend on its caller.
