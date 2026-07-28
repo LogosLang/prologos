@@ -749,11 +749,28 @@ currently passes for the wrong reason (we break on everything), so it will
 need a real Ed25519 verification once withdrawals start succeeding — the
 `crypto-ffi` primitives are already in use for handshake signing.
 
-Also fixed while here: `test-ocapn-bridge.rkt` had grown to 147 test-cases and
-was the single file timing out at the runner's 120s limit on CI. Split into
-`test-ocapn-bridge.rkt` (69) + `test-ocapn-bridge-02.rkt` (78), ~38s each.
-`.claude/rules/testing.md` asks for ~20 cases / ~30s per file for exactly this
-reason.
+Also attempted while here, and REVERTED: splitting `test-ocapn-bridge.rkt`
+(147 test-cases), which was the one file timing out at the runner's 120s
+per-file limit on CI.
+
+**The split made CI worse — 1 timeout became 2, with BOTH halves over the
+limit**, each costing more on CI than the whole file had. The dominant cost is
+PER FILE, not per test: every file re-elaborates the OCapN module chain through
+its shared fixture, so splitting paid that fixed cost twice. Locally the split
+measured as neutral (38s + 39s against 73s unsplit), which is exactly why it
+looked free and got pushed — the fixed cost is small on this machine and large
+on a GitHub runner, and I generalised from the local number without checking
+the ratio held.
+
+The real lever already existed and was merely unreachable: `batch-worker.rkt`
+has always supported `--file-timeout`, but `run-affected-tests.rkt` never
+passed it through, so the 120s default could not be raised from CI. Plumbed it
+through and set `--file-timeout 300` in `test.yml`. That default dates from
+when "slowest normal tests ~17s"; these tests are legitimately heavier.
+
+`.claude/rules/testing.md`'s ~20-cases/~30s guidance stays right in general —
+but splitting only helps once the fixed per-file cost is small, and here it is
+not.
 
 ### Cross-connection gift store — design note (next piece)
 
