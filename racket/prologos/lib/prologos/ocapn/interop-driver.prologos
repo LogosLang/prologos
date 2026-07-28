@@ -16,6 +16,9 @@ ns prologos::ocapn::interop-driver
 require [prologos::ocapn::captp-core :refer [ConnectionState empty-connection
                                               connection-step conn-step-state
                                               conn-step-outbound conn-state
+                                              conn-vat conn-bridge-state
+                                              conn-emitted conn-aborted?
+                                              GiftEntry bs-gifts bs-set-gifts
                                               bridge-state-empty]]
         [prologos::ocapn::vat        :refer [Vat vat Actor actor actor-table-set
                                              promise-table-set]]
@@ -36,6 +39,14 @@ foreign racket "ocapn-conn-ffi.rkt"
   [ocapn-conn-stash :as conn-stash : Nat -> ConnectionState -> Bool]
 foreign racket "ocapn-conn-ffi.rkt"
   [ocapn-conn-fetch :as conn-fetch : Nat -> ConnectionState]
+
+;; The exporter-global gift table (see ocapn-gift-ffi.rkt). A third-party
+;; handoff DEPOSITS on the gifter's connection and WITHDRAWS on the receiver's,
+;; so this one table has to outlive any single connection.
+foreign racket "ocapn-gift-ffi.rkt"
+  [ocapn-gift-stash :as gift-stash : Nat -> [List GiftEntry] -> Bool]
+foreign racket "ocapn-gift-ffi.rkt"
+  [ocapn-gift-fetch :as gift-fetch : Nat -> [List GiftEntry] -> [List GiftEntry]]
 
 spec concat-frames [List String] -> String
   :doc "Concatenate already-encoded outbound wire frames (raw-syrup is self-delimiting, so back-to-back frames need no separator)."
@@ -146,11 +157,30 @@ defn emit-after-stash [stashed outbound]
     | true  -> [concat-frames outbound]
     | false -> [concat-frames outbound]
 
+;; Seed a connection's bridge state with the exporter-global gift table, so a
+;; withdraw arriving on THIS connection can see a deposit made on another one.
+spec with-global-gifts ConnectionState -> ConnectionState
+defn with-global-gifts [cs]
+  [conn-state [conn-vat cs]
+              [bs-set-gifts [gift-fetch 0N [nil GiftEntry]] [conn-bridge-state cs]]
+              [conn-emitted cs]
+              [conn-aborted? cs]]
+
+;; Force the publish side-effect (matching stashed = the Bool result) and hand
+;; back the state, so the gift table this step produced is visible to every
+;; other connection.
+spec publish-gifts ConnectionState -> ConnectionState
+defn publish-gifts [cs]
+  match [gift-stash 0N [bs-gifts [conn-bridge-state cs]]]
+    | true  -> cs
+    | false -> cs
+
 spec run-step Nat CapTPOp ConnectionState -> String
 defn run-step [cid op cs]
-  let step := [connection-step op cs]
-    emit-after-stash [conn-stash cid [conn-step-state step]]
-                     [conn-step-outbound step]
+  let step := [connection-step op [with-global-gifts cs]]
+    let cs2 := [publish-gifts [conn-step-state step]]
+      emit-after-stash [conn-stash cid cs2]
+                       [conn-step-outbound step]
 
 spec step-connection Nat String -> String
   :doc "Process one inbound wire frame (hex-encoded) for connection

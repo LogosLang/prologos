@@ -61,6 +61,18 @@ SELECTED = [
     ("tests.op_abort", "OpAbortTest", [
         "test_abort_before_setup",
     ]),
+    # Third-party handoff, EXPORTER side (Phase 59b part 5). Both sessions are
+    # the suite dialling us — the gifter and the receiver are different peers —
+    # so this needs no outbound-connection capability, only a gift table that
+    # outlives a single connection (ocapn-gift-ffi.rkt).
+    #
+    # The other three in this class each need one more distinct feature:
+    #   wait_deposit_gift        -> park a withdrawal until the deposit lands
+    #   invalid_handoff_count    -> per-(session, side) handoff-count tracking
+    #   invalid_signature        -> real Ed25519 verification of the receive
+    ("tests.third_party_handoffs", "HandoffRemoteAsExporter", [
+        "test_valid_handoff",
+    ]),
     # op:listen (Phase 59b part 4). Gated on the promise-resolver object
     # (swiss-num IokCxYmMj04nos2JN1TDoY1bT8dXh6Lr), which is now PRE-SEEDED
     # per connection rather than created on demand: every upstream test that

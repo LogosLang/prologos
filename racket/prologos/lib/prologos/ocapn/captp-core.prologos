@@ -787,6 +787,16 @@ defn gift-remove-loop [entries gid]
           | true  -> gift-remove-loop rest gid
           | false -> [cons e [gift-remove-loop rest gid]]
 
+;; Replace the whole gift table. The gift table is the ONE piece of
+;; exporter-GLOBAL state in the protocol — a third-party handoff deposits on
+;; the gifter's session and withdraws on the RECEIVER's, which is a different
+;; connection — so the driver seeds it in and publishes it back out around each
+;; step. captp-core stays pure; the global lives at the FFI layer.
+spec bs-set-gifts [List GiftEntry] BridgeState -> BridgeState
+defn bs-set-gifts
+  | gs2 [bridge-state ls es as qs p oqs ir er pm _] ->
+      bridge-state ls es as qs p oqs ir er pm gs2
+
 spec bs-remove-gift String BridgeState -> BridgeState
   :doc "Drop a gift entry by gift-id, after a withdraw consumes it."
 defn bs-remove-gift
