@@ -196,6 +196,23 @@ defn mk-handshake-bytes [ver transport address host port]
     let location-bytes := [ocapn-peer-bytes transport address host port]
       start-session-bytes ver kp location-bytes
 
+;; Same, but with the keypair supplied rather than generated and thrown away.
+;;
+;; A third-party handoff has to SIGN a desc:handoff-receive with the same key
+;; the peer named as the receiver -- which is the key we handshake with. The
+;; convenience wrapper above discards its handle, so a caller that needs to
+;; sign later cannot use it. This is the version the test server uses.
+spec handshake-bytes-with-key String Nat String String String String -> String
+defn handshake-bytes-with-key [ver kp transport address host port]
+  start-session-bytes ver kp [ocapn-peer-bytes transport address host port]
+
+;; Sign an arbitrary payload and return the 64 raw signature bytes (r ++ s).
+;; `sign-location` above wraps its argument in the my-location envelope; a
+;; handoff-receive is signed BARE, over exactly the record bytes.
+spec sign-bytes Nat String -> String
+defn sign-bytes [kp payload]
+  sign-raw kp payload
+
 ;; ----------------------------------------
 ;; Incoming handshake validation — Phase 58.c / 58.d
 ;; ----------------------------------------

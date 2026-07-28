@@ -90,6 +90,13 @@ SELECTED = [
         "test_handoff_receive_invalid_handoff_count",
         "test_handoff_receive_invalid_signature",
     ]),
+    # Third-party handoff, RECEIVER side (Phase 59b part 13). A gifter hands us
+    # a signed handoff-give; we dial the exporter it names and withdraw the
+    # gift there with a handoff-receive signed by our own session key.
+    ("tests.third_party_handoffs", "HandoffRemoteAsReciever", [
+        "test_valid_handoff_without_prior_connection",
+        "test_valid_handoff_with_prior_connection",
+    ]),
     # op:listen (Phase 59b part 4). Gated on the promise-resolver object
     # (swiss-num IokCxYmMj04nos2JN1TDoY1bT8dXh6Lr), which is now PRE-SEEDED
     # per connection rather than created on demand: every upstream test that

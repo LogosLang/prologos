@@ -150,12 +150,27 @@
     (error 'extract-latin1-bytes "couldn't extract String from: ~s" prologos-result))
   (string->bytes/latin-1 (read (open-input-string (cadr m)))))
 
+;; ONE keypair for the process, held rather than discarded.
+;;
+;; `mk-handshake-bytes` generates a keypair inside a `let` and drops the
+;; handle, so nothing downstream can sign. A third-party handoff must sign a
+;; desc:handoff-receive with the same key the gifter named as the receiver --
+;; which is the key we handshake with -- so the handle has to outlive the
+;; handshake.
+(define keypair-handle
+  (let ([r (last (run-prologos "(eval (gen-keypair-raw unit))"))])
+    (or (and (string? r)
+             (let ([m (regexp-match #px"^([0-9]+)N? : Nat$" r)])
+               (and m (string->number (cadr m)))))
+        (error 'run-ocapn-test-server "could not read keypair handle from: ~s" r))))
+
 (define start-session-bytes
   (extract-latin1-bytes
    (last
     (run-prologos
-     (format "(eval (mk-handshake-bytes ~s \"tcp-testing-only\" \"0123456789abcdef0123456789abcdef\" \"127.0.0.1\" ~s))"
+     (format "(eval (handshake-bytes-with-key ~s ~aN \"tcp-testing-only\" \"0123456789abcdef0123456789abcdef\" \"127.0.0.1\" ~s))"
              (version-arg)
+             keypair-handle
              (number->string (port-arg)))))))
 
 (printf "ocapn-test-server: built signed start-session (~a bytes) via prologos::ocapn::handshake~n"
@@ -307,6 +322,69 @@
                 #"\"" r #">"))
 
 ;; ========================================
+;; Third-party handoff: the RECEIVER side
+;; ========================================
+;;
+;; A gifter hands us `<desc:sig-envelope <desc:handoff-give …> sig>`. We are
+;; expected to connect to the exporter the give names and withdraw the gift
+;; there, presenting a desc:handoff-receive signed with the key the gifter
+;; named as the receiver — which is the key we handshake with, hence the
+;; process-wide keypair above.
+;;
+;; The session id is defined by upstream (utils/captp.py:125-146) as
+;;   SHA256(SHA256("prot0" ++ min(sideA,sideB) ++ max(sideA,sideB)))
+;; and the receiving-side is our own side-id. Both are computable the moment
+;; the exporter's op:start-session arrives; nothing else is needed from it.
+
+(define (session-id-of their-side)
+  (define lo (if (bytes<? our-side-id their-side) our-side-id their-side))
+  (define hi (if (bytes<? our-side-id their-side) their-side our-side-id))
+  (sha256-bytes (sha256-bytes (bytes-append #"prot0" lo hi))))
+
+(define (syrup-bytestring b)
+  (bytes-append (string->bytes/latin-1 (number->string (bytes-length b))) #":" b))
+
+(define (syrup-symbol s)
+  (define b (string->bytes/latin-1 s))
+  (bytes-append (string->bytes/latin-1 (number->string (bytes-length b))) #"'" b))
+
+;; `[sig-val [eddsa [r 32:…] [s 32:…]]]` — the same gcrypt shape we parse when
+;; verifying, built here for the signing direction.
+(define (gcrypt-sig sig64)
+  (bytes-append #"[" (syrup-symbol "sig-val")
+                #"[" (syrup-symbol "eddsa")
+                #"[" (syrup-symbol "r") (syrup-bytestring (subbytes sig64 0 32)) #"]"
+                #"[" (syrup-symbol "s") (syrup-bytestring (subbytes sig64 32 64)) #"]"
+                #"]]"))
+
+(define (sign-with-our-key payload)
+  (extract-latin1-bytes
+   (last (run-prologos (format "(eval (sign-bytes ~aN ~s))"
+                               keypair-handle
+                               (bytes->string/latin-1 payload))))))
+
+;; <op:deliver <desc:export 0> ['withdraw-gift <sig-envelope receive sig>] f f>
+(define (withdraw-gift-frame their-side signed-give)
+  (define receive
+    (bytes-append #"<" (syrup-symbol "desc:handoff-receive")
+                  (syrup-bytestring (session-id-of their-side))
+                  (syrup-bytestring our-side-id)
+                  #"0+"
+                  signed-give
+                  #">"))
+  (define env
+    (bytes-append #"<" (syrup-symbol "desc:sig-envelope")
+                  receive (gcrypt-sig (sign-with-our-key receive)) #">"))
+  (bytes-append #"<" (syrup-symbol "op:deliver")
+                #"<" (syrup-symbol "desc:export") #"0+>"
+                #"[" (syrup-symbol "withdraw-gift") env #"]"
+                #"ff>"))
+
+;; Gives we have been handed and not yet withdrawn, keyed by the exporter
+;; location we must dial to redeem them.
+(define pending-gives (make-hash))
+
+;; ========================================
 ;; Outbound connections
 ;; ========================================
 ;;
@@ -378,14 +456,50 @@
               [(or (eof-object? frame) (not frame))
                (printf "ocapn-test-server: outbound closed after ~a frames (conn ~a)~n" n cid)]
               [(zero? n)
-               ;; their start-session; validate but do not answer -- we already sent ours.
+               ;; Their start-session. If we dialled this peer to redeem a
+               ;; handoff-give, everything the receive needs is now available:
+               ;; their side-id comes out of this very frame.
+               (let ([env (hash-ref pending-gives (location-of-start-session frame) #f)])
+                 (when env
+                   (hash-remove! pending-gives (location-of-start-session frame))
+                   (define w (withdraw-gift-frame (side-id-of-start-session frame) env))
+                   (printf "ocapn-test-server: withdrawing gift (~a bytes)~n" (bytes-length w))
+                   (write-frame dout w)))
                (loop (add1 n))]
               [else
+               (note-handoff-give! frame)
                (define out (drive-step cid frame))
                (when (> (bytes-length out) 0) (write-frame dout out))
                (loop (add1 n))]))
           (close-input-port din)
           (close-output-port dout))))]))
+
+;; A signed handoff-give anywhere in an inbound frame means we are the
+;; receiver. Found by scanning for the record marker rather than by walking
+;; the message: the give can sit at any depth in the args, and the marker is
+;; unambiguous — `desc:handoff-give` appears nowhere else on the wire.
+(define give-marker #"<17'desc:sig-envelope<17'desc:handoff-give")
+
+(define (find-subbytes hay needle [from 0])
+  (let loop ([i from])
+    (cond [(> (+ i (bytes-length needle)) (bytes-length hay)) #f]
+          [(equal? (subbytes hay i (+ i (bytes-length needle))) needle) i]
+          [else (loop (add1 i))])))
+
+(define (note-handoff-give! frame)
+  (define i (find-subbytes frame give-marker))
+  (when i
+    (define env (subbytes frame i (syrup-skip frame i)))
+    ;; field 0 of the envelope is the give; field 1 of the give is the
+    ;; exporter location, which is also the key we dial on.
+    (define give (record-field env 0))
+    (define loc (record-field give 1))
+    (printf "ocapn-test-server: handoff-give received; exporter location ~a bytes~n"
+            (bytes-length loc))
+    (hash-set! pending-gives loc env)
+    (ocapn-dial-request (bytes->string/latin-1
+                         (bytes-append #"<" (syrup-symbol "ocapn-sturdyref")
+                                       loc (syrup-bytestring #"handoff") #">")))))
 
 (define (drain-dials!)
   (for ([sr (in-list (ocapn-dial-drain '()))])
@@ -408,6 +522,7 @@
            (when (getenv "OCAPN_FRAME_HEX")
              (printf "ocapn-test-server: FRAME-HEX conn ~a n ~a: ~a~n"
                      cid (+ n 1) (bytes->hex-string frame)))
+           (note-handoff-give! frame)
            (define out (drive-step cid frame))
            (printf "ocapn-test-server: conn ~a frame ~a (~a in / ~a out bytes)~n"
                    cid (+ n 1) (bytes-length frame) (bytes-length out))
