@@ -3963,7 +3963,23 @@
     [(expr-int-lt a b) (expr-int-lt (nf a) (nf b))]
     [(expr-int-le a b) (expr-int-le (nf a) (nf b))]
     [(expr-int-eq a b) (expr-int-eq (nf a) (nf b))]
-    [(expr-from-nat n) (expr-from-nat (nf n))]
+    ;; from-nat must RE-FIRE its rule after normalizing the argument, not just
+    ;; rebuild the node. `whnf` cannot see through `(suc <unreduced>)` — it does
+    ;; not go under constructors — so a from-nat over a COMPUTED Nat arrives
+    ;; here still stuck, with an argument that only `nf` can turn into a
+    ;; numeral. Rebuilding blindly left it stuck forever.
+    ;;
+    ;; The old code was silent in the worst way: it survived to the FFI
+    ;; boundary and died there as "Cannot marshal to integer — not an Int
+    ;; literal: #(struct:expr-from-nat #(struct:expr-nat-val 4))", naming a
+    ;; fully-reduced argument and pointing at the marshaller, which is correct.
+    ;; It only bit for values built by arithmetic: `from-nat 1N` is a literal,
+    ;; and `from-nat (suc zero)` reduces under whnf, so every small hand-written
+    ;; case worked and the whole suite was green.
+    [(expr-from-nat n)
+     (let* ([n* (nf n)]
+            [k (nat-value n*)])
+       (if k (expr-int k) (expr-from-nat n*)))]
 
     ;; Rat normalization
     [(expr-Rat) e]
