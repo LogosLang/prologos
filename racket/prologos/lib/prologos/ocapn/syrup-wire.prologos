@@ -84,15 +84,31 @@ defn encode [v]
     | syrup-bool b       -> match b | true -> "t" | false -> "f"
     | syrup-nat n        -> str::append [nat-digits n] "+"
     | syrup-int i        -> str::append [int-abs-digits i] [int-sign-char i]
+    ;; String / symbol hold TEXT: the prefix is the UTF-8 byte length, per spec.
     | syrup-string s     -> str::append [str::from-int [str::bytes-length s]] [str::append "\"" s]
     | syrup-symbol s     -> str::append [str::from-int [str::bytes-length s]] [str::append "'" s]
-    | syrup-bytes b      -> str::append [str::from-int [str::bytes-length b]] [str::append ":" b]
+    ;; But `syrup-bytes` holds RAW BYTES, and our representation smuggles them
+    ;; as one code point per byte (Latin-1) — that is what `hex-to-bytes` and
+    ;; the frame FFI hand us, and what `decode-bytes-tail` slices back out by
+    ;; CODE POINT. So here the byte length is `str::length`, and re-encoding
+    ;; through `str::bytes-length` would re-measure those code points as if
+    ;; they were text.
+    ;;
+    ;; The two agree on ASCII, which is why this survived every test we had:
+    ;; all of them used ASCII payloads. They diverge on any byte >= 0x80 — i.e.
+    ;; on exactly the cryptographic blobs (public keys, Ed25519 r/s) that
+    ;; third-party handoffs consist of. Measured on a real 32-byte key: 32 code
+    ;; points but 51 UTF-8 bytes, so we emitted `51:` in front of 32 bytes and
+    ;; no peer could parse the frame.
+    ;;
+    ;; This was an OUTBOUND bug, not merely a round-trip one — it just had not
+    ;; been reached yet, because nothing we emit today carries a high byte.
+    | syrup-bytes b      -> str::append [str::from-int [str::length b]] [str::append ":" b]
     | syrup-list xs      -> str::append "[" [str::append [encode-many encode xs] "]"]
     | syrup-dict xs      -> str::append "{" [str::append [encode-many encode xs] "}"]
     | syrup-tagged tag p -> str::append "<" [str::append [encode [syrup-symbol tag]] [str::append [encode p] ">"]]
     | syrup-refr _       -> ""
     | syrup-promise _    -> ""
-    | syrup-dict    _   -> ""
 
 ;; ===========================================================
 ;; Encodability check
@@ -162,6 +178,70 @@ defn encode-record [label args]
   str::append "<"
     [str::append [encode [syrup-symbol label]]
       [str::append [encode-many encode args] ">"]]
+
+;; ===========================================================
+;; Re-encoder (splicing) — reproduce the bytes we DECODED
+;; ===========================================================
+;;
+;; `encode` is the OUTBOUND encoder: it renders a value we built. This is the
+;; INBOUND one: it renders a value we decoded, back to the bytes it came from.
+;; They differ, and the difference is not cosmetic.
+;;
+;; The decoder collapses a multi-arg record `<label a b c>` into
+;; `syrup-tagged label (syrup-list (a b c))` — the same shape it would produce
+;; for a genuine single-list-argument record `<label [a b c]>`. So AFTER
+;; decoding, those two frames are indistinguishable, and no single encoder can
+;; restore both. `encode` picks the second reading (payload is one value);
+;; `re-encode` picks the first (payload is the argument sequence, spliced).
+;;
+;; Measured on the 716-byte third-party-handoff withdraw frame: `encode`
+;; round-trips 851 -> 863 bytes, +2 per multi-arg record, 6 such records in the
+;; frame. `re-encode` is byte-identical (see tests/test-ocapn-syrup-wire.rkt).
+;;
+;; This matters for exactly one reason: signature verification. The peer signs
+;; the BYTES of an inner `<desc:handoff-receive …>`, so we must reproduce them
+;; before we can check anything. Getting it wrong is worse than not having it —
+;; every signature would fail as BAD SIGNATURE rather than as an error, which
+;; looks exactly like correct rejection while rejecting everything.
+;;
+;; Do NOT "fix" `encode` to splice: outbound frames that legitimately carry a
+;; single list argument would be corrupted. Two readings, two functions.
+
+spec re-encode-payload [SyrupValue -> String] SyrupValue -> String
+  :doc "Render a record payload as DIRECT CHILDREN: splice a list, drop null."
+defn re-encode-payload [enc p]
+  match p
+    ;; `<tag>` decodes to a null payload — a zero-arg record, no children.
+    | syrup-null       -> ""
+    ;; The multi-arg case: the list IS the argument sequence, not an argument.
+    | syrup-list xs    -> encode-many enc xs
+    | syrup-bool _     -> enc p
+    | syrup-nat _      -> enc p
+    | syrup-int _      -> enc p
+    | syrup-string _   -> enc p
+    | syrup-symbol _   -> enc p
+    | syrup-bytes _    -> enc p
+    | syrup-dict _     -> enc p
+    | syrup-tagged _ _ -> enc p
+    | syrup-refr _     -> enc p
+    | syrup-promise _  -> enc p
+
+spec re-encode SyrupValue -> String
+  :doc "Encode as-decoded: record payloads splice. Inverse of `decode-value`."
+defn re-encode [v]
+  match v
+    | syrup-tagged tag p -> str::append "<" [str::append [encode [syrup-symbol tag]] [str::append [re-encode-payload re-encode p] ">"]]
+    | syrup-list xs      -> str::append "[" [str::append [encode-many re-encode xs] "]"]
+    | syrup-dict xs      -> str::append "{" [str::append [encode-many re-encode xs] "}"]
+    | syrup-null         -> encode v
+    | syrup-bool _       -> encode v
+    | syrup-nat _        -> encode v
+    | syrup-int _        -> encode v
+    | syrup-string _     -> encode v
+    | syrup-symbol _     -> encode v
+    | syrup-bytes _      -> encode v
+    | syrup-refr _       -> encode v
+    | syrup-promise _    -> encode v
 
 ;; ===========================================================
 ;; Decoder

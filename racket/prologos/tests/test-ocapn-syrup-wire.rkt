@@ -38,6 +38,8 @@
 (imports (prologos::ocapn::syrup-wire :refer-all))
 (imports (prologos::data::list :refer (List nil cons)))
 (imports (prologos::data::option :refer (Option some none unwrap-or)))
+(imports (prologos::ocapn::handshake :refer (hex-to-bytes)))
+(imports (prologos::data::string :as str :refer ()))
 ")
 
 (define-values (shared-global-env
@@ -245,3 +247,108 @@
    (run-last "(eval (promise? (syrup-dict nil)))") "false")
   (check-contains
    (run-last "(eval (get-promise (syrup-dict nil)))") "none"))
+
+;; ========================================
+;; Splicing re-encoder — the signature-verification gate
+;; ========================================
+;;
+;; `encode` renders a value we BUILT; `re-encode` renders a value we DECODED.
+;; They disagree on multi-arg records, and the disagreement is unavoidable:
+;; the decoder maps both `<tag a b>` and `<tag [a b]>` to the same value, so
+;; one encoder cannot restore both.
+;;
+;; This matters because third-party-handoff signatures are computed over the
+;; BYTES of an inner `<desc:handoff-receive ...>` record. Verification is only
+;; possible if we can reproduce those bytes exactly. The frame below is a real
+;; 716-byte `withdraw-gift` captured off the wire from the upstream Python
+;; test suite -- 9 records, 6 of them multi-arg.
+;;
+;; This test is a GATE, not a nicety. If re-encoding is wrong, every signature
+;; check fails as BAD SIGNATURE rather than as an error -- indistinguishable
+;; from correct rejection while in fact rejecting everything, including the
+;; handoff tests that pass today.
+
+(define handoff-frame-hex
+  (string-append
+   "3c3130276f703a64656c697665723c313127646573633a6578706f7274302b3e5b31332777697468647261772d676966"
+   "743c313727646573633a7369672d656e76656c6f70653c323027646573633a68616e646f66662d726563656976653332"
+   "3a80ac24325c0ad104eac168cbf1bb67e0c349c27382cad5db5f91e18d5c8a030a33323a777564ff857cb2fcbd0d0875"
+   "022cc41238916df90ef232d93a30ade85b2e39bd302b3c313727646573633a7369672d656e76656c6f70653c31372764"
+   "6573633a68616e646f66662d676976655b3130277075626c69632d6b65795b33276563635b3527637572766537274564"
+   "32353531395d5b3527666c616773352765646473615d5b31277133323a391573c713b294f67c7204444dd1fce674148c"
+   "917d8a8b84978acca5075d73315d5d5d3c3130276f6361706e2d706565723136277463702d74657374696e672d6f6e6c"
+   "793332224a616451302b2b527a7344344d2b3430754c785457566156714d31304463424a7b3422686f73743922313237"
+   "2e302e302e313422706f7274352232323131367d3e33323a08ca4310f071e32dbc3b9be78c096fc44b42b174e738e8c4"
+   "8add887b9eba7aa833323aec9c661defc354b829fd2b426fe8429a653a0716cb021395c5c4612d2a20b1d5373a6d792d"
+   "676966743e5b37277369672d76616c5b352765646473615b31277233323a42677932d969d60d651f41502c29b1032395"
+   "f95ba8c247d3b64f4ad1549d8ee25d5b31277333323aa44329e7b3236014d99ac390750a78dde4259388028d3ddf27bb"
+   "74468e5aeb005d5d5d3e3e5b37277369672d76616c5b352765646473615b31277233323a02790feb642506c02deb0d69"
+   "ec7cee5f7fe6188ae7e77c1a3c3429445c9dd6a35d5b31277333323a0017ee74376826395ff3e3280d3b959f9d911126"
+   "fc8587e0243dde06e103bf095d5d5d3e5d663c313827646573633a696d706f72742d6f626a656374302b3e3e"))
+
+(define (frame-expr body)
+  (format "(eval (let ((raw (hex-to-bytes \"~a\"))) ~a))" handoff-frame-hex body))
+
+(test-case "syrup-wire/the captured handoff frame decodes at all"
+  ;; A decode failure would surface as `none` and make every assertion below
+  ;; vacuously green.
+  (check-false
+   (string-contains?
+    (run-last (frame-expr "(decode-value raw)"))
+    "none")))
+
+(test-case "syrup-wire/re-encode round-trips the handoff frame BYTE-IDENTICALLY"
+  (check-contains
+   (run-last
+    (frame-expr "(str::eq raw (re-encode (unwrap-or syrup-null (decode-value raw))))"))
+   "true"))
+
+(test-case "syrup-wire/encode does NOT round-trip it -- +2 bytes per multi-arg record"
+  ;; Pinning the asymmetry itself, so nobody "simplifies" re-encode into encode.
+  ;; 6 multi-arg records in this frame => +12 bytes.
+  (check-contains
+   (run-last
+    (frame-expr "(str::eq raw (encode (unwrap-or syrup-null (decode-value raw))))"))
+   "false")
+  (check-contains
+   (run-last
+    (frame-expr (string-append
+                 "(int- (str::bytes-length (encode (unwrap-or syrup-null (decode-value raw))))"
+                 " (str::bytes-length (re-encode (unwrap-or syrup-null (decode-value raw)))))")))
+   "12"))
+
+(test-case "syrup-wire/re-encode splices a record payload; encode wraps it"
+  ;; The same difference, minimally, without the 716-byte frame.
+  (check-contains
+   (run-last "(eval (re-encode (unwrap-or syrup-null (decode-value \"<1'f1+2+>\"))))")
+   "<1'f1+2+>")
+  (check-contains
+   (run-last "(eval (encode (unwrap-or syrup-null (decode-value \"<1'f1+2+>\"))))")
+   "<1'f[1+2+]>")
+  ;; Single-arg and zero-arg records are unaffected -- both encoders agree.
+  (check-contains
+   (run-last "(eval (re-encode (unwrap-or syrup-null (decode-value \"<1'f1+>\"))))")
+   "<1'f1+>")
+  (check-contains
+   (run-last "(eval (re-encode (unwrap-or syrup-null (decode-value \"<1'f>\"))))")
+   "<1'f>"))
+
+(test-case "syrup-wire/encode bytes uses the RAW byte count, not the UTF-8 count"
+  ;; `syrup-bytes` smuggles raw bytes as one code point per byte, so its length
+  ;; prefix is `str::length`. Using `str::bytes-length` (right for text)
+  ;; re-measures those code points as UTF-8 and inflates the prefix on any byte
+  ;; >= 0x80 -- which is every cryptographic payload in a third-party handoff.
+  ;;
+  ;; This 32-byte key measures 32 code points but 51 UTF-8 bytes. We used to
+  ;; emit `51:` in front of 32 bytes: an unparseable frame, outbound.
+  (check-contains
+   (run-last
+    (string-append
+     "(eval (str::slice (encode (syrup-bytes (hex-to-bytes \""
+     "80ac24325c0ad104eac168cbf1bb67e0c349c27382cad5db5f91e18d5c8a030a"
+     "\"))) 0 3))"))
+   "32:")
+  ;; ASCII is unaffected -- both measures agree, which is why every earlier
+  ;; test passed.
+  (check-contains
+   (run-last "(eval (encode (syrup-bytes \"abc\")))") "3:abc"))
