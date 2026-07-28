@@ -85,6 +85,16 @@ SELECTED = [
     # connection. That avoids needing a behaviour to allocate a promise and
     # spawn an actor mid-turn, which is what forces a step-behavior signature
     # change (still required for the Car Factory).
+    # op:gc-exports (Phase 59b part 8). A deliver with no answer position and no
+    # resolve-me has no reply channel, so every desc:import-object in its args
+    # is garbage the moment the turn ends -- which is exactly the shape these
+    # three send. test_gc_answer needs op:gc-answers for an ANSWER position and
+    # is a separate mechanism.
+    ("tests.op_gc", "OpGcExportsTest", [
+        "test_gc_export_emitted_single_object",
+        "test_gc_export_with_multiple_refrences",
+        "test_gc_export_with_multiple_refrences_in_different_messages",
+    ]),
     ("tests.op_listen", "OpListenTest", [
         "test_op_listen_to_promise_and_fulfill",
         "test_op_listen_to_promise_and_break",

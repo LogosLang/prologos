@@ -1058,6 +1058,109 @@ defn bs-incr-imports
   | nil           st -> st
   | [cons r rest] st -> [bs-incr-imports rest [bs-incr-import-by-refr r st]]
 
+
+spec tally-bump [List QEntry] Nat -> [List QEntry]
+defn tally-bump [acc id]
+  list-set-q-by-key acc id [add [unwrap-or zero [bs-lookup-question-loop acc id]] [suc zero]]
+
+spec refr-import-tally [List Refr] [List QEntry] -> [List QEntry]
+defn refr-import-tally [rs acc]
+  match rs
+    | nil -> acc
+    | [cons r rest] ->
+        match [refr-remote-import-object? r]
+          | false -> refr-import-tally rest acc
+          | true  -> refr-import-tally rest [tally-bump acc [refr-id r]]
+
+;; ===========================================================
+;; op:gc-exports — releasing the peer's objects we were handed
+;; ===========================================================
+;;
+;; When the peer puts `<desc:import-object N>` in a message, it is exporting
+;; one of its own objects to us and holding the entry open until we say we are
+;; done. Saying so is `<op:gc-exports [positions] [wire-deltas]>`: two PARALLEL
+;; lists, position i paired with delta i.
+;;
+;; Note the spelling. Our CapTPOp carries a SINGULAR `op-gc-export` with two
+;; scalars, which is not what any peer reads — the wire op is PLURAL and
+;; list-valued. Rather than add a variant (every new CapTPOp costs ~50 pattern
+;; sites across message.prologos + captp-wire.prologos), the outbound frame is
+;; built directly with `wire::encode-record`, which is how every other reply in
+;; this module is emitted. The inbound singular arm keeps working as the audit
+;; log it already was.
+;;
+;; WHEN we are done is the interesting question, and the answer here is
+;; deliberately narrow: a deliver with NO answer position and NO resolve-me has
+;; no reply channel, so its return value is discarded the moment the turn ends
+;; — and the return value is the only thing that could carry the arguments
+;; onward. Nothing in our vat stores an inbound descriptor in actor state. So
+;; for that message shape, every import-object in the args is garbage as soon
+;; as it has been delivered, and we can say so immediately.
+;;
+;; That is a claim about the actors we currently HAVE, not a theorem. An actor
+;; that stashed a peer reference in its state would need real reachability
+;; tracking before this could stay correct, and this comment is the marker for
+;; where to start.
+;;
+;; Two layout traps cost time here and shaped the code below: a match ARM
+;; cannot carry a multi-line continuation (#50), and a single-argument
+;; multi-arity `defn` over a nested constructor pattern lifts a phantom second
+;; parameter (#37). Both fail at MODULE IMPORT with a bare "Unbound variable"
+;; while the file itself processes with zero errors. Hence `qe-key`/`qe-val`
+;; and `tally-bump` — each exists to keep a body on one line.
+
+spec qe-key QEntry -> Nat
+defn qe-key [e]
+  match e
+    | q-entry k _ -> k
+
+spec qe-val QEntry -> Nat
+defn qe-val [e]
+  match e
+    | q-entry _ v -> v
+
+spec q-keys-syrup [List QEntry] -> [List SyrupValue]
+defn q-keys-syrup [es]
+  match es
+    | nil -> [nil SyrupValue]
+    | [cons e rest] -> [cons [syrup-nat [qe-key e]] [q-keys-syrup rest]]
+
+spec q-vals-syrup [List QEntry] -> [List SyrupValue]
+defn q-vals-syrup [es]
+  match es
+    | nil -> [nil SyrupValue]
+    | [cons e rest] -> [cons [syrup-nat [qe-val e]] [q-vals-syrup rest]]
+
+;; <op:gc-exports [pos …] [delta …]>
+spec gc-exports-bytes [List QEntry] -> String
+defn gc-exports-bytes [es]
+  wire::encode-record "op:gc-exports" [cons [syrup-list [q-keys-syrup es]] [cons [syrup-list [q-vals-syrup es]] nil]]
+
+;; Queue the release, unless there is nothing to release — an empty
+;; `<op:gc-exports [] []>` is legal but pure noise on the wire.
+spec bs-release-tally [List QEntry] BridgeState -> BridgeState
+defn bs-release-tally [es st]
+  match es
+    | nil -> st
+    | [cons _ _] -> bs-append-pending-out [gc-exports-bytes es] st
+
+spec bs-release-imports-of SyrupValue BridgeState -> BridgeState
+  :doc "Emit op:gc-exports for every desc:import-object in args."
+defn bs-release-imports-of [args st]
+  bs-release-tally [refr-import-tally [extract-refrs-from-args args] [nil QEntry]] st
+
+;; Only for the no-reply-channel shape. A deliver carrying an answer position
+;; or a resolve-me has somewhere to send its result, so the arguments may still
+;; be reachable through it and releasing now would be a lie.
+spec maybe-release-imports SyrupValue [Option Nat] [Option Nat] BridgeState -> BridgeState
+defn maybe-release-imports [args ap rm st]
+  match ap
+    | some _ -> st
+    | none ->
+        match rm
+          | some _ -> st
+          | none   -> bs-release-imports-of args st
+
 ;; ===========================================================
 ;; Phase 41/52b: syrup-shape inspectors (moved up to support
 ;; both build-forward-effect AND the Phase 52b gift dispatch)
@@ -1992,8 +2095,13 @@ defn captp-incoming-with-state
       ;; can later emit op:gc-export.
       ;; Phase 59b: `rm` (resolve-me) is now threaded instead of
       ;; discarded — incoming-deliver needs it for the `fetch` reply.
+      ;; op:gc-exports: with no answer position and no resolve-me there is no
+      ;; reply channel, so nothing outlives the turn — release the peer's
+      ;; import-objects right away. See § op:gc-exports above for why that is
+      ;; sound for the actors we have, and what would break it.
       incoming-deliver tgt args ap rm v
-        [bs-incr-imports [extract-refrs-from-args args] st]
+        [maybe-release-imports args ap rm
+          [bs-incr-imports [extract-refrs-from-args args] st]]
   | [op-deliver-only tgt args] v st ->
       ;; Phase 34b: same import-bookkeeping for fire-and-forget deliveries.
       bridge-step [send-only tgt args v]
