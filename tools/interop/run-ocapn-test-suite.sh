@@ -27,6 +27,18 @@
 
 set -uo pipefail
 
+# The compiler's giant match functions (whnf/nf ~990 arms) exceed Racket CS's
+# default compile limit and fall back to the INTERPRETER. The Racket server
+# below spends nearly all its time in reduction, and upstream's tests carry
+# their own wall-clock budgets, so an interpreted build does not merely run
+# slow -- it FAILS. Measured on this exact suite: 17/17 compiled, 14 passed +
+# 1 errored interpreted, which is precisely what CI reported before this line
+# existed.
+#
+# Set here as well as in the workflow so the gate does not depend on the
+# caller's environment.
+export PLT_CS_COMPILE_LIMIT="${PLT_CS_COMPILE_LIMIT:-1000000}"
+
 PORT="${1:-${OCAPN_TEST_PORT:-22045}}"
 SUITE_DIR="${2:-${OCAPN_TEST_SUITE_DIR:-/tmp/ocapn-test-suite}}"
 

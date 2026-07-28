@@ -7,6 +7,20 @@ on:
 jobs:
   benchmark:
     runs-on: ubuntu-latest
+    # The compiler's giant match functions (whnf/nf ~990 arms, shift/subst
+    # ~340) exceed Racket CS's default compile limit of 10000 and fall back to
+    # the INTERPRETER. `tools/run-affected-tests.rkt` and `tools/bench-ab.rkt`
+    # putenv this for themselves, but a bare `raco make` -- which is how CI
+    # precompiles -- does not, and the .zo it produces is interpreted for the
+    # rest of the job.
+    #
+    # This is not a micro-optimisation here. The OCapN interop gate failed on
+    # CI with 14 passed / 1 errored while passing 17/17 locally; rebuilding
+    # locally WITHOUT the limit reproduced 14/1 exactly. Upstream's tests carry
+    # their own wall-clock budgets (15s for a GC round trip), so interpreted
+    # reduction does not merely run slow, it fails.
+    env:
+      PLT_CS_COMPILE_LIMIT: 1000000
     timeout-minutes: 30
 
     steps:
