@@ -1,7 +1,7 @@
 # Collection Interface Unification (CIU) Series
 
 **Created**: 2026-03-21
-**Status**: Track 0 ✅ (Trait Hierarchy Audit). Tracks 1-2 ⬜ pre-Track-8. Tracks 3-5 ⬜ post-Track-8 (now unblocked by Track 8 completion + BSP-LE Track 2/2B). **Track 6 🔄 (Anonymous Records, Collections & Path Selection): F1a-core ✅ · F1a-col ✅ · F1a.2 ✅ (`expr-Open` DELETED, D1-b done); F1b Stage-3 ✅ (D21–D29) · F1b.1–.4 ✅ THE SEAL (D22) · F1b.5 (VALIDATE) ✅ p0→s4 (`expr-validate` node + `field-witness.rkt` + `data Reason`; door flip + `wrap-schema-checks` DELETED; selection-validate; non-literal fill + `:check` discharged) · F1b.6 ✅ (D23 escape-boundary posture flip) · F1b.7 ✅ RECORDS/SCHEMA HARDENING (§13.9; 7a–7g from an adversarial stress-test — the 7a `:check` soundness guard was a HIGH bug; 7c the `def x : S :=` commitment door discharges `:check`); suite 8917/465/0. **F1b.close ✅ 2026-07-19** — bench matrix (+0.4% deterministic, no wall regression; records-focused A/B confirms the records path Δ≈0, §13.10 + PIR §7) · PIR (`2026-07-19_CIU_T6_F1B_PIR.md`, first formal PIR in ~2 months) · typed-rows charter → Rel · doc-truth · DEFERRED triage. **F1b — the records/`Map`↔schema/validate CORNERSTONE — COMPLETE** (Track 6 stays 🔄: Path Selection = OPEN). Ladder: §13.6/§13.8/§13.9. **Path Selection opened 2026-07-26 → Stage-3 D.1 DRAFT [`2026-07-26_CIU_T6_PATH_SELECTION_DESIGN.md`](2026-07-26_CIU_T6_PATH_SELECTION_DESIGN.md)** (grounded @ `fe03b493` + 33-system prior-art survey; the SURFACE §5 is the live owner conversation; supersedes Track 2 and takes the surface half of Track 3 — §9).**
+**Status**: Track 0 ✅ (Trait Hierarchy Audit). Tracks 1-2 ⬜ pre-Track-8. Tracks 3-5 ⬜ post-Track-8 (now unblocked by Track 8 completion + BSP-LE Track 2/2B). **Track 6 🔄 (Anonymous Records, Collections & Path Selection): F1a-core ✅ · F1a-col ✅ · F1a.2 ✅ (`expr-Open` DELETED, D1-b done); F1b Stage-3 ✅ (D21–D29) · F1b.1–.4 ✅ THE SEAL (D22) · F1b.5 (VALIDATE) ✅ p0→s4 (`expr-validate` node + `field-witness.rkt` + `data Reason`; door flip + `wrap-schema-checks` DELETED; selection-validate; non-literal fill + `:check` discharged) · F1b.6 ✅ (D23 escape-boundary posture flip) · F1b.7 ✅ RECORDS/SCHEMA HARDENING (§13.9; 7a–7g from an adversarial stress-test — the 7a `:check` soundness guard was a HIGH bug; 7c the `def x : S :=` commitment door discharges `:check`); suite 8917/465/0. **F1b.close ✅ 2026-07-19** — bench matrix (+0.4% deterministic, no wall regression; records-focused A/B confirms the records path Δ≈0, §13.10 + PIR §7) · PIR (`2026-07-19_CIU_T6_F1B_PIR.md`, first formal PIR in ~2 months) · typed-rows charter → Rel · doc-truth · DEFERRED triage. **F1b — the records/`Map`↔schema/validate CORNERSTONE — COMPLETE** (Track 6 stays 🔄: Path Selection = OPEN). Ladder: §13.6/§13.8/§13.9. **Path Selection: opened 2026-07-26 → D.2 SETTLED + D.3 adjudicated → implementation P0/P1/P2 ✅ (`f47851a5` · `d18648f0` · `ad75e57a`→`ac89341f` — the TWO-TIER PRINCIPLE: assertive-tier runtime misses LOUD+COUNTED; suite 9238/474/0) → ⭐ **SURFACE REDESIGNED 2026-07-28**. The normative surface is now the spec [`docs/research/2026-07-28_path-selection-spec.md`](../research/2026-07-28_path-selection-spec.md) (key-sort thesis · per-step `^` discipline · selection-as-demand/copatterns · grades 1/ω · Ruling B · laws L1–L7 · §10 corpus as acceptance suite) — an OUTSIDE, idealized document, ruled a **guide not a prescription**; the implementation design that adapts it is [`2026-07-28_CIU_T6_PATH_SELECTION_D4.md`](2026-07-28_CIU_T6_PATH_SELECTION_D4.md) (per-phase sections; §1.2 supersession table; §2.3 the carrier table; §3 the rulings ledger). D4 ladder: **P0 ✅ `e2674208`** (acceptance 28/28) · **P1 ⬜ NEXT** (lexical seams + retirements, delivers spec Q8) · P2 grade-1 · P3 blocks · P4 broadcast ω · P5 Ruling B · PX binder-seam · P6 demand (staged) · X.close (PIR-gated). The 2026-07-26 doc is SUPERSEDED-but-kept as the record of rounds 1–8b. Supersedes Track 2 and takes the surface half of Track 3 (§9 there; see the T2/T3 sections below).**
 **Thesis**: All collection access — indexing, iteration, broadcast, mapping, path navigation — dispatches through traits resolved on the propagator network. Syntactic sugar generates trait constraints, not constructor-specific AST nodes. User-defined collections participate in all syntax automatically.
 
 ---
@@ -45,11 +45,11 @@ This thesis addresses 5 principle violations identified in the Collection Interf
 |---|-------|-------------|--------|------------|-------------------|
 | 0 | Trait Hierarchy Design | Deep Stage 2: Seq as trait, Functor vs Seq+Buildable, Keyed semantics, mixed paths, selective disclosure | ✅ | [Audit](2026-03-21_CIU_TRACK0_TRAIT_HIERARCHY_AUDIT.md) | Pre (design only) |
 | 1 | Seq Protocol | Seq-as-trait migration, native instances, LSeq demotion, gmap/gfilter rerouting | ⬜ | Pending | Pre |
-| 2 | Syntactic Sugar Normalization | dot-brace `.{...}`, ground-expr? fix, comprehensive sugar audit | ⬜ | Pending | Pre |
-| 3 | Trait-Dispatched Access | `surf-get` generates Indexed/Keyed constraints; propagator resolves; `expr-get` vestigial | ⬜ | Pending | Post Track 8 |
+| 2 | Syntactic Sugar Normalization | dot-brace `.{...}`, ground-expr? fix, comprehensive sugar audit | ⛔ | **SUPERSEDED by Track 6** (see § Track 2 below — both scope items are discharged or re-homed) | — |
+| 3 | Trait-Dispatched Access | `surf-get` generates Indexed/Keyed constraints; propagator resolves; `expr-get` vestigial | ⬜ | **RE-CHARTERED** — T6 took the SURFACE half; T3 keeps trait-dispatched RESOLUTION (see § Track 3 below) | Post Track 8 |
 | 4 | Trait-Dispatched Iteration | Broadcast via Seq dict; gmap/gfilter via Functor or Seq+Buildable | ⬜ | Pending | Post Track 8 |
 | 5 | Union-Aware Dispatch | Trait resolution on union types; runtime dispatch generation | ⬜ | Pending | Post Track 8 |
-| 6 | Anonymous Records, Collections & Path Selection | `Map`/`{…}` = anonymous **open record** (structural typing); **tuples** `@[…]` = the Nat-keyed dual (one carrier, key-domain axis); `schema` interop + the Map→schema **seal** + the Result-returning **validate** face; postfix `coll[…]` path-selection + result-shape + broadcast (OPEN owner design). Relates to Track 2 (sugar) + **Track 3 (Indexed/Keyed — fed by the tuple node as the Nat-keyed-row witness)**. WS-first. | 🔄 | [Track](2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md) (§2a rounds 1–7, D1–D29) · [F1 Stage-3 D.2](2026-07-06_CIU_T6_F1_STRUCTURAL_RECORDS_DESIGN.md) §2/§13 tracker: **F1a ✅ · F1b Stage-3 ✅ · SEAL ✅ · VALIDATE ✅ (p0→s4) · D23 tightening ✅ · records/schema HARDENING ✅ (7a–7g) · F1b.close ✅ ([PIR](2026-07-19_CIU_T6_F1B_PIR.md)) — F1b COMPLETE** | Post Track 8 |
+| 6 | Anonymous Records, Collections & Path Selection | `Map`/`{…}` = anonymous **open record** (structural typing); **tuples** `@[…]` = the Nat-keyed dual (one carrier, key-domain axis); `schema` interop + the Map→schema **seal** + the Result-returning **validate** face; **Path Selection** — REDESIGNED 2026-07-28 (spec + D4; brace-select `x{…}` · `:` broadcast · `^` re-key · `*` flatten · `<` disclose). Relates to Track 2 (sugar) + **Track 3 (Indexed/Keyed — fed by the tuple node as the Nat-keyed-row witness)**. WS-first. | 🔄 | [Track](2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md) (§2a rounds 1–7, D1–D29) · [F1 Stage-3 D.2](2026-07-06_CIU_T6_F1_STRUCTURAL_RECORDS_DESIGN.md) §2/§13 tracker: **F1a ✅ · F1b Stage-3 ✅ · SEAL ✅ · VALIDATE ✅ (p0→s4) · D23 tightening ✅ · records/schema HARDENING ✅ (7a–7g) · F1b.close ✅ ([PIR](2026-07-19_CIU_T6_F1B_PIR.md)) — F1b COMPLETE** | Post Track 8 |
 
 ---
 
@@ -143,7 +143,28 @@ Track 0 (Trait Hierarchy Design)
 
 **Not in scope**: Changing how syntactic sugar dispatches (that's Tracks 3-4). This Track is library-level: make the trait hierarchy correct and efficient, so Tracks 3-4 have the right traits to dispatch through.
 
-### Track 2: Syntactic Sugar Normalization
+### Track 2: Syntactic Sugar Normalization  ⛔ SUPERSEDED by Track 6
+
+> **Disposition (2026-07-26 D.2 §9, ratified; refreshed 2026-07-28)**: this
+> track is superseded outright — Track 6's Path Selection owns the surface.
+> Both scope items have concrete dispositions, so nothing is lost:
+>
+> - **`ground-expr?` union fix** — ✅ **DONE** at CIU T6 P2.a (`ad75e57a`), and
+>   more thoroughly than chartered: BOTH same-named twins
+>   (`global-constraints.rkt` + `trait-resolution.rkt`) were given a **generic
+>   transparent-struct fallback** (`expr-substructs-all?`, syntax.rkt) rather
+>   than a hand-added `expr-union` arm — the structural answer per
+>   `pipeline.md` § Exhaustive Walkers, so the class cannot re-open.
+> - **Dot-brace `.{field1 field2}`** — the chartered spelling (`dot-lbrace`
+>   token → preparse rewrite to `get-in`) is **superseded by the redesigned
+>   surface**: `.{` was retired as a MIXFIX at T6 P1 (`d18648f0`) and
+>   **RETURNS at D4.P1 as a `dot-lbrace` compound token** — but for the
+>   *mid-path sub-block* (`server^.{ssl^.enabled^ssl port}`), typed through the
+>   selection step-list node, NOT rewritten to `get-in`. Same token name, a
+>   different and larger job.
+> - The **comprehensive sugar audit** rides D4.P1's retirement censuses
+>   (dot-key · `.*name` · `m[:a]` · the reject batch), which are live-counted
+>   and both-modes.
 
 **Source**: Origin design Phases 1 and 4 + broader sugar audit
 
@@ -155,7 +176,24 @@ Track 0 (Trait Hierarchy Design)
 
 **Not in scope**: Changing dispatch (Tracks 3-5). This Track normalizes the sugar surface and documents the full scope of what Tracks 3-5 need to address.
 
-### Track 3: Trait-Dispatched Access
+### Track 3: Trait-Dispatched Access  🔄 RE-CHARTERED (surface half → Track 6)
+
+> **Disposition (2026-07-26 D.3-S9, ratified; refreshed 2026-07-28)**: Track 6
+> takes the **SURFACE** half; T3 keeps **trait-dispatched RESOLUTION**. What
+> changed under the redesign, and what T3 must NOT assume:
+>
+> - T3's Phase-2 example and Phase-3 criterion were written against the old
+>   surface (`coll[…]` postfix selection). The live surface is brace-select
+>   `x{…}` · `:` broadcast · `^` re-key — **re-derive the examples from the
+>   spec + D4 before scoping**.
+> - `expr-get` does **not** become vestigial the way this charter assumed: D4
+>   ruling 4b keeps it as a LOWERING TARGET (the selection step-list node
+>   lowers per step onto `get` / `pvec-map` / `map-map-vals`), and owner ruling
+>   2026-07-28 keeps `v[0]`'s current semantics. What DOES retire is
+>   `expr-broadcast-get` (with `.*name`, at D4.P4).
+> - The landed T6 P2 work already hardened this area: the two-tier principle
+>   (assertive-tier misses LOUD+COUNTED) + `definitely-not-map?` inverted to a
+>   positive list. T3's dispatch work builds on that, not around it.
 
 **Prerequisite**: Track 8 Part C (COMPLETE) — bridge propagators resolve traits in S0
 
