@@ -580,7 +580,7 @@
     [(expr-snd x) (occ-walk x d)]
     [(expr-map-assoc m k mv)
      (or (occ-walk m d) (occ-walk k d) (occ-walk mv d))]
-    [(expr-map-get m k) (or (occ-walk m d) (occ-walk k d))]
+    [(expr-map-get m k a) (or (occ-walk m d) (occ-walk k d) (occ-walk a d))]
     [(expr-map-empty k mv) (or (occ-walk k d) (occ-walk mv d))]
     [(expr-pvec-literal elems) (for/or ([el (in-list elems)]) (occ-walk el d))]
     ;; the four binder forms — body positions at d+1 (or +binding-count)
@@ -1735,6 +1735,18 @@
 ;; Deliberately ABSENT (and this is the site-7 fix): `expr-rrb` / `expr-trrb`.
 ;; A PVec/tuple is a legitimate nat-keyed map-get subject — it must project,
 ;; not degrade. `expr-champ` is absent because it IS a map.
+;; CIU T6 P2.b slice 4: key display for the loud map-get miss. Keywords are the
+;; overwhelmingly common case; the fallback is the raw struct (rare, still
+;; informative). Deliberately NOT pp-expr — reduction must not require
+;; pretty-print (module cycle).
+(define (fmt-map-key k)
+  (cond
+    [(expr-keyword? k) (format ":~a" (expr-keyword-name k))]
+    [(expr-string? k) (format "~s" (expr-string-val k))]
+    [(expr-nat-val? k) (format "~aN" (expr-nat-val-n k))]
+    [(expr-int? k) (format "~a" (expr-int-val k))]
+    [else (format "~a" k)]))
+
 (define (definitely-not-map? e)
   (or ;; numeric values
       (expr-zero? e) (expr-suc? e) (expr-nat-val? e)
@@ -2685,12 +2697,30 @@
     [(expr-map-assoc (expr-champ c) k v)
      (let ([k* (whnf k)] [v* (whnf v)])
        (expr-champ (champ-insert c (equal-hash-code k*) k* v*)))]
-    [(expr-map-get (expr-champ c) k)
+    ;; CIU T6 P2.b slice 4: THE FORK. The champ miss arm is type-blind (rows
+    ;; and dicts share the champ), so the tier decision arrives MATERIALIZED in
+    ;; the strictness slot: (expr-true) = typing proved the subject (Map K V)
+    ;; on the user's direct projection → the miss is a LOUD panic naming the
+    ;; key and the available keys (the closed-row diagnostic's quality bar).
+    ;; Anything else (#f raw/lowered/dynamic-tier · an unsolved meta · dyn-row
+    ;; subjects, whose slot typing never solves) → the permissive (expr-error),
+    ;; exactly today's shape (D19 pins: route-soundness B1/B2, records ;;77).
+    [(expr-map-get (expr-champ c) k a)
      (let ([k* (whnf k)])
        (let ([result (champ-lookup c (equal-hash-code k*) k*)])
-         (if (eq? result 'none)
-             (expr-error)
-             (whnf result))))]
+         (cond
+           [(not (eq? result 'none)) (whnf result)]
+           [(expr-true? a)
+            (expr-panic
+             (expr-string
+              (format "map-get: key ~a not found; available keys: ~a"
+                      (fmt-map-key k*)
+                      (if (champ-empty? c)
+                          "(none — the map is empty)"
+                          (string-join (sort (map fmt-map-key (champ-keys c))
+                                             string<?)
+                                       " ")))))]
+           [else (expr-error)])))]
 
     ;; CIU T6 P2.b (SITE 7): a PVec/tuple subject PROJECTS by position.
     ;; The typing side already does this — `record-project`'s nat-literal arm
@@ -2701,7 +2731,7 @@
     ;; agree BY CONSTRUCTION on the same carrier, which is exactly the
     ;; divergence site 7 was. `expr-get`'s arm already handles the Nat-or-Int
     ;; key gate and out-of-bounds.
-    [(expr-map-get (? expr-rrb? v) k) (whnf (expr-get v k))]
+    [(expr-map-get (? expr-rrb? v) k a) (whnf (expr-get v k a))]
 
     ;; CIU T6 F1b.5-s2 (D27): validate — the runtime tabulation redex.
     ;; Subject whnf's to exactly two classes (spines/map-empty collapse to
@@ -2714,15 +2744,16 @@
          [(equal? subj* subject) e]
          [else (whnf (expr-validate sname closed? plan subj* names))]))]
     ;; Generic get: dispatch by collection type
-    [(expr-get coll key)
+    [(expr-get coll key sa)
      (let ([c* (whnf coll)])
        ;; Extract numeric index from Nat or Int key
        (define (index-value k)
          (or (nat-value k)
              (and (expr-int? k) (let ([v (expr-int-val k)]) (and (>= v 0) v)))))
        (match c*
-         ;; Map (CHAMP) → delegate to map-get
-         [(expr-champ _) (whnf (expr-map-get c* (whnf key)))]
+         ;; Map (CHAMP) → delegate to map-get (the strictness slot RIDES the
+         ;; delegation — a one-node slot would be dropped exactly here)
+         [(expr-champ _) (whnf (expr-map-get c* (whnf key) sa))]
          ;; PVec (RRB) → index by nat/int
          ;; CIU T6 P2.b slice 2: OOB is a LOUD assertive-tier error (was a
          ;; silent `(expr-error)` behind a with-handlers). The explicit bounds
@@ -2735,7 +2766,7 @@
           (let* ([k* (whnf key)]
                  [n (index-value k*)])
             (cond
-              [(not n) (expr-get c* k*)]
+              [(not n) (expr-get c* k* sa)]
               [(< n (rrb-size r)) (whnf (rrb-get r n))]
               [else (expr-panic
                      (expr-string
@@ -2755,7 +2786,7 @@
                 (let* ([k* (whnf key)]
                        [n (index-value k*)])
                   (cond
-                    [(not n) (expr-get c* k*)]
+                    [(not n) (expr-get c* k* sa)]
                     [(< n (length elems)) (whnf (list-ref elems n))]
                     [else (expr-panic
                            (expr-string
@@ -2763,8 +2794,8 @@
                                     n (length elems))))]))
                 ;; Not yet reduced → try reducing
                 (if (not (equal? c* coll))
-                    (whnf (expr-get c* key))
-                    (expr-get c* key))))]))]
+                    (whnf (expr-get c* key sa))
+                    (expr-get c* key sa))))]))]
     ;; nil?: nil → true, ground non-nil value → false
     [(expr-nil-check (? expr-nil?)) (expr-true)]
     [(expr-nil-check a)
@@ -3118,10 +3149,10 @@
     [(expr-map-assoc m k v)
      (let ([m* (whnf m)])
        (if (equal? m* m) e (whnf (expr-map-assoc m* k v))))]
-    [(expr-map-get m k)
+    [(expr-map-get m k a)
      (let ([m* (whnf m)])
        (cond
-         [(not (equal? m* m)) (whnf (expr-map-get m* k))]
+         [(not (equal? m* m)) (whnf (expr-map-get m* k a))]
          ;; If m* is a concrete non-map value, return none (graceful degradation).
          ;; This handles cases like map-get on an Int from a mixed-type union.
          [(definitely-not-map? m*) (expr-fvar 'none)]
@@ -3148,7 +3179,7 @@
            [np (whnf paths)])
        (cond
          [(and (expr-path? np) (pair? (expr-path-branches np)))
-          (foldl (lambda (seg acc) (whnf (expr-map-get acc seg)))
+          (foldl (lambda (seg acc) (whnf (expr-map-get acc seg #f)))
                  nt (car (expr-path-branches np)))]
          [(and (equal? nt target) (equal? np paths)) e]
          [else (expr-get-in nt np)]))]
@@ -3169,7 +3200,7 @@
               [(null? segs) (whnf (expr-app fn base))]
               [else
                (let* ([key (car segs)]
-                      [sub (whnf (expr-map-get base key))]
+                      [sub (whnf (expr-map-get base key #f))]
                       [updated (build sub (cdr segs))])
                  (whnf (expr-map-assoc base key updated)))]))]
          [(and (equal? nt target) (equal? np paths)) e]
@@ -3182,7 +3213,7 @@
     [(expr-broadcast-get target fields)
      (let ([nt (whnf target)])
        (define (extract-field elem)
-         (foldl (lambda (fld acc) (whnf (expr-map-get acc fld))) elem fields))
+         (foldl (lambda (fld acc) (whnf (expr-map-get acc fld #f))) elem fields))
        (define (list-nil*? x)
          (or (expr-nil? x)
              (and (expr-fvar? x)
@@ -4200,7 +4231,7 @@
        ;; Static path on concrete target: walk segments
        [(and (expr-path? np) (pair? (expr-path-branches np)))
         (define segs (car (expr-path-branches np)))
-        (foldl (lambda (seg acc) (nf (expr-map-get acc seg))) nt segs)]
+        (foldl (lambda (seg acc) (nf (expr-map-get acc seg #f))) nt segs)]
        [else (expr-get-in nt np)])]
     [(expr-update-in target paths fn)
      (define nt (nf target))
@@ -4217,7 +4248,7 @@
             [(null? segs) (nf (expr-app nf-fn base))]
             [else
              (define key (car segs))
-             (define sub (nf (expr-map-get base key)))
+             (define sub (nf (expr-map-get base key #f)))
              (define updated (build sub (cdr segs)))
              ;; 2026-07-16: normalize the spine (was returned as a raw
              ;; map-assoc stuck term, leaving map-keys/map-size stuck on
@@ -4230,7 +4261,7 @@
      (define nt (nf target))
      (define (extract-field elem fields)
        ;; Apply chained map-get for each field keyword
-       (foldl (lambda (fld acc) (nf (expr-map-get acc fld))) elem fields))
+       (foldl (lambda (fld acc) (nf (expr-map-get acc fld #f))) elem fields))
      ;; Check if expression is a nil (any form)
      (define (list-nil? e)
        (or (expr-nil? e)
@@ -4288,11 +4319,11 @@
     [(expr-champ _) e]
     [(expr-map-empty k v) (expr-map-empty (nf k) (nf v))]
     [(expr-map-assoc m k v) (expr-map-assoc (nf m) (nf k) (nf v))]
-    [(expr-map-get m k) (expr-map-get (nf m) (nf k))]
+    [(expr-map-get m k a) (expr-map-get (nf m) (nf k) (if (expr? a) (nf a) a))]
     ;; CIU T6 F1b.5-s2: a validate that survived whnf is stuck — nf the
     ;; expr slots (subject + plan defaults/preds) via the single helper
     [(? expr-validate? v) (validate-map-exprs nf v)]
-    [(expr-get c k) (expr-get (nf c) (nf k))]
+    [(expr-get c k a) (expr-get (nf c) (nf k) (if (expr? a) (nf a) a))]
     [(expr-nil-safe-get m k) (expr-nil-safe-get (nf m) (nf k))]
     [(expr-nil-check a) (expr-nil-check (nf a))]
     [(expr-map-dissoc m k) (expr-map-dissoc (nf m) (nf k))]

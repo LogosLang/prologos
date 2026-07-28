@@ -1024,6 +1024,15 @@
     (and thunk (thunk))))
 
 ;; elaborate: surface-expr, env, depth -> (or/c expr? prologos-error?)
+;; CIU T6 P2.b slice 4: mint the strictness slot for a user projection —
+;; the expr-num-lit carried-alpha shape verbatim (fresh meta, hole-typed,
+;; sourced). The 'strictness-slot kind is NOT in d23-projection-meta-kinds,
+;; so it cannot trip the D23 escape gate.
+(define (strictness-slot loc env)
+  (fresh-meta ctx-empty (expr-hole)
+    (meta-source-info loc 'strictness-slot "assertive-tier strictness"
+                      #f (env->name-stack env))))
+
 (define (elaborate surf [env '()] [depth 0])
   (perf-inc-elaborate!)
   ;; PPN 4C Phase 1.5: parameterize current-source-loc from surf-node's srcloc field.
@@ -2182,19 +2191,25 @@
              [(prologos-error? ev) ev]
              [else (expr-map-assoc em ek ev)]))]
 
+    ;; CIU T6 P2.b slice 4: the USER's direct projection mints a STRICTNESS
+    ;; SLOT — a fresh meta, type-blind (elaborate has no typing env; the
+    ;; expr-num-lit carried-alpha precedent). Typing solves it to (expr-true)
+    ;; iff the subject is (Map K V); zonk materializes; the champ-miss arm
+    ;; reads it. The get-in/update-in inlinings below pass #f — they are the
+    ;; PS12/M3 DYNAMIC tier, permissive BY DESIGN.
     [(surf-get coll key loc)
      (let ([ec (elaborate coll env depth)]
            [ek (elaborate key env depth)])
        (cond [(prologos-error? ec) ec]
              [(prologos-error? ek) ek]
-             [else (expr-get ec ek)]))]
+             [else (expr-get ec ek (strictness-slot loc env))]))]
 
     [(surf-map-get m k loc)
      (let ([em (elaborate m env depth)]
            [ek (elaborate k env depth)])
        (cond [(prologos-error? em) em]
              [(prologos-error? ek) ek]
-             [else (expr-map-get em ek)]))]
+             [else (expr-map-get em ek (strictness-slot loc env))]))]
 
     [(surf-nil-safe-get m k loc)
      (let ([em (elaborate m env depth)]
@@ -2268,7 +2283,7 @@
                   (if (expr-path? elab-path)
                       (let ()
                         (define branch (car (expr-path-branches elab-path)))
-                        (foldl (lambda (seg acc) (expr-map-get acc seg))
+                        (foldl (lambda (seg acc) (expr-map-get acc seg #f))
                                et branch))
                       ;; Dynamic path (variable): emit expr-get-in for runtime dispatch
                       (expr-get-in et elab-path)))]
@@ -2290,7 +2305,7 @@
                 ;; Build a chained map-get for a single path
                 (define (path->chain base segs)
                   (foldl (lambda (seg acc)
-                           (expr-map-get acc (seg->nav-kw seg)))
+                           (expr-map-get acc (seg->nav-kw seg) #f))
                          base segs))
                 (cond
                   ;; Single path → return the leaf value
@@ -2351,7 +2366,7 @@
                            [(null? segs) (expr-app ef base)]
                            [else
                             (define key (car segs))
-                            (define sub-val (expr-map-get base key))
+                            (define sub-val (expr-map-get base key #f))
                             (define updated (build-update sub-val (cdr segs)))
                             (expr-map-assoc base key updated)]))
                        (build-update et segs))
@@ -2369,7 +2384,7 @@
                    [(null? segs) (expr-app ef base)]  ;; leaf: apply fn
                    [else
                     (define key (car segs))
-                    (define sub-val (expr-map-get base (seg->kw key)))
+                    (define sub-val (expr-map-get base (seg->kw key) #f))
                     (define updated (build-update sub-val (cdr segs)))
                     (expr-map-assoc base (seg->kw key) updated)]))
                (build-update et segs))])]))]

@@ -262,7 +262,7 @@
   (define bg-stuck (expr-broadcast-get (expr-fvar 'unknown-list)
                                        (list (expr-keyword 'name))))
   (check-false (definitely-not-map? bg-stuck))
-  (define r (whnf (expr-map-get bg-stuck (expr-keyword 'k))))
+  (define r (whnf (expr-map-get bg-stuck (expr-keyword 'k) #f)))
   (check-false (equal? r (expr-fvar 'none))))
 
 ;; ============================================================
@@ -355,6 +355,57 @@
   (check-false (regexp-match? #rx"<error>" (third r))
                "the DISPLAYED lambda body must not be nf-destroyed")
   (check-regexp-match #rx"20 : Int" (last r)))
+
+;; ---------- SLICE 4 — the Map-miss fork via CARRIED-ALPHA (round 8b) ----------
+;;
+;; Elaboration mints a strictness SLOT (a fresh meta, type-blind) on the USER's
+;; direct projection only; typing solves it to assertive when the subject is
+;; (Map K V); zonk materializes; the champ-miss arm reads it. The permissive
+;; default means: raw-constructed nodes, the reduction-lowered get-in/update-in
+;; family (= the PS12/M3 DYNAMIC TIER), and dyn-row subjects all keep D19.
+
+(test-case "P2.b A1: a (Map K V) runtime miss is LOUD and COUNTED (was: `<error> : Int`, 0 errors)"
+  (define r (run-ws-raw-last
+             (string-append
+              "def d : [Map Keyword Int] := [map-assoc [map-assoc {} :a 1] :b 2]\n"
+              "[map-get d :zzz]\n")))
+  (check-true (prologos-error? r)
+              "a dict miss must be a COUNTED error, not a displayed <error> value"))
+
+(test-case "P2.b A1b: the loud Map miss names the key and the available keys (the quality bar)"
+  (define r (run-ws-last
+             (string-append
+              "def d : [Map Keyword Int] := [map-assoc [map-assoc {} :a 1] :b 2]\n"
+              "[map-get d :zzz]\n")))
+  (check-regexp-match #rx"zzz" r)
+  (check-regexp-match #rx"available" r))
+
+(test-case "P2.b A2: a (Map K V) miss must not COMMIT silently into a def"
+  (define rs (run-ws-raw
+              (string-append
+               "def d : [Map Keyword Int] := [map-assoc [map-assoc {} :a 1] :b 2]\n"
+               "def dmiss := [map-get d :zzz]\n")))
+  (check-true (ormap prologos-error? rs)
+              "def-committing a miss is the stored silent-wrong-answer class"))
+
+(test-case "P2.b B9 (the tier boundary): a get-in path miss on a Map stays PERMISSIVE"
+  ;; get-in/update-in are the PS12/M3 DYNAMIC tier — their inlined map-get
+  ;; chains carry NO slot (permissive #f), by design not by accident. If this
+  ;; pin breaks, the tier boundary moved.
+  (define r (run-ws-raw-last
+             (string-append
+              "def d : [Map Keyword Int] := [map-assoc [map-assoc {} :a 1] :b 2]\n"
+              "[get-in d :zzz]\n")))
+  (check-false (prologos-error? r)))
+
+(test-case "P2.b B10: a Map HIT is unaffected, direct and def-committed"
+  (define r (run-ws
+             (string-append
+              "def d : [Map Keyword Int] := [map-assoc [map-assoc {} :a 1] :b 2]\n"
+              "[map-get d :a]\n"
+              "def hit := [map-get d :b]\nhit\n")))
+  (check-regexp-match #rx"1 : Int" (second r))
+  (check-regexp-match #rx"2 : Int" (last r)))
 
 ;; THE DEF SEAMS (Q_N5, both — driver.rkt:1907 inferred, :2112 annotated).
 (test-case "P2.b A7: a panic-valued def is COUNTED at the inferred def seam (was: silent)"

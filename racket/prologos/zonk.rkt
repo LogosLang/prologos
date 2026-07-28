@@ -308,8 +308,10 @@
     [(expr-champ _) e]
     [(expr-map-empty k v) (expr-map-empty (zonk k) (zonk v))]
     [(expr-map-assoc m k v) (expr-map-assoc (zonk m) (zonk k) (zonk v))]
-    [(expr-map-get m k) (expr-map-get (zonk m) (zonk k))]
-    [(expr-get c k) (expr-get (zonk c) (zonk k))]
+    ;; P2.b slice 4: zonking `strict` IS the materialization stage — a solved
+    ;; strictness meta becomes (expr-true) here, which is all reduction reads.
+    [(expr-map-get m k a) (expr-map-get (zonk m) (zonk k) (if (expr? a) (zonk a) a))]
+    [(expr-get c k a) (expr-get (zonk c) (zonk k) (if (expr? a) (zonk a) a))]
     [(expr-nil-safe-get m k) (expr-nil-safe-get (zonk m) (zonk k))]
     [(expr-nil-check a) (expr-nil-check (zonk a))]
     [(expr-map-dissoc m k) (expr-map-dissoc (zonk m) (zonk k))]
@@ -787,8 +789,10 @@
     [(expr-champ _) e]
     [(expr-map-empty k v) (expr-map-empty (zonk-at-depth depth k) (zonk-at-depth depth v))]
     [(expr-map-assoc m k v) (expr-map-assoc (zonk-at-depth depth m) (zonk-at-depth depth k) (zonk-at-depth depth v))]
-    [(expr-map-get m k) (expr-map-get (zonk-at-depth depth m) (zonk-at-depth depth k))]
-    [(expr-get c k) (expr-get (zonk-at-depth depth c) (zonk-at-depth depth k))]
+    [(expr-map-get m k a) (expr-map-get (zonk-at-depth depth m) (zonk-at-depth depth k)
+                                        (if (expr? a) (zonk-at-depth depth a) a))]
+    [(expr-get c k a) (expr-get (zonk-at-depth depth c) (zonk-at-depth depth k)
+                                (if (expr? a) (zonk-at-depth depth a) a))]
     [(expr-nil-safe-get m k) (expr-nil-safe-get (zonk-at-depth depth m) (zonk-at-depth depth k))]
     [(expr-nil-check a) (expr-nil-check (zonk-at-depth depth a))]
     [(expr-map-dissoc m k) (expr-map-dissoc (zonk-at-depth depth m) (zonk-at-depth depth k))]
@@ -1270,8 +1274,13 @@
     [(expr-champ _) e]
     [(expr-map-empty k v) (expr-map-empty (default-metas k) (default-metas v))]
     [(expr-map-assoc m k v) (expr-map-assoc (default-metas m) (default-metas k) (default-metas v))]
-    [(expr-map-get m k) (expr-map-get (default-metas m) (default-metas k))]
-    [(expr-get c k) (expr-get (default-metas c) (default-metas k))]
+    ;; An UNSOLVED strictness meta is deliberately LEFT (the expr-meta arm's
+    ;; identity) — reduction reads a non-(expr-true) as permissive, so the
+    ;; safe default is structural, not an arm here.
+    [(expr-map-get m k a) (expr-map-get (default-metas m) (default-metas k)
+                                        (if (expr? a) (default-metas a) a))]
+    [(expr-get c k a) (expr-get (default-metas c) (default-metas k)
+                                (if (expr? a) (default-metas a) a))]
     [(expr-nil-safe-get m k) (expr-nil-safe-get (default-metas m) (default-metas k))]
     [(expr-nil-check a) (expr-nil-check (default-metas a))]
     [(expr-map-dissoc m k) (expr-map-dissoc (default-metas m) (default-metas k))]

@@ -532,6 +532,20 @@
               #:when (eq? (schema-field-keyword f) keyword-sym))
     f))
 
+;; CIU T6 P2.b slice 4: solve a projection node's STRICTNESS SLOT to ASSERTIVE.
+;; Called from exactly the (expr-Map kt vt) subject legs — the one class whose
+;; type carries NO presence information, so the user's direct projection is an
+;; ASSERTION and a runtime miss must be loud. Everything else leaves the slot
+;; unsolved (⇒ permissive at reduction): closed rows are already statically
+;; loud, dyn rows keep D19, unions serve mixed-type degradation deliberately,
+;; schema/selection subjects are statically gated. Solving rides `unify` — the
+;; standard meta path (solve-meta! coupling included, per pipeline.md § Known
+;; Coupling).
+(define (solve-strict-assert! ctx a)
+  (when (expr-meta? a)
+    (unify ctx a (expr-true)))
+  (void))
+
 ;; CIU T6 F1 (s2): project a field type out of a structural-row type.
 ;;   literal key (keyword/nat) present → the field's type; absent → error (closed-row miss);
 ;;   dynamic key → union of ALL field types (B4-gated on the key domain; empty row → error).
@@ -1850,7 +1864,7 @@
     ;; get: type-directed index/lookup
     ;; List A → Nat → A, PVec A → Nat → A, Map K V → K → V
     ;; Selection/Schema → delegate to expr-map-get
-    [(expr-get coll key)
+    [(expr-get coll key sa)
      (let ([tc (whnf (infer ctx coll))])
        (match tc
          ;; PVec A → Nat/Int → A
@@ -1858,17 +1872,18 @@
           (if (or (check ctx key (expr-Nat)) (check ctx key (expr-Int))) a (expr-error))]
          ;; CIU T6 F1 (s2): structural-row projection (records + tuples)
          [(? expr-Record? rec) (record-project ctx rec key)]
-         ;; Map K V → K → V
+         ;; Map K V → K → V — P2.b slice 4: the ASSERTIVE solve (round 8)
          [(expr-Map kt vt)
+          (solve-strict-assert! ctx sa)
           (if (check ctx key kt) vt (expr-error))]
-         ;; Selection type → delegate to map-get typing
+         ;; Selection type → delegate to map-get typing (slot rides along)
          [(expr-fvar name)
           #:when (lookup-selection-by-name name)
-          (infer ctx (expr-map-get coll key))]
+          (infer ctx (expr-map-get coll key sa))]
          ;; Schema type → delegate to map-get typing
          [(expr-fvar name)
           #:when (lookup-schema-by-name name)
-          (infer ctx (expr-map-get coll key))]
+          (infer ctx (expr-map-get coll key sa))]
          ;; List A → Nat/Int → A
          [(expr-app f a)
           #:when (equal? f (list-type-fvar))
@@ -1893,12 +1908,15 @@
                     (expr-Map (expr-Keyword) (expr-fvar (cadr names))))]
          [else (expr-error)]))]
 
-    [(expr-map-get m k)
+    [(expr-map-get m k a)
      (let ([tm (whnf (infer ctx m))])
        (match tm
          ;; CIU T6 F1 (s2): structural-row projection — {:a 1}.a : Int (THE goal)
          [(? expr-Record? rec) (record-project ctx rec k)]
+         ;; P2.b slice 4: the ASSERTIVE solve — (Map K V) carries no presence
+         ;; information, so the direct projection asserts; the miss is loud.
          [(expr-Map kt vt)
+          (solve-strict-assert! ctx a)
           (if (check ctx k kt) vt (expr-error))]
          ;; Selection type: gate field access to selected fields only
          [(expr-fvar name)

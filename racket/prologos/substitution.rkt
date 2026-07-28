@@ -308,8 +308,12 @@
     [(expr-champ _) e]
     [(expr-map-empty k v) (expr-map-empty (shift delta cutoff k) (shift delta cutoff v))]
     [(expr-map-assoc m k v) (expr-map-assoc (shift delta cutoff m) (shift delta cutoff k) (shift delta cutoff v))]
-    [(expr-map-get m k) (expr-map-get (shift delta cutoff m) (shift delta cutoff k))]
-    [(expr-get c k) (expr-get (shift delta cutoff c) (shift delta cutoff k))]
+    ;; P2.b slice 4: `strict` is #f | expr-meta | (expr-true) — walk it when it
+    ;; is an expr (the differential-oracle contract: every field position).
+    [(expr-map-get m k a) (expr-map-get (shift delta cutoff m) (shift delta cutoff k)
+                                        (if (expr? a) (shift delta cutoff a) a))]
+    [(expr-get c k a) (expr-get (shift delta cutoff c) (shift delta cutoff k)
+                                (if (expr? a) (shift delta cutoff a) a))]
     [(expr-nil-safe-get m k) (expr-nil-safe-get (shift delta cutoff m) (shift delta cutoff k))]
     [(expr-nil-check a) (expr-nil-check (shift delta cutoff a))]
     [(expr-map-dissoc m k) (expr-map-dissoc (shift delta cutoff m) (shift delta cutoff k))]
@@ -831,8 +835,10 @@
     [(expr-champ _) e]
     [(expr-map-empty kt vt) (expr-map-empty (subst k s kt) (subst k s vt))]
     [(expr-map-assoc m key v) (expr-map-assoc (subst k s m) (subst k s key) (subst k s v))]
-    [(expr-map-get m key) (expr-map-get (subst k s m) (subst k s key))]
-    [(expr-get c key) (expr-get (subst k s c) (subst k s key))]
+    [(expr-map-get m key a) (expr-map-get (subst k s m) (subst k s key)
+                                          (if (expr? a) (subst k s a) a))]
+    [(expr-get c key a) (expr-get (subst k s c) (subst k s key)
+                                  (if (expr? a) (subst k s a) a))]
     [(expr-nil-safe-get m key) (expr-nil-safe-get (subst k s m) (subst k s key))]
     [(expr-nil-check a) (expr-nil-check (subst k s a))]
     [(expr-map-dissoc m key) (expr-map-dissoc (subst k s m) (subst k s key))]

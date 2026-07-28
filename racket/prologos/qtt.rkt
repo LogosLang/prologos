@@ -1271,14 +1271,19 @@
           ;; usage stays local.
           (tu (infer ctx e) (add-usage u1 (add-usage u2 u3)))]
          [(_ _ _) (tu-error)]))]
-    [(expr-map-get m k)
+    [(expr-map-get m k _a)
      (let ([r1 (inferQ ctx m)]
            [r2 (inferQ ctx k)])
        (match* (r1 r2)
          [((tu t1 u1) (tu _ u2))
           ;; map-get returns the value type V from Map K V
           (match t1
-            [(expr-Map _ vt) (tu vt (add-usage u1 u2))]
+            ;; P2.b slice 4 (audit R8/C20): the Map leg now DELEGATES the type
+            ;; to typing-core like its siblings — the local `vt` return was the
+            ;; one site where a fork in infer's result silently failed to reach
+            ;; the QTT pass (the infer/inferQ-twins class the F1 comment below
+            ;; records as already bitten). Usage stays local.
+            [(expr-Map _ _) (tu (infer ctx e) (add-usage u1 u2))]
             ;; CIU T6 F1 (s2): record/schema/selection — delegate result type to typing-core
             [(? expr-Record?) (tu (infer ctx e) (add-usage u1 u2))]
             [(expr-fvar name)
@@ -1287,7 +1292,7 @@
                (tu result-type (add-usage u1 u2)))]
             [_ (tu-error)])]
          [(_ _) (tu-error)]))]
-    [(expr-get c k)
+    [(expr-get c k _a)
      (let ([r1 (inferQ ctx c)]
            [r2 (inferQ ctx k)])
        (match* (r1 r2)

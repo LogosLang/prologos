@@ -82,7 +82,7 @@
 (test-case "map-get typing"
   (with-fresh-meta-env
     (let ([m (expr-map-empty (expr-Keyword) (expr-Nat))])
-      (check-equal? (tc:infer ctx-empty (expr-map-get m (expr-keyword 'x)))
+      (check-equal? (tc:infer ctx-empty (expr-map-get m (expr-keyword 'x) #f))
                     (expr-Nat)
                     "map-get infers Nat (value type)"))))
 
@@ -116,21 +116,21 @@
   (let* ([empty (expr-champ champ-empty)]
          [m1 (expr-map-assoc empty (expr-keyword 'name) (expr-suc (expr-zero)))]
          [reduced-m1 (whnf m1)]
-         [get-result (whnf (expr-map-get reduced-m1 (expr-keyword 'name)))])
+         [get-result (whnf (expr-map-get reduced-m1 (expr-keyword 'name) #f))])
     (check-true (expr-champ? reduced-m1) "assoc produces champ")
     (check-equal? get-result (expr-nat-val 1)
                   "map-get retrieves value")))
 
 (test-case "map-get missing key → error"
   (let* ([empty (expr-champ champ-empty)]
-         [result (whnf (expr-map-get empty (expr-keyword 'missing)))])
+         [result (whnf (expr-map-get empty (expr-keyword 'missing) #f))])
     (check-true (expr-error? result) "missing key produces error")))
 
 (test-case "map-assoc update existing key"
   (let* ([empty (expr-champ champ-empty)]
          [m1 (whnf (expr-map-assoc empty (expr-keyword 'x) (expr-zero)))]
          [m2 (whnf (expr-map-assoc m1 (expr-keyword 'x) (expr-suc (expr-zero))))]
-         [result (whnf (expr-map-get m2 (expr-keyword 'x)))])
+         [result (whnf (expr-map-get m2 (expr-keyword 'x) #f))])
     (check-equal? result (expr-nat-val 1)
                   "assoc updates existing key")))
 
@@ -138,7 +138,7 @@
   (let* ([empty (expr-champ champ-empty)]
          [m1 (whnf (expr-map-assoc empty (expr-keyword 'x) (expr-zero)))]
          [m2 (whnf (expr-map-dissoc m1 (expr-keyword 'x)))]
-         [result (whnf (expr-map-get m2 (expr-keyword 'x)))])
+         [result (whnf (expr-map-get m2 (expr-keyword 'x) #f))])
     (check-true (expr-error? result)
                 "after dissoc, key is gone")))
 

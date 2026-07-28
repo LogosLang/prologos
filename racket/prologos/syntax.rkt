@@ -809,8 +809,16 @@
 
 ;; Operations
 (struct expr-map-assoc (m k v) #:transparent)                 ; assoc : Map K V → K → V → Map K V
-(struct expr-get (coll key) #:transparent)                     ; get : Collection → Key → Value (type-directed; ASSERTIVE tier — error if missing/OOB)
-(struct expr-map-get (m k) #:transparent)                     ; get : Map K V → K → V (error if missing)
+;; CIU T6 P2.b slice 4: both carry a STRICTNESS SLOT (the carried-alpha
+;; pattern, expr-num-lit's precedent): `strict` is #f (permissive — raw
+;; constructions, the get-in/update-in lowering family = the PS12/M3 dynamic
+;; tier), an unsolved expr-meta (minted at elaboration on the USER's direct
+;; projection), or (expr-true) (typing solved it: the subject is (Map K V) —
+;; a runtime miss is a LOUD panic). zonk materializes the meta; reduction reads
+;; only the materialized value. The two nodes delegate to each other at
+;; reduction, so BOTH carry the slot (a one-node slot is dropped at the crossing).
+(struct expr-get (coll key strict) #:transparent)              ; get : Collection → Key → Value (type-directed; ASSERTIVE tier — error if missing/OOB)
+(struct expr-map-get (m k strict) #:transparent)              ; get : Map K V → K → V (assertive: LOUD miss when strict)
 (struct expr-nil-safe-get (m k) #:transparent)                ; nil-safe-get : (Map K V | Nil) → K → (V | Nil)
 (struct expr-map-dissoc (m k) #:transparent)                  ; dissoc : Map K V → K → Map K V
 (struct expr-map-size (m) #:transparent)                      ; size : Map K V → Nat
@@ -1343,7 +1351,10 @@
       (expr-Record? x)
       (expr-validate? x)
       (expr-Map? x) (expr-champ? x) (expr-map-empty? x)
-      (expr-map-assoc? x) (expr-map-get? x) (expr-nil-safe-get? x) (expr-map-dissoc? x)
+      ;; CIU T6 P2.b slice 4: expr-get? was ABSENT here (pipeline.md core item
+      ;; 1 unmet — pre-existing, found by the slice-2 audit C25). Fixed.
+      (expr-map-assoc? x) (expr-map-get? x) (expr-get? x)
+      (expr-nil-safe-get? x) (expr-map-dissoc? x)
       (expr-map-size? x) (expr-map-has-key? x)
       (expr-map-keys? x) (expr-map-vals? x)
       (expr-Set? x) (expr-hset? x) (expr-set-empty? x)

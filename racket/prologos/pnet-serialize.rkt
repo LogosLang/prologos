@@ -136,7 +136,11 @@
 ;; catch it, and the cache is gitignored/local, so no one would pull a good one.
 ;; The version gate is exact equality, so the bump is the reliable sweep — same
 ;; reasoning as the v3 -> v4 bump for #78. Costs one ~3s regeneration per machine.
-(define PNET_VERSION 5)
+;; v5 -> v6 (CIU T6 P2.b slice 4): expr-get/expr-map-get gained the strictness
+;; field — the on-disk vector width changed; exact-equality is the only
+;; reliable sweep (a v5 cache's 2-element vectors would (apply ctor) at the
+;; wrong arity, or worse, silently mismatch downstream).
+(define PNET_VERSION 6)
 
 ;; ============================================================
 ;; Serialization: struct->vector + gensym tagging + foreign-proc
@@ -304,7 +308,14 @@
   (regN! expr-validate 'S #f '() (expr-unit) '())
   (reg1! expr-Set (expr-Nat))
   (reg2! expr-union (expr-Nat) (expr-Int))
-  (reg2! expr-get (expr-unit) (expr-keyword 'k))
+  ;; CIU T6 P2.b slice 4: both projection nodes gained the strictness field
+  ;; (arity 3). expr-map-get MOVES here from auto-cache! deliberately —
+  ;; auto-cache!'s body is wrapped in an exception-swallowing handler, so a
+  ;; stale-arity call there VOIDS silently and the node vanishes from the
+  ;; cache with zero signal (audit G4). The regN! route errors LOUDLY at
+  ;; module load, which is what an arity change must do.
+  (regN! expr-get (expr-unit) (expr-keyword 'k) #f)
+  (regN! expr-map-get (expr-unit) (expr-keyword 'k) #f)
   ;; lmax is a smart function, not a struct — no registration needed
 
   ;; --- Three-arg ---
@@ -491,7 +502,7 @@
   (auto-cache! expr-set-delete d d) (auto-cache! expr-set-union d d) (auto-cache! expr-set-diff d d)
   (auto-cache! expr-set-fold d d d) (auto-cache! expr-set-to-list d)
   (auto-cache! expr-map-empty d d) (auto-cache! expr-map-assoc d d d)
-  (auto-cache! expr-map-dissoc d d) (auto-cache! expr-map-get d d)
+  (auto-cache! expr-map-dissoc d d)  ;; expr-map-get: explicit regN! above (P2.b slice 4)
   (auto-cache! expr-map-has-key d d) (auto-cache! expr-map-keys d) (auto-cache! expr-map-vals d)
   (auto-cache! expr-map-fold-entries d d d) (auto-cache! expr-map-filter-entries d d)
   (auto-cache! expr-pvec-empty d) (auto-cache! expr-pvec-push d d)

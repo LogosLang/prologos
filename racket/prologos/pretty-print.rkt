@@ -483,13 +483,15 @@
                         acc)
                    ", "))]
          [_ (format "[map-assoc ~a ~a ~a]" (pp-expr m names) (pp-expr k names) (pp-expr v names))]))]
-    [(expr-map-get m k) (format "[map-get ~a ~a]" (pp-expr m names) (pp-expr k names))]
+    ;; P2.b slice 4: the strictness slot is invisible in display (cosmetic
+    ;; invariance — user syntax has no spelling for it).
+    [(expr-map-get m k _) (format "[map-get ~a ~a]" (pp-expr m names) (pp-expr k names))]
     ;; CIU T6 F1b.5-s2: validate — compact display (plan is baked internals)
     [(? expr-validate? v)
      (format "[validate ~a ~a]"
              (expr-validate-schema-name v)
              (pp-expr (expr-validate-subject v) names))]
-    [(expr-get c k) (format "[get ~a ~a]" (pp-expr c names) (pp-expr k names))]
+    [(expr-get c k _) (format "[get ~a ~a]" (pp-expr c names) (pp-expr k names))]
     [(expr-nil-safe-get m k) (format "[nil-safe-get ~a ~a]" (pp-expr m names) (pp-expr k names))]
     [(expr-nil-check a) (format "[nil? ~a]" (pp-expr a names))]
     [(expr-map-dissoc m k) (format "[map-dissoc ~a ~a]" (pp-expr m names) (pp-expr k names))]
@@ -1166,14 +1168,16 @@
     [(expr-champ _) #f]
     [(expr-map-empty k v) (or (uses-bvar0? k) (uses-bvar0? v))]
     [(expr-map-assoc m k v) (or (uses-bvar0? m) (uses-bvar0? k) (uses-bvar0? v))]
-    [(expr-map-get m k) (or (uses-bvar0? m) (uses-bvar0? k))]
+    [(expr-map-get m k a) (or (uses-bvar0? m) (uses-bvar0? k)
+                              (and (expr? a) (uses-bvar0? a)))]
     ;; CIU T6 F1b.5-s2: validate — subject + plan expr slots
     [(? expr-validate? v)
      (or (uses-bvar0? (expr-validate-subject v))
          (for/or ([entry (in-list (expr-validate-plan v))])
            (or (and (caddr entry) (uses-bvar0? (caddr entry)))
                (and (cadddr entry) (uses-bvar0? (cadddr entry))))))]
-    [(expr-get c k) (or (uses-bvar0? c) (uses-bvar0? k))]
+    [(expr-get c k a) (or (uses-bvar0? c) (uses-bvar0? k)
+                          (and (expr? a) (uses-bvar0? a)))]
     [(expr-nil-safe-get m k) (or (uses-bvar0? m) (uses-bvar0? k))]
     [(expr-nil-check a) (uses-bvar0? a)]
     [(expr-map-dissoc m k) (or (uses-bvar0? m) (uses-bvar0? k))]
