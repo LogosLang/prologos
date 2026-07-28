@@ -193,6 +193,15 @@
 (define do-pnet-cache? (make-parameter #t))
 (define show-failures? (make-parameter #f))
 (define bail-timeout-threshold (make-parameter 3))
+;; Per-FILE timeout handed to batch-worker.rkt. The worker has always supported
+;; `--file-timeout`; this runner simply never passed it through, so the 120s
+;; default was unreachable from CI. That default was set when "slowest normal
+;; tests ~17s" — the OCapN bridge tests legitimately cost far more because each
+;; one elaborates the whole OCapN module chain, and on a GitHub runner the file
+;; exceeds 120s. Splitting the file made it WORSE (the cost is per-FILE, so
+;; splitting paid it twice), which is what established that this knob, not the
+;; file layout, is the right lever.
+(define file-timeout-secs (make-parameter #f))
 (define force-rerun? (make-parameter #f))
 (define force-stale-zo? (make-parameter #f))
 ;; PPN 4C Phase 3c process improvement (2026-04-20): --tests FILE...
@@ -235,6 +244,8 @@
     (do-pnet-cache? #f)]
    ["--failures" "Show failure logs from last run (no tests executed)"
     (show-failures? #t)]
+   ["--file-timeout" secs "Per-FILE timeout in seconds, passed to the batch worker (default: 120)"
+    (file-timeout-secs (string->number secs))]
    ["--bail-timeouts" n "Abort after N per-file timeouts (default: 3, 0=disable)"
     (bail-timeout-threshold (string->number n))]
    ["--no-bail" "Disable early-bail on timeouts"
@@ -780,7 +791,10 @@
 
   (for ([i (in-range jobs)])
     (define-values (proc stdout stdin stderr)
-      (subprocess #f #f #f racket-path batch-worker-path "--stdin"))
+      (if (file-timeout-secs)
+          (subprocess #f #f #f racket-path batch-worker-path "--stdin"
+                      "--file-timeout" (number->string (file-timeout-secs)))
+          (subprocess #f #f #f racket-path batch-worker-path "--stdin")))
     (set! all-procs (cons proc all-procs))
     (set! all-stdins (cons stdin all-stdins))
     ;; Send first file to each worker to get them started

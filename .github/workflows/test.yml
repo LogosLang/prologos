@@ -41,4 +41,9 @@ jobs:
         run: cd racket/prologos && raco make driver.rkt
 
       - name: "Run full test suite (skipped: heavy reduction perf tests)"
-        run: cd racket/prologos && racket tools/run-affected-tests.rkt --all --no-record
+        # --file-timeout: the 120s default was set when "slowest normal tests
+        # ~17s". The OCapN bridge tests legitimately cost far more — each one
+        # elaborates the whole OCapN module chain — and that cost is per FILE,
+        # so a GitHub runner exceeds 120s on it. (Splitting the file made it
+        # WORSE: the fixed cost got paid twice and BOTH halves timed out.)
+        run: cd racket/prologos && racket tools/run-affected-tests.rkt --all --no-record --file-timeout 300
