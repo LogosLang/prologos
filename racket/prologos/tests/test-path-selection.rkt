@@ -26,6 +26,8 @@
          (prefix-in tr: "../trait-resolution.rkt")
          (prefix-in u: "../unify.rkt")
          (prefix-in gc: "../global-constraints.rkt")
+         "../errors.rkt"
+         "../champ.rkt"
          "../parse-reader.rkt")
 
 (define-runtime-path lib-dir "../lib")
@@ -68,6 +70,30 @@
   (map (lambda (r) (format "~a" r)) result))
 
 (define (run-ws-last s) (last (run-ws s)))
+
+;; RAW results (NOT formatted). Required by P2.b: the silent miss DISPLAYS as
+;; "<error> : Int", so a #rx"error" assertion matches the silent form too and
+;; would pass for the wrong reason. `prologos-error?` is the only honest
+;; discriminator between "counted error" and "well-typed-looking wrong value".
+(define (run-ws-raw s)
+  (define tmp (make-temporary-file "prologos-pathsel-~a.prologos"))
+  (call-with-output-file tmp #:exists 'replace
+    (lambda (out) (display s out)))
+  (define result
+    (parameterize ([current-file-module-network-ref
+                    (module-network-add-import (make-module-network)
+                                               (module-network-from-snapshot shared-global-env))]
+                   [current-ns-context shared-ns-context]
+                   [current-module-registry shared-module-reg]
+                   [current-trait-registry shared-trait-reg]
+                   [current-impl-registry shared-impl-reg]
+                   [current-param-impl-registry shared-param-impl-reg]
+                   [current-bundle-registry shared-bundle-reg])
+      (process-file (path->string tmp))))
+  (delete-file tmp)
+  result)
+
+(define (run-ws-raw-last s) (last (run-ws-raw s)))
 
 ;; ============================================================
 ;; P2.a — record-project dynamic Int gate (D3-S1 prerequisite for PS10)
@@ -183,3 +209,86 @@
   (check-false (definitely-not-map? bg-stuck))
   (define r (whnf (expr-map-get bg-stuck (expr-keyword 'k))))
   (check-false (equal? r (expr-fvar 'none))))
+
+;; ============================================================
+;; P2.b — THE TWO-TIER PRINCIPLE  (design §5.10 round 7, realization round 8)
+;;
+;;   ASSERTIVE tier (map-get / .field / v[k]) — a FAILED runtime lookup is a
+;;   LOUD, COUNTED error.  HONEST tier (nil-safe-get / nth / kv-get) — unchanged.
+;;
+;; Written FAILING-FIRST. Group A fails at P2.b's opening and is the phase gate;
+;; Group B passes today and must KEEP passing (the change's blast-radius pins).
+;;
+;; Why this battery is mandatory rather than "flip 2 assertions" (round-8 audit):
+;; FIVE of the six target sites have ZERO coverage in either direction — every
+;; in-tree OOB pin is a CLOSED TUPLE that errors at ELABORATION and never reaches
+;; reduction — so the flip is suite-invisible both ways without these.
+;; ============================================================
+
+;; ---------- SITE 7 — the fabricated-`none` class (slice 1) ----------
+;;
+;; The remaining assertive-tier legs (Map-miss loud · PVec/List/pvec-nth OOB
+;; loud · the def seam) arrive with the carried-alpha and def-seam slices, each
+;; with its own tests — per `workflow.md`, a phase brings its OWN coverage.
+
+;; SITE 7 (round-8 Q_N6) — the design's claim was inverted in BOTH halves:
+;; the PRESENT position fabricates `none`; the OOB position is ALREADY loud.
+(test-case "P2.b A5 (site 7): [map-get tup <nat>] on a PRESENT position PROJECTS the value"
+  (define r (run-ws-last "def tp := @[1 \"a\" true]\n[map-get tp 1N]\n"))
+  (check-regexp-match #rx"\"a\"" r
+                      "position 1 is present with type String — must be \"a\", not `none`")
+  (check-false (regexp-match? #rx"none" r)
+               "`none` here is a FABRICATED library value at the projected type"))
+
+(test-case "P2.b A6 (site 7): the fabricated `none` must not be def-committed"
+  (define r (run-ws-last "def tp := @[1 \"a\" true]\ndef m1 := [map-get tp 1N]\nm1\n"))
+  (check-regexp-match #rx"\"a\"" r)
+  (check-false (regexp-match? #rx"none" r)))
+
+;; ---------- Group B — MUST-NOT-BREAK (the blast-radius pins) ----------
+
+(test-case "P2.b B1 (D19): a dyn-ROW miss stays PERMISSIVE — the mark keys on the SUBJECT"
+  (define r (run-ws-raw-last
+             (string-append
+              "def m := [map-assoc [map-assoc {} :a 1] :b \"s\"]\n"
+              "[map-get m :c]\n")))
+  (check-false (prologos-error? r)
+               "exploration on a dyn row is exempt (route-soundness:200, records ;;77)"))
+
+(test-case "P2.b B2 (D19): the third pin — an ANNOTATED def of a dyn-row miss stays permissive"
+  (define rs (run-ws-raw
+              (string-append
+               "def m := [map-assoc [map-assoc {} :a 1] :b \"s\"]\n"
+               "def x : String := [map-get m :c]\n")))
+  (check-false (ormap prologos-error? rs)
+               "keying on the DEF's annotated type instead of the subject breaks this"))
+
+(test-case "P2.b B3: a CLOSED-row miss keeps its rich static diagnostic (the quality bar)"
+  (define r (run-ws-last "def r := {:a 1}\n[map-get r :zzz]\n"))
+  (check-regexp-match #rx"not present in the record" r)
+  (check-regexp-match #rx"available fields" r))
+
+(test-case "P2.b B4: an OOB read in an UNTAKEN branch must not be made loud"
+  ;; The guard-awareness pin. `lt?` is prelude-only, so the property is pinned
+  ;; with a literal guard instead: the OOB node is elaborated and typed but
+  ;; never REDUCED (boolrec selects only the taken branch, reduction.rkt:1869).
+  ;; This is what insulates the bounds-guarded honest tier (pvec-idx-nth), and
+  ;; it is why the strictness decision may only bite at REDUCTION of the marked
+  ;; node — an elaboration-time firing would break every guarded read.
+  (define r (run-ws-raw-last
+             (string-append
+              "def v := @[10 20 30]\n"
+              "[if false [pvec-nth v 99N] 0]\n")))
+  (check-false (prologos-error? r)
+               "the strictness decision may only bite when the node REDUCES"))
+
+(test-case "P2.b B5: the HONEST tier is untouched — nil-safe-get champ miss → nil"
+  (define empty (expr-champ champ-empty))
+  (check-equal? (whnf (expr-nil-safe-get empty (expr-keyword 'missing)))
+                (expr-nil)
+                "nil-safe-get has its own champ arm and must not inherit loudness"))
+
+(test-case "P2.b B6: in-bounds reads are unaffected (the three correct spellings)"
+  (define r (run-ws "def tp := @[1 \"a\" true]\ntp[1]\n[pvec-nth tp 1N]\n[get tp 1N]\n"))
+  (for ([x (in-list (take-right r 3))])
+    (check-regexp-match #rx"\"a\"" x)))

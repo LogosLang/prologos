@@ -1704,38 +1704,52 @@
            (expr-app (expr-fvar err-name) (expr-champ (car err-pair)))
            (expr-app (expr-fvar ok-name) (expr-champ okc)))])))
 
+;; "Is `e` a CONCRETE non-map VALUE?" — the property the degradation arms
+;; actually need, stated by their own callers: reduction.rkt's map-get arm says
+;; "If m* is a concrete non-map value, return none … map-get on an Int from a
+;; mixed-type union."
+;;
+;; CIU T6 P2.b (SITE 7) — THE POLARITY WAS INVERTED. This was written as
+;; `(not (or <every node kind that might be a map>))`: a hand-maintained
+;; NEGATIVE inclusion list whose DEFAULT was to FABRICATE. Any node kind nobody
+;; remembered to exempt was judged "definitely not a map", so a `map-get` over
+;; it degraded to `none` — a legitimate library value, at the correctly
+;; projected type, with zero errors reported.
+;;
+;; That list was patched FIVE times, always by adding a sixth exemption, and
+;; every patch's own comment records a silent-value-loss bug found AFTER the
+;; fact: get-in/update-in (2026-07-16 P6) · broadcast-get (P2.a — "left out of
+;; the 2026-07-16 fix") · expr-error · expr-panic (D22) · expr-validate
+;; (F1b.5-s2). Site 7 was the sixth instance: a TUPLE's runtime representation
+;; is `expr-rrb`, which nobody had exempted, so `[map-get tup 1N]` on a PRESENT
+;; position returned `none` — and a `def` committed it silently at the right
+;; type. A green suite could not see any of it.
+;;
+;; The fix is the POLARITY, not a sixth exemption (`pipeline.md` § Exhaustive
+;; Walkers — "prefer the STRUCTURAL answer to the checklist"): enumerate
+;; POSITIVELY the values we are certain are not maps, and default to #f. An
+;; unrecognized node — including every node kind added in future — is now
+;; CONSERVATIVE: map-get stays stuck rather than inventing absence. The unsafe
+;; direction is no longer the default, so this list cannot silently rot.
+;;
+;; Deliberately ABSENT (and this is the site-7 fix): `expr-rrb` / `expr-trrb`.
+;; A PVec/tuple is a legitimate nat-keyed map-get subject — it must project,
+;; not degrade. `expr-champ` is absent because it IS a map.
 (define (definitely-not-map? e)
-  (not (or (expr-champ? e)          ;; IS a map runtime value
-           (expr-fvar? e)           ;; could resolve to a map
-           (expr-bvar? e)           ;; bound variable, unknown
-           (expr-meta? e)           ;; unsolved meta, unknown
-           (expr-app? e)            ;; application, could produce a map
-           (expr-hole? e)           ;; hole, unknown
-           (expr-typed-hole? e)    ;; typed hole, unknown
-           (expr-map-empty? e)      ;; map constructor
-           (expr-map-assoc? e)      ;; map operation
-           (expr-map-get? e)        ;; nested map-get
-           (expr-get? e)            ;; generic get, could return a map
-           (expr-nil-safe-get? e)  ;; nested nil-safe-get
-           (expr-map-dissoc? e)     ;; map operation
-           (expr-get-in? e)         ;; dynamic path navigation — could return a map
-           (expr-update-in? e)      ;; dynamic path update — its result IS a map
-           ;; CIU T6 P2.a: the third path sibling, left out of the 2026-07-16
-           ;; fix — a stuck broadcast's elements could be maps; degrading a
-           ;; map-get over it to `none` fabricated absence.
-           (expr-broadcast-get? e)
-           (expr-error? e)          ;; error propagation
-           ;; CIU T6 F1b.4c (D22): a PANIC must propagate stuck, never degrade
-           ;; — the :check bridge's failure value was swallowed to `none` by
-           ;; map-get (and to nil by nil-safe-get) under projection, hiding
-           ;; the violation entirely (PROBES §P4). Mirrors the expr-error
-           ;; exemption directly above.
-           (expr-panic? e)
-           ;; CIU T6 F1b.5-s2: a stuck validate must propagate stuck (its
-           ;; reduced result is ok/err over a champ — map-adjacent); the
-           ;; D22/P6 silent-value-loss class, decided explicitly per
-           ;; pipeline.md core item 4.
-           (expr-validate? e))))
+  (or ;; numeric values
+      (expr-zero? e) (expr-suc? e) (expr-nat-val? e)
+      (expr-int? e) (expr-rat? e) (expr-num-lit? e)
+      (expr-posit8? e) (expr-posit16? e) (expr-posit32? e) (expr-posit64? e)
+      ;; text values
+      (expr-string? e) (expr-char? e)
+      ;; other scalar values
+      (expr-true? e) (expr-false? e)
+      (expr-keyword? e) (expr-symbol? e)
+      (expr-unit? e) (expr-nil? e)
+      ;; a function is not a map
+      (expr-lam? e)
+      ;; a SET is not a map (distinct carrier, no key→value association)
+      (expr-hset? e)))
 
 ;; ========================================
 ;; Weak Head Normal Form
@@ -2677,6 +2691,17 @@
          (if (eq? result 'none)
              (expr-error)
              (whnf result))))]
+
+    ;; CIU T6 P2.b (SITE 7): a PVec/tuple subject PROJECTS by position.
+    ;; The typing side already does this — `record-project`'s nat-literal arm
+    ;; returns the position's exact field type — but the VALUE side had no arm
+    ;; at all, so it fell through to the stuck-term degradation and fabricated
+    ;; `none` at that correctly-projected type. Delegating to `expr-get` (rather
+    ;; than re-implementing rrb indexing here) is the point: map-get and get now
+    ;; agree BY CONSTRUCTION on the same carrier, which is exactly the
+    ;; divergence site 7 was. `expr-get`'s arm already handles the Nat-or-Int
+    ;; key gate and out-of-bounds.
+    [(expr-map-get (? expr-rrb? v) k) (whnf (expr-get v k))]
 
     ;; CIU T6 F1b.5-s2 (D27): validate — the runtime tabulation redex.
     ;; Subject whnf's to exactly two classes (spines/map-empty collapse to
