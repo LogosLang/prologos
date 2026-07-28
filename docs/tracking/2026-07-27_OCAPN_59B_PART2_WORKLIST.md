@@ -631,3 +631,71 @@ short redo once the decoder parses the frame.
 frame decodes and the target/resolve-me come out right, and only then redo the
 handler + rewrite the bridge tests to the byte-id / resolve-me contract in the
 same commit.
+
+---
+
+## `decode-op` on the handoff frames — ROOT CAUSE FOUND: no Syrup DICTIONARY support
+
+Rendered, the 716-byte withdraw frame is:
+
+```
+<10'op:deliver<11'desc:export0+>[13'withdraw-gift
+  <17'desc:sig-envelope
+    <20'desc:handoff-receive
+       32:<recv-session>  32:<recv-side>  0+
+       <17'desc:sig-envelope
+         <17'desc:handoff-give
+            [10'public-key[3'ecc[5'curve7'Ed25519][5'flags5'eddsa][1'q32:…]]]
+            <10'ocapn-peer16'tcp-testing-only32"JadQ0++…
+               {4"host9"127.0.0.14"port5"22116}>        ;; <-- HERE
+            32:<session>  32:<gifter-side>  7:my-gift>
+         [7'sig-val[5'eddsa[1'r32:…][1's32:…]]]>>
+    [7'sig-val[5'eddsa[1'r32:…][1's32:…]]]>]
+  f<18'desc:import-object0+>>
+```
+
+The `ocapn-peer` location carries its hints as a Syrup **DICTIONARY** —
+`{4"host9"127.0.0.14"port5"22116}`. `decode-at` (syrup-wire.prologos:379)
+dispatches on:
+
+| byte | code | form |
+|---|---|---|
+| `n` | 110 | null |
+| `t` | 116 | true |
+| `f` | 102 | false |
+| `[` | 91 | list |
+| `<` | 60 | record |
+| digit | — | int / string / symbol / bytes |
+
+and falls to `none` on anything else. `{` is 123 — unhandled. The file's own
+header says so outright: *"Floats / dicts / sets / bytes are deferred"* (bytes
+have since landed; dicts have not). So the frame dies at the first `{`, and
+`decode-op` returns none — which is exactly what the probe showed.
+
+Nothing about `desc:sig-envelope`, the nested envelopes, or the gcrypt
+signature s-expressions is a problem: those are all records and lists, which
+decode fine. **The single missing feature is the dictionary.**
+
+### Scope of the fix
+
+1. `syrup.prologos` — a `syrup-dict` variant on `SyrupValue`.
+2. `syrup-wire.prologos` — the `{` (123) decode case, and the encode case.
+3. **41 exhaustive `SyrupValue` matches** across 5 files
+   (behavior 11, syrup 11, captp-wire 9, captp-core 7, syrup-wire 3) each need
+   one more arm.
+
+Point 3 is the bulk, but it is mechanical AND it fails LOUDLY: Prologos's
+exhaustive matches produce `Hole ??__match-fail` on a missing arm (observed
+this session in test-ocapn-bridge), so an omission is detected, not silent.
+For nearly every one of these sites — predicates and shape-readers — the
+correct answer for a dict is the same as the one already given for
+`syrup-promise`: "not that shape". So the migration can be driven off the
+existing `syrup-promise` arm, with the handful of genuinely-different sites
+(the encoder, the pretty-printer) written by hand.
+
+### Why this is worth doing beyond the 4 exporter tests
+
+`OCapNPeer.hints` is how EVERY netlayer location is expressed on the wire, so
+dict support is a prerequisite for anything that carries a location: the
+sturdyref enlivener (1 test), and both `HandoffRemoteAsReciever` tests, which
+send us a location to connect out to. It is not exporter-specific plumbing.
