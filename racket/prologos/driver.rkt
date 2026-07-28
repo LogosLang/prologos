@@ -2240,7 +2240,7 @@
 ;; the visible env without going through global-env-add, so the generation alone
 ;; would not notice. Generation alone is monotone, so it can never cause a false
 ;; SKIP; pairing it with mnr identity closes the snapshot case too.
-(define cap-inference-memo (box #f))   ;; #f | (vector mnr generation result)
+(define cap-inference-memo (box #f))   ;; #f | (vector mnr generation result cap-registry)
 
 (define (run-post-compilation-inference!)
   ;; Fast path: skip if no capability types exist
@@ -2248,23 +2248,30 @@
   (when (not (hash-empty? (current-capability-registry)))
     (define mnr (current-file-module-network-ref))
     (define gen (global-env-generation))
+    ;; The capability REGISTRY is a third input the analysis reads, and it can
+    ;; change without any global-env write (a `capability` declaration goes to
+    ;; its own registry). Keying only on (mnr, generation) would then skip and
+    ;; re-apply a stale result. The registry is an immutable hash held in a
+    ;; parameter, so eq? on the hash itself is an exact "has it changed" test.
+    (define reg (current-capability-registry))
     (define memo (unbox cap-inference-memo))
     (define hit?
       (and (vector? memo)
            (eq? (vector-ref memo 0) mnr)
-           (= (vector-ref memo 1) gen)))
+           (= (vector-ref memo 1) gen)
+           (eq? (vector-ref memo 3) reg)))
     (cond
       [hit?
        ;; Nothing that the analysis reads has changed — re-apply the result the
        ;; last run computed. (Re-applying matters: current-module-cap-result is
        ;; a parameter downstream consumers read.)
        (current-module-cap-result (vector-ref memo 2))]
-      [else (run-post-compilation-inference!/uncached mnr gen)])))
+      [else (run-post-compilation-inference!/uncached mnr gen reg)])))
 
-(define (run-post-compilation-inference!/uncached mnr gen)
+(define (run-post-compilation-inference!/uncached mnr gen reg)
   (let ()
     (define result (run-capability-inference))
-    (set-box! cap-inference-memo (vector mnr gen result))
+    (set-box! cap-inference-memo (vector mnr gen result reg))
     (current-module-cap-result result)
     ;; Check all entries in the global env for authority roots.
     ;; An authority root is a function whose type declares capability requirements
