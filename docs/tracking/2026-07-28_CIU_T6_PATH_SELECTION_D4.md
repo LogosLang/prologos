@@ -11,8 +11,28 @@ superseded per §1.2 below; its P0–P2 implementation record stands).
 **Series / Track**: CIU Series → Track 6 · **Date opened**: 2026-07-28 · **Owner**: Zee Larson
 
 **Process note [owner, 2026-07-28]**: one-line tracker rows do not scale. This
-document is born with PER-PHASE SECTIONS (§5+); the §4 ladder table carries
-status + a pointer only.
+document is born with PER-PHASE SECTIONS (§5); the Progress Tracker below
+carries status + a pointer only, and every phase's design, audit findings,
+rulings, censuses and test delta live in its own section.
+
+---
+
+## Progress Tracker
+
+| Phase | Description | Status | Notes |
+|---|---|---|---|
+| **P0** | **Acceptance corpus** — augment the EXISTING acceptance file with the spec §10 examples + Appendix fixtures; `--check` gated; new forms commented until their phase lands | ⬜ | §5.P0 |
+| **P1** | **Lexical seams + the retirement batch** — brace/colon adjacency, keyword-trailing `*`; dot-key + `.*name` + `m[:a]` retirements; `x[]`/`_[sel]`/`.-1` rejections; round-trip pins. Answers spec Q8 | ⬜ | §5.P1 · censuses fresh from `wf_2830f0aa-9a4` |
+| **P2** | **Grade-1 core** — `.k`/`.N` access + bare-path extraction, on the landed P2 substrate | ⬜ | §5.P2 · `.N` has an end-to-end head start via `(get expr N)` |
+| **P3** | **Blocks** — `x{…}`, projection-by-default, `^` (3 continuations), L4 sort homogeneity, **STRICT merge** (the §3.6 waypoint) | ⬜ | §5.P3 · ⚠ **GATED on spec Q2** (map output-key ordering) |
+| **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, the §5.3 meet rule | ⬜ | §5.P4 |
+| **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | §5.P5 · L1–L5 law battery |
+| **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | §5.PX · position flexible |
+| **P6** | **Demand semantics** — the §1.3-vs-POL.10 staging decision, then (if in) lazy leaves | ⬜ | §5.P6 · decision due by P3 |
+| **X.close** | **MANDATORY** — bench matrix · DEFERRED triage · doc-truth sweep · memory fold · **Stage-5 PIR** | ⬜ | §5.X · the track does not flip ✅ without the PIR |
+
+*Per `workflow.md`: tests are PER-PHASE (each phase's section states its own
+test delta); a behavioural phase shipping +0 tests is INCOMPLETE.*
 
 ---
 
@@ -150,24 +170,26 @@ result is unchanged, only the forcing TIME differs.
 
 ---
 
-## §4 The ladder (status + pointer ONLY — content lives in §5)
+## §4 Phase sequencing and dependencies
 
-| Phase | Title | Status | Section |
-|---|---|---|---|
-| D4.P0 | Acceptance corpus (spec §10 → executable) | ⬜ | §5.P0 |
-| D4.P1 | The lexical seams + the retirement batch | ⬜ | §5.P1 |
-| D4.P2 | Grade-1 core: `.k`/`.N` access + bare-path extraction | ⬜ | §5.P2 |
-| D4.P3 | Blocks: `x{…}`, projection, `^`, L4, STRICT merge | ⬜ | §5.P3 |
-| D4.P4 | Broadcast ω: `:s`, fusion, map-generic, `*`, `.*` | ⬜ | §5.P4 |
-| D4.P5 | Ruling B (B2/B3) + L2 factoring + guided errors | ⬜ | §5.P5 |
-| D4.PX | Binder-seam substrate (carried) | ⬜ | §5.PX |
-| D4.P6 | Demand semantics — staging decision + (if in) lazy leaves | ⬜ | §5.P6 |
-| D4.X.close | Bench matrix · DEFERRED triage · doc-truth · memory fold · **PIR** | ⬜ | §5.X |
+The Progress Tracker (top) carries status; this section carries WHY the order
+is what it is.
 
-*Sequencing note: P1→P2→P3 are strictly ordered (tokens → access → blocks).
-P4 needs P3 (blocks are broadcast bodies). P5 needs P4 (spine identity). PX is
-position-flexible. P6's staging decision should be ruled by P3 (blocks make
-demand observable); its implementation may land later.*
+- **P1 → P2 → P3 are strictly ordered**: tokens must lex before access can
+  fold, and access must exist before blocks can contain paths.
+- **P4 needs P3**: a broadcast body is a block (`users:{0.userName^}`), so
+  block semantics must exist before ω can distribute over them.
+- **P5 needs P4**: Ruling B's B3 case is defined over *spine identity*, and a
+  spine is only observable once broadcasts exist. P3's STRICT merge is the
+  deliberate waypoint in between — every error it raises can become a meaning
+  at P5 without breaking a working program (spec §3.6 monotonicity).
+- **PX is position-flexible**: surface-independent substrate bugs; it can land
+  in any gap, and should land before X.close.
+- **P6's DECISION is due at P3** (blocks are what make demand observable);
+  its IMPLEMENTATION may land later or post-v1 — see §5.P6 for why it is
+  staged rather than absorbed.
+- **Gate**: spec **Q2** (map output-key ordering) blocks P3's result-equality
+  tests. It is the only OPEN question on the critical path.
 
 ---
 
@@ -175,29 +197,48 @@ demand observable); its implementation may land later.*
 
 ### §5.P0 — Acceptance corpus
 
-**Intent**: the spec's §10 corpus + Appendix fixtures become a NEW acceptance
-file (`examples/2026-07-28-path-selection-spec-corpus.prologos`), `--check`
-gated from day one, forms commented until their phase lands (the established
-pattern). The corpus is NORMATIVE (spec: "intended as executable test
-vectors") — divergence between the file and the spec is a spec bug or a code
-bug, never silently reconciled.
+**Intent [owner, 2026-07-28]: AUGMENT the existing acceptance file** —
+`examples/2026-07-26-ciu-t6-path-selection.prologos` — with the spec's §10
+examples and Appendix fixtures. One file, not two: it already holds the P0
+charter (nested config, PVec-of-records, solve rows, typing pins,
+function-typed forms) and its **21 working markers are live P1/P2 substrate
+regression**. A second file would split the instrument and duplicate fixtures.
 
-**Content**: §10.1 reshaping/splice/provenance · §10.2 broadcast/fusion/honest
-nesting · §10.3 Ruling B/factoring/SoA · §10.4 flatten/W1-border · §10.5
-map-generic (Q1 adopted → uncommented at P4) · §10.6 transposes (v2 —
-PERMANENTLY commented with the §7.3 pointer) · §10.7 meet rule + negative ·
-§10.8 W4 negative. Negative cases pin ERROR CLASS, not message text, until Q8
-settles messages.
+**Work**:
+- **Reconcile fixtures**: the file's `app-config` and the spec's Appendix
+  `app-config` are the same shape from different drafts — converge on the
+  spec's (it is normative and the §10 results are computed against it),
+  keeping any extra fields the existing markers depend on. Same for the party
+  PVec vs the spec's `users`. Add the fixtures with no counterpart:
+  `build`, `regions`, `strings`, `m`, `events`, `tree`.
+- **Replace the superseded target block**: the commented §B/§C old-syntax
+  targets (bracket-select, `.:.` iteration, `[*]`) are dead surface — delete
+  them with a one-line note pointing at this document, and add the §10 corpus
+  in their place, commented per phase.
+- **Section the corpus by phase** so uncommenting is mechanical: §10.1
+  reshaping/splice/provenance (P3) · §10.2 broadcast/fusion/honest nesting
+  (P4) · §10.3 Ruling B/factoring/SoA (P5) · §10.4 flatten + the W1 border
+  (P4) · §10.5 map-generic (P4, Q1 ✅) · §10.6 transposes (**v2 — stays
+  commented permanently**, with the §7.3 pointer) · §10.7 meet rule (P4) ·
+  §10.8 W4 (permanently commented, the exit noted).
+- **Negatives pin ERROR CLASS, not message text**, until spec Q8 settles
+  wording (the established `;;N=>~ ERROR` marker idiom).
 
-**The old P0 file**: keeps its 21 working markers as substrate regression;
-its commented old-syntax targets get a supersession header pointing here
-(doc-truth, not deletion — the file is the historical record of D.2).
+**Normativity**: the corpus is executable spec (spec §10: "intended as
+executable test vectors"). Any divergence between file and spec is a bug in
+one of them — resolved by ruling, never by quietly editing the marker.
 
-**Open here**: fixture `def app-config :date [now]` — computed leaves force
-eagerly until §5.P6; the corpus entry for §1.3 demand is therefore a marker
-comment, not an assertion, in v1.
+**Open here**: the spec fixture's computed leaves (`:date [now]`,
+`:url [env …]`) force EAGERLY until §5.P6 — so the §1.3 demand property gets a
+marker COMMENT, not an assertion, in v1. The forced values are indicative
+(spec §10 preamble), so every other §10 result is unaffected.
 
-**Test delta**: the file itself (+ its `--check` gate). Status: ⬜.
+**At X.close**: the file promotes to a suite-gated regression test (the
+existing charter, unchanged).
+
+**Test delta**: the augmented file + its `--check` gate (currently 21/21;
+expect the count to grow only by forms that WORK at P0 — everything else
+lands commented). Status: ⬜.
 
 ### §5.P1 — The lexical seams + the retirement batch
 
