@@ -892,3 +892,52 @@ change. The obvious fixes, cheapest first:
 
 Expect the first option alone to take `step-connection` from ~117ms to ~25ms,
 which would turn the 13s exporter-handoff run into roughly 3s.
+
+### `test_valid_handoff_wait_deposit_gift` — the path that avoids a cross-connection push
+
+The obvious reading is that this test needs the server to write bytes to a
+connection it is not currently stepping, which it cannot do: the withdraw
+arrives on `r2e_session` (conn B), the deposit on `g2e_session` (conn A), and
+the answer must reach conn B. Our server writes only the bytes a step returns
+for the connection it stepped.
+
+But the test explicitly permits answering with a PROMISE:
+
+```python
+initial_response = self.r2e_session.expect_message_to(withdraw_gift_msg.exported_resolve_me_desc)
+self.assertEqual(initial_response.args[0], Symbol("fulfill"))
+# Clients may return a promise, or the actual object
+if isinstance(initial_response.args[1], captp_types.DescImportPromise):
+    listen_on_vow_msg = captp_types.OpListen(initial_response.args[1].to_desc_export(), ...)
+    self.r2e_session.send_message(listen_on_vow_msg)
+    second_response = self.r2e_session.expect_promise_resolution(...)
+```
+
+That gives a flow with no cross-connection write at all:
+
+1. **withdraw on conn B, gift absent** — do NOT break. Allocate a promise `P`,
+   reply immediately with `['fulfill <desc:import-promise P>]` (conn B is the
+   connection being stepped, so this is an ordinary reply), and park
+   `P -> gift-id` in the exporter-global store.
+2. **deposit on conn A** — records the gift globally, as it already does. No
+   push needed, and nothing has to reach conn B yet.
+3. **`op:listen` on P, on conn B** — this is a STEP ON CONN B, and by the time
+   it arrives the deposit has landed (the test sends the deposit before it
+   waits). Resolve `P` from the parked gift-id against the now-populated global
+   table, and the EXISTING late-fire path
+   (`bs-handle-listen-with-late-fire`) delivers the notification, because it
+   already answers immediately when the promise is settled.
+
+So the missing pieces are bounded and need no new architecture:
+
+- reply with `desc:import-promise` instead of `break` when the gift is absent
+  but the receive is otherwise valid;
+- a park map `promise-id -> gift-id`, alongside the gifts in the global store
+  (it will want its own namespace — see the "used:" prefix tradeoff above,
+  which is now at two overloads and should become a proper record before it
+  reaches three);
+- on `op:listen` for a parked promise, consult the global gift table and settle.
+
+The one thing to verify early: that our reply actually encodes as
+`desc:import-promise` and not `desc:import-object`, since the test branches on
+that and the non-promise branch would then assert against a promise.
