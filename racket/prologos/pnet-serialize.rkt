@@ -41,7 +41,15 @@
                   current-specialization-registry
                   current-bundle-registry bundle-entry
                   current-trait-laws current-property-store
-                  current-functor-store)
+                  current-functor-store
+                  ;; #78 P2: the 7 registries that were never serialized
+                  current-schema-registry schema-entry schema-field
+                  current-selection-registry selection-entry
+                  current-session-registry session-entry
+                  current-strategy-registry strategy-entry
+                  current-process-registry process-entry
+                  current-user-operators op-info
+                  current-user-precedence-groups prec-group)
          (only-in "global-env.rkt" current-defn-param-names)
          (only-in "multi-dispatch.rkt" current-multi-defn-registry)
          (only-in "foreign.rkt" parse-foreign-type make-marshaller-pair)
@@ -52,9 +60,37 @@
 ;; Lib dir for resolving relative .rkt paths in foreign function re-linking
 (define pnet-lib-dir (simplify-path (build-path (syntax-source #'here) ".." "lib")))
 
+;; Resolve a `foreign racket "…"` module-path string to a dynamic-require
+;; spec. THE canonical resolver — used by BOTH resolution sites: fresh
+;; elaboration (driver.rkt handle-foreign-decl) and the .pnet re-link below.
+;; The two sites drifting apart is how the worktree defect stayed hidden.
+;;
+;; - "….rkt"      → file relative to the RUNNING compiler's source directory
+;; - "prologos/X" → the RUNNING compiler's own X.rkt — NEVER the installed
+;;   collection. The collection resolves to the MAIN checkout, so in a git
+;;   worktree it instantiates a SECOND compiler (its own syntax.rkt struct
+;;   identities) and IR passthrough values fail the foreign module's own
+;;   predicates ("keyword-name: expected a Keyword value, got
+;;   #(struct:expr-keyword …)"). Two-instance class, 3rd sighting 2026-07-26;
+;;   cf. testing.md "relative path, never prologos/X". In the main checkout
+;;   the rewrite resolves to the identical file — no behavior change there.
+;; - anything else ("racket/base", "racket/math") → collection path, unchanged.
+(define (foreign-module-path->require-spec module-path-str)
+  (cond
+    [(regexp-match? #rx"\\.rkt$" module-path-str)
+     (simplify-path (build-path pnet-lib-dir ".." module-path-str))]
+    [(regexp-match? #rx"^prologos/" module-path-str)
+     (simplify-path
+      (build-path pnet-lib-dir ".."
+                  (string-append (substring module-path-str
+                                            (string-length "prologos/"))
+                                 ".rkt")))]
+    [else (string->symbol module-path-str)]))
+
 (provide serialize-module-state
          deserialize-module-state
          relink-foreign-marshallers!
+         foreign-module-path->require-spec
          pnet-stale?
          pnet-path-for-module
          ;; For testing
@@ -74,7 +110,33 @@
 ;; 2→3 at POL.10 (2026-07-24): env-snapshots may now carry whnf-reduced def
 ;; values (incl. champ-sentinels) — bump forces clean regeneration everywhere
 ;; so no pre-POL.10 reader ever meets the new shapes (the F1a.2 precedent).
-(define PNET_VERSION 3)
+;; 3→4 at GitHub #78 P2 (2026-07-27): TWO independent reasons.
+;;   (a) FORMAT — 7 registry slots added (indices 24-30: schema, selection,
+;;       session, strategy, process, user-operators, user-precedence-groups),
+;;       which were never serialized at all, so a cache hit supplied them via
+;;       neither parameter nor cell. That is what made a schema SEAL over a
+;;       cached module fail as `imports: Error loading module <M>: Type
+;;       mismatch` (#78 severity 3).
+;;   (b) POISON INVALIDATION — pre-fix caches can contain a module that was
+;;       elaborated while a dependency's registries were invisible, i.e. with
+;;       constructor patterns silently degraded to catch-all variables. Those
+;;       files are WRONG on disk and must not be read again. `infrastructure-
+;;       stale?` cannot be relied on to sweep them: it requires
+;;       compiled/driver_rkt.zo to EXIST (see below), so with no compiled dir it
+;;       reports "not stale" and a poisoned cache stays live. The version gate
+;;       is exact equality, so the bump is the only reliable sweep.
+;;
+;; v4 -> v5 (2026-07-27, the prelude-snapshot test migration): 34 test files moved
+;; from reloading the prelude per test case to seeding from test-support.rkt's
+;; once-per-subprocess snapshot. Existing local caches written under the old
+;; per-test-fresh-registry regime do NOT survive that change — both the main
+;; checkout and the worktree had a green suite before the migration and a failing
+;; test-io-session-01.rkt after it, purely from a stale cache; deleting the cache
+;; fixed both, and two consecutive runs then stayed green. `pnet-stale?` did not
+;; catch it, and the cache is gitignored/local, so no one would pull a good one.
+;; The version gate is exact equality, so the bump is the reliable sweep — same
+;; reasoning as the v3 -> v4 bump for #78. Costs one ~3s regeneration per machine.
+(define PNET_VERSION 5)
 
 ;; ============================================================
 ;; Serialization: struct->vector + gensym tagging + foreign-proc
@@ -273,6 +335,26 @@
   ;; --- spec-entry (8 fields: type-datums docstring multi? srcloc where-constraints implicit-binders rest-type metadata) ---
   (regN! spec-entry '() #f #f #f '() '() #f #f)
 
+  ;; --- GitHub #78 P2: the registry value structs for the 7 registries that
+  ;; were never serialized. REQUIRED, not optional: an unregistered tag does NOT
+  ;; error at cache read — the reader's unknown-tag fallback silently returns a
+  ;; raw VECTOR, which then fails the first struct `match` to touch it,
+  ;; arbitrarily far from here, with an error that PRINTS like the real struct.
+  ;; (pipeline.md § "New AST Node" item 6 documents this failure mode.)
+  ;; NESTED value structs count too — registering the entry alone is NOT enough.
+  ;; schema-entry's `fields` holds schema-field structs; leaving that one out
+  ;; produced exactly the documented symptom: `schema-field-check-pred:
+  ;; contract violation … given: '#(struct:schema-field name String #f #f)` —
+  ;; a raw vector that PRINTS like the struct it impersonates.
+  (regN! schema-field    #f #f #f #f)           ;; keyword type-datum default-val check-pred
+  (regN! schema-entry    #f '() #f #f)          ;; name fields closed? srcloc
+  (regN! selection-entry #f #f '() '() '() #f)  ;; name schema-name requires-paths provides-paths includes-names srcloc
+  (regN! session-entry   #f #f #f)              ;; name session-type srcloc
+  (regN! strategy-entry  #f '() #f)             ;; name properties srcloc
+  (regN! process-entry   #f #f #f '() #f)       ;; name session-type proc-body caps srcloc
+  (regN! op-info         #f #f #f #f 0 0 #f)    ;; symbol fn-name group assoc left-bp right-bp swap?
+  (regN! prec-group      #f #f '())             ;; name assoc tighter-than
+
   ;; --- Special: expr-foreign-fn with dynamic re-linking ---
   ;; Override the auto-registered constructor with one that re-links the proc
   ;; from source-module + racket-name via dynamic-require.
@@ -284,11 +366,8 @@
                  (not (eq? source-module #f))
                  (not (eq? racket-name #f)))
             (with-handlers ([exn? (lambda (_) proc)])  ;; fallback to stub
-              (define mod-path
-                (if (regexp-match? #rx"\\.rkt$" source-module)
-                    (simplify-path (build-path pnet-lib-dir ".." source-module))
-                    (string->symbol source-module)))
-              (dynamic-require mod-path racket-name))
+              (dynamic-require (foreign-module-path->require-spec source-module)
+                               racket-name))
             proc))  ;; no source-module → keep the stub
       ;; Check if the re-linked proc has fewer args than arity.
       ;; This happens when :requires (Cap) adds capability token args.
@@ -596,6 +675,19 @@
   (define s-trait-laws (serialize! (current-trait-laws)))
   (define s-property (serialize! (current-property-store)))
   (define s-functor (serialize! (current-functor-store)))
+  ;; #78 P2: the 7 formerly-unserialized registries. Like every registry above,
+  ;; these read the PARAMETER, which load-module parameterizes — so what is
+  ;; captured is the MODULE-SCOPED view (this module's contributions plus its
+  ;; dependencies'), not the process-global accumulation. Reading the cells
+  ;; here instead would serialize every other module's entries into this
+  ;; module's cache file and make .pnet content load-order dependent.
+  (define s-schema     (serialize! (current-schema-registry)))
+  (define s-selection  (serialize! (current-selection-registry)))
+  (define s-session    (serialize! (current-session-registry)))
+  (define s-strategy   (serialize! (current-strategy-registry)))
+  (define s-process    (serialize! (current-process-registry)))
+  (define s-user-ops   (serialize! (current-user-operators)))
+  (define s-user-precs (serialize! (current-user-precedence-groups)))
 
   (let ()
      (define hash-val (source-hash-for-module ns-sym source-path))
@@ -626,6 +718,14 @@
              s-trait-laws           ;; 21
              s-property             ;; 22
              s-functor              ;; 23
+             ;; #78 P2 (v4): the 7 formerly-unserialized registries
+             s-schema               ;; 24
+             s-selection            ;; 25
+             s-session              ;; 26
+             s-strategy             ;; 27
+             s-process              ;; 28
+             s-user-ops             ;; 29
+             s-user-precs           ;; 30
              ))
      (define pnet-path (pnet-path-for-module ns-sym))
      (make-directory* (path-only pnet-path))
@@ -671,6 +771,17 @@
                      (define s-tlaws  (and (>= (length raw) 22) (list-ref raw 21)))
                      (define s-props  (and (>= (length raw) 23) (list-ref raw 22)))
                      (define s-funcs  (and (>= (length raw) 24) (list-ref raw 23)))
+                     ;; #78 P2 (v4): indices 24-30. The length guards here are
+                     ;; vestigial — pnet-stale? and the gate above both require
+                     ;; EXACT version equality, so a v4 file always has all 31
+                     ;; slots — but they are kept in the existing style.
+                     (define s-schema    (and (>= (length raw) 25) (list-ref raw 24)))
+                     (define s-selection (and (>= (length raw) 26) (list-ref raw 25)))
+                     (define s-session   (and (>= (length raw) 27) (list-ref raw 26)))
+                     (define s-strategy  (and (>= (length raw) 28) (list-ref raw 27)))
+                     (define s-process   (and (>= (length raw) 29) (list-ref raw 28)))
+                     (define s-userops   (and (>= (length raw) 30) (list-ref raw 29)))
+                     (define s-userprecs (and (>= (length raw) 31) (list-ref raw 30)))
                      (list (deep-serializable->struct s-env)
                            (deep-serializable->struct s-specs)
                            (deep-serializable->struct s-locs)
@@ -694,6 +805,17 @@
                            (if s-tlaws (deep-serializable->struct s-tlaws) (hasheq))
                            (if s-props (deep-serializable->struct s-props) (hasheq))
                            (if s-funcs (deep-serializable->struct s-funcs) (hasheq))
+                           ;; #78 P2 (v4) — returned positions 21-27.
+                           ;; Defaults match each parameter's own default so a
+                           ;; restore fold preserves key-comparison semantics
+                           ;; (all 7 default to hasheq; none is equal?-keyed).
+                           (if s-schema    (deep-serializable->struct s-schema)    (hasheq))
+                           (if s-selection (deep-serializable->struct s-selection) (hasheq))
+                           (if s-session   (deep-serializable->struct s-session)   (hasheq))
+                           (if s-strategy  (deep-serializable->struct s-strategy)  (hasheq))
+                           (if s-process   (deep-serializable->struct s-process)   (hasheq))
+                           (if s-userops   (deep-serializable->struct s-userops)   (hasheq))
+                           (if s-userprecs (deep-serializable->struct s-userprecs) (hasheq))
                            )))))))
 
 ;; ============================================================

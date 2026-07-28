@@ -129,6 +129,35 @@ entry (auto-discharge is the deferred half).
 
 ## CIU T6: the cross-module schema channel — staleness + cache-hit registration (probe-found at F1b.5-p0, 2026-07-17)
 
+> **TRIAGED 2026-07-27 (GitHub #78 X.close): gaps 2 and 3 are RESOLVED; gap 1
+> remains open.** This entry called its own fix shape correctly ten days early
+> — "serialize the schema registry into `.pnet` (the ctor-registry precedent:
+> serialize + cache-hit merge + load-module capture/re-propagation)" is exactly
+> what #78 P2 shipped (`54358a5f`).
+>
+> - **Gap 2 — RESOLVED** (`54358a5f`). schema (and selection/session/strategy/
+>   process/user-operators/user-precedence-groups) are now serialized into
+>   `.pnet` (v4, indices 24-30), restored into BOTH parameter and cell on a
+>   cache hit, and captured/re-propagated by `load-module`. Cross-module
+>   schemas are no longer cold-load-only. Regression-gated by
+>   `tests/test-pnet-registry-restore.rkt` (severity-3 case).
+>   ⚠ The predicted symptom was UNDER-stated: this did not merely make
+>   inject/wrap silently no-op — it produced a HARD module-load failure
+>   (`imports: Error loading module <M>: Type mismatch`), because the seal
+>   guard at `typing-core.rkt:3125-3126` turns the arm off entirely. That is
+>   the issue's severity 3.
+> - **Gap 3 — RESOLVED** (verify: all 7 registries appear in
+>   `save-macros-registry-snapshot`, and `tools/batch-worker.rkt` save/restores
+>   via it at `:98`/`:223`). The F1b.5-s1 hygiene rider this entry anticipated
+>   did land.
+> - **Gap 1 — STILL OPEN**: `.pnet` validity is still own-source mtime +
+>   `driver_rkt.zo` stamp only; no content/dep hashing. A dependency's schema
+>   changing still does not invalidate a dependent's cache. #78 P2 makes the
+>   *contents* correct on a hit; it does nothing about *when* a hit is
+>   legitimate. **Entry gate met** — the "first real cross-module schema
+>   consumer" gate was overtaken by #78, so gap 1 is now the sole remaining
+>   piece and should be scheduled rather than gated.
+
 PRE-EXISTING class, probe-verified at `6584b443` (F1b.5-p0 agents; full record
 design doc §13.8 ✏ items 6-7). THREE coupled gaps, ONE channel fix:
 
@@ -158,6 +187,40 @@ source-hash-for-module — its comment already names the full implementation).
 exporting schemas — none exist today; the demo is single-file); (b) or the
 first stale-baked-plan incident in practice. Until then the class is documented
 here + at §13.8.
+
+## PM: resolution bridges capture registry cell-ids while they are still #f (found at GitHub #78, 2026-07-27)
+
+VERIFIED at `a892f951`, separate from #78 and deliberately NOT swept into it.
+`make-pure-trait-bridge-factory` (`resolution.rkt:460-462`) and
+`make-pure-hasmethod-bridge-factory` (`:552-555`) read
+`(current-impl-registry-cell-id)` / `(current-param-impl-registry-cell-id)`
+**eagerly**, outside the returned lambda — and both factories are invoked at
+`driver.rkt:3623-3624`, at **module level**, where those cell-ids are still
+`#f` and stay `#f` for the life of the process. `read-persistent-registry-cell`
+(`resolution.rkt:408-413`) has **no parameter fallback**: it returns `(hasheq)`
+unconditionally on a `#f` cid. Net effect: the pure trait/hasmethod bridges
+read an EMPTY impl registry in every process.
+
+Opposite polarity to #78 (which was write-to-param/read-from-cell; this is
+read-from-a-cell-that-was-never-identified), and the same half-migration root.
+Silent in both cases. **Fix shape**: defer the capture into the lambda, or read
+the cid at fire time. **Constraint**: this is a prerequisite for PM Track 12's
+read-path work — see `2026-07-27_PM_TRACK12_REGISTRY_READ_PATH_NOTE.md` §2.4.
+
+## PM: `.pnet` positional format has no arity assertion (found at GitHub #78 P2, 2026-07-27)
+
+`serialize-module-state` and `deserialize-module-state` exchange a bare
+positional list, and `driver.rkt`'s cache-hit arm is its ONLY consumer (verified
+tree-wide). Nothing asserts the length or names the slots. Appending is safe;
+**inserting** a slot anywhere before the tail would silently shift every later
+position, and because every registry slot is a hasheq the types are
+indistinguishable — the failure would be silent wrong registries, i.e. exactly
+the #78 severity-1/2 class. The `PNET_VERSION` gate is the only thing standing
+between a mis-ordered write and a mis-read.
+
+Cheap hardening: assert the deserialized length matches an expected constant,
+or move to a keyed/named representation. Not urgent (one consumer, exact
+version gate), but the blast radius is silent-wrong-answer.
 
 ## CIU T6: inference on unannotated params (projection + arithmetic) — records ergonomics (hand-testing, 2026-07-18)
 
@@ -1376,6 +1439,18 @@ the day this lands.
 > cyclic solutions). Next step is a probe of a champ carrying an *unsolved* meta
 > through zonk and through `occurs?`; also `conv-nf` (independent, unverified).
 >
+> ⚠ **NEW COUPLING — GitHub #58 P3 (`94cfbcbd`, 2026-07-27) constrains this slice.**
+> `loose-bvar.rkt` memoizes each term's loose-bvar range in a weak **`eq?`-keyed**
+> table, sound today precisely *because* `shift`/`subst` are the identity on
+> `expr-meta` (substitution.rkt:49, :542) — so a term containing an unsolved meta
+> correctly reports range 0. But a meta's SOLUTION lives off-node in
+> metavar-store and is filled in mid-command while the expr node's identity stays
+> fixed. **The moment any walker learns to follow meta solutions, that memo goes
+> stale-by-construction** and must be invalidated on `solve-meta!`
+> (`clear-loose-bvar-cache!` is exported for exactly this). Do not land the META
+> half without revisiting it. Recorded in loose-bvar.rkt's memo comment too, so
+> the constraint is visible at the code as well as here.
+>
 > Everything below is the ORIGINAL capture, kept as the diagnosis of record.
 
 **LIVE BUG — a silent wrong answer in legal, zero-error user code.** `shift`/`subst`
@@ -1701,3 +1776,48 @@ separators), goals always parenthesized (no implicit solve), and `rel-params` ha
 no `:`-type alternative (C.b.1's fused `?x:Int`). It also still describes the
 dead-in-WS `?var:C1:C2` narrow-var surface, which now COLLIDES with C.b.1's
 spelling. The `.org`/`.md`/`.tex`/`.pdf` renderings inherit all of it.
+
+---
+
+## Substitution / reduction perf — spin-offs from GitHub #58 (captured 2026-07-27)
+
+Three items surfaced by the #58 grounding audit + implementation that were
+deliberately NOT swept into the fix. #58 itself is CLOSED (P0–P4: `5a2e57a3`,
+`3fce3ed0`, `cf1791ce`, `94cfbcbd`, `4a2bbee3`); design doc
+`2026-07-27_SUBSTITUTION_QUADRATIC_BLOWUP_DESIGN.md`.
+
+### 1. `substS` in sessions.rkt has the SAME O(N²) shape, unfixed
+
+`racket/prologos/sessions.rkt:85-86` — `(substS cont (add1 k) (shift 1 0 e))` is
+the identical binder-crossing re-shift that #58 fixed in `substitution.rkt`, but
+it lives outside that file and was left alone. It is a **fourth walker in the
+same family** (with `shift`, `subst`, `zonk-at-depth`); the grounding critic
+flagged the family as "already out of sync".
+
+**Why deferred, not effort-avoidance**: session types are not on any measured hot
+path today, and #58's scope was the reducer. The fix is mechanical once wanted —
+`shift-arg`'s guard applies verbatim. **Do it when session-typed code gets a real
+workload**, or fold it into any track that touches `sessions.rkt`.
+
+### 2. `zonk-at-depth` re-shifts per meta occurrence
+
+`racket/prologos/zonk.rkt:557` does `(shift depth 0 zonked-sol)` once per meta
+occurrence, with depth incremented at each binder (:590/:592/:594). Same shape:
+a solution term re-walked once per occurrence. Unmeasured — it may be entirely
+fine, since solutions are usually small. **Measure before fixing**; #58's whole
+lesson is that the layer you assume is the cost usually isn't.
+
+### 3. The whnf/nf cache is now `eq?`-keyed — its hit rate is UNMEASURED
+
+#58 P2 (`cf1791ce`) changed all three per-command caches from `equal?` to `eq?`
+keying, which was a 15.7× win at N=256 and suite-neutral. But it necessarily
+**loses structural hits**: on the accumulator workload `hasheq` benchmarked
+indistinguishable from *no cache at all*, which is the honest reading that the
+cache was doing nothing useful there — not evidence it does nothing useful
+anywhere. Nobody has measured the hit rate on type-checking-heavy workloads with
+genuinely repeated structural subterms.
+
+**If it turns out to matter**, the principled fix is a memoized cheap structural
+hash (or hash-consing — survey option #4), **not** reverting to the O(N³)
+`equal?` key. Cheap first probe: add hit/miss counters to `whnf` and run the
+comparative bench.

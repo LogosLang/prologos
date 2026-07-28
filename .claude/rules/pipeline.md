@@ -13,7 +13,7 @@ These are the always-touch files. No exceptions.
 1. `syntax.rkt` — struct definition + `provide struct-out` + `expr?` predicate entry
 2. `substitution.rkt` — `shift` and `subst` (identity case for atomic nodes; recursive for nodes with sub-exprs; binder-respecting for nodes with binders)
 3. `zonk.rkt` — all three zonk functions (`zonk`, `zonk-at-depth`, `default-metas`)
-4. `reduction.rkt` — `whnf` (at minimum, add to `trivially-whnf?` set for stuck/atomic nodes; add `nf` identity case). Check `definitely-not-map?` if the node could appear as a value.
+4. `reduction.rkt` — `whnf` (at minimum, add to the **`whnf-trivial?`** set for stuck/atomic nodes; add `nf` identity case). Check `definitely-not-map?` if the node could appear as a value. ⚠ The identifier is `whnf-trivial?` (`reduction.rkt:1781`, sole call site `:1827`) — this checklist said `trivially-whnf?` for its whole life, a name that **has never existed in the tree** (corrected 2026-07-27, GitHub #58 P4). Note also that it deliberately EXCLUDES `expr-app`, so it is a fast path for *stuck* nodes only and can never short-circuit the beta path.
 5. `pretty-print.rkt` — `pp-expr` display + `uses-bvar0?` recursion
 6. `pnet-serialize.rkt` — `reg0!` / `reg1!` / `regN!` (or the `auto-cache!` block) for auto-cache serialization. **REQUIRED post-PM 10** — module caching depends on this. (Pre-PM-10 checklists missed this; don't.) **Failure mode is MISLEADING (Numerics Q11, 2026-07-01)**: an unregistered node in a cached library body does NOT error at cache read — the reader's unknown-tag fallback silently returns a raw **vector** (pnet-serialize.rkt `[else v]` arm), which then fails the first struct `match` to touch it, arbitrarily far away (Q11 hit `subst`), with an error that PRINTS like the real struct (`#(struct:expr-… …)`). If a match "with the right arm" fails on a node that "exists", suspect a deserialized vector impostor and check the registration FIRST. Note also: the gap stays latent until the node first appears in — or is first INVOKED from — a cached module body (`expr-p*-if-nar` sat unregistered for months; `expr-generic-from-rat` was registered-adjacent but only detonated when a cached body using it was first beta-reduced).
 7. `typing-core.rkt` — `infer` / `check` / `is-type` / `infer-level` cases
@@ -117,6 +117,37 @@ value, no de Bruijn vars"); a `[_ e]` / `[else e]` catch-all in a transforming
 walker; a fix applied to one member of a container family (champ/hset/rrb +
 transients) but not its siblings; "the suite is green" offered as evidence that a
 walker is complete.
+
+## New Memo / Cache Keyed on an AST Node
+
+**Use `hasheq`, never `hash`, when the key is an expr tree.** Racket's
+`equal-hash-code` is **depth-bounded**: it inspects only the first ~17 levels. So a
+family of deep terms sharing a prefix — every tail-recursive accumulator, every
+growing spine — collapses into a handful of buckets. Measured on a cons-accumulator
+(GitHub #58, 2026-07-27): **17 distinct hash values for ANY N**, 98.3% collision at
+N=1024. Each probe then degenerates into a linear scan running full structural
+`equal?` against O(N) resident keys, each comparison O(N) — so the memo is **O(N³)
+and costs vastly more than the work it saves**. Isolated: 647,773× vs `hasheq` at
+N=512; end-to-end 15.3× at N=256 and *growing with N*.
+
+`eq?` keying is **sound** for expr memos, not merely faster: no expr struct is
+`#:mutable` (`grep -c '#:mutable' syntax.rkt` → 0), so a memo of a pure function
+keyed on identity is correct, and it is strictly conservative — it can only lose
+hits, never return a wrong one. `nbe-scan-cache` (`reduction.rkt:3727`) already
+ships this argument written out.
+
+**Red flags**: `(make-hash)` in a `parameterize` next to the word "memoization";
+a cache whose comment claims it "avoids O(N²)" without saying what it costs; any
+profile where the memoized function's SELF time dominates its callees'. The last
+one is the tell — at HEAD `whnf` self-time was 58.6% while its actual dispatch
+(`whnf-impl/match`) was 0.9%, i.e. nearly all the time was spent *deciding whether
+it had seen the term before*.
+
+**This class hides behind a green suite and a plausible counter.** Issue #58's own
+`cache-time` counter measured explicit bookkeeping, not collision cost, and reported
+the cache at 0.04% of wall — so the cache was formally exonerated and the
+investigation moved on. Measure a cache by A/B-ing it OFF, never by an
+instrument that only sees the code path you already suspect.
 
 ## New Racket Parameter
 

@@ -29,28 +29,28 @@ ns examples::audit::traits-instances
 ;; expect: eq-ord : Ordering
 
 ;; --- 1c. Generic operators via trait dispatch ---
-.{2N + 3N}
+.(2N + 3N)
 ;; expect: 5N : Nat
 
-.{10N - 3N}
+.(10N - 3N)
 ;; expect: 7N : Nat
 
-.{4N * 5N}
+.(4N * 5N)
 ;; expect: 20N : Nat
 
 ;; --- 1d. Generic comparison ---
-.{3N < 5N}
+.( 3N < 5N )
 ;; expect: true : Bool
 
-.{5N <= 5N}
+.( 5N <= 5N )
 ;; expect: true : Bool
 
 ;; --- 1e. Generic equality (= inside mixfix) ---
 ;; OK: Fixed — = is now alias for == in mixfix context
-.{3N = 3N}
+.(3N = 3N)
 ;; OK: true : Bool
 
-.{3N = 5N}
+.(3N = 5N)
 ;; OK: false : Bool
 
 ;; = outside mixfix also works:

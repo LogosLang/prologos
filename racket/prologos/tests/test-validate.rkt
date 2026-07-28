@@ -21,7 +21,9 @@
          "../macros.rkt"
          "../namespace.rkt"
          "../relations.rkt"
-         "../global-env.rkt")
+         "../global-env.rkt"
+         (only-in "../metavar-store.rkt" current-persistent-registry-net-box current-prop-net-box)
+         (only-in "../propagator.rkt" with-forked-network))
 
 (define here (path->string (path-only (syntax-source #'here))))
 (define lib-dir (simplify-path (build-path here ".." "lib")))
@@ -31,16 +33,34 @@
   (call-with-output-file tmp
     (lambda (out) (display content out)) #:exists 'truncate)
   (define results
-    (parameterize ([current-ns-context #f]
-                   [current-module-registry (hasheq)]
+    ;; Seed from the ONCE-per-subprocess prelude snapshot rather than reloading
+    ;; all 39 prelude modules per test case. `(hasheq)` here cost ~4s of
+    ;; deserialize-module-state + pnet-stale? per test — over half the runtime of
+    ;; a Level-3 route test, and none of it the thing under test. The registry
+    ;; family must be seeded TOGETHER: a preloaded module registry means modules
+    ;; are not re-loaded, so seeding only `current-module-registry` leaves the
+    ;; trait/impl registries empty and `Seqable for List` goes missing. Mirrors
+    ;; test-support.rkt's own run-ns-* helpers exactly.
+    ;; The schema/selection/defn-param registries stay FRESH — those are what
+    ;; these tests register into, and per-test isolation there is the point.
+    (parameterize ([current-file-module-network-ref (make-module-network)]
+                   [current-ns-context #f]
+                   [current-module-registry prelude-module-registry]
                    [current-lib-paths (list lib-dir)]
                    [current-relation-store (make-relation-store)]
-                   [current-preparse-registry (current-preparse-registry)]
+                   [current-preparse-registry prelude-preparse-registry]
+                   [current-trait-registry prelude-trait-registry]
+                   [current-impl-registry prelude-impl-registry]
+                   [current-param-impl-registry prelude-param-impl-registry]
+                   [current-persistent-registry-net-box prelude-persistent-registry-net-box]
+                   [current-module-registry-cell-id #f]
+                   [current-ns-context-cell-id #f]
                    [current-schema-registry (hasheq)]
                    [current-selection-registry (hasheq)]
                    [current-defn-param-names (hasheq)])
-      (install-module-loader!)
-      (process-file (path->string tmp))))
+      (with-forked-network current-prop-net-box
+        (install-module-loader!)
+        (process-file (path->string tmp)))))
   (delete-file tmp)
   results)
 

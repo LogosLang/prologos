@@ -3,8 +3,20 @@
 ;; performance-counters.rkt — Deterministic heartbeat counters for benchmarking
 ;;
 ;; Inspired by Lean4's heartbeat system. Hardware-independent, deterministic,
-;; reproducible. Zero-cost when disabled (parameter check = ~5ns, same as
-;; existing current-reduction-fuel pattern in reduction.rkt).
+;; reproducible. Cheap when disabled, but NOT "zero-cost" — measured 2026-07-27
+;; (GitHub #58 P0): the disabled path is a parameter read plus a branch at
+;; **43.3 ns/op** (against 1.0 ns for an empty loop, 3.1 ns for a module-level
+;; `set!`, 2.4 ns for a box). This header previously claimed ~5 ns, which is off
+;; by ~9x and had never been measured.
+;;
+;; The distinction is only academic at PER-STEP frequency, which is what every
+;; counter here does — `perf-inc-reduce!` fires once per whnf call, so 43 ns is
+;; invisible. It is decisive at PER-NODE frequency: wiring these macros into
+;; substitution.rkt's `shift`/`subst` (which recurse once per expr node, at
+;; ~17-26 ns/node) measured a **2.6x pessimization of the walker**, and the idea
+;; was abandoned. Before adding a counter to a per-node hot path, measure it;
+;; the cheap alternatives are module-global and therefore not thread-local like a
+;; parameter, so they interleave under the parallel batch runner.
 ;;
 ;; IMPORTANT: This module must remain a PURE LEAF — requires only racket/base
 ;; and json. 8+ source modules require it; any project dependency creates cycles.

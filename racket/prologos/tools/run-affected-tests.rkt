@@ -694,8 +694,28 @@
   ;; load balance. Workers pull files from a shared queue via stdin.
   (define jobs (min (num-jobs) file-count))
 
-  ;; Read historical timings for LPT sort
+  ;; Read historical timings for LPT sort.
+  ;;
+  ;; ⚠ This used to read ONLY THE LAST LINE of timings.jsonl, which is a trap: every
+  ;; TARGETED run (`--tests foo.rkt`) also appends a record, and 77% of all records are
+  ;; targeted (1162/1503 as of 2026-07-27). Our own workflow prescribes targeted runs
+  ;; during development and the full suite as the final gate — precisely the sequence
+  ;; that leaves a 1-6 file record last. Every other file then fell to the +inf.0
+  ;; default, all keys compared equal, and the "LPT" sort silently degenerated to
+  ;; stable (alphabetical) order.
+  ;;
+  ;; Measured impact was NIL (median effective parallelism 8.97 poisoned vs 8.96 clean
+  ;; over 282 runs) — the schedule is not what gates this suite. Fixed anyway because a
+  ;; silently-degenerating optimizer is a lie in the code, and the cost of being right
+  ;; is a few lines.
+  ;;
+  ;; Now: take the per-file MEDIAN over the most recent full-suite runs. Median rather
+  ;; than latest because per-file wall varies 5-10% run to run; full-suite runs only
+  ;; because a file timed alone is not under 10-way contention and reads systematically
+  ;; low, which would distort the ordering it is meant to inform.
   (define timings-path (build-path project-root "data" "benchmarks" "timings.jsonl"))
+  (define LPT-HISTORY-RUNS 5)      ;; how many recent full runs to draw on
+  (define LPT-MIN-FILE-COUNT 100)  ;; below this a record is a targeted run, not a suite
   (define historical-times
     (if (file-exists? timings-path)
         (with-handlers ([exn? (lambda (e) (hasheq))])
@@ -705,12 +725,29 @@
                 (let loop ([acc '()])
                   (define line (read-line))
                   (if (eof-object? line) (reverse acc) (loop (cons line acc)))))))
-          ;; Use last run's per-file times
-          (define last-run
-            (with-input-from-string (last lines) read-json))
-          (define results (hash-ref last-run 'results '()))
-          (for/hasheq ([r (in-list results)])
-            (values (hash-ref r 'file "") (hash-ref r 'wall_ms 0))))
+          ;; Newest-first, keep only full-suite records, take at most N.
+          (define full-runs
+            (let loop ([ls (reverse lines)] [got '()])
+              (cond
+                [(or (null? ls) (>= (length got) LPT-HISTORY-RUNS)) (reverse got)]
+                [else
+                 (define rec
+                   (with-handlers ([exn? (lambda (e) #f)])
+                     (with-input-from-string (car ls) read-json)))
+                 (loop (cdr ls)
+                       (if (and rec (>= (hash-ref rec 'file_count 0) LPT-MIN-FILE-COUNT))
+                           (cons rec got)
+                           got))])))
+          ;; file -> list of observed wall_ms, then median.
+          (define observed
+            (for*/fold ([h (hash)])
+                       ([run (in-list full-runs)]
+                        [r (in-list (hash-ref run 'results '()))])
+              (define f (hash-ref r 'file ""))
+              (hash-update h f (lambda (v) (cons (hash-ref r 'wall_ms 0) v)) '())))
+          (for/hasheq ([(f ms-list) (in-hash observed)])
+            (define sorted (sort ms-list <))
+            (values f (list-ref sorted (quotient (length sorted) 2)))))
         (hasheq)))
 
   ;; Sort: heaviest first. Unknown files get +inf.0 (conservative).

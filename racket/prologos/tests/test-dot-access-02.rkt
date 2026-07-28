@@ -30,7 +30,8 @@
          (prefix-in tc: "../typing-core.rkt")
          "../namespace.rkt"
          "../trait-resolution.rkt"
-         "../parse-reader.rkt")
+         "../parse-reader.rkt"
+         "test-support.rkt")
 
 ;; ========================================
 ;; Shared Fixture for E2E tests
@@ -49,12 +50,12 @@
                 shared-bundle-reg)
   (parameterize ([current-file-module-network-ref (make-module-network)]
                  [current-ns-context #f]
-                 [current-module-registry (hasheq)]
+                 [current-module-registry prelude-module-registry]
                  [current-lib-paths (list lib-dir)]
-                 [current-preparse-registry (current-preparse-registry)]
-                 [current-trait-registry (current-trait-registry)]
-                 [current-impl-registry (current-impl-registry)]
-                 [current-param-impl-registry (current-param-impl-registry)]
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry]
+                 [current-param-impl-registry prelude-param-impl-registry]
                  [current-bundle-registry (current-bundle-registry)])
     (install-module-loader!)
     ;; Set up a basic namespace with prelude

@@ -1896,3 +1896,56 @@ experiment (2026-05-30, §18.18.6.13). See DESIGN_METHODOLOGY.org §
 "Delegation vs Co-Design (Dynamic Workflows)" (the appropriateness
 distinction + scale tiers) + ~.claude/rules/workflow.md~ § "Dynamic-workflow
 code-state discipline" / "Diff-back" (the operational reflexes).
+
+** Two Compiler Instances: the Collection-Path Trap
+
+*The lesson*: any module reference that resolves through the INSTALLED
+=prologos= collection loads the MAIN checkout's copy — in a git worktree that
+is a SECOND compiler instance with its own struct identities (=syntax.rkt=
+=expr-*= types), and values from the running instance fail the second
+instance's own predicates. The error PRINTS as if the value were the right
+kind: =keyword-name: expected a Keyword value, got #(struct:expr-keyword age)=
+— a transparent-struct print that looks exactly like the expected type. When a
+predicate rejects a value that "is" the right struct, suspect two instances
+before suspecting the value.
+
+*Three sightings, three surfaces*:
+1. 2026-06-29 — test-file =require= by collection path (SRE-registry batch
+   isolation; parameter mutations die with the loading thread).
+2. 2026-07-14 — =test-sre-coverage= order-dependent batch flake (same
+   mechanism; 6 PPN-4C-era test files converted to relative requires).
+3. 2026-07-26 — *lib* surface: =reason.prologos='s
+   =foreign racket "prologos/keyword-ops"= resolved via
+   =(string->symbol module-path-str)= → collection → main checkout. Six
+   schema/seal/validate/reason tests failed in ANY worktree while green in
+   main. TWO resolution sites had the same fallback (fresh elaboration in
+   =handle-foreign-decl= + the =.pnet= re-link in =pnet-serialize.rkt=) —
+   fixing one changed nothing, which pointed at the second.
+
+*The structural fix* (2026-07-26): =foreign-module-path->require-spec=
+(=pnet-serialize.rkt=) is THE canonical resolver, used by both sites —
+="prologos/X"= rewrites to the RUNNING compiler's own =X.rkt= (anchored on the
+module's own resolved path), external collections (="racket/base"=) stay on
+the collection route. In the main checkout the rewrite resolves to the
+identical file, so nothing changes there. Unit-pinned in =test-foreign.rkt=
+including an instance-identity end-to-end check.
+
+*Secondary lesson — a lying diagnostic switch*: the investigation's cache
+hypothesis was "ruled out" with =--no-pnet-cache= … which was a NO-OP:
+=batch-worker.rkt= only acted on env ="1"= while =current-use-pnet-cache?=
+defaults to =#t=, so ="0"= silently kept the cache on. A diagnostic
+experiment is only as good as the switch it flips — when a flag is
+load-bearing for a conclusion, verify the flag actually changes the behavior
+(one =printf= would have caught it). Fixed alongside (explicit ="0"= branch).
+
+*Why the wrong path looked right*: the collection-path spelling
+="prologos/keyword-ops"= reads as the canonical module idiom, works perfectly
+in the main checkout (the only place lib foreign decls had run), and the
+failure it produces points at the VALUE ("expected a Keyword") rather than at
+module resolution. The class is invisible until the first worktree session
+exercises the surface.
+
+Origin: 2026-07-26 worktree session (commits =31d27c83= context →
+foreign-resolver fix). Ambient one-liner: =.claude/rules/testing.md= §
+"Test files require production modules by RELATIVE path" (extended with the
+lib-foreign surface + resolver pointer).

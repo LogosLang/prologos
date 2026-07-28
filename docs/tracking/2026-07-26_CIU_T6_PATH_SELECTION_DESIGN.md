@@ -1,7 +1,8 @@
-# CIU Track 6 — Path Selection (Stage-3 Design, D.1 DRAFT)
+# CIU Track 6 — Path Selection (Stage-3 Design, **D.2**)
 
-**Status**: **Stage-3 DRAFT.** Grounding ✅ · prior art ✅ · **the SURFACE is OPEN** (§5 —
-owner co-design conversation pending, deliberately not pre-empted here).
+**Status**: **Stage-3 D.2 — the SURFACE IS SETTLED** (five co-design rounds, owner-ruled
+2026-07-26; consolidated spec = **§5.9 PS1–PS15**; §5.1–§5.8 remain as the conversation
+record). Implementation opens at P0 (acceptance file) per §2.
 **Series / Track**: CIU Series → **Track 6** (Anonymous Records & Collections & Path Selection).
 **Date opened**: 2026-07-26 · **Owner**: Zee Larson
 **Predecessor**: [`2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md`](2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md)
@@ -48,14 +49,16 @@ successor) is designed-for but phased — see §9.
 | Phase | Description | Status | Notes |
 |---|---|---|---|
 | G | Grounding audit + prior-art survey | ✅ | audit `wf_a62d4b88-47b`; prior art `wf_c1acb1c7-ce1`; §3/§4 |
-| S | **Surface co-design (OWNER CONVERSATION)** | 🔄 | **§5 — THE OPEN PIECE.** Blocks every phase below except P1 |
-| P1 | `.{` full retirement + audit-example repair | ⬜ | **Owner-RULED 2026-07-26**: clean switchover, NO deprecation/diagnostic path. Surface-independent — can land first |
-| P2 | Prerequisite defect repairs (§3.5) | ⬜ | tuple dynamic Int index · PVec silent OOB · the walker gaps. Each needs its own census |
-| P3 | The selection NODE + elaboration | ⬜ | shape pending §5 |
-| P4 | Result typing (the seed retype, §3.2) | ⬜ | shape pending §5 |
-| P5 | Broadcast | ⬜ | shape pending §5 |
-| P6 | Migration + supersession (§9) | ⬜ | `#p(…)` · `get-in`/`update-in` · `.*` · `selection` · CIU T2/T3 |
-| X.close | **MANDATORY** — bench matrix · DEFERRED triage · doc-truth sweep · memory fold · **Stage-5 PIR** | ⬜ | The track does not flip ✅ until the PIR lands |
+| S | **Surface co-design (OWNER CONVERSATION)** | ✅ | **SETTLED 2026-07-26** — five rounds (§5.4–§5.8), consolidated as **§5.9 PS1–PS15** |
+| P0 | **Acceptance file** (`examples/2026-07-26-ciu-t6-path-selection.prologos`) — IDEAL Prologos syntax throughout [owner]; not-yet-working forms COMMENTED until their phase lands; `--check` gated from day one (the Rel T1 Batch-A lesson). Charter [owner, round 6b]: the `app-config` nested record · **broadcast over PVecs of same-shaped records** · **solve result sets** · **typing pins throughout** (markers carry types) · **function-typed forms** (D3-S11: named-schema + keyword-projection consumers) · **the standalone-def seam family pinned** (`def add5 := [+ 5 _]` et al., commented + the working argument/annotated forms as markers). **At X.close the file PROMOTES to a suite-gated regression test** (the F1 `test-*-acceptance.rkt` clone pattern) | ✅ | `--check` 21/21, 0 errors @ P0 landing; §A–§G: guild-hall config · party PVec · quest-board solve rows · the add5 family · typing pins | workflow.md § "Acceptance file as Phase 0". Spans predicate FAMILIES of forms, not one idiom (the 7a lesson) |
+| P1 | **`.{` retirement, WS leg (D3-S5 split)**: repair the 4 audit files' mixfix `.{X}`→`.(X)` · **DELETE the recognizer + the `$mixfix-retired` error entirely** (owner: retire from code AND diagnostics) | ✅ | `d18648f0` — recognizer + both grouping arms + error path + dead mixfix-rbrace closer legs all deleted; audit-06/-08/-09 → 0 errors, audit-12 runs (3 pre-existing quote-section errors unmasked); `<`-in-`.( )` mis-extension found + spawned as its own task (capability loss on 2 audit lines NAMED, converted to `lt`/`le`); suite 9150/471/0 | **Owner-RULED (Q_P5 + round 6)**. The SEXP brace-select leg is NOT here — it sequences WITH P4 (tests re-pointed, never deleted) |
+| P2 | Prerequisite defect repairs, SPLIT at the mini-audit (`wf_2c99bc25-940`): **P2.a ✅ `ad75e57a`** — record-project Int gate (+ the pvec-nth discipline guard the audit found: widening alone would have silently flipped the Nat-only discipline, suite-invisible) · ground-expr? twins → generic transparent-struct fallback (`expr-substructs-all?` in syntax.rkt; union-of-metas defect closed; mult/level-meta posture ruled+pinned) · normalize-for-resolution union descent (the upstream capture gap) · broadcast-get whnf arm + definitely-not-map? exemption (minimal scope; bare-meta typing = P5). 14 tests failing-first; suite 9164/472/0. **P2.b ⬜ RULED (c) — the TWO-TIER PRINCIPLE (owner, round 7; spec in §5.10)**: PVec OOB (TWO divergent silent legs: expr-get→`<error>`, pvec-nth→stuck; + pvec-update/pop siblings) · List OOB · Map-miss shape (census: Option-wrap ≈ 35-40 tests + 6 stdlib×2 book twins + ~24 corpus sites, ergonomics ~5:1 against; keep-V-runtime-LOUD ≈ 2 test pins but needs the type-fork + has the top-node-only panic-counting bound; the runtime arm is TYPE-BLIND — rows/dicts share the champ) · map-get-on-nat-row (project-vs-refuse) | 🔄 | B1 legs stay failing-test-first; the map-tutorial TEACHES error-on-miss 3× (doc-truth rider) |
+| P3 | Reader/lexer (WS-Impact MANDATORY; both-modes census; **ground on the TOKEN-REGISTRY inventory, priorities 92/88/87/86 — D3-S6**): `.N` segments (anchor at the DOT; numerics anchor at a DIGIT — CH-4 ruled) · `.:.`/`.:[` iteration · `*` splat/`[*]` · dot-key retirement (`.:name`→`.name`, **+ the `$nil-dot-key` twin `#.:name`**) · `.*name`→`.:.name` migration · **`m[:a]` RETIRES (error + hint; no flip — D3-S4)** · `x[]`/`_[sel]`/**`.-1`** rejections with real diagnostics · selector **round-trip printing pins** (D3-M6) · the sexp special form (PS14) | ⬜ | Censuses per D3-M7: dot-key 8+11 sites, `.*name` 7+4, `m[:kw]` 17+8, `v[literal]` 49+45 / 48 test-cases. **Sections tokens are GONE from this phase** (B2 → keyword-projection needs none) |
+| P4 | The selection NODE + elaboration + static typing (PS3–PS8 as amended §5.10): core-elaborator form (NOT preparse, §4.10) · contributions keying/assembly/collision/miss · rows out (§3.2 narrowed: keyword result type) · **P4.a the nat-keyed assembly path + PS4 renumbering** · **P4.b the closed-vs-dyn seed pin (PS15=CLOSED, test-pinned)** · **P4.c the sexp special form + re-pointing the 20 brace-select tests (D3-S5)** · **P4.d `v.i` neutral-segment + soft resolution (D3-S1; cuttable)** · full pipeline incl. **item 13: deliberate `#f` registration in typing-propagators (D3-M2)** | ⬜ | The heart. Tests per-phase; probe-first; Exhaustive-Walker discipline, generic fallback |
+| PX | **The binder-seam phase (owner-ruled in-track; WIDENED round 6b)**: (a) the D3-S10 concrete-codomain lambda-adoption hole — `[the [List String] [map [fn [x] x] ints]]` accepts silently; fix = decomplect evidence/obligation at binder positions (`:expected` facet; lam `:type` written only from the body; disagreement → top → existing refusal). (b) **the standalone-def seam** — `def f := [fn …]` / `def add5 := [int+ 5 _]` fail even when the body DETERMINES the types; body-directed inference for the monomorphic + row-lambda cases; the trait-op case (`[+ 5 _]`) honest residue (may need defaulting/residuation → Num T2/F-row; annotated-only fallback) | ⬜ | Position flexible; failing-test-first. §3.7's `map-size` class stays filed separately |
+| P5 | Iteration `:` + first-class selectors (PS1/PS11 as amended): `.:.`/`.:[` both key domains, **result carrier = source collection kind preserved (D3-S4)** · **keyword-projection coercion `map :name users` + qtt twin (+ the `[:kw m]` head arm)** · explicit lambdas as multi-select selector values · empty-prefix column extraction | ⬜ | v1 adds ZERO propagators (Network Reality Check stated in advance); the broadcast-propagator node is a FUTURE upgrade with its own NTT model |
+| P6 | Migration + supersession (§9 + PS12/PS13 as amended): `#p(…)`/`get-in`/`update-in` = the dynamic tier (kept; **Path applicability → DEFERRED entry, D3-M3**) · `selection`'s three gaps revisited · **CIU master: T2 items 2+4 superseded, 1+3 re-homed; T3 RE-CHARTERED (D3-S9)** · DEFERRED triage | ⬜ | §9's write-phase note: source-overlap disjointness is the WRITE headline (D3-S7) |
+| X.close | **MANDATORY** — bench matrix (feature microbench + E2E per testing.md) · DEFERRED triage · doc-truth sweep · memory fold · **Stage-5 PIR** | ⬜ | The track does not flip ✅ until the PIR lands |
 
 *Per `workflow.md`: tests are PER-PHASE, never a dedicated end-of-track test phase.
 A behavioural phase shipping +0 tests is INCOMPLETE.*
@@ -475,11 +478,342 @@ requiring the `^` on `[admins.0^[…]]` seems unsatisfying."*
   existing key NEVER changes when a sibling selector is added; post-derivation
   collisions remain static errors (remedy: explicit `^name`).
 
+### §5.7 Round 3 — the `*`-segment recast (Claude proposal, 2026-07-26; owner unease was the trigger)
+
+**Trigger (owner)**: `.[…]` is at odds with the algebra — `.` means extract, `[` means
+keep; iteration is neither. And the three admins targets (`@["Alice" "Bob"]` /
+`{:admins @[…]}` / `{:admins @[{:name …}…]}`) were not equally easy to spell.
+
+**PR-5 — `*` IS the iteration operator, as a PATH SEGMENT.** `admins.*.name` = "for
+each entry of admins, its name" — the owner's OWN 2026-03-02 vocabulary
+(`depts.*.projects`), and a compositional generalization of the SHIPPED `.*name`
+broadcast (First-Class Paths 7b: `admins.*name` ≡ new `admins.*.name`). `.[…]`
+broadcast is RETIRED from the design. `*` = "each entry" uniformly: per-element on
+nat-keyed subjects, per-VALUE on keyword-keyed subjects (map-vals — answers Q_S12
+with the same one rule). Stacking is just two segments (`matrix.*.*.x`) — the J
+wrap-vs-add trap dissolves. Dynamic `v.i` (PR-3) sits beside it: `v.*` = all, `v.i`
+= one, `v.0` = literal.
+
+**PR-6 — the keying rule, refined once**: a selector's kept key = the last segment of
+the path **up to the first structural operator (`*` or `[`)** — i.e. the deepest node
+the selector addresses AS A WHOLE. For pure paths this coincides with the round-2
+last-segment rule (`server.host` → `:host`); with iteration it names the collection
+(`admins.*.name` → `:admins`), which is what reads correctly. Corollary: `^`/`^n`/`^_`
+attach selector-FINAL and govern the selector's contributed key (mid-path `^` is
+superseded by PR-2 dot-descend).
+
+**The four quadrants, minimal spellings, no `^` needed:**
+| want | spelling | result |
+|---|---|---|
+| bare leaf values | `x.admins.*.name` | `@["Alice" "Bob"]` |
+| keyed leaf values | `x[admins.*.name]` | `{:admins @["Alice" "Bob"]}` |
+| keyed sub-records | `x[admins.*[name]]` | `{:admins @[{:name "Alice"} …]}` |
+| bare sub-records | `x.admins.*[name]` | `@[{:name "Alice"} …]` |
+
+**PR-7 — `.[…]` is FREED and becomes the anonymous-selector literal** (Q_S9's
+spelling): `.[name role]` ≡ `[fn [r] r[name role]]`; the simple section is `.name`
+(`map .name admins` — heals `ERGONOMICS.org:74`'s `.:name` aspiration). Leading dot
+= "subject pending", one reading everywhere.
+
+**Named costs**: (i) the `*`-SPLAT proposal (§ round-2 reply) CONFLICTS with
+`*`-iteration in final position — recommend splat is DEFERRED/re-spelled (it was
+Claude's proposal, not an owner need); (ii) `.*` reader work + `.*name` migration
+(already owed in P6); (iii) `*` on dyn tails stays forbidden (the wildcard gate).
+
+**PR-8 — the mixed-`^` question (owner re-floated)**: when one selector at a level
+elides, do siblings COERCE to positional (owner lean — one `^` ⇒ the level is a
+tuple) or is mixing a STATIC ERROR (Claude rec — remedy: elide/rename the rest)?
+Note: the owner's original draft line `[database^ features.1]` is all-positional
+under EITHER rule (nat-ending selectors contribute positionally per PR-1).
+
+**The first-principles needs basis** (owner asked for it): descend `.` · keep/assemble
+`[…]` · each `*` · key disposition {keep default, `^` drop, `^n` rename, `^_` derive,
+selector-final} · assembly rule (record | tuple | PR-8) · extraction (all-dots) ·
+dynamic index (`v.i`, dot-only) · sections (leading-dot forms) · reserved: ranges
+(future CIU track), `**`, splat respelling, nil-safe, omit-selectors
+(presence-marks era), the write direction.
+
+### §5.8 Round 4 (owner + Claude, 2026-07-26) — segment-attached `^` · the `:`-iteration variant · solve modeling
+
+- **ADOPTED — `^`-forms attach to the KEY-GENERATING segment** (owner proposal
+  `x[admins^.*[name] features^]`, soundness verified). The rule: `^`/`^name`/`^_` sit on
+  the segment the keying rule selects (= the last segment before the first structural
+  operator; = the final segment in pure paths). This SUPERSEDES PR-6's selector-final
+  corollary — for pure paths the two coincide; with a structural tail the mark stays
+  visually ON the key it governs instead of after the bracket. `^` on any OTHER segment
+  = static error. Lexing verified: `admins^` glues; `admins^.…` chains.
+  Owner's example under the rule: `x[admins^.:[name] features^]` → both elided → the
+  TUPLE `⟨[PVec {:name String}] [PVec Keyword]⟩` (display `⟨…⟩` — heterogeneous nat row,
+  not `@[…]`).
+- **PR-9 — the `:`-iteration variant (owner floated; Claude assessment: workable, with
+  named costs).** Owner finds `*`-as-iteration hard to read and wants `.*` as SPLAT.
+  The underlying insight: `*`'s March meaning is "all the FIELDS, here" (wildcard/
+  splat), NOT "for each, onward" — the two are different operations and overloading
+  `*` with both is why it read badly. Division of labour:
+  - **`*` = all-fields-HERE**: final-position `server.*` = SPLAT (fields spliced into
+    the result level); `[*]` = identity sub-select. Closed-tail-gated. Mid-path `*` is
+    ILLEGAL (its March mid-path use migrates to `:`).
+  - **`:` = along-EACH-entry** (NumPy `a[:, k]` / q `::` precedent): `admins.:.name`
+    (each's name) · `admins.:[name]` (each, sub-selected) · `rows.:[f c]`.
+  - **Grounded lexical facts**: `.:.` / `.:[` degrade to bare `|.| :` tokens today
+    (reader work needed, tokens available); ⚠ **`m.:name` ($dot-key) is LIVE** —
+    probed, returns the field — so `:`-iteration creates the one-dot hazard
+    `m.:name` (field) vs `m.:.name` (each's name) UNLESS dot-key is retired (migrate
+    `.:name` → `.name`; census owed; ERGONOMICS.org:74's `map .:name` becomes
+    `map .name`). Colon triple-duty (keyword sigil · fused `x:Int` annotations ·
+    dot-key) makes this the most census-sensitive corner of the tokenizer (the 7g
+    drift family). Sexp-mode divergence noted (keyword-glued paths).
+- **Solve-rows modeling** (owner-anticipated consumer), with `rows : List {:c String
+  :f String}` from `def rows := solve (fruit-color f c)` (or the POL.9 implicit form):
+  - `rows.:.f` → `'["apple" …] : [List String]` — one column, bare.
+  - `rows.:[f]` → `[List {:f String}]` — narrowed rows.
+  - `rows.:[f^ c^]` → `[List ⟨String String⟩]` — per-row value tuples (zip shape).
+    (PR-8's coerce-vs-error fork reappears PER-ELEMENT here.)
+  - **Empty-prefix selectors = COLUMN EXTRACTION**: a selector may begin with `:`
+    (no key-generating segment → keyless → positional, or renamed):
+    `rows[:.f^fruits :.c^colors]` → `{:fruits [List String] :colors [List String]}`
+    — the named UNZIP, one selection. Lexes today (degraded): verified.
+  - `rows.0.f` → `"apple"` (extraction); `rows[0]` → `⟨row⟩` per Q_S7a.
+
+### §5.9 THE SETTLED SURFACE (D.2 — owner-ruled across rounds 1–5, 2026-07-26)
+
+**Rounds 1–4 = §5.4–§5.8; round 5 rulings: PR-9 ADOPTED (`:` iteration · `*` splat ·
+dot-key retired) and PR-8 → STATIC ERROR.** Items marked ⊳ were adopted under the
+owner's delegation ("incorporate … with your recommendations", 2026-07-26).
+
+- **PS1 — the operator core.** `.` DESCENDS-and-drops (extraction) · `[…]` SELECTS
+  (keeps/assembles; always returns a row) · `:` ITERATES ("along each entry" — the
+  NumPy `a[:, k]` / q `::` reading): per-element on nat-keyed subjects, per-VALUE
+  (map-vals) on keyword-keyed ones. No operator has two meanings.
+- **PS2 — the uniform law**: *dot extracts the value; bracket selects a
+  sub-structure.* `v[…]` ALWAYS returns a selection; `v.0` is element extraction
+  (new `.N` lexing). Re-targets the shipped F1a-col degenerate case (`v[0]` →
+  `⟨elem⟩`; `v[1].b` → `v.1.b`) — clean switchover + census (Q_S7a).
+- **PS3 — keying**: a selector's kept key = the last segment of its path BEFORE the
+  first structural operator (`:` or `[`) — the deepest node addressed AS A WHOLE.
+  Pure path → last segment. Empty prefix (selector starts at `:`) → keyless
+  (column extraction; renameable).
+- **PS4 — key domains**: keyword keys are IDENTITIES (survive selection); nat keys
+  are POSITIONS (renumber dense — the carrier's dense-prefix invariant makes
+  "keeping" source indices impossible; `v[1 5]` → `⟨v.1 v.5⟩` automatically).
+- **PS5 — assembly**: all-keyword → record (canonical field order; value display may
+  keep selection order) · all-positional → tuple (WRITTEN selector order) · **mixed →
+  STATIC ERROR** (PR-8 ruled; conservative over the coercion reading — R's lesson
+  applied precisely: R's bite was shape-by-runtime-arity, coercion's would be
+  shape-by-non-local-static-scan; the error keeps every selector's contribution
+  locally derivable). Diagnostic names the remedies: `^` / `^name` / `^_`.
+  Applies identically per-element inside `.:[…]`.
+- **PS6 — the `^` family attaches to the KEY-GENERATING segment** (owner rule,
+  round 4): `^` elides · `^name` renames · `^_` derives. On any other segment =
+  static error. `^_` derivation = full-path kebab-join from the bracket's root
+  (`server.host^_` → `:server-host`); post-derivation collisions stay errors.
+- **PS7 — collision = static error** (Q_S5), diagnostic pointing at `^name`/`^_`.
+  We check what the field ships unchecked (`Control.Lens.Unsound` et al.) — a named
+  design goal.
+- **PS8 — miss = loud** (Q_S6): closed-row miss = type error with the rich
+  field-naming diagnostic; dyn-tail miss = the D19 fresh meta (D23 escape-boundary
+  unchanged); PVec runtime OOB becomes LOUD (P2); tuple OOB stays static.
+  Wildcards/splat only on CLOSED tails.
+- **PS9 — `*` = all-fields-HERE** (the March wildcard meaning, both halves): final
+  position = SPLAT (fields spliced into the result level; collisions → PS7);
+  `[*]` = identity sub-select (`x[server[*]]` ≡ `x[server]`). Mid-path `*` is
+  ILLEGAL — that meaning lives in `:` now.
+- **PS10 — dynamism is DOT-ONLY** ⊳: brackets are 100% literal/static (what makes
+  selection fully typable). `v.i` = dynamic index via the names-vs-numbers
+  asymmetry (a name segment on a nat-keyed subject can only be a variable);
+  requires the P2 Int-gate fix. Computed indices: bind first or `[get v e]`.
+  Dynamic KEYWORD lookup stays `get`/`get-in` (Q_S1).
+- **PS11 — first-class selectors = lambda sugar (v1)**: `.[sel]` ≡
+  `[fn [r] r[sel]]`; `.name` = the simple section (heals ERGONOMICS `.:name` →
+  `map .name users`). Works in argument/application position TODAY (bidirectional
+  checking, probe-verified); standalone `def sel := .[…]` inherits the
+  standalone-lambda gap (annotate) — named, not hidden. FUTURE: a dedicated
+  selector node carrying the one-broadcast-propagator/one-fire/one-merge guarantee
+  (NTT model required THEN; v1 adds zero propagators).
+- **PS12 — retirements + migrations** (all clean-switchover, each with census):
+  `.{` (Q_P5, + the 4 broken audit files) · **`$dot-key`** (`m.:name` → `m.name`;
+  frees `.:`) · old broadcast **`.*name` → `.:.name`** (expr-broadcast-get surface
+  superseded) · `m[:a]` flips from extraction to selection · `x[]` = static error
+  (hint: `{}`) · `_[sel]` rejected (hint: `.[sel]`).
+- **PS13 — reserved slots** (grammar leaves room; NOT built): ranges as nat-domain
+  selectors (**future CIU track**, owner-owned designs) · `**` globstar (typed
+  static-expansion story exists; deferred) · splat respellings beyond final-`*` ·
+  nil-safe selection (`?.`-family) · omit-selectors (presence-marks era) · the
+  WRITE direction (decided now, built later: v1 is READ-ONLY; overlap legal for
+  reads; the disjointness check arrives with writes).
+- **PS14 — sexp mode gets an explicit special form** for selection (postfix
+  adjacency is WS-only; the paren-goals institutionalized-divergence precedent).
+- **PS15 — subjects**: closed rows exact · dyn rows known-exact/unknown-meta ·
+  `(Map K V)` uniform V per field · schema/selection fvars via `schema->row` (the
+  F1b.7e projection; selections intersect `:requires`). Selection results are
+  ordinary closed rows — sealable, validatable, def-storable (D23 applies).
+
 ---
+
+### §5.10 D.3 critique adjudication — round 6 (owner + Claude, 2026-07-26)
+
+**The D.3 external critique** ([record + full findings](2026-07-26_CIU_T6_PATH_SELECTION_D3_CRITIQUE.md):
+2 BLOCKING · 11 SIGNIFICANT · 8 MINOR surviving; 12 refuted) **was adjudicated in full.**
+Dispositions below amend PS1–PS15 as ✏ deltas (the PS text in §5.9 stands as written;
+where a delta conflicts, the delta WINS). Owner rulings this round are marked **[owner]**.
+
+**The two BLOCKING:**
+
+- **D3-B1 → ACCEPT.** PS8 is restated: **the miss ruling is a function of the negative
+  information the subject's type carries** — a closed row carries "lacks *l*" → static
+  error; a dyn tail carries "unknown" → D19 meta; **`(Map K V)` carries nothing about
+  presence → the result is `Option`-shaped, NEVER a bare `V`**; unbounded positional
+  carriers (PVec/List — added to PS15 per D3-M5) carry no arity → runtime miss, LOUD.
+  PS15 gains the sealability qualifier: *a selection result is a closed row only when
+  its presence information was SOURCED, not fabricated.* P2 grows the Map-miss leg,
+  the `map-get`-on-nat-row leg, and List OOB — all pinned **failing-test-first**.
+  The "closed tails" wildcard gate is restated as **support-boundedness** (D3-M5).
+- **D3-B2 → ACCEPT PROBLEM; solution REPLACED [owner].** The dot-sections are
+  **WITHDRAWN** (`map .name users` does not lex — the fold absorbs the preceding
+  token; main-session-verified). The owner's replacement: **keyword-as-projection** —
+  **`map :name users`** (the Clojure idiom). Mechanism: a CHECK-mode coercion arm —
+  a keyword literal checked against a concrete `A -> B` where `A`'s row/schema/Map
+  carries the key elaborates to the projection lambda (+ the qtt twin; + optionally
+  the application-head arm `[:name m]`). **Zero reader work**; `:name` stays an
+  ordinary Keyword everywhere a Keyword is expected (`[map-get m :name]` verified
+  unchanged). `.[sel]` as a selector literal moves to PS13 (reserved); multi-select
+  selector values are explicit lambdas in v1. PS11's "annotate" remedy corrected:
+  annotate **with a named schema** (anonymous rows are not writable types — D3-S11).
+
+**Owner rulings on the four escalated items:**
+
+- **D3-S5 (the two `.{` worlds) → ACCEPT [owner]**: repair the four audit files'
+  mixfix `.{X}` → `.(X)`; **retire `.{` COMPLETELY from code and diagnostics** (the
+  recognizer + the `$mixfix-retired` error are DELETED — the syntax simply ceases to
+  exist); the sexp brace-select's 20 tests are **RE-POINTED at the P4 sexp special
+  form, never deleted** — that leg sequences WITH P4, not first. P1 splits accordingly.
+- **D3-S1 (`v.i`) → KEEP, as a bounded sub-phase [owner criterion: fits-a-phase].**
+  The real mechanism is named and budgeted as **P4.d**: preparse emits ONE neutral
+  segment node (no keyword freeze); name resolution is SOFT (unbound is not an error
+  when the subject is keyword-keyed); the key-domain fact flows from the subject's
+  row into the segment's resolution; qtt reads usage off the same resolved domain.
+  PS10's invariant restated: *every contributed KEY is statically determined; the
+  VALUES navigated to need not be.* If P4.d drags, it is cuttable (Q_S1's `get`
+  hatch loses nothing).
+- **D3-S3 (splat) → ACCEPT; SPLAT STAYS [owner].** One cause, three fixes:
+  (a) PS3's keying is restated over **CONTRIBUTIONS** — a selector contributes one
+  keyed slot, one positional slot, or (splat) **a SET of slots from the subject's own
+  support**; the structural operators are `:`, `[`, **and `*`** (the round-5 swap
+  dropped `*` from the list — restored). PS5/PS7 consume contributions uniformly.
+  (b) The collision remedy on a splat is **`^_` = derive-ALL** (every spliced field
+  gets its full-path key: `x[server.*^_ db.*^_]` → `{:server-host … :db-host …}`,
+  collision-free by construction); `^` and `^name` on a splat = static error (no
+  single key to govern). (c) §5.7's quadrant table is stale (mid-path `*` spelling)
+  — superseded by §5.8's `:` spellings; noted, not rewritten.
+- **D3-M1 (Q_S3) → RE-RULED [owner].** The redundancy basis was gone; the owner
+  re-affirms on the correct basis: *a selection returns a sub-tree (or forest) — a
+  collection is the expected result* — and `x.a` is the deliberate single-value
+  spelling. `x[a^]` = `⟨x.a⟩` stands, now deliberately.
+
+**The substrate bug [owner]:** **D3-S10 (the concrete-codomain lambda-adoption hole)
+gets its OWN PHASE in this track** — row **PX** in §2 — "not a bug we want rolling
+around unnoticed." Fix shape (from the critique, information-flow): decomplect
+evidence from obligation at binder positions — the downward write flows to an
+`:expected` facet; the lam's `:type` facet is written only from the body's own type;
+disagreement → `type-top` → the existing top-refusal. (§3.7's `map-size` class stays
+FILED SEPARATELY as before.)
+
+**Remaining dispositions** (all ACCEPT unless noted): **S2** §3.2 narrowed to the
+keyword result type; P4 gains the nat-keyed assembly path + the closed-vs-dyn seed
+pin (PS15 says CLOSED; the `{}` seed is DYN — test-pinned at P4). **S4** `rows[:f]`
+vs `rows[:.f]` is DISSOLVED: `m[:a]`/keyword-in-bracket does NOT flip — it **RETIRES**
+(static error + hint naming `m[a]` / `get`), amending PS12; PS1 gains the `:` result
+carrier: **iteration preserves the source collection kind** (List→List, PVec→PVec,
+keyword-row→map-vals with keys kept; heterogeneous tuple→per-position row).
+**S6** P3 grounds on the **token-registry inventory** (priorities 92/88/87/86) as the
+authoritative list — the walker discipline applied to the tokenizer; `.(` is named as
+P1's repair target; `$nil-dot-key` (`#.:name`) retires WITH dot-key (its `#.name`
+form survives); CH-4 ruled: `.N` anchors at the DOT, numeric recognizers anchor at a
+DIGIT. **S7** PS7's novelty claim corrected (result-key collision is precedented —
+GraphQL `FieldsInSetCanMerge`); **source-overlap disjointness is the WRITE phase's
+headline deliverable**, named in §9. **S8** §6 owes the Q4 bridge diagram with TWO
+edges — keyword = Galois (D21); nat = **relabelling with NO adjoint** (dense-prefix
+forbids the sparse γ) — the selector is the correspondence carrier for the nat edge;
+§6 re-run lands with D.4. **S9** §9's supersession rewritten against the CIU master:
+T2 items 2+4 superseded; **item 1 (`ground-expr?` `expr-union` arm — verified live,
+0 arms in trait-resolution.rkt) re-homes to P2** beside its §3.6 twin (the generic
+transparent-struct fallback covers both structurally); item 3 (sugar audit) is P3's
+prerequisite; **T3 is RE-CHARTERED, not "kept"** (PS2/PS10 redefine its Phase-2
+example and Phase-3 criterion). **S11** PS15 reframed as *where row information
+enters a binder's type cell*; v1's abstraction direction rides **named schemas +
+keyword-projections**; **P0 MUST carry function-typed forms** (else it proves
+nothing about library usability). **M2** P4 explicitly books pipeline item 13: the
+node gets a **deliberate `#f` registration** (the `expr-solve`/`expr-map-get` idiom),
+never left unregistered; §7's instruction narrowed to "no propagator CLAIMS without
+`net-add-propagator` calls". **M3** `#p()`/`Path` = the dynamic tier, KEPT v1, with
+a DEFERRED entry for applicability/typed-Path; the PRIMARY selector representation
+is the selection AST (the sexp special form); `#p` is runtime path DATA. **M4/M8**
+doc fixes folded (presence+tail lattices added to §6.2's inventory; the unenforceable
+§6.4 sentence deleted; coordinates re-pinned: elaborator arm :2297-2298, key-ty :565,
+audit-08 count 3). **M5** folded into B1/PS15 above. **M6** P3 additionally REJECTS
+`.-1` with a real diagnostic and pins selector round-trip printing. **M7**'s counts
+land in the P2/P3 census rows (49+45 `v[literal]` sites, 48 test-cases, etc.).
+
+**Out-of-scope flag (owner call recorded as CORRECTLY out of scope)**: cross-level
+correlation inside iteration ("for each admin, pair its name with the app's name")
+has no v1 spelling — selection is subtree extraction; the shape belongs to a future
+comprehension/binding surface, noted in PS13's spirit but not reserved.
+
+**Round 7 — P2.b RULED (owner, 2026-07-26): realization (c), stated as THE TWO-TIER
+PRINCIPLE.** This ✏-amends the D3-B1 adjudication above (the census evidence revised
+the realization while honoring the actual claim, *"never a bare V silently"*):
+
+> **The assertive tier** — `map-get` / `.field` / `v[k]` — asserts presence; a FAILED
+> assertion at runtime is a LOUD, counted error (panic-shaped). **The honest tier** —
+> `nil-safe-get` (`V|Nil`) · library `nth` (`Option`) · the traits' `kv-get`/`idx-nth`
+> (`Option`) — is the spelling for expected absence, unchanged.
+
+Realization constraints (from the P2 mini-audit, all probe-grounded):
+- The runtime miss arm is TYPE-BLIND (rows/dicts share the champ) → the loudness is
+  carried by an **elaboration-time strictness mark on Map-typed subjects**; dyn-ROW
+  runtime misses keep the D19 permissive display (pinned: route-soundness :196,
+  records acceptance ;;77).
+- The loud path is **TOP-NODE-BOUNDED** at the driver seam (a miss nested inside a
+  constructed value prints the panic, counts 0) — accepted + NAMED, the D22
+  seal-forcing precedent's own bound. A Racket raise would crash the file (no handler
+  at the reduce seam) — not an option.
+- The OOB legs join the same tier: PVec via expr-get (`<error>`) AND the divergent
+  `pvec-nth` stuck leg, + the audit's two silent siblings (`pvec-update` OOB,
+  `pvec-pop`-on-empty), + List OOB. `[map-get tup 1N]` on a PRESENT position
+  **projects** (value agrees with the typing, which already projects); OOB = loud.
+- Break set: exactly the 2 silent-miss pins (`test-map.rkt:124-127`, `:137-143`) flip
+  to loud assertions; zero stdlib/corpus churn. Doc-truth rider: the map tutorial
+  teaches "error if missing!" 3× — (c) makes the teaching TRUE.
+- Option-wrap (a) is recorded as REJECTED-WITH-REASON: ~35-40 tests + 6 stdlib ×2
+  book twins + ~24 corpus sites, hit-values change to `some v`, ergonomics ~5:1
+  against (44/53 sites access provably-present keys), `kv-get` double-wraps.
+
+**Round 6b — the standalone-def seam, widened by an owner data point (2026-07-26).**
+Owner hand-use: `def add5 := [+ 5 _]` fails ("Could not infer type — hint (issue
+#70) …"). Probed at HEAD, the boundary is the **def-RHS seam itself, not numerics**:
+- `def add5 := [+ 5 _]` (trait-op section) — FAILS with the #70 hint;
+- **`def add5c := [int+ 5 _]` — the CONCRETE-op section the #70 hint itself
+  recommends — ALSO FAILS** in def position (the second
+  diagnostic-recommends-an-impossible-fix instance, after the row-annotation hint);
+- `def getname := [fn [r] r.name]` (the row cousin) — FAILS;
+- ALL THREE work in ARGUMENT position (`map [+ 5 _] xs` → `List Int`, probed) and
+  under an ANNOTATED def (`def add5b : <Int -> Int> := [+ 5 _]` → works).
+
+So {trait sections · concrete sections · row lambdas · selector values} are ONE
+family: a def-RHS binder with no expected type does not infer its param type even
+when the BODY fully determines it (`int+` is monomorphic `Int Int -> Int` — that
+case needs no residuation, only body-directed inference). **Owner ruling: fix this
+aspect alongside the typing work — PX WIDENS to the binder-seam phase**: (a) the
+D3-S10 adoption hole; (b) standalone-def inference for body-determined cases
+(monomorphic sections + row lambdas whose body pins the row); honest residue: the
+trait-op case (`[+ 5 _]`) may additionally need numeric defaulting or a residuated
+constraint (the Num Track 2 / F-row seam) — if so, it lands annotated-only in this
+track with the deep fix pointed at its owning track. P0 pins the whole family
+(commented) + the working argument-position and annotated forms (markers).
 
 ## §6 SRE lattice lens — REQUIRED (the result shape IS lattice-shaped)
 
-*Provisional; completes when §5 settles.*
+*Completed against the settled surface (PS1–PS15).*
 
 1. **Classification**: STRUCTURAL. A selection result is a row (labelled product of
    per-field VALUE lattices) indexed by a support set + key-domain + tail — the *same*
@@ -499,11 +833,15 @@ requiring the `^` on `[admins.0^[…]]` seems unsatisfying."*
 
 ## §7 NTT model — REQUIRED if propagators/cells are added
 
-Pending §5. Trigger: if broadcast lands as §4.6's *one broadcast propagator, one fire, one
-merge* guarantee, it is a propagator design and the NTT model is mandatory before
-implementation (`workflow.md`). Note the Network Reality Check: F1b added **zero**
-propagators; a broadcast selection would be Track 6's first, and that claim must be
-`net-add-broadcast-propagator`-real, not vocabulary.
+**Resolved posture (PS11)**: v1 adds **ZERO propagators and zero cells** — the selection
+node is typed imperatively through the existing arms, iteration/sections are lambda
+sugar riding `map`'s existing machinery. The Network Reality Check for P4/P5 is stated
+in advance: no `net-add-propagator` calls, no cell writes, no trace — and the phases'
+commits must say so plainly (no propagator vocabulary). **The NTT model becomes
+MANDATORY at the future dedicated-selector-node upgrade**, whose whole point is the
+*one broadcast propagator, one fire, one merge* guarantee — that claim must be
+`net-add-broadcast-propagator`-real, not vocabulary, and it gets its own mini-design
+with the NTT model before any code.
 
 ## §8 Risks
 
@@ -517,7 +855,7 @@ propagators; a broadcast selection would be Track 6's first, and that claim must
 - **R5 — the `.{` retirement is a behaviour change with live users** (§3.8); P1 needs its
   own census even though the owner has ruled the disposition.
 
-## §9 Scope proposals (owner to ratify)
+## §9 Scope (ratified with D.2 under the round-5 delegation)
 
 - **IN**: the surface + result typing + broadcast; the §3.5 prerequisite defects (they ARE
   the degenerate case the design generalizes); P1.

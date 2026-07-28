@@ -14,7 +14,7 @@
 (require racket/match
          "prelude.rkt"
          "syntax.rkt"
-         "loose-bvar.rkt"  ;; pitfall #31 fix: looseBVarRange short-circuit for shift
+         (only-in "loose-bvar.rkt" loose-bvar-range loose-bvar-range-cached)
          (only-in "namespace.rkt" ns-context?))
 
 (provide shift subst open-expr)
@@ -22,30 +22,49 @@
 ;; ========================================
 ;; Shift: increase bound indices >= cutoff by delta
 ;; ========================================
-(define (shift delta cutoff e)
-  ;; pitfall #31 fix (Lean 4 looseBVarRange-style): if e has no free
-  ;; bvars >= cutoff, shift is a no-op. Returns e unchanged in O(1).
-  ;; This makes shift cheap on closed substitution arguments — the
-  ;; common case in tail-recursive accumulators (decoders, folds).
-  ;; See docs/tracking/2026-05-04_SUBSTITUTION_PERF_SURVEY.md.
-  (cond
-    [(<= (loose-bvar-range e) cutoff) e]
-    [else (shift-impl delta cutoff e)]))
 
-(define (shift-impl delta cutoff e)
-  (match e
+;; GitHub #58 P1 — delta = 0 is the IDENTITY, at every cutoff and for every term
+;; (open or closed). `shift`'s only effect is `(expr-bvar (+ k delta))` on
+;; qualifying bvars, and `(+ k 0) = k`; every other arm is a pure structural
+;; rebuild (this file contains exactly two conditionals, both the bvar index
+;; tests). Returning `e` itself rather than an equal? copy also preserves
+;; SHARING, which is what makes it a win rather than a wash.
+;;
+;; This is not a corner case. `subst`'s reduce-arm site (:988 below) passes the
+;; arm's `binding-count` as delta, and that is 0 for EVERY nullary constructor
+;; clause — so before this guard, every `| nil -> …` / `| zero -> …` clause did a
+;; complete walk and rebuild of the substitution argument that provably could not
+;; change a single node.
+;;
+;; The property is already asserted by the Redex model:
+;; redex/properties.rkt:144-148 "shift-identity" — (equal? e (term (shift 0 0 e))).
+;; This strengthens it from equal? to eq?.
+;;
+;; NOTE: the guard is a leading `if`, deliberately NOT a match arm. Neither
+;; walker in this file has a catch-all, so an unhandled node HARD-FAILS rather
+;; than silently skipping (the inverse of the pipeline.md § Exhaustive Walkers
+;; failure mode). Keep it that way — do not add a reflective fallback here.
+(define (shift delta cutoff e)
+  (cond
+    [(eqv? delta 0) e]
+    ;; #58 P3 — CONSULT-ONLY prune. If we already know this subtree's loose-bvar
+    ;; range (because `shift-arg` seeded it), skip the subtree whole. Never
+    ;; computes, so a term we have not seen costs one failed pointer lookup
+    ;; rather than a second full walk.
+    [(let ([r (loose-bvar-range-cached e)]) (and r (<= r cutoff))) e]
+    [else
+     (match e
     ;; Variables
     [(expr-bvar k)
      (if (>= k cutoff)
          (expr-bvar (+ k delta))
-         e)]                       ; pitfall #31 fix: was (expr-bvar k) — eq-preserve
+         (expr-bvar k))]
     [(expr-fvar _) e]
 
     ;; Constants (no bound variables inside)
     [(expr-zero) e]
     [(expr-nat-val _) e]
-    [(expr-suc e1)
-     (let ([e1* (shift delta cutoff e1)]) (if (eq? e1 e1*) e (expr-suc e1*)))]
+    [(expr-suc e1) (expr-suc (shift delta cutoff e1))]
     [(expr-refl) e]
     [(expr-Nat) e]
     [(expr-Bool) e]
@@ -64,31 +83,22 @@
     [(? ns-context?) e]  ;; namespace metadata — pass-through
 
     ;; Binding forms: cutoff increases under binders
-    ;; pitfall #31 fix: eq-preserving — if children unchanged, return e.
     [(expr-lam m t body)
-     (let ([t* (shift delta cutoff t)] [body* (shift delta (add1 cutoff) body)])
-       (if (and (eq? t t*) (eq? body body*)) e (expr-lam m t* body*)))]
+     (expr-lam m (shift delta cutoff t) (shift delta (add1 cutoff) body))]
     [(expr-Pi m dom cod)
-     (let ([dom* (shift delta cutoff dom)] [cod* (shift delta (add1 cutoff) cod)])
-       (if (and (eq? dom dom*) (eq? cod cod*)) e (expr-Pi m dom* cod*)))]
+     (expr-Pi m (shift delta cutoff dom) (shift delta (add1 cutoff) cod))]
     [(expr-Sigma t1 t2)
-     (let ([t1* (shift delta cutoff t1)] [t2* (shift delta (add1 cutoff) t2)])
-       (if (and (eq? t1 t1*) (eq? t2 t2*)) e (expr-Sigma t1* t2*)))]
+     (expr-Sigma (shift delta cutoff t1) (shift delta (add1 cutoff) t2))]
 
     ;; Non-binding forms
     [(expr-app e1 e2)
-     (let ([e1* (shift delta cutoff e1)] [e2* (shift delta cutoff e2)])
-       (if (and (eq? e1 e1*) (eq? e2 e2*)) e (expr-app e1* e2*)))]
+     (expr-app (shift delta cutoff e1) (shift delta cutoff e2))]
     [(expr-pair e1 e2)
-     (let ([e1* (shift delta cutoff e1)] [e2* (shift delta cutoff e2)])
-       (if (and (eq? e1 e1*) (eq? e2 e2*)) e (expr-pair e1* e2*)))]
-    [(expr-fst e1)
-     (let ([e1* (shift delta cutoff e1)]) (if (eq? e1 e1*) e (expr-fst e1*)))]
-    [(expr-snd e1)
-     (let ([e1* (shift delta cutoff e1)]) (if (eq? e1 e1*) e (expr-snd e1*)))]
+     (expr-pair (shift delta cutoff e1) (shift delta cutoff e2))]
+    [(expr-fst e1) (expr-fst (shift delta cutoff e1))]
+    [(expr-snd e1) (expr-snd (shift delta cutoff e1))]
     [(expr-ann e1 e2)
-     (let ([e1* (shift delta cutoff e1)] [e2* (shift delta cutoff e2)])
-       (if (and (eq? e1 e1*) (eq? e2 e2*)) e (expr-ann e1* e2*)))]
+     (expr-ann (shift delta cutoff e1) (shift delta cutoff e2))]
     [(expr-Eq t e1 e2)
      (expr-Eq (shift delta cutoff t) (shift delta cutoff e1) (shift delta cutoff e2))]
 
@@ -310,7 +320,13 @@
 
     ;; Set (all non-binding)
     [(expr-Set a) (expr-Set (shift delta cutoff a))]
-    [(expr-hset _) e]  ; Racket value, no de Bruijn vars
+    ;; Same contract as the expr-champ arm above (ruling (D), SUB.3a): a runtime
+    ;; collection value is closed w.r.t. its own boundary, ENFORCED by the SUB.1
+    ;; tripwire rather than by this comment. The stale "Racket value, no de
+    ;; Bruijn vars" wording that used to sit here is the exact false-assertion
+    ;; shape the track's own rule red-flags; dd285174 swept it from the champ arm
+    ;; and missed this sibling (removed 2026-07-27, GitHub #58 P4).
+    [(expr-hset _) e]
     [(expr-set-empty a) (expr-set-empty (shift delta cutoff a))]
     [(expr-set-insert s a) (expr-set-insert (shift delta cutoff s) (shift delta cutoff a))]
     [(expr-set-member s a) (expr-set-member (shift delta cutoff s) (shift delta cutoff a))]
@@ -528,25 +544,51 @@
                           (shift delta (+ cutoff (expr-reduce-arm-binding-count arm))
                                 (expr-reduce-arm-body arm))))
                        arms)
-                  structural?)]))
-
+                  structural?)])]))
 
 ;; ========================================
 ;; Substitution: replace bvar(k) with s in e
 ;; When going under a binder, k increases and s is shifted up
 ;; ========================================
-(define (subst k s e)
-  ;; pitfall #31 fix step 2: if e has no free bvars >= k, no
-  ;; substitution is possible — return e unchanged in O(1).
-  ;; Same looseBVarRange device as shift's short-circuit; eliminates
-  ;; the O(K²) walk-embedded-accumulator cost in tail-recursive
-  ;; iteration (the residual signature after shift was fixed).
-  (cond
-    [(<= (loose-bvar-range e) k) e]
-    [else (subst-impl k s e)]))
+;; GitHub #58 P3 — the loose-bvar-range short-circuit, THE issue's own finding.
+;;
+;; `shift-arg` replaces the four `(shift D 0 s)` calls below. When `s` is CLOSED
+;; it returns `s` itself: shifting a term with no free de Bruijn variable cannot
+;; change it, so the walk and the rebuild are both pure waste.
+;;
+;; WHERE THE GUARD LIVES IS THE WHOLE DESIGN, and it was measured, not guessed.
+;; A whole-tree property costs a whole-tree walk to compute, so a guard can NEVER
+;; pay for itself on a term that is walked once — it just walks twice. Putting
+;; this test inside `shift` (which is what the issue's proposed fix does, and
+;; what the first cut of this phase did) therefore taxes every one-shot shift in
+;; the compiler: it regressed the full suite ~25%, 198.6 s -> 240.9 s, while every
+;; micro looked fine. Micro-optimizing the walk did not help, because the walk is
+;; not the problem — walking AT ALL is.
+;;
+;; So the guard goes exactly where the REPETITION is, which is these four sites
+;; and nowhere else. `subst` re-shifts the SAME `s` once per binder crossing and,
+;; at :988, once PER REDUCE ARM — the multiplier the issue's 3-site enumeration
+;; misses. The memo then makes the repetition free three ways over:
+;;   - A-arm reduce node: one range computation, A skipped walks.
+;;   - nested binders: a closed `s` is passed through unchanged, so the next
+;;     level's lookup is a memo HIT on the same object — B levels, one walk.
+;;   - across accumulator iterations: s_{i+1} = cons(x, s_i) and s_i's range is
+;;     already memoized, so each step is O(1). THIS is what turns O(N^2) into O(N).
+;; Meanwhile `shift`'s own callers (unify, zonk, sessions, type-lattice) pay
+;; nothing, because `shift` itself is left unguarded apart from P1's delta=0.
+(define (shift-arg delta s)
+  (if (eqv? (loose-bvar-range s) 0) s (shift delta 0 s)))
 
-(define (subst-impl k s e)
-  (match e
+(define (subst k s e)
+  (cond
+    ;; Same consult-only prune: `subst k s e` is the identity on `e` when no
+    ;; variable free in `e` has an index at or above k. This is the arm that
+    ;; catches the residual kumavis identified in their step 2 — a body with the
+    ;; accumulator already EMBEDDED in it, which `subst` would otherwise re-walk
+    ;; in full on every iteration.
+    [(let ([r (loose-bvar-range-cached e)]) (and r (<= r k))) e]
+    [else
+     (match e
     ;; Variables
     [(expr-bvar n)
      (cond
@@ -578,11 +620,11 @@
 
     ;; Binding forms: increase k, shift s up by 1
     [(expr-lam m t body)
-     (expr-lam m (subst k s t) (subst (add1 k) (shift 1 0 s) body))]
+     (expr-lam m (subst k s t) (subst (add1 k) (shift-arg 1 s) body))]
     [(expr-Pi m dom cod)
-     (expr-Pi m (subst k s dom) (subst (add1 k) (shift 1 0 s) cod))]
+     (expr-Pi m (subst k s dom) (subst (add1 k) (shift-arg 1 s) cod))]
     [(expr-Sigma t1 t2)
-     (expr-Sigma (subst k s t1) (subst (add1 k) (shift 1 0 s) t2))]
+     (expr-Sigma (subst k s t1) (subst (add1 k) (shift-arg 1 s) t2))]
 
     ;; Non-binding forms
     [(expr-app e1 e2)
@@ -1017,10 +1059,10 @@
                          (expr-reduce-arm
                           (expr-reduce-arm-ctor-name arm)
                           bc
-                          (subst (+ k bc) (shift bc 0 s)
+                          (subst (+ k bc) (shift-arg bc s)
                                  (expr-reduce-arm-body arm))))
                        arms)
-                  structural?)]))
+                  structural?)])]))
 
 ;; ========================================
 ;; Open: substitute s for bvar(0)

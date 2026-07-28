@@ -23,7 +23,12 @@
          "../driver.rkt"
          "../errors.rkt"
          "../namespace.rkt"
-         "../relations.rkt")
+         "../relations.rkt"
+         "test-support.rkt"
+         (only-in "../macros.rkt" current-preparse-registry current-trait-registry
+                  current-impl-registry current-param-impl-registry)
+         (only-in "../metavar-store.rkt" current-persistent-registry-net-box current-prop-net-box)
+         (only-in "../propagator.rkt" with-forked-network))
 
 (define here (path->string (path-only (syntax-source #'here))))
 (define lib-dir (simplify-path (build-path here ".." "lib")))
@@ -35,12 +40,27 @@
     (lambda (out) (display content out))
     #:exists 'truncate)
   (define results
-    (parameterize ([current-ns-context #f]
-                   [current-module-registry (hasheq)]
+    ;; Seed from the once-per-subprocess prelude snapshot instead of reloading
+    ;; all 39 prelude modules per test case (~3.5s each, and none of it the thing
+    ;; under test). The registry family is seeded TOGETHER — a preloaded module
+    ;; registry means modules are not re-loaded, so seeding the module registry
+    ;; alone would leave trait/impl empty. Mirrors test-support.rkt's run-ns-*.
+    ;; The relation store stays FRESH: per-test fact isolation is the point here.
+    (parameterize ([current-file-module-network-ref (make-module-network)]
+                   [current-ns-context #f]
+                   [current-module-registry prelude-module-registry]
                    [current-lib-paths (list lib-dir)]
-                   [current-relation-store (make-relation-store)])
-      (install-module-loader!)
-      (process-file (path->string tmp))))
+                   [current-relation-store (make-relation-store)]
+                   [current-preparse-registry prelude-preparse-registry]
+                   [current-trait-registry prelude-trait-registry]
+                   [current-impl-registry prelude-impl-registry]
+                   [current-param-impl-registry prelude-param-impl-registry]
+                   [current-persistent-registry-net-box prelude-persistent-registry-net-box]
+                   [current-module-registry-cell-id #f]
+                   [current-ns-context-cell-id #f])
+      (with-forked-network current-prop-net-box
+        (install-module-loader!)
+        (process-file (path->string tmp)))))
   (delete-file tmp)
   results)
 

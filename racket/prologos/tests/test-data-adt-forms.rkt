@@ -33,7 +33,8 @@
          "../metavar-store.rkt"
          "../relations.rkt"
          "../trait-resolution.rkt"
-         "../macros.rkt")
+         "../macros.rkt"
+         "test-support.rkt")
 
 (define here (path->string (path-only (syntax-source #'here))))
 (define lib-dir (simplify-path (build-path here ".." "lib")))
@@ -46,13 +47,13 @@
     #:exists 'truncate)
   (define results
     (parameterize ([current-ns-context #f]
-                   [current-module-registry (hasheq)]
+                   [current-module-registry prelude-module-registry]
                    [current-lib-paths (list lib-dir)]
                    [current-relation-store (make-relation-store)]
-                   [current-preparse-registry (current-preparse-registry)]
-                   [current-trait-registry (current-trait-registry)]
-                   [current-impl-registry (current-impl-registry)]
-                   [current-param-impl-registry (current-param-impl-registry)]
+                   [current-preparse-registry prelude-preparse-registry]
+                   [current-trait-registry prelude-trait-registry]
+                   [current-impl-registry prelude-impl-registry]
+                   [current-param-impl-registry prelude-param-impl-registry]
                    [current-bundle-registry (current-bundle-registry)])
       (install-module-loader!)
       (process-file (path->string tmp))))
@@ -62,13 +63,13 @@
 ;; Run content through process-string-ws (the CELL / LSP-REPL pipeline).
 (define (run-ws-pipeline content)
   (parameterize ([current-ns-context #f]
-                 [current-module-registry (hasheq)]
+                 [current-module-registry prelude-module-registry]
                  [current-lib-paths (list lib-dir)]
                  [current-relation-store (make-relation-store)]
-                 [current-preparse-registry (current-preparse-registry)]
-                 [current-trait-registry (current-trait-registry)]
-                 [current-impl-registry (current-impl-registry)]
-                 [current-param-impl-registry (current-param-impl-registry)]
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry]
+                 [current-param-impl-registry prelude-param-impl-registry]
                  [current-bundle-registry (current-bundle-registry)])
     (install-module-loader!)
     (process-string-ws content)))

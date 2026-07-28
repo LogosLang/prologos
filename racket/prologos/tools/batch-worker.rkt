@@ -61,12 +61,21 @@
          (only-in "../typing-propagators.rkt" current-attribute-map-cell-id))  ;; Track 4B Phase 6b
 
 ;; Track 10 Phase 3a: Read .pnet cache setting from environment
-;; The test runner sets PROLOGOS_PNET_CACHE=1 when cache is enabled.
+;; The test runner sets PROLOGOS_PNET_CACHE=1 when cache is enabled and =0
+;; for --no-pnet-cache. The "0" branch must EXPLICITLY disable: the parameter
+;; defaults to #t (driver.rkt), so ignoring "0" silently kept the cache on —
+;; --no-pnet-cache was a no-op, a lying diagnostic switch (it "ruled out" the
+;; cache during the 2026-07-26 foreign two-instance investigation while the
+;; cache was in play the whole time).
 ;; Batch workers read from pre-generated .pnet files (read-only — no writes).
 (define pnet-env (getenv "PROLOGOS_PNET_CACHE"))
-(when (and pnet-env (string=? pnet-env "1"))
-  (current-use-pnet-cache? #t)
-  (current-pnet-write-enabled? #f))
+(cond
+  [(and pnet-env (string=? pnet-env "1"))
+   (current-use-pnet-cache? #t)
+   (current-pnet-write-enabled? #f)]
+  [(and pnet-env (string=? pnet-env "0"))
+   (current-use-pnet-cache? #f)
+   (current-pnet-write-enabled? #f)])
 
 ;; Load prelude via test-support.rkt (warms Racket module cache).
 ;; Must use dynamic-require (not require) to control execution order.

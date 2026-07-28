@@ -561,16 +561,26 @@
      (let ([fld (record-lookup-field rec n)])
        (if fld (record-field-type fld) (miss)))]
     [_
-     (let ([fields (expr-Record-fields rec)]
-           [key-ty (if (eq? kd 'keyword) (expr-Keyword) (expr-Nat))])
+     (let* ([fields (expr-Record-fields rec)]
+            ;; CIU T6 P2.a (D3-S1, required by PS10's `v.i`): the nat domain's
+            ;; dynamic key accepts Nat OR Int — ACTUALLY mirroring expr-get's
+            ;; PVec gate, as the literal leg's comment above always claimed
+            ;; (`def i := 1` is Int by the language's own convention). Thunked
+            ;; so the check's meta-solving side effects stay lazy on the
+            ;; empty-closed error path, as before.
+            [key-ok? (lambda ()
+                       (if (eq? kd 'keyword)
+                           (check ctx key (expr-Keyword))
+                           (or (check ctx key (expr-Nat))
+                               (check ctx key (expr-Int)))))])
        (cond
          ;; dyn + dynamic key: the result may be any known field OR the remainder
          ;; — ⋃knowns ∪ fresh; the EMPTY dyn row still projects (fresh alone).
          [(eq? (expr-Record-tail rec) 'dyn)
-          (if (check ctx key key-ty)
+          (if (key-ok?)
               (record-value-bound ctx rec (dyn-row-source 'dyn-row-dynamic-projection))
               (expr-error))]
-         [(and (pair? fields) (check ctx key key-ty))
+         [(and (pair? fields) (key-ok?))
           (record-value-union rec)]
          [else (expr-error)]))]))
 
@@ -2210,7 +2220,13 @@
          [(? expr-Record? rec)
           (match i
             [(expr-int _) (expr-error)]
-            [_ (record-project ctx rec i)])]
+            [(expr-nat-val _) (record-project ctx rec i)]
+            ;; CIU T6 P2.a: DYNAMIC index — pvec-* keeps its Nat-only
+            ;; discipline (runtime is nat-value-only). Gate HERE because
+            ;; record-project's dynamic leg now accepts Int for v[i]; without
+            ;; this gate the discipline would silently flip to
+            ;; accepted-then-runtime-stall (the mini-audit's census hazard).
+            [_ (if (check ctx i (expr-Nat)) (record-project ctx rec i) (expr-error))])]
          [_ (expr-error)]))]
     [(expr-pvec-update v i x)
      (let ([tv (whnf (infer ctx v))])

@@ -113,7 +113,21 @@ Evidence chain: grounding audit `wf_1ec0797b` (8 facets @ `6f80956b`, all R-lens
 1. **D27.2 attachment = A2-e CONFIRMED**, realized as ONE datum-parser keyword arm + ONE tree-parser bail-list entry (the solve/defr/session precedent — the "dual-parser cost" collapses to the precedented one-liner); plan baked at elaboration via cell-first `lookup-schema-by-name` ONLY (the raw parameter is absent from three save/restore lists — s1 hygiene rider), with a LOUD srcloc'd unknown-schema error (strict improvement over the pre-existing silent no-op on cache-hit-missing schemas).
 2. **D27.3 E key = the named fallback FIRES: `Map Keyword Reason`.** Path failed both probe routes (row key-domain is keyword/nat — Path keys are structurally F-carrier; `Path` unbound in annotation position). The widening cost is NAMED: nested identity at walker time = dotted-keyword path-encoding (E type never breaks; key values widen; tokenization-ambiguity check rides the walker charter); REAL Path keys re-trigger at F-carrier.
 
-### OPEN — Path Selection unified surface (owner direction 2026-07-13; NEEDS its own deep co-design BEFORE any surface commitment)
+### ~~OPEN~~ → **SETTLED 2026-07-26** — Path Selection unified surface
+
+**✏ 2026-07-26: the deep co-design HAPPENED and the surface is SETTLED** — five rounds,
+owner-ruled, consolidated as **PS1–PS15** in
+[`2026-07-26_CIU_T6_PATH_SELECTION_DESIGN.md`](2026-07-26_CIU_T6_PATH_SELECTION_DESIGN.md)
+§5.9 (Stage-3 D.2; conversation record §5.4–§5.8). Headlines vs the sketch below:
+`coll[…]` selection confirmed with a UNIFORM law (*dot extracts, bracket selects* —
+`v[0]` re-targets to `⟨elem⟩`, extraction moves to `v.0`); broadcast is **NOT** `coll.[…]`
+— iteration is the **`:` path segment** (`admins.:.name`; `.[…]` became the anonymous-
+selector literal); `*` = wildcard/splat only; `^` gains elide/derive arities on the
+key-generating segment. The ✏ 2026-07-19 broadcast-prerequisite note below was
+**REFUTED at HEAD** (both shapes work; the real gap is the standalone-lambda/defn-param
+case only). Historical text below preserved as written.
+
+*(original block, 2026-07-13:)*
 
 Owner (from live exploration, `foray.prologos` scratch `@[{:a 1} {:b 2}][1.b]`): the V2–V4 selection surface is converging on —
 1. **Postfix `coll[…]` = unified path SELECTION** — indexing is the degenerate single-segment case (`v[0]`); the bracket content generalizes to PATHS (`v[1.b]`). This **supersedes the earlier `coll{selector}` / `_{…}` postfix-BRACE direction** (§2 V2) — brackets, not braces.

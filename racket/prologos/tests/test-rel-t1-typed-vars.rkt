@@ -21,7 +21,10 @@
          "../elaborator.rkt"
          "../driver.rkt"
          "../errors.rkt"
-         "../namespace.rkt")
+         "../namespace.rkt"
+         "test-support.rkt"
+         (only-in "../macros.rkt" current-preparse-registry current-trait-registry
+                  current-impl-registry current-param-impl-registry))
 
 ;; ========================================
 ;; type-pred value (the predicate SET, list-of-type-EXPR)
@@ -90,8 +93,16 @@
   (call-with-output-file tmp (lambda (o) (display content o)) #:exists 'truncate)
   (define store (make-relation-store))
   (define results
+    ;; Seed from the ONCE-per-subprocess prelude snapshot rather than reloading all
+    ;; 39 prelude modules per test case. The registry family must be seeded TOGETHER:
+    ;; a preloaded module registry means modules are not re-loaded, so seeding only
+    ;; `current-module-registry` leaves the trait/impl registries empty.
     (parameterize ([current-ns-context #f]
-                   [current-module-registry (hasheq)]
+                   [current-module-registry prelude-module-registry]
+                   [current-preparse-registry prelude-preparse-registry]
+                   [current-trait-registry prelude-trait-registry]
+                   [current-impl-registry prelude-impl-registry]
+                   [current-param-impl-registry prelude-param-impl-registry]
                    [current-lib-paths (list cb1-lib-dir)]
                    [current-relation-store store])
       (install-module-loader!)
@@ -295,7 +306,11 @@
 (test-case "POL.6 sexp: glued `(defn sq (x:Int) ...)` splits and types"
   (define results
     (parameterize ([current-ns-context #f]
-                   [current-module-registry (hasheq)]
+                   [current-module-registry prelude-module-registry]
+                   [current-preparse-registry prelude-preparse-registry]
+                   [current-trait-registry prelude-trait-registry]
+                   [current-impl-registry prelude-impl-registry]
+                   [current-param-impl-registry prelude-param-impl-registry]
                    [current-lib-paths (list cb1-lib-dir)]
                    [current-relation-store (make-relation-store)])
       (install-module-loader!)

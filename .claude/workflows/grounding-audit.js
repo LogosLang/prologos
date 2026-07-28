@@ -28,7 +28,9 @@
 //     subphase:    "4A.d",                       // label
 //     head:        "8211247d",                   // expected HEAD; facets verify + cite
 //     context:     "one paragraph: what this sub-phase is + the design intent",
-//     facets:    [ { label: "...", prompt: "the read-only audit question" }, ... ],
+//     facets:    [ { label: "...", prompt: "the read-only audit question" }, ... ]
+//                  // bare strings also accepted: [ "the question", ... ]
+//                  // a missing/empty prompt ABORTS the run (was: silently sent "undefined")
 //     designClaims: [ "a claim the design doc makes that the audit must confirm/refute (cite §)", ... ],
 //     questions:    [ "an open design question the synthesis should inform", ... ]
 //   }
@@ -107,12 +109,33 @@ const SCHEMA = {
 }
 
 phase('Facets')
-log(`grounding-audit ${subphase}: ${facets.length} read-only facets @ expected HEAD ${head}`)
+// Normalize facets: accept EITHER {label, prompt} objects OR bare strings.
+// Passing bare strings used to silently send the literal text "undefined" to
+// every agent (f.prompt on a string is undefined), so all facets ran the same
+// unpartitioned full-surface audit while LOOKING like N independent slices —
+// and "N facets agreed" became false corroboration. Observed 2026-07-27 on the
+// issue-#78 audit: all 5 facets shared a blind spot the critic then caught.
+// Silent-wrong-answer class; now normalized, and validated loudly below.
+const normalizedFacets = facets.map((f, i) => {
+  const prompt = (typeof f === 'string') ? f : (f && f.prompt)
+  const label = (typeof f === 'string') ? ('facet-' + i) : ((f && f.label) || ('facet-' + i))
+  return { label, prompt }
+})
+const badFacets = normalizedFacets
+  .map((f, i) => ({ i, f }))
+  .filter(({ f }) => typeof f.prompt !== 'string' || f.prompt.trim() === '')
+if (badFacets.length > 0) {
+  const idxs = badFacets.map(({ i }) => i).join(', ')
+  log(`grounding-audit: ABORT — ${badFacets.length} facet(s) have an empty/missing prompt (indices: ${idxs}). Pass either a string or {label, prompt}.`)
+  return { error: 'malformed facets', badFacetIndices: badFacets.map(({ i }) => i), subphase }
+}
+
+log(`grounding-audit ${subphase}: ${normalizedFacets.length} read-only facets @ expected HEAD ${head}`)
 const facetResults = (await parallel(
-  facets.map((f, i) => () =>
+  normalizedFacets.map((f) => () =>
     agent(
-      `${DISCIPLINE}\n\nYOUR FACET — ${f.label || ('facet-' + i)}:\n${f.prompt}`,
-      { label: `audit:${f.label || i}`, phase: 'Facets', schema: SCHEMA }
+      `${DISCIPLINE}\n\nYOUR FACET — ${f.label}:\n${f.prompt}`,
+      { label: `audit:${f.label}`, phase: 'Facets', schema: SCHEMA }
     )
   )
 )).filter(Boolean)

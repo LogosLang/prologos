@@ -73,7 +73,8 @@
          "prop-observatory.rkt"   ;; Observatory: capture protocol
          (only-in "pnet-serialize.rkt"   ;; Track 10: .pnet serialization
                   serialize-module-state deserialize-module-state
-                  pnet-stale? relink-foreign-marshallers!)
+                  pnet-stale? relink-foreign-marshallers!
+                  foreign-module-path->require-spec)
          ;; SRE Track 2I Phase 3c (2026-04-30): subtype? import retired alongside
          ;; the install-lattice-subtype-fn! call (was its only use). Per-relation
          ;; meet registration in unify.rkt's type-sre-domain replaced the callback.
@@ -86,6 +87,12 @@
          (only-in "ctor-registry.rkt" lookup-ctor-desc))
 
 (provide process-command
+         ;; #78: exported so the regression test can drive its cell-coverage
+         ;; assertion off the PRODUCTION table rather than a copy of it — a
+         ;; hand-copied list in a test cannot detect an omission from a
+         ;; different hand-written list in production.
+         pnet-restore-rows
+         restore-registries!   ;; the unit that table drives; exported for the same test
          process-file
          process-string
          process-string/return-net    ;; PPN 4C Addendum Phase 3C.b.5.b — net-returning variant for cell-state inspection
@@ -117,6 +124,12 @@
 ;; module-definitions-content, doesn't run spec-propagation-handler, doesn't create
 ;; module-network-ref. Batch worker saves this incomplete state → test files break.
 ;; Fix: make cache-hit path a COMPLETE replacement for full elaboration side effects.
+;; [2026-07-27, GitHub #78] This 2026-03 note named the right invariant — "a
+;; COMPLETE replacement for full elaboration side effects" — and it stayed
+;; unmet for four months in two further ways, both silent: the restore wrote
+;; registry PARAMETERS while every reader had gone cell-primary (P1), and seven
+;; registries were not serialized at all (P2). The invariant is now gated by
+;; tests/test-pnet-registry-restore.rkt rather than by this comment.
 ;; Phase 2e: enabled with absolute paths. Root cause was relative pnet-cache-dir
 ;; resolving differently in batch workers (project root) vs direct runs (racket/prologos/).
 ;; Phase 2e: absolute path fix got further (15 vs 8 files). Still failing.
@@ -700,10 +713,30 @@
   ;; ns net-box still needed for per-command namespace cells. (prelude-env
   ;; box retired at 4A.c-iii-a3 — global-env-add is always-mnr.)
   (parameterize ([current-ns-prop-net-box (current-prop-net-box)]          ;; Phase 3c: activate ns cell writes (auto-reverts)
-                 [current-nf-cache (make-hash)]         ;; per-command nf memoization
-                 [current-whnf-cache (make-hash)]       ;; per-command whnf memoization
+                 ;; GitHub #58 P2 — these three MUST stay `hasheq`, never `hash`.
+                 ;;
+                 ;; They are keyed on expr TREES of unbounded depth. Racket's
+                 ;; `equal-hash-code` is DEPTH-BOUNDED, so a family of deep terms
+                 ;; that share a prefix collapses to a handful of buckets — measured
+                 ;; on a tail-recursive accumulator: 17 distinct hash values for ANY
+                 ;; N (98.3% collision at N=1024). Every probe then degenerates into
+                 ;; a linear scan running full structural `equal?` against O(N)
+                 ;; resident keys, each comparison O(N) — so an `equal?`-keyed cache
+                 ;; over growing terms is O(N^3) and the memo costs vastly more than
+                 ;; the work it saves (measured 15.3x at N=256, and GROWING with N;
+                 ;; `hasheq` benchmarked indistinguishable from no cache at all).
+                 ;;
+                 ;; `eq?` keying is SOUND here, not merely faster: no expr struct is
+                 ;; #:mutable (`grep -c '#:mutable' syntax.rkt` = 0), so a memo of a
+                 ;; pure function keyed on identity is correct. It is also strictly
+                 ;; conservative — it can only lose hits, never return a wrong one.
+                 ;; Same argument `nbe-scan-cache` (reduction.rkt:3727) already ships.
+                 ;;
+                 ;; See docs/tracking/2026-07-27_SUBSTITUTION_QUADRATIC_BLOWUP_DESIGN.md
+                 [current-nf-cache (make-hasheq)]         ;; per-command nf memoization
+                 [current-whnf-cache (make-hasheq)]       ;; per-command whnf memoization
                  [current-reduction-fuel (box 1000000)]  ;; 1M step limit
-                 [current-nat-value-cache (make-hash)]  ;; per-command nat-value memoization
+                 [current-nat-value-cache (make-hasheq)]  ;; per-command nat-value memoization
                  [current-narrow-var-constraints (hasheq)] ;; Phase 3c: per-command constraint chain
                  [current-coercion-warnings '()]         ;; per-command coercion warnings
                  [current-deprecation-warnings '()]      ;; per-command deprecation warnings
@@ -2731,6 +2764,106 @@
 ;; Module Loading
 ;; ========================================
 
+;; ============================================================
+;; .pnet cache-hit registry restore (GitHub #78)
+;; ============================================================
+;;
+;; Restore deserialized registry deltas into BOTH the Racket parameter and the
+;; registry cell. Rows are `(list param cell-id-or-#f delta)`.
+;;
+;; FOLD, never assign — this is a correctness constraint, not a style choice.
+;; The .pnet round-trip pushes EVERY hash through `for/hasheq`
+;; (pnet-serialize.rkt deep-s->v / deep-serializable->struct), so an
+;; `equal?`-keyed registry with cons-pair keys (subtype / coercion /
+;; specialization) comes back as an EQ-keyed hash and a lookup with a freshly
+;; consed key MISSES. Folding entry-by-entry into the existing accumulator
+;; restores the accumulator's key-comparison semantics. Assigning the
+;; deserialized hash wholesale — to the parameter OR the cell — silently breaks
+;; those three registries.
+;;
+;; The cell write is safe for the SAME reason: the cell's merge is
+;; merge-hasheq-replace, whose [else] arm folds `new` into `old`, and `old` is
+;; the cell's value seeded from the `equal?`-based parameter. It is NOT true
+;; that "the delta's hash type doesn't matter".
+;;
+;; ALL-OR-NOTHING: every row's new parameter value is computed BEFORE anything
+;; is committed. A partial restore would otherwise leave registries 1..k-1
+;; applied and k..N not, with the module already registered and no diagnostic —
+;; preparse wraps module loading in `(with-handlers ([exn:fail? void]) ...)`
+;; (macros.rkt), so the exception would be swallowed.
+;;
+;; `macros-cell-write!` is itself a no-op when the cell-id or the persistent
+;; registry net-box is #f, so pre-init and module-loading contexts are safe.
+;; THE registry restore table — the single source of truth for which
+;; deserialized slot goes to which parameter and cell.
+;;
+;; `d` is deserialize-module-state's returned list (fixed length; see
+;; pnet-serialize.rkt). Each row is `(list name param cell-id-or-#f delta)`.
+;; `name` exists so tests can report which registry regressed.
+;;
+;; A row with cell-id #f is a DELIBERATE parameter-only restore: that registry
+;; genuinely has no cell and no cell-primary reader. Every other row MUST reach
+;; its cell, or the registry is invisible to every reader (GitHub #78).
+;; tests/test-pnet-registry-restore.rkt drives its coverage assertion off THIS
+;; function, so a row added here is covered by construction — the point of
+;; making it a table rather than N hand-written writes (pipeline.md
+;; § "Exhaustive Walkers").
+(define (pnet-restore-rows d)
+  (list
+   ;; name                      param                          cell-id (#f = no cell)                    delta
+   (list 'preparse              current-preparse-registry      (current-preparse-registry-cell-id)       (list-ref d 4))
+   (list 'ctor                  current-ctor-registry          (current-ctor-registry-cell-id)           (list-ref d 5))
+   (list 'type-meta             current-type-meta              (current-type-meta-cell-id)               (list-ref d 6))
+   ;; multi-defn / tycon-arity-extension / defn-param-names have NO cell and no
+   ;; cell-primary reader anywhere in the tree — parameter-only is CORRECT for
+   ;; them, not an omission.
+   (list 'multi-defn            current-multi-defn-registry    #f                                        (list-ref d 7))
+   (list 'subtype               current-subtype-registry       (current-subtype-registry-cell-id)        (list-ref d 8))
+   (list 'coercion              current-coercion-registry      (current-coercion-registry-cell-id)       (list-ref d 9))
+   (list 'capability            current-capability-registry    (current-capability-registry-cell-id)     (list-ref d 10))
+   (list 'trait                 current-trait-registry         (current-trait-registry-cell-id)          (list-ref d 11))
+   (list 'impl                  current-impl-registry          (current-impl-registry-cell-id)           (list-ref d 12))
+   (list 'param-impl            current-param-impl-registry    (current-param-impl-registry-cell-id)     (list-ref d 13))
+   (list 'specialization        current-specialization-registry (current-specialization-registry-cell-id) (list-ref d 14))
+   (list 'tycon-arity           current-tycon-arity-extension  #f                                        (list-ref d 15))
+   (list 'bundle                current-bundle-registry        (current-bundle-registry-cell-id)         (list-ref d 16))
+   (list 'defn-param-names      current-defn-param-names       #f                                        (list-ref d 17))
+   (list 'trait-laws            current-trait-laws             (current-trait-laws-cell-id)              (list-ref d 18))
+   (list 'property-store        current-property-store         (current-property-store-cell-id)          (list-ref d 19))
+   (list 'functor-store         current-functor-store          (current-functor-store-cell-id)           (list-ref d 20))
+   ;; #78 P2 (.pnet v4): previously not serialized at all.
+   (list 'schema                current-schema-registry        (current-schema-registry-cell-id)         (list-ref d 21))
+   (list 'selection             current-selection-registry     (current-selection-registry-cell-id)      (list-ref d 22))
+   (list 'session               current-session-registry       (current-session-registry-cell-id)        (list-ref d 23))
+   (list 'strategy              current-strategy-registry      (current-strategy-registry-cell-id)       (list-ref d 24))
+   (list 'process               current-process-registry       (current-process-registry-cell-id)        (list-ref d 25))
+   (list 'user-operators        current-user-operators         (current-user-operators-cell-id)          (list-ref d 26))
+   (list 'user-precedence-groups current-user-precedence-groups (current-user-precedence-groups-cell-id) (list-ref d 27))))
+
+(define (restore-registries! rows)
+  ;; Phase 1 — compute, commit nothing.
+  (define pending
+    (for/list ([row (in-list rows)])
+      (define param   (cadr row))
+      (define cell-id (caddr row))
+      (define delta   (cadddr row))
+      (define folded
+        (for/fold ([reg (param)]) ([(k v) (in-hash delta)])
+          ;; The non-hash arm mirrors the pre-#78 behavior at the three
+          ;; equal?-keyed sites. Note it DISCARDS any prior non-hash content
+          ;; rather than preserving it — it is a fallback that never fires
+          ;; today, not a hardening measure.
+          (if (hash? reg) (hash-set reg k v) (hash k v))))
+      (list param cell-id delta folded)))
+  ;; Phase 2 — commit.
+  (for ([p (in-list pending)])
+    (define param   (car p))
+    (define cell-id (cadr p))
+    (define delta   (caddr p))
+    (define folded  (cadddr p))
+    (param folded)
+    (when cell-id (macros-cell-write! cell-id delta))))
+
 ;; Load a module from a namespace symbol.
 ;; Returns a module-info, or raises an error.
 ;;
@@ -2777,10 +2910,15 @@
 
      (cond
        [pnet-result
-        ;; .pnet hit: reconstruct module-info + propagate registries
-        ;; Destructure: first 11 are the core fields. Additional fields
-        ;; (trait, impl, param-impl, specialization) are serialized but NOT
-        ;; restored — they're outer-scope state, not load-module-managed.
+        ;; .pnet hit: reconstruct module-info + propagate registries.
+        ;; Destructure the module-info fields here; ALL registry slots are
+        ;; restored by pnet-restore-rows below.
+        ;;
+        ;; (This comment used to claim trait/impl/param-impl/specialization were
+        ;; "serialized but NOT restored — outer-scope state, not
+        ;; load-module-managed". That was stale by four registries: all four
+        ;; ARE restored, and were even before #78. Corrected 2026-07-27 — a
+        ;; scope enumeration derived from the old text would have been wrong.)
         (define d-env       (list-ref pnet-result 0))
         (define d-specs     (list-ref pnet-result 1))
         (define d-locs      (list-ref pnet-result 2))
@@ -2816,129 +2954,26 @@
         ;; Merging preserves the caller's existing entries while adding the module's.
         ;; hash-union with last-write-wins for conflicts (same as full elaboration path
         ;; where the module's parameterize inherited and extended the caller's registry).
-        ;; ------------------------------------------------------------------
-        ;; CRITICAL: every registry merged here MUST also be written to its
-        ;; CELL, not just its parameter.
         ;;
-        ;; The registry READERS are cell-primary — `read-ctor-registry`
-        ;; (macros.rkt:6300) is
-        ;;   (or (macros-cell-read-safe (current-ctor-registry-cell-id))
-        ;;       (current-ctor-registry))
-        ;; so once the cells exist the parameter is DEAD for reads. This
-        ;; block originally set parameters only (written 2026-03-24,
-        ;; `2ef600ba`, six days AFTER the readers went cell-primary in
-        ;; `7fec3751`), which made every registry entry restored from a
-        ;; .pnet cache hit invisible. Consequences ranged from a silent
-        ;; stuck `[reduce ...]` term, through a silently WRONG answer (a
-        ;; non-first match arm becoming unreachable because constructor
-        ;; patterns degrade to catch-all variables), to a hard
-        ;; "Type mismatch" at module load. See goblin-pitfalls #43.
+        ;; GitHub #78 (2026-07-27) — restore writes BOTH the parameter AND the cell.
+        ;; The 24 registry readers are CELL-primary (macros.rkt read-* functions:
+        ;; `(or (macros-cell-read-safe cid) (param))`), and because an empty hasheq
+        ;; is TRUTHY the parameter branch is unreachable once the cells exist. A
+        ;; parameter-only restore was therefore invisible to every reader — silently:
+        ;; stuck `[reduce ...]` terms, constructor patterns degrading to catch-all
+        ;; variables (wrong answers), and the degraded elaboration then serialized
+        ;; into the dependent's own .pnet (durable poisoning). The cache-MISS path
+        ;; has always dual-written (macros.rkt register-ctor! et al), so this makes
+        ;; HIT ≡ MISS rather than introducing a new escape.
         ;;
-        ;; `macros-cell-write!` is a no-op when the cell-id or the
-        ;; persistent-registry net-box is #f, so the pre-init and
-        ;; module-loading contexts are unaffected.
-        ;;
-        ;; The delta written is the DESERIALIZED hash (not the merged
-        ;; result): the cells' merge is `merge-hasheq-replace`, which
-        ;; hash-sets the delta over the cell's current value and preserves
-        ;; the accumulator's hash type — so equal?-keyed registries
-        ;; (subtype / coercion / specialization) are safe (macros.rkt:591).
-        ;;
-        ;; WHEN ADDING A REGISTRY HERE: if it has a *-cell-id, it needs a
-        ;; dual-write below. Three registries deliberately have none and
-        ;; are parameter-only: multi-defn, tycon-arity-extension,
-        ;; defn-param-names.
-        ;; ------------------------------------------------------------------
-        (current-preparse-registry
-         (for/fold ([reg (current-preparse-registry)]) ([(k v) (in-hash d-preparse)])
-           (hash-set reg k v)))
-        (macros-cell-write! (current-preparse-registry-cell-id) d-preparse)
-        (current-ctor-registry
-         (for/fold ([reg (current-ctor-registry)]) ([(k v) (in-hash d-ctor)])
-           (hash-set reg k v)))
-        (macros-cell-write! (current-ctor-registry-cell-id) d-ctor)
-        (current-type-meta
-         (for/fold ([reg (current-type-meta)]) ([(k v) (in-hash d-tmeta)])
-           (hash-set reg k v)))
-        (macros-cell-write! (current-type-meta-cell-id) d-tmeta)
-        ;; multi-defn: parameter-only by design (no cell) — no dual-write.
-        (current-multi-defn-registry
-         (for/fold ([reg (current-multi-defn-registry)]) ([(k v) (in-hash d-multi)])
-           (hash-set reg k v)))
-        (current-subtype-registry
-         (for/fold ([reg (current-subtype-registry)]) ([(k v) (in-hash d-sub)])
-           (if (hash? reg) (hash-set reg k v) (hash k v))))
-        (macros-cell-write! (current-subtype-registry-cell-id) d-sub)
-        (current-coercion-registry
-         (for/fold ([reg (current-coercion-registry)]) ([(k v) (in-hash d-coerce)])
-           (if (hash? reg) (hash-set reg k v) (hash k v))))
-        (macros-cell-write! (current-coercion-registry-cell-id) d-coerce)
-        (current-capability-registry
-         (for/fold ([reg (current-capability-registry)]) ([(k v) (in-hash d-cap)])
-           (hash-set reg k v)))
-        (macros-cell-write! (current-capability-registry-cell-id) d-cap)
-        ;; Track 10 Phase 2e: merge 5 additional registries (now managed by load-module)
-        (when (> (length pnet-result) 11)
-          (define d-trait (list-ref pnet-result 11))
-          (define d-impl  (list-ref pnet-result 12))
-          (define d-pimpl (list-ref pnet-result 13))
-          (define d-spec-r (and (> (length pnet-result) 14) (list-ref pnet-result 14)))
-          (define d-tycon  (and (> (length pnet-result) 15) (list-ref pnet-result 15)))
-          (define d-bundle (and (> (length pnet-result) 16) (list-ref pnet-result 16)))
-          ;; Same cell-primary rule as the block above — see pitfall #43.
-          (current-trait-registry
-           (for/fold ([reg (current-trait-registry)]) ([(k v) (in-hash d-trait)])
-             (hash-set reg k v)))
-          (macros-cell-write! (current-trait-registry-cell-id) d-trait)
-          (current-impl-registry
-           (for/fold ([reg (current-impl-registry)]) ([(k v) (in-hash d-impl)])
-             (hash-set reg k v)))
-          (macros-cell-write! (current-impl-registry-cell-id) d-impl)
-          (current-param-impl-registry
-           (for/fold ([reg (current-param-impl-registry)]) ([(k v) (in-hash d-pimpl)])
-             (hash-set reg k v)))
-          (macros-cell-write! (current-param-impl-registry-cell-id) d-pimpl)
-          (when d-spec-r
-            (current-specialization-registry
-             (for/fold ([reg (current-specialization-registry)]) ([(k v) (in-hash d-spec-r)])
-               (if (hash? reg) (hash-set reg k v) (hash k v))))
-            (macros-cell-write! (current-specialization-registry-cell-id) d-spec-r))
-          ;; tycon-arity-extension: parameter-only by design (no cell).
-          (when d-tycon
-            (current-tycon-arity-extension
-             (for/fold ([reg (current-tycon-arity-extension)]) ([(k v) (in-hash d-tycon)])
-               (hash-set reg k v))))
-          (when d-bundle
-            (current-bundle-registry
-             (for/fold ([reg (current-bundle-registry)]) ([(k v) (in-hash d-bundle)])
-               (hash-set reg k v)))
-            (macros-cell-write! (current-bundle-registry-cell-id) d-bundle))
-          ;; Phase 2f: 4 additional registries
-          (when (> (length pnet-result) 17)
-            (define d-dparam (and (> (length pnet-result) 17) (list-ref pnet-result 17)))
-            (define d-tlaws  (and (> (length pnet-result) 18) (list-ref pnet-result 18)))
-            (define d-props  (and (> (length pnet-result) 19) (list-ref pnet-result 19)))
-            (define d-funcs  (and (> (length pnet-result) 20) (list-ref pnet-result 20)))
-            ;; defn-param-names: parameter-only by design (no cell).
-            (when d-dparam
-              (current-defn-param-names
-               (for/fold ([reg (current-defn-param-names)]) ([(k v) (in-hash d-dparam)])
-                 (hash-set reg k v))))
-            (when d-tlaws
-              (current-trait-laws
-               (for/fold ([reg (current-trait-laws)]) ([(k v) (in-hash d-tlaws)])
-                 (hash-set reg k v)))
-              (macros-cell-write! (current-trait-laws-cell-id) d-tlaws))
-            (when d-props
-              (current-property-store
-               (for/fold ([reg (current-property-store)]) ([(k v) (in-hash d-props)])
-                 (hash-set reg k v)))
-              (macros-cell-write! (current-property-store-cell-id) d-props))
-            (when d-funcs
-              (current-functor-store
-               (for/fold ([reg (current-functor-store)]) ([(k v) (in-hash d-funcs)])
-                 (hash-set reg k v)))
-              (macros-cell-write! (current-functor-store-cell-id) d-funcs))))
+        ;; TABLE-DRIVEN by design (pipeline.md § "Exhaustive Walkers: prefer the
+        ;; STRUCTURAL answer to the checklist"): adding a registry is adding a ROW,
+        ;; and a row cannot be added without stating its cell-id — or `#f`
+        ;; DELIBERATELY, for the three registries that genuinely have no cell.
+        ;; The previous shape was N hand-written parameter writes, which is exactly
+        ;; the failure mode that rule names.
+        ;; #78: ONE table drives the whole restore (see pnet-restore-rows).
+        (restore-registries! (pnet-restore-rows pnet-result))
         mod-info]
 
        [else
@@ -2964,6 +2999,14 @@
      (define mod-trait-laws #f)
      (define mod-property-store #f)
      (define mod-functor-store #f)
+     ;; #78 P2: captured inside the parameterize, propagated back below.
+     (define mod-schema-reg #f)
+     (define mod-selection-reg #f)
+     (define mod-session-reg #f)
+     (define mod-strategy-reg #f)
+     (define mod-process-reg #f)
+     (define mod-user-ops #f)
+     (define mod-user-precs #f)
      (define mod-module-network #f)
      (parameterize ([current-ns-context #f]
                     [current-meta-store (make-hasheq)]
@@ -2988,6 +3031,24 @@
                     [current-trait-laws (current-trait-laws)]
                     [current-property-store (current-property-store)]
                     [current-functor-store (current-functor-store)]
+                    ;; #78 P2 (2026-07-27): these 7 were NOT scoped here, so a
+                    ;; module's registrations escaped to the caller's parameter
+                    ;; directly. That made `(current-X)` at serialize time the
+                    ;; process-GLOBAL accumulation — every other module's entries
+                    ;; too, and load-order dependent. Scoping them (inherit +
+                    ;; extend, exactly like the registries above) makes
+                    ;; serialize-module-state capture MODULE-SCOPED content.
+                    ;; Reader behavior is unchanged: all 7 registrars dual-write,
+                    ;; the cell write escapes this parameterize (the net-box is
+                    ;; deliberately not bound here), and the propagate-back below
+                    ;; hands the caller the same content it got before.
+                    [current-schema-registry (current-schema-registry)]
+                    [current-selection-registry (current-selection-registry)]
+                    [current-session-registry (current-session-registry)]
+                    [current-strategy-registry (current-strategy-registry)]
+                    [current-process-registry (current-process-registry)]
+                    [current-user-operators (current-user-operators)]
+                    [current-user-precedence-groups (current-user-precedence-groups)]
                     [current-spec-store (hasheq)]  ;; fresh — specs are module-local
                     [current-propagated-specs (seteq)]  ;; fresh propagated tracking
                     [current-loading-set (set-add (current-loading-set) ns-sym)]
@@ -3070,6 +3131,16 @@
        (set! mod-trait-laws (current-trait-laws))
        (set! mod-property-store (current-property-store))
        (set! mod-functor-store (current-functor-store))
+       ;; #78 P2: capture the 7 newly-scoped registries for both the
+       ;; propagate-back below AND serialize-module-state (which reads the
+       ;; parameters, i.e. this module-scoped view).
+       (set! mod-schema-reg (current-schema-registry))
+       (set! mod-selection-reg (current-selection-registry))
+       (set! mod-session-reg (current-session-registry))
+       (set! mod-strategy-reg (current-strategy-registry))
+       (set! mod-process-reg (current-process-registry))
+       (set! mod-user-ops (current-user-operators))
+       (set! mod-user-precs (current-user-precedence-groups))
 
        ;; Track 5 Phase 3b: Build module-network-ref from accumulated definitions.
        ;; Each entry in mod-env becomes a definition cell in the module's network.
@@ -3121,6 +3192,16 @@
      (current-trait-laws mod-trait-laws)
      (current-property-store mod-property-store)
      (current-functor-store mod-functor-store)
+     ;; #78 P2: hand the caller the same content it received before these 7 were
+     ;; scoped — the scoping exists so SERIALIZATION sees a module-scoped view,
+     ;; not to change what an importer ends up with.
+     (current-schema-registry mod-schema-reg)
+     (current-selection-registry mod-selection-reg)
+     (current-session-registry mod-session-reg)
+     (current-strategy-registry mod-strategy-reg)
+     (current-process-registry mod-process-reg)
+     (current-user-operators mod-user-ops)
+     (current-user-precedence-groups mod-user-precs)
 
      ;; Note: spec store is NOT globally propagated — it's carried in module-info
      ;; for selective propagation via process-imports-spec.
@@ -3384,13 +3465,13 @@
                zonked-type
                foreign-caps)))
 
-  ;; dynamic-require the Racket function using its ORIGINAL Racket name
-  ;; For .rkt file paths, resolve relative to the prologos source directory.
-  ;; For collection paths like "racket/base", convert to symbol.
-  (define rkt-mod-path
-    (if (regexp-match? #rx"\\.rkt$" module-path-str)
-        (simplify-path (build-path prologos-lib-dir ".." module-path-str))
-        (string->symbol module-path-str)))
+  ;; dynamic-require the Racket function using its ORIGINAL Racket name.
+  ;; Resolution goes through THE canonical resolver (pnet-serialize.rkt's
+  ;; foreign-module-path->require-spec) — shared with the .pnet re-link path
+  ;; so the two sites cannot drift. "prologos/X" resolves to the RUNNING
+  ;; compiler's own X.rkt, never the installed collection (the worktree
+  ;; two-instance defect, 2026-07-26 — see the resolver's comment).
+  (define rkt-mod-path (foreign-module-path->require-spec module-path-str))
   (define rkt-proc
     (with-handlers ([exn:fail? (lambda (e)
                                  (error 'foreign "Cannot import ~a from ~a: ~a"

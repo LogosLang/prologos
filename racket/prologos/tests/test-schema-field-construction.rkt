@@ -32,11 +32,18 @@
     (lambda (out) (display content out))
     #:exists 'truncate)
   (define results
+    ;; Seed from the ONCE-per-subprocess prelude snapshot rather than reloading all
+    ;; 39 prelude modules per test case. The registry family must be seeded TOGETHER:
+    ;; a preloaded module registry means modules are not re-loaded, so seeding only
+    ;; `current-module-registry` leaves the trait/impl registries empty.
     (parameterize ([current-ns-context #f]
-                   [current-module-registry (hasheq)]
+                   [current-module-registry prelude-module-registry]
                    [current-lib-paths (list lib-dir)]
                    [current-relation-store (make-relation-store)]
-                   [current-preparse-registry (current-preparse-registry)]
+                   [current-preparse-registry prelude-preparse-registry]
+                   [current-trait-registry prelude-trait-registry]
+                   [current-impl-registry prelude-impl-registry]
+                   [current-param-impl-registry prelude-param-impl-registry]
                    [current-schema-registry (hasheq)]
                    [current-selection-registry (hasheq)]
                    [current-defn-param-names (hasheq)])

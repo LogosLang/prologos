@@ -367,6 +367,7 @@
          current-user-operators-cell-id
          current-macro-registry-cell-id
          macros-cell-write!
+         macros-cell-read-safe   ;; #78: read-only accessor, exported for the restore-table coverage test
          register-macros-cells!
          init-macros-cells!
          ;; Track 6 Phase 6: Snapshot/restore for batch-worker
@@ -6140,12 +6141,6 @@
       (error 'mixfix "Empty .( ) mixfix expression")
       (pratt-parse tokens (effective-operator-table) (effective-precedence-groups))))
 
-;; `.{ }` is RETIRED for mixfix (replaced by `.( )`). The WS reader emits
-;; $mixfix-retired for dot-lbrace so preparse can raise a targeted migration error.
-(define (expand-mixfix-retired datum)
-  (error 'mixfix
-         "`.{ … }` is not currently supported — postfix path-selection is under redesign"))
-
 ;; Track 10 Phase 2c: register built-in expanders in the lookup table FIRST,
 ;; then register them in the preparse registry (which stores symbols, not closures).
 (register-built-in-expander! 'expand-let expand-let)
@@ -6157,7 +6152,6 @@
 (register-built-in-expander! 'expand-pipe-block expand-pipe-block)
 (register-built-in-expander! 'expand-compose-sexp expand-compose-sexp)
 (register-built-in-expander! 'expand-mixfix-form expand-mixfix-form)
-(register-built-in-expander! 'expand-mixfix-retired expand-mixfix-retired)
 
 ;; Register built-in pre-parse macros at module load time.
 ;; Phase 2c: register-preparse-macro! now stores SYMBOLS (from built-in-expander-table)
@@ -6171,7 +6165,6 @@
 (register-preparse-macro! '$pipe-gt expand-pipe-block)
 (register-preparse-macro! '$compose expand-compose-sexp)
 (register-preparse-macro! '$mixfix expand-mixfix-form)
-(register-preparse-macro! '$mixfix-retired expand-mixfix-retired)
 ;; $quote: code-as-data — 'expr → ($quote expr) → Datum constructor chain
 ;; Walks the quoted datum and emits Datum constructor calls.
 ;; Requires prologos::data::datum to be loaded for the constructors to resolve.

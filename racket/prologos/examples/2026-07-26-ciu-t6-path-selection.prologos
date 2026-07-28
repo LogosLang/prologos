@@ -1,0 +1,207 @@
+;; ═══════════════════════════════════════════════════════════════════════════
+;;  CIU Track 6 — PATH SELECTION acceptance file (P0)
+;;  ─────────────────────────────────────────────────────────────────────────
+;;  "Records and arrays are the same associative structure at a higher level
+;;   of abstraction; nested collections of such are TREES; and there is a
+;;   desire, often, in programming, to select out subtrees."   — the intent
+;;
+;;  THE LAW:   dot EXTRACTS · bracket SELECTS · `:` ITERATES · `*` SPLATS
+;;  Spec: docs/tracking/2026-07-26_CIU_T6_PATH_SELECTION_DESIGN.md §5.9 + §5.10
+;;
+;;  Conventions: IDEAL syntax throughout. Working forms carry `;;N=>` markers
+;;  (verified by tools/run-file.rkt --check). Not-yet-working forms are
+;;  COMMENTED with their phase tag — uncommented as each phase lands.
+;;  At X.close this file PROMOTES to a suite-gated regression test.
+;; ═══════════════════════════════════════════════════════════════════════════
+
+ns path-selection-acceptance
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; §A  THE GUILD HALL — one config record, three levels deep (the owner's own)
+;; ───────────────────────────────────────────────────────────────────────────
+
+def app-config
+  :name "GuildHall"
+  :version "1.0.0"
+  :server
+    :host "localhost"
+    :port 8080
+    :ssl
+      :enabled true
+      :cert-path "/etc/ssl/cert.pem"
+  :database
+    :url "localhost/guild-db"
+    :pool-size 10
+  :features @[:auth :logging :caching]
+  :admins
+    - :name "Alice"
+      :role :super
+    - :name "Bob"
+      :role :regular
+
+;;0=> app-config : {:admins [PVec {:name String :role Keyword}] :database {:pool-size Int :url String} :features [PVec Keyword] :name String :server {:host String :port Int :ssl {:cert-path String :enabled Bool}} :version String} defined.
+
+;; —— extraction: dots all the way down (WORKING) ——
+app-config.server.ssl.enabled
+;;1=> true : Bool
+
+app-config.database.pool-size
+;;2=> 10 : Int
+
+app-config.server
+;;3=> {:ssl {:cert-path "/etc/ssl/cert.pem", :enabled true}, :host "localhost", :port 8080} : {:host String :port Int :ssl {:cert-path String :enabled Bool}}
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; §B  SELECTION — bracket keeps keys, builds a NEW tree            [P4]
+;; ───────────────────────────────────────────────────────────────────────────
+;; app-config[database]                     ;; {:database {:url … :pool-size 10}}
+;; app-config[server[host port]]            ;; {:server {:host "localhost" :port 8080}}  — nesting preserved
+;; app-config[server[ssl[enabled]]]         ;; {:server {:ssl {:enabled true}}}
+;; app-config[server.host database.url]     ;; {:host … :url …}                — dot flattens the path
+;; app-config[database^db features]         ;; {:db {…} :features @[…]}        — ^name renames
+;; app-config[server.host^_ database.url^_] ;; {:server-host … :database-url …} — ^_ derives from the path
+;; app-config[server.host^ database.url^]   ;; ⟨"localhost" "localhost/guild-db"⟩ — all-elided ⇒ tuple
+;; app-config[name^]                        ;; ⟨"GuildHall"⟩ : ⟨String⟩        — 1-tuple (x.name is the bare value)
+;; def sub := app-config[server[host]]      ;; selection results are ordinary CLOSED rows:
+;; sub.server.host                          ;;   def-storable, sealable, validatable
+;;
+;; STATIC ERRORS the spec mandates (uncomment as error-pins when P4 lands):
+;; app-config[server.host database.host]    ;; ERROR: :host contributed twice — rename with ^name or ^_
+;; app-config[name admins.0]                ;; ERROR: mixed keyed/positional — elide or rename
+;; app-config[]                             ;; ERROR: empty selection (write {} for an empty record)
+;; app-config[zzz]                          ;; ERROR: closed-row miss, names available fields
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; §C  SPLAT — `*` splices a subtree's fields into the result       [P4]
+;; ───────────────────────────────────────────────────────────────────────────
+;; app-config[server.* database.url^dsn]    ;; {:host … :port … :ssl {…} :dsn …}
+;; app-config[server.*^_ database.*^_]      ;; every field path-derived — collision-free by construction
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; §D  THE PARTY — a PVec of same-shaped records; `:` iterates      [P5]
+;; ───────────────────────────────────────────────────────────────────────────
+
+def party := @[{:name "Frodo"   :class :burglar :hp 38 :level 9}
+               {:name "Gandalf" :class :wizard  :hp 92 :level 20}
+               {:name "Gimli"   :class :fighter :hp 77 :level 12}]
+
+;;4=> party : [PVec {:class Keyword :hp Int :level Int :name String}] defined.
+
+;; app-config.admins.:.name                 ;; @["Alice" "Bob"]                — each admin's name, bare
+;; app-config[admins.:.name]                ;; {:admins @["Alice" "Bob"]}      — same, key kept
+;; party.:[name hp]                         ;; @[{:name "Frodo" :hp 38} …]     — each member, narrowed
+;; party.:[name^ level^]                    ;; @[⟨"Frodo" 9⟩ ⟨"Gandalf" 20⟩ ⟨"Gimli" 12⟩]
+;; app-config.server.:                      ;; map-vals: `:` on a keyword row iterates its VALUES
+;; party.:.name                             ;; @["Frodo" "Gandalf" "Gimli"]
+
+;; the extraction/selection seam on positions (PS2 re-target, lands P3/P4):
+;; party.0.name                             ;; "Frodo"      — dot extracts (needs .N lexing)
+;; party[1 2]                               ;; ⟨{…Gandalf…} {…Gimli…}⟩ — positions RENUMBER, dense
+;; NOTE: today `party[0]` still EXTRACTS (the F1a-col degenerate case); PS2
+;; re-targets it to the 1-tuple ⟨elem⟩. Current behaviour pinned here so the
+;; flip is loud when it lands:
+party[0].name
+;;5=> "Frodo" : String
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; §E  FUNCTIONS OVER ROWS — first-class projection                 [P5 + PX]
+;; ───────────────────────────────────────────────────────────────────────────
+
+;; the HOF forms that ALREADY work — bidirectional checking supplies the row:
+map [fn [m] m.name] party
+;;6=> @["Frodo" "Gandalf" "Gimli"] : [PVec String]
+
+map [fn [m] {:who m.name :ready [gt m.hp 50]}] party
+;;7=> @[{:who "Frodo", :ready false} {:who "Gandalf", :ready true} {:who "Gimli", :ready true}] : [PVec {:ready Bool :who String}]
+
+map [+ 5 _] '[1 2 3]
+;;8=> '[6 7 8] : [prologos::data::list::List Int]
+
+;; keyword-as-projection — the Clojure idiom, owner-ruled at D.3     [P5]
+;; map :name party                          ;; '["Frodo" "Gandalf" "Gimli"]
+;; map :hp party                            ;; '[38 92 77]
+;; [:class {:class :bard}]                  ;; :bard — keyword at application head
+
+;; the STANDALONE-DEF SEAM (the add5 family, owner data point)       [PX]
+;; def add5 := [+ 5 _]                      ;; trait section       — fails today
+;; def add10 := [int+ 10 _]                 ;; the #70 hint's OWN recommendation — also fails today
+;; def get-name := [fn [m] m.name]          ;; the row cousin      — fails today
+;; …the ANNOTATED hatch works NOW, and stays the honest spelling meanwhile:
+def add5 : <Int -> Int> := [+ 5 _]
+[add5 37]
+;;10=> 42 : Int
+
+;; named-schema abstraction — v1's function-over-rows path (WORKING):
+schema Member
+  :name String
+  :class Keyword
+  :hp Int
+  :level Int
+
+spec veteran? Member -> Bool
+defn veteran? [m]
+  gt m.level 10
+
+def members : (List Member) := '[{:name "Sam" :class :gardener :hp 44 :level 8}
+                                 {:name "Legolas" :class :archer :hp 60 :level 15}]
+;;13=> members : [prologos::data::list::List path-selection-acceptance::Member] defined.
+
+map veteran? members
+;;14=> '[false true] : [prologos::data::list::List Bool]
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; §F  QUEST BOARD — relational facts; solve rows ARE records       [P4/P5]
+;; ───────────────────────────────────────────────────────────────────────────
+
+defr quest [?title ?giver ?reward]
+  || "Rescue the cat"      "Alice" 50
+     "Map the catacombs"   "Bob"   200
+     "Debug the compiler"  "Alice" 9000
+
+def quests := solve (quest t g r)
+;;16=> quests : [prologos::data::list::List {:g String :r Int :t String}] defined.
+
+quests
+;;17=> '[{:g "Alice", :t "Rescue the cat", :r 50} {:g "Bob", :t "Map the catacombs", :r 200} {:g "Alice", :t "Debug the compiler", :r 9000}] : [prologos::data::list::List {:g String :r Int :t String}]
+
+;; typed solve rows compose with HOFs TODAY:
+map [fn [q] q.r] quests
+;;18=> '[50 200 9000] : [prologos::data::list::List Int]
+
+;; …and with selection, once it lands:
+;; quests.:.t                               ;; '["Rescue the cat" "Map the catacombs" "Debug the compiler"]
+;; quests.:[t r]                            ;; each quest, narrowed to title + reward
+;; quests[:.t^titles :.r^rewards]           ;; {:titles '[…] :rewards '[…]} — the named UNZIP
+;; map :r quests                            ;; '[50 200 9000] — keyword projection over solve rows
+
+;; a paren-goal query (implicit solve) feeding the same machinery:
+def alice-quests := (quest t "Alice" r)
+;;19=> alice-quests : [prologos::data::list::List {:r Int :t String}] defined.
+
+map [fn [q] q.t] alice-quests
+;;20=> '["Rescue the cat" "Debug the compiler"] : [prologos::data::list::List String]
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; §G  TYPING SEAMS — the pins that keep us honest
+;; ───────────────────────────────────────────────────────────────────────────
+
+;; selection sources stay precisely typed through def:
+def ssl-config := app-config.server.ssl
+;;21=> ssl-config : {:cert-path String :enabled Bool} defined.
+
+ssl-config.enabled
+;;22=> true : Bool
+
+;; heterogeneous tuple: per-position types survive (D15), extraction is exact:
+def mixed := @[7 "seven" :seven]
+;;23=> mixed : ⟨Int String Keyword⟩ defined.
+
+mixed[1]
+;;24=> "seven" : String
+
+;; a selection result seals + validates, once selection lands        [P4/P6]:
+;; schema ServerCfg
+;;   :host String
+;;   :port Int
+;; def sc := [ServerCfg app-config.server[host port]^]
+;; [validate ServerCfg app-config.server[host port]^]
