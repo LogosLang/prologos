@@ -15,6 +15,32 @@ Deferral".
 
 ---
 
+## 🐛 DEFECT — `def X :=` + multi-key layout body fails; identical body without `:=` works (filed 2026-07-28, the D5 critique)
+
+**Repro (byte-identical bodies, A/B verified at `2b1b383d`)**:
+```
+def r1 :=
+  :eu {:host "eu.example.com" :port 443}
+  :us {:host "us.example.com" :port 443}
+;; → ERROR: Could not infer type
+
+def r2
+  :eu {:host "eu.example.com" :port 443}
+  :us {:host "us.example.com" :port 443}
+;; → r2 : {:eu {:host String :port Int} :us {:host String :port Int}} defined.
+```
+Trigger is fiddly (≥2 top-level keys, or ≥2 dash items with a multi-line
+`@[…]`) — evidence of a defect, not a documented restriction. Single-line
+`:=` bodies work. The diagnostic ("Could not infer type") names the wrong
+thing — it is a PARSE/layout seam, not typing. Found while running the Path
+Selection spec's Appendix fixtures (4 of its `def X :=` forms hit this).
+Workaround in corpus files: use the `def X` (no `:=`) implicit-map form.
+Owner ruled 2026-07-28: file as an issue. Adjacent context: the
+implicit-map-def WS path was touched by the 2026-07-18 hand-testing arc
+(`ff31d237` — process-string-ws parity), so the seam has history.
+
+---
+
 ## ✅ RESOLVED — CIU T6 F1b: D23 posture-flip (DEPLOYED F1b.6 `7bcbca69`, 2026-07-18)
 
 **The Q4 tightening is DEPLOYED — D23 (track doc §2a round 6): escape-boundary
