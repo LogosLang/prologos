@@ -290,6 +290,24 @@
                             (expr-string-val (expr-panic-msg forced))
                             (pp-expr (expr-panic-msg forced)))))))))
 
+;; CIU T6 P2.b slice 2 (Q_N5): the def-seam panic check — BOTH def paths
+;; (inferred + annotated) bound their value via `(whnf zonked-body)` and stored
+;; it with NO panic check at all, so `def d := [boom 2]` committed a panic value
+;; silently at zero errors while the same expression at top level was counted.
+;; This converts a panic-valued def into a counted per-command error, exactly
+;; the seal-forcing precedent above but without its schema-shape gate. The
+;; bound is TOP-NODE-ONLY, same as the eval arm (a panic nested inside a
+;; constructed value prints, counts 0 — accepted + named, the D22 bound;
+;; pinned at tests/test-path-selection.rkt B8). Returns a prologos-error or #f
+;; (usable directly as a cond => guard).
+(define (def-panic-error bound-value def-srcloc)
+  (and (expr-panic? bound-value)
+       (prologos-error def-srcloc
+         (format "panic: ~a"
+                 (if (expr-string? (expr-panic-msg bound-value))
+                     (expr-string-val (expr-panic-msg bound-value))
+                     (pp-expr (expr-panic-msg bound-value)))))))
+
 ;; Check if an elaborated type contains unsolved metas (level-meta, mult-meta, or expr-meta).
 ;; When a type has unsolved metas (from implicit parameter inference), is-type may fail
 ;; because infer-level can't handle universe level mismatches caused by Church encoding
@@ -1905,15 +1923,20 @@
                     ;; Ruling trail: design §8 POL.10 (F1 = snapshot; recipe
                     ;; invalidation = Rel T2 IVM territory).
                     (define bound-value (time-phase! reduce (whnf zonked-body)))
-                    (global-env-add name zonked-type bound-value)
-                    ;; LSP Tier 2.3: record definition location
-                    (register-definition-location! name def-srcloc)
-                    (when (current-ns-context)
-                      (define fqn (qualify-name name
-                                    (ns-context-current-ns (current-ns-context))))
-                      (global-env-add fqn zonked-type bound-value)
-                      (register-definition-location! fqn def-srcloc))
-                    (format "~a : ~a defined." name (pp-expr zonked-type))])])])])])])]
+                    (cond
+                      ;; CIU T6 P2.b (Q_N5): a panic-valued def is a COUNTED
+                      ;; error, not a silent commit.
+                      [(def-panic-error bound-value def-srcloc) => values]
+                      [else
+                       (global-env-add name zonked-type bound-value)
+                       ;; LSP Tier 2.3: record definition location
+                       (register-definition-location! name def-srcloc)
+                       (when (current-ns-context)
+                         (define fqn (qualify-name name
+                                       (ns-context-current-ns (current-ns-context))))
+                         (global-env-add fqn zonked-type bound-value)
+                         (register-definition-location! fqn def-srcloc))
+                       (format "~a : ~a defined." name (pp-expr zonked-type))])])])])])])])]
     ;; Existing annotated path (type annotation present)
     [else
      ;; 1. Elaborate type
@@ -2110,16 +2133,24 @@
                           ;; POL.10: bind the WHNF-reduced value (snapshot) —
                           ;; see the inferred-path twin for the full note.
                           (define bound-value (time-phase! reduce (whnf zonked-body)))
-                          (global-env-add name zonked-type bound-value)
-                          ;; LSP Tier 2.3: record definition location
-                          (register-definition-location! name def-srcloc)
-                          (when (current-ns-context)
-                            (define fqn (qualify-name name
-                                          (ns-context-current-ns (current-ns-context))))
-                            (global-env-add fqn zonked-type bound-value)
-                            (register-definition-location! fqn def-srcloc))
-                          (format "~a : ~a defined."
-                                  name (pp-expr zonked-type))])]
+                          (cond
+                            ;; CIU T6 P2.b (Q_N5): the ANNOTATED def seam is
+                            ;; checked too (the round-8 design named only the
+                            ;; inferred one) — un-register like the QTT-failure
+                            ;; arm above (this path pre-registered the type).
+                            [(def-panic-error bound-value def-srcloc)
+                             => (lambda (err) (remove-failed-definition! name) err)]
+                            [else
+                             (global-env-add name zonked-type bound-value)
+                             ;; LSP Tier 2.3: record definition location
+                             (register-definition-location! name def-srcloc)
+                             (when (current-ns-context)
+                               (define fqn (qualify-name name
+                                             (ns-context-current-ns (current-ns-context))))
+                               (global-env-add fqn zonked-type bound-value)
+                               (register-definition-location! fqn def-srcloc))
+                             (format "~a : ~a defined."
+                                     name (pp-expr zonked-type))])])]
                       )])])])])])])]))
 
 ;; ========================================

@@ -903,10 +903,13 @@ is *literally* 2 pins.
   naturally guard-aware (qualifier 3) because it only bites when the node reduces.
   ⇒ **The POLARITY question DISSOLVES**: `syntax.rkt` has **zero `#:auto` fields**
   across all 344 `expr-*` structs, so there is no "unmarked" state to assign a default
-  to — every construction site must declare, as a compile-time arity error. Fail-loud
-  by construction. Cost is honest: `pipeline.md` § New Struct Field applies in full
-  (repo-wide `struct-copy` AND direct-constructor grep; `pnet-serialize.rkt:307`'s
-  `reg2! expr-get` becomes `reg3!`).
+  to — every construction site must declare. ~~as a compile-time arity error. Fail-loud
+  by construction~~ **CORRECTED round 8b (probe-reproduced): cross-module CONSTRUCTOR
+  arity mismatch compiles CLEAN (exit 0, zero diagnostic) — only `match` patterns are
+  compile-loud.** A field migration is discovered by patterns at build and by
+  constructors only WHEN EXECUTED. Cost is honest: `pipeline.md` § New Struct Field
+  applies in full (repo-wide `struct-copy` AND direct-constructor grep;
+  `pnet-serialize.rkt:307`'s `reg2! expr-get` becomes `reg3!`).
 - **Q_N5 — the DEF SEAM is IN SCOPE.** P2.b is unobservable without it (R3). Must
   respect the whnf-never-nf commitment — this is not a one-liner.
 - **Q_N6 — SITE 7 is IN SCOPE.** The tuple-`none` fabrication (R4). Preferred fix is
@@ -947,6 +950,58 @@ is *literally* 2 pins.
   (`typing-core.rkt:2616` vs `:3000`; `qtt.rkt:1786` vs `:2285`). A bare top-level
   `[panic "…"]` dies at infer with *"Could not infer type"*, **not** `panic:`. Reduction-
   produced panics are unaffected. Any test that writes a bare panic will mislead.
+
+**Round 8b — the slice-2 mini-audit (`wf_af8d65c5-a6e`, 2026-07-27; all load-bearing
+claims main-session re-verified).** The Q_N4 scope hypothesis HELD, with new facts
+that re-shape the slice:
+
+- **A3/A4 need NO slot** — both rrb arms isolate the genuine range error inside a
+  handler reached only after a successful literal-index extraction (a non-literal key
+  exits stuck first: `reduction.rkt:2733`, `:2800`), and `expr-PVec` carries no arity
+  and no tail, so there is no permissive counterpart at typing. Flipping them is local
+  and type-free. Adversarial check: a nat-dyn ROW **does** exist (`map-dissoc` on a
+  tuple; `record-project`'s miss is tail-gated only) but no route places an `expr-rrb`
+  VALUE under one — the subject stays a stuck `expr-map-dissoc` and the open-tuple
+  type has no surface spelling. **Consequence pinned deliberately: a DYNAMIC-index
+  tuple OOB (types to ⋃positions, reaches reduction) becomes loud** — the static
+  literal-index tuple pins are untouched (they error at elaboration).
+- **The two rrb fallbacks DIFFER today** — `(expr-error)` at `:2731` vs stuck `e` at
+  `:2798`: A3 and A4 are two different silences; the flip must unify them.
+- **BOTH def seams are unchecked** — `driver.rkt:1907` (inferred) AND `:2112`
+  (annotated). Q_N5's single-site framing was an under-count; B2's own pin is an
+  annotated def. The `seal-forcing-error` guard directly above each is the template
+  (the annotated path also `remove-failed-definition!`s).
+- **The List leg is EXCLUDED from slice 2 (named, not silent)**: `expr-get`'s List arm
+  CONFLATES "index is not a literal" with OOB — both fall to one `(expr-error)`
+  (`:2742`), and a lambda body indexing a ground list is ALREADY destroyed to
+  `<error>` at HEAD (a live pre-existing silent-wrong-value bug). It needs the
+  literal/OOB split first; it rides the A1 decision round.
+- **CARRIED-ALPHA'S COST GREW — A1 is HELD for its own ruling**: (i) six sites
+  construct `expr-map-get` DURING REDUCTION (`:3123/:3144/:3157/:4175/:4192/:4205` —
+  the get-in/update-in/broadcast-get lowering family), after typing is over, so their
+  alpha is permanently unsolved: the "safe default" would BE that family's behaviour;
+  (ii) the two nodes DELEGATE to each other in both directions (`:2704`, `:2725`), so
+  the slot must go on BOTH or be dropped at the crossing; (iii) `expr-map-get`'s only
+  pnet registration is `auto-cache!` — variadic, inside
+  `with-handlers ([exn? void])` (`pnet-serialize.rkt:437-443`) — so a stale call is
+  SWALLOWED and the node silently vanishes from the cache, unlike `expr-get`'s loud
+  `reg2!`; (iv) `PNET_VERSION` 5→6 required same-commit (absent from pipeline.md's
+  field checklist); (v) `qtt.rkt:1281`'s Map leg returns locally instead of
+  delegating to `infer` — the infer/inferQ-twins class the adjacent arm's own comment
+  records as already bitten; (vi) the elaboration mint is SIX sites, not one (five are
+  compiler-synthesized get-in/update-in inlinings).
+- **Slice-1 regression check CLEAN**: old exemption set (19) ∩ new positive set (20)
+  = ∅, so new-#t ⊂ old-#t strictly — D22's panic guarantee preserved. Named
+  side-effect (inert, conservative): `expr-float32/64` moved from fabricate-`none` to
+  stuck.
+- Pre-existing `expr-get` gaps inherited, filed: `expr-get?` ABSENT from the `expr?`
+  predicate (`syntax.rkt:1346` — pipeline.md core item 1 unmet); ambient pipeline.md
+  names `trivially-whnf?` which does not exist (the real predicate is `whnf-trivial?`,
+  `reduction.rkt:1795`).
+
+**Slice 2 scope as ruled [owner]: A3 + A4 (both rrb arms → panic, unified) + BOTH def
+seams (A7 + the annotated twin). A1 (the Map fork) and the List-leg split return as
+their own decision.**
 
 ## §6 SRE lattice lens — REQUIRED (the result shape IS lattice-shaped)
 

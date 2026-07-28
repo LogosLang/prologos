@@ -227,9 +227,60 @@
 
 ;; ---------- SITE 7 — the fabricated-`none` class (slice 1) ----------
 ;;
-;; The remaining assertive-tier legs (Map-miss loud · PVec/List/pvec-nth OOB
-;; loud · the def seam) arrive with the carried-alpha and def-seam slices, each
-;; with its own tests — per `workflow.md`, a phase brings its OWN coverage.
+;; The remaining assertive-tier legs (Map-miss loud · List OOB) arrive with the
+;; A1 decision round, each with its own tests — per `workflow.md`, a phase
+;; brings its OWN coverage.
+
+;; ---------- SLICE 2 — PVec OOB loud + BOTH def seams (round 8b) ----------
+;;
+;; No strictness slot needed here (audit `wf_af8d65c5-a6e`): both rrb arms
+;; isolate the genuine range error AFTER a successful literal-index extraction,
+;; and `expr-PVec` carries no arity/tail — no permissive counterpart exists.
+
+(test-case "P2.b A3: PVec runtime OOB via expr-get is LOUD (reduction.rkt:2731)"
+  (define r (run-ws-raw-last "def v := @[10 20 30]\nv[5]\n"))
+  (check-true (prologos-error? r)))
+
+(test-case "P2.b A3b: the loud OOB names index and length (the quality bar)"
+  (define r (run-ws-last "def v := @[10 20 30]\nv[5]\n"))
+  (check-regexp-match #rx"out of bounds" r)
+  (check-regexp-match #rx"5" r)
+  (check-regexp-match #rx"3" r))
+
+(test-case "P2.b A4: pvec-nth runtime OOB is LOUD (reduction.rkt:2798 — was the stuck leg)"
+  (define r (run-ws-raw-last "def v := @[10 20 30]\n[pvec-nth v 5N]\n"))
+  (check-true (prologos-error? r)))
+
+(test-case "P2.b A9 (deliberate flip, round 8b): DYNAMIC-index tuple OOB becomes loud"
+  ;; Types to ⋃positions (the P2.a union-degrade) and reaches reduction with a
+  ;; runtime-computed index. The STATIC literal-index tuple pins are untouched —
+  ;; they error at elaboration and never reach these arms.
+  (define r (run-ws-raw-last
+             (string-append
+              "def tr := @[1 \"a\" true]\n"
+              "[pvec-nth tr [pvec-length @[1N 2N 3N 4N 5N]]]\n")))
+  (check-true (prologos-error? r)))
+
+;; THE DEF SEAMS (Q_N5, both — driver.rkt:1907 inferred, :2112 annotated).
+(test-case "P2.b A7: a panic-valued def is COUNTED at the inferred def seam (was: silent)"
+  (define rs (run-ws-raw
+              (string-append
+               "spec boom Int -> Int\n"
+               "defn boom [x]\n"
+               "  [panic \"BOOM\"]\n"
+               "def d := [boom 2]\n")))
+  (check-true (ormap prologos-error? rs)
+              "def d := [boom 2] yielded `d : Int defined.` with ZERO errors"))
+
+(test-case "P2.b A8: the ANNOTATED def seam is checked too (driver.rkt:2112)"
+  ;; The round-8 design named only :1907; the audit found the annotated twin.
+  (define rs (run-ws-raw
+              (string-append
+               "spec boom2 Int -> Int\n"
+               "defn boom2 [x]\n"
+               "  [panic \"BOOM\"]\n"
+               "def d : Int := [boom2 2]\n")))
+  (check-true (ormap prologos-error? rs)))
 
 ;; SITE 7 (round-8 Q_N6) — the design's claim was inverted in BOTH halves:
 ;; the PRESENT position fabricates `none`; the OOB position is ALREADY loud.
@@ -292,3 +343,24 @@
   (define r (run-ws "def tp := @[1 \"a\" true]\ntp[1]\n[pvec-nth tp 1N]\n[get tp 1N]\n"))
   (for ([x (in-list (take-right r 3))])
     (check-regexp-match #rx"\"a\"" x)))
+
+(test-case "P2.b B7: a runtime-COMPUTED in-bounds index still projects (no false OOB)"
+  (define r (run-ws-last
+             (string-append
+              "def v := @[10 20 30]\n"
+              "[pvec-nth v [pvec-length @[1N 2N]]]\n")))
+  (check-regexp-match #rx"30" r))
+
+(test-case "P2.b B8 (the named bound, D22 precedent): a NESTED panic prints, counts 0"
+  ;; Top-node-bounded at both seams — accepted + NAMED in round 7/8. This pin
+  ;; makes the boundary deliberate: if it ever flips, it flips in a test.
+  ;; (Nested under a MAP literal — core syntax; cons/nil are prelude-only and
+  ;; would make this fail with `Unbound variable`, i.e. for the wrong reason.)
+  (define rs (run-ws-raw
+              (string-append
+               "spec boom3 Int -> Int\n"
+               "defn boom3 [x]\n"
+               "  [panic \"NESTED\"]\n"
+               "def q := {:x [boom3 1]}\n")))
+  (check-false (ormap prologos-error? rs)
+               "a panic nested inside a constructed value is uncounted (top-node bound)"))

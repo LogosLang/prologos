@@ -2724,13 +2724,23 @@
          ;; Map (CHAMP) → delegate to map-get
          [(expr-champ _) (whnf (expr-map-get c* (whnf key)))]
          ;; PVec (RRB) → index by nat/int
+         ;; CIU T6 P2.b slice 2: OOB is a LOUD assertive-tier error (was a
+         ;; silent `(expr-error)` behind a with-handlers). The explicit bounds
+         ;; check replaces the handler — index-value guarantees n ≥ 0, so an
+         ;; in-bounds rrb-get cannot range-fail; anything else raising there
+         ;; would be a real invariant violation that must not be swallowed.
+         ;; A non-literal index still exits STUCK (the arm below), which is
+         ;; what keeps guarded/honest-tier reads insulated.
          [(expr-rrb r)
           (let* ([k* (whnf key)]
                  [n (index-value k*)])
-            (if n
-                (with-handlers ([exn:fail? (lambda (_) (expr-error))])
-                  (whnf (rrb-get r n)))
-                (expr-get c* k*)))]
+            (cond
+              [(not n) (expr-get c* k*)]
+              [(< n (rrb-size r)) (whnf (rrb-get r n))]
+              [else (expr-panic
+                     (expr-string
+                      (format "get: index ~a out of bounds for PVec of length ~a"
+                              n (rrb-size r))))]))]
          ;; List (cons chain) → walk to nth
          [_
           (let ([elems (prologos-list->racket-list c*)])
@@ -2791,13 +2801,20 @@
      (let ([x* (whnf x)])
        (expr-rrb (rrb-push r x*)))]
 
+    ;; CIU T6 P2.b slice 2: OOB is a LOUD assertive-tier error. This was THE
+    ;; DIVERGENT leg — it returned the stuck term `e` where expr-get's rrb arm
+    ;; returned `(expr-error)`: two different silences for one carrier. Both
+    ;; now unify on the same panic shape. Non-literal index stays stuck.
     [(expr-pvec-nth (expr-rrb r) i)
      (let* ([i* (whnf i)]
             [n (nat-value i*)])
-       (if n
-           (with-handlers ([exn:fail? (lambda (_) e)])
-             (whnf (rrb-get r n)))
-           e))]
+       (cond
+         [(not n) e]
+         [(< n (rrb-size r)) (whnf (rrb-get r n))]
+         [else (expr-panic
+                (expr-string
+                 (format "pvec-nth: index ~a out of bounds for PVec of length ~a"
+                         n (rrb-size r))))]))]
 
     [(expr-pvec-update (expr-rrb r) i x)
      (let* ([i* (whnf i)]
