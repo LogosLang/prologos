@@ -30,8 +30,8 @@ Per `HANDOFF_PROTOCOL.org`. **ON-DISK IS AUTHORITATIVE.**
   landed P0–P2 implementation):
   [`2026-07-26_CIU_T6_PATH_SELECTION_DESIGN.md`](../2026-07-26_CIU_T6_PATH_SELECTION_DESIGN.md).
   Carries a supersession banner. **Do not implement from it.**
-- **HEAD**: `5949f7b5` · branch `main`, **18 commits ahead of origin — do NOT
-  push unless directed**.
+- **HEAD**: `c284182a` · branch `main`, **~21 commits ahead of origin — do NOT
+  push unless directed** (re-count; HEAD moved 36 commits under a prior session).
 - **Suite**: GREEN **9238 / 474 / 0** (last full run at `ac89341f`; only docs +
   the acceptance file since). Acceptance: path-selection **28/28**, records
   **89/89**. `.pnet` is **v6**.
@@ -129,7 +129,16 @@ read failure logs, never re-run the suite to diagnose) · `workflow.md` (the
 6. `racket/prologos/tests/test-path-selection.rkt` — the track test file (39
    cases; grow it per phase).
 7. The predecessor design doc — **§3 grounded facts + §5.10 only**, for the
-   landed-work rationale. Its SURFACE (§5.9 PS1–PS15) is superseded.
+   landed-work rationale. Its SURFACE (§5.9 PS1–PS15) is superseded (its
+   Status header, §5.9 heading and §2 tracker now carry supersession markers).
+
+**A doc-truth sweep ran before this handoff** (`wf_f42f03ab-017`, 4 read-only
+facets) and fixed **2 BLOCKING + 7 SIGNIFICANT** drift defects in these very
+documents (`c284182a`) — the batch-ruling fold had updated the tracker and the
+§3 ledger while leaving several §5 PHASE SECTIONS stale, which is exactly what
+an implementer reads. **The lesson generalizes: when folding rulings, the phase
+sections are the drift surface, not the tracker.** Both memory files were also
+carrying the OLD surface as current and were corrected.
 
 ---
 
