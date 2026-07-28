@@ -1,5 +1,14 @@
 # CIU Track 6 — Path Selection (Stage-3 Design, **D.2**)
 
+> ⚠ **SUPERSEDED (2026-07-28)** — the surface (§5.9 PS1–PS15 + §5.10 deltas)
+> is replaced by the Path Selection redesign:
+> **spec** [`docs/research/2026-07-28_path-selection-spec.md`](../research/2026-07-28_path-selection-spec.md)
+> · **implementation design** [`2026-07-28_CIU_T6_PATH_SELECTION_D4.md`](2026-07-28_CIU_T6_PATH_SELECTION_D4.md)
+> (D4 §1.2 carries the per-ruling supersession table — PS4/PS5/PS8 survive,
+> PS6/PS7 generalize, the rest are replaced/superseded). This document stays
+> as the RECORD of rounds 1–8b and of the landed P0–P2 implementation, which
+> stands in full as D4's substrate. Do not implement from this document.
+
 **Status**: **Stage-3 D.2 — the SURFACE IS SETTLED** (five co-design rounds, owner-ruled
 2026-07-26; consolidated spec = **§5.9 PS1–PS15**; §5.1–§5.8 remain as the conversation
 record). Implementation opens at P0 (acceptance file) per §2.
