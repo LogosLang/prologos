@@ -14,6 +14,8 @@
 ;;;
 
 (require racket/list
+         racket/file
+         racket/os
          racket/path
          racket/port
          racket/string
@@ -57,7 +59,39 @@
          run-simple-capture-stderr
          ;; Rich failure diagnostics: custom check with provenance
          check-prologos
-         error-provenance-summary)
+         error-provenance-summary
+         ;; Collision-free scratch files for WS-mode (process-file) tests
+         make-prologos-temp-file)
+
+;; ========================================
+;; Temp files for WS-mode tests
+;; ========================================
+;;
+;; 23 test files drive `process-file` through a scratch `.prologos` file, and
+;; every one of them used the SAME `make-temporary-file` template. That is
+;; safe within a process -- Racket disambiguates with a counter -- but the
+;; counter is per-process, and the suite runs four batch workers. Two workers
+;; landing in the same millisecond generate the same name, and the loser dies
+;; with
+;;
+;;     open-output-file: file exists
+;;       path: /var/tmp/prologos-test-17852384651785238465047.prologos
+;;
+;; then fails somewhere unrelated -- the observed symptom was
+;; "Unbound variable: <" in a mixfix test, because the file it went on to read
+;; was not the one it meant to write.
+;;
+;; It is load-dependent and rare, so it presents as a test that "passes
+;; individually, fails in batch, sometimes" -- which is also the signature of
+;; two genuine architectural bugs in this project (the collection-path trap and
+;; parameter leakage), and it cost a wrong diagnosis before being read
+;; properly. Two sightings: test-mixfix-01 on CI (2026-07-27) and
+;; test-mixfix-02 locally (2026-07-28).
+;;
+;; The PID makes the name unique across workers; the counter keeps it unique
+;; within one.
+(define (make-prologos-temp-file)
+  (make-temporary-file (format "prologos-test-~a-~~a.prologos" (getpid))))
 
 ;; ========================================
 ;; Compute lib-dir from this file's location

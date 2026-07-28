@@ -2391,3 +2391,56 @@
        "          (framed-concat (bs-pending-out (bridge-step-state step)))))")
       handoff-frame-bad)))
    "5\'break"))
+
+;; ========================================
+;; op:gc-exports
+;; ========================================
+
+(test-case "gc/a fire-and-forget deliver releases the peer's import-objects"
+  ;; No answer position and no resolve-me: nothing outlives the turn, so every
+  ;; desc:import-object in the args is garbage immediately.
+  (check-contains
+   (extract-value-bytes
+    (run-last
+     "(eval (let (args (syrup-list (cons (syrup-tagged \"desc:import-object\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero))))))))) nil))
+                   step (captp-incoming-with-state
+                          (op-deliver (suc (suc zero)) args none none) empty-vat bridge-state-empty))
+               (framed-concat (bs-pending-out (bridge-step-state step)))))"))
+   "op:gc-exports[7+][1+]"))
+
+(test-case "gc/the wire-delta counts REPEATS in one message, not distinct objects"
+  ;; The same object four times is a wire-delta of four. This is the case that
+  ;; exposed the `from-nat` reduction bug: the tally was right but rendering it
+  ;; produced 1, because a Nat built by addition reached `nf` as a stuck
+  ;; from-nat. See tests/test-from-nat-computed.rkt.
+  (check-contains
+   (extract-value-bytes
+    (run-last
+     "(eval (let (io (syrup-tagged \"desc:import-object\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero)))))))))
+                   args (syrup-list (cons io (cons io (cons io (cons io nil)))))
+                   step (captp-incoming-with-state
+                          (op-deliver (suc (suc zero)) args none none) empty-vat bridge-state-empty))
+               (framed-concat (bs-pending-out (bridge-step-state step)))))"))
+   "op:gc-exports[7+][4+]"))
+
+(test-case "gc/a deliver WITH a reply channel releases nothing"
+  ;; An answer position or a resolve-me means the result has somewhere to go,
+  ;; so the arguments may still be reachable through it. Releasing would lie.
+  (check-contains
+   (run-last
+    "(eval (let (args (syrup-list (cons (syrup-tagged \"desc:import-object\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero))))))))) nil))
+                  step (captp-incoming-with-state
+                         (op-deliver (suc (suc zero)) args none (some (suc (suc (suc (suc (suc (suc (suc zero)))))))))
+                         empty-vat bridge-state-empty))
+              (length (bs-pending-out (bridge-step-state step)))))")
+   "0N"))
+
+(test-case "gc/args with no import-objects emit no frame at all"
+  ;; An empty <op:gc-exports [] []> is legal but pure noise.
+  (check-contains
+   (run-last
+    "(eval (let (args (syrup-list (cons (syrup-string \"hi\") nil))
+                  step (captp-incoming-with-state
+                         (op-deliver (suc (suc zero)) args none none) empty-vat bridge-state-empty))
+              (length (bs-pending-out (bridge-step-state step)))))")
+   "0N"))

@@ -53,7 +53,7 @@
 
 ;; Run WS-mode code via temp .prologos file
 (define (run-ws s)
-  (define tmp (make-temporary-file "prologos-test-~a.prologos"))
+  (define tmp (make-prologos-temp-file))
   (call-with-output-file tmp #:exists 'replace
     (lambda (out) (display s out)))
   (define result

@@ -84,7 +84,7 @@
 
 ;; Run WS code via temp file using shared environment
 (define (run-ws s)
-  (define tmp (make-temporary-file "prologos-test-~a.prologos"))
+  (define tmp (make-prologos-temp-file))
   (call-with-output-file tmp #:exists 'replace
     (lambda (out) (display s out)))
   (define result
