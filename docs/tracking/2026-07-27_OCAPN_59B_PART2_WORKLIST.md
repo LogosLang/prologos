@@ -941,3 +941,49 @@ So the missing pieces are bounded and need no new architecture:
 The one thing to verify early: that our reply actually encodes as
 `desc:import-promise` and not `desc:import-object`, since the test branches on
 that and the non-promise branch would then assert against a promise.
+
+### `invalid_signature` — blocked on a LOSSY record round-trip, measured
+
+Verifying the signed handoff-receive means re-encoding the inner
+`<desc:handoff-receive …>` and checking the signature over those bytes. So the
+first question is whether we can reproduce the peer's bytes at all. **We
+cannot, today** — measured on the real 716-byte withdraw frame:
+
+```
+decode-value then encode:   851 -> 863 bytes,  byte-identical? false
+```
+
+Exactly +12, and the mechanism is confirmed: the frame has 9 records, of which
+**6 are MULTI-ARG** (op:deliver, sig-envelope ×2, handoff-receive,
+handoff-give, ocapn-peer). 6 × 2 = 12.
+
+The cause is the known encoder asymmetry that `encode-record` exists to work
+around. The DECODER turns `<label a b c>` into
+`syrup-tagged label (syrup-list (a b c))`, but `encode` renders a tagged value
+as `<` label payload `>` — so the list payload comes back with its `[` `]`
+intact, as `<label [a b c]>`. Single-arg records are unaffected, which is why
+only 6 of the 9 shifted.
+
+This is FUNDAMENTALLY LOSSY, not just a missing case: after decoding,
+`<tag [a b]>` and `<tag a b>` are the same value, so no encoder can restore
+both. For signature verification specifically that does not matter — every
+record in a handoff is multi-arg — but it means the fix is a SEPARATE
+"re-encode as decoded" walker that splices a tagged value's list payload,
+NOT a change to `encode` (which would corrupt outbound frames that legitimately
+carry a single list argument).
+
+So `invalid_signature` needs, in order:
+
+1. a splicing re-encoder, with a round-trip test against this exact frame as
+   its gate (`decode |> re-encode == original bytes`);
+2. the receiver key out of the gcrypt s-expression nested in the handoff-give
+   — `[public-key [ecc [curve Ed25519] [flags eddsa] [q 32:…]]]`, so the `q`
+   bytes;
+3. the signature out of the envelope's `[sig-val [eddsa [r 32:…] [s 32:…]]]`,
+   as r ++ s;
+4. `crypto-verify` (already in crypto-ffi.rkt) over those three.
+
+Step 1 is the gate and must be verified FIRST. Without it every signature check
+fails, and it fails as "bad signature" rather than as an error — which would
+look like working rejection while actually rejecting everything, including the
+three exporter tests that currently pass.
