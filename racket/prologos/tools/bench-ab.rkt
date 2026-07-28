@@ -34,6 +34,14 @@
 (unless (getenv "PLT_CS_COMPILE_LIMIT")
   (putenv "PLT_CS_COMPILE_LIMIT" "1000000"))
 
+;; Benchmarks want the PRECISE retained-bytes figure, which needs a major GC on
+;; each side of a command. That forced GC is off by default because it cost the
+;; test suite 2.3x wall time for numbers nothing read (see
+;; performance-counters.rkt § mem-stats-force-gc?) — but here it is the point,
+;; so turn it back on for everything this tool spawns.
+(unless (getenv "PROLOGOS_MEM_STATS_GC")
+  (putenv "PROLOGOS_MEM_STATS_GC" "1"))
+
 ;; ============================================================
 ;; Path anchoring
 ;; ============================================================

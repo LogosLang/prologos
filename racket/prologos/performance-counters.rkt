@@ -398,17 +398,39 @@
 ;; Forces a major GC before measurement for consistency.
 ;; ============================================================
 
+;; Whether the memory report forces a major GC on each side of a command.
+;;
+;; It always did, unconditionally, at all three driver call sites — and that
+;; was 2/3 of the cost of running a test. MEASURED on
+;; tests/test-ocapn-bridge.rkt (147 cases, every one a `process-string`):
+;; 64.1s with the forced GCs, 28.1s without — a 2.3x difference, all of it
+;; instrumentation rather than work. Every `process-string` / `process-file`
+;; in the suite was paying two major collections it never read the result of.
+;;
+;; A major GC's cost scales with live heap and degrades sharply under memory
+;; pressure, which is also the best explanation for why this file was
+;; disproportionately slow on CI (>4.4x local, where the suite overall was
+;; 2.3x): four batch workers each forcing two full collections per command.
+;;
+;; So: OFF by default — the MEMORY-STATS line is still emitted (its consumers
+;; in batch-worker.rkt and tools/bench-lib.rkt keep parsing it unchanged), the
+;; numbers simply include uncollected garbage. Benchmarks that need the precise
+;; retained-bytes figure set PROLOGOS_MEM_STATS_GC=1, which tools/bench-ab.rkt
+;; does for them.
+(define mem-stats-force-gc?
+  (and (getenv "PROLOGOS_MEM_STATS_GC") #t))
+
 ;; Snapshot memory state before processing.
 ;; Returns an opaque hasheq to be passed to measure-memory-after.
 (define (measure-memory-before)
-  (collect-garbage 'major)
+  (when mem-stats-force-gc? (collect-garbage 'major))
   (hasheq 'mem_bytes (current-memory-use)
           'gc_ms (current-gc-milliseconds)))
 
 ;; Compute deltas after processing.
 ;; Returns a hasheq suitable for JSON serialization.
 (define (measure-memory-after before)
-  (collect-garbage 'major)
+  (when mem-stats-force-gc? (collect-garbage 'major))
   (define mem-after (current-memory-use))
   (define gc-after (current-gc-milliseconds))
   (hasheq 'mem_before_bytes (hash-ref before 'mem_bytes)
