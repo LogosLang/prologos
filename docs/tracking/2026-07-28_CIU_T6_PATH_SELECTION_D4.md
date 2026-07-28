@@ -264,6 +264,23 @@ standalone document**. Its surviving, R-lens-verified findings are recorded in
 - **Q4** — `*` stays vector-only in v1 (spec's own answer). **Q6/Q7** — moot
   under P3's strict waypoint; deferred to P5's mini-audit.
 
+**The P1-opening ruling [owner, 2026-07-28]:**
+- **THE `.*name` MIGRATION GAP IS ACCEPTED, DELIBERATELY.** Ruling Q1 makes
+  `.*name`'s migration target `:name`, which does not land until **P4** — so
+  retiring the surface at P1 leaves its live sites broken for three phases.
+  The alternative considered and **REJECTED** was migrating those sites to a
+  working spelling now (e.g. `[map [fn [r] r.x] …]`). Owner rationale: *"my
+  concern with migrating is that we'll also forget to migrate back; at least
+  the gap creates noise along the way until it is fixed."* The breakage is
+  therefore a deliberate **reminder instrument**, not debt — it is the thing
+  that makes P4 unforgettable. Two obligations follow, both on §5.P1:
+  (a) the audit must confirm the file(s) carrying those sites are **NOT
+  suite- or acceptance-GATED** — accepted noise and a red suite are different
+  things, and if they ARE gated the ruling needs revisiting; (b) the breakage
+  must be **per-command and non-fatal** (the `d18648f0` precedent: a retired
+  form yields a generic per-command error and the file CONTINUES), never the
+  raw-Racket-abort shape `.{` had before its retirement.
+
 **Open, GATING (spec §8):**
 - **Q8** (the precise lexical grammar) — §5.P1's own DELIVERABLE, reviewed
   with the owner before landing; carries the 3c probe decision + the `:<`
@@ -393,12 +410,26 @@ diagnostic seat; the compat-path rejects are dead code) · `m[:a]` static error
 + hint (grouping seat) · `x[]`/`_[sel]`/`.-1` rejections (`.-1` at the
 classifier; negative payloads at the grouping seat) · round-trip printing pins.
 
+⚠ **The `.*name` gap is ACCEPTED [owner, 2026-07-28 — see §3]**: `:name` lands
+at P4, so the live sites break from P1→P4 *on purpose* ("the gap creates noise
+along the way until it is fixed"). Do **not** migrate them away. This phase
+owes two checks instead: the carrying file must not be suite- or
+acceptance-GATED (accepted noise ≠ a red suite — if gated, re-open the ruling),
+and the breakage must be per-command and non-fatal per the `d18648f0`
+precedent. `expr-broadcast-get` retires WITH the surface (ruling 4b), which
+unwinds P2.a's whnf arm + `definitely-not-map?` exemption and their two pins in
+`test-path-selection.rkt` — those retire with the node, they are not left red.
+
 **Discipline**: both-modes census per `prologos-syntax.md` § Reader; any new
 opener co-updates the THREE layers (frame dispatch + langle skip-set +
 group-items — the 31d27c83 lesson); the counting RULE is live-vs-commented.
 
 **Open here**: none blocking once Q8's grammar is drafted — Q8 is answered BY
 this phase, reviewed with the owner before landing.
+
+**Mini-audit**: `wf_789e4f0f-f02` (2026-07-28, HEAD-pinned `5c171caa`) — 7
+read-only facets + completeness critic; 19 design claims sent for
+confirm-or-refute, 9 questions headed by Q8. Findings land in this section.
 
 **Test delta**: reader pins in `test-parse-reader.rkt` (RRB-native API — the
 audit's three-API finding standardizes here) + retirement/migration tests in

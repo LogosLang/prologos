@@ -1,0 +1,127 @@
+#+TITLE: Standup — 2026-07-28
+#+DATE: 2026-07-28
+
+* Yesterday (since 2026-07-24 standup)
+
+A long interval — **121 commits**. Three strands: **Rel Track 1 closed** with its
+PIR and four post-PIR batches; **three infrastructure arcs** landed off the
+critical path (two contributor issues, a test-suite perf recovery, and two
+reader/loader defects); and **CIU Track 6 Path Selection** ran design → five
+surface rounds → adjudicated critique → three implementation phases → and then
+**took a redesign intake** that superseded the settled surface. Suite GREEN
+throughout, now **9238 tests / 474 files / 0 failures**. Session logs:
+~docs/tracking/standups/2026-07-24_dailies.md~ (rolled to ~2026-07-26_dailies.md~).
+
+** Rel Track 1 — COMPLETE ✅ with its Stage-5 PIR
+
+The remainder of the POL roster, then X.close and four follow-up batches.
+
+- **POL.6** (~0f6dc98c~) fused ~x:Int~ in ~defn~ param lists — the C.b.2 last mile.
+- **B3.2** (~df428f7e~) display-time coinductive refinement — **B3 COMPLETE**.
+- **POL.3** (~b0e3da9c~) ~solve~ echoes display row keys in DECLARATION order.
+- **The syntax cluster**: **POL.7** (~f55988cc~) single-line facts with ~|~ row
+  separators · **POL.8** (~1c3c8848~) implicit rule-clause groups — layout-based
+  parenless goals · **POL.9a/b/c** (~ddf29351~ · ~7ce02760~ · ~08c3f187~)
+  **implicit solve** (parens make goals at command position, the ~def~-RHS leg,
+  and ~defn~/~defr~ namespaces disjoint at registration).
+- **X.close** (~3e7062b0~ · ~24b6ec94~ · ~dd285174~ · **PIR ~90aafe96~**):
+  doc-truth sweep, DEFERRED triage, an adversarial gap audit that shipped POL.1
+  and corrected two over-claims, then the Stage-5 PIR that gates the track ✅.
+- **Post-PIR batches A–D**: **A** (~bb45d2a0~) closed the test-gate gaps — the
+  acceptance file is now gated and its markers were found MISNUMBERED (5/28
+  real) · **B** (~b8e01255~) Q_N1: the goal keywords ~{rel, not, =, is}~ take
+  the implicit solve · **C** (~cdb535ac~) ~inferQ~'s missing standalone-lambda
+  arm — the **3rd** un-arm'd-node instance · **D** (~64d0b292~) four lesson
+  promotions **plus the two-tier promotion rule** that stops them stalling.
+
+Headline meta-finding from the PIR: **45% of the track's churn came from
+outside the Stage-3 plan** — it came from the owner using the language.
+
+** Three infrastructure arcs — all off the critical path, all landed
+
+- **GitHub #78** (~.pnet~ registry restore, kumavis) — verified REAL against a
+  4-day-old main, designed, critiqued, fixed P0–P4, merged and closed. The
+  restore wrote ~19 params with ZERO cell writes while all 24 readers are
+  cell-primary — and because **an empty hasheq is truthy**, the param fallback
+  was *unreachable*, not merely racing. New finding the issue lacked: **durable
+  poisoning** — a dependent mis-elaborated under the defect is itself
+  serialized, so the wrong answer survives into fresh processes. ~.pnet~ v3→v4.
+- **GitHub #58** (O(N²) substitution blow-up, kumavis) — independently
+  re-derived, **three stacked defects**, and the dominant one is the one the
+  issue RULES OUT: the per-command reduction caches were ~equal?~-keyed, and
+  Racket's ~equal-hash-code~ is depth-bounded, so N accumulator terms saturate
+  at **17 distinct hash values** (98.3% collision at N=1024) ⇒ O(N³).
+  **N=256: 49 775 ms → 15 ms (3318×)**, exponent 3.1 → 1.0.
+- **Test-suite perf recovery** (~f8ce6629~) — the dashboard's ~124→200 s jump was
+  **never a compiler regression**. 34 test files called ~process-file~ with an
+  EMPTY module registry, reloading all 39 prelude modules per test case.
+  **233 → 96 s (2.42×)**, identical test count, zero files slower.
+- Two reader/loader defects fixed in passing: the **~.( 3N < 5N )~ mixfix
+  swallow** (~31d27c83~ — an unmatched ~<~ counted as an opener; the extent
+  scanner now carries a frame stack mirroring grouping) and the **foreign
+  two-instance defect** (~9303a077~ — ~foreign racket "prologos/X"~ resolved to
+  the *main checkout's* copy, a second compiler instance; one canonical
+  resolver now serves both resolution sites).
+
+** Research — partiality and absence
+
+~docs/research/2026-07-27_PARTIALITY_ABSENCE_DESIGN_SURVEY.md~ (~72168e92~ +
+addendum ~3bbad429~): six design-space positions mapped. Prologos already
+occupies **all six positions' substrate** — the gap is discharge SURFACE only.
+**Verse's hardest unfinished problem (transactional failure contexts) IS our
+existing substrate** — worldview speculation + nogood retraction, parallel
+where theirs is sequential. Ranked corners: why-not provenance as first-class
+values (cheap only on an ATMS — no language has it); context-polymorphic
+absence; cardinality inference as a monotone network stratum. Research note
+only — no language commitment made.
+
+** CIU Track 6 — Path Selection: design, three phases, then a redesign
+
+*** The design arc
+
+Opened with a grounding audit + a 33-system prior-art survey (~7e70151f~). The
+headline: **V4 was never a blank slate** — branched multi-select already worked
+in sexp mode, and the suite *pinned its degraded type*. Five surface rounds
+(~403866d0~ → ~0ba5a5d6~) settled a surface as PS1–PS15; a 13-agent D.3
+critique (~9aff6b82~) was adjudicated in full (~7a701587~).
+
+*** Implementation P0–P2
+
+- **P0** (~f47851a5~) the acceptance file, 21/21 ~--check~ green.
+- **P1** (~d18648f0~) ~.{~ retired COMPLETELY — recognizer, error path, and dead
+  closer legs deleted in one commit, no dual path. It had been a **live fatal
+  regression**: ~audit-09-numerics~ aborted with zero output.
+- **P2 COMPLETE** — five slices (~ad75e57a~ → ~ac89341f~) delivering **the
+  two-tier principle**: the ASSERTIVE tier (~map-get~ / ~.field~ / ~v[k]~) makes
+  a failed runtime lookup a LOUD, counted error; the HONEST tier
+  (~nil-safe-get~/~nth~/~kv-get~) is untouched and test-pinned as such.
+  Mechanism = a carried-alpha strictness slot on ~expr-get~/~expr-map-get~;
+  ~definitely-not-map?~ inverted from a negative to a **positive** list so
+  unknown no longer means absent.
+
+*** ⭐ THE REDESIGN (2026-07-28)
+
+At the P3 checkpoint a separate design conversation produced a refined **Path
+Selection spec** (~docs/research/2026-07-28_path-selection-spec.md~) — a theory
+upgrade, not an amendment. The settled PS1–PS15 surface is **superseded**. The
+new law: **dot DESCENDS · brace SELECTS ~x{…}~ · ~:~ BROADCASTS · ~^~ RE-KEYS ·
+~*~ FLATTENS · ~<~ DISCLOSES**, resting on the **key-sort thesis** (ordinal keys
+contingent, nominal keys essential), **per-step result discipline**, and
+**selection-as-demand** over codata. Plus grades 1/ω, laws L1–L7, Ruling B
+merge behind a strict-first waypoint, and the W1–W4 expressivity walls.
+
+The implementation design that adapts it is
+~docs/tracking/2026-07-28_CIU_T6_PATH_SELECTION_D4.md~ — born with per-phase
+sections. **D4 is settled end-to-end** after a 13-agent critique whose survivors
+were all main-session verified. Its headline finding became **§2.3, the carrier
+table**: the spec designs a type language, the compiler ships a different one.
+**D4.P0 ✅** (~e2674208~) — the acceptance file augmented to 28/28.
+
+* Today
+
+- **D4.P1** — the lexical seams + the retirement batch, opening with its
+  mini-audit. Named deliverable: **spec Q8**, the precise lexical grammar.
+- Then P2 grade-1 → P3 blocks → P4 broadcast ω → P5 Ruling B → PX → P6 →
+  X.close (PIR-gated).
+
+* Conversations
