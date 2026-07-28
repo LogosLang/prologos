@@ -21,7 +21,7 @@ rulings, censuses and test delta live in its own section.
 
 | Phase | Description | Status | Notes |
 |---|---|---|---|
-| **P0** | **Acceptance corpus** — augment the EXISTING acceptance file with the spec §10 examples + Appendix fixtures; `--check` gated; new forms commented until their phase lands | ⬜ | §5.P0 |
+| **P0** | **Acceptance corpus** — augment the EXISTING acceptance file with the spec §10 examples + Appendix fixtures; `--check` gated; new forms commented until their phase lands | ✅ | §5.P0 · `e2674208` — 28/28 markers, 0 errors; all 7 fixtures load (layout via `def X`, issue #80 sidestepped); corpus phase-tagged in HEAD notation; carrier pins double as §2.3 docs |
 | **P1** | **Lexical seams + the retirement batch** — brace/colon adjacency, keyword-trailing `*`; dot-key + `.*name` + `m[:a]` retirements; `x[]`/`_[sel]`/`.-1` rejections; round-trip pins. Answers spec Q8 | ⬜ | §5.P1 · censuses fresh from `wf_2830f0aa-9a4` |
 | **P2** | **Grade-1 core** — `.k`/`.N` access + bare-path extraction, on the landed P2 substrate | ⬜ | §5.P2 · `.N` has an end-to-end head start via `(get expr N)` |
 | **P3** | **Blocks** — `x{…}`, projection-by-default, `^` (3 continuations), L4 sort homogeneity, **HONEST NESTING (n-tuples at every n — ruled 2a)**, **STRICT merge** (the §3.6 waypoint) | ⬜ | §5.P3 · Q2 gate RESOLVED (2c: carrier order, thesis-derived) |
