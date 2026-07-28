@@ -1024,3 +1024,61 @@ occurrence): a multi-line continuation inside a `match` arm fails at import
 with a bare "Type mismatch" while the file itself processes clean; and deleting
 one module's `.pnet` does not invalidate the consumers that embedded its body —
 only `rm -rf data/cache/pnet` does.
+
+
+---
+
+## Where this stands: 19 of 24, and the last 5 are ONE capability (2026-07-28)
+
+Landed this session, each with a full-suite-green gate:
+
+| # | What | Interop |
+|---|---|---|
+| p7  | handoff-receive signature verification (`96ce659c`, `ce1e25da`) | 12 → 13 |
+| p8  | `op:gc-exports` (`bbf55ed2`) | 13 → 16 |
+| p9  | outbound sends become real questions; `op:gc-answers` (`34e1d7fe`) | 16 → 17 |
+| p10 | promise pipelining — the Car Factory chain (`c874bb06`) | 17 → 19 |
+
+Plus two fixes that were not OCapN at all: `nf` never re-fired `from-nat`
+(`8f5ec4a0`), and CI precompiled without `PLT_CS_COMPILE_LIMIT` so it ran an
+INTERPRETED compiler and the interop gate FAILED rather than lagged
+(`afaf4795`, pitfall #51).
+
+### The remaining five need outbound connections, and nothing else does
+
+Verified by reading them, not inferred from the names:
+
+| Test | Why |
+|---|---|
+| `crossed_hellos_mitigation_aborts_inbound` | fetches the sturdyref enlivener and makes it dial out |
+| `crossed_hellos_mitigation_outbound_aborts` | same |
+| `HandoffRemoteAsReciever` ×2 | the receiver must connect to the exporter named in the give |
+| `HandoffRemoteAsGifter` ×1 | the enlivener again |
+
+Both crossed-hellos tests go through the sturdyref enlivener
+(`gi02I1qghIwPiKGKleCQAOhpy3ZtYRpB`, already mapped to export 5 in
+`swiss-num-export`), so **all five reduce to one missing capability**:
+dialling out and running the INITIATOR side of the handshake. Everything
+shipped so far responds on a connection the peer opened.
+
+### What that capability actually requires
+
+1. **An effect the vat can emit**, e.g. `eff-connect location swiss` — a pure
+   behaviour cannot open a socket, so the enlivener must request it the way
+   `eff-spawn` requests an actor. `tcp-connect` already exists in
+   `tcp-ffi.rkt`; nothing above it does.
+2. **Initiator-side handshake.** We validate an inbound `op:start-session` and
+   reply; we have never SENT one first and waited. The signing side already
+   exists (`handshake.prologos` builds our signed session bytes).
+3. **A second connection in the server process**, with its own
+   `ConnectionState`, driven by the same `step-connection` loop. The gift table
+   is already exporter-global (`ocapn-gift-ffi.rkt`), so cross-connection state
+   is solved; connection MANAGEMENT is not.
+4. **Crossed-hellos mitigation**: with both an inbound and an outbound session
+   to the same peer, sort the two side-ids and abort the loser. The test
+   deliberately regenerates keys until the outbound wins, so both directions
+   must be implemented — a one-sided rule passes one test and fails the other.
+
+Items 1–3 are a coherent piece; item 4 is a small rule that sits on top and
+cannot be tested until they exist. This is a distinct shape of work from
+everything above, all of which was request/response on an existing connection.
