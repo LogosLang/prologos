@@ -24,8 +24,8 @@ rulings, censuses and test delta live in its own section.
 | **P0** | **Acceptance corpus** — augment the EXISTING acceptance file with the spec §10 examples + Appendix fixtures; `--check` gated; new forms commented until their phase lands | ⬜ | §5.P0 |
 | **P1** | **Lexical seams + the retirement batch** — brace/colon adjacency, keyword-trailing `*`; dot-key + `.*name` + `m[:a]` retirements; `x[]`/`_[sel]`/`.-1` rejections; round-trip pins. Answers spec Q8 | ⬜ | §5.P1 · censuses fresh from `wf_2830f0aa-9a4` |
 | **P2** | **Grade-1 core** — `.k`/`.N` access + bare-path extraction, on the landed P2 substrate | ⬜ | §5.P2 · `.N` has an end-to-end head start via `(get expr N)` |
-| **P3** | **Blocks** — `x{…}`, projection-by-default, `^` (3 continuations), L4 sort homogeneity, **STRICT merge** (the §3.6 waypoint) | ⬜ | §5.P3 · ⚠ **GATED on spec Q2** (map output-key ordering) |
-| **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, the §5.3 meet rule | ⬜ | §5.P4 |
+| **P3** | **Blocks** — `x{…}`, projection-by-default, `^` (3 continuations), L4 sort homogeneity, **HONEST NESTING (n-tuples at every n — ruled 2a)**, **STRICT merge** (the §3.6 waypoint) | ⬜ | §5.P3 · Q2 gate RESOLVED (2c: carrier order, thesis-derived) |
+| **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) | ⬜ | §5.P4 · node strategy + row-map depth = Batch-4 rulings |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | §5.P5 · L1–L5 law battery |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | §5.PX · position flexible |
 | **P6** | **Demand semantics** — the §1.3-vs-POL.10 staging decision, then (if in) lazy leaves | ⬜ | §5.P6 · decision due by P3 |
@@ -82,7 +82,11 @@ points at the QTT semiring), the **equational theory L1–L7** as test material,
 - **P0** acceptance file (`examples/2026-07-26-ciu-t6-path-selection.prologos`):
   its 21 WORKING markers pin P1/P2 substrate and stay a regression instrument;
   its commented old-syntax §B/§C targets are superseded (see §5.P0).
-- **P1** `.{` retirement: consistent — the new block is brace-WITHOUT-dot.
+- **P1** `.{` retirement: what died was `.{`-as-MIXFIX (the `.( )` sibling).
+  The spec's mid-path sub-block spelling `server^.{…}` is a DIFFERENT, NEW
+  construct — today it reads as a loose `|.|` + `$brace-params` and errors
+  end-to-end (`cfg.server.{host port}` → "Bare symbol 'host' not allowed as
+  map key"). Its grouping is NEW P1 work (Batch-3 ruling pending).
 - **P2** (5 slices, `ad75e57a`→`ac89341f`): the two-tier principle IS the
   grade-1 substrate — loud assertive misses (Map key / PVec / List / dynamic
   tuple OOB, both def seams), site 7's projection, the carried-alpha slot,
@@ -123,7 +127,23 @@ gate). **Staged as its own phase-gate decision (§5.P6), not silently absorbed.*
 Until it lands, the corpus fixtures' computed leaves run eagerly — every §10
 result is unchanged, only the forcing TIME differs.
 
-### §2.3 Standing items the spec does not cover
+### §2.3 The carrier table (printed forms + the spec-notation translation)
+
+The §2.1 grounding was lexical; this is the TYPE/PRINT layer the D5 critique
+showed was missing (its "single most important unasked question"). Probed
+2026-07-28 @ `2b1b383d`:
+
+| Spec writes | HEAD's carrier + printed form | Notes |
+|---|---|---|
+| `〈T〉` (U+3008) | `[PVec T]` | homogeneous vector |
+| n-tuple `〈T₁ T₂〉` | `⟨T₁ T₂⟩` (U+27E8) — a nat-keyed CLOSED row | het `@[…]` literals produce this |
+| `〈τ₁ \| τ₂ \| …〉` het vector | **`⟨row₁ row₂ row₃⟩`** — a positional het TUPLE, duplicates un-collapsed, no union | the 2b split's first carrier; PVec-of-union exists only via annotation |
+| 1-tuple `〈String〉` | representable (1-field nat-row; runtime `expr-rrb`) but the LITERAL arm collapses `@[x]` to `[PVec T]` | selection mints rows directly — the 2a ruling |
+| keyed row `{:k T …}` in selection order | type: **canonically sorted** (`syntax.rkt:749-756`, `equal?`-identity, load-bearing) · value: champ-hash order, key-set-determined | the 2c ruling: carrier order, thesis-derived |
+| row-meet (§5.3) | **does not exist** (0 grep hits) | booked as NEW machinery, §5.P4 |
+| presence marks + `dyn` tail | `expr-Record (key-domain fields tail)`, `record-field (type presence)` — the S-lens-declared presence lattice | in NEITHER document; §6 declares it; dyn-tail semantics = Batch-4 question |
+
+### §2.4 Standing items the spec does not cover
 
 - **sexp mode** (old PS14): postfix adjacency is WS-only; the sexp special form
   is still an implementation deliverable. The 20 brace-select tests
@@ -144,12 +164,59 @@ result is unchanged, only the forcing TIME differs.
 
 ## §3 Rulings ledger
 
+**The spec's standing [owner, 2026-07-28]**: the spec was formed OUTSIDE the
+project, idealized — it is a **suggestion and guide, not a prescription**;
+adaptation to grounded code reality is expected. Where D4 adapts, the
+adaptation is recorded here with its reason.
+
 **Adopted [owner, 2026-07-28]:**
-- The spec's every **[ADOPTED]** element is normative for v1.
+- The spec's **[ADOPTED]** elements are normative for v1 *as adapted below*.
 - **Q1 = YES**: map-generic `:` (spec §3.2.3 + §5.4 row-map typing). With it:
   path-position `.*` is subsumed; `.*name`'s migration target is **`:name`**.
 - **`v[0]` keeps its current working semantics for now** — the PS2 flip is
   canceled; no census-flip of `v[literal]` sites.
+
+**The D5-critique batch rulings [owner, 2026-07-28]:**
+- **Notation = translation, not spec-editing (Batch 1, option b).** The spec
+  keeps its idealized notation; the CORPUS FILE is the adaptation layer,
+  written in HEAD's printed forms via the §2.3 translation table. §5.P0's
+  normativity protocol is refined: divergence in NOTATION is transcription
+  (resolved by the table); divergence in RESULT is semantics (resolved by
+  ruling). Fixtures normalize to the `def X` implicit-map form (the
+  `def X :=` layout defect is filed — **issue #80** + DEFERRED) and carry
+  `defn now`/`defn env` stubs with indicative values.
+- **2a — HONEST NESTING ADOPTED (spec §3.3 as written).** A keyless block is
+  an n-tuple at every n, including n = 1. Owner rationale: implicit splice
+  would break the algebraic properties of path selections; **the disclose
+  operator `<`/`:<` is DESIGNED as the unwrap remedy** for wanting the bare
+  value (a strong signal on spec Q5 — see the open list). Code reality
+  AGREES once seen at the right layer: the tuple carrier is a nat-keyed
+  closed record (1-field rows representable; runtime rep = `expr-rrb`, the
+  same carrier the landed P2 substrate projects from) — only the LITERAL
+  inference arm collapses n=1 to PVec, and selection never routes through
+  the literal arm. The block constructor mints nat-rows directly.
+- **2b — THE HETEROGENEITY SPLIT ADOPTED.** Spec §5.3's single meet rule is
+  adapted per-carrier, because HEAD has TWO het carriers:
+  · **Het tuple** (`⟨row₁ row₂ …⟩`, positions statically known — what `@[…]`
+    literals produce): broadcast projects **per-position, exactly** — no
+    meet needed, and a miss errors NAMING THE POSITION. Strictly stronger
+    than the spec's rule where it applies.
+  · **PVec-of-union** (`[PVec <A|B>]`, length unknown): the spec's rule,
+    restated over UNION COMPONENTS — every component must offer the key
+    (keys ⋂), result field type = ⋃. NEW machinery, small, booked at §5.P4.
+  · **Polarity note (write it down or it becomes a bug)**: the in-tree union
+    projection arm is filter-on-miss (optimistic) and is CORRECT for what it
+    serves — a single get on one union-typed value, which IS one branch.
+    Broadcast projects EVERY element, so all-must-offer is the sound
+    polarity there. Two operations, two polarities, no conflict.
+- **2c — Q2 DISSOLVED, off the critical path.** Q2-type: CLOSED by landed
+  code (type rows canonically sorted — load-bearing for `equal?`-as-row-
+  identity, `syntax.rkt:749-756`, not churnable). Q2-value: **carrier-
+  determined (champ) order — DERIVED FROM THE SPEC'S OWN KEY-SORT THESIS**,
+  not conceded to the implementation: §1.1 says nominal keys' identity
+  carries the meaning and their order does not, so selection-order display
+  would contradict the spec's foundation. Corpus markers transcribe to champ
+  order (deterministic per key set). §5.P3's gate is REMOVED.
 
 **Open, GATING (spec §8):**
 - **Q2 — map output-key ordering** in keyed blocks (source order vs selection
@@ -310,8 +377,13 @@ continuations (parser-side split) · L4 sort homogeneity (level-local) ·
 error, remedies named in the message) · result typing: copattern demand
 against the coinductive record type; grades 1-only at this phase.
 
-**GATE: spec Q2 (output-key ordering) must be ruled before this phase's
-result-equality tests can be written.**
+**The Q2 gate is RESOLVED (ruling 2c)**: type rows canonical (landed),
+value order carrier-determined — derived from the key-sort thesis itself
+(nominal key order carries no meaning). Result-equality tests transcribe
+markers to champ order. **Honest nesting is RULED (2a)**: the block
+constructor mints nat-rows directly at every n including n = 1 — the literal
+arm's PVec collapse is irrelevant (selection never routes through it); the
+disclose operator is the designed unwrap remedy [owner].
 
 **Design questions to settle in this section before code** (each gets a
 mini-audit): the block's parse representation (new surf/expr nodes — full
@@ -382,19 +454,89 @@ map tutorial, `prologos-syntax.md`'s selection section) · memory fold ·
 
 ---
 
-## §6 SRE lattice lens + NTT posture
+## §6 SRE lattice lens (the six questions, run against the ADAPTED surface)
 
-The old doc's §6 analysis carries where the carrier is unchanged (the result
-row IS the same lattice family). New under the spec: the GRADE algebra (1/ω
-composition, ω absorbing) is a semiring morphism into result shapes — the
-interval refinement (spec §3.1) is explicitly the QTT semiring; when grades
-sharpen, the lens re-runs. Ruling B's merge is a partial monoid on keyed
-results (L3: assoc/comm on disjoint keys) — the lattice-lens question "what is
-the join and where is it partial" IS Ruling B's case analysis. The NTT
-obligation stays where it was: mandatory at the future broadcast-propagator
-node, not v1.
+1. **Classification**: STRUCTURAL. The result carrier is **row × presence ×
+   tail** — a labelled product of per-field VALUE lattices, indexed by a
+   support set, a key-domain ∈ {keyword, nat}, presence marks
+   (`record-field (type presence)` — the S-lens-declared presence lattice,
+   `syntax.rkt:665-687`), and a tail ∈ {closed, dyn}. NEITHER source document
+   named presence/tail; this declaration closes that gap.
+2. **Algebraic properties**: per-field flat lattices; support = powerset;
+   the GRADE set {1, ω} composes by multiplication with ω absorbing — a
+   (deliberately tiny) commutative monoid that the spec's interval refinement
+   ([1,1]/[0,1]/[0,ω]/[1,ω]) would grow toward the QTT semiring already
+   in-tree (m0/m1/mw). v1 claims only the monoid; the semiring alignment is
+   OUTLOOK and the lens re-runs when 0|1 arrives.
+3. **Bridges**: keyword-selection → source row is the D21 Galois pair
+   (projection α, width-subsumption γ) — carried from the old §6. The nat
+   edge remains relabelling WITHOUT an adjoint (dense-prefix forbids the
+   sparse γ; the old D3-S8 finding stands). NEW: the 2b split adds the
+   union-component bridge (flatten-union → per-component record-project,
+   all-must-offer polarity).
+4. **Composition**: result shapes = grade-interpreted shape functors composed
+   along the path (spec §5.2); `*` deletes exactly one vector layer — the one
+   deliberate join in an otherwise functorial language (the spec's own
+   framing; the lens flags it as the single place associativity of shape
+   composition must be test-pinned, L1×L2 interaction).
+5. **Primary vs derived**: the SOURCE row is primary; every selection result
+   is DERIVED (recomputable). A selection must never become the sole carrier
+   of a fact — this is what makes the read-only v1 safe and what the write
+   direction (spec §7.7) will have to revisit.
+6. **Hasse / parallel decomposition**: N sibling branches of a block are N
+   independently-computable projections joined at assembly (the flatten and
+   path-keyed shapes remain the all-at-once forms). Under strict merge the
+   join is trivially disjoint; Ruling B (P5) makes the join partial — its
+   case analysis IS the answer to "where is the join defined."
 
-## §7 References
+**OPEN (named for the Batch-4 walkthrough): dyn-tail semantics** — what `.*`
+row-splat and map-generic `:` mean over a row whose tail is `dyn` (unknown
+support). The old surface's SUPPORT-BOUNDEDNESS principle (D3-M5, survived)
+says splat needs a bounded support; `(Map K V)` uniform broadcast needs no
+per-field row at all. Ruled in Batch 4.
+
+**NTT posture**: v1 adds zero propagators/cells — ratified twice (predecessor
+§7; D3-M2 refutation). The deferral is now NAMED with a TRIGGER (§9 gate row
+3): the broadcast-propagator node track opens on X.close perf pressure or
+F-row, whichever first, with its NTT model mandatory.
+
+## §8 Risks (carried forward + new — the D5 critique's ⑤)
+
+- **R2 (walker gaps)** — carried: every walker touching the NEW nodes (block,
+  `^` continuations, broadcast steps) defaults to the generic
+  transparent-struct rebuild (three in-tree templates: the SUB.1 tripwire,
+  `re-abstract`, `narrow-subst-bvars`); explicit arms only for binders + hot
+  paths, hot arms carrying a differential-oracle contract test.
+- **R3 (`.` on QUADRUPLE duty)** — sharpened: `.k` · `.N` (new) · `.*` ·
+  bare `.` before `{` (the sub-block seam). The Q8 grammar must state all
+  four and their disambiguation order; both-modes census per
+  `prologos-syntax.md` § Reader.
+- **R4 (a green suite proves nothing for this class)** — carried verbatim:
+  failing-test-first for anything walker- or seam-shaped; the D5 critique's
+  three live probes (permissive `expr-broadcast-get`, the `:=` layout defect,
+  the loose-`.{` shatter) all sat under a green suite.
+- **R5 (NEW — carrier drift)**: the spec's idealized carriers vs HEAD's
+  (§2.3). Any §10 corpus divergence must be classified NOTATION vs SEMANTICS
+  before resolution (ruling Batch 1); a "quick fix" that edits a marker
+  without the classification re-opens the D5 blockers.
+- **R6 (NEW — pipeline cost honesty)**: new AST nodes pay pipeline.md in
+  FULL — including `pnet-serialize` registration + a `PNET_VERSION` bump
+  (absent from pipeline.md's own checklist; promote it there at X.close) +
+  the D3-M2 item-13 deliberate `#f` typing-propagators registration —
+  and constructor-arity breakage compiles CLEAN cross-module (the slice-4
+  lesson): discovery is patterns-at-build + constructors-at-runtime.
+
+## §9 Principles gate (two columns — catalogue ‖ challenge)
+
+| Decision | Catalogue (passes?) | Challenge (could it be MORE aligned?) |
+|---|---|---|
+| Strict merge first (§3.6 waypoint) | Monotone: errors may become meanings, never the reverse. CALM-adjacent staging. | Challenged and KEPT: the alternative (Ruling B at P3) front-loads spine identity before broadcasts exist to have spines. The waypoint is sequencing, not scaffolding — no dual path exists at any moment. |
+| `v[0]` retention beside `.N` | Owner-ruled 2026-07-28. | Challenged: is it belt-and-suspenders? NO — two SURFACES over ONE mechanism (`(get expr N)`); the D5 verifier refuted the dual-path framing. Residue: an X.close revisit trigger is named (retire, document as `get` sugar, or keep). |
+| Zero-propagator v1 (§5.P4) | Ratified twice (predecessor §7; D3 critique M2 refutation — the Check asks what the track ADDS). | **Challenged and CHANGED**: "the future NTT-modeled track" had no name and no trigger — the ban-"pragmatic" rule demands specificity. Now: **deferred to the broadcast-propagator node track (CIU, post-v1), TRIGGERED by either (a) selection-perf pressure at the X.close bench matrix or (b) F-row landing** — whichever first; the NTT model is mandatory at that opening. |
+| Projection-by-default flips by enclosure (spec §1.2: the same path text means block-projection inside `{…}`, extraction outside) | The spec's own per-step discipline; consistent with copattern reading. | Challenged and KEPT with an obligation: this is the surface's largest learnability bet; the corpus MUST pin the pair (`x.a.b` vs `x{a.b}`) side by side so the flip is documented by executable example, and the P3 error for the common confusion (a bare path where a block was meant) names the other spelling. |
+| Demand semantics staged (P6) | Honest: the collision is priced, not hidden. | Challenged: is staging an ADOPTED element a "validated-not-deployed" shape? Resolution = Batch-4 ruling: amend the spec tag to [ADOPTED — staged] + an X.close gate row, or commit v1. The gate row is the tripwire either way. |
+
+## §10 References
 
 - **The spec** (normative surface): `docs/research/2026-07-28_path-selection-spec.md`
 - Predecessor design (record of rounds 1–8b): `2026-07-26_CIU_T6_PATH_SELECTION_DESIGN.md`
