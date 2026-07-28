@@ -79,6 +79,7 @@ require [prologos::ocapn::promise :refer-all]
         ;; wire-nat moved to prologos::ocapn::syrup (2026-07-27) — it reads a
         ;; SyrupValue as a table position, which is a SyrupValue concern.
         [prologos::ocapn::syrup      :refer [wire-nat]]
+        [prologos::ocapn::crypto     :refer [verify-raw]]
         [prologos::data::list :refer [append cons nil]]
 
 ;; Build the bytes for an outbound op:deliver targeting an
@@ -1430,6 +1431,146 @@ defn withdraw-gift-id [signed-receive]
     | none    -> [none String]
     | some hr -> handoff-receive-gift-id hr
 
+
+;; ===========================================================
+;; Handoff-receive signature verification
+;; ===========================================================
+;;
+;; The receiver signs the `<desc:handoff-receive …>` record and sends the
+;; signature alongside it in the enclosing `desc:sig-envelope`. Verifying it
+;; needs three things out of the frame:
+;;
+;;   message   the BYTES of the handoff-receive record — which is why
+;;             `wire::re-encode` exists. `wire::encode` would render its
+;;             multi-arg payload as a nested list and produce a different
+;;             (and never-signed) byte string, so every signature would look
+;;             bad. See syrup-wire.prologos § Re-encoder.
+;;   key       the receiver's public key, which the GIFTER named when it made
+;;             the give: handoff-give arg0 is
+;;             `[public-key [ecc [curve Ed25519] [flags eddsa] [q 32:…]]]`.
+;;             So the key travels INSIDE the thing being verified, one level
+;;             down — we do not need any prior connection to the receiver.
+;;   signature the envelope's arg1, `[sig-val [eddsa [r 32:…] [s 32:…]]]`,
+;;             as the 64 bytes r ++ s.
+;;
+;; Verified against the real upstream frame before any of this was written:
+;; those exact three inputs verify, which is what made it worth building.
+;;
+;; The gcrypt-style payloads are s-expressions — nested syrup-lists whose head
+;; is a symbol — not records, so they need their own tiny accessor rather than
+;; `record-args-of`.
+
+;; The head symbol of an s-expression list, if it has one.
+spec sexp-tag-of SyrupValue -> [Option String]
+defn sexp-tag-of [v]
+  match [nth-syrup [syrup-list-or-nil v] zero]
+    | none   -> [none String]
+    | some h -> syrup-symbol-name h
+
+spec sexp-tag-is? String SyrupValue -> Bool
+defn sexp-tag-is? [key e]
+  match [sexp-tag-of e]
+    | none   -> false
+    | some t -> str::eq t key
+
+;; `[… [key value] …]` -> value, by head symbol.
+spec sexp-field-loop String [List SyrupValue] -> [Option SyrupValue]
+defn sexp-field-loop [key xs]
+  match xs
+    | nil -> [none SyrupValue]
+    | [cons e rest] ->
+        match [sexp-tag-is? key e]
+          | true  -> nth-syrup [syrup-list-or-nil e] 1N
+          | false -> sexp-field-loop key rest
+
+spec sexp-field String SyrupValue -> [Option SyrupValue]
+defn sexp-field [key v]
+  sexp-field-loop key [syrup-list-or-nil v]
+
+spec sexp-field-bytes String SyrupValue -> [Option String]
+defn sexp-field-bytes [key v]
+  match [sexp-field key v]
+    | none   -> [none String]
+    | some b -> syrup-bytes-of b
+
+;; `[public-key [ecc [curve Ed25519] [flags eddsa] [q 32:…]]]` -> the q bytes.
+spec public-key-q-of SyrupValue -> [Option String]
+defn public-key-q-of [pk]
+  match [nth-syrup [syrup-list-or-nil pk] 1N]
+    | none     -> [none String]
+    | some ecc -> sexp-field-bytes "q" ecc
+
+;; `[sig-val [eddsa [r 32:…] [s 32:…]]]` -> r ++ s (64 bytes).
+spec eddsa-rs-with-r String SyrupValue -> [Option String]
+defn eddsa-rs-with-r [r ed]
+  match [sexp-field-bytes "s" ed]
+    | none   -> [none String]
+    | some s -> some [str::append r s]
+
+spec eddsa-rs-of SyrupValue -> [Option String]
+defn eddsa-rs-of [ed]
+  match [sexp-field-bytes "r" ed]
+    | none   -> [none String]
+    | some r -> eddsa-rs-with-r r ed
+
+spec sig-val-bytes-of SyrupValue -> [Option String]
+defn sig-val-bytes-of [sv]
+  match [nth-syrup [syrup-list-or-nil sv] 1N]
+    | none    -> [none String]
+    | some ed -> eddsa-rs-of ed
+
+;; <desc:sig-envelope obj SIG> -> the 64 signature bytes.
+spec sig-envelope-signature SyrupValue -> [Option String]
+defn sig-envelope-signature [v]
+  match [nth-syrup [record-args-of "desc:sig-envelope" v] 1N]
+    | none    -> [none String]
+    | some sv -> sig-val-bytes-of sv
+
+;; The receiver's public key, from the give nested inside the receive.
+spec give-receiver-key-of SyrupValue -> [Option String]
+defn give-receiver-key-of [hg]
+  match [nth-syrup [record-args-of "desc:handoff-give" hg] zero]
+    | none    -> [none String]
+    | some pk -> public-key-q-of pk
+
+spec signed-give-receiver-key SyrupValue -> [Option String]
+defn signed-give-receiver-key [sg]
+  match [sig-envelope-object sg]
+    | none    -> [none String]
+    | some hg -> give-receiver-key-of hg
+
+spec receive-receiver-key-of SyrupValue -> [Option String]
+defn receive-receiver-key-of [hr]
+  match [nth-syrup [record-args-of "desc:handoff-receive" hr] 3N]
+    | none    -> [none String]
+    | some sg -> signed-give-receiver-key sg
+
+;; The three inputs are now in hand; `verify-raw` is the libsodium bridge.
+spec verify-receive-with-key String String SyrupValue -> Bool
+defn verify-receive-with-key [q msg signed-receive]
+  match [sig-envelope-signature signed-receive]
+    | none     -> false
+    | some sig -> verify-raw q msg sig
+
+spec verify-receive-with-msg String SyrupValue SyrupValue -> Bool
+defn verify-receive-with-msg [msg hr signed-receive]
+  match [receive-receiver-key-of hr]
+    | none   -> false
+    | some q -> verify-receive-with-key q msg signed-receive
+
+spec verify-signed-receive-inner SyrupValue SyrupValue -> Bool
+defn verify-signed-receive-inner [hr signed-receive]
+  verify-receive-with-msg [wire::re-encode hr] hr signed-receive
+
+;; A malformed handoff verifies as FALSE, never as true: every step that
+;; cannot find its field returns `false` rather than skipping the check.
+spec signed-receive-valid? SyrupValue -> Bool
+  :doc "Verify the receiver's Ed25519 signature over the handoff-receive."
+defn signed-receive-valid? [signed-receive]
+  match [sig-envelope-object signed-receive]
+    | none    -> false
+    | some hr -> verify-signed-receive-inner hr signed-receive
+
 ;; Reply shapes. Upstream asserts on args[0], so a rejection MUST say `break` —
 ;; staying silent hangs the peer for its full timeout instead.
 spec withdraw-fulfill-bytes Nat Nat -> String
@@ -1565,11 +1706,19 @@ defn withdraw-with-gid [rm-pos gid signed-receive v st]
     | none       -> bridge-step v [bs-append-pending-out [withdraw-break-bytes rm-pos "malformed-handoff"] st]
     | some ident -> withdraw-with-identity rm-pos gid ident v st
 
-spec withdraw-with-receive Nat SyrupValue Vat BridgeState -> BridgeStep
-defn withdraw-with-receive [rm-pos signed-receive v st]
+spec withdraw-with-gift-lookup Nat SyrupValue Vat BridgeState -> BridgeStep
+defn withdraw-with-gift-lookup [rm-pos signed-receive v st]
   match [withdraw-gift-id signed-receive]
     | none     -> bridge-step v [bs-append-pending-out [withdraw-break-bytes rm-pos "malformed-handoff"] st]
     | some gid -> withdraw-with-gid rm-pos gid signed-receive v st
+
+;; The signature is checked BEFORE the gift is looked up, so a forged receive
+;; can neither consume a gift nor learn whether one was deposited.
+spec withdraw-with-receive Nat SyrupValue Vat BridgeState -> BridgeStep
+defn withdraw-with-receive [rm-pos signed-receive v st]
+  match [signed-receive-valid? signed-receive]
+    | false -> bridge-step v [bs-append-pending-out [withdraw-break-bytes rm-pos "bad-signature"] st]
+    | true  -> withdraw-with-gift-lookup rm-pos signed-receive v st
 
 spec withdraw-from-rest [List SyrupValue] [Option Nat] Vat BridgeState -> [Option BridgeStep]
 defn withdraw-from-rest [rest rm v st]

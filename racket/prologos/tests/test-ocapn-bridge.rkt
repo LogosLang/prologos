@@ -54,6 +54,7 @@
 (imports (prologos::data::list :refer (List nil cons)))
 (imports (prologos::data::option :refer (Option some none unwrap-or)))
 (imports (prologos::data::string :as str :refer ()))
+(imports (prologos::ocapn::handshake :refer (hex-to-bytes)))
 ")
 
 (define-values (shared-global-env
@@ -2290,3 +2291,103 @@
                          bridge-state-empty))
               (length (bs-gifts (bridge-step-state step)))))")
    "0N"))
+
+;; ========================================
+;; Handoff-receive signature verification
+;; ========================================
+;;
+;; A real 716-byte `withdraw-gift` frame captured off the wire from the
+;; upstream Python suite, and the same frame with one byte of the receiver
+;; signature flipped. Both go through the whole extraction chain: re-encode the
+;; handoff-receive for the message, dig the receiver public key out of the
+;; give nested two levels inside it, splice r ++ s out of the sig-val
+;; s-expression, and hand all three to libsodium.
+;;
+;; The corrupted case is the one that matters. A verifier that never finds its
+;; inputs also returns false, and would pass a rejection test while rejecting
+;; every valid handoff too -- so the accepting case is what makes this a test
+;; rather than a tautology, and it has to use a real signature to be one.
+
+(define handoff-frame-good
+  (string-append
+   "3c3130276f703a64656c697665723c313127646573633a6578706f7274302b3e5b31332777697468647261772d676966"
+   "743c313727646573633a7369672d656e76656c6f70653c323027646573633a68616e646f66662d726563656976653332"
+   "3a80ac24325c0ad104eac168cbf1bb67e0c349c27382cad5db5f91e18d5c8a030a33323a777564ff857cb2fcbd0d0875"
+   "022cc41238916df90ef232d93a30ade85b2e39bd302b3c313727646573633a7369672d656e76656c6f70653c31372764"
+   "6573633a68616e646f66662d676976655b3130277075626c69632d6b65795b33276563635b3527637572766537274564"
+   "32353531395d5b3527666c616773352765646473615d5b31277133323a391573c713b294f67c7204444dd1fce674148c"
+   "917d8a8b84978acca5075d73315d5d5d3c3130276f6361706e2d706565723136277463702d74657374696e672d6f6e6c"
+   "793332224a616451302b2b527a7344344d2b3430754c785457566156714d31304463424a7b3422686f73743922313237"
+   "2e302e302e313422706f7274352232323131367d3e33323a08ca4310f071e32dbc3b9be78c096fc44b42b174e738e8c4"
+   "8add887b9eba7aa833323aec9c661defc354b829fd2b426fe8429a653a0716cb021395c5c4612d2a20b1d5373a6d792d"
+   "676966743e5b37277369672d76616c5b352765646473615b31277233323a42677932d969d60d651f41502c29b1032395"
+   "f95ba8c247d3b64f4ad1549d8ee25d5b31277333323aa44329e7b3236014d99ac390750a78dde4259388028d3ddf27bb"
+   "74468e5aeb005d5d5d3e3e5b37277369672d76616c5b352765646473615b31277233323a02790feb642506c02deb0d69"
+   "ec7cee5f7fe6188ae7e77c1a3c3429445c9dd6a35d5b31277333323a0017ee74376826395ff3e3280d3b959f9d911126"
+   "fc8587e0243dde06e103bf095d5d5d3e5d663c313827646573633a696d706f72742d6f626a656374302b3e3e"))
+
+(define handoff-frame-bad
+  (string-append
+   "3c3130276f703a64656c697665723c313127646573633a6578706f7274302b3e5b31332777697468647261772d676966"
+   "743c313727646573633a7369672d656e76656c6f70653c323027646573633a68616e646f66662d726563656976653332"
+   "3a80ac24325c0ad104eac168cbf1bb67e0c349c27382cad5db5f91e18d5c8a030a33323a777564ff857cb2fcbd0d0875"
+   "022cc41238916df90ef232d93a30ade85b2e39bd302b3c313727646573633a7369672d656e76656c6f70653c31372764"
+   "6573633a68616e646f66662d676976655b3130277075626c69632d6b65795b33276563635b3527637572766537274564"
+   "32353531395d5b3527666c616773352765646473615d5b31277133323a391573c713b294f67c7204444dd1fce674148c"
+   "917d8a8b84978acca5075d73315d5d5d3c3130276f6361706e2d706565723136277463702d74657374696e672d6f6e6c"
+   "793332224a616451302b2b527a7344344d2b3430754c785457566156714d31304463424a7b3422686f73743922313237"
+   "2e302e302e313422706f7274352232323131367d3e33323a08ca4310f071e32dbc3b9be78c096fc44b42b174e738e8c4"
+   "8add887b9eba7aa833323aec9c661defc354b829fd2b426fe8429a653a0716cb021395c5c4612d2a20b1d5373a6d792d"
+   "676966743e5b37277369672d76616c5b352765646473615b31277233323a42677932d969d60d651f41502c29b1032395"
+   "f95ba8c247d3b64f4ad1549d8ee25d5b31277333323aa44329e7b3236014d99ac390750a78dde4259388028d3ddf27bb"
+   "74468e5aeb005d5d5d3e3e5b37277369672d76616c5b352765646473615b31277233323aff790feb642506c02deb0d69"
+   "ec7cee5f7fe6188ae7e77c1a3c3429445c9dd6a35d5b31277333323a0017ee74376826395ff3e3280d3b959f9d911126"
+   "fc8587e0243dde06e103bf095d5d5d3e5d663c313827646573633a696d706f72742d6f626a656374302b3e3e"))
+
+(define (signed-receive-of hex)
+  ;; <op:deliver <desc:export 0> [withdraw-gift SIGNED-RECEIVE] f <desc:import-object 0>>
+  ;;   -> args[1] of the op = the signed receive.
+  (format
+   (string-append
+    "(eval (unwrap-or syrup-null (nth-syrup (syrup-list-or-nil "
+    "  (unwrap-or syrup-null (nth-syrup (record-args-of \"op:deliver\" "
+    "     (unwrap-or syrup-null (decode-value (hex-to-bytes \"~a\")))) (suc zero)))) (suc zero))))")
+   hex))
+
+(test-case "handoff/a real signed handoff-receive VERIFIES"
+  (check-contains
+   (run-last
+    (format "(eval (signed-receive-valid? ~a))"
+            (string-append "(unwrap-or syrup-null (nth-syrup (syrup-list-or-nil "
+                           "  (unwrap-or syrup-null (nth-syrup (record-args-of \"op:deliver\" "
+                           "     (unwrap-or syrup-null (decode-value (hex-to-bytes \""
+                           handoff-frame-good
+                           "\")))) (suc zero)))) (suc zero)))")))
+   "true"))
+
+(test-case "handoff/one flipped signature byte does NOT verify"
+  (check-contains
+   (run-last
+    (format "(eval (signed-receive-valid? ~a))"
+            (string-append "(unwrap-or syrup-null (nth-syrup (syrup-list-or-nil "
+                           "  (unwrap-or syrup-null (nth-syrup (record-args-of \"op:deliver\" "
+                           "     (unwrap-or syrup-null (decode-value (hex-to-bytes \""
+                           handoff-frame-bad
+                           "\")))) (suc zero)))) (suc zero)))")))
+   "false"))
+
+(test-case "handoff/a bad signature BREAKS the withdraw, and breaks it as bad-signature"
+  ;; End to end through the bridge: the reply must say `break`, and the check
+  ;; must happen BEFORE the gift lookup -- otherwise a forged receive could
+  ;; still consume a deposited gift.
+  (check-contains
+   (extract-value-bytes
+    (run-last
+     (format
+      (string-append
+       "(eval (let (op (unwrap-or (op-deliver zero syrup-null none none) "
+       "                  (decode-op (hex-to-bytes \"~a\")))"
+       "                step (captp-incoming-with-state op empty-vat bridge-state-empty))"
+       "          (framed-concat (bs-pending-out (bridge-step-state step)))))")
+      handoff-frame-bad)))
+   "5\'break"))

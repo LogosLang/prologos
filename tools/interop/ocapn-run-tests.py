@@ -67,6 +67,8 @@ SELECTED = [
     # outlives a single connection (ocapn-gift-ffi.rkt).
     #
     # The other three in this class each need one more distinct feature:
+    # All four in this class now pass:
+    #   valid_handoff            -> the base flow
     #   wait_deposit_gift        -> park a withdrawal until the deposit lands
     #   invalid_handoff_count    -> per-(session, side) handoff-count tracking
     #   invalid_signature        -> real Ed25519 verification of the receive
@@ -74,6 +76,7 @@ SELECTED = [
         "test_valid_handoff",
         "test_valid_handoff_wait_deposit_gift",
         "test_handoff_receive_invalid_handoff_count",
+        "test_handoff_receive_invalid_signature",
     ]),
     # op:listen (Phase 59b part 4). Gated on the promise-resolver object
     # (swiss-num IokCxYmMj04nos2JN1TDoY1bT8dXh6Lr), which is now PRE-SEEDED
