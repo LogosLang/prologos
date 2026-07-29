@@ -23,7 +23,7 @@ rulings, censuses and test delta live in its own section.
 |---|---|---|---|
 | **P0** | **Acceptance corpus** — augment the EXISTING acceptance file with the spec §10 examples + Appendix fixtures; `--check` gated; new forms commented until their phase lands | ✅ | §5.P0 · `e2674208` — 28/28 markers, 0 errors; all 7 fixtures load (layout via `def X`, issue #80 sidestepped); corpus phase-tagged in HEAD notation; carrier pins double as §2.3 docs |
 | **P1a** | **Retirement batch + substrate** — dot-key family · the FULL `broadcast-get` chain (reader + parser keyword + surf + elaborator + node) · `m[:kw]` · reject batch · `surface-rewrite.rkt` `dot-lbrace` cleanup (BEFORE any re-mint) · the marker-form diagnostic seat | ✅ | §5.P1a · **`859b529d`** — suite 9253/474/0, acceptance 28/28 + 89/89, −744/+320; adversarial verify found 2 whole-file-abort defects (1 MINE, in the seat) → fixed + pinned pre-commit |
-| **P1b-i** | **Repairs + probes + the Q8 DRAFT** — WS narrow-var joiner · **the top-level `<` swallow fix (Q_M4)** · `def ?x` reservation (Q_M3) · the Q_M1 position probe FIRST, then `:N` / keyword-`*` / `:<`-both-shapes · Q8 drafted FROM the probe results | ⬜ | §5.P1b-i · **← NEXT** |
+| **P1b-i** | **Repairs + probes + the Q8 DRAFT** — the top-level `<` swallow fix (Q_M4) · WS narrowing typed vars · `def ?x` reservation (Q_M3) · the Q_M1 gating probe + `:N` / keyword-`*` / `:<` · **Q8 written from the results** | ✅ | §5.P1b-i + **§Q8** · `fc65ca54` — suite 9263/474/0, corpus A/B 160 files / 2 intended diffs; ⚠ **Q8 awaits OWNER REVIEW** before P1b-ii/iii |
 | **P1b-ii** | **The `.{` opener** — `dot-lbrace` re-mint, **SIX** sites incl. the surviving `surface-rewrite.rkt:516` (a POSITIVE addition — omitting it REGRESSES a currently-correct grouping); plain `'rbrace` closer per Q_M5 | ⬜ | §5.P1b-ii · must land BEFORE/WITH P1b-iii (Q_M2) |
 | **P1b-iii** | **Brace adjacency + the head registry** — the forced select-block sentinel (Q_M6) · leaf-module registry · the 4 buckets · NET-NEW WS `racket{…}` pins | ⬜ | §5.P1b-iii |
 | **P2** | **Grade-1 core** — `.k`/`.N` access + bare-path extraction, on the landed P2 substrate | ⬜ | §5.P2 · `.N` has an end-to-end head start via `(get expr N)` |
@@ -872,7 +872,112 @@ WRITTEN FROM measured facts rather than leans. No new surface syntax.
 
 **Test delta**: narrow-var real pins (replacing the vacuous one); `<`-swallow
 pins both directions (swallow gone / multi-line angle still works); `def ?x`
-guided-error pin; probe results recorded in this section. Status: ⬜.
+guided-error pin; probe results recorded in this section. Status: ✅ `fc65ca54`.
+
+---
+
+## §Q8 — THE LEXICAL GRAMMAR  ⟵ *the P1b deliverable; OWNER REVIEW REQUIRED*
+
+Written FROM the P1b-i probe results, not from leans. Every row is
+probe-verified at `fc65ca54` unless marked `[P1b-ii]` / `[P1b-iii]` (the rows
+those slices will add). Priorities are quoted from the registrations; **see
+the invariant note at the end — priority is NOT the safety property.**
+
+### Q8.1 — The `.` band: SIX duties, in matching order
+
+`.` is on six duties, not the four §8 R3 records. Two were unlisted: the
+single-char FALLBACK (what `.{`, `.N` and a bare `.` all hit today) and the
+DECIMAL POINT inside a number token.
+
+| # | Form | Token (priority) | Discriminator after `.` | Status |
+|---|---|---|---|---|
+| 1 | `x...` | `rest-param` (89) | a second `.` | live |
+| 2 | `m.:k` | `dot-key` (88) | `:` | **RETIRED** at P1a — token still lexes, marker seat converts |
+| 3 | `.( … )` | `dot-lparen` (87) | `(` | live (mixfix) |
+| 4 | `xs.*f` | `broadcast-access` (87) | `*` | **RETIRED** at P1a — as above |
+| 5 | `x.name` | `dot-access` (86) | `ident-start?` AND **not** `:`, `{`, `*`, digit | live |
+| 6 | `x.{…}` | *(fallback)* → `dot-lbrace` | `{` | **`[P1b-ii]`** — today falls to the single-char `.` |
+| — | `3.14` | `decimal-literal` (75) | anchors at a **DIGIT**, never at `.` | live — no overlap with the band |
+| — | `x . y` | single-char symbol fallback | — | the catch-all; `.N` also lands here until P2 |
+
+**Totality**: the five band members test *different* second characters
+(`.`/`:`/`(`/`*`/ident-start), and `recognize-dot-access` excludes `:`, `{`,
+`*` and digits **explicitly**, so `.{` is double-guarded and a `dot-lbrace`
+insertion is disjoint from all five. `.-1` LEXES CLEANLY as dot-access with
+field `-1` (`ident-start?` admits `-`), so the carried "`.-1` = classifier
+rejection" ruling is about a **well-formed token**, not a shatter — P2 owns
+it when `.N` arrives.
+
+### Q8.2 — The `{` band: TWO lexical rows, and a separate GROUPING table
+
+⚠ **The `{` order is not a lexical order at all**, and Q8 must say so. Only
+two `{` recognizers exist; every other bucket is a GROUPING decision made
+from token POSITIONS.
+
+| Lexical | Token (priority) |
+|---|---|
+| `#{…}` set | `hash-lbrace` (91) |
+| `{…}` | `lbrace` (30) |
+
+| Grouping (WS ONLY) | Rule | Status |
+|---|---|---|
+| spaced `f {…}` | never a select block | must not change (largest population is BINDERS) |
+| adjacent reader-form head `racket{…}` | head-symbol precedence — checked FIRST | `[P1b-iii]`; keeps `$brace-params` (spaced form is back-compat-pinned) |
+| adjacent `x{…}` | select block | `[P1b-iii]` — **forced NEW sentinel** (Q_M6) |
+| `.{…}` | descend-then-select | `[P1b-ii]`, plain `'rbrace` closer (Q_M5) |
+| closing-delimiter-adjacent `f[x]{a}` | **undecided** — zero live sites | `[P1b-iii]` must RULE, not discover |
+
+The sexp readtable binds `{` as a terminating macro with no positional
+context, so this table is **structurally WS-only** — the Q_L2 divergence,
+stated rather than discovered.
+
+### Q8.3 — The `:` seam: position AND adjacency
+
+`:0`/`:1`/`:w`/`:m` are **not spare glyphs** — they are the QTT multiplicity
+vocabulary (`colon-annotation`, priority 97), consumed at 18 sites. `users:0`
+and `[fn [x :0 Int] x]` are **the same lexeme**.
+
+| Form | Reading | Rule |
+|---|---|---|
+| `?x:Nat` (contiguous) | narrowing typed logic var | `narrow-var-annot` (96) — ONE token; **chains** `?x:A:B` included |
+| `?m :name` (spaced) | logic var + keyword ARGUMENT | untouched — contiguity is the discriminator |
+| `x:Int` | type annotation | binder/head position (POL.6) |
+| `x :0 Int` | QTT multiplicity | binder position, **spaced** |
+| `users:name` / `users:0` | broadcast `[P1b-iii]` | expression position **AND adjacent to a FOCUS-BEARING token** |
+| `{:0 …}` | map key / multiplicity | preceded by an OPENER, not a focus — never broadcast |
+
+**Q_M1's discriminator, as measured**: of 291 live multiplicity tokens, **289
+are spaced** and the other **2 are preceded by `{`**. So the rule is adjacency
+to a *focus-bearing* token — position alone is insufficient, and this is the
+same shape as `is-postfix?`'s `(pair? result)` conjunct.
+
+**Multi-digit `:N` — RECOMMENDATION: do NOT add a digits-only recognizer.**
+`:10` lexes as two tokens (`:` `10`) because `colon-annotation` is hard-capped
+at 2 chars. Adding one would collide with the QTT vocabulary it sits beside
+for a surface (`users:10`) with zero live uses. Owner to rule.
+
+### Q8.4 — `*` and `<`
+
+| Form | Finding |
+|---|---|
+| `:diags*` | `*` GLUES (`recognize-keyword` delegates to `ident-continue?`, and that delegation **is** the F1b.7g anti-drift fix). `int*`/`trait*` are live identifiers, so a charset change is forbidden — the split must happen at a **CONSUMER**. Prior art: `validate-selection-paths` already splits `^` off a keyword lexeme and handles a whole-segment `"*"`. |
+| `:<` disclose | **SAFE as of `fc65ca54`.** The hazard was never `:<` — a bare depth-0 `<` swallowed identically, and so did `def p := 1 < 2` / `def q := 3 > 4` with no colon and no brace. Fixed by the Q_M4 bound; `users:<{a}` + a later `>` now reads as three forms. |
+
+### Q8.5 — Standing invariants
+
+1. **Prefix-disjointness, NOT priority, is the safety property.** Priorities
+   TIE in two places (`dot-lparen`/`broadcast-access` both 87;
+   `nil-dot-key`/`nil-dot-access` both 92) and the registry is a plain hash
+   sorted descending — **ties break by unspecified hash order**. A new
+   recognizer must be prefix-disjoint and must not rely on its number.
+2. **Adjacency lives in TOKEN POSITIONS and is DESTROYED at the datum layer.**
+   `x{a b}` ≡ `x {a b}` byte-identical as datums. Any rule keyed on adjacency
+   must be decided at or before grouping. *(P1b-i learned this the hard way:
+   a datum-layer fusion of `?x` + `:Nat` absorbed unrelated keywords.)*
+3. **New sentinels owe two registrations**: `pattern-var?` (macros.rkt) and
+   tree-parser's inline skip-list — both hard-coded enumerations.
+4. **Both reader modes, always.** WS and sexp diverge by construction here
+   (adjacency, `.{`), so a census in one mode proves nothing about the other.
 
 ### §5.P1b-ii — The `.{` opener  ⬜
 
