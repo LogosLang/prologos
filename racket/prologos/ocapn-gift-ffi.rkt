@@ -19,6 +19,18 @@
 ;;; `[List GiftEntry]` crosses unmarshalled. The driver seeds the table into a
 ;;; connection's BridgeState before a step and publishes it back after, which
 ;;; keeps captp-core.prologos a pure function of its inputs.
+;;;
+;;; ONLY deposited gifts belong here. captp-core's gift table also holds parked
+;;; withdrawals and spent handoff identities, and both of those are keyed by
+;;; values that are only unique WITHIN a connection — every connection's vat
+;;; seeds its promise ids from the same counter, so connection A's park on its
+;;; promise 8 and connection B's park on ITS promise 8 collide. The driver
+;;; therefore publishes `bs-exportable-gifts` (gifts only) and `bs-set-gifts`
+;;; re-attaches the connection's own park/used entries on the way back in.
+;;;
+;;; The server gives each accepted connection its own thread, so both entry
+;;; points can run concurrently; Racket's `make-hash` is not safe for
+;;; concurrent mutation, hence the semaphore.
 
 (provide ocapn-gift-stash
          ocapn-gift-fetch)
@@ -26,10 +38,12 @@
 ;; Single-slot: the whole gift list, opaque. Keyed anyway so the Prologos-side
 ;; foreign signature has an argument to take.
 (define gift-table (make-hash))
+(define gift-sema (make-semaphore 1))
 
 (define (ocapn-gift-stash key gifts)
   "Publish the exporter-global gift list. Returns #t."
-  (hash-set! gift-table key gifts)
+  (call-with-semaphore gift-sema
+    (lambda () (hash-set! gift-table key gifts)))
   #t)
 
 ;; Takes the empty list from the Prologos side as a fallback: the FFI cannot
@@ -38,4 +52,5 @@
 ;; erroring, since #f is not a value the reducer has a case for.
 (define (ocapn-gift-fetch key empty)
   "Retrieve the exporter-global gift list, or `empty` if never stashed."
-  (hash-ref gift-table key empty))
+  (call-with-semaphore gift-sema
+    (lambda () (hash-ref gift-table key empty))))

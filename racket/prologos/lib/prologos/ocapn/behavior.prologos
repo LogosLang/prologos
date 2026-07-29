@@ -15,7 +15,9 @@ ns prologos::ocapn::behavior
 ;; `step-behavior` to dispatch it. This is the load-bearing limitation
 ;; documented in goblin-pitfalls #3.
 ;;
-;; The built-in set is small but covers the patterns we test:
+;; The built-in set is small but covers the patterns we test. This list is
+;; the file's index and must stay in step with `data BehaviorTag` below —
+;; it is the whole of it, not a sample:
 ;;
 ;;   beh-cell      — settable storage cell. msg = tagged "set" v / "get"
 ;;   beh-counter   — incrementable counter. msg = tagged "inc" / "get"
@@ -24,6 +26,11 @@ ns prologos::ocapn::behavior
 ;;   beh-adder     — running sum, message = arg, state = total
 ;;   beh-forwarder — forwards everything to a fixed target refr id
 ;;   beh-fulfiller — resolves a promise with a constant value (for tests)
+;;   beh-resolver  — upstream's promise resolver: interprets ['fulfill v]
+;;                   and ['break r] rather than resolving with the message
+;;   beh-car-factory-builder — answers with a fresh beh-car-factory actor
+;;   beh-car-factory         — answers with a fresh beh-car actor
+;;   beh-car                 — answers "Vroom! I am a <color> <model> car!"
 
 require [prologos::ocapn::syrup
          :refer [SyrupValue

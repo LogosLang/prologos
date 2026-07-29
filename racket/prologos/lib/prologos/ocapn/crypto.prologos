@@ -8,9 +8,23 @@ ns prologos::ocapn::crypto
 ;; Provides the Ed25519 primitives needed to build OCapN's
 ;; signed op:start-session handshake.
 ;;
-;; ALL FFI bindings carry a `:requires (CryptoCap)` annotation.
-;; A function using these primitives must be in scope of CryptoCap
-;; (or any supertype: SysCap). Keypair handles are opaque Nats;
+;; The FFI bindings here do NOT carry a `:requires (CryptoCap)`
+;; annotation, and the header used to claim they all did.
+;;
+;; They should. The convention is real — `prologos::ocapn::tcp-testing`
+;; tags every binding `:requires (NetCap)` — but it is only live there
+;; because that module has no consumers. Crypto does: the requirement
+;; propagates transitively to every caller, which is the whole
+;; verification chain in `captp-core` (`verify-raw` ->
+;; `verify-receive-with-key` -> ... -> `signed-receive-valid?` ->
+;; `withdraw-with-receive` -> `connection-step`), all of
+;; `handshake.prologos`, and the driver entry point that would have to
+;; introduce the capability in the first place. Applying the annotations
+;; without that threading fails every consumer at module load with
+;; "E2001: Required capability CryptoCap not available in scope".
+;;
+;; So the annotations are absent and the `CryptoCap` import below is
+;; retained as the marker for where they go. Keypair handles are opaque Nats;
 ;; bytes payloads (signature, pubkey, message) are carried as
 ;; Latin-1-encoded Strings — the same convention used by
 ;; `syrup-bytes` in the wire codec.
@@ -26,27 +40,26 @@ require [prologos::core::capabilities :refer (CryptoCap)]
 ;; ----------------------------------------
 
 ;; Generate a fresh Ed25519 keypair. Returns an opaque handle to a
-;; (pubkey, secret-key) pair stored in the FFI's handle table.
-;; The caller must release via crypto-close-keypair when done.
-foreign racket "crypto-ffi.rkt"
-  [crypto-gen-keypair :as gen-keypair-raw : Unit -> Nat]
+;; (pubkey, secret-key) pair stored in the FFI's handle table. The
+;; handle stays valid until `close-keypair-raw` releases it; nothing
+;; releases it automatically, and no current caller releases it at all
+;; — a session key is generated once and held for the life of the
+;; process. Anything that generates keypairs in a LOOP must release.
+foreign racket "crypto-ffi.rkt" [crypto-gen-keypair :as gen-keypair-raw : Unit -> Nat]
 
 ;; Extract the 32-byte raw Ed25519 public key for a keypair handle.
 ;; Returned as a Latin-1 String (32 chars, each char = 1 byte).
-foreign racket "crypto-ffi.rkt"
-  [crypto-pubkey :as pubkey-raw : Nat -> String]
+foreign racket "crypto-ffi.rkt" [crypto-pubkey :as pubkey-raw : Nat -> String]
 
 ;; Sign a message (Latin-1 bytes-as-string) with the keypair's
 ;; private key. Returns the 64-byte detached signature as a
 ;; Latin-1 String.
-foreign racket "crypto-ffi.rkt"
-  [crypto-sign :as sign-raw : Nat -> String -> String]
+foreign racket "crypto-ffi.rkt" [crypto-sign :as sign-raw : Nat -> String -> String]
 
 ;; Verify an Ed25519 signature. All three arguments are Latin-1
 ;; Strings of raw bytes: (public-key, message, signature).
-foreign racket "crypto-ffi.rkt"
-  [crypto-verify :as verify-raw : String -> String -> String -> Bool]
+foreign racket "crypto-ffi.rkt" [crypto-verify :as verify-raw : String -> String -> String -> Bool]
 
-;; Release a keypair handle. Returns true if the handle was present.
-foreign racket "crypto-ffi.rkt"
-  [crypto-close-keypair :as close-keypair-raw : Nat -> Bool]
+;; Release a keypair handle, zeroing the secret key first. Returns
+;; true if the handle was present.
+foreign racket "crypto-ffi.rkt" [crypto-close-keypair :as close-keypair-raw : Nat -> Bool]

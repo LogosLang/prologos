@@ -164,6 +164,7 @@
      (run-last
       "(eval (encode-op (op-start-session
                             \"0.1\"
+                            syrup-null
                             (syrup-string \"tcp-testing-only:peer-racket\"))))")))
   (define racket-abort
     (extract-value-bytes

@@ -14,8 +14,10 @@ ns prologos::ocapn::syrup
 ;;   containers : list | struct (record) | tagged
 ;;   references : refr id | promise id
 ;;
-;; Floats and byte-arrays are deliberately omitted from this Phase 0
-;; — they need primitive support that's outside scope.
+;; Byte-arrays are here (`syrup-bytes`). Floats and sets are NOT, and their
+;; absence is a real gap rather than a scoping decision: the reference emits
+;; both, so a peer that sends one gets a decode failure. Tracked in the gaps
+;; document.
 ;;
 ;; Identifiers are Nat (vat-local). A wire serialiser would translate
 ;; these to the descriptor table positions (desc:export N etc.) at
@@ -53,7 +55,11 @@ data SyrupValue
   ;; helper, `encode-many` and `decode-many-loop` all apply unchanged. Order
   ;; is preserved exactly as decoded — Syrup canonicalises by sorted key on
   ;; the wire, and since we neither re-sort nor re-order, re-encoding a
-  ;; decoded dict is byte-identical.
+  ;; decoded dict is byte-identical. That is what `re-encode` needs in order to
+  ;; reproduce a peer's bytes for signature verification — and it is true of
+  ;; the INBOUND direction only. It read as a blanket licence not to sort
+  ;; anywhere, which left every frame we originate non-canonical; `encode`
+  ;; sorts (see `encode-dict-body` in syrup-wire).
   ;;
   ;; This was the last unimplemented Syrup form we needed, and its absence was
   ;; invisible until it wasn't: `OCapNPeer` carries its netlayer hints as a
@@ -247,19 +253,27 @@ defn get-payload
   | syrup-promise _    -> none
   | syrup-dict    _   -> none
 
-;; Int -> Nat (clamped at 0). Structural recursion → O(n) cost.
-;; Only used for table-position decoding (small Nats) so the cost
-;; is acceptable.
-
-spec int-to-nat-loop Int Nat -> Nat
-defn int-to-nat-loop [i acc]
-  match [int-lt 0 i]
-    | false -> acc
-    | true  -> int-to-nat-loop [int- i 1] [suc acc]
+;; Int -> Nat, clamped at 0.
+;;
+;; This was structural recursion — `int-to-nat-loop` building `suc` by `suc`
+;; — under a comment asserting "only used for table-position decoding (small
+;; Nats) so the cost is acceptable". Nothing enforced that, and the input is
+;; entirely peer-controlled: `wire-nat` is applied to inbound `desc:export` /
+;; `desc:answer` / `desc:import-object` payloads, so the 18 wire bytes
+;; `<op:deliver <desc:export 100000000+> …>` bought an unbounded stall in the
+;; connection handler. Measured on the old loop: 2 ms at N=10, 1 398 ms at
+;; N=20 000, and superlinear.
+;;
+;; The fix is not a cap. `Nat` has an O(1) native representation
+;; (`expr-nat-val`, the Idris-2 model) and a foreign whose RESULT type is
+;; declared `Nat` marshals through `integer->nat`, which constructs one
+;; directly. `max` is total, needs no wrapper module, and gives the clamp for
+;; free.
+foreign racket "racket/base" [max :as int-max-to-nat : Int -> Int -> Nat]
 
 spec int-to-nat Int -> Nat
 defn int-to-nat [i]
-  int-to-nat-loop i zero
+  int-max-to-nat 0 i
 
 spec wire-nat SyrupValue -> [Option Nat]
 defn wire-nat

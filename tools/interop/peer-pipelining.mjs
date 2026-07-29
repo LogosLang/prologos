@@ -36,9 +36,11 @@ import {
 } from './node_modules/@endo/ocapn/src/syrup/js-representation.js';
 
 // The op:deliver args slot is a LIST -- the OCapN wire form, and what
-// upstream's own suite iterates. Racket used to send a bare value there,
-// which this script was written against; unwrapping one level reads both.
-const argsHead = (a) => Array.isArray(a) ? a[0] : (a && Array.isArray(a.values)) ? a.values[0] : a;
+// upstream's own suite iterates. This used to also accept a bare value,
+// because Racket once sent one there; that made the fixture pass under
+// either shape, so it stopped pinning the correct one. It is strict now:
+// anything but a list yields `undefined` and the assertion fails.
+const argsHead = (a) => Array.isArray(a) ? a[0] : undefined;
 const port = Number(process.argv[2]);
 if (!Number.isInteger(port) || port < 1) {
   process.stderr.write(`peer-pipelining: bad port ${process.argv[2]}\n`);

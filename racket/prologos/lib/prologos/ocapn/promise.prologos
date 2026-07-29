@@ -66,6 +66,12 @@ defn resolved?
 ;; Resolution is monotone: once a promise is fulfilled or broken,
 ;; subsequent attempts to re-resolve are no-ops. (Goblins enforces this
 ;; via the resolver-actor pattern; we enforce it structurally here.)
+;;
+;; Both transitions DISCARD the pending-message list: `pst-fulfilled` and
+;; `pst-broken` carry no queue, so anything `enqueue` had accumulated is
+;; gone at settlement. Forwarding those messages to the resolution is the
+;; bridge's job, from its own surviving copy (`bs-pipelined-msgs`) — this
+;; module has no way to address a resolution target.
 
 spec fulfill SyrupValue PromiseState -> PromiseState
   :doc "Fulfill an unresolved promise. No-op if already settled."
@@ -83,10 +89,20 @@ defn break
 
 ;; Push a queued message onto an unresolved promise. The newest
 ;; message ends up at the HEAD of the list (LIFO storage). Callers
-;; that want FIFO semantics can `reverse` the result of `take-queue`
-;; — Phase 0's only consumer of the queue is the test suite, which
-;; checks length and emptiness, not order. Goblins's wire-protocol
-;; layer would impose FIFO at the deliver site, not here.
+;; that want FIFO semantics can `reverse` the result of `take-queue`.
+;; Goblins's wire-protocol layer would impose FIFO at the deliver site,
+;; not here.
+;;
+;; This queue HAS a production writer: an inbound pipelined `op:deliver`
+;; reaches it through `dispatch-pipeline-on-our-q` →
+;; `pipeline-deliver` → `deliver-to-promise` (captp-core.prologos,
+;; pipelining.prologos). Nothing reads it back on that path — the bridge
+;; keeps a parallel `bs-pipelined-msgs` copy, which survives `fulfill`
+;; (this one does not; see the transitions above) and additionally carries
+;; the peer's answer position. So no consumer observes the LIFO order
+;; today, but "the only consumer is the test suite" has not been true
+;; since the wire-side pipelining landed.
+;;
 ;; Once resolved the message has nowhere to queue and is dropped.
 ;; (See Copilot review #28#discussion_r3150426657 for the LIFO-vs-
 ;; "append" wording call-out that prompted this clarification.)

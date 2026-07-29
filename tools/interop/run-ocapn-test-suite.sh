@@ -16,14 +16,18 @@
 #
 # Environment:
 #   OCAPN_TEST_SUITE_DIR  — path to the cloned ocapn-test-suite
-#                          (default: ./tmp/ocapn-test-suite, cloned
+#                          (default: /tmp/ocapn-test-suite, cloned
 #                          on first run)
 #   OCAPN_TEST_PORT       — TCP port for the Racket server (default 22045)
+#   OCAPN_SUITE_TIMEOUT   — wall-clock budget for the whole selected
+#                          run, in seconds (default 900)
 #
 # Exit:
-#   0 — the milestone tests passed.
-#   1 — a milestone test failed, or setup failed (server didn't
-#       start, suite not present, dependency missing).
+#   0 — every selected test passed.
+#   1 — a selected test failed or errored, the runner exited non-zero
+#       (which includes the allow-list drift check), the run timed out,
+#       or setup failed (server didn't start, suite not present,
+#       dependency missing).
 
 set -uo pipefail
 
@@ -41,6 +45,7 @@ export PLT_CS_COMPILE_LIMIT="${PLT_CS_COMPILE_LIMIT:-1000000}"
 
 PORT="${1:-${OCAPN_TEST_PORT:-22045}}"
 SUITE_DIR="${2:-${OCAPN_TEST_SUITE_DIR:-/tmp/ocapn-test-suite}}"
+SUITE_TIMEOUT="${OCAPN_SUITE_TIMEOUT:-900}"
 
 REPO_ROOT="$(cd "$(dirname "$0")"/../.. && pwd)"
 SERVER_SCRIPT="$REPO_ROOT/tools/interop/run-ocapn-test-server.rkt"
@@ -103,14 +108,15 @@ fi
 # suite README. The host/port are how the test suite reaches us.
 LOCATOR="ocapn://JadQ0++RzsD4M+40uLxTWVaVqM10DcBJ.tcp-testing-only?host=127.0.0.1&port=$PORT"
 
-# Milestone: this many of the selected tests must pass.
-#   op_start_session: remote_version, invalid_version, invalid_signature
-#   op_abort:         abort_before_setup
-#   op_deliver:       deliver_with_resolver  (Phase 59b part 2)
+# Every selected test must pass, and there must be at least this many of
+# them — the count is the length of SELECTED in ocapn-run-tests.py, which
+# spans op_start_session, op_deliver, op_abort, third_party_handoffs,
+# op_gc and op_listen. Raise it in lockstep when SELECTED grows; the
+# runner's own drift check is what catches a test appearing UPSTREAM.
 EXPECTED_PASS=24
 
 echo "[run-ocapn-test-suite] running selected tests against $LOCATOR"
-echo "[run-ocapn-test-suite] milestone: >= $EXPECTED_PASS of the selected tests must pass"
+echo "[run-ocapn-test-suite] gate: >= $EXPECTED_PASS passed, 0 failed, 0 errored, runner exit 0"
 echo "----------------------------------------------------------------"
 
 # The selective runner (ocapn-run-tests.py) lives in this repo; it
@@ -120,17 +126,25 @@ echo "----------------------------------------------------------------"
 # (every step-connection is a process-string that re-loads modules). The old
 # 90s budget fit 5 tests and silently truncated the run at 6 when the count
 # grew to 9 — the suite reported MILESTONE NOT MET for a TIMEOUT, not a
-# failure. Raise the budget whenever EXPECTED_PASS grows; the job itself has
-# timeout-minutes: 30, so this stays well inside it.
-OCAPN_TEST_SUITE_DIR="$SUITE_DIR" timeout 600 python3 -u \
+# failure. The 600s that replaced it was 25s x 24 tests EXACTLY, i.e. no
+# headroom at all, and `|| true` still hid exit 124. Both are fixed below:
+# 900s of budget, and a timeout is now reported AS a timeout.
+# Note the deliberate absence of `|| true`: it does not merely discard the
+# exit code, it OVERWRITES PIPESTATUS (`true` is a simple command), so
+# SUITE_EXIT read 0 unconditionally. This script does not `set -e`, so the
+# bare pipeline is safe.
+OCAPN_TEST_SUITE_DIR="$SUITE_DIR" timeout "$SUITE_TIMEOUT" python3 -u \
   "$REPO_ROOT/tools/interop/ocapn-run-tests.py" \
-  "$LOCATOR" "1.0" 2>&1 | tee /tmp/ocapn-suite-output.txt || true
+  "$LOCATOR" "1.0" 2>&1 | tee /tmp/ocapn-suite-output.txt
 SUITE_EXIT=${PIPESTATUS[0]}
 
-# Count pass/error/fail markers.
-N_PASS=$(grep -c " \.\.\. ok$" /tmp/ocapn-suite-output.txt || echo 0)
-N_ERROR=$(grep -c " \.\.\. ERROR$" /tmp/ocapn-suite-output.txt || echo 0)
-N_FAIL=$(grep -c " \.\.\. FAIL$" /tmp/ocapn-suite-output.txt || echo 0)
+# Count pass/error/fail markers. `grep -c` prints "0" and exits 1 when there
+# is no match, so `|| echo 0` would append a SECOND line and `[` would then
+# reject the two-line string "0\n0" with "integer expression expected" —
+# firing exactly when zero tests passed. `|| true` keeps grep's own "0".
+N_PASS=$(grep -c " \.\.\. ok$" /tmp/ocapn-suite-output.txt || true)
+N_ERROR=$(grep -c " \.\.\. ERROR$" /tmp/ocapn-suite-output.txt || true)
+N_FAIL=$(grep -c " \.\.\. FAIL$" /tmp/ocapn-suite-output.txt || true)
 echo ""
 echo "[run-ocapn-test-suite] tests passed: $N_PASS"
 echo "[run-ocapn-test-suite] tests errored: $N_ERROR"
@@ -141,10 +155,32 @@ echo "[run-ocapn-test-suite] runner exit code: $SUITE_EXIT"
 echo "[run-ocapn-test-suite] server log tail:"
 tail -20 "$SERVER_LOG"
 
-if [ "$N_PASS" -ge "$EXPECTED_PASS" ]; then
-  echo "[run-ocapn-test-suite] milestone met ($N_PASS >= $EXPECTED_PASS passed)"
+# The gate. Every one of these was computed and echoed before and none was
+# compared, so a 25th failing test passed the gate.
+GATE_OK=1
+if [ "$SUITE_EXIT" -eq 124 ]; then
+  echo "[run-ocapn-test-suite] TIMEOUT after ${SUITE_TIMEOUT}s — this is a" >&2
+  echo "                       budget problem, not a test failure. Raise" >&2
+  echo "                       OCAPN_SUITE_TIMEOUT (and the job's" >&2
+  echo "                       timeout-minutes) before reading the counts." >&2
+  GATE_OK=0
+elif [ "$SUITE_EXIT" -ne 0 ]; then
+  echo "[run-ocapn-test-suite] runner exited $SUITE_EXIT" >&2
+  GATE_OK=0
+fi
+if [ "$N_FAIL" -ne 0 ] || [ "$N_ERROR" -ne 0 ]; then
+  echo "[run-ocapn-test-suite] $N_FAIL failed, $N_ERROR errored" >&2
+  GATE_OK=0
+fi
+if [ "$N_PASS" -lt "$EXPECTED_PASS" ]; then
+  echo "[run-ocapn-test-suite] only $N_PASS passed, expected >= $EXPECTED_PASS" >&2
+  GATE_OK=0
+fi
+
+if [ "$GATE_OK" -eq 1 ]; then
+  echo "[run-ocapn-test-suite] gate met ($N_PASS passed, 0 failed, 0 errored)"
   exit 0
 else
-  echo "[run-ocapn-test-suite] MILESTONE NOT MET ($N_PASS < $EXPECTED_PASS passed)" >&2
+  echo "[run-ocapn-test-suite] GATE NOT MET" >&2
   exit 1
 fi

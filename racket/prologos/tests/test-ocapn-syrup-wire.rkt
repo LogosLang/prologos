@@ -98,8 +98,21 @@
 ;;
 ;; Hand-derived from the OCapN Syrup spec.
 
-(test-case "syrup-wire/encode null = \"n\""
-  (check-contains (run-last "(eval (encode syrup-null))") "\"n\""))
+(test-case "syrup-wire/a bare null is NOT wire-encodable"
+  ;; There is no null form in the Syrup dialect -- the reference codec has
+  ;; none. `syrup-null` is our internal "no value", and it means exactly one
+  ;; thing on the wire: a record's EMPTY argument sequence. Standalone it is a
+  ;; bug, and it now encodes to a poison record no peer will accept rather
+  ;; than to `n`, which our own frame reader rejects.
+  (check-contains (run-last "(eval (encode syrup-null))")
+                  "<20'prologos:unencodable4'null>"))
+
+(test-case "syrup-wire/an unencodable refr does not silently vanish from a list"
+  ;; It used to encode as "", which deleted the element and handed the peer a
+  ;; well-formed list of the WRONG ARITY.
+  (check-contains
+   (run-last "(eval (encode (syrup-list (cons (syrup-refr 3N) (cons (syrup-int 1) nil)))))")
+   "prologos:unencodable"))
 
 (test-case "syrup-wire/encode bool true = \"t\""
   (check-contains (run-last "(eval (encode (syrup-bool true)))") "\"t\""))
@@ -115,9 +128,9 @@
   (check-contains
    (run-last "(eval (encode (syrup-string \"hi\")))") "\"2\\\"hi\""))
 
-(test-case "syrup-wire/encode tagged \"op\" null = \"<2'opn>\""
+(test-case "syrup-wire/a null payload is a ZERO-ARG record, not a null argument"
   (check-contains
-   (run-last "(eval (encode (syrup-tagged \"op\" syrup-null)))") "\"<2'opn>\""))
+   (run-last "(eval (encode (syrup-tagged \"op\" syrup-null)))") "\"<2'op>\""))
 
 ;; ========================================
 ;; Encodability check
@@ -135,9 +148,12 @@
 ;; Decoder — atoms
 ;; ========================================
 
-(test-case "syrup-wire/decode \"n\" = some null"
+(test-case "syrup-wire/decode rejects \"n\" -- there is no null on this wire"
+  ;; Accepting a form we can never re-emit makes decode/re-encode a non-inverse,
+  ;; which is exactly what breaks signature verification. `ocapn-framing.rkt`
+  ;; already rejected byte 110; this makes the two agree.
   (check-contains
-   (run-last "(eval (decode-value \"n\"))") "syrup-null"))
+   (run-last "(eval (decode-value \"n\"))") "none"))
 
 (test-case "syrup-wire/decode \"5+\" = some int"
   (check-contains
@@ -151,9 +167,10 @@
 ;; Round-trip
 ;; ========================================
 
-(test-case "syrup-wire/roundtrip null"
+(test-case "syrup-wire/roundtrip a zero-arg record"
   (check-contains
-   (run-last "(eval (decode-value (encode syrup-null)))") "syrup-null"))
+   (run-last "(eval (re-encode (unwrap-or syrup-null (decode-value \"<1'f>\"))))")
+   "<1'f>"))
 
 (test-case "syrup-wire/roundtrip int 42"
   (check-contains
@@ -184,17 +201,25 @@
 ;; Phase 20 — UTF-8 byte-length aware encoding
 ;; ========================================
 
-(test-case "syrup-wire/encode UTF-8 string \"é\" uses byte length 2 not char length 1"
-  ;; "é" is 1 char, 2 bytes in UTF-8 (0xC3 0xA9). Wire form: 2"é
+(test-case "syrup-wire/a string's length prefix counts CODE POINTS, not UTF-8 bytes"
+  ;; Every String in this codec holds one byte per code point (Latin-1) -- that
+  ;; is what the frame FFI hands us and what the outbound path re-encodes with
+  ;; `string->bytes/latin-1`. So the prefix is `str::length` for strings and
+  ;; symbols exactly as it is for bytes.
+  ;;
+  ;; These two used to assert the opposite, on the reasoning that "strings hold
+  ;; text, so the spec's byte length applies". Nothing in this stack is UTF-8:
+  ;; a UTF-8 "é" arrives as the TWO code points 0xC3 0xA9 and must go back out
+  ;; as `2"` plus those two. Measuring the single code point U+00E9 as its
+  ;; 2-byte UTF-8 form emitted a prefix no peer could follow -- and
+  ;; `string->bytes/latin-1` raises outright on anything above U+00FF, so the
+  ;; value the old test pinned could never have been sent at all.
   (check-contains
    (run-last "(eval (encode (syrup-string \"é\")))")
-   "2\\\""))
-
-(test-case "syrup-wire/encode UTF-8 string \"αβγ\" uses byte length 6 not char length 3"
-  ;; Each Greek letter is 2 bytes in UTF-8. 3 chars × 2 = 6 bytes.
+   "1\\\"")
   (check-contains
-   (run-last "(eval (encode (syrup-string \"αβγ\")))")
-   "6\\\""))
+   (run-last "(eval (encode (syrup-symbol \"é\")))")
+   "1'"))
 
 ;; ========================================
 ;; Syrup DICTIONARIES — `{ k1 v1 k2 v2 ... }`
@@ -303,35 +328,80 @@
     (frame-expr "(str::eq raw (re-encode (unwrap-or syrup-null (decode-value raw))))"))
    "true"))
 
-(test-case "syrup-wire/encode does NOT round-trip it -- +2 bytes per multi-arg record"
-  ;; Pinning the asymmetry itself, so nobody "simplifies" re-encode into encode.
-  ;; 6 multi-arg records in this frame => +12 bytes.
+(test-case "syrup-wire/encode round-trips it too -- the two readings are now one"
+  ;; This used to pin the OPPOSITE: `encode` wrapped a record's argument
+  ;; sequence where `re-encode` spliced it, so `encode` came back +2 bytes per
+  ;; multi-arg record and the test existed to stop anyone "simplifying"
+  ;; re-encode into encode.
+  ;;
+  ;; The asymmetry was not a design, it was the decoder losing information.
+  ;; `<tag [a b]>` and `<tag a b>` decoded to the SAME value, so no single
+  ;; encoder could restore both and the two functions took opposite guesses --
+  ;; which meant `encode` emitted `<op:deliver [to args ap rm]>` for a record
+  ;; upstream reads as four fields. `decode-record-with` now distinguishes the
+  ;; two shapes, so both encoders splice and both are inverses.
+  ;;
+  ;; The remaining difference is dict key ordering, and it is deliberate: see
+  ;; the dict tests below.
   (check-contains
    (run-last
     (frame-expr "(str::eq raw (encode (unwrap-or syrup-null (decode-value raw))))"))
-   "false")
-  (check-contains
-   (run-last
-    (frame-expr (string-append
-                 "(int- (str::bytes-length (encode (unwrap-or syrup-null (decode-value raw))))"
-                 " (str::bytes-length (re-encode (unwrap-or syrup-null (decode-value raw)))))")))
-   "12"))
+   "true"))
 
-(test-case "syrup-wire/re-encode splices a record payload; encode wraps it"
-  ;; The same difference, minimally, without the 716-byte frame.
+(test-case "syrup-wire/a record payload splices, under both encoders"
   (check-contains
    (run-last "(eval (re-encode (unwrap-or syrup-null (decode-value \"<1'f1+2+>\"))))")
    "<1'f1+2+>")
   (check-contains
    (run-last "(eval (encode (unwrap-or syrup-null (decode-value \"<1'f1+2+>\"))))")
-   "<1'f[1+2+]>")
-  ;; Single-arg and zero-arg records are unaffected -- both encoders agree.
+   "<1'f1+2+>")
+  ;; Single-arg and zero-arg records too.
   (check-contains
    (run-last "(eval (re-encode (unwrap-or syrup-null (decode-value \"<1'f1+>\"))))")
    "<1'f1+>")
   (check-contains
    (run-last "(eval (re-encode (unwrap-or syrup-null (decode-value \"<1'f>\"))))")
    "<1'f>"))
+
+(test-case "syrup-wire/a record whose ONE argument is a list keeps its brackets"
+  ;; The case that made re-encode a non-inverse: `<f [1 2]>` (one list
+  ;; argument) and `<f 1 2>` (two arguments) decoded to the same value, and
+  ;; re-encode turned the first into the second -- a 1-arg record silently
+  ;; becoming a 2-arg one, ON THE SIGNATURE-VERIFICATION PATH.
+  (check-contains
+   (run-last "(eval (re-encode (unwrap-or syrup-null (decode-value \"<1'f[1+2+]>\"))))")
+   "<1'f[1+2+]>")
+  (check-contains
+   (run-last "(eval (encode (unwrap-or syrup-null (decode-value \"<1'f[1+2+]>\"))))")
+   "<1'f[1+2+]>"))
+
+(test-case "syrup-wire/decode-value rejects trailing residue"
+  ;; It used to discard `decode-at`'s offset, so a frame with garbage after a
+  ;; valid value parsed clean at every layer -- including the one that decides
+  ;; what a signature covers.
+  (check-contains (run-last "(eval (decode-value \"5+xyz\"))") "none")
+  (check-contains (run-last "(eval (decode-value \"1+\"))")    "syrup-int"))
+
+(test-case "syrup-wire/decode rejects non-canonical and malformed forms"
+  ;; Leading zeros: `00000000005\"hello` and `5\"hello` must not both decode,
+  ;; or a peer can vary the bytes it signs without varying the value we check.
+  (check-contains (run-last "(eval (decode-value \"005\\\"hello\"))") "none")
+  ;; A dict is a flat alternating key/value sequence, so an odd count is
+  ;; malformed. This used to decode into a one-element `syrup-dict`.
+  (check-contains (run-last "(eval (decode-value \"{1+}\"))") "none"))
+
+(test-case "syrup-wire/encode sorts dict keys; re-encode preserves the peer's order"
+  ;; Syrup canonicalises a dict by sorted encoded key, so frames WE originate
+  ;; must be sorted. But `re-encode` exists to reproduce a peer's bytes for
+  ;; signature verification, and a peer that sent a non-canonical dict must be
+  ;; reproduced as sent -- otherwise every such signature fails, which looks
+  ;; exactly like correct rejection while rejecting everything.
+  (check-contains
+   (run-last "(eval (encode (syrup-dict (cons (syrup-string \"port\") (cons (syrup-string \"1\") (cons (syrup-string \"host\") (cons (syrup-string \"2\") nil)))))))")
+   "{4\\\"host1\\\"24\\\"port1\\\"1}")
+  (check-contains
+   (run-last "(eval (re-encode (unwrap-or syrup-null (decode-value \"{4\\\"port1\\\"14\\\"host1\\\"2}\"))))")
+   "{4\\\"port1\\\"14\\\"host1\\\"2}"))
 
 (test-case "syrup-wire/encode bytes uses the RAW byte count, not the UTF-8 count"
   ;; `syrup-bytes` smuggles raw bytes as one code point per byte, so its length

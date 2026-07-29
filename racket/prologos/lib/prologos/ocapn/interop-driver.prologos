@@ -18,7 +18,8 @@ require [prologos::ocapn::captp-core :refer [ConnectionState empty-connection
                                               conn-step-outbound conn-state
                                               conn-vat conn-bridge-state
                                               conn-emitted conn-aborted?
-                                              GiftEntry bs-gifts bs-set-gifts
+                                              GiftEntry bs-exportable-gifts
+                                              bs-set-gifts
                                               bridge-state-empty]]
         [prologos::ocapn::vat        :refer [Vat vat Actor actor actor-table-set
                                              promise-table-set]]
@@ -33,29 +34,36 @@ require [prologos::ocapn::captp-core :refer [ConnectionState empty-connection
                                              op-gc-export op-gc-answer
                                              op-deliver-to-answer]]
         [prologos::ocapn::syrup-wire :as wire :refer []]
-        [prologos::data::nat         :refer [nat-eq?]]
+        [prologos::data::nat         :as nat :refer [nat-eq?]]
         [prologos::ocapn::handshake  :refer [hex-to-bytes]]
         [prologos::data::list        :refer [List nil cons]]
         [prologos::data::string      :as str :refer []]
         [prologos::data::option      :refer [Option some none]]
 
-;; Per-connection ConnectionState stash (see ocapn-conn-ffi.rkt).
+;; Per-connection ConnectionState stash (see ocapn-conn-ffi.rkt). `conn-fetch`
+;; takes the state to use when nothing was ever stashed for `cid`: the FFI
+;; cannot build a ConnectionState itself, and a `#f` from Racket would put a
+;; non-ADT where the reducer expects one, which crashes `nf` rather than
+;; erroring. Same reason `gift-fetch` takes an empty list.
 foreign racket "ocapn-conn-ffi.rkt"
   [ocapn-conn-stash :as conn-stash : Nat -> ConnectionState -> Bool]
 foreign racket "ocapn-conn-ffi.rkt"
-  [ocapn-conn-fetch :as conn-fetch : Nat -> ConnectionState]
+  [ocapn-conn-fetch :as conn-fetch : Nat -> ConnectionState -> ConnectionState]
+
+;; Outbound-connection requests. A pure behaviour cannot open a socket, so the
+;; sturdyref enlivener records where it wants to go and the server dials
+;; between steps -- the same shape as the gift table below. Only the server
+;; drains the queue (`ocapn-dial-drain`, called from Racket), so there is no
+;; declaration for it here.
+foreign racket "ocapn-dial-ffi.rkt"
+  [ocapn-dial-request :as dial-request : String -> Bool]
 
 ;; The exporter-global gift table (see ocapn-gift-ffi.rkt). A third-party
 ;; handoff DEPOSITS on the gifter's connection and WITHDRAWS on the receiver's,
-;; so this one table has to outlive any single connection.
-;; Outbound-connection requests. A pure behaviour cannot open a socket, so the
-;; sturdyref enlivener records where it wants to go and the server dials
-;; between steps -- the same shape as the gift table below.
-foreign racket "ocapn-dial-ffi.rkt"
-  [ocapn-dial-request :as dial-request : String -> Bool]
-foreign racket "ocapn-dial-ffi.rkt"
-  [ocapn-dial-drain :as dial-drain : [List String] -> [List String]]
-
+;; so this one table has to outlive any single connection. Only DEPOSITED GIFTS
+;; belong in it -- parked withdrawals and spent handoff identities are keyed by
+;; per-connection values, so `publish-gifts` sends `bs-exportable-gifts` and
+;; `bs-set-gifts` re-attaches this connection's own entries.
 foreign racket "ocapn-gift-ffi.rkt"
   [ocapn-gift-stash :as gift-stash : Nat -> [List GiftEntry] -> Bool]
 foreign racket "ocapn-gift-ffi.rkt"
@@ -84,18 +92,28 @@ defn concat-frames
 ;; next-id counter rather than accepting a chosen id, so the actor is
 ;; placed directly with `actor-table-set`. next-id is then set ABOVE the
 ;; highest seeded id, which is load-bearing: actor ids and promise ids
-;; come from the SAME counter (vat.prologos:184-186), so leaving it at
-;; zero would let `fresh-promise` hand out id 2 and alias Echo.
+;; come from the SAME counter (`vat-spawn` / `fresh-promise` in
+;; vat.prologos), so leaving it at zero would let `fresh-promise` hand out
+;; id 2 and alias Echo. `seeded-next-id` DERIVES it from the seeded
+;; positions rather than restating it as a literal.
 ;;
 ;; Echo (swiss IO58l1la..., export 2N) and Greeter (swiss VMDDd1vo...,
 ;; export 1N) are seeded. Greeter became possible in Phase 59b part 3,
 ;; which gave Vat an `outbound` list so a behaviour can originate a
 ;; message to a peer export position.
 ;;
-;; Still unseeded: Car Factory must SPAWN and the promise resolver must
-;; return a PAIR of references. `Effect` has no spawn variant, and
-;; ActStep returns a single value — both are unbuilt capability, not
-;; missing behaviours.
+;; `swiss-num-export` (captp-core) maps five swiss-nums, 1N through 5N.
+;; Four of them have an actor here: Greeter 1N, Echo 2N, the Car Factory
+;; builder 3N (`eff-spawn` exists — behavior.prologos — so the builder can
+;; spawn), and the promise-resolver 4N with its pre-seeded (vow, resolver)
+;; pair below.
+;;
+;; Position 5N, the sturdyref enlivener, deliberately has NO actor: a
+;; behaviour is pure and cannot open a socket, so `enliven-request-of`
+;; intercepts deliveries to 5N in this driver and queues a dial instead
+;; (see § The sturdyref enlivener). A `fetch` of its swiss-num therefore
+;; hands the peer an export position the vat cannot deliver to; only the
+;; driver's interception makes it work.
 
 
 ;; ===========================================================
@@ -148,10 +166,24 @@ def resolver-pair : SyrupValue :=
   [syrup-list [cons [import-object-desc resolver-vow-pos]
                     [cons [import-object-desc resolver-actor-pos] nil]]]
 
+;; The highest id this file hands out that does NOT come from a parameter.
+;; `sturdyref-enlivener-pos` is in here even though 5N gets no actor: the peer
+;; can still name it, so nothing else may be allocated there. Split across
+;; three defs because a continuation line starting with a bare identifier
+;; parses as a sibling form, so each of these has to fit on one line.
+def max-bootstrap-pos : Nat := [nat::max car-factory-builder-pos [nat::max promise-resolver-pos sturdyref-enlivener-pos]]
+def max-resolver-pos  : Nat := [nat::max resolver-vow-pos resolver-actor-pos]
+def seeded-max-fixed  : Nat := [nat::max max-bootstrap-pos max-resolver-pos]
+
+spec seeded-next-id Nat Nat -> Nat
+  :doc "One above every id seeded into the vat. DERIVED, not a literal: actor ids and promise ids come from the same counter, so a next-id at or below a seeded id would let `fresh-promise` alias an actor, and seeding a sixth object must not silently reintroduce that."
+defn seeded-next-id [echo-pos greeter-pos]
+  [suc [nat::max [nat::max echo-pos greeter-pos] seeded-max-fixed]]
+
 spec seeded-vat Nat Nat -> Vat
   :doc "A vat holding the Echo, Greeter and promise-resolver objects at the export positions `fetch` hands out, plus the pre-seeded (vow, resolver) pair. next-id starts above every seeded id so promise allocation cannot alias an actor."
 defn seeded-vat [echo-pos greeter-pos]
-  [vat 8N
+  [vat [seeded-next-id echo-pos greeter-pos]
        [actor-table-set echo-pos [actor beh-echo syrup-null]
          [actor-table-set greeter-pos [actor beh-greeter [syrup-string "Hello"]]
            [actor-table-set car-factory-builder-pos [actor beh-car-factory-builder syrup-null]
@@ -170,14 +202,25 @@ defn init-connection [cid]
 
 ;; Force the stash side effect — matching the Bool result drives its
 ;; evaluation — then return the concatenated outbound bytes.
+;;
+;; The arms are DELIBERATELY different. `conn-stash` cannot fail today (the
+;; FFI returns #t unconditionally), so the false arm is unreachable; writing
+;; it as `[concat-frames outbound]` too would make the match a pair of
+;; identical arms that any arm-collapsing rewrite is entitled to fold away —
+;; and folding it away deletes the stash. Emitting nothing is also the right
+;; answer if the stash ever does fail: replying while our own state was lost
+;; leaves the peer believing we are tracking a session we are not.
 spec emit-after-stash Bool [List String] -> String
 defn emit-after-stash [stashed outbound]
   match stashed
     | true  -> [concat-frames outbound]
-    | false -> [concat-frames outbound]
+    | false -> ""
 
 ;; Seed a connection's bridge state with the exporter-global gift table, so a
 ;; withdraw arriving on THIS connection can see a deposit made on another one.
+;; `bs-set-gifts` takes only the deposited gifts from the global table and
+;; keeps this connection's own park/used entries, which is what stops one
+;; connection's parked withdrawal from being settled by another's `op:listen`.
 spec with-global-gifts ConnectionState -> ConnectionState
 defn with-global-gifts [cs]
   [conn-state [conn-vat cs]
@@ -185,12 +228,23 @@ defn with-global-gifts [cs]
               [conn-emitted cs]
               [conn-aborted? cs]]
 
-;; Force the publish side-effect (matching stashed = the Bool result) and hand
-;; back the state, so the gift table this step produced is visible to every
-;; other connection.
+;; Force the publish side-effect (matching the Bool result) and hand back the
+;; state, so the gifts this step deposited are visible to every other
+;; connection.
+;;
+;; `bs-exportable-gifts`, NOT the whole table: park entries are keyed by a
+;; local promise id and used-markers by a handoff identity, and every
+;; connection's vat seeds its promise ids from the same counter — publishing
+;; them globally made connection A's park on its promise 8 and connection B's
+;; promise 8 the same key, so B's ordinary `op:listen` settled with A's gift
+;; and destroyed A's pending handoff. No attacker needed, just two sessions.
+;;
+;; Both arms return `cs`: `gift-stash` cannot fail, and if it somehow did there
+;; is nothing better to hand back than the state we already have. Unlike
+;; `emit-after-stash` there is no honest way to make the arms differ.
 spec publish-gifts ConnectionState -> ConnectionState
 defn publish-gifts [cs]
-  match [gift-stash 0N [bs-gifts [conn-bridge-state cs]]]
+  match [gift-stash 0N [bs-exportable-gifts [conn-bridge-state cs]]]
     | true  -> cs
     | false -> cs
 
@@ -210,6 +264,24 @@ defn publish-gifts [cs]
 ;; What gets queued is the sturdyref RE-ENCODED to bytes, not a parsed
 ;; location: parsing it is the dialler's job, and re-encoding is the operation
 ;; that reproduces the peer's own bytes (see syrup-wire § Re-encoder).
+;;
+;; The argument IS checked before it is queued. This is the one path in the
+;; implementation that makes us open an outbound TCP connection on peer-chosen
+;; bytes, so accepting any first argument at all would let a peer point the
+;; dialler wherever it liked with a record of any shape. Upstream's sturdyref
+;; is `<ocapn-sturdyref <ocapn-peer transport address hints> swiss-num>`
+;; (utils/ocapn_uris.py), and the label is what we gate on — the interior is
+;; the dialler's to parse and reject.
+
+spec sturdyref-bytes SyrupValue -> [Option String]
+  :doc "The re-encoded bytes of `v`, if `v` is an ocapn-sturdyref record."
+defn sturdyref-bytes [v]
+  match v
+    | syrup-tagged tag _ ->
+        match [str::eq tag "ocapn-sturdyref"]
+          | true  -> some [wire::re-encode v]
+          | false -> [none String]
+    | _ -> [none String]
 
 spec first-arg-bytes SyrupValue -> [Option String]
 defn first-arg-bytes [args]
@@ -217,7 +289,7 @@ defn first-arg-bytes [args]
     | syrup-list xs ->
         match xs
           | nil        -> [none String]
-          | [cons h _] -> some [wire::re-encode h]
+          | [cons h _] -> sturdyref-bytes h
     | _ -> [none String]
 
 spec enliven-target-arg Nat SyrupValue -> [Option String]
@@ -254,7 +326,13 @@ spec run-step Nat CapTPOp ConnectionState -> String
 ;; Reduction is lazy, so `let dialled := [maybe-dial op]` with `dialled`
 ;; unused is dropped outright and the side effect never happens -- which
 ;; presents as a queue that stays empty with no error anywhere. Same idiom as
-;; `publish-gifts` below, for the same reason.
+;; `publish-gifts` and `emit-after-stash` above, for the same reason.
+;;
+;; Here the arms MUST be identical: `false` is the ordinary case (this op is
+;; not an enliven), so there is nothing different to do. Unlike
+;; `emit-after-stash` the match cannot be made self-defending, and nothing in
+;; the language forces the effect. The durable fix is a strictness primitive
+;; or an effect type; until then this comment is the only guard.
 defn run-step [cid op cs]
   match [maybe-dial op]
     | true  -> run-step-inner cid op cs
@@ -263,7 +341,17 @@ defn run-step [cid op cs]
 spec step-connection Nat String -> String
   :doc "Process one inbound wire frame (hex-encoded) for connection
         `cid`. Returns the concatenated outbound wire bytes to send."
+;; `seeded-connection` is the fallback rather than a crash: `init-connection`
+;; is always called first, so a miss means that call did not land, and
+;; restarting the connection from the state it WOULD have stashed is the
+;; least-wrong recovery. The FFI reports the miss on stderr.
+;;
+;; KNOWN GAP: `| none -> ""` is one of four ways this server produces no
+;; reply, and the peer cannot tell them apart. The spec entitles it to an
+;; `op:abort` for an op we cannot decode. Emitting one needs an abort encoder
+;; and a decision about which decode failures are fatal — captp-core's
+;; territory, not the driver's.
 defn step-connection [cid hex-frame]
   match [decode-op [hex-to-bytes hex-frame]]
     | none    -> ""
-    | some op -> [run-step cid op [conn-fetch cid]]
+    | some op -> [run-step cid op [conn-fetch cid seeded-connection]]

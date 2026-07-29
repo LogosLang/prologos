@@ -50,7 +50,7 @@ require [prologos::ocapn::syrup
                  step-behavior]]
         [prologos::data::list   :refer [List nil cons append]]
         [prologos::data::option :refer [Option none some]]
-        [prologos::data::nat    :refer [add nat-eq?]]
+        [prologos::data::nat    :refer [add nat-eq? max]]
         [prologos::data::string :as str :refer []]
 
 ;; ========================================
@@ -149,20 +149,31 @@ defn actor-table-get [k entries]
           | true  -> some [ae-actor e]
           | false -> actor-table-get k rest
 
-;; cons-at-head, latest write wins on subsequent get. Earlier
-;; revisions used a recursive replace-in-place to avoid the
-;; unbounded-growth concern Copilot review #28#discussion_r3150426596
-;; raised — but that change made `run-vat` time-out on Racket 8.14
-;; under the run-affected-tests.rkt runner (3 OCapN test files,
-;; 120s per-file). The recursive form costs O(N) per delivery in
-;; the reducer's symbolic eval and dominated.
+;; Replace in place; append only when `k` is absent.
 ;;
-;; Phase 1 will swap the assoc list for a hash/CHAMP map; the cons
-;; form is acceptable for Phase 0 because each test scenario uses
-;; fewer than ~5 actors. Tracked as a known follow-up.
+;; An earlier revision consed at the head and let the newest write shadow
+;; the older ones (Copilot review #28#discussion_r3150426596). That is O(1)
+;; per write, but it leaves every superseded entry resident forever: the
+;; table grows with the number of WRITES rather than with the number of live
+;; actors, and `actor-table-get` — which runs once per delivery, and
+;; `promise-table-get` once per question per pump pass — walks all of them.
+;; Each delivery rewrites its target's state, so a session of D deliveries
+;; paid O(D²) in lookups to save O(D · live) in writes.
+;;
+;; Replacement keeps the table at exactly the live-entry count, so lookup
+;; cost stops depending on how long the session has been running. The
+;; recursive form was tried once before and timed the OCapN test files out
+;; on Racket 8.14 under the 120s-per-file runner; that measurement predates
+;; the runners setting PLT_CS_COMPILE_LIMIT, which is what stopped the
+;; reducer's giant match functions from being interpreted.
 spec actor-table-set Nat Actor [List ActorEntry] -> List ActorEntry
 defn actor-table-set [k a entries]
-  cons [actor-entry k a] entries
+  match entries
+    | nil -> [cons [actor-entry k a] [nil ActorEntry]]
+    | cons e rest ->
+        match [nat-eq? k [ae-id e]]
+          | true  -> [cons [actor-entry k a] rest]
+          | false -> [cons e [actor-table-set k a rest]]
 
 spec promise-table-get Nat [List PromiseEntry] -> Option PromiseState
 defn promise-table-get [k entries]
@@ -173,12 +184,20 @@ defn promise-table-get [k entries]
           | true  -> some [pe-state e]
           | false -> promise-table-get k rest
 
-;; Same trade-off as actor-table-set above (Copilot review
-;; #28#discussion_r3150426729). Cons-at-head; defer hash-backed
-;; storage to Phase 1.
+;; Same replace-in-place as actor-table-set above (Copilot review
+;; #28#discussion_r3150426729). This one is where shadowing cost the most:
+;; `resolve-promise` / `break-promise` write once per settlement, so under
+;; the cons form the settled entry was consed in FRONT of the unresolved one
+;; it superseded — correct, but the stale entry stayed resident forever and
+;; every settled promise cost two slots on every subsequent scan.
 spec promise-table-set Nat PromiseState [List PromiseEntry] -> List PromiseEntry
 defn promise-table-set [k s entries]
-  cons [promise-entry k s] entries
+  match entries
+    | nil -> [cons [promise-entry k s] [nil PromiseEntry]]
+    | cons e rest ->
+        match [nat-eq? k [pe-id e]]
+          | true  -> [cons [promise-entry k s] rest]
+          | false -> [cons e [promise-table-set k s rest]]
 
 ;; ========================================
 ;; Vat
@@ -186,11 +205,15 @@ defn promise-table-set [k s entries]
 
 data Vat
   ;; vat next-id actors promises queue outbound
-  ;; `outbound` = messages whose target is NOT a local actor (Phase 59b
-  ;; part 3). The vat stays wire-agnostic: it records "could not deliver
-  ;; this", the bridge decides that means "send to peer". Before this
-  ;; field deliver-msg SILENTLY DROPPED them, which is why a behaviour
-  ;; could never originate outbound traffic.
+  ;; `outbound` = messages a behaviour explicitly addressed to a PEER export
+  ;; position, via `eff-send-remote` (Phase 59b part 3). The vat stays
+  ;; wire-agnostic: it records "this one is not for anybody here", the bridge
+  ;; decides that means "send to peer".
+  ;;
+  ;; The entry condition is the EFFECT, not a failed actor-table lookup. An
+  ;; earlier revision also routed any undeliverable `vmsg-deliver` here,
+  ;; which made an inbound `op:deliver` to a position we do not hold come
+  ;; back out at the peer — see the reject arm in `deliver-msg`.
   vat : Nat -> [List ActorEntry] -> [List PromiseEntry] -> [List VatMsg] -> [List VatMsg]
 
 ;; Selectors.
@@ -341,14 +364,23 @@ defn enqueue-outbound [m v]
 ;; `data Effect` in behavior.prologos. Routing it through `send-only` would
 ;; let `deliver-msg` find a same-numbered LOCAL actor and deliver there.
 
-;; next-id becomes `suc id` rather than a max, because `id` IS the next-id the
-;; behaviour was handed — the two cannot be out of order by construction. If a
-;; future caller passes an arbitrary id that stops being true and this needs a
-;; max; the one-spawn-per-turn constraint on `eff-spawn` is the same fact seen
-;; from the other side.
+;; next-id must never move BACKWARDS: it is the sole allocator for both actor
+;; ids and promise ids, so lowering it re-issues ids that are already live and
+;; the next `vat-spawn` / `fresh-promise` silently overwrites an existing
+;; entry. In the normal case `id` IS the next-id the behaviour was handed, and
+;; `[suc id]` and the max agree — but that was an invariant the previous
+;; `[suc id]` only asserted in a comment. Taking the max makes it hold for any
+;; id a caller passes, which is what the comment claimed.
+;;
+;; Still NOT enforced structurally: at most one `eff-spawn` per turn (see
+;; `data Effect` in behavior.prologos). Two spawns in one effect list both name
+;; the same id; the max stops the second from rewinding next-id, but the first
+;; actor is still overwritten. Enforcing that means handing the behaviour a
+;; supply of ids rather than one — a change to `step-behavior`'s signature and
+;; to every behaviour that spawns.
 spec place-actor Nat BehaviorTag SyrupValue Vat -> Vat
 defn place-actor [id tag st v]
-  vat [suc id] [actor-table-set id [actor tag st] [vat-actors v]] [vat-promises v] [vat-queue v] [vat-outbound v]
+  vat [max [suc id] [vat-next-id v]] [actor-table-set id [actor tag st] [vat-actors v]] [vat-promises v] [vat-queue v] [vat-outbound v]
 
 spec apply-effect Effect Vat -> Vat
 defn apply-effect
@@ -440,12 +472,30 @@ defn deliver-msg [m v]
         match [actor-table-get target [vat-actors v]]
           | none ->
               match ap
-                ;; Phase 59b part 3: no longer DROPPED. A send-only whose
-                ;; target is not a local actor is exactly a behaviour
-                ;; originating a message to a peer export position.
-                | none     -> enqueue-outbound m v
-                ;; ap = some still breaks: sending to a peer AND awaiting
-                ;; an answer is an outbound QUESTION (needs an entry in the
+                ;; REJECT, do not re-address. Phase 59b part 3 routed this
+                ;; arm to `enqueue-outbound`, on the reading that a message
+                ;; with no local actor "must be" a behaviour talking to a
+                ;; peer export. That reading is the very heuristic
+                ;; `eff-send-remote` was introduced to kill (see the
+                ;; namespace note on `data Effect` in behavior.prologos): a
+                ;; VatMsg carries no provenance, so the arm fires for an
+                ;; INBOUND `op:deliver` too. The bridge then drains
+                ;; `vat-outbound` back to the peer as an `op:deliver` at
+                ;; the same position — a target we do not hold, reinterpreted
+                ;; in the peer's own namespace. A peer typo, or a chosen
+                ;; position, becomes traffic we emit against an object of
+                ;; the peer's choosing.
+                ;;
+                ;; Every legitimate producer of outbound traffic already
+                ;; bypasses this path: `eff-send-remote` writes
+                ;; `vat-outbound` directly in `apply-effect`, and the two
+                ;; forwarding loops in captp-core only call `send-only`
+                ;; after a successful `lookup-actor`. So the target here is
+                ;; either a peer position we never exported or a behaviour
+                ;; bug, and neither is deliverable.
+                | none     -> v
+                ;; ap = some breaks: sending to a peer AND awaiting an
+                ;; answer is an outbound QUESTION (needs an entry in the
                 ;; outbound-questions table) and is NOT built.
                 | some pid -> break-promise pid args v
           | some a ->
@@ -471,6 +521,30 @@ defn step-vat [v]
 ;; ========================================
 ;; run-vat: run-to-quiescence with fuel
 ;; ========================================
+;;
+;; POST-CONDITION, and the whole of the exhaustion signal: `run-vat` returns
+;; a vat whose queue is empty IFF the run reached quiescence. `step-vat`
+;; returns `none` only on an empty queue, so the sole way out with work left
+;; is fuel hitting zero. `vat-quiescent?` names that test; a caller that does
+;; not consult it cannot tell "nothing left to do" from "ran out of turns".
+;;
+;; That silence has already cost one debugging cycle — `drain-fuel` was
+;; raised 5 → 20 in `connection-step` because a send was being left on the
+;; queue with no error anywhere, which moved the threshold rather than the
+;; failure mode, and the mechanism is unchanged at 20.
+;;
+;; Deliberately NOT done here: breaking the answer promises of the messages
+;; still queued. Exhaustion is not undeliverability. `connection-step`
+;; carries the vat (queue included) forward into the next
+;; `ConnectionState`, so a message left over is DEFERRED to the next frame,
+;; not lost; breaking it would turn a delay into a wrong answer sent to the
+;; peer. What is missing is the caller's check, not a retraction here.
+spec vat-quiescent? Vat -> Bool
+  :doc "True iff the vat has no queued messages — i.e. iff the last run-vat reached quiescence rather than exhausting its fuel."
+defn vat-quiescent? [v]
+  match [vat-queue v]
+    | nil        -> true
+    | cons _ _   -> false
 
 spec run-vat Nat Vat -> Vat
 defn run-vat [fuel v]

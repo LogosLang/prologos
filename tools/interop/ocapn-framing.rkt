@@ -92,15 +92,40 @@
 ;;                 `digits "'" bytes` (symbol) | `"t" | "f"` (bool) |
 ;;                 `"F" 4-bytes` (float) | `"D" 8-bytes` (double)
 ;;   composites  — `"[" v* "]"` (list) | `"<" v+ ">"` (record) |
-;;                 `"{" (key val)* "}"` (dict)
+;;                 `"{" (key val)* "}"` (dict) | `"#" v* "$"` (set)
 ;;
 ;; A streaming decoder reads bytes one at a time, tracking nesting
-;; depth for `[<{` (open) and `]>}` (close). At depth 0, when a
+;; depth for `[<{#` (open) and `]>}$` (close). At depth 0, when a
 ;; complete value's last byte is consumed, the frame is complete.
 ;;
 ;; For length-prefixed atoms (`123:bytes`), we accumulate digits
 ;; until the prefix-terminator, then read that many payload bytes
 ;; without counting them toward nesting.
+;;
+;; Deliberate departures from the reference reader
+;; (`ocapn-test-suite/contrib/syrup.py:140-256`):
+;;
+;;   - We accept the legacy open/close aliases the reference accepts
+;;     but never emits: `(`/`l` open a list, `d` opens a dict, and
+;;     `)`/`e` close. Framing is a DELIMITER, not a validator: a form
+;;     we cannot delimit desynchronises the stream permanently,
+;;     whereas a form we delimit but do not understand is rejected
+;;     cleanly by the decoder one layer up. Being permissive here is
+;;     strictly safer.
+;;
+;;   - We accept `n` as a one-byte atom. The reference Syrup dialect
+;;     has NO null form (`grep -c null contrib/syrup.py` → 0), but our
+;;     own encoder emits one for `syrup-null`
+;;     (`lib/prologos/ocapn/syrup-wire.prologos`), and a reader that
+;;     rejects bytes our own writer produces cannot read its own
+;;     frames back. The correct fix is on the ENCODER — until it stops
+;;     emitting `n`, rejecting it here only converts a wire-format
+;;     defect into a framing desync.
+;;
+;; What we do NOT tolerate is an unbalanced close: a `]`/`>`/`}`/`$`
+;; at depth 0 is a hard error. Decrementing past zero used to yield a
+;; garbage frame with NO error and leave the remainder of the stream
+;; misaligned forever (`#"]<1'a><1'b>"` → `#"]<1'a"`).
 
 (define (read-syrup-frame port)
   "Read one complete Syrup value from `port` as bytes. Returns #f on EOF before any bytes are read."
@@ -161,21 +186,28 @@
          ;; Not in a length-prefix.
          [else
           (cond
-            [(or (= b #x5b) (= b #x3c) (= b #x7b))   ; '[' or '<' or '{'
+            ;; '[' '<' '{' '#' — and the reference's legacy '(' 'l' 'd'.
+            [(or (= b #x5b) (= b #x3c) (= b #x7b) (= b #x23)
+                 (= b #x28) (= b #x6c) (= b #x64))
              (set! depth (+ depth 1))
              (loop)]
-            [(or (= b #x5d) (= b #x3e) (= b #x7d))   ; ']' or '>' or '}'
+            ;; ']' '>' '}' '$' — and the reference's legacy ')' 'e'.
+            [(or (= b #x5d) (= b #x3e) (= b #x7d) (= b #x24)
+                 (= b #x29) (= b #x65))
+             (when (= depth 0)
+               (error 'read-syrup-frame
+                      "unbalanced close byte ~a at depth 0 (~v so far)"
+                      b (get-output-bytes out)))
              (set! depth (- depth 1))
              (if (done?) (get-output-bytes out) (loop))]
-            [(or (= b #x74) (= b #x66))              ; 't' or 'f' (bool)
+            ;; 't' or 'f' (bool), 'n' (our encoder's null — see header).
+            [(or (= b #x74) (= b #x66) (= b #x6e))
              (if (done?) (get-output-bytes out) (loop))]
             [(= b #x46)                              ; 'F' single-float: read 4 bytes
-             (define payload (read-bytes 4 port))
-             (write-bytes payload out)
+             (copy-atom-payload! port out 4)
              (if (done?) (get-output-bytes out) (loop))]
             [(= b #x44)                              ; 'D' double-float: read 8 bytes
-             (define payload (read-bytes 8 port))
-             (write-bytes payload out)
+             (copy-atom-payload! port out 8)
              (if (done?) (get-output-bytes out) (loop))]
             [(and (>= b #x30) (<= b #x39))           ; '0'-'9' starts a digit string
              (set! lp (cons 'digits (bytes b)))
@@ -183,3 +215,12 @@
             [else (error 'read-syrup-frame
                          "unexpected byte ~a at depth ~a (~v so far)"
                          b depth (get-output-bytes out))])])])))
+
+;; Copy exactly `n` payload bytes of a fixed-width atom ('F'/'D') from
+;; `port` to `out`. A short read is EOF mid-frame, not a frame.
+(define (copy-atom-payload! port out n)
+  (define payload (read-bytes n port))
+  (unless (and (bytes? payload) (= n (bytes-length payload)))
+    (error 'read-syrup-frame
+           "EOF mid-atom: wanted ~a payload bytes, got ~v" n payload))
+  (write-bytes payload out))

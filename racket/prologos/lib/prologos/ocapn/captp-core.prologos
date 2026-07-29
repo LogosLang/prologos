@@ -40,13 +40,17 @@ defn incoming-captp-op
       send-only tgt args v
   | [op-abort _reason] v ->
       v
-  | [op-start-session _ver _loc] v ->
+  | [op-start-session _ver _pk _loc] v ->
       v
   | [op-listen _tgt _resolver] v ->
       v
   | [op-gc-export _pos _cnt] v ->
       v
   | [op-gc-answer _pos] v ->
+      v
+  | [op-gc-exports _poss _deltas] v ->
+      v
+  | [op-gc-answers _poss] v ->
       v
   | [op-deliver-to-answer _qpos _args _ap _rm] v ->
       ;; Resolving an outbound question requires BridgeState (the
@@ -99,8 +103,13 @@ require [prologos::ocapn::promise :refer-all]
 ;; Answers reach here already-wrapped from the listener path (`['fulfill v]`),
 ;; but the question-table path passed the resolution value straight through —
 ;; including `<Error …>` for a broken promise, which is a record. Wrapping a
-;; non-list here is the fix, not a workaround: every other producer of this
-;; slot in this module already wraps.
+;; non-list here is the fix, not a workaround.
+;;
+;; The comment used to add "every other producer of this slot in this module
+;; already wraps", which was false — this had exactly one call site and the
+;; question, ask, listener-notify and forwarding encoders all placed `args`
+;; raw. They all route through here now, so the sentence is true by
+;; construction rather than by assertion.
 spec as-args-list SyrupValue -> SyrupValue
 defn as-args-list [v]
   match v
@@ -115,10 +124,14 @@ defn outbound-deliver-bytes [pid args]
         [cons [syrup-bool false]
           [cons [syrup-bool false] nil]]]]
 
-;; Build the bytes for our outbound op:start-session, given our
-;; protocol version and locator string. CapTP requires both peers
-;; to send their op:start-session; this is the canonical encoding
-;; the bridge emits in response to a peer's inbound session.
+;; Build the bytes for an UNSIGNED two-field op:start-session.
+;;
+;; This is NOT the canonical encoding, though it used to claim to be. The spec
+;; form has four fields — <op:start-session ver pubkey-sexp locator sig-sexp>
+;; — and the conformance path builds it in `handshake.prologos`, which has the
+;; keypair. captp-core has no crypto and structurally cannot produce a signed
+;; session, so this remains the unsigned form used by the Node interop
+;; harness, whose peers speak version "0.1" unsigned by design.
 ;;   <op:start-session ver loc>
 spec our-session-bytes String String -> String
 defn our-session-bytes [ver loc]
@@ -136,11 +149,17 @@ defn our-session-bytes [ver loc]
 ;; Caller is responsible for tracking `our-q-pos -> local-promise`
 ;; via `bs-add-outbound-question` so the inbound dispatch can resolve.
 spec outbound-question-bytes Nat SyrupValue Nat -> String
+;;
+;; The answer position is a BARE INTEGER, matching `outbound-ask-bytes` below
+;; and the rule its comment spells out. This wrote `<desc:answer N>` while its
+;; sibling wrote it raw, with nothing forcing the two to agree — and upstream
+;; reads slot 2 unwrapped, so the wrapped form came back as a record that
+;; never compared equal to the position we later name in op:gc-answers.
 defn outbound-question-bytes [tgt-export args our-q-pos]
   wire::encode-record "op:deliver"
     [cons [syrup-tagged "desc:export" [syrup-nat tgt-export]]
-      [cons args
-        [cons [syrup-tagged "desc:answer" [syrup-nat our-q-pos]]
+      [cons [as-args-list args]
+        [cons [syrup-nat our-q-pos]
           [cons [syrup-bool false] nil]]]]
 
 ;; Phase 59b part 9: an outbound ASK — us delivering to a peer export and
@@ -160,7 +179,35 @@ defn outbound-question-bytes [tgt-export args our-q-pos]
 ;;     to answer, and `exported_resolve_me_desc` is False.
 spec outbound-ask-bytes Nat SyrupValue Nat Nat -> String
 defn outbound-ask-bytes [tgt args apos rpos]
-  wire::encode-record "op:deliver" [cons [syrup-tagged "desc:export" [syrup-nat tgt]] [cons args [cons [syrup-nat apos] [cons [syrup-tagged "desc:import-object" [syrup-nat rpos]] nil]]]]
+  wire::encode-record "op:deliver" [cons [syrup-tagged "desc:export" [syrup-nat tgt]] [cons [as-args-list args] [cons [syrup-nat apos] [cons [syrup-tagged "desc:import-object" [syrup-nat rpos]] nil]]]]
+
+;; The two optional trailing slots of an op:deliver, rendered per spec.
+;;
+;;   answer position — a BARE INTEGER, or `false` when absent. Wrapping it in
+;;     `<desc:answer N>` makes upstream's `answer_position` a record that never
+;;     compares equal to the position named in a later op:gc-answers.
+;;   resolve-me — a descriptor, or `false` when absent. Which descriptor
+;;     depends on WHOSE object it is, so the two are separate functions rather
+;;     than one with a tag parameter: `opt-our-resolve-me` names an object WE
+;;     export (`desc:import-object`), `opt-peer-resolve-me` names one the PEER
+;;     exports and we are merely echoing back (`desc:export`).
+spec opt-answer-slot [Option Nat] -> SyrupValue
+defn opt-answer-slot [ap]
+  match ap
+    | none   -> syrup-bool false
+    | some n -> syrup-nat n
+
+spec opt-our-resolve-me [Option Nat] -> SyrupValue
+defn opt-our-resolve-me [rm]
+  match rm
+    | none   -> syrup-bool false
+    | some n -> syrup-tagged "desc:import-object" [syrup-nat n]
+
+spec opt-peer-resolve-me [Option Nat] -> SyrupValue
+defn opt-peer-resolve-me [rm]
+  match rm
+    | none   -> syrup-bool false
+    | some n -> syrup-tagged "desc:export" [syrup-nat n]
 
 ;; <op:gc-answers [pos …]> — one list, unlike op:gc-exports' two.
 spec gc-answers-bytes [List SyrupValue] -> String
@@ -184,7 +231,7 @@ spec listener-notify-bytes Nat SyrupValue -> String
 defn listener-notify-bytes [resolver-pos args]
   wire::encode-record "op:deliver"
     [cons [syrup-tagged "desc:export" [syrup-nat resolver-pos]]
-      [cons args
+      [cons [as-args-list args]
         [cons [syrup-bool false]
           [cons [syrup-bool false] nil]]]]
 
@@ -266,16 +313,30 @@ data QEntry
 ;;
 ;; When peer pipelines `<op:deliver <desc:answer N> args ap rm>` and N
 ;; is in our inbound bs-questions table, the bridge records
-;; (pid, args, ap) here — ap is peer's answer-pos for the pipelined Q
-;; (Phase 45). The vat-side queue (PromiseState's pst-unresolved msgs)
-;; is for in-process pipelining and gets WIPED on fulfill; this bridge-
-;; level queue survives resolution so the pump can emit forwarding
-;; bytes when the local promise resolves, AND can break-forward the
-;; queued delivers' answers when the local promise breaks.
+;; (pid, args, ap, rm) here. The vat-side queue (PromiseState's
+;; pst-unresolved msgs) is for in-process pipelining and gets WIPED on
+;; fulfill; this bridge-level queue survives resolution so the pump can
+;; emit forwarding bytes when the local promise resolves, AND can
+;; break-forward the queued delivers' answers when the local promise
+;; breaks.
+;;
+;; BOTH reply channels are carried, and both used to be lost. `rm` was not
+;; in the entry at all and `dispatch-pipeline-on-our-q` never received it,
+;; so a pipelined deliver that got QUEUED had its resolve-me dropped on the
+;; floor — only the break path ever used one. `ap` was stored but then
+;; discarded by every forwarding loop (`[pipe-msg p args _]`), and
+;; `forward-deliver-bytes` hardcoded `false false`, so a forwarded deliver
+;; reached the peer with no answer position and the peer's answer at that
+;; position never resolved. An error was deliverable; a success was not.
+;;
+;; It passes today because our answers settle immediately and the rescue
+;; path runs instead of the queue — but every upstream Car-Factory op
+;; carries a resolve-me.
+;;
 ;; Single-constructor avoids issue #60.
 data PipeMsg
-  pipe-msg : Nat -> SyrupValue -> [Option Nat]
-  ;; (local-promise-id, args, queued-deliver-answer-pos)
+  pipe-msg : Nat -> SyrupValue -> [Option Nat] -> [Option Nat]
+  ;; (local-promise-id, args, queued-deliver-answer-pos, queued-resolve-me)
 
 ;; ===========================================================
 ;; Refr — runtime CapTP capability value (Phase 34a)
@@ -315,6 +376,12 @@ def refr-kind-remote-answer        : Nat := [suc [suc [suc zero]]]
 ;; peer; the receiver treats it as a refr but resolution to the actual
 ;; provider requires netlayer machinery deferred beyond Phase 0.
 def refr-kind-remote-import-object : Nat := [suc [suc [suc [suc zero]]]]
+;; A 6th kind for `<desc:import-promise N>` — a PROMISE the peer exports.
+;; Upstream ships this descriptor and we emit one ourselves when answering a
+;; parked withdrawal, but nothing recognised one INBOUND: it was accepted by
+;; `unwrap-desc`, contributed no Refr, was never refcounted, and so the peer's
+;; export was never released.
+def refr-kind-remote-import-promise : Nat := [suc [suc [suc [suc [suc zero]]]]]
 
 ;; Smart constructors. Use these — never construct `refr` directly.
 
@@ -337,6 +404,10 @@ defn refr-remote-answer [n]
 spec refr-remote-import-object Nat -> Refr
 defn refr-remote-import-object [n]
   refr refr-kind-remote-import-object n
+
+spec refr-remote-import-promise Nat -> Refr
+defn refr-remote-import-promise [n]
+  refr refr-kind-remote-import-promise n
 
 ;; Accessors.
 
@@ -369,6 +440,10 @@ defn refr-remote-answer?
 spec refr-remote-import-object? Refr -> Bool
 defn refr-remote-import-object?
   | refr k _ -> nat-eq? k refr-kind-remote-import-object
+
+spec refr-remote-import-promise? Refr -> Bool
+defn refr-remote-import-promise?
+  | refr k _ -> nat-eq? k refr-kind-remote-import-promise
 
 ;; Brand-check: two refrs are the same brand iff same (kind, id).
 ;; Implements OCapN brand-check semantics within a single connection.
@@ -408,14 +483,20 @@ defn refr-export-kind? [r]
 ;; Pick the desc:* tag name for a given Refr's wire encoding. Phase 37
 ;; extends Phase 34d to a third tag. Two-deep match (NOT three-deep)
 ;; sidesteps pitfall #18 / #33.
+spec refr-syrup-tag-non-export Refr -> String
+defn refr-syrup-tag-non-export [r]
+  match [refr-remote-import-object? r]
+    | true  -> "desc:import-object"
+    | false ->
+        match [refr-remote-import-promise? r]
+          | true  -> "desc:import-promise"
+          | false -> "desc:answer"
+
 spec refr-syrup-tag Refr -> String
 defn refr-syrup-tag [r]
   match [refr-export-kind? r]
     | true  -> "desc:export"
-    | false ->
-        match [refr-remote-import-object? r]
-          | true  -> "desc:import-object"
-          | false -> "desc:answer"
+    | false -> refr-syrup-tag-non-export r
 
 spec refr-to-syrup Refr -> SyrupValue
 defn refr-to-syrup [r]
@@ -426,19 +507,75 @@ defn refr-to-syrup [r]
 ;; which returns none for bytes — so the handler bridged through unchanged and
 ;; NO GIFT WAS EVER RECORDED, silently. Hence GiftEntry, keyed by the id bytes
 ;; (which `syrup-bytes : String` already carries).
+;;
+;; The table carries THREE kinds of entry, and the kind is a FIELD rather than
+;; a prefix on the key. That distinction is load-bearing, not stylistic.
+;;
+;; It used to be a prefix — `used:` markers and `park:` entries shared one
+;; String-keyed table with peer-supplied gift ids, justified by a comment
+;; reading "the prefix cannot collide with a gift id, because gift ids come
+;; from the peer as opaque bytes and this key is only ever CONSTRUCTED here."
+;; That reasoning is exactly backwards. Peer-supplied opaque bytes are
+;; precisely what lets a peer CHOOSE bytes equal to a constructed key, and
+;; `deposit-gift` is reachable by any connected peer. Two exploits followed
+;; from it: depositing gift-id `used:<sess>|<side>|0` denied an unrelated
+;; party's legitimate handoff by pre-poisoning its replay marker, and
+;; depositing `park:<p>:<chosen-gid>` shadowed a real parked withdrawal so an
+;; `op:listen` resolved promise `p` with an export of the attacker's choosing.
+;;
+;; With a kind field the collision is not merely unlikely, it is
+;; unrepresentable: `bs-add-gift` is the only writer of `gk-gift` and every
+;; lookup filters on kind.
+data GiftKind
+  ;; A real deposited gift. Key = the peer's gift-id bytes, pos = export.
+  gk-gift
+  ;; A SPENT handoff identity, so a receive cannot be replayed. Key = the
+  ;; (session, side, count) identity, pos unused.
+  gk-used
+  ;; A PARKED withdrawal, awaiting its deposit. Key = the gift-id, pos = the
+  ;; local promise the withdrawer is waiting on.
+  gk-park
+
+spec kind-eq? GiftKind GiftKind -> Bool
+defn kind-eq? [a b]
+  match a
+    | gk-gift -> match b | gk-gift -> true | gk-used -> false | gk-park -> false
+    | gk-used -> match b | gk-gift -> false | gk-used -> true | gk-park -> false
+    | gk-park -> match b | gk-gift -> false | gk-used -> false | gk-park -> true
+
 data GiftEntry
-  gift-entry : String -> Nat
+  gift-entry : String -> Nat -> GiftKind -> String
 
 spec ge-key GiftEntry -> String
 defn ge-key
-  | gift-entry k _ -> k
+  | gift-entry k _ _ _ -> k
 
 spec ge-pos GiftEntry -> Nat
 defn ge-pos
-  | gift-entry _ n -> n
+  | gift-entry _ n _ _ -> n
+
+spec ge-kind GiftEntry -> GiftKind
+defn ge-kind
+  | gift-entry _ _ k _ -> k
+
+;; The fourth field is a per-KIND payload. It is a union discriminated by
+;; `ge-kind`, which is exactly what the kind field is for:
+;;
+;;   gk-gift  the depositing peer's Ed25519 public key (raw q bytes). This is
+;;            what makes a handoff verifiable: the gifter signs the
+;;            `desc:handoff-give`, and the only party who can say which key
+;;            that should be is the exporter, from the session the gift was
+;;            deposited on.
+;;   gk-park  the re-encoded bytes of the signed `desc:handoff-give` that
+;;            arrived with the withdrawal, held until the deposit shows up and
+;;            supplies the key to check it against.
+;;   gk-used  unused ("").
+spec ge-aux GiftEntry -> String
+defn ge-aux
+  | gift-entry _ _ _ a -> a
 
 data BridgeState
-  bridge-state : [List Listener] -> [List GcExportReq] -> [List Nat] -> [List QEntry] -> [List String] -> [List QEntry] -> [List QEntry] -> [List QEntry] -> [List PipeMsg] -> [List GiftEntry]
+  bridge-state : [List Listener] -> [List GcExportReq] -> [List Nat] -> [List QEntry] -> [List String] -> [List QEntry] -> [List QEntry] -> [List QEntry] -> [List PipeMsg] -> [List GiftEntry] -> String
   ;; (listeners, gc-export-requests, gc-answer-positions, inbound-questions,
   ;;  pending-out, outbound-questions, imports-refcount, exports-refcount,
   ;;  pipelined-msgs, gifts)
@@ -507,7 +644,7 @@ data BridgeState
   ;; Reusing QEntry for the (Nat → Nat) lists; entry semantics
   ;; depends on which list it's in.
 
-def bridge-state-empty : BridgeState := [bridge-state nil nil nil nil nil nil nil nil nil nil]
+def bridge-state-empty : BridgeState := [bridge-state nil nil nil nil nil nil nil nil nil nil ""]
 
 ;; Construct a BridgeState pre-loaded with our op:start-session bytes
 ;; queued for flush on the next pump-outbound. CapTP handshake
@@ -516,75 +653,93 @@ def bridge-state-empty : BridgeState := [bridge-state nil nil nil nil nil nil ni
 ;; pump emit them alongside any vat-resolution outbound.
 spec bridge-state-with-our-session String String -> BridgeState
 defn bridge-state-with-our-session [ver loc]
-  bridge-state nil nil nil nil [cons [our-session-bytes ver loc] nil] nil nil nil nil nil
+  bridge-state nil nil nil nil [cons [our-session-bytes ver loc] nil] nil nil nil nil nil ""
 
 spec bs-listeners BridgeState -> List Listener
 defn bs-listeners
-  | bridge-state ls _ _ _ _ _ _ _ _ _ -> ls
+  | bridge-state ls _ _ _ _ _ _ _ _ _ _ -> ls
 
 spec bs-gc-exports BridgeState -> List GcExportReq
 defn bs-gc-exports
-  | bridge-state _ es _ _ _ _ _ _ _ _ -> es
+  | bridge-state _ es _ _ _ _ _ _ _ _ _ -> es
 
 spec bs-gc-answers BridgeState -> List Nat
 defn bs-gc-answers
-  | bridge-state _ _ as _ _ _ _ _ _ _ -> as
+  | bridge-state _ _ as _ _ _ _ _ _ _ _ -> as
 
 spec bs-questions BridgeState -> List QEntry
 defn bs-questions
-  | bridge-state _ _ _ qs _ _ _ _ _ _ -> qs
+  | bridge-state _ _ _ qs _ _ _ _ _ _ _ -> qs
 
 spec bs-pending-out BridgeState -> List String
 defn bs-pending-out
-  | bridge-state _ _ _ _ p _ _ _ _ _ -> p
+  | bridge-state _ _ _ _ p _ _ _ _ _ _ -> p
 
 spec bs-outbound-questions BridgeState -> List QEntry
 defn bs-outbound-questions
-  | bridge-state _ _ _ _ _ oqs _ _ _ _ -> oqs
+  | bridge-state _ _ _ _ _ oqs _ _ _ _ _ -> oqs
 
 spec bs-imports-refcount BridgeState -> List QEntry
 defn bs-imports-refcount
-  | bridge-state _ _ _ _ _ _ ir _ _ _ -> ir
+  | bridge-state _ _ _ _ _ _ ir _ _ _ _ -> ir
 
 spec bs-exports-refcount BridgeState -> List QEntry
 defn bs-exports-refcount
-  | bridge-state _ _ _ _ _ _ _ er _ _ -> er
+  | bridge-state _ _ _ _ _ _ _ er _ _ _ -> er
 
 spec bs-pipelined-msgs BridgeState -> List PipeMsg
 defn bs-pipelined-msgs
-  | bridge-state _ _ _ _ _ _ _ _ pm _ -> pm
+  | bridge-state _ _ _ _ _ _ _ _ pm _ _ -> pm
 
 ;; Phase 52: gift-table accessor.
 spec bs-gifts BridgeState -> List GiftEntry
 defn bs-gifts
-  | bridge-state _ _ _ _ _ _ _ _ _ gs -> gs
+  | bridge-state _ _ _ _ _ _ _ _ _ gs _ -> gs
+
+;; The Ed25519 public key (raw q bytes) of the peer on THIS session, taken
+;; from its `op:start-session`. "" when the peer sent the legacy unsigned
+;; two-field handshake, i.e. when we do not know who it is.
+;;
+;; This exists so a third-party handoff can be authenticated. The exporter is
+;; the only party positioned to say which key should have signed a
+;; `desc:handoff-give`: the gifter is its peer on the session the gift was
+;; deposited on. Without it, the give's signature could only be checked
+;; against a key the give itself supplied, which is no check at all.
+spec bs-peer-key BridgeState -> String
+defn bs-peer-key
+  | bridge-state _ _ _ _ _ _ _ _ _ _ sk -> sk
+
+spec bs-set-peer-key String BridgeState -> BridgeState
+defn bs-set-peer-key
+  | sk2 [bridge-state ls es as qs p oqs ir er pm gs _] ->
+      bridge-state ls es as qs p oqs ir er pm gs sk2
 
 ;; Pure updates.
 
 spec bs-add-listener Nat Nat BridgeState -> BridgeState
 defn bs-add-listener
-  | tgt res [bridge-state ls es as qs p oqs ir er pm gs] ->
-      bridge-state [cons [listener tgt res] ls] es as qs p oqs ir er pm gs
+  | tgt res [bridge-state ls es as qs p oqs ir er pm gs sk] ->
+      bridge-state [cons [listener tgt res] ls] es as qs p oqs ir er pm gs sk
 
 spec bs-add-gc-export Nat Nat BridgeState -> BridgeState
 defn bs-add-gc-export
-  | pos cnt [bridge-state ls es as qs p oqs ir er pm gs] ->
-      bridge-state ls [cons [gc-export-req pos cnt] es] as qs p oqs ir er pm gs
+  | pos cnt [bridge-state ls es as qs p oqs ir er pm gs sk] ->
+      bridge-state ls [cons [gc-export-req pos cnt] es] as qs p oqs ir er pm gs sk
 
 spec bs-add-gc-answer Nat BridgeState -> BridgeState
 defn bs-add-gc-answer
-  | pos [bridge-state ls es as qs p oqs ir er pm gs] ->
-      bridge-state ls es [cons pos as] qs p oqs ir er pm gs
+  | pos [bridge-state ls es as qs p oqs ir er pm gs sk] ->
+      bridge-state ls es [cons pos as] qs p oqs ir er pm gs sk
 
 spec bs-add-question Nat Nat BridgeState -> BridgeState
 defn bs-add-question
-  | remote local [bridge-state ls es as qs p oqs ir er pm gs] ->
-      bridge-state ls es as [cons [q-entry remote local] qs] p oqs ir er pm gs
+  | remote local [bridge-state ls es as qs p oqs ir er pm gs sk] ->
+      bridge-state ls es as [cons [q-entry remote local] qs] p oqs ir er pm gs sk
 
 spec bs-clear-pending-out BridgeState -> BridgeState
 defn bs-clear-pending-out
-  | bridge-state ls es as qs _ oqs ir er pm gs ->
-      bridge-state ls es as qs nil oqs ir er pm gs
+  | bridge-state ls es as qs _ oqs ir er pm gs sk ->
+      bridge-state ls es as qs nil oqs ir er pm gs sk
 
 ;; Phase 50: append a single byte-string to pending-out. Used by
 ;; declarative-release helpers that stage `op:gc-export` bytes for
@@ -592,8 +747,8 @@ defn bs-clear-pending-out
 ;; question replies.
 spec bs-append-pending-out String BridgeState -> BridgeState
 defn bs-append-pending-out
-  | bytes [bridge-state ls es as qs p oqs ir er pm gs] ->
-      bridge-state ls es as qs [cons bytes p] oqs ir er pm gs
+  | bytes [bridge-state ls es as qs p oqs ir er pm gs sk] ->
+      bridge-state ls es as qs [cons bytes p] oqs ir er pm gs sk
 
 ;; Phase 25: track an outbound question we asked. `our-q-pos` is the
 ;; position we used in the desc:answer of our outbound op:deliver;
@@ -602,8 +757,8 @@ defn bs-append-pending-out
 ;; the helper that allocates and registers in one step.
 spec bs-add-outbound-question Nat Nat BridgeState -> BridgeState
 defn bs-add-outbound-question
-  | qpos local [bridge-state ls es as qs p oqs ir er pm gs] ->
-      bridge-state ls es as qs p [cons [q-entry qpos local] oqs] ir er pm gs
+  | qpos local [bridge-state ls es as qs p oqs ir er pm gs sk] ->
+      bridge-state ls es as qs p [cons [q-entry qpos local] oqs] ir er pm gs sk
 
 ;; Look up the local-id for a given remote-question-pos.
 ;; First (most-recent) match wins per cons-at-head insertion.
@@ -648,16 +803,16 @@ defn list-remove-q-by-key
 ;; promise we allocated for it.
 spec bs-remove-question Nat BridgeState -> BridgeState
 defn bs-remove-question
-  | qpos [bridge-state ls es as qs p oqs ir er pm gs] ->
-      bridge-state ls es as [list-remove-q-by-key qs qpos] p oqs ir er pm gs
+  | qpos [bridge-state ls es as qs p oqs ir er pm gs sk] ->
+      bridge-state ls es as [list-remove-q-by-key qs qpos] p oqs ir er pm gs sk
 
 ;; Phase 31: remove the outbound-question entry for `our-q-pos`.
 ;; Used when WE've consumed peer's reply and want to send op:gc-answer
 ;; — the local-promise/q-pos mapping is no longer needed.
 spec bs-remove-outbound-question Nat BridgeState -> BridgeState
 defn bs-remove-outbound-question
-  | qpos [bridge-state ls es as qs p oqs ir er pm gs] ->
-      bridge-state ls es as qs p [list-remove-q-by-key oqs qpos] ir er pm gs
+  | qpos [bridge-state ls es as qs p oqs ir er pm gs sk] ->
+      bridge-state ls es as qs p [list-remove-q-by-key oqs qpos] ir er pm gs sk
 
 ;; ===========================================================
 ;; Phase 34c: imports-refcount accessors + updaters
@@ -711,13 +866,14 @@ defn bs-lookup-import-refcount [export-id st]
 ;; args (Phase 34b).
 spec bs-incr-import Nat BridgeState -> BridgeState
 defn bs-incr-import
-  | export-id [bridge-state ls es as qs p oqs ir er pm gs] ->
+  | export-id [bridge-state ls es as qs p oqs ir er pm gs sk] ->
       bridge-state ls es as qs p oqs
         [list-set-q-by-key ir export-id
           [add [unwrap-or zero [bs-lookup-question-loop ir export-id]] [suc zero]]]
         er
         pm
         gs
+        sk
 
 ;; Decrement imports-refcount[export-id] by k. Used by
 ;; release-import after sending op:gc-export. If decremented past 0
@@ -728,13 +884,14 @@ defn bs-incr-import
 ;; zeroed entries; for now the entry persists harmlessly.
 spec bs-decr-import Nat Nat BridgeState -> BridgeState
 defn bs-decr-import
-  | export-id k [bridge-state ls es as qs p oqs ir er pm gs] ->
+  | export-id k [bridge-state ls es as qs p oqs ir er pm gs sk] ->
       bridge-state ls es as qs p oqs
         [list-set-q-by-key ir export-id
           [sat-sub [unwrap-or zero [bs-lookup-question-loop ir export-id]] k]]
         er
         pm
         gs
+        sk
 
 ;; ===========================================================
 ;; Phase 36: exports-refcount — symmetric to imports-refcount
@@ -751,23 +908,57 @@ defn bs-lookup-export-refcount [export-id st]
 
 spec bs-incr-export Nat BridgeState -> BridgeState
 defn bs-incr-export
-  | export-id [bridge-state ls es as qs p oqs ir er pm gs] ->
+  | export-id [bridge-state ls es as qs p oqs ir er pm gs sk] ->
       bridge-state ls es as qs p oqs ir
         [list-set-q-by-key er export-id
           [add [unwrap-or zero [bs-lookup-question-loop er export-id]] [suc zero]]]
         pm
         gs
+        sk
 
 ;; Decrement exports-refcount[export-id] by k. Saturates at 0 if
 ;; peer's count exceeds ours (peer bug or pre-existing race).
 spec bs-decr-export Nat Nat BridgeState -> BridgeState
 defn bs-decr-export
-  | export-id k [bridge-state ls es as qs p oqs ir er pm gs] ->
+  | export-id k [bridge-state ls es as qs p oqs ir er pm gs sk] ->
       bridge-state ls es as qs p oqs ir
         [list-set-q-by-key er export-id
           [sat-sub [unwrap-or zero [bs-lookup-question-loop er export-id]] k]]
         pm
         gs
+        sk
+
+;; --- The PLURAL GC ops: what a conforming peer actually sends ---
+;;
+;; `op:gc-exports` carries two PARALLEL lists (positions, wire deltas);
+;; `op:gc-answers` carries one list of answer positions. The singular
+;; `op:gc-export` / `op:gc-answer` spellings this module was built around are
+;; not in the spec and not in upstream's type set, so before these arms every
+;; inbound GC frame from a real peer decoded to `none` and was dropped in
+;; silence — which is why `bs-decr-export` and `bs-remove-question` were
+;; reachable only from ops no conforming peer can send, and why
+;; `exports-refcount` and `bs-questions` grew monotonically for the life of
+;; every session.
+;;
+;; Mismatched list lengths stop at the shorter list: upstream asserts the
+;; record's 2-field arity and nothing more, so the pairing is ours to do
+;; defensively.
+spec bs-decr-exports [List Nat] [List Nat] BridgeState -> BridgeState
+defn bs-decr-exports [poss deltas st]
+  match poss
+    | nil -> st
+    | cons pos prest ->
+        match deltas
+          | nil          -> st
+          | cons d drest ->
+              bs-decr-exports prest drest [bs-decr-export pos d [bs-add-gc-export pos d st]]
+
+spec bs-remove-questions [List Nat] BridgeState -> BridgeState
+defn bs-remove-questions [poss st]
+  match poss
+    | nil -> st
+    | cons pos rest ->
+        bs-remove-questions rest [bs-remove-question pos [bs-add-gc-answer pos st]]
 
 ;; ===========================================================
 ;; Phase 41: pipelined-msgs append (for wire-out forwarding)
@@ -779,74 +970,196 @@ defn bs-decr-export
 ;; survives fulfill (the vat-side queue gets wiped). Pump-outbound
 ;; later walks this list, emits forwarding bytes when a queued pid's
 ;; promise has resolved to a peer-export refr.
-spec bs-add-pipeline-msg Nat SyrupValue [Option Nat] BridgeState -> BridgeState
+spec bs-add-pipeline-msg Nat SyrupValue [Option Nat] [Option Nat] BridgeState -> BridgeState
 defn bs-add-pipeline-msg
-  | pid args ap [bridge-state ls es as qs p oqs ir er pm gs] ->
+  | pid args ap rm [bridge-state ls es as qs p oqs ir er pm gs sk] ->
       bridge-state ls es as qs p oqs ir er
-        [cons [pipe-msg pid args ap] pm]
+        [cons [pipe-msg pid args ap rm] pm]
         gs
+        sk
 
 ;; ===========================================================
-;; Phase 52: gift-table mutators
+;; Gift-table mutators
 ;; ===========================================================
 ;;
-;; The gift table holds (gift-id → exported-pos) entries deposited
-;; by peer for the OCapN three-vat handoff. This phase ships only
-;; the state-level helpers; wire-level op:deposit-gift /
-;; op:withdraw-gift dispatch is deferred to Phase 52b (requires
-;; new CapTPOp variants — touches every pattern match site).
+;; The gift table backs the OCapN three-vat handoff. It holds three kinds of
+;; entry, discriminated by `GiftKind` (see the type above for why the kind is
+;; a field and not a key prefix): deposited gifts, spent handoff identities,
+;; and parked withdrawals.
 ;;
-;; The simple shape (List QEntry — pair of Nat) suits gifts that
-;; are `<desc:export N>` shaped. Gifts that are themselves promises
-;; (or carry resolution metadata) would require extending the
-;; entry type; deferred until a use case demands it.
+;; Wire-level dispatch is NOT deferred — it lives at `deposit-with-gid` and
+;; `withdraw-with-receive` below, reached through the bootstrap object's
+;; method dispatch rather than through dedicated `CapTPOp` variants. The
+;; dedicated variants were tried and reverted because they did not interop
+;; with the canonical model; the comment claiming this is "deferred to Phase
+;; 52b" outlived that by a long way.
+;;
+;; A gift whose refr is not `<desc:export N>` — an answer position from a
+;; pipelined fetch, say — is still unsupported, and `deposit-with-gid` breaks
+;; the caller rather than dropping it silently.
 
-spec bs-add-gift String Nat BridgeState -> BridgeState
-  :doc "Record a deposited gift (gift-id bytes -> exported-pos)."
-defn bs-add-gift
-  | gid xid [bridge-state ls es as qs p oqs ir er pm gs] ->
-      bridge-state ls es as qs p oqs ir er pm
-        [cons [gift-entry gid xid] gs]
+;; --- Generic kind-filtered table operations ---
+;;
+;; Every read and every removal names the kind it means. A peer-supplied gift
+;; id can therefore never be mistaken for a replay marker or a park entry, no
+;; matter what bytes the peer chooses.
 
-spec gift-lookup-loop [List GiftEntry] String -> [Option Nat]
-defn gift-lookup-loop [entries gid]
+spec entry-matches? GiftEntry String GiftKind -> Bool
+defn entry-matches? [e k kind]
+  match [kind-eq? [ge-kind e] kind]
+    | false -> false
+    | true  -> str::eq [ge-key e] k
+
+spec gift-lookup-loop [List GiftEntry] String GiftKind -> [Option Nat]
+defn gift-lookup-loop [entries k kind]
   match entries
     | nil -> [none Nat]
     | [cons e rest] ->
-        match [str::eq [ge-key e] gid]
+        match [entry-matches? e k kind]
           | true  -> [some [ge-pos e]]
-          | false -> gift-lookup-loop rest gid
+          | false -> gift-lookup-loop rest k kind
+
+spec gift-remove-loop [List GiftEntry] String GiftKind -> [List GiftEntry]
+defn gift-remove-loop [entries k kind]
+  match entries
+    | nil -> [nil GiftEntry]
+    | [cons e rest] ->
+        match [entry-matches? e k kind]
+          | true  -> gift-remove-loop rest k kind
+          | false -> [cons e [gift-remove-loop rest k kind]]
+
+spec bs-add-entry String Nat GiftKind String BridgeState -> BridgeState
+defn bs-add-entry
+  | k xid kind aux [bridge-state ls es as qs p oqs ir er pm gs sk] ->
+      bridge-state ls es as qs p oqs ir er pm
+        [cons [gift-entry k xid kind aux] gs]
+        sk
+
+spec bs-remove-entry String GiftKind BridgeState -> BridgeState
+defn bs-remove-entry
+  | k kind [bridge-state ls es as qs p oqs ir er pm gs sk] ->
+      bridge-state ls es as qs p oqs ir er pm
+        [gift-remove-loop gs k kind]
+        sk
+
+;; --- Gifts proper ---
+
+spec bs-add-gift String Nat BridgeState -> BridgeState
+  :doc "Record a deposited gift (gift-id -> exported-pos), bound to this session's peer."
+defn bs-add-gift [gid xid st]
+  bs-add-entry gid xid gk-gift [bs-peer-key st] st
+
+;; The public key of the peer that deposited `gid`, if we hold that gift.
+spec gifter-key-loop [List GiftEntry] String -> [Option String]
+defn gifter-key-loop [entries gid]
+  match entries
+    | nil -> [none String]
+    | [cons e rest] ->
+        match [entry-matches? e gid gk-gift]
+          | true  -> some [ge-aux e]
+          | false -> gifter-key-loop rest gid
+
+spec bs-gifter-key String BridgeState -> [Option String]
+defn bs-gifter-key [gid st]
+  gifter-key-loop [bs-gifts st] gid
 
 spec bs-lookup-gift String BridgeState -> [Option Nat]
   :doc "Look up the exported-pos for a deposited gift-id."
 defn bs-lookup-gift [gid st]
-  gift-lookup-loop [bs-gifts st] gid
-
-spec gift-remove-loop [List GiftEntry] String -> [List GiftEntry]
-defn gift-remove-loop [entries gid]
-  match entries
-    | nil -> [nil GiftEntry]
-    | [cons e rest] ->
-        match [str::eq [ge-key e] gid]
-          | true  -> gift-remove-loop rest gid
-          | false -> [cons e [gift-remove-loop rest gid]]
-
-;; Replace the whole gift table. The gift table is the ONE piece of
-;; exporter-GLOBAL state in the protocol — a third-party handoff deposits on
-;; the gifter's session and withdraws on the RECEIVER's, which is a different
-;; connection — so the driver seeds it in and publishes it back out around each
-;; step. captp-core stays pure; the global lives at the FFI layer.
-spec bs-set-gifts [List GiftEntry] BridgeState -> BridgeState
-defn bs-set-gifts
-  | gs2 [bridge-state ls es as qs p oqs ir er pm _] ->
-      bridge-state ls es as qs p oqs ir er pm gs2
+  gift-lookup-loop [bs-gifts st] gid gk-gift
 
 spec bs-remove-gift String BridgeState -> BridgeState
   :doc "Drop a gift entry by gift-id, after a withdraw consumes it."
-defn bs-remove-gift
-  | gid [bridge-state ls es as qs p oqs ir er pm gs] ->
+defn bs-remove-gift [gid st]
+  bs-remove-entry gid gk-gift st
+
+;; --- Single-use handoff identities ---
+
+spec bs-mark-used String BridgeState -> BridgeState
+  :doc "Record that a handoff identity has been spent."
+defn bs-mark-used [ident st]
+  bs-add-entry ident zero gk-used "" st
+
+spec bs-identity-used? String BridgeState -> Bool
+defn bs-identity-used? [ident st]
+  match [gift-lookup-loop [bs-gifts st] ident gk-used]
+    | none  -> false
+    | some _ -> true
+
+;; --- Parked withdrawals ---
+
+spec bs-add-park String Nat String BridgeState -> BridgeState
+  :doc "Park a withdrawal: gift-id -> the local promise, plus the give to check later."
+defn bs-add-park [gid p give-bytes st]
+  bs-add-entry gid p gk-park give-bytes st
+
+spec parked-entry-matches? GiftEntry Nat -> Bool
+defn parked-entry-matches? [e p]
+  match [kind-eq? [ge-kind e] gk-park]
+    | false -> false
+    | true  -> nat-eq? [ge-pos e] p
+
+;; The signed handoff-give bytes held against a parked withdrawal.
+spec parked-give-loop [List GiftEntry] Nat -> [Option String]
+defn parked-give-loop [entries p]
+  match entries
+    | nil -> [none String]
+    | [cons e rest] ->
+        match [parked-entry-matches? e p]
+          | true  -> some [ge-aux e]
+          | false -> parked-give-loop rest p
+
+spec bs-remove-park String BridgeState -> BridgeState
+defn bs-remove-park [gid st]
+  bs-remove-entry gid gk-park st
+
+;; --- Publication boundary ---
+;;
+;; The gift table is the ONE piece of exporter-GLOBAL state in the protocol: a
+;; third-party handoff deposits on the gifter's session and withdraws on the
+;; RECEIVER's, which is a different connection, so the driver seeds it in and
+;; publishes it back out around each step. captp-core stays pure; the global
+;; lives at the FFI layer.
+;;
+;; Only `gk-gift` entries cross that boundary. Park and used entries are
+;; PER-CONNECTION and must stay that way. Publishing them globally was a live
+;; cross-connection defect that needed no attacker at all: every connection's
+;; vat starts its promise ids from the same seed, so connection A's park on
+;; its promise 8 and connection B's promise 8 were the same key. B's ordinary
+;; `op:listen` then settled with A's gift and destroyed A's pending handoff.
+;; The single-use identity carries the receiving session id, so keeping the
+;; used-set per-connection loses nothing.
+
+spec exportable-gifts [List GiftEntry] -> [List GiftEntry]
+defn exportable-gifts [entries]
+  match entries
+    | nil -> [nil GiftEntry]
+    | [cons e rest] ->
+        match [kind-eq? [ge-kind e] gk-gift]
+          | true  -> [cons e [exportable-gifts rest]]
+          | false -> exportable-gifts rest
+
+spec local-gift-entries [List GiftEntry] -> [List GiftEntry]
+defn local-gift-entries [entries]
+  match entries
+    | nil -> [nil GiftEntry]
+    | [cons e rest] ->
+        match [kind-eq? [ge-kind e] gk-gift]
+          | true  -> local-gift-entries rest
+          | false -> [cons e [local-gift-entries rest]]
+
+spec bs-exportable-gifts BridgeState -> [List GiftEntry]
+  :doc "The entries the driver should publish to the process-global table."
+defn bs-exportable-gifts [st]
+  exportable-gifts [bs-gifts st]
+
+spec bs-set-gifts [List GiftEntry] BridgeState -> BridgeState
+  :doc "Seed the global gifts, PRESERVING this connection's park/used entries."
+defn bs-set-gifts
+  | gs2 [bridge-state ls es as qs p oqs ir er pm gs sk] ->
       bridge-state ls es as qs p oqs ir er pm
-        [gift-remove-loop gs gid]
+        [append [exportable-gifts gs2] [local-gift-entries gs]]
+        sk
 
 ;; ===========================================================
 ;; Phase 27: vat-side `ask` wiring — bridge-send-question
@@ -1007,69 +1320,80 @@ defn match-payload-as-import-object [p]
 ;; tag-dispatch. Pulled out as a 2-deep helper so the top-level
 ;; extract-refrs-from-tagged stays at depth 2 (no 3-deep nest;
 ;; pitfall #18 / #33).
-spec dispatch-non-export-tag String SyrupValue -> List Refr
+spec match-payload-as-import-promise SyrupValue -> List Refr
+defn match-payload-as-import-promise [p]
+  match [wire-nat p]
+    | none   -> [nil Refr]
+    | some n -> [cons [refr-remote-import-promise n] [nil Refr]]
+
+;; `<desc:import-object N>` / `<desc:import-promise N>` split out so the tag
+;; chain stays two-deep per body.
+spec dispatch-import-tag String SyrupValue -> [Option [List Refr]]
+defn dispatch-import-tag [tag p]
+  match [str::eq tag "desc:import-object"]
+    | true  -> some [match-payload-as-import-object p]
+    | false ->
+        match [str::eq tag "desc:import-promise"]
+          | true  -> some [match-payload-as-import-promise p]
+          | false -> [none [List Refr]]
+
+spec dispatch-non-export-tag String SyrupValue -> [Option [List Refr]]
 defn dispatch-non-export-tag [tag p]
   match [str::eq tag "desc:answer"]
-    | true  -> match-payload-as-answer p
-    | false ->
-        match [str::eq tag "desc:import-object"]
-          | true  -> match-payload-as-import-object p
-          | false -> [nil Refr]
+    | true  -> some [match-payload-as-answer p]
+    | false -> dispatch-import-tag tag p
 
 ;; Tag dispatch: recognize "desc:export", "desc:answer", and
 ;; "desc:import-object" tags. Anything else returns empty list (could
 ;; be other tagged shapes like Error, syrup records, etc — none carry
 ;; refrs at this level).
-spec extract-refrs-from-tagged String SyrupValue -> List Refr
-defn extract-refrs-from-tagged [tag p]
+;; `some refrs` when the tag IS a descriptor, `none` when it is an ordinary
+;; record whose payload should be walked instead. The two used to be
+;; indistinguishable — an unrecognised tag returned the empty list, which read
+;; as "this record holds no refrs" when it meant "this record was not looked
+;; inside".
+spec descriptor-refrs String SyrupValue -> [Option [List Refr]]
+defn descriptor-refrs [tag p]
   match [str::eq tag "desc:export"]
-    | true  -> match-payload-as-export p
+    | true  -> some [match-payload-as-export p]
     | false -> dispatch-non-export-tag tag p
 
-;; Single-element check: refrs reachable directly from a SyrupValue
-;; (top-level desc:export / desc:answer tag). Does NOT recurse into
-;; syrup-list children — see extract-refrs-from-args's wrapper for
-;; the one-level-deep list walk. Mutual recursion with a list walker
-;; isn't supported in Prologos (pitfall #16: no forward references),
-;; so the design is "outer one-layer list walk + inner shallow check
-;; per element."
+;; FULL recursive walk: every refr reachable anywhere inside a value.
 ;;
-;; Limitation: refrs nested inside records or deeper than one list
-;; level aren't found. For the OCapN common case (args = list of
-;; refrs and primitives, OR args = a single refr), this is enough.
-;; A future phase that wants full recursion can add it via foldr +
-;; type-erased generic walker.
-spec shallow-refr SyrupValue -> List Refr
-defn shallow-refr
-  | syrup-null         -> [nil Refr]
-  | syrup-bool _       -> [nil Refr]
-  | syrup-nat _        -> [nil Refr]
-  | syrup-int _        -> [nil Refr]
-  | syrup-string _     -> [nil Refr]
-  | syrup-symbol _     -> [nil Refr]
-  | syrup-refr _       -> [nil Refr]
-  | syrup-promise _    -> [nil Refr]
-  | syrup-dict    _   -> [nil Refr]
-  | syrup-bytes _      -> [nil Refr]
-  | syrup-list _       -> [nil Refr]    ;; SHALLOW: nested lists not walked
-  | syrup-tagged tag p -> [extract-refrs-from-tagged tag p]
+;; This used to be one level deep by construction — `shallow-refr` returned
+;; the empty list for `syrup-list` and `syrup-dict`, and the outer walker
+;; visited only the top-level elements of an args list. The comment called it
+;; "enough for the OCapN common case (args = list of refrs and primitives)".
+;; It is not enough: an import inside a dict, inside a nested list, or inside
+;; an ordinary record was never seen, so `bs-incr-imports` missed it,
+;; `refr-import-tally` counted zero, no `op:gc-exports` was ever emitted for
+;; it, and the peer held that export open forever. Dicts in particular are
+;; decoded on the wire — every `ocapn-peer` location carries one.
+;;
+;; It was one level because mutual recursion is not available (pitfall #16, no
+;; forward references), and the list walker and the element walker need each
+;; other. Injecting the element walker as a PARAMETER breaks the cycle: the
+;; list walker takes it as an argument, and `deep-refr` — which is only
+;; SELF-recursive — passes itself. `encode-many` in syrup-wire uses the same
+;; shape for the same reason.
 
-;; Walk a list of SyrupValue once, calling shallow-refr on each
-;; element. NOT mutually recursive (only calls shallow-refr).
-;; Uses bracketed-arg + inline `match` form (same shape as data/list's
-;; concat) — works around the multi-arity-with-cons-pattern issue
-;; that `defn name | nil -> ... | [cons hd tl] -> ...` triggers.
-spec walk-toplevel-list [List SyrupValue] -> List Refr
-defn walk-toplevel-list [xs]
+spec walk-refr-list [SyrupValue -> List Refr] [List SyrupValue] -> List Refr
+defn walk-refr-list [f xs]
   match xs
-    | nil          -> [nil Refr]
-    | cons hd tl   -> [append Refr [shallow-refr hd] [walk-toplevel-list tl]]
+    | nil        -> [nil Refr]
+    | cons hd tl -> [append Refr [f hd] [walk-refr-list f tl]]
 
-;; Top-level walk: collect refrs from a SyrupValue. If args itself
-;; is a desc:* tag, extract directly. If args is a syrup-list, walk
-;; one level into the list. Other shapes (atomic) yield no refrs.
-spec extract-refrs-from-args SyrupValue -> List Refr
-defn extract-refrs-from-args
+;; A record either IS a descriptor — in which case it names one refr and has
+;; no interior to search — or it is an ordinary record whose payload may hold
+;; refrs anywhere.
+spec walk-refr-tagged [SyrupValue -> List Refr] String SyrupValue -> List Refr
+defn walk-refr-tagged [f tag p]
+  match [descriptor-refrs tag p]
+    | some rs -> rs
+    | none    -> [f p]
+
+spec deep-refr SyrupValue -> List Refr
+defn deep-refr
   | syrup-null         -> [nil Refr]
   | syrup-bool _       -> [nil Refr]
   | syrup-nat _        -> [nil Refr]
@@ -1078,10 +1402,15 @@ defn extract-refrs-from-args
   | syrup-symbol _     -> [nil Refr]
   | syrup-refr _       -> [nil Refr]
   | syrup-promise _    -> [nil Refr]
-  | syrup-dict    _   -> [nil Refr]
   | syrup-bytes _      -> [nil Refr]
-  | syrup-list xs      -> [walk-toplevel-list xs]
-  | syrup-tagged tag p -> [extract-refrs-from-tagged tag p]
+  | syrup-dict xs      -> [walk-refr-list deep-refr xs]
+  | syrup-list xs      -> [walk-refr-list deep-refr xs]
+  | syrup-tagged tag p -> [walk-refr-tagged deep-refr tag p]
+
+;; Collect every refr in a message's arguments.
+spec extract-refrs-from-args SyrupValue -> List Refr
+defn extract-refrs-from-args [v]
+  deep-refr v
 
 ;; Increment imports-refcount for one Refr value. Only
 ;; remote-export refrs increment imports-refcount; other kinds
@@ -1509,22 +1838,29 @@ defn handoff-receive-gift-id [v]
 ;; exactly that triple (re-depositing the gift first, so gift-consumption alone
 ;; does NOT catch it) and requires a `break`.
 ;;
-;; The used-set is stored IN THE GIFT TABLE under a reserved "used:" key
-;; prefix. That overloads one String->Nat table with two namespaces, which is a
-;; real tradeoff taken deliberately: the alternative is an 11th BridgeState
-;; field, and every `bridge-state` pattern in this module would have to change
-;; for a set that the driver already seeds and publishes alongside the gifts.
-;; The prefix cannot collide with a gift id, because gift ids come from the
-;; peer as opaque bytes and this key is only ever CONSTRUCTED here.
+;; The used-set shares the gift table, discriminated by `gk-used` rather than
+;; by a key prefix — see `GiftKind`. A peer cannot write a `gk-used` entry, so
+;; it cannot pre-poison someone else's replay marker.
+;;
+;; The identity itself is built by LENGTH-PREFIXING each part. Joining
+;; peer-controlled strings with a bare separator made `(sess "A|B", side "C")`
+;; and `(sess "A", side "B|C")` the same identity, so one party's handoff could
+;; deny another's.
 
 spec nat-digits-of Nat -> String
 defn nat-digits-of [n]
   str::from-int [from-nat n]
 
+;; `<byte-length>:<bytes>` — self-delimiting, so no choice of contents can make
+;; two different part sequences produce the same string.
+spec length-prefixed String -> String
+defn length-prefixed [s]
+  str::append [str::from-int [str::length s]] [str::append ":" s]
+
 spec handoff-identity-parts String String Nat -> String
 defn handoff-identity-parts [sess side count]
-  str::append "used:"
-    [str::append sess [str::append "|" [str::append side [str::append "|" [nat-digits-of count]]]]]
+  str::append [length-prefixed sess]
+    [str::append [length-prefixed side] [length-prefixed [nat-digits-of count]]]
 
 spec handoff-count-of SyrupValue -> [Option Nat]
 defn handoff-count-of [hr]
@@ -1717,6 +2053,70 @@ defn signed-receive-valid? [signed-receive]
     | none    -> false
     | some hr -> verify-signed-receive-inner hr signed-receive
 
+;; ===========================================================
+;; Handoff verification — the GIFTER's half of the chain
+;; ===========================================================
+;;
+;; `signed-receive-valid?` above proves that whoever holds the key named
+;; inside the give signed the receive. On its own that proves NOTHING, because
+;; the key it checks against is read out of the give NESTED INSIDE THE MESSAGE
+;; BEING VERIFIED (`receive-receiver-key-of` -> `signed-give-receiver-key` ->
+;; `give-receiver-key-of` -> the give's arg 0). A peer that forges a give
+;; naming its own public key, then signs the receive with the matching secret,
+;; passes. The whole chain was attacker-supplied: any peer that knew a gift-id
+;; could redeem it, and the comment above `withdraw-with-receive` claiming "a
+;; forged receive can neither consume a gift nor learn whether one was
+;; deposited" was false for exactly that forgery.
+;;
+;; The missing link is the GIFTER's signature over the give. Verifying it
+;; needs a key the attacker does not choose, and there is exactly one:
+;; the public key of the peer that deposited the gift, which the exporter
+;; recorded from that session's `op:start-session` (`ge-aux` on the gk-gift
+;; entry). Chain, closed:
+;;
+;;   gifter's session key  --verifies-->  desc:handoff-give
+;;   give's receiver-key   --verifies-->  desc:handoff-receive
+;;
+;; A peer that cannot produce a give signed by the depositing peer cannot
+;; withdraw, however well-formed the rest of its message is.
+
+spec verify-give-with-sig String String SyrupValue -> Bool
+defn verify-give-with-sig [q msg signed-give]
+  match [sig-envelope-signature signed-give]
+    | none     -> false
+    | some sig -> verify-raw q msg sig
+
+;; Does `signed-give` carry the gifter's signature over its own contents?
+spec signed-give-valid? String SyrupValue -> Bool
+defn signed-give-valid? [gifter-q signed-give]
+  match [sig-envelope-object signed-give]
+    | none    -> false
+    | some hg -> verify-give-with-sig gifter-q [wire::re-encode hg] signed-give
+
+;; The signed give nested at arg 3 of a signed handoff-receive.
+spec signed-give-of-receive SyrupValue -> [Option SyrupValue]
+defn signed-give-of-receive [signed-receive]
+  match [sig-envelope-object signed-receive]
+    | none    -> [none SyrupValue]
+    | some hr -> nth-syrup [record-args-of "desc:handoff-receive" hr] 3N
+
+spec receive-give-signed-by? String SyrupValue -> Bool
+defn receive-give-signed-by? [q signed-receive]
+  match [signed-give-of-receive signed-receive]
+    | none    -> false
+    | some sg -> signed-give-valid? q sg
+
+;; An UNAUTHENTICATED session (the legacy two-field handshake, where we never
+;; learned the peer's key) cannot vouch for a gift. Rather than fail open, a
+;; gift deposited on such a session is unredeemable: `""` is not a valid
+;; Ed25519 public key and `verify-raw` will reject it, but saying so here
+;; makes the intent explicit instead of leaving it to a length check in C.
+spec give-authentic-for-key? String SyrupValue -> Bool
+defn give-authentic-for-key? [q signed-receive]
+  match [str::eq q ""]
+    | true  -> false
+    | false -> receive-give-signed-by? q signed-receive
+
 ;; Reply shapes. Upstream asserts on args[0], so a rejection MUST say `break` —
 ;; staying silent hangs the peer for its full timeout instead.
 spec withdraw-fulfill-bytes Nat Nat -> String
@@ -1751,49 +2151,74 @@ defn withdraw-break-bytes [rm-pos reason]
 ;;                                already fires immediately for a settled
 ;;                                promise.
 ;;
-;; The park entry encodes the promise id in its KEY ("park:<P>:<gift-id>") so
-;; finding a park by promise takes ONE prefix comparison. Keying by gift-id and
-;; storing P as the value would need a two-condition scan, and that is a
-;; three-deep `match` in one body, which does not elaborate
-;; (prologos-syntax.md).
+;; A park entry is `gift-entry <gift-id> <promise> gk-park`: the gift-id is the
+;; key, the promise is the value, and the KIND is what makes it a park.
+;;
+;; It used to encode the promise in the key, as `"park:<P>:<gift-id>"`, so that
+;; finding a park by promise was one prefix comparison — the alternative was
+;; described as needing a two-condition scan and therefore a three-deep `match`
+;; that does not elaborate. Both halves of that were avoidable: the two
+;; conditions factor into `entry-matches?` (see the table helpers above), and
+;; the prefix scheme put a constructed key in the same namespace as
+;; peer-supplied gift ids, which a peer could then forge.
 
-def park-prefix : String := "park:"
-
-spec park-prefix-for Nat -> String
-defn park-prefix-for [p]
-  str::append park-prefix [str::append [nat-digits-of p] ":"]
-
-spec park-key-for Nat String -> String
-defn park-key-for [p gid]
-  str::append [park-prefix-for p] gid
-
-;; The gift-id parked against promise `p`, if any. One prefix test per entry.
-spec parked-gid-loop [List GiftEntry] String -> [Option String]
-defn parked-gid-loop [entries pfx]
+;; The gift-id parked against promise `p`, if any.
+spec parked-gid-loop [List GiftEntry] Nat -> [Option String]
+defn parked-gid-loop [entries p]
   match entries
     | nil -> [none String]
     | [cons e rest] ->
-        match [str::starts-with? [ge-key e] pfx]
-          | true  -> some [str::slice [ge-key e] [str::length pfx] [str::length [ge-key e]]]
-          | false -> parked-gid-loop rest pfx
+        match [parked-entry-matches? e p]
+          | true  -> some [ge-key e]
+          | false -> parked-gid-loop rest p
 
 spec parked-gid-for Nat BridgeState -> [Option String]
 defn parked-gid-for [p st]
-  parked-gid-loop [bs-gifts st] [park-prefix-for p]
+  parked-gid-loop [bs-gifts st] p
 
 ;; Settle a parked promise now that its gift has been deposited. Consumes both
 ;; the park entry and the gift, and counts the export the peer now holds.
 spec do-settle-parked Nat String Nat Vat BridgeState -> BridgeStep
 defn do-settle-parked [p gid xid v st]
   bridge-step [resolve-promise p [syrup-tagged "desc:import-object" [syrup-nat xid]] v]
-    [bs-remove-gift [park-key-for p gid]
+    [bs-remove-park gid
       [bs-remove-gift gid [bs-incr-export xid st]]]
+
+;; The deposit has now arrived, so the give parked with the withdrawal can
+;; finally be checked against the gifter it names.
+spec parked-give-authentic? String String -> Bool
+defn parked-give-authentic? [q give-bytes]
+  match [wire::decode-value give-bytes]
+    | none    -> false
+    | some sg -> signed-give-valid? q sg
+
+spec parked-give-matches? Nat String BridgeState -> Bool
+defn parked-give-matches? [p q st]
+  match [parked-give-loop [bs-gifts st] p]
+    | none    -> false
+    | some gb -> parked-give-authentic? q gb
+
+spec parked-give-ok? Nat String BridgeState -> Bool
+defn parked-give-ok? [p gid st]
+  match [bs-gifter-key gid st]
+    | none   -> false
+    | some q -> parked-give-matches? p q st
+
+;; A parked withdrawal whose give does not verify is DROPPED, not resolved:
+;; the park entry goes and the promise stays pending, so the peer that parked
+;; it learns nothing about whether a gift exists. Resolving would hand over the
+;; capability on an unverified claim, which is the whole defect this closes.
+spec settle-parked-authenticated Nat String Nat Vat BridgeState -> BridgeStep
+defn settle-parked-authenticated [p gid xid v st]
+  match [parked-give-ok? p gid st]
+    | false -> bridge-step v [bs-remove-park gid st]
+    | true  -> do-settle-parked p gid xid v st
 
 spec settle-parked-with-gid Nat String Vat BridgeState -> BridgeStep
 defn settle-parked-with-gid [p gid v st]
   match [bs-lookup-gift gid st]
     | none     -> bridge-step v st          ;; deposit still has not arrived
-    | some xid -> do-settle-parked p gid xid v st
+    | some xid -> settle-parked-authenticated p gid xid v st
 
 spec settle-parked Nat Vat BridgeState -> BridgeStep
   :doc "If `p` is a parked withdrawal whose gift has since been deposited, resolve it."
@@ -1807,50 +2232,75 @@ spec withdraw-promise-bytes Nat Nat -> String
 defn withdraw-promise-bytes [rm-pos p]
   listener-notify-bytes rm-pos [syrup-list [cons [syrup-symbol "fulfill"] [cons [syrup-tagged "desc:import-promise" [syrup-nat p]] [nil SyrupValue]]]]
 
-spec park-reply Nat String String Nat Vat BridgeState -> BridgeStep
-defn park-reply [rm-pos gid ident p v2 st]
+spec park-reply Nat String String Nat String Vat BridgeState -> BridgeStep
+defn park-reply [rm-pos gid ident p give-bytes v2 st]
   bridge-step v2
     [bs-append-pending-out [withdraw-promise-bytes rm-pos p]
-      [bs-add-gift [park-key-for p gid] zero
-        [bs-add-gift ident zero st]]]
+      [bs-add-park gid p give-bytes
+        [bs-mark-used ident st]]]
+
+;; The signed give, re-encoded, so the deposit that arrives later can be
+;; checked against it. "" when the receive carries no give — that withdrawal
+;; can never authenticate, and `settle-parked` will refuse it.
+spec parked-give-bytes SyrupValue -> String
+defn parked-give-bytes [signed-receive]
+  match [signed-give-of-receive signed-receive]
+    | none    -> ""
+    | some sg -> wire::re-encode sg
 
 ;; The receive is consumed at PARK time, not at settle time: it has been acted
 ;; upon, so a replay of the same (session, side, count) must still be refused.
-spec withdraw-park Nat String String Vat BridgeState -> BridgeStep
-defn withdraw-park [rm-pos gid ident v st]
+spec withdraw-park Nat String String SyrupValue Vat BridgeState -> BridgeStep
+defn withdraw-park [rm-pos gid ident signed-receive v st]
   let alloc := [fresh-promise v]
-    park-reply rm-pos gid ident [alloc-id alloc] [alloc-vat alloc] st
+    park-reply rm-pos gid ident [alloc-id alloc] [parked-give-bytes signed-receive] [alloc-vat alloc] st
 
 spec do-withdraw Nat String String Nat Vat BridgeState -> BridgeStep
 defn do-withdraw [rm-pos gid ident xid v st]
   bridge-step v
     [bs-append-pending-out [withdraw-fulfill-bytes rm-pos xid]
-      [bs-add-gift ident zero
+      [bs-mark-used ident
         [bs-remove-gift gid [bs-incr-export xid st]]]]
 
-spec withdraw-known-gid Nat String String Vat BridgeState -> BridgeStep
-defn withdraw-known-gid [rm-pos gid ident v st]
+;; The gift is in hand, so its depositing peer's key is too: check that the
+;; give was actually signed by that peer before honouring the withdrawal.
+spec give-authentic-for-gift? String SyrupValue BridgeState -> Bool
+defn give-authentic-for-gift? [gid signed-receive st]
+  match [bs-gifter-key gid st]
+    | none   -> false
+    | some q -> give-authentic-for-key? q signed-receive
+
+spec withdraw-authenticated Nat String String Nat SyrupValue Vat BridgeState -> BridgeStep
+defn withdraw-authenticated [rm-pos gid ident xid signed-receive v st]
+  match [give-authentic-for-gift? gid signed-receive st]
+    | false -> bridge-step v [bs-append-pending-out [withdraw-break-bytes rm-pos "unauthenticated-handoff"] st]
+    | true  -> do-withdraw rm-pos gid ident xid v st
+
+spec withdraw-known-gid Nat String String SyrupValue Vat BridgeState -> BridgeStep
+defn withdraw-known-gid [rm-pos gid ident signed-receive v st]
   match [bs-lookup-gift gid st]
     ;; Not a failure: the gifter may simply not have deposited yet. Answer with
-    ;; a promise and park it (see § PARKED withdrawals above).
-    | none     -> withdraw-park rm-pos gid ident v st
-    | some xid -> do-withdraw rm-pos gid ident xid v st
+    ;; a promise and park it (see § PARKED withdrawals above). The give is
+    ;; parked ALONGSIDE it, because nothing can authenticate it until the
+    ;; deposit arrives and names the gifter.
+    | none     -> withdraw-park rm-pos gid ident signed-receive v st
+    | some xid -> withdraw-authenticated rm-pos gid ident xid signed-receive v st
 
 ;; A handoff-receive is SINGLE-USE. Consuming the gift is not enough on its
 ;; own: upstream's invalid-handoff-count test re-deposits the gift before
 ;; replaying the same receive, so the gift is present again and the replay
 ;; would succeed. The (session, side, count) identity is what must not repeat.
-spec withdraw-with-identity Nat String String Vat BridgeState -> BridgeStep
-defn withdraw-with-identity [rm-pos gid ident v st]
-  match [bs-lookup-gift ident st]
-    | some _ -> bridge-step v [bs-append-pending-out [withdraw-break-bytes rm-pos "replayed-handoff"] st]
-    | none   -> withdraw-known-gid rm-pos gid ident v st
+spec withdraw-with-identity Nat String String SyrupValue Vat BridgeState -> BridgeStep
+defn withdraw-with-identity [rm-pos gid ident signed-receive v st]
+  match [bs-identity-used? ident st]
+    | true  -> bridge-step v [bs-append-pending-out [withdraw-break-bytes rm-pos "replayed-handoff"] st]
+    | false -> withdraw-known-gid rm-pos gid ident signed-receive v st
 
 spec withdraw-with-gid Nat String SyrupValue Vat BridgeState -> BridgeStep
 defn withdraw-with-gid [rm-pos gid signed-receive v st]
   match [withdraw-identity-of signed-receive]
     | none       -> bridge-step v [bs-append-pending-out [withdraw-break-bytes rm-pos "malformed-handoff"] st]
-    | some ident -> withdraw-with-identity rm-pos gid ident v st
+    | some ident -> withdraw-with-identity rm-pos gid ident signed-receive v st
 
 spec withdraw-with-gift-lookup Nat SyrupValue Vat BridgeState -> BridgeStep
 defn withdraw-with-gift-lookup [rm-pos signed-receive v st]
@@ -1996,21 +2446,23 @@ defn dispatch-deliver [tgt args ap v st]
 ;; `pipeline-deliver` (from prologos::ocapn::pipelining) implements
 ;; the actor-vs-promise dispatch on the local id; the bridge's job is
 ;; just the q-pos → local-id lookup.
-spec dispatch-pipeline-on-our-q Nat SyrupValue [Option Nat] Vat BridgeState -> BridgeStep
-defn dispatch-pipeline-on-our-q [qpos args ap v st]
+spec dispatch-pipeline-on-our-q Nat SyrupValue [Option Nat] [Option Nat] Vat BridgeState -> BridgeStep
+defn dispatch-pipeline-on-our-q [qpos args ap rm v st]
   match [bs-lookup-question qpos st]
     | none     -> bridge-step v st
     | some pid ->
-        ;; Phase 41: dual-queue. The vat-side queue (via pipeline-deliver)
-        ;; is for in-process pipelining (and gets wiped on fulfill). The
-        ;; bridge-side queue (via bs-add-pipeline-msg) survives fulfill so
-        ;; pump-outbound can emit forwarding bytes when the local promise
-        ;; resolves to a peer-export refr.
-        ;; Phase 45: ap (peer's answer-pos for the pipelined deliver)
-        ;; threaded through so break-forward can emit error answers
-        ;; if the local promise breaks.
+        ;; Dual-queue. The vat-side queue (via pipeline-deliver) is for
+        ;; in-process pipelining and gets wiped on fulfill. The bridge-side
+        ;; queue (via bs-add-pipeline-msg) survives fulfill so pump-outbound
+        ;; can emit forwarding bytes when the local promise resolves to a
+        ;; peer-export refr.
+        ;;
+        ;; BOTH of the deliver's reply channels are stored. `ap` was already
+        ;; threaded here so break-forward could emit error answers on a break;
+        ;; `rm` was not passed to this function at all, so a queued deliver's
+        ;; resolve-me was lost the moment it was queued.
         bridge-step [pipeline-deliver pid args v]
-                    [bs-add-pipeline-msg pid args ap st]
+                    [bs-add-pipeline-msg pid args ap rm st]
 
 ;; Phase 25 questioner-side: peer is replying to our outbound
 ;; question. Look up the local promise tied to our question-pos
@@ -2223,7 +2675,7 @@ defn forward-break [qpos r rm v st]
 spec pipeline-or-break Nat SyrupValue [Option Nat] [Option Nat] Vat BridgeState -> BridgeStep
 defn pipeline-or-break [qpos args ap rm v st]
   match [question-break-reason qpos v st]
-    | none   -> dispatch-pipeline-on-our-q qpos args ap v st
+    | none   -> dispatch-pipeline-on-our-q qpos args ap rm v st
     | some r -> forward-break qpos r rm v st
 
 spec dispatch-pipeline-or-forward Nat SyrupValue [Option Nat] [Option Nat] Vat BridgeState -> BridgeStep
@@ -2285,12 +2737,18 @@ defn captp-incoming-with-state
         [bs-incr-imports [extract-refrs-from-args args] st]
   | [op-abort _reason] v st ->
       bridge-step v st
-  | [op-start-session _ver _loc] v st ->
-      ;; Phase 25 handshake: peer's session arrived — state already
-      ;; carries our session bytes in pending-out (set up via
-      ;; bridge-state-with-our-session); the next pump-outbound call
-      ;; will flush them. State-preserving here, emission deferred.
-      bridge-step v st
+  | [op-start-session _ver pk _loc] v st ->
+      ;; Record WHO this peer is. The pubkey slot is an s-expression
+      ;; (`[public-key [ecc [curve Ed25519] [flags eddsa] [q 32:…]]]`); we keep
+      ;; the raw q bytes, and "" when the peer sent the legacy unsigned
+      ;; two-field handshake. A gift deposited on this session is bound to
+      ;; this key, and that binding is what makes a third-party handoff
+      ;; verifiable rather than self-attested.
+      ;;
+      ;; Otherwise state-preserving: our own session bytes are already staged
+      ;; in pending-out by `bridge-state-with-our-session`, and the next
+      ;; pump-outbound flushes them.
+      bridge-step v [bs-set-peer-key [unwrap-or "" [public-key-q-of pk]] st]
   | [op-listen tgt resolver] v st ->
       ;; Phase 51: late-registration handling. If the target promise
       ;; has ALREADY settled by the time the op:listen arrives, the
@@ -2318,6 +2776,13 @@ defn captp-incoming-with-state
       ;; promise tied to that q-pos. Also append to gc-answers audit
       ;; log so callers can inspect what was released.
       bridge-step v [bs-remove-question pos [bs-add-gc-answer pos st]]
+  | [op-gc-exports poss deltas] v st ->
+      ;; The spec form of the above: peer dropped references to several of our
+      ;; exports at once.
+      bridge-step v [bs-decr-exports poss deltas st]
+  | [op-gc-answers poss] v st ->
+      ;; The spec form: peer is done with several of our answer positions.
+      bridge-step v [bs-remove-questions poss st]
   | [op-deliver-to-answer qpos args ap rm] v st ->
       ;; Phase 25 questioner-side: peer is replying to our question
       ;; with pos `qpos`. Look up `qpos` in BridgeState's
@@ -2379,13 +2844,21 @@ defn syrup-as-answer-target
 ;; where TAG is "desc:export" (Phase 41 — peer's export) or
 ;; "desc:answer" (Phase 44 — chained answer at peer's bs-questions).
 ;; Caller picks the tag based on the resolution-value shape.
-spec forward-deliver-bytes String Nat SyrupValue -> String
-defn forward-deliver-bytes [tag target args]
+;;
+;; The queued deliver's OWN reply channels are carried through. They used to be
+;; hardcoded `false false`, so forwarding a pipelined message answered nobody:
+;; the peer's answer at the position it was waiting on never resolved, and its
+;; resolve-me was never notified. Both slots belong to the peer — it allocated
+;; the answer position in its own question table and exported the resolver — so
+;; the answer position is echoed verbatim and the resolver is named as the
+;; peer's export rather than as one of ours.
+spec forward-deliver-bytes String Nat SyrupValue [Option Nat] [Option Nat] -> String
+defn forward-deliver-bytes [tag target args ap rm]
   wire::encode-record "op:deliver"
     [cons [syrup-tagged tag [syrup-nat target]]
-      [cons args
-        [cons [syrup-bool false]
-          [cons [syrup-bool false] nil]]]]
+      [cons [as-args-list args]
+        [cons [opt-answer-slot ap]
+          [cons [opt-peer-resolve-me rm] nil]]]]
 
 ;; Walk pipelined-msgs; for each entry whose pid matches `pid`, emit
 ;; forwarding bytes targeting (TAG, target). Entries with mismatched
@@ -2395,9 +2868,9 @@ defn forward-deliver-bytes [tag target args]
 spec forward-bytes-loop String Nat Nat [List PipeMsg] [List String] -> [List String]
 defn forward-bytes-loop
   | _   _   _      nil                            accum -> accum
-  | tag pid target [cons [pipe-msg p args _] rest] accum ->
+  | tag pid target [cons [pipe-msg p args ap rm] rest] accum ->
       match [nat-eq? p pid]
-        | true  -> forward-bytes-loop tag pid target rest [cons [forward-deliver-bytes tag target args] accum]
+        | true  -> forward-bytes-loop tag pid target rest [cons [forward-deliver-bytes tag target args ap rm] accum]
         | false -> forward-bytes-loop tag pid target rest accum
 
 ;; ===========================================================
@@ -2421,7 +2894,7 @@ defn forward-bytes-loop
 spec deliver-locally-loop Nat Nat [List PipeMsg] Vat -> Vat
 defn deliver-locally-loop
   | _   _ nil                            v -> v
-  | pid k [cons [pipe-msg p args _] rest] v ->
+  | pid k [cons [pipe-msg p args _ _] rest] v ->
       match [nat-eq? p pid]
         | true  -> deliver-locally-loop pid k rest [send-only k args v]
         | false -> deliver-locally-loop pid k rest v
@@ -2453,7 +2926,7 @@ defn break-step-matched-pid [pid r ap accum]
 spec break-step Nat SyrupValue PipeMsg [List String] -> [List String]
 defn break-step [pid r entry accum]
   match entry
-    | pipe-msg p _args ap ->
+    | pipe-msg p _args ap _rm ->
         match [nat-eq? p pid]
           | false -> accum
           | true  -> break-step-matched-pid pid r ap accum
@@ -2483,16 +2956,21 @@ defn dispatch-broken-resolution
 ;; answer at peer's ap. Same shape as break-forwarding (Phase 45) with
 ;; a synthesized reason. Queued msgs with ap=none have nowhere to send
 ;; the error, but ARE still semantically processed (not dropped).
-spec plain-value-error-reason String -> SyrupValue
-defn plain-value-error-reason [_msg]
-  ;; The reason names the type-error condition. Caller passes a hint
-  ;; string for now (kept generic in case future variants want richer
-  ;; reasons — e.g., the actual resolution-value SyrupValue inlined).
+;; The reason for delivering to a resolution that is not a callable.
+;;
+;; It is a CONSTANT, and the dead `String` parameter that used to suggest
+;; otherwise is gone — it was ignored, its only caller passed "", and the
+;; comment promised "richer reasons" that nothing could produce. Naming the
+;; offending value here would be more useful, but it is a wire-visible change
+;; that `tools/interop/peer-plain-value-error.mjs` currently pins by exact
+;; string; the fixture has to move first.
+spec plain-value-error-reason SyrupValue -> SyrupValue
+defn plain-value-error-reason [_resolution]
   syrup-string "deliver-to-non-callable"
 
 spec dispatch-plain-value-resolution Nat [List PipeMsg] Vat -> ForwardEffect
 defn dispatch-plain-value-resolution [pid pms v]
-  [forward-effect v [break-forward-loop pid [plain-value-error-reason ""] pms [nil String]]]
+  [forward-effect v [break-forward-loop pid [plain-value-error-reason syrup-null] pms [nil String]]]
 
 ;; ForwardEffect bundles the two outcomes of forwarding: an updated
 ;; Vat (if msgs were delivered locally) plus a list of bytes (if any
@@ -2624,19 +3102,20 @@ spec list-filter-pipe-by-emitted [List PipeMsg] [List Nat] -> [List PipeMsg]
   :doc "Drop pipe-msg entries whose pid is in the emitted set."
 defn list-filter-pipe-by-emitted
   | nil _ -> [nil PipeMsg]
-  | [cons [pipe-msg p args ap] rest] emitted ->
+  | [cons [pipe-msg p args ap rm] rest] emitted ->
       match [member-nat? p emitted]
         | true  -> list-filter-pipe-by-emitted rest emitted
         | false ->
-            [cons [pipe-msg p args ap] [list-filter-pipe-by-emitted rest emitted]]
+            [cons [pipe-msg p args ap rm] [list-filter-pipe-by-emitted rest emitted]]
 
 spec bs-gc-pipelined-msgs-by-emitted [List Nat] BridgeState -> BridgeState
   :doc "Phase 47: drop pipelined-msgs entries whose pid is in `emitted`. Applied after pump-outbound at connection-step granularity."
 defn bs-gc-pipelined-msgs-by-emitted
-  | emitted [bridge-state ls es as qs p oqs ir er pm gs] ->
+  | emitted [bridge-state ls es as qs p oqs ir er pm gs sk] ->
       bridge-state ls es as qs p oqs ir er
         [list-filter-pipe-by-emitted pm emitted]
         gs
+        sk
 
 ;; ===========================================================
 ;; Phase 48: op:listen notification on resolution
@@ -2683,8 +3162,8 @@ defn list-filter-listeners-by-notified
 spec bs-gc-listeners-by-notified [List Nat] BridgeState -> BridgeState
   :doc "Phase 48: drop listener entries whose target is in `notified`. Applied after pump-outbound at connection-step granularity, alongside pipelined-msgs GC."
 defn bs-gc-listeners-by-notified
-  | notified [bridge-state ls es as qs p oqs ir er pm gs] ->
-      bridge-state [list-filter-listeners-by-notified ls notified] es as qs p oqs ir er pm gs
+  | notified [bridge-state ls es as qs p oqs ir er pm gs sk] ->
+      bridge-state [list-filter-listeners-by-notified ls notified] es as qs p oqs ir er pm gs sk
 
 ;; Result of the pump: bytes emitted this turn + updated emitted-pids
 ;; + the vat (Phase 42 may have enqueued local-actor messages on it
@@ -2910,8 +3389,8 @@ defn unsettled-q-loop [es v acc]
 
 spec bs-set-outbound-questions [List QEntry] BridgeState -> BridgeState
 defn bs-set-outbound-questions
-  | oqs2 [bridge-state ls es as qs p oqs ir er pm gs] ->
-      bridge-state ls es as qs p oqs2 ir er pm gs
+  | oqs2 [bridge-state ls es as qs p oqs ir er pm gs sk] ->
+      bridge-state ls es as qs p oqs2 ir er pm gs sk
 
 ;; Nothing settled this step means no frame at all — an empty
 ;; `<op:gc-answers []>` is legal but pure noise.
@@ -3132,16 +3611,28 @@ spec conn-release-bytes ConnRelease -> List String
 defn conn-release-bytes
   | conn-release _ bs -> bs
 
-;; Build the wire bytes for an op:gc-answer N message.
+;; Release bytes for ONE answer position / ONE export.
+;;
+;; These emit the PLURAL spec ops with a single-element list, not the singular
+;; `op:gc-answer` / `op:gc-export` they used to emit. Those spellings are not
+;; in the OCapN spec and not in upstream's `CAPTP_TYPES`, so a peer's receive
+;; loop aborts the session on one — and these are reachable through the
+;; PUBLIC `captp-release-answer` / `captp-release-import` API, so anything
+;; calling them wrote a frame no conforming peer could parse. The interop path
+;; was safe only because `connection-step` happens never to call them.
+;;
+;; The plural encoders (`gc-exports-bytes`, `gc-answers-bytes`) already
+;; existed and were added ALONGSIDE these rather than replacing them, under a
+;; comment openly stating that the singular form "is not what any peer reads".
 spec gc-answer-bytes Nat -> String
 defn gc-answer-bytes [pos]
-  wire::encode [syrup-tagged "op:gc-answer" [syrup-nat pos]]
+  gc-answers-bytes [cons [syrup-nat pos] nil]
 
-;; Build the wire bytes for an op:gc-export N k message.
 spec gc-export-bytes Nat Nat -> String
 defn gc-export-bytes [pos cnt]
-  wire::encode-record "op:gc-export"
-    [cons [syrup-nat pos] [cons [syrup-nat cnt] nil]]
+  wire::encode-record "op:gc-exports"
+    [cons [syrup-list [cons [syrup-nat pos] nil]]
+      [cons [syrup-list [cons [syrup-nat cnt] nil]] nil]]
 
 ;; Release: we're done with our outbound-question at q-pos N. Emits
 ;; op:gc-answer N bytes for peer (so they can free their answer-table
@@ -3264,15 +3755,18 @@ defn connection-pipeline [our-q-pos args cs]
 
 ;; Determine whether this op is itself an abort.
 spec op-is-abort? CapTPOp -> Bool
-defn op-is-abort?
-  | op-abort _         -> true
-  | op-start-session _ _ -> false
-  | op-deliver _ _ _ _ -> false
-  | op-deliver-only _ _ -> false
-  | op-listen _ _      -> false
-  | op-gc-export _ _   -> false
-  | op-gc-answer _     -> false
-  | op-deliver-to-answer _ _ _ _ -> false
+defn op-is-abort? [op]
+  match op
+    | op-abort _         -> true
+    | op-start-session _ _ _ -> false
+    | op-deliver _ _ _ _ -> false
+    | op-deliver-only _ _ -> false
+    | op-listen _ _      -> false
+    | op-gc-export _ _   -> false
+    | op-gc-answer _     -> false
+    | op-gc-exports _ _  -> false
+    | op-gc-answers _    -> false
+    | op-deliver-to-answer _ _ _ _ -> false
 
 ;; Once-aborted bool: was-aborted OR op-is-abort.
 spec or-bool Bool Bool -> Bool
@@ -3283,7 +3777,9 @@ defn or-bool
 ;; Drain fuel: 5 successive turns is plenty for our test cases.
 ;; Phase 59b part 3: raised 5 -> 20. Fuel is consumed per TURN, and a turn
 ;; that ORIGINATES a message (the greeter sending "Hello") needs further
-;; turns for that message to reach the outbound list. 5 silently left the
+;; turns for that message to reach the outbound list. The bound is 20; the
+;; lead sentence here used to say "5 successive turns is plenty for our test
+;; cases", directly above a definition that had already been raised. 5 silently left the
 ;; send undelivered on the queue with no error — see goblin-pitfalls #46.
 ;; run-vat stops at quiescence, so a higher bound costs nothing when the
 ;; chain is short.

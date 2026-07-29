@@ -17,6 +17,17 @@ ns prologos::ocapn::locator
 ;;     hints: { host, port }            ;; for tcp: where to dial
 ;;   }
 ;;
+;; KNOWN LIMITATION — hints are not a map here. `Locator` fixes `host`
+;; and `port` as two scalar fields, so a netlayer whose hints are
+;; anything else has no representation: upstream's onion netlayer
+;; (`netlayers/onion.py`) carries different keys entirely, and there is
+;; no place to put them. Nothing in this module PARSES a hint map
+;; today, so nothing is silently dropped yet — but the moment a URI or
+;; wire parser targets `Locator`, it will be. Lifting `host`/`port` to
+;; a hint list is not a local change: `loc-port` is typed `Nat` and
+;; there is no string→Nat conversion in `prologos::data::string`, and
+;; `tcp-testing.prologos` plus three test files consume the selectors.
+;;
 ;; The Endo `tcp-test-only.js` netlayer encodes this as a JS object;
 ;; we encode it as a small data type. Real OCapN production locators
 ;; carry a public-key designator, location signature, and crypto

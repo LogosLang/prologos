@@ -133,6 +133,7 @@
      (run-last
       "(eval (encode-op (op-start-session
                             \"0.1\"
+                            syrup-null
                             (syrup-string \"tcp-testing-only:peer-racket\"))))")))
   (define racket-deliver
     (extract-value-bytes
@@ -148,6 +149,7 @@
      (run-last
       "(eval (encode-op (op-start-session
                             \"0.1\"
+                            syrup-null
                             (syrup-string \"tcp-testing-only:peer-node\"))))")))
   (define expected-node-deliver
     (extract-value-bytes

@@ -115,3 +115,11 @@ sock.on('end', () => {
   process.stdout.write(JSON.stringify({ ok, received }) + '\n');
   process.exit(ok ? 0 : 1);
 });
+
+// Safety: the summary only runs on 'end'. A parent that connects and
+// then stalls leaves this process alive indefinitely — no Racket test
+// kills it. Bound it.
+setTimeout(() => {
+  process.stderr.write('peer-conversation: timeout\n');
+  process.exit(3);
+}, 30_000).unref();

@@ -75,3 +75,11 @@ sock.on('end', () => {
     process.exit(1);
   }
 });
+
+// Safety: nothing above ever fires if the parent connects and then goes
+// quiet — `sock.on('end')` waits forever and no Racket test kills the
+// subprocess. Bound it.
+setTimeout(() => {
+  process.stderr.write('peer-recv: timeout\n');
+  process.exit(3);
+}, 30_000).unref();

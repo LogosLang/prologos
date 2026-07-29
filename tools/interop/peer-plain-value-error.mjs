@@ -25,12 +25,23 @@
 //       b. Phase 46 fall-through: resolution-value isn't
 //          desc:export / desc:answer → dispatch-plain-value-resolution
 //          → break-forward-loop emits an error answer at peer's
-//          queued ap=88 with reason "deliver-to-non-callable".
+//          queued ap=88.
 //
 //   4. Node receives 3 frames, verifies:
 //      - Q1 reply at desc:answer 7 with the plain string echoed
-//      - Plain-value error at desc:answer 88 with
-//        <Error "deliver-to-non-callable"> args
+//      - Plain-value error at desc:answer 88 whose args are an
+//        <Error reason> record carrying a non-empty diagnostic that
+//        is NOT the forwarded payload (i.e. Q2 was rejected, not
+//        blindly forwarded).
+//
+//   This peer deliberately does NOT assert the exact reason string.
+//   `<Error …>` is our own convention — upstream's captp_types.py has
+//   no error record at all — so pinning the constant here made an
+//   "external" gate that could only ever confirm our own spelling, and
+//   froze a string `captp-core` wants to improve. The reason IS still
+//   reported verbatim as `error_reason`, and the Racket-side test
+//   (`test-ocapn-break-plain-interop.rkt`) pins it there — on our side
+//   of the boundary, where a pin belongs.
 
 import '@endo/init';
 import net from 'node:net';
@@ -40,9 +51,11 @@ import {
 } from './node_modules/@endo/ocapn/src/syrup/js-representation.js';
 
 // The op:deliver args slot is a LIST -- the OCapN wire form, and what
-// upstream's own suite iterates. Racket used to send a bare value there,
-// which this script was written against; unwrapping one level reads both.
-const argsHead = (a) => Array.isArray(a) ? a[0] : (a && Array.isArray(a.values)) ? a.values[0] : a;
+// upstream's own suite iterates. This used to also accept a bare value,
+// because Racket once sent one there; that made the fixture pass under
+// either shape, so it stopped pinning the correct one. It is strict now:
+// anything but a list yields `undefined` and the assertion fails.
+const argsHead = (a) => Array.isArray(a) ? a[0] : undefined;
 const port = Number(process.argv[2]);
 if (!Number.isInteger(port) || port < 1) {
   process.stderr.write(`peer-plain-value-error: bad port ${process.argv[2]}\n`);
@@ -54,7 +67,6 @@ const Q2_QUEUED_AP = 88n;
 const TARGET_EXPORT = 0n;
 const Q1_PAYLOAD = 'i-am-a-string';
 const Q2_PAYLOAD = 'forward-me';
-const EXPECTED_ERROR_REASON = 'deliver-to-non-callable';
 
 const mkRec = (label, values) => ({
   [Symbol.toStringTag]: 'Record',
@@ -144,14 +156,23 @@ const summarize = () => {
   const replyEchoesString = replyToQ1
     && replyToQ1.values && argsHead(replyToQ1.values[1]) === Q1_PAYLOAD;
 
-  // Error answer args is <Error "deliver-to-non-callable">.
+  // Error answer args is an <Error reason> record.
   const errorIsErrorWrapped = errorAnswer && isErrorFrame(argsHead(errorAnswer.values[1]));
   const errorReason = errorIsErrorWrapped && argsHead(errorAnswer.values[1]).values
     ? argsHead(errorAnswer.values[1]).values[0] : null;
 
+  // The discriminator that actually distinguishes "Q2 was rejected"
+  // from "Q2 was forwarded": a non-empty diagnostic string that is
+  // neither of the two payloads we sent.
+  const errorReasonIsDiagnostic =
+    typeof errorReason === 'string'
+    && errorReason.length > 0
+    && errorReason !== Q2_PAYLOAD
+    && errorReason !== Q1_PAYLOAD;
+
   const ok = !!(session && replyToQ1 && errorAnswer
     && replyEchoesString && errorIsErrorWrapped
-    && errorReason === EXPECTED_ERROR_REASON);
+    && errorReasonIsDiagnostic);
 
   const sessionLocator = session && Array.isArray(session.values)
     ? String(session.values[1]) : null;
@@ -163,6 +184,7 @@ const summarize = () => {
     saw_error_answer: !!errorAnswer,
     reply_echoes_string: replyEchoesString,
     error_is_error_wrapped: errorIsErrorWrapped,
+    error_reason_is_diagnostic: errorReasonIsDiagnostic,
     error_reason: errorReason,
   }) + '\n');
 

@@ -97,3 +97,11 @@ sock.on('end', () => {
     process.exit(1);
   }
 });
+
+// Safety: the summary only runs on 'end'. A parent that connects and
+// then stalls leaves this process alive indefinitely — no Racket test
+// kills it. Bound it.
+setTimeout(() => {
+  process.stderr.write('peer-handshake: timeout\n');
+  process.exit(3);
+}, 30_000).unref();

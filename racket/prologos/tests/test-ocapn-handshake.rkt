@@ -141,12 +141,14 @@
      (run-last
       "(eval (encode-op (op-start-session
                             \"0.1\"
+                            syrup-null
                             (syrup-string \"tcp-testing-only:peer-racket\"))))")))
   (define expected-node-start-bytes
     (extract-value-bytes
      (run-last
       "(eval (encode-op (op-start-session
                             \"0.1\"
+                            syrup-null
                             (syrup-string \"tcp-testing-only:peer-node\"))))")))
 
   ;; 1. Bind ephemeral port.

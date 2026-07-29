@@ -3,16 +3,20 @@
 #
 # The upstream `test_runner.py` can only run a whole test MODULE: its
 # `CapTPTestLoader` injects the netlayer at the TestCase-CLASS level, so
-# `loadTestsFromName` against an individual method fails. Several
-# upstream tests (crossed-hellos, op:deliver, op:gc, op:listen, ...)
-# need a swiss-num object registry and outbound connections that the
-# Prologos OCapN implementation does not provide yet (Phase 59+). Left
-# in the run they block on the 120s socket timeout and starve the
-# tests we DO pass of the CI time budget.
+# `loadTestsFromName` against an individual method fails. It also imports
+# the Tor onion netlayer unconditionally, which does not build in our
+# containers.
 #
 # This runner builds a TestSuite from an explicit allow-list of the
 # upstream tests the current implementation targets. Extend SELECTED
 # as new phases land.
+#
+# The cost of an allow-list is that a test ADDED upstream is silently not
+# run. `check_allow_list_drift` closes that: it enumerates the `test_*`
+# methods of every targeted class, and every test-bearing class of every
+# targeted module, and reports anything SELECTED does not name. Drift is
+# reported up front and turned into a non-zero exit at the END, so the
+# conformance signal is still produced on the run that discovers it.
 #
 # Usage: ocapn-run-tests.py <locator> [captp-version]
 # Env:   OCAPN_TEST_SUITE_DIR — path to the cloned ocapn-test-suite
@@ -34,11 +38,9 @@ from netlayers.testing_only_tcp import TestingOnlyTCPNetlayer
 # (module, class, [method, ...]) — the upstream tests the current
 # Prologos OCapN implementation targets.
 #
-# Phase 58.c/58.d: the test server validates an inbound op:start-session
-# and aborts on an unsupported CapTP version or an invalid location
-# signature, and on an op:abort sent before the handshake completes.
-# The crossed-hellos / op:deliver / op:gc / op:listen tests need the
-# server to drive captp-core with a swiss-num object registry (Phase 59+).
+# As of Phase 59b this is every `test_*` method of every test-bearing
+# class in the six modules named below; the per-entry comments record
+# what each group needed. The drift check below is what keeps that true.
 SELECTED = [
     ("tests.op_start_session", "OpStartSessionTest", [
         "test_captp_remote_version",
@@ -135,6 +137,50 @@ SELECTED = [
 ]
 
 
+def check_allow_list_drift():
+    """Report upstream `test_*` methods that SELECTED does not name.
+
+    Two levels: a method added to a class we already target, and a whole
+    test-bearing class added to a module we already target. Returns a list
+    of human-readable drift lines (empty when the allow-list is complete).
+    """
+    selected_methods = {}   # (module, class) -> set(method)
+    for mod_name, cls_name, methods in SELECTED:
+        selected_methods.setdefault((mod_name, cls_name), set()).update(methods)
+
+    drift = []
+    for mod_name in sorted({m for m, _c, _s in SELECTED}):
+        mod = importlib.import_module(mod_name)
+        for cls_name in sorted(dir(mod)):
+            cls = getattr(mod, cls_name)
+            if not (isinstance(cls, type) and issubclass(cls, unittest.TestCase)):
+                continue
+            # `dir(mod)` also sees classes the module merely imported
+            # (CapTPTestCase, and any sibling test class). Only audit the
+            # ones this module actually defines.
+            if cls.__module__ != mod_name:
+                continue
+            # Only count methods the class itself defines: the shared
+            # CapTPTestCase / HandoffTestCase bases are inherited by every
+            # subclass and would otherwise be reported N times.
+            upstream = {n for n in vars(cls) if n.startswith("test_")}
+            if not upstream:
+                continue
+            known = selected_methods.get((mod_name, cls_name))
+            if known is None:
+                drift.append(
+                    f"{mod_name}.{cls_name} is not in SELECTED at all "
+                    f"({len(upstream)} test(s): {', '.join(sorted(upstream))})")
+                continue
+            for missing in sorted(upstream - known):
+                drift.append(f"{mod_name}.{cls_name}.{missing} is not in SELECTED")
+            for stale in sorted(known - upstream):
+                drift.append(
+                    f"{mod_name}.{cls_name}.{stale} is in SELECTED but no "
+                    f"longer exists upstream")
+    return drift
+
+
 def main():
     if len(sys.argv) < 2:
         sys.stderr.write("usage: ocapn-run-tests.py <locator> [captp-version]\n")
@@ -145,6 +191,18 @@ def main():
     uri = OCapNPeer.from_uri(locator)
     netlayer = TestingOnlyTCPNetlayer(uri.hints.get("host"))
     runner = CapTPTestRunner(netlayer, uri, captp_version, verbosity=2)
+
+    drift = check_allow_list_drift()
+    if drift:
+        sys.stderr.write(
+            "ocapn-run-tests: ALLOW-LIST DRIFT — the upstream suite has\n"
+            "moved and these tests are not being run. Add them to SELECTED\n"
+            "(or remove them, if they are gone upstream) and raise\n"
+            "EXPECTED_PASS in run-ocapn-test-suite.sh to match:\n")
+        for line in drift:
+            sys.stderr.write(f"  - {line}\n")
+        sys.stderr.write("\n")
+        sys.stderr.flush()
 
     suite = unittest.TestSuite()
     selected_count = 0
@@ -158,7 +216,11 @@ def main():
     print(f"ocapn-run-tests: running {selected_count} selected test(s) "
           f"against {locator}")
     result = runner.run(suite)
-    return 0 if result.wasSuccessful() else 1
+    if not result.wasSuccessful():
+        return 1
+    # Run the selected tests first so the conformance signal is still
+    # produced, THEN fail on drift.
+    return 3 if drift else 0
 
 
 if __name__ == "__main__":

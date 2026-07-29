@@ -157,7 +157,7 @@
   (check-contains
    (run-last
     "(eval (let (v0  empty-vat
-                  v1  (incoming-captp-op (op-start-session \"0.1\" syrup-null) v0))
+                  v1  (incoming-captp-op (op-start-session \"0.1\" syrup-null syrup-null) v0))
               (queue-length v1)))")
    "0N"))
 
@@ -194,7 +194,15 @@
 ;; on the peer side, embedding our q-pos in a desc:answer for routing.
 (test-case "bridge/outbound-question-bytes builds canonical questioner op:deliver"
   ;; tgt-export=2, args="ping", our-q-pos=7 should produce
-  ;; <op:deliver <desc:export 2> "ping" <desc:answer 7> false>
+  ;;   <op:deliver <desc:export 2> ["ping"] 7 false>
+  ;;
+  ;; Two things here used to be wrong and were pinned wrong by this test.
+  ;; The args slot is a LIST, always -- a peer iterates it directly, so a bare
+  ;; value raises inside its receive loop. And the answer position is a BARE
+  ;; INTEGER: upstream reads slot 2 unwrapped, so `<desc:answer 7>` came back
+  ;; as a record that never compared equal to the position we later name in
+  ;; op:gc-answers. The sibling encoder `outbound-ask-bytes` always wrote both
+  ;; correctly; nothing forced the two to agree.
   (define got
     (extract-value-bytes
      (run-last
@@ -204,8 +212,8 @@
      (run-last
       "(eval (encode-record \"op:deliver\"
                               (cons (syrup-tagged \"desc:export\" (syrup-nat (suc (suc zero))))
-                                (cons (syrup-string \"ping\")
-                                  (cons (syrup-tagged \"desc:answer\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero)))))))))
+                                (cons (syrup-list (cons (syrup-string \"ping\") nil))
+                                  (cons (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero))))))))
                                     (cons (syrup-bool false) nil))))))")))
   (check-equal? got expected))
 
@@ -1212,7 +1220,7 @@
   (check-contains
    (run-last
     "(eval (let (step (connection-step
-                          (op-start-session \"0.1\" syrup-null)
+                          (op-start-session \"0.1\" syrup-null syrup-null)
                           empty-connection))
               (conn-aborted? (conn-step-state step))))")
    "false"))
@@ -1235,7 +1243,7 @@
                           (suc (suc (suc (suc (suc zero)))))
                           (syrup-string \"book-room\")
                           (none Nat)
-                          v0 st0))
+                          (none Nat) v0 st0))
               (promise-queue-length pid (bridge-step-vat step))))")
    "1N"))
 
@@ -1248,7 +1256,7 @@
                         (suc (suc (suc (suc zero))))
                         (syrup-string \"orphan\")
                         (none Nat)
-                        empty-vat bridge-state-empty))
+                        (none Nat) empty-vat bridge-state-empty))
               (length (bs-questions (bridge-step-state step)))))")
    "0N"))
 
@@ -1343,7 +1351,7 @@
                           (suc (suc zero))
                           (syrup-string \"queued\")
                           (none Nat)
-                          v0 st0))
+                          (none Nat) v0 st0))
               (length (bs-pipelined-msgs (bridge-step-state step)))))")
    "1N"))
 
@@ -1373,14 +1381,14 @@
   (define got
     (extract-value-bytes
      (run-last
-      "(eval (forward-deliver-bytes \"desc:export\" (suc (suc zero)) (syrup-string \"book-room\")))")))
+      "(eval (forward-deliver-bytes \"desc:export\" (suc (suc zero)) (syrup-string \"book-room\") (none Nat) (none Nat)))")))
   ;; Build the expected shape via raw encode-record for byte equivalence.
   (define expected
     (extract-value-bytes
      (run-last
       "(eval (encode-record \"op:deliver\"
                   (cons (syrup-tagged \"desc:export\" (syrup-nat (suc (suc zero))))
-                    (cons (syrup-string \"book-room\")
+                    (cons (syrup-list (cons (syrup-string \"book-room\") nil))
                       (cons (syrup-bool false)
                         (cons (syrup-bool false) nil))))))")))
   (check-equal? got expected))
@@ -1403,7 +1411,7 @@
                           (suc (suc (suc (suc (suc zero)))))
                           (syrup-string \"chained-msg\")
                           (none Nat)
-                          v0 st0)
+                          (none Nat) v0 st0)
                   v1    (resolve-promise pid
                           (syrup-tagged \"desc:export\"
                             (syrup-nat (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))))) ;; 11
@@ -1428,7 +1436,7 @@
                           (suc (suc zero))
                           (syrup-string \"chained\")
                           (none Nat)
-                          v0 st0)
+                          (none Nat) v0 st0)
                   v1    (resolve-promise pid (syrup-string \"plain-value\") (bridge-step-vat step))
                   pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
               (length (pump-result-bytes pr))))")
@@ -1457,7 +1465,7 @@
                   step   (dispatch-pipeline-on-our-q (suc (suc (suc zero)))
                                                       (syrup-string \"local-msg\")
                                                       (none Nat)
-                                                      v1 st0)
+                                                      (none Nat) v1 st0)
                   v2     (resolve-promise pid
                             (syrup-tagged \"desc:export\" (syrup-nat k))
                             (bridge-step-vat step))
@@ -1481,7 +1489,7 @@
                   step   (dispatch-pipeline-on-our-q (suc zero)
                                                       (syrup-string \"local-msg\")
                                                       (none Nat)
-                                                      v1 st0)
+                                                      (none Nat) v1 st0)
                   v2     (resolve-promise pid
                             (syrup-tagged \"desc:export\" (syrup-nat k))
                             (bridge-step-vat step))
@@ -1502,7 +1510,7 @@
                   step  (dispatch-pipeline-on-our-q (suc (suc zero))
                                                      (syrup-string \"remote-msg\")
                                                      (none Nat)
-                                                     v0 st0)
+                                                     (none Nat) v0 st0)
                   v1    (resolve-promise pid
                           (syrup-tagged \"desc:export\"
                             (syrup-nat (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))))) ;; 11
@@ -1538,13 +1546,13 @@
   (define got
     (extract-value-bytes
      (run-last
-      "(eval (forward-deliver-bytes \"desc:answer\" (suc (suc zero)) (syrup-string \"chained-msg\")))")))
+      "(eval (forward-deliver-bytes \"desc:answer\" (suc (suc zero)) (syrup-string \"chained-msg\") (none Nat) (none Nat)))")))
   (define expected
     (extract-value-bytes
      (run-last
       "(eval (encode-record \"op:deliver\"
                   (cons (syrup-tagged \"desc:answer\" (syrup-nat (suc (suc zero))))
-                    (cons (syrup-string \"chained-msg\")
+                    (cons (syrup-list (cons (syrup-string \"chained-msg\") nil))
                       (cons (syrup-bool false)
                         (cons (syrup-bool false) nil))))))")))
   (check-equal? got expected))
@@ -1564,7 +1572,7 @@
                           (suc (suc (suc (suc (suc zero)))))
                           (syrup-string \"chain\")
                           (none Nat)
-                          v0 st0)
+                          (none Nat) v0 st0)
                   v1    (resolve-promise pid
                           (syrup-tagged \"desc:answer\"
                             (syrup-nat (suc (suc (suc (suc zero))))))
@@ -1595,12 +1603,12 @@
                           (suc (suc (suc (suc (suc zero)))))
                           (syrup-string \"with-answer\")
                           (some Nat (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))
-                          v0 st0)
+                          (none Nat) v0 st0)
                   step2 (dispatch-pipeline-on-our-q
                           (suc (suc (suc (suc (suc zero)))))
                           (syrup-string \"fire-and-forget\")
                           (none Nat)
-                          (bridge-step-vat step1) (bridge-step-state step1))
+                          (none Nat) (bridge-step-vat step1) (bridge-step-state step1))
                   v1    (break-promise pid (syrup-string \"rejected\") (bridge-step-vat step2))
                   pr    (pump-outbound v1 (bridge-step-state step2) (nil Nat)))
               ;; resolution bytes (1) + 1 error-answer bytes (only the ap=some msg) = 2
@@ -1620,7 +1628,7 @@
                           (suc (suc zero))
                           (syrup-string \"no-answer-needed\")
                           (none Nat)
-                          v0 st0)
+                          (none Nat) v0 st0)
                   v1    (break-promise pid (syrup-string \"oops\") (bridge-step-vat step))
                   pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
               (length (pump-result-bytes pr))))")
@@ -1642,7 +1650,7 @@
                             (suc (suc (suc zero)))
                             (syrup-string \"q-payload\")
                             (some Nat (suc (suc (suc (suc (suc (suc (suc zero))))))))
-                            v0 st0)
+                            (none Nat) v0 st0)
                     v1    (break-promise pid (syrup-string \"oops\") (bridge-step-vat step))
                     pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
                 (framed-concat (pump-result-bytes pr))))")))
@@ -1692,12 +1700,12 @@
                           (suc (suc (suc (suc zero))))
                           (syrup-string \"with-answer\")
                           (some Nat (suc (suc (suc (suc (suc (suc (suc (suc zero)))))))))
-                          v0 st0)
+                          (none Nat) v0 st0)
                   step2 (dispatch-pipeline-on-our-q
                           (suc (suc (suc (suc zero))))
                           (syrup-string \"fire-and-forget\")
                           (none Nat)
-                          (bridge-step-vat step1) (bridge-step-state step1))
+                          (none Nat) (bridge-step-vat step1) (bridge-step-state step1))
                   v1    (resolve-promise pid (syrup-string \"plain-value\") (bridge-step-vat step2))
                   pr    (pump-outbound v1 (bridge-step-state step2) (nil Nat)))
               (length (pump-result-bytes pr))))")
@@ -1720,7 +1728,7 @@
                             (suc (suc zero))
                             (syrup-string \"q-payload\")
                             (some Nat (suc (suc (suc (suc (suc (suc zero)))))))
-                            v0 st0)
+                            (none Nat) v0 st0)
                     v1    (resolve-promise pid (syrup-string \"plain-value\") (bridge-step-vat step))
                     pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
                 (framed-concat (pump-result-bytes pr))))")))
@@ -1742,10 +1750,10 @@
   ;; Result should keep [3, 7] only.
   (check-contains
    (run-last
-    "(eval (let (st0 (bs-add-pipeline-msg (suc (suc (suc zero))) (syrup-string \"a\") (none Nat)
-                       (bs-add-pipeline-msg (suc (suc (suc (suc (suc zero))))) (syrup-string \"b\") (none Nat)
+    "(eval (let (st0 (bs-add-pipeline-msg (suc (suc (suc zero))) (syrup-string \"a\") (none Nat) (none Nat)
+                       (bs-add-pipeline-msg (suc (suc (suc (suc (suc zero))))) (syrup-string \"b\") (none Nat) (none Nat)
                          (bs-add-pipeline-msg (suc (suc (suc (suc (suc (suc (suc zero)))))))
-                                              (syrup-string \"c\") (none Nat)
+                                              (syrup-string \"c\") (none Nat) (none Nat)
                                               bridge-state-empty)))
                   st1 (bs-gc-pipelined-msgs-by-emitted
                         (cons (suc (suc (suc (suc (suc zero))))) (nil Nat))
@@ -1769,7 +1777,7 @@
                           (suc (suc (suc zero)))
                           (syrup-string \"queued\")
                           (some Nat (suc (suc zero)))
-                          v0 st0)
+                          (none Nat) v0 st0)
                   v1    (resolve-promise pid
                           (syrup-tagged \"desc:export\"
                             (syrup-nat (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))))) ;; 11
@@ -1792,7 +1800,7 @@
                           (suc (suc (suc zero)))
                           (syrup-string \"queued\")
                           (none Nat)
-                          v0 st0)
+                          (none Nat) v0 st0)
                   cs0   (conn-state (bridge-step-vat step) (bridge-step-state step) (nil Nat) false)
                   s2    (connection-step (op-gc-export (suc zero) zero) cs0))
               (length (bs-pipelined-msgs (conn-bridge-state (conn-step-state s2))))))")

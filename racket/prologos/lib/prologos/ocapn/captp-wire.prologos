@@ -5,32 +5,53 @@ ns prologos::ocapn::captp-wire
 ;; ===========================================================
 ;;
 ;; Builds on Phase-1's pure Syrup codec to encode/decode CapTP
-;; operation messages (op:start-session, op:abort, op:deliver,
-;; op:deliver-only, op:listen, op:gc-export, op:gc-answer).
+;; operation messages.
 ;;
-;; Each CapTPOp serialises as a Syrup record with the op-name
-;; symbol as label and a positional payload. Per the OCapN spec:
+;; Each CapTPOp serialises as a Syrup record with the op-name symbol as
+;; label and a positional payload. The shapes below are the ones
+;; upstream decodes; every `from_syrup_record` in
+;; `utils/captp_types.py` asserts an EXACT arity, so a record with the
+;; wrong field count is a protocol error rather than a tolerated
+;; variant, and this decoder now says so too:
 ;;
-;;   op:start-session   <op:start-session ver-string locator>
-;;   op:abort           <op:abort reason-string>
-;;   op:deliver         <op:deliver to-desc args answer-pos resolve-me>
-;;   op:deliver-only    <op:deliver-only to-desc args>
-;;   op:listen          <op:listen to-desc resolver-desc>
-;;   op:gc-export       <op:gc-export export-pos count>
-;;   op:gc-answer       <op:gc-answer answer-pos>
+;;   op:start-session <op:start-session ver pubkey-sexp locator sig-sexp>
+;;   op:abort         <op:abort reason-string>
+;;   op:deliver       <op:deliver to-desc args answer-pos resolve-me>
+;;   op:deliver-only  <op:deliver-only to-desc args>
+;;   op:listen        <op:listen to-desc resolve-me wants-partial>
+;;   op:gc-exports    <op:gc-exports [export-pos …] [wire-delta …]>
+;;   op:gc-answers    <op:gc-answers [answer-pos …]>
 ;;
-;; In our Phase-0 model target / answer-pos / resolver are Nat
-;; positions. On the wire those positions are wrapped in
-;; descriptor records:
+;; `op:gc-export` / `op:gc-answer` — SINGULAR, two scalars / one scalar
+;; — are NOT in the spec and are absent from upstream's `CAPTP_TYPES`
+;; (`utils/captp_types.py:558-576`). They are still decoded because
+;; this codebase emitted them for years and captp-core's audit-log arm
+;; consumes them; nothing sends them to a conforming peer.
 ;;
-;;   <desc:export N>          ;; refr exported by us
-;;   <desc:import-promise N>  ;; promise imported by us
-;;   <desc:answer N>          ;; answer-table position
+;; Positions travel inside descriptor records, and the LABEL is
+;; load-bearing — it names which table the position indexes:
 ;;
-;; We encode targets as desc:export and answer-pos / resolver as
-;; desc:answer. (A full implementation consults the
-;; question/answer/export/import tables to choose the right
-;; descriptor; that bookkeeping is Phase 3+.)
+;;   <desc:export N>          ;; a position in the RECEIVER's export table
+;;   <desc:answer N>          ;; an answer/question-table position
+;;   <desc:import-object N>   ;; an object the SENDER exports
+;;   <desc:import-promise N>  ;; a promise the SENDER exports
+;;
+;; So a deliver / deliver-only / listen TARGET is `desc:export` or
+;; `desc:answer` (upstream asserts exactly that at
+;; `utils/captp_types.py:472`), a resolve-me is `desc:import-object` or
+;; `desc:import-promise`, and an answer position is a bare non-negative
+;; integer or `false`. Each slot is checked against its own label set:
+;; the label used to be discarded, so `<totally-bogus 3>` unwrapped to
+;; export position 3 and was delivered to.
+;;
+;; KNOWN DEVIATION, still open: `encode-op` writes the answer position
+;; as `<desc:answer N>` where the spec wants a bare integer.
+;; `captp-core`'s `outbound-ask-bytes` — the encoder that talks to real
+;; peers — already writes it bare; `encode-op` is reached only from the
+;; in-tree JS interop peers, three of which match on the record form
+;; (`tools/interop/peer-responder.mjs:118`, `peer-pipelined.mjs:108`,
+;; `peer-bootstrap-gift.mjs:132`). Changing the slot means changing
+;; those three in the same commit.
 ;;
 ;; Layout / parsing notes (see goblin-pitfalls follow-up):
 ;;   - `[Option Nat]` brackets in spec — bare `Option Nat` parses
@@ -61,18 +82,45 @@ spec desc-import-promise Nat -> SyrupValue
 defn desc-import-promise [n]
   syrup-tagged "desc:import-promise" [syrup-nat n]
 
-;; option-of-Nat -> SyrupValue: `none` becomes `syrup-bool false`,
-;; `some n` becomes `desc:answer N`. We use false (not null) for
-;; the absent-position sentinel because @endo/ocapn's decoder
-;; rejects `null` as a record child — only `false` and the typed
-;; values are accepted as record positional fields. (Goblin
-;; pitfalls #28 — discovered Phase 8.)
+spec desc-import-object Nat -> SyrupValue
+defn desc-import-object [n]
+  syrup-tagged "desc:import-object" [syrup-nat n]
 
-spec opt-pos [Option Nat] -> SyrupValue
-defn opt-pos [o]
+;; A list of positions as Syrup naturals — the payload shape of both
+;; plural GC ops. (Mirrors captp-core's `q-keys-syrup`.)
+spec nats-syrup [List Nat] -> [List SyrupValue]
+defn nats-syrup [ns]
+  match ns
+    | nil -> [nil SyrupValue]
+    | cons n rest -> [cons [syrup-nat n] [nats-syrup rest]]
+
+;; The absent sentinel for both optional slots is `false`, not `null`:
+;; @endo/ocapn's decoder rejects `null` as a record child, accepting
+;; only `false` and the typed values as record positional fields.
+;; (Goblin pitfalls #28 — discovered Phase 8.)
+
+;; The ANSWER-POSITION slot. See the KNOWN DEVIATION note in the file
+;; header: the spec form is a bare non-negative integer and this writes
+;; `<desc:answer N>`. The decoder accepts both, so `decode-op` after
+;; `encode-op` round-trips either way.
+spec opt-answer-pos [Option Nat] -> SyrupValue
+defn opt-answer-pos [o]
   match o
     | none   -> [syrup-bool false]
     | some n -> desc-answer n
+
+;; The RESOLVE-ME slot. The resolver is an object WE export, so the
+;; peer receives it as an import: `<desc:import-object N>`, which is
+;; what upstream sends and what `to_desc_export()` expects to convert
+;; (`utils/captp_types.py:420-424`). This used to write
+;; `<desc:answer N>`, which routes into the answer table on the far
+;; side and raises `'DescAnswer' object has no attribute
+;; 'to_desc_export'` in upstream's decoder.
+spec opt-resolve-me [Option Nat] -> SyrupValue
+defn opt-resolve-me [o]
+  match o
+    | none   -> [syrup-bool false]
+    | some n -> desc-import-object n
 
 ;; ===========================================================
 ;; Encode a CapTPOp to a Syrup-record VALUE (for tests that want
@@ -81,40 +129,74 @@ defn opt-pos [o]
 ;; shape the decoder produces. This loses the spec-level
 ;; record-N-arity distinction but is sufficient for the
 ;; round-trip tests.
+;;
+;; Every CapTPOp constructor gets an arm. There is no wildcard, and
+;; adding one would be the wrong repair: an un-armed constructor
+;; reduces to a stuck `reduce` node that is still well-typed as a
+;; SyrupValue, so the omission produces no diagnostic at all. That is
+;; how `op-deliver-to-answer` went missing here for the whole time it
+;; had an arm in `encode-op` below.
 ;; ===========================================================
 
 spec op-to-syrup CapTPOp -> SyrupValue
 defn op-to-syrup [op]
   match op
-    | op-start-session ver loc  -> [syrup-tagged "op:start-session" [syrup-list [cons [syrup-string ver] [cons loc nil]]]]
+    ;; Re-emits the legacy TWO-field form, dropping the pubkey slot. The
+    ;; signed four-field frame is built by `handshake.prologos`, which holds
+    ;; the keypair; this encoder has no signature to put in slot 3 and would
+    ;; emit an unverifiable frame if it pretended otherwise.
+    | op-start-session ver _pk loc -> [syrup-tagged "op:start-session" [syrup-list [cons [syrup-string ver] [cons loc nil]]]]
     | op-abort reason           -> [syrup-tagged "op:abort" [syrup-string reason]]
-    | op-deliver tgt args ap rm -> [syrup-tagged "op:deliver" [syrup-list [cons [desc-export tgt] [cons args [cons [opt-pos ap] [cons [opt-pos rm] nil]]]]]]
+    | op-deliver tgt args ap rm -> [syrup-tagged "op:deliver" [syrup-list [cons [desc-export tgt] [cons args [cons [opt-answer-pos ap] [cons [opt-resolve-me rm] nil]]]]]]
     | op-deliver-only tgt args  -> [syrup-tagged "op:deliver-only" [syrup-list [cons [desc-export tgt] [cons args nil]]]]
-    | op-listen tgt resolver    -> [syrup-tagged "op:listen" [syrup-list [cons [desc-export tgt] [cons [desc-export resolver] nil]]]]
+    | op-listen tgt resolver    -> [syrup-tagged "op:listen" [syrup-list [cons [desc-export tgt] [cons [desc-import-object resolver] [cons [syrup-bool false] nil]]]]]
     | op-gc-export pos cnt      -> [syrup-tagged "op:gc-export" [syrup-list [cons [syrup-nat pos] [cons [syrup-nat cnt] nil]]]]
     | op-gc-answer pos          -> [syrup-tagged "op:gc-answer" [syrup-nat pos]]
+    | op-gc-exports poss deltas -> [syrup-tagged "op:gc-exports" [syrup-list [cons [syrup-list [nats-syrup poss]] [cons [syrup-list [nats-syrup deltas]] nil]]]]
+    ;; ONE argument, which is itself a list — so the payload is the
+    ;; one-element argument sequence holding it, not the list itself.
+    | op-gc-answers poss        -> [syrup-tagged "op:gc-answers" [syrup-list [cons [syrup-list [nats-syrup poss]] nil]]]
+    | op-deliver-to-answer qpos args ap rm -> [syrup-tagged "op:deliver" [syrup-list [cons [desc-answer qpos] [cons args [cons [opt-answer-pos ap] [cons [opt-resolve-me rm] nil]]]]]]
 
 ;; ===========================================================
 ;; Encode a CapTPOp to wire BYTES.
 ;; ===========================================================
 ;;
 ;; Multi-arity records (op:start-session, op:deliver, op:listen,
-;; op:gc-export, op:deliver-only) use `encode-record` directly to
-;; produce the canonical `<label arg1 arg2 ...>` form. Single-arity
-;; records (op:abort, op:gc-answer) go through `op-to-syrup` +
-;; `wire::encode` (the syrup-tagged form is byte-equivalent in
-;; the 2-elem case).
+;; op:gc-export, op:gc-exports, op:deliver-only) use `encode-record`
+;; directly to produce the canonical `<label arg1 arg2 ...>` form.
+;; Single-arity records (op:abort, op:gc-answer, op:gc-answers) go
+;; through `op-to-syrup` + `wire::encode` (the syrup-tagged form is
+;; byte-equivalent in the 2-elem case).
+;;
+;; `op:start-session` here emits the TWO-field legacy form, which no
+;; peer sends and upstream rejects — the CapTPOp carries only ver and
+;; locator, and the missing pubkey and locator-signature cannot be
+;; synthesised without the session key. The conformant four-field
+;; frame is built by `handshake.prologos`, which holds the key; this
+;; arm is used only by in-tree byte-comparison tests.
 
 spec encode-op CapTPOp -> String
 defn encode-op [op]
   match op
-    | op-start-session ver loc  -> wire::encode-record "op:start-session" [cons [syrup-string ver] [cons loc nil]]
+    | op-start-session ver _pk loc -> wire::encode-record "op:start-session" [cons [syrup-string ver] [cons loc nil]]
     | op-abort reason           -> wire::encode [syrup-tagged "op:abort" [syrup-string reason]]
-    | op-deliver tgt args ap rm -> wire::encode-record "op:deliver" [cons [desc-export tgt] [cons args [cons [opt-pos ap] [cons [opt-pos rm] nil]]]]
+    | op-deliver tgt args ap rm -> wire::encode-record "op:deliver" [cons [desc-export tgt] [cons args [cons [opt-answer-pos ap] [cons [opt-resolve-me rm] nil]]]]
     | op-deliver-only tgt args  -> wire::encode-record "op:deliver-only" [cons [desc-export tgt] [cons args nil]]
-    | op-listen tgt resolver    -> wire::encode-record "op:listen" [cons [desc-export tgt] [cons [desc-export resolver] nil]]
+    ;; Three fields, per the spec: target, the resolver as one of OUR
+    ;; exports, and wants-partial. `op-listen` cannot carry
+    ;; wants-partial, so we always ask for the full resolution.
+    | op-listen tgt resolver    -> wire::encode-record "op:listen" [cons [desc-export tgt] [cons [desc-import-object resolver] [cons [syrup-bool false] nil]]]
     | op-gc-export pos cnt      -> wire::encode-record "op:gc-export" [cons [syrup-nat pos] [cons [syrup-nat cnt] nil]]
     | op-gc-answer pos          -> wire::encode [syrup-tagged "op:gc-answer" [syrup-nat pos]]
+    ;; Two PARALLEL lists: position i pairs with delta i.
+    | op-gc-exports poss deltas -> wire::encode-record "op:gc-exports" [cons [syrup-list [nats-syrup poss]] [cons [syrup-list [nats-syrup deltas]] nil]]
+    ;; ONE argument, which is a list — `encode-record` rather than
+    ;; `wire::encode`, because a record whose single argument is a list
+    ;; is exactly the case the two payload readings disagree about.
+    ;; `encode-record` takes the argument sequence directly and is
+    ;; unambiguous. Same call shape as captp-core's `gc-answers-bytes`.
+    | op-gc-answers poss        -> wire::encode-record "op:gc-answers" [cons [syrup-list [nats-syrup poss]] nil]
     ;; Phase 25/44: peer's reply to our question OR pipelining onto
     ;; their own. Wire form is op:deliver with target=desc:answer N,
     ;; trailing ap/rm carry the (optional) answer-pos and resolver — for
@@ -124,31 +206,23 @@ defn encode-op [op]
         wire::encode-record "op:deliver"
           [cons [desc-answer qpos]
             [cons args
-              [cons [opt-pos ap]
-                [cons [opt-pos rm] nil]]]]
+              [cons [opt-answer-pos ap]
+                [cons [opt-resolve-me rm] nil]]]]
 
 ;; ===========================================================
 ;; Decoder
 ;; ===========================================================
 
-;; The wire format for a positive integer is `digits "+"`; the
-;; Phase-1 decoder always returns a syrup-int (sign already
-;; stripped). For our purposes (refr ids, answer positions,
-;; counts) the value is always a non-negative INT, but we keep
-;; it as Int internally rather than converting to Nat — Nat
-;; conversions are O(n) structural recursion and unnecessary
-;; for table-position arithmetic.
+;; The wire format for a positive integer is `digits "+"`; the Phase-1
+;; decoder always returns a syrup-int (sign already stripped). Every
+;; position this decoder reads — refr ids, answer positions, counts —
+;; is stored in the CapTPOp as a `Nat`, so each one goes through
+;; `wire-nat`, which converts and returns `none` on a negative.
 ;;
-;; To keep our types stable across the boundary, the dispatcher
-;; helpers use Int positions (after re-encoding through the
-;; existing message.prologos which carries Nat targets, decoders
-;; convert via syrup-nat → Nat directly).
+;; That conversion is unary structural recursion and its cost is linear
+;; in the position's VALUE, on a number the peer chooses (see the gaps
+;; document, §1.4 finding 4). Nothing here bounds it.
 ;;
-;; For Phase-2 simplicity we accept both syrup-int and
-;; syrup-nat in `wire-positive` and return as syrup-nat-equivalent
-;; via the (lossy on negatives) fallback `none`. Internal storage
-;; remains as Nat in the CapTPOp so downstream code is unchanged.
-
 ;; int-to-nat / wire-nat MOVED to prologos::ocapn::syrup (2026-07-27).
 ;; They read a SyrupValue as a table position — a SyrupValue concern, not a
 ;; codec one — and `behavior` needs the same reader without depending on the
@@ -178,12 +252,109 @@ defn list-4th [xs]
     | nil      -> none
     | cons _ t -> list-3rd t
 
-;; A `desc:export N` / `desc:answer N` / etc. wrapper becomes
-;; `syrup-tagged "desc:..." (syrup-nat N)`. Unwrap it.
+;; --- Exact record arity ---------------------------------------------
+;;
+;; Upstream asserts `len(record.args) == N` for every type it decodes.
+;; We read positionally with `list-fst`/`2nd`/`3rd`/`4th` and never
+;; looked at the tail, so `<op:deliver <desc:export 1> [] f f "EXTRA">`
+;; decoded clean with the fifth field silently dropped. Each dispatcher
+;; is now gated on the exact count first.
+
+spec list-len0? [List SyrupValue] -> Bool
+defn list-len0? [xs]
+  match xs
+    | nil      -> true
+    | cons _ _ -> false
+
+spec list-len1? [List SyrupValue] -> Bool
+defn list-len1? [xs]
+  match xs
+    | nil      -> false
+    | cons _ t -> list-len0? t
+
+spec list-len2? [List SyrupValue] -> Bool
+defn list-len2? [xs]
+  match xs
+    | nil      -> false
+    | cons _ t -> list-len1? t
+
+spec list-len3? [List SyrupValue] -> Bool
+defn list-len3? [xs]
+  match xs
+    | nil      -> false
+    | cons _ t -> list-len2? t
+
+spec list-len4? [List SyrupValue] -> Bool
+defn list-len4? [xs]
+  match xs
+    | nil      -> false
+    | cons _ t -> list-len3? t
+
+;; --- Descriptor labels ----------------------------------------------
+;;
+;; A position arrives as `syrup-tagged "desc:…" (syrup-nat N)`, and the
+;; LABEL names the table N indexes. It used to be thrown away —
+;; `| syrup-tagged _ p -> wire-nat p` — so `<totally-bogus 3>` in a
+;; target slot unwrapped to export position 3 and was delivered to.
+;; Each slot now checks against its own label set.
+
+;; A deliver / deliver-only / listen TARGET, per upstream's
+;;   assert isinstance(to, DescExport) or isinstance(to, DescAnswer)
+;; (`utils/captp_types.py:472`).
+spec target-label? String -> Bool
+defn target-label? [tag]
+  match [str::eq tag "desc:export"]
+    | true  -> true
+    | false -> str::eq tag "desc:answer"
+
+;; A resolve-me. The sender names one of its OWN objects, so we receive
+;; it as an import — upstream's `DescImport` = import-object or
+;; import-promise (`utils/captp_types.py:420-424`).
+spec resolve-me-label? String -> Bool
+defn resolve-me-label? [tag]
+  match [str::eq tag "desc:import-object"]
+    | true  -> true
+    | false -> str::eq tag "desc:import-promise"
+
+spec unwrap-target-tagged String SyrupValue -> [Option Nat]
+defn unwrap-target-tagged [tag p]
+  match [target-label? tag]
+    | true  -> wire-nat p
+    | false -> none
+
+spec unwrap-resolve-me-tagged String SyrupValue -> [Option Nat]
+defn unwrap-resolve-me-tagged [tag p]
+  match [resolve-me-label? tag]
+    | true  -> wire-nat p
+    | false -> none
+
+;; A `desc:export N` / `desc:answer N` target becomes
+;; `syrup-tagged "desc:..." (syrup-nat N)`. Unwrap it, rejecting any
+;; other label.
 
 spec unwrap-desc SyrupValue -> [Option Nat]
 defn unwrap-desc
-  | syrup-tagged _ p -> wire-nat p
+  | syrup-tagged tag p -> unwrap-target-tagged tag p
+  | syrup-null       -> none
+  | syrup-bool _     -> none
+  | syrup-nat _      -> none
+  | syrup-int _      -> none
+  | syrup-string _   -> none
+  | syrup-symbol _   -> none
+  | syrup-list _     -> none
+  | syrup-refr _     -> none
+  | syrup-bytes _  -> none
+  | syrup-promise _  -> none
+  | syrup-dict  _   -> none
+
+;; The same for a resolve-me slot: `<desc:import-object N>` or
+;; `<desc:import-promise N>`, nothing else. Used for op:listen's
+;; required slot 1 and — via the absent check below — for op:deliver's
+;; optional slot 3.
+
+spec unwrap-resolve-me SyrupValue -> [Option Nat]
+defn unwrap-resolve-me
+  | syrup-tagged tag p -> unwrap-resolve-me-tagged tag p
   | syrup-null       -> none
   | syrup-bool _     -> none
   | syrup-nat _      -> none
@@ -216,26 +387,76 @@ defn desc-is-answer?
   | syrup-promise _    -> false
   | syrup-dict    _   -> false
 
-;; Same shape but for an Option-wrapped descriptor:
-;;   - `syrup-bool false` -> `none`  (canonical absent sentinel)
-;;   - `syrup-null`       -> `none`  (alternate, accepted for compat)
-;;   - `desc:answer N`    -> `some N`
-;;   - anything else      -> `none`
+;; --- The two optional slots -----------------------------------------
+;;
+;; `false` is the absent sentinel; `null` is accepted for compat. The
+;; trouble was that `none` meant BOTH "absent" and "unreadable", so a
+;; malformed slot decoded as fire-and-forget — the one reading that is
+;; definitely wrong, because the peer is waiting on a reply that will
+;; never come. Each slot now has a well-formedness predicate the
+;; dispatcher checks BEFORE unwrapping; a slot that fails it fails the
+;; whole decode.
 
-;; Both spellings of an answer position are accepted, because both occur.
+;; Is this readable as a table position? Deliberately NOT
+;; `some? (wire-nat v)`: `wire-nat` converts through `int-to-nat`,
+;; whose cost is linear in the position's VALUE and is paid again by
+;; the unwrap that follows. Checking the sign is the whole test.
+spec int-nonneg? Int -> Bool
+defn int-nonneg? [i]
+  match [int-lt i 0]
+    | true  -> false
+    | false -> true
+
+spec wire-nat-ok? SyrupValue -> Bool
+defn wire-nat-ok?
+  | syrup-nat _        -> true
+  | syrup-int i        -> int-nonneg? i
+  | syrup-null         -> false
+  | syrup-bool _       -> false
+  | syrup-string _     -> false
+  | syrup-symbol _     -> false
+  | syrup-tagged _ _   -> false
+  | syrup-list _       -> false
+  | syrup-refr _       -> false
+  | syrup-bytes _    -> false
+  | syrup-promise _    -> false
+  | syrup-dict    _   -> false
+
+;; ANSWER-POSITION slot. Upstream reads it raw (`answer_position =
+;; record.args[2]`) and writes it raw, so the spec form is a bare
+;; non-negative integer, or `false` for "no answer wanted".
+;; `<desc:answer N>` is accepted as well, because this codebase wrote
+;; that spelling for years and `encode-op` still does — without the
+;; bare arm every pipelined message from a real peer arrived with its
+;; answer position silently dropped.
 ;;
-;; `<desc:answer N>` is what this codebase wrote for years. But the ANSWER
-;; POSITION slot of op:deliver carries a BARE INTEGER on the wire — upstream
-;; reads slot 2 raw and writes it raw — so every pipelined message from a real
-;; peer arrived with its answer position silently DROPPED to `none`, which
-;; reads downstream as "fire and forget" rather than as an error. The Car
-;; Factory chain works link by link with the tagged form and not at all with
-;; the bare one; that asymmetry is what this arm closes.
-;;
-;; `false` (and `null`, for compat) remain the absent sentinel, so a bare
-;; integer is unambiguous.
-spec unwrap-opt-desc SyrupValue -> [Option Nat]
-defn unwrap-opt-desc
+;; A NEGATIVE integer is malformed: `wire-nat` cannot represent it, and
+;; it used to collapse to `none`, i.e. to fire-and-forget.
+spec answer-pos-desc-ok? String SyrupValue -> Bool
+defn answer-pos-desc-ok? [tag p]
+  match [str::eq tag "desc:answer"]
+    | true  -> wire-nat-ok? p
+    | false -> false
+
+spec answer-pos-ok? SyrupValue -> Bool
+defn answer-pos-ok?
+  | syrup-null         -> true
+  | syrup-bool _       -> true
+  | syrup-nat _        -> true
+  | syrup-int i        -> int-nonneg? i
+  | syrup-tagged tag p -> answer-pos-desc-ok? tag p
+  | syrup-string _     -> false
+  | syrup-symbol _     -> false
+  | syrup-list _       -> false
+  | syrup-refr _       -> false
+  | syrup-bytes _    -> false
+  | syrup-promise _    -> false
+  | syrup-dict    _   -> false
+
+;; The tagged arm drops the label because `answer-pos-ok?` has already
+;; established it is `desc:answer`. Call them as a pair.
+spec unwrap-opt-answer-pos SyrupValue -> [Option Nat]
+defn unwrap-opt-answer-pos
   | syrup-null         -> none
   | syrup-bool _       -> none
   | syrup-tagged _ p   -> wire-nat p
@@ -248,6 +469,31 @@ defn unwrap-opt-desc
   | syrup-bytes _    -> none
   | syrup-promise _    -> none
   | syrup-dict    _   -> none
+
+;; RESOLVE-ME slot: `false` / `null` for absent, otherwise one of the
+;; two import descriptors. A `<desc:answer N>` here used to unwrap to a
+;; bare N that the bridge re-addressed as `<desc:export N>` — a slot
+;; naming the answer table routed into the export table.
+spec resolve-me-desc-ok? String SyrupValue -> Bool
+defn resolve-me-desc-ok? [tag p]
+  match [resolve-me-label? tag]
+    | true  -> wire-nat-ok? p
+    | false -> false
+
+spec resolve-me-ok? SyrupValue -> Bool
+defn resolve-me-ok?
+  | syrup-null         -> true
+  | syrup-bool _       -> true
+  | syrup-tagged tag p -> resolve-me-desc-ok? tag p
+  | syrup-nat _        -> false
+  | syrup-int _        -> false
+  | syrup-string _     -> false
+  | syrup-symbol _     -> false
+  | syrup-list _       -> false
+  | syrup-refr _       -> false
+  | syrup-bytes _    -> false
+  | syrup-promise _    -> false
+  | syrup-dict    _   -> false
 
 ;; ===========================================================
 ;; Per-op dispatchers
@@ -265,8 +511,8 @@ defn dispatch-gc-answer [p]
     | none   -> none
     | some n -> some [op-gc-answer n]
 
-spec dispatch-gc-export-args [List SyrupValue] -> [Option CapTPOp]
-defn dispatch-gc-export-args [xs]
+spec dispatch-gc-export-fields [List SyrupValue] -> [Option CapTPOp]
+defn dispatch-gc-export-fields [xs]
   match [list-fst xs]
     | none -> none
     | some pos ->
@@ -279,6 +525,12 @@ defn dispatch-gc-export-args [xs]
                     match [wire-nat cnt]
                       | none -> none
                       | some cnt-n -> some [op-gc-export pos-n cnt-n]
+
+spec dispatch-gc-export-args [List SyrupValue] -> [Option CapTPOp]
+defn dispatch-gc-export-args [xs]
+  match [list-len2? xs]
+    | false -> none
+    | true  -> dispatch-gc-export-fields xs
 
 spec dispatch-gc-export SyrupValue -> [Option CapTPOp]
 defn dispatch-gc-export
@@ -295,8 +547,125 @@ defn dispatch-gc-export
   | syrup-promise _ -> none
   | syrup-dict _   -> none
 
-spec dispatch-deliver-only-args [List SyrupValue] -> [Option CapTPOp]
-defn dispatch-deliver-only-args [xs]
+;; --- The plural GC ops, which are the ones a peer actually sends ----
+;;
+;; `<op:gc-exports [pos …] [delta …]>` and `<op:gc-answers [pos …]>`.
+;; Neither had an arm in `dispatch-op`, so every conforming peer's GC
+;; frame decoded to `none` and was dropped to `""` by
+;; `interop-driver`'s `step-connection` with no log — which is why the
+;; export refcount table only ever grew.
+
+;; A Syrup list read as positions. Strict: one unreadable element
+;; (negative, non-numeric) fails the whole list rather than being
+;; skipped, because a dropped position is a table entry that never gets
+;; released.
+spec wire-nat-cons Nat [Option [List Nat]] -> [Option [List Nat]]
+defn wire-nat-cons [n rest]
+  match rest
+    | none    -> none
+    | some ns -> some [cons n ns]
+
+spec wire-nat-list [List SyrupValue] -> [Option [List Nat]]
+defn wire-nat-list [xs]
+  match xs
+    | nil -> some [nil Nat]
+    | cons h t ->
+        match [wire-nat h]
+          | none   -> none
+          | some n -> wire-nat-cons n [wire-nat-list t]
+
+spec nat-list-of SyrupValue -> [Option [List Nat]]
+defn nat-list-of
+  | syrup-list xs -> wire-nat-list xs
+  | syrup-null     -> none
+  | syrup-bool _   -> none
+  | syrup-nat _    -> none
+  | syrup-int _    -> none
+  | syrup-string _ -> none
+  | syrup-symbol _ -> none
+  | syrup-tagged _ _ -> none
+  | syrup-refr _   -> none
+  | syrup-bytes _ -> none
+  | syrup-promise _ -> none
+  | syrup-dict _   -> none
+
+;; `<op:gc-answers [7+ 8+]>` is a ONE-argument record whose argument is
+;; a list, and that is the one shape the record decoder has had two
+;; readings of: the payload is either the positions list itself, or a
+;; one-element argument sequence containing it. Both are accepted here
+;; and they cannot be confused, because a positions list holds NUMBERS
+;; while the wrapped form holds a LIST.
+spec first-of-syrup-list SyrupValue -> [Option SyrupValue]
+defn first-of-syrup-list
+  | syrup-list xs -> list-fst xs
+  | syrup-null     -> none
+  | syrup-bool _   -> none
+  | syrup-nat _    -> none
+  | syrup-int _    -> none
+  | syrup-string _ -> none
+  | syrup-symbol _ -> none
+  | syrup-tagged _ _ -> none
+  | syrup-refr _   -> none
+  | syrup-bytes _ -> none
+  | syrup-promise _ -> none
+  | syrup-dict _   -> none
+
+spec gc-answers-unwrapped SyrupValue -> [Option [List Nat]]
+defn gc-answers-unwrapped [p]
+  match [first-of-syrup-list p]
+    | none       -> none
+    | some inner -> nat-list-of inner
+
+spec gc-answers-positions SyrupValue -> [Option [List Nat]]
+defn gc-answers-positions [p]
+  match [nat-list-of p]
+    | some ns -> some ns
+    | none    -> gc-answers-unwrapped p
+
+spec dispatch-gc-answers SyrupValue -> [Option CapTPOp]
+defn dispatch-gc-answers [p]
+  match [gc-answers-positions p]
+    | none    -> none
+    | some ns -> some [op-gc-answers ns]
+
+spec dispatch-gc-exports-fields [List SyrupValue] -> [Option CapTPOp]
+defn dispatch-gc-exports-fields [xs]
+  match [list-fst xs]
+    | none -> none
+    | some poss ->
+        match [nat-list-of poss]
+          | none -> none
+          | some pl ->
+              match [list-2nd xs]
+                | none -> none
+                | some deltas ->
+                    match [nat-list-of deltas]
+                      | none -> none
+                      | some dl -> some [op-gc-exports pl dl]
+
+spec dispatch-gc-exports-args [List SyrupValue] -> [Option CapTPOp]
+defn dispatch-gc-exports-args [xs]
+  match [list-len2? xs]
+    | false -> none
+    | true  -> dispatch-gc-exports-fields xs
+
+spec dispatch-gc-exports SyrupValue -> [Option CapTPOp]
+defn dispatch-gc-exports
+  | syrup-list xs -> dispatch-gc-exports-args xs
+  | syrup-null     -> none
+  | syrup-bool _   -> none
+  | syrup-nat _    -> none
+  | syrup-int _    -> none
+  | syrup-string _ -> none
+  | syrup-symbol _ -> none
+  | syrup-tagged _ _ -> none
+  | syrup-refr _   -> none
+  | syrup-bytes _ -> none
+  | syrup-promise _ -> none
+  | syrup-dict _   -> none
+
+spec dispatch-deliver-only-fields [List SyrupValue] -> [Option CapTPOp]
+defn dispatch-deliver-only-fields [xs]
   match [list-fst xs]
     | none -> none
     | some tgt ->
@@ -306,6 +675,12 @@ defn dispatch-deliver-only-args [xs]
               match [list-2nd xs]
                 | none -> none
                 | some args -> some [op-deliver-only t args]
+
+spec dispatch-deliver-only-args [List SyrupValue] -> [Option CapTPOp]
+defn dispatch-deliver-only-args [xs]
+  match [list-len2? xs]
+    | false -> none
+    | true  -> dispatch-deliver-only-fields xs
 
 spec dispatch-deliver-only SyrupValue -> [Option CapTPOp]
 defn dispatch-deliver-only
@@ -322,8 +697,12 @@ defn dispatch-deliver-only
   | syrup-promise _ -> none
   | syrup-dict _   -> none
 
-spec dispatch-listen-args [List SyrupValue] -> [Option CapTPOp]
-defn dispatch-listen-args [xs]
+;; Three fields: target, resolve-me, wants-partial. The third is
+;; required — upstream asserts arity 3 — but `op-listen` has nowhere to
+;; put it, so its value is dropped and a peer asking for partial
+;; resolutions is indistinguishable from one that is not.
+spec dispatch-listen-fields [List SyrupValue] -> [Option CapTPOp]
+defn dispatch-listen-fields [xs]
   match [list-fst xs]
     | none -> none
     | some tgt ->
@@ -333,9 +712,15 @@ defn dispatch-listen-args [xs]
               match [list-2nd xs]
                 | none -> none
                 | some r ->
-                    match [unwrap-desc r]
+                    match [unwrap-resolve-me r]
                       | none -> none
                       | some r-n -> some [op-listen t r-n]
+
+spec dispatch-listen-args [List SyrupValue] -> [Option CapTPOp]
+defn dispatch-listen-args [xs]
+  match [list-len3? xs]
+    | false -> none
+    | true  -> dispatch-listen-fields xs
 
 spec dispatch-listen SyrupValue -> [Option CapTPOp]
 defn dispatch-listen
@@ -361,8 +746,23 @@ defn dispatch-deliver-from-tgt [tgt-raw t args ap rm]
     | true  -> op-deliver-to-answer t args ap rm
     | false -> op-deliver t args ap rm
 
-spec dispatch-deliver-args [List SyrupValue] -> [Option CapTPOp]
-defn dispatch-deliver-args [xs]
+;; Both optional slots are checked for well-formedness before either is
+;; read, so a malformed one fails the frame rather than reading as
+;; "absent" — see § The two optional slots.
+spec deliver-check-rm SyrupValue Nat SyrupValue SyrupValue SyrupValue -> [Option CapTPOp]
+defn deliver-check-rm [tgt-raw t args ap rm]
+  match [resolve-me-ok? rm]
+    | false -> none
+    | true  -> some [dispatch-deliver-from-tgt tgt-raw t args [unwrap-opt-answer-pos ap] [unwrap-resolve-me rm]]
+
+spec deliver-from-slots SyrupValue Nat SyrupValue SyrupValue SyrupValue -> [Option CapTPOp]
+defn deliver-from-slots [tgt-raw t args ap rm]
+  match [answer-pos-ok? ap]
+    | false -> none
+    | true  -> deliver-check-rm tgt-raw t args ap rm
+
+spec dispatch-deliver-fields [List SyrupValue] -> [Option CapTPOp]
+defn dispatch-deliver-fields [xs]
   match [list-fst xs]
     | none -> none
     | some tgt ->
@@ -377,7 +777,13 @@ defn dispatch-deliver-args [xs]
                       | some ap ->
                           match [list-4th xs]
                             | none -> none
-                            | some rm -> some [dispatch-deliver-from-tgt tgt t args [unwrap-opt-desc ap] [unwrap-opt-desc rm]]
+                            | some rm -> deliver-from-slots tgt t args ap rm
+
+spec dispatch-deliver-args [List SyrupValue] -> [Option CapTPOp]
+defn dispatch-deliver-args [xs]
+  match [list-len4? xs]
+    | false -> none
+    | true  -> dispatch-deliver-fields xs
 
 spec dispatch-deliver SyrupValue -> [Option CapTPOp]
 defn dispatch-deliver
@@ -394,6 +800,46 @@ defn dispatch-deliver
   | syrup-promise _ -> none
   | syrup-dict _   -> none
 
+;; The spec record is FOUR fields —
+;;   <op:start-session ver pubkey-sexp locator sig-sexp>
+;; — so the LOCATOR is args[2]. args[1] is the session public key as a
+;; gcrypt s-expression (`utils/captp_types.py:378`), and reading it as
+;; the locator is what this used to do: a real peer's start-session
+;; decoded with its pubkey sitting in the `loc` slot.
+;;
+;; The two-field form is accepted as well, because `encode-op` and
+;; `captp-core`'s `our-session-bytes` both still emit it and it must
+;; round-trip. No peer sends it.
+spec start-session-loc-slot2 [List SyrupValue] -> [Option SyrupValue]
+defn start-session-loc-slot2 [xs]
+  match [list-len2? xs]
+    | true  -> list-2nd xs
+    | false -> none
+
+spec start-session-loc-slot [List SyrupValue] -> [Option SyrupValue]
+defn start-session-loc-slot [xs]
+  match [list-len4? xs]
+    | true  -> list-3rd xs
+    | false -> start-session-loc-slot2 xs
+
+;; Field 2 of a 4-field frame is the session PUBKEY s-expression. A legacy
+;; 2-field frame has none, and yields `syrup-null` — which is what every
+;; consumer must treat as "this peer is unauthenticated".
+spec start-session-pubkey-slot [List SyrupValue] -> SyrupValue
+defn start-session-pubkey-slot [xs]
+  match [list-len4? xs]
+    | false -> syrup-null
+    | true  ->
+        match [list-2nd xs]
+          | none   -> syrup-null
+          | some k -> k
+
+spec start-session-with-loc String SyrupValue [Option SyrupValue] -> [Option CapTPOp]
+defn start-session-with-loc [ver-s pk loc]
+  match loc
+    | none   -> none
+    | some l -> some [op-start-session ver-s pk l]
+
 spec dispatch-start-session-args [List SyrupValue] -> [Option CapTPOp]
 defn dispatch-start-session-args [xs]
   match [list-fst xs]
@@ -401,10 +847,7 @@ defn dispatch-start-session-args [xs]
     | some ver ->
         match [get-string ver]
           | none -> none
-          | some ver-s ->
-              match [list-2nd xs]
-                | none -> none
-                | some loc -> some [op-start-session ver-s loc]
+          | some ver-s -> start-session-with-loc ver-s [start-session-pubkey-slot xs] [start-session-loc-slot xs]
 
 spec dispatch-start-session SyrupValue -> [Option CapTPOp]
 defn dispatch-start-session
@@ -432,29 +875,41 @@ defn dispatch-start-session
 ;; Tag dispatcher
 ;; ===========================================================
 
+;; The chain is split in two so that no single `defn` body carries a
+;; nine-deep `match` nest. `dispatch-op-rest` holds the tail.
+
+spec dispatch-op-rest String SyrupValue -> [Option CapTPOp]
+defn dispatch-op-rest [tag payload]
+  match [str::eq tag "op:gc-exports"]
+    | true  -> dispatch-gc-exports payload
+    | false ->
+        match [str::eq tag "op:gc-answers"]
+          | true  -> dispatch-gc-answers payload
+          | false ->
+              match [str::eq tag "op:gc-export"]
+                | true  -> dispatch-gc-export payload
+                | false ->
+                    match [str::eq tag "op:gc-answer"]
+                      | true  -> dispatch-gc-answer payload
+                      | false -> none
+
 spec dispatch-op String SyrupValue -> [Option CapTPOp]
 defn dispatch-op [tag payload]
   match [str::eq tag "op:abort"]
     | true  -> dispatch-abort payload
     | false ->
-        match [str::eq tag "op:gc-answer"]
-          | true  -> dispatch-gc-answer payload
+        match [str::eq tag "op:deliver"]
+          | true  -> dispatch-deliver payload
           | false ->
-              match [str::eq tag "op:gc-export"]
-                | true  -> dispatch-gc-export payload
+              match [str::eq tag "op:deliver-only"]
+                | true  -> dispatch-deliver-only payload
                 | false ->
-                    match [str::eq tag "op:deliver-only"]
-                      | true  -> dispatch-deliver-only payload
+                    match [str::eq tag "op:listen"]
+                      | true  -> dispatch-listen payload
                       | false ->
-                          match [str::eq tag "op:listen"]
-                            | true  -> dispatch-listen payload
-                            | false ->
-                                match [str::eq tag "op:deliver"]
-                                  | true  -> dispatch-deliver payload
-                                  | false ->
-                                      match [str::eq tag "op:start-session"]
-                                        | true  -> dispatch-start-session payload
-                                        | false -> none
+                          match [str::eq tag "op:start-session"]
+                            | true  -> dispatch-start-session payload
+                            | false -> dispatch-op-rest tag payload
 
 spec syrup-to-op SyrupValue -> [Option CapTPOp]
 defn syrup-to-op

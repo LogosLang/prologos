@@ -29,7 +29,8 @@
 ;;;     signature-bytes), all as Latin-1 Strings. Returns Bool.
 ;;;
 ;;;   crypto-close-keypair  : (Nat -> Bool)
-;;;     Release a keypair handle. Returns #t if it was present.
+;;;     Zero the secret key, then release the handle. Returns #t if
+;;;     it was present.
 
 (require ffi/unsafe
          ffi/unsafe/define
@@ -125,6 +126,10 @@
   (hash-count crypto-table))
 
 (define (crypto-table-clear!)
+  ;; Same zeroing obligation as crypto-close-keypair (see below): drop
+  ;; the table only after the secrets it holds have been overwritten.
+  (for ([(_id entry) (in-hash crypto-table)])
+    (crypto-wipe-secret! entry))
   (set! crypto-table (make-hasheq))
   (set! crypto-next-id 0))
 
@@ -166,12 +171,25 @@
     (error 'crypto-verify "expected 64-byte sig; got ~a" (bytes-length sig)))
   (= 0 (crypto-sign-verify-detached-raw sig msg pk)))
 
+;; Overwrite the 64-byte secret in place BEFORE dropping the table
+;; reference. `hash-remove!` only makes the bytes unreachable; it does
+;; not erase them, and the collector is free to leave that page
+;; readable for an unbounded time (and to have copied it during a
+;; previous collection). Zeroing what we still hold is the only part
+;; of that we control, and it is what libsodium's own
+;; `sodium_memzero` discipline asks of a caller.
+(define (crypto-wipe-secret! entry)
+  (bytes-fill! (cdr entry) 0))
+
 (define (crypto-close-keypair id)
-  "Release a keypair handle. Returns #t if it was present."
-  (define present? (hash-has-key? crypto-table id))
-  (when present?
-    (hash-remove! crypto-table id))
-  present?)
+  "Zero the secret key, then release the handle. Returns #t if it was present."
+  (define entry (hash-ref crypto-table id #f))
+  (cond
+    [entry
+     (crypto-wipe-secret! entry)
+     (hash-remove! crypto-table id)
+     #t]
+    [else #f]))
 
 ;; ========================================
 ;; FFI registry (mirrors tcp-ffi-registry)
