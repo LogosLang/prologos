@@ -26,7 +26,7 @@ rulings, censuses and test delta live in its own section.
 | **P1b-i** | **Repairs + probes + the Q8 DRAFT** — the top-level `<` swallow fix (Q_M4) · WS narrowing typed vars · `def ?x` reservation (Q_M3) · the Q_M1 gating probe + `:N` / keyword-`*` / `:<` · **Q8 written from the results** | ✅ | §5.P1b-i + **§Q8** · `fc65ca54` — suite 9263/474/0, corpus A/B 160 files / 2 intended diffs; **Q8 owner-reviewed ✅ 2026-07-28, amended by Q_M8** (ordinals multi-digit in both bands) |
 | **P1b-ii** | **The `.{` opener** — `dot-lbrace` re-mint across **EIGHT** edit regions (not six) incl. the surviving `surface-rewrite.rkt:516` POSITIVE addition; plain `'rbrace` closer (Q_M5); new `$dot-brace` sentinel + `dot-brace-group` tag + tree-parser arm (Q_N1); the Q_N3 two-grouper agreement guard | ✅ | §5.P1b-ii · **`1a1091d4`** — suite **9279/474/0**, acceptance 28/28 + 89/89, corpus A/B **158 files / 1 intended diff**; adversarial verify caught a **BLOCKING regression I introduced** (`$dot-brace` missing from `pattern-var?` → whole-file abort in a defmacro template) — fixed + pinned pre-commit |
 | **P1b-iii** | **Brace adjacency + the head registry + Q_M8** — the forced `$select-brace` sentinel (Q_M6) · the `reader-forms.rkt` leaf registry · adjacency in BOTH groupers (Q_N7) · bucket 4 ruled SELECT (Q_N5) · the `:N` digit-run widening + the structural `fused-type-annot?` repair (Q_N4) · P1b-ii's residual CLOSED | ✅ | §5.P1b-iii · **`a6af2761`** — suite **9304/474/0**, acceptance 28/28 + 89/89, corpus A/B **158 files / ZERO diffs**; adversarial verify caught **3 BLOCKING** (one non-idempotent fold → a silently-dropped `defn` clause) + 10 SIGNIFICANT — all fixed or filed pre-commit |
-| **P2** | **Grade-1 core** — `.k`/`.N` access + bare-path extraction, on the landed P2 substrate | ⬜ | §5.P2 · `.N` has an end-to-end head start via `(get expr N)` |
+| **P2** | **Grade-1 core** — `.k`/`.N` access + bare-path extraction. Carries **Q_M8's dot half** (`digit+` at the dot). Ruled at the mini-audit: **`.N` REUSES `$postfix-index`** (Q_R1 — near-zero registrations, fixpoint inherited, `v[0]` ≡ `v.0` byte-identical) · **copy the `:N` trailing guard** (Q_R2) · **dot band stays adjacency-free** (Q_R3) · `m.0` moves out of the v2 block (Q_R4) · **the `.N` error surface IS IN SCOPE** (Q_R5) | ⬜ | §5.P2 · audit `wf_22020418-a5f` (**12th** consecutive premise refuted) · doc-truth landed separately `0e5a56a3` (Q_R6) · ⚠ the "0 errors" claim was a **LAYER ERROR** — end-to-end the rational forms are LOUD, so the pin is TWO-LAYER |
 | **P3** | **Blocks** — `x{…}`, projection-by-default, `^` (3 continuations), L4 sort homogeneity, **HONEST NESTING (n-tuples at every n — ruled 2a)**, **STRICT merge** (the §3.6 waypoint) | ⬜ | §5.P3 · Q2 gate RESOLVED (2c: carrier order, thesis-derived) |
 | **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | ⬜ | §5.P4 · step-list node (4b) · per-field row-map (4c) |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | §5.P5 · L1–L5 law battery |
@@ -442,6 +442,87 @@ main-session R-lens-verified; full record in §5.P1b):
   tokenizer changes. *Watching data point: probing before ruling changed the
   ruling — this time against MY OWN recommendation, on a premise I stated
   confidently and had not measured to its edges.*
+
+**The P2 mini-audit rulings [owner, 2026-07-29]** (audit `wf_22020418-a5f`, 6
+facets + completeness critic @ `c5153685`; every load-bearing claim
+main-session R-lens-verified before adjudication. **12th consecutive phase
+whose premise the mini-audit refuted or rescoped.** The doc-truth half landed
+separately at `0e5a56a3` per owner ruling Q_R6):
+
+- **Q_R1 — `.N` REUSES `$postfix-index`; it does NOT mint a new sentinel.**
+  The audit's decisive finding: §5.P2 never ruled the sentinel choice, and it
+  is the decision that sets the phase's whole cost. Both naive `$dot-access`
+  reuses are BROKEN — a numeric payload **hard-raises** at macros.rkt:5556
+  (`symbol->string` on `10`, i.e. a whole-file abort) and a symbol payload
+  `|10|` silently yields `(map-get x :10)`, the wrong NODE (no PVec leg) with
+  the wrong KEY DOMAIN. Reuse is verified near-free: `$postfix-index` is
+  ALREADY in `pattern-var?` (macros.rkt:1152) and ALREADY in the
+  `access-sentinel?` fusion gate (:5496), and its fold arm ALREADY terminates
+  `[else `(get ,target ,key)]` (:5625) — the exact target §5.P2 specifies. So
+  `v[0]` and `v.0` become **byte-identical datums**, which makes the owner's
+  standing "two surfaces over ONE mechanism" ruling literally true at the datum
+  layer rather than merely architecturally.
+  **Costs, accepted with eyes open**: (a) `.0` and `[0]` are datum-
+  indistinguishable, so spelling-specific diagnostics are forfeited and
+  X.close's open "does bracket-postfix retire?" question is prejudged toward
+  keeping them unified; (b) of the fold arm's four retirement guards only
+  `postfix-hole` is reachable from a `digit+` payload, so `_.0` would print
+  BRACKET-flavoured advice (*"use `[fn [m] m[k]]`"*) — **P2 fixes that message
+  to be spelling-agnostic.** Decisive reason: the nine-tier sentinel surface
+  produced the BLOCKING defect in *both* of the last two slices, and reuse
+  avoids it entirely (no new `pattern-var?` entry, no new pp-datum/form-deps
+  omission — the residual stays 23-of-33, not 24-of-34).
+- **Q_R2 — COPY the `:N` twin's TRAILING GUARD.** The just-landed colon half
+  consumes `digit+` and THEN declines on `ident-continue?`
+  (parse-reader.rkt:907). `.N` copies it. This governs five shapes that each
+  lex as ONE numeric token today — `x.0N` → `($nat-literal 0)` · `x.1e3` →
+  **1000** · `x.1/2` → `($rat-literal 1/2)` · `x.1f` → float · `x.1p8` → posit
+  — and with the guard all five DECLINE and stay exactly as they are today,
+  minting no new error surface. **`xs.0N` is a NAMED NON-GOAL**: `0N` is the
+  project's own Nat spelling and `expr-get` accepts Nat *or* Int, so it reads
+  as sensible Prologos, but supporting it needs `digit+` plus an optional `N`
+  and that is not this phase. Recorded so the next reader does not think it
+  was missed.
+- **Q_R3 — the DOT BAND STAYS ADJACENCY-FREE, ruled rather than inherited.**
+  The band has no adjacency gate at all (`adjacent-to-base?` is called only
+  from the bracket and brace arms), so `x .0` and `x. 0` both read `((x |.|
+  0))` and a spaced `.0` WILL select after P2. `.k` never enforced adjacency
+  either, so requiring it for `.N` alone would create a NEW inconsistency
+  *inside* the band, and retrofitting the whole band is out of scope. Blast
+  radius is nil by census. Per Q_N5's precedent this is RULED, not discovered.
+- **Q_R4 — `m.0` MOVES OUT of the `§10.6` v2 block.** The corpus
+  self-contradicted: `m.0` sat inside a block headed *"v2, PERMANENTLY
+  commented (spec §7.3)"* while its own annotation said *"works at D4.P2 via
+  .N"*. It moves to a live section rather than the header being amended.
+  Ordering also matters and the audit priced it: `run-file.rkt` keys `;;N=>` to
+  **RESULT INDEX**, so uncommenting `party.0.name` (line 118) costs **23**
+  marker renumbers while a trailing addition costs **zero** — land the trailing
+  ones first.
+- **Q_R5 — the `.N` ERROR SURFACE IS IN SCOPE.** P2 owns the first user-facing
+  ordinal-access diagnostics, and the two out-of-range paths are wildly
+  asymmetric: PVec at RUNTIME is excellent (`panic: get: index 9 out of bounds
+  for PVec of length 3`) while a CLOSED nat-row (het tuple) out-of-range is
+  caught statically and reported as a bare *"Could not infer type"* — no arity,
+  no positions, no path — because `closed-row-miss-hint` is **KEYWORD-GATED**
+  (typing-errors.rkt:148, :151). Het tuples are exactly the carrier the
+  acceptance file pins (`mixed`, `events`), so this is the FIRST thing a user
+  hits on the new surface.
+- **Q_R6 — the doc-truth batch lands SEPARATELY**, before P2's code. Done:
+  `0e5a56a3`. It corrected a self-contradiction in **owner-reviewed normative
+  text** (§Q8.1's five-vs-six), a **layer error** that had already propagated
+  into a session summary (the "0 errors" claim), a **false illustration** in
+  §Q8.5 invariant 2 that no facet caught, invariant 3's opener-shaped token
+  layer plus four stale coordinates including the fusion gate it exists to
+  name, and §8 R3's retired-`.*` quadruple-duty claim.
+
+**Recorded adaptation (Batch-1 discipline — an UNRECORDED adaptation is a bug
+in D4, so it is recorded here rather than applied silently):** `.N` routing
+through `expr-get` means that on a `(Map Int V)` subject it resolves to a
+**NOMINAL key lookup wearing ordinal notation**, against the spec's own
+key-sort thesis (spec §2.1 reads `.N` as "ordinal access (index)"). Blast
+radius is low — `(Map Int V)` requires an annotation to reach — and unifying
+the spellings is the point of Q_R1, so the adaptation is ACCEPTED. Named so it
+cannot be rediscovered as a defect.
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
@@ -1711,9 +1792,139 @@ field `-1` (`ident-start?` admits `-`). A digit-required `.N` correctly declines
 it, but the carried "`.-1` = classifier rejection" ruling is therefore about a
 **well-formed token** and is a CONSUMER decision, not a classifier one.
 
-**Test delta**: corpus §10 grade-1 lines uncomment; track-file pins for the
-chain forms + `v[0]`-coexistence pins (both spellings extract, per the
-ruling). Status: ⬜.
+#### Mini-audit `wf_22020418-a5f` — what it changed  (6 facets + critic @ `c5153685`)
+
+**12th consecutive phase whose premise it refuted or rescoped.** The doc-truth
+half landed separately (`0e5a56a3`, ruling Q_R6). What it changed about the
+WORK:
+
+1. **The sentinel choice was never ruled, and it sets the whole cost** → Q_R1
+   (reuse `$postfix-index`). Both naive `$dot-access` reuses are broken: a
+   numeric payload hard-raises (whole-file abort), a symbolised one silently
+   mints the wrong node with the wrong key domain.
+2. **The fold arm's fixpoint question is ANSWERED, not open.** The existing
+   fold is a fixpoint *by construction* because no arm's output is
+   sentinel-headed: re-entry is gated on the datum having CHANGED
+   (macros.rkt:2527-2534) and the ormap gate short-circuits (:5537), so pass 2
+   is a no-op. Every live arm emits `map-get` / `nil-safe-get` / `get` /
+   `$retired-selection`, none of which matches any of the eight
+   `access-sentinel?` predicates. **`(get target N)` inherits the property** —
+   which is a second, independent reason Q_R1's reuse is the safe option, since
+   P1b-iii's BLOCKING defect was exactly a non-fixpoint fold.
+3. **`token-entry->stx`'s `case type` is the site that matters, and a miss
+   there is SILENT** (parse-reader.rkt:2264; copy the `dot-access` template at
+   :2265-2270). ⚠ Build the payload with **`string->number`**, not the
+   siblings' `string->symbol` — that is what makes it byte-identical to
+   `v[0]`'s bare fixnum and thus what makes Q_R1 actually hold.
+4. **Two work items are FREE or already done.** "Chain forms
+   (`admins.0.name`)" is free — chains arrive as flat top-level siblings and
+   the existing single fold-left handles them in one pass. "Bare-path
+   extraction" already works at top level, `def` RHS, HOF lambda, and spec'd
+   `defn`; the ONLY gap is a `defn` with an UNANNOTATED param, which is the
+   **§5.PX** inference family, not a `.k`/`.N` gap. §5.P2's Intent silently
+   promised that; it does not deliver it and should not pretend to.
+5. **The A/B diff set is predicted EMPTY** — zero non-comment `ident.digit`
+   occurrences across all 160 tracked `.prologos` at HEAD, computed with the
+   REAL tokenizer over a clean `git archive HEAD` snapshot. ⚠ **The dirty-tree
+   trap is quantified in advance at exactly ONE site**:
+   `lib/examples/foray.prologos:787` (`app-config[admins.0[name^ role^]]`),
+   owner WIP, absent at HEAD. **If the A/B reports one diff in `foray`, that is
+   THE TREE, not the change.**
+6. **`rewrite-dot-access` has THREE production callers, not one** —
+   macros.rkt:1957 (`preparse-map-literal-contents`, map-literal VALUES),
+   :2527 (the re-entry), :6236 (`expand-mixfix-form`, the `.( … )` token stream
+   before pratt-parse). A `.N` arm placed *inside* `rewrite-dot-access`
+   inherits all three free; anywhere else silently misses `{:k x.0}` and gives
+   "Unexpected token after expression" for `.(x.0 + 1)`.
+7. ⚠ **A FALSE PREMISE in the predecessor is struck**: its D3-era prescription
+   was "one fold arm plus **stopping that re-entrancy**". The re-entrancy is
+   **LOAD-BEARING** — `v[idx.i]` → `20 : Int` works *only* because the payload
+   is re-preparsed. Do not stop it. What it actually gets wrong is narrow (a
+   LITERAL-headed payload, `v[1.b]`, folding to `(map-get 1 :b)`) and the
+   result is an unguided error, not a wrong value.
+
+#### Work (as ruled)
+
+- **The recognizer**: dot-anchored, `digit+`, with the Q_R2 `ident-continue?`
+  trailing guard; prefix-disjoint from all SIX band members (§Q8.1); priority
+  87 or 88, placed in source order inside the dot cluster — but per §Q8.5
+  invariant 1 the safety argument is **disjointness, not the number**. Use
+  `(char<=? #\0 c #\9)` rather than `char-numeric?` (Unicode-wide vs
+  `string->number`'s narrower domain — a NARROWING, so the F1b.7g rule
+  permits it).
+- **The token→datum arm** at `token-entry->stx` (site f), payload via
+  `string->number`, minting `$postfix-index`.
+- **No fold-arm change is expected** (Q_R1 reuse) — but VERIFY, and flag if the
+  existing arm needs anything.
+- **Q_R5's error surface**: un-gate `closed-row-miss-hint` for the nat
+  key-domain so het-tuple out-of-range names arity and index instead of "Could
+  not infer type"; and make the `postfix-hole` message spelling-agnostic (it
+  currently gives bracket advice, which `_.0` would now reach).
+- **NEW-instance guards P2 must not introduce** (the audit's "does P2 create a
+  new instance" pass): `namespace.rkt:888`'s ns-dot guard raises only for
+  `$dot-access`, so `ns foo.2` would **SILENTLY DROP** the segment —
+  reintroducing exactly the bug `b0db8f3e` fixed. Extend its memq. Same class:
+  `reconstitute-selection-paths`/`-path-list` (macros.rkt:2695, :2700) are
+  `$dot-access`-only, so a WS selection path with an ordinal segment
+  (`:items.0`) is not reconstituted — verify and fix or file.
+- **Commit the corpus A/B harness.** There is NO committed harness; it is
+  re-derived every phase, which is how P1b-ii's first run measured the tree.
+  Two live footguns to encode: `tokenize-char-rrb` reads a MUTABLE registry
+  populated only inside the reader entry points, so a direct call matches
+  NOTHING (one facet's first scan returned a FALSE ZERO for exactly this — put
+  a tripwire in); and the walker must skip leading-`.`/`~` basenames (a
+  dangling Emacs lock symlink for the acceptance file exists right now).
+- **§Q8.3 one-liner for P4** (forward obligation the audit found): the new
+  `.N` token becomes the adjacency PREDECESSOR of a following `:name`
+  (`xs.0:name`), so §Q8.3's FOCUS-BEARING token set must admit it or broadcast
+  silently fails to fire at P4. One line now prevents a P4 rediscovery.
+
+#### Named NON-goals and pre-existing exclusions (so P2 is neither blamed nor tempted)
+
+- **`xs.0N`** — sensible-looking Prologos that the Q_R2 guard declines. Named,
+  not missed.
+- **`expr-pvec-nth` REJECTS Int literals on a nat-row while `expr-get` ACCEPTS
+  them** (typing-core.rkt:2228-2235, deliberate and commented). After P2, `t.1`
+  (→ `get`, Int OK) and `[pvec-nth t 1]` (Int → error) answer differently for
+  the same subject. **Do NOT "fix" this** — `.N` routes through `get`.
+- **`\.` is ALREADY mis-lexed** (`recognize-backslash-char` rejects `.`) and is
+  the SOLE bare-dot token in the whole HEAD corpus (space-followed, so P2 does
+  not touch it). `\.5` newly changes. Pre-existing; excluded.
+- **`compat-tokenize-string` RAISES "Unexpected character: ."** on a bare `.`
+  while the production path emits `|.|` silently (parse-reader.rkt:2136-2138).
+  After P2 that raise stops firing for `.digit` inputs. Its sole dependent test
+  uses a SPACED dot so stays green — but it is a bare `(check-exn exn:fail? …)`
+  with no message match; tighten it while in the area.
+- **DEFERRED items 1–8**: none are fixed by P2. **Item 8 must not be
+  disturbed** — `pattern-var?`'s 23-of-33 residual (including `$list-literal`,
+  so `'[1 2]` in a defmacro template is a whole-file abort TODAY); the ruled
+  fix is INVERTING the predicate's polarity, not adding exclusions, and Q_R1
+  means P2 adds no entry at all. Item 5 (`<`-adjacent grouper divergence, live
+  at `foray.prologos:674`) is **P4's**, on the disclose surface.
+
+#### Test delta
+
+Failing-test-first, and the rational pair is pinned at **BOTH LAYERS** per the
+§Q8.1 correction: (a) reader/datum pins (`x.10` · `x.1.2` · `x.10.20` — today
+`($decimal-literal 6/5)` / `51/5`, after `(get (get x 1) 2)`), (b) end-to-end
+pins framed *"was a misleading error, now computes the right value"* — never
+"was silently 6/5". Plus: the four subject types (PVec / het tuple / Map /
+List) in-bounds and out-of-range · **the `v[0]` ≡ `v.0` datum-identity pin**
+(what makes Q_R1's "two surfaces, one mechanism" checkable rather than
+asserted) · the Q_R2 guard's five declining shapes · the Q_R3 spaced-`.0`
+ruling · `.-1`/`.+1` as a consumer decision · the fixpoint pin (once ≡ twice,
+modelled on tests/test-path-selection.rkt:867-879 from P1b-iii) · the
+lying-diagnostic repairs (`{:a m.0}` · `[fn [v] v.0]` · bare `m.0`) · the ns
+guard · a both-modes census note (sexp is structurally unaffected — the sexp
+readtable binds no `#\.`, and the sexp IR spelling for ordinal access is
+already `(get x 0)`, so `.N` adds NO new divergence, unlike `.{`'s Q_L2).
+
+⚠ **Probe trap the audit flagged twice**: `prologos-read` (parse-reader.rkt:3130)
+is the **WS** reader. A "sexp mode" probe routed through it silently measures WS
+and manufactures a phantom divergence — use `prologos-sexp-read`.
+
+Corpus: `m.0` moves out of the §10.6 v2 block (Q_R4) and trailing markers land
+before line-118's 23-renumber edit. Status: ⬜.
 
 ### §5.P3 — Blocks
 
@@ -1916,7 +2127,7 @@ F-row, whichever first, with its NTT model mandatory.
 | Strict merge first (§3.6 waypoint) | Monotone: errors may become meanings, never the reverse. CALM-adjacent staging. | Challenged and KEPT: the alternative (Ruling B at P3) front-loads spine identity before broadcasts exist to have spines. The waypoint is sequencing, not scaffolding — no dual path exists at any moment. |
 | `v[0]` retention beside `.N` | Owner-ruled 2026-07-28. | Challenged: is it belt-and-suspenders? NO — two SURFACES over ONE mechanism (`(get expr N)`); the D5 verifier refuted the dual-path framing. Residue: an X.close revisit trigger is named (retire, document as `get` sugar, or keep). |
 | Zero-propagator v1 (§5.P4) | Ratified twice (predecessor §7; D3 critique M2 refutation — the Check asks what the track ADDS). | **Challenged and CHANGED**: "the future NTT-modeled track" had no name and no trigger — the ban-"pragmatic" rule demands specificity. Now: **deferred to the broadcast-propagator node track (CIU, post-v1), TRIGGERED by either (a) selection-perf pressure at the X.close bench matrix or (b) F-row landing** — whichever first; the NTT model is mandatory at that opening. |
-| Projection-by-default flips by enclosure (spec §1.2: the same path text means block-projection inside `{…}`, extraction outside) | The spec's own per-step discipline; consistent with copattern reading. | Challenged and KEPT with an obligation: this is the surface's largest learnability bet; the corpus MUST pin the pair (`x.a.b` vs `x{a.b}`) side by side so the flip is documented by executable example, and the P3 error for the common confusion (a bare path where a block was meant) names the other spelling. |
+| Projection-by-default flips by enclosure (spec §1.2: the same path text means block-projection inside `{…}`, extraction outside) | The spec's own per-step discipline; consistent with copattern reading. | Challenged and KEPT with an obligation: this is the surface's largest learnability bet; the corpus MUST pin the pair (`x.a.b` vs `x{a.b}`) side by side so the flip is documented by executable example — ⚠ **assigned to NO PHASE until 2026-07-29** (found by the P2 audit): **P2 lands the `x.a.b` half; P3 OWNS THE PAIR**, and neither test delta had named it, and the P3 error for the common confusion (a bare path where a block was meant) names the other spelling. |
 | Demand semantics staged (P6) | Honest: the collision is priced, not hidden. | Challenged: is staging an ADOPTED element a "validated-not-deployed" shape? Resolution = Batch-4 ruling: amend the spec tag to [ADOPTED — staged] + an X.close gate row, or commit v1. The gate row is the tripwire either way. |
 
 ## §10 References
