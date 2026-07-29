@@ -189,7 +189,8 @@ defn seeded-vat [echo-pos greeter-pos]
          [actor-table-set greeter-pos [actor beh-greeter [syrup-string "Hello"]]
            [actor-table-set car-factory-builder-pos [actor beh-car-factory-builder syrup-null]
              [actor-table-set promise-resolver-pos [actor beh-cell resolver-pair]
-               [actor-table-set resolver-actor-pos [actor beh-resolver [syrup-promise resolver-vow-pos]] nil]]]]]
+               [actor-table-set resolver-actor-pos [actor beh-resolver [syrup-promise resolver-vow-pos]]
+                 [actor-table-set sturdyref-enlivener-pos [actor beh-sturdyref-enlivener syrup-null] nil]]]]]]
        [promise-table-set resolver-vow-pos fresh nil]
        nil nil nil]
 
@@ -309,62 +310,35 @@ defn run-step-emit [cid step]
     emit-after-stash [conn-stash cid cs2]
                      [conn-step-outbound step]
 
-;; An enliven is intercepted here: the dial is queued and the op is NOT passed
-;; on to `connection-step`.
-;;
-;; `eff-connect` and `beh-sturdyref-enlivener` now exist, and the intent is
-;; that this interception disappears — the enlivener becomes an ordinary actor
-;; at export 5 that asks for its own connection. One thing still blocks it,
-;; and it is in the vat model rather than here:
-;;
-;;   AN ENLIVENER CANNOT ANSWER, AND `ActStep` CANNOT SAY SO.
-;;
-;; The reply the peer is waiting for is a signed `desc:handoff-give`, which
-;; only the driver can build — it needs the keypair and the exporter
-;; connection. The behaviour's job ends at "please connect". But every
-;; `ActStep` carries a return value, and `step-after-act` settles the answer
-;; promise with it unconditionally, so seeding the actor makes captp-core
-;; answer the enliven with something wrong, immediately, beating the real
-;; reply. Tried it: the conformance suite goes 24 -> 23 with the peer
-;; receiving the echoed sturdyref where it expects a sig-envelope.
-;;
-;; Closing it needs `ActStep` to express "no answer yet" — a third outcome
-;; beside a value and a break. That is a model change, not a driver one, and
-;; it is the next step for gaps-document §0.2 / §1.7 M8 / §1.7 M7.
-;;
-;; `maybe-dial` is FORCED by matching on its result rather than merely bound.
-;; Reduction is lazy, so `let d := [maybe-dial op]` with `d` unused is dropped
-;; outright and the side effect never happens — which presents as a queue that
-;; stays empty with no error anywhere.
-spec enliven-target-arg Nat SyrupValue -> [Option String]
-defn enliven-target-arg [tgt args]
-  match [nat-eq? tgt sturdyref-enlivener-pos]
-    | false -> [none String]
-    | true  -> first-sturdyref-arg args
-
-spec enliven-request-of CapTPOp -> [Option String]
-  :doc "The sturdyref an op:deliver is asking us to enliven, if it is one."
-defn enliven-request-of [op]
-  match op
-    | op-deliver tgt args _ _ -> enliven-target-arg tgt args
-    | op-deliver-only tgt args -> enliven-target-arg tgt args
-    | _ -> [none String]
-
-spec maybe-dial CapTPOp -> Bool
-defn maybe-dial [op]
-  match [enliven-request-of op]
-    | none    -> false
-    | some sr -> dial-request sr
-
 spec run-step Nat CapTPOp ConnectionState -> String
+;; EVERY op goes through `connection-step`. There is no longer an op the
+;; driver handles instead of the bridge.
+;;
+;; There used to be: an enliven was intercepted here, the dial queued, and the
+;; op never passed on — because a behaviour is pure and cannot open a socket,
+;; so `sturdyref-enlivener-pos` had no actor at all. Two consequences, both
+;; recorded in the gaps document: the two implementations acted on the same
+;; frame with only one of them knowing (§1.7 M8), and the export position the
+;; enlivener answers on was reserved by convention rather than construction
+;; (§1.7 M7).
+;;
+;; `eff-connect` and `act-step-pending` between them remove the need. The
+;; enlivener is an ordinary actor now: it asks for the connection as an
+;; effect, and says it has NO ANSWER, so captp-core leaves the peer's promise
+;; pending for the reply the driver will build. Seeding it without
+;; `act-step-pending` does not work — the actor answers immediately with the
+;; wrong thing and beats the real reply.
+;;
+;; `drain-dials` is FORCED by matching on its result rather than merely bound.
+;; Reduction is lazy, so `let d := [drain-dials ...]` with `d` unused is
+;; dropped outright and the side effect never happens — which presents as a
+;; queue that stays empty with no error anywhere. Same idiom as
+;; `publish-gifts` and `emit-after-stash` above, for the same reason.
 defn run-step [cid op cs]
-  match [maybe-dial op]
-    | true  -> ""
-    | false ->
-        let step := [connection-step op [with-global-gifts cs]]
-          match [drain-dials [vat-dials [conn-vat [conn-step-state step]]]]
-            | true  -> run-step-emit cid step
-            | false -> run-step-emit cid step
+  let step := [connection-step op [with-global-gifts cs]]
+    match [drain-dials [vat-dials [conn-vat [conn-step-state step]]]]
+      | true  -> run-step-emit cid step
+      | false -> run-step-emit cid step
 
 spec step-connection Nat String -> String
   :doc "Process one inbound wire frame (hex-encoded) for connection

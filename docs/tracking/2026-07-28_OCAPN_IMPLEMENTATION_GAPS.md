@@ -119,37 +119,35 @@ of it.
 
 | Finding | Why it is still open |
 |---|---|
-| §0.2 gifter/receiver roles live in Racket | **First primitive built.** `eff-connect` exists, the vat carries a pending-dial list, and `beh-sturdyref-enlivener` is a real behaviour that asks for its own connection. Seeding it at export 5 is blocked on one thing, in the vat model rather than the driver — see below. `eff-send-on` and `eff-sign` are untouched, and the connection registry is still a Racket hash. |
-| §1.7 M8 every frame is processed twice | Same root. Narrowed — the Racket side now only acts on frames it can match structurally, and `run-step` no longer hands an enliven to captp-core at all — but both halves still run on the same bytes. |
-| §1.7 M7 enliven slots 900+ are unregistered | Same root: the enlivener must hand out a real exported resolve-me from the connection's export table instead of a Racket counter. Its two live consequences are gone — captp-core no longer breaks on the answer (a deliver with no reply channel to an export we lack is dropped, not reflected), and the slot base is above anything the vat allocates until ~890 allocations on one connection. What remains is that the reservation is by convention, not construction. |
+| §0.2 gifter/receiver roles live in Racket | **First primitive landed; the enlivener has moved.** `eff-connect` and `act-step-pending` both exist, and `beh-sturdyref-enlivener` is a real actor at export 5 — the driver no longer intercepts anything, so EVERY op now goes through `connection-step`. That closes §0.3 and the Prologos half of §1.7 M8. `eff-send-on` and `eff-sign` are untouched, and the connection registry is still a Racket hash, so the gifter and receiver roles themselves have not moved. |
+| §1.7 M8 every frame is processed twice | **Half closed.** The PROLOGOS half is gone: `run-step` no longer handles any op instead of the bridge, because the enlivener is an actor. The Racket byte-scanners (`try-enliven!`, `try-fetch-answer!`, `note-handoff-give!`) still run on every frame alongside `drive-step`; removing them needs `eff-sign` and a connection registry, i.e. the rest of §0.2. |
+| §1.7 M7 enliven slots 900+ are unregistered | The RACKET server's `next-enliven-slot!` counter, distinct from export 5 (which now has a real actor). Its two live consequences are gone — captp-core no longer breaks on the answer, and the base is above anything the vat allocates until ~890 allocations on one connection — so what remains is that the reservation is by convention rather than construction. Closing it means the enlivener handing out a resolve-me from the connection's own export table, which is the rest of §0.2. |
 
-**§0.2 — an enlivener cannot answer, and `ActStep` cannot say so.** This is
-the concrete blocker, found by building the thing and running the gate:
+**§0.2 — first primitive landed, and the model change it needed.** Two things
+were built, in that order, because the first did not work without the second:
 
-`eff-connect` is done. A behaviour describes the connection it wants, the vat
-records it in a pending-dial list, and the driver drains it between steps —
-the same shape `eff-send-remote`/`vat-outbound` already uses, so the vat stays
-pure. `beh-sturdyref-enlivener` is a real behaviour, and it gates on the
-`ocapn-sturdyref` label because this is the one path that opens an outbound
-TCP connection on peer-chosen bytes.
+`eff-connect` lets a behaviour ask for an outbound connection. It records the
+request in a per-vat pending-dial list that the driver drains between steps —
+the same shape `eff-send-remote`/`vat-outbound` already uses — so the vat
+stays pure and wire-agnostic.
 
-What it cannot do is *not answer*. The reply the peer waits for is a signed
-`desc:handoff-give`, which only the driver can build — it needs the keypair
-and the exporter connection. The behaviour's job ends at "please connect". But
-every `ActStep` carries a return value and `step-after-act` settles the answer
-promise with it unconditionally, so seeding the actor at export 5 makes
-captp-core answer the enliven immediately with the wrong thing, beating the
-real reply. Measured, not predicted: the conformance suite goes 24 → 23, with
-the peer receiving an echoed sturdyref where it expects a sig-envelope.
+That alone was not enough, and finding out why is the useful part. Seeding the
+enlivener as an actor made the conformance suite go 24 → 23: **an enlivener
+cannot answer, and `ActStep` could not say so.** The reply the peer waits for
+is a signed `desc:handoff-give` that only the driver can build; the
+behaviour's job ends at "please connect". But every `ActStep` carried a return
+value and `step-after-act` settled the answer promise with it unconditionally,
+so the actor answered immediately with an echoed sturdyref where the peer
+expected a sig-envelope, beating the real reply.
 
-So the driver interception stays, and the next step is a MODEL change:
-`ActStep` needs a third outcome beside a value and a break — "no answer yet".
-Returning `syrup-null` is not it; `no-op` already returns null and several
-behaviours rely on that settling their promise.
+So `ActStep` gained a second outcome: `act-step-pending`, which acts without
+answering and leaves the promise pending. `syrup-null` was deliberately not
+used for this — `no-op` returns null and several behaviours rely on that
+settling their promise.
 
-That one change unblocks seeding the enlivener, which is most of §1.7 M8 (the
-two implementations stop both acting on the enliven frame) and all of §1.7 M7
-(export 5 gets a real actor, so the slot stops being reserved by convention).
+With both, the enlivener is an ordinary actor at export 5, the driver
+intercepts nothing, and every op goes through `connection-step`. §0.3 is
+closed and §1.7 M8 is half closed.
 
 **§1.2 M3 — closed, on the second attempt.** A forwarded deliver is a NEW
 message with us as the sender, so the queued deliver's `ap`/`rm` cannot be
@@ -243,7 +241,16 @@ Not in the original inventory:
    Its test did not catch this because it loads through the sexp `imports`
    path; the WS `require` path is the one that fails. A module with no
    importers has no witness for its own breakage.
-7. **LOW | a non-exhaustive match in `behavior.prologos`** — the elaborator
+7. **MEDIUM | the `.pnet` cache HIDES real failures, not just causes fake ones.**
+   The inverse of #5, and it cost a CI-only red build. Widening `Vat` broke a
+   test fixture that builds a vat AS A STRING, so it could not fail at compile
+   time — it failed at elaboration inside `run-last`, reported as "could not
+   infer type" with no mention of arity. Every local run passed, because a
+   warm `.pnet` was answering from the pre-change module. CI, on a fresh
+   checkout, failed 3/164. `rm -rf data/cache/pnet` **plus** `rm -rf
+   compiled/tests` reproduced it exactly. A green local suite is not evidence
+   after a type change; a green suite from a cold cache is.
+8. **LOW | a non-exhaustive match in `behavior.prologos`** — the elaborator
    reports `Hole ??__match-fail : ActStep` on every load of anything that
    depends on it. It predates all of this work and is not in the inventory,
    but it is the same silent-wrong-answer class the inventory is about.

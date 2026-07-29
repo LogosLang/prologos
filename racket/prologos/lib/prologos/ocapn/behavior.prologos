@@ -152,22 +152,52 @@ data Effect
 ;;
 ;; new-state, return-value, side-effects.
 
+;; TWO outcomes, and the second is not a value.
+;;
+;; `act-step` answers: its return value settles the caller's answer promise.
+;; `act-step-pending` does NOT — it says "I have acted; the answer comes from
+;; somewhere else." Every ActStep used to answer, and `step-after-act` settled
+;; the promise unconditionally, so a behaviour that legitimately has no answer
+;; had no way to say so and was forced to invent one.
+;;
+;; The sturdyref enlivener is the case that forced this. Enlivening means
+;; opening a socket, so the behaviour's job ends at `eff-connect`; the reply
+;; the peer waits for is a signed `desc:handoff-give` that only the driver can
+;; build. An enlivener written with `act-step` answers immediately with
+;; something wrong and beats the real reply — measured: the conformance suite
+;; goes 24 -> 23 with the peer receiving an echoed sturdyref where it expects
+;; a sig-envelope.
+;;
+;; `syrup-null` is deliberately NOT the way to say this. `no-op` returns null
+;; and several behaviours rely on that settling their promise, so overloading
+;; it would silently leave those pending.
 data ActStep
-  act-step : SyrupValue -> SyrupValue -> [List Effect]
+  act-step         : SyrupValue -> SyrupValue -> [List Effect]
+  act-step-pending : SyrupValue -> [List Effect]
 
 ;; Selectors.
 
 spec step-state ActStep -> SyrupValue
 defn step-state
-  | act-step st _ _ -> st
+  | act-step st _ _        -> st
+  | act-step-pending st _  -> st
 
+;; Meaningless for a pending step; `step-answers?` gates every read of it.
 spec step-return ActStep -> SyrupValue
 defn step-return
-  | act-step _ rv _ -> rv
+  | act-step _ rv _        -> rv
+  | act-step-pending _ _   -> syrup-null
 
 spec step-effects ActStep -> List Effect
 defn step-effects
-  | act-step _ _ es -> es
+  | act-step _ _ es        -> es
+  | act-step-pending _ es  -> es
+
+spec step-answers? ActStep -> Bool
+  :doc "False when the behaviour has no answer and the promise must stay pending."
+defn step-answers?
+  | act-step _ _ _         -> true
+  | act-step-pending _ _   -> false
 
 ;; ========================================
 ;; A small helper: "no change" step
@@ -686,7 +716,9 @@ spec step-sturdyref-enlivener SyrupValue SyrupValue -> ActStep
 defn step-sturdyref-enlivener [state args]
   match [first-sturdyref-arg args]
     | none     -> no-op state
-    | some loc -> act-step state args [cons [eff-connect loc] nil]
+    ;; PENDING, not an answer: the reply is a signed handoff-give the driver
+    ;; builds once the connection is up.
+    | some loc -> act-step-pending state [cons [eff-connect loc] nil]
 
 spec step-behavior BehaviorTag SyrupValue SyrupValue Nat -> ActStep
 defn step-behavior [tag state args fresh]

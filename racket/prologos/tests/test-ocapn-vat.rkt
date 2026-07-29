@@ -340,3 +340,33 @@
    (run-last
     "(eval (length (step-effects (step-behavior beh-sturdyref-enlivener syrup-null (syrup-list (cons (syrup-tagged \"not-a-sturdyref\" (syrup-string \"loc\")) nil)) zero))))")
    "0N"))
+
+(test-case "vat/a pending step leaves the answer promise unresolved"
+  ;; `act-step-pending` is what lets a behaviour say "I have acted; the answer
+  ;; comes from somewhere else". Without it every ActStep answered, so the
+  ;; sturdyref enlivener could not exist as an actor at all -- it would settle
+  ;; the peer's promise with an invented value and beat the real reply.
+  (check-contains
+   (run-last
+    "(eval (let (sa (vat-spawn beh-sturdyref-enlivener syrup-null empty-vat)
+                  pa (fresh-promise (alloc-vat sa))
+                  v1 (enqueue-msg (vmsg-deliver (alloc-id sa)
+                                     (syrup-list (cons (syrup-tagged \"ocapn-sturdyref\" (syrup-string \"loc\")) nil))
+                                     (some Nat (alloc-id pa)))
+                                  (alloc-vat pa))
+                  v2 (run-vat (suc (suc (suc zero))) v1))
+              (fulfilled? (unwrap-or fresh (lookup-promise (alloc-id pa) v2)))))")
+   "false"))
+
+(test-case "vat/an ordinary step still settles its answer promise"
+  ;; The control: if pending were the default, every answer would hang.
+  (check-contains
+   (run-last
+    "(eval (let (sa (vat-spawn beh-echo syrup-null empty-vat)
+                  pa (fresh-promise (alloc-vat sa))
+                  v1 (enqueue-msg (vmsg-deliver (alloc-id sa) (syrup-string \"hi\")
+                                     (some Nat (alloc-id pa)))
+                                  (alloc-vat pa))
+                  v2 (run-vat (suc (suc (suc zero))) v1))
+              (fulfilled? (unwrap-or fresh (lookup-promise (alloc-id pa) v2)))))")
+   "true"))

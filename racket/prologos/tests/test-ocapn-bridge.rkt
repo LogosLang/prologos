@@ -2466,7 +2466,12 @@
 ;; ========================================
 
 (define greeter-vat
-  "(vat (suc (suc zero)) (actor-table-set (suc zero) (actor beh-greeter (syrup-string \"Hello\")) nil) nil nil nil)")
+  ;; Six fields: next-id, actors, promises, queue, outbound, DIALS. The last
+  ;; is `eff-connect`'s pending-connection list. This fixture is a STRING, so
+  ;; widening the type did not break it at compile time -- it failed at
+  ;; elaboration inside `run-last`, as an "unable to infer type" with no
+  ;; mention of arity, and only on a clean build.
+  "(vat (suc (suc zero)) (actor-table-set (suc zero) (actor beh-greeter (syrup-string \"Hello\")) nil) nil nil nil nil)")
 
 (define greet-args
   "(syrup-list (cons (syrup-tagged \"desc:import-object\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero))))))))) nil))")
