@@ -110,12 +110,21 @@ open below.
 
 ### Still open
 
-Thirteen entries were open after the first remediation pass. **Ten are closed,
-two dissolved under premises that stopped holding, and one is half closed.**
-What is left is a single architectural problem and the two entries downstream
-of it.
+Thirteen entries were open after the first remediation pass, and §0.3 and
+§1.7 M7 were open from §0. **Twelve are closed, two dissolved under premises
+that stopped holding, and one is half closed.** What is left is a single
+architectural problem — the gifter and receiver roles living in Racket — and
+the one entry still downstream of it.
 
-**Genuinely open — one problem, two entries:**
+Two of §0.2's three primitives now exist and both have real consumers:
+`eff-connect` (a behaviour asks for a socket without opening one) and
+`act-step-pending` (a behaviour acts without answering). Between them the
+sturdyref enlivener became an ordinary actor, the driver stopped intercepting
+anything, and the enliven resolve-me became a real export. `eff-send-on`, a
+first-class connection registry, and `eff-sign` are what remain, and they are
+what the roles themselves need.
+
+**Genuinely open — one problem, one entry downstream of it:**
 
 | Finding | Why it is still open |
 |---|---|
