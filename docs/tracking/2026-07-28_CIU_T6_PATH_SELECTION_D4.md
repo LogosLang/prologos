@@ -936,22 +936,69 @@ DECIMAL POINT inside a number token.
 | 3 | `.( … )` | `dot-lparen` (87) | `(` | live (mixfix) |
 | 4 | `xs.*f` | `broadcast-access` (87) | `*` | **RETIRED** at P1a — as above |
 | 5 | `x.name` | `dot-access` (86) | `ident-start?` AND **not** `:`, `{`, `*`, digit | live |
-| 6 | `x.{…}` | *(fallback)* → `dot-lbrace` | `{` | **`[P1b-ii]`** — today falls to the single-char `.` |
+| 6 | `x.{…}` | `dot-lbrace` (87) | `{` | **live** since P1b-ii `1a1091d4` (registered parse-reader.rkt:1192) |
 | — | `3.14` | `decimal-literal` (75) | anchors at a **DIGIT**, never at `.` | live — no overlap with the band |
 | — | `x . y` | single-char symbol fallback | — | the catch-all; `.N` also lands here until P2 |
 
-**Totality**: the five band members test *different* second characters
-(`.`/`:`/`(`/`*`/ident-start), and `recognize-dot-access` excludes `:`, `{`,
-`*` and digits **explicitly**, so `.{` is double-guarded and a `dot-lbrace`
-insertion is disjoint from all five. `.-1` LEXES CLEANLY as dot-access with
-field `-1` (`ident-start?` admits `-`), so the carried "`.-1` = classifier
-rejection" ruling is about a **well-formed token**, not a shatter — P2 owns
-it when `.N` arrives.
+⚠ **CORRECTED 2026-07-29 (P2 audit `wf_22020418-a5f`) — this section
+CONTRADICTED ITSELF, in normative text.** The table above has had SIX rows
+since P1b-ii, but the Totality prose below said "five" and the row-6 Token
+column still described the PRE-P1b-ii state (`*(fallback)* → dot-lbrace …
+today falls to the single-char .`). §5.P2 inherited the five. **This is the
+THIRD consecutive under-count of this one enumeration** (four → five → six),
+and it matters beyond tidiness: §Q8.5 invariant 1's safety argument is
+literally "prefix-disjoint from *all band members*", which is sound only if
+the enumeration is complete.
 
-**`.N` is MULTI-DIGIT, and it FIXES A SILENT WRONG ANSWER (ruled Q_M8).** P2's
-`.N` recognizer anchors at the **dot** and takes `digit+` (not one digit). It is
-prefix-disjoint from `decimal-literal` (which anchors at a **digit**, never at a
-dot) and from all five band members. Probe-measured at `b389479b`, today:
+**Totality**: the **six** band members test *different* second characters
+(`.` / `:` / `(` / `*` / `{` / ident-start), and `recognize-dot-access`
+excludes `:`, `{`, `*` and digits **explicitly** (parse-reader.rkt:734-739 —
+the digit exclusion is real but REDUNDANT under `ident-start?`, which admits
+no digits, so "double-guarded" is accurate and one guard is decorative). A
+`dot-lbrace` insertion was therefore disjoint from all five that preceded it,
+and a `.N` insertion is disjoint from all six. `.-1` LEXES CLEANLY as
+dot-access with field `-1` (`ident-start?` admits `-` — **and `+`, so the
+class is SIGNED, not negative: `x.+1` lexes identically**), so the carried
+"`.-1` = classifier rejection" ruling is about a **well-formed token**, not a
+shatter — P2 owns it when `.N` arrives, as a CONSUMER decision.
+
+**The OPPOSING family was also under-counted, by 5×.** This section named only
+`decimal-literal` as the digit-anchored competitor. **SIX** digit-anchored
+recognizers currently claim the digit run after a dot — `decimal-literal`
+(:286), `number` (:268), `exp-literal` (:309), `float-literal` (:352),
+`posit-literal` (:409), `rat-literal` — and all six lose that claim to a
+dot-anchored recognizer. That is why the **trailing-guard** question (Q_R2) is
+not cosmetic: it decides five shapes that each lex as ONE numeric token today
+(`x.0N` `x.1e3` `x.1/2` `x.1f` `x.1p8`). Two further unruled items in BOTH
+bands: **leading zeros** (`x.007` → 7 today via `string->number` on `#e007`;
+`:007` is one token since P1b-iii) and the **Unicode-digit crash**
+(`char-numeric?` is Unicode-wide while `string->number` is not, so `٣` raises a
+raw `exact?: contract violation` — `(char<=? #\0 c #\9)` is strictly safer and
+is a NARROWING, not a competing definition, so the F1b.7g rule permits it).
+
+**`.N` is MULTI-DIGIT (ruled Q_M8).** P2's `.N` recognizer anchors at the
+**dot** and takes `digit+` (not one digit). It is prefix-disjoint from
+`decimal-literal` (which anchors at a **digit**, never at a dot) and from all
+six band members.
+
+⚠ **CORRECTED 2026-07-29 — "it fixes a SILENT WRONG ANSWER … both at 0 errors"
+was a LAYER ERROR.** The readings below are real but **reader-layer only**. END
+TO END every rational-class form is **LOUD**, because the stranded bare `|.|`
+symbol is unbound. Re-probed at `c5153685` via `tools/run-file.rkt`:
+`m.0` / `m.1.2` / `m.10.20` → `ERROR: Unbound variable`; `m.-1` → `ERROR: Could
+not infer type`; **4 errors**, not 0. The defect is a live MIS-LEXING that
+produces a MISLEADING error — not a silent wrong value.
+
+**Consequence for the failing-test-first obligation** (this is why the
+correction matters rather than being pedantry): the honest pin is **TWO-LAYER** —
+(a) a reader/datum pin (`($decimal-literal 6/5)` today → `(get (get x 1) 2)`
+after), and (b) an end-to-end pin framed *"was a misleading error, now computes
+the right value"*. A pin written as *"was silently 6/5 at 0 errors"* **cannot
+fail for the reason it claims**, which is this arc's hazard 4 (already the
+source of one vacuous pin and two mis-premised fixtures). Four of the P2
+audit's six facets caught this independently.
+
+Probe-measured at `b389479b`, re-confirmed at `c5153685`, today:
 
 | Source | Today | Why |
 |---|---|---|
@@ -1026,14 +1073,39 @@ ALREADY lex as one token and are ALREADY not multiplicities.
 ### Q8.5 — Standing invariants
 
 1. **Prefix-disjointness, NOT priority, is the safety property.** Priorities
-   TIE in two places (`dot-lparen`/`broadcast-access` both 87;
-   `nil-dot-key`/`nil-dot-access` both 92) and the registry is a plain hash
-   sorted descending — **ties break by unspecified hash order**. A new
-   recognizer must be prefix-disjoint and must not rely on its number.
-2. **Adjacency lives in TOKEN POSITIONS and is DESTROYED at the datum layer.**
-   `x{a b}` ≡ `x {a b}` byte-identical as datums. Any rule keyed on adjacency
-   must be decided at or before grouping. *(P1b-i learned this the hard way:
-   a datum-layer fusion of `?x` + `:Nat` absorbed unrelated keywords.)*
+   TIE in two places — the **87 group is THREE-WAY** since P1b-ii
+   (`dot-lparen` / `broadcast-access` / `dot-lbrace`; *corrected 2026-07-29 —
+   this said "two places … both 87", stale in arity*), and
+   `nil-dot-key`/`nil-dot-access` are both 92 — and the registry is a plain
+   `(make-hash)` sorted descending with a `for/or` FIRST-match — **ties break
+   by unspecified hash order**. A new recognizer must be prefix-disjoint and
+   must not rely on its number. *The code already says this better than the
+   doc did: parse-reader.rkt:1188-1191 — "safe because the three are
+   PREFIX-DISJOINT (`(` / `*` / `{`), not because of the number".*
+   Corollary verified at P2: the scan advances by the matched length, so an
+   INTERIOR dot is structurally unreachable as an anchor — `3.14` is consumed
+   whole at the `3`, which is a stronger argument than "no overlap".
+2. **Adjacency lives in TOKEN POSITIONS. Any rule keyed on it must be decided
+   at or before GROUPING** — because the *consumers* downstream of grouping
+   cannot recover it. *(P1b-i learned this the hard way: a datum-layer fusion
+   of `?x` + `:Nat` absorbed unrelated keywords.)*
+   ⚠ **CORRECTED 2026-07-29 — the old illustration was FALSE at HEAD and
+   misleading in a dangerous direction.** It read: "`x{a b}` ≡ `x {a b}`
+   byte-identical as datums." Probed at `c5153685`: `x{a}` → `((x
+   ($select-brace a)))` vs `x {a}` → `((x ($brace-params a)))`, and `x[0]` →
+   `((x ($postfix-index 0)))` vs `x [0]` → `((x (0)))`. They are **distinct**
+   — because P1a/P1b-iii took this very lesson and moved the decision to
+   grouping via `adjacent-to-base?` (parse-reader.rkt:2632). The old text
+   described the PRE-FIX state and implied "the datum layer can't tell, so
+   don't bother checking." **No facet caught this; the completeness critic
+   did.**
+   Scope note for P2: the **dot band has NO adjacency gate at all** —
+   `adjacent-to-base?` is called only from the bracket arm (:2692-2694) and
+   the brace arm (:2750). `x .0` and `x. 0` both read `((x |.| 0))`, so a
+   dot-anchored recognizer fires regardless of the preceding space. Ruled
+   Q_R3: the dot band stays adjacency-free (`.k` never enforced it either;
+   retrofitting the whole band is out of P2's scope, and the blast radius is
+   nil by census).
 3. **New sentinels owe NINE registrations — this invariant used to say TWO, and
    ONE OF THOSE TWO WAS A NO-OP.** ⚠ Corrected at P1b-iii after the P1b-ii
    regression. The old text ("`pattern-var?` and tree-parser's inline
@@ -1044,11 +1116,34 @@ ALREADY lex as one token and are ALREADY not multiplicities.
    regardless, and every member of the list starts with `$` or is `quote`).
    The real surface, verified at `88b3019a`:
 
-   **Token layer** (only when a new TOKEN is minted — P1b-ii's five):
-   a. the recognizer · b. `register-token-pattern!` · c. `langle-matched?`
-   opener set · d. its `has-matching-rangle?` TWIN (keep IDENTICAL) ·
-   e. the extent frame dispatch. *(+ the test oracle's THIRD copy of the
-   opener list, tests/test-parse-reader.rkt.)*
+   ⚠ **CORRECTED AGAIN 2026-07-29 (P2 audit).** The token layer below was
+   written from an OPENER's shape and under-specifies for a SELF-CONTAINED
+   token by exactly the amount that would let one through — *the identical
+   failure mode this invariant was corrected for at P1b-iii.* Twice now, an
+   enumeration written from one member's shape has missed the next
+   differently-shaped member. **Read the applicability column, not just the
+   list.** Four coordinates were also stale (audited at `88b3019a`; `a6af2761`
+   moved them) — including the fusion gate this invariant exists to name.
+
+   **Token layer** — applicability depends on the token's SHAPE:
+
+   | | Site | OPENER (e.g. `dot-lbrace`) | SELF-CONTAINED (e.g. `.N`, `dot-access`) |
+   |---|---|---|---|
+   | a | the recognizer | required | required |
+   | b | `register-token-pattern!` | required | required |
+   | **f** | **`token-entry->stx`'s `case type`** (parse-reader.rkt:2264; copy the `dot-access` template at :2265-2270) | required | **REQUIRED — and a miss is SILENT** |
+   | c | `langle-matched?` opener set (:1486) | required | **N/A** — no closer |
+   | d | its `has-matching-rangle?` TWIN (:2570, keep IDENTICAL) | required | **N/A** |
+   | e | the extent frame dispatch (:1503-1539) | required | **N/A** |
+   | — | the test oracle's THIRD copy of the opener list (tests/test-parse-reader.rkt:1174) | required | **N/A** |
+
+   **Site f is the one no enumeration had ever named, and it fails SILENTLY**:
+   a new token type with no `case type` arm falls through BOTH `[else]`s —
+   :2262 `[else (string->symbol lexeme)]` and :2342 `[else (make-stx value …)]`
+   — yielding the bare symbol `|.1|`. No raise, no diagnostic, wrong datum.
+   Note also that site 1 below ("`group-items` arm") names the CALLER (:2648 →
+   :2734/:2828/…), not the minting function; `token-entry->compat`'s value
+   `[else]` (:2092) is a test-only twin.
 
    **Sentinel/tag layer** (EVERY new sentinel):
    1. `group-items` arm (parse-reader.rkt) — mints the datum sentinel
@@ -1058,10 +1153,12 @@ ALREADY lex as one token and are ALREADY not multiplicities.
       for any node with children; "Unhandled form" is UNREACHABLE from a group tag
    4. **`pattern-var?` (macros.rkt)** — **LOUD whole-file abort if missed.**
       This is the P1b-ii regression
-   5. preparse opacity (macros.rkt:1988)
-   6. sub-form recursion skip (macros.rkt:2536)
-   7. `combine-foreign-blocks` head test (macros.rkt:2444) — if head-relevant
-   8. **`access-sentinel?` (macros.rkt:5446) + the `rewrite-dot-access` fold
+   5. preparse opacity (macros.rkt:**1999** — *was cited :1988*)
+   6. sub-form recursion skip (macros.rkt:**2560** — *was cited :2536*)
+   7. `combine-foreign-blocks` head test (macros.rkt:**2445** — *was :2444*) — if head-relevant
+   8. **`access-sentinel?` (macros.rkt:**5493** — ⚠ *was cited :5446, a 47-line
+      drift in the very site this invariant was corrected to NAME; :5446 is the
+      `dot-access?` comment*) + the `rewrite-dot-access` fold
       arm** — ⚠ **named by NO enumeration before P1b-iii, and the site that
       produced P1b-ii's carried residual.** Without it the sentinel never fuses
       onto its base, stays a separate sibling, and every guided error it owns
@@ -1260,7 +1357,7 @@ immediately — the test oracle's verbatim copy of the production list
 
 Status: ✅ `1a1091d4`.
 
-### §5.P1b-iii — Brace adjacency + the head registry  🔄
+### §5.P1b-iii — Brace adjacency + the head registry  ✅ `a6af2761`
 
 **Mini-audit**: `wf_18992d66-b81` (6 facets + completeness critic, HEAD-pinned
 `88b3019a`). Main-session R-lens-verified. It found a **BLOCKING problem with
@@ -1576,26 +1673,38 @@ Status: ⬜.
 fragment, on the P2 substrate.
 
 **Grounded head start** (audit + probes): `.N` extraction works END-TO-END
-today via a `(get expr N)` fold arm — `expr-get` types PVec + tuple(nat-row) +
-Map + List subjects; site 7 projects; the two-tier principle makes misses
-loud. The fold target is `get`, NOT `map-get` (probe: map-get's infer has no
+today via a `(get expr N)` fold arm — `expr-get` types PVec (Nat-or-Int) +
+Record/tuple(nat-row, EXACT per-position via `record-project`) + Map +
+selection-fvar + schema-fvar + List, terminating `[_ (expr-error)]`
+(typing-core.rkt:1861-1885); the two-tier principle makes misses loud.
+*("site 7 projects" was an UNRESOLVABLE citation — corrected 2026-07-29. It
+meant the P2.b round-8 audit's **site 7**, the `[map-get tup 1N]`
+fabricated-`none` case closed structurally at `88d1f746`; it is a
+predecessor-doc label, not a D4 §7.)* The fold target is `get`, NOT `map-get` (probe: map-get's infer has no
 PVec leg). `.k` nominal access already works (dot-access → map-get fold).
 
-**Work**: the `.N` recognizer (dot-anchored, prefix-disjoint inside the **FIVE**-
-member band {rest-89 · dot-key-88 · dot-lparen-87 · broadcast-87 ·
-dot-access-86} — ⚠ this section previously cited a THREE-member band, the
-under-count Q8.1 corrected; and per Q8.5 invariant 1 the safety property is
+**Work**: the `.N` recognizer (dot-anchored, prefix-disjoint inside the
+**SIX**-member band {rest-89 · dot-key-88 · dot-lparen-87 · dot-lbrace-87 ·
+broadcast-87 · dot-access-86} — ⚠ **this cite has now been wrong THREE TIMES**
+(three → five → six); §Q8.1 is normative and was itself self-contradictory
+until 2026-07-29. Per Q8.5 invariant 1 the safety property is
 **disjointness, not priority**) · the nat-dot fold arm → `(get expr N)` · chain
 forms (`admins.0.name`) · extraction typing = the existing arms (no new nodes
 expected — flag if that breaks).
 
-⚠ **Q_M8 — `.N` TAKES `digit+`, NOT ONE DIGIT, AND THAT FIXES A LIVE SILENT
-WRONG ANSWER.** Multi-digit ordinal access is owner-ruled. It is not extra
-work: the same one-line `digit+` that admits `x.10` is what kills the rational
-bug, because a dot-anchored recognizer consumes `.1` before `decimal-literal`
-(which anchors at a **digit**) can ever anchor. Probe-measured at `b389479b`:
-`x.1.2` → `($decimal-literal 6/5)` and `x.10.20` → `51/5`, both at 0 errors.
-**Failing-test-first on those two**, not just on `x.10`.
+⚠ **Q_M8 — `.N` TAKES `digit+`, NOT ONE DIGIT.** Multi-digit ordinal access
+is owner-ruled. It is not extra work: the same one-line `digit+` that admits
+`x.10` is what kills the rational mis-lex, because a dot-anchored recognizer
+consumes `.1` before `decimal-literal` (which anchors at a **digit**) can ever
+anchor. `x.1.2` → `($decimal-literal 6/5)` and `x.10.20` → `51/5` at the
+reader.
+
+⚠ **"AND THAT FIXES A LIVE SILENT WRONG ANSWER … both at 0 errors" was a LAYER
+ERROR — struck 2026-07-29.** End to end all three forms are **LOUD** (`ERROR:
+Unbound variable`; `m.-1` → `Could not infer type`; 4 errors, re-probed at
+`c5153685`) because the stranded bare `|.|` is unbound. See §Q8.1 for the
+two-layer pin this forces. **Failing-test-first on the rational pair at BOTH
+layers**, not just on `x.10`, and never framed as "was silently 6/5".
 
 Clarification carried from Q8.1: `.-1` **lexes cleanly** as dot-access with
 field `-1` (`ident-start?` admits `-`). A digit-required `.N` correctly declines
@@ -1778,10 +1887,13 @@ F-row, whichever first, with its NTT model mandatory.
   transparent-struct rebuild (three in-tree templates: the SUB.1 tripwire,
   `re-abstract`, `narrow-subst-bvars`); explicit arms only for binders + hot
   paths, hot arms carrying a differential-oracle contract test.
-- **R3 (`.` on QUADRUPLE duty)** — sharpened: `.k` · `.N` (new) · `.*` ·
-  bare `.` before `{` (the sub-block seam). The Q8 grammar must state all
-  four and their disambiguation order; both-modes census per
-  `prologos-syntax.md` § Reader.
+- **R3 (`.` on duty N)** — ⚠ **STALE, corrected 2026-07-29**: this said
+  QUADRUPLE and listed `.*`, which **P1a RETIRED**. §Q8.1 (normative) is the
+  single source: the band is **SIX** members plus two non-band duties, and the
+  OPPOSING digit-anchored family is six recognizers, not one. Two
+  contradictory statements in one document is the shape Q_M7 was struck to
+  prevent — so this row now POINTS at §Q8.1 rather than restating it.
+  Both-modes census per `prologos-syntax.md` § Reader still applies.
 - **R4 (a green suite proves nothing for this class)** — carried verbatim:
   failing-test-first for anything walker- or seam-shaped; the D5 critique's
   three live probes (permissive `expr-broadcast-get`, the `:=` layout defect,
