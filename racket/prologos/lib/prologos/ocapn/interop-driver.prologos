@@ -253,8 +253,10 @@ defn publish-gifts [cs]
 ;; ===========================================================
 ;;
 ;; Upstream's enlivener (swiss gi02I1qgh…) takes a sturdyref and is expected to
-;; CONNECT to the peer it names. That is the only thing in this implementation
-;; that ever dials; everything else responds on a connection the peer opened.
+;; CONNECT to the peer it names. It is the only thing on the PROLOGOS side that
+;; ever dials — the Racket test server dials too, from `note-handoff-give!`,
+;; on a location it scrapes out of a handoff-give (see the gaps document
+;; §1.9 M1, still open).
 ;;
 ;; It is handled here rather than as a behaviour because a behaviour is pure —
 ;; it cannot open a socket, and it cannot reach the FFI queue above. The driver
@@ -265,9 +267,9 @@ defn publish-gifts [cs]
 ;; location: parsing it is the dialler's job, and re-encoding is the operation
 ;; that reproduces the peer's own bytes (see syrup-wire § Re-encoder).
 ;;
-;; The argument IS checked before it is queued. This is the one path in the
-;; implementation that makes us open an outbound TCP connection on peer-chosen
-;; bytes, so accepting any first argument at all would let a peer point the
+;; The argument IS checked before it is queued. This path makes us open an
+;; outbound TCP connection on peer-chosen bytes, so accepting any first
+;; argument at all would let a peer point the
 ;; dialler wherever it liked with a record of any shape. Upstream's sturdyref
 ;; is `<ocapn-sturdyref <ocapn-peer transport address hints> swiss-num>`
 ;; (utils/ocapn_uris.py), and the label is what we gate on — the interior is

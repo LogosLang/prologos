@@ -181,33 +181,6 @@ spec outbound-ask-bytes Nat SyrupValue Nat Nat -> String
 defn outbound-ask-bytes [tgt args apos rpos]
   wire::encode-record "op:deliver" [cons [syrup-tagged "desc:export" [syrup-nat tgt]] [cons [as-args-list args] [cons [syrup-nat apos] [cons [syrup-tagged "desc:import-object" [syrup-nat rpos]] nil]]]]
 
-;; The two optional trailing slots of an op:deliver, rendered per spec.
-;;
-;;   answer position — a BARE INTEGER, or `false` when absent. Wrapping it in
-;;     `<desc:answer N>` makes upstream's `answer_position` a record that never
-;;     compares equal to the position named in a later op:gc-answers.
-;;   resolve-me — a descriptor, or `false` when absent. Which descriptor
-;;     depends on WHOSE object it is, so the two are separate functions rather
-;;     than one with a tag parameter: `opt-our-resolve-me` names an object WE
-;;     export (`desc:import-object`), `opt-peer-resolve-me` names one the PEER
-;;     exports and we are merely echoing back (`desc:export`).
-spec opt-answer-slot [Option Nat] -> SyrupValue
-defn opt-answer-slot [ap]
-  match ap
-    | none   -> syrup-bool false
-    | some n -> syrup-nat n
-
-spec opt-our-resolve-me [Option Nat] -> SyrupValue
-defn opt-our-resolve-me [rm]
-  match rm
-    | none   -> syrup-bool false
-    | some n -> syrup-tagged "desc:import-object" [syrup-nat n]
-
-spec opt-peer-resolve-me [Option Nat] -> SyrupValue
-defn opt-peer-resolve-me [rm]
-  match rm
-    | none   -> syrup-bool false
-    | some n -> syrup-tagged "desc:export" [syrup-nat n]
 
 ;; <op:gc-answers [pos …]> — one list, unlike op:gc-exports' two.
 spec gc-answers-bytes [List SyrupValue] -> String
@@ -2845,20 +2818,33 @@ defn syrup-as-answer-target
 ;; "desc:answer" (Phase 44 — chained answer at peer's bs-questions).
 ;; Caller picks the tag based on the resolution-value shape.
 ;;
-;; The queued deliver's OWN reply channels are carried through. They used to be
-;; hardcoded `false false`, so forwarding a pipelined message answered nobody:
-;; the peer's answer at the position it was waiting on never resolved, and its
-;; resolve-me was never notified. Both slots belong to the peer — it allocated
-;; the answer position in its own question table and exported the resolver — so
-;; the answer position is echoed verbatim and the resolver is named as the
-;; peer's export rather than as one of ours.
+;; Both trailing slots are `false`, and the queued deliver's own `ap`/`rm` are
+;; NOT echoed into them — which was tried and is wrong.
+;;
+;; This frame is a NEW message with US as the sender, so its answer position
+;; would name a slot in OUR question table and its resolve-me an object WE
+;; export. The queued deliver's `ap` and `rm` belong to the PEER: it allocated
+;; that answer position in its own question table and exported that resolver.
+;; Echoing them tells the peer to answer at a number that means something else
+;; on our side, and names its own export as though we were introducing it —
+;; which our own decoder rejects (`resolve-me-ok?` in captp-wire), correctly.
+;;
+;; So the defect the gaps document records under §1.2 M3 is REAL and still
+;; open: a forwarded pipelined deliver reaches the peer with no reply channel,
+;; and the answer the peer is waiting on never resolves. Closing it needs us to
+;; allocate our OWN answer position here and forward the reply back to the
+;; queued deliver's `ap`/`rm` when it arrives — answer-forwarding machinery
+;; that does not exist yet. `PipeMsg` now carries `rm` so that machinery has
+;; something to read; the break path already uses `ap` correctly, because a
+;; break is a REPLY (target `<desc:answer N>`, the peer's namespace) rather
+;; than a new message.
 spec forward-deliver-bytes String Nat SyrupValue [Option Nat] [Option Nat] -> String
-defn forward-deliver-bytes [tag target args ap rm]
+defn forward-deliver-bytes [tag target args _ap _rm]
   wire::encode-record "op:deliver"
     [cons [syrup-tagged tag [syrup-nat target]]
       [cons [as-args-list args]
-        [cons [opt-answer-slot ap]
-          [cons [opt-peer-resolve-me rm] nil]]]]
+        [cons [syrup-bool false]
+          [cons [syrup-bool false] nil]]]]
 
 ;; Walk pipelined-msgs; for each entry whose pid matches `pid`, emit
 ;; forwarding bytes targeting (TAG, target). Entries with mismatched

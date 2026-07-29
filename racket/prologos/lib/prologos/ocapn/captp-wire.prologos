@@ -180,14 +180,18 @@ defn op-to-syrup [op]
 ;; Multi-arity records (op:start-session, op:deliver, op:listen,
 ;; op:gc-export, op:gc-exports, op:deliver-only) use `encode-record`
 ;; directly to produce the canonical `<label arg1 arg2 ...>` form.
-;; Single-arity records (op:abort, op:gc-answer, op:gc-answers) go
-;; through `op-to-syrup` + `wire::encode` (the syrup-tagged form is
-;; byte-equivalent in the 2-elem case).
+;; Single-arity records (op:abort, op:gc-answer) go through
+;; `op-to-syrup` + `wire::encode` (the syrup-tagged form is
+;; byte-equivalent in the 2-elem case). `op:gc-answers` does NOT: its one
+;; argument is itself a LIST, and the payload reading would splice that
+;; list's elements into the record. It uses `encode-record` like the
+;; multi-arity ops.
 ;;
 ;; `op:start-session` here emits the TWO-field legacy form, which no
-;; peer sends and upstream rejects — the CapTPOp carries only ver and
-;; locator, and the missing pubkey and locator-signature cannot be
-;; synthesised without the session key. The conformant four-field
+;; peer sends and upstream rejects. The CapTPOp does carry the peer's
+;; pubkey now (it is what binds a deposited gift to its gifter), but not
+;; the locator SIGNATURE, which cannot be synthesised without the session
+;; key. The conformant four-field
 ;; frame is built by `handshake.prologos`, which holds the key; this
 ;; arm is used only by in-tree byte-comparison tests.
 
@@ -234,9 +238,12 @@ defn encode-op [op]
 ;; is stored in the CapTPOp as a `Nat`, so each one goes through
 ;; `wire-nat`, which converts and returns `none` on a negative.
 ;;
-;; That conversion is unary structural recursion and its cost is linear
-;; in the position's VALUE, on a number the peer chooses (see the gaps
-;; document, §1.4 finding 4). Nothing here bounds it.
+;; That conversion used to be unary structural recursion, so its cost was
+;; linear in the position's VALUE on a number the peer chooses — 18 wire
+;; bytes bought an unbounded stall. `int-to-nat` is now O(1) (it goes
+;; through a foreign whose declared result type is `Nat`, which marshals
+;; into the native representation directly), so a peer-chosen position
+;; costs nothing to convert.
 ;;
 ;; int-to-nat / wire-nat MOVED to prologos::ocapn::syrup (2026-07-27).
 ;; They read a SyrupValue as a table position — a SyrupValue concern, not a
@@ -412,10 +419,13 @@ defn desc-is-answer?
 ;; dispatcher checks BEFORE unwrapping; a slot that fails it fails the
 ;; whole decode.
 
-;; Is this readable as a table position? Deliberately NOT
-;; `some? (wire-nat v)`: `wire-nat` converts through `int-to-nat`,
-;; whose cost is linear in the position's VALUE and is paid again by
-;; the unwrap that follows. Checking the sign is the whole test.
+;; Is this readable as a table position? Checking the sign IS the whole
+;; test — `wire-nat`'s only failure mode on an integer is a negative one.
+;;
+;; This was originally justified by avoiding `int-to-nat`'s cost, which was
+;; linear in the position's value and paid twice. That cost is gone (it is
+;; O(1) now), so the justification is just clarity: the predicate says what
+;; it checks.
 spec int-nonneg? Int -> Bool
 defn int-nonneg? [i]
   match [int-lt i 0]
@@ -610,32 +620,36 @@ defn nat-list-of
 ;; one-element argument sequence containing it. Both are accepted here
 ;; and they cannot be confused, because a positions list holds NUMBERS
 ;; while the wrapped form holds a LIST.
-spec first-of-syrup-list SyrupValue -> [Option SyrupValue]
-defn first-of-syrup-list
-  | syrup-list xs -> list-fst xs
-  | syrup-null     -> none
-  | syrup-bool _   -> none
-  | syrup-nat _    -> none
-  | syrup-int _    -> none
-  | syrup-string _ -> none
-  | syrup-symbol _ -> none
-  | syrup-tagged _ _ -> none
-  | syrup-refr _   -> none
-  | syrup-bytes _ -> none
-  | syrup-promise _ -> none
-  | syrup-dict _   -> none
-
-spec gc-answers-unwrapped SyrupValue -> [Option [List Nat]]
-defn gc-answers-unwrapped [p]
-  match [first-of-syrup-list p]
-    | none       -> none
-    | some inner -> nat-list-of inner
+;; `<op:gc-answers [pos …]>` — EXACTLY ONE argument, which is a list.
+;;
+;; The payload of a one-list-argument record is a one-element argument list
+;; holding it, so the arity check is on that outer list. This used to try
+;; `nat-list-of` on the payload and, failing that, take the FIRST element of
+;; it — which decoded `<op:gc-answers [1+] [2+]>` happily as `[1]` and dropped
+;; the second list in silence. It was the one op left without an arity gate.
+spec gc-answers-only-arg [List SyrupValue] -> [Option [List Nat]]
+defn gc-answers-only-arg [xs]
+  match [list-len1? xs]
+    | false -> none
+    | true  ->
+        match [list-fst xs]
+          | none   -> none
+          | some l -> nat-list-of l
 
 spec gc-answers-positions SyrupValue -> [Option [List Nat]]
-defn gc-answers-positions [p]
-  match [nat-list-of p]
-    | some ns -> some ns
-    | none    -> gc-answers-unwrapped p
+defn gc-answers-positions
+  | syrup-list xs    -> gc-answers-only-arg xs
+  | syrup-null       -> none
+  | syrup-bool _     -> none
+  | syrup-nat _      -> none
+  | syrup-int _      -> none
+  | syrup-string _   -> none
+  | syrup-symbol _   -> none
+  | syrup-tagged _ _ -> none
+  | syrup-refr _     -> none
+  | syrup-bytes _    -> none
+  | syrup-promise _  -> none
+  | syrup-dict _     -> none
 
 spec dispatch-gc-answers SyrupValue -> [Option CapTPOp]
 defn dispatch-gc-answers [p]

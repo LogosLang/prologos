@@ -132,3 +132,100 @@
   (check-contains
    (run-last "(eval (decode-op \"garbage\"))")
    "none"))
+
+;; ========================================
+;; The SPEC forms of the GC ops
+;; ========================================
+;;
+;; `op:gc-exports` / `op:gc-answers` are what a conforming peer sends;
+;; the singular `op:gc-export` / `op:gc-answer` this module was built
+;; around are in neither the spec nor upstream's CAPTP_TYPES. Before
+;; these arms existed, every inbound GC frame from a real peer decoded
+;; to `none` and was dropped in silence.
+
+(test-case "captp-wire/decode op:gc-exports (two parallel lists)"
+  (check-contains
+   (run-last "(eval (decode-op \"<13'op:gc-exports[3+7+][1+2+]>\"))")
+   "op-gc-exports"))
+
+(test-case "captp-wire/decode op:gc-answers (one list)"
+  (check-contains
+   (run-last "(eval (decode-op \"<13'op:gc-answers[4+9+]>\"))")
+   "op-gc-answers"))
+
+(test-case "captp-wire/op:gc-answers with a second list is REJECTED"
+  ;; It used to take the first list and drop the rest without a word --
+  ;; the one op left without an arity gate.
+  (check-contains
+   (run-last "(eval (decode-op \"<13'op:gc-answers[4+][9+]>\"))")
+   "none"))
+
+;; ========================================
+;; Arity and label gates
+;; ========================================
+
+(test-case "captp-wire/op:deliver with a FIFTH field is rejected"
+  ;; Every dispatcher read positionally and never checked the tail, so a
+  ;; frame with extra fields decoded as though it were well-formed.
+  (check-contains
+   (run-last
+    "(eval (decode-op \"<10'op:deliver<11'desc:export1+>[]ff5\\\"EXTRA>\"))")
+   "none"))
+
+(test-case "captp-wire/an unknown descriptor label in the target slot is rejected"
+  ;; `unwrap-desc` discarded the label, so `<totally-bogus 3>` routed
+  ;; straight into the export table at position 3.
+  (check-contains
+   (run-last
+    "(eval (decode-op \"<10'op:deliver<13'totally-bogus3+>[]ff>\"))")
+   "none"))
+
+(test-case "captp-wire/a NEGATIVE answer position is rejected, not read as absent"
+  ;; `wire-nat` returns none on a negative, which made a malformed slot
+  ;; indistinguishable from `false` -- i.e. from fire-and-forget.
+  (check-contains
+   (run-last
+    "(eval (decode-op \"<10'op:deliver<11'desc:export1+>[]5-f>\"))")
+   "none"))
+
+(test-case "captp-wire/a well-formed op:deliver still decodes"
+  ;; The gates above are only meaningful if the good case survives them.
+  (check-contains
+   (run-last
+    "(eval (decode-op \"<10'op:deliver<11'desc:export1+>[4\\\"ping]0+<18'desc:import-object2+>>\"))")
+   "op-deliver"))
+
+;; ========================================
+;; op:start-session — the four-field wire record
+;; ========================================
+
+(test-case "captp-wire/a 4-field start-session takes the locator from field 3"
+  ;; Field 1 is the session PUBKEY. This bound it as the locator, so the
+  ;; loc slot held the pubkey s-expression.
+  (check-contains
+   (run-last
+    "(eval (decode-op \"<16'op:start-session3\\\"1.06'PUBKEY3'LOC3'SIG>\"))")
+   "LOC"))
+
+;; ========================================
+;; The answer-position slot is a BARE integer
+;; ========================================
+
+(test-case "captp-wire/encode-op writes a bare answer position, not <desc:answer N>"
+  ;; Upstream reads slot 2 raw, so a wrapped position comes back as a
+  ;; record that never compares equal to the position named in a later
+  ;; op:gc-answers.
+  (define got
+    (run-last
+     "(eval (encode-op (op-deliver zero (syrup-string \"hi\") (some Nat (suc zero)) (none Nat))))"))
+  (check-true (string-contains? got "1+") "answer position should be bare")
+  (check-false (string-contains? got "desc:answer")
+               "answer position should NOT be wrapped in desc:answer"))
+
+(test-case "captp-wire/encode-op wraps the args slot in a list"
+  ;; A peer iterates the args slot directly; a bare value raises inside
+  ;; its receive loop and the peer drops the connection.
+  (check-contains
+   (run-last
+    "(eval (encode-op (op-deliver-only zero (syrup-string \"ping\"))))")
+   "[4\\\"ping]"))

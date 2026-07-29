@@ -113,14 +113,15 @@
 ;;     cleanly by the decoder one layer up. Being permissive here is
 ;;     strictly safer.
 ;;
-;;   - We accept `n` as a one-byte atom. The reference Syrup dialect
-;;     has NO null form (`grep -c null contrib/syrup.py` → 0), but our
-;;     own encoder emits one for `syrup-null`
-;;     (`lib/prologos/ocapn/syrup-wire.prologos`), and a reader that
-;;     rejects bytes our own writer produces cannot read its own
-;;     frames back. The correct fix is on the ENCODER — until it stops
-;;     emitting `n`, rejecting it here only converts a wire-format
-;;     defect into a framing desync.
+;;   - We accept `n` as a one-byte atom, purely defensively. The
+;;     reference Syrup dialect has NO null form (`grep -c null
+;;     contrib/syrup.py` → 0) and our own encoder no longer emits one
+;;     — `syrup-null` is the empty argument sequence of a record, and
+;;     standalone it encodes to a poison record instead. So nothing
+;;     should produce an `n` any more; tolerating it here keeps a
+;;     stray one from desynchronising the framing rather than merely
+;;     failing the frame, which is the same trade the other permissive
+;;     cases above make.
 ;;
 ;; What we do NOT tolerate is an unbalanced close: a `]`/`>`/`}`/`$`
 ;; at depth 0 is a hard error. Decrementing past zero used to yield a

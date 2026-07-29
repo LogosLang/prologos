@@ -40,7 +40,13 @@ import {
 // upstream's own suite iterates. Racket used to send a bare value there,
 // which this script was written against; unwrapping one level here reads
 // both, so the fixture no longer pins the older (unparseable) shape.
-const argsHead = (a) => Array.isArray(a) ? a[0] : (a && Array.isArray(a.values)) ? a.values[0] : a;
+// The args slot is a LIST, always. This used to fall back to returning the
+// value itself, which meant it read the correct list form AND the bare value
+// Racket used to send -- so reverting that bug would have kept this green.
+const argsHead = (a) => {
+  const l = Array.isArray(a) ? a : (a && Array.isArray(a.values) ? a.values : null);
+  return l && l.length ? l[0] : null;
+};
 const port = Number(process.argv[2]);
 if (!Number.isInteger(port) || port < 1) {
   process.stderr.write(`peer-questioner: bad port ${process.argv[2]}\n`);

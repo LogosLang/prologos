@@ -23,13 +23,16 @@ ns prologos::ocapn::handshake
 ;;
 ;; IMPLEMENTATION NOTE — why bytes-level assembly:
 ;;
-;; Prologos's `SyrupValue` models a record as `syrup-tagged label
-;; payload` with a SINGLE payload — `encode` of that gives the
-;; WRONG shape `<label [a b c]>` for a multi-arg record. The OCapN
-;; spec (and the Python ocapn-test-suite) needs `<label a b c>`
-;; with N direct args. So records are assembled at the BYTES level
-;; here: each arg is pre-encoded, then concatenated between
-;; `<label` and `>`.
+;; Records are assembled at the BYTES level here: each arg is
+;; pre-encoded, then concatenated between `<label` and `>`.
+;;
+;; The original reason was that `encode` wrapped a multi-arg record's
+;; arguments in a list — `<label [a b c]>` where the spec wants
+;; `<label a b c>`. That is no longer true (`encode-payload` in
+;; syrup-wire splices a list payload), so `wire::encode-record` would
+;; do. What still holds is the SECOND reason below: the signature
+;; covers exact bytes, and assembling them here keeps the bytes we
+;; sign and the bytes we send provably identical.
 ;;
 ;; Likewise, crypto byte-payloads (pubkey, sig halves) are
 ;; Latin-1-encoded Strings where 1 char == 1 wire byte, so their

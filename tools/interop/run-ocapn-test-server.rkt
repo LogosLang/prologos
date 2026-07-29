@@ -491,6 +491,14 @@
 (define (desc-position v label)
   (and (syv-record? v label) (syv-nat (syv-arg v 0))))
 
+;; The position inside a RESOLVE-ME slot. Both descriptors are valid there --
+;; `captp-wire.prologos` documents the pair -- and accepting only
+;; `desc:import-object` silently dropped an enliven whose resolver was a
+;; promise, with nothing logged.
+(define (resolve-me-position v)
+  (or (desc-position v #"desc:import-object")
+      (desc-position v #"desc:import-promise")))
+
 ;; The raw 32-byte Ed25519 key inside a gcrypt public-key s-expression
 ;; `[public-key [ecc [curve Ed25519] [flags eddsa] [q 32:…]]]`. Compared
 ;; instead of the encoded form: the encoded form is only equal to a peer's
@@ -900,7 +908,7 @@
   (when parts
     (define to (list-ref parts 0))
     (define args (list-ref parts 1))
-    (define rm-pos (desc-position (list-ref parts 3) #"desc:import-object"))
+    (define rm-pos (resolve-me-position (list-ref parts 3)))
     (define sr-node (and (eq? (syv-kind args) 'list)
                          (pair? (syv-val args))
                          (car (syv-val args))))
