@@ -1034,12 +1034,53 @@ ALREADY lex as one token and are ALREADY not multiplicities.
    `x{a b}` ≡ `x {a b}` byte-identical as datums. Any rule keyed on adjacency
    must be decided at or before grouping. *(P1b-i learned this the hard way:
    a datum-layer fusion of `?x` + `:Nat` absorbed unrelated keywords.)*
-3. **New sentinels owe two registrations**: `pattern-var?` (macros.rkt) and
-   tree-parser's inline skip-list — both hard-coded enumerations.
+3. **New sentinels owe NINE registrations — this invariant used to say TWO, and
+   ONE OF THOSE TWO WAS A NO-OP.** ⚠ Corrected at P1b-iii after the P1b-ii
+   regression. The old text ("`pattern-var?` and tree-parser's inline
+   skip-list") was written ONE COMMIT BEFORE the regression it was meant to
+   prevent, and **under-specified by exactly the amount that let it through**:
+   tree-parser.rkt:662's memq is **DEAD CODE** (both cond arms terminate in a
+   `(char=? (string-ref s 0) #\:)` test, so a `$`-headed item fails the arm
+   regardless, and every member of the list starts with `$` or is `quote`).
+   The real surface, verified at `88b3019a`:
+
+   **Token layer** (only when a new TOKEN is minted — P1b-ii's five):
+   a. the recognizer · b. `register-token-pattern!` · c. `langle-matched?`
+   opener set · d. its `has-matching-rangle?` TWIN (keep IDENTICAL) ·
+   e. the extent frame dispatch. *(+ the test oracle's THIRD copy of the
+   opener list, tests/test-parse-reader.rkt.)*
+
+   **Sentinel/tag layer** (EVERY new sentinel):
+   1. `group-items` arm (parse-reader.rkt) — mints the datum sentinel
+   2. `group-items-to-tree` (surface-rewrite.rkt) — **SILENT if missed, and
+      load-bearing**: a non-error tree surf can REPLACE preparse's error surf
+   3. tree-parser dispatch arm — its `else` **silently** calls `parse-expr-tree`
+      for any node with children; "Unhandled form" is UNREACHABLE from a group tag
+   4. **`pattern-var?` (macros.rkt)** — **LOUD whole-file abort if missed.**
+      This is the P1b-ii regression
+   5. preparse opacity (macros.rkt:1988)
+   6. sub-form recursion skip (macros.rkt:2536)
+   7. `combine-foreign-blocks` head test (macros.rkt:2444) — if head-relevant
+   8. **`access-sentinel?` (macros.rkt:5446) + the `rewrite-dot-access` fold
+      arm** — ⚠ **named by NO enumeration before P1b-iii, and the site that
+      produced P1b-ii's carried residual.** Without it the sentinel never fuses
+      onto its base, stays a separate sibling, and every guided error it owns
+      becomes unreachable in arity-checking contexts
+   9. the parser head-dispatch arm (parser.rkt, modelled on :829)
+
+   **Silent-degradation tier** — pre-existing and family-wide, NOT chargeable to
+   a new sentinel: `pp-datum` (pretty-print.rkt, handles 11 heads and **no
+   access sentinels at all**) and `tools/form-deps.rkt:42`.
+
+   **The structural reading**: nine hand-maintained enumerations is the disease,
+   not the checklist's length. `pattern-var?` in particular is a NEGATIVE list
+   defaulting to "this IS a pattern variable" — the same inverted polarity
+   `definitely-not-map?` had before P2.b slice 1 inverted it. See DEFERRED
+   § "CIU T6 D4.P1b-ii spin-offs" item 3.
 4. **Both reader modes, always.** WS and sexp diverge by construction here
    (adjacency, `.{`), so a census in one mode proves nothing about the other.
 
-### §5.P1b-ii — The `.{` opener  🔄
+### §5.P1b-ii — The `.{` opener  ✅ `1a1091d4`
 
 **Mini-audit**: `wf_f91e5aac-df2` (5 facets + completeness critic, HEAD-pinned
 `09a1f0d7`; a first run `wf_e34bc9f3-6a8` died on an auth expiry with zero
@@ -1219,7 +1260,181 @@ immediately — the test oracle's verbatim copy of the production list
 
 Status: ✅ `1a1091d4`.
 
-### §5.P1b-iii — Brace adjacency + the head registry  ⬜
+### §5.P1b-iii — Brace adjacency + the head registry  🔄
+
+**Mini-audit**: `wf_18992d66-b81` (6 facets + completeness critic, HEAD-pinned
+`88b3019a`). Main-session R-lens-verified. It found a **BLOCKING problem with
+Q_M8** and **located the root cause of P1b-ii's carried residual**.
+
+#### ⚠ BLOCKING — Q_M8 as ruled would ship a SILENT WRONG ANSWER
+
+The ruling's safety premise ("`:10` is rejected by the SAME `memq` arm that
+already rejects `:7` — no new failure mode") is **FALSE for the 2-element `defn`
+bare-param shape**. Probe-verified at `88b3019a`:
+
+| Source | Result today |
+|---|---|
+| `defn g [x :7] x` | **SILENTLY ACCEPTED** → `g : [Pi [x :0 <[Type 0]>] x -> x]` — `:7` consumed as a **TYPE NAME**, a different function, 0 errors |
+| `defn g [x :10] x` | LOUD parse-error |
+| `defn g [x :0] x` | LOUD parse-error |
+| `defn g [x :1] x` | LOUD parse-error |
+
+So the *valid* multiplicities are loud here and **`:7` is the anomaly**.
+Widening makes `:10` lex like `:7` — moving it **LOUD → SILENT WRONG**.
+
+**Root cause — a site NO enumeration names**: `fused-type-annot?`
+(parser.rkt:5459-5460) is a **SECOND hard-coded colon enumeration**, excluding
+exactly `'(:0 :1 :w :m)` — four lexemes — against a recognizer minting **twelve**.
+Everything outside those four falls through and is consumed as a type name. Its
+own comment eight lines above warns *"a second copy is how the two paths would
+drift"* — while being exactly that.
+
+**Q_N4 [owner]: WIDEN THE SCOPE.** Fix `fused-type-annot?` **structurally**, not
+by extending the list: **no type name starts with a digit**, so a digit-headed
+colon symbol is never a type annotation. This co-migrates with the recognizer
+widening AND **repairs the pre-existing `:7` silent-wrong-answer**. Q_M8 done
+correctly makes the language *more* sound, not less.
+
+#### The carried residual has a LOCATED cause
+
+**`access-sentinel?` (macros.rkt:5446-5450)** gates the left-fold that fuses a
+sentinel onto its base. It lists six predicates; `$dot-brace` is not among them —
+verified, macros.rkt has exactly two `dot-brace` mentions, both the P1b-ii
+`pattern-var?` fix. **That single omission IS the unreachable-guided-error gap.**
+
+And **adjacency does NOT fuse** (Q4 answered: NO). `is-postfix?` only MARKS —
+`xs[0]` yields two siblings — and the consuming fold lives one layer down in
+`rewrite-dot-access`, gated by `access-sentinel?`. **Corollary the phase
+inherits**: the new select sentinel reproduces the identical gap on day one
+unless it also gets a predicate + an `access-sentinel?` entry + a fold arm.
+Closing P1b-ii's residual and not opening a new one are **the same edit** — in
+`macros.rkt`, a file this phase's stated scope ("entirely tokenizer/grouping")
+does not name.
+
+#### ⚠ Scope the design MISSED ENTIRELY — and it is worse than P1b-ii's
+
+**§5.P1b-iii never mentions `surface-rewrite.rkt`**, the second grouper, which
+has **ZERO adjacency machinery** (grep for `end-pos|start-pos|postfix|adjacen`
+→ 0 hits). The two groupers therefore ALREADY diverge in shape on `xs[0]`
+(datum `($postfix-index 0)` vs tree plain `bracket-group`).
+
+Why this is worse here: `brace-group` already has a **NON-ERROR** tree handler
+returning a map literal, and driver's error-recovery arm (driver.rkt:2557-2560)
+lets a non-error tree surf **REPLACE** preparse's error surf. So a
+parse-reader-only implementation does not merely lose a diagnostic — **the guided
+"not until P3" error is SILENTLY SWALLOWED and the user gets a plausible wrong
+map.** → **Q_N7 [owner]: implement adjacency in BOTH groupers.**
+
+#### The rulings [owner, 2026-07-29]
+
+- **Q_N4** — Q_M8 widens in scope: recognizer digit-run `digit+` **plus** the
+  structural `fused-type-annot?` fix (see above).
+- **Q_N5 — BUCKET 4 IS RULED "SELECT", EXPLICITLY.** ⚠ Inaction is **not** the
+  status quo: for `f[x]{a}` **both** `is-postfix?` conjuncts already pass (the
+  previous raw-vector item is the `rbracket`, byte-adjacent and
+  `token-entry?`-passing; `result` already holds `f` + the postfix group), so a
+  naive generalization rules bucket 4 **by accident**. The bracket band already
+  answers the analogous question affirmatively (`xs[0][1]` chains through
+  `is-postfix?` off an `rbracket`). Ruled to MATCH that precedent — by decision,
+  not by default. Zero live sites (census: 160 files, 0 hits).
+- **Q_N6 — the binder hazard is ACCEPTED.** `defn f{x} x` is a binder today
+  (`($brace-params x)`, byte-identical to the spaced form) and becomes a select
+  block after. **Zero live adjacent-brace binder sites**, but the exposure is
+  real: **419 of 622 live spaced braces are implicit type binders** (vs 202 map
+  literals — a 2.07× margin), and **384 of 622 sit immediately after an
+  identifier on the same line**, i.e. one deleted space away. Accepted; **both
+  spellings get pins**. No diagnostic attempted — grouping has no position
+  concept, so it cannot tell binder position from expression position.
+- **Q_N7** — adjacency lands in **both** groupers (above).
+
+#### Q8.5 invariant 3 was UNDER-SPECIFIED — corrected in §Q8
+
+It named two registrations. The audit's answer to Q1 is **NINE real ones**, and
+**one of the two it named is a NO-OP**: the tree-parser memq (`:662`) is dead
+code — both cond arms terminate in a `(char=? (string-ref s 0) #\:)` test, so a
+`$`-headed item fails regardless, and every member of the list starts with `$`
+or is `quote`. **The invariant written one commit before P1b-ii's regression, to
+prevent exactly it, listed one real item and one no-op — under-specifying by
+precisely the amount that let the regression through.** §Q8.5 is corrected.
+
+#### Other audit findings folded
+
+- **Coordinate drift, ELEVENTH consecutive phase**: `recognize-colon-annotation`
+  is at :871 (design said :847); `is-postfix?` at :2631 (design ~:2441);
+  `combine-foreign-blocks` at :2438 (design ~:2431 — which is `arrow-sym?`).
+- **The head "registry" is ONE site, not two.** driver.rkt:3335-3339 is
+  `handle-foreign` guarding the `(foreign racket "mod" …)` DECLARATION — head
+  symbol `foreign`, `racket` in arg-1, a STRING required next. It never meets a
+  brace group. The single grouping-relevant site is macros.rkt:2447. *The "no
+  module edge" half stands, and so does the leaf-module conclusion.*
+- **Registry home**: `parse-reader.rkt` requires only rrb/propagator/parse-lattice
+  and `macros.rkt` does not require it — so a **new leaf module** requiring
+  nothing project-local can be required by both with no cycle. `surface-rewrite`
+  already requires parse-reader, so it inherits.
+- **The editors already diverge**: `editors/emacs/prologos-mode.el:119` and
+  `prologos-font-lock.el:220` hard-code the literal **adjacent** `"racket{"`, so
+  the editor already requires adjacency while `combine-foreign-blocks` does not.
+  P1b-iii *closes* a divergence — but a Racket-side registry cannot reach `.el`,
+  so the residual is NAMED as accepted.
+- **The back-compat pin the design leans on is SEXP-ONLY** and constrains nothing
+  in WS (test-foreign-block's `run-ns` calls `process-string`; sexp `{`→
+  `$brace-params` comes from the positionless readtable). The real justification
+  for the head carve-out is the **10 live WS adjacent sites**.
+- **`$brace-params` is ≥7-purposed → actually ELEVEN** (ten source-level + two
+  synthesized). Missing from the design's list: spawn/session overrides
+  (parser.rkt:6555), **schema construction `Person {…}` (macros.rkt:2011, 24 LIVE
+  SITES — the closest semantic neighbour of a select block, all spaced)**, spec
+  metadata blocks (nested brace-params), schema defaults injection (rewrites in
+  place). **Independent corroboration of Q_M6**: the only existing
+  map-vs-binder discriminator is CONTENT-based (first element is a keyword) and
+  lives in preparse — a select block `x{name age}` has BARE-SYMBOL content, so
+  reusing `$brace-params` would route select blocks into the binder path.
+- **The opener-adjacent population is ~2× the design's 13** — 13 in `.prologos`
+  plus 14 live `'[{` in `.rkt` test strings plus `#p({name email})` ≈ 28. If
+  `(pair? result)` is dropped, every list-of-maps literal mis-reads its **first
+  element only**, at zero errors.
+- **⚠ THE GENERALIZATION SHAPE**: `lbrace` must **NOT** join the
+  `(memq type '(lbracket lparen))` arm — that arm's closer is a two-way `if`
+  selecting `'rparen` for anything not `lbracket`. **Identical to the shape
+  P1b-ii hit in surface-rewrite.rkt.** Correct: hoist the adjacency test into a
+  named helper consumed by both arms, leaving the brace arm's `'rbrace` intact.
+- **P1b-iii FLIPS the P1b-ii FLAGSHIP pin** (test-parse-reader.rkt:438-442),
+  written one commit ago — `app-config` is not a reader-form head, so that brace
+  becomes a select block. §5.P1b-iii's test-delta named only "NET-NEW `racket{…}`
+  pins"; a flip discovered at suite time reads as a regression.
+- **The Q_N3 guard is STRUCTURALLY BLIND here, twice**: every row is uniformly
+  SPACED (exactly the population that must not change), and it compares ITEM
+  COUNTS while this phase's defect class is a **shape divergence at equal
+  count**. The pre-existing `xs[0]` case proves the blindness is live. → extend
+  it to be shape-aware.
+- **⚠ THE A/B TRAP IS PRIMED AT THE WORST FILE**: `lib/examples/foreign.prologos`
+  holds **10 of the 12** adjacent sites (83% of the surface) and **is one of the
+  6 dirty `.prologos` files** (+19/−3 owner WIP). Both legs must read from a
+  materialized `git show 88b3019a:` snapshot. Expected-diff set is **EMPTY for
+  both halves** — any non-empty result is a bug, not a change to review.
+- **Correction**: the design's "six currently-PASSING markers at RISK" does not
+  reproduce — the acceptance file has exactly **two** live ident-adjacent bracket
+  sites (`:122 party[0].name`, `:216 mixed[1]`).
+- **`(> i 0)` is REDUNDANT** today — `(pair? result)` subsumes it — and becomes
+  load-bearing only if that conjunct is removed.
+
+#### The nine-tier registration surface (from Q1; §Q8.5 now carries it)
+
+Not in scope here (no new TOKEN — the decision is positional at grouping): the
+five token-layer enumerations P1b-ii co-updated. **In scope**: `group-items`
+brace arm · `group-items-to-tree` (SILENT + load-bearing) · tree-parser dispatch
+arm (its `else` silently calls `parse-expr-tree`) · `pattern-var?` (LOUD
+whole-file abort — the P1b-ii regression) · preparse opacity (macros.rkt:1988) ·
+sub-form recursion skip (:2536) · `combine-foreign-blocks` head (:2444) ·
+**`access-sentinel?` + the `rewrite-dot-access` fold arm — named by NO
+enumeration, and the site that produced the residual** · the parser head-dispatch
+arm. Silent-degradation tier, pre-existing and family-wide, NOT chargeable here:
+`pp-datum` (handles 11 heads, no access sentinels at all) and
+`tools/form-deps.rkt:42`.
+
+---
+
+**Original design text (superseded in part by the above):**
 
 The forced select-block sentinel (Q_M6) for the non-head-adjacent bucket only;
 head-adjacent keeps `$brace-params` UNCHANGED (the spaced-`racket {…}`
