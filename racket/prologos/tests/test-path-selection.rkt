@@ -668,3 +668,68 @@
   ;; on a plainly-unarmed node so the coverage survives the node deletion.
   (check-false (definitely-not-map? (expr-fvar 'some-unknown-node))
                "an unrecognized node must default to #f — unknown is not not-a-map"))
+
+;; ============================================================
+;; D4.P1b-ii — the `.{` opener (dot-lbrace re-mint)
+;;
+;; The reader/grouping pins live in test-parse-reader.rkt (incl. the FLAGSHIP
+;; nesting pin and the Q_N3 two-grouper agreement guard). These are the
+;; Level-3 WS pins: the construct LEXES and GROUPS, and until P3 gives it
+;; semantics it must fail GUIDINGLY and PER-COMMAND — never a whole-file abort
+;; and never the misleading "Unbound variable" the generic path produced.
+;; ============================================================
+
+(test-case "P1b-ii: `.{ }` gives a GUIDED per-command error and the file CONTINUES"
+  (define rs (run-ws-raw
+              (string-append
+               "def cfg := {:host \"localhost\" :port 8080}\n"
+               "cfg.{host port}\n"
+               "def after := 42\n"
+               "after\n")))
+  ;; the offending command errors...
+  (check-true (ormap prologos-error? rs))
+  ;; ...and the commands AFTER it still run (this is the whole point of the
+  ;; P1a marker-seat discipline: a parse-error VALUE, never a raise).
+  (check-regexp-match #rx"42" (last rs)))
+
+(test-case "P1b-ii: the guided error names the construct, not a missing variable"
+  (define r (run-ws-last
+             (string-append
+              "def cfg := {:host \"localhost\" :port 8080}\n"
+              "cfg.{host port}\n")))
+  (check-regexp-match #rx"select block" r)
+  (check-false (regexp-match? #rx"Unbound variable" r)
+               "a valid new form reported as a missing variable is the misleading shape"))
+
+(test-case "P1b-ii: plain field access is UNAFFECTED (must-not-break)"
+  (define r (run-ws-last
+             (string-append
+              "def cfg := {:host \"localhost\" :port 8080}\n"
+              "cfg.host\n")))
+  (check-regexp-match #rx"localhost" r))
+
+(test-case "P1b-ii BLOCKING regression pin: `.{ }` in a defmacro TEMPLATE must not abort the file"
+  ;; Found by adversarial verify BEFORE the commit; it was a real regression.
+  ;; `$dot-brace` was missing from `pattern-var?`'s exclusion list (macros.rkt),
+  ;; so the sentinel read as a macro PATTERN VARIABLE and `datum-subst` raised
+  ;; "Unbound pattern variable in template: $dot-brace" — an uncaught raise at
+  ;; preparse, i.e. a WHOLE-FILE ABORT with zero results, where the same source
+  ;; gave a per-command error before the token existed.
+  ;;
+  ;; ⚠ This pin must exercise macro USE, not just registration: P1a's own
+  ;; sibling pin only registers a macro, and registration is harmless — the
+  ;; abort needs the template to be SUBSTITUTED. A registration-shaped pin
+  ;; would have stayed green through the whole defect.
+  (define rs (run-ws-raw
+              (string-append
+               "defmacro getsel [$u] [$u.{a b}]\n"
+               "def cfg := {:host \"h\"}\n"
+               "[getsel cfg]\n"
+               "def after := 42\n"
+               "after\n")))
+  ;; the file must RUN TO COMPLETION — the trailing command is the real assertion
+  (check-regexp-match #rx"42" (last rs)
+                      "whole-file abort: nothing after the macro use evaluated")
+  (check-true (ormap prologos-error? rs))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"select block" (format "~a" r))) rs)
+              "the guided error must survive macro expansion"))

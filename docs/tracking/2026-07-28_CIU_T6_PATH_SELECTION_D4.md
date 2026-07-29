@@ -24,7 +24,7 @@ rulings, censuses and test delta live in its own section.
 | **P0** | **Acceptance corpus** — augment the EXISTING acceptance file with the spec §10 examples + Appendix fixtures; `--check` gated; new forms commented until their phase lands | ✅ | §5.P0 · `e2674208` — 28/28 markers, 0 errors; all 7 fixtures load (layout via `def X`, issue #80 sidestepped); corpus phase-tagged in HEAD notation; carrier pins double as §2.3 docs |
 | **P1a** | **Retirement batch + substrate** — dot-key family · the FULL `broadcast-get` chain (reader + parser keyword + surf + elaborator + node) · `m[:kw]` · reject batch · `surface-rewrite.rkt` `dot-lbrace` cleanup (BEFORE any re-mint) · the marker-form diagnostic seat | ✅ | §5.P1a · **`859b529d`** — suite 9253/474/0, acceptance 28/28 + 89/89, −744/+320; adversarial verify found 2 whole-file-abort defects (1 MINE, in the seat) → fixed + pinned pre-commit |
 | **P1b-i** | **Repairs + probes + the Q8 DRAFT** — the top-level `<` swallow fix (Q_M4) · WS narrowing typed vars · `def ?x` reservation (Q_M3) · the Q_M1 gating probe + `:N` / keyword-`*` / `:<` · **Q8 written from the results** | ✅ | §5.P1b-i + **§Q8** · `fc65ca54` — suite 9263/474/0, corpus A/B 160 files / 2 intended diffs; **Q8 owner-reviewed ✅ 2026-07-28, amended by Q_M8** (ordinals multi-digit in both bands) |
-| **P1b-ii** | **The `.{` opener** — `dot-lbrace` re-mint, **SIX** sites incl. the surviving `surface-rewrite.rkt:516` (a POSITIVE addition — omitting it REGRESSES a currently-correct grouping); plain `'rbrace` closer per Q_M5 | ⬜ | §5.P1b-ii · must land BEFORE/WITH P1b-iii (Q_M2) |
+| **P1b-ii** | **The `.{` opener** — `dot-lbrace` re-mint across **EIGHT** edit regions (not six) incl. the surviving `surface-rewrite.rkt:516` POSITIVE addition; plain `'rbrace` closer (Q_M5); new `$dot-brace` sentinel + `dot-brace-group` tag + tree-parser arm (Q_N1); the Q_N3 two-grouper agreement guard | ✅ | §5.P1b-ii · suite **9279/474/0**, acceptance 28/28 + 89/89, corpus A/B **158 files / 1 intended diff**; adversarial verify caught a **BLOCKING regression I introduced** (`$dot-brace` missing from `pattern-var?` → whole-file abort in a defmacro template) — fixed + pinned pre-commit |
 | **P1b-iii** | **Brace adjacency + the head registry** — the forced select-block sentinel (Q_M6) · leaf-module registry · the 4 buckets · NET-NEW WS `racket{…}` pins | ⬜ | §5.P1b-iii |
 | **P2** | **Grade-1 core** — `.k`/`.N` access + bare-path extraction, on the landed P2 substrate | ⬜ | §5.P2 · `.N` has an end-to-end head start via `(get expr N)` |
 | **P3** | **Blocks** — `x{…}`, projection-by-default, `^` (3 continuations), L4 sort homogeneity, **HONEST NESTING (n-tuples at every n — ruled 2a)**, **STRICT merge** (the §3.6 waypoint) | ⬜ | §5.P3 · Q2 gate RESOLVED (2c: carrier order, thesis-derived) |
@@ -1039,19 +1039,185 @@ ALREADY lex as one token and are ALREADY not multiplicities.
 4. **Both reader modes, always.** WS and sexp diverge by construction here
    (adjacency, `.{`), so a census in one mode proves nothing about the other.
 
-### §5.P1b-ii — The `.{` opener  ⬜
+### §5.P1b-ii — The `.{` opener  🔄
 
-`dot-lbrace` re-mint across **SIX** sites — five in parse-reader.rkt
-(registration · extent frame dispatch :1310 · extent langle skip-set :1292 ·
-group-items langle skip-set :2357 · group-items opener arm :2500) **plus
-surface-rewrite.rkt:516** (the positive addition above). Closer = plain
-`'rbrace` (Q_M5). Decide the group-tag question (seventh site, above).
-Prefix-disjointness re-verified post-P1a: the band is still five members
-(dot-key and broadcast-access remain registered as marker emitters) and
-`recognize-dot-access` excludes `{` explicitly AND requires `ident-start?`.
-Flips: test-parse-reader.rkt:401-406 (asserts NO dot-lbrace token — INVERTS)
-and test-mixfix-01.rkt:54-58 (asserts `.{` RAISES via the compat path — a
-DIFFERENT flip shape). Status: ⬜.
+**Mini-audit**: `wf_f91e5aac-df2` (5 facets + completeness critic, HEAD-pinned
+`09a1f0d7`; a first run `wf_e34bc9f3-6a8` died on an auth expiry with zero
+results). Every load-bearing finding below was **main-session R-lens-verified**.
+It refuted the design on three points and **inverted the phase's hazard model**.
+
+#### What the audit changed
+
+1. **⚠ COORDINATES DRIFTED +136 to +148** on all five parse-reader cites (P1a +
+   P1b-i both inserted). Only `surface-rewrite.rkt:516` was exact. HEAD truth is
+   the table below. *Ninth consecutive phase with drifted coordinates.*
+2. **⚠ THE HAZARD MODEL WAS INVERTED.** The design said a missing tree-parser
+   arm "hits the *Unhandled form* fallthrough" — i.e. LOUD. **False.**
+   `"Unhandled form"` (tree-parser.rkt:119) lives inside the nested `case` of the
+   **top-level-form** arm; a GROUP tag can never reach it. The reachable arm is
+   **tree-parser.rkt:189-193**, which calls `parse-expr-tree` **SILENTLY**
+   whenever the node has children — always true for a brace group. Worse,
+   `driver.rkt:2457-2459` admits tree output when *non-error ∧ same-form-type ∧
+   same-line*, so **a silent garbage surf can BEAT preparse's correct one**. A
+   missing arm is a silent-wrong-answer, not an error.
+3. **⚠ THE "NEW TAG NEEDS AN ARM" OBLIGATION HAS THREE LIVE COUNTEREXAMPLES**:
+   `set-group`, `at-group`, `tilde-group` are minted at surface-rewrite.rkt
+   :519/:527/:528 with **zero** tree-parser arms and zero non-test consumers —
+   they already ride the silent :189-193 path. Verified. Whether that is benign
+   for them is **UNVERIFIED → filed** (DEFERRED), not assumed.
+4. **MY OWN QUESTION'S PREMISE WAS WRONG.** I asked whether `dot-lbrace` belongs
+   in the "langle skip-set" at all, reasoning a select block is not mixfix. The
+   lists at :1427-1428 / :2504-2506 are **OPENER DEPTH-BALANCING** sets (paired
+   increment/decrement inside the langle lookahead), **not** suppression sets.
+   Adding `dot-lbrace` is **REQUIRED**; omitting it causes TWO failures — a
+   spurious no-rangle-match, and a **WRONG-FRAME POP** in the frame dispatch
+   (the `31d27c83` class). Angle suppression is separately keyed on frame kind
+   `'mixfix` (:1442/:1458/:1465), which a `'brace`/`'rbrace` frame never sets —
+   so **type-level angle groups keep working inside a select block**, which is
+   the behaviour we want, and it falls out of Q_M5 rather than needing a rule.
+5. **Q_M5 VALIDATED HARDER THAN ARGUED**: because the closer is plain `'rbrace`,
+   **ZERO closer-side edits are needed** — every closer enumeration already
+   lists `rbrace` (parse-reader.rkt :1430/:1470/:2507/:2734; surface-rewrite.rkt
+   :504/:533). A sentinel closer would have added six sites **and** needed 4+
+   translation arms (`langle-matched?` :1433 has NO translation; its twin
+   :2510-2513 DOES — the asymmetry is itself the hazard).
+6. **THE INVERTED HAZARD IS CONFIRMED AND SILENT.** Probed: the flagship groups
+   correctly today (`(root (line app-config (brace-group server^ |.| (brace-group
+   ssl port) version)))` — the surviving `|.|` is the direct evidence that `.{`
+   lexes as two tokens). Without the :516 addition an unarm'd opener falls to
+   surface-rewrite.rkt:539-540 `[else …]`, the inner `}` closes the OUTER group
+   at :504-506, and the real outer `}` is discarded by the stray-closer arm
+   :532-534 — **a silently wrong tree, no raise**.
+7. **IT IS ≥8 EDIT REGIONS, NOT 6**: the recognizer is a separate edit from the
+   registration, and surface-rewrite.rkt needs **:516 AND :519** unconditionally
+   (the two-way `if` has no arm for a third token type — so :519 is not the
+   "conditional seventh site" the design priced, it is mandatory either way).
+
+#### The rulings [owner, 2026-07-28]
+
+- **Q_N1 — TWO decisions, one layer apart; BOTH mint new.** The design named only
+  the tree tag. There is a parallel **datum-layer** decision: which SENTINEL HEAD
+  the new `group-items` arm emits (siblings mint distinct ones — `lbrace`→
+  `$brace-params`, `dot-lparen`→`$mixfix`, `hash-lbrace`→`$set-literal`).
+  **Ruled: new sentinel `$dot-brace` + new tree tag `'dot-brace-group` + write
+  the tree-parser arm.** Rationale: (a) reusing `$brace-params` would give `.{`
+  the **implicit-type-binder** meaning and a large consumer surface (driver
+  capability extraction, form-cells, ~30 library sites) — the genuinely dangerous
+  reuse, worse than the tree tag; (b) reuse is lossless *today* only because the
+  loose `|.|` token survives grouping, and **P1b-ii's own mint destroys that
+  signal** — a one-way loss, not a neutral choice; (c) **srcloc cannot recover
+  it** — verified: `group-items-to-tree` is entered with the enclosing node's
+  srcloc and all four mint sites (:501/:513/:520/:530) reuse the same binding, so
+  every group in a form shares one srcloc, and the opener token is consumed.
+- **Q_N2 — the `.( )` sibling bug is FILED, not fixed here.** It is real and
+  worse than recorded: a **LAYER DIVERGENCE**, not a mis-group — probed,
+  `(a .( b ) c)` keeps `c` at the datum layer (`((a ($mixfix b) c))`) and
+  **EXPELS** it at the tree layer (`(root (line (paren-group a |.(| b) c))`), at
+  zero errors. Not fixable by an arm: the `'mixfix-group` tag and its ~445-line
+  consumer were DELETED at P1a, so a new arm has no tag to emit but
+  `'paren-group` (erasing the distinction), and the angle half needs a `'mixfix`
+  frame concept `group-items-to-tree` does not have. No test pins `.( )` at the
+  tree layer either. → DEFERRED.
+- **Q_N3 — ADD THE STRUCTURAL GUARD.** Nothing pins *"every registered opener
+  token type has an arm in BOTH groupers."* surface-rewrite.rkt:539 is a bare
+  `[else]` catch-all in a transforming walker — the exact red flag
+  `pipeline.md` § Exhaustive Walkers names, and precisely the class that produced
+  the `dot-lparen` bug. A contract test censusing the token-pattern registry's
+  opener names against both arm lists makes the class impossible **by
+  construction** rather than by checklist.
+
+#### The edit regions (HEAD `09a1f0d7`, all re-verified)
+
+| # | Site | HEAD coord | Edit |
+|---|---|---|---|
+| 1 | `recognize-dot-lbrace` | new, beside `recognize-dot-lparen` :756 | `.`+`{` → 2 |
+| 2 | registration | :1136-area (dot band) | priority **87** (sibling of `dot-lparen`; safe by DISJOINTNESS, not number — Q8.5 inv. 1) |
+| 3 | `langle-matched?` opener set | :1427-1428 | append `dot-lbrace` |
+| 4 | frame dispatch | :1453-1454 | append to `'(lbrace hash-lbrace)` → `(cons 'brace 'rbrace)` |
+| 5 | `has-matching-rangle?` opener set | :2504-2506 | append `dot-lbrace` — **identical to #3, the twin** |
+| 6 | `group-items` arm | after the `lbrace` arm :2639-2645 | new arm → `$dot-brace`, closer `'rbrace`, srcloc span **2** |
+| 7 | surface-rewrite.rkt | :516 **and** :519 | memq gains `dot-lbrace`; the tag `if` becomes a `cond` |
+| 8 | tree-parser arm | :128-135 arm set | `[(dot-brace-group) …]` |
+
+⚠ **Priority 90 is NOT free** — it is `char-lit` (:1182). Only 81, 82, 94 are
+unused in 80-99. (We use 87 regardless; recorded so the next reader does not
+interpolate.)
+
+#### Test delta
+
+- **Three flips**, not two: test-parse-reader.rkt:401-406 (`check-false (assq
+  'dot-lbrace …)` — INVERTS) · test-mixfix-01.rkt:54-58 (compat-path
+  `check-exn` — flips because the standalone-`.` rejection is **token-type**
+  keyed, so folding both chars into one non-symbol token makes it unreachable) ·
+  **test-mixfix-01.rkt:332-342** (a Level-3 WS pin the design never named).
+- **The flagship needs an EXPLICIT NEW PIN — the corpus A/B cannot see it.**
+  Verified: exactly **ONE** live non-comment `.{` exists in all 160 corpus files
+  (`examples/2026-03-20-first-class-paths.prologos:331`); every
+  `app-config{server^.{…}}` line in our own acceptance file is `;;`-commented.
+- **The A/B must compare succeeded/failed TALLIES, not only `.golden` contents**:
+  `tools/golden-capture.rkt:83` calls `tokenize-string`, whose standalone-`.`
+  rejection is exactly what flip 2 disables, and it swallows per-file exceptions
+  into a FAIL counter — so a file may move FAIL→SUCCESS, a diff of a different
+  shape.
+- **The Q_N3 guard** as a contract test.
+- A **third opener enumeration** exists in the test oracle
+  (tests/test-parse-reader.rkt:1015-1019, a verbatim copy of the production
+  8-member list) — the guard should cover it or it drifts.
+
+**Acceptance delta: ZERO markers uncommented** (P1b makes forms LEXABLE; the
+semantics are P3's, and the file ties uncommenting to a verified result).
+
+#### CLOSE NOTES ✅
+
+**Gates**: suite **9279 / 474 / 0** · acceptance **28/28 + 89/89** · neighbourhood
+battery 443/443 (incl. both sexp `.{` files and all three defmacro files) ·
+**corpus A/B: 158 files, ONE diff, intended** — `first-class-paths.prologos:331`,
+form count unchanged 52→52, `app-config |.| ($brace-params …)` →
+`app-config ($dot-brace …)`.
+
+**⚠ THE A/B WAS WRONG THE FIRST TIME, AND THE FAILURE IS INSTRUCTIVE.** Run 1
+reported **5 diffs** — which were *exactly* the 5 owner-modified `.prologos`
+files. Both legs read from different trees, so it compared *content*, not
+readers. Re-run with both legs reading identical HEAD content and only the
+reader differing → 1 diff. **This is the same dirty-tree trap that made two
+facets of the P1 audit "refute" a correct design count.** An A/B over a dirty
+tree measures the tree, not the change: pin BOTH legs' inputs, not just the code.
+
+**⚠ ADVERSARIAL VERIFY CAUGHT A BLOCKING REGRESSION — MINE — AND THE SUITE WAS
+GREEN.** `$dot-brace` was missing from `pattern-var?` (macros.rkt), so the new
+sentinel read as a macro PATTERN VARIABLE: `.{ }` inside a defmacro **template**
+made `datum-subst` raise, i.e. a **whole-file abort with zero results**, where
+the same source gave a per-command error before the token existed. It is the
+exact P1a headline defect class, at the exact site P1a fixed for
+`$dot-key`/`$nil-dot-key` — **and Q8.5 invariant 3 names this obligation
+explicitly**. I wrote that invariant and then did not follow it. Fixed +
+pinned; the pin exercises macro **USE**, because P1a's sibling pin only
+registers a macro and registration is harmless — a registration-shaped pin stays
+green through the whole defect.
+
+**The guided error was also wrong at first**: `.{ }` reported *"Unbound
+variable"* until it was routed through P1a's marker seat — telling a user their
+valid new syntax had a missing variable. Now: `` `.{ }` select blocks are not
+supported yet — path selection lands them in CIU Track 6 P3. Field access works
+today: `x.name` ``, per-command, file continues.
+
+**Three SIGNIFICANT findings, all verified NOT regressions → DEFERRED items 3+4**:
+the guided error is unreachable in arity-checking contexts (map literal, `fn`
+params, `validate`) because `$dot-brace` stays a *sibling* item until P1b-iii
+fuses it — ordering-dependent, named not fixed; `.{ }` inside `.( )` aborts; and
+inside a parenless `defr` goal it is silent. The `.( )` one shares a root with a
+pre-existing family: **`$set-literal` and `$mixfix` are ALSO still pattern-vars**
+and abort identically in a macro template. DEFERRED item 3 records the
+structural reading — `pattern-var?` is a hand-maintained NEGATIVE list whose
+default is "pattern variable", the same inverted polarity `definitely-not-map?`
+had before P2.b slice 1 inverted it. More exclusions is not the fix.
+
+**What the Q_N3 guard bought**: it caught the third opener enumeration
+immediately — the test oracle's verbatim copy of the production list
+(test-parse-reader.rkt:1015) reported a real example file as unbalanced until
+`dot-lbrace` was added there too.
+
+Status: ✅ `PENDING-HASH`.
 
 ### §5.P1b-iii — Brace adjacency + the head registry  ⬜
 

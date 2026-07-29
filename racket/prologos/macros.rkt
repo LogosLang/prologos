@@ -1153,6 +1153,19 @@
        (not (eq? x '$dot-key))          ; RETIRED sentinel (D4.P1a) — still emitted by the reader
        (not (eq? x '$nil-dot-key))      ; RETIRED sentinel (D4.P1a) — still emitted by the reader
        (not (eq? x '$retired-selection)) ; D4.P1a retirement marker (parser converts to guided error)
+       (not (eq? x '$dot-brace))        ; D4.P1b-ii `.{ }` sub-block sentinel — see below
+       ;; ⚠ WHY $dot-brace IS HERE (caught by adversarial verify, pre-commit):
+       ;; omitting it made `.{ }` inside a defmacro TEMPLATE read as a macro
+       ;; pattern variable, so datum-subst raised "Unbound pattern variable" —
+       ;; an uncaught raise at preparse = a WHOLE-FILE ABORT with zero results,
+       ;; where the same source produced a per-command error before the token
+       ;; existed. A REGRESSION, and the exact P1a defect class (a new symbol
+       ;; missing from a hard-coded enumeration) at the exact site P1a fixed for
+       ;; $dot-key/$nil-dot-key. Q8.5 invariant 3 names this obligation
+       ;; explicitly — it was written and then not followed.
+       ;; NOTE (pre-existing, NOT fixed here): `$set-literal` and `$mixfix` are
+       ;; still pattern-vars by this predicate and abort the same way in a macro
+       ;; template. Filed in DEFERRED rather than widened silently.
        (let ([s (symbol->string x)])
          (and (> (string-length s) 1)
               (char=? (string-ref s 0) #\$)))))

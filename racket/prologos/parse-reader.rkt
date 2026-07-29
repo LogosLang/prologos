@@ -755,11 +755,35 @@
 
 (define (recognize-dot-lparen rrb pos)
   ;; .(  — mixfix entry with `( )` grouping. Content closes on `)`.
-  ;; (`.{ }` is RETIRED entirely — CIU T6 Path Selection P1, 2026-07-26; selection
-  ;;  is the postfix-bracket surface, design doc §5.9.)
+  ;; (The 2026-07-26 note here — "`.{ }` is RETIRED entirely … selection is the
+  ;;  postfix-bracket surface" — described a surface the 2026-07-28 REDESIGN
+  ;;  replaced. `.{` is live again below, for a DIFFERENT construct.)
   (define c1 (rrb-char-at rrb pos))
   (define c2 (rrb-char-at rrb (+ pos 1)))
   (if (and c1 c2 (char=? c1 #\.) (char=? c2 #\())
+      2
+      #f))
+
+;; CIU T6 D4.P1b-ii (ruling 3a + Q_M5) — the mid-path sub-block opener.
+;; `.{` is descend-then-select: `server^.{ssl port}`. `.` uniformly DESCENDS
+;; and the brace SELECTS, so this is a compound token, not a mixfix entry.
+;;
+;; ⚠ Its closer is a PLAIN `'rbrace`, deliberately NOT dot-lparen's
+;; `'mixfix-rparen` sentinel (Q_M5): the extent scanner stores REAL token types
+;; as frame closers and `langle-matched?` terminates on a bare `eq?` with no
+;; translation arm (its twin `has-matching-rangle?` DOES translate) — a sentinel
+;; closer would reproduce the `31d27c83` cross-line swallow AND would add six
+;; closer-side sites. With `'rbrace`, every closer enumeration already lists it
+;; and ZERO closer-side edits are needed.
+;;
+;; Prefix-disjoint from all five dot-band members by second character
+;; (`.`/`:`/`(`/`*`/ident-start); `recognize-dot-access` additionally excludes
+;; `{` explicitly. Per Q8.5 invariant 1, DISJOINTNESS — not the priority
+;; number — is what makes this safe.
+(define (recognize-dot-lbrace rrb pos)
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\.) (char=? c2 #\{))
       2
       #f))
 
@@ -1135,6 +1159,13 @@
   (register-token-pattern!
    (token-pattern 'dot-lparen (lambda (rrb pos) (recognize-dot-lparen rrb pos))
                   (lambda (s p l) 'dot-lparen) 87))
+  ;; D4.P1b-ii: `.{` mid-path sub-block. Shares 87 with its dot-compound
+  ;; siblings; safe because the three are PREFIX-DISJOINT (`(` / `*` / `{`),
+  ;; not because of the number — priorities tie here and the registry is a
+  ;; plain hash, so ties break by unspecified order (Q8.5 invariant 1).
+  (register-token-pattern!
+   (token-pattern 'dot-lbrace (lambda (rrb pos) (recognize-dot-lbrace rrb pos))
+                  (lambda (s p l) 'dot-lbrace) 87))
   (register-token-pattern!
    (token-pattern 'broadcast-access (lambda (rrb pos) (recognize-broadcast-access rrb pos))
                   (lambda (s p l) 'broadcast-access) 87))
@@ -1424,8 +1455,11 @@
            [(eq? type 'langle) (loop (+ i 1) (+ angle-depth 1) other-depth)]
            [(and (eq? type 'rangle) (> angle-depth 0))
             (loop (+ i 1) (- angle-depth 1) other-depth)]
+           ;; OPENER DEPTH-BALANCING set (NOT angle suppression — that is keyed
+           ;; on frame kind 'mixfix below). MUST stay identical to its twin in
+           ;; has-matching-rangle?; their disagreement IS the 31d27c83 defect.
            [(memq type '(lbracket lparen lbrace quote-lbracket at-lbracket
-                         tilde-lbracket hash-lbrace dot-lparen))
+                         tilde-lbracket hash-lbrace dot-lparen dot-lbrace))
             (loop (+ i 1) angle-depth (+ other-depth 1))]
            [(and (memq type '(rbracket rparen rbrace)) (> other-depth 0))
             (loop (+ i 1) angle-depth (- other-depth 1))]
@@ -1450,7 +1484,13 @@
                        (cons (cons (if in-mixfix? 'mixfix 'paren) 'rparen) frames))]
               [(memq type '(lbracket quote-lbracket at-lbracket tilde-lbracket))
                (values (+ bd 1) (cons (cons 'bracket 'rbracket) frames))]
-              [(memq type '(lbrace hash-lbrace))
+              ;; D4.P1b-ii: dot-lbrace joins the BRACE family — kind 'brace,
+              ;; closer 'rbrace (Q_M5). Kind 'brace (not 'mixfix) is what keeps
+              ;; angle grouping ALIVE inside a `.{ }` block, which type-level
+              ;; angle groups need. Omitting it here would leave bd
+              ;; un-incremented while the matching `}` still pops — the
+              ;; wrong-frame-pop half of the 31d27c83 class.
+              [(memq type '(lbrace hash-lbrace dot-lbrace))
                (values (+ bd 1) (cons (cons 'brace 'rbrace) frames))]
               [(eq? type 'langle)
                ;; Operator inside mixfix; opener only when a matching `>`
@@ -2501,8 +2541,9 @@
             [(eq? type 'langle) (loop (+ i 1) (+ angle-depth 1) other-depth)]
             [(and (eq? type 'rangle) (> angle-depth 0)) (loop (+ i 1) (- angle-depth 1) other-depth)]
             ;; Other brackets — track depth to skip over them
+            ;; Twin of langle-matched?'s opener set — keep IDENTICAL (31d27c83).
             [(memq type '(lbracket lparen lbrace quote-lbracket at-lbracket
-                          tilde-lbracket hash-lbrace dot-lparen))
+                          tilde-lbracket hash-lbrace dot-lparen dot-lbrace))
              (loop (+ i 1) angle-depth (+ other-depth 1))]
             [(and (memq type '(rbracket rparen rbrace)) (> other-depth 0))
              (loop (+ i 1) angle-depth (- other-depth 1))]
@@ -2643,6 +2684,22 @@
                  (loop next-i
                        (cons (make-stx (cons (make-stx '$brace-params source bl bc (+ (token-entry-start-pos item) 1) 1) inner)
                                        source bl bc (+ (token-entry-start-pos item) 1) 1) result))))]
+            ;; D4.P1b-ii — Dot-brace → $dot-brace sentinel, PLAIN 'rbrace closer.
+            ;; The mid-path sub-block `server^.{ssl port}`. Ruling Q_N1 mints a
+            ;; DISTINCT sentinel rather than reusing $brace-params: that head
+            ;; means IMPLICIT TYPE BINDER to a large consumer surface (driver
+            ;; capability extraction, form-cells, ~30 library sites), and the
+            ;; only signal that distinguishes `x.{a}` from `x{a}` today is the
+            ;; loose `.` token — which THIS token fold destroys. Reuse would be
+            ;; a one-way loss, and srcloc cannot recover it (every group in a
+            ;; form shares the enclosing node's srcloc).
+            ;; Span is 2 (a two-char token), matching hash-lbrace.
+            [(eq? type 'dot-lbrace)
+             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbrace source source-str qq-depth)])
+               (let-values ([(dl dc) (pos->line-col source-str (token-entry-start-pos item))])
+                 (loop next-i
+                       (cons (make-stx (cons (make-stx '$dot-brace source dl dc (+ (token-entry-start-pos item) 1) 2) inner)
+                                       source dl dc (+ (token-entry-start-pos item) 1) 2) result))))]
             ;; Dot-paren → $mixfix sentinel with 'mixfix-rparen (closes on `)`,
             ;; enables `( )` grouping inside — the mixfix ergonomics form).
             [(eq? type 'dot-lparen)

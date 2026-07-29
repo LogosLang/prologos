@@ -14,7 +14,10 @@
          "../propagator.rkt"
          "../parse-lattice.rkt"
          "../parse-reader.rkt"
-         (only-in "../parse-reader.rkt" read-all-forms-string))
+         (only-in "../parse-reader.rkt" read-all-forms-string)
+         ;; D4.P1b-ii Q_N3: the two-grouper agreement guard needs the OTHER
+         ;; grouping implementation (surface-rewrite's tree layer).
+         (only-in "../surface-rewrite.rkt" group-tree-node))
 
 ;; Helper: register patterns once
 (register-default-token-patterns!)
@@ -398,12 +401,58 @@
   (check-equal? (car (list-ref toks 1)) 'dot-key)
   (check-equal? (cdr (list-ref toks 1)) ".:key"))
 
-(test-case "tokenizer: .{ is RETIRED — no dot-lbrace token exists (CIU T6 P1)"
-  ;; Regression pin against re-introduction: `.{` must NOT tokenize as a
-  ;; compound token; it degrades to a bare `.` + lbrace with no special path.
+;; ============================================================
+;; CIU T6 D4.P1b-ii — the `.{` opener (dot-lbrace re-mint)
+;;
+;; FLIPPED from "`.{` is RETIRED — no dot-lbrace token exists (CIU T6 P1)".
+;; P1 retired `.{`-as-MIXFIX; the redesign (2026-07-28) re-mints the GLYPH for
+;; a different construct — the mid-path sub-block `server^.{ssl port}`, where
+;; `.` DESCENDS and the brace SELECTS. Q_M5: plain 'rbrace closer (the
+;; hash-lbrace precedent), NOT dot-lparen's 'mixfix-rparen sentinel.
+;; ============================================================
+
+(test-case "tokenizer: .{ produces a dot-lbrace compound token (D4.P1b-ii)"
   (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "x.{a b}")))
   (define toks (token-types-from-rrb tok-rrb))
-  (check-false (assq 'dot-lbrace toks)))
+  (check-true (and (assq 'dot-lbrace toks) #t)
+              "`.{` must fold into ONE token, not a bare `.` + lbrace")
+  ;; and the loose `.` it replaces must be GONE — that token was the only
+  ;; signal distinguishing `x.{a}` from `x{a}`, which is why Q_N1 mints a
+  ;; distinct sentinel rather than reusing $brace-params.
+  (check-false (member '(symbol . ".") toks)))
+
+(test-case "datum: .{ mints the $dot-brace sentinel, distinct from $brace-params"
+  (define forms (read-all-forms-string "x.{a b}"))
+  (check-equal? forms '((x ($dot-brace a b)))))
+
+(test-case "datum: plain {…} still mints $brace-params (must-not-break)"
+  (check-equal? (read-all-forms-string "x {a b}") '((x ($brace-params a b)))))
+
+(test-case "⭐ D4.P1b-ii FLAGSHIP: a nested .{ } does not expel its outer tail"
+  ;; The INVERTED hazard. This groups CORRECTLY today (because `.{` lexes as
+  ;; two tokens and the general lbrace arm handles the inner `{`); minting
+  ;; dot-lbrace WITHOUT teaching every grouper about it REGRESSES it —
+  ;; silently: the inner `}` closes the OUTER group and `version` is expelled.
+  ;; The corpus A/B cannot catch this (exactly ONE live `.{` exists in all 160
+  ;; corpus files, and it is not this shape), so it is pinned explicitly.
+  (define forms (read-all-forms-string "app-config{server^.{ssl port} version}"))
+  (check-equal? (length forms) 1)
+  (define g (car forms))
+  ;; `version` must be INSIDE the outer brace group, not a sibling of it.
+  (check-equal? g '(app-config ($brace-params server^ ($dot-brace ssl port) version))))
+
+(test-case "D4.P1b-ii: .{ nests inside itself"
+  (check-equal? (read-all-forms-string "x.{a.{b c} d}")
+                '((x ($dot-brace a ($dot-brace b c) d)))))
+
+(test-case "D4.P1b-ii: angle groups still work INSIDE a .{ } block"
+  ;; Q_M5 consequence, and the refutation of an audit question's premise: the
+  ;; opener lists in langle-matched?/has-matching-rangle? are DEPTH-BALANCING
+  ;; sets, not angle-SUPPRESSION sets. Suppression is keyed on frame kind
+  ;; 'mixfix, which a 'brace/'rbrace frame never sets — so type-level angle
+  ;; groups must keep grouping inside a select block.
+  (check-equal? (length (read-all-forms-string "def f : <Int -> Int> := g.{a b}")) 1)
+  (check-equal? (length (read-all-forms-string "x.{a b}\ndef p := 1 < 2\ndef q := 3 > 4")) 3))
 
 (test-case "tokenizer: .*field broadcast"
   (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "xs.*name")))
@@ -1012,14 +1061,91 @@
         (let* ([entry (rrb-get tok-rrb i)]
                [type (set-first (token-entry-types entry))]
                [d (cond
+                    ;; ⚠ THIRD COPY of the production opener list (the other two
+                    ;; are langle-matched? / has-matching-rangle? in
+                    ;; parse-reader.rkt). It is a hand-maintained duplicate of a
+                    ;; production invariant and it DRIFTS: D4.P1b-ii's
+                    ;; `dot-lbrace` made this oracle report a real example file
+                    ;; as unbalanced until it was added here. If you add an
+                    ;; opener token type, it goes in all three — and the Q_N3
+                    ;; agreement guard above only covers the two PRODUCTION
+                    ;; groupers, not this oracle.
                     [(memq type '(lbracket lparen lbrace
                                   quote-lbracket at-lbracket tilde-lbracket
-                                  hash-lbrace dot-lparen))
+                                  hash-lbrace dot-lparen dot-lbrace))
                      (+ depth 1)]
                     [(memq type '(rbracket rparen rbrace))
                      (- depth 1)]
                     [else depth])])
           (loop (+ i 1) d)))))
+
+;; ============================================================
+;; CIU T6 D4.P1b-ii Q_N3 — THE TWO-GROUPER AGREEMENT GUARD (structural)
+;;
+;; The tree carries TWO independent grouping implementations: parse-reader's
+;; `group-items` (datum layer) and surface-rewrite's `group-items-to-tree`
+;; (tree layer). Each dispatches on token type through a hand-written arm
+;; list ending in a bare `[else]` catch-all — the exact shape
+;; `.claude/rules/pipeline.md` § "Exhaustive Walkers" names as a red flag.
+;; When an opener is known to one and not the other they SILENTLY DISAGREE:
+;; that is the live `.( )` defect (DEFERRED, filed 2026-07-28), where the
+;; datum layer keeps the trailing token and the tree layer expels it, at
+;; ZERO errors.
+;;
+;; This guard makes the class impossible by CONSTRUCTION rather than by
+;; checklist: for `a OPEN b CLOSE c`, both layers must agree that the form
+;; has THREE top-level items (a, the group, c). A grouper that does not know
+;; an opener produces a different count.
+;; ============================================================
+
+(define (grouped-line-item-count s)
+  ;; tree layer: direct children of the line node after grouping
+  (define grouped (group-tree-node (parse-tree-root (read-to-tree s))))
+  (define line (rrb-get (parse-tree-node-children grouped) 0))
+  (rrb-size (parse-tree-node-children line)))
+
+(define (datum-form-item-count s)
+  ;; datum layer: top-level items of the single form
+  (define forms (read-all-forms-string s))
+  (and (= (length forms) 1) (length (car forms))))
+
+(test-case "Q_N3 GUARD: every opener groups IDENTICALLY at both layers"
+  ;; (opener-literal closer-literal label)
+  (define openers
+    (list (list "["   "]" 'lbracket)
+          (list "("   ")" 'lparen)
+          (list "{"   "}" 'lbrace)
+          (list "'["  "]" 'quote-lbracket)
+          (list "@["  "]" 'at-lbracket)
+          (list "~["  "]" 'tilde-lbracket)
+          (list "#{"  "}" 'hash-lbrace)
+          (list ".{"  "}" 'dot-lbrace)))   ;; D4.P1b-ii — the new one
+  ;; ⚠ NAMED EXCLUSION: `dot-lparen` FAILS this guard today — tree layer
+  ;; reports 4 where the datum layer reports 3, because surface-rewrite.rkt
+  ;; has no dot-lparen arm at all. Owner-ruled Q_N2: FILED, not fixed here
+  ;; (the repair needs a 'mixfix frame concept group-items-to-tree lacks,
+  ;; and the 'mixfix-group tag its arm would emit was deleted at D4.P1a).
+  ;; See DEFERRED.md § "CIU T6 D4.P1b-ii spin-offs" item 1. When that lands,
+  ;; delete this comment and add (list ".(" ")" 'dot-lparen) above.
+  (for ([o (in-list openers)])
+    (define src (string-append "a " (car o) " b " (cadr o) " c"))
+    (define tree-n (grouped-line-item-count src))
+    (define datum-n (datum-form-item-count src))
+    (check-equal? datum-n 3
+                  (format "datum layer lost/gained an item for ~a: ~s"
+                          (caddr o) (read-all-forms-string src)))
+    (check-equal? tree-n datum-n
+                  (format "LAYER DISAGREEMENT for ~a — tree=~a datum=~a (this is the .( ) defect class)"
+                          (caddr o) tree-n datum-n))))
+
+(test-case "Q_N3 GUARD: the guard actually detects a known divergence (dot-lparen)"
+  ;; The guard is only worth having if it fails on the real bug. Pin the
+  ;; KNOWN-BAD case so that if `.( )` is ever repaired this test goes red and
+  ;; whoever fixed it promotes dot-lparen into the guard list above.
+  (define src "a .( b ) c")
+  (check-equal? (datum-form-item-count src) 3)
+  (check-equal? (grouped-line-item-count src) 4
+                "dot-lparen tree/datum divergence is FIXED — promote it into the Q_N3 guard list and delete this test"))
 
 (test-case "bracket-balance: simple expressions"
   (define test-strings

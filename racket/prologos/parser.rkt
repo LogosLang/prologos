@@ -818,6 +818,21 @@
     [(and (symbol? head) (eq? head '$broadcast-access))
      (retired-selection-error 'broadcast (and (pair? args) (stx->datum (car args))) loc)]
 
+    ;; CIU T6 D4.P1b-ii — `.{ }` NOT-YET (as distinct from the RETIRED sentinels
+    ;; above). P1b-ii makes the mid-path sub-block LEX and GROUP; its semantics
+    ;; land at P3. Without this arm the form reaches the generic path and reports
+    ;; "Unbound variable" — actively misleading, since the user wrote valid new
+    ;; syntax and is told a variable is missing. Same seat, same discipline: a
+    ;; per-command parse-error VALUE, never a raise (a raise here is a
+    ;; whole-file abort). `args` is deliberately untouched — the P1a adversarial
+    ;; verify found an unguarded `(car args)` at this very seam.
+    [(and (symbol? head) (eq? head '$dot-brace))
+     (parse-error loc
+                  (string-append
+                   "`.{ }` select blocks are not supported yet — path selection "
+                   "lands them in CIU Track 6 P3. Field access works today: `x.name`")
+                  #f)]
+
     ;; $nat-literal sentinel: 42N → surf-nat-lit (Nat suc-chain)
     [(and (symbol? head) (eq? head '$nat-literal))
      (if (= (length args) 1)

@@ -513,10 +513,24 @@
              (define group-node (parse-tree-node 'angle-group (list->rrb inner) srcloc indent))
              (loop next-i (cons group-node result))]
             ;; Lbrace → brace group
-            [(memq type '(lbrace hash-lbrace))
+            ;; ⚠ D4.P1b-ii: `dot-lbrace` MUST be listed here. This is a POSITIVE
+            ;; addition, not the usual deletion: before the token existed, `.{`
+            ;; lexed as a loose `.` + `lbrace` and THIS general arm is what
+            ;; grouped the inner brace correctly. Minting the token without
+            ;; adding it here would leave `.{` falling to the `[else]` arm as a
+            ;; bare token, so the inner `}` would match the OUTER close-type
+            ;; above and the real outer `}` would be dropped by the stray-closer
+            ;; arm — a SILENTLY WRONG TREE, no raise. That is exactly the shape
+            ;; `dot-lparen` is in today (absent from this file entirely; see
+            ;; DEFERRED § "CIU T6 D4.P1b-ii spin-offs" item 1), which is why the
+            ;; Q_N3 agreement guard in test-parse-reader.rkt now pins the class.
+            [(memq type '(lbrace hash-lbrace dot-lbrace))
              (define-values (inner next-i)
                (group-items-to-tree vec (+ i 1) end 'rbrace srcloc indent))
-             (define group-tag (if (eq? type 'hash-lbrace) 'set-group 'brace-group))
+             ;; Three token types now — the old two-way `if` cannot express it.
+             (define group-tag (cond [(eq? type 'hash-lbrace) 'set-group]
+                                     [(eq? type 'dot-lbrace) 'dot-brace-group]
+                                     [else 'brace-group]))
              (define group-node (parse-tree-node group-tag (list->rrb inner) srcloc indent))
              (loop next-i (cons group-node result))]
             ;; Quote-bracket, at-bracket, tilde-bracket → special groups

@@ -128,6 +128,16 @@
        [(bracket-group) (parse-bracket-group-tree children loc)]
        [(angle-group) (parse-angle-group-tree children loc)]
        [(brace-group) (parse-brace-group-tree children loc)]
+       ;; CIU T6 D4.P1b-ii — `.{ }` mid-path sub-block. P1b-ii makes it LEX and
+       ;; GROUP; its SEMANTICS land at P3 (blocks). An explicit error arm is
+       ;; MANDATORY, not cosmetic: the `else` fallthrough at the bottom of this
+       ;; dispatch calls parse-expr-tree SILENTLY for any node with children
+       ;; (always true for a group), and driver.rkt admits tree output whenever
+       ;; it is non-error ∧ same-form-type ∧ same-line — so a missing arm would
+       ;; let a garbage surf-app BEAT preparse's version. ("Unhandled form"
+       ;; below is unreachable from here; it lives in the top-level-form case.)
+       [(dot-brace-group)
+        (parse-error-result loc ".{ } select blocks are not supported yet (CIU T6 Path Selection lands them at P3)")]
        [(paren-group) (parse-paren-group-tree children loc)]
        [(group) (parse-group-tree children loc)]
 

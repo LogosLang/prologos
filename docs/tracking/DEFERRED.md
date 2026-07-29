@@ -1904,3 +1904,106 @@ genuinely repeated structural subterms.
 hash (or hash-consing — survey option #4), **not** reverting to the O(N³)
 `equal?` key. Cheap first probe: add hit/miss counters to `whnf` and run the
 comparative bench.
+
+## CIU T6 D4.P1b-ii spin-offs (filed 2026-07-28, owner-ruled Q_N2)
+
+### 1. `.( )` mis-groups at the TREE layer — a live LAYER DIVERGENCE
+
+`dot-lparen` is absent from `surface-rewrite.rkt` entirely (`git grep -n
+dot-lparen HEAD -- racket/prologos/surface-rewrite.rkt` → 0 hits), so `.(` falls
+to `group-items-to-tree`'s `[else]` arm (:539-540) as a bare token and the first
+`)` closes the ENCLOSING group at :504-506. Probe-verified at `09a1f0d7`:
+
+```
+(a .( b ) c)
+  DATUM: ((a ($mixfix b) c))                        ;; c RETAINED
+  TREE:  (root (line (paren-group a |.(| b) c))     ;; c EXPELLED
+```
+
+**Zero errors.** The two grouping implementations disagree — this is the
+`31d27c83` "layers must agree" defect class at a third layer that commit's own
+comment does not cover.
+
+**Why deferred, not effort-avoidance** [owner ruling Q_N2]: it is not fixable by
+adding an arm. (a) The `'mixfix-group` tag and its ~445-line consumer were
+DELETED at D4.P1a, so a new arm has no tag to emit but `'paren-group`, which
+erases the mixfix distinction. (b) The angle-suppression half needs a `'mixfix`
+FRAME concept that `group-items-to-tree` does not have at all — a design change,
+not an arm. (c) No test pins `.( )` at the tree layer (every `dot-lparen` test
+hit is tokenizer-level), so any shape change would ship unguarded.
+
+**Do it when**: a track touches the mixfix surface, or `group-items-to-tree`
+grows a frame concept. P1b-ii's `dot-lbrace` is deliberately justified on its own
+terms (Q_M5's plain-`'rbrace` closer) rather than by analogy to this sibling —
+"match your siblings" would have inherited the bug.
+
+### 2. Three group tags ride the SILENT tree-parser fallthrough — benign or not, unverified
+
+`set-group`, `at-group` and `tilde-group` are minted at surface-rewrite.rkt
+:519/:527/:528 and have **zero** tree-parser dispatch arms and zero non-test
+consumers (verified at `09a1f0d7`). They therefore take tree-parser.rkt:189-193
+`[else (if (pair? children) (parse-expr-tree children loc) …)]` — which is
+**silent** for any node with children and produces a `surf-app`. Combined with
+driver.rkt:2457-2459 (tree output wins when non-error ∧ same-form-type ∧
+same-line), a garbage surf can beat preparse's correct one.
+
+This may be entirely benign — preparse may always win these by form-type
+mismatch — but **nobody has verified it**, and P1b-ii's Q_N1 ruling cites the
+"a new tag needs an arm" obligation as absolute while three in-tree tags violate
+it. Resolve the inconsistency: either they are fine (and the obligation is
+narrower than stated), or they are three latent silent-garbage paths.
+
+**Cheap first probe**: feed `#{…}`, `@[…]`, `~[…]` through the tree layer and
+check whether the tree-parser result is admitted or rejected by the merge.
+
+### 3. Reader sentinels that are still MACRO PATTERN VARIABLES (`$set-literal`, `$mixfix`)
+
+`pattern-var?` (macros.rkt:1144+) excludes eleven reader sentinels, but **not all
+of them**. Probe-verified at D4.P1b-ii: `(pattern-var? '$set-literal)` → `#t` and
+`(pattern-var? '$mixfix)` → `#t`, while their ten siblings return `#f`.
+
+Consequence: a `#{…}` set literal or a `.( … )` mixfix group inside a **defmacro
+template** makes `datum-subst` raise `"Unbound pattern variable in template"` —
+an uncaught raise at preparse, i.e. a **WHOLE-FILE ABORT with zero results**.
+Adversarially confirmed for `$mixfix`:
+
+```
+defmacro getm [$u] [$u.(a + b)]      ;; + a use site  →  whole-file abort
+```
+
+**Pre-existing — NOT introduced by P1b-ii** (which hit the identical defect for
+its own new `$dot-brace`, found it in adversarial verify, and fixed it in the
+same commit). Filed rather than widened silently, because the fix is a one-line
+exclusion per sentinel and the *interesting* question is the structural one:
+
+**The real fix is not more exclusions.** `pattern-var?` is a hand-maintained
+NEGATIVE list whose default is "this is a pattern variable" — the same inverted
+polarity that `definitely-not-map?` had before CIU T6 P2.b slice 1 inverted it to
+a positive list with a conservative default. A `$`-prefixed *reader sentinel* is
+never a user's pattern variable; the predicate should ask whether the symbol is a
+DECLARED macro parameter, not whether it is absent from a list someone remembered
+to update. Every new sentinel is otherwise a latent whole-file abort.
+
+**Do it when**: a track touches macro expansion, or the next new sentinel lands.
+Cheap first probe: enumerate every `$`-headed symbol the reader can emit and run
+`pattern-var?` over the set.
+
+### 4. `.{ }` inside `.( )` aborts, and inside a parenless `defr` goal is SILENT
+
+Two more P1b-ii adversarial-verify findings, **both verified NOT regressions**
+(the pre-diff spellings and the plain-`{…}` controls behave identically):
+
+- **`.(cfg.{b c} + 1)` → whole-file abort** (`mixfix: Unexpected token after
+  expression`). Nothing normalizes a brace-family sentinel before the Pratt
+  parser. The P1a RETIRED sentinels are on the safe side of this line — they are
+  rewritten to `$retired-selection` *before* pratt-parse — so retired forms
+  degrade better than live ones here. Same family as item 3 above.
+- **`.{ }` inside a parenless `defr` goal produces NO error at all**: the
+  relation is silently never registered and the `defr` command echoes a LATER
+  command's result string. Controls (`cfg.host`, `cfg.*name`) DO get the guided
+  parenless-goal message (parser.rkt:5765), so the dot-access family routes to
+  the guidance while brace-shaped siblings slip through to a silent path.
+
+Both are ordering/normalization gaps in surfaces P1b-ii does not own. Revisit
+when P3 gives `.{ }` semantics — several may dissolve once the construct is real
+rather than a not-yet stub.
