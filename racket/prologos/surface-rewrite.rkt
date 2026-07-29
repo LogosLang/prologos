@@ -24,6 +24,7 @@
          racket/set
          racket/vector
          "parse-reader.rkt"
+         "reader-forms.rkt"   ;; D4.P1b-iii: THE head registry (one list, both groupers)
          "rrb.rkt"
          "ctor-registry.rkt"
          ;; SRE Track 2D: SRE rewrite rules
@@ -525,11 +526,45 @@
             ;; DEFERRED § "CIU T6 D4.P1b-ii spin-offs" item 1), which is why the
             ;; Q_N3 agreement guard in test-parse-reader.rkt now pins the class.
             [(memq type '(lbrace hash-lbrace dot-lbrace))
+             ;; D4.P1b-iii Q_N7: the adjacency fork, mirrored in the SECOND
+             ;; grouper (this file had ZERO adjacency machinery).
+             ;;
+             ;; ⚠ CORRECTED CLAIM (adversarial verify, pre-commit): an earlier
+             ;; version of this comment said that WITHOUT the fork the guided
+             ;; error "would be SILENTLY SWALLOWED". That is FALSE, and it was
+             ;; disproved by construction — a third checkout with this file
+             ;; reverted produced byte-identical output across 20 end-to-end
+             ;; files. driver's `merge-form` gates on `same-form-type?`, which
+             ;; only pairs surf-infer/def/defn/defn-multi, so a preparse ERROR
+             ;; surf can never same-form-type a non-error tree surf: preparse
+             ;; wins whenever it errors. Do not re-assert the swallow story.
+             ;;
+             ;; The fork is kept for the reason that IS true: the two groupers
+             ;; should agree on what a brace MEANS, and the Q_N3 v2 guard now
+             ;; pins that agreement. (They still diverge on `<`-adjacent braces
+             ;; — see DEFERRED — because parse-reader's langle arm falls back to
+             ;; operator-`<` while this one always opens an angle group.)
+             ;; The logic mirrors parse-reader's `adjacent-to-base?` /
+             ;; `prev-token-reader-form-head?`, including the `(pair? result)`
+             ;; conjunct that keeps `'[{…}` / `@[{…}` out of the select reading.
+             (define adjacent?
+               (and (eq? type 'lbrace)
+                    (pair? result)
+                    (> i 0)
+                    (let ([prev (vector-ref vec (- i 1))])
+                      (and (token-entry? prev)
+                           (= (token-entry-end-pos prev) (token-entry-start-pos item))))))
+             (define head-form?
+               (and adjacent?
+                    (let ([prev (vector-ref vec (- i 1))])
+                      (and (token-entry? prev)
+                           (reader-form-head? (string->symbol (token-entry-lexeme prev)))))))
              (define-values (inner next-i)
                (group-items-to-tree vec (+ i 1) end 'rbrace srcloc indent))
-             ;; Three token types now — the old two-way `if` cannot express it.
+             ;; Four cases now — the old two-way `if` could not express them.
              (define group-tag (cond [(eq? type 'hash-lbrace) 'set-group]
                                      [(eq? type 'dot-lbrace) 'dot-brace-group]
+                                     [(and adjacent? (not head-form?)) 'select-brace-group]
                                      [else 'brace-group]))
              (define group-node (parse-tree-node group-tag (list->rrb inner) srcloc indent))
              (loop next-i (cons group-node result))]

@@ -763,6 +763,21 @@
             [else (substring s i)])))
   (define f (and detail (base-name detail)))
   (case kind
+    ;; CIU T6 D4.P1b-iii — NOT-YET, as distinct from the RETIRED kinds below.
+    ;; The marker sentinel now carries two families: forms that were retired,
+    ;; and forms that exist but whose semantics land later. Both need the same
+    ;; thing from this seat — a per-command parse-error VALUE, never a raise —
+    ;; so they share the mechanism rather than minting a second one. (Reusing it
+    ;; also means zero new registrations: `$retired-selection` is already in
+    ;; `pattern-var?` and already has its parser arm, and the nine-tier
+    ;; registration surface is precisely what this phase learned to respect.)
+    [(select-block)
+     (parse-error loc
+                  (string-append
+                   "select blocks (`x{…}` / `.{…}`) are not supported yet — path "
+                   "selection lands them in CIU Track 6 P3. Field access works "
+                   "today: `x.name`")
+                  #f)]
     [(dot-key)
      (parse-error loc (format "dot-key `.:~a` was retired — spell field access with `.~a` (e.g. `m.~a`); as a function value use `[fn [m] m.~a]`" f f f f) #f)]
     [(nil-dot-key)
@@ -826,11 +841,12 @@
     ;; per-command parse-error VALUE, never a raise (a raise here is a
     ;; whole-file abort). `args` is deliberately untouched — the P1a adversarial
     ;; verify found an unguarded `(car args)` at this very seam.
-    [(and (symbol? head) (eq? head '$dot-brace))
+    [(and (symbol? head) (memq head '($dot-brace $select-brace)))
      (parse-error loc
                   (string-append
-                   "`.{ }` select blocks are not supported yet — path selection "
-                   "lands them in CIU Track 6 P3. Field access works today: `x.name`")
+                   "select blocks (`x{…}` / `.{…}`) are not supported yet — path "
+                   "selection lands them in CIU Track 6 P3. Field access works "
+                   "today: `x.name`")
                   #f)]
 
     ;; $nat-literal sentinel: 42N → surf-nat-lit (Nat suc-chain)
@@ -4876,6 +4892,25 @@
                ty
                (loop (cddr es)
                      (cons (binder-info (stx->datum (car es)) #f ty) acc))))]
+        ;; CIU T6 D4.P1b-iii / Q_N4 — a STRAY colon-symbol is never a parameter.
+        ;; By here the fused arms above have already consumed every legitimate
+        ;; `name :Type` pair, so a colon-symbol in head position is either a
+        ;; dangling annotation or an invalid multiplicity. It used to fall into
+        ;; the bare-param arm below and become a PARAMETER NAMED `:7`, silently
+        ;; giving `defn f [x :7] x` arity 2 with hole types — measured, 0 errors.
+        ;; (Before the `fused-type-annot?` repair it was worse still: `:7` was
+        ;; consumed as a TYPE NAME, yielding `[Pi [x :0 <[Type 0]>] x -> x]`.)
+        ;; Nothing legitimate is lost: `[x :0 Int]` / `[x :w Int]` are ALREADY
+        ;; rejected upstream by the defn form-shape gate — probe-verified — so
+        ;; multiplicity annotations were never a working defn-param spelling.
+        [(colon-symbol? (stx->datum (car es)))
+         (parse-error loc
+                      (format (string-append
+                               "defn: `~a` is not a parameter name. Annotate the parameter "
+                               "itself (`[x:Int]`); multiplicity annotations are not supported in "
+                               "a defn parameter list")
+                              (stx->datum (car es)))
+                      #f)]
         ;; sexp glued `name:Type`, or a plain bare param
         [(symbol? (stx->datum (car es)))
          (let-values ([(name ty err)
@@ -5454,10 +5489,36 @@
 
 ;; WS shape: a colon-symbol that is a TYPE annotation, not a multiplicity.
 ;; `:0`/`:1`/`:w`/`:m` stay multiplicity annotations (so `[fn [x :0 Int] x]` is
-;; untouched) — the cost, named in C.b.2: a type literally named `w`/`m`/`0`/`1`
+;; untouched) — the cost, named in C.b.2: a type literally named `w`/`m`
 ;; cannot be fused in WS; use the spaced form.
+;;
+;; ⚠ CIU T6 D4.P1b-iii / Q_N4 [owner] — THIS EXCLUSION IS STRUCTURAL, NOT A LIST.
+;; It used to be `(not (memq d '(:0 :1 :w :m)))`: FOUR lexemes against a
+;; recognizer that mints TWELVE (`:0`–`:9`, `:w`, `:m`). Everything outside the
+;; four fell through here and was silently consumed as a TYPE NAME — probed:
+;;   `defn g [x :7] x`  =>  g : [Pi [x :0 <[Type 0]>] x -> x]   (0 errors!)
+;; a DIFFERENT function, silently, while `:0`/`:1`/`:10` were all loud. So the
+;; VALID multiplicities were loud in that shape and `:7` was the anomaly.
+;;
+;; Q_M8's digit-run widening would have made `:10` lex exactly like `:7`,
+;; moving it LOUD -> SILENT WRONG. The fix is not a longer list — it is the
+;; observation that **no type name starts with a digit**, so a digit-headed
+;; colon symbol is NEVER a type annotation. That co-migrates with the widened
+;; recognizer for free AND repairs the pre-existing `:7` defect.
+;;
+;; The comment eight lines above warns that "a second copy is how the two paths
+;; would drift". This predicate WAS that second copy; it is now derived from a
+;; property instead of an enumeration, so it cannot drift from the recognizer.
+(define (digit-headed-colon-symbol? d)
+  (and (colon-symbol? d)
+       (let ([s (symbol->string d)])
+         (and (> (string-length s) 1) (char-numeric? (string-ref s 1))))))
+
 (define (fused-type-annot? d)
-  (and (colon-symbol? d) (not (memq d '(:0 :1 :w :m)))))
+  (and (colon-symbol? d)
+       (not (memq d '(:w :m)))              ;; the LETTER multiplicities
+       (not (digit-headed-colon-symbol? d)) ;; :0 :1 :7 :10 :127 … never a type
+       ))
 
 ;; Build the type surf from a WS fused annotation datum (`:Int` → the surf for
 ;; `Int`), via parse-datum so it is IDENTICAL to what the spaced arm produces.

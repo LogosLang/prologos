@@ -733,3 +733,164 @@
   (check-true (ormap prologos-error? rs))
   (check-true (ormap (lambda (r) (regexp-match? #rx"select block" (format "~a" r))) rs)
               "the guided error must survive macro expansion"))
+
+;; ============================================================
+;; D4.P1b-iii / Q_M8 — the SILENT-WRONG-ANSWER repair (audit wf_18992d66-b81)
+;;
+;; Q_M8's original safety premise was FALSE: `:10` would have moved LOUD →
+;; SILENT WRONG. Probed at 88b3019a, the 2-element `defn [x :N]` shape:
+;;   `defn g [x :7]  x` → SILENTLY ACCEPTED, `:7` consumed as a TYPE NAME,
+;;                        yielding `g : [Pi [x :0 <[Type 0]>] x -> x]`
+;;   `defn g [x :0/:1/:10] x` → all LOUD
+;; i.e. the VALID multiplicities are loud here and `:7` is the anomaly. Root
+;; cause: `fused-type-annot?` (parser.rkt) excluded FOUR lexemes against a
+;; recognizer minting TWELVE, so everything else fell through and was consumed
+;; as a type. Owner ruling Q_N4 widened the scope: fix it STRUCTURALLY — no
+;; type name starts with a digit — which repairs the PRE-EXISTING `:7` bug too.
+;; ============================================================
+
+(test-case "Q_N4: `defn g [x :7] x` is LOUD (was: silently a DIFFERENT function)"
+  (define rs (run-ws-raw "defn g7 [x :7] x\n"))
+  (check-true (ormap prologos-error? rs)
+              ":7 was consumed as a TYPE NAME and silently defined [Pi [x :0 <[Type 0]>] …]"))
+
+(test-case "Q_N4: multi-digit `:10` in binder position stays LOUD (no LOUD→SILENT slide)"
+  (define rs (run-ws-raw "defn g10 [x :10] x\n"))
+  (check-true (ormap prologos-error? rs)))
+
+(test-case "Q_N4: the VALID multiplicities are unchanged in the 3-element shape"
+  ;; The multiplicity surface must not move: these are the working spellings.
+  (check-regexp-match #rx"Int -> Int" (car (run-ws "def fw := [fn [x :w Int] x]\n")))
+  (check-regexp-match #rx":1" (car (run-ws "def f1 := [fn [x :1 Int] x]\n"))))
+
+(test-case "Q_N4: a SPACED implicit type binder is unaffected (the 419-site population)"
+  (define r (run-ws-last "spec hq {A : Type} A -> A\ndefn hq [x] x\n[hq 5]\n"))
+  (check-regexp-match #rx"5" r))
+
+;; ============================================================
+;; D4.P1b-iii — the P1b-ii RESIDUAL, CLOSED
+;;
+;; P1b-ii's guided error was unreachable wherever arity is checked first,
+;; because `$dot-brace` never FUSED onto its base — it stayed a separate sibling
+;; item, so a map literal saw an odd element count, `fn` saw a non-binder, and
+;; `validate` saw an extra argument, each reporting its own confusing thing.
+;; The cause was `access-sentinel?` (macros.rkt), a fusion gate named by NO
+;; enumeration. Both brace-family sentinels are now in it.
+;; ============================================================
+
+(test-case "P1b-iii: the guided error IS reachable inside a map literal (was: odd-element-count)"
+  (define r (run-ws-last "def cfg := {:host \"h\"}\ndef m := {:k cfg.{host}}\n"))
+  (check-regexp-match #rx"select block" r)
+  (check-false (regexp-match? #rx"even number of elements" r)
+               "the enclosing arity check fired first — the sentinel did not fuse"))
+
+(test-case "P1b-iii: reachable inside an fn BODY (was: 'all parameters must be bare symbols')"
+  ;; ⚠ RENAMED + CORRECTED. This test was titled "inside fn params too" while
+  ;; asserting on `[fn [x : Int] cfg{host}]` — where the select block is in the
+  ;; BODY and the param list is the untouched `[x : Int]`. It passed for a
+  ;; reason unrelated to its name (body-position select blocks give the guided
+  ;; error everywhere), i.e. it was a VACUOUS pin of the exact class this track
+  ;; keeps catching. Caught by adversarial verify, pre-commit.
+  (define r (run-ws-last "def cfg := {:host \"h\"}\ndef y := [fn [x : Int] cfg{host}]\n"))
+  (check-regexp-match #rx"select block" r)
+  (check-false (regexp-match? #rx"bare symbols" r)))
+
+(test-case "P1b-iii: an fn PARAM-LIST select block is LOUD (the honest behaviour)"
+  ;; The real param-list case, now actually exercised. It is LOUD and the file
+  ;; continues — the correctness property holds — but the message is the binder
+  ;; walker's generic one, NOT the guided select-block error, and it dumps raw
+  ;; syntax objects. Same for the `spec f{A}` spelling. Pinned as-is and the
+  ;; diagnostic-quality gap is filed (DEFERRED); pinning the honest behaviour
+  ;; is what stops a future change silencing it.
+  (define rs (run-ws-raw "def bs := {:a 1}\ndef f := [fn [x bs{a}] x]\ndef after := 7\nafter\n"))
+  (check-true (ormap prologos-error? rs) "must be LOUD")
+  (check-regexp-match #rx"7" (last rs) "and the file must continue"))
+
+(test-case "P1b-iii: adjacent select block in a defmacro TEMPLATE does not abort the file"
+  ;; The P1b-ii regression class, re-pinned for the NEW sentinel: `$select-brace`
+  ;; must be excluded from `pattern-var?` or macro use is a whole-file abort.
+  (define rs (run-ws-raw
+              (string-append
+               "defmacro sel3 [$u] [$u{a b}]\n"
+               "def cfg := {:host \"h\"}\n"
+               "[sel3 cfg]\n"
+               "def after3 := 42\n"
+               "after3\n")))
+  (check-regexp-match #rx"42" (last rs) "whole-file abort — nothing after the macro use ran")
+  (check-true (ormap prologos-error? rs)))
+
+(test-case "P1b-iii: WS `racket{…}` foreign blocks still work — NET-NEW coverage"
+  ;; The audit found WS racket{…} has ZERO regression coverage: all 13
+  ;; test-foreign-block cases are SEXP (they never reach group-items), and
+  ;; lib/examples/foreign.prologos is 'skip'ed by the runner. These are the
+  ;; first pins that actually exercise HEAD PRECEDENCE at the grouping layer.
+  ;; Shape copied from the live sites (`def x : Nat racket{42}`) — my first
+  ;; draft invented a `foreign racket "…"` preamble that is not the form, and
+  ;; failed for that reason rather than for the property under test.
+  (define r (run-ws-last "def fx : Nat racket{42}\nfx\n"))
+  (check-false (regexp-match? #rx"select block" r)
+               "head precedence failed — racket{…} was read as a select block")
+  (check-regexp-match #rx"42" r))
+
+(test-case "P1b-iii: MULTI-LINE WS `racket{…}` — the shape a single-line pin misses"
+  ;; 2 of the 10 live WS sites are multi-line, and the audit named that as the
+  ;; most exposed shape.
+  (define r (run-ws-last
+             (string-append
+              "def fy : Nat racket{\n"
+              "  (let loop ([n 10] [acc 0])\n"
+              "    (if (zero? n) acc\n"
+              "        (loop (sub1 n) (add1 acc))))\n"
+              "}\n"
+              "fy\n")))
+  (check-false (regexp-match? #rx"select block" r))
+  (check-regexp-match #rx"10" r))
+
+;; ============================================================
+;; D4.P1b-iii — THE FOLD MUST BE A FIXPOINT (adversarial verify, pre-commit)
+;;
+;; The first draft of the brace-family fusion arm rewrote
+;;   (x base ($select-brace a))  ->  (x ($select-brace base a))
+;; which is STILL sentinel-headed, therefore NOT a fixpoint. Because
+;; `preparse-expand-subforms` re-enters while the datum keeps changing, each
+;; pass swallowed one more sibling to the LEFT. Three BLOCKING consequences,
+;; all silent, all under a green suite and a clean corpus A/B:
+;;   1. a multi-arity `defn` clause lost its `$pipe` head and was SILENTLY
+;;      DROPPED — the function evaluated with the wrong arms at 0 errors;
+;;   2. `defn g [x base{a}] x` silently defined a 4-parameter function;
+;;   3. the application HEAD itself was swallowed.
+;; Every other access-sentinel arm rewrites the sentinel AWAY (to `get` /
+;; `map-get`) and is a fixpoint; this one now does too, emitting the NOT-YET
+;; marker instead.
+;; ============================================================
+
+(test-case "P1b-iii: the brace fusion fold is IDEMPOTENT (the fixpoint property)"
+  (define once (rewrite-dot-access '(x base ($select-brace a))))
+  (define twice (rewrite-dot-access once))
+  (check-equal? once twice "non-idempotent fold — it will swallow siblings on re-entry")
+  ;; and it must NOT be sentinel-headed, which is WHY it is a fixpoint
+  (check-false (and (pair? once) (memq (car once) '($select-brace $dot-brace)))
+               "the result is still sentinel-headed — re-entry will match it again"))
+
+(test-case "P1b-iii: fusion consumes the BASE only — the application head survives"
+  (check-equal? (preparse-expand-form '(h base ($select-brace a)))
+                '(h ($retired-selection select-block #f)))
+  (check-equal? (preparse-expand-form '(h base ($dot-brace a)))
+                '(h ($retired-selection select-block #f))))
+
+(test-case "P1b-iii BLOCKING pin: a multi-arity defn clause is NOT silently dropped"
+  ;; Was: `bad : Int -> Int defined.` with 0 errors and `[bad 0]` returning the
+  ;; WRONG arm, because the `| 0 -> …` clause head had been eaten.
+  (define rs (run-ws-raw
+              (string-append
+               "def mm := {:a 1 :b 2}\n"
+               "defn bad\n"
+               "  | 0 -> mm{a}\n"
+               "  | n -> [int+ n 100]\n")))
+  (check-true (ormap prologos-error? rs)
+              "the clause was silently dropped — the function defined with the wrong arms"))
+
+(test-case "P1b-iii BLOCKING pin: an adjacent brace in a defn PARAM LIST is not silent"
+  ;; Was: `g : _ _ _ _ -> _ defined.` with 0 errors (params $select-brace/x/base/a).
+  (define rs (run-ws-raw "def bs := {:a 1}\ndefn g [x bs{a}] x\n"))
+  (check-true (ormap prologos-error? rs)))

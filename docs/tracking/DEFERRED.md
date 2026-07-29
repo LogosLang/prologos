@@ -2007,3 +2007,85 @@ Two more P1b-ii adversarial-verify findings, **both verified NOT regressions**
 Both are ordering/normalization gaps in surfaces P1b-ii does not own. Revisit
 when P3 gives `.{ }` semantics — several may dissolve once the construct is real
 rather than a not-yet stub.
+
+## CIU T6 D4.P1b-iii spin-offs (filed 2026-07-29, from adversarial verify)
+
+### 5. The two groupers DIVERGE on `<`-adjacent braces — and it is live on the disclose surface
+
+`m<{a}` and the spec's disclose spelling `users:<{0.userName^}` yield `$select-brace`
+at the datum layer but `brace-group` at the tree layer. Root cause: parse-reader's
+`langle` arm FALLS BACK to emitting `<` as a plain operator when no matching `>`
+exists (so `result` is non-empty at the brace and the adjacency test fires), while
+surface-rewrite's `langle` arm has NO fallback — it unconditionally recurses for
+`'rangle`, so the brace is the first item inside that recursion and `(pair? result)`
+is false.
+
+**Live at `racket/prologos/lib/examples/foray.prologos:674`** — `users:<{0.userName^}`,
+which is exactly the `<` DISCLOSE surface **P4 is scheduled to build on** (spec §3.7,
+ruled ADOPTED v1 at Q5).
+
+Not observable end-to-end today: `same-form-type?` keeps preparse's error winning
+(see item 6). The Q_N3 v2 agreement guard added at P1b-iii asserts precisely this
+tag↔sentinel correspondence but its six rows contain no `<`-adjacent case.
+
+**Do it when**: P4 opens (it owns disclose), or sooner if the guard is extended. The
+fix is to make the two langle arms agree — almost certainly by giving
+surface-rewrite the same `has-matching-rangle?` fallback parse-reader has.
+
+### 6. `same-form-type?` makes the tree layer unable to override a preparse error — verify before relying on it either way
+
+D4.P1b-iii's Q_N7 ruling was justified by "a non-error tree surf can REPLACE
+preparse's error surf, so the guided error would be silently swallowed". Adversarial
+verify **disproved it by construction**: a third checkout with `surface-rewrite.rkt`
+reverted produced byte-identical output across 20 end-to-end files. `merge-form`
+(driver.rkt) gates on `same-form-type?`, which only pairs
+surf-infer/def/defn/defn-multi — an error surf can never pair with a non-error one.
+
+The fork was kept anyway (the groupers *should* agree, and the guard now pins it),
+but **the justification in the design and the code comment was wrong and is
+corrected**. Worth knowing precisely, because the same reasoning will be reached for
+again: **the tree layer cannot rescue a preparse error, and cannot corrupt one.**
+
+### 7. Select blocks in BINDER positions get a raw-syntax diagnostic, not the guided error
+
+`def f := [fn [x base{a}] x]` and `spec idf{A} A -> A` are both LOUD and the file
+continues — the correctness property holds — but the message comes from the binder
+walker and dumps raw syntax objects including absolute file paths:
+
+```
+ERROR: Expected binder [x <T>] or (x : T), got (#<syntax:/private/…/f.prologos:3:10 x>
+  #<syntax:… ($retired-selection select-block #f)>)
+```
+
+It never mentions select blocks, and the internal marker sentinel leaks into
+user-facing text. Both binder walkers would need a marker arm. Filed rather than
+widened because P1b-iii had already grown well past its designed scope; the honest
+behaviour is pinned so a future change cannot silence it.
+
+Related, same family: `pp-datum` (pretty-print.rkt) has no arm for ANY access
+sentinel — `$select-brace`, `$dot-brace`, `$postfix-index`, `$nil-dot-access`,
+`$broadcast-access` all render as raw sentinels; only `$brace-params` renders. And
+`tools/form-deps.rkt`'s `syntax-keywords` lists four sentinels and omits five.
+
+### 8. `pattern-var?`'s residual is 23 of 33, not 2 — and `'[1 2]` in a macro template ABORTS TODAY
+
+Item 3 above named `$set-literal` and `$mixfix`. A full census of every `$`-headed
+symbol the reader can emit puts the real number at **23 of 33**:
+
+`$clause-sep $compose $decimal-literal $exp-literal $facts-sep $float-literal
+$list-literal $list-tail $lseq-literal $mixfix $narrow-eq $nat-literal $pipe
+$pipe-gt $posit-literal $quasiquote $rat-literal $rest $rest-param $set-literal
+$typed-hole $unquote $vec-literal`
+
+**`$list-literal` is in that list**, so a plain quoted list inside a defmacro template
+is a whole-file abort at HEAD:
+
+```
+defmacro lst [$x] [f '[1 2]]
+[lst 1]        →  defmacro: Unbound pattern variable in template: $list-literal
+                  (zero results, no error summary)
+```
+
+This supersedes item 3's count. The structural reading there stands and is now
+better evidenced: the fix is inverting the predicate's polarity, not 23 more
+exclusions.

@@ -25,7 +25,7 @@ rulings, censuses and test delta live in its own section.
 | **P1a** | **Retirement batch + substrate** — dot-key family · the FULL `broadcast-get` chain (reader + parser keyword + surf + elaborator + node) · `m[:kw]` · reject batch · `surface-rewrite.rkt` `dot-lbrace` cleanup (BEFORE any re-mint) · the marker-form diagnostic seat | ✅ | §5.P1a · **`859b529d`** — suite 9253/474/0, acceptance 28/28 + 89/89, −744/+320; adversarial verify found 2 whole-file-abort defects (1 MINE, in the seat) → fixed + pinned pre-commit |
 | **P1b-i** | **Repairs + probes + the Q8 DRAFT** — the top-level `<` swallow fix (Q_M4) · WS narrowing typed vars · `def ?x` reservation (Q_M3) · the Q_M1 gating probe + `:N` / keyword-`*` / `:<` · **Q8 written from the results** | ✅ | §5.P1b-i + **§Q8** · `fc65ca54` — suite 9263/474/0, corpus A/B 160 files / 2 intended diffs; **Q8 owner-reviewed ✅ 2026-07-28, amended by Q_M8** (ordinals multi-digit in both bands) |
 | **P1b-ii** | **The `.{` opener** — `dot-lbrace` re-mint across **EIGHT** edit regions (not six) incl. the surviving `surface-rewrite.rkt:516` POSITIVE addition; plain `'rbrace` closer (Q_M5); new `$dot-brace` sentinel + `dot-brace-group` tag + tree-parser arm (Q_N1); the Q_N3 two-grouper agreement guard | ✅ | §5.P1b-ii · **`1a1091d4`** — suite **9279/474/0**, acceptance 28/28 + 89/89, corpus A/B **158 files / 1 intended diff**; adversarial verify caught a **BLOCKING regression I introduced** (`$dot-brace` missing from `pattern-var?` → whole-file abort in a defmacro template) — fixed + pinned pre-commit |
-| **P1b-iii** | **Brace adjacency + the head registry** — the forced select-block sentinel (Q_M6) · leaf-module registry · the 4 buckets · NET-NEW WS `racket{…}` pins | ⬜ | §5.P1b-iii |
+| **P1b-iii** | **Brace adjacency + the head registry + Q_M8** — the forced `$select-brace` sentinel (Q_M6) · the `reader-forms.rkt` leaf registry · adjacency in BOTH groupers (Q_N7) · bucket 4 ruled SELECT (Q_N5) · the `:N` digit-run widening + the structural `fused-type-annot?` repair (Q_N4) · P1b-ii's residual CLOSED | ✅ | §5.P1b-iii · suite **9304/474/0**, acceptance 28/28 + 89/89, corpus A/B **158 files / ZERO diffs**; adversarial verify caught **3 BLOCKING** (one non-idempotent fold → a silently-dropped `defn` clause) + 10 SIGNIFICANT — all fixed or filed pre-commit |
 | **P2** | **Grade-1 core** — `.k`/`.N` access + bare-path extraction, on the landed P2 substrate | ⬜ | §5.P2 · `.N` has an end-to-end head start via `(get expr N)` |
 | **P3** | **Blocks** — `x{…}`, projection-by-default, `^` (3 continuations), L4 sort homogeneity, **HONEST NESTING (n-tuples at every n — ruled 2a)**, **STRICT merge** (the §3.6 waypoint) | ⬜ | §5.P3 · Q2 gate RESOLVED (2c: carrier order, thesis-derived) |
 | **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | ⬜ | §5.P4 · step-list node (4b) · per-field row-map (4c) |
@@ -1433,6 +1433,69 @@ arm. Silent-degradation tier, pre-existing and family-wide, NOT chargeable here:
 `tools/form-deps.rkt:42`.
 
 ---
+
+#### CLOSE NOTES ✅
+
+**Gates**: suite **9304 / 474 / 0** · acceptance **28/28 + 89/89** · battery 501/501 ·
+**corpus A/B 158 files, ZERO diffs on both halves** — the audit predicted an empty
+expected-diff set and it held.
+
+**⚠ ADVERSARIAL VERIFY CAUGHT THREE BLOCKING DEFECTS, ALL ONE ROOT CAUSE, ALL MINE.**
+The fusion arm I added to `rewrite-dot-access` was **not idempotent**: it rewrote
+`(x base ($select-brace a))` to `(x ($select-brace base a))` — still sentinel-headed,
+so `select-brace?` matched it again. Since `preparse-expand-subforms` re-enters while
+the datum keeps changing, each pass swallowed one more sibling to the LEFT:
+
+| consequence | observed |
+|---|---|
+| multi-arity `defn` clause | `$pipe` head eaten → **clause SILENTLY DROPPED**, function evaluated with the wrong arms, **0 errors** |
+| `defn g [x base{a}] x` | silently defined a **4-parameter** function |
+| application head | `(h base ($select-brace a))` → `($select-brace h base a)` |
+
+Every OTHER access-sentinel arm rewrites the sentinel AWAY (to `get`/`map-get`) and is
+a fixpoint **by construction** — their predicates pin a fixed arity. Mine deliberately
+accepted `>= 1`, which removed exactly that protection. **Fixed** by emitting the
+NOT-YET marker (`$retired-selection` with a new `select-block` kind) — a non-sentinel
+head, hence a fixpoint, and zero new registrations since that sentinel is already in
+`pattern-var?` and already has its parser arm. Idempotence is now test-pinned.
+
+The irony is worth recording: this phase's Q_N4 hunk exists to repair a
+silent-wrong-answer, and the same commit introduced one.
+
+**SIGNIFICANT findings — fixed in-phase:**
+- **The registry did not do its job.** `reader-forms.rkt`'s docstring said "this is the
+  ONE list" and that both grouping and preparse require it. **macros.rkt required it
+  zero times** and `combine-foreign-blocks` still tested an inline `(eq? v 'racket)` —
+  two lists, and the module unified nothing. Now wired; `lang` is derived from the head
+  rather than hard-coded.
+- **A VACUOUS PIN of my own.** A test titled "reachable inside fn params too" asserted
+  on `[fn [x : Int] cfg{host}]` — the select block is in the **body**; the param list
+  was untouched. It passed for a reason unrelated to its name. Renamed, and the real
+  param-list case added.
+- **The Q_N7 justification was FALSE.** The comment claimed that without the
+  surface-rewrite fork the guided error "would be SILENTLY SWALLOWED". Disproved by
+  construction (a third checkout, byte-identical output over 20 files):
+  `same-form-type?` only pairs surf-infer/def/defn/defn-multi, so a preparse ERROR surf
+  can never pair with a non-error tree surf — **preparse always wins when it errors**.
+  The fork is KEPT (the groupers should agree, and the Q_N3 v2 guard pins it) but the
+  justification is corrected in both the comment and here.
+- **My diagnostic gave advice that does not work**: it recommended `[x : Int]`, which
+  the defn form-shape gate rejects in the very shape that raises the error. Now
+  recommends only `[x:Int]`.
+- **The `pattern-var?` residual is 23 of 33, not 2** — including `$list-literal`, so a
+  plain `'[1 2]` in a defmacro template is a whole-file abort TODAY. Comment corrected;
+  DEFERRED item 8 carries the census.
+
+**Filed, not fixed** (DEFERRED items 5–8): the two groupers still diverge on
+`<`-adjacent braces — live at `foray.prologos:674`, on the **disclose surface P4 owns**;
+binder-position select blocks get a raw-syntax diagnostic rather than the guided error;
+and the `pattern-var?` polarity problem.
+
+**What the Q_N3 v2 guard bought**: it is now shape-aware (tag ↔ sentinel across six
+brace spellings) where v1 was blind twice over — all its rows were spaced, and it
+compared counts when the defect class is shape-at-equal-count.
+
+Status: ✅ `PENDING-HASH`.
 
 **Original design text (superseded in part by the above):**
 

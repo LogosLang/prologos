@@ -425,6 +425,103 @@
   (define forms (read-all-forms-string "x.{a b}"))
   (check-equal? forms '((x ($dot-brace a b)))))
 
+
+;; ============================================================
+;; CIU T6 D4.P1b-iii — BRACE ADJACENCY
+;;
+;; Adjacent `x{…}` is a SELECT BLOCK (forced new sentinel, Q_M6 — adjacency is
+;; destroyed at the datum layer and $brace-params is ELEVEN-purposed). Spaced
+;; `f {…}` must NOT change: 419 of 622 live spaced braces are implicit type
+;; binders. Known reader-form heads (`racket{…}`) win FIRST and keep
+;; $brace-params, because `combine-foreign-blocks` has no adjacency test and
+;; the spaced form is accepted today.
+;; ============================================================
+
+(test-case "P1b-iii: ADJACENT x{…} mints $select-brace"
+  (check-equal? (read-all-forms-string "x{a b}") '((x ($select-brace a b)))))
+
+(test-case "P1b-iii: SPACED f {…} is UNCHANGED — the 419-binder population"
+  (check-equal? (read-all-forms-string "x {a b}") '((x ($brace-params a b))))
+  (check-equal? (read-all-forms-string "spec identity {A : Type} A -> A")
+                '((spec identity ($brace-params A : Type) A -> A))))
+
+(test-case "P1b-iii: HEAD PRECEDENCE — racket{…} keeps $brace-params"
+  ;; Checked BEFORE the select-block rule. No-space is the documented canonical
+  ;; form for foreign blocks (10 live WS sites), and the spaced form is
+  ;; accepted too, so BOTH must stay $brace-params.
+  (check-equal? (read-all-forms-string "racket{(+ 1 2)}") '((racket ($brace-params (+ 1 2)))))
+  (check-equal? (read-all-forms-string "racket {(+ 1 2)}") '((racket ($brace-params (+ 1 2))))))
+
+(test-case "P1b-iii Q_N5: BUCKET 4 — closing-delimiter-adjacent is SELECT, by decision"
+  ;; ⚠ Inaction is NOT the status quo here: for `f[x]{a}` BOTH is-postfix?
+  ;; conjuncts already pass, so a naive generalization would rule this by
+  ;; ACCIDENT. Owner-ruled SELECT, matching the bracket band's own precedent
+  ;; (`xs[0][1]` chains through is-postfix? off an rbracket). Zero live sites.
+  (check-equal? (read-all-forms-string "f[x]{a}")
+                '((f ($postfix-index x) ($select-brace a))))
+  (check-equal? (read-all-forms-string "xs[0][1]")
+                '((xs ($postfix-index 0) ($postfix-index 1)))))
+
+(test-case "P1b-iii Q_N6: the ACCEPTED binder hazard, both spellings pinned"
+  ;; `defn f{x} x` was a BINDER and becomes a select block. Owner-accepted:
+  ;; zero live adjacent-brace binder sites. The SPACED spelling — which is what
+  ;; 419 live sites use — must not move.
+  (check-equal? (read-all-forms-string "defn f{x} x") '((defn f ($select-brace x) x)))
+  (check-equal? (read-all-forms-string "defn f {x} x") '((defn f ($brace-params x) x))))
+
+(test-case "P1b-iii: OPENER-ADJACENT braces are NOT select blocks — the (pair? result) guard"
+  ;; `'[{` and `@[{` are byte-adjacent, so ONLY `(pair? result)` declines them.
+  ;; ~28 live sites. If the guard is dropped, every list-of-maps literal
+  ;; mis-reads its FIRST element only, at zero errors.
+  (check-equal? (read-all-forms-string "'[{:a 1} {:b 2}]")
+                '(($list-literal ($brace-params :a 1) ($brace-params :b 2))))
+  (check-equal? (read-all-forms-string "@[{:a 1} {:b 2}]")
+                '(($vec-literal ($brace-params :a 1) ($brace-params :b 2))))
+  (check-equal? (read-all-forms-string "[{:a 1}]") '((($brace-params :a 1))))
+  (check-equal? (read-all-forms-string "({:a 1})") '((($brace-params :a 1)))))
+
+;; ============================================================
+;; CIU T6 D4.P1b-iii / Q_M8 — ORDINALS ARE MULTI-DIGIT
+;;
+;; `recognize-colon-annotation` was hard-capped at 2 chars, so `:10` shattered
+;; into `:` + `10` while `:0`…`:9` were single tokens. Owner-ruled Q_M8: widen
+;; the DIGIT run to digit+. The overlap with the QTT multiplicity vocabulary is
+;; only `:0`/`:1` (mult-annot? accepts exactly {:0 :1 :w}), and those are
+;; discriminated by position, not by lexeme.
+;; ============================================================
+
+(test-case "Q_M8: :10 is ONE token, like :0…:9 (was: `:` + `10`)"
+  (check-equal? (read-all-forms-string "users:10") '((users :10)))
+  (check-equal? (read-all-forms-string "users:127") '((users :127))))
+
+(test-case "Q_M8: single-digit and w/m forms are UNCHANGED (must-not-break)"
+  (check-equal? (read-all-forms-string "users:0") '((users :0)))
+  (check-equal? (read-all-forms-string "users:9") '((users :9)))
+  (check-equal? (read-all-forms-string "users:w") '((users :w)))
+  (check-equal? (read-all-forms-string "users:m") '((users :m))))
+
+(test-case "Q_M8: the trailing ident-continue GUARD still declines after the LAST digit"
+  ;; The widened digit run must test `not ident-continue?` AFTER the last digit,
+  ;; or `:10abc` would wrongly lex as an annotation.
+  ;;
+  ;; ⚠ These pin ACTUAL behaviour, not intuition — my first draft asserted
+  ;; `:0abc` was a KEYWORD and the test refuted it. A digit-headed colon symbol
+  ;; that the annotation arm declines does NOT fall through to the keyword arm
+  ;; (no keyword starts with a digit), so it SHATTERS. That is the status quo
+  ;; for `:0abc` and must stay the status quo for `:10abc`.
+  (check-equal? (read-all-forms-string "x:0abc") '((x : 0 abc)))
+  (check-equal? (read-all-forms-string "x:10abc") '((x : 10 abc)))
+  ;; …while the LETTER arm still yields keywords, which is why the guard exists:
+  (check-equal? (read-all-forms-string "x:where") '((x :where)))
+  (check-equal? (read-all-forms-string "x:wm") '((x :wm))))
+
+(test-case "Q_M8: {:10 v} is a legal map key — the LATENT DEFECT this repairs"
+  ;; `{:0 v}`, `{:1 v}`, `{:9 v}` were legal today while `{:10 v}` SHATTERED
+  ;; into `: 10 v` and failed the even-count check. Arbitrary and
+  ;; user-surprising, and unrelated to Path Selection.
+  (check-equal? (read-all-forms-string "{:10 v}") '(($brace-params :10 v)))
+  (check-equal? (read-all-forms-string "{:0 v}") '(($brace-params :0 v))))
+
 (test-case "datum: plain {…} still mints $brace-params (must-not-break)"
   (check-equal? (read-all-forms-string "x {a b}") '((x ($brace-params a b)))))
 
@@ -439,7 +536,11 @@
   (check-equal? (length forms) 1)
   (define g (car forms))
   ;; `version` must be INSIDE the outer brace group, not a sibling of it.
-  (check-equal? g '(app-config ($brace-params server^ ($dot-brace ssl port) version))))
+  ;; ⚠ FLIPPED at D4.P1b-iii: `app-config{` is ADJACENT and `app-config` is not
+  ;; a reader-form head, so under Q_M6 this brace is now a SELECT BLOCK. The
+  ;; P1b-iii audit caught that §5.P1b-iii's test-delta never named this flip —
+  ;; discovered at suite time it would have read as a regression.
+  (check-equal? g '(app-config ($select-brace server^ ($dot-brace ssl port) version))))
 
 (test-case "D4.P1b-ii: .{ nests inside itself"
   (check-equal? (read-all-forms-string "x.{a.{b c} d}")
@@ -1137,6 +1238,42 @@
     (check-equal? tree-n datum-n
                   (format "LAYER DISAGREEMENT for ~a — tree=~a datum=~a (this is the .( ) defect class)"
                           (caddr o) tree-n datum-n))))
+
+(test-case "Q_N3 GUARD v2 (D4.P1b-iii): the two layers agree on the brace SENTINEL, not just counts"
+  ;; ⚠ The original guard was STRUCTURALLY BLIND to P1b-iii, twice over: every
+  ;; row was built SPACED (exactly the population adjacency must NOT change),
+  ;; and it compared ITEM COUNTS while this phase's defect class is a SHAPE
+  ;; divergence at EQUAL count. This row set closes both holes by asserting the
+  ;; tree TAG corresponds to the datum SENTINEL for each brace spelling.
+  ;;
+  ;; It is the guard that would catch "adjacency implemented in parse-reader
+  ;; only" — the failure mode that would otherwise SILENTLY hand back a map
+  ;; literal, because brace-group has a non-error tree handler and driver lets a
+  ;; non-error tree surf replace preparse's error surf.
+  (define cases
+    (list (list "x{a}"        '$select-brace  'select-brace-group "adjacent → select")
+          (list "x {a}"       '$brace-params  'brace-group        "spaced → literal")
+          (list "racket{a}"   '$brace-params  'brace-group        "head-adjacent → literal")
+          (list "racket {a}"  '$brace-params  'brace-group        "head-spaced → literal")
+          (list "x.{a}"       '$dot-brace     'dot-brace-group    "dot-brace")
+          (list "x#{a}"       '$set-literal   'set-group          "set literal")))
+  (for ([c (in-list cases)])
+    (define src (car c))
+    ;; datum layer: find the sentinel head of the last item in the form
+    (define form (car (read-all-forms-string src)))
+    (define datum-head (let ([lst (car (reverse form))]) (and (pair? lst) (car lst))))
+    (check-equal? datum-head (cadr c)
+                  (format "DATUM layer wrong for ~a (~a)" src (cadddr c)))
+    ;; tree layer: the tag of the last child of the line
+    (define grouped (group-tree-node (parse-tree-root (read-to-tree src))))
+    (define line (rrb-get (parse-tree-node-children grouped) 0))
+    (define kids (parse-tree-node-children line))
+    (define lastk (rrb-get kids (- (rrb-size kids) 1)))
+    (check-true (parse-tree-node? lastk)
+                (format "TREE layer produced no group for ~a — the grouper does not know this shape" src))
+    (check-equal? (parse-tree-node-tag lastk) (caddr c)
+                  (format "LAYER DISAGREEMENT for ~a (~a): datum ~a vs tree ~a"
+                          src (cadddr c) datum-head (parse-tree-node-tag lastk)))))
 
 (test-case "Q_N3 GUARD: the guard actually detects a known divergence (dot-lparen)"
   ;; The guard is only worth having if it fails on the real bug. Pin the

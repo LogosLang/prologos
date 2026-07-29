@@ -24,6 +24,10 @@
          "rrb.rkt"
          "propagator.rkt"
          "parse-lattice.rkt"
+         ;; D4.P1b-iii: THE reader-form-head registry. A leaf module with no
+         ;; project-local requires — that is what lets grouping (here) and
+         ;; preparse (macros.rkt) share ONE list with no cycle.
+         "reader-forms.rkt"
 )
 
 (provide
@@ -869,19 +873,40 @@
 ;; ---- Phase 5b tokenizer gaps ----
 
 (define (recognize-colon-annotation rrb pos)
-  ;; :0, :1, :w, :m — colon immediately followed by digit or w/m
-  ;; ONLY when NOT followed by ident-continue (else it's a keyword like :where, :write)
+  ;; `:N` (N = one or MORE digits) · `:w` · `:m` — ONLY when not followed by
+  ;; ident-continue (else it is a keyword like :where, :write, :wm).
+  ;;
+  ;; CIU T6 D4.P1b-iii / Q_M8 [owner]: the digit run is `digit+`, not one digit.
+  ;; It was hard-capped at 2 chars, so `:10` shattered into `:` + `10` while
+  ;; `:0`…`:9` were single tokens — arbitrary, and it also made `{:10 v}` an
+  ;; illegal map key while `{:0 v}`/`{:9 v}` were fine.
+  ;;
+  ;; Widening is not widening a COLLISION: this recognizer already accepted
+  ;; TWELVE lexemes (`:0`–`:9`, `:w`, `:m`) while `mult-annot?` (parser.rkt)
+  ;; accepts THREE (`:0 :1 :w`), so nine of the twelve already lexed as one
+  ;; token and already were not multiplicities. Ordinal ∩ multiplicity is
+  ;; `:0`/`:1` only, and those are discriminated by POSITION (of 289 live
+  ;; multiplicity tokens, 287 spaced + 2 opener-preceded, ZERO focus-adjacent).
+  ;;
+  ;; ⚠ The trailing guard must be tested after the LAST digit — see
+  ;; `fused-type-annot?` in parser.rkt for the co-migration this REQUIRES.
   (define c1 (rrb-char-at rrb pos))
   (define c2 (rrb-char-at rrb (+ pos 1)))
-  (define c3 (rrb-char-at rrb (+ pos 2)))
-  (if (and c1 c2 (char=? c1 #\:)
-           (or (char-numeric? c2)
-               (char=? c2 #\w)
-               (char=? c2 #\m))
-           ;; Must NOT be followed by ident-continue
-           (not (and c3 (ident-continue? c3))))
-      2
-      #f))
+  (cond
+    [(not (and c1 c2 (char=? c1 #\:))) #f]
+    ;; letter arm — unchanged, always exactly 2 chars
+    [(or (char=? c2 #\w) (char=? c2 #\m))
+     (let ([c3 (rrb-char-at rrb (+ pos 2))])
+       (if (not (and c3 (ident-continue? c3))) 2 #f))]
+    ;; digit arm — consume the whole run, THEN apply the guard
+    [(char-numeric? c2)
+     (let loop ([i (+ pos 2)])
+       (define c (rrb-char-at rrb i))
+       (cond
+         [(and c (char-numeric? c)) (loop (+ i 1))]
+         [(and c (ident-continue? c)) #f]   ;; e.g. `:10abc` — not an annotation
+         [else (- i pos)]))]
+    [else #f]))
 
 ;; CIU T6 D4.P1b-i (owner ruling Q_L1's scoped-in repair) — the WS narrowing
 ;; typed logic variable `?x:Nat` (chains: `?foo:Nat:Even`), lexed as ONE token.
@@ -2584,6 +2609,42 @@
 ;; Group items (tokens + indent markers) with bracket matching.
 ;; indent-open/indent-close create implicit sub-lists ONLY when
 ;; not inside an explicit bracket group (bracket groups take priority).
+;; ── D4.P1b-iii: THE adjacency test, hoisted ──────────────────────────────────
+;; Was inlined in the bracket arm as `is-postfix?`. Hoisted so the bracket arm
+;; and the brace arm consume ONE definition rather than two copies that drift.
+;;
+;; ⚠ It is NOT enough to add `lbrace` to the bracket arm's `memq`: that arm's
+;; closer is a two-way `(if (eq? type 'lbracket) 'rbracket 'rparen)`, so a brace
+;; joining it would be handed `'rparen`. That is the identical "a two-way if
+;; cannot express three token types" shape D4.P1b-ii hit in surface-rewrite.rkt.
+;;
+;; `(pair? result)` means THE CURRENT GROUP HAS ALREADY EMITTED A BASE. `result`
+;; is the per-group accumulator, seeded '() at every recursive entry, so it is
+;; false exactly when the opener is the FIRST item inside its group. That is the
+;; only thing distinguishing `xs{…}` (select off xs) from `'[{…}` / `@[{…}`
+;; (a map literal that merely happens to be byte-adjacent to its opener) — ~28
+;; live sites. Drop it and every list-of-maps literal mis-reads its FIRST
+;; element only, at zero errors.
+;;
+;; `(> i 0)` is redundant while `(pair? result)` holds (a non-empty accumulator
+;; implies the loop advanced), and becomes load-bearing only if that conjunct is
+;; ever removed — it also guards the `(- i 1)` index below.
+(define (adjacent-to-base? vec i result item)
+  (and (pair? result)
+       (> i 0)
+       (let ([prev-item (vector-ref vec (- i 1))])
+         (and (token-entry? prev-item)
+              (= (token-entry-end-pos prev-item)
+                 (token-entry-start-pos item))))))
+
+;; Is the physically preceding token a READER-FORM HEAD (`racket{…}`)? Consults
+;; the ONE registry (reader-forms.rkt) — never an inline literal.
+(define (prev-token-reader-form-head? vec i)
+  (and (> i 0)
+       (let ([prev (vector-ref vec (- i 1))])
+         (and (token-entry? prev)
+              (reader-form-head? (string->symbol (token-entry-lexeme prev)))))))
+
 (define (group-items vec start end close-type source source-str [qq-depth 0])
   (let loop ([i start] [result '()])
     (cond
@@ -2630,13 +2691,7 @@
             [(memq type '(lbracket lparen))
              (define is-postfix?
                (and (eq? type 'lbracket)
-                    (pair? result)
-                    ;; Previous item must be adjacent (no whitespace gap)
-                    (> i 0)
-                    (let ([prev-item (vector-ref vec (- i 1))])
-                      (and (token-entry? prev-item)
-                           (= (token-entry-end-pos prev-item)
-                              (token-entry-start-pos item))))))
+                    (adjacent-to-base? vec i result item)))
              (let-values ([(inner next-i)
                            (group-items vec (+ i 1) end
                                         (if (eq? type 'lbracket) 'rbracket 'rparen)
@@ -2677,12 +2732,28 @@
                                            source al ac (+ (token-entry-start-pos item) 1) 1) result))))
                  ;; No matching > → treat < as operator
                  (loop (+ i 1) (cons (token-entry->stx item source source-str) result)))]
-            ;; Braces → $brace-params sentinel
+            ;; Braces → $brace-params (spaced / reader-form head) or $select-brace
+            ;; (adjacent). D4.P1b-iii: THE adjacency fork.
+            ;;
+            ;; Order is load-bearing (Q8.2's grouping table): HEAD PRECEDENCE is
+            ;; checked FIRST, so `racket{…}` stays a foreign block rather than
+            ;; becoming a selection off a variable named `racket`. Spaced braces
+            ;; are never select blocks — 419 of 622 live spaced braces are
+            ;; implicit type binders, and `combine-foreign-blocks` accepts the
+            ;; spaced `racket {…}` too, so both head spellings keep the old
+            ;; sentinel UNCHANGED.
+            ;;
+            ;; `adjacent-to-base?` carries the `(pair? result)` conjunct, which
+            ;; is the ONLY thing keeping opener-adjacent braces (`'[{…}`,
+            ;; `@[{…}` — ~28 live sites) out of the select reading.
             [(eq? type 'lbrace)
+             (define adjacent? (adjacent-to-base? vec i result item))
+             (define head-form? (and adjacent? (prev-token-reader-form-head? vec i)))
+             (define sentinel (if (and adjacent? (not head-form?)) '$select-brace '$brace-params))
              (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbrace source source-str qq-depth)])
                (let-values ([(bl bc) (pos->line-col source-str (token-entry-start-pos item))])
                  (loop next-i
-                       (cons (make-stx (cons (make-stx '$brace-params source bl bc (+ (token-entry-start-pos item) 1) 1) inner)
+                       (cons (make-stx (cons (make-stx sentinel source bl bc (+ (token-entry-start-pos item) 1) 1) inner)
                                        source bl bc (+ (token-entry-start-pos item) 1) 1) result))))]
             ;; D4.P1b-ii — Dot-brace → $dot-brace sentinel, PLAIN 'rbrace closer.
             ;; The mid-path sub-block `server^.{ssl port}`. Ruling Q_N1 mints a

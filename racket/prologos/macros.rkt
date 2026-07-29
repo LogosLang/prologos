@@ -20,6 +20,7 @@
          racket/list
          racket/string
          racket/set
+         "reader-forms.rkt"     ;; D4.P1b-iii: THE reader-form-head registry (see below)
          "syntax.rkt"           ;; Phase 7: expr-fvar?, expr-app? for capability-type-expr?
          "surface-syntax.rkt"
          "source-location.rkt"
@@ -1154,6 +1155,7 @@
        (not (eq? x '$nil-dot-key))      ; RETIRED sentinel (D4.P1a) — still emitted by the reader
        (not (eq? x '$retired-selection)) ; D4.P1a retirement marker (parser converts to guided error)
        (not (eq? x '$dot-brace))        ; D4.P1b-ii `.{ }` sub-block sentinel — see below
+       (not (eq? x '$select-brace))     ; D4.P1b-iii adjacent-brace select block
        ;; ⚠ WHY $dot-brace IS HERE (caught by adversarial verify, pre-commit):
        ;; omitting it made `.{ }` inside a defmacro TEMPLATE read as a macro
        ;; pattern variable, so datum-subst raised "Unbound pattern variable" —
@@ -1163,9 +1165,13 @@
        ;; missing from a hard-coded enumeration) at the exact site P1a fixed for
        ;; $dot-key/$nil-dot-key. Q8.5 invariant 3 names this obligation
        ;; explicitly — it was written and then not followed.
-       ;; NOTE (pre-existing, NOT fixed here): `$set-literal` and `$mixfix` are
-       ;; still pattern-vars by this predicate and abort the same way in a macro
-       ;; template. Filed in DEFERRED rather than widened silently.
+       ;; NOTE (pre-existing, NOT fixed here, and BIGGER than first recorded):
+       ;; a census of every `$`-headed symbol the reader can emit finds **23 of
+       ;; 33** still pattern-vars — not the two (`$set-literal`, `$mixfix`) an
+       ;; earlier draft of this comment named. The list includes `$list-literal`,
+       ;; so a plain `'[1 2]` inside a defmacro TEMPLATE is a whole-file abort
+       ;; TODAY. Filed in DEFERRED rather than widened silently: the fix is not
+       ;; 23 more exclusions but inverting the predicate's polarity.
        (let ([s (symbol->string x)])
          (and (> (string-length s) 1)
               (char=? (string-ref s 0) #\$)))))
@@ -1987,6 +1993,10 @@
      (preparse-map-literal-contents datum reg depth)]
     [(and (pair? datum) (eq? (car datum) '$brace-params))
      datum]
+    ;; D4.P1b-iii: the select block is opaque during preparse too — its contents
+    ;; are SELECTOR STEPS (bare names/ordinals), not expressions to expand.
+    [(and (pair? datum) (memq (car datum) '($select-brace $dot-brace)))
+     datum]
     ;; List form — check head symbol for macros
     [(and (pair? datum) (symbol? (car datum)))
      (define entry (hash-ref reg (car datum) #f))
@@ -2441,14 +2451,26 @@
       (let loop ([rest elems] [acc '()])
         (cond
           [(null? rest) (reverse acc)]
-          ;; Detect: racket followed by ($brace-params ...)
+          ;; Detect: a READER-FORM HEAD followed by ($brace-params ...)
+          ;; D4.P1b-iii: the head test now consults the ONE registry
+          ;; (reader-forms.rkt) instead of an inline `(eq? v 'racket)` literal.
+          ;; ⚠ This is the half that makes reader-forms.rkt actually a single
+          ;; source of truth. Adversarial verify caught it missing: the module
+          ;; was created so grouping and preparse would share one list, its
+          ;; docstring said "this is the ONE list", and preparse was still
+          ;; testing its own inline literal — two lists, and the module unified
+          ;; nothing. The concrete failure it re-enabled: add a second head and
+          ;; both groupers would grant it head precedence while preparse never
+          ;; combined it into a foreign block, so the body would fall through as
+          ;; a map literal at zero errors.
           [(and (pair? (cdr rest))
                 (let ([v (if (syntax? (car rest)) (syntax-e (car rest)) (car rest))])
-                  (eq? v 'racket))
+                  (reader-form-head? v))
                 (let ([next (cadr rest)])
                   (let ([d (if (syntax? next) (syntax-e next) next)])
                     (brace-params? d))))
-           (define lang 'racket)
+           (define lang (let ([v (if (syntax? (car rest)) (syntax-e (car rest)) (car rest))])
+                          v))
            (define brace-elem (cadr rest))
            (define brace-datum (if (syntax? brace-elem) (syntax-e brace-elem) brace-elem))
            ;; Extract code datums (skip $brace-params sentinel)
@@ -2533,8 +2555,10 @@
               ;; headed brace-params is a MAP LITERAL — let it through to
               ;; preparse-expand-form (the map-literal-brace-params? arm rewrites
               ;; its values). This is the def/defn-BODY map case.
-              (if (and (pair? sub) (eq? (car sub) '$brace-params)
-                       (not (map-literal-brace-params? sub)))
+              (if (or (and (pair? sub) (eq? (car sub) '$brace-params)
+                           (not (map-literal-brace-params? sub)))
+                      ;; D4.P1b-iii: selection sentinels are opaque here too.
+                      (and (pair? sub) (memq (car sub) '($select-brace $dot-brace))))
                   sub
                   (preparse-expand-form sub reg depth)))
             merged))
@@ -5443,11 +5467,34 @@
 (define (broadcast-access? x)
   (and (list? x) (= (length x) 2) (eq? (car x) '$broadcast-access)))
 
+;; CIU T6 D4.P1b-ii / P1b-iii — the two brace-family selection sentinels.
+;; Unlike their siblings these carry an arbitrary-length body, so the length
+;; test is `>= 1` (head only) rather than a fixed arity.
+(define (dot-brace? x)
+  (and (list? x) (pair? x) (eq? (car x) '$dot-brace)))
+(define (select-brace? x)
+  (and (list? x) (pair? x) (eq? (car x) '$select-brace)))
+
 ;; Is this element any kind of access sentinel?
+;;
+;; ⚠ THIS IS THE FUSION GATE, and it was the site NO enumeration named — not
+;; Q8.5's invariant, not the P1b-ii design, not P1b-ii's own eight-region
+;; landing. `$dot-brace` shipped at P1b-ii WITHOUT an entry here, so it never
+;; folded onto its base, stayed a separate sibling item, and its guided error
+;; became unreachable in every arity-checking context (a map literal saw an odd
+;; element count, `fn` saw a non-binder, `validate` saw an extra argument —
+;; each reporting its own confusing thing instead). Adding both sentinels here
+;; closes that residual AND stops `$select-brace` reproducing it on day one.
+;;
+;; Fusion is NOT a grouping-layer operation: `is-postfix?`/`adjacent-to-base?`
+;; only MARK (`xs[0]` yields two siblings), and this fold is what joins them.
+;; So a new selection sentinel owes THREE things, not one: a predicate, an entry
+;; here, and a fold arm in `rewrite-dot-access` below.
 (define (access-sentinel? x)
   (or (dot-access? x) (dot-key? x)
       (nil-dot-access? x) (nil-dot-key? x)
-      (postfix-index? x) (broadcast-access? x)))
+      (postfix-index? x) (broadcast-access? x)
+      (dot-brace? x) (select-brace? x)))
 
 ;; Unified rewrite for ALL access sentinels in a flat datum list.
 ;; Handles: $dot-access, $nil-dot-access, $postfix-index (live) and the
@@ -5517,6 +5564,35 @@
                        [wrapped `(nil-safe-get ,target ,(string->symbol
                                                           (string-append ":" (symbol->string field))))])
                   (loop (cdr elems) (cons wrapped (cdr acc)))))]
+           ;; CIU T6 D4.P1b-ii/iii — the brace-family selection sentinels.
+           ;; They consume their base so the enclosing form counts ONE item
+           ;; instead of two; semantics land at P3, so the fused result is the
+           ;; NOT-YET MARKER, which the parser converts to a guided per-command
+           ;; error. Without this fold the sentinel stays a sibling and the
+           ;; guided error is unreachable wherever arity is checked first —
+           ;; that was P1b-ii's carried residual, and this is its repair.
+           ;;
+           ;; ⚠ THE RESULT MUST NOT BE SENTINEL-HEADED. A first draft rewrote
+           ;; `(x base ($select-brace a))` to `(x ($select-brace base a))` —
+           ;; still matching `select-brace?`, therefore NOT A FIXPOINT. Because
+           ;; `preparse-expand-subforms` re-enters while the datum keeps
+           ;; changing, each pass swallowed one more sibling to the LEFT:
+           ;;   (x base ($select-brace a)) → (x ($select-brace base a))
+           ;;                              → ($select-brace x base a)
+           ;; In a multi-arity `defn` that ate the `$pipe` clause head, so the
+           ;; clause stopped being recognised as a clause and was SILENTLY
+           ;; DROPPED — the function evaluated with the wrong arms at 0 errors.
+           ;; Caught by adversarial verify, pre-commit. Every OTHER arm here
+           ;; rewrites the sentinel AWAY (to `get`/`map-get`) and is a fixpoint
+           ;; for exactly this reason; this arm now does the same.
+           [(or (dot-brace? (car elems)) (select-brace? (car elems)))
+            (if (null? acc)
+                ;; No base (a leading `.{…}` / `{…}`): leave the bare sentinel —
+                ;; the parser's own arm still fires on it.
+                (loop (cdr elems) (cons (car elems) acc))
+                (loop (cdr elems)
+                      (cons (retired-selection-marker 'select-block #f)
+                            (cdr acc))))]
            [(postfix-index? (car elems))
             (if (null? acc)
                 (loop (cdr elems) (cons (car elems) acc))

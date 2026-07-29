@@ -136,8 +136,15 @@
        ;; it is non-error ∧ same-form-type ∧ same-line — so a missing arm would
        ;; let a garbage surf-app BEAT preparse's version. ("Unhandled form"
        ;; below is unreachable from here; it lives in the top-level-form case.)
-       [(dot-brace-group)
-        (parse-error-result loc ".{ } select blocks are not supported yet (CIU T6 Path Selection lands them at P3)")]
+       [(dot-brace-group select-brace-group)
+        ;; D4.P1b-ii/iii. An explicit arm is MANDATORY: the `else` fallthrough
+        ;; calls parse-expr-tree SILENTLY for any node with children, and
+        ;; driver.rkt admits tree output when non-error ∧ same-form-type ∧
+        ;; same-line — so a missing arm lets a garbage surf BEAT preparse's.
+        ;; For `select-brace-group` the stakes are higher than for its sibling:
+        ;; `brace-group` has a NON-ERROR handler right above, so without this
+        ;; arm an adjacent `x{…}` would silently become a MAP LITERAL.
+        (parse-error-result loc "select blocks are not supported yet (CIU T6 Path Selection lands them at P3)")]
        [(paren-group) (parse-paren-group-tree children loc)]
        [(group) (parse-group-tree children loc)]
 
