@@ -69,14 +69,13 @@ data CapTPOp
   op-deliver-only : Nat -> SyrupValue
   ;; op:listen — register that we're interested in being notified when
   ;; the target promise settles.
-  ;; INCOMPLETE against the spec: the wire record has THREE fields —
-  ;; <op:listen to-desc resolve-me wants-partial>
-  ;; (`utils/captp_types.py:429-433`). The decoder requires the third
-  ;; field to be present but drops its value, so a peer asking for
-  ;; partial resolutions is indistinguishable from one that is not.
-  ;; Carrying it means widening this constructor.
-  ;;   target resolver
-  op-listen : Nat -> Nat
+  ;; op:listen — three fields on the wire:
+  ;;   <op:listen to-desc resolve-me wants-partial>
+  ;; (`utils/captp_types.py:429-433`). `wants-partial` asks to be told
+  ;; about a PARTIAL resolution — a promise resolving to another promise
+  ;; — rather than only about the final settled value.
+  ;;   target resolver wants-partial
+  op-listen : Nat -> Nat -> Bool
   ;; op:gc-export — peer no longer needs an exported object; decrement
   ;; the local refcount.
   ;; LEGACY SPELLING. `op:gc-export` (singular, two scalars) is not in
@@ -160,7 +159,7 @@ defn deliver?
   | op-abort _             -> false
   | op-deliver _ _ _ _     -> true
   | op-deliver-only _ _    -> false
-  | op-listen _ _          -> false
+  | op-listen _ _ _          -> false
   | op-gc-export _ _       -> false
   | op-gc-answer _         -> false
   | op-gc-exports _ _      -> false
@@ -174,7 +173,7 @@ defn deliver-to-answer?
   | op-abort _             -> false
   | op-deliver _ _ _ _     -> false
   | op-deliver-only _ _    -> false
-  | op-listen _ _          -> false
+  | op-listen _ _ _          -> false
   | op-gc-export _ _       -> false
   | op-gc-answer _         -> false
   | op-gc-exports _ _      -> false
@@ -187,7 +186,7 @@ defn deliver-only?
   | op-abort _             -> false
   | op-deliver _ _ _ _     -> false
   | op-deliver-only _ _    -> true
-  | op-listen _ _          -> false
+  | op-listen _ _ _          -> false
   | op-gc-export _ _       -> false
   | op-gc-answer _         -> false
   | op-gc-exports _ _      -> false
@@ -200,7 +199,7 @@ defn listen?
   | op-abort _             -> false
   | op-deliver _ _ _ _     -> false
   | op-deliver-only _ _    -> false
-  | op-listen _ _          -> true
+  | op-listen _ _ _          -> true
   | op-gc-export _ _       -> false
   | op-gc-answer _         -> false
   | op-gc-exports _ _      -> false
@@ -213,7 +212,7 @@ defn abort?
   | op-abort _             -> true
   | op-deliver _ _ _ _     -> false
   | op-deliver-only _ _    -> false
-  | op-listen _ _          -> false
+  | op-listen _ _ _          -> false
   | op-gc-export _ _       -> false
   | op-gc-answer _         -> false
   | op-gc-exports _ _      -> false
@@ -231,7 +230,7 @@ defn deliver-target
   | op-abort _             -> none
   | op-deliver t _ _ _     -> some t
   | op-deliver-only t _    -> some t
-  | op-listen _ _          -> none
+  | op-listen _ _ _          -> none
   | op-gc-export _ _       -> none
   | op-gc-answer _         -> none
   | op-gc-exports _ _      -> none
@@ -244,7 +243,7 @@ defn deliver-args
   | op-abort _             -> none
   | op-deliver _ a _ _     -> some a
   | op-deliver-only _ a    -> some a
-  | op-listen _ _          -> none
+  | op-listen _ _ _          -> none
   | op-gc-export _ _       -> none
   | op-gc-answer _         -> none
   | op-gc-exports _ _      -> none
@@ -257,7 +256,7 @@ defn deliver-answer-pos
   | op-abort _             -> none
   | op-deliver _ _ ap _    -> ap
   | op-deliver-only _ _    -> none
-  | op-listen _ _          -> none
+  | op-listen _ _ _          -> none
   | op-gc-export _ _       -> none
   | op-gc-answer _         -> none
   | op-gc-exports _ _      -> none
@@ -270,7 +269,7 @@ defn deliver-resolver
   | op-abort _             -> none
   | op-deliver _ _ _ r     -> r
   | op-deliver-only _ _    -> none
-  | op-listen _ _          -> none
+  | op-listen _ _ _          -> none
   | op-gc-export _ _       -> none
   | op-gc-answer _         -> none
   | op-gc-exports _ _      -> none

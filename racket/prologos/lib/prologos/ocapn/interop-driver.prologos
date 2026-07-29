@@ -28,7 +28,7 @@ require [prologos::ocapn::captp-core :refer [ConnectionState empty-connection
                                              syrup-list syrup-nat syrup-tagged
                                              syrup-promise]]
         [prologos::ocapn::promise    :refer [fresh]]
-        [prologos::ocapn::captp-wire :refer [decode-op]]
+        [prologos::ocapn::captp-wire :refer [decode-op encode-op]]
         [prologos::ocapn::message    :refer [CapTPOp op-deliver op-deliver-only
                                              op-abort op-start-session op-listen
                                              op-gc-export op-gc-answer
@@ -361,12 +361,23 @@ spec step-connection Nat String -> String
 ;; restarting the connection from the state it WOULD have stashed is the
 ;; least-wrong recovery. The FFI reports the miss on stderr.
 ;;
-;; KNOWN GAP: `| none -> ""` is one of four ways this server produces no
-;; reply, and the peer cannot tell them apart. The spec entitles it to an
-;; `op:abort` for an op we cannot decode. Emitting one needs an abort encoder
-;; and a decision about which decode failures are fatal — captp-core's
-;; territory, not the driver's.
+;; A frame we cannot decode gets an `op:abort`, not silence.
+;;
+;; This used to return "", which is one of several ways this server produces
+;; no reply and which the peer cannot tell apart from "decoded fine, nothing
+;; to say" — so a peer sending an op we do not understand waited out its own
+;; timeout instead of learning anything. The spec entitles it to an abort.
+;;
+;; Every decode failure is fatal, deliberately. There is no partial-credit
+;; reading of a CapTP frame: the decoder's gates are arity, descriptor label
+;; and slot well-formedness, and a frame that fails any of them is one whose
+;; meaning we do not know. Continuing the session on a frame we could not
+;; read is how a desync becomes a wrong answer several frames later.
+;;
+;; This was blocked until recently for a concrete reason worth recording: the
+;; SPEC's plural GC ops did not decode, so aborting here would have fired on
+;; ordinary conforming traffic. They decode now.
 defn step-connection [cid hex-frame]
   match [decode-op [hex-to-bytes hex-frame]]
-    | none    -> ""
+    | none    -> [encode-op [op-abort "undecodable-frame"]]
     | some op -> [run-step cid op [conn-fetch cid seeded-connection]]

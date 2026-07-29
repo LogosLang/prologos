@@ -164,7 +164,7 @@ defn op-to-syrup [op]
     | op-abort reason           -> [syrup-tagged "op:abort" [syrup-string reason]]
     | op-deliver tgt args ap rm -> [syrup-tagged "op:deliver" [syrup-list [cons [desc-export tgt] [cons [as-args-list args] [cons [opt-answer-pos ap] [cons [opt-resolve-me rm] nil]]]]]]
     | op-deliver-only tgt args  -> [syrup-tagged "op:deliver-only" [syrup-list [cons [desc-export tgt] [cons [as-args-list args] nil]]]]
-    | op-listen tgt resolver    -> [syrup-tagged "op:listen" [syrup-list [cons [desc-export tgt] [cons [desc-import-object resolver] [cons [syrup-bool false] nil]]]]]
+    | op-listen tgt resolver wp -> [syrup-tagged "op:listen" [syrup-list [cons [desc-export tgt] [cons [desc-import-object resolver] [cons [syrup-bool wp] nil]]]]]
     | op-gc-export pos cnt      -> [syrup-tagged "op:gc-export" [syrup-list [cons [syrup-nat pos] [cons [syrup-nat cnt] nil]]]]
     | op-gc-answer pos          -> [syrup-tagged "op:gc-answer" [syrup-nat pos]]
     | op-gc-exports poss deltas -> [syrup-tagged "op:gc-exports" [syrup-list [cons [syrup-list [nats-syrup poss]] [cons [syrup-list [nats-syrup deltas]] nil]]]]
@@ -203,9 +203,8 @@ defn encode-op [op]
     | op-deliver tgt args ap rm -> wire::encode-record "op:deliver" [cons [desc-export tgt] [cons [as-args-list args] [cons [opt-answer-pos ap] [cons [opt-resolve-me rm] nil]]]]
     | op-deliver-only tgt args  -> wire::encode-record "op:deliver-only" [cons [desc-export tgt] [cons [as-args-list args] nil]]
     ;; Three fields, per the spec: target, the resolver as one of OUR
-    ;; exports, and wants-partial. `op-listen` cannot carry
-    ;; wants-partial, so we always ask for the full resolution.
-    | op-listen tgt resolver    -> wire::encode-record "op:listen" [cons [desc-export tgt] [cons [desc-import-object resolver] [cons [syrup-bool false] nil]]]
+    ;; exports, and wants-partial.
+    | op-listen tgt resolver wp -> wire::encode-record "op:listen" [cons [desc-export tgt] [cons [desc-import-object resolver] [cons [syrup-bool wp] nil]]]
     | op-gc-export pos cnt      -> wire::encode-record "op:gc-export" [cons [syrup-nat pos] [cons [syrup-nat cnt] nil]]
     | op-gc-answer pos          -> wire::encode [syrup-tagged "op:gc-answer" [syrup-nat pos]]
     ;; Two PARALLEL lists: position i pairs with delta i.
@@ -750,10 +749,39 @@ defn dispatch-deliver-only
   | syrup-set _ -> none
   | syrup-float _ -> none
 
-;; Three fields: target, resolve-me, wants-partial. The third is
-;; required — upstream asserts arity 3 — but `op-listen` has nowhere to
-;; put it, so its value is dropped and a peer asking for partial
-;; resolutions is indistinguishable from one that is not.
+;; Three fields: target, resolve-me, wants-partial. The third used to be
+;; required-but-discarded, so a peer asking for partial resolutions was
+;; indistinguishable from one that was not; `op-listen` carries it now.
+;;
+;; A non-boolean in that slot fails the decode rather than defaulting: the
+;; field is not optional, and reading a malformed one as `false` would be the
+;; same silent-coercion class as the answer-position slot two functions up.
+spec listen-wants-partial SyrupValue -> [Option Bool]
+defn listen-wants-partial
+  | syrup-bool b     -> some b
+  | syrup-null       -> none
+  | syrup-nat _      -> none
+  | syrup-int _      -> none
+  | syrup-string _   -> none
+  | syrup-symbol _   -> none
+  | syrup-list _     -> none
+  | syrup-tagged _ _ -> none
+  | syrup-refr _     -> none
+  | syrup-bytes _    -> none
+  | syrup-promise _  -> none
+  | syrup-dict _     -> none
+  | syrup-set _      -> none
+  | syrup-float _    -> none
+
+spec listen-with-wants-partial Nat Nat [List SyrupValue] -> [Option CapTPOp]
+defn listen-with-wants-partial [t r-n xs]
+  match [list-3rd xs]
+    | none -> none
+    | some w ->
+        match [listen-wants-partial w]
+          | none    -> none
+          | some wp -> some [op-listen t r-n wp]
+
 spec dispatch-listen-fields [List SyrupValue] -> [Option CapTPOp]
 defn dispatch-listen-fields [xs]
   match [list-fst xs]
@@ -767,7 +795,7 @@ defn dispatch-listen-fields [xs]
                 | some r ->
                     match [unwrap-resolve-me r]
                       | none -> none
-                      | some r-n -> some [op-listen t r-n]
+                      | some r-n -> listen-with-wants-partial t r-n xs
 
 spec dispatch-listen-args [List SyrupValue] -> [Option CapTPOp]
 defn dispatch-listen-args [xs]

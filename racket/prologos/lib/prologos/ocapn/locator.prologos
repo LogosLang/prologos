@@ -17,16 +17,20 @@ ns prologos::ocapn::locator
 ;;     hints: { host, port }            ;; for tcp: where to dial
 ;;   }
 ;;
-;; KNOWN LIMITATION — hints are not a map here. `Locator` fixes `host`
-;; and `port` as two scalar fields, so a netlayer whose hints are
-;; anything else has no representation: upstream's onion netlayer
-;; (`netlayers/onion.py`) carries different keys entirely, and there is
-;; no place to put them. Nothing in this module PARSES a hint map
-;; today, so nothing is silently dropped yet — but the moment a URI or
-;; wire parser targets `Locator`, it will be. Lifting `host`/`port` to
-;; a hint list is not a local change: `loc-port` is typed `Nat` and
-;; there is no string→Nat conversion in `prologos::data::string`, and
-;; `tcp-testing.prologos` plus three test files consume the selectors.
+;; Hints are a MAP — a flat alternating key/value list, the same shape
+;; `syrup-dict` uses on the wire — not two fixed scalar fields.
+;;
+;; They used to be exactly two: `host` and `port`. A netlayer whose
+;; hints are anything else then had no representation at all, and
+;; upstream ships one — `netlayers/onion.py` carries different keys
+;; entirely. `loc-host` and `loc-port` survive as LOOKUPS into the map,
+;; so the one consumer (`tcp-testing.prologos`) and the tests are
+;; unaffected while an onion locator becomes expressible.
+;;
+;; `loc-port` returns a `Nat`, so it parses its hint. `prologos::data::string`
+;; exposes no string→Nat, and the parse is here rather than there because a
+;; hint that is absent or not a number must answer zero rather than raise —
+;; a locator with no port is a loopback locator, not an error.
 ;;
 ;; The Endo `tcp-test-only.js` netlayer encodes this as a JS object;
 ;; we encode it as a small data type. Real OCapN production locators
@@ -36,7 +40,9 @@ ns prologos::ocapn::locator
 ;; transport without auth/crypto").
 
 require [prologos::data::list   :refer [List nil cons]]
-        [prologos::data::option :refer [Option none some]]
+        [prologos::data::option :refer [Option none some unwrap-or]]
+        [prologos::data::string :as str :refer []]
+        [prologos::data::char   :as char :refer []]
 
 ;; ========================================
 ;; Transport tag
@@ -66,27 +72,88 @@ defn transport-name
 ;; loopback.
 
 data Locator
-  ;; locator transport designator host port
-  ;; (host as string, port as Nat — empty string + zero for non-tcp)
-  locator : Transport -> String -> String -> Nat
+  ;; locator transport designator hints
+  ;; hints is flat and alternating: ["host" "127.0.0.1" "port" "22045"]
+  locator : Transport -> String -> [List String]
 
 ;; Selectors
 
 spec loc-transport Locator -> Transport
 defn loc-transport
-  | locator t _ _ _ -> t
+  | locator t _ _ -> t
 
 spec loc-designator Locator -> String
 defn loc-designator
-  | locator _ d _ _ -> d
+  | locator _ d _ -> d
+
+spec loc-hints Locator -> [List String]
+defn loc-hints
+  | locator _ _ hs -> hs
+
+spec hint-lookup [List String] String -> [Option String]
+defn hint-lookup [hs k]
+  match hs
+    | nil -> [none String]
+    | cons key rest ->
+        match rest
+          | nil -> [none String]
+          | cons val more ->
+              match [str::eq key k]
+                | true  -> some val
+                | false -> hint-lookup more k
+
+spec loc-hint Locator String -> [Option String]
+  :doc "The value of one hint, if the locator carries it."
+defn loc-hint [loc k]
+  hint-lookup [loc-hints loc] k
 
 spec loc-host Locator -> String
-defn loc-host
-  | locator _ _ h _ -> h
+defn loc-host [loc]
+  unwrap-or "" [loc-hint loc "host"]
+
+;; --- Parsing the port hint ---
+;;
+;; Total: anything that is not a non-empty run of digits answers zero.
+
+spec digit-of Char -> [Option Int]
+defn digit-of [c]
+  let v := [int- [char::code c] 48]
+    match [int-lt v 0]
+      | true  -> [none Int]
+      | false ->
+          match [int-lt 9 v]
+            | true  -> [none Int]
+            | false -> some v
+
+spec digits-to-int String Int Int Int -> [Option Int]
+defn digits-to-int [s len acc i]
+  match [int-eq i len]
+    | true  -> some acc
+    | false ->
+        match [digit-of [str::ref s i]]
+          | none   -> [none Int]
+          | some d -> digits-to-int s len [int+ [int* acc 10] d] [int+ i 1]
+
+spec string-to-int String -> [Option Int]
+defn string-to-int [s]
+  match [int-eq [str::length s] 0]
+    | true  -> [none Int]
+    | false -> digits-to-int s [str::length s] 0 0
+
+spec port-of-hint [Option String] -> Nat
+defn port-of-hint [h]
+  match h
+    | none   -> zero
+    | some v ->
+        match [string-to-int v]
+          | none   -> zero
+          | some i -> int-max-to-nat 0 i
+
+foreign racket "racket/base" [max :as int-max-to-nat : Int -> Int -> Nat]
 
 spec loc-port Locator -> Nat
-defn loc-port
-  | locator _ _ _ p -> p
+defn loc-port [loc]
+  port-of-hint [loc-hint loc "port"]
 
 ;; ========================================
 ;; Convenience constructors
@@ -95,12 +162,22 @@ defn loc-port
 spec mk-loopback-locator String -> Locator
   :doc "Locator for an in-process loopback peer (testing only)."
 defn mk-loopback-locator [designator]
-  locator tr-loopback designator "" zero
+  locator tr-loopback designator [nil String]
+
+spec nat-digits-str Nat -> String
+defn nat-digits-str [n]
+  str::from-int [from-nat n]
 
 spec mk-tcp-locator String String Nat -> Locator
   :doc "Locator for a tcp-testing-only peer at host:port."
 defn mk-tcp-locator [designator host port]
-  locator tr-tcp-testing-only designator host port
+  locator tr-tcp-testing-only designator
+    [cons "host" [cons host [cons "port" [cons [nat-digits-str port] [nil String]]]]]
+
+spec mk-locator-with-hints Transport String [List String] -> Locator
+  :doc "Locator for a transport whose hints are not host/port -- e.g. onion."
+defn mk-locator-with-hints [t designator hints]
+  locator t designator hints
 
 ;; ========================================
 ;; Equality (structural)
@@ -110,8 +187,7 @@ defn mk-tcp-locator [designator host port]
 ;; to deduplicate in the connection-cache; not lifted as a typeclass
 ;; for Phase 0.
 
-require [prologos::data::string :as str :refer []]
-        [prologos::data::nat :refer [nat-eq?]]
+require [prologos::data::nat :refer [nat-eq?]]
 
 spec transport-eq? Transport Transport -> Bool
 defn transport-eq? [a b]
@@ -125,15 +201,32 @@ defn transport-eq? [a b]
           | tr-loopback         -> false
           | tr-tcp-testing-only -> true
 
+;; Hints compare AS A SEQUENCE, order included. Two locators whose hints
+;; differ only in order name the same peer, so this is stricter than the
+;; semantics deserve — but the alternative is a set comparison over a flat
+;; alternating list, and the one caller (connection-cache dedup) builds its
+;; locators from `mk-tcp-locator`, which emits a fixed order.
+spec hints-eq? [List String] [List String] -> Bool
+defn hints-eq? [xs ys]
+  match xs
+    | nil ->
+        match ys
+          | nil      -> true
+          | cons _ _ -> false
+    | cons a arest ->
+        match ys
+          | nil -> false
+          | cons b brest ->
+              match [str::eq a b]
+                | false -> false
+                | true  -> hints-eq? arest brest
+
 spec locator-eq? Locator Locator -> Bool
 defn locator-eq?
-  | [locator ta da ha pa] [locator tb db hb pb] ->
+  | [locator ta da ha] [locator tb db hb] ->
       match [transport-eq? ta tb]
         | false -> false
         | true  ->
             match [str::eq da db]
               | false -> false
-              | true  ->
-                  match [str::eq ha hb]
-                    | false -> false
-                    | true  -> nat-eq? pa pb
+              | true  -> hints-eq? ha hb

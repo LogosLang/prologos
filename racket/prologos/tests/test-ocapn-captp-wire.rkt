@@ -229,3 +229,30 @@
    (run-last
     "(eval (encode-op (op-deliver-only zero (syrup-string \"ping\"))))")
    "[4\\\"ping]"))
+
+;; ========================================
+;; op:listen carries wants-partial
+;; ========================================
+
+(test-case "captp-wire/op:listen's wants-partial survives the round trip"
+  ;; The field was required-but-DISCARDED: a peer asking for partial
+  ;; resolutions was indistinguishable from one that was not.
+  (check-contains
+   (run-last "(eval (encode-op (op-listen zero (suc zero) true)))")
+   "t>")
+  (check-contains
+   (run-last "(eval (encode-op (op-listen zero (suc zero) false)))")
+   "f>"))
+
+(test-case "captp-wire/a non-boolean wants-partial fails the decode"
+  ;; Not defaulted to false -- the field is not optional, and coercing a
+  ;; malformed one is the same silent-coercion class as the answer position.
+  (check-contains
+   (run-last
+    "(eval (decode-op \"<9'op:listen<11'desc:export1+><18'desc:import-object2+>7+>\"))")
+   "none")
+  ;; The well-formed frame still decodes, so the gate is not blanket.
+  (check-contains
+   (run-last
+    "(eval (decode-op \"<9'op:listen<11'desc:export1+><18'desc:import-object2+>t>\"))")
+   "op-listen"))

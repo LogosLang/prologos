@@ -709,7 +709,8 @@
    (run-last
     "(eval (let (step (captp-incoming-with-state
                           (op-listen (suc (suc (suc (suc (suc (suc (suc zero))))))) ;; 7
-                                     (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero)))))))))))))) ;; 13
+                                     (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))))) ;; 13
+                                     false)
                           empty-vat
                           bridge-state-empty)
                     listeners (bs-listeners (bridge-step-state step)))
@@ -1822,7 +1823,8 @@
                   cs0   (conn-state v0 bridge-state-empty (nil Nat) false)
                   s1    (connection-step
                           (op-listen (suc (suc (suc (suc zero))))
-                                     (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))
+                                     (suc (suc (suc (suc (suc (suc (suc (suc (suc zero)))))))))
+                                     false)
                           cs0))
               (length (bs-listeners (conn-bridge-state (conn-step-state s1))))))")
    "1N"))
@@ -2075,7 +2077,7 @@
                   v1    (resolve-promise pid (syrup-string \"already-resolved\") v0)
                   cs0   (conn-state v1 bridge-state-empty (nil Nat) false)
                   s1    (connection-step
-                          (op-listen pid (suc (suc (suc (suc (suc (suc (suc zero))))))))
+                          (op-listen pid (suc (suc (suc (suc (suc (suc (suc zero))))))) false)
                           cs0))
               (length (conn-step-outbound s1))))")
    "1N"))
@@ -2092,7 +2094,7 @@
                   v1    (resolve-promise pid (syrup-string \"already-resolved\") v0)
                   cs0   (conn-state v1 bridge-state-empty (nil Nat) false)
                   s1    (connection-step
-                          (op-listen pid (suc (suc (suc (suc (suc (suc (suc zero))))))))
+                          (op-listen pid (suc (suc (suc (suc (suc (suc (suc zero))))))) false)
                           cs0))
               (length (bs-listeners (conn-bridge-state (conn-step-state s1))))))")
    "0N"))
@@ -2108,7 +2110,7 @@
                   v0    (alloc-vat alloc)
                   cs0   (conn-state v0 bridge-state-empty (nil Nat) false)
                   s1    (connection-step
-                          (op-listen pid (suc (suc (suc (suc (suc (suc (suc zero))))))))
+                          (op-listen pid (suc (suc (suc (suc (suc (suc (suc zero))))))) false)
                           cs0))
               (length (bs-listeners (conn-bridge-state (conn-step-state s1))))))")
    "1N"))
@@ -2133,7 +2135,7 @@
                     v1    (break-promise pid (syrup-string \"oops\") v0)
                     cs0   (conn-state v1 bridge-state-empty (nil Nat) false)
                     s1    (connection-step
-                            (op-listen pid (suc (suc (suc (suc (suc (suc (suc zero))))))))
+                            (op-listen pid (suc (suc (suc (suc (suc (suc (suc zero))))))) false)
                             cs0))
                 (framed-concat (conn-step-outbound s1))))")))
   (check-true (regexp-match? #rx"desc:export7" got)

@@ -159,3 +159,35 @@
   (check-contains
    (run-last "(eval (transport-eq? tr-tcp-testing-only tr-tcp-testing-only))")
    "true"))
+
+;; ========================================
+;; Hints are a MAP, not two fixed fields
+;; ========================================
+;;
+;; Upstream ships an onion netlayer whose hints are different keys
+;; entirely (`netlayers/onion.py`); with host and port as scalar fields
+;; it had no representation at all.
+
+(test-case "locator/a non-tcp netlayer's hints are representable"
+  (check-contains
+   (run-last
+    "(eval (unwrap-or \"\" (loc-hint (mk-locator-with-hints tr-loopback \"x\" (cons \"onion\" (cons \"abc.onion\" nil))) \"onion\")))")
+   "abc.onion"))
+
+(test-case "locator/loc-port parses its hint"
+  (check-contains
+   (run-last "(eval (loc-port (mk-tcp-locator \"x\" \"127.0.0.1\" 22045N)))")
+   "22045"))
+
+(test-case "locator/a missing or non-numeric port hint answers zero, not an error"
+  ;; A locator with no port is a loopback locator.
+  (check-contains
+   (run-last "(eval (loc-port (mk-loopback-locator \"x\")))") "0")
+  (check-contains
+   (run-last
+    "(eval (loc-port (mk-locator-with-hints tr-loopback \"x\" (cons \"port\" (cons \"not-a-number\" nil)))))")
+   "0"))
+
+(test-case "locator/an unknown hint key is absent, not empty"
+  (check-contains
+   (run-last "(eval (loc-hint (mk-loopback-locator \"x\") \"host\"))") "none"))

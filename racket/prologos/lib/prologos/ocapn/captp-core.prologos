@@ -42,7 +42,7 @@ defn incoming-captp-op
       v
   | [op-start-session _ver _pk _loc] v ->
       v
-  | [op-listen _tgt _resolver] v ->
+  | [op-listen _tgt _resolver _wp] v ->
       v
   | [op-gc-export _pos _cnt] v ->
       v
@@ -2734,7 +2734,7 @@ defn captp-incoming-with-state
       ;; in pending-out by `bridge-state-with-our-session`, and the next
       ;; pump-outbound flushes them.
       bridge-step v [bs-set-peer-key [unwrap-or "" [public-key-q-of pk]] st]
-  | [op-listen tgt resolver] v st ->
+  | [op-listen tgt resolver _wants-partial] v st ->
       ;; Phase 51: late-registration handling. If the target promise
       ;; has ALREADY settled by the time the op:listen arrives, the
       ;; pump-outbound walk would skip it (the `emitted` set gates
@@ -3766,7 +3766,7 @@ defn op-is-abort? [op]
     | op-start-session _ _ _ -> false
     | op-deliver _ _ _ _ -> false
     | op-deliver-only _ _ -> false
-    | op-listen _ _      -> false
+    | op-listen _ _ _    -> false
     | op-gc-export _ _   -> false
     | op-gc-answer _     -> false
     | op-gc-exports _ _  -> false

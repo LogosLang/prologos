@@ -103,7 +103,7 @@
 
 (test-case "message/op-listen elaborates"
   (check-contains
-   (run-last "(eval (op-listen zero (suc zero)))")
+   (run-last "(eval (op-listen zero (suc zero) false))")
    "CapTPOp"))
 
 (test-case "message/op-gc-export elaborates"
@@ -133,7 +133,7 @@
 
 (test-case "message/listen? on op-listen is true"
   (check-contains
-   (run-last "(eval (listen? (op-listen zero (suc zero))))")
+   (run-last "(eval (listen? (op-listen zero (suc zero) false)))")
    "true"))
 
 (test-case "message/abort? on op-abort is true"
