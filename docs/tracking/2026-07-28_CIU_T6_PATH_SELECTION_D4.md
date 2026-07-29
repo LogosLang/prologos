@@ -23,7 +23,7 @@ rulings, censuses and test delta live in its own section.
 |---|---|---|---|
 | **P0** | **Acceptance corpus** — augment the EXISTING acceptance file with the spec §10 examples + Appendix fixtures; `--check` gated; new forms commented until their phase lands | ✅ | §5.P0 · `e2674208` — 28/28 markers, 0 errors; all 7 fixtures load (layout via `def X`, issue #80 sidestepped); corpus phase-tagged in HEAD notation; carrier pins double as §2.3 docs |
 | **P1a** | **Retirement batch + substrate** — dot-key family · the FULL `broadcast-get` chain (reader + parser keyword + surf + elaborator + node) · `m[:kw]` · reject batch · `surface-rewrite.rkt` `dot-lbrace` cleanup (BEFORE any re-mint) · the marker-form diagnostic seat | ✅ | §5.P1a · **`859b529d`** — suite 9253/474/0, acceptance 28/28 + 89/89, −744/+320; adversarial verify found 2 whole-file-abort defects (1 MINE, in the seat) → fixed + pinned pre-commit |
-| **P1b-i** | **Repairs + probes + the Q8 DRAFT** — the top-level `<` swallow fix (Q_M4) · WS narrowing typed vars · `def ?x` reservation (Q_M3) · the Q_M1 gating probe + `:N` / keyword-`*` / `:<` · **Q8 written from the results** | ✅ | §5.P1b-i + **§Q8** · `fc65ca54` — suite 9263/474/0, corpus A/B 160 files / 2 intended diffs; ⚠ **Q8 awaits OWNER REVIEW** before P1b-ii/iii |
+| **P1b-i** | **Repairs + probes + the Q8 DRAFT** — the top-level `<` swallow fix (Q_M4) · WS narrowing typed vars · `def ?x` reservation (Q_M3) · the Q_M1 gating probe + `:N` / keyword-`*` / `:<` · **Q8 written from the results** | ✅ | §5.P1b-i + **§Q8** · `fc65ca54` — suite 9263/474/0, corpus A/B 160 files / 2 intended diffs; **Q8 owner-reviewed ✅ 2026-07-28, amended by Q_M8** (ordinals multi-digit in both bands) |
 | **P1b-ii** | **The `.{` opener** — `dot-lbrace` re-mint, **SIX** sites incl. the surviving `surface-rewrite.rkt:516` (a POSITIVE addition — omitting it REGRESSES a currently-correct grouping); plain `'rbrace` closer per Q_M5 | ⬜ | §5.P1b-ii · must land BEFORE/WITH P1b-iii (Q_M2) |
 | **P1b-iii** | **Brace adjacency + the head registry** — the forced select-block sentinel (Q_M6) · leaf-module registry · the 4 buckets · NET-NEW WS `racket{…}` pins | ⬜ | §5.P1b-iii |
 | **P2** | **Grade-1 core** — `.k`/`.N` access + bare-path extraction, on the landed P2 substrate | ⬜ | §5.P2 · `.N` has an end-to-end head start via `(get expr N)` |
@@ -411,18 +411,54 @@ main-session R-lens-verified; full record in §5.P1b):
   WS-path `^` primitive** and must either lift the sexp one or write the
   primitive the old ruling forbade. Recorded now so P3 does not build on a
   false premise.
+- **Q_M8 — ORDINALS ARE MULTI-DIGIT IN BOTH BANDS [owner, 2026-07-28].** The
+  owner ruled against P1b-i's draft recommendation: *"An ordinal broadcast could
+  and should very much be multi-digit, practically — just as an ordinal `.Ndd`."*
+  The recommendation was **wrongly premised**, and the refutation is measured:
+  · **The overlap is TWO lexemes, not a space.** `recognize-colon-annotation`
+    (parse-reader.rkt:847) accepts **12** lexemes — `:0`–`:9`, `:w`, `:m` — while
+    `mult-annot?` (parser.rkt:3904) accepts **3** — `:0 :1 :w`. So **nine of the
+    twelve already lex as one token and already are not multiplicities**;
+    probe-verified, a binder-position `:7` gives a clean loud *"Expected binder
+    [x <T>] or (x : T)"*. Ordinal ∩ multiplicity = **`:0` and `:1` only**.
+  · **Those two are already discriminated**: of 289 live multiplicity tokens,
+    287 spaced + 2 opener-preceded, **zero focus-adjacent** (Q8.3).
+  · **So widening the digit run from 1 to N is not widening a collision** — it
+    finishes a job the recognizer already half-did. `mult-annot?`'s `memq`
+    rejects `:10` by the identical path it rejects `:7`: same arm, same error,
+    **no new failure mode and no new error surface on the multiplicity side.**
+  · **It also repairs a latent defect unrelated to Path Selection**: `{:0 v}`,
+    `{:1 v}`, `{:9 v}` are legal map keys today and **`{:10 v}` SHATTERS** into
+    `: 10`. Arbitrary and user-surprising.
+  · **Blast radius is nil**: zero live uses of `:2`–`:9` or `:m` at HEAD, so the
+    already-over-accepted range is unexercised.
+  · **On the dot side the ruling FIXES A SILENT WRONG ANSWER** (Q8.1): `x.1.2`
+    reads as the rational **6/5** and `x.10.20` as **51/5** today. A dot-anchored
+    `digit+` recognizer kills it structurally — multi-digit is the *same*
+    one-line `digit+` that fixes the rational, not an extra.
+  **Implementation homes** (neither moves into P1b-ii): the `:N` widening rides
+  the colon seam at **P1b-iii** (until broadcast exists `users:10` has no
+  meaning); `.N` lands at **P2** as designed. Both owe a corpus A/B, being
+  tokenizer changes. *Watching data point: probing before ruling changed the
+  ruling — this time against MY OWN recommendation, on a premise I stated
+  confidently and had not measured to its edges.*
 
 **Open, GATING (spec §8):**
-- **Q8** (the precise lexical grammar) — §5.P1b's own DELIVERABLE, reviewed
-  with the owner before landing; carries the 3c probe decision + the `:<`
-  angle-opener row.
+- ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
+  P1b-i, **owner-reviewed**, and ruled (Q_M8 the sole amendment). §Q8 is now
+  normative for P1b-ii/iii and P2.
 - Keyword-projection disposition (§2.4) — revisit when P4 lands broadcast
   (likely subsumed by `users:name`).
 
 **Carried from the P3 mini-audit [owner, 2026-07-28], still standing:**
 - `#:keyword` retires with the `#.:name` twin (`#.name` survives).
-- `^` splitting is **P3**-parser-side via POL.6 `split-fused-symbol` — no second
-  splitter (P1 does NOT touch `^`; see §5.P1 item 4 and §5.P3).
+- ~~`^` splitting is **P3**-parser-side via POL.6 `split-fused-symbol` — no
+  second splitter~~ — **SUPERSEDED by Q_M7 above**, which found this ruling not
+  executable (`split-fused-symbol` splits on `":"` and rejects >2 segments; the
+  tree's only `^` splitter is the sexp-only `validate-selection-paths`). It is
+  struck here rather than left standing, because two contradictory statements
+  eleven lines apart in the same section is exactly how P3 would inherit the
+  false premise Q_M7 was written to prevent.
 - `.-1` = classifier-level rejection; negative bracket/`get` payloads = a
   static error at the grouping seat alongside `m[:a]`.
 - ~~`.:.`/`.:[` tokens defer to P5~~ — **MOOT**: the new broadcast is bare
@@ -832,7 +868,7 @@ main thread). **9th consecutive phase whose premise the audit refuted.**
   the "Unhandled form" fallthrough. Reusing `'brace-group` avoids that but
   ERASES the `.{` distinction from the tree spine, which P3 will need.
 
-### §5.P1b-i — Repairs, probes, and the Q8 draft  ⬜ ← NEXT
+### §5.P1b-i — Repairs, probes, and the Q8 draft  ✅ `fc65ca54`
 
 **Intent**: land the repairs and settle the probe-decided items, so Q8 is
 WRITTEN FROM measured facts rather than leans. No new surface syntax.
@@ -876,7 +912,11 @@ guided-error pin; probe results recorded in this section. Status: ✅ `fc65ca54`
 
 ---
 
-## §Q8 — THE LEXICAL GRAMMAR  ⟵ *the P1b deliverable; OWNER REVIEW REQUIRED*
+## §Q8 — THE LEXICAL GRAMMAR  ✅ *owner-reviewed 2026-07-28; NORMATIVE*
+
+> **Review outcome**: adopted as written, with **one amendment — Q_M8**
+> (ordinals are multi-digit in both bands; the draft's `:N` recommendation was
+> withdrawn as wrongly-premised). Q8 now governs P1b-ii, P1b-iii and P2.
 
 Written FROM the P1b-i probe results, not from leans. Every row is
 probe-verified at `fc65ca54` unless marked `[P1b-ii]` / `[P1b-iii]` (the rows
@@ -907,6 +947,22 @@ insertion is disjoint from all five. `.-1` LEXES CLEANLY as dot-access with
 field `-1` (`ident-start?` admits `-`), so the carried "`.-1` = classifier
 rejection" ruling is about a **well-formed token**, not a shatter — P2 owns
 it when `.N` arrives.
+
+**`.N` is MULTI-DIGIT, and it FIXES A SILENT WRONG ANSWER (ruled Q_M8).** P2's
+`.N` recognizer anchors at the **dot** and takes `digit+` (not one digit). It is
+prefix-disjoint from `decimal-literal` (which anchors at a **digit**, never at a
+dot) and from all five band members. Probe-measured at `b389479b`, today:
+
+| Source | Today | Why |
+|---|---|---|
+| `x.10` | `(x \|.\| 10)` | falls to the single-char `.` fallback |
+| `x.1.2` | `(x \|.\| ($decimal-literal 6/5))` | **the RATIONAL bug** — `decimal-literal` anchors at the `1` |
+| `x.10.20` | `(x \|.\| ($decimal-literal 51/5))` | same class, multi-digit |
+
+A dot-anchored `digit+` recognizer kills the rational **structurally**: the
+tokenizer consumes `.1` at the dot, then `.2`, so `decimal-literal` never gets to
+anchor. Multi-digit is therefore not an extra — it is the same one-line `digit+`
+that fixes `x.1.2`.
 
 ### Q8.2 — The `{` band: TWO lexical rows, and a separate GROUPING table
 
@@ -946,15 +1002,19 @@ and `[fn [x :0 Int] x]` are **the same lexeme**.
 | `users:name` / `users:0` | broadcast `[P1b-iii]` | expression position **AND adjacent to a FOCUS-BEARING token** |
 | `{:0 …}` | map key / multiplicity | preceded by an OPENER, not a focus — never broadcast |
 
-**Q_M1's discriminator, as measured**: of 291 live multiplicity tokens, **289
-are spaced** and the other **2 are preceded by `{`**. So the rule is adjacency
+**Q_M1's discriminator, as measured** (re-verified at `b389479b`): of **289**
+live multiplicity tokens, **287 are spaced** and the other **2 are preceded by
+`{`**; **zero are adjacent to a focus-bearing token**. So the rule is adjacency
 to a *focus-bearing* token — position alone is insufficient, and this is the
-same shape as `is-postfix?`'s `(pair? result)` conjunct.
+same shape as `is-postfix?`'s `(pair? result)` conjunct. *(An earlier draft said
+291/289/2 — a regex-boundary artifact; the shape and conclusion are unchanged.)*
 
-**Multi-digit `:N` — RECOMMENDATION: do NOT add a digits-only recognizer.**
-`:10` lexes as two tokens (`:` `10`) because `colon-annotation` is hard-capped
-at 2 chars. Adding one would collide with the QTT vocabulary it sits beside
-for a surface (`users:10`) with zero live uses. Owner to rule.
+**Multi-digit `:N` — RULED Q_M8: the digit run WIDENS to N.** See §3 Q_M8. The
+draft recommendation here ("do not add a digits-only recognizer") was **withdrawn
+as wrongly-premised** — it treated `:`+digit as QTT-owned space. It is not:
+`recognize-colon-annotation` accepts **12** lexemes (`:0`–`:9`, `:w`, `:m`) while
+`mult-annot?` (parser.rkt:3904) accepts **3** (`:0 :1 :w`). Nine of the twelve
+ALREADY lex as one token and are ALREADY not multiplicities.
 
 ### Q8.4 — `*` and `<`
 
@@ -1004,7 +1064,21 @@ cases pass PARENTHESIZED SEXP source that never reaches `group-items`, so the
 head-precedence rule is UNTESTABLE from them; 2 of the 10 live WS sites are
 MULTI-LINE bodies, the shape most exposed and the one a single-line pin
 misses. Sentinel registration checklist: `pattern-var?` + tree-parser
-skip-list. Status: ⬜.
+skip-list.
+
+⚠ **Q_M8 — the `:N` DIGIT RUN WIDENS TO N here.** `recognize-colon-annotation`
+(parse-reader.rkt:847) is hard-capped at 2 chars; widen its digit run to
+`digit+` (keeping the `:w`/`:m` arms and the trailing `not ident-continue?`
+guard, so `:0abc` still declines). This rides P1b-iii because until broadcast
+exists `users:10` has no meaning. **Why it is safe, measured**: the recognizer
+already accepts 12 lexemes while `mult-annot?` accepts 3, so `:10` is rejected
+by the *same* `memq` arm that already rejects `:7` — no new failure mode. It
+additionally repairs `{:10 v}`, which SHATTERS today while `{:0 v}`/`{:9 v}` do
+not. Zero live `:2`–`:9`/`:m` uses, so nothing live moves. **Owes a corpus
+A/B** (tokenizer change) and a pin on both halves: `users:10` one token, and a
+binder-position `:10` still loudly rejected.
+
+Status: ⬜.
 
 **Acceptance delta for ALL of P1b: ZERO markers uncommented** — every line
 P1b makes LEXABLE is a P3/P4/P5 SEMANTICS target, and the file's convention
@@ -1063,11 +1137,26 @@ Map + List subjects; site 7 projects; the two-tier principle makes misses
 loud. The fold target is `get`, NOT `map-get` (probe: map-get's infer has no
 PVec leg). `.k` nominal access already works (dot-access → map-get fold).
 
-**Work**: the `.N` recognizer (dot-anchored, priority slot inside the audited
-band {rest-89 · dot-lparen-87 · dot-access-86}; digit-required so `.-1` never
-matches) · the nat-dot fold arm → `(get expr N)` · chain forms
-(`admins.0.name`) · extraction typing = the existing arms (no new nodes
+**Work**: the `.N` recognizer (dot-anchored, prefix-disjoint inside the **FIVE**-
+member band {rest-89 · dot-key-88 · dot-lparen-87 · broadcast-87 ·
+dot-access-86} — ⚠ this section previously cited a THREE-member band, the
+under-count Q8.1 corrected; and per Q8.5 invariant 1 the safety property is
+**disjointness, not priority**) · the nat-dot fold arm → `(get expr N)` · chain
+forms (`admins.0.name`) · extraction typing = the existing arms (no new nodes
 expected — flag if that breaks).
+
+⚠ **Q_M8 — `.N` TAKES `digit+`, NOT ONE DIGIT, AND THAT FIXES A LIVE SILENT
+WRONG ANSWER.** Multi-digit ordinal access is owner-ruled. It is not extra
+work: the same one-line `digit+` that admits `x.10` is what kills the rational
+bug, because a dot-anchored recognizer consumes `.1` before `decimal-literal`
+(which anchors at a **digit**) can ever anchor. Probe-measured at `b389479b`:
+`x.1.2` → `($decimal-literal 6/5)` and `x.10.20` → `51/5`, both at 0 errors.
+**Failing-test-first on those two**, not just on `x.10`.
+
+Clarification carried from Q8.1: `.-1` **lexes cleanly** as dot-access with
+field `-1` (`ident-start?` admits `-`). A digit-required `.N` correctly declines
+it, but the carried "`.-1` = classifier rejection" ruling is therefore about a
+**well-formed token** and is a CONSUMER decision, not a classifier one.
 
 **Test delta**: corpus §10 grade-1 lines uncomment; track-file pins for the
 chain forms + `v[0]`-coexistence pins (both spellings extract, per the
