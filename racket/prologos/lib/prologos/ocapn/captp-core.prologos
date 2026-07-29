@@ -3511,7 +3511,7 @@ defn outbound-loop
 
 spec clear-outbound Vat -> Vat
 defn clear-outbound [v]
-  [vat [vat-next-id v] [vat-actors v] [vat-promises v] [vat-queue v] nil]
+  [vat [vat-next-id v] [vat-actors v] [vat-promises v] [vat-queue v] nil [vat-dials v]]
 
 ;; Defined HERE, not with the rest of the drain above, only because it calls
 ;; `clear-outbound` and modules are single-pass: a callee placed after its

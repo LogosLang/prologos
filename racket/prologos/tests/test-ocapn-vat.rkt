@@ -296,3 +296,47 @@
                   v3  (run-vat (suc (suc (suc (suc (suc zero))))) v2))
               (lookup-actor zero v3)))")
    "some"))
+
+;; ========================================
+;; eff-connect
+;; ========================================
+;;
+;; A behaviour is pure and cannot open a socket, which is why the gifter
+;; and receiver roles live in Racket at all (gaps doc §0.2). `eff-connect`
+;; is the first of the three primitives that changes: the behaviour says
+;; what it wants, the vat records it, the driver drains it between steps --
+;; the same shape `eff-send-remote` already uses one layer out.
+
+(test-case "vat/eff-connect records a dial request without performing it"
+  (check-contains
+   (run-last
+    "(eval (length (vat-dials (apply-effect (eff-connect \"<15'ocapn-sturdyref>\") empty-vat))))")
+   "1N"))
+
+(test-case "vat/a fresh vat has no pending dials"
+  (check-contains
+   (run-last "(eval (length (vat-dials empty-vat)))") "0N"))
+
+(test-case "vat/clear-dials drops them, so a later step does not re-dial"
+  (check-contains
+   (run-last
+    "(eval (length (vat-dials (clear-dials (apply-effect (eff-connect \"x\") empty-vat)))))")
+   "0N"))
+
+(test-case "vat/dials accumulate in request order"
+  (check-contains
+   (run-last
+    "(eval (length (vat-dials (apply-effect (eff-connect \"b\") (apply-effect (eff-connect \"a\") empty-vat)))))")
+   "2N"))
+
+(test-case "vat/the sturdyref enlivener asks to connect, and only for a sturdyref"
+  ;; The label is gated because this is what makes us open an outbound TCP
+  ;; connection on peer-chosen bytes.
+  (check-contains
+   (run-last
+    "(eval (length (step-effects (step-behavior beh-sturdyref-enlivener syrup-null (syrup-list (cons (syrup-tagged \"ocapn-sturdyref\" (syrup-string \"loc\")) nil)) zero))))")
+   "1N")
+  (check-contains
+   (run-last
+    "(eval (length (step-effects (step-behavior beh-sturdyref-enlivener syrup-null (syrup-list (cons (syrup-tagged \"not-a-sturdyref\" (syrup-string \"loc\")) nil)) zero))))")
+   "0N"))

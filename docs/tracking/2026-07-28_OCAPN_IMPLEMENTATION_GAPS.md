@@ -119,9 +119,37 @@ of it.
 
 | Finding | Why it is still open |
 |---|---|
-| §0.2 gifter/receiver roles live in Racket | Needs `eff-connect`, `eff-send-on`, `eff-sign` and a connection registry as a first-class cell. Unchanged, and now the ONLY thing left here. The shape is clear: `eff-connect` is the cheapest of the three — the dial queue it would drive already exists (`ocapn-dial-ffi.rkt`) and the vat stays pure if the effect accumulates a pending-dial list the driver drains, exactly as `vat-outbound` works today. That one primitive would let the sturdyref enlivener be a real behaviour at export 5 instead of a driver interception, which is most of §1.7 M8 and all of §1.7 M7. |
+| §0.2 gifter/receiver roles live in Racket | **First primitive built.** `eff-connect` exists, the vat carries a pending-dial list, and `beh-sturdyref-enlivener` is a real behaviour that asks for its own connection. Seeding it at export 5 is blocked on one thing, in the vat model rather than the driver — see below. `eff-send-on` and `eff-sign` are untouched, and the connection registry is still a Racket hash. |
 | §1.7 M8 every frame is processed twice | Same root. Narrowed — the Racket side now only acts on frames it can match structurally, and `run-step` no longer hands an enliven to captp-core at all — but both halves still run on the same bytes. |
 | §1.7 M7 enliven slots 900+ are unregistered | Same root: the enlivener must hand out a real exported resolve-me from the connection's export table instead of a Racket counter. Its two live consequences are gone — captp-core no longer breaks on the answer (a deliver with no reply channel to an export we lack is dropped, not reflected), and the slot base is above anything the vat allocates until ~890 allocations on one connection. What remains is that the reservation is by convention, not construction. |
+
+**§0.2 — an enlivener cannot answer, and `ActStep` cannot say so.** This is
+the concrete blocker, found by building the thing and running the gate:
+
+`eff-connect` is done. A behaviour describes the connection it wants, the vat
+records it in a pending-dial list, and the driver drains it between steps —
+the same shape `eff-send-remote`/`vat-outbound` already uses, so the vat stays
+pure. `beh-sturdyref-enlivener` is a real behaviour, and it gates on the
+`ocapn-sturdyref` label because this is the one path that opens an outbound
+TCP connection on peer-chosen bytes.
+
+What it cannot do is *not answer*. The reply the peer waits for is a signed
+`desc:handoff-give`, which only the driver can build — it needs the keypair
+and the exporter connection. The behaviour's job ends at "please connect". But
+every `ActStep` carries a return value and `step-after-act` settles the answer
+promise with it unconditionally, so seeding the actor at export 5 makes
+captp-core answer the enliven immediately with the wrong thing, beating the
+real reply. Measured, not predicted: the conformance suite goes 24 → 23, with
+the peer receiving an echoed sturdyref where it expects a sig-envelope.
+
+So the driver interception stays, and the next step is a MODEL change:
+`ActStep` needs a third outcome beside a value and a break — "no answer yet".
+Returning `syrup-null` is not it; `no-op` already returns null and several
+behaviours rely on that settling their promise.
+
+That one change unblocks seeding the enlivener, which is most of §1.7 M8 (the
+two implementations stop both acting on the enliven frame) and all of §1.7 M7
+(export 5 gets a real actor, so the slot stops being reserved by convention).
 
 **§1.2 M3 — closed, on the second attempt.** A forwarded deliver is a NEW
 message with us as the sender, so the queued deliver's `ap`/`rm` cannot be

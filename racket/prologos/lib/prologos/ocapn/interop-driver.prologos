@@ -15,15 +15,16 @@ ns prologos::ocapn::interop-driver
 
 require [prologos::ocapn::captp-core :refer [ConnectionState empty-connection
                                               connection-step conn-step-state
-                                              conn-step-outbound conn-state
+                                              ConnStep conn-step-outbound conn-state
                                               conn-vat conn-bridge-state
                                               conn-emitted conn-aborted?
                                               GiftEntry bs-exportable-gifts
                                               bs-set-gifts
                                               bridge-state-empty]]
         [prologos::ocapn::vat        :refer [Vat vat Actor actor actor-table-set
-                                             promise-table-set]]
-        [prologos::ocapn::behavior   :refer [beh-echo beh-greeter beh-cell beh-resolver beh-car-factory-builder]]
+                                             promise-table-set vat-dials clear-dials]]
+        [prologos::ocapn::behavior   :refer [beh-echo beh-greeter beh-cell beh-resolver beh-car-factory-builder
+                                             beh-sturdyref-enlivener first-sturdyref-arg]]
         [prologos::ocapn::syrup      :refer [SyrupValue syrup-null syrup-string
                                              syrup-list syrup-nat syrup-tagged
                                              syrup-promise]]
@@ -190,7 +191,7 @@ defn seeded-vat [echo-pos greeter-pos]
              [actor-table-set promise-resolver-pos [actor beh-cell resolver-pair]
                [actor-table-set resolver-actor-pos [actor beh-resolver [syrup-promise resolver-vow-pos]] nil]]]]]
        [promise-table-set resolver-vow-pos fresh nil]
-       nil nil]
+       nil nil nil]
 
 def seeded-connection : ConnectionState :=
   [conn-state [seeded-vat 2N 1N] bridge-state-empty nil false]
@@ -275,30 +276,71 @@ defn publish-gifts [cs]
 ;; (utils/ocapn_uris.py), and the label is what we gate on — the interior is
 ;; the dialler's to parse and reject.
 
-spec sturdyref-bytes SyrupValue -> [Option String]
-  :doc "The re-encoded bytes of `v`, if `v` is an ocapn-sturdyref record."
-defn sturdyref-bytes [v]
-  match v
-    | syrup-tagged tag _ ->
-        match [str::eq tag "ocapn-sturdyref"]
-          | true  -> some [wire::re-encode v]
-          | false -> [none String]
-    | _ -> [none String]
+;; Hand every dial the vat's behaviours asked for to the FFI queue.
+;;
+;; This used to be an INTERCEPTION: `run-step` inspected each inbound op,
+;; recognised a deliver to the enlivener position, extracted the sturdyref
+;; itself and queued the dial — all before `connection-step` ran, and the
+;; enlivener position had no actor behind it at all. The whole arrangement
+;; existed because a behaviour is pure and cannot open a socket.
+;;
+;; `eff-connect` removes the need for it. The enlivener is now an ordinary
+;; actor (seeded above), it asks for the connection like any other effect,
+;; and this drains what the vat recorded — the same shape as the outbound
+;; message queue, one layer out.
+spec drain-dials [List String] -> Bool
+defn drain-dials [locs]
+  match locs
+    | nil        -> true
+    | cons l rest ->
+        match [dial-request l]
+          | true  -> drain-dials rest
+          | false -> drain-dials rest
 
-spec first-arg-bytes SyrupValue -> [Option String]
-defn first-arg-bytes [args]
-  match args
-    | syrup-list xs ->
-        match xs
-          | nil        -> [none String]
-          | [cons h _] -> sturdyref-bytes h
-    | _ -> [none String]
+spec clear-conn-dials ConnectionState -> ConnectionState
+defn clear-conn-dials [cs]
+  conn-state [clear-dials [conn-vat cs]] [conn-bridge-state cs] [conn-emitted cs] [conn-aborted? cs]
 
+;; The dials have been taken, so the state that persists must not still carry
+;; them — otherwise every later step re-dials everything this one asked for.
+spec run-step-emit Nat ConnStep -> String
+defn run-step-emit [cid step]
+  let cs2 := [publish-gifts [clear-conn-dials [conn-step-state step]]]
+    emit-after-stash [conn-stash cid cs2]
+                     [conn-step-outbound step]
+
+;; An enliven is intercepted here: the dial is queued and the op is NOT passed
+;; on to `connection-step`.
+;;
+;; `eff-connect` and `beh-sturdyref-enlivener` now exist, and the intent is
+;; that this interception disappears — the enlivener becomes an ordinary actor
+;; at export 5 that asks for its own connection. One thing still blocks it,
+;; and it is in the vat model rather than here:
+;;
+;;   AN ENLIVENER CANNOT ANSWER, AND `ActStep` CANNOT SAY SO.
+;;
+;; The reply the peer is waiting for is a signed `desc:handoff-give`, which
+;; only the driver can build — it needs the keypair and the exporter
+;; connection. The behaviour's job ends at "please connect". But every
+;; `ActStep` carries a return value, and `step-after-act` settles the answer
+;; promise with it unconditionally, so seeding the actor makes captp-core
+;; answer the enliven with something wrong, immediately, beating the real
+;; reply. Tried it: the conformance suite goes 24 -> 23 with the peer
+;; receiving the echoed sturdyref where it expects a sig-envelope.
+;;
+;; Closing it needs `ActStep` to express "no answer yet" — a third outcome
+;; beside a value and a break. That is a model change, not a driver one, and
+;; it is the next step for gaps-document §0.2 / §1.7 M8 / §1.7 M7.
+;;
+;; `maybe-dial` is FORCED by matching on its result rather than merely bound.
+;; Reduction is lazy, so `let d := [maybe-dial op]` with `d` unused is dropped
+;; outright and the side effect never happens — which presents as a queue that
+;; stays empty with no error anywhere.
 spec enliven-target-arg Nat SyrupValue -> [Option String]
 defn enliven-target-arg [tgt args]
   match [nat-eq? tgt sturdyref-enlivener-pos]
     | false -> [none String]
-    | true  -> first-arg-bytes args
+    | true  -> first-sturdyref-arg args
 
 spec enliven-request-of CapTPOp -> [Option String]
   :doc "The sturdyref an op:deliver is asking us to enliven, if it is one."
@@ -308,50 +350,21 @@ defn enliven-request-of [op]
     | op-deliver-only tgt args -> enliven-target-arg tgt args
     | _ -> [none String]
 
-;; Queue the dial as a side effect, and hand back a Bool so lazy reduction
-;; cannot drop the call.
 spec maybe-dial CapTPOp -> Bool
 defn maybe-dial [op]
   match [enliven-request-of op]
     | none    -> false
     | some sr -> dial-request sr
 
-spec run-step-inner Nat CapTPOp ConnectionState -> String
-defn run-step-inner [cid op cs]
-    let step := [connection-step op [with-global-gifts cs]]
-      let cs2 := [publish-gifts [conn-step-state step]]
-        emit-after-stash [conn-stash cid cs2]
-                         [conn-step-outbound step]
-
 spec run-step Nat CapTPOp ConnectionState -> String
-;; `maybe-dial` is FORCED by matching on its result, not merely bound.
-;; Reduction is lazy, so `let dialled := [maybe-dial op]` with `dialled`
-;; unused is dropped outright and the side effect never happens -- which
-;; presents as a queue that stays empty with no error anywhere. Same idiom as
-;; `publish-gifts` and `emit-after-stash` above, for the same reason.
-;;
-;; An ENLIVEN (`true`) does NOT continue into `connection-step`, and that is
-;; the point of the branch rather than a shortcut. Enlivening a sturdyref
-;; means opening a socket, so `sturdyref-enlivener-pos` deliberately has no
-;; actor and the DRIVER answers it out of band. Handing the same op to
-;; captp-core as well made the vat find no actor at that position and BREAK
-;; the peer's promise -- a break emitted on the enliven frame itself, which
-;; therefore beat the driver's `fulfill` (that one has to wait for a fetch on
-;; another connection) and became the answer the peer kept.
-;;
-;; It went unnoticed because the break was UNPARSEABLE: the encoder used to
-;; wrap a record's argument sequence in a list, so upstream saw
-;; `<ocapn-sturdyref [<ocapn-peer [...]>]>` and dropped the frame. Fixing the
-;; encoder turned a silently-ignored malformed break into a well-formed one,
-;; which is how a latent bug in this dispatch surfaced as a handoff failure.
-;;
-;; The arms also stopped being identical, which is a small bonus: the effect
-;; is now forced by a branch that does different things, not by a comment
-;; asking the next reader not to simplify it.
 defn run-step [cid op cs]
   match [maybe-dial op]
     | true  -> ""
-    | false -> run-step-inner cid op cs
+    | false ->
+        let step := [connection-step op [with-global-gifts cs]]
+          match [drain-dials [vat-dials [conn-vat [conn-step-state step]]]]
+            | true  -> run-step-emit cid step
+            | false -> run-step-emit cid step
 
 spec step-connection Nat String -> String
   :doc "Process one inbound wire frame (hex-encoded) for connection

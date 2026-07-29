@@ -15,8 +15,8 @@ defn list-length [xs]
 spec set-promise-state Nat PromiseState Vat -> Vat
 defn set-promise-state [pid pst v]
   match v
-    | vat n acts proms q ob ->
-        [vat n acts [promise-table-set pid pst proms] q ob]
+    | vat n acts proms q ob dl ->
+        [vat n acts [promise-table-set pid pst proms] q ob dl]
 
 spec deliver-to-promise Nat SyrupValue PromiseState Vat -> Vat
 defn deliver-to-promise [pid args pst v]

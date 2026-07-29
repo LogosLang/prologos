@@ -214,37 +214,60 @@ data Vat
   ;; earlier revision also routed any undeliverable `vmsg-deliver` here,
   ;; which made an inbound `op:deliver` to a position we do not hold come
   ;; back out at the peer — see the reject arm in `deliver-msg`.
-  vat : Nat -> [List ActorEntry] -> [List PromiseEntry] -> [List VatMsg] -> [List VatMsg]
+  vat : Nat -> [List ActorEntry] -> [List PromiseEntry] -> [List VatMsg] -> [List VatMsg] -> [List String]
 
 ;; Selectors.
 
 spec vat-next-id Vat -> Nat
 defn vat-next-id
-  | vat n _ _ _ _ -> n
+  | vat n _ _ _ _ _ -> n
 
 spec vat-actors Vat -> List ActorEntry
 defn vat-actors
-  | vat _ a _ _ _ -> a
+  | vat _ a _ _ _ _ -> a
 
 spec vat-promises Vat -> List PromiseEntry
 defn vat-promises
-  | vat _ _ p _ _ -> p
+  | vat _ _ p _ _ _ -> p
 
 spec vat-queue Vat -> List VatMsg
 defn vat-queue
-  | vat _ _ _ q _ -> q
+  | vat _ _ _ q _ _ -> q
 
 ;; Phase 59b part 3: messages the vat could not deliver locally.
 spec vat-outbound Vat -> List VatMsg
 defn vat-outbound
-  | vat _ _ _ _ o -> o
+  | vat _ _ _ _ o _ -> o
+
+;; Outbound CONNECTION requests: locations a behaviour asked us to dial, via
+;; `eff-connect`. Same shape and same reason as `outbound` above — the vat
+;; stays pure and wire-agnostic, recording "somebody wants a connection here"
+;; and leaving the socket to the driver, which drains this list between steps.
+;;
+;; This is what lets the sturdyref enlivener be an ACTOR rather than a special
+;; case in the driver: enlivening means opening a socket, a behaviour cannot,
+;; and before this the driver had to intercept the deliver before captp-core
+;; saw it. See the gaps document §0.2.
+spec vat-dials Vat -> List String
+defn vat-dials
+  | vat _ _ _ _ _ d -> d
+
+spec clear-dials Vat -> Vat
+  :doc "Drop the pending dial requests, once the driver has taken them."
+defn clear-dials
+  | vat n acts proms q ob _ -> vat n acts proms q ob [nil String]
+
+spec enqueue-dial String Vat -> Vat
+defn enqueue-dial [loc v]
+  vat [vat-next-id v] [vat-actors v] [vat-promises v] [vat-queue v] [vat-outbound v] [append [vat-dials v] [cons loc [nil String]]]
+
 
 ;; ========================================
 ;; Construction
 ;; ========================================
 
 ;; Empty vat: no actors, no promises, no queue, next-id = 0.
-def empty-vat : Vat := [vat zero nil nil nil nil]
+def empty-vat : Vat := [vat zero nil nil nil nil nil]
 
 ;; ========================================
 ;; Allocation result — concrete struct
@@ -276,20 +299,20 @@ defn alloc-id
 
 spec vat-spawn BehaviorTag SyrupValue Vat -> Allocated
 defn vat-spawn
-  | tag init-state [vat n acts proms q ob] ->
-      allocated [vat [suc n] [actor-table-set n [actor tag init-state] acts] proms q ob] n
+  | tag init-state [vat n acts proms q ob dl] ->
+      allocated [vat [suc n] [actor-table-set n [actor tag init-state] acts] proms q ob dl] n
 
 spec fresh-promise Vat -> Allocated
 defn fresh-promise
-  | vat n acts proms q ob ->
-      allocated [vat [suc n] acts [promise-table-set n fresh proms] q ob] n
+  | vat n acts proms q ob dl ->
+      allocated [vat [suc n] acts [promise-table-set n fresh proms] q ob dl] n
 
 ;; enqueue-msg: append a VatMsg at the END of the queue (FIFO).
 
 spec enqueue-msg VatMsg Vat -> Vat
 defn enqueue-msg
-  | m [vat n acts proms q ob] ->
-      vat n acts proms [append q [cons m nil]] ob
+  | m [vat n acts proms q ob dl] ->
+      vat n acts proms [append q [cons m nil]] ob dl
 
 ;; ========================================
 ;; Sending
@@ -324,25 +347,25 @@ defn send-only [target args v]
 
 spec resolve-promise Nat SyrupValue Vat -> Vat
 defn resolve-promise
-  | pid val [vat n acts proms q ob] ->
+  | pid val [vat n acts proms q ob dl] ->
       match [promise-table-get pid proms]
-        | none -> [vat n acts proms q ob]   ;; unknown promise, no-op
+        | none -> [vat n acts proms q ob dl]   ;; unknown promise, no-op
         | some s ->
             match [resolved? s]
-              | true  -> [vat n acts proms q ob]   ;; already settled, monotone no-op
+              | true  -> [vat n acts proms q ob dl]   ;; already settled, monotone no-op
               | false ->
-                  [vat n acts [promise-table-set pid [fulfill val s] proms] q ob]
+                  [vat n acts [promise-table-set pid [fulfill val s] proms] q ob dl]
 
 spec break-promise Nat SyrupValue Vat -> Vat
 defn break-promise
-  | pid reason [vat n acts proms q ob] ->
+  | pid reason [vat n acts proms q ob dl] ->
       match [promise-table-get pid proms]
-        | none -> [vat n acts proms q ob]
+        | none -> [vat n acts proms q ob dl]
         | some s ->
             match [resolved? s]
-              | true  -> [vat n acts proms q ob]
+              | true  -> [vat n acts proms q ob dl]
               | false ->
-                  [vat n acts [promise-table-set pid [break reason s] proms] q ob]
+                  [vat n acts [promise-table-set pid [break reason s] proms] q ob dl]
 
 ;; ========================================
 ;; Effect interpretation
@@ -352,7 +375,7 @@ defn break-promise
 ;; that sends twice must have them emitted in that order).
 spec enqueue-outbound VatMsg Vat -> Vat
 defn enqueue-outbound [m v]
-  [vat [vat-next-id v] [vat-actors v] [vat-promises v] [vat-queue v] [append [vat-outbound v] [cons m nil]]]
+  [vat [vat-next-id v] [vat-actors v] [vat-promises v] [vat-queue v] [append [vat-outbound v] [cons m nil]] [vat-dials v]]
 
 ;; Apply one Effect to the vat: a send-only enqueues on the LOCAL queue;
 ;; a send-remote goes straight to the outbound queue; resolve/break
@@ -380,7 +403,7 @@ defn enqueue-outbound [m v]
 ;; to every behaviour that spawns.
 spec place-actor Nat BehaviorTag SyrupValue Vat -> Vat
 defn place-actor [id tag st v]
-  vat [max [suc id] [vat-next-id v]] [actor-table-set id [actor tag st] [vat-actors v]] [vat-promises v] [vat-queue v] [vat-outbound v]
+  vat [max [suc id] [vat-next-id v]] [actor-table-set id [actor tag st] [vat-actors v]] [vat-promises v] [vat-queue v] [vat-outbound v] [vat-dials v]
 
 spec apply-effect Effect Vat -> Vat
 defn apply-effect
@@ -394,6 +417,8 @@ defn apply-effect
   ;; picks the id itself, and the behaviour has already published this one in
   ;; its return value.
   | [eff-spawn id tag st]  v -> place-actor id tag st v
+  ;; The vat records the request and stays pure; the driver opens the socket.
+  | [eff-connect loc]      v -> enqueue-dial loc v
 
 spec apply-effects [List Effect] Vat -> Vat
 defn apply-effects
@@ -448,7 +473,7 @@ defn settle-answer [pid rv v]
 spec step-after-act Nat Actor SyrupValue SyrupValue [List Effect] [Option Nat] Vat -> Vat
 defn step-after-act [target old-act new-state rv effects ap v]
   let acts1 := [actor-table-set target [actor [actor-tag old-act] new-state] [vat-actors v]]
-    let v1 := [vat [vat-next-id v] acts1 [vat-promises v] [vat-queue v] [vat-outbound v]]
+    let v1 := [vat [vat-next-id v] acts1 [vat-promises v] [vat-queue v] [vat-outbound v] [vat-dials v]]
       let v2 := [apply-effects effects v1]
         match ap
           | none -> v2
@@ -515,7 +540,7 @@ defn step-vat [v]
   match [vat-queue v]
     | nil -> none
     | cons m rest ->
-        let v1 := [vat [vat-next-id v] [vat-actors v] [vat-promises v] rest [vat-outbound v]]
+        let v1 := [vat [vat-next-id v] [vat-actors v] [vat-promises v] rest [vat-outbound v] [vat-dials v]]
           some [deliver-msg m v1]
 
 ;; ========================================

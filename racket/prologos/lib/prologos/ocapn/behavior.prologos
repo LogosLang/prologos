@@ -31,6 +31,8 @@ ns prologos::ocapn::behavior
 ;;   beh-car-factory-builder — answers with a fresh beh-car-factory actor
 ;;   beh-car-factory         — answers with a fresh beh-car actor
 ;;   beh-car                 — answers "Vroom! I am a <color> <model> car!"
+;;   beh-sturdyref-enlivener — asks for an outbound connection to the
+;;                   location an `ocapn-sturdyref` names (`eff-connect`)
 
 require [prologos::ocapn::syrup
          :refer [SyrupValue
@@ -42,6 +44,11 @@ require [prologos::ocapn::syrup
         [prologos::data::option :refer [Option none some]]
         [prologos::data::nat    :refer [add]]
         [prologos::data::string :as str :refer []]
+        ;; For `re-encode` in the sturdyref enlivener: an `eff-connect` asks
+        ;; for a location by the peer's OWN bytes, and re-encoding is what
+        ;; reproduces them. syrup-wire depends only on syrup, so this adds no
+        ;; cycle.
+        [prologos::ocapn::syrup-wire :as wire :refer []]
 
 ;; ========================================
 ;; Behaviour tags
@@ -67,6 +74,14 @@ data BehaviorTag
   beh-car-factory-builder
   beh-car-factory
   beh-car
+  ;; The STURDYREF ENLIVENER. Given an `ocapn-sturdyref`, it asks for an
+  ;; outbound connection to the location the sturdyref names.
+  ;;
+  ;; It exists as a behaviour at all only because `eff-connect` does. Before
+  ;; that, enlivening was a special case in the driver — it had to be, since a
+  ;; behaviour cannot open a socket — and the export position it answers on
+  ;; had no actor behind it.
+  beh-sturdyref-enlivener
 
 ;; ========================================
 ;; Side-effects an actor can request
@@ -102,6 +117,20 @@ data Effect
   eff-resolve     : Nat -> SyrupValue
   ;; Break a promise with a reason (pst-broken).
   eff-break       : Nat -> SyrupValue
+  ;; Ask for an outbound CONNECTION to the location these bytes name.
+  ;;
+  ;; The payload is a re-encoded `ocapn-sturdyref` / `ocapn-peer`, not a
+  ;; parsed address: parsing it is the dialler's job, and re-encoding is what
+  ;; reproduces the peer's own bytes.
+  ;;
+  ;; This is the effect that lets enlivening be a BEHAVIOUR. A behaviour is
+  ;; pure and cannot open a socket, so the sturdyref enlivener used to be a
+  ;; special case in the driver, which intercepted the deliver before the
+  ;; bridge ever saw it — export position 5 had no actor at all. With the
+  ;; effect, the behaviour says what it wants, the vat records it, and the
+  ;; driver drains it between steps, exactly as `eff-send-remote` already
+  ;; works. See the gaps document §0.2.
+  eff-connect     : String
   ;; Create a NEW actor at a caller-chosen id: (id, behaviour, initial state).
   ;;
   ;; The id is not invented by the behaviour — `step-behavior` is handed the
@@ -621,6 +650,44 @@ defn step-car-factory-builder [state args fresh]
 
 ;; `fresh` is the vat's next free actor id, handed in so a behaviour can name
 ;; the object it is about to create in its own return value (see `eff-spawn`).
+;; --- sturdyref enlivener ---
+;;
+;; The argument is checked before it is used: the label must be
+;; `ocapn-sturdyref`. This path is what makes us open an outbound TCP
+;; connection on peer-chosen bytes, so accepting any record shape at all
+;; would let a peer point the dialler wherever it liked. The INTERIOR is the
+;; dialler's to parse and reject; the label is what is gated here.
+;;
+;; What gets asked for is the sturdyref RE-ENCODED, not a parsed location:
+;; re-encoding reproduces the peer's own bytes, and parsing belongs to
+;; whoever opens the socket.
+spec sturdyref-arg SyrupValue -> [Option String]
+defn sturdyref-arg [v]
+  match v
+    | syrup-tagged tag _ ->
+        match [str::eq tag "ocapn-sturdyref"]
+          | true  -> some [wire::re-encode v]
+          | false -> [none String]
+    | _ -> [none String]
+
+spec first-sturdyref-arg SyrupValue -> [Option String]
+defn first-sturdyref-arg [args]
+  match args
+    | syrup-list xs ->
+        match xs
+          | nil        -> [none String]
+          | [cons h _] -> sturdyref-arg h
+    | _ -> [none String]
+
+;; The answer is the sturdyref itself, echoed. The peer learns the connection
+;; was requested; the capability it is actually after arrives over the
+;; connection the driver opens, not in this reply.
+spec step-sturdyref-enlivener SyrupValue SyrupValue -> ActStep
+defn step-sturdyref-enlivener [state args]
+  match [first-sturdyref-arg args]
+    | none     -> no-op state
+    | some loc -> act-step state args [cons [eff-connect loc] nil]
+
 spec step-behavior BehaviorTag SyrupValue SyrupValue Nat -> ActStep
 defn step-behavior [tag state args fresh]
   match tag
@@ -635,3 +702,4 @@ defn step-behavior [tag state args fresh]
     | beh-car-factory-builder -> step-car-factory-builder state args fresh
     | beh-car-factory -> step-car-factory state args fresh
     | beh-car       -> step-car state args
+    | beh-sturdyref-enlivener -> step-sturdyref-enlivener state args
