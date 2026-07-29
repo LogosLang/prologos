@@ -1,7 +1,7 @@
 # OCapN implementation — known gaps, shortcomings and workarounds
 
 **Written 2026-07-28 against `ad673edb`. Remediated 2026-07-29; see § Status.**
-Upstream conformance suite: 24/24. Unit suite: 9616 pass.
+Upstream conformance suite: 24/24. Unit suite: 9623 pass.
 
 Passing the conformance suite is the *premise* of this document, not its
 conclusion. Everything below is something that passed and was nevertheless
@@ -121,7 +121,7 @@ left is below, and it is short.
 | §0.2 gifter/receiver roles live in Racket | Needs `eff-connect`, `eff-send-on`, `eff-sign` and a connection registry as a first-class cell. Unchanged, and still the largest piece of debt here. |
 | §1.7 M8 every frame is processed twice | Same root. Narrowed — the Racket side now only acts on frames it can match structurally, and `run-step` no longer hands an enliven to captp-core at all — but both halves still run on the same bytes. |
 | §1.7 M7 enliven slots 900+ are unregistered | Same root: the enlivener must hand out a real exported resolve-me from the connection's export table instead of a Racket counter. Its two live consequences are gone — captp-core no longer breaks on the answer (a deliver with no reply channel to an export we lack is dropped, not reflected), and the slot base is above anything the vat allocates until ~890 allocations on one connection. What remains is that the reservation is by convention, not construction. |
-| §1.10 #8 Node peers speak unsigned `"0.1"` | Real. The conformance gate covers the signed path end to end, so this is redundancy rather than a hole; making a peer drive it is a rewrite of the peer harness. |
+| §1.10 #8 Node peers speak unsigned `"0.1"` | **Half closed.** The real hole was not the peers' dialect — it was that `handshake.prologos` had NO unit coverage at all (its own test file did not import it), so the signed path was covered solely by the conformance suite. It now has seven tests, including two negative signature cases and an accept control, plus the field accessors `ParsedSS` was missing. What remains is that the Node peers still speak `"0.1"` unsigned, which is redundancy rather than a hole. |
 | §1.2 M3 forwarded pipelined deliver has no reply channel | **Attempted and reverted, 2026-07-29** — see below. |
 
 **§1.2 M3 — the design is settled; the landing is not.** Worth writing down,

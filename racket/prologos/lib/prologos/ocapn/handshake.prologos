@@ -448,6 +448,25 @@ defn ss-version [p]
   match p
     | parsed-ss v _ _ _ -> v
 
+;; Field accessors. The type had only `ss-version`, so nothing outside this
+;; module could look at the pubkey, the location or the signature — which is
+;; also why its signed path had no unit test that could construct a NEGATIVE
+;; case.
+spec ss-pubkey ParsedSS -> String
+defn ss-pubkey [p]
+  match p
+    | parsed-ss _ q _ _ -> q
+
+spec ss-location ParsedSS -> String
+defn ss-location [p]
+  match p
+    | parsed-ss _ _ loc _ -> loc
+
+spec ss-signature ParsedSS -> String
+defn ss-signature [p]
+  match p
+    | parsed-ss _ _ _ sig -> sig
+
 spec ss-verify-sig ParsedSS -> Bool
   :doc "Verify the Ed25519 location signature against the my-location envelope."
 defn ss-verify-sig [p]

@@ -74,6 +74,9 @@
 (imports (prologos::ocapn::captp-wire :refer-all))
 (imports (prologos::data::list :refer (List nil cons)))
 (imports (prologos::data::option :refer (Option some none unwrap-or)))
+(imports (prologos::ocapn::crypto :refer-all))
+(imports (prologos::ocapn::handshake :refer-all))
+(imports (prologos::data::string :as str :refer ()))
 ")
 
 (define-values (shared-global-env
@@ -210,3 +213,91 @@
   (check-true (regexp-match? #px"tcp-testing-only:peer-racket" child-stdout)
               (format "expected racket's locator in node decode: ~s" child-stdout))
   (printf "  Node-side: decoded ~a~n" (string-trim child-stdout)))
+
+(define (check-contains actual substr [msg #f])
+  (check-true (string-contains? actual substr)
+              (or msg (format "Expected ~s to contain ~s" actual substr))))
+
+;; ========================================
+;; The SIGNED four-field handshake
+;; ========================================
+;;
+;; This module had no unit coverage at all -- its own test file did not
+;; even import it, and the single test above exercises the UNSIGNED
+;; two-field form that only our Node harness speaks. The signed path is
+;; the one every real peer uses, and it was covered solely by the
+;; upstream conformance suite: if it broke, 13 green interop steps would
+;; have stayed green (gaps doc section 1.10 #8).
+
+(define (signed-frame-expr [ver "1.0"])
+  (format (string-append
+           "(let (kp (gen-keypair-raw unit)"
+           "      frame (handshake-bytes-with-key \"~a\" kp \"tcp-testing-only\""
+           "               \"abc\" \"127.0.0.1\" \"22045\"))")
+          ver))
+
+;; A ParsedSS to fall back on, so no test has to match on an Option.
+(define bad-ss "(parsed-ss \"PARSE-FAILED\" \"\" \"\" \"\")")
+
+(test-case "handshake/a signed start-session parses and its signature verifies"
+  (check-contains
+   (run-last
+    (string-append
+     "(eval " (signed-frame-expr)
+     "  (ss-verify-sig (unwrap-or " bad-ss " (parse-start-session frame)))))"))
+   "true"))
+
+(test-case "handshake/the parsed version is the one we signed"
+  (check-contains
+   (run-last
+    (string-append
+     "(eval " (signed-frame-expr)
+     "  (ss-version (unwrap-or " bad-ss " (parse-start-session frame)))))"))
+   "1.0"))
+
+(test-case "handshake/a signature over a DIFFERENT location does not verify"
+  ;; The signature covers the location. Pairing one session's key and
+  ;; signature with another location must fail -- if it did not, the
+  ;; signature would not be binding the location at all, which is the
+  ;; whole point of signing it.
+  (check-contains
+   (run-last
+    (string-append
+     "(eval " (signed-frame-expr)
+     "  (let (p (unwrap-or " bad-ss " (parse-start-session frame))"
+     "        locB (ocapn-peer-bytes \"tcp-testing-only\" \"xyz\" \"10.0.0.1\" \"9999\"))"
+     "    (ss-verify-sig (parsed-ss (ss-version p) (ss-pubkey p) locB (ss-signature p))))))"))
+   "false"))
+
+(test-case "handshake/a signature from a DIFFERENT key does not verify"
+  (check-contains
+   (run-last
+    (string-append
+     "(eval " (signed-frame-expr)
+     "  (let (kp2 (gen-keypair-raw unit)"
+     "        p (unwrap-or " bad-ss " (parse-start-session frame)))"
+     "    (ss-verify-sig (parsed-ss (ss-version p) (pubkey-raw kp2) (ss-location p) (ss-signature p))))))"))
+   "false"))
+
+(test-case "handshake/an unparseable frame is rejected, not accepted by default"
+  (check-contains
+   (run-last "(eval (decide-incoming \"1.0\" (parse-start-session \"not-a-frame\")))")
+   "op:abort"))
+
+(test-case "handshake/a version we do not speak is rejected"
+  (check-contains
+   (run-last
+    (string-append
+     "(eval " (signed-frame-expr "9.9")
+     "  (decide-incoming \"1.0\" (parse-start-session frame))))"))
+   "op:abort"))
+
+(test-case "handshake/a well-formed current-version frame is ACCEPTED"
+  ;; The control for the two rejections above: without it they could
+  ;; both be passing because everything is rejected.
+  (check-contains
+   (run-last
+    (string-append
+     "(eval " (signed-frame-expr)
+     "  (str::eq \"\" (decide-incoming \"1.0\" (parse-start-session frame)))))"))
+   "true"))
