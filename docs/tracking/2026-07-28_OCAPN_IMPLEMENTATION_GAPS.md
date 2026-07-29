@@ -1,10 +1,10 @@
 # OCapN implementation — known gaps, shortcomings and workarounds
 
-**As of `ad673edb`, 2026-07-28.** Upstream conformance suite: 24/24. Unit suite:
-9541 pass.
+**Written 2026-07-28 against `ad673edb`. Remediated 2026-07-29; see § Status.**
+Upstream conformance suite: 24/24. Unit suite: 9599 pass.
 
 Passing the conformance suite is the *premise* of this document, not its
-conclusion. Everything below is something that passes today and is nevertheless
+conclusion. Everything below is something that passed and was nevertheless
 wrong, fragile, unfinished, or in the wrong place.
 
 Findings are ranked:
@@ -21,58 +21,152 @@ failing input is not a finding and should be deleted rather than softened.
 
 ---
 
-## The short version
+## Status (2026-07-29)
 
-**7 CRITICAL, 31 HIGH, 35 MEDIUM, 24 LOW** survived verification across ten
-surfaces. The seven criticals cluster into three themes, and none of them is a
-loose end — each is load-bearing:
+The inventory below was written first and fixed second. **Most of it is now
+fixed**; §"Still open" lists what is not, with the reason in each case.
+Sections 0 and 1 are preserved AS WRITTEN on 2026-07-28 — they are the record
+of what was found, not a description of the code today. Where a finding's text
+is now false because the finding was acted on, that is the intended outcome.
 
-**A. The handoff trust chain is not closed.** The exporter verifies a
-`desc:handoff-receive` against a public key it reads *out of the handoff-give
-nested inside that same receive*, and the give's own signature is never checked
-(`captp-core.prologos:1676-1718`, `:1699`). A withdrawal is therefore entirely
-self-attested: forge a give naming your own key, sign the receive with it, and
-verification passes. The conformance suite never tries this, because it only
-ever sends well-formed gives. **This is the most serious finding in the
-document** — it is an authentication bypass, not a robustness gap.
+Three commits: `bae33ae3` (Prologos library + FFI), `beeb3855` (test server,
+CI, Node peers), `29591985` (acting on the adversarial verification pass).
 
-**B. The gift table is a shared, unauthenticated namespace.** Gifts are keyed by
-peer-supplied id with nothing binding a gift to the session that deposited it
-(`:804-809`), the `"used:"` replay-guard prefix shares that namespace under a
-comment whose reasoning is exactly backwards (`:1517-1518`), and park keys
-collide across connections because promise ids restart per connection
-(`interop-driver.prologos:154`). Any peer can name another peer's gift.
+### The three critical themes are closed
 
-**C. The codec is not self-inverse.** `syrup-string`/`syrup-symbol` prefix with
-UTF-8 byte length while the whole stack is Latin-1 one-byte-per-code-point, so
-our own encoder emits frames our own decoder rejects (`syrup-wire.prologos:88-89`)
-— the *identical* bug fixed for `syrup-bytes` two lines below, never applied
-upward. And `re-encode` silently splices away the brackets of a record whose
-single argument is a list (`:217`), which is on the signature path.
+**A. The handoff trust chain.** The exporter verified a `desc:handoff-receive`
+against a key it read out of the `desc:handoff-give` nested inside that same
+receive, and never checked the give's own signature — so a withdrawal was
+entirely self-attested. Closing it needed a key the attacker does not choose,
+and there is exactly one: the public key of the peer that deposited the gift.
+`op:start-session` now carries the peer's session pubkey, `BridgeState`
+retains it, a `GiftEntry` records the key of the peer that deposited it, and a
+parked withdrawal keeps the signed give until the deposit arrives to supply
+the key. Chain: gifter's session key → the give; the give's receiver-key → the
+receive. Verified against the reference, which signs the give with
+`g2e_session.private_key` — exactly the key we now record.
 
-Everything ASCII-only and well-formed works, which is exactly the shape of the
-conformance suite.
+**B. The gift namespace.** `used:` and `park:` prefixes shared one
+String-keyed table with peer-supplied gift ids, under a comment reasoning that
+a constructed prefix "cannot collide with a gift id, because gift ids come
+from the peer as opaque bytes". That is backwards. The kind is now a FIELD,
+so collision is unrepresentable rather than unlikely; park and used entries
+are per-connection (publishing them globally was a live cross-connection bug
+needing no attacker, since every connection's vat seeds its promise ids the
+same); and the replay identity length-prefixes its parts.
 
-**A note on finding C**, because the record should show it: the `syrup-bytes`
-half of that bug was found and fixed earlier the same day, and the string/symbol
-arms were *deliberately* left on `str::bytes-length` with the comment "String /
-symbol hold TEXT: the prefix is the UTF-8 byte length, per spec". That reasoning
-is wrong — not because the spec says otherwise, but because nothing else in this
-stack is UTF-8: the frame FFI decodes Latin-1, the outbound path is
-`string->bytes/latin-1`, and the decoder slices by code point. The audit caught
-a half-applied fix whose other half was argued for on the spot. Two existing
-tests currently pin the bug.
+**C. The codec.** Latin-1 length prefixes throughout; `encode` and `re-encode`
+collapsed to one payload reading once `decode-record-with` stopped conflating
+`<tag [a b]>` with `<tag a b>`; no null on the wire; a poison record instead of
+the empty string for values that must never reach it; strict `decode-value`;
+canonical dict ordering outbound only. `int-to-nat` is O(1), which closes the
+18-byte remote stall.
 
-**Verified before publishing**, not taken on the agents' word: `verify-receive-with-key`
-(`:1695-1699`) does take its key as a parameter sourced from the nested give;
-`bs-add-gift` (`:804-809`) records `gid → xid` with no session field; and
-`syrup-string`/`syrup-symbol` (`syrup-wire.prologos:88-89`) do use
-`str::bytes-length` where `syrup-bytes` two lines below uses `str::length`.
+### What the fixes exposed, and what that cost
 
+Fixing the encoder took the conformance suite from 24 to 23, and the failure
+was worth more than the fix. Enlivening a sturdyref opens a socket, so export
+position 5 deliberately has no vat actor and the driver answers it out of
+band — but `run-step` handed the op to `connection-step` as well, the vat found
+no actor, and captp-core BROKE the peer's promise on the enliven frame itself,
+beating the driver's `fulfill`. That break had always been emitted. It was
+invisible because it was unparseable: the old encoder wrapped a record's
+argument sequence in a list, so upstream dropped the frame. A correct encoder
+turned a silently-ignored malformed break into a well-formed one.
+
+It took a worktree-pinned baseline and a diff of the outbound frames to find;
+three attempts to reason it out from the code alone were all wrong. **The
+lesson is the one the document already argues elsewhere: a malformed frame and
+an absent frame are indistinguishable to everything except the bytes.**
+
+Two more of the same shape: the args slot and the answer position were each
+wrong in one encoder and right in another, and had stayed wrong because
+in-tree JS fixtures pinned the wrong forms. §1.10 finding 9 called that out
+in the abstract; it turned out to be load-bearing.
+
+### Corrections to this document
+
+Three claims below are wrong, and are left in place with the correction here
+rather than quietly edited:
+
+- **§0.3 says the enlivener "works because the *server* intercepts the deliver
+  in `run-step` before `connection-step` ever sees it."** `connection-step` did
+  see it. The interception queued a dial and then fell through. The substance —
+  that position 5 has no actor and this is load-bearing — was right; the
+  mechanism was not.
+- **§1.2 finding 19 lists six functions as having "no caller anywhere".** True
+  as stated (`lib/` and `tools/`), but five of them have test callers and are
+  public API, not dead code. Only `deliver-with-ap` was genuinely unreferenced.
+- **§1.3 finding 10's exemplar was already corrected in its own note**, and the
+  note is right: the realistic dropped input is a pipelined gift, not a
+  `desc:import-object`.
+
+One further correction, to the fix rather than the finding: **§1.2 M3 was
+"fixed" by echoing the queued deliver's `ap`/`rm` into the forwarded frame, and
+that was wrong.** A forwarded deliver is a new message with us as the sender,
+so those slots name our tables, not the peer's. The verification pass caught
+it (our own decoder rejected the result); it is reverted, and the finding is
+open below.
+
+### Still open
+
+Each of these was reached and left, for the reason given — not missed.
+
+| Finding | Why it is still open |
+|---|---|
+| §0.2 gifter/receiver roles live in Racket | Architectural. Needs `eff-connect`, `eff-send-on`, `eff-sign` and a connection registry as a first-class cell. Unchanged, and still the largest piece of debt here. |
+| §1.7 M8 every frame is processed twice | Same root. Narrowed — the Racket side now only acts on frames it can match structurally — but both halves still run on the same bytes. |
+| §1.2 M3 forwarded pipelined deliver has no reply channel | Needs us to allocate our own answer position and forward the reply back to the queued deliver's. `PipeMsg` now carries `rm` so that machinery has something to read. |
+| §1.1 #5 floats and sets do not decode | Needs `SyrupValue` constructors, which every exhaustive match in captp-wire and captp-core must then follow. Upstream emits both. |
+| §1.4 #6 `op:listen`'s `wants_partial` value | The field's PRESENCE is now required; carrying its value needs a third field on `op-listen`. |
+| §1.9 #4 `:requires (CryptoCap)` | Applying the annotations fails every consumer at module load; the capability must be threaded from the driver entry through the whole verification chain first. The header now says this instead of claiming the annotations are present. |
+| §1.10 #12 `locator` fixes host/port | Needs a hints map and a string→Nat conversion the stdlib does not expose. |
+| §1.8 M2 one process-wide session keypair | Confined to one file but a protocol-semantics change: `our-side-id` becomes per-connection, moving session-id derivation and the crossed-hellos tie-break at once. |
+| §1.7 M7 enliven slots 900+ are unregistered | Needs the enlivener to hand out a real exported resolve-me from the connection's export table instead of a Racket counter. |
+| §1.10 #10 `plain-value-error-reason` is a constant | Naming the offending value is wire-visible and `peer-plain-value-error.mjs` plus a Racket test pin the exact string. The dead parameter is gone. |
+| §1.10 #8 Node peers speak unsigned `"0.1"` | Real, and the conformance gate covers the signed path. Making a peer drive it is a rewrite of the peer harness. |
+| §1.6 M8 an undecodable frame returns `""` | Emitting `op:abort` changes bytes for frames we currently answer with silence; it needs a decision about which decode failures are fatal. |
+| §1.10 #11 residue | Floats and sets have no fixture coverage because the model has no constructor for them — the same gap as §1.1 #5. And the cross-impl harness is UTF-8-keyed while the codec's byte model is Latin-1, so no non-ASCII vector can ride it. |
+
+### Newly found, while fixing
+
+Not in the original inventory:
+
+1. **HIGH | `finish-fetch-answer!` spliced an integer into `bytes-append`.** Raised
+   on every gifter-side enliven and was swallowed by the surrounding guard, so
+   the fulfill was never sent — the mechanism by which theme A's fix first
+   looked like a regression.
+2. **HIGH | `op:gc-answers` had no arity gate** where every other op got one, so
+   `<op:gc-answers [1+] [2+]>` decoded as `[1]` and dropped the second list.
+3. **MEDIUM | `try-enliven!` accepted only `desc:import-object` as a resolve-me**,
+   silently dropping an enliven whose resolver was a promise — a new silent
+   drop introduced while fixing silent drops.
+4. **MEDIUM | `tools/check-parens.sh` hardcoded a macOS Racket path**, so on any
+   other machine it reported a delimiter error for every balanced file and the
+   pre-commit hook that calls it was a silent no-op. Fixed.
+5. **LOW | the `.pnet` cache masquerades as a forward reference.** After a struct
+   arity change, importing a module fails with a bare "Unbound variable" while
+   the module itself processes with zero errors. `rm -rf data/cache/pnet` is
+   the fix; this is the second sighting (pitfall #47) and it cost time again.
+
+### Method note on the fix pass
+
+Seven repair agents on file-disjoint surfaces, each followed by an adversarial
+verifier that re-opened every file and tried to refute the report. The
+verifiers earned their place: they caught a claimed fix that was not in the
+file at all, the `forward-deliver-bytes` error above, four comments that my own
+fixes had falsified in the same sweep, a missing arity gate, and a large
+behavioural change that shipped with zero tests. Every "BROKEN" they reported
+that I could reproduce was real.
 
 ---
 
 ## 0. The three structural gaps
+
+> **As-written 2026-07-28.** 0.1 is fixed (the allow-list is drift-checked
+> against the modules it targets). 0.2 is unchanged and is still the largest
+> piece of debt here. 0.3's substance was right and its stated mechanism was
+> wrong — see § Corrections.
 
 These are not bugs. They are places where the implementation is shaped by the
 test suite rather than by the protocol, and no amount of local fixing addresses
@@ -132,6 +226,12 @@ actor at 5 will find the server intercepting its messages first.
 
 
 ## 1. Findings by surface
+
+> **As-written 2026-07-28, preserved unedited.** Most of what follows is now
+> fixed; § Status above is authoritative for the current state. Read this
+> section as the record of what was found and why it mattered, not as a
+> description of the code today.
+
 Each subsection holds the findings that **survived adversarial verification** —
 a second agent opened every cited file, checked every line number and quote, and
 was asked to refute rather than agree. Its **MISSED** list follows: things the
