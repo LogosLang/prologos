@@ -23,7 +23,9 @@ rulings, censuses and test delta live in its own section.
 |---|---|---|---|
 | **P0** | **Acceptance corpus** — augment the EXISTING acceptance file with the spec §10 examples + Appendix fixtures; `--check` gated; new forms commented until their phase lands | ✅ | §5.P0 · `e2674208` — 28/28 markers, 0 errors; all 7 fixtures load (layout via `def X`, issue #80 sidestepped); corpus phase-tagged in HEAD notation; carrier pins double as §2.3 docs |
 | **P1a** | **Retirement batch + substrate** — dot-key family · the FULL `broadcast-get` chain (reader + parser keyword + surf + elaborator + node) · `m[:kw]` · reject batch · `surface-rewrite.rkt` `dot-lbrace` cleanup (BEFORE any re-mint) · the marker-form diagnostic seat | ✅ | §5.P1a · **`859b529d`** — suite 9253/474/0, acceptance 28/28 + 89/89, −744/+320; adversarial verify found 2 whole-file-abort defects (1 MINE, in the seat) → fixed + pinned pre-commit |
-| **P1b** | **Seams + Q8** — `dot-lbrace` re-mint (6 sites) · brace adjacency + the reader-form-head REGISTRY · colon seam (`?`-discriminator, Q_L1) + WS narrow-var repair · `:N` probe · keyword-`*` split · `:<` probe row. Q8 grammar owner-reviewed before landing | ⬜ | §5.P1b |
+| **P1b-i** | **Repairs + probes + the Q8 DRAFT** — WS narrow-var joiner · **the top-level `<` swallow fix (Q_M4)** · `def ?x` reservation (Q_M3) · the Q_M1 position probe FIRST, then `:N` / keyword-`*` / `:<`-both-shapes · Q8 drafted FROM the probe results | ⬜ | §5.P1b-i · **← NEXT** |
+| **P1b-ii** | **The `.{` opener** — `dot-lbrace` re-mint, **SIX** sites incl. the surviving `surface-rewrite.rkt:516` (a POSITIVE addition — omitting it REGRESSES a currently-correct grouping); plain `'rbrace` closer per Q_M5 | ⬜ | §5.P1b-ii · must land BEFORE/WITH P1b-iii (Q_M2) |
+| **P1b-iii** | **Brace adjacency + the head registry** — the forced select-block sentinel (Q_M6) · leaf-module registry · the 4 buckets · NET-NEW WS `racket{…}` pins | ⬜ | §5.P1b-iii |
 | **P2** | **Grade-1 core** — `.k`/`.N` access + bare-path extraction, on the landed P2 substrate | ⬜ | §5.P2 · `.N` has an end-to-end head start via `(get expr N)` |
 | **P3** | **Blocks** — `x{…}`, projection-by-default, `^` (3 continuations), L4 sort homogeneity, **HONEST NESTING (n-tuples at every n — ruled 2a)**, **STRICT merge** (the §3.6 waypoint) | ⬜ | §5.P3 · Q2 gate RESOLVED (2c: carrier order, thesis-derived) |
 | **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | ⬜ | §5.P4 · step-list node (4b) · per-field row-map (4c) |
@@ -327,6 +329,88 @@ main-session R-lens-verified; full findings in §5.P1):
   audit-discovered scope (the surface-rewrite cleanup, the reader-form-head
   registry, the diagnostic seat, the 4-site chain, net-new pins) made the
   single phase too large for one gated slice.
+
+**The P1b mini-audit rulings [owner, 2026-07-28]** (audit `wf_d0862784-5e5`, 6
+facets + completeness critic @ `bc0c7578`; every load-bearing finding
+main-session R-lens-verified; full record in §5.P1b):
+
+- **Q_M1 — `:N` disambiguated by POSITION (option b).** ⚠ The audit's largest
+  find: `:0`/`:1`/`:w`/`:m` are NOT unclaimed lexical space — they are the
+  **QTT multiplicity vocabulary** (`recognize-colon-annotation`,
+  parse-reader.rkt:847-860), consumed at 18 sites across
+  parser/macros/driver/tree-parser. Probe-verified: `users:0` → `(users :0)`
+  and `[fn [x :0 Int] x]` → `(fn (x :0 Int) x)` are **the same lexeme**.
+  Ruling 3c framed `:N` as a multi-digit question settled by a `{:10 v}`
+  probe — that probe cannot see this collision. Resolution: multiplicity
+  annotations are binder/param position, broadcast is expression position.
+  ⚠ **OBLIGATION, not an assumption**: position-disjointness was ALREADY
+  REFUTED ONCE on this seam (ruling 3d, by the narrowing typed-vars). P1b-i's
+  FIRST probe hunts expression-position `:0`/`:w`/`:m`; a counterexample
+  re-opens Q_M1 before anything is built on it.
+- **Q_M2 — P1b SPLITS THREE WAYS** (audit-recommended, owner-approved), with
+  an ORDERING CONSTRAINT the design had not stated: **`.{` must be re-minted
+  BEFORE or WITH lbrace adjacency**, because `.{` today presents a loose `|.|`
+  token whose end-pos abuts the `{`, so adjacency-first would turn every
+  in-flight `x.{…}` into a select block anchored on a bare dot.
+- **Q_M3 — `def ?x` becomes a GUIDED ERROR.** Q_L1's "the discriminator
+  already exists in the surface" is a **namespace RESERVATION we are making**,
+  not a property we inherit: `def ?cfg := {:a 1}` is legal at HEAD and
+  `?cfg.a` → `1 : Int` at 0 errors (probe-verified). Owner rationale: `?` is a
+  **modality** marker (functional narrowing; `defr` logic-var params), so a
+  `def` binding was never meant to be one — reserving it costs nothing now and
+  prevents the surprise later. No present soundness issue; the reservation is
+  prophylactic.
+- **Q_M4 — the TOP-LEVEL `<` SWALLOW IS FIXED IN P1b-i [owner]**, not
+  documented as a hazard. The audit REFUTED the design's framing: the
+  swallower is a bare depth-0 `<`, NOT `:<` — probe-verified, `users<{a}`
+  (no colon) and even `def p := 1 < 2` / `def q := 3 > 4` (no colon, no brace)
+  collapse into ONE form at **ZERO errors**. Mechanism now pinned:
+  `langle-matched?`'s terminating arm is `(and close-type (eq? type
+  close-type) …)`, but at top level `close-type` is `#f`, so it can never
+  fire and the scan runs to `[(>= i n) #f]` — the end of the whole token
+  stream. Fix: **bound the scan at the next top-level form start**; the
+  information already exists one domain earlier (`content-line-indices`,
+  Domain 2, computed before Domain 4's `make-bracket-depth-rrb`), so this is
+  plumbing + a termination arm, not new analysis. Owner: *"This has been an
+  issue to fix for a while, and there is a stronger need now than ever
+  before."* ⚠ Constraint: multi-line angle groups (`<(x : Int)\n -> Int>`)
+  were DELIBERATELY kept working at `31d27c83` — the bound must admit
+  CONTINUATION lines while rejecting NEW-FORM lines, and the 15 pins from
+  that commit are the gate. If it proves messier than the plumbing suggests,
+  STOP and re-checkpoint rather than let the slice swell.
+- **Q_M5 — ruling 3a's PRECEDENT is CORRECTED**: the model is **`hash-lbrace`
+  (6/6 sites, plain `'rbrace` closer, probe-verified nesting)**, NOT
+  `dot-lparen`. Citing dot-lparen silently imported its `'mixfix-rparen`
+  sentinel, which exists to carry SEMANTIC MODE, not to disambiguate a
+  closer — and a sentinel closer would reproduce the `31d27c83` cross-line
+  swallow, because the extent scanner stores REAL token types as frame
+  closers (parse-reader.rkt:1311) and `langle-matched?` has no translation
+  arm. **`dot-lbrace` uses plain `'rbrace`.** The word "closer" never appeared
+  in ruling 3a.
+- **Q_M6 — a DISTINCT SENTINEL for the select block is FORCED, not
+  preferable.** Adjacency is DESTROYED at the datum layer (probe: `x{a b}`
+  and `x {a b}` are byte-identical, as are `racket{42}` / `racket {42}` and
+  `spec identity {A : Type}`), so "a fourth fork on `$brace-params`" is not
+  implementable by position at all — and `$brace-params` turns out to be
+  **≥7-purposed** (map literal · implicit type binders · foreign block ·
+  solver config · defproc capability binders · selection path fan-out ·
+  foreign-import capability annotations), every fork position-disambiguated.
+  ⚠ Constraint: `combine-foreign-blocks` (macros.rkt:2431-2437) has **NO
+  adjacency test**, so spaced `racket {code}` is accepted today and is
+  back-compat-PINNED — therefore the head-adjacent bucket keeps emitting
+  `$brace-params` UNCHANGED and only the non-head-adjacent select block gets
+  the new sentinel. Any new sentinel owes `pattern-var?` (macros.rkt:1144+)
+  AND tree-parser.rkt's inline skip-list — **P1a's own headline defect
+  class**.
+- **Q_M7 — the standing `^` ruling is CORRECTED (it was not executable).**
+  "`^` splitting is P3-parser-side via POL.6 `split-fused-symbol` — no second
+  splitter" names the WRONG primitive: `split-fused-symbol` (parser.rkt:5437)
+  splits on `":"`, has two binder-path callers, and REJECTS >2 segments; the
+  tree's ONLY `^` splitter is parser.rkt:3543 inside `validate-selection-
+  paths` — which is the SEXP-ONLY surface Q_L2 freezes. **P3 has no reusable
+  WS-path `^` primitive** and must either lift the sexp one or write the
+  primitive the old ruling forbade. Recorded now so P3 does not build on a
+  false premise.
 
 **Open, GATING (spec §8):**
 - **Q8** (the precise lexical grammar) — §5.P1b's own DELIVERABLE, reviewed
@@ -667,7 +751,163 @@ must-not-break pins; the conservative-default replacement pin; net-new reject
 pins. Both modes where the surface exists in both. Failing-test-first.
 Status: ⬜.
 
-### §5.P1b — The seams + the Q8 grammar  ⬜
+### §5.P1b — The seams + the Q8 grammar  (SPLIT THREE WAYS, Q_M2)
+
+**Mini-audit `wf_d0862784-5e5`** (6 facets + completeness critic @ `bc0c7578`;
+27 critic findings, 22 capture gaps; load-bearing claims R-lens-verified on the
+main thread). **9th consecutive phase whose premise the audit refuted.**
+
+**The audit record — grounded facts P1b-i/ii/iii build on:**
+
+- ⚠ **THE HAZARD IS INVERTED.** §5.P1b previously said "the SIX-site
+  co-update (five parse-reader sites + the P1a-cleaned surface-rewrite)",
+  which reads as DISCHARGED. It is not: `surface-rewrite.rkt:516` is the
+  **general brace-opener arm**, alive, needing `dot-lbrace` as a **POSITIVE
+  ADDITION**. Probe-verified: the spec flagship
+  `app-config{server^.{ssl port} version}` groups **CORRECTLY TODAY** —
+  `((app-config ($brace-params server^ |.| ($brace-params ssl port)
+  version)))` — precisely BECAUSE `.{` lexes as two tokens and `lbrace` is
+  handled at :516. Minting the token without that arm stops it firing, the
+  inner `}` closes the OUTER block, and `version` is expelled. **P1b would
+  REGRESS a currently-correct grouping** — the opposite of the "inert until
+  wired" assumption the risk framing carried.
+- **"Match your siblings" would INHERIT A LIVE BUG here.** `dot-lparen` is
+  ABSENT from surface-rewrite entirely (0 grep hits), and that absence is a
+  latent defect: `(a .( b ) c)` mis-groups at the tree layer with `c`
+  EXPELLED. The ACTION (add the arm) is right; the precedent's FACT (no arm)
+  must not be copied. P1a's lesson, inverted.
+- **`hash-lbrace` is the complete-coverage precedent** (6/6 sites) — see Q_M5.
+- **The `.` duty count is SIX, not four**: `.k` · `.N` (P2) · `.*` (retired,
+  token still lexes) · `.{` · `.(` · `...` **plus** (5) the single-char
+  FALLBACK — which is what `.{`, `.N` and a standalone `.` all hit today —
+  and (6) the DECIMAL POINT inside number tokens (`3.14` → one token; the
+  `v.0` vs `3.14` boundary is exactly what P2's `.N` must respect). Also
+  `.-1` LEXES CLEANLY as dot-access with field `-1` (`ident-start?` includes
+  `-`), so the carried "`.-1` = classifier rejection" ruling is about an
+  existing well-formed token, not a shatter.
+- **Priority numbers are DECORATIVE where they tie**: dot-lparen and
+  broadcast-access both sit at 87; nil-dot-key and nil-dot-access both at 92.
+  The registry is a plain mutable hash sorted by descending priority — ties
+  break by UNSPECIFIED hash order. **Prefix-disjointness, not priority, is
+  the safety property**; Q8 owes this as a standing invariant line, and a new
+  `dot-lbrace` must take a unique priority without relying on one.
+- **The registry has ONE hard-coded site, not two**: macros.rkt:2434/:2438
+  (coordinates were stale by +3 after P1a). driver.rkt:3337 is
+  `handle-foreign`'s `(foreign racket "module" …)` IMPORT DECLARATION — a
+  different form with no brace. Q8 must decide explicitly whether the registry
+  unifies block-head languages with import-declaration languages.
+- **A zero-dependency LEAF MODULE is the only registry option with in-tree
+  precedent**: there is NO cross-module registration idiom into parse-reader
+  (its token-pattern registry is module-private, zero external callers), while
+  four leaf-module precedents exist (`tropical-fuel-primitives.rkt`,
+  `definition-entry.rkt`, `derivation-chain-types.rkt`, `source-location.rkt`)
+  — one naming cycle-safety as its own rationale. The parameter option is
+  additionally disqualified by the collection-path trap.
+- **`(pair? result)` protects MORE than recorded**: 13 opener-adjacent lines
+  in `.prologos` (9 of them ACCEPTANCE-gated) **plus 16 more in suite-gated
+  test files**.
+- **The sexp `.{` fan-out is ~2× the recorded size**: 27 test-cases / 50
+  occurrences in `test-selection-paths.rkt` + 4/4 in `test-path-expressions`.
+  Q_L2's isolation claim CONFIRMED (both route through
+  `prologos-sexp-read-syntax`, never the WS reader).
+- **A THIRD already-silently-broken-in-WS surface** in this neighbourhood: the
+  WS side of the `selection` form (WS yields `:address` + loose `|.|` +
+  `$brace-params`, never the trailing-dot string the validator splits) —
+  alongside the narrow-var one and the `<` swallow. Recorded, not scoped in.
+- **Bucket 4 (closing-delimiter-adjacent: `f[x]{a}`, `(g y){a}`, `{:a 1}{b}`)
+  has ZERO live sites** — a free decision, but `(pair? result)` is TRUE for
+  all three, so a naive `is-postfix?` generalization classifies them as select
+  blocks by accident. P1b-iii must DECIDE, not discover.
+- **Q8 owes a binder-adjacency THREE-WAY split**: `[fn [x :Int] x]` and
+  `defn s [x :Int]` ACCEPT the spaced form (adjacency-blind); `parse-rel-params`
+  (defr) EXPLICITLY ERRORS on it; expression position is where adjacency
+  decides. Three positions, three rules.
+- **Two additional opener enumerations, both currently inert** and excluded
+  from "the six" with reason: parse-reader.rkt:1585-1586 (the disambiguator's
+  negative-prefix list, a no-op arm today) and tools/golden-capture.rkt:89
+  (dev tooling).
+- **A SEVENTH site is conditional on a decision P1b-ii must make**: whether
+  `dot-lbrace` mints a NEW GROUP TAG. surface-rewrite.rkt:519 derives the tag
+  from the token type; a new tag needs a tree-parser dispatch arm or it hits
+  the "Unhandled form" fallthrough. Reusing `'brace-group` avoids that but
+  ERASES the `.{` distinction from the tree spine, which P3 will need.
+
+### §5.P1b-i — Repairs, probes, and the Q8 draft  ⬜ ← NEXT
+
+**Intent**: land the repairs and settle the probe-decided items, so Q8 is
+WRITTEN FROM measured facts rather than leans. No new surface syntax.
+
+1. **THE Q_M1 POSITION PROBE — FIRST, and gating.** Hunt expression-position
+   `:0`/`:1`/`:w`/`:m` in both modes and across the corpus at HEAD. If ANY
+   exists, ruling Q_M1(b) re-opens BEFORE anything is built on it. (The seam
+   has refuted position-disjointness once already.)
+2. **The WS narrow-var repair** — a **MISSING JOINER, not a missing
+   splitter**, so the standing no-second-splitter rule is satisfied. WS
+   already delivers `?x` and `:Nat` as separate adjacent datums (probe:
+   `[add ?x:Nat ?y:Nat] = 5N` → `((= (add ?x :Nat ?y :Nat) …))`); fusing them
+   at the `=`/`#=` arms leaves `collect-narrow-vars+constraints`,
+   `rewrite-constrained-vars`, `narrow-var-base-name` and
+   `narrow-var-constraints` ALL untouched, and is a provable no-op in sexp
+   mode — the two modes CONVERGE. Reuse `fused-type-annot?` (parser.rkt:5420)
+   as the recognizer; do NOT reuse `split-fused-symbol` (it rejects chains,
+   which the narrowing surface pins as supported). ⚠ Coordinates were STALE
+   by 44 lines: `narrow-var-constraints` is at **:6915**, call sites
+   **:3057/:3063/:3082**. Replace the VACUOUS pin
+   (test-constraint-chain-01.rkt:186-193 — passes on substring `"x"`).
+3. **The top-level `<` swallow fix (Q_M4)** — bound `langle-matched?`'s scan
+   at the next top-level form start; plumb `content-line-indices` (already
+   computed at Domain 2) into `make-bracket-depth-rrb` (Domain 4). Must admit
+   CONTINUATION lines, reject NEW-FORM lines. The `31d27c83` pins
+   (test-parse-reader.rkt:499-547 ×8 + test-mixfix-02.rkt:359-416 ×7) are the
+   gate. **Failing-test-first on the `def p := 1 < 2` / `def q := 3 > 4`
+   repro.** If messier than plumbing suggests: STOP and re-checkpoint.
+4. **`def ?x` → guided error (Q_M3)**, riding the P1a marker seat.
+5. **The remaining probes**: keyword-trailing `*` (confirm `recognize-keyword`
+   delegates to `ident-continue?` — that delegation IS the F1b.7g anti-drift
+   fix, so the split must happen at a CONSUMER; prior art:
+   `validate-selection-paths` already splits `^` string-wise off a keyword
+   lexeme and handles a whole-segment `"*"`); `:<` in BOTH shapes (should be
+   SAFE once item 3 lands — re-probe to confirm rather than assume).
+6. **Q8 DRAFT** from the results — owner-reviewed before P1b-ii/iii land.
+
+**Test delta**: narrow-var real pins (replacing the vacuous one); `<`-swallow
+pins both directions (swallow gone / multi-line angle still works); `def ?x`
+guided-error pin; probe results recorded in this section. Status: ⬜.
+
+### §5.P1b-ii — The `.{` opener  ⬜
+
+`dot-lbrace` re-mint across **SIX** sites — five in parse-reader.rkt
+(registration · extent frame dispatch :1310 · extent langle skip-set :1292 ·
+group-items langle skip-set :2357 · group-items opener arm :2500) **plus
+surface-rewrite.rkt:516** (the positive addition above). Closer = plain
+`'rbrace` (Q_M5). Decide the group-tag question (seventh site, above).
+Prefix-disjointness re-verified post-P1a: the band is still five members
+(dot-key and broadcast-access remain registered as marker emitters) and
+`recognize-dot-access` excludes `{` explicitly AND requires `ident-start?`.
+Flips: test-parse-reader.rkt:401-406 (asserts NO dot-lbrace token — INVERTS)
+and test-mixfix-01.rkt:54-58 (asserts `.{` RAISES via the compat path — a
+DIFFERENT flip shape). Status: ⬜.
+
+### §5.P1b-iii — Brace adjacency + the head registry  ⬜
+
+The forced select-block sentinel (Q_M6) for the non-head-adjacent bucket only;
+head-adjacent keeps `$brace-params` UNCHANGED (the spaced-`racket {…}`
+back-compat pin, test-foreign-block.rkt:155-160). Leaf-module registry.
+Generalize `is-postfix?` beyond `lbracket` while KEEPING `(pair? result)`.
+Rule bucket 4. NET-NEW WS `racket{…}` pins — all 13 existing foreign-block
+cases pass PARENTHESIZED SEXP source that never reaches `group-items`, so the
+head-precedence rule is UNTESTABLE from them; 2 of the 10 live WS sites are
+MULTI-LINE bodies, the shape most exposed and the one a single-line pin
+misses. Sentinel registration checklist: `pattern-var?` + tree-parser
+skip-list. Status: ⬜.
+
+**Acceptance delta for ALL of P1b: ZERO markers uncommented** — every line
+P1b makes LEXABLE is a P3/P4/P5 SEMANTICS target, and the file's convention
+ties uncommenting to a verified `;;N=>` RESULT; there is no honest result for
+"this now tokenizes." Reader pins go to `test-parse-reader.rkt`. ⚠ Six
+currently-PASSING markers are at RISK if `(pair? result)` is dropped.
+
+### §5.P1b — (superseded framing; see the three sub-sections above)  ⬜
 
 **Work list**:
 1. **`.{` = `dot-lbrace` re-mint** (ruling 3a): the SIX-site co-update (five
