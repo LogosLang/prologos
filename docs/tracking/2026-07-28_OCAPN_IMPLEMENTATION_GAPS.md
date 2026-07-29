@@ -149,6 +149,54 @@ With both, the enlivener is an ordinary actor at export 5, the driver
 intercepts nothing, and every op goes through `connection-step`. §0.3 is
 closed and §1.7 M8 is half closed.
 
+**§0.2 — what is left, as a design rather than a label.** The entry has always
+said "that is a design task, not a refactor". Two primitives shipping changes
+what the design can assume, so here it is concretely, grounded in what now
+works.
+
+*The shape that works.* `eff-connect` established the pattern: a behaviour
+names what it wants, the vat appends it to a per-vat request list, the driver
+drains that list between steps and performs the effect. The vat stays pure;
+nothing in it touches a socket. `act-step-pending` established the other half:
+a behaviour can act without answering, so an effect whose *result* arrives
+later does not have to invent a reply. Both remaining primitives are the same
+two shapes.
+
+*`eff-sign payload reply-to`.* Signing needs a keypair the vat must not hold,
+and its result must come back. Same pattern: a pending-signature list carrying
+`(payload, reply-to)`; the driver signs and delivers the signature to the named
+actor as an ordinary message. The behaviour uses `act-step-pending`, because
+the signature is not its return value. This is what the RECEIVER role needs to
+build a `desc:handoff-receive`.
+
+*`eff-send-on conn bytes` and the registry.* This is the one that is not a
+primitive in isolation, and the reason the roles have not moved. A gifter must
+write to a connection OTHER than the one being serviced — the exporter's — and
+nothing in the vat can name one. Concretely: `conn-entry`
+(`run-ocapn-test-server.rkt:803`) is `(out-port, pubkey, side-id)` and carries
+NO connection id, so even the Racket side cannot currently ask the driver to
+act on a named connection. A first-class registry — connection id → (peer key,
+side id, export table) — is the prerequisite, and `eff-send-on` is trivial
+once it exists.
+
+*Migration order, each step independently landable:*
+
+1. Add a connection id to the server's `conn-entry` and to whatever the driver
+   stashes. Nothing behavioural; it makes every later step expressible.
+2. `reserve-export cid` in the driver: spawn a placeholder actor in that
+   connection's vat and return its id. **This closes §1.7 M7 by
+   construction** — the enliven resolve-me stops being a Racket counter in a
+   range reserved by convention and becomes a real export in the exporter
+   connection's own table.
+3. `eff-sign`, with the receiver's handoff-receive as its first consumer.
+4. `eff-send-on` + the registry, which lets the gifter role move.
+5. Delete the Racket byte-scanners, **which closes the rest of §1.7 M8** —
+   the two implementations stop running on the same bytes because there is
+   only one left.
+
+Steps 1 and 2 are small and closable now. Steps 3–5 are the actual role
+migration, and that is still a day of work rather than an afternoon.
+
 **§1.2 M3 — closed, on the second attempt.** A forwarded deliver is a NEW
 message with us as the sender, so the queued deliver's `ap`/`rm` cannot be
 echoed — they name the peer's tables. What is correct is to allocate a fresh
