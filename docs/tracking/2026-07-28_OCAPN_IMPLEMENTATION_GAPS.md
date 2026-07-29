@@ -180,12 +180,22 @@ build a `desc:handoff-receive`.
 *`eff-send-on conn bytes` and the registry.* This is the one that is not a
 primitive in isolation, and the reason the roles have not moved. A gifter must
 write to a connection OTHER than the one being serviced — the exporter's — and
-nothing in the vat can name one. Concretely: `conn-entry`
-(`run-ocapn-test-server.rkt:803`) is `(out-port, pubkey, side-id)` and carries
-NO connection id, so even the Racket side cannot currently ask the driver to
-act on a named connection. A first-class registry — connection id → (peer key,
-side id, export table) — is the prerequisite, and `eff-send-on` is trivial
-once it exists.
+nothing in the vat can name one. `conn-entry` now carries a connection id
+(that was step 1), so the Racket side CAN name one; what is missing is
+somewhere for cross-connection state to live that both halves can see.
+
+**The registry is not a new mechanism.** It is the gift table's shape applied
+a second time: an exporter-global table living behind an FFI, seeded into the
+per-connection state at the start of a step and published back at the end
+(`with-global-gifts` / `publish-gifts` in the driver). That pattern already
+carries state across connections for exactly this reason — a handoff deposits
+on one connection and withdraws on another — and it already has the
+kind-discriminated entry type and the per-connection/global split worked out.
+A connection registry is the same thing keyed by connection id.
+
+That matters for estimating the rest: the registry is not a design problem, it
+is an application of a design that already ships. What is left after it is the
+role migration itself.
 
 *Migration order, each step independently landable:*
 
