@@ -859,6 +859,45 @@
       2
       #f))
 
+;; CIU T6 D4.P1b-i (owner ruling Q_L1's scoped-in repair) — the WS narrowing
+;; typed logic variable `?x:Nat` (chains: `?foo:Nat:Even`), lexed as ONE token.
+;;
+;; The sexp reader glues `?x:Nat` into a single symbol; the WS tokenizer split
+;; it, so `narrow-var-constraints`' string-split never saw a colon: WS
+;; narrowing silently returned `nil` — ZERO solutions, ZERO errors — where
+;; sexp returns six. Its only regression pin passed on the substring "nil",
+;; i.e. it passed BECAUSE of the bug.
+;;
+;; ⚠ The FIRST fix attempt joined the two datums back together in the PARSER,
+;; and was UNSOUND: at the datum layer adjacency is already destroyed (the
+;; very fact this phase's audit established for braces), so it absorbed ANY
+;; following colon-symbol — `[add ?x :foo ?y] = 5N` silently became a
+;; different 2-argument goal returning six solutions, and `{:name ?n :age 30}`
+;; swallowed a map key. Caught by two independent skeptics. Doing it HERE, in
+;; the tokenizer, makes adjacency inherent: a token is contiguous by
+;; construction, so a SPACE-separated `?m :name` cannot match and keyword
+;; arguments after a logic variable are untouched.
+(define (recognize-narrow-var-annot rrb pos)
+  (define (ident-run i)   ;; length of an ident-start ident-continue* run at i
+    (define c (rrb-char-at rrb i))
+    (and c (ident-start? c)
+         (let loop ([j (+ i 1)])
+           (define cj (rrb-char-at rrb j))
+           (if (and cj (ident-continue? cj)) (loop (+ j 1)) (- j i)))))
+  (define c0 (rrb-char-at rrb pos))
+  (and c0 (char=? c0 #\?)
+       (let ([vlen (ident-run (+ pos 1))])
+         (and vlen
+              ;; at least one `:Segment` must follow, contiguously
+              (let seg ([i (+ pos 1 vlen)] [n 0])
+                (define ci (rrb-char-at rrb i))
+                (cond
+                  [(and ci (char=? ci #\:))
+                   (let ([slen (ident-run (+ i 1))])
+                     (if slen (seg (+ i 1 slen) (+ n 1)) (and (> n 0) (- i pos))))]
+                  [(> n 0) (- i pos)]
+                  [else #f]))))))
+
 (define (recognize-session-arrow rrb pos)
   ;; -0>, -1>, -w> — session type linear arrows
   (define c1 (rrb-char-at rrb pos))
@@ -1006,6 +1045,12 @@
   (register-token-pattern!
    (token-pattern 'colon-annotation (lambda (rrb pos) (recognize-colon-annotation rrb pos))
                   (lambda (s p l) 'symbol) 97))  ;; :0, :w before bare colon
+  ;; D4.P1b-i: `?x:Nat` as ONE token — before `symbol` (50), which would stop
+  ;; at the colon. Contiguity is the discriminator: `?m :name` (spaced) is
+  ;; untouched, so keyword arguments after a logic variable still work.
+  (register-token-pattern!
+   (token-pattern 'narrow-var-annot (lambda (rrb pos) (recognize-narrow-var-annot rrb pos))
+                  (lambda (s p l) 'symbol) 96))
   (register-token-pattern!
    (token-pattern 'typed-hole (lambda (rrb pos) (recognize-typed-hole rrb pos))
                   (lambda (s p l) 'typed-hole) 98))  ;; ?? before ?:/?
@@ -1272,15 +1317,106 @@
 ;; bracket continuation (the `.( 3N < 5N )` / `[< 3N 5N]` defect, 2026-07-26).
 ;; A frame stack tracks the innermost group kind + its closer to mirror the
 ;; grouping layer's context.
-(define (make-bracket-depth-rrb token-rrb)
+;; ============================================================
+;; CIU T6 D4.P1b-i (owner ruling Q_M4) — the TOP-LEVEL `<` bound.
+;;
+;; `langle-matched?` / `has-matching-rangle?` decide whether a `<` OPENS an
+;; angle group by scanning ahead for a matching `>`. Their terminating arm
+;; needs a close-type — but at TOP LEVEL close-type is #f, so it can never
+;; fire and the scan ran to the END OF THE TOKEN STREAM. A `<` therefore
+;; matched a `>` belonging to a LATER top-level form: `def p := 1 < 2` /
+;; `def q := 3 > 4` collapsed into ONE form at ZERO errors — a silent
+;; wrong answer in ordinary code, and the reason `:<` (disclose) looked
+;; hazardous when the hazard was the bare `<`.
+;;
+;; The bound: a TOP-LEVEL `<` may not scan past the start of the NEXT
+;; top-level form. Continuation lines are INDENTED by layout, so multi-line
+;; angle groups (`<(x : A)\n -> B>`) are unaffected — pinned in
+;; test-parse-reader.rkt. Applied ONLY when close-type is #f: nested scopes
+;; are already bounded by their own closer, so this cannot regress them.
+;;
+;; Both twins take the bound. Their disagreement IS the `31d27c83` defect
+;; class, and the bracket-depth pin passing while the datum layer collapsed
+;; is exactly what proved both are load-bearing here.
+;; ============================================================
+
+;; A token BEGINS A TOP-LEVEL FORM iff it is the first thing on its line and
+;; that line has indent 0. Both halves DELEGATE to the reader's own notions
+;; rather than re-deriving them:
+;;   * indent = leading SPACE count — exactly `measure-indent` (:121-126);
+;;   * everything between the line start and the token must be whitespace,
+;;     which makes `\r` (CRLF) and `\t` invisible here just as the tokenizer
+;;     already treats them.
+;;
+;; ⚠ The first draft of this bound hand-rolled a THIRD definition of
+;; "indent-0 content line" and drifted from BOTH existing ones — it counted
+;; `\r` as content (so a CRLF blank line destroyed a working angle group) and
+;; counted `\t` as indent (so tab-indented files got no bound at all and the
+;; swallow survived). That is the F1b.7g drift class in `prologos-syntax.md`
+;; § Reader, caught by the P1b-i adversarial verify. Working per TOKEN also
+;; removes two hazards the string scan had for free: a multi-line STRING is
+;; ONE token, so column-0 text inside it can no longer register a phantom
+;; form start, and comments are not tokens at all.
+(define (line-start-of src pos)
+  (let back ([i (- pos 1)])
+    (cond [(< i 0) 0]
+          [(char=? (string-ref src i) #\newline) (+ i 1)]
+          [else (back (- i 1))])))
+
+;; Indent of the line containing `pos`, delegating to `measure-indent`'s
+;; semantics: LEADING SPACES only (a tab-indented line therefore has indent 0
+;; and is a sibling, exactly as the layout engine already reads it).
+(define (line-indent-at src pos)
+  (define ls (line-start-of src pos))
+  (let count ([i ls] [k 0])
+    (if (and (< i (string-length src)) (char=? (string-ref src i) #\space))
+        (count (+ i 1) (+ k 1))
+        k)))
+
+;; Is `pos` the FIRST token position on its line? (Only whitespace behind it.)
+;; Working per TOKEN is what makes a multi-line STRING safe: the string is ONE
+;; token, so column-0 text inside it can never register as a form start.
+(define (token-first-on-line? src pos)
+  (let scan ([i (line-start-of src pos)])
+    (cond [(>= i pos) #t]
+          [(memv (string-ref src i) '(#\space #\tab #\return)) (scan (+ i 1))]
+          [else #f])))
+
+;; Does the token at `tok-pos` START A NEW FORM relative to a `<` at
+;; `langle-pos`? Layout rule: a line at the SAME-or-LESSER indent is a sibling
+;; or an outdent — a new form; a MORE-indented line is a continuation.
+;;
+;; ⚠ Two earlier drafts of this bound were wrong in instructive ways, both
+;; caught by the P1b-i adversarial verify. The first hand-rolled a THIRD
+;; definition of "indent-0 content line" that drifted from BOTH `content-line?`
+;; and `measure-indent` (it counted `\r` as content, so a CRLF blank line
+;; destroyed a working angle group, and counted `\t` as indent, so
+;; tab-indented files got no bound at all) — the F1b.7g drift class. The
+;; second fixed those but tested "indent 0" absolutely, which misses every
+;; file whose forms start indented (`"  def a\n  def b"` is TWO forms).
+;; Delegate, and compare RELATIVE indent.
+(define (token-starts-new-form? src langle-pos tok-pos)
+  (and (token-first-on-line? src tok-pos)
+       (<= (line-indent-at src tok-pos) (line-indent-at src langle-pos))))
+
+(define (make-bracket-depth-rrb token-rrb [src #f])
   (define n (rrb-size token-rrb))
   ;; Lookahead twin of has-matching-rangle? over the token RRB: is there a
   ;; matching rangle for a langle at `start`, before the enclosing group's
   ;; closer? Skips balanced nested groups; nested angles via angle-depth.
   (define (langle-matched? start close-type)
+    ;; Q_M4: at TOP LEVEL (no enclosing closer) bound the scan at the next
+    ;; top-level form start, else it runs to EOF and matches another form's `>`.
+    (define langle-pos
+      (and src (not close-type) (> start 0)
+           (token-entry-start-pos (rrb-get token-rrb (- start 1)))))
     (let loop ([i start] [angle-depth 0] [other-depth 0])
       (cond
         [(>= i n) #f]
+        [(and langle-pos
+              (token-starts-new-form?
+               src langle-pos (token-entry-start-pos (rrb-get token-rrb i))))
+         #f]
         [else
          (define type (set-first (token-entry-types (rrb-get token-rrb i))))
          (cond
@@ -1629,7 +1765,8 @@
   (define tok-rrb (tokenize-char-rrb char-rrb))
 
   ;; Domain 4: Bracket-depth RRB
-  (define bd-rrb (make-bracket-depth-rrb tok-rrb))
+  ;; Q_M4 (D4.P1b-i): the source bounds the top-level angle lookahead.
+  (define bd-rrb (make-bracket-depth-rrb tok-rrb str))
 
   ;; Disambiguation cycle (≤2 rounds)
   (define-values (tok-rrb-final bd-rrb-final)
@@ -1639,7 +1776,7 @@
           (let-values ([(narrowed changed?) (disambiguate-tokens tok bd)])
             (if changed?
                 ;; Recompute bracket-depth from narrowed tokens
-                (let ([new-bd (make-bracket-depth-rrb narrowed)])
+                (let ([new-bd (make-bracket-depth-rrb narrowed str)])
                   (round narrowed new-bd (+ rounds 1)))
                 (values tok bd))))))
 
@@ -2334,15 +2471,26 @@
 
 ;; Lookahead: check if there's a matching rangle before the current scope closes.
 ;; Scans forward tracking nesting depth for <> pairs.
-(define (has-matching-rangle? vec start end close-type)
+(define (has-matching-rangle? vec start end close-type [src #f])
   ;; Scan forward for matching rangle, tracking ALL bracket depths.
   ;; Skip over nested [...], (...), {...} groups entirely.
+  ;; Q_M4 (D4.P1b-i): the langle-matched? twin — same top-level bound, or a
+  ;; `<` matches a `>` in a later top-level form. The bracket-depth pin
+  ;; passing while the DATUM layer still collapsed is what proved this twin
+  ;; also needs it (the 31d27c83 "layers must agree" lesson).
+  (define langle-pos
+    (and src (not close-type) (> start 0)
+         (let ([prev (vector-ref vec (- start 1))])
+           (and (token-entry? prev) (token-entry-start-pos prev)))))
   (let loop ([i start] [angle-depth 0] [other-depth 0])
     (cond
       [(>= i end) #f]
       [else
        (define item (vector-ref vec i))
        (cond
+         [(and langle-pos (token-entry? item)
+               (token-starts-new-form? src langle-pos (token-entry-start-pos item)))
+          #f]
          [(not (token-entry? item)) (loop (+ i 1) angle-depth other-depth)]
          [else
           (define type (set-first (token-entry-types item)))
@@ -2480,7 +2628,7 @@
             ;; AND we're not inside a mixfix group (where < > are operators)
             [(eq? type 'langle)
              (if (and (not (mixfix-close? close-type))
-                      (has-matching-rangle? vec (+ i 1) end close-type))
+                      (has-matching-rangle? vec (+ i 1) end close-type source-str))
                  (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rangle source source-str qq-depth)])
                    (let-values ([(al ac) (pos->line-col source-str (token-entry-start-pos item))])
                      (loop next-i

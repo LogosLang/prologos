@@ -536,6 +536,63 @@
   (check-equal? (car (rrb-get bd-rrb (- n 1))) 0)   ;; final > closes all
   (check-equal? (car (rrb-get bd-rrb (- n 2))) 1))  ;; B still inside <>
 
+;; ---- D4.P1b-i (owner ruling Q_M4): the TOP-LEVEL `<` swallow ----
+;; `langle-matched?`'s terminating arm needs a close-type, but at TOP LEVEL
+;; close-type is #f — so the scan ran to the end of the whole token stream and
+;; a `<` matched a `>` belonging to a LATER top-level form. Ordinary code
+;; (`def p := 1 < 2` / `def q := 3 > 4`) silently collapsed into ONE form at
+;; ZERO errors. The bound: a top-level `<` may not scan past the start of the
+;; next top-level (indent-0) form. Continuation lines are INDENTED, so
+;; multi-line angle groups are unaffected (pinned directly below).
+
+(test-case "P1b-i: a top-level `<` does not match a `>` in a LATER top-level form"
+  ;; The comparison pair that silently collapsed. Depth must return to 0.
+  (check-equal? (final-bracket-depth "def p := 1 < 2\ndef q := 3 > 4") 0))
+
+(test-case "P1b-i: the collapse is gone at the DATUM layer — two forms, not one"
+  (check-equal? (length (read-all-forms-string "def p := 1 < 2\ndef q := 3 > 4")) 2))
+
+(test-case "P1b-i: `:<` disclose shape is safe even with a later depth-0 `>`"
+  ;; The audit showed the swallower is the bare `<`, NOT `:<` — this pins the
+  ;; disclose spelling against the same hazard (grammar row owed by Q8; the
+  ;; SEMANTICS land at P4).
+  (check-equal? (length (read-all-forms-string "users:<{a}\ndef z := 1\na > b")) 3))
+
+(test-case "P1b-i: the bare-`<` control is fixed too (no colon, no brace)"
+  (check-equal? (length (read-all-forms-string "users<{a}\ndef z := 1\na > b")) 3))
+
+(test-case "P1b-i MUST-STAY-GREEN: a multi-line angle group still spans its continuation"
+  ;; Continuations are MORE-indented, so the relative-indent bound must not cut them.
+  (check-equal? (length (read-all-forms-string "def f : <(x : Int)\n -> Int> := g")) 1)
+  (check-equal? (length (read-all-forms-string "def u : <Int\n | String> := 42")) 1))
+
+;; ---- The P1b-i adversarial verify's findings, pinned. Two earlier drafts of
+;; this bound were wrong: the first hand-rolled a THIRD definition of
+;; "indent-0 content line" (drifting from both `content-line?` and
+;; `measure-indent` — the F1b.7g class); the second tested indent 0
+;; ABSOLUTELY, which misses every file whose forms start indented. The bound
+;; now compares RELATIVE indent and works per TOKEN. ----
+
+(test-case "P1b-i: the bound works when the whole file is INDENTED (relative, not absolute)"
+  ;; `  def a := 1` / `  def b := 2` is TWO forms with no angles — so a bound
+  ;; keyed on "indent 0" would never fire here and the swallow would survive.
+  (check-equal? (length (read-all-forms-string "  def a := 1\n  def b := 2")) 2)
+  (check-equal? (length (read-all-forms-string "  def p := 1 < 2\n  def q := 3 > 4")) 2))
+
+(test-case "P1b-i: TAB-indented siblings are bounded (measure-indent counts spaces only)"
+  (check-equal? (length (read-all-forms-string "def p := 1 < 2\n\tdef q := 3 > 4")) 2))
+
+(test-case "P1b-i: a CRLF blank line inside an angle group does NOT destroy it"
+  ;; The first draft counted a bare `\r` as indent-0 CONTENT, registering a
+  ;; phantom form start; `content-line?` string-trims, so it is not one.
+  (check-equal? (length (read-all-forms-string "def u : <Int\r\n\r\n | String> := 42")) 1)
+  (check-equal? (length (read-all-forms-string "def u : <Int\r\n | String> := 42")) 1))
+
+(test-case "P1b-i: column-0 text inside a multi-line STRING is not a form start"
+  ;; Free consequence of working per TOKEN: a multi-line string is ONE token,
+  ;; so nothing inside it can begin a line as far as the bound is concerned.
+  (check-equal? (length (read-all-forms-string "def f : <(x : Int)\n -> Foo \"ab\ncd\"> := g")) 1))
+
 (test-case "bracket-depth: bracket group inside mixfix restores mixfix context"
   ;; .( [id 3N] < 5N ) — `<` after the nested [ ] pops back to the mixfix
   ;; frame, so it is still an operator.

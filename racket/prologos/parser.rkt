@@ -3059,6 +3059,7 @@
                       (and (pair? qvars) qvars)))
                ;; Has ?-variables: parse as narrowing expression
                ;; Phase 3c: rewrite constrained vars (?x:Nat → ?x) before parse-datum
+               ;; D4.P1b-i: JOIN the WS-split `?x` + `:Nat` first (no-op in sexp).
                (let*-values
                  ([(qvars cmap) (collect-narrow-vars+constraints
                                  (car args) (cadr args))]
@@ -3914,6 +3915,23 @@
 ;; ========================================
 ;; Parse def: (def name : type body)
 ;; ========================================
+;; CIU T6 D4.P1b-i (owner ruling Q_M3) — the `?`-namespace RESERVATION.
+;; `?` marks a LOGIC VARIABLE (functional narrowing; `defr` logic-var params),
+;; so a `def` binding was never meant to be one. Legal at HEAD (`def ?cfg :=
+;; {:a 1}` bound fine and `?cfg.a` projected), which made it a silent surprise
+;; waiting to happen once `?`-headed subjects become the broadcast
+;; discriminator (Q_L1). Reserved here: prophylactic, no present soundness
+;; issue [owner]. ONE message, three call sites — the def arms.
+(define (def-name-reservation-error name loc)
+  (and (symbol? name)
+       (narrow-var-symbol? name)
+       (parse-error
+        loc
+        (format "def: `~a` is reserved — a leading `?` marks a logic variable (narrowing / defr params), not a definition; name it `~a`"
+                name
+                (substring (symbol->string name) 1))
+        name)))
+
 (define (parse-def args loc)
   ;; Sprint 10: (def name body) — 2 args, type inferred from body
   ;; NEW: (def name <type> body) — 3 args where second is ($angle-type ...)
@@ -3925,6 +3943,8 @@
        (cond
          [(not (symbol? name))
           (parse-error loc (format "def: expected name, got ~a" name) name)]
+         [(def-name-reservation-error name loc)
+          => values]
          [else
           ;; Rel T1 POL.9b: the def RHS is command position (Q_C) —
           ;; a paren goal binds the solve's rows (POL.10 snapshot governs).
@@ -3938,6 +3958,8 @@
        (cond
          [(not (symbol? name))
           (parse-error loc (format "def: expected name, got ~a" name) name)]
+         [(def-name-reservation-error name loc)
+          => values]
          [else
           (let ([ty (unwrap-angle-type (cadr args) loc)]
                 [bd (parse-defrhs-datum (caddr args))])  ;; POL.9b: := RHS command position
@@ -3954,6 +3976,8 @@
        (cond
          [(not (symbol? name))
           (parse-error loc (format "def: expected name, got ~a" name) name)]
+         [(def-name-reservation-error name loc)
+          => values]
          [(not (eq? colon ':))
           (parse-error loc (format "def: expected ':', got ~a" colon) colon)]
          [else

@@ -637,6 +637,31 @@
   (define r (run-ws-last "def v := @[10 20 30]\nv[-1.5]\n"))
   (check-regexp-match #rx"negative" r))
 
+;; ============================================================
+;; D4.P1b-i — repairs (D4 §5.P1b-i; audit wf_d0862784-5e5)
+;; ============================================================
+
+(test-case "P1b-i C1 (Q_M4): the top-level `<` swallow is gone E2E — intervening commands survive"
+  ;; Before the fix these THREE lines collapsed into ONE form (the `<` on
+  ;; line 1 matched the `>` on line 3), so `ok` was never defined and the
+  ;; whole thing reported ZERO errors. `<`/`>` are themselves unbound as
+  ;; functions here (they are spelled lt/gt) — irrelevant: the property
+  ;; under test is that each line is its OWN top-level form.
+  (define rs (run-ws "def p := 1 < 2\ndef ok := 7\ndef q := 3 > 4\nok\n"))
+  (check-true (ormap (lambda (r) (regexp-match? #rx"ok : Int defined" r)) rs)
+              "the intervening def must be its OWN form and succeed")
+  (check-false (regexp-match? #rx"Unbound" (last rs))
+               "a command BETWEEN a `<` and a later `>` must survive as its own form"))
+
+(test-case "P1b-i C2 (Q_M3): `def ?x` is a guided error — `?` is the logic-var modality"
+  ;; Namespace RESERVATION [owner]: `?` marks a logic variable (narrowing,
+  ;; defr params), so a def binding was never meant to be one. Legal at HEAD
+  ;; (`def ?cfg := {:a 1}` → `?cfg : {:a Int} defined.`), reserved here.
+  (define rs (run-ws "def ?cfg := {:a 1}\ndef okr := 1\nokr\n"))
+  (check-regexp-match #rx"logic variable|\\?-prefixed|reserved" (first rs))
+  (check-regexp-match #rx"1 : Int" (last rs)
+                      "the reservation must be per-command — the file continues"))
+
 (test-case "P1a B4: definitely-not-map? conservative default pinned DIRECTLY (replaces the broadcast-get pin)"
   ;; The retiring walker pin at :258-266 incidentally carried the track file's
   ;; only direct pin on P2.b's positive-list default (critic C3). This pins it
