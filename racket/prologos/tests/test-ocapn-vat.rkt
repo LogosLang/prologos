@@ -370,3 +370,19 @@
                   v2 (run-vat (suc (suc (suc zero))) v1))
               (fulfilled? (unwrap-or fresh (lookup-promise (alloc-id pa) v2)))))")
    "true"))
+
+(test-case "vat/beh-sink absorbs a message and answers nothing"
+  ;; It exists so an export position can be REAL -- something a connection's
+  ;; own table holds -- rather than a number reserved by convention. Any
+  ;; ANSWERING behaviour would put a reply on the wire for a message whose
+  ;; real handler is somewhere else entirely.
+  (check-contains
+   (run-last
+    "(eval (let (sa (vat-spawn beh-sink syrup-null empty-vat)
+                  pa (fresh-promise (alloc-vat sa))
+                  v1 (enqueue-msg (vmsg-deliver (alloc-id sa) (syrup-string \"anything\")
+                                     (some Nat (alloc-id pa)))
+                                  (alloc-vat pa))
+                  v2 (run-vat (suc (suc (suc zero))) v1))
+              (fulfilled? (unwrap-or fresh (lookup-promise (alloc-id pa) v2)))))")
+   "false"))
