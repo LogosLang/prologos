@@ -133,10 +133,10 @@
    (rewrite-nil-dot-access '(user ($nil-dot-access address) ($nil-dot-access city)))
    '(nil-safe-get (nil-safe-get user :address) :city)))
 
-(test-case "rewrite-nil-dot-access: nil-dot-key prefix"
+(test-case "rewrite-nil-dot-access: nil-dot-key prefix → RETIREMENT MARKER (D4.P1a)"
   (check-equal?
    (rewrite-nil-dot-access '(($nil-dot-key :name) user))
-   '(nil-safe-get user :name)))
+   '($retired-selection nil-dot-key :name)))
 
 (test-case "rewrite-nil-dot-access: in larger form"
   (check-equal?
@@ -148,12 +148,10 @@
    (rewrite-nil-dot-access '(f x y))
    '(f x y)))
 
-(test-case "rewrite-nil-dot-access: standalone nil-dot-key → lambda"
-  (define result (rewrite-nil-dot-access '(($nil-dot-key :name))))
-  (check-true (list? result))
-  (check-equal? (car result) 'fn)
-  ;; Should produce (fn ($x : _) (nil-safe-get $x :name))
-  (check-equal? (length result) 3))
+(test-case "rewrite-nil-dot-access: standalone nil-dot-key → RETIREMENT MARKER (D4.P1a)"
+  (check-equal?
+   (rewrite-nil-dot-access '(($nil-dot-key :name)))
+   '($retired-selection nil-dot-key :name)))
 
 ;; ========================================
 ;; E. Reader tokenization: #. and #:

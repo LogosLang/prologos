@@ -3,9 +3,11 @@
 ;;;
 ;;; CIU T6 Path Selection — the track's test file (created P2.a, grown per phase).
 ;;; P2.a: prerequisite repairs — the record-project Int gate, the pvec-nth
-;;; discipline guard, the ground-expr? twin fallbacks, and the
-;;; expr-broadcast-get walker-safety arms.
-;;; Design: docs/tracking/2026-07-26_CIU_T6_PATH_SELECTION_DESIGN.md §2 P2 + §5.10.
+;;; discipline guard, the ground-expr? twin fallbacks (the broadcast-get
+;;; walker-safety arms retired WITH the node at D4.P1a).
+;;; P2.b: the two-tier principle. D4.P1a: the retirement batch + marker seat.
+;;; Design: docs/tracking/2026-07-28_CIU_T6_PATH_SELECTION_D4.md §5 (P2 record
+;;; in the 2026-07-26 predecessor §5.10).
 ;;;
 
 (require rackunit
@@ -237,33 +239,11 @@
                             (expr-Nat))))
 
 ;; ============================================================
-;; P2.a — expr-broadcast-get walker safety (whnf + definitely-not-map?)
+;; P2.a — expr-broadcast-get walker safety: RETIRED WITH THE NODE (D4.P1a).
+;; The two whnf/definitely-not-map? pins that lived here died with
+;; expr-broadcast-get (ruling Q_L3). The conservative-default coverage they
+;; incidentally carried is now pinned DIRECTLY by "P1a B4" below (critic C3).
 ;; ============================================================
-
-(define champ-alice
-  (whnf (expr-map-assoc (expr-map-empty (expr-Keyword) (expr-String))
-                        (expr-keyword 'name) (expr-string "alice"))))
-
-(define bg-live
-  ;; (broadcast-get (cons {:name "alice"} nil) :name) — reducible.
-  (expr-broadcast-get
-   (expr-app (expr-app (expr-fvar 'cons) champ-alice) (expr-fvar 'nil))
-   (list (expr-keyword 'name))))
-
-(test-case "broadcast-get: whnf now reduces it (was: [_ e] fallthrough, nf-only)"
-  (define w (whnf bg-live))
-  (check-false (eq? w bg-live))
-  (check-equal? w (nf bg-live)))
-
-(test-case "broadcast-get: a STUCK broadcast no longer degrades map-get to `none`"
-  ;; definitely-not-map? now exempts expr-broadcast-get like its two path
-  ;; siblings (the 2026-07-16 value-loss fix left it out): map-get over a stuck
-  ;; broadcast stays STUCK instead of fabricating (expr-fvar 'none).
-  (define bg-stuck (expr-broadcast-get (expr-fvar 'unknown-list)
-                                       (list (expr-keyword 'name))))
-  (check-false (definitely-not-map? bg-stuck))
-  (define r (whnf (expr-map-get bg-stuck (expr-keyword 'k) #f)))
-  (check-false (equal? r (expr-fvar 'none))))
 
 ;; ============================================================
 ;; P2.b — THE TWO-TIER PRINCIPLE  (design §5.10 round 7, realization round 8)
@@ -510,3 +490,156 @@
                "def q := {:x [boom3 1]}\n")))
   (check-false (ormap prologos-error? rs)
                "a panic nested inside a constructed value is uncounted (top-node bound)"))
+
+;; ============================================================
+;; D4.P1a — THE RETIREMENT BATCH  (D4 §5.P1a; audit wf_789e4f0f-f02)
+;;
+;; Written FAILING-FIRST. Group A pins the GUIDED retirement diagnostics
+;; (marker-form seat: tokens stay, preparse rewrites die, the PARSER converts
+;; sentinels to per-command parse-error VALUES). Group B pins the survivors.
+;;
+;; Fixture discipline (Watching #4): map-literal subjects use the :no-prelude
+;; fixture; List subjects ('[…] lowers to cons/nil = prelude names) use the
+;; PRELUDE fixture — else a broadcast test errors for the WRONG reason and
+;; false-greens an is-error assertion.
+;; ============================================================
+
+;; ---------- Group A — the retirements (RED until P1a lands) ----------
+
+(test-case "P1a A1: dot-key POSTFIX `user.:name` → guided retirement error; file CONTINUES"
+  (define rs (run-ws
+              (string-append
+               "def user := {:name \"Alice\" :age 30}\n"
+               "user.:name\n"
+               "def zz := 7\n"
+               "zz\n")))
+  (check-regexp-match #rx"retired" (second rs))
+  (check-regexp-match #rx"\\.name" (second rs))
+  (check-regexp-match #rx"7 : Int" (last rs)
+                      "the seat must be per-command — later commands still evaluate"))
+
+(test-case "P1a A2: dot-key PREFIX `.:name user` → the same guided error (Pattern-2a shape)"
+  (define rs (run-ws
+              (string-append
+               "def user := {:name \"Alice\"}\n"
+               ".:name user\n")))
+  (check-regexp-match #rx"retired" (last rs)))
+
+(test-case "P1a A3: the nil-dot-key twins `#:name` / `#.:name` → guided error naming the survivor `#.name`"
+  ;; These are ALREADY broken on the WS path today (probe: `Unbound variable`)
+  ;; — the pin asserts the MESSAGE upgrade, not a behavior flip.
+  (define rs (run-ws
+              (string-append
+               "def user := {:name \"Alice\"}\n"
+               "user#:name\n"
+               "user#.:name\n")))
+  (check-regexp-match #rx"retired" (second rs))
+  (check-regexp-match #rx"#\\.name" (second rs))
+  (check-regexp-match #rx"retired" (third rs))
+  (check-regexp-match #rx"#\\.name" (third rs)))
+
+(test-case "P1a A4: broadcast `.*name` → guided error naming `:name` (the accepted P1→P4 gap's noise)"
+  ;; PRELUDE fixture: the subject must be a REAL List so that today the form
+  ;; SUCCEEDS — an undefined subject would error today too and false-red this.
+  (define rs (run-ws-pre
+              (string-append
+               "def ladmins := '[{:name \"Alice\"} {:name \"Bob\"}]\n"
+               "ladmins.*name\n"
+               "ladmins.*nope\n"
+               "def after := 1\nafter\n")))
+  (check-regexp-match #rx"retired" (second rs))
+  (check-regexp-match #rx":name" (second rs))
+  ;; the once-SILENT wrong answer ('[<error> <error>] at 0 errors) dies with
+  ;; the surface — same guided error, no fabricated value:
+  (check-regexp-match #rx"retired" (third rs))
+  (check-false (regexp-match? #rx"<error>" (third rs)))
+  (check-regexp-match #rx"1 : Int" (last rs)))
+
+(test-case "P1a A5: the `broadcast-get` parser KEYWORD is retired — both spellings error"
+  ;; Zero live users (census). Bracket spelling → unbound variable;
+  ;; paren spelling at command position → a POL.9 goal → solver diagnostic.
+  (define rs1 (run-ws-pre-raw
+               (string-append
+                "def xs := '[{:name \"A\"}]\n"
+                "[broadcast-get xs :name]\n")))
+  (check-true (prologos-error? (last rs1))
+              "[broadcast-get …] must no longer be a live application")
+  (define rs2 (run-ws-pre-raw
+               (string-append
+                "def xs := '[{:name \"A\"}]\n"
+                "(broadcast-get xs :name)\n")))
+  (check-true (prologos-error? (last rs2))
+              "(broadcast-get …) at command position must no longer parse as the keyword"))
+
+(test-case "P1a A6: keyword-literal postfix `m[:a]` → guided error naming `m.a` / `[get m :a]`"
+  (define rs (run-ws
+              (string-append
+               "def m := {:a 1 :b 2}\n"
+               "m[:a]\n")))
+  (check-regexp-match #rx"retired" (last rs))
+  (check-regexp-match #rx"get" (last rs)))
+
+(test-case "P1a A7: negative literal postfix `v[-1]` is a COUNTED error (was: silent wrong answer, 0 errors)"
+  (define r (run-ws-raw-last "def v := @[10 20 30]\nv[-1]\n"))
+  (check-true (prologos-error? r)
+              "v[-1] type-checked Int and printed a stuck term at ZERO errors"))
+
+(test-case "P1a A7b: the negative-index error names the negativity"
+  (define r (run-ws-last "def v := @[10 20 30]\nv[-1]\n"))
+  (check-regexp-match #rx"negative" r))
+
+(test-case "P1a A8: empty postfix `v[]` → guided message (was: generic `Unexpected datum: ()`)"
+  (define r (run-ws-last "def v := @[10 20 30]\nv[]\n"))
+  (check-regexp-match #rx"empty" r))
+
+(test-case "P1a A9: `_[k]` hole subject → guided message (was: generic `Could not infer type`)"
+  (define r (run-ws-last "def k := :a\n_[k]\n"))
+  (check-regexp-match #rx"subject" r))
+
+;; ---------- Group B — survivors (GREEN today, must STAY green) ----------
+
+(test-case "P1a B1: `#.name` nil-safe access SURVIVES the twin retirement"
+  (define r (run-ws-last "def user := {:name \"Alice\"}\nuser#.name\n"))
+  (check-regexp-match #rx"\"Alice\"" r))
+
+(test-case "P1a B2: `m[k]` with a COMPUTED Keyword key survives (the discriminator is literal-only)"
+  (define r (run-ws-last "def m := {:x 42}\ndef k : Keyword := :x\nm[k]\n"))
+  (check-regexp-match #rx"42" r))
+
+(test-case "P1a B3: numeric postfix `v[0]` keeps extraction (PS2 flip CANCELED, owner)"
+  (define r (run-ws-last "def v := @[10 20 30]\nv[0]\n"))
+  (check-regexp-match #rx"10 : Int" r))
+
+(test-case "P1a B5: a ZERO-ARG marker head must NOT abort the file (the seat's own contract)"
+  ;; Found by the P1a adversarial verify: the marker arm called (car args)
+  ;; unguarded, so `[$retired-selection]` raised at the parse seam and killed
+  ;; the WHOLE FILE — the exact failure mode this seat exists to eliminate.
+  ;; Its three raw-sentinel siblings carried the guard from the start.
+  (define rs (run-ws "[$retired-selection]\ndef okz := 1\nokz\n"))
+  (check-regexp-match #rx"retired" (first rs))
+  (check-regexp-match #rx"1 : Int" (last rs)
+                      "a raise here aborts the file — later commands must still evaluate"))
+
+(test-case "P1a B6: a RETIRED sentinel inside a defmacro template must not abort the file"
+  ;; pattern-var? excluded the live sentinels but not the retired $dot-key /
+  ;; $nil-dot-key, so a retired shape in a template read as an unbound pattern
+  ;; variable and raised out of preparse — again whole-file. (Pre-existing;
+  ;; the asymmetry was flagged by the mini-audit and closed here.)
+  (define rs (run-ws
+              (string-append
+               "defmacro getname [$u] [$u.:name]\n"
+               "def okm := 1\n"
+               "okm\n")))
+  (check-regexp-match #rx"1 : Int" (last rs)
+                      "registering the macro must not abort the file"))
+
+(test-case "P1a B7: a negative NON-integer index is guided too (not just exact integers)"
+  (define r (run-ws-last "def v := @[10 20 30]\nv[-1.5]\n"))
+  (check-regexp-match #rx"negative" r))
+
+(test-case "P1a B4: definitely-not-map? conservative default pinned DIRECTLY (replaces the broadcast-get pin)"
+  ;; The retiring walker pin at :258-266 incidentally carried the track file's
+  ;; only direct pin on P2.b's positive-list default (critic C3). This pins it
+  ;; on a plainly-unarmed node so the coverage survives the node deletion.
+  (check-false (definitely-not-map? (expr-fvar 'some-unknown-node))
+               "an unrecognized node must default to #f — unknown is not not-a-map"))

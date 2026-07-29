@@ -143,7 +143,7 @@
     Symbol symbol-lit
     Keyword Char String
     Map map-empty map-assoc map-get nil-safe-get nil? map-dissoc map-size map-has-key? map-keys map-vals
-    get get-in update-in broadcast-get
+    get get-in update-in
     Set set-empty set-insert set-member? set-delete set-size set-union set-intersect set-diff set-to-list
     PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice pvec-to-list pvec-from-list pvec-fold pvec-map pvec-filter
     set-fold set-filter
@@ -740,6 +740,46 @@
              inner
              names)))
 
+;; ============================================================
+;; CIU T6 D4.P1a — the retired-selection diagnostic seat (ruling Q_L4).
+;; The reader still tokenizes the retired surfaces (dot-key `.:name`,
+;; nil-dot-key `#:name`/`#.:name`, broadcast `.*name`); preparse normalizes
+;; them — and the retired postfix payloads — to ($retired-selection kind
+;; detail) markers. THIS converts a marker (or a targetless raw sentinel)
+;; into a per-command guided parse-error VALUE: never a raise, the file
+;; continues (the $mixfix-retired mechanism minus its fatal flaw; probed:
+;; a classifier-level raise is a whole-file abort by construction).
+;; ============================================================
+(define (retired-selection-error kind detail loc)
+  ;; :name / #:name / #.:name / name → "name" (strip any #/./: prefix chars)
+  (define (base-name d)
+    (define s (cond [(symbol? d) (symbol->string d)]
+                    [(keyword? d) (keyword->string d)]
+                    [else (format "~a" d)]))
+    (define n (string-length s))
+    (let loop ([i 0])
+      (cond [(>= i n) s]
+            [(memv (string-ref s i) '(#\# #\. #\:)) (loop (add1 i))]
+            [else (substring s i)])))
+  (define f (and detail (base-name detail)))
+  (case kind
+    [(dot-key)
+     (parse-error loc (format "dot-key `.:~a` was retired — spell field access with `.~a` (e.g. `m.~a`); as a function value use `[fn [m] m.~a]`" f f f f) #f)]
+    [(nil-dot-key)
+     (parse-error loc (format "`#:~a` / `#.:~a` was retired — nil-safe field access is spelled `#.~a`" f f f) #f)]
+    [(broadcast)
+     (parse-error loc (format "broadcast `.*~a` was retired — its replacement `:~a` arrives with Path Selection P4; until then spell it `[map [fn [m] m.~a] xs]`" f f f) #f)]
+    [(postfix-kw)
+     (parse-error loc (format "keyword index `[:~a]` was retired — spell the field `m.~a` or use `[get m :~a]`" f f f) #f)]
+    [(postfix-empty)
+     (parse-error loc "empty index `[]` — a postfix index needs a payload (e.g. `v[0]`, `m[k]`)" #f)]
+    [(postfix-neg)
+     (parse-error loc (format "negative index ~a — postfix indices are non-negative (`v[0]` is the first element)" detail) #f)]
+    [(postfix-hole)
+     (parse-error loc "`_` cannot be the subject of a postfix index — name the subject or use `[fn [m] m[k]]`" #f)]
+    [else
+     (parse-error loc "this selection form was retired (CIU T6 Path Selection) — see the migration note for its replacement spelling" #f)]))
+
 (define (parse-list elems loc stx)
   ;; elems is either a list of syntax objects or plain datums
   ;; Normalize: if stx is a syntax object, get the list of syntax children
@@ -759,6 +799,24 @@
     ;; $angle-type sentinel: unwrap as type annotation
     [(and (symbol? head) (eq? head '$angle-type))
      (unwrap-angle-type stx loc)]
+
+    ;; D4.P1a retired-selection marker (preparse-normalized) → guided error.
+    ;; ⚠ The (pair? args) guard is LOAD-BEARING, not defensive: a user may
+    ;; write the head with no arguments, and an unguarded (car args) raises —
+    ;; which at this seam is a WHOLE-FILE ABORT, the exact failure this seat
+    ;; exists to eliminate. Caught by the P1a adversarial verify; its three
+    ;; raw-sentinel siblings below carried the guard from the start.
+    [(and (symbol? head) (eq? head '$retired-selection))
+     (retired-selection-error (and (pair? args) (stx->datum (car args)))
+                              (and (pair? args) (pair? (cdr args)) (stx->datum (cadr args)))
+                              loc)]
+    ;; …and the raw retired sentinels (targetless shapes the fold passes through)
+    [(and (symbol? head) (eq? head '$dot-key))
+     (retired-selection-error 'dot-key (and (pair? args) (stx->datum (car args))) loc)]
+    [(and (symbol? head) (eq? head '$nil-dot-key))
+     (retired-selection-error 'nil-dot-key (and (pair? args) (stx->datum (car args))) loc)]
+    [(and (symbol? head) (eq? head '$broadcast-access))
+     (retired-selection-error 'broadcast (and (pair? args) (stx->datum (car args))) loc)]
 
     ;; $nat-literal sentinel: 42N → surf-nat-lit (Nat suc-chain)
     [(and (symbol? head) (eq? head '$nat-literal))
@@ -2329,25 +2387,11 @@
                        (if (prologos-error? paths) paths
                            (surf-get-in target paths loc))))))])]
 
-       ;; broadcast-get: (broadcast-get target :field1 :field2 ...)
-       ;; Maps field access over a list — produced by .*field broadcast syntax
-       [(broadcast-get)
-        (cond
-          [(< (length args) 2)
-           (parse-error loc "broadcast-get requires target and at least one field" #f)]
-          [else
-           (define target (parse-datum (car args)))
-           (if (prologos-error? target) target
-               (let ([fields (map (lambda (a)
-                                    (define d (if (syntax? a) (syntax->datum a) a))
-                                    (cond
-                                      [(keyword? d) (string->symbol (keyword->string d))]
-                                      [(and (symbol? d) (keyword-like-symbol? d))
-                                       (string->symbol (substring (symbol->string d) 1))]
-                                      [else (parse-error loc (format "broadcast-get field must be a keyword, got: ~a" d) d)]))
-                                  (cdr args))])
-                 (if (ormap prologos-error? fields) (findf prologos-error? fields)
-                     (surf-broadcast-get target fields loc))))])]
+       ;; broadcast-get: RETIRED (CIU T6 D4.P1a, ruling Q_L3 — the full chain).
+       ;; The `.*field` reader surface now yields a guided $retired-selection
+       ;; error; the keyword form had ZERO live users (census) and is gone —
+       ;; `(broadcast-get …)` is an unknown relation / unbound variable now.
+       ;; Broadcast returns as `:field` at Path Selection P4.
 
        ;; update-in: (update-in target path-spec fn-expr)
        ;; path-spec is parsed as selection paths, fn-expr is the update function

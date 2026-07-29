@@ -365,8 +365,6 @@
      (expr-get-in (zonk target) (zonk paths))]
     [(expr-update-in target paths fn)
      (expr-update-in (zonk target) (zonk paths) (zonk fn))]
-    [(expr-broadcast-get target fields)
-     (expr-broadcast-get (zonk target) fields)]
 
     ;; Transient Builders
     [(expr-transient c) (expr-transient (zonk c))]
@@ -849,8 +847,6 @@
      (expr-get-in (zonk-at-depth depth target) (zonk-at-depth depth paths))]
     [(expr-update-in target paths fn)
      (expr-update-in (zonk-at-depth depth target) (zonk-at-depth depth paths) (zonk-at-depth depth fn))]
-    [(expr-broadcast-get target fields)
-     (expr-broadcast-get (zonk-at-depth depth target) fields)]
 
     ;; Transient Builders
     [(expr-transient c) (expr-transient (zonk-at-depth depth c))]
@@ -1333,8 +1329,6 @@
      (expr-get-in (default-metas target) (default-metas paths))]
     [(expr-update-in target paths fn)
      (expr-update-in (default-metas target) (default-metas paths) (default-metas fn))]
-    [(expr-broadcast-get target fields)
-     (expr-broadcast-get (default-metas target) fields)]
 
     ;; Transient Builders
     [(expr-transient c) (expr-transient (default-metas c))]

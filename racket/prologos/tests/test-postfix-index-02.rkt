@@ -20,10 +20,11 @@
    (rewrite-dot-access '(xs ($postfix-index 0)))
    '(get xs 0)))
 
-(test-case "rewrite: keyword postfix-index → get"
+(test-case "rewrite: keyword-LITERAL postfix-index → RETIREMENT MARKER (D4.P1a)"
+  ;; m[:key] retired; computed keys (`m[k]`) still rewrite to get below.
   (check-equal?
    (rewrite-dot-access '(m ($postfix-index :key)))
-   '(get m :key)))
+   '($retired-selection postfix-kw :key)))
 
 (test-case "rewrite: expression postfix-index → get"
   (check-equal?

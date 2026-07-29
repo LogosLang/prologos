@@ -3205,44 +3205,8 @@
                  (whnf (expr-map-assoc base key updated)))]))]
          [(and (equal? nt target) (equal? np paths)) e]
          [else (expr-update-in nt np fn)]))]
-    ;; CIU T6 P2.a: broadcast-get at whnf strength — the 2026-07-16 P6
-    ;; value-loss fix (siblings above) left this node out; with no whnf arm a
-    ;; broadcast result was whnf-stuck and map-get's graceful degradation
-    ;; silently converted it to none. Mirrors the nf arm (:~4133) at whnf
-    ;; strength: walk the cons spine, per-element chained map-get.
-    [(expr-broadcast-get target fields)
-     (let ([nt (whnf target)])
-       (define (extract-field elem)
-         (foldl (lambda (fld acc) (whnf (expr-map-get acc fld #f))) elem fields))
-       (define (list-nil*? x)
-         (or (expr-nil? x)
-             (and (expr-fvar? x)
-                  (let ([s (symbol->string (expr-fvar-name x))])
-                    (or (string=? s "nil") (string-suffix? s "::nil"))))
-             (and (expr-app? x) (expr-fvar? (expr-app-func x))
-                  (let ([s (symbol->string (expr-fvar-name (expr-app-func x)))])
-                    (or (string=? s "nil") (string-suffix? s "::nil"))))))
-       (define (list-cons*? x)
-         (and (expr-app? x) (expr-app? (expr-app-func x))
-              (let ([inner (expr-app-func (expr-app-func x))])
-                (define (cons-fvar? v)
-                  (and (expr-fvar? v)
-                       (let ([s (symbol->string (expr-fvar-name v))])
-                         (or (string=? s "cons") (string-suffix? s "::cons")))))
-                (or (cons-fvar? inner)
-                    (and (expr-app? inner) (cons-fvar? (expr-app-func inner)))))))
-       (define (map-over lst)
-         (cond
-           [(list-nil*? lst) lst]
-           [(list-cons*? lst)
-            (let* ([head-elem (expr-app-arg (expr-app-func lst))]
-                   [tail-lst (whnf (expr-app-arg lst))])
-              (expr-app (expr-app (expr-fvar 'cons) (extract-field head-elem))
-                        (map-over tail-lst)))]
-           ;; stuck target: return SELF (eq?-preserving) so callers see no
-           ;; progress and definitely-not-map?'s exemption keeps map-get honest
-           [else (if (eq? nt target) e (expr-broadcast-get lst fields))]))
-       (map-over nt))]
+    ;; expr-broadcast-get: RETIRED at CIU T6 D4.P1a (ruling Q_L3) — the P2.a
+    ;; whnf arm that lived here is unwound with the node.
     [(expr-map-size m)
      (let ([m* (whnf m)])
        (if (equal? m* m) e (whnf (expr-map-size m*))))]
@@ -4256,53 +4220,7 @@
              (nf (expr-map-assoc base key updated))]))
         (build nt segs)]
        [else (expr-update-in nt np nf-fn)])]
-    [(expr-broadcast-get target fields)
-     ;; Reduce target, then map nested map-get over each list element
-     (define nt (nf target))
-     (define (extract-field elem fields)
-       ;; Apply chained map-get for each field keyword
-       (foldl (lambda (fld acc) (nf (expr-map-get acc fld #f))) elem fields))
-     ;; Check if expression is a nil (any form)
-     (define (list-nil? e)
-       (or (expr-nil? e)
-           (and (expr-fvar? e)
-                (let ([s (symbol->string (expr-fvar-name e))])
-                  (or (string=? s "nil")
-                      (and (>= (string-length s) 5)
-                           (string-suffix? s "::nil")))))
-           ;; (nil A) — nil with type arg
-           (and (expr-app? e)
-                (expr-fvar? (expr-app-func e))
-                (let ([s (symbol->string (expr-fvar-name (expr-app-func e)))])
-                  (or (string=? s "nil")
-                      (and (>= (string-length s) 5)
-                           (string-suffix? s "::nil")))))))
-     ;; Try to destructure as cons cell, returns (values head tail) or #f
-     (define (list-cons? e)
-       (and (expr-app? e)
-            (expr-app? (expr-app-func e))
-            (let ([inner (expr-app-func (expr-app-func e))])
-              (define (cons-fvar? v)
-                (and (expr-fvar? v)
-                     (let ([s (symbol->string (expr-fvar-name v))])
-                       (or (string=? s "cons")
-                           (and (>= (string-length s) 6)
-                                (string-suffix? s "::cons"))))))
-              (or (cons-fvar? inner)
-                  ;; typed cons: ((cons A) x) xs
-                  (and (expr-app? inner) (cons-fvar? (expr-app-func inner)))))))
-     ;; Walk the list structure, applying field extraction to each element
-     (define (map-over lst)
-       (cond
-         [(list-nil? lst) lst]
-         [(list-cons? lst)
-          (define head-elem (expr-app-arg (expr-app-func lst)))
-          (define tail-lst (expr-app-arg lst))
-          (define extracted (extract-field head-elem fields))
-          (expr-app (expr-app (expr-fvar 'cons) extracted) (map-over tail-lst))]
-         ;; Can't reduce further — return as-is
-         [else (expr-broadcast-get lst fields)]))
-     (map-over nt)]
+    ;; expr-broadcast-get: RETIRED at CIU T6 D4.P1a (ruling Q_L3).
 
     ;; Char normalization
     [(expr-Char) e]

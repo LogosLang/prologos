@@ -1162,14 +1162,6 @@
                 (meta-source-info #f 'get-in-result "result type of dynamic get-in" #f '()))
               (add-usage u1 u2))]
          [(_ _) (tu-error)]))]
-    [(expr-broadcast-get target fields)
-     (let ([r1 (inferQ ctx target)])
-       (match r1
-         [(tu _ u1)
-          (tu (fresh-meta ctx-empty (expr-hole)
-                (meta-source-info #f 'broadcast-get-result "result type of broadcast-get" #f '()))
-              u1)]
-         [_ (tu-error)]))]
     [(expr-update-in target paths fn)
      ;; CIU T6 F1b.3: DELEGATE the type to typing-core (the map-keys/vals
      ;; precedent) — this twin previously returned the TARGET's type unchanged,

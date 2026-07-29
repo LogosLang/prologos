@@ -129,14 +129,13 @@
       "(eval (outer-m ($dot-access inner) ($dot-access val)))")))
   (check-equal? result "42N : Nat"))
 
-(test-case "e2e/sexp: dot-key prefix"
-  ;; (($dot-key :name) m) → (map-get m :name)
+(test-case "e2e/sexp: dot-key prefix → guided retirement error (D4.P1a)"
   (define result
     (run-last
      (string-append
       "(def m : (Map Keyword Nat) {:name 5N})\n"
       "(eval (($dot-key :name) m))")))
-  (check-equal? result "5N : Nat"))
+  (check-regexp-match #rx"retired" (format "~a" result)))
 
 ;; ========================================
 ;; E. E2E tests: dot-access via WS mode
@@ -160,13 +159,13 @@
       "eval outer.inner.val\n")))
   (check-equal? result "42N : Nat"))
 
-(test-case "e2e/ws: dot-key prefix .:name"
+(test-case "e2e/ws: dot-key prefix .:name → guided retirement error (D4.P1a)"
   (define result
     (run-ws-last
      (string-append
       "def m : [Map Keyword Nat] {:name 5N}\n"
       "eval [.:name m]\n")))
-  (check-equal? result "5N : Nat"))
+  (check-regexp-match #rx"retired" (format "~a" result)))
 
 (test-case "e2e/ws: dot-access in bracket form [f m.name]"
   (define result

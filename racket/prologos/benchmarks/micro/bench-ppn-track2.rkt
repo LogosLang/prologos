@@ -171,7 +171,9 @@
    (cons "expand-list-literal"
          (lambda () (preparse-expand-form '($list-literal 1 2 3))))
    (cons "rewrite-dot-access"
-         (lambda () (preparse-expand-form '(($dot-key :name) user))))
+         ;; D4.P1a: was a $dot-key payload (retired + MISNAMED — it measured
+         ;; the dot-key leg under the dot-access name); now the live sentinel.
+         (lambda () (preparse-expand-form '(user ($dot-access name)))))
    (cons "rewrite-infix-pipe"
          (lambda () (preparse-expand-form '(5 $pipe-gt inc dbl))))
    (cons "expand-quote"
@@ -234,7 +236,7 @@
    '(cond ($pipe true -> 1) ($pipe false -> 0))  ;; 1 iteration (cond → nested if)
    '(if true 1 0)                             ;; 1 iteration (if → boolrec)
    '($list-literal 1 2 3)                     ;; 1 iteration (list-lit → cons chain)
-   '(($dot-key :name) user)                   ;; 1 iteration (dot-key → map-get)
+   '(user ($dot-access name))                 ;; 1 iteration (dot-access → map-get)
    '(5 $pipe-gt inc dbl)                      ;; 1 iteration (infix → block pipe)
    '(int+ 1 2)                                ;; 0 iterations (no macro matches)
    ))

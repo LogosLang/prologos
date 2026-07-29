@@ -1150,6 +1150,9 @@
        (not (eq? x '$nil-dot-access))   ; reader sentinel for nil-safe dot access
        (not (eq? x '$postfix-index))    ; reader sentinel for postfix indexing
        (not (eq? x '$broadcast-access)) ; reader sentinel for broadcast access
+       (not (eq? x '$dot-key))          ; RETIRED sentinel (D4.P1a) — still emitted by the reader
+       (not (eq? x '$nil-dot-key))      ; RETIRED sentinel (D4.P1a) — still emitted by the reader
+       (not (eq? x '$retired-selection)) ; D4.P1a retirement marker (parser converts to guided error)
        (let ([s (symbol->string x)])
          (and (> (string-length s) 1)
               (char=? (string-ref s 0) #\$)))))
@@ -5434,15 +5437,38 @@
       (postfix-index? x) (broadcast-access? x)))
 
 ;; Unified rewrite for ALL access sentinels in a flat datum list.
-;; Handles: $dot-access, $dot-key, $nil-dot-access, $nil-dot-key, $postfix-index
+;; Handles: $dot-access, $nil-dot-access, $postfix-index (live) and the
+;; RETIRED family $dot-key / $nil-dot-key / $broadcast-access (D4.P1a).
 ;; All are "consume preceding element" operations, processed left-to-right.
 ;;
 ;; Pattern 1: (expr ($dot-access f1) ($postfix-index k) ($dot-access f2) ...)
 ;;   → fold left: (map-get (get (map-get expr :f1) k) :f2)
-;; Pattern 2: (($dot-key :kw) expr) or (($nil-dot-key :kw) expr) at head
-;;   → (map-get expr :kw) or (nil-safe-get expr :kw)
-;; Pattern 3: standalone ($dot-key :kw) or ($nil-dot-key :kw)
-;;   → partial fn
+;;
+;; RETIRED shapes (CIU T6 D4.P1a, owner rulings Q_L3/Q_L4): the legs below
+;; that used to build map-get/nil-safe-get/broadcast-get for the dot-key,
+;; nil-dot-key, and broadcast-access sentinels now normalize the shape to ONE
+;; marker head ($retired-selection kind detail). The PARSER converts the
+;; marker into a per-command guided parse-error VALUE — never a raise, so the
+;; file continues (the $mixfix-retired mechanism minus its fatal flaw).
+(define (retired-selection-marker kind detail)
+  `($retired-selection ,kind ,detail))
+
+;; A postfix-index payload that denotes a NEGATIVE number, returning that
+;; number (or #f). Handles the bare form (`-1`) and the reader's wrapped
+;; numeric-literal sentinels (`-1.5` → ($decimal-literal -3/2), `-2/3` →
+;; ($rat-literal -2/3)) — the wrapped shapes are why an unwrapped `real?`
+;; test misses them.
+(define (negative-index-payload? key)
+  (define n
+    (cond
+      [(real? key) key]
+      [(and (list? key) (= (length key) 2)
+            (memq (car key) '($decimal-literal $rat-literal $nat-literal))
+            (real? (cadr key)))
+       (cadr key)]
+      [else #f]))
+  (and n (negative? n) n))
+
 (define (rewrite-dot-access datum)
   (cond
     [(not (list? datum)) datum]
@@ -5450,32 +5476,12 @@
     ;; Check for any access sentinels in the list
     [(not (ormap access-sentinel? datum))
      datum]
-    ;; Pattern 2a: ($dot-key :kw) at head, with at least one more element
-    [(and (dot-key? (car datum)) (>= (length datum) 2))
-     (define kw (cadr (car datum)))
-     (define expr (cadr datum))
-     (define rest-elems (cddr datum))
-     (define rewritten `(map-get ,expr ,kw))
-     (if (null? rest-elems)
-         rewritten
-         (rewrite-dot-access (cons rewritten rest-elems)))]
-    ;; Pattern 3a: standalone ($dot-key :kw) — single element list
-    [(and (= (length datum) 1) (dot-key? (car datum)))
-     (define kw (cadr (car datum)))
-     `(fn ($x : _) (map-get $x ,kw))]
-    ;; Pattern 2b: ($nil-dot-key :kw) at head, with at least one more element
-    [(and (nil-dot-key? (car datum)) (>= (length datum) 2))
-     (define kw (cadr (car datum)))
-     (define expr (cadr datum))
-     (define rest-elems (cddr datum))
-     (define rewritten `(nil-safe-get ,expr ,kw))
-     (if (null? rest-elems)
-         rewritten
-         (rewrite-dot-access (cons rewritten rest-elems)))]
-    ;; Pattern 3b: standalone ($nil-dot-key :kw) — single element list
-    [(and (= (length datum) 1) (nil-dot-key? (car datum)))
-     (define kw (cadr (car datum)))
-     `(fn ($x : _) (nil-safe-get $x ,kw))]
+    ;; Pattern 2a/3a (RETIRED): ($dot-key :kw) at head or standalone
+    [(dot-key? (car datum))
+     (retired-selection-marker 'dot-key (cadr (car datum)))]
+    ;; Pattern 2b/3b (RETIRED): ($nil-dot-key lexeme) at head or standalone
+    [(nil-dot-key? (car datum))
+     (retired-selection-marker 'nil-dot-key (cadr (car datum)))]
     ;; Unified fold-left for all access sentinels
     [else
      (define result
@@ -5503,50 +5509,52 @@
                 (loop (cdr elems) (cons (car elems) acc))
                 (let* ([key (cadr (car elems))]
                        [target (car acc)]
-                       [wrapped `(get ,target ,key)])
+                       ;; D4.P1a retirement guards: keyword-LITERAL payloads,
+                       ;; empty/negative payloads, and `_` subjects normalize
+                       ;; to the marker (parser → guided per-command error).
+                       ;; Computed keys (`m[k]`) and non-negative literals
+                       ;; (`v[0]`) are untouched — the live surface.
+                       [wrapped
+                        (cond
+                          [(eq? target '_)
+                           (retired-selection-marker 'postfix-hole key)]
+                          [(null? key)
+                           (retired-selection-marker 'postfix-empty '())]
+                          ;; Negative payloads. Probe-established shapes: `-1`
+                          ;; arrives BARE, but `-1.5` / `-2/3` arrive WRAPPED
+                          ;; as ($decimal-literal -3/2) / ($rat-literal -2/3),
+                          ;; so an unwrapped numeric guard silently misses them
+                          ;; (they fell through to a generic inference error).
+                          [(negative-index-payload? key)
+                           (retired-selection-marker 'postfix-neg
+                                                     (negative-index-payload? key))]
+                          [(and (symbol? key)
+                                (let ([s (symbol->string key)])
+                                  (and (> (string-length s) 1)
+                                       (char=? (string-ref s 0) #\:))))
+                           (retired-selection-marker 'postfix-kw key)]
+                          [else `(get ,target ,key)])])
                   (loop (cdr elems) (cons wrapped (cdr acc)))))]
-           [(dot-key? (car elems))
+           [(dot-key? (car elems))    ;; RETIRED (D4.P1a) — consume target, mark
             (if (null? acc)
                 (loop (cdr elems) (cons (car elems) acc))
-                (let* ([kw (cadr (car elems))]
-                       [target (car acc)]
-                       [wrapped `(map-get ,target ,kw)])
-                  (loop (cdr elems) (cons wrapped (cdr acc)))))]
-           [(nil-dot-key? (car elems))
+                (loop (cdr elems)
+                      (cons (retired-selection-marker 'dot-key (cadr (car elems)))
+                            (cdr acc))))]
+           [(nil-dot-key? (car elems))    ;; RETIRED (D4.P1a) — consume target, mark
             (if (null? acc)
                 (loop (cdr elems) (cons (car elems) acc))
-                (let* ([kw (cadr (car elems))]
-                       [target (car acc)]
-                       [wrapped `(nil-safe-get ,target ,kw)])
-                  (loop (cdr elems) (cons wrapped (cdr acc)))))]
-           [(broadcast-access? (car elems))
+                (loop (cdr elems)
+                      (cons (retired-selection-marker 'nil-dot-key (cadr (car elems)))
+                            (cdr acc))))]
+           [(broadcast-access? (car elems))    ;; RETIRED (D4.P1a) — consume target, mark
             (if (null? acc)
-                ;; No target yet — standalone broadcast, keep as-is
+                ;; No target yet — standalone broadcast; the parser's raw-sentinel
+                ;; backstop arm produces the same guided error.
                 (loop (cdr elems) (cons (car elems) acc))
-                ;; Broadcast: consume target + collect subsequent dot-access for deep path
-                (let* ([field (cadr (car elems))]
-                       [target (car acc)])
-                  ;; Collect subsequent $dot-access sentinels for deep broadcast
-                  (define-values (deep-fields remaining)
-                    (let collect ([r (cdr elems)] [fields '()])
-                      (if (and (pair? r) (dot-access? (car r)))
-                          (collect (cdr r) (cons (cadr (car r)) fields))
-                          (values (reverse fields) r))))
-                  ;; Build the chained map-get body: x.field.sub1.sub2...
-                  (define all-fields (cons field deep-fields))
-                  (define body
-                    (foldl (lambda (f acc)
-                             `(map-get ,acc ,(string->symbol
-                                              (string-append ":" (symbol->string f)))))
-                           '$broadcast-var
-                           all-fields))
-                  ;; Desugar to (broadcast-get target :field1 :field2 ...) — a form
-                  ;; the parser handles, avoiding the map+lambda inference gap.
-                  (define kw-fields
-                    (map (lambda (f) (string->symbol (string-append ":" (symbol->string f))))
-                         all-fields))
-                  (define wrapped `(broadcast-get ,target ,@kw-fields))
-                  (loop remaining (cons wrapped (cdr acc)))))]
+                (loop (cdr elems)
+                      (cons (retired-selection-marker 'broadcast (cadr (car elems)))
+                            (cdr acc))))]
            [else
             (loop (cdr elems) (cons (car elems) acc))])))
      ;; If result is a single-element list, unwrap it

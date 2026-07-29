@@ -27,10 +27,12 @@
    (rewrite-dot-access '(user ($dot-access address) ($dot-access city)))
    '(map-get (map-get user :address) :city)))
 
-(test-case "rewrite-dot-access: dot-key prefix"
+(test-case "rewrite-dot-access: dot-key prefix → RETIREMENT MARKER (D4.P1a)"
+  ;; The dot-key semantics are retired; the shape normalizes to the marker
+  ;; the parser converts into a guided per-command parse-error.
   (check-equal?
    (rewrite-dot-access '(($dot-key :name) user))
-   '(map-get user :name)))
+   '($retired-selection dot-key :name)))
 
 (test-case "rewrite-dot-access: in larger form"
   (check-equal?
@@ -42,10 +44,10 @@
    (rewrite-dot-access '(f x y))
    '(f x y)))
 
-(test-case "rewrite-dot-access: standalone dot-key → lambda"
+(test-case "rewrite-dot-access: standalone dot-key → RETIREMENT MARKER (D4.P1a)"
   (check-equal?
    (rewrite-dot-access '(($dot-key :name)))
-   '(fn ($x : _) (map-get $x :name))))
+   '($retired-selection dot-key :name)))
 
 (test-case "rewrite-dot-access: non-list passthrough"
   (check-equal? (rewrite-dot-access 'x) 'x)

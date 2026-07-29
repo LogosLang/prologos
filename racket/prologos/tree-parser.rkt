@@ -152,11 +152,12 @@
        ;; These are rewritten by preparse-expand-form (mixfix Pratt parser,
        ;; pipe/compose expansion) but NOT by surface-rewrite.rkt. The tree
        ;; parser returns errors so the merge uses preparse's version.
-       [(mixfix mixfix-group) (parse-error-result loc "mixfix: handled by preparse expansion")]
+       ;; ('mixfix-group dropped at D4.P1a — its producer died with the
+       ;;  dot-lbrace routing leg; 'mixfix is still minted, so it stays.)
+       [(mixfix) (parse-error-result loc "mixfix: handled by preparse expansion")]
        [(pipe-gt) (parse-error-result loc "pipe-gt: handled by preparse expansion")]
        [(compose) (parse-error-result loc "compose: handled by preparse expansion")]
        [(dot-access) (parse-error-result loc "dot-access: handled by preparse expansion")]
-       [(dot-key) (parse-error-result loc "dot-key: handled by preparse expansion")]
        [(infix-pipe) (parse-error-result loc "infix-pipe: handled by preparse expansion")]
        [(implicit-map) (parse-error-result loc "implicit-map: handled by preparse expansion")]
 

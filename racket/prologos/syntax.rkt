@@ -174,7 +174,7 @@
  (struct-out expr-map-get) (struct-out expr-nil-safe-get) (struct-out expr-map-dissoc)
  (struct-out expr-map-size) (struct-out expr-map-has-key)
  (struct-out expr-map-keys) (struct-out expr-map-vals)
- (struct-out expr-get) (struct-out expr-get-in) (struct-out expr-update-in) (struct-out expr-broadcast-get)
+ (struct-out expr-get) (struct-out expr-get-in) (struct-out expr-update-in)
  ;; Path (first-class path values)
  (struct-out expr-path) (struct-out expr-Path)
  ;; Set (persistent hash set)
@@ -829,7 +829,9 @@
 ;; Path algebra operations
 (struct expr-get-in (target paths) #:transparent)             ; get-in : M → paths → V
 (struct expr-update-in (target paths fn) #:transparent)       ; update-in : M → paths → (V → V) → M
-(struct expr-broadcast-get (target fields) #:transparent)     ; broadcast-get : [List M] → keywords → [List V]
+;; expr-broadcast-get: RETIRED at CIU T6 D4.P1a (ruling Q_L3) — it was
+;; permissive (fabricated <error>/none rows at 0 errors) and its surface
+;; `.*name` is superseded by `:field` broadcast (Path Selection P4).
 
 ;; First-class path values
 (struct expr-path (branches) #:transparent)                   ; path literal: branches = list of (listof expr-keyword|expr-symbol)

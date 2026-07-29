@@ -40,6 +40,7 @@
          'specialize 'schema 'solver 'defr 'precedence-group 'with-transient
          '-> '=> ': ':= ':doc ':no-prelude ':refer ':as ':refer-all
          '$pipe '$angle-type '$brace-params '$quote '$dot-access '$dot-key
+         '$retired-selection
          '$mixfix '$pipe-gt '$compose
          'where 'of 'refl 'J
          'Type 'Unit 'unit))

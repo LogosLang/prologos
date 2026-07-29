@@ -2389,12 +2389,7 @@
                     (expr-map-assoc base (seg->kw key) updated)]))
                (build-update et segs))])]))]
 
-    ;; broadcast-get: map field extraction over a list
-    ;; (broadcast-get target :f1 :f2) → maps nested map-get over each element
-    [(surf-broadcast-get target fields loc)
-     (let ([et (elaborate target env depth)])
-       (if (prologos-error? et) et
-           (expr-broadcast-get et (map expr-keyword fields))))]
+    ;; broadcast-get: RETIRED at CIU T6 D4.P1a (ruling Q_L3 — full chain).
 
     ;; ---- Set type and operations ----
     [(surf-set-type a loc)
