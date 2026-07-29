@@ -15,6 +15,33 @@ Deferral".
 
 ---
 
+## 🐛 DEFECT — the tilde-number reader diagnostic is a WHOLE-FILE ABORT (found 2026-07-28, the D4.P1 mini-audit)
+
+**Repro (probe-verified at `5c171caa`)**: a file containing `def a := 1` /
+`a` / `def b := ~3` / … run via `tools/run-file.rkt` prints ONLY the
+`prologos-reader: ~ approximate literals were removed …` message plus a raw
+Racket `context...:` dump — the earlier commands' output NEVER appears, and
+there is no per-command error count. Structural cause: the classifier `error`
+fires inside `tokenize-char-rrb` while `read-all-syntax-ws`
+(driver.rkt:2226) tokenizes the ENTIRE file before any command runs — so any
+classifier-level raise is a whole-file abort by construction. This is the
+exact silence class the P2 loud-tier work exists to prevent, sitting in the
+reader. **Remedy**: once CIU T6 D4.P1a lands the marker-form + `parse-error`
+value diagnostic seat, migrate the tilde diagnostic onto it (emit a marker,
+convert per-command). Owner of the remedy: D4.X.close triage (or fold into
+P1a if trivially cheap once the seat exists). Recorded in D4 §5.P1.
+
+## 🐛 DEFECT — bare top-level `[]` hard-aborts the reader with a raw contract violation (found 2026-07-28, the D4.P1 mini-audit)
+
+A standalone `[]` as a top-level form dies inside the reader: parse-reader.rkt
+:2160-2161 emits a position-0 stx → `syntax-position` #f → macros.rkt:2804
+`max`/`-` on #f → raw Racket contract violation, whole file lost. `[f []]`,
+`def x := []`, `a []` are all fine — the defect is the bare-top-level shape
+only. Adjacent to (but distinct from) D4.P1a's `x[]` reject-batch item, which
+covers the POSTFIX-adjacent empty bracket; this is the standalone form.
+Fix candidate: guard the position-0 emission or route through the P1a
+diagnostic seat. Recorded in D4 §5.P1.
+
 ## 🐛 DEFECT — `def X :=` + multi-key layout body fails; identical body without `:=` works (filed 2026-07-28, the D5 critique)
 
 **Repro (byte-identical bodies, A/B verified at `2b1b383d`)**:
