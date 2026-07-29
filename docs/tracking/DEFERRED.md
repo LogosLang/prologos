@@ -15,6 +15,35 @@ Deferral".
 
 ---
 
+## 🐛 DEFECT — live `.( )` mixfix errors RAISE and abort the whole file (found 2026-07-28, the D4.P1a adversarial verify)
+
+An incomparable-precedence-group error or an empty `.( )` raises out of
+`preparse-expand-all` (macros.rkt `parse-expr` → `pratt-parse` →
+`preparse-expand-form` → driver.rkt `process-file-inner`) and kills the file
+with ZERO result lines. Repro: a file containing `.( 1 + 2 )` /
+`.( 1 :: '[2 3] ++ '[4] )` / `.( 3 + 4 )` → exit 1, no output, uncaught
+`mixfix: Operators from groups 'additive' and 'cons' have no defined
+precedence relationship`. Byte-identical at HEAD — **not** a P1a regression.
+Notable because it is the SAME failure class D4 ruling Q_L4 documents for the
+old `$mixfix-retired` raiser, on the surviving mixfix path: **D4.P1a built the
+per-command marker seat (`$retired-selection` → `parse-error` VALUE,
+parser.rkt) that these errors should route through.** Fix candidate: emit a
+marker/error-value from the pratt path instead of raising. Recorded in D4
+§5.P1a close notes.
+
+## 🐛 DEFECT — union-typed def + implicit-binder spec + call HANGS the type checker (found 2026-07-28, the D4.P1a adversarial verify)
+
+Five-command repro, >10 min CPU-bound, never completes: `ns c1` /
+`def u : <Int | String> := 42` / `u` / `spec identity2 {A : Type} A -> A` /
+`defn identity2 [x] x` / `[identity2 7]`. Dropping EITHER the bare `u` use OR
+the final call completes in seconds. Kill backtrace pins
+`typing-propagators.rkt:3009 infer-on-network/full` → `driver.rkt:693
+process-command` — after parse, in typing. Reproduced on a pristine HEAD copy,
+so pre-existing and unrelated to the P1a surface deletions. Likely
+union-speculation × implicit instantiation. Adjacent to (possibly the same as)
+the existing "Union-type checking hangs the type-checker (BSP non-quiescence)"
+entry below — **triage whether they are one defect** before opening work.
+
 ## 🐛 DEFECT — the tilde-number reader diagnostic is a WHOLE-FILE ABORT (found 2026-07-28, the D4.P1 mini-audit)
 
 **Repro (probe-verified at `5c171caa`)**: a file containing `def a := 1` /

@@ -22,7 +22,7 @@ rulings, censuses and test delta live in its own section.
 | Phase | Description | Status | Notes |
 |---|---|---|---|
 | **P0** | **Acceptance corpus** — augment the EXISTING acceptance file with the spec §10 examples + Appendix fixtures; `--check` gated; new forms commented until their phase lands | ✅ | §5.P0 · `e2674208` — 28/28 markers, 0 errors; all 7 fixtures load (layout via `def X`, issue #80 sidestepped); corpus phase-tagged in HEAD notation; carrier pins double as §2.3 docs |
-| **P1a** | **Retirement batch + substrate** — dot-key family · the FULL `broadcast-get` chain (reader + parser keyword + surf + elaborator + node) · `m[:kw]` · reject batch · `surface-rewrite.rkt` `dot-lbrace` cleanup (BEFORE any re-mint) · the marker-form diagnostic seat | ⬜ | §5.P1a · split ruled Q_L6; audit `wf_789e4f0f-f02` |
+| **P1a** | **Retirement batch + substrate** — dot-key family · the FULL `broadcast-get` chain (reader + parser keyword + surf + elaborator + node) · `m[:kw]` · reject batch · `surface-rewrite.rkt` `dot-lbrace` cleanup (BEFORE any re-mint) · the marker-form diagnostic seat | ✅ | §5.P1a · **`859b529d`** — suite 9253/474/0, acceptance 28/28 + 89/89, −744/+320; adversarial verify found 2 whole-file-abort defects (1 MINE, in the seat) → fixed + pinned pre-commit |
 | **P1b** | **Seams + Q8** — `dot-lbrace` re-mint (6 sites) · brace adjacency + the reader-form-head REGISTRY · colon seam (`?`-discriminator, Q_L1) + WS narrow-var repair · `:N` probe · keyword-`*` split · `:<` probe row. Q8 grammar owner-reviewed before landing | ⬜ | §5.P1b |
 | **P2** | **Grade-1 core** — `.k`/`.N` access + bare-path extraction, on the landed P2 substrate | ⬜ | §5.P2 · `.N` has an end-to-end head start via `(get expr N)` |
 | **P3** | **Blocks** — `x{…}`, projection-by-default, `^` (3 continuations), L4 sort homogeneity, **HONEST NESTING (n-tuples at every n — ruled 2a)**, **STRICT merge** (the §3.6 waypoint) | ⬜ | §5.P3 · Q2 gate RESOLVED (2c: carrier order, thesis-derived) |
@@ -518,7 +518,70 @@ R-lens-verified unless marked):
   hard-aborts with a raw contract violation (parse-reader.rkt:2160-2161
   position-0 stx → macros.rkt:2804 `max` on #f).
 
-### §5.P1a — The retirement batch + substrate  ⬜ ← NEXT
+### §5.P1a — The retirement batch + substrate  ✅ `859b529d`
+
+**✏ CLOSE NOTES (2026-07-28).** Suite **9253 / 474 / 0** · neighborhood
+**477 / 16 files** · acceptance **28/28 + 89/89** · audit-06/-09
+differential-identical to HEAD · −744/+320 across 23 files. Written
+failing-first: 10 RED guided-diagnostic pins → green.
+
+**What the adversarial verify caught** (3 perspective-diverse skeptics on the
+uncommitted diff — the practice paid, and the headline is self-inflicted):
+- **BLOCKING, and MINE — the seat introduced the abort it exists to prevent.**
+  The marker arm called `(car args)` unguarded, so a user-written zero-arg
+  `[$retired-selection]` RAISED at the parse seam and killed the whole file.
+  Its three raw-sentinel siblings had carried `(pair? args)` from the start —
+  I wrote the guard three times and omitted it on the fourth. Fixed + pinned
+  (B5). **Lesson shape: when a new arm joins a family, diff it against its
+  siblings, not against its own intent.**
+- **SIGNIFICANT, pre-existing** — `pattern-var?` excluded the LIVE sentinels
+  but not the retired `$dot-key`/`$nil-dot-key`, so a retired shape inside a
+  `defmacro` TEMPLATE read as an unbound pattern variable and raised out of
+  preparse: whole-file abort, a retired-surface path that BYPASSES the seat.
+  The mini-audit had flagged the asymmetry (facet 3 finding 19); closed here
+  because the phase owns that list. Pinned (B6).
+- **MINOR** — negative NON-integer indices escaped the guard, and **probing
+  corrected the skeptic's own mechanism**: `-1` arrives BARE but `-1.5`/`-2/3`
+  arrive WRAPPED as `($decimal-literal -3/2)`/`($rat-literal -2/3)`, so no
+  unwrapped numeric test can see them. Hence `negative-index-payload?`. Pinned
+  (B7). *(Another "probe before believing the mechanism" data point — this
+  time against a report, not a design.)*
+- **CONFIRMED**: node deletion complete across reflection consumers + the pnet
+  table; zero misfires on every must-survive surface; **`.( )` mixfix fully
+  intact INCLUDING comparison chains** — the live pratt path implements them
+  natively, so the deleted `expand-comparison-chain` was a redundant dead twin.
+
+**Adaptations made during implementation** (design → code):
+- **The seat's conversion point moved preparse → PARSER.** Error VALUES are
+  already legal there and flow per-command; preparse Pass 2 has no per-form
+  handler and datums are its only legal output. Consequence: retirement
+  TOKENS stay as marker emitters, so **all reader token-layer pins stayed
+  green** and the churn shrank to rewrite-units + E2E pins.
+- **The `m[:kw]` hint in the design row was wrong** — it named `m[a]`, the
+  *superseded* surface's spelling. Corrected to `m.a` / `[get m :a]`.
+- **The nil-dot-key twins were already broken in WS**, and the mechanism is
+  now known: the stx arm kept the RAW LEXEME (`#:name`) as the key, so the
+  e2e path died as `Unbound variable`. Their retirement is a message upgrade,
+  not a capability removal.
+- **test-postfix-index-02 carried a rewrite-unit pin the audit's flip list
+  missed** (`m[:key]` → `get`) — found by running, not by reading.
+
+**Recorded, not fixed** (2 pre-existing whole-file aborts, both reproduce
+identically at HEAD → DEFERRED): live `.( )` mixfix errors still RAISE
+through preparse — the same failure class Q_L4 documents, and **the seat now
+exists for them**; and a union-typed def + implicit-binder spec + call hangs
+in typing. Also left: chained `m[:a][:b]` reports only the last key
+(cosmetic, one correct-class error, continuation intact).
+
+**Test delta**: +14 in `test-path-selection` (10 guided-diagnostic, 4
+survivor incl. the direct `definitely-not-map?` conservative-default pin
+replacing what the retiring walker tests incidentally carried), +3 defect
+pins (B5/B6/B7); 11 flips across `test-dot-access-01/-02`, `test-nil-type`,
+`test-postfix-index-02/-03`; the 2 P2.a walker pins retired WITH the node.
+
+---
+
+**Original work list** (as designed; all items landed):
 
 **Work list** (order matters — substrate first):
 1. **`surface-rewrite.rkt` `dot-lbrace` cleanup** — delete/re-point the
@@ -526,12 +589,26 @@ R-lens-verified unless marked):
    `'mixfix-group` consumers (:1412/:1654/:1778/:1789) serve any OTHER live
    producer before touching them. Zero behavioral change expected; the
    `d18648f0` pins must stay green.
-2. **The diagnostic seat** (Q_L4): reader/grouping emits a retirement MARKER
-   form; a preparse arm converts it to a per-command `parse-error` VALUE
-   (errors.rkt) with the migration message. The `$mixfix-retired` shape minus
-   the raise; the POL.4 value-conversion discipline. Every retirement below
-   rides this seat. Verify per-command continuation E2E (a following command
-   still evaluates) on EVERY entry path the seat claims.
+2. **The diagnostic seat** (Q_L4), mechanism REFINED by the audit's own
+   grounding: the retirement TOKENS/RECOGNIZERS **STAY**, as marker emitters
+   (their sentinels `$dot-key`/`$nil-dot-key`/`$broadcast-access` already ride
+   the datum stream to every entry path); the preparse REWRITE arms (the
+   semantics) are DELETED, normalizing each retired shape to ONE marker head
+   `$retired-selection` with a kind tag; **the PARSER converts the marker to a
+   per-command `parse-error` VALUE** with the kind-tailored migration message.
+   Conversion sits at the parser, not preparse, because parse-error VALUES are
+   already legal there and flow per-command (probe: `v[]` → "Unexpected
+   datum: ()", file continues — facet 5 [12]), whereas preparse Pass 2 has NO
+   per-form handler (macros.rkt:2803-2806) and datums are its only legal
+   output. This is `$mixfix-retired`'s marker mechanism with the raise
+   replaced by the POL.4 value conversion. Consequence for the test delta:
+   ALL token-layer pins (test-parse-reader :395-399/:408-412/:438-442) STAY
+   GREEN; only preparse-rewrite units + E2E pins flip. Verify per-command
+   continuation E2E on every entry path the seat claims. Two riders recorded:
+   the tree-spine merge survives on a latent `loc->line` `(cadr loc)` bug
+   (driver.rkt:2468-2473 — noted, not depended on); the sexp tilde template's
+   format string is itself malformed (`~ ` consumed by the formatter,
+   sexp-readtable.rkt:310) — do not copy it verbatim.
 3. **Dot-key family retirement**: `.:name` recognizer + BOTH macros arms (the
    prefix Pattern-2a :5453 leg AND the postfix fold-left :5508 leg — two
    shapes, one guided message naming `.name`); `#.:name` (`$nil-dot-key`) and
@@ -554,9 +631,14 @@ R-lens-verified unless marked):
    incidentally carried is REPLACED by a direct pin on an arbitrary unarmed
    node (the critic's C3 — do not silently drop the track file's only pin on
    the positive-list default).
-5. **`m[:kw]` static error + hint** (grouping seat): counting rule =
-   adjacency-verified (16 lines); message names `m[a]` / `get`; the 5
-   flipping pins updated; `m[k]` with `k : Keyword` variable stays green.
+5. **`m[:kw]` static error + hint** (preparse-postfix seat): counting rule =
+   adjacency-verified (16 lines); ⚠ hint CORRECTED at implementation — the
+   carried "names `m[a]` / `get`" was the SUPERSEDED surface's spelling
+   (brackets are not selection under the new law; `m[a]` = `(get m a)` with
+   unbound `a`). The hint names **`m.a`** (dot descends — works today) and
+   **`[get m :a]`**. The 5 flipping pins updated; `m[k]` with `k : Keyword`
+   variable stays green (the discriminator is keyword-LITERAL payload, sound
+   at the preparse arm since `ident-start?` excludes `:`).
 6. **Reject batch**: `x[]` + `_[sel]` graceful static errors at the grouping
    seat (net-new pins). `v[-1]`: static error at the grouping seat for the
    bracket spelling; the bracket-free `[get v -1]` twin is FLAGGED to P2
@@ -566,6 +648,17 @@ R-lens-verified unless marked):
    states.
 7. **Collateral**: re-point `bench-ppn-track2.rkt:174`'s payload + name; note
    the 2 stale golden fixtures (zero callers, no action).
+8. **Recorded decisions**: the `expr?`-predicate gaps on the four surviving
+   path siblings (`expr-get-in?`/`expr-update-in?`/`expr-path?`/`expr-Path?`
+   — pre-existing, pipeline.md item 1) are LEFT NAMED for P2's mini-audit,
+   not closed opportunistically here (retirement slice, not a repair slice).
+   PNET: **no version bump** — the tag table is SYMBOL-keyed (removal shifts
+   nothing) and zero `.pnet` caches carry the node (grep over all 39; no lib
+   module ever used `.*name`); stated honestly: this rests on the
+   cache-content census, NOT on `infrastructure-stale?`. Owner-WIP noise
+   named eyes-open: `foray.prologos` (~18 live new-surface lines) +
+   `today.prologos` (a live `.{` mixfix line) are ungated and will change
+   behavior loudly across P1b/P3 — expected, not a regression.
 
 **Test delta**: retirement pins (guided messages + file-continues E2E) in
 `test-path-selection.rkt`; reader pins in `test-parse-reader.rkt`; the 5
