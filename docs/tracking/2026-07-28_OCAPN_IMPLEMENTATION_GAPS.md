@@ -110,19 +110,18 @@ open below.
 
 ### Still open
 
-Seven entries were open after the first remediation pass; five are now closed
-and two of those turned out to rest on premises that no longer hold. What is
-left is below, and it is short.
+Thirteen entries were open after the first remediation pass. **Ten are closed,
+two dissolved under premises that stopped holding, and one is half closed.**
+What is left is a single architectural problem and the two entries downstream
+of it.
 
-**Genuinely open — all one architectural problem, or downstream of it:**
+**Genuinely open — one problem, three entries:**
 
 | Finding | Why it is still open |
 |---|---|
-| §0.2 gifter/receiver roles live in Racket | Needs `eff-connect`, `eff-send-on`, `eff-sign` and a connection registry as a first-class cell. Unchanged, and still the largest piece of debt here. |
+| §0.2 gifter/receiver roles live in Racket | Needs `eff-connect`, `eff-send-on`, `eff-sign` and a connection registry as a first-class cell. Unchanged, and now the ONLY thing left here. The shape is clear: `eff-connect` is the cheapest of the three — the dial queue it would drive already exists (`ocapn-dial-ffi.rkt`) and the vat stays pure if the effect accumulates a pending-dial list the driver drains, exactly as `vat-outbound` works today. That one primitive would let the sturdyref enlivener be a real behaviour at export 5 instead of a driver interception, which is most of §1.7 M8 and all of §1.7 M7. |
 | §1.7 M8 every frame is processed twice | Same root. Narrowed — the Racket side now only acts on frames it can match structurally, and `run-step` no longer hands an enliven to captp-core at all — but both halves still run on the same bytes. |
 | §1.7 M7 enliven slots 900+ are unregistered | Same root: the enlivener must hand out a real exported resolve-me from the connection's export table instead of a Racket counter. Its two live consequences are gone — captp-core no longer breaks on the answer (a deliver with no reply channel to an export we lack is dropped, not reflected), and the slot base is above anything the vat allocates until ~890 allocations on one connection. What remains is that the reservation is by convention, not construction. |
-| §1.10 #8 Node peers speak unsigned `"0.1"` | **Half closed.** The real hole was not the peers' dialect — it was that `handshake.prologos` had NO unit coverage at all (its own test file did not import it), so the signed path was covered solely by the conformance suite. It now has seven tests, including two negative signature cases and an accept control, plus the field accessors `ParsedSS` was missing. What remains is that the Node peers still speak `"0.1"` unsigned, which is redundancy rather than a hole. |
-| §1.2 M3 forwarded pipelined deliver has no reply channel | **CLOSED** on the second attempt — see below. |
 
 **§1.2 M3 — closed, on the second attempt.** A forwarded deliver is a NEW
 message with us as the sender, so the queued deliver's `ap`/`rm` cannot be
@@ -158,10 +157,12 @@ without a reply channel. That case chains the pipeline onto the peer's own
 question rather than terminating it, so it is a different shape; it is not
 covered by this fix and is not claimed to be.
 
-**Closed since:** §1.1 #5 (floats and sets), §1.4 #6 (`wants_partial`),
-§1.6 M8 (undecodable frames abort), §1.10 #10 (the plain-value reason),
-§1.10 #12 (locator hints are a map), §1.10 #11 residue (fixture coverage and
-the Latin-1 harness).
+**Closed:** §1.1 #5 / §1.10 #3 (floats and sets), §1.4 #6 (`wants_partial`),
+§1.6 M8 (undecodable frames abort), §1.10 #10 (the plain-value reason names
+its value), §1.10 #12 (locator hints are a map), §1.10 #11 residue (fixture
+coverage and the Latin-1 harness), §1.2 M3 (the forwarded reply channel).
+§1.10 #8 is half closed — the signed handshake now has direct unit coverage,
+which was the real hole; the Node peers' dialect is redundancy.
 
 **Two entries dissolved rather than fixed**, because their premises stopped
 holding — recorded here rather than silently dropped:
