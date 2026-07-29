@@ -1,7 +1,7 @@
 # OCapN implementation — known gaps, shortcomings and workarounds
 
 **Written 2026-07-28 against `ad673edb`. Remediated 2026-07-29; see § Status.**
-Upstream conformance suite: 24/24. Unit suite: 9599 pass.
+Upstream conformance suite: 24/24. Unit suite: 9616 pass.
 
 Passing the conformance suite is the *premise* of this document, not its
 conclusion. Everything below is something that passed and was nevertheless
@@ -110,23 +110,47 @@ open below.
 
 ### Still open
 
-Each of these was reached and left, for the reason given — not missed.
+Seven entries were open after the first remediation pass; five are now closed
+and two of those turned out to rest on premises that no longer hold. What is
+left is below, and it is short.
+
+**Genuinely open — all one architectural problem, or downstream of it:**
 
 | Finding | Why it is still open |
 |---|---|
-| §0.2 gifter/receiver roles live in Racket | Architectural. Needs `eff-connect`, `eff-send-on`, `eff-sign` and a connection registry as a first-class cell. Unchanged, and still the largest piece of debt here. |
-| §1.7 M8 every frame is processed twice | Same root. Narrowed — the Racket side now only acts on frames it can match structurally — but both halves still run on the same bytes. |
-| §1.2 M3 forwarded pipelined deliver has no reply channel | Needs us to allocate our own answer position and forward the reply back to the queued deliver's. `PipeMsg` now carries `rm` so that machinery has something to read. |
-| §1.1 #5 floats and sets do not decode | Needs `SyrupValue` constructors, which every exhaustive match in captp-wire and captp-core must then follow. Upstream emits both. |
-| §1.4 #6 `op:listen`'s `wants_partial` value | The field's PRESENCE is now required; carrying its value needs a third field on `op-listen`. |
-| §1.9 #4 `:requires (CryptoCap)` | Applying the annotations fails every consumer at module load; the capability must be threaded from the driver entry through the whole verification chain first. The header now says this instead of claiming the annotations are present. |
-| §1.10 #12 `locator` fixes host/port | Needs a hints map and a string→Nat conversion the stdlib does not expose. |
-| §1.8 M2 one process-wide session keypair | Confined to one file but a protocol-semantics change: `our-side-id` becomes per-connection, moving session-id derivation and the crossed-hellos tie-break at once. |
-| §1.7 M7 enliven slots 900+ are unregistered | Needs the enlivener to hand out a real exported resolve-me from the connection's export table instead of a Racket counter. |
-| §1.10 #10 `plain-value-error-reason` is a constant | Naming the offending value is wire-visible and `peer-plain-value-error.mjs` plus a Racket test pin the exact string. The dead parameter is gone. |
-| §1.10 #8 Node peers speak unsigned `"0.1"` | Real, and the conformance gate covers the signed path. Making a peer drive it is a rewrite of the peer harness. |
-| §1.6 M8 an undecodable frame returns `""` | Emitting `op:abort` changes bytes for frames we currently answer with silence; it needs a decision about which decode failures are fatal. |
-| §1.10 #11 residue | Floats and sets have no fixture coverage because the model has no constructor for them — the same gap as §1.1 #5. And the cross-impl harness is UTF-8-keyed while the codec's byte model is Latin-1, so no non-ASCII vector can ride it. |
+| §0.2 gifter/receiver roles live in Racket | Needs `eff-connect`, `eff-send-on`, `eff-sign` and a connection registry as a first-class cell. Unchanged, and still the largest piece of debt here. |
+| §1.7 M8 every frame is processed twice | Same root. Narrowed — the Racket side now only acts on frames it can match structurally, and `run-step` no longer hands an enliven to captp-core at all — but both halves still run on the same bytes. |
+| §1.7 M7 enliven slots 900+ are unregistered | Same root: the enlivener must hand out a real exported resolve-me from the connection's export table instead of a Racket counter. Its two live consequences are gone — captp-core no longer breaks on the answer (a deliver with no reply channel to an export we lack is dropped, not reflected), and the slot base is above anything the vat allocates until ~890 allocations on one connection. What remains is that the reservation is by convention, not construction. |
+| §1.10 #8 Node peers speak unsigned `"0.1"` | Real. The conformance gate covers the signed path end to end, so this is redundancy rather than a hole; making a peer drive it is a rewrite of the peer harness. |
+| §1.2 M3 forwarded pipelined deliver has no reply channel | Needs us to allocate our OWN answer position for the forwarded send and resolve the queued deliver's from it. The machinery to do that correctly exists in pieces — `bs-add-question` maps a peer answer position to a local promise and the pump answers from it — but wiring them means threading BridgeState through `forward-bytes-loop`, which today returns bytes only. `PipeMsg` carries `rm` so the work has something to read. |
+
+**Closed since:** §1.1 #5 (floats and sets), §1.4 #6 (`wants_partial`),
+§1.6 M8 (undecodable frames abort), §1.10 #10 (the plain-value reason),
+§1.10 #12 (locator hints are a map), §1.10 #11 residue (fixture coverage and
+the Latin-1 harness).
+
+**Two entries dissolved rather than fixed**, because their premises stopped
+holding — recorded here rather than silently dropped:
+
+- **§1.9 #4 (`:requires (CryptoCap)`) is a LANGUAGE gap, not an OCapN one.**
+  Annotating an FFI binding makes the whole module unimportable from a
+  `.prologos` file: the requirement propagates to the caller and nothing can
+  introduce a root capability. Wrapping the bindings in same-module functions
+  does not help, and neither does importing the capability type — both were
+  tried. And `prologos::ocapn::tcp-testing`, cited in this document as proof
+  the convention is live, **cannot be imported either**; nothing imports it,
+  and its test loads it through the sexp path, which does not hit the check.
+  That module now carries a characterization test asserting the WS-mode
+  failure, so the gap has a witness and will fail loudly when the language
+  grows a root capability form.
+- **§1.8 M2 (one process-wide session keypair) has lost its consequence.** The
+  stated failure was that session-ids collapse and the handoff replay guard,
+  keyed on session, then refuses a peer's legitimate second handoff. That
+  guard is per-connection now (theme B), so two connections no longer share a
+  replay set. What remains is a conformance deviation — upstream mints a key
+  per session — with no failing input, which by this document's own standard
+  is not a finding. Minting per connection also costs a `process-string` per
+  accept, which the suite's wall-clock budget would notice.
 
 ### Newly found, while fixing
 
@@ -148,6 +172,18 @@ Not in the original inventory:
    arity change, importing a module fails with a bare "Unbound variable" while
    the module itself processes with zero errors. `rm -rf data/cache/pnet` is
    the fix; this is the second sighting (pitfall #47) and it cost time again.
+   It cost time a THIRD way later: an arm with a genuinely unbound variable
+   presents identically, so the cache is both a cause of that symptom and a
+   plausible-looking excuse for it. Clearing twice is what separates them.
+6. **MEDIUM | `prologos::ocapn::tcp-testing` cannot be imported**, and neither
+   can any module whose FFI bindings carry `:requires`. See § Still open.
+   Its test did not catch this because it loads through the sexp `imports`
+   path; the WS `require` path is the one that fails. A module with no
+   importers has no witness for its own breakage.
+7. **LOW | a non-exhaustive match in `behavior.prologos`** — the elaborator
+   reports `Hole ??__match-fail : ActStep` on every load of anything that
+   depends on it. It predates all of this work and is not in the inventory,
+   but it is the same silent-wrong-answer class the inventory is about.
 
 ### Method note on the fix pass
 

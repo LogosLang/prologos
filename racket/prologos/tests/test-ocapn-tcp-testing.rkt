@@ -186,3 +186,45 @@
   (check-equal? (tcp-table-size) 1)
   (tcp-close server-id)
   (check-equal? (tcp-table-size) 0))
+
+;; ========================================
+;; The `:requires` annotation makes this module unimportable
+;; ========================================
+;;
+;; CHARACTERIZATION TEST — it pins behaviour that is WRONG, so that the
+;; gap has a witness instead of being silent.
+;;
+;; Every binding here is `:requires (NetCap)`, which is cited elsewhere
+;; in the tree (crypto.prologos) as proof that the convention is live.
+;; It is not. The requirement propagates to the caller and there is no
+;; root-capability introduction form, so requiring this module from a
+;; `.prologos` file fails at load with E2001 — and nothing in the tree
+;; imports it, so nothing noticed.
+;;
+;; The `imports` form above loads it through the SEXP path, which does
+;; not hit the same check. That is why this file could assert "just load
+;; the module" and still pass while the WS path was broken.
+;;
+;; When the language grows a way to introduce a capability, this test
+;; FAILS, and that is the signal to delete it and thread the capability
+;; for real.
+
+(test-case "tcp-testing/WS-mode require still fails on the NetCap requirement"
+  (define tmp (make-prologos-temp-file))
+  (dynamic-wind
+    void
+    (lambda ()
+      (call-with-output-file tmp #:exists 'truncate
+        (lambda (o)
+          (displayln "ns probe-tcp-testing-caps" o)
+          (displayln "" o)
+          (displayln "require [prologos::ocapn::tcp-testing :refer [listen]]" o)))
+      (define out (open-output-string))
+      (parameterize ([current-output-port out] [current-error-port out])
+        (with-handlers ([exn:fail? (lambda (e) (display (exn-message e) out))])
+          (process-file tmp)))
+      (check-true
+       (regexp-match? #rx"E2001|capability" (get-output-string out))
+       (format "expected the NetCap requirement to make this unimportable; got: ~s"
+               (get-output-string out))))
+    (lambda () (when (file-exists? tmp) (delete-file tmp)))))
