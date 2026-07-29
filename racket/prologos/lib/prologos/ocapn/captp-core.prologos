@@ -2942,12 +2942,12 @@ defn break-forward-loop
 ;; Phase 45: dispatch the broken case. If pst is pst-broken r, walk
 ;; pipelined-msgs and emit error-answer bytes for each queued deliver
 ;; that had a non-false answer-pos. Other PromiseStates: no effect.
-spec dispatch-broken-resolution Nat PromiseState [List PipeMsg] Vat -> ForwardEffect
+spec dispatch-broken-resolution Nat PromiseState [List PipeMsg] Vat BridgeState -> ForwardEffect
 defn dispatch-broken-resolution
-  | _   [pst-unresolved _] _   v -> [forward-effect v [nil String]]
-  | _   [pst-fulfilled  _] _   v -> [forward-effect v [nil String]]
-  | pid [pst-broken     r] pms v ->
-      [forward-effect v [break-forward-loop pid r pms [nil String]]]
+  | _   [pst-unresolved _] _   v st -> [forward-effect v st [nil String]]
+  | _   [pst-fulfilled  _] _   v st -> [forward-effect v st [nil String]]
+  | pid [pst-broken     r] pms v st ->
+      [forward-effect v st [break-forward-loop pid r pms [nil String]]]
 
 ;; Phase 46: plain-value resolution. When the promise fulfills with a
 ;; value that isn't a callable (not desc:export, not desc:answer),
@@ -2973,33 +2973,105 @@ spec plain-value-error-reason SyrupValue -> SyrupValue
 defn plain-value-error-reason [resolution]
   syrup-string [str::append "deliver-to-non-callable: " [wire::encode resolution]]
 
-spec dispatch-plain-value-resolution Nat SyrupValue [List PipeMsg] Vat -> ForwardEffect
-defn dispatch-plain-value-resolution [pid V pms v]
-  [forward-effect v [break-forward-loop pid [plain-value-error-reason V] pms [nil String]]]
+spec dispatch-plain-value-resolution Nat SyrupValue [List PipeMsg] Vat BridgeState -> ForwardEffect
+defn dispatch-plain-value-resolution [pid V pms v st]
+  [forward-effect v st [break-forward-loop pid [plain-value-error-reason V] pms [nil String]]]
 
 ;; ForwardEffect bundles the two outcomes of forwarding: an updated
 ;; Vat (if msgs were delivered locally) plus a list of bytes (if any
 ;; were forwarded on the wire). Single-constructor avoids issue #60.
 data ForwardEffect
-  forward-effect : Vat -> [List String]
+  forward-effect : Vat -> BridgeState -> [List String]
 
 spec fwd-effect-vat ForwardEffect -> Vat
 defn fwd-effect-vat
-  | forward-effect v _ -> v
+  | forward-effect v _ _ -> v
 
 spec fwd-effect-bytes ForwardEffect -> List String
 defn fwd-effect-bytes
-  | forward-effect _ bs -> bs
+  | forward-effect _ _ bs -> bs
+
+spec fwd-effect-state ForwardEffect -> BridgeState
+defn fwd-effect-state
+  | forward-effect _ st _ -> st
 
 ;; Innermost helper for desc:export: K is the export target.
 ;; Discriminate local-actor (Phase 42) vs peer-export (Phase 41) via
 ;; lookup-actor. Bottom of the helper chain that sidesteps pitfall #18's
 ;; 3-deep nested match.
-spec dispatch-export-target Nat Nat [List PipeMsg] Vat -> ForwardEffect
-defn dispatch-export-target [pid k pms v]
+;; Forward one queued deliver, allocating a REAL reply channel for it.
+;;
+;; A forwarded deliver is a NEW message with US as the sender, so the queued
+;; deliver's own `ap`/`rm` cannot be echoed into it — they name the PEER's
+;; tables. What is correct is to allocate our own answer position and wire the
+;; peer's back to it, and the pieces for that already exist:
+;;
+;;   * a fresh promise P, whose id doubles as our outbound question position
+;;     (the convention `bs-add-outbound-question pid pid` already uses);
+;;   * `bs-add-question ap P` — the peer's answer position is served BY P, so
+;;     when P settles the pump emits `<op:deliver <desc:answer ap> value f f>`
+;;     with no new code;
+;;   * `bs-handle-listen-with-late-fire P rm` — the peer's resolver, if it
+;;     named one, becomes a listener on P.
+;;
+;; The peer answers OUR question, that resolves P, and P answers the peer at
+;; the position it was actually waiting on. Both tables point at the same
+;; promise, which is what makes the round trip work with no new plumbing.
+;;
+;; A queued deliver with neither `ap` nor `rm` is genuinely fire-and-forget
+;; and still goes out through `forward-deliver-bytes`.
+spec forward-ask-listen Nat [Option Nat] Vat BridgeState -> BridgeState
+defn forward-ask-listen [p rm v st]
+  match rm
+    | none        -> st
+    | some rm-pos -> bs-handle-listen-with-late-fire p rm-pos v st
+
+spec forward-ask-bind Nat [Option Nat] [Option Nat] Vat BridgeState -> BridgeState
+defn forward-ask-bind [p ap rm v st]
+  match ap
+    | none     -> forward-ask-listen p rm v st
+    | some pos -> forward-ask-listen p rm v [bs-add-question pos p st]
+
+spec queued-has-reply-channel? [Option Nat] [Option Nat] -> Bool
+defn queued-has-reply-channel? [ap rm]
+  match ap
+    | some _ -> true
+    | none   ->
+        match rm
+          | some _ -> true
+          | none   -> false
+
+spec forward-plain Nat SyrupValue [Option Nat] [Option Nat] ForwardEffect -> ForwardEffect
+defn forward-plain [target args ap rm fe]
+  forward-effect [fwd-effect-vat fe] [fwd-effect-state fe]
+    [cons [forward-deliver-bytes "desc:export" target args ap rm] [fwd-effect-bytes fe]]
+
+spec forward-asking Nat SyrupValue [Option Nat] [Option Nat] ForwardEffect -> ForwardEffect
+defn forward-asking [target args ap rm fe]
+  let alloc := [fresh-promise [fwd-effect-vat fe]]
+    forward-effect [alloc-vat alloc]
+      [bs-add-outbound-question [alloc-id alloc] [alloc-id alloc] [forward-ask-bind [alloc-id alloc] ap rm [alloc-vat alloc] [fwd-effect-state fe]]]
+      [cons [outbound-question-bytes target args [alloc-id alloc]] [fwd-effect-bytes fe]]
+
+spec forward-one-queued Nat SyrupValue [Option Nat] [Option Nat] ForwardEffect -> ForwardEffect
+defn forward-one-queued [target args ap rm fe]
+  match [queued-has-reply-channel? ap rm]
+    | false -> forward-plain target args ap rm fe
+    | true  -> forward-asking target args ap rm fe
+
+spec forward-ask-loop Nat Nat [List PipeMsg] ForwardEffect -> ForwardEffect
+defn forward-ask-loop
+  | _   _      nil                                     fe -> fe
+  | pid target [cons [pipe-msg p args ap rm] rest] fe ->
+      match [nat-eq? p pid]
+        | true  -> forward-ask-loop pid target rest [forward-one-queued target args ap rm fe]
+        | false -> forward-ask-loop pid target rest fe
+
+spec dispatch-export-target Nat Nat [List PipeMsg] Vat BridgeState -> ForwardEffect
+defn dispatch-export-target [pid k pms v st]
   match [lookup-actor k v]
-    | some _ -> [forward-effect [deliver-locally-loop pid k pms v] [nil String]]
-    | none   -> [forward-effect v [forward-bytes-loop "desc:export" pid k pms [nil String]]]
+    | some _ -> [forward-effect [deliver-locally-loop pid k pms v] st [nil String]]
+    | none   -> forward-ask-loop pid k pms [forward-effect v st [nil String]]
 
 ;; Phase 44: chained-answer dispatch. Resolution to `<desc:answer M>`
 ;; means "the result is whatever lives at our outbound-question M (or
@@ -3013,9 +3085,9 @@ defn dispatch-export-target [pid k pms v]
 ;;
 ;; This is purely wire-side; the local-actor case doesn't apply to
 ;; desc:answer (an answer-target isn't a local actor).
-spec dispatch-answer-target Nat Nat [List PipeMsg] Vat -> ForwardEffect
-defn dispatch-answer-target [pid m pms v]
-  [forward-effect v [forward-bytes-loop "desc:answer" pid m pms [nil String]]]
+spec dispatch-answer-target Nat Nat [List PipeMsg] Vat BridgeState -> ForwardEffect
+defn dispatch-answer-target [pid m pms v st]
+  [forward-effect v st [forward-bytes-loop "desc:answer" pid m pms [nil String]]]
 
 ;; Middle helper: V is the resolution-value SyrupValue. Try
 ;; desc:export first (most common); fall through to desc:answer
@@ -3025,14 +3097,14 @@ defn dispatch-answer-target [pid m pms v]
 ;; plain non-callable value is a TYPE error reported at the queued
 ;; msg's ap, structurally identical to broken-promise error-forwarding
 ;; (Phase 45). Two-deep match (sidesteps pitfall #18).
-spec dispatch-resolution-value Nat SyrupValue [List PipeMsg] Vat -> ForwardEffect
-defn dispatch-resolution-value [pid V pms v]
+spec dispatch-resolution-value Nat SyrupValue [List PipeMsg] Vat BridgeState -> ForwardEffect
+defn dispatch-resolution-value [pid V pms v st]
   match [syrup-as-export-target V]
-    | some k -> dispatch-export-target pid k pms v
+    | some k -> dispatch-export-target pid k pms v st
     | none ->
         match [syrup-as-answer-target V]
-          | some m -> dispatch-answer-target pid m pms v
-          | none   -> dispatch-plain-value-resolution pid V pms v
+          | some m -> dispatch-answer-target pid m pms v st
+          | none   -> dispatch-plain-value-resolution pid V pms v st
 
 ;; Top-level: given a resolved promise's pid + resolution PromiseState
 ;; + bridge's pipelined-msgs list + current Vat, return a ForwardEffect
@@ -3056,14 +3128,14 @@ defn dispatch-resolution-value [pid V pms v]
 ;;                        unresolved means "wait, not drop").
 ;; broken? gates the dispatch into the error path before resolution-
 ;; value collapses fulfilled and broken into the same Some.
-spec build-forward-effect Nat PromiseState [List PipeMsg] Vat -> ForwardEffect
-defn build-forward-effect [pid pst pms v]
+spec build-forward-effect Nat PromiseState [List PipeMsg] Vat BridgeState -> ForwardEffect
+defn build-forward-effect [pid pst pms v st]
   match [broken? pst]
-    | true  -> dispatch-broken-resolution pid pst pms v
+    | true  -> dispatch-broken-resolution pid pst pms v st
     | false ->
         match [resolution-value pst]
-          | none   -> [forward-effect v [nil String]]
-          | some V -> dispatch-resolution-value pid V pms v
+          | none   -> [forward-effect v st [nil String]]
+          | some V -> dispatch-resolution-value pid V pms v st
 
 ;; ===========================================================
 ;; Wire-OUT pump — Phase 16
@@ -3174,19 +3246,23 @@ defn bs-gc-listeners-by-notified
 ;; + the vat (Phase 42 may have enqueued local-actor messages on it
 ;; via pipelined-msg forwarding to a refr-local-export resolution).
 data PumpResult
-  pump-result : Vat -> [List String] -> [List Nat]
+  pump-result : Vat -> BridgeState -> [List String] -> [List Nat]
 
 spec pump-result-vat PumpResult -> Vat
 defn pump-result-vat
-  | pump-result v _ _ -> v
+  | pump-result v _ _ _ -> v
 
 spec pump-result-bytes PumpResult -> List String
 defn pump-result-bytes
-  | pump-result _ bs _ -> bs
+  | pump-result _ _ bs _ -> bs
+
+spec pump-result-state PumpResult -> BridgeState
+defn pump-result-state
+  | pump-result _ st _ _ -> st
 
 spec pump-result-emitted PumpResult -> List Nat
 defn pump-result-emitted
-  | pump-result _ _ es -> es
+  | pump-result _ _ _ es -> es
 
 ;; Per-question: if the local promise has settled (fulfilled OR
 ;; broken) AND the pid hasn't been emitted yet, prepend bytes
@@ -3208,34 +3284,35 @@ defn listener-bytes-for-pid [ls pid pst accum]
     | none         -> accum
     | some payload -> listener-notify-loop ls pid payload accum
 
-spec pump-one Nat Nat Vat [List PipeMsg] [List Listener] [List Nat] [List String] -> PumpResult
-defn pump-one [remote local v pms ls emitted accum]
+spec pump-one Nat Nat Vat BridgeState [List PipeMsg] [List Listener] [List Nat] [List String] -> PumpResult
+defn pump-one [remote local v st pms ls emitted accum]
   match [member-nat? local emitted]
-    | true  -> pump-result v accum emitted
+    | true  -> pump-result v st accum emitted
     | false ->
         match [lookup-promise local v]
-          | none -> pump-result v accum emitted
+          | none -> pump-result v st accum emitted
           | some pst ->
               match [outbound-from-resolution remote pst]
-                | none       -> pump-result v accum emitted
+                | none       -> pump-result v st accum emitted
                 | some bytes ->
-                    let fwd := [build-forward-effect local pst pms v]
+                    let fwd := [build-forward-effect local pst pms v st]
                       let listener-bytes :=
                             [listener-bytes-for-pid ls local pst [nil String]]
                         [pump-result
                           [fwd-effect-vat fwd]
+                          [fwd-effect-state fwd]
                           [cons bytes
                             [append String [fwd-effect-bytes fwd]
                               [append String listener-bytes accum]]]
                           [cons local emitted]]
 
 ;; Walk the question-table list once.
-spec pump-loop [List QEntry] Vat [List PipeMsg] [List Listener] [List Nat] [List String] -> PumpResult
+spec pump-loop [List QEntry] Vat BridgeState [List PipeMsg] [List Listener] [List Nat] [List String] -> PumpResult
 defn pump-loop
-  | nil v _ _ emitted accum -> pump-result v accum emitted
-  | [cons [q-entry remote local] rest] v pms ls emitted accum ->
-      let r := [pump-one remote local v pms ls emitted accum]
-        pump-loop rest [pump-result-vat r] pms ls
+  | nil v st _ _ emitted accum -> pump-result v st accum emitted
+  | [cons [q-entry remote local] rest] v st pms ls emitted accum ->
+      let r := [pump-one remote local v st pms ls emitted accum]
+        pump-loop rest [pump-result-vat r] [pump-result-state r] pms ls
           [pump-result-emitted r]
           [pump-result-bytes r]
 
@@ -3244,6 +3321,7 @@ defn pump-loop
 spec prepend-pending-out [List String] PumpResult -> PumpResult
 defn prepend-pending-out [pending pr]
   pump-result [pump-result-vat pr]
+              [pump-result-state pr]
               [append String pending [pump-result-bytes pr]]
               [pump-result-emitted pr]
 
@@ -3295,15 +3373,15 @@ defn orphan-bytes-for [pid emitted v]
     | true  -> [none SyrupValue]
     | false -> orphan-payload-for pid v
 
-spec orphan-loop [List Listener] Vat [List Nat] [List String] -> PumpResult
+spec orphan-loop [List Listener] Vat BridgeState [List Nat] [List String] -> PumpResult
   :doc "Emit listener-notification bytes for settled promises carrying a listener that pump-loop did not already cover."
 defn orphan-loop
-  | nil v emitted accum -> pump-result v accum emitted
-  | [cons [listener tgt res] rest] v emitted accum ->
+  | nil v st emitted accum -> pump-result v st accum emitted
+  | [cons [listener tgt res] rest] v st emitted accum ->
       match [orphan-bytes-for tgt emitted v]
-        | none -> orphan-loop rest v emitted accum
+        | none -> orphan-loop rest v st emitted accum
         | some payload ->
-            orphan-loop rest v [cons tgt emitted] [cons [listener-notify-bytes res payload] accum]
+            orphan-loop rest v st [cons tgt emitted] [cons [listener-notify-bytes res payload] accum]
 
 ;; ===========================================================
 ;; Phase 59b part 9: outbound sends become real QUESTIONS
@@ -3447,13 +3525,13 @@ defn drain-vat-questions [v st]
 
 spec drain-outbound PumpResult -> PumpResult
 defn drain-outbound [pr]
-  pump-result [clear-outbound [pump-result-vat pr]] [outbound-loop [vat-outbound [pump-result-vat pr]] [pump-result-bytes pr]] [pump-result-emitted pr]
+  pump-result [clear-outbound [pump-result-vat pr]] [pump-result-state pr] [outbound-loop [vat-outbound [pump-result-vat pr]] [pump-result-bytes pr]] [pump-result-emitted pr]
 
 spec pump-outbound Vat BridgeState [List Nat] -> PumpResult
   :doc "Walk the question table; emit bytes for newly-resolved promises plus any pending-out bytes (e.g. handshake reply). Phase 42: also delivers pipelined msgs locally to actors when applicable; the resulting Vat is in the PumpResult. Phase 48: also emits listener-notification bytes for any registered op:listen targeting a settled pid. Phase 59b part 2: a second pass covers listeners whose promise has no question-table entry (the resolve-me case)."
 defn pump-outbound [v st emitted]
-  let base := [pump-loop [bs-questions st] v [bs-pipelined-msgs st] [bs-listeners st] emitted nil]
-    drain-outbound [prepend-pending-out [bs-pending-out st] [orphan-loop [bs-listeners st] [pump-result-vat base] [pump-result-emitted base] [pump-result-bytes base]]]
+  let base := [pump-loop [bs-questions st] v st [bs-pipelined-msgs st] [bs-listeners st] emitted nil]
+    drain-outbound [prepend-pending-out [bs-pending-out [pump-result-state base]] [orphan-loop [bs-listeners st] [pump-result-vat base] [pump-result-state base] [pump-result-emitted base] [pump-result-bytes base]]]
 
 ;; Convenience helper for tests / callers that want the first
 ;; emitted byte-string (or a default if nothing was emitted).
@@ -3808,14 +3886,17 @@ defn connection-step [op cs]
         let bs    := [captp-incoming-with-state op [conn-vat cs] [conn-bridge-state cs]]
           let v0    := [run-vat drain-fuel [bridge-step-vat bs]]
             ;; Phase 59b part 9: turn queued outbound sends into QUESTIONS
-            ;; before the pump runs. This must happen here, not inside
-            ;; pump-outbound, because it updates BridgeState and PumpResult
-            ;; carries none. It also clears vat-outbound, so the pump's own
-            ;; drain finds nothing left to do.
+            ;; before the pump runs. It also clears vat-outbound, so the
+            ;; pump's own drain finds nothing left to do.
+            ;;
+            ;; The PUMP's state is what the GC chain below builds on, not the
+            ;; pre-pump one: forwarding a queued pipelined deliver registers a
+            ;; fresh promise in both question tables, and taking the earlier
+            ;; state here would drop those registrations on the floor.
             let drain := [drain-vat-questions v0 [bridge-step-state bs]]
               let v'    := [od-vat drain]
-                let st0   := [bs-clear-pending-out [prepend-pending-list [od-bytes drain] [od-state drain]]]
-                  let pump  := [pump-outbound v' [prepend-pending-list [od-bytes drain] [od-state drain]] [conn-emitted cs]]
+                let pump  := [pump-outbound v' [prepend-pending-list [od-bytes drain] [od-state drain]] [conn-emitted cs]]
+                  let st0   := [bs-clear-pending-out [pump-result-state pump]]
                 ;; Phase 47: GC pipelined-msgs whose pid has been
                 ;; emitted (forwarding/break-forward/plain-value-error
                 ;; bytes already produced); the queue no longer needs

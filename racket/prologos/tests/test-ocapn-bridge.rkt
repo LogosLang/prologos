@@ -2606,3 +2606,91 @@
   (check-contains
    (run-last "(eval (outbound-deliver-bytes zero (syrup-list (cons (syrup-string \"a\") nil))))")
    "[1"))
+
+;; ========================================
+;; A forwarded pipelined deliver keeps its reply channel
+;; ========================================
+;;
+;; The queued deliver's OWN ap/rm cannot be echoed into the forwarded
+;; frame -- that frame is a NEW message with US as the sender, so those
+;; slots would name our tables, not the peer's. What is correct is to
+;; allocate our own answer position and wire the peer's back to it:
+;; a fresh promise P goes into BOTH question tables, so the peer answers
+;; our question, that resolves P, and the pump answers the peer at the
+;; position it was actually waiting on.
+;;
+;; Before this, `forward-deliver-bytes` hardcoded `false false` and the
+;; peer's answer never resolved: an error was deliverable, a success was
+;; not (gaps doc section 1.2 M3).
+
+(test-case "bridge/forwarding a queued deliver with an ap emits a real answer position"
+  (define got
+    (run-last
+     "(eval (let (alloc (fresh-promise empty-vat)
+                   pid   (alloc-id alloc)
+                   v0    (alloc-vat alloc)
+                   st0   (bs-add-question (suc (suc (suc (suc (suc zero))))) pid bridge-state-empty)
+                   step  (dispatch-pipeline-on-our-q
+                           (suc (suc (suc (suc (suc zero)))))
+                           (syrup-string \"chained-msg\")
+                           (some Nat (suc (suc (suc (suc (suc (suc (suc (suc (suc zero)))))))))) ;; peer's ap = 9
+                           (none Nat) v0 st0)
+                   v1    (resolve-promise pid
+                           (syrup-tagged \"desc:export\"
+                             (syrup-nat (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))))) ;; 11
+                           (bridge-step-vat step))
+                   pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
+               (pump-result-bytes pr)))"))
+  ;; The emitted list holds the resolution answer AND the forward. The
+  ;; forward targets the peer's export 11 and must carry a real answer
+  ;; position, so no frame in the list both names export 11 and ends in
+  ;; the fire-and-forget `ff`.
+  (check-true (string-contains? got "desc:export11+")
+              (format "expected a forward to desc:export 11; got ~s" got))
+  (check-false (string-contains? got "desc:export11+>[4\\\"chained-msg]ff>")
+               (format "expected a real answer position on the forward; got ~s" got)))
+
+(test-case "bridge/forwarding registers the peer's answer position against a promise"
+  ;; The peer's ap must end up in bs-questions, or nothing will ever
+  ;; answer it. Two entries: the original question and the forwarded one.
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                   pid   (alloc-id alloc)
+                   v0    (alloc-vat alloc)
+                   st0   (bs-add-question (suc (suc (suc (suc (suc zero))))) pid bridge-state-empty)
+                   step  (dispatch-pipeline-on-our-q
+                           (suc (suc (suc (suc (suc zero)))))
+                           (syrup-string \"chained-msg\")
+                           (some Nat (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))
+                           (none Nat) v0 st0)
+                   v1    (resolve-promise pid
+                           (syrup-tagged \"desc:export\"
+                             (syrup-nat (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero)))))))))))))
+                           (bridge-step-vat step))
+                   pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
+               (length (bs-questions (pump-result-state pr)))))")
+   "2N"))
+
+(test-case "bridge/a queued deliver with NO reply channel still forwards fire-and-forget"
+  ;; The control: allocating a question for a fire-and-forget send would
+  ;; leave an outbound question nothing ever answers.
+  (define got
+    (run-last
+     "(eval (let (alloc (fresh-promise empty-vat)
+                   pid   (alloc-id alloc)
+                   v0    (alloc-vat alloc)
+                   st0   (bs-add-question (suc (suc (suc (suc (suc zero))))) pid bridge-state-empty)
+                   step  (dispatch-pipeline-on-our-q
+                           (suc (suc (suc (suc (suc zero)))))
+                           (syrup-string \"chained-msg\")
+                           (none Nat)
+                           (none Nat) v0 st0)
+                   v1    (resolve-promise pid
+                           (syrup-tagged \"desc:export\"
+                             (syrup-nat (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))))) 
+                           (bridge-step-vat step))
+                   pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
+               (pump-result-bytes pr)))"))
+  (check-true (string-contains? got "ff>")
+              (format "expected fire-and-forget slots; got ~s" got)))

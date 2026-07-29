@@ -122,38 +122,41 @@ left is below, and it is short.
 | §1.7 M8 every frame is processed twice | Same root. Narrowed — the Racket side now only acts on frames it can match structurally, and `run-step` no longer hands an enliven to captp-core at all — but both halves still run on the same bytes. |
 | §1.7 M7 enliven slots 900+ are unregistered | Same root: the enlivener must hand out a real exported resolve-me from the connection's export table instead of a Racket counter. Its two live consequences are gone — captp-core no longer breaks on the answer (a deliver with no reply channel to an export we lack is dropped, not reflected), and the slot base is above anything the vat allocates until ~890 allocations on one connection. What remains is that the reservation is by convention, not construction. |
 | §1.10 #8 Node peers speak unsigned `"0.1"` | **Half closed.** The real hole was not the peers' dialect — it was that `handshake.prologos` had NO unit coverage at all (its own test file did not import it), so the signed path was covered solely by the conformance suite. It now has seven tests, including two negative signature cases and an accept control, plus the field accessors `ParsedSS` was missing. What remains is that the Node peers still speak `"0.1"` unsigned, which is redundancy rather than a hole. |
-| §1.2 M3 forwarded pipelined deliver has no reply channel | **Attempted and reverted, 2026-07-29** — see below. |
+| §1.2 M3 forwarded pipelined deliver has no reply channel | **CLOSED** on the second attempt — see below. |
 
-**§1.2 M3 — the design is settled; the landing is not.** Worth writing down,
-because the next attempt should not re-derive it:
+**§1.2 M3 — closed, on the second attempt.** A forwarded deliver is a NEW
+message with us as the sender, so the queued deliver's `ap`/`rm` cannot be
+echoed — they name the peer's tables. What is correct is to allocate a fresh
+promise P for the forwarded send and register it in BOTH question tables:
+`bs-add-outbound-question P P` so the peer answers our question, and
+`bs-add-question <peer's ap> P` so that when P settles the pump emits
+`<op:deliver <desc:answer ap> value f f>` with no new code at all. The peer's
+resolver, if it named one, becomes a listener on P. Both tables pointing at
+the same promise is what makes the round trip work.
 
-A forwarded deliver is a NEW message with us as the sender, so the queued
-deliver's `ap`/`rm` cannot be echoed — they name the peer's tables. What is
-correct is to allocate a fresh promise P for the forwarded send and register
-it in BOTH question tables:
+It took two attempts, and the first one is the part worth keeping:
 
-  * `bs-add-outbound-question P P` — the peer answers our question at P;
-  * `bs-add-question <peer's ap> P` — so when P settles, the pump emits
-    `<op:deliver <desc:answer ap> value f f>` with no new code at all;
-  * `bs-handle-listen-with-late-fire P <peer's rm>` for the resolver.
+The whole change (~25 sites threading `BridgeState` through `ForwardEffect`,
+`PumpResult` and the four pump loops) was written in one go, elaborated
+cleanly, and then failed at IMPORT with a bare "Unbound variable". One cause
+was `bs-handle-listen-with-late-fire` taking four arguments where I passed
+three — **under-application in Prologos produces a stuck term, not an arity
+error**. Fixing that one call did not clear it, and with no location in the
+message I reverted rather than leave the tree red.
 
-Both tables pointing at the same promise is what makes the round trip work.
-Getting there means threading `BridgeState` through `ForwardEffect`,
-`PumpResult`, `pump-one`, `pump-loop`, `orphan-loop` and `pump-outbound` —
-about 25 sites, all mechanical.
+The second attempt landed the identical design by applying it in four steps
+and testing the import after each: widen `ForwardEffect`; thread it into
+`pump-one`; add the helpers; wire them in and widen `PumpResult`. Every step
+was clean. Whatever the second mistake was, it did not survive being written
+a second time — which is the actual lesson: at the import boundary an
+under-application, an unbound name and a stale `.pnet` all present as the
+same bare message with no location, so bisecting by construction beats
+diagnosing by inspection.
 
-That was written and reverted. It elaborated cleanly and then failed at IMPORT
-with a bare "Unbound variable": `bs-handle-listen-with-late-fire` takes four
-arguments, not three, and an under-application in Prologos produces a stuck
-term rather than an arity error. Fixing that one call did not clear it, so at
-least one more of the same kind is in there. The tree is greener without it,
-and a half-landed reply channel is worse than a documented absent one.
-
-The lesson is not "be careful": it is that **under-application is
-indistinguishable from an unbound variable at the import boundary**, and both
-are indistinguishable from a stale `.pnet`. Three causes, one message. A
-mechanical arity check against the `spec` lines would have found this in
-seconds and does not exist.
+`dispatch-answer-target` (resolution to `<desc:answer M>`) still forwards
+without a reply channel. That case chains the pipeline onto the peer's own
+question rather than terminating it, so it is a different shape; it is not
+covered by this fix and is not claimed to be.
 
 **Closed since:** §1.1 #5 (floats and sets), §1.4 #6 (`wants_partial`),
 §1.6 M8 (undecodable frames abort), §1.10 #10 (the plain-value reason),
