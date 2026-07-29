@@ -33,6 +33,9 @@ ns prologos::ocapn::behavior
 ;;   beh-car                 — answers "Vroom! I am a <color> <model> car!"
 ;;   beh-sturdyref-enlivener — asks for an outbound connection to the
 ;;                   location an `ocapn-sturdyref` names (`eff-connect`)
+;;   beh-sink        — absorbs a message and answers nothing; exists so an
+;;                   export position can be REAL rather than reserved by
+;;                   convention
 
 require [prologos::ocapn::syrup
          :refer [SyrupValue
@@ -82,6 +85,14 @@ data BehaviorTag
   ;; behaviour cannot open a socket — and the export position it answers on
   ;; had no actor behind it.
   beh-sturdyref-enlivener
+  ;; Absorbs a message and answers NOTHING. Its only purpose is to make an
+  ;; export position REAL: something the connection's own table holds, rather
+  ;; than a number reserved by convention.
+  ;;
+  ;; It could not exist before `act-step-pending` — any behaviour that
+  ;; answered would put a reply on the wire for a message whose real handler
+  ;; is somewhere else entirely.
+  beh-sink
 
 ;; ========================================
 ;; Side-effects an actor can request
@@ -712,6 +723,10 @@ defn first-sturdyref-arg [args]
 ;; The answer is the sturdyref itself, echoed. The peer learns the connection
 ;; was requested; the capability it is actually after arrives over the
 ;; connection the driver opens, not in this reply.
+spec step-sink SyrupValue -> ActStep
+defn step-sink [state]
+  act-step-pending state nil
+
 spec step-sturdyref-enlivener SyrupValue SyrupValue -> ActStep
 defn step-sturdyref-enlivener [state args]
   match [first-sturdyref-arg args]
@@ -735,3 +750,4 @@ defn step-behavior [tag state args fresh]
     | beh-car-factory -> step-car-factory state args fresh
     | beh-car       -> step-car state args
     | beh-sturdyref-enlivener -> step-sturdyref-enlivener state args
+    | beh-sink      -> step-sink state

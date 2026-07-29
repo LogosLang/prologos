@@ -22,9 +22,11 @@ require [prologos::ocapn::captp-core :refer [ConnectionState empty-connection
                                               bs-set-gifts
                                               bridge-state-empty]]
         [prologos::ocapn::vat        :refer [Vat vat Actor actor actor-table-set
-                                             promise-table-set vat-dials clear-dials]]
+                                             promise-table-set vat-dials clear-dials
+                                             Allocated vat-spawn alloc-id alloc-vat]]
         [prologos::ocapn::behavior   :refer [beh-echo beh-greeter beh-cell beh-resolver beh-car-factory-builder
-                                             beh-sturdyref-enlivener first-sturdyref-arg]]
+                                             beh-sturdyref-enlivener first-sturdyref-arg
+                                             beh-sink]]
         [prologos::ocapn::syrup      :refer [SyrupValue syrup-null syrup-string
                                              syrup-list syrup-nat syrup-tagged
                                              syrup-promise]]
@@ -201,6 +203,38 @@ spec init-connection Nat -> Bool
   :doc "Set up fresh per-connection captp-core state for connection `cid`, with the bootstrap objects seeded."
 defn init-connection [cid]
   conn-stash cid seeded-connection
+
+;; ===========================================================
+;; Reserving an export position
+;; ===========================================================
+;;
+;; Hand out an export position in connection `cid`'s OWN table, backed by a
+;; real (if inert) actor, and return it as decimal digits.
+;;
+;; The gifter path needs a resolve-me to put in the `fetch` it sends to an
+;; exporter, and the exporter answers it as `<desc:export N>` on the
+;; exporter's connection — so N has to be a position that connection actually
+;; holds. It used to be a Racket counter starting at 900, reserved from the
+;; vat's allocator by nothing but the distance between 900 and wherever
+;; `next-id` had got to (gaps document §1.7 M7). This makes the reservation
+;; structural: the id comes from the same allocator everything else does, so
+;; it cannot collide by construction rather than by margin.
+;;
+;; `beh-sink` is what sits there. It absorbs the exporter's answer and does
+;; not reply — the real handling is elsewhere — which is only expressible
+;; because `act-step-pending` exists.
+spec reserve-export-emit Nat Allocated ConnectionState -> String
+defn reserve-export-emit [cid alloc cs]
+  match [conn-stash cid [conn-state [alloc-vat alloc] [conn-bridge-state cs] [conn-emitted cs] [conn-aborted? cs]]]
+    | true  -> str::from-int [from-nat [alloc-id alloc]]
+    | false -> ""
+
+spec reserve-export Nat -> String
+  :doc "Allocate an export position in `cid`'s table and return its digits."
+defn reserve-export [cid]
+  let cs := [conn-fetch cid seeded-connection]
+    let alloc := [vat-spawn beh-sink syrup-null [conn-vat cs]]
+      reserve-export-emit cid alloc cs
 
 ;; Force the stash side effect — matching the Bool result drives its
 ;; evaluation — then return the concatenated outbound bytes.

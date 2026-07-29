@@ -737,8 +737,20 @@
 ;; it also reaches `drive-step`, addresses an export captp-core has never
 ;; heard of. Fixing that means the enlivener handing out a real exported
 ;; resolve-me from the connection's own export table.
-(define enliven-slot-box (box 900))
-(define (next-enliven-slot!) (next-counter! enliven-slot-box))
+;; The enliven resolve-me is an export position in the EXPORTER's own table,
+;; allocated by the same vat allocator everything else uses. It used to be a
+;; counter starting at 900, reserved from that allocator by nothing but the
+;; distance between 900 and wherever `next-id` had got to.
+(define (reserve-enliven-slot! exporter)
+  (define r (last-result
+             (run-prologos/locked
+              (format "(eval (reserve-export ~aN))" (conn-entry-cid exporter)))))
+  (define m (and (string? r) (regexp-match #px"^\"([0-9]+)\" : String$" r)))
+  ;; A stuck term is well-typed as String and reduces to itself, so a
+  ;; forward reference in the driver shows up HERE as an unmatched result
+  ;; rather than as an error anywhere. Say what came back.
+  (unless m (printf "ocapn-test-server: reserve-export did not return digits: ~s~n" r))
+  (and m (string->number (cadr m))))
 
 (define gift-counter-box (box 0))
 
@@ -800,13 +812,16 @@
 ;; are removed when their connection closes, so a stale closed port is no
 ;; longer handed to a write.
 
-(struct conn-entry (out pubkey-bytes side-id) #:transparent)
+;; `cid` is the connection id captp-core knows this peer by. Without it the
+;; gifter path could not ask the driver to act in the exporter's namespace --
+;; which is why the enliven resolve-me used to be a Racket counter.
+(struct conn-entry (out pubkey-bytes side-id cid) #:transparent)
 
 (define open-conns (make-hash))
 (define pubkey-by-out (make-hasheq))
 
-(define (record-open-conn! hello cout)
-  (define e (conn-entry cout (peer-hello-pubkey-bytes hello) (peer-hello-side-id hello)))
+(define (record-open-conn! hello cout cid)
+  (define e (conn-entry cout (peer-hello-pubkey-bytes hello) (peer-hello-side-id hello) cid))
   (with-state
     (hash-update! open-conns (peer-hello-location-key hello) (lambda (es) (cons e es)) '())
     (hash-set! pubkey-by-out cout (peer-hello-pubkey-bytes hello)))
@@ -925,7 +940,11 @@
            [(not exporter)
             (printf "ocapn-test-server: enliven for a peer we have no open connection to; the dial queue will take it~n")]
            [else
-            (define slot (next-enliven-slot!))
+            (define slot (reserve-enliven-slot! exporter))
+            (cond
+              [(not slot)
+               (printf "ocapn-test-server: could not reserve an export on the exporter session; dropping the enliven~n")]
+              [else
             (with-state
               (hash-set! pending-enlivens slot
                          (vector cout rm-pos (sturdyref-loc-bytes sr) exporter)))
@@ -934,7 +953,7 @@
                         (bytes-append #"<" (syrup-symbol "op:deliver")
                                       (desc-record "desc:export" 0)
                                       #"[" (syrup-symbol "fetch") (sturdyref-swiss sr) #"]"
-                                      #"f" (desc-record "desc:import-object" slot) #">"))])]))))
+                                      #"f" (desc-record "desc:import-object" slot) #">"))])])]))))
 
 ;; Claim a pending enliven whose fetch we sent on `cout`. The lookup and
 ;; the removal are one critical section: a `for/first` scan followed by a
@@ -1256,7 +1275,7 @@
                  (drop-half-open-dial! key)
                  (set! cid (next-conn-id!))
                  (drive-init! cid frame)
-                 (record-open-conn! hello dout)
+                 (record-open-conn! hello dout cid)
                  ;; If we dialled this peer to redeem a handoff-give,
                  ;; everything the receive needs is now available: their
                  ;; side-id comes out of this very frame.
@@ -1425,7 +1444,7 @@
                        ;; enliven for this peer finds nothing in
                        ;; `open-conns` and the gifter path silently
                        ;; no-ops.
-                       (record-open-conn! hello cout)
+                       (record-open-conn! hello cout cid)
                        (redeem-gift-for-hello! hello cout)
                        (run-frame-loop cin cout cid)]
                       [else
@@ -1436,7 +1455,7 @@
                     (drive-init! cid first-frame)
                     (printf "ocapn-test-server: inbound start-session accepted (conn ~a); driving captp-core~n"
                             cid)
-                    (record-open-conn! hello cout)
+                    (record-open-conn! hello cout cid)
                     (redeem-gift-for-hello! hello cout)
                     (run-frame-loop cin cout cid)])])])])))
     (lambda ()

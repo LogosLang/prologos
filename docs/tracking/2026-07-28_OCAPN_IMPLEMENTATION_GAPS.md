@@ -115,13 +115,12 @@ two dissolved under premises that stopped holding, and one is half closed.**
 What is left is a single architectural problem and the two entries downstream
 of it.
 
-**Genuinely open — one problem, three entries:**
+**Genuinely open — one problem, two entries:**
 
 | Finding | Why it is still open |
 |---|---|
 | §0.2 gifter/receiver roles live in Racket | **First primitive landed; the enlivener has moved.** `eff-connect` and `act-step-pending` both exist, and `beh-sturdyref-enlivener` is a real actor at export 5 — the driver no longer intercepts anything, so EVERY op now goes through `connection-step`. That closes §0.3 and the Prologos half of §1.7 M8. `eff-send-on` and `eff-sign` are untouched, and the connection registry is still a Racket hash, so the gifter and receiver roles themselves have not moved. |
 | §1.7 M8 every frame is processed twice | **Half closed.** The PROLOGOS half is gone: `run-step` no longer handles any op instead of the bridge, because the enlivener is an actor. The Racket byte-scanners (`try-enliven!`, `try-fetch-answer!`, `note-handoff-give!`) still run on every frame alongside `drive-step`; removing them needs `eff-sign` and a connection registry, i.e. the rest of §0.2. |
-| §1.7 M7 enliven slots 900+ are unregistered | The RACKET server's `next-enliven-slot!` counter, distinct from export 5 (which now has a real actor). Its two live consequences are gone — captp-core no longer breaks on the answer, and the base is above anything the vat allocates until ~890 allocations on one connection — so what remains is that the reservation is by convention rather than construction. Closing it means the enlivener handing out a resolve-me from the connection's own export table, which is the rest of §0.2. |
 
 **§0.2 — first primitive landed, and the model change it needed.** Two things
 were built, in that order, because the first did not work without the second:
@@ -181,21 +180,24 @@ once it exists.
 
 *Migration order, each step independently landable:*
 
-1. Add a connection id to the server's `conn-entry` and to whatever the driver
-   stashes. Nothing behavioural; it makes every later step expressible.
-2. `reserve-export cid` in the driver: spawn a placeholder actor in that
-   connection's vat and return its id. **This closes §1.7 M7 by
-   construction** — the enliven resolve-me stops being a Racket counter in a
-   range reserved by convention and becomes a real export in the exporter
-   connection's own table.
+1. ~~Add a connection id to the server's `conn-entry`.~~ **DONE.**
+2. ~~`reserve-export cid` in the driver.~~ **DONE — §1.7 M7 is closed.**
 3. `eff-sign`, with the receiver's handoff-receive as its first consumer.
 4. `eff-send-on` + the registry, which lets the gifter role move.
 5. Delete the Racket byte-scanners, **which closes the rest of §1.7 M8** —
    the two implementations stop running on the same bytes because there is
    only one left.
 
-Steps 1 and 2 are small and closable now. Steps 3–5 are the actual role
-migration, and that is still a day of work rather than an afternoon.
+Steps 1 and 2 are done. Steps 3–5 are the actual role migration, and that is
+still a day of work rather than an afternoon.
+
+One note from doing step 2, because it is the third sighting this session and
+the diagnosis was slow every time: `reserve-export` initially called a helper
+defined BELOW it. Modules are single-pass, so the call did not reduce — and a
+stuck term is WELL-TYPED. It came back as the literal string
+`"[reserve-export 21N] : String"`, the enliven was dropped, and the only
+symptom was a conformance test timing out three layers away. Nothing errored
+anywhere. The server now prints what it got instead of silently dropping.
 
 **§1.2 M3 — closed, on the second attempt.** A forwarded deliver is a NEW
 message with us as the sender, so the queued deliver's `ap`/`rm` cannot be
@@ -230,6 +232,21 @@ diagnosing by inspection.
 without a reply channel. That case chains the pipeline onto the peer's own
 question rather than terminating it, so it is a different shape; it is not
 covered by this fix and is not claimed to be.
+
+**§1.7 M7 — closed.** The enliven resolve-me was a Racket counter starting at
+900, reserved from the vat's allocator by nothing but the distance between 900
+and wherever `next-id` had got to. It is now allocated BY that allocator:
+`reserve-export cid` spawns a `beh-sink` actor in the exporter connection's own
+vat and returns its id, so the position the exporter answers on is one that
+connection actually holds. Collision is impossible by construction rather than
+by margin.
+
+Two things had to exist first, which is why it could not be done directly:
+`act-step-pending` (the placeholder must absorb the exporter's answer without
+replying — any answering behaviour would put a reply on the wire for a message
+whose real handler is elsewhere), and a connection id on the server's
+`conn-entry`, without which the gifter side could not name the connection to
+allocate in. Step 1 and step 2 of the migration order below.
 
 **Closed:** §1.1 #5 / §1.10 #3 (floats and sets), §1.4 #6 (`wants_partial`),
 §1.6 M8 (undecodable frames abort), §1.10 #10 (the plain-value reason names
