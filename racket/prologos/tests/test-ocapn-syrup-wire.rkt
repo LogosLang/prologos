@@ -422,3 +422,48 @@
   ;; test passed.
   (check-contains
    (run-last "(eval (encode (syrup-bytes \"abc\")))") "3:abc"))
+
+;; ========================================
+;; Sets and floats
+;; ========================================
+;;
+;; The reference emits both (`contrib/syrup.py`: `b'#' + sorted(items) + b'$'`
+;; and `b'D' + struct.pack('>d', obj)`), so a peer that sent one used to get a
+;; decode failure from us and no diagnostic.
+
+(test-case "syrup-wire/a set decodes"
+  (check-contains
+   (run-last "(eval (decode-value \"#1+2+$\"))") "syrup-set"))
+
+(test-case "syrup-wire/encode sorts set items; re-encode preserves the peer's order"
+  ;; Same split as dicts, for the same reason: we owe a peer canonical bytes
+  ;; on frames we originate, and byte-exact reproduction on frames it sent.
+  (check-contains
+   (run-last "(eval (encode (syrup-set (cons (syrup-int 2) (cons (syrup-int 1) nil)))))")
+   "#1+2+$")
+  (check-contains
+   (run-last "(eval (re-encode (unwrap-or syrup-null (decode-value \"#2+1+$\"))))")
+   "#2+1+$"))
+
+(test-case "syrup-wire/a double round-trips byte-exactly"
+  ;; `D` + 8 bytes. Carried as raw bytes INCLUDING the marker rather than as a
+  ;; number: nothing here does float arithmetic, and a signature covers bytes.
+  (check-contains
+   (run-last "(eval (re-encode (unwrap-or syrup-null (decode-value \"D12345678\"))))")
+   "D12345678"))
+
+(test-case "syrup-wire/a single float round-trips as F, not widened to D"
+  ;; Decoding `F` to a number and re-emitting the `D` the reference prefers
+  ;; would preserve the value and change the bytes -- exactly what re-encode
+  ;; exists to prevent.
+  (check-contains
+   (run-last "(eval (re-encode (unwrap-or syrup-null (decode-value \"F1234\"))))")
+   "F1234"))
+
+(test-case "syrup-wire/a truncated float is rejected"
+  (check-contains (run-last "(eval (decode-value \"D123\"))") "none"))
+
+(test-case "syrup-wire/a set nested in a record decodes and round-trips"
+  (check-contains
+   (run-last "(eval (re-encode (unwrap-or syrup-null (decode-value \"<1'f#1+2+$>\"))))")
+   "<1'f#1+2+$>"))

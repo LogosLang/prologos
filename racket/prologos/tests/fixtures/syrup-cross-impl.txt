@@ -42,3 +42,5 @@ record two-arg	3c313227646573633a68616e646f6666312b3122783e	(syrup-tagged "desc:
 record bytes-arg	3c3827646573633a736967333a78797a3e	(syrup-tagged "desc:sig" (syrup-bytes "xyz"))
 record op:deliver four-arg	3c3130276f703a64656c697665723c313127646573633a6578706f7274302b3e5b342270696e675d3c313127646573633a616e73776572372b3e663e	(syrup-tagged "op:deliver" (syrup-list (cons (syrup-tagged "desc:export" (syrup-int 0)) (cons (syrup-list (cons (syrup-string "ping") nil)) (cons (syrup-tagged "desc:answer" (syrup-int 7)) (cons (syrup-bool false) nil))))))
 record ocapn-peer with hints	3c3130276f6361706e2d706565723136277463702d74657374696e672d6f6e6c7933226162637b3422686f737439223132372e302e302e313422706f7274352232323034357d3e	(syrup-tagged "ocapn-peer" (syrup-list (cons (syrup-symbol "tcp-testing-only") (cons (syrup-string "abc") (cons (syrup-dict (cons (syrup-string "host") (cons (syrup-string "127.0.0.1") (cons (syrup-string "port") (cons (syrup-string "22045") nil))))) nil)))))
+set of ints	23312b322b24	(syrup-set (cons (syrup-int 1) (cons (syrup-int 2) nil)))
+double float	443132333435363738	(syrup-float "D12345678")

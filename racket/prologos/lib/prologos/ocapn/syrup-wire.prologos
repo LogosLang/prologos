@@ -148,6 +148,17 @@ spec encode-dict-body [SyrupValue -> String] [List SyrupValue] -> String
 defn encode-dict-body [enc xs]
   concat-strings [str-sort [encode-dict-pairs enc xs]]
 
+spec encode-each [SyrupValue -> String] [List SyrupValue] -> [List String]
+defn encode-each [enc xs]
+  match xs
+    | nil      -> [nil String]
+    | cons h t -> [cons [enc h] [encode-each enc t]]
+
+;; A set has no key/value pairing: sort the encoded ITEMS.
+spec encode-set-body [SyrupValue -> String] [List SyrupValue] -> String
+defn encode-set-body [enc xs]
+  concat-strings [str-sort [encode-each enc xs]]
+
 ;; --- The poison record for values that must never reach the wire ---
 ;;
 ;; `syrup-refr` / `syrup-promise` / a standalone `syrup-null` are CapTP-layer
@@ -196,6 +207,8 @@ defn encode-payload [enc p]
     | syrup-symbol _   -> enc p
     | syrup-bytes _    -> enc p
     | syrup-dict _     -> enc p
+    | syrup-set _ -> enc p
+    | syrup-float _ -> enc p
     | syrup-tagged _ _ -> enc p
     | syrup-refr _     -> enc p
     | syrup-promise _  -> enc p
@@ -218,6 +231,13 @@ defn encode [v]
     | syrup-bytes b      -> str::append [str::from-int [str::length b]] [str::append ":" b]
     | syrup-list xs      -> str::append "[" [str::append [encode-many encode xs] "]"]
     | syrup-dict xs      -> str::append "{" [str::append [encode-dict-body encode xs] "}"]
+    ;; A set canonicalises by SORTED ENCODED ITEM, same rule as a dict's keys
+    ;; (`contrib/syrup.py` sorts `encoded_items`). `encode-set-body` sorts
+    ;; whole encoded items rather than pairs.
+    | syrup-set xs       -> str::append "#" [str::append [encode-set-body encode xs] "$"]
+    ;; The payload already carries its marker byte — see `syrup-float` in
+    ;; syrup.prologos for why a float is bytes here and not a number.
+    | syrup-float f      -> f
     | syrup-tagged tag p -> str::append "<" [str::append [encode [syrup-symbol tag]] [str::append [encode-payload encode p] ">"]]
     | syrup-refr _       -> unencodable "refr"
     | syrup-promise _    -> unencodable "promise"
@@ -259,6 +279,8 @@ defn encodable?
   ;; as for a list. (The mechanical pass cloned `false` from the promise arm
   ;; above, which would have made every location-bearing frame unencodable.)
   | syrup-dict xs     -> all-encodable encodable? xs
+  | syrup-set xs      -> all-encodable encodable? xs
+  | syrup-float _     -> true
 
 spec encode-safe SyrupValue -> Option String
   :doc "Encode if v contains no naked refr/promise; else `none`."
@@ -326,6 +348,10 @@ defn re-encode [v]
     ;; (`encode`), where we are the author of the bytes. Two readings, two
     ;; functions, and this is the second place that distinction bites.
     | syrup-dict xs      -> str::append "{" [str::append [encode-many re-encode xs] "}"]
+    ;; NOT `encode-set-body`, for the same reason as the dict arm above: this
+    ;; path reproduces the peer's bytes for signature verification.
+    | syrup-set xs       -> str::append "#" [str::append [encode-many re-encode xs] "$"]
+    | syrup-float _      -> encode v
     | syrup-null         -> encode v
     | syrup-bool _       -> encode v
     | syrup-nat _        -> encode v
@@ -561,6 +587,8 @@ defn single-arg-payload [p]
     | syrup-symbol _   -> p
     | syrup-bytes _    -> p
     | syrup-dict _     -> p
+    | syrup-set _ -> p
+    | syrup-float _ -> p
     | syrup-tagged _ _ -> p
     | syrup-refr _     -> p
     | syrup-promise _  -> p
@@ -593,6 +621,8 @@ defn decode-record-with [dec s i]
                 | syrup-refr _    -> none
                 | syrup-promise _ -> none
                 | syrup-dict _   -> none
+                | syrup-set _ -> none
+                | syrup-float _ -> none
 
 ;; --- Top-level decoder: parse one syrup-value at offset i ---
 ;;
@@ -618,6 +648,15 @@ defn dict-decoded [xs e]
   match [list-even-length? xs]
     | true  -> some [decoded [syrup-dict xs] e]
     | false -> [none Decoded]
+
+;; A FLOAT is its marker byte plus a fixed-width payload: `D` + 8 (double) or
+;; `F` + 4 (single). Both are carried verbatim, marker included.
+spec decode-float-at String Int Int -> Option Decoded
+defn decode-float-at [s i width]
+  let e := [int+ i [int+ 1 width]]
+    match [int-lt [str::length s] e]
+      | true  -> [none Decoded]
+      | false -> some [decoded [syrup-float [str::slice s i e]] e]
 
 spec decode-at String Int -> Option Decoded
 defn decode-at [s i]
@@ -662,9 +701,24 @@ defn decode-at [s i]
                                     match [int-eq cc 60]
                                       | true  -> decode-record-with decode-at s [int+ i 1]
                                       | false ->
-                                          match [digit? c]
-                                            | true  -> decode-numeric-or-string s i
-                                            | false -> none
+                                        match [int-eq cc 35]
+                                          | true  ->
+                                              ;; `#` item* `$` — a SET. Same element loop
+                                              ;; as a list, terminator `$` (36).
+                                              match [decode-many-loop decode-at s [int+ i 1] 36]
+                                                | none -> none
+                                                | some [decoded-many xs e] ->
+                                                    some [decoded [syrup-set xs] e]
+                                          | false ->
+                                            match [int-eq cc 68]
+                                              | true  -> decode-float-at s i 8
+                                              | false ->
+                                                match [int-eq cc 70]
+                                                  | true  -> decode-float-at s i 4
+                                                  | false ->
+                                                      match [digit? c]
+                                                        | true  -> decode-numeric-or-string s i
+                                                        | false -> none
 
 ;; --- Public top-level decode ---
 

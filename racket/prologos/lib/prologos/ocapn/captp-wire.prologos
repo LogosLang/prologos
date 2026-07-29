@@ -368,6 +368,8 @@ defn unwrap-desc
   | syrup-bytes _  -> none
   | syrup-promise _  -> none
   | syrup-dict  _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
 
 ;; The same for a resolve-me slot: `<desc:import-object N>` or
 ;; `<desc:import-promise N>`, nothing else. Used for op:listen's
@@ -388,6 +390,8 @@ defn unwrap-resolve-me
   | syrup-bytes _  -> none
   | syrup-promise _  -> none
   | syrup-dict  _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
 
 ;; Phase 25: discriminate desc:export from desc:answer. Returns true
 ;; iff `v` is a `syrup-tagged "desc:answer" ...` form. Used by the
@@ -408,6 +412,8 @@ defn desc-is-answer?
   | syrup-bytes _      -> false
   | syrup-promise _    -> false
   | syrup-dict    _   -> false
+  | syrup-set _ -> false
+  | syrup-float _ -> false
 
 ;; --- The two optional slots -----------------------------------------
 ;;
@@ -446,6 +452,8 @@ defn wire-nat-ok?
   | syrup-bytes _    -> false
   | syrup-promise _    -> false
   | syrup-dict    _   -> false
+  | syrup-set _ -> false
+  | syrup-float _ -> false
 
 ;; ANSWER-POSITION slot. Upstream reads it raw (`answer_position =
 ;; record.args[2]`) and writes it raw, so the spec form is a bare
@@ -477,6 +485,8 @@ defn answer-pos-ok?
   | syrup-bytes _    -> false
   | syrup-promise _    -> false
   | syrup-dict    _   -> false
+  | syrup-set _ -> false
+  | syrup-float _ -> false
 
 ;; The tagged arm drops the label because `answer-pos-ok?` has already
 ;; established it is `desc:answer`. Call them as a pair.
@@ -494,6 +504,8 @@ defn unwrap-opt-answer-pos
   | syrup-bytes _    -> none
   | syrup-promise _    -> none
   | syrup-dict    _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
 
 ;; RESOLVE-ME slot: `false` / `null` for absent, otherwise one of the
 ;; two import descriptors. A `<desc:answer N>` here used to unwrap to a
@@ -519,6 +531,8 @@ defn resolve-me-ok?
   | syrup-bytes _    -> false
   | syrup-promise _    -> false
   | syrup-dict    _   -> false
+  | syrup-set _ -> false
+  | syrup-float _ -> false
 
 ;; ===========================================================
 ;; Per-op dispatchers
@@ -571,6 +585,8 @@ defn dispatch-gc-export
   | syrup-bytes _ -> none
   | syrup-promise _ -> none
   | syrup-dict _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
 
 ;; --- The plural GC ops, which are the ones a peer actually sends ----
 ;;
@@ -613,6 +629,8 @@ defn nat-list-of
   | syrup-bytes _ -> none
   | syrup-promise _ -> none
   | syrup-dict _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
 
 ;; `<op:gc-answers [7+ 8+]>` is a ONE-argument record whose argument is
 ;; a list, and that is the one shape the record decoder has had two
@@ -650,6 +668,8 @@ defn gc-answers-positions
   | syrup-bytes _    -> none
   | syrup-promise _  -> none
   | syrup-dict _     -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
 
 spec dispatch-gc-answers SyrupValue -> [Option CapTPOp]
 defn dispatch-gc-answers [p]
@@ -692,6 +712,8 @@ defn dispatch-gc-exports
   | syrup-bytes _ -> none
   | syrup-promise _ -> none
   | syrup-dict _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
 
 spec dispatch-deliver-only-fields [List SyrupValue] -> [Option CapTPOp]
 defn dispatch-deliver-only-fields [xs]
@@ -725,6 +747,8 @@ defn dispatch-deliver-only
   | syrup-bytes _ -> none
   | syrup-promise _ -> none
   | syrup-dict _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
 
 ;; Three fields: target, resolve-me, wants-partial. The third is
 ;; required — upstream asserts arity 3 — but `op-listen` has nowhere to
@@ -765,6 +789,8 @@ defn dispatch-listen
   | syrup-bytes _ -> none
   | syrup-promise _ -> none
   | syrup-dict _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
 
 ;; If the deliver's target is a `desc:answer N`, build an
 ;; op-deliver-to-answer (peer is replying to OUR question N).
@@ -828,6 +854,8 @@ defn dispatch-deliver
   | syrup-bytes _ -> none
   | syrup-promise _ -> none
   | syrup-dict _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
 
 ;; The spec record is FOUR fields —
 ;;   <op:start-session ver pubkey-sexp locator sig-sexp>
@@ -892,6 +920,8 @@ defn dispatch-start-session
   | syrup-bytes _ -> none
   | syrup-promise _ -> none
   | syrup-dict _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
 
 ;; (Phase 52b note: dispatch-deposit-gift / dispatch-withdraw-gift
 ;; were removed on 2026-05-18. The OCapN canonical model dispatches
@@ -954,6 +984,8 @@ defn syrup-to-op
   | syrup-bytes _          -> none
   | syrup-promise _          -> none
   | syrup-dict          _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
 
 ;; ===========================================================
 ;; Public top-level decode

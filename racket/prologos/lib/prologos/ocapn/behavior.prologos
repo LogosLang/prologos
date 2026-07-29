@@ -36,7 +36,7 @@ require [prologos::ocapn::syrup
          :refer [SyrupValue
                  syrup-null syrup-bool syrup-nat syrup-int syrup-string
                  syrup-symbol syrup-list syrup-tagged
-                 syrup-refr syrup-promise syrup-dict
+                 syrup-refr syrup-promise syrup-dict syrup-set syrup-float
                  wire-nat]]
         [prologos::data::list   :refer [List nil cons]]
         [prologos::data::option :refer [Option none some]]
@@ -178,6 +178,8 @@ defn step-cell
   | state [syrup-refr _]    -> no-op state
   | state [syrup-promise _] -> no-op state
   | state [syrup-dict _]    -> no-op state
+  | state [syrup-set _]    -> no-op state
+  | state [syrup-float _]    -> no-op state
 
 ;; --- counter ---
 ;; State: syrup-nat n. Args: tagged "inc" _ | tagged "get" _.
@@ -208,6 +210,8 @@ defn step-counter [state args]
           | syrup-refr _    -> no-op state
           | syrup-promise _ -> no-op state
           | syrup-dict _   -> no-op state
+          | syrup-set _   -> no-op state
+          | syrup-float _   -> no-op state
     | syrup-null      -> no-op state
     | syrup-bool _    -> no-op state
     | syrup-int _     -> no-op state
@@ -218,6 +222,8 @@ defn step-counter [state args]
     | syrup-refr _    -> no-op state
     | syrup-promise _ -> no-op state
     | syrup-dict _   -> no-op state
+    | syrup-set _   -> no-op state
+    | syrup-float _   -> no-op state
 
 ;; --- greeter ---
 ;; State: syrup-string greeting. Args: syrup-string name.
@@ -258,6 +264,8 @@ defn first-nat-in [xs]
           | syrup-refr _     -> [none Nat]
           | syrup-promise _  -> [none Nat]
           | syrup-dict  _   -> [none Nat]
+          | syrup-set  _   -> [none Nat]
+          | syrup-float  _   -> [none Nat]
 
 ;; A syrup RECORD decodes as tag + an ARGUMENT LIST, so the payload of
 ;; <desc:import-object 7> is [syrup-nat 7], not a bare syrup-nat. Accept
@@ -284,6 +292,8 @@ defn nat-payload [v]
     | syrup-refr _     -> [none Nat]
     | syrup-promise _  -> [none Nat]
     | syrup-dict  _   -> [none Nat]
+    | syrup-set  _   -> [none Nat]
+    | syrup-float  _   -> [none Nat]
 
 spec desc-target-of String SyrupValue -> [Option Nat]
 defn desc-target-of [tag inner]
@@ -308,6 +318,8 @@ defn refr-id-of [v]
     | syrup-tagged t inner -> desc-target-of t inner
     | syrup-promise _  -> [none Nat]
     | syrup-dict  _   -> [none Nat]
+    | syrup-set  _   -> [none Nat]
+    | syrup-float  _   -> [none Nat]
 
 spec first-refr-in [List SyrupValue] -> [Option Nat]
 defn first-refr-in [xs]
@@ -344,6 +356,8 @@ defn step-greeter [state args]
           | syrup-refr t    -> greeter-send state [some t]
           | syrup-promise _ -> no-op state
           | syrup-dict _   -> no-op state
+          | syrup-set _   -> no-op state
+          | syrup-float _   -> no-op state
     | syrup-null      -> no-op state
     | syrup-bool _    -> no-op state
     | syrup-nat _     -> no-op state
@@ -354,6 +368,8 @@ defn step-greeter [state args]
     | syrup-refr _    -> no-op state
     | syrup-promise _ -> no-op state
     | syrup-dict _   -> no-op state
+    | syrup-set _   -> no-op state
+    | syrup-float _   -> no-op state
 
 ;; --- adder ---
 ;; State: syrup-nat running-total. Args: syrup-nat addend.
@@ -375,6 +391,8 @@ defn step-adder [state args]
           | syrup-refr _    -> no-op state
           | syrup-promise _ -> no-op state
           | syrup-dict _   -> no-op state
+          | syrup-set _   -> no-op state
+          | syrup-float _   -> no-op state
     | syrup-null      -> no-op state
     | syrup-bool _    -> no-op state
     | syrup-int _     -> no-op state
@@ -385,6 +403,8 @@ defn step-adder [state args]
     | syrup-refr _    -> no-op state
     | syrup-promise _ -> no-op state
     | syrup-dict _   -> no-op state
+    | syrup-set _   -> no-op state
+    | syrup-float _   -> no-op state
 
 ;; --- forwarder ---
 ;; State: syrup-refr target. Forwards args via a fire-and-forget send.
@@ -405,6 +425,8 @@ defn step-forwarder [state args]
     | syrup-tagged _ _ -> act-step state syrup-null nil
     | syrup-promise _  -> act-step state syrup-null nil
     | syrup-dict  _   -> act-step state syrup-null nil
+    | syrup-set  _   -> act-step state syrup-null nil
+    | syrup-float  _   -> act-step state syrup-null nil
 
 ;; --- fulfiller ---
 ;; State: syrup-promise pid (the promise to settle).

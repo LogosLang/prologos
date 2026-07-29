@@ -220,6 +220,30 @@ addCase(cases, 'record ocapn-peer with hints',
   ]),
   '(syrup-tagged "ocapn-peer" (syrup-list (cons (syrup-symbol "tcp-testing-only") (cons (syrup-string "abc") (cons (syrup-dict (cons (syrup-string "host") (cons (syrup-string "127.0.0.1") (cons (syrup-string "port") (cons (syrup-string "22045") nil))))) nil)))))');
 
+// Sets and floats. The reference emits both; we had no constructor for
+// either, so a peer sending one got a decode failure and no diagnostic.
+// A set canonicalises by SORTED ENCODED ITEM, like a dict's keys.
+// Inserted in sorted order deliberately. `contrib/syrup.py` canonicalises a
+// set by SORTED ENCODED ITEM and @endo's encoder emits insertion order, so an
+// unsorted literal here would pin that disagreement into a cross-impl vector
+// rather than testing anything. Our own sorting is pinned in
+// test-ocapn-syrup-wire.rkt, against the reference's rule.
+addCase(cases, 'set of ints',
+  new Set([1n, 2n]),
+  '(syrup-set (cons (syrup-int 1) (cons (syrup-int 2) nil)))');
+// A float is carried as its raw wire payload INCLUDING the marker byte --
+// nothing in the Prologos stack does float arithmetic, and the codec owes
+// the peer byte-exactness because a signature covers bytes.
+// The double whose eight big-endian bytes are the ASCII "12345678". Any
+// eight bytes are a valid IEEE-754 double, and choosing printable ones is
+// what lets the expected value be written as a plain Prologos string.
+const asciiByteDouble = new DataView(
+  Uint8Array.from(Buffer.from('12345678', 'latin1')).buffer,
+).getFloat64(0, false);
+addCase(cases, 'double float',
+  asciiByteDouble,
+  '(syrup-float "D12345678")');
+
 // ---- Output -----------------------------------------------------
 
 let stderr = 0;

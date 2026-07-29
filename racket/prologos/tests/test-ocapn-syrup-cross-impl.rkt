@@ -113,7 +113,12 @@
 
 ;; Lowercase hex-encode a string treating its chars as bytes.
 (define (string->hex s)
-  (define bs (string->bytes/utf-8 s))
+  ;; LATIN-1, not UTF-8. Every String in the codec holds one byte per code
+  ;; point (see THE BYTE MODEL in syrup-wire), so UTF-8 here re-measured those
+  ;; code points as text and no vector carrying a byte >= 0x80 could ride this
+  ;; fixture at all -- which is exactly the class of bug the fixture exists to
+  ;; catch.
+  (define bs (string->bytes/latin-1 s))
   (apply string-append
          (for/list ([b (in-bytes bs)])
            (define hh (number->string b 16))
@@ -126,7 +131,7 @@
   (for ([i (in-range n)])
     (bytes-set! bs i
                 (string->number (substring h (* 2 i) (* 2 (+ i 1))) 16)))
-  (bytes->string/utf-8 bs))
+  (bytes->string/latin-1 bs))
 
 ;; ========================================
 ;; Vector loader

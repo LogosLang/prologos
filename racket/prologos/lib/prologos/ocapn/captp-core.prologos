@@ -1377,6 +1377,8 @@ defn deep-refr
   | syrup-promise _    -> [nil Refr]
   | syrup-bytes _      -> [nil Refr]
   | syrup-dict xs      -> [walk-refr-list deep-refr xs]
+  | syrup-set xs -> [walk-refr-list deep-refr xs]
+  | syrup-float xs -> [nil Refr]
   | syrup-list xs      -> [walk-refr-list deep-refr xs]
   | syrup-tagged tag p -> [walk-refr-tagged deep-refr tag p]
 
@@ -1535,6 +1537,8 @@ defn syrup-as-export-target
   | syrup-bytes _    -> [none Nat]
   | syrup-promise _  -> [none Nat]
   | syrup-dict  _   -> [none Nat]
+  | syrup-set _ -> [none Nat]
+  | syrup-float _ -> [none Nat]
   | syrup-tagged tag p ->
       match [str::eq tag "desc:export"]
         | true  -> tagged-payload-as-nat p
@@ -1578,6 +1582,8 @@ defn syrup-list-or-nil
   | syrup-bytes _    -> [nil SyrupValue]
   | syrup-promise _  -> [nil SyrupValue]
   | syrup-dict  _   -> [nil SyrupValue]
+  | syrup-set _ -> [nil SyrupValue]
+  | syrup-float _ -> [nil SyrupValue]
 
 ;; Helper: extract a syrup-symbol's name (Some s), or None if the
 ;; SyrupValue isn't a symbol.
@@ -1595,6 +1601,8 @@ defn syrup-symbol-name
   | syrup-bytes _    -> [none String]
   | syrup-promise _  -> [none String]
   | syrup-dict  _   -> [none String]
+  | syrup-set _ -> [none String]
+  | syrup-float _ -> [none String]
 
 ;; Read a Syrup bytestring (or string) as a Prologos String. Wire ids —
 ;; swiss-nums, gift-ids — are bytestrings, so this is the reader for all of
@@ -1611,6 +1619,10 @@ defn syrup-bytes-of
   | syrup-symbol _   -> [none String]
   | syrup-list _     -> [none String]
   | syrup-dict _     -> [none String]
+  | syrup-set _      -> [none String]
+  ;; A float's payload IS bytes, but it is not a bytestring in the sense this
+  ;; reader means -- a swiss-num or gift-id is never a float.
+  | syrup-float _    -> [none String]
   | syrup-tagged _ _ -> [none String]
   | syrup-refr _     -> [none String]
   | syrup-promise _  -> [none String]
@@ -2807,6 +2819,8 @@ defn syrup-as-answer-target
   | syrup-bytes _    -> [none Nat]
   | syrup-promise _  -> [none Nat]
   | syrup-dict  _   -> [none Nat]
+  | syrup-set _ -> [none Nat]
+  | syrup-float _ -> [none Nat]
   | syrup-tagged tag p ->
       match [str::eq tag "desc:answer"]
         | true  -> tagged-payload-as-nat p
@@ -2944,19 +2958,24 @@ defn dispatch-broken-resolution
 ;; the error, but ARE still semantically processed (not dropped).
 ;; The reason for delivering to a resolution that is not a callable.
 ;;
-;; It is a CONSTANT, and the dead `String` parameter that used to suggest
-;; otherwise is gone — it was ignored, its only caller passed "", and the
-;; comment promised "richer reasons" that nothing could produce. Naming the
-;; offending value here would be more useful, but it is a wire-visible change
-;; that `tools/interop/peer-plain-value-error.mjs` currently pins by exact
-;; string; the fixture has to move first.
+;; It NAMES THE OFFENDING VALUE. The condition alone does not tell the peer
+;; which of its pipelined sends went to a plain value, and this used to be a
+;; bare constant with a dead `String` parameter that its only caller fed "" —
+;; a function that did no work under a comment promising "richer reasons"
+;; nothing could produce.
+;;
+;; It stays a single STRING rather than becoming a structured record: the
+;; reason travels inside our own `<Error …>` wrapper, which upstream has no
+;; type for at all, so a peer can only ever treat it as a diagnostic. The
+;; condition is the prefix so it is still greppable and still discriminates
+;; "rejected" from "forwarded".
 spec plain-value-error-reason SyrupValue -> SyrupValue
-defn plain-value-error-reason [_resolution]
-  syrup-string "deliver-to-non-callable"
+defn plain-value-error-reason [resolution]
+  syrup-string [str::append "deliver-to-non-callable: " [wire::encode resolution]]
 
-spec dispatch-plain-value-resolution Nat [List PipeMsg] Vat -> ForwardEffect
-defn dispatch-plain-value-resolution [pid pms v]
-  [forward-effect v [break-forward-loop pid [plain-value-error-reason syrup-null] pms [nil String]]]
+spec dispatch-plain-value-resolution Nat SyrupValue [List PipeMsg] Vat -> ForwardEffect
+defn dispatch-plain-value-resolution [pid V pms v]
+  [forward-effect v [break-forward-loop pid [plain-value-error-reason V] pms [nil String]]]
 
 ;; ForwardEffect bundles the two outcomes of forwarding: an updated
 ;; Vat (if msgs were delivered locally) plus a list of bytes (if any
@@ -3013,7 +3032,7 @@ defn dispatch-resolution-value [pid V pms v]
     | none ->
         match [syrup-as-answer-target V]
           | some m -> dispatch-answer-target pid m pms v
-          | none   -> dispatch-plain-value-resolution pid pms v
+          | none   -> dispatch-plain-value-resolution pid V pms v
 
 ;; Top-level: given a resolved promise's pid + resolution PromiseState
 ;; + bridge's pipelined-msgs list + current Vat, return a ForwardEffect

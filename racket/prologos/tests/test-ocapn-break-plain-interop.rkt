@@ -28,7 +28,7 @@
 ;;;     error answer at peer's queued ap 88 with reason
 ;;;     "deliver-to-non-callable".
 ;;;   - Node verifies the reply echoes the plain string AND the
-;;;     error-answer carries <Error "deliver-to-non-callable">.
+;;;     error-answer carries <Error "deliver-to-non-callable: <value>">.
 
 (require rackunit
          racket/list
@@ -237,5 +237,8 @@
               (format "expected Q1 reply to echo plain string; got: ~s" child-stdout))
   (check-true (regexp-match? #rx"\"error_is_error_wrapped\":true" child-stdout)
               (format "expected error answer wrapped in Error; got: ~s" child-stdout))
-  (check-true (regexp-match? #rx"\"error_reason\":\"deliver-to-non-callable\"" child-stdout)
+  ;; The reason NAMES THE OFFENDING VALUE after the condition, so this
+  ;; matches the prefix rather than the whole string -- pinning the whole
+  ;; string is what froze it as a constant that could not vary.
+  (check-true (regexp-match? #rx"\"error_reason\":\"deliver-to-non-callable: " child-stdout)
               (format "expected error reason 'deliver-to-non-callable'; got: ~s" child-stdout)))

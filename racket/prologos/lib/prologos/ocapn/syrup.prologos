@@ -14,10 +14,10 @@ ns prologos::ocapn::syrup
 ;;   containers : list | struct (record) | tagged
 ;;   references : refr id | promise id
 ;;
-;; Byte-arrays are here (`syrup-bytes`). Floats and sets are NOT, and their
-;; absence is a real gap rather than a scoping decision: the reference emits
-;; both, so a peer that sends one gets a decode failure. Tracked in the gaps
-;; document.
+;; Byte-arrays, floats and sets are all here. Floats and sets were absent for
+;; a long time and that was a real gap, not a scoping decision: the reference
+;; emits both (`contrib/syrup.py`), so a peer that sent one got a decode
+;; failure from us and no diagnostic.
 ;;
 ;; Identifiers are Nat (vat-local). A wire serialiser would translate
 ;; these to the descriptor table positions (desc:export N etc.) at
@@ -67,6 +67,20 @@ data SyrupValue
   ;; location — third-party handoffs, sturdyrefs — died at the first `{` with
   ;; decode-op returning `none` and no diagnostic.
   syrup-dict   : List SyrupValue
+  ;; A Syrup SET — wire form `#` item* `$`, canonicalised by sorted encoded
+  ;; item exactly as a dict is by sorted key.
+  syrup-set    : List SyrupValue
+  ;; A Syrup FLOAT, carried as its RAW WIRE PAYLOAD INCLUDING THE MARKER
+  ;; byte: "D" ++ 8 big-endian IEEE-754 bytes, or "F" ++ 4.
+  ;;
+  ;; Not as a number. Nothing in this stack does float arithmetic, and the one
+  ;; thing the codec owes a peer is byte-exactness — a signature covers bytes.
+  ;; Decoding an `F` to a number and re-encoding it as the `D` the reference
+  ;; emits would be a value-preserving round trip that changes the bytes, i.e.
+  ;; precisely the class of defect `re-encode` exists to avoid. Keeping the
+  ;; marker in the payload makes both forms round-trip exactly and costs one
+  ;; constructor instead of two.
+  syrup-float  : String
   ;; tagged label + payload (payload can itself be a syrup-list)
   syrup-tagged : String -> SyrupValue
   ;; An object reference, vat-local position. The peer's import/export
@@ -97,6 +111,8 @@ defn null?
   | syrup-refr _       -> false
   | syrup-promise _    -> false
   | syrup-dict    _   -> false
+  | syrup-set _ -> false
+  | syrup-float _ -> false
 
 spec bool? SyrupValue -> Bool
 defn bool?
@@ -112,6 +128,8 @@ defn bool?
   | syrup-refr _       -> false
   | syrup-promise _    -> false
   | syrup-dict    _   -> false
+  | syrup-set _ -> false
+  | syrup-float _ -> false
 
 spec refr? SyrupValue -> Bool
 defn refr?
@@ -127,6 +145,8 @@ defn refr?
   | syrup-refr _       -> true
   | syrup-promise _    -> false
   | syrup-dict    _   -> false
+  | syrup-set _ -> false
+  | syrup-float _ -> false
 
 spec promise? SyrupValue -> Bool
 defn promise?
@@ -142,6 +162,8 @@ defn promise?
   | syrup-refr _       -> false
   | syrup-promise _    -> true
   | syrup-dict _       -> false
+  | syrup-set _ -> false
+  | syrup-float _ -> false
 
 spec tagged? SyrupValue -> Bool
 defn tagged?
@@ -157,6 +179,8 @@ defn tagged?
   | syrup-refr _       -> false
   | syrup-promise _    -> false
   | syrup-dict    _   -> false
+  | syrup-set _ -> false
+  | syrup-float _ -> false
 
 ;; ========================================
 ;; Selectors
@@ -177,6 +201,8 @@ defn get-nat
   | syrup-refr _       -> none
   | syrup-promise _    -> none
   | syrup-dict    _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
 
 spec get-string SyrupValue -> Option String
 defn get-string
@@ -192,6 +218,8 @@ defn get-string
   | syrup-refr _       -> none
   | syrup-promise _    -> none
   | syrup-dict    _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
 
 spec get-refr SyrupValue -> Option Nat
 defn get-refr
@@ -207,6 +235,8 @@ defn get-refr
   | syrup-refr id      -> some id
   | syrup-promise _    -> none
   | syrup-dict    _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
 
 spec get-promise SyrupValue -> Option Nat
 defn get-promise
@@ -222,6 +252,8 @@ defn get-promise
   | syrup-refr _       -> none
   | syrup-promise id   -> some id
   | syrup-dict _       -> [none Nat]
+  | syrup-set _ -> [none Nat]
+  | syrup-float _ -> none
 
 spec get-tag SyrupValue -> Option String
 defn get-tag
@@ -237,6 +269,8 @@ defn get-tag
   | syrup-refr _       -> none
   | syrup-promise _    -> none
   | syrup-dict    _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
 
 spec get-payload SyrupValue -> Option SyrupValue
 defn get-payload
@@ -252,6 +286,8 @@ defn get-payload
   | syrup-refr _       -> none
   | syrup-promise _    -> none
   | syrup-dict    _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
 
 ;; Int -> Nat, clamped at 0.
 ;;
@@ -292,6 +328,8 @@ defn wire-nat
   | syrup-bytes _  -> none
   | syrup-promise _  -> none
   | syrup-dict  _   -> none
+  | syrup-set _ -> none
+  | syrup-float _ -> none
 
 ;; ========================================
 ;; Convenience constructors
