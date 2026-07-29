@@ -318,6 +318,13 @@ That is a design task, not a refactor.
 
 ### 0.3 Export position 5 has no vat actor — MEDIUM
 
+> **CLOSED 2026-07-29.** It has one: `beh-sturdyref-enlivener`, seeded by
+> `seeded-vat`. The driver intercepts nothing, so the second paragraph's
+> failure mode is gone too. What made it possible was `eff-connect` (a
+> behaviour can ask for a socket without opening one) plus `act-step-pending`
+> (a behaviour can act without answering) — see § Status. The mechanism named
+> below was also wrong; see § Corrections.
+
 `swiss-num-export` maps the sturdyref enlivener's swiss-num to export `5N`
 (`racket/prologos/lib/prologos/ocapn/captp-core.prologos`), but `seeded-vat`
 (`interop-driver.prologos`) seeds actors at 1, 2, 3, 4 and 7 only. The enlivener

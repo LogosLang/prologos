@@ -110,11 +110,11 @@ defn concat-frames
 ;; pair below.
 ;;
 ;; Position 5N, the sturdyref enlivener, deliberately has NO actor: a
-;; behaviour is pure and cannot open a socket, so `enliven-request-of`
-;; intercepts deliveries to 5N in this driver and queues a dial instead
-;; (see § The sturdyref enlivener). A `fetch` of its swiss-num therefore
-;; hands the peer an export position the vat cannot deliver to; only the
-;; driver's interception makes it work.
+;; behaviour is pure and cannot open a socket — which is why this used to be
+;; a driver interception with NO actor behind the position at all. With
+;; `eff-connect` and `act-step-pending` the enlivener is an ordinary actor:
+;; it asks for the connection as an effect and answers nothing, leaving the
+;; peer's promise for the reply the driver builds.
 
 
 ;; ===========================================================
