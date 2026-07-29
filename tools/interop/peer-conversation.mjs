@@ -47,7 +47,10 @@ const mkRec = (label, values) => ({
 // Three messages we send.
 const ourFrames = [
   mkRec('op:start-session', ['0.1', 'tcp-testing-only:peer-node']),
-  mkRec('op:deliver-only', [mkRec('desc:export', [0n]), 'ping']),
+  // The args slot is a LIST, always -- a peer iterates it directly. This sent
+  // a bare value, which is the shape our own encoder used to produce and this
+  // test asserts byte-equality against.
+  mkRec('op:deliver-only', [mkRec('desc:export', [0n]), ['ping']]),
   mkRec('op:abort', ['goodbye']),
 ];
 

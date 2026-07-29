@@ -107,15 +107,19 @@ const summarize = () => {
       && f.values && f.values[0]
       && f.values[0].label === 'desc:answer'
       && f.values[0].values && f.values[0].values[0] === ANSWER_POS);
+  // `op:gc-exports` (PLURAL) is the spec form and the only one a conforming
+  // peer sends: two parallel lists, export position i paired with wire delta
+  // i. This used to look for the singular `op:gc-export` with two scalars,
+  // which is not in the spec and not in upstream's CAPTP_TYPES.
   const gcExport = receivedFrames.find(f =>
-    f && f.label === 'op:gc-export'
+    f && f.label === 'op:gc-exports'
       && Array.isArray(f.values)
       && f.values.length >= 2
-      && typeof f.values[0] === 'bigint'
-      && f.values[0] === REFR_ID);
+      && Array.isArray(f.values[0])
+      && f.values[0][0] === REFR_ID);
 
-  const gcExportPos = gcExport ? Number(gcExport.values[0]) : null;
-  const gcExportCnt = gcExport ? Number(gcExport.values[1]) : null;
+  const gcExportPos = gcExport ? Number(gcExport.values[0][0]) : null;
+  const gcExportCnt = gcExport ? Number(gcExport.values[1][0]) : null;
 
   const sessionLocator = session && Array.isArray(session.values)
     ? String(session.values[1]) : null;
@@ -150,7 +154,7 @@ sock.on('data', d => {
     f && f.label === 'op:deliver'
       && f.values && f.values[0]
       && f.values[0].label === 'desc:answer');
-  const haveGcExport = receivedFrames.some(f => f && f.label === 'op:gc-export');
+  const haveGcExport = receivedFrames.some(f => f && f.label === 'op:gc-exports');
   if (haveSession && haveReply && haveGcExport) summarize();
 });
 

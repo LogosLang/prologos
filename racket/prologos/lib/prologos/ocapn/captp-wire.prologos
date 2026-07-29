@@ -44,14 +44,10 @@ ns prologos::ocapn::captp-wire
 ;; the label used to be discarded, so `<totally-bogus 3>` unwrapped to
 ;; export position 3 and was delivered to.
 ;;
-;; KNOWN DEVIATION, still open: `encode-op` writes the answer position
-;; as `<desc:answer N>` where the spec wants a bare integer.
-;; `captp-core`'s `outbound-ask-bytes` — the encoder that talks to real
-;; peers — already writes it bare; `encode-op` is reached only from the
-;; in-tree JS interop peers, three of which match on the record form
-;; (`tools/interop/peer-responder.mjs:118`, `peer-pipelined.mjs:108`,
-;; `peer-bootstrap-gift.mjs:132`). Changing the slot means changing
-;; those three in the same commit.
+;; The answer position is a BARE integer in every encoder here, matching
+;; the spec and `captp-core`'s `outbound-ask-bytes`. It used to be
+;; `<desc:answer N>` in this file only, held there by three in-tree JS peers
+;; that matched on the record form; those were changed in the same commit.
 ;;
 ;; Layout / parsing notes (see goblin-pitfalls follow-up):
 ;;   - `[Option Nat]` brackets in spec — bare `Option Nat` parses
@@ -99,15 +95,34 @@ defn nats-syrup [ns]
 ;; only `false` and the typed values as record positional fields.
 ;; (Goblin pitfalls #28 — discovered Phase 8.)
 
-;; The ANSWER-POSITION slot. See the KNOWN DEVIATION note in the file
-;; header: the spec form is a bare non-negative integer and this writes
-;; `<desc:answer N>`. The decoder accepts both, so `decode-op` after
-;; `encode-op` round-trips either way.
+;; The ARGS slot of an op:deliver is a LIST, always. A peer iterates it
+;; directly (`for arg in record.args[1]`), so a bare value there is not a
+;; tolerable variation: it raises inside the peer's receive loop, the peer
+;; drops the connection, and our next write fails several frames later with
+;; an error that points at the transport. captp-core wraps at its own
+;; encoders; this file did not, and the in-tree JS peers had been written to
+;; accept the bare form because of it.
+spec as-args-list SyrupValue -> SyrupValue
+defn as-args-list [v]
+  match v
+    | syrup-list _ -> v
+    | _            -> [syrup-list [cons v nil]]
+
+;; The ANSWER-POSITION slot: a BARE non-negative integer.
+;;
+;; Upstream reads slot 2 raw (`answer_position = record.args[2]`) and writes
+;; it raw, so `<desc:answer N>` came back as a RECORD that never compared
+;; equal to the position we later name in op:gc-answers. captp-core's
+;; `outbound-ask-bytes` always wrote it correctly and this did not, with
+;; nothing forcing the two to agree.
+;;
+;; It stayed wrong because three in-tree JS peers matched on the record form;
+;; they now read the bare integer, which is also what a real peer sends.
 spec opt-answer-pos [Option Nat] -> SyrupValue
 defn opt-answer-pos [o]
   match o
     | none   -> [syrup-bool false]
-    | some n -> desc-answer n
+    | some n -> [syrup-nat n]
 
 ;; The RESOLVE-ME slot. The resolver is an object WE export, so the
 ;; peer receives it as an import: `<desc:import-object N>`, which is
@@ -147,8 +162,8 @@ defn op-to-syrup [op]
     ;; emit an unverifiable frame if it pretended otherwise.
     | op-start-session ver _pk loc -> [syrup-tagged "op:start-session" [syrup-list [cons [syrup-string ver] [cons loc nil]]]]
     | op-abort reason           -> [syrup-tagged "op:abort" [syrup-string reason]]
-    | op-deliver tgt args ap rm -> [syrup-tagged "op:deliver" [syrup-list [cons [desc-export tgt] [cons args [cons [opt-answer-pos ap] [cons [opt-resolve-me rm] nil]]]]]]
-    | op-deliver-only tgt args  -> [syrup-tagged "op:deliver-only" [syrup-list [cons [desc-export tgt] [cons args nil]]]]
+    | op-deliver tgt args ap rm -> [syrup-tagged "op:deliver" [syrup-list [cons [desc-export tgt] [cons [as-args-list args] [cons [opt-answer-pos ap] [cons [opt-resolve-me rm] nil]]]]]]
+    | op-deliver-only tgt args  -> [syrup-tagged "op:deliver-only" [syrup-list [cons [desc-export tgt] [cons [as-args-list args] nil]]]]
     | op-listen tgt resolver    -> [syrup-tagged "op:listen" [syrup-list [cons [desc-export tgt] [cons [desc-import-object resolver] [cons [syrup-bool false] nil]]]]]
     | op-gc-export pos cnt      -> [syrup-tagged "op:gc-export" [syrup-list [cons [syrup-nat pos] [cons [syrup-nat cnt] nil]]]]
     | op-gc-answer pos          -> [syrup-tagged "op:gc-answer" [syrup-nat pos]]
@@ -156,7 +171,7 @@ defn op-to-syrup [op]
     ;; ONE argument, which is itself a list — so the payload is the
     ;; one-element argument sequence holding it, not the list itself.
     | op-gc-answers poss        -> [syrup-tagged "op:gc-answers" [syrup-list [cons [syrup-list [nats-syrup poss]] nil]]]
-    | op-deliver-to-answer qpos args ap rm -> [syrup-tagged "op:deliver" [syrup-list [cons [desc-answer qpos] [cons args [cons [opt-answer-pos ap] [cons [opt-resolve-me rm] nil]]]]]]
+    | op-deliver-to-answer qpos args ap rm -> [syrup-tagged "op:deliver" [syrup-list [cons [desc-answer qpos] [cons [as-args-list args] [cons [opt-answer-pos ap] [cons [opt-resolve-me rm] nil]]]]]]
 
 ;; ===========================================================
 ;; Encode a CapTPOp to wire BYTES.
@@ -181,8 +196,8 @@ defn encode-op [op]
   match op
     | op-start-session ver _pk loc -> wire::encode-record "op:start-session" [cons [syrup-string ver] [cons loc nil]]
     | op-abort reason           -> wire::encode [syrup-tagged "op:abort" [syrup-string reason]]
-    | op-deliver tgt args ap rm -> wire::encode-record "op:deliver" [cons [desc-export tgt] [cons args [cons [opt-answer-pos ap] [cons [opt-resolve-me rm] nil]]]]
-    | op-deliver-only tgt args  -> wire::encode-record "op:deliver-only" [cons [desc-export tgt] [cons args nil]]
+    | op-deliver tgt args ap rm -> wire::encode-record "op:deliver" [cons [desc-export tgt] [cons [as-args-list args] [cons [opt-answer-pos ap] [cons [opt-resolve-me rm] nil]]]]
+    | op-deliver-only tgt args  -> wire::encode-record "op:deliver-only" [cons [desc-export tgt] [cons [as-args-list args] nil]]
     ;; Three fields, per the spec: target, the resolver as one of OUR
     ;; exports, and wants-partial. `op-listen` cannot carry
     ;; wants-partial, so we always ask for the full resolution.
@@ -205,7 +220,7 @@ defn encode-op [op]
     | op-deliver-to-answer qpos args ap rm ->
         wire::encode-record "op:deliver"
           [cons [desc-answer qpos]
-            [cons args
+            [cons [as-args-list args]
               [cons [opt-answer-pos ap]
                 [cons [opt-resolve-me rm] nil]]]]
 

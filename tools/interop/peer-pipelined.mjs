@@ -30,9 +30,26 @@
 import '@endo/init';
 import net from 'node:net';
 import {
+
   encodeSyrup,
   decodeSyrup,
 } from './node_modules/@endo/ocapn/src/syrup/js-representation.js';
+
+// --- Spec-shaped accessors for an op:deliver's trailing slots -----------
+//
+// The answer position is a BARE INTEGER (`utils/captp_types.py` reads
+// `record.args[2]` raw). Racket used to wrap it as `<desc:answer N>` and
+// these peers were written against that, so they pinned a form no
+// conforming peer sends. They accept the spec form ONLY: accepting both
+// would keep them green if the wrapping came back.
+const answerPosOf = (v) => (typeof v === 'bigint' ? v : null);
+
+// The args slot is a LIST, always -- a peer iterates it directly. Racket
+// used to put a bare value there for some replies; that is not a tolerable
+// variation and is not accepted here.
+const argsList = (a) => (Array.isArray(a) ? a : (a && Array.isArray(a.values) ? a.values : null));
+const argsFirst = (a) => { const l = argsList(a); return l && l.length ? l[0] : null; };
+
 
 const port = Number(process.argv[2]);
 if (!Number.isInteger(port) || port < 1) {
@@ -103,13 +120,7 @@ const handleFrame = (frame) => {
   if (frame.label === 'op:deliver') {
     // values = [target-desc, args, answer-pos, resolve-me]
     const argsValue = frame.values[1];
-    const apDesc = frame.values[2];
-    let answerN = null;
-    if (apDesc && apDesc.label === 'desc:answer'
-        && Array.isArray(apDesc.values)
-        && typeof apDesc.values[0] === 'bigint') {
-      answerN = apDesc.values[0];
-    }
+    const answerN = answerPosOf(frame.values[2]);
     if (answerN === null) {
       process.stdout.write(JSON.stringify({
         ok: false,
@@ -117,7 +128,8 @@ const handleFrame = (frame) => {
       }) + '\n');
       process.exit(1);
     }
-    const inStr = typeof argsValue === 'string' ? argsValue : '?';
+    const first = argsFirst(argsValue);
+    const inStr = typeof first === 'string' ? first : '?';
     const replyStr = `${inStr}-ack`;
     argsSeen.push(inStr);
     argsReplied.push(replyStr);

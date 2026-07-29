@@ -27,9 +27,24 @@
 import '@endo/init';
 import net from 'node:net';
 import {
+
   encodeSyrup,
   decodeSyrup,
 } from './node_modules/@endo/ocapn/src/syrup/js-representation.js';
+
+// --- Spec-shaped accessors for an op:deliver's trailing slots -----------
+//
+// The answer position is a BARE INTEGER (`utils/captp_types.py` reads
+// `record.args[2]` raw). Racket used to wrap it as `<desc:answer N>` and
+// these peers were written against that, so they pinned a form no
+// conforming peer sends. The spec form ONLY is accepted: taking both would
+// keep these green if the wrapping came back.
+const answerPosOf = (v) => (typeof v === 'bigint' ? v : null);
+
+// The args slot is a LIST, always -- a peer iterates it directly.
+const argsList = (a) => (Array.isArray(a) ? a : (a && Array.isArray(a.values) ? a.values : null));
+const argsFirst = (a) => { const l = argsList(a); return l && l.length ? l[0] : null; };
+
 
 const port = Number(process.argv[2]);
 if (!Number.isInteger(port) || port < 1) {
@@ -114,7 +129,7 @@ const summarize = () => {
     f && f.label === 'op:deliver'
       && f.values && f.values[0] && f.values[0].label === 'desc:export'
       // and it has an answer-pos (third element is desc:answer or desc:export, not bool false)
-      && f.values[2] && typeof f.values[2] === 'object' && f.values[2].label === 'desc:answer');
+      && answerPosOf(f.values[2]) !== null);
 
   const sessionLocator = session && Array.isArray(session.values)
     ? String(session.values[1]) : null;
@@ -126,13 +141,9 @@ const summarize = () => {
   let racketQPos = null;
   let racketQArgs = null;
   if (racketQ && Array.isArray(racketQ.values) && racketQ.values.length >= 3) {
-    racketQArgs = typeof racketQ.values[1] === 'string' ? racketQ.values[1] : null;
-    const ap = racketQ.values[2];
-    if (ap && ap.label === 'desc:answer'
-        && Array.isArray(ap.values)
-        && typeof ap.values[0] === 'bigint') {
-      racketQPos = ap.values[0];
-    }
+    const firstArg = argsFirst(racketQ.values[1]);
+    racketQArgs = typeof firstArg === 'string' ? firstArg : null;
+    racketQPos = answerPosOf(racketQ.values[2]);
   }
 
   if (racketQPos === null) {
@@ -199,7 +210,7 @@ sock.on('data', d => {
   const haveRacketQ = receivedFrames.some(f =>
     f && f.label === 'op:deliver'
       && f.values && f.values[0] && f.values[0].label === 'desc:export'
-      && f.values[2] && typeof f.values[2] === 'object' && f.values[2].label === 'desc:answer');
+      && answerPosOf(f.values[2]) !== null);
   if (haveSession && haveReplyToOurQ && haveRacketQ) summarize();
 });
 

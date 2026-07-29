@@ -127,13 +127,15 @@ const summarize = () => {
   if (withdraw) {
     const args = withdraw.values[1];
     const ap = withdraw.values[2];
+    // The answer position is a BARE integer per the spec; this used to
+    // require `<desc:answer N>`, which is the form our encoder wrongly
+    // produced and no conforming peer sends.
     if (args.length >= 2
         && typeof args[1] === 'bigint'
-        && isRecord(ap, 'desc:answer')
-        && ap.values && typeof ap.values[0] === 'bigint') {
+        && typeof ap === 'bigint') {
       withdrawShapeOk = true;
       withdrawGiftId = args[1];
-      withdrawApPos = ap.values[0];
+      withdrawApPos = ap;
     }
   }
 

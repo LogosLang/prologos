@@ -30,9 +30,24 @@
 import '@endo/init';
 import net from 'node:net';
 import {
+
   encodeSyrup,
   decodeSyrup,
 } from './node_modules/@endo/ocapn/src/syrup/js-representation.js';
+
+// --- Spec-shaped accessors for an op:deliver's trailing slots -----------
+//
+// The answer position is a BARE INTEGER (`utils/captp_types.py` reads
+// `record.args[2]` raw). Racket used to wrap it as `<desc:answer N>` and
+// these peers were written against that, so they pinned a form no
+// conforming peer sends. The spec form ONLY is accepted: taking both would
+// keep these green if the wrapping came back.
+const answerPosOf = (v) => (typeof v === 'bigint' ? v : null);
+
+// The args slot is a LIST, always -- a peer iterates it directly.
+const argsList = (a) => (Array.isArray(a) ? a : (a && Array.isArray(a.values) ? a.values : null));
+const argsFirst = (a) => { const l = argsList(a); return l && l.length ? l[0] : null; };
+
 
 const port = Number(process.argv[2]);
 if (!Number.isInteger(port) || port < 1) {
@@ -135,7 +150,7 @@ const summarize = () => {
       && f.values && f.values[0]
       && f.values[0].label === 'desc:export'
       && f.values[0].values && f.values[0].values[0] === REFR_ID
-      && f.values[1] === Q2_PAYLOAD);
+      && argsFirst(f.values[1]) === Q2_PAYLOAD);
 
   const sessionLocator = session && Array.isArray(session.values)
     ? String(session.values[1]) : null;
@@ -146,7 +161,7 @@ const summarize = () => {
     saw_reply_to_q1: !!replyToQ1,
     saw_forwarding: !!forwarding,
     forwarding_target: forwarding ? Number(forwarding.values[0].values[0]) : null,
-    forwarding_payload: forwarding ? forwarding.values[1] : null,
+    forwarding_payload: forwarding ? argsFirst(forwarding.values[1]) : null,
   }) + '\n');
 
   sock.end();

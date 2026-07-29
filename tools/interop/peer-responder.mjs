@@ -31,9 +31,26 @@
 import '@endo/init';
 import net from 'node:net';
 import {
+
   encodeSyrup,
   decodeSyrup,
 } from './node_modules/@endo/ocapn/src/syrup/js-representation.js';
+
+// --- Spec-shaped accessors for an op:deliver's trailing slots -----------
+//
+// The answer position is a BARE INTEGER (`utils/captp_types.py` reads
+// `record.args[2]` raw). Racket used to wrap it as `<desc:answer N>` and
+// these peers were written against that, so they pinned a form no
+// conforming peer sends. They accept the spec form ONLY: accepting both
+// would keep them green if the wrapping came back.
+const answerPosOf = (v) => (typeof v === 'bigint' ? v : null);
+
+// The args slot is a LIST, always -- a peer iterates it directly. Racket
+// used to put a bare value there for some replies; that is not a tolerable
+// variation and is not accepted here.
+const argsList = (a) => (Array.isArray(a) ? a : (a && Array.isArray(a.values) ? a.values : null));
+const argsFirst = (a) => { const l = argsList(a); return l && l.length ? l[0] : null; };
+
 
 const port = Number(process.argv[2]);
 if (!Number.isInteger(port) || port < 1) {
@@ -110,16 +127,7 @@ const respond = () => {
                                    // i.e. 4 children. Let's read them.
   const targetDesc = deliver.values[0];
   const argsValue  = deliver.values[1];
-  const answerPos  = deliver.values[2];
-
-  // answerPos should be a record `<desc:answer N>` per our Phase-2
-  // convention. Extract N.
-  let answerN = null;
-  if (answerPos && answerPos.label === 'desc:answer'
-      && Array.isArray(answerPos.values)
-      && typeof answerPos.values[0] === 'bigint') {
-    answerN = answerPos.values[0];
-  }
+  const answerN = answerPosOf(deliver.values[2]);
   if (answerN === null) {
     process.stdout.write(JSON.stringify({
       ok: false,
@@ -131,7 +139,8 @@ const respond = () => {
   }
 
   // Compose reply value: <args>-pong (if args is a string).
-  const replyArgs = typeof argsValue === 'string' ? `${argsValue}-pong` : 'reply';
+  const firstArg = argsFirst(argsValue);
+  const replyArgs = typeof firstArg === 'string' ? `${firstArg}-pong` : 'reply';
 
   // Build the response record:
   //   <op:deliver <desc:answer N> reply-args false false>
@@ -157,7 +166,7 @@ const respond = () => {
   process.stdout.write(JSON.stringify({
     ok: true,
     saw_session: sessionLocator,
-    saw_deliver_args0: typeof argsValue === 'string' ? argsValue : null,
+    saw_deliver_args0: typeof firstArg === 'string' ? firstArg : null,
     answer_pos: Number(answerN),
     sent_reply_args0: replyArgs,
   }) + '\n');

@@ -637,11 +637,27 @@
 ;; stashed and every later step will run against ocapn-conn-ffi's
 ;; fallback — worth a line, since the symptom otherwise appears frames
 ;; later as an unexplained empty reply.
-(define (drive-init! cid)
+(define (drive-init! cid [start-session-frame #f])
   (define r (with-handlers ([exn:fail? (lambda (e) (exn-message e))])
               (last-result (run-prologos/locked (format "(eval (init-connection ~aN))" cid)))))
   (unless (and (string? r) (regexp-match? #px"^true : Bool$" r))
     (printf "ocapn-test-server: init-connection did NOT land for conn ~a: ~s~n" cid r))
+  ;; Hand the peer's op:start-session to captp-core as well.
+  ;;
+  ;; This frame is consumed here for the handshake -- validated, and sliced
+  ;; for the peer's location and side-id -- and it used to stop there, so
+  ;; `connection-step` never saw a start-session at all and BridgeState's
+  ;; record of WHO this peer is stayed empty. That record is what binds a
+  ;; deposited gift to its gifter, so without it every third-party handoff
+  ;; fails verification: the exporter has no key to check the give against.
+  ;;
+  ;; The op:start-session arm is state-only and emits nothing, so any bytes
+  ;; coming back mean captp-core disagreed about what this frame is.
+  (when start-session-frame
+    (define out (drive-step cid start-session-frame))
+    (unless (zero? (bytes-length out))
+      (printf "ocapn-test-server: start-session step produced ~a unexpected bytes on conn ~a~n"
+              (bytes-length out) cid)))
   (void))
 
 ;; The outbound wire bytes for one frame, or #"" when captp-core produced
@@ -990,9 +1006,14 @@
      (define env (bytes-append #"<" (syrup-symbol "desc:sig-envelope")
                                give (gcrypt-sig (sign-with-our-key give)) #">"))
      (printf "ocapn-test-server: answering enliven ~a with a signed handoff-give~n" slot)
+     ;; `rm-pos` is a POSITION (an integer from `desc-position`), not the
+     ;; descriptor's encoded bytes. Splicing it straight into `bytes-append`
+     ;; raised "bytes-append: contract violation ... given: 1" inside
+     ;; `try-fetch-answer!`, which swallowed it -- so the enliven was never
+     ;; answered and the only reply the peer saw was captp-core's break.
      (send-frame r2g-out
                  (bytes-append #"<" (syrup-symbol "op:deliver")
-                               #"<" (syrup-symbol "desc:export") rm-pos #">"
+                               (desc-record "desc:export" rm-pos)
                                #"[" (syrup-symbol "fulfill") env #"]ff>"))]))
 
 ;; ========================================
@@ -1219,14 +1240,14 @@
                          (bytes-length frame) (bytes->hex-string frame))
                  (drop-half-open-dial! key)
                  (set! cid (next-conn-id!))
-                 (drive-init! cid)
+                 (drive-init! cid frame)
                  (run-frame-loop din dout cid)]
                 [else
                  ;; The handshake completed, so this is no longer a
                  ;; candidate for the crossed-hellos tie-break.
                  (drop-half-open-dial! key)
                  (set! cid (next-conn-id!))
-                 (drive-init! cid)
+                 (drive-init! cid frame)
                  (record-open-conn! hello dout)
                  ;; If we dialled this peer to redeem a handoff-give,
                  ;; everything the receive needs is now available: their
@@ -1299,6 +1320,9 @@
        (define out (drive-step cid frame))
        (printf "ocapn-test-server: conn ~a frame ~a (~a in / ~a out bytes)~n"
                cid (+ n 1) (bytes-length frame) (bytes-length out))
+       (when (and (getenv "OCAPN_FRAME_HEX") (> (bytes-length out) 0))
+         (printf "ocapn-test-server: OUT-HEX conn ~a n ~a: ~a~n"
+                 cid (+ n 1) (bytes->hex-string out)))
        (when (> (bytes-length out) 0)
          (guarded "reply write" (lambda () (send-frame cout out))))
        ;; A step (or the give scan above) may have queued an outbound
@@ -1353,7 +1377,7 @@
                  (printf "ocapn-test-server: DEGRADED — start-session validated but did not parse here (~a bytes): ~a~n"
                          (bytes-length first-frame) (bytes->hex-string first-frame))
                  (set! cid (next-conn-id!))
-                 (drive-init! cid)
+                 (drive-init! cid first-frame)
                  (run-frame-loop cin cout cid)]
                 [else
                  (define crossed (half-open-dial-for (peer-hello-location-key hello)))
@@ -1388,7 +1412,7 @@
                                   (close-input-port (vector-ref crossed 0))
                                   (close-output-port (vector-ref crossed 1))))
                        (set! cid (next-conn-id!))
-                       (drive-init! cid)
+                       (drive-init! cid first-frame)
                        ;; The survivor must be registered too, or a later
                        ;; enliven for this peer finds nothing in
                        ;; `open-conns` and the gifter path silently
@@ -1401,7 +1425,7 @@
                        (send-frame cout abort-bytes)])]
                    [else
                     (set! cid (next-conn-id!))
-                    (drive-init! cid)
+                    (drive-init! cid first-frame)
                     (printf "ocapn-test-server: inbound start-session accepted (conn ~a); driving captp-core~n"
                             cid)
                     (record-open-conn! hello cout)

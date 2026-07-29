@@ -328,14 +328,27 @@ spec run-step Nat CapTPOp ConnectionState -> String
 ;; presents as a queue that stays empty with no error anywhere. Same idiom as
 ;; `publish-gifts` and `emit-after-stash` above, for the same reason.
 ;;
-;; Here the arms MUST be identical: `false` is the ordinary case (this op is
-;; not an enliven), so there is nothing different to do. Unlike
-;; `emit-after-stash` the match cannot be made self-defending, and nothing in
-;; the language forces the effect. The durable fix is a strictness primitive
-;; or an effect type; until then this comment is the only guard.
+;; An ENLIVEN (`true`) does NOT continue into `connection-step`, and that is
+;; the point of the branch rather than a shortcut. Enlivening a sturdyref
+;; means opening a socket, so `sturdyref-enlivener-pos` deliberately has no
+;; actor and the DRIVER answers it out of band. Handing the same op to
+;; captp-core as well made the vat find no actor at that position and BREAK
+;; the peer's promise -- a break emitted on the enliven frame itself, which
+;; therefore beat the driver's `fulfill` (that one has to wait for a fetch on
+;; another connection) and became the answer the peer kept.
+;;
+;; It went unnoticed because the break was UNPARSEABLE: the encoder used to
+;; wrap a record's argument sequence in a list, so upstream saw
+;; `<ocapn-sturdyref [<ocapn-peer [...]>]>` and dropped the frame. Fixing the
+;; encoder turned a silently-ignored malformed break into a well-formed one,
+;; which is how a latent bug in this dispatch surfaced as a handoff failure.
+;;
+;; The arms also stopped being identical, which is a small bonus: the effect
+;; is now forced by a branch that does different things, not by a comment
+;; asking the next reader not to simplify it.
 defn run-step [cid op cs]
   match [maybe-dial op]
-    | true  -> run-step-inner cid op cs
+    | true  -> ""
     | false -> run-step-inner cid op cs
 
 spec step-connection Nat String -> String
