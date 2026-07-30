@@ -328,6 +328,7 @@
          ;; Implicit map, dot-access, and introspection helpers
          rewrite-implicit-map
          rewrite-dot-access
+         access-sentinel?   ;; D4.P3a: exported so the fold-fixpoint obligation is test-pinnable
          map-literal-brace-params?
          rewrite-nil-dot-access
          rewrite-infix-operators
@@ -1156,6 +1157,7 @@
        (not (eq? x '$retired-selection)) ; D4.P1a retirement marker (parser converts to guided error)
        (not (eq? x '$dot-brace))        ; D4.P1b-ii `.{ }` sub-block sentinel — see below
        (not (eq? x '$select-brace))     ; D4.P1b-iii adjacent-brace select block
+       (not (eq? x '$select))           ; D4.P3a fused select head (LOUD-if-missed: whole-file abort in a defmacro template)
        ;; ⚠ WHY $dot-brace IS HERE (caught by adversarial verify, pre-commit):
        ;; omitting it made `.{ }` inside a defmacro TEMPLATE read as a macro
        ;; pattern variable, so datum-subst raised "Unbound pattern variable" —
@@ -1997,6 +1999,21 @@
     ;; are SELECTOR STEPS (bare names/ordinals), not expressions to expand.
     [(and (pair? datum) (memq (car datum) '($select-brace $dot-brace)))
      datum]
+    ;; D4.P3a (corrected at the adversarial verify): `$select` is PARTIALLY
+    ;; opaque — the SUBJECT expands (the fold at :2533 runs BEFORE the
+    ;; per-subform recursion, so compound subjects arrive UN-expanded here;
+    ;; the first draft's "already expanded when fused" premise was FALSE and
+    ;; froze raw sentinels inside bracket/map-literal/select subjects into
+    ;; lying downstream errors), while the PAYLOAD stays raw — descending into
+    ;; it would fuse `($dot-access k)` items against their neighbours into
+    ;; `map-get`, silently destroying the branch structure.
+    [(and (pair? datum) (eq? (car datum) '$select))
+     (if (pair? (cdr datum))
+         (let ([subj* (preparse-expand-form (cadr datum) reg depth)])
+           (if (equal? subj* (cadr datum))
+               datum
+               (list* '$select subj* (cddr datum))))
+         datum)]
     ;; List form — check head symbol for macros
     [(and (pair? datum) (symbol? (car datum)))
      (define entry (hash-ref reg (car datum) #f))
@@ -2558,6 +2575,8 @@
               (if (or (and (pair? sub) (eq? (car sub) '$brace-params)
                            (not (map-literal-brace-params? sub)))
                       ;; D4.P1b-iii: selection sentinels are opaque here too.
+                      ;; D4.P3a: `$select` is NOT skipped — recursion reaches
+                      ;; its arm above, which expands the SUBJECT only.
                       (and (pair? sub) (memq (car sub) '($select-brace $dot-brace))))
                   sub
                   (preparse-expand-form sub reg depth)))
@@ -5585,10 +5604,27 @@
            ;; Caught by adversarial verify, pre-commit. Every OTHER arm here
            ;; rewrites the sentinel AWAY (to `get`/`map-get`) and is a fixpoint
            ;; for exactly this reason; this arm now does the same.
-           [(or (dot-brace? (car elems)) (select-brace? (car elems)))
+           ;; D4.P3a: `$select-brace` with a base fuses to the REAL `($select
+           ;; base item…)` head — semantics landed. `$select` is deliberately
+           ;; NOT an access sentinel and NOT re-matched by any arm here, so
+           ;; the fold stays a FIXPOINT by construction (the P1b-iii lesson:
+           ;; a sentinel-headed result re-matches on re-entry and swallows one
+           ;; LEFT sibling per pass). The payload items ride RAW — `$select`
+           ;; is preparse-opaque, so the parser segments them intact.
+           [(select-brace? (car elems))
             (if (null? acc)
-                ;; No base (a leading `.{…}` / `{…}`): leave the bare sentinel —
-                ;; the parser's own arm still fires on it.
+                ;; No base: leave the bare sentinel — the parser's
+                ;; needs-a-subject backstop answers it (audit C23).
+                (loop (cdr elems) (cons (car elems) acc))
+                (loop (cdr elems)
+                      (cons `($select ,(car acc) ,@(cdr (car elems)))
+                            (cdr acc))))]
+           ;; D4.P3a: top-level `.{…}` (dot-brace WITH a base, outside any
+           ;; block) stays REFUSED — its meaning outside a block is unruled.
+           ;; Inside a block payload it never reaches here (the payload is
+           ;; opaque; the parser's segmentation consumes it as a sub-block).
+           [(dot-brace? (car elems))
+            (if (null? acc)
                 (loop (cdr elems) (cons (car elems) acc))
                 (loop (cdr elems)
                       (cons (retired-selection-marker 'select-block #f)
@@ -5848,7 +5884,19 @@
 ;; Main block-form pipe expander with loop fusion.
 ;; ($pipe-gt init step1 step2 ...) → fused pipeline
 (define (expand-pipe-block datum)
-  (define parts (cdr datum))  ; everything after $pipe-gt
+  ;; D4.P3a adversarial verify (BLOCKING catch): head-macro dispatch runs
+  ;; BEFORE the access-sentinel fold, so raw sentinels ($select-brace /
+  ;; $dot-access / $postfix-index) arrive here as SIBLINGS of their base —
+  ;; and the step builder appends the accumulator into whatever datum a step
+  ;; is. Appending into a raw sentinel payload CORRUPTED it silently:
+  ;; `|> cfg{server} f` spliced `cfg` into the select payload, then the later
+  ;; fold fused the corrupted select onto `f` — a WRONG SELECT at 0 errors.
+  ;; Fold the elements FIRST (the same rewrite preparse-expand-subforms runs);
+  ;; the fold is a fixpoint, so the later pass is a no-op. The single-element
+  ;; unwrap at the fold's exit is re-wrapped.
+  (define raw-parts (cdr datum))  ; everything after $pipe-gt
+  (define folded (rewrite-dot-access raw-parts))
+  (define parts (if (list? folded) folded (list folded)))
   (when (null? parts)
     (error 'pipe "|> requires at least a value"))
   (define init (car parts))

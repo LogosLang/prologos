@@ -290,6 +290,8 @@
     [(? expr-Record? rec) (record-map-field-types (lambda (t) (shift delta cutoff t)) rec)]
     ;; CIU T6 F1b.5-s2: validate — non-binding; exprs via the single helper
     [(? expr-validate? v) (validate-map-exprs (lambda (t) (shift delta cutoff t)) v)]
+    ;; CIU T6 D4.P3a: select — non-binding; subject is the only expr slot
+    [(? expr-select? v) (select-map-exprs (lambda (t) (shift delta cutoff t)) v)]
     ;; Map (all non-binding)
     [(expr-Map k v) (expr-Map (shift delta cutoff k) (shift delta cutoff v))]
     ;; Runtime collection values are CLOSED leaves — no descent.
@@ -828,6 +830,8 @@
     [(? expr-Record? rec) (record-map-field-types (lambda (t) (subst k s t)) rec)]
     ;; CIU T6 F1b.5-s2: validate — non-binding; exprs via the single helper
     [(? expr-validate? v) (validate-map-exprs (lambda (t) (subst k s t)) v)]
+    ;; CIU T6 D4.P3a: select — non-binding; subject is the only expr slot
+    [(? expr-select? v) (select-map-exprs (lambda (t) (subst k s t)) v)]
     ;; Map (all non-binding)
     [(expr-Map kt vt) (expr-Map (subst k s kt) (subst k s vt))]
     [(expr-champ _) e]

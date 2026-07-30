@@ -226,6 +226,69 @@
                (ormap search (expr-subfields x)))))))
 
 ;; ========================================
+;; CIU T6 D4.P3a: the select-block hint (the S7 pattern).
+;; ========================================
+;; Post-hoc walk on the already-failing expr, most-specific-first. It re-runs
+;; the SAME `select-project` walk the infer arm used (one walk, two consumers
+;; — the arm and its diagnostic cannot drift) and formats the failure with
+;; BRANCH context. The three Q_T2 refusal kinds all name the 4d remedy list:
+;; seal / validate / annotate.
+(define (format-select-fail fail names)
+  (define path (select-fail-path fail))
+  (define branch-str (string-join (map symbol->string path) "."))
+  (define label (select-fail-label fail))
+  (define row (select-fail-row fail))
+  ;; D4.P3a adversarial verify: "annotate its row type" was DROPPED from the
+  ;; remedy list — row-literal annotations have no working spelling at HEAD
+  ;; (zero in-tree uses; `def q : {:a Int} := …` refuses), so naming it was
+  ;; the P1b-iii advice-that-does-not-work class. Seal and validate are both
+  ;; VERIFIED working remedies now that select-project projects through
+  ;; schema-typed subjects. Re-add annotate when row annotations become
+  ;; writable (recorded as a Q_T2 adaptation in D4 §5.P3a).
+  (define remedies
+    "seal the subject against a schema (`the Schema subj`) or validate it against one")
+  (case (select-fail-kind fail)
+    [(miss-closed)
+     (string-append
+      (format-closed-row-miss row label names)
+      (format "; in the select branch `~a` — bare field access (no construction) is spelled `.~a`"
+              branch-str label))]
+    [(miss-dyn)
+     (format
+      "Could not infer type — select: field :~a (branch `~a`) is not listed on the open row ~a; a select block asserts its result, so unlisted fields refuse — ~a"
+      label branch-str (pp-expr row names) remedies)]
+    [(unknown-presence)
+     (format
+      "Could not infer type — select: field :~a's presence (branch `~a`) is 'unknown on ~a; a select block asserts its result — ~a"
+      label branch-str (pp-expr row names) remedies)]
+    [(subject-map)
+     (format
+      "Could not infer type — select: the subject~a is a (Map K V), which has no per-field row; a select block needs a record subject — ~a"
+      (if (null? path) "" (format " (branch `~a`)" branch-str)) remedies)]
+    [(subject-tuple)
+     (format
+      "Could not infer type — select: the subject~a is a tuple (nat-keyed row); a keyed block selects NAMED fields — extract an element with `x.N` (ordinal selection lands at P3c)"
+      (if (null? path) "" (format " (branch `~a`)" branch-str)))]
+    [(subject-other)
+     (format
+      "Could not infer type — select: the subject~a is not a record; a select block projects fields of a keyword row"
+      (if (null? path) "" (format " (branch `~a`)" branch-str)))]
+    [else #f]))
+
+(define (select-block-hint ctx e names)
+  (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+    (let search ([x e])
+      (and (expr? x)
+           (or (match x
+                 [(expr-select subject branches)
+                  (let ([tm (whnf (infer ctx subject))])
+                    (and (not (expr-error? tm))
+                         (let-values ([(row fail) (select-project ctx tm branches)])
+                           (and fail (format-select-fail fail names)))))]
+                 [_ #f])
+               (ormap search (expr-subfields x)))))))
+
+;; ========================================
 ;; CIU T6 F1b.4e (D22): seal missing-required hint (the S7 pattern)
 ;; ========================================
 ;; When an infer failure contains a seal boundary (expr-ann against a schema
@@ -363,6 +426,7 @@
                                     (cross-schema-seal-hint ctx e names);; F1b.7f (c) cross-schema `the`
                                     (validate-nonmap-hint ctx e names)  ;; F1b.7f (d) validate non-map subj
                                     (app-domain-schema-hint ctx e names);; F1b.7f (b) schema arg vs param
+                                    (select-block-hint ctx e names)     ;; D4.P3a (before S7: branch-aware)
                                     (closed-row-miss-hint ctx e names)  ;; S7
                                     (if (hole-lambda-over-generic-op? e)
                                         i70-inference-hint

@@ -3069,6 +3069,14 @@
     ;; exprs; reduction can't reach typing-core). Payload is final before
     ;; pnet serialization: exprs/symbols/sexps/booleans only — the pred is an
     ;; elaborated expr-lam (a Racket closure would serialize to an error stub).
+    ;; CIU T6 D4.P3a: select block — branches are static data (segmented +
+    ;; checked at the parser); only the subject elaborates.
+    [(surf-select subject branches loc)
+     (let ([subj (elaborate subject env depth)])
+       (if (prologos-error? subj)
+           subj
+           (expr-select subj branches)))]
+
     [(surf-validate sname subject loc)
      (let* ([schema-entry (lookup-schema-by-name sname)]
             [sel (and (not schema-entry) (lookup-selection-by-name sname))]

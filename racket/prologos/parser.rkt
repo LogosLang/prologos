@@ -772,11 +772,13 @@
     ;; `pattern-var?` and already has its parser arm, and the nine-tier
     ;; registration surface is precisely what this phase learned to respect.)
     [(select-block)
+     ;; D4.P3a: `x{…}` now WORKS — only the top-level `.{…}` form reaches this
+     ;; marker (its meaning outside a block is unruled; refused, monotone).
      (parse-error loc
                   (string-append
-                   "select blocks (`x{…}` / `.{…}`) are not supported yet — path "
-                   "selection lands them in CIU Track 6 P3. Field access works "
-                   "today: `x.name`")
+                   "a `.{…}` sub-block belongs inside a select block — write "
+                   "`x{server.{host port}}`; at top level, `x{…}` selects and "
+                   "`x.k` accesses")
                   #f)]
     [(dot-key)
      (parse-error loc (format "dot-key `.:~a` was retired — spell field access with `.~a` (e.g. `m.~a`); as a function value use `[fn [m] m.~a]`" f f f f) #f)]
@@ -797,6 +799,97 @@
      (parse-error loc "`_` cannot be the subject of an index — name the subject or wrap it in a lambda (e.g. `[fn [m] m[k]]`, `[fn [v] v.0]`)" #f)]
     [else
      (parse-error loc "this selection form was retired (CIU T6 Path Selection) — see the migration note for its replacement spelling" #f)]))
+
+;; ============================================================
+;; CIU T6 D4.P3a — select-payload segmentation (the parser seat)
+;; ============================================================
+;; items arrive RAW from the preparse-opaque `$select` head: a plain SYMBOL
+;; opens a branch; `($dot-access k)` attaches a descent key; `($dot-brace …)`
+;; attaches a TERMINAL sub-block (recursing); everything else is the
+;; malformed-payload seat. After segmentation each LEVEL is duplicate-checked
+;; (output keys are fully syntactic at this slice — Q_T3's output-level frame;
+;; the check runs here, strictly BEFORE any make-record could last-win).
+;; Returns (values branches #f) or (values #f parse-error).
+(define (segment-select-items items loc [sub? #f])
+  (define (kw-sym? s)
+    (and (symbol? s)
+         (let ([str (symbol->string s)])
+           (and (> (string-length str) 0) (char=? (string-ref str 0) #\:)))))
+  ;; D4.P3a adversarial verify: `^`-bearing lexemes are the P3b RE-KEY family —
+  ;; without this gate they passed plain-key? and produced FABRICATED
+  ;; field-miss diagnostics (`field :version^ is not present …`) on exactly
+  ;; the spellings the duplicate message directs users toward. Symmetric to
+  ;; the ordinal arm's P3c pointer: refuse, name the phase, monotone.
+  (define (re-key-sym? s)
+    (and (symbol? s) (regexp-match? #rx"\\^" (symbol->string s))))
+  (define (plain-key? s)
+    (and (symbol? s) (not (kw-sym? s)) (not (eq? s '|.|)) (not (re-key-sym? s))
+         (let ([str (symbol->string s)])
+           (and (> (string-length str) 0)
+                (not (char=? (string-ref str 0) #\$))))))
+  (define (fail msg) (values #f (parse-error loc msg #f)))
+  (define (head-of tagged) (and (pair? tagged) (symbol? (car tagged)) (car tagged)))
+  ;; per-level duplicate check (strict waypoint): first duplicate head label
+  (define (dup-label branches)
+    (let loop ([bs branches] [seen '()])
+      (cond [(null? bs) #f]
+            [(memq (caar bs) seen) (caar bs)]
+            [else (loop (cdr bs) (cons (caar bs) seen))])))
+  (let loop ([items items] [cur #f] [cur-subbed? #f] [acc '()])
+    (define (closed-acc) (if cur (cons (reverse cur) acc) acc))
+    (if (null? items)
+        (let ([branches (reverse (closed-acc))])
+          (cond
+            [(null? branches)
+             (fail (if sub?
+                       "empty sub-block — `.{}` selects nothing; name the fields to keep (e.g. `server.{host port}`)"
+                       "empty selection — `x{}` selects nothing (`{}` alone is the empty map literal)"))]
+            [(dup-label branches)
+             => (lambda (l)
+                  (fail (format "duplicate output key :~a in the select block — distinct output keys are required (strict merge); rename a branch with `^k'` or synthesize a key with `^_` (Path Selection P3b), or group same-head branches into one sub-block (`x{k.{a b}}`)" l)))]
+            [else (values branches #f)]))
+        (let ([it (car items)])
+          (cond
+            [(re-key-sym? it)
+             (fail (format "`~a` — the `^` re-key family (`k^` dissolve · `^k'` rename · `^_` synth · `^-` collapse · `^..` parent-key) lands at Path Selection P3b; a P3a block selects plain named fields" it))]
+            [(plain-key? it)
+             (loop (cdr items) (list it) #f (closed-acc))]
+            [(and (eq? (head-of it) '$dot-access) cur cur-subbed?)
+             (fail "a segment cannot follow a `.{…}` sub-block — the sub-block is a branch's terminal step")]
+            [(and (eq? (head-of it) '$dot-access) cur (re-key-sym? (cadr it)))
+             (fail (format "`.~a` — the `^` re-key family lands at Path Selection P3b; a P3a block selects plain named fields" (cadr it)))]
+            [(and (eq? (head-of it) '$dot-access) cur)
+             (loop (cdr items) (cons (cadr it) cur) #f acc)]
+            [(eq? (head-of it) '$dot-access)
+             (fail (format "a `.~a` segment needs a preceding field — a branch starts with a bare field name (e.g. `x{server.~a}`)" (cadr it) (cadr it)))]
+            [(and (eq? (head-of it) '$dot-brace) cur cur-subbed?)
+             (fail "a `.{…}` sub-block cannot follow another sub-block in the same branch")]
+            [(eq? (head-of it) '$dot-brace)
+             (if (not cur)
+                 (fail "a `.{…}` sub-block needs a preceding segment (e.g. `x{server.{host port}}`)")
+                 (let-values ([(subs suberr) (segment-select-items (cdr it) loc #t)])
+                   (if suberr
+                       (values #f suberr)
+                       (loop (cdr items) (cons (cons '@sub subs) cur) #t acc))))]
+            [(eq? (head-of it) '$select-brace)
+             (fail (format "inside a select block, narrow with `.{…}` — write `~a.{…}`, not `~a{…}`"
+                           (if (and cur (symbol? (car (reverse cur)))) (car (reverse cur)) "field")
+                           (if (and cur (symbol? (car (reverse cur)))) (car (reverse cur)) "field")))]
+            [(eq? (head-of it) '$postfix-index)
+             (fail (format "ordinal segment `.~a` inside a select block is not yet supported — extract with `x.k.~a` outside the block" (cadr it) (cadr it)))]
+            [(number? it)
+             (fail "ordinal branches `x{N M}` land with keyless selection (Path Selection P3c) — for one element use `x.N`")]
+            [(kw-sym? it)
+             (fail (format "block keys are written bare — `x{~a}`, not `x{~a}`"
+                           (substring (symbol->string it) 1) it))]
+            [(eq? it '|.|)
+             (fail "stray `.` in a select block — write the path with no spaces (`server.host`)")]
+            [(eq? it '$rest)
+             (fail "`...` is not valid in a select block")]
+            [else
+             ;; ~s, not ~a: a string item must display as \"s\" — the bare form
+             ;; is indistinguishable from the valid field-name spelling.
+             (fail (format "`~s` is not a valid selection branch — block branches are field names (e.g. `x{name server.{host}}`)" it))])))))
 
 (define (parse-list elems loc stx)
   ;; elems is either a list of syntax objects or plain datums
@@ -844,13 +937,36 @@
     ;; per-command parse-error VALUE, never a raise (a raise here is a
     ;; whole-file abort). `args` is deliberately untouched — the P1a adversarial
     ;; verify found an unguarded `(car args)` at this very seam.
+    ;; D4.P3a: the baseless leg REMAINS as the needs-a-subject backstop (the
+    ;; P3 audit's C23) — a bare brace sentinel with no base can only arrive
+    ;; from constructed datums (macro expansion, sexp); guide, don't raise.
     [(and (symbol? head) (memq head '($dot-brace $select-brace)))
      (parse-error loc
                   (string-append
-                   "select blocks (`x{…}` / `.{…}`) are not supported yet — path "
-                   "selection lands them in CIU Track 6 P3. Field access works "
-                   "today: `x.name`")
+                   "a select block needs a subject — `x{…}` and `.{…}` attach "
+                   "to the form on their left (no space)")
                   #f)]
+
+    ;; CIU T6 D4.P3a ($select — the fused select block, Q_T1 Route A):
+    ;; segment the RAW payload into branches (the head is preparse-opaque, so
+    ;; items arrive unfolded), run the malformed-payload seat + the per-level
+    ;; DUPLICATE check (strict merge BEFORE any make-record can last-win),
+    ;; and mint surf-select. Every refusal is a parse-error VALUE, per-command.
+    [(and (symbol? head) (eq? head '$select))
+     (if (null? args)
+         (parse-error loc "a select block needs a subject — write `x{…}` (adjacent, no space)" #f)
+         (let ([subj (parse-datum (car args))])
+           (if (prologos-error? subj)
+               subj
+               (let-values ([(branches err)
+                             (segment-select-items
+                              ;; items must be PLAIN datums all the way down —
+                              ;; stx->datum is shallow (syntax-e), and payload
+                              ;; items are nested lists of stx
+                              (map (lambda (a) (if (syntax? a) (syntax->datum a) a))
+                                   (cdr args))
+                              loc)])
+                 (or err (surf-select subj branches loc))))))]
 
     ;; $nat-literal sentinel: 42N → surf-nat-lit (Nat suc-chain)
     [(and (symbol? head) (eq? head '$nat-literal))

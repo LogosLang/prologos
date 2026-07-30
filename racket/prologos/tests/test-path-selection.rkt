@@ -786,14 +786,13 @@
                "the enclosing arity check fired first — the sentinel did not fuse"))
 
 (test-case "P1b-iii: reachable inside an fn BODY (was: 'all parameters must be bare symbols')"
-  ;; ⚠ RENAMED + CORRECTED. This test was titled "inside fn params too" while
-  ;; asserting on `[fn [x : Int] cfg{host}]` — where the select block is in the
-  ;; BODY and the param list is the untouched `[x : Int]`. It passed for a
-  ;; reason unrelated to its name (body-position select blocks give the guided
-  ;; error everywhere), i.e. it was a VACUOUS pin of the exact class this track
-  ;; keeps catching. Caught by adversarial verify, pre-commit.
+  ;; ⚠ RENAMED + CORRECTED at P1b-iii; FLIPPED at D4.P3a: a body-position
+  ;; select block now has SEMANTICS, so the property upgrades from "the guided
+  ;; error is reachable" to "the body select WORKS under an annotated binder"
+  ;; (the hole-domain `[fn [x] …]` shape stays a pre-existing PX-family
+  ;; failure, identical for map-get — not selection's).
   (define r (run-ws-last "def cfg := {:host \"h\"}\ndef y := [fn [x : Int] cfg{host}]\n"))
-  (check-regexp-match #rx"select block" r)
+  (check-regexp-match #rx"Int -> \\{:host String\\}" r)
   (check-false (regexp-match? #rx"bare symbols" r)))
 
 (test-case "P1b-iii: an fn PARAM-LIST select block is LOUD (the honest behaviour)"
@@ -874,22 +873,38 @@
                "the result is still sentinel-headed — re-entry will match it again"))
 
 (test-case "P1b-iii: fusion consumes the BASE only — the application head survives"
+  ;; D4.P3a UPDATE: the select-brace half now fuses to the REAL `$select` head
+  ;; (semantics landed); the top-level dot-brace half keeps the guided marker
+  ;; (a bare `x.{…}` at top level stays refused — its meaning is P3b/P4
+  ;; territory). The property pinned is unchanged: ONE item out, head intact.
   (check-equal? (preparse-expand-form '(h base ($select-brace a)))
-                '(h ($retired-selection select-block #f)))
+                '(h ($select base a)))
   (check-equal? (preparse-expand-form '(h base ($dot-brace a)))
                 '(h ($retired-selection select-block #f))))
 
 (test-case "P1b-iii BLOCKING pin: a multi-arity defn clause is NOT silently dropped"
   ;; Was: `bad : Int -> Int defined.` with 0 errors and `[bad 0]` returning the
   ;; WRONG arm, because the `| 0 -> …` clause head had been eaten.
+  ;; D4.P3a UPDATE: `mm{a}` now has SEMANTICS, so the property upgrades from
+  ;; "errors rather than silently dropping" to "the clause FIRES with the
+  ;; right arm" — a strictly stronger pin of the same fixpoint defect.
+  ;; ⚠ The arms deliberately share ONE result type: multi-arity clauses with
+  ;; HETEROGENEOUS result types fail at HEAD with a lying unannotated-param
+  ;; diagnostic — PRE-EXISTING and select-free (probe: `| 0 -> {:a 1} |
+  ;; n -> 5` fails identically; filed 2026-07-30). Distinct VALUES still
+  ;; discriminate the arms.
   (define rs (run-ws-raw
               (string-append
                "def mm := {:a 1 :b 2}\n"
                "defn bad\n"
                "  | 0 -> mm{a}\n"
-               "  | n -> [int+ n 100]\n")))
-  (check-true (ormap prologos-error? rs)
-              "the clause was silently dropped — the function defined with the wrong arms"))
+               "  | n -> {:a 999}\n"
+               "[bad 0]\n"
+               "[bad 5]\n")))
+  (check-false (ormap prologos-error? rs))
+  (check-regexp-match #rx":a 1" (format "~a" (list-ref rs (- (length rs) 2)))
+                      "the `| 0` clause was dropped or answered wrong")
+  (check-regexp-match #rx":a 999" (format "~a" (last rs))))
 
 (test-case "P1b-iii BLOCKING pin: an adjacent brace in a defn PARAM LIST is not silent"
   ;; Was: `g : _ _ _ _ -> _ defined.` with 0 errors (params $select-brace/x/base/a).
@@ -1124,3 +1139,434 @@
   ;; and a base-less ordinal must not consume anything to its left
   (check-equal? (rewrite-dot-access '(($postfix-index 0)))
                 (rewrite-dot-access (rewrite-dot-access '(($postfix-index 0))))))
+
+;; ============================================================
+;; CIU T6 D4.P3a — the node + KEYED blocks, no `^`  (Q_T1/Q_T2/Q_T5, Q_U1)
+;;
+;; Failing-test-first: every E2E pin below was written RED — at pin time each
+;; select form produced the P1a NOT-YET marker error ("select blocks … are not
+;; supported yet"), which is the documented fails-for-the-right-reason state.
+;; The battery pins the Q_T rulings: Route A node (Q_T1), Horn-D LENIENT
+;; presence (Q_T2), strict duplicate check BEFORE make-record can last-win,
+;; the malformed-payload seat, the type-position refusal, branch-aware miss
+;; errors, and §9's learnability pair. Corpus list per Q_U1 (owner,
+;; 2026-07-30): P3a owns EVERY no-`^` block line.
+;; ============================================================
+
+;; Fixture strings (per-call, against the shared env). The FIRST test-case is
+;; the fixture-sanity guard (the Watching-4 lesson: a broken fixture makes
+;; every pin fail for the WRONG reason — guard the premise).
+(define P3A-CFG
+  (string-append
+   "def cfg := {:name \"GuildHall\" :version \"1.0.0\" "
+   ":server {:host \"localhost\" :port 8080 :ssl {:enabled true :cert-path \"/etc\"}} "
+   ":database {:url \"db-url\" :pool-size 10}}\n"))
+
+(define P3A-REGIONS
+  (string-append
+   "def regions := {:eu {:host \"eu.x\" :port 443} "
+   ":us {:host \"us.x\" :port 443} :ap {:host \"ap.x\" :port 8443}}\n"))
+
+(test-case "P3a fixture-sanity guard: the fixture defs load and P2 access works (GREEN before P3a)"
+  (define rs (run-ws-raw (string-append P3A-CFG P3A-REGIONS "cfg.server.host\n")))
+  (check-false (ormap prologos-error? rs) "the P3a fixture itself is broken — every pin below is void")
+  (check-regexp-match #rx"localhost" (format "~a" (last rs))))
+
+;; ---- the preparse seam: fold, fixpoint, registration sites ----
+
+(test-case "P3a: the fold fuses [base $select-brace] into the $select head"
+  (check-equal? (preparse-expand-form '(h base ($select-brace a)))
+                '(h ($select base a))))
+
+(test-case "P3a: the fold is a FIXPOINT with LEFT siblings and an opaque payload"
+  ;; The P1b-iii BLOCKING class: a non-fixpoint fold swallows one more LEFT
+  ;; sibling per preparse re-entry. AND the payload must stay RAW — if re-entry
+  ;; descended into `($select …)`, the payload's `($dot-access b)` would fuse
+  ;; against its neighbour into `(map-get a :b)`, silently destroying the
+  ;; branch structure before the parser can segment it.
+  (define once (preparse-expand-form '(f w ($select-brace a ($dot-access b)))))
+  (define twice (preparse-expand-form once))
+  (check-equal? once '(f ($select w a ($dot-access b))))
+  (check-equal? once twice "non-idempotent fold or non-opaque payload — re-entry changed the datum")
+  (check-equal? (car once) 'f "the application head was swallowed"))
+
+(test-case "P3a: $select is NOT an access sentinel and NOT a pattern variable"
+  ;; access-sentinel? membership is what would make the fold non-fixpoint (the
+  ;; head would re-match on re-entry); pattern-var? membership is the
+  ;; whole-file-abort site (the P1b-ii regression class).
+  (check-false (access-sentinel? '($select x a)))
+  (check-false (pattern-var? '$select)))
+
+(test-case "P3a: the baseless $select-brace stays as the needs-a-subject backstop"
+  ;; The audit's C23: the baseless leg REMAINS — the fold must not touch a
+  ;; sentinel with no base; the parser's own arm answers it.
+  ;; (the single-element unwrap at the fold exit is the established norm —
+  ;; the P2 `(($postfix-index 0))` pin unwraps identically)
+  (check-equal? (preparse-expand-form '(($select-brace a)))
+                '($select-brace a)))
+
+(test-case "P3a: a select block in a defmacro TEMPLATE works through macro USE"
+  ;; The pin is via USE, not registration (the P1b-ii lesson: a
+  ;; registration-shaped pin stays green through the defect). RED today: the
+  ;; NOT-YET marker error.
+  (define rs (run-ws-raw
+              (string-append
+               "def bm := {:host \"h\" :port 1}\n"
+               "defmacro sel4 [$u] [$u{host}]\n"
+               "[sel4 bm]\n")))
+  (check-false (ormap prologos-error? rs)
+               "macro-expanded select must fold + parse + evaluate")
+  (check-regexp-match #rx":host \"h\"" (format "~a" (last rs))))
+
+;; ---- E2E keyed corpus (Q_U1: every no-`^` block line) ----
+
+(test-case "P3a ⭐ single-branch projection keeps the key: cfg{database}"
+  (define rs (run-ws (string-append P3A-CFG "cfg{database}\n")))
+  (define r (last rs))
+  (check-regexp-match #rx":pool-size 10" r)
+  (check-regexp-match #rx":url \"db-url\"" r)
+  ;; type rows are canonically sorted, so the TYPE string is exact
+  (check-regexp-match #rx"\\{:database \\{:pool-size Int :url String\\}\\}" r))
+
+(test-case "P3a ⭐ sub-block narrows under kept ancestry: cfg{server.{host port}}"
+  (define rs (run-ws (string-append P3A-CFG "cfg{server.{host port}}\n")))
+  (define r (last rs))
+  (check-regexp-match #rx":host \"localhost\"" r)
+  (check-regexp-match #rx":port 8080" r)
+  (check-regexp-match #rx"\\{:server \\{:host String :port Int\\}\\}" r)
+  ;; narrowed: ssl must NOT survive into the result
+  (check-false (regexp-match #rx"ssl" r)))
+
+(test-case "P3a: doubly nested sub-block: cfg{server.{ssl.{enabled}}}"
+  (define rs (run-ws (string-append P3A-CFG "cfg{server.{ssl.{enabled}}}\n")))
+  (define r (last rs))
+  (check-regexp-match #rx":enabled true" r)
+  (check-regexp-match #rx"\\{:server \\{:ssl \\{:enabled Bool\\}\\}\\}" r))
+
+(test-case "P3a: plain dot-descent projects with ancestry: cfg{database.pool-size}"
+  ;; The dot-access ATTACH rule (no sub-block involved): projection keeps the
+  ;; traversed nominal keys — {:database {:pool-size 10}}, NOT bare 10.
+  (define rs (run-ws (string-append P3A-CFG "cfg{database.pool-size}\n")))
+  (define r (last rs))
+  (check-regexp-match #rx":pool-size 10" r)
+  (check-regexp-match #rx"\\{:database \\{:pool-size Int\\}\\}" r))
+
+(test-case "P3a: multi-branch block: cfg{name version}"
+  (define rs (run-ws (string-append P3A-CFG "cfg{name version}\n")))
+  (define r (last rs))
+  (check-regexp-match #rx":name \"GuildHall\"" r)
+  (check-regexp-match #rx":version \"1.0.0\"" r)
+  (check-regexp-match #rx"\\{:name String :version String\\}" r))
+
+(test-case "P3a: nominal n-ary selection over a map-of-rows: regions{eu us}"
+  (define rs (run-ws (string-append P3A-REGIONS "regions{eu us}\n")))
+  (define r (last rs))
+  (check-regexp-match #rx":eu" r)
+  (check-regexp-match #rx":us" r)
+  (check-false (regexp-match #rx":ap" r) "unselected key :ap must be pruned")
+  (check-regexp-match
+   #rx"\\{:eu \\{:host String :port Int\\} :us \\{:host String :port Int\\}\\}" r))
+
+(test-case "P3a ⭐ selection results are ordinary closed rows: def + re-projection"
+  (define rs (run-ws (string-append
+                      P3A-CFG
+                      "def sub := cfg{server.{host}}\n"
+                      "sub.server.host\n")))
+  (check-regexp-match #rx"sub : \\{:server \\{:host String\\}\\} defined" (second rs))
+  (check-regexp-match #rx"\"localhost\" : String" (last rs)))
+
+(test-case "P3a: a select composes with dot-access: cfg{server}.server.host"
+  (define rs (run-ws (string-append P3A-CFG "cfg{server}.server.host\n")))
+  (check-regexp-match #rx"\"localhost\" : String" (last rs)))
+
+;; ---- Q_T2: Horn D, LENIENT ----
+
+(test-case "P3a ⭐ Q_T2 LENIENT: listed-'present fields on a DYN row select; result row is CLOSED"
+  ;; dyn2's fields are listed 'present ({:host String :port Int | _}) — their
+  ;; presence IS sourced, so the block may select them. The RESULT row is
+  ;; closed all-'present (no `| _` in the result type) — PS15's "sealable,
+  ;; validatable" claim made true.
+  (define rs (run-ws-raw (string-append
+                          "def base := {:host \"h\" :port 1}\n"
+                          "def kk := :port\n"
+                          "def d2 := [map-assoc base kk 2]\n"
+                          "d2{host}\n")))
+  (check-false (ormap prologos-error? rs) "the LENIENT select must succeed")
+  (define r (format "~a" (last rs)))
+  (check-regexp-match #rx":host \"h\"" r)
+  (check-regexp-match #rx"\\{:host String\\}" r)
+  ;; verify-corrected: an open row prints `{… | _}` — the pipe is INSIDE the
+  ;; braces, so the original `} |` regexp could never fire; `[|]` can.
+  (check-false (regexp-match #rx"[|]" r) "the result row must be CLOSED (no dyn tail)"))
+
+(test-case "P3a Q_T2: an 'unknown-marked field REFUSES with the remedy list"
+  ;; dyn1 = dissoc-with-dynamic-key → every field 'unknown ({:host? … | _}).
+  (define rs (run-ws-raw (string-append
+                          "def base := {:host \"h\" :port 1}\n"
+                          "def kk := :port\n"
+                          "def d1 := [map-dissoc base kk]\n"
+                          "d1{host}\n")))
+  (check-true (prologos-error? (last rs)))
+  (define r (format "~a" (last rs)))
+  ;; the remedy list names ONLY remedies that work at HEAD (adversarial
+  ;; verify dropped "annotate its row type" — no working spelling exists)
+  (check-regexp-match #rx"seal" r)
+  (check-regexp-match #rx"validate" r)
+  (check-false (regexp-match #rx"annotate" r) "an unimplementable remedy re-appeared"))
+
+(test-case "P3a Q_T2: an UNLISTED field on a dyn row REFUSES with the remedy list"
+  (define rs (run-ws-raw (string-append
+                          "def base := {:host \"h\" :port 1}\n"
+                          "def kk := :port\n"
+                          "def d2 := [map-assoc base kk 2]\n"
+                          "d2{zzz}\n")))
+  (check-true (prologos-error? (last rs)))
+  (define r (format "~a" (last rs)))
+  ;; the remedy list names ONLY remedies that work at HEAD (adversarial
+  ;; verify dropped "annotate its row type" — no working spelling exists)
+  (check-regexp-match #rx"seal" r)
+  (check-regexp-match #rx"validate" r)
+  (check-false (regexp-match #rx"annotate" r) "an unimplementable remedy re-appeared"))
+
+(test-case "P3a Q_T2: a (Map K V) subject REFUSES with the remedy list"
+  (define rs (run-ws-raw (string-append
+                          "def m1 := [map-assoc [map-empty Keyword Int] :a 1]\n"
+                          "m1{a}\n")))
+  (check-true (prologos-error? (last rs)))
+  (define r (format "~a" (last rs)))
+  ;; the remedy list names ONLY remedies that work at HEAD (adversarial
+  ;; verify dropped "annotate its row type" — no working spelling exists)
+  (check-regexp-match #rx"seal" r)
+  (check-regexp-match #rx"validate" r)
+  (check-false (regexp-match #rx"annotate" r) "an unimplementable remedy re-appeared"))
+
+(test-case "P3a: a keyed block on a TUPLE (nat row) is a loud refusal"
+  (define rs (run-ws-raw (string-append
+                          "def het := @[7 \"seven\" :seven]\n"
+                          "het{name}\n")))
+  (check-true (prologos-error? (last rs)))
+  (check-regexp-match #rx"tuple" (format "~a" (last rs))))
+
+;; ---- the error battery: miss, duplicate, malformed payload ----
+
+(test-case "P3a ⭐ closed-row miss names the fields, the branch, and the extraction spelling"
+  (define rs (run-ws-raw (string-append P3A-CFG "cfg{zzz}\n")))
+  (check-true (prologos-error? (last rs)))
+  (define r (format "~a" (last rs)))
+  (check-regexp-match #rx":zzz" r)
+  (check-regexp-match #rx"available fields" r)
+  (check-regexp-match #rx"branch" r)
+  ;; §9's learnability half: the block-side miss names the extraction spelling
+  (check-regexp-match #rx"\\.zzz" r))
+
+(test-case "P3a: a miss INSIDE a sub-block names the full branch path"
+  (define rs (run-ws-raw (string-append P3A-CFG "cfg{server.{zzz}}\n")))
+  (check-true (prologos-error? (last rs)))
+  (define r (format "~a" (last rs)))
+  (check-regexp-match #rx":zzz" r)
+  (check-regexp-match #rx"server" r))
+
+(test-case "P3a ⭐ duplicate output keys error BEFORE make-record can last-win"
+  ;; make-record dedups right-priority SILENTLY ({:a 1 :a 2} → {:a 2} at 0
+  ;; errors, probe-verified at HEAD) — so the strict check must run before
+  ;; minting, at both the top level and nested sub-block levels.
+  (define raw1 (run-ws-raw-last (string-append P3A-CFG "cfg{database database}\n")))
+  (check-true (prologos-error? raw1))
+  (define r1 (format "~a" raw1))
+  (check-regexp-match #rx"duplicate" r1)
+  (check-regexp-match #rx":database" r1)
+  (check-regexp-match #rx"\\^" r1)  ;; remedies ^k' / ^_ named
+  (define raw2 (run-ws-raw-last (string-append P3A-CFG "cfg{server.{host host}}\n")))
+  (check-true (prologos-error? raw2))
+  (define r2 (format "~a" raw2))
+  (check-regexp-match #rx"duplicate" r2)
+  (check-regexp-match #rx":host" r2))
+
+(test-case "P3a: the empty block has its OWN arm ahead of L4"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{}\n")))
+  (check-true (prologos-error? raw))
+  (define r (format "~a" raw))
+  (check-regexp-match #rx"empty selection" r)
+  (check-regexp-match #rx"empty map" r))
+
+(test-case "P3a malformed seat: ordinal STEP inside a branch is refused (unruled — not fabricated)"
+  ;; `{admins.0}`-class: the projection semantics of a mid-branch ordinal are
+  ;; unruled (ancestry through a contingent key). Loud refusal, monotone.
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{server.0}\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"ordinal" (format "~a" raw)))
+
+(test-case "P3a malformed seat: ordinal BRANCHES name P3c"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{0 1}\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"ordinal" (format "~a" raw)))
+
+(test-case "P3a malformed seat: keyword items are written bare"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{:name}\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"bare" (format "~a" raw)))
+
+(test-case "P3a malformed seat: stray `.` / $rest / list items / atoms are refused"
+  (check-true (prologos-error? (run-ws-raw-last (string-append P3A-CFG "cfg{server . host}\n"))))
+  (check-true (prologos-error? (run-ws-raw-last (string-append P3A-CFG "cfg{name...}\n"))))
+  (check-true (prologos-error? (run-ws-raw-last (string-append P3A-CFG "cfg{[name version]}\n"))))
+  (check-true (prologos-error? (run-ws-raw-last (string-append P3A-CFG "cfg{\"s\"}\n")))))
+
+(test-case "P3a malformed seat: a nested ADJACENT brace names the `.{…}` spelling"
+  ;; `cfg{server{host}}` — the sub-block spelling inside a block is `.{…}`.
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{server{host}}\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"narrow with" (format "~a" raw)))
+
+(test-case "P3a malformed seat: a segment cannot follow a sub-block"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{server.{host}.port}\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"cannot follow" (format "~a" raw)))
+
+(test-case "P3a: type position refuses loudly"
+  (define rs (run-ws-raw (string-append P3A-CFG "def bad : cfg{version} := \"x\"\n")))
+  (check-true (ormap prologos-error? rs) "a select block must not be accepted as a type"))
+
+(test-case "P3a: top-level `x.{…}` gets a guided error that does not lie about x{…}"
+  ;; After P3a, `x{…}` WORKS — the old shared message ("select blocks … are
+  ;; not supported yet") would be false. The dot-brace form at top level stays
+  ;; refused, with guidance naming the block spelling.
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg.{version}\n")))
+  (check-true (prologos-error? raw))
+  (define r (format "~a" raw))
+  (check-regexp-match #rx"belongs inside a select block" r)
+  (check-false (regexp-match #rx"not supported yet" r)
+               "the P1a NOT-YET wording survived past its truth"))
+
+;; ---- the twins (inferQ/checkQ) + §9's learnability pair ----
+
+(test-case "P3a twins: a select as a MAP VALUE (infer position) types under QTT"
+  ;; The cdb535ac shape: map values are INFER position — an un-arm'd inferQ
+  ;; falls to the catch-all and lies "Multiplicity violation".
+  (define rs (run-ws-raw (string-append P3A-CFG "def m2 := {:f cfg{database}}\n")))
+  (check-false (ormap prologos-error? rs)
+               "an inferQ miss surfaces as a lying 'Multiplicity violation'"))
+
+(test-case "P3a twins: a select in a defn body + call"
+  (define rs (run-ws (string-append
+                      P3A-CFG
+                      "defn getdb [] cfg{database}\n"
+                      "[getdb]\n")))
+  (check-regexp-match #rx":pool-size 10" (last rs)))
+
+(test-case "P3a §9 learnability pair: x.a.b extracts, x{a.b} projects — side by side"
+  (define rs (run-ws (string-append
+                      P3A-CFG
+                      "cfg.database.pool-size\n"
+                      "cfg{database.pool-size}\n")))
+  (check-regexp-match #rx"^10 : Int" (second rs))
+  (check-regexp-match #rx"\\{:database \\{:pool-size Int\\}\\}" (last rs)))
+
+;; ============================================================
+;; D4.P3a — ADVERSARIAL VERIFY pins (6th consecutive slice with a catch)
+;;
+;; Four skeptics + main-thread adjudication on the uncommitted diff.
+;; BLOCKING: block-form `|>` with a select init silently evaluated the WRONG
+;; select at 0 errors (head-macro dispatch precedes the fold; the pipe's step
+;; builder spliced its accumulator INTO the raw sentinel payload, and the
+;; later fold fused the corrupted select onto the FUNCTION). SIGNIFICANT:
+;; the `$select` subject was never preparse-expanded (the fold-arm comment's
+;; premise was FALSE — the fold runs before subform recursion), freezing raw
+;; sentinels inside compound subjects; schema-sealed subjects refused with a
+;; wrong-kinded message while the remedy text said "seal the subject" (found
+;; by TWO skeptics independently); `^`-bearing items produced FABRICATED
+;; field-miss diagnostics on exactly the P3b spellings the duplicate message
+;; recommends.
+;; ============================================================
+
+(test-case "P3a verify ⭐ BLOCKING: block-form pipe with a select init pipes the RIGHT value"
+  ;; Was: `|> cfg{server} f` = `($select f server cfg-as-branch)` — a select
+  ;; over the FUNCTION, silently wrong when f's row happened to offer the keys.
+  (check-equal? (preparse-expand-form '($pipe-gt cfg ($select-brace server) f2))
+                '(f2 ($select cfg server)))
+  ;; E2E at TOP LEVEL — a block-form pipe on a def RHS is PRE-EXISTING broken
+  ;; (worktree-pinned baseline: `def r3 := |> cfg.server map-keys` fails with
+  ;; 2 errors at clean HEAD, select-free), so the def shape cannot pin THIS
+  ;; defect. Top level works and discriminates: the corrupted fold selected
+  ;; off the FUNCTION, so :server-vs-:name tells the subjects apart.
+  (define rs (run-ws-raw (string-append P3A-CFG "|> cfg{server} map-keys\n")))
+  (check-false (ormap prologos-error? rs))
+  (define r (format "~a" (last rs)))
+  (check-regexp-match #rx":server" r)
+  (check-false (regexp-match #rx":name" r) "the pipe selected off the wrong subject"))
+
+(test-case "P3a verify: compound select SUBJECTS are preparse-expanded (partial opacity)"
+  ;; The fold runs BEFORE subform recursion, so the subject arrives raw; the
+  ;; $select arm now expands the SUBJECT while the payload stays protected.
+  ;; F2a shape — bracket-group subject with an inner dot-access:
+  (check-equal? (preparse-expand-form '((f m ($dot-access x)) ($select-brace a)))
+                '($select (f (map-get m :x)) a))
+  ;; F2b shape — subject containing its OWN select:
+  (check-equal? (preparse-expand-form '((g cfg ($select-brace server)) ($select-brace server)))
+                '($select (g ($select cfg server)) server))
+  ;; F2c E2E — map-literal subject whose VALUE uses dot-access:
+  (define rs (run-ws-raw "def p := {:x 5}\ndef s4 := {:a p.x}{a}\ns4\n"))
+  (check-false (ormap prologos-error? rs))
+  (check-regexp-match #rx":a 5" (format "~a" (last rs))))
+
+(test-case "P3a verify ⭐ schema-sealed subjects project THROUGH the seal (the remedy loop closes)"
+  ;; Two skeptics convergent: `sealed{name}` refused as 'subject-other while
+  ;; the refusal messages named "seal the subject" as remedy #1.
+  (define rs (run-ws-raw
+              (string-append
+               "schema Person\n  :name String\n  :age Int\n"
+               "def sealed := the Person {:name \"ann\" :age 3}\n"
+               "sealed{name}\n"
+               "def picker := [fn [p : Person] p{name}]\n"
+               "[picker sealed]\n")))
+  (check-false (ormap prologos-error? rs))
+  (check-regexp-match #rx":name \"ann\"" (format "~a" (list-ref rs (- (length rs) 3))))
+  (check-regexp-match #rx":name \"ann\"" (format "~a" (last rs))))
+
+(test-case "P3a verify: `^`-bearing items name P3b instead of fabricating a field miss"
+  ;; Was: `cfg{version^}` → "field :version^ is not present … spelled
+  ;; `.version^`" — a lying miss with a garbage remedy, on the exact
+  ;; spellings the duplicate message recommends.
+  (define raw1 (run-ws-raw-last (string-append P3A-CFG "cfg{version^}\n")))
+  (check-true (prologos-error? raw1))
+  (check-regexp-match #rx"P3b" (format "~a" raw1))
+  (check-false (regexp-match #rx"not present" (format "~a" raw1)) "fabricated miss")
+  (define raw2 (run-ws-raw-last (string-append P3A-CFG "cfg{server.host^_}\n")))
+  (check-true (prologos-error? raw2))
+  (check-regexp-match #rx"P3b" (format "~a" raw2)))
+
+(test-case "P3a verify: ground non-map subjects PANIC at the top level too (tier symmetry)"
+  ;; Was: `(whnf (expr-select (expr-int 5) …))` returned the node unchanged —
+  ;; silent stick where the nested descent one level down panics loudly.
+  (define r (whnf (expr-select (expr-int 5) '((a)))))
+  (check-true (expr-panic? r) "a ground non-map subject must panic, not stick")
+  ;; and a stuck NEUTRAL still sticks (fvar subject — no panic, no loop):
+  (define stuck (whnf (expr-select (expr-fvar 'nosuch) '((a)))))
+  (check-true (expr-select? stuck)))
+
+(test-case "P3a verify: trailing steps after a terminal sub-block panic (constructed IR)"
+  ;; The parser grammar forbids the shape; the reducer now enforces it rather
+  ;; than silently discarding the trailing steps.
+  (define subj (whnf (expr-select (expr-fvar 'x) '((a)))))
+  (check-true (expr-select? subj)) ;; sanity: stuck neutral stays stuck
+  (define bad-branches '((a (@sub (b)) c)))
+  ;; construct the champ directly — no fixture dependency
+  (define inner
+    (champ-insert champ-empty (equal-hash-code (expr-keyword 'b)) (expr-keyword 'b) (expr-int 1)))
+  (define champ-subj
+    (expr-champ (champ-insert champ-empty (equal-hash-code (expr-keyword 'a)) (expr-keyword 'a)
+                              (expr-champ inner))))
+  (define r (whnf (expr-select champ-subj bad-branches)))
+  (check-true (expr-panic? r) "trailing steps after @sub must panic, not vanish"))
+
+(test-case "P3a verify: the sub-block empty message does not claim `{}` is a map literal"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{server.{}}\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"empty sub-block" (format "~a" raw)))
+
+(test-case "P3a verify: the duplicate message also names the WORKING remedy (sub-block grouping)"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{database.url database.pool-size}\n")))
+  (check-true (prologos-error? raw))
+  (define r (format "~a" raw))
+  (check-regexp-match #rx"duplicate" r)
+  (check-regexp-match #rx"sub-block" r))

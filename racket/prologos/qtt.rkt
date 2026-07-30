@@ -1303,6 +1303,16 @@
      (match (inferQ ctx subject)
        [(tu _ u) (tu (infer ctx e) u)]
        [_ (tu-error)])]
+    ;; CIU T6 D4.P3a: select — the same expr-get delegate pattern (the
+    ;; cdb535ac "no drift twin" model): subject usage at natural multiplicity;
+    ;; TYPE delegated to typing-core's infer arm. Branches are static data —
+    ;; no exprs, no usage. No checkQ arm needed (the conversion fallback
+    ;; covers check position). A missing arm here is the LYING "Multiplicity
+    ;; violation" (pipeline.md § infer/inferQ are twins).
+    [(expr-select subject _)
+     (match (inferQ ctx subject)
+       [(tu _ u) (tu (infer ctx e) u)]
+       [_ (tu-error)])]
     [(expr-nil-safe-get m k)
      (let ([r1 (inferQ ctx m)]
            [r2 (inferQ ctx k)])

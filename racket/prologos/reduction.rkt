@@ -1586,6 +1586,70 @@
 ;; name, a [fn ...] value) FAILS LOUD as check-unevaluable (F1b.7a Layer B:
 ;; err-polarity's "skip stuck" governs TYPE-WITNESSING, not the user's
 ;; runtime :check assertion; an un-evaluable check must never silently pass).
+;; CIU T6 D4.P3a: the select-block value assembly (Q_T1 Route A).
+;; subj-champ is the ALREADY-whnf'd subject (evaluated ONCE by the whnf arm —
+;; reused across every branch). Per-branch: project the head key, then walk
+;; the remaining steps rebuilding PROJECTION nesting (traversed nominal keys
+;; are kept — spec §1.2; a `.k` descent contributes a one-field level), with
+;; a terminal `(@sub …)` recursing over the narrowed champ. Typing (Horn D)
+;; sourced every selected field as 'present and the parser rejected duplicate
+;; output keys BEFORE this code can mint — so a miss or a non-map mid-descent
+;; here is an INVARIANT VIOLATION: panic loudly, never fabricate (the P2.b
+;; two-tier discipline; fabricating `none` was exactly divergence site 7).
+(define (select-reduce subj-expr branches)
+  (let/ec return
+    (define (kw-of label) (expr-keyword label))
+    (define (champ-of v what)
+      (let ([v* (whnf v)])
+        (if (expr-champ? v*)
+            (expr-champ-racket-champ v*)
+            (return (expr-panic
+                     (expr-string
+                      (format "select: ~a is not a map at runtime (invariant violation — typing admitted the block)"
+                              what)))))))
+    (define (project c label)
+      (let* ([kw (kw-of label)]
+             [hit (champ-lookup c (equal-hash-code kw) kw)])
+        (if (eq? hit 'none)
+            (return (expr-panic
+                     (expr-string
+                      (format "select: field :~a not found at runtime (invariant violation — typing sourced it as present)"
+                              label))))
+            (whnf hit))))
+    ;; assemble one output LEVEL from branches over the champ c
+    (define (assemble c branches)
+      (for/fold ([acc champ-empty])
+                ([b (in-list branches)])
+        (let* ([label (car b)]
+               [kw (kw-of label)]
+               [v (steps-value (project c label) (cdr b) label)])
+          (champ-insert acc (equal-hash-code kw) kw v))))
+    ;; the value contributed BELOW a head: leaf | nominal descent | sub-block
+    (define (steps-value v steps path)
+      (cond
+        [(null? steps) v]
+        [(and (pair? (car steps)) (eq? (car (car steps)) '@sub))
+         ;; terminal sub-block: recurse over the narrowed value.
+         ;; D4.P3a verify hardening: the grammar makes a sub-block TERMINAL
+         ;; (the parser refuses trailing segments) — enforce it here too
+         ;; rather than silently discarding constructed-IR trailing steps
+         ;; (the "comment asserting an invariant nothing enforces" red flag).
+         (if (null? (cdr steps))
+             (expr-champ (assemble (champ-of v path) (cdr (car steps))))
+             (return (expr-panic
+                      (expr-string
+                       "select: internal — steps after a terminal sub-block (the parser grammar forbids this shape)"))))]
+        [else
+         ;; nominal descent: keep the traversed key (projection nesting)
+         (let* ([k (car steps)]
+                [kw (kw-of k)]
+                [inner (champ-of v path)]
+                [hit (project inner k)])
+           (expr-champ
+            (champ-insert champ-empty (equal-hash-code kw) kw
+                          (steps-value hit (cdr steps) k))))]))
+    (expr-champ (assemble (champ-of subj-expr "the subject") branches))))
+
 (define (validate-tabulate sname closed? plan subj-champ names)
   (define c (expr-champ-racket-champ subj-champ))
   (define ok-name          (list-ref names 2))
@@ -2732,6 +2796,29 @@
     ;; divergence site 7 was. `expr-get`'s arm already handles the Nat-or-Int
     ;; key gate and out-of-bounds.
     [(expr-map-get (? expr-rrb? v) k a) (whnf (expr-get v k a))]
+
+    ;; CIU T6 D4.P3a: the select-block redex (Q_T1 Route A).
+    ;; The subject is evaluated ONCE — subj* is computed a single time and
+    ;; reused across every branch (the design's no-let/fn obligation).
+    ;; Typing (select-project, Q_T2 Horn D) guaranteed every selected field is
+    ;; sourced-'present, and the parser guaranteed duplicate-free branches —
+    ;; so a runtime miss here is an INVARIANT VIOLATION and panics loudly
+    ;; (never fabricate), and champ-insert is never asked to last-win.
+    ;; Stuck subject → the node stays stuck (the map-get/validate precedent).
+    [(expr-select subject branches)
+     (let ([subj* (whnf subject)])
+       (cond
+         [(expr-champ? subj*) (select-reduce subj* branches)]
+         ;; D4.P3a verify hardening: a GROUND non-map subject can never
+         ;; become a champ — panic per the node's own tier discipline
+         ;; (the nested descent one level down is already loud; only the
+         ;; top level silently stuck). Stuck NEUTRALS still fall through.
+         [(definitely-not-map? subj*)
+          (expr-panic
+           (expr-string
+            "select: the subject is not a map at runtime (invariant violation — typing admitted the block)"))]
+         [(equal? subj* subject) e]
+         [else (whnf (expr-select subj* branches))]))]
 
     ;; CIU T6 F1b.5-s2 (D27): validate — the runtime tabulation redex.
     ;; Subject whnf's to exactly two classes (spines/map-empty collapse to
@@ -4241,6 +4328,9 @@
     ;; CIU T6 F1b.5-s2: a validate that survived whnf is stuck — nf the
     ;; expr slots (subject + plan defaults/preds) via the single helper
     [(? expr-validate? v) (validate-map-exprs nf v)]
+    ;; CIU T6 D4.P3a: a select reaching nf-whnf is STUCK (whnf fired the
+    ;; redex already) — rebuild the subject, branches are static data
+    [(? expr-select? v) (select-map-exprs nf v)]
     [(expr-get c k a) (expr-get (nf c) (nf k) (if (expr? a) (nf a) a))]
     [(expr-nil-safe-get m k) (expr-nil-safe-get (nf m) (nf k))]
     [(expr-nil-check a) (expr-nil-check (nf a))]

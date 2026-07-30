@@ -166,6 +166,8 @@
  ;; Anonymous structural record / tuple type (CIU T6 F1; internal-only — inferred, not parsed)
  (struct-out expr-Record) (struct-out record-field)
  (struct-out expr-validate) validate-map-exprs
+ ;; Path Selection block node (CIU T6 D4.P3a)
+ (struct-out expr-select) select-map-exprs
  record-map-field-types make-record record-extend record-lookup-field record-remove
  closed-nat-row? closed-keyword-row? record-mark-all-unknown
  ;; Map (persistent hash map)
@@ -742,6 +744,34 @@
                          (list-ref entry 6)))  ; F1b.5-s4: required-on-miss? (atom)
                  (proc (expr-validate-subject v))
                  (expr-validate-names v)))
+
+;; ============================================================
+;; expr-select — the Path Selection block node (CIU T6 D4.P3a, Q_T1 Route A)
+;; ============================================================
+;; `x{…}` — a keyed select block over a keyword-row subject. Grades-1-scoped
+;; at P3a (no `^`, no broadcast); P3b extends the step vocabulary with `^`
+;; continuations, P3c adds the keyless sort, P4 broadcast steps.
+;;
+;;   subject  : expr
+;;   branches : (listof branch)              STATIC data — no exprs inside
+;;   branch  ::= (listof step), non-empty
+;;   step    ::= symbol                       nominal descent key (colon-less)
+;;             | (cons '@sub (listof branch)) terminal sub-block  `.{…}`
+;;
+;; The branches are segmented + malformed-checked + duplicate-checked at the
+;; PARSER ($select head arm) — by construction an expr-select carries only
+;; well-formed, duplicate-free plain-key branches at this slice. Typing =
+;; per-branch copattern demand under Q_T2 Horn-D LENIENT presence
+;; (typing-core `select-project`); reduction evaluates the subject ONCE
+;; (reduction.rkt). Walkers: subject is the only expr slot — branches pass
+;; through untouched (P1b/P2 walker discipline; no binder ⇒ no depth routing).
+(struct expr-select (subject branches) #:transparent)
+
+;; Map proc over the single EXPR slot (the record-map-field-types pattern:
+;; ONE reconstruction point for shift/subst/zonk/nf).
+(define (select-map-exprs proc v)
+  (expr-select (proc (expr-select-subject v))
+               (expr-select-branches v)))
 
 ;; SMART CONSTRUCTOR (D6 §4.1): the ONLY row producer. Dedups labels right-priority
 ;; (later entries win — Clojure/D10 assoc overwrite) and re-canonicalizes the field order
@@ -1352,6 +1382,7 @@
       (expr-String? x) (expr-string? x)
       (expr-Record? x)
       (expr-validate? x)
+      (expr-select? x)
       (expr-Map? x) (expr-champ? x) (expr-map-empty? x)
       ;; CIU T6 P2.b slice 4: expr-get? was ABSENT here (pipeline.md core item
       ;; 1 unmet — pre-existing, found by the slice-2 audit C25). Fixed.

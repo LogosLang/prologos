@@ -66,9 +66,16 @@ app-config.server
 ;; ───────────────────────────────────────────────────────────────────────────
 ;; §B  SELECT BLOCKS — braces project, `^` re-keys                  [D4.P3]
 ;; ───────────────────────────────────────────────────────────────────────────
-;; app-config{database}                       ;; {:database {:url … :pool-size 10}} — projection keeps the key
-;; app-config{server.{host port}}             ;; {:server {:host "localhost" :port 8080}} — narrowed, ancestry kept
-;; app-config{server.{ssl.{enabled}}}         ;; {:server {:ssl {:enabled true}}}
+;; —— keyed blocks, no `^` (LANDED at D4.P3a — Q_U1's corpus slice) ——
+app-config{database}
+;;6=> {:database {:url "localhost/guild-db", :pool-size 10}} : {:database {:pool-size Int :url String}}
+
+app-config{server.{host port}}
+;;7=> {:server {:host "localhost", :port 8080}} : {:server {:host String :port Int}}
+
+app-config{server.{ssl.{enabled}}}
+;;8=> {:server {:ssl {:enabled true}}} : {:server {:ssl {:enabled Bool}}}
+
 ;; app-config{server^.{ssl^.enabled^ssl port} version database^.pool-size}
 ;;   ;; {:ssl true :port 8080 :version "1.0.0" :pool-size 10}  — the spec's flagship (§10.1)
 ;; app-config{database^.{url pool-size}}      ;; {:url "localhost/guild-db" :pool-size 10}
@@ -84,8 +91,12 @@ app-config.server
 ;;                                             ;;   nominal segment instead: admins^first.0           [Q_T4a]
 ;; app-config{server.host^ database.url^}     ;; @["localhost" "localhost/guild-db"] : ⟨String String⟩ — keyless ⇒ tuple
 ;; app-config{version^}                       ;; @["1.0.0"] : ⟨String⟩ — HONEST 1-TUPLE (ruling 2a)
-;; def sub := app-config{server.{host}}       ;; selection results are ordinary CLOSED rows:
-;; sub.server.host                            ;;   def-storable, sealable, validatable
+;; selection results are ordinary CLOSED rows — def-storable, re-projectable:
+def sub := app-config{server.{host}}
+;;9=> sub : {:server {:host String}} defined.
+
+sub.server.host
+;;10=> "localhost" : String
 ;;
 ;; STATIC ERRORS (strict-merge waypoint; error-class pins until Q8 wording):
 ;; app-config{version^ server.port}           ;; ERROR — mixed keyed/keyless sorts (L4)
@@ -122,7 +133,7 @@ def party := @[{:name "Frodo"   :class :burglar :hp 38 :level 9}
                {:name "Gandalf" :class :wizard  :hp 92 :level 20}
                {:name "Gimli"   :class :fighter :hp 77 :level 12}]
 
-;;6=> party : [PVec {:class Keyword :hp Int :level Int :name String}] defined.
+;;11=> party : [PVec {:class Keyword :hp Int :level Int :name String}] defined.
 
 ;; party:name                               ;; @["Frodo" "Gandalf" "Gimli"] — broadcast one step  [D4.P4]
 ;; party:{name hp}                          ;; @[{:name "Frodo" :hp 38} …] — per-element block    [D4.P4]
@@ -136,12 +147,12 @@ def party := @[{:name "Frodo"   :class :burglar :hp 38 :level 9}
 ;; mechanism (owner ruling Q_R1 — they are byte-identical datums), and this is
 ;; the corpus demonstrating that rather than the design asserting it.
 party.0.name
-;;7=> "Frodo" : String
+;;12=> "Frodo" : String
 ;; NOTE [owner 2026-07-28]: `party[0]` KEEPS its current extraction semantics
 ;; (the PS2 re-target is CANCELED); `.N` arrives ALONGSIDE, not instead.
 ;; The bracket pin below is a MUST-NOT-BREAK regression, not a flip warning:
 party[0].name
-;;8=> "Frodo" : String
+;;13=> "Frodo" : String
 
 ;; ───────────────────────────────────────────────────────────────────────────
 ;; §E  FUNCTIONS OVER ROWS — first-class projection                 [P5 + PX]
@@ -149,13 +160,13 @@ party[0].name
 
 ;; the HOF forms that ALREADY work — bidirectional checking supplies the row:
 map [fn [m] m.name] party
-;;9=> @["Frodo" "Gandalf" "Gimli"] : [PVec String]
+;;14=> @["Frodo" "Gandalf" "Gimli"] : [PVec String]
 
 map [fn [m] {:who m.name :ready [gt m.hp 50]}] party
-;;10=> @[{:who "Frodo", :ready false} {:who "Gandalf", :ready true} {:who "Gimli", :ready true}] : [PVec {:ready Bool :who String}]
+;;15=> @[{:who "Frodo", :ready false} {:who "Gandalf", :ready true} {:who "Gimli", :ready true}] : [PVec {:ready Bool :who String}]
 
 map [+ 5 _] '[1 2 3]
-;;11=> '[6 7 8] : [prologos::data::list::List Int]
+;;16=> '[6 7 8] : [prologos::data::list::List Int]
 
 ;; keyword-as-projection is LIKELY SUBSUMED by broadcast (D4 §3 open item):
 ;; party:name                               ;; @["Frodo" "Gandalf" "Gimli"]   [D4.P4]
@@ -168,7 +179,7 @@ map [+ 5 _] '[1 2 3]
 ;; …the ANNOTATED hatch works NOW, and stays the honest spelling meanwhile:
 def add5 : <Int -> Int> := [+ 5 _]
 [add5 37]
-;;13=> 42 : Int
+;;18=> 42 : Int
 
 ;; named-schema abstraction — v1's function-over-rows path (WORKING):
 schema Member
@@ -183,10 +194,10 @@ defn veteran? [m]
 
 def members : (List Member) := '[{:name "Sam" :class :gardener :hp 44 :level 8}
                                  {:name "Legolas" :class :archer :hp 60 :level 15}]
-;;16=> members : [prologos::data::list::List path-selection-acceptance::Member] defined.
+;;21=> members : [prologos::data::list::List path-selection-acceptance::Member] defined.
 
 map veteran? members
-;;17=> '[false true] : [prologos::data::list::List Bool]
+;;22=> '[false true] : [prologos::data::list::List Bool]
 
 ;; ───────────────────────────────────────────────────────────────────────────
 ;; §F  QUEST BOARD — relational facts; solve rows ARE records       [P4/P5]
@@ -198,14 +209,14 @@ defr quest [?title ?giver ?reward]
      "Debug the compiler"  "Alice" 9000
 
 def quests := solve (quest t g r)
-;;19=> quests : [prologos::data::list::List {:g String :r Int :t String}] defined.
+;;24=> quests : [prologos::data::list::List {:g String :r Int :t String}] defined.
 
 quests
-;;20=> '[{:g "Alice", :t "Rescue the cat", :r 50} {:g "Bob", :t "Map the catacombs", :r 200} {:g "Alice", :t "Debug the compiler", :r 9000}] : [prologos::data::list::List {:g String :r Int :t String}]
+;;25=> '[{:g "Alice", :t "Rescue the cat", :r 50} {:g "Bob", :t "Map the catacombs", :r 200} {:g "Alice", :t "Debug the compiler", :r 9000}] : [prologos::data::list::List {:g String :r Int :t String}]
 
 ;; typed solve rows compose with HOFs TODAY:
 map [fn [q] q.r] quests
-;;21=> '[50 200 9000] : [prologos::data::list::List Int]
+;;26=> '[50 200 9000] : [prologos::data::list::List Int]
 
 ;; …and with selection, once it lands:
 ;; quests:t                                 ;; '["Rescue the cat" …] — broadcast over solve rows   [D4.P4]
@@ -214,10 +225,10 @@ map [fn [q] q.r] quests
 
 ;; a paren-goal query (implicit solve) feeding the same machinery:
 def alice-quests := (quest t "Alice" r)
-;;22=> alice-quests : [prologos::data::list::List {:r Int :t String}] defined.
+;;27=> alice-quests : [prologos::data::list::List {:r Int :t String}] defined.
 
 map [fn [q] q.t] alice-quests
-;;23=> '["Rescue the cat" "Debug the compiler"] : [prologos::data::list::List String]
+;;28=> '["Rescue the cat" "Debug the compiler"] : [prologos::data::list::List String]
 
 ;; ───────────────────────────────────────────────────────────────────────────
 ;; §G  TYPING SEAMS — the pins that keep us honest
@@ -225,17 +236,17 @@ map [fn [q] q.t] alice-quests
 
 ;; selection sources stay precisely typed through def:
 def ssl-config := app-config.server.ssl
-;;24=> ssl-config : {:cert-path String :enabled Bool} defined.
+;;29=> ssl-config : {:cert-path String :enabled Bool} defined.
 
 ssl-config.enabled
-;;25=> true : Bool
+;;30=> true : Bool
 
 ;; heterogeneous tuple: per-position types survive (D15), extraction is exact:
 def mixed := @[7 "seven" :seven]
-;;26=> mixed : ⟨Int String Keyword⟩ defined.
+;;31=> mixed : ⟨Int String Keyword⟩ defined.
 
 mixed[1]
-;;27=> "seven" : String
+;;32=> "seven" : String
 
 ;; a selection result seals + validates, once selection lands   [D4.P3 + seal]:
 ;; schema ServerCfg
@@ -253,7 +264,7 @@ def users :=
   @[@[{:userName "Lisa" :age 30}]
     @[{:userName "John" :age 25}]
     @[{:userName "Mike" :age 35}]]
-;;28=> users : [PVec [PVec {:age Int :userName String}]] defined.
+;;33=> users : [PVec [PVec {:age Int :userName String}]] defined.
 ;;   ^ the LITERAL arm collapses the 1-tuple elements to PVec (§2.3); the
 ;;     spec reads them as 1-tuples — selection MINTS rows directly (ruling 2a)
 
@@ -264,27 +275,27 @@ def build
                {:sev :error :msg "import cycle"  :line 88}]
     - :name "cli"
       :diags @[{:sev :warn :msg "shadowed var" :line 7}]
-;;29=> build : {:modules [PVec {:diags [PVec {:line Int :msg String :sev Keyword}] :name String}]} defined.
+;;34=> build : {:modules [PVec {:diags [PVec {:line Int :msg String :sev Keyword}] :name String}]} defined.
 
 def regions
   :eu {:host "eu.example.com" :port 443}
   :us {:host "us.example.com" :port 443}
   :ap {:host "ap.example.com" :port 8443}
-;;30=> regions : {:ap {:host String :port Int} :eu {:host String :port Int} :us {:host String :port Int}} defined.
+;;35=> regions : {:ap {:host String :port Int} :eu {:host String :port Int} :us {:host String :port Int}} defined.
 
 def strings
   :en {:home "Home"  :about "About"}
   :de {:home "Start" :about "Über"}
-;;31=> strings : {:de {:about String :home String} :en {:about String :home String}} defined.
+;;36=> strings : {:de {:about String :home String} :en {:about String :home String}} defined.
 
 def m := @[@[1 2 3]
            @[4 5 6]]
-;;32=> m : [PVec [PVec Int]] defined.
+;;37=> m : [PVec [PVec Int]] defined.
 
 def events := @[{:t :click :x 10 :y 20}
                 {:t :key   :code "KeyA"}
                 {:t :click :x 3  :y 9}]
-;;33=> events : ⟨{:t Keyword :x Int :y Int} {:code String :t Keyword} {:t Keyword :x Int :y Int}⟩ defined.
+;;38=> events : ⟨{:t Keyword :x Int :y Int} {:code String :t Keyword} {:t Keyword :x Int :y Int}⟩ defined.
 ;;   ^ HET TUPLE, per-position rows — the 2b split's first carrier
 
 def tree
@@ -294,7 +305,7 @@ def tree
     - :name "core"
       :entries
         - :name "eval.pl" :size 12010
-;;34=> tree : {:entries ⟨{:name String :size Int} {:entries [PVec {:name String :size Int}] :name String}⟩ :name String} defined.
+;;39=> tree : {:entries ⟨{:name String :size Int} {:entries [PVec {:name String :size Int}] :name String}⟩ :name String} defined.
 
 ;; ───────────────────────────────────────────────────────────────────────────
 ;; §I  THE SPEC CORPUS (§10.2–§10.8, commented per phase; HEAD notation)
@@ -317,7 +328,8 @@ def tree
 
 ;; §10.5 map-generic broadcast — regions (Q1 ✅)                     [D4.P4]
 ;; regions:host       ;; {:ap "ap.example.com" :eu "eu.example.com" :us "us.example.com"}
-;; regions{eu us}     ;; {:eu {…} :us {…}} — nominal n-ary selection [D4.P3]
+regions{eu us}     ;; nominal n-ary selection (LANDED at D4.P3a, Q_U1)
+;;40=> {:eu {:host "eu.example.com", :port 443}, :us {:host "us.example.com", :port 443}} : {:eu {:host String :port Int} :us {:host String :port Int}}
 
 ;; §10.6 pure transposes — m, strings — v2, PERMANENTLY commented (spec §7.3)
 ;; (`m.0` USED TO SIT HERE and self-contradicted the block header — it was
@@ -346,26 +358,26 @@ def tree
 ;; is permanently-commented v2 territory (Q_R4).
 
 m.0
-;;35=> @[1 2 3] : [PVec Int]
+;;41=> @[1 2 3] : [PVec Int]
 
 ;; nat→nat chains. These USED to mis-lex: `m.1.2` read as the rational 6/5,
 ;; because `decimal-literal` anchors at the DIGIT. A dot-anchored recognizer
 ;; consumes `.1` first, so the interior dot is never available as an anchor.
 ;; (⚠ the mis-lex was LOUD, not silent — the stranded bare `.` was unbound.)
 m.1.2
-;;36=> 6 : Int
+;;42=> 6 : Int
 
 ;; multi-digit — the ordinal Q_M8 exists for
 def scores := @[10 11 12 13 14 15 16 17 18 19 20 21 22]
-;;37=> scores : [PVec Int] defined.
+;;43=> scores : [PVec Int] defined.
 
 scores.12
-;;38=> 22 : Int
+;;44=> 22 : Int
 
 ;; per-position EXACT types survive on a het tuple (D15 + record-project)
 mixed.1
-;;39=> "seven" : String
+;;45=> "seven" : String
 
 ;; and `.N` reaches into nested rows the same way `.name` does
 app-config.admins.0.name
-;;40=> "Alice" : String
+;;46=> "Alice" : String

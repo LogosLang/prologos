@@ -303,6 +303,8 @@
     [(? expr-Record? rec) (record-map-field-types zonk rec)]
     ;; CIU T6 F1b.5-s2: validate — exprs via the single helper
     [(? expr-validate? v) (validate-map-exprs zonk v)]
+    ;; CIU T6 D4.P3a: select — subject via the single helper
+    [(? expr-select? v) (select-map-exprs zonk v)]
     ;; Map
     [(expr-Map k v) (expr-Map (zonk k) (zonk v))]
     [(expr-champ _) e]
@@ -782,6 +784,8 @@
     [(? expr-Record? rec) (record-map-field-types (lambda (t) (zonk-at-depth depth t)) rec)]
     ;; CIU T6 F1b.5-s2: validate — exprs via the single helper
     [(? expr-validate? v) (validate-map-exprs (lambda (t) (zonk-at-depth depth t)) v)]
+    ;; CIU T6 D4.P3a: select — subject via the single helper
+    [(? expr-select? v) (select-map-exprs (lambda (t) (zonk-at-depth depth t)) v)]
     ;; Map
     [(expr-Map k v) (expr-Map (zonk-at-depth depth k) (zonk-at-depth depth v))]
     [(expr-champ _) e]
@@ -1265,6 +1269,8 @@
     ;; CIU T6 F1b.5-s2: validate — the SILENT function (catch-all passthrough);
     ;; a missed arm here would leave unsolved metas in plan exprs un-defaulted
     [(? expr-validate? v) (validate-map-exprs default-metas v)]
+    ;; CIU T6 D4.P3a: select — same silent-function obligation
+    [(? expr-select? v) (select-map-exprs default-metas v)]
     ;; Map
     [(expr-Map k v) (expr-Map (default-metas k) (default-metas v))]
     [(expr-champ _) e]

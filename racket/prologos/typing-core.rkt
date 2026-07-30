@@ -39,6 +39,9 @@
 )
 
 (provide infer check is-type infer-level
+         ;; CIU T6 D4.P3a: the select walk + failure struct (consumed by the
+         ;; typing-errors select hint — one walk, two consumers, no drift)
+         select-project (struct-out select-fail)
          ;; Rel T1 B3.2: display-time coinductive refinement (driver echo seam only)
          refine-solve-row-type-for-display
          (struct-out no-level) (struct-out just-level)
@@ -613,6 +616,84 @@
 ;; same as the historical bare strings — behavior-preserving).
 (define (dyn-row-source tag)
   (meta-source-info #f tag (symbol->string tag) #f #f))
+
+;; ============================================================
+;; CIU T6 D4.P3a — the select-block projection walk (Q_T2 Horn D, LENIENT)
+;; ============================================================
+;; ONE walk, TWO consumers: the `expr-select` infer arm (needs the type) and
+;; typing-errors' select hint (needs the failure) — so the arm and its
+;; diagnostic cannot drift (the infer/inferQ-twin lesson applied to
+;; arm+diagnostic). Returns (values row-or-#f failure-or-#f).
+;;
+;; The rule (owner ruling Q_T2): a block may select a field iff the subject's
+;; type SOURCES that field's presence as 'present. LENIENT: a dyn row's
+;; LISTED-'present fields are selectable (their presence IS sourced); only
+;; 'unknown-marked and unlisted fields refuse. (Map K V) subjects refuse —
+;; no per-field row exists. The result row is CLOSED, all-'present, honestly
+;; (PS15: never ask the presence-blind seal to vouch for fabrication).
+;; NOTE this deliberately does NOT delegate to record-project: its dyn-miss
+;; and 'unknown legs mint fresh metas (D19 exploration — right for `.field`,
+;; WRONG for a block, which is assertive-tier construction).
+;;
+;; Branches arrive duplicate-free and well-formed BY CONSTRUCTION (the parser
+;; seat rejects duplicates before a surf-select is ever minted — the strict
+;; check runs before any make-record can last-win).
+;;
+;; failure kinds: 'subject-map · 'subject-tuple · 'subject-other ·
+;; 'miss-closed · 'miss-dyn (unlisted on dyn) · 'unknown-presence.
+;; `path` = the label trail to the failure (for branch-aware messages).
+(struct select-fail (kind path label row) #:transparent)
+
+(define (select-project ctx tm branches [path '()])
+  (cond
+    ;; D4.P3a adversarial verify (TWO skeptics convergent): a SCHEMA-typed
+    ;; subject projects THROUGH the seal — schema fields are all-'present by
+    ;; construction (schema->row), the strongest source Horn D recognizes.
+    ;; Without this leg the refusal messages' own "seal the subject" remedy
+    ;; led into a wrong-kinded 'subject-other refusal (the dot-access arm has
+    ;; carried the same leg since F1). SELECTION-typed subjects stay refused
+    ;; at this slice — a selection is a capability-restricted VIEW
+    ;; (F1b.5-s4 :requires), and projecting through one without the
+    ;; read-capability check would bypass it.
+    [(and (expr-fvar? tm) (lookup-schema-by-name (expr-fvar-name tm)))
+     => (lambda (entry) (select-project ctx (schema->row entry) branches path))]
+    [(expr-Map? tm) (values #f (select-fail 'subject-map path #f tm))]
+    [(and (expr-Record? tm) (eq? (expr-Record-key-domain tm) 'nat))
+     (values #f (select-fail 'subject-tuple path #f tm))]
+    [(not (expr-Record? tm)) (values #f (select-fail 'subject-other path #f tm))]
+    [else
+     (let loop ([bs branches] [fields '()])
+       (if (null? bs)
+           (values (make-record 'keyword (reverse fields) 'closed) #f)
+           (let* ([b (car bs)]
+                  [label (car b)]
+                  [steps (cdr b)]
+                  [fld (record-lookup-field tm label)])
+             (cond
+               [(and fld (eq? (record-field-presence fld) 'present))
+                (let-values ([(vt vf) (select-steps-type ctx (record-field-type fld)
+                                                         steps (append path (list label)))])
+                  (if vf
+                      (values #f vf)
+                      (loop (cdr bs)
+                            (cons (cons label (record-field vt 'present)) fields))))]
+               [fld  ;; listed, but presence not sourced 'present ('unknown; reserved marks)
+                (values #f (select-fail 'unknown-presence (append path (list label)) label tm))]
+               [(eq? (expr-Record-tail tm) 'dyn)
+                (values #f (select-fail 'miss-dyn (append path (list label)) label tm))]
+               [else
+                (values #f (select-fail 'miss-closed (append path (list label)) label tm))]))))]))
+
+;; The type contributed BELOW a selected head of type ft. A nominal descent
+;; `k` is exactly a one-branch nested select — projection nesting falls out
+;; of the recursion (traversed nominal keys are kept, spec §1.2).
+(define (select-steps-type ctx ft steps path)
+  (cond
+    [(null? steps) (values ft #f)]
+    [(and (pair? (car steps)) (eq? (car (car steps)) '@sub))
+     (select-project ctx (whnf ft) (cdr (car steps)) path)]
+    [else
+     (select-project ctx (whnf ft) (list steps) path)]))
 
 (define (record-value-bound ctx rec [src (dyn-row-source 'dyn-row-values)])
   (cond
@@ -1891,6 +1972,17 @@
     ;; / union-of-map-ish / unsolved-meta gradual); non-maps reject statically.
     ;; The PLAN is bake-trusted (elaborated + witness-tagged at elaboration —
     ;; the expr-num-lit carried-alpha precedent); the rule never re-checks it.
+    ;; CIU T6 D4.P3a (Q_T1 Route A): the select block — per-branch copattern
+    ;; demand under Q_T2 Horn-D LENIENT presence; result = a CLOSED keyword
+    ;; row, all-'present. The guided message is reconstructed by
+    ;; typing-errors' select hint from the SAME select-project walk.
+    [(expr-select subject branches)
+     (let ([tm (whnf (infer ctx subject))])
+       (if (expr-error? tm)
+           (expr-error)
+           (let-values ([(row fail) (select-project ctx tm branches)])
+             (or row (expr-error)))))]
+
     [(expr-validate sname _closed? _plan subject names)
      (let ([tm (whnf (infer ctx subject))])
        (cond

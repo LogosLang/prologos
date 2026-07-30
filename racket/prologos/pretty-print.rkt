@@ -108,6 +108,20 @@
 
 ;; pp-expr: convert Expr -> string
 ;; names is a list of name strings (stack), innermost binding first
+;; CIU T6 D4.P3a: render one select branch back to its surface spelling.
+;; branch = (listof step); step = symbol | (cons '@sub branches).
+;; First segment bare, later keys `.k`, sub-block `.{…}` (always terminal).
+(define (pp-select-branch b)
+  (define (step->string s first?)
+    (cond
+      [(symbol? s) (if first? (symbol->string s) (string-append "." (symbol->string s)))]
+      [(and (pair? s) (eq? (car s) '@sub))
+       (string-append ".{" (string-join (map pp-select-branch (cdr s)) " ") "}")]
+      [else (format "~a" s)]))
+  (apply string-append
+         (for/list ([s (in-list b)] [i (in-naturals)])
+           (step->string s (zero? i)))))
+
 (define (pp-expr e [names '()])
   (match e
     ;; Variables
@@ -491,6 +505,11 @@
      (format "[validate ~a ~a]"
              (expr-validate-schema-name v)
              (pp-expr (expr-validate-subject v) names))]
+    ;; CIU T6 D4.P3a: select — render the SURFACE spelling (subject{branches})
+    [(expr-select subject branches)
+     (format "~a{~a}"
+             (pp-expr subject names)
+             (string-join (map pp-select-branch branches) " "))]
     [(expr-get c k _) (format "[get ~a ~a]" (pp-expr c names) (pp-expr k names))]
     [(expr-nil-safe-get m k) (format "[nil-safe-get ~a ~a]" (pp-expr m names) (pp-expr k names))]
     [(expr-nil-check a) (format "[nil? ~a]" (pp-expr a names))]
@@ -1173,6 +1192,8 @@
          (for/or ([entry (in-list (expr-validate-plan v))])
            (or (and (caddr entry) (uses-bvar0? (caddr entry)))
                (and (cadddr entry) (uses-bvar0? (cadddr entry))))))]
+    ;; CIU T6 D4.P3a: select — subject is the only expr slot
+    [(expr-select subject _) (uses-bvar0? subject)]
     [(expr-get c k a) (or (uses-bvar0? c) (uses-bvar0? k)
                           (and (expr? a) (uses-bvar0? a)))]
     [(expr-nil-safe-get m k) (or (uses-bvar0? m) (uses-bvar0? k))]

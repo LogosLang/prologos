@@ -306,6 +306,11 @@
   ;; (the vector-impostor rule). Payload = symbols/booleans/sexps/exprs only
   ;; (preds are expr-lams, NEVER Racket closures — those serialize to stubs).
   (regN! expr-validate 'S #f '() (expr-unit) '())
+  ;; CIU T6 D4.P3a: the select-block node — SAME-COMMIT registration (the
+  ;; vector-impostor rule). Payload = subject expr + branches (nested lists of
+  ;; symbols — plain sexp data). NO PNET bump: the tag table is symbol-keyed,
+  ;; so a new struct is purely additive (§8 R6 as corrected 2026-07-29).
+  (regN! expr-select (expr-unit) '())
   (reg1! expr-Set (expr-Nat))
   (reg2! expr-union (expr-Nat) (expr-Int))
   ;; CIU T6 P2.b slice 4: both projection nodes gained the strictness field
