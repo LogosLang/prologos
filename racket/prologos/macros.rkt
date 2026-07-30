@@ -5548,12 +5548,35 @@
       [else #f]))
   (and n (negative? n) n))
 
+;; D4.P3b (Q_T4a): the top-level ordinal-`^` datum shapes. `^` after an
+;; ordinal is a guided spelling error — ONE message, all spellings (the
+;; in-block shapes are seated at the parser's segmentation; these are the
+;; forms that never reach it). Two probe-measured shapes:
+;;   `x[0]^`  →  (x ($postfix-index 0) ^)      — postfix + caret sibling
+;;   `x.0^`   →  (x |.| 0 ^)                   — the Q_R2-guard shatter
+;; ⚠ The replacement is ELEMENT-WISE (the P1a dot-key precedent): the marker
+;; replaces only base+ordinal+caret, leaving siblings intact. A first draft
+;; replaced the WHOLE datum — the P3b adversarial verify showed that turns a
+;; clause-shaped datum into the bare marker: a match arm lost its `->` (raw
+;; `take` contract violation = WHOLE-FILE abort where HEAD recovered
+;; per-command), a defn clause was swallowed, a map literal went odd-arity,
+;; a pipe block shredded the marker. The marker head is not an access
+;; sentinel, so the fold stays a fixpoint.
+(define (ordinal-rekey-shatter? datum)
+  ;; the sentinel-free shape (`|.| N ^`) — the gate below can't see it
+  (let scan ([xs datum])
+    (cond
+      [(or (null? xs) (null? (cdr xs)) (null? (cddr xs))) #f]
+      [(and (eq? (car xs) '|.|) (number? (cadr xs)) (eq? (caddr xs) '^)) #t]
+      [else (scan (cdr xs))])))
+
 (define (rewrite-dot-access datum)
   (cond
     [(not (list? datum)) datum]
     [(null? datum) datum]
     ;; Check for any access sentinels in the list
-    [(not (ormap access-sentinel? datum))
+    ;; (D4.P3b: the `x.0^` shatter carries NO sentinel — gate it in too)
+    [(not (or (ormap access-sentinel? datum) (ordinal-rekey-shatter? datum)))
      datum]
     ;; Pattern 2a/3a (RETIRED): ($dot-key :kw) at head or standalone
     [(dot-key? (car datum))
@@ -5629,6 +5652,20 @@
                 (loop (cdr elems)
                       (cons (retired-selection-marker 'select-block #f)
                             (cdr acc))))]
+           ;; D4.P3b (Q_T4a): `^` after an ordinal — element-wise marker
+           ;; replacement (consume base+ordinal+caret; siblings survive).
+           [(and (postfix-index? (car elems))
+                 (pair? (cdr elems)) (eq? (cadr elems) '^))
+            (loop (cddr elems)
+                  (cons (retired-selection-marker 'ordinal-rekey #f)
+                        (if (null? acc) acc (cdr acc))))]
+           ;; the sentinel-free shatter: base |.| N ^ → marker
+           [(and (eq? (car elems) '|.|)
+                 (pair? (cdr elems)) (number? (cadr elems))
+                 (pair? (cddr elems)) (eq? (caddr elems) '^))
+            (loop (cdddr elems)
+                  (cons (retired-selection-marker 'ordinal-rekey #f)
+                        (if (null? acc) acc (cdr acc))))]
            [(postfix-index? (car elems))
             (if (null? acc)
                 (loop (cdr elems) (cons (car elems) acc))

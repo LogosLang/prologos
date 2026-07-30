@@ -1523,17 +1523,20 @@
   (check-regexp-match #rx":name \"ann\"" (format "~a" (list-ref rs (- (length rs) 3))))
   (check-regexp-match #rx":name \"ann\"" (format "~a" (last rs))))
 
-(test-case "P3a verify: `^`-bearing items name P3b instead of fabricating a field miss"
-  ;; Was: `cfg{version^}` → "field :version^ is not present … spelled
-  ;; `.version^`" — a lying miss with a garbage remedy, on the exact
-  ;; spellings the duplicate message recommends.
+(test-case "P3a verify (P3b-updated): `^`-bearing items never fabricate a field miss"
+  ;; P3a's gate refused BOTH spellings with a P3b pointer; P3b's splitter
+  ;; DEMOLISHED that gate (the planned flip — hazard 2 of the P3b relay).
+  ;; The pin's intent survives the flip: no `^` spelling may produce a
+  ;; fabricated "field :version^ is not present" miss. `version^` (keyless
+  ;; leaf) now refuses with the P3c boundary pointer; `server.host^_` is
+  ;; LIVE semantics (Reading N) and must not error at all.
   (define raw1 (run-ws-raw-last (string-append P3A-CFG "cfg{version^}\n")))
   (check-true (prologos-error? raw1))
-  (check-regexp-match #rx"P3b" (format "~a" raw1))
+  (check-regexp-match #rx"P3c" (format "~a" raw1))
   (check-false (regexp-match #rx"not present" (format "~a" raw1)) "fabricated miss")
   (define raw2 (run-ws-raw-last (string-append P3A-CFG "cfg{server.host^_}\n")))
-  (check-true (prologos-error? raw2))
-  (check-regexp-match #rx"P3b" (format "~a" raw2)))
+  (check-false (prologos-error? raw2) "Reading N is live at P3b — no error")
+  (check-regexp-match #rx":server-host" (format "~a" raw2)))
 
 (test-case "P3a verify: ground non-map subjects PANIC at the top level too (tier symmetry)"
   ;; Was: `(whnf (expr-select (expr-int 5) …))` returned the node unchanged —
@@ -1570,3 +1573,349 @@
   (define r (format "~a" raw))
   (check-regexp-match #rx"duplicate" r)
   (check-regexp-match #rx"sub-block" r))
+
+;; ============================================================
+;; CIU T6 D4.P3b — the `^` family  (Q_T3/T4a/T4b/T4b′/T7/T8, Q_U1)
+;;
+;; Failing-test-first: every pin below was written RED — at pin time each `^`
+;; spelling produced P3a's re-key-family pointer error ("… lands at Path
+;; Selection P3b"), the stray-`.` text (the ordinal-`^` shatter shapes), or an
+;; unbound-variable error (the top-level spellings) — the documented
+;; fails-for-the-right-reason state. The battery pins: the ONE splitter's
+;; continuation grammar (`-`?·{ε | label | `_`}), in-place rename (Q_T4b),
+;; `^_` Reading N (Q_T4b′), mid-path dissolve/splice, the `^-` collapse
+;; family (Q_T7), `^..` parent-key collapse (Q_T8), the OUTPUT-level-local
+;; duplicate check (Q_T3, the monotonicity pin), the Q_T4a ordinal-`^` guided
+;; error across ALL THREE datum shapes, and the malformed-`^` battery.
+;; Leaf-position bare `^` (keyless) REFUSES with a P3c pointer — the boundary
+;; note: the tuple carrier does not exist until P3c.
+;; ============================================================
+
+;; ---- the splitter, one E2E pin per continuation (Q_T4b base rules) ----
+
+(test-case "P3b ⭐ in-place rename: cfg{server.host^h} keeps the level, renames the leaf"
+  ;; Q_T4b: rename is IN PLACE — {:server {:h …}}, NOT {:h …}.
+  (define r (run-ws-last (string-append P3A-CFG "cfg{server.host^h}\n")))
+  (check-regexp-match #rx":h \"localhost\"" r)
+  (check-regexp-match #rx"\\{:server \\{:h String\\}\\}" r)
+  (check-false (regexp-match #rx":host" r) "the source key must not survive a rename"))
+
+(test-case "P3b: head-leaf rename: cfg{database^db}"
+  (define r (run-ws-last (string-append P3A-CFG "cfg{database^db}\n")))
+  (check-regexp-match #rx":db" r)
+  (check-regexp-match #rx"\\{:db \\{:pool-size Int :url String\\}\\}" r))
+
+(test-case "P3b ⭐ mid-path dissolve splices: cfg{server^.host}"
+  ;; only dissolve removes a level (Q_T4b).
+  (define r (run-ws-last (string-append P3A-CFG "cfg{server^.host}\n")))
+  (check-regexp-match #rx":host \"localhost\"" r)
+  (check-regexp-match #rx"\\{:host String\\}" r)
+  (check-false (regexp-match #rx":server" r) "the dissolved level must not survive"))
+
+(test-case "P3b: mid-path rename: cfg{server^srv.host}"
+  ;; `k'` is legal mid-path (spec §3.4) — the level is kept under the new key.
+  (define r (run-ws-last (string-append P3A-CFG "cfg{server^srv.host}\n")))
+  (check-regexp-match #rx"\\{:srv \\{:host String\\}\\}" r))
+
+(test-case "P3b: dissolve then multi-descent: cfg{server^.ssl.enabled}"
+  (define r (run-ws-last (string-append P3A-CFG "cfg{server^.ssl.enabled}\n")))
+  (check-regexp-match #rx":enabled true" r)
+  (check-regexp-match #rx"\\{:ssl \\{:enabled Bool\\}\\}" r))
+
+(test-case "P3b: dissolve + sub-block: cfg{database^.{url pool-size}}"
+  (define r (run-ws-last (string-append P3A-CFG "cfg{database^.{url pool-size}}\n")))
+  (check-regexp-match #rx":url \"db-url\"" r)
+  (check-regexp-match #rx":pool-size 10" r)
+  (check-regexp-match #rx"\\{:pool-size Int :url String\\}" r))
+
+(test-case "P3b ⭐ `^_` Reading N: rename the leaf IN PLACE to the path-synthesized key"
+  ;; Q_T4b′: cfg{server.host^_} → {:server {:server-host …}} — the flat
+  ;; result was the SUPERSEDED surface's reading (that spelling is `^-_`).
+  (define r (run-ws-last (string-append P3A-CFG "cfg{server.host^_ database.url^_}\n")))
+  (check-regexp-match #rx":server-host \"localhost\"" r)
+  (check-regexp-match #rx":database-url \"db-url\"" r)
+  (check-regexp-match
+   #rx"\\{:database \\{:database-url String\\} :server \\{:server-host String\\}\\}" r))
+
+(test-case "P3b ⭐ `^-` collapse keeps the leaf key, drops the ancestry (Q_T7)"
+  (define r (run-ws-last (string-append P3A-CFG "cfg{server.host^-}\n")))
+  (check-regexp-match #rx":host \"localhost\"" r)
+  (check-regexp-match #rx"\\{:host String\\}" r)
+  (check-false (regexp-match #rx":server" r)))
+
+(test-case "P3b: `^-k'` collapse-rename (Q_T7)"
+  (define r (run-ws-last (string-append P3A-CFG "cfg{server.host^-hst}\n")))
+  (check-regexp-match #rx":hst \"localhost\"" r)
+  (check-regexp-match #rx"\\{:hst String\\}" r))
+
+(test-case "P3b ⭐ `^-_` collapse-synth: FLAT provenance (Q_T7 — where the old `^_` semantics live)"
+  (define r (run-ws-last (string-append P3A-CFG "cfg{server.host^-_ database.url^-_}\n")))
+  (check-regexp-match #rx":server-host \"localhost\"" r)
+  (check-regexp-match #rx":database-url \"db-url\"" r)
+  (check-regexp-match #rx"\\{:database-url String :server-host String\\}" r))
+
+(test-case "P3b ⭐ `^..` parent-key collapse: ancestors above the parent are KEPT (Q_T8)"
+  ;; server.ssl.enabled^.. ≡ server.ssl^.enabled^ssl → {:server {:ssl true}}
+  (define r (run-ws-last (string-append P3A-CFG "cfg{server.ssl.enabled^..}\n")))
+  (check-regexp-match #rx":ssl true" r)
+  (check-regexp-match #rx"\\{:server \\{:ssl Bool\\}\\}" r)
+  (check-false (regexp-match #rx":enabled" r) "the leaf key must not survive `^..`"))
+
+(test-case "P3b: 2-segment `^..` lands the leaf under the parent key at top level"
+  (define r (run-ws-last (string-append P3A-CFG "cfg{database.url^..}\n")))
+  (check-regexp-match #rx":database \"db-url\"" r)
+  (check-regexp-match #rx"\\{:database String\\}" r))
+
+;; ---- the flagship (spec §10.1) ----
+
+(test-case "P3b ⭐⭐ the FLAGSHIP: cfg{server^.{ssl^.enabled^ssl port} version database^.pool-size}"
+  (define r (run-ws-last
+             (string-append P3A-CFG
+                            "cfg{server^.{ssl^.enabled^ssl port} version database^.pool-size}\n")))
+  (check-regexp-match #rx":ssl true" r)
+  (check-regexp-match #rx":port 8080" r)
+  (check-regexp-match #rx":version \"1.0.0\"" r)
+  (check-regexp-match #rx":pool-size 10" r)
+  (check-regexp-match #rx"\\{:pool-size Int :port Int :ssl Bool :version String\\}" r))
+
+;; ---- Q_T3: the OUTPUT-level-local duplicate check ----
+
+(test-case "P3b ⭐⭐ the MONOTONICITY pin: cfg{server^.{port} database^.port} ERRORS (Q_T3)"
+  ;; The named pin: the syntactic-block reading ACCEPTS this (two branch heads
+  ;; server ≠ database); Ruling B B4 REJECTS it (two dissolving branches land
+  ;; :port at the same OUTPUT level). Accepting it today would be the ONE
+  ;; monotonicity break — an error that later became a different meaning.
+  ;; The naive lowering silently last-wins (probe-verified at the audit).
+  (define raw (run-ws-raw-last
+               (string-append P3A-CFG "cfg{server^.{port} database^.port}\n")))
+  (check-true (prologos-error? raw) "Q_T3: this must ERROR at the strict waypoint")
+  (define r (format "~a" raw))
+  (check-regexp-match #rx"duplicate" r)
+  (check-regexp-match #rx":port" r))
+
+(test-case "P3b: duplicate LEAF after rename errors, naming the remedies (spec §10.1 negative)"
+  ;; app-config{server^.host database^.url^host} — the rename CREATES the collision.
+  (define raw (run-ws-raw-last
+               (string-append P3A-CFG "cfg{server^.host database^.url^host}\n")))
+  (check-true (prologos-error? raw))
+  (define r (format "~a" raw))
+  (check-regexp-match #rx"duplicate" r)
+  (check-regexp-match #rx":host" r)
+  (check-regexp-match #rx"\\^" r "the message names the ^k'/^_ remedies"))
+
+(test-case "P3b: distinct spliced keys COEXIST (no false duplicate): cfg{server^.{host} version}"
+  (define rs (run-ws-raw (string-append P3A-CFG "cfg{server^.{host} version}\n")))
+  (check-false (ormap prologos-error? rs))
+  (define r (format "~a" (last rs)))
+  (check-regexp-match #rx":host \"localhost\"" r)
+  (check-regexp-match #rx":version \"1.0.0\"" r))
+
+;; ---- Horn D through `^` (presence checks run on SOURCE fields) ----
+
+(test-case "P3b: a dissolved head still projects the SOURCE field — miss is branch-aware"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{nope^.host}\n")))
+  (check-true (prologos-error? raw))
+  (define r (format "~a" raw))
+  (check-regexp-match #rx":nope" r)
+  (check-regexp-match #rx":database|:server" r "the miss names the available fields"))
+
+;; ---- Q_T4a: the ordinal-`^` guided error, ALL THREE datum shapes ----
+
+(test-case "P3b ⭐ Q_T4a in-block: cfg{admins.0^first} — the |.| shatter shape"
+  ;; datum: admins |.| 0 ^ first — must NOT hit the stray-`.` arm.
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{admins.0^first}\n")))
+  (check-true (prologos-error? raw))
+  (define r (format "~a" raw))
+  (check-regexp-match #rx"ordinal has no key" r)
+  (check-regexp-match #rx"admins\\^first\\.0" r "the message names the valid spelling")
+  (check-false (regexp-match #rx"stray" r) "must not fall to the stray-`.` arm"))
+
+(test-case "P3b Q_T4a top level: x[0]^ — the $postfix-index shape"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg[0]^\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"ordinal has no key" (format "~a" raw)))
+
+(test-case "P3b Q_T4a top level: x.0^ — the stranded-dot shape"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg.0^\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"ordinal has no key" (format "~a" raw)))
+
+;; ---- the P3b/P3c boundary: keyless leaf `^` refuses with a P3c pointer ----
+
+(test-case "P3b boundary: leaf `^` (keyless) refuses naming P3c — cfg{version^}"
+  ;; DEMOLITION FLIP: this spelling carried P3a's generic re-key pointer; the
+  ;; splitter now classifies it precisely — keyless tuples land at P3c.
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{version^}\n")))
+  (check-true (prologos-error? raw))
+  (define r (format "~a" raw))
+  (check-regexp-match #rx"P3c" r)
+  (check-regexp-match #rx"keyless" r))
+
+(test-case "P3b boundary: the two-leaf keyless block also names P3c"
+  (define raw (run-ws-raw-last
+               (string-append P3A-CFG "cfg{server.host^ database.url^}\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"P3c" (format "~a" raw)))
+
+;; ---- the malformed-`^` battery ----
+
+(test-case "P3b malformed: a^b^c — one `^` per segment"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{a^b^c}\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"one `\\^`" (format "~a" raw)))
+
+(test-case "P3b malformed: lone `^` and spaced `^ b` — a `^` needs a segment to its left"
+  (define raw1 (run-ws-raw-last (string-append P3A-CFG "cfg{^}\n")))
+  (check-true (prologos-error? raw1))
+  (check-regexp-match #rx"segment" (format "~a" raw1))
+  (define raw2 (run-ws-raw-last (string-append P3A-CFG "cfg{^ b}\n")))
+  (check-true (prologos-error? raw2))
+  (check-regexp-match #rx"segment" (format "~a" raw2)))
+
+(test-case "P3b malformed: `^...` absorbs into $rest and the seat rejects it (Q_T8 edge)"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{a.b^...}\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"\\.\\.\\." (format "~a" raw)))
+
+(test-case "P3b malformed: `^..` with no parent segment refuses"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{version^..}\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"parent" (format "~a" raw)))
+
+(test-case "P3b malformed: mid-path `^_` refuses (synth attaches to the last segment)"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{server^_.host}\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"LAST segment" (format "~a" raw)))
+
+(test-case "P3b malformed: mid-path collapse `^-` refuses (collapse is a leaf continuation)"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{server^-.host}\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"LEAF continuation" (format "~a" raw)))
+
+(test-case "P3b malformed: a rename target may not begin with `-` (Q_T7 eyes-open)"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{server.host^--x}\n")))
+  (check-true (prologos-error? raw))
+  ;; verify finding 9: the original `#rx"-"` pin was VACUOUS — the transparent
+  ;; error struct prints the temp-file path, which always contains a dash.
+  (check-regexp-match #rx"collapse marker" (format "~a" raw)))
+
+;; ---- §G: a `^`-shaped selection seals + validates (Q_U1 reassigned here) ----
+
+(test-case "P3b ⭐ §G: the selection result seals and validates (schema + `the` + validate)"
+  ;; validate needs the result + reason modules in scope (:no-prelude fixture)
+  (define rs (run-ws-raw
+              (string-append
+               "require [prologos::data::result :refer [Result ok err ok? err?]]\n"
+               "require [prologos::data::reason :refer [Reason missing-required check-failed type-mismatch unexpected-field errors-to-list]]\n"
+               P3A-CFG
+               "schema SrvC\n  :host String\n  :port Int\n"
+               "def sc := the SrvC cfg{server^.{host port}}\n"
+               "sc.host\n"
+               "[validate SrvC cfg{server^.{host port}}]\n")))
+  (check-false (ormap prologos-error? rs))
+  (check-regexp-match #rx"\"localhost\"" (format "~a" (list-ref rs (- (length rs) 2))))
+  (check-regexp-match #rx"ok|valid" (format "~a" (last rs))))
+
+;; ---- twins: a `^`-bearing select under QTT ----
+
+(test-case "P3b twins: a collapse-synth select on a def RHS + re-projection"
+  (define rs (run-ws-raw (string-append
+                          P3A-CFG
+                          "def flat := cfg{server.host^-_}\n"
+                          "flat.server-host\n")))
+  (check-false (ormap prologos-error? rs))
+  (check-regexp-match #rx"\"localhost\"" (format "~a" (last rs))))
+
+;; ============================================================
+;; D4.P3b — ADVERSARIAL VERIFY pins (7th consecutive slice with a catch)
+;;
+;; 4 skeptics + adjudication on the uncommitted diff. BLOCKING: the first
+;; ordinal-rekey seat replaced the WHOLE datum with the guided marker, so a
+;; match arm containing `v[0]^` lost its `->` and raw-crashed the READER —
+;; a whole-file abort where HEAD recovered per-command. Same root cause
+;; swallowed a defn clause, broke map-literal arity, and shredded pipe
+;; inits. Fixed by ELEMENT-WISE marker replacement (the P1a dot-key
+;; precedent). Plus: the fused `^..enabled` continuation missed the Q_T8
+;; lookahead (INVERTED stray-dot advice); `k^...label` leaked the internal
+;; `($rest-param …)` sentinel; the dup message's `^_` remedy reproduced the
+;; collision in both canonical classes (dropped); digit-leading rename
+;; targets minted dot-unreachable fields (refused); `{0^first}` escaped the
+;; ONE Q_T4a message; a vacuous `#rx"-"` pin matched the temp-file path.
+;; ============================================================
+
+(test-case "P3b verify ⭐ BLOCKING: ordinal-^ inside a match arm recovers PER-COMMAND"
+  ;; Was: the whole ($pipe 0 -> body) arm became the bare marker; the arm
+  ;; parser found no `->` and raw-crashed — ZERO commands output.
+  (define rs (run-ws-raw (string-append
+                          P3A-CFG
+                          "def w := match 5\n  | 0 -> cfg[0]^\n  | _ -> 111\n"
+                          "cfg.version\n")))
+  (check-regexp-match #rx"ordinal has no key|1.0.0"
+                      (format "~a" rs)
+                      "the file must survive to later commands")
+  (check-regexp-match #rx"\"1.0.0\"" (format "~a" (last rs))
+                      "the command AFTER the bad arm must still run"))
+
+(test-case "P3b verify: ordinal-^ in a defn clause body keeps the clause structure"
+  (define rs (run-ws-raw (string-append
+                          P3A-CFG
+                          "defn k2 [x] cfg[0]^\n"
+                          "cfg.version\n")))
+  (check-regexp-match #rx"\"1.0.0\"" (format "~a" (last rs))))
+
+(test-case "P3b verify: ordinal-^ as a map-literal VALUE errors per-command, not arity"
+  (define raw (run-ws-raw (string-append P3A-CFG "def g2 := {:a cfg[0]^}\ncfg.version\n")))
+  (check-false (regexp-match #rx"even number" (format "~a" raw))
+               "the marker must not splice element-wise into the literal")
+  (check-regexp-match #rx"\"1.0.0\"" (format "~a" (last raw))))
+
+(test-case "P3b verify: siblings SURVIVE the element-wise ordinal-^ marker"
+  ;; the whole-datum replacement lost `f` and `b`; element-wise keeps them
+  (check-equal? (car (preparse-expand-form '(f w ($postfix-index 0) ^ b)))
+                'f))
+
+(test-case "P3b verify ⭐ fused `^..` continuation agrees with the spaced spelling"
+  ;; Was: `ssl^..enabled` → the second dot FUSED into ($dot-access enabled),
+  ;; the Q_T8 lookahead missed, and the stray-`.` arm gave INVERTED advice
+  ;; ("write the path with no spaces" — it had none).
+  (define r (run-ws-last (string-append P3A-CFG "cfg{server.ssl^..enabled}\n")))
+  (check-regexp-match #rx"\\{:server \\{:enabled Bool\\}\\}" r)
+  ;; and the sub-block continuation:
+  (define r2 (run-ws-last (string-append P3A-CFG "cfg{server.ssl^..{enabled}}\n")))
+  (check-regexp-match #rx":enabled true" r2))
+
+(test-case "P3b verify: `^.`-near-miss names `^..`, not the stray-dot advice"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{server.ssl^ .}\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"\\^\\.\\." (format "~a" raw)))
+
+(test-case "P3b verify: `k^...label` gets the Q_T8 message, never the raw sentinel"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{server.ssl^...enabled}\n")))
+  (check-true (prologos-error? raw))
+  (check-false (regexp-match #rx"rest-param" (format "~a" raw)) "internal sentinel leaked")
+  (check-regexp-match #rx"k\\^\\.\\." (format "~a" raw)))
+
+(test-case "P3b verify: head-position `{0^first}` takes the ONE Q_T4a message"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{0^first}\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"ordinal has no key" (format "~a" raw)))
+
+(test-case "P3b verify: digit-leading rename targets refuse (dot-unreachable field)"
+  (define raw1 (run-ws-raw-last (string-append P3A-CFG "cfg{server.host^0}\n")))
+  (check-true (prologos-error? raw1))
+  (check-regexp-match #rx"digit" (format "~a" raw1))
+  (define raw2 (run-ws-raw-last (string-append P3A-CFG "cfg{server.host^-0}\n")))
+  (check-true (prologos-error? raw2))
+  (check-regexp-match #rx"digit" (format "~a" raw2)))
+
+(test-case "P3b verify: the `server^{x}` misspelling names the SEGMENT, not 'field'"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{server^srv{host}}\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"server" (format "~a" raw)))
+
+(test-case "P3b verify: the P3c ordinal-step pointer names its phase (the Q_T4a advice loop closes)"
+  ;; the Q_T4a message recommends `admins^first.0`; executing it lands here —
+  ;; this message must name P3c so the loop is guided, not a dead end.
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{server^first.0}\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"P3c" (format "~a" raw)))

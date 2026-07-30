@@ -112,9 +112,24 @@
 ;; branch = (listof step); step = symbol | (cons '@sub branches).
 ;; First segment bare, later keys `.k`, sub-block `.{…}` (always terminal).
 (define (pp-select-branch b)
+  ;; D4.P3b: `^` continuation suffixes (the surface spellings, Q_T7 grammar)
+  (define (cont->string c)
+    (cond
+      [(eq? c 'dissolve) "^"]
+      [(eq? c 'synth) "^_"]
+      [(eq? c 'collapse) "^-"]
+      [(eq? c 'collapse-synth) "^-_"]
+      [(and (pair? c) (eq? (car c) 'rename))
+       (string-append "^" (symbol->string (cdr c)))]
+      [(and (pair? c) (eq? (car c) 'collapse-rename))
+       (string-append "^-" (symbol->string (cdr c)))]
+      [else "^?"]))
   (define (step->string s first?)
     (cond
       [(symbol? s) (if first? (symbol->string s) (string-append "." (symbol->string s)))]
+      [(and (pair? s) (eq? (car s) '@key))
+       (string-append (if first? "" ".") (symbol->string (cadr s))
+                      (cont->string (caddr s)))]
       [(and (pair? s) (eq? (car s) '@sub))
        (string-append ".{" (string-join (map pp-select-branch (cdr s)) " ") "}")]
       [else (format "~a" s)]))

@@ -1616,39 +1616,74 @@
                       (format "select: field :~a not found at runtime (invariant violation — typing sourced it as present)"
                               label))))
             (whnf hit))))
-    ;; assemble one output LEVEL from branches over the champ c
-    (define (assemble c branches)
-      (for/fold ([acc champ-empty])
-                ([b (in-list branches)])
-        (let* ([label (car b)]
-               [kw (kw-of label)]
-               [v (steps-value (project c label) (cdr b) label)])
-          (champ-insert acc (equal-hash-code kw) kw v))))
-    ;; the value contributed BELOW a head: leaf | nominal descent | sub-block
-    (define (steps-value v steps path)
+    (define (entries->champ entries)
+      (expr-champ
+       (for/fold ([acc champ-empty]) ([e (in-list entries)])
+         (let ([kw (kw-of (car e))])
+           (champ-insert acc (equal-hash-code kw) kw (cdr e))))))
+    ;; D4.P3b — one branch's entries at the CURRENT level, mirroring
+    ;; typing-core's select-branch-entries over champs (the same shared
+    ;; syntax.rkt walk classifies steps, so meaning cannot drift from the
+    ;; parser's Q_T3 check). Duplicates were excluded at the parser, so
+    ;; champ-insert is never asked to last-win; a miss or non-map
+    ;; mid-descent is an INVARIANT VIOLATION — panic, never fabricate.
+    ;; `seen` mirrors typing-core's select-branch-entries: the branch steps
+    ;; consumed above this recursion, so `^_`'s Reading-N label synthesizes
+    ;; over the FULL branch via the SHARED select-synth-name walk; resets at
+    ;; a `.{…}` sub-block (branch-of-its-block scope).
+    (define (branch-entries c b seen)
+      (let ([col (select-branch-collapse b)])
+        (if col
+            ;; the `^-` family (Q_T7): flatten the whole branch — one entry
+            (let walk ([steps b] [c c])
+              (let* ([s (car steps)]
+                     [name (select-step-name s)]
+                     [hit (project c name)])
+                (if (null? (cdr steps))
+                    (list (cons (cond [(select-cont-rename col)]
+                                      [(eq? col 'collapse-synth)
+                                       (select-synth-name (append seen b))]
+                                      [else name])
+                                hit))
+                    (walk (cdr steps) (champ-of hit name)))))
+            (let* ([s (car b)]
+                   [rest (cdr b)]
+                   [name (select-step-name s)]
+                   [cont (select-step-cont s)]
+                   [hit (project c name)])
+              (cond
+                [(null? rest)
+                 ;; LEAF: kept · renamed IN PLACE (Q_T4b) · synth (Q_T4b′).
+                 ;; A dissolve leaf (keyless) is refused at the parser (P3c).
+                 (list (cons (cond [(and cont (select-cont-rename cont))]
+                                   [(eq? cont 'synth)
+                                    (select-synth-name (append seen (list s)))]
+                                   [else name])
+                             hit))]
+                [else
+                 (let ([below (below-entries (champ-of hit name) rest
+                                             (append seen (list s)))])
+                   (if (eq? cont 'dissolve)
+                       below  ;; splice: only dissolve removes a level
+                       (list (cons (or (and cont (select-cont-rename cont)) name)
+                                   (entries->champ below)))))])))))
+    ;; the entries BELOW a head: terminal sub-block assembles that block's
+    ;; level (fresh branches — `seen` resets); otherwise the remaining steps
+    ;; continue as a single branch.
+    ;; D4.P3a verify hardening carried: a sub-block is TERMINAL — the parser
+    ;; refuses trailing segments; enforce for constructed IR too.
+    (define (below-entries c steps seen)
       (cond
-        [(null? steps) v]
         [(and (pair? (car steps)) (eq? (car (car steps)) '@sub))
-         ;; terminal sub-block: recurse over the narrowed value.
-         ;; D4.P3a verify hardening: the grammar makes a sub-block TERMINAL
-         ;; (the parser refuses trailing segments) — enforce it here too
-         ;; rather than silently discarding constructed-IR trailing steps
-         ;; (the "comment asserting an invariant nothing enforces" red flag).
          (if (null? (cdr steps))
-             (expr-champ (assemble (champ-of v path) (cdr (car steps))))
+             (append-map (lambda (b) (branch-entries c b '())) (cdr (car steps)))
              (return (expr-panic
                       (expr-string
                        "select: internal — steps after a terminal sub-block (the parser grammar forbids this shape)"))))]
-        [else
-         ;; nominal descent: keep the traversed key (projection nesting)
-         (let* ([k (car steps)]
-                [kw (kw-of k)]
-                [inner (champ-of v path)]
-                [hit (project inner k)])
-           (expr-champ
-            (champ-insert champ-empty (equal-hash-code kw) kw
-                          (steps-value hit (cdr steps) k))))]))
-    (expr-champ (assemble (champ-of subj-expr "the subject") branches))))
+        [else (branch-entries c steps seen)]))
+    (entries->champ
+     (append-map (lambda (b) (branch-entries (champ-of subj-expr "the subject") b '()))
+                 branches))))
 
 (define (validate-tabulate sname closed? plan subj-champ names)
   (define c (expr-champ-racket-champ subj-champ))

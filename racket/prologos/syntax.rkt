@@ -11,7 +11,9 @@
 ;;;
 
 (require "prelude.rkt"
-         racket/generic)  ;; PM 8F Phase 1: gen:equal+hash for expr-meta
+         racket/generic   ;; PM 8F Phase 1: gen:equal+hash for expr-meta
+         (only-in racket/string string-join)   ;; D4.P3b select-synth-name
+         (only-in racket/list append-map))     ;; D4.P3b select-branch-top-keys
 
 ;; ========================================
 ;; SRE Track 2 Phase 0: O(1) Constructor Tag Dispatch
@@ -166,8 +168,11 @@
  ;; Anonymous structural record / tuple type (CIU T6 F1; internal-only — inferred, not parsed)
  (struct-out expr-Record) (struct-out record-field)
  (struct-out expr-validate) validate-map-exprs
- ;; Path Selection block node (CIU T6 D4.P3a)
+ ;; Path Selection block node (CIU T6 D4.P3a; step vocabulary D4.P3b)
  (struct-out expr-select) select-map-exprs
+ select-key-step? select-sub-step? select-step-name select-step-cont
+ select-cont-collapse? select-cont-rename select-branch-collapse
+ select-step-output-name select-synth-name select-branch-top-keys
  record-map-field-types make-record record-extend record-lookup-field record-remove
  closed-nat-row? closed-keyword-row? record-mark-all-unknown
  ;; Map (persistent hash map)
@@ -772,6 +777,104 @@
 (define (select-map-exprs proc v)
   (expr-select (proc (expr-select-subject v))
                (expr-select-branches v)))
+
+;; ============================================================
+;; D4.P3b — the `^` step vocabulary + the ONE shared branch walk
+;; ============================================================
+;; A step is now:
+;;   symbol                          plain kept descent (key preserved)
+;;   (list '@key name cont)          `^`-bearing segment
+;;   (cons '@sub (listof branch))    terminal sub-block  `.{…}`
+;; cont ::= 'dissolve                        k^   mid-path: splice a level up
+;;        | (cons 'rename k')                k^k' rename IN PLACE (Q_T4b)
+;;        | 'synth                           k^_  Reading N (Q_T4b′) — leaf
+;;        | 'collapse                        k^-  flatten branch, keep leaf key
+;;        | (cons 'collapse-rename k')       k^-k'                     (Q_T7)
+;;        | 'collapse-synth                  k^-_  flat provenance      (Q_T7)
+;; `^..` (Q_T8) never reaches the node — the parser desugars it at
+;; segmentation to the owner-ruled equivalence [P^ . L^P].
+;;
+;; These helpers are the ONE walk over the vocabulary: the parser's Q_T3
+;; OUTPUT-level duplicate check, typing-core's select-project and
+;; reduction's select-reduce all consume them, so output-key computation
+;; cannot drift between the check and the semantics (the infer/inferQ-twin
+;; lesson applied to check+meaning).
+
+(define (select-key-step? s) (and (pair? s) (eq? (car s) '@key)))
+(define (select-sub-step? s) (and (pair? s) (eq? (car s) '@sub)))
+(define (select-step-name s) (if (select-key-step? s) (cadr s) s))
+(define (select-step-cont s) (and (select-key-step? s) (caddr s)))
+
+(define (select-cont-collapse? c)
+  (or (eq? c 'collapse) (eq? c 'collapse-synth)
+      (and (pair? c) (eq? (car c) 'collapse-rename))))
+
+;; the rename target carried by a (collapse-)rename cont, else #f
+(define (select-cont-rename c)
+  (and (pair? c) (memq (car c) '(rename collapse-rename)) (cdr c)))
+
+;; the branch's LEAF collapse continuation, or #f (the `^-` family flattens
+;; the WHOLE branch, so its walk is a pre-classified special case)
+(define (select-branch-collapse b)
+  (let ([s (car (reverse b))])
+    (and (select-key-step? s)
+         (let ([c (select-step-cont s)])
+           (and (select-cont-collapse? c) c)))))
+
+;; A step's contribution to the surviving OUTPUT-name path: kept → its name;
+;; renamed → the new label; dissolved → none ("dropped means dropped");
+;; synth/collapse leaves → their SOURCE name (they have no other).
+(define (select-step-output-name s)
+  (cond
+    [(symbol? s) s]
+    [(select-sub-step? s) #f]
+    [(select-key-step? s)
+     (let ([c (select-step-cont s)])
+       (cond
+         [(eq? c 'dissolve) #f]
+         [(select-cont-rename c) => values]
+         [else (cadr s)]))]
+    [else #f]))
+
+;; Reading N (Q_T4b′) + `^-_` flat provenance (Q_T7): join the surviving
+;; output names with `-`. Scope = the branch of the block the leaf sits in.
+(define (select-synth-name steps)
+  (string->symbol
+   (string-join
+    (map symbol->string (filter values (map select-step-output-name steps)))
+    "-")))
+
+;; The output keys a branch contributes AT ITS BLOCK'S LEVEL — a dissolved
+;; head splices its continuation's keys (Q_T3: "level-local" means OUTPUT
+;; level, after splicing). Fully static at this slice; the parser's
+;; duplicate check runs on these, strictly BEFORE any make-record could
+;; last-win.
+(define (select-branch-top-keys b)
+  (let ([col (select-branch-collapse b)])
+    (cond
+      [col
+       (list (cond
+               [(select-cont-rename col)]
+               [(eq? col 'collapse-synth) (select-synth-name b)]
+               [else (select-step-name (car (reverse b)))]))]
+      [else
+       (let ([s (car b)] [rest (cdr b)])
+         (cond
+           [(symbol? s) (list s)]
+           [(select-sub-step? s) (append-map select-branch-top-keys (cdr s))]
+           [(select-key-step? s)
+            (let ([c (select-step-cont s)])
+              (cond
+                [(eq? c 'dissolve)
+                 (cond
+                   [(null? rest) '()] ;; keyless leaf — refused upstream (P3c)
+                   [(and (select-sub-step? (car rest)) (null? (cdr rest)))
+                    (append-map select-branch-top-keys (cdr (car rest)))]
+                   [else (select-branch-top-keys rest)])]
+                [(select-cont-rename c) => list]
+                [(eq? c 'synth) (list (select-synth-name b))]
+                [else (list (cadr s))]))]
+           [else '()]))])))
 
 ;; SMART CONSTRUCTOR (D6 §4.1): the ONLY row producer. Dedups labels right-priority
 ;; (later entries win — Clojure/D10 assoc overwrite) and re-canonicalizes the field order

@@ -14,7 +14,13 @@
          "errors.rkt"
          "sexp-readtable.rkt"
          "macros.rkt"
-         "global-env.rkt")
+         "global-env.rkt"
+         ;; D4.P3b: the shared select branch-walk helpers (the Q_T3
+         ;; output-level duplicate check consumes the SAME walk as typing +
+         ;; reduction, so check and meaning cannot drift)
+         (only-in "syntax.rkt"
+                  select-key-step? select-sub-step? select-step-cont
+                  select-cont-collapse? select-branch-top-keys))
 
 (provide parse-datum
          parse-toplevel-datum  ;; Rel T1 POL.9: command-position paren-goal dispatch
@@ -786,6 +792,14 @@
      (parse-error loc (format "`#:~a` / `#.:~a` was retired — nil-safe field access is spelled `#.~a`" f f f) #f)]
     [(broadcast)
      (parse-error loc (format "broadcast `.*~a` was retired — its replacement `:~a` arrives with Path Selection P4; until then spell it `[map [fn [m] m.~a] xs]`" f f f) #f)]
+    ;; D4.P3b (Q_T4a): `^` after an ordinal, ALL spellings (`x.0^`, `x[0]^`,
+    ;; and the in-block shatter) — ONE guided message. An ordinal returns the
+    ;; value at an index, not a key-value; non-local attachment breaks
+    ;; composition (owner ruling). The macros-side shape-scan emits this kind
+    ;; for the top-level datum shapes; the segmentation seat emits the same
+    ;; message text directly for the in-block shapes.
+    [(ordinal-rekey)
+     (parse-error loc ordinal-rekey-message #f)]
     [(postfix-kw)
      (parse-error loc (format "keyword index `[:~a]` was retired — spell the field `m.~a` or use `[get m :~a]`" f f f) #f)]
     [(postfix-empty)
@@ -801,25 +815,78 @@
      (parse-error loc "this selection form was retired (CIU T6 Path Selection) — see the migration note for its replacement spelling" #f)]))
 
 ;; ============================================================
-;; CIU T6 D4.P3a — select-payload segmentation (the parser seat)
+;; CIU T6 D4.P3a/P3b — select-payload segmentation (the parser seat)
 ;; ============================================================
 ;; items arrive RAW from the preparse-opaque `$select` head: a plain SYMBOL
 ;; opens a branch; `($dot-access k)` attaches a descent key; `($dot-brace …)`
-;; attaches a TERMINAL sub-block (recursing); everything else is the
-;; malformed-payload seat. After segmentation each LEVEL is duplicate-checked
-;; (output keys are fully syntactic at this slice — Q_T3's output-level frame;
-;; the check runs here, strictly BEFORE any make-record could last-win).
+;; attaches a TERMINAL sub-block (recursing); `^`-bearing lexemes route
+;; through THE ONE SPLITTER (D4.P3b); everything else is the
+;; malformed-payload seat. After segmentation, branch-close validation
+;; enforces positional `^` legality, then each LEVEL is duplicate-checked
+;; over OUTPUT keys after `^`-splicing (Q_T3 — the check runs here,
+;; strictly BEFORE any make-record could last-win).
 ;; Returns (values branches #f) or (values #f parse-error).
+
+;; Q_T4a's ONE message, all spellings (`x.0^` · `x[0]^` · the in-block
+;; shatter). Also emitted via the `ordinal-rekey` marker kind for the
+;; top-level datum shapes (macros-side shape-scan).
+(define ordinal-rekey-message
+  "an ordinal has no key — `^` re-keys a NAMED segment; rename the nominal segment instead and then descend (e.g. `admins^first.0`)")
+
+(define caret-needs-segment-message
+  "a `^` operates on the segment to its LEFT — write `k^label` (rename), `k^_` (synth), or mid-path `k^` (dissolve), with no space before the `^`")
+
+;; D4.P3b — THE ONE SPLITTER (Q_M7: nothing liftable — `split-fused-symbol`
+;; splits on `:`, and the sexp-side splitter keeps empty segments, the
+;; F1b.7g class). Continuation grammar: `-`?·{ε | label | `_`} — after `^`
+;; a leading `-` is the COLLAPSE marker (Q_T7; eyes-open cost: a rename
+;; target may not begin with `-`).
+;; Returns (values name cont) on success, (values #f error-message) on a
+;; malformed lexeme.
+(define (split-caret-lexeme s)
+  (define str (symbol->string s))
+  (define carets (for/sum ([c (in-string str)] #:when (char=? c #\^)) 1))
+  (define i (for/first ([c (in-string str)] [j (in-naturals)]
+                        #:when (char=? c #\^))
+              j))
+  (cond
+    [(> carets 1)
+     (values #f (format "`~a` — one `^` per segment; the continuation after `^` is a plain label, `_`, or empty" str))]
+    [(zero? i) (values #f caret-needs-segment-message)]
+    [else
+     (let ([name (string->symbol (substring str 0 i))]
+           [k (substring str (add1 i))])
+       (cond
+         [(string=? k "")   (values name 'dissolve)]
+         [(string=? k "_")  (values name 'synth)]
+         [(string=? k "-")  (values name 'collapse)]
+         [(string=? k "-_") (values name 'collapse-synth)]
+         [(and (>= (string-length k) 2)
+               (char=? (string-ref k 0) #\-) (char=? (string-ref k 1) #\-))
+          (values #f (format "`~a` — a rename target may not begin with `-` (after `^` a leading `-` is the collapse marker)" str))]
+         ;; P3b verify (finding 10): a digit-leading target would mint a
+         ;; field the dot surface cannot reach (`r.0` is ordinal access) —
+         ;; refuse rather than accept-with-degraded-reachability.
+         [(and (char=? (string-ref k 0) #\-)
+               (> (string-length k) 1)
+               (char<=? #\0 (string-ref k 1) #\9))
+          (values #f (format "`~a` — a rename target may not begin with a digit (`.N` is ordinal access; the renamed field would be unreachable)" str))]
+         [(char=? (string-ref k 0) #\-)
+          (values name (cons 'collapse-rename (string->symbol (substring k 1))))]
+         [(char=? (string-ref k 0) #\:)
+          (values #f (format "`~a` — a rename target is a bare label, not a keyword (write `^~a`)" str (substring k 1)))]
+         [(char<=? #\0 (string-ref k 0) #\9)
+          (values #f (format "`~a` — a rename target may not begin with a digit (`.N` is ordinal access; the renamed field would be unreachable)" str))]
+         [else (values name (cons 'rename (string->symbol k)))]))]))
+
 (define (segment-select-items items loc [sub? #f])
   (define (kw-sym? s)
     (and (symbol? s)
          (let ([str (symbol->string s)])
            (and (> (string-length str) 0) (char=? (string-ref str 0) #\:)))))
-  ;; D4.P3a adversarial verify: `^`-bearing lexemes are the P3b RE-KEY family —
-  ;; without this gate they passed plain-key? and produced FABRICATED
-  ;; field-miss diagnostics (`field :version^ is not present …`) on exactly
-  ;; the spellings the duplicate message directs users toward. Symmetric to
-  ;; the ordinal arm's P3c pointer: refuse, name the phase, monotone.
+  ;; `^`-bearing lexemes are the re-key family — routed to the splitter
+  ;; (P3a's refuse-and-point gate was this predicate's first duty; the
+  ;; splitter is its demolition, per the phase plan).
   (define (re-key-sym? s)
     (and (symbol? s) (regexp-match? #rx"\\^" (symbol->string s))))
   (define (plain-key? s)
@@ -829,12 +896,49 @@
                 (not (char=? (string-ref str 0) #\$))))))
   (define (fail msg) (values #f (parse-error loc msg #f)))
   (define (head-of tagged) (and (pair? tagged) (symbol? (car tagged)) (car tagged)))
-  ;; per-level duplicate check (strict waypoint): first duplicate head label
-  (define (dup-label branches)
-    (let loop ([bs branches] [seen '()])
-      (cond [(null? bs) #f]
-            [(memq (caar bs) seen) (caar bs)]
-            [else (loop (cdr bs) (cons (caar bs) seen))])))
+  ;; `^`-ish item: the bare `^` symbol or a `^`-leading lexeme (the ordinal
+  ;; shatter shapes put the caret in a SEPARATE item — probe-measured).
+  (define (caret-ish? x)
+    (or (eq? x '^)
+        (and (symbol? x)
+             (let ([s (symbol->string x)])
+               (and (> (string-length s) 0) (char=? (string-ref s 0) #\^))))))
+  (define (dissolve-step? s)
+    (and (select-key-step? s) (eq? (select-step-cont s) 'dissolve)))
+  ;; ---- P3b branch-close validation: positional legality of `^` conts ----
+  ;; br in ORDER (head first). #f = ok, else the error message.
+  (define (branch-problem br)
+    (let check ([steps br])
+      (if (null? steps)
+          #f
+          (let* ([s (car steps)] [last? (null? (cdr steps))]
+                 [c (select-step-cont s)])
+            (cond
+              [(and (eq? c 'synth) (not last?))
+               "`^_` synthesizes the leaf key from the surviving path — it attaches to the branch's LAST segment"]
+              [(and c (select-cont-collapse? c) (not last?))
+               "the `^-` collapse family ends a branch — it is a LEAF continuation"]
+              [(and (eq? c 'dissolve) last?)
+               ;; the P3b/P3c boundary: bare leaf `^` is the KEYLESS sort —
+               ;; the tuple carrier does not exist until P3c. Parsed, refused.
+               "keyless selection — a leaf `^` drops the key and assembles a tuple, which lands at Path Selection P3c; a keyed block keeps or renames keys (`^k'`, `^_`)"]
+              [else (check (cdr steps))])))))
+  ;; ---- Q_T3: OUTPUT-level duplicate check, after `^`-splicing ----
+  ;; select-branch-top-keys is the SHARED walk (syntax.rkt) — the same
+  ;; computation typing + reduction use, so check and meaning cannot drift.
+  (define (dup-output-key branches)
+    (let dloop ([ks (append-map select-branch-top-keys branches)] [seen '()])
+      (cond [(null? ks) #f]
+            [(memq (car ks) seen) (car ks)]
+            [else (dloop (cdr ks) (cons (car ks) seen))])))
+  ;; split a `^` lexeme and continue with the minted step
+  (define (split-step lexeme k)
+    (let-values ([(name cont) (split-caret-lexeme lexeme)])
+      (cond
+        [(not name) (fail cont)]
+        [(not (plain-key? name))
+         (fail (format "`~a` — the segment before `^` must be a plain field name" lexeme))]
+        [else (k (list '@key name cont))])))
   (let loop ([items items] [cur #f] [cur-subbed? #f] [acc '()])
     (define (closed-acc) (if cur (cons (reverse cur) acc) acc))
     (if (null? items)
@@ -844,20 +948,86 @@
              (fail (if sub?
                        "empty sub-block — `.{}` selects nothing; name the fields to keep (e.g. `server.{host port}`)"
                        "empty selection — `x{}` selects nothing (`{}` alone is the empty map literal)"))]
-            [(dup-label branches)
+            [(ormap branch-problem branches) => fail]
+            [(dup-output-key branches)
+             ;; P3b verify (finding 8): `^_` was dropped from this remedy
+             ;; list — in both canonical dup classes the synthesized key
+             ;; REPRODUCES the collision (dissolved ancestry ⇒ synth = the
+             ;; colliding leaf name, Q_T4b′), the advice-that-does-not-work
+             ;; class. `^k'` and sub-block grouping are probe-verified live.
              => (lambda (l)
-                  (fail (format "duplicate output key :~a in the select block — distinct output keys are required (strict merge); rename a branch with `^k'` or synthesize a key with `^_` (Path Selection P3b), or group same-head branches into one sub-block (`x{k.{a b}}`)" l)))]
+                  (fail (format "duplicate output key :~a in the select block — distinct output keys are required (strict merge); rename a branch with `^k'`, or group same-head branches into one sub-block (`x{k.{a b}}`)" l)))]
             [else (values branches #f)]))
         (let ([it (car items)])
           (cond
+            ;; ---- Q_T4a: ordinal-`^`, the in-block datum shapes. These arms
+            ;; sit AHEAD of the stray-`.` and ordinal arms — the shatter
+            ;; shapes (`admins |.| 0 ^ first`, `($postfix-index 0) ^`) would
+            ;; otherwise take those arms' unrelated messages.
+            [(and (eq? it '|.|) (pair? (cdr items)) (number? (cadr items))
+                  (pair? (cddr items)) (caret-ish? (caddr items)))
+             (fail ordinal-rekey-message)]
+            [(and (eq? (head-of it) '$postfix-index)
+                  (pair? (cdr items)) (caret-ish? (cadr items)))
+             (fail ordinal-rekey-message)]
+            ;; ---- Q_T8: `^..` — TWO bare `|.|` after a dissolve-leaf.
+            ;; Desugared here to the owner-ruled equivalence P.L^.. ≡ P^.L^P
+            ;; (ancestors above the parent are kept), so the node vocabulary
+            ;; never carries a parent-collapse continuation.
+            [(and (eq? it '|.|) (pair? (cdr items))
+                  ;; P3b verify (finding 5): the SECOND dot may arrive FUSED —
+                  ;; `^..enabled` reads [seg^ |.| ($dot-access enabled)] and
+                  ;; `^..{…}` reads [seg^ |.| ($dot-brace …)]. Accept bare
+                  ;; `|.|` (pure `^..`) or a fused continuation (desugar,
+                  ;; then let the normal arms consume the continuation) —
+                  ;; the spaced and fused spellings must agree.
+                  (let ([n (cadr items)])
+                    (or (eq? n '|.|)
+                        (memq (head-of n) '($dot-access $dot-brace))))
+                  cur (dissolve-step? (car cur)))
+             (let ([leaf (car cur)] [above (cdr cur)])
+               (cond
+                 [(null? above)
+                  (fail "`^..` collapses the leaf to its PARENT key — this branch has no parent segment (for a plain rename use `^k'`)")]
+                 [(not (symbol? (car above)))
+                  (fail "`^..` needs a plain KEPT parent segment — spell the reshape explicitly with `^` (dissolve) and `^k'` (rename)")]
+                 [else
+                  (let* ([parent (car above)]
+                         [cur* (cons (list '@key (cadr leaf) (cons 'rename parent))
+                                     (cons (list '@key parent 'dissolve) (cdr above)))])
+                    (if (eq? (cadr items) '|.|)
+                        (loop (cddr items) cur* #f acc)          ;; bare: consume both dots
+                        (loop (cdr items) cur* #f acc)))]))]     ;; fused: keep the continuation item
+            ;; `^.`-near-miss (finding 5's tail, widened per finding 14): a
+            ;; bare `|.|` directly after ANY `^`-bearing step that is not a
+            ;; `^..` shape — `a.b^.` trailing, `a.b^s..` (renamed leaf + dots).
+            ;; A continuation dot would have FUSED (`.c` → ($dot-access c)),
+            ;; so this is the near-miss class; the generic stray-`.` advice
+            ;; ("write the path with no spaces") would be FALSE here.
+            [(and (eq? it '|.|) cur (select-key-step? (car cur)))
+             (fail "a bare `.` cannot follow a `^` continuation — parent-key collapse attaches to the plain leaf as `k^..`")]
+            ;; ---- a lone `^` item (incl. spaced `^ b`)
+            [(eq? it '^) (fail caret-needs-segment-message)]
+            ;; `.^b` class (finding 14): a caret right after a dot — the `^`
+            ;; belongs to the segment on the dot's LEFT, written glued.
+            [(and (eq? it '|.|) (pair? (cdr items)) (caret-ish? (cadr items)))
+             (fail caret-needs-segment-message)]
+            ;; in-block head-position ordinal + `^` (finding 12): `{0^first}`
+            ;; must take the ONE Q_T4a message, not the P3c branch pointer.
+            [(and (number? it) (pair? (cdr items)) (caret-ish? (cadr items)))
+             (fail ordinal-rekey-message)]
+            ;; ---- `^`-bearing branch head → the splitter
             [(re-key-sym? it)
-             (fail (format "`~a` — the `^` re-key family (`k^` dissolve · `^k'` rename · `^_` synth · `^-` collapse · `^..` parent-key) lands at Path Selection P3b; a P3a block selects plain named fields" it))]
+             (split-step it (lambda (step)
+                              (loop (cdr items) (list step) #f (closed-acc))))]
             [(plain-key? it)
              (loop (cdr items) (list it) #f (closed-acc))]
             [(and (eq? (head-of it) '$dot-access) cur cur-subbed?)
              (fail "a segment cannot follow a `.{…}` sub-block — the sub-block is a branch's terminal step")]
+            ;; ---- `^`-bearing descent payload → the splitter
             [(and (eq? (head-of it) '$dot-access) cur (re-key-sym? (cadr it)))
-             (fail (format "`.~a` — the `^` re-key family lands at Path Selection P3b; a P3a block selects plain named fields" (cadr it)))]
+             (split-step (cadr it) (lambda (step)
+                                     (loop (cdr items) (cons step cur) #f acc)))]
             [(and (eq? (head-of it) '$dot-access) cur)
              (loop (cdr items) (cons (cadr it) cur) #f acc)]
             [(eq? (head-of it) '$dot-access)
@@ -872,11 +1042,18 @@
                        (values #f suberr)
                        (loop (cdr items) (cons (cons '@sub subs) cur) #t acc))))]
             [(eq? (head-of it) '$select-brace)
-             (fail (format "inside a select block, narrow with `.{…}` — write `~a.{…}`, not `~a{…}`"
-                           (if (and cur (symbol? (car (reverse cur)))) (car (reverse cur)) "field")
-                           (if (and cur (symbol? (car (reverse cur)))) (car (reverse cur)) "field")))]
+             ;; P3b verify (finding 14): recover the head name through @key
+             ;; steps too — `server^{x}` must name `server`, not "field".
+             (let* ([head-step (and cur (car (reverse cur)))]
+                    [nm (cond [(symbol? head-step) head-step]
+                              [(select-key-step? head-step) (cadr head-step)]
+                              [else "field"])])
+               (fail (format "inside a select block, narrow with `.{…}` — write `~a.{…}`, not `~a{…}`" nm nm)))]
             [(eq? (head-of it) '$postfix-index)
-             (fail (format "ordinal segment `.~a` inside a select block is not yet supported — extract with `x.k.~a` outside the block" (cadr it) (cadr it)))]
+             ;; P3b verify (finding 7): name the PHASE — the Q_T4a guided
+             ;; error's worked example (`admins^first.0`) lands on this arm
+             ;; until P3c, so this message is the loop-closer.
+             (fail (format "ordinal segment `.~a` inside a select block lands at Path Selection P3c — until then extract with `x.k.~a` outside the block" (cadr it) (cadr it)))]
             [(number? it)
              (fail "ordinal branches `x{N M}` land with keyless selection (Path Selection P3c) — for one element use `x.N`")]
             [(kw-sym? it)
@@ -884,8 +1061,12 @@
                            (substring (symbol->string it) 1) it))]
             [(eq? it '|.|)
              (fail "stray `.` in a select block — write the path with no spaces (`server.host`)")]
-            [(eq? it '$rest)
-             (fail "`...` is not valid in a select block")]
+            [(or (eq? it '$rest) (eq? (head-of it) '$rest-param))
+             ;; Q_T8 edge: `k^...` absorbs the dots into `$rest`, and
+             ;; `k^...label` into `($rest-param label)` (finding 6 — the
+             ;; tagged shape leaked the internal sentinel verbatim). Reject
+             ;; both, naming the intended spelling.
+             (fail "`...` is not valid in a select block (parent-key collapse is spelled `k^..`)")]
             [else
              ;; ~s, not ~a: a string item must display as \"s\" — the bare form
              ;; is indistinguishable from the valid field-name spelling.

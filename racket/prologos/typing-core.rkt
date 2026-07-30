@@ -644,56 +644,143 @@
 ;; `path` = the label trail to the failure (for branch-aware messages).
 (struct select-fail (kind path label row) #:transparent)
 
-(define (select-project ctx tm branches [path '()])
+;; Subject-kind dispatch shared by every descent level. Returns
+;; (values keyword-row-or-#f fail-or-#f). tm arrives whnf'd.
+;; D4.P3a adversarial verify (TWO skeptics convergent): a SCHEMA-typed
+;; subject projects THROUGH the seal — schema fields are all-'present by
+;; construction (schema->row), the strongest source Horn D recognizes.
+;; SELECTION-typed subjects stay refused at this slice — a selection is a
+;; capability-restricted VIEW (F1b.5-s4 :requires), and projecting through
+;; one without the read-capability check would bypass it (DEFERRED 20).
+(define (select-row-of ctx tm path)
   (cond
-    ;; D4.P3a adversarial verify (TWO skeptics convergent): a SCHEMA-typed
-    ;; subject projects THROUGH the seal — schema fields are all-'present by
-    ;; construction (schema->row), the strongest source Horn D recognizes.
-    ;; Without this leg the refusal messages' own "seal the subject" remedy
-    ;; led into a wrong-kinded 'subject-other refusal (the dot-access arm has
-    ;; carried the same leg since F1). SELECTION-typed subjects stay refused
-    ;; at this slice — a selection is a capability-restricted VIEW
-    ;; (F1b.5-s4 :requires), and projecting through one without the
-    ;; read-capability check would bypass it.
     [(and (expr-fvar? tm) (lookup-schema-by-name (expr-fvar-name tm)))
-     => (lambda (entry) (select-project ctx (schema->row entry) branches path))]
+     => (lambda (entry) (values (schema->row entry) #f))]
     [(expr-Map? tm) (values #f (select-fail 'subject-map path #f tm))]
     [(and (expr-Record? tm) (eq? (expr-Record-key-domain tm) 'nat))
      (values #f (select-fail 'subject-tuple path #f tm))]
     [(not (expr-Record? tm)) (values #f (select-fail 'subject-other path #f tm))]
-    [else
-     (let loop ([bs branches] [fields '()])
-       (if (null? bs)
-           (values (make-record 'keyword (reverse fields) 'closed) #f)
-           (let* ([b (car bs)]
-                  [label (car b)]
-                  [steps (cdr b)]
-                  [fld (record-lookup-field tm label)])
-             (cond
-               [(and fld (eq? (record-field-presence fld) 'present))
-                (let-values ([(vt vf) (select-steps-type ctx (record-field-type fld)
-                                                         steps (append path (list label)))])
-                  (if vf
-                      (values #f vf)
-                      (loop (cdr bs)
-                            (cons (cons label (record-field vt 'present)) fields))))]
-               [fld  ;; listed, but presence not sourced 'present ('unknown; reserved marks)
-                (values #f (select-fail 'unknown-presence (append path (list label)) label tm))]
-               [(eq? (expr-Record-tail tm) 'dyn)
-                (values #f (select-fail 'miss-dyn (append path (list label)) label tm))]
-               [else
-                (values #f (select-fail 'miss-closed (append path (list label)) label tm))]))))]))
+    [else (values tm #f)]))
 
-;; The type contributed BELOW a selected head of type ft. A nominal descent
-;; `k` is exactly a one-branch nested select — projection nesting falls out
-;; of the recursion (traversed nominal keys are kept, spec §1.2).
-(define (select-steps-type ctx ft steps path)
-  (cond
-    [(null? steps) (values ft #f)]
-    [(and (pair? (car steps)) (eq? (car (car steps)) '@sub))
-     (select-project ctx (whnf ft) (cdr (car steps)) path)]
-    [else
-     (select-project ctx (whnf ft) (list steps) path)]))
+;; Horn D per level: the field's presence must be SOURCED 'present.
+(define (select-project-field ctx row label path)
+  (let ([fld (record-lookup-field row label)])
+    (cond
+      [(and fld (eq? (record-field-presence fld) 'present))
+       (values (record-field-type fld) #f)]
+      [fld  ;; listed, but presence not sourced 'present ('unknown; reserved)
+       (values #f (select-fail 'unknown-presence (append path (list label)) label row))]
+      [(eq? (expr-Record-tail row) 'dyn)
+       (values #f (select-fail 'miss-dyn (append path (list label)) label row))]
+      [else
+       (values #f (select-fail 'miss-closed (append path (list label)) label row))])))
+
+(define (select-project ctx tm branches [path '()])
+  (let-values ([(row rf) (select-row-of ctx tm path)])
+    (if rf
+        (values #f rf)
+        (let-values ([(entries ef) (select-level-entries ctx row branches path)])
+          (if ef
+              (values #f ef)
+              (values (make-record 'keyword entries 'closed) #f))))))
+
+;; One output LEVEL: every branch contributes its entries (a dissolved head
+;; splices >1 — Q_T3's output-level frame). Duplicates were excluded at the
+;; parser's shared-walk check, so plain append assembles safely.
+(define (select-level-entries ctx row branches path)
+  (let loop ([bs branches] [entries '()])
+    (if (null? bs)
+        (values (reverse entries) #f)
+        (let-values ([(es bf) (select-branch-entries ctx row (car bs) path '())])
+          (if bf
+              (values #f bf)
+              (loop (cdr bs) (append (reverse es) entries)))))))
+
+;; D4.P3b — one branch's entries at the CURRENT level, as
+;; (values (listof (label . record-field)) fail-or-#f).
+;; The `^-` collapse family flattens the WHOLE branch (Q_T7), so it is
+;; pre-classified: project through every segment to the leaf, one flat entry.
+;; Otherwise: kept/renamed heads contribute ONE entry (nesting below);
+;; a dissolved head SPLICES its continuation's entries (Q_T4b: only
+;; dissolve removes a level; rename is IN PLACE).
+;;
+;; `seen` = the steps this BRANCH has already consumed above the current
+;; recursion (the tail-branch recursion loses them otherwise) — `^_`'s
+;; Reading-N label is synthesized over (seen + leaf) via the SHARED
+;; select-synth-name walk, so `server.host^_` yields :server-host. Scope is
+;; the branch of the block the leaf sits in: `seen` resets at a `.{…}`
+;; sub-block (each sub-branch is its own branch).
+(define (select-branch-entries ctx row b path seen)
+  (let ([col (select-branch-collapse b)])
+    (if col
+        ;; collapse: walk to the leaf, checking presence at every level
+        ;; (never entered via tail-recursion — a collapse leaf is detected on
+        ;; the full branch — so b is complete and seen is not needed here)
+        (let walk ([steps b] [row row] [path path])
+          (let* ([s (car steps)]
+                 [name (select-step-name s)])
+            (let-values ([(ft ff) (select-project-field ctx row name path)])
+              (cond
+                [ff (values #f ff)]
+                [(null? (cdr steps))
+                 (let ([label (cond
+                                [(select-cont-rename col)]
+                                [(eq? col 'collapse-synth)
+                                 (select-synth-name (append seen b))]
+                                [else name])])
+                   (values (list (cons label (record-field ft 'present))) #f))]
+                [else
+                 (let*-values ([(ft*) (whnf ft)]
+                               [(inner rf) (select-row-of ctx ft* (append path (list name)))])
+                   (if rf
+                       (values #f rf)
+                       (walk (cdr steps) inner (append path (list name)))))]))))
+        (let* ([s (car b)]
+               [rest (cdr b)]
+               [name (select-step-name s)]
+               [cont (select-step-cont s)])
+          (let-values ([(ft ff) (select-project-field ctx row name path)])
+            (cond
+              [ff (values #f ff)]
+              [(null? rest)
+               ;; LEAF: kept (plain) · renamed in place · synth (Reading N).
+               ;; A dissolve leaf (keyless) is refused at the parser (P3c).
+               (let ([label (cond
+                              [(and cont (select-cont-rename cont))]
+                              [(eq? cont 'synth)
+                               (select-synth-name (append seen (list s)))]
+                              [else name])])
+                 (values (list (cons label (record-field ft 'present))) #f))]
+              [else
+               (let-values ([(below bf)
+                             (select-below-entries ctx (whnf ft) rest
+                                                   (append path (list name))
+                                                   (append seen (list s)))])
+                 (cond
+                   [bf (values #f bf)]
+                   [(eq? cont 'dissolve)
+                    ;; splice: the continuation's entries land at THIS level
+                    (values below #f)]
+                   [else
+                    (let ([label (or (and cont (select-cont-rename cont)) name)])
+                      (values (list (cons label
+                                          (record-field
+                                           (make-record 'keyword below 'closed)
+                                           'present)))
+                              #f))]))]))))))
+
+;; The entries contributed BELOW a selected head of type ft: a terminal
+;; `(@sub …)` assembles that block's level (fresh branches — `seen` resets);
+;; otherwise the remaining steps continue as a single branch. Projection
+;; nesting falls out of the recursion (traversed nominal keys are kept,
+;; spec §1.2).
+(define (select-below-entries ctx ft steps path seen)
+  (let-values ([(row rf) (select-row-of ctx ft path)])
+    (if rf
+        (values #f rf)
+        (if (and (select-sub-step? (car steps)) (null? (cdr steps)))
+            (select-level-entries ctx row (cdr (car steps)) path)
+            (select-branch-entries ctx row steps path seen)))))
 
 (define (record-value-bound ctx rec [src (dyn-row-source 'dyn-row-values)])
   (cond
