@@ -27,7 +27,9 @@ rulings, censuses and test delta live in its own section.
 | **P1b-ii** | **The `.{` opener** — `dot-lbrace` re-mint across **EIGHT** edit regions (not six) incl. the surviving `surface-rewrite.rkt:516` POSITIVE addition; plain `'rbrace` closer (Q_M5); new `$dot-brace` sentinel + `dot-brace-group` tag + tree-parser arm (Q_N1); the Q_N3 two-grouper agreement guard | ✅ | §5.P1b-ii · **`1a1091d4`** — suite **9279/474/0**, acceptance 28/28 + 89/89, corpus A/B **158 files / 1 intended diff**; adversarial verify caught a **BLOCKING regression I introduced** (`$dot-brace` missing from `pattern-var?` → whole-file abort in a defmacro template) — fixed + pinned pre-commit |
 | **P1b-iii** | **Brace adjacency + the head registry + Q_M8** — the forced `$select-brace` sentinel (Q_M6) · the `reader-forms.rkt` leaf registry · adjacency in BOTH groupers (Q_N7) · bucket 4 ruled SELECT (Q_N5) · the `:N` digit-run widening + the structural `fused-type-annot?` repair (Q_N4) · P1b-ii's residual CLOSED | ✅ | §5.P1b-iii · **`a6af2761`** — suite **9304/474/0**, acceptance 28/28 + 89/89, corpus A/B **158 files / ZERO diffs**; adversarial verify caught **3 BLOCKING** (one non-idempotent fold → a silently-dropped `defn` clause) + 10 SIGNIFICANT — all fixed or filed pre-commit |
 | **P2** | **Grade-1 core** — `.k`/`.N` access + bare-path extraction. Carries **Q_M8's dot half** (`digit+` at the dot). Ruled at the mini-audit: **`.N` REUSES `$postfix-index`** (Q_R1 — near-zero registrations, fixpoint inherited, `v[0]` ≡ `v.0` byte-identical) · **copy the `:N` trailing guard** (Q_R2) · **dot band stays adjacency-free** (Q_R3) · `m.0` moves out of the v2 block (Q_R4) · **the `.N` error surface IS IN SCOPE** (Q_R5) | ✅ | §5.P2 · **`3005170b`** — suite **9370/475/0**, acceptance **35/35** + 89/89, corpus A/B **158 files / ZERO diffs**; audit `wf_22020418-a5f` (**12th** consecutive premise refuted); doc-truth separately `0e5a56a3` (Q_R6); adversarial verify caught **a diagnostic REGRESSION I introduced** + 2 more, all fixed pre-commit; DEFERRED 9–13 |
-| **P3** | **Blocks** — `x{…}`, projection-by-default, `^` (3 continuations), L4 sort homogeneity, **HONEST NESTING (n-tuples at every n — ruled 2a)**, **STRICT merge** (the §3.6 waypoint) | ⬜ | §5.P3 · Q2 gate RESOLVED (2c: carrier order, thesis-derived) |
+| **P3a** | **The node + KEYED blocks, no `^`** — `surf-select`/`expr-select` (full pipeline.md cost paid once; twins; walkers via the generic fallback; NO PNET bump) · payload segmentation + the malformed-payload seat · **D-lenient presence** (Q_T2) · subject-once reduction · **strict merge for plain keys BEFORE `make-record` can last-win** · type-position refusal · branch-aware miss errors · §9's learnability pair | ⬜ | §5.P3a · opens the FRESH session, failing-test-first; the P3 audit (`wf_27a84061-c7e`) is its grounding |
+| **P3b** | **The `^` family** — the ONE splitter (continuation grammar `-`?·{ε\|label\|`_`} + `^..`) · dissolve/splice · in-place rename · `^_` Reading N · the `^-` collapse family (Q_T7) · `^..` (Q_T8) · **output-level-local merge** (Q_T3, the monotonicity pin) · the Q_T4a ordinal-`^` guided error · the malformed-`^` battery | ⬜ | §5.P3b · light mini-audit (coordinates only) |
+| **P3c** | **Keyless + L4 + honest nesting** — the nat-row mint at EVERY n (incl. 1 and homogeneous n) · ordinal branches `{N M}` · the L4 mixing error · `⟨String⟩` 1-tuple pins · the G11 one-space pair pinned side by side | ⬜ | §5.P3c · light mini-audit; DEPENDS on P3b's bare-`^` |
 | **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | ⬜ | §5.P4 · step-list node (4b) · per-field row-map (4c) |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | §5.P5 · L1–L5 law battery |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | §5.PX · position flexible |
@@ -652,7 +654,28 @@ in PROSE per the standing discipline; audit `wf_27a84061-c7e` fed them —
     carrier state no walker has ever seen; Horn C (presence-aware seal) is
     complementary to B, not an alternative to D, and is F1b-scope growth
     mid-phase. All refusals are MONOTONE (F-row/P6 can later relax them).
-- **Pending in this batch**: Q_T5 (slicing — the last).
+- **Q_T5 — P3 SPLITS THREE WAYS: P3a → P3b → P3c [owner, 2026-07-29 — "that
+  shape looks good to me"].** **P3a** = the node + keyed blocks, no `^` (the
+  full pipeline cost paid once; D-lenient presence from day one; strict merge
+  for plain keys BEFORE `make-record` can last-win; the malformed-payload
+  seat; the type-position refusal; §9's learnability pair). **P3b** = the `^`
+  family (the ONE splitter; five operators; the output-level-local merge
+  re-check with the Q_T3 monotonicity case as its named pin; the Q_T4a
+  ordinal-`^` guided error). **P3c** = keyless + L4 + honest nesting (the
+  nat-row mint at EVERY n; ordinal branches `{N M}`; the L4 mixing error; the
+  `⟨String⟩` pins; the G11 one-space pair). **Ordering is FORCED, not
+  chosen**: a→b because the splitter extends the payload parser and every `^`
+  semantic runs through the node's arms; b→c because both §B keyless corpus
+  lines use leaf-`^`, so tuples cannot ship before bare-`^` means something.
+  Rejected-with-reason: folding P3c into P3a puts the tuple mint ahead of the
+  bare-`^` semantics it depends on — the forward-reference-between-slices
+  shape that made P1b split three ways. **P3 needs ZERO tokenizer changes**
+  (every ruled spelling already lexes, probe-verified), so NO corpus A/B is
+  owed anywhere in the phase; gates = acceptance + targeted batteries + full
+  suite + the pre-commit adversarial verify (a BLOCKING catch in five
+  consecutive behavioural slices — load-bearing, not optional). P3b/P3c open
+  with LIGHT mini-audits (coordinate re-verification against `wf_27a84061-c7e`,
+  not full re-audits). **The Q_T batch is COMPLETE.**
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
@@ -2145,38 +2168,104 @@ RE-KEY** (`x.0^` declines while `x[0]^` lexes — the two spellings Q_R1 unified
 would diverge on exactly the character P3 introduces) · `reconstitute-path-list`'s
 `$dot-access`-only walk · the `tokenize-string` raise→token flip.
 
-### §5.P3 — Blocks
+### §5.P3 — Blocks  (CO-DESIGN COMPLETE 2026-07-29 — the Q_T batch; SPLIT P3a/P3b/P3c per Q_T5)
 
-> ⚠ **CO-DESIGN IN PROGRESS (2026-07-29)** — the §3 Q_T rulings govern where
-> they touch this section; the section rewrite lands with the Q_T1/Q_T2/Q_T5
-> adjudication. The audit (`wf_27a84061-c7e`) refuted this section's premise
-> that new nodes are needed for the KEYED half and confirmed the keyless half
-> cannot be desugared; §5.P3's four "design questions" are superseded by the
-> Q_T batch.
+**The §3 Q_T rulings govern this phase.** The mini-audit (`wf_27a84061-c7e`,
+7 facets + critic @ `76214095` — 13th consecutive premise refuted) fed a
+deliberative one-question-per-turn co-design with the owner; every ruling and
+its rationale is in the §3 ledger. This section is the IMPLEMENTATION shape.
 
-**Intent**: `x{…}` select block · projection-by-default · `^` three
-continuations (parser-side split) · L4 sort homogeneity (level-local) ·
-**STRICT merge** (the §3.6 monotone waypoint: ALL duplicate output keys
-error, remedies named in the message) · result typing: copattern demand
-against the coinductive record type; grades 1-only at this phase.
+**What the audit established** (all probe-verified, load-bearing for the
+slices): the KEYED result needs no new row machinery (an all-keyword map
+literal already mints the corpus's closed rows — but Route A was ruled anyway,
+on completed-architecture grounds, Q_T1); the KEYLESS sort CANNOT be desugared
+(`@[…]` collapses to PVec at EVERY homogeneous n, so both §B keyless lines are
+unreachable via literals); STRICT MERGE cannot be inherited (`make-record`
+silently last-wins — the check runs BEFORE minting); the P1a gate has a HOLE
+at `spec` (DEFERRED 14 — P3 ships its OWN type-position refusal); and NO
+tokenizer changes are needed (every ruled spelling already lexes), so NO
+corpus A/B is owed.
 
-**The Q2 gate is RESOLVED (ruling 2c)**: type rows canonical (landed),
-value order carrier-determined — derived from the key-sort thesis itself
-(nominal key order carries no meaning). Result-equality tests transcribe
-markers to champ order. **Honest nesting is RULED (2a)**: the block
-constructor mints nat-rows directly at every n including n = 1 — the literal
-arm's PVec collapse is irrelevant (selection never routes through it); the
-disclose operator is the designed unwrap remedy [owner].
+#### §5.P3a — The node + keyed blocks, no `^`  ⬜  ← the fresh session opens here
 
-**Design questions to settle in this section before code** (each gets a
-mini-audit): the block's parse representation (new surf/expr nodes — full
-pipeline.md cost, budgeted honestly this time: constructor sites compile
-CLEAN cross-module, discovery is patterns+runtime); where `^` splitting binds
-(POL.6 splitter at parse of block branches); L4's error seat; the honest-
-nesting 1-tuple display.
+**Work**: `surf-select` + `expr-select` per pipeline.md § New AST Node in
+FULL — struct + provides + `expr?` · `shift`/`subst` · zonk ×3 · `whnf`/`nf`
+(+ `whnf-trivial?` if stuck-classified) · `pp-expr` · **pnet-serialize
+REGISTRATION (no bump — §8 R6 as corrected)** · `infer`/`check` · **the
+`inferQ`/`checkQ` twins** (delegation model `cdb535ac`: TYPE delegated to
+`infer`, USAGE mirroring `checkQ`) · surf struct + parser arm + elaborator
+arm. No binder ⇒ no depth routing; cold walkers ride the generic
+transparent-struct fallback.
 
-**Test delta**: corpus §10.1 uncomsments (minus computed-leaf demand
-assertions); L4/collision negative pins. Status: ⬜.
+**The preparse seam** (replaces P1a's NOT-YET marker for the shapes this
+slice handles): the fold arm fuses `[base, $select-brace …]` into a
+`$`-headed, NON-access-sentinel datum head (the fixpoint requirement — hazard
+1; the baseless leg REMAINS as the "needs a subject" backstop per the audit's
+C23). That new head pays its SUBSET of the nine-site surface: `pattern-var?`
+(the loud-if-missed site) + the parser head arm; NO reader token ⇒ no
+token-layer sites; it must NOT join `access-sentinel?` (that is what makes the
+fold a fixpoint).
+
+**Semantics**: payload segmentation (a non-sentinel item OPENS a branch;
+following access sentinels ATTACH; `$dot-brace` recurses); typing = per-branch
+copattern demand with **Q_T2 D-lenient presence** (sourced-`'present` or a
+loud refusal naming seal/validate/annotate) + assembly into a CLOSED keyword
+row; reduction = subject evaluated ONCE, then per-branch extraction; **the
+duplicate-output-key check runs BEFORE `make-record`** (plain keys at this
+slice; remedies `^k'`/`^_` named in the message); the malformed-payload seat
+(empty block `x{}` gets its OWN arm AHEAD of L4 — zero branches is vacuously
+both sorts and `record-value-union` raises on empty; bare keyword items;
+`$rest`; stray `|.|`; bracket groups); the TYPE-POSITION refusal; miss errors
+via `format-closed-row-miss` WITH branch context (the audit's C9 answered).
+
+**Test delta**: node pins (fixpoint incl. LEFT siblings · `pattern-var?` via
+macro USE, not registration — the P1b-ii lesson) · E2E keyed corpus (§B's
+no-`^` lines uncomment: `{name}` · `{database}` · `{server.{host port}}` ·
+`def sub` + re-projection) · the error battery (`{zzz}` names available
+fields + the branch · `{}` · duplicate plain keys · dyn-subject refusal ·
+`(Map K V)`-subject refusal · type-position) · twins pins (a block in a
+`def`/`defn` body under QTT) · **§9's learnability pair**: `x.a.b` vs
+`x{a.b}` side by side, and the block-side miss message names the extraction
+spelling. Gates: targeted battery · acceptance `--check` · full suite ·
+adversarial verify.
+
+#### §5.P3b — The `^` family  ⬜
+
+**Work**: the ONE splitter over glued lexemes (Q_M7: nothing liftable — the
+sexp splitter keeps empty segments, F1b.7g class), continuation grammar
+`-`?·{ε | label | `_`}, plus `^..` recognized over the bare-`|.|` datum shapes
+(`[seg^, |.|, |.|]`); dissolve/splice (mid-path `^`); in-place rename `^k'`;
+`^_` Reading N (computed label, in place); the `^-` collapse family
+(`^-` / `^-k'` / `^-_` — leading `-` after `^` reserved); `^..` parent-key
+collapse (ancestors above the parent kept); **the output-level-local
+duplicate check** (Q_T3) with `cfg{server^.{port} database^.port}` as the
+NAMED monotonicity pin; the Q_T4a ordinal-`^` guided error (one message, all
+spellings: `x.0^`, `x[0]^`, `{admins.0^first}` → "an ordinal has no key;
+rename the nominal segment: `admins^first.0`"); the malformed-`^` battery
+(`a^b^c` · lone `^` · spaced `^b` · `^...`-absorbs-`$rest` rejected).
+
+**Test delta**: splitter unit pins per continuation · the flagship E2E ·
+rename/dissolve/`^_`/`^-`/`^-_`/`^..` corpus lines · duplicate-leaf error
+naming remedies · the monotonicity pin · the ordinal-`^` battery. Gates as
+P3a.
+
+#### §5.P3c — Keyless + L4 + honest nesting  ⬜  (depends on P3b's bare-`^`)
+
+**Work**: bare leaf `^` = keyless component (the branch contributes the leaf
+VALUE); ordinal branches `{N M}`; the nat-row mint at EVERY n — 1-tuples and
+homogeneous n included, which is the entire reason selection routes around
+the literal arm (ruling 2a as corrected by the audit); L4 sort homogeneity
+(all-keyed → Map, all-keyless → tuple, MIXING errors level-locally — both
+sorts must exist before the error is expressible, hence this slice); honest
+nesting display (`⟨String⟩` at n=1 — a pin, not a decision: `pvec-slice`
+already mints and prints it).
+
+**Test delta**: `{server.host^ database.url^}` → `⟨String String⟩` ·
+`{version^}` → `⟨String⟩` · `{N M}` ordinal selection with fresh indices ·
+the L4 mixing error (`{version^ server.port}`) · **the G11 one-space pair
+pinned side by side** (`{a^0}` keyed-rename-to-`:0` vs `{a^ 0}` keyless
+2-tuple). Gates as P3a; P3c closes the phase → the P3 close notes + the
+per-phase 5-step gate.
 
 ### §5.P4 — Broadcast ω
 
