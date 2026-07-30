@@ -26,7 +26,7 @@ rulings, censuses and test delta live in its own section.
 | **P1b-i** | **Repairs + probes + the Q8 DRAFT** — the top-level `<` swallow fix (Q_M4) · WS narrowing typed vars · `def ?x` reservation (Q_M3) · the Q_M1 gating probe + `:N` / keyword-`*` / `:<` · **Q8 written from the results** | ✅ | §5.P1b-i + **§Q8** · `fc65ca54` — suite 9263/474/0, corpus A/B 160 files / 2 intended diffs; **Q8 owner-reviewed ✅ 2026-07-28, amended by Q_M8** (ordinals multi-digit in both bands) |
 | **P1b-ii** | **The `.{` opener** — `dot-lbrace` re-mint across **EIGHT** edit regions (not six) incl. the surviving `surface-rewrite.rkt:516` POSITIVE addition; plain `'rbrace` closer (Q_M5); new `$dot-brace` sentinel + `dot-brace-group` tag + tree-parser arm (Q_N1); the Q_N3 two-grouper agreement guard | ✅ | §5.P1b-ii · **`1a1091d4`** — suite **9279/474/0**, acceptance 28/28 + 89/89, corpus A/B **158 files / 1 intended diff**; adversarial verify caught a **BLOCKING regression I introduced** (`$dot-brace` missing from `pattern-var?` → whole-file abort in a defmacro template) — fixed + pinned pre-commit |
 | **P1b-iii** | **Brace adjacency + the head registry + Q_M8** — the forced `$select-brace` sentinel (Q_M6) · the `reader-forms.rkt` leaf registry · adjacency in BOTH groupers (Q_N7) · bucket 4 ruled SELECT (Q_N5) · the `:N` digit-run widening + the structural `fused-type-annot?` repair (Q_N4) · P1b-ii's residual CLOSED | ✅ | §5.P1b-iii · **`a6af2761`** — suite **9304/474/0**, acceptance 28/28 + 89/89, corpus A/B **158 files / ZERO diffs**; adversarial verify caught **3 BLOCKING** (one non-idempotent fold → a silently-dropped `defn` clause) + 10 SIGNIFICANT — all fixed or filed pre-commit |
-| **P2** | **Grade-1 core** — `.k`/`.N` access + bare-path extraction. Carries **Q_M8's dot half** (`digit+` at the dot). Ruled at the mini-audit: **`.N` REUSES `$postfix-index`** (Q_R1 — near-zero registrations, fixpoint inherited, `v[0]` ≡ `v.0` byte-identical) · **copy the `:N` trailing guard** (Q_R2) · **dot band stays adjacency-free** (Q_R3) · `m.0` moves out of the v2 block (Q_R4) · **the `.N` error surface IS IN SCOPE** (Q_R5) | ⬜ | §5.P2 · audit `wf_22020418-a5f` (**12th** consecutive premise refuted) · doc-truth landed separately `0e5a56a3` (Q_R6) · ⚠ the "0 errors" claim was a **LAYER ERROR** — end-to-end the rational forms are LOUD, so the pin is TWO-LAYER |
+| **P2** | **Grade-1 core** — `.k`/`.N` access + bare-path extraction. Carries **Q_M8's dot half** (`digit+` at the dot). Ruled at the mini-audit: **`.N` REUSES `$postfix-index`** (Q_R1 — near-zero registrations, fixpoint inherited, `v[0]` ≡ `v.0` byte-identical) · **copy the `:N` trailing guard** (Q_R2) · **dot band stays adjacency-free** (Q_R3) · `m.0` moves out of the v2 block (Q_R4) · **the `.N` error surface IS IN SCOPE** (Q_R5) | ✅ | §5.P2 · **`3005170b`** — suite **9370/475/0**, acceptance **35/35** + 89/89, corpus A/B **158 files / ZERO diffs**; audit `wf_22020418-a5f` (**12th** consecutive premise refuted); doc-truth separately `0e5a56a3` (Q_R6); adversarial verify caught **a diagnostic REGRESSION I introduced** + 2 more, all fixed pre-commit; DEFERRED 9–13 |
 | **P3** | **Blocks** — `x{…}`, projection-by-default, `^` (3 continuations), L4 sort homogeneity, **HONEST NESTING (n-tuples at every n — ruled 2a)**, **STRICT merge** (the §3.6 waypoint) | ⬜ | §5.P3 · Q2 gate RESOLVED (2c: carrier order, thesis-derived) |
 | **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | ⬜ | §5.P4 · step-list node (4b) · per-field row-map (4c) |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | §5.P5 · L1–L5 law battery |
@@ -1925,6 +1925,95 @@ and manufactures a phantom divergence — use `prologos-sexp-read`.
 
 Corpus: `m.0` moves out of the §10.6 v2 block (Q_R4) and trailing markers land
 before line-118's 23-renumber edit. Status: ⬜.
+
+#### CLOSE NOTES ✅ `3005170b`
+
+**Gates**: suite **9370 / 475 / 0** (from 9304/474 — +66 tests, +1 file) ·
+acceptance path-selection **35/35** (from 28) + records **89/89** ·
+neighborhood battery **558 / 16 files** · reader corpus A/B **158 files, ZERO
+diffs**, both legs pinned to identical HEAD content. The audit PREDICTED an
+empty diff set and it held, and its quantified dirty-tree prediction held too:
+the one site a working-tree A/B would have flagged is `foray.prologos:787`
+(owner WIP, absent at HEAD), which does read differently under `.N`.
+
+**Shipped**: the `recognize-dot-ordinal` recognizer (`digit+`, Q_R2 guard,
+ASCII-digit gate, priority 87 by disjointness) · the `token-entry->stx` arm
+minting `$postfix-index` with a `string->number` payload · Q_R5's ordinal
+miss-hint · the `namespace.rkt` new-instance guard · a spelling-agnostic
+`postfix-hole` message · plus two pieces of committed infrastructure the track
+had been re-deriving by hand (below).
+
+**⚠ THE ADVERSARIAL VERIFY CAUGHT A DIAGNOSTIC REGRESSION I INTRODUCED** — 5th
+behavioural slice running, and still nothing a green suite could see.
+`ordinal-key-index` accepted ANY `expr-int` including NEGATIVE, dropping the
+`exact-nonnegative-integer?` half of the guard it mirrors
+(`record-project`'s literal-nat leg) — the **infer/inferQ-twin drift shape**.
+Because the ordinal branch sits FIRST in `closed-row-miss-hint`'s `or`, a
+negative literal produced a hint asserting an expression was out of range when
+that expression **type-checks fine** (`record-project` routes a negative literal
+to the dynamic path, which succeeds as the union of positions) — *and* that
+false hint SUPPRESSED the correct keyword closed-row-miss hint on the same
+expression. Strictly worse than the message it replaced.
+The adjudicator **worktree-pinned a baseline and A/B'd**, which is what turned
+this from "a gap" into "a REGRESSION" and made it commit-blocking. It is
+unreachable from `.N` (which cannot lex a sign) and from `het[-1]` (the
+`postfix-neg` marker intercepts) — the reachable surface is the paren-keyword
+form `(get het -1)`, which is **exactly why no `.N` test caught it**. Fixed +
+3 pins.
+
+**Two more verify fixes**: the `token-entry->compat` sibling arm (**four lenses
+found it independently** — the token fell through to `|.10|`, contradicting both
+its dot-band siblings and Q_R1's numeric payload) and `closed-nat-row?` used
+instead of hand-inlining its three-way conjunction.
+
+**⚠ AND A LAYER ERROR IN MY OWN COMMENT — the THIRD instance of that class in
+this phase**, after `0e5a56a3` (§Q8 contradicting itself) and `f6f30eaa` (the
+phase headline). It called the `char-numeric?` counterfactual a "SILENT WRONG
+DATUM … worse than" the audit's predicted `exact?: contract violation`. Both
+halves were layer-confused: the `#f` payload is silent only at the DATUM layer
+(end-to-end it is a LOUD per-command error with the file continuing, i.e. LESS
+severe), and the audit's prediction describes the SHIPPED path correctly — it
+was right, not superseded. The same comment block gets the distinction right 30
+lines earlier. **Corrected in the comment.**
+
+**Three of my own TEST defects, caught before the commit**: a **VACUOUS pin that
+PASSED** (bare `#rx"9"`/`#rx"3"` matched DIGITS IN THE TEMP-FILE PATH inside a
+printed error struct — the identical trap this arc already hit); a
+**MIS-PREMISED pin** (`.( v.0 )` is a single-operand mixfix that errors
+identically on the baseline with a plain `.name`); and a **ruling I had stated
+wrong from the audit's own text** — a space BEFORE the dot is irrelevant, but a
+space AFTER it means there is no `.N` lexeme at all, contiguity being inherent
+to a token. The audit conflated the two spaces.
+
+**Design claims the audit corrected**: two work items were FREE or already done
+(chains fall out of the existing fold-left; bare-path extraction already works
+in 3 of 4 positions, the 4th being §5.PX's inference family, which §5.P2's Intent
+silently promised) · the predecessor's "stop that re-entrancy" prescription is a
+**FALSE PREMISE** — the re-entrancy is LOAD-BEARING, `v[idx.i]` works only
+because the payload is re-preparsed · `rewrite-dot-access` has **THREE**
+production callers, so the `.N` arm inherits map-literal values and the `.( … )`
+token stream free.
+
+**New committed infrastructure** (both were being re-derived by hand every
+phase, which is how P1b-ii's first A/B measured the tree):
+- **`tools/reader-corpus-ab.rkt`** — refuses to guess a corpus (`--corpus is
+  REQUIRED`) so both legs must be handed the same snapshot, and carries a
+  TRIPWIRE for the mutable-registry footgun that gave one audit facet a
+  confident FALSE ZERO.
+- **`tests/test-path-selection-acceptance.rkt`** — this file's siblings were all
+  gated; it was not, so "N/N markers" had been hand-verified since P0. Fine while
+  phases only APPENDED; P2 uncomments mid-file and shifts ~20 markers, which is
+  precisely the situation that produced the Rel T1 misnumbering defect. Also
+  pins that no two markers claim the same index — P2's own first attempt did
+  exactly that.
+
+**DEFERRED 9–13**: the ordinal hint's cross-domain blindness (`cfg.0` especially
+— the adjudicator's pick as the most plausible first-contact error, in mild
+tension with Q_R5's own rationale) · a possibly-unreachable zero-arity branch
+(the VAG's red flag) · **the trailing guard blocking `^`, a landmine for P3's
+RE-KEY** (`x.0^` declines while `x[0]^` lexes — the two spellings Q_R1 unified
+would diverge on exactly the character P3 introduces) · `reconstitute-path-list`'s
+`$dot-access`-only walk · the `tokenize-string` raise→token flip.
 
 ### §5.P3 — Blocks
 
