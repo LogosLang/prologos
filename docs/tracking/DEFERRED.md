@@ -2274,3 +2274,32 @@ restriction. When selection values grow their capability-aware projection
 (DEFERRED "projections via selection" items), extend the leg; until then the
 refusal is generic ('subject-other) — a guided selection-aware message would
 be a cheap interim improvement.
+
+## CIU T6 D4.P3b spin-offs (filed 2026-07-30, from the pre-commit adversarial verify — 4 skeptics + adjudication)
+
+The verify caught one BLOCKING (the whole-datum ordinal-rekey replacement —
+a match arm containing `v[0]^` whole-file aborted where HEAD recovered
+per-command) and eight SIGNIFICANT defects in the uncommitted diff — all
+FIXED pre-commit (see D4 §5.P3b close notes). These survived as filings:
+
+### 21. `k^:x` keyword rename target — the splitter's `#\:` arm is dead in WS mode
+
+`cfg{server.host^:x}` gets the block-keys-bare message instead of the
+splitter's keyword-target refusal: in WS mode the lexeme does not glue
+through the colon, so the item arrives as a keyword and the splitter's
+`#\:` arm never fires (it is reachable from sexp-mode datums only — the
+F1b sexp-green ≠ WS-correct class). MITIGATION: the wrong message's action
+(drop the colon) resolves the input, so this is degraded-not-lying. Fix
+shape: detect a kw item immediately after a caret-bearing step in
+`segment-select-items` and emit the splitter's message.
+
+### 22. Arrowless match arms raw-crash the reader — pre-existing, the Q_L4 marker-seat class
+
+`match 5\n  | 0 111` (no `->`) dies with a raw `take: contract violation`
+from `parse-match-pattern-arm` (parser.rkt ~:7392): whole-file abort, zero
+commands output. Verified select-free and pre-existing at HEAD by the P3b
+adjudicator (it was the crash SITE of the P3b BLOCKING finding, but the
+arrowless input class crashes on its own). The fix belongs to the match
+parser (a guided per-command error naming the missing `->`), not to
+selection. Same family as the `.( )` mixfix raises and the tilde abort —
+the marker-seat / POL.4 conversion discipline applied to match arms.
