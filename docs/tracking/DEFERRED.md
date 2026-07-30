@@ -15,6 +15,102 @@ Deferral".
 
 ---
 
+## The branch-result join — residual work after the diagnostic fix (2026-07-30)
+
+Context: a multi-clause `defn` whose clause bodies have different result types
+reported the unannotated-parameter hint — a lying diagnostic whose own advice
+could not help, because `infer` returns `expr-error` for ANY hole-domain lambda
+without inspecting the body (typing-core.rkt:1129) and every generated clause
+lambda is hole-domain by construction (macros.rkt:10282/:10294) even when a
+`spec` is present. Fixed on the DIAGNOSTIC side only — the join is untouched
+(commit `04085007`). See `typing-errors.rkt` § the branch-result-mismatch
+diagnostic.
+
+Three pieces stayed out, deliberately:
+
+1. **The union route proper** — making the join produce `<A | B>` for differing
+   branches, so `defn f | 0 -> 1 | n -> "x"` gets `Int -> <Int | String>`.
+   TRIAGED AND REJECTED FOR NOW, per the explicit instruction to triage against
+   the union-hang entries first. Evidence: a union in a codomain position emits a
+   fork-on-union request at EVERY call site (`type-map-write` →
+   `maybe-emit-fork-on-union-request`, typing-propagators.rkt), and that
+   machinery carries the two open unbounded-hang defects below — "BUG:
+   Union-type checking hangs the type-checker (BSP non-quiescence)" and "DEFECT
+   — union-typed def + implicit-binder spec + call HANGS the type checker". A
+   hang is strictly worse than a bad message. Note also that the same strict
+   join serves user-written 3-arg `if` (parser.rkt:1393) and `match` arms, so a
+   semantic change here alters `if` typing project-wide. **Blocked on** the
+   dedicated typing-propagator-network debugging session those entries call for.
+
+2. **Unreportable branch types → the old message still shows, and is still
+   wrong there.** The hint fires only when it can EXHIBIT two inferred,
+   non-convertible, REPORTABLE branch types; a type mentioning a hole or a de
+   Bruijn variable is refused (that filter is what keeps wrong types and `_` /
+   `?bvar0` artifacts out of user-facing prose). The common shape it gives up on
+   is a branch that READS its pattern-bound field, because `branch-result-leaves`
+   extends the arm ctx with `(expr-hole)` per binding rather than the
+   constructor's real field types:
+   `defn f | zero -> "s" | suc n -> n` (with or without `spec f Nat -> Nat`)
+   still reports "cannot infer the type of an unannotated parameter … Annotate
+   the parameter or add a `spec`" — and that advice is false: the parameter is
+   not the problem and a spec is already present. Fix path, non-blocked and
+   mechanical: export the arm-binder ctx derivation `check-reduce-structural`
+   already performs (typing-core.rkt:4451-4473 — `instantiate-pi-chain` +
+   `extend-ctx-with-fields`) and call it from the leaf walk, the "one derivation,
+   two consumers, cannot drift" pattern already used for `select-project` and
+   `seal-missing-required`. Needs the peeled ctx to carry the expected Pi's
+   domain so the scrutinee type is decomposable.
+
+3. **Guarded clause groups** are now walked (the branch-neutral rewrite dropped
+   the `expr-int-eq` target gate that had excluded them), but see the crash entry
+   below — the more common guard shape does not survive parsing at all.
+
+## 🐛 DEFECT — a guarded clause group with no `[params]` header CRASHES the compiler and aborts the whole file (found 2026-07-30)
+
+**Repro** (independently verified at `5e6d9f41`, pre-existing — the crash is in
+`macros.rkt`, long before typing):
+
+```
+ns pre1
+def before := 1
+defn m07
+  | n when [int-lt n 0] -> "neg"
+  | n -> 5
+def after := 2
+```
+
+`racket tools/run-file.rkt` prints NO numbered results at all — not even
+`def before := 1`, which precedes the offending form — just a raw Racket
+`list-ref: index too large for list / index: 3 / in: '(__arg0 __arg1)` with a
+`context...:` dump through `macros.rkt:9928 compile-match-tree` →
+`macros.rkt:10235 compile-pattern-group` → `macros.rkt:10309
+expand-defn-multi`. Adding the bracket header (`defn m07 [n] | n when … -> …`)
+avoids it. Same **whole-file-abort silence class** as the `.( )` mixfix entry
+below and the tilde-reader entry: a raise on the expansion path takes the file
+down instead of becoming a per-command error. Likely cause: the guard row's
+pattern list is arity-adjusted for a 1-column group while `param-names` still
+holds two entries, so `compile-match-tree` indexes past the list.
+
+## 🐛 DEFECT — the branch-result join silently ACCEPTS a float branch against a String branch (found 2026-07-30)
+
+**Repro** (independently verified at `5e6d9f41`, pre-existing; the in-file
+control errors correctly in the same run):
+
+```
+ns pre2
+defn ctl | 0 -> 1   | n -> "x"    ;; ERROR (correct — Int vs String)
+defn d8  | 0 -> 1.5 | n -> "x"    ;; d8 : Int -> String defined  ← NO error
+```
+
+So the first-arm-wins join is not merely strict, it is **unsound for a
+Rat/Posit-literal first branch**: the definition is accepted with result type
+`String`. Found while adversarially verifying the branch-result diagnostic;
+the diagnostic cannot see it because `check` never fails. Suspect the numeric
+literal's flexible typing (the widening/defaulting path) satisfies the motive
+meta and then re-solves against `String`. Wants a failing-test-first
+investigation on the numeric-literal side of the join — plausibly Num Track 1
+territory.
+
 ## 🐛 DEFECT — live `.( )` mixfix errors RAISE and abort the whole file (found 2026-07-28, the D4.P1a adversarial verify)
 
 An incomparable-precedence-group error or an empty `.( )` raises out of
