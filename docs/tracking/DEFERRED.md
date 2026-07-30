@@ -2205,3 +2205,72 @@ Root cause is `spec`'s error architecture (the void-ing handler), the same
 class Q_L4's marker seat was built for at the reader layer. The fix belongs to
 a spec/preparse-diagnostics slice, not to Path Selection; P3 ships its own
 type-position refusal independently.
+
+## CIU T6 D4.P3a spin-offs (filed 2026-07-30, from the pre-commit adversarial verify — 4 skeptics + main-thread adjudication)
+
+The verify caught one BLOCKING (the block-pipe select corruption) and three
+SIGNIFICANT defects in the uncommitted diff — all FIXED pre-commit (see D4
+§5.P3a close notes). These are what survived as deliberate filings: every one
+is PRE-EXISTING (verified select-free / dot-identical / baseline-pinned), with
+P3a only widening the walked-into surface.
+
+### 15. Block-form `|>` on a `def` RHS is broken — pre-existing, baseline-pinned
+
+`def r3 := |> cfg.server map-keys` → 2 errors at CLEAN HEAD (`6d919142`,
+worktree-pinned A/B; "Unbound variable" ×2) while the same pipe at TOP LEVEL
+works. Select-free — the P3a pipe pre-fold changes the error TEXT (now
+"Expression is not a valid type", still 2 loud errors) but the seam predates
+it. Adjacent to the infix-pipe def-RHS grouping corruption the fold skeptic
+also reproduced dot-identically (`(idf (def r3 := …))` — the def swallowed
+into the application). A pipe/def layout-seam fix, not selection's.
+
+### 16. The `do` expander whole-file-aborts on ANY access-sentinel statement — pre-existing family
+
+A defn body `do` / `cfg{a}` raises raw out of preparse (macros.rkt `do` arm,
+"each binding must be [name <type> value]…") → ZERO commands output, internal
+sentinel leaked. `cfg.a` baseline aborts identically, so the hole is the
+do-expander's (the Q_L4 marker-seat class: a raise where a per-command error
+value belongs). Same family: `def cfg{a} := 5` (def-LHS select) aborts at the
+def parser — dot baseline identical. P3a makes `x{…}` a shipped surface that
+now walks into both.
+
+### 17. Registered head-macros (`if` / `cond` / `let`) see RAW access sentinels — lying per-command diagnostics, pre-existing family
+
+Head-macro dispatch runs BEFORE the access-sentinel fold, so `if true cfg{a} 5`
+→ "boolrec expects 4 arguments, got 3"; `let s := cfg{a}` in a defn dumps
+internal syntax. ALL reproduce identically with `cfg.a` (per-command, file
+survives). The P3a fix for the one SILENT member of this family (the pipe,
+which corrupted instead of erroring) was a pipe-local pre-fold; the general
+fix is running the fold before head-macro dispatch — an ordering change with
+wide blast radius that needs its own slice. `match` folds correctly already.
+
+### 18. Dyn-key `map-assoc` mints a type/value DESYNC that selection then launders — pre-existing upstream
+
+`def d3 := [map-assoc base kh 42]` (kh dynamic `:host`) types
+`{:host String … | _}` while the runtime value holds `{:host 42 …}` — the
+desync is minted by dyn-assoc TYPING (pre-existing). `d3{host}` then returns
+`{:host 42} : {:host String}` — a CLOSED row claiming String over an Int,
+stripping the `| _` marker that at least advertised uncertainty. The select
+is honest per its inputs (Horn D trusts sourced-'present); the fix belongs at
+the dyn-assoc typing rule. The reduction-layer panic stays unreachable
+(verified: the dissoc route refuses at typing).
+
+### 19. Row-literal type annotations have NO working spelling — the dropped "annotate" remedy
+
+`def q : {:a Int} := {:a 1}` → "Expression is not a valid type";
+`[fn [m : {:host String}] m.host]` fails select-free; zero in-tree uses. The
+Q_T2 remedy list as ruled named "annotate" third — the verify dropped it from
+the select refusal messages as advice-that-does-not-work (recorded as an
+adaptation in D4 §5.P3a; owner may ratify or redirect). Re-add to the
+messages when row annotations become writable (PX / F-carrier adjacent).
+
+### 20. SELECTION-typed subjects refuse as 'subject-other — capability-alignment deferred
+
+`select-project` projects through SCHEMA-typed subjects (the verify's
+convergent fix) but deliberately NOT through selection-typed ones: a
+selection is a capability-restricted VIEW (F1b.5-s4 `:requires`), and
+projecting through it without the read-capability check would bypass the
+restriction. When selection values grow their capability-aware projection
+(DEFERRED "projections via selection" items), extend the leg; until then the
+refusal is generic ('subject-other) — a guided selection-aware message would
+be a cheap interim improvement.

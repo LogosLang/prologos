@@ -27,7 +27,7 @@ rulings, censuses and test delta live in its own section.
 | **P1b-ii** | **The `.{` opener** — `dot-lbrace` re-mint across **EIGHT** edit regions (not six) incl. the surviving `surface-rewrite.rkt:516` POSITIVE addition; plain `'rbrace` closer (Q_M5); new `$dot-brace` sentinel + `dot-brace-group` tag + tree-parser arm (Q_N1); the Q_N3 two-grouper agreement guard | ✅ | §5.P1b-ii · **`1a1091d4`** — suite **9279/474/0**, acceptance 28/28 + 89/89, corpus A/B **158 files / 1 intended diff**; adversarial verify caught a **BLOCKING regression I introduced** (`$dot-brace` missing from `pattern-var?` → whole-file abort in a defmacro template) — fixed + pinned pre-commit |
 | **P1b-iii** | **Brace adjacency + the head registry + Q_M8** — the forced `$select-brace` sentinel (Q_M6) · the `reader-forms.rkt` leaf registry · adjacency in BOTH groupers (Q_N7) · bucket 4 ruled SELECT (Q_N5) · the `:N` digit-run widening + the structural `fused-type-annot?` repair (Q_N4) · P1b-ii's residual CLOSED | ✅ | §5.P1b-iii · **`a6af2761`** — suite **9304/474/0**, acceptance 28/28 + 89/89, corpus A/B **158 files / ZERO diffs**; adversarial verify caught **3 BLOCKING** (one non-idempotent fold → a silently-dropped `defn` clause) + 10 SIGNIFICANT — all fixed or filed pre-commit |
 | **P2** | **Grade-1 core** — `.k`/`.N` access + bare-path extraction. Carries **Q_M8's dot half** (`digit+` at the dot). Ruled at the mini-audit: **`.N` REUSES `$postfix-index`** (Q_R1 — near-zero registrations, fixpoint inherited, `v[0]` ≡ `v.0` byte-identical) · **copy the `:N` trailing guard** (Q_R2) · **dot band stays adjacency-free** (Q_R3) · `m.0` moves out of the v2 block (Q_R4) · **the `.N` error surface IS IN SCOPE** (Q_R5) | ✅ | §5.P2 · **`3005170b`** — suite **9370/475/0**, acceptance **35/35** + 89/89, corpus A/B **158 files / ZERO diffs**; audit `wf_22020418-a5f` (**12th** consecutive premise refuted); doc-truth separately `0e5a56a3` (Q_R6); adversarial verify caught **a diagnostic REGRESSION I introduced** + 2 more, all fixed pre-commit; DEFERRED 9–13 |
-| **P3a** | **The node + KEYED blocks, no `^`** — `surf-select`/`expr-select` (full pipeline.md cost paid once; twins; walkers via the generic fallback; NO PNET bump) · payload segmentation + the malformed-payload seat · **D-lenient presence** (Q_T2) · subject-once reduction · **strict merge for plain keys BEFORE `make-record` can last-win** · type-position refusal · branch-aware miss errors · §9's learnability pair | ⬜ | §5.P3a · opens the FRESH session, failing-test-first; the P3 audit (`wf_27a84061-c7e`) is its grounding |
+| **P3a** | **The node + KEYED blocks, no `^`** — `surf-select`/`expr-select` (full pipeline.md cost paid once; twins; walkers via the generic fallback; NO PNET bump) · payload segmentation + the malformed-payload seat · **D-lenient presence** (Q_T2) · subject-once reduction · **strict merge for plain keys BEFORE `make-record` can last-win** · type-position refusal · branch-aware miss errors · §9's learnability pair | ✅ | §5.P3a · **`290f77f9`** — suite **9418/475/0**, acceptance **41/41** + records, battery 136/136, neighborhood 623/21; Q_U1 (corpus list corrected, `6d919142`); adversarial verify caught **1 BLOCKING** (block-pipe select corruption at 0 errors — 6th consecutive slice) + 3 SIGNIFICANT, all fixed pre-commit; DEFERRED 15–20 |
 | **P3b** | **The `^` family** — the ONE splitter (continuation grammar `-`?·{ε\|label\|`_`} + `^..`) · dissolve/splice · in-place rename · `^_` Reading N · the `^-` collapse family (Q_T7) · `^..` (Q_T8) · **output-level-local merge** (Q_T3, the monotonicity pin) · the Q_T4a ordinal-`^` guided error · the malformed-`^` battery | ⬜ | §5.P3b · light mini-audit (coordinates only) |
 | **P3c** | **Keyless + L4 + honest nesting** — the nat-row mint at EVERY n (incl. 1 and homogeneous n) · ordinal branches `{N M}` · the L4 mixing error · `⟨String⟩` 1-tuple pins · the G11 one-space pair pinned side by side | ⬜ | §5.P3c · light mini-audit; DEPENDS on P3b's bare-`^` |
 | **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | ⬜ | §5.P4 · step-list node (4b) · per-field row-map (4c) |
@@ -2252,6 +2252,92 @@ names the extraction spelling. NOT P3a's despite its `[D4.P3]` tag: §G's
 seal/validate pair (acceptance :240-245) uses `server^.{host port}` —
 mid-path dissolve ⇒ **P3b's** (its delta now names it, per Q_U1). Gates:
 targeted battery · acceptance `--check` · full suite · adversarial verify.
+
+**CLOSE NOTES ✅ `290f77f9`** (opened `6d919142` with Q_U1; failing-test-first
+— 34 pins RED at open, each failing on the NOT-YET marker, i.e. for the
+reason its name claims).
+
+**Gates**: suite **9418 / 475 / 0** (from 9370 — +48) · acceptance **41/41**
+(from 35; the 6 new markers value-verified before pinning; the renumber
+gate-checked, no duplicate indices) · battery **136/136** · neighborhood
+**623/623 over 21 files** (incl. the pipe-compose and schema/seal families
+the verify fixes touched) · **zero tokenizer changes ⇒ no corpus A/B owed**
+(Q_T5, as predicted).
+
+**⚠ THE ADVERSARIAL VERIFY CAUGHT A BLOCKING DEFECT — 6th consecutive
+behavioural slice, and this one was a SILENT WRONG VALUE at 0 errors.**
+Block-form `|>` with a select init: head-macro dispatch runs BEFORE the
+access-sentinel fold, and the pipe's step builder appends its accumulator
+into whatever datum a step is — appending into a raw `$select-brace` payload
+CORRUPTED it (`|> cfg{server} f` → `($select-brace server cfg)` → the later
+fold fused the corrupted select onto the FUNCTION). With an adversarial `f`
+whose row offered the keys, the wrong select evaluated silently. Pre-P3a the
+same input was a guided error — the slice turned a refusal into corruption,
+which is exactly what the verify exists to catch. **Fix**: a pipe-local
+pre-fold (`expand-pipe-block` runs `rewrite-dot-access` over its raw parts
+first — sound because the fold is a fixpoint). The general
+head-macros-before-fold ordering is DEFERRED 17 (the if/cond/let siblings
+are LOUD-but-lying and dot-identical, i.e. pre-existing).
+
+**Three SIGNIFICANT, all fixed pre-commit**:
+1. **The `$select` subject was never preparse-expanded** — the fold-arm
+   comment's premise ("already expanded when fused") was FALSE: the fold at
+   the subforms seam runs BEFORE per-subform recursion. Compound subjects
+   (bracket groups, map literals with dot-access values, selects-of-selects)
+   froze raw sentinels into lying downstream errors. Fix: `$select` is now
+   PARTIALLY opaque — the subject expands, the payload stays protected.
+2. **Schema-sealed subjects refused wrong-kinded** (found by TWO skeptics
+   independently) — `sealed{name}` hit 'subject-other while the refusal
+   messages named "seal the subject" as remedy #1, a circular dead-end. Fix:
+   `select-project` projects THROUGH schema fvars via `schema->row`
+   (all-'present by construction — the strongest Horn-D source; the
+   dot-access arm has carried the same leg since F1). SELECTION-typed
+   subjects stay refused on read-capability grounds (DEFERRED 20).
+3. **`^`-bearing items fabricated field misses** (`cfg{version^}` → "field
+   :version^ is not present … spelled `.version^`") on exactly the spellings
+   the duplicate message recommends. Fix: a P3b-pointer arm in the
+   segmentation seat, symmetric to the ordinal arm's P3c pointer, gating
+   both branch-head and dot-access-attach positions. ⚠ P3b REPLACES this
+   gate with the real splitter.
+
+**Q_T2 adaptation, recorded for owner ratification**: the remedy list as
+ruled named seal / validate / **annotate** — the verify found "annotate its
+row type" has NO working spelling at HEAD (row-literal annotations refuse
+everywhere; zero in-tree uses — DEFERRED 19), i.e. the P1b-iii
+advice-that-does-not-work class. The messages now name only the two VERIFIED
+remedies (seal via `the Schema subj`, validate); re-add annotate when row
+annotations become writable.
+
+**Also hardened at the verify**: ground non-map subjects PANIC at the whnf
+arm (was a silent stick, asymmetric with the loud nested descent —
+`definitely-not-map?` consulted); trailing steps after a terminal `@sub`
+PANIC instead of silently vanishing (constructed-IR only; the parser grammar
+forbids the shape); two dead negative pins fixed (an open row prints `{… |
+_}` — the pipe is INSIDE the braces, so the original `} |` regexp could
+never fire); `~s` for string items (a bare `s` rendering was
+indistinguishable from the valid spelling); the sub-block empty message no
+longer claims `{}` is a map literal.
+
+**Scope rulings surfaced mid-slice**: mid-branch ordinal steps
+(`{admins.0}`) are REFUSED loud (their projection semantics — does the
+contingent ordinal level survive as ancestry? — are unruled; flagged as the
+next co-design question); multi-arity defn clauses with HETEROGENEOUS result
+types fail PRE-EXISTING with a lying unannotated-param diagnostic
+(select-free control `| 0 -> {:a 1} | n -> 5` pinned it; filed as a spawned
+task) — the multi-arity pin uses same-row arms with distinct VALUES.
+
+**Pre-existing, filed not fixed** (DEFERRED 15–20): the def-RHS block-pipe
+(baseline worktree-pinned at clean `6d919142`) · the do-expander
+whole-file-abort family · the head-macro raw-sentinel family · the dyn-assoc
+type/value desync selection would otherwise launder · row annotations ·
+selection-subject capability alignment.
+
+**P3b watch items** (from the verify): the fold fuses against ANY left
+sibling incl. non-expression sentinels (`$angle-type` in the pre-existing
+spec-hole context, `:=` — both loud or pre-dropped today; the splitter round
+should decide a fusable-base posture) · the `re-key-sym?` gate is P3b's
+demolition site · `format-select-fail`'s 'unknown wording will misreport a
+future 'optional mark (no producer today).
 
 #### §5.P3b — The `^` family  ⬜
 
