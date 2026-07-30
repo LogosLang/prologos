@@ -26,7 +26,10 @@
          "../driver.rkt"
          "../macros.rkt"
          "../namespace.rkt"
-         "../unify.rkt")
+         "../unify.rkt"
+         ;; CIU T6 (2026-07-30): pins the message-text → diagnostic-code coupling
+         ;; that `error->code` derives by regexp (see the E1001 test below).
+         (only-in "../lsp/diagnostics.rkt" error->diagnostic))
 
 ;; ========================================
 ;; Helper: process commands and return results
@@ -542,6 +545,19 @@
   (check-equal? (length msgs) 2 (format "expected exactly 2 errors, got: ~v" r))
   (for ([m (in-list msgs)])
     (check-true (regexp-match? branch-mismatch-rx m) (format "got: ~v" m))))
+
+(test-case "branch-result mismatch maps to LSP code E1001, not E0000"
+  ;; The message's "Type mismatch" opening is load-bearing, not prose:
+  ;; lsp/diagnostics.rkt's `error->code` derives the code by regexp over the
+  ;; message text, testing `type.?mismatch` → E1001 FIRST. A future reword that
+  ;; drops every recognised substring would SILENTLY degrade this class to E0000
+  ;; — invisible to every other test, since nothing else reads message text.
+  ;; This pins the coupling instead of leaving it to a source comment.
+  (define r (run-ns-ws-last "ns t\ndefn c5\n  | 0 -> 1\n  | n -> \"x\"\n"))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (check-true (regexp-match? branch-mismatch-rx (prologos-error-message r)))
+  (check-equal? (hash-ref (error->diagnostic r) 'code) "E1001"
+                (format "got: ~v" (error->diagnostic r))))
 
 (test-case "branch-result mismatch has no clause-count cliff (80 clauses)"
   ;; REGRESSION PIN (adversarial verify, SIGNIFICANT). A `(> depth 64)` guard in
