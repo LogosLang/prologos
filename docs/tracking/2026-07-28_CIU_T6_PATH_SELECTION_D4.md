@@ -2300,13 +2300,14 @@ are LOUD-but-lying and dot-identical, i.e. pre-existing).
    both branch-head and dot-access-attach positions. ⚠ P3b REPLACES this
    gate with the real splitter.
 
-**Q_T2 adaptation, recorded for owner ratification**: the remedy list as
-ruled named seal / validate / **annotate** — the verify found "annotate its
-row type" has NO working spelling at HEAD (row-literal annotations refuse
-everywhere; zero in-tree uses — DEFERRED 19), i.e. the P1b-iii
-advice-that-does-not-work class. The messages now name only the two VERIFIED
-remedies (seal via `the Schema subj`, validate); re-add annotate when row
-annotations become writable.
+**Q_T2 adaptation — RATIFIED [owner, 2026-07-30: "the adaptation stands —
+annotate comes back when it's real"]**: the remedy list as ruled named seal /
+validate / **annotate** — the verify found "annotate its row type" has NO
+working spelling at HEAD (row-literal annotations refuse everywhere; zero
+in-tree uses — DEFERRED 19), i.e. the P1b-iii advice-that-does-not-work
+class. The messages name only the two VERIFIED remedies (seal via
+`the Schema subj`, validate); annotate re-enters when row annotations become
+writable (DEFERRED 19 carries the trigger).
 
 **Also hardened at the verify**: ground non-map subjects PANIC at the whnf
 arm (was a silent stick, asymmetric with the loud nested descent —

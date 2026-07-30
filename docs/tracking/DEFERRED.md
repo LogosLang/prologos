@@ -2260,9 +2260,9 @@ the dyn-assoc typing rule. The reduction-layer panic stays unreachable
 `def q : {:a Int} := {:a 1}` → "Expression is not a valid type";
 `[fn [m : {:host String}] m.host]` fails select-free; zero in-tree uses. The
 Q_T2 remedy list as ruled named "annotate" third — the verify dropped it from
-the select refusal messages as advice-that-does-not-work (recorded as an
-adaptation in D4 §5.P3a; owner may ratify or redirect). Re-add to the
-messages when row annotations become writable (PX / F-carrier adjacent).
+the select refusal messages as advice-that-does-not-work — an adaptation the
+owner RATIFIED 2026-07-30 ("annotate comes back when it's real"). Re-add to
+the messages when row annotations become writable (PX / F-carrier adjacent).
 
 ### 20. SELECTION-typed subjects refuse as 'subject-other — capability-alignment deferred
 
