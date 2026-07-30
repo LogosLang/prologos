@@ -678,6 +678,26 @@ in PROSE per the standing discipline; audit `wf_27a84061-c7e` fed them —
   with LIGHT mini-audits (coordinate re-verification against `wf_27a84061-c7e`,
   not full re-audits). **The Q_T batch is COMPLETE.**
 
+**The P3a-close checkpoint rulings [owner, 2026-07-30]:**
+- **Q_U1 — P3a owns EVERY no-`^` block line** (the §5.P3a corpus list was
+  corrected against the file; `6d919142`).
+- **Q_T2 adaptation RATIFIED** — "annotate its row type" dropped from the
+  refusal remedy lists ("annotate comes back when it's real"); DEFERRED 19
+  carries the re-entry trigger.
+- **Q_U2 — mid-branch ordinal steps take READING A** ["Reading A stands —
+  ordinal blocks own the re-derivation"]. A grade-1 `.N` step inside a keyed
+  branch DESCENDS, contributing NO output level — ordinal keys are
+  contingent, there is no identity to preserve; nominal ancestry above and
+  below survives (`cfg{admins.0.name}` → `{:admins {:name "Alice"}}`).
+  Re-derivation (fresh indexing) is reserved for ordinal BLOCKS — `{N M}`,
+  including the 1-tuple `.{0}` per honest nesting — so `.0` (one focus, no
+  shape) and `.{0}` (1-tuple) stay DISTINCT and the step/block grade
+  distinction survives; the in-block step matches the bare path's landed P2
+  extraction, with ancestry kept. Consistent with Q_T4a's recorded
+  consequence ("renames the NOMINAL segment then descends").
+  **Implementation: P3c** (rides the ordinal machinery; P3a's parser refusal
+  lifts there; P3b untouched).
+
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
   P1b-i, **owner-reviewed**, and ruled (Q_M8 the sole amendment). §Q8 is now
@@ -2320,9 +2340,8 @@ indistinguishable from the valid spelling); the sub-block empty message no
 longer claims `{}` is a map literal.
 
 **Scope rulings surfaced mid-slice**: mid-branch ordinal steps
-(`{admins.0}`) are REFUSED loud (their projection semantics — does the
-contingent ordinal level survive as ancestry? — are unruled; flagged as the
-next co-design question); multi-arity defn clauses with HETEROGENEOUS result
+(`{admins.0}`) are REFUSED loud — ruled **Q_U2 Reading A** at the close
+checkpoint (descent, no output level; lifts at P3c); multi-arity defn clauses with HETEROGENEOUS result
 types fail PRE-EXISTING with a lying unannotated-param diagnostic
 (select-free control `| 0 -> {:a 1} | n -> 5` pinned it; filed as a spawned
 task) — the multi-arity pin uses same-row arms with distinct VALUES.
@@ -2367,7 +2386,12 @@ ordinal-`^` battery. Gates as P3a.
 semantic; the LEAF-position keyless reading lands HERE, because a keyless
 branch only means something once the tuple carrier exists — so P3b's close
 leaves a leaf `^` parsed-but-refused, and P3c makes it assemble):
-bare leaf `^` = keyless component (the branch contributes the leaf VALUE); ordinal branches `{N M}`; the nat-row mint at EVERY n — 1-tuples and
+bare leaf `^` = keyless component (the branch contributes the leaf VALUE);
+**mid-branch ordinal STEPS per Q_U2 Reading A** (the P3a refusal lifts: `.N`
+in a keyed branch descends, NO output level — typing = the element type via
+the existing PVec/het-tuple arms, reduction = the existing rrb path; the
+test delta adds the DISCRIMINATING PAIR `admins.0` vs `admins.{0}` — descent
+vs 1-tuple); ordinal branches `{N M}`; the nat-row mint at EVERY n — 1-tuples and
 homogeneous n included, which is the entire reason selection routes around
 the literal arm (ruling 2a as corrected by the audit); L4 sort homogeneity
 (all-keyed → Map, all-keyless → tuple, MIXING errors level-locally — both
