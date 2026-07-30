@@ -99,7 +99,15 @@ app-config.server
 ;; ───────────────────────────────────────────────────────────────────────────
 ;; app-config{database^.*}                    ;; {:url … :pool-size 10} — dissolve + row-splat        [D4.P4]
 ;; app-config{database.*}                     ;; {:database {…}} — splat under projection             [D4.P4]
-;; app-config{admins:name}                    ;; {:admins @["Alice" "Bob"]}                           [D4.P4]
+;; app-config{admins:name}                    ;; {:admins @[{:name "Alice"} {:name "Bob"}]}          [D4.P4]
+;;   ^ CORRECTED 2026-07-29 (handoff verification): this line previously showed
+;;     the BARE vector @["Alice" "Bob"], which is the EXTRACTIVE result of the
+;;     bare path `app-config.admins:name` — not the in-block one. Inside `{…}` a
+;;     path PROJECTS (spec §1.2), so broadcast maps the projection and each
+;;     element keeps its leaf key. The file also contradicted ITSELF: the two
+;;     lines below claim the merge of `{admins:name admins:role}` gives KEYED
+;;     per-element rows, which two bare vectors could never produce. Same
+;;     transcription class as the §B `^_` line corrected earlier today.
 ;; app-config{admins:name admins:role}        ;; SAME-SPINE MERGE (Ruling B case 3)                   [D4.P5]
 ;; app-config{admins:{name role}}             ;;   ⟵ the L2 normal form; both give
 ;;   ;; {:admins @[{:name "Alice" :role :super} {:name "Bob" :role :regular}]}

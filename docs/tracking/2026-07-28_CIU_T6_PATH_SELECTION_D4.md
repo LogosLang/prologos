@@ -147,7 +147,7 @@ showed was missing (its "single most important unasked question"). Probed
 | 1-tuple `〈String〉` | representable (1-field nat-row; runtime `expr-rrb`) but the LITERAL arm collapses `@[x]` to `[PVec T]` | selection mints rows directly — the 2a ruling. ⚠ R5 classification RECORDED (2026-07-29): the spec's corpus marker `〈String〉` transcribes to HEAD's `⟨String⟩` — a NOTATION divergence (two spec notations share the `〈…〉` glyph; row 1 is the generic homogeneous vector, this row the concrete tuple). Previously applied only in an acceptance-file comment. Also: the literal arm collapses at EVERY homogeneous n (the probe iterates under rollback), not only n=1 — which is WHY selection mints rows directly for both of §B's keyless lines |
 | keyed row `{:k T …}` in selection order | type: **canonically sorted** (`syntax.rkt:749-756`, `equal?`-identity, load-bearing) · value: champ-hash order, key-set-determined | the 2c ruling: carrier order, thesis-derived |
 | row-meet (§5.3) | **does not exist** (0 grep hits) | booked as NEW machinery, §5.P4 |
-| presence marks + `dyn` tail | `expr-Record (key-domain fields tail)`, `record-field (type presence)` — the S-lens-declared presence lattice | in NEITHER document; §6 declares it; dyn-tail semantics = Batch-4 question |
+| presence marks + `dyn` tail | `expr-Record (key-domain fields tail)`, `record-field (type presence)` — the S-lens-declared presence lattice | §6 declares it; dyn-tail semantics RULED by 4d, and for BLOCKS by **Q_T2 (Horn D lenient)** |
 
 ### §2.4 Standing items the spec does not cover
 
@@ -537,7 +537,8 @@ radius is low — `(Map Int V)` requires an annotation to reach — and unifying
 the spellings is the point of Q_R1, so the adaptation is ACCEPTED. Named so it
 cannot be rediscovered as a defect.
 
-**The P3 co-design rulings [owner, 2026-07-29]** (rounds 1–3 of the Q_T batch,
+**The P3 co-design rulings [owner, 2026-07-29]** (the COMPLETE Q_T batch —
+Q_T1–Q_T8, ruled across four deliberative rounds,
 in PROSE per the standing discipline; audit `wf_27a84061-c7e` fed them —
 **13th consecutive phase whose premise the mini-audit refuted or rescoped**):
 
@@ -693,8 +694,11 @@ in PROSE per the standing discipline; audit `wf_27a84061-c7e` fed them —
   struck here rather than left standing, because two contradictory statements
   eleven lines apart in the same section is exactly how P3 would inherit the
   false premise Q_M7 was written to prevent.
-- `.-1` = classifier-level rejection; negative bracket/`get` payloads = a
-  static error at the grouping seat alongside `m[:a]`.
+- ~~`.-1` = classifier-level rejection~~ — **SUPERSEDED** by §Q8.1 + §5.P2:
+  `.-1` (and `.+1`) LEX CLEANLY as dot-access with a signed field, so the
+  rejection is a CONSUMER decision, not a classifier one; pinned at P2.
+  Negative bracket/`get` payloads = a static error at the grouping seat
+  alongside `m[:a]` (landed P1a).
 - ~~`.:.`/`.:[` tokens defer to P5~~ — **MOOT**: the new broadcast is bare
   `:s`; no `.:` tokens exist in the surface at all.
 
@@ -719,8 +723,8 @@ is what it is.
   its IMPLEMENTATION may land later or post-v1 — see §5.P6 for why it is
   staged rather than absorbed.
 - **Gate**: NONE open on the critical path. Spec Q2 was DISSOLVED by ruling 2c
-  (carrier order, thesis-derived); the only open question is **Q8 (the lexical
-  grammar), which is ANSWERED BY §5.P1** — its own deliverable, not a blocker on
+  (carrier order, thesis-derived); **Q8 is CLOSED** (written at P1b-i, owner-reviewed 2026-07-28, normative;
+  see §Q8) — its own deliverable, not a blocker on
   anything upstream.
 
 ---
@@ -974,9 +978,15 @@ pins (B5/B6/B7); 11 flips across `test-dot-access-01/-02`, `test-nil-type`,
    struct (surface-syntax.rkt:251/:894) · elaborator arm (:2394) · the
    `expr-broadcast-get` node per pipeline.md IN FULL (syntax/substitution/
    zonk/reduction whnf+nf arms/pretty-print/pnet-serialize/typing/qtt) ·
-   PNET_VERSION bump if the node is tag-registered (decide from the serialize
-   table; the #78 v3→v4 precedent — a version sweep is the only reliable
-   cache invalidation). The `.*name` guided error names `:name` as the P4
+   ~~PNET_VERSION bump if the node is tag-registered … a version sweep is the
+   only reliable cache invalidation~~ — ⚠ **STRUCK 2026-07-29**: refuted by §8
+   R6 as corrected. The tag table is SYMBOL-keyed (additive), and
+   `pnet-stale?` already invalidates on `infrastructure-stale?` + a source
+   hash, so a bump is owed only when an EXISTING shape's serialization
+   changes. P1a itself needed none. (Left visible rather than deleted: this is
+   the second copy of the premise the `3cf60868` doc-truth commit was written
+   to kill, found by the handoff verification — the "one correction, two
+   copies" shape.) The `.*name` guided error names `:name` as the P4
    replacement (the accepted-gap noise, 4 sites). Post-keyword-removal
    diagnostic shapes pinned BOTH ways: `(broadcast-get x :f)` at command
    position = a POL.9 goal → "Unknown procedure"; `[broadcast-get x :f]` =
@@ -1019,7 +1029,7 @@ pins (B5/B6/B7); 11 flips across `test-dot-access-01/-02`, `test-nil-type`,
 `m[:kw]` flips in test-postfix-index-01/-03; the `#.name` + `m[k]`-variable
 must-not-break pins; the conservative-default replacement pin; net-new reject
 pins. Both modes where the surface exists in both. Failing-test-first.
-Status: ⬜.
+Status: ✅ (see this section's close notes / the tracker).
 
 ### §5.P1b — The seams + the Q8 grammar  (SPLIT THREE WAYS, Q_M2)
 
@@ -1853,7 +1863,7 @@ not. Zero live `:2`–`:9`/`:m` uses, so nothing live moves. **Owes a corpus
 A/B** (tokenizer change) and a pin on both halves: `users:10` one token, and a
 binder-position `:10` still loudly rejected.
 
-Status: ⬜.
+Status: ✅ (see this section's close notes / the tracker).
 
 **Acceptance delta for ALL of P1b: ZERO markers uncommented** — every line
 P1b makes LEXABLE is a P3/P4/P5 SEMANTICS target, and the file's convention
@@ -1892,8 +1902,12 @@ currently-PASSING markers are at RISK if `(pair? result)` is dropped.
    four-bucket order (reader-form head ≻ select-block ≻ literal; spaced never
    a block). **Owner-reviewed before landing.**
 
-`^` is NOT touched in either half (parser-side split at P3, per the standing
-ruling — no second splitter).
+~~`^` is NOT touched in either half (parser-side split at P3, per the standing
+ruling — no second splitter).~~ ⚠ **STRUCK**: superseded by **Q_M7** (§3) —
+that ruling was NOT EXECUTABLE (`split-fused-symbol` splits on `":"`; the
+tree's only `^` splitter is sexp-only AND keeps empty segments). **P3b builds
+THE ONE splitter.** Struck rather than left, because "no second splitter" is
+a premise that bites exactly at P3b.
 
 **Test delta**: seam pins in `test-parse-reader.rkt` (RRB-native API — the
 three-API finding standardizes here) both modes; the WS narrow-var repair pin
@@ -2251,8 +2265,11 @@ P3a.
 
 #### §5.P3c — Keyless + L4 + honest nesting  ⬜  (depends on P3b's bare-`^`)
 
-**Work**: bare leaf `^` = keyless component (the branch contributes the leaf
-VALUE); ordinal branches `{N M}`; the nat-row mint at EVERY n — 1-tuples and
+**Work** (⚠ boundary note: P3b ships the SPLITTER and every MID-PATH `^`
+semantic; the LEAF-position keyless reading lands HERE, because a keyless
+branch only means something once the tuple carrier exists — so P3b's close
+leaves a leaf `^` parsed-but-refused, and P3c makes it assemble):
+bare leaf `^` = keyless component (the branch contributes the leaf VALUE); ordinal branches `{N M}`; the nat-row mint at EVERY n — 1-tuples and
 homogeneous n included, which is the entire reason selection routes around
 the literal arm (ruling 2a as corrected by the audit); L4 sort homogeneity
 (all-keyed → Map, all-keyless → tuple, MIXING errors level-locally — both
@@ -2395,7 +2412,8 @@ flip ✅ without it). Status: ⬜.
    join is trivially disjoint; Ruling B (P5) makes the join partial — its
    case analysis IS the answer to "where is the join defined."
 
-**OPEN (named for the Batch-4 walkthrough): dyn-tail semantics** — what `.*`
+**~~OPEN~~ RULED (Batch 4 = ruling 4d; further refined for BLOCKS by Q_T2's
+D-lenient rule): dyn-tail semantics** — what `.*`
 row-splat and map-generic `:` mean over a row whose tail is `dyn` (unknown
 support). The old surface's SUPPORT-BOUNDEDNESS principle (D3-M5, survived)
 says splat needs a bounded support; `(Map K V)` uniform broadcast needs no

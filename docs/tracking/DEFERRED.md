@@ -2134,7 +2134,16 @@ is the VAG's own red flag — a defensive guard whose guarded condition may be
 impossible. Either construct the reaching case and pin it, or delete the arm.
 Do not leave it as decoration.
 
-### 11. The `.N` trailing guard blocks `^`, so `x.0^` declines while `x[0]^` lexes
+### 11. ~~The `.N` trailing guard blocks `^`~~ — DISSOLVED 2026-07-29 by ruling Q_T4a
+
+> **Resolution**: the owner ruled that `^` NEVER attaches to an ordinal (an
+> ordinal yields the value at an index; there is no key to operate on, and
+> non-local attachment breaks composition). So `x.0^`, `x[0]^` and
+> `{admins.0^first}` are all SPELLING ERRORS, and the Q_R1 "two surfaces one
+> mechanism" identity is preserved — they agree on being rejected. What remains
+> is MESSAGE QUALITY only, owned by **D4.P3b** (one guided error naming the
+> valid spelling `admins^first.0`). The original filing follows for the record.
+
 
 Q_R2's guard declines on any `ident-continue?` char after the digit run, and
 `ident-continue?` contains `#\^` and `#\'`. Consequence: `x.0^` is not ordinal
