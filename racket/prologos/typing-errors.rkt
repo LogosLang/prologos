@@ -139,11 +139,78 @@
         (string-join (map (lambda (l) (string-append ":" (symbol->string l))) shown) " ")
         (if (> more 0) (format " (+~a more)" more) "")))))
 
+;; CIU T6 D4.P2 (owner ruling Q_R5) — the ORDINAL counterpart of
+;; `format-closed-row-miss`.
+;;
+;; P2 makes `t.9` reachable on a het tuple, and the pre-existing hint was
+;; KEYWORD-GATED twice over (an `expr-keyword?` key AND a `'keyword`
+;; key-domain), so a nat-domain closed row got NO hint at all and surfaced as a
+;; bare "Could not infer type" — no index, no arity, no path. Het tuples are
+;; exactly the carrier the acceptance corpus pins (`mixed`, `events`), so this
+;; was the first thing a user would hit on the new surface. The PVec runtime
+;; path was already excellent ("index 9 out of bounds for PVec of length 3");
+;; this brings the STATIC tuple path up to that bar.
+(define (format-closed-tuple-oob rec idx names)
+  (define arity (length (expr-Record-fields rec)))
+  (string-append
+   "Could not infer type — index " (number->string idx)
+   " is out of range for the " (number->string arity) "-tuple "
+   (pp-expr rec names)
+   (if (zero? arity)
+       " (the tuple has no positions)"
+       (format " — valid indices 0–~a" (sub1 arity)))))
+
+;; The key of an ordinal projection, as a plain NON-NEGATIVE integer, or #f.
+;; `expr-get` accepts Nat-or-Int literals, so both shapes reach here.
+;;
+;; ⚠ THE NON-NEGATIVE GUARD IS LOAD-BEARING — caught by adversarial verify.
+;; This predicate mirrors `record-project`'s literal-nat leg
+;; (typing-core.rkt:573-576), whose `#:when` is `(and (eq? kd 'nat)
+;; (exact-nonnegative-integer? n))`. The first draft copied the Nat-or-Int half
+;; and DROPPED the non-negative half — the `infer`/`inferQ`-twin drift shape
+;; `pipeline.md` codifies, where two halves of one rule disagree.
+;;
+;; Because the ordinal branch sits FIRST in `closed-row-miss-hint`'s `or`, a
+;; negative literal made the hint (a) assert something FALSE about a
+;; sub-expression that type-checks fine — `record-project` routes a negative
+;; literal to the DYNAMIC-key path, where `(get het -1)` succeeds as the union
+;; of positions — and (b) SUPPRESS the correct keyword closed-row-miss hint
+;; that the same expression used to get. A/B-verified against a pinned
+;; baseline: it was a diagnostic REGRESSION, not merely a new gap. Reachable
+;; via the paren-keyword forms `(get het -1)` / `(map-get het -1)`; the bracket
+;; surface is intercepted by the `postfix-neg` marker and `.N` cannot lex a
+;; sign, which is exactly why no `.N` test caught it.
+(define (ordinal-key-index k)
+  (cond
+    [(expr-nat-val? k) (expr-nat-val-n k)]
+    [(expr-int? k)
+     (let ([n (expr-int-val k)])
+       (and (exact-nonnegative-integer? n) n))]
+    [else #f]))
+
 (define (closed-row-miss-hint ctx e names)
   (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
     (let search ([x e])
       (and (expr? x)
-           (or (let ([mk (projection-parts x)])
+           (or
+            ;; ---- ORDINAL branch (D4.P2, Q_R5): nat key-domain, integer key ----
+            (let ([mk (projection-parts x)])
+              (and mk
+                   (let ([idx (ordinal-key-index (cdr mk))])
+                     (and idx
+                          (let ([tm (whnf (infer ctx (car mk)))])
+                            ;; `closed-nat-row?` (syntax.rkt) IS this conjunction
+                            ;; — Record ∧ 'nat domain ∧ 'closed tail — and is
+                            ;; already the canonical guard at 5 typing-core
+                            ;; sites. The first draft re-derived it inline; use
+                            ;; the ONE definition (the "check for existing
+                            ;; helpers" lesson). CLOSED-only for the same reason
+                            ;; the keyword branch below is: a 'dyn tail means
+                            ;; the position may live in the remainder.
+                            (and (closed-nat-row? tm)
+                                 (not (record-lookup-field tm idx))
+                                 (format-closed-tuple-oob tm idx names)))))))
+            (let ([mk (projection-parts x)])
                  (and mk
                       (expr-keyword? (cdr mk))
                       (let ([tm (whnf (infer ctx (car mk)))])

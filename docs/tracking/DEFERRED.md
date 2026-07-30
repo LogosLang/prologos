@@ -2089,3 +2089,84 @@ defmacro lst [$x] [f '[1 2]]
 This supersedes item 3's count. The structural reading there stands and is now
 better evidenced: the fix is inverting the predicate's polarity, not 23 more
 exclusions.
+
+---
+
+## CIU T6 D4.P2 spin-offs (filed 2026-07-29, from the pre-commit adversarial verify)
+
+Four skeptics + an adjudicator on the uncommitted `.N` diff. One SIGNIFICANT
+finding was a real regression and was FIXED before the commit (the negative
+literal hijacking `closed-row-miss-hint`; see typing-errors.rkt's
+`ordinal-key-index` comment and the three regression pins in
+`tests/test-path-selection.rkt`). Two more were fixed in passing (the
+`token-entry->compat` sibling arm; the layer-error comment). These are what
+SURVIVED as deliberate non-goals.
+
+### 9. The ordinal miss-hint is narrower than the surface `.N` opens
+
+Q_R5 gave the nat key-domain its own `closed-row-miss-hint` branch, so a
+het-tuple index out of range now names index and arity. Four adjacent shapes
+still fall through to a bare "Could not infer type" / "Type mismatch":
+
+- `cfg.0` — an ORDINAL on a KEYWORD-domain row. **The adjudicator singled this
+  one out**, and rightly: it is the most plausible first-contact error on a
+  brand-new positional surface, and Q_R5's own stated rationale was "the first
+  thing a user would hit". Leaving it bare is in mild tension with the ruling
+  that motivated the branch.
+- `het.name` — a KEYWORD field on a NAT-domain row (the mirror case).
+- ordinal OOB in CHECK position (inside a `spec`'d body) rather than infer.
+- `.N` on a non-tuple carrier (Int, String).
+
+Each is a one-line symmetric extension of the machinery P2 just built, and
+NONE is a lie — every case is loud, honest, and strictly better than the
+pre-P2 "Unbound variable" these spellings used to produce. Deferred rather
+than swept in because the branch order in `closed-row-miss-hint` is exactly
+where P2's own regression came from: adding arms there without an A/B against
+a pinned baseline is how a correct diagnostic gets suppressed. Whoever takes
+this should A/B each new arm the way the P2 adjudicator did.
+
+### 10. `format-closed-tuple-oob`'s zero-arity branch may be structurally unreachable
+
+`(if (zero? arity) " (the tuple has no positions)" …)` (typing-errors.rkt)
+ships with no test and no demonstrated reachability: `@[]` types as
+`[PVec _]`, not a 0-field nat row, so it takes the runtime path instead. This
+is the VAG's own red flag — a defensive guard whose guarded condition may be
+impossible. Either construct the reaching case and pin it, or delete the arm.
+Do not leave it as decoration.
+
+### 11. The `.N` trailing guard blocks `^`, so `x.0^` declines while `x[0]^` lexes
+
+Q_R2's guard declines on any `ident-continue?` char after the digit run, and
+`ident-continue?` contains `#\^` and `#\'`. Consequence: `x.0^` is not ordinal
+access, while the bracket spelling `x[0]^` lexes fine.
+
+**This is a landmine for P3**, which lands `^` RE-KEY: the moment `^` becomes
+meaningful after a selector, the two spellings Q_R1 unified will diverge on
+exactly the character P3 is introducing. It is not a defect today (nothing
+uses `^` after an ordinal yet) and it is not a reason to widen the guard now —
+but P3's mini-audit must decide it deliberately rather than discover it, and
+Q_R1's "two surfaces, ONE mechanism" identity is what is at stake.
+
+### 12. `reconstitute-path-list` is `$dot-access`-only, so ordinal segments leak the sentinel
+
+`macros.rkt`'s `reconstitute-selection-paths` / `reconstitute-path-list`
+reconstitute only `$dot-access` segments, so a `selection … :requires
+[:address.0]` leaks a raw `'($postfix-index 0)` into the user-facing message.
+Loud, same error count as baseline, and the same family as the `pp-datum` /
+`form-deps.rkt` silent-degradation tier §Q8.5 already declares family-wide and
+not chargeable to a new sentinel. Pre-existing shape; `.N` widens its input
+space. Fix belongs with whatever finally inverts that family's polarity
+(see item 8).
+
+### 13. `tokenize-string` flipped from RAISING to emitting a token on `.digit` input
+
+The compat tokenizer's standalone-`.` rejection (`"Unexpected character: ."`)
+no longer fires for `x.10`, because `.10` is now one token. The exported API's
+behaviour on that input therefore changed from raise to value. Not
+production-reachable (the only non-test consumer, `tools/golden-capture.rkt`,
+reads token TYPES only) and the value is now sibling-consistent since P2 added
+the `token-entry->compat` arm. Recorded because §Q8.5 pre-classified this site
+as "a test-only twin" WITHOUT recording that a behaviour flip was possible
+there — and the sole dependent test uses a SPACED dot, so nothing caught it.
+The weak pin (`(check-exn exn:fail? …)`, no message match) in
+`tests/test-varargs.rkt` is worth tightening.

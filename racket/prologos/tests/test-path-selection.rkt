@@ -12,6 +12,7 @@
 
 (require rackunit
          racket/list
+         racket/string
          racket/file
          racket/runtime-path
          "../macros.rkt"
@@ -894,3 +895,232 @@
   ;; Was: `g : _ _ _ _ -> _ defined.` with 0 errors (params $select-brace/x/base/a).
   (define rs (run-ws-raw "def bs := {:a 1}\ndefn g [x bs{a}] x\n"))
   (check-true (ormap prologos-error? rs)))
+
+;; ============================================================
+;; CIU T6 D4.P2 — grade-1 core: `.N` ordinal access  (Q_M8 dot half, Q_R1–Q_R5)
+;;
+;; Reader/datum pins live in test-parse-reader.rkt. THIS is the other half of
+;; the TWO-LAYER pin the §Q8.1 correction forces.
+;;
+;; ⚠ The design said the rational mis-lex sat "at 0 errors" and demanded
+;; failing-test-first on that. It was a LAYER ERROR: the 6/5 reading is
+;; reader-layer, and END TO END the stranded bare `|.|` is UNBOUND, so every
+;; rational-class form is LOUD today. Framing a pin as "was silently 6/5"
+;; would make it pass/fail for a reason it does not claim — this arc's hazard
+;; 4. So these are framed: WAS A MISLEADING ERROR, NOW COMPUTES THE VALUE.
+;; ============================================================
+
+(test-case "P2 fixpoint pin: the $postfix-index fold is IDEMPOTENT (Q_R1 inherits this)"
+  ;; Q_R1's second, independent justification. P1b-iii's BLOCKING defect was a
+  ;; non-fixpoint fold that swallowed one more LEFT sibling per preparse pass.
+  ;; The existing arm emits `(get target key)` — NOT sentinel-headed — so pass 2
+  ;; short-circuits at the ormap gate. `.N` reusing it inherits the property.
+  (define once (rewrite-dot-access '(x ($postfix-index 0))))
+  (define twice (rewrite-dot-access once))
+  (check-equal? once twice "non-idempotent fold — it will swallow siblings on re-entry")
+  (check-false (and (pair? once) (memq (car once) '($postfix-index)))
+               "result is still sentinel-headed — re-entry will match it again"))
+
+(test-case "P2 ⭐ .N computes a value where it was a MISLEADING error (PVec)"
+  (define r (run-ws "def v := @[10 20 30]\nv.0\nv.2\n"))
+  (check-regexp-match #rx"10 : Int" (second r))
+  (check-regexp-match #rx"30 : Int" (last r)))
+
+(test-case "P2 ⭐ the RATIONAL class, end-to-end: was `Unbound variable`, now a value"
+  ;; `m.1.2` read as ($decimal-literal 6/5) at the reader, leaving a bare `|.|`
+  ;; that is UNBOUND — so this was 2 counted errors, not a silent 6/5.
+  (define rs (run-ws-raw "def m := @[@[1 2 3] @[4 5 6]]\nm.1.2\nm.0.0\n"))
+  (check-false (ormap prologos-error? rs)
+               "the rational mis-lex is gone; both forms must now type and reduce")
+  (define r (map (lambda (x) (format "~a" x)) rs))
+  (check-regexp-match #rx"6 : Int" (second r))
+  (check-regexp-match #rx"1 : Int" (last r)))
+
+(test-case "P2: multi-digit ordinals (Q_M8 — the ruling's own motivating case)"
+  (define r (run-ws
+             (string-append
+              "def big := @[0 1 2 3 4 5 6 7 8 9 10 11 12]\n"
+              "big.10\nbig.12\n")))
+  (check-regexp-match #rx"10 : Int" (second r))
+  (check-regexp-match #rx"12 : Int" (last r)))
+
+(test-case "P2: chains in BOTH directions (field→nat was mis-lexed, nat→field mis-folded)"
+  (define r (run-ws
+             (string-append
+              "def cfg := {:admins @[{:name \"Alice\"} {:name \"Bob\"}]}\n"
+              "cfg.admins.0.name\ncfg.admins.1.name\n")))
+  (check-regexp-match #rx"\"Alice\"" (second r))
+  (check-regexp-match #rx"\"Bob\"" (last r)))
+
+(test-case "P2 ⭐ Q_R1 end-to-end: `v[0]` and `v.0` agree, being one mechanism"
+  (define r (run-ws "def v := @[10 20 30]\nv[1]\nv.1\n"))
+  (check-equal? (second r) (last r)
+                "two surfaces over ONE mechanism — if these differ, Q_R1 broke"))
+
+(test-case "P2: het tuple .N keeps EXACT per-position types (record-project)"
+  (define r (run-ws "def t := @[7 \"seven\" :seven]\nt.0\nt.1\nt.2\n"))
+  (check-regexp-match #rx"7 : Int" (list-ref r 1))
+  (check-regexp-match #rx"\"seven\" : String" (list-ref r 2))
+  (check-regexp-match #rx":seven : Keyword" (list-ref r 3)))
+
+(test-case "P2: a PVec runtime OOB stays LOUD (the P2 two-tier substrate)"
+  (define r (run-ws-raw-last "def v := @[10 20 30]\nv.5\n"))
+  (check-true (prologos-error? r)))
+
+(test-case "P2 Q_R5: a het-tuple OOB NAMES the index and the arity (was bare 'Could not infer type')"
+  ;; `closed-row-miss-hint` was KEYWORD-GATED, so a nat-domain closed row got no
+  ;; hint at all — and het tuples are exactly what the acceptance corpus pins.
+  ;; ⚠ THIS PIN WAS VACUOUS IN ITS FIRST DRAFT — AND THE DRAFT PASSED. Asserting
+  ;; bare #rx"9" / #rx"3" matched DIGITS IN THE TEMP-FILE PATH inside the printed
+  ;; error struct, the identical trap this arc already hit. Assert on DISTINCTIVE
+  ;; PHRASING, never on bare digits.
+  (define r (run-ws-last "def t := @[7 \"seven\" :seven]\nt.9\n"))
+  (check-regexp-match #rx"index 9" r "must name the offending INDEX")
+  (check-regexp-match #rx"valid indices" r "must name the valid RANGE")
+  (check-false (regexp-match? #rx"Unbound variable" r)
+               "the pre-P2 lie: the stranded bare `|.|` was reported instead"))
+
+;; ---------- the LYING DIAGNOSTICS this phase actually repairs ----------
+;; P2's real headline, unclaimed by §5.P2: because `x.0` was THREE datum items,
+;; every arity-checking context blamed something else entirely.
+
+(test-case "P2 ⭐ lying diagnostic 1: `.N` inside a MAP LITERAL blamed the map key"
+  ;; was: "Bare symbol '.' not allowed as map key; use :. for keyword"
+  (define r (run-ws-raw "def v := @[10 20 30]\ndef q := {:a v.0}\nq\n"))
+  (check-false (ormap prologos-error? r))
+  (check-regexp-match #rx"10" (format "~a" (last r))))
+
+(test-case "P2 ⭐ lying diagnostic 2: `.N` in an fn BODY blamed the PARAMETER LIST"
+  ;; was: "fn: all parameters except body must be bare symbols or a binder (x : T)"
+  (define r (run-ws-raw "def v := @[10 20 30]\ndef f := [fn [w : [PVec Int]] w.0]\n[f v]\n"))
+  (check-false (ormap prologos-error? r))
+  (check-regexp-match #rx"10 : Int" (format "~a" (last r))))
+
+(test-case "P2 ⭐ lying diagnostic 3: a bare `.N` at top level said `Unbound variable`"
+  (define r (run-ws-raw-last "def v := @[10 20 30]\nv.0\n"))
+  (check-false (prologos-error? r)))
+
+(test-case "P2: `.N` folds in ALL THREE rewrite-dot-access callers"
+  ;; rewrite-dot-access has THREE production callers, so a `.N` arm inside it
+  ;; inherits them free: preparse-expand-subforms (the re-entry),
+  ;; preparse-map-literal-contents (map-literal VALUES), and expand-mixfix-form
+  ;; (the `.( … )` token stream, folded BEFORE pratt-parse).
+  ;; ⚠ The first draft of this pin used `.( v.0 )` — a SINGLE-operand mixfix,
+  ;; which errors identically on the baseline with a plain `.name`
+  ;; (`.( c.a )` → "mixfix: Unexpected token after expression"). It would have
+  ;; failed for a reason unrelated to `.N`. Use a real infix expression.
+  (define r (run-ws-raw "def v := @[10 20 30]\n.( v.0 + v.1 )\ndef q := {:a v.2}\nq\n"))
+  (check-false (ormap prologos-error? r))
+  (define f (map (lambda (x) (format "~a" x)) r))
+  (check-regexp-match #rx"30 : Int" (second f))     ;; mixfix caller
+  (check-regexp-match #rx"30" (last f)))            ;; map-literal-value caller
+
+(test-case "P2 NEW-INSTANCE GUARD: `ns foo.2` must NOT silently drop the segment"
+  ;; namespace.rkt's guard raised only for $dot-access. With `.N` minting
+  ;; $postfix-index, `ns foo.2` would reintroduce exactly the silent-drop bug
+  ;; that b0db8f3e fixed.
+  ;; ⚠ The guard RAISES (`(error 'ns …)`) rather than returning a per-command
+  ;; error value, so this is a whole-file abort — PRE-EXISTING behaviour, shared
+  ;; with `ns foo.bar`, and the same class Q_L4's marker seat exists for. Left
+  ;; as-is deliberately: `ns` is the first command in a file, so aborting there
+  ;; is near-indistinguishable from a per-command error. Pinned with check-exn
+  ;; so the SHAPE is deliberate and a future change to the seat is visible.
+  (check-exn #rx"namespace name cannot contain"
+             (lambda () (run-ws-raw "ns foo.2\n"))
+             "a numeric ns segment must be REJECTED, not silently dropped"))
+
+(test-case "P2 MUST-NOT-BREAK: `.k` nominal access and the `v[…]` surface are untouched"
+  (define r (run-ws
+             (string-append
+              "def cfg := {:host \"localhost\" :port 8080}\n"
+              "cfg.host\ncfg.port\n"
+              "def v := @[10 20 30]\nv[2]\n")))
+  (check-regexp-match #rx"\"localhost\"" (list-ref r 1))
+  (check-regexp-match #rx"8080 : Int" (list-ref r 2))
+  (check-regexp-match #rx"30 : Int" (last r)))
+
+;; ============================================================
+;; D4.P2 — pins added from the pre-commit ADVERSARIAL VERIFY.
+;;
+;; Four perspective-diverse skeptics + an adjudicator, on the uncommitted diff.
+;; The adjudicator worktree-pinned a baseline and A/B'd, which is what turned
+;; the first item below from "a gap" into "a REGRESSION" — the distinction that
+;; made it commit-blocking.
+;; ============================================================
+
+(test-case "P2 REGRESSION PIN (adversarial verify): a NEGATIVE literal index must not hijack the hint"
+  ;; The ordinal branch sits FIRST in `closed-row-miss-hint`'s `or`, and its
+  ;; first draft accepted ANY `expr-int` — dropping the `exact-nonnegative-integer?`
+  ;; half of the guard it mirrors (`record-project`'s literal-nat leg). Effect:
+  ;;   (a) it asserted the index was out of range for an expression that
+  ;;       TYPE-CHECKS FINE (record-project routes a negative literal to the
+  ;;       DYNAMIC path, which succeeds as the union of positions), and
+  ;;   (b) it SUPPRESSED the correct keyword closed-row-miss hint on the same
+  ;;       expression — strictly worse than the message it replaced.
+  ;; Not reachable from `.N` (which cannot lex a sign) nor from `het[-1]` (the
+  ;; postfix-neg marker intercepts), which is exactly why no `.N` test caught it.
+  ;; The reachable surface is the paren-keyword form.
+  (define r (run-ws
+             (string-append
+              "def mp := {:a 1 :b 2}\n"
+              "def het := @[7 \"seven\" :seven]\n"
+              "[+ (get het -1) mp.nope]\n")))
+  ;; the KEYWORD miss is what is actually wrong here, and must be what is named
+  (check-regexp-match #rx"not present in the record" (last r))
+  (check-regexp-match #rx"nope" (last r))
+  (check-false (regexp-match? #rx"out of range" (last r))
+               "the ordinal branch hijacked a sound subexpression's diagnostic"))
+
+(test-case "P2: a negative literal index still TYPE-CHECKS (the union-of-positions path)"
+  ;; The premise of the pin above: `(get het -1)` is not an error at all, so
+  ;; claiming it is out of range is a false statement, not a stricter one.
+  (define r (run-ws-raw-last
+             (string-append
+              "def het := @[7 \"seven\" :seven]\n"
+              "(get het -1)\n")))
+  (check-false (prologos-error? r)))
+
+(test-case "P2: the TRUE ordinal OOB hint survives the negative-literal fix"
+  ;; Guard the fix against over-correction — the whole point of Q_R5 must remain.
+  (define r (run-ws-last
+             (string-append
+              "def het := @[7 \"seven\" :seven]\n"
+              "het[9]\n")))
+  (check-regexp-match #rx"index 9" r)
+  (check-regexp-match #rx"valid indices" r))
+
+(test-case "P2 (adversarial verify): the ASCII-digit gate is SUITE-defended, not comment-defended"
+  ;; `char-numeric?` accepts U+0663 etc. while `string->number` rejects them, so
+  ;; a `char-numeric?` gate would mint a `#f` payload. The adjudicator PROVED
+  ;; the swap is invisible to all 241 targeted tests by actually making it —
+  ;; i.e. the decision was defended only by a comment. It is now pinned.
+  ;; A non-ASCII digit must be DECLINED by the ordinal recognizer (it then falls
+  ;; to pre-existing machinery, byte-identical to baseline).
+  ;; A non-ASCII digit is DECLINED by the ordinal recognizer AND by
+  ;; `recognize-dot-access` (whose exclusion is the wider `char-numeric?`), so it
+  ;; falls through to pre-existing machinery, which RAISES. A/B-verified
+  ;; byte-identical to baseline, so this pins "declined, unchanged" — not a new
+  ;; surface. If a future cleanup swaps in `char-numeric?`, the recognizer would
+  ;; instead ACCEPT it and mint a `#f` payload, and this check-exn goes red.
+  (define arabic-3 (string (integer->char #x0663)))
+  (check-exn #rx"exact\\?: contract violation"
+             (lambda () (compat-read-all-forms-string (string-append "x." arabic-3)))
+             "a non-ASCII digit must be DECLINED by the ordinal recognizer")
+  ;; and the positive direction: an ASCII ordinal payload is an exact non-negative
+  ;; integer, which is what `string->number` can actually produce.
+  (define payload (cadr (cadr (car (compat-read-all-forms-string "x.10")))))
+  (check-true (exact-nonnegative-integer? payload)
+              "the $postfix-index payload must be an exact non-negative integer"))
+
+(test-case "P2 (adversarial verify): the fixpoint pin now carries LEFT SIBLINGS"
+  ;; The original pin tested `(x ($postfix-index 0))` — a shape with no left
+  ;; siblings, while P1b-iii's defect was precisely that re-entry swallowed one
+  ;; more LEFT sibling per pass. A sibling-free shape cannot observe that.
+  (define once (rewrite-dot-access '(h base ($postfix-index 0) ($dot-access name))))
+  (define twice (rewrite-dot-access once))
+  (check-equal? once twice "non-idempotent fold — it will swallow siblings on re-entry")
+  ;; the application head must SURVIVE; only the immediate base is consumed
+  (check-equal? (car once) 'h "the application head was swallowed")
+  ;; and a base-less ordinal must not consume anything to its left
+  (check-equal? (rewrite-dot-access '(($postfix-index 0)))
+                (rewrite-dot-access (rewrite-dot-access '(($postfix-index 0))))))

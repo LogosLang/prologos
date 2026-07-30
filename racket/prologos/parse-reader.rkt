@@ -791,6 +791,77 @@
       2
       #f))
 
+;; CIU T6 D4.P2 — ORDINAL ACCESS `.N` (owner rulings Q_M8 · Q_R1 · Q_R2 · Q_R3).
+;;
+;; `.` DESCENDS uniformly under the 2026-07-28 surface, so `.0` / `.10` is
+;; ordinal descent — the positional twin of `.name`. MULTI-digit per Q_M8.
+;;
+;; WHY THIS KILLS THE RATIONAL MIS-LEX STRUCTURALLY, not heuristically: the
+;; tokenizer scans by POSITION and advances by the matched length, so once `.1`
+;; is consumed AT THE DOT, `recognize-decimal-literal` — which anchors at a
+;; DIGIT — never gets the interior dot of `x.1.2` as a candidate position. The
+;; dot simply stops being available as an anchor. (Before this, `x.1.2` read as
+;; `($decimal-literal 6/5)` and `x.10.20` as `51/5`. ⚠ Those were READER-layer
+;; readings: end-to-end the stranded bare `|.|` was UNBOUND, so the forms were
+;; LOUD, not silently wrong. See D4 §Q8.1's layer-error correction.)
+;;
+;; DISJOINTNESS, NOT PRIORITY, IS THE SAFETY PROPERTY (Q8.5 invariant 1 —
+;; priorities tie three ways at 87 and the registry is a plain hash, so ties
+;; break by unspecified order). The six-member dot band discriminates entirely
+;; on the SECOND character: `.` rest-param · `:` dot-key · `(` dot-lparen ·
+;; `{` dot-lbrace · `*` broadcast-access · ident-start dot-access (which
+;; excludes digits EXPLICITLY). A digit is disjoint from all six.
+;;
+;; Q_R2 — THE TRAILING GUARD, copied from the `:N` twin
+;; (`recognize-colon-annotation`): consume the whole digit run, THEN decline if
+;; an `ident-continue?` char follows. So `x.0N` `x.1e3` `x.1/2` `x.1f` `x.1p8`
+;; all DECLINE and keep lexing exactly as they do today — the guard mints no new
+;; error surface. `xs.0N` is a NAMED NON-GOAL (`0N` is the project's Nat
+;; spelling and `expr-get` accepts Nat-or-Int, so it reads as sensible
+;; Prologos; supporting it needs `digit+` plus an optional `N`, which is not
+;; this phase). Note `#\.` is NOT in `ident-continue?`, which is what lets
+;; `x.1.2` chain rather than decline.
+;;
+;; ⚠ ASCII DIGITS, DELIBERATELY DIFFERENT FROM THE `:N` TWIN — and this is NOT
+;; the F1b.7g drift class, because the two classifiers have different
+;; obligations. The twin's classifier keeps its lexeme symbolic and never calls
+;; `string->number`; THIS one must produce a NUMERIC payload (Q_R1). Measured:
+;; `char-numeric?` ACCEPTS U+0663 ARABIC-INDIC DIGIT THREE (and U+06F3, U+0966,
+;; U+FF11, U+17E0) while `(string->number "٣")` returns `#f`, so a
+;; `char-numeric?` gate here would mint a payload of `#f`. The narrow test is
+;; the one that matches what the classifier can actually convert.
+;;
+;; ⚠ AN EARLIER VERSION OF THIS COMMENT MADE A LAYER ERROR — corrected after
+;; adversarial verify measured the counterfactual end-to-end, and recorded here
+;; because it is the THIRD instance of this class in this phase (see `0e5a56a3`
+;; and `f6f30eaa`). It claimed the `char-numeric?` gate would be a "SILENT WRONG
+;; DATUM … worse than" the audit's predicted `exact?: contract violation`. Both
+;; halves were layer-confused: (1) the `#f` payload is silent only at the DATUM
+;; layer — end-to-end it is a LOUD per-command `ERROR: Unexpected datum: #f`
+;; with the file continuing, i.e. LESS severe, not worse; (2) the audit's
+;; `exact?: contract violation` prediction describes the SHIPPED path correctly
+;; (a non-ASCII digit is declined by this recognizer AND by `recognize-dot-access`,
+;; whose :738 exclusion is the wider `char-numeric?`, so it falls to pre-existing
+;; machinery and raises there — byte-identical to baseline). The audit was right;
+;; it was not superseded. State the layer with the measurement — the same
+;; discipline this file's own comment 30 lines above already applies.
+(define (ascii-digit? c)
+  (and (char? c) (char<=? #\0 c) (char<=? c #\9)))
+
+(define (recognize-dot-ordinal rrb pos)
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (cond
+    [(not (and c1 c2 (char=? c1 #\.) (ascii-digit? c2))) #f]
+    [else
+     (let loop ([i (+ pos 2)])
+       (define c (rrb-char-at rrb i))
+       (cond
+         [(ascii-digit? c) (loop (+ i 1))]
+         ;; Q_R2: a suffixed numeric shape is NOT an ordinal — decline whole.
+         [(and c (ident-continue? c)) #f]
+         [else (- i pos)]))]))
+
 (define (recognize-broadcast-access rrb pos)
   ;; .*ident
   (define c1 (rrb-char-at rrb pos))
@@ -1194,6 +1265,14 @@
   (register-token-pattern!
    (token-pattern 'broadcast-access (lambda (rrb pos) (recognize-broadcast-access rrb pos))
                   (lambda (s p l) 'broadcast-access) 87))
+  ;; D4.P2: `.N` ordinal access. Joins the 87 dot-compound cluster, making it
+  ;; FOUR-way — safe for the same reason the three-way was: all four are
+  ;; PREFIX-DISJOINT (`(` / `*` / `{` / digit), not because of the number
+  ;; (Q8.5 invariant 1). It is also disjoint from `decimal-literal` (75), which
+  ;; anchors at a DIGIT and can therefore never contend for a dot position.
+  (register-token-pattern!
+   (token-pattern 'dot-ordinal (lambda (rrb pos) (recognize-dot-ordinal rrb pos))
+                  (lambda (s p l) 'dot-ordinal) 87))
   (register-token-pattern!
    (token-pattern 'dot-access (lambda (rrb pos) (recognize-dot-access rrb pos))
                   (lambda (s p l) 'dot-access) 86))
@@ -2068,6 +2147,17 @@
       [(pipe-right) '$pipe-gt]
       [(facts-sep) '$facts-sep]
       [(clause-sep) '$clause-sep]
+      ;; D4.P2: `dot-ordinal` is NOT in this list — it needs a NUMERIC payload,
+      ;; not a prefix-stripped symbol, so it gets its own arm below. Reported
+      ;; independently by FOUR adversarial lenses when it was missing: the token
+      ;; fell to `[else (string->symbol lexeme)]` and yielded `|.10|` (dot
+      ;; retained, payload symbolic), contradicting both the sibling contract
+      ;; here and the numeric payload Q_R1 establishes. Not production-reachable
+      ;; (this converter's only non-test consumer, tools/golden-capture.rkt,
+      ;; reads token TYPES only) — fixed anyway, because a sibling-inconsistent
+      ;; value in an exported API is how the next reader gets misled.
+      [(dot-ordinal)
+       (string->number (substring lexeme 1))]
       [(dot-access nil-dot-access broadcast-access)
        (string->symbol (substring lexeme (if (string-prefix? lexeme "#") 2 1)))]
       [(dot-key)
@@ -2267,6 +2357,24 @@
      (define field-sym (string->symbol (substring lexeme 1)))
      (make-stx (list (make-stx '$dot-access source line col pos1 0)
                      (make-stx field-sym source line (+ col 1) (+ pos1 1) (- span 1)))
+               source line col pos1 span)]
+    ;; D4.P2 — `.N` ordinal access. THIS SITE IS THE ONE NO ENUMERATION HAD
+    ;; NAMED, and a miss here is SILENT: a token type with no arm falls through
+    ;; both `[else]`s (the inner `value` case yields `(string->symbol lexeme)`,
+    ;; the outer wraps that symbol) — no raise, no diagnostic, just the bare
+    ;; symbol `|.1|`. §Q8.5 invariant 3 now carries it as token-layer site (f).
+    ;;
+    ;; ⚠ `string->number`, NOT the siblings' `string->symbol`. A NUMERIC payload
+    ;; is what makes `v.0` byte-identical to `v[0]`'s datum, and that identity is
+    ;; the whole content of owner ruling Q_R1 ("two SURFACES over ONE
+    ;; mechanism") — with a symbolic payload the reuse would silently mint
+    ;; `(map-get x :10)`: the wrong node (map-get has no PVec leg) with the
+    ;; wrong key domain. The recognizer's ASCII-digit gate is what guarantees
+    ;; this conversion cannot return `#f`.
+    [(dot-ordinal)
+     (define n (string->number (substring lexeme 1)))
+     (make-stx (list (make-stx '$postfix-index source line col pos1 0)
+                     (make-stx n source line (+ col 1) (+ pos1 1) (- span 1)))
                source line col pos1 span)]
     [(dot-key)
      (define kw-sym (string->symbol (substring lexeme 1)))  ;; .:name → :name

@@ -1551,3 +1551,106 @@
   (check-equal? failed 0
                 (format "~a/~a example files failed topology comparison"
                         failed (+ passed failed))))
+
+;; ============================================================
+;; CIU T6 D4.P2 — the `.N` ordinal-access token (Q_M8's dot half)
+;;
+;; Dot-anchored `digit+` (owner ruling Q_M8: MULTI-digit), with the Q_R2
+;; trailing guard copied from the `:N` twin, minting `$postfix-index` per
+;; owner ruling Q_R1 (NOT a new sentinel — reuse is near-free and the
+;; existing fold arm is already a fixpoint).
+;;
+;; ⚠ TWO-LAYER PIN. These are the DATUM-layer half. The design originally
+;; claimed the rational mis-lex sat "at 0 errors"; that was a LAYER ERROR —
+;; end-to-end the stranded bare `|.|` is unbound, so every rational-class form
+;; is LOUD today. The end-to-end half lives in test-path-selection.rkt and is
+;; framed "was a misleading error, now computes the right value".
+;; ============================================================
+
+(test-case "P2: .N produces a dot-ordinal token, MULTI-digit (Q_M8)"
+  (define toks (token-types-from-rrb (tokenize-char-rrb (make-char-rrb-from-string "x.10"))))
+  (check-equal? (length toks) 2)
+  (check-equal? (car (list-ref toks 0)) 'symbol)
+  (check-equal? (car (list-ref toks 1)) 'dot-ordinal)
+  (check-equal? (cdr (list-ref toks 1)) ".10"))
+
+(test-case "P2: .N mints $postfix-index with a NUMERIC payload (Q_R1)"
+  ;; The payload must be a NUMBER, not a symbol: that is what makes it
+  ;; byte-identical to `v[0]`'s bare fixnum, which is what makes Q_R1's
+  ;; "two surfaces, ONE mechanism" hold at the datum layer rather than
+  ;; merely architecturally. `string->number`, not `string->symbol`.
+  (check-equal? (read-all-forms-string "x.10") '((x ($postfix-index 10))))
+  (check-equal? (read-all-forms-string "x.0")  '((x ($postfix-index 0)))))
+
+(test-case "P2 ⭐ Q_R1's checkable pin: `v[0]` and `v.0` are the SAME DATUM"
+  ;; Owner ruling: two SURFACES over ONE mechanism. If this ever diverges,
+  ;; the ruling has silently stopped being true.
+  (check-equal? (read-all-forms-string "v.0") (read-all-forms-string "v[0]"))
+  (check-equal? (read-all-forms-string "v.10") (read-all-forms-string "v[10]")))
+
+(test-case "P2 ⭐ the RATIONAL mis-lex is dead, structurally (datum layer)"
+  ;; Today `x.1.2` reads as ($decimal-literal 6/5) and `x.10.20` as 51/5,
+  ;; because `decimal-literal` anchors at the DIGIT. A dot-anchored
+  ;; recognizer consumes `.1` first, so decimal-literal never gets to anchor.
+  (check-equal? (read-all-forms-string "x.1.2")
+                '((x ($postfix-index 1) ($postfix-index 2))))
+  (check-equal? (read-all-forms-string "x.10.20")
+                '((x ($postfix-index 10) ($postfix-index 20))))
+  ;; and no rational survives anywhere in the datum
+  (check-false (regexp-match? #rx"decimal-literal"
+                             (format "~s" (read-all-forms-string "x.1.2")))))
+
+(test-case "P2: mixed chains lex in BOTH directions now (field→nat was broken)"
+  (check-equal? (read-all-forms-string "x.0.name")
+                '((x ($postfix-index 0) ($dot-access name))))
+  (check-equal? (read-all-forms-string "x.name.0")
+                '((x ($dot-access name) ($postfix-index 0)))))
+
+(test-case "P2 Q_R2: the TRAILING GUARD declines every suffixed numeric shape"
+  ;; Copied from the `:N` twin (parse-reader.rkt: `[(and c (ident-continue? c)) #f]`).
+  ;; Each of these lexes as ONE numeric token today and KEEPS doing so — the
+  ;; guard mints no new error surface. `xs.0N` is a NAMED NON-GOAL (`0N` is the
+  ;; project's Nat spelling and expr-get accepts Nat or Int, so it reads as
+  ;; sensible Prologos — but supporting it needs `digit+` plus optional `N`).
+  ;; ⚠ HONEST NOTE: before the recognizer exists this passes TRIVIALLY (no
+  ;; `dot-ordinal` token exists at all). It is a MUST-STAY-GREEN guard, not a
+  ;; failing-first pin — its value is entirely post-implementation.
+  (for ([s (in-list '("x.0N" "x.1e3" "x.1/2" "x.1f" "x.1p8"))])
+    (define toks (token-types-from-rrb (tokenize-char-rrb (make-char-rrb-from-string s))))
+    (check-false (and (assq 'dot-ordinal toks) #t)
+                 (format "~a must DECLINE the guard, not split into .N + stray" s))))
+
+(test-case "P2 Q_R3: the dot band is ADJACENCY-FREE — ruled, not inherited"
+  ;; `adjacent-to-base?` is called only from the bracket and brace arms, so the
+  ;; dot band has no gate at all — and `.k` never had one either. Requiring
+  ;; adjacency for `.N` alone would be a NEW inconsistency inside the band.
+  (check-equal? (read-all-forms-string "x .0") '((x ($postfix-index 0))))
+  ;; ⚠ SHARPENED BY MEASUREMENT — the P2 audit conflated two different spaces.
+  ;; A space BEFORE the dot is irrelevant (no base-adjacency gate, above), but a
+  ;; space AFTER the dot means there is no `.N` LEXEME at all: contiguity is
+  ;; inherent to being one token, exactly as it is for the `?x:Nat` twin. So
+  ;; `x. 0` is NOT ordinal access and must stay the single-char fallback.
+  (check-equal? (read-all-forms-string "x. 0") '((x |.| 0)))
+  ;; consequence, pinned so it is deliberate: a form-leading `.N` is a
+  ;; base-less sentinel (the fold's null-acc leg keeps it raw).
+  (check-equal? (read-all-forms-string ".5") '(($postfix-index 5))))
+
+(test-case "P2: leading zeros COLLAPSE — pinned rather than discovered"
+  ;; `string->number` on "007" is 7. Inherited from the number classifier's
+  ;; own conversion; the `:N` twin does the same since P1b-iii.
+  (check-equal? (read-all-forms-string "x.007") '((x ($postfix-index 7)))))
+
+(test-case "P2 MUST-NOT-BREAK: the rest of the dot band and every numeric literal"
+  ;; the other five band members
+  (check-equal? (read-all-forms-string "x.name")  '((x ($dot-access name))))
+  (check-equal? (read-all-forms-string "x...")    '((x $rest)))
+  (check-equal? (read-all-forms-string "x.{a}")   '((x ($dot-brace a))))
+  ;; `.-1` / `.+1` lex CLEANLY as dot-access with a SIGNED field (`ident-start?`
+  ;; admits both `-` and `+`), so a digit-required `.N` correctly declines them.
+  (check-equal? (read-all-forms-string "x.-1")    '((x ($dot-access |-1|))))
+  (check-equal? (read-all-forms-string "x.+1")    '((x ($dot-access |+1|))))
+  ;; interior dots are structurally unreachable as anchors: the scan advances by
+  ;; the matched length, so `3.14` is consumed whole at the `3`.
+  (check-equal? (read-all-forms-string "1.5")     '(($decimal-literal 3/2)))
+  (check-equal? (read-all-forms-string "3.14")    '(($decimal-literal 157/50)))
+  (check-equal? (read-all-forms-string "[+ 1 2.5]") '((+ 1 ($decimal-literal 5/2)))))

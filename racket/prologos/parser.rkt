@@ -791,7 +791,10 @@
     [(postfix-neg)
      (parse-error loc (format "negative index ~a — postfix indices are non-negative (`v[0]` is the first element)" detail) #f)]
     [(postfix-hole)
-     (parse-error loc "`_` cannot be the subject of a postfix index — name the subject or use `[fn [m] m[k]]`" #f)]
+     ;; D4.P2 (Q_R1's accepted cost): `.N` reuses `$postfix-index`, so `_.0`
+     ;; now reaches this arm too — the message must not assume the BRACKET
+     ;; spelling it used to be the only reachable one for.
+     (parse-error loc "`_` cannot be the subject of an index — name the subject or wrap it in a lambda (e.g. `[fn [m] m[k]]`, `[fn [v] v.0]`)" #f)]
     [else
      (parse-error loc "this selection form was retired (CIU T6 Path Selection) — see the migration note for its replacement spelling" #f)]))
 
