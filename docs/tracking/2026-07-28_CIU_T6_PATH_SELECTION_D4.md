@@ -2232,16 +2232,26 @@ both sorts and `record-value-union` raises on empty; bare keyword items;
 `$rest`; stray `|.|`; bracket groups); the TYPE-POSITION refusal; miss errors
 via `format-closed-row-miss` WITH branch context (the audit's C9 answered).
 
-**Test delta**: node pins (fixpoint incl. LEFT siblings · `pattern-var?` via
-macro USE, not registration — the P1b-ii lesson) · E2E keyed corpus (§B's
-no-`^` lines uncomment: `{name}` · `{database}` · `{server.{host port}}` ·
-`def sub` + re-projection) · the error battery (`{zzz}` names available
-fields + the branch · `{}` · duplicate plain keys · dyn-subject refusal ·
-`(Map K V)`-subject refusal · type-position) · twins pins (a block in a
-`def`/`defn` body under QTT) · **§9's learnability pair**: `x.a.b` vs
-`x{a.b}` side by side, and the block-side miss message names the extraction
-spelling. Gates: targeted battery · acceptance `--check` · full suite ·
-adversarial verify.
+**Test delta** (⚠ corpus list CORRECTED 2026-07-30 — ruled **Q_U1** [owner]:
+**P3a owns EVERY no-`^` block line**; the list below was previously written
+against no file — it named `{name}`, which does not exist in §B (a
+mis-transcription), and left three no-`^` lines unassigned, the §9
+"assigned to NO PHASE" class landing on this slice's own work list): node
+pins (fixpoint incl. LEFT siblings · `pattern-var?` via macro USE, not
+registration — the P1b-ii lesson) · E2E keyed corpus — `{database}` ·
+`{server.{host port}}` · `{server.{ssl.{enabled}}}` (was unassigned) ·
+`def sub := app-config{server.{host}}` + re-projection · `regions{eu us}`
+(§I :320, was unassigned — a plain keyed n-ary selection over a closed-row
+subject; its own `[D4.P3]` line tag is correct, the §10.5 heading's
+`[D4.P4]` covers only the broadcast lines) · the error battery (`{zzz}`
+names available fields + the branch · `{}` · duplicate plain keys ·
+dyn-subject refusal · `(Map K V)`-subject refusal · type-position) · twins
+pins (a block in a `def`/`defn` body under QTT) · **§9's learnability
+pair**: `x.a.b` vs `x{a.b}` side by side, and the block-side miss message
+names the extraction spelling. NOT P3a's despite its `[D4.P3]` tag: §G's
+seal/validate pair (acceptance :240-245) uses `server^.{host port}` —
+mid-path dissolve ⇒ **P3b's** (its delta now names it, per Q_U1). Gates:
+targeted battery · acceptance `--check` · full suite · adversarial verify.
 
 #### §5.P3b — The `^` family  ⬜
 
@@ -2259,9 +2269,10 @@ rename the nominal segment: `admins^first.0`"); the malformed-`^` battery
 (`a^b^c` · lone `^` · spaced `^b` · `^...`-absorbs-`$rest` rejected).
 
 **Test delta**: splitter unit pins per continuation · the flagship E2E ·
-rename/dissolve/`^_`/`^-`/`^-_`/`^..` corpus lines · duplicate-leaf error
-naming remedies · the monotonicity pin · the ordinal-`^` battery. Gates as
-P3a.
+rename/dissolve/`^_`/`^-`/`^-_`/`^..` corpus lines · §G's seal/validate pair
+(acceptance :240-245 — `[D4.P3]`-tagged but `^`-bearing, assigned HERE per
+Q_U1) · duplicate-leaf error naming remedies · the monotonicity pin · the
+ordinal-`^` battery. Gates as P3a.
 
 #### §5.P3c — Keyless + L4 + honest nesting  ⬜  (depends on P3b's bare-`^`)
 
