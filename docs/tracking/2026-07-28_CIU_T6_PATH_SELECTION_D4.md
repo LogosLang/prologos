@@ -591,9 +591,30 @@ in PROSE per the standing discipline; audit `wf_27a84061-c7e` fed them —
   follow-up `defn h` error QUOTES the raw `($retired-selection …)` marker
   from the stored spec), so the hole stores garbage rather than losing a
   declaration.
-- **Pending in this batch**: Q_T1 (parse representation — the
-  completed-architecture question), Q_T2 (presence — consequences to be walked
-  before ruling), Q_T5 (slicing — follows Q_T1).
+- **Q_T1 — ROUTE A: mint the `expr-select` node NOW, scoped grades-1-only
+  [owner, 2026-07-29].** Decided from the COMPLETED-feature horizon, on four
+  legs: (1) **P5's spine identity is a comparison over a structured step
+  representation** ("source-directed steps with `^`-continuations erased") —
+  a desugared block leaves nothing to compare; (2) **the error-surface
+  argument REVERSES at the completed horizon** — P5's "SHOULD print the
+  factored spelling" and even P3's strict-merge remedies need BLOCK CONTEXT
+  at error time, which desugaring forfeits permanently while inheriting only
+  generic messages (the audit's C9/G7 diagnostic concern is answered by
+  wiring `format-closed-row-miss` — a standalone, reusable fn — into the
+  node's own typing arm, WITH branch context: same quality, better ceiling,
+  and the work persists); (3) **option 2 is a strict PREFIX of option 3**
+  (surf node + parser + elaborator are shared; the routes differ only in what
+  the elaborator arm emits), so route B's elaborate-time lowering would be
+  scaffolding with a designed ONE-phase lifetime that P4 must tear out (the
+  dual-path ban forbids keeping it); (4) ruling 4b already fixed the node as
+  the destination — only timing was open, and the audit priced it. Honest
+  price accepted: ~13 files, the inferQ/checkQ twins (delegation model
+  `cdb535ac`), walkers via the generic transparent-struct fallback (no
+  binder ⇒ no depth routing), NO PNET bump (symbol-keyed tag table,
+  verified), subject evaluated ONCE in the node's reduction (no let/fn
+  workaround). P3 is a MULTI-SLICE phase; Q_T5 organizes it.
+- **Pending in this batch**: Q_T2 (presence — consequences walked next), Q_T5
+  (slicing — follows Q_T2).
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
