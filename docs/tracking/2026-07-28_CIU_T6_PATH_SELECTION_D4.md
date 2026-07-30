@@ -613,8 +613,35 @@ in PROSE per the standing discipline; audit `wf_27a84061-c7e` fed them —
   binder ⇒ no depth routing), NO PNET bump (symbol-keyed tag table,
   verified), subject evaluated ONCE in the node's reduction (no let/fn
   workaround). P3 is a MULTI-SLICE phase; Q_T5 organizes it.
-- **Pending in this batch**: Q_T2 (presence — consequences walked next), Q_T5
-  (slicing — follows Q_T2).
+- **Q_T2 — PRESENCE: HORN D, LENIENT [owner, 2026-07-29].** The rule: **a
+  block may select a field iff the subject's type SOURCES that field's
+  presence as `'present`; everything else is a loud static error** naming the
+  4d remedy list (seal / validate / annotate). The result row is closed,
+  all-`'present`, honestly — PS15's sourced-presence qualifier satisfied, so
+  §B's "sealable, validatable" claim is TRUE, and the presence-blind seal
+  (verified: zero `record-field-presence` reads in either seal fn) is never
+  asked to vouch for fabricated presence.
+  · **LENIENT**: a dyn row's LISTED-`'present` fields are selectable (their
+    presence IS sourced — PS15's own criterion); only `'unknown`-marked and
+    unlisted fields refuse. Consistent with 4d: broadcast needs the WHOLE
+    support (dyn tail ⇒ loud), a block names SPECIFIC fields, so
+    support-boundedness (D3-M5) is satisfied per-field.
+  · **Probe fact that reshaped the case table**: `map-dissoc` on a CLOSED row
+    simply REMOVES the field (still closed, no `'unknown` mark; projecting it
+    is already a loud miss). `'unknown` arises only from dissoc-on-DYN — so
+    closed rows cannot carry unknown presence, and the corpus (all closed
+    rows) costs ZERO.
+  · **The deliberate asymmetry, ruled not absorbed**: bare `.field` on a dyn
+    row stays D19-permissive (exploration); a BLOCK on the same row refuses
+    (construction is assertive-tier — it mints a committed, sealable value).
+  · Rejected-with-reason: Horn A (stamp `'present` always) fabricates
+    presence on dyn subjects and the blind seal then guarantees it — the
+    seal's contract broken exactly where PS15 warned; Horn B (`'unknown` in a
+    closed row) is unsound TODAY for the same blind-seal reason and mints a
+    carrier state no walker has ever seen; Horn C (presence-aware seal) is
+    complementary to B, not an alternative to D, and is F1b-scope growth
+    mid-phase. All refusals are MONOTONE (F-row/P6 can later relax them).
+- **Pending in this batch**: Q_T5 (slicing — the last).
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
