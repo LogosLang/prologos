@@ -524,6 +524,77 @@ radius is low — `(Map Int V)` requires an annotation to reach — and unifying
 the spellings is the point of Q_R1, so the adaptation is ACCEPTED. Named so it
 cannot be rediscovered as a defect.
 
+**The P3 co-design rulings [owner, 2026-07-29]** (rounds 1–3 of the Q_T batch,
+in PROSE per the standing discipline; audit `wf_27a84061-c7e` fed them —
+**13th consecutive phase whose premise the mini-audit refuted or rescoped**):
+
+- **Q_T3 — "level-local" means OUTPUT-level-local.** The L4/strict-merge checks
+  run over the keys that reach a result level AFTER `^`-splicing. Ruled because
+  the syntactic-block reading ACCEPTS `cfg{server^.{port} database^.port}` —
+  two dissolving branches landing `:port` at the same output level — which
+  Ruling B B4 REJECTS, and that is the one direction that breaks the strict
+  waypoint's monotonicity guarantee ("every error today can become a meaning
+  later"). Probe-verified that the naive lowering would silently last-win it.
+- **Q_T4a — `^` NEVER attaches to an ordinal; it is a guided spelling error.**
+  Owner: an ordinal returns the value at an index, not a key-value; and
+  non-local attachment (my PS6 reading, scanning left past ordinals to the
+  key-generating segment) "breaks composition, first-class re-use, and
+  expectations." The expressivity lives at the right place already:
+  `cfg{admins^first.0}` renames the NOMINAL segment then descends → `{:first
+  ⟨admins[0]⟩}`. Consequence: DEFERRED 11 dissolves into a MESSAGE-QUALITY
+  item — `x.0^` / `x[0]^` / `{admins.0^first}` all need one guided error
+  ("an ordinal has no key; rename the nominal segment"), not a semantics.
+- **Q_T4b — THE `^` BASE RULES** (the mutual-clarity round; misread by me, now
+  pinned): a branch's output key is its **surviving head key**; every `^` form
+  acts **locally on its own segment**; **rename is IN PLACE**; only
+  `^`-dissolve removes a level; bare leaf `^` contributes the leaf VALUE as a
+  keyless component (no keys ⇒ no ancestry question). So `server.host^h` →
+  `{:server {:h …}}` and `server^.host^h` → `{:h …}`. The spec flagship
+  re-derives exactly under these rules.
+  **Where the misreading came from, recorded so it cannot recur**: (1) NO §10
+  example renames a leaf under a KEPT ancestor — every spec rename sits under
+  a dissolved ancestor or at the branch head, so the corpus cannot
+  discriminate in-place from collapsing; (2) the acceptance file's §B `^_`
+  line (written at P0) showed a FLAT result imported from the SUPERSEDED
+  surface's D3-era "`^_` = derive-ALL" ruling — an old-surface semantic in the
+  new corpus without the §8 R5 NOTATION-vs-SEMANTICS classification. The line
+  is corrected in this commit.
+- **Q_T4b′ — `^_` takes READING N (local, like its siblings)**: it is `^k'`
+  with a computed label — rename the leaf IN PLACE to the path-synthesized
+  key. `cfg{server.host^_}` → `{:server {:server-host …}}`. The flat
+  "provenance" behaviour is NOT lost — it is the explicit collapse spelling
+  `server.host^-_` (Q_T7), which is where a structural effect belongs.
+- **Q_T7 — the `^-` COLLAPSE family is IN SCOPE at P3.** `^-` collapses the
+  whole branch flat: `h.k^-` → `{:k …}` · `h.k^-k'` → `{:k' …}` · `h.k^-_` →
+  `{:h-k …}` (the flat provenance recovery). Makes `i^.h^.k` ergonomically
+  `i.h.k^-`. Lexing verified: `k^-` / `k^-k2` / `k^-_` each glue into ONE
+  token; the splitter's continuation grammar is `-`?·{ε | label | `_`}.
+  ⚠ Eyes-open cost: after `^` a leading `-` IS the collapse marker, so a
+  rename target literally beginning with `-` is unsupported.
+- **Q_T8 — the parent-key collapse is IN SCOPE, spelled `^..` (not `^.`).**
+  `ssl.enabled^..` ≡ `ssl^.enabled^ssl` → `{:ssl …}`; ancestors above the
+  parent are kept (`server.ssl.enabled^..` → `{:server {:ssl …}}`). The owner
+  flagged the `^.` parse hazard and pre-authorized `^..`; probes CONFIRMED the
+  hazard is real and `^..` dissolves it: `a.b^.c` (missing space) reads
+  IDENTICALLY to the legitimate mid-path dissolve `a`·`b^`·`.c` — a silent
+  one-space meaning flip between two well-typed keyed forms with NO type-error
+  net (the §2.2 mitigation does not apply here) — and `a.b^.0` collides the
+  same way with ordinals. Under `^..` both no-space shapes contain a bare
+  `|.|` mid-branch and are LOUD malformed-payload errors. Edge recorded:
+  `a.b^...` absorbs into `$rest`; the malformed-payload seat must reject a
+  `$rest` item in a block payload.
+- **Q_T6 — the `spec` type-position hole is FILED** (DEFERRED 14), not fixed in
+  P3. Pre-existing (the shipped `.`-access is dropped identically) and rooted
+  in `spec`'s error architecture (a preparse command inside a `void`-ing
+  handler), not in selection. ⚠ The C30 open question is now ANSWERED — it is
+  the WORSE reading: the dropped spec's type datum IS registered (the
+  follow-up `defn h` error QUOTES the raw `($retired-selection …)` marker
+  from the stored spec), so the hole stores garbage rather than losing a
+  declaration.
+- **Pending in this batch**: Q_T1 (parse representation — the
+  completed-architecture question), Q_T2 (presence — consequences to be walked
+  before ruling), Q_T5 (slicing — follows Q_T1).
+
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
   P1b-i, **owner-reviewed**, and ruled (Q_M8 the sole amendment). §Q8 is now
@@ -2016,6 +2087,13 @@ would diverge on exactly the character P3 introduces) · `reconstitute-path-list
 `$dot-access`-only walk · the `tokenize-string` raise→token flip.
 
 ### §5.P3 — Blocks
+
+> ⚠ **CO-DESIGN IN PROGRESS (2026-07-29)** — the §3 Q_T rulings govern where
+> they touch this section; the section rewrite lands with the Q_T1/Q_T2/Q_T5
+> adjudication. The audit (`wf_27a84061-c7e`) refuted this section's premise
+> that new nodes are needed for the KEYED half and confirmed the keyless half
+> cannot be desugared; §5.P3's four "design questions" are superseded by the
+> Q_T batch.
 
 **Intent**: `x{…}` select block · projection-by-default · `^` three
 continuations (parser-side split) · L4 sort homogeneity (level-local) ·

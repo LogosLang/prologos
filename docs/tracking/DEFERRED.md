@@ -2170,3 +2170,29 @@ as "a test-only twin" WITHOUT recording that a behaviour flip was possible
 there — and the sole dependent test uses a SPACED dot, so nothing caught it.
 The weak pin (`(check-exn exn:fail? …)`, no message match) in
 `tests/test-varargs.rkt` is worth tightening.
+
+### 14. `spec` silently drops a malformed type — and REGISTERS the garbage (filed at P3 co-design, Q_T6)
+
+`spec h cfg{version} -> Nat` alone → **0 errors, no output, the spec silently
+dropped**. Identical for the SHIPPED surface: `spec g cfg.version -> Nat` is
+dropped the same way, so this is pre-existing and not selection's.
+
+Mechanism: `spec` is a PREPARSE command — `process-spec` runs inside
+`(with-handlers ([exn:fail? void]) …)` (macros.rkt:2791-2793), so its type
+datum never reaches `parse-list`'s head-dispatch gate and any failure is
+voided. The P1a NOT-YET gate therefore has a hole at the project's PRIMARY
+signature surface, and P3 cannot assume it inherits a guided refusal in type
+position (it adds its own).
+
+⚠ It is the WORSE of the two readings the P3 audit's critic left open (its
+C30): the spec's type datum IS partially registered, not merely lost. Probe: a
+following `defn h [x] 1N` dies with `defn: expected <ReturnType> or :
+ReturnType, got (($retired-selection select-block #f) -> Nat)` — the defn
+error QUOTES the raw marker from the stored spec — then the defn itself is
+lost (`Unbound variable` at the call). Two errors, neither naming the spec or
+the block; a stored garbage type shaping a later diagnostic.
+
+Root cause is `spec`'s error architecture (the void-ing handler), the same
+class Q_L4's marker seat was built for at the reader layer. The fix belongs to
+a spec/preparse-diagnostics slice, not to Path Selection; P3 ships its own
+type-position refusal independently.

@@ -72,7 +72,16 @@ app-config.server
 ;; app-config{server^.{ssl^.enabled^ssl port} version database^.pool-size}
 ;;   ;; {:ssl true :port 8080 :version "1.0.0" :pool-size 10}  — the spec's flagship (§10.1)
 ;; app-config{database^.{url pool-size}}      ;; {:url "localhost/guild-db" :pool-size 10}
-;; app-config{server.host^_ database.url^_}   ;; {:server-host … :database-url …} — ^_ path-derives
+;; app-config{server.host^_ database.url^_}   ;; {:database {:database-url "localhost/guild-db"} :server {:server-host "localhost"}}
+;;   ^ CORRECTED 2026-07-29 (Q_T4b′, Reading N): `^_` renames the leaf IN PLACE —
+;;     this line previously showed the FLAT result, an OLD-surface (D3 derive-all)
+;;     semantic imported at P0 without the R5 classification. The flat provenance
+;;     spelling is the explicit collapse family below.
+;; app-config{server.host^-_ database.url^-_}  ;; {:database-url … :server-host …} — FLAT provenance  [Q_T7]
+;; app-config{server.host^-}                   ;; {:host "localhost"} — collapse, keep leaf key       [Q_T7]
+;; app-config{server.ssl.enabled^..}           ;; {:server {:ssl true}} — parent-key collapse         [Q_T8]
+;; app-config{admins.0^first}                  ;; ERROR — `^` cannot attach to an ordinal; rename the
+;;                                             ;;   nominal segment instead: admins^first.0           [Q_T4a]
 ;; app-config{server.host^ database.url^}     ;; @["localhost" "localhost/guild-db"] : ⟨String String⟩ — keyless ⇒ tuple
 ;; app-config{version^}                       ;; @["1.0.0"] : ⟨String⟩ — HONEST 1-TUPLE (ruling 2a)
 ;; def sub := app-config{server.{host}}       ;; selection results are ordinary CLOSED rows:
