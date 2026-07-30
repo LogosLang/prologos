@@ -142,7 +142,7 @@ showed was missing (its "single most important unasked question"). Probed
 | `〈T〉` (U+3008) | `[PVec T]` | homogeneous vector |
 | n-tuple `〈T₁ T₂〉` | `⟨T₁ T₂⟩` (U+27E8) — a nat-keyed CLOSED row | het `@[…]` literals produce this |
 | `〈τ₁ \| τ₂ \| …〉` het vector | **`⟨row₁ row₂ row₃⟩`** — a positional het TUPLE, duplicates un-collapsed, no union | the 2b split's first carrier; PVec-of-union exists only via annotation |
-| 1-tuple `〈String〉` | representable (1-field nat-row; runtime `expr-rrb`) but the LITERAL arm collapses `@[x]` to `[PVec T]` | selection mints rows directly — the 2a ruling |
+| 1-tuple `〈String〉` | representable (1-field nat-row; runtime `expr-rrb`) but the LITERAL arm collapses `@[x]` to `[PVec T]` | selection mints rows directly — the 2a ruling. ⚠ R5 classification RECORDED (2026-07-29): the spec's corpus marker `〈String〉` transcribes to HEAD's `⟨String⟩` — a NOTATION divergence (two spec notations share the `〈…〉` glyph; row 1 is the generic homogeneous vector, this row the concrete tuple). Previously applied only in an acceptance-file comment. Also: the literal arm collapses at EVERY homogeneous n (the probe iterates under rollback), not only n=1 — which is WHY selection mints rows directly for both of §B's keyless lines |
 | keyed row `{:k T …}` in selection order | type: **canonically sorted** (`syntax.rkt:749-756`, `equal?`-identity, load-bearing) · value: champ-hash order, key-set-determined | the 2c ruling: carrier order, thesis-derived |
 | row-meet (§5.3) | **does not exist** (0 grep hits) | booked as NEW machinery, §5.P4 |
 | presence marks + `dyn` tail | `expr-Record (key-domain fields tail)`, `record-field (type presence)` — the S-lens-declared presence lattice | in NEITHER document; §6 declares it; dyn-tail semantics = Batch-4 question |
@@ -150,9 +150,12 @@ showed was missing (its "single most important unasked question"). Probed
 ### §2.4 Standing items the spec does not cover
 
 - **sexp mode** (old PS14): postfix adjacency is WS-only; the sexp special form
-  is still an implementation deliverable. The 20 brace-select tests
-  (`test-path-expressions.rkt`) remain isolated from WS changes (audit-proven)
-  and re-point when the sexp form lands.
+  is still an implementation deliverable. ⚠ Figure corrected (P3 audit):
+  `test-path-expressions.rkt` has 20 test-cases TOTAL of which 4 touch `.{`;
+  the BULK of the sexp selection surface is `test-selection-paths.rkt` (56
+  test-cases, 50 `.{`-bearing lines), which this section previously did not
+  name. Both remain isolated from WS changes (audit-proven twice) and
+  re-point when the sexp form lands.
 - **`v[0]` bracket-postfix**: KEEPS current working semantics for now
   [owner 2026-07-28]. `.N` extraction arrives alongside; both spellings
   extract. Revisit at X.close whether bracket-postfix stays, becomes `get`
@@ -411,6 +414,14 @@ main-session R-lens-verified; full record in §5.P1b):
   WS-path `^` primitive** and must either lift the sexp one or write the
   primitive the old ruling forbade. Recorded now so P3 does not build on a
   false premise.
+  *(Coordinates re-verified at the P3 audit: `split-fused-symbol` is at
+  parser.rkt:5540 — the ruling's :5437 had drifted +103 — and the sexp `^`
+  splitter at :3578 inside `validate-selection-paths` (:3567), drift +35.
+  A SECOND reason it is unliftable, found there: it calls a LOCAL hand-rolled
+  `string-split` (parser.rkt:3762-3770) that does NOT drop empty segments —
+  `a^` becomes a rename to the EMPTY keyword and `a^b^c` is silently absorbed
+  as one caret-bearing keyword. The F1b.7g drift class, live in the very
+  primitive the old ruling proposed to lift.)*
 - **Q_M8 — ORDINALS ARE MULTI-DIGIT IN BOTH BANDS [owner, 2026-07-28].** The
   owner ruled against P1b-i's draft recommendation: *"An ordinal broadcast could
   and should very much be multi-digit, practically — just as an ordinal `.Ndd`."*
@@ -2328,12 +2339,23 @@ F-row, whichever first, with its NTT model mandatory.
   (§2.3). Any §10 corpus divergence must be classified NOTATION vs SEMANTICS
   before resolution (ruling Batch 1); a "quick fix" that edits a marker
   without the classification re-opens the D5 blockers.
-- **R6 (NEW — pipeline cost honesty)**: new AST nodes pay pipeline.md in
-  FULL — including `pnet-serialize` registration + a `PNET_VERSION` bump
-  (absent from pipeline.md's own checklist; promote it there at X.close) +
-  the D3-M2 item-13 deliberate `#f` typing-propagators registration —
-  and constructor-arity breakage compiles CLEAN cross-module (the slice-4
-  lesson): discovery is patterns-at-build + constructors-at-runtime.
+- **R6 (pipeline cost honesty — ⚠ CORRECTED 2026-07-29, P3 audit)**: new AST
+  nodes pay pipeline.md in FULL — including `pnet-serialize` registration and
+  the D3-M2 item-13 deliberate `#f` typing-propagators registration — **but
+  NOT an automatic `PNET_VERSION` bump**. The earlier text asserted the bump
+  and instructed promoting it into pipeline.md at X.close, which would have
+  propagated a FALSE obligation into the ambient rules tier. Verified: the
+  tag table is SYMBOL-keyed on `struct->vector`'s tag, so registering a new
+  struct is purely additive (no pre-existing cache can contain the new tag),
+  and `pnet-stale?` already invalidates on `infrastructure-stale?` (any
+  driver `.zo` rebuild) plus a source hash. A bump is owed only when an
+  EXISTING shape's serialization changes (P1a's own precedent: no bump,
+  "symbol-keyed tag table + a zero-hit cache census"). The constructor-arity
+  hazard (compiles CLEAN cross-module; discovery is patterns-at-build +
+  constructors-at-runtime) belongs to pipeline.md § New STRUCT FIELD — it
+  bites the cheaper-looking variant of ADDING A FIELD to a shipped node,
+  which is exactly the variant this row previously could not reject on
+  principle because it never named it.
 
 ## §9 Principles gate (two columns — catalogue ‖ challenge)
 
