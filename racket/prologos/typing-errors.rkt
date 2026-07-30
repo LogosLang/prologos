@@ -413,6 +413,252 @@
                (ormap search (expr-subfields x)))))))
 
 ;; ========================================
+;; CIU T6 (2026-07-30): the clause-result-mismatch diagnostic.
+;; ========================================
+;; A multi-clause `defn` whose clause bodies have DIFFERENT result types
+;; reported "cannot infer the type of an unannotated parameter …" — a message
+;; that names a subsystem which is working perfectly, and whose own advice ("add
+;; a `spec`") is structurally unable to help. Verified pre-existing at 5e6d9f41
+;; for BOTH clause-dispatch routes, and NOT map-specific:
+;;   defn f | 0    -> {:a 1} | n     -> 5      (Int-literal dispatch → boolrec)
+;;   defn g | zero -> {:a 1} | suc _ -> 5      (ctor dispatch → reduce)
+;;   defn h | 0    -> 1      | n     -> "x"    (no maps involved at all)
+;;
+;; WHY THE OLD HINT LIED. `infer` on a hole-domain lambda returns `(expr-error)`
+;; WITHOUT EVER INSPECTING THE BODY (typing-core.rkt:1127-1129), and
+;; `compile-pattern-group` hard-codes `(surf-hole loc)` as the binder type of
+;; EVERY generated clause lambda (macros.rkt:10282, :10294) — unconditionally,
+;; even when a `spec` is present (a spec feeds only the def's annotation,
+;; macros.rkt:10290). So `infer-hint-msg`'s guard — `(and (expr-error? actual)
+;; (expr-lam? e) hole-or-meta-domain)` — degenerates to "e is a generated clause
+;; lambda" and fired for EVERY failing multi-clause defn whatever the real
+;; cause. Its in-tree claim to be "surgical — only fires for this shape" was
+;; false, and the reason `add a spec` cannot help is the same one: the spec never
+;; reaches the binder.
+;;
+;; THE REAL CAUSE is that the clause-result join is FIRST-ARM-WINS by
+;; construction, not a lattice join. The synthesized motive's body is a hole, so
+;; typing-core allocates ONE fresh meta for it (typing-core.rkt:1251); clause 1's
+;; check solves that meta to clause 1's type; `nf`/`whnf` then RESOLVE the
+;; solution (reduction.rkt meta arm), so clause 2 is checked against CLAUSE 1'S
+;; TYPE (typing-core.rkt:1255-1260). The reduce route does the same with one
+;; shared `expected-type` pushed into every arm (typing-core.rkt:4451-4473).
+;; Differing clauses ⇒ `(expr-error)`.
+;;
+;; WHY NOT THE UNION ROUTE (make the join emit `<A | B>`) — triaged, REJECTED.
+;; A union in a codomain position emits a fork-on-union request at EVERY call
+;; site (`type-map-write` → `maybe-emit-fork-on-union-request`,
+;; typing-propagators.rkt), and that machinery carries TWO open unbounded-hang
+;; defects: DEFERRED.md § "BUG: Union-type checking hangs the type-checker (BSP
+;; non-quiescence)" and § "DEFECT — union-typed def + implicit-binder spec + call
+;; HANGS the type checker". A hang is strictly worse than a bad message. The same
+;; join also serves user-written 3-arg `if` (parser.rkt:1393), so a semantic
+;; change there would alter `if` typing project-wide. The join therefore stays
+;; strict and ONLY the diagnostic changes; emitting unions remains blocked on the
+;; dedicated debugging session those DEFERRED entries call for.
+;;
+;; ⚠ WHY THIS IS PHRASED "BRANCHES" AND NOT "CLAUSES" — the first version tried
+;; to fire only on a GENERATED clause-dispatch spine, so it could say "clause".
+;; The adversarial verify demolished that premise: post-elaboration a generated
+;; clause dispatch and a USER-WRITTEN `match` / `if` are THE SAME NODES, and
+;; there is no discriminator.
+;;   - `expr-int-eq` looked like a generated-dispatch marker. It is not —
+;;     `int-eq` is a user-callable primitive, so `(if [int-eq x 0] 1 "s")` walked
+;;     straight through the gate and was reported as "clauses of a multi-clause
+;;     definition" for a one-clause function.
+;;   - `expr-reduce` is emitted by user `match` too (`expand-match` compiles
+;;     through the SAME `compile-match-tree`, macros.rkt), so a single-clause
+;;     `defn` whose body is a `match` was also reported as multi-clause.
+;;   - the test that asserted the exclusion was VACUOUS: it used `if true 1 "x"`,
+;;     whose target is `true`, not an `int-eq`.
+;; The fix is not a better gate — no gate exists. It is to say something TRUE of
+;; every producer. `defn` clause bodies, `match` arms and `if` branches all share
+;; ONE result type through the same strict join, so "branches" is accurate for
+;; all of them, and dropping the impossible discriminator also picks up the
+;; guard-fallthrough boolrec that the old int-eq gate silently excluded.
+;;
+;; CONTRACT (the S7 hint contract): a best-effort post-hoc walk that runs ONLY on
+;; the already-failing check path, changes NO typing behaviour, and fires ONLY
+;; when it can EXHIBIT two successfully-inferred, non-convertible, REPORTABLE
+;; branch result types. When it cannot prove that it returns #f and the old
+;; parameter hint stands — a deliberately conservative fallback, though note the
+;; fallback message is itself still wrong for some of those cases (see § the
+;; residual gap in DEFERRED.md).
+
+;; Is this TYPE unfit to show a user (and unfit to compare)? Rejects anything
+;; mentioning a de Bruijn variable or a hole, anywhere.
+;;
+;; This ONE predicate closes three separate defects the adversarial verify
+;; demonstrated, which is why it is a filter and not three special cases:
+;;   (1) BLOCKING — WRONG TYPES with raw internal junk. `names` is never extended
+;;       in lockstep with the ctx this walk builds, so a leaf type mentioning a
+;;       bound variable rendered as `[Pi [x <?bvar0>] ?bvar1]` for a body whose
+;;       real type was `Int -> Int`. A type with no bvars renders identically
+;;       whatever `names` holds, so refusing bvar-bearing types removes the
+;;       entire class rather than trying to reconstruct names.
+;;   (2) ORDER-DEPENDENT FIRING. `conv` treats `expr-hole` as a WILDCARD
+;;       (reduction.rkt), so `distinct-up-to-conv` was folding a NON-TRANSITIVE
+;;       relation: one hole-typed branch arriving FIRST absorbed every later
+;;       type and the diagnosis silently died. Two defns differing only in
+;;       constructor declaration order gave different messages. Hole-free types
+;;       make `conv` a proper equivalence here, so the fold is order-independent.
+;;   (3) ARTIFACT LEAKAGE — `_` (a hole) printed as if it were a user type.
+;; Unsolved METAS are deliberately still allowed: `conv` compares them by
+;; identity, not as wildcards, so they break neither (1) nor (2), and for a
+;; genuinely-unknown element type (`'[]` → `List ?m`) reporting it beats
+;; reporting nothing.
+;;
+;; Reflective by construction, so a new expr node cannot silently escape the
+;; check (pipeline.md § "Exhaustive Walkers: prefer the STRUCTURAL answer to the
+;; checklist").
+;;
+;; ⚠ THE DESCENT MUST BE FULLY GENERIC — this predicate took three rounds to get
+;; right because a single `_` hides behind two different non-expr layers, and
+;; each partial version still leaked `{:v _}` into a user-facing message:
+;;   - it does NOT reuse `expr-subfields` above: that helper does
+;;     `(filter expr? f)` on a LIST field, so a list of (label . type) PAIRS —
+;;     exactly an `expr-Record`'s `fields` — yields NOTHING;
+;;   - and it does NOT gate the struct descent on `expr?`: a record field's value
+;;     is a `record-field` WRAPPER struct (syntax.rkt:690), which is not an expr,
+;;     so an `expr?`-gated walk stopped one layer short of the type.
+;; Hence `struct?` (every relevant struct is `#:transparent`) plus `car`/`cdr` of
+;; any pair — covering lists, improper pairs and lists-of-pairs — plus vectors.
+;; Anything narrower silently under-approximates, and the failure mode is a
+;; wrong user-facing message, not an error.
+(define (type-unreportable? t)
+  (let scan ([x t])
+    (cond
+      [(expr-bvar? x) #t]
+      [(expr-hole? x) #t]
+      [(expr-typed-hole? x) #t]
+      [(struct? x)
+       (let ([v (struct->vector x)])
+         (for/or ([i (in-range 1 (vector-length v))])
+           (scan (vector-ref v i))))]
+      [(pair? x) (or (scan (car x)) (scan (cdr x)))]
+      [(vector? x) (for/or ([y (in-vector x)]) (scan y))]
+      [else #f])))
+
+;; The result leaves of a branch spine, each paired with the ctx it must be
+;; inferred in:
+;;   - `expr-boolrec` — BOTH cases are result positions. Covers user `if`
+;;     (parser.rkt:1393), Int-literal clause dispatch (macros.rkt:9916-9920) and
+;;     guard fallthrough (macros.rkt:9913, :9950) alike; no target check, per the
+;;     note above.
+;;   - `expr-reduce` arms — `match` / constructor dispatch (macros.rkt:10013).
+;;     Each arm binds `binding-count` fields; the ctx is extended by that many
+;;     unknown entries, so an arm body that READS a field yields an unreportable
+;;     type and drops out rather than being guessed at.
+;;   - the let-redex `((fn [v : _] body) scrutinee)` binding a pattern variable
+;;     (macros.rkt:9751-9755): DESCEND UNDER THE BINDER with the ctx extended.
+;;     ⚠ Do NOT beta-reduce via `whnf` — that was a silent proof-killer caught by
+;;     the verification battery. It works for a simple body (`| n -> 5`) but
+;;     OVER-REDUCES a record literal's map-assoc chain into a runtime value whose
+;;     type no longer infers, so EVERY record-bodied clause lost its type and the
+;;     hint fell back to the old lying message, while the Int/String cases passed
+;;     throughout — a battery without a record-bodied case ships it green.
+;;   - `__match-fail` typed holes are the incomplete-match filler, not a branch,
+;;     and check against ANY type — skipped.
+;;
+;; TERMINATION is STRUCTURAL: every recursive call is on a proper subfield of
+;; `x`. The first version carried a `(> depth 64)` guard against `whnf`-driven
+;; recursion; with `whnf` gone that guard bought nothing and cost a silent
+;; CORRECTNESS CLIFF — the verify bisected it at exactly 63 clauses fine / 64
+;; clauses back to the lying message, at identical wall time. Removed.
+;;
+;; ORDER: leaves are deliberately NOT labelled "branch 1 / branch 2". The boolrec
+;; route preserves source order, but reduce arms follow the TYPE's constructor
+;; DECLARATION order (macros.rkt:9971-9980), which need not match source order.
+;; Numbering would assert an ordering this walk cannot honour, so the message
+;; lists the disagreeing TYPES instead.
+(define (branch-result-leaves x ctx)
+  (cond
+    [(not (expr? x)) '()]
+    [(expr-boolrec? x)
+     (append (branch-result-leaves (expr-boolrec-true-case x) ctx)
+             (branch-result-leaves (expr-boolrec-false-case x) ctx))]
+    [(expr-reduce? x)
+     (append*
+      (for/list ([arm (in-list (expr-reduce-arms x))])
+        (branch-result-leaves
+         (expr-reduce-arm-body arm)
+         (for/fold ([c ctx])
+                   ([_ (in-range (expr-reduce-arm-binding-count arm))])
+           (ctx-extend c (expr-hole) 'mw)))))]
+    [(and (expr-app? x) (expr-lam? (expr-app-func x)))
+     (let* ([lam (expr-app-func x)]
+            [arg-ty (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+                      (infer ctx (expr-app-arg x)))]
+            [bound-ty (if (and (expr? arg-ty) (not (expr-error? arg-ty)))
+                          arg-ty
+                          (expr-lam-type lam))])
+       (branch-result-leaves (expr-lam-body lam)
+                             (ctx-extend ctx bound-ty 'mw)))]
+    [(expr-typed-hole? x) '()]
+    [else (list (cons x ctx))]))
+
+;; Distinct up to conversion. `conv` (reduction.rkt:4496) is PURE — normalize
+;; then structural compare; it does NOT solve metas, so it is safe on an error
+;; path. Callers MUST pre-filter with `type-unreportable?`: `conv`'s
+;; hole-as-wildcard rule would otherwise make this fold non-transitive and hence
+;; order-dependent (see (2) above).
+(define (distinct-up-to-conv tys)
+  (for/fold ([acc '()] #:result (reverse acc))
+            ([t (in-list tys)])
+    (if (for/or ([u (in-list acc)]) (conv t u)) acc (cons t acc))))
+
+(define (format-branch-result-mismatch tys names)
+  ;; 6, matching `format-closed-row-miss`'s house convention above.
+  (define shown (if (> (length tys) 6) (take tys 6) tys))
+  (define more (- (length tys) (length shown)))
+  (string-append
+   ;; The "Type mismatch" opening is DELIBERATE, not incidental prose:
+   ;; lsp/diagnostics.rkt's `error->code` derives the diagnostic CODE by regexp
+   ;; over this message text, testing `type.?mismatch` → E1001 FIRST. Without a
+   ;; recognised substring the code would silently degrade to E0000. E1001 is
+   ;; also the honest classification — the struct really is a
+   ;; type-mismatch-error, and the branch results really do mismatch. (The old
+   ;; message matched `cannot infer` → E1004.)
+   "Type mismatch between branches — every branch must have the same result type,"
+   " but these disagree: "
+   (string-join (map (lambda (t) (pp-expr t names)) shown) " vs ")
+   (if (> more 0) (format " (+~a more)" more) "")
+   ". The clauses of a multi-clause `defn`, the arms of a `match`, and both"
+   " branches of an `if` all share ONE result type"
+   " (a union result type is not inferred here)."))
+
+(define (branch-result-mismatch-hint ctx e names)
+  (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+    ;; Peel lambdas to reach the branch spine. Generated clause lambdas are
+    ;; hole-domain by construction (macros.rkt:10282/:10294); an annotated
+    ;; user lambda keeps its own domain and is not peeled, which is why the ctx
+    ;; stays sound. Reaching the spine with ZERO peels is fine and intended — a
+    ;; plain `def x : Int := if c 1 "x"` gets the branch message instead of a
+    ;; bare "Type mismatch".
+    (let peel ([x e] [c ctx])
+      (cond
+        [(and (expr-lam? x)
+              (let ([d (expr-lam-type x)])
+                (or (expr-hole? d) (expr-meta? d))))
+         (peel (expr-lam-body x) (ctx-extend c (expr-lam-type x) 'mw))]
+        [(not (or (expr-reduce? x) (expr-boolrec? x))) #f]
+        [else
+         (let* ([leaves (branch-result-leaves x c)]
+                [tys (filter
+                      (lambda (t)
+                        (and (expr? t)
+                             (not (expr-error? t))
+                             (not (type-unreportable? t))))
+                      (map (lambda (l)
+                             (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+                               (whnf (infer (cdr l) (car l)))))
+                           leaves))]
+                [distinct (distinct-up-to-conv tys)])
+           (and (>= (length leaves) 2)
+                (>= (length distinct) 2)
+                (format-branch-result-mismatch distinct names)))]))))
+
+;; ========================================
 ;; Infer with error reporting
 ;; ========================================
 ;; Returns (or/c Expr? prologos-error?)
@@ -582,8 +828,22 @@
                    ;; projection) or `defn f [x] [+ x 1]` (arithmetic): both need
                    ;; p / x to have a known type. Surgical — only fires for this
                    ;; shape, so every other check failure keeps "Type mismatch".
+                   ;; CIU T6 (2026-07-30): ordered BEFORE infer-hint-msg, whose
+                   ;; guard below is VACUOUSLY TRUE for every generated clause
+                   ;; lambda and so mis-attributed a branch-result disagreement
+                   ;; to the parameter. This one PROVES its claim (two inferred,
+                   ;; non-convertible, reportable branch result types) or returns
+                   ;; #f and lets the parameter hint stand. See § the
+                   ;; branch-result-mismatch diagnostic above.
+                   ;; Guarded on the two msgs that PRECEDE it in the `or` so the
+                   ;; walk-and-infer is skipped when it would be discarded.
+                   [branch-result-msg
+                    (and (not seal-msg)
+                         (not seal-type-msg)
+                         (branch-result-mismatch-hint ctx e names))]
                    [infer-hint-msg
                     (and (not seal-msg)
+                         (not branch-result-msg)
                          (expr-error? actual)
                          (expr-lam? e)
                          (let ([dom (expr-lam-type e)])
@@ -595,7 +855,8 @@
                           "Annotate the parameter (`[x : T]`) or add a `spec`."))])
               (type-mismatch-error
                loc
-               (or seal-msg seal-type-msg infer-hint-msg "Type mismatch")
+               (or seal-msg seal-type-msg branch-result-msg infer-hint-msg
+                   "Type mismatch")
                (pp-expr t names)
                (if (expr-error? actual) "<could not infer>" (pp-expr actual names))
                (pp-expr e names)

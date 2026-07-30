@@ -368,3 +368,195 @@
               (format "got: ~v" (prologos-error-message r)))
   (check-false (regexp-match? #rx"cannot infer the type of an unannotated"
                               (prologos-error-message r))))
+
+;; ========================================
+;; Branch-result mismatch (CIU T6, 2026-07-30)
+;; ========================================
+;; A multi-clause `defn` whose clause bodies have DIFFERENT result types used to
+;; report the unannotated-parameter hint above — a lying diagnostic, because
+;; `infer` returns expr-error for ANY hole-domain lambda without inspecting the
+;; body (typing-core.rkt:1129) and every generated clause lambda is hole-domain
+;; by construction (macros.rkt:10282/:10294) even when a `spec` is present, so
+;; that hint's guard was vacuous for this whole syntactic class. It now names the
+;; real cause (a first-arm-wins result join) and lists the disagreeing types.
+;; See typing-errors.rkt § the branch-result-mismatch diagnostic.
+;;
+;; The message says "branches", not "clauses", DELIBERATELY: post-elaboration a
+;; generated clause dispatch and a user-written `match` / `if` are the SAME
+;; NODES, so no wording keyed on "clause" can be true for all of them. Several
+;; pins below exist because the first version tried to gate on a
+;; generated-vs-user discriminator that does not exist.
+;;
+;; NOTE the sexp spelling: multi-clause `defn` is recognised by
+;; `has-pipe-clauses?` (parser.rkt) looking for a `$pipe`-headed sub-datum, and
+;; `$pipe` is the WS-READER lexeme for `|`. An L1 pin MUST use `$pipe` (as
+;; test-pattern-defn-01.rkt does); a bare `|` exercises none of this path. L2
+;; cases below use the real `|` surface.
+
+(define branch-mismatch-rx #rx"Type mismatch between branches")
+
+(test-case "branch-result mismatch: Int vs String (L1, $pipe spelling)"
+  (define r (run-ns-last
+             "(ns t)\n(defn f ($pipe (0) -> 1) ($pipe (n) -> \"x\"))"))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (define msg (prologos-error-message r))
+  (check-true (regexp-match? branch-mismatch-rx msg) (format "got: ~v" msg))
+  ;; the disagreeing types are NAMED — that is the point of the diagnostic
+  (check-true (regexp-match? #rx"Int" msg) (format "got: ~v" msg))
+  (check-true (regexp-match? #rx"String" msg) (format "got: ~v" msg))
+  ;; and it no longer blames the parameter
+  (check-false (regexp-match? #rx"cannot infer the type of an unannotated" msg)
+               (format "got: ~v" msg)))
+
+(test-case "branch-result mismatch: record vs Int (L2, WS `|` surface)"
+  ;; the originally reported repro
+  (define r (run-ns-ws-last "ns t\ndefn c1\n  | 0 -> {:a 1}\n  | n -> 5\n"))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (define msg (prologos-error-message r))
+  (check-true (regexp-match? branch-mismatch-rx msg) (format "got: ~v" msg))
+  (check-true (regexp-match? #rx"\\{:a Int\\}" msg) (format "got: ~v" msg))
+  (check-false (regexp-match? #rx"cannot infer the type of an unannotated" msg)
+               (format "got: ~v" msg)))
+
+(test-case "branch-result mismatch: record vs record (L2) — both rows named"
+  ;; REGRESSION PIN: an earlier draft beta-reduced the clause's let-redex with
+  ;; `whnf`, which over-reduced a record literal's map-assoc chain into a runtime
+  ;; value whose type no longer inferred — so every record-bodied clause silently
+  ;; lost its type and fell back to the lying message. Int/String cases passed
+  ;; throughout, so only a record-bodied case catches it.
+  (define r (run-ns-ws-last "ns t\ndefn c2\n  | 0 -> {:a 1}\n  | n -> {:b 2}\n"))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (define msg (prologos-error-message r))
+  (check-true (regexp-match? branch-mismatch-rx msg) (format "got: ~v" msg))
+  (check-true (regexp-match? #rx"\\{:a Int\\}" msg) (format "got: ~v" msg))
+  (check-true (regexp-match? #rx"\\{:b Int\\}" msg) (format "got: ~v" msg)))
+
+(test-case "branch-result mismatch: constructor-pattern route too (L2)"
+  ;; The ctor route joins through a shared `expected-type` per arm
+  ;; (typing-core.rkt:4451-4473) rather than a boolrec motive, and lied
+  ;; identically. Both routes are covered.
+  (define r (run-ns-ws-last
+             "ns t\ndefn c3\n  | zero -> {:a 1}\n  | suc _ -> 5\n"))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (define msg (prologos-error-message r))
+  (check-true (regexp-match? branch-mismatch-rx msg) (format "got: ~v" msg))
+  (check-false (regexp-match? #rx"cannot infer the type of an unannotated" msg)
+               (format "got: ~v" msg)))
+
+(test-case "branch-result mismatch does NOT fire when the param hint is RIGHT"
+  ;; `| n -> [+ n 1]` genuinely needs n's type: clause 2 does not infer, so no
+  ;; two-type proof is available and the parameter hint must stand. This is the
+  ;; contract — the hint fires only when it can EXHIBIT the disagreement.
+  (define r (run-ns-ws-last "ns t\ndefn c4\n  | 0 -> 1\n  | n -> [+ n 1]\n"))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (define msg (prologos-error-message r))
+  (check-true (regexp-match? #rx"cannot infer the type of an unannotated" msg)
+              (format "got: ~v" msg))
+  (check-false (regexp-match? branch-mismatch-rx msg) (format "got: ~v" msg)))
+
+(test-case "matching clause result types still type-check (control, L2)"
+  ;; the working case must stay working — both routes
+  (define r1 (run-ns-ws-last "ns t\ndefn ok1\n  | 0 -> {:a 1}\n  | n -> {:a 9}\n"))
+  (check-false (prologos-error? r1) (format "expected success, got: ~v" r1))
+  (define r2 (run-ns-ws-last "ns t\ndefn ok2\n  | zero -> 1\n  | suc _ -> 2\n"))
+  (check-false (prologos-error? r2) (format "expected success, got: ~v" r2)))
+
+(test-case "a user-written `if` gets the BRANCH message, with no false clause claim"
+  ;; REGRESSION PIN (adversarial verify, SIGNIFICANT). The same strict join serves
+  ;; 3-arg `if` (parser.rkt:1393), `match` arms and `defn` clauses, and
+  ;; post-elaboration they are the SAME NODES. The first version of this fix
+  ;; claimed a generated-vs-user discriminator — an `expr-int-eq` boolrec target —
+  ;; and it does not exist: `int-eq` is a user-callable primitive, so this
+  ;; ONE-clause function was reported as "every clause of a multi-clause
+  ;; definition". The old test asserting the exclusion was VACUOUS: it used
+  ;; `if true 1 "x"`, whose target is a Bool literal (not an int-eq) and which has
+  ;; no hole-domain lambda to peel, so it exercised neither guard.
+  (define r (run-ns-ws-last "ns t\ndefn t1 [x]\n  (if [int-eq x 0] 1 \"s\")\n"))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (define msg (prologos-error-message r))
+  (check-true (regexp-match? branch-mismatch-rx msg) (format "got: ~v" msg))
+  (check-true (regexp-match? #rx"Int" msg) (format "got: ~v" msg))
+  (check-true (regexp-match? #rx"String" msg) (format "got: ~v" msg))
+  ;; the message must never assert that THIS definition has multiple clauses
+  (check-false (regexp-match? #rx"every clause of a multi-clause" msg)
+               (format "got: ~v" msg)))
+
+(test-case "a single-clause defn with a user `match` body gets the BRANCH message"
+  ;; Same root cause as the `if` pin: `expand-match` compiles through the SAME
+  ;; `compile-match-tree` as `compile-pattern-group`, so a user `match` emits the
+  ;; same `expr-reduce` a generated ctor dispatch does.
+  (define r (run-ns-ws-last
+             "ns t\ndefn m1 [x]\n  match x\n    | zero  -> 1\n    | suc k -> \"s\"\n"))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (define msg (prologos-error-message r))
+  (check-true (regexp-match? branch-mismatch-rx msg) (format "got: ~v" msg))
+  (check-false (regexp-match? #rx"every clause of a multi-clause" msg)
+               (format "got: ~v" msg)))
+
+(test-case "branch-result mismatch never prints hole / de Bruijn artifacts"
+  ;; REGRESSION PIN (adversarial verify). Two defects, one filter:
+  ;;  - BLOCKING: a branch type mentioning a bound variable was rendered
+  ;;    `[Pi [x <?bvar0>] ?bvar1]` for a body whose real type is `Int -> Int`,
+  ;;    because `names` is never extended in lockstep with the ctx the leaf walk
+  ;;    builds. Such types are refused outright now.
+  ;;  - a hole printed as a user type: `{:v _}`. That one needed THREE rounds,
+  ;;    because a `_` hides behind two non-expr layers — the Record's `fields`
+  ;;    list-of-pairs, and the `record-field` wrapper struct (syntax.rkt:690).
+  ;;    `type-unreportable?` therefore descends ANY transparent struct.
+  (define r (run-ns-ws-all
+             (string-append
+              "ns t\n"
+              "data Box | mk-a Int | mk-b String | mk-c Bool\n"
+              "defn d2\n"
+              "  | mk-a x -> {:v x}\n"
+              "  | mk-b _ -> {:v \"z\"}\n"
+              "  | mk-c _ -> true\n")))
+  (define msgs (for/list ([x (in-list r)] #:when (prologos-error? x))
+                 (prologos-error-message x)))
+  (check-equal? (length msgs) 1 (format "expected exactly 1 error, got: ~v" r))
+  (define msg (car msgs))
+  (check-true (regexp-match? branch-mismatch-rx msg) (format "got: ~v" msg))
+  ;; the hole-bearing row is dropped; the two REPORTABLE types remain
+  (check-false (regexp-match? #rx"[{]:v _[}]" msg) (format "got: ~v" msg))
+  (check-false (regexp-match? #rx"bvar" msg) (format "got: ~v" msg))
+  (check-true (regexp-match? #rx"[{]:v String[}]" msg) (format "got: ~v" msg))
+  (check-true (regexp-match? #rx"Bool" msg) (format "got: ~v" msg)))
+
+(test-case "branch-result mismatch is ORDER-INDEPENDENT (ctor declaration order)"
+  ;; REGRESSION PIN (adversarial verify, SIGNIFICANT). `conv` treats `expr-hole`
+  ;; as a WILDCARD, so folding it over a type list was a NON-TRANSITIVE relation:
+  ;; one hole-typed branch arriving FIRST absorbed every later type and the
+  ;; diagnosis silently died. These two defns differ ONLY in constructor
+  ;; declaration order — the order the reduce route walks — and before the
+  ;; `type-unreportable?` pre-filter, `h1` fell back to the lying message while
+  ;; `h2` fired. Both must now fire.
+  (define r (run-ns-ws-all
+             (string-append
+              "ns t\n"
+              "data Th | a1 Int | b2 | c3\n"
+              "defn h1\n  | a1 x -> x\n  | b2 -> 5\n  | c3 -> \"s\"\n"
+              "data Th2 | p1 | q2 | r3 Int\n"
+              "defn h2\n  | p1 -> 5\n  | q2 -> \"s\"\n  | r3 x -> x\n")))
+  (define msgs (for/list ([x (in-list r)] #:when (prologos-error? x))
+                 (prologos-error-message x)))
+  (check-equal? (length msgs) 2 (format "expected exactly 2 errors, got: ~v" r))
+  (for ([m (in-list msgs)])
+    (check-true (regexp-match? branch-mismatch-rx m) (format "got: ~v" m))))
+
+(test-case "branch-result mismatch has no clause-count cliff (80 clauses)"
+  ;; REGRESSION PIN (adversarial verify, SIGNIFICANT). A `(> depth 64)` guard in
+  ;; the leaf walk silently truncated the spine, so a defn with >= 64 int-literal
+  ;; clauses reverted to the lying message — at IDENTICAL wall time, so it read as
+  ;; a correctness cliff, not a cost bailout. The guard existed only to bound
+  ;; `whnf`-driven recursion; with `whnf` gone the walk descends proper subfields
+  ;; only and terminates structurally, so the cap was removed.
+  (define clauses
+    (apply string-append
+           (for/list ([i (in-range 80)]) (format "  | ~a -> 1\n" i))))
+  (define r (run-ns-ws-last
+             (string-append "ns t\ndefn wide\n" clauses "  | n -> \"x\"\n")))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r))
+  (define msg (prologos-error-message r))
+  (check-true (regexp-match? branch-mismatch-rx msg) (format "got: ~v" msg))
+  (check-false (regexp-match? #rx"cannot infer the type of an unannotated" msg)
+               (format "got: ~v" msg)))
