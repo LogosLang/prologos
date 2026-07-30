@@ -33,7 +33,7 @@ rulings, censuses and test delta live in its own section.
 | **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | ⬜ | §5.P4 · step-list node (4b) · per-field row-map (4c) |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | §5.P5 · L1–L5 law battery |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | §5.PX · position flexible |
-| **P6** | **Demand semantics** — RULED STAGED (4a): spec tag amended, X.close gated; lazy-leaf design = own post-v1 phase | ⬜ | §5.P6 |
+| **P6** | **Demand semantics** — RULED STAGED (4a); **decision ✅ Q_U3 (owner, 2026-07-30): option (c)** — deferred to a named post-v1 phase, charter stub in §5.P6 | ⬜ (residue = the X.close gate row only) | §5.P6 |
 | **X.close** | **MANDATORY** — bench matrix · DEFERRED triage · doc-truth sweep · memory fold · **Stage-5 PIR** | ⬜ | §5.X · the track does not flip ✅ without the PIR |
 
 *Per `workflow.md`: tests are PER-PHASE (each phase's section states its own
@@ -697,6 +697,9 @@ in PROSE per the standing discipline; audit `wf_27a84061-c7e` fed them —
   consequence ("renames the NOMINAL segment then descends").
   **Implementation: P3c** (rides the ordinal machinery; P3a's parser refusal
   lifts there; P3b untouched).
+- **Q_U3 — the P6 demand DECISION takes option (c)** ["defer it — (c)
+  stands"]: demand semantics deferred to a named post-v1 phase; §5.P6
+  carries the ruling + the charter stub; the 4a X.close gate stays armed.
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
@@ -2480,12 +2483,29 @@ capture stands. Position flexible. Status: ⬜.
 ### §5.P6 — Demand semantics (staging decision + implementation)
 
 The §2.2 collision, staged honestly: **decision by P3** (blocks make demand
-observable), implementation possibly later. Options to design against POL.10:
-lazy leaf thunks in the champ (rep change; `.pnet` + effect-gate interaction) ·
-a demand mark at elaboration (selection-aware forcing) · defer §1.3 to a
-named post-v1 phase with the corpus marker documenting the gap. **No option is
-adopted here** — this section exists so the lift is visible and priced before
-anything claims v1-complete. Status: ⬜.
+observable), implementation possibly later. Options considered against
+POL.10: (a) lazy leaf thunks in the champ (rep change; `.pnet` + effect-gate
+interaction) · (b) a demand mark at elaboration (selection-aware forcing) ·
+(c) defer §1.3 to a named post-v1 phase with the corpus marker documenting
+the gap.
+
+**RULED Q_U3 — option (c) [owner, 2026-07-30: "defer it — (c) stands"].**
+Demand semantics is DEFERRED to a named post-v1 phase (the
+**demand-semantics phase**, CIU T6 post-v1 — chartered by this stub, opened
+only by explicit owner direction). Rationale (the P3a-close presentation):
+the lift is a RUNTIME REPRESENTATION change deserving its own Stage-3
+design; nothing in P3b–P5 depends on it (all value-level); demand's real
+payoff needs the effect story and **Stratum 3 is comment-only at HEAD** —
+lazy leaves without the effect stratum buy invisible timing changes for pure
+programs and UNSEQUENCED effects for impure ones; the 4a X.close gate keeps
+the deferral honest (the PIR must re-state the staged status and the owner
+must charter or re-defer explicitly). **Charter-stub inputs for the future
+phase's Stage 3**: thunked-champ-leaves vs demand-mark realization · `.pnet`
+serialization of thunks · the effect gate · the whnf memo cache · sequencing
+against (or explicitly without) the effect stratum. Eyes-open cost accepted:
+an [ADOPTED] spec element stays unimplemented through v1; `[now]`/`[env …]`
+leaves force at def-commit (the corpus §A comment documents it).
+Status: **decision ✅ (Q_U3)**; the phase's residue = the X.close gate row.
 
 ### §5.X — X.close
 

@@ -47,7 +47,7 @@ The idiom `ssl^.enabled^ssl` (dissolve two levels, resurrect one name) is the
 canonical demonstration: real reshaping wants to keep some ancestry and
 dissolve the rest *in the same query*.
 
-### 1.3 Selection is demand **[ADOPTED — staged; runtime laziness lands per D4 §5.P6, gated at X.close]**
+### 1.3 Selection is demand **[ADOPTED — staged POST-V1 per Q_U3 (owner, 2026-07-30); chartered in D4 §5.P6, gated at X.close]**
 
 Map leaves may be computed (`[now]`, `[env "DATABASE_URL"]`). A selection is a
 *demand specification*: unselected computed leaves are never forced. In the
