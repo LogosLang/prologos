@@ -1,6 +1,6 @@
 # QTT: multiplicity checking for pattern matching
 
-**Status**: P1 ✅ · P2 ✅ · P3 ✅ · P4 ✅ · X.close ✅ — **COMPLETE**. Created
+**Status**: P1 ✅ · P2 ✅ · P3 ✅ · P4 ✅ · P5 ✅ · X.close ✅ — **COMPLETE**. Created
 retroactively at P3 (the work arrived as a Suggested-task chip, not from a
 Stage-3 design; P1/P2 landed before this doc existed and their sections are
 written from their commits).
@@ -20,8 +20,13 @@ and these close notes serve instead.
 | linear var used once per branch | **rejected** (m1+m1 = mw) | accepted |
 | linear var dropped on some branches | accepted (**fd leak**) | rejected |
 | the violation message | 3 placeholder lines, `Variable:` = the whole body | names the resource, declaration, what happened, and why |
+| defs containing Vec / Fin / a foreign value | **QTT skipped entirely for the whole def** | checked (guard deleted) |
 
-Suite 9418 → 9460, 475 files, 0 failures throughout. Zero stdlib fallout.
+Suite 9418 → 9473, 475 files, 0 failures throughout. Zero stdlib fallout.
+
+After P5, multiplicity checking is unconditional **at the def seam**. Bare
+top-level expressions, `check` commands, foreign decls and cache-hit loads remain
+outside the gate — not regressions, but the claim is scoped deliberately.
 
 ## Summary
 
@@ -44,6 +49,7 @@ became `m1 + m1 = mw` and was rejected — though only one branch runs.
 | P2 | `checkQ` `expr-reduce` arm + beta-redex arm; guard entry removed; PNET 6→7 | ✅ | `9fbbc90f` — suite 9445/475/0, zero fallout |
 | P3 | Linear-per-path: branch-agreement guard at `m1` positions (**owner ruling: option 3**) | ✅ | `3a4d521a` — suite 9455/475/0; VAG produced `join-branches` |
 | P4 | Precise diagnostic naming the dropped resource | ✅ | `e7fbd2ba` — suite 9460/475/0; VAG caught the message-only rendering trap |
+| P5 | Retire `contains-unsupported-qtt?` — arm the 8 remaining nodes, delete the guard | ✅ | `9f0ddede` (arms) + `7b14fffe` (deletion + PNET 7→8) — suite 9473/475/0 |
 | X.close | Roadmap row + DEFERRED sweep + close notes | ✅ | **NO PIR** (owner, 2026-07-30): this is not a full designed track — it arrived as a chip and the design doc is retroactive. `workflow.md`'s objective PIR gate is for tracked Stage-3 designs; close notes suffice here. |
 
 ## 7. P4 mini-design (step 1)
