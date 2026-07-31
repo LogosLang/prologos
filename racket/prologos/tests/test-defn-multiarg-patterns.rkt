@@ -366,9 +366,18 @@
 (test-case "spec-mult/the two spellings of the same function now agree"
   ;; Destructuring a linear value: bracket-params + inline match (the stdlib fio
   ;; spelling) and the multi-clause form must both be accepted.
-  (define decl (string-append handle-decl "(spec c Handle2 -1> Nat)\n"))
-  (check-false (mult-violation? (string-append decl "(defn c [h] (match h (mk-h k -> k)))")))
-  (check-false (mult-violation? (string-append decl "(defn c ($pipe (mk-h k) -> k))"))))
+  ;;
+  ;; ⚠ The function is `hconsume`, NOT a single letter. It was `c`, and that
+  ;; spec LEAKED ACROSS TEST FILES within a batch worker (the cell-backed spec
+  ;; registry rides the shared persistent net-box; restore-macros-registry-
+  ;; snapshot! restores only the parameters), colliding with
+  ;; test-new-lattice-cell's `def c : CellId` — "def c has both a spec and
+  ;; inline type annotation" — whenever the two landed in one worker. The leak
+  ;; itself is filed in DEFERRED (LET P1 close notes); single-letter spec names
+  ;; in test strings are collision bait until it is fixed.
+  (define decl (string-append handle-decl "(spec hconsume Handle2 -1> Nat)\n"))
+  (check-false (mult-violation? (string-append decl "(defn hconsume [h] (match h (mk-h k -> k)))")))
+  (check-false (mult-violation? (string-append decl "(defn hconsume ($pipe (mk-h k) -> k))"))))
 
 ;; ========================================
 ;; Guards in the bare-`|` clause form (2026-07-31)

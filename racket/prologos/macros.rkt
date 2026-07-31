@@ -1155,6 +1155,7 @@
        (not (eq? x '$dot-key))          ; RETIRED sentinel (D4.P1a) — still emitted by the reader
        (not (eq? x '$nil-dot-key))      ; RETIRED sentinel (D4.P1a) — still emitted by the reader
        (not (eq? x '$retired-selection)) ; D4.P1a retirement marker (parser converts to guided error)
+       (not (eq? x '$let-error))        ; LET P1 syntax-failure marker (parser converts to per-command parse error)
        (not (eq? x '$dot-brace))        ; D4.P1b-ii `.{ }` sub-block sentinel — see below
        (not (eq? x '$select-brace))     ; D4.P1b-iii adjacent-brace select block
        (not (eq? x '$select))           ; D4.P3a fused select head (LOUD-if-missed: whole-file abort in a defmacro template)
@@ -4715,9 +4716,49 @@
 ;; 4. Bracket () — (let ([name : T value] ...) body) — nested 4-element sub-lists
 ;; 5. Shorthand  — (let name value body) — no type, 4 elements
 ;;
+;; ============================================================
+;; LET P1 (2026-07-31): let syntax failures are per-command parse
+;; errors, never whole-file aborts.
+;; ============================================================
+;; Every failure in this family was a raw `(let-syntax-error …)` — 13 sites — and a
+;; raise on the preparse path aborts the WHOLE file with zero results (no
+;; handler until driver.rkt's process-file-inner; probed: commands BEFORE the
+;; bad let vanish too). Same silence class as the `.( )` mixfix and
+;; tilde-reader entries in DEFERRED, and the guarded-clause crash fixed at
+;; f51bda2b.
+;;
+;; MECHANISM — the retired-selection marker seat (parser.rkt § the
+;; retired-selection diagnostic seat), reached via ONE conversion boundary:
+;; the 13 sites raise a DEDICATED struct (`let-syntax-error`), and
+;; `expand-let` — the family's single entry — converts exactly that struct to
+;; a `($let-error "msg")` marker datum. The parser's expression dispatch turns
+;; the marker into a per-command parse-error VALUE at any nesting depth, with
+;; the loc supplied at parse time.
+;;
+;; Why a boundary handler and not marker returns from each site: the sites
+;; live in recursive helpers whose return values are consumed as DATA
+;; (parse-assign-bindings returns binding triples straight into a foldr);
+;; threading marker returns through ~5 functions is churn with no benefit.
+;; The handler catches ONLY `exn:let-syntax?` — a genuine Racket-level bug
+;; (list-ref, car on '()) still crashes loudly rather than masquerading as a
+;; let syntax error. This is the family's error CHANNEL at its single entry,
+;; not a defensive guard: every raise site is a reachable user-input
+;; condition, and all 13 are beneath expand-let's dynamic extent (verified —
+;; merge-sibling-lets and its helpers raise nowhere).
+(struct exn:let-syntax exn:fail () #:transparent)
+
+(define (let-syntax-error fmt . args)
+  (raise (exn:let-syntax (apply format fmt args)
+                         (current-continuation-marks))))
+
 (define (expand-let datum)
+  (with-handlers ([exn:let-syntax?
+                   (lambda (e) `($let-error ,(exn-message e)))])
+    (expand-let-impl datum)))
+
+(define (expand-let-impl datum)
   (unless (and (list? datum) (>= (length datum) 3))
-    (error 'let "let requires at least: (let name value body)"))
+    (let-syntax-error "let requires at least: (let name value body)"))
   (define rest (cdr datum))  ; everything after 'let
 
   ;; Detect top-level let without body: (let name := value) with no continuation.
@@ -4738,9 +4779,9 @@
                     (let ([after-assign (drop rest (+ assign-pos 1))])
                       (= (length after-assign) 1)))))
     (define name (car rest))
-    (error 'let
-           "`let` is not allowed at top level. Use `def` instead.\n  let ~a := ...\n      ^^^\n  Use: def ~a := ..."
-           name name))
+    (let-syntax-error
+     "`let` is not allowed at top level. Use `def` instead.\n  let ~a := ...\n      ^^^\n  Use: def ~a := ..."
+     name name))
 
   (cond
     ;; --- Branch 1: Bracket format — second element is a list ---
@@ -4788,7 +4829,7 @@
      (expand-let-bracket-bindings bindings-tokens body)]
 
     [else
-     (error 'let "let: unrecognized format: ~a" datum)]))
+     (let-syntax-error "let: unrecognized format: ~a" datum)]))
 
 ;; Expand bracket-style let bindings.
 ;; Handles three sub-formats within the bracket:
@@ -4839,7 +4880,7 @@
             ;; (name value) — type inferred via hole
             (list (car binding) '_ (cadr binding))]
            [else
-            (error 'let "let: each binding must be (name value) or (name : type value), got ~a" binding)])))
+            (let-syntax-error "let: each binding must be (name value) or (name : type value), got ~a" binding)])))
      (let-bindings->nested-fn parsed body)]))
 
 ;; Expand inline := let: rest = (name [: type-atoms...] := value body)
@@ -4869,7 +4910,7 @@
     [(null? tokens) '()]
     [else
      (unless (symbol? (car tokens))
-       (error 'let "let :=: expected variable name, got ~a" (car tokens)))
+       (let-syntax-error "let :=: expected variable name, got ~a" (car tokens)))
      (define name (car tokens))
      (define after-name (cdr tokens))
      ;; Check for optional type annotation: : T1 T2 ... :=
@@ -4878,7 +4919,7 @@
        [(and (pair? after-name) (eq? (car after-name) ':=))
         (define after-assign (cdr after-name))
         (when (null? after-assign)
-          (error 'let "let :=: missing value after := for ~a" name))
+          (let-syntax-error "let :=: missing value after := for ~a" name))
         ;; Value = everything until next binding start or end
         (define-values (value-tokens rest) (split-at-next-assign-binding after-assign))
         (define value (if (= (length value-tokens) 1)
@@ -4892,13 +4933,13 @@
         (define-values (type-atoms after-assign)
           (split-before-symbol ':= after-colon))
         (when (null? type-atoms)
-          (error 'let "let :=: empty type annotation for ~a" name))
+          (let-syntax-error "let :=: empty type annotation for ~a" name))
         (when (null? after-assign)
-          (error 'let "let :=: missing := after type for ~a" name))
+          (let-syntax-error "let :=: missing := after type for ~a" name))
         ;; after-assign starts with :=, skip it
         (define past-assign (cdr after-assign))
         (when (null? past-assign)
-          (error 'let "let :=: missing value after := for ~a" name))
+          (let-syntax-error "let :=: missing value after := for ~a" name))
         (define-values (value-tokens rest) (split-at-next-assign-binding past-assign))
         (define type (if (= (length type-atoms) 1)
                          (car type-atoms)
@@ -4908,7 +4949,7 @@
                           (maybe-restructure-infix-eq value-tokens)))
         (cons (list name type value) (parse-assign-bindings rest))]
        [else
-        (error 'let "let :=: expected := or : after name ~a, got ~a" name after-name)])]))
+        (let-syntax-error "let :=: expected := or : after name ~a, got ~a" name after-name)])]))
 
 ;; Restructure infix = in a multi-token value list to prefix form.
 ;; (add ?x 3N = 5N) → (= (add ?x 3N) 5N)
@@ -4967,14 +5008,14 @@
   (cond
     [(null? elems) '()]
     [(< (length elems) 3)
-     (error 'let "let: incomplete binding triple, got ~a" elems)]
+     (let-syntax-error "let: incomplete binding triple, got ~a" elems)]
     [else
      (let* ([name (car elems)]
             [angle-form (cadr elems)]
             [_ (unless (symbol? name)
-                 (error 'let "let: expected variable name, got ~a" name))]
+                 (let-syntax-error "let: expected variable name, got ~a" name))]
             [_ (unless (and (pair? angle-form) (eq? (car angle-form) '$angle-type))
-                 (error 'let "let: expected <type>, got ~a" angle-form))]
+                 (let-syntax-error "let: expected <type>, got ~a" angle-form))]
             [type (if (= (length (cdr angle-form)) 1)
                       (cadr angle-form)
                       (cdr angle-form))]

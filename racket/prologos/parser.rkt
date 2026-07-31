@@ -921,6 +921,19 @@
      (retired-selection-error (and (pair? args) (stx->datum (car args)))
                               (and (pair? args) (pair? (cdr args)) (stx->datum (cadr args)))
                               loc)]
+
+    ;; LET P1 — the let syntax-failure marker. expand-let (macros.rkt) converts
+    ;; its family's 13 raise sites into ($let-error "msg") datums so a bad let
+    ;; is a PER-COMMAND parse error instead of a whole-file abort; this arm
+    ;; supplies the loc the datum layer cannot carry. The (pair? args) guard is
+    ;; LOAD-BEARING per the $retired-selection precedent above — an unguarded
+    ;; (car args) here would reintroduce the exact abort this seat eliminates.
+    [(and (symbol? head) (eq? head '$let-error))
+     (parse-error loc
+                  (if (and (pair? args) (string? (stx->datum (car args))))
+                      (stx->datum (car args))
+                      "let: malformed let expression")
+                  #f)]
     ;; …and the raw retired sentinels (targetless shapes the fold passes through)
     [(and (symbol? head) (eq? head '$dot-key))
      (retired-selection-error 'dot-key (and (pair? args) (stx->datum (car args))) loc)]
