@@ -1,6 +1,6 @@
 # LET blocks — multi-binding `let` layout
 
-**Status**: P0 ✅ `0effba9c` · P1 ✅ `49f51c14` · P2 ✅ `e8a41a9a` · P3 ✅ `940c1c16` · P4 next. Owner-requested language polish (2026-07-31): the
+**Status**: P0 ✅ `0effba9c` · P1 ✅ `49f51c14` · P2 ✅ `e8a41a9a` · P3 ✅ `940c1c16` · P4 ✅ `feb79740` · X.close next. Owner-requested language polish (2026-07-31): the
 nested-only `let` layout "was never intended to be how they function."
 
 **Acceptance file**: `examples/2026-07-31-let-blocks.prologos` (Phase 0; target
@@ -115,7 +115,7 @@ existing inputs.
 | P1 | All 13 `(error 'let …)` raises → per-command parse-error VALUES (`$let-error` marker) | ✅ | `49f51c14` — suite 9497/476/0; 2 check-exn pins flipped WITH the behavior; the spec-c batch collision surfaced and was renamed away (leak filed) |
 | P2 | Sibling no-`:=` chains (form 3): uniform `:=` synthesis at the merge seam; tree spine defers on let heads | ✅ | `e8a41a9a` — suite 9507/476/0; acceptance §C live (20 markers); the P0-era "unspecced BROKEN" filing WITHDRAWN (it was i70 — §7) |
 | P3 | Aligned blocks (forms 1/5): reader-layer `$let-block` regrouping, STRICT columns | ✅ | `940c1c16` — suite 9513/476/0; acceptance §D live (26 markers); the gate caught a PROPERTIES-DROP bug pre-commit (POL.9 paren-origin) |
-| P4 | Fused `var:Type` binders (form 2): WS pair + sexp glued split | ⬜ | recognizer in reader-forms.rkt; chained-annot reject shared |
+| P4 | Fused `var:Type` binders (form 2): WS pair + sexp glued split; MULTI-LINE VALUES (owner add-on: the fold + the absorb) | ✅ | `feb79740` — suite 9520/476/0; acceptance §E live (34 markers); an infinite loop caught at the preparse seam (fused-type-annot? accepted bare `:`/`:=`) |
 | X.close | prologos-syntax.md § let (discharges issue #21's doc obligation) + DEFERRED sweep + close notes | ⬜ | |
 
 ## 4. P1 design (mini-design)
@@ -324,3 +324,29 @@ ONE shared `normalize-let-binding-group`, then the existing
 - **Flip-with-the-feature, 3rd instance**: the P1 broken-form exemplars moved
   forward to the fused form. When P4 lands, the containment tests' bad-let
   exemplar must become the top-level let (the one PERMANENT error).
+
+## 10. P4 close notes
+
+- **Fused landed everywhere** (aligned, sibling, nested, `:=` and not, sexp
+  glued split per ruling 3) through the one-normalizer funnel; the annotation
+  is REAL (wrong type = per-command type error); multiplicities and keyword
+  values structurally excluded.
+- **The primitives moved, not copied**: reader-forms.rkt owns them; parser.rkt
+  re-imports. The cycle (parser → macros) made this the only correct home —
+  and the move HARDENED the predicate: `fused-type-annot?` accepted bare `:`
+  and `:=`, which the let rewrite arm turned into an INFINITE LOOP (the defn
+  consumer never fed it a bare `:`, so the hole was latent there). Found by a
+  hung battery; bisected reader → preparse; the stack named the loop pair.
+  Lesson, the session's recurring one: a predicate inherited by a NEW consumer
+  meets inputs its old consumers never produced.
+- **Multi-line values (the owner add-on)**: the fold (deeper-than-binding-col
+  = value continuation — the original design rule, finally implemented) + the
+  absorb (multi-line brackets end the reader's form extent; siblings taken
+  back, gated on bodiless shape). All five broken shapes were A/B'd at
+  pre-P3 BEFORE attribution: all pre-existing, nothing regressed.
+- **Boundary stated, not hidden**: unannotated match VALUES remain the QTT
+  infer-position debt (typing-side; the layout now produces the correct
+  datum). Annotated they work; pinned both ways; acceptance §E2 carries the
+  annotated form with a comment naming the boundary.
+- The flip-with-the-feature series CLOSED: P1's exemplars now sit on the two
+  PERMANENT errors (chained annotation, top-level let).
