@@ -34,6 +34,7 @@
 
 (require rackunit
          "../parse-reader.rkt"
+         "../errors.rkt"   ;; LET P1: prologos-error? for the per-command-error pin
          "test-support.rkt")
 
 ;; --- Level 1 (preparse / read) helpers ---------------------------------
@@ -112,9 +113,13 @@
   (check-true (ws-runs? src)))
 
 ;; ========================================
-;; Empty / bare let still raise
+;; Empty / bare let is a per-command ERROR (LET P1: raises retired)
 ;; ========================================
+;; This pinned `check-exn` until 2026-07-31 — but the raise it pinned was a
+;; WHOLE-FILE abort in .prologos files. expand-let now returns a $let-error
+;; marker that the parser converts to a parse-error VALUE; the failure is
+;; still loud, per command, and the file continues.
 
-(test-case "let with bindings but no body still raises"
-  (check-exn exn:fail?
-             (lambda () (run-ns-ws-last "(let [x := 1])"))))
+(test-case "let with bindings but no body is a per-command error"
+  (define r (run-ns-ws-last "(let [x := 1])"))
+  (check-true (prologos-error? r) (format "expected an error value, got: ~v" r)))

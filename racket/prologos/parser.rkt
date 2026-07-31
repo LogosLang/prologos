@@ -20,7 +20,13 @@
          ;; reduction, so check and meaning cannot drift)
          (only-in "syntax.rkt"
                   select-key-step? select-sub-step? select-step-cont
-                  select-cont-collapse? select-branch-top-keys))
+                  select-cont-collapse? select-branch-top-keys)
+         ;; LET P4: the fused primitives moved here (the one definition —
+         ;; macros.rkt consumes them at the datum level, and this module
+         ;; requires macros.rkt, so they cannot live in this file).
+         (only-in "reader-forms.rkt"
+                  colon-symbol? digit-headed-colon-symbol?
+                  fused-type-annot? fused-annot->type-symbol))
 
 (provide parse-datum
          parse-toplevel-datum  ;; Rel T1 POL.9: command-position paren-goal dispatch
@@ -1129,6 +1135,19 @@
      (retired-selection-error (and (pair? args) (stx->datum (car args)))
                               (and (pair? args) (pair? (cdr args)) (stx->datum (cadr args)))
                               loc)]
+
+    ;; LET P1 — the let syntax-failure marker. expand-let (macros.rkt) converts
+    ;; its family's 13 raise sites into ($let-error "msg") datums so a bad let
+    ;; is a PER-COMMAND parse error instead of a whole-file abort; this arm
+    ;; supplies the loc the datum layer cannot carry. The (pair? args) guard is
+    ;; LOAD-BEARING per the $retired-selection precedent above — an unguarded
+    ;; (car args) here would reintroduce the exact abort this seat eliminates.
+    [(and (symbol? head) (eq? head '$let-error))
+     (parse-error loc
+                  (if (and (pair? args) (string? (stx->datum (car args))))
+                      (stx->datum (car args))
+                      "let: malformed let expression")
+                  #f)]
     ;; …and the raw retired sentinels (targetless shapes the fold passes through)
     [(and (symbol? head) (eq? head '$dot-key))
      (retired-selection-error 'dot-key (and (pair? args) (stx->datum (car args))) loc)]
@@ -4794,8 +4813,35 @@
     ;; ---- Pattern clause: patterns... -> body ----
     ;; Handles both bracketed [pats] -> body and bare pat1 pat2 -> body
     [arrow-idx
-     (define pattern-stxs (take cleaned arrow-idx))
+     ;; Split the pre-arrow forms at `when` into PATTERNS and an optional GUARD.
+     ;;
+     ;; 2026-07-31: this split was missing here, though the bracketed-header
+     ;; clause parser has always had it. So in the bare-`|` form a guard was
+     ;; silently parsed as EXTRA PATTERNS — `| n when [int-lt n 0] -> 7` became
+     ;; three patterns (`n`, `when`, `[…]`) — giving clauses of mismatched
+     ;; arity, and the pattern compiler then indexed off the end of its
+     ;; parameter list and died with a raw Racket
+     ;;   `list-ref: index too large for list, in: '(__arg0 __arg1)`
+     ;; that killed the WHOLE FILE (no per-command error, no earlier command's
+     ;; output). Same split, same guard parsing, as the header path.
+     (define pre-arrow (take cleaned arrow-idx))
+     (define-values (pattern-stxs guard-forms)
+       (let ([when-idx (for/or ([p (in-list pre-arrow)] [i (in-naturals)])
+                         (and (eq? (stx->datum p) 'when) i))])
+         (if when-idx
+             (values (take pre-arrow when-idx) (drop pre-arrow (+ when-idx 1)))
+             (values pre-arrow '()))))
+     (define guard
+       (if (null? guard-forms)
+           #f
+           (let ([guard-stx (if (= (length guard-forms) 1)
+                                (car guard-forms)
+                                (datum->syntax #f (map stx->datum guard-forms)
+                                               (car guard-forms)))])
+             (parse-datum guard-stx))))
      (define body-parts (drop cleaned (+ arrow-idx 1)))
+     (when (and (pair? guard-forms) (null? pattern-stxs))
+       (parse-error loc (format "defn ~a: `when` guard with no pattern before it" name) #f))
      (when (null? pattern-stxs)
        (parse-error loc (format "defn ~a: pattern clause needs at least one pattern before ->" name) #f))
      (when (null? body-parts)
@@ -4842,9 +4888,10 @@
             (parse-single-pattern p loc))]))
      (cond
        [(prologos-error? body) body]
+       [(prologos-error? guard) guard]
        [(prologos-error? patterns) patterns]
        [(findf prologos-error? patterns) => (lambda (err) err)]
-       [else (defn-pattern-clause patterns #f body loc)])]
+       [else (defn-pattern-clause patterns guard body loc)])]
 
     ;; ---- Arity clause: existing logic ----
     [else
@@ -5801,10 +5848,10 @@
 ;; A colon-prefixed symbol like `:Int`. The WS reader renders a fused type
 ;; annotation's `:Type` as a SEPARATE colon-prefixed SYMBOL (not a Racket keyword);
 ;; sexp glues it into the preceding symbol. Rel Track 1 Aspect C, C.b.1.
-(define (colon-symbol? x)
-  (and (symbol? x)
-       (let ([s (symbol->string x)])
-         (and (> (string-length s) 0) (char=? (string-ref s 0) #\:)))))
+;; colon-symbol? — MOVED to reader-forms.rkt at LET P4 (macros.rkt needs it at
+;; the datum level and this module requires macros.rkt — the cycle). Imported
+;; below; the definition, its digit-headed sibling and fused-type-annot? live
+;; there as the ONE set of fused primitives.
 
 ;; ── Fused type annotations: the ONE pair of primitives (Rel T1 C.b.2 + POL.6) ──
 ;; `x:Int` reaches the parser in two shapes: WS splits it into `x` + the
@@ -5836,24 +5883,15 @@
 ;; The comment eight lines above warns that "a second copy is how the two paths
 ;; would drift". This predicate WAS that second copy; it is now derived from a
 ;; property instead of an enumeration, so it cannot drift from the recognizer.
-(define (digit-headed-colon-symbol? d)
-  (and (colon-symbol? d)
-       (let ([s (symbol->string d)])
-         (and (> (string-length s) 1) (char-numeric? (string-ref s 1))))))
+;; digit-headed-colon-symbol? — moved to reader-forms.rkt (LET P4).
 
-(define (fused-type-annot? d)
-  (and (colon-symbol? d)
-       (not (memq d '(:w :m)))              ;; the LETTER multiplicities
-       (not (digit-headed-colon-symbol? d)) ;; :0 :1 :7 :10 :127 … never a type
-       ))
+;; fused-type-annot? — moved to reader-forms.rkt (LET P4).
 
 ;; Build the type surf from a WS fused annotation datum (`:Int` → the surf for
 ;; `Int`), via parse-datum so it is IDENTICAL to what the spaced arm produces.
 ;; ctx-stx supplies srcloc context for datum->syntax.
 (define (fused-annot->type-surf annot-datum ctx-stx)
-  (parse-datum (datum->syntax ctx-stx
-                              (string->symbol
-                               (substring (symbol->string annot-datum) 1)))))
+  (parse-datum (datum->syntax ctx-stx (fused-annot->type-symbol annot-datum))))
 
 ;; sexp shape: split a possibly-glued `name:Type` symbol.
 ;; Returns (values name-symbol type-surf-or-#f error-or-#f):

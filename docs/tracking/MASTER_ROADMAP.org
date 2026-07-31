@@ -157,6 +157,34 @@ value strata. Topology strata are sequential. See =DEVELOPMENT_LESSONS.org=
 | 4 | Trait-Dispatched Iteration (broadcast via Seq) | ⬜ | Post Track 8 |
 | 5 | Union-Aware Dispatch | ⬜ | Post Track 8 |
 
+** LET (let-block layout)  — /Multi-binding `let`: aligned blocks, sibling chains, fused binders, multi-line values/
+
+| | |
+|------------------+------|
+| *Design doc*     | [[file:2026-07-31_LET_BLOCKS_DESIGN.md][2026-07-31_LET_BLOCKS_DESIGN.md]] |
+| *Status*         | **COMPLETE 2026-07-31** (P0–P4 + X.close, one session). Owner-requested polish: the nested-only `let` layout "was never intended". Shipped: per-command let errors (13 whole-file-abort raises retired, P1 `49f51c14`) · sibling no-`:=` chains one scope (P2 `e8a41a9a`; the tree spine defers to preparse on let heads — single implementation) · ALIGNED blocks with STRICT column discipline, guided errors naming columns (P3 `940c1c16`; reader-layer eq?-preserving stx transform — the gate caught a syntax-PROPERTIES drop breaking implicit solve pre-commit) · fused `x:Int` binders WS+sexp + MULTI-LINE values via the fold + the absorb (P4 `feb79740`; an infinite loop caught at the preparse seam — `fused-type-annot?` accepted bare `:`/`:=`) · docs: prologos-syntax.md § let (discharges GitHub #21's obligation). Suite 9520/476/0; acceptance `examples/2026-07-31-let-blocks.prologos` 34 markers. Boundary: unannotated match VALUES = the QTT infer-position debt (typing-side; annotate works). Notable process: the P0-era "unspecced defns broken" filing was WITHDRAWN at P2 (issue-#70 in a let costume — the repro was never controlled). |
+
+** QTT (Quantitative Type Theory)  — /Multiplicities that are actually enforced: erased, linear, unrestricted/
+
+| | |
+|------------------+------|
+| *Design doc*     | [[file:2026-07-30_QTT_PATTERN_MATCHING_DESIGN.md][2026-07-30_QTT_PATTERN_MATCHING_DESIGN.md]] |
+| *Thesis*         | The multiplicity layer as a CHECKED discipline rather than a declared one. Distinct from the type layer (CIU rows/records) and the constraint substrate (UCS): QTT owns what m0/m1/mw *mean* operationally and where they are enforced. |
+| *Status*         | Founded 2026-07-30 from a Suggested-task chip (no Stage-3 predecessor; design doc written retroactively at P3). *P1 ✅ `966226cf`* — `mult-join`, the missing ALTERNATION operator: eliminator branches join, they do not add (`mult-add` stays right for sequential composition; PPN 4C Phase 2's "REFUTE idempotence" finding stands, it was about the tensor). Differs from `mult-add` in exactly one cell, so the swap is monotone-permissive. 5 sites; `natrec` deliberately excluded. *P2 ✅ `9fbbc90f`* — pattern matching is multiplicity-checked at all: `contains-unsupported-qtt?` returned #t for `expr-reduce`, so every `match` and multi-clause `defn` (the PRIMARY dispatch form) skipped QTT, and the stdlib's only linear API (fio's `-1>` handles, match-implemented) was declared linear and never checked. Adds the `checkQ` reduce arm + a beta-redex arm; `reduce-arm-ctx` factored out of `check-reduce-structural` and exported (one derivation, two consumers); PNET_VERSION 6→7 in the same commit (a warm cache masks the change entirely). Zero fallout. *P3 ✅ `3a4d521a`* — LINEAR-PER-PATH (owner ruling, option 3): `join-branches` gates the join on branch agreement at m1 positions, so a linear resource consumed on some paths and dropped on others now errors. On the real API the pair was INVERTED before P1 (`always-close` rejected, the `maybe-close` fd leak accepted); both are now correct. *P4 ✅ `e7fbd2ba`* — the diagnostic now NAMES the resource, the declaration, what happened and why, for all four violation classes; the placeholder literals "declared"/"actual" are gone. *P5 ✅ `9f0ddede`+`7b14fffe`* — the belt-and-suspenders guard `contains-unsupported-qtt?` is DELETED: the 8 nodes it flagged (Vec constructors/eliminators, Fin, foreign-fn) are armed in qtt.rkt, so multiplicity checking is unconditional at the def seam. The guard both over-skipped (one Vec anywhere disabled QTT for a whole def) and under-detected (a hand-armed walk over ~344 structs ending in `[_ #f]`). PNET_VERSION 7→8 rode the deletion. *P6 ✅ `e5810cfe`* — the Church-fold agreement hole was LIVE: a linear resource dropped (and in a second variant DOUBLE-FREED) inside an unanalysable branch type-checked clean and RAN, while the byte-identical Bool-scrutinee control was rejected. The skip swallowed NESTED violations. Now refused when — and only when — a linear is at stake, with a message naming what cannot be decided. *P7 ✅ `63dea0b6`* — ω-scaling for repeatedly-applied function arguments across 9 nodes / 28 sites / both twins (natrec + 8 HOF primitives with 121 shipped uses), plus J's base usage which was dropped ENTIRELY. Not a tightening: the app rule already scales arguments by their binder multiplicity, and these arms synthesized an mw Pi then failed to scale by it. *X.close ✅* — **the track is COMPLETE**. No PIR (owner ruling: arrived as a chip, not a designed track; the per-phase VAGs + close notes serve instead). Residuals carried in DEFERRED: natrec's step counted once though it runs n times; the Church-fold arm never checks branch agreement; retire `contains-unsupported-qtt?` by arming its remaining 8 nodes. |
+
+*** Tracks
+
+| Track | Description | Status |
+|-------+-------------+--------|
+| P1 | `mult-join` — the alternation operator | ✅ `966226cf` |
+| P2 | `expr-reduce` arms; guard entry removed; PNET bump | ✅ `9fbbc90f` |
+| P3 | Branch-agreement guard — linear-per-path | ✅ `3a4d521a` |
+| P4 | Precise diagnostic naming the dropped resource | ✅ `e7fbd2ba` |
+| P5 | Retire the QTT guard — arm the 8 remaining nodes, delete it | ✅ `9f0ddede`+`7b14fffe` |
+| P6 | Close the Church-fold agreement hole | ✅ `e5810cfe` |
+| P7 | ω-scale repeatedly-applied function args (9 nodes) + J's dropped base | ✅ `63dea0b6` |
+| X.close | Close notes + DEFERRED sweep (**no PIR** — owner: not a full designed track) | ✅ |
+
 ** Rel (Relational Language)  — /The logic-programming layer: `solve`/`defr`, NAF, guards, solution-set typing/
 
 | | |

@@ -21,7 +21,9 @@
          "../global-env.rkt"
          "../namespace.rkt"
          "../macros.rkt"
-         "../metavar-store.rkt")
+         "../metavar-store.rkt"
+         ;; QTT P4: pins the message-text → LSP diagnostic-code coupling (E1003)
+         (only-in "../lsp/diagnostics.rkt" error->diagnostic))
 
 ;; Helper: run prologos code in a fresh environment
 (define (run s)
@@ -155,6 +157,351 @@
   ;; Second result should be an unbound variable error (def was removed)
   (check-true (prologos-error? (second results))
               "Second result should be an error (bad is not defined)"))
+
+;; ========================================
+;; Pattern matching IS multiplicity-checked (QTT P2, 2026-07-30)
+;; ========================================
+;; `contains-unsupported-qtt?` used to return #t for expr-reduce, so the driver
+;; skipped checkQ-top for every `match` and every multi-clause `defn` — the
+;; language's primary dispatch form. These pin that the arm now runs, that its
+;; arms JOIN (one runs), and that sequential use inside an arm still ADDs.
+
+(test-case "qtt-reduce/linear-used-once-in-EACH-arm-is-legal"
+  ;; `y` is linear and appears in both arms; only one arm runs. The scrutinee
+  ;; `s` is unrestricted, so it contributes nothing to y's count.
+  (define result
+    (run-first
+     (string-append
+      "(def m1ok <(Pi [y :1 <Nat>] (Pi [s <Nat>] Nat))> "
+      "(fn [y :1 <Nat>] (fn [s <Nat>] (match s (zero -> y) (suc _ -> y)))))")))
+  (check-false (multiplicity-error? result)
+               (format "linear var once per arm must be legal; got: ~v" result)))
+
+(test-case "qtt-reduce/linear-used-in-NEITHER-arm-is-error"
+  ;; m1 demands exactly one use; m0 join m0 = m0.
+  (define result
+    (run-first
+     (string-append
+      "(def m1unused <(Pi [y :1 <Nat>] (Pi [s <Nat>] Nat))> "
+      "(fn [y :1 <Nat>] (fn [s <Nat>] (match s (zero -> zero) (suc _ -> zero)))))")))
+  (check-true (multiplicity-error? result)
+              (format "unused linear var must violate; got: ~v" result)))
+
+(test-case "qtt-reduce/linear-used-TWICE-IN-ONE-arm-is-error"
+  ;; Within an arm the uses still ADD — the join is branch-vs-branch only.
+  ;; THE pin for the original defect: this exact shape (a linear param
+  ;; duplicated inside a match arm) was ACCEPTED with 0 errors before P2.
+  ;; `(natrec motive y step y)` uses y twice (base AND target) — the same
+  ;; double-use idiom `qtt-pipeline/linear-used-twice-is-error` above uses.
+  (define dbl
+    (string-append "(natrec (fn [_ <Nat>] Nat) y "
+                   "(fn [_ <Nat>] (fn [r <Nat>] r)) y)"))
+  (define result
+    (run-first
+     (string-append
+      "(def m1dup <(Pi [y :1 <Nat>] (Pi [s <Nat>] Nat))> "
+      "(fn [y :1 <Nat>] (fn [s <Nat>] "
+      "(match s (zero -> " dbl ") (suc _ -> " dbl ")))))")))
+  (check-true (multiplicity-error? result)
+              (format "two uses in ONE arm must violate; got: ~v" result)))
+
+(test-case "qtt-reduce/scrutinee-ADDs-to-the-arm-join"
+  ;; The scrutinee always runs, so a linear var matched on AND used in an arm is
+  ;; used twice. Pins add(scrutinee, join(arms)) rather than a flat join.
+  (define result
+    (run-first
+     (string-append
+      "(def m1scrut <(Pi [y :1 <Nat>] Nat)> "
+      "(fn [y :1 <Nat>] (match y (zero -> y) (suc _ -> y))))")))
+  (check-true (multiplicity-error? result)
+              (format "scrutinee must ADD to the arm join; got: ~v" result)))
+
+(test-case "qtt-reduce/linear-consumed-in-ONE-arm-only-is-error"
+  ;; P3, linear-per-path: the arms must agree about each linear resource. `y` is
+  ;; consumed on the zero arm and DROPPED on the suc arm — a leak, and accepted
+  ;; before the agreement guard.
+  (define result
+    (run-first
+     (string-append
+      "(def m1leak <(Pi [y :1 <Nat>] (Pi [s <Nat>] Nat))> "
+      "(fn [y :1 <Nat>] (fn [s <Nat>] (match s (zero -> y) (suc _ -> zero)))))")))
+  (check-true (multiplicity-error? result)
+              (format "dropping a linear var on one arm must violate; got: ~v" result)))
+
+(test-case "qtt-reduce/the-same-shape-UNRESTRICTED-is-still-fine"
+  ;; The guard must fire only at linear positions (drift risk 2).
+  (check-false
+   (multiplicity-error?
+    (run-first
+     (string-append
+      "(def mwok <(Pi [y <Nat>] (Pi [s <Nat>] Nat))> "
+      "(fn [y <Nat>] (fn [s <Nat>] (match s (zero -> y) (suc _ -> zero)))))")))))
+
+(test-case "qtt-reduce/unrestricted-match-still-fine"
+  ;; The overwhelmingly common case: no multiplicity annotations anywhere.
+  ;; Turning checking ON must not disturb it.
+  (check-equal?
+   (run-first
+    (string-append
+     "(def classify <(-> Nat Nat)> "
+     "(fn [x <Nat>] (match x (zero -> zero) (suc _ -> (suc zero)))))"))
+   "classify : Nat -> Nat defined."))
+
+(test-case "qtt-reduce/let-bound-match-does-not-spuriously-fail"
+  ;; A `let` desugars to (app (lam ...) arg). checkQ had no beta-redex arm, so
+  ;; before P2 added one this fell through to inferQ, which has no reduce arm,
+  ;; and reported a bogus "Multiplicity violation".
+  (define result
+    (run-first
+     (string-append
+      "(def letmatch <Nat> "
+      "(let a : Nat := (suc zero) (match a (zero -> zero) (suc _ -> a))))")))
+  (check-false (multiplicity-error? result)
+               (format "let-bound match must not violate; got: ~v" result)))
+
+;; ========================================
+;; The multiplicity message says what actually went wrong (QTT P4, 2026-07-30)
+;; ========================================
+;; `multiplicity-error`'s Variable / Declared / Actual fields always existed and
+;; always rendered — they were filled with the string LITERALS "declared" and
+;; "actual", and Variable got the entire pretty-printed body. P4 computes real
+;; values via `explain-qtt-failure` (qtt.rkt, beside the rules it reproduces).
+;;
+;; The detail is asserted on the MESSAGE, deliberately: tools/run-file.rkt and
+;; the `;;N=>` acceptance harness print `prologos-error-message` ALONE, so detail
+;; living only in the struct fields is invisible to users. The first draft did
+;; exactly that and these assertions are what pin it.
+
+(define (qtt-msg s) (prologos-error-message (run-first s)))
+
+(test-case "qtt-msg/linear-used-twice names the parameter and both multiplicities"
+  (define m (qtt-msg "(def dup <(Pi [x :1 <Nat>] Nat)> (fn [x :1 <Nat>] (natrec (fn [_ <Nat>] Nat) x (fn [_ <Nat>] (fn [r <Nat>] (suc r))) x)))"))
+  (check-true (regexp-match? #rx"Multiplicity violation" m) m)   ;; LSP trigger
+  (check-true (regexp-match? #rx"declared" m) m)
+  (check-true (regexp-match? #rx"linear" m) m)
+  (check-true (regexp-match? #rx"used more than once" m) m)
+  ;; the placeholder literals are gone
+  (check-false (regexp-match? #rx"Actual usage: actual" m) m))
+
+(test-case "qtt-msg/linear-unused says it must be consumed"
+  (define m (qtt-msg "(def drop <(Pi [x :1 <Nat>] Nat)> (fn [x :1 <Nat>] zero))"))
+  (check-true (regexp-match? #rx"is not used" m) m)
+  (check-true (regexp-match? #rx"must be consumed" m) m))
+
+(test-case "qtt-msg/erased-used explains erasure rather than repeating the code"
+  (define m (qtt-msg "(def ue <(Pi [x :0 <Nat>] Nat)> (fn [x :0 <Nat>] x))"))
+  (check-true (regexp-match? #rx"erased" m) m)
+  (check-true (regexp-match? #rx"cannot be used at runtime" m) m))
+
+(test-case "qtt-msg/branch disagreement names the EVERY-path rule"
+  ;; The class P3 introduced, which had no diagnostic at all before P4.
+  (define m (qtt-msg (string-append
+                      "(def leak <(Pi [y :1 <Nat>] (Pi [c <Bool>] Nat))> "
+                      "(fn [y :1 <Nat>] (fn [c <Bool>] "
+                      "(boolrec (fn [_ <Bool>] Nat) y zero c))))")))
+  (check-true (regexp-match? #rx"Multiplicity violation" m) m)
+  (check-true (regexp-match? #rx"EVERY path" m) m)
+  (check-true (regexp-match? #rx"branches disagree" m) m)
+  ;; names what each side did, not just that something is wrong
+  (check-true (regexp-match? #rx"used once" m) m)
+  (check-true (regexp-match? #rx"not used" m) m))
+
+(test-case "qtt-msg/still maps to LSP code E1003"
+  ;; lsp/diagnostics.rkt derives the code by regexp over the message, testing
+  ;; `type.?mismatch` FIRST. A reworded multiplicity message that gained that
+  ;; substring — or lost "multiplicity" — would silently retag the whole class.
+  (for ([src (in-list
+              (list "(def drop <(Pi [x :1 <Nat>] Nat)> (fn [x :1 <Nat>] zero))"
+                    (string-append
+                     "(def leak <(Pi [y :1 <Nat>] (Pi [c <Bool>] Nat))> "
+                     "(fn [y :1 <Nat>] (fn [c <Bool>] "
+                     "(boolrec (fn [_ <Bool>] Nat) y zero c))))")))])
+    (define r (run-first src))
+    (check-true (multiplicity-error? r) src)
+    (check-equal? (hash-ref (error->diagnostic r) 'code) "E1003" src)))
+
+;; ========================================
+;; The QTT guard is GONE: Vec / Fin / foreign defs are checked (QTT P5)
+;; ========================================
+;; `contains-unsupported-qtt?` used to make the driver SKIP checkQ-top for any
+;; def whose body contained a Vec/Fin constructor or eliminator, or a foreign-fn
+;; value. It is deleted; these pin that such defs now go THROUGH the gate rather
+;; than around it. Before P5 there was no driver-path Vec/Fin test at all — the
+;; existing ones drive typing-core directly and never touch the gate.
+
+(test-case "qtt-guard/Vec defs pass the gate rather than skipping it"
+  (check-equal? (run-first "(def v <(Vec Nat zero)> (vnil Nat))")
+                "v : [Vec Nat 0N] defined.")
+  (check-equal?
+   (run-first "(def v1 <(Vec Nat (suc zero))> (vcons Nat zero zero (vnil Nat)))")
+   "v1 : [Vec Nat 1N] defined."))
+
+(test-case "qtt-guard/Fin defs pass the gate"
+  (check-equal? (run-first "(def i0 <(Fin (suc zero))> (fzero zero))")
+                "i0 : [Fin 1N] defined.")
+  (check-equal?
+   (run-first "(def i1 <(Fin (suc (suc zero)))> (fsuc (suc zero) (fzero zero)))")
+   "i1 : [Fin 2N] defined."))
+
+(test-case "qtt-guard/a linear value consed TWICE into a Vec is now an error"
+  ;; THE point of the retirement: this def used to skip QTT entirely and be
+  ;; accepted. `y` is linear and stored in both the head and the tail.
+  (define result
+    (run-first
+     (string-append
+      "(def dupvec <(Pi [y :1 <Nat>] (Vec Nat (suc (suc zero))))> "
+      "(fn [y :1 <Nat>] (vcons Nat (suc zero) y (vcons Nat zero y (vnil Nat)))))")))
+  (check-true (multiplicity-error? result)
+              (format "consing a linear value twice must violate; got: ~v" result)))
+
+(test-case "qtt-guard/consing a linear value ONCE is fine"
+  ;; The positive control for the negative above — the arm must not simply
+  ;; reject everything Vec-shaped.
+  (check-false
+   (multiplicity-error?
+    (run-first
+     (string-append
+      "(def okvec <(Pi [y :1 <Nat>] (Vec Nat (suc zero)))> "
+      "(fn [y :1 <Nat>] (vcons Nat zero y (vnil Nat))))")))))
+
+(test-case "qtt-guard/vindex counts its INDEX as well as the vector"
+  ;; A linear Fin index used once is fine; the vector is unrestricted here.
+  (check-false
+   (multiplicity-error?
+    (run-first
+     (string-append
+      "(def idx1 <(Pi [i :1 <(Fin (suc zero))>] Nat)> "
+      "(fn [i :1 <(Fin (suc zero))>] "
+      "(vindex Nat (suc zero) i (vcons Nat zero zero (vnil Nat)))))")))))
+
+(test-case "qtt-guard/a capture-bearing racket block is checked, and passes"
+  ;; Capture-bearing blocks desugar to (app (foreign-fn ...) cap ...) and are
+  ;; the only in-tree defs that actually carried an expr-foreign-fn past the
+  ;; old guard. Top-level captures contribute no usage, so they stay green.
+  (check-true
+   (string-contains?
+    (format "~a"
+            (run-ns-last
+             (string-append
+              "(def n : Nat (suc (suc zero)))\n"
+              "(def r : Nat racket{(add1 n)} (n : Nat) -> (r : Nat))\n(eval r)")))
+    "3N")))
+
+(test-case "qtt-guard/capturing a LINEAR variable in a racket block errors"
+  ;; The capture desugar builds each capture binder at 'mw (foreign code may use
+  ;; a capture any number of times), so a linear local captured into a block is
+  ;; correctly rejected. Newly reachable now that foreign-fn defs pass the gate —
+  ;; nothing covered this before.
+  (define result
+    (run-ns-last
+     (string-append
+      "(def f <(Pi [y :1 <Nat>] Nat)> "
+      "(fn [y :1 <Nat>] racket{(add1 y)} (y : Nat) -> (r : Nat)))")))
+  (check-true (prologos-error? result)
+              (format "capturing a linear var must error; got: ~v" result)))
+
+;; ========================================
+;; The Church-fold agreement hole is closed (QTT P6, 2026-07-31)
+;; ========================================
+;; A scrutinee whose type has no constructor metadata (a Church-encoded value)
+;; takes the Church-fold path, where an arm's field bindings cannot be derived.
+;; Such an arm was skipped — and a skipped arm was never checked for branch
+;; AGREEMENT either, so a linear resource dropped (or double-freed) inside one
+;; type-checked clean. The Bool-scrutinee control below is what makes that a bug
+;; rather than a policy: byte-identical body, opposite verdict.
+
+(define church-bool
+  "(def cbA <(Pi [C <(Type 0)>] (-> C (-> C C)))> (fn [C] (fn [t] (fn [f] t))))\n")
+
+(test-case "qtt-church/CONTROL — the same shape on Bool is rejected (analysable)"
+  ;; `y` is consumed on one path of the nested match and dropped on the other.
+  (define r
+    (run-first
+     (string-append
+      "(def ctrl <(Pi [y :1 <Nat>] (Pi [c <Bool>] (Pi [d <Bool>] Nat)))> "
+      "(fn [y :1 <Nat>] (fn [c <Bool>] (fn [d <Bool>] "
+      "(match d (true -> y) (false -> (match c (true -> y) (false -> zero))))))))")))
+  (check-true (multiplicity-error? r) (format "got: ~v" r))
+  ;; and it is diagnosed as a DISAGREEMENT, not as unanalysable
+  (check-true (regexp-match? #rx"branches disagree" (prologos-error-message r))
+              (format "got: ~v" (prologos-error-message r))))
+
+(test-case "qtt-church/a linear dropped inside an unanalysable branch is REFUSED"
+  ;; THE P6 pin. Identical body, Church scrutinee on the outer match — accepted
+  ;; with 0 errors before P6.
+  (define r
+    (run-last
+     (string-append
+      church-bool
+      "(def leak <(Pi [y :1 <Nat>] (Pi [c <Bool>] Nat))> "
+      "(fn [y :1 <Nat>] (fn [c <Bool>] "
+      "(match cbA (true -> y) (false -> (match c (true -> y) (false -> zero)))))))")))
+  (check-true (multiplicity-error? r) (format "got: ~v" r)))
+
+(test-case "qtt-church/the refusal NAMES what it cannot decide"
+  ;; Without this the rejection is a bare "Multiplicity violation" — the lying
+  ;; diagnostic class P4 exists to prevent. Also pins that the checker and its
+  ;; explainer agree: they skip on the SAME condition, and were out of sync
+  ;; before P6 (the explainer abandoned the Church path entirely).
+  (define m
+    (prologos-error-message
+     (run-last
+      (string-append
+       church-bool
+       "(def leak2 <(Pi [y :1 <Nat>] (Pi [c <Bool>] Nat))> "
+       "(fn [y :1 <Nat>] (fn [c <Bool>] "
+       "(match cbA (true -> y) (false -> (match c (true -> y) (false -> zero)))))))"))))
+  (check-true (regexp-match? #rx"cannot be analysed" m) m)
+  (check-true (regexp-match? #rx"linear value of type" m) m)
+  ;; the claim is about the ANALYSIS, not an accusation about the program
+  (check-true (regexp-match? #rx"cannot be decided" m) m))
+
+(test-case "qtt-church/the permissive path stays OPEN when nothing linear is at stake"
+  ;; P6 must reject only what it can show it cannot verify. Same Church shape,
+  ;; unrestricted parameter — still accepted.
+  (check-false
+   (multiplicity-error?
+    (run-last
+     (string-append
+      church-bool
+      "(def ok <(Pi [y <Nat>] (Pi [c <Bool>] Nat))> "
+      "(fn [y <Nat>] (fn [c <Bool>] "
+      "(match cbA (true -> y) (false -> (match c (true -> y) (false -> zero)))))))")))))
+
+;; ========================================
+;; ω-scaling of repeatedly-applied function arguments (QTT P7, 2026-07-31)
+;; ========================================
+
+(test-case "qtt-omega/natrec step capturing a linear is rejected"
+  ;; The step is applied 0..n times, so a captured linear is consumed 0..n
+  ;; times — counted once before P7, which accepted this.
+  (define r
+    (run-first
+     (string-append
+      "(def caplin <(Pi [y :1 <Nat>] (Pi [k <Nat>] Nat))> "
+      "(fn [y :1 <Nat>] (fn [k <Nat>] "
+      "(natrec (fn [_ <Nat>] Nat) zero (fn [_ <Nat>] (fn [r <Nat>] y)) k))))")))
+  (check-true (multiplicity-error? r) (format "got: ~v" r)))
+
+(test-case "qtt-omega/an UNRESTRICTED capture in a natrec step is unaffected"
+  (check-false
+   (multiplicity-error?
+    (run-first
+     (string-append
+      "(def capmw <(Pi [y <Nat>] (Pi [k <Nat>] Nat))> "
+      "(fn [y <Nat>] (fn [k <Nat>] "
+      "(natrec (fn [_ <Nat>] Nat) zero (fn [_ <Nat>] (fn [r <Nat>] y)) k))))")))))
+
+(test-case "qtt-omega/a CLOSED natrec step is unaffected"
+  ;; The escape hatch for code P7 rejects: keep the step closed and thread the
+  ;; resource through the accumulator instead of capturing it.
+  (check-equal?
+   (run-first
+    (string-append
+     "(def closedstep <(-> Nat Nat)> "
+     "(fn [k <Nat>] (natrec (fn [_ <Nat>] Nat) zero "
+     "(fn [_ <Nat>] (fn [r <Nat>] (suc r))) k)))"))
+   "closedstep : Nat -> Nat defined."))
 
 ;; ========================================
 ;; Regression guards: existing functionality still works

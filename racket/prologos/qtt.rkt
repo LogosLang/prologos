@@ -32,13 +32,16 @@
 
 (provide
  ;; Usage context operations
- zero-usage single-usage add-usage scale-usage
+ zero-usage single-usage add-usage join-usage scale-usage
  uhead utail ulen
  check-all-usages
  ;; Result types
  (struct-out tu) (struct-out tu-error) (struct-out bu)
  ;; QTT inference and checking
- inferQ checkQ checkQ-top)
+ inferQ checkQ checkQ-top
+ ;; QTT P4: diagnostic support for typing-errors' multiplicity message —
+ ;; defined beside the rules it mirrors so the two cannot drift
+ explain-qtt-failure)
 
 ;; ========================================
 ;; Usage Context: plain list of multiplicities
@@ -62,6 +65,143 @@
     [else (cons (mult-add (car u1) (car u2))
                 (add-usage (cdr u1) (cdr u2)))]))
 
+;; Pointwise JOIN of usage contexts — the ALTERNATION combinator.
+;;
+;; Use this, NOT `add-usage`, when combining the branches of an eliminator that
+;; runs exactly ONE of them (boolrec, the four posit if-nars, a match's arms).
+;; `add-usage` stays correct for everything sequential — including an
+;; eliminator's SCRUTINEE, which always runs. The canonical shape at an
+;; alternation site is therefore
+;;     (add-usage u-scrutinee (join-usage u-branch1 u-branch2))
+;; and NOT a flat 3-way join. See `mult-join` (prelude.rkt) for why alternation
+;; needs its own operator and why the swap is monotone-permissive.
+;;
+;; The two null shortcuts are cloned from `add-usage` deliberately and are sound
+;; here for a DIFFERENT reason: there, a missing tail is all-m0 because m0 is the
+;; additive IDENTITY; here it is sound because m0 is the lattice BOTTOM. Those
+;; coincide for this order, so the same code is right both times — but the
+;; reasoning does not transfer to any other table, so re-derive it if `mult-join`
+;; ever changes.
+;;
+;; ⚠ NEITHER operator errors on length divergence — both silently PAD. A usage
+;; vector that was not truncated back to the ambient ctx depth therefore produces
+;; no error here; it surfaces far away as `check-all-usages` returning #f on a
+;; length mismatch, i.e. as a spurious "Multiplicity violation". Callers that
+;; combine vectors from DIFFERENT context depths (an eliminator whose arms bind a
+;; per-arm number of fields) must truncate first and assert equal lengths
+;; themselves — `join-usage` cannot catch it for them.
+(define (join-usage u1 u2)
+  (cond
+    [(and (null? u1) (null? u2)) '()]
+    [(null? u1) u2]
+    [(null? u2) u1]
+    [else (cons (mult-join (car u1) (car u2))
+                (join-usage (cdr u1) (cdr u2)))]))
+
+;; Do two branches of an eliminator AGREE about every LINEAR resource?
+;;
+;; This is what makes multiplicities LINEAR-PER-PATH rather than affine-per-path
+;; (owner ruling, 2026-07-30 — see docs/tracking/2026-07-30_QTT_PATTERN_MATCHING_DESIGN.md
+;; §1). `mult-join` is the honest lub of `mult-leq`, so `m0 ⊔ m1 = m1`, which on
+;; its own would accept a linear resource consumed on SOME paths and dropped on
+;; others. In a language with no implicit destructor that is not a laxer
+;; discipline, it is a leak: dropping a `Handle` on a branch does not close it.
+;; Verified on the real API before this guard existed —
+;;   (boolrec … [fio-close h] unit c)   with h :1   type-checked clean.
+;;
+;; The guard is deliberately SEPARATE from the join rather than folded into it as
+;; `m0 ⊔ m1 = mw`, because that table is not the lub of the tree's own order: it
+;; would cost `m0` its identity status and silently invalidate `join-usage`'s
+;; null shortcuts, and it would encode "dropped on a path" as "used many times".
+;; Keeping the lattice honest and the discipline explicit separates the two.
+;;
+;; Fires ONLY at positions whose DECLARED multiplicity is m1:
+;;   - m0 disagreement is already caught by `compatible m0 m1` downstream;
+;;   - mw positions are unrestricted by definition and must stay free, or this
+;;     would reject ordinary code en masse.
+;; Equality (not merely "not one m0 and one m1") so that m1-vs-mw disagreement is
+;; caught precisely here too, rather than downstream as a bare `compatible` fail.
+;;
+;; DECLINES (returns #t) on length divergence rather than rejecting: the vectors
+;; are only meaningful when both are trimmed back to the ambient ctx depth, and a
+;; bookkeeping slip must not manifest as a spurious linearity error. `ctx-extend`
+;; front-conses, so usage index 0 is `ctx`'s car — the same parallelism
+;; `check-all-usages` walks.
+(define (branches-agree-on-linear? ctx u1 u2)
+  (let loop ([c ctx] [a u1] [b u2])
+    (cond
+      [(or (null? c) (null? a) (null? b)) #t]
+      [(and (eq? (cdar c) 'm1) (not (eq? (car a) (car b)))) #f]
+      [else (loop (cdr c) (cdr a) (cdr b))])))
+
+;; Is a LINEAR resource actually at stake in this accumulated usage? I.e. is
+;; there a ctx position declared m1 that some branch has already consumed?
+;;
+;; QTT P6 (2026-07-31). Used to decide whether an UNANALYSABLE eliminator arm
+;; can be safely ignored. It can, when nothing linear is in play — but when
+;; another arm has consumed a linear resource and one arm cannot be analysed,
+;; linear-per-path is UNDECIDABLE for that resource, and the honest answer is to
+;; refuse rather than to guess "the skipped arm probably agreed".
+;;
+;; Only the "some surviving arm consumed it" direction needs this guard. The
+;; mirror case — the SKIPPED arm consumes it and the surviving ones do not — is
+;; already caught downstream: the surviving arms join to m0 at that position, and
+;; `compatible m1 m0` then fails as "declared linear but is not used".
+;; Returns the TYPE of the first such resource, or #f. `linear-at-stake?` is the
+;; boolean face; the explainer wants the type so it can name what is at risk.
+(define (first-linear-at-stake ctx usage)
+  (let loop ([c ctx] [u usage])
+    (cond
+      [(or (null? c) (null? u)) #f]
+      [(and (eq? (cdar c) 'm1) (not (eq? (car u) 'm0))) (caar c)]
+      [else (loop (cdr c) (cdr u))])))
+
+(define (linear-at-stake? ctx usage)
+  (and (first-linear-at-stake ctx usage) #t))
+
+;; THE alternation combinator for eliminator branches: the join, gated on
+;; agreement. Returns the combined usage, or #f when the branches disagree about
+;; a linear resource.
+;;
+;; This exists so the two operations CANNOT be separated. The guard and the join
+;; must co-occur at every alternation site; leaving them as two calls made that a
+;; discipline a future eliminator could forget — and forgetting silently restores
+;; affine-per-path for that construct alone, with a green suite. Bundling them
+;; makes it correct-by-construction instead: there is no way to join branch
+;; usages without the linear check.
+;;
+;; Structural reading (worth keeping when typing eventually moves on-network):
+;; the guard says the join must be EXACT at linear positions — u1 ⊔ u2 = u1 = u2
+;; there. That is a side condition on the lattice operation, not an ad-hoc
+;; comparison, and it is expressible as such wherever the join is expressed.
+;;
+;; `join-usage` remains available and exported for its own unit tests, but
+;; ALTERNATION SITES SHOULD CALL THIS, not `join-usage` directly.
+(define (join-branches ctx u1 u2)
+  (and (branches-agree-on-linear? ctx u1 u2)
+       (join-usage u1 u2)))
+
+;; Validate and strip the first `bc` binder entries from a usage vector, using
+;; the declared multiplicities at the front of `ext-ctx`. This is the lambda
+;; arm's `(compatible declared (uhead u))` / `(utail u)` idiom (see checkQ's
+;; expr-lam arm) iterated `bc` times, for eliminator arms that bind several
+;; pattern fields at once.
+;;
+;; Returns the trimmed usage, or #f if a bound field violates its multiplicity
+;; (e.g. a linear field duplicated inside the arm body).
+;;
+;; ⚠ Trimming is not optional bookkeeping: `join-usage`/`add-usage` silently PAD
+;; on length divergence, so an untrimmed vector produces no error here and
+;; instead surfaces far away as `check-all-usages` failing on a length mismatch —
+;; i.e. as a spurious "Multiplicity violation" pointing at the wrong thing.
+(define (strip-binders ext-ctx u bc)
+  (let loop ([c ext-ctx] [u u] [k bc])
+    (cond
+      [(zero? k) u]
+      [(or (null? c) (null? u)) #f]
+      [(compatible (cdar c) (car u)) (loop (cdr c) (cdr u) (sub1 k))]
+      [else #f])))
+
 ;; Scalar multiplication of usage context
 (define (scale-usage m u)
   (map (lambda (x) (mult-mul m x)) u))
@@ -84,6 +224,20 @@
 ;;     monoidal structure, quantale-adjacent, not a simple lattice.
 ;;     R5 contingency: counted as 1 bug-found (accepted design); still
 ;;     within K=2 absorption.
+;;
+;; AMENDED 2026-07-30: the finding above stands for the CELL MERGE and for
+;; SEQUENTIAL composition, which is all it was ever about — a cell accumulating
+;; usage really is a monoid, and `add-usage` remains this domain's registered
+;; merge. What the D2 note did not consider is ALTERNATION: an eliminator that
+;; runs exactly one of its branches combines them with a JOIN, not with
+;; addition. `:usage` therefore carries BOTH structures — a tensor
+;; (`add-usage`, registered below) and a join (`join-usage`, above) — and the
+;; refuted idempotence was refuted for the tensor only.
+;;   The join is deliberately ARM-LOCAL and is NOT registered as a second SRE
+;; relation: it is a typing-rule combinator for eliminator branches, not a
+;; merge for concurrent writes to a cell. If a future design wants alternation
+;; on-network (speculative branches merging into one usage cell), that is when
+;; the domain gains a second relation — and this note is the pointer.
 
 (define usage-merge-registry
   (lambda (rel-name)
@@ -351,8 +505,95 @@
             [_ (tu-error)])]
          [_ (tu-error)]))]
 
+    ;; ---- Vec eliminators (QTT P5, 2026-07-30) ----
+    ;; Usage passes the SUBJECT's usage through unchanged — exactly the fst/snd
+    ;; projection stance directly above. The discarded part of the vector (the
+    ;; tail for vhead, the head for vtail, every other element for vindex) is
+    ;; weakening that is invisible to variable-level usage accounting, just as
+    ;; `fst` discarding a pair's second component is. That is the codebase's
+    ;; existing position on projection, not a new laxity introduced here.
+    ;;
+    ;; The TYPE is delegated to typing-core's own infer arms (`vhead`/`vtail`/
+    ;; `vindex`) — the no-drift twin pattern: one derivation, two consumers.
+    ;; A/n are type-level indices and contribute nothing.
+
+    [(expr-vhead a n0 v)
+     (let ([ty (infer ctx e)])
+       (if (expr-error? ty)
+           (tu-error)
+           (match (checkQ ctx v (expr-Vec a (expr-suc n0)))
+             [(bu #t u) (tu ty u)]
+             [_ (tu-error)])))]
+
+    [(expr-vtail a n0 v)
+     (let ([ty (infer ctx e)])
+       (if (expr-error? ty)
+           (tu-error)
+           (match (checkQ ctx v (expr-Vec a (expr-suc n0)))
+             [(bu #t u) (tu ty u)]
+             [_ (tu-error)])))]
+
+    ;; vindex additionally consumes its INDEX: `i` is a runtime Fin value that
+    ;; selects the element, so its usage is added to the vector's. (A linear
+    ;; vector indexed twice therefore errors — conservative and sound.)
+    [(expr-vindex a n0 i v)
+     (let ([ty (infer ctx e)])
+       (if (expr-error? ty)
+           (tu-error)
+           (match* ((checkQ ctx i (expr-Fin n0)) (checkQ ctx v (expr-Vec a n0)))
+             [((bu #t u-i) (bu #t u-v)) (tu ty (add-usage u-i u-v))]
+             [(_ _) (tu-error)])))]
+
+    ;; ---- Foreign function value (QTT P5) ----
+    ;; A foreign function is a Racket procedure plus marshalling metadata; the
+    ;; only field that can hold Prologos expressions is `args`, the accumulator
+    ;; for curried partial application. At every position reachable from
+    ;; elaboration `args` is '() — captured variables live OUTSIDE the node, as
+    ;; arguments of an enclosing `expr-app` — so this folds to zero usage. The
+    ;; fold is written out anyway rather than hardcoding zero, so a value that
+    ;; did carry args would still have them counted.
+    ;;
+    ;; ⚠ TYPE CAVEAT, shared with the typing twin: `global-env-lookup-type`
+    ;; returns the FULL registered Pi, which is arity-wrong for a node that has
+    ;; already accumulated args (it should be the remainder after (length args)
+    ;; applications). typing-core's infer arm has the identical flaw, so this
+    ;; matches its twin rather than silently diverging — filed in DEFERRED.md
+    ;; rather than fixed here, because fixing it means fixing both.
+    [(expr-foreign-fn _ _ _ args _ _ _ _)
+     (let ([ty (infer ctx e)])
+       (if (expr-error? ty)
+           (tu-error)
+           (let loop ([as args] [acc (zero-usage n)])
+             (cond
+               [(null? as) (tu ty acc)]
+               [else (match (inferQ ctx (car as))
+                       [(tu _ ua) (loop (cdr as) (add-usage acc ua))]
+                       [_ (tu-error)])]))))]
+
     ;; ---- natrec ----
-    ;; Usage = U_target + U_base + U_step (motive is type-level)
+    ;; Usage = U_target + U_base + ω·U_step   (motive is type-level)
+    ;;
+    ;; NOT a join across base/step — they are not mutually exclusive
+    ;; alternatives, so the P1 branch-join treatment does not apply here. But
+    ;; `add-usage` alone was ALSO wrong: `step` has type
+    ;; Π(n:Nat). motive(n) → motive(suc n) and is applied 0..n times, while its
+    ;; usage was added exactly ONCE. A linear value captured in the step was
+    ;; counted m1 however many times it was consumed.
+    ;;
+    ;; ω-SCALING IS NOT A NEW RULE — it is the app rule, finally applied here.
+    ;; `(add-usage u1 (scale-usage m u2))` is what the general application arm
+    ;; does with every argument: scale by the binder's multiplicity. This arm
+    ;; SYNTHESIZES an mw Pi for `step` and then failed to scale by it. Spelled as
+    ;; an ordinary function with `step` at ω, the app rule would have produced
+    ;; the right answer for free.
+    ;;
+    ;; It catches BOTH failure directions at once, because m1 demands
+    ;; exactly-once and mw is neither: over-application (n>1) and the
+    ;; zero-iteration leak (n=0, the step never runs and a linear is never
+    ;; consumed). Erasure is safe — mult-mul mw m0 = m0 — so an erased capture
+    ;; stays erased, and a CLOSED step is unaffected (all-m0 scales to all-m0).
+    ;; Escape hatch for code this rejects: thread the resource through the
+    ;; motive/accumulator instead of capturing it, which keeps the step closed.
     [(expr-natrec mot base step target)
      (let ([step-type
             ;; Π(n:Nat). motive(n) → motive(suc(n))
@@ -369,14 +610,21 @@
                    (match r3
                      [(bu #t u3)
                       (tu (expr-app mot target)
-                          (add-usage u4 (add-usage u2 u3)))]
+                          (add-usage u4 (add-usage u2 (scale-usage 'mw u3))))]
                      [_ (tu-error)]))]
                 [_ (tu-error)]))]
            [_ (tu-error)])))]
 
     ;; ---- boolrec ----
-    ;; Usage = U_target + U_true-case + U_false-case (motive is type-level)
+    ;; Usage = U_target + (U_true-case ⊔ U_false-case)   (motive is type-level)
     ;; boolrec(motive, true-case, false-case, target)
+    ;;
+    ;; The target ADDS (it always runs); the two branches JOIN (exactly one
+    ;; runs). Before 2026-07-30 both were added, which rejected
+    ;;   spec both Box -1> Bool -> Box / defn both [b c] (if c b b)
+    ;; even though `b` is used exactly once on every execution path — m1+m1 = mw.
+    ;; See `mult-join` (prelude.rkt) for the one-cell difference and why the swap
+    ;; cannot reject any program it previously accepted.
     [(expr-boolrec mot tc fc target)
      (let ([r4 (checkQ ctx target (expr-Bool))])
        (match r4
@@ -387,8 +635,10 @@
                (let ([r3 (checkQ ctx fc (expr-app mot (expr-false)))])
                  (match r3
                    [(bu #t u3)
-                    (tu (expr-app mot target)
-                        (add-usage u4 (add-usage u2 u3)))]
+                    (let ([uj (join-branches ctx u2 u3)])
+                      (if uj
+                          (tu (expr-app mot target) (add-usage u4 uj))
+                          (tu-error)))]
                    [_ (tu-error)]))]
               [_ (tu-error)]))]
          [_ (tu-error)]))]
@@ -748,7 +998,8 @@
                (let ([r3 (checkQ ctx normal-case ty)])
                  (match r3
                    [(bu #t u3)
-                    (tu ty (add-usage u4 (add-usage u2 u3)))]
+                    (let ([uj (join-branches ctx u2 u3)])
+                      (if uj (tu ty (add-usage u4 uj)) (tu-error)))]
                    [_ (tu-error)]))]
               [_ (tu-error)]))]
          [_ (tu-error)]))]
@@ -838,7 +1089,8 @@
                (let ([r3 (checkQ ctx normal-case ty)])
                  (match r3
                    [(bu #t u3)
-                    (tu ty (add-usage u4 (add-usage u2 u3)))]
+                    (let ([uj (join-branches ctx u2 u3)])
+                      (if uj (tu ty (add-usage u4 uj)) (tu-error)))]
                    [_ (tu-error)]))]
               [_ (tu-error)]))]
          [_ (tu-error)]))]
@@ -998,7 +1250,8 @@
                (let ([r3 (checkQ ctx normal-case ty)])
                  (match r3
                    [(bu #t u3)
-                    (tu ty (add-usage u4 (add-usage u2 u3)))]
+                    (let ([uj (join-branches ctx u2 u3)])
+                      (if uj (tu ty (add-usage u4 uj)) (tu-error)))]
                    [_ (tu-error)]))]
               [_ (tu-error)]))]
          [_ (tu-error)]))]
@@ -1088,7 +1341,8 @@
                (let ([r3 (checkQ ctx normal-case ty)])
                  (match r3
                    [(bu #t u3)
-                    (tu ty (add-usage u4 (add-usage u2 u3)))]
+                    (let ([uj (join-branches ctx u2 u3)])
+                      (if uj (tu ty (add-usage u4 uj)) (tu-error)))]
                    [_ (tu-error)]))]
               [_ (tu-error)]))]
          [_ (tu-error)]))]
@@ -1611,7 +1865,7 @@
              (let* ([ef (expr-Pi 'mw tb (expr-Pi 'mw (shift 1 0 a) (shift 2 0 tb)))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
-                 [(tu _ uf) (tu tb (add-usage (add-usage uf ui) uv))]
+                 [(tu _ uf) (tu tb (add-usage (add-usage (scale-usage 'mw uf) ui) uv))]
                  [_ (tu-error)]))]
             ;; CIU T6 F1a-col-3: fold over a tuple — uniform view (typing-core mirror)
             [(? closed-nat-row? rec)
@@ -1619,7 +1873,7 @@
                     [ef (expr-Pi 'mw tb (expr-Pi 'mw (shift 1 0 v) (shift 2 0 tb)))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
-                 [(tu _ uf) (tu tb (add-usage (add-usage uf ui) uv))]
+                 [(tu _ uf) (tu tb (add-usage (add-usage (scale-usage 'mw uf) ui) uv))]
                  [_ (tu-error)]))]
             [_ (tu-error)])]
          [(_ _) (tu-error)]))]
@@ -1634,7 +1888,7 @@
             [(expr-PVec a)
              (let* ([rf (inferQ-or-checkQ ctx f (expr-Pi 'mw a (shift 1 0 result-type)))])
                (match rf
-                 [(tu _ uf) (tu result-type (add-usage uf uv))]
+                 [(tu _ uf) (tu result-type (add-usage (scale-usage 'mw uf) uv))]
                  [_ (tu-error)]))]
             ;; CIU T6 F1a-col-3: map over a tuple — f consumes ⋃positions; the
             ;; position-preserving result type comes from infer (the map-map-vals
@@ -1643,7 +1897,7 @@
              (let ([rf (inferQ-or-checkQ ctx f
                          (expr-Pi 'mw (record-value-bound ctx rec "tuple-map") (shift 1 0 result-type)))])
                (match rf
-                 [(tu _ uf) (tu result-type (add-usage uf uv))]
+                 [(tu _ uf) (tu result-type (add-usage (scale-usage 'mw uf) uv))]
                  [_ (tu-error)]))]
             [_ (tu-error)])]
          [_ (tu-error)]))]
@@ -1656,7 +1910,7 @@
             [(expr-PVec a)
              (let ([rp (inferQ-or-checkQ ctx pred (expr-Pi 'mw a (expr-Bool)))])
                (match rp
-                 [(tu _ up) (tu (expr-PVec a) (add-usage up uv))]
+                 [(tu _ up) (tu (expr-PVec a) (add-usage (scale-usage 'mw up) uv))]
                  [_ (tu-error)]))]
             ;; CIU T6 F1a-col-3: filter on a tuple → (PVec ⋃positions) degrade
             ;; (typing-core mirror)
@@ -1664,7 +1918,7 @@
              (let* ([v (record-value-bound ctx rec "tuple-filter")]
                     [rp (inferQ-or-checkQ ctx pred (expr-Pi 'mw v (expr-Bool)))])
                (match rp
-                 [(tu _ up) (tu (expr-PVec v) (add-usage up uv))]
+                 [(tu _ up) (tu (expr-PVec v) (add-usage (scale-usage 'mw up) uv))]
                  [_ (tu-error)]))]
             [_ (tu-error)])]
          [_ (tu-error)]))]
@@ -1679,7 +1933,7 @@
              (let* ([ef (expr-Pi 'mw tb (expr-Pi 'mw (shift 1 0 a) (shift 2 0 tb)))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
-                 [(tu _ uf) (tu tb (add-usage (add-usage uf ui) us))]
+                 [(tu _ uf) (tu tb (add-usage (add-usage (scale-usage 'mw uf) ui) us))]
                  [_ (tu-error)]))]
             [_ (tu-error)])]
          [(_ _) (tu-error)]))]
@@ -1692,7 +1946,7 @@
             [(expr-Set a)
              (let ([rp (inferQ-or-checkQ ctx pred (expr-Pi 'mw a (expr-Bool)))])
                (match rp
-                 [(tu _ up) (tu (expr-Set a) (add-usage up us))]
+                 [(tu _ up) (tu (expr-Set a) (add-usage (scale-usage 'mw up) us))]
                  [_ (tu-error)]))]
             [_ (tu-error)])]
          [_ (tu-error)]))]
@@ -1709,7 +1963,7 @@
                             (expr-Pi 'mw (shift 2 0 v) (shift 3 0 tb))))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
-                 [(tu _ uf) (tu tb (add-usage (add-usage uf ui) um))]
+                 [(tu _ uf) (tu tb (add-usage (add-usage (scale-usage 'mw uf) ui) um))]
                  [_ (tu-error)]))]
             ;; CIU T6 F1 (s3): fold over a record — uniform view (K=Keyword, V=⋃fields)
             [(? expr-Record? rec)
@@ -1719,7 +1973,7 @@
                             (expr-Pi 'mw (shift 2 0 v) (shift 3 0 tb))))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
-                 [(tu _ uf) (tu tb (add-usage (add-usage uf ui) um))]
+                 [(tu _ uf) (tu tb (add-usage (add-usage (scale-usage 'mw uf) ui) um))]
                  [_ (tu-error)]))]
             [_ (tu-error)])]
          [(_ _) (tu-error)]))]
@@ -1733,7 +1987,7 @@
              (let ([rp (inferQ-or-checkQ ctx pred
                          (expr-Pi 'mw k (expr-Pi 'mw (shift 1 0 v) (expr-Bool))))])
                (match rp
-                 [(tu _ up) (tu (expr-Map k v) (add-usage up um))]
+                 [(tu _ up) (tu (expr-Map k v) (add-usage (scale-usage 'mw up) um))]
                  [_ (tu-error)]))]
             ;; CIU T6 F1 (s3): filter on a record → dictionary view (mirrors typing-core)
             [(? expr-Record? rec)
@@ -1741,7 +1995,7 @@
                     [rp (inferQ-or-checkQ ctx pred
                           (expr-Pi 'mw (expr-Keyword) (expr-Pi 'mw (shift 1 0 v) (expr-Bool))))])
                (match rp
-                 [(tu _ up) (tu (expr-Map (expr-Keyword) v) (add-usage up um))]
+                 [(tu _ up) (tu (expr-Map (expr-Keyword) v) (add-usage (scale-usage 'mw up) um))]
                  [_ (tu-error)]))]
             [_ (tu-error)])]
          [_ (tu-error)]))]
@@ -1755,14 +2009,14 @@
             [(expr-Map k v)
              (let ([rf (inferQ-or-checkQ ctx f (expr-Pi 'mw v (shift 1 0 result-type)))])
                (match rf
-                 [(tu _ uf) (tu result-type (add-usage uf um))]
+                 [(tu _ uf) (tu result-type (add-usage (scale-usage 'mw uf) um))]
                  [_ (tu-error)]))]
             ;; CIU T6 F1 (s3): map-vals over a record — f consumes ⋃fields; type from infer
             [(? expr-Record? rec)
              (let ([rf (inferQ-or-checkQ ctx f
                          (expr-Pi 'mw (record-value-bound ctx rec "dyn-row-map-vals") (shift 1 0 result-type)))])
                (match rf
-                 [(tu _ uf) (tu result-type (add-usage uf um))]
+                 [(tu _ uf) (tu result-type (add-usage (scale-usage 'mw uf) um))]
                  [_ (tu-error)]))]
             [_ (tu-error)])]
          [_ (tu-error)]))]
@@ -2243,22 +2497,38 @@
 
     ;; ---- J eliminator ----
     ;; Usage from proof, base, motive arguments
+    ;; Usage = U_proof + U_base.
+    ;;
+    ;; ⚠ THE BASE'S USAGE WAS DROPPED ENTIRELY until QTT P7 (2026-07-31): this arm
+    ;; verified the base with typing-core's BOOLEAN `check`, which computes no
+    ;; usage, and returned `u5` (the proof's usage) alone. So a linear value
+    ;; consumed inside J's base was invisible — an under-count to ZERO, strictly
+    ;; worse than the under-count-to-one this commit fixes elsewhere. Using
+    ;; `checkQ` performs the same type check AND yields the usage.
+    ;;
+    ;; ADDED, not mw-scaled: unlike a fold's function argument, J's base is
+    ;; applied exactly ONCE (reduction.rkt's J rule), so it is ordinary
+    ;; sequential composition.
     [(expr-J mot base left right proof)
      (let ([r5 (inferQ ctx proof)])
        (match r5
          [(tu t5 u5)
           (match (whnf t5)
             [(expr-Eq t t1 t2)
-             (if (and (unify-ok? (unify ctx t1 left))
-                      (unify-ok? (unify ctx t2 right))
-                      ;; Verify base type: Π(a:A). motive(a, a, refl)
-                      (check ctx base
-                        (expr-Pi 'mw t
-                          (expr-app (expr-app (expr-app (shift 1 0 mot) (expr-bvar 0))
-                                              (expr-bvar 0))
-                                    (expr-refl)))))
-                 (tu (expr-app (expr-app (expr-app mot left) right) proof) u5)
-                 (tu-error))]
+             ;; base type: Π(a:A). motive(a, a, refl)
+             (let ([base-type
+                    (expr-Pi 'mw t
+                      (expr-app (expr-app (expr-app (shift 1 0 mot) (expr-bvar 0))
+                                          (expr-bvar 0))
+                                (expr-refl)))])
+               (if (and (unify-ok? (unify ctx t1 left))
+                        (unify-ok? (unify ctx t2 right)))
+                   (match (checkQ ctx base base-type)
+                     [(bu #t ub)
+                      (tu (expr-app (expr-app (expr-app mot left) right) proof)
+                          (add-usage u5 ub))]
+                     [_ (tu-error)])
+                   (tu-error)))]
             [_ (tu-error)])]
          [_ (tu-error)]))]
 
@@ -2294,6 +2564,177 @@
        (match r
          [(bu #t u) (bu #t u)]
          [_ (bu #f (zero-usage n))]))]
+
+    ;; ---- Vec / Fin constructors: CHECK-only, by necessity ----
+    ;; QTT P5 (2026-07-30). These four MUST be checkQ arms, not inferQ arms:
+    ;; typing-core has no `infer` case for any of them (they are check-only
+    ;; there too), so without an arm here the conversion fallback delegates to
+    ;; inferQ, hits its `[_ (tu-error)]` catch-all, and EVERY annotated Vec/Fin
+    ;; def dies as a generic "Multiplicity violation" — the lying-diagnostic
+    ;; class, naming a subsystem that is working perfectly.
+    ;;
+    ;; The usage split follows the runtime/type-level split in each struct, and
+    ;; that split is not guesswork: whnf's computation rules
+    ;;   [(expr-vhead _ _ (expr-vcons _ _ hd _)) (whnf hd)]
+    ;;   [(expr-vtail _ _ (expr-vcons _ _ _ tl)) (whnf tl)]
+    ;; DISCARD the type and length fields and consume only head/tail, so the
+    ;; indices are erased and contribute NO usage while head/tail contribute
+    ;; their own. Type-side validation is left to typing-core's own arms (the
+    ;; no-drift twin pattern) — these arms compute USAGE.
+
+    ;; vnil(A) : Vec(A, zero) — A is type-level, so no usage at all.
+    [((expr-vnil _) (expr-Vec _ _)) (bu #t (zero-usage n))]
+
+    ;; vcons(A, n, head, tail) : Vec(A, suc n) — head and tail each consumed ONCE.
+    ;; add-usage, not join: both are stored, so both happen (this is sequential
+    ;; composition, not alternation). A linear value consed into a vector is
+    ;; therefore consumed exactly once, which is what makes Vec linear-safe.
+    [((expr-vcons a1 n1 hd tl) (expr-Vec _ _))
+     (match* ((checkQ ctx hd a1) (checkQ ctx tl (expr-Vec a1 n1)))
+       [((bu #t u-hd) (bu #t u-tl)) (bu #t (add-usage u-hd u-tl))]
+       [(_ _) (bu #f (zero-usage n))])]
+
+    ;; fzero(n) : Fin(suc n) — n is the type-level bound; nothing runs.
+    [((expr-fzero _) (expr-Fin _)) (bu #t (zero-usage n))]
+
+    ;; fsuc(n, i) : Fin(suc n) — `i` is the runtime predecessor, `n` the bound.
+    ;; Mirrors the `suc` arm above, which counts its argument's usage.
+    [((expr-fsuc n1 i) (expr-Fin _))
+     (match (checkQ ctx i (expr-Fin n1))
+       [(bu #t u) (bu #t u)]
+       [_ (bu #f (zero-usage n))])]
+
+    ;; ---- Reduce (pattern match): the arms ALTERNATE ----
+    ;; usage = U_scrutinee + JOIN over arms of (arm-body usage, binders stripped)
+    ;;
+    ;; Until 2026-07-30 there was NO arm here: `contains-unsupported-qtt?`
+    ;; (driver.rkt) returned #t for expr-reduce and the driver SKIPPED
+    ;; checkQ-top entirely, so every `match` and every multi-clause `defn` — the
+    ;; language's PRIMARY dispatch form — escaped multiplicity checking. The
+    ;; stdlib's only linear API (fio's `-1>` handles) is match-implemented, so its
+    ;; linearity was declared and never checked. Demonstrated at the time:
+    ;;   defn dup       [b] (pair b b)                     → correctly rejected
+    ;;   defn dup-match [b] match b (mk-box n -> (pair b b)) → ACCEPTED, 0 errors
+    ;;
+    ;; TYPE work is not redone here — arm bodies are CHECKED against the expected
+    ;; type, and the per-arm binder ctx comes from typing-core's `reduce-arm-ctx`,
+    ;; the very derivation `check-reduce-structural` uses. One derivation, two
+    ;; consumers (pipeline.md § "infer / inferQ Are Twins").
+    ;;
+    ;; PERMISSIVE FALLBACK, and its LIMIT (QTT P6, 2026-07-31).
+    ;;
+    ;; When the scrutinee's type carries no constructor metadata (the Church-fold
+    ;; path — live, despite typing-core's comment claiming otherwise) or a
+    ;; constructor's type cannot be found, the arm's field multiplicities cannot
+    ;; be derived. Such an arm binds its fields at `mw` and, if its own checkQ
+    ;; then fails, contributes NO usage rather than failing the whole match —
+    ;; because failing would reject code over a mere lookup gap.
+    ;;
+    ;; ⚠ THAT TRADE HAS A HARD LIMIT, and P6 enforces it. The earlier version of
+    ;; this comment claimed the fallback "cannot invent a violation, only miss
+    ;; one", that "outer variables stay tracked either way", and that "the
+    ;; baseline is no checking whatsoever". All three were false: the accumulated
+    ;; usage is the join over SURVIVING arms only, so a linear consumed solely
+    ;; inside a skipped arm reads m0 and surfaces as a WRONG-CAUSE "declared :1
+    ;; but is not used"; and P5 deleted the driver guard, so the baseline is now
+    ;; full checking. Worse, the skip swallowed nested violations: an arm whose
+    ;; own body contained a linear-per-path disagreement failed, was skipped, and
+    ;; the disagreement vanished — a real leak AND a real double-free both
+    ;; type-checked clean (probe /tmp/qtt-p6-g.prologos; the Bool-scrutinee
+    ;; control was correctly rejected in the same run).
+    ;;
+    ;; So the fallback now stops exactly where it stops being safe: if any arm was
+    ;; skipped AND a linear resource is at stake in the surviving arms'
+    ;; accumulated usage, linear-per-path is UNDECIDABLE and the match is refused.
+    ;; When nothing linear is in play the permissive path is untouched — this
+    ;; rejects only what it can show it cannot verify, and says so in the message
+    ;; rather than reporting a generic violation.
+    [((expr-reduce scrutinee arms _) expected-type)
+     (let ([scrut-type (infer ctx scrutinee)])
+       (cond
+         [(expr-error? scrut-type) (bu #f (zero-usage n))]
+         [else
+          (let*-values ([(tc targs) (reduce-scrutinee-decompose scrut-type)])
+            (let ([r-scrut (checkQ ctx scrutinee scrut-type)])
+              (match r-scrut
+                [(bu #t u-scrut)
+                 (let loop ([as arms] [acc #f] [skipped? #f])
+                   (cond
+                     [(null? as)
+                      ;; No arm contributed (empty/unanalysable match): the
+                      ;; scrutinee's own usage still stands.
+                      ;;
+                      ;; QTT P6: but if any arm was SKIPPED as unanalysable and a
+                      ;; linear resource is at stake, linear-per-path cannot be
+                      ;; verified for it — refuse instead of accepting. Checked
+                      ;; HERE, at the end, rather than at the skip: an arm skipped
+                      ;; BEFORE the consuming arm is reached would otherwise slip
+                      ;; through, so the test must see the final accumulator.
+                      (let ([final (or acc (zero-usage n))])
+                        (if (and skipped? (linear-at-stake? ctx final))
+                            (bu #f (zero-usage n))
+                            (bu #t (add-usage u-scrut final))))]
+                     [else
+                      (let* ([arm (car as)]
+                             [bc (expr-reduce-arm-binding-count arm)]
+                             [body (expr-reduce-arm-body arm)]
+                             [strict-ctx (and tc (reduce-arm-ctx ctx arm tc targs))]
+                             [ext-ctx
+                              (or strict-ctx
+                                  ;; fallback: unknown fields bound unrestricted
+                                  (for/fold ([c ctx]) ([_ (in-range bc)])
+                                    (ctx-extend c (expr-hole) 'mw)))]
+                             [r (checkQ ext-ctx body (shift bc 0 expected-type))]
+                             [trimmed
+                              (match r
+                                [(bu #t u-arm) (strip-binders ext-ctx u-arm bc)]
+                                [_ #f])])
+                        (cond
+                          ;; A well-derived arm that fails IS a real violation.
+                          [(and strict-ctx (not trimmed)) (bu #f (zero-usage n))]
+                          ;; An unanalysable arm contributes nothing, but is
+                          ;; RECORDED — see the end-of-loop check.
+                          [(not trimmed) (loop (cdr as) acc #t)]
+                          ;; Length divergence would silently pad at the join.
+                          [(not (= (length trimmed) n)) (bu #f (zero-usage n))]
+                          [else
+                           ;; Linear-per-path: every arm must make the SAME
+                           ;; consumption decision about each linear resource.
+                           ;; Folded against the running accumulator — sound
+                           ;; because disagreeing with the accumulated value
+                           ;; means disagreeing with some earlier arm.
+                           (let ([uj (if acc (join-branches ctx acc trimmed) trimmed)])
+                             (if uj
+                                 (loop (cdr as) uj skipped?)
+                                 (bu #f (zero-usage n))))]))]))]
+                [_ (bu #f (zero-usage n))])))]))]
+
+    ;; ---- Let (beta-redex): propagate the expected type into the body ----
+    ;; `(app (lam m dom body) arg)` is the desugared `let`. typing-core's `check`
+    ;; has this arm (see its "Let pattern (beta-redex)" case) precisely so the
+    ;; body is CHECKED rather than inferred; checkQ lacked the twin, so a
+    ;; let-bound body fell through to the conversion fallback → `inferQ` →
+    ;; app-of-lam → `inferQ` on the body. That was harmless while reduce was
+    ;; skipped wholesale, but with the arm above in place a `let`-bound `match`
+    ;; would reach inferQ, which has no reduce arm, and report a spurious
+    ;; "Multiplicity violation". Mirrors the app-of-lam usage rule in inferQ:
+    ;; the argument's usage is scaled by the binder's multiplicity.
+    [((expr-app (expr-lam m dom body) arg) expected-type)
+     (let* ([arg-dom (if (or (expr-hole? dom) (expr-typed-hole? dom))
+                         (let ([ri (inferQ ctx arg)])
+                           (match ri [(tu ty _) ty] [_ #f]))
+                         dom)])
+       (cond
+         [(not arg-dom) (bu #f (zero-usage n))]
+         [else
+          (match (checkQ ctx arg arg-dom)
+            [(bu #t u-arg)
+             (match (checkQ (ctx-extend ctx arg-dom m) body
+                            (shift 1 0 expected-type))
+               [(bu #t u-body)
+                (bu #t (add-usage (scale-usage m u-arg) (utail u-body)))]
+               [_ (bu #f (zero-usage n))])]
+            [_ (bu #f (zero-usage n))])]))]
 
     ;; ---- Lambda: check against Pi ----
     ;; Sprint 7: mult-meta-aware — resolve mult-metas from Pi context or usage
@@ -2514,7 +2955,7 @@
                           (expr-Pi 'mw (shift 1 0 a) (shift 2 0 expected-type)))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
-                 [(tu _ uf) (bu #t (add-usage (add-usage uf ui) uv))]
+                 [(tu _ uf) (bu #t (add-usage (add-usage (scale-usage 'mw uf) ui) uv))]
                  [_ (bu #f (zero-usage n))]))]
             ;; CIU T6 F1a-col-3: fold over a tuple in CHECK mode — uniform view
             ;; (the issue-#76 class: checked positions must not fall to inferQ)
@@ -2524,7 +2965,7 @@
                           (expr-Pi 'mw (shift 1 0 v) (shift 2 0 expected-type)))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
-                 [(tu _ uf) (bu #t (add-usage (add-usage uf ui) uv))]
+                 [(tu _ uf) (bu #t (add-usage (add-usage (scale-usage 'mw uf) ui) uv))]
                  [_ (bu #f (zero-usage n))]))]
             [_ (bu #f (zero-usage n))])]
          [(_ _) (bu #f (zero-usage n))]))]
@@ -2539,7 +2980,7 @@
                (match rf
                  [(tu _ uf)
                   (bu (check ctx (expr-pvec-map f vec) expected-type)
-                      (add-usage uf uv))]
+                      (add-usage (scale-usage 'mw uf) uv))]
                  [_ (bu #f (zero-usage n))]))]
             ;; CIU T6 F1a-col-3: tuple source checked against (PVec B) — f consumes
             ;; ⋃positions (typing-core check-arm mirror; issue-#76 class)
@@ -2549,7 +2990,7 @@
                (match rf
                  [(tu _ uf)
                   (bu (check ctx (expr-pvec-map f vec) expected-type)
-                      (add-usage uf uv))]
+                      (add-usage (scale-usage 'mw uf) uv))]
                  [_ (bu #f (zero-usage n))]))]
             [(_ _) (bu #f (zero-usage n))])]
          [_ (bu #f (zero-usage n))]))]
@@ -2564,7 +3005,7 @@
                (match rp
                  [(tu _ up)
                   (bu (check ctx (expr-pvec-filter pred vec) expected-type)
-                      (add-usage up uv))]
+                      (add-usage (scale-usage 'mw up) uv))]
                  [_ (bu #f (zero-usage n))]))]
             ;; CIU T6 F1a-col-3: tuple — pred consumes ⋃positions; the result check
             ;; delegates (the (PVec ⋃) degrade meets the annotation via the α)
@@ -2574,7 +3015,7 @@
                (match rp
                  [(tu _ up)
                   (bu (check ctx (expr-pvec-filter pred vec) expected-type)
-                      (add-usage up uv))]
+                      (add-usage (scale-usage 'mw up) uv))]
                  [_ (bu #f (zero-usage n))]))]
             [_ (bu #f (zero-usage n))])]
          [_ (bu #f (zero-usage n))]))]
@@ -2590,7 +3031,7 @@
                           (expr-Pi 'mw (shift 1 0 a) (shift 2 0 expected-type)))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
-                 [(tu _ uf) (bu #t (add-usage (add-usage uf ui) us))]
+                 [(tu _ uf) (bu #t (add-usage (add-usage (scale-usage 'mw uf) ui) us))]
                  [_ (bu #f (zero-usage n))]))]
             [_ (bu #f (zero-usage n))])]
          [(_ _) (bu #f (zero-usage n))]))]
@@ -2605,7 +3046,7 @@
                (match rp
                  [(tu _ up)
                   (bu (check ctx (expr-set-filter pred set) expected-type)
-                      (add-usage up us))]
+                      (add-usage (scale-usage 'mw up) us))]
                  [_ (bu #f (zero-usage n))]))]
             [_ (bu #f (zero-usage n))])]
          [_ (bu #f (zero-usage n))]))]
@@ -2622,7 +3063,7 @@
                             (expr-Pi 'mw (shift 2 0 v) (shift 3 0 expected-type))))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
-                 [(tu _ uf) (bu #t (add-usage (add-usage uf ui) um))]
+                 [(tu _ uf) (bu #t (add-usage (add-usage (scale-usage 'mw uf) ui) um))]
                  [_ (bu #f (zero-usage n))]))]
             ;; CIU T6 F1 (s3): fold over a record — uniform view (K=Keyword, V=⋃fields)
             [(? expr-Record? rec)
@@ -2632,7 +3073,7 @@
                                      (shift 3 0 expected-type))))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
-                 [(tu _ uf) (bu #t (add-usage (add-usage uf ui) um))]
+                 [(tu _ uf) (bu #t (add-usage (add-usage (scale-usage 'mw uf) ui) um))]
                  [_ (bu #f (zero-usage n))]))]
             [_ (bu #f (zero-usage n))])]
          [(_ _) (bu #f (zero-usage n))]))]
@@ -2648,7 +3089,7 @@
                (match rp
                  [(tu _ up)
                   (bu (check ctx (expr-map-filter-entries pred map) expected-type)
-                      (add-usage up um))]
+                      (add-usage (scale-usage 'mw up) um))]
                  [_ (bu #f (zero-usage n))]))]
             ;; CIU T6 F1 (s3): filter on a record — pred consumes the uniform view;
             ;; the final type check delegates to typing-core (dictionary-view result)
@@ -2659,7 +3100,7 @@
                (match rp
                  [(tu _ up)
                   (bu (check ctx (expr-map-filter-entries pred map) expected-type)
-                      (add-usage up um))]
+                      (add-usage (scale-usage 'mw up) um))]
                  [_ (bu #f (zero-usage n))]))]
             [_ (bu #f (zero-usage n))])]
          [_ (bu #f (zero-usage n))]))]
@@ -2675,7 +3116,7 @@
                  [(tu _ uf)
                   (bu (and (unify-ok? (unify ctx k k2))
                            (check ctx (expr-map-map-vals f map) expected-type))
-                      (add-usage uf um))]
+                      (add-usage (scale-usage 'mw uf) um))]
                  [_ (bu #f (zero-usage n))]))]
             ;; CIU T6 F1 (s3): record source vs Map result — keys are Keyword;
             ;; f consumes ⋃fields; final check delegates to typing-core
@@ -2686,7 +3127,7 @@
                  [(tu _ uf)
                   (bu (and (unify-ok? (unify ctx k (expr-Keyword)))
                            (check ctx (expr-map-map-vals f map) expected-type))
-                      (add-usage uf um))]
+                      (add-usage (scale-usage 'mw uf) um))]
                  [_ (bu #f (zero-usage n))]))]
             [(_ _) (bu #f (zero-usage n))])]
          [_ (bu #f (zero-usage n))]))]
@@ -2840,3 +3281,126 @@
     (match r
       [(bu #t u) (check-all-usages ctx u)]
       [_ #f])))
+
+;; ========================================
+;; QTT P4 (2026-07-30): explain a multiplicity failure
+;; ========================================
+;; Consumed by typing-errors' `checkQ-top/err`, which until now filled
+;; `multiplicity-error`'s three rendered fields with the string LITERALS
+;; "declared" and "actual" plus the entire pretty-printed body as the
+;; "Variable". The fields and their rendering already existed — only real values
+;; were missing.
+;;
+;; DEFINED HERE, NOT IN typing-errors.rkt, on purpose: explaining the failure
+;; means reproducing the very tests that produced it — the lambda arm's
+;; `(compatible effective-m (uhead u))`, and each eliminator's per-branch
+;; expected types (`(expr-app mot (expr-true))` for boolrec, a `shift`ed expected
+;; type for reduce). Re-deriving those in the error module is the twin drift
+;; `pipeline.md` § "infer / inferQ Are Twins" documents. Same rationale as
+;; typing-core exporting `select-project` / `seal-missing-required` for the
+;; typing-errors hints: one derivation, two consumers.
+;;
+;; CONTRACT: runs ONLY on an already-failing `checkQ-top`, is pure, and returns
+;; #f whenever it cannot PROVE a specific cause — the caller then keeps the
+;; generic message. It must never assert a cause it did not establish.
+;;
+;; Returns one of:
+;;   (list 'binder type declared actual) — a binder's usage ≠ its declaration
+;;   (list 'branch type m-a m-b)         — branches disagree at a LINEAR position
+;;   #f
+
+;; First position where two branch usages disagree and the declared multiplicity
+;; is linear. Mirrors `branches-agree-on-linear?` (which answers yes/no); this
+;; reports WHICH. Returns (list 'branch type m-a m-b) or #f.
+(define (first-linear-disagreement ctx u1 u2)
+  (let loop ([c ctx] [a u1] [b u2])
+    (cond
+      [(or (null? c) (null? a) (null? b)) #f]
+      [(and (eq? (cdar c) 'm1) (not (eq? (car a) (car b))))
+       (list 'branch (caar c) (car a) (car b))]
+      [else (loop (cdr c) (cdr a) (cdr b))])))
+
+;; Branch-level explanation: recompute each branch's usage using the SAME
+;; expected type its typing arm uses, then diff. Covers the eliminators that
+;; carry the linear-per-path guard; anything else yields #f (generic message).
+(define (explain-branch-disagreement ctx e t)
+  (define (two a ta b tb)
+    (match* ((checkQ ctx a ta) (checkQ ctx b tb))
+      [((bu #t ua) (bu #t ub)) (first-linear-disagreement ctx ua ub)]
+      [(_ _) #f]))
+  (match e
+    [(expr-boolrec mot tc fc _)
+     (two tc (expr-app mot (expr-true)) fc (expr-app mot (expr-false)))]
+    [(expr-p8-if-nar ty nar norm _)  (two nar ty norm ty)]
+    [(expr-p16-if-nar ty nar norm _) (two nar ty norm ty)]
+    [(expr-p32-if-nar ty nar norm _) (two nar ty norm ty)]
+    [(expr-p64-if-nar ty nar norm _) (two nar ty norm ty)]
+    [(expr-reduce scrutinee arms _)
+     ;; Arms bind a per-arm field count, so each usage is trimmed back to the
+     ;; ambient depth before comparison — the same discipline the checkQ arm
+     ;; applies, and the reason a raw comparison would be meaningless.
+     ;;
+     ;; ⚠ THIS LOOP MIRRORS THE checkQ expr-reduce ARM AND MUST MOVE WITH IT.
+     ;; They were ALREADY out of sync before QTT P6: this one bailed on
+     ;; `(and tc …)`, abandoning the Church-fold path entirely, while the checker
+     ;; carried a permissive fallback there — so the explainer could not describe
+     ;; the very case the checker was deciding. Both now use the same
+     ;; strict-ctx / mw-fallback / skipped? shape. A test pins the message so a
+     ;; future divergence fails loudly instead of silently reverting to the
+     ;; generic "Multiplicity violation".
+     (let ([scrut-type (infer ctx scrutinee)])
+       (and (not (expr-error? scrut-type))
+            (let-values ([(tc targs) (reduce-scrutinee-decompose scrut-type)])
+              (let loop ([as arms] [acc #f] [skipped? #f])
+                (cond
+                  [(null? as)
+                   ;; QTT P6: an arm we could not analyse, plus a linear resource
+                   ;; some other arm consumed ⇒ linear-per-path is undecidable.
+                   (and skipped? acc
+                        (let ([ty (first-linear-at-stake ctx acc)])
+                          (and ty (list 'unanalysable ty))))]
+                  [else
+                   (let* ([arm (car as)]
+                          [bc (expr-reduce-arm-binding-count arm)]
+                          [strict-ctx (and tc (reduce-arm-ctx ctx arm tc targs))]
+                          [ext (or strict-ctx
+                                   (for/fold ([c ctx]) ([_ (in-range bc)])
+                                     (ctx-extend c (expr-hole) 'mw)))]
+                          [u (match (checkQ ext (expr-reduce-arm-body arm)
+                                            (shift bc 0 t))
+                               [(bu #t ua) (strip-binders ext ua bc)]
+                               [_ #f])])
+                     (cond
+                       ;; An arm that failed but WAS analysable is not a skip —
+                       ;; the checker hard-fails on it, and the real cause is
+                       ;; nested inside, so recurse rather than mislabel it as
+                       ;; unanalysable. (Without this, the Bool control in the
+                       ;; P6 battery reported "cannot be analysed" about a
+                       ;; perfectly analysable `match`.)
+                       [(and (not u) strict-ctx)
+                        (or (explain-branch-disagreement
+                             ext (expr-reduce-arm-body arm) (shift bc 0 t))
+                            (loop (cdr as) acc skipped?))]
+                       [(not u) (loop (cdr as) acc #t)]
+                       [(not acc) (loop (cdr as) u skipped?)]
+                       [(first-linear-disagreement ctx acc u) => values]
+                       [else (loop (cdr as) (join-usage acc u) skipped?)]))]))))) ]
+    [_ #f]))
+
+(define (explain-qtt-failure ctx e t)
+  (match* (e (whnf t))
+    [((expr-lam m dom body) (expr-Pi m2 t-dom cod))
+     (let* ([eff (cond [(mult-meta? m) (if (mult-meta? m2) 'mw m2)]
+                       [(mult-meta? m2) m]
+                       [else m])]
+            [d (if (expr-hole? dom) t-dom dom)]
+            [ext (ctx-extend ctx d eff)])
+       (match (checkQ ext body cod)
+         ;; The body checks cleanly, so the failure is THIS binder's own usage —
+         ;; exactly the lambda arm's test, re-run to read off the actual value.
+         [(bu #t u)
+          (and (not (compatible eff (uhead u)))
+               (list 'binder d eff (uhead u)))]
+         ;; The body itself fails: the cause is deeper.
+         [_ (explain-qtt-failure ext body cod)]))]
+    [(_ t-whnf) (explain-branch-disagreement ctx e t-whnf)]))

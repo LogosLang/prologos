@@ -21,6 +21,7 @@
          racket/string
          racket/set
          "reader-forms.rkt"     ;; D4.P1b-iii: THE reader-form-head registry (see below)
+                                ;; + LET P4: the fused-annotation primitives
          "syntax.rkt"           ;; Phase 7: expr-fvar?, expr-app? for capability-type-expr?
          "surface-syntax.rkt"
          "source-location.rkt"
@@ -1155,6 +1156,8 @@
        (not (eq? x '$dot-key))          ; RETIRED sentinel (D4.P1a) — still emitted by the reader
        (not (eq? x '$nil-dot-key))      ; RETIRED sentinel (D4.P1a) — still emitted by the reader
        (not (eq? x '$retired-selection)) ; D4.P1a retirement marker (parser converts to guided error)
+       (not (eq? x '$let-error))        ; LET P1 syntax-failure marker (parser converts to per-command parse error)
+       (not (eq? x '$let-block))        ; LET P3 aligned-block sentinel (reader-validated; expand-let consumes)
        (not (eq? x '$dot-brace))        ; D4.P1b-ii `.{ }` sub-block sentinel — see below
        (not (eq? x '$select-brace))     ; D4.P1b-iii adjacent-brace select block
        (not (eq? x '$select))           ; D4.P3a fused select head (LOUD-if-missed: whole-file abort in a defmacro template)
@@ -2344,6 +2347,16 @@
             ;; Find := position, check if there's exactly one element after it
             (let ([assign-pos (index-of-symbol ':= rest)])
               (and assign-pos (= (length rest) (+ assign-pos 2))))]
+           ;; LET P2 (2026-07-31): (let name value) — the no-:= bodyless shape,
+           ;; so sibling chains `let x 4 / let y 5 / body` merge like their :=
+           ;; twins. The SYMBOL check is load-bearing (drift risk 3): a bracket
+           ;; form `(let (x 5 y 6))` has a LIST car and must stay non-bodyless.
+           [(and (= (length rest) 2) (symbol? (car rest)))
+            #t]
+           ;; LET P4: (let name :Type value) — the fused bodyless shape.
+           [(and (= (length rest) 3) (symbol? (car rest))
+                 (fused-type-annot? (cadr rest)))
+            #t]
            ;; (let [bindings] body) — has body, not bodyless
            ;; (let name value body) — has body, not bodyless
            [else #f]))))
@@ -2384,14 +2397,68 @@
 ;; Extract binding tokens from a bodyless let form.
 ;; (let name := value) → (name := value)
 ;; (let name : T := value) → (name : T := value)
+;; (let name value)     → (name := value)   [LET P2: `:=` SYNTHESIZED]
+;;
+;; The synthesis closes the normalize-vs-verbatim ASYMMETRY that broke no-:=
+;; sibling chains: `split-last-let` has always fabricated `:=` for the last
+;; sibling's legacy shape (see its 3-element arm), while this function returned
+;; earlier siblings' tokens verbatim — so the merged bracket stream mixed
+;; `x 4` with `z := (+ x y)` and parse-assign-bindings (which demands `:=`
+;; everywhere) died at the first bare pair. Now every consumer of the merge
+;; emits uniformly `:=`-marked bindings. `:=`-bearing forms pass through
+;; VERBATIM — byte-transparency for the exact-output pins (drift risk 1).
 (define (extract-let-binding-tokens let-form)
-  (cdr let-form))  ; everything after 'let
+  (define rest (cdr let-form))  ; everything after 'let
+  (if (and (= (length rest) 2) (symbol? (car rest)) (not (memq ':= rest)))
+      (list (car rest) ':= (cadr rest))
+      rest))
+
+;; LET P3: normalize ONE validated binding-line group onto the := token form
+;; parse-assign-bindings consumes. ONE normalizer, TWO consumers — expand-let's
+;; $let-block branch and split-last-let's $let-block arm (the sibling-merge
+;; path); a third copy would be the exact normalize-drift that broke the no-:=
+;; chains before P2.
+;;   (name value…)         → (name := value…)   [P4: multi-token values — a
+;;                            folded multi-line value like `k match a (arms…)`]
+;;   (name := value …)     → verbatim
+;;   (name : T … := v)     → verbatim
+;;   (name :T value…)      → (name : T := value…)   [P4: fused annotation]
+;;   anything else         → guided error
+(define (normalize-let-binding-group g)
+  (cond
+    [(and (list? g) (memq ':= g)) g]
+    ;; P4 fused: `x:Int 4` arrives as `x` `:Int` `4…` (the reader splits the
+    ;; token; same shape as defn's POL.6 params). Mult annotations (:0/:1/:w/:m)
+    ;; are excluded by fused-type-annot?, chained annotations rejected.
+    [(and (list? g) (>= (length g) 3) (symbol? (car g))
+          (fused-type-annot? (cadr g)))
+     (when (and (>= (length g) 4) (fused-type-annot? (caddr g)))
+       (let-syntax-error
+        "let: chained type annotation on ~a not supported (reserve for UCS)"
+        (car g)))
+     (append (list (car g) ': (fused-annot->type-symbol (cadr g)) ':=)
+             (cddr g))]
+    [(and (list? g) (>= (length g) 2) (symbol? (car g)))
+     (cons (car g) (cons ':= (cdr g)))]
+    [else
+     (let-syntax-error
+      "let block binding must be `name value`, `name := value`, or `name : T := value`, got ~a"
+      g)]))
 
 ;; Split the last let in a sequence into (values binding-tokens body).
 ;; The last let has a body.
 (define (split-last-let let-form)
   (define rest (cdr let-form))
   (cond
+    ;; LET P3: an aligned block as the LAST sibling — a bodyless `let a := 1`
+    ;; followed by an aligned let lands here via merge-let-sequence. Without
+    ;; this arm the bracket arm below would splice the raw ($let-block …) into
+    ;; the binding stream, where parse-assign-bindings swallows it into the
+    ;; previous value (the probe-5 junk class). Same normalizer as expand-let's
+    ;; Branch 0 — one derivation, two consumers.
+    [(and (pair? rest) (pair? (car rest)) (eq? (caar rest) '$let-block))
+     (values (append-map normalize-let-binding-group (cdar rest))
+             (cadr rest))]
     ;; := format: find the body (last element after the value)
     [(memq ':= rest)
      ;; For (let name := value body) or (let name : T := value body)
@@ -4715,9 +4782,49 @@
 ;; 4. Bracket () — (let ([name : T value] ...) body) — nested 4-element sub-lists
 ;; 5. Shorthand  — (let name value body) — no type, 4 elements
 ;;
+;; ============================================================
+;; LET P1 (2026-07-31): let syntax failures are per-command parse
+;; errors, never whole-file aborts.
+;; ============================================================
+;; Every failure in this family was a raw `(let-syntax-error …)` — 13 sites — and a
+;; raise on the preparse path aborts the WHOLE file with zero results (no
+;; handler until driver.rkt's process-file-inner; probed: commands BEFORE the
+;; bad let vanish too). Same silence class as the `.( )` mixfix and
+;; tilde-reader entries in DEFERRED, and the guarded-clause crash fixed at
+;; f51bda2b.
+;;
+;; MECHANISM — the retired-selection marker seat (parser.rkt § the
+;; retired-selection diagnostic seat), reached via ONE conversion boundary:
+;; the 13 sites raise a DEDICATED struct (`let-syntax-error`), and
+;; `expand-let` — the family's single entry — converts exactly that struct to
+;; a `($let-error "msg")` marker datum. The parser's expression dispatch turns
+;; the marker into a per-command parse-error VALUE at any nesting depth, with
+;; the loc supplied at parse time.
+;;
+;; Why a boundary handler and not marker returns from each site: the sites
+;; live in recursive helpers whose return values are consumed as DATA
+;; (parse-assign-bindings returns binding triples straight into a foldr);
+;; threading marker returns through ~5 functions is churn with no benefit.
+;; The handler catches ONLY `exn:let-syntax?` — a genuine Racket-level bug
+;; (list-ref, car on '()) still crashes loudly rather than masquerading as a
+;; let syntax error. This is the family's error CHANNEL at its single entry,
+;; not a defensive guard: every raise site is a reachable user-input
+;; condition, and all 13 are beneath expand-let's dynamic extent (verified —
+;; merge-sibling-lets and its helpers raise nowhere).
+(struct exn:let-syntax exn:fail () #:transparent)
+
+(define (let-syntax-error fmt . args)
+  (raise (exn:let-syntax (apply format fmt args)
+                         (current-continuation-marks))))
+
 (define (expand-let datum)
+  (with-handlers ([exn:let-syntax?
+                   (lambda (e) `($let-error ,(exn-message e)))])
+    (expand-let-impl datum)))
+
+(define (expand-let-impl datum)
   (unless (and (list? datum) (>= (length datum) 3))
-    (error 'let "let requires at least: (let name value body)"))
+    (let-syntax-error "let requires at least: (let name value body)"))
   (define rest (cdr datum))  ; everything after 'let
 
   ;; Detect top-level let without body: (let name := value) with no continuation.
@@ -4738,11 +4845,24 @@
                     (let ([after-assign (drop rest (+ assign-pos 1))])
                       (= (length after-assign) 1)))))
     (define name (car rest))
-    (error 'let
-           "`let` is not allowed at top level. Use `def` instead.\n  let ~a := ...\n      ^^^\n  Use: def ~a := ..."
-           name name))
+    (let-syntax-error
+     "`let` is not allowed at top level. Use `def` instead.\n  let ~a := ...\n      ^^^\n  Use: def ~a := ..."
+     name name))
 
   (cond
+    ;; --- Branch 0 (LET P3): the aligned block, pre-structured by the reader ---
+    ;; (let ($let-block (head-binding) (b1 …) …) body) — the column discipline
+    ;; already ran at the reader layer (parse-reader.rkt § LET P3), so every
+    ;; group here is a VALIDATED binding line. Normalize each group and lower
+    ;; onto the single parse-assign-bindings funnel.
+    [(and (pair? (car rest)) (eq? (caar rest) '$let-block))
+     (unless (= (length rest) 2)
+       (let-syntax-error "let block: expected exactly one body, got ~a" rest))
+     (define groups (cdar rest))
+     (define body (cadr rest))
+     (define tokens (append-map normalize-let-binding-group groups))
+     (let-bindings->nested-fn (parse-assign-bindings tokens) body)]
+
     ;; --- Branch 1: Bracket format — second element is a list ---
     [(list? (car rest))
      ;; The outer "(>= (length datum) 3)" check above guarantees
@@ -4771,11 +4891,27 @@
      (expand-let-inline-assign rest)]
 
     ;; --- Branch 3: Legacy shorthand — (let name value body) ---
+    ;; LET P4 (ruling 3): a glued sexp name `x:Int` splits into the annotated
+    ;; binding (it used to bind a variable literally NAMED `x:Int` — a silent
+    ;; WS/sexp divergence). Module paths never split; chained rejects.
     [(and (= (length rest) 3) (symbol? (car rest)))
-     (define name (car rest))
+     (define-values (name glued-ty glued-err)
+       (split-glued-name-datum (car rest)))
+     (when glued-err (let-syntax-error "let: ~a" glued-err))
      (define value (cadr rest))
      (define body (caddr rest))
-     `((fn (,name : _) ,body) ,value)]
+     `((fn (,name : ,(or glued-ty '_)) ,body) ,value)]
+
+    ;; --- Branch 3f (LET P4): WS fused nested — (let name :Type value body) ---
+    ;; The reader splits `let x:Int 4` into `x` + `:Int`; with a deeper body
+    ;; line this arrives as a 4-element rest. Same desugar, type carried.
+    [(and (= (length rest) 4) (symbol? (car rest))
+          (fused-type-annot? (cadr rest)))
+     (define name (car rest))
+     (define ty (fused-annot->type-symbol (cadr rest)))
+     (define value (caddr rest))
+     (define body (cadddr rest))
+     `((fn (,name : ,ty) ,body) ,value)]
 
     ;; --- Branch 4: Legacy angle-type format — (let name ($angle-type T) value body) ---
     [(and (>= (length rest) 4)
@@ -4788,7 +4924,7 @@
      (expand-let-bracket-bindings bindings-tokens body)]
 
     [else
-     (error 'let "let: unrecognized format: ~a" datum)]))
+     (let-syntax-error "let: unrecognized format: ~a" datum)]))
 
 ;; Expand bracket-style let bindings.
 ;; Handles three sub-formats within the bracket:
@@ -4839,7 +4975,7 @@
             ;; (name value) — type inferred via hole
             (list (car binding) '_ (cadr binding))]
            [else
-            (error 'let "let: each binding must be (name value) or (name : type value), got ~a" binding)])))
+            (let-syntax-error "let: each binding must be (name value) or (name : type value), got ~a" binding)])))
      (let-bindings->nested-fn parsed body)]))
 
 ;; Expand inline := let: rest = (name [: type-atoms...] := value body)
@@ -4852,7 +4988,19 @@
 
 ;; Convert parsed bindings ((name type value) ...) to nested fn application.
 ;; Type '_ means inferred (hole).
+;;
+;; LET P3: a BODY that is binding-shaped is refused here, at the single funnel
+;; every let format converges on. `:=` is RESERVED (never legal in expression
+;; position), so a body like `(um := 5)` can only be a BINDING the user meant
+;; as part of the block — the shape the P0 grounding flagged as bypassing the
+;; top-level guard (`let tl := 4` + `um := 5` silently bound tl and died
+;; "Unbound variable um"). One check, all branches: inline, bracket, $let-block
+;; and the sibling merge all pass through here.
 (define (let-bindings->nested-fn parsed-bindings body)
+  (when (and (list? body) (>= (length body) 3) (eq? (cadr body) ':=))
+    (let-syntax-error
+     "let has no body — the final line `~a` is a BINDING; a let block's body sits on a line indented between the `let` column and the bindings column"
+     body))
   (foldr (lambda (binding inner)
            (define name (car binding))
            (define type (cadr binding))
@@ -4869,16 +5017,42 @@
     [(null? tokens) '()]
     [else
      (unless (symbol? (car tokens))
-       (error 'let "let :=: expected variable name, got ~a" (car tokens)))
-     (define name (car tokens))
-     (define after-name (cdr tokens))
+       (let-syntax-error "let :=: expected variable name, got ~a" (car tokens)))
+     ;; LET P4 (ruling 3): a GLUED sexp name `x:Int` splits into name + type,
+     ;; matching defn's sexp path — it used to bind a variable literally named
+     ;; `x:Int` (a silent WS/sexp divergence). Module paths (`str::length`)
+     ;; produce empty segments and never split; chained (`x:A:B`) rejects.
+     (define-values (name0 glued-ty glued-err)
+       (split-glued-name-datum (car tokens)))
+     (when glued-err (let-syntax-error "let: ~a" glued-err))
+     (define name name0)
+     (define after-name
+       (if glued-ty
+           (cons ': (cons glued-ty (cdr tokens)))  ;; lower onto the typed arm
+           (cdr tokens)))
      ;; Check for optional type annotation: : T1 T2 ... :=
      (cond
+       ;; LET P4: the WS fused shape — `name :Type value…` or
+       ;; `name :Type := value…`. Lower onto the spaced-typed arm below by
+       ;; rewriting `:Type` → `: Type`, inserting `:=` when absent.
+       [(and (pair? after-name) (fused-type-annot? (car after-name)))
+        (when (and (pair? (cdr after-name))
+                   (fused-type-annot? (cadr after-name)))
+          (let-syntax-error
+           "let: chained type annotation on ~a not supported (reserve for UCS)"
+           name))
+        (define ty (fused-annot->type-symbol (car after-name)))
+        (define after-ty (cdr after-name))
+        (define rewritten
+          (if (and (pair? after-ty) (eq? (car after-ty) ':=))
+              (append (list name ': ty) after-ty)
+              (append (list name ': ty ':=) after-ty)))
+        (parse-assign-bindings rewritten)]
        ;; name := value ... — no type annotation
        [(and (pair? after-name) (eq? (car after-name) ':=))
         (define after-assign (cdr after-name))
         (when (null? after-assign)
-          (error 'let "let :=: missing value after := for ~a" name))
+          (let-syntax-error "let :=: missing value after := for ~a" name))
         ;; Value = everything until next binding start or end
         (define-values (value-tokens rest) (split-at-next-assign-binding after-assign))
         (define value (if (= (length value-tokens) 1)
@@ -4892,13 +5066,13 @@
         (define-values (type-atoms after-assign)
           (split-before-symbol ':= after-colon))
         (when (null? type-atoms)
-          (error 'let "let :=: empty type annotation for ~a" name))
+          (let-syntax-error "let :=: empty type annotation for ~a" name))
         (when (null? after-assign)
-          (error 'let "let :=: missing := after type for ~a" name))
+          (let-syntax-error "let :=: missing := after type for ~a" name))
         ;; after-assign starts with :=, skip it
         (define past-assign (cdr after-assign))
         (when (null? past-assign)
-          (error 'let "let :=: missing value after := for ~a" name))
+          (let-syntax-error "let :=: missing value after := for ~a" name))
         (define-values (value-tokens rest) (split-at-next-assign-binding past-assign))
         (define type (if (= (length type-atoms) 1)
                          (car type-atoms)
@@ -4908,7 +5082,7 @@
                           (maybe-restructure-infix-eq value-tokens)))
         (cons (list name type value) (parse-assign-bindings rest))]
        [else
-        (error 'let "let :=: expected := or : after name ~a, got ~a" name after-name)])]))
+        (let-syntax-error "let :=: expected := or : after name ~a, got ~a" name after-name)])]))
 
 ;; Restructure infix = in a multi-token value list to prefix form.
 ;; (add ?x 3N = 5N) → (= (add ?x 3N) 5N)
@@ -4955,7 +5129,11 @@
             (not (eq? (car rest) ':=))
             (pair? (cdr rest))
             (or (eq? (cadr rest) ':=)
-                (eq? (cadr rest) ':)))
+                (eq? (cadr rest) ':)
+                ;; LET P4: `name :Type …` starts a binding too (the WS fused
+                ;; shape) — without this a fused binding after a := binding is
+                ;; swallowed into the previous value.
+                (fused-type-annot? (cadr rest))))
        (values (take tokens i) rest)]
       [else
        (loop (+ i 1) (cdr rest))])))
@@ -4967,14 +5145,14 @@
   (cond
     [(null? elems) '()]
     [(< (length elems) 3)
-     (error 'let "let: incomplete binding triple, got ~a" elems)]
+     (let-syntax-error "let: incomplete binding triple, got ~a" elems)]
     [else
      (let* ([name (car elems)]
             [angle-form (cadr elems)]
             [_ (unless (symbol? name)
-                 (error 'let "let: expected variable name, got ~a" name))]
+                 (let-syntax-error "let: expected variable name, got ~a" name))]
             [_ (unless (and (pair? angle-form) (eq? (car angle-form) '$angle-type))
-                 (error 'let "let: expected <type>, got ~a" angle-form))]
+                 (let-syntax-error "let: expected <type>, got ~a" angle-form))]
             [type (if (= (length (cdr angle-form)) 1)
                       (cadr angle-form)
                       (cdr angle-form))]
@@ -9492,9 +9670,19 @@
   (match type-ast
     [(surf-pi binder body _loc)
      (cons binder (extract-pi-binders body))]
-    [(surf-arrow _ domain codomain _loc)
-     ;; Non-dependent arrow: generate anonymous binder
-     (cons (binder-info '_ 'mw domain)
+    [(surf-arrow m domain codomain _loc)
+     ;; Non-dependent arrow: generate anonymous binder, PRESERVING the arrow's
+     ;; multiplicity.
+     ;;
+     ;; 2026-07-31: this matched the mult field as `_` and substituted 'mw,
+     ;; silently discarding it — so every binder derived from an arrow type came
+     ;; back unrestricted. `A -1> B` and `A -> B` were indistinguishable to every
+     ;; consumer of this function. The visible symptom was that a multi-clause
+     ;; `defn` with a linear spec was rejected out of hand, whatever its body
+     ;; did: the generated lambda got 'mw while the Pi said :1, and checkQ's
+     ;; lam-vs-Pi arm requires them to be equal.
+     ;; (`->` carries #f rather than 'mw, hence the `or`.)
+     (cons (binder-info '_ (or m 'mw) domain)
            (extract-pi-binders codomain))]
     [_ '()]))
 
@@ -9633,7 +9821,16 @@
        [else
         (surf-app (expand-expression fn) (map expand-expression args) loc)])]
     [(surf-lam binder body loc)
-     (surf-lam binder (expand-expression body) loc)]
+     ;; Propagate an error VALUE out of the body rather than wrapping it in a
+     ;; lambda. `expand-expression` is otherwise a structural rebuild with no
+     ;; error propagation, so an error produced during expansion (today: an
+     ;; unreachable match arm) would be carried into the elaborator and surface
+     ;; as "Cannot elaborate: #(struct:prologos-error …)". This arm is where a
+     ;; `defn` body lands, which is the common case; deeper nestings still leak
+     ;; that way — tracked in DEFERRED rather than by arming every arm here,
+     ;; which is the exhaustive-walker hazard pipeline.md warns about.
+     (let ([b (expand-expression body)])
+       (if (prologos-error? b) b (surf-lam binder b loc)))]
     [(surf-ann type term loc)
      (surf-ann (expand-expression type) (expand-expression term) loc)]
     [(surf-pair e1 e2 loc)
@@ -9665,7 +9862,10 @@
     ;; Rich pattern match — compile via compile-match-tree, then re-expand
     [(surf-match-patterns scrutinee arms loc)
      (define compiled (compile-match-expression scrutinee arms loc))
-     (expand-expression compiled)]
+     ;; compile-match-expression may return a prologos-error VALUE (an
+     ;; unreachable arm) — propagate it rather than re-expanding it, which would
+     ;; surface as "Cannot elaborate: #(struct:prologos-error …)".
+     (if (prologos-error? compiled) compiled (expand-expression compiled))]
     ;; Reduce — walk scrutinee and arm bodies
     [(surf-reduce scrutinee arms loc)
      (surf-reduce (expand-expression scrutinee)
@@ -10060,6 +10260,57 @@
        (for/and ([sub (in-list (pat-compound-args pat))])
          (and (pat-atom? sub) (memq (pat-atom-kind sub) '(var wildcard))))))
 
+;; ========================================
+;; Unreachable-arm detection (2026-07-31)
+;; ========================================
+;; An arm following an IRREFUTABLE arm can never run, and — the reason this is a
+;; correctness bug rather than a style nit — it is never TYPE-CHECKED either. The
+;; pattern compiler drops it, so its body escapes the checker entirely:
+;;
+;;   spec d Nat -> Nat
+;;   defn d [v] match v (n -> 1N) (zero -> "dead")   ;; defined clean, String body
+;;
+;; The reported symptom was subtler. `normalize-pattern` turns a bare name into a
+;; constructor pattern only when `lookup-ctor` knows it; an UNKNOWN name falls to
+;; its `[else pat]` and stays a VARIABLE — i.e. irrefutable. So a mistyped or
+;; unimported constructor silently becomes a catch-all and eats every later arm:
+;;
+;;   defn d1 [v] match v (vnil -> 1N) (vcons a b -> "not-a-nat")  ;; defined clean
+;;
+;; Both are the same defect seen from two angles, so the check is on
+;; REACHABILITY rather than on constructor spelling — the general property, and
+;; the one that does not need to guess whether a lowercase name was "meant" as a
+;; constructor (a pattern variable is a binding occurrence; the two are genuinely
+;; ambiguous in isolation).
+;;
+;; A row is irrefutable when it has NO GUARD and every one of its patterns is a
+;; variable or wildcard. The guard clause is load-bearing: `| n when p -> …` can
+;; fail, so arms after it stay reachable. And an irrefutable arm in FINAL
+;; position is the idiomatic default (`| n -> fallback`) — only arms AFTER one
+;; are flagged.
+;;
+;; Returns a prologos-error or #f. Both call sites already propagate error values.
+(define (unreachable-arm-error rows loc)
+  (define (irrefutable? row)
+    (and (not (cadr row))                       ;; no guard
+         (pair? (car row))
+         (for/and ([p (in-list (car row))]) (pattern-is-variable? p))))
+  (let loop ([rs rows] [i 0] [covered-at #f])
+    (cond
+      [(null? rs) #f]
+      [covered-at
+       (prologos-error
+        loc
+        (string-append
+         "unreachable match arm: arm " (number->string (add1 i))
+         " can never run, because arm " (number->string (add1 covered-at))
+         " matches everything — and an unreachable arm is never type-checked,"
+         " so mistakes in it go unreported."
+         " If a name there was meant as a CONSTRUCTOR, it was not recognised as"
+         " one (check the spelling, and that its type is imported) and so became"
+         " a catch-all variable pattern instead."))]
+      [else (loop (cdr rs) (add1 i) (if (irrefutable? (car rs)) i #f))])))
+
 ;; Compile a rich pattern match expression into nested surf-reduce.
 ;; Used by expand-expression to handle surf-match-patterns nodes.
 ;; scrutinee: already-parsed surface expression (NOT yet expanded)
@@ -10077,12 +10328,15 @@
       (list (map normalize-pattern (match-pattern-arm-patterns arm))
             (match-pattern-arm-guard arm)
             (match-pattern-arm-body arm))))
+  (define dead-arm (unreachable-arm-error normalized-arms loc))
   (define simple?
     (for/and ([row (in-list normalized-arms)])
       (and (not (cadr row))                     ;; no guard
            (= (length (car row)) 1)             ;; single pattern
            (pattern-is-simple-flat? (caar row))  ;; flat ctor or variable
            )))
+  (if dead-arm
+      dead-arm
   (if simple?
       ;; Fast path: directly produce surf-reduce (all arms are flat constructors)
       (let ([reduce-arms
@@ -10096,7 +10350,7 @@
       ;; Full path: compile via compile-match-tree for complex patterns
       (let* ([scrutinee-name (gensym '__scrutinee)]
              [match-body (compile-match-tree normalized-arms (list scrutinee-name) loc)])
-        (make-let-binding scrutinee-name scrutinee match-body loc))))
+        (make-let-binding scrutinee-name scrutinee match-body loc)))))
 
 ;; Convert a type name symbol to its surface syntax representation.
 ;; Built-in types (Nat, Bool, Unit) have dedicated surface syntax structs;
@@ -10295,10 +10549,36 @@
       (list (map normalize-pattern (defn-pattern-clause-patterns clause))
             (defn-pattern-clause-guard clause)
             (defn-pattern-clause-body clause))))
+  ;; An arm after an irrefutable one is dead AND unchecked — see
+  ;; `unreachable-arm-error`. Checked here, on the ORIGINAL rows, not inside the
+  ;; recursive compile-match-tree, where a variable pattern in a specialized
+  ;; column is perfectly normal.
+  (define dead-arm (unreachable-arm-error rows loc))
   ;; Try spec type first, fall back to inferred type from constructor metadata
   (define spec-type
     (and (> arity 0) (lookup-spec-type-for-patterns spec-name arity loc)))
+  ;; The generated lambda binders' MULTIPLICITIES. 2026-07-31: these were
+  ;; hardcoded 'mw, so a multi-clause `defn` whose spec declared any non-mw
+  ;; multiplicity was rejected OUT OF HAND — checkQ's lam-vs-Pi arm requires the
+  ;; lambda's mult to equal the Pi's, and 'mw never equals ':1'. Every linear
+  ;; multi-clause defn failed, whatever its body did:
+  ;;
+  ;;   spec cB Handle -1> Nat
+  ;;   defn cB | mk-h k -> k          ;; "Multiplicity violation"
+  ;;   defn cB [h] match h (mk-h k -> k)   ;; the SAME function, accepted
+  ;;
+  ;; The second spelling works because the `surf-defn` path takes each binder's
+  ;; mult FROM the declared type (see expand-top-level's surf-defn arm). This
+  ;; does the same, so the two spellings agree. Falls back to 'mw when there is
+  ;; no spec, or when it has fewer binders than the clause group has parameters.
+  (define binder-mults
+    (let ([bs (and spec-type (extract-pi-binders spec-type))])
+      (lambda (names)
+        (if (and bs (>= (length bs) (length names)))
+            (map binder-info-mult (take bs (length names)))
+            (map (lambda (_) 'mw) names)))))
   (cond
+    [dead-arm dead-arm]
     ;; Zero-arity: just use first body
     [(= arity 0)
      (surf-def name #f (caddr (car rows)) loc)]
@@ -10315,9 +10595,9 @@
      (define body (caddr (car rows)))
      (define type (or spec-type (build-pattern-group-type var-names rows loc)))
      (define nested-lam
-       (foldr (lambda (vn inner)
-                (surf-lam (binder-info vn 'mw (surf-hole loc)) inner loc))
-              body var-names))
+       (foldr (lambda (vn m inner)
+                (surf-lam (binder-info vn m (surf-hole loc)) inner loc))
+              body var-names (binder-mults var-names)))
      ;; Register user-facing param names for bound-arg display (don't overwrite parser-provided names)
      (unless (lookup-defn-param-names name)
        (register-defn-param-names! name var-names))
@@ -10327,9 +10607,9 @@
      (define type (or spec-type (build-pattern-group-type param-names rows loc)))
      (define body (compile-match-tree rows param-names loc))
      (define nested-lam
-       (foldr (lambda (pn inner)
-                (surf-lam (binder-info pn 'mw (surf-hole loc)) inner loc))
-              body param-names))
+       (foldr (lambda (pn m inner)
+                (surf-lam (binder-info pn m (surf-hole loc)) inner loc))
+              body param-names (binder-mults param-names)))
      ;; Register param names for bound-arg display (don't overwrite parser-provided names)
      (unless (lookup-defn-param-names name)
        (register-defn-param-names! name param-names))
@@ -10496,12 +10776,20 @@
          (expand-top-level result (+ depth 1)))]
     ;; Already a top-level command — expand sub-expressions, then pass through
     [(surf-def? surf)
-     (surf-def (surf-def-name surf)
-               ;; Sprint 10: type may be #f for type-inferred defs
-               (let ([ty (surf-def-type surf)])
-                 (if ty (expand-expression ty) #f))
-               (expand-expression (surf-def-body surf))
-               (surf-def-srcloc surf))]
+     ;; Propagate an error VALUE out of the body at the COMMAND boundary. This is
+     ;; the one place every def's body passes through, so catching it here gives
+     ;; a clean per-command error instead of carrying the error struct into the
+     ;; elaborator, which reports it as "Cannot elaborate:
+     ;; #(struct:prologos-error …)". (Today's producer: an unreachable match arm.)
+     (let ([body (expand-expression (surf-def-body surf))])
+       (if (prologos-error? body)
+           body
+           (surf-def (surf-def-name surf)
+                     ;; Sprint 10: type may be #f for type-inferred defs
+                     (let ([ty (surf-def-type surf)])
+                       (if ty (expand-expression ty) #f))
+                     body
+                     (surf-def-srcloc surf))))]
     [(surf-check? surf)
      (surf-check (expand-expression (surf-check-expr surf))
                  (expand-expression (surf-check-type surf))

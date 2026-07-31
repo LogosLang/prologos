@@ -15,6 +15,426 @@ Deferral".
 
 ---
 
+## LET track residuals (X.close sweep, 2026-07-31 — track COMPLETE, `feb79740`)
+
+Three small items survive the track, none blocking, all verified at HEAD:
+
+1. **`let` inside a BRACKETED `fn` body fails with a misleading message.**
+   `[fn [n : Int] let k := 4 [int+ n k]]` → "fn: all parameters except body
+   must be bare symbols or a binder" — the let line is consumed as fn
+   PARAMETERS (brackets suspend indent grouping, so the fn's bracket swallows
+   the tokens). Per-command since LET P1 (it was a whole-file abort), but the
+   form does not work and the message names the wrong thing. Workaround: use a
+   parenthesized `(let x := 4 body)` or hoist. Found by the P0 grounding
+   (unfiled then); the fix wants fn-side layout work, not let-side.
+
+2. **The 2-line forgot-body shape gives a mediocre error.** `let x 4 / y 5`
+   (one continuation line — below the aligned discipline's ≥2 activation)
+   falls to the legacy shorthand as `(let x 4 (y 5))`, body = apply y to 5 →
+   "Unbound variable y". An error, loud, but not the guided no-body message
+   the ≥3-line shape gets. Documented at P3 (design doc §9); a fix needs the
+   1-continuation case disambiguated, which collides with the nested-form's
+   byte-transparency — revisit only if users actually hit it.
+
+3. **Unannotated `match` as a binding VALUE** dies on the QTT infer-position
+   debt (generic multiplicity message). NOT a let item — the layout produces
+   the correct datum since P4 — but let is where users will MEET it, so the
+   syntax doc § let carries the annotate-the-binding workaround. The debt
+   itself is the QTT track's recorded option-(c) deliberate deferral
+   (an `expr-reduce` arm for `infer`/`inferQ` — new typing policy).
+
+## ✅ WITHDRAWN, with a correction — "the `:=` let chain is BROKEN in UNSPECCED defns" was issue #70 in a let costume (filed 2026-07-31, corrected same day at LET P2 `e8a41a9a`)
+
+**The filing was WRONG and is withdrawn.** Its repro used `[+ a [+ x y]]` —
+generic `+` over the defn's UNANNOTATED parameter — which is the documented
+issue-#70 inference limitation, unrelated to let. The control that would have
+caught it (`defn ca [a] [+ a 4]`, no let at all) fails identically. A pre-P2
+A/B (worktree at `974e5cc5`) shows the unspecced `:=` chain WORKED with
+concrete ops (`int+`) before any P2 change. 4th data point this session for
+"a failing test is only evidence if it fails for the reason you claim" — and
+the first filed by the same process that codified the pattern. Kept (not
+deleted) because a withdrawn filing teaches more than a silent one.
+
+What WAS real and did land at P2 (`e8a41a9a`): the tree spine's let-chain arm
+was a rival half-implementation (`:=`-only, annotation-dropping, and a no-`:=`
+`let-bracket` head fell through to a junk application surf that would WIN the
+merge). It now DEFERS to preparse per the driver's own architecture comment —
+a structural single-implementation move with no demonstrated behavioral delta,
+claimed as exactly that. The defer is named scaffolding; it retires when the
+form-cell path grows a real let.
+## 🐛 Cross-FILE spec-store leakage within a batch worker (diagnosed 2026-07-31, LET P1 gate)
+
+**Symptom**: `test-defn-multiarg-patterns.rkt` registered `(spec c Handle2 -1> Nat)`
+via `run-ns-ws-all`; `test-new-lattice-cell.rkt`, running LATER IN THE SAME
+BATCH WORKER, died with "spec: def c has both a spec and inline type
+annotation" on its own `def c : CellId`. Passes alone; order-dependent; surfaced
+when LET P1's +1 test file reshuffled worker assignment. (Unblocked by renaming
+the spec to `hconsume` at `49f51c14` — that removes the collision, NOT the leak.)
+
+**Mechanism (partially diagnosed — finish before fixing)**: the batch worker
+DOES restore the spec store per file — `restore-macros-registry-snapshot!`
+(tools/batch-worker.rkt:223) and `current-spec-store` IS in the snapshot vector
+(macros.rkt:713 region). So the leak rides something the snapshot does not
+cover: prime suspect is the CELL-BACKED registry layer — `run-ns-ws-all` passes
+`prelude-persistent-registry-net-box` UNFORKED (test-support.rkt:195 region),
+so a spec cell written there is shared across every file in the worker process,
+and cell-first reads see it. That is the pipeline.md Two-Context class, sibling
+of the 2026-06-29/07-14 batch-isolation incidents in testing.md.
+
+**Watch**: any NEW test file addition reshuffles workers and can surface the
+next collision pair. Single-letter spec/def names in test strings are collision
+bait until fixed.
+
+## ✅ CLOSED — the two eliminator usage residuals (QTT P6 + P7, 2026-07-31)
+
+- **The Church-fold agreement hole** → ✅ `e5810cfe`. It was LIVE, not theoretical:
+  a linear resource dropped inside an unanalysable branch — and in a second
+  variant DOUBLE-FREED — type-checked clean and RAN, while the byte-identical
+  Bool-scrutinee control was rejected. The skip swallowed NESTED violations.
+- **natrec's step counted once** → ✅ `63dea0b6`, and the filing was WRONG about
+  scope: natrec has zero shipped uses; the same defect sat in 8 HOF primitives
+  with 121 shipped uses. Fixed across 9 nodes / 28 sites / both twins. Also
+  reframed — it is the app rule (scale an argument by its binder multiplicity)
+  finally applied, not a tightening: a user-written HOF capturing a linear was
+  already rejected; only the built-in twins accepted it.
+- **The J arm's dropped base usage** (filed below at P5) → ✅ `63dea0b6`, folded
+  into P7 by owner direction.
+
+## ✅ CLOSED — the three pattern-matching soundness items (2026-07-31)
+
+- **Unreachable arms** → ✅ `55aac8c4`. Broader than filed: the reported
+  "unknown ctor becomes a catch-all" was one instance of a general defect — an
+  arm after ANY irrefutable arm is dropped by the pattern compiler and therefore
+  never TYPE-CHECKED, so `match v (n -> 1N) (zero -> "dead")` defined clean with
+  a String body where a Nat was expected. Fixed as a REACHABILITY check, which
+  needs no heuristic about whether a lowercase name was "meant" as a constructor.
+  Required a second fix to be usable: `expand-expression` had no error
+  propagation, so the message arrived as
+  "Cannot elaborate: #(struct:prologos-error …)" — propagation added at the
+  `surf-def` command boundary and at `surf-lam`.
+- **Cross-type constructor** → ✅ `09e68e60`. `ctor-belongs-to-type?` consults the
+  same registry `reduce-scrutinee-decompose` uses, and DECLINES when membership
+  is undecidable, so it rejects only what it can show is foreign.
+- **Linear destructuring via multi-clause `defn`** → ✅ `6d4e8c73`, and the ROOT
+  CAUSE was much wider than the filed symptom: `extract-pi-binders` matched a
+  `surf-arrow`'s multiplicity as `_` and substituted 'mw, so `A -1> B` and
+  `A -> B` were indistinguishable to every consumer.
+
+## 🐛 `expand-expression` has no general error propagation (2026-07-31)
+
+`expand-expression` is a structural rebuild; an error VALUE produced during
+expansion is wrapped into the surrounding node and carried to the elaborator,
+which reports it as `Cannot elaborate: #(struct:prologos-error …)` — the struct,
+printed. `55aac8c4` added propagation at the `surf-def` command boundary and at
+`surf-lam`, which covers a def body (the common case), but a producer nested
+deeper still leaks that way. Arming every arm is the exhaustive-walker hazard
+`pipeline.md` warns about; the structural answer is a reflective rebuild that
+propagates by construction, or an error-carrying surface node.
+
+## 🐛 A specific message for a foreign constructor in a match arm (2026-07-31)
+
+`09e68e60` rejects it, but through the generic "Type mismatch" — accurate, not
+lying, but it does not say *"`mk-b3` is a constructor of `Box3`, not `Bool`"*.
+Wants the post-hoc hint pattern (a `(ctx e names) → string-or-#f` helper in
+`typing-errors`' ordered chain, as used for the branch-result and QTT
+diagnostics).
+
+## 🐛 Two soundness holes on the STRICT path, found while grounding P6 (2026-07-31)
+
+Both confirmed by probe at `7584c16e`, both independent of P6/P7. **Both are now
+FIXED — see the CLOSED entry above.** Retained for the mechanisms.
+
+1. **An unknown constructor in a match pattern silently becomes an irrefutable
+   VARIABLE pattern**, making every later arm dead code with zero diagnostics.
+   `defn deadarm [v] match v (vnil -> 1N) (vcons a b -> "not-a-nat")` at expected
+   type `Nat` DEFINES CLEAN — arm 2's String body is never checked. Mechanism:
+   `normalize-pattern`'s `[else pat]` (macros.rkt). Consequence beyond the bug:
+   any probe using a misspelled constructor proves nothing, because no
+   `expr-reduce` is produced at all.
+2. **A constructor from an UNRELATED data type is accepted in an arm.**
+   `spec crossctor Bool -> Nat` / `defn crossctor [b] match b (true -> 1N)
+   (mk-b3 x -> 2N)` where `mk-b3 : Nat -> Box3` DEFINES with 0 errors. Cause: the
+   bare-name `global-env-lookup-type` fallback in `reduce-arm-ctx`'s derivation
+   (typing-core.rkt) with no membership test against `lookup-type-ctors`. Note
+   this CONSTRAINS any "make an unfindable ctor an error" fix — the fallback
+   already half-defeats it.
+
+## ✅ CLOSED `6d4e8c73` — Linear destructuring via a multi-clause `defn` is rejected (2026-07-31)
+
+**Root cause was wider than this symptom** — see the CLOSED entry above.
+Original report retained:
+
+`spec c3 Handle2 -1> Nat` + `defn c3 | mk-h k -> k` → "Multiplicity violation",
+though it consumes the linear scrutinee exactly once. The fio spelling
+(`defn f [h] match h (mk-h k -> …)`) works, so the two surface forms disagree.
+Verified PRE-EXISTING by A/B against the parent commit while implementing P6 —
+not caused by the QTT track.
+
+## Residuals from QTT P5 (the guard retirement) — filed 2026-07-30
+
+P5 (`9f0ddede` + `7b14fffe`) armed the 8 nodes and DELETED
+`contains-unsupported-qtt?`. These surfaced and were deliberately not fixed in
+that commit; item 4 has since closed.
+
+1. **`expr-vindex` is STUCK** — `whnf` has computation rules for `vhead`/`vtail`
+   on a canonical `vcons` (reduction.rkt) but NONE for `vindex`, which appears
+   only as an `nf` congruence arm. So `vindex` now type-checks and
+   multiplicity-checks but does not compute. Pre-existing, unrelated to QTT;
+   filed so "Vec is supported now" is not over-read.
+2. **Vec/Fin nodes have no `pnet-serialize` registration** — zero `reg!`/
+   `auto-cache!` entries for the 7 constructor/eliminator nodes. Harmless today
+   (no cached module contains one), but the moment a lib or user module caches a
+   Vec term the reader's unknown-tag fallback returns a raw VECTOR impostor that
+   fails a struct match arbitrarily far away — `pipeline.md` item 6's documented
+   misleading-failure class. P5 is the natural trigger point because it makes
+   Vec/Fin defs pass the gate for the first time.
+3. **The Redex model has no QTT rules for Vec/Fin** — `redex/qtt.rkt` has
+   grammar/typing/reduction for them but zero usage rules, so P5's seven usage
+   rules ship spec-unbacked. The soundness property stays vacuously true (nothing
+   breaks), which is exactly why this would drift silently.
+4. ✅ CLOSED `63dea0b6` — *(was: the J arm drops its base's usage entirely.)*
+   Folded into P7.
+5. **`expr-foreign-fn`'s type is arity-wrong once `args` is non-empty** — both
+   `typing-core`'s infer arm and P5's QTT twin return the FULL registered Pi
+   rather than the remainder after `(length args)` applications. They agree with
+   each other, so this is twin-parity, not drift; fixing it means fixing both.
+   Reachable only via the hole-section `whnf` path.
+
+## 🐛 LATENT — `expr-foreign-fn` is treated as a closed leaf by `shift`/`subst` but ACCUMULATES Prologos exprs (found 2026-07-30)
+
+`substitution.rkt`'s `shift` and `subst` both have
+`[(expr-foreign-fn _ _ _ _ _ _ _ _) e]` with the comment *"opaque leaf — no
+Prologos sub-expressions"*. That comment is FALSE: `reduction.rkt`'s partial-
+application arm appends whnf'd argument expressions into the `args` field and
+returns the updated node when arity is not yet reached. So a node reachable
+under a binder could hold an open term that `subst` then refuses to descend.
+
+This is the exact shape `pipeline.md` § "Exhaustive Walkers" documents (the
+`expr-champ` "closed leaf" comment asserting an invariant nothing enforced ⇒
+beta silently drops arguments / `shift` never renumbers ⇒ capture).
+
+**Probed, NOT reproducible** at `9c75e046`: a partially-applied 2-ary foreign
+under a lambda (`def g := [fn [x : String] [append x "!"]]`, then `[g "hi"]`),
+and a top-level partial (`def p := [append "pre-"]` then `[p "post"]`), both give
+correct values — the accumulation does not survive to a substitution point in
+practice, because substitution happens on the enclosing `expr-app` before `whnf`
+ever builds the partial. So: a live tripwire, not a live bug. Worth either
+enforcing the invariant or descending `args` in both walkers.
+
+## ✅ RULED + SHIPPED — `m0 ⊔ m1`: a linear resource MUST be consumed on every path (2026-07-30)
+
+**Owner ruled option 3; implemented in QTT P3 (`3a4d521a`).** Kept here rather
+than deleted because the reasoning is the reference for the next multiplicity
+question. Ruling: *"linear types should always be linear... there's a
+correctness concern otherwise."* The join stayed the honest lub and a separate
+`join-branches` guard supplies linear-per-path — `maybe-close` (the fd leak
+below) now errors; `always-close` type-checks. Two residuals, both filed:
+- P4 ✅ `e7fbd2ba` — the message NOW names the resource, its declaration, what
+  happened and why, for all four violation classes. (The premise above was wrong:
+  `multiplicity-error` already had `variable`/`declared`/`actual` fields that
+  already rendered — they were filled with the string literals "declared" and
+  "actual". No protocol change was needed, only real values.)
+- The reduce arm's permissive fallback never checks agreement, so a leak on an
+  unanalysable (Church-fold) arm still hides. Closes when that path does.
+
+Original framing, retained:
+
+Raised by QTT P1/P2 (`966226cf`, `9fbbc90f`). NOT the implementer's call, so it
+shipped with the status-quo-preserving cell and is recorded here.
+
+`mult-join` (prelude.rkt) is the lub of the tree's own `mult-leq` order, so
+`m0 ⊔ m1 = m1`. That means a linear value consumed on SOME branches and dropped
+on others type-checks — **affine per path**, not linear per path. Demonstrated on
+the real API (fio, verified at `9fbbc90f`):
+
+```prologos
+;; closes the handle on EVERY path — the correct linear program
+def always-close := [fn [h :1 <Handle>] [fn [c : Bool]
+  (boolrec [fn [_ : Bool] Unit] [fio-close h] [fio-close h] c)]]   ;; ✓ accepted
+
+;; closes on one branch, SILENTLY DROPS the handle on the other — an fd leak
+def maybe-close  := [fn [h :1 <Handle>] [fn [c : Bool]
+  (boolrec [fn [_ : Bool] Unit] [fio-close h] unit c)]]            ;; ✓ ALSO accepted
+```
+
+Before P1 this pair was **inverted**: `always-close` was REJECTED (m1+m1 = mw)
+and `maybe-close` accepted. P1 fixed the false rejection. What remains is that
+the leak is still accepted — precisely the failure `Handle`'s linearity exists to
+prevent.
+
+Three options:
+1. **Lenient (shipped)** — `m0 ⊔ m1 = m1`. Preserves every currently-accepted
+   program; permits the leak.
+2. **Strict** — `m0 ⊔ m1 = mw`, so a linear resource must be consumed on every
+   path. Rejects the leak, but is a behavioural regression for accepted code AND
+   mislabels "zero-or-one" as "unrestricted" behind the generic "Multiplicity
+   violation" string (typing-errors.rkt hardcodes the declared/actual fields as
+   literals, so the message cannot say what actually went wrong).
+3. **Lenient join + a per-position branch-AGREEMENT guard** for positions whose
+   DECLARED multiplicity is m1. Gives strict linear-per-path semantics with a
+   PRECISE failure instead of encoding a rejection as `mw`. Expressible where the
+   join now sits: `ctx` is in scope and carries `(type . mult)` positionally
+   parallel to the usage vectors, and `(tu-error)` is already the arm's failure
+   form. This is the option the first analysis pass never enumerated.
+
+Recommendation: (3) if linear-per-path is wanted, since it is the only one that
+can produce a diagnostic naming the dropped resource. Do NOT read the shipped
+default as an endorsement — it is the status quo, and the status quo permits the
+leak.
+
+## ✅ CLOSED `63dea0b6` — natrec's `step` usage is counted ONCE though it runs n times (2026-07-30)
+
+**Superseded by QTT P7**, which also found the filing under-scoped: the same
+defect sat in 8 HOF primitives with 121 shipped uses, while natrec has none.
+The Redex model's matching natrec rule is noted below and still stands as a
+follow-up. Original entry retained:
+
+QTT P1 changed eliminator branch combination to a join at 5 sites and
+DELIBERATELY left `natrec` on `add-usage` (qtt.rkt, comment in place). The
+rationale is sound as far as it goes — base and step are not mutually exclusive
+alternatives, so joining them would UNDER-count, unsound in the permissive
+direction. But the current rule is not right either: `step` has type
+`Π(n:Nat). motive(n) → motive(suc n)` and is applied 0..n times, while its usage
+is added exactly ONCE. A linear variable captured only in the step is therefore
+counted `m1` no matter how many times it is consumed.
+
+Making it sound means scaling the step by `mw`
+(`(add-usage u4 (add-usage u2 (scale-usage 'mw u3)))`), which newly rejects a
+class of currently-accepted code. Recorded rather than defaulted into. Note the
+Redex model (redex/qtt.rkt:173-186) carries the same natrec rule, so the two are
+currently IN AGREEMENT — a fix must move both.
+
+## ✅ CLOSED `9f0ddede` + `7b14fffe` — Retire `contains-unsupported-qtt?` (2026-07-30)
+
+**Done in QTT P5**: all 8 nodes armed in qtt.rkt and the guard DELETED, so
+multiplicity checking is unconditional at the def seam. PNET_VERSION 7→8 rode
+the deletion. Original entry retained for the rationale:
+
+QTT P2 removed the `expr-reduce` entry, which was the one that mattered. What is
+left (driver.rkt) is a hand-armed walk that recurses 12 node kinds, flags 8
+(`expr-vnil`, `expr-vcons`, `expr-vhead`, `expr-vtail`, `expr-vindex`,
+`expr-fzero`, `expr-fsuc`, `expr-foreign-fn`), and terminates at `[_ #f]` — over
+~344 `expr-*` structs. Everything else stops the walk and is reported
+"supported" WITHOUT being looked inside, so the guard both over-skips (a flagged
+node anywhere disables QTT for the whole def) and under-detects.
+
+Per `pipeline.md` § "Exhaustive Walkers" the structural answer is a reflective
+fallback; per `workflow.md` the guard IS the belt-and-suspenders dual path
+masking qtt.rkt's gaps, and the endgame is arming those 8 nodes in qtt.rkt and
+DELETING the function. Each of the 8 is its own typing question (Vec/Fin are
+length-indexed; `expr-foreign-fn` is an opaque runtime value), which is why P2
+deleted one entry rather than the guard.
+
+⚠ Whoever does this: a `.pnet` version bump belongs in the same commit, for the
+reason P2's did — on a cache hit the driver never elaborates, so the QTT gate
+does not run and a module that should newly fail keeps loading from cache.
+
+## The branch-result join — residual work after the diagnostic fix (2026-07-30)
+
+Context: a multi-clause `defn` whose clause bodies have different result types
+reported the unannotated-parameter hint — a lying diagnostic whose own advice
+could not help, because `infer` returns `expr-error` for ANY hole-domain lambda
+without inspecting the body (typing-core.rkt:1129) and every generated clause
+lambda is hole-domain by construction (macros.rkt:10282/:10294) even when a
+`spec` is present. Fixed on the DIAGNOSTIC side only — the join is untouched
+(commit `04085007`). See `typing-errors.rkt` § the branch-result-mismatch
+diagnostic.
+
+Three pieces stayed out, deliberately:
+
+1. **The union route proper** — making the join produce `<A | B>` for differing
+   branches, so `defn f | 0 -> 1 | n -> "x"` gets `Int -> <Int | String>`.
+   TRIAGED AND REJECTED FOR NOW, per the explicit instruction to triage against
+   the union-hang entries first. Evidence: a union in a codomain position emits a
+   fork-on-union request at EVERY call site (`type-map-write` →
+   `maybe-emit-fork-on-union-request`, typing-propagators.rkt), and that
+   machinery carries the two open unbounded-hang defects below — "BUG:
+   Union-type checking hangs the type-checker (BSP non-quiescence)" and "DEFECT
+   — union-typed def + implicit-binder spec + call HANGS the type checker". A
+   hang is strictly worse than a bad message. Note also that the same strict
+   join serves user-written 3-arg `if` (parser.rkt:1393) and `match` arms, so a
+   semantic change here alters `if` typing project-wide. **Blocked on** the
+   dedicated typing-propagator-network debugging session those entries call for.
+
+2. **Unreportable branch types → the old message still shows, and is still
+   wrong there.** The hint fires only when it can EXHIBIT two inferred,
+   non-convertible, REPORTABLE branch types; a type mentioning a hole or a de
+   Bruijn variable is refused (that filter is what keeps wrong types and `_` /
+   `?bvar0` artifacts out of user-facing prose). The common shape it gives up on
+   is a branch that READS its pattern-bound field, because `branch-result-leaves`
+   extends the arm ctx with `(expr-hole)` per binding rather than the
+   constructor's real field types:
+   `defn f | zero -> "s" | suc n -> n` (with or without `spec f Nat -> Nat`)
+   still reports "cannot infer the type of an unannotated parameter … Annotate
+   the parameter or add a `spec`" — and that advice is false: the parameter is
+   not the problem and a spec is already present. Fix path, non-blocked and
+   mechanical: export the arm-binder ctx derivation `check-reduce-structural`
+   already performs (typing-core.rkt:4451-4473 — `instantiate-pi-chain` +
+   `extend-ctx-with-fields`) and call it from the leaf walk, the "one derivation,
+   two consumers, cannot drift" pattern already used for `select-project` and
+   `seal-missing-required`. Needs the peeled ctx to carry the expected Pi's
+   domain so the scrutinee type is decomposable.
+
+3. **Guarded clause groups** are now walked (the branch-neutral rewrite dropped
+   the `expr-int-eq` target gate that had excluded them), but see the crash entry
+   below — the more common guard shape does not survive parsing at all.
+
+## ✅ CLOSED `f51bda2b` — a guarded clause group with no `[params]` header CRASHES the compiler and aborts the whole file (found 2026-07-30)
+
+**Cause was a missing parse, not a compiler bug**: `parse-defn-clause` took
+everything before `->` as PATTERNS with no `when` handling, though the
+bracketed-header parser has always had that split. `n when [int-lt n 0]` became
+three patterns, the clauses had mismatched arity, and the pattern compiler
+indexed off the end of its parameter list and raised — a whole-file abort by
+construction. Fixed by mirroring the header path, so the bare-`|` guarded form
+now WORKS rather than merely failing politely. Semantics pinned (dispatch,
+successive-guard fallthrough, header form unchanged, and an earlier command's
+output surviving). Original report retained:
+
+**Repro** (independently verified at `5e6d9f41`, pre-existing — the crash is in
+`macros.rkt`, long before typing):
+
+```
+ns pre1
+def before := 1
+defn m07
+  | n when [int-lt n 0] -> "neg"
+  | n -> 5
+def after := 2
+```
+
+`racket tools/run-file.rkt` prints NO numbered results at all — not even
+`def before := 1`, which precedes the offending form — just a raw Racket
+`list-ref: index too large for list / index: 3 / in: '(__arg0 __arg1)` with a
+`context...:` dump through `macros.rkt:9928 compile-match-tree` →
+`macros.rkt:10235 compile-pattern-group` → `macros.rkt:10309
+expand-defn-multi`. Adding the bracket header (`defn m07 [n] | n when … -> …`)
+avoids it. Same **whole-file-abort silence class** as the `.( )` mixfix entry
+below and the tilde-reader entry: a raise on the expansion path takes the file
+down instead of becoming a per-command error. Likely cause: the guard row's
+pattern list is arity-adjusted for a 1-column group while `param-names` still
+holds two entries, so `compile-match-tree` indexes past the list.
+
+## 🐛 DEFECT — the branch-result join silently ACCEPTS a float branch against a String branch (found 2026-07-30)
+
+**Repro** (independently verified at `5e6d9f41`, pre-existing; the in-file
+control errors correctly in the same run):
+
+```
+ns pre2
+defn ctl | 0 -> 1   | n -> "x"    ;; ERROR (correct — Int vs String)
+defn d8  | 0 -> 1.5 | n -> "x"    ;; d8 : Int -> String defined  ← NO error
+```
+
+So the first-arm-wins join is not merely strict, it is **unsound for a
+Rat/Posit-literal first branch**: the definition is accepted with result type
+`String`. Found while adversarially verifying the branch-result diagnostic;
+the diagnostic cannot see it because `check` never fails. Suspect the numeric
+literal's flexible typing (the widening/defaulting path) satisfies the motive
+meta and then re-solves against `String`. Wants a failing-test-first
+investigation on the numeric-literal side of the join — plausibly Num Track 1
+territory.
+
 ## 🐛 DEFECT — live `.( )` mixfix errors RAISE and abort the whole file (found 2026-07-28, the D4.P1a adversarial verify)
 
 An incomparable-precedence-group error or an empty `.( )` raises out of

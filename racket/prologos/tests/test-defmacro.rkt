@@ -141,8 +141,14 @@
   (check-equal? result '((fn (x : Nat) ((fn (y : Nat) (suc y)) (suc x))) zero)))
 
 (test-case "let: wrong arity"
-  (check-exn exn:fail?
-    (lambda () (preparse-expand-form '(let)))))
+  ;; LET P1 (2026-07-31): expand-let no longer RAISES — a raise on the preparse
+  ;; path was a whole-file abort. Failures now return a ($let-error "msg")
+  ;; marker datum that the parser converts to a per-command parse error.
+  (define result (preparse-expand-form '(let)))
+  (check-true (and (pair? result) (eq? (car result) '$let-error))
+              (format "expected a $let-error marker, got: ~v" result))
+  (check-true (regexp-match? #rx"let requires at least" (cadr result))
+              (format "got: ~v" result)))
 
 ;; ========================================
 ;; let := expansion

@@ -951,32 +951,31 @@
   (cond
     [(null? items) (parse-error-result loc "empty expression")]
     [(= (length items) 1) (parse-form-tree (car items))]
-    ;; Check if first item is a let-assign node → let-chain
+    ;; LET P2 (2026-07-31): a let head DEFERS TO PREPARSE — deliberately.
+    ;;
+    ;; This arm used to half-implement let-chains: `:=`-only, type-annotation-
+    ;; dropping (`binder-info name #f (surf-hole loc)`), and its surf output
+    ;; FAILED TYPING — so every let-bearing UNSPECCED defn (where the tree surf
+    ;; wins at merge-form) was broken while the specced twin worked, including
+    ;; issue #21's "working" sibling-`:=` chain. Worse, a no-`:=` `let-bracket`
+    ;; head fell through to parse-expr-tree, whose junk APPLICATION surf is a
+    ;; non-error and would silently WIN the merge.
+    ;;
+    ;; The driver's own architecture comment (above process-string-ws-inner-impl)
+    ;; says preparse is the FALLBACK "for forms that fail parse-form-tree
+    ;; (expression-level desugaring: cond, let, multi-arity defn patterns)" —
+    ;; deferring here is that design, enacted. A parse-error result is EXCLUDED
+    ;; from tree-by-line (`#:when (not (prologos-error? s))`), so merge-form's
+    ;; first arm hands the whole form to preparse, the single let implementation
+    ;; (all five formats already converge on let-bindings->nested-fn there).
+    ;;
+    ;; SCAFFOLDING, named: this defer retires when the form-cell path grows a
+    ;; real let (Phase 4 of the form-cells plan — the tree spine is the
+    ;; architectural destination). Rival half-implementations are how the
+    ;; specced/unspecced divergence shipped in the first place.
     [(and (parse-tree-node? (car items))
           (memq (parse-tree-node-tag (car items)) '(let-assign let-bracket)))
-     ;; Let-chain: parse first let, body is rest of items
-     (define let-node (car items))
-     (define rest (cdr items))
-     (define let-children (rrb-to-list (parse-tree-node-children let-node)))
-     ;; let-assign: [let, name, :=, value]
-     (define let-items (if (and (pair? let-children) (token-entry? (car let-children))
-                                (equal? (token-entry-lexeme (car let-children)) "let"))
-                           (cdr let-children) let-children))
-     (define assign-idx (for/or ([item (in-list let-items)] [i (in-naturals)])
-                           (and (token-is? item ":=") i)))
-     (if (not assign-idx)
-         (parse-expr-tree items loc)  ;; not a proper let — fallback
-         (let* ([name (token-symbol (car let-items))]
-                [val-items (drop let-items (+ assign-idx 1))]
-                [val (if (= (length val-items) 1) (parse-form-tree (car val-items))
-                         (parse-expr-items val-items loc))]
-                [body (parse-expr-items rest loc)])
-           (cond
-             [(not name) (parse-error-result loc "let: expected name")]
-             [(prologos-error? val) val]
-             [(prologos-error? body) body]
-             [else (surf-app (surf-lam (binder-info name #f (surf-hole loc)) body loc)
-                             (list val) loc)])))]
+     (parse-error-result loc "let: tree spine defers to preparse (LET P2)")]
     [else
      ;; Multiple items — parse as expression tree
      (parse-expr-tree items loc)]))

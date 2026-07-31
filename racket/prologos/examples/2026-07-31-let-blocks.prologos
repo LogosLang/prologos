@@ -1,0 +1,226 @@
+;; LET blocks — acceptance file (LET track, Phase 0)
+;; docs/tracking/2026-07-31_LET_BLOCKS_DESIGN.md
+;;
+;; Sections marked [P2]/[P3]/[P4] are COMMENTED OUT target syntax, uncommented
+;; as each phase lands (renumber the ;;N=> markers when uncommenting — they are
+;; result indices). Everything live below runs at P0 (HEAD 13cce230 + P1).
+;;
+;; Specs on §A/§B defns keep those pins stable (spec injection). §C3 pins the
+;; UNSPECCED path — since P2 the tree spine DEFERS to preparse on let heads, so
+;; the two spines agree by construction. (The P0-era note here claimed the
+;; unspecced path was "broken"; that repro was issue #70 — generic ops over an
+;; unannotated param — wearing a let costume. Design doc §7.)
+
+ns letblocks
+
+;; ============================================================
+;; §A — the four working variants (issue #21) + nested form
+;; ============================================================
+
+;; A1: nested no-:= shorthand (the historical form)
+spec a1 Int -> Int
+defn a1 [a]
+  let x 4
+    let y 5
+      [+ x [+ a y]]
+
+[a1 1]
+;;0=> a1 : Int -> Int defined.
+;;1=> 10 : Int
+
+;; A2: single := with deeper body
+spec a2 Int -> Int
+defn a2 [a]
+  let x := 4
+    [+ a x]
+
+[a2 1]
+;;2=> a2 : Int -> Int defined.
+;;3=> 5 : Int
+
+;; A3: sibling := chain — scopes stack, body under the last let
+spec a3 Int -> Int
+defn a3 [a]
+  let x := 4
+  let y := 5
+  let z := [+ x y]
+    [+ a z]
+
+[a3 1]
+;;4=> a3 : Int -> Int defined.
+;;5=> 10 : Int
+
+;; A4: bracket flat-pair
+spec a4 Int -> Int
+defn a4 [a]
+  let [x 5 y 6]
+    [+ a [+ x y]]
+
+[a4 1]
+;;6=> a4 : Int -> Int defined.
+;;7=> 12 : Int
+
+;; A5: bracket typed :=
+spec a5 Int -> Int
+defn a5 [a]
+  let [x : Int := 5 y : Int := 6]
+    [+ a [+ x y]]
+
+[a5 1]
+;;8=> a5 : Int -> Int defined.
+;;9=> 12 : Int
+
+;; ============================================================
+;; §B — the := chain in other body contexts (context coverage)
+;; ============================================================
+
+;; B1: inside a match arm
+spec b1 Int -> Int
+defn b1 [n]
+  match n
+    | 0 -> 0
+    | m ->
+      let k := 100
+      let j := [+ k m]
+        j
+
+[b1 3]
+;;10=> b1 : Int -> Int defined.
+;;11=> 103 : Int
+
+;; B2: under a def := RHS
+def b2 :=
+  let p := 6
+  let q := [+ p 1]
+    [+ p q]
+
+b2
+;;12=> b2 : Int defined.
+;;13=> 13 : Int
+
+;; ============================================================
+;; §C — sibling lets WITHOUT := form one scope (P2)
+;; ============================================================
+
+spec c1 Int -> Int
+defn c1 [a]
+  let x 4
+  let y 5
+  let z [+ x y]
+    [+ a z]
+
+[c1 1]
+;;14=> c1 : Int -> Int defined.
+;;15=> 10 : Int
+
+;; C2: mixed spellings in one chain (owner ruling 2)
+spec c2 Int -> Int
+defn c2 [a]
+  let x 4
+  let y := 5
+    [+ a [+ x y]]
+
+[c2 1]
+;;16=> c2 : Int -> Int defined.
+;;17=> 10 : Int
+
+;; C3: UNSPECCED defn + chains — the two spines agree (P2 tree-defer).
+;; Concrete ops (int+) deliberately: generic `+` over an unannotated param is
+;; the DOCUMENTED issue-#70 limitation, unrelated to let — an earlier filing
+;; confused the two (see the design doc §7 correction).
+defn c3 [a]
+  let x 4
+  let y := 5
+    [int+ a [int+ x y]]
+
+[c3 1]
+;;18=> c3 : Int -> Int defined.
+;;19=> 10 : Int
+
+;; ============================================================
+;; §D — aligned multi-binding blocks (P3; STRICT column discipline:
+;;      bindings align with each other; body strictly between the
+;;      `let` column and the binding column)
+;; ============================================================
+
+spec d1 Int -> Int
+defn d1 [a]
+  let x 4
+      y 5
+      z [+ x y]
+    [+ a z]
+
+[d1 1]
+;;20=> d1 : Int -> Int defined.
+;;21=> 10 : Int
+
+spec d2 Int -> Int
+defn d2 [a]
+  let x := 4
+      y := 5
+    [+ a [+ x y]]
+
+[d2 1]
+;;22=> d2 : Int -> Int defined.
+;;23=> 10 : Int
+
+;; mixed spellings in one block (owner ruling 2: allowed)
+spec d3 Int -> Int
+defn d3 [a]
+  let x 4
+      y := 5
+    [+ a [+ x y]]
+
+[d3 1]
+;;24=> d3 : Int -> Int defined.
+;;25=> 10 : Int
+
+;; ============================================================
+;; §E — fused var:Type binders (P4; the sexp glued form splits too,
+;;      owner ruling 3 — pinned in tests)
+;; ============================================================
+
+spec e1 Int -> Int
+defn e1 [a]
+  let x:Int 4
+      y:Int 5
+    [+ a [+ x y]]
+
+[e1 1]
+;;26=> e1 : Int -> Int defined.
+;;27=> 10 : Int
+
+spec e2 Int -> Int
+defn e2 [a]
+  let x:Int := 4
+    [+ a x]
+
+[e2 1]
+;;28=> e2 : Int -> Int defined.
+;;29=> 5 : Int
+
+;; §E2 — multi-line values (P4): a bracket-continued value, and an annotated
+;; multi-line match value (unannotated match VALUES are the documented QTT
+;; infer-position boundary — annotate, as here, and they work)
+spec e3 Int -> Int
+defn e3 [a]
+  let x [+ 1
+         3]
+      y 5
+    [+ a [+ x y]]
+
+[e3 1]
+;;30=> e3 : Int -> Int defined.
+;;31=> 10 : Int
+
+spec e4 Int -> Int
+defn e4 [a]
+  let k : Int := match a
+                   | 1 -> 10
+                   | m -> m
+      j 5
+    [+ a [+ k j]]
+
+[e4 1]
+;;32=> e4 : Int -> Int defined.
+;;33=> 16 : Int

@@ -319,39 +319,6 @@
   ;; scrub (shallow detection under a deep scrub would mis-gate).
   (expr-contains-meta-deep? e))
 
-;; Check if an expression contains node types that the QTT module
-;; doesn't handle yet: expr-reduce (structural PM), Vec, Fin constructors/eliminators.
-;; Other expression types (boolrec, Posit8, fvar, Pi/Sigma/Eq)
-;; are now handled by qtt.rkt directly.
-(define (contains-unsupported-qtt? e)
-  (match e
-    [(expr-reduce _ _ _) #t]
-    [(expr-vnil _) #t]
-    [(expr-vcons _ _ _ _) #t]
-    [(expr-vhead _ _ _) #t]
-    [(expr-vtail _ _ _) #t]
-    [(expr-vindex _ _ _ _) #t]
-    [(expr-fzero _) #t]
-    [(expr-fsuc _ _) #t]
-    [(expr-foreign-fn _ _ _ _ _ _ _ _) #t]
-    [(expr-app f x) (or (contains-unsupported-qtt? f) (contains-unsupported-qtt? x))]
-    [(expr-lam _ a b) (or (contains-unsupported-qtt? a) (contains-unsupported-qtt? b))]
-    [(expr-Pi _ a b) (or (contains-unsupported-qtt? a) (contains-unsupported-qtt? b))]
-    [(expr-Sigma a b) (or (contains-unsupported-qtt? a) (contains-unsupported-qtt? b))]
-    [(expr-pair a b) (or (contains-unsupported-qtt? a) (contains-unsupported-qtt? b))]
-    [(expr-fst e) (contains-unsupported-qtt? e)]
-    [(expr-snd e) (contains-unsupported-qtt? e)]
-    [(expr-ann e t) (or (contains-unsupported-qtt? e) (contains-unsupported-qtt? t))]
-    [(expr-suc e) (contains-unsupported-qtt? e)]
-    [(expr-natrec m b s t) (or (contains-unsupported-qtt? m) (contains-unsupported-qtt? b)
-                               (contains-unsupported-qtt? s) (contains-unsupported-qtt? t))]
-    [(expr-boolrec m tc fc t) (or (contains-unsupported-qtt? m) (contains-unsupported-qtt? tc)
-                                  (contains-unsupported-qtt? fc) (contains-unsupported-qtt? t))]
-    [(expr-J m b l r p) (or (contains-unsupported-qtt? m) (contains-unsupported-qtt? b)
-                            (contains-unsupported-qtt? l) (contains-unsupported-qtt? r)
-                            (contains-unsupported-qtt? p))]
-    [_ #f]))
-
 ;; Sprint 10: For bare-param defn, the type has holes. We skip is-type and
 ;; just run check(body, type) — the holes act as wildcards, accepting any type.
 ;; The stored type retains holes which display as `_`.
@@ -1892,11 +1859,8 @@
                  ;; the stored type is a HARD ERROR — checked on the PRE-scrub type
                  ;; (the scrub above turned OTHER unsolved metas into holes).
                  (define proj-err (check-escaping-projection-metas pre-scrub-type name def-srcloc))
-                 ;; Skip QTT for expressions with unsupported node types (Vec/Fin)
                  (define qtt-ok
-                   (if (contains-unsupported-qtt? zonked-body)
-                       #t
-                       (time-phase! qtt (checkQ-top/err ctx-empty zonked-body zonked-type))))
+                   (time-phase! qtt (checkQ-top/err ctx-empty zonked-body zonked-type)))
                  (cond
                    [proj-err proj-err]  ;; D23 escape error takes precedence
                    [(prologos-error? qtt-ok) qtt-ok]
@@ -2110,12 +2074,9 @@
                        ;; a `: _` hole annotation leaves it unsolved → errors here.
                        (define proj-err (check-escaping-projection-metas zonked-type-raw name def-srcloc))
                        ;; 6.5. QTT multiplicity check (on zonked terms with concrete mults).
-                       ;; Skip for expressions containing unsupported node types (Vec/Fin).
                        (define qtt-ok
-                         (if (contains-unsupported-qtt? zonked-body)
-                             #t  ;; skip QTT for unsupported expression types
-                             (time-phase! qtt (checkQ-top/err ctx-empty zonked-body zonked-type
-                                             srcloc-unknown (recover-name-map)))))
+                         (time-phase! qtt (checkQ-top/err ctx-empty zonked-body zonked-type
+                                         srcloc-unknown (recover-name-map))))
                        (cond
                          ;; D23 escape error takes precedence; un-register (this
                          ;; path pre-registered the type for recursion).
