@@ -701,6 +701,18 @@ in PROSE per the standing discipline; audit `wf_27a84061-c7e` fed them —
   stands"]: demand semantics deferred to a named post-v1 phase; §5.P6
   carries the ruling + the charter stub; the 4a X.close gate stays armed.
 
+**The P3b-close checkpoint ruling [owner, 2026-07-30]:**
+- **Q_U4 — `^_`/`^-_` synth scope: SUBJECT-ROOT is PREFERRED; the flip is
+  DEFERRED until it next matters.** P3b implemented branch-of-its-block
+  scope (`server.{host^_}` → `{:server {:host …}}` while the dot spelling
+  gives `{:server {:server-host …}}`). Owner: the local reading is "not a
+  bad assumption" but of lesser utility — **a sub-branch is LESS likely to
+  share a common leaf key**, so the synth's disambiguating power wants the
+  full path; not a high-priority feature, "switch when it matters next."
+  Natural trigger: P5's L2 factoring (which makes the divergence observable
+  and wants the two spellings equal) or the first user-visible need.
+  DEFERRED 23 carries the trigger + the one-line flip site.
+
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
   P1b-i, **owner-reviewed**, and ruled (Q_M8 the sole amendment). §Q8 is now
@@ -2442,14 +2454,13 @@ minted a dot-unreachable `:0` field at 0 errors — refused (the one minor
 the adjudicator promoted) · `{0^first}` escaped the ONE Q_T4a message ·
 `server^{x}` lost its segment name to a "field" placeholder.
 
-**Interpretation pinned eyes-open (Q_U4 CANDIDATE — owner checkpoint)**:
-`^_`/`^-_` synth scope is **branch-of-its-block** — `server.{host^_}` →
-`{:server {:host …}}` (the sub-branch is its own scope) while
-`server.host^_` → `{:server {:server-host …}}`. Every RULED example agrees
-under both readings; the divergence becomes observable only at P5's L2
-factoring (`x{server.host^_}` ≡? `x{server.{host^_}}` under keywise merge).
-Flagged, not silently decided: if factoring-consistency should win, the
-synth scope flips to subject-root at P5.
+**Interpretation pinned eyes-open — RULED Q_U4 at the close checkpoint
+[owner, 2026-07-30]**: `^_`/`^-_` synth scope shipped as
+**branch-of-its-block** (`server.{host^_}` → `{:server {:host …}}` vs the
+dot spelling's `{:server {:server-host …}}`). The owner ruled SUBJECT-ROOT
+is preferred (a sub-branch is less likely to share a common leaf key) but
+not high priority — the flip is DEFERRED until it next matters (P5's L2
+factoring is the natural trigger; DEFERRED 23 carries it).
 
 **Filed, not fixed**: DEFERRED 21 (`k^:x` keyword rename target — the
 splitter's `#\:` arm is WS-dead, sexp-only reachable; degraded-not-lying) ·

@@ -2303,3 +2303,19 @@ arrowless input class crashes on its own). The fix belongs to the match
 parser (a guided per-command error naming the missing `->`), not to
 selection. Same family as the `.( )` mixfix raises and the tilde abort —
 the marker-seat / POL.4 conversion discipline applied to match arms.
+
+### 23. `^_`/`^-_` synth scope: SUBJECT-ROOT preferred over the shipped branch-of-its-block — flip when it next matters (ruled Q_U4, 2026-07-30)
+
+P3b shipped branch-of-its-block scope: `x{server.{host^_}}` →
+`{:server {:host …}}` while the dot spelling `x{server.host^_}` →
+`{:server {:server-host …}}`. Owner ruling (Q_U4): subject-root is
+PREFERRED — a sub-branch is less likely to share a common leaf key, so the
+synth's disambiguating power wants the full path — but it is not a
+high-priority feature; "switch when it matters next." Triggers: P5's L2
+factoring work (which makes the divergence observable — under keywise merge
+`x{server.host^_}` ≡ `x{server.{host^_}}` wants to be a theorem, and the
+subject-root reading is the one that makes it true) or the first
+user-visible need. Flip site (one line each + re-pins): typing-core
+`select-below-entries` and reduction `below-entries` currently RESET `seen`
+at the `@sub` boundary — subject-root = thread `seen` through instead; then
+flip the `server.{host^_}` pins to `{:server {:server-host …}}`.
