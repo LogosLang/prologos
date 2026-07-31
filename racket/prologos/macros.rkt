@@ -2345,6 +2345,12 @@
             ;; Find := position, check if there's exactly one element after it
             (let ([assign-pos (index-of-symbol ':= rest)])
               (and assign-pos (= (length rest) (+ assign-pos 2))))]
+           ;; LET P2 (2026-07-31): (let name value) — the no-:= bodyless shape,
+           ;; so sibling chains `let x 4 / let y 5 / body` merge like their :=
+           ;; twins. The SYMBOL check is load-bearing (drift risk 3): a bracket
+           ;; form `(let (x 5 y 6))` has a LIST car and must stay non-bodyless.
+           [(and (= (length rest) 2) (symbol? (car rest)))
+            #t]
            ;; (let [bindings] body) — has body, not bodyless
            ;; (let name value body) — has body, not bodyless
            [else #f]))))
@@ -2385,8 +2391,21 @@
 ;; Extract binding tokens from a bodyless let form.
 ;; (let name := value) → (name := value)
 ;; (let name : T := value) → (name : T := value)
+;; (let name value)     → (name := value)   [LET P2: `:=` SYNTHESIZED]
+;;
+;; The synthesis closes the normalize-vs-verbatim ASYMMETRY that broke no-:=
+;; sibling chains: `split-last-let` has always fabricated `:=` for the last
+;; sibling's legacy shape (see its 3-element arm), while this function returned
+;; earlier siblings' tokens verbatim — so the merged bracket stream mixed
+;; `x 4` with `z := (+ x y)` and parse-assign-bindings (which demands `:=`
+;; everywhere) died at the first bare pair. Now every consumer of the merge
+;; emits uniformly `:=`-marked bindings. `:=`-bearing forms pass through
+;; VERBATIM — byte-transparency for the exact-output pins (drift risk 1).
 (define (extract-let-binding-tokens let-form)
-  (cdr let-form))  ; everything after 'let
+  (define rest (cdr let-form))  ; everything after 'let
+  (if (and (= (length rest) 2) (symbol? (car rest)) (not (memq ':= rest)))
+      (list (car rest) ':= (cadr rest))
+      rest))
 
 ;; Split the last let in a sequence into (values binding-tokens body).
 ;; The last let has a body.

@@ -79,11 +79,11 @@
   (check-true (prologos-error? (second rs)) "the bad let must error")
   (check-false (prologos-error? (third rs)) "`after` must define"))
 
-(test-case "let-p1/all four broken-form classes are parse errors, not raises"
-  ;; One file, all four raise classes the probes hit: aligned (unrecognized
-  ;; format), fused (unrecognized format via :Int), sibling no-:= (the
-  ;; parse-assign-bindings site), top-level let (the guided error). Each is a
-  ;; per-command error and the file reaches the trailing control.
+(test-case "let-p1/the still-broken form classes are parse errors, not raises"
+  ;; P1 pinned FOUR broken classes; the sibling no-:= chain graduated to
+  ;; WORKING at P2 and moved to the let-p2 pins below. Remaining: aligned
+  ;; (unrecognized format — P3's target), fused (P4's target), top-level let
+  ;; (permanent guided error). Each per-command; the file reaches the control.
   (define rs (run-file-ws (string-append
     "ns c2\n"
     "spec f1 Int -> Int\n"
@@ -95,15 +95,10 @@
     "defn f2 [a]\n"
     "  let x:Int 4\n"
     "    [+ a x]\n"
-    "spec f3 Int -> Int\n"
-    "defn f3 [a]\n"
-    "  let x 4\n"
-    "  let y 5\n"
-    "    [+ a [+ x y]]\n"
     "let tl := 99\n"
     "def control := 7\n")))
-  (check-equal? (length rs) 5 (format "expected 5 results, got: ~v" rs))
-  (for ([r (in-list (take rs 4))] [i (in-naturals)])
+  (check-equal? (length rs) 4 (format "expected 4 results, got: ~v" rs))
+  (for ([r (in-list (take rs 3))] [i (in-naturals)])
     (check-true (prologos-error? r) (format "result ~a must be an error, got: ~v" i r)))
   (check-false (prologos-error? (last rs)) "the trailing control must define"))
 
@@ -135,6 +130,99 @@
   (check-equal? (length rs) 2 (format "expected 2 results, got: ~v" rs))
   (check-true (prologos-error? (first rs)))
   (check-false (prologos-error? (second rs)) "the file must continue"))
+
+;; ============================================================
+;; P2 — sibling no-:= chains form one scope; the tree spine defers
+;; ============================================================
+;; Part 1: `extract-let-binding-tokens` synthesizes `:=` for the bodyless
+;; no-:= shape, closing the normalize-vs-verbatim asymmetry with
+;; `split-last-let` (which always synthesized). Part 2: the tree-parser's
+;; let-chain arm DEFERS to preparse (a parse-error result, excluded from
+;; tree-by-line) — single let implementation, per the driver's own
+;; architecture comment.
+;;
+;; ⚠ Unspecced cases use CONCRETE ops (int+): generic `+` over an unannotated
+;; param is the documented issue-#70 limitation, unrelated to let. An earlier
+;; DEFERRED filing confused the two — its repro failed for the i70 reason, not
+;; the spine. Tests here control for it.
+
+(test-case "let-p2/sibling no-:= chain forms one scope (specced)"
+  ;; THE form 3 pin: was `let :=: expected := or : after name x` (a whole-file
+  ;; abort before P1, a per-command error after it).
+  (define rs (run-file-ws (string-append
+    "ns p2a\n"
+    "spec f Int -> Int\n"
+    "defn f [a]\n"
+    "  let x 4\n"
+    "  let y 5\n"
+    "  let z [+ x y]\n"
+    "    [+ a z]\n"
+    "[f 1]\n")))
+  (check-equal? (length rs) 2 (format "got: ~v" rs))
+  (for ([r (in-list rs)]) (check-false (prologos-error? r) (format "~v" r)))
+  (check-true (regexp-match? #rx"10" (format "~a" (second rs)))
+              (format "expected 10, got: ~v" (second rs))))
+
+(test-case "let-p2/mixed := and no-:= spellings in one chain (owner ruling 2)"
+  (define rs (run-file-ws (string-append
+    "ns p2b\n"
+    "spec f Int -> Int\n"
+    "defn f [a]\n"
+    "  let x 4\n"
+    "  let y := 5\n"
+    "    [+ a [+ x y]]\n"
+    "[f 1]\n")))
+  (for ([r (in-list rs)]) (check-false (prologos-error? r) (format "~v" r)))
+  (check-true (regexp-match? #rx"10" (format "~a" (second rs)))))
+
+(test-case "let-p2/UNSPECCED defns: both chains work — the spines agree"
+  ;; The tree spine used to win for unspecced forms with its own half-
+  ;; implemented let-chain; it now defers, so preparse's output (the single
+  ;; implementation) serves both regimes. Concrete ops per the i70 note above.
+  (define rs (run-file-ws (string-append
+    "ns p2c\n"
+    "defn g [a]\n"
+    "  let x := 4\n"
+    "  let y := 5\n"
+    "    [int+ a [int+ x y]]\n"
+    "[g 1]\n"
+    "defn h [a]\n"
+    "  let x 4\n"
+    "  let y 5\n"
+    "    [int+ a [int+ x y]]\n"
+    "[h 1]\n"
+    "defn k [a]\n"
+    "  let [x 5 y 6]\n"
+    "    [int+ a [int+ x y]]\n"
+    "[k 1]\n")))
+  (check-equal? (length rs) 6 (format "got: ~v" rs))
+  (for ([r (in-list rs)]) (check-false (prologos-error? r) (format "~v" r))))
+
+(test-case "let-p2/a standalone bodiless let is STILL an error, with containment"
+  ;; Drift risk 5: `(let x 4)` with no following body must not silently become
+  ;; a binding of nothing. Per-command (P1), so neighbors report.
+  (define rs (run-file-ws (string-append
+    "ns p2d\n"
+    "def before := 1\n"
+    "spec f Int -> Int\n"
+    "defn f [a]\n"
+    "  let x 4\n"
+    "def after := 2\n")))
+  (check-equal? (length rs) 3 (format "got: ~v" rs))
+  (check-false (prologos-error? (first rs)))
+  (check-true (prologos-error? (second rs)))
+  (check-false (prologos-error? (third rs))))
+
+(test-case "let-p2/merge normalization is byte-transparent for := inputs"
+  ;; Drift risk 1: the exact-output pins in test-defmacro cover preparse
+  ;; expansion; this pins the MERGE layer directly for a := chain (must be
+  ;; verbatim) vs a no-:= chain (synthesized).
+  (check-equal?
+   (merge-sibling-lets '((let a := 1) (let b := 2 (add a b))))
+   '((let (a := 1 b := 2) (add a b))))
+  (check-equal?
+   (merge-sibling-lets '((let a 1) (let b 2 (add a b))))
+   '((let (a := 1 b := 2) (add a b)))))
 
 (test-case "let-p1/working let forms are untouched (control)"
   ;; The := chain and the nested shorthand still work through the same seam.

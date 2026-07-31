@@ -5,12 +5,11 @@
 ;; as each phase lands (renumber the ;;N=> markers when uncommenting — they are
 ;; result indices). Everything live below runs at P0 (HEAD 13cce230 + P1).
 ;;
-;; ⚠ All defns here carry a spec DELIBERATELY: a spec makes the PREPARSE spine
-;; win at merge-form (driver.rkt). The tree spine's independent let-chain is
-;; BROKEN today (probe 2026-07-31: the := chain AND single := both fail in an
-;; UNSPECCED defn — typing dies on the tree spine's surf output). Filed in
-;; DEFERRED; a later phase makes the unspecced twin of §A work, and its pins
-;; join this file then.
+;; Specs on §A/§B defns keep those pins stable (spec injection). §C3 pins the
+;; UNSPECCED path — since P2 the tree spine DEFERS to preparse on let heads, so
+;; the two spines agree by construction. (The P0-era note here claimed the
+;; unspecced path was "broken"; that repro was issue #70 — generic ops over an
+;; unannotated param — wearing a let costume. Design doc §7.)
 
 ns letblocks
 
@@ -100,16 +99,43 @@ b2
 ;;13=> 13 : Int
 
 ;; ============================================================
-;; [P2] §C — sibling lets WITHOUT := form one scope
+;; §C — sibling lets WITHOUT := form one scope (P2)
 ;; ============================================================
-;; spec c1 Int -> Int
-;; defn c1 [a]
-;;   let x 4
-;;   let y 5
-;;   let z [+ x y]
-;;     [+ a z]
-;;
-;; [c1 1]                                    ;; expect 10 : Int
+
+spec c1 Int -> Int
+defn c1 [a]
+  let x 4
+  let y 5
+  let z [+ x y]
+    [+ a z]
+
+[c1 1]
+;;14=> c1 : Int -> Int defined.
+;;15=> 10 : Int
+
+;; C2: mixed spellings in one chain (owner ruling 2)
+spec c2 Int -> Int
+defn c2 [a]
+  let x 4
+  let y := 5
+    [+ a [+ x y]]
+
+[c2 1]
+;;16=> c2 : Int -> Int defined.
+;;17=> 10 : Int
+
+;; C3: UNSPECCED defn + chains — the two spines agree (P2 tree-defer).
+;; Concrete ops (int+) deliberately: generic `+` over an unannotated param is
+;; the DOCUMENTED issue-#70 limitation, unrelated to let — an earlier filing
+;; confused the two (see the design doc §7 correction).
+defn c3 [a]
+  let x 4
+  let y := 5
+    [int+ a [int+ x y]]
+
+[c3 1]
+;;18=> c3 : Int -> Int defined.
+;;19=> 10 : Int
 
 ;; ============================================================
 ;; [P3] §D — aligned multi-binding blocks (STRICT column discipline:
