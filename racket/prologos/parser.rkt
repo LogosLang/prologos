@@ -14,7 +14,13 @@
          "errors.rkt"
          "sexp-readtable.rkt"
          "macros.rkt"
-         "global-env.rkt")
+         "global-env.rkt"
+         ;; LET P4: the fused primitives moved here (the one definition —
+         ;; macros.rkt consumes them at the datum level, and this module
+         ;; requires macros.rkt, so they cannot live in this file).
+         (only-in "reader-forms.rkt"
+                  colon-symbol? digit-headed-colon-symbol?
+                  fused-type-annot? fused-annot->type-symbol))
 
 (provide parse-datum
          parse-toplevel-datum  ;; Rel T1 POL.9: command-position paren-goal dispatch
@@ -5634,10 +5640,10 @@
 ;; A colon-prefixed symbol like `:Int`. The WS reader renders a fused type
 ;; annotation's `:Type` as a SEPARATE colon-prefixed SYMBOL (not a Racket keyword);
 ;; sexp glues it into the preceding symbol. Rel Track 1 Aspect C, C.b.1.
-(define (colon-symbol? x)
-  (and (symbol? x)
-       (let ([s (symbol->string x)])
-         (and (> (string-length s) 0) (char=? (string-ref s 0) #\:)))))
+;; colon-symbol? — MOVED to reader-forms.rkt at LET P4 (macros.rkt needs it at
+;; the datum level and this module requires macros.rkt — the cycle). Imported
+;; below; the definition, its digit-headed sibling and fused-type-annot? live
+;; there as the ONE set of fused primitives.
 
 ;; ── Fused type annotations: the ONE pair of primitives (Rel T1 C.b.2 + POL.6) ──
 ;; `x:Int` reaches the parser in two shapes: WS splits it into `x` + the
@@ -5669,24 +5675,15 @@
 ;; The comment eight lines above warns that "a second copy is how the two paths
 ;; would drift". This predicate WAS that second copy; it is now derived from a
 ;; property instead of an enumeration, so it cannot drift from the recognizer.
-(define (digit-headed-colon-symbol? d)
-  (and (colon-symbol? d)
-       (let ([s (symbol->string d)])
-         (and (> (string-length s) 1) (char-numeric? (string-ref s 1))))))
+;; digit-headed-colon-symbol? — moved to reader-forms.rkt (LET P4).
 
-(define (fused-type-annot? d)
-  (and (colon-symbol? d)
-       (not (memq d '(:w :m)))              ;; the LETTER multiplicities
-       (not (digit-headed-colon-symbol? d)) ;; :0 :1 :7 :10 :127 … never a type
-       ))
+;; fused-type-annot? — moved to reader-forms.rkt (LET P4).
 
 ;; Build the type surf from a WS fused annotation datum (`:Int` → the surf for
 ;; `Int`), via parse-datum so it is IDENTICAL to what the spaced arm produces.
 ;; ctx-stx supplies srcloc context for datum->syntax.
 (define (fused-annot->type-surf annot-datum ctx-stx)
-  (parse-datum (datum->syntax ctx-stx
-                              (string->symbol
-                               (substring (symbol->string annot-datum) 1)))))
+  (parse-datum (datum->syntax ctx-stx (fused-annot->type-symbol annot-datum))))
 
 ;; sexp shape: split a possibly-glued `name:Type` symbol.
 ;; Returns (values name-symbol type-surf-or-#f error-or-#f):

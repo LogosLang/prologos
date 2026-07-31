@@ -19,7 +19,8 @@
          "../driver.rkt"
          "../global-env.rkt"
          "../namespace.rkt"
-         "../macros.rkt")
+         "../macros.rkt"
+         "../reader-forms.rkt")  ;; P4: split-glued-name-datum unit pins
 
 ;; ---- Shared prelude fixture (once per file; the path-selection pattern) ----
 (define-values (pre-global-env pre-ns-context pre-module-reg
@@ -64,15 +65,16 @@
 
 (test-case "let-p1/containment: commands before AND after a bad let still report"
   ;; The load-bearing pin: a broken let is ONE failed command. (Before P1 a
-  ;; bad let was a raw raise killing the WHOLE file.)
-  ;; (P3 flipped the aligned exemplar to WORKING; the fused form is the bad
-  ;; let until P4 — the flip-with-the-feature pattern, applied forward.)
+  ;; bad let was a raw raise killing the WHOLE file.) Exemplar history: aligned
+  ;; (graduated P3) → fused (graduated P4) → CHAINED annotation, which is a
+  ;; PERMANENT reject (reserve for UCS) — the flip-with-the-feature pattern
+  ;; ends here.
   (define rs (run-file-ws (string-append
     "ns c1\n"
     "def before := 1\n"
     "spec f Int -> Int\n"
     "defn f [a]\n"
-    "  let x:Int 4\n"
+    "  let x:A:B 4\n"
     "    [+ a x]\n"
     "def after := 2\n")))
   (check-equal? (length rs) 3 (format "expected 3 results, got: ~v" rs))
@@ -81,14 +83,15 @@
   (check-false (prologos-error? (third rs)) "`after` must define"))
 
 (test-case "let-p1/the still-broken form classes are parse errors, not raises"
-  ;; P1 pinned FOUR broken classes; the sibling no-:= chain graduated at P2,
-  ;; the aligned block at P3. Remaining: fused (P4's target) and top-level let
-  ;; (permanent guided error). Each per-command; the file reaches the control.
+  ;; P1 pinned FOUR broken classes; all four graduated (P2 sibling no-:=,
+  ;; P3 aligned, P4 fused). What remains is PERMANENT: the chained annotation
+  ;; (reserve for UCS) and top-level let (the guided error). Per-command; the
+  ;; file reaches the control.
   (define rs (run-file-ws (string-append
     "ns c2\n"
     "spec f2 Int -> Int\n"
     "defn f2 [a]\n"
-    "  let x:Int 4\n"
+    "  let x:A:B 4\n"
     "    [+ a x]\n"
     "let tl := 99\n"
     "def control := 7\n")))
@@ -100,12 +103,12 @@
 (test-case "let-p1/message text is preserved through the marker"
   ;; The messages predate P1 and are useful; the marker must not flatten them
   ;; into a generic string. Pin one per raise family.
+  ;; the standalone bodiless let: deterministic "unrecognized format" text.
   (define rs (run-file-ws (string-append
     "ns c3\n"
     "spec f Int -> Int\n"
     "defn f [a]\n"
-    "  let x:Int 4\n"
-    "    [+ a x]\n"
+    "  let x 4\n"
     "let tl := 99\n")))
   (check-equal? (length rs) 2)
   (check-true (regexp-match? #rx"unrecognized format"
@@ -338,6 +341,141 @@
     "d1\n")))
   (for ([r (in-list rs)]) (check-false (prologos-error? r) (format "~v" r)))
   (check-true (regexp-match? #rx"13" (format "~a" (second rs)))))
+
+;; ============================================================
+;; P4 — fused var:Type binders + multi-line values
+;; ============================================================
+;; The fused primitives moved to reader-forms.rkt (parser.rkt re-imports —
+;; ONE definition; macros.rkt could never import them from parser.rkt, the
+;; cycle). fused-type-annot? was HARDENED there: it accepted the bare `:` and
+;; `:=` (neither multiplicity-shaped), which made parse-assign-bindings's
+;; rewrite arm loop forever — caught live as a preparse hang.
+
+(test-case "let-p4/fused binders in every block form"
+  (define rs (run-file-ws (string-append
+    "ns p4a\n"
+    "spec e1 Int -> Int\n"
+    "defn e1 [a]\n"
+    "  let x:Int 4\n"
+    "      y:Int 5\n"
+    "    [+ a [+ x y]]\n"
+    "[e1 1]\n"
+    "spec e2 Int -> Int\n"
+    "defn e2 [a]\n"
+    "  let x:Int := 4\n"
+    "    [+ a x]\n"
+    "[e2 1]\n"
+    "spec e3 Int -> Int\n"
+    "defn e3 [a]\n"
+    "  let x:Int 4\n"
+    "  let y:Int := 5\n"
+    "    [+ a [+ x y]]\n"
+    "[e3 1]\n"
+    "spec e4 Int -> Int\n"
+    "defn e4 [a]\n"
+    "  let x:Int 4\n"
+    "    [+ a x]\n"
+    "[e4 1]\n")))
+  (for ([r (in-list rs)]) (check-false (prologos-error? r) (format "~v" r)))
+  (check-equal? (length rs) 8))
+
+(test-case "let-p4/the fused annotation is REAL — a wrong type errors"
+  (define rs (run-file-ws (string-append
+    "ns p4b\n"
+    "spec f Int -> Int\n"
+    "defn f [a]\n"
+    "  let x:String 4\n"
+    "    [+ a x]\n"
+    "def control := 7\n")))
+  (check-equal? (length rs) 2)
+  (check-true (prologos-error? (first rs)) (format "~v" (first rs)))
+  (check-false (prologos-error? (second rs)) "containment"))
+
+(test-case "let-p4/multiplicity annotations and keyword values do NOT fuse"
+  ;; :0-style tokens are multiplicities (digit-headed, structural exclusion);
+  ;; a keyword VALUE after := is data, not an annotation.
+  (define rs (run-file-ws (string-append
+    "ns p4c\n"
+    "def m4 := [fn [x :0 Int] 7]\n"
+    "spec m5 Int -> Keyword\n"
+    "defn m5 [a]\n"
+    "  let k := :foo\n"
+    "    k\n"
+    "[m5 1]\n")))
+  (for ([r (in-list rs)]) (check-false (prologos-error? r) (format "~v" r))))
+
+(test-case "let-p4/sexp glued x:Int splits (ruling 3); module paths never split"
+  ;; sexp mode: `(let x:Int 4 body)` used to bind a variable literally named
+  ;; |x:Int|. It is now the annotated binding, matching defn's sexp path.
+  ;; run through THIS file's fixture (mixing test-support's run-ns-* fixture
+  ;; with ours trips the two-context class: net-cell-reset unknown cell).
+  (define r
+    (last
+     (parameterize ([current-file-module-network-ref
+                     (module-network-add-import (make-module-network)
+                                                (module-network-from-snapshot pre-global-env))]
+                    [current-ns-context pre-ns-context]
+                    [current-module-registry pre-module-reg]
+                    [current-trait-registry pre-trait-reg]
+                    [current-impl-registry pre-impl-reg]
+                    [current-param-impl-registry pre-param-impl-reg])
+       (process-string "(ns p4d)\n(def g (fn (a : Int) (let x:Int (suc zero) x)))"))))
+  (check-false (prologos-error? r) (format "~v" r))
+  ;; the datum-level splitter: module paths (empty segments) pass through
+  (define-values (n1 t1 e1) (split-glued-name-datum 'x:Int))
+  (check-equal? (list n1 t1 e1) '(x Int #f))
+  (define-values (n2 t2 e2) (split-glued-name-datum 'str::length))
+  (check-equal? (list n2 t2 e2) '(str::length #f #f))
+  (define-values (n3 t3 e3) (split-glued-name-datum 'x:A:B))
+  (check-true (string? e3) "chained must reject"))
+
+(test-case "let-p4/multi-line values — the absorb path (bracket ends the extent)"
+  ;; A multi-line bracket in the head binding's value ends the let's form
+  ;; extent at the reader; the continuation lines land as SIBLINGS and are
+  ;; absorbed back. Without the absorb pass this silently applied y to 5.
+  (define rs (run-file-ws (string-append
+    "ns p4e\n"
+    "spec m1 Int -> Int\n"
+    "defn m1 [a]\n"
+    "  let x [+ 1\n"
+    "         3]\n"
+    "      y 5\n"
+    "    [+ a [+ x y]]\n"
+    "[m1 1]\n")))
+  (for ([r (in-list rs)]) (check-false (prologos-error? r) (format "~v" r)))
+  (check-true (regexp-match? #rx"10" (format "~a" (second rs)))))
+
+(test-case "let-p4/multi-line values — an ANNOTATED match value works end-to-end"
+  ;; The deeper-than-binding-col fold puts a multi-line match INSIDE the
+  ;; binding's value. Annotated, it checks (check-mode reaches check-reduce);
+  ;; UNANNOTATED it still hits the documented QTT infer-position debt
+  ;; (generic "Multiplicity violation") — the boundary is typing-side, not
+  ;; layout-side, and is tracked in the QTT close notes.
+  (define rs (run-file-ws (string-append
+    "ns p4f\n"
+    "spec m3 Int -> Int\n"
+    "defn m3 [a]\n"
+    "  let k : Int := match a\n"
+    "                   | 1 -> 10\n"
+    "                   | m -> m\n"
+    "      j 5\n"
+    "    [+ a [+ k j]]\n"
+    "[m3 1]\n")))
+  (for ([r (in-list rs)]) (check-false (prologos-error? r) (format "~v" r)))
+  (check-true (regexp-match? #rx"16" (format "~a" (second rs)))
+              (format "got: ~v" (second rs))))
+
+(test-case "let-p4/chained fused annotation rejects with guidance"
+  (define rs (run-file-ws (string-append
+    "ns p4g\n"
+    "spec f Int -> Int\n"
+    "defn f [a]\n"
+    "  let x:A:B 4\n"
+    "    [+ a x]\n"
+    "def control := 7\n")))
+  (check-equal? (length rs) 2)
+  (check-true (prologos-error? (first rs)))
+  (check-false (prologos-error? (second rs)) "containment"))
 
 (test-case "let-p1/working let forms are untouched (control)"
   ;; The := chain and the nested shorthand still work through the same seam.

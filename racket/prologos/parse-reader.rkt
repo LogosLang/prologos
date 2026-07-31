@@ -2569,18 +2569,39 @@
   (define lst (syntax->list stx))
   (if (not lst)
       stx
-      (let* ([kids (map transform-let-blocks-stx lst)]
+      (let* ([kids0 (map transform-let-blocks-stx lst)]
+             [kids (absorb-let-siblings kids0)]
              [kids* (if (let-headed? kids) (classify-let-block kids) kids)])
-        (if (and (eq? kids* kids) (andmap eq? kids lst))
+        (if (and (eq? kids* kids) (eq? kids kids0) (andmap eq? kids0 lst))
             stx
             (datum->syntax #f kids* stx stx)))))
 
 ;; Entry point for a top-level form's element list (tree-node->stx-elements).
 (define (transform-let-blocks-elems elems)
-  (define elems* (map transform-let-blocks-stx elems))
+  (define elems* (absorb-let-siblings (map transform-let-blocks-stx elems)))
   (if (let-headed? elems*) (classify-let-block elems*) elems*))
 
 ;; Classify a let-headed element list; return the (possibly rewritten) list.
+;;
+;; LET P4 refinement (multi-line values — owner request): the column model is
+;; now the FULL original design rule. Continuation lines partition by column:
+;;   body-col     = the SHALLOWEST continuation column (> the let column);
+;;                  exactly ONE line sits there, and it must be LAST;
+;;   binding-col  = the SECOND-shallowest;
+;;   anything DEEPER than binding-col is a CONTINUATION of the nearest
+;;                  preceding binding line (or of the head binding) and FOLDS
+;;                  into that binding's value — this is what makes
+;;                      let k := match a
+;;                                 | 1 -> 10   ← deeper: k's value continues
+;;                                 | m -> m
+;;                          j 5
+;;                        body
+;;                  work: the arms fold into k's group.
+;; The pipe exclusion refines with it: a `$pipe`-headed line DEEPER than
+;; binding-col is a value continuation (folded, fine); a pipe AT binding-col or
+;; body-col is arm syntax (a match body / legacy layout) → deactivate,
+;; untouched. With only ONE distinct continuation column the old rules stand
+;; (no-body error / legacy shapes).
 (define (classify-let-block elems)
   (define let-tok (car elems))
   (define let-line (syntax-line let-tok))
@@ -2597,56 +2618,169 @@
        ;; nested shorthand, bracket lets with one body line, sibling := chains)
        ;; — untouched, byte-transparent.
        [(< (length cont-elems) 2) elems]
-       ;; pipe-headed continuation: a match/arm body — never bindings.
-       [(ormap let-block-pipe-headed? cont-elems) elems]
        ;; bracket-binding head (car of head-elems is a group) or empty head:
        ;; not the aligned surface.
        [(or (null? head-elems) (pair? (syntax-e (car head-elems)))) elems]
        [else
-        (define bcol (syntax-column (car cont-elems)))
-        (define body-cands
-          (filter (lambda (e) (and (> (syntax-column e) let-col)
-                                   (< (syntax-column e) bcol)))
-                  cont-elems))
-        (define binding-lines
-          (filter (lambda (e) (= (syntax-column e) bcol)) cont-elems))
-        (define stray
-          (filter (lambda (e) (and (not (memq e body-cands))
-                                   (not (memq e binding-lines))))
-                  cont-elems))
+        (define cols (sort (remove-duplicates (map syntax-column cont-elems)) <))
+        (define body-col (car cols))
+        (define bcol (if (pair? (cdr cols)) (cadr cols) #f))
         (define (fail msg) (let-block-error let-tok msg))
         (cond
-          ;; No body signature AND no strays: the forgot-the-body shape.
-          [(and (null? body-cands) (null? stray))
-           (fail (format
-                  "let block has no body — expected a line indented between column ~a (the `let`) and column ~a (the bindings)"
-                  let-col bcol))]
-          [(pair? stray)
-           (fail (format
-                  "let block mis-indent at column ~a — bindings align at column ~a; the body sits strictly between column ~a (the `let`) and column ~a"
-                  (syntax-column (car stray)) bcol let-col bcol))]
-          [(> (length body-cands) 1)
-           (fail (format
-                  "let block has ~a body lines at columns between ~a and ~a — exactly one body line is allowed"
-                  (length body-cands) let-col bcol))]
-          [(not (eq? (car body-cands) (last cont-elems)))
-           (fail (format
-                  "let block bindings appear AFTER the body line — the body (column between ~a and ~a) must be last"
-                  let-col bcol))]
-          [(ormap (lambda (e) (not (pair? (syntax-e e)))) binding-lines)
-           (fail (format
-                  "let block binding line at column ~a needs a name and a value (e.g. `y 5` or `y := 5`)"
-                  bcol))]
+          ;; ONE distinct column only: bindings with no body (the forgot-body
+          ;; shape) — unless pipes live there (arm syntax → untouched).
+          [(not bcol)
+           (cond
+             [(ormap let-block-pipe-headed? cont-elems) elems]
+             [(<= body-col let-col) elems]
+             [else
+              (fail (format
+                     "let block has no body — expected a line indented between column ~a (the `let`) and column ~a (the bindings)"
+                     let-col body-col))])]
+          ;; Pipes at the body or binding column = arm syntax → untouched.
+          [(ormap (lambda (e) (and (let-block-pipe-headed? e)
+                                   (<= (syntax-column e) bcol)))
+                  cont-elems)
+           elems]
+          [(<= body-col let-col) elems]
           [else
-           (define body (car body-cands))
-           (define groups
-             (cons (datum->syntax #f head-elems let-tok)  ;; the head-line binding
-                   binding-lines))
-           (list let-tok
-                 (datum->syntax #f (cons (datum->syntax #f '$let-block let-tok)
-                                         groups)
-                                let-tok)
-                 body)])])]))
+           ;; FOLD deeper-than-bcol continuations into the nearest preceding
+           ;; binding (or the head binding). Walk in order, accumulating.
+           (define-values (head-extra bindings-rev body-cands)
+             (for/fold ([hx '()] [br '()] [bc '()])
+                       ([e (in-list cont-elems)])
+               (define c (syntax-column e))
+               (cond
+                 [(> c bcol)
+                  ;; value continuation: attach to the last binding, or the
+                  ;; head binding when no binding line has appeared yet.
+                  (if (null? br)
+                      (values (cons e hx) br bc)
+                      (values hx (cons (cons e (car br)) (cdr br)) bc))]
+                 [(= c bcol) (values hx (cons (list e) br) bc)]
+                 [else       (values hx br (cons e bc))])))
+           (define binding-lines
+             (map (lambda (grp) (reverse grp)) (reverse bindings-rev)))
+           (define bodies (reverse body-cands))
+           (cond
+             [(null? bodies)
+              (fail (format
+                     "let block has no body — expected a line indented between column ~a (the `let`) and column ~a (the bindings)"
+                     let-col bcol))]
+             [(> (length bodies) 1)
+              (fail (format
+                     "let block has ~a body lines at columns between ~a and ~a — exactly one body line is allowed"
+                     (length bodies) let-col bcol))]
+             [(not (eq? (car bodies) (last cont-elems)))
+              (fail (format
+                     "let block bindings appear AFTER the body line — the body (column between ~a and ~a) must be last"
+                     let-col bcol))]
+             [(ormap (lambda (grp) (and (= (length grp) 1)
+                                        (not (pair? (syntax-e (car grp))))))
+                     binding-lines)
+              (fail (format
+                     "let block binding line at column ~a needs a name and a value (e.g. `y 5` or `y := 5`)"
+                     bcol))]
+             [else
+              (define body (car bodies))
+              ;; A binding line with folded continuations becomes one group:
+              ;; the line's own elements spliced with its continuation lines.
+              (define (line-group grp)
+                (define base (car grp))
+                (define extra (cdr grp))
+                (if (null? extra)
+                    base
+                    (datum->syntax #f (append (syntax->list base) extra) base base)))
+              (define head-group
+                (datum->syntax #f (append head-elems (reverse head-extra))
+                               let-tok))
+              (define groups (cons head-group (map line-group binding-lines)))
+              (list let-tok
+                    (datum->syntax #f (cons (datum->syntax #f '$let-block let-tok)
+                                            groups)
+                                   let-tok)
+                    body)])])])]))
+
+;; LET P4: absorb ALIGNED SIBLINGS into a bodiless let group. A multi-line
+;; bracket in the HEAD binding's value ends the let's form extent at the
+;; reader, so its continuation lines land as SIBLINGS of the let group:
+;;     let x [+ 1
+;;            3]        ← bracket closes the extent
+;;         y 5          ← sibling of (let x (+ 1 3)), NOT a child
+;;       [+ a [+ x y]]
+;; Without this pass the P2 bodiless-merge would fuse `(let x (+ 1 3))` with
+;; the NEXT sibling as its body — silently applying y to 5. Absorption is
+;; gated hard: the let group must be BODILESS-shaped (a complete let absorbs
+;; nothing), and only siblings on LATER lines at columns STRICTLY DEEPER than
+;; the let's own are taken (a sibling `let` at the same column — the := chain
+;; — is never absorbed).
+(define (let-group-bodiless? g)
+  (define d (syntax->datum g))
+  (and (list? d) (pair? d) (eq? (car d) 'let)
+       (let ([rest (cdr d)])
+         (cond
+           [(memq ':= rest)
+            (let loop ([i 0] [l rest])
+              (cond [(null? l) #f]
+                    [(eq? (car l) ':=) (= (length l) 2)]
+                    [else (loop (add1 i) (cdr l))]))]
+           [else (= (length rest) 2)]))))
+
+(define (let-group-last-line g)
+  (define lst (syntax->list g))
+  (and lst (pair? lst)
+       (for/fold ([m (syntax-line g)]) ([e (in-list lst)])
+         (define l (syntax-line e))
+         (if (and l m (> l m)) l m))))
+
+;; eq?-preserving: when nothing absorbs, the ORIGINAL list object returns
+;; (the identity guard in transform-let-blocks-stx depends on it).
+(define (absorb-let-siblings elems)
+  (define out (absorb-let-siblings* elems))
+  (if (and (= (length out) (length elems)) (andmap eq? out elems))
+      elems
+      out))
+
+(define (absorb-let-siblings* elems)
+  (let loop ([es elems] [acc '()])
+    (cond
+      [(null? es) (reverse acc)]
+      [(let* ([g (car es)]
+              [lst (and (syntax? g) (syntax->list g))])
+         (and lst (pair? lst)
+              (let ([h (syntax-e (car lst))])
+                (and (symbol? h) (eq? h 'let)))
+              (syntax-line g) (syntax-column g)
+              (let-group-bodiless? g)
+              (pair? (cdr es))))
+       (define g (car es))
+       (define gcol (syntax-column g))
+       (define gline (let-group-last-line g))
+       (define-values (absorbed remaining)
+         (let take ([rest (cdr es)] [got '()] [prev-line gline])
+           (cond
+             [(null? rest) (values (reverse got) '())]
+             [(let ([e (car rest)])
+                (and (syntax-line e) (syntax-column e)
+                     (> (syntax-line e) prev-line)
+                     (> (syntax-column e) gcol)))
+              (take (cdr rest) (cons (car rest) got)
+                    (or (let-group-last-line (car rest))
+                        (syntax-line (car rest))))]
+             [else (values (reverse got) rest)])))
+       (cond
+         ;; Need at least binding/body structure to be worth absorbing —
+         ;; a single absorbed element is the nested-body shape the P2 merge
+         ;; already handles; leave it.
+         [(< (length absorbed) 2)
+          (loop (cdr es) (cons g acc))]
+         [else
+          (define fat
+            (datum->syntax #f (append (syntax->list g) absorbed) g g))
+          (define fat* (let ([kids (syntax->list fat)])
+                         (datum->syntax #f (classify-let-block kids) fat fat)))
+          (loop remaining (cons fat* acc))])]
+      [else (loop (cdr es) (cons (car es) acc))])))
 
 ;; Flatten a node into a list of items: token-entries and 'indent-open/'indent-close markers.
 ;; Child line nodes are wrapped in indent-open/indent-close pairs.

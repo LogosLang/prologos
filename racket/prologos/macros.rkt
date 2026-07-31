@@ -21,6 +21,7 @@
          racket/string
          racket/set
          "reader-forms.rkt"     ;; D4.P1b-iii: THE reader-form-head registry (see below)
+                                ;; + LET P4: the fused-annotation primitives
          "syntax.rkt"           ;; Phase 7: expr-fvar?, expr-app? for capability-type-expr?
          "surface-syntax.rkt"
          "source-location.rkt"
@@ -2352,6 +2353,10 @@
            ;; form `(let (x 5 y 6))` has a LIST car and must stay non-bodyless.
            [(and (= (length rest) 2) (symbol? (car rest)))
             #t]
+           ;; LET P4: (let name :Type value) — the fused bodyless shape.
+           [(and (= (length rest) 3) (symbol? (car rest))
+                 (fused-type-annot? (cadr rest)))
+            #t]
            ;; (let [bindings] body) — has body, not bodyless
            ;; (let name value body) — has body, not bodyless
            [else #f]))))
@@ -2413,15 +2418,28 @@
 ;; $let-block branch and split-last-let's $let-block arm (the sibling-merge
 ;; path); a third copy would be the exact normalize-drift that broke the no-:=
 ;; chains before P2.
-;;   (name value)          → (name := value)
+;;   (name value…)         → (name := value…)   [P4: multi-token values — a
+;;                            folded multi-line value like `k match a (arms…)`]
 ;;   (name := value …)     → verbatim
 ;;   (name : T … := v)     → verbatim
-;;   anything else         → guided error (fused `name:T` arrives at P4)
+;;   (name :T value…)      → (name : T := value…)   [P4: fused annotation]
+;;   anything else         → guided error
 (define (normalize-let-binding-group g)
   (cond
     [(and (list? g) (memq ':= g)) g]
-    [(and (list? g) (= (length g) 2) (symbol? (car g)))
-     (list (car g) ':= (cadr g))]
+    ;; P4 fused: `x:Int 4` arrives as `x` `:Int` `4…` (the reader splits the
+    ;; token; same shape as defn's POL.6 params). Mult annotations (:0/:1/:w/:m)
+    ;; are excluded by fused-type-annot?, chained annotations rejected.
+    [(and (list? g) (>= (length g) 3) (symbol? (car g))
+          (fused-type-annot? (cadr g)))
+     (when (and (>= (length g) 4) (fused-type-annot? (caddr g)))
+       (let-syntax-error
+        "let: chained type annotation on ~a not supported (reserve for UCS)"
+        (car g)))
+     (append (list (car g) ': (fused-annot->type-symbol (cadr g)) ':=)
+             (cddr g))]
+    [(and (list? g) (>= (length g) 2) (symbol? (car g)))
+     (cons (car g) (cons ':= (cdr g)))]
     [else
      (let-syntax-error
       "let block binding must be `name value`, `name := value`, or `name : T := value`, got ~a"
@@ -4873,11 +4891,27 @@
      (expand-let-inline-assign rest)]
 
     ;; --- Branch 3: Legacy shorthand — (let name value body) ---
+    ;; LET P4 (ruling 3): a glued sexp name `x:Int` splits into the annotated
+    ;; binding (it used to bind a variable literally NAMED `x:Int` — a silent
+    ;; WS/sexp divergence). Module paths never split; chained rejects.
     [(and (= (length rest) 3) (symbol? (car rest)))
-     (define name (car rest))
+     (define-values (name glued-ty glued-err)
+       (split-glued-name-datum (car rest)))
+     (when glued-err (let-syntax-error "let: ~a" glued-err))
      (define value (cadr rest))
      (define body (caddr rest))
-     `((fn (,name : _) ,body) ,value)]
+     `((fn (,name : ,(or glued-ty '_)) ,body) ,value)]
+
+    ;; --- Branch 3f (LET P4): WS fused nested — (let name :Type value body) ---
+    ;; The reader splits `let x:Int 4` into `x` + `:Int`; with a deeper body
+    ;; line this arrives as a 4-element rest. Same desugar, type carried.
+    [(and (= (length rest) 4) (symbol? (car rest))
+          (fused-type-annot? (cadr rest)))
+     (define name (car rest))
+     (define ty (fused-annot->type-symbol (cadr rest)))
+     (define value (caddr rest))
+     (define body (cadddr rest))
+     `((fn (,name : ,ty) ,body) ,value)]
 
     ;; --- Branch 4: Legacy angle-type format — (let name ($angle-type T) value body) ---
     [(and (>= (length rest) 4)
@@ -4984,10 +5018,36 @@
     [else
      (unless (symbol? (car tokens))
        (let-syntax-error "let :=: expected variable name, got ~a" (car tokens)))
-     (define name (car tokens))
-     (define after-name (cdr tokens))
+     ;; LET P4 (ruling 3): a GLUED sexp name `x:Int` splits into name + type,
+     ;; matching defn's sexp path — it used to bind a variable literally named
+     ;; `x:Int` (a silent WS/sexp divergence). Module paths (`str::length`)
+     ;; produce empty segments and never split; chained (`x:A:B`) rejects.
+     (define-values (name0 glued-ty glued-err)
+       (split-glued-name-datum (car tokens)))
+     (when glued-err (let-syntax-error "let: ~a" glued-err))
+     (define name name0)
+     (define after-name
+       (if glued-ty
+           (cons ': (cons glued-ty (cdr tokens)))  ;; lower onto the typed arm
+           (cdr tokens)))
      ;; Check for optional type annotation: : T1 T2 ... :=
      (cond
+       ;; LET P4: the WS fused shape — `name :Type value…` or
+       ;; `name :Type := value…`. Lower onto the spaced-typed arm below by
+       ;; rewriting `:Type` → `: Type`, inserting `:=` when absent.
+       [(and (pair? after-name) (fused-type-annot? (car after-name)))
+        (when (and (pair? (cdr after-name))
+                   (fused-type-annot? (cadr after-name)))
+          (let-syntax-error
+           "let: chained type annotation on ~a not supported (reserve for UCS)"
+           name))
+        (define ty (fused-annot->type-symbol (car after-name)))
+        (define after-ty (cdr after-name))
+        (define rewritten
+          (if (and (pair? after-ty) (eq? (car after-ty) ':=))
+              (append (list name ': ty) after-ty)
+              (append (list name ': ty ':=) after-ty)))
+        (parse-assign-bindings rewritten)]
        ;; name := value ... — no type annotation
        [(and (pair? after-name) (eq? (car after-name) ':=))
         (define after-assign (cdr after-name))
@@ -5069,7 +5129,11 @@
             (not (eq? (car rest) ':=))
             (pair? (cdr rest))
             (or (eq? (cadr rest) ':=)
-                (eq? (cadr rest) ':)))
+                (eq? (cadr rest) ':)
+                ;; LET P4: `name :Type …` starts a binding too (the WS fused
+                ;; shape) — without this a fused binding after a := binding is
+                ;; swallowed into the previous value.
+                (fused-type-annot? (cadr rest))))
        (values (take tokens i) rest)]
       [else
        (loop (+ i 1) (cdr rest))])))
