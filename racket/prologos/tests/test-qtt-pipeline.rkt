@@ -321,6 +321,86 @@
     (check-equal? (hash-ref (error->diagnostic r) 'code) "E1003" src)))
 
 ;; ========================================
+;; The QTT guard is GONE: Vec / Fin / foreign defs are checked (QTT P5)
+;; ========================================
+;; `contains-unsupported-qtt?` used to make the driver SKIP checkQ-top for any
+;; def whose body contained a Vec/Fin constructor or eliminator, or a foreign-fn
+;; value. It is deleted; these pin that such defs now go THROUGH the gate rather
+;; than around it. Before P5 there was no driver-path Vec/Fin test at all — the
+;; existing ones drive typing-core directly and never touch the gate.
+
+(test-case "qtt-guard/Vec defs pass the gate rather than skipping it"
+  (check-equal? (run-first "(def v <(Vec Nat zero)> (vnil Nat))")
+                "v : [Vec Nat 0N] defined.")
+  (check-equal?
+   (run-first "(def v1 <(Vec Nat (suc zero))> (vcons Nat zero zero (vnil Nat)))")
+   "v1 : [Vec Nat 1N] defined."))
+
+(test-case "qtt-guard/Fin defs pass the gate"
+  (check-equal? (run-first "(def i0 <(Fin (suc zero))> (fzero zero))")
+                "i0 : [Fin 1N] defined.")
+  (check-equal?
+   (run-first "(def i1 <(Fin (suc (suc zero)))> (fsuc (suc zero) (fzero zero)))")
+   "i1 : [Fin 2N] defined."))
+
+(test-case "qtt-guard/a linear value consed TWICE into a Vec is now an error"
+  ;; THE point of the retirement: this def used to skip QTT entirely and be
+  ;; accepted. `y` is linear and stored in both the head and the tail.
+  (define result
+    (run-first
+     (string-append
+      "(def dupvec <(Pi [y :1 <Nat>] (Vec Nat (suc (suc zero))))> "
+      "(fn [y :1 <Nat>] (vcons Nat (suc zero) y (vcons Nat zero y (vnil Nat)))))")))
+  (check-true (multiplicity-error? result)
+              (format "consing a linear value twice must violate; got: ~v" result)))
+
+(test-case "qtt-guard/consing a linear value ONCE is fine"
+  ;; The positive control for the negative above — the arm must not simply
+  ;; reject everything Vec-shaped.
+  (check-false
+   (multiplicity-error?
+    (run-first
+     (string-append
+      "(def okvec <(Pi [y :1 <Nat>] (Vec Nat (suc zero)))> "
+      "(fn [y :1 <Nat>] (vcons Nat zero y (vnil Nat))))")))))
+
+(test-case "qtt-guard/vindex counts its INDEX as well as the vector"
+  ;; A linear Fin index used once is fine; the vector is unrestricted here.
+  (check-false
+   (multiplicity-error?
+    (run-first
+     (string-append
+      "(def idx1 <(Pi [i :1 <(Fin (suc zero))>] Nat)> "
+      "(fn [i :1 <(Fin (suc zero))>] "
+      "(vindex Nat (suc zero) i (vcons Nat zero zero (vnil Nat)))))")))))
+
+(test-case "qtt-guard/a capture-bearing racket block is checked, and passes"
+  ;; Capture-bearing blocks desugar to (app (foreign-fn ...) cap ...) and are
+  ;; the only in-tree defs that actually carried an expr-foreign-fn past the
+  ;; old guard. Top-level captures contribute no usage, so they stay green.
+  (check-true
+   (string-contains?
+    (format "~a"
+            (run-ns-last
+             (string-append
+              "(def n : Nat (suc (suc zero)))\n"
+              "(def r : Nat racket{(add1 n)} (n : Nat) -> (r : Nat))\n(eval r)")))
+    "3N")))
+
+(test-case "qtt-guard/capturing a LINEAR variable in a racket block errors"
+  ;; The capture desugar builds each capture binder at 'mw (foreign code may use
+  ;; a capture any number of times), so a linear local captured into a block is
+  ;; correctly rejected. Newly reachable now that foreign-fn defs pass the gate —
+  ;; nothing covered this before.
+  (define result
+    (run-ns-last
+     (string-append
+      "(def f <(Pi [y :1 <Nat>] Nat)> "
+      "(fn [y :1 <Nat>] racket{(add1 y)} (y : Nat) -> (r : Nat)))")))
+  (check-true (prologos-error? result)
+              (format "capturing a linear var must error; got: ~v" result)))
+
+;; ========================================
 ;; Regression guards: existing functionality still works
 ;; ========================================
 

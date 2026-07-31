@@ -15,6 +15,55 @@ Deferral".
 
 ---
 
+## Residuals from QTT P5 (the guard retirement) — filed 2026-07-30
+
+P5 (`9f0ddede` + `d0ee0eb1`) armed the 8 nodes and DELETED
+`contains-unsupported-qtt?`. Four things surfaced and were deliberately not
+fixed in that commit:
+
+1. **`expr-vindex` is STUCK** — `whnf` has computation rules for `vhead`/`vtail`
+   on a canonical `vcons` (reduction.rkt) but NONE for `vindex`, which appears
+   only as an `nf` congruence arm. So `vindex` now type-checks and
+   multiplicity-checks but does not compute. Pre-existing, unrelated to QTT;
+   filed so "Vec is supported now" is not over-read.
+2. **Vec/Fin nodes have no `pnet-serialize` registration** — zero `reg!`/
+   `auto-cache!` entries for the 7 constructor/eliminator nodes. Harmless today
+   (no cached module contains one), but the moment a lib or user module caches a
+   Vec term the reader's unknown-tag fallback returns a raw VECTOR impostor that
+   fails a struct match arbitrarily far away — `pipeline.md` item 6's documented
+   misleading-failure class. P5 is the natural trigger point because it makes
+   Vec/Fin defs pass the gate for the first time.
+3. **The Redex model has no QTT rules for Vec/Fin** — `redex/qtt.rkt` has
+   grammar/typing/reduction for them but zero usage rules, so P5's seven usage
+   rules ship spec-unbacked. The soundness property stays vacuously true (nothing
+   breaks), which is exactly why this would drift silently.
+4. **`expr-foreign-fn`'s type is arity-wrong once `args` is non-empty** — both
+   `typing-core`'s infer arm and P5's QTT twin return the FULL registered Pi
+   rather than the remainder after `(length args)` applications. They agree with
+   each other, so this is twin-parity, not drift; fixing it means fixing both.
+   Reachable only via the hole-section `whnf` path.
+
+## 🐛 LATENT — `expr-foreign-fn` is treated as a closed leaf by `shift`/`subst` but ACCUMULATES Prologos exprs (found 2026-07-30)
+
+`substitution.rkt`'s `shift` and `subst` both have
+`[(expr-foreign-fn _ _ _ _ _ _ _ _) e]` with the comment *"opaque leaf — no
+Prologos sub-expressions"*. That comment is FALSE: `reduction.rkt`'s partial-
+application arm appends whnf'd argument expressions into the `args` field and
+returns the updated node when arity is not yet reached. So a node reachable
+under a binder could hold an open term that `subst` then refuses to descend.
+
+This is the exact shape `pipeline.md` § "Exhaustive Walkers" documents (the
+`expr-champ` "closed leaf" comment asserting an invariant nothing enforced ⇒
+beta silently drops arguments / `shift` never renumbers ⇒ capture).
+
+**Probed, NOT reproducible** at `9c75e046`: a partially-applied 2-ary foreign
+under a lambda (`def g := [fn [x : String] [append x "!"]]`, then `[g "hi"]`),
+and a top-level partial (`def p := [append "pre-"]` then `[p "post"]`), both give
+correct values — the accumulation does not survive to a substitution point in
+practice, because substitution happens on the enclosing `expr-app` before `whnf`
+ever builds the partial. So: a live tripwire, not a live bug. Worth either
+enforcing the invariant or descending `args` in both walkers.
+
 ## ✅ RULED + SHIPPED — `m0 ⊔ m1`: a linear resource MUST be consumed on every path (2026-07-30)
 
 **Owner ruled option 3; implemented in QTT P3 (`3a4d521a`).** Kept here rather

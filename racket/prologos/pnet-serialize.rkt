@@ -149,7 +149,17 @@
 ;; now fail keeps loading from cache, and the suite can be green on a warm tree
 ;; while a cold clone or CI hits the new errors. `pnet-stale?` /
 ;; `infrastructure-stale?` cannot sweep this class; exact equality can.
-(define PNET_VERSION 7)
+;; v7 -> v8 (QTT P5, 2026-07-30): `contains-unsupported-qtt?` is DELETED, so the
+;; driver no longer skips multiplicity checking for defs containing Vec/Fin
+;; constructors, their eliminators, or a foreign-fn value. Same SEMANTIC-VALIDITY
+;; class as v6->v7 and as (b) POISON INVALIDATION above: on a cache HIT the driver
+;; deserializes and never elaborates, so the QTT gate never runs — 24 of the 40
+;; .pnet files on disk carry serialized expr-foreign-fn structs (including modules
+;; with no foreign decl of their own, via env snapshots), every one written while
+;; those bodies were QTT-SKIPPED. Without the bump a module that should newly fail
+;; keeps loading from cache, and the suite is green on a warm tree while a cold
+;; clone or CI hits the new errors. Exact equality is the only reliable sweep.
+(define PNET_VERSION 8)
 
 ;; ============================================================
 ;; Serialization: struct->vector + gensym tagging + foreign-proc
