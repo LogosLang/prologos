@@ -21,7 +21,9 @@
          "../global-env.rkt"
          "../namespace.rkt"
          "../macros.rkt"
-         "../metavar-store.rkt")
+         "../metavar-store.rkt"
+         ;; QTT P4: pins the message-text → LSP diagnostic-code coupling (E1003)
+         (only-in "../lsp/diagnostics.rkt" error->diagnostic))
 
 ;; Helper: run prologos code in a fresh environment
 (define (run s)
@@ -256,6 +258,67 @@
       "(let a : Nat := (suc zero) (match a (zero -> zero) (suc _ -> a))))")))
   (check-false (multiplicity-error? result)
                (format "let-bound match must not violate; got: ~v" result)))
+
+;; ========================================
+;; The multiplicity message says what actually went wrong (QTT P4, 2026-07-30)
+;; ========================================
+;; `multiplicity-error`'s Variable / Declared / Actual fields always existed and
+;; always rendered — they were filled with the string LITERALS "declared" and
+;; "actual", and Variable got the entire pretty-printed body. P4 computes real
+;; values via `explain-qtt-failure` (qtt.rkt, beside the rules it reproduces).
+;;
+;; The detail is asserted on the MESSAGE, deliberately: tools/run-file.rkt and
+;; the `;;N=>` acceptance harness print `prologos-error-message` ALONE, so detail
+;; living only in the struct fields is invisible to users. The first draft did
+;; exactly that and these assertions are what pin it.
+
+(define (qtt-msg s) (prologos-error-message (run-first s)))
+
+(test-case "qtt-msg/linear-used-twice names the parameter and both multiplicities"
+  (define m (qtt-msg "(def dup <(Pi [x :1 <Nat>] Nat)> (fn [x :1 <Nat>] (natrec (fn [_ <Nat>] Nat) x (fn [_ <Nat>] (fn [r <Nat>] (suc r))) x)))"))
+  (check-true (regexp-match? #rx"Multiplicity violation" m) m)   ;; LSP trigger
+  (check-true (regexp-match? #rx"declared" m) m)
+  (check-true (regexp-match? #rx"linear" m) m)
+  (check-true (regexp-match? #rx"used more than once" m) m)
+  ;; the placeholder literals are gone
+  (check-false (regexp-match? #rx"Actual usage: actual" m) m))
+
+(test-case "qtt-msg/linear-unused says it must be consumed"
+  (define m (qtt-msg "(def drop <(Pi [x :1 <Nat>] Nat)> (fn [x :1 <Nat>] zero))"))
+  (check-true (regexp-match? #rx"is not used" m) m)
+  (check-true (regexp-match? #rx"must be consumed" m) m))
+
+(test-case "qtt-msg/erased-used explains erasure rather than repeating the code"
+  (define m (qtt-msg "(def ue <(Pi [x :0 <Nat>] Nat)> (fn [x :0 <Nat>] x))"))
+  (check-true (regexp-match? #rx"erased" m) m)
+  (check-true (regexp-match? #rx"cannot be used at runtime" m) m))
+
+(test-case "qtt-msg/branch disagreement names the EVERY-path rule"
+  ;; The class P3 introduced, which had no diagnostic at all before P4.
+  (define m (qtt-msg (string-append
+                      "(def leak <(Pi [y :1 <Nat>] (Pi [c <Bool>] Nat))> "
+                      "(fn [y :1 <Nat>] (fn [c <Bool>] "
+                      "(boolrec (fn [_ <Bool>] Nat) y zero c))))")))
+  (check-true (regexp-match? #rx"Multiplicity violation" m) m)
+  (check-true (regexp-match? #rx"EVERY path" m) m)
+  (check-true (regexp-match? #rx"branches disagree" m) m)
+  ;; names what each side did, not just that something is wrong
+  (check-true (regexp-match? #rx"used once" m) m)
+  (check-true (regexp-match? #rx"not used" m) m))
+
+(test-case "qtt-msg/still maps to LSP code E1003"
+  ;; lsp/diagnostics.rkt derives the code by regexp over the message, testing
+  ;; `type.?mismatch` FIRST. A reworded multiplicity message that gained that
+  ;; substring — or lost "multiplicity" — would silently retag the whole class.
+  (for ([src (in-list
+              (list "(def drop <(Pi [x :1 <Nat>] Nat)> (fn [x :1 <Nat>] zero))"
+                    (string-append
+                     "(def leak <(Pi [y :1 <Nat>] (Pi [c <Bool>] Nat))> "
+                     "(fn [y :1 <Nat>] (fn [c <Bool>] "
+                     "(boolrec (fn [_ <Bool>] Nat) y zero c))))")))])
+    (define r (run-first src))
+    (check-true (multiplicity-error? r) src)
+    (check-equal? (hash-ref (error->diagnostic r) 'code) "E1003" src)))
 
 ;; ========================================
 ;; Regression guards: existing functionality still works

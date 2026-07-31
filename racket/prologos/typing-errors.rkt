@@ -1011,11 +1011,99 @@
 ;; Returns (or/c #t prologos-error?)
 ;; Runs checkQ-top to verify that variable usage matches declared multiplicities.
 ;; For v1, error message is generic (checkQ-top returns boolean only).
+;; Render a multiplicity for a user, not for the implementation.
+(define (pp-mult-user m)
+  (case m
+    [(m0) "0 — erased, must not be used at runtime"]
+    [(m1) "1 — linear, must be used exactly once"]
+    [(mw) "unrestricted — any number of uses"]
+    [else (format "~a" m)]))
+
+;; The declaration as the user wrote it, for inline use mid-sentence.
+(define (pp-mult-decl-short m)
+  (case m
+    [(m0) "`:0` (erased)"]
+    [(m1) "`:1` (linear)"]
+    [(mw) "unrestricted"]
+    [else (format "~a" m)]))
+
+;; What a branch pair actually did with the resource.
+(define (pp-branch-usage m)
+  (case m
+    [(m0) "not used"]
+    [(m1) "used once"]
+    [(mw) "used more than once"]
+    [else (format "~a" m)]))
+
+;; QTT P4 (2026-07-30): fill `multiplicity-error`'s three rendered fields with
+;; REAL values. They always existed and always rendered (errors.rkt) —
+;; `Variable:` used to receive the entire pretty-printed body, and
+;; `Declared multiplicity:` / `Actual usage:` the string literals "declared" and
+;; "actual". So this is not new plumbing; it is computing what the fields were
+;; always shaped to hold.
+;;
+;; The analysis lives in qtt.rkt (`explain-qtt-failure`) beside the rules it
+;; reproduces — see the contract there. It returns #f whenever it cannot PROVE a
+;; cause, in which case the generic message stands unchanged.
+;;
+;; ⚠ The word "Multiplicity" is load-bearing, not prose: lsp/diagnostics.rkt
+;; derives the diagnostic CODE by regexp over this text and maps
+;; `(?i:multiplicity)` → E1003. Keep it, and keep "type mismatch" OUT — that
+;; pattern is tested FIRST and would silently retag this class as E1001.
 (define (checkQ-top/err ctx e t [loc srcloc-unknown] [names '()])
   (if (checkQ-top ctx e t)
       #t
-      (multiplicity-error loc
-                          "Multiplicity violation"
-                          (pp-expr e names)
-                          "declared"
-                          "actual")))
+      (let ([why (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+                   (explain-qtt-failure ctx e t))])
+        (match why
+          ;; A linear resource consumed on some branches and dropped on others —
+          ;; the class QTT P3 introduced, which had no diagnostic at all.
+          [(list 'branch ty m-a m-b)
+           (multiplicity-error
+            loc
+            (string-append
+             "Multiplicity violation — a linear value must be used exactly once"
+             " on EVERY path, but the branches disagree: it is "
+             (pp-branch-usage m-a) " in one branch and " (pp-branch-usage m-b)
+             " in another. Dropping it on a path does not release it (there is"
+             " no implicit destructor), so consume it in every branch.")
+            (string-append "the linear value of type " (pp-expr ty names))
+            (pp-mult-user 'm1)
+            (string-append (pp-branch-usage m-a) " / " (pp-branch-usage m-b)
+                           " across branches"))]
+          ;; A binder whose usage does not match its declaration.
+          ;;
+          ;; ⚠ THE DETAIL GOES IN THE MESSAGE, not only in the struct fields.
+          ;; `multiplicity-error`'s `variable`/`declared`/`actual` render via
+          ;; `format-error`, but tools/run-file.rkt — and ~11 test files that
+          ;; copy its `result->string` — print `prologos-error-message` ALONE.
+          ;; Detail placed only in the fields is therefore invisible to users and
+          ;; to the `;;N=>` acceptance harness. Caught by running the probe:
+          ;; the first draft did exactly that and printed a bare "Multiplicity
+          ;; violation" for every binder case. The fields are still filled, for
+          ;; `format-error` and LSP consumers.
+          [(list 'binder ty declared actual)
+           (multiplicity-error
+            loc
+            (string-append
+             "Multiplicity violation — the parameter of type "
+             (pp-expr ty names) " is declared " (pp-mult-decl-short declared)
+             " but is " (pp-branch-usage actual) "."
+             (cond
+               [(and (eq? declared 'm1) (eq? actual 'm0))
+                " A linear value must be consumed; nothing may drop it."]
+               [(and (eq? declared 'm1) (eq? actual 'mw))
+                " A linear value must be consumed exactly once."]
+               [(eq? declared 'm0)
+                " An erased value exists only at type level and cannot be used at runtime."]
+               [else ""]))
+            (string-append "the parameter of type " (pp-expr ty names))
+            (pp-mult-user declared)
+            (pp-mult-user actual))]
+          ;; Nothing proven — keep the message that shipped before P4.
+          [_
+           (multiplicity-error loc
+                               "Multiplicity violation"
+                               (pp-expr e names)
+                               "declared"
+                               "actual")]))))

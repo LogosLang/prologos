@@ -26,8 +26,121 @@ became `m1 + m1 = mw` and was rejected — though only one branch runs.
 | P1 | `mult-join` + `join-usage`; branch alternation at 5 eliminator sites | ✅ | `966226cf` — suite 9444/475/0 |
 | P2 | `checkQ` `expr-reduce` arm + beta-redex arm; guard entry removed; PNET 6→7 | ✅ | `9fbbc90f` — suite 9445/475/0, zero fallout |
 | P3 | Linear-per-path: branch-agreement guard at `m1` positions (**owner ruling: option 3**) | ✅ | `3a4d521a` — suite 9455/475/0; VAG produced `join-branches` |
-| P4 | Precise diagnostic naming the dropped resource | ⬜ | DEFERRED — see §5.P3 "benefit not yet realized" |
-| X.close | PIR + roadmap row + DEFERRED sweep | ⬜ | PIR-gated per `workflow.md`; the track is NOT done until it lands |
+| P4 | Precise diagnostic naming the dropped resource | 🔄 | this phase — realizes §5.P3's deferred benefit |
+| X.close | Roadmap row + DEFERRED sweep | ⬜ | **NO PIR** (owner, 2026-07-30): this is not a full designed track — it arrived as a chip and the design doc is retroactive. `workflow.md`'s objective PIR gate is for tracked Stage-3 designs; close notes suffice here. |
+
+## 7. P4 mini-design (step 1)
+
+**Design reference**: §5.P3 ("the benefit that does NOT land here").
+
+**Obligation carried**: option 3 was argued partly on being *able* to name the
+dropped resource. P3 shipped the correctness half; P4 owes the message half.
+
+**What the audit changed about the plan** (§8): the plan of record assumed
+`bu`/`tu-error` carry no payload, so a protocol refactor or a post-hoc walk was
+needed. The audit found `multiplicity-error` **already has** `variable` /
+`declared` / `actual` fields that already render as three lines — they are simply
+filled with the string literals `"declared"` and `"actual"`, and `variable` gets
+the entire pretty-printed body. So P4 is not a refactor: it is computing real
+values for fields that already exist. No protocol change at all.
+
+**Principles in play**: *One derivation, two consumers* — the explainer must
+mirror the typing rules it explains, so it lives in `qtt.rkt` beside them
+(precedent: typing-core exports `select-project` / `seal-missing-required`
+purely for typing-errors hints). *Completeness* — the fields render whether or
+not they are meaningful, so leaving placeholders is a visible defect, not a gap.
+
+**Mantra check**: neutral again, and for the same reason as P3 — a pure
+analysis over values already in hand, on the already-failing path only. No new
+state. Recording it rather than claiming a pass.
+
+**Drift risks named BEFORE coding**:
+1. **Re-deriving the branch expected-types in typing-errors** — the boolrec arm
+   checks branches against `(expr-app mot (expr-true))` / `(… (expr-false))`, the
+   reduce arm against a `shift`ed expected type. Re-deriving those in the error
+   module is exactly the twin drift `pipeline.md` warns about. The explainer goes
+   in `qtt.rkt`.
+2. **LSP code regression** — `error->code` maps on message text, `type.?mismatch`
+   FIRST and `multiplicity` later. A reworded message that gains "type mismatch"
+   or loses "multiplicity" silently changes the code. Keep the substring.
+3. **Names may not exist** — `recover-name-map` is best-effort and one of the two
+   driver call sites passes no names at all. The message must degrade to
+   something useful (the binder's TYPE) rather than to an index or "".
+4. **Claiming a cause we did not establish** — the same failure mode as the
+   branch-result diagnostic earlier: if the explainer cannot prove a specific
+   cause it must return #f and let the generic message stand.
+5. **Scope creep into non-multiplicity errors** — the walk is for
+   `checkQ-top/err` only.
+
+## 8. P4 mini-audit (step 2)
+
+| Fact | Coordinate |
+|---|---|
+| The producer, with hardcoded literals | `typing-errors.rkt` `checkQ-top/err` — `"declared"`, `"actual"`, and `variable` = the whole body |
+| The struct — fields ALREADY EXIST | `errors.rkt:71` `(struct multiplicity-error prologos-error (variable declared actual))` |
+| It ALREADY renders 3 dedicated lines | `errors.rkt:170` — `Variable:` / `Declared multiplicity:` / `Actual usage:` |
+| Names reach only ONE of two doors | `driver.rkt:2131` passes `(recover-name-map)`; `driver.rkt:1913` passes neither loc nor names |
+| The real gate is the lambda arm | `qtt.rkt` — `(compatible effective-m (uhead u))`; `check-all-usages` is vacuous in production (both driver sites pass `ctx-empty`) |
+
+Consequence for the design: the explainer reproduces the lambda arm's own test —
+peel `(lam, Pi)` pairs, and at the level where the BODY checks cleanly but the
+binder's `uhead` is incompatible, that binder is the cause. Where the body itself
+fails, recurse. At a non-lambda body, look for a linear branch disagreement.
+
+### Before / after
+
+```
+;; every multiplicity violation, before P4:
+Multiplicity violation
+  Variable: [fn [x :1 <Nat>] 0N]        ← the whole body, not a variable
+  Declared multiplicity: declared        ← literally the word "declared"
+  Actual usage: actual
+
+;; after P4:
+Multiplicity violation — the parameter of type Box is declared `:1` (linear)
+  but is not used. A linear value must be consumed; nothing may drop it.
+
+Multiplicity violation — a linear value must be used exactly once on EVERY path,
+  but the branches disagree: it is used once in one branch and not used in
+  another. Dropping it on a path does not release it (there is no implicit
+  destructor), so consume it in every branch.
+```
+
+## 9. P4 Vision Alignment Gate (step 5) — two columns
+
+### (a) On-network?
+
+| Catalogue | Challenge |
+|---|---|
+| Pure analysis over values in hand; runs only on the already-failing path; no new state. | **Was a mutable shortcut available and rightly refused?** Yes — the guard could have recorded the offending position in a parameter as it ran, which would have been less code. That is `make-parameter`-shaped off-network state on a hot path for the benefit of a cold one, and the red-flag list names it. The post-hoc recomputation is strictly more aligned and costs nothing measurable (it runs once, on a failure). |
+
+### (b) Complete?
+
+| Catalogue | Challenge |
+|---|---|
+| All four violation classes now explained; fields filled; suite 9460/475/0; acceptance 5/5. | **Did the benefit reach the USER, or only the struct?** This is where the phase nearly failed. The first draft filled `variable`/`declared`/`actual` correctly and left the message as bare "Multiplicity violation" — and `tools/run-file.rkt` (plus the ~11 test files copying its `result->string`, and the `;;N=>` acceptance harness) print the MESSAGE ALONE. The improvement was invisible in exactly the surface users see. Caught by running the probe rather than trusting the struct. Detail now lives in the message, with the fields still filled for `format-error`/LSP. **Shape without benefit, caught at the gate rather than after it.** |
+
+### (c) Vision-advancing?
+
+| Catalogue | Challenge |
+|---|---|
+| The diagnostic now names the resource, the declaration, what happened, and why it is wrong. | **Is anything asserted that was not established?** The explainer returns #f rather than guessing, and the pre-P4 message is retained verbatim for that path — the same contract as the branch-result hint earlier in the session. One honest gap: the message says "the parameter of type T" rather than a NAME, because `recover-name-map` is best-effort and one of the two driver doors passes no names at all. Naming the type is what can be *proven*; inventing a variable name would be the failure mode this project keeps re-learning. |
+
+### (d) Drift-risks-cleared?
+
+| Risk (named in §7 before coding) | Outcome |
+|---|---|
+| 1. Re-deriving branch expected-types in typing-errors | Avoided by construction — `explain-qtt-failure` lives in `qtt.rkt` beside the arms. |
+| 2. LSP code regression | Did not materialize, and is now **test-pinned** (`qtt-msg/still maps to LSP code E1003`) rather than left to a comment. |
+| 3. Names may not exist | **Materialized** — handled by naming the TYPE instead of a variable. See (c). |
+| 4. Claiming an unestablished cause | Did not materialize; `#f` → generic message, retained verbatim. |
+| 5. Scope creep beyond `checkQ-top/err` | Held. |
+
+**Not covered by the named risks** — the message-only rendering trap (b). It was
+in the earlier grounding but I did not carry it into §7's risk list, and it is
+the one that nearly shipped. The lesson generalizes past this phase: *a
+diagnostic improvement is not done until it is read back through the renderer the
+user actually gets.*
 
 ## 1. The ruling (owner, 2026-07-30)
 

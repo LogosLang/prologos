@@ -38,7 +38,10 @@
  ;; Result types
  (struct-out tu) (struct-out tu-error) (struct-out bu)
  ;; QTT inference and checking
- inferQ checkQ checkQ-top)
+ inferQ checkQ checkQ-top
+ ;; QTT P4: diagnostic support for typing-errors' multiplicity message —
+ ;; defined beside the rules it mirrors so the two cannot drift
+ explain-qtt-failure)
 
 ;; ========================================
 ;; Usage Context: plain list of multiplicities
@@ -3098,3 +3101,102 @@
     (match r
       [(bu #t u) (check-all-usages ctx u)]
       [_ #f])))
+
+;; ========================================
+;; QTT P4 (2026-07-30): explain a multiplicity failure
+;; ========================================
+;; Consumed by typing-errors' `checkQ-top/err`, which until now filled
+;; `multiplicity-error`'s three rendered fields with the string LITERALS
+;; "declared" and "actual" plus the entire pretty-printed body as the
+;; "Variable". The fields and their rendering already existed — only real values
+;; were missing.
+;;
+;; DEFINED HERE, NOT IN typing-errors.rkt, on purpose: explaining the failure
+;; means reproducing the very tests that produced it — the lambda arm's
+;; `(compatible effective-m (uhead u))`, and each eliminator's per-branch
+;; expected types (`(expr-app mot (expr-true))` for boolrec, a `shift`ed expected
+;; type for reduce). Re-deriving those in the error module is the twin drift
+;; `pipeline.md` § "infer / inferQ Are Twins" documents. Same rationale as
+;; typing-core exporting `select-project` / `seal-missing-required` for the
+;; typing-errors hints: one derivation, two consumers.
+;;
+;; CONTRACT: runs ONLY on an already-failing `checkQ-top`, is pure, and returns
+;; #f whenever it cannot PROVE a specific cause — the caller then keeps the
+;; generic message. It must never assert a cause it did not establish.
+;;
+;; Returns one of:
+;;   (list 'binder type declared actual) — a binder's usage ≠ its declaration
+;;   (list 'branch type m-a m-b)         — branches disagree at a LINEAR position
+;;   #f
+
+;; First position where two branch usages disagree and the declared multiplicity
+;; is linear. Mirrors `branches-agree-on-linear?` (which answers yes/no); this
+;; reports WHICH. Returns (list 'branch type m-a m-b) or #f.
+(define (first-linear-disagreement ctx u1 u2)
+  (let loop ([c ctx] [a u1] [b u2])
+    (cond
+      [(or (null? c) (null? a) (null? b)) #f]
+      [(and (eq? (cdar c) 'm1) (not (eq? (car a) (car b))))
+       (list 'branch (caar c) (car a) (car b))]
+      [else (loop (cdr c) (cdr a) (cdr b))])))
+
+;; Branch-level explanation: recompute each branch's usage using the SAME
+;; expected type its typing arm uses, then diff. Covers the eliminators that
+;; carry the linear-per-path guard; anything else yields #f (generic message).
+(define (explain-branch-disagreement ctx e t)
+  (define (two a ta b tb)
+    (match* ((checkQ ctx a ta) (checkQ ctx b tb))
+      [((bu #t ua) (bu #t ub)) (first-linear-disagreement ctx ua ub)]
+      [(_ _) #f]))
+  (match e
+    [(expr-boolrec mot tc fc _)
+     (two tc (expr-app mot (expr-true)) fc (expr-app mot (expr-false)))]
+    [(expr-p8-if-nar ty nar norm _)  (two nar ty norm ty)]
+    [(expr-p16-if-nar ty nar norm _) (two nar ty norm ty)]
+    [(expr-p32-if-nar ty nar norm _) (two nar ty norm ty)]
+    [(expr-p64-if-nar ty nar norm _) (two nar ty norm ty)]
+    [(expr-reduce scrutinee arms _)
+     ;; Arms bind a per-arm field count, so each usage is trimmed back to the
+     ;; ambient depth before comparison — the same discipline the checkQ arm
+     ;; applies, and the reason a raw comparison would be meaningless.
+     (let ([scrut-type (infer ctx scrutinee)])
+       (and (not (expr-error? scrut-type))
+            (let-values ([(tc targs) (reduce-scrutinee-decompose scrut-type)])
+              (and tc
+                   (let loop ([as arms] [acc #f])
+                     (cond
+                       [(null? as) #f]
+                       [else
+                        (let* ([arm (car as)]
+                               [bc (expr-reduce-arm-binding-count arm)]
+                               [ext (reduce-arm-ctx ctx arm tc targs)]
+                               [u (and ext
+                                       (match (checkQ ext (expr-reduce-arm-body arm)
+                                                      (shift bc 0 t))
+                                         [(bu #t ua) (strip-binders ext ua bc)]
+                                         [_ #f]))])
+                          (cond
+                            [(not u) (loop (cdr as) acc)]
+                            [(not acc) (loop (cdr as) u)]
+                            [(first-linear-disagreement ctx acc u)
+                             => values]
+                            [else (loop (cdr as) (join-usage acc u))]))]))))))]
+    [_ #f]))
+
+(define (explain-qtt-failure ctx e t)
+  (match* (e (whnf t))
+    [((expr-lam m dom body) (expr-Pi m2 t-dom cod))
+     (let* ([eff (cond [(mult-meta? m) (if (mult-meta? m2) 'mw m2)]
+                       [(mult-meta? m2) m]
+                       [else m])]
+            [d (if (expr-hole? dom) t-dom dom)]
+            [ext (ctx-extend ctx d eff)])
+       (match (checkQ ext body cod)
+         ;; The body checks cleanly, so the failure is THIS binder's own usage —
+         ;; exactly the lambda arm's test, re-run to read off the actual value.
+         [(bu #t u)
+          (and (not (compatible eff (uhead u)))
+               (list 'binder d eff (uhead u)))]
+         ;; The body itself fails: the cause is deeper.
+         [_ (explain-qtt-failure ext body cod)]))]
+    [(_ t-whnf) (explain-branch-disagreement ctx e t-whnf)]))
