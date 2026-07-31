@@ -1,6 +1,6 @@
 # LET blocks — multi-binding `let` layout
 
-**Status**: P0 ✅ · P1 🔄. Owner-requested language polish (2026-07-31): the
+**Status**: P0 ✅ `0effba9c` · P1 ✅ `49f51c14` · P2 next. Owner-requested language polish (2026-07-31): the
 nested-only `let` layout "was never intended to be how they function."
 
 **Acceptance file**: `examples/2026-07-31-let-blocks.prologos` (Phase 0; target
@@ -112,7 +112,7 @@ existing inputs.
 | Phase | Description | Status | Notes |
 |---|---|---|---|
 | P0 | Acceptance file: 5 working variants + 2 context cases pinned; P2/P3/P4 targets commented | ✅ | `examples/2026-07-31-let-blocks.prologos`, --check exit 0, 14 markers |
-| P1 | All 13 `(error 'let …)` raises → per-command parse-error VALUES (`$let-error` marker) | 🔄 | the whole-file-abort class, closed for let |
+| P1 | All 13 `(error 'let …)` raises → per-command parse-error VALUES (`$let-error` marker) | ✅ | `49f51c14` — suite 9497/476/0; 2 check-exn pins flipped WITH the behavior; the spec-c batch collision surfaced and was renamed away (leak filed) |
 | P2 | Sibling no-`:=` chains (form 3): uniform `:=` synthesis at the merge seam | ⬜ | + the tree-spine defect disposition (fix or make preparse win) |
 | P3 | Aligned blocks (forms 1/5): reader-layer `$let-block` regrouping, STRICT columns | ⬜ | mis-indent = per-command error naming both columns; top-level guard extended |
 | P4 | Fused `var:Type` binders (form 2): WS pair + sexp glued split | ⬜ | recognizer in reader-forms.rkt; chained-annot reject shared |
@@ -147,3 +147,18 @@ precedent.
 3. Containment is the point: commands before AND after the bad let must report.
    Pinned (the `f51bda2b` containment-pin pattern).
 4. `check-stdout-clean` gate: the marker must never print as a struct.
+
+## 5. P1 close notes
+
+- Landed as designed; all four drift risks held (all 13 sites under the
+  boundary; the marker converts at depth; containment pinned; stdout clean).
+- **Two pre-existing pins flipped WITH the behavior** (test-defmacro "wrong
+  arity", test-let-multiline-ws "no body still raises") — both check-exn'd the
+  raise the phase exists to remove. Flipped to pin the marker/error-value.
+- **The gate caught a batch-worker collision**: `spec c` (added by this branch's
+  own 6d4e8c73) leaked across files in a worker and collided with
+  test-new-lattice-cell's `def c`. Renamed to `hconsume`; the LEAK (cell-backed
+  spec registry on the shared persistent net-box, not covered by the parameter
+  snapshot) is filed in DEFERRED with the mechanism half-diagnosed.
+- The unspecced-defn tree-spine breakage found at P0 grounding is now formally
+  filed in DEFERRED and OWNED BY P2.

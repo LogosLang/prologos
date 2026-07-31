@@ -15,6 +15,56 @@ Deferral".
 
 ---
 
+## 🐛 The `:=` let chain — issue #21's "working" variant — is BROKEN in UNSPECCED defns (found 2026-07-31, LET P0 grounding)
+
+**Repro** (verified at `13cce230`, pre-existing):
+
+```prologos
+ns unspec
+defn g [a]          ;; NO spec — merge-form picks the TREE-PARSER spine
+  let x := 4
+  let y := 5
+    [+ a [+ x y]]
+[g 1]
+;; → ERROR: cannot infer the type of an unannotated parameter … + Unbound variable
+```
+
+Even the SINGLE `:=`-with-body form fails unspecced. Add a `spec` and both work
+— because a spec makes the PREPARSE spine win at `merge-form`
+(driver.rkt:2468-2490), and all of issue #21's evidence plus every grounding
+probe was spec-annotated. The tree spine has an INDEPENDENT let implementation
+(tree-parser.rkt:950-982) that requires `:=` and drops type annotations
+(`binder-info name #f (surf-hole loc)`), and its surf output fails typing.
+
+Owned by **LET P2** (docs/tracking/2026-07-31_LET_BLOCKS_DESIGN.md): the phase
+must fix the tree chain or make preparse win for let-bearing forms — a silent
+specced/unspecced divergence on the PRIMARY local-binding form is not shippable
+as "works". Until then the LET acceptance file's defns all carry specs, with a
+header note saying why.
+
+## 🐛 Cross-FILE spec-store leakage within a batch worker (diagnosed 2026-07-31, LET P1 gate)
+
+**Symptom**: `test-defn-multiarg-patterns.rkt` registered `(spec c Handle2 -1> Nat)`
+via `run-ns-ws-all`; `test-new-lattice-cell.rkt`, running LATER IN THE SAME
+BATCH WORKER, died with "spec: def c has both a spec and inline type
+annotation" on its own `def c : CellId`. Passes alone; order-dependent; surfaced
+when LET P1's +1 test file reshuffled worker assignment. (Unblocked by renaming
+the spec to `hconsume` at `49f51c14` — that removes the collision, NOT the leak.)
+
+**Mechanism (partially diagnosed — finish before fixing)**: the batch worker
+DOES restore the spec store per file — `restore-macros-registry-snapshot!`
+(tools/batch-worker.rkt:223) and `current-spec-store` IS in the snapshot vector
+(macros.rkt:713 region). So the leak rides something the snapshot does not
+cover: prime suspect is the CELL-BACKED registry layer — `run-ns-ws-all` passes
+`prelude-persistent-registry-net-box` UNFORKED (test-support.rkt:195 region),
+so a spec cell written there is shared across every file in the worker process,
+and cell-first reads see it. That is the pipeline.md Two-Context class, sibling
+of the 2026-06-29/07-14 batch-isolation incidents in testing.md.
+
+**Watch**: any NEW test file addition reshuffles workers and can surface the
+next collision pair. Single-letter spec/def names in test strings are collision
+bait until fixed.
+
 ## ✅ CLOSED — the two eliminator usage residuals (QTT P6 + P7, 2026-07-31)
 
 - **The Church-fold agreement hole** → ✅ `e5810cfe`. It was LIVE, not theoretical:
