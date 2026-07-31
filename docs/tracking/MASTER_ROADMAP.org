@@ -157,6 +157,13 @@ value strata. Topology strata are sequential. See =DEVELOPMENT_LESSONS.org=
 | 4 | Trait-Dispatched Iteration (broadcast via Seq) | ⬜ | Post Track 8 |
 | 5 | Union-Aware Dispatch | ⬜ | Post Track 8 |
 
+** LET (let-block layout)  — /Multi-binding `let`: aligned blocks, sibling chains, fused binders, multi-line values/
+
+| | |
+|------------------+------|
+| *Design doc*     | [[file:2026-07-31_LET_BLOCKS_DESIGN.md][2026-07-31_LET_BLOCKS_DESIGN.md]] |
+| *Status*         | **COMPLETE 2026-07-31** (P0–P4 + X.close, one session). Owner-requested polish: the nested-only `let` layout "was never intended". Shipped: per-command let errors (13 whole-file-abort raises retired, P1 `49f51c14`) · sibling no-`:=` chains one scope (P2 `e8a41a9a`; the tree spine defers to preparse on let heads — single implementation) · ALIGNED blocks with STRICT column discipline, guided errors naming columns (P3 `940c1c16`; reader-layer eq?-preserving stx transform — the gate caught a syntax-PROPERTIES drop breaking implicit solve pre-commit) · fused `x:Int` binders WS+sexp + MULTI-LINE values via the fold + the absorb (P4 `feb79740`; an infinite loop caught at the preparse seam — `fused-type-annot?` accepted bare `:`/`:=`) · docs: prologos-syntax.md § let (discharges GitHub #21's obligation). Suite 9520/476/0; acceptance `examples/2026-07-31-let-blocks.prologos` 34 markers. Boundary: unannotated match VALUES = the QTT infer-position debt (typing-side; annotate works). Notable process: the P0-era "unspecced defns broken" filing was WITHDRAWN at P2 (issue-#70 in a let costume — the repro was never controlled). |
+
 ** QTT (Quantitative Type Theory)  — /Multiplicities that are actually enforced: erased, linear, unrestricted/
 
 | | |

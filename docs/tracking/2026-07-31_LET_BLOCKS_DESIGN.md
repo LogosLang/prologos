@@ -1,6 +1,6 @@
 # LET blocks — multi-binding `let` layout
 
-**Status**: P0 ✅ `0effba9c` · P1 ✅ `49f51c14` · P2 ✅ `e8a41a9a` · P3 ✅ `940c1c16` · P4 ✅ `feb79740` · X.close next. Owner-requested language polish (2026-07-31): the
+**Status**: **COMPLETE** — P0 ✅ `0effba9c` · P1 ✅ `49f51c14` · P2 ✅ `e8a41a9a` · P3 ✅ `940c1c16` · P4 ✅ `feb79740` · X.close ✅ (docs + sweep + PIR-lite below). Owner-requested language polish (2026-07-31): the
 nested-only `let` layout "was never intended to be how they function."
 
 **Acceptance file**: `examples/2026-07-31-let-blocks.prologos` (Phase 0; target
@@ -116,7 +116,7 @@ existing inputs.
 | P2 | Sibling no-`:=` chains (form 3): uniform `:=` synthesis at the merge seam; tree spine defers on let heads | ✅ | `e8a41a9a` — suite 9507/476/0; acceptance §C live (20 markers); the P0-era "unspecced BROKEN" filing WITHDRAWN (it was i70 — §7) |
 | P3 | Aligned blocks (forms 1/5): reader-layer `$let-block` regrouping, STRICT columns | ✅ | `940c1c16` — suite 9513/476/0; acceptance §D live (26 markers); the gate caught a PROPERTIES-DROP bug pre-commit (POL.9 paren-origin) |
 | P4 | Fused `var:Type` binders (form 2): WS pair + sexp glued split; MULTI-LINE VALUES (owner add-on: the fold + the absorb) | ✅ | `feb79740` — suite 9520/476/0; acceptance §E live (34 markers); an infinite loop caught at the preparse seam (fused-type-annot? accepted bare `:`/`:=`) |
-| X.close | prologos-syntax.md § let (discharges issue #21's doc obligation) + DEFERRED sweep + close notes | ⬜ | |
+| X.close | prologos-syntax.md § let (discharges issue #21's doc obligation) + DEFERRED sweep + roadmap row + PIR-lite | ✅ | 3 residuals filed; GitHub #21 close is the OWNER's call (outward-facing) |
 
 ## 4. P1 design (mini-design)
 
@@ -350,3 +350,44 @@ ONE shared `normalize-let-binding-group`, then the existing
   annotated form with a comment naming the boundary.
 - The flip-with-the-feature series CLOSED: P1's exemplars now sit on the two
   PERMANENT errors (chained annotation, top-level let).
+
+## 11. X.close — PIR-lite
+
+Scoped as PIR-lite, flagged not defaulted: `workflow.md`'s objective gate wants
+a full PIR for tracked designs; this track is one session, five phases, with
+per-phase close notes + VAGs already in this doc. The owner can upgrade to a
+full 16-question PIR on request.
+
+**Delivered vs asked**: everything in the original request (aligned blocks,
+fused, sibling chains, optional `:=`) plus the mid-track owner add-on
+(multi-line values) plus the un-asked-for foundation that made the rest safe
+(per-command let errors — the 13-raise abort class). Three rulings honored
+(strict columns · mixed spellings · sexp split). One boundary shipped stated
+rather than silently: unannotated match values (QTT infer-position debt,
+typing-side).
+
+**What went wrong, honestly**:
+- The P0-era DEFERRED filing ("unspecced defns broken") was WRONG — issue #70
+  in a let costume; withdrawn at P2 with the full correction. Filed by the
+  same process that codified "a failing test is only evidence if it fails for
+  the reason you claim."
+- P3's first draft dropped SYNTAX PROPERTIES tree-wide (broke implicit solve);
+  caught by the acceptance gate pre-commit; the fix (eq?-preserving walk) was
+  stronger than the patch.
+- P4's predicate move exposed a latent hole as an INFINITE LOOP (bare `:`/`:=`
+  accepted by `fused-type-annot?`); the battery hang + stack bisection found
+  it in minutes.
+
+**The pattern that recurred FOUR times** (P1 exemplar flips ×3 + the final
+flip to permanent errors): tests pinning "X is broken" flip WITH the feature
+that fixes X. Writing the pin's exemplar on the NEXT phase's target makes the
+flip an expected checkpoint instead of a surprise failure.
+
+**What the track leaves better beyond let**: the `$let-error` marker seat
+(reusable per-command error channel for preparse), the fused primitives in
+reader-forms.rkt (ONE definition, hardened), the eq?-preserving stx-walk
+pattern with the properties lesson recorded, and the withdrawn-filing
+precedent (kept, not deleted).
+
+**Residuals**: three, filed in DEFERRED (fn-bracket-body lets · the 2-line
+forgot-body mediocre error · the unannotated-match-value boundary pointer).

@@ -15,6 +15,34 @@ Deferral".
 
 ---
 
+## LET track residuals (X.close sweep, 2026-07-31 — track COMPLETE, `feb79740`)
+
+Three small items survive the track, none blocking, all verified at HEAD:
+
+1. **`let` inside a BRACKETED `fn` body fails with a misleading message.**
+   `[fn [n : Int] let k := 4 [int+ n k]]` → "fn: all parameters except body
+   must be bare symbols or a binder" — the let line is consumed as fn
+   PARAMETERS (brackets suspend indent grouping, so the fn's bracket swallows
+   the tokens). Per-command since LET P1 (it was a whole-file abort), but the
+   form does not work and the message names the wrong thing. Workaround: use a
+   parenthesized `(let x := 4 body)` or hoist. Found by the P0 grounding
+   (unfiled then); the fix wants fn-side layout work, not let-side.
+
+2. **The 2-line forgot-body shape gives a mediocre error.** `let x 4 / y 5`
+   (one continuation line — below the aligned discipline's ≥2 activation)
+   falls to the legacy shorthand as `(let x 4 (y 5))`, body = apply y to 5 →
+   "Unbound variable y". An error, loud, but not the guided no-body message
+   the ≥3-line shape gets. Documented at P3 (design doc §9); a fix needs the
+   1-continuation case disambiguated, which collides with the nested-form's
+   byte-transparency — revisit only if users actually hit it.
+
+3. **Unannotated `match` as a binding VALUE** dies on the QTT infer-position
+   debt (generic multiplicity message). NOT a let item — the layout produces
+   the correct datum since P4 — but let is where users will MEET it, so the
+   syntax doc § let carries the annotate-the-binding workaround. The debt
+   itself is the QTT track's recorded option-(c) deliberate deferral
+   (an `expr-reduce` arm for `infer`/`inferQ` — new typing policy).
+
 ## ✅ WITHDRAWN, with a correction — "the `:=` let chain is BROKEN in UNSPECCED defns" was issue #70 in a let costume (filed 2026-07-31, corrected same day at LET P2 `e8a41a9a`)
 
 **The filing was WRONG and is withdrawn.** Its repro used `[+ a [+ x y]]` —
