@@ -401,6 +401,74 @@
               (format "capturing a linear var must error; got: ~v" result)))
 
 ;; ========================================
+;; The Church-fold agreement hole is closed (QTT P6, 2026-07-31)
+;; ========================================
+;; A scrutinee whose type has no constructor metadata (a Church-encoded value)
+;; takes the Church-fold path, where an arm's field bindings cannot be derived.
+;; Such an arm was skipped — and a skipped arm was never checked for branch
+;; AGREEMENT either, so a linear resource dropped (or double-freed) inside one
+;; type-checked clean. The Bool-scrutinee control below is what makes that a bug
+;; rather than a policy: byte-identical body, opposite verdict.
+
+(define church-bool
+  "(def cbA <(Pi [C <(Type 0)>] (-> C (-> C C)))> (fn [C] (fn [t] (fn [f] t))))\n")
+
+(test-case "qtt-church/CONTROL — the same shape on Bool is rejected (analysable)"
+  ;; `y` is consumed on one path of the nested match and dropped on the other.
+  (define r
+    (run-first
+     (string-append
+      "(def ctrl <(Pi [y :1 <Nat>] (Pi [c <Bool>] (Pi [d <Bool>] Nat)))> "
+      "(fn [y :1 <Nat>] (fn [c <Bool>] (fn [d <Bool>] "
+      "(match d (true -> y) (false -> (match c (true -> y) (false -> zero))))))))")))
+  (check-true (multiplicity-error? r) (format "got: ~v" r))
+  ;; and it is diagnosed as a DISAGREEMENT, not as unanalysable
+  (check-true (regexp-match? #rx"branches disagree" (prologos-error-message r))
+              (format "got: ~v" (prologos-error-message r))))
+
+(test-case "qtt-church/a linear dropped inside an unanalysable branch is REFUSED"
+  ;; THE P6 pin. Identical body, Church scrutinee on the outer match — accepted
+  ;; with 0 errors before P6.
+  (define r
+    (run-last
+     (string-append
+      church-bool
+      "(def leak <(Pi [y :1 <Nat>] (Pi [c <Bool>] Nat))> "
+      "(fn [y :1 <Nat>] (fn [c <Bool>] "
+      "(match cbA (true -> y) (false -> (match c (true -> y) (false -> zero)))))))")))
+  (check-true (multiplicity-error? r) (format "got: ~v" r)))
+
+(test-case "qtt-church/the refusal NAMES what it cannot decide"
+  ;; Without this the rejection is a bare "Multiplicity violation" — the lying
+  ;; diagnostic class P4 exists to prevent. Also pins that the checker and its
+  ;; explainer agree: they skip on the SAME condition, and were out of sync
+  ;; before P6 (the explainer abandoned the Church path entirely).
+  (define m
+    (prologos-error-message
+     (run-last
+      (string-append
+       church-bool
+       "(def leak2 <(Pi [y :1 <Nat>] (Pi [c <Bool>] Nat))> "
+       "(fn [y :1 <Nat>] (fn [c <Bool>] "
+       "(match cbA (true -> y) (false -> (match c (true -> y) (false -> zero)))))))"))))
+  (check-true (regexp-match? #rx"cannot be analysed" m) m)
+  (check-true (regexp-match? #rx"linear value of type" m) m)
+  ;; the claim is about the ANALYSIS, not an accusation about the program
+  (check-true (regexp-match? #rx"cannot be decided" m) m))
+
+(test-case "qtt-church/the permissive path stays OPEN when nothing linear is at stake"
+  ;; P6 must reject only what it can show it cannot verify. Same Church shape,
+  ;; unrestricted parameter — still accepted.
+  (check-false
+   (multiplicity-error?
+    (run-last
+     (string-append
+      church-bool
+      "(def ok <(Pi [y <Nat>] (Pi [c <Bool>] Nat))> "
+      "(fn [y <Nat>] (fn [c <Bool>] "
+      "(match cbA (true -> y) (false -> (match c (true -> y) (false -> zero)))))))")))))
+
+;; ========================================
 ;; Regression guards: existing functionality still works
 ;; ========================================
 

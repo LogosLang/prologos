@@ -134,6 +134,31 @@
       [(and (eq? (cdar c) 'm1) (not (eq? (car a) (car b)))) #f]
       [else (loop (cdr c) (cdr a) (cdr b))])))
 
+;; Is a LINEAR resource actually at stake in this accumulated usage? I.e. is
+;; there a ctx position declared m1 that some branch has already consumed?
+;;
+;; QTT P6 (2026-07-31). Used to decide whether an UNANALYSABLE eliminator arm
+;; can be safely ignored. It can, when nothing linear is in play — but when
+;; another arm has consumed a linear resource and one arm cannot be analysed,
+;; linear-per-path is UNDECIDABLE for that resource, and the honest answer is to
+;; refuse rather than to guess "the skipped arm probably agreed".
+;;
+;; Only the "some surviving arm consumed it" direction needs this guard. The
+;; mirror case — the SKIPPED arm consumes it and the surviving ones do not — is
+;; already caught downstream: the surviving arms join to m0 at that position, and
+;; `compatible m1 m0` then fails as "declared linear but is not used".
+;; Returns the TYPE of the first such resource, or #f. `linear-at-stake?` is the
+;; boolean face; the explainer wants the type so it can name what is at risk.
+(define (first-linear-at-stake ctx usage)
+  (let loop ([c ctx] [u usage])
+    (cond
+      [(or (null? c) (null? u)) #f]
+      [(and (eq? (cdar c) 'm1) (not (eq? (car u) 'm0))) (caar c)]
+      [else (loop (cdr c) (cdr u))])))
+
+(define (linear-at-stake? ctx usage)
+  (and (first-linear-at-stake ctx usage) #t))
+
 ;; THE alternation combinator for eliminator branches: the join, gated on
 ;; agreement. Returns the combined usage, or #f when the branches disagree about
 ;; a linear resource.
@@ -2569,21 +2594,34 @@
     ;; the very derivation `check-reduce-structural` uses. One derivation, two
     ;; consumers (pipeline.md § "infer / inferQ Are Twins").
     ;;
-    ;; PERMISSIVE FALLBACK, deliberate: when the scrutinee's type carries no
-    ;; constructor metadata (the Church-fold path) or a constructor's type cannot
-    ;; be found, this arm cannot derive the field multiplicities. It then binds
-    ;; the fields at `mw` and lets an unanalysable arm contribute NO usage rather
-    ;; than failing. That can MISS a violation inside such an arm, but it cannot
-    ;; invent one — the alternative would newly reject code over a lookup gap,
-    ;; and today's baseline for all of this is no checking whatsoever. Outer
-    ;; variables (the linear parameters that matter) stay tracked either way.
+    ;; PERMISSIVE FALLBACK, and its LIMIT (QTT P6, 2026-07-31).
     ;;
-    ;; ⚠ P3 SHARPENS THE COST OF THAT CHOICE: a skipped arm contributes no usage,
-    ;; so it is also never checked for branch AGREEMENT — i.e. a linear resource
-    ;; dropped on an unanalysable arm is exactly the leak P3 exists to reject, and
-    ;; it hides here. Still the right trade (rejecting over a lookup gap is worse
-    ;; than missing over one), but it is a hole, not a rounding error. It closes
-    ;; when the Church-fold path does; tracked in DEFERRED.md.
+    ;; When the scrutinee's type carries no constructor metadata (the Church-fold
+    ;; path — live, despite typing-core's comment claiming otherwise) or a
+    ;; constructor's type cannot be found, the arm's field multiplicities cannot
+    ;; be derived. Such an arm binds its fields at `mw` and, if its own checkQ
+    ;; then fails, contributes NO usage rather than failing the whole match —
+    ;; because failing would reject code over a mere lookup gap.
+    ;;
+    ;; ⚠ THAT TRADE HAS A HARD LIMIT, and P6 enforces it. The earlier version of
+    ;; this comment claimed the fallback "cannot invent a violation, only miss
+    ;; one", that "outer variables stay tracked either way", and that "the
+    ;; baseline is no checking whatsoever". All three were false: the accumulated
+    ;; usage is the join over SURVIVING arms only, so a linear consumed solely
+    ;; inside a skipped arm reads m0 and surfaces as a WRONG-CAUSE "declared :1
+    ;; but is not used"; and P5 deleted the driver guard, so the baseline is now
+    ;; full checking. Worse, the skip swallowed nested violations: an arm whose
+    ;; own body contained a linear-per-path disagreement failed, was skipped, and
+    ;; the disagreement vanished — a real leak AND a real double-free both
+    ;; type-checked clean (probe /tmp/qtt-p6-g.prologos; the Bool-scrutinee
+    ;; control was correctly rejected in the same run).
+    ;;
+    ;; So the fallback now stops exactly where it stops being safe: if any arm was
+    ;; skipped AND a linear resource is at stake in the surviving arms'
+    ;; accumulated usage, linear-per-path is UNDECIDABLE and the match is refused.
+    ;; When nothing linear is in play the permissive path is untouched — this
+    ;; rejects only what it can show it cannot verify, and says so in the message
+    ;; rather than reporting a generic violation.
     [((expr-reduce scrutinee arms _) expected-type)
      (let ([scrut-type (infer ctx scrutinee)])
        (cond
@@ -2593,12 +2631,22 @@
             (let ([r-scrut (checkQ ctx scrutinee scrut-type)])
               (match r-scrut
                 [(bu #t u-scrut)
-                 (let loop ([as arms] [acc #f])
+                 (let loop ([as arms] [acc #f] [skipped? #f])
                    (cond
                      [(null? as)
                       ;; No arm contributed (empty/unanalysable match): the
                       ;; scrutinee's own usage still stands.
-                      (bu #t (add-usage u-scrut (or acc (zero-usage n))))]
+                      ;;
+                      ;; QTT P6: but if any arm was SKIPPED as unanalysable and a
+                      ;; linear resource is at stake, linear-per-path cannot be
+                      ;; verified for it — refuse instead of accepting. Checked
+                      ;; HERE, at the end, rather than at the skip: an arm skipped
+                      ;; BEFORE the consuming arm is reached would otherwise slip
+                      ;; through, so the test must see the final accumulator.
+                      (let ([final (or acc (zero-usage n))])
+                        (if (and skipped? (linear-at-stake? ctx final))
+                            (bu #f (zero-usage n))
+                            (bu #t (add-usage u-scrut final))))]
                      [else
                       (let* ([arm (car as)]
                              [bc (expr-reduce-arm-binding-count arm)]
@@ -2617,8 +2665,9 @@
                         (cond
                           ;; A well-derived arm that fails IS a real violation.
                           [(and strict-ctx (not trimmed)) (bu #f (zero-usage n))]
-                          ;; An unanalysable arm contributes nothing (see above).
-                          [(not trimmed) (loop (cdr as) acc)]
+                          ;; An unanalysable arm contributes nothing, but is
+                          ;; RECORDED — see the end-of-loop check.
+                          [(not trimmed) (loop (cdr as) acc #t)]
                           ;; Length divergence would silently pad at the join.
                           [(not (= (length trimmed) n)) (bu #f (zero-usage n))]
                           [else
@@ -2629,7 +2678,7 @@
                            ;; means disagreeing with some earlier arm.
                            (let ([uj (if acc (join-branches ctx acc trimmed) trimmed)])
                              (if uj
-                                 (loop (cdr as) uj)
+                                 (loop (cdr as) uj skipped?)
                                  (bu #f (zero-usage n))))]))]))]
                 [_ (bu #f (zero-usage n))])))]))]
 
@@ -3263,28 +3312,52 @@
      ;; Arms bind a per-arm field count, so each usage is trimmed back to the
      ;; ambient depth before comparison — the same discipline the checkQ arm
      ;; applies, and the reason a raw comparison would be meaningless.
+     ;;
+     ;; ⚠ THIS LOOP MIRRORS THE checkQ expr-reduce ARM AND MUST MOVE WITH IT.
+     ;; They were ALREADY out of sync before QTT P6: this one bailed on
+     ;; `(and tc …)`, abandoning the Church-fold path entirely, while the checker
+     ;; carried a permissive fallback there — so the explainer could not describe
+     ;; the very case the checker was deciding. Both now use the same
+     ;; strict-ctx / mw-fallback / skipped? shape. A test pins the message so a
+     ;; future divergence fails loudly instead of silently reverting to the
+     ;; generic "Multiplicity violation".
      (let ([scrut-type (infer ctx scrutinee)])
        (and (not (expr-error? scrut-type))
             (let-values ([(tc targs) (reduce-scrutinee-decompose scrut-type)])
-              (and tc
-                   (let loop ([as arms] [acc #f])
+              (let loop ([as arms] [acc #f] [skipped? #f])
+                (cond
+                  [(null? as)
+                   ;; QTT P6: an arm we could not analyse, plus a linear resource
+                   ;; some other arm consumed ⇒ linear-per-path is undecidable.
+                   (and skipped? acc
+                        (let ([ty (first-linear-at-stake ctx acc)])
+                          (and ty (list 'unanalysable ty))))]
+                  [else
+                   (let* ([arm (car as)]
+                          [bc (expr-reduce-arm-binding-count arm)]
+                          [strict-ctx (and tc (reduce-arm-ctx ctx arm tc targs))]
+                          [ext (or strict-ctx
+                                   (for/fold ([c ctx]) ([_ (in-range bc)])
+                                     (ctx-extend c (expr-hole) 'mw)))]
+                          [u (match (checkQ ext (expr-reduce-arm-body arm)
+                                            (shift bc 0 t))
+                               [(bu #t ua) (strip-binders ext ua bc)]
+                               [_ #f])])
                      (cond
-                       [(null? as) #f]
-                       [else
-                        (let* ([arm (car as)]
-                               [bc (expr-reduce-arm-binding-count arm)]
-                               [ext (reduce-arm-ctx ctx arm tc targs)]
-                               [u (and ext
-                                       (match (checkQ ext (expr-reduce-arm-body arm)
-                                                      (shift bc 0 t))
-                                         [(bu #t ua) (strip-binders ext ua bc)]
-                                         [_ #f]))])
-                          (cond
-                            [(not u) (loop (cdr as) acc)]
-                            [(not acc) (loop (cdr as) u)]
-                            [(first-linear-disagreement ctx acc u)
-                             => values]
-                            [else (loop (cdr as) (join-usage acc u))]))]))))))]
+                       ;; An arm that failed but WAS analysable is not a skip —
+                       ;; the checker hard-fails on it, and the real cause is
+                       ;; nested inside, so recurse rather than mislabel it as
+                       ;; unanalysable. (Without this, the Bool control in the
+                       ;; P6 battery reported "cannot be analysed" about a
+                       ;; perfectly analysable `match`.)
+                       [(and (not u) strict-ctx)
+                        (or (explain-branch-disagreement
+                             ext (expr-reduce-arm-body arm) (shift bc 0 t))
+                            (loop (cdr as) acc skipped?))]
+                       [(not u) (loop (cdr as) acc #t)]
+                       [(not acc) (loop (cdr as) u skipped?)]
+                       [(first-linear-disagreement ctx acc u) => values]
+                       [else (loop (cdr as) (join-usage acc u) skipped?)]))]))))) ]
     [_ #f]))
 
 (define (explain-qtt-failure ctx e t)

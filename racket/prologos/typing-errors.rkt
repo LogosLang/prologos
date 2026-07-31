@@ -1071,6 +1071,26 @@
             (pp-mult-user 'm1)
             (string-append (pp-branch-usage m-a) " / " (pp-branch-usage m-b)
                            " across branches"))]
+          ;; QTT P6: a branch the checker could not analyse, while a linear
+          ;; resource was in play. The claim is deliberately about the ANALYSIS,
+          ;; not about the program — "I cannot verify this" is a fact we have;
+          ;; "your code leaks" is not, since the unanalysable branch may well
+          ;; have consumed the resource correctly.
+          [(list 'unanalysable ty)
+           (multiplicity-error
+            loc
+            (string-append
+             "Multiplicity violation — this match has a branch that cannot be"
+             " analysed (its scrutinee is not a data type with known"
+             " constructors, so the branch's bindings cannot be derived), and a"
+             " linear value of type " (pp-expr ty names) " is consumed by"
+             " another branch. Whether every path consumes it exactly once"
+             " cannot be decided, so it is refused rather than assumed."
+             " Matching on a `data` type instead makes the branches analysable.")
+            (string-append "the linear value of type " (pp-expr ty names))
+            (pp-mult-user 'm1)
+            "undecidable — one branch could not be analysed")]
+
           ;; A binder whose usage does not match its declaration.
           ;;
           ;; ⚠ THE DETAIL GOES IN THE MESSAGE, not only in the struct fields.
