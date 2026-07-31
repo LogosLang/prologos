@@ -1,10 +1,27 @@
 # QTT: multiplicity checking for pattern matching
 
-**Status**: P1 ✅ · P2 ✅ · P3 🔄 · created retroactively at P3 (the work arrived
-as a Suggested-task chip, not from a Stage-3 design; P1/P2 landed before this
-doc existed, and their sections below are written from their commits).
+**Status**: P1 ✅ · P2 ✅ · P3 ✅ · P4 ✅ · X.close ✅ — **COMPLETE**. Created
+retroactively at P3 (the work arrived as a Suggested-task chip, not from a
+Stage-3 design; P1/P2 landed before this doc existed and their sections are
+written from their commits).
 
-**Series**: QTT (new). Not yet in `MASTER_ROADMAP.org` — add on P3 close.
+**Series**: QTT — in `MASTER_ROADMAP.org` § QTT since P3 close.
+
+**No PIR** (owner ruling, 2026-07-30): not a full designed track. `workflow.md`'s
+objective PIR gate is for tracked Stage-3 designs; the per-phase VAGs (§6, §9)
+and these close notes serve instead.
+
+## 0. What this track changed, in one place
+
+| | Before | After |
+|---|---|---|
+| `match` / multi-clause `defn` | **no multiplicity checking at all** | checked |
+| fio's `-1>` handles (the only linear API) | declared linear, never verified | verified, and they hold |
+| linear var used once per branch | **rejected** (m1+m1 = mw) | accepted |
+| linear var dropped on some branches | accepted (**fd leak**) | rejected |
+| the violation message | 3 placeholder lines, `Variable:` = the whole body | names the resource, declaration, what happened, and why |
+
+Suite 9418 → 9460, 475 files, 0 failures throughout. Zero stdlib fallout.
 
 ## Summary
 
@@ -26,8 +43,8 @@ became `m1 + m1 = mw` and was rejected — though only one branch runs.
 | P1 | `mult-join` + `join-usage`; branch alternation at 5 eliminator sites | ✅ | `966226cf` — suite 9444/475/0 |
 | P2 | `checkQ` `expr-reduce` arm + beta-redex arm; guard entry removed; PNET 6→7 | ✅ | `9fbbc90f` — suite 9445/475/0, zero fallout |
 | P3 | Linear-per-path: branch-agreement guard at `m1` positions (**owner ruling: option 3**) | ✅ | `3a4d521a` — suite 9455/475/0; VAG produced `join-branches` |
-| P4 | Precise diagnostic naming the dropped resource | 🔄 | this phase — realizes §5.P3's deferred benefit |
-| X.close | Roadmap row + DEFERRED sweep | ⬜ | **NO PIR** (owner, 2026-07-30): this is not a full designed track — it arrived as a chip and the design doc is retroactive. `workflow.md`'s objective PIR gate is for tracked Stage-3 designs; close notes suffice here. |
+| P4 | Precise diagnostic naming the dropped resource | ✅ | `e7fbd2ba` — suite 9460/475/0; VAG caught the message-only rendering trap |
+| X.close | Roadmap row + DEFERRED sweep + close notes | ✅ | **NO PIR** (owner, 2026-07-30): this is not a full designed track — it arrived as a chip and the design doc is retroactive. `workflow.md`'s objective PIR gate is for tracked Stage-3 designs; close notes suffice here. |
 
 ## 7. P4 mini-design (step 1)
 

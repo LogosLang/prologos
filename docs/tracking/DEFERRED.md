@@ -23,8 +23,11 @@ question. Ruling: *"linear types should always be linear... there's a
 correctness concern otherwise."* The join stayed the honest lub and a separate
 `join-branches` guard supplies linear-per-path — `maybe-close` (the fd leak
 below) now errors; `always-close` type-checks. Two residuals, both filed:
-- P4 — the rejection still reads generic "Multiplicity violation"; `bu`/`tu-error`
-  carry no payload, so it cannot yet NAME the dropped resource.
+- P4 ✅ `e7fbd2ba` — the message NOW names the resource, its declaration, what
+  happened and why, for all four violation classes. (The premise above was wrong:
+  `multiplicity-error` already had `variable`/`declared`/`actual` fields that
+  already rendered — they were filled with the string literals "declared" and
+  "actual". No protocol change was needed, only real values.)
 - The reduce arm's permissive fallback never checks agreement, so a leak on an
   unanalysable (Church-fold) arm still hides. Closes when that path does.
 
