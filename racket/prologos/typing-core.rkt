@@ -42,6 +42,9 @@
          ;; CIU T6 D4.P3a: the select walk + failure struct (consumed by the
          ;; typing-errors select hint — one walk, two consumers, no drift)
          select-project (struct-out select-fail)
+         ;; QTT P2 (2026-07-30): the reduce-arm binder derivation, shared with
+         ;; qtt.rkt's expr-reduce arm — one derivation, two consumers, no drift
+         reduce-arm-ctx reduce-scrutinee-decompose
          ;; Rel T1 B3.2: display-time coinductive refinement (driver echo seam only)
          refine-solve-row-type-for-display
          (struct-out no-level) (struct-out just-level)
@@ -4447,30 +4450,55 @@
     [(unit) (expr-Unit)]
     [else #f]))
 
+;; The ctx a single reduce ARM's body must be checked in: the ambient ctx
+;; extended with that arm's field binders, each carrying the multiplicity the
+;; constructor's own Pi chain declares. Returns the extended ctx, or #f when the
+;; constructor's type is unknown or cannot be instantiated at `type-args`.
+;;
+;; EXPORTED for the QTT twin. qtt.rkt's `expr-reduce` arm needs exactly this
+;; derivation to know what multiplicities the pattern-bound fields carry, and
+;; re-deriving it there would be the twin-drift failure `pipeline.md`
+;; § "infer / inferQ Are Twins" documents. One derivation, two consumers.
+;; (bc = 0 returns `ctx` unchanged, so callers need no special case.)
+(define (reduce-arm-ctx ctx arm type-ctor-name type-args)
+  (define ctor-name (expr-reduce-arm-ctor-name arm))
+  (define bc (expr-reduce-arm-binding-count arm))
+  ;; Look up constructor type from global-env (try FQN, bare, then built-in)
+  (define ctor-fqn (qualify-ctor-name ctor-name type-ctor-name))
+  (define ctor-type (or (global-env-lookup-type ctor-fqn)
+                        (global-env-lookup-type ctor-name)
+                        (builtin-ctor-type ctor-name)))
+  (and ctor-type
+       (let ([instantiated (instantiate-pi-chain ctor-type type-args)])
+         (and instantiated
+              (if (= bc 0)
+                  ctx
+                  (extend-ctx-with-fields ctx instantiated bc))))))
+
+;; Decompose a scrutinee's type into (values type-ctor-name type-args) and the
+;; constructor list, exactly as `check-reduce` does. EXPORTED alongside
+;; `reduce-arm-ctx` so the QTT twin reaches the arms through the same route.
+;; Returns (values type-ctor-name type-args) with type-ctor-name = #f when the
+;; type has no constructor metadata (the Church-fold fallback case).
+(define (reduce-scrutinee-decompose scrut-type)
+  (let-values ([(type-ctor-name type-args) (decompose-type-app scrut-type)])
+    (define bare-tc (and type-ctor-name (bare-name type-ctor-name)))
+    (define type-ctors (and bare-tc (lookup-type-ctors bare-tc)))
+    (if (and type-ctors (not (null? type-ctors)))
+        (values type-ctor-name type-args)
+        (values #f '()))))
+
 ;; Path A: True structural pattern matching using constructor metadata
 (define (check-reduce-structural ctx arms expected-type
                                   type-ctor-name type-args)
   (for/and ([arm (in-list arms)])
-    (define ctor-name (expr-reduce-arm-ctor-name arm))
     (define bc (expr-reduce-arm-binding-count arm))
     (define body (expr-reduce-arm-body arm))
-    ;; Look up constructor type from global-env (try FQN, bare, then built-in)
-    (define ctor-fqn (qualify-ctor-name ctor-name type-ctor-name))
-    (define ctor-type (or (global-env-lookup-type ctor-fqn)
-                          (global-env-lookup-type ctor-name)
-                          (builtin-ctor-type ctor-name)))
+    (define ext-ctx (reduce-arm-ctx ctx arm type-ctor-name type-args))
     (cond
-      [(not ctor-type) #f]
-      [else
-       (define instantiated (instantiate-pi-chain ctor-type type-args))
-       (cond
-         [(not instantiated) #f]
-         [else
-          (if (= bc 0)
-              (check ctx body expected-type)
-              (let ([ext-ctx (extend-ctx-with-fields ctx instantiated bc)])
-                (define shifted-exp (shift bc 0 expected-type))
-                (check ext-ctx body shifted-exp)))])])))
+      [(not ext-ctx) #f]
+      [(= bc 0) (check ctx body expected-type)]
+      [else (check ext-ctx body (shift bc 0 expected-type))])))
 
 ;; Path B: Church fold desugaring (fallback for built-in types)
 (define (check-reduce-church ctx scrutinee arms expected-type)

@@ -325,7 +325,21 @@
 ;; are now handled by qtt.rkt directly.
 (define (contains-unsupported-qtt? e)
   (match e
-    [(expr-reduce _ _ _) #t]
+    ;; NOTE (2026-07-30): `expr-reduce` was the FIRST arm here and is gone —
+    ;; qtt.rkt now has a checkQ arm for it, so pattern matching is multiplicity-
+    ;; checked. While it sat here, every `match` and every multi-clause `defn`
+    ;; skipped QTT entirely, which is why fio's `-1>` handles were declared linear
+    ;; and never checked.
+    ;;
+    ;; ⚠ THIS WALK IS NON-EXHAUSTIVE AND SILENTLY SO: it recurses 12 node kinds,
+    ;; flags 8, and ends at `[_ #f]` below — over ~344 `expr-*` structs. Anything
+    ;; else (container literals, records, and every node added since) stops the
+    ;; walk and reports "supported" without looking inside. Per pipeline.md
+    ;; § "Exhaustive Walkers" the structural answer is a reflective fallback, and
+    ;; per workflow.md this guard is itself the belt-and-suspenders dual path
+    ;; masking qtt.rkt's gaps — the endgame is arming the remaining 8 nodes in
+    ;; qtt.rkt and deleting this function. Tracked in DEFERRED.md; not done here
+    ;; because each of the 8 is its own typing question.
     [(expr-vnil _) #t]
     [(expr-vcons _ _ _ _) #t]
     [(expr-vhead _ _ _) #t]

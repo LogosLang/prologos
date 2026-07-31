@@ -95,6 +95,27 @@
     [else (cons (mult-join (car u1) (car u2))
                 (join-usage (cdr u1) (cdr u2)))]))
 
+;; Validate and strip the first `bc` binder entries from a usage vector, using
+;; the declared multiplicities at the front of `ext-ctx`. This is the lambda
+;; arm's `(compatible declared (uhead u))` / `(utail u)` idiom (see checkQ's
+;; expr-lam arm) iterated `bc` times, for eliminator arms that bind several
+;; pattern fields at once.
+;;
+;; Returns the trimmed usage, or #f if a bound field violates its multiplicity
+;; (e.g. a linear field duplicated inside the arm body).
+;;
+;; ⚠ Trimming is not optional bookkeeping: `join-usage`/`add-usage` silently PAD
+;; on length divergence, so an untrimmed vector produces no error here and
+;; instead surfaces far away as `check-all-usages` failing on a length mismatch —
+;; i.e. as a spurious "Multiplicity violation" pointing at the wrong thing.
+(define (strip-binders ext-ctx u bc)
+  (let loop ([c ext-ctx] [u u] [k bc])
+    (cond
+      [(zero? k) u]
+      [(or (null? c) (null? u)) #f]
+      [(compatible (cdar c) (car u)) (loop (cdr c) (cdr u) (sub1 k))]
+      [else #f])))
+
 ;; Scalar multiplication of usage context
 (define (scale-usage m u)
   (map (lambda (x) (mult-mul m x)) u))
@@ -2359,6 +2380,100 @@
        (match r
          [(bu #t u) (bu #t u)]
          [_ (bu #f (zero-usage n))]))]
+
+    ;; ---- Reduce (pattern match): the arms ALTERNATE ----
+    ;; usage = U_scrutinee + JOIN over arms of (arm-body usage, binders stripped)
+    ;;
+    ;; Until 2026-07-30 there was NO arm here: `contains-unsupported-qtt?`
+    ;; (driver.rkt) returned #t for expr-reduce and the driver SKIPPED
+    ;; checkQ-top entirely, so every `match` and every multi-clause `defn` — the
+    ;; language's PRIMARY dispatch form — escaped multiplicity checking. The
+    ;; stdlib's only linear API (fio's `-1>` handles) is match-implemented, so its
+    ;; linearity was declared and never checked. Demonstrated at the time:
+    ;;   defn dup       [b] (pair b b)                     → correctly rejected
+    ;;   defn dup-match [b] match b (mk-box n -> (pair b b)) → ACCEPTED, 0 errors
+    ;;
+    ;; TYPE work is not redone here — arm bodies are CHECKED against the expected
+    ;; type, and the per-arm binder ctx comes from typing-core's `reduce-arm-ctx`,
+    ;; the very derivation `check-reduce-structural` uses. One derivation, two
+    ;; consumers (pipeline.md § "infer / inferQ Are Twins").
+    ;;
+    ;; PERMISSIVE FALLBACK, deliberate: when the scrutinee's type carries no
+    ;; constructor metadata (the Church-fold path) or a constructor's type cannot
+    ;; be found, this arm cannot derive the field multiplicities. It then binds
+    ;; the fields at `mw` and lets an unanalysable arm contribute NO usage rather
+    ;; than failing. That can MISS a violation inside such an arm, but it cannot
+    ;; invent one — the alternative would newly reject code over a lookup gap,
+    ;; and today's baseline for all of this is no checking whatsoever. Outer
+    ;; variables (the linear parameters that matter) stay tracked either way.
+    [((expr-reduce scrutinee arms _) expected-type)
+     (let ([scrut-type (infer ctx scrutinee)])
+       (cond
+         [(expr-error? scrut-type) (bu #f (zero-usage n))]
+         [else
+          (let*-values ([(tc targs) (reduce-scrutinee-decompose scrut-type)])
+            (let ([r-scrut (checkQ ctx scrutinee scrut-type)])
+              (match r-scrut
+                [(bu #t u-scrut)
+                 (let loop ([as arms] [acc #f])
+                   (cond
+                     [(null? as)
+                      ;; No arm contributed (empty/unanalysable match): the
+                      ;; scrutinee's own usage still stands.
+                      (bu #t (add-usage u-scrut (or acc (zero-usage n))))]
+                     [else
+                      (let* ([arm (car as)]
+                             [bc (expr-reduce-arm-binding-count arm)]
+                             [body (expr-reduce-arm-body arm)]
+                             [strict-ctx (and tc (reduce-arm-ctx ctx arm tc targs))]
+                             [ext-ctx
+                              (or strict-ctx
+                                  ;; fallback: unknown fields bound unrestricted
+                                  (for/fold ([c ctx]) ([_ (in-range bc)])
+                                    (ctx-extend c (expr-hole) 'mw)))]
+                             [r (checkQ ext-ctx body (shift bc 0 expected-type))]
+                             [trimmed
+                              (match r
+                                [(bu #t u-arm) (strip-binders ext-ctx u-arm bc)]
+                                [_ #f])])
+                        (cond
+                          ;; A well-derived arm that fails IS a real violation.
+                          [(and strict-ctx (not trimmed)) (bu #f (zero-usage n))]
+                          ;; An unanalysable arm contributes nothing (see above).
+                          [(not trimmed) (loop (cdr as) acc)]
+                          ;; Length divergence would silently pad at the join.
+                          [(not (= (length trimmed) n)) (bu #f (zero-usage n))]
+                          [else
+                           (loop (cdr as)
+                                 (if acc (join-usage acc trimmed) trimmed))]))]))]
+                [_ (bu #f (zero-usage n))])))]))]
+
+    ;; ---- Let (beta-redex): propagate the expected type into the body ----
+    ;; `(app (lam m dom body) arg)` is the desugared `let`. typing-core's `check`
+    ;; has this arm (see its "Let pattern (beta-redex)" case) precisely so the
+    ;; body is CHECKED rather than inferred; checkQ lacked the twin, so a
+    ;; let-bound body fell through to the conversion fallback → `inferQ` →
+    ;; app-of-lam → `inferQ` on the body. That was harmless while reduce was
+    ;; skipped wholesale, but with the arm above in place a `let`-bound `match`
+    ;; would reach inferQ, which has no reduce arm, and report a spurious
+    ;; "Multiplicity violation". Mirrors the app-of-lam usage rule in inferQ:
+    ;; the argument's usage is scaled by the binder's multiplicity.
+    [((expr-app (expr-lam m dom body) arg) expected-type)
+     (let* ([arg-dom (if (or (expr-hole? dom) (expr-typed-hole? dom))
+                         (let ([ri (inferQ ctx arg)])
+                           (match ri [(tu ty _) ty] [_ #f]))
+                         dom)])
+       (cond
+         [(not arg-dom) (bu #f (zero-usage n))]
+         [else
+          (match (checkQ ctx arg arg-dom)
+            [(bu #t u-arg)
+             (match (checkQ (ctx-extend ctx arg-dom m) body
+                            (shift 1 0 expected-type))
+               [(bu #t u-body)
+                (bu #t (add-usage (scale-usage m u-arg) (utail u-body)))]
+               [_ (bu #f (zero-usage n))])]
+            [_ (bu #f (zero-usage n))])]))]
 
     ;; ---- Lambda: check against Pi ----
     ;; Sprint 7: mult-meta-aware — resolve mult-metas from Pi context or usage

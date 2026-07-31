@@ -157,6 +157,86 @@
               "Second result should be an error (bad is not defined)"))
 
 ;; ========================================
+;; Pattern matching IS multiplicity-checked (QTT P2, 2026-07-30)
+;; ========================================
+;; `contains-unsupported-qtt?` used to return #t for expr-reduce, so the driver
+;; skipped checkQ-top for every `match` and every multi-clause `defn` — the
+;; language's primary dispatch form. These pin that the arm now runs, that its
+;; arms JOIN (one runs), and that sequential use inside an arm still ADDs.
+
+(test-case "qtt-reduce/linear-used-once-in-EACH-arm-is-legal"
+  ;; `y` is linear and appears in both arms; only one arm runs. The scrutinee
+  ;; `s` is unrestricted, so it contributes nothing to y's count.
+  (define result
+    (run-first
+     (string-append
+      "(def m1ok <(Pi [y :1 <Nat>] (Pi [s <Nat>] Nat))> "
+      "(fn [y :1 <Nat>] (fn [s <Nat>] (match s (zero -> y) (suc _ -> y)))))")))
+  (check-false (multiplicity-error? result)
+               (format "linear var once per arm must be legal; got: ~v" result)))
+
+(test-case "qtt-reduce/linear-used-in-NEITHER-arm-is-error"
+  ;; m1 demands exactly one use; m0 join m0 = m0.
+  (define result
+    (run-first
+     (string-append
+      "(def m1unused <(Pi [y :1 <Nat>] (Pi [s <Nat>] Nat))> "
+      "(fn [y :1 <Nat>] (fn [s <Nat>] (match s (zero -> zero) (suc _ -> zero)))))")))
+  (check-true (multiplicity-error? result)
+              (format "unused linear var must violate; got: ~v" result)))
+
+(test-case "qtt-reduce/linear-used-TWICE-IN-ONE-arm-is-error"
+  ;; Within an arm the uses still ADD — the join is branch-vs-branch only.
+  ;; THE pin for the original defect: this exact shape (a linear param
+  ;; duplicated inside a match arm) was ACCEPTED with 0 errors before P2.
+  ;; `(natrec motive y step y)` uses y twice (base AND target) — the same
+  ;; double-use idiom `qtt-pipeline/linear-used-twice-is-error` above uses.
+  (define dbl
+    (string-append "(natrec (fn [_ <Nat>] Nat) y "
+                   "(fn [_ <Nat>] (fn [r <Nat>] r)) y)"))
+  (define result
+    (run-first
+     (string-append
+      "(def m1dup <(Pi [y :1 <Nat>] (Pi [s <Nat>] Nat))> "
+      "(fn [y :1 <Nat>] (fn [s <Nat>] "
+      "(match s (zero -> " dbl ") (suc _ -> " dbl ")))))")))
+  (check-true (multiplicity-error? result)
+              (format "two uses in ONE arm must violate; got: ~v" result)))
+
+(test-case "qtt-reduce/scrutinee-ADDs-to-the-arm-join"
+  ;; The scrutinee always runs, so a linear var matched on AND used in an arm is
+  ;; used twice. Pins add(scrutinee, join(arms)) rather than a flat join.
+  (define result
+    (run-first
+     (string-append
+      "(def m1scrut <(Pi [y :1 <Nat>] Nat)> "
+      "(fn [y :1 <Nat>] (match y (zero -> y) (suc _ -> y))))")))
+  (check-true (multiplicity-error? result)
+              (format "scrutinee must ADD to the arm join; got: ~v" result)))
+
+(test-case "qtt-reduce/unrestricted-match-still-fine"
+  ;; The overwhelmingly common case: no multiplicity annotations anywhere.
+  ;; Turning checking ON must not disturb it.
+  (check-equal?
+   (run-first
+    (string-append
+     "(def classify <(-> Nat Nat)> "
+     "(fn [x <Nat>] (match x (zero -> zero) (suc _ -> (suc zero)))))"))
+   "classify : Nat -> Nat defined."))
+
+(test-case "qtt-reduce/let-bound-match-does-not-spuriously-fail"
+  ;; A `let` desugars to (app (lam ...) arg). checkQ had no beta-redex arm, so
+  ;; before P2 added one this fell through to inferQ, which has no reduce arm,
+  ;; and reported a bogus "Multiplicity violation".
+  (define result
+    (run-first
+     (string-append
+      "(def letmatch <Nat> "
+      "(let a : Nat := (suc zero) (match a (zero -> zero) (suc _ -> a))))")))
+  (check-false (multiplicity-error? result)
+               (format "let-bound match must not violate; got: ~v" result)))
+
+;; ========================================
 ;; Regression guards: existing functionality still works
 ;; ========================================
 

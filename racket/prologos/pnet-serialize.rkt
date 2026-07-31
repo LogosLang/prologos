@@ -140,7 +140,16 @@
 ;; field — the on-disk vector width changed; exact-equality is the only
 ;; reliable sweep (a v5 cache's 2-element vectors would (apply ctor) at the
 ;; wrong arity, or worse, silently mismatch downstream).
-(define PNET_VERSION 6)
+;; v6 -> v7 (QTT P2, 2026-07-30): pattern matching is now multiplicity-checked.
+;; This is a SEMANTIC-VALIDITY change to already-cached modules, the same class
+;; as (b) POISON INVALIDATION above: every .pnet on disk was written while
+;; `contains-unsupported-qtt?` returned #t for expr-reduce, i.e. while every
+;; `match` body SKIPPED checkQ-top. On a cache hit the driver deserializes and
+;; never elaborates, so the QTT gate does not run at all — a module that should
+;; now fail keeps loading from cache, and the suite can be green on a warm tree
+;; while a cold clone or CI hits the new errors. `pnet-stale?` /
+;; `infrastructure-stale?` cannot sweep this class; exact equality can.
+(define PNET_VERSION 7)
 
 ;; ============================================================
 ;; Serialization: struct->vector + gensym tagging + foreign-proc
