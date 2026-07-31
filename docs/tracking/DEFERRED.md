@@ -15,6 +15,89 @@ Deferral".
 
 ---
 
+## ⭐ OWNER DECISION — `m0 ⊔ m1`: does a linear resource have to be consumed on EVERY path? (2026-07-30)
+
+Raised by QTT P1/P2 (`966226cf`, `9fbbc90f`). NOT the implementer's call, so it
+shipped with the status-quo-preserving cell and is recorded here.
+
+`mult-join` (prelude.rkt) is the lub of the tree's own `mult-leq` order, so
+`m0 ⊔ m1 = m1`. That means a linear value consumed on SOME branches and dropped
+on others type-checks — **affine per path**, not linear per path. Demonstrated on
+the real API (fio, verified at `9fbbc90f`):
+
+```prologos
+;; closes the handle on EVERY path — the correct linear program
+def always-close := [fn [h :1 <Handle>] [fn [c : Bool]
+  (boolrec [fn [_ : Bool] Unit] [fio-close h] [fio-close h] c)]]   ;; ✓ accepted
+
+;; closes on one branch, SILENTLY DROPS the handle on the other — an fd leak
+def maybe-close  := [fn [h :1 <Handle>] [fn [c : Bool]
+  (boolrec [fn [_ : Bool] Unit] [fio-close h] unit c)]]            ;; ✓ ALSO accepted
+```
+
+Before P1 this pair was **inverted**: `always-close` was REJECTED (m1+m1 = mw)
+and `maybe-close` accepted. P1 fixed the false rejection. What remains is that
+the leak is still accepted — precisely the failure `Handle`'s linearity exists to
+prevent.
+
+Three options:
+1. **Lenient (shipped)** — `m0 ⊔ m1 = m1`. Preserves every currently-accepted
+   program; permits the leak.
+2. **Strict** — `m0 ⊔ m1 = mw`, so a linear resource must be consumed on every
+   path. Rejects the leak, but is a behavioural regression for accepted code AND
+   mislabels "zero-or-one" as "unrestricted" behind the generic "Multiplicity
+   violation" string (typing-errors.rkt hardcodes the declared/actual fields as
+   literals, so the message cannot say what actually went wrong).
+3. **Lenient join + a per-position branch-AGREEMENT guard** for positions whose
+   DECLARED multiplicity is m1. Gives strict linear-per-path semantics with a
+   PRECISE failure instead of encoding a rejection as `mw`. Expressible where the
+   join now sits: `ctx` is in scope and carries `(type . mult)` positionally
+   parallel to the usage vectors, and `(tu-error)` is already the arm's failure
+   form. This is the option the first analysis pass never enumerated.
+
+Recommendation: (3) if linear-per-path is wanted, since it is the only one that
+can produce a diagnostic naming the dropped resource. Do NOT read the shipped
+default as an endorsement — it is the status quo, and the status quo permits the
+leak.
+
+## Recorded decision — natrec's `step` usage is counted ONCE though it runs n times (2026-07-30)
+
+QTT P1 changed eliminator branch combination to a join at 5 sites and
+DELIBERATELY left `natrec` on `add-usage` (qtt.rkt, comment in place). The
+rationale is sound as far as it goes — base and step are not mutually exclusive
+alternatives, so joining them would UNDER-count, unsound in the permissive
+direction. But the current rule is not right either: `step` has type
+`Π(n:Nat). motive(n) → motive(suc n)` and is applied 0..n times, while its usage
+is added exactly ONCE. A linear variable captured only in the step is therefore
+counted `m1` no matter how many times it is consumed.
+
+Making it sound means scaling the step by `mw`
+(`(add-usage u4 (add-usage u2 (scale-usage 'mw u3)))`), which newly rejects a
+class of currently-accepted code. Recorded rather than defaulted into. Note the
+Redex model (redex/qtt.rkt:173-186) carries the same natrec rule, so the two are
+currently IN AGREEMENT — a fix must move both.
+
+## Retire `contains-unsupported-qtt?` — arm the remaining 8 nodes (2026-07-30)
+
+QTT P2 removed the `expr-reduce` entry, which was the one that mattered. What is
+left (driver.rkt) is a hand-armed walk that recurses 12 node kinds, flags 8
+(`expr-vnil`, `expr-vcons`, `expr-vhead`, `expr-vtail`, `expr-vindex`,
+`expr-fzero`, `expr-fsuc`, `expr-foreign-fn`), and terminates at `[_ #f]` — over
+~344 `expr-*` structs. Everything else stops the walk and is reported
+"supported" WITHOUT being looked inside, so the guard both over-skips (a flagged
+node anywhere disables QTT for the whole def) and under-detects.
+
+Per `pipeline.md` § "Exhaustive Walkers" the structural answer is a reflective
+fallback; per `workflow.md` the guard IS the belt-and-suspenders dual path
+masking qtt.rkt's gaps, and the endgame is arming those 8 nodes in qtt.rkt and
+DELETING the function. Each of the 8 is its own typing question (Vec/Fin are
+length-indexed; `expr-foreign-fn` is an opaque runtime value), which is why P2
+deleted one entry rather than the guard.
+
+⚠ Whoever does this: a `.pnet` version bump belongs in the same commit, for the
+reason P2's did — on a cache hit the driver never elaborates, so the QTT gate
+does not run and a module that should newly fail keeps loading from cache.
+
 ## The branch-result join — residual work after the diagnostic fix (2026-07-30)
 
 Context: a multi-clause `defn` whose clause bodies have different result types
