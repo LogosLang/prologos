@@ -480,6 +480,71 @@
             [_ (tu-error)])]
          [_ (tu-error)]))]
 
+    ;; ---- Vec eliminators (QTT P5, 2026-07-30) ----
+    ;; Usage passes the SUBJECT's usage through unchanged — exactly the fst/snd
+    ;; projection stance directly above. The discarded part of the vector (the
+    ;; tail for vhead, the head for vtail, every other element for vindex) is
+    ;; weakening that is invisible to variable-level usage accounting, just as
+    ;; `fst` discarding a pair's second component is. That is the codebase's
+    ;; existing position on projection, not a new laxity introduced here.
+    ;;
+    ;; The TYPE is delegated to typing-core's own infer arms (`vhead`/`vtail`/
+    ;; `vindex`) — the no-drift twin pattern: one derivation, two consumers.
+    ;; A/n are type-level indices and contribute nothing.
+
+    [(expr-vhead a n0 v)
+     (let ([ty (infer ctx e)])
+       (if (expr-error? ty)
+           (tu-error)
+           (match (checkQ ctx v (expr-Vec a (expr-suc n0)))
+             [(bu #t u) (tu ty u)]
+             [_ (tu-error)])))]
+
+    [(expr-vtail a n0 v)
+     (let ([ty (infer ctx e)])
+       (if (expr-error? ty)
+           (tu-error)
+           (match (checkQ ctx v (expr-Vec a (expr-suc n0)))
+             [(bu #t u) (tu ty u)]
+             [_ (tu-error)])))]
+
+    ;; vindex additionally consumes its INDEX: `i` is a runtime Fin value that
+    ;; selects the element, so its usage is added to the vector's. (A linear
+    ;; vector indexed twice therefore errors — conservative and sound.)
+    [(expr-vindex a n0 i v)
+     (let ([ty (infer ctx e)])
+       (if (expr-error? ty)
+           (tu-error)
+           (match* ((checkQ ctx i (expr-Fin n0)) (checkQ ctx v (expr-Vec a n0)))
+             [((bu #t u-i) (bu #t u-v)) (tu ty (add-usage u-i u-v))]
+             [(_ _) (tu-error)])))]
+
+    ;; ---- Foreign function value (QTT P5) ----
+    ;; A foreign function is a Racket procedure plus marshalling metadata; the
+    ;; only field that can hold Prologos expressions is `args`, the accumulator
+    ;; for curried partial application. At every position reachable from
+    ;; elaboration `args` is '() — captured variables live OUTSIDE the node, as
+    ;; arguments of an enclosing `expr-app` — so this folds to zero usage. The
+    ;; fold is written out anyway rather than hardcoding zero, so a value that
+    ;; did carry args would still have them counted.
+    ;;
+    ;; ⚠ TYPE CAVEAT, shared with the typing twin: `global-env-lookup-type`
+    ;; returns the FULL registered Pi, which is arity-wrong for a node that has
+    ;; already accumulated args (it should be the remainder after (length args)
+    ;; applications). typing-core's infer arm has the identical flaw, so this
+    ;; matches its twin rather than silently diverging — filed in DEFERRED.md
+    ;; rather than fixed here, because fixing it means fixing both.
+    [(expr-foreign-fn _ _ _ args _ _ _ _)
+     (let ([ty (infer ctx e)])
+       (if (expr-error? ty)
+           (tu-error)
+           (let loop ([as args] [acc (zero-usage n)])
+             (cond
+               [(null? as) (tu ty acc)]
+               [else (match (inferQ ctx (car as))
+                       [(tu _ ua) (loop (cdr as) (add-usage acc ua))]
+                       [_ (tu-error)])]))))]
+
     ;; ---- natrec ----
     ;; Usage = U_target + U_base + U_step (motive is type-level)
     ;;
@@ -2447,6 +2512,45 @@
        (match r
          [(bu #t u) (bu #t u)]
          [_ (bu #f (zero-usage n))]))]
+
+    ;; ---- Vec / Fin constructors: CHECK-only, by necessity ----
+    ;; QTT P5 (2026-07-30). These four MUST be checkQ arms, not inferQ arms:
+    ;; typing-core has no `infer` case for any of them (they are check-only
+    ;; there too), so without an arm here the conversion fallback delegates to
+    ;; inferQ, hits its `[_ (tu-error)]` catch-all, and EVERY annotated Vec/Fin
+    ;; def dies as a generic "Multiplicity violation" — the lying-diagnostic
+    ;; class, naming a subsystem that is working perfectly.
+    ;;
+    ;; The usage split follows the runtime/type-level split in each struct, and
+    ;; that split is not guesswork: whnf's computation rules
+    ;;   [(expr-vhead _ _ (expr-vcons _ _ hd _)) (whnf hd)]
+    ;;   [(expr-vtail _ _ (expr-vcons _ _ _ tl)) (whnf tl)]
+    ;; DISCARD the type and length fields and consume only head/tail, so the
+    ;; indices are erased and contribute NO usage while head/tail contribute
+    ;; their own. Type-side validation is left to typing-core's own arms (the
+    ;; no-drift twin pattern) — these arms compute USAGE.
+
+    ;; vnil(A) : Vec(A, zero) — A is type-level, so no usage at all.
+    [((expr-vnil _) (expr-Vec _ _)) (bu #t (zero-usage n))]
+
+    ;; vcons(A, n, head, tail) : Vec(A, suc n) — head and tail each consumed ONCE.
+    ;; add-usage, not join: both are stored, so both happen (this is sequential
+    ;; composition, not alternation). A linear value consed into a vector is
+    ;; therefore consumed exactly once, which is what makes Vec linear-safe.
+    [((expr-vcons a1 n1 hd tl) (expr-Vec _ _))
+     (match* ((checkQ ctx hd a1) (checkQ ctx tl (expr-Vec a1 n1)))
+       [((bu #t u-hd) (bu #t u-tl)) (bu #t (add-usage u-hd u-tl))]
+       [(_ _) (bu #f (zero-usage n))])]
+
+    ;; fzero(n) : Fin(suc n) — n is the type-level bound; nothing runs.
+    [((expr-fzero _) (expr-Fin _)) (bu #t (zero-usage n))]
+
+    ;; fsuc(n, i) : Fin(suc n) — `i` is the runtime predecessor, `n` the bound.
+    ;; Mirrors the `suc` arm above, which counts its argument's usage.
+    [((expr-fsuc n1 i) (expr-Fin _))
+     (match (checkQ ctx i (expr-Fin n1))
+       [(bu #t u) (bu #t u)]
+       [_ (bu #f (zero-usage n))])]
 
     ;; ---- Reduce (pattern match): the arms ALTERNATE ----
     ;; usage = U_scrutinee + JOIN over arms of (arm-body usage, binders stripped)

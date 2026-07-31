@@ -250,6 +250,69 @@
                              (expr-bvar 0))   ;; scrutinee is the same linear b
                (expr-Bool))))
 
+;; ========================================
+;; Vec / Fin usage rules (QTT P5, 2026-07-30)
+;; ========================================
+;; These eight nodes were flagged "unsupported" by driver.rkt's
+;; `contains-unsupported-qtt?`, which made the driver SKIP multiplicity checking
+;; for any def containing one. Arming them here is what allows that guard to be
+;; deleted. Type/length INDICES are erased and contribute no usage; runtime
+;; sub-terms contribute their own — the split is proven by whnf's own rules,
+;; which discard the indices and consume only head/tail.
+;;
+;; vnil/vcons/fzero/fsuc are CHECK-only (typing-core has no infer arm for them
+;; either), so they are checkQ arms; the eliminators are inferQ arms.
+
+(test-case "checkQ: vnil has zero usage (its type index is erased)"
+  (check-equal? (checkQ (ctx-extend ctx-empty (expr-Nat) 'm1)
+                        (expr-vnil (expr-Nat))
+                        (expr-Vec (expr-Nat) (expr-zero)))
+                (bu #t '(m0))))
+
+(test-case "checkQ: vcons ADDS head and tail usage — both are stored"
+  ;; ctx = [y :1 Nat]; consing y once into a 1-vector uses it exactly once.
+  (check-true
+   (checkQ-top (ctx-extend ctx-empty (expr-Nat) 'm1)
+               (expr-vcons (expr-Nat) (expr-zero)
+                           (expr-bvar 0)
+                           (expr-vnil (expr-Nat)))
+               (expr-Vec (expr-Nat) (expr-suc (expr-zero))))))
+
+(test-case "checkQ: a linear value consed TWICE is a violation"
+  ;; head and tail both mention y — add-usage, not join: both are stored.
+  (check-false
+   (checkQ-top (ctx-extend ctx-empty (expr-Nat) 'm1)
+               (expr-vcons (expr-Nat) (expr-suc (expr-zero))
+                           (expr-bvar 0)
+                           (expr-vcons (expr-Nat) (expr-zero)
+                                       (expr-bvar 0)
+                                       (expr-vnil (expr-Nat))))
+               (expr-Vec (expr-Nat) (expr-suc (expr-suc (expr-zero)))))))
+
+(test-case "inferQ: vhead passes the SUBJECT's usage through (the fst/snd stance)"
+  ;; The discarded tail is weakening, invisible to variable-level accounting —
+  ;; exactly as `fst` discarding a pair's second component is.
+  (define ctx1 (ctx-extend ctx-empty (expr-Vec (expr-Nat) (expr-suc (expr-zero))) 'm1))
+  (check-equal? (inferQ ctx1 (expr-vhead (expr-Nat) (expr-zero) (expr-bvar 0)))
+                (tu (expr-Nat) '(m1))))
+
+(test-case "inferQ: vtail likewise passes subject usage through"
+  (define ctx1 (ctx-extend ctx-empty (expr-Vec (expr-Nat) (expr-suc (expr-zero))) 'm1))
+  (check-equal? (inferQ ctx1 (expr-vtail (expr-Nat) (expr-zero) (expr-bvar 0)))
+                (tu (expr-Vec (expr-Nat) (expr-zero)) '(m1))))
+
+(test-case "checkQ: fzero is zero usage; fsuc counts its inner Fin"
+  (check-equal? (checkQ (ctx-extend ctx-empty (expr-Nat) 'm1)
+                        (expr-fzero (expr-zero))
+                        (expr-Fin (expr-suc (expr-zero))))
+                (bu #t '(m0)))
+  ;; fsuc(zero, fzero(zero)) : Fin(suc zero) — inner contributes its own usage,
+  ;; which for a closed fzero is none.
+  (check-equal? (checkQ (ctx-extend ctx-empty (expr-Nat) 'm1)
+                        (expr-fsuc (expr-zero) (expr-fzero (expr-zero)))
+                        (expr-Fin (expr-suc (expr-zero))))
+                (bu #t '(m0))))
+
 ;; ---- linear-per-path: branches must AGREE about each linear resource ----
 ;; Owner ruling 2026-07-30 (design doc §1). `mult-join` stays the honest lub, so
 ;; m0 ⊔ m1 = m1; a separate agreement guard supplies linear-per-path. Without it
