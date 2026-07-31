@@ -9455,9 +9455,19 @@
   (match type-ast
     [(surf-pi binder body _loc)
      (cons binder (extract-pi-binders body))]
-    [(surf-arrow _ domain codomain _loc)
-     ;; Non-dependent arrow: generate anonymous binder
-     (cons (binder-info '_ 'mw domain)
+    [(surf-arrow m domain codomain _loc)
+     ;; Non-dependent arrow: generate anonymous binder, PRESERVING the arrow's
+     ;; multiplicity.
+     ;;
+     ;; 2026-07-31: this matched the mult field as `_` and substituted 'mw,
+     ;; silently discarding it — so every binder derived from an arrow type came
+     ;; back unrestricted. `A -1> B` and `A -> B` were indistinguishable to every
+     ;; consumer of this function. The visible symptom was that a multi-clause
+     ;; `defn` with a linear spec was rejected out of hand, whatever its body
+     ;; did: the generated lambda got 'mw while the Pi said :1, and checkQ's
+     ;; lam-vs-Pi arm requires them to be equal.
+     ;; (`->` carries #f rather than 'mw, hence the `or`.)
+     (cons (binder-info '_ (or m 'mw) domain)
            (extract-pi-binders codomain))]
     [_ '()]))
 
@@ -10332,6 +10342,26 @@
   ;; Try spec type first, fall back to inferred type from constructor metadata
   (define spec-type
     (and (> arity 0) (lookup-spec-type-for-patterns spec-name arity loc)))
+  ;; The generated lambda binders' MULTIPLICITIES. 2026-07-31: these were
+  ;; hardcoded 'mw, so a multi-clause `defn` whose spec declared any non-mw
+  ;; multiplicity was rejected OUT OF HAND — checkQ's lam-vs-Pi arm requires the
+  ;; lambda's mult to equal the Pi's, and 'mw never equals ':1'. Every linear
+  ;; multi-clause defn failed, whatever its body did:
+  ;;
+  ;;   spec cB Handle -1> Nat
+  ;;   defn cB | mk-h k -> k          ;; "Multiplicity violation"
+  ;;   defn cB [h] match h (mk-h k -> k)   ;; the SAME function, accepted
+  ;;
+  ;; The second spelling works because the `surf-defn` path takes each binder's
+  ;; mult FROM the declared type (see expand-top-level's surf-defn arm). This
+  ;; does the same, so the two spellings agree. Falls back to 'mw when there is
+  ;; no spec, or when it has fewer binders than the clause group has parameters.
+  (define binder-mults
+    (let ([bs (and spec-type (extract-pi-binders spec-type))])
+      (lambda (names)
+        (if (and bs (>= (length bs) (length names)))
+            (map binder-info-mult (take bs (length names)))
+            (map (lambda (_) 'mw) names)))))
   (cond
     [dead-arm dead-arm]
     ;; Zero-arity: just use first body
@@ -10350,9 +10380,9 @@
      (define body (caddr (car rows)))
      (define type (or spec-type (build-pattern-group-type var-names rows loc)))
      (define nested-lam
-       (foldr (lambda (vn inner)
-                (surf-lam (binder-info vn 'mw (surf-hole loc)) inner loc))
-              body var-names))
+       (foldr (lambda (vn m inner)
+                (surf-lam (binder-info vn m (surf-hole loc)) inner loc))
+              body var-names (binder-mults var-names)))
      ;; Register user-facing param names for bound-arg display (don't overwrite parser-provided names)
      (unless (lookup-defn-param-names name)
        (register-defn-param-names! name var-names))
@@ -10362,9 +10392,9 @@
      (define type (or spec-type (build-pattern-group-type param-names rows loc)))
      (define body (compile-match-tree rows param-names loc))
      (define nested-lam
-       (foldr (lambda (pn inner)
-                (surf-lam (binder-info pn 'mw (surf-hole loc)) inner loc))
-              body param-names))
+       (foldr (lambda (pn m inner)
+                (surf-lam (binder-info pn m (surf-hole loc)) inner loc))
+              body param-names (binder-mults param-names)))
      ;; Register param names for bound-arg display (don't overwrite parser-provided names)
      (unless (lookup-defn-param-names name)
        (register-defn-param-names! name param-names))

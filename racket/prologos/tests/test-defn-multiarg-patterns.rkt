@@ -321,3 +321,51 @@
      "defn unbox\n  | mk-b3 k -> k\n  | empty3  -> 0N\n"
      "eval [unbox [mk-b3 7N]]"))
    "7N : Nat"))
+
+;; ========================================
+;; Multiplicities survive an arrow spec (2026-07-31)
+;; ========================================
+;; `extract-pi-binders` matched a `surf-arrow`'s multiplicity field as `_` and
+;; substituted 'mw, so every binder derived from an arrow type came back
+;; unrestricted — `A -1> B` and `A -> B` were indistinguishable to all its
+;; consumers. Visible symptom: a multi-clause `defn` with a linear spec was
+;; rejected OUT OF HAND whatever its body did (the generated lambda got 'mw while
+;; the Pi said :1, and checkQ's lam-vs-Pi arm requires them equal), while the
+;; SAME function written with bracket params + an inline match was accepted.
+
+(define (mult-violation? s)
+  (define r (with-handlers ([(lambda (_) #t) (lambda (e) e)]) (run-last s)))
+  (and (prologos-error? r)
+       (regexp-match? #rx"Multiplicity" (prologos-error-message r))))
+
+(define handle-decl "(data Handle2 (mk-h : Nat))\n")
+
+(test-case "spec-mult/a linear multi-clause defn is ACCEPTED when correct"
+  ;; The regression: this was rejected for its spec alone.
+  (check-false
+   (mult-violation?
+    (string-append handle-decl
+                   "(spec ok1 Handle2 -1> Nat -> Handle2)\n"
+                   "(defn ok1 ($pipe (h n) -> h))"))))
+
+(test-case "spec-mult/linearity is still ENFORCED in that form"
+  ;; The control that matters: the fix must restore checking, not disable it.
+  (check-true
+   (mult-violation?
+    (string-append handle-decl
+                   "(spec bad2 Handle2 -1> Nat -> Nat)\n"
+                   "(defn bad2 ($pipe (h n) -> 0N))"))
+   "a linear parameter left unused must still violate")
+  (check-true
+   (mult-violation?
+    (string-append handle-decl
+                   "(spec bad3 Handle2 -0> Handle2)\n"
+                   "(defn bad3 ($pipe (h) -> h))"))
+   "an erased parameter used at runtime must still violate"))
+
+(test-case "spec-mult/the two spellings of the same function now agree"
+  ;; Destructuring a linear value: bracket-params + inline match (the stdlib fio
+  ;; spelling) and the multi-clause form must both be accepted.
+  (define decl (string-append handle-decl "(spec c Handle2 -1> Nat)\n"))
+  (check-false (mult-violation? (string-append decl "(defn c [h] (match h (mk-h k -> k)))")))
+  (check-false (mult-violation? (string-append decl "(defn c ($pipe (mk-h k) -> k))"))))
