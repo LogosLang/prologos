@@ -63,16 +63,17 @@
 ;; ============================================================
 
 (test-case "let-p1/containment: commands before AND after a bad let still report"
-  ;; The load-bearing pin. Before P1 the aligned form was a raw raise killing
-  ;; the WHOLE file — even `before`, which precedes it, produced no output.
+  ;; The load-bearing pin: a broken let is ONE failed command. (Before P1 a
+  ;; bad let was a raw raise killing the WHOLE file.)
+  ;; (P3 flipped the aligned exemplar to WORKING; the fused form is the bad
+  ;; let until P4 — the flip-with-the-feature pattern, applied forward.)
   (define rs (run-file-ws (string-append
     "ns c1\n"
     "def before := 1\n"
     "spec f Int -> Int\n"
     "defn f [a]\n"
-    "  let x 4\n"
-    "      y 5\n"
-    "    [+ a [+ x y]]\n"
+    "  let x:Int 4\n"
+    "    [+ a x]\n"
     "def after := 2\n")))
   (check-equal? (length rs) 3 (format "expected 3 results, got: ~v" rs))
   (check-false (prologos-error? (first rs)) "`before` must define")
@@ -80,25 +81,19 @@
   (check-false (prologos-error? (third rs)) "`after` must define"))
 
 (test-case "let-p1/the still-broken form classes are parse errors, not raises"
-  ;; P1 pinned FOUR broken classes; the sibling no-:= chain graduated to
-  ;; WORKING at P2 and moved to the let-p2 pins below. Remaining: aligned
-  ;; (unrecognized format — P3's target), fused (P4's target), top-level let
+  ;; P1 pinned FOUR broken classes; the sibling no-:= chain graduated at P2,
+  ;; the aligned block at P3. Remaining: fused (P4's target) and top-level let
   ;; (permanent guided error). Each per-command; the file reaches the control.
   (define rs (run-file-ws (string-append
     "ns c2\n"
-    "spec f1 Int -> Int\n"
-    "defn f1 [a]\n"
-    "  let x 4\n"
-    "      y 5\n"
-    "    [+ a [+ x y]]\n"
     "spec f2 Int -> Int\n"
     "defn f2 [a]\n"
     "  let x:Int 4\n"
     "    [+ a x]\n"
     "let tl := 99\n"
     "def control := 7\n")))
-  (check-equal? (length rs) 4 (format "expected 4 results, got: ~v" rs))
-  (for ([r (in-list (take rs 3))] [i (in-naturals)])
+  (check-equal? (length rs) 3 (format "expected 3 results, got: ~v" rs))
+  (for ([r (in-list (take rs 2))] [i (in-naturals)])
     (check-true (prologos-error? r) (format "result ~a must be an error, got: ~v" i r)))
   (check-false (prologos-error? (last rs)) "the trailing control must define"))
 
@@ -109,9 +104,8 @@
     "ns c3\n"
     "spec f Int -> Int\n"
     "defn f [a]\n"
-    "  let x 4\n"
-    "      y 5\n"
-    "    [+ a [+ x y]]\n"
+    "  let x:Int 4\n"
+    "    [+ a x]\n"
     "let tl := 99\n")))
   (check-equal? (length rs) 2)
   (check-true (regexp-match? #rx"unrecognized format"
@@ -223,6 +217,127 @@
   (check-equal?
    (merge-sibling-lets '((let a 1) (let b 2 (add a b))))
    '((let (a := 1 b := 2) (add a b)))))
+
+;; ============================================================
+;; P3 — aligned let blocks: strict column discipline (owner ruling 1)
+;; ============================================================
+;; The reader-layer transform (parse-reader.rkt § LET P3) consumes columns
+;; BEFORE syntax->datum erases them, emitting ($let-block …) for valid blocks
+;; and P1's $let-error marker (guided, columns named) for violations.
+
+(test-case "let-p3/aligned block, all three spellings + typed + bare-token body"
+  (define rs (run-file-ws (string-append
+    "ns p3a\n"
+    "spec f1 Int -> Int\n"
+    "defn f1 [a]\n"
+    "  let x 4\n"
+    "      y 5\n"
+    "      z [+ x y]\n"
+    "    [+ a z]\n"
+    "[f1 1]\n"
+    "spec f2 Int -> Int\n"
+    "defn f2 [a]\n"
+    "  let x := 4\n"
+    "      y := 5\n"
+    "    [+ a [+ x y]]\n"
+    "[f2 1]\n"
+    "spec f3 Int -> Int\n"
+    "defn f3 [a]\n"
+    "  let x 4\n"
+    "      y := 5\n"
+    "    [+ a [+ x y]]\n"
+    "[f3 1]\n"
+    "spec f4 Int -> Int\n"
+    "defn f4 [a]\n"
+    "  let x : Int := 4\n"
+    "      y 5\n"
+    "    [+ a [+ x y]]\n"
+    "[f4 1]\n"
+    "spec f5 Int -> Int\n"
+    "defn f5 [a]\n"
+    "  let x 4\n"
+    "      z [+ x 1]\n"
+    "    z\n"
+    "[f5 9]\n")))
+  (for ([r (in-list rs)]) (check-false (prologos-error? r) (format "~v" r)))
+  (check-equal? (length rs) 10))
+
+(test-case "let-p3/STRICT: forgot-the-body gives the guided error, columns named"
+  (define rs (run-file-ws (string-append
+    "ns p3b\n"
+    "spec f Int -> Int\n"
+    "defn f [a]\n"
+    "  let x 4\n"
+    "      y 5\n"
+    "      z [+ x y]\n"
+    "def control := 7\n")))
+  (check-equal? (length rs) 2 (format "got: ~v" rs))
+  (check-true (prologos-error? (first rs)))
+  (check-true (regexp-match? #rx"no body.*column"
+                             (prologos-error-message (first rs)))
+              (format "got: ~v" (prologos-error-message (first rs))))
+  (check-false (prologos-error? (second rs)) "containment"))
+
+(test-case "let-p3/STRICT: a trailing BINDING mistaken for a body is refused"
+  ;; The P0-flagged top-level-guard bypass, closed structurally at the funnel:
+  ;; `:=` is reserved, so a binding-shaped body can only be a mistake.
+  (define rs (run-file-ws (string-append
+    "ns p3c\n"
+    "def before := 1\n"
+    "let tl := 4\n"
+    "    um := 5\n"
+    "def after := 2\n")))
+  (check-equal? (length rs) 3 (format "got: ~v" rs))
+  (check-true (prologos-error? (second rs)))
+  (check-true (regexp-match? #rx"BINDING"
+                             (prologos-error-message (second rs)))
+              (format "got: ~v" (prologos-error-message (second rs))))
+  (check-false (prologos-error? (third rs)) "containment"))
+
+(test-case "let-p3/controls: nested, := chain, and pipe-bodied lets untouched"
+  ;; The activation gate's byte-transparency pins: 0/1-continuation forms and
+  ;; pipe-headed continuations (a match body) must never be captured.
+  (define rs (run-file-ws (string-append
+    "ns p3d\n"
+    "spec g1 Int -> Int\n"
+    "defn g1 [a]\n"
+    "  let x 4\n"
+    "    let y 5\n"
+    "      [+ x [+ a y]]\n"
+    "[g1 1]\n"
+    "spec g2 Int -> Int\n"
+    "defn g2 [n]\n"
+    "  let k := [+ n 1]\n"
+    "    match k\n"
+    "      | 0 -> 0\n"
+    "      | m -> m\n"
+    "[g2 3]\n")))
+  (for ([r (in-list rs)]) (check-false (prologos-error? r) (format "~v" r))))
+
+(test-case "let-p3/an aligned let as the LAST sibling merges (split-last-let arm)"
+  (define rs (run-file-ws (string-append
+    "ns p3e\n"
+    "spec f Int -> Int\n"
+    "defn f [a]\n"
+    "  let w := 100\n"
+    "  let x 4\n"
+    "      y 5\n"
+    "    [+ a [+ w [+ x y]]]\n"
+    "[f 1]\n")))
+  (for ([r (in-list rs)]) (check-false (prologos-error? r) (format "~v" r)))
+  (check-true (regexp-match? #rx"110" (format "~a" (second rs)))
+              (format "got: ~v" (second rs))))
+
+(test-case "let-p3/aligned block under a def := RHS"
+  (define rs (run-file-ws (string-append
+    "ns p3f\n"
+    "def d1 :=\n"
+    "  let p 6\n"
+    "      q [+ p 1]\n"
+    "    [+ p q]\n"
+    "d1\n")))
+  (for ([r (in-list rs)]) (check-false (prologos-error? r) (format "~v" r)))
+  (check-true (regexp-match? #rx"13" (format "~a" (second rs)))))
 
 (test-case "let-p1/working let forms are untouched (control)"
   ;; The := chain and the nested shorthand still work through the same seam.

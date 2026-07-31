@@ -1156,6 +1156,7 @@
        (not (eq? x '$nil-dot-key))      ; RETIRED sentinel (D4.P1a) — still emitted by the reader
        (not (eq? x '$retired-selection)) ; D4.P1a retirement marker (parser converts to guided error)
        (not (eq? x '$let-error))        ; LET P1 syntax-failure marker (parser converts to per-command parse error)
+       (not (eq? x '$let-block))        ; LET P3 aligned-block sentinel (reader-validated; expand-let consumes)
        (not (eq? x '$dot-brace))        ; D4.P1b-ii `.{ }` sub-block sentinel — see below
        (not (eq? x '$select-brace))     ; D4.P1b-iii adjacent-brace select block
        (not (eq? x '$select))           ; D4.P3a fused select head (LOUD-if-missed: whole-file abort in a defmacro template)
@@ -2407,11 +2408,39 @@
       (list (car rest) ':= (cadr rest))
       rest))
 
+;; LET P3: normalize ONE validated binding-line group onto the := token form
+;; parse-assign-bindings consumes. ONE normalizer, TWO consumers — expand-let's
+;; $let-block branch and split-last-let's $let-block arm (the sibling-merge
+;; path); a third copy would be the exact normalize-drift that broke the no-:=
+;; chains before P2.
+;;   (name value)          → (name := value)
+;;   (name := value …)     → verbatim
+;;   (name : T … := v)     → verbatim
+;;   anything else         → guided error (fused `name:T` arrives at P4)
+(define (normalize-let-binding-group g)
+  (cond
+    [(and (list? g) (memq ':= g)) g]
+    [(and (list? g) (= (length g) 2) (symbol? (car g)))
+     (list (car g) ':= (cadr g))]
+    [else
+     (let-syntax-error
+      "let block binding must be `name value`, `name := value`, or `name : T := value`, got ~a"
+      g)]))
+
 ;; Split the last let in a sequence into (values binding-tokens body).
 ;; The last let has a body.
 (define (split-last-let let-form)
   (define rest (cdr let-form))
   (cond
+    ;; LET P3: an aligned block as the LAST sibling — a bodyless `let a := 1`
+    ;; followed by an aligned let lands here via merge-let-sequence. Without
+    ;; this arm the bracket arm below would splice the raw ($let-block …) into
+    ;; the binding stream, where parse-assign-bindings swallows it into the
+    ;; previous value (the probe-5 junk class). Same normalizer as expand-let's
+    ;; Branch 0 — one derivation, two consumers.
+    [(and (pair? rest) (pair? (car rest)) (eq? (caar rest) '$let-block))
+     (values (append-map normalize-let-binding-group (cdar rest))
+             (cadr rest))]
     ;; := format: find the body (last element after the value)
     [(memq ':= rest)
      ;; For (let name := value body) or (let name : T := value body)
@@ -4803,6 +4832,19 @@
      name name))
 
   (cond
+    ;; --- Branch 0 (LET P3): the aligned block, pre-structured by the reader ---
+    ;; (let ($let-block (head-binding) (b1 …) …) body) — the column discipline
+    ;; already ran at the reader layer (parse-reader.rkt § LET P3), so every
+    ;; group here is a VALIDATED binding line. Normalize each group and lower
+    ;; onto the single parse-assign-bindings funnel.
+    [(and (pair? (car rest)) (eq? (caar rest) '$let-block))
+     (unless (= (length rest) 2)
+       (let-syntax-error "let block: expected exactly one body, got ~a" rest))
+     (define groups (cdar rest))
+     (define body (cadr rest))
+     (define tokens (append-map normalize-let-binding-group groups))
+     (let-bindings->nested-fn (parse-assign-bindings tokens) body)]
+
     ;; --- Branch 1: Bracket format — second element is a list ---
     [(list? (car rest))
      ;; The outer "(>= (length datum) 3)" check above guarantees
@@ -4912,7 +4954,19 @@
 
 ;; Convert parsed bindings ((name type value) ...) to nested fn application.
 ;; Type '_ means inferred (hole).
+;;
+;; LET P3: a BODY that is binding-shaped is refused here, at the single funnel
+;; every let format converges on. `:=` is RESERVED (never legal in expression
+;; position), so a body like `(um := 5)` can only be a BINDING the user meant
+;; as part of the block — the shape the P0 grounding flagged as bypassing the
+;; top-level guard (`let tl := 4` + `um := 5` silently bound tl and died
+;; "Unbound variable um"). One check, all branches: inline, bracket, $let-block
+;; and the sibling merge all pass through here.
 (define (let-bindings->nested-fn parsed-bindings body)
+  (when (and (list? body) (>= (length body) 3) (eq? (cadr body) ':=))
+    (let-syntax-error
+     "let has no body — the final line `~a` is a BINDING; a let block's body sits on a line indented between the `let` column and the bindings column"
+     body))
   (foldr (lambda (binding inner)
            (define name (car binding))
            (define type (cadr binding))

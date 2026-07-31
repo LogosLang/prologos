@@ -2499,7 +2499,154 @@
   (define vec (list->vector items))
   (define-values (elems _end)
     (group-items vec 0 (vector-length vec) #f source source-str))
-  elems)
+  (transform-let-blocks-elems elems))
+
+;; ============================================================
+;; LET P3 (2026-07-31): aligned let blocks — the column discipline.
+;; ============================================================
+;;
+;;     let x 4              The continuation BINDING lines share one column;
+;;         y 5              the BODY sits strictly between the `let` column
+;;         z [+ x y]        and the binding column. STRICT (owner ruling 1):
+;;       [+ a z]            anything else is a guided per-command error
+;;                          naming the columns.
+;;
+;; This is the ONE layer that can implement the discipline: every element here
+;; — bare token or wrapped line-group — still carries line/column, while
+;; preparse strips srclocs (`syntax->datum`) before `expand-let` dispatches,
+;; and binding groups vs a body application are SHAPE-IDENTICAL without
+;; columns (`(z (+ x y))` vs `(+ a z)`). The `&>` clause-group machinery is
+;; the precedent (Rel T1 POL.8).
+;;
+;; ACTIVATION is deliberately narrow — the transform is IDENTITY unless:
+;;   - the group heads with the identifier `let` followed by BARE binding
+;;     tokens (bracket-binding heads excluded), and
+;;   - there are ≥2 continuation LINES, and
+;;   - none is `$pipe`-headed (STRUCTURAL, not heuristic: `|` is reserved arm
+;;     syntax and never a binding, so the working `let x := v` + `match x` +
+;;     `| arm` body shape can never be captured), and
+;;   - the elements carry real line/col (synthesized stx deactivates), and
+;;   - EITHER the aligned body signature is present (last continuation
+;;     strictly between the let and binding columns) OR every continuation
+;;     shares the binding column (the forgot-the-body shape, which today
+;;     value-swallows into junk — it gets the guided no-body error instead).
+;;
+;; On success the group is rewritten to
+;;     (let ($let-block (head-binding) (b1 …) (b2 …)) body)
+;; — head `let` retained so preparse's existing dispatch reaches expand-let,
+;; which normalizes the groups onto the single parse-assign-bindings funnel.
+;; On violation the group becomes P1's ($let-error "…") marker: a per-command
+;; guided error with the columns named, and the file continues.
+
+(define (let-block-pipe-headed? e)
+  (define d (syntax-e e))
+  (or (and (symbol? d) (eq? d '$pipe))
+      (and (pair? d)
+           (let ([h (syntax-e (car d))])
+             (and (symbol? h) (eq? h '$pipe))))))
+
+(define (let-block-error stx msg)
+  (datum->syntax #f (list (datum->syntax #f '$let-error stx)
+                          (datum->syntax #f msg stx))
+                 stx))
+
+;; The recursive walk: bottom-up (a nested let inside a binding value is
+;; transformed before its parent is classified). `classify` runs on
+;; already-recursed element lists; the two entry points share it.
+(define (let-headed? elems)
+  (and (pair? elems)
+       (let ([h (syntax-e (car elems))]) (and (symbol? h) (eq? h 'let)))))
+
+;; ⚠ EQ?-PRESERVING BY CONSTRUCTION (caught by the P3 gate, acceptance
+;; [27]/[28]): the first draft rebuilt EVERY stx-list via
+;; `(datum->syntax #f kids stx)`, which copies the srcloc but DROPS SYNTAX
+;; PROPERTIES — including POL.9's 'prologos-paren-origin mark, so an
+;; implicit-solve paren goal `(quest t "Alice" r)` silently degraded to an
+;; APPLICATION. A form the walk does not change now keeps its ORIGINAL stx
+;; (identity, properties, everything); a rebuilt form passes the original as
+;; BOTH the srcloc and the property template (datum->syntax's 4th argument).
+(define (transform-let-blocks-stx stx)
+  (define lst (syntax->list stx))
+  (if (not lst)
+      stx
+      (let* ([kids (map transform-let-blocks-stx lst)]
+             [kids* (if (let-headed? kids) (classify-let-block kids) kids)])
+        (if (and (eq? kids* kids) (andmap eq? kids lst))
+            stx
+            (datum->syntax #f kids* stx stx)))))
+
+;; Entry point for a top-level form's element list (tree-node->stx-elements).
+(define (transform-let-blocks-elems elems)
+  (define elems* (map transform-let-blocks-stx elems))
+  (if (let-headed? elems*) (classify-let-block elems*) elems*))
+
+;; Classify a let-headed element list; return the (possibly rewritten) list.
+(define (classify-let-block elems)
+  (define let-tok (car elems))
+  (define let-line (syntax-line let-tok))
+  (define let-col (syntax-column let-tok))
+  (define rest (cdr elems))
+  (define (loc-ok? e) (and (syntax-line e) (syntax-column e)))
+  (cond
+    [(or (not let-line) (not let-col) (not (andmap loc-ok? rest))) elems]
+    [else
+     (define head-elems (filter (lambda (e) (= (syntax-line e) let-line)) rest))
+     (define cont-elems (filter (lambda (e) (> (syntax-line e) let-line)) rest))
+     (cond
+       ;; 0/1 continuation lines: every working form (single-line lets, the
+       ;; nested shorthand, bracket lets with one body line, sibling := chains)
+       ;; — untouched, byte-transparent.
+       [(< (length cont-elems) 2) elems]
+       ;; pipe-headed continuation: a match/arm body — never bindings.
+       [(ormap let-block-pipe-headed? cont-elems) elems]
+       ;; bracket-binding head (car of head-elems is a group) or empty head:
+       ;; not the aligned surface.
+       [(or (null? head-elems) (pair? (syntax-e (car head-elems)))) elems]
+       [else
+        (define bcol (syntax-column (car cont-elems)))
+        (define body-cands
+          (filter (lambda (e) (and (> (syntax-column e) let-col)
+                                   (< (syntax-column e) bcol)))
+                  cont-elems))
+        (define binding-lines
+          (filter (lambda (e) (= (syntax-column e) bcol)) cont-elems))
+        (define stray
+          (filter (lambda (e) (and (not (memq e body-cands))
+                                   (not (memq e binding-lines))))
+                  cont-elems))
+        (define (fail msg) (let-block-error let-tok msg))
+        (cond
+          ;; No body signature AND no strays: the forgot-the-body shape.
+          [(and (null? body-cands) (null? stray))
+           (fail (format
+                  "let block has no body — expected a line indented between column ~a (the `let`) and column ~a (the bindings)"
+                  let-col bcol))]
+          [(pair? stray)
+           (fail (format
+                  "let block mis-indent at column ~a — bindings align at column ~a; the body sits strictly between column ~a (the `let`) and column ~a"
+                  (syntax-column (car stray)) bcol let-col bcol))]
+          [(> (length body-cands) 1)
+           (fail (format
+                  "let block has ~a body lines at columns between ~a and ~a — exactly one body line is allowed"
+                  (length body-cands) let-col bcol))]
+          [(not (eq? (car body-cands) (last cont-elems)))
+           (fail (format
+                  "let block bindings appear AFTER the body line — the body (column between ~a and ~a) must be last"
+                  let-col bcol))]
+          [(ormap (lambda (e) (not (pair? (syntax-e e)))) binding-lines)
+           (fail (format
+                  "let block binding line at column ~a needs a name and a value (e.g. `y 5` or `y := 5`)"
+                  bcol))]
+          [else
+           (define body (car body-cands))
+           (define groups
+             (cons (datum->syntax #f head-elems let-tok)  ;; the head-line binding
+                   binding-lines))
+           (list let-tok
+                 (datum->syntax #f (cons (datum->syntax #f '$let-block let-tok)
+                                         groups)
+                                let-tok)
+                 body)])])]))
 
 ;; Flatten a node into a list of items: token-entries and 'indent-open/'indent-close markers.
 ;; Child line nodes are wrapped in indent-open/indent-close pairs.
