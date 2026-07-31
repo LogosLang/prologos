@@ -23,7 +23,9 @@
 
 (require rackunit
          racket/string
-         "test-support.rkt")
+         "test-support.rkt"
+         ;; 2026-07-31: the unreachable-arm cases assert on the error VALUE
+         "../errors.rkt")
 
 ;; ========================================
 ;; Helpers
@@ -232,3 +234,60 @@
      "  | [[cons _ _]]   -> false\n"
      "eval [singleton?-dblbracket '[42N]]"))
    "true : Bool"))
+
+;; ========================================
+;; Unreachable arms are rejected (2026-07-31)
+;; ========================================
+;; An arm following an IRREFUTABLE arm can never run — and, the reason this is a
+;; correctness bug rather than a style nit, it is never TYPE-CHECKED either. The
+;; pattern compiler drops it, so its body escapes the checker entirely and a
+;; String body where a Nat is expected was accepted silently.
+;;
+;; The reported symptom was subtler: `normalize-pattern` turns a bare name into a
+;; constructor pattern only when `lookup-ctor` knows it, so an UNKNOWN name (a
+;; typo, or a constructor whose type is not imported) stays a VARIABLE pattern —
+;; irrefutable — and silently eats every later arm. Same defect, two angles, so
+;; the check is on REACHABILITY: it needs no guess about whether a lowercase name
+;; was "meant" as a constructor, which is genuinely ambiguous in isolation.
+
+(define (unreachable? s)
+  (define r (with-handlers ([(lambda (_) #t) (lambda (e) e)]) (run-last s)))
+  (and (prologos-error? r)
+       (regexp-match? #rx"unreachable match arm" (prologos-error-message r))))
+
+(test-case "unreachable/dead arm after a catch-all is rejected"
+  ;; Before the check this DEFINED CLEAN, with a String body where Nat is
+  ;; expected — the arm was never type-checked.
+  (check-true
+   (unreachable? "(spec d2 Nat -> Nat)\n(defn d2 [v] (match v (n -> 1N) (zero -> \"dead\")))")))
+
+(test-case "unreachable/an unrecognised constructor name eats later arms"
+  ;; THE reported shape. `vnil` is not a known constructor here, so it became an
+  ;; irrefutable variable pattern and arm 2 was dead.
+  (check-true
+   (unreachable?
+    "(spec d1 Nat -> Nat)\n(defn d1 [v] (match v (vnil -> 1N) (vcons a b -> \"not-a-nat\")))")))
+
+(test-case "unreachable/the multi-clause defn form is checked too"
+  ;; The other entry point: clause groups compile through compile-pattern-group,
+  ;; not compile-match-expression.
+  (check-true
+   (unreachable? "(spec d4 Nat -> Nat)\n(defn d4 ($pipe (n) -> 1N) ($pipe (zero) -> 2N))")))
+
+(test-case "unreachable/a variable arm LAST stays legal (idiomatic default)"
+  ;; Only arms AFTER an irrefutable one are flagged — the catch-all itself is the
+  ;; idiomatic default and must keep working, on both entry points.
+  (check-equal?
+   (run-ws-last "defn ok1\n  | zero -> 1N\n  | n    -> 2N\neval [ok1 5N]")
+   "2N : Nat")
+  ;; same, on the match-EXPRESSION entry point (the negative cases above use it)
+  (check-false
+   (unreachable?
+    "(spec ok2 Nat -> Nat)\n(defn ok2 [v] (match v (zero -> 1N) (n -> 2N)))")))
+
+(test-case "unreachable/a GUARD keeps later arms reachable"
+  ;; A guarded arm can fail, so it is refutable and does not shadow what follows.
+  ;; The guard clause in the irrefutability test is what makes this work.
+  (check-false
+   (unreachable?
+    "(spec g1 Nat -> Nat)\n(defn g1 [v] (match v (n when (int-lt n 1N) -> 1N) (m -> 2N)))")))

@@ -9596,7 +9596,16 @@
        [else
         (surf-app (expand-expression fn) (map expand-expression args) loc)])]
     [(surf-lam binder body loc)
-     (surf-lam binder (expand-expression body) loc)]
+     ;; Propagate an error VALUE out of the body rather than wrapping it in a
+     ;; lambda. `expand-expression` is otherwise a structural rebuild with no
+     ;; error propagation, so an error produced during expansion (today: an
+     ;; unreachable match arm) would be carried into the elaborator and surface
+     ;; as "Cannot elaborate: #(struct:prologos-error …)". This arm is where a
+     ;; `defn` body lands, which is the common case; deeper nestings still leak
+     ;; that way — tracked in DEFERRED rather than by arming every arm here,
+     ;; which is the exhaustive-walker hazard pipeline.md warns about.
+     (let ([b (expand-expression body)])
+       (if (prologos-error? b) b (surf-lam binder b loc)))]
     [(surf-ann type term loc)
      (surf-ann (expand-expression type) (expand-expression term) loc)]
     [(surf-pair e1 e2 loc)
@@ -9628,7 +9637,10 @@
     ;; Rich pattern match — compile via compile-match-tree, then re-expand
     [(surf-match-patterns scrutinee arms loc)
      (define compiled (compile-match-expression scrutinee arms loc))
-     (expand-expression compiled)]
+     ;; compile-match-expression may return a prologos-error VALUE (an
+     ;; unreachable arm) — propagate it rather than re-expanding it, which would
+     ;; surface as "Cannot elaborate: #(struct:prologos-error …)".
+     (if (prologos-error? compiled) compiled (expand-expression compiled))]
     ;; Reduce — walk scrutinee and arm bodies
     [(surf-reduce scrutinee arms loc)
      (surf-reduce (expand-expression scrutinee)
@@ -10023,6 +10035,57 @@
        (for/and ([sub (in-list (pat-compound-args pat))])
          (and (pat-atom? sub) (memq (pat-atom-kind sub) '(var wildcard))))))
 
+;; ========================================
+;; Unreachable-arm detection (2026-07-31)
+;; ========================================
+;; An arm following an IRREFUTABLE arm can never run, and — the reason this is a
+;; correctness bug rather than a style nit — it is never TYPE-CHECKED either. The
+;; pattern compiler drops it, so its body escapes the checker entirely:
+;;
+;;   spec d Nat -> Nat
+;;   defn d [v] match v (n -> 1N) (zero -> "dead")   ;; defined clean, String body
+;;
+;; The reported symptom was subtler. `normalize-pattern` turns a bare name into a
+;; constructor pattern only when `lookup-ctor` knows it; an UNKNOWN name falls to
+;; its `[else pat]` and stays a VARIABLE — i.e. irrefutable. So a mistyped or
+;; unimported constructor silently becomes a catch-all and eats every later arm:
+;;
+;;   defn d1 [v] match v (vnil -> 1N) (vcons a b -> "not-a-nat")  ;; defined clean
+;;
+;; Both are the same defect seen from two angles, so the check is on
+;; REACHABILITY rather than on constructor spelling — the general property, and
+;; the one that does not need to guess whether a lowercase name was "meant" as a
+;; constructor (a pattern variable is a binding occurrence; the two are genuinely
+;; ambiguous in isolation).
+;;
+;; A row is irrefutable when it has NO GUARD and every one of its patterns is a
+;; variable or wildcard. The guard clause is load-bearing: `| n when p -> …` can
+;; fail, so arms after it stay reachable. And an irrefutable arm in FINAL
+;; position is the idiomatic default (`| n -> fallback`) — only arms AFTER one
+;; are flagged.
+;;
+;; Returns a prologos-error or #f. Both call sites already propagate error values.
+(define (unreachable-arm-error rows loc)
+  (define (irrefutable? row)
+    (and (not (cadr row))                       ;; no guard
+         (pair? (car row))
+         (for/and ([p (in-list (car row))]) (pattern-is-variable? p))))
+  (let loop ([rs rows] [i 0] [covered-at #f])
+    (cond
+      [(null? rs) #f]
+      [covered-at
+       (prologos-error
+        loc
+        (string-append
+         "unreachable match arm: arm " (number->string (add1 i))
+         " can never run, because arm " (number->string (add1 covered-at))
+         " matches everything — and an unreachable arm is never type-checked,"
+         " so mistakes in it go unreported."
+         " If a name there was meant as a CONSTRUCTOR, it was not recognised as"
+         " one (check the spelling, and that its type is imported) and so became"
+         " a catch-all variable pattern instead."))]
+      [else (loop (cdr rs) (add1 i) (if (irrefutable? (car rs)) i #f))])))
+
 ;; Compile a rich pattern match expression into nested surf-reduce.
 ;; Used by expand-expression to handle surf-match-patterns nodes.
 ;; scrutinee: already-parsed surface expression (NOT yet expanded)
@@ -10040,12 +10103,15 @@
       (list (map normalize-pattern (match-pattern-arm-patterns arm))
             (match-pattern-arm-guard arm)
             (match-pattern-arm-body arm))))
+  (define dead-arm (unreachable-arm-error normalized-arms loc))
   (define simple?
     (for/and ([row (in-list normalized-arms)])
       (and (not (cadr row))                     ;; no guard
            (= (length (car row)) 1)             ;; single pattern
            (pattern-is-simple-flat? (caar row))  ;; flat ctor or variable
            )))
+  (if dead-arm
+      dead-arm
   (if simple?
       ;; Fast path: directly produce surf-reduce (all arms are flat constructors)
       (let ([reduce-arms
@@ -10059,7 +10125,7 @@
       ;; Full path: compile via compile-match-tree for complex patterns
       (let* ([scrutinee-name (gensym '__scrutinee)]
              [match-body (compile-match-tree normalized-arms (list scrutinee-name) loc)])
-        (make-let-binding scrutinee-name scrutinee match-body loc))))
+        (make-let-binding scrutinee-name scrutinee match-body loc)))))
 
 ;; Convert a type name symbol to its surface syntax representation.
 ;; Built-in types (Nat, Bool, Unit) have dedicated surface syntax structs;
@@ -10258,10 +10324,16 @@
       (list (map normalize-pattern (defn-pattern-clause-patterns clause))
             (defn-pattern-clause-guard clause)
             (defn-pattern-clause-body clause))))
+  ;; An arm after an irrefutable one is dead AND unchecked — see
+  ;; `unreachable-arm-error`. Checked here, on the ORIGINAL rows, not inside the
+  ;; recursive compile-match-tree, where a variable pattern in a specialized
+  ;; column is perfectly normal.
+  (define dead-arm (unreachable-arm-error rows loc))
   ;; Try spec type first, fall back to inferred type from constructor metadata
   (define spec-type
     (and (> arity 0) (lookup-spec-type-for-patterns spec-name arity loc)))
   (cond
+    [dead-arm dead-arm]
     ;; Zero-arity: just use first body
     [(= arity 0)
      (surf-def name #f (caddr (car rows)) loc)]
@@ -10459,12 +10531,20 @@
          (expand-top-level result (+ depth 1)))]
     ;; Already a top-level command — expand sub-expressions, then pass through
     [(surf-def? surf)
-     (surf-def (surf-def-name surf)
-               ;; Sprint 10: type may be #f for type-inferred defs
-               (let ([ty (surf-def-type surf)])
-                 (if ty (expand-expression ty) #f))
-               (expand-expression (surf-def-body surf))
-               (surf-def-srcloc surf))]
+     ;; Propagate an error VALUE out of the body at the COMMAND boundary. This is
+     ;; the one place every def's body passes through, so catching it here gives
+     ;; a clean per-command error instead of carrying the error struct into the
+     ;; elaborator, which reports it as "Cannot elaborate:
+     ;; #(struct:prologos-error …)". (Today's producer: an unreachable match arm.)
+     (let ([body (expand-expression (surf-def-body surf))])
+       (if (prologos-error? body)
+           body
+           (surf-def (surf-def-name surf)
+                     ;; Sprint 10: type may be #f for type-inferred defs
+                     (let ([ty (surf-def-type surf)])
+                       (if ty (expand-expression ty) #f))
+                     body
+                     (surf-def-srcloc surf))))]
     [(surf-check? surf)
      (surf-check (expand-expression (surf-check-expr surf))
                  (expand-expression (surf-check-type surf))
