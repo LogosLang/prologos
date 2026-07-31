@@ -15,33 +15,25 @@ Deferral".
 
 ---
 
-## 🐛 The `:=` let chain — issue #21's "working" variant — is BROKEN in UNSPECCED defns (found 2026-07-31, LET P0 grounding)
+## ✅ WITHDRAWN, with a correction — "the `:=` let chain is BROKEN in UNSPECCED defns" was issue #70 in a let costume (filed 2026-07-31, corrected same day at LET P2 `e8a41a9a`)
 
-**Repro** (verified at `13cce230`, pre-existing):
+**The filing was WRONG and is withdrawn.** Its repro used `[+ a [+ x y]]` —
+generic `+` over the defn's UNANNOTATED parameter — which is the documented
+issue-#70 inference limitation, unrelated to let. The control that would have
+caught it (`defn ca [a] [+ a 4]`, no let at all) fails identically. A pre-P2
+A/B (worktree at `974e5cc5`) shows the unspecced `:=` chain WORKED with
+concrete ops (`int+`) before any P2 change. 4th data point this session for
+"a failing test is only evidence if it fails for the reason you claim" — and
+the first filed by the same process that codified the pattern. Kept (not
+deleted) because a withdrawn filing teaches more than a silent one.
 
-```prologos
-ns unspec
-defn g [a]          ;; NO spec — merge-form picks the TREE-PARSER spine
-  let x := 4
-  let y := 5
-    [+ a [+ x y]]
-[g 1]
-;; → ERROR: cannot infer the type of an unannotated parameter … + Unbound variable
-```
-
-Even the SINGLE `:=`-with-body form fails unspecced. Add a `spec` and both work
-— because a spec makes the PREPARSE spine win at `merge-form`
-(driver.rkt:2468-2490), and all of issue #21's evidence plus every grounding
-probe was spec-annotated. The tree spine has an INDEPENDENT let implementation
-(tree-parser.rkt:950-982) that requires `:=` and drops type annotations
-(`binder-info name #f (surf-hole loc)`), and its surf output fails typing.
-
-Owned by **LET P2** (docs/tracking/2026-07-31_LET_BLOCKS_DESIGN.md): the phase
-must fix the tree chain or make preparse win for let-bearing forms — a silent
-specced/unspecced divergence on the PRIMARY local-binding form is not shippable
-as "works". Until then the LET acceptance file's defns all carry specs, with a
-header note saying why.
-
+What WAS real and did land at P2 (`e8a41a9a`): the tree spine's let-chain arm
+was a rival half-implementation (`:=`-only, annotation-dropping, and a no-`:=`
+`let-bracket` head fell through to a junk application surf that would WIN the
+merge). It now DEFERS to preparse per the driver's own architecture comment —
+a structural single-implementation move with no demonstrated behavioral delta,
+claimed as exactly that. The defer is named scaffolding; it retires when the
+form-cell path grows a real let.
 ## 🐛 Cross-FILE spec-store leakage within a batch worker (diagnosed 2026-07-31, LET P1 gate)
 
 **Symptom**: `test-defn-multiarg-patterns.rkt` registered `(spec c Handle2 -1> Nat)`

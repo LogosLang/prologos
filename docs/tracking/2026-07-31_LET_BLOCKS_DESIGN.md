@@ -1,6 +1,6 @@
 # LET blocks — multi-binding `let` layout
 
-**Status**: P0 ✅ `0effba9c` · P1 ✅ `49f51c14` · P2 next. Owner-requested language polish (2026-07-31): the
+**Status**: P0 ✅ `0effba9c` · P1 ✅ `49f51c14` · P2 ✅ `e8a41a9a` · P3 next. Owner-requested language polish (2026-07-31): the
 nested-only `let` layout "was never intended to be how they function."
 
 **Acceptance file**: `examples/2026-07-31-let-blocks.prologos` (Phase 0; target
@@ -113,7 +113,7 @@ existing inputs.
 |---|---|---|---|
 | P0 | Acceptance file: 5 working variants + 2 context cases pinned; P2/P3/P4 targets commented | ✅ | `examples/2026-07-31-let-blocks.prologos`, --check exit 0, 14 markers |
 | P1 | All 13 `(error 'let …)` raises → per-command parse-error VALUES (`$let-error` marker) | ✅ | `49f51c14` — suite 9497/476/0; 2 check-exn pins flipped WITH the behavior; the spec-c batch collision surfaced and was renamed away (leak filed) |
-| P2 | Sibling no-`:=` chains (form 3): uniform `:=` synthesis at the merge seam | ⬜ | + the tree-spine defect disposition (fix or make preparse win) |
+| P2 | Sibling no-`:=` chains (form 3): uniform `:=` synthesis at the merge seam; tree spine defers on let heads | ✅ | `e8a41a9a` — suite 9507/476/0; acceptance §C live (20 markers); the P0-era "unspecced BROKEN" filing WITHDRAWN (it was i70 — §7) |
 | P3 | Aligned blocks (forms 1/5): reader-layer `$let-block` regrouping, STRICT columns | ⬜ | mis-indent = per-command error naming both columns; top-level guard extended |
 | P4 | Fused `var:Type` binders (form 2): WS pair + sexp glued split | ⬜ | recognizer in reader-forms.rkt; chained-annot reject shared |
 | X.close | prologos-syntax.md § let (discharges issue #21's doc obligation) + DEFERRED sweep + close notes | ⬜ | |
@@ -162,3 +162,72 @@ precedent.
   snapshot) is filed in DEFERRED with the mechanism half-diagnosed.
 - The unspecced-defn tree-spine breakage found at P0 grounding is now formally
   filed in DEFERRED and OWNED BY P2.
+
+## 6. P2 mini-design + mini-audit
+
+**Design reference**: §0 form (3); the DEFERRED entry "the `:=` let chain is
+BROKEN in UNSPECCED defns" (owned here).
+
+**Part 1 — the merge-seam normalization** (form 3, specced already; both spines
+after Part 2): `let-bodyless?` gains the no-`:=` arm (`rest` length 2, car a
+SYMBOL — the symbol check keeps bracket forms out), and
+`extract-let-binding-tokens` synthesizes `name := value` for that shape while
+leaving every `:=`-bearing form VERBATIM (byte-transparency for the exact-output
+pins). `split-last-let` already synthesizes for the last-with-body sibling
+(:2408), so the merged bracket stream becomes uniformly `:=`-marked and lowers
+onto `parse-assign-bindings` unchanged.
+
+**Part 2 — the tree-spine disposition: DEFER, not fix.** Decided by the
+architecture's own words at the cell-pipeline comment (driver.rkt, above
+`process-string-ws-inner-impl`): "Preparse surfs are FALLBACK for forms that
+fail parse-form-tree (expression-level desugaring: cond, **let**, multi-arity
+defn patterns, etc.)" — the tree spine is DESIGNED to error on let and fall
+back; its half-implemented let-chain (`:=`-only, annotation-dropping, output
+fails typing) contradicts that design and WINS the merge. Mechanics verified:
+`tree-by-line` is built `#:when (not (prologos-error? s))`, so an erroring tree
+parse → tree-match #f → merge-form's first arm → preparse. The audit also found
+a THIRD latent case: a no-`:=` `let-bracket` head falls to `parse-expr-tree`,
+producing a junk APPLICATION surf that would win the merge for unspecced
+bracket lets. The fix therefore covers the WHOLE let-chain arm (both
+`let-assign` and `let-bracket` heads → a deliberate `parse-error-result`
+defer). Not option (a) (fixing the duplicate): two rival implementations of let
+semantics is the belt-and-suspenders class, and full parity would mean
+implementing P2/P3/P4 twice — for a spine whose let support serves ZERO working
+cases today. The defer is named scaffolding: it retires when the form-cell path
+grows a real let (the tree spine is the architectural destination — Phase 4 of
+the form-cells plan — and this is recorded there, not silently dropped).
+
+**Drift risks named before coding**:
+1. Byte-transparency — the `:=` merge paths must be untouched (exact-output
+   pins in test-defmacro).
+2. The tree defer must be a parse-ERROR result (excluded from tree-by-line);
+   any non-error junk surf silently WINS the merge.
+3. The bodyless arm must not capture bracket forms (`(let (x 5 y 6))` has a
+   LIST car — excluded by the symbol check).
+4. Deferring the whole defn to preparse must not regress non-let aspects —
+   safe: preparse is the strictly-more-capable spine (spec injection, POL.9b
+   paren-origin, annotations kept).
+5. A standalone bodiless `(let x 4)` (no following body) must stay a
+   per-command ERROR, not silently become a binding of nothing.
+
+## 7. P2 close notes — including the correction
+
+- Part 1 landed as designed; byte-transparency held (merge-layer pin + the
+  test-defmacro exact-output pins untouched). Mixed spellings fell out free.
+- **The phase's own A/B refuted the phase's own mini-design rationale.** §6
+  justified the tree defer with "its output fails typing" — false. A pre-P2
+  worktree at `974e5cc5` shows the unspecced `:=` chain WORKED with concrete
+  ops; the P0-era DEFERRED filing's repro failed for the ISSUE-#70 reason
+  (generic `+` over an unannotated param), never controlled. The filing is
+  WITHDRAWN in DEFERRED with the full correction; the defer ships on the
+  single-implementation principle alone (the driver's own architecture comment
+  names preparse as the let fallback), with NO demonstrated behavioral delta —
+  and is claimed as exactly that in the commit.
+- The P1 "four broken classes" pin dropped to three: the no-`:=` chain
+  graduated to working — the flip-with-the-feature pattern, third instance
+  this track.
+- VAG note (adversarial column, honestly): the gate's real catch this phase
+  was AGAINST the phase's own grounding — the disposition survived, its
+  justification did not. Watching pattern reinforced: control every repro
+  against the documented failure classes BEFORE filing (i70 for anything with
+  a generic op over an unannotated param).
