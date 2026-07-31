@@ -369,3 +369,60 @@
   (define decl (string-append handle-decl "(spec c Handle2 -1> Nat)\n"))
   (check-false (mult-violation? (string-append decl "(defn c [h] (match h (mk-h k -> k)))")))
   (check-false (mult-violation? (string-append decl "(defn c ($pipe (mk-h k) -> k))"))))
+
+;; ========================================
+;; Guards in the bare-`|` clause form (2026-07-31)
+;; ========================================
+;; `parse-defn-clause` split the pre-arrow forms into patterns with NO `when`
+;; handling, though the bracketed-header parser has always had it. So a guard was
+;; silently parsed as EXTRA PATTERNS — `| n when [int-lt n 0] -> 7` became three
+;; patterns — giving clauses of mismatched arity. The pattern compiler then
+;; indexed off the end of its parameter list and died with a raw Racket
+;; `list-ref: index too large for list`, which killed the WHOLE FILE: no
+;; per-command error, and no output from commands BEFORE the offending one.
+;;
+;; Guards now parse, so the form works rather than merely failing politely — and
+;; the semantics are pinned, not just the absence of a crash.
+
+(test-case "guard-bare/a guarded clause group compiles and DISPATCHES"
+  (check-equal?
+   (run-ws-last
+    (string-append
+     "defn classify\n  | n when [int-lt n 0] -> 7\n  | n -> 5\n"
+     "eval [classify -3]"))
+   "7 : Int")
+  (check-equal?
+   (run-ws-last
+    (string-append
+     "defn classify2\n  | n when [int-lt n 0] -> 7\n  | n -> 5\n"
+     "eval [classify2 3]"))
+   "5 : Int"))
+
+(test-case "guard-bare/successive guards fall through in order"
+  (define src
+    (string-append
+     "defn sign\n"
+     "  | n when [int-lt n 0] -> 0\n"
+     "  | n when [int-eq n 0] -> 1\n"
+     "  | n                   -> 2\n"))
+  (check-equal? (run-ws-last (string-append src "eval [sign -5]")) "0 : Int")
+  (check-equal? (run-ws-last (string-append src "eval [sign 0]"))  "1 : Int")
+  (check-equal? (run-ws-last (string-append src "eval [sign 5]"))  "2 : Int"))
+
+(test-case "guard-bare/an earlier command's output survives (no whole-file abort)"
+  ;; The crash took the entire file down, so a command BEFORE the guarded defn
+  ;; produced no output at all. This is the containment pin.
+  (define rs (run-ws (string-append
+                      "def before := 1\n"
+                      "defn m07\n  | n when [int-lt n 0] -> 7\n  | n -> 5\n"
+                      "def after := 2\n")))
+  (check-true (>= (length rs) 3) (format "expected all commands to report; got: ~v" rs))
+  (check-false (ormap prologos-error? rs) (format "expected no errors; got: ~v" rs)))
+
+(test-case "guard-bare/the bracketed-header form is unchanged"
+  (check-equal?
+   (run-ws-last
+    (string-append
+     "defn classify3 [n]\n  | n when [int-lt n 0] -> 7\n  | n -> 5\n"
+     "eval [classify3 -3]"))
+   "7 : Int"))

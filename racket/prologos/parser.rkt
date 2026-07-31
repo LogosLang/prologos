@@ -4586,8 +4586,35 @@
     ;; ---- Pattern clause: patterns... -> body ----
     ;; Handles both bracketed [pats] -> body and bare pat1 pat2 -> body
     [arrow-idx
-     (define pattern-stxs (take cleaned arrow-idx))
+     ;; Split the pre-arrow forms at `when` into PATTERNS and an optional GUARD.
+     ;;
+     ;; 2026-07-31: this split was missing here, though the bracketed-header
+     ;; clause parser has always had it. So in the bare-`|` form a guard was
+     ;; silently parsed as EXTRA PATTERNS — `| n when [int-lt n 0] -> 7` became
+     ;; three patterns (`n`, `when`, `[…]`) — giving clauses of mismatched
+     ;; arity, and the pattern compiler then indexed off the end of its
+     ;; parameter list and died with a raw Racket
+     ;;   `list-ref: index too large for list, in: '(__arg0 __arg1)`
+     ;; that killed the WHOLE FILE (no per-command error, no earlier command's
+     ;; output). Same split, same guard parsing, as the header path.
+     (define pre-arrow (take cleaned arrow-idx))
+     (define-values (pattern-stxs guard-forms)
+       (let ([when-idx (for/or ([p (in-list pre-arrow)] [i (in-naturals)])
+                         (and (eq? (stx->datum p) 'when) i))])
+         (if when-idx
+             (values (take pre-arrow when-idx) (drop pre-arrow (+ when-idx 1)))
+             (values pre-arrow '()))))
+     (define guard
+       (if (null? guard-forms)
+           #f
+           (let ([guard-stx (if (= (length guard-forms) 1)
+                                (car guard-forms)
+                                (datum->syntax #f (map stx->datum guard-forms)
+                                               (car guard-forms)))])
+             (parse-datum guard-stx))))
      (define body-parts (drop cleaned (+ arrow-idx 1)))
+     (when (and (pair? guard-forms) (null? pattern-stxs))
+       (parse-error loc (format "defn ~a: `when` guard with no pattern before it" name) #f))
      (when (null? pattern-stxs)
        (parse-error loc (format "defn ~a: pattern clause needs at least one pattern before ->" name) #f))
      (when (null? body-parts)
@@ -4634,9 +4661,10 @@
             (parse-single-pattern p loc))]))
      (cond
        [(prologos-error? body) body]
+       [(prologos-error? guard) guard]
        [(prologos-error? patterns) patterns]
        [(findf prologos-error? patterns) => (lambda (err) err)]
-       [else (defn-pattern-clause patterns #f body loc)])]
+       [else (defn-pattern-clause patterns guard body loc)])]
 
     ;; ---- Arity clause: existing logic ----
     [else
