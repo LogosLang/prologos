@@ -309,7 +309,17 @@ Three pieces stayed out, deliberately:
    the `expr-int-eq` target gate that had excluded them), but see the crash entry
    below — the more common guard shape does not survive parsing at all.
 
-## 🐛 DEFECT — a guarded clause group with no `[params]` header CRASHES the compiler and aborts the whole file (found 2026-07-30)
+## ✅ CLOSED `f51bda2b` — a guarded clause group with no `[params]` header CRASHES the compiler and aborts the whole file (found 2026-07-30)
+
+**Cause was a missing parse, not a compiler bug**: `parse-defn-clause` took
+everything before `->` as PATTERNS with no `when` handling, though the
+bracketed-header parser has always had that split. `n when [int-lt n 0]` became
+three patterns, the clauses had mismatched arity, and the pattern compiler
+indexed off the end of its parameter list and raised — a whole-file abort by
+construction. Fixed by mirroring the header path, so the bare-`|` guarded form
+now WORKS rather than merely failing politely. Semantics pinned (dispatch,
+successive-guard fallthrough, header form unchanged, and an earlier command's
+output surviving). Original report retained:
 
 **Repro** (independently verified at `5e6d9f41`, pre-existing — the crash is in
 `macros.rkt`, long before typing):
