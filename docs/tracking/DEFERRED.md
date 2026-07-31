@@ -30,11 +30,49 @@ Deferral".
 - **The J arm's dropped base usage** (filed below at P5) → ✅ `63dea0b6`, folded
   into P7 by owner direction.
 
+## ✅ CLOSED — the three pattern-matching soundness items (2026-07-31)
+
+- **Unreachable arms** → ✅ `55aac8c4`. Broader than filed: the reported
+  "unknown ctor becomes a catch-all" was one instance of a general defect — an
+  arm after ANY irrefutable arm is dropped by the pattern compiler and therefore
+  never TYPE-CHECKED, so `match v (n -> 1N) (zero -> "dead")` defined clean with
+  a String body where a Nat was expected. Fixed as a REACHABILITY check, which
+  needs no heuristic about whether a lowercase name was "meant" as a constructor.
+  Required a second fix to be usable: `expand-expression` had no error
+  propagation, so the message arrived as
+  "Cannot elaborate: #(struct:prologos-error …)" — propagation added at the
+  `surf-def` command boundary and at `surf-lam`.
+- **Cross-type constructor** → ✅ `09e68e60`. `ctor-belongs-to-type?` consults the
+  same registry `reduce-scrutinee-decompose` uses, and DECLINES when membership
+  is undecidable, so it rejects only what it can show is foreign.
+- **Linear destructuring via multi-clause `defn`** → ✅ `6d4e8c73`, and the ROOT
+  CAUSE was much wider than the filed symptom: `extract-pi-binders` matched a
+  `surf-arrow`'s multiplicity as `_` and substituted 'mw, so `A -1> B` and
+  `A -> B` were indistinguishable to every consumer.
+
+## 🐛 `expand-expression` has no general error propagation (2026-07-31)
+
+`expand-expression` is a structural rebuild; an error VALUE produced during
+expansion is wrapped into the surrounding node and carried to the elaborator,
+which reports it as `Cannot elaborate: #(struct:prologos-error …)` — the struct,
+printed. `55aac8c4` added propagation at the `surf-def` command boundary and at
+`surf-lam`, which covers a def body (the common case), but a producer nested
+deeper still leaks that way. Arming every arm is the exhaustive-walker hazard
+`pipeline.md` warns about; the structural answer is a reflective rebuild that
+propagates by construction, or an error-carrying surface node.
+
+## 🐛 A specific message for a foreign constructor in a match arm (2026-07-31)
+
+`09e68e60` rejects it, but through the generic "Type mismatch" — accurate, not
+lying, but it does not say *"`mk-b3` is a constructor of `Box3`, not `Bool`"*.
+Wants the post-hoc hint pattern (a `(ctx e names) → string-or-#f` helper in
+`typing-errors`' ordered chain, as used for the branch-result and QTT
+diagnostics).
+
 ## 🐛 Two soundness holes on the STRICT path, found while grounding P6 (2026-07-31)
 
-Both confirmed by probe at `7584c16e`, both independent of P6/P7, both arguably
-worse than the hole P6 closed. Deliberately NOT folded in — each deserves its own
-test and its own fix.
+Both confirmed by probe at `7584c16e`, both independent of P6/P7. **Both are now
+FIXED — see the CLOSED entry above.** Retained for the mechanisms.
 
 1. **An unknown constructor in a match pattern silently becomes an irrefutable
    VARIABLE pattern**, making every later arm dead code with zero diagnostics.
@@ -51,7 +89,10 @@ test and its own fix.
    this CONSTRAINS any "make an unfindable ctor an error" fix — the fallback
    already half-defeats it.
 
-## 🐛 Linear destructuring via a multi-clause `defn` is rejected (2026-07-31)
+## ✅ CLOSED `6d4e8c73` — Linear destructuring via a multi-clause `defn` is rejected (2026-07-31)
+
+**Root cause was wider than this symptom** — see the CLOSED entry above.
+Original report retained:
 
 `spec c3 Handle2 -1> Nat` + `defn c3 | mk-h k -> k` → "Multiplicity violation",
 though it consumes the linear scrutinee exactly once. The fio spelling
