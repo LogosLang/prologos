@@ -127,6 +127,9 @@
   (define (step->string s first?)
     (cond
       [(symbol? s) (if first? (symbol->string s) (string-append "." (symbol->string s)))]
+      ;; D4.P3c: ordinal STEP (.N — descends) vs @ord BRANCH head (bare N)
+      [(number? s) (if first? (number->string s) (string-append "." (number->string s)))]
+      [(and (pair? s) (eq? (car s) '@ord)) (number->string (cadr s))]
       [(and (pair? s) (eq? (car s) '@key))
        (string-append (if first? "" ".") (symbol->string (cadr s))
                       (cont->string (caddr s)))]

@@ -170,8 +170,9 @@
  (struct-out expr-validate) validate-map-exprs
  ;; Path Selection block node (CIU T6 D4.P3a; step vocabulary D4.P3b)
  (struct-out expr-select) select-map-exprs
- select-key-step? select-sub-step? select-step-name select-step-cont
- select-cont-collapse? select-cont-rename select-branch-collapse
+ select-key-step? select-sub-step? select-ord-step? select-step-name
+ select-step-cont select-cont-collapse? select-cont-rename
+ select-branch-collapse select-branch-keyless?
  select-step-output-name select-synth-name select-branch-top-keys
  record-map-field-types make-record record-extend record-lookup-field record-remove
  closed-nat-row? closed-keyword-row? record-mark-all-unknown
@@ -802,6 +803,13 @@
 
 (define (select-key-step? s) (and (pair? s) (eq? (car s) '@key)))
 (define (select-sub-step? s) (and (pair? s) (eq? (car s) '@sub)))
+;; D4.P3c: `(@ord N)` = an ordinal BRANCH head (written `{N …}` — re-derives,
+;; keyless sort). A bare number N in the steps is an ordinal STEP (`.N` —
+;; Q_U2 Reading A: descends, contributes NO output level, transparent to
+;; keys and synth names). The two are distinct on purpose: after a dissolve
+;; splice, `a^.0.name`'s continuation [0 name] must stay a STEP chain
+;; (output key :name), while `{0.name}` is a keyless component.
+(define (select-ord-step? s) (and (pair? s) (eq? (car s) '@ord)))
 (define (select-step-name s) (if (select-key-step? s) (cadr s) s))
 (define (select-step-cont s) (and (select-key-step? s) (caddr s)))
 
@@ -823,11 +831,15 @@
 
 ;; A step's contribution to the surviving OUTPUT-name path: kept → its name;
 ;; renamed → the new label; dissolved → none ("dropped means dropped");
-;; synth/collapse leaves → their SOURCE name (they have no other).
+;; synth/collapse leaves → their SOURCE name (they have no other). Ordinal
+;; steps and `@ord` heads contribute no name (P3c — contingent keys have no
+;; identity, Q_U2).
 (define (select-step-output-name s)
   (cond
     [(symbol? s) s]
+    [(number? s) #f]
     [(select-sub-step? s) #f]
+    [(select-ord-step? s) #f]
     [(select-key-step? s)
      (let ([c (select-step-cont s)])
        (cond
@@ -835,6 +847,14 @@
          [(select-cont-rename c) => values]
          [else (cadr s)]))]
     [else #f]))
+
+;; D4.P3c: the `^`-terminated (keyless) branch pre-classifier — a branch
+;; whose LAST step is a bare dissolve contributes the leaf VALUE as a
+;; keyless component (Q_T4b: no keys ⇒ no ancestry question; the whole
+;; branch flattens like the collapse family, minus the label).
+(define (select-branch-keyless? b)
+  (let ([s (car (reverse b))])
+    (and (select-key-step? s) (eq? (select-step-cont s) 'dissolve))))
 
 ;; Reading N (Q_T4b′) + `^-_` flat provenance (Q_T7): join the surviving
 ;; output names with `-`. Scope = the branch of the block the leaf sits in.
@@ -844,11 +864,14 @@
     (map symbol->string (filter values (map select-step-output-name steps)))
     "-")))
 
-;; The output keys a branch contributes AT ITS BLOCK'S LEVEL — a dissolved
-;; head splices its continuation's keys (Q_T3: "level-local" means OUTPUT
-;; level, after splicing). Fully static at this slice; the parser's
-;; duplicate check runs on these, strictly BEFORE any make-record could
-;; last-win.
+;; The output COMPONENTS a branch contributes AT ITS BLOCK'S LEVEL — a
+;; dissolved head splices its continuation's components (Q_T3:
+;; "level-local" means OUTPUT level, after splicing). Each component is a
+;; key SYMBOL (keyed sort) or **#f** (keyless sort — D4.P3c: `^`-terminated
+;; branches, `@ord` heads, and pure ordinal-step chains). Fully static; the
+;; parser's duplicate check (over the keyed subset) AND the L4
+;; sort-homogeneity check both run on these, strictly BEFORE any
+;; make-record could last-win.
 (define (select-branch-top-keys b)
   (let ([col (select-branch-collapse b)])
     (cond
@@ -857,17 +880,24 @@
                [(select-cont-rename col)]
                [(eq? col 'collapse-synth) (select-synth-name b)]
                [else (select-step-name (car (reverse b)))]))]
+      [(select-branch-keyless? b) (list #f)]
       [else
        (let ([s (car b)] [rest (cdr b)])
          (cond
            [(symbol? s) (list s)]
+           [(select-ord-step? s) (list #f)]
+           ;; a bare-number STEP head arises only from dissolve-splice
+           ;; continuations — transparent (Q_U2: no output level); an
+           ;; ordinal-terminal chain has no surviving key → keyless.
+           [(number? s)
+            (if (null? rest) (list #f) (select-branch-top-keys rest))]
            [(select-sub-step? s) (append-map select-branch-top-keys (cdr s))]
            [(select-key-step? s)
             (let ([c (select-step-cont s)])
               (cond
                 [(eq? c 'dissolve)
                  (cond
-                   [(null? rest) '()] ;; keyless leaf — refused upstream (P3c)
+                   [(null? rest) (list #f)] ;; keyless leaf (pre-classified above; defensive)
                    [(and (select-sub-step? (car rest)) (null? (cdr rest)))
                     (append-map select-branch-top-keys (cdr (car rest)))]
                    [else (select-branch-top-keys rest)])]

@@ -1616,11 +1616,37 @@
                       (format "select: field :~a not found at runtime (invariant violation — typing sourced it as present)"
                               label))))
             (whnf hit))))
-    (define (entries->champ entries)
-      (expr-champ
-       (for/fold ([acc champ-empty]) ([e (in-list entries)])
-         (let ([kw (kw-of (car e))])
-           (champ-insert acc (equal-hash-code kw) kw (cdr e))))))
+    ;; D4.P3c: a level assembles either sort — all-keyed components → champ;
+    ;; all-keyless ((#f . v)) → the rrb tuple mint in written order (ruling
+    ;; 2a: honest at EVERY n, incl. 1-tuples). Parser L4 guaranteed
+    ;; homogeneity.
+    (define (entries->value entries)
+      (if (and (pair? entries) (not (car (car entries))))
+          (expr-rrb (rrb-from-list (map cdr entries)))
+          (expr-champ
+           (for/fold ([acc champ-empty]) ([e (in-list entries)])
+             (let ([kw (kw-of (car e))])
+               (champ-insert acc (equal-hash-code kw) kw (cdr e)))))))
+    ;; ordinal descent over the runtime value (Q_U2 / ordinal branches).
+    ;; Typing admitted the block; a het-row OOB was caught statically; a
+    ;; PVec OOB is a legitimate runtime assertive-tier error — LOUD, the
+    ;; expr-get wording (P2.b: never fabricate).
+    (define (index-into v n what)
+      (let ([v* (whnf v)])
+        (cond
+          [(expr-rrb? v*)
+           (let ([r (expr-rrb-racket-rrb v*)])
+             (if (< n (rrb-size r))
+                 (whnf (rrb-get r n))
+                 (return (expr-panic
+                          (expr-string
+                           (format "select: index ~a out of bounds for the vector of length ~a (at `~a`)"
+                                   n (rrb-size r) what))))))]
+          [else
+           (return (expr-panic
+                    (expr-string
+                     (format "select: ~a is not a vector at runtime (invariant violation — typing admitted the ordinal)"
+                             what))))])))
     ;; D4.P3b — one branch's entries at the CURRENT level, mirroring
     ;; typing-core's select-branch-entries over champs (the same shared
     ;; syntax.rkt walk classifies steps, so meaning cannot drift from the
@@ -1630,59 +1656,102 @@
     ;; `seen` mirrors typing-core's select-branch-entries: the branch steps
     ;; consumed above this recursion, so `^_`'s Reading-N label synthesizes
     ;; over the FULL branch via the SHARED select-synth-name walk; resets at
-    ;; a `.{…}` sub-block (branch-of-its-block scope).
-    (define (branch-entries c b seen)
+    ;; a `.{…}` sub-block (branch-of-its-block scope — Q_U4: subject-root
+    ;; preferred, flip deferred; DEFERRED 23).
+    ;; D4.P3c: v is the RAW subject value (champ OR rrb) — each branch
+    ;; dispatches per its head kind, mirroring typing's per-branch dispatch.
+    ;; component ::= (cons kw-label . value) keyed | (cons #f value) keyless.
+    (define (branch-entries v b seen)
+      ;; shared by collapse + keyless: descend every step to the leaf value.
+      ;; P3c verify (rank 1): the `(@ord N)` head arm — the ATOMIC twin of
+      ;; typing's walk-to-leaf arm (missing here = champ-of panic on rrb).
+      (define (walk-to-leaf)
+        (let walk ([steps b] [v v])
+          (let* ([s (car steps)]
+                 [name (select-step-name s)]
+                 [hit (cond
+                        [(number? s) (index-into v s name)]
+                        [(select-ord-step? s) (index-into v (cadr s) (cadr s))]
+                        [else (project (champ-of v name) name)])])
+            (if (null? (cdr steps))
+                hit
+                (walk (cdr steps) hit)))))
       (let ([col (select-branch-collapse b)])
-        (if col
-            ;; the `^-` family (Q_T7): flatten the whole branch — one entry
-            (let walk ([steps b] [c c])
-              (let* ([s (car steps)]
-                     [name (select-step-name s)]
-                     [hit (project c name)])
-                (if (null? (cdr steps))
-                    (list (cons (cond [(select-cont-rename col)]
-                                      [(eq? col 'collapse-synth)
-                                       (select-synth-name (append seen b))]
-                                      [else name])
-                                hit))
-                    (walk (cdr steps) (champ-of hit name)))))
-            (let* ([s (car b)]
-                   [rest (cdr b)]
-                   [name (select-step-name s)]
-                   [cont (select-step-cont s)]
-                   [hit (project c name)])
-              (cond
-                [(null? rest)
-                 ;; LEAF: kept · renamed IN PLACE (Q_T4b) · synth (Q_T4b′).
-                 ;; A dissolve leaf (keyless) is refused at the parser (P3c).
-                 (list (cons (cond [(and cont (select-cont-rename cont))]
-                                   [(eq? cont 'synth)
-                                    (select-synth-name (append seen (list s)))]
-                                   [else name])
-                             hit))]
-                [else
-                 (let ([below (below-entries (champ-of hit name) rest
-                                             (append seen (list s)))])
-                   (if (eq? cont 'dissolve)
-                       below  ;; splice: only dissolve removes a level
-                       (list (cons (or (and cont (select-cont-rename cont)) name)
-                                   (entries->champ below)))))])))))
-    ;; the entries BELOW a head: terminal sub-block assembles that block's
-    ;; level (fresh branches — `seen` resets); otherwise the remaining steps
-    ;; continue as a single branch.
-    ;; D4.P3a verify hardening carried: a sub-block is TERMINAL — the parser
-    ;; refuses trailing segments; enforce for constructed IR too.
-    (define (below-entries c steps seen)
+        (cond
+          [col
+           (list (cons (cond [(select-cont-rename col)]
+                             [(eq? col 'collapse-synth)
+                              (select-synth-name (append seen b))]
+                             [else (select-step-name (car (reverse b)))])
+                       (walk-to-leaf)))]
+          [(select-branch-keyless? b)
+           ;; P3c: the keyless component — the leaf VALUE, no key
+           (list (cons #f (walk-to-leaf)))]
+          [(select-ord-step? (car b))
+           ;; P3c: ordinal BRANCH — keyless component over the element
+           (let* ([n (cadr (car b))]
+                  [elem (index-into v n n)])
+             (if (null? (cdr b))
+                 (list (cons #f elem))
+                 (list (cons #f (below-value elem (cdr b) '())))))]
+          [(number? (car b))
+           ;; bare-number STEP chain (splice continuation): transparent
+           (let ([elem (index-into v (car b) (car b))])
+             (if (null? (cdr b))
+                 (list (cons #f elem))
+                 (branch-entries elem (cdr b) seen)))]
+          [else
+           (let* ([s (car b)]
+                  [rest (cdr b)]
+                  [name (select-step-name s)]
+                  [cont (select-step-cont s)]
+                  [hit (project (champ-of v name) name)])
+             (cond
+               [(null? rest)
+                (list (cons (cond [(and cont (select-cont-rename cont))]
+                                  [(eq? cont 'synth)
+                                   (select-synth-name (append seen (list s)))]
+                                  [else name])
+                            hit))]
+               [(eq? cont 'dissolve)
+                (below-components hit rest (append seen (list s)))]
+               [else
+                (list (cons (or (and cont (select-cont-rename cont)) name)
+                            (below-value hit rest (append seen (list s)))))]))])))
+    ;; the COMPONENTS a dissolved head splices (terminal sub-block = that
+    ;; block's level, fresh branches; else the steps continue as one branch).
+    ;; D4.P3a verify hardening carried: a sub-block is TERMINAL.
+    (define (below-components v steps seen)
       (cond
         [(and (pair? (car steps)) (eq? (car (car steps)) '@sub))
          (if (null? (cdr steps))
-             (append-map (lambda (b) (branch-entries c b '())) (cdr (car steps)))
+             (append-map (lambda (b) (branch-entries v b '())) (cdr (car steps)))
              (return (expr-panic
                       (expr-string
                        "select: internal — steps after a terminal sub-block (the parser grammar forbids this shape)"))))]
-        [else (branch-entries c steps seen)]))
-    (entries->champ
-     (append-map (lambda (b) (branch-entries (champ-of subj-expr "the subject") b '()))
+        [else (branch-entries v steps seen)]))
+    ;; the VALUE below a kept/renamed head: terminal sub-block assembles
+    ;; honestly (incl. the keyless 1-tuple); ordinal steps descend with no
+    ;; level (Q_U2); keyed chains build their nested level.
+    (define (below-value v steps seen)
+      (cond
+        [(and (pair? (car steps)) (eq? (car (car steps)) '@sub))
+         (if (null? (cdr steps))
+             (entries->value
+              (append-map (lambda (b) (branch-entries v b '())) (cdr (car steps))))
+             (return (expr-panic
+                      (expr-string
+                       "select: internal — steps after a terminal sub-block (the parser grammar forbids this shape)"))))]
+        [(number? (car steps))
+         ;; ordinal STEP: descend, no output level (Reading A); seen carries
+         ;; (numbers contribute no synth name — the shared walk skips them)
+         (let ([elem (index-into v (car steps) (car steps))])
+           (if (null? (cdr steps))
+               elem
+               (below-value elem (cdr steps) seen)))]
+        [else (entries->value (branch-entries v steps seen))]))
+    (entries->value
+     (append-map (lambda (b) (branch-entries (whnf subj-expr) b '()))
                  branches))))
 
 (define (validate-tabulate sname closed? plan subj-champ names)
@@ -2843,7 +2912,9 @@
     [(expr-select subject branches)
      (let ([subj* (whnf subject)])
        (cond
-         [(expr-champ? subj*) (select-reduce subj* branches)]
+         ;; D4.P3c: rrb subjects admitted — ordinal branches select over
+         ;; vectors/tuples (`het{2 0}`); per-branch dispatch inside.
+         [(or (expr-champ? subj*) (expr-rrb? subj*)) (select-reduce subj* branches)]
          ;; D4.P3a verify hardening: a GROUND non-map subject can never
          ;; become a champ — panic per the node's own tier discipline
          ;; (the nested descent one level down is already loud; only the

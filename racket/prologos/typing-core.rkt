@@ -675,112 +675,211 @@
       [else
        (values #f (select-fail 'miss-closed (append path (list label)) label row))])))
 
-(define (select-project ctx tm branches [path '()])
-  (let-values ([(row rf) (select-row-of ctx tm path)])
-    (if rf
-        (values #f rf)
-        (let-values ([(entries ef) (select-level-entries ctx row branches path)])
-          (if ef
-              (values #f ef)
-              (values (make-record 'keyword entries 'closed) #f))))))
+;; D4.P3c: the ordinal-subject dispatch — the nat twin of select-row-of.
+;; An ordinal step/branch needs an INDEXABLE subject: PVec (uniform elem)
+;; or a closed nat row (exact per-position; a literal OOB is a loud static
+;; error — the P2 assertive tier). Everything else refuses.
+;; fill a subject-kind fail's label with the step that was about to
+;; project (rank 3: `.-1` was invisible in the message)
+(define (select-fail-fill-label f name)
+  (if (select-fail-label f)
+      f
+      (select-fail (select-fail-kind f) (select-fail-path f) name
+                   (select-fail-row f))))
 
-;; One output LEVEL: every branch contributes its entries (a dissolved head
-;; splices >1 — Q_T3's output-level frame). Duplicates were excluded at the
-;; parser's shared-walk check, so plain append assembles safely.
-(define (select-level-entries ctx row branches path)
-  (let loop ([bs branches] [entries '()])
+(define (select-index-of ctx tm n path)
+  (cond
+    [(expr-PVec? tm) (values (expr-PVec-elem-type tm) #f)]
+    [(closed-nat-row? tm)
+     (let ([fld (record-lookup-field tm n)])
+       (if fld
+           (values (record-field-type fld) #f)
+           (values #f (select-fail 'ordinal-oob (append path (list n)) n tm))))]
+    [else (values #f (select-fail 'not-indexable (append path (list n)) n tm))]))
+
+;; select-project — the node's typing walk (Q_T1's one walk, two consumers).
+;; D4.P3c: a LEVEL now assembles either sort: all-keyed components → a
+;; closed keyword row; all-keyless (#f keys) → the nat-row tuple mint
+;; (indices 0.. in written order — ruling 2a: selection routes around the
+;; collapsing `@[…]` literal arm, so 1-tuples and homogeneous n mint
+;; honestly). The parser's shared-walk L4 check guaranteed homogeneity.
+(define (select-project ctx tm branches [path '()])
+  (let-values ([(comps cf) (select-level-components ctx tm branches path)])
+    (if cf
+        (values #f cf)
+        (values (select-assemble-row comps) #f))))
+
+(define (select-assemble-row comps)
+  (if (and (pair? comps) (not (car (car comps))))
+      (make-record 'nat
+                   (for/list ([c (in-list comps)] [i (in-naturals)])
+                     (cons i (cdr c)))
+                   'closed)
+      (make-record 'keyword comps 'closed)))
+
+;; One output LEVEL: every branch contributes its components (a dissolved
+;; head splices >1 — Q_T3's output-level frame). component ::=
+;; (cons key-symbol record-field) keyed | (cons #f record-field) keyless.
+;; Duplicates/mixing were excluded at the parser's shared-walk checks, so
+;; plain append assembles safely.
+(define (select-level-components ctx tm branches path)
+  (let loop ([bs branches] [comps '()])
     (if (null? bs)
-        (values (reverse entries) #f)
-        (let-values ([(es bf) (select-branch-entries ctx row (car bs) path '())])
+        (values (reverse comps) #f)
+        (let-values ([(es bf) (select-branch-entries ctx tm (car bs) path '())])
           (if bf
               (values #f bf)
-              (loop (cdr bs) (append (reverse es) entries)))))))
+              (loop (cdr bs) (append (reverse es) comps)))))))
 
-;; D4.P3b — one branch's entries at the CURRENT level, as
-;; (values (listof (label . record-field)) fail-or-#f).
-;; The `^-` collapse family flattens the WHOLE branch (Q_T7), so it is
-;; pre-classified: project through every segment to the leaf, one flat entry.
-;; Otherwise: kept/renamed heads contribute ONE entry (nesting below);
-;; a dissolved head SPLICES its continuation's entries (Q_T4b: only
-;; dissolve removes a level; rename is IN PLACE).
+;; D4.P3b/P3c — one branch's components at the CURRENT level, as
+;; (values (listof (key-or-#f . record-field)) fail-or-#f).
+;; PRE-CLASSIFIED whole-branch shapes (both flatten to the LEAF, walking
+;; every level's presence check on the way down):
+;;   · the `^-` collapse family (Q_T7) — one flat KEYED entry
+;;   · the `^`-terminated keyless branch (P3c) — one KEYLESS entry
+;; Otherwise the structural walk: kept/renamed heads contribute ONE keyed
+;; entry (nesting below); a dissolved head SPLICES its continuation's
+;; components (Q_T4b); an `@ord` head is a keyless component over the
+;; indexed element (P3c); bare-number STEPS descend transparently
+;; (Q_U2 Reading A — no output level).
+;;
+;; Each branch does its OWN subject dispatch (keyword heads need row-of;
+;; ordinal heads need index-of) — tm arrives whnf'd and undispatched.
 ;;
 ;; `seen` = the steps this BRANCH has already consumed above the current
-;; recursion (the tail-branch recursion loses them otherwise) — `^_`'s
-;; Reading-N label is synthesized over (seen + leaf) via the SHARED
-;; select-synth-name walk, so `server.host^_` yields :server-host. Scope is
-;; the branch of the block the leaf sits in: `seen` resets at a `.{…}`
-;; sub-block (each sub-branch is its own branch).
-(define (select-branch-entries ctx row b path seen)
+;; recursion — `^_`'s Reading-N label synthesizes over (seen + leaf) via
+;; the SHARED select-synth-name walk. Scope is the branch of the block the
+;; leaf sits in (`seen` resets at `.{…}` — Q_U4: subject-root preferred,
+;; flip deferred; DEFERRED 23).
+(define (select-branch-entries ctx tm b path seen)
+  (define (walk-to-leaf k)  ;; shared by collapse + keyless: k gets leaf ft
+    ;; P3c verify (rank 1): the `(@ord N)` head arm — an ordinal-headed
+    ;; branch with a keyless/collapse LEAF pre-classifies into THIS walk,
+    ;; and the number-vs-keyed dispatch missed the pair (the label leaked
+    ;; into select-project-field → lying subject diagnostics). The twin arm
+    ;; in reduction's walk-to-leaf lands ATOMICALLY with this one — fixing
+    ;; typing alone would convert the loud lie into a runtime champ-of
+    ;; panic on vectors (the Exhaustive-Walkers twin-drift class).
+    (let walk ([steps b] [tm tm] [path path])
+      (let* ([s (car steps)]
+             ;; path labels: the ordinal ITSELF for @ord steps (the raw pair
+             ;; would leak into branch-str)
+             [name (if (select-ord-step? s) (cadr s) (select-step-name s))])
+        (let-values ([(ft ff)
+                      (cond
+                        [(number? s) (select-index-of ctx tm s path)]
+                        [(select-ord-step? s)
+                         (select-index-of ctx tm (cadr s) path)]
+                        [else
+                         (let-values ([(row rf) (select-row-of ctx tm path)])
+                           (if rf (values #f (select-fail-fill-label rf name))
+                               (select-project-field ctx row name path)))])])
+          (cond
+            [ff (values #f ff)]
+            [(null? (cdr steps)) (k ft)]
+            [else (walk (cdr steps) (whnf ft) (append path (list name)))])))))
   (let ([col (select-branch-collapse b)])
-    (if col
-        ;; collapse: walk to the leaf, checking presence at every level
-        ;; (never entered via tail-recursion — a collapse leaf is detected on
-        ;; the full branch — so b is complete and seen is not needed here)
-        (let walk ([steps b] [row row] [path path])
-          (let* ([s (car steps)]
-                 [name (select-step-name s)])
-            (let-values ([(ft ff) (select-project-field ctx row name path)])
-              (cond
-                [ff (values #f ff)]
-                [(null? (cdr steps))
-                 (let ([label (cond
-                                [(select-cont-rename col)]
-                                [(eq? col 'collapse-synth)
-                                 (select-synth-name (append seen b))]
-                                [else name])])
-                   (values (list (cons label (record-field ft 'present))) #f))]
-                [else
-                 (let*-values ([(ft*) (whnf ft)]
-                               [(inner rf) (select-row-of ctx ft* (append path (list name)))])
-                   (if rf
-                       (values #f rf)
-                       (walk (cdr steps) inner (append path (list name)))))]))))
-        (let* ([s (car b)]
-               [rest (cdr b)]
-               [name (select-step-name s)]
-               [cont (select-step-cont s)])
-          (let-values ([(ft ff) (select-project-field ctx row name path)])
-            (cond
-              [ff (values #f ff)]
-              [(null? rest)
-               ;; LEAF: kept (plain) · renamed in place · synth (Reading N).
-               ;; A dissolve leaf (keyless) is refused at the parser (P3c).
-               (let ([label (cond
-                              [(and cont (select-cont-rename cont))]
-                              [(eq? cont 'synth)
-                               (select-synth-name (append seen (list s)))]
-                              [else name])])
-                 (values (list (cons label (record-field ft 'present))) #f))]
-              [else
-               (let-values ([(below bf)
-                             (select-below-entries ctx (whnf ft) rest
-                                                   (append path (list name))
-                                                   (append seen (list s)))])
-                 (cond
-                   [bf (values #f bf)]
-                   [(eq? cont 'dissolve)
-                    ;; splice: the continuation's entries land at THIS level
-                    (values below #f)]
-                   [else
+    (cond
+      [col
+       (walk-to-leaf
+        (lambda (ft)
+          (let ([label (cond
+                         [(select-cont-rename col)]
+                         [(eq? col 'collapse-synth)
+                          (select-synth-name (append seen b))]
+                         [else (select-step-name (car (reverse b)))])])
+            (values (list (cons label (record-field ft 'present))) #f))))]
+      [(select-branch-keyless? b)
+       ;; P3c: the keyless component — the leaf VALUE, no key, no ancestry
+       (walk-to-leaf
+        (lambda (ft) (values (list (cons #f (record-field ft 'present))) #f)))]
+      [(select-ord-step? (car b))
+       ;; P3c: an ordinal BRANCH — keyless component over the element
+       (let ([n (cadr (car b))] [rest (cdr b)])
+         (let-values ([(elem ef) (select-index-of ctx tm n path)])
+           (cond
+             [ef (values #f ef)]
+             [(null? rest)
+              (values (list (cons #f (record-field elem 'present))) #f)]
+             [else
+              (let-values ([(ft bf) (select-below-field ctx (whnf elem) rest
+                                                        (append path (list n)) '())])
+                (if bf
+                    (values #f bf)
+                    (values (list (cons #f (record-field ft 'present))) #f)))])))]
+      [(number? (car b))
+       ;; a bare-number STEP chain (dissolve-splice continuation): descend
+       ;; transparently; an ordinal-terminal chain is a keyless component.
+       (let ([n (car b)] [rest (cdr b)])
+         (let-values ([(elem ef) (select-index-of ctx tm n path)])
+           (cond
+             [ef (values #f ef)]
+             [(null? rest)
+              (values (list (cons #f (record-field elem 'present))) #f)]
+             [else (select-branch-entries ctx (whnf elem) rest
+                                          (append path (list n)) seen)])))]
+      [else
+       (let* ([s (car b)]
+              [rest (cdr b)]
+              [name (select-step-name s)]
+              [cont (select-step-cont s)])
+         (let*-values ([(row rf) (select-row-of ctx tm path)]
+                       [(ft ff) (if rf (values #f (select-fail-fill-label rf name))
+                                    (select-project-field ctx row name path))])
+           (cond
+             [ff (values #f ff)]
+             [(null? rest)
+              ;; LEAF: kept (plain) · renamed in place · synth (Reading N).
+              (let ([label (cond
+                             [(and cont (select-cont-rename cont))]
+                             [(eq? cont 'synth)
+                              (select-synth-name (append seen (list s)))]
+                             [else name])])
+                (values (list (cons label (record-field ft 'present))) #f))]
+             [(eq? cont 'dissolve)
+              ;; splice: the continuation's components land at THIS level
+              (select-below-components ctx (whnf ft) rest
+                                       (append path (list name))
+                                       (append seen (list s)))]
+             [else
+              (let-values ([(bt bf) (select-below-field ctx (whnf ft) rest
+                                                        (append path (list name))
+                                                        (append seen (list s)))])
+                (if bf
+                    (values #f bf)
                     (let ([label (or (and cont (select-cont-rename cont)) name)])
-                      (values (list (cons label
-                                          (record-field
-                                           (make-record 'keyword below 'closed)
-                                           'present)))
-                              #f))]))]))))))
+                      (values (list (cons label (record-field bt 'present)))
+                              #f))))])))])))
 
-;; The entries contributed BELOW a selected head of type ft: a terminal
-;; `(@sub …)` assembles that block's level (fresh branches — `seen` resets);
-;; otherwise the remaining steps continue as a single branch. Projection
-;; nesting falls out of the recursion (traversed nominal keys are kept,
-;; spec §1.2).
-(define (select-below-entries ctx ft steps path seen)
-  (let-values ([(row rf) (select-row-of ctx ft path)])
-    (if rf
-        (values #f rf)
-        (if (and (select-sub-step? (car steps)) (null? (cdr steps)))
-            (select-level-entries ctx row (cdr (car steps)) path)
-            (select-branch-entries ctx row steps path seen)))))
+;; The COMPONENTS a dissolved head splices to its level: a terminal
+;; `(@sub …)` contributes that block's level components (fresh branches —
+;; `seen` resets); otherwise the remaining steps continue as one branch.
+(define (select-below-components ctx ft steps path seen)
+  (if (and (select-sub-step? (car steps)) (null? (cdr steps)))
+      (select-level-components ctx ft (cdr (car steps)) path)
+      (select-branch-entries ctx ft steps path seen)))
+
+;; The FIELD TYPE below a kept/renamed head (projection nesting — traversed
+;; nominal keys are kept, spec §1.2; ordinal steps contribute NO level,
+;; Q_U2). A terminal `(@sub …)` assembles that block's level honestly —
+;; including the keyless 1-tuple (`admins.{0}` ≠ `admins.0`).
+(define (select-below-field ctx ft steps path seen)
+  (cond
+    [(and (select-sub-step? (car steps)) (null? (cdr steps)))
+     (let-values ([(comps cf) (select-level-components ctx ft (cdr (car steps)) path)])
+       (if cf (values #f cf) (values (select-assemble-row comps) #f)))]
+    [(number? (car steps))
+     ;; ordinal STEP: descend, no output level (Reading A)
+     (let-values ([(elem ef) (select-index-of ctx ft (car steps) path)])
+       (cond
+         [ef (values #f ef)]
+         [(null? (cdr steps)) (values elem #f)]
+         [else (select-below-field ctx (whnf elem) (cdr steps)
+                                   (append path (list (car steps))) seen)]))]
+    [else
+     ;; a keyed chain: its components assemble into the nested row
+     (let-values ([(comps cf) (select-branch-entries ctx ft steps path seen)])
+       (if cf (values #f cf) (values (select-assemble-row comps) #f)))]))
 
 (define (record-value-bound ctx rec [src (dyn-row-source 'dyn-row-values)])
   (cond

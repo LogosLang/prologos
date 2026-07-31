@@ -1389,17 +1389,18 @@
   (check-regexp-match #rx"empty selection" r)
   (check-regexp-match #rx"empty map" r))
 
-(test-case "P3a malformed seat: ordinal STEP inside a branch is refused (unruled — not fabricated)"
-  ;; `{admins.0}`-class: the projection semantics of a mid-branch ordinal are
-  ;; unruled (ancestry through a contingent key). Loud refusal, monotone.
+(test-case "P3a→P3c: an ordinal STEP over a KEYWORD row is the honest cross-domain error"
+  ;; P3c-flipped (verify rank 5): this pin carried the "unruled" refusal;
+  ;; ordinal steps are LIVE now (Q_U2) — `.0` over a keyword row gets the
+  ;; not-indexable teaching, not a phase pointer.
   (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{server.0}\n")))
   (check-true (prologos-error? raw))
-  (check-regexp-match #rx"ordinal" (format "~a" raw)))
+  (check-regexp-match #rx"tuple or vector subject" (format "~a" raw)))
 
-(test-case "P3a malformed seat: ordinal BRANCHES name P3c"
+(test-case "P3a→P3c: ordinal BRANCHES over a KEYWORD row refuse cross-domain"
   (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{0 1}\n")))
   (check-true (prologos-error? raw))
-  (check-regexp-match #rx"ordinal" (format "~a" raw)))
+  (check-regexp-match #rx"tuple or vector subject" (format "~a" raw)))
 
 (test-case "P3a malformed seat: keyword items are written bare"
   (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{:name}\n")))
@@ -1523,19 +1524,15 @@
   (check-regexp-match #rx":name \"ann\"" (format "~a" (list-ref rs (- (length rs) 3))))
   (check-regexp-match #rx":name \"ann\"" (format "~a" (last rs))))
 
-(test-case "P3a verify (P3b-updated): `^`-bearing items never fabricate a field miss"
-  ;; P3a's gate refused BOTH spellings with a P3b pointer; P3b's splitter
-  ;; DEMOLISHED that gate (the planned flip — hazard 2 of the P3b relay).
-  ;; The pin's intent survives the flip: no `^` spelling may produce a
-  ;; fabricated "field :version^ is not present" miss. `version^` (keyless
-  ;; leaf) now refuses with the P3c boundary pointer; `server.host^_` is
-  ;; LIVE semantics (Reading N) and must not error at all.
+(test-case "P3a verify (P3c-updated): `^`-bearing items never fabricate a field miss"
+  ;; P3a refused both spellings with a pointer; P3b landed `^_`; P3c landed
+  ;; the keyless sort — BOTH are live semantics now. The pin's surviving
+  ;; intent: no `^` spelling may produce a fabricated "not present" miss.
   (define raw1 (run-ws-raw-last (string-append P3A-CFG "cfg{version^}\n")))
-  (check-true (prologos-error? raw1))
-  (check-regexp-match #rx"P3c" (format "~a" raw1))
+  (check-false (prologos-error? raw1) "the keyless 1-tuple is live at P3c")
   (check-false (regexp-match #rx"not present" (format "~a" raw1)) "fabricated miss")
   (define raw2 (run-ws-raw-last (string-append P3A-CFG "cfg{server.host^_}\n")))
-  (check-false (prologos-error? raw2) "Reading N is live at P3b — no error")
+  (check-false (prologos-error? raw2) "Reading N is live since P3b")
   (check-regexp-match #rx":server-host" (format "~a" raw2)))
 
 (test-case "P3a verify: ground non-map subjects PANIC at the top level too (tier symmetry)"
@@ -1742,20 +1739,15 @@
 
 ;; ---- the P3b/P3c boundary: keyless leaf `^` refuses with a P3c pointer ----
 
-(test-case "P3b boundary: leaf `^` (keyless) refuses naming P3c — cfg{version^}"
-  ;; DEMOLITION FLIP: this spelling carried P3a's generic re-key pointer; the
-  ;; splitter now classifies it precisely — keyless tuples land at P3c.
-  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{version^}\n")))
-  (check-true (prologos-error? raw))
-  (define r (format "~a" raw))
-  (check-regexp-match #rx"P3c" r)
-  (check-regexp-match #rx"keyless" r))
-
-(test-case "P3b boundary: the two-leaf keyless block also names P3c"
-  (define raw (run-ws-raw-last
-               (string-append P3A-CFG "cfg{server.host^ database.url^}\n")))
-  (check-true (prologos-error? raw))
-  (check-regexp-match #rx"P3c" (format "~a" raw)))
+(test-case "P3b boundary (P3c-flipped): the keyless spellings are LIVE"
+  ;; These two pins carried the P3b→P3c boundary refusals; P3c demolished
+  ;; them as planned. The semantic pins live in the P3c battery below —
+  ;; here we keep the flip itself pinned: no refusal survives.
+  (check-false (prologos-error?
+                (run-ws-raw-last (string-append P3A-CFG "cfg{version^}\n"))))
+  (check-false (prologos-error?
+                (run-ws-raw-last
+                 (string-append P3A-CFG "cfg{server.host^ database.url^}\n")))))
 
 ;; ---- the malformed-`^` battery ----
 
@@ -1913,9 +1905,273 @@
   (check-true (prologos-error? raw))
   (check-regexp-match #rx"server" (format "~a" raw)))
 
-(test-case "P3b verify: the P3c ordinal-step pointer names its phase (the Q_T4a advice loop closes)"
-  ;; the Q_T4a message recommends `admins^first.0`; executing it lands here —
-  ;; this message must name P3c so the loop is guided, not a dead end.
+(test-case "P3b verify (P3c-closed): the Q_T4a advice EXECUTES — admins^first.0 works"
+  ;; At P3b this spelling hit the P3c ordinal-step pointer; P3c lifted it.
+  ;; The Q_T4a advice loop is now fully closed: rename the nominal segment,
+  ;; then descend the ordinal — end to end.
+  ;; self-contained fixture (P3C-DATA is defined later in the file)
+  (define rs (run-ws-raw (string-append
+                          "def adm2 := @[{:name \"Alice\" :role :super} {:name \"Bob\" :role :regular}]\n"
+                          "def mq := {:admins adm2}\n"
+                          "mq{admins^first.0}\n")))
+  (check-false (ormap prologos-error? rs))
+  (check-regexp-match #rx"\\{:first \\{:name String :role Keyword\\}\\}" (format "~a" (last rs)))
+  ;; and over a NON-indexable value the error is the honest cross-domain one:
   (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{server^first.0}\n")))
   (check-true (prologos-error? raw))
-  (check-regexp-match #rx"P3c" (format "~a" raw)))
+  (check-regexp-match #rx"ordinal" (format "~a" raw)))
+
+;; ============================================================
+;; CIU T6 D4.P3c — keyless + L4 + honest nesting  (Q_U2, ruling 2a, L4/B5)
+;;
+;; Failing-test-first: every pin below was written RED — at pin time each
+;; spelling produced one of the three P3c pointers landed by P3a/P3b (the
+;; keyless-leaf refusal, the ordinal-STEP refusal, the ordinal-BRANCH
+;; refusal), the documented fails-for-the-right-reason state. The battery
+;; pins: `^`-terminated keyless branches (tuple components in written order,
+;; ordinally re-keyed — the nat-row mint at EVERY n incl. 1-tuples, which is
+;; WHY selection routes around the collapsing `@[…]` literal arm, ruling
+;; 2a); ordinal branches `{N M}` (fresh indices, selection order); ordinal
+;; STEPS per Q_U2 Reading A (descend, NO output level — `.0` ≠ `.{0}`); the
+;; L4 sort-homogeneity error at the OUTPUT level; and the G11 one-space pair
+;; AS AMENDED by P3b's digit-target refusal (both halves now refuse loudly —
+;; the one-space flip crosses a loud wall instead of two silent meanings).
+;; ============================================================
+
+(define P3C-DATA
+  (string-append
+   "def admins := @[{:name \"Alice\" :role :super} {:name \"Bob\" :role :regular}]\n"
+   "def het3 := @[7 \"seven\" :seven]\n"))
+
+(test-case "P3c fixture-sanity guard: PVec + het tuple mint as expected (GREEN before P3c)"
+  (define rs (run-ws-raw (string-append P3C-DATA "admins.0.name\nhet3[1]\n")))
+  (check-false (ormap prologos-error? rs) "the P3c fixture itself is broken")
+  (check-regexp-match #rx"\"seven\"" (format "~a" (last rs))))
+
+;; ---- keyless: `^`-terminated branches assemble tuples ----
+
+(test-case "P3c ⭐ the keyless 2-tuple: cfg{server.host^ database.url^} → ⟨String String⟩"
+  (define r (run-ws-last (string-append P3A-CFG "cfg{server.host^ database.url^}\n")))
+  (check-regexp-match #rx"\"localhost\"" r)
+  (check-regexp-match #rx"\"db-url\"" r)
+  (check-regexp-match #rx"⟨String String⟩" r)
+  (check-false (regexp-match #rx":host|:server" r) "keyless drops ALL keys"))
+
+(test-case "P3c ⭐ the HONEST 1-TUPLE (ruling 2a): cfg{version^} → ⟨String⟩"
+  ;; the entire reason selection mints rows directly: the @[…] literal arm
+  ;; collapses to PVec at EVERY homogeneous n, so this value is unreachable
+  ;; via literals.
+  (define r (run-ws-last (string-append P3A-CFG "cfg{version^}\n")))
+  (check-regexp-match #rx"\"1.0.0\"" r)
+  (check-regexp-match #rx"⟨String⟩" r)
+  (check-false (regexp-match #rx"PVec" r) "must be the 1-tuple, not a collapsed PVec"))
+
+(test-case "P3c: keyless nested under kept ancestry: cfg{server.{host^ port^}}"
+  (define r (run-ws-last (string-append P3A-CFG "cfg{server.{host^ port^}}\n")))
+  (check-regexp-match #rx"\"localhost\"" r)
+  (check-regexp-match #rx"8080" r)
+  (check-regexp-match #rx"\\{:server ⟨String Int⟩\\}" r))
+
+(test-case "P3c: a dissolved head SPLICES keyless components to its level"
+  (define r (run-ws-last (string-append P3A-CFG "cfg{server^.{host^ port^}}\n")))
+  (check-regexp-match #rx"⟨String Int⟩" r)
+  (check-false (regexp-match #rx":server" r)))
+
+(test-case "P3c: keyless leaf under a mid-path dissolve: cfg{server^.host^} → ⟨String⟩"
+  (define r (run-ws-last (string-append P3A-CFG "cfg{server^.host^}\n")))
+  (check-regexp-match #rx"\"localhost\"" r)
+  (check-regexp-match #rx"⟨String⟩" r))
+
+;; ---- ordinal branches: fresh indices, selection order ----
+
+(test-case "P3c ⭐ ordinal branches re-derive indices in WRITTEN order: het3{2 0}"
+  (define r (run-ws-last (string-append P3C-DATA "het3{2 0}\n")))
+  (check-regexp-match #rx"⟨Keyword Int⟩" r "written order: element 2 then element 0")
+  (check-regexp-match #rx":seven" r)
+  (check-regexp-match #rx"7" r))
+
+(test-case "P3c: ordinal 1-tuple over a PVec: admins{1}"
+  (define r (run-ws-last (string-append P3C-DATA "admins{1}\n")))
+  (check-regexp-match #rx"\"Bob\"" r)
+  (check-regexp-match #rx"⟨\\{:name String :role Keyword\\}⟩" r))
+
+(test-case "P3c: ordinal branches over a KEYWORD row refuse loudly (cross-domain)"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{0 1}\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"ordinal" (format "~a" raw)))
+
+;; ---- Q_U2 Reading A: ordinal STEPS descend with NO output level ----
+
+(test-case "P3c ⭐⭐ the Q_U2 DISCRIMINATING PAIR: admins.0 (descent) ≠ admins.{0} (1-tuple)"
+  (define rs (run-ws-raw (string-append
+                          P3C-DATA
+                          "def m5 := {:admins admins}\n"
+                          "m5{admins.0}\n"
+                          "m5{admins.{0}}\n")))
+  (check-false (ormap prologos-error? rs))
+  (define step-r (format "~a" (list-ref rs (- (length rs) 2))))
+  (define block-r (format "~a" (last rs)))
+  ;; the STEP descends — element 0's row lands BARE under :admins
+  (check-regexp-match #rx"\\{:admins \\{:name String :role Keyword\\}\\}" step-r)
+  ;; the BLOCK re-derives — a 1-tuple under :admins
+  (check-regexp-match #rx"\\{:admins ⟨\\{:name String :role Keyword\\}⟩\\}" block-r))
+
+(test-case "P3c Q_U2: nominal ancestry survives BELOW an ordinal step: {admins.0.name}"
+  (define rs (run-ws-raw (string-append
+                          P3C-DATA
+                          "def m6 := {:admins admins}\n"
+                          "m6{admins.0.name}\n")))
+  (check-false (ormap prologos-error? rs))
+  (define r (format "~a" (last rs)))
+  (check-regexp-match #rx"\"Alice\"" r)
+  (check-regexp-match #rx"\\{:admins \\{:name String\\}\\}" r))
+
+(test-case "P3c Q_U2: an ordinal step then a sub-block: {admins.0.{name}}"
+  (define rs (run-ws-raw (string-append
+                          P3C-DATA
+                          "def m7 := {:admins admins}\n"
+                          "m7{admins.0.{name}}\n")))
+  (check-false (ormap prologos-error? rs))
+  (check-regexp-match #rx"\\{:admins \\{:name String\\}\\}" (format "~a" (last rs))))
+
+(test-case "P3c: het-tuple ordinal steps type EXACTLY per position"
+  (define rs (run-ws-raw (string-append
+                          P3C-DATA
+                          "def m8 := {:t het3}\n"
+                          "m8{t.1}\n")))
+  (check-false (ormap prologos-error? rs))
+  (check-regexp-match #rx"\\{:t String\\}" (format "~a" (last rs))))
+
+(test-case "P3c: het-tuple ordinal step OOB is a LOUD typing error naming the position"
+  (define rs (run-ws-raw (string-append
+                          P3C-DATA
+                          "def m9 := {:t het3}\n"
+                          "m9{t.9}\n")))
+  (check-true (prologos-error? (last rs)))
+  (check-regexp-match #rx"9" (format "~a" (last rs))))
+
+;; ---- L4: sort homogeneity, checked at the OUTPUT level ----
+
+(test-case "P3c ⭐ L4: mixed keyed/keyless sorts error level-locally"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{version^ server.port}\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"mix" (format "~a" raw)))
+
+(test-case "P3c L4: a SPLICED keyless component mixes at the OUTPUT level (the Q_T3 frame)"
+  ;; version is keyed; the dissolved branch splices a keyless component into
+  ;; the same level — the syntactic-branch reading would miss this.
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{version server^.{host^}}\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"mix" (format "~a" raw)))
+
+(test-case "P3c L4: keyless sub-level under a keyed level is LEGAL (level-local, not global)"
+  (define rs (run-ws-raw (string-append P3A-CFG "cfg{version server.{host^}}\n")))
+  (check-false (ormap prologos-error? rs)
+               "the sub-block is its OWN level — keyed outer + keyless inner must pass"))
+
+;; ---- the G11 one-space pair, AS AMENDED (both halves loud) ----
+
+(test-case "P3c ⭐ G11 as amended: {a^0} and {a^ 0} are DIFFERENT loud errors"
+  ;; original G11: `{a^0}` keyed-rename-to-:0 vs `{a^ 0}` keyless 2-tuple.
+  ;; P3b's verify refused digit-leading rename targets (`:0` would be
+  ;; dot-unreachable), so the pair's one-space flip now crosses a LOUD wall:
+  ;; `{a^0}` = the digit-target refusal; `{a^ 0}` = keyless leaf + ordinal
+  ;; branch over a KEYWORD row — a cross-domain refusal.
+  (define raw1 (run-ws-raw-last (string-append P3A-CFG "cfg{name^0}\n")))
+  (check-true (prologos-error? raw1))
+  (check-regexp-match #rx"digit" (format "~a" raw1))
+  (define raw2 (run-ws-raw-last (string-append P3A-CFG "cfg{name^ 0}\n")))
+  (check-true (prologos-error? raw2))
+  (check-false (regexp-match #rx"digit" (format "~a" raw2)) "the spaced half is a DIFFERENT error")
+  (check-regexp-match #rx"ordinal" (format "~a" raw2)))
+
+;; ---- composition: selection results are ordinary tuples ----
+
+(test-case "P3c: a keyless selection result is def-storable and re-indexable"
+  (define rs (run-ws-raw (string-append
+                          P3C-DATA
+                          "def pair := admins{0 1}\n"
+                          "pair.0.name\n")))
+  (check-false (ormap prologos-error? rs))
+  (check-regexp-match #rx"\"Alice\"" (format "~a" (last rs))))
+
+(test-case "P3c twins: a keyless select on a def RHS under QTT"
+  (define rs (run-ws-raw (string-append
+                          P3A-CFG
+                          "def kv := cfg{version^}\n"
+                          "kv.0\n")))
+  (check-false (ormap prologos-error? rs))
+  (check-regexp-match #rx"\"1.0.0\"" (format "~a" (last rs))))
+
+;; ============================================================
+;; D4.P3c — ADVERSARIAL VERIFY pins (no BLOCKING — first slice in eight;
+;; 2 SIGNIFICANT + 3 MINOR, all fixed pre-commit)
+;;
+;; Rank 1 (SIGNIFICANT, twin-drift): ordinal-headed branches with
+;; keyless/collapse LEAVES pre-classify into walk-to-leaf, whose dispatch
+;; missed the (@ord N) pair — the label leaked into select-project-field
+;; and produced LYING subject diagnostics ("not a record" on a PVec that
+;; works for the keyed twin; a BLANK generic on records via the hint's
+;; swallow-all). Fixed with the @ord arm in BOTH walks atomically (fixing
+;; typing alone would have converted the lie into a runtime champ-of panic
+;; — the Exhaustive-Walkers twin-drift class). Rank 2: {N.M} fused
+;; decimals leaked ($decimal-literal q) at a stale message. Rank 3: `.-1`
+;; was invisible + the PVec wording predated live ordinals. Rank 4:
+;; in-block v[0] aliasing pinned as the Q_R1 identity; {[0]} guided.
+;; Rank 5: the two stale P3a-era pin titles flipped above.
+;; ============================================================
+
+(test-case "P3c verify ⭐ rank 1: ordinal head + keyless leaf works (was a lying non-record error)"
+  (define rs (run-ws-raw (string-append P3C-DATA "admins{0.name^}\n")))
+  (check-false (ormap prologos-error? rs))
+  (define r (format "~a" (last rs)))
+  (check-regexp-match #rx"\"Alice\"" r)
+  (check-regexp-match #rx"⟨String⟩" r "one keyless branch — the honest 1-tuple"))
+
+(test-case "P3c verify rank 1: ordinal head + collapse leaf re-keys (coherent with the component walk)"
+  (define rs (run-ws-raw (string-append P3C-DATA "admins{0.name^-}\n")))
+  (check-false (ormap prologos-error? rs))
+  (check-regexp-match #rx"\\{:name String\\}" (format "~a" (last rs))))
+
+(test-case "P3c verify rank 1: ordinal head over a RECORD subject refuses honestly (was a BLANK generic)"
+  (define raw (run-ws-raw-last (string-append P3A-CFG "cfg{0.name^}\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"tuple or vector subject" (format "~a" raw)))
+
+(test-case "P3c verify rank 2: {N.M} decimal fusion gets the guided collision message"
+  (define raw (run-ws-raw-last (string-append P3C-DATA "admins{1.2}\n")))
+  (check-true (prologos-error? raw))
+  (define r (format "~a" raw))
+  (check-regexp-match #rx"decimal literal" r)
+  (check-false (regexp-match #rx"decimal-literal" r) "the sentinel must not leak")
+  ;; and the recommended spaced spelling EXECUTES:
+  (define rs (run-ws-raw (string-append
+                          "def nv := @[@[1 2] @[3 4]]\n"
+                          "nv{0 .1}\n")))
+  (check-false (ormap prologos-error? rs)))
+
+(test-case "P3c verify rank 3: `.-1` surfaces in the vector-subject message"
+  (define rs (run-ws-raw (string-append
+                          P3C-DATA
+                          "def mv := {:admins admins}\n"
+                          "mv{admins.-1}\n")))
+  (check-true (prologos-error? (last rs)))
+  (define r (format "~a" (last rs)))
+  (check-regexp-match #rx"-1" r)
+  (check-regexp-match #rx"ordinal" r))
+
+(test-case "P3c verify rank 4: in-block `v[0]` aliases `.0` (the Q_R1 identity holds in blocks)"
+  (define rs (run-ws-raw (string-append
+                          P3C-DATA
+                          "def mw := {:admins admins}\n"
+                          "mw{admins[0]}\n"
+                          "mw{admins.0}\n")))
+  (check-false (ormap prologos-error? rs))
+  (check-equal? (format "~a" (list-ref rs (- (length rs) 2)))
+                (format "~a" (last rs))
+                "two surfaces, ONE mechanism — byte-identical results"))
+
+(test-case "P3c verify rank 4: head-position `{[0]}` is guided to the bare spelling"
+  (define raw (run-ws-raw-last (string-append P3C-DATA "admins{[0]}\n")))
+  (check-true (prologos-error? raw))
+  (check-regexp-match #rx"written bare" (format "~a" raw)))

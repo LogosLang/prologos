@@ -918,19 +918,25 @@
                "`^_` synthesizes the leaf key from the surviving path — it attaches to the branch's LAST segment"]
               [(and c (select-cont-collapse? c) (not last?))
                "the `^-` collapse family ends a branch — it is a LEAF continuation"]
-              [(and (eq? c 'dissolve) last?)
-               ;; the P3b/P3c boundary: bare leaf `^` is the KEYLESS sort —
-               ;; the tuple carrier does not exist until P3c. Parsed, refused.
-               "keyless selection — a leaf `^` drops the key and assembles a tuple, which lands at Path Selection P3c; a keyed block keeps or renames keys (`^k'`, `^_`)"]
+              ;; D4.P3c: the bare dissolve LEAF is now the KEYLESS sort —
+              ;; the P3b refusal lifted; L4 (below) governs the mixing.
               [else (check (cdr steps))])))))
-  ;; ---- Q_T3: OUTPUT-level duplicate check, after `^`-splicing ----
+  ;; ---- Q_T3 + L4: OUTPUT-level checks, after `^`-splicing ----
   ;; select-branch-top-keys is the SHARED walk (syntax.rkt) — the same
   ;; computation typing + reduction use, so check and meaning cannot drift.
+  ;; Components: key symbols (keyed) | #f (keyless — D4.P3c).
   (define (dup-output-key branches)
-    (let dloop ([ks (append-map select-branch-top-keys branches)] [seen '()])
+    (let dloop ([ks (filter values (append-map select-branch-top-keys branches))]
+                [seen '()])
       (cond [(null? ks) #f]
             [(memq (car ks) seen) (car ks)]
             [else (dloop (cdr ks) (cons (car ks) seen))])))
+  ;; L4 (spec §3.3): every level denotes exactly ONE of Map or tuple —
+  ;; checked over the OUTPUT components (a dissolved branch's spliced
+  ;; components count at the receiving level, same frame as Q_T3).
+  (define (mixed-sorts? branches)
+    (let ([cs (append-map select-branch-top-keys branches)])
+      (and (ormap values cs) (ormap not cs))))
   ;; split a `^` lexeme and continue with the minted step
   (define (split-step lexeme k)
     (let-values ([(name cont) (split-caret-lexeme lexeme)])
@@ -949,6 +955,8 @@
                        "empty sub-block — `.{}` selects nothing; name the fields to keep (e.g. `server.{host port}`)"
                        "empty selection — `x{}` selects nothing (`{}` alone is the empty map literal)"))]
             [(ormap branch-problem branches) => fail]
+            [(mixed-sorts? branches)
+             (fail "mixed keyed/keyless sorts in the select block (L4) — every branch keeps a key (`k`, `^k'`, `^_`) or drops one (`k^`, `{N}`); one level assembles a Map OR a tuple, never both")]
             [(dup-output-key branches)
              ;; P3b verify (finding 8): `^_` was dropped from this remedy
              ;; list — in both canonical dup classes the synthesized key
@@ -1049,13 +1057,32 @@
                               [(select-key-step? head-step) (cadr head-step)]
                               [else "field"])])
                (fail (format "inside a select block, narrow with `.{…}` — write `~a.{…}`, not `~a{…}`" nm nm)))]
+            ;; D4.P3c (Q_U2 Reading A): an ordinal STEP attaches to the
+            ;; current branch — descends, contributes NO output level. The
+            ;; P3b refusal (this arm's predecessor) lifted here.
+            [(and (eq? (head-of it) '$postfix-index) cur (not cur-subbed?)
+                  (exact-nonnegative-integer? (cadr it)))
+             (loop (cdr items) (cons (cadr it) cur) #f acc)]
+            [(and (eq? (head-of it) '$postfix-index) cur cur-subbed?)
+             (fail "a segment cannot follow a `.{…}` sub-block — the sub-block is a branch's terminal step")]
             [(eq? (head-of it) '$postfix-index)
-             ;; P3b verify (finding 7): name the PHASE — the Q_T4a guided
-             ;; error's worked example (`admins^first.0`) lands on this arm
-             ;; until P3c, so this message is the loop-closer.
-             (fail (format "ordinal segment `.~a` inside a select block lands at Path Selection P3c — until then extract with `x.k.~a` outside the block" (cadr it) (cadr it)))]
+             (fail (format "an ordinal segment `.~a` needs a preceding branch — an ordinal BRANCH is written bare (`x{~a}`)" (cadr it) (cadr it)))]
+            ;; D4.P3c: an ordinal BRANCH head — `{N M}` re-derives indices in
+            ;; written order (keyless sort; the L4 check above governs mixing).
+            [(and (number? it) (exact-nonnegative-integer? it))
+             (loop (cdr items) (list (list '@ord it)) #f (closed-acc))]
             [(number? it)
-             (fail "ordinal branches `x{N M}` land with keyless selection (Path Selection P3c) — for one element use `x.N`")]
+             (fail (format "`~a` is not a valid ordinal — ordinal branches use non-negative indices (`x{0 1}`)" it))]
+            ;; P3c verify (rank 2): `{N.M}` fuses into a DECIMAL literal —
+            ;; without this arm the internal `($decimal-literal q)` sentinel
+            ;; leaked through the `~s` fallback (with the rational value, at
+            ;; a stale message). Name the collision + the working spellings.
+            [(memq (head-of it) '($decimal-literal $rat-literal))
+             (fail "`N.M` reads as a decimal literal inside a select block — for element N then index M write `x{N .M}` (spaced) or `x{N.{M}}`")]
+            ;; P3c verify (rank 4): a head-position bracket group `{[0]}` —
+            ;; ordinal BRANCHES are written bare.
+            [(and (list? it) (= (length it) 1) (number? (car it)))
+             (fail (format "ordinal branches are written bare — `x{~a}`, not `x{[~a]}`" (car it) (car it)))]
             [(kw-sym? it)
              (fail (format "block keys are written bare — `x{~a}`, not `x{~a}`"
                            (substring (symbol->string it) 1) it))]

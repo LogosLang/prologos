@@ -235,7 +235,8 @@
 ;; seal / validate / annotate.
 (define (format-select-fail fail names)
   (define path (select-fail-path fail))
-  (define branch-str (string-join (map symbol->string path) "."))
+  ;; D4.P3c: ordinal steps put NUMBERS in the path — ~a, not symbol->string
+  (define branch-str (string-join (map (lambda (p) (format "~a" p)) path) "."))
   (define label (select-fail-label fail))
   (define row (select-fail-row fail))
   ;; D4.P3a adversarial verify: "annotate its row type" was DROPPED from the
@@ -266,13 +267,37 @@
       "Could not infer type — select: the subject~a is a (Map K V), which has no per-field row; a select block needs a record subject — ~a"
       (if (null? path) "" (format " (branch `~a`)" branch-str)) remedies)]
     [(subject-tuple)
+     ;; D4.P3c: ordinal selection is LIVE — the recommendation works now.
      (format
-      "Could not infer type — select: the subject~a is a tuple (nat-keyed row); a keyed block selects NAMED fields — extract an element with `x.N` (ordinal selection lands at P3c)"
+      "Could not infer type — select: the subject~a is a tuple (nat-keyed row); a keyed block selects NAMED fields — ordinal selection is `x{N M}`, single-element extraction `x.N`"
       (if (null? path) "" (format " (branch `~a`)" branch-str)))]
     [(subject-other)
+     ;; P3c verify (rank 3): PVec subjects deserve the ordinal teaching —
+     ;; ordinal steps/branches over vectors are LIVE; only NAMED steps
+     ;; refuse here. Also surface the offending step label (`.-1` was
+     ;; invisible, byte-identical to `.foo`).
+     (if (expr-PVec? row)
+         (format
+          "Could not infer type — select: `~a`~a is not a field of a vector element position — a vector subject takes ordinal steps (`.N`) or ordinal branches (`x{N M}`)"
+          (or label "the step")
+          (if (null? path) "" (format " (branch `~a`)" branch-str)))
+         (format
+          "Could not infer type — select: the subject~a is not a record; a select block projects fields of a keyword row"
+          (if (null? path) "" (format " (branch `~a`)" branch-str))))]
+    ;; ---- D4.P3c: the ordinal fail kinds ----
+    [(ordinal-oob)
+     (string-append
+      (format-closed-tuple-oob row label names)
+      (format "; in the select branch `~a`" branch-str))]
+    [(not-indexable)
      (format
-      "Could not infer type — select: the subject~a is not a record; a select block projects fields of a keyword row"
-      (if (null? path) "" (format " (branch `~a`)" branch-str)))]
+      "Could not infer type — select: ordinal `~a` (branch `~a`) needs a tuple or vector subject; ~a — select named fields instead (`x{k}`)"
+      label branch-str
+      (cond
+        [(and (expr-Record? row) (eq? (expr-Record-key-domain row) 'keyword))
+         (format "~a is keyword-keyed" (pp-expr row names))]
+        [(expr-Map? row) "a (Map K V) has no positions"]
+        [else (format "~a has no positions" (pp-expr row names))]))]
     [else #f]))
 
 (define (select-block-hint ctx e names)
