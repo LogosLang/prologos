@@ -157,6 +157,24 @@ value strata. Topology strata are sequential. See =DEVELOPMENT_LESSONS.org=
 | 4 | Trait-Dispatched Iteration (broadcast via Seq) | ⬜ | Post Track 8 |
 | 5 | Union-Aware Dispatch | ⬜ | Post Track 8 |
 
+** QTT (Quantitative Type Theory)  — /Multiplicities that are actually enforced: erased, linear, unrestricted/
+
+| | |
+|------------------+------|
+| *Design doc*     | [[file:2026-07-30_QTT_PATTERN_MATCHING_DESIGN.md][2026-07-30_QTT_PATTERN_MATCHING_DESIGN.md]] |
+| *Thesis*         | The multiplicity layer as a CHECKED discipline rather than a declared one. Distinct from the type layer (CIU rows/records) and the constraint substrate (UCS): QTT owns what m0/m1/mw *mean* operationally and where they are enforced. |
+| *Status*         | Founded 2026-07-30 from a Suggested-task chip (no Stage-3 predecessor; design doc written retroactively at P3). *P1 ✅ `966226cf`* — `mult-join`, the missing ALTERNATION operator: eliminator branches join, they do not add (`mult-add` stays right for sequential composition; PPN 4C Phase 2's "REFUTE idempotence" finding stands, it was about the tensor). Differs from `mult-add` in exactly one cell, so the swap is monotone-permissive. 5 sites; `natrec` deliberately excluded. *P2 ✅ `9fbbc90f`* — pattern matching is multiplicity-checked at all: `contains-unsupported-qtt?` returned #t for `expr-reduce`, so every `match` and multi-clause `defn` (the PRIMARY dispatch form) skipped QTT, and the stdlib's only linear API (fio's `-1>` handles, match-implemented) was declared linear and never checked. Adds the `checkQ` reduce arm + a beta-redex arm; `reduce-arm-ctx` factored out of `check-reduce-structural` and exported (one derivation, two consumers); PNET_VERSION 6→7 in the same commit (a warm cache masks the change entirely). Zero fallout. *P3 ✅ `3a4d521a`* — LINEAR-PER-PATH (owner ruling, option 3): `join-branches` gates the join on branch agreement at m1 positions, so a linear resource consumed on some paths and dropped on others now errors. On the real API the pair was INVERTED before P1 (`always-close` rejected, the `maybe-close` fd leak accepted); both are now correct. *NEXT = P4* (a diagnostic that NAMES the dropped resource — today it is the generic "Multiplicity violation"), then X.close (PIR-gated). |
+
+*** Tracks
+
+| Track | Description | Status |
+|-------+-------------+--------|
+| P1 | `mult-join` — the alternation operator | ✅ `966226cf` |
+| P2 | `expr-reduce` arms; guard entry removed; PNET bump | ✅ `9fbbc90f` |
+| P3 | Branch-agreement guard — linear-per-path | ✅ `3a4d521a` |
+| P4 | Precise diagnostic naming the dropped resource | ⬜ |
+| X.close | PIR + DEFERRED sweep | ⬜ |
+
 ** Rel (Relational Language)  — /The logic-programming layer: `solve`/`defr`, NAF, guards, solution-set typing/
 
 | | |

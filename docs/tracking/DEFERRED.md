@@ -15,7 +15,20 @@ Deferral".
 
 ---
 
-## ⭐ OWNER DECISION — `m0 ⊔ m1`: does a linear resource have to be consumed on EVERY path? (2026-07-30)
+## ✅ RULED + SHIPPED — `m0 ⊔ m1`: a linear resource MUST be consumed on every path (2026-07-30)
+
+**Owner ruled option 3; implemented in QTT P3 (`3a4d521a`).** Kept here rather
+than deleted because the reasoning is the reference for the next multiplicity
+question. Ruling: *"linear types should always be linear... there's a
+correctness concern otherwise."* The join stayed the honest lub and a separate
+`join-branches` guard supplies linear-per-path — `maybe-close` (the fd leak
+below) now errors; `always-close` type-checks. Two residuals, both filed:
+- P4 — the rejection still reads generic "Multiplicity violation"; `bu`/`tu-error`
+  carry no payload, so it cannot yet NAME the dropped resource.
+- The reduce arm's permissive fallback never checks agreement, so a leak on an
+  unanalysable (Church-fold) arm still hides. Closes when that path does.
+
+Original framing, retained:
 
 Raised by QTT P1/P2 (`966226cf`, `9fbbc90f`). NOT the implementer's call, so it
 shipped with the status-quo-preserving cell and is recorded here.

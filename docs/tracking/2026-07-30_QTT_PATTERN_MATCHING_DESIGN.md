@@ -25,8 +25,9 @@ became `m1 + m1 = mw` and was rejected — though only one branch runs.
 |---|---|---|---|
 | P1 | `mult-join` + `join-usage`; branch alternation at 5 eliminator sites | ✅ | `966226cf` — suite 9444/475/0 |
 | P2 | `checkQ` `expr-reduce` arm + beta-redex arm; guard entry removed; PNET 6→7 | ✅ | `9fbbc90f` — suite 9445/475/0, zero fallout |
-| P3 | Linear-per-path: branch-agreement guard at `m1` positions (**owner ruling: option 3**) | 🔄 | this phase |
+| P3 | Linear-per-path: branch-agreement guard at `m1` positions (**owner ruling: option 3**) | ✅ | `3a4d521a` — suite 9455/475/0; VAG produced `join-branches` |
 | P4 | Precise diagnostic naming the dropped resource | ⬜ | DEFERRED — see §5.P3 "benefit not yet realized" |
+| X.close | PIR + roadmap row + DEFERRED sweep | ⬜ | PIR-gated per `workflow.md`; the track is NOT done until it lands |
 
 ## 1. The ruling (owner, 2026-07-30)
 
