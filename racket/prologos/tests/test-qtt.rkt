@@ -251,6 +251,53 @@
                (expr-Bool))))
 
 ;; ========================================
+;; ω-scaling for repeatedly-applied function arguments (QTT P7, 2026-07-31)
+;; ========================================
+;; An eliminator or HOF that APPLIES its function argument an unknown number of
+;; times must scale that argument's usage by ω — otherwise a linear value
+;; captured in the function is counted once however many times it is consumed.
+;;
+;; This is NOT a new rule: the general application arm already does
+;; `(add-usage u1 (scale-usage m u2))`, scaling an argument by its binder's
+;; multiplicity. These arms SYNTHESIZE an mw Pi for their function argument and
+;; then failed to scale by it — so the fix restores consistency with the app
+;; rule rather than tightening the type system. (A user-written HOF capturing a
+;; linear was already rejected; only the built-in twins accepted it.)
+;;
+;; It catches BOTH directions, since m1 demands exactly-once and mw is neither:
+;; over-application (n > 1) and the zero-iteration leak (n = 0, the function
+;; never runs and the linear is never consumed).
+
+(test-case "checkQ-top: natrec step capturing a LINEAR value is rejected"
+  ;; ctx = [y :1 Nat]. The step ignores its arguments and returns y, so y is
+  ;; consumed once per iteration — 0..n times, not once.
+  (check-false
+   (checkQ-top (ctx-extend ctx-empty (expr-Nat) 'm1)
+               (expr-natrec (expr-lam 'mw (expr-Nat) (expr-Nat))
+                            (expr-zero)
+                            (expr-lam 'mw (expr-Nat)
+                                      (expr-lam 'mw (expr-Nat) (expr-bvar 2)))
+                            (expr-zero))
+               (expr-Nat))))
+
+(test-case "checkQ-top: a CLOSED natrec step is unaffected by ω-scaling"
+  ;; all-m0 scales to all-m0, so closed steps keep working — this is what makes
+  ;; the escape hatch (thread the resource through the accumulator) viable.
+  (check-true
+   (checkQ-top (ctx-extend ctx-empty (expr-Nat) 'm1)
+               (expr-natrec (expr-lam 'mw (expr-Nat) (expr-Nat))
+                            (expr-bvar 0)          ;; y consumed ONCE, in the base
+                            (expr-lam 'mw (expr-Nat)
+                                      (expr-lam 'mw (expr-Nat) (expr-bvar 0)))
+                            (expr-zero))
+               (expr-Nat))))
+
+(test-case "mult-mul: ω-scaling cannot break erasure or disturb ω"
+  ;; The soundness side-condition for scaling: an erased capture stays erased,
+  ;; and an already-unrestricted one is unchanged. Only m1 moves.
+  (check-equal? (scale-usage 'mw '(m0 m1 mw)) '(m0 mw mw)))
+
+;; ========================================
 ;; Vec / Fin usage rules (QTT P5, 2026-07-30)
 ;; ========================================
 ;; These eight nodes were flagged "unsupported" by driver.rkt's

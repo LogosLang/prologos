@@ -571,18 +571,29 @@
                        [_ (tu-error)])]))))]
 
     ;; ---- natrec ----
-    ;; Usage = U_target + U_base + U_step (motive is type-level)
+    ;; Usage = U_target + U_base + ω·U_step   (motive is type-level)
     ;;
-    ;; ⚠ DELIBERATELY STILL `add-usage` ACROSS base/step, unlike every other
-    ;; eliminator in this file (2026-07-30). natrec's base and step are NOT
-    ;; mutually exclusive alternatives: `step` has type
-    ;; Π(n:Nat). motive(n) → motive(suc n) and is applied 0..n times, so joining
-    ;; base with step would UNDER-count a linear variable captured in the step —
-    ;; unsound in the permissive direction, which is worse than the over-count.
-    ;; (The current rule is not right either: the step's usage is added exactly
-    ;; ONCE though it runs n times. Making that sound means scaling the step by
-    ;; mw, which newly rejects a class of accepted code — a separate decision,
-    ;; recorded rather than defaulted into. See DEFERRED.md.)
+    ;; NOT a join across base/step — they are not mutually exclusive
+    ;; alternatives, so the P1 branch-join treatment does not apply here. But
+    ;; `add-usage` alone was ALSO wrong: `step` has type
+    ;; Π(n:Nat). motive(n) → motive(suc n) and is applied 0..n times, while its
+    ;; usage was added exactly ONCE. A linear value captured in the step was
+    ;; counted m1 however many times it was consumed.
+    ;;
+    ;; ω-SCALING IS NOT A NEW RULE — it is the app rule, finally applied here.
+    ;; `(add-usage u1 (scale-usage m u2))` is what the general application arm
+    ;; does with every argument: scale by the binder's multiplicity. This arm
+    ;; SYNTHESIZES an mw Pi for `step` and then failed to scale by it. Spelled as
+    ;; an ordinary function with `step` at ω, the app rule would have produced
+    ;; the right answer for free.
+    ;;
+    ;; It catches BOTH failure directions at once, because m1 demands
+    ;; exactly-once and mw is neither: over-application (n>1) and the
+    ;; zero-iteration leak (n=0, the step never runs and a linear is never
+    ;; consumed). Erasure is safe — mult-mul mw m0 = m0 — so an erased capture
+    ;; stays erased, and a CLOSED step is unaffected (all-m0 scales to all-m0).
+    ;; Escape hatch for code this rejects: thread the resource through the
+    ;; motive/accumulator instead of capturing it, which keeps the step closed.
     [(expr-natrec mot base step target)
      (let ([step-type
             ;; Π(n:Nat). motive(n) → motive(suc(n))
@@ -599,7 +610,7 @@
                    (match r3
                      [(bu #t u3)
                       (tu (expr-app mot target)
-                          (add-usage u4 (add-usage u2 u3)))]
+                          (add-usage u4 (add-usage u2 (scale-usage 'mw u3))))]
                      [_ (tu-error)]))]
                 [_ (tu-error)]))]
            [_ (tu-error)])))]
@@ -1854,7 +1865,7 @@
              (let* ([ef (expr-Pi 'mw tb (expr-Pi 'mw (shift 1 0 a) (shift 2 0 tb)))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
-                 [(tu _ uf) (tu tb (add-usage (add-usage uf ui) uv))]
+                 [(tu _ uf) (tu tb (add-usage (add-usage (scale-usage 'mw uf) ui) uv))]
                  [_ (tu-error)]))]
             ;; CIU T6 F1a-col-3: fold over a tuple — uniform view (typing-core mirror)
             [(? closed-nat-row? rec)
@@ -1862,7 +1873,7 @@
                     [ef (expr-Pi 'mw tb (expr-Pi 'mw (shift 1 0 v) (shift 2 0 tb)))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
-                 [(tu _ uf) (tu tb (add-usage (add-usage uf ui) uv))]
+                 [(tu _ uf) (tu tb (add-usage (add-usage (scale-usage 'mw uf) ui) uv))]
                  [_ (tu-error)]))]
             [_ (tu-error)])]
          [(_ _) (tu-error)]))]
@@ -1877,7 +1888,7 @@
             [(expr-PVec a)
              (let* ([rf (inferQ-or-checkQ ctx f (expr-Pi 'mw a (shift 1 0 result-type)))])
                (match rf
-                 [(tu _ uf) (tu result-type (add-usage uf uv))]
+                 [(tu _ uf) (tu result-type (add-usage (scale-usage 'mw uf) uv))]
                  [_ (tu-error)]))]
             ;; CIU T6 F1a-col-3: map over a tuple — f consumes ⋃positions; the
             ;; position-preserving result type comes from infer (the map-map-vals
@@ -1886,7 +1897,7 @@
              (let ([rf (inferQ-or-checkQ ctx f
                          (expr-Pi 'mw (record-value-bound ctx rec "tuple-map") (shift 1 0 result-type)))])
                (match rf
-                 [(tu _ uf) (tu result-type (add-usage uf uv))]
+                 [(tu _ uf) (tu result-type (add-usage (scale-usage 'mw uf) uv))]
                  [_ (tu-error)]))]
             [_ (tu-error)])]
          [_ (tu-error)]))]
@@ -1899,7 +1910,7 @@
             [(expr-PVec a)
              (let ([rp (inferQ-or-checkQ ctx pred (expr-Pi 'mw a (expr-Bool)))])
                (match rp
-                 [(tu _ up) (tu (expr-PVec a) (add-usage up uv))]
+                 [(tu _ up) (tu (expr-PVec a) (add-usage (scale-usage 'mw up) uv))]
                  [_ (tu-error)]))]
             ;; CIU T6 F1a-col-3: filter on a tuple → (PVec ⋃positions) degrade
             ;; (typing-core mirror)
@@ -1907,7 +1918,7 @@
              (let* ([v (record-value-bound ctx rec "tuple-filter")]
                     [rp (inferQ-or-checkQ ctx pred (expr-Pi 'mw v (expr-Bool)))])
                (match rp
-                 [(tu _ up) (tu (expr-PVec v) (add-usage up uv))]
+                 [(tu _ up) (tu (expr-PVec v) (add-usage (scale-usage 'mw up) uv))]
                  [_ (tu-error)]))]
             [_ (tu-error)])]
          [_ (tu-error)]))]
@@ -1922,7 +1933,7 @@
              (let* ([ef (expr-Pi 'mw tb (expr-Pi 'mw (shift 1 0 a) (shift 2 0 tb)))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
-                 [(tu _ uf) (tu tb (add-usage (add-usage uf ui) us))]
+                 [(tu _ uf) (tu tb (add-usage (add-usage (scale-usage 'mw uf) ui) us))]
                  [_ (tu-error)]))]
             [_ (tu-error)])]
          [(_ _) (tu-error)]))]
@@ -1935,7 +1946,7 @@
             [(expr-Set a)
              (let ([rp (inferQ-or-checkQ ctx pred (expr-Pi 'mw a (expr-Bool)))])
                (match rp
-                 [(tu _ up) (tu (expr-Set a) (add-usage up us))]
+                 [(tu _ up) (tu (expr-Set a) (add-usage (scale-usage 'mw up) us))]
                  [_ (tu-error)]))]
             [_ (tu-error)])]
          [_ (tu-error)]))]
@@ -1952,7 +1963,7 @@
                             (expr-Pi 'mw (shift 2 0 v) (shift 3 0 tb))))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
-                 [(tu _ uf) (tu tb (add-usage (add-usage uf ui) um))]
+                 [(tu _ uf) (tu tb (add-usage (add-usage (scale-usage 'mw uf) ui) um))]
                  [_ (tu-error)]))]
             ;; CIU T6 F1 (s3): fold over a record — uniform view (K=Keyword, V=⋃fields)
             [(? expr-Record? rec)
@@ -1962,7 +1973,7 @@
                             (expr-Pi 'mw (shift 2 0 v) (shift 3 0 tb))))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
-                 [(tu _ uf) (tu tb (add-usage (add-usage uf ui) um))]
+                 [(tu _ uf) (tu tb (add-usage (add-usage (scale-usage 'mw uf) ui) um))]
                  [_ (tu-error)]))]
             [_ (tu-error)])]
          [(_ _) (tu-error)]))]
@@ -1976,7 +1987,7 @@
              (let ([rp (inferQ-or-checkQ ctx pred
                          (expr-Pi 'mw k (expr-Pi 'mw (shift 1 0 v) (expr-Bool))))])
                (match rp
-                 [(tu _ up) (tu (expr-Map k v) (add-usage up um))]
+                 [(tu _ up) (tu (expr-Map k v) (add-usage (scale-usage 'mw up) um))]
                  [_ (tu-error)]))]
             ;; CIU T6 F1 (s3): filter on a record → dictionary view (mirrors typing-core)
             [(? expr-Record? rec)
@@ -1984,7 +1995,7 @@
                     [rp (inferQ-or-checkQ ctx pred
                           (expr-Pi 'mw (expr-Keyword) (expr-Pi 'mw (shift 1 0 v) (expr-Bool))))])
                (match rp
-                 [(tu _ up) (tu (expr-Map (expr-Keyword) v) (add-usage up um))]
+                 [(tu _ up) (tu (expr-Map (expr-Keyword) v) (add-usage (scale-usage 'mw up) um))]
                  [_ (tu-error)]))]
             [_ (tu-error)])]
          [_ (tu-error)]))]
@@ -1998,14 +2009,14 @@
             [(expr-Map k v)
              (let ([rf (inferQ-or-checkQ ctx f (expr-Pi 'mw v (shift 1 0 result-type)))])
                (match rf
-                 [(tu _ uf) (tu result-type (add-usage uf um))]
+                 [(tu _ uf) (tu result-type (add-usage (scale-usage 'mw uf) um))]
                  [_ (tu-error)]))]
             ;; CIU T6 F1 (s3): map-vals over a record — f consumes ⋃fields; type from infer
             [(? expr-Record? rec)
              (let ([rf (inferQ-or-checkQ ctx f
                          (expr-Pi 'mw (record-value-bound ctx rec "dyn-row-map-vals") (shift 1 0 result-type)))])
                (match rf
-                 [(tu _ uf) (tu result-type (add-usage uf um))]
+                 [(tu _ uf) (tu result-type (add-usage (scale-usage 'mw uf) um))]
                  [_ (tu-error)]))]
             [_ (tu-error)])]
          [_ (tu-error)]))]
@@ -2486,22 +2497,38 @@
 
     ;; ---- J eliminator ----
     ;; Usage from proof, base, motive arguments
+    ;; Usage = U_proof + U_base.
+    ;;
+    ;; ⚠ THE BASE'S USAGE WAS DROPPED ENTIRELY until QTT P7 (2026-07-31): this arm
+    ;; verified the base with typing-core's BOOLEAN `check`, which computes no
+    ;; usage, and returned `u5` (the proof's usage) alone. So a linear value
+    ;; consumed inside J's base was invisible — an under-count to ZERO, strictly
+    ;; worse than the under-count-to-one this commit fixes elsewhere. Using
+    ;; `checkQ` performs the same type check AND yields the usage.
+    ;;
+    ;; ADDED, not mw-scaled: unlike a fold's function argument, J's base is
+    ;; applied exactly ONCE (reduction.rkt's J rule), so it is ordinary
+    ;; sequential composition.
     [(expr-J mot base left right proof)
      (let ([r5 (inferQ ctx proof)])
        (match r5
          [(tu t5 u5)
           (match (whnf t5)
             [(expr-Eq t t1 t2)
-             (if (and (unify-ok? (unify ctx t1 left))
-                      (unify-ok? (unify ctx t2 right))
-                      ;; Verify base type: Π(a:A). motive(a, a, refl)
-                      (check ctx base
-                        (expr-Pi 'mw t
-                          (expr-app (expr-app (expr-app (shift 1 0 mot) (expr-bvar 0))
-                                              (expr-bvar 0))
-                                    (expr-refl)))))
-                 (tu (expr-app (expr-app (expr-app mot left) right) proof) u5)
-                 (tu-error))]
+             ;; base type: Π(a:A). motive(a, a, refl)
+             (let ([base-type
+                    (expr-Pi 'mw t
+                      (expr-app (expr-app (expr-app (shift 1 0 mot) (expr-bvar 0))
+                                          (expr-bvar 0))
+                                (expr-refl)))])
+               (if (and (unify-ok? (unify ctx t1 left))
+                        (unify-ok? (unify ctx t2 right)))
+                   (match (checkQ ctx base base-type)
+                     [(bu #t ub)
+                      (tu (expr-app (expr-app (expr-app mot left) right) proof)
+                          (add-usage u5 ub))]
+                     [_ (tu-error)])
+                   (tu-error)))]
             [_ (tu-error)])]
          [_ (tu-error)]))]
 
@@ -2928,7 +2955,7 @@
                           (expr-Pi 'mw (shift 1 0 a) (shift 2 0 expected-type)))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
-                 [(tu _ uf) (bu #t (add-usage (add-usage uf ui) uv))]
+                 [(tu _ uf) (bu #t (add-usage (add-usage (scale-usage 'mw uf) ui) uv))]
                  [_ (bu #f (zero-usage n))]))]
             ;; CIU T6 F1a-col-3: fold over a tuple in CHECK mode — uniform view
             ;; (the issue-#76 class: checked positions must not fall to inferQ)
@@ -2938,7 +2965,7 @@
                           (expr-Pi 'mw (shift 1 0 v) (shift 2 0 expected-type)))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
-                 [(tu _ uf) (bu #t (add-usage (add-usage uf ui) uv))]
+                 [(tu _ uf) (bu #t (add-usage (add-usage (scale-usage 'mw uf) ui) uv))]
                  [_ (bu #f (zero-usage n))]))]
             [_ (bu #f (zero-usage n))])]
          [(_ _) (bu #f (zero-usage n))]))]
@@ -2953,7 +2980,7 @@
                (match rf
                  [(tu _ uf)
                   (bu (check ctx (expr-pvec-map f vec) expected-type)
-                      (add-usage uf uv))]
+                      (add-usage (scale-usage 'mw uf) uv))]
                  [_ (bu #f (zero-usage n))]))]
             ;; CIU T6 F1a-col-3: tuple source checked against (PVec B) — f consumes
             ;; ⋃positions (typing-core check-arm mirror; issue-#76 class)
@@ -2963,7 +2990,7 @@
                (match rf
                  [(tu _ uf)
                   (bu (check ctx (expr-pvec-map f vec) expected-type)
-                      (add-usage uf uv))]
+                      (add-usage (scale-usage 'mw uf) uv))]
                  [_ (bu #f (zero-usage n))]))]
             [(_ _) (bu #f (zero-usage n))])]
          [_ (bu #f (zero-usage n))]))]
@@ -2978,7 +3005,7 @@
                (match rp
                  [(tu _ up)
                   (bu (check ctx (expr-pvec-filter pred vec) expected-type)
-                      (add-usage up uv))]
+                      (add-usage (scale-usage 'mw up) uv))]
                  [_ (bu #f (zero-usage n))]))]
             ;; CIU T6 F1a-col-3: tuple — pred consumes ⋃positions; the result check
             ;; delegates (the (PVec ⋃) degrade meets the annotation via the α)
@@ -2988,7 +3015,7 @@
                (match rp
                  [(tu _ up)
                   (bu (check ctx (expr-pvec-filter pred vec) expected-type)
-                      (add-usage up uv))]
+                      (add-usage (scale-usage 'mw up) uv))]
                  [_ (bu #f (zero-usage n))]))]
             [_ (bu #f (zero-usage n))])]
          [_ (bu #f (zero-usage n))]))]
@@ -3004,7 +3031,7 @@
                           (expr-Pi 'mw (shift 1 0 a) (shift 2 0 expected-type)))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
-                 [(tu _ uf) (bu #t (add-usage (add-usage uf ui) us))]
+                 [(tu _ uf) (bu #t (add-usage (add-usage (scale-usage 'mw uf) ui) us))]
                  [_ (bu #f (zero-usage n))]))]
             [_ (bu #f (zero-usage n))])]
          [(_ _) (bu #f (zero-usage n))]))]
@@ -3019,7 +3046,7 @@
                (match rp
                  [(tu _ up)
                   (bu (check ctx (expr-set-filter pred set) expected-type)
-                      (add-usage up us))]
+                      (add-usage (scale-usage 'mw up) us))]
                  [_ (bu #f (zero-usage n))]))]
             [_ (bu #f (zero-usage n))])]
          [_ (bu #f (zero-usage n))]))]
@@ -3036,7 +3063,7 @@
                             (expr-Pi 'mw (shift 2 0 v) (shift 3 0 expected-type))))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
-                 [(tu _ uf) (bu #t (add-usage (add-usage uf ui) um))]
+                 [(tu _ uf) (bu #t (add-usage (add-usage (scale-usage 'mw uf) ui) um))]
                  [_ (bu #f (zero-usage n))]))]
             ;; CIU T6 F1 (s3): fold over a record — uniform view (K=Keyword, V=⋃fields)
             [(? expr-Record? rec)
@@ -3046,7 +3073,7 @@
                                      (shift 3 0 expected-type))))]
                     [rf (inferQ-or-checkQ ctx f ef)])
                (match rf
-                 [(tu _ uf) (bu #t (add-usage (add-usage uf ui) um))]
+                 [(tu _ uf) (bu #t (add-usage (add-usage (scale-usage 'mw uf) ui) um))]
                  [_ (bu #f (zero-usage n))]))]
             [_ (bu #f (zero-usage n))])]
          [(_ _) (bu #f (zero-usage n))]))]
@@ -3062,7 +3089,7 @@
                (match rp
                  [(tu _ up)
                   (bu (check ctx (expr-map-filter-entries pred map) expected-type)
-                      (add-usage up um))]
+                      (add-usage (scale-usage 'mw up) um))]
                  [_ (bu #f (zero-usage n))]))]
             ;; CIU T6 F1 (s3): filter on a record — pred consumes the uniform view;
             ;; the final type check delegates to typing-core (dictionary-view result)
@@ -3073,7 +3100,7 @@
                (match rp
                  [(tu _ up)
                   (bu (check ctx (expr-map-filter-entries pred map) expected-type)
-                      (add-usage up um))]
+                      (add-usage (scale-usage 'mw up) um))]
                  [_ (bu #f (zero-usage n))]))]
             [_ (bu #f (zero-usage n))])]
          [_ (bu #f (zero-usage n))]))]
@@ -3089,7 +3116,7 @@
                  [(tu _ uf)
                   (bu (and (unify-ok? (unify ctx k k2))
                            (check ctx (expr-map-map-vals f map) expected-type))
-                      (add-usage uf um))]
+                      (add-usage (scale-usage 'mw uf) um))]
                  [_ (bu #f (zero-usage n))]))]
             ;; CIU T6 F1 (s3): record source vs Map result — keys are Keyword;
             ;; f consumes ⋃fields; final check delegates to typing-core
@@ -3100,7 +3127,7 @@
                  [(tu _ uf)
                   (bu (and (unify-ok? (unify ctx k (expr-Keyword)))
                            (check ctx (expr-map-map-vals f map) expected-type))
-                      (add-usage uf um))]
+                      (add-usage (scale-usage 'mw uf) um))]
                  [_ (bu #f (zero-usage n))]))]
             [(_ _) (bu #f (zero-usage n))])]
          [_ (bu #f (zero-usage n))]))]

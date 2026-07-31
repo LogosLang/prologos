@@ -469,6 +469,41 @@
       "(match cbA (true -> y) (false -> (match c (true -> y) (false -> zero)))))))")))))
 
 ;; ========================================
+;; ω-scaling of repeatedly-applied function arguments (QTT P7, 2026-07-31)
+;; ========================================
+
+(test-case "qtt-omega/natrec step capturing a linear is rejected"
+  ;; The step is applied 0..n times, so a captured linear is consumed 0..n
+  ;; times — counted once before P7, which accepted this.
+  (define r
+    (run-first
+     (string-append
+      "(def caplin <(Pi [y :1 <Nat>] (Pi [k <Nat>] Nat))> "
+      "(fn [y :1 <Nat>] (fn [k <Nat>] "
+      "(natrec (fn [_ <Nat>] Nat) zero (fn [_ <Nat>] (fn [r <Nat>] y)) k))))")))
+  (check-true (multiplicity-error? r) (format "got: ~v" r)))
+
+(test-case "qtt-omega/an UNRESTRICTED capture in a natrec step is unaffected"
+  (check-false
+   (multiplicity-error?
+    (run-first
+     (string-append
+      "(def capmw <(Pi [y <Nat>] (Pi [k <Nat>] Nat))> "
+      "(fn [y <Nat>] (fn [k <Nat>] "
+      "(natrec (fn [_ <Nat>] Nat) zero (fn [_ <Nat>] (fn [r <Nat>] y)) k))))")))))
+
+(test-case "qtt-omega/a CLOSED natrec step is unaffected"
+  ;; The escape hatch for code P7 rejects: keep the step closed and thread the
+  ;; resource through the accumulator instead of capturing it.
+  (check-equal?
+   (run-first
+    (string-append
+     "(def closedstep <(-> Nat Nat)> "
+     "(fn [k <Nat>] (natrec (fn [_ <Nat>] Nat) zero "
+     "(fn [_ <Nat>] (fn [r <Nat>] (suc r))) k)))"))
+   "closedstep : Nat -> Nat defined."))
+
+;; ========================================
 ;; Regression guards: existing functionality still works
 ;; ========================================
 
