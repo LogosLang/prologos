@@ -30,7 +30,7 @@ rulings, censuses and test delta live in its own section.
 | **P3a** | **The node + KEYED blocks, no `^`** — `surf-select`/`expr-select` (full pipeline.md cost paid once; twins; walkers via the generic fallback; NO PNET bump) · payload segmentation + the malformed-payload seat · **D-lenient presence** (Q_T2) · subject-once reduction · **strict merge for plain keys BEFORE `make-record` can last-win** · type-position refusal · branch-aware miss errors · §9's learnability pair | ✅ | §5.P3a · **`290f77f9`** — suite **9418/475/0**, acceptance **41/41** + records, battery 136/136, neighborhood 623/21; Q_U1 (corpus list corrected, `6d919142`); adversarial verify caught **1 BLOCKING** (block-pipe select corruption at 0 errors — 6th consecutive slice) + 3 SIGNIFICANT, all fixed pre-commit; DEFERRED 15–20 |
 | **P3b** | **The `^` family** — the ONE splitter (continuation grammar `-`?·{ε\|label\|`_`} + `^..`) · dissolve/splice · in-place rename · `^_` Reading N · the `^-` collapse family (Q_T7) · `^..` (Q_T8) · **output-level-local merge** (Q_T3, the monotonicity pin) · the Q_T4a ordinal-`^` guided error · the malformed-`^` battery | ✅ | §5.P3b · **`36ce601c`** — suite **9469/475/0**, acceptance **50/50** + records, battery 178; light re-grounding only (per Q_T5); adversarial verify caught **1 BLOCKING** (whole-datum ordinal-rekey marker → match-arm whole-file abort; fixed ELEMENT-WISE) + 8 SIGNIFICANT — all fixed pre-commit; DEFERRED 21–22; Q_U4 candidate flagged (sub-block synth scope) |
 | **P3c** | **Keyless + L4 + honest nesting** — the nat-row mint at EVERY n (incl. 1 and homogeneous n) · ordinal branches `{N M}` · the L4 mixing error · `⟨String⟩` 1-tuple pins · the G11 one-space pair pinned side by side | ✅ | §5.P3c · **`1b021d57`** — suite **9497/475/0**, acceptance **52/52**, battery 206; P3 (BLOCKS) COMPLETE; the verify's FIRST no-BLOCKING slice in eight (2 SIGNIFICANT fixed pre-commit: the @ord walk-to-leaf twin-drift, the decimal-fusion leak); G11 landed AS AMENDED; in-block `v[0]`≡`.0` ratified-by-pin |
-| **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | ⬜ | §5.P4 · step-list node (4b) · per-field row-map (4c) |
+| **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | §5.P4 · CO-DESIGN: audit `wf_8458c23b` + options panel run; **Q_U5** (ONE reified selector carrier, monomorphic — F-row carries bound-selector precision) + **Q_U6** (WHOLESALE path migration; P4a totality/repairs → P4b carrier → P4c+ ω) RULED 2026-07-31; **Q_U7** ω-representation + **Q_U8** `:` gate PENDING; ⚠ LET merge `5e16ead4` landed mid-walk (audit coords @ `02dd27d7`) |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | §5.P5 · L1–L5 law battery |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | §5.PX · position flexible |
 | **P6** | **Demand semantics** — RULED STAGED (4a); **decision ✅ Q_U3 (owner, 2026-07-30): option (c)** — deferred to a named post-v1 phase, charter stub in §5.P6 | ⬜ (residue = the X.close gate row only) | §5.P6 |
@@ -713,12 +713,93 @@ in PROSE per the standing discipline; audit `wf_27a84061-c7e` fed them —
   and wants the two spellings equal) or the first user-visible need.
   DEFERRED 23 carries the trigger + the one-line flip site.
 
+**The P4 co-design rulings [owner, 2026-07-31]** (Q_U5/Q_U6 — ruled in a
+deliberative walk that REVERSED the frame twice: the mini-audit
+(`wf_8458c23b-312`, 5 facets + critic @ `02dd27d7` — **14th consecutive
+premise refuted**) fed an adversarial options panel (`wf_82e56156-b28`)
+whose own CRITIC overturned the proposers' lean by probe, and the OWNER'S
+challenge then overturned the critic's framing of what blocks. ⚠ The LET
+track's merge (`5e16ead4`) landed MID-WALK — audit coordinates are
+@ `02dd27d7`; re-pin before use):
+
+- **Q_U5 — THE SELECTOR REPRESENTATION: ONE REIFIED CARRIER (panel option
+  B), MONOMORPHIC AT P4.** `expr-path` and `expr-select` unify on one
+  reifiable selector carrier; `#p(…)`, `x{…}` and path position become
+  spellings of ONE representation; the vacuous ground `Path` type is
+  superseded. The walk that got here: (1) the owner REJECTED the brace-only
+  answer ("loses information on its spine … doesn't reach the generalized
+  first-classness we want"); (2) the panel's proposers leaned "charter the
+  reification" on the premise that B needs row polymorphism — an unbounded
+  extension; (3) the panel's critic REFUTED the conclusion by probe
+  (monomorphic source-annotated projection types cleanly at HEAD: `spec g
+  P -> Int` / `defn g [r] r.a` ✓); (4) the owner refuted the PREMISE'S
+  FRAMING: the records system was BUILT from row polymorphism + codata —
+  verified: the carrier comment STAGES the row variable (syntax.rkt:672
+  "`ρ` row-meta = **F-row**"), the records design §151 names open rows as
+  THE row-polymorphic case, D12 ships substrate-level codata, and every P4
+  carrier's element/field type is KNOWABLE (PVec elem-type · Map k/v ·
+  nat-row per-position · keyword-row per-label). So B splits: **(i) the
+  carrier unification needs ZERO new typing** (every P4 site has a known
+  source row) and lands NOW — it is the half that cannot be retrofitted;
+  **(ii) bound-selector precision** (`Selector src dst` / D11's
+  `HasField`-constraint idiom) rides **F-row's EXISTING entry gate**
+  (DEFERRED: "generate `p : {:x _ | _}` from `p.x`, solve structurally") —
+  a named deferral onto an already-chartered absorber, NOT a new charter.
+  Rejected-with-reason: **A** (brace-only node + untouched `expr-path` =
+  C without the honesty; unnamed dual carrier) · **C** (charter the
+  reification = a SECOND charter over First-Class Paths **Phase 8**,
+  already chartered 2026-03-20 as "Out of scope" and idle since — the
+  belt-and-suspenders blocking red flag + the Validated≠Deployed sibling) ·
+  **D** (selector-as-Datum: Datum's syntactic order ≠ selection order, so
+  L2/Q6 leave the carrier) · **E** (selector-as-function — and record the
+  GENERAL RESULT: a selector typed as its own APPLICATION erases the
+  spine; function types are not lattice elements, so no Pi/section/
+  closure/lens-as-function representation can support P5's spine equality
+  or Ruling-B pointwise merge. This is the positive argument FOR the data
+  carrier, and it rules out the §7.7 lens FRAMING as a representation
+  while keeping lenses as an INTERPRETATION).
+- **Q_U6 — WHOLESALE PATH-POSITION MIGRATION AT P4, with the three-stage
+  sequencing.** Dot AND colon path steps mint the node; the preparse
+  `map-get`/`nil-safe-get`/`get` fold legs retire into `$select` minting.
+  NOT colon-only: that leaves path text on two representations
+  discriminated by a step's GRADE (complection; P5 would normalize across
+  both). Grounded costs: the fold's callers are a NON-issue —
+  probe-verified all **FOUR** production callers (map-literal values ·
+  subforms re-entry · pipe pre-fold · mixfix; the 4th is P3a's own
+  addition, missed by every enumeration — 6th consecutive under-count)
+  depend ONLY on arity collapse and are head-agnostic (`$select` and
+  `map-get` fold identically through all four). The REAL cost is the
+  BEHAVIOR-PRESERVATION CHECKLIST: `.field`'s landed behavior must survive
+  under the carrier's `'path` sort — Q_T2's ruled asymmetry is LIVE
+  (probe: `dyn1.host` → `"h" : ?meta` D19-permissive vs `dyn1{host}` →
+  loud Horn-D refusal), so ONE carrier carries TWO typing postures by
+  sort; plus the P2 `closed-row-miss-hint` family (via
+  `projection-parts`), nil-safe variants, and `get-in`/`update-in`
+  retargeting. **Sequencing (ruled)**: (1) totality dispatcher +
+  strategy-independent repairs (no new surface) → (2) carrier unification
+  + wholesale migration with the behavior checklist → (3) the ω semantics
+  on top. Sub-slice partition finalizes after Q_U7/Q_U8.
+
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
   P1b-i, **owner-reviewed**, and ruled (Q_M8 the sole amendment). §Q8 is now
   normative for P1b-ii/iii and P2.
 - Keyword-projection disposition (§2.4) — revisit when P4 lands broadcast
   (likely subsumed by `users:name`).
+- **Q_U7 (pending)** — the ω-step REPRESENTATION. Ruling 4b cannot
+  arbitrate as written: its WORDING selects a flat marker, its RATIONALE
+  ("fusion becomes structural") selects a run-carrier — and the panel
+  showed fusion is FREE under all four candidates (fmap∘fmap = fmap
+  arithmetically; nothing computes a layer count; §10.4's layers come from
+  data shape + `*`). Re-rule on the real discriminators: which position's
+  silent wrong answer becomes UNREPRESENTABLE, and spine recoverability.
+- **Q_U8 (pending)** — the `:` adjacency gate + the corpus A/B. §Q8.3 is
+  design-only (ZERO code; `x:name` ≡ `x :name` today); the fused-binder
+  hazard (`[fn [x:Int] x]`, zero corpus instances, A/B-blind) **GREW at
+  the LET merge** (`feb79740` ships fused `var:Type` let binders — a
+  second live population). The focus-adjacency census is owed a POST-MERGE
+  re-run before the gate lands; any recognizer change ⇒ corpus A/B
+  MANDATORY.
 
 **Carried from the P3 mini-audit [owner, 2026-07-28], still standing:**
 - `#:keyword` retires with the `#.:name` twin (`#.name` survives).
@@ -2569,7 +2650,122 @@ the `not-indexable`/`subject-tuple` messages will need `:s` teaching when
 broadcast lands; DEFERRED 9's cross-domain hint family now has the
 `tuple-or-vector` message as its pattern.
 
-### §5.P4 — Broadcast ω
+### §5.P4 — Broadcast ω  (CO-DESIGN IN PROGRESS — Q_U5/Q_U6 ruled 2026-07-31; Q_U7 ω-representation + Q_U8 `:` gate pending)
+
+**The P4 mini-audit** (`wf_8458c23b-312`, 5 facets + completeness critic @
+`02dd27d7` — 14th consecutive premise refuted) fed an adversarial options
+panel (`wf_82e56156-b28`, 3 clusters × propose/critique/synthesize). Every
+load-bearing claim below was re-verified on the MAIN THREAD. ⚠ The LET
+track merged mid-walk (`5e16ead4`, +738 lines across macros/parse-reader/
+parser/typing-core): `02dd27d7` remains an ancestor and no select surface
+was semantically touched (LET REUSES the P1a marker seat), but every audit
+coordinate is @ `02dd27d7` — re-pin before use. §3's Q_U5/Q_U6 carry the
+rulings; this records what the audit established and the staged shape.
+
+#### What the audit + panel established (probe-verified corrections to the Intent below)
+
+1. **The unnamed predecessor**: the FIRST-CLASS PATHS track
+   (`2026-03-20_FIRST_CLASS_PATHS_DESIGN.md`, Phases 0–7c SHIPPED) is the
+   prior arc over THIS problem — its §1 problem statement is P4's verbatim.
+   Its Phase 7b IS the `expr-broadcast-get` P1a retired; its 7c built `^`
+   in path segments before P3b rebuilt it in blocks; its Phase 8 (Lens) =
+   spec §7.7 from the other side, chartered once and idle. Its machinery is
+   LIVE: `#p(a.b.c) : Path` round-trips; `get-in` works; **`update-in`
+   works — the write direction exists**. Q_U5 ABSORBS this carrier.
+2. **The precision cliff is real but narrow**: literal paths inline
+   (elaborator.rkt:2282 @02dd27d7) and keep precision; a BOUND path
+   degrades to `?meta`. Monomorphic source-annotated projection types
+   cleanly (probe) — and the deeper grounding is the owner's: rows were
+   BUILT row-polymorphic + codata-shaped, with `ρ` STAGED at F-row
+   (syntax.rkt:672) — so **P4's surface needs zero row-polymorphism work**;
+   only source-UNKNOWN selector reuse waits, on F-row's existing gate.
+3. **The Intent's LOWERING clause is contradicted by shipped code**:
+   `select-reduce` WALKS and opens ONE `let/ec` (reduction.rkt:1600) — a
+   lowered per-element realization would BURY `expr-panic` values in output
+   slots (the P2.b fabrication class; four agents converged). Settled by a
+   FAIL-FIRST FIXTURE in P4a, not argument. Under WALK the def-seam
+   `map-map-vals`/`pvec-map` twin defect (closed-row + het-tuple legs FAIL
+   at the def seam with the lying "Multiplicity violation"; Map/PVec legs
+   pass — 4-way probe) is NOT a P4 prerequisite; it stays FILED.
+4. **The 2b split under-enumerates**: `[PVec {closed row}]` — the case
+   nearly every corpus line exercises — has NO stated arm, and `quests` is
+   a **List** (cons-spine, corpus :225), a fifth carrier. The split needs a
+   stated uniform-row arm + a List disposition + a THIRD dispatcher
+   (subject → elem-type + per-carrier functorial lift): `select-row-of`
+   sends PVec AND union to one 'subject-other catch-all; `select-ord-of`
+   does not exist.
+5. **PVec-of-union is NOT blocked** (the Intent and §2.3 assumed it was):
+   `def pu : [PVec <Circ | Squa>] := @[…]` types/reduces/indexes at HEAD.
+   ONLY projection fails — incl. `u.size` offered by BOTH components at
+   Int — because the union arm loops on bare `(whnf (car cs))`
+   (typing-core.rkt:2232 @02dd27d7) where the nil-safe-get sibling applies
+   `schema-fvar->row-or-self` (:2254). One PER-COMPONENT conversion +
+   `row-meet` (still 0 hits) = the leg; the §10.7 discriminating fixture
+   IS constructible.
+6. **The residue is 16 mentions / 3 files**, incl. the token-TYPE group
+   `[(dot-access nil-dot-access broadcast-access)]` (parse-reader.rkt:2161
+   @02dd27d7) named by NO enumeration, and `broadcast-access?` STILL live
+   in `access-sentinel?` — the retired sentinel still gates fusion.
+   Disposal is a NAMED slice item.
+7. **The `:` gate is ZERO code** (§Q8.3 design-only). Census @02dd27d7:
+   232 adjacent keyword tokens, ALL opener-preceded; ZERO focus-adjacent.
+   The fused-binder hazard (`[fn [x:Int] x]` — zero corpus instances,
+   A/B-blind) GREW at the LET merge (fused `var:Type` let binders). `.N`
+   joins the focus set FREE under a positional rule, by hand under an
+   enumerated one. Q_U8's round; recognizer change ⇒ A/B mandatory.
+8. **Perf levers the Intent never budgeted**: `whnf-trivial?` holds every
+   container TYPE former and ZERO container VALUE carriers (champ/rrb/
+   hset; ~96% of per-element cost; no bare head arms outside `nf` = the
+   safety proof) · `select-reduce` re-whnf's the subject PER BRANCH
+   (reduction.rkt:1754) against its own "evaluated ONCE" comment. Both →
+   P4a; the bench must NOT share a commit range with the first
+   per-element broadcast (attribution).
+9. **The shared walk needs TOTALITY before a fifth step kind**: four
+   silent catch-alls (e.g. `[else '()]` syntax.rkt:906). A named
+   `select-step-kind` dispatcher over the closed step union, consumed by
+   every walk — loud arms, one fixture per catch-all position (the
+   Exhaustive Walkers rule applied BEFORE the step kind lands, for once).
+10. **DEFERRED 5's citation is dirty-tree-only** (`foray.prologos:674`
+    absent at HEAD — 114 lines); the owning slice re-censuses `<`-adjacent
+    sites at HEAD.
+11. **Lattice notes, now load-bearing**: **Q6** decides whether Ruling-B
+    merge is a join-semilattice — i.e. whether a selector can EVER be a
+    cell value (the broadcast-propagator track's trigger at §9 row 3 is
+    real); schedule Q6 WITH the cell-merge requirement in view (P5 rules
+    it; P4's representation must not foreclose it). The 2b keys-⋂ is
+    ANTI-MONOTONE in the union component set — CALM-safe only because the
+    set is CLOSED at typing time (annotation-only at HEAD; now DECLARED
+    rather than assumed). And filter-on-miss (single get) vs
+    all-must-offer (broadcast) form a Galois ADJOINT PAIR — the asymmetry
+    is structural; never "unify" them.
+
+#### The staged shape (Q_U6's sequencing; sub-slice sections finalize after Q_U7/Q_U8)
+
+- **P4a — totality + strategy-independent repairs (no new surface)**: the
+  `select-step-kind` totality dispatcher (loud arms; one fixture per
+  catch-all position — the arms ARE behavior) · the LOWER-vs-WALK
+  fail-first panic fixture · the `select-reduce` subject re-whnf hoist ·
+  the `whnf-trivial?` container-VALUE arms · a clean bench vs the P2
+  baseline (nothing else in the slice ⇒ attribution-clean).
+- **P4b — the ONE selector carrier + wholesale path migration (Q_U5/Q_U6)**:
+  unify `expr-path`/`expr-select`; retire the preparse fold's access legs
+  into `$select` minting (all four callers head-agnostic, probe-verified);
+  the BEHAVIOR-PRESERVATION CHECKLIST is the core work (D19 dyn-row
+  permissive metas under the `'path` sort · the P2 miss-hint family ·
+  nil-safe variants · `get-in`/`update-in` retargeting · `#p(…)`
+  re-carrier). Carrier-shape detail (new field vs selector-in-branches-
+  slot; the §8 R6 constructor-arity hazard prefers the latter) = the
+  slice's own mini-round.
+- **P4c+ — the ω semantics** (partition after Q_U7/Q_U8): the `:` gate +
+  vector broadcast over `[PVec {closed row}]` as first corpus green
+  (§D party lines · §10.2 basics · §10.8 `tree.entries:name`; pays the
+  parser.rkt:793 `.*name`→`:name` promise in the same commit that retires
+  the recognizer) · map-generic `:` · the 2b split (+ the per-component
+  union conversion + `row-meet` + the discriminating fixture + the List
+  disposition) · flatten `*` / splat `.*` / disclose `<` (+ DEFERRED 5's
+  HEAD re-census) · residue disposal · the corpus A/B wherever the first
+  recognizer change lands.
+
 
 **Intent** — the COMPLETE P4 contract (each item tagged with its ruling):
 - `:s` **one-step extent** (spec §3.2.1) · **L1 fusion** — under the step-list
@@ -2605,8 +2801,12 @@ broadcast lands; DEFERRED 9's cross-domain hint family now has the
   violate the per-position exactness just ruled). ⚠ Probe the pre-existing
   `def := [map-map-vals …]` → "Multiplicity violation" lying-diagnostic if the
   lowering touches that node.
-- **Realized on the STEP-LIST NODE** (4b): typing WALKS the steps; reduction
-  LOWERS per step onto shipped machinery (`get`, `pvec-map`, `map-map-vals`).
+- **Realized on the STEP-LIST NODE** (4b): typing WALKS the steps; ~~reduction
+  LOWERS per step onto shipped machinery (`get`, `pvec-map`, `map-map-vals`)~~
+  — ⚠ **CORRECTED 2026-07-31 (P4 audit, 4-agent convergence)**: the landed
+  `select-reduce` WALKS under ONE `let/ec`; a per-element LOWERING would
+  bury `expr-panic` values in output slots (the P2.b fabrication class).
+  Reduction EXTENDS the native walk; the fixture in P4a pins it.
   **`expr-broadcast-get` RETIRES** with `.*name` — it is not repaired.
 
 **Grounded**: the meet rule's error case is the *typing* side of the P2 loud
