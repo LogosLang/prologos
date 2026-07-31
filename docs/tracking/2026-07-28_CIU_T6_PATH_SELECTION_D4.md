@@ -30,7 +30,7 @@ rulings, censuses and test delta live in its own section.
 | **P3a** | **The node + KEYED blocks, no `^`** — `surf-select`/`expr-select` (full pipeline.md cost paid once; twins; walkers via the generic fallback; NO PNET bump) · payload segmentation + the malformed-payload seat · **D-lenient presence** (Q_T2) · subject-once reduction · **strict merge for plain keys BEFORE `make-record` can last-win** · type-position refusal · branch-aware miss errors · §9's learnability pair | ✅ | §5.P3a · **`290f77f9`** — suite **9418/475/0**, acceptance **41/41** + records, battery 136/136, neighborhood 623/21; Q_U1 (corpus list corrected, `6d919142`); adversarial verify caught **1 BLOCKING** (block-pipe select corruption at 0 errors — 6th consecutive slice) + 3 SIGNIFICANT, all fixed pre-commit; DEFERRED 15–20 |
 | **P3b** | **The `^` family** — the ONE splitter (continuation grammar `-`?·{ε\|label\|`_`} + `^..`) · dissolve/splice · in-place rename · `^_` Reading N · the `^-` collapse family (Q_T7) · `^..` (Q_T8) · **output-level-local merge** (Q_T3, the monotonicity pin) · the Q_T4a ordinal-`^` guided error · the malformed-`^` battery | ✅ | §5.P3b · **`36ce601c`** — suite **9469/475/0**, acceptance **50/50** + records, battery 178; light re-grounding only (per Q_T5); adversarial verify caught **1 BLOCKING** (whole-datum ordinal-rekey marker → match-arm whole-file abort; fixed ELEMENT-WISE) + 8 SIGNIFICANT — all fixed pre-commit; DEFERRED 21–22; Q_U4 candidate flagged (sub-block synth scope) |
 | **P3c** | **Keyless + L4 + honest nesting** — the nat-row mint at EVERY n (incl. 1 and homogeneous n) · ordinal branches `{N M}` · the L4 mixing error · `⟨String⟩` 1-tuple pins · the G11 one-space pair pinned side by side | ✅ | §5.P3c · **`1b021d57`** — suite **9497/475/0**, acceptance **52/52**, battery 206; P3 (BLOCKS) COMPLETE; the verify's FIRST no-BLOCKING slice in eight (2 SIGNIFICANT fixed pre-commit: the @ord walk-to-leaf twin-drift, the decimal-fusion leak); G11 landed AS AMENDED; in-block `v[0]`≡`.0` ratified-by-pin |
-| **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | §5.P4 · CO-DESIGN: audit `wf_8458c23b` + options panel run; **Q_U5** (ONE reified selector carrier, monomorphic — F-row carries bound-selector precision) + **Q_U6** (WHOLESALE path migration; P4a totality/repairs → P4b carrier → P4c+ ω) RULED 2026-07-31; **Q_U7** RULED (the `(@bcast step)` wrapper; 4b restated) · **Q_U8** RULED (uniform positional `$bcast-step` mint + parser position-dispatch; A/B named-diff-set) — partition LOCKED P4a–P4e; pre-implementation pause items in §5.P4; ⚠ LET merge `5e16ead4` landed mid-walk (audit coords @ `02dd27d7`) |
+| **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | §5.P4 · CO-DESIGN: audit `wf_8458c23b` + options panel run; **Q_U5** (ONE reified selector carrier, monomorphic — F-row carries bound-selector precision) + **Q_U6** (WHOLESALE path migration; P4a totality/repairs → P4b carrier → P4c+ ω) RULED 2026-07-31; **Q_U7** RULED (the `(@bcast step)` wrapper; 4b restated) · **Q_U8** RULED (uniform positional `$bcast-step` mint + parser position-dispatch; A/B named-diff-set) — partition LOCKED P4a–P4e; **the PAUSE is CLEARED 2026-07-31: Q_U9 RULED (`:` REFUSES over `List` — no native carrier + the key-sort thesis does not reach a cons-spine; guided error naming `pvec-from-list`; the `Functor`-instance door named; the solve-carrier counter resolved UPSTREAM by the `solve-*`→PVec mini-track) + the `update-in` ω fence and the whole-node abort both RATIFIED**; ⚠ LET merge `5e16ead4` landed mid-walk (audit coords @ `02dd27d7`) |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | §5.P5 · L1–L5 law battery |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | §5.PX · position flexible |
 | **P6** | **Demand semantics** — RULED STAGED (4a); **decision ✅ Q_U3 (owner, 2026-07-30): option (c)** — deferred to a named post-v1 phase, charter stub in §5.P6 | ⬜ (residue = the X.close gate row only) | §5.P6 |
@@ -838,6 +838,73 @@ track's merge (`5e16ead4`) landed MID-WALK — audit coordinates are
   enumerated context list — the under-count class); parser-only (cannot
   see adjacency, Q8.5 inv 2); a fused tokenizer token (same collision,
   bigger surface).
+
+**The P4 pre-implementation PAUSE rulings [owner, 2026-07-31]** — all three
+items of the hold-point, ruled before P4a opened:
+
+- **Q_U9 — `:` REFUSES over `List`, with a guided error [owner, 2026-07-31].**
+  Broadcast covers the carriers the KEY-SORT THESIS reaches; `List` is not one
+  of them, so `quests:t` does not uncomment and the corpus line's fate changes.
+  The grounded argument (probed at `711a9bde`, not asserted):
+  **(i) `List` is the only candidate with no native carrier** — `Map`→
+  `expr-champ`, `PVec`→`expr-rrb`, `Set`→`expr-hset`, het-tuple→`expr-Record`
+  (nat key-domain), while `List` is a USER-SPACE inductive
+  (`data List {A} | nil | cons : A -> List A`,
+  `lib/prologos/data/list.prologos:12`) with no struct in `syntax.rkt`.
+  Broadcasting it would make the compiler-native `select-reduce` pattern-match
+  constructor applications of a STDLIB type — a dependency direction no other
+  selection carrier has, and a slope with no principled stopping point short of
+  trait dispatch (`Option`, `Either`, `LSeq`, user functors).
+  **(ii) The key-sort thesis (spec §1.1) does not reach a cons-spine**: every
+  other carrier has a key domain (ordinal or nominal); a List's positions are
+  recoverable only by walking. This is the SAME argument §3.2.3 used to
+  ADOPT map-generic `:` ("a vector-only `:` leaves the thesis decorative
+  exactly where it matters") — pointed the other way.
+  **(iii) The remedy exists, is one primitive, and preserves precision** —
+  probe at HEAD, 0 errors: `def qv := [pvec-from-list quests]` →
+  `qv : [PVec {:g String :r Int :t String}]` (the row SURVIVES), and the
+  landed grade-1 machinery reaches in (`qv[0].t` → `"Rescue the cat"`).
+  `pvec-from-list : List A → PVec A` is a live compiler primitive
+  (`parser.rkt:2966`).
+  **(iv) Monotone** — spec §3.6's own migration principle: errors may become
+  meanings, never the reverse.
+  **Deliverable, not a shrug**: the refusal is a GUIDED error naming
+  `pvec-from-list` and stating that the row type is preserved (iii proves it).
+  **The principled door is NAMED**: `:` refuses over `List` *because `List` has
+  no `Functor` instance* — the higher-kinded trait vocabulary (`Functor`,
+  `Foldable`, `Seqable`, `Buildable`, `Reducible`, `Indexed`, `Keyed`,
+  `Setlike`) is ALREADY DECLARED WITH LAWS at
+  `lib/prologos/core/collection-traits.prologos:41-177` and has **ZERO live
+  instances tree-wide** (the only three mentions are commented aspirations in
+  the 2026-03-21 Track 8 acceptance file). So the exit is "inhabit a
+  designed-but-uninhabited surface, then route `:` through `Functor`" — seeded
+  as a candidate CIU track, NOT chartered here.
+  Recorded counter-argument (it is real, and it is why the carrier question
+  moved rather than dying): `solve` returns `List`, and solve rows are exactly
+  what this feature exists for — Rel T1 landed typed solution rows so
+  relational output would compose with records. The resolution is **upstream,
+  not here**: `solve-*`/`explain-*` should return `PVec` (spun out as its own
+  mini-track — seam measured at TWO lines, `solve-row-type`'s `'list` arm
+  `typing-core.rkt:4338` + `racket-list->prologos-list` `reduction.rkt:905`;
+  consumer census 2 live `.prologos` sites + ~31 mechanical test type-string
+  pins + the `nil`→`@[]` empty shape). That fixes the ergonomics at the source
+  WITHOUT widening selection's carrier semantics. **Implementation: P4d**
+  (the refusal + its guided error); nothing before P4d reads this decision —
+  verified, `quests:t` sits COMMENTED at corpus `:235`, so it produces no
+  datums and P4c's reader-datum A/B does not touch it.
+- **The `update-in` ω FENCE — RATIFIED [owner, 2026-07-31].** `update-in`
+  accepts **grade-1 selectors only**; an ω-bearing selector refuses LOUDLY.
+  Broadcast WRITES are spec §7.7 traversal territory, explicitly not v1.
+  Monotone (the refusal can become a meaning later). Load-bearing because
+  Q_U5's carrier ABSORBS First-Class Paths' `#p(…)` — including its **working
+  write direction** — so without the fence the unified carrier would silently
+  widen `update-in`'s domain the moment ω steps become constructible.
+- **The WHOLE-NODE ABORT — RATIFIED [owner, 2026-07-31].** A runtime miss
+  INSIDE a broadcast aborts the WHOLE selection — the single `let/ec`
+  (`reduction.rkt:1600`), no partial results, no `expr-panic` buried in an
+  output slot. Consistent with the P2.b two-tier discipline; stated and
+  PINNED so a "map semantics" intuition cannot drift it later. This is the
+  same fact the P4a LOWER-vs-WALK fail-first fixture settles by test.
 
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
@@ -2694,7 +2761,7 @@ the `not-indexable`/`subject-tuple` messages will need `:s` teaching when
 broadcast lands; DEFERRED 9's cross-domain hint family now has the
 `tuple-or-vector` message as its pattern.
 
-### §5.P4 — Broadcast ω  (CO-DESIGN COMPLETE 2026-07-31 — Q_U5–Q_U8 RULED; partition LOCKED P4a–P4e; implementation opens at the PAUSE below)
+### §5.P4 — Broadcast ω  (CO-DESIGN COMPLETE 2026-07-31 — Q_U5–Q_U9 RULED; partition LOCKED P4a–P4e; the PAUSE is CLEARED — implementation opens at P4a)
 
 **The P4 mini-audit** (`wf_8458c23b-312`, 5 facets + completeness critic @
 `02dd27d7` — 14th consecutive premise refuted) fed an adversarial options
@@ -2796,10 +2863,21 @@ rulings; this records what the audit established and the staged shape.
   into `$select` minting (all four callers head-agnostic, probe-verified);
   the BEHAVIOR-PRESERVATION CHECKLIST is the core work (D19 dyn-row
   permissive metas under the `'path` sort · the P2 miss-hint family ·
-  nil-safe variants · `get-in`/`update-in` retargeting · `#p(…)`
-  re-carrier). Carrier-shape detail (new field vs selector-in-branches-
-  slot; the §8 R6 constructor-arity hazard prefers the latter) = the
-  slice's own mini-round.
+  nil-safe variants · `get-in`/`update-in` retargeting **+ the ratified ω
+  FENCE, which must land in THIS slice — the carrier absorbs First-Class
+  Paths' working write direction, so a later fence leaves the domain
+  silently widened between slices** · `#p(…)` re-carrier). Carrier-shape
+  detail (new field vs selector-in-branches-slot; the §8 R6
+  constructor-arity hazard prefers the latter) = the slice's own mini-round.
+  ⚠ **A SECOND live test pin, named by no enumeration** (found at the P4
+  re-grounding, `711a9bde` — the 7th under-count of the arc): the
+  back-compat alias `rewrite-nil-dot-access` (macros.rkt:5906, ZERO
+  production callers) carries a **6-test-case battery at
+  `tests/test-nil-type.rkt:126-155` that asserts the fold's EXACT OUTPUT
+  DATUM** (`'(nil-safe-get user :name)`, the chained twin, the
+  in-larger-form case). Under wholesale `$select` minting **4 of the 6 go
+  RED**. Same class as P4c's `broadcast-access` token pin — but it lands
+  HERE, in P4b, and must be updated in the migrating commit.
 - **P4c — the `:` gate + the ω wrapper + PVec broadcast (first corpus
   green)**: the `$bcast-step` sentinel (nine-site registration, BOTH
   groupers, Q_U8) · parser position-dispatch + the binder-consumer
@@ -2820,7 +2898,10 @@ rulings; this records what the audit established and the staged shape.
   (`events:t`/`events:x` §10.7 · the `tree` lines §10.8) · PVec-of-union
   (the PER-COMPONENT `schema-fvar->row-or-self` conversion + `row-meet`,
   still 0 hits + the §10.7-style discriminating fixture, now known
-  constructible) · the List disposition (Q_U9 — pending, below) · dyn-tail
+  constructible) · **the List REFUSAL (Q_U9 ✅ ruled)** — a guided error
+  naming `pvec-from-list`, stating the row type is preserved, and pointing
+  at the `Functor`-instance door; the corpus's `quests:t` / `quests:{t r}`
+  lines are re-fated HERE (they do NOT uncomment) · dyn-tail
   4d refusals.
 - **P4e — flatten `*` · splat `.*` · disclose `<`/`:<` + closures**: the
   keyword-trailing-`*` consumer split (`:diags*` — split-caret-lexeme
@@ -2830,23 +2911,25 @@ rulings; this records what the audit established and the staged shape.
   re-census** of `<`-adjacent sites · the keyword-projection disposition
   (§2.4, due at this close).
 
-#### Pre-implementation pause items (named 2026-07-31; the owner's hold-point)
+#### Pre-implementation pause items — ✅ ALL THREE RULED 2026-07-31 (the owner's hold-point, CLEARED)
 
-Ruling-shaped (owner):
-1. **Q_U9 (PENDING) — the List broadcast disposition.** `quests` is a
-   List (cons-spine, corpus :225) and `quests:t` is tagged [D4.P4]. v1
-   options: (a) broadcast over List (a fifth functorial lift + lowering);
-   (b) refuse with a guided error naming the PVec conversion — which
-   moves/re-fixtures the corpus line. Changes a corpus line's fate ⇒
-   owner's call at the P4d round.
-2. **The update-in ω FENCE (ratification).** Q_U5 absorbs `#p(…)` incl.
-   the WORKING write direction — but a broadcast WRITE is spec §7.7
-   traversal territory, NOT v1. Proposed fence: `update-in` accepts
-   grade-1 selectors only; ω-bearing selectors refuse loudly (monotone).
-3. **The whole-node abort ruling (ratification).** A runtime miss INSIDE
-   a broadcast aborts the WHOLE selection (the single `let/ec` — no
-   partial results, no buried panics). Consistent with the P2.b tier;
-   stated + pinned so "map semantics" intuitions cannot drift it.
+Ruling-shaped (owner) — full rationale in §3's P4-PAUSE block:
+1. **Q_U9 — ✅ RULED: `:` REFUSES over `List`**, with a guided error naming
+   `pvec-from-list` (probe-verified precision-preserving) and the `Functor`
+   instance named as the principled door. `quests:t` does NOT uncomment;
+   §F's `[D4.P4]` lines are re-fated at P4d. The motivating counter-argument
+   (solve returns List) is resolved UPSTREAM by the `solve-*`/`explain-*`
+   → PVec mini-track, spun out separately — seam measured at two lines.
+   **Implementation: P4d.**
+2. **The update-in ω FENCE — ✅ RATIFIED.** `update-in` accepts grade-1
+   selectors only; ω-bearing selectors refuse loudly. Monotone. Guards the
+   write direction Q_U5's carrier absorbs from First-Class Paths.
+   **Implementation: P4b** (with the `get-in`/`update-in` retargeting) —
+   the fence must land in the SAME slice that unifies the carrier, or the
+   widened domain is live between slices.
+3. **The whole-node abort — ✅ RATIFIED.** A runtime miss inside a broadcast
+   aborts the WHOLE selection; no partial results, no buried panics.
+   **Pinned at P4a** by the LOWER-vs-WALK fail-first fixture.
 
 Design-round work (per-slice mini-rounds; no owner gate):
 4. **The carrier shape** (P4b's round, against code): selector-struct in
