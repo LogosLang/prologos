@@ -1,6 +1,6 @@
 # LET blocks — multi-binding `let` layout
 
-**Status**: P0 ✅ `0effba9c` · P1 ✅ `49f51c14` · P2 ✅ `e8a41a9a` · P3 next. Owner-requested language polish (2026-07-31): the
+**Status**: P0 ✅ `0effba9c` · P1 ✅ `49f51c14` · P2 ✅ `e8a41a9a` · P3 ✅ `940c1c16` · P4 next. Owner-requested language polish (2026-07-31): the
 nested-only `let` layout "was never intended to be how they function."
 
 **Acceptance file**: `examples/2026-07-31-let-blocks.prologos` (Phase 0; target
@@ -114,7 +114,7 @@ existing inputs.
 | P0 | Acceptance file: 5 working variants + 2 context cases pinned; P2/P3/P4 targets commented | ✅ | `examples/2026-07-31-let-blocks.prologos`, --check exit 0, 14 markers |
 | P1 | All 13 `(error 'let …)` raises → per-command parse-error VALUES (`$let-error` marker) | ✅ | `49f51c14` — suite 9497/476/0; 2 check-exn pins flipped WITH the behavior; the spec-c batch collision surfaced and was renamed away (leak filed) |
 | P2 | Sibling no-`:=` chains (form 3): uniform `:=` synthesis at the merge seam; tree spine defers on let heads | ✅ | `e8a41a9a` — suite 9507/476/0; acceptance §C live (20 markers); the P0-era "unspecced BROKEN" filing WITHDRAWN (it was i70 — §7) |
-| P3 | Aligned blocks (forms 1/5): reader-layer `$let-block` regrouping, STRICT columns | ⬜ | mis-indent = per-command error naming both columns; top-level guard extended |
+| P3 | Aligned blocks (forms 1/5): reader-layer `$let-block` regrouping, STRICT columns | ✅ | `940c1c16` — suite 9513/476/0; acceptance §D live (26 markers); the gate caught a PROPERTIES-DROP bug pre-commit (POL.9 paren-origin) |
 | P4 | Fused `var:Type` binders (form 2): WS pair + sexp glued split | ⬜ | recognizer in reader-forms.rkt; chained-annot reject shared |
 | X.close | prologos-syntax.md § let (discharges issue #21's doc obligation) + DEFERRED sweep + close notes | ⬜ | |
 
@@ -231,3 +231,96 @@ the form-cells plan — and this is recorded there, not silently dropped).
   justification did not. Watching pattern reinforced: control every repro
   against the documented failure classes BEFORE filing (i70 for anything with
   a generic op over an unannotated param).
+
+## 8. P3 mini-design + mini-audit
+
+**Design reference**: §0 forms (1)/(5); ruling 1 (STRICT columns).
+
+**Hook**: a recursive stx transform applied to `tree-node->stx-elements`'s
+output (after `group-items`) — the layer where EVERY element, bare token or
+group, still carries line/column (`make-stx` → real `datum->syntax` with loc;
+verified). Nested lets at any depth are reached by the walk; sexp mode has no
+columns and the aligned form is WS-only, like `&>`.
+
+**Activation (the load-bearing design decision)** — the transform is IDENTITY
+unless ALL of:
+- the group's head is the identifier `let`, with BARE head-binding tokens
+  (a bracket-binding head is excluded);
+- ≥2 continuation LINES (elements whose `syntax-line` > the let's);
+- no continuation is `$pipe`-headed — STRUCTURAL, not heuristic: `|` is
+  reserved arm syntax, never a binding, so `let x := v / match x / | arm…`
+  (a working multi-line body) can never be captured;
+- every element carries line/col (synthesized loc-less stx deactivates).
+
+Then the STRICT discipline (ruling 1): binding-col := the first continuation's
+column; every continuation at binding-col is a binding line (a BARE token
+there = guided error — "a binding line needs a name and a value"); exactly ONE
+line strictly between the let column and binding-col is the body and must be
+LAST; **any other column, no body line, or multiple body lines = a guided
+`$let-error` naming the columns** — P1's marker seat means the reader layer
+emits per-command column-precise errors with zero new machinery.
+
+**Why signature-activation instead of activating on any ≥2-continuation let**:
+the audit found the working `let x := v / match x / | arms` shape has two
+same-column continuations. Pipe-exclusion handles it structurally; the
+remaining same-col-no-body shapes (`let x := 4 / (f 1) / (f 2)`) are
+ALREADY-BROKEN junk today (value-swallowing), so the guided no-body error is a
+strict improvement, never a regression.
+
+**Emitted shape**: `(let ($let-block (head-binding) (b1…) (b2…)) body)` — head
+`let` retained so the existing preparse dispatch reaches `expand-let`, which
+gains one branch: normalize each group (`name value` → synthesize `:=`;
+`:=`-bearing verbatim; anything else a guided error — fused arrives at P4) via
+ONE shared `normalize-let-binding-group`, then the existing
+`parse-assign-bindings` → `let-bindings->nested-fn` funnel.
+
+**Audit findings that shaped it**:
+- `split-last-let` needs a `$let-block` arm sharing that SAME normalizer — a
+  bodyless sibling `let a := 1` followed by an ALIGNED let hits
+  `merge-let-sequence`, whose bracket arm would splice the raw `$let-block`
+  into a binding stream (value-swallowing junk). One normalizer, two
+  consumers.
+- `let-bodyless?` needs no change: an aligned let's rest is
+  `(($let-block …) body)` — car is a LIST, so the P2 arm's symbol check
+  already excludes it (the check earns its keep again).
+- `preprocess-let-infix-eq`'s group-blindness is DISSOLVED for aligned forms:
+  binding values are structured into groups at the reader, before any merge
+  processing.
+- The P0-flagged top-level guard bypass closes STRUCTURALLY: the bodyless
+  aligned shape at top level has no between-columns line → the guided no-body
+  error, columns named.
+- `$let-block` owes the `pattern-var?` exclusion (the `$dot-brace` lesson).
+
+**Drift risks named before coding**:
+1. Byte-transparency for every working form — 0/1-continuation lets, bracket
+   heads, pipe-bodied lets, `:=` sibling chains: all must pass the transform
+   untouched (the suite + acceptance are the oracle, plus explicit pins).
+2. The walk must recurse BOTTOM-UP (a nested let inside a binding value).
+3. Loc-less synthesized stx must deactivate, never crash.
+4. The 2-line forgot-body case (`let x 4 / y 5`) is NOT activatable (no body
+   signature) and falls to Branch 3 as `(let x 4 (y 5))` → "Unbound variable
+   y" — an error, but a mediocre one; pre-existing shape, documented not fixed.
+5. `check-stdout-clean` — markers must never print as structs.
+
+## 9. P3 close notes + VAG highlights (two columns, the challenge side)
+
+- **(a/d) The gate's catch WAS the challenge finding**: the first draft's walk
+  rebuilt every stx and silently DROPPED SYNTAX PROPERTIES — POL.9's
+  `'prologos-paren-origin` mark among them — degrading implicit-solve paren
+  goals to applications (path-selection acceptance [27]/[28] + two Rel T1
+  suites). The mini-design's drift risks named LOC hygiene (risk 3) but not
+  PROPERTY hygiene — the enumeration under-counted its own hygiene class, the
+  session's recurring shape. Fixed eq?-preserving by construction (untouched
+  forms keep stx identity — the pipeline.md reflective-walker idiom), which is
+  strictly stronger than patching the property template alone.
+- **(b) Complete, with one named residual**: the 2-line forgot-body shape has
+  no signature to activate on and yields Branch 3's "Unbound variable" —
+  documented (risk 4), not fixed. Everything else in scope landed: all
+  spellings mixed freely, guided errors carry columns, contexts covered
+  (defn body, def := RHS, sibling merge via the shared normalizer).
+- **(c) The top-level bypass closed at the FUNNEL, not with a second guard**:
+  `:=`-reserved means a binding-shaped body is refusable at the single point
+  every format converges on — one check, all branches, no column data needed.
+- **Flip-with-the-feature, 3rd instance**: the P1 broken-form exemplars moved
+  forward to the fused form. When P4 lands, the containment tests' bad-let
+  exemplar must become the top-level let (the one PERMANENT error).
