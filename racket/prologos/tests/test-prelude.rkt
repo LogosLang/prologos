@@ -48,6 +48,58 @@
 (test-case "mult-mul commutative: mw * m0 = m0"
   (check-equal? (mult-mul 'mw 'm0) 'm0))
 
+;; ========================================
+;; mult-join — the ALTERNATION operator (2026-07-30)
+;; ========================================
+;; `mult-add` composes usages that BOTH happen (sequential); `mult-join` is the
+;; least upper bound, for branches of which exactly ONE happens. The whole point
+;; is the single cell where they differ, so pin the full table.
+
+(test-case "mult-join: m1 join m1 = m1 — THE cell that differs from mult-add"
+  ;; mult-add gives mw here, which is what rejected a linear variable used once
+  ;; in each branch of an `if` (legal: only one branch runs).
+  (check-equal? (mult-join 'm1 'm1) 'm1)
+  (check-equal? (mult-add  'm1 'm1) 'mw))
+
+(test-case "mult-join: agrees with mult-add on every OTHER cell"
+  ;; This is the property that makes swapping add→join at an alternation site
+  ;; monotone-permissive — it can never reject a program it used to accept.
+  (for* ([a (in-list '(m0 m1 mw))]
+         [b (in-list '(m0 m1 mw))]
+         #:unless (and (eq? a 'm1) (eq? b 'm1)))
+    (check-equal? (mult-join a b) (mult-add a b)
+                  (format "mult-join/mult-add disagree at (~a ~a)" a b))))
+
+(test-case "mult-join: m0 is the identity (= the lattice bottom)"
+  ;; join-usage's null shortcuts depend on this.
+  (for ([x (in-list '(m0 m1 mw))])
+    (check-equal? (mult-join 'm0 x) x)
+    (check-equal? (mult-join x 'm0) x)))
+
+(test-case "mult-join: idempotent, commutative, associative"
+  (for* ([a (in-list '(m0 m1 mw))] [b (in-list '(m0 m1 mw))])
+    (check-equal? (mult-join a b) (mult-join b a) "commutative")
+    (for ([c (in-list '(m0 m1 mw))])
+      (check-equal? (mult-join a (mult-join b c))
+                    (mult-join (mult-join a b) c) "associative")))
+  (for ([x (in-list '(m0 m1 mw))])
+    (check-equal? (mult-join x x) x "idempotent")))
+
+(test-case "mult-join: it IS the lub of mult-leq"
+  ;; Derived from the tree's own order rather than asserted independently.
+  (for* ([a (in-list '(m0 m1 mw))] [b (in-list '(m0 m1 mw))])
+    (define j (mult-join a b))
+    (check-true (mult-leq a j) "upper bound of a")
+    (check-true (mult-leq b j) "upper bound of b")
+    ;; least: no strictly smaller element is also an upper bound
+    (for ([c (in-list '(m0 m1 mw))]
+          #:when (and (mult-leq c j) (not (eq? c j))))
+      (check-false (and (mult-leq a c) (mult-leq b c))
+                   (format "~a is a smaller upper bound of (~a ~a)" c a b)))))
+
+(test-case "mult-join: mult-meta is treated as mw, like every sibling"
+  (check-equal? (mult-join (mult-meta 99) 'm1) 'mw))
+
 ;; Ordering
 (test-case "mult-leq: m0 <= m1"
   (check-true (mult-leq 'm0 'm1)))

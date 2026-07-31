@@ -32,7 +32,7 @@
 
 (provide
  ;; Usage context operations
- zero-usage single-usage add-usage scale-usage
+ zero-usage single-usage add-usage join-usage scale-usage
  uhead utail ulen
  check-all-usages
  ;; Result types
@@ -62,6 +62,39 @@
     [else (cons (mult-add (car u1) (car u2))
                 (add-usage (cdr u1) (cdr u2)))]))
 
+;; Pointwise JOIN of usage contexts — the ALTERNATION combinator.
+;;
+;; Use this, NOT `add-usage`, when combining the branches of an eliminator that
+;; runs exactly ONE of them (boolrec, the four posit if-nars, a match's arms).
+;; `add-usage` stays correct for everything sequential — including an
+;; eliminator's SCRUTINEE, which always runs. The canonical shape at an
+;; alternation site is therefore
+;;     (add-usage u-scrutinee (join-usage u-branch1 u-branch2))
+;; and NOT a flat 3-way join. See `mult-join` (prelude.rkt) for why alternation
+;; needs its own operator and why the swap is monotone-permissive.
+;;
+;; The two null shortcuts are cloned from `add-usage` deliberately and are sound
+;; here for a DIFFERENT reason: there, a missing tail is all-m0 because m0 is the
+;; additive IDENTITY; here it is sound because m0 is the lattice BOTTOM. Those
+;; coincide for this order, so the same code is right both times — but the
+;; reasoning does not transfer to any other table, so re-derive it if `mult-join`
+;; ever changes.
+;;
+;; ⚠ NEITHER operator errors on length divergence — both silently PAD. A usage
+;; vector that was not truncated back to the ambient ctx depth therefore produces
+;; no error here; it surfaces far away as `check-all-usages` returning #f on a
+;; length mismatch, i.e. as a spurious "Multiplicity violation". Callers that
+;; combine vectors from DIFFERENT context depths (an eliminator whose arms bind a
+;; per-arm number of fields) must truncate first and assert equal lengths
+;; themselves — `join-usage` cannot catch it for them.
+(define (join-usage u1 u2)
+  (cond
+    [(and (null? u1) (null? u2)) '()]
+    [(null? u1) u2]
+    [(null? u2) u1]
+    [else (cons (mult-join (car u1) (car u2))
+                (join-usage (cdr u1) (cdr u2)))]))
+
 ;; Scalar multiplication of usage context
 (define (scale-usage m u)
   (map (lambda (x) (mult-mul m x)) u))
@@ -84,6 +117,20 @@
 ;;     monoidal structure, quantale-adjacent, not a simple lattice.
 ;;     R5 contingency: counted as 1 bug-found (accepted design); still
 ;;     within K=2 absorption.
+;;
+;; AMENDED 2026-07-30: the finding above stands for the CELL MERGE and for
+;; SEQUENTIAL composition, which is all it was ever about — a cell accumulating
+;; usage really is a monoid, and `add-usage` remains this domain's registered
+;; merge. What the D2 note did not consider is ALTERNATION: an eliminator that
+;; runs exactly one of its branches combines them with a JOIN, not with
+;; addition. `:usage` therefore carries BOTH structures — a tensor
+;; (`add-usage`, registered below) and a join (`join-usage`, above) — and the
+;; refuted idempotence was refuted for the tensor only.
+;;   The join is deliberately ARM-LOCAL and is NOT registered as a second SRE
+;; relation: it is a typing-rule combinator for eliminator branches, not a
+;; merge for concurrent writes to a cell. If a future design wants alternation
+;; on-network (speculative branches merging into one usage cell), that is when
+;; the domain gains a second relation — and this note is the pointer.
 
 (define usage-merge-registry
   (lambda (rel-name)
@@ -353,6 +400,17 @@
 
     ;; ---- natrec ----
     ;; Usage = U_target + U_base + U_step (motive is type-level)
+    ;;
+    ;; ⚠ DELIBERATELY STILL `add-usage` ACROSS base/step, unlike every other
+    ;; eliminator in this file (2026-07-30). natrec's base and step are NOT
+    ;; mutually exclusive alternatives: `step` has type
+    ;; Π(n:Nat). motive(n) → motive(suc n) and is applied 0..n times, so joining
+    ;; base with step would UNDER-count a linear variable captured in the step —
+    ;; unsound in the permissive direction, which is worse than the over-count.
+    ;; (The current rule is not right either: the step's usage is added exactly
+    ;; ONCE though it runs n times. Making that sound means scaling the step by
+    ;; mw, which newly rejects a class of accepted code — a separate decision,
+    ;; recorded rather than defaulted into. See DEFERRED.md.)
     [(expr-natrec mot base step target)
      (let ([step-type
             ;; Π(n:Nat). motive(n) → motive(suc(n))
@@ -375,8 +433,15 @@
            [_ (tu-error)])))]
 
     ;; ---- boolrec ----
-    ;; Usage = U_target + U_true-case + U_false-case (motive is type-level)
+    ;; Usage = U_target + (U_true-case ⊔ U_false-case)   (motive is type-level)
     ;; boolrec(motive, true-case, false-case, target)
+    ;;
+    ;; The target ADDS (it always runs); the two branches JOIN (exactly one
+    ;; runs). Before 2026-07-30 both were added, which rejected
+    ;;   spec both Box -1> Bool -> Box / defn both [b c] (if c b b)
+    ;; even though `b` is used exactly once on every execution path — m1+m1 = mw.
+    ;; See `mult-join` (prelude.rkt) for the one-cell difference and why the swap
+    ;; cannot reject any program it previously accepted.
     [(expr-boolrec mot tc fc target)
      (let ([r4 (checkQ ctx target (expr-Bool))])
        (match r4
@@ -388,7 +453,7 @@
                  (match r3
                    [(bu #t u3)
                     (tu (expr-app mot target)
-                        (add-usage u4 (add-usage u2 u3)))]
+                        (add-usage u4 (join-usage u2 u3)))]
                    [_ (tu-error)]))]
               [_ (tu-error)]))]
          [_ (tu-error)]))]
@@ -748,7 +813,7 @@
                (let ([r3 (checkQ ctx normal-case ty)])
                  (match r3
                    [(bu #t u3)
-                    (tu ty (add-usage u4 (add-usage u2 u3)))]
+                    (tu ty (add-usage u4 (join-usage u2 u3)))]
                    [_ (tu-error)]))]
               [_ (tu-error)]))]
          [_ (tu-error)]))]
@@ -838,7 +903,7 @@
                (let ([r3 (checkQ ctx normal-case ty)])
                  (match r3
                    [(bu #t u3)
-                    (tu ty (add-usage u4 (add-usage u2 u3)))]
+                    (tu ty (add-usage u4 (join-usage u2 u3)))]
                    [_ (tu-error)]))]
               [_ (tu-error)]))]
          [_ (tu-error)]))]
@@ -998,7 +1063,7 @@
                (let ([r3 (checkQ ctx normal-case ty)])
                  (match r3
                    [(bu #t u3)
-                    (tu ty (add-usage u4 (add-usage u2 u3)))]
+                    (tu ty (add-usage u4 (join-usage u2 u3)))]
                    [_ (tu-error)]))]
               [_ (tu-error)]))]
          [_ (tu-error)]))]
@@ -1088,7 +1153,7 @@
                (let ([r3 (checkQ ctx normal-case ty)])
                  (match r3
                    [(bu #t u3)
-                    (tu ty (add-usage u4 (add-usage u2 u3)))]
+                    (tu ty (add-usage u4 (join-usage u2 u3)))]
                    [_ (tu-error)]))]
               [_ (tu-error)]))]
          [_ (tu-error)]))]

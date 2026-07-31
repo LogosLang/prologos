@@ -24,6 +24,30 @@
 (test-case "add-usage"
   (check-equal? (add-usage '(m0 m1) '(m1 m0)) '(m1 m1)))
 
+;; ---- join-usage: the ALTERNATION combinator (2026-07-30) ----
+;; NOTE the `add-usage` case above does NOT discriminate the two operators —
+;; '(m0 m1) and '(m1 m0) share no m1 position, so join gives '(m1 m1) too.
+;; These cases are chosen to actually distinguish them.
+
+(test-case "join-usage: m1 in the SAME position joins to m1, not mw"
+  ;; the discriminating case — add-usage would give '(mw)
+  (check-equal? (join-usage '(m1) '(m1)) '(m1))
+  (check-equal? (add-usage  '(m1) '(m1)) '(mw)))
+
+(test-case "join-usage: pointwise over a mixed vector"
+  (check-equal? (join-usage '(m0 m1 mw) '(m1 m1 m0)) '(m1 m1 mw)))
+
+(test-case "join-usage: shorter vector is treated as all-m0 (lattice bottom)"
+  (check-equal? (join-usage '() '(m1 m0)) '(m1 m0))
+  (check-equal? (join-usage '(m1 m0) '()) '(m1 m0))
+  (check-equal? (join-usage '() '()) '()))
+
+(test-case "join-usage: idempotent — the property add-usage does NOT have"
+  ;; qtt.rkt's D2 note records idempotence as REFUTED for add-usage; that was
+  ;; about the tensor. The join has it.
+  (check-equal? (join-usage '(m0 m1 mw) '(m0 m1 mw)) '(m0 m1 mw))
+  (check-equal? (add-usage  '(m0 m1 mw) '(m0 m1 mw)) '(m0 mw mw)))
+
 (test-case "scale-usage with m0 (erased)"
   (check-equal? (scale-usage 'm0 '(m1 mw)) '(m0 m0)))
 
@@ -181,3 +205,58 @@
   (check-true (checkQ-top (ctx-extend (ctx-extend ctx-empty (expr-Nat) 'm1) (expr-Nat) 'm1)
                           (expr-pair (expr-bvar 1) (expr-bvar 0))
                           (expr-Sigma (expr-Nat) (expr-Nat)))))
+
+;; ========================================
+;; Branch alternation: eliminator branches JOIN, they do not ADD (2026-07-30)
+;; ========================================
+;; An eliminator runs exactly ONE branch, so a linear variable used once in each
+;; branch is used exactly once on every execution path. Before this change the
+;; branches were combined with semiring addition (m1 + m1 = mw) and such code was
+;; rejected. The SCRUTINEE still adds — it always runs. See qtt.rkt § boolrec.
+;; A constant motive (fn [_ : Bool] Nat) keeps these about usage, not types.
+
+(define bool-motive-nat (expr-lam 'mw (expr-Bool) (expr-Nat)))
+
+(test-case "checkQ-top: linear var used once in EACH boolrec branch — legal"
+  ;; THE regression pin. ctx = [b :1 Nat, c :w Bool]; bvar1 = b, bvar0 = c.
+  (check-true
+   (checkQ-top (ctx-extend (ctx-extend ctx-empty (expr-Nat) 'm1) (expr-Bool) 'mw)
+               (expr-boolrec bool-motive-nat
+                             (expr-bvar 1)     ;; true  branch uses b
+                             (expr-bvar 1)     ;; false branch uses b
+                             (expr-bvar 0))    ;; scrutinee is c
+               (expr-Nat))))
+
+(test-case "checkQ-top: linear var used TWICE IN ONE branch — still fails"
+  ;; Within a branch the uses still ADD. Guards against a fix that joined
+  ;; everything instead of only branch-vs-branch.
+  (check-false
+   (checkQ-top (ctx-extend (ctx-extend ctx-empty (expr-Nat) 'm1) (expr-Bool) 'mw)
+               (expr-boolrec (expr-lam 'mw (expr-Bool) (expr-Sigma (expr-Nat) (expr-Nat)))
+                             (expr-pair (expr-bvar 1) (expr-bvar 1))  ;; b twice, one branch
+                             (expr-pair (expr-bvar 1) (expr-bvar 1))
+                             (expr-bvar 0))
+               (expr-Sigma (expr-Nat) (expr-Nat)))))
+
+(test-case "checkQ-top: linear scrutinee ADDS to the branch join — fails"
+  ;; b in the scrutinee AND in both branches = two uses on every path. Pins that
+  ;; the rule is add(scrutinee, join(branches)) and NOT a flat 3-way join, which
+  ;; would wrongly accept this.
+  (check-false
+   (checkQ-top (ctx-extend ctx-empty (expr-Bool) 'm1)
+               (expr-boolrec (expr-lam 'mw (expr-Bool) (expr-Bool))
+                             (expr-bvar 0)
+                             (expr-bvar 0)
+                             (expr-bvar 0))   ;; scrutinee is the same linear b
+               (expr-Bool))))
+
+(test-case "checkQ-top: linear var used in NEITHER branch — still fails"
+  ;; The join must not turn "unused" into "used": m0 ⊔ m0 = m0, and m1 demands
+  ;; exactly one use.
+  (check-false
+   (checkQ-top (ctx-extend (ctx-extend ctx-empty (expr-Nat) 'm1) (expr-Bool) 'mw)
+               (expr-boolrec bool-motive-nat
+                             (expr-zero)
+                             (expr-zero)
+                             (expr-bvar 0))
+               (expr-Nat))))
