@@ -30,7 +30,7 @@ rulings, censuses and test delta live in its own section.
 | **P3a** | **The node + KEYED blocks, no `^`** — `surf-select`/`expr-select` (full pipeline.md cost paid once; twins; walkers via the generic fallback; NO PNET bump) · payload segmentation + the malformed-payload seat · **D-lenient presence** (Q_T2) · subject-once reduction · **strict merge for plain keys BEFORE `make-record` can last-win** · type-position refusal · branch-aware miss errors · §9's learnability pair | ✅ | §5.P3a · **`290f77f9`** — suite **9418/475/0**, acceptance **41/41** + records, battery 136/136, neighborhood 623/21; Q_U1 (corpus list corrected, `6d919142`); adversarial verify caught **1 BLOCKING** (block-pipe select corruption at 0 errors — 6th consecutive slice) + 3 SIGNIFICANT, all fixed pre-commit; DEFERRED 15–20 |
 | **P3b** | **The `^` family** — the ONE splitter (continuation grammar `-`?·{ε\|label\|`_`} + `^..`) · dissolve/splice · in-place rename · `^_` Reading N · the `^-` collapse family (Q_T7) · `^..` (Q_T8) · **output-level-local merge** (Q_T3, the monotonicity pin) · the Q_T4a ordinal-`^` guided error · the malformed-`^` battery | ✅ | §5.P3b · **`36ce601c`** — suite **9469/475/0**, acceptance **50/50** + records, battery 178; light re-grounding only (per Q_T5); adversarial verify caught **1 BLOCKING** (whole-datum ordinal-rekey marker → match-arm whole-file abort; fixed ELEMENT-WISE) + 8 SIGNIFICANT — all fixed pre-commit; DEFERRED 21–22; Q_U4 candidate flagged (sub-block synth scope) |
 | **P3c** | **Keyless + L4 + honest nesting** — the nat-row mint at EVERY n (incl. 1 and homogeneous n) · ordinal branches `{N M}` · the L4 mixing error · `⟨String⟩` 1-tuple pins · the G11 one-space pair pinned side by side | ✅ | §5.P3c · **`1b021d57`** — suite **9497/475/0**, acceptance **52/52**, battery 206; P3 (BLOCKS) COMPLETE; the verify's FIRST no-BLOCKING slice in eight (2 SIGNIFICANT fixed pre-commit: the @ord walk-to-leaf twin-drift, the decimal-fusion leak); G11 landed AS AMENDED; in-block `v[0]`≡`.0` ratified-by-pin |
-| **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | §5.P4 · CO-DESIGN: audit `wf_8458c23b` + options panel run; **Q_U5** (ONE reified selector carrier, monomorphic — F-row carries bound-selector precision) + **Q_U6** (WHOLESALE path migration; P4a totality/repairs → P4b carrier → P4c+ ω) RULED 2026-07-31; **Q_U7** RULED (the `(@bcast step)` one-step wrapper; 4b restated — extent structural, fusion a pinned theorem) · **Q_U8** `:` gate PENDING; ⚠ LET merge `5e16ead4` landed mid-walk (audit coords @ `02dd27d7`) |
+| **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | §5.P4 · CO-DESIGN: audit `wf_8458c23b` + options panel run; **Q_U5** (ONE reified selector carrier, monomorphic — F-row carries bound-selector precision) + **Q_U6** (WHOLESALE path migration; P4a totality/repairs → P4b carrier → P4c+ ω) RULED 2026-07-31; **Q_U7** RULED (the `(@bcast step)` wrapper; 4b restated) · **Q_U8** RULED (uniform positional `$bcast-step` mint + parser position-dispatch; A/B named-diff-set) — partition LOCKED P4a–P4e; pre-implementation pause items in §5.P4; ⚠ LET merge `5e16ead4` landed mid-walk (audit coords @ `02dd27d7`) |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | §5.P5 · L1–L5 law battery |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | §5.PX · position flexible |
 | **P6** | **Demand semantics** — RULED STAGED (4a); **decision ✅ Q_U3 (owner, 2026-07-30): option (c)** — deferred to a named post-v1 phase, charter stub in §5.P6 | ⬜ (residue = the X.close gate row only) | §5.P6 |
@@ -808,20 +808,43 @@ track's merge (`5e16ead4`) landed MID-WALK — audit coordinates are
   meaning depends on neighbors — exactly what a reified composable
   selector must not do).
 
+- **Q_U8 — THE `:` GATE: UNIFORM POSITIONAL SENTINEL-MINT AT GROUPING +
+  PARSER POSITION-DISPATCH [owner, 2026-07-31 — "uniform mint"].** At
+  grouping, a `keyword` or `colon-annotation` token BYTE-ADJACENT to a
+  non-empty local result mints the new access sentinel
+  **`($bcast-step payload)`** — the `adjacent-to-base?` shape, landed in
+  BOTH groupers (Q_N7 twin), positional NOT enumerated (`.N`/brackets/
+  braces join the focus set free; six enumeration under-counts this arc).
+  `$bcast-step` IS an access sentinel (fuses onto its base via the fold —
+  the `$postfix-index` pattern) and pays the NINE-site §Q8.5 registration
+  surface. The `ident:ident` collision (annotation vs broadcast) is
+  position-dependent and ONLY the parser knows position, while adjacency
+  is destroyed below grouping (Q8.5 inv 2) — so grouping PRESERVES the
+  distinction and the parser DISPATCHES: expression position reads the
+  sentinel as the ω/broadcast step; **binder position UNWRAPS it as the
+  annotation** (`fused-type-annot?`'s 4 sites · LET's binder consumer ·
+  the spec-param and `$brace-params` binder paths — census-gated).
+  Shattered spellings (`users:{a b}` = bare `:` + adjacent group;
+  `users:<{a}`) become grouping arms over EXISTING tokens — **zero
+  tokenizer changes**. **Corpus A/B MANDATORY** (grouping changes datums)
+  with a NAMED predicted diff set: exactly the fused-binder sites (3
+  `.prologos` let lines at HEAD flip datum shape, not behavior — the
+  parser unwraps); any diff outside the set is a bug. **The LET merge
+  IMPROVED the safety net**: the fused-annotation hazard class went from
+  ZERO instances (A/B-blind at `02dd27d7`) to 3 acceptance lines + 12
+  suite-gated embedded pins + 17 defn-param shapes — a naive gate now
+  turns the suite red instead of shipping silently. Rejected-with-reason:
+  mint-suppression in grouping-recognizable contexts (reintroduces an
+  enumerated context list — the under-count class); parser-only (cannot
+  see adjacency, Q8.5 inv 2); a fused tokenizer token (same collision,
+  bigger surface).
+
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
   P1b-i, **owner-reviewed**, and ruled (Q_M8 the sole amendment). §Q8 is now
   normative for P1b-ii/iii and P2.
 - Keyword-projection disposition (§2.4) — revisit when P4 lands broadcast
   (likely subsumed by `users:name`).
-- **Q_U8 (pending)** — the `:` adjacency gate + the corpus A/B. §Q8.3 is
-  design-only (ZERO code; `x:name` ≡ `x :name` today); the fused-binder
-  hazard (`[fn [x:Int] x]`, zero corpus instances, A/B-blind) **GREW at
-  the LET merge** (`feb79740` ships fused `var:Type` let binders — a
-  second live population). The focus-adjacency census is owed a POST-MERGE
-  re-run before the gate lands; any recognizer change ⇒ corpus A/B
-  MANDATORY.
-
 **Carried from the P3 mini-audit [owner, 2026-07-28], still standing:**
 - `#:keyword` retires with the `#.:name` twin (`#.name` survives).
 - ~~`^` splitting is **P3**-parser-side via POL.6 `split-fused-symbol` — no
@@ -2760,7 +2783,7 @@ rulings; this records what the audit established and the staged shape.
     all-must-offer (broadcast) form a Galois ADJOINT PAIR — the asymmetry
     is structural; never "unify" them.
 
-#### The staged shape (Q_U6's sequencing; sub-slice sections finalize after Q_U7/Q_U8)
+#### The LOCKED partition (Q_U6 sequencing; Q_U7/Q_U8 folded 2026-07-31)
 
 - **P4a — totality + strategy-independent repairs (no new surface)**: the
   `select-step-kind` totality dispatcher (loud arms; one fixture per
@@ -2777,15 +2800,73 @@ rulings; this records what the audit established and the staged shape.
   re-carrier). Carrier-shape detail (new field vs selector-in-branches-
   slot; the §8 R6 constructor-arity hazard prefers the latter) = the
   slice's own mini-round.
-- **P4c+ — the ω semantics** (partition after Q_U7/Q_U8): the `:` gate +
-  vector broadcast over `[PVec {closed row}]` as first corpus green
-  (§D party lines · §10.2 basics · §10.8 `tree.entries:name`; pays the
-  parser.rkt:793 `.*name`→`:name` promise in the same commit that retires
-  the recognizer) · map-generic `:` · the 2b split (+ the per-component
-  union conversion + `row-meet` + the discriminating fixture + the List
-  disposition) · flatten `*` / splat `.*` / disclose `<` (+ DEFERRED 5's
-  HEAD re-census) · residue disposal · the corpus A/B wherever the first
-  recognizer change lands.
+- **P4c — the `:` gate + the ω wrapper + PVec broadcast (first corpus
+  green)**: the `$bcast-step` sentinel (nine-site registration, BOTH
+  groupers, Q_U8) · parser position-dispatch + the binder-consumer
+  unwrapping (census-gated: 4 `fused-type-annot?` sites + LET binders +
+  spec/`$brace-params` paths; 3+12+17 live fused-annotation sites must
+  stay green E2E) · the `(@bcast step)` wrapper in the step vocabulary
+  (its totality-dispatcher arm, key-transparent) · broadcast over PVec
+  subjects (uniform elem — the missing "third arm" stated) · the L1
+  fusion pin (`users:0:userName` → ONE layer) + the extent pair pin ·
+  **the `.*name`→`:name` migration + the FULL residue disposal (16
+  mentions incl. `access-sentinel?` membership + parse-reader:2161) in
+  the same commit that retires the recognizer** (the parser.rkt:793
+  promise) · the corpus A/B with the NAMED diff set. Corpus: §D party
+  lines · §10.2 basics/fusion/honest-nesting.
+- **P4d — map-generic `:` + the 2b heterogeneity split**: map-generic
+  over Map/keyword-row subjects (`regions:host`, §10.5; per-field
+  row-map, 4c's no-desugar ban) · het-tuple subjects per-position EXACT
+  (`events:t`/`events:x` §10.7 · the `tree` lines §10.8) · PVec-of-union
+  (the PER-COMPONENT `schema-fvar->row-or-self` conversion + `row-meet`,
+  still 0 hits + the §10.7-style discriminating fixture, now known
+  constructible) · the List disposition (Q_U9 — pending, below) · dyn-tail
+  4d refusals.
+- **P4e — flatten `*` · splat `.*` · disclose `<`/`:<` + closures**: the
+  keyword-trailing-`*` consumer split (`:diags*` — split-caret-lexeme
+  prior art; §10.4 `build.modules:diags*:msg`) · `.*` row-splat in block
+  position (§C lines; the splat/duplicate-check interaction below) ·
+  disclose (`users:<{0.userName^}` §10.2) + **DEFERRED 5's HEAD
+  re-census** of `<`-adjacent sites · the keyword-projection disposition
+  (§2.4, due at this close).
+
+#### Pre-implementation pause items (named 2026-07-31; the owner's hold-point)
+
+Ruling-shaped (owner):
+1. **Q_U9 (PENDING) — the List broadcast disposition.** `quests` is a
+   List (cons-spine, corpus :225) and `quests:t` is tagged [D4.P4]. v1
+   options: (a) broadcast over List (a fifth functorial lift + lowering);
+   (b) refuse with a guided error naming the PVec conversion — which
+   moves/re-fixtures the corpus line. Changes a corpus line's fate ⇒
+   owner's call at the P4d round.
+2. **The update-in ω FENCE (ratification).** Q_U5 absorbs `#p(…)` incl.
+   the WORKING write direction — but a broadcast WRITE is spec §7.7
+   traversal territory, NOT v1. Proposed fence: `update-in` accepts
+   grade-1 selectors only; ω-bearing selectors refuse loudly (monotone).
+3. **The whole-node abort ruling (ratification).** A runtime miss INSIDE
+   a broadcast aborts the WHOLE selection (the single `let/ec` — no
+   partial results, no buried panics). Consistent with the P2.b tier;
+   stated + pinned so "map semantics" intuitions cannot drift it.
+
+Design-round work (per-slice mini-rounds; no owner gate):
+4. **The carrier shape** (P4b's round, against code): selector-struct in
+   the EXISTING branches slot (same arity; one line in `select-map-exprs`)
+   vs a new field vs `expr-selector`+re-pointed `expr-select` — decided
+   under the §8 R6 constructor-arity hazard; the slice must END
+   single-carrier (`expr-path` retired within P4b, never aliased past it).
+5. **The `'path`-sort semantic table** (P4b's round): every landed
+   dot-access behavior mapped to its node twin — D19 permissive metas ·
+   the P2 miss-hint family (`projection-parts`) · nil-safe `#.name` ·
+   `_.field` holes · the `ns foo.bar` ns-dot guard (do not reintroduce
+   b0db8f3e) · `reconstitute-selection-paths` (DEFERRED 12 absorbs here).
+6. **Splat vs the static duplicate check** (P4e's round): `.*` contributes
+   keys UNKNOWN at parse — Q_T3's parser-side check keeps the static
+   half; a TYPING-side extension catches splat-vs-explicit collisions
+   loudly at select-project assembly.
+7. **The `:diags*` splitter grammar** (P4e's round): trailing-`*` split at
+   the consumer; multi-`*`/interior-`*` shapes enumerated.
+8. **A/B diff-set re-derivation at implementation HEAD** (the LET merge
+   moved the tree once already; re-pin before P4c's A/B).
 
 
 **Intent** — the COMPLETE P4 contract (each item tagged with its ruling):
