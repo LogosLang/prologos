@@ -291,3 +291,33 @@
   (check-false
    (unreachable?
     "(spec g1 Nat -> Nat)\n(defn g1 [v] (match v (n when (int-lt n 1N) -> 1N) (m -> 2N)))")))
+
+;; ========================================
+;; A constructor of ANOTHER type is rejected (2026-07-31)
+;; ========================================
+;; `reduce-arm-ctx` resolved an arm's constructor via a bare-name global-env
+;; lookup with no check that it belongs to the type being matched, so an arm
+;; naming a FOREIGN type's constructor was accepted. A `Bool` is never a `Box3`,
+;; so that arm can never match — silent dead code with no diagnostic. Narrower
+;; than the unreachable-arm case above: this arm's body IS type-checked.
+
+(test-case "cross-ctor/an arm naming another type's constructor is rejected"
+  (define r
+    (with-handlers ([(lambda (_) #t) (lambda (e) e)])
+      (run-last
+       (string-append
+        "(data Box3 (mk-b3 : Nat))\n"
+        "(spec crossctor Bool -> Nat)\n"
+        "(defn crossctor [b] (match b (true -> 1N) (mk-b3 x -> 2N)))"))))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r)))
+
+(test-case "cross-ctor/the type's OWN constructors still work"
+  ;; The membership test must not reject legitimate arms — including a match on
+  ;; the user type itself, where both constructors belong.
+  (check-equal?
+   (run-ws-last
+    (string-append
+     "data Box3\n  | mk-b3 Nat\n  | empty3\n"
+     "defn unbox\n  | mk-b3 k -> k\n  | empty3  -> 0N\n"
+     "eval [unbox [mk-b3 7N]]"))
+   "7N : Nat"))

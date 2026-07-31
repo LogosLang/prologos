@@ -4460,14 +4460,41 @@
 ;; re-deriving it there would be the twin-drift failure `pipeline.md`
 ;; § "infer / inferQ Are Twins" documents. One derivation, two consumers.
 ;; (bc = 0 returns `ctx` unchanged, so callers need no special case.)
+;; Is `ctor-name` actually a constructor OF the scrutinee's type?
+;;
+;; 2026-07-31: the bare-name `global-env-lookup-type` fallback below finds ANY
+;; constructor in scope, with no check that it belongs to the type being matched.
+;; So an arm naming a FOREIGN type's constructor was accepted:
+;;
+;;   data Box3 | mk-b3 Nat
+;;   spec f Bool -> Nat
+;;   defn f [b] match b (true -> 1N) (mk-b3 x -> 2N)   ;; defined, 0 errors
+;;
+;; A `Bool` is never a `Box3`, so that arm can never match — silent dead code,
+;; and no diagnostic. (Its body IS type-checked, unlike the unreachable-arm case,
+;; so this is the narrower of the two defects.) The membership test uses the same
+;; registry `reduce-scrutinee-decompose` consults, so the two agree by
+;; construction about what a type's constructors are.
+;;
+;; Returns #t when membership cannot be decided (no registry entry, or a built-in
+;; whose constructors are not registry-backed) — declining rather than rejecting,
+;; so this can only reject what it can show is foreign.
+(define (ctor-belongs-to-type? ctor-name type-ctor-name)
+  (define bare-tc (and type-ctor-name (bare-name type-ctor-name)))
+  (define ctors (and bare-tc (lookup-type-ctors bare-tc)))
+  (cond
+    [(or (not ctors) (null? ctors)) #t]           ;; undecidable → allow
+    [else (and (memq (bare-name ctor-name) (map bare-name ctors)) #t)]))
+
 (define (reduce-arm-ctx ctx arm type-ctor-name type-args)
   (define ctor-name (expr-reduce-arm-ctor-name arm))
   (define bc (expr-reduce-arm-binding-count arm))
   ;; Look up constructor type from global-env (try FQN, bare, then built-in)
   (define ctor-fqn (qualify-ctor-name ctor-name type-ctor-name))
-  (define ctor-type (or (global-env-lookup-type ctor-fqn)
-                        (global-env-lookup-type ctor-name)
-                        (builtin-ctor-type ctor-name)))
+  (define ctor-type (and (ctor-belongs-to-type? ctor-name type-ctor-name)
+                         (or (global-env-lookup-type ctor-fqn)
+                             (global-env-lookup-type ctor-name)
+                             (builtin-ctor-type ctor-name))))
   (and ctor-type
        (let ([instantiated (instantiate-pi-chain ctor-type type-args)])
          (and instantiated
