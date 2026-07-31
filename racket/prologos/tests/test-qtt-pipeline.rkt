@@ -214,6 +214,27 @@
   (check-true (multiplicity-error? result)
               (format "scrutinee must ADD to the arm join; got: ~v" result)))
 
+(test-case "qtt-reduce/linear-consumed-in-ONE-arm-only-is-error"
+  ;; P3, linear-per-path: the arms must agree about each linear resource. `y` is
+  ;; consumed on the zero arm and DROPPED on the suc arm — a leak, and accepted
+  ;; before the agreement guard.
+  (define result
+    (run-first
+     (string-append
+      "(def m1leak <(Pi [y :1 <Nat>] (Pi [s <Nat>] Nat))> "
+      "(fn [y :1 <Nat>] (fn [s <Nat>] (match s (zero -> y) (suc _ -> zero)))))")))
+  (check-true (multiplicity-error? result)
+              (format "dropping a linear var on one arm must violate; got: ~v" result)))
+
+(test-case "qtt-reduce/the-same-shape-UNRESTRICTED-is-still-fine"
+  ;; The guard must fire only at linear positions (drift risk 2).
+  (check-false
+   (multiplicity-error?
+    (run-first
+     (string-append
+      "(def mwok <(Pi [y <Nat>] (Pi [s <Nat>] Nat))> "
+      "(fn [y <Nat>] (fn [s <Nat>] (match s (zero -> y) (suc _ -> zero)))))")))))
+
 (test-case "qtt-reduce/unrestricted-match-still-fine"
   ;; The overwhelmingly common case: no multiplicity annotations anywhere.
   ;; Turning checking ON must not disturb it.

@@ -250,6 +250,45 @@
                              (expr-bvar 0))   ;; scrutinee is the same linear b
                (expr-Bool))))
 
+;; ---- linear-per-path: branches must AGREE about each linear resource ----
+;; Owner ruling 2026-07-30 (design doc §1). `mult-join` stays the honest lub, so
+;; m0 ⊔ m1 = m1; a separate agreement guard supplies linear-per-path. Without it
+;; a linear resource consumed on SOME paths and dropped on others type-checks —
+;; which in a language with no implicit destructor is a leak, not laxity.
+
+(test-case "checkQ-top: linear var consumed in ONE branch only — fails (leak)"
+  ;; THE P3 pin. Accepted before the agreement guard (m0 ⊔ m1 = m1).
+  ;; ctx = [b :1 Nat, c :w Bool]; bvar1 = b, bvar0 = c.
+  (check-false
+   (checkQ-top (ctx-extend (ctx-extend ctx-empty (expr-Nat) 'm1) (expr-Bool) 'mw)
+               (expr-boolrec bool-motive-nat
+                             (expr-bvar 1)     ;; true branch consumes b
+                             (expr-zero)       ;; false branch DROPS it
+                             (expr-bvar 0))
+               (expr-Nat))))
+
+(test-case "checkQ-top: the guard fires ONLY at linear positions"
+  ;; The identical shape with the variable declared UNRESTRICTED must stay legal,
+  ;; or the guard would reject ordinary code en masse (drift risk 2).
+  (check-true
+   (checkQ-top (ctx-extend (ctx-extend ctx-empty (expr-Nat) 'mw) (expr-Bool) 'mw)
+               (expr-boolrec bool-motive-nat
+                             (expr-bvar 1)
+                             (expr-zero)
+                             (expr-bvar 0))
+               (expr-Nat))))
+
+(test-case "checkQ-top: an ERASED var dropped in one branch is unaffected"
+  ;; m0 positions are not the guard's business — using an erased var at all is
+  ;; already caught by `compatible m0 m1`, and NOT using it is correct.
+  (check-true
+   (checkQ-top (ctx-extend (ctx-extend ctx-empty (expr-Nat) 'm0) (expr-Bool) 'mw)
+               (expr-boolrec bool-motive-nat
+                             (expr-zero)
+                             (expr-zero)
+                             (expr-bvar 0))
+               (expr-Nat))))
+
 (test-case "checkQ-top: linear var used in NEITHER branch — still fails"
   ;; The join must not turn "unused" into "used": m0 ⊔ m0 = m0, and m1 demands
   ;; exactly one use.

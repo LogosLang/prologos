@@ -95,6 +95,64 @@
     [else (cons (mult-join (car u1) (car u2))
                 (join-usage (cdr u1) (cdr u2)))]))
 
+;; Do two branches of an eliminator AGREE about every LINEAR resource?
+;;
+;; This is what makes multiplicities LINEAR-PER-PATH rather than affine-per-path
+;; (owner ruling, 2026-07-30 — see docs/tracking/2026-07-30_QTT_PATTERN_MATCHING_DESIGN.md
+;; §1). `mult-join` is the honest lub of `mult-leq`, so `m0 ⊔ m1 = m1`, which on
+;; its own would accept a linear resource consumed on SOME paths and dropped on
+;; others. In a language with no implicit destructor that is not a laxer
+;; discipline, it is a leak: dropping a `Handle` on a branch does not close it.
+;; Verified on the real API before this guard existed —
+;;   (boolrec … [fio-close h] unit c)   with h :1   type-checked clean.
+;;
+;; The guard is deliberately SEPARATE from the join rather than folded into it as
+;; `m0 ⊔ m1 = mw`, because that table is not the lub of the tree's own order: it
+;; would cost `m0` its identity status and silently invalidate `join-usage`'s
+;; null shortcuts, and it would encode "dropped on a path" as "used many times".
+;; Keeping the lattice honest and the discipline explicit separates the two.
+;;
+;; Fires ONLY at positions whose DECLARED multiplicity is m1:
+;;   - m0 disagreement is already caught by `compatible m0 m1` downstream;
+;;   - mw positions are unrestricted by definition and must stay free, or this
+;;     would reject ordinary code en masse.
+;; Equality (not merely "not one m0 and one m1") so that m1-vs-mw disagreement is
+;; caught precisely here too, rather than downstream as a bare `compatible` fail.
+;;
+;; DECLINES (returns #t) on length divergence rather than rejecting: the vectors
+;; are only meaningful when both are trimmed back to the ambient ctx depth, and a
+;; bookkeeping slip must not manifest as a spurious linearity error. `ctx-extend`
+;; front-conses, so usage index 0 is `ctx`'s car — the same parallelism
+;; `check-all-usages` walks.
+(define (branches-agree-on-linear? ctx u1 u2)
+  (let loop ([c ctx] [a u1] [b u2])
+    (cond
+      [(or (null? c) (null? a) (null? b)) #t]
+      [(and (eq? (cdar c) 'm1) (not (eq? (car a) (car b)))) #f]
+      [else (loop (cdr c) (cdr a) (cdr b))])))
+
+;; THE alternation combinator for eliminator branches: the join, gated on
+;; agreement. Returns the combined usage, or #f when the branches disagree about
+;; a linear resource.
+;;
+;; This exists so the two operations CANNOT be separated. The guard and the join
+;; must co-occur at every alternation site; leaving them as two calls made that a
+;; discipline a future eliminator could forget — and forgetting silently restores
+;; affine-per-path for that construct alone, with a green suite. Bundling them
+;; makes it correct-by-construction instead: there is no way to join branch
+;; usages without the linear check.
+;;
+;; Structural reading (worth keeping when typing eventually moves on-network):
+;; the guard says the join must be EXACT at linear positions — u1 ⊔ u2 = u1 = u2
+;; there. That is a side condition on the lattice operation, not an ad-hoc
+;; comparison, and it is expressible as such wherever the join is expressed.
+;;
+;; `join-usage` remains available and exported for its own unit tests, but
+;; ALTERNATION SITES SHOULD CALL THIS, not `join-usage` directly.
+(define (join-branches ctx u1 u2)
+  (and (branches-agree-on-linear? ctx u1 u2)
+       (join-usage u1 u2)))
+
 ;; Validate and strip the first `bc` binder entries from a usage vector, using
 ;; the declared multiplicities at the front of `ext-ctx`. This is the lambda
 ;; arm's `(compatible declared (uhead u))` / `(utail u)` idiom (see checkQ's
@@ -473,8 +531,10 @@
                (let ([r3 (checkQ ctx fc (expr-app mot (expr-false)))])
                  (match r3
                    [(bu #t u3)
-                    (tu (expr-app mot target)
-                        (add-usage u4 (join-usage u2 u3)))]
+                    (let ([uj (join-branches ctx u2 u3)])
+                      (if uj
+                          (tu (expr-app mot target) (add-usage u4 uj))
+                          (tu-error)))]
                    [_ (tu-error)]))]
               [_ (tu-error)]))]
          [_ (tu-error)]))]
@@ -834,7 +894,8 @@
                (let ([r3 (checkQ ctx normal-case ty)])
                  (match r3
                    [(bu #t u3)
-                    (tu ty (add-usage u4 (join-usage u2 u3)))]
+                    (let ([uj (join-branches ctx u2 u3)])
+                      (if uj (tu ty (add-usage u4 uj)) (tu-error)))]
                    [_ (tu-error)]))]
               [_ (tu-error)]))]
          [_ (tu-error)]))]
@@ -924,7 +985,8 @@
                (let ([r3 (checkQ ctx normal-case ty)])
                  (match r3
                    [(bu #t u3)
-                    (tu ty (add-usage u4 (join-usage u2 u3)))]
+                    (let ([uj (join-branches ctx u2 u3)])
+                      (if uj (tu ty (add-usage u4 uj)) (tu-error)))]
                    [_ (tu-error)]))]
               [_ (tu-error)]))]
          [_ (tu-error)]))]
@@ -1084,7 +1146,8 @@
                (let ([r3 (checkQ ctx normal-case ty)])
                  (match r3
                    [(bu #t u3)
-                    (tu ty (add-usage u4 (join-usage u2 u3)))]
+                    (let ([uj (join-branches ctx u2 u3)])
+                      (if uj (tu ty (add-usage u4 uj)) (tu-error)))]
                    [_ (tu-error)]))]
               [_ (tu-error)]))]
          [_ (tu-error)]))]
@@ -1174,7 +1237,8 @@
                (let ([r3 (checkQ ctx normal-case ty)])
                  (match r3
                    [(bu #t u3)
-                    (tu ty (add-usage u4 (join-usage u2 u3)))]
+                    (let ([uj (join-branches ctx u2 u3)])
+                      (if uj (tu ty (add-usage u4 uj)) (tu-error)))]
                    [_ (tu-error)]))]
               [_ (tu-error)]))]
          [_ (tu-error)]))]
@@ -2406,6 +2470,13 @@
     ;; invent one — the alternative would newly reject code over a lookup gap,
     ;; and today's baseline for all of this is no checking whatsoever. Outer
     ;; variables (the linear parameters that matter) stay tracked either way.
+    ;;
+    ;; ⚠ P3 SHARPENS THE COST OF THAT CHOICE: a skipped arm contributes no usage,
+    ;; so it is also never checked for branch AGREEMENT — i.e. a linear resource
+    ;; dropped on an unanalysable arm is exactly the leak P3 exists to reject, and
+    ;; it hides here. Still the right trade (rejecting over a lookup gap is worse
+    ;; than missing over one), but it is a hole, not a rounding error. It closes
+    ;; when the Church-fold path does; tracked in DEFERRED.md.
     [((expr-reduce scrutinee arms _) expected-type)
      (let ([scrut-type (infer ctx scrutinee)])
        (cond
@@ -2444,8 +2515,15 @@
                           ;; Length divergence would silently pad at the join.
                           [(not (= (length trimmed) n)) (bu #f (zero-usage n))]
                           [else
-                           (loop (cdr as)
-                                 (if acc (join-usage acc trimmed) trimmed))]))]))]
+                           ;; Linear-per-path: every arm must make the SAME
+                           ;; consumption decision about each linear resource.
+                           ;; Folded against the running accumulator — sound
+                           ;; because disagreeing with the accumulated value
+                           ;; means disagreeing with some earlier arm.
+                           (let ([uj (if acc (join-branches ctx acc trimmed) trimmed)])
+                             (if uj
+                                 (loop (cdr as) uj)
+                                 (bu #f (zero-usage n))))]))]))]
                 [_ (bu #f (zero-usage n))])))]))]
 
     ;; ---- Let (beta-redex): propagate the expected type into the body ----
