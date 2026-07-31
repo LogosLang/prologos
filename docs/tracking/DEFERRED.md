@@ -15,11 +15,55 @@ Deferral".
 
 ---
 
+## ✅ CLOSED — the two eliminator usage residuals (QTT P6 + P7, 2026-07-31)
+
+- **The Church-fold agreement hole** → ✅ `e5810cfe`. It was LIVE, not theoretical:
+  a linear resource dropped inside an unanalysable branch — and in a second
+  variant DOUBLE-FREED — type-checked clean and RAN, while the byte-identical
+  Bool-scrutinee control was rejected. The skip swallowed NESTED violations.
+- **natrec's step counted once** → ✅ `63dea0b6`, and the filing was WRONG about
+  scope: natrec has zero shipped uses; the same defect sat in 8 HOF primitives
+  with 121 shipped uses. Fixed across 9 nodes / 28 sites / both twins. Also
+  reframed — it is the app rule (scale an argument by its binder multiplicity)
+  finally applied, not a tightening: a user-written HOF capturing a linear was
+  already rejected; only the built-in twins accepted it.
+- **The J arm's dropped base usage** (filed below at P5) → ✅ `63dea0b6`, folded
+  into P7 by owner direction.
+
+## 🐛 Two soundness holes on the STRICT path, found while grounding P6 (2026-07-31)
+
+Both confirmed by probe at `7584c16e`, both independent of P6/P7, both arguably
+worse than the hole P6 closed. Deliberately NOT folded in — each deserves its own
+test and its own fix.
+
+1. **An unknown constructor in a match pattern silently becomes an irrefutable
+   VARIABLE pattern**, making every later arm dead code with zero diagnostics.
+   `defn deadarm [v] match v (vnil -> 1N) (vcons a b -> "not-a-nat")` at expected
+   type `Nat` DEFINES CLEAN — arm 2's String body is never checked. Mechanism:
+   `normalize-pattern`'s `[else pat]` (macros.rkt). Consequence beyond the bug:
+   any probe using a misspelled constructor proves nothing, because no
+   `expr-reduce` is produced at all.
+2. **A constructor from an UNRELATED data type is accepted in an arm.**
+   `spec crossctor Bool -> Nat` / `defn crossctor [b] match b (true -> 1N)
+   (mk-b3 x -> 2N)` where `mk-b3 : Nat -> Box3` DEFINES with 0 errors. Cause: the
+   bare-name `global-env-lookup-type` fallback in `reduce-arm-ctx`'s derivation
+   (typing-core.rkt) with no membership test against `lookup-type-ctors`. Note
+   this CONSTRAINS any "make an unfindable ctor an error" fix — the fallback
+   already half-defeats it.
+
+## 🐛 Linear destructuring via a multi-clause `defn` is rejected (2026-07-31)
+
+`spec c3 Handle2 -1> Nat` + `defn c3 | mk-h k -> k` → "Multiplicity violation",
+though it consumes the linear scrutinee exactly once. The fio spelling
+(`defn f [h] match h (mk-h k -> …)`) works, so the two surface forms disagree.
+Verified PRE-EXISTING by A/B against the parent commit while implementing P6 —
+not caused by the QTT track.
+
 ## Residuals from QTT P5 (the guard retirement) — filed 2026-07-30
 
-P5 (`9f0ddede` + `d0ee0eb1`) armed the 8 nodes and DELETED
-`contains-unsupported-qtt?`. Four things surfaced and were deliberately not
-fixed in that commit:
+P5 (`9f0ddede` + `7b14fffe`) armed the 8 nodes and DELETED
+`contains-unsupported-qtt?`. These surfaced and were deliberately not fixed in
+that commit; item 4 has since closed.
 
 1. **`expr-vindex` is STUCK** — `whnf` has computation rules for `vhead`/`vtail`
    on a canonical `vcons` (reduction.rkt) but NONE for `vindex`, which appears
@@ -37,7 +81,9 @@ fixed in that commit:
    grammar/typing/reduction for them but zero usage rules, so P5's seven usage
    rules ship spec-unbacked. The soundness property stays vacuously true (nothing
    breaks), which is exactly why this would drift silently.
-4. **`expr-foreign-fn`'s type is arity-wrong once `args` is non-empty** — both
+4. ✅ CLOSED `63dea0b6` — *(was: the J arm drops its base's usage entirely.)*
+   Folded into P7.
+5. **`expr-foreign-fn`'s type is arity-wrong once `args` is non-empty** — both
    `typing-core`'s infer arm and P5's QTT twin return the FULL registered Pi
    rather than the remainder after `(length args)` applications. They agree with
    each other, so this is twin-parity, not drift; fixing it means fixing both.
@@ -125,7 +171,12 @@ can produce a diagnostic naming the dropped resource. Do NOT read the shipped
 default as an endorsement — it is the status quo, and the status quo permits the
 leak.
 
-## Recorded decision — natrec's `step` usage is counted ONCE though it runs n times (2026-07-30)
+## ✅ CLOSED `63dea0b6` — natrec's `step` usage is counted ONCE though it runs n times (2026-07-30)
+
+**Superseded by QTT P7**, which also found the filing under-scoped: the same
+defect sat in 8 HOF primitives with 121 shipped uses, while natrec has none.
+The Redex model's matching natrec rule is noted below and still stands as a
+follow-up. Original entry retained:
 
 QTT P1 changed eliminator branch combination to a join at 5 sites and
 DELIBERATELY left `natrec` on `add-usage` (qtt.rkt, comment in place). The
@@ -142,7 +193,11 @@ class of currently-accepted code. Recorded rather than defaulted into. Note the
 Redex model (redex/qtt.rkt:173-186) carries the same natrec rule, so the two are
 currently IN AGREEMENT — a fix must move both.
 
-## Retire `contains-unsupported-qtt?` — arm the remaining 8 nodes (2026-07-30)
+## ✅ CLOSED `9f0ddede` + `7b14fffe` — Retire `contains-unsupported-qtt?` (2026-07-30)
+
+**Done in QTT P5**: all 8 nodes armed in qtt.rkt and the guard DELETED, so
+multiplicity checking is unconditional at the def seam. PNET_VERSION 7→8 rode
+the deletion. Original entry retained for the rationale:
 
 QTT P2 removed the `expr-reduce` entry, which was the one that mattered. What is
 left (driver.rkt) is a hand-armed walk that recurses 12 node kinds, flags 8
