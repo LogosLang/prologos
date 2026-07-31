@@ -29,7 +29,7 @@ rulings, censuses and test delta live in its own section.
 | **P2** | **Grade-1 core** — `.k`/`.N` access + bare-path extraction. Carries **Q_M8's dot half** (`digit+` at the dot). Ruled at the mini-audit: **`.N` REUSES `$postfix-index`** (Q_R1 — near-zero registrations, fixpoint inherited, `v[0]` ≡ `v.0` byte-identical) · **copy the `:N` trailing guard** (Q_R2) · **dot band stays adjacency-free** (Q_R3) · `m.0` moves out of the v2 block (Q_R4) · **the `.N` error surface IS IN SCOPE** (Q_R5) | ✅ | §5.P2 · **`3005170b`** — suite **9370/475/0**, acceptance **35/35** + 89/89, corpus A/B **158 files / ZERO diffs**; audit `wf_22020418-a5f` (**12th** consecutive premise refuted); doc-truth separately `0e5a56a3` (Q_R6); adversarial verify caught **a diagnostic REGRESSION I introduced** + 2 more, all fixed pre-commit; DEFERRED 9–13 |
 | **P3a** | **The node + KEYED blocks, no `^`** — `surf-select`/`expr-select` (full pipeline.md cost paid once; twins; walkers via the generic fallback; NO PNET bump) · payload segmentation + the malformed-payload seat · **D-lenient presence** (Q_T2) · subject-once reduction · **strict merge for plain keys BEFORE `make-record` can last-win** · type-position refusal · branch-aware miss errors · §9's learnability pair | ✅ | §5.P3a · **`290f77f9`** — suite **9418/475/0**, acceptance **41/41** + records, battery 136/136, neighborhood 623/21; Q_U1 (corpus list corrected, `6d919142`); adversarial verify caught **1 BLOCKING** (block-pipe select corruption at 0 errors — 6th consecutive slice) + 3 SIGNIFICANT, all fixed pre-commit; DEFERRED 15–20 |
 | **P3b** | **The `^` family** — the ONE splitter (continuation grammar `-`?·{ε\|label\|`_`} + `^..`) · dissolve/splice · in-place rename · `^_` Reading N · the `^-` collapse family (Q_T7) · `^..` (Q_T8) · **output-level-local merge** (Q_T3, the monotonicity pin) · the Q_T4a ordinal-`^` guided error · the malformed-`^` battery | ✅ | §5.P3b · **`36ce601c`** — suite **9469/475/0**, acceptance **50/50** + records, battery 178; light re-grounding only (per Q_T5); adversarial verify caught **1 BLOCKING** (whole-datum ordinal-rekey marker → match-arm whole-file abort; fixed ELEMENT-WISE) + 8 SIGNIFICANT — all fixed pre-commit; DEFERRED 21–22; Q_U4 candidate flagged (sub-block synth scope) |
-| **P3c** | **Keyless + L4 + honest nesting** — the nat-row mint at EVERY n (incl. 1 and homogeneous n) · ordinal branches `{N M}` · the L4 mixing error · `⟨String⟩` 1-tuple pins · the G11 one-space pair pinned side by side | ⬜ | §5.P3c · light mini-audit; DEPENDS on P3b's bare-`^` |
+| **P3c** | **Keyless + L4 + honest nesting** — the nat-row mint at EVERY n (incl. 1 and homogeneous n) · ordinal branches `{N M}` · the L4 mixing error · `⟨String⟩` 1-tuple pins · the G11 one-space pair pinned side by side | ✅ | §5.P3c · **`1b021d57`** — suite **9497/475/0**, acceptance **52/52**, battery 206; P3 (BLOCKS) COMPLETE; the verify's FIRST no-BLOCKING slice in eight (2 SIGNIFICANT fixed pre-commit: the @ord walk-to-leaf twin-drift, the decimal-fusion leak); G11 landed AS AMENDED; in-block `v[0]`≡`.0` ratified-by-pin |
 | **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | ⬜ | §5.P4 · step-list node (4b) · per-field row-map (4c) |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | §5.P5 · L1–L5 law battery |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | §5.PX · position flexible |
@@ -2217,7 +2217,7 @@ RE-KEY** (`x.0^` declines while `x[0]^` lexes — the two spellings Q_R1 unified
 would diverge on exactly the character P3 introduces) · `reconstitute-path-list`'s
 `$dot-access`-only walk · the `tokenize-string` raise→token flip.
 
-### §5.P3 — Blocks  (CO-DESIGN COMPLETE 2026-07-29 — the Q_T batch; SPLIT P3a/P3b/P3c per Q_T5)
+### §5.P3 — Blocks  ✅ COMPLETE (P3a `290f77f9` · P3b `36ce601c` · P3c `1b021d57` — the Q_T batch; split per Q_T5)
 
 **The §3 Q_T rulings govern this phase.** The mini-audit (`wf_27a84061-c7e`,
 7 facets + critic @ `76214095` — 13th consecutive premise refuted) fed a
@@ -2474,7 +2474,7 @@ are P3c's demolition sites (their pins flip); Q_U2's discriminating pair
 keyed-only.
 
 
-#### §5.P3c — Keyless + L4 + honest nesting  ⬜  (depends on P3b's bare-`^`)
+#### §5.P3c — Keyless + L4 + honest nesting  ✅ `1b021d57`
 
 **Work** (⚠ boundary note: P3b ships the SPLITTER and every MID-PATH `^`
 semantic; the LEAF-position keyless reading lands HERE, because a keyless
@@ -2499,6 +2499,75 @@ the L4 mixing error (`{version^ server.port}`) · **the G11 one-space pair
 pinned side by side** (`{a^0}` keyed-rename-to-`:0` vs `{a^ 0}` keyless
 2-tuple). Gates as P3a; P3c closes the phase → the P3 close notes + the
 per-phase 5-step gate.
+
+**CLOSE NOTES ✅ `1b021d57` — P3 (BLOCKS) IS COMPLETE** (failing-test-first
+— 16 pins RED at open on the three P3c pointers; the light re-grounding
+probed the demolition sites, the `pvec-slice` ⟨⟩ mint, and the G11 conflict
+before any code).
+
+**Gates**: suite **9497 / 475 / 0** · acceptance **52/52** (from 50 — §B's
+two keyless lines, value-verified) · track battery **206** test-cases ·
+neighborhood **410/410 over 11 files** · **zero tokenizer changes across the
+WHOLE PHASE** (Q_T5's exemption held P3a→P3c; no corpus A/B ever owed).
+
+**Shipped**: the KEYLESS sort — `^`-terminated branches contribute leaf
+VALUES; ordinal branches `{N M}` re-derive in written order; the nat-row
+mint at EVERY n (ruling 2a — `cfg{version^}` → `@["1.0.0"] : ⟨String⟩`,
+honest, never a collapsed PVec) · **Q_U2 Reading A** — ordinal STEPS descend
+with no output level; the discriminating pair pinned (`{admins.0}` →
+`{:admins row}` ≠ `{admins.{0}}` → `{:admins ⟨row⟩}`); the `(@ord N)` head /
+bare-number step distinction keeps dissolve-splice continuations keyed ·
+**L4** at the OUTPUT level over the shared walk's components (spliced
+keyless into a keyed level errors; sub-levels check themselves) · **B5** —
+keyless levels concatenate, NO dup check (`{version^ version^}` = legal
+⟨String String⟩) · typing `select-index-of` (PVec / closed-nat-row with
+static OOB) + the components model `(key-or-#f . field)`; reduction mirrors
+with `rrb-from-list` + bounds-checked `index-into` (PVec runtime OOB panics
+LOUDLY with the length — the P2.b tier) · the three P3-pointer arms
+demolished; **the Q_T4a advice loop closes END-TO-END** (`{admins^first.0}`
+executes: rename, then descend).
+
+**Two twin-drift catches at the RED battery** (mine, pre-verify):
+reduction's `below-value` dropped the `seen` synth threading, and the whnf
+arm admitted only champ subjects — ordinal blocks over vectors would have
+panicked as non-maps.
+
+**⚠ THE ADVERSARIAL VERIFY: NO BLOCKING — the FIRST slice in EIGHT without
+one.** 2 SIGNIFICANT + 3 MINOR, all fixed pre-commit:
+1. (SIGNIFICANT, mine, the Exhaustive-Walkers twin-drift class) ordinal
+   heads + keyless/collapse LEAVES pre-classify into `walk-to-leaf`, whose
+   dispatch missed the `(@ord N)` pair — `admins{0.name^}` got a LYING
+   "not a record" on a PVec the keyed twin works on; on records the hint's
+   swallow-all ate a format throw → a BLANK generic. Fixed with the @ord
+   arm in BOTH walks ATOMICALLY — the adjudicator flagged that fixing
+   typing alone would have converted the loud lie into a runtime champ-of
+   panic (i.e. CREATED a blocking).
+2. (SIGNIFICANT) `{N.M}` fused-decimal spellings leaked the internal
+   `($decimal-literal q)` sentinel with the rational value — the guided
+   collision arm names `x{N .M}` / `x{N.{M}}` (the leak itself was
+   pre-existing; the diff made the advice false — adjudicator-split).
+3. (MINOR) `.-1` was invisible in the vector-subject message; the wording
+   predated live ordinals — label filled at the fail consumers, PVec
+   teaching refreshed.
+4. (MINOR) in-block `v[0]` silently aliased `.0` — RATIFIED-BY-PIN as the
+   Q_R1 "two surfaces, one mechanism" identity extended into blocks;
+   head-position `{[0]}` guided to the bare spelling.
+5. (MINOR) two stale P3a-era pin titles asserted new error classes through
+   loose `#rx"ordinal"` matches — retitled + tightened.
+
+**Interpretation pinned eyes-open**: `{0.name^-}` (ordinal head + collapse
+leaf) re-keys to `{:name …}` — the collapse's whole point is producing a
+key, so it overrides the head's keyless sort; the three walks agree
+(collapse-first classification). The G11 pair landed AS AMENDED (both
+halves loud: the digit-target refusal vs the cross-domain refusal — the
+one-space flip crosses a loud wall; the recorded rename-to-`:0` reading was
+overtaken by the P3b verify's dot-unreachability ruling).
+
+**P3c watch items → P4**: the components model is the broadcast assembly's
+natural substrate (a broadcast step's per-element results are components);
+the `not-indexable`/`subject-tuple` messages will need `:s` teaching when
+broadcast lands; DEFERRED 9's cross-domain hint family now has the
+`tuple-or-vector` message as its pattern.
 
 ### §5.P4 — Broadcast ω
 
