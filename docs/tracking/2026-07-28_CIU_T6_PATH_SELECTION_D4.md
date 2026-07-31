@@ -30,7 +30,7 @@ rulings, censuses and test delta live in its own section.
 | **P3a** | **The node + KEYED blocks, no `^`** — `surf-select`/`expr-select` (full pipeline.md cost paid once; twins; walkers via the generic fallback; NO PNET bump) · payload segmentation + the malformed-payload seat · **D-lenient presence** (Q_T2) · subject-once reduction · **strict merge for plain keys BEFORE `make-record` can last-win** · type-position refusal · branch-aware miss errors · §9's learnability pair | ✅ | §5.P3a · **`290f77f9`** — suite **9418/475/0**, acceptance **41/41** + records, battery 136/136, neighborhood 623/21; Q_U1 (corpus list corrected, `6d919142`); adversarial verify caught **1 BLOCKING** (block-pipe select corruption at 0 errors — 6th consecutive slice) + 3 SIGNIFICANT, all fixed pre-commit; DEFERRED 15–20 |
 | **P3b** | **The `^` family** — the ONE splitter (continuation grammar `-`?·{ε\|label\|`_`} + `^..`) · dissolve/splice · in-place rename · `^_` Reading N · the `^-` collapse family (Q_T7) · `^..` (Q_T8) · **output-level-local merge** (Q_T3, the monotonicity pin) · the Q_T4a ordinal-`^` guided error · the malformed-`^` battery | ✅ | §5.P3b · **`36ce601c`** — suite **9469/475/0**, acceptance **50/50** + records, battery 178; light re-grounding only (per Q_T5); adversarial verify caught **1 BLOCKING** (whole-datum ordinal-rekey marker → match-arm whole-file abort; fixed ELEMENT-WISE) + 8 SIGNIFICANT — all fixed pre-commit; DEFERRED 21–22; Q_U4 candidate flagged (sub-block synth scope) |
 | **P3c** | **Keyless + L4 + honest nesting** — the nat-row mint at EVERY n (incl. 1 and homogeneous n) · ordinal branches `{N M}` · the L4 mixing error · `⟨String⟩` 1-tuple pins · the G11 one-space pair pinned side by side | ✅ | §5.P3c · **`1b021d57`** — suite **9497/475/0**, acceptance **52/52**, battery 206; P3 (BLOCKS) COMPLETE; the verify's FIRST no-BLOCKING slice in eight (2 SIGNIFICANT fixed pre-commit: the @ord walk-to-leaf twin-drift, the decimal-fusion leak); G11 landed AS AMENDED; in-block `v[0]`≡`.0` ratified-by-pin |
-| **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | §5.P4 · CO-DESIGN: audit `wf_8458c23b` + options panel run; **Q_U5** (ONE reified selector carrier, monomorphic — F-row carries bound-selector precision) + **Q_U6** (WHOLESALE path migration; P4a totality/repairs → P4b carrier → P4c+ ω) RULED 2026-07-31; **Q_U7** ω-representation + **Q_U8** `:` gate PENDING; ⚠ LET merge `5e16ead4` landed mid-walk (audit coords @ `02dd27d7`) |
+| **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | §5.P4 · CO-DESIGN: audit `wf_8458c23b` + options panel run; **Q_U5** (ONE reified selector carrier, monomorphic — F-row carries bound-selector precision) + **Q_U6** (WHOLESALE path migration; P4a totality/repairs → P4b carrier → P4c+ ω) RULED 2026-07-31; **Q_U7** RULED (the `(@bcast step)` one-step wrapper; 4b restated — extent structural, fusion a pinned theorem) · **Q_U8** `:` gate PENDING; ⚠ LET merge `5e16ead4` landed mid-walk (audit coords @ `02dd27d7`) |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | §5.P5 · L1–L5 law battery |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | §5.PX · position flexible |
 | **P6** | **Demand semantics** — RULED STAGED (4a); **decision ✅ Q_U3 (owner, 2026-07-30): option (c)** — deferred to a named post-v1 phase, charter stub in §5.P6 | ⬜ (residue = the X.close gate row only) | §5.P6 |
@@ -780,19 +780,40 @@ track's merge (`5e16ead4`) landed MID-WALK — audit coordinates are
   + wholesale migration with the behavior checklist → (3) the ω semantics
   on top. Sub-slice partition finalizes after Q_U7/Q_U8.
 
+- **Q_U7 — THE ω STEP IS A ONE-STEP WRAPPER: `(@bcast step)` [owner,
+  2026-07-31 — "(b) stands"].** `users:name` → `[(@bcast name)]` ·
+  `users:{a b}` → `[(@bcast (@sub …))]` · `x:s:t` → `[(@bcast s) (@bcast t)]`.
+  **Ruling 4b is RESTATED**: the ω step is a one-step wrapper; EXTENT is
+  structural (the spec's "broadcasts exactly the NEXT step" is the
+  representation 1:1 — a broadcast-of-nothing is UNCONSTRUCTIBLE, and the
+  §3.2.1 extent pair is two visibly different datums); **L1 fusion is a
+  THEOREM the battery pins** (`users:0:userName` → ONE layer), not a
+  property the representation maintains — fusion is FREE under any
+  candidate (each ω step consumes one container layer and re-wraps one;
+  fmap∘fmap = fmap arithmetically; nothing computes a layer count); the
+  old "layer count = unfused-ω-steps" clause is RETIRED as
+  descriptive-not-normative (§10.4's layers come from data shape + `*`).
+  Rejected-with-reason: the flat nullary marker (extent-by-adjacency ⇒
+  representable malformed states + a backward scan, the structurally-
+  emergent red flag) · the run-carrying wrapper (the surface never writes
+  runs ⇒ the parser must MERGE adjacent wrappers — exactly the
+  normalization pass 4b's rationale forbids; spends the terminal-`@sub`
+  invariant for no v1 consumer; P5 recovers runs by a trivial fold over
+  consecutive wrappers) · the per-step grade field (taxes the entire
+  landed vocabulary for one grade). In the components walk ω is
+  key-transparent like ordinal steps — a WRITTEN arm under the P4a
+  totality dispatcher; branch-initial `:` stays refused in v1 (W2/spec
+  §7.3), so a wrapper never heads a branch. The wrapper is plain data,
+  so it survives the Q_U5 carrier unification unchanged (a marker's
+  meaning depends on neighbors — exactly what a reified composable
+  selector must not do).
+
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
   P1b-i, **owner-reviewed**, and ruled (Q_M8 the sole amendment). §Q8 is now
   normative for P1b-ii/iii and P2.
 - Keyword-projection disposition (§2.4) — revisit when P4 lands broadcast
   (likely subsumed by `users:name`).
-- **Q_U7 (pending)** — the ω-step REPRESENTATION. Ruling 4b cannot
-  arbitrate as written: its WORDING selects a flat marker, its RATIONALE
-  ("fusion becomes structural") selects a run-carrier — and the panel
-  showed fusion is FREE under all four candidates (fmap∘fmap = fmap
-  arithmetically; nothing computes a layer count; §10.4's layers come from
-  data shape + `*`). Re-rule on the real discriminators: which position's
-  silent wrong answer becomes UNREPRESENTABLE, and spine recoverability.
 - **Q_U8 (pending)** — the `:` adjacency gate + the corpus A/B. §Q8.3 is
   design-only (ZERO code; `x:name` ≡ `x :name` today); the fused-binder
   hazard (`[fn [x:Int] x]`, zero corpus instances, A/B-blind) **GREW at
