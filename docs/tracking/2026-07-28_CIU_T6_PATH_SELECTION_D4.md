@@ -2631,7 +2631,7 @@ probed the demolition sites, the `pvec-slice` ⟨⟩ mint, and the G11 conflict
 before any code).
 
 **Gates**: suite **9497 / 475 / 0** · acceptance **52/52** (from 50 — §B's
-two keyless lines, value-verified) · track battery **206** test-cases ·
+two keyless lines, value-verified) · track battery **204** test-cases ·
 neighborhood **410/410 over 11 files** · **zero tokenizer changes across the
 WHOLE PHASE** (Q_T5's exemption held P3a→P3c; no corpus A/B ever owed).
 
@@ -2694,7 +2694,7 @@ the `not-indexable`/`subject-tuple` messages will need `:s` teaching when
 broadcast lands; DEFERRED 9's cross-domain hint family now has the
 `tuple-or-vector` message as its pattern.
 
-### §5.P4 — Broadcast ω  (CO-DESIGN IN PROGRESS — Q_U5/Q_U6 ruled 2026-07-31; Q_U7 ω-representation + Q_U8 `:` gate pending)
+### §5.P4 — Broadcast ω  (CO-DESIGN COMPLETE 2026-07-31 — Q_U5–Q_U8 RULED; partition LOCKED P4a–P4e; implementation opens at the PAUSE below)
 
 **The P4 mini-audit** (`wf_8458c23b-312`, 5 facets + completeness critic @
 `02dd27d7` — 14th consecutive premise refuted) fed an adversarial options
