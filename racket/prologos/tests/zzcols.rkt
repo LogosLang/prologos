@@ -2,7 +2,7 @@
 (require racket/file racket/pretty "../parse-reader.rkt")
 (define src (vector-ref (current-command-line-arguments) 0))
 (define txt (file->string src))
-(define stxs (compat-read-syntax-all (open-input-string txt) "<probe>"))
+(define stxs (compat-read-syntax-all "<probe>" (open-input-string txt)))
 (define (walk s d)
   (printf "~a~s  line=~a col=~a\n" (make-string (* 2 d) #\space)
           (syntax->datum s) (syntax-line s) (syntax-column s))
