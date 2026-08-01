@@ -33,6 +33,61 @@ That is Q_U9's door, described four months before Q_U9 was asked.
 > Implement native `Seq` instances for List, PVec, Set, Map with efficient dispatch […]
 > **Extend `Functor` instances beyond List (PVec, Map, Option, Result)**
 
+## §2a ⚠ CORRECTION (2026-07-31, same day) — F1 and F2 below are WRONG
+
+**This note originally claimed the eight higher-kinded traits have ZERO live
+instances tree-wide, and that `map` is monomorphic. Both are false.** The
+census behind them grepped for `impl Functor` / `impl Seqable` / … and found
+nothing. Instances are not spelled `impl` — they are explicit **dictionary
+VALUES** under a naming convention, and they exist:
+
+| trait | dicts in `lib/prologos/core/` |
+|---|---|
+| `Seqable` | **4** (List, PVec, Set, LSeq) |
+| `Buildable` | **4** |
+| `Indexed` | **2** |
+| `Keyed` · `Setlike` | **1** each |
+| `Foldable` · `Reducible` · `Functor` | 0 |
+
+e.g. `lib/prologos/core/list.prologos:22`
+`def List--Seqable--dict : [Seqable List] := list-to-lseq`, and the PVec/Set/
+LSeq twins in their own modules.
+
+**And generic `map` ALREADY routes through them** —
+`lib/prologos/core/collections.prologos:33`:
+
+```
+(spec map {A B : Type} {C : Type -> Type} (Seqable C) -> (Buildable C) -> (-> A B) -> (C A) -> (C B))
+(defn map [$seq $build f xs] (Buildable-from-seq $build B (lseq-map A B f ($seq A xs))))
+```
+
+Probe: `map [int+ _ 1] @[1 2 3]` → `@[2 3 4] : [PVec Int]`; over a List →
+`[List Int]`. Container-preserving, both carriers. The `spec map … [List A] ->
+List B` this note cited as proof of monomorphism is ONE INSTANCE under that
+generic dispatch, not the definition.
+
+**What this changes for the track it arms** — mostly for the better:
+- CIU **Track 4**'s "Broadcast via Seq dict … any collection, not just
+  cons/nil lists" is *more* tractable than §4 said, not less: the `Seqable` +
+  `Buildable` dicts it needs ALREADY EXIST for the four carriers, and `map` is
+  the worked precedent for consuming them.
+- The genuinely missing instances are **`Functor`, `Foldable`, `Reducible`**
+  — so §4 step 1 stands, but as "add the three uninhabited traits' dicts",
+  not "add the first instance of anything".
+- Track 1's scope line ("*extend* `Functor` instances beyond List") is still
+  wrong, but for a different reason than §3-F2 gave: there is no `Functor`
+  dict for List either, while `Seqable`/`Buildable` are well populated.
+
+**Method note, and it is the point of writing this correction rather than
+quietly editing**: this is the THIRD time in one session that a claim of
+"X doesn't exist / is new" failed because the thing existed under a different
+spelling — after (1) trait-dispatched broadcast being already chartered as
+CIU Track 4, and (2) this note's own instance census. `MEMORY.md`'s
+"prior-art search before claiming 'new pattern'" reminder has now earned its
+third data point and should graduate to the rules tier. **A grep for one
+spelling is not a census.** Found because the SolveCarrier spin-out's own
+census refuted my "`map` is monomorphic" claim from the other direction.
+
 ## §3 The three grounded findings
 
 ### F1 — The higher-kinded trait vocabulary is DECLARED WITH LAWS and has ZERO live instances
