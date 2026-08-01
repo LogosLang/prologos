@@ -3026,3 +3026,31 @@
   ;; so it renders a visible marker instead (the P4a site-13 ruling)
   (check-true (string? (pp-expr (expr-select (expr-fvar 'x) (expr-path '((a)) 'nil-safe)) '()))
               "an unknown sort must degrade to a marker, never crash a diagnostic"))
+
+;; ---- b-ii-1 DEFECT, found by the b-ii-2 mini-audit's completeness critic ----
+
+(define TBL-RECORD-CLOSED-UNKNOWN
+  ;; a CLOSED row carrying an 'unknown-presence field. Not constructible from
+  ;; the surface today — `record-mark-all-unknown` (syntax.rkt) is the SOLE
+  ;; 'unknown producer and it forces tail='dyn in the same constructor — so
+  ;; this cell is latent BY LUCK, not by design. That is exactly the
+  ;; pipeline.md "invariant asserted with no enforcement" shape, so it gets a
+  ;; direct-call pin rather than an assurance.
+  (make-record 'keyword (list (cons 'a (record-field (expr-Int) 'unknown))) 'closed))
+
+(test-case "P4b-ii-1 defect: the 'unknown arm must be TAIL-SENSITIVE, like record-project"
+  ;; `record-project`'s 'unknown HIT routes to `miss()`, which tests the ROW
+  ;; TAIL: dyn -> fresh meta, closed -> expr-error. The b-ii-1 'path arm was
+  ;; TAIL-BLIND — it minted a meta unconditionally — while its own comment
+  ;; asserted both "mirror record-project's D19/D24 posture EXACTLY". On a
+  ;; closed row that made `map-get` REFUSE where the carrier ADMITS: a
+  ;; silent-accept divergence, the direction no red-set census can see.
+  (let-values ([(ft fail) (tc:select-project-field
+                           '() TBL-RECORD-CLOSED-UNKNOWN 'a '() 'path)])
+    (check-false ft "a closed row cannot host the field in a remainder — there is none")
+    (check-equal? (tc:select-fail-kind fail) 'unknown-presence))
+  ;; and the DYN twin still admits — the tail test must discriminate, not just refuse
+  (let-values ([(ft fail) (tc:select-project-field
+                           '() TBL-RECORD-DYN-UNKNOWN 'a '() 'path)])
+    (check-false fail "a DYN row's unknown field may live in the remainder")
+    (check-true (expr-meta? ft))))

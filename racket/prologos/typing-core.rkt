@@ -842,18 +842,34 @@
       [(and fld (eq? (record-field-presence fld) 'present))
        (values (record-field-type fld) #f)]
       ;; D4.P4b-ii-1 — ASYMMETRY #1 (Q_T2), the two cells where the sorts
-      ;; DIVERGE. Both mirror `record-project`'s D19/D24 posture EXACTLY (the
-      ;; reference behaviour for the path sort is `expr-map-get`'s typing arm,
-      ;; which routes here through record-project):
-      ;;   'path  — a fresh meta. An 'unknown-marked HIT projects exactly like
-      ;;            a tail miss; the meta IS the observation. Never the
-      ;;            retained type — that courtesy upgrade would assert a
-      ;;            presence the compiler does not have.
-      ;;   'block — refuse loudly. A block ASSERTS its result (Horn D).
+      ;; DIVERGE. The `'path` behaviour mirrors `record-project`, which is what
+      ;; `expr-map-get`'s typing arm routes through:
+      ;;   'path  — an 'unknown-marked HIT projects exactly like a TAIL MISS,
+      ;;            i.e. through `record-project`'s `miss()` — which is
+      ;;            TAIL-SENSITIVE: a DYN row yields a fresh meta (the field may
+      ;;            live in the remainder; the meta IS the observation, never
+      ;;            the retained type — that courtesy upgrade would assert a
+      ;;            presence the compiler lacks), while a CLOSED row REFUSES
+      ;;            (there is no remainder to host it).
+      ;;   'block — refuse loudly under either tail. A block ASSERTS its result.
+      ;;
+      ;; ⚠ THE FIRST CUT WAS TAIL-BLIND — it minted a meta unconditionally,
+      ;; under a comment claiming it mirrored record-project "EXACTLY". On a
+      ;; CLOSED row that made `map-get` REFUSE where the carrier ADMITS: a
+      ;; SILENT-ACCEPT divergence, the direction no red-set census can see.
+      ;; Caught by the b-ii-2 mini-audit's completeness critic. It is
+      ;; unreachable from the surface today only because the sole 'unknown
+      ;; producer (`record-mark-all-unknown`, syntax.rkt) forces tail='dyn in
+      ;; the SAME constructor — latent by luck, not by design, which is the
+      ;; pipeline.md "invariant asserted with no enforcement" red flag. Pinned
+      ;; by direct call rather than left to that luck.
       [fld  ;; listed, but presence not sourced 'present ('unknown; reserved)
        (case sort
-         [(path)  (values (fresh-meta ctx (expr-Type (lzero))
-                                      (dyn-row-source 'dyn-row-projection)) #f)]
+         [(path)
+          (if (eq? (expr-Record-tail row) 'dyn)
+              (values (fresh-meta ctx (expr-Type (lzero))
+                                  (dyn-row-source 'dyn-row-projection)) #f)
+              (values #f (select-fail 'unknown-presence (append path (list label)) label row)))]
          [(block) (values #f (select-fail 'unknown-presence (append path (list label)) label row))]
          [else    (select-sort-unhandled 'select-project-field sort)])]
       [(eq? (expr-Record-tail row) 'dyn)
