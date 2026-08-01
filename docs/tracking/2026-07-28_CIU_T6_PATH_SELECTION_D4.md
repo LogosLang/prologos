@@ -944,6 +944,56 @@ items of the hold-point, ruled before P4a opened:
   subjects — incoherent, elaboration precedes typing so the discriminator is
   not available where the mint happens.
 
+- **Q_U11 — RETIRE the silently-broken `#p(…)` vocabulary, with a guided
+  error** ["(a) — retire them with a guided error", owner 2026-07-31]. Opening
+  P4b-i by probing the encoding, the path literal turned out to carry FOUR
+  spellings of which only ONE works:
+
+  | spelling | at `099ef690` |
+  |---|---|
+  | `#p(a)` · `#p(a.a1)` | **live** — `get-in m p` returns the value |
+  | `#p(a.*)` · `#p(a.**)` | defines as `Path`, then `get-in` → **`<error>` VALUE at ZERO ERRORS** |
+  | `#p(a.{b c})` | same — `<error>` value, 0 errors |
+
+  The broken half is the **P2.b fabrication class, live**: a value where an
+  error is owed, unconstrainable because the vacuous ground `Path` type
+  discards the branches (`typing-core.rkt:2050-2051` matches `_`). Their own
+  acceptance file has them COMMENTED OUT
+  (`examples/2026-03-20-first-class-paths.prologos:80,83,86`), so there is no
+  live corpus use. **Retired rather than carried across the carrier
+  unification** — carrying them would move a silent-wrong-answer into the new
+  carrier and make "ends single-carrier" hollow (the blocking
+  belt-and-suspenders shape); fixing them into working semantics would be new
+  behaviour inside a slice that is meant to be behaviour-preserving, and
+  multi-branch collides with the `(car branches)` truncation P4b-iii repairs.
+  Monotone. Refusal fires at ELABORATION — at the literal, not its use — via
+  the `parse-error` seat (a per-command error VALUE, never a raise), the same
+  seat the `update-in` guards use at elaborator.rkt:2347/:2351.
+  ⚠ **The P4b mini-audit did NOT catch this.** Its F3 confirmed
+  "`#p(a.b.c)` round-trips" and "`get-in` works" — both TRUE, for the subset
+  anyone probed. The fuller vocabulary was never run end-to-end. **15th
+  consecutive premise refutation of this arc, and this time the refuted
+  premise was the audit's own.**
+
+  **TWO further findings surfaced while implementing the refusal** (both
+  diagnosed by READING THE DATUM after two wrong guesses, per the diagnostic
+  protocol — a branch-COUNT guard and a keyword-SHAPE guard both missed):
+  1. **P1b-ii silently broke `expand-brace-branches`.** That expander keys on
+     `$brace-params` (parser.rkt, inside `validate-selection-paths`), but
+     P1b-ii re-minted `.{` from `$brace-params` to `$dot-brace` and the test
+     was never re-pointed. So the brace expansion **stopped firing** and has
+     been dead since — a regression nobody noticed, because its only consumer
+     was already producing `<error>` values at 0 errors.
+  2. **A brace spelling never arrives as a group at all.** The WS reader
+     collapses `#p(a.{a1 a2})` into ONE symbol — `(path |:a.{a1 a2}|)` — so
+     `parse-path-string` splits on `.` and mints `#:a` and `#:{a1 a2}` as
+     ORDINARY KEYWORDS. Both pass any keyword test; the malformed thing is the
+     segment's CONTENT. The guard is therefore a shattered-NAME test
+     (whitespace or bracket characters in the segment), not a count or a shape
+     test. The old `[else (expr-keyword seg)]` coerced this — and rename pairs
+     — into a keyword wholesale: the same silent-catch-all class P4a spent its
+     whole phase eliminating, one arm away from it.
+
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
   P1b-i, **owner-reviewed**, and ruled (Q_M8 the sole amendment). §Q8 is now

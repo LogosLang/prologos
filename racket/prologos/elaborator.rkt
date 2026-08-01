@@ -2253,17 +2253,76 @@
            (expr-map-vals em)))]
 
     ;; path literal: #p(address.zip) → expr-path with elaborated segments
+    ;;
+    ;; D4.P4b-i (Q_U11, owner 2026-07-31): the literal carried FOUR spellings
+    ;; and only ONE worked. `#p(a.*)`, `#p(a.**)` and `#p(a.{b c})` all
+    ;; defined as a `Path` and then produced an `<error>` VALUE at ZERO
+    ;; ERRORS — the P2.b fabrication class, live. The vacuous ground `Path`
+    ;; type (typing-core.rkt:2050-2051 discards the branches with `_`) meant
+    ;; no shape constraint could ever bite. Retired here rather than carried
+    ;; across P4b's carrier unification, which would have moved a
+    ;; silent-wrong-answer into the new carrier and made "ends single-carrier"
+    ;; hollow. Monotone — a refusal can become a meaning later.
+    ;;
+    ;; The refusal fires HERE, at the literal, not at its use: the malformed
+    ;; thing is what the user wrote, so that is where the error belongs.
+    ;; Uses the `parse-error` seat (a per-command error VALUE, never a raise)
+    ;; — the same seat the update-in guards below use at :2347/:2351.
     [(surf-path branches loc)
-     (expr-path
-      (for/list ([branch (in-list branches)])
-        (for/list ([seg (in-list branch)])
-          (cond
-            [(keyword? seg)
-             (expr-keyword (string->symbol (keyword->string seg)))]
-            [(and (symbol? seg) (memq seg '(* **)))
-             (expr-symbol seg)]
-            [else
-             (expr-keyword seg)]))))]
+     (define (wildcard-seg? seg) (and (symbol? seg) (memq seg '(* **))))
+     ;; A well-formed segment is a Racket keyword (what `parse-path-string`
+     ;; mints for `a` / `:a`). Everything else is malformed for the surviving
+     ;; surface — including the `$dot-brace` GROUP that `#p(a.{b c})` now
+     ;; leaves behind (P1b-ii re-minted `.{` from `$brace-params` to
+     ;; `$dot-brace`, and `expand-brace-branches`' `brace-params?` test was
+     ;; never re-pointed, so the brace expansion silently STOPPED FIRING and
+     ;; the group falls through as one opaque segment) and the rename PAIR
+     ;; `(#:a . #:b)`, which the old `[else]` wrapped in an `expr-keyword`
+     ;; wholesale. That `[else]` is the same silent-catch-all class P4a spent
+     ;; the whole phase eliminating — it coerced ANY unrecognized segment into
+     ;; a keyword and produced an `<error>` VALUE downstream at zero errors.
+     ;; ⚠ A brace spelling does NOT arrive as a group. The WS reader collapses
+     ;; `#p(a.{a1 a2})` into ONE symbol — `(path |:a.{a1 a2}|)` — so
+     ;; `parse-path-string` splits it on `.` and mints `#:a` and `#:{a1 a2}`
+     ;; as ordinary keywords. Both pass a keyword test, which is why a
+     ;; branch-COUNT guard and a keyword-SHAPE guard both miss it: the
+     ;; malformed thing is the segment's CONTENT. (Diagnosed by reading the
+     ;; datum after two wrong guesses, per the diagnostic protocol.)
+     (define (shattered-name? s)
+       (for/or ([c (in-string s)])
+         (or (char-whitespace? c) (memv c '(#\{ #\} #\( #\) #\[ #\])))))
+     (define (bad-seg? seg)
+       (cond
+         [(wildcard-seg? seg) #f]                     ;; handled by its own arm
+         [(keyword? seg) (shattered-name? (keyword->string seg))]
+         [else #t]))                                  ;; rename pairs, groups, anything else
+     (cond
+       [(ormap (lambda (b) (ormap wildcard-seg? b)) branches)
+        (parse-error
+         loc
+         (string-append
+          "path-literal wildcards `*` / `**` were retired (CIU T6 Path Selection) "
+          "— they defined as a `Path` and then produced an error VALUE at zero errors. "
+          "In the current surface `*` is postfix FLATTEN and a sub-selection is a "
+          "select block `x{…}`")
+         #f)]
+       [(or (> (length branches) 1)
+            (ormap (lambda (b) (ormap bad-seg? b)) branches))
+        (parse-error
+         loc
+         (string-append
+          "a multi-branch path literal `#p(a.{b c})` was retired (CIU T6 Path Selection) "
+          "— every consumer truncated it to the FIRST branch, and since the `.{` re-mint "
+          "the brace no longer expands at all. Write a select block instead: `x{a.{b c}}`")
+         #f)]
+       [else
+        ;; TOTAL over the surviving vocabulary: keyword segments only. The
+        ;; guards above have already refused everything else, so this loop
+        ;; needs no catch-all — and must not grow one back.
+        (expr-path
+         (for/list ([branch (in-list branches)])
+           (for/list ([seg (in-list branch)])
+             (expr-keyword (string->symbol (keyword->string seg))))))])]
 
     ;; get-in: desugar to chained map-get calls
     ;; Single path:   (get-in m :a.b.c) → (map-get (map-get (map-get m :a) :b) :c)

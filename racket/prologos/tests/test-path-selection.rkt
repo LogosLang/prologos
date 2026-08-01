@@ -2489,3 +2489,63 @@
   (check-eq? (whnf c) c)
   (check-eq? (whnf v) v)
   (check-eq? (whnf h) h))
+
+;; ============================================================
+;; D4.P4b-i — Q_U11: RETIRE the silently-broken `#p(…)` vocabulary
+;; ============================================================
+;;
+;; Probed at `099ef690`, the First-Class Paths literal carries FOUR spellings
+;; but only ONE of them works:
+;;
+;;   #p(a)  /  #p(a.a1)        → Path; `get-in m p` → the value      ✓ LIVE
+;;   #p(a.*)   #p(a.**)        → Path; `get-in m p` → `<error>` value, 0 ERRORS
+;;   #p(a.{b c})               → Path; `get-in m p` → `<error>` value, 0 ERRORS
+;;
+;; The broken half is a LIVE SILENT WRONG ANSWER — the P2.b fabrication class:
+;; it produces a value where an error is owed, and the vacuous ground `Path`
+;; type (typing-core.rkt:2050-2051 discards the branches with `_`) means no
+;; shape constraint can bite. Their own acceptance file has them COMMENTED OUT
+;; (examples/2026-03-20-first-class-paths.prologos:80,83,86), so there is no
+;; live corpus use.
+;;
+;; ⚠ The P4b mini-audit did NOT catch this: its F3 confirmed "#p(a.b.c)
+;; round-trips" and "get-in works", both TRUE — for the subset anyone probed.
+;; The fuller vocabulary was never run end-to-end. (15th consecutive premise
+;; refutation of this arc; this time the premise was the audit's own.)
+;;
+;; Owner ruling Q_U11 [2026-07-31]: RETIRE them with a guided error, rather
+;; than carry a defect across the carrier unification (that would be the
+;; blocking belt-and-suspenders shape) or fix them into new semantics inside a
+;; slice that is meant to be behaviour-preserving. Monotone: a refusal can
+;; become a meaning later, never the reverse.
+;;
+;; The refusal fires at ELABORATION — at the literal, not at its use — so the
+;; error names the malformed thing at the site the user wrote it.
+
+(test-case "P4b-i Q_U11: `#p(a.*)` REFUSES loudly (was an <error> value at 0 errors)"
+  (define r (run-ws-raw-last "def m := {:a {:a1 1}}\ndef p := #p(a.*)\n"))
+  (check-true (prologos-error? r)
+              "a wildcard path literal must refuse, not define as a vacuous Path")
+  (check-regexp-match #rx"\\*" (format "~a" r)))
+
+(test-case "P4b-i Q_U11: `#p(a.**)` REFUSES loudly"
+  (define r (run-ws-raw-last "def m := {:a {:a1 1}}\ndef p := #p(a.**)\n"))
+  (check-true (prologos-error? r))
+  (check-regexp-match #rx"\\*" (format "~a" r)))
+
+(test-case "P4b-i Q_U11: multi-branch `#p(a.{a1 a2})` REFUSES loudly"
+  (define r (run-ws-raw-last "def m := {:a {:a1 1 :a2 2}}\ndef p := #p(a.{a1 a2})\n"))
+  (check-true (prologos-error? r)
+              "a multi-branch path literal must refuse — every consumer truncates it with (car branches)"))
+
+(test-case "P4b-i Q_U11: the guided error NAMES the surviving spelling"
+  (define r (format "~a" (run-ws-raw-last "def p := #p(a.*)\n")))
+  (check-regexp-match #rx"retired|no longer" r "the message must say the spelling is retired")
+  (check-regexp-match #rx"select|flatten|\\{" r
+                      "and must point at what replaced it in the current surface"))
+
+(test-case "P4b-i Q_U11: the LIVE subset is untouched — a keyword chain still works"
+  ;; the whole point of the retirement is that it costs the working surface nothing
+  (define rs (run-ws-raw "def m := {:a {:a1 7}}\ndef p := #p(a.a1)\n[get-in m p]\n"))
+  (check-false (ormap prologos-error? rs) "the single-branch keyword chain must keep working")
+  (check-regexp-match #rx"7" (format "~a" (last rs))))
