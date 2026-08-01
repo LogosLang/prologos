@@ -1024,6 +1024,36 @@ items of the hold-point, ruled before P4a opened:
      — into a keyword wholesale: the same silent-catch-all class P4a spent its
      whole phase eliminating, one arm away from it.
 
+- **Q_U12 — "WHOLESALE" MEANS THE `$dot-access` LEG ONLY; b-ii SPLITS THREE
+  WAYS** ["(b) — $dot-access leg only, split it like b-i", owner 2026-07-31].
+  The b-ii mini-audit (`wf_f8568392-b44`, 5 facets + critic @ `2e3fc14e`,
+  1.22M tokens) found the ruling's own term ambiguous in a way nobody had
+  anticipated: **the sort axis is THREE-valued, not two.**
+  `rewrite-dot-access` has THREE live access legs minting THREE DIFFERENT
+  nodes, each with its own subject-dispatch table:
+
+  | leg | mints | block counterpart |
+  |---|---|---|
+  | `$dot-access` | `expr-map-get` | `x{…}` |
+  | `$nil-dot-access` (`#.f`) | `expr-nil-safe-get` | **NONE** — `#{…}` does not exist |
+  | `$postfix-index` (`[k]`) | `expr-get` | — |
+
+  And the two PATH nodes have **divergent subject tables**: `expr-map-get`
+  has a union leg `expr-get` lacks; `expr-get` has PVec **and List** legs
+  `expr-map-get` lacks — so **`List` is a subject row the 2-D table's own
+  enumeration omitted.**
+  **The ruling**: b-ii migrates the **`$dot-access` leg only**. This is NOT
+  the complection Q_U6 rejected — that objection was one SORT on two
+  representations, whereas nil-safe access and ordinal/dynamic indexing are
+  genuinely DIFFERENT SORTS, not spellings of one thing. Scoping to the
+  named-step sort is where the Map posture and the (subject × sort) table
+  actually live. `#.field` and `[k]` keep their nodes; their migration is a
+  named follow-up, not an omission.
+  **b-ii splits like b-i**: **b-ii-1** the Map posture + the semantic table
+  (typing side) → **b-ii-2** the fold migration → **b-ii-3** the `_.field`
+  rescue. Each with its own failing-test-first pass, because the per-caller
+  obligations are **NOT uniform** (below).
+
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
   P1b-i, **owner-reviewed**, and ruled (Q_M8 the sole amendment). §Q8 is now
@@ -3533,6 +3563,93 @@ for zero benefit. Named as cosmetic follow-up rather than left implicit.
 
 Status: ✅ b-i COMPLETE (Q_U11 retirement ✅ · encoding ✅ · single-carrier ✅;
 the carrier's NAME is a named cosmetic follow-up).
+
+#### §5.P4b-ii — The `$dot-access` fold migration (mini-audit folded 2026-07-31)
+
+**Mini-audit** `wf_f8568392-b44` (5 HEAD-pinned facets + completeness critic
+@ `2e3fc14e`, 6 agents / 1.22M tokens). Re-pinned from scratch because the
+SolveCarrier merge invalidated every P4b coordinate. Load-bearing findings
+R-lens-verified on the main thread.
+
+**⭐ THE SORT AXIS IS THREE-VALUED** — see Q_U12. This is what forced the
+scoping ruling; the design's "2-D (subject kind × sort)" table was itself an
+under-specification.
+
+**⭐ ASYMMETRY #3 (NEW) — SELECTION-TYPED SUBJECTS.** `.f` projects THROUGH
+the view and is READ-CAPABILITY-GATED (an out-of-view field errors); `{f}`
+refuses via the catch-all `'subject-other`, whose message **LIES** ("the
+subject is not a record") and names no remedy. The refusal is deliberate
+(DEFERRED 20); the diagnostic does not say so. Joins the dyn-row asymmetry
+(Q_T2) and the Map asymmetry (Q_U10) — **three**, and the table must be
+indexed by (subject kind × sort) with all three.
+
+**⭐ `_.field` SECTIONS WORK — and wholesale minting deletes them, untested.**
+Probe-verified at HEAD: `[_.a {:a 7}]` → `7 : Int`; `map _.a recs` →
+`@[1 2] : [PVec Int]`; `map _{a} recs` → ERROR. Mechanism: `map-get` ∈
+`sectionable-op-keywords` (parser.rkt:755) + the gate (:1355-1360), which
+`$select` **cannot reach** because its arm is dispatched EARLIER in the same
+cond (:1238). ⚠ **This document previously implied `_[k]` is a working
+symmetric case — it is not**: `_[k]` is pinned as a guided REFUSAL
+(tests/test-path-selection.rkt:598-600), because the postfix leg has a `_`
+guard (macros.rkt:6039-6040) that the DOT leg deliberately lacks. The
+asymmetry is intentional; the deletion would not be. **b-ii-3 owns the
+rescue**; `_.field` has NO test anywhere.
+
+**⭐ THE RED CENSUS IS STRUCTURALLY WRONG, not merely undercounted.** "25
+across 7 files" is a **datum-shape** census, and the failure mode that
+matters — a VALUE assertion going red by TYPE ERROR — is invisible to it.
+Missing entirely:
+- `tests/test-first-class-paths.rkt:88-130` — WS-mode, value-asserting
+  dot-access, in the ONE file testing `#p(…)`/`get-in`/`update-in`, i.e. the
+  surfaces Q_U5/Q_U6 absorb. **Highest-coupling RED file in the tree; named by
+  no facet and no design census.**
+- `tests/test-selection-paths.rkt` (~8 cases) — the corpus for
+  `reconstitute-selection-paths`, a **SIXTH** `$dot-access` consumer.
+- `tests/test-route-soundness-01.rkt:152-157` and
+  `tests/test-implicit-map-02.rkt:155-162` — more Map-posture pins.
+- `tests/test-dot-access-02.rkt` has **FIVE** Map value-assertions
+  (:112, :121, :145, :153, :170), not the two this doc cited.
+- **A FIFTH fold entry point**: the `rewrite-nil-dot-access` alias
+  (macros.rkt:6086) has zero production callers but THREE direct test callers
+  — on the edit surface while absent from every "four callers" framing.
+
+**THE FOUR CALLERS ARE NOT UNIFORM** — per-caller obligations differ, and
+`preparse-expand-subforms` (macros.rkt:2665) is the dangerous one: the
+`$select` arm is PARTIALLY OPAQUE and skips sibling-level passes that
+`map-get` gets through the generic arm, so a naive mint makes every `.field`
+in the tree lose infix / implicit-map / sibling-let processing. The migration
+must either route the minted head through the generic arm or widen the
+`$select` arm — decided per caller, not once.
+
+**THE MAP POSTURE APPLIES AT EVERY DESCENT LEVEL**, not just the leaf —
+`outer.inner.a` through an intermediate Map is a pinned surface. Sort is a
+property of the whole carrier, so threading it down suffices, but ALL THREE
+per-level dispatches (`walk-to-leaf`, `select-branch-entries`,
+`select-below-field`) must take the Map arm. Prior art for the shape:
+`select-below-field`'s ordinal-STEP arm ("descend, contribute NO output
+level", Q_U2 Reading A) generalized to keyed steps — reusing it keeps the
+reduction twin together, which is where P4a's self-review already caught an
+omission.
+
+**⚠ DOC-TRUTH DEFECTS IN THIS DOCUMENT** (found by the critic):
+1. **Four places disagree** on which phase owns `quests:t`/`quests:{t r}` —
+   the P4c bullet claims them, the P4d bullet says they are re-fated to P4d,
+   the SolveCarrier back-note says P4d, the pause summary repeats P4d.
+   **RESOLVED by solve→PVec: they are P4c PVec broadcasts.**
+2. **Consequence undrawn**: with solve→PVec landed, **P4d's List refusal has
+   NO corpus instance** and needs a purpose-built fixture.
+3. The corpus cite `:235` is stale by 3 (the lines are :232/:233).
+
+**ADJACENT, NOT IN b-ii's BLAST RADIUS but the natural place to close it**:
+the `ns` silent-segment-drop guard has **THREE UNCLOSED NEW INSTANCES** —
+probe-verified, `ns foo{bar}` and `ns foo#.bar` both accept at 0 errors and
+silently drop the segment, while `ns foo.bar` correctly aborts. The guard
+(namespace.rkt:895-896) enumerates **2 of the 8** sentinels in
+`access-sentinel?`. Exactly the bug class `b0db8f3e` fixed and the P2 audit
+re-closed for `.N`; P1b/P3 minted new family members and nobody extended it.
+
+Status: ⬜ — b-ii-1 (Map posture + table) · b-ii-2 (fold migration) ·
+b-ii-3 (`_.field` rescue).
 
 ### §5.P5 — Ruling B + factoring
 
