@@ -55,10 +55,11 @@
          (only-in "foreign.rkt" parse-foreign-type make-marshaller-pair)
          ;; POL.10: reconstructive champ serialization (def binds reduced values,
          ;; so champ-bearing rows now reach module env-snapshots)
-         (only-in "champ.rkt" champ-empty champ-insert champ-entries)
+         (only-in "champ.rkt" champ-empty champ-insert champ-entries
+                  champ-transient tchamp-freeze)
          ;; SolveCarrier: the PVec carrier a POL.10 `def` can bind (see the
          ;; rrb-sentinel arms). Leaf data module, cycle-free — same as champ.
-         (only-in "rrb.rkt" rrb-to-list rrb-from-list))
+         (only-in "rrb.rkt" rrb-to-list rrb-from-list rrb-transient trrb-freeze))
 
 ;; Lib dir for resolving relative .rkt paths in foreign function re-linking
 (define pnet-lib-dir (simplify-path (build-path (syntax-source #'here) ".." "lib")))
@@ -173,7 +174,19 @@
 ;; below closes it reconstructively (elements serialized, tree rebuilt at read).
 ;; The bump is what stops a v8 cache written under the broken path from being
 ;; read back with cross-process hashes baked in.
-(define PNET_VERSION 9)
+;; v9 -> v10 (2026-07-31): the FOUR remaining container wrappers gain sentinels —
+;; `expr-hset` (Set) plus the three transient builders `expr-trrb` / `expr-tchamp`
+;; / `expr-thset` (TVec/TMap/TSet). An audit of every wrapper struct holding a raw
+;; persistent/transient structure found all four had NO sentinel and NO reg entry.
+;; Details for the Set case (the others are identical in shape): It
+;; wraps a CHAMP but is not the `expr-champ` struct, so it fell to the generic
+;; struct walk and hit BOTH the hash-persistence defect the champ-sentinel arm
+;; exists to prevent AND the unregistered-node defect (no reg entry either, so
+;; the reader handed back a raw vector that PRINTS like the struct). Same
+;; POISON-INVALIDATION reasoning as v3->v4 and v8->v9: any v9-or-earlier cache
+;; holding a Set has cross-process hashes baked in, and exact equality is the
+;; only reliable sweep.
+(define PNET_VERSION 10)
 
 ;; ============================================================
 ;; Serialization: struct->vector + gensym tagging + foreign-proc
@@ -222,6 +235,28 @@
        (list 'champ-sentinel
              (for/list ([kv (in-list (champ-entries (expr-champ-racket-champ v)))])
                (cons (deep-s->v (car kv)) (deep-s->v (cdr kv)))))]
+      ;; A SET value. `expr-hset` wraps a CHAMP (keys with a `#t` sentinel value),
+      ;; but the `expr-champ?` arm above does not see through the wrapper, so
+      ;; before this arm an hset fell to the generic `[(struct? v) …]` walk and
+      ;; hit BOTH failure modes at once:
+      ;;   (1) HASH PERSISTENCE — the walk descends into champ-root/champ-node,
+      ;;       whose entry vectors carry `equal-hash-code` values. Those are
+      ;;       process-stable ONLY; a cache written by one process and read by
+      ;;       another has stale hashes baked in, so `champ-lookup` — which
+      ;;       navigates BY the stored hash — silently misses. Exactly what the
+      ;;       champ-sentinel arm exists to prevent, one wrapper up.
+      ;;   (2) NO RECONSTRUCTION — `expr-hset` is not in the reg0!/reg1!/regN!
+      ;;       tables either, so the reader's unknown-tag fallback returned the
+      ;;       raw VECTOR. That is the pipeline.md failure verbatim, down to the
+      ;;       symptom: the value PRINTS as `#(struct:expr-hset …)` and then
+      ;;       fails the first struct match to touch it, arbitrarily far away.
+      ;; Verified by probe, not inferred: round-tripping an `expr-hset` returned
+      ;; a vector, and `expr-hset-racket-champ` raised a contract violation on it.
+      ;; The sentinel fixes both — reconstructive, hashes RECOMPUTED at read.
+      [(expr-hset? v)
+       (list 'hset-sentinel
+             (for/list ([kv (in-list (champ-entries (expr-hset-racket-champ v)))])
+               (cons (deep-s->v (car kv)) (deep-s->v (cdr kv)))))]
       ;; SolveCarrier (2026-07-31): the same argument one container up. Since
       ;; solve/explain return a PVec, a POL.10 `def` can bind an rrb of solution
       ;; rows into a module env-snapshot. rrb-root's `tail` is a RAW RACKET VECTOR
@@ -235,6 +270,31 @@
        (list 'rrb-sentinel
              (for/list ([e (in-list (rrb-to-list (expr-rrb-racket-rrb v)))])
                (deep-s->v e)))]
+      ;; THE TRANSIENT BUILDERS (TVec / TMap / TSet). Same two defects as their
+      ;; persistent siblings — raw struct walk, no reconstruction — and reachable
+      ;; the same way: `def ts := (transient s)` binds a TSet, and POL.10 puts the
+      ;; reduced value in the module env-snapshot (probe-verified: `ts : [TSet Int]
+      ;; defined.`). A `tchamp-root`'s entries are `(cons hash value)` pairs, so
+      ;; the hash-persistence half applies here too.
+      ;;
+      ;; Serialize through the FREEZE — both `trrb-freeze` and `tchamp-freeze` are
+      ;; NON-DESTRUCTIVE (they build a fresh persistent structure and leave the
+      ;; transient untouched; verified by reading them), so this is a read, not a
+      ;; consume. The reader re-transients, which is also the semantically right
+      ;; answer: a MUTABLE builder must never be shared across module loads, so
+      ;; each load getting its own is a feature rather than a compromise.
+      [(expr-trrb? v)
+       (list 'trrb-sentinel
+             (for/list ([e (in-list (rrb-to-list (trrb-freeze (expr-trrb-racket-trrb v))))])
+               (deep-s->v e)))]
+      [(expr-tchamp? v)
+       (list 'tchamp-sentinel
+             (for/list ([kv (in-list (champ-entries (tchamp-freeze (expr-tchamp-racket-tchamp v))))])
+               (cons (deep-s->v (car kv)) (deep-s->v (cdr kv)))))]
+      [(expr-thset? v)
+       (list 'thset-sentinel
+             (for/list ([kv (in-list (champ-entries (tchamp-freeze (expr-thset-racket-tchamp v))))])
+               (cons (deep-s->v (car kv)) (deep-s->v (cdr kv)))))]
       [(struct? v)
        (for/vector ([e (in-vector (struct->vector v))]) (deep-s->v e))]
       [(pair? v)
@@ -601,6 +661,17 @@
 ;; Run registration at module load time
 (register-all-pnet-structs!)
 
+;; ONE rebuild for every champ-backed sentinel (champ / hset / tchamp / thset).
+;; Hashes are RECOMPUTED here and never read from disk — that is the whole point
+;; of the sentinel family: `equal-hash-code` is process-stable only, and
+;; `champ-lookup` navigates BY the stored hash, so a persisted one silently
+;; misses in another process. Four arms, one derivation, no drift.
+(define (rebuild-champ-from-entries entries)
+  (for/fold ([c champ-empty]) ([kv (in-list entries)])
+    (define k (deep-serializable->struct (car kv)))
+    (define val (deep-serializable->struct (cdr kv)))
+    (champ-insert c (equal-hash-code k) k val)))
+
 (define (deep-serializable->struct v)
   (cond
     ;; Tagged vector: reconstruct struct
@@ -638,15 +709,22 @@
     ;; POL.10: reconstruct an expr-champ from its serialized entries list —
     ;; hashes recomputed at read (never persisted; see the serializer arm).
     [(and (list? v) (= (length v) 2) (eq? (car v) 'champ-sentinel))
-     (expr-champ
-      (for/fold ([c champ-empty]) ([kv (in-list (cadr v))])
-        (define k (deep-serializable->struct (car kv)))
-        (define val (deep-serializable->struct (cdr kv)))
-        (champ-insert c (equal-hash-code k) k val)))]
+     (expr-champ (rebuild-champ-from-entries (cadr v)))]
     ;; SolveCarrier: rebuild the PVec carrier from its elements (see the
     ;; serializer arm — the tree shape is derived, never persisted).
     [(and (list? v) (= (length v) 2) (eq? (car v) 'rrb-sentinel))
      (expr-rrb (rrb-from-list (map deep-serializable->struct (cadr v))))]
+    ;; …and the Set, same argument: hashes RECOMPUTED at read, never persisted.
+    [(and (list? v) (= (length v) 2) (eq? (car v) 'hset-sentinel))
+     (expr-hset (rebuild-champ-from-entries (cadr v)))]
+    ;; The transient builders: rebuild the persistent form (hashes recomputed),
+    ;; then re-transient. Each module load gets its OWN builder.
+    [(and (list? v) (= (length v) 2) (eq? (car v) 'trrb-sentinel))
+     (expr-trrb (rrb-transient (rrb-from-list (map deep-serializable->struct (cadr v)))))]
+    [(and (list? v) (= (length v) 2) (eq? (car v) 'tchamp-sentinel))
+     (expr-tchamp (champ-transient (rebuild-champ-from-entries (cadr v))))]
+    [(and (list? v) (= (length v) 2) (eq? (car v) 'thset-sentinel))
+     (expr-thset (champ-transient (rebuild-champ-from-entries (cadr v))))]
     [(and (list? v) (= (length v) 2) (eq? (car v) 'foreign-proc))
      ;; Re-link foreign procedure. For most procs, the expr-foreign-fn struct
      ;; that contains this proc also has source-module + racket-name fields.
