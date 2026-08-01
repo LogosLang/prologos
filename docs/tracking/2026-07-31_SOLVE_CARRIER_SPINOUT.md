@@ -97,9 +97,11 @@ nested rows get their own sentinel — tree rebuilt at read via `rrb-from-list`)
 plus a `PNET_VERSION` 8→9 bump so no cache written under the broken path is read
 back. Pinned by two round-trip tests.
 
-The same latent gap exists for `expr-hset` (Sets), which wraps a champ without
-hitting the `expr-champ?` arm. **Pre-existing and orthogonal** — spun out rather
-than folded in.
+The same latent gap existed for `expr-hset` (Sets) and the three transient
+builders. Spun out at the time, then **fixed 2026-07-31 (`c99bfa89`)** — the
+audit found FOUR unprotected wrappers, not one, and `expr-hset`'s round-trip
+returned a raw vector as well as persisting hashes. `tests/test-pnet-container-sentinels.rkt`
+is now the anti-drift gate for the whole family.
 
 ## 2. Consumer census (at HEAD, via `git grep … HEAD`, not the dirty tree)
 
