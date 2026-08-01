@@ -936,9 +936,27 @@
 ;; honestly). The parser's shared-walk L4 check guaranteed homogeneity.
 (define (select-project ctx tm branches sort [path '()])
   (let-values ([(comps cf) (select-level-components ctx tm branches path sort)])
-    (if cf
-        (values #f cf)
-        (values (select-assemble-row comps) #f))))
+    (cond
+      [cf (values #f cf)]
+      ;; D4.P4b-ii-2a — THE `'path` ASSEMBLY, the typing twin of
+      ;; `select-reduce`'s. A block PROJECTS (assemble the components into a
+      ;; row/tuple); a path EXTRACTS (yield the leaf TYPE). Both sorts
+      ;; assembled a ROW before this slice, which is exactly why the fold could
+      ;; not be flipped: `x.a` would have typed as `{:a T}` instead of `T`.
+      ;; ⚠ A GREEN PINNED TEST stands on this — `cfg{server}.server.host`
+      ;; (found by the b-ii-2 mini-audit's critic) becomes a `'path` selector
+      ;; whose subject is a `'block` selector, and the middle level must
+      ;; EXTRACT for the outer to find `host`.
+      ;; Under Q_U13's NEST encoding a `'path` carrier is exactly one branch of
+      ;; one step per level, so extraction is unambiguous.
+      [(eq? sort 'path)
+       (if (and (pair? comps) (null? (cdr comps)))
+           (values (record-field-type (cdr (car comps))) #f)
+           ;; unconstructible from the surface under NEST; taking the first
+           ;; silently is the fabrication class this phase exists to prevent
+           (values #f (select-fail 'subject-other path #f tm)))]
+      [(eq? sort 'block) (values (select-assemble-row comps) #f)]
+      [else (select-sort-unhandled 'select-project sort)])))
 
 (define (select-assemble-row comps)
   (if (and (pair? comps) (not (car (car comps))))
@@ -2411,7 +2429,7 @@
     ;; demand under Q_T2 Horn-D LENIENT presence; result = a CLOSED keyword
     ;; row, all-'present. The guided message is reconstructed by
     ;; typing-errors' select hint from the SAME select-project walk.
-    [(expr-select subject (expr-path branches sort))
+    [(expr-select subject (expr-path branches sort) _)
      (let ([tm (whnf (infer ctx subject))])
        (if (expr-error? tm)
            (expr-error)

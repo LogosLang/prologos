@@ -774,7 +774,33 @@
 ;; (typing-core `select-project`); reduction evaluates the subject ONCE
 ;; (reduction.rkt). Walkers: subject is the only expr slot — branches pass
 ;; through untouched (P1b/P2 walker discipline; no binder ⇒ no depth routing).
-(struct expr-select (subject branches) #:transparent)
+;; D4.P4b-ii-2a — `tier` is the TWO-TIER MISS DECISION, materialized from
+;; typing into reduction. It is the carrier's analogue of `expr-map-get`'s
+;; third field (P2.b slice 4): a fresh strictness meta that typing solves to
+;; `(expr-true)` when it PROVED an assertive subject, and which reduction
+;; reads to choose between a LOUD panic naming the key and the PERMISSIVE
+;; `(expr-error)` degradation. `#f` = no claim (the block sort, and every
+;; internal reconstruction).
+;;
+;; WHY IT IS ON `expr-select` AND NOT ON THE SELECTOR: the tier is a property
+;; of the APPLICATION (subject × selector), not of the selector — a bare
+;; `#p(…)` has no subject and so has no tier. It also keeps the selector's
+;; declared "STATIC data — no exprs inside" invariant intact, and rides
+;; `select-map-exprs`, the ONE reconstruction point for six walkers, instead
+;; of six independent identity arms that would never zonk a meta.
+;;
+;; WHY A SCALAR SUFFICES [Q_U13, owner]: the tier is decided PER DESCENT
+;; LEVEL, and under the NEST encoding each level is its own `expr-select`
+;; node — exactly as each `.field` is its own `expr-map-get` today. Under the
+;; rejected GATHER encoding one node would span a whole chain and this would
+;; have to be a list parallel to the steps.
+;;
+;; INERT AT 2a: every construction passes `#f` and nothing reads it. b-ii-2b
+;; mints the meta at the fold and teaches `select-reduce` to read it. The
+;; field lands in its own slice deliberately — an arity change on a shipped
+;; struct is the §8 R6 hazard, and it is cheaper when it does not share a diff
+;; with a behavioural flip.
+(struct expr-select (subject branches tier) #:transparent)
 
 ;; Map proc over the single EXPR slot (the record-map-field-types pattern:
 ;; ONE reconstruction point for shift/subst/zonk/nf).
@@ -786,8 +812,19 @@
 ;; when BOUND selectors land (F-row), and mapping it now is what makes that
 ;; landing safe rather than a silent under-walk.
 (define (select-map-exprs proc v)
-  (expr-select (proc (expr-select-subject v))
-               (proc (expr-select-branches v))))
+  ;; D4.P4b-ii-2a: the tier is MAPPED, not merely preserved. It becomes a
+  ;; strictness META at b-ii-2b, and this is the ONE reconstruction point for
+  ;; all six walkers (shift, subst, zonk ×3, nf) — so a tier that is carried
+  ;; but not mapped would never ZONK, `expr-true?` would never hold, and every
+  ;; Map miss would silently go PERMISSIVE. That is a reverse regression with
+  ;; no signal, and it is exactly the hidden cost the b-ii-2 mini-audit
+  ;; identified in the rejected put-it-on-the-selector option, whose six
+  ;; identity arms had the same defect.
+  ;; `#f` (no claim) is not an expr, so it passes through untouched.
+  (let ([tier (expr-select-tier v)])
+    (expr-select (proc (expr-select-subject v))
+                 (proc (expr-select-branches v))
+                 (if (expr? tier) (proc tier) tier))))
 
 ;; ============================================================
 ;; D4.P3b — the `^` step vocabulary + the ONE shared branch walk

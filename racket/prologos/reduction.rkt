@@ -1625,7 +1625,7 @@
 ;; output keys BEFORE this code can mint — so a miss or a non-map mid-descent
 ;; here is an INVARIANT VIOLATION: panic loudly, never fabricate (the P2.b
 ;; two-tier discipline; fabricating `none` was exactly divergence site 7).
-(define (select-reduce subj-expr branches)
+(define (select-reduce subj-expr branches [sort 'block])
   (let/ec return
     (define (kw-of label) (expr-keyword label))
     (define (champ-of v what)
@@ -1807,10 +1807,28 @@
     ;; subj-expr)` sat INSIDE the append-map lambda, so an N-branch block
     ;; whnf'd the subject N times. Pure win (whnf is a pure function of the
     ;; expr); this makes the code match its own documented contract.
-    (let ([subj* (whnf subj-expr)])
-      (entries->value
-       (append-map (lambda (b) (branch-entries subj* b '()))
-                   branches)))))
+    (let* ([subj* (whnf subj-expr)]
+           [entries (append-map (lambda (b) (branch-entries subj* b '())) branches)])
+      ;; D4.P4b-ii-2a — THE `'path` ASSEMBLY. A block PROJECTS (assemble the
+      ;; components into a row/tuple); a path EXTRACTS (yield the leaf value).
+      ;; Both sorts assembled a ROW before this slice, which is why the fold
+      ;; could not be flipped: `x.a` would have produced `{:a …}` instead of
+      ;; the value. Under Q_U13's NEST encoding a `'path` carrier is exactly
+      ;; one branch of one step per level, so extraction is unambiguous.
+      (case sort
+        [(block) (entries->value entries)]
+        [(path)
+         (if (and (pair? entries) (null? (cdr entries)))
+             (cdr (car entries))
+             ;; not constructible from the surface under NEST — a path
+             ;; selector with 0 or >1 components is a malformed carrier, and
+             ;; silently taking the first is how the P2.b fabrication class
+             ;; starts. Loud, per this phase's whole discipline.
+             (return (expr-panic
+                      (expr-string
+                       (format "select: a path selector must yield exactly ONE component, got ~a (malformed carrier — the path sort EXTRACTS, it does not project)"
+                               (length entries))))))]
+        [else (select-sort-unhandled 'select-reduce sort)]))))
 
 (define (validate-tabulate sname closed? plan subj-champ names)
   (define c (expr-champ-racket-champ subj-champ))
@@ -3001,12 +3019,12 @@
     ;; so a runtime miss here is an INVARIANT VIOLATION and panics loudly
     ;; (never fabricate), and champ-insert is never asked to last-win.
     ;; Stuck subject → the node stays stuck (the map-get/validate precedent).
-    [(expr-select subject (expr-path branches sort))
+    [(expr-select subject (expr-path branches sort) tier)
      (let ([subj* (whnf subject)])
        (cond
          ;; D4.P3c: rrb subjects admitted — ordinal branches select over
          ;; vectors/tuples (`het{2 0}`); per-branch dispatch inside.
-         [(or (expr-champ? subj*) (expr-rrb? subj*)) (select-reduce subj* branches)]
+         [(or (expr-champ? subj*) (expr-rrb? subj*)) (select-reduce subj* branches sort)]
          ;; D4.P3a verify hardening: a GROUND non-map subject can never
          ;; become a champ — panic per the node's own tier discipline
          ;; (the nested descent one level down is already loud; only the
@@ -3020,7 +3038,7 @@
          ;; it here would silently re-sort a `'path` selector as a `'block`
          ;; one on any subject that takes a whnf step (the R6 constructor
          ;; hazard's runtime half: this call compiles clean either way).
-         [else (whnf (expr-select subj* (expr-path branches sort)))]))]
+         [else (whnf (expr-select subj* (expr-path branches sort) tier))]))]
 
     ;; CIU T6 F1b.5-s2 (D27): validate — the runtime tabulation redex.
     ;; Subject whnf's to exactly two classes (spines/map-empty collapse to

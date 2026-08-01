@@ -416,7 +416,7 @@
   ;; vector-impostor rule). Payload = subject expr + branches (nested lists of
   ;; symbols — plain sexp data). NO PNET bump: the tag table is symbol-keyed,
   ;; so a new struct is purely additive (§8 R6 as corrected 2026-07-29).
-  (regN! expr-select (expr-unit) '())
+  (regN! expr-select (expr-unit) '() #f)
   ;; CIU T6 D4.P4b-ii-1: THE SELECTOR CARRIER gained its `sort` field, so it
   ;; MOVES here from auto-cache! (ruling C4). auto-cache! wraps its body in an
   ;; exception-swallowing handler — a stale-arity call there voids the

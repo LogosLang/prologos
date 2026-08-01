@@ -1563,7 +1563,7 @@
     ;; no exprs, no usage. No checkQ arm needed (the conversion fallback
     ;; covers check position). A missing arm here is the LYING "Multiplicity
     ;; violation" (pipeline.md § infer/inferQ are twins).
-    [(expr-select subject _)
+    [(expr-select subject _ _)
      (match (inferQ ctx subject)
        [(tu _ u) (tu (infer ctx e) u)]
        [_ (tu-error)])]

@@ -3904,8 +3904,72 @@ while the payload is declared STATIC data with no exprs inside
 (`syntax.rkt:765`) and `select-step-kind` is a closed union. Stating it
 structurally also says exactly when the follow-up becomes possible.
 
-Status: ⬜ — Q_U13 ruled (NEST); the b-ii-1 tail-blind defect fixed first
-(below); implementation not started.
+**⭐ Q_U14 RULED — b-ii-2 SPLITS: 2a (prerequisites + before-the-fold pins) →
+2b+2c TOGETHER (the mint + its diagnostics)** [owner, 2026-08-01]. 2c is NOT
+separable from 2b: without it a `.zz` miss gets a block-worded message whose
+remedy tells the user to spell it `.zz` — and `select-block-hint` runs BEFORE
+`closed-row-miss-hint`, so the bad message WINS. Not a lost hint, actively
+misleading advice; "we'll fix the message next slice" is how a misleading
+diagnostic becomes permanent.
+
+###### §5.P4b-ii-2a — Prerequisites + the before-the-fold tripwires  ✅
+
+**The two prerequisites the audit found that NOBODY had named:**
+1. **`select-reduce` now RECEIVES the sort.** Its signature was
+   `(subj-expr branches)` and the whnf call site DISCARDED the sort it had just
+   bound — so every runtime outcome for a migrated `.field` would have been
+   decided by a sort-blind function. Step zero for any tier work.
+2. **BOTH walks now have a `'path` ASSEMBLY.** They assembled a ROW
+   unconditionally under BOTH sorts, so the fold could not be flipped: `x.a`
+   would have typed as `{:a T}` and reduced to `{:a v}` instead of `T`/`v`. A
+   path EXTRACTS, a block PROJECTS. Under Q_U13's NEST encoding a `'path`
+   carrier is exactly one branch of one step per level, so extraction is
+   unambiguous; a 0-or->1-component path carrier REFUSES loudly rather than
+   silently taking the first (the P2.b fabrication class). ⚠ This was not a
+   green-field question — **`cfg{server}.server.host` is PINNED GREEN** and
+   becomes a `'path` selector over a `'block` one.
+
+**The `tier` FIELD on `expr-select`** (arity 2→3, `#f` = no claim), landed
+INERT — every construction passes `#f` and nothing reads it; b-ii-2b mints the
+meta at the fold and teaches `select-reduce` to read it. On `expr-select` and
+not on the selector because the tier is a property of the APPLICATION
+(subject × selector) — a bare `#p(…)` has no subject and so no tier — and
+because it then rides `select-map-exprs`, the ONE reconstruction point for six
+walkers, instead of six independent identity arms. A SCALAR suffices only
+because of Q_U13: under NEST each level is its own node, exactly as each
+`.field` is its own `expr-map-get` today.
+⚠ **`select-map-exprs` MAPS the tier, it does not merely carry it.** A carried-
+but-unmapped tier would never ZONK, `expr-true?` would never hold, and every
+Map miss would go silently PERMISSIVE — a reverse regression with no signal,
+and precisely the hidden cost the audit identified in the rejected
+put-it-on-the-selector option. Pinned.
+
+**THE BEFORE-THE-FOLD TRIPWIRES** — pins for behaviour b-ii-2b WILL change.
+They are tripwires, not invariants: their job is to make each change VISIBLE
+(a RED test at 2b, updated deliberately with the delta recorded) instead of
+silent. They exist because the audit found a class **no red-set census can
+see** — ACCEPT-DIRECTION flips produce no failing test.
+- **the union-subject LYING DIAGNOSTIC**, live and probe-confirmed today:
+  `def y := u.a` on a union reports **"Multiplicity violation"** because
+  `qtt.rkt`'s `expr-map-get` arm is subject-type-gated with no `expr-union`
+  case while typing-core's `infer` has one. The fold SILENTLY FIXES this.
+- **the DOT spelling's permissive dyn-row miss** — `d1.zzz` → `<error>` at
+  ZERO errors. **Nothing in the tree pinned this**: all three D19 pins use the
+  BRACKET spelling, which never reaches the `$dot-access` sentinel.
+- **`_.field` sections**, three shapes, zero prior tests.
+⚠ The `_.field` tripwire FAILED ON ITS FIRST RUN for the `:no-prelude`
+false-green reason this file was hardened against (`map` does not exist there,
+so an Unbound-variable cascade masks the deletion the pin exists to catch).
+Moved to the prelude-backed fixture, reason recorded in the pin.
+
+⚠ **Two b-ii-1 pins went RED on the assembly change — correctly.** They
+asserted `select-project` returns a ROW under `'path`, which is exactly what
+2a changes. Updated to assert EXTRACTION, annotated as having caught their own
+slice's change.
+
+Test delta **269 → 276**. Suite green.
+
+Status: ✅ 2a COMPLETE · ⬜ 2b+2c (the mint + its diagnostics).
 
 ##### §5.P4b-ii-3 — remaining
 

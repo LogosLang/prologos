@@ -3195,7 +3195,7 @@
            ;; D4.P4b-ii-1: sort `'block` — `x{…}` PROJECTS. b-ii-2's fold
            ;; migration mints the SAME carrier at `'path` for `x.a`, which is
            ;; exactly why the sort cannot be derived from the node's shape.
-           (expr-select subj (expr-path branches 'block))))]
+           (expr-select subj (expr-path branches 'block) #f)))]
 
     [(surf-validate sname subject loc)
      (let* ([schema-entry (lookup-schema-by-name sname)]

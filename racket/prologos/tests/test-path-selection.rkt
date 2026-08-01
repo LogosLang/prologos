@@ -1540,16 +1540,16 @@
 (test-case "P3a verify: ground non-map subjects PANIC at the top level too (tier symmetry)"
   ;; Was: `(whnf (expr-select (expr-int 5) …))` returned the node unchanged —
   ;; silent stick where the nested descent one level down panics loudly.
-  (define r (whnf (expr-select (expr-int 5) (expr-path '((a)) 'block))))
+  (define r (whnf (expr-select (expr-int 5) (expr-path '((a)) 'block) #f)))
   (check-true (expr-panic? r) "a ground non-map subject must panic, not stick")
   ;; and a stuck NEUTRAL still sticks (fvar subject — no panic, no loop):
-  (define stuck (whnf (expr-select (expr-fvar 'nosuch) (expr-path '((a)) 'block))))
+  (define stuck (whnf (expr-select (expr-fvar 'nosuch) (expr-path '((a)) 'block) #f)))
   (check-true (expr-select? stuck)))
 
 (test-case "P3a verify: trailing steps after a terminal sub-block panic (constructed IR)"
   ;; The parser grammar forbids the shape; the reducer now enforces it rather
   ;; than silently discarding the trailing steps.
-  (define subj (whnf (expr-select (expr-fvar 'x) (expr-path '((a)) 'block))))
+  (define subj (whnf (expr-select (expr-fvar 'x) (expr-path '((a)) 'block) #f)))
   (check-true (expr-select? subj)) ;; sanity: stuck neutral stays stuck
   (define bad-branches '((a (@sub (b)) c)))
   ;; construct the champ directly — no fixture dependency
@@ -1558,7 +1558,7 @@
   (define champ-subj
     (expr-champ (champ-insert champ-empty (equal-hash-code (expr-keyword 'a)) (expr-keyword 'a)
                               (expr-champ inner))))
-  (define r (whnf (expr-select champ-subj (expr-path bad-branches 'block))))
+  (define r (whnf (expr-select champ-subj (expr-path bad-branches 'block) #f)))
   (check-true (expr-panic? r) "trailing steps after @sub must panic, not vanish"))
 
 (test-case "P3a verify: the sub-block empty message does not claim `{}` is a map literal"
@@ -2441,7 +2441,7 @@
   ;; catch-all handler could swallow it). It must still never leak the raw
   ;; datum, which is what `[else (format "~a" s)]` used to do.
   (define rendered
-    (pp-expr (expr-select (expr-fvar 'x) (expr-path (list (list 'a BOGUS-STEP)) 'block)) '()))
+    (pp-expr (expr-select (expr-fvar 'x) (expr-path (list (list 'a BOGUS-STEP)) 'block) #f) '()))
   ;; The marker NAMES the datum on purpose — that is the debugging value.
   ;; The property is that it is WRAPPED, not passed through as if it were
   ;; valid surface syntax, which is exactly what `[else (format "~a" s)]`
@@ -2646,12 +2646,12 @@
 
 (test-case "P4b-i slice 3: expr-select's branches slot holds the SELECTOR CARRIER"
   (define sel (expr-path '((a)) 'block))
-  (define node (expr-select (expr-fvar 'x) sel))
+  (define node (expr-select (expr-fvar 'x) sel #f))
   (check-true (expr-path? (expr-select-branches node))
               "one representation: the slot holds an expr-path, not a raw list"))
 
 (test-case "P4b-i slice 3: select-map-exprs maps into BOTH slots and preserves the carrier"
-  (define node (expr-select (expr-fvar 'x) (expr-path '((a)) 'block)))
+  (define node (expr-select (expr-fvar 'x) (expr-path '((a)) 'block) #f))
   (define mapped (select-map-exprs (lambda (e) e) node))
   (check-true (expr-select? mapped))
   (check-true (expr-path? (expr-select-branches mapped))
@@ -2660,9 +2660,9 @@
 (test-case "P4b-i slice 3: uses-bvar0? recurses into the selector slot"
   ;; inert at P4 (selectors hold symbols) but correct by construction — the
   ;; subject-only recursion is the pipeline.md Exhaustive-Walkers signature
-  (check-false (uses-bvar0? (expr-select (expr-fvar 'x) (expr-path '((a)) 'block)))
+  (check-false (uses-bvar0? (expr-select (expr-fvar 'x) (expr-path '((a)) 'block) #f))
                "no bvar anywhere → #f")
-  (check-true (uses-bvar0? (expr-select (expr-bvar 0) (expr-path '((a)) 'block)))
+  (check-true (uses-bvar0? (expr-select (expr-bvar 0) (expr-path '((a)) 'block) #f))
               "a bvar in the SUBJECT is still found"))
 
 (test-case "P4b-i slice 3: the surface is unchanged end-to-end"
@@ -2943,7 +2943,7 @@
   ;; not. A beta-redex subject forces the reconstruction branch.
   (define node (expr-select (expr-app (expr-lam 'mw (expr-Int) (expr-bvar 0))
                                       (expr-fvar 'nosuch))
-                            (expr-path '((a)) 'path)))
+                            (expr-path '((a)) 'path) #f))
   (define r (whnf node))
   (check-true (expr-select? r) "the node stays stuck on an unbound subject")
   (check-eq? (expr-path-sort (expr-select-branches r)) 'path
@@ -2969,11 +2969,14 @@
   ;; refuses. A fourth asymmetry, missed by the mini-audit's enumeration of
   ;; three and found by the adversarial verify. Without this arm b-ii-2's
   ;; wholesale minting silently deletes a working surface.
-  (let-values ([(row fail) (tc:select-project '() TBL-UNION (list (list 'a)) 'path)])
+  ;; ⚠ UPDATED at b-ii-2a: this asserted a ROW because `'path` still assembled
+  ;; block-shaped when it was written. 2a gave `'path` its own assembly — it
+  ;; EXTRACTS the leaf type — so the union join now arrives DIRECTLY. The pin
+  ;; caught its own slice's change, which is what it is for.
+  (let-values ([(ty fail) (tc:select-project '() TBL-UNION (list (list 'a)) 'path)])
     (check-false fail "the path sort must project a union subject, not refuse it")
-    (check-true (expr-Record? row))
-    (let ([ft (record-field-type (cdr (car (expr-Record-fields row))))])
-      (check-true (expr-union? ft) "the per-component value types join into a union"))))
+    (check-false (expr-Record? ty) "the path sort EXTRACTS — a row here would be the block assembly")
+    (check-true (expr-union? ty) "the per-component value types join into a union")))
 
 (test-case "P4b-ii-1 table (BLOCK × union): unchanged — still refuses"
   (let-values ([(row fail) (tc:select-project '() TBL-UNION (list (list 'a)) 'block)])
@@ -2991,11 +2994,13 @@
     (check-false row "a keyword label is not a legal key of a (Map Int String)")
     (check-equal? (tc:select-fail-kind fail) 'subject-map))
   ;; and the gate is not vacuous — a matching key type still admits
-  (let-values ([(row fail) (tc:select-project
-                            '() (expr-Map (expr-Keyword) (expr-String))
-                            (list (list 'a)) 'path)])
+  (let-values ([(ty fail) (tc:select-project
+                           '() (expr-Map (expr-Keyword) (expr-String))
+                           (list (list 'a)) 'path)])
     (check-false fail)
-    (check-true (expr-Record? row))))
+    ;; UPDATED at b-ii-2a with the 'path assembly: the Map's VALUE type
+    ;; arrives directly, not wrapped in a one-field row.
+    (check-equal? ty (expr-String) "the path sort extracts the Map's value type")))
 
 (test-case "P4b-ii-1 verify gap: select-index-of — the NAT TWIN — is total over sort"
   ;; the file's own comment calls it "the nat twin of select-row-of"; when its
@@ -3017,14 +3022,14 @@
   ;; hard-coding `subject{…}` was correct while 'block was the only reachable
   ;; sort; after b-ii-2 every `x.a` would have printed as `x{a}` in error
   ;; messages and def echoes — silent wrong output on the diagnostic path.
-  (check-equal? (pp-expr (expr-select (expr-fvar 'x) (expr-path '((a)) 'block)) '())
+  (check-equal? (pp-expr (expr-select (expr-fvar 'x) (expr-path '((a)) 'block) #f) '())
                 "x{a}")
-  (check-equal? (pp-expr (expr-select (expr-fvar 'x) (expr-path '((a)) 'path)) '())
+  (check-equal? (pp-expr (expr-select (expr-fvar 'x) (expr-path '((a)) 'path) #f) '())
                 "x.a"
                 "the path sort is the DOT spelling, not the brace one")
   ;; and it must not RAISE on an unknown sort — pp-expr is on the error path,
   ;; so it renders a visible marker instead (the P4a site-13 ruling)
-  (check-true (string? (pp-expr (expr-select (expr-fvar 'x) (expr-path '((a)) 'nil-safe)) '()))
+  (check-true (string? (pp-expr (expr-select (expr-fvar 'x) (expr-path '((a)) 'nil-safe) #f) '()))
               "an unknown sort must degrade to a marker, never crash a diagnostic"))
 
 ;; ---- b-ii-1 DEFECT, found by the b-ii-2 mini-audit's completeness critic ----
@@ -3054,3 +3059,127 @@
                            '() TBL-RECORD-DYN-UNKNOWN 'a '() 'path)])
     (check-false fail "a DYN row's unknown field may live in the remainder")
     (check-true (expr-meta? ft))))
+
+;; ============================================================
+;; D4.P4b-ii-2a — BEFORE-THE-FOLD TRIPWIRES
+;; ============================================================
+;; These pin behaviour that the b-ii-2b fold migration WILL CHANGE. They are
+;; TRIPWIRES, not invariants: their job is to make each change VISIBLE (a RED
+;; test at 2b, updated deliberately with the delta recorded) instead of silent.
+;;
+;; They exist because the b-ii-2 mini-audit found a class no red-set census can
+;; see — ACCEPT-DIRECTION flips. A migration that makes something start working,
+;; or stop erroring, produces NO failing test. If it is not captured here, it
+;; lands unrecorded. The other two capture a permissive→panic conversion and a
+;; silent deletion, neither of which any existing test covers.
+
+(test-case "b-ii-2a TRIPWIRE: `.field` on a UNION subject is a LYING diagnostic today"
+  ;; qtt.rkt's expr-map-get arm is SUBJECT-TYPE-GATED and has no expr-union
+  ;; case, although typing-core's infer arm does — so QTT falls to its
+  ;; catch-all and reports a multiplicity error for a typing gap. The
+  ;; infer/inferQ-twins signature from pipeline.md, live.
+  ;; AT 2b THIS FLIPS TO WORKING: expr-select's inferQ delegates
+  ;; unconditionally, so the fold SILENTLY FIXES this. Record the before.
+  (define rs (run-ws-raw (string-append
+                          "def u : <[Map Keyword Int] | [Map Keyword String]> := {:a 1}\n"
+                          "def y := u.a\n")))
+  (check-true (prologos-error? (last rs))
+              "if this goes GREEN, the fold fixed the union case — record it, do not just re-baseline")
+  (check-regexp-match #rx"Multiplicity violation" (format "~a" (last rs))
+                      "the LIE: a typing gap reported as a QTT violation"))
+
+(test-case "b-ii-2a TRIPWIRE: the DOT spelling's miss on a dyn row is PERMISSIVE"
+  ;; THE GAP THE AUDIT FOUND: all three D19 pins use the BRACKET spelling
+  ;; (`[map-get d :zzz]`), which parses through the map-get PARSER KEYWORD, not
+  ;; the `$dot-access` sentinel b-ii-2 migrates. So they stay green through the
+  ;; regression and NOTHING pinned the dot spelling. This is that pin.
+  ;; Mechanism: expr-map-get's strictness slot is only solved to (expr-true) by
+  ;; the (Map K V) infer arm; a dyn-row subject never solves it, so reduction
+  ;; takes the permissive `(expr-error)` branch instead of the loud panic.
+  ;; AT 2b THIS REGRESSES TO A PANIC unless the tier rides the carrier.
+  (define rs (run-ws-raw (string-append
+                          "def base := {:host \"h\" :port 1}\n"
+                          "def kk := :port\n"
+                          "def d1 := [map-dissoc base kk]\n"
+                          "d1.zzz\n")))
+  (check-false (ormap prologos-error? rs)
+               "a dyn-row miss via the DOT spelling is permissive — zero errors")
+  (check-regexp-match #rx"error" (format "~a" (last rs))
+                      "it degrades to the <error> VALUE, not a panic"))
+
+(test-case "b-ii-2a TRIPWIRE: `_.field` sections work — THREE shapes, zero prior tests"
+  ;; `_.a` sections because the $dot-access fold arm has NO `_` guard (its
+  ;; $postfix-index sibling DOES — which is why `_[k]` is a guided refusal) and
+  ;; `map-get` is in sectionable-op-keywords. `$select` is neither in that list
+  ;; nor reachable by it: its parse-list clause PRECEDES the section clause in
+  ;; the same cond, so "add $select to sectionable-op-keywords" is INERT.
+  ;; AT 2b THIS SURFACE DISAPPEARS unless b-ii-3's rescue lands with it.
+  ;; ⚠ PRELUDE fixture, deliberately: `map` does not exist under :no-prelude,
+  ;; and a prologos-error? assertion cannot tell an Unbound-variable cascade
+  ;; from the deletion this pin exists to catch (the Watching-4 false-green
+  ;; class — it caught this pin on its first run).
+  (define rs (run-ws-pre-raw (string-append
+                              "def r := {:a 7}\n"
+                              "[_.a r]\n"
+                              "def recs := @[{:a 1} {:a 2}]\n"
+                              "map _.a recs\n")))
+  (check-false (ormap prologos-error? rs) "all three shapes must stay live")
+  (check-regexp-match #rx"7 : Int" (format "~a" (list-ref rs 1))
+                      "direct application of the section")
+  (check-regexp-match #rx"@\\[1 2\\]" (format "~a" (last rs))
+                      "the section as a HOF argument — the ergonomic case"))
+
+(test-case "b-ii-2a: the `'path` ASSEMBLY extracts; the `'block` assembly projects"
+  ;; the prerequisite the b-ii-2 mini-audit found nobody had named: BOTH walks
+  ;; assembled a ROW unconditionally, under both sorts, so the fold could not
+  ;; be flipped — `x.a` would have typed as `{:a T}` instead of `T`.
+  (let-values ([(ty fail) (tc:select-project '() TBL-RECORD-CLOSED BRANCHES-A 'path)])
+    (check-false fail)
+    (check-equal? ty (expr-Int) "path EXTRACTS the leaf type"))
+  (let-values ([(row fail) (tc:select-project '() TBL-RECORD-CLOSED BRANCHES-A 'block)])
+    (check-false fail)
+    (check-true (expr-Record? row) "block PROJECTS into a row")
+    (check-equal? (record-field-type (cdr (car (expr-Record-fields row)))) (expr-Int))))
+
+(test-case "b-ii-2a: a malformed multi-component `'path` carrier REFUSES, it does not take the first"
+  ;; unconstructible from the surface under Q_U13's NEST encoding (one branch,
+  ;; one step per level) — pinned anyway, because silently taking the first
+  ;; component is how the P2.b fabrication class starts.
+  (let-values ([(ty fail) (tc:select-project '() TBL-RECORD-CLOSED
+                                             (list (list 'a) (list 'a)) 'path)])
+    (check-false ty)
+    (check-true (tc:select-fail? fail) "a 2-component path carrier must refuse")))
+
+(test-case "b-ii-2a: select-reduce RECEIVES the sort (step zero for any tier work)"
+  ;; its signature was `(subj-expr branches)` and the whnf call site discarded
+  ;; the sort it had just bound — so every runtime outcome for a migrated
+  ;; `.field` would have been decided by a sort-blind function.
+  (define subj (expr-champ (let ([kw (expr-keyword 'a)])
+                             (champ-insert champ-empty (equal-hash-code kw) kw (expr-int 7)))))
+  ;; block: assembles a champ
+  (check-true (expr-champ? (select-reduce subj '((a)) 'block)))
+  ;; path: extracts the leaf VALUE
+  (check-equal? (select-reduce subj '((a)) 'path) (expr-int 7)
+                "the path sort must yield the value, not a one-key map")
+  ;; and the sort axis is total here too
+  (check-exn (lambda (e) (and (exn:fail? e)
+                              (regexp-match? #rx"no arm for selector sort" (exn-message e))))
+             (lambda () (select-reduce subj '((a)) 'nil-safe))))
+
+(test-case "b-ii-2a: the tier field is carried, and MAPPED — not merely preserved"
+  ;; INERT at 2a (every construction passes #f, nothing reads it), but the
+  ;; walker contract has to be right BEFORE b-ii-2b puts a meta in it.
+  (define node (expr-select (expr-fvar 'x) (expr-path '((a)) 'path) #f))
+  (check-eq? (expr-select-tier node) #f "no claim is the 2a default")
+  (check-eq? (expr-select-tier (select-map-exprs (lambda (e) e) node)) #f
+             "#f is not an expr — it must pass through the mapper untouched")
+  ;; the load-bearing half: a tier that is CARRIED but not MAPPED would never
+  ;; zonk at 2b, `expr-true?` would never hold, and every Map miss would go
+  ;; silently PERMISSIVE — a reverse regression with no signal.
+  (define with-meta (expr-select (expr-fvar 'x) (expr-path '((a)) 'path) (expr-fvar 'TIER)))
+  (define mapped (select-map-exprs (lambda (e) (if (equal? e (expr-fvar 'TIER))
+                                                   (expr-true)
+                                                   e))
+                                   with-meta))
+  (check-equal? (expr-select-tier mapped) (expr-true)
+                "the mapper must DESCEND into the tier, or a meta there can never be solved"))

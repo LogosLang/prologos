@@ -550,7 +550,7 @@
     ;; and every `def` echo — silent wrong output on the DIAGNOSTIC path, which
     ;; is the worst place for it. Found by the P4b-ii-1 adversarial verify;
     ;; third consecutive slice whose census missed a pretty-print.rkt site.
-    [(expr-select subject (expr-path branches sort))
+    [(expr-select subject (expr-path branches sort) _)
      (case sort
        [(block) (format "~a{~a}"
                         (pp-expr subject names)
@@ -1261,7 +1261,7 @@
     ;; D4.P4b-i slice 3: the branches slot holds an expr — recurse into it.
     ;; Inert at P4 (selectors hold symbols) but correct by construction; the
     ;; old subject-only arm is the Exhaustive-Walkers signature.
-    [(expr-select subject sel) (or (uses-bvar0? subject) (uses-bvar0? sel))]
+    [(expr-select subject sel _) (or (uses-bvar0? subject) (uses-bvar0? sel))]
     [(expr-get c k a) (or (uses-bvar0? c) (uses-bvar0? k)
                           (and (expr? a) (uses-bvar0? a)))]
     [(expr-nil-safe-get m k) (or (uses-bvar0? m) (uses-bvar0? k))]
