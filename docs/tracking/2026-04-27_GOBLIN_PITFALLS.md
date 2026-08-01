@@ -3334,3 +3334,79 @@ note Node 20 → Node 24 as the new default in the same window.
 **Rule.** Before attributing an interop failure to a code change, run the same
 test at a known-green commit. Two of the three symptoms here look like real
 regressions and neither is one.
+
+---
+
+### #57 — CI: ONE test went 41s → 198s and started failing, on a commit that changed one markdown file (2026-08-01, open, **not attributable to any diff**)
+
+**Symptom.** `test-ocapn-import-object-interop.rkt` fails in the interop job
+with
+
+```
+imports: Error loading module prologos::ocapn::captp-core: Unbound variable
+```
+
+after running for over three minutes. It passes locally in 11–45 s under every
+configuration tried.
+
+**The evidence that matters is the step timings, not the message.** Comparing
+the last green run with the first red one, step by step:
+
+| Step | green (07-29) | red (08-01) |
+|---|---|---|
+| Install Prologos deps | 106 s | 113 s |
+| Pre-compile modules | 0 s | 0 s |
+| cross-impl | 5 s | 5 s |
+| live-interop | 9 s | 9 s |
+| handshake | 8 s | 9 s |
+| conversation | 7 s | 8 s |
+| rpc | 7 s | 9 s |
+| pipelined | 8 s | 8 s |
+| abort | 7 s | 9 s |
+| **import-object** | **41 s ✓** | **232 s ✗** |
+
+Every other step is within a second of its green counterpart, so the runner is
+not slower. Exactly one test changed, by 5.7×, and it is the one that fails.
+
+**The commit it started on adds 167 lines to `2026-04-27_GOBLIN_PITFALLS.md`
+and touches nothing else** (`git diff --stat e65e0f82 6dbcfe8a` → one file).
+It has now reproduced on five consecutive commits, so it is not a flake
+either. A diff that cannot cause it, and a consistency that rules out chance.
+
+**What was ruled out locally**, each with a real run rather than an argument:
+
+| Hypothesis | Test | Result |
+|---|---|---|
+| Our code broke it | run at `e65e0f82` | fails there too — same 7 tests |
+| Interpreted build (#51) | rebuild without the compile limit | 120 s, still PASSES |
+| Cold `.pnet` | `rm -rf data/cache/pnet` | 45 s, passes |
+| CI's test ORDER warms a bad cache | ran all 7 preceding tests, then it | 11 s, passes |
+| Node / `@endo` broken | `node peer-questioner.mjs 22077` | starts, ECONNREFUSED — healthy |
+
+**The named suspect is the `.pnet` cache**, on the strength of `driver.rkt:136`,
+which describes this exact error as a known unresolved defect: *"the `.pnet`
+cache-hit path restores the registry from the `.pnet` file, but the restored
+state may not match what incremental module loading builds"* — with
+`"Unbound variable: when"` as its recorded symptom. Supporting it: on CI green
+the test took 41 s, which is our COLD local time, even though seven tests ran
+before it — so the cache is not helping there, and a cache that is written but
+restored wrong would explain both the 41 s and the later 232 s.
+
+**The cheapest experiment, for whoever picks this up:** add
+`rm -rf data/cache/pnet` immediately before the import-object step in
+`interop.yml`. If 232 s drops back to ~41 s, the cache is confirmed and the
+real fix is the driver.rkt:136 defect.
+
+⚠ **`PROLOGOS_PNET_CACHE=0` will NOT do it.** That variable is read only by
+`batch-worker.rkt`, and CI's interop steps are plain `raco test` invocations
+that never go through the batch worker. This is the same shape as the
+already-recorded "`--no-pnet-cache` was a no-op, a lying diagnostic switch":
+there is still no working way to disable the `.pnet` cache for a direct
+`raco test`, and anyone who sets that variable will believe they have ruled the
+cache out when they have not.
+
+**Rule.** When a CI failure names a module, compare the per-step TIMINGS of the
+green and red runs before reading any code. A uniform slowdown is a runner; a
+single step moving while its neighbours do not is a real, localised change —
+and if the diff cannot have caused it, the cause is state the job carries, not
+source.
