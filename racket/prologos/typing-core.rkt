@@ -769,14 +769,17 @@
              ;; would leak into branch-str)
              [name (if (select-ord-step? s) (cadr s) (select-step-name s))])
         (let-values ([(ft ff)
-                      (cond
-                        [(number? s) (select-index-of ctx tm s path)]
-                        [(select-ord-step? s)
+                      ;; D4.P4a site 3: was `[else …]` — a sixth kind was
+                      ;; silently projected as a NOMINAL KEY here.
+                      (case (select-step-kind s)
+                        [(ord-step) (select-index-of ctx tm s path)]
+                        [(ord-branch)
                          (select-index-of ctx tm (cadr s) path)]
-                        [else
+                        [(key caret sub)
                          (let-values ([(row rf) (select-row-of ctx tm path)])
                            (if rf (values #f (select-fail-fill-label rf name))
-                               (select-project-field ctx row name path)))])])
+                               (select-project-field ctx row name path)))]
+                        [else (select-step-kind-unhandled 'select-walk-to-leaf s)])])
           (cond
             [ff (values #f ff)]
             [(null? (cdr steps)) (k ft)]
@@ -821,7 +824,12 @@
               (values (list (cons #f (record-field elem 'present))) #f)]
              [else (select-branch-entries ctx (whnf elem) rest
                                           (append path (list n)) seen)])))]
-      [else
+      ;; D4.P4a site 4: was a bare `[else …]` — a sixth kind was silently
+      ;; projected as a NOMINAL KEY. The guard routes through the classifier
+      ;; (this arm's body is too large for a `case` to stay reviewable);
+      ;; `sub` joins `key`/`caret` because that is exactly what the old
+      ;; `else` caught, so the refactor is behaviour-preserving.
+      [(memq (select-step-kind (car b)) '(key caret sub))
        (let* ([s (car b)]
               [rest (cdr b)]
               [name (select-step-name s)]
@@ -852,7 +860,8 @@
                     (values #f bf)
                     (let ([label (or (and cont (select-cont-rename cont)) name)])
                       (values (list (cons label (record-field bt 'present)))
-                              #f))))])))])))
+                              #f))))])))]
+      [else (select-step-kind-unhandled 'select-branch-entries (car b))])))
 
 ;; The COMPONENTS a dissolved head splices to its level: a terminal
 ;; `(@sub …)` contributes that block's level components (fresh branches —
@@ -879,10 +888,19 @@
          [(null? (cdr steps)) (values elem #f)]
          [else (select-below-field ctx (whnf elem) (cdr steps)
                                    (append path (list (car steps))) seen)]))]
-    [else
+    ;; D4.P4a site 5: was a bare `[else …]`. The guard must list EXACTLY what
+    ;; that else caught, or the refactor is not behaviour-preserving. The arms
+    ;; above it take TERMINAL `sub` and `ord-step`, so the else caught
+    ;; `key`, `caret`, `ord-branch`, and NON-terminal `sub` — `ord-branch`
+    ;; included. (Self-review at the P4a gate caught it omitted here and at
+    ;; its twin, reduction.rkt's `below-value`: both would have RAISED where
+    ;; they used to delegate to the branch walk. The twin-drift class again —
+    ;; the two "below a kept head" walks are the pair that must move together.)
+    [(memq (select-step-kind (car steps)) '(key caret sub ord-branch))
      ;; a keyed chain: its components assemble into the nested row
      (let-values ([(comps cf) (select-branch-entries ctx ft steps path seen)])
-       (if cf (values #f cf) (values (select-assemble-row comps) #f)))]))
+       (if cf (values #f cf) (values (select-assemble-row comps) #f)))]
+    [else (select-step-kind-unhandled 'select-below-field (car steps))]))
 
 (define (record-value-bound ctx rec [src (dyn-row-source 'dyn-row-values)])
   (cond
