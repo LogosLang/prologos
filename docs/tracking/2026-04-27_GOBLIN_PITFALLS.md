@@ -3236,3 +3236,101 @@ of the three — and only then start reading code.
 **Rule.** A bare "Unbound variable" with no location at module load has
 three causes in this codebase: a stale `.pnet`, an under-applied call, and a
 forward reference. Clear the cache before diagnosing either of the others.
+
+---
+
+### #55 — A one-argument Syrup record's payload is the VALUE, not a one-element list, so `record-args-of` reports zero arguments for it (2026-08-01, real trap, **silent wrong answer**)
+
+**Symptom.** `record-args-of "desc:import-object" v` returns `nil` for a `v`
+that is unmistakably a `<desc:import-object 0>` — a `kind-of` probe on the same
+value answers `"tagged:desc:import-object"`.
+
+**Cause.** The decoder builds a record as `syrup-tagged TAG PAYLOAD`, and for a
+record with exactly one field the PAYLOAD is that field, not a list containing
+it. `record-args-of` ends in `syrup-list-or-nil`, which answers `nil` for a
+non-list — so every list-shaped reader finds zero arguments and reports
+"absent" for a field that is present.
+
+**Why it hides.** Every multi-field record in this port reads correctly through
+the same helper — `desc:handoff-give` (five), `ocapn-peer` (three),
+`desc:sig-envelope` (two), `ocapn-sturdyref` (two). The single-field
+descriptors are exactly the ones where it breaks, and they are also the ones
+whose absence looks like a protocol condition rather than a bug: "the peer sent
+no reference" is a thing that can legitimately happen.
+
+**What it cost.** A third-party handoff that fetched correctly, received a
+well-formed `['fulfill <desc:import-object 0>]`, and then did nothing. No
+error, no log line, no failed assertion on our side — the reference simply read
+as absent, so the deposit and the reply were never built. The claim key
+matched, the parked state was found, and the step still produced nothing.
+
+**Rule.** Accept both shapes when reading a record field:
+
+```prologos
+match payload
+  | <the scalar case> -> …
+  | _                 -> …[nth-syrup [syrup-list-or-nil payload] zero]
+```
+
+and treat a zero-length `record-args-of` on a record you know has one field as
+this bug until proven otherwise.
+
+---
+
+### #56 — A wire nat decodes as `syrup-nat` OR non-negative `syrup-int`; matching only the first silently misses half the inputs (2026-08-01, real trap, **silent wrong answer**)
+
+**Symptom.** A hand-written reader
+
+```prologos
+match v
+  | syrup-nat n -> some n
+  | _           -> [none Nat]
+```
+
+returns `none` for a value the codec is perfectly happy to call a number, and
+which `deliver-target` — on the very same frame — reads without trouble.
+
+**Cause.** `wire-nat-ok?` (captp-wire) is explicit: a wire nat is `syrup-nat`
+**or** a `syrup-int` that is non-negative. Both spellings reach a reader
+depending on how the value was produced. The codec already owns the
+conversion — `wire-nat` in `prologos::ocapn::syrup` — and it returns
+`[Option Nat]`, doing the negative check on the way.
+
+**Why it hides.** It is a coin flip which spelling any given field arrives as,
+so a reader written against one of them works on the frames you happened to
+test with. It also composes badly with #55: together they turned "read the
+reference out of a fulfill" into "there is no reference", with the two causes
+stacked and neither visible.
+
+**Rule.** Never re-derive "is this a number" — call `wire-nat`. More generally,
+when the codec ships a predicate or a converter for a wire-level notion, that
+function is the authority and a local `match` on one constructor is a bug
+waiting for the other spelling. `wire-nat-ok?`, `wire-nat`, `nat-list-of` and
+`record-args-of` all exist for this reason.
+
+---
+
+### #51 FAMILY (2026-08-01) — the Node interop tests fail on an unchanged tree
+
+Recorded so the next session does not spend a diagnosis on it. Seven
+Node-spawning interop tests (`questioner`, `multi-questioner`, `bidirectional`,
+`refr-passing`, `bootstrap-gift`, `break-plain`, `pipeline-forwarding`) fail
+locally with `expected reply frame from Node`. They fail identically at
+`e65e0f82` — a commit that was CI-green on 2026-07-29 — so this is the
+ENVIRONMENT, not the tree.
+
+The Node side itself is healthy: `node peer-questioner.mjs 22077` starts and
+reports only `ECONNREFUSED`, which is the correct answer when nothing is
+listening. (An `import('@endo/ocapn')` without `@endo/init` first fails with
+"Cannot initialize @endo/errors" — that is expected, and is NOT evidence the
+dependency is broken. Do not conclude from it.)
+
+On CI the same family fails differently: `test-ocapn-import-object-interop.rkt`
+raises `Error loading module prologos::ocapn::captp-core: Unbound variable`.
+That failure appeared on a **documentation-only commit** whose parent was
+green, which by construction rules out the diff as its cause. The runner logs
+note Node 20 → Node 24 as the new default in the same window.
+
+**Rule.** Before attributing an interop failure to a code change, run the same
+test at a known-green commit. Two of the three symptoms here look like real
+regressions and neither is one.
