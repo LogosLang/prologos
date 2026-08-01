@@ -543,11 +543,37 @@
      (format "[validate ~a ~a]"
              (expr-validate-schema-name v)
              (pp-expr (expr-validate-subject v) names))]
-    ;; CIU T6 D4.P3a: select — render the SURFACE spelling (subject{branches})
-    [(expr-select subject (expr-path branches))
-     (format "~a{~a}"
-             (pp-expr subject names)
-             (string-join (map pp-select-branch branches) " "))]
+    ;; CIU T6 D4.P3a: select — render the SURFACE spelling. D4.P4b-ii-1: the
+    ;; spelling now DEPENDS ON THE SORT. Hard-coding `subject{…}` was correct
+    ;; while `'block` was the only sort that could reach here; once b-ii-2
+    ;; migrates the fold, `x.a` would render as `x{a}` in every error message
+    ;; and every `def` echo — silent wrong output on the DIAGNOSTIC path, which
+    ;; is the worst place for it. Found by the P4b-ii-1 adversarial verify;
+    ;; third consecutive slice whose census missed a pretty-print.rkt site.
+    [(expr-select subject (expr-path branches sort))
+     (case sort
+       [(block) (format "~a{~a}"
+                        (pp-expr subject names)
+                        (string-join (map pp-select-branch branches) " "))]
+       ;; the path sort is the DOT spelling. Grade-1 selectors are
+       ;; single-branch by construction (a comma/space branch list is block
+       ;; syntax), so a multi-branch carrier here would be malformed — render
+       ;; it visibly rather than silently picking the first, per the
+       ;; no-silent-catch-all discipline this phase exists to enforce.
+       [(path)  (if (= (length branches) 1)
+                    (format "~a.~a" (pp-expr subject names)
+                            (string-join (map pp-select-branch (list (car branches))) ""))
+                    (format "~a.<malformed multi-branch path selector: ~a>"
+                            (pp-expr subject names)
+                            (string-join (map pp-select-branch branches) " | ")))]
+       ;; NON-raising, deliberately: pp-expr is on the error-message path
+       ;; (driver.rkt's diagnostics + the typing hints), so a raise here would
+       ;; convert a real diagnostic into an internal crash — and
+       ;; typing-errors' catch-all could swallow it, achieving strictly LESS
+       ;; than a visible marker. Same ruling as P4a's site 13.
+       [else    (format "~a<?~a?>{~a}"
+                        (pp-expr subject names) sort
+                        (string-join (map pp-select-branch branches) " "))])]
     [(expr-get c k _) (format "[get ~a ~a]" (pp-expr c names) (pp-expr k names))]
     [(expr-nil-safe-get m k) (format "[nil-safe-get ~a ~a]" (pp-expr m names) (pp-expr k names))]
     [(expr-nil-check a) (format "[nil? ~a]" (pp-expr a names))]
@@ -599,7 +625,7 @@
     [(expr-map-filter-entries pred map) (format "[map-filter-entries ~a ~a]" (pp-expr pred names) (pp-expr map names))]
     [(expr-map-map-vals f map) (format "[map-map-vals ~a ~a]" (pp-expr f names) (pp-expr map names))]
     ;; Path values
-    [(expr-path branches)
+    [(expr-path branches _)
      (define (pp-branch segs)
        (string-join (for/list ([s (in-list segs)])
                       ;; D4.P4b-i: segments are bare SYMBOLS (the step
@@ -1275,7 +1301,7 @@
     [(expr-map-filter-entries pred map) (or (uses-bvar0? pred) (uses-bvar0? map))]
     [(expr-map-map-vals f map) (or (uses-bvar0? f) (uses-bvar0? map))]
     ;; Path values — no bound variables
-    [(expr-path _) #f]
+    [(expr-path _ _) #f]
     [(expr-Path) #f]
     [(expr-get-in target paths) (or (uses-bvar0? target) (uses-bvar0? paths))]
     [(expr-update-in target paths fn) (or (uses-bvar0? target) (uses-bvar0? paths) (uses-bvar0? fn))]

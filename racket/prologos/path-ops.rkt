@@ -95,7 +95,9 @@
              [(expr-keyword? seg) (expr-keyword-name seg)]
              [(symbol? seg) seg]
              [else (error 'path-from-segments
-                          "path segments must be keywords, got ~a" seg)])))))
+                          "path segments must be keywords, got ~a" seg)])))
+   ;; D4.P4b-ii-1: the FFI builds a `#p(…)`-equivalent value, so `'path`.
+   'path))
 
 ;; path-branch-count : expr-path -> Int
 ;; Number of branches in a path (usually 1 unless branching).
@@ -136,5 +138,8 @@
                    (car (expr-path-branches p))
                    '()))
   (if (pair? segs)
-      (expr-path (list (cdr segs)))
+      ;; D4.P4b-ii-1: the tail of a selector is the SAME sort — preserve it
+      ;; rather than defaulting, so a future `'block` carrier reaching here
+      ;; cannot be silently re-sorted.
+      (expr-path (list (cdr segs)) (expr-path-sort p))
       (error 'path-tail "empty path has no tail")))

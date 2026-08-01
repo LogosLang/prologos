@@ -171,6 +171,7 @@
  ;; Path Selection block node (CIU T6 D4.P3a; step vocabulary D4.P3b)
  (struct-out expr-select) select-map-exprs
  select-key-step? select-sub-step? select-ord-step? select-step-name
+ select-sorts select-sort? select-sort-unhandled
  ;; D4.P4a: the step-kind totality dispatcher + the consumer-side else
  select-step-kind select-step-kind-unhandled select-step-kind/display
  select-step-cont select-cont-collapse? select-cont-rename
@@ -903,6 +904,23 @@
           " for it — add one (D4.P4a totality)")
          (select-step-kind s) s))
 
+;; D4.P4b-ii-1 — the SORT axis gets the same totality treatment as the step
+;; axis, for the same reason and BEFORE it grows. `sort` is 'path | 'block
+;; today, but Q_U12 already NAMES the next members: `#.field` (nil-safe) and
+;; `[k]` (ordinal/dynamic) are "genuinely DIFFERENT SORTS" whose migration is
+;; a deferred follow-up. An `(if (eq? sort 'path) … …)` would hand each of
+;; them BLOCK semantics silently — the exact catch-all class P4a spent a
+;; phase eliminating, re-introduced on a fresh axis one slice later.
+;; Every sort dispatch ends here instead.
+(define select-sorts '(path block))
+(define (select-sort? s) (and (memq s select-sorts) #t))
+(define (select-sort-unhandled who sort)
+  (error who
+         (string-append
+          "no arm for selector sort '~a\n"
+          "  known sorts: ~a — add an arm (D4.P4b-ii-1 sort totality)")
+         sort select-sorts))
+
 (define (select-step-name s) (if (select-key-step? s) (cadr s) s))
 (define (select-step-cont s) (and (select-key-step? s) (caddr s)))
 
@@ -1105,8 +1123,40 @@
 ;; permissive (fabricated <error>/none rows at 0 errors) and its surface
 ;; `.*name` is superseded by `:field` broadcast (Path Selection P4).
 
-;; First-class path values
-(struct expr-path (branches) #:transparent)                   ; path literal: branches = list of (listof expr-keyword|expr-symbol)
+;; ============================================================
+;; THE ONE SELECTOR CARRIER  (Q_U5; encoding `389f6802`, nesting `2e3fc14e`)
+;; ============================================================
+;; `expr-path` IS the reified selector — `#p(…)` is a bare carrier, `x{…}` is
+;; a carrier applied to a subject (it sits in `expr-select`'s branches slot),
+;; and after D4.P4b-ii-2 path position mints the same carrier. The NAME is
+;; legacy (the rename is ~30 arms of pure churn — a named cosmetic follow-up,
+;; NOT an alias: there is exactly one struct).
+;;
+;; branches : (listof branch), branch = (listof step), step per the vocabulary
+;;   at §"the `^` step vocabulary" above — BARE SYMBOLS and the tagged sexps,
+;;   NOT `expr-keyword`/`expr-symbol` structs (the b-i encoding convergence
+;;   `389f6802` unified them; this comment said otherwise until D4.P4b-ii-1).
+;;
+;; sort : 'path | 'block  — WHICH SPELLING minted this selector.
+;;   'block  — `x{…}`: PROJECTS (spec §1.2); refuses a (Map K V) subject,
+;;             refuses an 'unknown-presence field (Horn D, Q_T2).
+;;   'path   — `#p(…)`, and after b-ii-2 `x.a`: DESCENDS; keeps `map-get`
+;;             semantics on a (Map K V) subject (the MAP POSTURE, Q_U10) and
+;;             is D19-permissive on a dyn row.
+;;
+;; WHY A FIELD and not a step kind or a second struct [owner, D4.P4b-ii-1]:
+;; the sort is a property of the WHOLE carrier, not of any one step, and it
+;; cannot be DERIVED once b-ii-2 lands — today a bare carrier is `#p(…)` and
+;; a nested one is a block, but after the fold migrates `x.a` and `x{a}` are
+;; the same node shape. A second struct would reopen "ends single-carrier"
+;; one slice after b-i closed it.
+;;
+;; ⚠ ARITY: this struct is registered with `regN!` (pnet-serialize.rkt), NOT
+;; `auto-cache!` — auto-cache!'s body swallows exceptions, so a stale-arity
+;; call there voids the registration SILENTLY and the node comes back from a
+;; `.pnet` as a raw-vector impostor (pipeline.md § New AST Node item 6). The
+;; same move `expr-map-get` made at P2.b slice 4, for the same reason.
+(struct expr-path (branches sort) #:transparent)              ; THE selector carrier
 (struct expr-Path () #:transparent)                           ; Path type (ground, unparameterized)
 
 ;; ========================================

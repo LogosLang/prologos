@@ -3648,8 +3648,153 @@ silently drop the segment, while `ns foo.bar` correctly aborts. The guard
 `access-sentinel?`. Exactly the bug class `b0db8f3e` fixed and the P2 audit
 re-closed for `.N`; P1b/P3 minted new family members and nobody extended it.
 
-Status: ⬜ — b-ii-1 (Map posture + table) · b-ii-2 (fold migration) ·
-b-ii-3 (`_.field` rescue).
+##### §5.P4b-ii-1 — The (subject kind × sort) semantic table  ✅
+
+**Scope, as ruled mid-slice [owner]**: cover **ALL** asymmetries, not just
+Q_U10's Map posture, **including the diagnostics**. Typing-side only — no fold
+change, so the RED set stays green and the posture is pinned cell-by-cell
+before anything migrates.
+
+**The sort is a FIELD on the carrier** [owner]: `expr-path (branches sort)`,
+`'path | 'block`. Rejected: a distinguished step kind (the sort is a property
+of the whole carrier, not of any step) and a second struct (reopens
+"ends single-carrier" one slice after b-i closed it). It cannot be DERIVED:
+today a bare carrier is `#p(…)` and a nested one is a block, but after b-ii-2
+`x.a` and `x{a}` are the same node shape. **`auto-cache!` DELETED in the same
+slice** (ruling C4) — its body swallows exceptions, so this arity change would
+have voided the registration silently; now `regN!`/`reg0!`, which error loudly.
+
+**The Map posture takes option (b)** [owner] — a `select-uniform` marker.
+Rejected: **(a)** synthesize a closed row from the requested labels (fabricates
+a support the subject lacks, and it would flow into result-shape computation as
+if the key set were known — this track's failure history is fabrications that
+type-check); **(c)** fold Map into the dyn-row machinery (merges two postures
+Q_T2 and Q_U10 separated, whose RUNTIME behaviours differ — Map miss = loud
+panic, dyn miss = D19-permissive meta; the merge would be invisible later
+precisely because it reads as a simplification).
+
+**The table, as shipped** (all four asymmetries + the cells that deliberately
+AGREE):
+
+| subject | `'path` | `'block` |
+|---|---|---|
+| keyword record, present | field type | field type |
+| **Map** (Q_U10) | `select-uniform` at V, **key type checked** | `'subject-map` |
+| **dyn row**, presence `'unknown` (Q_T2) | fresh meta (D19/D24) | `'unknown-presence` |
+| **dyn row**, unlisted | fresh meta | `'miss-dyn` |
+| **selection view** (NEW #3) | `select-view`, capability-gated | `'subject-selection` |
+| **union** (NEW #4) | `select-union`, per-component ⋃ | `'subject-other` |
+| closed row, missing | `'miss-closed` | `'miss-closed` — **agree** |
+| nat/ordinal | unreachable at b-ii by Q_U12 scoping | ordinal dispatch |
+
+**Both diagnostics repaired.** The block-over-view message was reaching
+`'subject-other`, whose text ("the subject is not a record") is FALSE of a
+selection — it IS a record, restricted — and named no remedy; it now names the
+view, explains the `:requires` bypass, and gives two remedies. **This half is
+LIVE at HEAD.** The out-of-view message (`selection-not-in-view`) is written
+and pinned but only reaches users at b-ii-2, since `.field` still routes
+through `expr-map-get`.
+
+**Self-review caught the sort axis was a SILENT CATCH-ALL** — `(if (eq? sort
+'path) … …)` gave any other value block semantics, P4a's exact class on a fresh
+axis one slice later, and load-bearing because Q_U12 already NAMES the next two
+sorts (`#.field`, `[k]`). Now `select-sorts` + `select-sort-unhandled`
+mirroring the step-kind machinery. Pin validated by re-introducing the defect.
+
+#### ⚠ THE ADVERSARIAL VERIFY — 4 skeptics, and it earned its keep
+
+Three defects in what shipped, plus three unpinned claims. **All re-verified by
+main-thread probe before acting.**
+
+1. **A LIVE CAPABILITY BYPASS.** The selection arm was placed BELOW the schema
+   arm; the reference (`expr-map-get`) orders them the other way. Both
+   registries accept the same name, so `schema Person` + `selection Person from
+   Person` is constructible — and `u{age}` returned **`{:age 9}` at 0 errors**
+   for an out-of-view field. The `'block` half was PRE-EXISTING (there was no
+   selection arm at all); what this slice did was add the arm and put it where
+   a colliding name could never reach it, and ship a test asserting "a block
+   over a view still refuses" that was FALSE for that case. Read-capability
+   cell — the bar is higher. Fixed; order is now reference-matched and
+   commented as load-bearing.
+2. **The Map arm dropped the KEY-TYPE check.** The reference is
+   `(if (check ctx k kt) vt (expr-error))` — TWO obligations; only the miss
+   half was implemented. Probe: `mi : (Map Int String)` / `mi.a` REFUSES at
+   HEAD, and the first cut would have admitted it, degrading to a runtime panic
+   at b-ii-2. `select-uniform` now carries the key type.
+3. **MY FIXTURE WAS MALFORMED.** `requires-paths` is a list of PATHS;
+   `TBL-VIEW` passed a flat `'(#:name)`, so `selection-allows-field?` returned
+   `#f` for EVERY label — both selection pins passed because the gate refused
+   everything, and `selection-field-type` (the ADMIT half of asymmetry #3) had
+   ZERO coverage. The fixture-makes-the-pin-vacuous class, on the slice that
+   had just quoted it.
+4. **The sort threading was unexercised.** All `'path` pins entered at the
+   LEAVES, so replacing `sort` with the literal `'block` at any of ~15
+   recursive call sites still passed 260 tests. Now pinned at the top and at
+   depth, as a NEGATIVE assertion (it rules no assembled shape).
+5. **`whnf`'s sort-preserving reconstruction was unpinned** — the production
+   comment warned about exactly the silent re-sort; the warning was written,
+   the pin was not.
+6. **The sort-totality pin's NAME overstated the mechanism.** The guard fires
+   at the DISPATCH POINTS, not across the walk: a non-divergent cell still
+   answers under an unknown sort. Reworded, and widened from one divergent cell
+   to three. The fourth (selection) is documented as unreachable by direct
+   call — registries live only for the duration of `process-file`.
+
+**Then THREE more folded in on the owner's ruling** (all unreachable today, all
+detonating at b-ii-2 — taking them keeps b-ii-1 the safe typing-side slice):
+
+7. **ASYMMETRY #4 — UNION subjects**, which the mini-audit's enumeration of
+   "three" missed entirely. Probe: `u : <(Map Keyword Int) | (Map Keyword
+   String)>` gives `u.a` → `1 : Int | String` at 0 errors, `u{a}` refuses.
+   `select-row-of` had NO union arm. Wholesale minting would have silently
+   deleted a working surface — Q_U10's own failure mode, one subject kind over.
+   ⚠ The arm is the OPTIMISTIC filter-on-miss polarity (correct for a single
+   get); broadcast is the all-must-offer adjoint and must NOT reuse it (§3's 2b
+   ruling: never "unify" them). Commented at the arm.
+8. **`select-index-of` — the file's own comment calls it "the nat twin of
+   `select-row-of`" — never got the sort axis**, so the ordinal column of a
+   2-D table silently carried block semantics and could never raise the guard.
+   The twin-drift class P4a's self-review caught, one dispatcher over. Now
+   total; the two sorts AGREE there by Q_U12 scoping (`.N` reuses
+   `$postfix-index`), which is recorded at the arm so it is not mistaken for
+   luck.
+9. **`pretty-print.rkt` hard-coded the BLOCK spelling** and discarded the sort,
+   so after b-ii-2 every `x.a` would render as `x{a}` in error messages and
+   `def` echoes — silent wrong output on the DIAGNOSTIC path. **Third
+   consecutive slice whose census missed a `pretty-print.rkt` site.** Renders
+   by sort now, and degrades to a visible marker rather than raising (the P4a
+   site-13 ruling: a raise on the error path converts a diagnostic into a
+   crash).
+
+**Owed to b-ii-2, found here, NOT owed by this slice**:
+- **The carrier has no STRICTNESS slot.** `expr-map-get`'s third field
+  materializes P2.b slice 4's two-tier decision into reduction: `(expr-true)`
+  → loud panic naming the key + available keys; anything else (unsolved meta,
+  **dyn-row subjects**) → permissive `(expr-error)`. `select-reduce` panics
+  unconditionally. So at b-ii-2 a Map miss gets the WRONG message and **a
+  dyn-row miss PANICS where today it is permissive** — a real regression the
+  D19 pins would catch. Reduction cannot consult types, which is why the slot
+  exists; b-ii-2 must materialize the tier onto the carrier. This is a
+  CARRIER-SHAPE question re-opened one slice after b-i settled it.
+- `select-reduce`'s header asserts a runtime miss is an "INVARIANT VIOLATION
+  (typing sourced every field 'present)". Under the Map/dyn postures typing
+  sources nothing, so the sentence becomes FALSE at b-ii-2 — contract-truth
+  fix owed in the migrating commit, same class as P4a's "evaluated ONCE".
+- `select-project` has **TWO** production callers, not the one this slice's
+  comment claimed: the `expr-select` infer arm AND `typing-errors`'
+  `select-block-hint`. Harmless today (both pass `'block`), but at b-ii-2 the
+  DIAGNOSTIC re-walk runs the `'path` column, and `selection-field-type` has
+  SIDE EFFECTS (`register-selection!` + `global-env-add-type-only`) — formatting
+  an error message would mutate the selection registry.
+- `select-sort?` is dead code (written, exported, never wired — its natural
+  home is a `#:guard` on the struct). Stale comments at `syntax.rkt` and in the
+  test file still say `[(expr-path _) e]`.
+
+Status: ✅ b-ii-1 COMPLETE.
+
+##### §5.P4b-ii-2 / §5.P4b-ii-3 — remaining
+
+Status: ⬜ — b-ii-2 (fold migration) · b-ii-3 (`_.field` rescue).
 
 ### §5.P5 — Ruling B + factoring
 

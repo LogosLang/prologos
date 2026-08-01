@@ -2374,10 +2374,13 @@
         ;; representation of the selector. Consumers that used a segment
         ;; directly as an `expr-map-get` KEY now wrap it, and the FFI shims
         ;; marshal at the boundary — which is where marshalling belongs.
+        ;; D4.P4b-ii-1: sort `'path` — `#p(…)` is the path spelling. (The
+        ;; block spelling `x{…}` mints `'block` at the surf-select arm.)
         (expr-path
          (for/list ([branch (in-list branches)])
            (for/list ([seg (in-list branch)])
-             (string->symbol (keyword->string seg)))))])]
+             (string->symbol (keyword->string seg))))
+         'path)])]
 
     ;; get-in: desugar to chained map-get calls
     ;; Single path:   (get-in m :a.b.c) → (map-get (map-get (map-get m :a) :b) :c)
@@ -3189,7 +3192,10 @@
      (let ([subj (elaborate subject env depth)])
        (if (prologos-error? subj)
            subj
-           (expr-select subj (expr-path branches))))]
+           ;; D4.P4b-ii-1: sort `'block` — `x{…}` PROJECTS. b-ii-2's fold
+           ;; migration mints the SAME carrier at `'path` for `x.a`, which is
+           ;; exactly why the sort cannot be derived from the node's shape.
+           (expr-select subj (expr-path branches 'block))))]
 
     [(surf-validate sname subject loc)
      (let* ([schema-entry (lookup-schema-by-name sname)]

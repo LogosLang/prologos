@@ -266,6 +266,23 @@
      (format
       "Could not infer type — select: the subject~a is a (Map K V), which has no per-field row; a select block needs a record subject — ~a"
       (if (null? path) "" (format " (branch `~a`)" branch-str)) remedies)]
+    ;; D4.P4b-ii-1 — ASYMMETRY #3's diagnostics. Both replace messages the
+    ;; b-ii mini-audit found defective: the block case was reaching
+    ;; 'subject-other, whose text ("the subject is not a record") is FALSE of a
+    ;; selection — it IS a record, restricted — and named no remedy; the
+    ;; out-of-view case was a bare "Could not infer type" with no explanation
+    ;; at all. The refusal itself is deliberate in both (DEFERRED 20 / the
+    ;; :requires read-capability); only the diagnostics were wrong.
+    [(subject-selection)
+     (format
+      "Could not infer type — select: the subject~a is a SELECTION (a capability-restricted view over its parent schema); a select block over a view is not yet supported, because projecting a whole block through one would bypass the per-field `:requires` check — select fields individually (`v.field`), or block over the underlying record"
+      (if (null? path) "" (format " (branch `~a`)" branch-str)))]
+    [(selection-not-in-view)
+     (format
+      "Could not infer type — select: field :~a~a is not in this selection's view — a selection restricts READS to its `:requires` fields; add :~a to the selection, or read it from the underlying record"
+      label
+      (if (null? path) "" (format " (branch `~a`)" branch-str))
+      label)]
     [(subject-tuple)
      ;; D4.P3c: ordinal selection is LIVE — the recommendation works now.
      (format
@@ -305,10 +322,10 @@
     (let search ([x e])
       (and (expr? x)
            (or (match x
-                 [(expr-select subject (expr-path branches))
+                 [(expr-select subject (expr-path branches sort))
                   (let ([tm (whnf (infer ctx subject))])
                     (and (not (expr-error? tm))
-                         (let-values ([(row fail) (select-project ctx tm branches)])
+                         (let-values ([(row fail) (select-project ctx tm branches sort)])
                            (and fail (format-select-fail fail names)))))]
                  [_ #f])
                (ormap search (expr-subfields x)))))))

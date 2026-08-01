@@ -1405,7 +1405,7 @@
     [(expr-keyword _) (tu (expr-Keyword) (zero-usage n))]
     ;; Path
     [(expr-Path) (tu (expr-Type (lzero)) (zero-usage n))]
-    [(expr-path _) (tu (expr-Path) (zero-usage n))]
+    [(expr-path _ _) (tu (expr-Path) (zero-usage n))]
     ;; Dynamic path operations
     [(expr-get-in target paths)
      (let ([r1 (inferQ ctx target)]

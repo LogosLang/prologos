@@ -2080,7 +2080,7 @@
       ;; champ/rrb/hset, one line away and missed by that census too.
       ;; VERIFIED at `f072c115`: `whnf-impl/match` has NO arm for `expr-path`
       ;; at any indent, so it already fell to `[_ e]` (:3957) — identity — and
-      ;; `nf`'s arm is likewise `[(expr-path _) e]`. A path literal is a
+      ;; `nf`'s arm is likewise `[(expr-path _ _) e]`. A path literal is a
       ;; canonical form with no head reduction rule, which is this predicate's
       ;; own stated criterion for membership.
       ;; ⚠ This is a DECISION, not an inheritance (the P4b audit named it as
@@ -3001,7 +3001,7 @@
     ;; so a runtime miss here is an INVARIANT VIOLATION and panics loudly
     ;; (never fabricate), and champ-insert is never asked to last-win.
     ;; Stuck subject → the node stays stuck (the map-get/validate precedent).
-    [(expr-select subject (expr-path branches))
+    [(expr-select subject (expr-path branches sort))
      (let ([subj* (whnf subject)])
        (cond
          ;; D4.P3c: rrb subjects admitted — ordinal branches select over
@@ -3016,7 +3016,11 @@
            (expr-string
             "select: the subject is not a map at runtime (invariant violation — typing admitted the block)"))]
          [(equal? subj* subject) e]
-         [else (whnf (expr-select subj* (expr-path branches)))]))]
+         ;; D4.P4b-ii-1: the re-construction must PRESERVE the sort — dropping
+         ;; it here would silently re-sort a `'path` selector as a `'block`
+         ;; one on any subject that takes a whnf step (the R6 constructor
+         ;; hazard's runtime half: this call compiles clean either way).
+         [else (whnf (expr-select subj* (expr-path branches sort)))]))]
 
     ;; CIU T6 F1b.5-s2 (D27): validate — the runtime tabulation redex.
     ;; Subject whnf's to exactly two classes (spines/map-empty collapse to
@@ -4471,7 +4475,7 @@
 
     ;; Path normalization
     [(expr-Path) e]
-    [(expr-path _) e]
+    [(expr-path _ _) e]
     ;; Dynamic path operations — reduce target/path, then navigate
     [(expr-get-in target paths)
      (define nt (nf target))

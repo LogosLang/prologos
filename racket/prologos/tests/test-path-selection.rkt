@@ -1540,16 +1540,16 @@
 (test-case "P3a verify: ground non-map subjects PANIC at the top level too (tier symmetry)"
   ;; Was: `(whnf (expr-select (expr-int 5) …))` returned the node unchanged —
   ;; silent stick where the nested descent one level down panics loudly.
-  (define r (whnf (expr-select (expr-int 5) (expr-path '((a))))))
+  (define r (whnf (expr-select (expr-int 5) (expr-path '((a)) 'block))))
   (check-true (expr-panic? r) "a ground non-map subject must panic, not stick")
   ;; and a stuck NEUTRAL still sticks (fvar subject — no panic, no loop):
-  (define stuck (whnf (expr-select (expr-fvar 'nosuch) (expr-path '((a))))))
+  (define stuck (whnf (expr-select (expr-fvar 'nosuch) (expr-path '((a)) 'block))))
   (check-true (expr-select? stuck)))
 
 (test-case "P3a verify: trailing steps after a terminal sub-block panic (constructed IR)"
   ;; The parser grammar forbids the shape; the reducer now enforces it rather
   ;; than silently discarding the trailing steps.
-  (define subj (whnf (expr-select (expr-fvar 'x) (expr-path '((a))))))
+  (define subj (whnf (expr-select (expr-fvar 'x) (expr-path '((a)) 'block))))
   (check-true (expr-select? subj)) ;; sanity: stuck neutral stays stuck
   (define bad-branches '((a (@sub (b)) c)))
   ;; construct the champ directly — no fixture dependency
@@ -1558,7 +1558,7 @@
   (define champ-subj
     (expr-champ (champ-insert champ-empty (equal-hash-code (expr-keyword 'a)) (expr-keyword 'a)
                               (expr-champ inner))))
-  (define r (whnf (expr-select champ-subj (expr-path bad-branches))))
+  (define r (whnf (expr-select champ-subj (expr-path bad-branches 'block))))
   (check-true (expr-panic? r) "trailing steps after @sub must panic, not vanish"))
 
 (test-case "P3a verify: the sub-block empty message does not claim `{}` is a map literal"
@@ -2257,20 +2257,20 @@
 (test-case "P4a totality site 4: select-project's branch walk RAISES on an unknown step kind"
   ;; the branch head is the bogus step -> select-branch-entries' guard
   (check-exn totality-exn?
-             (lambda () (tc:select-project '() BOGUS-TYPING-SUBJ (list (list BOGUS-STEP))))
+             (lambda () (tc:select-project '() BOGUS-TYPING-SUBJ (list (list BOGUS-STEP)) 'block))
              "an unknown step kind must not be silently projected as a nominal key"))
 
 (test-case "P4a totality site 5: select-below-field RAISES on an unknown step kind below a kept head"
   ;; `a` descends, then the bogus step is BELOW it -> select-below-field's guard
   (check-exn totality-exn?
-             (lambda () (tc:select-project '() BOGUS-TYPING-SUBJ (list (list 'a BOGUS-STEP))))
+             (lambda () (tc:select-project '() BOGUS-TYPING-SUBJ (list (list 'a BOGUS-STEP)) 'block))
              "an unknown step kind below a kept head must not be silently projected"))
 
 (test-case "P4a totality site 3: walk-to-leaf RAISES on an unknown step kind (collapse branch)"
   ;; a `^-` collapse leaf pre-classifies into walk-to-leaf -> its guard
   (check-exn totality-exn?
              (lambda () (tc:select-project '() BOGUS-TYPING-SUBJ
-                                           (list (list BOGUS-STEP '(@key a collapse)))))
+                                           (list (list BOGUS-STEP '(@key a collapse))) 'block))
              "walk-to-leaf must not silently treat an unknown step kind as a nominal key"))
 
 ;; ---- sites 6-8: the reduction walk, via the newly-exported `select-reduce` ----
@@ -2392,7 +2392,7 @@
                                                        (exn-message e))
                                     (raise e))
                                   (void))])
-       (tc:select-project '() tm (list (list 'a '(@ord 0))))))
+       (tc:select-project '() tm (list (list 'a '(@ord 0))) 'block)))
    "typing's select-below-field must keep handling ord-branch — its old else did"))
 
 ;; ============================================================
@@ -2441,7 +2441,7 @@
   ;; catch-all handler could swallow it). It must still never leak the raw
   ;; datum, which is what `[else (format "~a" s)]` used to do.
   (define rendered
-    (pp-expr (expr-select (expr-fvar 'x) (expr-path (list (list 'a BOGUS-STEP)))) '()))
+    (pp-expr (expr-select (expr-fvar 'x) (expr-path (list (list 'a BOGUS-STEP)) 'block)) '()))
   ;; The marker NAMES the datum on purpose — that is the debugging value.
   ;; The property is that it is WRAPPED, not passed through as if it were
   ;; valid surface syntax, which is exactly what `[else (format "~a" s)]`
@@ -2622,7 +2622,7 @@
 (test-case "P4b-i: whnf of a bare selector carrier is identity (the P4a argument, applied)"
   ;; the SELECTOR is a literal — no head reduction rule, so the fast path must
   ;; return the SAME object. `expr-select` (the APPLICATION) stays reducible.
-  (define sel (expr-path '((a b))))
+  (define sel (expr-path '((a b)) 'block))
   (check-eq? (whnf sel) sel))
 
 ;; ============================================================
@@ -2645,13 +2645,13 @@
 ;; class starts.
 
 (test-case "P4b-i slice 3: expr-select's branches slot holds the SELECTOR CARRIER"
-  (define sel (expr-path '((a))))
+  (define sel (expr-path '((a)) 'block))
   (define node (expr-select (expr-fvar 'x) sel))
   (check-true (expr-path? (expr-select-branches node))
               "one representation: the slot holds an expr-path, not a raw list"))
 
 (test-case "P4b-i slice 3: select-map-exprs maps into BOTH slots and preserves the carrier"
-  (define node (expr-select (expr-fvar 'x) (expr-path '((a)))))
+  (define node (expr-select (expr-fvar 'x) (expr-path '((a)) 'block)))
   (define mapped (select-map-exprs (lambda (e) e) node))
   (check-true (expr-select? mapped))
   (check-true (expr-path? (expr-select-branches mapped))
@@ -2660,9 +2660,9 @@
 (test-case "P4b-i slice 3: uses-bvar0? recurses into the selector slot"
   ;; inert at P4 (selectors hold symbols) but correct by construction — the
   ;; subject-only recursion is the pipeline.md Exhaustive-Walkers signature
-  (check-false (uses-bvar0? (expr-select (expr-fvar 'x) (expr-path '((a)))))
+  (check-false (uses-bvar0? (expr-select (expr-fvar 'x) (expr-path '((a)) 'block)))
                "no bvar anywhere → #f")
-  (check-true (uses-bvar0? (expr-select (expr-bvar 0) (expr-path '((a)))))
+  (check-true (uses-bvar0? (expr-select (expr-bvar 0) (expr-path '((a)) 'block)))
               "a bvar in the SUBJECT is still found"))
 
 (test-case "P4b-i slice 3: the surface is unchanged end-to-end"
@@ -2673,3 +2673,356 @@
   (check-false (ormap prologos-error? rs) "nesting the carrier must not move the surface")
   (check-regexp-match #rx"h" (format "~a" (list-ref rs (- (length rs) 2))))
   (check-regexp-match #rx"80" (format "~a" (last rs))))
+
+;; ============================================================
+;; D4.P4b-ii-1 — the (subject kind × sort) SEMANTIC TABLE
+;; ============================================================
+;; Q_U10 ruled the `'path` sort gains a MAP POSTURE; Q_U12 scoped b-ii to the
+;; `$dot-access` leg. The table is TWO-DIMENSIONAL and there are THREE
+;; asymmetries (dyn row · Map · selection-typed), so the posture is pinned
+;; CELL BY CELL here, typing-side only, BEFORE the fold migrates (b-ii-2).
+;;
+;; These are DIRECT-CALL pins by necessity. `select-project` is reached from
+;; exactly ONE place — the `expr-select` typing arm (typing-core.rkt) — and
+;; `expr-select` is minted at exactly ONE elaborator site (`surf-select`,
+;; i.e. `x{…}`). `#p(…)` never reaches the walk (its typing arm is the
+;; vacuous `[(expr-path _) (expr-Path)]`). So with no fold change EVERY
+;; carrier reaching the walk is `'block`, and the `'path` column is
+;; unreachable from surface syntax until b-ii-2 flips the fold.
+;;
+;; The `'block` column below is CHARACTERIZATION: it must be green before the
+;; sort field lands and stay green after — those pins ARE the claim that
+;; threading the sort changed nothing.
+
+;; ---- subject fixtures, hoisted OUT of every guarded lambda ----
+(define TBL-RECORD-CLOSED       ;; {:a Int} — the happy path
+  (make-record 'keyword (list (cons 'a (record-field (expr-Int) 'present))) 'closed))
+
+(define TBL-RECORD-DYN-UNKNOWN  ;; {:a? Int | _} — presence not sourced
+  (make-record 'keyword (list (cons 'a (record-field (expr-Int) 'unknown))) 'dyn))
+
+(define TBL-RECORD-DYN-EMPTY    ;; {| _} — `a` unlisted on a dyn row
+  (make-record 'keyword '() 'dyn))
+
+(define TBL-MAP (expr-Map (expr-Keyword) (expr-Int)))          ;; (Map Keyword Int)
+(define TBL-TUPLE                                              ;; ⟨Int⟩ — nat key-domain
+  (make-record 'nat (list (cons 0 (record-field (expr-Int) 'present))) 'closed))
+(define TBL-NON-RECORD (expr-Int))                             ;; not a record at all
+
+(define BRANCHES-A (list (list 'a)))   ;; the single branch `a`
+
+;; helper: run the walk and report (kind-or-'row)
+(define (tbl-outcome tm [branches BRANCHES-A] [sort 'block])
+  (let-values ([(row fail) (tc:select-project '() tm branches sort)])
+    (cond [fail (tc:select-fail-kind fail)]
+          [row 'row]
+          [else 'neither])))
+
+(test-case "P4b-ii-1 table (block × record/closed/present): projects to a row"
+  (check-equal? (tbl-outcome TBL-RECORD-CLOSED) 'row))
+
+(test-case "P4b-ii-1 table (block × Map): refuses 'subject-map — ASYMMETRY 2, the block half"
+  ;; `.field` on this same subject WORKS (probe: `m.a` -> 1 : Int, via
+  ;; expr-map-get). That divergence IS Q_U10's Map posture; this pin holds
+  ;; the BLOCK half fixed so b-ii-2 cannot move it by accident.
+  (check-equal? (tbl-outcome TBL-MAP) 'subject-map))
+
+(test-case "P4b-ii-1 table (block × nat-row): refuses 'subject-tuple"
+  (check-equal? (tbl-outcome TBL-TUPLE) 'subject-tuple))
+
+(test-case "P4b-ii-1 table (block × non-record): refuses 'subject-other"
+  (check-equal? (tbl-outcome TBL-NON-RECORD) 'subject-other))
+
+(test-case "P4b-ii-1 table (block × dyn row, presence 'unknown): refuses 'unknown-presence"
+  ;; ASYMMETRY 1 (Q_T2), the block half: `.field` on a dyn row is
+  ;; D19-PERMISSIVE (probe: `d1.host` -> "h" : ?meta), the block is loud.
+  (check-equal? (tbl-outcome TBL-RECORD-DYN-UNKNOWN) 'unknown-presence))
+
+(test-case "P4b-ii-1 table (block × dyn row, field unlisted): refuses 'miss-dyn"
+  (check-equal? (tbl-outcome TBL-RECORD-DYN-EMPTY) 'miss-dyn))
+
+(test-case "P4b-ii-1 table (block × closed row, field missing): refuses 'miss-closed"
+  (check-equal? (tbl-outcome TBL-RECORD-CLOSED (list (list 'zzz))) 'miss-closed))
+
+(test-case "P4b-ii-1 table: the Map refusal applies at EVERY DESCENT LEVEL, not just the leaf"
+  ;; `outer.inner.a` through an intermediate Map is a pinned SURFACE (it works
+  ;; via map-get). Under the block sort the intermediate Map must refuse the
+  ;; same way the leaf does — the level-invariance the Map posture has to
+  ;; preserve when b-ii-2 gives it the path sort.
+  (define outer
+    (make-record 'keyword
+                 (list (cons 'inner (record-field TBL-MAP 'present)))
+                 'closed))
+  (check-equal? (tbl-outcome outer (list (list 'inner 'a))) 'subject-map))
+
+;; ---- the PATH column: the MAP POSTURE (Q_U10) ----
+;; Pinned at `select-row-of` — the subject-kind × sort DISPATCH — not through
+;; `select-project`. The table IS that dispatch; `select-project`'s assembly
+;; is block-shaped (it builds a row from components) and what the `'path`
+;; sort ASSEMBLES is b-ii-2's question, because `'path` EXTRACTS where
+;; `'block` projects. Pinning the admit-cell through the assembly would
+;; therefore pin a shape this slice has not ruled.
+
+(test-case "P4b-ii-1 table (PATH × Map): the MAP POSTURE admits, at the Map's value type"
+  ;; Q_U10: `.field` on a (Map K V) subject keeps `map-get` semantics under
+  ;; the unified carrier. There is NO per-field row — every key is admissible
+  ;; at V, and a MISS is a RUNTIME panic (probed at HEAD: `m.zzz` →
+  ;; "panic: map-get: key :zzz not found"), never a static refusal. So the
+  ;; dispatch must hand back a UNIFORM value type, not a row and not a fail.
+  (let-values ([(row fail) (tc:select-row-of '() TBL-MAP '() 'path)])
+    (check-false fail
+                 "the path sort must not refuse a Map subject — 'subject-map is the BLOCK posture")
+    (check-true (tc:select-uniform? row)
+                "a Map has no per-field row; the path sort admits any label uniformly")
+    (check-equal? (tc:select-uniform-value-type row) (expr-Int)
+                  "the uniform type is the Map's VALUE type")))
+
+(test-case "P4b-ii-1 table (PATH × Map): the block sort is UNCHANGED by the posture"
+  ;; the asymmetry is the point — same subject, other sort, still refuses
+  (let-values ([(row fail) (tc:select-row-of '() TBL-MAP '() 'block)])
+    (check-false row)
+    (check-equal? (tc:select-fail-kind fail) 'subject-map)))
+
+(test-case "P4b-ii-1 table: a uniform subject admits ANY label, including one no row lists"
+  ;; the miss-deferral half: `m.zzz` must NOT fail statically under 'path
+  (let-values ([(ft fail) (tc:select-project-field '() (tc:select-uniform (expr-Keyword) (expr-Int))
+                                                   'zzz '() 'path)])
+    (check-false fail "a Map key miss is a RUNTIME panic, not a static refusal")
+    (check-equal? ft (expr-Int))))
+
+(test-case "P4b-ii-1 table (PATH × record): the record posture is unchanged"
+  ;; the Map posture must not leak into record subjects — they still project
+  (let-values ([(row fail) (tc:select-row-of '() TBL-RECORD-CLOSED '() 'path)])
+    (check-false fail)
+    (check-false (tc:select-uniform? row) "a record still yields its ROW, not a uniform")))
+
+(test-case "P4b-ii-1 sort totality: an unknown sort raises AT EVERY DIVERGENT CELL"
+  ;; P4a's lesson applied to the new axis BEFORE it grows. Q_U12 already names
+  ;; the next sorts (`#.field` nil-safe, `[k]` ordinal) as deferred follow-ups.
+  ;; ⚠ SCOPE, stated honestly after the adversarial verify corrected an
+  ;; overstatement in this pin's own name: the guard fires at the cells where
+  ;; the sorts DIVERGE (the Map arm, the selection arm, and the two dyn-row
+  ;; arms). A non-divergent cell — a plain closed-row hit, a closed miss —
+  ;; still answers under an unknown sort, because it has no `case sort` to
+  ;; reach. Totality here is over the DISPATCH POINTS, not over the walk.
+  ;; The predicate is narrow on purpose — `exn:fail?` alone would pass on an
+  ;; arity error or a malformed fixture.
+  (define (sort-exn? e)
+    (and (exn:fail? e)
+         (regexp-match? #rx"no arm for selector sort" (exn-message e))))
+  ;; all FOUR divergent cells, not just the one the first cut pinned
+  (check-exn sort-exn? (lambda () (tc:select-row-of '() TBL-MAP '() 'nil-safe))
+             "the Map cell must raise on an unknown sort")
+  ;; ⚠ the SELECTION cell's sort dispatch is NOT pinned here, and the reason is
+  ;; a real coverage limit rather than an oversight: its arm only fires for a
+  ;; REGISTERED selection, and the registries are parameterized only for the
+  ;; duration of `process-file` (see run-ws-raw), so a direct call cannot
+  ;; reach it. An unregistered fvar falls to 'subject-other without consulting
+  ;; the sort. Stated rather than papered over; it closes when b-ii-2 makes
+  ;; the path sort reachable end-to-end.
+  (check-exn sort-exn?
+             (lambda () (tc:select-project-field '() TBL-RECORD-DYN-UNKNOWN 'a '() 'nil-safe))
+             "the 'unknown-presence cell must raise on an unknown sort")
+  (check-exn sort-exn?
+             (lambda () (tc:select-project-field '() TBL-RECORD-DYN-EMPTY 'zzz '() 'nil-safe))
+             "the miss-dyn cell must raise on an unknown sort")
+  ;; and the guard is not vacuous: the two REAL sorts still answer
+  (check-not-exn (lambda () (tc:select-row-of '() TBL-MAP '() 'path)))
+  (check-not-exn (lambda () (tc:select-row-of '() TBL-MAP '() 'block))))
+
+;; ---- the PATH column: ASYMMETRY #1, the dyn row (Q_T2) ----
+
+(test-case "P4b-ii-1 table (PATH × dyn row, presence 'unknown): admits as a fresh META"
+  ;; D19/D24: an 'unknown-marked HIT projects exactly like a tail miss — the
+  ;; meta IS the observation, never the retained type (that courtesy upgrade
+  ;; would assert a presence the compiler does not have). Mirrors
+  ;; `record-project`, which is what `.field` reaches at HEAD (probed:
+  ;; `d1.host` → "h" : ?meta, NOT : String).
+  (let-values ([(ft fail) (tc:select-project-field
+                           '() TBL-RECORD-DYN-UNKNOWN 'a '() 'path)])
+    (check-false fail "the path sort is D19-PERMISSIVE on an 'unknown presence")
+    (check-true (expr-meta? ft) "the observation is a fresh meta")
+    (check-false (equal? ft (expr-Int))
+                 "NOT the retained type — that would assert presence")))
+
+(test-case "P4b-ii-1 table (PATH × dyn row, field unlisted): admits as a fresh META"
+  (let-values ([(ft fail) (tc:select-project-field
+                           '() TBL-RECORD-DYN-EMPTY 'zzz '() 'path)])
+    (check-false fail "an unlisted field may live in the dyn remainder")
+    (check-true (expr-meta? ft))))
+
+(test-case "P4b-ii-1 table (× closed row, field missing): BOTH sorts refuse — no divergence"
+  ;; the cell where the sorts deliberately AGREE; record-project returns
+  ;; expr-error for a 'closed miss too. Pinned so a future edit cannot invent
+  ;; a permissive path arm here on symmetry grounds.
+  (for ([srt (in-list '(path block))])
+    (let-values ([(ft fail) (tc:select-project-field
+                             '() TBL-RECORD-CLOSED 'zzz '() srt)])
+      (check-false ft)
+      (check-equal? (tc:select-fail-kind fail) 'miss-closed
+                    (format "closed-row miss must refuse under ~a too" srt)))))
+
+;; ---- the PATH column: ASYMMETRY #3, selection-typed subjects ----
+
+(define TBL-VIEW
+  ;; a hand-built view allowing :name only. ⚠ `requires-paths` is a list of
+  ;; PATHS (list of lists) — the first cut passed a FLAT '(#:name), which made
+  ;; `selection-allows-field?` refuse EVERY label, so both pins below passed
+  ;; because the gate refused everything and the admit branch had ZERO
+  ;; coverage. Caught at the adversarial verify; the fixture-makes-the-pin-
+  ;; vacuous class, on the very slice that quoted it.
+  (tc:select-view (selection-entry 'NameOnly 'Person '((#:name)) '() '() #f)
+                  (expr-fvar 'NameOnly)))
+
+(test-case "P4b-ii-1 table (PATH × selection, out of view): refuses NAMING THE CAPABILITY"
+  ;; today `u.age` is a bare "Could not infer type" with no explanation
+  ;; (expr-map-get's selection arm returns a raw expr-error). Under the
+  ;; carrier it carries the gate's reason. Reachable E2E at b-ii-2.
+  (let-values ([(ft fail) (tc:select-project-field '() TBL-VIEW 'age '() 'path)])
+    (check-false ft)
+    (check-equal? (tc:select-fail-kind fail) 'selection-not-in-view)))
+
+(test-case "P4b-ii-1 table (PATH × selection): the capability gate does NOT depend on the parent resolving"
+  ;; 'Person is not registered in this fixture, so the parent lookup would
+  ;; fail — an out-of-view field must still report the CAPABILITY, not the
+  ;; missing parent. This is the ordering pinned.
+  (let-values ([(_ft fail) (tc:select-project-field '() TBL-VIEW 'nope '() 'path)])
+    (check-equal? (tc:select-fail-kind fail) 'selection-not-in-view
+                  "an out-of-view field must not be reported as a parent-schema problem")))
+
+(test-case "P4b-ii-1 ASYMMETRY #3 diagnostic: the block refusal no longer LIES — E2E"
+  ;; the live half. Before this slice: "the subject is not a record" — false
+  ;; of a selection view, and naming no remedy. The refusal itself stays
+  ;; (DEFERRED 20); only the message was wrong.
+  (define rs (run-ws-raw (string-append
+                          "schema Person\n  :name String\n  :age Int\n"
+                          "selection NameOnly from Person :requires [:name]\n"
+                          "def u : NameOnly := {:name \"hana\" :age 9}\n"
+                          "u{name}\n")))
+  (define r (format "~a" (last rs)))
+  (check-true (prologos-error? (last rs)) "a block over a view still refuses")
+  (check-regexp-match #rx"SELECTION" r "the message must name what the subject IS")
+  (check-regexp-match #rx"capability-restricted" r)
+  (check-false (regexp-match #rx"is not a record" r)
+               "the LIE must be gone — a selection view IS a record, restricted"))
+
+(test-case "P4b-ii-1 ASYMMETRY #3: `.field` through a view still WORKS end-to-end"
+  ;; the other half of the asymmetry — unchanged by this slice, pinned so
+  ;; b-ii-2's fold migration cannot silently delete it (Q_U10's whole lesson)
+  (define rs (run-ws-raw (string-append
+                          "schema Person\n  :name String\n  :age Int\n"
+                          "selection NameOnly from Person :requires [:name]\n"
+                          "def u : NameOnly := {:name \"hana\" :age 9}\n"
+                          "u.name\n")))
+  (check-false (prologos-error? (last rs)))
+  (check-regexp-match #rx"hana" (format "~a" (last rs))))
+
+;; ---- gaps the P4b-ii-1 adversarial verify found in this slice's OWN pins ----
+
+(test-case "P4b-ii-1 verify gap: the sort THREADS through the recursive walk"
+  ;; Every 'path pin above enters at a LEAF (select-row-of / select-project-field),
+  ;; so the ~15 recursive call sites that carry `sort` down through
+  ;; select-project → select-level-components → select-branch-entries →
+  ;; select-below-field were completely unexercised: replacing `sort` with the
+  ;; literal 'block at ANY of them still passed all 260. This pin enters at
+  ;; the TOP so the threading is load-bearing. It asserts a NEGATIVE (not the
+  ;; assembled shape, which this slice has not ruled) so it rules nothing.
+  (check-not-equal? (tbl-outcome TBL-MAP BRANCHES-A 'path) 'subject-map
+                    "the path sort must survive the walk down to the subject dispatch")
+  ;; and at DEPTH — the intermediate-Map case, which is where a dropped sort
+  ;; in select-below-field/select-branch-entries would show
+  (define outer
+    (make-record 'keyword (list (cons 'inner (record-field TBL-MAP 'present))) 'closed))
+  (check-not-equal? (tbl-outcome outer (list (list 'inner 'a)) 'path) 'subject-map
+                    "the sort must survive a DESCENT, not just the top level"))
+
+(test-case "P4b-ii-1 verify gap: whnf's re-construction PRESERVES the sort"
+  ;; reduction.rkt's expr-select arm rebuilds the carrier after a subject whnf
+  ;; step. Its own comment warns that dropping the sort there would silently
+  ;; re-sort a 'path selector as 'block — the warning was written, the pin was
+  ;; not. A beta-redex subject forces the reconstruction branch.
+  (define node (expr-select (expr-app (expr-lam 'mw (expr-Int) (expr-bvar 0))
+                                      (expr-fvar 'nosuch))
+                            (expr-path '((a)) 'path)))
+  (define r (whnf node))
+  (check-true (expr-select? r) "the node stays stuck on an unbound subject")
+  (check-eq? (expr-path-sort (expr-select-branches r)) 'path
+             "the sort must survive reconstruction — 'block here is the silent re-sort"))
+
+(test-case "P4b-ii-1 verify gap: the selection ADMIT branch, not just the refusal"
+  ;; The first cut's fixture was malformed, so the capability gate refused
+  ;; EVERY label and `selection-field-type` — the admit half of asymmetry #3 —
+  ;; had zero coverage. With a well-formed view the gate must now DISTINGUISH.
+  (check-true (tc:selection-allows-field? (tc:select-view-sel TBL-VIEW) 'name)
+              "the fixture must ALLOW its :requires field — a gate that refuses everything makes both refusal pins vacuous")
+  (check-false (tc:selection-allows-field? (tc:select-view-sel TBL-VIEW) 'age)
+               "and must still refuse an out-of-view field"))
+
+;; ---- ASYMMETRY #4 (union) + the two twin-dispatch folds, all from the verify ----
+
+(define TBL-UNION
+  (expr-union (expr-Map (expr-Keyword) (expr-Int))
+              (expr-Map (expr-Keyword) (expr-String))))
+
+(test-case "P4b-ii-1 table (PATH × union): ASYMMETRY #4 — projects per component"
+  ;; probe at HEAD: `u.a` → 1 : Int | String at 0 errors, while `u{a}`
+  ;; refuses. A fourth asymmetry, missed by the mini-audit's enumeration of
+  ;; three and found by the adversarial verify. Without this arm b-ii-2's
+  ;; wholesale minting silently deletes a working surface.
+  (let-values ([(row fail) (tc:select-project '() TBL-UNION (list (list 'a)) 'path)])
+    (check-false fail "the path sort must project a union subject, not refuse it")
+    (check-true (expr-Record? row))
+    (let ([ft (record-field-type (cdr (car (expr-Record-fields row))))])
+      (check-true (expr-union? ft) "the per-component value types join into a union"))))
+
+(test-case "P4b-ii-1 table (BLOCK × union): unchanged — still refuses"
+  (let-values ([(row fail) (tc:select-project '() TBL-UNION (list (list 'a)) 'block)])
+    (check-false row)
+    (check-equal? (tc:select-fail-kind fail) 'subject-other)))
+
+(test-case "P4b-ii-1 verify gap: the Map posture honours the KEY TYPE"
+  ;; the reference is `(if (check ctx k kt) vt (expr-error))` — TWO
+  ;; obligations. The first cut implemented only the miss half, so a
+  ;; (Map Int String) subject would have admitted a keyword label and
+  ;; degraded to a runtime panic at b-ii-2. Probe: `mi.a` REFUSES at HEAD.
+  (let-values ([(row fail) (tc:select-project
+                            '() (expr-Map (expr-Int) (expr-String))
+                            (list (list 'a)) 'path)])
+    (check-false row "a keyword label is not a legal key of a (Map Int String)")
+    (check-equal? (tc:select-fail-kind fail) 'subject-map))
+  ;; and the gate is not vacuous — a matching key type still admits
+  (let-values ([(row fail) (tc:select-project
+                            '() (expr-Map (expr-Keyword) (expr-String))
+                            (list (list 'a)) 'path)])
+    (check-false fail)
+    (check-true (expr-Record? row))))
+
+(test-case "P4b-ii-1 verify gap: select-index-of — the NAT TWIN — is total over sort"
+  ;; the file's own comment calls it "the nat twin of select-row-of"; when its
+  ;; twin became 2-D this stayed 1-D, so the ORDINAL column silently carried
+  ;; block semantics and could never raise the guard. The two sorts agree here
+  ;; today BY SCOPING (Q_U12: `.N` reuses $postfix-index, so 'path × ordinal is
+  ;; unreachable at b-ii) — totality is what stops a THIRD sort inheriting it.
+  (define (sort-exn? e)
+    (and (exn:fail? e) (regexp-match? #rx"no arm for selector sort" (exn-message e))))
+  (check-exn sort-exn?
+             (lambda () (tc:select-project '() (expr-PVec (expr-Int))
+                                           (list (list '(@ord 0))) 'nil-safe))
+             "the ordinal dispatch must raise on an unknown sort, not default to block")
+  ;; both real sorts still answer
+  (check-not-exn (lambda () (tc:select-project '() (expr-PVec (expr-Int))
+                                               (list (list '(@ord 0))) 'block))))
+
+(test-case "P4b-ii-1 verify gap: pp-expr renders the selector BY SORT"
+  ;; hard-coding `subject{…}` was correct while 'block was the only reachable
+  ;; sort; after b-ii-2 every `x.a` would have printed as `x{a}` in error
+  ;; messages and def echoes — silent wrong output on the diagnostic path.
+  (check-equal? (pp-expr (expr-select (expr-fvar 'x) (expr-path '((a)) 'block)) '())
+                "x{a}")
+  (check-equal? (pp-expr (expr-select (expr-fvar 'x) (expr-path '((a)) 'path)) '())
+                "x.a"
+                "the path sort is the DOT spelling, not the brace one")
+  ;; and it must not RAISE on an unknown sort — pp-expr is on the error path,
+  ;; so it renders a visible marker instead (the P4a site-13 ruling)
+  (check-true (string? (pp-expr (expr-select (expr-fvar 'x) (expr-path '((a)) 'nil-safe)) '()))
+              "an unknown sort must degrade to a marker, never crash a diagnostic"))

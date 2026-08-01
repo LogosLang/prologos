@@ -373,7 +373,7 @@
     [(expr-map-map-vals f map) (expr-map-map-vals (shift delta cutoff f) (shift delta cutoff map))]
 
     ;; Path values (no free variables — branches are keywords/symbols)
-    [(expr-path _) e]
+    [(expr-path _ _) e]
     [(expr-Path) e]
     ;; Dynamic path operations (sub-expressions may have free vars)
     [(expr-get-in target paths)
@@ -892,7 +892,7 @@
     [(expr-map-map-vals f map) (expr-map-map-vals (subst k s f) (subst k s map))]
 
     ;; Path values (no free variables)
-    [(expr-path _) e]
+    [(expr-path _ _) e]
     [(expr-Path) e]
     ;; Dynamic path operations
     [(expr-get-in target paths)
