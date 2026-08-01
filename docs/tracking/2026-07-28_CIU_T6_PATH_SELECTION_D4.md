@@ -30,7 +30,7 @@ rulings, censuses and test delta live in its own section.
 | **P3a** | **The node + KEYED blocks, no `^`** — `surf-select`/`expr-select` (full pipeline.md cost paid once; twins; walkers via the generic fallback; NO PNET bump) · payload segmentation + the malformed-payload seat · **D-lenient presence** (Q_T2) · subject-once reduction · **strict merge for plain keys BEFORE `make-record` can last-win** · type-position refusal · branch-aware miss errors · §9's learnability pair | ✅ | §5.P3a · **`290f77f9`** — suite **9418/475/0**, acceptance **41/41** + records, battery 136/136, neighborhood 623/21; Q_U1 (corpus list corrected, `6d919142`); adversarial verify caught **1 BLOCKING** (block-pipe select corruption at 0 errors — 6th consecutive slice) + 3 SIGNIFICANT, all fixed pre-commit; DEFERRED 15–20 |
 | **P3b** | **The `^` family** — the ONE splitter (continuation grammar `-`?·{ε\|label\|`_`} + `^..`) · dissolve/splice · in-place rename · `^_` Reading N · the `^-` collapse family (Q_T7) · `^..` (Q_T8) · **output-level-local merge** (Q_T3, the monotonicity pin) · the Q_T4a ordinal-`^` guided error · the malformed-`^` battery | ✅ | §5.P3b · **`36ce601c`** — suite **9469/475/0**, acceptance **50/50** + records, battery 178; light re-grounding only (per Q_T5); adversarial verify caught **1 BLOCKING** (whole-datum ordinal-rekey marker → match-arm whole-file abort; fixed ELEMENT-WISE) + 8 SIGNIFICANT — all fixed pre-commit; DEFERRED 21–22; Q_U4 candidate flagged (sub-block synth scope) |
 | **P3c** | **Keyless + L4 + honest nesting** — the nat-row mint at EVERY n (incl. 1 and homogeneous n) · ordinal branches `{N M}` · the L4 mixing error · `⟨String⟩` 1-tuple pins · the G11 one-space pair pinned side by side | ✅ | §5.P3c · **`1b021d57`** — suite **9497/475/0**, acceptance **52/52**, battery 206; P3 (BLOCKS) COMPLETE; the verify's FIRST no-BLOCKING slice in eight (2 SIGNIFICANT fixed pre-commit: the @ord walk-to-leaf twin-drift, the decimal-fusion leak); G11 landed AS AMENDED; in-block `v[0]`≡`.0` ratified-by-pin |
-| **P4** | **Broadcast ω** — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | §5.P4 · CO-DESIGN: audit `wf_8458c23b` + options panel run; **Q_U5** (ONE reified selector carrier, monomorphic — F-row carries bound-selector precision) + **Q_U6** (WHOLESALE path migration; P4a totality/repairs → P4b carrier → P4c+ ω) RULED 2026-07-31; **Q_U7** RULED (the `(@bcast step)` wrapper; 4b restated) · **Q_U8** RULED (uniform positional `$bcast-step` mint + parser position-dispatch; A/B named-diff-set) — partition LOCKED P4a–P4e; **the PAUSE is CLEARED 2026-07-31: Q_U9 RULED (`:` REFUSES over `List` — no native carrier + the key-sort thesis does not reach a cons-spine; guided error naming `pvec-from-list`; the `Functor`-instance door named; the solve-carrier counter resolved UPSTREAM by the `solve-*`→PVec mini-track) + the `update-in` ω fence and the whole-node abort both RATIFIED**; ⚠ LET merge `5e16ead4` landed mid-walk (audit coords @ `02dd27d7`) |
+| **P4** | **Broadcast ω** — ⭐ **P4a ✅ · P4b ✅ COMPLETE** (b-i carrier + b-ii `$dot-access` migration; `x.a` now mints the unified selector carrier) · P4c–P4e ⬜ — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | §5.P4 · CO-DESIGN: audit `wf_8458c23b` + options panel run; **Q_U5** (ONE reified selector carrier, monomorphic — F-row carries bound-selector precision) + **Q_U6** (WHOLESALE path migration; P4a totality/repairs → P4b carrier → P4c+ ω) RULED 2026-07-31; **Q_U7** RULED (the `(@bcast step)` wrapper; 4b restated) · **Q_U8** RULED (uniform positional `$bcast-step` mint + parser position-dispatch; A/B named-diff-set) — partition LOCKED P4a–P4e; **the PAUSE is CLEARED 2026-07-31: Q_U9 RULED (`:` REFUSES over `List` — no native carrier + the key-sort thesis does not reach a cons-spine; guided error naming `pvec-from-list`; the `Functor`-instance door named; the solve-carrier counter resolved UPSTREAM by the `solve-*`→PVec mini-track) + the `update-in` ω fence and the whole-node abort both RATIFIED**; ⚠ LET merge `5e16ead4` landed mid-walk (audit coords @ `02dd27d7`) |
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | §5.P4a · battery 204 → **224** |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | §5.P5 · L1–L5 law battery |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | §5.PX · position flexible |
@@ -4049,12 +4049,53 @@ Suite **9732/478/0** · battery **280 → 289** · acceptance 52/52 + 89/89 + 29
 
 Status: ✅ 2b+2c COMPLETE.
 
-##### §5.P4b-ii-3 — remaining
+##### §5.P4b-ii-3 — DISSOLVED at the close (its scope was discharged at 2b)
 
-Status: ⬜ — `_.field` was RESCUED at 2b (eta-expansion in the parser arm; the
-`sectionable-op-keywords` route the design assumed is INERT, because that
-clause is dispatched later in the same `cond`). b-ii-3's residue is whatever
-the close finds still owed.
+`_.field` was RESCUED inside 2b by eta-expansion in the `$select-path` parser
+arm. The design's assumed repair — "add `$select` to `sectionable-op-keywords`"
+— is **INERT**: that clause is dispatched LATER in the same `parse-list` cond,
+so the section path is unreachable for any select head. Re-verified at the
+close: `[_.a r]` → `7`, `map _.a recs` → `@[1 2]`, `|> r _.a` → `7`, all at
+zero errors. Nested `_.a.b` remains broken — verified IDENTICAL at HEAD
+(`parse-keyword-section` detects only a top-level `_`), so it is pre-existing,
+not a regression (DEFERRED 28).
+
+Status: ✅ DISSOLVED — no residue of its own.
+
+##### §5.P4b-ii — CLOSE  ✅ (2026-08-01)
+
+**b-ii is COMPLETE**: b-ii-1 (the (subject × sort) table, four asymmetries) →
+b-ii-2a (the two unnamed prerequisites + the tripwires) → b-ii-2b/2c (the flip
++ its diagnostics) → b-ii-3 DISSOLVED. Q_U12's scoping held: the `$dot-access`
+leg migrated; `#.field` and `[k]` keep their nodes as named follow-ups
+(DEFERRED 30 — and the audit sharpened the REASON from a taxonomic one to a
+structural one: `[k]` admits a COMPUTED KEY, and the payload is declared
+static-no-exprs).
+
+**Residue filed, DEFERRED 24–30.** The one that deserves the owner's eye is
+**24**: `select-block-hint` searches every subfield of every failing expr, from
+`infer/err`, under a swallow-everything handler — and the flip made the `'path`
+column reachable from it, opening four side-effect classes (registry mutation,
+`fresh-meta` ×2, meta-solving `check`, a speculative network fork) **inside an
+error formatter**. Mechanism confirmed by reading; **observable harm NOT
+demonstrated** in two close-time probes. Filed as a reachability RISK, stated
+that way deliberately — "I could not trigger it twice" is not evidence of
+safety for a walker that runs on every inference failure.
+
+**What b-ii cost, and what it bought.** Four owner rulings (Q_U12 scoping,
+Q_U13 NEST, Q_U14 the 2a/2b+2c split, Q_U15 the distinct sentinel), one
+mini-audit (1.36M tokens, 6 agents) and one adversarial verify (4 skeptics).
+The verify found a **BLOCKING** permissive→panic that two skeptics located
+independently, and proved by MUTATION that the tier pins were hollow — two
+independent mutations left the battery fully green.
+
+**The transferable lesson**: *a tripwire on one side of a fork is not coverage
+of the fork.* 2a's tripwire pinned the PERMISSIVE half of the two-tier miss;
+the LOUD half — whose failure STORES a wrong answer — had nothing, and stayed
+green under mutation. When a change introduces a FORK, both arms need pins, and
+mutation is what proves it.
+
+Suite **9732/478/0** · battery 240 → **289** · acceptance 52/52 + 89/89 + 29/29.
 
 ### §5.P5 — Ruling B + factoring
 

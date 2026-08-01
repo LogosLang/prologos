@@ -2739,3 +2739,95 @@ user-visible need. Flip site (one line each + re-pins): typing-core
 `select-below-entries` and reduction `below-entries` currently RESET `seen`
 at the `@sub` boundary — subject-root = thread `seen` through instead; then
 flip the `server.{host^_}` pins to `{:server {:server-host …}}`.
+
+## CIU T6 D4.P4b-ii spin-offs (filed 2026-08-01 at the b-ii close — from the mini-audit, the adversarial verify, and the close's own triage)
+
+### 24. `select-block-hint` runs the `'path` column inside an ERROR FORMATTER, with four side-effect classes — NEWLY LIVE
+
+**Mechanism, verified**: `select-block-hint` (typing-errors.rkt) is not a
+targeted re-walk of the failing node — it SEARCHES every subfield of ANY
+failing expr (`(ormap search (expr-subfields x))`), runs from `infer/err` on
+every inference failure, and is wrapped in a swallow-EVERYTHING handler that
+discards a raise but NOT effects already performed.
+
+Before the b-ii-2b flip this could never reach the side-effecting arms:
+`select-row-of` refused selection / Map / union subjects under `'block` before
+them. **The flip makes the `'path` column reachable from that walker**, and
+that column contains: `register-selection!` + `global-env-add-type-only`
+(sub-selection minting, via `selection-field-type`), `fresh-meta` ×2 (the
+dyn/'unknown arms), `check` (which SOLVES metas — the Map key-type gate), and
+`with-speculative-rollback` (a network fork, the union arm).
+
+**Honest status**: the mechanism is confirmed by reading; **an observable harm
+was NOT demonstrated** at the close. Two probes (a failing expr containing
+dyn-row dot accesses; a type error containing a selection dot-access) showed no
+meta inflation beyond the elaborator's own expected strictness-slot mint. So
+this is filed as a REACHABILITY RISK with the mechanism named, not as a
+reproduced defect — and deliberately not as "fine", because "I could not
+trigger it in two probes" is not evidence of safety for a walker that runs on
+every inference failure in the program.
+
+**What would settle it**: instrument the four effect sites, run the full suite,
+and see whether any fires from inside `select-block-hint`. If any does, the fix
+is to make the hint's re-walk effect-free (a read-only projection variant)
+rather than to narrow its search.
+
+### 25. `format-select-fail`'s remaining arms are still unconditionally block-worded
+
+b-ii-2c made five arms sort-aware. `subject-tuple` is **reachable under
+`'path`** (`select-row-of`'s nat-key-domain arm is sort-blind by construction)
+and still reads "a keyed block selects NAMED fields". `subject-map` under
+`'path` still interpolates "(branch `a`)" although a path access has no branch
+— which contradicts a b-ii-2c pin's own comment. `ordinal-oob`,
+`not-indexable` and `subject-selection` look unreachable under `'path` (Q_U12
+routes `.N` through `$postfix-index`; the selection arm sends `'path` to
+`select-view`) — verify before assuming.
+
+Mutation evidence from the verify: stripping the block wording from
+`miss-dyn` / `unknown-presence` / the not-a-record fallback left the whole
+battery green, i.e. three of the five conditionalised arms are unpinned on both
+sides.
+
+### 26. `typing-propagators.rkt` has no `expr-select` registration — the whole dot surface is now on the unhandled fallback
+
+`expr-map-get` is registered; `expr-select` is not, so every `.field` in the
+language now lands in `unhandled-expr-counts` instead of a registry-dispatched
+rule. **Pre-existing for the block spelling since P3a**, but this flip moved
+the highest-traffic access surface in the language onto it. Coverage hygiene,
+not a live defect — `expr-validate` was registered explicitly for exactly this
+reason ("registering suppresses unhandled-expr-counts noise").
+
+### 27. Stale comments describing a rewrite that no longer happens
+
+`surface-rewrite.rkt:1403`/`:1407` and `sre-rewrite.rkt:650` still say
+`($dot-access field) target → (map-get target :field)`. Both are comment-only
+placeholders (no live rule, no `register-sre-rewrite-rule!` call), so the CODE
+claim holds and only the prose is wrong — but this is the doc-truth class that
+sends the next census to the wrong file.
+
+### 28. `_.a.b` nested sections are broken — PRE-EXISTING, verified identical at HEAD
+
+`parse-keyword-section` detects only a TOP-LEVEL `_`, so the outer level never
+had a hole to section. Direct `parse-datum` A/B confirms `(map-get (map-get _
+:a) :b)` and `($select-path ($select-path _ a) b)` both wrap the outer node
+around a `surf-lam`. Single-level `_.a` works. Not a regression; recorded so it
+is not re-diagnosed as one.
+
+### 29. The `defr` parenless-clause delta is unpinned
+
+HEAD classified `(map-get cfg :host)` in a parenless clause body as a goal pair
+(`pol8-goal-pair?` = "pair not headed by a `$` sentinel"); `($select-path …)`
+IS `$`-headed, so the clause now takes `parse-degraded`'s guided refusal —
+**strictly better**, and that message's "(e.g. dot-access)" is now literally
+accurate rather than aspirational. No pin.
+
+### 30. Q_U12's named follow-ups remain open (by ruling, not omission)
+
+`#.field` (nil-safe → `expr-nil-safe-get`) and `[k]` (postfix index →
+`expr-get`) keep their own nodes. The b-ii-2 audit sharpened the reason: the
+taxonomy is NOT "different sorts" — ordinals already ride the carrier as
+`'ord-step`/`'ord-branch` from block spellings. The real, structural reason is
+that `[k]` admits a **COMPUTED key** (an expr) while the selector payload is
+declared STATIC data with no exprs inside and `select-step-kind` is a closed
+union. Stating it structurally also says exactly when the follow-up becomes
+possible: when the payload can carry exprs.
