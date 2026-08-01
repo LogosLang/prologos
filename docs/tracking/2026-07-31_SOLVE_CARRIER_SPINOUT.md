@@ -25,7 +25,7 @@ Second, unrelated-but-adjacent deliverable: the **`let` implicit-solve gap** (§
 | Phase | Description | Status | Notes |
 |---|---|---|---|
 | P0 | Census at HEAD, acceptance file, `explain` disposition ruling | ✅ | this doc; `examples/2026-07-31-solve-carrier.prologos` |
-| P1 | Carrier flip: typing + runtime + display walkers + consumers | ✅ | `2b34dbf7` |
+| P1 | Carrier flip: typing + runtime + display walkers + consumers + `.pnet` | ✅ | `b2c4366a` |
 | P2 | `let` implicit-solve gap + guided diagnostic | ✅ | `f2fd9d9d` |
 | X.close | Full-suite gate, roadmap, D4 §Q_U9 back-note | ✅ | `8d0e3d38` |
 
