@@ -3971,9 +3971,90 @@ Test delta **269 → 276**. Suite green.
 
 Status: ✅ 2a COMPLETE · ⬜ 2b+2c (the mint + its diagnostics).
 
+###### §5.P4b-ii-2b/2c — THE FLIP + its diagnostics  ✅ `54d940fe`
+
+**Q_U15 RULED — the fold mints a DISTINCT sentinel `$select-path`** [owner],
+not a reused `$select`. Forced: `surf-select` had NO sort field and the
+elaborator HARD-CODED `'block`, so a reused head left the elaborator unable to
+tell a dot access from a brace block. The fold mints in preparse and the origin
+is gone by the time a surf-select exists, so the sort had to become a CARRIED
+fact and a distinct head is the channel.
+
+**⭐ THE ARITY GATE, and why the distinct sentinel pays for itself.**
+`map-get`'s parser arm imposes EXACT arity 2; `$select`'s has only an emptiness
+check and NO upper bound, so every surplus arg becomes a BRANCH.
+`apply-pipe-step` appends the accumulator into any hole-free step, so a reused
+`$select` would have turned `|> m foo.bar` from a LOUD arity-error into a
+SILENT two-branch select. The same append lives in the `>>` compose twin, so a
+blacklist fix needed BOTH. Enforcing one-branch at the path arm fixes every
+caller at once, structurally.
+
+**Registration cost, MEASURED: FIVE sites, not §Q8.5's nine** — because that
+surface is written for a GROUPING-minted sentinel and this one is minted by the
+fold in preparse, after grouping and tree-parsing. Mirroring the sibling beat
+applying the checklist. (The verify then found a SIXTH — see below.)
+
+**2c was NOT separable** (Q_U14): probed live, `r.zzz` said "…in the select
+branch `zzz` — bare field access is spelled `.zzz`", instructing the user to
+write what they had just written, and `select-block-hint` runs BEFORE
+`closed-row-miss-hint` so the bad message WON. The fix is SCOPED — the block
+spelling keeps its teaching tail — pinned both ways.
+
+**The RED set came in at 12 datum assertions across 4 files and NOTHING ELSE.**
+No value-assertion failures, no type errors. The b-ii audit warned a
+datum-shape census is blind to type-error failures; that warning was sound, and
+the reason it did not bite is that b-ii-1 and 2a did the semantic work first.
+
+#### ⚠ THE ADVERSARIAL VERIFY (4 skeptics) — a BLOCKING find and hollow pins
+
+1. **BLOCKING, found INDEPENDENTLY BY TWO SKEPTICS** via A/B against a baseline
+   tree: `.field` on a union whose runtime value is a NON-MAP component
+   **PANICKED** where `[map-get u :a]` degrades to `none` at ZERO errors. The
+   first cut tier-gated the keyed MISS and never looked at the SUBJECT-kind arm
+   one level above. **That is the permissive→panic conversion this slice exists
+   to prevent**, and the message lied twice — "the block" for a dot access, and
+   "invariant violation" when typing legitimately admitted a union with a
+   non-map component. Now tier-gated; both spellings agree.
+2. **THE TIER PINS WERE HOLLOW**, proved by MUTATION: disabling reduction's
+   assertive arm, and separately disabling typing's `solve-strict-assert!`,
+   EACH left 283/283 green. 2a's tripwire pinned the PERMISSIVE half; the LOUD
+   half — whose failure STORES a wrong answer — had nothing. Three pins added
+   (the P2.b A1/A1b/A2 analogues) and BOTH mutations re-run to confirm they now
+   fail. One is also the only test executing `assertive-miss-message`, whose
+   extraction had fixed a live crash with zero coverage.
+3. **A SILENT ACCEPT-FLIP nobody predicted**: the field rides as a bare SYMBOL
+   now, so `segment-select-items` splits `^` out of it into a re-key
+   continuation and the `'path` assembly DROPPED it — five spellings returned
+   the plain field at ZERO errors where HEAD refused, while `pp-expr` rendered
+   the `^` faithfully. Honest display over dishonest semantics. Now a guided
+   refusal; blocks keep `^` in full.
+4. **THE FOURTH CONSECUTIVE MISSED `pretty-print.rkt` SITE**: `pp-datum` had no
+   arm, so `expand r.a` emitted the raw sentinel where HEAD emitted readable
+   `(map-get r :a)` — a silent regression on the introspection path for the
+   most common access surface in the language. b-ii-1's census fixed `pp-expr`
+   and stopped 1000 lines short of its DATUM-layer twin, on a datum-layer
+   migration.
+5. **THREE BINARY SORT DISPATCHES**, violating the rule written one slice
+   earlier: `(if (eq? sort 'path) …)` in elaborator/typing-core/typing-errors,
+   when `select-sort-unhandled` exists precisely to forbid it. Concrete future
+   failure: a `'nil-safe` node gets tier `#f`, which reduction reads as BLOCK,
+   so a nil-safe miss whose contract is `none` would panic. All total now.
+6. **Three MINORs**: `assertive-miss-message` claimed two consumers and had one
+   (map-get now shares it — the anti-drift property is ESTABLISHED, not
+   asserted); `uses-bvar0?` skipped the tier under a stale "subject is the only
+   expr slot" comment; `select-reduce`'s `[tier #f]` default was a trap (`#f`
+   means BLOCK, not "no claim") — defaults removed.
+
+Suite **9732/478/0** · battery **280 → 289** · acceptance 52/52 + 89/89 + 29/29.
+
+Status: ✅ 2b+2c COMPLETE.
+
 ##### §5.P4b-ii-3 — remaining
 
-Status: ⬜ — the `_.field` rescue.
+Status: ⬜ — `_.field` was RESCUED at 2b (eta-expansion in the parser arm; the
+`sectionable-op-keywords` route the design assumed is INERT, because that
+clause is dispatched later in the same `cond`). b-ii-3's residue is whatever
+the close finds still owed.
 
 ### §5.P5 — Ruling B + factoring
 
