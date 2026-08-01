@@ -859,12 +859,25 @@
 
 (define (forget-open-conn! hello cout)
   (when hello
-    (with-state
-      (define key (peer-hello-location-key hello))
-      (define left (filter (lambda (e) (not (eq? (conn-entry-out e) cout)))
-                           (hash-ref open-conns key '())))
-      (if (null? left) (hash-remove! open-conns key) (hash-set! open-conns key left))
-      (hash-remove! pubkey-by-out cout)))
+    (define key (peer-hello-location-key hello))
+    (define cid
+      (with-state
+        (define es (hash-ref open-conns key '()))
+        (define mine (findf (lambda (e) (eq? (conn-entry-out e) cout)) es))
+        (define left (filter (lambda (e) (not (eq? (conn-entry-out e) cout))) es))
+        (if (null? left) (hash-remove! open-conns key) (hash-set! open-conns key left))
+        (hash-remove! pubkey-by-out cout)
+        (and mine (conn-entry-cid mine))))
+    ;; And out of the PROLOGOS-side registry and the port map. Leaving them is
+    ;; not merely untidy: `reach-exporter` takes its already-open branch on any
+    ;; non-zero lookup, so a stale entry makes it CLAIM a parked give and write
+    ;; to a closed port — the give is destroyed and no dial is ever attempted.
+    ;; Invisible in the suite only because upstream mints a fresh designator per
+    ;; netlayer; any netlayer with a stable designator hits it on the first
+    ;; reconnect.
+    (when cid
+      (with-state (hash-remove! out-by-cid cid))
+      (ocapn-peer-forget (bytes->string/latin-1 key) cid)))
   (void))
 
 ;; The newest still-open connection to that peer, or #f.

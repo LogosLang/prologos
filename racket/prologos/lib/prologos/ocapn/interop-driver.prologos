@@ -45,7 +45,7 @@ require [prologos::ocapn::captp-core :refer [ConnectionState empty-connection
                                              op-gc-export op-gc-answer
                                              op-deliver-to-answer
                                              deliver-args deliver-target
-                                             deliver-resolver]]
+                                             deliver-resolver deliver-to-answer?]]
         [prologos::ocapn::syrup-wire :as wire :refer []]
         [prologos::data::nat         :as nat :refer [nat-eq?]]
         [prologos::ocapn::handshake  :refer [hex-to-bytes sig-envelope-bytes
@@ -123,7 +123,9 @@ foreign racket "ocapn-give-ffi.rkt"
 foreign racket "ocapn-enliven-ffi.rkt"
   [ocapn-enliven-park :as enliven-park : String -> String -> Bool]
 foreign racket "ocapn-enliven-ffi.rkt"
-  [ocapn-enliven-claim :as enliven-claim : String -> String]
+  [ocapn-enliven-peek :as enliven-peek : String -> String]
+foreign racket "ocapn-enliven-ffi.rkt"
+  [ocapn-enliven-drop :as enliven-drop : String -> Bool]
 foreign racket "ocapn-enliven-ffi.rkt"
   [ocapn-gift-id :as fresh-gift-id : String -> String]
 
@@ -578,6 +580,16 @@ defn handoff-sturdyref-bytes [loc]
 ;; A withdraw over a session that is ALREADY open. `peer-side-id` is why the
 ;; registry carries one: finding the connection is not enough, the receive has
 ;; to name the session, and that is derived from the two side-ids.
+;; KNOWN RESIDUAL RACE, stated rather than half-fixed. `peer-side-id` here and
+;; the `peer-lookup` inside `do-send-on` are two separate registry reads, so a
+;; connection closing between them yields a receive signed over an empty
+;; side-id — a well-formed frame naming a session nobody has.
+;;
+;; A compound `(cid, side-id)` read does NOT close it: the send resolves the
+;; cid again later, so the atomicity has to reach as far as the write. Closing
+;; it properly means threading the cid through `out-send` so the send targets
+;; the connection whose side-id we signed with, which is a change to `OutReq`
+;; and every producer. Not done here; named so it is not mistaken for safe.
 spec withdraw-over-open-session String -> [Option OutReq]
 defn withdraw-over-open-session [lk]
   let signed-give := [give-claim lk]
@@ -833,8 +845,8 @@ defn enliven-for-target [cid cs op]
 ;; `<15'ocapn-sturdyref` anywhere — including inside a bytestring argument —
 ;; and took the FIRST `desc:import-object` in the whole frame as the reply
 ;; target, which on the wire is an ARGUMENT, since args precede resolve-me.
-spec enliven-out-reqs Nat ConnectionState CapTPOp -> [List OutReq]
-defn enliven-out-reqs [cid cs op]
+spec enliven-for-export Nat ConnectionState CapTPOp -> [List OutReq]
+defn enliven-for-export [cid cs op]
   match [deliver-target op]
     | none   -> [nil OutReq]
     | some t ->
@@ -846,6 +858,14 @@ defn enliven-out-reqs [cid cs op]
 
 ;; A reference reaches us as whichever descriptor the exporter chose; all
 ;; three name a position, and that position is what a deposit carries.
+;; Same export-namespace gate as `fetch-answer-out-reqs`, for the same reason:
+;; `op:deliver-to-answer 5` is a peer-chosen answer slot, not our enlivener.
+spec enliven-out-reqs Nat ConnectionState CapTPOp -> [List OutReq]
+defn enliven-out-reqs [cid cs op]
+  match [deliver-to-answer? op]
+    | true  -> [nil OutReq]
+    | false -> enliven-for-export cid cs op
+
 spec desc-tag? String -> Bool
 defn desc-tag? [tag]
   match [str::eq tag "desc:import-object"]
@@ -933,6 +953,23 @@ defn blob-nat [blob i]
     | none   -> zero
     | some n -> n
 
+;; Did the blob decode to the five fields we parked?
+;;
+;; `blob-nat` answers zero and `blob-string` answers "" for BOTH "field absent"
+;; and "blob did not decode", and zero is not a harmless default here: it is the
+;; peer's BOOTSTRAP position, so a blob we failed to read would send
+;; `['fulfill ENV]` to the peer's bootstrap object rather than sending nothing.
+;; Check once, up front, and emit nothing at all if the parked state is not
+;; readable.
+spec blob-ok? String -> Bool
+defn blob-ok? [blob]
+  match [blob-field blob 4N]
+    | none   -> false
+    | some _ ->
+        match [str::eq [blob-string blob zero] ""]
+          | true  -> false
+          | false -> true
+
 spec answer-for-blob String -> OutReq
 defn answer-for-blob [blob]
   out-send [blob-string blob zero] [answer-enliven-bytes [blob-nat blob 1N] [sig-envelope-bytes [identity-keypair 0N] [blob-string blob 3N]]]
@@ -946,10 +983,27 @@ defn deposit-for-blob [blob ref]
 ;; this role could not be expressed before the connection registry existed.
 spec finish-handoff String Nat -> [List OutReq]
 defn finish-handoff [blob ref]
-  cons [deposit-for-blob blob ref] [cons [answer-for-blob blob] [nil OutReq]]
+  match [blob-ok? blob]
+    | false -> [nil OutReq]
+    | true  -> cons [deposit-for-blob blob ref] [cons [answer-for-blob blob] [nil OutReq]]
 
-spec claim-for-slot String CapTPOp -> [List OutReq]
-defn claim-for-slot [blob op]
+;; Remove the parked enliven, and act ONLY if we were the remover.
+;;
+;; `enliven-drop` answers #t for exactly one caller, so two threads racing one
+;; slot produce one send rather than two.
+spec finish-if-dropped Bool String Nat -> [List OutReq]
+defn finish-if-dropped [dropped blob ref]
+  match dropped
+    | false -> [nil OutReq]
+    | true  -> finish-handoff blob ref
+
+;; VALIDATE, THEN CLAIM. The earlier shape claimed first and validated after,
+;; so any deliver to a reserved slot that was not a well-formed
+;; `['fulfill REF]` — a break, a `desc:answer` reference the descriptor gate
+;; rejects, a second delivery — destroyed the pending handoff permanently and
+;; silently. Peeking leaves it in place for the answer we can actually use.
+spec claim-for-slot String String CapTPOp -> [List OutReq]
+defn claim-for-slot [key blob op]
   match [str::eq blob ""]
     | true  -> [nil OutReq]
     | false ->
@@ -958,15 +1012,26 @@ defn claim-for-slot [blob op]
           | some a ->
               match [fulfill-ref a]
                 | none     -> [nil OutReq]
-                | some ref -> finish-handoff blob ref
+                | some ref -> finish-if-dropped [enliven-drop key] blob ref
 
-spec fetch-answer-out-reqs Nat CapTPOp -> [List OutReq]
-defn fetch-answer-out-reqs [cid op]
+spec fetch-answer-for-export Nat CapTPOp -> [List OutReq]
+defn fetch-answer-for-export [cid op]
   match [deliver-target op]
     | none   -> [nil OutReq]
-    | some t -> claim-for-slot [enliven-claim [enliven-key cid t]] op
+    | some t -> claim-for-slot [enliven-key cid t] [enliven-peek [enliven-key cid t]] op
 
 ;; Both halves of the gifter role, for one inbound op.
+;; The EXPORT table only. `deliver-target`'s own doc says it indexes the
+;; question/answer table for `op-deliver-to-answer` and that `deliver-to-answer?`
+;; is how you tell them apart — and the answer namespace is PEER-allocated and
+;; starts at 0, so without this gate a peer reaches any slot it likes from a
+;; namespace that has nothing to do with our exports.
+spec fetch-answer-out-reqs Nat CapTPOp -> [List OutReq]
+defn fetch-answer-out-reqs [cid op]
+  match [deliver-to-answer? op]
+    | true  -> [nil OutReq]
+    | false -> fetch-answer-for-export cid op
+
 spec gifter-out-reqs Nat ConnectionState CapTPOp -> [List OutReq]
 defn gifter-out-reqs [cid cs op]
   append [enliven-out-reqs cid cs op] [fetch-answer-out-reqs cid op]
@@ -989,9 +1054,10 @@ defn gifter-out-reqs [cid cs op]
 ;; against a connection that does not exist.
 spec do-send-on String String -> Bool
 defn do-send-on [loc bs]
-  match [nat-eq? [peer-lookup loc] zero]
-    | true  -> true
-    | false -> send-on-conn [peer-lookup loc] bs
+  let cid := [peer-lookup loc]
+    match [nat-eq? cid zero]
+      | true  -> true
+      | false -> send-on-conn cid bs
 
 spec do-out-req OutReq -> Bool
 defn do-out-req [r]

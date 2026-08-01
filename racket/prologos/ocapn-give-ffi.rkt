@@ -15,9 +15,17 @@
 ;;;     names. Keyed by location and not by connection: at park time the
 ;;;     connection does not exist yet — dialling it is the next step.
 ;;;
+;;;     A QUEUE per location, not a slot. Two gives naming one exporter is
+;;;     ordinary — one deliver can carry both — and the first version of this
+;;;     table was a flat `hash-set!`, so the second silently deleted the
+;;;     first: its gifter's deposit then sat at the exporter forever and the
+;;;     receiver's promise never settled, with nothing logged. A duplicate
+;;;     give (same bytes) is idempotent rather than queued twice.
+;;;
 ;;;   ocapn-give-claim : (String -> String)
-;;;     Take the give waiting on a location, removing it. "" when there is
-;;;     none, which is the common case: every start-session asks.
+;;;     Take the OLDEST give waiting on a location, removing just that one.
+;;;     "" when there is none, which is the common case: every start-session
+;;;     asks. Call it again to drain the rest.
 ;;;
 ;;;     Claim REMOVES, and the read and the remove are one critical section.
 ;;;     Two connections to the same peer completing at once would otherwise
@@ -43,22 +51,31 @@
 
 (define lock (make-semaphore 1))
 
-;; exporter location key -> signed-give wire bytes (Latin-1 string)
+;; exporter location key -> LIST of signed-give wire bytes, oldest first
 (define gives (make-hash))
 
 ;; session id (Latin-1 string) -> next count
 (define counts (make-hash))
 
 (define (ocapn-give-park loc-key give)
-  (call-with-semaphore lock (lambda () (hash-set! gives loc-key give)))
+  (call-with-semaphore lock
+    (lambda ()
+      (define es (hash-ref gives loc-key '()))
+      ;; Idempotent on identical bytes: a give redelivered (a retry, or the
+      ;; same frame seen twice) must not queue a second withdraw for one gift.
+      (unless (member give es)
+        (hash-set! gives loc-key (append es (list give))))))
   #t)
 
 (define (ocapn-give-claim loc-key)
   (call-with-semaphore lock
     (lambda ()
-      (define v (hash-ref gives loc-key ""))
-      (hash-remove! gives loc-key)
-      v)))
+      (define es (hash-ref gives loc-key '()))
+      (cond
+        [(null? es) ""]
+        [else
+         (if (null? (cdr es)) (hash-remove! gives loc-key) (hash-set! gives loc-key (cdr es)))
+         (car es)]))))
 
 (define (ocapn-handoff-count session-id)
   (call-with-semaphore lock

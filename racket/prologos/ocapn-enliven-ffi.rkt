@@ -18,14 +18,25 @@
 ;;;     exporter's answer arrives addressed to, and it is the only thing in
 ;;;     that answer we chose.
 ;;;
-;;;   ocapn-enliven-claim : (String -> String)
-;;;     Take the pending enliven for a key, removing it. "" when there is
-;;;     none, which is every ordinary deliver.
+;;;   ocapn-enliven-peek  : (String -> String)
+;;;     The pending enliven for a key, WITHOUT removing it. "" for a miss,
+;;;     which is every ordinary deliver.
 ;;;
-;;;     Claim REMOVES, and the read and the remove are one critical section.
-;;;     A `for/first` scan followed by a separate remove let two threads both
-;;;     pass and send the give twice — which is what the Racket version this
-;;;     replaces had to be fixed for.
+;;;   ocapn-enliven-drop  : (String -> Bool)
+;;;     Remove it, once the caller has decided it can act on it.
+;;;
+;;;     PEEK-THEN-DROP, not claim-then-check. The single `claim` this replaces
+;;;     removed unconditionally and the caller validated afterwards, so any
+;;;     deliver to a reserved slot that was NOT a well-formed `['fulfill REF]`
+;;;     — a break, a `desc:answer` reference, a second delivery — consumed the
+;;;     pending handoff permanently, with nothing logged and no way back. The
+;;;     handoff then stalled forever. Validate first; remove only when the
+;;;     frame is one we are actually going to answer.
+;;;
+;;;     The drop is still a single critical section, which is what stops two
+;;;     threads both acting on one entry: `drop` reports whether IT was the
+;;;     one that removed, so the caller can make the send conditional on
+;;;     having won.
 ;;;
 ;;;   ocapn-gift-id : (String -> String)
 ;;;     A fresh gift id, `prefix` ++ a counter. Ids must be unique: the gift
@@ -40,7 +51,8 @@
 ;;; across an FFI signature that would have to change with it.
 
 (provide ocapn-enliven-park
-         ocapn-enliven-claim
+         ocapn-enliven-peek
+         ocapn-enliven-drop
          ocapn-gift-id
          ocapn-enliven-reset!
          ocapn-enliven-ffi-registry)
@@ -56,12 +68,16 @@
   (call-with-semaphore lock (lambda () (hash-set! pending key blob)))
   #t)
 
-(define (ocapn-enliven-claim key)
+(define (ocapn-enliven-peek key)
+  (call-with-semaphore lock (lambda () (hash-ref pending key ""))))
+
+;; #t only for the caller that actually removed it. Two threads racing one
+;; slot: exactly one sees #t, so exactly one sends.
+(define (ocapn-enliven-drop key)
   (call-with-semaphore lock
     (lambda ()
-      (define v (hash-ref pending key ""))
-      (hash-remove! pending key)
-      v)))
+      (cond [(hash-has-key? pending key) (hash-remove! pending key) #t]
+            [else #f]))))
 
 (define (ocapn-gift-id prefix)
   (call-with-semaphore lock
@@ -77,5 +93,6 @@
 (define ocapn-enliven-ffi-registry
   (hasheq
    'ocapn-enliven-park  (cons ocapn-enliven-park  '(String -> String -> Bool))
-   'ocapn-enliven-claim (cons ocapn-enliven-claim '(String -> String))
+   'ocapn-enliven-peek  (cons ocapn-enliven-peek  '(String -> String))
+   'ocapn-enliven-drop  (cons ocapn-enliven-drop  '(String -> Bool))
    'ocapn-gift-id       (cons ocapn-gift-id       '(String -> String))))

@@ -49,7 +49,9 @@
 ;;;     the connection the enliven arrived on, and by then it is servicing a
 ;;;     different one.
 ;;;
-;;;   ocapn-peer-forget   : called by the SERVER when a connection closes.
+;;;   ocapn-peer-forget   : (String -> Nat -> Bool)
+;;;     Called by the SERVER when a connection closes. Drops one connection's
+;;;     entry, not the peer's whole list.
 ;;;
 ;;;   ocapn-send-on       : (Nat -> String -> Bool)
 ;;;     Queue wire bytes for connection `cid`, as a Latin-1 string — the same
@@ -74,6 +76,8 @@
 ;;; concurrently, and a bare `set!` drops a send queued between a drainer's
 ;;; read and its clear.
 
+(require racket/list)
+
 (provide ocapn-peer-register
          ocapn-peer-lookup
          ocapn-peer-side-id
@@ -86,35 +90,64 @@
 
 (define lock (make-semaphore 1))
 
-;; location key (as a Latin-1 string) -> (cons connection-id side-id)
+;; location key (as a Latin-1 string) -> LIST of (cons connection-id side-id),
+;; newest first.
+;;
+;; A LIST, not a slot. The key names a PEER, not a connection, and one peer can
+;; hold two concurrent sessions — the server's own `open-conns` was made
+;; list-valued for exactly this reason and says so at its definition. The first
+;; version of this table was a flat `hash-set!` and reintroduced the bug that
+;; comment describes: the earlier session's routing entry silently overwritten
+;; by the later one, so a reply for session A went to session B.
 (define peers (make-hash))
 
 ;; pending sends, oldest first, as (cons cid payload)
 (define sends '())
 
 (define (ocapn-peer-register loc cid side-id)
-  "Record loc -> (cid, side-id). Returns #t."
-  (call-with-semaphore lock (lambda () (hash-set! peers loc (cons cid side-id))))
-  #t)
-
-(define (ocapn-peer-lookup loc)
-  "The connection id for loc, or 0 when we have none."
-  (call-with-semaphore lock (lambda () (car (hash-ref peers loc '(0 . ""))))))
-
-(define (ocapn-peer-side-id loc)
-  "The peer's side-id for loc, or \"\" when we have no connection."
-  (call-with-semaphore lock (lambda () (cdr (hash-ref peers loc '(0 . ""))))))
-
-(define (ocapn-peer-loc-of cid)
-  "The location key registered for cid, or \"\" when there is none."
+  "Prepend (cid, side-id) to loc's list. Returns #t."
   (call-with-semaphore lock
     (lambda ()
-      (or (for/first ([(loc v) (in-hash peers)] #:when (equal? (car v) cid)) loc)
+      (hash-update! peers loc
+                    (lambda (es) (cons (cons cid side-id)
+                                       (filter (lambda (e) (not (equal? (car e) cid))) es)))
+                    '())))
+  #t)
+
+(define (newest loc) (let ([es (hash-ref peers loc '())]) (if (null? es) #f (car es))))
+
+(define (ocapn-peer-lookup loc)
+  "The newest connection id for loc, or 0 when we have none."
+  (call-with-semaphore lock (lambda () (let ([e (newest loc)]) (if e (car e) 0)))))
+
+(define (ocapn-peer-side-id loc)
+  "The newest peer side-id for loc, or \"\" when we have none."
+  (call-with-semaphore lock (lambda () (let ([e (newest loc)]) (if e (cdr e) "")))))
+
+
+;; The location a connection is registered under — the reverse of `lookup`.
+;; A step knows which connection it is servicing, but the outbound side names
+;; peers by LOCATION: a gifter answering an enliven has to get back to the
+;; connection the enliven arrived on, and by then it is servicing a different
+;; one. Scans every peer's list, since a cid appears in exactly one.
+(define (ocapn-peer-loc-of cid)
+  (call-with-semaphore lock
+    (lambda ()
+      (or (for/first ([(loc es) (in-hash peers)]
+                      #:when (findf (lambda (e) (equal? (car e) cid)) es))
+            loc)
           ""))))
 
-(define (ocapn-peer-forget loc)
-  "Drop a location's entry once its connection closes."
-  (call-with-semaphore lock (lambda () (hash-remove! peers loc)))
+;; Drop ONE connection's entry, leaving that peer's other sessions alone.
+;; Without this a stale entry makes `reach-exporter` take its already-open
+;; branch, CLAIM a parked give, and write to a closed port — the give is
+;; destroyed and no dial is ever attempted.
+(define (ocapn-peer-forget loc cid)
+  (call-with-semaphore lock
+    (lambda ()
+      (define left (filter (lambda (e) (not (equal? (car e) cid)))
+                           (hash-ref peers loc '())))
+      (if (null? left) (hash-remove! peers loc) (hash-set! peers loc left))))
   #t)
 
 (define (ocapn-peer-reset!)
@@ -142,6 +175,6 @@
    'ocapn-peer-lookup   (cons ocapn-peer-lookup   '(String -> Nat))
    'ocapn-peer-side-id  (cons ocapn-peer-side-id  '(String -> String))
    'ocapn-peer-loc-of   (cons ocapn-peer-loc-of   '(Nat -> String))
-   'ocapn-peer-forget   (cons ocapn-peer-forget   '(String -> Bool))
+   'ocapn-peer-forget   (cons ocapn-peer-forget   '(String -> Nat -> Bool))
    'ocapn-send-on       (cons ocapn-send-on       '(Nat -> String -> Bool))
    'ocapn-send-drain    (cons ocapn-send-drain    '((List String) -> (List String)))))
