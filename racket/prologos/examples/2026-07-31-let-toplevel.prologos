@@ -140,6 +140,24 @@ def after := 2
 ;;18=> 3 : Int
 
 ;; ───────────────────────────────────────────────────────────────────────────
+;; §E2  A CHAIN MERGES REGARDLESS OF WHAT PRECEDES IT
+;; ───────────────────────────────────────────────────────────────────────────
+;; §A's chain sits FIRST in this file, which is exactly the position that hid a
+;; bug: the first cut tested the whole MAXIMAL RUN of consecutive lets, so a
+;; single COMPLETE let in front of a chain poisoned it. Pinned here in the
+;; position the fixture was otherwise blind to.
+
+let w := 1
+  w
+;;19=> 1 : Int
+
+let d := 4
+let e := 5
+let f := [+ d e]
+  [* f 2]
+;;20=> 18 : Int
+
+;; ───────────────────────────────────────────────────────────────────────────
 ;; §F  THE DIAGNOSTIC MUST NOT LIE
 ;; ───────────────────────────────────────────────────────────────────────────
 ;; A nested bodyless `let` used to report "`let` is not allowed at top level.
@@ -150,7 +168,7 @@ def after := 2
 defn nested-noop [] : Int
   let ignored := 1
   7
-;;19=> nested-noop : Int defined.
+;;21=> nested-noop : Int defined.
 
 [nested-noop]
-;;20=> 7 : Int
+;;22=> 7 : Int

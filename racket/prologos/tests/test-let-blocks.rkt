@@ -649,3 +649,39 @@
   (check-false (prologos-error? (last rs)) (format "got: ~v" (last rs)))
   (check-true (regexp-match? #rx"PVec" (format "~a" (last rs)))
               (format "the implicit solve must still fire, got: ~v" (last rs))))
+
+(test-case "let-tl/a chain merges REGARDLESS of what precedes it"
+  ;; REGRESSION PIN. The first cut of the top-level merge tested the whole
+  ;; MAXIMAL RUN of consecutive lets — "are all but the last bodyless?" — so a
+  ;; single COMPLETE let sitting in front of a chain poisoned it: the run was
+  ;; rejected wholesale and nothing merged. The run is now SEGMENTED into units
+  ;; (bodyless* followed by one with-a-body), so a complete let simply forms its
+  ;; own unit and the chain behind it merges normally.
+  ;;
+  ;; This escaped the acceptance file purely by POSITION — §A's chain sits first
+  ;; in that file. It surfaced only when the same chain was written after other
+  ;; material. "The fixture passes" is a claim about the fixture's SHAPE as much
+  ;; as about the code.
+  (define (chain-after prefix)
+    (run-file-ws (string-append
+      "ns tlseg\n" prefix
+      "let a := 4\n"
+      "let b := 5\n"
+      "let c := [+ a b]\n"
+      "  [* c 2]\n")))
+  (define (last-is-18? rs)
+    (and (not (prologos-error? (last rs)))
+         (regexp-match? #rx"18" (format "~a" (last rs)))))
+  ;; the chain first — the shape the acceptance file happens to use
+  (check-true (last-is-18? (chain-after "")) "chain alone")
+  ;; …after a declaration
+  (check-true (last-is-18? (chain-after "def z := 1\n")) "after a def")
+  ;; …after a bare expression
+  (check-true (last-is-18? (chain-after "[+ 1 1]\n")) "after an expression")
+  ;; …after a COMPLETE let — the case that was broken
+  (check-true (last-is-18? (chain-after "let w := 1\n  w\n")) "after a let WITH a body")
+  ;; …and directly after another chain: two units, both merge
+  (define two (chain-after "let p := 1\nlet q := 2\n  [+ p q]\n"))
+  (check-equal? (length two) 2 (format "two chains → two forms, got: ~v" two))
+  (check-true (regexp-match? #rx"3" (format "~a" (first two))) "the first chain evaluates")
+  (check-true (last-is-18? two) "…and so does the second"))

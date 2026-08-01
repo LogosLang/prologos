@@ -2877,10 +2877,35 @@
 (define (toplevel-let-stx? s)
   (let ([d (syntax->datum s)]) (and (pair? d) (eq? (car d) 'let))))
 
-(define (mergeable-let-run? datums)
-  (and (> (length datums) 1)
-       (andmap let-bodyless? (drop-right datums 1))
-       (not (let-bodyless? (last datums)))))
+;; SEGMENT a run of consecutive top-level lets into merge units. A unit is a
+;; (possibly empty) sequence of BODYLESS lets terminated by one let WITH a body —
+;; the precondition `merge-let-sequence`/`split-last-let` actually assume.
+;;
+;; ⚠ Segmenting, not testing the run as a whole, is the correction to the first
+;; cut. That version asked "are all but the last bodyless?" of the WHOLE maximal
+;; run, so a single complete let sitting in front of a chain POISONED it:
+;;     let w := 1
+;;       w            ← has a body …
+;;     let a := 4     ← … so this chain silently stopped merging
+;;     let b := 5
+;;     let c := [+ a b]
+;;       [* c 2]
+;; gave `1 / 4 / 5 / ERROR unbound` instead of `1 / 18`. It survived the
+;; acceptance file only because §A's chain happens to sit first in the file —
+;; positional luck, and a reminder that "the fixture passes" is a statement
+;; about the fixture's SHAPE as much as about the code.
+(define (segment-let-run run)
+  ;; → (listof (listof stx)) — each inner list is one merge unit, in order
+  (let loop ([r run] [pending '()] [out '()])
+    (cond
+      [(null? r)
+       ;; trailing BODYLESS lets have nothing to merge into: each stays its own
+       ;; legal no-op, per the ruling that the next top-level form ends the scope
+       (append (reverse out) (map list (reverse pending)))]
+      [(let-bodyless? (syntax->datum (car r)))
+       (loop (cdr r) (cons (car r) pending) out)]
+      [else
+       (loop (cdr r) '() (cons (append (reverse pending) (list (car r))) out))])))
 
 (define (merge-toplevel-sibling-lets stxs)
   (let loop ([rest stxs] [acc '()])
@@ -2894,14 +2919,19 @@
            (if (and (pair? r) (toplevel-let-stx? (car r)))
                (take (cdr r) (cons (car r) got))
                (values (reverse got) r))))
-       (define run-datums (map syntax->datum run))
-       (cond
-         [(mergeable-let-run? run-datums)
-          (define merged (merge-sibling-lets run-datums))
-          (if (= (length merged) 1)
-              (loop tail (cons (datum->syntax #f (car merged) (car run) (car run)) acc))
-              (loop tail (append (reverse run) acc)))]
-         [else (loop tail (append (reverse run) acc))])])))
+       (define emitted
+         (for/fold ([out '()]) ([unit (in-list (segment-let-run run))])
+           (cond
+             ;; a lone form merges with nothing — pass it through EQ?-IDENTICAL,
+             ;; so its syntax properties ('prologos-paren-origin,
+             ;; 'prologos-defrhs-command) are never round-tripped
+             [(null? (cdr unit)) (cons (car unit) out)]
+             [else
+              (define merged (merge-sibling-lets (map syntax->datum unit)))
+              (if (= (length merged) 1)
+                  (cons (datum->syntax #f (car merged) (car unit) (car unit)) out)
+                  (append (reverse unit) out))])))
+       (loop tail (append emitted acc))])))
 
 (define (preparse-expand-all stxs0)
   (define stxs (merge-toplevel-sibling-lets stxs0))
