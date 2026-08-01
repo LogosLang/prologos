@@ -3069,3 +3069,170 @@ not a slower one. Fixed by setting `env: PLT_CS_COMPILE_LIMIT: 1000000` at job
 level in all three workflows (job level, because the precompile STEP is what
 needs it) and exporting it from `run-ocapn-test-suite.sh` so the gate does not
 depend on its caller.
+
+---
+
+### #52 — A forward reference reduces to a STUCK TERM, and the only error comes from the FFI marshaller with the whole unreduced tree in it (2026-08-01, real bug, **misleading diagnostic + false all-clear**)
+
+**Symptom.** A module whose definitions call each other in the wrong order
+elaborates clean, imports clean, and passes a probe that names the broken
+functions. It fails only when something actually forces the path — and the
+error names the FFI:
+
+```
+foreign: Cannot marshal to string — not a String literal:
+  #(struct:expr-reduce #(struct:expr-reduce #(struct:expr-reduce
+    #(struct:expr-app #(struct:expr-app #(struct:expr-app
+      #(struct:expr-fvar prologos::ocapn::interop-driver::enliven-out-reqs)
+      #(struct:expr-nat-val 1)) …
+```
+
+41 KB of `#(struct:expr-app …)` naming a function that is defined, in a
+module that loaded, from a call site that is spelled correctly.
+
+**Cause.** Modules are single-pass. `defn f [x] g x` written *above*
+`defn g …` does not error — the call to `g` does not reduce, and the
+application stays as an `expr-app` node. A stuck term is **well-typed**, so
+nothing downstream complains until a boundary needs a value: here the
+`foreign` marshaller, which is the first thing that cannot accept a term.
+The `expr-fvar` in the dump names the OUTERMOST stuck call, not the
+definition that was out of order — in the case above `enliven-out-reqs` was
+fine and its callee `enliven-for-target`, twenty lines below it, was not.
+
+**The false all-clear is the expensive half.** All of these passed while the
+module was broken:
+
+| check | result |
+|---|---|
+| `require [M :refer [entry-point]]` | clean |
+| `require [M :refer-all]` | clean |
+| a probe CALLING every new function by name | clean, correct values |
+| `raco make driver.rkt` | clean |
+
+Referring a name does not force its body. Calling `fetch-frame-bytes`
+directly returned the right bytes, because *that* function's callees
+happened to precede it. Only `step-connection` — the entry point that
+reaches the whole graph — failed.
+
+**Rule.** Write definitions bottom-up, and verify by calling the ENTRY
+POINT, never by importing the module or by calling leaves. If an FFI
+marshal error prints a term, read the `expr-fvar` names in it as a *call
+chain* and check the definition ORDER of each, deepest first.
+
+**Cost this session.** Nine of thirty-five new definitions in one block were
+out of order (`begin-handoff` above `begin-handoff-on`, `enliven-out-reqs`
+above `enliven-for-target` above `opt-to-list`, `fulfill-ref` above
+`ref-position` above `desc-position` above `desc-position-for` above
+`desc-tag?`). The fix was mechanical — a script that split the block on
+`spec` lines and reassembled it in dependency order — but finding it took
+three conformance runs at ~9 minutes each, because the first two blamed a
+stale cache and a killed server process.
+
+**Related.** This is the fourth sighting of "stuck term is well-typed" in
+this port; the others are under-application (§0.2 of the gaps doc),
+`reserve-export` returning the literal string `"[reserve-export 21N] :
+String"`, and #48's typing-budget exhaustion. It is the same defect wearing
+different clothes: **Prologos has no diagnostic for "this did not reduce."**
+A `--warn-stuck` that reported any residual `expr-app` on an `fvar` at the
+end of a module load would have caught all four in seconds.
+
+---
+
+### #53 — `let X := <value spanning two lines>` is reported as "`let` is not allowed at top level" (2026-08-01, real bug, **misleading diagnostic**; facet of #38)
+
+**Symptom.**
+
+```prologos
+defn begin-handoff-on [cid cs lk loc swiss rm ecid]
+  let gid := [fresh-gift-id "prologos-gift-"]
+    let give := [handoff-give-bytes [receiver-key-bytes cs] [wire::encode loc]
+                                    [exporter-session-id lk] [our-side-id unit] gid]
+      let slot := [reserve-export-id ecid]
+        …
+```
+
+```
+let: `let` is not allowed at top level. Use `def` instead.
+  let give := ...
+      ^^^
+  Use: def give := ...
+```
+
+The `let` is four levels deep inside a `defn`. It is not at top level and
+`def` is not the fix.
+
+**Cause.** #38's reader behaviour: a `let` value may not span lines. The
+reader loses the binding, the enclosing form ends early, and what is left of
+the `let` is spliced out to top level — where the *top-level* check fires
+and reports the position it finds rather than the one that caused it. #38
+recorded the message as `let :=: missing value after :=`; a value broken
+after a *complete bracketed argument* (rather than mid-bracket) produces this
+different, actively wrong one instead.
+
+**Workaround.** Keep the value on one line, or factor it into a helper:
+
+```prologos
+spec give-for-handoff ConnectionState String SyrupValue String -> String
+defn give-for-handoff [cs lk loc gid]
+  handoff-give-bytes [receiver-key-bytes cs] [wire::encode loc] [exporter-session-id lk] [our-side-id unit] gid
+```
+
+**Rule.** "`let` is not allowed at top level" pointing at a `let` that is
+plainly nested means the value spans lines. Do not go looking for a
+misplaced `def`.
+
+---
+
+### #54 — `tools/check-parens.sh` cannot read `.prologos` files and reports a bogus imbalance (2026-08-01, tooling gap)
+
+**Symptom.** Run on a `.prologos` file, the delimiter checker fails on
+correct source:
+
+```
+$ tools/check-parens.sh lib/prologos/ocapn/interop-driver.prologos
+FAIL: …/interop-driver.prologos
+…:611:4: read-syntax: end-of-file following `|` in symbol
+1 file(s) with delimiter errors.
+```
+
+**Cause.** The checker is Racket `read-syntax`, which parses s-expressions.
+WS-mode `.prologos` is not s-expressions — a `defn` clause's `|` is a bare
+symbol start to the Racket reader.
+
+**Why it is only a foot-gun.** The pre-commit hook runs it on staged `.rkt`
+files only, so it never fires wrongly in the hook. It misleads only when a
+human or an agent runs it directly on a `.prologos` file, which is exactly
+what the rule "run `check-parens.sh` after every edit" invites during a
+session that is editing both.
+
+**Rule.** `check-parens.sh` is for `.rkt` only. For a `.prologos` file the
+equivalent check is loading it — which is what #52 says to do anyway. The
+script should reject a non-`.rkt` argument rather than mis-report it.
+
+---
+
+### #47 RECURRENCE (2026-08-01) — a stale `.pnet` as a bare "Unbound variable" at module load
+
+New symptom shape for #47, worth recording because it cost two full
+conformance runs. After editing a `.prologos` module, the test server failed
+at startup with:
+
+```
+imports: Error loading module prologos::ocapn::interop-driver: Unbound variable
+  context...:
+   /home/user/prologos/racket/prologos/namespace.rkt:968:0: process-imports-spec
+```
+
+No name, no line, no location. The same module imported cleanly from a WS
+probe in the same tree, seconds earlier. `rm -rf data/cache/pnet` made the
+server load fine with no source change.
+
+The reason it is worth its own note: the message is *identical in shape* to
+the one #52 produces and to the one under-application produces, so the three
+are indistinguishable at the point you first see them. The cheap
+discriminator is to clear the cache FIRST — it takes seconds and removes one
+of the three — and only then start reading code.
+
+**Rule.** A bare "Unbound variable" with no location at module load has
+three causes in this codebase: a stale `.pnet`, an under-applied call, and a
+forward reference. Clear the cache before diagnosing either of the others.
