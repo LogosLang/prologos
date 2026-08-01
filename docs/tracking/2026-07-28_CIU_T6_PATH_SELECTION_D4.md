@@ -3792,9 +3792,124 @@ detonating at b-ii-2 — taking them keeps b-ii-1 the safe typing-side slice):
 
 Status: ✅ b-ii-1 COMPLETE.
 
-##### §5.P4b-ii-2 / §5.P4b-ii-3 — remaining
+##### §5.P4b-ii-2 — The `$dot-access` fold migration (mini-audit folded 2026-08-01)
 
-Status: ⬜ — b-ii-2 (fold migration) · b-ii-3 (`_.field` rescue).
+**Mini-audit** `wf_db6ff64a-b94` (5 HEAD-pinned facets + completeness critic
+@ `7ba7bdad`, 6 agents / **1.36M tokens**). Load-bearing findings R-lens-verified
+on the main thread. **It refuted the design's named danger and found the real
+one**, and it refuted a claim b-ii-1 shipped.
+
+**⭐ Q_U13 RULED — the mint uses the NEST encoding** [owner, 2026-08-01].
+`x.a.b` mints `($select ($select x a) b)` — ONE CARRIER PER LEVEL — not the
+GATHER shape `($select x a b)`. Rationale: **nesting is what the fold already
+does** (probe-verified at HEAD: `x.a.b` → `(map-get (map-get x :a) :b)`), so
+this is the minimal diff; and it **preserves per-level tier granularity BY
+CONSTRUCTION**, which dissolves the objection that looked like it would
+re-open the carrier shape (below). Accepted cost, eyes open: the dot spelling
+and the `#p(a.b)` literal then encode the same path text with different
+nesting arity — one struct either way, so this is not the two-representation
+complection Q_U6 rejected, but it IS a divergence and is recorded as one.
+The GATHER alternative was rejected-with-reason: it matches `#p(…)` exactly
+and reads most literally as Q_U5's "three spellings, one representation", but
+it forces the tier to become a list parallel to the steps and re-opens
+per-step granularity as new work.
+
+**⭐ THE TIER PROBLEM DISSOLVES UNDER NEST — and the two questions were the
+SAME question, which no facet connected.** The strictness facet established
+that the tier is decided PER DESCENT LEVEL (probe: in one chain shape, a
+dyn-row level is permissive while a Map level panics) and concluded a scalar
+tier slot is "structurally insufficient". The critic showed that holds only
+for GATHER: under NEST each level is its own node with its own slot, exactly
+as `expr-map-get` has today. So Q_U13 decides Q1.
+
+**⚠ THE DESIGN'S NAMED DANGER DOES NOT REPRODUCE.** §5.P4b-ii claimed
+`preparse-expand-subforms`'s partially-opaque `$select` arm would make every
+`.field` lose infix / implicit-map / sibling-let processing. Refuted by five
+probes: every sibling pass that arm bypasses is keyed on a HEAD a folded
+access node never has (`def/defn/spec/trait/property/functor`; `$pipe`;
+`let`/`racket`). `(map-get x :a)` and `($select x a)` composed identically in
+all five. The `$select` arm DOES expand the subject; only the payload steps
+are opaque, which is intended.
+
+**⭐ THE REAL LOUD→SILENT SITE IS THE PIPE CALLER — and the in-tree test prose
+FORGETS it.** `apply-pipe-step` appends the accumulator into any hole-free
+list step. `|> m foo.bar` today yields `(map-get foo :bar m)` → LOUD
+`arity-error "map-get expects 2 arguments, got 3"`, because `map-get`'s parser
+arm imposes EXACT arity 2. Minted, it yields `($select foo bar m)` → a SILENT
+two-branch `surf-select` (`branches=((bar) (m))`) — the piped accumulator has
+become a selection branch at zero errors — because `$select`'s parser arm has
+only an emptiness check and NO upper bound. **R-lens-verified both halves.**
+`tests/test-path-selection.rkt:1020-1022` asserts in prose that
+`rewrite-dot-access` has "THREE production callers" and names three; the
+fourth, `expand-pipe-block` (macros.rkt:6294), landed at P3a AFTER that P2
+test was written and is precisely the dangerous one. **Zero dot-access-in-pipe
+coverage exists in the tree.** Correct the prose in the migrating commit.
+
+**⚠ TWO PREREQUISITES NOBODY NAMED**:
+1. **`select-reduce` does not receive the sort** — its signature is
+   `(subj-expr branches)` and the call site passes two args, discarding the
+   `sort` the whnf arm binds. Plumbing it is step ZERO for any tier decision.
+2. **Neither walk has a `'path` ASSEMBLY.** Both assemble a ROW
+   unconditionally under BOTH sorts; `x.a` must yield the VALUE. This is not
+   a green-field question: **`cfg{server}.server.host` is PINNED GREEN**
+   (`tests/test-path-selection.rkt:1280`) and becomes a `'path` selector over
+   a `'block` selector, where the middle level must EXTRACT for the outer to
+   find `host`.
+
+**⚠ THE REGRESSION SET IS WIDER THAN §5.P4b-ii-1 RECORDED, AND ITS PINS ARE
+THE WRONG SPELLING.** Of the four asymmetries, THREE regress permissive→panic
+(dyn row · selection view · union) and the Map cell regresses in MESSAGE
+QUALITY — from `map-get: key :zzz not found; available keys: …` to
+`select: … (invariant violation — typing sourced it as present)`, **which is
+FALSE for a Map under Q_U10's own posture**. And there is a SECOND arm nobody
+framed: a definitely-non-map SUBJECT degrades to `(expr-fvar 'none)` at zero
+errors today and PANICS under the carrier — reachable from a union narrowed
+at runtime, with no typing counterpart, so no typing-axis enumeration
+(including b-ii-1's four asymmetries) could surface it.
+**⚠ CORRECTION to this document and to a claim made to the owner**: b-ii-1's
+close notes said the D19 pins "would catch" the dyn-row regression. **They
+would not.** All three cited pins use the BRACKET `[map-get …]` spelling,
+which parses through the `map-get` PARSER KEYWORD, not the `$dot-access`
+sentinel Q_U12 scopes b-ii-2 to. They stay GREEN through every regression
+above, and **no test anywhere pins the DOT spelling's permissive miss.**
+
+**⚠ SILENT-ACCEPT FLIPS, which no red-set census can see.** Migrating
+LOOSENS QTT: `expr-map-get`'s `inferQ` is SUBJECT-TYPE-GATED (Map / Record /
+schema-or-selection fvar, else `tu-error`) while `expr-select`'s delegates
+unconditionally — and the map-get arm has NO `expr-union` case although
+typing-core's `infer` arm does, so migrating also silently FIXES a live
+lying-"Multiplicity violation" on union subjects. Both are accept-direction
+flips: they produce no failing test, so they must be PINNED BEFORE the fold
+or they land unrecorded.
+
+**C5 is wider than recorded**: `select-block-hint` is not a targeted re-walk —
+it SEARCHES every subfield of ANY failing expr (`ormap search (expr-subfields
+x)`), from `infer/err`, on every inference failure. After b-ii-2 the `'path`
+column opens FOUR side-effect classes inside an error formatter:
+`register-selection!` + `global-env-add-type-only`, `fresh-meta` ×2, `check`
+(which solves metas), and `with-speculative-rollback` (a network fork) — all
+under an all-exceptions swallow that discards the raise but not the effects.
+
+**`_.field` deletion is REAL, SILENT, and the repair is not the obvious one.**
+Three working shapes, ZERO tests. "Add `$select` to `sectionable-op-keywords`"
+is **INERT**: `$select`'s clause precedes the section clause in the SAME
+`parse-list` cond, so it never reaches it. (b-ii-3's, but b-ii-2 must not
+delete it in the meantime.)
+
+**Q_U12's taxonomy is looser than its phrasing** (adjudicated): ordinals are
+ALREADY in the step vocabulary (`'ord-step`/`'ord-branch`) and ride the
+carrier from block spellings, so "`[k]` is a different sort" is not the real
+reason. The structural reason is that `[k]` admits a COMPUTED key — an expr —
+while the payload is declared STATIC data with no exprs inside
+(`syntax.rkt:765`) and `select-step-kind` is a closed union. Stating it
+structurally also says exactly when the follow-up becomes possible.
+
+Status: ⬜ — Q_U13 ruled (NEST); the b-ii-1 tail-blind defect fixed first
+(below); implementation not started.
+
+##### §5.P4b-ii-3 — remaining
+
+Status: ⬜ — the `_.field` rescue.
 
 ### §5.P5 — Ruling B + factoring
 
