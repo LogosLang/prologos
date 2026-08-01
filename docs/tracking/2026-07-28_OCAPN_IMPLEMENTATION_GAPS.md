@@ -108,28 +108,68 @@ so those slots name our tables, not the peer's. The verification pass caught
 it (our own decoder rejected the result); it is reverted, and the finding is
 open below.
 
-### Still open
+### Nothing is open
 
 Thirteen entries were open after the first remediation pass, and §0.3 and
-§1.7 M7 were open from §0. **Twelve are closed, two dissolved under premises
-that stopped holding, and one is half closed.** What is left is a single
-architectural problem — the gifter and receiver roles living in Racket — and
-the one entry still downstream of it.
+§1.7 M7 were open from §0. **All are closed** — twelve by being fixed, two
+dissolved under premises that stopped holding, and the last two (§0.2 and
+§1.7 M8) by the handoff-role migration described below.
 
-Two of §0.2's three primitives now exist and both have real consumers:
-`eff-connect` (a behaviour asks for a socket without opening one) and
-`act-step-pending` (a behaviour acts without answering). Between them the
-sturdyref enlivener became an ordinary actor, the driver stopped intercepting
-anything, and the enliven resolve-me became a real export. `eff-send-on`, a
-first-class connection registry, and `eff-sign` are what remain, and they are
-what the roles themselves need.
+§0.2's remaining primitives all landed, and both roles moved with them.
+`eff-connect` and `act-step-pending` came first (a behaviour asks for a socket
+without opening one; a behaviour acts without answering) and made the sturdyref
+enlivener an ordinary actor. The connection registry, the process signing key
+and SHA-256 followed, and with them the gifter and receiver roles themselves.
 
-**Genuinely open — one problem, one entry downstream of it:**
+**Everything is closed. The two that were open:**
 
-| Finding | Why it is still open |
+| Finding | How it closed |
 |---|---|
-| §0.2 gifter/receiver roles live in Racket | **First primitive landed; the enlivener has moved.** `eff-connect` and `act-step-pending` both exist, and `beh-sturdyref-enlivener` is a real actor at export 5 — the driver no longer intercepts anything, so EVERY op now goes through `connection-step`. That closes §0.3 and the Prologos half of §1.7 M8. `eff-send-on` and `eff-sign` are untouched, and the connection registry is still a Racket hash, so the gifter and receiver roles themselves have not moved. |
-| §1.7 M8 every frame is processed twice | **Half closed.** The PROLOGOS half is gone: `run-step` no longer handles any op instead of the bridge, because the enlivener is an actor. The Racket byte-scanners (`try-enliven!`, `try-fetch-answer!`, `note-handoff-give!`) still run on every frame alongside `drive-step`; removing them needs `eff-sign` and a connection registry, i.e. the rest of §0.2. |
+| §0.2 gifter/receiver roles live in Racket | **CLOSED.** Both roles are `interop-driver.prologos`. The Racket server holds no handoff logic at all — `try-enliven!`, `claim-enliven!`, `try-fetch-answer!`, `finish-fetch-answer!`, `pending-enlivens`, `note-handoff-give!`, `redeem-gift-if-pending!`, `redeem-gift-for-hello!`, `withdraw-gift-frame`, `pending-gives`, `reserve-enliven-slot!`, `next-gift-id!` and `next-handoff-count!` are deleted. Conformance 24/24 with nothing on the Racket side. |
+| §1.7 M8 every frame is processed twice | **CLOSED.** There is one Syrup parser on a frame again. The Prologos half went when the enlivener became an actor; the Racket half went with the scanners above. |
+
+**§0.2 — how it actually closed, and the one design decision in it.**
+
+The three primitives the earlier analysis named were `eff-send-on`,
+`eff-sign`, and a connection registry. Two of those shipped as described. The
+third did not, and the reason is worth keeping.
+
+*`eff-sign` was not built.* The sketch was: a behaviour asks for a signature,
+the driver signs, and the result comes back as an ordinary message. That is
+the right shape for a BEHAVIOUR, which must not hold a keypair. But neither
+role turned out to be a behaviour.
+
+*The roles belong in the DRIVER, and that is the finding.* A handoff role has
+no swiss-num, answers no message of its own, and must name connections — none
+of which a behaviour can or should do. It is protocol machinery, not
+application logic. Putting it in a behaviour would have meant pushing wire
+encoding and connection identity into application code to no purpose, plus a
+re-entry into the vat to deliver a signature. The driver already holds the
+keypair legitimately and is already where per-step side effects live, so it
+signs directly via `sig-envelope-bytes`.
+
+This is OBSERVATION of the decoded op, not the interception §0.3 removed:
+every op still goes through `connection-step`, and nothing is handled instead
+of the bridge. The gain over the byte-scanners is exactly what §1.7 M8 asked
+for — one parser, and structural gates instead of substring matches. The
+receiver's gate is narrower than the scan it replaces: TOP-LEVEL arguments
+only, because a give is handed over as an argument and one buried inside
+another structure is not one we were handed. That matters because a false
+positive here makes us dial an address the peer chose.
+
+*The identity substrate turned out to be one value.* `ocapn-identity-ffi.rkt`
+holds the process keypair handle and nothing else: our public key, our
+side-id and every session id we take part in derive from it, and the peer's
+key is already on the connection (`bs-peer-key`). Adding SHA-256 to the crypto
+FFI was the only other missing piece.
+
+*Two decoder facts had to be learned by experiment*, both of which fail
+silently and are now pitfalls #55 and #56: a one-argument Syrup record's
+payload is the value itself rather than a one-element list (so `record-args-of`
+reports zero arguments for `<desc:import-object 0>`), and a wire nat arrives as
+either `syrup-nat` or a non-negative `syrup-int` (so `wire-nat` is the only
+correct reader). Together they produced a gifter that fetched correctly,
+received a well-formed fulfill, and then did nothing, with no error anywhere.
 
 **§0.2 — first primitive landed, and the model change it needed.** Two things
 were built, in that order, because the first did not work without the second:
@@ -201,14 +241,16 @@ role migration itself.
 
 1. ~~Add a connection id to the server's `conn-entry`.~~ **DONE.**
 2. ~~`reserve-export cid` in the driver.~~ **DONE — §1.7 M7 is closed.**
-3. `eff-sign`, with the receiver's handoff-receive as its first consumer.
-4. `eff-send-on` + the registry, which lets the gifter role move.
-5. Delete the Racket byte-scanners, **which closes the rest of §1.7 M8** —
-   the two implementations stop running on the same bytes because there is
-   only one left.
+3. ~~`eff-sign`.~~ **NOT BUILT, and correctly so** — see above. The roles are
+   driver-level, so they sign directly; the signature never has to travel
+   back to a behaviour.
+4. ~~`eff-send-on` + the registry, which lets the gifter role move.~~ **DONE.**
+5. ~~Delete the Racket byte-scanners.~~ **DONE — §1.7 M8 is closed.** There is
+   one implementation on the frame, so there is nothing left to run twice.
 
-Steps 1 and 2 are done. Steps 3–5 are the actual role migration, and that is
-still a day of work rather than an afternoon.
+All five steps are done. Step 3 closed by being dropped rather than built,
+which is the part worth remembering: the primitive was designed for a
+behaviour, and the thing that needed it was never a behaviour.
 
 One note from doing step 2, because it is the third sighting this session and
 the diagnosis was slow every time: `reserve-export` initially called a helper
