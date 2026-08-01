@@ -28,7 +28,15 @@
          pp-process
          pp-mult
          pp-function-signature
-         pp-datum)
+         pp-datum
+         ;; D4.P4b-i slice 3: exported for the WALKER pin only. `expr-select`'s
+         ;; branches slot now holds an expr (the selector carrier), so this
+         ;; walker must recurse into it — but a bvar inside a selector is
+         ;; UNCONSTRUCTIBLE from surface syntax at P4 (selectors are
+         ;; monomorphic and hold bare symbols), so the pin has to call the
+         ;; walker directly. Same rationale as `select-reduce`'s P4a export;
+         ;; zero behavioural change.
+         uses-bvar0?)
 
 ;; ========================================
 ;; Name supply for de Bruijn -> named variables
@@ -536,7 +544,7 @@
              (expr-validate-schema-name v)
              (pp-expr (expr-validate-subject v) names))]
     ;; CIU T6 D4.P3a: select — render the SURFACE spelling (subject{branches})
-    [(expr-select subject branches)
+    [(expr-select subject (expr-path branches))
      (format "~a{~a}"
              (pp-expr subject names)
              (string-join (map pp-select-branch branches) " "))]
@@ -1224,7 +1232,10 @@
            (or (and (caddr entry) (uses-bvar0? (caddr entry)))
                (and (cadddr entry) (uses-bvar0? (cadddr entry))))))]
     ;; CIU T6 D4.P3a: select — subject is the only expr slot
-    [(expr-select subject _) (uses-bvar0? subject)]
+    ;; D4.P4b-i slice 3: the branches slot holds an expr — recurse into it.
+    ;; Inert at P4 (selectors hold symbols) but correct by construction; the
+    ;; old subject-only arm is the Exhaustive-Walkers signature.
+    [(expr-select subject sel) (or (uses-bvar0? subject) (uses-bvar0? sel))]
     [(expr-get c k a) (or (uses-bvar0? c) (uses-bvar0? k)
                           (and (expr? a) (uses-bvar0? a)))]
     [(expr-nil-safe-get m k) (or (uses-bvar0? m) (uses-bvar0? k))]

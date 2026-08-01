@@ -2184,7 +2184,7 @@
     ;; demand under Q_T2 Horn-D LENIENT presence; result = a CLOSED keyword
     ;; row, all-'present. The guided message is reconstructed by
     ;; typing-errors' select hint from the SAME select-project walk.
-    [(expr-select subject branches)
+    [(expr-select subject (expr-path branches))
      (let ([tm (whnf (infer ctx subject))])
        (if (expr-error? tm)
            (expr-error)

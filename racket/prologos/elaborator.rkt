@@ -3189,7 +3189,7 @@
      (let ([subj (elaborate subject env depth)])
        (if (prologos-error? subj)
            subj
-           (expr-select subj branches)))]
+           (expr-select subj (expr-path branches))))]
 
     [(surf-validate sname subject loc)
      (let* ([schema-entry (lookup-schema-by-name sname)]

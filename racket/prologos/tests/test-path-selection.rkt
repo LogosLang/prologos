@@ -1540,16 +1540,16 @@
 (test-case "P3a verify: ground non-map subjects PANIC at the top level too (tier symmetry)"
   ;; Was: `(whnf (expr-select (expr-int 5) …))` returned the node unchanged —
   ;; silent stick where the nested descent one level down panics loudly.
-  (define r (whnf (expr-select (expr-int 5) '((a)))))
+  (define r (whnf (expr-select (expr-int 5) (expr-path '((a))))))
   (check-true (expr-panic? r) "a ground non-map subject must panic, not stick")
   ;; and a stuck NEUTRAL still sticks (fvar subject — no panic, no loop):
-  (define stuck (whnf (expr-select (expr-fvar 'nosuch) '((a)))))
+  (define stuck (whnf (expr-select (expr-fvar 'nosuch) (expr-path '((a))))))
   (check-true (expr-select? stuck)))
 
 (test-case "P3a verify: trailing steps after a terminal sub-block panic (constructed IR)"
   ;; The parser grammar forbids the shape; the reducer now enforces it rather
   ;; than silently discarding the trailing steps.
-  (define subj (whnf (expr-select (expr-fvar 'x) '((a)))))
+  (define subj (whnf (expr-select (expr-fvar 'x) (expr-path '((a))))))
   (check-true (expr-select? subj)) ;; sanity: stuck neutral stays stuck
   (define bad-branches '((a (@sub (b)) c)))
   ;; construct the champ directly — no fixture dependency
@@ -1558,7 +1558,7 @@
   (define champ-subj
     (expr-champ (champ-insert champ-empty (equal-hash-code (expr-keyword 'a)) (expr-keyword 'a)
                               (expr-champ inner))))
-  (define r (whnf (expr-select champ-subj bad-branches)))
+  (define r (whnf (expr-select champ-subj (expr-path bad-branches))))
   (check-true (expr-panic? r) "trailing steps after @sub must panic, not vanish"))
 
 (test-case "P3a verify: the sub-block empty message does not claim `{}` is a map literal"
@@ -2441,7 +2441,7 @@
   ;; catch-all handler could swallow it). It must still never leak the raw
   ;; datum, which is what `[else (format "~a" s)]` used to do.
   (define rendered
-    (pp-expr (expr-select (expr-fvar 'x) (list (list 'a BOGUS-STEP))) '()))
+    (pp-expr (expr-select (expr-fvar 'x) (expr-path (list (list 'a BOGUS-STEP)))) '()))
   ;; The marker NAMES the datum on purpose — that is the debugging value.
   ;; The property is that it is WRAPPED, not passed through as if it were
   ;; valid surface syntax, which is exactly what `[else (format "~a" s)]`
@@ -2624,3 +2624,52 @@
   ;; return the SAME object. `expr-select` (the APPLICATION) stays reducible.
   (define sel (expr-path '((a b))))
   (check-eq? (whnf sel) sel))
+
+;; ============================================================
+;; D4.P4b-i slice 3 — SLOT NESTING: `expr-select` holds the selector CARRIER
+;; ============================================================
+;;
+;; Q_U5: `#p(…)`, `x{…}` and path position are three spellings of ONE
+;; representation. Slice 2 converged the ENCODING (both hold step symbols);
+;; this slice makes the STRUCT one too — `expr-select`'s `branches` slot holds
+;; an `expr-path` (the reified selector) rather than a raw list. After this
+;; there is exactly one way to hold a selector.
+;;
+;; ⚠ The audit's C3 finding (`uses-bvar0?`, pretty-print.rkt, recursing into
+;; the SUBJECT ONLY under a comment asserting "subject is the only expr slot")
+;; becomes technically live here — the slot now holds an expr. It is INERT at
+;; P4 by the monomorphic ruling: a selector holds bare symbols, never exprs,
+;; and all six `expr-path` walker arms are `[(expr-path _) e]` — pure
+;; identity. It goes genuinely live when BOUND selectors land (F-row). The
+;; walker is corrected anyway, because "inert today" is how the silent-walker
+;; class starts.
+
+(test-case "P4b-i slice 3: expr-select's branches slot holds the SELECTOR CARRIER"
+  (define sel (expr-path '((a))))
+  (define node (expr-select (expr-fvar 'x) sel))
+  (check-true (expr-path? (expr-select-branches node))
+              "one representation: the slot holds an expr-path, not a raw list"))
+
+(test-case "P4b-i slice 3: select-map-exprs maps into BOTH slots and preserves the carrier"
+  (define node (expr-select (expr-fvar 'x) (expr-path '((a)))))
+  (define mapped (select-map-exprs (lambda (e) e) node))
+  (check-true (expr-select? mapped))
+  (check-true (expr-path? (expr-select-branches mapped))
+              "the mapper must not flatten the carrier back to a list"))
+
+(test-case "P4b-i slice 3: uses-bvar0? recurses into the selector slot"
+  ;; inert at P4 (selectors hold symbols) but correct by construction — the
+  ;; subject-only recursion is the pipeline.md Exhaustive-Walkers signature
+  (check-false (uses-bvar0? (expr-select (expr-fvar 'x) (expr-path '((a)))))
+               "no bvar anywhere → #f")
+  (check-true (uses-bvar0? (expr-select (expr-bvar 0) (expr-path '((a)))))
+              "a bvar in the SUBJECT is still found"))
+
+(test-case "P4b-i slice 3: the surface is unchanged end-to-end"
+  (define rs (run-ws-raw (string-append
+                          "def cfg := {:server {:host \"h\" :port 80}}\n"
+                          "cfg{server.host}\n"
+                          "cfg.server.port\n")))
+  (check-false (ormap prologos-error? rs) "nesting the carrier must not move the surface")
+  (check-regexp-match #rx"h" (format "~a" (list-ref rs (- (length rs) 2))))
+  (check-regexp-match #rx"80" (format "~a" (last rs))))

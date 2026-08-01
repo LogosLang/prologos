@@ -777,9 +777,16 @@
 
 ;; Map proc over the single EXPR slot (the record-map-field-types pattern:
 ;; ONE reconstruction point for shift/subst/zonk/nf).
+;; D4.P4b-i slice 3: the `branches` slot holds the SELECTOR CARRIER (an
+;; `expr-path`), not a raw list — Q_U5's "one representation". So the mapper
+;; maps into BOTH slots. The selector's own walker arms are all
+;; `[(expr-path _) e]` (identity), so this is a no-op at P4 by the monomorphic
+;; ruling — a selector holds bare symbols, never exprs. It stops being a no-op
+;; when BOUND selectors land (F-row), and mapping it now is what makes that
+;; landing safe rather than a silent under-walk.
 (define (select-map-exprs proc v)
   (expr-select (proc (expr-select-subject v))
-               (expr-select-branches v)))
+               (proc (expr-select-branches v))))
 
 ;; ============================================================
 ;; D4.P3b — the `^` step vocabulary + the ONE shared branch walk

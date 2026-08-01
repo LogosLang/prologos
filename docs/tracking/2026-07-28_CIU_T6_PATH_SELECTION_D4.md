@@ -3491,7 +3491,48 @@ FFI pins add `process-file` cycles) — `raco test` reported 235 passing while
 the runner said `ABORTED — 0 timeouts`. Use `--timeout 180`; an abort here is
 not a failure.
 
-Status: 🔄 (encoding ✅ · single-carrier ⬜).
+**Slice 3 — the SLOT NESTING (b-i now ENDS single-carrier).**
+`expr-select`'s `branches` slot holds an **`expr-path`** — the reified
+selector — rather than a raw list. After this there is exactly ONE way to hold
+a selector, which is Q_U5's "three spellings, one representation" made
+structural: `#p(…)` is a bare carrier, `x{…}` is a carrier applied to a
+subject, and path position mints the same carrier.
+
+Sites: 1 mapper (`select-map-exprs`, now mapping BOTH slots) · 4 positional
+matches unwrapping (`pretty-print` · `typing-errors` · `reduction` ·
+`typing-core`) · 2 constructors wrapping (elaborator, and reduction's
+re-construction) · 5 test constructions. `qtt.rkt`'s match binds `_` and
+needed no change.
+
+**The audit's C3 finding, resolved rather than inherited.** C3 said
+`uses-bvar0?` (pretty-print) recurses into the SUBJECT ONLY, under a comment
+asserting "subject is the only expr slot" — a silent under-report the moment
+the slot holds an expr. This slice is that moment. Two facts make it
+tractable: (i) all six `expr-path` walker arms are `[(expr-path _) e]` — pure
+identity — so mapping into the slot is a no-op; (ii) at P4 the monomorphic
+ruling means a selector holds bare SYMBOLS, never exprs, so the walker could
+not have under-reported anything yet. **So C3 is real as a class and INERT at
+P4** — it goes genuinely live when BOUND selectors land (F-row). The walker is
+corrected here anyway, because "inert today" is exactly how the silent-walker
+class starts. `uses-bvar0?` is exported for the pin (a bvar inside a selector
+is unconstructible from surface syntax, so the pin must call it directly —
+same rationale as P4a's `select-reduce` export; zero behavioural change).
+
+**Test delta +4** (236 → 240): the slot holds the carrier · the mapper
+preserves it · `uses-bvar0?` recurses · the surface is unchanged E2E.
+
+**On the NAME**: the design says "`expr-path` retired within P4b, never
+aliased past it", which facet 1 read as a rename into the unified carrier.
+The struct IS now the one selector carrier; only its NAME is legacy. That is
+not an alias and not a dual path — there is one struct — but the rename is
+deliberately NOT done here: it is ~30 arms of pure churn (substitution ×2,
+zonk ×3, nf, pp ×2, typing-core, qtt, pnet, path-ops ×7, reduction ×8,
+elaborator ×2, unify, foreign, union-types) with no semantic content, and
+bundling it into a behaviour-preserving slice would make the diff unreviewable
+for zero benefit. Named as cosmetic follow-up rather than left implicit.
+
+Status: ✅ b-i COMPLETE (Q_U11 retirement ✅ · encoding ✅ · single-carrier ✅;
+the carrier's NAME is a named cosmetic follow-up).
 
 ### §5.P5 — Ruling B + factoring
 

@@ -3001,7 +3001,7 @@
     ;; so a runtime miss here is an INVARIANT VIOLATION and panics loudly
     ;; (never fabricate), and champ-insert is never asked to last-win.
     ;; Stuck subject → the node stays stuck (the map-get/validate precedent).
-    [(expr-select subject branches)
+    [(expr-select subject (expr-path branches))
      (let ([subj* (whnf subject)])
        (cond
          ;; D4.P3c: rrb subjects admitted — ordinal branches select over
@@ -3016,7 +3016,7 @@
            (expr-string
             "select: the subject is not a map at runtime (invariant violation — typing admitted the block)"))]
          [(equal? subj* subject) e]
-         [else (whnf (expr-select subj* branches))]))]
+         [else (whnf (expr-select subj* (expr-path branches)))]))]
 
     ;; CIU T6 F1b.5-s2 (D27): validate — the runtime tabulation redex.
     ;; Subject whnf's to exactly two classes (spines/map-empty collapse to

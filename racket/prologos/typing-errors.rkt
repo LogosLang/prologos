@@ -305,7 +305,7 @@
     (let search ([x e])
       (and (expr? x)
            (or (match x
-                 [(expr-select subject branches)
+                 [(expr-select subject (expr-path branches))
                   (let ([tm (whnf (infer ctx subject))])
                     (and (not (expr-error? tm))
                          (let-values ([(row fail) (select-project ctx tm branches)])
