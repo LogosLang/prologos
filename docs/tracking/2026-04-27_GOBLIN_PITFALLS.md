@@ -3515,3 +3515,64 @@ becomes permanent scaffolding.
 time was not being wrong — it was *nearly recording a wrong conclusion from a
 probe that had tested nothing*. State what a negative result rules out only
 after checking that the instrument could have said yes.
+
+---
+
+### #57 WIDENED (2026-08-01) — it is not one test, it is MODULE LOADING ON CI, and it wears three different error messages
+
+I had been reading the two failing workflows as one cause and then, on seeing
+different exit codes, as two. Both readings were wrong. The `test` workflow's
+log settles it — the same phenomenon, across nine files, presenting as three
+unrelated-looking messages:
+
+```
+FAILED: test-bridge-perf.rkt              Error loading prologos::ocapn::captp-core: Unbound variable
+FAILED: test-ocapn-acceptance-l3.rkt      Error loading prologos::ocapn::captp-core: Unbound variable
+FAILED: test-ocapn-break-plain-interop    Error loading prologos::ocapn::captp-core: Unbound variable
+FAILED: test-ocapn-e2e.rkt                Error loading prologos::ocapn::captp-core: Unbound variable
+FAILED: test-ocapn-bridge-interop.rkt     Error loading prologos::ocapn::captp-core: Unbound variable
+FAILED: test-ocapn-netlayer.rkt           Error loading prologos::ocapn::netlayer:   Type mismatch
+FAILED: test-ocapn-bidirectional-interop  TIMEOUT: exceeded 300s
+FAILED: test-ocapn-bootstrap-gift-interop TIMEOUT: exceeded 300s
+FAILED: test-ocapn-import-object-interop  TIMEOUT: exceeded 300s
+```
+
+Every one is a MODULE LOAD that is slow and then fails. "Unbound variable",
+"Type mismatch" and "TIMEOUT" are three faces of the same event — which check
+happens to fail first against a module that did not finish loading. Chasing
+any one of them as its own bug leads nowhere, and I lost time doing exactly
+that with the `.pnet` cache.
+
+**The suite numbers are the clearest statement of it:**
+
+| | files | tests | wall | result |
+|---|---|---|---|---|
+| local, cold cache, batch runner | 514 | 9631 | 204 s | **all pass** |
+| CI, same runner | 244 of 518 | 4259 | 650 s | 9 failures, ABORTED |
+
+CI did not finish: its own systemic-regression guard tripped at 3 timeouts and
+killed the remaining 274 files. Per file it is several times slower, and the
+files that fail are the ones with the heaviest module graphs
+(`captp-core` and its dependents).
+
+**This also retires the "7 Node-interop tests" note above.** Those seven failed
+in this container earlier today with `expected reply frame from Node`, and in
+this run they all PASS, cold, with no code change between. So they were
+intermittent here too — I recorded them as environmental, which was right, but
+"fails identically at e65e0f82" overstated it: they are flaky, not
+deterministic. Corrected rather than deleted, because the wrong version was
+load-bearing for a conclusion I reported.
+
+**What is established.** Not our code (a documentation-only commit reproduced
+it, and the full suite passes locally cold). Not the `.pnet` cache (cleared
+25 MB on CI, no change). Not an interpreted build (locally interpreted + cold
+is 118 s and passes). Not the runner in general (in the interop job every other
+step matches its green timing to the second). What is left is that Prologos
+module loading is several times slower on this CI runner than locally, and
+past some threshold it does not merely lag — it fails, with a message naming
+whatever was asked of the half-loaded module.
+
+**Rule.** When failures share a SHAPE (module load) but not a MESSAGE, group
+them by shape first. Three messages across nine files looked like three bugs
+and was one; the grouping was visible only in the full-suite log, which is the
+artifact I should have read first instead of the single job I was pinged about.
