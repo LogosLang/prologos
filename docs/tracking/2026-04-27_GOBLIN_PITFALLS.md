@@ -3459,3 +3459,59 @@ sizes, paths. `rm -rf` on a nonexistent path succeeds silently and looks
 exactly like a successful clear. This is the same class as the
 `--no-pnet-cache` no-op already on file, and it cost a second wrong conclusion
 in the same investigation.
+
+---
+
+### #57 RESULT (2026-08-01) — the cache is exonerated, properly this time; the cause is still unknown
+
+The corrected probe found a real cache and cleared it:
+
+```
+cache at racket/prologos/data/cache/pnet: 45 files, 25M
+no cache at data/cache/pnet
+```
+
+and the step then ran **229 s and failed with the identical error**. So this
+is a genuine negative: a probe that could have been positive, demonstrably
+was positive about the thing it acted on, and the failure did not move. The
+`.pnet` cache is not the cause.
+
+**Everything ruled out, each by a measurement rather than an argument:**
+
+| Hypothesis | How it was tested | Verdict |
+|---|---|---|
+| Our branch's code | ran the test at `e65e0f82` | fails there too |
+| The diff that started it | `git diff --stat e65e0f82 6dbcfe8a` | one markdown file, 167 lines |
+| A slower runner | per-step timings, green vs red | every other step within 1 s |
+| Interpreted build (#51) | rebuilt without the compile limit, cold cache | 118 s, PASSES |
+| `.pnet` cache | cleared 25 M / 45 files on CI | 229 s, still fails |
+| CI's test ordering | ran the 7 preceding tests locally, then it | 11 s, passes |
+| Node / `@endo` | ran the peer directly | starts, ECONNREFUSED — healthy |
+
+**What is actually known.** Loading `prologos::ocapn::captp-core` takes ~230 s
+on CI and then fails; the same load takes ~40 s locally and succeeds. Same
+pinned Racket 9.0, same source, compiled build, no cache, on a runner that is
+demonstrably not slower at anything else in the same job. The failure is in
+the module load — `imports: Error loading module` — before any Node or TCP
+interaction, so the interop machinery is not involved despite this living in
+the interop job.
+
+**Two open threads for whoever picks it up**, in order of how specific they are:
+
+1. **On CI the `.pnet` cache is written but never HIT.** Locally a warm cache
+   takes this test from 49 s to 11 s. On CI *green* it took 41 s — cold speed —
+   with seven tests before it and a 25 MB cache on disk. So cache writes work
+   there and reads do not. That is a real defect regardless of this failure,
+   and `driver.rkt:133` already suspects relative-path resolution.
+2. **Why one module load costs 5× more on a runner that matches on everything
+   else.** Not memory (MEMORY-STATS reports ~165 MB), not the compile limit
+   (set at job level and verified in the step env).
+
+**The probe has been reverted**; `interop.yml` is back to its pre-investigation
+form. Leaving a diagnostic in place that has already answered is how a probe
+becomes permanent scaffolding.
+
+**Rule.** Two hypotheses died here and both were mine. The one that cost real
+time was not being wrong — it was *nearly recording a wrong conclusion from a
+probe that had tested nothing*. State what a negative result rules out only
+after checking that the instrument could have said yes.

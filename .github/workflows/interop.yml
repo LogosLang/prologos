@@ -113,33 +113,6 @@ jobs:
       - name: Run abort test (Phase 10 — graceful op:abort teardown)
         run: cd racket/prologos && raco test tests/test-ocapn-abort.rkt
 
-      # DIAGNOSTIC PROBE for pitfall #57 — remove once it has answered.
-      #
-      # The step below is the only one in this job that regressed: 41s and
-      # green on 2026-07-29, then ~230s and failing since 2026-08-01, first
-      # on a commit whose entire diff is 167 lines of markdown. Every other
-      # step runs within a second of its green timing, so the runner is not
-      # slower and the cause is state the job carries.
-      #
-      # ATTEMPT 1 CLEARED THE WRONG DIRECTORY and proved nothing. The .pnet
-      # cache dir is resolved RELATIVE TO CWD, and every test step here does
-      # `cd racket/prologos` first, so the cache is at
-      # racket/prologos/data/cache/pnet -- not data/cache/pnet, which is
-      # where the first probe looked and correctly reported "no cache
-      # directory". driver.rkt:133 records this exact relative-path hazard;
-      # I walked into it anyway. Reporting the size is what catches it: a
-      # probe that clears nothing must SAY it cleared nothing.
-      - name: Clear .pnet cache (diagnostic — pitfall #57)
-        run: |
-          for d in racket/prologos/data/cache/pnet data/cache/pnet; do
-            if [ -d "$d" ]; then
-              echo "cache at $d: $(find "$d" -type f | wc -l) files, $(du -sh "$d" | cut -f1)"
-              rm -rf "$d"
-            else
-              echo "no cache at $d"
-            fi
-          done
-
       - name: Run desc:import-object test (Phase 37 — 5th refr kind cross-impl round-trip)
         run: cd racket/prologos && raco test tests/test-ocapn-import-object-interop.rkt
 
