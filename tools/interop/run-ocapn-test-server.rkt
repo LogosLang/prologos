@@ -580,7 +580,7 @@
 ;; The peer designator. Upstream uses `uuid.uuid4().hex` per netlayer
 ;; (testing_only_tcp.py:49-56) precisely so it is unique; a literal meant
 ;; every instance of this server advertised the same one, and since
-;; `open-conns`, `half-open-dials` and `pending-gives` are all keyed by
+;; `open-conns` and `half-open-dials` are both keyed by
 ;; location, that is one hint collision away from cross-peer confusion.
 (define peer-designator (bytes->hex-string (crypto-random-bytes 16)))
 
@@ -748,50 +748,13 @@
 (define conn-id-box (box 0))
 (define (next-conn-id!) (next-counter! conn-id-box))
 
-;; Export positions we advertise to an exporter as our reply target for a
-;; fetch. KNOWN GAP (gaps doc §1.7 M7): these are NOT registered in
-;; captp-core's export table for the connection — they exist only as a
-;; position `try-fetch-answer!` recognises — so the exporter's answer, when
-;; it also reaches `drive-step`, addresses an export captp-core has never
-;; heard of. Fixing that means the enlivener handing out a real exported
-;; resolve-me from the connection's own export table.
-;; The enliven resolve-me is an export position in the EXPORTER's own table,
-;; allocated by the same vat allocator everything else uses. It used to be a
-;; counter starting at 900, reserved from that allocator by nothing but the
-;; distance between 900 and wherever `next-id` had got to.
-(define (reserve-enliven-slot! exporter)
-  (define r (last-result
-             (run-prologos/locked
-              (format "(eval (reserve-export ~aN))" (conn-entry-cid exporter)))))
-  (define m (and (string? r) (regexp-match #px"^\"([0-9]+)\" : String$" r)))
-  ;; A stuck term is well-typed as String and reduces to itself, so a
-  ;; forward reference in the driver shows up HERE as an unmatched result
-  ;; rather than as an error anywhere. Say what came back.
-  (unless m (printf "ocapn-test-server: reserve-export did not return digits: ~s~n" r))
-  (and m (string->number (cadr m))))
-
-(define gift-counter-box (box 0))
-
-;; Gift ids must be unique: the gift table is keyed BY gift id
-;; (captp-core `gift-entry`), `gift-lookup-loop` returns the newest match
-;; and `gift-remove-loop` removes EVERY match, so two outstanding handoffs
-;; sharing one id cross-wire and then delete each other. This was the
-;; process-wide literal `prologos-gift`.
-(define (next-gift-id!)
-  (string->bytes/latin-1 (format "prologos-gift-~a" (next-counter! gift-counter-box))))
-
-;; Per-receiving-session handoff count. A repeat within a session is a
-;; replay to upstream (utils/captp.py:100-109) and to our own exporter
-;; (captp-core `withdraw-with-identity`), so a second gift redeemed on the
-;; same exporter session needs a fresh count. This was the literal 0 for
-;; every withdraw, which made our own second handoff look like a replay.
-;; session-id bytes -> next count.
-(define handoff-counts (make-hash))
-(define (next-handoff-count! session-id)
-  (with-state
-    (define n (hash-ref handoff-counts session-id 0))
-    (hash-set! handoff-counts session-id (add1 n))
-    n))
+;; The export position a fetch replies to, the gift ids, and the per-session
+;; handoff counts: ALL MIGRATED. The position now comes from
+;; `reserve-export-id` (interop-driver.prologos), which allocates from the
+;; vat's own allocator instead of from a counter that started at 900 and was
+;; reserved from it by nothing but distance; the ids from
+;; `ocapn-gift-id` (ocapn-enliven-ffi.rkt); the counts from
+;; `ocapn-handoff-count` (ocapn-give-ffi.rkt).
 
 ;; ----------------------------------------
 ;; Frame writing
@@ -854,6 +817,9 @@
   ;; give redeemed over a session that was already open needs that session's
   ;; id, and the id is derived from the two side-ids, so registering only the
   ;; connection would let a role find it and then be unable to name it.
+  (when (getenv "OCAPN_FRAME_HEX")
+    (printf "ocapn-test-server: REGISTER conn ~a key-hex ~a~n"
+            cid (bytes->hex-string (peer-hello-location-key hello))))
   (ocapn-peer-register (bytes->string/latin-1 (peer-hello-location-key hello))
                        cid
                        (bytes->string/latin-1 (peer-hello-side-id hello)))
@@ -955,240 +921,22 @@
       [else v])))
 
 ;; ========================================
-;; Third-party handoff: the GIFTER side
+;; Third-party handoff — BOTH ROLES MIGRATED
 ;; ========================================
 ;;
-;; An enliven arrives on one session and the `fetch` it triggers must go
-;; out on another — the exporter session, found in `open-conns` by the
-;; location the sturdyref names.
-
-;; slot -> (vector requester-out resolve-me-position exporter-location-bytes exporter-entry)
-(define pending-enlivens (make-hash))
-
-;; The export position captp-core seeds the sturdyref enlivener at
-;; (`sturdyref-enlivener-pos` in interop-driver.prologos, swiss
-;; gi02I1qgh…). Duplicated here because the gate has to run before the
-;; frame reaches Prologos; if that constant moves, this must move with it.
-(define sturdyref-enlivener-export-pos 5)
-
-;; The enliven arrived on `cout`; the exporter is whichever open
-;; connection carries the location the sturdyref names.
+;; The GIFTER (`pending-enlivens`, `try-enliven!`, `claim-enliven!`,
+;; `try-fetch-answer!`, `finish-fetch-answer!`) and the RECEIVER
+;; (`pending-gives`, `withdraw-gift-frame`, `note-handoff-give!`,
+;; `redeem-gift-if-pending!`, `redeem-gift-for-hello!`) both used to live
+;; here: byte-scanners running over every inbound frame with their own Syrup
+;; parser, alongside captp-core's, on the same bytes (gaps document §1.7 M8).
 ;;
-;; Gated on the frame's STRUCTURE: an op:deliver, addressed to the
-;; enlivener's export position, whose first argument is an
-;; `ocapn-sturdyref` and whose resolve-me is a `desc:import-object`. The
-;; scan this replaced fired on any frame containing the bytes
-;; `<15'ocapn-sturdyref` anywhere — including inside a bytestring
-;; argument — and took the FIRST `desc:import-object` in the whole frame
-;; as the reply target, which on the wire is an argument, since args
-;; precede resolve-me.
-(define (try-enliven! frame v cout)
-  (define parts (read-deliver v))
-  (when parts
-    (define to (list-ref parts 0))
-    (define args (list-ref parts 1))
-    (define rm-pos (resolve-me-position (list-ref parts 3)))
-    (define sr-node (and (eq? (syv-kind args) 'list)
-                         (pair? (syv-val args))
-                         (car (syv-val args))))
-    (when (and (equal? (desc-position to #"desc:export") sturdyref-enlivener-export-pos)
-               rm-pos
-               sr-node)
-      (define sr (sturdyref-of frame sr-node))
-      (cond
-        [(not sr)
-         (printf "ocapn-test-server: enliven names something that is not an ocapn-sturdyref; ignoring~n")]
-        [else
-         (define exporter (open-conn-for (sturdyref-loc-key sr)))
-         (cond
-           [(not exporter)
-            (printf "ocapn-test-server: enliven for a peer we have no open connection to; the dial queue will take it~n")]
-           [else
-            (define slot (reserve-enliven-slot! exporter))
-            (cond
-              [(not slot)
-               (printf "ocapn-test-server: could not reserve an export on the exporter session; dropping the enliven~n")]
-              [else
-            (with-state
-              (hash-set! pending-enlivens slot
-                         (vector cout rm-pos (sturdyref-loc-bytes sr) exporter)))
-            (printf "ocapn-test-server: enliven -> fetch on the exporter session (slot ~a)~n" slot)
-            (send-frame (conn-entry-out exporter)
-                        (bytes-append #"<" (syrup-symbol "op:deliver")
-                                      (desc-record "desc:export" 0)
-                                      #"[" (syrup-symbol "fetch") (sturdyref-swiss sr) #"]"
-                                      #"f" (desc-record "desc:import-object" slot) #">"))])])]))))
-
-;; Claim a pending enliven whose fetch we sent on `cout`. The lookup and
-;; the removal are one critical section: a `for/first` scan followed by a
-;; separate `hash-remove!` let two threads both pass and send the give
-;; twice. The port check keeps an unrelated connection that happens to
-;; address the same position from consuming it.
-(define (claim-enliven! slot cout)
-  (with-state
-    (define v (hash-ref pending-enlivens slot #f))
-    (and v
-         (eq? (conn-entry-out (vector-ref v 3)) cout)
-         (begin (hash-remove! pending-enlivens slot) v))))
-
-;; The exporter answered our fetch. Deposit a gift naming the object it
-;; gave us, then answer the original enliven with a signed handoff-give.
-;;
-;; Field values are pinned by upstream's own assertions
-;; (third_party_handoffs.py:458-462): receiver-key is the ENLIVENING
-;; peer's key, while exporter-location / session / gifter-side all belong
-;; to the EXPORTER session -- and gifter-side is OUR side-id, because from
-;; the exporter's point of view we are the gifter.
-(define (try-fetch-answer! frame v cout)
-  (define parts (read-deliver v))
-  (when parts
-    (define slot (desc-position (list-ref parts 0) #"desc:export"))
-    (define pending (and slot (claim-enliven! slot cout)))
-    (when pending
-      (finish-fetch-answer! frame (list-ref parts 1) pending slot))))
-
-(define (finish-fetch-answer! frame args pending slot)
-  (define r2g-out (vector-ref pending 0))
-  (define rm-pos (vector-ref pending 1))
-  (define loc (vector-ref pending 2))
-  (define exporter (vector-ref pending 3))
-  ;; `['fulfill REF]`. The reference is taken from the ARGUMENT LIST, not
-  ;; from the first desc:import-object anywhere in the frame.
-  (define items (if (eq? (syv-kind args) 'list) (syv-val args) '()))
-  (define obj-node
-    (for/or ([item (in-list items)])
-      (and (or (syv-record? item #"desc:import-object")
-               (syv-record? item #"desc:export")
-               (syv-record? item #"desc:import-promise"))
-           (syv-arg item 0))))
-  (define receiver-key (with-state (hash-ref pubkey-by-out r2g-out #f)))
-  (cond
-    [(not (and (pair? items) (syv-symbol? (car items) #"fulfill")))
-     (printf "ocapn-test-server: fetch answer for slot ~a is not a fulfill; dropping the enliven~n" slot)]
-    [(not obj-node)
-     (printf "ocapn-test-server: fetch answer for slot ~a names no reference; dropping the enliven~n" slot)]
-    [(not receiver-key)
-     ;; Splicing #"" here produced a FOUR-field desc:handoff-give where
-     ;; captp_types.py asserts five, signed and sent as if valid.
-     (printf "ocapn-test-server: no session key on record for the enlivening connection; refusing to sign a handoff-give without a receiver-key~n")]
-    [else
-     (define obj (syv-src frame obj-node))
-     (define gid (next-gift-id!))
-     ;; Deposit at the exporter.
-     (send-frame (conn-entry-out exporter)
-                 (bytes-append #"<" (syrup-symbol "op:deliver")
-                               (desc-record "desc:export" 0)
-                               #"[" (syrup-symbol "deposit-gift")
-                               (syrup-bytestring gid)
-                               #"<" (syrup-symbol "desc:export") obj #">"
-                               #"]ff>"))
-     ;; Answer the enliven with the signed give. The exporter-location is
-     ;; the peer's OWN location bytes, copied verbatim rather than
-     ;; re-encoded: upstream's assertion compares ENCODED forms, so any
-     ;; disagreement between its encoder and ours would fail it.
-     (define give
-       (bytes-append #"<" (syrup-symbol "desc:handoff-give")
-                     receiver-key
-                     loc
-                     (syrup-bytestring (session-id-of (conn-entry-side-id exporter)))
-                     (syrup-bytestring our-side-id)
-                     (syrup-bytestring gid)
-                     #">"))
-     (define env (bytes-append #"<" (syrup-symbol "desc:sig-envelope")
-                               give (gcrypt-sig (sign-with-our-key give)) #">"))
-     (printf "ocapn-test-server: answering enliven ~a with a signed handoff-give~n" slot)
-     ;; `rm-pos` is a POSITION (an integer from `desc-position`), not the
-     ;; descriptor's encoded bytes. Splicing it straight into `bytes-append`
-     ;; raised "bytes-append: contract violation ... given: 1" inside
-     ;; `try-fetch-answer!`, which swallowed it -- so the enliven was never
-     ;; answered and the only reply the peer saw was captp-core's break.
-     (send-frame r2g-out
-                 (bytes-append #"<" (syrup-symbol "op:deliver")
-                               (desc-record "desc:export" rm-pos)
-                               #"[" (syrup-symbol "fulfill") env #"]ff>"))]))
-
-;; ========================================
-;; Third-party handoff: the RECEIVER side
-;; ========================================
-;;
-;; A gifter hands us `<desc:sig-envelope <desc:handoff-give …> sig>`. We
-;; are expected to reach the exporter the give names and withdraw the gift
-;; there, presenting a desc:handoff-receive signed with the key the gifter
-;; named as the receiver — which is the key we handshake with, hence the
-;; process-wide keypair above.
-
-;; Gives we have been handed and not yet withdrawn, keyed by the exporter
-;; location we must reach to redeem them.
-(define pending-gives (make-hash))
-
-;; <op:deliver <desc:export 0> ['withdraw-gift <sig-envelope receive sig>] f f>
-(define (withdraw-gift-frame their-side signed-give)
-  (define session (session-id-of their-side))
-  (define receive
-    (bytes-append #"<" (syrup-symbol "desc:handoff-receive")
-                  (syrup-bytestring session)
-                  (syrup-bytestring our-side-id)
-                  (syrup-nat (next-handoff-count! session))
-                  signed-give
-                  #">"))
-  (define env
-    (bytes-append #"<" (syrup-symbol "desc:sig-envelope")
-                  receive (gcrypt-sig (sign-with-our-key receive)) #">"))
-  (bytes-append #"<" (syrup-symbol "op:deliver")
-                #"<" (syrup-symbol "desc:export") #"0+>"
-                #"[" (syrup-symbol "withdraw-gift") env #"]"
-                #"ff>"))
-
-;; A signed handoff-give in an inbound frame means we are the receiver.
-;;
-;; The give is located by walking the PARSED frame, never by scanning raw
-;; bytes for `<17'desc:handoff-give`: a bytestring argument may contain
-;; any bytes at all, including that exact pattern, and the consequence of
-;; a false positive is an outbound `tcp-connect` to a host:port the peer
-;; chose. Two further gates for the same reason — the give must name OUR
-;; session key as the receiver, and the dial must clear `dial-allowed?`.
-(define (note-handoff-give! frame v)
-  (define env
-    (syv-find v (lambda (n)
-                  (and (syv-record? n #"desc:sig-envelope")
-                       (let ([g (syv-arg n 0)])
-                         (and (syv-record? g #"desc:handoff-give")
-                              (= (length (syv-args g)) 5)))))))
-  (when env
-    (define give (syv-arg env 0))
-    (define receiver-key (gcrypt-pubkey-raw (syv-arg give 0)))
-    (define loc (syv-src frame (syv-arg give 1)))
-    (cond
-      [(not (equal? receiver-key our-pubkey-raw))
-       (printf "ocapn-test-server: handoff-give names another receiver key; not ours, ignoring~n")]
-      [else
-       (printf "ocapn-test-server: handoff-give received; exporter location ~a bytes~n"
-               (bytes-length loc))
-       (with-state (hash-set! pending-gives (location-key loc) (syv-src frame env)))
-       (ocapn-dial-request
-        (bytes->string/latin-1
-         (bytes-append #"<" (syrup-symbol "ocapn-sturdyref")
-                       loc (syrup-bytestring #"handoff") #">")))])))
-
-;; Redeem, over an open connection to that peer, any give waiting on it.
-;; Called on every path that reaches a live session with the exporter —
-;; one we dialled, one we accepted, and the survivor of a crossed-hellos
-;; tie — because a give whose dial is skipped or refused would otherwise
-;; sit in `pending-gives` forever with nothing logged.
-(define (redeem-gift-if-pending! loc-key their-side cout)
-  (define env (with-state
-                (define v (hash-ref pending-gives loc-key #f))
-                (when v (hash-remove! pending-gives loc-key))
-                v))
-  (when env
-    (define w (withdraw-gift-frame their-side env))
-    (printf "ocapn-test-server: withdrawing gift (~a bytes)~n" (bytes-length w))
-    (send-frame cout w)))
-
-(define (redeem-gift-for-hello! hello cout)
-  (redeem-gift-if-pending! (peer-hello-location-key hello)
-                           (peer-hello-side-id hello)
-                           cout))
+;; Both are now `interop-driver.prologos`, working on the DECODED op. They
+;; moved once three things existed: a signing key reachable from Prologos
+;; (ocapn-identity-ffi.rkt + `sig-envelope-bytes`), a way to name a peer other
+;; than the one being serviced (the connection registry), and an export
+;; position allocated by the vat's own allocator rather than by a counter
+;; starting at 900 (`reserve-export-id`, §1.7 M7).
 
 ;; ========================================
 ;; Outbound connections
@@ -1263,15 +1011,12 @@
        [(reuse)
         (printf "ocapn-test-server: dial to ~a:~a skipped — a session to that peer is already open~n"
                 (sturdyref-host sr) (sturdyref-port sr))
-        ;; A give whose dial we skip still has to be redeemed, over the
-        ;; session we already have.
-        (let ([e (open-conn-for (sturdyref-loc-key sr))])
-          (when e
-            (guarded "gift withdraw over an existing session"
-                     (lambda ()
-                       (redeem-gift-if-pending! (sturdyref-loc-key sr)
-                                                (conn-entry-side-id e)
-                                                (conn-entry-out e))))))]
+        ;; A give whose dial we skip still has to be redeemed over the session
+        ;; we already have -- and it is, before the dial is ever requested:
+        ;; `reach-exporter` (interop-driver.prologos) checks the connection
+        ;; registry first and emits the withdraw directly when there is one.
+        ;; So by the time a dial reaches here, no give is waiting on it.
+        (void)]
        [(in-flight)
         (printf "ocapn-test-server: dial to ~a:~a skipped — one is already in flight~n"
                 (sturdyref-host sr) (sturdyref-port sr))]
@@ -1340,10 +1085,6 @@
                  (set! cid (next-conn-id!))
                  (drive-init! cid frame dout)
                  (record-open-conn! hello dout cid)
-                 ;; If we dialled this peer to redeem a handoff-give,
-                 ;; everything the receive needs is now available: their
-                 ;; side-id comes out of this very frame.
-                 (redeem-gift-for-hello! hello dout)
                  (run-frame-loop din dout cid)])])])))
     (lambda ()
       ;; Ports are closed and the tables cleaned up on EVERY exit path.
@@ -1371,7 +1112,7 @@
 ;; outbound connections.
 ;;
 ;; Each hook is guarded on its own. A write to another connection's port
-;; from `try-enliven!` or `try-fetch-answer!` must not unwind into the
+;; from a step or from a queued send must not unwind into the
 ;; connection handler and tear down the healthy connection that merely
 ;; carried the enliven.
 
@@ -1405,9 +1146,7 @@
           (printf "ocapn-test-server: FRAME DID NOT PARSE (conn ~a, ~a bytes): ~a~n"
                   cid (bytes-length frame) (bytes->hex-string frame))]
          [else
-          (guarded "handoff-give scan" (lambda () (note-handoff-give! frame v)))
-          (guarded "enliven routing" (lambda () (try-enliven! frame v cout)))
-          (guarded "fetch-answer routing" (lambda () (try-fetch-answer! frame v cout)))])
+          (void)])
        (define out (drive-step cid frame))
        (printf "ocapn-test-server: conn ~a frame ~a (~a in / ~a out bytes)~n"
                cid (+ n 1) (bytes-length frame) (bytes-length out))
@@ -1416,9 +1155,11 @@
                  cid (+ n 1) (bytes->hex-string out)))
        (when (> (bytes-length out) 0)
          (guarded "reply write" (lambda () (send-frame cout out))))
-       ;; A step (or the give scan above) may have queued an outbound
-       ;; connection.
+       ;; A step may have queued an outbound connection, or bytes for a
+       ;; connection other than this one -- the third-party handoff roles do
+       ;; both.
        (guarded "dial drain" drain-dials!)
+       (guarded "send drain" drain-sends!)
        (loop (+ n 1))])))
 
 ;; ========================================
@@ -1509,7 +1250,6 @@
                        ;; `open-conns` and the gifter path silently
                        ;; no-ops.
                        (record-open-conn! hello cout cid)
-                       (redeem-gift-for-hello! hello cout)
                        (run-frame-loop cin cout cid)]
                       [else
                        ;; Their dial loses: abort the socket THEY opened.
@@ -1520,7 +1260,6 @@
                     (printf "ocapn-test-server: inbound start-session accepted (conn ~a); driving captp-core~n"
                             cid)
                     (record-open-conn! hello cout cid)
-                    (redeem-gift-for-hello! hello cout)
                     (run-frame-loop cin cout cid)])])])])))
     (lambda ()
       (when hello (forget-open-conn! hello cout))

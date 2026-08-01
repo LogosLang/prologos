@@ -37,7 +37,7 @@ require [prologos::ocapn::captp-core :refer [ConnectionState empty-connection
         [prologos::ocapn::syrup      :refer [SyrupValue syrup-null syrup-string
                                              syrup-list syrup-nat syrup-tagged
                                              syrup-symbol syrup-bytes syrup-bool
-                                             syrup-promise]]
+                                             syrup-promise wire-nat]]
         [prologos::ocapn::promise    :refer [fresh]]
         [prologos::ocapn::captp-wire :refer [decode-op encode-op]]
         [prologos::ocapn::message    :refer [CapTPOp op-deliver op-deliver-only
@@ -855,20 +855,37 @@ defn desc-tag? [tag]
           | true  -> true
           | false -> str::eq tag "desc:import-promise"
 
+;; `wire-nat`, not a `syrup-nat` match. A wire nat decodes as EITHER
+;; `syrup-nat` or a non-negative `syrup-int` (see `wire-nat-ok?` in
+;; captp-wire), so a hand-rolled match on the first spelling silently misses
+;; the second — and the codec's own predicate is the authority on which
+;; spellings are one number.
 spec nat-of-syrup [Option SyrupValue] -> [Option Nat]
 defn nat-of-syrup [o]
   match o
     | none   -> [none Nat]
-    | some v ->
-        match v
-          | syrup-nat n -> some n
-          | _           -> [none Nat]
+    | some v -> wire-nat v
+
+;; A SINGLE-argument record's payload is the VALUE ITSELF, not a one-element
+;; list. `<desc:import-object 0>` decodes to `syrup-tagged "desc:import-object"
+;; <the number>`, so `syrup-list-or-nil` on it answers nil and every
+;; list-shaped reader finds zero arguments — `record-args-of` included.
+;;
+;; That is why the multi-field records here (desc:handoff-give with five,
+;; ocapn-peer with three, desc:sig-envelope with two) read fine through
+;; `record-args-of` while the one-field descriptors silently produced nothing.
+;; Both shapes are accepted rather than guessed at.
+spec nat-of-payload SyrupValue -> [Option Nat]
+defn nat-of-payload [payload]
+  match [wire-nat payload]
+    | some n -> some n
+    | none   -> nat-of-syrup [nth-syrup [syrup-list-or-nil payload] zero]
 
 spec desc-position-for String SyrupValue -> [Option Nat]
 defn desc-position-for [tag payload]
   match [desc-tag? tag]
     | false -> [none Nat]
-    | true  -> nat-of-syrup [nth-syrup [syrup-list-or-nil payload] zero]
+    | true  -> nat-of-payload payload
 
 spec desc-position SyrupValue -> [Option Nat]
 defn desc-position [v]

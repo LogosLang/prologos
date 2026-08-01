@@ -78,10 +78,14 @@ python3 -c "import cryptography, cffi" 2>/dev/null || {
 }
 
 echo "[run-ocapn-test-suite] starting Racket server on 127.0.0.1:$PORT"
-SERVER_LOG=$(mktemp -t ocapn-server.XXXXXX)
+# Overridable so a diagnosis can keep the log. The default is still a temp
+# file; only the cleanup differs, and a stray temp file is cheaper than a
+# session spent reading a STALE log from a previous run because the path was
+# guessed rather than known.
+SERVER_LOG=${OCAPN_SERVER_LOG:-$(mktemp -t ocapn-server.XXXXXX)}
 racket "$SERVER_SCRIPT" --port "$PORT" >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
-trap "kill $SERVER_PID 2>/dev/null; rm -f $SERVER_LOG" EXIT
+trap "kill $SERVER_PID 2>/dev/null; [ -n \"${OCAPN_SERVER_LOG:-}\" ] || rm -f $SERVER_LOG" EXIT
 
 # Wait for the server to bind. It loads the Prologos OCapN modules
 # at startup (process-string of the handshake preamble), which
