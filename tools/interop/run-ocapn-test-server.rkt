@@ -39,6 +39,8 @@
 (require racket/cmdline
          "../../racket/prologos/ocapn-dial-ffi.rkt"
          "../../racket/prologos/ocapn-conn-ffi.rkt"
+         "../../racket/prologos/ocapn-peer-ffi.rkt"
+         "../../racket/prologos/ocapn-identity-ffi.rkt"
          racket/tcp
          racket/list
          racket/string
@@ -569,6 +571,12 @@
                (and m (string->number (cadr m)))))
         (error 'run-ocapn-test-server "could not read keypair handle from: ~s" r))))
 
+;; Tell the PROLOGOS side which key we are. It signs with the same one: a
+;; handoff-give names the gifter's session key, and the peer checks it against
+;; the key we presented in our own op:start-session -- two keys would be two
+;; identities, and the check would fail on a give we did make.
+(ocapn-identity-set! keypair-handle)
+
 ;; The peer designator. Upstream uses `uuid.uuid4().hex` per netlayer
 ;; (testing_only_tcp.py:49-56) precisely so it is unique; a literal meant
 ;; every instance of this server advertised the same one, and since
@@ -645,7 +653,7 @@
 ;; stashed and every later step will run against ocapn-conn-ffi's
 ;; fallback — worth a line, since the symptom otherwise appears frames
 ;; later as an unexplained empty reply.
-(define (drive-init! cid [start-session-frame #f])
+(define (drive-init! cid [start-session-frame #f] [cout #f])
   (define r (with-handlers ([exn:fail? (lambda (e) (exn-message e))])
               (last-result (run-prologos/locked (format "(eval (init-connection ~aN))" cid)))))
   (unless (and (string? r) (regexp-match? #px"^true : Bool$" r))
@@ -659,13 +667,23 @@
   ;; deposited gift to its gifter, so without it every third-party handoff
   ;; fails verification: the exporter has no key to check the give against.
   ;;
-  ;; The op:start-session arm is state-only and emits nothing, so any bytes
-  ;; coming back mean captp-core disagreed about what this frame is.
+  ;; The op:start-session arm is state-only for the SESSION itself, but the
+  ;; step is also where a parked third-party give is redeemed: a session
+  ;; opening with a peer we hold a give against emits the withdraw right here
+  ;; (`withdraw-frames` in interop-driver.prologos). So bytes coming back are
+  ;; expected, and they have to be WRITTEN -- discarding them, which is what
+  ;; this did while the receiver role lived in Racket, silently drops the
+  ;; withdraw and the handoff never completes.
   (when start-session-frame
     (define out (drive-step cid start-session-frame))
     (unless (zero? (bytes-length out))
-      (printf "ocapn-test-server: start-session step produced ~a unexpected bytes on conn ~a~n"
-              (bytes-length out) cid)))
+      (printf "ocapn-test-server: start-session step emitted ~a bytes on conn ~a~n"
+              (bytes-length out) cid)
+      (cond
+        [cout (send-frame cout out)]
+        [else
+         (printf "ocapn-test-server: NO PORT to write the start-session reply on conn ~a~n"
+                 cid)])))
   (void))
 
 ;; The outbound wire bytes for one frame, or #"" when captp-core produced
@@ -820,12 +838,58 @@
 (define open-conns (make-hash))
 (define pubkey-by-out (make-hasheq))
 
+;; connection id -> output port. The registry the Prologos side consults maps
+;; LOCATION -> cid; this is the other half, and it stays here because a port
+;; is the one thing that cannot cross the FFI boundary.
+(define out-by-cid (make-hash))
+
 (define (record-open-conn! hello cout cid)
   (define e (conn-entry cout (peer-hello-pubkey-bytes hello) (peer-hello-side-id hello) cid))
   (with-state
     (hash-update! open-conns (peer-hello-location-key hello) (lambda (es) (cons e es)) '())
-    (hash-set! pubkey-by-out cout (peer-hello-pubkey-bytes hello)))
+    (hash-set! pubkey-by-out cout (peer-hello-pubkey-bytes hello))
+    (hash-set! out-by-cid cid cout))
+  ;; And tell the PROLOGOS side, which resolves a location to a connection
+  ;; when a role asks to reach a peer by name. The SIDE-ID goes with it: a
+  ;; give redeemed over a session that was already open needs that session's
+  ;; id, and the id is derived from the two side-ids, so registering only the
+  ;; connection would let a role find it and then be unable to name it.
+  (ocapn-peer-register (bytes->string/latin-1 (peer-hello-location-key hello))
+                       cid
+                       (bytes->string/latin-1 (peer-hello-side-id hello)))
   (void))
+
+;; Write everything the Prologos side queued for a connection other than the
+;; one being serviced. Entries are "<cid>:<payload>" with the payload as raw
+;; Latin-1 wire bytes.
+;;
+;; Split at the first colon BY INDEX, not by regexp: the payload is arbitrary
+;; bytes, and `#px"^([0-9]+):(.*)$"` fails outright on one containing a
+;; newline, because `.` does not match one and a frame carrying 0x0a is
+;; entirely ordinary.
+(define (drain-sends!)
+  (for ([entry (in-list (ocapn-send-drain '()))])
+    (define i (for/first ([c (in-string entry)] [k (in-naturals)] #:when (char=? c #\:)) k))
+    (cond
+      [(not i)
+       (printf "ocapn-test-server: unparseable queued send (no separator, ~a chars)~n"
+               (string-length entry))]
+      [else
+       (define cid (string->number (substring entry 0 i)))
+       (define port (and cid (with-state (hash-ref out-by-cid cid #f))))
+       (cond
+         [(not port)
+          (printf "ocapn-test-server: queued send for connection ~a, which we have no port for~n" cid)]
+         [else
+          (guarded "queued send"
+                   (lambda ()
+                     (define payload (string->bytes/latin-1 (substring entry (add1 i))))
+                     (printf "ocapn-test-server: queued send -> conn ~a (~a bytes)~n"
+                             cid (bytes-length payload))
+                     (when (getenv "OCAPN_FRAME_HEX")
+                       (printf "ocapn-test-server: QUEUED-HEX conn ~a: ~a~n"
+                               cid (bytes->hex-string payload)))
+                     (send-frame port payload)))])])))
 
 (define (forget-open-conn! hello cout)
   (when hello
@@ -1267,14 +1331,14 @@
                          (bytes-length frame) (bytes->hex-string frame))
                  (drop-half-open-dial! key)
                  (set! cid (next-conn-id!))
-                 (drive-init! cid frame)
+                 (drive-init! cid frame dout)
                  (run-frame-loop din dout cid)]
                 [else
                  ;; The handshake completed, so this is no longer a
                  ;; candidate for the crossed-hellos tie-break.
                  (drop-half-open-dial! key)
                  (set! cid (next-conn-id!))
-                 (drive-init! cid frame)
+                 (drive-init! cid frame dout)
                  (record-open-conn! hello dout cid)
                  ;; If we dialled this peer to redeem a handoff-give,
                  ;; everything the receive needs is now available: their
@@ -1404,7 +1468,7 @@
                  (printf "ocapn-test-server: DEGRADED — start-session validated but did not parse here (~a bytes): ~a~n"
                          (bytes-length first-frame) (bytes->hex-string first-frame))
                  (set! cid (next-conn-id!))
-                 (drive-init! cid first-frame)
+                 (drive-init! cid first-frame cout)
                  (run-frame-loop cin cout cid)]
                 [else
                  (define crossed (half-open-dial-for (peer-hello-location-key hello)))
@@ -1439,7 +1503,7 @@
                                   (close-input-port (vector-ref crossed 0))
                                   (close-output-port (vector-ref crossed 1))))
                        (set! cid (next-conn-id!))
-                       (drive-init! cid first-frame)
+                       (drive-init! cid first-frame cout)
                        ;; The survivor must be registered too, or a later
                        ;; enliven for this peer finds nothing in
                        ;; `open-conns` and the gifter path silently
@@ -1452,7 +1516,7 @@
                        (send-frame cout abort-bytes)])]
                    [else
                     (set! cid (next-conn-id!))
-                    (drive-init! cid first-frame)
+                    (drive-init! cid first-frame cout)
                     (printf "ocapn-test-server: inbound start-session accepted (conn ~a); driving captp-core~n"
                             cid)
                     (record-open-conn! hello cout cid)

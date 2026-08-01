@@ -42,6 +42,7 @@ ns prologos::ocapn::crypto
 ;; live in `captp-core.prologos`'s session-bytes builder.
 
 require [prologos::core::capabilities :refer (CryptoCap)]
+        [prologos::data::string       :as str :refer []]
 
 ;; ----------------------------------------
 ;; Primitive FFI bindings
@@ -71,3 +72,50 @@ foreign racket "crypto-ffi.rkt" [crypto-verify :as verify-raw : String -> String
 ;; Release a keypair handle, zeroing the secret key first. Returns
 ;; true if the handle was present.
 foreign racket "crypto-ffi.rkt" [crypto-close-keypair :as close-keypair-raw : Nat -> Bool]
+
+;; SHA-256 of Latin-1 message bytes, as a 32-byte Latin-1 String.
+;;
+;; Not part of the signing story, but the other hash the CapTP session layer
+;; needs. A side-id is SHA256d(the ENCODED public-key s-expression) and a
+;; session id is SHA256d("prot0" ++ min(a,b) ++ max(a,b)) — upstream
+;; utils/captp.py:115-146. Both appear inside a `desc:handoff-give` and a
+;; `desc:handoff-receive`, so a third-party handoff cannot be built without
+;; them. Until this existed the derivation could only be done in Racket,
+;; which is a large part of why the gifter and receiver roles lived there.
+foreign racket "crypto-ffi.rkt" [crypto-sha256 :as sha256-raw : String -> String]
+
+;; The doubled hash is what the protocol actually uses; neither caller wants
+;; a single round, so name the composite rather than making every site
+;; remember to apply it twice.
+spec sha256d String -> String
+  :doc "SHA-256 applied twice — the form every CapTP identity uses."
+defn sha256d [s]
+  sha256-raw [sha256-raw s]
+
+;; A CapTP side-id: the doubled hash of the ENCODED public-key s-expression —
+;; the Syrup bytes of `(public-key (ecc (curve Ed25519) (flags eddsa) (q PK)))`,
+;; NOT the 32-byte raw q inside it.
+;;
+;; Named for the distinction because getting it wrong is invisible: both
+;; inputs are byte strings, both produce a plausible 32-byte digest, and the
+;; only symptom is a session id that disagrees with the peer's several frames
+;; later. Upstream is unambiguous — `self.public_key.to_syrup()`,
+;; utils/captp.py:115-123.
+spec side-id-of-encoded-key String -> String
+  :doc "The side-id of a peer, from its ENCODED public-key s-expression bytes."
+defn side-id-of-encoded-key [pk-sexp-bytes]
+  sha256d pk-sexp-bytes
+
+;; The session id shared by two sides. Defined so both peers compute the same
+;; value without another round trip: the two side-ids are sorted as octet
+;; strings, so the pair is unordered.
+;;
+;; `str::lt` is `string<?`, which compares by code point — and every one of
+;; these strings is Latin-1, where a code point IS its byte. So this is the
+;; octet ordering upstream sorts by, not merely a similar one.
+spec session-id-of String String -> String
+  :doc "SHA256d(\"prot0\" ++ min(a,b) ++ max(a,b)) — the CapTP session id."
+defn session-id-of [a b]
+  match [str::lt a b]
+    | true  -> sha256d [str::append "prot0" [str::append a b]]
+    | false -> sha256d [str::append "prot0" [str::append b a]]

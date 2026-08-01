@@ -31,6 +31,17 @@
 ;;;   crypto-close-keypair  : (Nat -> Bool)
 ;;;     Zero the secret key, then release the handle. Returns #t if
 ;;;     it was present.
+;;;
+;;;   crypto-sha256         : (String -> String)
+;;;     SHA-256 of the message bytes, as a 32-byte Latin-1 String.
+;;;     Not a libsodium call — `racket/base` has it — but it belongs
+;;;     here because it is a HASH, and because its caller is the CapTP
+;;;     identity derivation that sits right next to signing:
+;;;       side-id    = SHA256(SHA256(encoded public-key sexp))
+;;;       session-id = SHA256(SHA256("prot0" ++ min(a,b) ++ max(a,b)))
+;;;     (upstream utils/captp.py:115-146). Without it the derivation
+;;;     could only happen in Racket, which is a large part of why the
+;;;     third-party handoff roles could not move to Prologos.
 
 (require ffi/unsafe
          ffi/unsafe/define
@@ -42,6 +53,7 @@
  crypto-sign
  crypto-verify
  crypto-close-keypair
+ crypto-sha256
  crypto-ffi-registry
  ;; Test-only helpers
  crypto-table-size
@@ -171,6 +183,10 @@
     (error 'crypto-verify "expected 64-byte sig; got ~a" (bytes-length sig)))
   (= 0 (crypto-sign-verify-detached-raw sig msg pk)))
 
+(define (crypto-sha256 msg-str)
+  "SHA-256 of the Latin-1 message bytes, as a 32-byte Latin-1 String."
+  (raw-bytes->string (sha256-bytes (string->raw-bytes msg-str))))
+
 ;; Overwrite the 64-byte secret in place BEFORE dropping the table
 ;; reference. `hash-remove!` only makes the bytes unreachable; it does
 ;; not erase them, and the collector is free to leave that page
@@ -201,4 +217,5 @@
    'crypto-pubkey         (cons crypto-pubkey         '(Nat -> String))
    'crypto-sign           (cons crypto-sign           '(Nat -> String -> String))
    'crypto-verify         (cons crypto-verify         '(String -> String -> String -> Bool))
-   'crypto-close-keypair  (cons crypto-close-keypair  '(Nat -> Bool))))
+   'crypto-close-keypair  (cons crypto-close-keypair  '(Nat -> Bool))
+   'crypto-sha256         (cons crypto-sha256         '(String -> String))))

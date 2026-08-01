@@ -20,28 +20,41 @@ require [prologos::ocapn::captp-core :refer [ConnectionState empty-connection
                                               conn-emitted conn-aborted?
                                               GiftEntry bs-exportable-gifts
                                               bs-set-gifts
-                                              bridge-state-empty]]
+                                              bridge-state-empty
+                                              signed-give-receiver-key
+                                              sig-envelope-object bs-peer-key
+                                              syrup-symbol-name syrup-list-or-nil
+                                              record-args-of nth-syrup]]
         [prologos::ocapn::vat        :refer [Vat vat Actor actor actor-table-set
                                              promise-table-set vat-dials clear-dials
                                              Allocated vat-spawn alloc-id alloc-vat]]
-        [prologos::ocapn::behavior   :refer [beh-echo beh-greeter beh-cell beh-resolver beh-car-factory-builder
+        [prologos::ocapn::behavior   :refer [OutReq out-dial out-send
+                                             beh-echo beh-greeter beh-cell beh-resolver beh-car-factory-builder
                                              beh-sturdyref-enlivener first-sturdyref-arg
                                              beh-sink]]
+        [prologos::ocapn::crypto     :refer [side-id-of-encoded-key session-id-of
+                                             pubkey-raw]]
         [prologos::ocapn::syrup      :refer [SyrupValue syrup-null syrup-string
                                              syrup-list syrup-nat syrup-tagged
+                                             syrup-symbol syrup-bytes syrup-bool
                                              syrup-promise]]
         [prologos::ocapn::promise    :refer [fresh]]
         [prologos::ocapn::captp-wire :refer [decode-op encode-op]]
         [prologos::ocapn::message    :refer [CapTPOp op-deliver op-deliver-only
                                              op-abort op-start-session op-listen
                                              op-gc-export op-gc-answer
-                                             op-deliver-to-answer]]
+                                             op-deliver-to-answer
+                                             deliver-args deliver-target
+                                             deliver-resolver]]
         [prologos::ocapn::syrup-wire :as wire :refer []]
         [prologos::data::nat         :as nat :refer [nat-eq?]]
-        [prologos::ocapn::handshake  :refer [hex-to-bytes]]
-        [prologos::data::list        :refer [List nil cons]]
+        [prologos::ocapn::handshake  :refer [hex-to-bytes sig-envelope-bytes
+                                             record-bytes list-bytes bytes-atom
+                                             gcrypt-pubkey-bytes]]
+        [prologos::data::list        :refer [List nil cons append]]
         [prologos::data::string      :as str :refer []]
-        [prologos::data::option      :refer [Option some none]]
+        [prologos::data::char        :as char :refer []]
+        [prologos::data::option      :refer [Option some none unwrap-or]]
 
 ;; Per-connection ConnectionState stash (see ocapn-conn-ffi.rkt). `conn-fetch`
 ;; takes the state to use when nothing was ever stashed for `cid`: the FFI
@@ -60,6 +73,59 @@ foreign racket "ocapn-conn-ffi.rkt"
 ;; declaration for it here.
 foreign racket "ocapn-dial-ffi.rkt"
   [ocapn-dial-request :as dial-request : String -> Bool]
+
+;; The connection registry and the outbound-send queue (ocapn-peer-ffi.rkt).
+;; Together they are what lets this driver act on a connection OTHER than the
+;; one being serviced — the capability a third-party handoff needs, and the
+;; reason the gifter and receiver roles used to live in the Racket server.
+;;
+;; Only the READ side is declared here. Registration happens in the server, at
+;; the moment a handshake completes, which is the only place that knows a
+;; connection has opened.
+foreign racket "ocapn-peer-ffi.rkt"
+  [ocapn-peer-lookup :as peer-lookup : String -> Nat]
+foreign racket "ocapn-peer-ffi.rkt"
+  [ocapn-peer-side-id :as peer-side-id : String -> String]
+foreign racket "ocapn-peer-ffi.rkt"
+  [ocapn-peer-loc-of :as peer-loc-of : Nat -> String]
+foreign racket "ocapn-peer-ffi.rkt"
+  [ocapn-send-on :as send-on-conn : Nat -> String -> Bool]
+
+;; The process signing key, by handle (ocapn-identity-ffi.rkt). ONE value:
+;; our public key, our side-id and every session id we take part in are all
+;; derived from it, and the peer's key is already on the connection
+;; (`bs-peer-key`). So this is the whole of the identity substrate a handoff
+;; needs, and the reason a role that must sign can now live here.
+;;
+;; The argument is the fallback used when no server ever set one — a unit
+;; test loading this module on its own. Zero is a keypair handle that does not
+;; exist, so it errors at the FFI rather than signing with the wrong key, and
+;; that is the behaviour we want from a miss.
+foreign racket "ocapn-identity-ffi.rkt"
+  [ocapn-identity-keypair :as identity-keypair : Nat -> Nat]
+
+;; Gives handed to us and not yet withdrawn (ocapn-give-ffi.rkt). A give
+;; arrives on the gifter's connection and is spent on the exporter's, so like
+;; the gift table it has to outlive either one. `give-claim` answers "" for a
+;; location with nothing waiting, which is what almost every start-session
+;; sees.
+foreign racket "ocapn-give-ffi.rkt"
+  [ocapn-give-park :as give-park : String -> String -> Bool]
+foreign racket "ocapn-give-ffi.rkt"
+  [ocapn-give-claim :as give-claim : String -> String]
+foreign racket "ocapn-give-ffi.rkt"
+  [ocapn-handoff-count :as handoff-count : String -> Nat]
+
+;; Enlivens whose fetch is out and whose answer has not come back
+;; (ocapn-enliven-ffi.rkt). The answer arrives on the EXPORTER's connection,
+;; which knows nothing about the enliven that started it on the receiver's —
+;; this is what holds the two together across that gap.
+foreign racket "ocapn-enliven-ffi.rkt"
+  [ocapn-enliven-park :as enliven-park : String -> String -> Bool]
+foreign racket "ocapn-enliven-ffi.rkt"
+  [ocapn-enliven-claim :as enliven-claim : String -> String]
+foreign racket "ocapn-enliven-ffi.rkt"
+  [ocapn-gift-id :as fresh-gift-id : String -> String]
 
 ;; The exporter-global gift table (see ocapn-gift-ffi.rkt). A third-party
 ;; handoff DEPOSITS on the gifter's connection and WITHDRAWS on the receiver's,
@@ -236,6 +302,22 @@ defn reserve-export [cid]
     let alloc := [vat-spawn beh-sink syrup-null [conn-vat cs]]
       reserve-export-emit cid alloc cs
 
+;; The same reservation, as a number. The gifter needs the position itself to
+;; put in a `desc:import-object`, not its decimal spelling; the String form
+;; above stays because a Racket caller can only read a printed result.
+;;
+;; Zero on a failed stash. Zero is the BOOTSTRAP position, so it is not a
+;; plausible reservation — a fetch addressed to it is answered by the
+;; bootstrap object rather than going silently nowhere, which is the loudest
+;; failure available here without an exception.
+spec reserve-export-id Nat -> Nat
+defn reserve-export-id [cid]
+  let cs := [conn-fetch cid seeded-connection]
+    let alloc := [vat-spawn beh-sink syrup-null [conn-vat cs]]
+      match [conn-stash cid [conn-state [alloc-vat alloc] [conn-bridge-state cs] [conn-emitted cs] [conn-aborted? cs]]]
+        | true  -> [alloc-id alloc]
+        | false -> zero
+
 ;; Force the stash side effect — matching the Bool result drives its
 ;; evaluation — then return the concatenated outbound bytes.
 ;;
@@ -311,6 +393,567 @@ defn publish-gifts [cs]
 ;; (utils/ocapn_uris.py), and the label is what we gate on — the interior is
 ;; the dialler's to parse and reject.
 
+;; ===========================================================
+;; Third-party handoff — the RECEIVER and GIFTER roles
+;; ===========================================================
+;;
+;; Both used to live in the Racket test server as byte-scanners running over
+;; every inbound frame ALONGSIDE captp-core, each with its own second Syrup
+;; parser (gaps document §1.7 M8, §0.2). They could not move for two concrete
+;; reasons: a handoff role has to SIGN, and it has to act on a connection
+;; other than the one it is servicing. `sig-envelope-bytes` over the process
+;; keypair and the connection registry are exactly those two capabilities.
+;;
+;; They are in the DRIVER rather than in behaviours, and that is a finding
+;; rather than a shortcut: a handoff is protocol machinery, not application
+;; logic. A behaviour is an object a peer can name and message; a handoff role
+;; is none of those things — it has no swiss-num, answers no message of its
+;; own, and needs to name connections, which is precisely what a behaviour
+;; must not do. The driver is where per-step side effects already live.
+;;
+;; This is OBSERVATION, not the interception §0.3 removed. Every op still goes
+;; through `connection-step`; nothing is handled instead of the bridge.
+;;
+;; Everything below is in DEPENDENCY ORDER. Modules are single-pass, and a
+;; forward reference here does not error — it reduces to a stuck term that is
+;; perfectly well-typed, so the only symptom is a handoff that quietly does
+;; nothing until an FFI marshaller refuses the term far away. See pitfall #52.
+
+;; --- Naming a peer ---
+
+;; A real NUL, built rather than written as a literal: an escape in a string
+;; literal is a reader question, and this has to be exactly byte 0.
+def nul-string : String := [str::from-char [char::from-code 0]]
+
+;; Text out of whichever atom carries it. A transport name reaches us as a
+;; symbol from one implementation and a string from another, and a designator
+;; can be either or a bytestring; all three are the same text to a location
+;; key. Everything else has no text, and says so rather than guessing.
+spec syrup-text-of SyrupValue -> [Option String]
+defn syrup-text-of [v]
+  match v
+    | syrup-symbol s -> some s
+    | syrup-string s -> some s
+    | syrup-bytes  s -> some s
+    | _              -> [none String]
+
+;; NUL-joined because neither component may contain one, so the join is
+;; injective — "a" + "bc" and "ab" + "c" must not collide into one peer.
+spec key-of-transport-designator SyrupValue SyrupValue -> [Option String]
+defn key-of-transport-designator [t d]
+  match [syrup-text-of t]
+    | none    -> [none String]
+    | some ts ->
+        match [syrup-text-of d]
+          | none    -> [none String]
+          | some ds -> some [str::append ts [str::append nul-string ds]]
+
+;; The identity of a PEER, independent of how to reach it: transport and
+;; designator, with hints dropped. Two locators differing only in hints name
+;; the same peer, and the give's copy of a location need not carry the hints
+;; the peer itself advertises when it connects. This is the key the connection
+;; registry is written under (`record-open-conn!` in the server), so the two
+;; must agree — both are transport, NUL, designator.
+spec peer-location-key SyrupValue -> [Option String]
+defn peer-location-key [v]
+  let args := [record-args-of "ocapn-peer" v]
+    match [nth-syrup args zero]
+      | none   -> [none String]
+      | some t ->
+          match [nth-syrup args 1N]
+            | none   -> [none String]
+            | some d -> key-of-transport-designator t d
+
+;; Our own raw Ed25519 public key — what a give must name for us to act on it.
+spec our-public-key Unit -> String
+defn our-public-key [u]
+  pubkey-raw [identity-keypair 0N]
+
+;; Our side-id: the doubled hash of our ENCODED public-key s-expression. Not
+;; of the raw key — see `side-id-of-encoded-key`, where getting this wrong is
+;; invisible until a session id disagrees several frames later.
+spec our-side-id Unit -> String
+defn our-side-id [u]
+  side-id-of-encoded-key [gcrypt-pubkey-bytes [our-public-key unit]]
+
+;; --- Frame pieces shared by both roles ---
+
+def false-bytes : String := [wire::encode [syrup-bool false]]
+
+spec export-zero-bytes Unit -> String
+defn export-zero-bytes [u]
+  record-bytes "desc:export" [cons [wire::encode [syrup-nat 0N]] nil]
+
+;; --- The RECEIVER: building the withdraw ---
+
+;; <desc:handoff-receive SESSION OUR-SIDE COUNT SIGNED-GIVE>
+;;
+;; The signed give is spliced VERBATIM, exactly as the gifter sent it. Its
+;; signature covers its own bytes, so re-encoding a decoded copy risks
+;; producing a give whose signature no longer verifies — over a difference we
+;; would never see.
+spec handoff-receive-bytes String String Nat String -> String
+defn handoff-receive-bytes [session our-side count signed-give]
+  record-bytes "desc:handoff-receive"
+    [cons [bytes-atom session]
+      [cons [bytes-atom our-side]
+        [cons [wire::encode [syrup-nat count]]
+          [cons signed-give nil]]]]
+
+;; <op:deliver <desc:export 0> ['withdraw-gift ENVELOPE] f f>
+spec withdraw-frame-bytes String -> String
+defn withdraw-frame-bytes [env]
+  record-bytes "op:deliver"
+    [cons [export-zero-bytes unit]
+      [cons [list-bytes [cons [wire::encode [syrup-symbol "withdraw-gift"]] [cons env nil]]]
+        [cons false-bytes [cons false-bytes nil]]]]
+
+;; The whole frame, signed. The count is drawn HERE, after we know there is a
+;; give to redeem: drawing it earlier would burn a count on every
+;; start-session, and a count is not just a number — upstream refuses a repeat
+;; within a session as a replay, so the sequence has to be dense.
+spec withdraw-bytes String String -> String
+defn withdraw-bytes [their-side signed-give]
+  let session := [session-id-of [our-side-id unit] their-side]
+    let body := [handoff-receive-bytes session [our-side-id unit] [handoff-count session] signed-give]
+      withdraw-frame-bytes [sig-envelope-bytes [identity-keypair 0N] body]
+
+;; --- The RECEIVER: redeeming when a session OPENS ---
+;;
+;; The frame goes out as part of THIS step's outbound rather than through the
+;; connection registry. The registry resolves a location to the newest
+;; connection, and a peer with two concurrent sessions would then get the
+;; withdraw on whichever one opened last; the step knows exactly which
+;; connection it is on.
+
+spec withdraw-if-give String String -> [List String]
+defn withdraw-if-give [loc-key their-side]
+  let signed-give := [give-claim loc-key]
+    match [str::eq signed-give ""]
+      | true  -> [nil String]
+      | false -> [cons [withdraw-bytes their-side signed-give] nil]
+
+;; The peer's key reaches us as the DECODED s-expression and is re-encoded
+;; here, because the side-id hashes the encoded form. Re-encoding is exact for
+;; a gcrypt sexp — nested lists of symbols and byte atoms, none of the shapes
+;; (dicts, floats, sets) where an encoder can legitimately differ.
+spec withdraw-for-session SyrupValue SyrupValue -> [List String]
+defn withdraw-for-session [pk loc]
+  match [peer-location-key loc]
+    | none    -> [nil String]
+    | some lk -> withdraw-if-give lk [side-id-of-encoded-key [wire::encode pk]]
+
+;; A start-session is where a peer tells us who it is and where it lives,
+;; which is exactly what a parked give is keyed on — so it is the only op that
+;; can redeem one.
+spec withdraw-frames CapTPOp -> [List String]
+defn withdraw-frames [op]
+  match op
+    | op-start-session _ pk loc -> withdraw-for-session pk loc
+    | _                         -> [nil String]
+
+;; --- The RECEIVER: recognising a give, and reaching its exporter ---
+;;
+;; The give is located by walking the DECODED op, never by scanning raw bytes
+;; for `<17'desc:handoff-give`: a bytestring argument may contain any bytes at
+;; all, including that exact pattern, and the consequence of a false positive
+;; is an outbound TCP connection to a host:port the peer chose. Two further
+;; gates for the same reason — the give must name OUR key as the receiver, and
+;; the location must parse as an `ocapn-peer`.
+
+;; `<desc:handoff-give k LOCATION …>` -> arg 1, the exporter's location.
+spec give-location SyrupValue -> [Option SyrupValue]
+defn give-location [hg]
+  nth-syrup [record-args-of "desc:handoff-give" hg] 1N
+
+;; What the dialler is handed. It parses an `ocapn-sturdyref`, not a bare
+;; location, so the give's location is wrapped in one — the swiss-num is a
+;; placeholder because we are not fetching an object, only opening the session
+;; the withdraw will go out on.
+spec handoff-sturdyref-bytes SyrupValue -> String
+defn handoff-sturdyref-bytes [loc]
+  record-bytes "ocapn-sturdyref"
+    [cons [wire::encode loc] [cons [bytes-atom "handoff"] nil]]
+
+;; A withdraw over a session that is ALREADY open. `peer-side-id` is why the
+;; registry carries one: finding the connection is not enough, the receive has
+;; to name the session, and that is derived from the two side-ids.
+spec withdraw-over-open-session String -> [Option OutReq]
+defn withdraw-over-open-session [lk]
+  let signed-give := [give-claim lk]
+    match [str::eq signed-give ""]
+      | true  -> [none OutReq]
+      | false -> some [out-send lk [withdraw-bytes [peer-side-id lk] signed-give]]
+
+;; Reach the exporter. If a session with it is already open we withdraw on
+;; that one directly; otherwise we ask for a connection and the withdraw goes
+;; out when the session opens (`withdraw-frames`).
+;;
+;; Both branches are needed. Dialling a peer we already have is refused by the
+;; dialler ("a session to that peer is already open") and the give would then
+;; sit parked forever with nothing logged — which is precisely why the Racket
+;; version called its redeem from the dial-skip path as well as from the two
+;; handshake paths.
+spec reach-exporter String SyrupValue -> [Option OutReq]
+defn reach-exporter [lk loc]
+  match [nat-eq? [peer-lookup lk] zero]
+    | true  -> some [out-dial [handoff-sturdyref-bytes loc]]
+    | false -> withdraw-over-open-session lk
+
+;; Force the park (by matching its Bool) before deciding how to reach the
+;; exporter. Lazy reduction would otherwise drop the park outright — and the
+;; already-open branch immediately claims what this just parked, so a dropped
+;; park is a withdraw over an empty give, with no error at all.
+spec park-then-reach String String SyrupValue -> [Option OutReq]
+defn park-then-reach [lk give-bytes loc]
+  match [give-park lk give-bytes]
+    | false -> [none OutReq]
+    | true  -> reach-exporter lk loc
+
+spec park-give-at-location SyrupValue SyrupValue -> [Option OutReq]
+defn park-give-at-location [sg loc]
+  match [peer-location-key loc]
+    | none    -> [none OutReq]
+    | some lk -> park-then-reach lk [wire::encode sg] loc
+
+spec give-park-and-reach SyrupValue SyrupValue -> [Option OutReq]
+defn give-park-and-reach [sg hg]
+  match [give-location hg]
+    | none     -> [none OutReq]
+    | some loc -> park-give-at-location sg loc
+
+spec give-for-us SyrupValue -> [Option OutReq]
+defn give-for-us [sg]
+  match [sig-envelope-object sg]
+    | none    -> [none OutReq]
+    | some hg -> give-park-and-reach sg hg
+
+;; One argument: a signed give naming US as the receiver, or nothing to do.
+spec give-to-out-req SyrupValue -> [Option OutReq]
+defn give-to-out-req [sg]
+  match [signed-give-receiver-key sg]
+    | none    -> [none OutReq]
+    | some rk ->
+        match [str::eq rk [our-public-key unit]]
+          | false -> [none OutReq]
+          | true  -> give-for-us sg
+
+;; Every give addressed to us in one op's arguments.
+;;
+;; TOP-LEVEL arguments only, deliberately narrower than the Racket scan it
+;; replaces (which walked the whole frame). A give is HANDED OVER, as an
+;; argument — upstream's own test delivers `[signed_handoff_give]` to the
+;; greeter — and a give buried inside some other structure is not one we were
+;; handed. Narrowing the gate narrows what a peer can make us dial.
+spec gives-in-args [List SyrupValue] -> [List OutReq]
+defn gives-in-args
+  | nil        -> [nil OutReq]
+  | cons a rest ->
+      match [give-to-out-req a]
+        | none   -> gives-in-args rest
+        | some r -> [cons r [gives-in-args rest]]
+
+spec gives-in-op CapTPOp -> [List OutReq]
+defn gives-in-op [op]
+  match [deliver-args op]
+    | none   -> [nil OutReq]
+    | some a -> gives-in-args [syrup-list-or-nil a]
+
+;; --- The GIFTER ---
+;;
+;; An enliven arrives on the receiver's connection naming an object on a THIRD
+;; peer. We fetch that object from the exporter, deposit it there as a gift,
+;; and answer the enliven with a signed `desc:handoff-give` the receiver can
+;; redeem.
+
+;; Every field of a `desc:handoff-give` is known when the enliven arrives: the
+;; receiver's key from the connection it came in on, the exporter's location
+;; from the sturdyref, the exporter session from the two side-ids, the gifter
+;; side from ours, and the gift id because we mint it. Only the DEPOSIT needs
+;; the fetch answer, because only the deposit names the object.
+;;
+;; Field values are pinned by upstream's own assertions
+;; (third_party_handoffs.py:458-462): receiver-key belongs to the ENLIVENING
+;; peer, while exporter-location / session / gifter-side all belong to the
+;; EXPORTER session — and gifter-side is OUR side-id, because from the
+;; exporter's point of view we are the gifter.
+spec handoff-give-bytes String String String String String -> String
+defn handoff-give-bytes [receiver-key loc session our-side gid]
+  record-bytes "desc:handoff-give"
+    [cons receiver-key
+      [cons loc
+        [cons [bytes-atom session]
+          [cons [bytes-atom our-side]
+            [cons [bytes-atom gid] nil]]]]]
+
+;; <op:deliver <desc:export 0> ['fetch SWISS] f <desc:import-object SLOT>>
+spec fetch-frame-bytes String Nat -> String
+defn fetch-frame-bytes [swiss slot]
+  record-bytes "op:deliver"
+    [cons [export-zero-bytes unit]
+      [cons [list-bytes [cons [wire::encode [syrup-symbol "fetch"]] [cons [bytes-atom swiss] nil]]]
+        [cons false-bytes
+          [cons [record-bytes "desc:import-object" [cons [wire::encode [syrup-nat slot]] nil]] nil]]]]
+
+;; <op:deliver <desc:export 0> ['deposit-gift GID <desc:export REF>] f f>
+spec deposit-frame-bytes String Nat -> String
+defn deposit-frame-bytes [gid ref]
+  record-bytes "op:deliver"
+    [cons [export-zero-bytes unit]
+      [cons [list-bytes
+              [cons [wire::encode [syrup-symbol "deposit-gift"]]
+                [cons [bytes-atom gid]
+                  [cons [record-bytes "desc:export" [cons [wire::encode [syrup-nat ref]] nil]] nil]]]]
+        [cons false-bytes [cons false-bytes nil]]]]
+
+;; <op:deliver <desc:export RM> ['fulfill SIGNED-GIVE] f f>
+spec answer-enliven-bytes Nat String -> String
+defn answer-enliven-bytes [rm env]
+  record-bytes "op:deliver"
+    [cons [record-bytes "desc:export" [cons [wire::encode [syrup-nat rm]] nil]]
+      [cons [list-bytes [cons [wire::encode [syrup-symbol "fulfill"]] [cons env nil]]]
+        [cons false-bytes [cons false-bytes nil]]]]
+
+;; Keyed by exporter connection and the export position we reserved on it:
+;; that pair is what the exporter's answer is addressed to, and it is the only
+;; thing in that answer we chose.
+spec enliven-key Nat Nat -> String
+defn enliven-key [cid slot]
+  str::append [str::from-int [from-nat cid]] [str::append ":" [str::from-int [from-nat slot]]]
+
+;; The parked fields, carried as Syrup rather than as an FFI signature so the
+;; field list lives in ONE place — here, the only thing that reads it.
+spec pending-enliven-blob String Nat String String String -> String
+defn pending-enliven-blob [requester-loc rm exporter-loc give gid]
+  wire::encode
+    [syrup-list [cons [syrup-string requester-loc]
+                  [cons [syrup-nat rm]
+                    [cons [syrup-string exporter-loc]
+                      [cons [syrup-string give]
+                        [cons [syrup-string gid] nil]]]]]]
+
+;; The exporter's session id, from our side-id and the one the registry
+;; recorded when that connection opened.
+spec exporter-session-id String -> String
+defn exporter-session-id [lk]
+  session-id-of [our-side-id unit] [peer-side-id lk]
+
+;; The receiver's key, as the ENCODED public-key s-expression the give must
+;; carry. `bs-peer-key` holds the raw q, so it is rebuilt rather than stored
+;; twice.
+spec receiver-key-bytes ConnectionState -> String
+defn receiver-key-bytes [cs]
+  gcrypt-pubkey-bytes [bs-peer-key [conn-bridge-state cs]]
+
+;; `<ocapn-sturdyref LOCATION SWISS>` -> its two fields.
+spec sturdyref-location SyrupValue -> [Option SyrupValue]
+defn sturdyref-location [v]
+  nth-syrup [record-args-of "ocapn-sturdyref" v] zero
+
+spec sturdyref-swiss SyrupValue -> [Option String]
+defn sturdyref-swiss [v]
+  match [nth-syrup [record-args-of "ocapn-sturdyref" v] 1N]
+    | none   -> [none String]
+    | some s -> syrup-text-of s
+
+spec first-arg SyrupValue -> [Option SyrupValue]
+defn first-arg [args]
+  nth-syrup [syrup-list-or-nil args] zero
+
+;; Force the park before emitting the fetch. Lazy reduction will drop it
+;; otherwise — nothing matches on its result — and then the fetch goes out
+;; while its answer arrives with nothing to match it against, which presents
+;; as a handoff that stalls with no error anywhere.
+spec park-then-fetch String String String Nat String -> [Option OutReq]
+defn park-then-fetch [key blob swiss slot lk]
+  match [enliven-park key blob]
+    | false -> [none OutReq]
+    | true  -> some [out-send lk [fetch-frame-bytes swiss slot]]
+
+;; A `let` value may not span lines — the reader loses the binding and the
+;; form escapes to top level (pitfall #53) — so the give is built by a helper
+;; rather than by a five-argument call broken across two.
+spec give-for-handoff ConnectionState String SyrupValue String -> String
+defn give-for-handoff [cs lk loc gid]
+  handoff-give-bytes [receiver-key-bytes cs] [wire::encode loc] [exporter-session-id lk] [our-side-id unit] gid
+
+spec begin-handoff-on Nat ConnectionState String SyrupValue String Nat Nat -> [Option OutReq]
+defn begin-handoff-on [cid cs lk loc swiss rm ecid]
+  let gid := [fresh-gift-id "prologos-gift-"]
+    let slot := [reserve-export-id ecid]
+      park-then-fetch [enliven-key ecid slot] [pending-enliven-blob [peer-loc-of cid] rm lk [give-for-handoff cs lk loc gid] gid] swiss slot lk
+
+;; No connection to the exporter yet means no handoff: the enlivener
+;; behaviour has already asked for the dial, and the enliven is not retried.
+;; That is the Racket version's behaviour too, and it is a known limit rather
+;; than a decision.
+spec begin-handoff Nat ConnectionState String SyrupValue String Nat -> [Option OutReq]
+defn begin-handoff [cid cs lk loc swiss rm]
+  let ecid := [peer-lookup lk]
+    match [nat-eq? ecid zero]
+      | true  -> [none OutReq]
+      | false -> begin-handoff-on cid cs lk loc swiss rm ecid
+
+spec enliven-with-sturdyref Nat ConnectionState SyrupValue Nat -> [Option OutReq]
+defn enliven-with-sturdyref [cid cs sr rm]
+  match [sturdyref-location sr]
+    | none     -> [none OutReq]
+    | some loc ->
+        match [sturdyref-swiss sr]
+          | none       -> [none OutReq]
+          | some swiss ->
+              match [peer-location-key loc]
+                | none    -> [none OutReq]
+                | some lk -> begin-handoff cid cs lk loc swiss rm
+
+spec enliven-with-args Nat ConnectionState SyrupValue Nat -> [Option OutReq]
+defn enliven-with-args [cid cs args rm]
+  match [first-arg args]
+    | none    -> [none OutReq]
+    | some sr -> enliven-with-sturdyref cid cs sr rm
+
+spec opt-to-list [Option OutReq] -> [List OutReq]
+defn opt-to-list [o]
+  match o
+    | none   -> [nil OutReq]
+    | some r -> [cons r [nil OutReq]]
+
+spec enliven-for-target Nat ConnectionState CapTPOp -> [List OutReq]
+defn enliven-for-target [cid cs op]
+  match [deliver-resolver op]
+    | none    -> [nil OutReq]
+    | some rm ->
+        match [deliver-args op]
+          | none   -> [nil OutReq]
+          | some a -> opt-to-list [enliven-with-args cid cs a rm]
+
+;; The gate is STRUCTURAL: a deliver, to the enlivener's export position,
+;; carrying a resolve-me, whose first argument is an `ocapn-sturdyref`. The
+;; scan this replaces fired on any frame containing the bytes
+;; `<15'ocapn-sturdyref` anywhere — including inside a bytestring argument —
+;; and took the FIRST `desc:import-object` in the whole frame as the reply
+;; target, which on the wire is an ARGUMENT, since args precede resolve-me.
+spec enliven-out-reqs Nat ConnectionState CapTPOp -> [List OutReq]
+defn enliven-out-reqs [cid cs op]
+  match [deliver-target op]
+    | none   -> [nil OutReq]
+    | some t ->
+        match [nat-eq? t sturdyref-enlivener-pos]
+          | false -> [nil OutReq]
+          | true  -> enliven-for-target cid cs op
+
+;; --- The GIFTER: finishing on the exporter's answer ---
+
+;; A reference reaches us as whichever descriptor the exporter chose; all
+;; three name a position, and that position is what a deposit carries.
+spec desc-tag? String -> Bool
+defn desc-tag? [tag]
+  match [str::eq tag "desc:import-object"]
+    | true  -> true
+    | false ->
+        match [str::eq tag "desc:export"]
+          | true  -> true
+          | false -> str::eq tag "desc:import-promise"
+
+spec nat-of-syrup [Option SyrupValue] -> [Option Nat]
+defn nat-of-syrup [o]
+  match o
+    | none   -> [none Nat]
+    | some v ->
+        match v
+          | syrup-nat n -> some n
+          | _           -> [none Nat]
+
+spec desc-position-for String SyrupValue -> [Option Nat]
+defn desc-position-for [tag payload]
+  match [desc-tag? tag]
+    | false -> [none Nat]
+    | true  -> nat-of-syrup [nth-syrup [syrup-list-or-nil payload] zero]
+
+spec desc-position SyrupValue -> [Option Nat]
+defn desc-position [v]
+  match v
+    | syrup-tagged tag payload -> desc-position-for tag payload
+    | _                        -> [none Nat]
+
+spec ref-position [Option SyrupValue] -> [Option Nat]
+defn ref-position [o]
+  match o
+    | none   -> [none Nat]
+    | some v -> desc-position v
+
+;; `['fulfill REF]` — the reference is taken from the ARGUMENT LIST, not from
+;; the first `desc:import-object` anywhere in the frame.
+spec fulfill-ref SyrupValue -> [Option Nat]
+defn fulfill-ref [args]
+  let xs := [syrup-list-or-nil args]
+    match [nth-syrup xs zero]
+      | none   -> [none Nat]
+      | some h ->
+          match [syrup-symbol-name h]
+            | none   -> [none Nat]
+            | some n ->
+                match [str::eq n "fulfill"]
+                  | false -> [none Nat]
+                  | true  -> ref-position [nth-syrup xs 1N]
+
+;; The parked fields, read back out of the blob.
+spec blob-field String Nat -> [Option SyrupValue]
+defn blob-field [blob i]
+  match [wire::decode-value blob]
+    | none   -> [none SyrupValue]
+    | some v -> nth-syrup [syrup-list-or-nil v] i
+
+spec blob-string String Nat -> String
+defn blob-string [blob i]
+  match [blob-field blob i]
+    | none   -> ""
+    | some v -> unwrap-or "" [syrup-text-of v]
+
+spec blob-nat String Nat -> Nat
+defn blob-nat [blob i]
+  match [nat-of-syrup [blob-field blob i]]
+    | none   -> zero
+    | some n -> n
+
+spec answer-for-blob String -> OutReq
+defn answer-for-blob [blob]
+  out-send [blob-string blob zero] [answer-enliven-bytes [blob-nat blob 1N] [sig-envelope-bytes [identity-keypair 0N] [blob-string blob 3N]]]
+
+spec deposit-for-blob String Nat -> OutReq
+defn deposit-for-blob [blob ref]
+  out-send [blob-string blob 2N] [deposit-frame-bytes [blob-string blob 4N] ref]
+
+;; Deposit the object at the exporter, and answer the enliven with the signed
+;; give. Two sends, on two different connections — which is the whole reason
+;; this role could not be expressed before the connection registry existed.
+spec finish-handoff String Nat -> [List OutReq]
+defn finish-handoff [blob ref]
+  cons [deposit-for-blob blob ref] [cons [answer-for-blob blob] [nil OutReq]]
+
+spec claim-for-slot String CapTPOp -> [List OutReq]
+defn claim-for-slot [blob op]
+  match [str::eq blob ""]
+    | true  -> [nil OutReq]
+    | false ->
+        match [deliver-args op]
+          | none   -> [nil OutReq]
+          | some a ->
+              match [fulfill-ref a]
+                | none     -> [nil OutReq]
+                | some ref -> finish-handoff blob ref
+
+spec fetch-answer-out-reqs Nat CapTPOp -> [List OutReq]
+defn fetch-answer-out-reqs [cid op]
+  match [deliver-target op]
+    | none   -> [nil OutReq]
+    | some t -> claim-for-slot [enliven-claim [enliven-key cid t]] op
+
+;; Both halves of the gifter role, for one inbound op.
+spec gifter-out-reqs Nat ConnectionState CapTPOp -> [List OutReq]
+defn gifter-out-reqs [cid cs op]
+  append [enliven-out-reqs cid cs op] [fetch-answer-out-reqs cid op]
+
 ;; Hand every dial the vat's behaviours asked for to the FFI queue.
 ;;
 ;; This used to be an INTERCEPTION: `run-step` inspected each inbound op,
@@ -323,12 +966,28 @@ defn publish-gifts [cs]
 ;; actor (seeded above), it asks for the connection like any other effect,
 ;; and this drains what the vat recorded — the same shape as the outbound
 ;; message queue, one layer out.
-spec drain-dials [List String] -> Bool
-defn drain-dials [locs]
-  match locs
+;; A send needs a CONNECTION, and the behaviour named only a location. The
+;; registry resolves it. A location we have no connection to yet answers 0 —
+;; connection ids start at 1 — and the send is dropped rather than queued
+;; against a connection that does not exist.
+spec do-send-on String String -> Bool
+defn do-send-on [loc bs]
+  match [nat-eq? [peer-lookup loc] zero]
+    | true  -> true
+    | false -> send-on-conn [peer-lookup loc] bs
+
+spec do-out-req OutReq -> Bool
+defn do-out-req [r]
+  match r
+    | out-dial l    -> dial-request l
+    | out-send l bs -> do-send-on l bs
+
+spec drain-dials [List OutReq] -> Bool
+defn drain-dials [rs]
+  match rs
     | nil        -> true
-    | cons l rest ->
-        match [dial-request l]
+    | cons r rest ->
+        match [do-out-req r]
           | true  -> drain-dials rest
           | false -> drain-dials rest
 
@@ -338,11 +997,18 @@ defn clear-conn-dials [cs]
 
 ;; The dials have been taken, so the state that persists must not still carry
 ;; them — otherwise every later step re-dials everything this one asked for.
-spec run-step-emit Nat ConnStep -> String
-defn run-step-emit [cid step]
+spec run-step-emit Nat ConnStep [List String] -> String
+defn run-step-emit [cid step extra]
   let cs2 := [publish-gifts [clear-conn-dials [conn-step-state step]]]
     emit-after-stash [conn-stash cid cs2]
-                     [conn-step-outbound step]
+                     [append [conn-step-outbound step] extra]
+
+;; Everything this step asks the outside world for: gives handed to us, the
+;; gifter's two halves, and whatever the vat's behaviours queued. One list,
+;; because they are all "things this turn wants done once the turn closes".
+spec step-out-reqs Nat ConnectionState CapTPOp ConnStep -> [List OutReq]
+defn step-out-reqs [cid cs op step]
+  append [gives-in-op op] [append [gifter-out-reqs cid cs op] [vat-dials [conn-vat [conn-step-state step]]]]
 
 spec run-step Nat CapTPOp ConnectionState -> String
 ;; EVERY op goes through `connection-step`. There is no longer an op the
@@ -370,9 +1036,9 @@ spec run-step Nat CapTPOp ConnectionState -> String
 ;; `publish-gifts` and `emit-after-stash` above, for the same reason.
 defn run-step [cid op cs]
   let step := [connection-step op [with-global-gifts cs]]
-    match [drain-dials [vat-dials [conn-vat [conn-step-state step]]]]
-      | true  -> run-step-emit cid step
-      | false -> run-step-emit cid step
+    match [drain-dials [step-out-reqs cid cs op step]]
+      | true  -> run-step-emit cid step [withdraw-frames op]
+      | false -> run-step-emit cid step [withdraw-frames op]
 
 spec step-connection Nat String -> String
   :doc "Process one inbound wire frame (hex-encoded) for connection

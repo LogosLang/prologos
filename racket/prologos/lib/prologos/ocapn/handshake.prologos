@@ -231,6 +231,31 @@ spec sign-bytes Nat String -> String
 defn sign-bytes [kp payload]
   sign-raw kp payload
 
+;; The gcrypt sig-val form of a 64-byte raw signature. Split at 32 because
+;; Ed25519's signature IS r ++ s, and the wire form names the halves.
+spec sig-val-bytes String -> String
+  :doc "Wrap 64 raw signature bytes as (sig-val (eddsa (r R) (s S)))."
+defn sig-val-bytes [sig]
+  gcrypt-sig-bytes [str::slice sig 0 32] [str::slice sig 32 64]
+
+;; `<desc:sig-envelope BODY (sig-val …)>` over exactly the BODY bytes.
+;;
+;; Signed BARE — over the encoded record and nothing else. That is the
+;; difference from `sign-location`, which wraps its argument in the
+;; my-location envelope first; a `desc:handoff-give` and a
+;; `desc:handoff-receive` are both signed as they stand.
+;;
+;; Taking the body as pre-encoded BYTES rather than a SyrupValue is
+;; deliberate: the signature covers the exact bytes that go on the wire, and
+;; re-encoding a decoded value is the one operation that can silently change
+;; them (a dict re-sorted, a length recomputed). The caller signs what it
+;; sends.
+spec sig-envelope-bytes Nat String -> String
+  :doc "Sign BODY with the keypair and wrap it as <desc:sig-envelope BODY SIG>."
+defn sig-envelope-bytes [kp body]
+  record-bytes "desc:sig-envelope"
+    [cons body [cons [sig-val-bytes [sign-bytes kp body]] nil]]
+
 ;; ----------------------------------------
 ;; Incoming handshake validation — Phase 58.c / 58.d
 ;; ----------------------------------------

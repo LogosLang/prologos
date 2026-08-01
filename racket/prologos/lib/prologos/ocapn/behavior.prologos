@@ -118,6 +118,24 @@ data BehaviorTag
 ;; errored; the connection simply produced no bytes and upstream timed out.
 ;;
 ;; So the namespace is part of the effect, not something to infer later.
+;; What the vat wants the driver to do with the OUTSIDE WORLD, once the turn
+;; closes. The vat accumulates these and stays pure; the driver drains them.
+;;
+;; One list of these rather than one list per kind: adding a field to `Vat`
+;; means touching every construction site, and the kinds share a lifetime —
+;; they are all "things this turn asked the world for".
+data OutReq
+  ;; Open a connection to the location these bytes name.
+  out-dial : String
+  ;; Send wire bytes to the peer at this location, on whatever connection we
+  ;; have to it. (location, bytes)
+  out-send : String -> String
+
+spec out-req-loc OutReq -> String
+defn out-req-loc
+  | out-dial l   -> l
+  | out-send l _ -> l
+
 data Effect
   ;; Send to a LOCAL refr (fire-and-forget) — `t` is a vat actor-table key.
   eff-send-only   : Nat -> SyrupValue
@@ -142,6 +160,17 @@ data Effect
   ;; driver drains it between steps, exactly as `eff-send-remote` already
   ;; works. See the gaps document §0.2.
   eff-connect     : String
+  ;; Send wire bytes on the connection to a NAMED PEER — the location, not
+  ;; the connection being serviced.
+  ;;
+  ;; This is what a third-party handoff needs and had no way to express: a
+  ;; gifter fetches from the exporter while servicing the enliven that
+  ;; arrived from the receiver. The location is resolved to a connection by
+  ;; the driver, because a behaviour cannot see the registry (it sees only
+  ;; its own state and the message), and that is the right split — the
+  ;; behaviour names WHO, the driver knows WHERE.
+  ;;   location-bytes  wire-bytes
+  eff-send-on     : String -> String
   ;; Create a NEW actor at a caller-chosen id: (id, behaviour, initial state).
   ;;
   ;; The id is not invented by the behaviour — `step-behavior` is handed the
