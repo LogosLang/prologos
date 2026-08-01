@@ -907,6 +907,43 @@ items of the hold-point, ruled before P4a opened:
   PINNED so a "map semantics" intuition cannot drift it later. This is the
   same fact the P4a LOWER-vs-WALK fail-first fixture settles by test.
 
+**The P4b opening ruling [owner, 2026-07-31]:**
+
+- **Q_U10 — WHOLESALE STANDS; the `'path` sort GAINS A MAP POSTURE**
+  ["(a) — keep wholesale, give the 'path sort a Map posture"]. The P4b
+  mini-audit (`wf_1cb9d606-89c`, 5 facets + completeness critic @ `2cef148b`,
+  1.17M tokens) produced a **BLOCKING objection to Q_U6 as written**, which
+  this ruling resolves.
+  **The objection, probe-verified at HEAD**: `.field` on a `(Map K V)` subject
+  WORKS (`m.a` → `1 : Int`, 0 errors, via `expr-map-get`,
+  typing-core.rkt:2205-2213) while `{field}` on the SAME subject REFUSES
+  STATICALLY (`select-row-of`'s `[(expr-Map? tm) … 'subject-map]`,
+  typing-core.rkt:663). So wholesale `$select` minting for `.field` would
+  **silently delete a working surface** — and not an obscure one: it is
+  DOCUMENTED in the ambient rules (`prologos-syntax.md:117` "Dot access is for
+  map keys — `user.name` → `[map-get user :name]`"), TAUGHT as the headline
+  ergonomic in `examples/map-tutorial-demo.prologos:219-225` against an
+  explicit `[Map Keyword Nat]` def, and PINNED E2E at
+  `tests/test-dot-access-02.rkt:112-119` — a pin BOTH fold-census facets
+  missed, because it asserts a **value**, not a datum, so it fails by TYPE
+  ERROR rather than shape mismatch. A migration plan phrased as "update the
+  datum assertions in the migrating commit" structurally cannot catch it.
+  **The ruling**: wholesale stands (the complection Q_U6 rejected is still the
+  thing to avoid), and the `'path` sort gains a **Map posture** — `.field` on
+  a Map subject keeps `map-get` semantics under the unified carrier.
+  **Consequence, accepted eyes-open**: design claim C2 ("ZERO new typing
+  work") is **REFUTED** and formally withdrawn. Sort dispatch has to exist
+  anyway for Q_T2's dyn-row asymmetry; Map is a THIRD posture in a table we
+  are already building, not a new mechanism. Therefore **design-round item 5's
+  semantic table is TWO-DIMENSIONAL — indexed by (subject kind × sort), not by
+  sort alone.** Rejected-with-reason: **(b)** narrow the migration to the
+  reified spellings only (`#p(…)` + `x{…}`), leaving `.field` on `map-get` —
+  preserves the Map surface for free but leaves path text on TWO
+  representations discriminated by subject type, which is exactly the
+  complection Q_U6 was ruled to prevent; **(c)** migrate only record-typed
+  subjects — incoherent, elaboration precedes typing so the discriminator is
+  not available where the mint happens.
+
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
   P1b-i, **owner-reviewed**, and ruled (Q_M8 the sole amendment). §Q8 is now
@@ -3222,6 +3259,98 @@ element-level guarantee cannot be pinned until a broadcast step exists — P4c
 owes that fixture.
 
 Status: ✅ (see the Progress Tracker).
+
+#### §5.P4b — The ONE selector carrier + wholesale path migration  (mini-audit folded 2026-07-31)
+
+**The mini-audit** (`wf_1cb9d606-89c`, 5 HEAD-pinned read-only facets +
+adversarial completeness critic @ `2cef148b`, 6 agents / 1.17M tokens).
+**FOUR of the seven design claims did not survive**, and the critic found a
+BLOCKING objection no facet connected. Every load-bearing finding below was
+R-lens-verified on the main thread before folding.
+
+**Design-claim verdicts:**
+
+| Claim | Verdict |
+|---|---|
+| C1 — all four fold callers head-agnostic, `$select`/`map-get` fold identically | **REFUTED.** Head-agnostic AT THE FOLD (callers re-pinned: macros.rkt:1962, :2611, :6113, :6499), but one step downstream `preparse-expand-form` carries a DEDICATED `$select` partial-opacity arm (macros.rkt:2013-2019) that `map-get` never touches — `map-get` falls to the generic list arm and gets FULL subform recursion. Two of the four callers re-enter `preparse-expand-form` directly, so they do NOT fold identically end-to-end. Rider: a loud→silent slide — `map-get`'s parser arm has an arity ceiling of 2 (parser.rkt:2663), `$select`'s has NO count check (parser.rkt:1195-1209), so a zero-hole pipe step that errors loudly today becomes an extra BRANCH silently. |
+| C2 — ZERO new typing work | **REFUTED** → withdrawn by Q_U10. Three divergent subject postures, and the walks are DELIBERATELY non-delegating (typing-core.rkt:637-639 says so in a comment). |
+| C3 — one line in `select-map-exprs` | **UNDERCOUNTS BY ONE WALKER, and it fails SILENTLY.** The 6-walker funnel is real (syntax.rkt:780-782; shift/subst/zonk×3/nf all route through it), but `uses-bvar0?` (pretty-print.rkt:1042, select arm :1226) is a SEVENTH hand-armed walker OUTSIDE it: `[(expr-select subject _)` with a comment asserting "subject is the only expr slot". Correct today; the moment branches hold an expr it under-reports bvar0 usage with no error — the `pipeline.md` § Exhaustive Walkers signature exactly. Cleared as safe by construction: `occurs?` (unify.rkt:240) and `expr-subfields` (typing-errors.rkt:73-87) are generic `struct->vector` walks; `conv-nf` falls to `equal?`; `narrowing.rkt` has ZERO references. |
+| C4 — no PNET_VERSION bump | **CONCLUSION CONFIRMED, REASONING REFUTED.** §8 R6's symbol-keyed/additive argument covers struct ADDITION only; P4b does an ARITY CHANGE and a TAG REMOVAL. On arity mismatch `(apply ctor fields)` raises — but driver.rkt:2892 wraps deserialization in `(with-handlers ([exn? …]) …)`, so it is SWALLOWED into silent re-elaboration. On tag REMOVAL the reader's `[else v]` (pnet-serialize.rkt:589-599) returns a RAW VECTOR with **no exception at all**, so the handler never fires and the impostor lands in the module env (the `pipeline.md` § New AST Node item-6 failure). What actually makes "no bump" true is `infrastructure-stale?` (pnet-serialize.rkt:664-671): any syntax.rkt edit rebuilds `driver_rkt.zo`, whose mtime then invalidates every `.pnet`. **Corollary — the registration ROUTE must FLIP**: `expr-select` uses `regN!` (loud on arity drift); `expr-path`/`expr-Path` use `auto-cache!` (:542), whose body SWALLOWS exceptions so a stale-arity call voids the registration silently. P4b must DELETE that line, not repoint it — the rationale is already written in-tree for the identical `expr-map-get` case (pnet-serialize.rkt:336-341). |
+| C5 — Q_T2 asymmetry live | **CONFIRMED, and WIDER: it is THREE-WAY.** dyn pair (typing-core.rkt:564-567 vs :677-678) + Map pair (:2205-2213 vs :663) — and the Map pair runs the OPPOSITE direction on the hit case. |
+| C6 — the ω fence | **CONFIRMED but UNDERSTATED: the fence is a REPAIR of a LIVE defect, not only a forward guard.** Multi-branch truncation is ALREADY a silent wrong answer at five `(car (expr-path-branches …))` sites (reduction.rkt:3431/:3446/:4445/:4454) plus the elaborator's static inline (:2285/:2363), and BOTH existing static guards (elaborator.rkt:2346-2347, :2349-2351) are structurally BYPASSED by the expression/dynamic route. |
+| C7 — vacuous ground `Path` | **CONFIRMED** (typing-core.rkt:2050-2051 discards branches with `_`; unify.rkt:799 is unconditional `ok`). Refinement: `#p()` empty is a DIFFERENT failure class (reader-layer `Unbound variable`), so "vacuous" does not predict it. |
+
+**⭐ THE REAL CARRIER-SHAPE DECISION IS THE SEGMENT ENCODING MISMATCH — and
+none of the three candidate shapes named it.** `expr-path` branches hold
+`expr-keyword`/`expr-symbol` **structs** (minted at elaborator.rkt:2257-2266);
+`expr-select` branches hold bare **symbols** plus `(@key name cont)` /
+`(@sub . branches)` / `(@ord N)` **s-expressions** (syntax.rkt:786-800,
+classified at :860-873). The shapes were framed as ARITY questions (new field
+vs branches-slot vs new struct); the actual cost is an **encoding convergence
+plus a rewrite of every step consumer**, which is invisible from any
+constructor-count analysis. Settle the encoding BEFORE trusting any edit-site
+list. Facet 1's recommendation (shape **a′**: repurpose `expr-path` INTO the
+carrier and place it in `expr-select`'s existing `branches` slot, preserving
+`expr-select` arity 2 and inheriting the eight pipeline arms `expr-path`
+already carries) survives only if the encoding question is answered first.
+Note also facet 1's structural point: a bare `#p(a.b)` is a STANDALONE VALUE
+in expression position (`def p1 := #p(name)` is live), so the unified carrier
+MUST be an `expr?` with its own arms — shape (a) as literally written cannot
+carry `#p(…)`, and (a)/(c) are therefore not two sizes of the same thing.
+
+**Scope facts the design under-counted:**
+
+- **The RED set is 25 tests across SEVEN files**, not the "4 of 6 in one file"
+  §5.P4 names: test-postfix-index-02 (10) · test-implicit-map-01 (4) ·
+  test-dot-access-01 (3) · test-nil-type (**3, not 4** — the other three are
+  `$retired-selection` markers and a no-sentinel passthrough, all
+  migration-invariant) · test-mixfix-01 (2) · test-path-selection:1501 (1) ·
+  **test-dot-access-02 (2, failing by TYPE ERROR not datum shape — the file
+  both fold-census facets missed).**
+- **`expr-path` has a LIVE FFI SURFACE** that Q_U5's carrier round did not
+  mention: `path-ops.rkt:33-121` (6 shims, each `expr-path?`-guarded) bound by
+  `lib/prologos/core/path.prologos:12-17`, plus `unify.rkt:799`,
+  `foreign.rkt:362` (`[(expr-Path) 'Path]` marshalling tag) and
+  `union-types.rkt:102` (ordering key). Retiring `expr-path` re-points a
+  FOREIGN MODULE, not just Racket call sites. `path-branch-count`
+  (path-ops.rkt:83-88) is already a grade predicate in primitive form.
+- **The ω fence is VACUOUS inside its own slice** unless written as a total
+  `case` over `select-step-kind` terminating in `select-step-kind-unhandled`
+  — the step vocabulary is a CLOSED union with **no ω member** until P4c mints
+  `(@bcast step)`. Write it as the total dispatch (P4a's mechanism), so it
+  becomes live the moment the kind lands.
+- **`_.field` sections silently retire, unpinned.** `map-get` and `map-assoc`
+  ARE in `sectionable-op-keywords` (parser.rkt:703-730); `get`,
+  `nil-safe-get` and `$select` are NOT. So `_.field` currently desugars to a
+  hole-domain lambda and would stop. `_[k]` IS pinned
+  (tests/test-path-selection.rkt:598-599); `_.field` has **no test anywhere**.
+- **`whnf-trivial?` holds `expr-Path?` (the TYPE) but not `expr-path?` (the
+  VALUE)** — reduction.rkt:2010-2065. A literal is a canonical form with no
+  head rule, so by the predicate's own criterion it belongs there; its absence
+  means every `#p(…)` reaching whnf pays the full ~990-arm match. A live
+  `pipeline.md` core-item-4 gap one line from a P4a deliverable. **P4b
+  DECISION**: a reducible carrier must stay OUT, a literal carrier must go IN.
+- **The `expr?` predicate gap is ASYMMETRIC and still open**: `expr-select?`
+  is registered (syntax.rkt:1620); `expr-path?`, `expr-Path?`, `expr-get-in?`,
+  `expr-update-in?` are NOT. §5.P1a item 8 deferred this to "P2's mini-audit"
+  and it did not close. P4b closes it by construction or carries it forward.
+- **A SIXTH hand-maintained sentinel enumeration**: `tools/form-deps.rkt:42`'s
+  `syntax-keywords` (carries `$dot-access`/`$dot-key`/`$retired-selection`,
+  not `$select`) — it EXCLUDES syntax keywords from the stdlib dependency
+  graph, so an unlisted head is silently counted as a reference to an
+  undefined name. Joins `pattern-var?`, `access-sentinel?`, namespace.rkt:896,
+  `sectionable-op-keywords`, and `tools/reader-corpus-ab.rkt:76-80`. Note the
+  RETIREMENT direction is a different surface from §Q8.5's nine MINTING sites.
+
+**⚠ Three doc-truth defects in THIS document, found by the audit:**
+1. §5.P2 audit finding 6 says `rewrite-dot-access` has **THREE** production
+   callers at macros.rkt:1957/:2527/:6236; §5.P4's P4b bullet says **four**.
+   The code says FOUR and **none of the three cited coordinates lands**.
+2. §5.P4b's "4 of the 6 go RED" at test-nil-type is **3 of 6**.
+3. §8 R6's no-bump reasoning is right by accident (see C4).
+
+Status: ⬜ — scope re-derived; the encoding decision and the slice split are
+the open items.
 
 ### §5.P5 — Ruling B + factoring
 
