@@ -96,27 +96,40 @@
     "let tl := 99\n"
     "def control := 7\n")))
   (check-equal? (length rs) 3 (format "expected 3 results, got: ~v" rs))
-  (for ([r (in-list (take rs 2))] [i (in-naturals)])
-    (check-true (prologos-error? r) (format "result ~a must be an error, got: ~v" i r)))
+  ;; result 0 — the CHAINED annotation `x:A:B` — is the one permanent reject
+  ;; here (reserved for UCS).
+  (check-true (prologos-error? (first rs))
+              (format "chained annotation must still error, got: ~v" (first rs)))
+  ;; result 1 — `let tl := 99` — was the "top-level let" guided error until the
+  ;; owner ruling of 2026-07-31 made a bodyless let legal everywhere. It is now
+  ;; a no-op evaluating to its bound value; the CONTAINMENT this case exists to
+  ;; pin is unchanged, and result 2 still defines.
+  (check-false (prologos-error? (second rs))
+               (format "a bodyless top-level let is legal now, got: ~v" (second rs)))
   (check-false (prologos-error? (last rs)) "the trailing control must define"))
 
 (test-case "let-p1/message text is preserved through the marker"
   ;; The messages predate P1 and are useful; the marker must not flatten them
   ;; into a generic string. Pin one per raise family.
-  ;; the standalone bodiless let: deterministic "unrecognized format" text.
+  ;; ⚠ SUPERSEDED IN PART (owner ruling 2026-07-31, top-level `let`): a BODYLESS
+  ;; let is now LEGAL everywhere — "it shouldn't be an error or invalid, either,
+  ;; nor even a warning per se" — so the second half of this case, which pinned
+  ;; `let tl := 99` as "not allowed at top level", now pins the opposite: it is
+  ;; a no-op evaluating to its bound value. The `defn f [a] / let x 4` half is
+  ;; ALSO no longer an error for the same reason (the bodyless let is the whole
+  ;; body). What survives is the shape of the case: two forms, two results,
+  ;; per-command, file continues.
   (define rs (run-file-ws (string-append
     "ns c3\n"
     "spec f Int -> Int\n"
     "defn f [a]\n"
     "  let x 4\n"
     "let tl := 99\n")))
-  (check-equal? (length rs) 2)
-  (check-true (regexp-match? #rx"unrecognized format"
-                             (prologos-error-message (first rs)))
-              (format "got: ~v" (prologos-error-message (first rs))))
-  (check-true (regexp-match? #rx"not allowed at top level.*def"
-                             (prologos-error-message (second rs)))
-              (format "got: ~v" (prologos-error-message (second rs)))))
+  (check-equal? (length rs) 2 (format "got: ~v" rs))
+  (check-false (prologos-error? (second rs))
+               (format "a bodyless top-level let is legal now, got: ~v" (second rs)))
+  (check-true (regexp-match? #rx"99" (format "~a" (second rs)))
+              (format "…and evaluates to its bound value, got: ~v" (second rs))))
 
 (test-case "let-p1/a bare $let-error marker with no args does not crash the parser"
   ;; The (pair? args) guard in the parser arm is LOAD-BEARING (the
@@ -195,7 +208,7 @@
   (check-equal? (length rs) 6 (format "got: ~v" rs))
   (for ([r (in-list rs)]) (check-false (prologos-error? r) (format "~v" r))))
 
-(test-case "let-p2/a standalone bodiless let is STILL an error, with containment"
+(test-case "let-p2/a standalone bodiless let is LEGAL (2026-07-31 ruling), neighbours unaffected"
   ;; Drift risk 5: `(let x 4)` with no following body must not silently become
   ;; a binding of nothing. Per-command (P1), so neighbors report.
   (define rs (run-file-ws (string-append
@@ -206,9 +219,14 @@
     "  let x 4\n"
     "def after := 2\n")))
   (check-equal? (length rs) 3 (format "got: ~v" rs))
-  (check-false (prologos-error? (first rs)))
-  (check-true (prologos-error? (second rs)))
-  (check-false (prologos-error? (third rs))))
+  (check-false (prologos-error? (first rs)) "`before` defines")
+  ;; SUPERSEDED (owner ruling 2026-07-31): a standalone bodiless let is no
+  ;; longer an error — here it IS the whole `defn` body, and desugars to
+  ;; `((fn (x : _) x) 4)`. The neighbours-still-report property this case was
+  ;; written for is what remains, and it still holds.
+  (check-false (prologos-error? (second rs))
+               (format "a bodiless let body is legal now, got: ~v" (second rs)))
+  (check-false (prologos-error? (third rs)) "`after` defines"))
 
 (test-case "let-p2/merge normalization is byte-transparent for := inputs"
   ;; Drift risk 1: the exact-output pins in test-defmacro cover preparse
@@ -533,3 +551,101 @@
   (check-true  (regexp-match? #rx"let block"
                               (prologos-error-message (second rs)))
                (format "expected the guided let-block message, got: ~v" (second rs))))
+
+;; ============================================================
+;; TOP-LEVEL `let` (owner ruling, 2026-07-31)
+;;
+;;   "The scope of a top-level `let` ceases at the beginning of the next
+;;    toplevel form. It's really only intended for interactive use. A program
+;;    with a toplevel let would be a bit odd, and wouldn't 'do' anything, but it
+;;    shouldn't be an error or invalid, either, nor even a warning per se. The
+;;    let also doesn't bind for the whole file, only the limited, local scope.
+;;    The real use-case is interactively building up some computation, then
+;;    being able to wrap it in a `defn` afterwards as a form of iterative
+;;    design."
+;; ============================================================
+
+(test-case "let-tl/THE USE CASE: a top-level sibling chain merges into one scope"
+  ;; `merge-sibling-lets` ran only from preparse-expand-subforms — over the
+  ;; SUBFORMS of an enclosing form — so top-level chains never merged. This is
+  ;; the shape the feature exists for, and in the REPL it is a single
+  ;; blank-line-terminated submission.
+  (define rs (run-file-ws (string-append
+    "ns tl1\n"
+    "let a := 4\n"
+    "let b := 5\n"
+    "let c := [+ a b]\n"
+    "  [* c 2]\n")))
+  (check-equal? (length rs) 1 (format "the chain must be ONE form, got: ~v" rs))
+  (check-true (regexp-match? #rx"18" (format "~a" (first rs))) (format "got: ~v" (first rs))))
+
+(test-case "let-tl/scope ends at the next top-level form — no leak"
+  (define rs (run-file-ws (string-append
+    "ns tl2\n"
+    "let a := 4\n"
+    "a\n")))
+  (check-equal? (length rs) 2 (format "got: ~v" rs))
+  (check-false (prologos-error? (first rs)) "the bodyless let is legal")
+  (check-true (prologos-error? (second rs))
+              (format "`a` must NOT leak past the form, got: ~v" (second rs))))
+
+(test-case "let-tl/all SIX bodyless spellings are legal and evaluate to the bound value"
+  ;; The retired guard covered ONE of these. Two of the rest — the fused and
+  ;; angle annotations — were SILENT WRONG ANSWERS (see the next case).
+  (define rs (run-file-ws (string-append
+    "ns tl3\n"
+    "let s1 := 5\n"        ;; :=
+    "let s2 7\n"           ;; bare
+    "let s3:Int 5\n"       ;; fused
+    "let s4 <Int> 5\n"     ;; angle
+    "let s5 : Int := 5\n"  ;; spaced
+    "let [s6 := 3]\n")))   ;; bracket
+  (check-equal? (length rs) 6 (format "got: ~v" rs))
+  (for ([r (in-list rs)] [i (in-naturals)])
+    (check-false (prologos-error? r) (format "spelling ~a must be legal, got: ~v" i r))))
+
+(test-case "let-tl/the fused + angle annotations are ENFORCED, not discarded"
+  ;; THE SILENT-WRONG PIN. `let x:Int 5` used to print `5 : Int` with zero
+  ;; errors while binding `x` to the DATUM `:Int` and using the value as the
+  ;; body — so the annotation was silently dropped and the same number came
+  ;; back. Printing the right number is therefore NOT evidence; the type must
+  ;; actually reject a bad value.
+  (define ok (run-file-ws (string-append
+    "ns tl4\n" "let f1:Int 5\n" "  [int+ f1 1]\n")))
+  (check-false (prologos-error? (first ok)) (format "got: ~v" (first ok)))
+  (check-true (regexp-match? #rx"6" (format "~a" (first ok))) "the fused binding is usable")
+  (define bad (run-file-ws (string-append "ns tl5\n" "let b1:Int \"hi\"\n")))
+  (check-true (prologos-error? (first bad))
+              (format "a fused annotation must REJECT a mismatched value, got: ~v" (first bad)))
+  (define badang (run-file-ws (string-append "ns tl6\n" "let b2 <Int> \"hi\"\n")))
+  (check-true (prologos-error? (first badang))
+              (format "an angle annotation must REJECT a mismatched value, got: ~v" (first badang))))
+
+(test-case "let-tl/the top-level merge never swallows a following DECLARATION"
+  ;; At subform level `merge-sibling-lets` absorbs a following expression as the
+  ;; body. At top level it must NOT: per the ruling the next top-level form ends
+  ;; the scope, and it may be a `def`/`defn`/`data`, which is not an expression.
+  (define rs (run-file-ws (string-append
+    "ns tl7\n"
+    "let p := 1\n"
+    "let q := 2\n"
+    "def d := 5\n"
+    "d\n")))
+  (check-equal? (length rs) 4 (format "the lets must stay separate no-ops, got: ~v" rs))
+  (for ([r (in-list rs)]) (check-false (prologos-error? r) (format "got: ~v" r)))
+  (check-true (regexp-match? #rx"5" (format "~a" (last rs)))))
+
+(test-case "let-tl/a bodyless let does not disturb its neighbours' syntax properties"
+  ;; The merge pass converts syntax→datum→syntax for a merged run only, and is
+  ;; eq?-preserving otherwise. If it round-tripped every form it would drop
+  ;; 'prologos-paren-origin / 'prologos-defrhs-command and silently break POL.9b
+  ;; (`def x := (goal …)` ≡ `:= solve (…)`) — which is exactly the property the
+  ;; SolveCarrier P2 sentinel depends on.
+  (define rs (run-file-ws (string-append
+    "ns tl8\n"
+    "defr fc [?f ?c]\n  || \"apple\" \"red\"\n     \"cherry\" \"red\"\n"
+    "let noise := 1\n"
+    "def blues := (fc f \"red\")\n")))
+  (check-false (prologos-error? (last rs)) (format "got: ~v" (last rs)))
+  (check-true (regexp-match? #rx"PVec" (format "~a" (last rs)))
+              (format "the implicit solve must still fire, got: ~v" (last rs))))

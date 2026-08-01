@@ -1159,6 +1159,7 @@
        (not (eq? x '$let-error))        ; LET P1 syntax-failure marker (parser converts to per-command parse error)
        (not (eq? x '$let-block))        ; LET P3 aligned-block sentinel (reader-validated; expand-let consumes)
        (not (eq? x '$goal-rhs))         ; SolveCarrier P2: let binding-RHS paren marker (parser consumes)
+       (not (eq? x '$let-noop-body))    ; top-level let: bodyless placeholder (let-bindings->nested-fn consumes)
        (not (eq? x '$dot-brace))        ; D4.P1b-ii `.{ }` sub-block sentinel — see below
        (not (eq? x '$select-brace))     ; D4.P1b-iii adjacent-brace select block
        (not (eq? x '$select))           ; D4.P3a fused select head (LOUD-if-missed: whole-file abort in a defmacro template)
@@ -2254,6 +2255,32 @@
 ;; Example: (defn ... (let a := 1) (let b := 2 (add a b)))
 ;; → (defn ... (let (a := 1 b := 2) (add a b)))
 (define (merge-sibling-lets elems)
+  ;; ⚠ THE FAMILY'S SECOND ERROR BOUNDARY (2026-07-31).
+  ;;
+  ;; The `$let-error` marker channel is documented (§ "the retired-selection
+  ;; marker seat", below) as converting EVERY let-syntax failure into a
+  ;; per-command error, and its note claims "all 13 are beneath expand-let's
+  ;; dynamic extent (verified — merge-sibling-lets and its helpers raise
+  ;; nowhere)". BOTH halves of that were false: there are 20 raise sites, and
+  ;; TWO of them — `normalize-let-binding-group`'s (:2437 chained annotation,
+  ;; :2445 unrecognized binding shape) — are reached from HERE, via
+  ;; `merge-let-sequence` → `split-last-let`'s `$let-block` arm, which runs in
+  ;; `preparse-expand-subforms` and NOT under `expand-let`'s `with-handlers`.
+  ;; A raise there escaped as a raw Racket exception and took the WHOLE FILE
+  ;; down with zero results — the exact outcome the channel exists to prevent.
+  ;;
+  ;; This outer handler is the CONTAINMENT INVARIANT — "no let-syntax raise ever
+  ;; escapes this function" — and it is deliberately separate from the precise
+  ;; per-run handler on the `[else]` arm below, which is what makes the MESSAGE
+  ;; good. Different jobs: the inner one shapes the result, this one guarantees
+  ;; there is a result at all. It exists because the note below the family's
+  ;; other boundary asserted exactly this invariant as "(verified)" while it was
+  ;; false, and the cost of that was a whole-file abort. Only `exn:let-syntax?`
+  ;; is caught — a genuine Racket bug still crashes loudly.
+  (with-handlers ([exn:let-syntax? (lambda (_) elems)])
+    (merge-sibling-lets/raising elems)))
+
+(define (merge-sibling-lets/raising elems)
   (cond
     [(or (not (list? elems)) (null? elems)) elems]
     [else
@@ -2299,7 +2326,18 @@
              (loop (cdr remaining) (cons merged acc))]
             ;; Multiple consecutive lets (last has body embedded) — merge
             [else
-             (define merged (merge-let-sequence lets))
+             ;; This is the ONE arm that can raise: merge-let-sequence →
+             ;; split-last-let's `$let-block` arm → normalize-let-binding-group.
+             ;; Catching HERE (rather than only at the outer boundary) is what
+             ;; keeps the result WELL-FORMED: the failing run collapses to a
+             ;; single `($let-error msg)` form carrying the real message, so an
+             ;; enclosing `defn` still sees exactly ONE body. Returning the run
+             ;; unmerged instead leaves a multi-body `defn`, whose own arity
+             ;; error then MASKS the let message the user needed to see.
+             (define merged
+               (with-handlers ([exn:let-syntax?
+                                (lambda (e) `($let-error ,(exn-message e)))])
+                 (merge-let-sequence lets)))
              (loop remaining (cons merged acc))])]
          [else
           (loop (cdr rest) (cons (car rest) acc))]))]))
@@ -2357,6 +2395,21 @@
            ;; LET P4: (let name :Type value) — the fused bodyless shape.
            [(and (= (length rest) 3) (symbol? (car rest))
                  (fused-type-annot? (cadr rest)))
+            #t]
+           ;; TOP-LEVEL LET (2026-07-31): the two spellings this predicate did
+           ;; NOT cover, and whose absence was a pair of SILENT WRONG ANSWERS —
+           ;; `let x <Int> 5` and `let x:Int 5` each printed `5 : Int` with zero
+           ;; errors, having bound the name to the ANNOTATION and evaluated the
+           ;; value as the body. (The fused arm above covers `x:Int` only once
+           ;; the reader has split it; the angle form never had an arm at all.)
+           ;; This predicate is now THE bodyless test for the whole family —
+           ;; expand-let's own ad-hoc "exactly one token after :=" heuristic is
+           ;; retired in its favour, which is what closes the gap for good.
+           [(and (= (length rest) 3) (symbol? (car rest))
+                 (pair? (cadr rest)) (eq? (car (cadr rest)) '$angle-type))
+            #t]
+           ;; the BRACKET form with no body: (let (b …)) / (let ($let-block …))
+           [(and (= (length rest) 1) (list? (car rest)))
             #t]
            ;; (let [bindings] body) — has body, not bodyless
            ;; (let name value body) — has body, not bodyless
@@ -2791,7 +2844,67 @@
       [else
        (loop (cdr remaining) (cons (car remaining) acc))])))
 
-(define (preparse-expand-all stxs)
+;; ── TOP-LEVEL SIBLING-LET MERGE (owner ruling 2026-07-31) ────────────────────
+;; `merge-sibling-lets` runs from `preparse-expand-subforms`, i.e. over the
+;; SUBFORMS of an enclosing form. Top-level forms are subforms of nothing, so a
+;; chain typed at the prompt or written at column 0 never merged — the exact
+;; shape the feature exists for:
+;;     let a := 4
+;;     let b := 5
+;;     let c := [+ a b]
+;;       [* c 2]                    ;; → 18
+;; The reader splits those into FOUR? no — THREE top-level forms (the body line
+;; is indented, so it belongs to the last `let`), and this pass folds the run
+;; into one.
+;;
+;; ⚠ THE RUN MERGES AMONG ITSELF ONLY — it never absorbs a FOLLOWING form as the
+;; body, which is what `merge-sibling-lets` does at subform level. Two reasons,
+;; and the first is the owner's ruling: "the scope of a top-level `let` ceases at
+;; the beginning of the next toplevel form", so in
+;;     let p := 1
+;;     let q := 2
+;;     [+ p q]                      ;; ← column 0: the NEXT top-level form
+;; `p` and `q` are correctly OUT of scope and the third line errors. Second, at
+;; top level the following form may be a `def`/`defn`/`data` declaration, which
+;; is not an expression and must never be swallowed as a let body.
+;;
+;; Gate: all but the last must be bodyless and the last must have a body — the
+;; precondition `merge-let-sequence`/`split-last-let` actually assume. A run of
+;; purely bodyless lets is left alone; each is its own legal no-op.
+;; EQ?-PRESERVING when nothing merges, so `def`-RHS syntax properties
+;; (POL.9b's 'prologos-defrhs-command, POL.9's 'prologos-paren-origin) are never
+;; round-tripped through datum->syntax.
+(define (toplevel-let-stx? s)
+  (let ([d (syntax->datum s)]) (and (pair? d) (eq? (car d) 'let))))
+
+(define (mergeable-let-run? datums)
+  (and (> (length datums) 1)
+       (andmap let-bodyless? (drop-right datums 1))
+       (not (let-bodyless? (last datums)))))
+
+(define (merge-toplevel-sibling-lets stxs)
+  (let loop ([rest stxs] [acc '()])
+    (cond
+      [(null? rest) (reverse acc)]
+      [(not (toplevel-let-stx? (car rest)))
+       (loop (cdr rest) (cons (car rest) acc))]
+      [else
+       (define-values (run tail)
+         (let take ([r rest] [got '()])
+           (if (and (pair? r) (toplevel-let-stx? (car r)))
+               (take (cdr r) (cons (car r) got))
+               (values (reverse got) r))))
+       (define run-datums (map syntax->datum run))
+       (cond
+         [(mergeable-let-run? run-datums)
+          (define merged (merge-sibling-lets run-datums))
+          (if (= (length merged) 1)
+              (loop tail (cons (datum->syntax #f (car merged) (car run) (car run)) acc))
+              (loop tail (append (reverse run) acc)))]
+         [else (loop tail (append (reverse run) acc))])])))
+
+(define (preparse-expand-all stxs0)
+  (define stxs (merge-toplevel-sibling-lets stxs0))
   ;; ============================================================
   ;; Pass -1: Process ns/imports declarations FIRST
   ;; ============================================================
@@ -4809,9 +4922,20 @@
 ;; The handler catches ONLY `exn:let-syntax?` — a genuine Racket-level bug
 ;; (list-ref, car on '()) still crashes loudly rather than masquerading as a
 ;; let syntax error. This is the family's error CHANNEL at its single entry,
-;; not a defensive guard: every raise site is a reachable user-input
-;; condition, and all 13 are beneath expand-let's dynamic extent (verified —
-;; merge-sibling-lets and its helpers raise nowhere).
+;; not a defensive guard: every raise site is a reachable user-input condition.
+;;
+;; ⚠ CORRECTED 2026-07-31 — this note used to read "all 13 are beneath
+;; expand-let's dynamic extent (verified — merge-sibling-lets and its helpers
+;; raise nowhere)". BOTH halves were false, and the second one was a live
+;; whole-file abort. There are **20** `let-syntax-error` call sites, not 13
+;; (grep: 2437 2445 4828 4849 4861 4901 4928 4979 5002 5021 5028 5042 5056
+;; 5070 5072 5076 5086 5149 5154 5156 — the first TWO are the exception), and
+;; `normalize-let-binding-group`'s two raises ARE reached from
+;; `merge-sibling-lets` → `merge-let-sequence` → `split-last-let`, which runs
+;; in `preparse-expand-subforms`, outside this handler. `merge-sibling-lets`
+;; therefore carries the family's SECOND boundary (see its own note).
+;; The lesson worth keeping: a parenthetical "(verified)" in a comment is an
+;; ASSERTION, not evidence — this one shipped a defect behind the word.
 (struct exn:let-syntax exn:fail () #:transparent)
 
 (define (let-syntax-error fmt . args)
@@ -4824,31 +4948,33 @@
     (expand-let-impl datum)))
 
 (define (expand-let-impl datum)
-  (unless (and (list? datum) (>= (length datum) 3))
+  ;; TOP-LEVEL LET (owner ruling 2026-07-31). What used to sit here was a guard
+  ;; raising "`let` is not allowed at top level. Use `def` instead." It was
+  ;; wrong three ways and is RETIRED:
+  ;;   (a) it did not test top-level-ness at all — `expand-let` has no way to
+  ;;       know where it is — but "exactly one token after the FIRST `:=`", so
+  ;;       it fired on a NESTED bodyless let too, naming a location the form was
+  ;;       not in and prescribing `def`, which is illegal inside a `defn` body;
+  ;;   (b) its premise ("top-level let has no body because there's no enclosing
+  ;;       scope") was false: a top-level let WITH a body already worked in all
+  ;;       four spellings;
+  ;;   (c) it covered only ONE of the six bodyless spellings, so `let x:Int 5`
+  ;;       and `let x <Int> 5` slipped past it into SILENT WRONG ANSWERS.
+  ;;
+  ;; A bodyless let is now legal wherever it appears. `let-bodyless?` — the
+  ;; predicate the sibling merge already trusts, extended to cover all six
+  ;; spellings — decides, and the `$let-noop-body` placeholder occupies the body
+  ;; slot so each branch below slices unchanged. `let-bindings->nested-fn`
+  ;; resolves it to the last bound name.
+  ;; NOTE the ORDER: the bodyless append runs BEFORE the arity precheck, because
+  ;; the bracket spelling `(let (x := 5))` is only 2 long until the placeholder
+  ;; lands — checking first would reject it with the raw "let requires at least"
+  ;; message instead of accepting it as the no-op it now is.
+  (define datum*
+    (if (let-bodyless? datum) (append datum (list '$let-noop-body)) datum))
+  (unless (and (list? datum*) (>= (length datum*) 3))
     (let-syntax-error "let requires at least: (let name value body)"))
-  (define rest (cdr datum))  ; everything after 'let
-
-  ;; Detect top-level let without body: (let name := value) with no continuation.
-  ;; In WS mode, top-level let has no body because there's no enclosing scope.
-  ;; Emit a clear error directing users to use `def` instead.
-  (when (and (memq ':= rest)
-             (symbol? (car rest))
-             ;; A single-binding let without body: (name := value) or (name : T := value)
-             ;; has no remaining tokens after the first value.
-             ;; Detect by checking: after removing the binding, nothing is left for a body.
-             (let ()
-               (define assign-pos (index-of rest ':=))
-               (and assign-pos
-                    ;; Everything after := is the value; if there's exactly 1 token after :=,
-                    ;; then the "body" would be that same token (stolen by expand-let-inline-assign).
-                    ;; Count total bindings: each binding consumes name [: type...] := value.
-                    ;; Simple heuristic: exactly one := and value is the last token.
-                    (let ([after-assign (drop rest (+ assign-pos 1))])
-                      (= (length after-assign) 1)))))
-    (define name (car rest))
-    (let-syntax-error
-     "`let` is not allowed at top level. Use `def` instead.\n  let ~a := ...\n      ^^^\n  Use: def ~a := ..."
-     name name))
+  (define rest (cdr datum*))  ; everything after 'let
 
   (cond
     ;; --- Branch 0 (LET P3): the aligned block, pre-structured by the reader ---
@@ -4901,7 +5027,12 @@
      (when glued-err (let-syntax-error "let: ~a" glued-err))
      (define value (cadr rest))
      (define body (caddr rest))
-     `((fn (,name : ,(or glued-ty '_)) ,body) ,value)]
+     ;; through the FUNNEL, not a hand-built `((fn …) …)`. This branch and 3f
+     ;; were the two that bypassed it — which is why the design's "everything
+     ;; desugars through one funnel" claim was not quite true, and why the
+     ;; bodyless placeholder reached the user as an unbound `$let-noop-body`
+     ;; for exactly these two spellings until they were routed here.
+     (let-bindings->nested-fn (list (list name (or glued-ty '_) value)) body)]
 
     ;; --- Branch 3f (LET P4): WS fused nested — (let name :Type value body) ---
     ;; The reader splits `let x:Int 4` into `x` + `:Int`; with a deeper body
@@ -4912,7 +5043,7 @@
      (define ty (fused-annot->type-symbol (cadr rest)))
      (define value (caddr rest))
      (define body (cadddr rest))
-     `((fn (,name : ,ty) ,body) ,value)]
+     (let-bindings->nested-fn (list (list name ty value)) body)]
 
     ;; --- Branch 4: Legacy angle-type format — (let name ($angle-type T) value body) ---
     [(and (>= (length rest) 4)
@@ -4997,7 +5128,26 @@
 ;; top-level guard (`let tl := 4` + `um := 5` silently bound tl and died
 ;; "Unbound variable um"). One check, all branches: inline, bracket, $let-block
 ;; and the sibling merge all pass through here.
-(define (let-bindings->nested-fn parsed-bindings body)
+(define (let-bindings->nested-fn parsed-bindings body0)
+  ;; TOP-LEVEL LET (owner ruling 2026-07-31): "the scope of a top-level `let`
+  ;; ceases at the beginning of the next toplevel form … A program with a
+  ;; toplevel let would be a bit odd, and wouldn't 'do' anything, but it
+  ;; shouldn't be an error or invalid, either, nor even a warning per se."
+  ;;
+  ;; A BODYLESS let is therefore legal everywhere and evaluates to its own last
+  ;; binding: `expand-let-impl` appends the `$let-noop-body` placeholder (so
+  ;; every spelling's existing branch still slices name/type/value correctly —
+  ;; the placeholder simply occupies the body slot), and this ONE funnel
+  ;; resolves it. Result: `let x := 5` desugars to `((fn (x : _) x) 5)` — the
+  ;; value is fully type-checked, the binding's scope ends with the form, and
+  ;; nothing leaks to the next one. Doing it here rather than per-branch is what
+  ;; makes it uniform across all six spellings.
+  (define body
+    (if (eq? body0 '$let-noop-body)
+        (if (pair? parsed-bindings)
+            (car (last parsed-bindings))   ;; the last bound NAME
+            '$unit)
+        body0))
   (when (and (list? body) (>= (length body) 3) (eq? (cadr body) ':=))
     (let-syntax-error
      "let has no body — the final line `~a` is a BINDING; a let block's body sits on a line indented between the `let` column and the bindings column"

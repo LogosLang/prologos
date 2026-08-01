@@ -120,6 +120,13 @@
 ;; marker that the parser converts to a parse-error VALUE; the failure is
 ;; still loud, per command, and the file continues.
 
-(test-case "let with bindings but no body is a per-command error"
+(test-case "let with bindings but no body is LEGAL (owner ruling 2026-07-31)"
+  ;; SUPERSEDED: this pinned an error, then (LET P1) a per-command error value.
+  ;; The top-level-`let` ruling makes a bodyless let legal everywhere — "it
+  ;; shouldn't be an error or invalid, either, nor even a warning per se" — so
+  ;; it is now a no-op that evaluates to its last bound value. The containment
+  ;; property the LET P1 rewrite cared about is unaffected and still pinned by
+  ;; test-let-blocks' run-file-ws cases.
   (define r (run-ns-ws-last "(let [x := 1])"))
-  (check-true (prologos-error? r) (format "expected an error value, got: ~v" r)))
+  (check-false (prologos-error? r) (format "expected a value, got: ~v" r))
+  (check-true (regexp-match? #rx"1 : Int" (format "~a" r)) (format "got: ~v" r)))
