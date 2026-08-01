@@ -263,25 +263,48 @@
 (define (row-query-vars query-vars)
   (filter (lambda (qv) (not (anon-query-var? qv))) query-vars))
 
-;; Convert solver answer maps (list of hasheq) back to a Prologos expression.
-;; Each answer is a hasheq mapping query variable names (symbols) to ground values.
-;; Returns a Prologos List of Maps: '[(map :x val1 :y val2), ...]
-;; Solution maps carry ONLY query-var keys (CIU T6 F1b.1 / D25: the bound-args
-;; echo — ground call-site values re-emitted under '_'-suffixed relation param
-;; names — is deleted; solutions are pure answers to the queried unknowns).
-;; POL.2: anon `_` vars are additionally excluded (row-query-vars).
+;; Convert solver answer maps (list of hasheq) into the row CHAMPs behind a
+;; result. Each answer is a hasheq mapping query variable names (symbols) to
+;; ground values. Solution maps carry ONLY query-var keys (CIU T6 F1b.1 / D25:
+;; the bound-args echo — ground call-site values re-emitted under '_'-suffixed
+;; relation param names — is deleted; solutions are pure answers to the queried
+;; unknowns). POL.2: anon `_` vars are additionally excluded (row-query-vars).
+;;
+;; This is the SHARED core (SolveCarrier R5). The two wrappers below choose the
+;; CARRIER; keeping one core means the row-key policy can never drift between
+;; them.
+(define (answers->champ-list answers query-vars)
+  (for/list ([answer (in-list answers)])
+    ;; Build a CHAMP map from the answer bindings
+    (define champ-val
+      (for/fold ([c champ-empty])
+                ([qv (in-list (row-query-vars query-vars))])
+        (define val (hash-ref answer qv #f))
+        (define key (query-var->champ-key qv))
+        (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
+        (champ-insert c (equal-hash-code key) key pval)))
+    (expr-champ champ-val)))
+
+;; Rows under the List carrier: '[{:x val1 :y val2}, ...].
+;; Since the SolveCarrier flip this is NARROWING's carrier only (R3) — the
+;; solve/explain family uses answers->prologos-pvec. Narrowing's static type is
+;; expr-hole, so moving it would relocate a runtime shape with no type to match.
 (define (answers->prologos-expr answers query-vars)
-  (racket-list->prologos-list
-   (for/list ([answer (in-list answers)])
-     ;; Build a CHAMP map from the answer bindings
-     (define champ-val
-       (for/fold ([c champ-empty])
-                 ([qv (in-list (row-query-vars query-vars))])
-         (define val (hash-ref answer qv #f))
-         (define key (query-var->champ-key qv))
-         (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
-         (champ-insert c (equal-hash-code key) key pval)))
-     (expr-champ champ-val))))
+  (racket-list->prologos-list (answers->champ-list answers query-vars)))
+
+;; Rows under the PVec carrier: @[{:x val1 :y val2}, ...] — the solve/explain
+;; result since the SolveCarrier flip (2026-07-31, discharging CIU T6 Q_U9).
+;; PVec is ordered and duplicate-bearing, so Rel T1 POL.1's BAG semantics (one
+;; row per derivation path; the multiplicity IS the derivation count) are carried
+;; exactly, and `expr-rrb` is the NATIVE carrier struct path selection's `:`
+;; broadcast requires.
+(define (answers->prologos-pvec answers query-vars)
+  (rows->prologos-pvec (answers->champ-list answers query-vars)))
+
+;; The same carrier, for a caller that already holds the rows (explain's
+;; answer-result → row conversion). Same wrapper, one definition.
+(define (rows->prologos-pvec rows)
+  (expr-rrb (rrb-from-list rows)))
 
 ;; Convert a ground solver value back to a Prologos AST expression.
 ;; If the value is already an AST expression, return it directly.
@@ -661,7 +684,7 @@
      (define answers
        (parameterize ([current-is-eval-fn nf])
          (stratified-solve-goal config store rel-name goal-args query-vars)))
-     (answers->prologos-expr answers query-vars)]
+     (answers->prologos-pvec answers query-vars)]
     [(expr-rel? goal*)
      ;; Anonymous relation — create temporary relation-info and solve
      (define temp-name (gensym 'anon-rel))
@@ -677,7 +700,7 @@
      (define answers
        (parameterize ([current-is-eval-fn nf])
          (stratified-solve-goal config store temp-name goal-args query-vars)))
-     (answers->prologos-expr answers query-vars)]
+     (answers->prologos-pvec answers query-vars)]
     [(expr-unify-goal? goal*)
      ;; Inline = goal: normalize both sides to solver representation,
      ;; collect query vars, run unification, format answer.
@@ -703,7 +726,7 @@
        (for/list ([ans (in-list answers)])
          (for/hasheq ([qv (in-list query-vars)])
            (values qv (solver-term->prologos-expr (walk* ans qv))))))
-     (answers->prologos-expr converted-answers query-vars)]
+     (answers->prologos-pvec converted-answers query-vars)]
     [(expr-is-goal? goal*)
      ;; Inline is goal: evaluate expr, bind to var, return single-answer list.
      (define var-node (expr-is-goal-var goal*))
@@ -716,7 +739,7 @@
      ;; SUB.1 tripwire: nf-persisting boundary 1 (solve is-goal answer row)
      (assert-no-open-container! 'solve result)
      (define answer (hasheq var-name result))
-     (answers->prologos-expr (list answer) (list var-name))]
+     (answers->prologos-pvec (list answer) (list var-name))]
     [(expr-not-goal? goal*)
      ;; Top-level NAF goal (A.1): run via the DFS engine — solve-single-goal
      ;; handles 'not (prove inner; empty ⇒ NAF succeeds). Mirrors the inline-unify
@@ -747,7 +770,7 @@
        (for/list ([ans (in-list answers)])
          (for/hasheq ([qv (in-list query-vars)])
            (values qv (solver-term->prologos-expr (walk* ans qv))))))
-     (answers->prologos-expr converted-answers query-vars)]
+     (answers->prologos-pvec converted-answers query-vars)]
     ;; If the goal is not yet reduced to a goal-app, return the expression unchanged
     [else (expr-solve goal*)]))
 
@@ -902,7 +925,7 @@
          (if (answer-result? r)
              (answer-result->prologos-expr r query-vars)
              r)))
-     (racket-list->prologos-list prologos-maps)]
+     (rows->prologos-pvec prologos-maps)]
     [(expr-not-goal? goal*)
      ;; Explain over a top-level NAF goal (A.1): a negation has no positive
      ;; provenance chain, so run it via the DFS engine and return plain answer maps
@@ -931,7 +954,7 @@
        (for/list ([ans (in-list answers)])
          (for/hasheq ([qv (in-list query-vars)])
            (values qv (solver-term->prologos-expr (walk* ans qv))))))
-     (answers->prologos-expr converted-answers query-vars)]
+     (answers->prologos-pvec converted-answers query-vars)]
     [else (expr-explain goal*)]))
 
 ;; ----------------------------------------

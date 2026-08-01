@@ -32,7 +32,9 @@ Second, unrelated-but-adjacent deliverable: the **`let` implicit-solve gap** (§
 ## 1. The seam — VERIFIED at `cab30b9a`
 
 The opening note called this "two lines". The census found **six** production
-sites; the three display walkers were the capture gap.
+sites; the three display walkers were the capture gap. A **seventh** (the `.pnet`
+carrier, §1.4) only surfaced during P1's adversarial verification — the census
+missed it too.
 
 ### Typing (2 sites)
 
@@ -65,20 +67,61 @@ row-build. Called from:
 All three fail **silently** (degrade, not error) — exactly the class the
 adversarial-verify gate exists to catch. Each gets a failing test first.
 
+### 1.4 Module caching (`pnet-serialize.rkt`) — found by adversarial verify, NOT by the census
+
+The census asked "what READS a solve result". It should also have asked "what
+PERSISTS one". Rel T1 POL.10 made `def` bind whnf-reduced values, so a library
+module's `def x := solve (…)` puts the carrier into a module env-snapshot — which
+is exactly why the v2→v3 cache bump added a `champ-sentinel` arm for the rows.
+
+Post-flip those rows arrive inside an `expr-rrb`, and probing the serializer
+directly showed a **real defect, silent and correctness-relevant**:
+
+```racket
+(deep-struct->serializable (expr-rrb (rrb-from-list (list row))))
+;; ⇒ #(struct:expr-rrb #(struct:rrb-root #f 1 0
+;;      #( #(struct:expr-champ #(struct:champ-root #(struct:champ-node 256 0
+;;           #( #(421465141712168 …) ) …)))) ))
+```
+
+`rrb-root`'s `tail` is a **raw Racket vector**, and `deep-s->v` has arms for
+`pair?`/`list?`/`hash?`/`box?`/`struct?` but **none for `vector?`** — so the
+tail's contents fell through `[else v]` unchanged, writing `equal-hash-code`
+values to disk. Those are process-stable only; persisting them is precisely what
+the champ-sentinel arm exists to prevent.
+
+Fixed by an `rrb-sentinel` arm mirroring `champ-sentinel` exactly
+(reconstructive: elements serialized — each still routed through `deep-s->v`, so
+nested rows get their own sentinel — tree rebuilt at read via `rrb-from-list`),
+plus a `PNET_VERSION` 8→9 bump so no cache written under the broken path is read
+back. Pinned by two round-trip tests.
+
+The same latent gap exists for `expr-hset` (Sets), which wraps a champ without
+hitting the `expr-champ?` arm. **Pre-existing and orthogonal** — spun out rather
+than folded in.
+
 ## 2. Consumer census (at HEAD, via `git grep … HEAD`, not the dirty tree)
 
-**`.prologos` corpus** — 2 live sites pipe a solve-bound name into a
-List-monomorphic HOF (`spec map [A -> B] [List A] -> List B`,
-`lib/prologos/data/list.prologos:46`), both in
-`examples/2026-07-26-ciu-t6-path-selection.prologos`:
+**`.prologos` corpus** — 2 live sites pipe a solve-bound name into a HOF, both
+in `examples/2026-07-26-ciu-t6-path-selection.prologos`:
 
 - `:234` `map [fn [q] q.r] quests` (bound at `:224` `def quests := solve (quest t g r)`)
 - `:246` `map [fn [q] q.t] alice-quests` (bound at `:243` by an *implicit* solve)
 
-Both become `pvec-map` — a **native AST primitive** (parser keyword, reduces via
-`rrb-fold`), so this is an improvement, not a workaround: no List round-trip.
-Their `;;NN=>` acceptance markers move with them. Every other `.prologos` solve
-site is a bare top-level echo with no downstream List consumption.
+⚠ **CORRECTION to this section's first draft** (caught in P1 by the acceptance
+run, not by the census): the census read `spec map [A -> B] [List A] -> List B`
+(`lib/prologos/data/list.prologos:46`) and concluded `map` is List-monomorphic,
+so both sites would need rewriting to `pvec-map`. **That is wrong.** That spec is
+one *instance* under container-generic dispatch. Probed at the flip:
+`map`, `filter`, `length` and `first` all accept the PVec carrier and return
+PVec (`map [fn [q] q.f] rows` → `@["apple" "cherry"] : [PVec String]`). So **no
+`.prologos` source changes are needed at all** — only the `;;NN=>` markers move.
+The lesson is the general one: a `spec` line is evidence about one instance, not
+about dispatch. Every other `.prologos` solve site is a bare top-level echo with
+no downstream container consumption.
+
+`pvec-map` (a native AST primitive reducing via `rrb-fold`, no List round-trip)
+remains available and is pinned in the acceptance file alongside generic `map`.
 
 **Racket tests** — 7 files carry shape/type assertions over solve output:
 `test-rel-t1-typed-rows` (20), `test-rel-t1-pol` (11), `test-rel-t1-naf` (10),

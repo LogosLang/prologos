@@ -2473,26 +2473,26 @@
     ;; twin of the typing-core arms (query-var keys, schema-projected field types).
     [(expr-solve g)
      (let ([r (inferQ ctx g)])
-       (match r [(tu _ u) (tu (solve-row-type g 'list) u)] [_ (tu-error)]))]
+       (match r [(tu _ u) (tu (solve-row-type g 'pvec) u)] [_ (tu-error)]))]
     [(expr-solve-with sv ov g)
      (define su (if sv (match (inferQ ctx sv) [(tu _ u) u] [_ (zero-usage n)]) (zero-usage n)))
      (define ou (if ov (match (inferQ ctx ov) [(tu _ u) u] [_ (zero-usage n)]) (zero-usage n)))
      (let ([rg (inferQ ctx g)])
        (match rg
-         [(tu _ ug) (tu (solve-row-type g 'list) (add-usage su (add-usage ou ug)))]
+         [(tu _ ug) (tu (solve-row-type g 'pvec) (add-usage su (add-usage ou ug)))]
          [_ (tu-error)]))]
     [(expr-solve-one g)
      (let ([r (inferQ ctx g)])
        (match r [(tu _ u) (tu (solve-row-type g 'bare) u)] [_ (tu-error)]))]
     [(expr-explain g)
      (let ([r (inferQ ctx g)])
-       (match r [(tu _ u) (tu (solve-row-type g 'list 'dyn) u)] [_ (tu-error)]))]
+       (match r [(tu _ u) (tu (solve-row-type g 'pvec 'dyn) u)] [_ (tu-error)]))]
     [(expr-explain-with sv ov g)
      (define su (if sv (match (inferQ ctx sv) [(tu _ u) u] [_ (zero-usage n)]) (zero-usage n)))
      (define ou (if ov (match (inferQ ctx ov) [(tu _ u) u] [_ (zero-usage n)]) (zero-usage n)))
      (let ([rg (inferQ ctx g)])
        (match rg
-         [(tu _ ug) (tu (solve-row-type g 'list 'dyn) (add-usage su (add-usage ou ug)))]
+         [(tu _ ug) (tu (solve-row-type g 'pvec 'dyn) (add-usage su (add-usage ou ug)))]
          [_ (tu-error)]))]
 
     ;; ---- J eliminator ----

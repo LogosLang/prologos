@@ -80,8 +80,8 @@
   (check-true (string? r))
   (check-false (string-contains? r "solve")
                "top-level (not G) must not be echoed unevaluated")
-  (check-true (string-contains? r "nil")
-              "NAF over a licensed ground arg should fail (nil)"))
+  (check-true (string-contains? r "@[]")
+              "NAF over a licensed ground arg should fail (empty result)"))
 
 (test-case "A.1: solve-one (not G) — runs, returns none for a failed NAF"
   (define results
@@ -126,7 +126,7 @@
   (define auto-r (last results))
   (check-true (string-contains? bicycle-r "{}")
               "ground unlicensed vehicle succeeds")
-  (check-true (string-contains? auto-r "nil")
+  (check-true (string-contains? auto-r "@[]")
               "ground licensed vehicle fails"))
 
 ;; ========================================
@@ -226,8 +226,8 @@
          "defr lic [?x]\n  || \"car\"\n\n"
          "eval (solve (not (lic v)))\n"))))
   (define s (result-str (last-result results)))
-  (check-true (string-contains? s "nil")
-              "top-level `not` over a free var returns the standard Prolog nil (not an error)")
+  (check-true (string-contains? s "@[]")
+              "top-level `not` over a free var returns the standard Prolog empty result (not an error)")
   (check-true (string-contains? (get-output-string err) "floundering")
               "a floundering warning is emitted to stderr"))
 
@@ -268,5 +268,5 @@
   (define pass-r (result-str (list-ref results (- (length results) 2))))
   (define fail-r (result-str (last-result results)))
   (check-true (string-contains? pass-r "{}") "w=3 passes the guard")
-  (check-true (string-contains? fail-r "nil") "w=0 fails the guard"))
+  (check-true (string-contains? fail-r "@[]") "w=0 fails the guard"))
 

@@ -222,15 +222,12 @@ defr quest [?title ?giver ?reward]
      "Debug the compiler"  "Alice" 9000
 
 def quests := solve (quest t g r)
-;;32=> quests : [prologos::data::list::List {:g String :r Int :t String}] defined.
-
+;;32=> quests : [PVec {:g String :r Int :t String}] defined.
 quests
-;;33=> '[{:g "Alice", :t "Rescue the cat", :r 50} {:g "Bob", :t "Map the catacombs", :r 200} {:g "Alice", :t "Debug the compiler", :r 9000}] : [prologos::data::list::List {:g String :r Int :t String}]
-
+;;33=> @[{:g "Alice", :t "Rescue the cat", :r 50} {:g "Bob", :t "Map the catacombs", :r 200} {:g "Alice", :t "Debug the compiler", :r 9000}] : [PVec {:g String :r Int :t String}]
 ;; typed solve rows compose with HOFs TODAY:
 map [fn [q] q.r] quests
-;;34=> '[50 200 9000] : [prologos::data::list::List Int]
-
+;;34=> @[50 200 9000] : [PVec Int]
 ;; …and with selection, once it lands:
 ;; quests:t                                 ;; '["Rescue the cat" …] — broadcast over solve rows   [D4.P4]
 ;; quests:{t r}                             ;; each quest, narrowed to title + reward              [D4.P4]
@@ -238,11 +235,9 @@ map [fn [q] q.r] quests
 
 ;; a paren-goal query (implicit solve) feeding the same machinery:
 def alice-quests := (quest t "Alice" r)
-;;35=> alice-quests : [prologos::data::list::List {:r Int :t String}] defined.
-
+;;35=> alice-quests : [PVec {:r Int :t String}] defined.
 map [fn [q] q.t] alice-quests
-;;36=> '["Rescue the cat" "Debug the compiler"] : [prologos::data::list::List String]
-
+;;36=> @["Rescue the cat" "Debug the compiler"] : [PVec String]
 ;; ───────────────────────────────────────────────────────────────────────────
 ;; §G  TYPING SEAMS — the pins that keep us honest
 ;; ───────────────────────────────────────────────────────────────────────────

@@ -52,12 +52,28 @@ pvec-map [fn [q] q.t] alice-quests
 [pvec-length-int quests]
 ;;7=> 3 : Int
 
+;; (keys read in champ order here, not declaration order: POL.3's reorder applies
+;; where the GOAL is in hand — the solve-echo seam — and this is an ordinary
+;; application whose subject happens to be a row.)
 [pvec-nth-int quests 0]
-;;8=> [prologos::data::option::some {:g String :r Int :t String} {:t "Rescue the cat", :g "Alice", :r 50}] : [prologos::data::option::Option {:g String :r Int :t String}]
+;;8=> [prologos::data::option::some {:g String :r Int :t String} {:g "Alice", :t "Rescue the cat", :r 50}] : [prologos::data::option::Option {:g String :r Int :t String}]
 
 ;; the List reading is still one explicit hop away
 [pvec-to-list-fn alice-quests]
 ;;9=> '[{:t "Rescue the cat", :r 50} {:t "Debug the compiler", :r 9000}] : [prologos::data::list::List {:r Int :t String}]
+
+;; …and the container-GENERIC HOFs — what users actually write — carry the new
+;; carrier through unchanged. (The P0 census misread `spec map … [List A] …` as
+;; monomorphic; it is one instance under generic dispatch. Pinned here so that
+;; misreading cannot recur silently.)
+map [fn [q] q.r] quests
+;;10=> @[50 200 9000] : [PVec Int]
+
+filter [fn [q] [gt q.r 100]] quests
+;;11=> @[{:g "Bob", :t "Map the catacombs", :r 200} {:g "Alice", :t "Debug the compiler", :r 9000}] : [PVec {:g String :r Int :t String}]
+
+length quests
+;;12=> 3N : Nat
 
 ;; ───────────────────────────────────────────────────────────────────────────
 ;; §C  INVARIANTS THE FLIP MUST NOT BREAK
@@ -70,29 +86,29 @@ defr twice [?n]
   || 1
      1
      2
-;;10=> twice : _ defined.
+;;13=> twice : _ defined.
 
 solve (twice n)
-;;11=> @[{:n 1} {:n 1} {:n 2}] : [PVec {:n Int}]
+;;14=> @[{:n 1} {:n 1} {:n 2}] : [PVec {:n Int}]
 
 ;; C2 — the EMPTY result set. Was `nil` (a nullary List constructor carrying no
 ;; container identity); now an empty PVec that still announces its row type.
 solve (quest t "Nobody" r)
-;;12=> @[] : [PVec {:r Int :t String}]
+;;15=> @[] : [PVec {:r Int :t String}]
 
 ;; C3 — solve-one is UNCHANGED: a bare row champ (D25.4-unwrapped), not a
 ;; container at all. R2 in the tracking doc.
 solve-one (quest t "Bob" r)
-;;13=> {:t "Map the catacombs", :r 200} : {:r Int :t String}
+;;16=> {:t "Map the catacombs", :r 200} : {:r Int :t String}
 
 ;; C4 — solve-one on an empty result stays `none`
 solve-one (quest t "Nobody" r)
-;;14=> none : {:r Int :t String}
+;;17=> none : {:r Int :t String}
 
 ;; C5 — explain FLIPS WITH solve (R1). Rows carry the conditional metadata keys
 ;; under a 'dyn tail, which is why the displayed row type ends `| _`.
 explain (quest t "Bob" r)
-;;15=>~ @[{:t "Map the catacombs", :r 200, :provenance
+;;18=>~ @[{:t "Map the catacombs", :r 200, :provenance
 
 ;; C6 — THE CAPTURE-GAP PIN. The B3.2 coinductive display refinement must still
 ;; fire through the new carrier. `:v` is statically a UNION (the fact rows
@@ -104,16 +120,16 @@ explain (quest t "Bob" r)
 defr val [?k ?v]
   || :a 1
      :b "two"
-;;16=> val : _ defined.
+;;19=> val : _ defined.
 
 solve (val k v)
-;;17=> @[{:k :a, :v 1} {:k :b, :v "two"}] : [PVec {:k Keyword :v Int | String}]
+;;20=> @[{:k :a, :v 1} {:k :b, :v "two"}] : [PVec {:k Keyword :v Int | String}]
 
 def only-a := solve (val :a v)
-;;18=> only-a : [PVec {:v Int | String}] defined.
+;;21=> only-a : [PVec {:v Int | String}] defined.
 
 solve (val :a v)
-;;19=> @[{:v 1}] : [PVec {:v Int}]
+;;22=> @[{:v 1}] : [PVec {:v Int}]
 
 ;; ───────────────────────────────────────────────────────────────────────────
 ;; §D  THE `let` IMPLICIT-SOLVE GAP  (P2)
@@ -122,29 +138,29 @@ solve (val :a v)
 ;; D1 — explicit solve in a let RHS: worked before, must keep working
 let ls := solve (quest t "Bob" r)
   ls
-;;20=> @[{:t "Map the catacombs", :r 200}] : [PVec {:r Int :t String}]
+;;23=> @[{:t "Map the catacombs", :r 200}] : [PVec {:r Int :t String}]
 
 ;; D2 — implicit solve in a let RHS (nested shorthand). Was `Unbound variable t`.
 let li := (quest t "Bob" r)
   li
-;;21=> @[{:t "Map the catacombs", :r 200}] : [PVec {:r Int :t String}]
+;;24=> @[{:t "Map the catacombs", :r 200}] : [PVec {:r Int :t String}]
 
 ;; D3 — implicit solve in an ALIGNED let block, alongside an ordinary binding
 let la (quest t "Bob" r)
     n 7
   [pvec-length-int la]
-;;22=> 1 : Int
+;;25=> 1 : Int
 
 ;; D4 — implicit solve in the BRACKET let form
 let [lb := (quest t "Alice" r)] [pvec-length-int lb]
-;;23=> 2 : Int
+;;26=> 2 : Int
 
 ;; D5 — SCOPE BOUND: implicit solve is a BINDING-RHS rule, not a general
 ;; expression-position rule. A paren group in argument position stays
 ;; application/term, so this is an ordinary unbound-variable error — NOT a
 ;; silent re-query of the ambient fact store.
 [pvec-length-int (quest t "Bob" r)]
-;;24=>~ ERROR:
+;;27=>~ ERROR:
 
 ;; NOTE (out of scope, pre-existing): a top-level `let` SIBLING CHAIN
 ;; (`let p := 1` / `let q := 2` / indented body) fails with "`let` is not

@@ -30,6 +30,7 @@
          ;; fire-fn bypasses the mnr's cons↔def-entry adapters). Pure leaf → no cycle.
          (only-in "definition-entry.rkt"
                   def-entry def-entry? def-entry-type def-entry-value)
+         (only-in "rrb.rkt" rrb-to-list)  ;; SolveCarrier: POL.3 ordered echo over the PVec carrier (leaf data module)
          "macros.rkt"
          "sexp-readtable.rkt"
          "parse-reader.rkt"  ;; unified reader: WS-mode + sexp re-exports
@@ -629,9 +630,10 @@
 
 ;; The ordered display of a solve result value, or #f to fall back to pp-expr.
 ;; Custom-renders ONLY the shapes it fully understands: a bare row champ
-;; (solve-one) or a proper cons spine whose members are ALL row champs; anything
-;; else (nil, none, stuck terms, mixed lists) falls back — the echo must never
-;; drop or reshape an element it did not recognize.
+;; (solve-one), an rrb whose members are ALL row champs (the SolveCarrier PVec
+;; result), or a proper cons spine whose members are ALL row champs; anything
+;; else (@[], nil, none, stuck terms, mixed containers) falls back — the echo
+;; must never drop or reshape an element it did not recognize.
 (define (pp-solve-echo-ordered val ordered-names)
   (define (cons-head? f)
     (and (expr-fvar? f)
@@ -639,6 +641,17 @@
            (or (string=? s "cons") (regexp-match? #rx"::cons$" s)))))
   (cond
     [(expr-champ? val) (pp-row-ordered val ordered-names)]
+    ;; SolveCarrier: the PVec carrier. Renders `@[…]` to match pp-expr's rrb arm.
+    ;; An EMPTY result falls back (like `nil` did) so `@[]` keeps its pp-expr
+    ;; rendering; a non-champ member falls back wholesale, same as the cons arm.
+    [(expr-rrb? val)
+     (let ([rows (rrb-to-list (expr-rrb-racket-rrb val))])
+       (and (pair? rows)
+            (andmap expr-champ? rows)
+            (format "@[~a]"
+                    (string-join
+                     (map (lambda (r) (pp-row-ordered r ordered-names)) rows)
+                     " "))))]
     [else
      (let loop ([v val] [acc '()])
        (cond

@@ -35,6 +35,7 @@
          "subtype-predicate.rkt"  ;; SRE Track 1: extracted flat subtype predicate
          "sign-refinement.rkt"    ;; Numerics N5c: Sign transfer + name<->Sign/base tables
          (only-in "champ.rkt" champ-entries)  ;; Rel T1 B3.2: display-time row observation (leaf data module, cycle-free)
+         (only-in "rrb.rkt" rrb-to-list)      ;; SolveCarrier: same, for the PVec-carried solve result (leaf data module)
          "relations.rkt"          ;; Rel T1 Aspect B (B1): relation store → schema-name for typed solution rows (cycle-free — relations has no typing/reduction back-edge)
 )
 
@@ -3246,19 +3247,19 @@
     ;; (else a loose hole — B2 refines the un-schema'd facts case). solve-one is the
     ;; D25.4-unwrapped BARE row; explain rows carry a 'dyn tail for the conditional
     ;; reserved metadata keys (:certainty/:cycle/:provenance).
-    [(expr-solve g) (infer ctx g) (solve-row-type g 'list)]
+    [(expr-solve g) (infer ctx g) (solve-row-type g 'pvec)]
     [(expr-solve-with sv ov g)
      (when sv (infer ctx sv))
      (when ov (infer ctx ov))
      (infer ctx g)
-     (solve-row-type g 'list)]
+     (solve-row-type g 'pvec)]
     [(expr-solve-one g) (infer ctx g) (solve-row-type g 'bare)]
-    [(expr-explain g) (infer ctx g) (solve-row-type g 'list 'dyn)]
+    [(expr-explain g) (infer ctx g) (solve-row-type g 'pvec 'dyn)]
     [(expr-explain-with sv ov g)
      (when sv (infer ctx sv))
      (when ov (infer ctx ov))
      (infer ctx g)
-     (solve-row-type g 'list 'dyn)]
+     (solve-row-type g 'pvec 'dyn)]
 
     ;; Narrow — functional-logic narrowing: type-unsafe (hole) like solve
     [(expr-narrow func args target vars)
@@ -3963,8 +3964,12 @@
 ;; Cost posture: the refinable? gate runs first, so a fully-concrete row type (the
 ;; common case — `{:x Int :z Int}`) costs one shallow field scan and NO row walk.
 
-;; A solve result's displayed type is either `[List <row>]` (solve) or a bare
+;; A solve result's displayed type is either `[PVec <row>]` (solve) or a bare
 ;; `<row>` (solve-one). Returns (values rebuild-fn record) or (values #f #f).
+;;
+;; SolveCarrier: the expr-PVec arm is the carrier's; the expr-app arm is retained
+;; because solve-one's row can still arrive under an application spine from other
+;; producers, and because narrowing (R3) stays List-shaped.
 ;;
 ;; The CLOSED-tail requirement is what scopes this to solution rows: per D-B3.6 a
 ;; solve row is always closed with Κ′ keys, whereas an ordinary record value can
@@ -3977,6 +3982,8 @@
 (define (display-row-type-parts ty)
   (define (row? r) (and (expr-Record? r) (eq? (expr-Record-tail r) 'closed)))
   (cond
+    [(and (expr-PVec? ty) (row? (expr-PVec-elem-type ty)))
+     (values (lambda (rec*) (expr-PVec rec*)) (expr-PVec-elem-type ty))]
     [(and (expr-app? ty) (row? (expr-app-arg ty)))
      (values (lambda (rec*) (expr-app (expr-app-func ty) rec*)) (expr-app-arg ty))]
     [(row? ty) (values (lambda (rec*) rec*) ty)]
@@ -3991,8 +3998,10 @@
 (define (refinable-field-type? t)
   (or (expr-hole? t) (expr-union? t)))
 
-;; The runtime rows behind a displayed value: a cons spine of champs (solve), a
-;; bare champ (solve-one), or nothing observable (`nil`, `none`, a stuck term).
+;; The runtime rows behind a displayed value: an rrb of champs (solve, since the
+;; SolveCarrier flip), a cons spine of champs (narrowing, and pre-flip results
+;; still reachable through List-typed bindings), a bare champ (solve-one), or
+;; nothing observable (`@[]`, `nil`, `none`, a stuck term).
 (define (display-result-rows val)
   (define (cons-head? f)
     (and (expr-fvar? f)
@@ -4001,6 +4010,10 @@
   (let loop ([v val] [acc '()] [fuel 10000])
     (cond
       [(zero? fuel) (reverse acc)]                 ;; cyclic/absurd term — observe what we have
+      ;; SolveCarrier: the PVec carrier. Non-champ members are SKIPPED rather than
+      ;; aborting the walk — mirroring the cons arm below, whose filter is the same.
+      [(expr-rrb? v)
+       (append (reverse acc) (filter expr-champ? (rrb-to-list (expr-rrb-racket-rrb v))))]
       [(expr-champ? v) (reverse (cons v acc))]     ;; bare row (solve-one)
       [(and (expr-app? v)
             (expr-app? (expr-app-func v))
@@ -4335,9 +4348,18 @@
 
 ;; solve-row-type — the static result type for a solve-family node. Pure structural
 ;; derivation from the goal (does NOT infer the goal — the caller does that for
-;; effect/usage). wrapper ∈ 'list (solve/solve-with/explain*) | 'bare (solve-one,
+;; effect/usage). wrapper ∈ 'pvec (solve/solve-with/explain*) | 'bare (solve-one,
 ;; whose runtime is the D25.4-unwrapped champ). Returns the wrapped typed row for a
 ;; typeable goal-app or anonymous rel (B3.1), else expr-hole (loose fallback).
+;;
+;; SolveCarrier spin-out (2026-07-31, discharging CIU T6 Q_U9): the container was
+;; `[List row]` until this commit. `List` is a user-space inductive (`data List
+;; {A} | nil | cons`) with no native carrier struct, so path selection's `:`
+;; broadcast REFUSES over it — and typed rows exist precisely so relational output
+;; composes with the records surface. PVec is the native ordered, duplicate-bearing
+;; carrier, which is exactly the BAG semantics POL.1 ruled for solution sets.
+;; The 'list wrapper value is GONE, not retained: after the flip it had zero
+;; callers, and a dead alternative path is not a safety net.
 (define (solve-row-type g wrapper [tail 'closed])
   (define g* (whnf g))
   (define row (cond
@@ -4347,7 +4369,7 @@
   (cond
     [(not row) (expr-hole)]
     [(eq? wrapper 'bare) row]
-    [else (expr-app (list-type-fvar) row)]))
+    [else (expr-PVec row)]))
 
 ;; F1b.7e: project a schema-fvar type to its row (else identity), so the
 ;; structural map-op infer arms (map-keys/vals/assoc/dissoc/has-key?/nil-safe-get/

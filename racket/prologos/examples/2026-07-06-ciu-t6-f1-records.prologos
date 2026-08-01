@@ -375,7 +375,7 @@ defr sol-parent [?a ?b]
   || "alice" "charlie"
 
 solve (sol-parent "alice" y)
-;;81=> '[{:y "bob"} {:y "charlie"}] : [List {:y String}]
+;;81=> @[{:y "bob"} {:y "charlie"}] : [PVec {:y String}]
 ;;   ← the D25 payoff: pure answer rows, no :a_ echo, no "alice" re-emission
 
 solve-one (sol-parent "alice" y)
@@ -387,7 +387,7 @@ solve-one (sol-parent "zed" y)
 ;;   ← no solution = none, never {} (D17: {} is an empty dyn row VALUE)
 
 solve (sol-parent x y)
-;;84=> '[{:x "alice", :y "bob"} {:x "alice", :y "charlie"}] : [List {:x String :y String}]
+;;84=> @[{:x "alice", :y "bob"} {:x "alice", :y "charlie"}] : [PVec {:x String :y String}]
 ;;   ← all-free queries were always echo-free; keys in DECLARATION order (Rel T1 POL.3)
 
 ;; ============================================================

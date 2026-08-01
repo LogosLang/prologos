@@ -544,7 +544,7 @@
   (check-equal? bare paren))
 
 (test-case "POL.8/Q5: sloppy-indent paren continuation stays a SIBLING (lenient)"
-  ;; conjunction semantics pinned: same fruit must have both colors -> nil
+  ;; conjunction semantics pinned: same fruit must have both colors -> empty
   (define r (run-ns-ws-last
              (string-append P8FIX
                             "defr both [?f]\n"
@@ -552,7 +552,7 @@
                             "        (fruit-color f \"yellow\")\n"
                             "solve (both q)")))
   (check-true (string? r) (result-msg r))
-  (check-true (string-contains? r "nil") "conjunction of two colors is unsatisfiable"))
+  (check-true (string-contains? r "@[]") "conjunction of two colors is unsatisfiable"))
 
 (test-case "POL.8: single-token deeper line continues the `&>`-line bare goal"
   (define r (run-ns-ws-last
@@ -683,7 +683,7 @@
   (check-true (string? r) (result-msg r))
   (check-true (string-contains? r "blueberry"))
   (check-true (string-contains? r "banana"))
-  (check-true (string-contains? r "List {:q String}")
+  (check-true (string-contains? r "PVec {:q String}")
               "the B-machinery types the implicit solve identically"))
 
 (test-case "POL.9: the composed owner example — paren rel + POL.8 parenless clauses"
@@ -754,10 +754,10 @@
              (string-append P9FIX
                             "def mm := {:c \"blue\"}\n"
                             "(fruit-color f mm.c)")))
-  ;; computed goal args don't evaluate (pre-existing semantics) → nil, but the
-  ;; command IS a solve — pinned via the row-list TYPE on the echo.
+  ;; computed goal args don't evaluate (pre-existing semantics) → empty, but the
+  ;; command IS a solve — pinned via the row-container TYPE on the echo.
   (check-true (string? r) (result-msg r))
-  (check-true (string-contains? r "List {:f String}") r))
+  (check-true (string-contains? r "PVec {:f String}") r))
 
 (test-case "POL.9: a gate-rejected defr's solve points at the earlier error"
   (define m (result-msg (run-ns-ws-last
@@ -783,7 +783,7 @@
                             "blues")))
   (check-true (string? r) (result-msg r))
   (check-true (string-contains? r "blueberry"))
-  (check-true (string-contains? r "List {:f String}")))
+  (check-true (string-contains? r "PVec {:f String}")))
 
 (test-case "POL.9b: def RHS paren rel with POL.8 parenless clauses (inner layout survives)"
   (define r (run-ns-ws-last

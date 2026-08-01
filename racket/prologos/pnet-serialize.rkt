@@ -55,7 +55,10 @@
          (only-in "foreign.rkt" parse-foreign-type make-marshaller-pair)
          ;; POL.10: reconstructive champ serialization (def binds reduced values,
          ;; so champ-bearing rows now reach module env-snapshots)
-         (only-in "champ.rkt" champ-empty champ-insert champ-entries))
+         (only-in "champ.rkt" champ-empty champ-insert champ-entries)
+         ;; SolveCarrier: the PVec carrier a POL.10 `def` can bind (see the
+         ;; rrb-sentinel arms). Leaf data module, cycle-free — same as champ.
+         (only-in "rrb.rkt" rrb-to-list rrb-from-list))
 
 ;; Lib dir for resolving relative .rkt paths in foreign function re-linking
 (define pnet-lib-dir (simplify-path (build-path (syntax-source #'here) ".." "lib")))
@@ -159,7 +162,18 @@
 ;; those bodies were QTT-SKIPPED. Without the bump a module that should newly fail
 ;; keeps loading from cache, and the suite is green on a warm tree while a cold
 ;; clone or CI hits the new errors. Exact equality is the only reliable sweep.
-(define PNET_VERSION 8)
+;; v8 -> v9 (SolveCarrier spin-out, 2026-07-31): `solve`/`explain` now return a
+;; PVec, so the whnf-reduced value a POL.10 `def` binds is `(expr-rrb …)` rather
+;; than a cons spine. That reaches env-snapshots exactly the way champ-bearing
+;; rows did at v2->v3 — and hit the SAME defect for the same reason: an rrb-root's
+;; `tail` is a RAW RACKET VECTOR, and `deep-s->v` has no `vector?` arm, so the
+;; champ rows inside it fell through `[else v]` and were written out VERBATIM,
+;; persisting their `equal-hash-code` values. Those are process-stable only —
+;; precisely what the champ-sentinel arm exists to prevent. The rrb-sentinel arm
+;; below closes it reconstructively (elements serialized, tree rebuilt at read).
+;; The bump is what stops a v8 cache written under the broken path from being
+;; read back with cross-process hashes baked in.
+(define PNET_VERSION 9)
 
 ;; ============================================================
 ;; Serialization: struct->vector + gensym tagging + foreign-proc
@@ -208,6 +222,19 @@
        (list 'champ-sentinel
              (for/list ([kv (in-list (champ-entries (expr-champ-racket-champ v)))])
                (cons (deep-s->v (car kv)) (deep-s->v (cdr kv)))))]
+      ;; SolveCarrier (2026-07-31): the same argument one container up. Since
+      ;; solve/explain return a PVec, a POL.10 `def` can bind an rrb of solution
+      ;; rows into a module env-snapshot. rrb-root's `tail` is a RAW RACKET VECTOR
+      ;; and deep-s->v has no `vector?` arm, so a structural walk leaks its
+      ;; contents through `[else v]` UNCHANGED — champ rows with their
+      ;; equal-hash-codes baked in, which must never be persisted. Serialize
+      ;; RECONSTRUCTIVELY as the element list (each element still routed through
+      ;; deep-s->v, so nested rows get the champ-sentinel); the reader rebuilds
+      ;; the tree with rrb-from-list.
+      [(expr-rrb? v)
+       (list 'rrb-sentinel
+             (for/list ([e (in-list (rrb-to-list (expr-rrb-racket-rrb v)))])
+               (deep-s->v e)))]
       [(struct? v)
        (for/vector ([e (in-vector (struct->vector v))]) (deep-s->v e))]
       [(pair? v)
@@ -616,6 +643,10 @@
         (define k (deep-serializable->struct (car kv)))
         (define val (deep-serializable->struct (cdr kv)))
         (champ-insert c (equal-hash-code k) k val)))]
+    ;; SolveCarrier: rebuild the PVec carrier from its elements (see the
+    ;; serializer arm — the tree shape is derived, never persisted).
+    [(and (list? v) (= (length v) 2) (eq? (car v) 'rrb-sentinel))
+     (expr-rrb (rrb-from-list (map deep-serializable->struct (cadr v))))]
     [(and (list? v) (= (length v) 2) (eq? (car v) 'foreign-proc))
      ;; Re-link foreign procedure. For most procs, the expr-foreign-fn struct
      ;; that contains this proc also has source-module + racket-name fields.
