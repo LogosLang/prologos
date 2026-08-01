@@ -3410,3 +3410,52 @@ green and red runs before reading any code. A uniform slowdown is a runner; a
 single step moving while its neighbours do not is a real, localised change —
 and if the diff cannot have caused it, the cause is state the job carries, not
 source.
+
+---
+
+### #57 UPDATE (2026-08-01) — the first probe cleared the WRONG DIRECTORY, and my local "cold cache" runs did too
+
+**The probe reported `(no cache directory)` and the step still took 230 s.** I
+was one sentence away from writing "the cache is exonerated". It was not
+exonerated; it was never tested.
+
+**Cause.** The `.pnet` cache directory is resolved RELATIVE TO CWD, and every
+test step in `interop.yml` begins `cd racket/prologos`. So the cache lives at
+`racket/prologos/data/cache/pnet`. The probe cleared `data/cache/pnet` from the
+repo root — a path that does not exist on CI — and truthfully said so.
+
+`driver.rkt:133` records this exact hazard in its own words: *"Root cause was
+relative pnet-cache-dir resolving differently in batch workers (project root)
+vs direct runs (racket/prologos/)."* It is written down, and I still walked
+into it.
+
+**It invalidated my local measurements too**, which is the worse half. Every
+"cold cache" run I reported was `rm -rf ../../data/cache/pnet` or
+`rm -rf data/cache/pnet` from the repo root — the wrong directory in both
+cases — so those runs were WARM. Corrected, with the real path
+(`racket/prologos/data/cache/pnet`, 47 MB):
+
+| configuration | time | result |
+|---|---|---|
+| compiled, warm cache | 11 s | pass |
+| compiled, genuinely cold | 49 s | pass |
+| interpreted, genuinely cold | 118 s | pass |
+| **CI (red)** | **230 s** | **FAIL** |
+
+So CI is 2× the worst configuration reproducible locally, and still fails.
+Both the interpreted-build and cache hypotheses are now measured rather than
+assumed, and neither reaches CI's number.
+
+**One live anomaly the corrected numbers expose.** Locally a warm cache takes
+the test from 49 s to 11 s. On CI *green* it took 41 s — cold speed — even
+though seven tests ran before it and should have warmed the cache. So on CI
+the cache is written and apparently never hit, which is consistent with the
+same relative-path resolution being wrong there for a different reason. That
+is now the most specific open thread.
+
+**Rule — a null result from a probe is only evidence if the probe could have
+been positive.** Make every diagnostic report what it acted on: file counts,
+sizes, paths. `rm -rf` on a nonexistent path succeeds silently and looks
+exactly like a successful clear. This is the same class as the
+`--no-pnet-cache` no-op already on file, and it cost a second wrong conclusion
+in the same investigation.

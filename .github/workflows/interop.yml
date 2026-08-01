@@ -116,27 +116,29 @@ jobs:
       # DIAGNOSTIC PROBE for pitfall #57 — remove once it has answered.
       #
       # The step below is the only one in this job that regressed: 41s and
-      # green on 2026-07-29, then 232s and failing from 2026-08-01, on a
-      # commit whose entire diff is 167 lines of markdown. Every other step
-      # in the job runs within a second of its green timing, so the runner
-      # is not slower and the cause is state the job carries.
+      # green on 2026-07-29, then ~230s and failing since 2026-08-01, first
+      # on a commit whose entire diff is 167 lines of markdown. Every other
+      # step runs within a second of its green timing, so the runner is not
+      # slower and the cause is state the job carries.
       #
-      # The suspect is the .pnet cache (driver.rkt:136 records this exact
-      # "Unbound variable" as a known cache-restore mismatch). This clears it
-      # and prints what was there, so the next run says which it is:
-      #   ~41s and green  -> the cache is the cause, and driver.rkt:136 is
-      #                      the real bug to fix
-      #   still ~232s     -> the cache is exonerated and the suspect is wrong
-      #
-      # NOT PROLOGOS_PNET_CACHE=0: only batch-worker.rkt reads that, and
-      # these steps are plain `raco test`. Setting it would look like a test
-      # of the cache while testing nothing.
+      # ATTEMPT 1 CLEARED THE WRONG DIRECTORY and proved nothing. The .pnet
+      # cache dir is resolved RELATIVE TO CWD, and every test step here does
+      # `cd racket/prologos` first, so the cache is at
+      # racket/prologos/data/cache/pnet -- not data/cache/pnet, which is
+      # where the first probe looked and correctly reported "no cache
+      # directory". driver.rkt:133 records this exact relative-path hazard;
+      # I walked into it anyway. Reporting the size is what catches it: a
+      # probe that clears nothing must SAY it cleared nothing.
       - name: Clear .pnet cache (diagnostic — pitfall #57)
         run: |
-          echo "pnet cache contents before clearing:"
-          find data/cache/pnet -type f 2>/dev/null | wc -l
-          du -sh data/cache/pnet 2>/dev/null || echo "  (no cache directory)"
-          rm -rf data/cache/pnet
+          for d in racket/prologos/data/cache/pnet data/cache/pnet; do
+            if [ -d "$d" ]; then
+              echo "cache at $d: $(find "$d" -type f | wc -l) files, $(du -sh "$d" | cut -f1)"
+              rm -rf "$d"
+            else
+              echo "no cache at $d"
+            fi
+          done
 
       - name: Run desc:import-object test (Phase 37 — 5th refr kind cross-impl round-trip)
         run: cd racket/prologos && raco test tests/test-ocapn-import-object-interop.rkt
