@@ -686,6 +686,26 @@
 ;; Resolve a surf-var to a core expression.
 ;; When auto-apply? is #t and the global has ALL m0 params, auto-apply with holes.
 ;; When auto-apply? is #f (function position), just return the fvar.
+;; SolveCarrier P2: is NAME currently a RELATION (a live `defr`)?
+;;
+;; The precise test is the one `raise-unknown-relation-error` (relations.rkt)
+;; already uses for its mirror-image diagnostic: a defr name is ALSO global-env
+;; registered, bound to an `expr-defr` VALUE. Going through the global env is
+;; what makes this namespace-correct and rebinding-correct for free:
+;;   * namespace — the env lookup resolves through the active `ns`, so a
+;;     relation `t::m` in one namespace does NOT match a reference to `m` in
+;;     another. (A first cut consulted the relation STORE and matched any key
+;;     ending `::m`; it cross-matched namespaces and mis-diagnosed four
+;;     unrelated Batch-C tests whose `def m := {…}` had nothing to do with
+;;     relations. The store is not namespace-scoped; the env is.)
+;;   * rebinding — `def m := 5` after a `defr m` leaves an ordinary value in the
+;;     env, so `[m …]` is diagnosed only while `m` really is a relation.
+(define (defr-bound-name? name)
+  (define status (global-env-lookup-status name))
+  (and (eq? (car status) 'ground)
+       (let ([payload (cdr status)])
+         (and (pair? payload) (expr-defr? (cdr payload))))))
+
 (define (elaborate-var name loc env depth auto-apply?)
   (let ([idx (env-lookup env name depth)])
     (cond
@@ -1204,6 +1224,35 @@
     [(surf-app func args loc)
      ;; Multi-defn dispatch: resolve base name to internal clause by arity
      (cond
+       ;; ── SolveCarrier P2: the INVERSE of POL.9's guiding diagnostic ────────
+       ;; `raise-unknown-relation-error` (relations.rkt) already guides the
+       ;; goal-over-a-function case: `(dbl 3)` → "dbl is a function —
+       ;; application is written [dbl …]". The mirror image had no diagnostic at
+       ;; all: APPLYING a relation fell through to whatever its arguments did,
+       ;; which for the common `[fc f "red"]` shape is a bare "Unbound variable
+       ;; f" naming the query variable — a message about the wrong thing
+       ;; entirely, since `f` is unbound precisely BECAUSE this should have been
+       ;; a goal. (`[fc "a" "red"]`, all-ground, instead reached typing and said
+       ;; "Could not infer type".) Both now get one message that names the fix.
+       ;;
+       ;; This is deliberately NOT scoped to `let`: the same bare error appears
+       ;; for `def n := [f (fc x "red")]` and at top level, because the cause is
+       ;; the same — a relation in APPLICATION position. R6 keeps the implicit
+       ;; solve to BINDING RHS, so argument position stays an error; this makes
+       ;; it an error that says what to do.
+       ;; The env check is LOAD-BEARING: a lambda parameter or `let` binding may
+       ;; shadow a relation name (`[fn [fc] [fc 1]]`), and inside that scope the
+       ;; name is an ordinary local, not a goal head.
+       [(and (surf-var? func)
+             (not (env-lookup env (surf-var-name func) depth))
+             (defr-bound-name? (surf-var-name func)))
+        (define n (surf-var-name func))
+        (prologos-error loc
+          (format (string-append
+                   "~a is a relation, not a function — a query is written (~a …). "
+                   "At command position or on a `def`/`let` binding RHS that carries "
+                   "an implicit solve; elsewhere write `solve (~a …)` explicitly.")
+                  n n n))]
        [(and (surf-var? func)
              (lookup-multi-defn (surf-var-name func)))
         => (lambda (multi-info)

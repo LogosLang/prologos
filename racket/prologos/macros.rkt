@@ -1158,6 +1158,7 @@
        (not (eq? x '$retired-selection)) ; D4.P1a retirement marker (parser converts to guided error)
        (not (eq? x '$let-error))        ; LET P1 syntax-failure marker (parser converts to per-command parse error)
        (not (eq? x '$let-block))        ; LET P3 aligned-block sentinel (reader-validated; expand-let consumes)
+       (not (eq? x '$goal-rhs))         ; SolveCarrier P2: let binding-RHS paren marker (parser consumes)
        (not (eq? x '$dot-brace))        ; D4.P1b-ii `.{ }` sub-block sentinel — see below
        (not (eq? x '$select-brace))     ; D4.P1b-iii adjacent-brace select block
        (not (eq? x '$select))           ; D4.P3a fused select head (LOUD-if-missed: whole-file abort in a defmacro template)

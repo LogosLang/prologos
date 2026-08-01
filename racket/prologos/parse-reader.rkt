@@ -2565,21 +2565,133 @@
 ;; APPLICATION. A form the walk does not change now keeps its ORIGINAL stx
 ;; (identity, properties, everything); a rebuilt form passes the original as
 ;; BOTH the srcloc and the property template (datum->syntax's 4th argument).
+;; ── SolveCarrier P2: the `let` binding-RHS implicit solve (ruling R6) ────────
+;; Rel T1 POL.9/POL.9b give a paren goal at COMMAND POSITION an implicit solve.
+;; `def x := (goal …)` got it; `let x := (goal …)` did not — the LET track landed
+;; a new binding form and the scope never grew to cover its RHS, so the failure
+;; was a bare `Unbound variable`.
+;;
+;; WHY THE MARK CANNOT REACH THE PARSER ON ITS OWN. Goal-ness is carried by the
+;; reader's 'prologos-paren-origin SYNTAX PROPERTY. `let` desugars in a PREPARSE
+;; MACRO (macros.rkt `expand-let`), and preparse macros receive fully STRIPPED
+;; datums — verified by instrumenting expand-let's entry: every element arrives
+;; with syntax?=#f. So by the time any let code could look, the property is gone.
+;; The `def` leg dodges this by threading the original RHS syntax through the
+;; := rewrite (macros.rkt `def-rhs-stx`); `let` has five spellings, so the same
+;; threading would mean five hooks into machinery that landed today.
+;;
+;; THE REALIZATION. The property's whole information content here is one bit —
+;; "this value was written in parens" — so preserve that bit in the DATUM, where
+;; stripping cannot reach it, by wrapping in a `$goal-rhs` sentinel. The reader
+;; knows POSITION and PARENS; the parser knows the KEYWORD TABLE and decides
+;; goal-ness. Neither needs the other's table, so nothing drifts. This is the
+;; same shape as the existing `$let-block` sentinel, minted here and consumed
+;; downstream.
+;;
+;; THE POSITION RULE, argued from the grammar rather than re-deriving the binding
+;; parser (which would be exactly the F1b.7g drift class): under the LET grammar
+;; a direct child of a `let` form is the head token, a binding NAME, `:=`, a
+;; TYPE, a binding VALUE, or the BODY — and names, `:=` and types are never paren
+;; groups. So a paren-origin direct child is a binding value UNLESS it is the
+;; body, and the body is always LAST. Binding groups (`$let-block` lines, the
+;; bracket form's list) are descended ONE level, since those contain only
+;; binding material. We deliberately do NOT recurse further: a paren goal nested
+;; inside a value (`let x := [f (g a)]`) is an ARGUMENT, not a binding RHS, and
+;; must keep its application reading.
+(define ($goal-rhs-wrap e)
+  (if (and (syntax? e) (syntax-property e 'prologos-paren-origin))
+      (datum->syntax #f (list (datum->syntax #f '$goal-rhs e) e) e)
+      e))
+
+(define (stx-sym=? e s) (and (syntax? e) (eq? (syntax-e e) s)))
+(define (stx-group? e) (and (syntax? e) (let ([d (syntax-e e)]) (and (pair? d) (list? d)))))
+
+;; Wrap the VALUE of each binding in one token list. `single-binding?` says the
+;; list is exactly ONE binding (a `$let-block` group, or the let's own direct
+;; children for the non-block spellings) rather than the bracket form's flat run
+;; of several.
+;;
+;; The value must be a SINGLE element to qualify — POL.9b's own rule for `def`
+;; ("Only a SINGLE element after := qualifies — a multi-token RHS is the
+;; auto-wrapped application"). Mirroring it is what keeps the EXPLICIT spelling
+;; `let ls := solve (goal …)` working: there the paren group is `solve`'s
+;; ARGUMENT, not the value, and wrapping it produced `solve (solve …)` — caught
+;; by acceptance marker 23 (a double solve), which is exactly why the acceptance
+;; file pins the explicit spelling alongside the implicit one.
+(define (mark-binding-values ts single-binding?)
+  (define n (length ts))
+  (define has-assign? (ormap (lambda (e) (stx-sym=? e ':=)) ts))
+  (cond
+    ;; ── one binding, `name [: T] := VALUE` ──
+    [(and single-binding? has-assign?)
+     (define idx (for/last ([e (in-list ts)] [i (in-naturals)] #:when (stx-sym=? e ':=)) i))
+     (if (= n (+ idx 2))                        ;; exactly one element after :=
+         (append (take ts (add1 idx)) (list ($goal-rhs-wrap (last ts))))
+         ts)]
+    ;; ── one binding, bare `name VALUE` (incl. the fused `name:T VALUE`) ──
+    [single-binding?
+     (if (= n 2) (list (car ts) ($goal-rhs-wrap (cadr ts))) ts)]
+    ;; ── the bracket form's flat run: `x := V y := V2` ──
+    [has-assign?
+     (for/list ([e (in-list ts)] [i (in-naturals)])
+       (if (and (> i 0) (stx-sym=? (list-ref ts (sub1 i)) ':=)) ($goal-rhs-wrap e) e))]
+    ;; ── the bracket form's flat PAIRS: `x 5 y 6` — values sit at odd indices ──
+    [else
+     (for/list ([e (in-list ts)] [i (in-naturals)])
+       (if (odd? i) ($goal-rhs-wrap e) e))]))
+
+(define (mark-let-goal-rhs elems)
+  ;; elems is a let-headed element list, POST classify-let-block.
+  (cond
+    [(< (length elems) 3) elems]     ;; nothing that could be both binding and body
+    [else
+     (define let-tok (car elems))
+     (define rest (cdr elems))
+     (define body (last rest))
+     (define bindings (reverse (cdr (reverse rest))))
+     (define (rebuild-group g ts) (datum->syntax #f ts g g))
+     (define marked
+       (cond
+         ;; aligned block: (let ($let-block (b1 …) (b2 …)) body) — each group is
+         ;; ONE binding; the `$let-block` head token is not.
+         [(and (= (length bindings) 1) (stx-group? (car bindings))
+               (let ([d (syntax-e (car bindings))])
+                 (and (pair? d) (stx-sym=? (car d) '$let-block))))
+          (define blk (car bindings))
+          (define d (syntax-e blk))
+          (list (rebuild-group
+                 blk
+                 (cons (car d)
+                       (for/list ([g (in-list (cdr d))])
+                         (if (stx-group? g)
+                             (rebuild-group g (mark-binding-values (syntax-e g) #t))
+                             g)))))]
+         ;; bracket form: (let (…bindings…) body) — one group, possibly many bindings
+         [(and (= (length bindings) 1) (stx-group? (car bindings)))
+          (define g (car bindings))
+          (list (rebuild-group g (mark-binding-values (syntax-e g) #f)))]
+         ;; the non-block spellings: the let's own direct children ARE the binding
+         [else (mark-binding-values bindings #t)]))
+     (cons let-tok (append marked (list body)))]))
+
 (define (transform-let-blocks-stx stx)
   (define lst (syntax->list stx))
   (if (not lst)
       stx
       (let* ([kids0 (map transform-let-blocks-stx lst)]
              [kids (absorb-let-siblings kids0)]
-             [kids* (if (let-headed? kids) (classify-let-block kids) kids)])
-        (if (and (eq? kids* kids) (eq? kids kids0) (andmap eq? kids0 lst))
+             [kids1 (if (let-headed? kids) (classify-let-block kids) kids)]
+             [kids* (if (let-headed? kids1) (mark-let-goal-rhs kids1) kids1)])
+        (if (and (eq? kids* kids1) (eq? kids1 kids) (eq? kids kids0) (andmap eq? kids0 lst))
             stx
             (datum->syntax #f kids* stx stx)))))
 
 ;; Entry point for a top-level form's element list (tree-node->stx-elements).
 (define (transform-let-blocks-elems elems)
   (define elems* (absorb-let-siblings (map transform-let-blocks-stx elems)))
-  (if (let-headed? elems*) (classify-let-block elems*) elems*))
+  (if (let-headed? elems*)
+      (mark-let-goal-rhs (classify-let-block elems*))
+      elems*))
 
 ;; Classify a let-headed element list; return the (possibly rewritten) list.
 ;;

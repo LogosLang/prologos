@@ -42,6 +42,16 @@
 
 (define (ws expr) (run-ns-ws-last (string-append world expr "\n")))
 
+;; An error's message text, whatever error struct it is (the family shares the
+;; message field position via prologos-error-message).
+(define (error-text r)
+  (if (string? r) r (format "~a" r)))
+
+;; The P2 guided diagnostic for a relation used in APPLICATION position.
+(define (relation-diagnostic? r)
+  (and (not (string? r))
+       (regexp-match? #rx"is a relation, not a function" (error-text r))))
+
 ;; ========================================
 ;; The carrier
 ;; ========================================
@@ -162,3 +172,116 @@
   (define e (expr-rrb (rrb-from-list '())))
   (define back (deep-serializable->struct (deep-struct->serializable e)))
   (check-equal? (rrb-to-list (expr-rrb-racket-rrb back)) '()))
+
+;; ========================================
+;; P2 — the `let` binding-RHS implicit solve (ruling R6)
+;; ========================================
+;; `def x := (goal …)` carried an implicit solve (POL.9b) but `let x := (goal …)`
+;; did not — the LET track landed a new binding form and the scope never grew.
+;; The reader mints a `$goal-rhs` sentinel around a paren value in binding
+;; position (the paren-origin SYNTAX PROPERTY cannot survive: `expand-let` is a
+;; preparse macro and receives fully stripped datums); the parser, which owns the
+;; keyword table, decides goal-ness. Neither side duplicates the other's table.
+
+(test-case "let x := (goal …) carries the implicit solve — nested shorthand"
+  (define r (ws "let xs := (fc f \"red\")\n  xs"))
+  (check-true (string? r) (format "~a" r))
+  (check-true (string-contains? r "[PVec {:f String}]"))
+  (check-true (string-contains? r "apple")))
+
+(test-case "…the ALIGNED block, alongside an ordinary binding"
+  (define r (ws "let xs (fc f \"red\")\n    n 7\n  xs"))
+  (check-true (string? r) (format "~a" r))
+  (check-true (string-contains? r "[PVec {:f String}]")))
+
+(test-case "…and the BRACKET form"
+  (define r (ws "let [xs := (fc f \"red\")] xs"))
+  (check-true (string? r) (format "~a" r))
+  (check-true (string-contains? r "[PVec {:f String}]")))
+
+(test-case "the EXPLICIT spelling still works — no DOUBLE solve"
+  ;; REGRESSION PIN. The first position rule wrapped every non-body paren child,
+  ;; so in `let ls := solve (goal …)` it wrapped `solve`'s ARGUMENT and produced
+  ;; `solve (solve …)` — which echoed as a stuck `(solve @[…]) : _`. The rule now
+  ;; mirrors POL.9b: only a SINGLE-element value after `:=` qualifies, so a
+  ;; multi-token RHS stays the auto-wrapped application it always was.
+  (define r (ws "let ls := solve (fc f \"red\")\n  ls"))
+  (check-true (string? r) (format "~a" r))
+  (check-false (string-contains? r "(solve") "the goal is solved ONCE, not wrapped again")
+  (check-true (string-contains? r "[PVec {:f String}]")))
+
+(test-case "a NON-goal keyword head in a let RHS keeps its expression reading"
+  ;; the parser's keyword table is what makes this work; the reader only reports
+  ;; \"this was in parens, in binding position\".
+  (check-true (string-contains? (ws "let n := (+ 1 2)\n  n") "3 : Int"))
+  (check-true (string-contains? (ws "let n := (the Int 4)\n  n") "4 : Int")))
+
+(test-case "SCOPE BOUND: a paren goal in ARGUMENT position is NOT an implicit solve"
+  ;; R6 scopes the rule to a BINDING RHS. General expression position keeps the
+  ;; old reading — a goal there would make ordinary calls re-query the ambient
+  ;; fact store, which is the standing purity concern.
+  (define r (ws "let n := [pvec-length-int (fc f \"red\")]\n  n"))
+  (check-false (string? r) "argument position is still an error")
+  (check-true (relation-diagnostic? r) "…but a GUIDED one that names the fix"))
+
+(test-case "a let BODY is not a binding RHS — no implicit solve there either"
+  (define r (ws "let n := 1\n  (fc f \"red\")"))
+  (check-false (string? r) "the body keeps its pre-existing reading")
+  (check-true (relation-diagnostic? r)))
+
+(test-case "flat-pair bracket bindings mark the VALUE slots, not the names"
+  (define r (ws "let [xs (fc f \"red\") n 7] xs"))
+  (check-true (string? r) (format "~a" r))
+  (check-true (string-contains? r "[PVec {:f String}]")))
+
+;; ========================================
+;; P2 — the guided diagnostic (the INVERSE of POL.9's)
+;; ========================================
+;; relations.rkt already guided the goal-over-a-function case (`(dbl 3)` → "dbl
+;; is a function — application is written [dbl …]"). The mirror image had no
+;; diagnostic: APPLYING a relation surfaced whatever its ARGUMENTS did — for the
+;; common `[fc f "red"]` shape a bare "Unbound variable f", naming the query
+;; variable rather than the mistake. `f` is unbound precisely BECAUSE this should
+;; have been a goal.
+
+(test-case "applying a relation with a FREE var: guided, not `Unbound variable f`"
+  (define r (ws "[fc f \"red\"]"))
+  (check-true (relation-diagnostic? r) (format "~a" r))
+  (check-false (regexp-match? #rx"Unbound variable" (error-text r))
+               "the old message named the query var, not the mistake"))
+
+(test-case "applying a relation with GROUND args: same message, not `Could not infer type`"
+  ;; the all-ground shape took a different route (it reached typing), so it used
+  ;; to produce a different unhelpful error. One message now covers both.
+  (define r (ws "[fc \"apple\" \"red\"]"))
+  (check-true (relation-diagnostic? r) (format "~a" r))
+  (check-false (regexp-match? #rx"Could not infer type" (error-text r))))
+
+(test-case "the diagnostic does NOT fire for a function — `[dbl 3]` still evaluates"
+  (define r (ws "defn dbl [x:Int] : Int\n  * x 2\n[dbl 3]"))
+  (check-true (string? r) (format "~a" r))
+  (check-true (string-contains? r "6 : Int")))
+
+(test-case "a LOCAL BINDING shadowing a relation name is not diagnosed"
+  ;; the env check is load-bearing: inside `[fn [fc] …]` the name is an ordinary
+  ;; parameter, not a goal head. Without the guard this became the relation
+  ;; diagnostic — a wrong error on correct code.
+  (define r (ws "[fn [fc] [fc 1]]"))
+  (check-false (relation-diagnostic? r)
+               "shadowed name elaborates as a local, whatever it then infers to"))
+
+(test-case "the diagnostic is NAMESPACE-scoped — a same-named relation elsewhere is not it"
+  ;; REGRESSION PIN. The first cut consulted the relation STORE and matched any
+  ;; key ending `::m`. The store is not namespace-scoped, so a relation `m` in
+  ;; one namespace mis-diagnosed an unrelated `def m := {…}` in another — it
+  ;; broke four Batch-C tests that have nothing to do with relations. Going
+  ;; through the GLOBAL ENV (where a defr name is bound to an expr-defr value)
+  ;; makes namespace- and rebinding-correctness structural rather than checked.
+  (void (run-ns-ws-last (string-append world "solve (fc f \"red\")")))
+  (define r (run-ns-ws-last "ns other\ndef fc := {:a 1}\nfc"))
+  (check-false (relation-diagnostic? r) (format "~a" r))
+  (check-true (string? r) (format "~a" r)))
+
+(test-case "…and REBINDING-scoped — `def` over a defr name stops the diagnostic"
+  (define r (run-ns-ws-last (string-append world "def fc := 5\n[int+ fc 1]")))
+  (check-false (relation-diagnostic? r) (format "~a" r)))

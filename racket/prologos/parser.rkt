@@ -91,19 +91,12 @@
 
 ;; The command-position goal predicate: a WS paren-origin group whose head is
 ;; either a non-keyword symbol (a relation) or a GOAL keyword.
+;; (The head test itself lives in `goal-head-datum?` below — the `let` leg needs
+;; it without the paren-origin check, so it is ONE definition with two callers.)
 (define (paren-goal-stx? stx)
-  (define (dollar-sym? s)
-    (let ([str (symbol->string s)])
-      (and (positive? (string-length str))
-           (char=? (string-ref str 0) #\$))))
   (and (syntax? stx)
        (syntax-property stx 'prologos-paren-origin)
-       (let ([d (stx->datum stx)])
-         (and (pair? d)
-              (let* ([h0 (car d)] [h (if (syntax? h0) (syntax-e h0) h0)])
-                (and (symbol? h)
-                     (not (dollar-sym? h))
-                     (or (not (keyword? h)) (goal-keyword? h))))))))
+       (goal-head-datum? (stx->datum stx))))
 
 ;; Parse a datum at COMMAND position (top-level command or def RHS — the
 ;; Q_C scope): a paren goal becomes an implicit solve; everything else
@@ -127,6 +120,41 @@
            (syntax-property stx 'prologos-defrhs-command))
       (parse-command-datum stx)
       (parse-datum stx)))
+
+;; ── SolveCarrier P2 (ruling R6): the `let` binding-RHS leg of Q_C ────────────
+;; `let x := (goal …)` ≡ `let x := solve (goal …)`, matching `def`'s RHS. A
+;; `let` binding RHS is a BINDING RHS, evaluated once at the binding site — the
+;; same act as `def`'s, one scope down — not the general expression position the
+;; standing purity concern is about (a goal inside a `defn` body would make
+;; ordinary calls re-query the ambient fact store). Refusing here would mean
+;; `def x := (g …)` works and `let x := (g …)` does not, for no reason a user
+;; could predict.
+;;
+;; The reader mints `($goal-rhs V)` around a paren-origin value in binding
+;; position (parse-reader.rkt § mark-let-goal-rhs) because the preparse strips
+;; syntax properties before `expand-let` ever runs — the sentinel carries the
+;; one bit that would otherwise be lost. The reader owns POSITION + PARENS; this
+;; owns the KEYWORD TABLE and thus goal-ness, so neither duplicates the other.
+;; A non-goal head (`let x := (+ 1 2)`, `(match …)`, `(the …)`) unwraps to the
+;; ordinary parse, exactly as before the sentinel existed.
+(define (goal-rhs-sentinel? d)
+  (and (pair? d) (= (length d) 2)
+       (let ([h (car d)]) (eq? (if (syntax? h) (syntax-e h) h) '$goal-rhs))))
+
+;; The head test of `paren-goal-stx?`, minus the paren-origin check the sentinel
+;; already witnesses. ONE definition of goal-headedness, two callers.
+(define (goal-head-datum? d0)
+  (define (dollar-sym? s)
+    (let ([str (symbol->string s)])
+      (and (positive? (string-length str)) (char=? (string-ref str 0) #\$))))
+  ;; `stx->datum` is SHALLOW — a list datum's elements are still syntax objects
+  ;; (this cost one debug cycle), so unwrap before testing the head.
+  (define d (if (syntax? d0) (syntax-e d0) d0))
+  (and (pair? d)
+       (let* ([h0 (car d)] [h (if (syntax? h0) (syntax-e h0) h0)])
+         (and (symbol? h)
+              (not (dollar-sym? h))
+              (or (not (keyword? h)) (goal-keyword? h))))))
 
 ;; ========================================
 ;; Keywords: forms with special parsing rules
@@ -591,6 +619,21 @@
     ;; Char literal → surf-char
     [(char? d)
      (surf-char d loc)]
+
+    ;; SolveCarrier P2: `($goal-rhs V)` — a `let` binding value the reader saw
+    ;; written in PARENS. Goal-headed → the implicit solve (ruling R6); anything
+    ;; else unwraps to the ordinary parse. The sentinel is stripped either way,
+    ;; so it never reaches elaboration.
+    [(goal-rhs-sentinel? d)
+     (let* ([inner-stx (let ([l (and (syntax? stx) (syntax->list stx))])
+                         (if (and l (= (length l) 2)) (cadr l) #f))]
+            [inner-d (cadr d)])
+       (cond
+         [(goal-head-datum? inner-d)
+          (let ([g (parse-relational-goal (or inner-stx (datum->syntax #f inner-d stx)))])
+            (if (prologos-error? g) g (surf-solve g loc)))]
+         [inner-stx (parse-datum inner-stx)]
+         [else (parse-datum (datum->syntax #f inner-d stx))]))]
 
     ;; List form
     [(pair? d)

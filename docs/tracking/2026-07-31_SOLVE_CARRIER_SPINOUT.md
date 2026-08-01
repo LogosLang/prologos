@@ -200,6 +200,61 @@ and `let x := (goal …)` doesn't, for no reason a user can predict.
 The scope stays **binding RHS**, not `let` bodies — a goal in a body is general
 expression position and keeps the existing (non-goal) reading.
 
+### 4.1 Realization — why a sentinel, and not the existing mark
+
+Goal-ness is carried by the reader's `'prologos-paren-origin` **syntax
+property**. `let` desugars in a **preparse macro** (`macros.rkt` `expand-let`),
+and preparse macros receive fully **stripped datums** — verified by instrumenting
+`expand-let`'s entry, where every element arrives with `syntax? = #f`. So by the
+time any `let` code could look, the property is gone. `def` dodges this by
+threading its RHS syntax through the `:=` rewrite (`def-rhs-stx`); `let` has five
+spellings, so the same threading would mean five hooks into machinery that landed
+the same day.
+
+The property's whole information content here is **one bit** — "this value was
+written in parens" — so it is preserved in the DATUM, where stripping cannot
+reach it, as a `$goal-rhs` sentinel (the same idiom as the existing `$let-block`).
+The **reader** owns POSITION + PARENS; the **parser** owns the KEYWORD TABLE and
+therefore goal-ness. Neither needs the other's table, so nothing can drift — the
+F1b.7g concern. Registered in `macros.rkt`'s pattern-variable exclusion list
+alongside the other sentinels (the LOUD-if-missed class).
+
+The position rule mirrors **POL.9b's own**: only a value that is a **single
+element** after `:=` (or the second of a bare `name VALUE` pair) qualifies; a
+multi-token RHS stays the auto-wrapped application. That is not a nicety — the
+first cut wrapped every non-body paren child, which wrapped the ARGUMENT of the
+explicit spelling `let ls := solve (goal …)` and produced a **double solve**
+(`(solve @[…]) : _`). Caught by acceptance marker 23, which is why the file pins
+the explicit spelling next to the implicit one.
+
+### 4.2 The guided diagnostic — the INVERSE of POL.9's
+
+`relations.rkt`'s `raise-unknown-relation-error` already guides the
+goal-over-a-function case: `(dbl 3)` → *"dbl is a function — application is
+written `[dbl …]`"*. The **mirror image had no diagnostic at all**: APPLYING a
+relation surfaced whatever its arguments did — for the common `[fc f "red"]`
+shape a bare **`Unbound variable f`**, naming the query variable rather than the
+mistake (`f` is unbound precisely *because* this should have been a goal); the
+all-ground `[fc "a" "red"]` instead reached typing and said *"Could not infer
+type"*. Two unhelpful messages for one mistake.
+
+Both now produce one message naming the fix. Deliberately **not** scoped to
+`let` — `def n := [f (fc x "red")]` and top level produce the identical bare
+error, because the cause is the same (a relation in application position). R6
+keeps the implicit solve to binding RHS, so argument position stays an error;
+this makes it an error that says what to do.
+
+**Two guards, both load-bearing, one found by regression:**
+- **Local shadowing** — `[fn [fc] [fc 1]]`: inside that scope `fc` is an
+  ordinary parameter. Guarded by an `env-lookup` check before the diagnostic.
+- **Namespace + rebinding** — the first cut consulted the relation STORE and
+  matched any key ending `::fc`. The store is **not namespace-scoped**, so a
+  relation `m` in one namespace mis-diagnosed four unrelated Batch-C tests whose
+  `def m := {…}` had nothing to do with relations. Fixed by testing the **global
+  env** value for `expr-defr?` instead — the same test `raise-unknown-relation-error`
+  uses. Going through the env makes namespace- *and* rebinding-correctness
+  structural rather than checked. Both are test-pinned.
+
 ## 5. Files
 
 - `racket/prologos/typing-core.rkt` — `solve-row-type`, `display-row-type-parts`, `display-result-rows`

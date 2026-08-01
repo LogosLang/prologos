@@ -157,10 +157,11 @@ let [lb := (quest t "Alice" r)] [pvec-length-int lb]
 
 ;; D5 — SCOPE BOUND: implicit solve is a BINDING-RHS rule, not a general
 ;; expression-position rule. A paren group in argument position stays
-;; application/term, so this is an ordinary unbound-variable error — NOT a
-;; silent re-query of the ambient fact store.
+;; application/term — NOT a silent re-query of the ambient fact store. It is an
+;; error, and since P2 a GUIDED one: the old message was a bare `Unbound
+;; variable t`, naming the query variable rather than the mistake.
 [pvec-length-int (quest t "Bob" r)]
-;;27=>~ ERROR:
+;;27=>~ quest is a relation, not a function — a query is written (quest …)
 
 ;; NOTE (out of scope, pre-existing): a top-level `let` SIBLING CHAIN
 ;; (`let p := 1` / `let q := 2` / indented body) fails with "`let` is not
