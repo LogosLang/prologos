@@ -495,3 +495,41 @@
   (check-equal? (length rs) 4 (format "got: ~v" rs))
   (for ([r (in-list rs)])
     (check-false (prologos-error? r) (format "unexpected error: ~v" r))))
+
+;; ============================================================
+;; LET × marker-channel contract (2026-07-31, found while grounding top-level
+;; `let`). A let-block LAYOUT error inside a TOP-LEVEL let-headed form took the
+;; WHOLE FILE down with a Racket `in-list: contract violation` instead of
+;; producing the per-command error the `$let-error` marker channel exists for.
+;;
+;; Cause: `transform-let-blocks-elems` is documented to return an ELEMENT LIST,
+;; and `tree-node->stx-elements` feeds its result straight to
+;; `maybe-rewrite-infix-eq-stx` (`(in-list elems)`) — but `classify-let-block`'s
+;; FAIL path returns `let-block-error`'s value, a SYNTAX OBJECT wrapping
+;; `($let-error "msg")`. Verified PRE-EXISTING by neutralising the P2 goal-rhs
+;; additions and reproducing the identical crash at base shape.
+;;
+;; These use run-file-ws deliberately: per this file's own note, a string-level
+;; run cannot pin containment — only a real file can show that ONE command died
+;; and the rest survived.
+;; ============================================================
+
+(test-case "let-marker/a top-level let-block LAYOUT error is contained, not a file abort"
+  (define rs (run-file-ws (string-append
+    "ns lbc\n"
+    "def before := 1\n"
+    "let z := 100\n"
+    "  let p := 1\n"
+    "  let q := 2\n"
+    "    [+ z [+ p q]]\n"
+    "def after := 2\n")))
+  ;; 3 results: `before`, the ONE erroring let form (its nested lines are part of
+  ;; the same command), `after`. Before the repair there were ZERO — the read
+  ;; raised and the file produced nothing.
+  (check-equal? (length rs) 3 (format "expected 3 results (no abort), got: ~v" rs))
+  (check-false (prologos-error? (first rs))  "`before` must define")
+  (check-true  (prologos-error? (second rs)) "the mis-laid-out let must ERROR")
+  (check-false (prologos-error? (third rs))  "`after` must still define")
+  (check-true  (regexp-match? #rx"let block"
+                              (prologos-error-message (second rs)))
+               (format "expected the guided let-block message, got: ~v" (second rs))))

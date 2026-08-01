@@ -2641,8 +2641,22 @@
        (if (odd? i) ($goal-rhs-wrap e) e))]))
 
 (define (mark-let-goal-rhs elems)
-  ;; elems is a let-headed element list, POST classify-let-block.
+  ;; TOTAL BY CONSTRUCTION: accepts whatever `classify-let-block` returned and
+  ;; passes through anything that is not a let-headed element list.
+  ;;
+  ;; ⚠ This is not defensive padding — it is the fix for a REAL whole-file abort
+  ;; this function shipped with. `classify-let-block`'s `fail` path returns
+  ;; `let-block-error`'s value, which is a SYNTAX OBJECT wrapping
+  ;; `($let-error "msg")` — NOT an element list. The `-elems` entry point called
+  ;; this on that result without re-checking let-headedness, so `(length elems)`
+  ;; raised a Racket `contract violation` and took the WHOLE FILE down, where the
+  ;; `$let-error` marker channel exists precisely to produce a per-command error.
+  ;; Guarding at the call sites would work but leaves the trap armed for the next
+  ;; caller; totality here cannot be forgotten. (Found by probing a nested
+  ;; sibling chain; the full suite was GREEN — no test reaches a let-block layout
+  ;; error from inside a let-headed top-level form.)
   (cond
+    [(not (let-headed? elems)) elems]
     [(< (length elems) 3) elems]     ;; nothing that could be both binding and body
     [else
      (define let-tok (car elems))
@@ -2706,7 +2720,7 @@
       (let* ([kids0 (skip-reader-form-body (map transform-let-blocks-stx lst) lst)]
              [kids (absorb-let-siblings kids0)]
              [kids1 (if (let-headed? kids) (classify-let-block kids) kids)]
-             [kids* (if (let-headed? kids1) (mark-let-goal-rhs kids1) kids1)])
+             [kids* (mark-let-goal-rhs kids1)])   ;; total — see its own note
         (if (and (eq? kids* kids1) (eq? kids1 kids) (eq? kids kids0) (andmap eq? kids0 lst))
             stx
             (datum->syntax #f kids* stx stx)))))
@@ -2715,9 +2729,23 @@
 (define (transform-let-blocks-elems elems)
   (define elems*
     (absorb-let-siblings (skip-reader-form-body (map transform-let-blocks-stx elems) elems)))
-  (if (let-headed? elems*)
-      (mark-let-goal-rhs (classify-let-block elems*))
-      elems*))
+  (let ([r (mark-let-goal-rhs (if (let-headed? elems*) (classify-let-block elems*) elems*))])
+    ;; ⚠ CONTRACT REPAIR (pre-existing LET-track defect, verified by neutralising
+    ;; the P2 additions and reproducing at base shape). This entry point is
+    ;; documented to return an ELEMENT LIST, and `tree-node->stx-elements` hands
+    ;; its result straight to `maybe-rewrite-infix-eq-stx`, which does
+    ;; `(in-list elems)`. But `classify-let-block`'s FAIL path returns
+    ;; `let-block-error`'s value — a SYNTAX OBJECT wrapping `($let-error "msg")`,
+    ;; not a list. So a let-block LAYOUT error in a top-level let-headed form
+    ;; raised a Racket `in-list: contract violation` and took the WHOLE FILE
+    ;; down with zero results — defeating the marker channel that exists
+    ;; precisely to make it a PER-COMMAND error at any nesting depth.
+    ;; Wrapping it as a single-element list is what makes it flow as ONE
+    ;; top-level form: read-all-forms-from-tree's "single paren-form" arm then
+    ;; unwraps it, the parser meets `($let-error msg)` and converts it.
+    ;; (The nested `-stx` path never hit this: `let-headed?` on a syntax object
+    ;; is #f, so the error form simply passed through as a child.)
+    (if (list? r) r (list r))))
 
 ;; Classify a let-headed element list; return the (possibly rewritten) list.
 ;;
