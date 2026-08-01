@@ -594,9 +594,10 @@
     [(expr-path branches)
      (define (pp-branch segs)
        (string-join (for/list ([s (in-list segs)])
-                      (cond [(expr-keyword? s) (symbol->string (expr-keyword-name s))]
-                            [(expr-symbol? s) (symbol->string (expr-symbol-name s))]
-                            [else "?"]))
+                      ;; D4.P4b-i: segments are bare SYMBOLS (the step
+                      ;; encoding). The expr-keyword/expr-symbol arms are the
+                      ;; pre-convergence shapes and are gone with them.
+                      (symbol->string s))
                     "."))
      (if (= (length branches) 1)
          (format "#p(~a)" (pp-branch (car branches)))

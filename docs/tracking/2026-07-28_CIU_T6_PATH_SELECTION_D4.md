@@ -3402,6 +3402,67 @@ carry `#p(…)`, and (a)/(c) are therefore not two sizes of the same thing.
 Status: ⬜ — scope re-derived; the encoding decision and the slice split are
 the open items.
 
+##### §5.P4b-i — Encoding convergence + the carrier repurpose
+
+**Slice 1 — Q_U11 retirement** (`f072c115`): see §3 Q_U11.
+
+**Slice 2 — the encoding convergence** (this slice). `expr-path`'s branches
+now hold **bare symbols** — the same step vocabulary `expr-select`'s branches
+use (syntax.rkt:786+). `#p(a.b)` and `x{a.b}` therefore carry ONE
+representation of the selector, which is the substantive half of Q_U5.
+
+Six consumer sites re-pointed, all of which had used a segment DIRECTLY as an
+`expr-map-get` key: the `get-in`/`update-in` whnf arms + their `nf` twins
+(reduction.rkt), and the two elaborator static inlines. Plus the
+pretty-printer, whose `expr-keyword?`/`expr-symbol?`/`[else "?"]` cond
+collapsed to a single symbol render (its `[else "?"]` was another silent
+catch-all of the P4a family).
+
+**The FFI became the MARSHALLING BOUNDARY**, which is where marshalling
+belongs: `path-head` marshals a symbol OUT to a Prologos keyword value;
+`path-from-segments` marshals keywords IN and **refuses** a non-keyword rather
+than coercing it — coercing an unrecognized segment into a key is precisely
+what made `#p(a.*)` fabricate `<error>` values (Q_U11).
+
+**`whnf-trivial?` gained the selector carrier** — a DECISION, not an
+inheritance (the audit named it as one). Verified: `whnf-impl/match` has NO
+`expr-path` arm at any indent, so it already fell to `[_ e]` (identity), and
+`nf`'s arm is `[(expr-path _) e]`. A literal with no head rule is exactly this
+predicate's criterion. `expr-select` — the APPLICATION — is reducible
+(whnf arm reduction.rkt:2967-2982) and stays OUT. Same
+type-former-without-its-value-carrier gap P4a closed for champ/rrb/hset, one
+line away and missed by that census too.
+
+**Method**: this is a behaviour-preserving refactor, so the pins were written
+BEFORE the change and had to stay GREEN — the pins ARE the claim. Six FFI/E2E
+characterization pins (`head` · `tail` · `depth` · `branch-count` · `leaf?` ·
+`get-in`/`update-in`) plus the whnf identity pin. Test delta **+7** (229 → 236).
+
+⚠ **FILED, PRE-EXISTING, not caused by this slice** (characterized at
+`f072c115` while writing the pins): `p::segments` **whole-file ABORTS** —
+`path-segments` builds a Prologos cons-chain while the foreign marshaller
+expects a RACKET list, so the declared `Path -> [List Keyword]` never
+marshalled. `from-segments` and the `path-append` combinator built on it are
+dead with it. 5 of 6 primitives work. Deliberately NOT pinned (a whole-file
+abort would take the test file with it).
+
+⚠ **b-i DOES NOT YET END SINGLE-CARRIER.** The remaining structural step is
+nesting `expr-path` INTO `expr-select`'s `branches` slot so there is literally
+one selector struct. Held back deliberately: that slot change makes the slot
+hold an **expr**, which activates the audit's C3 finding (`uses-bvar0?`,
+pretty-print.rkt:1226, recurses into the SUBJECT ONLY) and requires
+`select-map-exprs` to map into the selector. Walker-shaped work, owed its own
+failing-test-first pass. **This slice is "one encoding", NOT "one carrier"** —
+stated so the phase headline does not outrun what shipped (the
+Validated≠Deployed shape).
+
+**Process note**: the targeted runner's 30 s default now aborts this file (the
+FFI pins add `process-file` cycles) — `raco test` reported 235 passing while
+the runner said `ABORTED — 0 timeouts`. Use `--timeout 180`; an abort here is
+not a failure.
+
+Status: 🔄 (encoding ✅ · single-carrier ⬜).
+
 ### §5.P5 — Ruling B + factoring
 
 **Intent**: upgrade the strict waypoint to Ruling B — B2 keywise node merge ·

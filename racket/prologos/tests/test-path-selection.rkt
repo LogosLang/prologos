@@ -2549,3 +2549,78 @@
   (define rs (run-ws-raw "def m := {:a {:a1 7}}\ndef p := #p(a.a1)\n[get-in m p]\n"))
   (check-false (ormap prologos-error? rs) "the single-branch keyword chain must keep working")
   (check-regexp-match #rx"7" (format "~a" (last rs))))
+
+;; ============================================================
+;; D4.P4b-i — FFI CHARACTERIZATION pins (must stay GREEN through the
+;; encoding convergence; this is a behaviour-preserving refactor)
+;; ============================================================
+;;
+;; `expr-path`'s branches hold `expr-keyword` STRUCTS; `expr-select`'s hold
+;; bare symbols + `@key`/`@sub`/`@ord` s-expressions. b-i converges them onto
+;; the STEP encoding so `#p(…)` and `x{…}` are one representation. These pins
+;; are written BEFORE the change and must not move: for a refactor that claims
+;; to preserve behaviour, the pins are the claim.
+;;
+;; The live FFI surface is `lib/prologos/core/path.prologos` — 6 foreign
+;; primitives over `path-ops.rkt`. Characterized at `f072c115`:
+;;   depth · branch-count · head · tail · leaf?   → WORK
+;;   segments                                      → WHOLE-FILE ABORT
+;; `path-segments` builds a Prologos cons-chain (`expr-app` of `cons`) but the
+;; foreign marshaller wants a RACKET list, so the declared type
+;; `Path -> [List Keyword]` never marshalled. That takes `from-segments` and
+;; `path-append` (built on `segments`) with it. PRE-EXISTING and filed — NOT
+;; caused by the encoding change, and deliberately not pinned here because a
+;; whole-file abort would take the test file with it.
+;;
+;; `head` and `tail` are the load-bearing ones: they return segments AS
+;; PROLOGOS VALUES, which works today only because segments are `expr-keyword`
+;; structs. Under the step encoding the shims become the marshalling
+;; boundary — which is where marshalling belongs.
+
+(define FFI-PATH-PRELUDE
+  (string-append "require [prologos::core::path :as p]\n"
+                 "def q := #p(a.b.c)\n"))
+
+(test-case "P4b-i FFI: `head` returns a Prologos KEYWORD value"
+  (define r (format "~a" (run-ws-raw-last (string-append FFI-PATH-PRELUDE "[p::head q]\n"))))
+  (check-regexp-match #rx":a" r)
+  (check-regexp-match #rx"Keyword" r "the declared foreign type must still marshal"))
+
+(test-case "P4b-i FFI: `tail` returns a Path, printed in surface spelling"
+  (define r (format "~a" (run-ws-raw-last (string-append FFI-PATH-PRELUDE "[p::tail q]\n"))))
+  (check-regexp-match #rx"#p\\(b\\.c\\)" r "tail must drop the head and round-trip its printed form")
+  (check-regexp-match #rx"Path" r))
+
+(test-case "P4b-i FFI: `depth` counts segments of the first branch"
+  (define r (format "~a" (run-ws-raw-last (string-append FFI-PATH-PRELUDE "[p::depth q]\n"))))
+  (check-regexp-match #rx"3" r))
+
+(test-case "P4b-i FFI: `branch-count` is 1 for the surviving single-branch vocabulary"
+  (define r (format "~a" (run-ws-raw-last (string-append FFI-PATH-PRELUDE "[p::branch-count q]\n"))))
+  (check-regexp-match #rx"1" r))
+
+(test-case "P4b-i FFI: `leaf?` composes over depth (a pure Prologos combinator)"
+  (define rs (run-ws-raw (string-append FFI-PATH-PRELUDE
+                                        "[p::leaf? q]\n"
+                                        "[p::leaf? #p(a)]\n")))
+  (check-false (ormap prologos-error? rs))
+  (check-regexp-match #rx"false" (format "~a" (list-ref rs (- (length rs) 2))))
+  (check-regexp-match #rx"true"  (format "~a" (last rs))))
+
+(test-case "P4b-i: get-in / update-in still consume the path encoding"
+  ;; both reduction arms pass segments DIRECTLY as expr-map-get keys, so they
+  ;; are the consumers the encoding change must re-point
+  (define rs (run-ws-raw (string-append
+                          "def m := {:a {:b 5}}\n"
+                          "def pp := #p(a.b)\n"
+                          "[get-in m pp]\n"
+                          "[update-in m pp [fn [x : Int] [int+ x 1]]]\n")))
+  (check-false (ormap prologos-error? rs) "get-in/update-in over a path literal must keep working")
+  (check-regexp-match #rx"5" (format "~a" (list-ref rs (- (length rs) 2))))
+  (check-regexp-match #rx"6" (format "~a" (last rs))))
+
+(test-case "P4b-i: whnf of a bare selector carrier is identity (the P4a argument, applied)"
+  ;; the SELECTOR is a literal — no head reduction rule, so the fast path must
+  ;; return the SAME object. `expr-select` (the APPLICATION) stays reducible.
+  (define sel (expr-path '((a b))))
+  (check-eq? (whnf sel) sel))

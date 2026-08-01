@@ -2319,10 +2319,16 @@
         ;; TOTAL over the surviving vocabulary: keyword segments only. The
         ;; guards above have already refused everything else, so this loop
         ;; needs no catch-all — and must not grow one back.
+        ;; D4.P4b-i: mint the STEP encoding — a bare SYMBOL per segment,
+        ;; the same vocabulary `expr-select`'s branches use (syntax.rkt:786+).
+        ;; This is the convergence: `#p(a.b)` and `x{a.b}` now carry ONE
+        ;; representation of the selector. Consumers that used a segment
+        ;; directly as an `expr-map-get` KEY now wrap it, and the FFI shims
+        ;; marshal at the boundary — which is where marshalling belongs.
         (expr-path
          (for/list ([branch (in-list branches)])
            (for/list ([seg (in-list branch)])
-             (expr-keyword (string->symbol (keyword->string seg))))))])]
+             (string->symbol (keyword->string seg)))))])]
 
     ;; get-in: desugar to chained map-get calls
     ;; Single path:   (get-in m :a.b.c) → (map-get (map-get (map-get m :a) :b) :c)
@@ -2341,7 +2347,7 @@
                   ;; Static path (literal expr-path): inline to chained map-get
                   (if (expr-path? elab-path)
                       (let ()
-                        (define branch (car (expr-path-branches elab-path)))
+                        (define branch (map expr-keyword (car (expr-path-branches elab-path))))
                         (foldl (lambda (seg acc) (expr-map-get acc seg #f))
                                et branch))
                       ;; Dynamic path (variable): emit expr-get-in for runtime dispatch
@@ -2419,7 +2425,7 @@
                  ;; Static path: inline to nested map-get + map-assoc
                  (if (expr-path? elab-path)
                      (let ()
-                       (define segs (car (expr-path-branches elab-path)))
+                       (define segs (map expr-keyword (car (expr-path-branches elab-path))))
                        (define (build-update base segs)
                          (cond
                            [(null? segs) (expr-app ef base)]

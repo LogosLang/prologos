@@ -2051,6 +2051,20 @@
       ;; kinds already behave — but it is NOT covered by the match-arm proof
       ;; above and must not be smuggled under it.
       (expr-champ? e) (expr-rrb? e) (expr-hset? e)
+      ;; D4.P4b-i: the SELECTOR carrier value. `whnf-trivial?` already held
+      ;; `expr-Path?` (the TYPE, :2014) but not `expr-path?` (the VALUE) — the
+      ;; same type-former-without-its-value-carrier gap P4a closed for
+      ;; champ/rrb/hset, one line away and missed by that census too.
+      ;; VERIFIED at `f072c115`: `whnf-impl/match` has NO arm for `expr-path`
+      ;; at any indent, so it already fell to `[_ e]` (:3957) — identity — and
+      ;; `nf`'s arm is likewise `[(expr-path _) e]`. A path literal is a
+      ;; canonical form with no head reduction rule, which is this predicate's
+      ;; own stated criterion for membership.
+      ;; ⚠ This is a DECISION, not an inheritance (the P4b audit named it as
+      ;; one): the SELECTOR is a literal and belongs here; `expr-select` — the
+      ;; APPLICATION of a selector to a subject — IS reducible (whnf arm at
+      ;; :2967-2982) and must stay OUT.
+      (expr-path? e)
       ;; Bound variables (stuck — no definition to unfold)
       (expr-bvar? e)
       ;; Type constructor names
@@ -3427,7 +3441,7 @@
            [np (whnf paths)])
        (cond
          [(and (expr-path? np) (pair? (expr-path-branches np)))
-          (foldl (lambda (seg acc) (whnf (expr-map-get acc seg #f)))
+          (foldl (lambda (seg acc) (whnf (expr-map-get acc (expr-keyword seg) #f)))
                  nt (car (expr-path-branches np)))]
          [(and (equal? nt target) (equal? np paths)) e]
          [else (expr-get-in nt np)]))]
@@ -3447,7 +3461,7 @@
             (cond
               [(null? segs) (whnf (expr-app fn base))]
               [else
-               (let* ([key (car segs)]
+               (let* ([key (expr-keyword (car segs))]
                       [sub (whnf (expr-map-get base key #f))]
                       [updated (build sub (cdr segs))])
                  (whnf (expr-map-assoc base key updated)))]))]
@@ -4443,7 +4457,7 @@
        ;; Static path on concrete target: walk segments
        [(and (expr-path? np) (pair? (expr-path-branches np)))
         (define segs (car (expr-path-branches np)))
-        (foldl (lambda (seg acc) (nf (expr-map-get acc seg #f))) nt segs)]
+        (foldl (lambda (seg acc) (nf (expr-map-get acc (expr-keyword seg) #f))) nt segs)]
        [else (expr-get-in nt np)])]
     [(expr-update-in target paths fn)
      (define nt (nf target))
@@ -4459,7 +4473,7 @@
           (cond
             [(null? segs) (nf (expr-app nf-fn base))]
             [else
-             (define key (car segs))
+             (define key (expr-keyword (car segs)))
              (define sub (nf (expr-map-get base key #f)))
              (define updated (build sub (cdr segs)))
              ;; 2026-07-16: normalize the spine (was returned as a raw
