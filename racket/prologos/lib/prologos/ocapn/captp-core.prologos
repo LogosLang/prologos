@@ -3296,8 +3296,7 @@ defn pump-one [remote local v st pms ls emitted accum]
                 | none       -> pump-result v st accum emitted
                 | some bytes ->
                     let fwd := [build-forward-effect local pst pms v st]
-                      let listener-bytes :=
-                            [listener-bytes-for-pid ls local pst [nil String]]
+                      let listener-bytes := [listener-bytes-for-pid ls local pst [nil String]]
                         [pump-result
                           [fwd-effect-vat fwd]
                           [fwd-effect-state fwd]

@@ -216,8 +216,7 @@ spec sim-open Locator Bool SimNet -> SimAlloc
   :doc "Open a fresh connection. Bool is is-outgoing? flag."
 defn sim-open
   | peer is-outgoing? [sim-net n entries] ->
-      let c : Connection :=
-        [connection n peer empty-mailbox empty-mailbox is-outgoing?]
+      let c : Connection := [connection n peer empty-mailbox empty-mailbox is-outgoing?]
         sim-alloc [sim-net [suc n] [sim-set-conn n c entries]] n
 
 ;; Write to a connection's outbound mailbox.
