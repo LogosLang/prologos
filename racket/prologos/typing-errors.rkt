@@ -233,7 +233,22 @@
 ;; — the arm and its diagnostic cannot drift) and formats the failure with
 ;; BRANCH context. The three Q_T2 refusal kinds all name the 4d remedy list:
 ;; seal / validate / annotate.
-(define (format-select-fail fail names)
+(define (format-select-fail fail names [sort 'block])
+  ;; D4.P4b-ii-2c: the wording DEPENDS ON THE SORT. Every arm below was
+  ;; written when only `x{…}` could reach here, so they say "a select block"
+  ;; and append block-specific advice. After b-ii-2b the DOT spelling reaches
+  ;; them too — and the block advice becomes actively MISLEADING: `r.zzz`
+  ;; produced "…bare field access is spelled `.zzz`", which is what the user
+  ;; just wrote. Worse, `select-block-hint` runs BEFORE `closed-row-miss-hint`
+  ;; in infer/err's `or`, so the bad message WINS. Found by the b-ii-2
+  ;; mini-audit's critic; probe-confirmed live before this fix.
+  ;; TOTAL over the sort axis (the verify: this was a binary `(eq? sort
+  ;; 'block)`, which would silently hand every FUTURE sort the PATH wording).
+  (define block?
+    (case sort
+      [(block) #t]
+      [(path)  #f]
+      [else (select-sort-unhandled 'format-select-fail sort)]))
   (define path (select-fail-path fail))
   ;; D4.P3c: ordinal steps put NUMBERS in the path — ~a, not symbol->string
   (define branch-str (string-join (map (lambda (p) (format "~a" p)) path) "."))
@@ -252,19 +267,30 @@
     [(miss-closed)
      (string-append
       (format-closed-row-miss row label names)
-      (format "; in the select branch `~a` — bare field access (no construction) is spelled `.~a`"
-              branch-str label))]
+      ;; the block tail TEACHES the dot spelling — useless when the user
+      ;; already wrote it. Under 'path the closed-row miss message stands on
+      ;; its own (it already names the field and the available ones).
+      (if block?
+          (format "; in the select branch `~a` — bare field access (no construction) is spelled `.~a`"
+                  branch-str label)
+          ""))]
     [(miss-dyn)
      (format
+      (if block?
       "Could not infer type — select: field :~a (branch `~a`) is not listed on the open row ~a; a select block asserts its result, so unlisted fields refuse — ~a"
+      "Could not infer type — select: field :~a (branch `~a`) is not listed on the open row ~a — ~a")
       label branch-str (pp-expr row names) remedies)]
     [(unknown-presence)
      (format
+      (if block?
       "Could not infer type — select: field :~a's presence (branch `~a`) is 'unknown on ~a; a select block asserts its result — ~a"
+      "Could not infer type — select: field :~a's presence (branch `~a`) is 'unknown on ~a, and the row is CLOSED so it cannot live in a remainder — ~a")
       label branch-str (pp-expr row names) remedies)]
     [(subject-map)
      (format
+      (if block?
       "Could not infer type — select: the subject~a is a (Map K V), which has no per-field row; a select block needs a record subject — ~a"
+      "Could not infer type — select: the subject~a is a (Map K V) whose KEY TYPE does not admit this field — ~a")
       (if (null? path) "" (format " (branch `~a`)" branch-str)) remedies)]
     ;; D4.P4b-ii-1 — ASYMMETRY #3's diagnostics. Both replace messages the
     ;; b-ii mini-audit found defective: the block case was reaching
@@ -299,7 +325,9 @@
           (or label "the step")
           (if (null? path) "" (format " (branch `~a`)" branch-str)))
          (format
+          (if block?
           "Could not infer type — select: the subject~a is not a record; a select block projects fields of a keyword row"
+          "Could not infer type — select: the subject~a is not a record, so it has no fields to access")
           (if (null? path) "" (format " (branch `~a`)" branch-str))))]
     ;; ---- D4.P3c: the ordinal fail kinds ----
     [(ordinal-oob)
@@ -326,7 +354,7 @@
                   (let ([tm (whnf (infer ctx subject))])
                     (and (not (expr-error? tm))
                          (let-values ([(row fail) (select-project ctx tm branches sort)])
-                           (and fail (format-select-fail fail names)))))]
+                           (and fail (format-select-fail fail names sort)))))]
                  [_ #f])
                (ormap search (expr-subfields x)))))))
 

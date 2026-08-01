@@ -1261,7 +1261,15 @@
     ;; D4.P4b-i slice 3: the branches slot holds an expr — recurse into it.
     ;; Inert at P4 (selectors hold symbols) but correct by construction; the
     ;; old subject-only arm is the Exhaustive-Walkers signature.
-    [(expr-select subject sel _) (or (uses-bvar0? subject) (uses-bvar0? sel))]
+    ;; D4.P4b-ii-2b (the verify, M2): the tier is an EXPR slot now, and both
+    ;; twins guard theirs (`expr-map-get`, `expr-get` use `(and (expr? a) …)`).
+    ;; Unreachable today — `strictness-slot` mints under `ctx-empty`, so the
+    ;; slot is closed — but "unreachable today" is exactly how the silent-walker
+    ;; class starts, and the comment above claiming the subject is the only
+    ;; expr slot has been false since this slice.
+    [(expr-select subject sel tier)
+     (or (uses-bvar0? subject) (uses-bvar0? sel)
+         (and (expr? tier) (uses-bvar0? tier)))]
     [(expr-get c k a) (or (uses-bvar0? c) (uses-bvar0? k)
                           (and (expr? a) (uses-bvar0? a)))]
     [(expr-nil-safe-get m k) (or (uses-bvar0? m) (uses-bvar0? k))]
@@ -1669,6 +1677,20 @@
          ;; ($lseq-literal e1 e2 ...) → ~[e1 e2 ...]
          [(eq? h '$lseq-literal)
           (format "~~[~a]" (pp-datum-list (cdr d)))]
+
+         ;; ⭐ D4.P4b-ii-2b — ($select-path subj field) → subj.field.
+         ;; THE FOURTH CONSECUTIVE MISSED pretty-print.rkt SITE, found by the
+         ;; verify. `pp-expr`'s select arm was fixed at b-ii-1 and that census
+         ;; STOPPED THERE — `pp-datum` is the datum-layer twin, 1000 lines
+         ;; down the same file, and the fold migration is a datum-layer change.
+         ;; Without this arm `expand r.a` emitted the raw sentinel
+         ;; `($select-path r a)` where HEAD emitted readable `(map-get r :a)`:
+         ;; a REGRESSION on the most common access surface in the language,
+         ;; silent, on the introspection path (driver's expand/expand-1/
+         ;; expand-full). Nesting composes: `r.a.b` renders `r.a.b`.
+         [(and (eq? h '$select-path) (pair? (cdr d)) (pair? (cddr d))
+               (null? (cdddr d)))
+          (format "~a.~a" (pp-datum (cadr d)) (pp-datum (caddr d)))]
 
          ;; ($rest-param name) → ...name
          [(and (eq? h '$rest-param) (pair? (cdr d)) (null? (cddr d)))

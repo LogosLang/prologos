@@ -2429,12 +2429,29 @@
     ;; demand under Q_T2 Horn-D LENIENT presence; result = a CLOSED keyword
     ;; row, all-'present. The guided message is reconstructed by
     ;; typing-errors' select hint from the SAME select-project walk.
-    [(expr-select subject (expr-path branches sort) _)
+    [(expr-select subject (expr-path branches sort) tier)
      (let ([tm (whnf (infer ctx subject))])
        (if (expr-error? tm)
            (expr-error)
-           (let-values ([(row fail) (select-project ctx tm branches sort)])
-             (or row (expr-error)))))]
+           (begin
+             ;; D4.P4b-ii-2b — SOLVE THE TIER, mirroring `expr-map-get`'s arm.
+             ;; A `(Map K V)` subject under the PATH sort is the assertive tier:
+             ;; typing admits every label uniformly (Q_U10's Map posture) and
+             ;; DEFERS the miss to runtime, so the runtime miss must be LOUD and
+             ;; name the available keys. Every other subject kind leaves the
+             ;; meta unsolved, which reduction reads as PERMISSIVE — that is
+             ;; what keeps the dyn-row / selection-view / union misses at the
+             ;; quiet `<error>` they were before the fold.
+             ;; A closed record needs no solve: its miss is caught STATICALLY,
+             ;; so the runtime tier is unreachable there.
+             ;; TOTAL over the sort axis (the verify: this was a binary
+             ;; `(eq? sort 'path)` test — see the elaborator's twin).
+             (case sort
+               [(path)  (when (expr-Map? tm) (solve-strict-assert! ctx tier))]
+               [(block) (void)]
+               [else (select-sort-unhandled 'infer-select sort)])
+             (let-values ([(row fail) (select-project ctx tm branches sort)])
+               (or row (expr-error))))))]
 
     [(expr-validate sname _closed? _plan subject names)
      (let ([tm (whnf (infer ctx subject))])

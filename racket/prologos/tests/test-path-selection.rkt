@@ -1020,10 +1020,16 @@
   (define r (run-ws-raw-last "def v := @[10 20 30]\nv.0\n"))
   (check-false (prologos-error? r)))
 
-(test-case "P2: `.N` folds in ALL THREE rewrite-dot-access callers"
-  ;; rewrite-dot-access has THREE production callers, so a `.N` arm inside it
-  ;; inherits them free: preparse-expand-subforms (the re-entry),
-  ;; preparse-map-literal-contents (map-literal VALUES), and expand-mixfix-form
+(test-case "P2: `.N` folds in ALL FOUR rewrite-dot-access callers"
+  ;; ⚠ CORRECTED at D4.P4b-ii-2b: this said THREE and named three. There are
+  ;; FOUR — `expand-pipe-block` (macros.rkt:6294) landed at P3a, AFTER this
+  ;; test was written, and it is the DANGEROUS one: `apply-pipe-step` appends
+  ;; the accumulator into any hole-free step, which is how a surplus arg gets
+  ;; into a fold's output. The title over-claimed coverage it never had, and
+  ;; the b-ii-2 mini-audit's critic caught it. The `$select-path` arity gate
+  ;; now refuses that shape loudly (see the b-ii-2b pins).
+  ;; The four: preparse-expand-subforms (the re-entry),
+  ;; preparse-map-literal-contents (map-literal VALUES), expand-mixfix-form
   ;; (the `.( … )` token stream, folded BEFORE pratt-parse).
   ;; ⚠ The first draft of this pin used `.( v.0 )` — a SINGLE-operand mixfix,
   ;; which errors identically on the baseline with a plain `.name`
@@ -1501,12 +1507,16 @@
   (check-regexp-match #rx":server" r)
   (check-false (regexp-match #rx":name" r) "the pipe selected off the wrong subject"))
 
+;; ⚠ UPDATED at b-ii-2b (the RED set): the subject's inner `m.x` now folds to
+;; `($select-path m x)` instead of `(map-get m :x)`. The CLAIM is unchanged —
+;; the subject IS expanded while the payload stays raw — only the folded shape
+;; moved, which is the migration itself.
 (test-case "P3a verify: compound select SUBJECTS are preparse-expanded (partial opacity)"
   ;; The fold runs BEFORE subform recursion, so the subject arrives raw; the
   ;; $select arm now expands the SUBJECT while the payload stays protected.
   ;; F2a shape — bracket-group subject with an inner dot-access:
   (check-equal? (preparse-expand-form '((f m ($dot-access x)) ($select-brace a)))
-                '($select (f (map-get m :x)) a))
+                '($select (f ($select-path m x)) a))
   ;; F2b shape — subject containing its OWN select:
   (check-equal? (preparse-expand-form '((g cfg ($select-brace server)) ($select-brace server)))
                 '($select (g ($select cfg server)) server))
@@ -2287,18 +2297,19 @@
 
 (test-case "P4a totality site 7: select-reduce's branch-entries RAISES on an unknown step kind"
   (check-exn totality-exn?
-             (lambda () (nf (select-reduce BOGUS-RUNTIME-SUBJ (list (list BOGUS-STEP)))))
+             (lambda () (nf (select-reduce BOGUS-RUNTIME-SUBJ (list (list BOGUS-STEP)) 'block #f)))
              "an unknown step kind must not be silently projected at runtime"))
 
 (test-case "P4a totality site 8: select-reduce's below-value RAISES on an unknown step kind"
   (check-exn totality-exn?
-             (lambda () (nf (select-reduce BOGUS-RUNTIME-SUBJ (list (list 'a BOGUS-STEP)))))
+             (lambda () (nf (select-reduce BOGUS-RUNTIME-SUBJ (list (list 'a BOGUS-STEP)) 'block #f)))
              "an unknown step kind below a kept head must not be silently projected at runtime"))
 
 (test-case "P4a totality site 6: select-reduce's walk-to-leaf RAISES on an unknown step kind"
   (check-exn totality-exn?
              (lambda () (nf (select-reduce BOGUS-RUNTIME-SUBJ
-                                           (list (list BOGUS-STEP '(@key a collapse))))))
+                                           (list (list BOGUS-STEP '(@key a collapse)))
+                                           'block #f)))
              "walk-to-leaf must not silently treat an unknown step kind as a nominal key"))
 
 ;; ============================================================
@@ -2328,7 +2339,8 @@
   (define result
     (nf (select-reduce (bogus-runtime-subject)
                        (list (list 'a)        ;; succeeds — :a is present
-                             (list 'nope))))) ;; misses at runtime
+                             (list 'nope))    ;; misses at runtime
+                       'block #f))) ;; misses at runtime
   (check-true (expr-panic? result)
               "the WHOLE selection must be the panic (single let/ec), not a record with a panic inside")
   (check-false (expr-champ? result)
@@ -2343,7 +2355,7 @@
   ;; discriminator.
   (define result
     (nf (select-reduce (bogus-runtime-subject)
-                       (list (list 'a) (list 'nope)))))
+                       (list (list 'a) (list 'nope)) 'block #f)))
   (check-true (expr-panic? result)
               "the discriminating assertion — a buried panic would be an expr-champ")
   (check-regexp-match #rx"nope" (format "~a" result))
@@ -2352,7 +2364,7 @@
 (test-case "P4a whole-node abort: a non-map mid-descent aborts the NODE too"
   ;; :a holds an Int, so descending `a.b` hits champ-of's non-map path
   (define result
-    (nf (select-reduce (bogus-runtime-subject) (list (list 'a 'b)))))
+    (nf (select-reduce (bogus-runtime-subject) (list (list 'a 'b)) 'block #f)))
   (check-true (expr-panic? result))
   (check-regexp-match #rx"not a map at runtime" (format "~a" result)))
 
@@ -2379,7 +2391,7 @@
 
 (test-case "P4a site 8 twin: an (@ord N) below a kept head still DELEGATES, never 'no arm'"
   (define result (nf (select-reduce (vector-under-key-subject)
-                                    (list (list 'a '(@ord 0))))))
+                                    (list (list 'a '(@ord 0))) 'block #f)))
   (check-false (regexp-match? #rx"no arm for select step kind" (format "~a" result))
                "reduction's below-value must keep handling ord-branch — its old else did"))
 
@@ -3076,20 +3088,25 @@
 ;; lands unrecorded. The other two capture a permissive→panic conversion and a
 ;; silent deletion, neither of which any existing test covers.
 
-(test-case "b-ii-2a TRIPWIRE: `.field` on a UNION subject is a LYING diagnostic today"
-  ;; qtt.rkt's expr-map-get arm is SUBJECT-TYPE-GATED and has no expr-union
-  ;; case, although typing-core's infer arm does — so QTT falls to its
-  ;; catch-all and reports a multiplicity error for a typing gap. The
-  ;; infer/inferQ-twins signature from pipeline.md, live.
-  ;; AT 2b THIS FLIPS TO WORKING: expr-select's inferQ delegates
-  ;; unconditionally, so the fold SILENTLY FIXES this. Record the before.
+(test-case "b-ii-2b: the union LYING diagnostic is FIXED by the fold — delta recorded"
+  ;; ⭐ THE TRIPWIRE FIRED, and this is the record it demanded. Before the fold
+  ;; `def y := u.a` on a union subject reported "Multiplicity violation" —
+  ;; qtt.rkt's `expr-map-get` arm is SUBJECT-TYPE-GATED with no `expr-union`
+  ;; case, although typing-core's `infer` arm has one, so QTT fell to its
+  ;; catch-all and reported a multiplicity error for a TYPING gap (the
+  ;; infer/inferQ-twins signature from pipeline.md, live in the tree).
+  ;;
+  ;; Migrating fixes it because `expr-select`'s `inferQ` delegates
+  ;; unconditionally. This is an ACCEPT-DIRECTION flip — it produces no failing
+  ;; test, which is exactly why 2a pinned the BEFORE. Without that pin this
+  ;; would have landed unrecorded.
   (define rs (run-ws-raw (string-append
                           "def u : <[Map Keyword Int] | [Map Keyword String]> := {:a 1}\n"
                           "def y := u.a\n")))
-  (check-true (prologos-error? (last rs))
-              "if this goes GREEN, the fold fixed the union case — record it, do not just re-baseline")
-  (check-regexp-match #rx"Multiplicity violation" (format "~a" (last rs))
-                      "the LIE: a typing gap reported as a QTT violation"))
+  (check-false (ormap prologos-error? rs)
+               "the union subject now types cleanly through the carrier")
+  (check-regexp-match #rx"Int \\| String" (format "~a" (last rs))
+                      "and the per-component join is the ANSWER, not a lie about multiplicity"))
 
 (test-case "b-ii-2a TRIPWIRE: the DOT spelling's miss on a dyn row is PERMISSIVE"
   ;; THE GAP THE AUDIT FOUND: all three D19 pins use the BRACKET spelling
@@ -3160,14 +3177,14 @@
   (define subj (expr-champ (let ([kw (expr-keyword 'a)])
                              (champ-insert champ-empty (equal-hash-code kw) kw (expr-int 7)))))
   ;; block: assembles a champ
-  (check-true (expr-champ? (select-reduce subj '((a)) 'block)))
+  (check-true (expr-champ? (select-reduce subj '((a)) 'block #f)))
   ;; path: extracts the leaf VALUE
-  (check-equal? (select-reduce subj '((a)) 'path) (expr-int 7)
+  (check-equal? (select-reduce subj '((a)) 'path (expr-true)) (expr-int 7)
                 "the path sort must yield the value, not a one-key map")
   ;; and the sort axis is total here too
   (check-exn (lambda (e) (and (exn:fail? e)
                               (regexp-match? #rx"no arm for selector sort" (exn-message e))))
-             (lambda () (select-reduce subj '((a)) 'nil-safe))))
+             (lambda () (select-reduce subj '((a)) 'nil-safe #f))))
 
 (test-case "b-ii-2a: the tier field is carried, and MAPPED — not merely preserved"
   ;; INERT at 2a (every construction passes #f, nothing reads it), but the
@@ -3231,3 +3248,124 @@
   (check-false (ormap prologos-error? rs))
   ;; the block spelling still round-trips as a block (pp renders by sort)
   (check-regexp-match #rx"server" (format "~a" (last rs))))
+
+;; ============================================================
+;; D4.P4b-ii-2c — the diagnostics are SORT-AWARE
+;; ============================================================
+
+(test-case "b-ii-2c: the DOT spelling's miss no longer tells the user to write what they wrote"
+  ;; every `format-select-fail` arm was written when only `x{…}` could reach
+  ;; it, so they say "a select block" and append block-specific advice. After
+  ;; the b-ii-2b flip the dot spelling reaches them too, and the tail became
+  ;; ACTIVELY MISLEADING — probe-confirmed before the fix:
+  ;;   `r.zzz` → "…; in the select branch `zzz` — bare field access (no
+  ;;              construction) is spelled `.zzz`"
+  ;; which is exactly what the user wrote. Worse, `select-block-hint` runs
+  ;; BEFORE `closed-row-miss-hint` in infer/err's `or`, so the bad message WON.
+  (define rs (run-ws-raw "def r := {:a 1 :b 2}\nr.zzz\n"))
+  (define msg (format "~a" (last rs)))
+  (check-true (prologos-error? (last rs)))
+  (check-regexp-match #rx"not present in the record" msg "the useful half stays")
+  (check-regexp-match #rx"available fields" msg)
+  (check-false (regexp-match #rx"is spelled" msg)
+               "the block tail TEACHES the dot spelling — useless when they used it")
+  (check-false (regexp-match #rx"select branch" msg)
+               "there is no branch: a path access is not a block"))
+
+(test-case "b-ii-2c: the BLOCK spelling KEEPS its wording — the fix is scoped, not a blanket strip"
+  (define rs (run-ws-raw "def r := {:a 1 :b 2}\nr{zzz}\n"))
+  (define msg (format "~a" (last rs)))
+  (check-true (prologos-error? (last rs)))
+  (check-regexp-match #rx"select branch" msg "a block miss IS in a branch")
+  (check-regexp-match #rx"is spelled" msg
+                      "and the dot spelling is genuinely the remedy there"))
+
+(test-case "b-ii-2c: the Map BLOCK refusal is unchanged by the sort-awareness"
+  (define rs (run-ws-raw "def m : [Map Keyword Int] := {:a 1}\nm{a}\n"))
+  (define msg (format "~a" (last rs)))
+  (check-regexp-match #rx"a select block needs a record subject" msg)
+  (check-regexp-match #rx"seal|validate" msg "the remedies survive"))
+
+;; ============================================================
+;; D4.P4b-ii-2b — THE ADVERSARIAL VERIFY'S FINDINGS, pinned
+;; ============================================================
+;; Mutation testing proved the ASSERTIVE half of the two-tier fork was
+;; COMPLETELY unpinned: disabling reduction's `expr-true?` arm, and separately
+;; disabling typing's `solve-strict-assert!`, each left the whole battery
+;; green. The permissive half was pinned (the 2a tripwire); the loud half —
+;; the half whose failure STORES a wrong answer — was not. These are the three
+;; direct analogues of the map-get pins the migration claims parity with.
+
+(test-case "verify B1: an assertive (Map K V) miss via the DOT spelling is a COUNTED error"
+  ;; the analogue of P2.b A1. Mutation M1 (reduction ignores the tier) and M2
+  ;; (typing never solves it) both made this degrade to `<error>` at ZERO
+  ;; errors with 283/283 still green.
+  (define rs (run-ws-raw (string-append
+                          "def d : [Map Keyword Int] := [map-assoc [map-assoc [map-empty Keyword Int] :a 1] :b 2]\n"
+                          "d.zzz\n")))
+  (check-true (prologos-error? (last rs))
+              "a proved-Map miss must be LOUD — degrading here stores a wrong answer"))
+
+(test-case "verify B1: the assertive miss names the key AND the available keys"
+  ;; the analogue of P2.b A1b — the quality bar map-get set, which the dot
+  ;; spelling must not lose. Also the ONLY test that executes
+  ;; `assertive-miss-message`, whose extraction fixed a live shadowing crash.
+  (define rs (run-ws-raw (string-append
+                          "def d : [Map Keyword Int] := [map-assoc [map-assoc [map-empty Keyword Int] :alpha 1] :beta 2]\n"
+                          "d.zzz\n")))
+  (define msg (format "~a" (last rs)))
+  (check-regexp-match #rx"zzz" msg "the missing key")
+  (check-regexp-match #rx"available keys" msg)
+  (check-regexp-match #rx"alpha" msg "the keys that ARE there")
+  (check-regexp-match #rx"beta" msg))
+
+(test-case "verify B1: an assertive miss must NOT silently COMMIT to a def"
+  ;; the analogue of P2.b A2 — the stored-silent-wrong-answer class. Under the
+  ;; mutations this bound `bad : Int` at zero errors.
+  (define rs (run-ws-raw (string-append
+                          "def d : [Map Keyword Int] := [map-assoc [map-empty Keyword Int] :a 1]\n"
+                          "def bad := d.zzz\n")))
+  (check-true (ormap prologos-error? rs)
+              "binding a proved-Map miss must fail, not commit"))
+
+(test-case "verify BLOCKING: a non-map union component DEGRADES like map-get, it does not panic"
+  ;; TWO skeptics found this independently by A/B against a baseline tree. The
+  ;; first cut tier-gated only the keyed MISS; the SUBJECT-kind arm one level
+  ;; up stayed unconditional, so `.field` on a union whose runtime value is a
+  ;; non-map PANICKED where `[map-get u :a]` degrades to `none` at 0 errors.
+  ;; A permissive->panic conversion — the class this slice exists to prevent.
+  (define rs (run-ws-raw (string-append
+                          "def u : <[Map Keyword Int] | Int> := 42\n"
+                          "u.a\n"
+                          "[map-get u :a]\n")))
+  (check-false (ormap prologos-error? rs) "neither spelling may error here")
+  (check-equal? (format "~a" (list-ref rs 1)) (format "~a" (last rs))
+                "the two spellings of ONE operation must agree — that is the whole point of the carrier"))
+
+(test-case "verify S2: `^` in a DOT access REFUSES — it is not silently dropped"
+  ;; the field rides as a bare SYMBOL now, so `segment-select-items` splits a
+  ;; `^` out of it into a re-key continuation and the 'path assembly DROPPED
+  ;; it: five spellings returned the plain field at ZERO errors where HEAD
+  ;; refused, while pp-expr still rendered the `^` faithfully — honest display
+  ;; over dishonest semantics. `^` sets an OUTPUT KEY; a path access has none.
+  (for ([src (in-list '("m.foo^z" "m.foo^" "m.foo^_" "m.foo^-"))])
+    (define rs (run-ws-raw (string-append "def m := {:foo 7 :bar 8}\n" src "\n")))
+    (check-true (prologos-error? (last rs)) (format "~a must refuse" src))
+    (check-regexp-match #rx"re-keys the OUTPUT" (format "~a" (last rs))))
+  ;; and the plain access is untouched
+  (check-regexp-match #rx"7 : Int"
+                      (format "~a" (last (run-ws-raw "def m := {:foo 7}\nm.foo\n"))))
+  ;; and the BLOCK spelling keeps `^` in full
+  (define b (run-ws-raw "def c := {:server {:host \"h\"}}\nc{server.host^alias}\n"))
+  (check-false (ormap prologos-error? b) "blocks still re-key")
+  (check-regexp-match #rx"alias" (format "~a" (last b))))
+
+(test-case "verify S1: pp-datum renders the carrier, not a raw sentinel"
+  ;; the FOURTH consecutive missed pretty-print.rkt site. `expand r.a` emitted
+  ;; `($select-path r a)` where HEAD emitted `(map-get r :a)` — a silent
+  ;; regression on the introspection path, for the most common access surface
+  ;; in the language. pp-expr was fixed at b-ii-1; that census stopped there.
+  (define rs (run-ws-raw "def r := {:a {:b 1}}\nexpand r.a\nexpand r.a.b\n"))
+  (check-regexp-match #rx"^r\\.a$" (format "~a" (list-ref rs 1)))
+  (check-regexp-match #rx"^r\\.a\\.b$" (format "~a" (last rs))
+                      "nesting must compose, not render as r.a{b} or a raw sentinel"))

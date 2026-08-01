@@ -5958,13 +5958,26 @@
        (let loop ([elems datum] [acc '()])
          (cond
            [(null? elems) (reverse acc)]
+           ;; ⭐ D4.P4b-ii-2b — THE FLIP. `x.a` mints the SELECTOR CARRIER
+           ;; (`$select-path`) instead of `map-get`, so the dot spelling joins
+           ;; the unified representation Q_U5 ruled.
+           ;;
+           ;; NESTING, per Q_U13 [owner]: the fold already nests
+           ;; (`x.a.b` was `(map-get (map-get x :a) :b)`), so `($select-path
+           ;; ($select-path x a) b)` is the minimal diff AND gives one carrier
+           ;; PER LEVEL — which is what makes a SCALAR tier slot sufficient.
+           ;; Under the rejected GATHER encoding one node would span a whole
+           ;; chain and the tier would have to be a list parallel to the steps.
+           ;;
+           ;; The FIELD rides as a bare SYMBOL, not a `:keyword` — the payload
+           ;; is the step vocabulary (`389f6802`'s encoding convergence), and
+           ;; the parser's `$select-path` arm segments it.
            [(dot-access? (car elems))
             (if (null? acc)
                 (loop (cdr elems) (cons (car elems) acc))
                 (let* ([field (cadr (car elems))]
                        [target (car acc)]
-                       [wrapped `(map-get ,target ,(string->symbol
-                                                     (string-append ":" (symbol->string field))))])
+                       [wrapped `($select-path ,target ,field)])
                   (loop (cdr elems) (cons wrapped (cdr acc)))))]
            [(nil-dot-access? (car elems))
             (if (null? acc)

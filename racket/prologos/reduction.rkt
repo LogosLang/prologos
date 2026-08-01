@@ -1625,7 +1625,25 @@
 ;; output keys BEFORE this code can mint — so a miss or a non-map mid-descent
 ;; here is an INVARIANT VIOLATION: panic loudly, never fabricate (the P2.b
 ;; two-tier discipline; fabricating `none` was exactly divergence site 7).
-(define (select-reduce subj-expr branches [sort 'block])
+;; D4.P4b-ii-2b: the ASSERTIVE-tier miss message, ONE definition and two
+;; consumers (`expr-map-get`'s champ arm and `select-reduce`'s), so the dot
+;; spelling cannot drift from the quality bar P2.b slice 4 set. Extracting it
+;; also fixes a shadowing bug this slice introduced: `select-reduce` binds a
+;; parameter named `sort`, which SHADOWS Racket's `sort` — so calling it inside
+;; that scope applied the symbol `'path` as a procedure. Same class as the
+;; propagator rule's "never let a parameter shadow the thing you call".
+(define (assertive-miss-message who label c)
+  (format "~a: key ~a not found; available keys: ~a"
+          who (fmt-map-key label)
+          (if (champ-empty? c)
+              "(none — the map is empty)"
+              (string-join (sort (map fmt-map-key (champ-keys c)) string<?) " "))))
+
+(define (select-reduce subj-expr branches sort tier)
+  ;; D4.P4b-ii-2b (the verify, M3): NO DEFAULTS. `#f` is not a neutral tier —
+  ;; reduction reads it as the BLOCK tier and PANICS, so a caller that omitted
+  ;; it would silently get "invariant violation" rather than "no claim". One
+  ;; production caller, which passes both; requiring them keeps it that way.
   (let/ec return
     (define (kw-of label) (expr-keyword label))
     (define (champ-of v what)
@@ -1640,10 +1658,42 @@
       (let* ([kw (kw-of label)]
              [hit (champ-lookup c (equal-hash-code kw) kw)])
         (if (eq? hit 'none)
-            (return (expr-panic
-                     (expr-string
-                      (format "select: field :~a not found at runtime (invariant violation — typing sourced it as present)"
-                              label))))
+            ;; D4.P4b-ii-2b — THE TWO-TIER MISS, the carrier's analogue of
+            ;; `expr-map-get`'s strictness fork (P2.b slice 4). The tier is
+            ;; SOLVED to (expr-true) only when typing PROVED an assertive
+            ;; subject; a dyn row / selection view / union leaves it unsolved,
+            ;; and those misses must stay PERMISSIVE — they were `<error>` at
+            ;; zero errors before the fold, and the b-ii-2a tripwire pins it.
+            ;; ⚠ The old message asserted "typing sourced it as present". That
+            ;; is FALSE for a Map under Q_U10's posture (the Map arm admits
+            ;; uniformly and DEFERS the miss to runtime), so the assertive
+            ;; message now names the key and the available keys instead —
+            ;; matching the quality bar `map-get` set, which the dot spelling
+            ;; would otherwise have lost.
+            ;; THREE outcomes, not two — the first cut collapsed the first two
+            ;; because they share "panic loudly", but they are different facts
+            ;; and the P4a pin caught it:
+            ;;   tier = #f          — the BLOCK sort. Typing sourced every
+            ;;                        field 'present (Horn D), so a miss here
+            ;;                        really IS an invariant violation.
+            ;;   tier = (expr-true) — the PATH sort over a proved Map. Typing
+            ;;                        admitted every label and DEFERRED the
+            ;;                        miss (Q_U10), so "typing sourced it as
+            ;;                        present" would be FALSE; name the key and
+            ;;                        the available keys, the bar map-get set.
+            ;;   otherwise          — unsolved: the PERMISSIVE tier (dyn row,
+            ;;                        selection view, union). Quiet <error>,
+            ;;                        exactly as before the fold.
+            (cond
+              [(not tier)
+               (return (expr-panic
+                        (expr-string
+                         (format "select: field :~a not found at runtime (invariant violation — typing sourced it as present)"
+                                 label))))]
+              [(expr-true? tier)
+               (return (expr-panic
+                        (expr-string (assertive-miss-message "select" kw c))))]
+              [else (return (expr-error))])
             (whnf hit))))
     ;; D4.P3c: a level assembles either sort — all-keyed components → champ;
     ;; all-keyless ((#f . v)) → the rrb tuple mint in written order (ruling
@@ -2989,15 +3039,12 @@
          (cond
            [(not (eq? result 'none)) (whnf result)]
            [(expr-true? a)
-            (expr-panic
-             (expr-string
-              (format "map-get: key ~a not found; available keys: ~a"
-                      (fmt-map-key k*)
-                      (if (champ-empty? c)
-                          "(none — the map is empty)"
-                          (string-join (sort (map fmt-map-key (champ-keys c))
-                                             string<?)
-                                       " ")))))]
+            ;; D4.P4b-ii-2b (the verify, M1): this now CALLS the shared helper
+            ;; instead of inlining a second copy. The extraction's comment
+            ;; claimed "ONE definition and two consumers" while map-get still
+            ;; had its own — so the anti-drift property was asserted, not
+            ;; established. Now it is established.
+            (expr-panic (expr-string (assertive-miss-message "map-get" k* c)))]
            [else (expr-error)])))]
 
     ;; CIU T6 P2.b (SITE 7): a PVec/tuple subject PROJECTS by position.
@@ -3024,15 +3071,36 @@
        (cond
          ;; D4.P3c: rrb subjects admitted — ordinal branches select over
          ;; vectors/tuples (`het{2 0}`); per-branch dispatch inside.
-         [(or (expr-champ? subj*) (expr-rrb? subj*)) (select-reduce subj* branches sort)]
+         [(or (expr-champ? subj*) (expr-rrb? subj*)) (select-reduce subj* branches sort tier)]
          ;; D4.P3a verify hardening: a GROUND non-map subject can never
          ;; become a champ — panic per the node's own tier discipline
          ;; (the nested descent one level down is already loud; only the
          ;; top level silently stuck). Stuck NEUTRALS still fall through.
+         ;; ⭐ D4.P4b-ii-2b, THE VERIFY'S BLOCKING FIND (two skeptics, independently,
+         ;; by A/B against a baseline tree). This arm is the SUBJECT-kind
+         ;; sibling of the keyed-miss fork below, and the first cut tier-gated
+         ;; only the miss — so a `.field` on a union whose runtime value is a
+         ;; non-map component PANICKED where `[map-get u :a]` degrades to
+         ;; `none` at ZERO errors (reduction's own comment on that arm names
+         ;; this exact scenario: "map-get on an Int from a mixed-type union").
+         ;; That is the permissive→panic conversion this whole slice exists to
+         ;; prevent, one arm above where I looked.
+         ;;
+         ;; The tier decides it, exactly as it decides the miss:
+         ;;   tier = #f  — the BLOCK sort. P3a's hardening stands: typing
+         ;;                admitted the block, so a non-map subject IS an
+         ;;                invariant violation and the panic is honest.
+         ;;   otherwise  — the PATH sort. Match `map-get`: degrade to `none`.
+         ;;                An ASSERTIVE path tier cannot reach here (typing
+         ;;                proved a Map, so the value cannot be a non-map), so
+         ;;                no arm is owed for it — and inventing one would be
+         ;;                the speculative-scaffolding shape.
          [(definitely-not-map? subj*)
-          (expr-panic
-           (expr-string
-            "select: the subject is not a map at runtime (invariant violation — typing admitted the block)"))]
+          (if tier
+              (expr-fvar 'none)
+              (expr-panic
+               (expr-string
+                "select: the subject is not a map at runtime (invariant violation — typing admitted the block)")))]
          [(equal? subj* subject) e]
          ;; D4.P4b-ii-1: the re-construction must PRESERVE the sort — dropping
          ;; it here would silently re-sort a `'path` selector as a `'block`

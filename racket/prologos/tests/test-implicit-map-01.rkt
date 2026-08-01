@@ -85,25 +85,25 @@
   (check-false (map-literal-brace-params? '($brace-params)))          ;; empty stays opaque
   (check-false (map-literal-brace-params? '(not-brace :a 1))))
 
-(test-case "map value: dot-access folds to map-get"
+(test-case "map value: dot-access folds to the selector carrier"
   (check-equal?
    (preparse-expand-form '(def m ($brace-params :a pt ($dot-access x))))
-   '(def m ($brace-params :a (map-get pt :x)))))
+   '(def m ($brace-params :a ($select-path pt x)))))
 
 (test-case "map value: dot-access inside a bracketed app folds"
   (check-equal?
    (preparse-expand-form '(def m ($brace-params :a (+ p ($dot-access x) 1))))
-   '(def m ($brace-params :a (+ (map-get p :x) 1)))))
+   '(def m ($brace-params :a (+ ($select-path p x) 1)))))
 
 (test-case "map value: nested map recurses"
   (check-equal?
    (preparse-expand-form '(def m ($brace-params :a ($brace-params :b p ($dot-access x)))))
-   '(def m ($brace-params :a ($brace-params :b (map-get p :x))))))
+   '(def m ($brace-params :a ($brace-params :b ($select-path p x))))))
 
 (test-case "map value: multi-entry keeps even key/value alternation"
   (check-equal?
    (preparse-expand-form '(def m ($brace-params :a p ($dot-access x) :b q ($dot-access y))))
-   '(def m ($brace-params :a (map-get p :x) :b (map-get q :y)))))
+   '(def m ($brace-params :a ($select-path p x) :b ($select-path q y)))))
 
 (test-case "binder brace-params stays OPAQUE (protects the -> kind arrow)"
   ;; symbol-headed → NOT a map literal → untouched; a value rewrite would corrupt

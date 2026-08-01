@@ -3192,11 +3192,35 @@
      (let ([subj (elaborate subject env depth)])
        (if (prologos-error? subj)
            subj
-           ;; D4.P4b-ii-2b: the sort now ARRIVES from the parser rather than
-           ;; being hard-coded — `x{…}` carries 'block, `x.a` will carry 'path.
-           ;; The tier stays #f here; the assertive tier is a property of the
-           ;; user's DIRECT projection and is minted on the path arm.
-           (expr-select subj (expr-path branches sort) #f)))]
+           ;; D4.P4b-ii-2b: the sort ARRIVES from the parser rather than being
+           ;; hard-coded — `x{…}` carries 'block, `x.a` carries 'path.
+           ;;
+           ;; THE TIER, mirroring `surf-map-get`: a fresh strictness meta for
+           ;; the PATH sort only. Typing solves it to `(expr-true)` exactly
+           ;; when it PROVED an assertive subject (the `(Map K V)` arms call
+           ;; `solve-strict-assert!`); it stays UNSOLVED for a dyn row, a
+           ;; selection view or a union, and reduction reads that as the
+           ;; PERMISSIVE tier. Without it every one of those misses would
+           ;; regress from a quiet `<error>` to a panic — the before-the-fold
+           ;; tripwire that exists to catch precisely this.
+           ;; A BLOCK gets `#f`: a block ASSERTS its result (Horn D sourced
+           ;; every field as present), so a miss there really is an invariant
+           ;; violation and the loud panic is correct.
+           (expr-select subj (expr-path branches sort)
+                        ;; ⚠ TOTAL, not binary. The verify caught this as an
+                        ;; `(if (eq? sort 'path) …)` — the exact anti-pattern
+                        ;; `select-sort-unhandled` was built one slice earlier
+                        ;; to forbid, and whose rationale I wrote. Concretely:
+                        ;; a future `'nil-safe` sort would get tier `#f`, and
+                        ;; `#f` is NOT "no claim" at reduction — it is read as
+                        ;; the BLOCK tier and panics "invariant violation". A
+                        ;; nil-safe miss, whose whole contract is to return
+                        ;; `none`, would abort. Silent now, loud-and-wrong the
+                        ;; day the next sort lands.
+                        (case sort
+                          [(path)  (strictness-slot loc env)]
+                          [(block) #f]
+                          [else (select-sort-unhandled 'elaborate-select sort)]))))]
 
     [(surf-validate sname subject loc)
      (let* ([schema-entry (lookup-schema-by-name sname)]

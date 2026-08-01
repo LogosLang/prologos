@@ -20,12 +20,12 @@
 (test-case "rewrite-dot-access: basic postfix"
   (check-equal?
    (rewrite-dot-access '(user ($dot-access name)))
-   '(map-get user :name)))
+   '($select-path user name)))
 
 (test-case "rewrite-dot-access: chained postfix"
   (check-equal?
    (rewrite-dot-access '(user ($dot-access address) ($dot-access city)))
-   '(map-get (map-get user :address) :city)))
+   '($select-path ($select-path user address) city)))
 
 (test-case "rewrite-dot-access: dot-key prefix → RETIREMENT MARKER (D4.P1a)"
   ;; The dot-key semantics are retired; the shape normalizes to the marker
@@ -37,7 +37,7 @@
 (test-case "rewrite-dot-access: in larger form"
   (check-equal?
    (rewrite-dot-access '(f user ($dot-access name) x))
-   '(f (map-get user :name) x)))
+   '(f ($select-path user name) x)))
 
 (test-case "rewrite-dot-access: no sentinels passthrough"
   (check-equal?

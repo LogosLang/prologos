@@ -1271,6 +1271,26 @@
      (cond
        [(null? args)
         (parse-error loc "a field access needs a subject — write `x.field`" #f)]
+       ;; ⭐ D4.P4b-ii-2b — THE `_.field` SECTION RESCUE. `_.a` is a live,
+       ;; ergonomic surface (`map _.a recs`) that the fold migration would
+       ;; otherwise DELETE SILENTLY: it worked because `map-get` is in
+       ;; `sectionable-op-keywords`, and the carrier is not — nor can it be.
+       ;; Adding `$select-path` to that table is INERT, because this clause is
+       ;; dispatched EARLIER in the same `cond` than the section clause and so
+       ;; the section path is unreachable. So the eta-expansion happens HERE,
+       ;; modelled on `parse-keyword-section`'s hole-domain lambda.
+       ;; (`_[k]` stays a guided REFUSAL — the postfix leg has a `_` guard the
+       ;; dot leg deliberately lacks. That asymmetry is intentional; deleting
+       ;; the dot section would not have been.)
+       [(eq? (stx->datum (car args)) '_)
+        (define nm '$_0)
+        (define inner
+          (parse-list (cons (datum->syntax #f '$select-path)
+                            (cons (datum->syntax #f nm) (cdr args)))
+                      loc #f))
+        (if (prologos-error? inner)
+            inner
+            (surf-lam (binder-info nm #f (surf-hole loc)) inner loc))]
        [else
         (define subj (parse-datum (car args)))
         (cond
@@ -1282,6 +1302,23 @@
               loc))
            (cond
              [err err]
+             ;; ⭐ THE VERIFY'S SILENT ACCEPT-FLIP. The field now rides as a
+             ;; bare SYMBOL, so `segment-select-items` splits a `^` out of it
+             ;; into a re-key / dissolve / collapse CONTINUATION — and the
+             ;; `'path` assembly then extracts the leaf and DROPS it. Probed:
+             ;; `m.foo^z`, `m.foo^`, `m.foo^_`, `m.foo^-`, `m.foo^-q` all
+             ;; returned the plain field at ZERO errors, where HEAD refused.
+             ;; Five spellings silently ignoring the user's instruction, with
+             ;; `pp-expr` still rendering the `^` faithfully — honest display
+             ;; over dishonest semantics.
+             ;; `^` is a BLOCK operator: it sets the OUTPUT KEY, and a path
+             ;; access has no output key, it has a value. So refuse, guided.
+             [(ormap (lambda (st) (and (select-key-step? st) (select-step-cont st)))
+                     (car branches))
+              (parse-error
+               loc
+               "`^` re-keys the OUTPUT of a selection, and a field access has no output key — it yields the value. Use a select block if you want to rename: `x{field^alias}`"
+               #f)]
              [(not (= (length branches) 1))
               ;; NOT reachable from well-formed source: the fold mints one
               ;; branch per level. It IS reachable when something appends into
