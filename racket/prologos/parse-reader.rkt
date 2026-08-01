@@ -2674,11 +2674,36 @@
          [else (mark-binding-values bindings #t)]))
      (cons let-tok (append marked (list body)))]))
 
+
+;; ⚠ DO NOT DESCEND INTO A READER-FORM BODY (`racket{…}`). At this stage the
+;; foreign block is still ORDINARY SYNTAX — `combine-foreign-blocks` runs later,
+;; at preparse — so a walk that recurses blindly reaches the HOST language's
+;; code. A Racket `(let loop ([n 10] [acc 0]) …)` inside `racket{…}` is
+;; `let`-headed, so it reached `mark-let-goal-rhs`, which wrapped `([n 10] [acc
+;; 0])` in a `$goal-rhs` sentinel and corrupted the block. Caught by the FULL
+;; SUITE (test-path-selection's multi-line `racket{…}` pin), not by any targeted
+;; run — the single-line pin next to it passes either way, which is exactly why
+;; that test says a single-line pin misses this shape.
+;;
+;; `classify-let-block` had the same theoretical exposure and escaped only
+;; because its heuristics happened to bail; guarding at the RECURSION protects
+;; both, and any future let-shaped rewrite, by construction.
+(define (skip-reader-form-body kids0 lst)
+  ;; keep element i UNTRANSFORMED when element i-1 is a reader-form head
+  (for/list ([k (in-list kids0)] [orig (in-list lst)] [i (in-naturals)])
+    (if (and (> i 0)
+             (let ([prev (list-ref lst (sub1 i))])
+               (and (syntax? prev)
+                    (let ([d (syntax-e prev)])
+                      (and (symbol? d) (reader-form-head? d))))))
+        orig
+        k)))
+
 (define (transform-let-blocks-stx stx)
   (define lst (syntax->list stx))
   (if (not lst)
       stx
-      (let* ([kids0 (map transform-let-blocks-stx lst)]
+      (let* ([kids0 (skip-reader-form-body (map transform-let-blocks-stx lst) lst)]
              [kids (absorb-let-siblings kids0)]
              [kids1 (if (let-headed? kids) (classify-let-block kids) kids)]
              [kids* (if (let-headed? kids1) (mark-let-goal-rhs kids1) kids1)])
@@ -2688,7 +2713,8 @@
 
 ;; Entry point for a top-level form's element list (tree-node->stx-elements).
 (define (transform-let-blocks-elems elems)
-  (define elems* (absorb-let-siblings (map transform-let-blocks-stx elems)))
+  (define elems*
+    (absorb-let-siblings (skip-reader-form-body (map transform-let-blocks-stx elems) elems)))
   (if (let-headed? elems*)
       (mark-let-goal-rhs (classify-let-block elems*))
       elems*))

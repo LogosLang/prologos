@@ -285,3 +285,23 @@
 (test-case "…and REBINDING-scoped — `def` over a defr name stops the diagnostic"
   (define r (run-ns-ws-last (string-append world "def fc := 5\n[int+ fc 1]")))
   (check-false (relation-diagnostic? r) (format "~a" r)))
+
+(test-case "the let walk does NOT descend into a `racket{…}` foreign block"
+  ;; REGRESSION PIN, found by the FULL SUITE and by nothing else. At reader stage
+  ;; a foreign block is still ORDINARY SYNTAX (combine-foreign-blocks runs later,
+  ;; at preparse), so a blind walk reaches the HOST language's code. A Racket
+  ;; `(let loop ([n 10] [acc 0]) …)` is `let`-headed, so mark-let-goal-rhs wrapped
+  ;; `([n 10] [acc 0])` in a `$goal-rhs` sentinel and corrupted the block.
+  ;; The SINGLE-LINE racket{…} shape passes either way — only the multi-line one
+  ;; carries an embedded `let`, which is why targeted runs stayed green.
+  (define r (run-ns-ws-last
+             (string-append
+              "ns fb\n"
+              "def fy : Nat racket{\n"
+              "  (let loop ([n 10] [acc 0])\n"
+              "    (if (zero? n) acc\n"
+              "        (loop (sub1 n) (add1 acc))))\n"
+              "}\n"
+              "fy\n")))
+  (check-true (string? r) (format "~a" r))
+  (check-true (string-contains? r "10") "the host-language let still evaluates"))
