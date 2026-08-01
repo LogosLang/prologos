@@ -88,6 +88,10 @@ foreign racket "ocapn-peer-ffi.rkt"
   [ocapn-peer-side-id :as peer-side-id : String -> String]
 foreign racket "ocapn-peer-ffi.rkt"
   [ocapn-peer-loc-of :as peer-loc-of : Nat -> String]
+;; Did WE open this connection? See the FFI's note: this is the only binding
+;; available between a parked give and the peer that gets to redeem it.
+foreign racket "ocapn-peer-ffi.rkt"
+  [ocapn-peer-dialled? :as peer-dialled? : Nat -> Bool]
 foreign racket "ocapn-peer-ffi.rkt"
   [ocapn-send-on :as send-on-conn : Nat -> String -> Bool]
 
@@ -548,11 +552,32 @@ defn withdraw-for-session [pk loc]
 ;; A start-session is where a peer tells us who it is and where it lives,
 ;; which is exactly what a parked give is keyed on — so it is the only op that
 ;; can redeem one.
-spec withdraw-frames CapTPOp -> [List String]
-defn withdraw-frames [op]
+spec withdraw-frames-dialled CapTPOp -> [List String]
+defn withdraw-frames-dialled [op]
   match op
     | op-start-session _ pk loc -> withdraw-for-session pk loc
     | _                         -> [nil String]
+
+;; ONLY over a connection we dialled.
+;;
+;; A give names its exporter by location, never by key, so "the peer that
+;; opened this session asserts the exporter's designator" proves nothing — any
+;; peer may assert any designator, and the handshake signature only binds the
+;; assertion to the asserter. Redeeming on an ACCEPTED session hands our signed
+;; handoff-receive, with the gifter's give inside it, to whoever asked first;
+;; it also destroys the honest handoff, because the claim removes.
+;;
+;; Restricting to connections we opened — to an address taken from the give
+;; itself — is the strongest binding the protocol data allows. It is not
+;; cryptographic: `tcp-testing-only` designators are unauthenticated by
+;; construction, so a peer that can occupy the address the give names is still
+;; the peer we will talk to. Closing that needs the give to carry the
+;; exporter's KEY, which is an upstream protocol question.
+spec withdraw-frames Nat CapTPOp -> [List String]
+defn withdraw-frames [cid op]
+  match [peer-dialled? cid]
+    | false -> [nil String]
+    | true  -> withdraw-frames-dialled op
 
 ;; --- The RECEIVER: recognising a give, and reaching its exporter ---
 ;;
@@ -606,11 +631,23 @@ defn withdraw-over-open-session [lk]
 ;; sit parked forever with nothing logged — which is precisely why the Racket
 ;; version called its redeem from the dial-skip path as well as from the two
 ;; handshake paths.
+spec reach-over-existing Nat String SyrupValue -> [Option OutReq]
+defn reach-over-existing [cid lk loc]
+  match [peer-dialled? cid]
+    | true  -> withdraw-over-open-session lk
+    | false -> some [out-dial [handoff-sturdyref-bytes loc]]
+
+;; Reuse an open session ONLY if we dialled it — same binding as
+;; `withdraw-frames`, and for the same reason. An accepted session to the
+;; asserted location is exactly the case an attacker can manufacture, so
+;; falling through to a dial there is the safe answer, not a missed
+;; optimisation.
 spec reach-exporter String SyrupValue -> [Option OutReq]
 defn reach-exporter [lk loc]
-  match [nat-eq? [peer-lookup lk] zero]
-    | true  -> some [out-dial [handoff-sturdyref-bytes loc]]
-    | false -> withdraw-over-open-session lk
+  let cid := [peer-lookup lk]
+    match [nat-eq? cid zero]
+      | true  -> some [out-dial [handoff-sturdyref-bytes loc]]
+      | false -> reach-over-existing cid lk loc
 
 ;; Force the park (by matching its Bool) before deciding how to reach the
 ;; exporter. Lazy reduction would otherwise drop the park outright — and the
@@ -1120,8 +1157,8 @@ spec run-step Nat CapTPOp ConnectionState -> String
 defn run-step [cid op cs]
   let step := [connection-step op [with-global-gifts cs]]
     match [drain-dials [step-out-reqs cid cs op step]]
-      | true  -> run-step-emit cid step [withdraw-frames op]
-      | false -> run-step-emit cid step [withdraw-frames op]
+      | true  -> run-step-emit cid step [withdraw-frames cid op]
+      | false -> run-step-emit cid step [withdraw-frames cid op]
 
 spec step-connection Nat String -> String
   :doc "Process one inbound wire frame (hex-encoded) for connection

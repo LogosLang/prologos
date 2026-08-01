@@ -82,6 +82,9 @@
          ocapn-peer-lookup
          ocapn-peer-side-id
          ocapn-peer-loc-of
+         ocapn-peer-mark-dialled
+         ocapn-peer-dialled?
+         ocapn-peer-unmark-dialled
          ocapn-peer-forget
          ocapn-peer-reset!
          ocapn-send-on
@@ -130,6 +133,37 @@
 ;; peers by LOCATION: a gifter answering an enliven has to get back to the
 ;; connection the enliven arrived on, and by then it is servicing a different
 ;; one. Scans every peer's list, since a cid appears in exactly one.
+
+;; Which connections WE dialled, as opposed to accepted.
+;;
+;; This is a SECURITY binding, not bookkeeping. A parked give names the
+;; exporter by LOCATION — transport plus a self-chosen designator — and never
+;; by key, so a receiver cannot cryptographically identify the exporter. The
+;; `my-location` signature in a handshake only proves "this key asserted this
+;; string"; nothing stops a different peer asserting the same designator.
+;;
+;; Without this marker, any peer that completes a handshake claiming exporter
+;; C's designator is handed our signed `desc:handoff-receive` — which destroys
+;; the honest handoff and leaks a token that an exporter not binding receives
+;; to their connection will honour. Redeeming only over a connection we
+;; OURSELVES opened, to an address taken from the give, is the strongest
+;; binding the protocol data allows.
+;;
+;; Marked by the server on the dial path BEFORE the peer's start-session is
+;; stepped, because that step is where the redeem happens.
+(define dialled (make-hash))
+
+(define (ocapn-peer-mark-dialled cid)
+  (call-with-semaphore lock (lambda () (hash-set! dialled cid #t)))
+  #t)
+
+(define (ocapn-peer-dialled? cid)
+  (call-with-semaphore lock (lambda () (hash-ref dialled cid #f))))
+
+(define (ocapn-peer-unmark-dialled cid)
+  (call-with-semaphore lock (lambda () (hash-remove! dialled cid)))
+  #t)
+
 (define (ocapn-peer-loc-of cid)
   (call-with-semaphore lock
     (lambda ()
@@ -153,7 +187,7 @@
 (define (ocapn-peer-reset!)
   "Drop every entry and every pending send. Test-only."
   (call-with-semaphore lock
-    (lambda () (hash-clear! peers) (set! sends '()))))
+    (lambda () (hash-clear! peers) (hash-clear! dialled) (set! sends '()))))
 
 (define (ocapn-send-on cid payload)
   "Queue wire bytes (Latin-1) for connection cid. Returns #t."
@@ -175,6 +209,7 @@
    'ocapn-peer-lookup   (cons ocapn-peer-lookup   '(String -> Nat))
    'ocapn-peer-side-id  (cons ocapn-peer-side-id  '(String -> String))
    'ocapn-peer-loc-of   (cons ocapn-peer-loc-of   '(Nat -> String))
+   'ocapn-peer-dialled? (cons ocapn-peer-dialled? '(Nat -> Bool))
    'ocapn-peer-forget   (cons ocapn-peer-forget   '(String -> Nat -> Bool))
    'ocapn-send-on       (cons ocapn-send-on       '(Nat -> String -> Bool))
    'ocapn-send-drain    (cons ocapn-send-drain    '((List String) -> (List String)))))

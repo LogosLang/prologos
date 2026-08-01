@@ -1089,6 +1089,11 @@
                          (bytes-length frame) (bytes->hex-string frame))
                  (drop-half-open-dial! key)
                  (set! cid (next-conn-id!))
+                 ;; Mark BEFORE the step: the start-session step is where a parked
+                 ;; give is redeemed, and the redeem is gated on this. These are the
+                 ;; two dial paths -- connections WE opened, to an address taken from
+                 ;; the give itself.
+                 (ocapn-peer-mark-dialled cid)
                  (drive-init! cid frame dout)
                  (run-frame-loop din dout cid)]
                 [else
@@ -1096,6 +1101,11 @@
                  ;; candidate for the crossed-hellos tie-break.
                  (drop-half-open-dial! key)
                  (set! cid (next-conn-id!))
+                 ;; Mark BEFORE the step: the start-session step is where a parked
+                 ;; give is redeemed, and the redeem is gated on this. These are the
+                 ;; two dial paths -- connections WE opened, to an address taken from
+                 ;; the give itself.
+                 (ocapn-peer-mark-dialled cid)
                  (drive-init! cid frame dout)
                  (record-open-conn! hello dout cid)
                  (run-frame-loop din dout cid)])])])))
