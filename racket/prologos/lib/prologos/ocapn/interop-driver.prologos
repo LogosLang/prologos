@@ -183,8 +183,9 @@ defn concat-frames
 ;; spawn), and the promise-resolver 4N with its pre-seeded (vow, resolver)
 ;; pair below.
 ;;
-;; Position 5N, the sturdyref enlivener, deliberately has NO actor: a
-;; behaviour is pure and cannot open a socket — which is why this used to be
+;; Position 5N, the sturdyref enlivener, IS an ordinary actor (see
+;; `seeded-vat` below). It used to have none: a behaviour is pure and cannot
+;; open a socket — which is why this used to be
 ;; a driver interception with NO actor behind the position at all. With
 ;; `eff-connect` and `act-step-pending` the enlivener is an ordinary actor:
 ;; it asks for the connection as an effect and answers nothing, leaving the
@@ -295,23 +296,6 @@ defn init-connection [cid]
 ;; `beh-sink` is what sits there. It absorbs the exporter's answer and does
 ;; not reply — the real handling is elsewhere — which is only expressible
 ;; because `act-step-pending` exists.
-spec reserve-export-emit Nat Allocated ConnectionState -> String
-defn reserve-export-emit [cid alloc cs]
-  match [conn-stash cid [conn-state [alloc-vat alloc] [conn-bridge-state cs] [conn-emitted cs] [conn-aborted? cs]]]
-    | true  -> str::from-int [from-nat [alloc-id alloc]]
-    | false -> ""
-
-spec reserve-export Nat -> String
-  :doc "Allocate an export position in `cid`'s table and return its digits."
-defn reserve-export [cid]
-  let cs := [conn-fetch cid seeded-connection]
-    let alloc := [vat-spawn beh-sink syrup-null [conn-vat cs]]
-      reserve-export-emit cid alloc cs
-
-;; The same reservation, as a number. The gifter needs the position itself to
-;; put in a `desc:import-object`, not its decimal spelling; the String form
-;; above stays because a Racket caller can only read a printed result.
-;;
 ;; Zero on a failed stash. Zero is the BOOTSTRAP position, so it is not a
 ;; plausible reservation — a fetch addressed to it is answered by the
 ;; bootstrap object rather than going silently nowhere, which is the loudest
@@ -1073,7 +1057,9 @@ spec gifter-out-reqs Nat ConnectionState CapTPOp -> [List OutReq]
 defn gifter-out-reqs [cid cs op]
   append [enliven-out-reqs cid cs op] [fetch-answer-out-reqs cid op]
 
-;; Hand every dial the vat's behaviours asked for to the FFI queue.
+;; --- Draining what a turn asked the outside world for ---
+;;
+;; The vat records `OutReq`s and stays pure; these perform them.
 ;;
 ;; This used to be an INTERCEPTION: `run-step` inspected each inbound op,
 ;; recognised a deliver to the enlivener position, extracted the sturdyref

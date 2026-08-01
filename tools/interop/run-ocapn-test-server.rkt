@@ -345,25 +345,6 @@
 (define (syv-text v)
   (and (syv? v) (memq (syv-kind v) '(bytes string symbol)) (syv-val v)))
 
-;; The STRUCTURAL children of a value. Deliberately does NOT descend into
-;; a bytestring's payload: the peer controls those bytes and can put
-;; anything in them, including the exact byte pattern of a record we act
-;; on. Every "is there a X inside this frame" question in this file goes
-;; through `syv-find`, so no peer-supplied payload can be mistaken for
-;; structure — which is what the raw `find-subbytes` scans this replaced
-;; could not distinguish.
-(define (syv-children v)
-  (case (syv-kind v)
-    [(list set) (syv-val v)]
-    [(record) (syv-val v)]                                  ; label + args
-    [(dict) (append (map car (syv-val v)) (map cdr (syv-val v)))]
-    [else '()]))
-
-(define (syv-find v ok?)
-  (let loop ([v v])
-    (cond [(ok? v) v]
-          [else (for/or ([c (in-list (syv-children v))]) (loop c))])))
-
 ;; ----------------------------------------
 ;; The encoding half
 ;; ----------------------------------------
@@ -377,19 +358,6 @@
 (define (syrup-symbol s)
   (define b (string->bytes/latin-1 s))
   (bytes-append (string->bytes/latin-1 (number->string (bytes-length b))) #"'" b))
-
-;; `<tag N>` — the shape every desc:* position descriptor has.
-(define (desc-record tag n)
-  (bytes-append #"<" (syrup-symbol tag) (syrup-nat n) #">"))
-
-;; `[sig-val [eddsa [r 32:…] [s 32:…]]]` — the same gcrypt shape we parse
-;; when verifying, built here for the signing direction.
-(define (gcrypt-sig sig64)
-  (bytes-append #"[" (syrup-symbol "sig-val")
-                #"[" (syrup-symbol "eddsa")
-                #"[" (syrup-symbol "r") (syrup-bytestring (subbytes sig64 0 32)) #"]"
-                #"[" (syrup-symbol "s") (syrup-bytestring (subbytes sig64 32 64)) #"]"
-                #"]]"))
 
 ;; `<op:abort "reason">`. Built directly rather than through captp-wire:
 ;; this runs on the accept thread before any connection state exists, and
@@ -482,24 +450,6 @@
 (define (read-sturdyref bs)
   (define v (syrup-parse bs))
   (and v (sturdyref-of bs v)))
-
-;; `<op:deliver TO ARGS ANSWER-POS RESOLVE-ME>` — the four fields, or #f.
-(define (read-deliver v)
-  (and (syv-record? v #"op:deliver")
-       (= (length (syv-args v)) 4)
-       (syv-args v)))
-
-;; The position inside `<desc:export N>` / `<desc:import-object N>`.
-(define (desc-position v label)
-  (and (syv-record? v label) (syv-nat (syv-arg v 0))))
-
-;; The position inside a RESOLVE-ME slot. Both descriptors are valid there --
-;; `captp-wire.prologos` documents the pair -- and accepting only
-;; `desc:import-object` silently dropped an enliven whose resolver was a
-;; promise, with nothing logged.
-(define (resolve-me-position v)
-  (or (desc-position v #"desc:import-object")
-      (desc-position v #"desc:import-promise")))
 
 ;; The raw 32-byte Ed25519 key inside a gcrypt public-key s-expression
 ;; `[public-key [ecc [curve Ed25519] [flags eddsa] [q 32:…]]]`. Compared
@@ -605,21 +555,7 @@
              "could not parse the op:start-session we just built (~a bytes)"
              (bytes-length start-session-bytes))))
 
-(define our-pubkey-raw
-  (or (peer-hello-pubkey-raw our-hello)
-      (error 'run-ocapn-test-server
-             "could not read our own Ed25519 key out of our start-session")))
-
 (define our-side-id (peer-hello-side-id our-hello))
-
-;; The session id is defined by upstream (utils/captp.py:125-146) as
-;;   SHA256(SHA256("prot0" ++ min(sideA,sideB) ++ max(sideA,sideB)))
-;; and the receiving-side is our own side-id. Both are computable the
-;; moment the peer's op:start-session arrives.
-(define (session-id-of their-side)
-  (define lo (if (bytes<? our-side-id their-side) our-side-id their-side))
-  (define hi (if (bytes<? our-side-id their-side) their-side our-side-id))
-  (sha256-bytes (sha256-bytes (bytes-append #"prot0" lo hi))))
 
 (printf "ocapn-test-server: built signed start-session (~a bytes, designator ~a) via prologos::ocapn::handshake~n"
         (bytes-length start-session-bytes) peer-designator)
@@ -714,13 +650,6 @@
       [else
        (printf "ocapn-test-server: STEP RESULT UNPARSABLE (conn ~a): ~a~n" cid r)
        #""])))
-
-(define (sign-with-our-key payload)
-  (extract-latin1-bytes
-   (last-result (run-prologos/locked
-                 (format "(eval (sign-bytes ~aN ~s))"
-                         keypair-handle
-                         (bytes->string/latin-1 payload))))))
 
 ;; ========================================
 ;; Shared mutable state

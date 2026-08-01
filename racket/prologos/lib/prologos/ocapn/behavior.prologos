@@ -131,11 +131,6 @@ data OutReq
   ;; have to it. (location, bytes)
   out-send : String -> String
 
-spec out-req-loc OutReq -> String
-defn out-req-loc
-  | out-dial l   -> l
-  | out-send l _ -> l
-
 data Effect
   ;; Send to a LOCAL refr (fire-and-forget) — `t` is a vat actor-table key.
   eff-send-only   : Nat -> SyrupValue
@@ -160,30 +155,19 @@ data Effect
   ;; driver drains it between steps, exactly as `eff-send-remote` already
   ;; works. See the gaps document §0.2.
   eff-connect     : String
-  ;; Send wire bytes on the connection to a NAMED PEER — the location, not
-  ;; the connection being serviced.
+  ;; NOTE — there is deliberately NO `eff-send-on` here.
   ;;
-  ;; This is what a third-party handoff needs and had no way to express: a
-  ;; gifter fetches from the exporter while servicing the enliven that
-  ;; arrived from the receiver. The location is resolved to a connection by
-  ;; the driver, because a behaviour cannot see the registry (it sees only
-  ;; its own state and the message), and that is the right split — the
-  ;; behaviour names WHO, the driver knows WHERE.
-  ;;   location-bytes  wire-bytes
-  eff-send-on     : String -> String
-  ;; Create a NEW actor at a caller-chosen id: (id, behaviour, initial state).
+  ;; One was built: a behaviour naming a PEER by location, with the driver
+  ;; resolving it to a connection. It shipped with ZERO producers, because the
+  ;; thing it was built for — the third-party-handoff gifter — turned out not
+  ;; to be a behaviour at all. A handoff role has no swiss-num, answers no
+  ;; message of its own, and must name connections, so it is protocol
+  ;; machinery and lives in the driver, which reaches the send queue directly.
   ;;
-  ;; The id is not invented by the behaviour — `step-behavior` is handed the
-  ;; vat's next free id, and the behaviour names that. So the vat and the
-  ;; behaviour agree by construction rather than by convention, and the
-  ;; behaviour can put a reference to the actor it is about to create INTO its
-  ;; own return value, which is the whole point: the Car Factory chain answers
-  ;; with objects, not values.
-  ;;
-  ;; CONSTRAINT, stated rather than hidden: at most ONE spawn per turn. Two
-  ;; would both name the same id and the second would overwrite the first.
-  ;; Lifting it means handing the behaviour a supply of ids rather than one,
-  ;; which none of the behaviours here need.
+  ;; Removed rather than left: an effect no behaviour emits is scaffolding,
+  ;; and the tracking document recorded it as the mechanism of a migration
+  ;; that in fact bypassed it. If a genuine behaviour ever needs to address a
+  ;; peer by name, add it back with its producer in the same commit.
   eff-spawn       : Nat -> BehaviorTag -> SyrupValue
 
 ;; ========================================
