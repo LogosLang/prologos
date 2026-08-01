@@ -23,8 +23,11 @@ failing input is not a finding and should be deleted rather than softened.
 
 ## Status (2026-07-29)
 
-The inventory below was written first and fixed second. **Most of it is now
-fixed**; §"Still open" lists what is not, with the reason in each case.
+The inventory below was written first and fixed second. **All of it is now
+fixed, dissolved, or corrected** — see § "Nothing is open" below. (This
+sentence previously pointed at a §"Still open" section that no longer exists,
+because its last two entries closed; the dangling pointer is corrected rather
+than left, since a reader following it finds nothing.)
 Sections 0 and 1 are preserved AS WRITTEN on 2026-07-28 — they are the record
 of what was found, not a description of the code today. Where a finding's text
 is now false because the finding was acted on, that is the intended outcome.
@@ -126,7 +129,7 @@ and SHA-256 followed, and with them the gifter and receiver roles themselves.
 | Finding | How it closed |
 |---|---|
 | §0.2 gifter/receiver roles live in Racket | **CLOSED.** Both roles are `interop-driver.prologos`. The Racket server holds no handoff logic at all — `try-enliven!`, `claim-enliven!`, `try-fetch-answer!`, `finish-fetch-answer!`, `pending-enlivens`, `note-handoff-give!`, `redeem-gift-if-pending!`, `redeem-gift-for-hello!`, `withdraw-gift-frame`, `pending-gives`, `reserve-enliven-slot!`, `next-gift-id!` and `next-handoff-count!` are deleted. Conformance 24/24 with nothing on the Racket side. |
-| §1.7 M8 every frame is processed twice | **CLOSED.** There is one Syrup parser on a frame again. The Prologos half went when the enlivener became an actor; the Racket half went with the scanners above. |
+| §1.7 M8 every frame is processed twice | **CLOSED — with one correction to how it was first written.** Only one implementation now ACTS on a frame. The claim "there is one Syrup parser on a frame again" is literally FALSE and should not be repeated: `run-ocapn-test-server.rkt:1140` still calls `syrup-parse` on every inbound frame, and `read-start-session` re-parses the handshake at `:1067`/`:1200`. Those survive as a discard-result validation check that prints `FRAME DID NOT PARSE` on disagreement — they route nothing. The substantive fix (two implementations no longer act on the same bytes) is real; the parser count was overstated. |
 
 **§0.2 — how it actually closed, and the one design decision in it.**
 
@@ -363,7 +366,7 @@ Not in the original inventory:
    presents identically, so the cache is both a cause of that symptom and a
    plausible-looking excuse for it. Clearing twice is what separates them.
 6. **MEDIUM | `prologos::ocapn::tcp-testing` cannot be imported**, and neither
-   can any module whose FFI bindings carry `:requires`. See § Still open.
+   can any module whose FFI bindings carry `:requires`. See § "Two entries dissolved" below.
    Its test did not catch this because it loads through the sexp `imports`
    path; the WS `require` path is the one that fails. A module with no
    importers has no witness for its own breakage.

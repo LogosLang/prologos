@@ -3090,10 +3090,26 @@ foreign: Cannot marshal to string — not a String literal:
 41 KB of `#(struct:expr-app …)` naming a function that is defined, in a
 module that loaded, from a call site that is spelled correctly.
 
-**Cause.** Modules are single-pass. `defn f [x] g x` written *above*
-`defn g …` does not error — the call to `g` does not reduce, and the
-application stays as an `expr-app` node. A stuck term is **well-typed**, so
-nothing downstream complains until a boundary needs a value: here the
+**Cause — CORRECTED 2026-08-01, the original statement was false.** The
+original text said a forward `defn` reference "does not error — the call does
+not reduce". Probed at HEAD, that is wrong in BOTH module-loading modes:
+
+| path | `current-residuation-enabled?` | forward `defn` reference |
+|---|---|---|
+| `process-file` | `#t` (`driver.rkt:2711`) | **residuates and reduces correctly**, 0 errors |
+| `process-string` | `#f` (`global-env.rkt:68`) | **raises** `Error loading module …: Unbound variable` |
+
+**That asymmetry is the real lesson, and it is worth more than the paragraph
+it replaces** — it is precisely what produced the false all-clear below. A
+`process-file` probe RESOLVES a forward reference that the test server's
+`process-string` path REJECTS. So "my probe loaded the module" proves nothing
+about the server.
+
+What IS independently verified is the narrower claim: a stuck term is
+**well-typed**, and the shape that actually produces one is a `def` VALUE whose
+referent never grounds — `def k := [g 1N]` above `defn g` yields
+`[suc …::k] : Nat` at **0 errors**. Nothing downstream complains until a
+boundary needs a value: here the
 `foreign` marshaller, which is the first thing that cannot accept a term.
 The `expr-fvar` in the dump names the OUTERMOST stuck call, not the
 definition that was out of order — in the case above `enliven-out-reqs` was
@@ -3119,8 +3135,9 @@ POINT, never by importing the module or by calling leaves. If an FFI
 marshal error prints a term, read the `expr-fvar` names in it as a *call
 chain* and check the definition ORDER of each, deepest first.
 
-**Cost this session.** Nine of thirty-five new definitions in one block were
-out of order (`begin-handoff` above `begin-handoff-on`, `enliven-out-reqs`
+**Cost this session.** Several definitions in one block were out of order
+(the exact count is UNVERIFIABLE — the broken state was never committed; the
+chains below name ten functions across three chains, i.e. seven misplaced) (`begin-handoff` above `begin-handoff-on`, `enliven-out-reqs`
 above `enliven-for-target` above `opt-to-list`, `fulfill-ref` above
 `ref-position` above `desc-position` above `desc-position-for` above
 `desc-tag?`). The fix was mechanical — a script that split the block on
@@ -3138,7 +3155,14 @@ end of a module load would have caught all four in seconds.
 
 ---
 
-### #53 — `let X := <value spanning two lines>` is reported as "`let` is not allowed at top level" (2026-08-01, real bug, **misleading diagnostic**; facet of #38)
+### #53 — `let X := <value spanning two lines>` is reported as "`let` is not allowed at top level" (2026-08-01, **PRE-MERGE — superseded by main's LET series**; facet of #38)
+
+> ⚠ **STALE AT HEAD.** This message no longer exists. Since main's LET series
+> the same shape reports `let block bindings appear AFTER the body line — the
+> body (column between N and M) must be last`, or, for the `#57` shape,
+> `Too many arguments to '<fn>'`. Grepping for the quoted diagnostic will find
+> nothing. Retained because the underlying hazard — a `let` value may not span
+> lines — is still real and is what #57 turned out to be.
 
 **Symptom.**
 
@@ -3183,7 +3207,15 @@ misplaced `def`.
 
 ---
 
-### #54 — `tools/check-parens.sh` cannot read `.prologos` files and reports a bogus imbalance (2026-08-01, tooling gap)
+### #54 — `tools/check-parens.sh` MIS-REPORTS SOME `.prologos` files (2026-08-01, tooling gap)
+
+> ⚠ **HEADLINE CORRECTED.** "Cannot read" overstates it: the failure is
+> content-dependent, not categorical. `interop-driver.prologos` and
+> `lib/prologos/data/list.prologos` both pass "All files balanced". A
+> reproducing example is `netlayer.prologos:308:10: read-syntax: end-of-file
+> following \`|\` in symbol`. The transcript originally quoted here
+> (`interop-driver.prologos:611:4`) does not reproduce against any committed
+> version of that file.
 
 **Symptom.** Run on a `.prologos` file, the delimiter checker fails on
 correct source:
@@ -3296,9 +3328,12 @@ depending on how the value was produced. The codec already owns the
 conversion — `wire-nat` in `prologos::ocapn::syrup` — and it returns
 `[Option Nat]`, doing the negative check on the way.
 
-**Why it hides.** It is a coin flip which spelling any given field arrives as,
-so a reader written against one of them works on the frames you happened to
-test with. It also composes badly with #55: together they turned "read the
+**Why it hides.** Which spelling you get is determined by PROVENANCE, not
+chance (the original "coin flip" here was wrong): the wire decoder ALWAYS emits
+`syrup-int` for `N+` (`syrup-wire.prologos:508-511`), and `syrup-nat` only ever
+comes from locally-constructed values. So a reader written against one spelling
+works on every frame from the side you tested and fails on the other side's.
+The operational rule is unchanged — call `wire-nat`. It also composes badly with #55: together they turned "read the
 reference out of a fulfill" into "there is no reference", with the two causes
 stacked and neither visible.
 
@@ -3311,6 +3346,13 @@ waiting for the other spelling. `wire-nat-ok?`, `wire-nat`, `nat-list-of` and
 ---
 
 ### #51 FAMILY (2026-08-01) — the Node interop tests fail on an unchanged tree
+
+> ⚠ **CORRECTED IN PLACE.** "Fail identically at `e65e0f82`" OVERSTATES it —
+> they are FLAKY, not deterministic. In a later run in the same container all
+> seven PASSED, cold, with no code change between. Environmental was right;
+> "identically" was not, and that word carried a conclusion that was reported
+> as fact. The correction used to live 245 lines below, which is exactly the
+> failure mode this log warns about elsewhere.
 
 Recorded so the next session does not spend a diagnosis on it. Seven
 Node-spawning interop tests (`questioner`, `multi-questioner`, `bidirectional`,
@@ -3336,243 +3378,68 @@ test at a known-green commit. Two of the three symptoms here look like real
 regressions and neither is one.
 
 ---
-
-### #57 — CI: ONE test went 41s → 198s and started failing, on a commit that changed one markdown file (2026-08-01, open, **not attributable to any diff**)
-
-**Symptom.** `test-ocapn-import-object-interop.rkt` fails in the interop job
-with
-
-```
-imports: Error loading module prologos::ocapn::captp-core: Unbound variable
-```
-
-after running for over three minutes. It passes locally in 11–45 s under every
-configuration tried.
-
-**The evidence that matters is the step timings, not the message.** Comparing
-the last green run with the first red one, step by step:
-
-| Step | green (07-29) | red (08-01) |
-|---|---|---|
-| Install Prologos deps | 106 s | 113 s |
-| Pre-compile modules | 0 s | 0 s |
-| cross-impl | 5 s | 5 s |
-| live-interop | 9 s | 9 s |
-| handshake | 8 s | 9 s |
-| conversation | 7 s | 8 s |
-| rpc | 7 s | 9 s |
-| pipelined | 8 s | 8 s |
-| abort | 7 s | 9 s |
-| **import-object** | **41 s ✓** | **232 s ✗** |
-
-Every other step is within a second of its green counterpart, so the runner is
-not slower. Exactly one test changed, by 5.7×, and it is the one that fails.
-
-**The commit it started on adds 167 lines to `2026-04-27_GOBLIN_PITFALLS.md`
-and touches nothing else** (`git diff --stat e65e0f82 6dbcfe8a` → one file).
-It has now reproduced on five consecutive commits, so it is not a flake
-either. A diff that cannot cause it, and a consistency that rules out chance.
-
-**What was ruled out locally**, each with a real run rather than an argument:
-
-| Hypothesis | Test | Result |
-|---|---|---|
-| Our code broke it | run at `e65e0f82` | fails there too — same 7 tests |
-| Interpreted build (#51) | rebuild without the compile limit | 120 s, still PASSES |
-| Cold `.pnet` | `rm -rf data/cache/pnet` | 45 s, passes |
-| CI's test ORDER warms a bad cache | ran all 7 preceding tests, then it | 11 s, passes |
-| Node / `@endo` broken | `node peer-questioner.mjs 22077` | starts, ECONNREFUSED — healthy |
-
-**The named suspect is the `.pnet` cache**, on the strength of `driver.rkt:136`,
-which describes this exact error as a known unresolved defect: *"the `.pnet`
-cache-hit path restores the registry from the `.pnet` file, but the restored
-state may not match what incremental module loading builds"* — with
-`"Unbound variable: when"` as its recorded symptom. Supporting it: on CI green
-the test took 41 s, which is our COLD local time, even though seven tests ran
-before it — so the cache is not helping there, and a cache that is written but
-restored wrong would explain both the 41 s and the later 232 s.
-
-**The cheapest experiment, for whoever picks this up:** add
-`rm -rf data/cache/pnet` immediately before the import-object step in
-`interop.yml`. If 232 s drops back to ~41 s, the cache is confirmed and the
-real fix is the driver.rkt:136 defect.
-
-⚠ **`PROLOGOS_PNET_CACHE=0` will NOT do it.** That variable is read only by
-`batch-worker.rkt`, and CI's interop steps are plain `raco test` invocations
-that never go through the batch worker. This is the same shape as the
-already-recorded "`--no-pnet-cache` was a no-op, a lying diagnostic switch":
-there is still no working way to disable the `.pnet` cache for a direct
-`raco test`, and anyone who sets that variable will believe they have ruled the
-cache out when they have not.
-
-**Rule.** When a CI failure names a module, compare the per-step TIMINGS of the
-green and red runs before reading any code. A uniform slowdown is a runner; a
-single step moving while its neighbours do not is a real, localised change —
-and if the diff cannot have caused it, the cause is state the job carries, not
-source.
-
 ---
 
-### #57 UPDATE (2026-08-01) — the first probe cleared the WRONG DIRECTORY, and my local "cold cache" runs did too
+### #57 — CI tests the PR **MERGE** commit, so "my diff did not change" does not mean "the code under test did not change" (2026-08-01, RESOLVED, **the most expensive wrong premise in this log**)
 
-**The probe reported `(no cache directory)` and the step still took 230 s.** I
-was one sentence away from writing "the cache is exonerated". It was not
-exonerated; it was never tested.
+**Superseded four earlier sections** (#57, #57 UPDATE, #57 RESULT, #57 WIDENED),
+which were written while the cause was unknown and which reached several wrong
+conclusions. They are replaced rather than appended to, because leaving a wrong
+investigation readable as current fact is the failure this entry is about.
 
-**Cause.** The `.pnet` cache directory is resolved RELATIVE TO CWD, and every
-test step in `interop.yml` begins `cd racket/prologos`. So the cache lives at
-`racket/prologos/data/cache/pnet`. The probe cleared `data/cache/pnet` from the
-repo root — a path that does not exist on CI — and truthfully said so.
+**Symptom.** CI went red on a commit whose entire diff was 167 lines of
+markdown, and stayed red for eleven consecutive runs. Nine to fifteen files
+failed per run — the count varied — with `Error loading module
+prologos::ocapn::captp-core: Unbound variable`, `Error loading module
+prologos::ocapn::netlayer: Type mismatch`, and `TIMEOUT`. Locally the full
+suite passed 9631/9631.
 
-`driver.rkt:133` records this exact hazard in its own words: *"Root cause was
-relative pnet-cache-dir resolving differently in batch workers (project root)
-vs direct runs (racket/prologos/)."* It is written down, and I still walked
-into it.
+**Root cause.** Two `let` bindings whose value sat on the FOLLOWING line —
+`netlayer.prologos:219` and `captp-core.prologos:3299`, the only two of that
+shape in the tree. Main's LET series (`49f51c14` P1 … `feb79740` P4) changed
+`let` grouping at the reader layer so that shape mis-parses: the body line is
+absorbed into the value's argument list. Fixed in `38a4e523`, two source lines.
+CI green at that SHA on both workflows; the import-object step went 232 s → 37 s.
 
-**It invalidated my local measurements too**, which is the worse half. Every
-"cold cache" run I reported was `rm -rf ../../data/cache/pnet` or
-`rm -rf data/cache/pnet` from the repo root — the wrong directory in both
-cases — so those runs were WARM. Corrected, with the real path
-(`racket/prologos/data/cache/pnet`, 47 MB):
+**Why it looked impossible.** The workflows trigger `on: pull_request` with a
+bare `actions/checkout@v4`, so GitHub builds **`refs/pull/N/merge`** — the
+branch merged into main. Main's LET series landed 2026‑07‑31, between the last
+green run (07‑29) and the first red one (08‑01). **The code under test changed
+while the branch's own diff did not.** Every "the diff cannot have caused it"
+argument in the superseded sections was reasoning about the wrong tree.
 
-| configuration | time | result |
-|---|---|---|
-| compiled, warm cache | 11 s | pass |
-| compiled, genuinely cold | 49 s | pass |
-| interpreted, genuinely cold | 118 s | pass |
-| **CI (red)** | **230 s** | **FAIL** |
+**Rule.** On a `pull_request` workflow, the tested tree is branch **+ base**.
+Before concluding a failure is unattributable to a diff, check what moved on
+the BASE since the last green run — `git log $(git merge-base HEAD origin/main)..origin/main`.
+Being 120 commits behind is itself the finding.
 
-So CI is 2× the worst configuration reproducible locally, and still fails.
-Both the interpreted-build and cache hypotheses are now measured rather than
-assumed, and neither reaches CI's number.
+**Corollary rule, which cost as much:** when a failure resists local
+reproduction, MERGE THE BASE FIRST. Doing so turned this from an unreproducible
+CI-only failure into a 6-second deterministic local one.
 
-**One live anomaly the corrected numbers expose.** Locally a warm cache takes
-the test from 49 s to 11 s. On CI *green* it took 41 s — cold speed — even
-though seven tests ran before it and should have warmed the cache. So on CI
-the cache is written and apparently never hit, which is consistent with the
-same relative-path resolution being wrong there for a different reason. That
-is now the most specific open thread.
+**Four wrong conclusions this produced, recorded because the pattern matters
+more than any of them:**
 
-**Rule — a null result from a probe is only evidence if the probe could have
-been positive.** Make every diagnostic report what it acted on: file counts,
-sizes, paths. `rm -rf` on a nonexistent path succeeds silently and looks
-exactly like a successful clear. This is the same class as the
-`--no-pnet-cache` no-op already on file, and it cost a second wrong conclusion
-in the same investigation.
+1. *"Environmental, not ours."* Wrong twice over — it was a code interaction,
+   and this code has never been on main, so there was no other owner.
+2. *"A 10–30× perf regression in my own commits"*, citing `timings.jsonl`.
+   Wrong: those were cold-cache runs compared against warm baselines. The tell
+   I missed is that the slow run shows a **flat ~39 s floor across twelve
+   structurally unrelated tests**, including `test-parse-reader.rkt`, which
+   touches no OCapN code. A flat constant across unrelated work is a fixed
+   per-file cost, never a per-op one.
+3. *"The `.pnet` cache is written but never hit on CI."* Unsupported: it
+   compared a CI number against local warm/cold numbers on different hardware.
+   At `38a4e523` the same step is 37 s under the same cache regime.
+4. *"The cache directory resolves relative to CWD."* **False.**
+   `pnet-serialize.rkt:750-751` anchors `pnet-cache-dir` to the module's own
+   source directory precisely to "prevent working-directory sensitivity". The
+   observation that the repo-root path does not exist was right; the
+   explanation was invented. The `driver.rkt:134` line quoted in support is a
+   HISTORICAL note about a bug fixed in Phase 2e, not a live hazard.
 
----
-
-### #57 RESULT (2026-08-01) — the cache is exonerated, properly this time; the cause is still unknown
-
-The corrected probe found a real cache and cleared it:
-
-```
-cache at racket/prologos/data/cache/pnet: 45 files, 25M
-no cache at data/cache/pnet
-```
-
-and the step then ran **229 s and failed with the identical error**. So this
-is a genuine negative: a probe that could have been positive, demonstrably
-was positive about the thing it acted on, and the failure did not move. The
-`.pnet` cache is not the cause.
-
-**Everything ruled out, each by a measurement rather than an argument:**
-
-| Hypothesis | How it was tested | Verdict |
-|---|---|---|
-| Our branch's code | ran the test at `e65e0f82` | fails there too |
-| The diff that started it | `git diff --stat e65e0f82 6dbcfe8a` | one markdown file, 167 lines |
-| A slower runner | per-step timings, green vs red | every other step within 1 s |
-| Interpreted build (#51) | rebuilt without the compile limit, cold cache | 118 s, PASSES |
-| `.pnet` cache | cleared 25 M / 45 files on CI | 229 s, still fails |
-| CI's test ordering | ran the 7 preceding tests locally, then it | 11 s, passes |
-| Node / `@endo` | ran the peer directly | starts, ECONNREFUSED — healthy |
-
-**What is actually known.** Loading `prologos::ocapn::captp-core` takes ~230 s
-on CI and then fails; the same load takes ~40 s locally and succeeds. Same
-pinned Racket 9.0, same source, compiled build, no cache, on a runner that is
-demonstrably not slower at anything else in the same job. The failure is in
-the module load — `imports: Error loading module` — before any Node or TCP
-interaction, so the interop machinery is not involved despite this living in
-the interop job.
-
-**Two open threads for whoever picks it up**, in order of how specific they are:
-
-1. **On CI the `.pnet` cache is written but never HIT.** Locally a warm cache
-   takes this test from 49 s to 11 s. On CI *green* it took 41 s — cold speed —
-   with seven tests before it and a 25 MB cache on disk. So cache writes work
-   there and reads do not. That is a real defect regardless of this failure,
-   and `driver.rkt:133` already suspects relative-path resolution.
-2. **Why one module load costs 5× more on a runner that matches on everything
-   else.** Not memory (MEMORY-STATS reports ~165 MB), not the compile limit
-   (set at job level and verified in the step env).
-
-**The probe has been reverted**; `interop.yml` is back to its pre-investigation
-form. Leaving a diagnostic in place that has already answered is how a probe
-becomes permanent scaffolding.
-
-**Rule.** Two hypotheses died here and both were mine. The one that cost real
-time was not being wrong — it was *nearly recording a wrong conclusion from a
-probe that had tested nothing*. State what a negative result rules out only
-after checking that the instrument could have said yes.
-
----
-
-### #57 WIDENED (2026-08-01) — it is not one test, it is MODULE LOADING ON CI, and it wears three different error messages
-
-I had been reading the two failing workflows as one cause and then, on seeing
-different exit codes, as two. Both readings were wrong. The `test` workflow's
-log settles it — the same phenomenon, across nine files, presenting as three
-unrelated-looking messages:
-
-```
-FAILED: test-bridge-perf.rkt              Error loading prologos::ocapn::captp-core: Unbound variable
-FAILED: test-ocapn-acceptance-l3.rkt      Error loading prologos::ocapn::captp-core: Unbound variable
-FAILED: test-ocapn-break-plain-interop    Error loading prologos::ocapn::captp-core: Unbound variable
-FAILED: test-ocapn-e2e.rkt                Error loading prologos::ocapn::captp-core: Unbound variable
-FAILED: test-ocapn-bridge-interop.rkt     Error loading prologos::ocapn::captp-core: Unbound variable
-FAILED: test-ocapn-netlayer.rkt           Error loading prologos::ocapn::netlayer:   Type mismatch
-FAILED: test-ocapn-bidirectional-interop  TIMEOUT: exceeded 300s
-FAILED: test-ocapn-bootstrap-gift-interop TIMEOUT: exceeded 300s
-FAILED: test-ocapn-import-object-interop  TIMEOUT: exceeded 300s
-```
-
-Every one is a MODULE LOAD that is slow and then fails. "Unbound variable",
-"Type mismatch" and "TIMEOUT" are three faces of the same event — which check
-happens to fail first against a module that did not finish loading. Chasing
-any one of them as its own bug leads nowhere, and I lost time doing exactly
-that with the `.pnet` cache.
-
-**The suite numbers are the clearest statement of it:**
-
-| | files | tests | wall | result |
-|---|---|---|---|---|
-| local, cold cache, batch runner | 514 | 9631 | 204 s | **all pass** |
-| CI, same runner | 244 of 518 | 4259 | 650 s | 9 failures, ABORTED |
-
-CI did not finish: its own systemic-regression guard tripped at 3 timeouts and
-killed the remaining 274 files. Per file it is several times slower, and the
-files that fail are the ones with the heaviest module graphs
-(`captp-core` and its dependents).
-
-**This also retires the "7 Node-interop tests" note above.** Those seven failed
-in this container earlier today with `expected reply frame from Node`, and in
-this run they all PASS, cold, with no code change between. So they were
-intermittent here too — I recorded them as environmental, which was right, but
-"fails identically at e65e0f82" overstated it: they are flaky, not
-deterministic. Corrected rather than deleted, because the wrong version was
-load-bearing for a conclusion I reported.
-
-**What is established.** Not our code (a documentation-only commit reproduced
-it, and the full suite passes locally cold). Not the `.pnet` cache (cleared
-25 MB on CI, no change). Not an interpreted build (locally interpreted + cold
-is 118 s and passes). Not the runner in general (in the interop job every other
-step matches its green timing to the second). What is left is that Prologos
-module loading is several times slower on this CI runner than locally, and
-past some threshold it does not merely lag — it fails, with a message naming
-whatever was asked of the half-loaded module.
-
-**Rule.** When failures share a SHAPE (module load) but not a MESSAGE, group
-them by shape first. Three messages across nine files looked like three bugs
-and was one; the grouping was visible only in the full-suite log, which is the
-artifact I should have read first instead of the single job I was pinged about.
+**The one methodological lesson worth keeping from the wrong path:** a probe
+that clears a nonexistent directory succeeds silently and is indistinguishable
+from one that worked. Make every diagnostic report what it ACTED ON — file
+counts, sizes, paths. A null result is evidence only if the instrument could
+have said yes.
