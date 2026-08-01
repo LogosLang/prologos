@@ -124,18 +124,30 @@
       [(and (pair? c) (eq? (car c) 'collapse-rename))
        (string-append "^-" (symbol->string (cdr c)))]
       [else "^?"]))
+  ;; D4.P4a: the NINTH step-kind dispatch site — missed by the original
+  ;; census because it OPEN-CODED the shape tests (`(and (pair? s) (eq? (car
+  ;; s) '@ord))`) instead of using the exported predicates, so an
+  ;; identifier-grep could not see it. Its old `[else (format "~a" s)]`
+  ;; leaked a raw s-expression into user-facing output and diagnostics.
+  ;;
+  ;; This is the ONE site that does not RAISE on a missed kind. `pp-expr` is
+  ;; on the error-message path (driver.rkt:291,309,507,798,834 and the typing
+  ;; hints), so a raise here converts a real diagnostic into an internal
+  ;; crash — and `typing-errors.rkt`'s catch-all handler could swallow it,
+  ;; achieving strictly LESS than a visible marker. The marker is loud,
+  ;; grep-able, and names the kind. Written scope decision, not an omission.
   (define (step->string s first?)
-    (cond
-      [(symbol? s) (if first? (symbol->string s) (string-append "." (symbol->string s)))]
+    (case (select-step-kind/display s)
+      [(key) (if first? (symbol->string s) (string-append "." (symbol->string s)))]
       ;; D4.P3c: ordinal STEP (.N — descends) vs @ord BRANCH head (bare N)
-      [(number? s) (if first? (number->string s) (string-append "." (number->string s)))]
-      [(and (pair? s) (eq? (car s) '@ord)) (number->string (cadr s))]
-      [(and (pair? s) (eq? (car s) '@key))
+      [(ord-step) (if first? (number->string s) (string-append "." (number->string s)))]
+      [(ord-branch) (number->string (cadr s))]
+      [(caret)
        (string-append (if first? "" ".") (symbol->string (cadr s))
                       (cont->string (caddr s)))]
-      [(and (pair? s) (eq? (car s) '@sub))
+      [(sub)
        (string-append ".{" (string-join (map pp-select-branch (cdr s)) " ") "}")]
-      [else (format "~a" s)]))
+      [else (format "«unrendered-step-kind:~a:~s»" (select-step-kind/display s) s)]))
   (apply string-append
          (for/list ([s (in-list b)] [i (in-naturals)])
            (step->string s (zero? i)))))
@@ -582,9 +594,10 @@
     [(expr-path branches)
      (define (pp-branch segs)
        (string-join (for/list ([s (in-list segs)])
-                      (cond [(expr-keyword? s) (symbol->string (expr-keyword-name s))]
-                            [(expr-symbol? s) (symbol->string (expr-symbol-name s))]
-                            [else "?"]))
+                      ;; D4.P4b-i: segments are bare SYMBOLS (the step
+                      ;; encoding). The expr-keyword/expr-symbol arms are the
+                      ;; pre-convergence shapes and are gone with them.
+                      (symbol->string s))
                     "."))
      (if (= (length branches) 1)
          (format "#p(~a)" (pp-branch (car branches)))

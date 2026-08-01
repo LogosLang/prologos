@@ -55,6 +55,12 @@
          ;; SUB.3 hot-scan: the reflective oracle, for the differential
          ;; contract tests ONLY (armed ≡ reflective)
          contains-open-container?/reflective
+         ;; CIU T6 D4.P4a: the select-block value walk. Exported for the
+         ;; TOTALITY pins ONLY — the untotal case (a step kind the walk has no
+         ;; arm for) is UNCONSTRUCTIBLE from surface syntax, so the fixtures
+         ;; must call the walk directly with a synthetic step. Zero behavioural
+         ;; change; production reaches it through the whnf `expr-select` arm.
+         select-reduce
          ;; N6e issue #71: saturated-multi-hole-section classifier (shared by
          ;; infer/inferQ so the 3-stage guard cannot drift between stages).
          saturated-hole-section-app?
@@ -1692,10 +1698,14 @@
         (let walk ([steps b] [v v])
           (let* ([s (car steps)]
                  [name (select-step-name s)]
-                 [hit (cond
-                        [(number? s) (index-into v s name)]
-                        [(select-ord-step? s) (index-into v (cadr s) (cadr s))]
-                        [else (project (champ-of v name) name)])])
+                 ;; D4.P4a site 6: was `[else …]` — a sixth kind was silently
+                 ;; projected as a NOMINAL KEY (and would have surfaced, if at
+                 ;; all, as a champ-of "not a map" panic naming the wrong thing).
+                 [hit (case (select-step-kind s)
+                        [(ord-step) (index-into v s name)]
+                        [(ord-branch) (index-into v (cadr s) (cadr s))]
+                        [(key caret sub) (project (champ-of v name) name)]
+                        [else (select-step-kind-unhandled 'select-walk-to-leaf s)])])
             (if (null? (cdr steps))
                 hit
                 (walk (cdr steps) hit)))))
@@ -1723,7 +1733,11 @@
              (if (null? (cdr b))
                  (list (cons #f elem))
                  (branch-entries elem (cdr b) seen)))]
-          [else
+          ;; D4.P4a site 7: was a bare `[else …]` — a sixth kind was silently
+          ;; projected as a NOMINAL KEY. Guard rather than `case`: the body is
+          ;; the walk's largest arm. `sub` joins `key`/`caret` because that is
+          ;; what the old `else` caught — behaviour-preserving by construction.
+          [(memq (select-step-kind (car b)) '(key caret sub))
            (let* ([s (car b)]
                   [rest (cdr b)]
                   [name (select-step-name s)]
@@ -1740,7 +1754,8 @@
                 (below-components hit rest (append seen (list s)))]
                [else
                 (list (cons (or (and cont (select-cont-rename cont)) name)
-                            (below-value hit rest (append seen (list s)))))]))])))
+                            (below-value hit rest (append seen (list s)))))]))]
+          [else (select-step-kind-unhandled 'select-branch-entries (car b))])))
     ;; the COMPONENTS a dissolved head splices (terminal sub-block = that
     ;; block's level, fresh branches; else the steps continue as one branch).
     ;; D4.P3a verify hardening carried: a sub-block is TERMINAL.
@@ -1772,10 +1787,30 @@
            (if (null? (cdr steps))
                elem
                (below-value elem (cdr steps) seen)))]
-        [else (entries->value (branch-entries v steps seen))]))
-    (entries->value
-     (append-map (lambda (b) (branch-entries (whnf subj-expr) b '()))
-                 branches))))
+        ;; D4.P4a site 8: was a bare `[else …]`. The guard must list EXACTLY
+        ;; what that else caught. ⚠ The twins are NOT symmetric here, and the
+        ;; first version of this comment said they were (corrected at the P4a
+        ;; verify): typing-core's arm-1 guard is `(and (select-sub-step? …)
+        ;; (null? (cdr steps)))`, so its old else DID see non-terminal `sub`
+        ;; — but reduction's arm at :1753 guards on `@sub` alone and tests
+        ;; terminality INSIDE the arm, so `sub` never reached this else at
+        ;; all. `sub` is therefore a DEAD entry in this list: harmless (a
+        ;; wider guard, unreachable position) but not what the comment
+        ;; claimed. What both twins genuinely omitted in the first cut, and
+        ;; what is actually load-bearing here, is `ord-branch`.
+        [(memq (select-step-kind (car steps)) '(key caret sub ord-branch))
+         (entries->value (branch-entries v steps seen))]
+        [else (select-step-kind-unhandled 'select-below-value (car steps))]))
+    ;; D4.P4a: HOIST the subject's whnf out of the per-branch lambda. The
+    ;; header comment above has claimed since P3a that the subject is
+    ;; "evaluated ONCE ... reused across every branch" — it was not: `(whnf
+    ;; subj-expr)` sat INSIDE the append-map lambda, so an N-branch block
+    ;; whnf'd the subject N times. Pure win (whnf is a pure function of the
+    ;; expr); this makes the code match its own documented contract.
+    (let ([subj* (whnf subj-expr)])
+      (entries->value
+       (append-map (lambda (b) (branch-entries subj* b '()))
+                   branches)))))
 
 (define (validate-tabulate sname closed? plan subj-champ names)
   (define c (expr-champ-racket-champ subj-champ))
@@ -2019,6 +2054,40 @@
       ;; Structural forms (not reducible at head)
       (expr-lam? e) (expr-pair? e) (expr-union? e)
       (expr-vcons? e) (expr-vnil? e)
+      ;; D4.P4a: container VALUE carriers. This list held every container
+      ;; TYPE former (Map/Set/PVec/TVec/TMap/TSet/Record) and ZERO of the
+      ;; value carriers, so every champ/rrb/hset reaching whnf paid the full
+      ;; ~990-arm match to arrive at `[_ e]` (reduction.rkt:3957) — identity.
+      ;; SAFETY PROOF (verified at `cab30b9a`, re-verify if the match moves):
+      ;; `whnf-impl/match` has NO bare-head arm for any of the three — every
+      ;; expr-champ/expr-rrb/expr-hset pattern in it sits at nested indent,
+      ;; matching an already-whnf'd ARGUMENT of a map/set/vector operation,
+      ;; never `e` itself. So the fast path returns exactly what the match
+      ;; returned — VALUE-identical, one predicate instead of the match.
+      ;; ⚠ NOT "identical semantics" without qualification (corrected at the
+      ;; P4a adversarial verify, found independently by two reviewers): the
+      ;; fast path returns at :2062, BEFORE the fuel decrement in the `else`
+      ;; at :2065-2069, so a champ/rrb/hset now consumes ZERO reduction fuel.
+      ;; That is a real semantic delta. It is one-way (a program that used to
+      ;; exhaust the 1M budget may now complete; never the reverse), cannot
+      ;; produce a wrong answer, and matches how the ~70 pre-existing trivial
+      ;; kinds already behave — but it is NOT covered by the match-arm proof
+      ;; above and must not be smuggled under it.
+      (expr-champ? e) (expr-rrb? e) (expr-hset? e)
+      ;; D4.P4b-i: the SELECTOR carrier value. `whnf-trivial?` already held
+      ;; `expr-Path?` (the TYPE, :2014) but not `expr-path?` (the VALUE) — the
+      ;; same type-former-without-its-value-carrier gap P4a closed for
+      ;; champ/rrb/hset, one line away and missed by that census too.
+      ;; VERIFIED at `f072c115`: `whnf-impl/match` has NO arm for `expr-path`
+      ;; at any indent, so it already fell to `[_ e]` (:3957) — identity — and
+      ;; `nf`'s arm is likewise `[(expr-path _) e]`. A path literal is a
+      ;; canonical form with no head reduction rule, which is this predicate's
+      ;; own stated criterion for membership.
+      ;; ⚠ This is a DECISION, not an inheritance (the P4b audit named it as
+      ;; one): the SELECTOR is a literal and belongs here; `expr-select` — the
+      ;; APPLICATION of a selector to a subject — IS reducible (whnf arm at
+      ;; :2967-2982) and must stay OUT.
+      (expr-path? e)
       ;; Bound variables (stuck — no definition to unfold)
       (expr-bvar? e)
       ;; Type constructor names
@@ -3395,7 +3464,7 @@
            [np (whnf paths)])
        (cond
          [(and (expr-path? np) (pair? (expr-path-branches np)))
-          (foldl (lambda (seg acc) (whnf (expr-map-get acc seg #f)))
+          (foldl (lambda (seg acc) (whnf (expr-map-get acc (expr-keyword seg) #f)))
                  nt (car (expr-path-branches np)))]
          [(and (equal? nt target) (equal? np paths)) e]
          [else (expr-get-in nt np)]))]
@@ -3415,7 +3484,7 @@
             (cond
               [(null? segs) (whnf (expr-app fn base))]
               [else
-               (let* ([key (car segs)]
+               (let* ([key (expr-keyword (car segs))]
                       [sub (whnf (expr-map-get base key #f))]
                       [updated (build sub (cdr segs))])
                  (whnf (expr-map-assoc base key updated)))]))]
@@ -4411,7 +4480,7 @@
        ;; Static path on concrete target: walk segments
        [(and (expr-path? np) (pair? (expr-path-branches np)))
         (define segs (car (expr-path-branches np)))
-        (foldl (lambda (seg acc) (nf (expr-map-get acc seg #f))) nt segs)]
+        (foldl (lambda (seg acc) (nf (expr-map-get acc (expr-keyword seg) #f))) nt segs)]
        [else (expr-get-in nt np)])]
     [(expr-update-in target paths fn)
      (define nt (nf target))
@@ -4427,7 +4496,7 @@
           (cond
             [(null? segs) (nf (expr-app nf-fn base))]
             [else
-             (define key (car segs))
+             (define key (expr-keyword (car segs)))
              (define sub (nf (expr-map-get base key #f)))
              (define updated (build sub (cdr segs)))
              ;; 2026-07-16: normalize the spine (was returned as a raw

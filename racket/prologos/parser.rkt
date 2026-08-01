@@ -20,7 +20,8 @@
          ;; reduction, so check and meaning cannot drift)
          (only-in "syntax.rkt"
                   select-key-step? select-sub-step? select-step-cont
-                  select-cont-collapse? select-branch-top-keys)
+                  select-cont-collapse? select-branch-top-keys
+                  select-step-kind)   ;; D4.P4a: the totality dispatcher
          ;; LET P4: the fused primitives moved here (the one definition —
          ;; macros.rkt consumes them at the datum level, and this module
          ;; requires macros.rkt, so they cannot live in this file).
@@ -952,15 +953,27 @@
         (and (symbol? x)
              (let ([s (symbol->string x)])
                (and (> (string-length s) 0) (char=? (string-ref s 0) #\^))))))
+  ;; D4.P4a: a parser-local re-implementation of `select-branch-keyless?`'s
+  ;; leaf test — invisible to the original census, which searched three other
+  ;; files. Classify rather than testing `select-key-step?` directly, so an
+  ;; unrecognized leaf kind raises here instead of silently answering #f and
+  ;; mis-gating the `^..` desugar at :1001.
   (define (dissolve-step? s)
-    (and (select-key-step? s) (eq? (select-step-cont s) 'dissolve)))
+    (and (eq? (select-step-kind s) 'caret)
+         (eq? (select-step-cont s) 'dissolve)))
   ;; ---- P3b branch-close validation: positional legality of `^` conts ----
   ;; br in ORDER (head first). #f = ok, else the error message.
   (define (branch-problem br)
     (let check ([steps br])
       (if (null? steps)
           #f
+          ;; D4.P4a: `select-step-cont` answers #f for every non-`caret` kind,
+          ;; so this positional-legality check silently PASSED any step kind
+          ;; it did not recognize — a `^`-bearing wrapper in an illegal
+          ;; position would slip through a check written to reject it.
+          ;; Classifying first makes an unrecognized kind loud here.
           (let* ([s (car steps)] [last? (null? (cdr steps))]
+                 [_kind (select-step-kind s)]
                  [c (select-step-cont s)])
             (cond
               [(and (eq? c 'synth) (not last?))

@@ -26,11 +26,13 @@
          "../driver.rkt"
          "../reduction.rkt"
          "../namespace.rkt"
+         (prefix-in tc: "../typing-core.rkt")   ;; D4.P4a: select-project, for the totality pins
          (prefix-in tr: "../trait-resolution.rkt")
          (prefix-in u: "../unify.rkt")
          (prefix-in gc: "../global-constraints.rkt")
          "../errors.rkt"
          "../champ.rkt"
+         (only-in "../rrb.rkt" rrb-from-list)   ;; D4.P4a: twin-regression fixture
          "test-support.rkt"
          "../parse-reader.rkt")
 
@@ -2175,3 +2177,450 @@
   (define raw (run-ws-raw-last (string-append P3C-DATA "admins{[0]}\n")))
   (check-true (prologos-error? raw))
   (check-regexp-match #rx"written bare" (format "~a" raw)))
+
+;; ============================================================
+;; D4.P4a — STEP-KIND TOTALITY (the Exhaustive Walkers rule, applied
+;; BEFORE the sixth step kind lands rather than after a silent miss)
+;; ============================================================
+;;
+;; The step vocabulary is a CLOSED union (syntax.rkt § "the ONE shared branch
+;; walk"):  symbol | number | (@key name cont) | (@sub . branches) | (@ord N).
+;; Q_U7 adds a sixth kind at P4c — the `(@bcast step)` ω wrapper.
+;;
+;; Censused at `cab30b9a`, EIGHT cond arms dispatch on step kind and SILENTLY
+;; absorb an unknown one (the design said four — the 8th enumeration
+;; under-count of this arc, landing on the phase built to end that class):
+;;
+;;   1 syntax.rkt:849       select-step-output-name   -> #f   (no name)
+;;   2 syntax.rkt:907       select-branch-top-keys    -> '()  (no component)
+;;   3 typing-core.rkt:776  walk-to-leaf              -> treated as a nominal key
+;;   4 typing-core.rkt:824  select-branch-entries     -> treated as a nominal key
+;;   5 typing-core.rkt:882  select-below-field        -> treated as a nominal key
+;;   6 reduction.rkt:1675   walk-to-leaf              -> project (champ-of v name)
+;;   7 reduction.rkt:1703   branch-entries            -> treated as a nominal key
+;;   8 reduction.rkt:1752   below-value               -> treated as a nominal key
+;;
+;; A sixth kind reaching ANY of them is a silent wrong answer, not an error.
+;; Owner ruling 2026-07-31: route ALL EIGHT through one named classifier
+;; (`select-step-kind`) whose else RAISES, and give each consumer a `case`
+;; over the closed kind set whose own else re-raises.
+;;
+;; WHY THESE ARE DIRECT-CALL UNIT PINS: there is no sixth step kind yet, so
+;; the untotal case is UNCONSTRUCTIBLE from surface syntax. A pin written
+;; through `process-string` cannot reach these arms. (And a pin that merely
+;; called a not-yet-existing `select-step-kind` would fail with "unbound
+;; identifier" — NOT the reason it claims, this arc's hazard 4, which has
+;; already produced one vacuous pin and two mis-premised fixtures.) Each pin
+;; below hands a walk a synthetic unknown step and asserts it RAISES; today
+;; every one of them returns a VALUE instead, so the RED is
+;; "expected exception, got value" — which IS the claimed reason.
+
+(define BOGUS-STEP '(@bogus-step-kind zzz))
+
+;; The pins assert the TOTALITY failure specifically, not merely "something
+;; raised". `check-exn exn:fail?` is far too broad: the adversarial verify
+;; showed it passes on an ARITY error or a malformed fixture, so a future
+;; change to `make-record`/`champ-insert` could turn all eight green while the
+;; totality arms were entirely reverted. The fixtures are also hoisted OUT of
+;; the guarded lambda for the same reason — a fixture that throws must fail
+;; the test, not satisfy it.
+(define (totality-exn? e)
+  (and (exn:fail? e)
+       (regexp-match? #rx"unknown select step kind|no arm for select step kind"
+                      (exn-message e))))
+
+;; ---- sites 1 + 2: the shared syntax.rkt walks (directly exported) ----
+
+(test-case "P4a totality site 1: select-step-output-name RAISES on an unknown step kind"
+  (check-exn totality-exn?
+             (lambda () (select-step-output-name BOGUS-STEP))
+             "an unknown step kind must not silently contribute NO output name"))
+
+(test-case "P4a totality site 2: select-branch-top-keys RAISES on an unknown step kind"
+  (check-exn totality-exn?
+             (lambda () (select-branch-top-keys (list BOGUS-STEP)))
+             "an unknown step kind must not silently contribute NO component"))
+
+;; ---- sites 3-5: the typing walk, via the exported `select-project` ----
+;; ctx is unused by select-row-of / select-project-field, so '() is faithful.
+
+(define (bogus-typing-subject)
+  ;; a closed keyword row offering :a — so the walk gets PAST the subject
+  ;; check and reaches the step dispatch proper
+  (make-record 'keyword
+               (list (cons 'a (record-field (expr-Int) 'present)))
+               'closed))
+
+;; hoisted: built ONCE, outside every guarded lambda
+(define BOGUS-TYPING-SUBJ (bogus-typing-subject))
+
+(test-case "P4a totality site 4: select-project's branch walk RAISES on an unknown step kind"
+  ;; the branch head is the bogus step -> select-branch-entries' guard
+  (check-exn totality-exn?
+             (lambda () (tc:select-project '() BOGUS-TYPING-SUBJ (list (list BOGUS-STEP))))
+             "an unknown step kind must not be silently projected as a nominal key"))
+
+(test-case "P4a totality site 5: select-below-field RAISES on an unknown step kind below a kept head"
+  ;; `a` descends, then the bogus step is BELOW it -> select-below-field's guard
+  (check-exn totality-exn?
+             (lambda () (tc:select-project '() BOGUS-TYPING-SUBJ (list (list 'a BOGUS-STEP))))
+             "an unknown step kind below a kept head must not be silently projected"))
+
+(test-case "P4a totality site 3: walk-to-leaf RAISES on an unknown step kind (collapse branch)"
+  ;; a `^-` collapse leaf pre-classifies into walk-to-leaf -> its guard
+  (check-exn totality-exn?
+             (lambda () (tc:select-project '() BOGUS-TYPING-SUBJ
+                                           (list (list BOGUS-STEP '(@key a collapse)))))
+             "walk-to-leaf must not silently treat an unknown step kind as a nominal key"))
+
+;; ---- sites 6-8: the reduction walk, via the newly-exported `select-reduce` ----
+
+(define (bogus-runtime-subject)
+  (let ([kw (expr-keyword 'a)])
+    (expr-champ (champ-insert champ-empty (equal-hash-code kw) kw (expr-int 1)))))
+
+;; hoisted, as above
+(define BOGUS-RUNTIME-SUBJ (bogus-runtime-subject))
+
+(test-case "P4a totality site 7: select-reduce's branch-entries RAISES on an unknown step kind"
+  (check-exn totality-exn?
+             (lambda () (nf (select-reduce BOGUS-RUNTIME-SUBJ (list (list BOGUS-STEP)))))
+             "an unknown step kind must not be silently projected at runtime"))
+
+(test-case "P4a totality site 8: select-reduce's below-value RAISES on an unknown step kind"
+  (check-exn totality-exn?
+             (lambda () (nf (select-reduce BOGUS-RUNTIME-SUBJ (list (list 'a BOGUS-STEP)))))
+             "an unknown step kind below a kept head must not be silently projected at runtime"))
+
+(test-case "P4a totality site 6: select-reduce's walk-to-leaf RAISES on an unknown step kind"
+  (check-exn totality-exn?
+             (lambda () (nf (select-reduce BOGUS-RUNTIME-SUBJ
+                                           (list (list BOGUS-STEP '(@key a collapse))))))
+             "walk-to-leaf must not silently treat an unknown step kind as a nominal key"))
+
+;; ============================================================
+;; D4.P4a — THE WHOLE-NODE ABORT (owner ratification 2026-07-31)
+;; ============================================================
+;;
+;; RULED: a runtime miss anywhere inside a selection aborts the WHOLE
+;; selection — no partial results, no `expr-panic` buried in an output slot.
+;; Mechanism: `select-reduce` opens ONE `let/ec` (reduction.rkt:1600) and the
+;; miss paths `return` through it.
+;;
+;; WHY THIS IS PINNED NOW, BEFORE BROADCAST EXISTS: §5.P4's original LOWERING
+;; clause said reduction would lower per-step onto `pvec-map`/`map-map-vals`.
+;; Four agents converged that this is contradicted by shipped code — a
+;; per-element lowering would evaluate each element independently and BURY the
+;; panic value in an output slot, which is the P2.b fabrication class. The
+;; ruling is WALK-under-one-`let/ec`; this fixture is what makes it a fact
+;; rather than a claim, so P4c's per-element broadcast cannot drift it back
+;; under a "map semantics" intuition.
+;;
+;; The discriminator is deliberate: TWO branches, the FIRST of which succeeds.
+;; Under WALK the whole node is the panic. Under a per-element LOWERING the
+;; result would be a 2-field record whose `:a` slot holds 1 and whose `:nope`
+;; slot holds the panic — i.e. a fabricated partial answer at zero errors.
+
+(test-case "P4a whole-node abort: a runtime miss aborts the NODE, not one slot"
+  (define result
+    (nf (select-reduce (bogus-runtime-subject)
+                       (list (list 'a)        ;; succeeds — :a is present
+                             (list 'nope))))) ;; misses at runtime
+  (check-true (expr-panic? result)
+              "the WHOLE selection must be the panic (single let/ec), not a record with a panic inside")
+  (check-false (expr-champ? result)
+               "a record result here would be a fabricated partial answer — the P2.b class"))
+
+(test-case "P4a whole-node abort: the panic names the missing field, not the surviving one"
+  ;; ⚠ The adversarial verify showed the message assertions ALONE do not
+  ;; discriminate: expr-champ is #:transparent, so a record with the panic
+  ;; buried in its :nope slot ALSO prints both "nope" and "invariant
+  ;; violation". The discriminating half is `expr-panic?` on the WHOLE
+  ;; result — kept here so this fixture is not a message pin sold as a
+  ;; discriminator.
+  (define result
+    (nf (select-reduce (bogus-runtime-subject)
+                       (list (list 'a) (list 'nope)))))
+  (check-true (expr-panic? result)
+              "the discriminating assertion — a buried panic would be an expr-champ")
+  (check-regexp-match #rx"nope" (format "~a" result))
+  (check-regexp-match #rx"invariant violation" (format "~a" result)))
+
+(test-case "P4a whole-node abort: a non-map mid-descent aborts the NODE too"
+  ;; :a holds an Int, so descending `a.b` hits champ-of's non-map path
+  (define result
+    (nf (select-reduce (bogus-runtime-subject) (list (list 'a 'b)))))
+  (check-true (expr-panic? result))
+  (check-regexp-match #rx"not a map at runtime" (format "~a" result)))
+
+;; ---- P4a self-review regression: the "below a kept head" TWINS ----
+;;
+;; The four `memq`-guard sites must list EXACTLY the kinds their old `else`
+;; caught, or the totality refactor is not behaviour-preserving. Sites 5
+;; (typing-core `select-below-field`) and 8 (reduction `below-value`) sit
+;; under arms taking TERMINAL `sub` and `ord-step`, so their else ALSO caught
+;; `ord-branch` — and the first cut of both omitted it, turning a delegation
+;; into a raise. Caught at the P4a gate by self-review, not by the suite:
+;; the path is not reached from surface syntax today, which is exactly why it
+;; needs a direct-call pin rather than trust.
+;;
+;; The assertion is deliberately NOT "returns value X" — it is "does not fail
+;; the TOTALITY way". An `(@ord N)` below a kept head may still panic for an
+;; honest reason (bad subject, OOB); what it must never do is report that the
+;; walk has no arm for its kind.
+
+(define (vector-under-key-subject)
+  (let ([kw (expr-keyword 'a)])
+    (expr-champ (champ-insert champ-empty (equal-hash-code kw) kw
+                              (expr-rrb (rrb-from-list (list (expr-int 7) (expr-int 8))))))))
+
+(test-case "P4a site 8 twin: an (@ord N) below a kept head still DELEGATES, never 'no arm'"
+  (define result (nf (select-reduce (vector-under-key-subject)
+                                    (list (list 'a '(@ord 0))))))
+  (check-false (regexp-match? #rx"no arm for select step kind" (format "~a" result))
+               "reduction's below-value must keep handling ord-branch — its old else did"))
+
+(test-case "P4a site 5 twin: typing's select-below-field keeps handling ord-branch"
+  (define tm (make-record 'keyword
+                          (list (cons 'a (record-field (expr-PVec (expr-Int)) 'present)))
+                          'closed))
+  ;; must not raise the TOTALITY error; a select-fail is a legitimate outcome
+  (check-not-exn
+   (lambda ()
+     (with-handlers ([exn:fail? (lambda (e)
+                                  (when (regexp-match? #rx"no arm for select step kind"
+                                                       (exn-message e))
+                                    (raise e))
+                                  (void))])
+       (tc:select-project '() tm (list (list 'a '(@ord 0))))))
+   "typing's select-below-field must keep handling ord-branch — its old else did"))
+
+;; ============================================================
+;; D4.P4a (post-verify) — the FIVE sites the first census missed
+;; ============================================================
+;;
+;; The original census was SYNTAX-directed: grep the exported helper names,
+;; then look for `cond` arms, in three files. That method structurally cannot
+;; see (a) dispatchers that OPEN-CODE the shape tests, or (b) dispatchers
+;; shaped as `and`/`if` rather than `cond`. Both classes existed. Five more
+;; sites, in two more files — and the two LEAF classifiers run UPSTREAM of the
+;; guarded walks, so a silent #f there DEFEATS the guards rather than sitting
+;; beside them: the branch is mis-sorted (keyed vs keyless) with no raise
+;; anywhere downstream, and that feeds the parser's L4 and duplicate checks.
+;;
+;; Owner ruling (2026-07-31): extend the routing; deliver the totality.
+
+(test-case "P4a leaf classifier: select-branch-collapse RAISES on an unknown leaf kind"
+  (check-exn totality-exn?
+             (lambda () (select-branch-collapse (list 'a BOGUS-STEP)))
+             "a silent #f here mis-sorts the branch BEFORE any guarded walk sees it"))
+
+(test-case "P4a leaf classifier: select-branch-keyless? RAISES on an unknown leaf kind"
+  (check-exn totality-exn?
+             (lambda () (select-branch-keyless? (list 'a BOGUS-STEP)))
+             "a silent #f here mis-sorts a keyless branch as KEYED"))
+
+(test-case "P4a leaf classifiers keep their answers for all FIVE known kinds"
+  ;; behaviour-preservation: only `caret` ever answered non-#f, and it still does
+  (check-equal? (select-branch-collapse (list 'a '(@key b collapse))) 'collapse)
+  (check-equal? (select-branch-collapse (list 'a '(@key b dissolve))) #f)
+  (check-false  (select-branch-collapse (list 'a 'b)))
+  (check-false  (select-branch-collapse (list 'a 0)))
+  (check-false  (select-branch-collapse (list 'a '(@ord 0))))
+  (check-false  (select-branch-collapse (list 'a '(@sub (x)))))
+  (check-true   (select-branch-keyless? (list 'a '(@key b dissolve))))
+  (check-false  (select-branch-keyless? (list 'a '(@key b collapse))))
+  (check-false  (select-branch-keyless? (list 'a 'b)))
+  (check-false  (select-branch-keyless? (list 'a 0)))
+  (check-false  (select-branch-keyless? (list 'a '(@ord 0))))
+  (check-false  (select-branch-keyless? (list 'a '(@sub (x))))))
+
+(test-case "P4a render site: an unknown step kind gets a LOUD marker, never a raw s-expression"
+  ;; pp-expr is on the error-message path, so this site renders rather than
+  ;; raising (a raise would turn a diagnostic into an internal crash, and a
+  ;; catch-all handler could swallow it). It must still never leak the raw
+  ;; datum, which is what `[else (format "~a" s)]` used to do.
+  (define rendered
+    (pp-expr (expr-select (expr-fvar 'x) (list (list 'a BOGUS-STEP))) '()))
+  ;; The marker NAMES the datum on purpose — that is the debugging value.
+  ;; The property is that it is WRAPPED, not passed through as if it were
+  ;; valid surface syntax, which is exactly what `[else (format "~a" s)]`
+  ;; used to do (it rendered `x{a(@bogus-step-kind zzz)}`).
+  (check-regexp-match #rx"unrendered-step-kind" rendered)
+  (check-false (regexp-match? #rx"\\{a\\(@bogus-step-kind zzz\\)\\}" rendered)
+               "the datum must be wrapped in the marker, not emitted as surface syntax")
+  ;; and it must not RAISE — pp-expr is on the error-message path
+  (check-true (string? rendered)))
+
+;; ---- the consumer-side else: previously ZERO coverage ----
+;;
+;; The verify found that all eight totality pins raise from the CLASSIFIER,
+;; never from `select-step-kind-unhandled`. That is true by construction today
+;; (with five kinds, every consumer's arm list covers all five), so the
+;; mechanism the design advertises — "a missed consumer RAISES naming itself"
+;; — had no test at all. This pins its contract directly.
+
+(test-case "P4a: select-step-kind-unhandled names the CONSUMER and the kind"
+  (define msg
+    (with-handlers ([exn:fail? exn-message])
+      (select-step-kind-unhandled 'my-walk '(@key b collapse))
+      "NO RAISE"))
+  (check-regexp-match #rx"my-walk" msg "the consumer must name itself")
+  (check-regexp-match #rx"caret" msg "the message must name the unhandled kind")
+  (check-regexp-match #rx"no arm for select step kind" msg))
+
+(test-case "P4a: select-step-kind classifies all five known kinds"
+  (check-equal? (select-step-kind 'a) 'key)
+  (check-equal? (select-step-kind 0) 'ord-step)
+  (check-equal? (select-step-kind '(@key b collapse)) 'caret)
+  (check-equal? (select-step-kind '(@sub (x))) 'sub)
+  (check-equal? (select-step-kind '(@ord 0)) 'ord-branch)
+  (check-exn totality-exn? (lambda () (select-step-kind BOGUS-STEP))))
+
+;; ---- the whnf-trivial? container fast path (the verify's MINOR-4) ----
+
+(test-case "P4a: whnf of a bare container VALUE carrier is identity"
+  ;; the safety proof made executable rather than prose — whnf-impl/match has
+  ;; no bare-head arm for these three, so they fell to `[_ e]`; the fast path
+  ;; must return the SAME object.
+  (define c (expr-champ champ-empty))
+  (define v (expr-rrb (rrb-from-list (list (expr-int 1)))))
+  (define h (expr-hset champ-empty))
+  (check-eq? (whnf c) c)
+  (check-eq? (whnf v) v)
+  (check-eq? (whnf h) h))
+
+;; ============================================================
+;; D4.P4b-i — Q_U11: RETIRE the silently-broken `#p(…)` vocabulary
+;; ============================================================
+;;
+;; Probed at `099ef690`, the First-Class Paths literal carries FOUR spellings
+;; but only ONE of them works:
+;;
+;;   #p(a)  /  #p(a.a1)        → Path; `get-in m p` → the value      ✓ LIVE
+;;   #p(a.*)   #p(a.**)        → Path; `get-in m p` → `<error>` value, 0 ERRORS
+;;   #p(a.{b c})               → Path; `get-in m p` → `<error>` value, 0 ERRORS
+;;
+;; The broken half is a LIVE SILENT WRONG ANSWER — the P2.b fabrication class:
+;; it produces a value where an error is owed, and the vacuous ground `Path`
+;; type (typing-core.rkt:2050-2051 discards the branches with `_`) means no
+;; shape constraint can bite. Their own acceptance file has them COMMENTED OUT
+;; (examples/2026-03-20-first-class-paths.prologos:80,83,86), so there is no
+;; live corpus use.
+;;
+;; ⚠ The P4b mini-audit did NOT catch this: its F3 confirmed "#p(a.b.c)
+;; round-trips" and "get-in works", both TRUE — for the subset anyone probed.
+;; The fuller vocabulary was never run end-to-end. (15th consecutive premise
+;; refutation of this arc; this time the premise was the audit's own.)
+;;
+;; Owner ruling Q_U11 [2026-07-31]: RETIRE them with a guided error, rather
+;; than carry a defect across the carrier unification (that would be the
+;; blocking belt-and-suspenders shape) or fix them into new semantics inside a
+;; slice that is meant to be behaviour-preserving. Monotone: a refusal can
+;; become a meaning later, never the reverse.
+;;
+;; The refusal fires at ELABORATION — at the literal, not at its use — so the
+;; error names the malformed thing at the site the user wrote it.
+
+(test-case "P4b-i Q_U11: `#p(a.*)` REFUSES loudly (was an <error> value at 0 errors)"
+  (define r (run-ws-raw-last "def m := {:a {:a1 1}}\ndef p := #p(a.*)\n"))
+  (check-true (prologos-error? r)
+              "a wildcard path literal must refuse, not define as a vacuous Path")
+  (check-regexp-match #rx"\\*" (format "~a" r)))
+
+(test-case "P4b-i Q_U11: `#p(a.**)` REFUSES loudly"
+  (define r (run-ws-raw-last "def m := {:a {:a1 1}}\ndef p := #p(a.**)\n"))
+  (check-true (prologos-error? r))
+  (check-regexp-match #rx"\\*" (format "~a" r)))
+
+(test-case "P4b-i Q_U11: multi-branch `#p(a.{a1 a2})` REFUSES loudly"
+  (define r (run-ws-raw-last "def m := {:a {:a1 1 :a2 2}}\ndef p := #p(a.{a1 a2})\n"))
+  (check-true (prologos-error? r)
+              "a multi-branch path literal must refuse — every consumer truncates it with (car branches)"))
+
+(test-case "P4b-i Q_U11: the guided error NAMES the surviving spelling"
+  (define r (format "~a" (run-ws-raw-last "def p := #p(a.*)\n")))
+  (check-regexp-match #rx"retired|no longer" r "the message must say the spelling is retired")
+  (check-regexp-match #rx"select|flatten|\\{" r
+                      "and must point at what replaced it in the current surface"))
+
+(test-case "P4b-i Q_U11: the LIVE subset is untouched — a keyword chain still works"
+  ;; the whole point of the retirement is that it costs the working surface nothing
+  (define rs (run-ws-raw "def m := {:a {:a1 7}}\ndef p := #p(a.a1)\n[get-in m p]\n"))
+  (check-false (ormap prologos-error? rs) "the single-branch keyword chain must keep working")
+  (check-regexp-match #rx"7" (format "~a" (last rs))))
+
+;; ============================================================
+;; D4.P4b-i — FFI CHARACTERIZATION pins (must stay GREEN through the
+;; encoding convergence; this is a behaviour-preserving refactor)
+;; ============================================================
+;;
+;; `expr-path`'s branches hold `expr-keyword` STRUCTS; `expr-select`'s hold
+;; bare symbols + `@key`/`@sub`/`@ord` s-expressions. b-i converges them onto
+;; the STEP encoding so `#p(…)` and `x{…}` are one representation. These pins
+;; are written BEFORE the change and must not move: for a refactor that claims
+;; to preserve behaviour, the pins are the claim.
+;;
+;; The live FFI surface is `lib/prologos/core/path.prologos` — 6 foreign
+;; primitives over `path-ops.rkt`. Characterized at `f072c115`:
+;;   depth · branch-count · head · tail · leaf?   → WORK
+;;   segments                                      → WHOLE-FILE ABORT
+;; `path-segments` builds a Prologos cons-chain (`expr-app` of `cons`) but the
+;; foreign marshaller wants a RACKET list, so the declared type
+;; `Path -> [List Keyword]` never marshalled. That takes `from-segments` and
+;; `path-append` (built on `segments`) with it. PRE-EXISTING and filed — NOT
+;; caused by the encoding change, and deliberately not pinned here because a
+;; whole-file abort would take the test file with it.
+;;
+;; `head` and `tail` are the load-bearing ones: they return segments AS
+;; PROLOGOS VALUES, which works today only because segments are `expr-keyword`
+;; structs. Under the step encoding the shims become the marshalling
+;; boundary — which is where marshalling belongs.
+
+(define FFI-PATH-PRELUDE
+  (string-append "require [prologos::core::path :as p]\n"
+                 "def q := #p(a.b.c)\n"))
+
+(test-case "P4b-i FFI: `head` returns a Prologos KEYWORD value"
+  (define r (format "~a" (run-ws-raw-last (string-append FFI-PATH-PRELUDE "[p::head q]\n"))))
+  (check-regexp-match #rx":a" r)
+  (check-regexp-match #rx"Keyword" r "the declared foreign type must still marshal"))
+
+(test-case "P4b-i FFI: `tail` returns a Path, printed in surface spelling"
+  (define r (format "~a" (run-ws-raw-last (string-append FFI-PATH-PRELUDE "[p::tail q]\n"))))
+  (check-regexp-match #rx"#p\\(b\\.c\\)" r "tail must drop the head and round-trip its printed form")
+  (check-regexp-match #rx"Path" r))
+
+(test-case "P4b-i FFI: `depth` counts segments of the first branch"
+  (define r (format "~a" (run-ws-raw-last (string-append FFI-PATH-PRELUDE "[p::depth q]\n"))))
+  (check-regexp-match #rx"3" r))
+
+(test-case "P4b-i FFI: `branch-count` is 1 for the surviving single-branch vocabulary"
+  (define r (format "~a" (run-ws-raw-last (string-append FFI-PATH-PRELUDE "[p::branch-count q]\n"))))
+  (check-regexp-match #rx"1" r))
+
+(test-case "P4b-i FFI: `leaf?` composes over depth (a pure Prologos combinator)"
+  (define rs (run-ws-raw (string-append FFI-PATH-PRELUDE
+                                        "[p::leaf? q]\n"
+                                        "[p::leaf? #p(a)]\n")))
+  (check-false (ormap prologos-error? rs))
+  (check-regexp-match #rx"false" (format "~a" (list-ref rs (- (length rs) 2))))
+  (check-regexp-match #rx"true"  (format "~a" (last rs))))
+
+(test-case "P4b-i: get-in / update-in still consume the path encoding"
+  ;; both reduction arms pass segments DIRECTLY as expr-map-get keys, so they
+  ;; are the consumers the encoding change must re-point
+  (define rs (run-ws-raw (string-append
+                          "def m := {:a {:b 5}}\n"
+                          "def pp := #p(a.b)\n"
+                          "[get-in m pp]\n"
+                          "[update-in m pp [fn [x : Int] [int+ x 1]]]\n")))
+  (check-false (ormap prologos-error? rs) "get-in/update-in over a path literal must keep working")
+  (check-regexp-match #rx"5" (format "~a" (list-ref rs (- (length rs) 2))))
+  (check-regexp-match #rx"6" (format "~a" (last rs))))
+
+(test-case "P4b-i: whnf of a bare selector carrier is identity (the P4a argument, applied)"
+  ;; the SELECTOR is a literal — no head reduction rule, so the fast path must
+  ;; return the SAME object. `expr-select` (the APPLICATION) stays reducible.
+  (define sel (expr-path '((a b))))
+  (check-eq? (whnf sel) sel))

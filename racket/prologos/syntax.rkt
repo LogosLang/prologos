@@ -171,6 +171,8 @@
  ;; Path Selection block node (CIU T6 D4.P3a; step vocabulary D4.P3b)
  (struct-out expr-select) select-map-exprs
  select-key-step? select-sub-step? select-ord-step? select-step-name
+ ;; D4.P4a: the step-kind totality dispatcher + the consumer-side else
+ select-step-kind select-step-kind-unhandled select-step-kind/display
  select-step-cont select-cont-collapse? select-cont-rename
  select-branch-collapse select-branch-keyless?
  select-step-output-name select-synth-name select-branch-top-keys
@@ -810,6 +812,90 @@
 ;; splice, `a^.0.name`'s continuation [0 name] must stay a STEP chain
 ;; (output key :name), while `{0.name}` is a keyless component.
 (define (select-ord-step? s) (and (pair? s) (eq? (car s) '@ord)))
+
+;; D4.P4a — THE STEP-KIND TOTALITY DISPATCHER (owner ruling 2026-07-31:
+;; route ALL EIGHT dispatch sites through this one classifier).
+;;
+;; The step vocabulary is a CLOSED union, and it is about to grow: Q_U7 adds
+;; `(@bcast step)` at P4c. Before P4a, eight `cond` arms across THREE modules
+;; dispatched on step kind and SILENTLY absorbed an unknown one — two
+;; contributing no name/component, six silently projecting it as a NOMINAL
+;; KEY. A sixth kind reaching any of them is a silent wrong answer, which is
+;; the exact failure `pipeline.md` § "Exhaustive Walkers" was written for.
+;; This is that rule applied BEFORE the kind lands rather than after a miss.
+;;
+;; The kinds are pairwise disjoint by construction (a symbol and a number are
+;; not pairs; @key/@sub/@ord are pairs with distinct heads), so the classifier
+;; is total and order-independent. `match` cannot help here — steps are
+;; s-expressions, not transparent structs, so the generic-rebuild answer in
+;; pipeline.md does not apply and a named classifier is the available
+;; structural form.
+;;
+;; ADDING A KIND — the COMPLETE site list (13 sites, FIVE files). ⚠ The first
+;; cut of this recipe said "every `case (select-step-kind …)` in syntax.rkt,
+;; typing-core.rkt and reduction.rkt", which was written from the eight sites
+;; a name-grep found. That census was SYNTAX-directed and structurally could
+;; not see two whole classes: dispatchers that OPEN-CODE the shape tests
+;; (pretty-print), and dispatchers shaped as `and`/`if` rather than `cond`
+;; (the leaf classifiers, parser). Following the old recipe literally left
+;; FIVE sites wrong — two of them UPSTREAM of the guards, so they defeat the
+;; guard rather than sit beside it. Corrected at the P4a adversarial verify.
+;;
+;;   syntax.rkt       select-step-output-name · select-branch-top-keys
+;;                    select-branch-collapse  · select-branch-keyless?   [leaf]
+;;   typing-core.rkt  walk-to-leaf · select-branch-entries · select-below-field
+;;   reduction.rkt    walk-to-leaf · branch-entries · below-value
+;;   parser.rkt       dissolve-step? [leaf] · branch-problem
+;;   pretty-print.rkt step->string
+;;
+;; The four LEAF classifiers (marked [leaf]) matter most: they run BEFORE the
+;; branch walks and answer a silent #f if they do not recognize the leaf, so a
+;; missed kind is mis-SORTED (keyed vs keyless) with no raise downstream.
+;;
+;; All sites raise on a missed kind EXCEPT `pretty-print.rkt`'s, which renders
+;; a loud marker instead — `pp-expr` is on the error-message path, so raising
+;; there would turn a diagnostic into an internal crash, and an existing
+;; catch-all handler could swallow it, achieving LESS than a visible marker.
+;; That is a written scope decision, not an omission.
+(define (select-step-kind s)
+  (cond
+    [(symbol? s)          'key]         ;; plain kept descent
+    [(number? s)          'ord-step]    ;; `.N` — Q_U2 Reading A (no output level)
+    [(select-key-step? s) 'caret]       ;; (@key name cont)
+    [(select-sub-step? s) 'sub]         ;; (@sub . branches) — terminal sub-block
+    [(select-ord-step? s) 'ord-branch]  ;; (@ord N) — ordinal BRANCH head
+    [else
+     (error 'select-step-kind
+            (string-append
+             "unknown select step kind: ~s\n"
+             "  the step vocabulary is a CLOSED union: symbol | number"
+             " | (@key name cont) | (@sub . branches) | (@ord N)\n"
+             "  a new kind must be added to select-step-kind AND given an arm"
+             " in every `case` over it (D4.P4a)")
+            s)]))
+
+;; D4.P4a: the NON-RAISING variant, for the DISPLAY path ONLY
+;; (`pretty-print.rkt`'s `step->string`). `pp-expr` is on the error-message
+;; path, so it must never convert a real diagnostic into an internal crash —
+;; it renders a loud marker instead. Defined by DELEGATION rather than by
+;; re-listing the predicates: a second copy of the kind list is precisely the
+;; drift this phase exists to eliminate, so this cannot fall out of step with
+;; the classifier by construction.
+(define (select-step-kind/display s)
+  (with-handlers ([exn:fail? (lambda (_) 'unknown)])
+    (select-step-kind s)))
+
+;; The consumer-side else. Every `case (select-step-kind …)` ends here, so a
+;; kind added to the classifier but missed at a consumer raises AT that
+;; consumer, naming it — rather than falling into a nominal-key arm.
+(define (select-step-kind-unhandled who s)
+  (error who
+         (string-append
+          "no arm for select step kind '~a (step: ~s)\n"
+          "  the kind is known to select-step-kind but this walk has no arm"
+          " for it — add one (D4.P4a totality)")
+         (select-step-kind s) s))
+
 (define (select-step-name s) (if (select-key-step? s) (cadr s) s))
 (define (select-step-cont s) (and (select-key-step? s) (caddr s)))
 
@@ -825,7 +911,13 @@
 ;; the WHOLE branch, so its walk is a pre-classified special case)
 (define (select-branch-collapse b)
   (let ([s (car (reverse b))])
-    (and (select-key-step? s)
+    ;; D4.P4a: CLASSIFY the leaf rather than testing `select-key-step?`
+    ;; directly. This runs UPSTREAM of every guarded walk (syntax :932,
+    ;; typing-core :787, reduction :1689), so an unknown leaf kind answering
+    ;; a silent #f here defeats the guards downstream instead of reaching
+    ;; them — the branch is then mis-sorted with no raise anywhere.
+    ;; Identical for all five known kinds (only `caret` ever answered #t).
+    (and (eq? (select-step-kind s) 'caret)
          (let ([c (select-step-cont s)])
            (and (select-cont-collapse? c) c)))))
 
@@ -835,18 +927,21 @@
 ;; steps and `@ord` heads contribute no name (P3c — contingent keys have no
 ;; identity, Q_U2).
 (define (select-step-output-name s)
-  (cond
-    [(symbol? s) s]
-    [(number? s) #f]
-    [(select-sub-step? s) #f]
-    [(select-ord-step? s) #f]
-    [(select-key-step? s)
+  ;; D4.P4a site 1: was `[else #f]` — a sixth kind silently contributed NO
+  ;; name, so every synth name (`^_`, `^-_`) computed from a branch carrying
+  ;; one would be silently short.
+  (case (select-step-kind s)
+    [(key) s]
+    [(ord-step) #f]
+    [(sub) #f]
+    [(ord-branch) #f]
+    [(caret)
      (let ([c (select-step-cont s)])
        (cond
          [(eq? c 'dissolve) #f]
          [(select-cont-rename c) => values]
          [else (cadr s)]))]
-    [else #f]))
+    [else (select-step-kind-unhandled 'select-step-output-name s)]))
 
 ;; D4.P3c: the `^`-terminated (keyless) branch pre-classifier — a branch
 ;; whose LAST step is a bare dissolve contributes the leaf VALUE as a
@@ -854,7 +949,11 @@
 ;; branch flattens like the collapse family, minus the label).
 (define (select-branch-keyless? b)
   (let ([s (car (reverse b))])
-    (and (select-key-step? s) (eq? (select-step-cont s) 'dissolve))))
+    ;; D4.P4a: classify the leaf — same upstream-of-the-guards argument as
+    ;; select-branch-collapse. A silent #f here mis-sorts the branch as KEYED,
+    ;; which then feeds the parser's L4 sort check and duplicate-key check.
+    (and (eq? (select-step-kind s) 'caret)
+         (eq? (select-step-cont s) 'dissolve))))
 
 ;; Reading N (Q_T4b′) + `^-_` flat provenance (Q_T7): join the surviving
 ;; output names with `-`. Scope = the branch of the block the leaf sits in.
@@ -882,17 +981,20 @@
                [else (select-step-name (car (reverse b)))]))]
       [(select-branch-keyless? b) (list #f)]
       [else
+       ;; D4.P4a site 2: was `[else '()]` — a sixth kind silently contributed
+       ;; NO component, so the parser's L4 sort check and its OUTPUT-key
+       ;; duplicate check would both simply not see it.
        (let ([s (car b)] [rest (cdr b)])
-         (cond
-           [(symbol? s) (list s)]
-           [(select-ord-step? s) (list #f)]
+         (case (select-step-kind s)
+           [(key) (list s)]
+           [(ord-branch) (list #f)]
            ;; a bare-number STEP head arises only from dissolve-splice
            ;; continuations — transparent (Q_U2: no output level); an
            ;; ordinal-terminal chain has no surviving key → keyless.
-           [(number? s)
+           [(ord-step)
             (if (null? rest) (list #f) (select-branch-top-keys rest))]
-           [(select-sub-step? s) (append-map select-branch-top-keys (cdr s))]
-           [(select-key-step? s)
+           [(sub) (append-map select-branch-top-keys (cdr s))]
+           [(caret)
             (let ([c (select-step-cont s)])
               (cond
                 [(eq? c 'dissolve)
@@ -904,7 +1006,7 @@
                 [(select-cont-rename c) => list]
                 [(eq? c 'synth) (list (select-synth-name b))]
                 [else (list (cadr s))]))]
-           [else '()]))])))
+           [else (select-step-kind-unhandled 'select-branch-top-keys s)]))])))
 
 ;; SMART CONSTRUCTOR (D6 §4.1): the ONLY row producer. Dedups labels right-priority
 ;; (later entries win — Clojure/D10 assoc overwrite) and re-canonicalizes the field order
