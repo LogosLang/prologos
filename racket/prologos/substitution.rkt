@@ -290,6 +290,8 @@
     [(? expr-Record? rec) (record-map-field-types (lambda (t) (shift delta cutoff t)) rec)]
     ;; CIU T6 F1b.5-s2: validate — non-binding; exprs via the single helper
     [(? expr-validate? v) (validate-map-exprs (lambda (t) (shift delta cutoff t)) v)]
+    ;; CIU T6 D4.P3a: select — non-binding; subject is the only expr slot
+    [(? expr-select? v) (select-map-exprs (lambda (t) (shift delta cutoff t)) v)]
     ;; Map (all non-binding)
     [(expr-Map k v) (expr-Map (shift delta cutoff k) (shift delta cutoff v))]
     ;; Runtime collection values are CLOSED leaves — no descent.
@@ -308,8 +310,12 @@
     [(expr-champ _) e]
     [(expr-map-empty k v) (expr-map-empty (shift delta cutoff k) (shift delta cutoff v))]
     [(expr-map-assoc m k v) (expr-map-assoc (shift delta cutoff m) (shift delta cutoff k) (shift delta cutoff v))]
-    [(expr-map-get m k) (expr-map-get (shift delta cutoff m) (shift delta cutoff k))]
-    [(expr-get c k) (expr-get (shift delta cutoff c) (shift delta cutoff k))]
+    ;; P2.b slice 4: `strict` is #f | expr-meta | (expr-true) — walk it when it
+    ;; is an expr (the differential-oracle contract: every field position).
+    [(expr-map-get m k a) (expr-map-get (shift delta cutoff m) (shift delta cutoff k)
+                                        (if (expr? a) (shift delta cutoff a) a))]
+    [(expr-get c k a) (expr-get (shift delta cutoff c) (shift delta cutoff k)
+                                (if (expr? a) (shift delta cutoff a) a))]
     [(expr-nil-safe-get m k) (expr-nil-safe-get (shift delta cutoff m) (shift delta cutoff k))]
     [(expr-nil-check a) (expr-nil-check (shift delta cutoff a))]
     [(expr-map-dissoc m k) (expr-map-dissoc (shift delta cutoff m) (shift delta cutoff k))]
@@ -374,8 +380,6 @@
      (expr-get-in (shift delta cutoff target) (shift delta cutoff paths))]
     [(expr-update-in target paths fn)
      (expr-update-in (shift delta cutoff target) (shift delta cutoff paths) (shift delta cutoff fn))]
-    [(expr-broadcast-get target fields)
-     (expr-broadcast-get (shift delta cutoff target) fields)]
 
     ;; Transient Builders (all non-binding)
     [(expr-transient c) (expr-transient (shift delta cutoff c))]
@@ -826,13 +830,17 @@
     [(? expr-Record? rec) (record-map-field-types (lambda (t) (subst k s t)) rec)]
     ;; CIU T6 F1b.5-s2: validate — non-binding; exprs via the single helper
     [(? expr-validate? v) (validate-map-exprs (lambda (t) (subst k s t)) v)]
+    ;; CIU T6 D4.P3a: select — non-binding; subject is the only expr slot
+    [(? expr-select? v) (select-map-exprs (lambda (t) (subst k s t)) v)]
     ;; Map (all non-binding)
     [(expr-Map kt vt) (expr-Map (subst k s kt) (subst k s vt))]
     [(expr-champ _) e]
     [(expr-map-empty kt vt) (expr-map-empty (subst k s kt) (subst k s vt))]
     [(expr-map-assoc m key v) (expr-map-assoc (subst k s m) (subst k s key) (subst k s v))]
-    [(expr-map-get m key) (expr-map-get (subst k s m) (subst k s key))]
-    [(expr-get c key) (expr-get (subst k s c) (subst k s key))]
+    [(expr-map-get m key a) (expr-map-get (subst k s m) (subst k s key)
+                                          (if (expr? a) (subst k s a) a))]
+    [(expr-get c key a) (expr-get (subst k s c) (subst k s key)
+                                  (if (expr? a) (subst k s a) a))]
     [(expr-nil-safe-get m key) (expr-nil-safe-get (subst k s m) (subst k s key))]
     [(expr-nil-check a) (expr-nil-check (subst k s a))]
     [(expr-map-dissoc m key) (expr-map-dissoc (subst k s m) (subst k s key))]
@@ -891,8 +899,6 @@
      (expr-get-in (subst k s target) (subst k s paths))]
     [(expr-update-in target paths fn)
      (expr-update-in (subst k s target) (subst k s paths) (subst k s fn))]
-    [(expr-broadcast-get target fields)
-     (expr-broadcast-get (subst k s target) fields)]
 
     ;; Transient Builders (all non-binding)
     [(expr-transient c) (expr-transient (subst k s c))]

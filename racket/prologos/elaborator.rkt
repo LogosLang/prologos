@@ -686,6 +686,26 @@
 ;; Resolve a surf-var to a core expression.
 ;; When auto-apply? is #t and the global has ALL m0 params, auto-apply with holes.
 ;; When auto-apply? is #f (function position), just return the fvar.
+;; SolveCarrier P2: is NAME currently a RELATION (a live `defr`)?
+;;
+;; The precise test is the one `raise-unknown-relation-error` (relations.rkt)
+;; already uses for its mirror-image diagnostic: a defr name is ALSO global-env
+;; registered, bound to an `expr-defr` VALUE. Going through the global env is
+;; what makes this namespace-correct and rebinding-correct for free:
+;;   * namespace — the env lookup resolves through the active `ns`, so a
+;;     relation `t::m` in one namespace does NOT match a reference to `m` in
+;;     another. (A first cut consulted the relation STORE and matched any key
+;;     ending `::m`; it cross-matched namespaces and mis-diagnosed four
+;;     unrelated Batch-C tests whose `def m := {…}` had nothing to do with
+;;     relations. The store is not namespace-scoped; the env is.)
+;;   * rebinding — `def m := 5` after a `defr m` leaves an ordinary value in the
+;;     env, so `[m …]` is diagnosed only while `m` really is a relation.
+(define (defr-bound-name? name)
+  (define status (global-env-lookup-status name))
+  (and (eq? (car status) 'ground)
+       (let ([payload (cdr status)])
+         (and (pair? payload) (expr-defr? (cdr payload))))))
+
 (define (elaborate-var name loc env depth auto-apply?)
   (let ([idx (env-lookup env name depth)])
     (cond
@@ -1024,6 +1044,15 @@
     (and thunk (thunk))))
 
 ;; elaborate: surface-expr, env, depth -> (or/c expr? prologos-error?)
+;; CIU T6 P2.b slice 4: mint the strictness slot for a user projection —
+;; the expr-num-lit carried-alpha shape verbatim (fresh meta, hole-typed,
+;; sourced). The 'strictness-slot kind is NOT in d23-projection-meta-kinds,
+;; so it cannot trip the D23 escape gate.
+(define (strictness-slot loc env)
+  (fresh-meta ctx-empty (expr-hole)
+    (meta-source-info loc 'strictness-slot "assertive-tier strictness"
+                      #f (env->name-stack env))))
+
 (define (elaborate surf [env '()] [depth 0])
   (perf-inc-elaborate!)
   ;; PPN 4C Phase 1.5: parameterize current-source-loc from surf-node's srcloc field.
@@ -1195,6 +1224,35 @@
     [(surf-app func args loc)
      ;; Multi-defn dispatch: resolve base name to internal clause by arity
      (cond
+       ;; ── SolveCarrier P2: the INVERSE of POL.9's guiding diagnostic ────────
+       ;; `raise-unknown-relation-error` (relations.rkt) already guides the
+       ;; goal-over-a-function case: `(dbl 3)` → "dbl is a function —
+       ;; application is written [dbl …]". The mirror image had no diagnostic at
+       ;; all: APPLYING a relation fell through to whatever its arguments did,
+       ;; which for the common `[fc f "red"]` shape is a bare "Unbound variable
+       ;; f" naming the query variable — a message about the wrong thing
+       ;; entirely, since `f` is unbound precisely BECAUSE this should have been
+       ;; a goal. (`[fc "a" "red"]`, all-ground, instead reached typing and said
+       ;; "Could not infer type".) Both now get one message that names the fix.
+       ;;
+       ;; This is deliberately NOT scoped to `let`: the same bare error appears
+       ;; for `def n := [f (fc x "red")]` and at top level, because the cause is
+       ;; the same — a relation in APPLICATION position. R6 keeps the implicit
+       ;; solve to BINDING RHS, so argument position stays an error; this makes
+       ;; it an error that says what to do.
+       ;; The env check is LOAD-BEARING: a lambda parameter or `let` binding may
+       ;; shadow a relation name (`[fn [fc] [fc 1]]`), and inside that scope the
+       ;; name is an ordinary local, not a goal head.
+       [(and (surf-var? func)
+             (not (env-lookup env (surf-var-name func) depth))
+             (defr-bound-name? (surf-var-name func)))
+        (define n (surf-var-name func))
+        (prologos-error loc
+          (format (string-append
+                   "~a is a relation, not a function — a query is written (~a …). "
+                   "At command position or on a `def`/`let` binding RHS that carries "
+                   "an implicit solve; elsewhere write `solve (~a …)` explicitly.")
+                  n n n))]
        [(and (surf-var? func)
              (lookup-multi-defn (surf-var-name func)))
         => (lambda (multi-info)
@@ -2182,19 +2240,25 @@
              [(prologos-error? ev) ev]
              [else (expr-map-assoc em ek ev)]))]
 
+    ;; CIU T6 P2.b slice 4: the USER's direct projection mints a STRICTNESS
+    ;; SLOT — a fresh meta, type-blind (elaborate has no typing env; the
+    ;; expr-num-lit carried-alpha precedent). Typing solves it to (expr-true)
+    ;; iff the subject is (Map K V); zonk materializes; the champ-miss arm
+    ;; reads it. The get-in/update-in inlinings below pass #f — they are the
+    ;; PS12/M3 DYNAMIC tier, permissive BY DESIGN.
     [(surf-get coll key loc)
      (let ([ec (elaborate coll env depth)]
            [ek (elaborate key env depth)])
        (cond [(prologos-error? ec) ec]
              [(prologos-error? ek) ek]
-             [else (expr-get ec ek)]))]
+             [else (expr-get ec ek (strictness-slot loc env))]))]
 
     [(surf-map-get m k loc)
      (let ([em (elaborate m env depth)]
            [ek (elaborate k env depth)])
        (cond [(prologos-error? em) em]
              [(prologos-error? ek) ek]
-             [else (expr-map-get em ek)]))]
+             [else (expr-map-get em ek (strictness-slot loc env))]))]
 
     [(surf-nil-safe-get m k loc)
      (let ([em (elaborate m env depth)]
@@ -2238,17 +2302,82 @@
            (expr-map-vals em)))]
 
     ;; path literal: #p(address.zip) → expr-path with elaborated segments
+    ;;
+    ;; D4.P4b-i (Q_U11, owner 2026-07-31): the literal carried FOUR spellings
+    ;; and only ONE worked. `#p(a.*)`, `#p(a.**)` and `#p(a.{b c})` all
+    ;; defined as a `Path` and then produced an `<error>` VALUE at ZERO
+    ;; ERRORS — the P2.b fabrication class, live. The vacuous ground `Path`
+    ;; type (typing-core.rkt:2050-2051 discards the branches with `_`) meant
+    ;; no shape constraint could ever bite. Retired here rather than carried
+    ;; across P4b's carrier unification, which would have moved a
+    ;; silent-wrong-answer into the new carrier and made "ends single-carrier"
+    ;; hollow. Monotone — a refusal can become a meaning later.
+    ;;
+    ;; The refusal fires HERE, at the literal, not at its use: the malformed
+    ;; thing is what the user wrote, so that is where the error belongs.
+    ;; Uses the `parse-error` seat (a per-command error VALUE, never a raise)
+    ;; — the same seat the update-in guards below use at :2347/:2351.
     [(surf-path branches loc)
-     (expr-path
-      (for/list ([branch (in-list branches)])
-        (for/list ([seg (in-list branch)])
-          (cond
-            [(keyword? seg)
-             (expr-keyword (string->symbol (keyword->string seg)))]
-            [(and (symbol? seg) (memq seg '(* **)))
-             (expr-symbol seg)]
-            [else
-             (expr-keyword seg)]))))]
+     (define (wildcard-seg? seg) (and (symbol? seg) (memq seg '(* **))))
+     ;; A well-formed segment is a Racket keyword (what `parse-path-string`
+     ;; mints for `a` / `:a`). Everything else is malformed for the surviving
+     ;; surface — including the `$dot-brace` GROUP that `#p(a.{b c})` now
+     ;; leaves behind (P1b-ii re-minted `.{` from `$brace-params` to
+     ;; `$dot-brace`, and `expand-brace-branches`' `brace-params?` test was
+     ;; never re-pointed, so the brace expansion silently STOPPED FIRING and
+     ;; the group falls through as one opaque segment) and the rename PAIR
+     ;; `(#:a . #:b)`, which the old `[else]` wrapped in an `expr-keyword`
+     ;; wholesale. That `[else]` is the same silent-catch-all class P4a spent
+     ;; the whole phase eliminating — it coerced ANY unrecognized segment into
+     ;; a keyword and produced an `<error>` VALUE downstream at zero errors.
+     ;; ⚠ A brace spelling does NOT arrive as a group. The WS reader collapses
+     ;; `#p(a.{a1 a2})` into ONE symbol — `(path |:a.{a1 a2}|)` — so
+     ;; `parse-path-string` splits it on `.` and mints `#:a` and `#:{a1 a2}`
+     ;; as ordinary keywords. Both pass a keyword test, which is why a
+     ;; branch-COUNT guard and a keyword-SHAPE guard both miss it: the
+     ;; malformed thing is the segment's CONTENT. (Diagnosed by reading the
+     ;; datum after two wrong guesses, per the diagnostic protocol.)
+     (define (shattered-name? s)
+       (for/or ([c (in-string s)])
+         (or (char-whitespace? c) (memv c '(#\{ #\} #\( #\) #\[ #\])))))
+     (define (bad-seg? seg)
+       (cond
+         [(wildcard-seg? seg) #f]                     ;; handled by its own arm
+         [(keyword? seg) (shattered-name? (keyword->string seg))]
+         [else #t]))                                  ;; rename pairs, groups, anything else
+     (cond
+       [(ormap (lambda (b) (ormap wildcard-seg? b)) branches)
+        (parse-error
+         loc
+         (string-append
+          "path-literal wildcards `*` / `**` were retired (CIU T6 Path Selection) "
+          "— they defined as a `Path` and then produced an error VALUE at zero errors. "
+          "In the current surface `*` is postfix FLATTEN and a sub-selection is a "
+          "select block `x{…}`")
+         #f)]
+       [(or (> (length branches) 1)
+            (ormap (lambda (b) (ormap bad-seg? b)) branches))
+        (parse-error
+         loc
+         (string-append
+          "a multi-branch path literal `#p(a.{b c})` was retired (CIU T6 Path Selection) "
+          "— every consumer truncated it to the FIRST branch, and since the `.{` re-mint "
+          "the brace no longer expands at all. Write a select block instead: `x{a.{b c}}`")
+         #f)]
+       [else
+        ;; TOTAL over the surviving vocabulary: keyword segments only. The
+        ;; guards above have already refused everything else, so this loop
+        ;; needs no catch-all — and must not grow one back.
+        ;; D4.P4b-i: mint the STEP encoding — a bare SYMBOL per segment,
+        ;; the same vocabulary `expr-select`'s branches use (syntax.rkt:786+).
+        ;; This is the convergence: `#p(a.b)` and `x{a.b}` now carry ONE
+        ;; representation of the selector. Consumers that used a segment
+        ;; directly as an `expr-map-get` KEY now wrap it, and the FFI shims
+        ;; marshal at the boundary — which is where marshalling belongs.
+        (expr-path
+         (for/list ([branch (in-list branches)])
+           (for/list ([seg (in-list branch)])
+             (string->symbol (keyword->string seg)))))])]
 
     ;; get-in: desugar to chained map-get calls
     ;; Single path:   (get-in m :a.b.c) → (map-get (map-get (map-get m :a) :b) :c)
@@ -2267,8 +2396,8 @@
                   ;; Static path (literal expr-path): inline to chained map-get
                   (if (expr-path? elab-path)
                       (let ()
-                        (define branch (car (expr-path-branches elab-path)))
-                        (foldl (lambda (seg acc) (expr-map-get acc seg))
+                        (define branch (map expr-keyword (car (expr-path-branches elab-path))))
+                        (foldl (lambda (seg acc) (expr-map-get acc seg #f))
                                et branch))
                       ;; Dynamic path (variable): emit expr-get-in for runtime dispatch
                       (expr-get-in et elab-path)))]
@@ -2290,7 +2419,7 @@
                 ;; Build a chained map-get for a single path
                 (define (path->chain base segs)
                   (foldl (lambda (seg acc)
-                           (expr-map-get acc (seg->nav-kw seg)))
+                           (expr-map-get acc (seg->nav-kw seg) #f))
                          base segs))
                 (cond
                   ;; Single path → return the leaf value
@@ -2345,13 +2474,13 @@
                  ;; Static path: inline to nested map-get + map-assoc
                  (if (expr-path? elab-path)
                      (let ()
-                       (define segs (car (expr-path-branches elab-path)))
+                       (define segs (map expr-keyword (car (expr-path-branches elab-path))))
                        (define (build-update base segs)
                          (cond
                            [(null? segs) (expr-app ef base)]
                            [else
                             (define key (car segs))
-                            (define sub-val (expr-map-get base key))
+                            (define sub-val (expr-map-get base key #f))
                             (define updated (build-update sub-val (cdr segs)))
                             (expr-map-assoc base key updated)]))
                        (build-update et segs))
@@ -2369,17 +2498,12 @@
                    [(null? segs) (expr-app ef base)]  ;; leaf: apply fn
                    [else
                     (define key (car segs))
-                    (define sub-val (expr-map-get base (seg->kw key)))
+                    (define sub-val (expr-map-get base (seg->kw key) #f))
                     (define updated (build-update sub-val (cdr segs)))
                     (expr-map-assoc base (seg->kw key) updated)]))
                (build-update et segs))])]))]
 
-    ;; broadcast-get: map field extraction over a list
-    ;; (broadcast-get target :f1 :f2) → maps nested map-get over each element
-    [(surf-broadcast-get target fields loc)
-     (let ([et (elaborate target env depth)])
-       (if (prologos-error? et) et
-           (expr-broadcast-get et (map expr-keyword fields))))]
+    ;; broadcast-get: RETIRED at CIU T6 D4.P1a (ruling Q_L3 — full chain).
 
     ;; ---- Set type and operations ----
     [(surf-set-type a loc)
@@ -3059,6 +3183,14 @@
     ;; exprs; reduction can't reach typing-core). Payload is final before
     ;; pnet serialization: exprs/symbols/sexps/booleans only — the pred is an
     ;; elaborated expr-lam (a Racket closure would serialize to an error stub).
+    ;; CIU T6 D4.P3a: select block — branches are static data (segmented +
+    ;; checked at the parser); only the subject elaborates.
+    [(surf-select subject branches loc)
+     (let ([subj (elaborate subject env depth)])
+       (if (prologos-error? subj)
+           subj
+           (expr-select subj (expr-path branches))))]
+
     [(surf-validate sname subject loc)
      (let* ([schema-entry (lookup-schema-by-name sname)]
             [sel (and (not schema-entry) (lookup-selection-by-name sname))]

@@ -28,7 +28,15 @@
          pp-process
          pp-mult
          pp-function-signature
-         pp-datum)
+         pp-datum
+         ;; D4.P4b-i slice 3: exported for the WALKER pin only. `expr-select`'s
+         ;; branches slot now holds an expr (the selector carrier), so this
+         ;; walker must recurse into it — but a bvar inside a selector is
+         ;; UNCONSTRUCTIBLE from surface syntax at P4 (selectors are
+         ;; monomorphic and hold bare symbols), so the pin has to call the
+         ;; walker directly. Same rationale as `select-reduce`'s P4a export;
+         ;; zero behavioural change.
+         uses-bvar0?)
 
 ;; ========================================
 ;; Name supply for de Bruijn -> named variables
@@ -108,6 +116,50 @@
 
 ;; pp-expr: convert Expr -> string
 ;; names is a list of name strings (stack), innermost binding first
+;; CIU T6 D4.P3a: render one select branch back to its surface spelling.
+;; branch = (listof step); step = symbol | (cons '@sub branches).
+;; First segment bare, later keys `.k`, sub-block `.{…}` (always terminal).
+(define (pp-select-branch b)
+  ;; D4.P3b: `^` continuation suffixes (the surface spellings, Q_T7 grammar)
+  (define (cont->string c)
+    (cond
+      [(eq? c 'dissolve) "^"]
+      [(eq? c 'synth) "^_"]
+      [(eq? c 'collapse) "^-"]
+      [(eq? c 'collapse-synth) "^-_"]
+      [(and (pair? c) (eq? (car c) 'rename))
+       (string-append "^" (symbol->string (cdr c)))]
+      [(and (pair? c) (eq? (car c) 'collapse-rename))
+       (string-append "^-" (symbol->string (cdr c)))]
+      [else "^?"]))
+  ;; D4.P4a: the NINTH step-kind dispatch site — missed by the original
+  ;; census because it OPEN-CODED the shape tests (`(and (pair? s) (eq? (car
+  ;; s) '@ord))`) instead of using the exported predicates, so an
+  ;; identifier-grep could not see it. Its old `[else (format "~a" s)]`
+  ;; leaked a raw s-expression into user-facing output and diagnostics.
+  ;;
+  ;; This is the ONE site that does not RAISE on a missed kind. `pp-expr` is
+  ;; on the error-message path (driver.rkt:291,309,507,798,834 and the typing
+  ;; hints), so a raise here converts a real diagnostic into an internal
+  ;; crash — and `typing-errors.rkt`'s catch-all handler could swallow it,
+  ;; achieving strictly LESS than a visible marker. The marker is loud,
+  ;; grep-able, and names the kind. Written scope decision, not an omission.
+  (define (step->string s first?)
+    (case (select-step-kind/display s)
+      [(key) (if first? (symbol->string s) (string-append "." (symbol->string s)))]
+      ;; D4.P3c: ordinal STEP (.N — descends) vs @ord BRANCH head (bare N)
+      [(ord-step) (if first? (number->string s) (string-append "." (number->string s)))]
+      [(ord-branch) (number->string (cadr s))]
+      [(caret)
+       (string-append (if first? "" ".") (symbol->string (cadr s))
+                      (cont->string (caddr s)))]
+      [(sub)
+       (string-append ".{" (string-join (map pp-select-branch (cdr s)) " ") "}")]
+      [else (format "«unrendered-step-kind:~a:~s»" (select-step-kind/display s) s)]))
+  (apply string-append
+         (for/list ([s (in-list b)] [i (in-naturals)])
+           (step->string s (zero? i)))))
+
 (define (pp-expr e [names '()])
   (match e
     ;; Variables
@@ -483,13 +535,20 @@
                         acc)
                    ", "))]
          [_ (format "[map-assoc ~a ~a ~a]" (pp-expr m names) (pp-expr k names) (pp-expr v names))]))]
-    [(expr-map-get m k) (format "[map-get ~a ~a]" (pp-expr m names) (pp-expr k names))]
+    ;; P2.b slice 4: the strictness slot is invisible in display (cosmetic
+    ;; invariance — user syntax has no spelling for it).
+    [(expr-map-get m k _) (format "[map-get ~a ~a]" (pp-expr m names) (pp-expr k names))]
     ;; CIU T6 F1b.5-s2: validate — compact display (plan is baked internals)
     [(? expr-validate? v)
      (format "[validate ~a ~a]"
              (expr-validate-schema-name v)
              (pp-expr (expr-validate-subject v) names))]
-    [(expr-get c k) (format "[get ~a ~a]" (pp-expr c names) (pp-expr k names))]
+    ;; CIU T6 D4.P3a: select — render the SURFACE spelling (subject{branches})
+    [(expr-select subject (expr-path branches))
+     (format "~a{~a}"
+             (pp-expr subject names)
+             (string-join (map pp-select-branch branches) " "))]
+    [(expr-get c k _) (format "[get ~a ~a]" (pp-expr c names) (pp-expr k names))]
     [(expr-nil-safe-get m k) (format "[nil-safe-get ~a ~a]" (pp-expr m names) (pp-expr k names))]
     [(expr-nil-check a) (format "[nil? ~a]" (pp-expr a names))]
     [(expr-map-dissoc m k) (format "[map-dissoc ~a ~a]" (pp-expr m names) (pp-expr k names))]
@@ -543,9 +602,10 @@
     [(expr-path branches)
      (define (pp-branch segs)
        (string-join (for/list ([s (in-list segs)])
-                      (cond [(expr-keyword? s) (symbol->string (expr-keyword-name s))]
-                            [(expr-symbol? s) (symbol->string (expr-symbol-name s))]
-                            [else "?"]))
+                      ;; D4.P4b-i: segments are bare SYMBOLS (the step
+                      ;; encoding). The expr-keyword/expr-symbol arms are the
+                      ;; pre-convergence shapes and are gone with them.
+                      (symbol->string s))
                     "."))
      (if (= (length branches) 1)
          (format "#p(~a)" (pp-branch (car branches)))
@@ -555,9 +615,6 @@
      (format "[get-in ~a ~a]" (pp-expr target names) (pp-expr paths names))]
     [(expr-update-in target paths fn)
      (format "[update-in ~a ~a ~a]" (pp-expr target names) (pp-expr paths names) (pp-expr fn names))]
-    [(expr-broadcast-get target fields)
-     (format "[broadcast-get ~a ~a]" (pp-expr target names)
-             (string-join (map (lambda (f) (pp-expr f names)) fields) " "))]
     [(expr-pvec-nth v i) (format "[pvec-nth ~a ~a]" (pp-expr v names) (pp-expr i names))]
     [(expr-pvec-update v i x) (format "[pvec-update ~a ~a ~a]" (pp-expr v names) (pp-expr i names) (pp-expr x names))]
     [(expr-pvec-length v) (format "[pvec-length ~a]" (pp-expr v names))]
@@ -1166,14 +1223,21 @@
     [(expr-champ _) #f]
     [(expr-map-empty k v) (or (uses-bvar0? k) (uses-bvar0? v))]
     [(expr-map-assoc m k v) (or (uses-bvar0? m) (uses-bvar0? k) (uses-bvar0? v))]
-    [(expr-map-get m k) (or (uses-bvar0? m) (uses-bvar0? k))]
+    [(expr-map-get m k a) (or (uses-bvar0? m) (uses-bvar0? k)
+                              (and (expr? a) (uses-bvar0? a)))]
     ;; CIU T6 F1b.5-s2: validate — subject + plan expr slots
     [(? expr-validate? v)
      (or (uses-bvar0? (expr-validate-subject v))
          (for/or ([entry (in-list (expr-validate-plan v))])
            (or (and (caddr entry) (uses-bvar0? (caddr entry)))
                (and (cadddr entry) (uses-bvar0? (cadddr entry))))))]
-    [(expr-get c k) (or (uses-bvar0? c) (uses-bvar0? k))]
+    ;; CIU T6 D4.P3a: select — subject is the only expr slot
+    ;; D4.P4b-i slice 3: the branches slot holds an expr — recurse into it.
+    ;; Inert at P4 (selectors hold symbols) but correct by construction; the
+    ;; old subject-only arm is the Exhaustive-Walkers signature.
+    [(expr-select subject sel) (or (uses-bvar0? subject) (uses-bvar0? sel))]
+    [(expr-get c k a) (or (uses-bvar0? c) (uses-bvar0? k)
+                          (and (expr? a) (uses-bvar0? a)))]
     [(expr-nil-safe-get m k) (or (uses-bvar0? m) (uses-bvar0? k))]
     [(expr-nil-check a) (uses-bvar0? a)]
     [(expr-map-dissoc m k) (or (uses-bvar0? m) (uses-bvar0? k))]
@@ -1215,7 +1279,6 @@
     [(expr-Path) #f]
     [(expr-get-in target paths) (or (uses-bvar0? target) (uses-bvar0? paths))]
     [(expr-update-in target paths fn) (or (uses-bvar0? target) (uses-bvar0? paths) (uses-bvar0? fn))]
-    [(expr-broadcast-get target _fields) (uses-bvar0? target)]
     [(expr-pvec-nth v i) (or (uses-bvar0? v) (uses-bvar0? i))]
     [(expr-pvec-update v i x) (or (uses-bvar0? v) (uses-bvar0? i) (uses-bvar0? x))]
     [(expr-pvec-length v) (uses-bvar0? v)]

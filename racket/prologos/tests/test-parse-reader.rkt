@@ -14,7 +14,10 @@
          "../propagator.rkt"
          "../parse-lattice.rkt"
          "../parse-reader.rkt"
-         (only-in "../parse-reader.rkt" read-all-forms-string))
+         (only-in "../parse-reader.rkt" read-all-forms-string)
+         ;; D4.P1b-ii Q_N3: the two-grouper agreement guard needs the OTHER
+         ;; grouping implementation (surface-rewrite's tree layer).
+         (only-in "../surface-rewrite.rkt" group-tree-node))
 
 ;; Helper: register patterns once
 (register-default-token-patterns!)
@@ -398,12 +401,159 @@
   (check-equal? (car (list-ref toks 1)) 'dot-key)
   (check-equal? (cdr (list-ref toks 1)) ".:key"))
 
-(test-case "tokenizer: .{ is RETIRED — no dot-lbrace token exists (CIU T6 P1)"
-  ;; Regression pin against re-introduction: `.{` must NOT tokenize as a
-  ;; compound token; it degrades to a bare `.` + lbrace with no special path.
+;; ============================================================
+;; CIU T6 D4.P1b-ii — the `.{` opener (dot-lbrace re-mint)
+;;
+;; FLIPPED from "`.{` is RETIRED — no dot-lbrace token exists (CIU T6 P1)".
+;; P1 retired `.{`-as-MIXFIX; the redesign (2026-07-28) re-mints the GLYPH for
+;; a different construct — the mid-path sub-block `server^.{ssl port}`, where
+;; `.` DESCENDS and the brace SELECTS. Q_M5: plain 'rbrace closer (the
+;; hash-lbrace precedent), NOT dot-lparen's 'mixfix-rparen sentinel.
+;; ============================================================
+
+(test-case "tokenizer: .{ produces a dot-lbrace compound token (D4.P1b-ii)"
   (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "x.{a b}")))
   (define toks (token-types-from-rrb tok-rrb))
-  (check-false (assq 'dot-lbrace toks)))
+  (check-true (and (assq 'dot-lbrace toks) #t)
+              "`.{` must fold into ONE token, not a bare `.` + lbrace")
+  ;; and the loose `.` it replaces must be GONE — that token was the only
+  ;; signal distinguishing `x.{a}` from `x{a}`, which is why Q_N1 mints a
+  ;; distinct sentinel rather than reusing $brace-params.
+  (check-false (member '(symbol . ".") toks)))
+
+(test-case "datum: .{ mints the $dot-brace sentinel, distinct from $brace-params"
+  (define forms (read-all-forms-string "x.{a b}"))
+  (check-equal? forms '((x ($dot-brace a b)))))
+
+
+;; ============================================================
+;; CIU T6 D4.P1b-iii — BRACE ADJACENCY
+;;
+;; Adjacent `x{…}` is a SELECT BLOCK (forced new sentinel, Q_M6 — adjacency is
+;; destroyed at the datum layer and $brace-params is ELEVEN-purposed). Spaced
+;; `f {…}` must NOT change: 419 of 622 live spaced braces are implicit type
+;; binders. Known reader-form heads (`racket{…}`) win FIRST and keep
+;; $brace-params, because `combine-foreign-blocks` has no adjacency test and
+;; the spaced form is accepted today.
+;; ============================================================
+
+(test-case "P1b-iii: ADJACENT x{…} mints $select-brace"
+  (check-equal? (read-all-forms-string "x{a b}") '((x ($select-brace a b)))))
+
+(test-case "P1b-iii: SPACED f {…} is UNCHANGED — the 419-binder population"
+  (check-equal? (read-all-forms-string "x {a b}") '((x ($brace-params a b))))
+  (check-equal? (read-all-forms-string "spec identity {A : Type} A -> A")
+                '((spec identity ($brace-params A : Type) A -> A))))
+
+(test-case "P1b-iii: HEAD PRECEDENCE — racket{…} keeps $brace-params"
+  ;; Checked BEFORE the select-block rule. No-space is the documented canonical
+  ;; form for foreign blocks (10 live WS sites), and the spaced form is
+  ;; accepted too, so BOTH must stay $brace-params.
+  (check-equal? (read-all-forms-string "racket{(+ 1 2)}") '((racket ($brace-params (+ 1 2)))))
+  (check-equal? (read-all-forms-string "racket {(+ 1 2)}") '((racket ($brace-params (+ 1 2))))))
+
+(test-case "P1b-iii Q_N5: BUCKET 4 — closing-delimiter-adjacent is SELECT, by decision"
+  ;; ⚠ Inaction is NOT the status quo here: for `f[x]{a}` BOTH is-postfix?
+  ;; conjuncts already pass, so a naive generalization would rule this by
+  ;; ACCIDENT. Owner-ruled SELECT, matching the bracket band's own precedent
+  ;; (`xs[0][1]` chains through is-postfix? off an rbracket). Zero live sites.
+  (check-equal? (read-all-forms-string "f[x]{a}")
+                '((f ($postfix-index x) ($select-brace a))))
+  (check-equal? (read-all-forms-string "xs[0][1]")
+                '((xs ($postfix-index 0) ($postfix-index 1)))))
+
+(test-case "P1b-iii Q_N6: the ACCEPTED binder hazard, both spellings pinned"
+  ;; `defn f{x} x` was a BINDER and becomes a select block. Owner-accepted:
+  ;; zero live adjacent-brace binder sites. The SPACED spelling — which is what
+  ;; 419 live sites use — must not move.
+  (check-equal? (read-all-forms-string "defn f{x} x") '((defn f ($select-brace x) x)))
+  (check-equal? (read-all-forms-string "defn f {x} x") '((defn f ($brace-params x) x))))
+
+(test-case "P1b-iii: OPENER-ADJACENT braces are NOT select blocks — the (pair? result) guard"
+  ;; `'[{` and `@[{` are byte-adjacent, so ONLY `(pair? result)` declines them.
+  ;; ~28 live sites. If the guard is dropped, every list-of-maps literal
+  ;; mis-reads its FIRST element only, at zero errors.
+  (check-equal? (read-all-forms-string "'[{:a 1} {:b 2}]")
+                '(($list-literal ($brace-params :a 1) ($brace-params :b 2))))
+  (check-equal? (read-all-forms-string "@[{:a 1} {:b 2}]")
+                '(($vec-literal ($brace-params :a 1) ($brace-params :b 2))))
+  (check-equal? (read-all-forms-string "[{:a 1}]") '((($brace-params :a 1))))
+  (check-equal? (read-all-forms-string "({:a 1})") '((($brace-params :a 1)))))
+
+;; ============================================================
+;; CIU T6 D4.P1b-iii / Q_M8 — ORDINALS ARE MULTI-DIGIT
+;;
+;; `recognize-colon-annotation` was hard-capped at 2 chars, so `:10` shattered
+;; into `:` + `10` while `:0`…`:9` were single tokens. Owner-ruled Q_M8: widen
+;; the DIGIT run to digit+. The overlap with the QTT multiplicity vocabulary is
+;; only `:0`/`:1` (mult-annot? accepts exactly {:0 :1 :w}), and those are
+;; discriminated by position, not by lexeme.
+;; ============================================================
+
+(test-case "Q_M8: :10 is ONE token, like :0…:9 (was: `:` + `10`)"
+  (check-equal? (read-all-forms-string "users:10") '((users :10)))
+  (check-equal? (read-all-forms-string "users:127") '((users :127))))
+
+(test-case "Q_M8: single-digit and w/m forms are UNCHANGED (must-not-break)"
+  (check-equal? (read-all-forms-string "users:0") '((users :0)))
+  (check-equal? (read-all-forms-string "users:9") '((users :9)))
+  (check-equal? (read-all-forms-string "users:w") '((users :w)))
+  (check-equal? (read-all-forms-string "users:m") '((users :m))))
+
+(test-case "Q_M8: the trailing ident-continue GUARD still declines after the LAST digit"
+  ;; The widened digit run must test `not ident-continue?` AFTER the last digit,
+  ;; or `:10abc` would wrongly lex as an annotation.
+  ;;
+  ;; ⚠ These pin ACTUAL behaviour, not intuition — my first draft asserted
+  ;; `:0abc` was a KEYWORD and the test refuted it. A digit-headed colon symbol
+  ;; that the annotation arm declines does NOT fall through to the keyword arm
+  ;; (no keyword starts with a digit), so it SHATTERS. That is the status quo
+  ;; for `:0abc` and must stay the status quo for `:10abc`.
+  (check-equal? (read-all-forms-string "x:0abc") '((x : 0 abc)))
+  (check-equal? (read-all-forms-string "x:10abc") '((x : 10 abc)))
+  ;; …while the LETTER arm still yields keywords, which is why the guard exists:
+  (check-equal? (read-all-forms-string "x:where") '((x :where)))
+  (check-equal? (read-all-forms-string "x:wm") '((x :wm))))
+
+(test-case "Q_M8: {:10 v} is a legal map key — the LATENT DEFECT this repairs"
+  ;; `{:0 v}`, `{:1 v}`, `{:9 v}` were legal today while `{:10 v}` SHATTERED
+  ;; into `: 10 v` and failed the even-count check. Arbitrary and
+  ;; user-surprising, and unrelated to Path Selection.
+  (check-equal? (read-all-forms-string "{:10 v}") '(($brace-params :10 v)))
+  (check-equal? (read-all-forms-string "{:0 v}") '(($brace-params :0 v))))
+
+(test-case "datum: plain {…} still mints $brace-params (must-not-break)"
+  (check-equal? (read-all-forms-string "x {a b}") '((x ($brace-params a b)))))
+
+(test-case "⭐ D4.P1b-ii FLAGSHIP: a nested .{ } does not expel its outer tail"
+  ;; The INVERTED hazard. This groups CORRECTLY today (because `.{` lexes as
+  ;; two tokens and the general lbrace arm handles the inner `{`); minting
+  ;; dot-lbrace WITHOUT teaching every grouper about it REGRESSES it —
+  ;; silently: the inner `}` closes the OUTER group and `version` is expelled.
+  ;; The corpus A/B cannot catch this (exactly ONE live `.{` exists in all 160
+  ;; corpus files, and it is not this shape), so it is pinned explicitly.
+  (define forms (read-all-forms-string "app-config{server^.{ssl port} version}"))
+  (check-equal? (length forms) 1)
+  (define g (car forms))
+  ;; `version` must be INSIDE the outer brace group, not a sibling of it.
+  ;; ⚠ FLIPPED at D4.P1b-iii: `app-config{` is ADJACENT and `app-config` is not
+  ;; a reader-form head, so under Q_M6 this brace is now a SELECT BLOCK. The
+  ;; P1b-iii audit caught that §5.P1b-iii's test-delta never named this flip —
+  ;; discovered at suite time it would have read as a regression.
+  (check-equal? g '(app-config ($select-brace server^ ($dot-brace ssl port) version))))
+
+(test-case "D4.P1b-ii: .{ nests inside itself"
+  (check-equal? (read-all-forms-string "x.{a.{b c} d}")
+                '((x ($dot-brace a ($dot-brace b c) d)))))
+
+(test-case "D4.P1b-ii: angle groups still work INSIDE a .{ } block"
+  ;; Q_M5 consequence, and the refutation of an audit question's premise: the
+  ;; opener lists in langle-matched?/has-matching-rangle? are DEPTH-BALANCING
+  ;; sets, not angle-SUPPRESSION sets. Suppression is keyed on frame kind
+  ;; 'mixfix, which a 'brace/'rbrace frame never sets — so type-level angle
+  ;; groups must keep grouping inside a select block.
+  (check-equal? (length (read-all-forms-string "def f : <Int -> Int> := g.{a b}")) 1)
+  (check-equal? (length (read-all-forms-string "x.{a b}\ndef p := 1 < 2\ndef q := 3 > 4")) 3))
 
 (test-case "tokenizer: .*field broadcast"
   (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "xs.*name")))
@@ -535,6 +685,63 @@
   (define n (rrb-size bd-rrb))
   (check-equal? (car (rrb-get bd-rrb (- n 1))) 0)   ;; final > closes all
   (check-equal? (car (rrb-get bd-rrb (- n 2))) 1))  ;; B still inside <>
+
+;; ---- D4.P1b-i (owner ruling Q_M4): the TOP-LEVEL `<` swallow ----
+;; `langle-matched?`'s terminating arm needs a close-type, but at TOP LEVEL
+;; close-type is #f — so the scan ran to the end of the whole token stream and
+;; a `<` matched a `>` belonging to a LATER top-level form. Ordinary code
+;; (`def p := 1 < 2` / `def q := 3 > 4`) silently collapsed into ONE form at
+;; ZERO errors. The bound: a top-level `<` may not scan past the start of the
+;; next top-level (indent-0) form. Continuation lines are INDENTED, so
+;; multi-line angle groups are unaffected (pinned directly below).
+
+(test-case "P1b-i: a top-level `<` does not match a `>` in a LATER top-level form"
+  ;; The comparison pair that silently collapsed. Depth must return to 0.
+  (check-equal? (final-bracket-depth "def p := 1 < 2\ndef q := 3 > 4") 0))
+
+(test-case "P1b-i: the collapse is gone at the DATUM layer — two forms, not one"
+  (check-equal? (length (read-all-forms-string "def p := 1 < 2\ndef q := 3 > 4")) 2))
+
+(test-case "P1b-i: `:<` disclose shape is safe even with a later depth-0 `>`"
+  ;; The audit showed the swallower is the bare `<`, NOT `:<` — this pins the
+  ;; disclose spelling against the same hazard (grammar row owed by Q8; the
+  ;; SEMANTICS land at P4).
+  (check-equal? (length (read-all-forms-string "users:<{a}\ndef z := 1\na > b")) 3))
+
+(test-case "P1b-i: the bare-`<` control is fixed too (no colon, no brace)"
+  (check-equal? (length (read-all-forms-string "users<{a}\ndef z := 1\na > b")) 3))
+
+(test-case "P1b-i MUST-STAY-GREEN: a multi-line angle group still spans its continuation"
+  ;; Continuations are MORE-indented, so the relative-indent bound must not cut them.
+  (check-equal? (length (read-all-forms-string "def f : <(x : Int)\n -> Int> := g")) 1)
+  (check-equal? (length (read-all-forms-string "def u : <Int\n | String> := 42")) 1))
+
+;; ---- The P1b-i adversarial verify's findings, pinned. Two earlier drafts of
+;; this bound were wrong: the first hand-rolled a THIRD definition of
+;; "indent-0 content line" (drifting from both `content-line?` and
+;; `measure-indent` — the F1b.7g class); the second tested indent 0
+;; ABSOLUTELY, which misses every file whose forms start indented. The bound
+;; now compares RELATIVE indent and works per TOKEN. ----
+
+(test-case "P1b-i: the bound works when the whole file is INDENTED (relative, not absolute)"
+  ;; `  def a := 1` / `  def b := 2` is TWO forms with no angles — so a bound
+  ;; keyed on "indent 0" would never fire here and the swallow would survive.
+  (check-equal? (length (read-all-forms-string "  def a := 1\n  def b := 2")) 2)
+  (check-equal? (length (read-all-forms-string "  def p := 1 < 2\n  def q := 3 > 4")) 2))
+
+(test-case "P1b-i: TAB-indented siblings are bounded (measure-indent counts spaces only)"
+  (check-equal? (length (read-all-forms-string "def p := 1 < 2\n\tdef q := 3 > 4")) 2))
+
+(test-case "P1b-i: a CRLF blank line inside an angle group does NOT destroy it"
+  ;; The first draft counted a bare `\r` as indent-0 CONTENT, registering a
+  ;; phantom form start; `content-line?` string-trims, so it is not one.
+  (check-equal? (length (read-all-forms-string "def u : <Int\r\n\r\n | String> := 42")) 1)
+  (check-equal? (length (read-all-forms-string "def u : <Int\r\n | String> := 42")) 1))
+
+(test-case "P1b-i: column-0 text inside a multi-line STRING is not a form start"
+  ;; Free consequence of working per TOKEN: a multi-line string is ONE token,
+  ;; so nothing inside it can begin a line as far as the bound is concerned.
+  (check-equal? (length (read-all-forms-string "def f : <(x : Int)\n -> Foo \"ab\ncd\"> := g")) 1))
 
 (test-case "bracket-depth: bracket group inside mixfix restores mixfix context"
   ;; .( [id 3N] < 5N ) — `<` after the nested [ ] pops back to the mixfix
@@ -955,14 +1162,127 @@
         (let* ([entry (rrb-get tok-rrb i)]
                [type (set-first (token-entry-types entry))]
                [d (cond
+                    ;; ⚠ THIRD COPY of the production opener list (the other two
+                    ;; are langle-matched? / has-matching-rangle? in
+                    ;; parse-reader.rkt). It is a hand-maintained duplicate of a
+                    ;; production invariant and it DRIFTS: D4.P1b-ii's
+                    ;; `dot-lbrace` made this oracle report a real example file
+                    ;; as unbalanced until it was added here. If you add an
+                    ;; opener token type, it goes in all three — and the Q_N3
+                    ;; agreement guard above only covers the two PRODUCTION
+                    ;; groupers, not this oracle.
                     [(memq type '(lbracket lparen lbrace
                                   quote-lbracket at-lbracket tilde-lbracket
-                                  hash-lbrace dot-lparen))
+                                  hash-lbrace dot-lparen dot-lbrace))
                      (+ depth 1)]
                     [(memq type '(rbracket rparen rbrace))
                      (- depth 1)]
                     [else depth])])
           (loop (+ i 1) d)))))
+
+;; ============================================================
+;; CIU T6 D4.P1b-ii Q_N3 — THE TWO-GROUPER AGREEMENT GUARD (structural)
+;;
+;; The tree carries TWO independent grouping implementations: parse-reader's
+;; `group-items` (datum layer) and surface-rewrite's `group-items-to-tree`
+;; (tree layer). Each dispatches on token type through a hand-written arm
+;; list ending in a bare `[else]` catch-all — the exact shape
+;; `.claude/rules/pipeline.md` § "Exhaustive Walkers" names as a red flag.
+;; When an opener is known to one and not the other they SILENTLY DISAGREE:
+;; that is the live `.( )` defect (DEFERRED, filed 2026-07-28), where the
+;; datum layer keeps the trailing token and the tree layer expels it, at
+;; ZERO errors.
+;;
+;; This guard makes the class impossible by CONSTRUCTION rather than by
+;; checklist: for `a OPEN b CLOSE c`, both layers must agree that the form
+;; has THREE top-level items (a, the group, c). A grouper that does not know
+;; an opener produces a different count.
+;; ============================================================
+
+(define (grouped-line-item-count s)
+  ;; tree layer: direct children of the line node after grouping
+  (define grouped (group-tree-node (parse-tree-root (read-to-tree s))))
+  (define line (rrb-get (parse-tree-node-children grouped) 0))
+  (rrb-size (parse-tree-node-children line)))
+
+(define (datum-form-item-count s)
+  ;; datum layer: top-level items of the single form
+  (define forms (read-all-forms-string s))
+  (and (= (length forms) 1) (length (car forms))))
+
+(test-case "Q_N3 GUARD: every opener groups IDENTICALLY at both layers"
+  ;; (opener-literal closer-literal label)
+  (define openers
+    (list (list "["   "]" 'lbracket)
+          (list "("   ")" 'lparen)
+          (list "{"   "}" 'lbrace)
+          (list "'["  "]" 'quote-lbracket)
+          (list "@["  "]" 'at-lbracket)
+          (list "~["  "]" 'tilde-lbracket)
+          (list "#{"  "}" 'hash-lbrace)
+          (list ".{"  "}" 'dot-lbrace)))   ;; D4.P1b-ii — the new one
+  ;; ⚠ NAMED EXCLUSION: `dot-lparen` FAILS this guard today — tree layer
+  ;; reports 4 where the datum layer reports 3, because surface-rewrite.rkt
+  ;; has no dot-lparen arm at all. Owner-ruled Q_N2: FILED, not fixed here
+  ;; (the repair needs a 'mixfix frame concept group-items-to-tree lacks,
+  ;; and the 'mixfix-group tag its arm would emit was deleted at D4.P1a).
+  ;; See DEFERRED.md § "CIU T6 D4.P1b-ii spin-offs" item 1. When that lands,
+  ;; delete this comment and add (list ".(" ")" 'dot-lparen) above.
+  (for ([o (in-list openers)])
+    (define src (string-append "a " (car o) " b " (cadr o) " c"))
+    (define tree-n (grouped-line-item-count src))
+    (define datum-n (datum-form-item-count src))
+    (check-equal? datum-n 3
+                  (format "datum layer lost/gained an item for ~a: ~s"
+                          (caddr o) (read-all-forms-string src)))
+    (check-equal? tree-n datum-n
+                  (format "LAYER DISAGREEMENT for ~a — tree=~a datum=~a (this is the .( ) defect class)"
+                          (caddr o) tree-n datum-n))))
+
+(test-case "Q_N3 GUARD v2 (D4.P1b-iii): the two layers agree on the brace SENTINEL, not just counts"
+  ;; ⚠ The original guard was STRUCTURALLY BLIND to P1b-iii, twice over: every
+  ;; row was built SPACED (exactly the population adjacency must NOT change),
+  ;; and it compared ITEM COUNTS while this phase's defect class is a SHAPE
+  ;; divergence at EQUAL count. This row set closes both holes by asserting the
+  ;; tree TAG corresponds to the datum SENTINEL for each brace spelling.
+  ;;
+  ;; It is the guard that would catch "adjacency implemented in parse-reader
+  ;; only" — the failure mode that would otherwise SILENTLY hand back a map
+  ;; literal, because brace-group has a non-error tree handler and driver lets a
+  ;; non-error tree surf replace preparse's error surf.
+  (define cases
+    (list (list "x{a}"        '$select-brace  'select-brace-group "adjacent → select")
+          (list "x {a}"       '$brace-params  'brace-group        "spaced → literal")
+          (list "racket{a}"   '$brace-params  'brace-group        "head-adjacent → literal")
+          (list "racket {a}"  '$brace-params  'brace-group        "head-spaced → literal")
+          (list "x.{a}"       '$dot-brace     'dot-brace-group    "dot-brace")
+          (list "x#{a}"       '$set-literal   'set-group          "set literal")))
+  (for ([c (in-list cases)])
+    (define src (car c))
+    ;; datum layer: find the sentinel head of the last item in the form
+    (define form (car (read-all-forms-string src)))
+    (define datum-head (let ([lst (car (reverse form))]) (and (pair? lst) (car lst))))
+    (check-equal? datum-head (cadr c)
+                  (format "DATUM layer wrong for ~a (~a)" src (cadddr c)))
+    ;; tree layer: the tag of the last child of the line
+    (define grouped (group-tree-node (parse-tree-root (read-to-tree src))))
+    (define line (rrb-get (parse-tree-node-children grouped) 0))
+    (define kids (parse-tree-node-children line))
+    (define lastk (rrb-get kids (- (rrb-size kids) 1)))
+    (check-true (parse-tree-node? lastk)
+                (format "TREE layer produced no group for ~a — the grouper does not know this shape" src))
+    (check-equal? (parse-tree-node-tag lastk) (caddr c)
+                  (format "LAYER DISAGREEMENT for ~a (~a): datum ~a vs tree ~a"
+                          src (cadddr c) datum-head (parse-tree-node-tag lastk)))))
+
+(test-case "Q_N3 GUARD: the guard actually detects a known divergence (dot-lparen)"
+  ;; The guard is only worth having if it fails on the real bug. Pin the
+  ;; KNOWN-BAD case so that if `.( )` is ever repaired this test goes red and
+  ;; whoever fixed it promotes dot-lparen into the guard list above.
+  (define src "a .( b ) c")
+  (check-equal? (datum-form-item-count src) 3)
+  (check-equal? (grouped-line-item-count src) 4
+                "dot-lparen tree/datum divergence is FIXED — promote it into the Q_N3 guard list and delete this test"))
 
 (test-case "bracket-balance: simple expressions"
   (define test-strings
@@ -1231,3 +1551,106 @@
   (check-equal? failed 0
                 (format "~a/~a example files failed topology comparison"
                         failed (+ passed failed))))
+
+;; ============================================================
+;; CIU T6 D4.P2 — the `.N` ordinal-access token (Q_M8's dot half)
+;;
+;; Dot-anchored `digit+` (owner ruling Q_M8: MULTI-digit), with the Q_R2
+;; trailing guard copied from the `:N` twin, minting `$postfix-index` per
+;; owner ruling Q_R1 (NOT a new sentinel — reuse is near-free and the
+;; existing fold arm is already a fixpoint).
+;;
+;; ⚠ TWO-LAYER PIN. These are the DATUM-layer half. The design originally
+;; claimed the rational mis-lex sat "at 0 errors"; that was a LAYER ERROR —
+;; end-to-end the stranded bare `|.|` is unbound, so every rational-class form
+;; is LOUD today. The end-to-end half lives in test-path-selection.rkt and is
+;; framed "was a misleading error, now computes the right value".
+;; ============================================================
+
+(test-case "P2: .N produces a dot-ordinal token, MULTI-digit (Q_M8)"
+  (define toks (token-types-from-rrb (tokenize-char-rrb (make-char-rrb-from-string "x.10"))))
+  (check-equal? (length toks) 2)
+  (check-equal? (car (list-ref toks 0)) 'symbol)
+  (check-equal? (car (list-ref toks 1)) 'dot-ordinal)
+  (check-equal? (cdr (list-ref toks 1)) ".10"))
+
+(test-case "P2: .N mints $postfix-index with a NUMERIC payload (Q_R1)"
+  ;; The payload must be a NUMBER, not a symbol: that is what makes it
+  ;; byte-identical to `v[0]`'s bare fixnum, which is what makes Q_R1's
+  ;; "two surfaces, ONE mechanism" hold at the datum layer rather than
+  ;; merely architecturally. `string->number`, not `string->symbol`.
+  (check-equal? (read-all-forms-string "x.10") '((x ($postfix-index 10))))
+  (check-equal? (read-all-forms-string "x.0")  '((x ($postfix-index 0)))))
+
+(test-case "P2 ⭐ Q_R1's checkable pin: `v[0]` and `v.0` are the SAME DATUM"
+  ;; Owner ruling: two SURFACES over ONE mechanism. If this ever diverges,
+  ;; the ruling has silently stopped being true.
+  (check-equal? (read-all-forms-string "v.0") (read-all-forms-string "v[0]"))
+  (check-equal? (read-all-forms-string "v.10") (read-all-forms-string "v[10]")))
+
+(test-case "P2 ⭐ the RATIONAL mis-lex is dead, structurally (datum layer)"
+  ;; Today `x.1.2` reads as ($decimal-literal 6/5) and `x.10.20` as 51/5,
+  ;; because `decimal-literal` anchors at the DIGIT. A dot-anchored
+  ;; recognizer consumes `.1` first, so decimal-literal never gets to anchor.
+  (check-equal? (read-all-forms-string "x.1.2")
+                '((x ($postfix-index 1) ($postfix-index 2))))
+  (check-equal? (read-all-forms-string "x.10.20")
+                '((x ($postfix-index 10) ($postfix-index 20))))
+  ;; and no rational survives anywhere in the datum
+  (check-false (regexp-match? #rx"decimal-literal"
+                             (format "~s" (read-all-forms-string "x.1.2")))))
+
+(test-case "P2: mixed chains lex in BOTH directions now (field→nat was broken)"
+  (check-equal? (read-all-forms-string "x.0.name")
+                '((x ($postfix-index 0) ($dot-access name))))
+  (check-equal? (read-all-forms-string "x.name.0")
+                '((x ($dot-access name) ($postfix-index 0)))))
+
+(test-case "P2 Q_R2: the TRAILING GUARD declines every suffixed numeric shape"
+  ;; Copied from the `:N` twin (parse-reader.rkt: `[(and c (ident-continue? c)) #f]`).
+  ;; Each of these lexes as ONE numeric token today and KEEPS doing so — the
+  ;; guard mints no new error surface. `xs.0N` is a NAMED NON-GOAL (`0N` is the
+  ;; project's Nat spelling and expr-get accepts Nat or Int, so it reads as
+  ;; sensible Prologos — but supporting it needs `digit+` plus optional `N`).
+  ;; ⚠ HONEST NOTE: before the recognizer exists this passes TRIVIALLY (no
+  ;; `dot-ordinal` token exists at all). It is a MUST-STAY-GREEN guard, not a
+  ;; failing-first pin — its value is entirely post-implementation.
+  (for ([s (in-list '("x.0N" "x.1e3" "x.1/2" "x.1f" "x.1p8"))])
+    (define toks (token-types-from-rrb (tokenize-char-rrb (make-char-rrb-from-string s))))
+    (check-false (and (assq 'dot-ordinal toks) #t)
+                 (format "~a must DECLINE the guard, not split into .N + stray" s))))
+
+(test-case "P2 Q_R3: the dot band is ADJACENCY-FREE — ruled, not inherited"
+  ;; `adjacent-to-base?` is called only from the bracket and brace arms, so the
+  ;; dot band has no gate at all — and `.k` never had one either. Requiring
+  ;; adjacency for `.N` alone would be a NEW inconsistency inside the band.
+  (check-equal? (read-all-forms-string "x .0") '((x ($postfix-index 0))))
+  ;; ⚠ SHARPENED BY MEASUREMENT — the P2 audit conflated two different spaces.
+  ;; A space BEFORE the dot is irrelevant (no base-adjacency gate, above), but a
+  ;; space AFTER the dot means there is no `.N` LEXEME at all: contiguity is
+  ;; inherent to being one token, exactly as it is for the `?x:Nat` twin. So
+  ;; `x. 0` is NOT ordinal access and must stay the single-char fallback.
+  (check-equal? (read-all-forms-string "x. 0") '((x |.| 0)))
+  ;; consequence, pinned so it is deliberate: a form-leading `.N` is a
+  ;; base-less sentinel (the fold's null-acc leg keeps it raw).
+  (check-equal? (read-all-forms-string ".5") '(($postfix-index 5))))
+
+(test-case "P2: leading zeros COLLAPSE — pinned rather than discovered"
+  ;; `string->number` on "007" is 7. Inherited from the number classifier's
+  ;; own conversion; the `:N` twin does the same since P1b-iii.
+  (check-equal? (read-all-forms-string "x.007") '((x ($postfix-index 7)))))
+
+(test-case "P2 MUST-NOT-BREAK: the rest of the dot band and every numeric literal"
+  ;; the other five band members
+  (check-equal? (read-all-forms-string "x.name")  '((x ($dot-access name))))
+  (check-equal? (read-all-forms-string "x...")    '((x $rest)))
+  (check-equal? (read-all-forms-string "x.{a}")   '((x ($dot-brace a))))
+  ;; `.-1` / `.+1` lex CLEANLY as dot-access with a SIGNED field (`ident-start?`
+  ;; admits both `-` and `+`), so a digit-required `.N` correctly declines them.
+  (check-equal? (read-all-forms-string "x.-1")    '((x ($dot-access |-1|))))
+  (check-equal? (read-all-forms-string "x.+1")    '((x ($dot-access |+1|))))
+  ;; interior dots are structurally unreachable as anchors: the scan advances by
+  ;; the matched length, so `3.14` is consumed whole at the `3`.
+  (check-equal? (read-all-forms-string "1.5")     '(($decimal-literal 3/2)))
+  (check-equal? (read-all-forms-string "3.14")    '(($decimal-literal 157/50)))
+  (check-equal? (read-all-forms-string "[+ 1 2.5]") '((+ 1 ($decimal-literal 5/2)))))

@@ -248,7 +248,6 @@
  (struct-out surf-map-vals)
  (struct-out surf-get) (struct-out surf-get-in)
  (struct-out surf-update-in)
- (struct-out surf-broadcast-get)
  ;; Path surface forms
  (struct-out surf-path)
  ;; Set surface forms
@@ -302,6 +301,8 @@
  (struct-out surf-goal-app) (struct-out surf-unify) (struct-out surf-not) (struct-out surf-is)
  (struct-out surf-guard) (struct-out surf-cut)
  (struct-out surf-validate)
+ ;; Path Selection select block (CIU T6 D4.P3a)
+ (struct-out surf-select)
  (struct-out surf-solve) (struct-out surf-solve-one) (struct-out surf-solve-with)
  (struct-out surf-explain) (struct-out surf-explain-with)
  ;; Narrowing (Phase 1e)
@@ -891,7 +892,8 @@
 (struct surf-map-vals (m srcloc) #:transparent)            ; (map-vals m)
 (struct surf-get-in (target paths srcloc) #:transparent)   ; (get-in target path-spec) — paths is list of parsed paths
 (struct surf-update-in (target paths fn-expr srcloc) #:transparent) ; (update-in target path-spec fn)
-(struct surf-broadcast-get (target fields srcloc) #:transparent)   ; (broadcast-get target :f1 :f2 ...) → map+get over list
+;; surf-broadcast-get: RETIRED at CIU T6 D4.P1a (ruling Q_L3) — broadcast
+;; returns as `:field` at Path Selection P4.
 
 ;; First-class path literal
 (struct surf-path (branches srcloc) #:transparent)         ; #p(a.b.c) — branches = list of (listof keyword|symbol)
@@ -1015,6 +1017,10 @@
 ;; tabulation face. schema-name = raw symbol (resolved at the elaboration
 ;; bake); srcloc LAST (the surf-node-srcloc reflection convention).
 (struct surf-validate         (schema-name subject srcloc) #:transparent)
+;; CIU T6 D4.P3a: the select block `x{…}`. branches = STATIC data, segmented +
+;; malformed-checked + duplicate-checked at the parser ($select head arm):
+;; branch = (listof step); step = symbol | (cons '@sub (listof branch)).
+(struct surf-select          (subject branches srcloc) #:transparent)
 ;; Solve: (solve (goal))
 (struct surf-solve            (goal srcloc) #:transparent)
 ;; Solve-one: (solve-one (goal)) — returns first answer or none

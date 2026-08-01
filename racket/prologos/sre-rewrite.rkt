@@ -851,12 +851,12 @@
     '() #f apply-expand-cond-fold 'one-way 0 'strongly-confluent 'V0-2))
 (register-sre-rewrite-rule! expand-cond-fold)
 
-;; --- expand-mixfix: registered from surface-rewrite.rkt ---
-;; Mixfix resolution requires macros.rkt imports (operator table, precedence
-;; groups). Registered in surface-rewrite.rkt where those imports exist.
-;; Removed from sre-rewrite.rkt to avoid circular dep.
-;; (This comment preserved for traceability — the rule IS registered,
-;; just not in this file.)
+;; --- expand-mixfix: NO LONGER REGISTERED ANYWHERE (CIU T6 D4.P1a) ---
+;; This comment used to point at surface-rewrite.rkt. That registration
+;; served ONLY the 'mixfix-group tag, whose sole producer was the dot-lbrace
+;; routing leg — dead since d18648f0 retired the `.{` token — and the whole
+;; subsystem was deleted at D4.P1a. The LIVE `.( )` mixfix path is
+;; macros.rkt's pratt-parse (comparison chaining included).
 
 ;; ========================================
 ;; Phase 3b: Tree-Structural Combinator

@@ -24,6 +24,10 @@
          "rrb.rkt"
          "propagator.rkt"
          "parse-lattice.rkt"
+         ;; D4.P1b-iii: THE reader-form-head registry. A leaf module with no
+         ;; project-local requires — that is what lets grouping (here) and
+         ;; preparse (macros.rkt) share ONE list with no cycle.
+         "reader-forms.rkt"
 )
 
 (provide
@@ -755,13 +759,108 @@
 
 (define (recognize-dot-lparen rrb pos)
   ;; .(  — mixfix entry with `( )` grouping. Content closes on `)`.
-  ;; (`.{ }` is RETIRED entirely — CIU T6 Path Selection P1, 2026-07-26; selection
-  ;;  is the postfix-bracket surface, design doc §5.9.)
+  ;; (The 2026-07-26 note here — "`.{ }` is RETIRED entirely … selection is the
+  ;;  postfix-bracket surface" — described a surface the 2026-07-28 REDESIGN
+  ;;  replaced. `.{` is live again below, for a DIFFERENT construct.)
   (define c1 (rrb-char-at rrb pos))
   (define c2 (rrb-char-at rrb (+ pos 1)))
   (if (and c1 c2 (char=? c1 #\.) (char=? c2 #\())
       2
       #f))
+
+;; CIU T6 D4.P1b-ii (ruling 3a + Q_M5) — the mid-path sub-block opener.
+;; `.{` is descend-then-select: `server^.{ssl port}`. `.` uniformly DESCENDS
+;; and the brace SELECTS, so this is a compound token, not a mixfix entry.
+;;
+;; ⚠ Its closer is a PLAIN `'rbrace`, deliberately NOT dot-lparen's
+;; `'mixfix-rparen` sentinel (Q_M5): the extent scanner stores REAL token types
+;; as frame closers and `langle-matched?` terminates on a bare `eq?` with no
+;; translation arm (its twin `has-matching-rangle?` DOES translate) — a sentinel
+;; closer would reproduce the `31d27c83` cross-line swallow AND would add six
+;; closer-side sites. With `'rbrace`, every closer enumeration already lists it
+;; and ZERO closer-side edits are needed.
+;;
+;; Prefix-disjoint from all five dot-band members by second character
+;; (`.`/`:`/`(`/`*`/ident-start); `recognize-dot-access` additionally excludes
+;; `{` explicitly. Per Q8.5 invariant 1, DISJOINTNESS — not the priority
+;; number — is what makes this safe.
+(define (recognize-dot-lbrace rrb pos)
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\.) (char=? c2 #\{))
+      2
+      #f))
+
+;; CIU T6 D4.P2 — ORDINAL ACCESS `.N` (owner rulings Q_M8 · Q_R1 · Q_R2 · Q_R3).
+;;
+;; `.` DESCENDS uniformly under the 2026-07-28 surface, so `.0` / `.10` is
+;; ordinal descent — the positional twin of `.name`. MULTI-digit per Q_M8.
+;;
+;; WHY THIS KILLS THE RATIONAL MIS-LEX STRUCTURALLY, not heuristically: the
+;; tokenizer scans by POSITION and advances by the matched length, so once `.1`
+;; is consumed AT THE DOT, `recognize-decimal-literal` — which anchors at a
+;; DIGIT — never gets the interior dot of `x.1.2` as a candidate position. The
+;; dot simply stops being available as an anchor. (Before this, `x.1.2` read as
+;; `($decimal-literal 6/5)` and `x.10.20` as `51/5`. ⚠ Those were READER-layer
+;; readings: end-to-end the stranded bare `|.|` was UNBOUND, so the forms were
+;; LOUD, not silently wrong. See D4 §Q8.1's layer-error correction.)
+;;
+;; DISJOINTNESS, NOT PRIORITY, IS THE SAFETY PROPERTY (Q8.5 invariant 1 —
+;; priorities tie three ways at 87 and the registry is a plain hash, so ties
+;; break by unspecified order). The six-member dot band discriminates entirely
+;; on the SECOND character: `.` rest-param · `:` dot-key · `(` dot-lparen ·
+;; `{` dot-lbrace · `*` broadcast-access · ident-start dot-access (which
+;; excludes digits EXPLICITLY). A digit is disjoint from all six.
+;;
+;; Q_R2 — THE TRAILING GUARD, copied from the `:N` twin
+;; (`recognize-colon-annotation`): consume the whole digit run, THEN decline if
+;; an `ident-continue?` char follows. So `x.0N` `x.1e3` `x.1/2` `x.1f` `x.1p8`
+;; all DECLINE and keep lexing exactly as they do today — the guard mints no new
+;; error surface. `xs.0N` is a NAMED NON-GOAL (`0N` is the project's Nat
+;; spelling and `expr-get` accepts Nat-or-Int, so it reads as sensible
+;; Prologos; supporting it needs `digit+` plus an optional `N`, which is not
+;; this phase). Note `#\.` is NOT in `ident-continue?`, which is what lets
+;; `x.1.2` chain rather than decline.
+;;
+;; ⚠ ASCII DIGITS, DELIBERATELY DIFFERENT FROM THE `:N` TWIN — and this is NOT
+;; the F1b.7g drift class, because the two classifiers have different
+;; obligations. The twin's classifier keeps its lexeme symbolic and never calls
+;; `string->number`; THIS one must produce a NUMERIC payload (Q_R1). Measured:
+;; `char-numeric?` ACCEPTS U+0663 ARABIC-INDIC DIGIT THREE (and U+06F3, U+0966,
+;; U+FF11, U+17E0) while `(string->number "٣")` returns `#f`, so a
+;; `char-numeric?` gate here would mint a payload of `#f`. The narrow test is
+;; the one that matches what the classifier can actually convert.
+;;
+;; ⚠ AN EARLIER VERSION OF THIS COMMENT MADE A LAYER ERROR — corrected after
+;; adversarial verify measured the counterfactual end-to-end, and recorded here
+;; because it is the THIRD instance of this class in this phase (see `0e5a56a3`
+;; and `f6f30eaa`). It claimed the `char-numeric?` gate would be a "SILENT WRONG
+;; DATUM … worse than" the audit's predicted `exact?: contract violation`. Both
+;; halves were layer-confused: (1) the `#f` payload is silent only at the DATUM
+;; layer — end-to-end it is a LOUD per-command `ERROR: Unexpected datum: #f`
+;; with the file continuing, i.e. LESS severe, not worse; (2) the audit's
+;; `exact?: contract violation` prediction describes the SHIPPED path correctly
+;; (a non-ASCII digit is declined by this recognizer AND by `recognize-dot-access`,
+;; whose :738 exclusion is the wider `char-numeric?`, so it falls to pre-existing
+;; machinery and raises there — byte-identical to baseline). The audit was right;
+;; it was not superseded. State the layer with the measurement — the same
+;; discipline this file's own comment 30 lines above already applies.
+(define (ascii-digit? c)
+  (and (char? c) (char<=? #\0 c) (char<=? c #\9)))
+
+(define (recognize-dot-ordinal rrb pos)
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (cond
+    [(not (and c1 c2 (char=? c1 #\.) (ascii-digit? c2))) #f]
+    [else
+     (let loop ([i (+ pos 2)])
+       (define c (rrb-char-at rrb i))
+       (cond
+         [(ascii-digit? c) (loop (+ i 1))]
+         ;; Q_R2: a suffixed numeric shape is NOT an ordinal — decline whole.
+         [(and c (ident-continue? c)) #f]
+         [else (- i pos)]))]))
 
 (define (recognize-broadcast-access rrb pos)
   ;; .*ident
@@ -845,19 +944,79 @@
 ;; ---- Phase 5b tokenizer gaps ----
 
 (define (recognize-colon-annotation rrb pos)
-  ;; :0, :1, :w, :m — colon immediately followed by digit or w/m
-  ;; ONLY when NOT followed by ident-continue (else it's a keyword like :where, :write)
+  ;; `:N` (N = one or MORE digits) · `:w` · `:m` — ONLY when not followed by
+  ;; ident-continue (else it is a keyword like :where, :write, :wm).
+  ;;
+  ;; CIU T6 D4.P1b-iii / Q_M8 [owner]: the digit run is `digit+`, not one digit.
+  ;; It was hard-capped at 2 chars, so `:10` shattered into `:` + `10` while
+  ;; `:0`…`:9` were single tokens — arbitrary, and it also made `{:10 v}` an
+  ;; illegal map key while `{:0 v}`/`{:9 v}` were fine.
+  ;;
+  ;; Widening is not widening a COLLISION: this recognizer already accepted
+  ;; TWELVE lexemes (`:0`–`:9`, `:w`, `:m`) while `mult-annot?` (parser.rkt)
+  ;; accepts THREE (`:0 :1 :w`), so nine of the twelve already lexed as one
+  ;; token and already were not multiplicities. Ordinal ∩ multiplicity is
+  ;; `:0`/`:1` only, and those are discriminated by POSITION (of 289 live
+  ;; multiplicity tokens, 287 spaced + 2 opener-preceded, ZERO focus-adjacent).
+  ;;
+  ;; ⚠ The trailing guard must be tested after the LAST digit — see
+  ;; `fused-type-annot?` in parser.rkt for the co-migration this REQUIRES.
   (define c1 (rrb-char-at rrb pos))
   (define c2 (rrb-char-at rrb (+ pos 1)))
-  (define c3 (rrb-char-at rrb (+ pos 2)))
-  (if (and c1 c2 (char=? c1 #\:)
-           (or (char-numeric? c2)
-               (char=? c2 #\w)
-               (char=? c2 #\m))
-           ;; Must NOT be followed by ident-continue
-           (not (and c3 (ident-continue? c3))))
-      2
-      #f))
+  (cond
+    [(not (and c1 c2 (char=? c1 #\:))) #f]
+    ;; letter arm — unchanged, always exactly 2 chars
+    [(or (char=? c2 #\w) (char=? c2 #\m))
+     (let ([c3 (rrb-char-at rrb (+ pos 2))])
+       (if (not (and c3 (ident-continue? c3))) 2 #f))]
+    ;; digit arm — consume the whole run, THEN apply the guard
+    [(char-numeric? c2)
+     (let loop ([i (+ pos 2)])
+       (define c (rrb-char-at rrb i))
+       (cond
+         [(and c (char-numeric? c)) (loop (+ i 1))]
+         [(and c (ident-continue? c)) #f]   ;; e.g. `:10abc` — not an annotation
+         [else (- i pos)]))]
+    [else #f]))
+
+;; CIU T6 D4.P1b-i (owner ruling Q_L1's scoped-in repair) — the WS narrowing
+;; typed logic variable `?x:Nat` (chains: `?foo:Nat:Even`), lexed as ONE token.
+;;
+;; The sexp reader glues `?x:Nat` into a single symbol; the WS tokenizer split
+;; it, so `narrow-var-constraints`' string-split never saw a colon: WS
+;; narrowing silently returned `nil` — ZERO solutions, ZERO errors — where
+;; sexp returns six. Its only regression pin passed on the substring "nil",
+;; i.e. it passed BECAUSE of the bug.
+;;
+;; ⚠ The FIRST fix attempt joined the two datums back together in the PARSER,
+;; and was UNSOUND: at the datum layer adjacency is already destroyed (the
+;; very fact this phase's audit established for braces), so it absorbed ANY
+;; following colon-symbol — `[add ?x :foo ?y] = 5N` silently became a
+;; different 2-argument goal returning six solutions, and `{:name ?n :age 30}`
+;; swallowed a map key. Caught by two independent skeptics. Doing it HERE, in
+;; the tokenizer, makes adjacency inherent: a token is contiguous by
+;; construction, so a SPACE-separated `?m :name` cannot match and keyword
+;; arguments after a logic variable are untouched.
+(define (recognize-narrow-var-annot rrb pos)
+  (define (ident-run i)   ;; length of an ident-start ident-continue* run at i
+    (define c (rrb-char-at rrb i))
+    (and c (ident-start? c)
+         (let loop ([j (+ i 1)])
+           (define cj (rrb-char-at rrb j))
+           (if (and cj (ident-continue? cj)) (loop (+ j 1)) (- j i)))))
+  (define c0 (rrb-char-at rrb pos))
+  (and c0 (char=? c0 #\?)
+       (let ([vlen (ident-run (+ pos 1))])
+         (and vlen
+              ;; at least one `:Segment` must follow, contiguously
+              (let seg ([i (+ pos 1 vlen)] [n 0])
+                (define ci (rrb-char-at rrb i))
+                (cond
+                  [(and ci (char=? ci #\:))
+                   (let ([slen (ident-run (+ i 1))])
+                     (if slen (seg (+ i 1 slen) (+ n 1)) (and (> n 0) (- i pos))))]
+                  [(> n 0) (- i pos)]
+                  [else #f]))))))
 
 (define (recognize-session-arrow rrb pos)
   ;; -0>, -1>, -w> — session type linear arrows
@@ -1006,6 +1165,12 @@
   (register-token-pattern!
    (token-pattern 'colon-annotation (lambda (rrb pos) (recognize-colon-annotation rrb pos))
                   (lambda (s p l) 'symbol) 97))  ;; :0, :w before bare colon
+  ;; D4.P1b-i: `?x:Nat` as ONE token — before `symbol` (50), which would stop
+  ;; at the colon. Contiguity is the discriminator: `?m :name` (spaced) is
+  ;; untouched, so keyword arguments after a logic variable still work.
+  (register-token-pattern!
+   (token-pattern 'narrow-var-annot (lambda (rrb pos) (recognize-narrow-var-annot rrb pos))
+                  (lambda (s p l) 'symbol) 96))
   (register-token-pattern!
    (token-pattern 'typed-hole (lambda (rrb pos) (recognize-typed-hole rrb pos))
                   (lambda (s p l) 'typed-hole) 98))  ;; ?? before ?:/?
@@ -1090,9 +1255,24 @@
   (register-token-pattern!
    (token-pattern 'dot-lparen (lambda (rrb pos) (recognize-dot-lparen rrb pos))
                   (lambda (s p l) 'dot-lparen) 87))
+  ;; D4.P1b-ii: `.{` mid-path sub-block. Shares 87 with its dot-compound
+  ;; siblings; safe because the three are PREFIX-DISJOINT (`(` / `*` / `{`),
+  ;; not because of the number — priorities tie here and the registry is a
+  ;; plain hash, so ties break by unspecified order (Q8.5 invariant 1).
+  (register-token-pattern!
+   (token-pattern 'dot-lbrace (lambda (rrb pos) (recognize-dot-lbrace rrb pos))
+                  (lambda (s p l) 'dot-lbrace) 87))
   (register-token-pattern!
    (token-pattern 'broadcast-access (lambda (rrb pos) (recognize-broadcast-access rrb pos))
                   (lambda (s p l) 'broadcast-access) 87))
+  ;; D4.P2: `.N` ordinal access. Joins the 87 dot-compound cluster, making it
+  ;; FOUR-way — safe for the same reason the three-way was: all four are
+  ;; PREFIX-DISJOINT (`(` / `*` / `{` / digit), not because of the number
+  ;; (Q8.5 invariant 1). It is also disjoint from `decimal-literal` (75), which
+  ;; anchors at a DIGIT and can therefore never contend for a dot position.
+  (register-token-pattern!
+   (token-pattern 'dot-ordinal (lambda (rrb pos) (recognize-dot-ordinal rrb pos))
+                  (lambda (s p l) 'dot-ordinal) 87))
   (register-token-pattern!
    (token-pattern 'dot-access (lambda (rrb pos) (recognize-dot-access rrb pos))
                   (lambda (s p l) 'dot-access) 86))
@@ -1272,15 +1452,106 @@
 ;; bracket continuation (the `.( 3N < 5N )` / `[< 3N 5N]` defect, 2026-07-26).
 ;; A frame stack tracks the innermost group kind + its closer to mirror the
 ;; grouping layer's context.
-(define (make-bracket-depth-rrb token-rrb)
+;; ============================================================
+;; CIU T6 D4.P1b-i (owner ruling Q_M4) — the TOP-LEVEL `<` bound.
+;;
+;; `langle-matched?` / `has-matching-rangle?` decide whether a `<` OPENS an
+;; angle group by scanning ahead for a matching `>`. Their terminating arm
+;; needs a close-type — but at TOP LEVEL close-type is #f, so it can never
+;; fire and the scan ran to the END OF THE TOKEN STREAM. A `<` therefore
+;; matched a `>` belonging to a LATER top-level form: `def p := 1 < 2` /
+;; `def q := 3 > 4` collapsed into ONE form at ZERO errors — a silent
+;; wrong answer in ordinary code, and the reason `:<` (disclose) looked
+;; hazardous when the hazard was the bare `<`.
+;;
+;; The bound: a TOP-LEVEL `<` may not scan past the start of the NEXT
+;; top-level form. Continuation lines are INDENTED by layout, so multi-line
+;; angle groups (`<(x : A)\n -> B>`) are unaffected — pinned in
+;; test-parse-reader.rkt. Applied ONLY when close-type is #f: nested scopes
+;; are already bounded by their own closer, so this cannot regress them.
+;;
+;; Both twins take the bound. Their disagreement IS the `31d27c83` defect
+;; class, and the bracket-depth pin passing while the datum layer collapsed
+;; is exactly what proved both are load-bearing here.
+;; ============================================================
+
+;; A token BEGINS A TOP-LEVEL FORM iff it is the first thing on its line and
+;; that line has indent 0. Both halves DELEGATE to the reader's own notions
+;; rather than re-deriving them:
+;;   * indent = leading SPACE count — exactly `measure-indent` (:121-126);
+;;   * everything between the line start and the token must be whitespace,
+;;     which makes `\r` (CRLF) and `\t` invisible here just as the tokenizer
+;;     already treats them.
+;;
+;; ⚠ The first draft of this bound hand-rolled a THIRD definition of
+;; "indent-0 content line" and drifted from BOTH existing ones — it counted
+;; `\r` as content (so a CRLF blank line destroyed a working angle group) and
+;; counted `\t` as indent (so tab-indented files got no bound at all and the
+;; swallow survived). That is the F1b.7g drift class in `prologos-syntax.md`
+;; § Reader, caught by the P1b-i adversarial verify. Working per TOKEN also
+;; removes two hazards the string scan had for free: a multi-line STRING is
+;; ONE token, so column-0 text inside it can no longer register a phantom
+;; form start, and comments are not tokens at all.
+(define (line-start-of src pos)
+  (let back ([i (- pos 1)])
+    (cond [(< i 0) 0]
+          [(char=? (string-ref src i) #\newline) (+ i 1)]
+          [else (back (- i 1))])))
+
+;; Indent of the line containing `pos`, delegating to `measure-indent`'s
+;; semantics: LEADING SPACES only (a tab-indented line therefore has indent 0
+;; and is a sibling, exactly as the layout engine already reads it).
+(define (line-indent-at src pos)
+  (define ls (line-start-of src pos))
+  (let count ([i ls] [k 0])
+    (if (and (< i (string-length src)) (char=? (string-ref src i) #\space))
+        (count (+ i 1) (+ k 1))
+        k)))
+
+;; Is `pos` the FIRST token position on its line? (Only whitespace behind it.)
+;; Working per TOKEN is what makes a multi-line STRING safe: the string is ONE
+;; token, so column-0 text inside it can never register as a form start.
+(define (token-first-on-line? src pos)
+  (let scan ([i (line-start-of src pos)])
+    (cond [(>= i pos) #t]
+          [(memv (string-ref src i) '(#\space #\tab #\return)) (scan (+ i 1))]
+          [else #f])))
+
+;; Does the token at `tok-pos` START A NEW FORM relative to a `<` at
+;; `langle-pos`? Layout rule: a line at the SAME-or-LESSER indent is a sibling
+;; or an outdent — a new form; a MORE-indented line is a continuation.
+;;
+;; ⚠ Two earlier drafts of this bound were wrong in instructive ways, both
+;; caught by the P1b-i adversarial verify. The first hand-rolled a THIRD
+;; definition of "indent-0 content line" that drifted from BOTH `content-line?`
+;; and `measure-indent` (it counted `\r` as content, so a CRLF blank line
+;; destroyed a working angle group, and counted `\t` as indent, so
+;; tab-indented files got no bound at all) — the F1b.7g drift class. The
+;; second fixed those but tested "indent 0" absolutely, which misses every
+;; file whose forms start indented (`"  def a\n  def b"` is TWO forms).
+;; Delegate, and compare RELATIVE indent.
+(define (token-starts-new-form? src langle-pos tok-pos)
+  (and (token-first-on-line? src tok-pos)
+       (<= (line-indent-at src tok-pos) (line-indent-at src langle-pos))))
+
+(define (make-bracket-depth-rrb token-rrb [src #f])
   (define n (rrb-size token-rrb))
   ;; Lookahead twin of has-matching-rangle? over the token RRB: is there a
   ;; matching rangle for a langle at `start`, before the enclosing group's
   ;; closer? Skips balanced nested groups; nested angles via angle-depth.
   (define (langle-matched? start close-type)
+    ;; Q_M4: at TOP LEVEL (no enclosing closer) bound the scan at the next
+    ;; top-level form start, else it runs to EOF and matches another form's `>`.
+    (define langle-pos
+      (and src (not close-type) (> start 0)
+           (token-entry-start-pos (rrb-get token-rrb (- start 1)))))
     (let loop ([i start] [angle-depth 0] [other-depth 0])
       (cond
         [(>= i n) #f]
+        [(and langle-pos
+              (token-starts-new-form?
+               src langle-pos (token-entry-start-pos (rrb-get token-rrb i))))
+         #f]
         [else
          (define type (set-first (token-entry-types (rrb-get token-rrb i))))
          (cond
@@ -1288,8 +1559,11 @@
            [(eq? type 'langle) (loop (+ i 1) (+ angle-depth 1) other-depth)]
            [(and (eq? type 'rangle) (> angle-depth 0))
             (loop (+ i 1) (- angle-depth 1) other-depth)]
+           ;; OPENER DEPTH-BALANCING set (NOT angle suppression — that is keyed
+           ;; on frame kind 'mixfix below). MUST stay identical to its twin in
+           ;; has-matching-rangle?; their disagreement IS the 31d27c83 defect.
            [(memq type '(lbracket lparen lbrace quote-lbracket at-lbracket
-                         tilde-lbracket hash-lbrace dot-lparen))
+                         tilde-lbracket hash-lbrace dot-lparen dot-lbrace))
             (loop (+ i 1) angle-depth (+ other-depth 1))]
            [(and (memq type '(rbracket rparen rbrace)) (> other-depth 0))
             (loop (+ i 1) angle-depth (- other-depth 1))]
@@ -1314,7 +1588,13 @@
                        (cons (cons (if in-mixfix? 'mixfix 'paren) 'rparen) frames))]
               [(memq type '(lbracket quote-lbracket at-lbracket tilde-lbracket))
                (values (+ bd 1) (cons (cons 'bracket 'rbracket) frames))]
-              [(memq type '(lbrace hash-lbrace))
+              ;; D4.P1b-ii: dot-lbrace joins the BRACE family — kind 'brace,
+              ;; closer 'rbrace (Q_M5). Kind 'brace (not 'mixfix) is what keeps
+              ;; angle grouping ALIVE inside a `.{ }` block, which type-level
+              ;; angle groups need. Omitting it here would leave bd
+              ;; un-incremented while the matching `}` still pops — the
+              ;; wrong-frame-pop half of the 31d27c83 class.
+              [(memq type '(lbrace hash-lbrace dot-lbrace))
                (values (+ bd 1) (cons (cons 'brace 'rbrace) frames))]
               [(eq? type 'langle)
                ;; Operator inside mixfix; opener only when a matching `>`
@@ -1629,7 +1909,8 @@
   (define tok-rrb (tokenize-char-rrb char-rrb))
 
   ;; Domain 4: Bracket-depth RRB
-  (define bd-rrb (make-bracket-depth-rrb tok-rrb))
+  ;; Q_M4 (D4.P1b-i): the source bounds the top-level angle lookahead.
+  (define bd-rrb (make-bracket-depth-rrb tok-rrb str))
 
   ;; Disambiguation cycle (≤2 rounds)
   (define-values (tok-rrb-final bd-rrb-final)
@@ -1639,7 +1920,7 @@
           (let-values ([(narrowed changed?) (disambiguate-tokens tok bd)])
             (if changed?
                 ;; Recompute bracket-depth from narrowed tokens
-                (let ([new-bd (make-bracket-depth-rrb narrowed)])
+                (let ([new-bd (make-bracket-depth-rrb narrowed str)])
                   (round narrowed new-bd (+ rounds 1)))
                 (values tok bd))))))
 
@@ -1866,6 +2147,17 @@
       [(pipe-right) '$pipe-gt]
       [(facts-sep) '$facts-sep]
       [(clause-sep) '$clause-sep]
+      ;; D4.P2: `dot-ordinal` is NOT in this list — it needs a NUMERIC payload,
+      ;; not a prefix-stripped symbol, so it gets its own arm below. Reported
+      ;; independently by FOUR adversarial lenses when it was missing: the token
+      ;; fell to `[else (string->symbol lexeme)]` and yielded `|.10|` (dot
+      ;; retained, payload symbolic), contradicting both the sibling contract
+      ;; here and the numeric payload Q_R1 establishes. Not production-reachable
+      ;; (this converter's only non-test consumer, tools/golden-capture.rkt,
+      ;; reads token TYPES only) — fixed anyway, because a sibling-inconsistent
+      ;; value in an exported API is how the next reader gets misled.
+      [(dot-ordinal)
+       (string->number (substring lexeme 1))]
       [(dot-access nil-dot-access broadcast-access)
        (string->symbol (substring lexeme (if (string-prefix? lexeme "#") 2 1)))]
       [(dot-key)
@@ -2066,6 +2358,24 @@
      (make-stx (list (make-stx '$dot-access source line col pos1 0)
                      (make-stx field-sym source line (+ col 1) (+ pos1 1) (- span 1)))
                source line col pos1 span)]
+    ;; D4.P2 — `.N` ordinal access. THIS SITE IS THE ONE NO ENUMERATION HAD
+    ;; NAMED, and a miss here is SILENT: a token type with no arm falls through
+    ;; both `[else]`s (the inner `value` case yields `(string->symbol lexeme)`,
+    ;; the outer wraps that symbol) — no raise, no diagnostic, just the bare
+    ;; symbol `|.1|`. §Q8.5 invariant 3 now carries it as token-layer site (f).
+    ;;
+    ;; ⚠ `string->number`, NOT the siblings' `string->symbol`. A NUMERIC payload
+    ;; is what makes `v.0` byte-identical to `v[0]`'s datum, and that identity is
+    ;; the whole content of owner ruling Q_R1 ("two SURFACES over ONE
+    ;; mechanism") — with a symbolic payload the reuse would silently mint
+    ;; `(map-get x :10)`: the wrong node (map-get has no PVec leg) with the
+    ;; wrong key domain. The recognizer's ASCII-digit gate is what guarantees
+    ;; this conversion cannot return `#f`.
+    [(dot-ordinal)
+     (define n (string->number (substring lexeme 1)))
+     (make-stx (list (make-stx '$postfix-index source line col pos1 0)
+                     (make-stx n source line (+ col 1) (+ pos1 1) (- span 1)))
+               source line col pos1 span)]
     [(dot-key)
      (define kw-sym (string->symbol (substring lexeme 1)))  ;; .:name → :name
      (make-stx (list (make-stx '$dot-key source line col pos1 0)
@@ -2189,7 +2499,454 @@
   (define vec (list->vector items))
   (define-values (elems _end)
     (group-items vec 0 (vector-length vec) #f source source-str))
-  elems)
+  (transform-let-blocks-elems elems))
+
+;; ============================================================
+;; LET P3 (2026-07-31): aligned let blocks — the column discipline.
+;; ============================================================
+;;
+;;     let x 4              The continuation BINDING lines share one column;
+;;         y 5              the BODY sits strictly between the `let` column
+;;         z [+ x y]        and the binding column. STRICT (owner ruling 1):
+;;       [+ a z]            anything else is a guided per-command error
+;;                          naming the columns.
+;;
+;; This is the ONE layer that can implement the discipline: every element here
+;; — bare token or wrapped line-group — still carries line/column, while
+;; preparse strips srclocs (`syntax->datum`) before `expand-let` dispatches,
+;; and binding groups vs a body application are SHAPE-IDENTICAL without
+;; columns (`(z (+ x y))` vs `(+ a z)`). The `&>` clause-group machinery is
+;; the precedent (Rel T1 POL.8).
+;;
+;; ACTIVATION is deliberately narrow — the transform is IDENTITY unless:
+;;   - the group heads with the identifier `let` followed by BARE binding
+;;     tokens (bracket-binding heads excluded), and
+;;   - there are ≥2 continuation LINES, and
+;;   - none is `$pipe`-headed (STRUCTURAL, not heuristic: `|` is reserved arm
+;;     syntax and never a binding, so the working `let x := v` + `match x` +
+;;     `| arm` body shape can never be captured), and
+;;   - the elements carry real line/col (synthesized stx deactivates), and
+;;   - EITHER the aligned body signature is present (last continuation
+;;     strictly between the let and binding columns) OR every continuation
+;;     shares the binding column (the forgot-the-body shape, which today
+;;     value-swallows into junk — it gets the guided no-body error instead).
+;;
+;; On success the group is rewritten to
+;;     (let ($let-block (head-binding) (b1 …) (b2 …)) body)
+;; — head `let` retained so preparse's existing dispatch reaches expand-let,
+;; which normalizes the groups onto the single parse-assign-bindings funnel.
+;; On violation the group becomes P1's ($let-error "…") marker: a per-command
+;; guided error with the columns named, and the file continues.
+
+(define (let-block-pipe-headed? e)
+  (define d (syntax-e e))
+  (or (and (symbol? d) (eq? d '$pipe))
+      (and (pair? d)
+           (let ([h (syntax-e (car d))])
+             (and (symbol? h) (eq? h '$pipe))))))
+
+(define (let-block-error stx msg)
+  (datum->syntax #f (list (datum->syntax #f '$let-error stx)
+                          (datum->syntax #f msg stx))
+                 stx))
+
+;; The recursive walk: bottom-up (a nested let inside a binding value is
+;; transformed before its parent is classified). `classify` runs on
+;; already-recursed element lists; the two entry points share it.
+(define (let-headed? elems)
+  (and (pair? elems)
+       (let ([h (syntax-e (car elems))]) (and (symbol? h) (eq? h 'let)))))
+
+;; ⚠ EQ?-PRESERVING BY CONSTRUCTION (caught by the P3 gate, acceptance
+;; [27]/[28]): the first draft rebuilt EVERY stx-list via
+;; `(datum->syntax #f kids stx)`, which copies the srcloc but DROPS SYNTAX
+;; PROPERTIES — including POL.9's 'prologos-paren-origin mark, so an
+;; implicit-solve paren goal `(quest t "Alice" r)` silently degraded to an
+;; APPLICATION. A form the walk does not change now keeps its ORIGINAL stx
+;; (identity, properties, everything); a rebuilt form passes the original as
+;; BOTH the srcloc and the property template (datum->syntax's 4th argument).
+;; ── SolveCarrier P2: the `let` binding-RHS implicit solve (ruling R6) ────────
+;; Rel T1 POL.9/POL.9b give a paren goal at COMMAND POSITION an implicit solve.
+;; `def x := (goal …)` got it; `let x := (goal …)` did not — the LET track landed
+;; a new binding form and the scope never grew to cover its RHS, so the failure
+;; was a bare `Unbound variable`.
+;;
+;; WHY THE MARK CANNOT REACH THE PARSER ON ITS OWN. Goal-ness is carried by the
+;; reader's 'prologos-paren-origin SYNTAX PROPERTY. `let` desugars in a PREPARSE
+;; MACRO (macros.rkt `expand-let`), and preparse macros receive fully STRIPPED
+;; datums — verified by instrumenting expand-let's entry: every element arrives
+;; with syntax?=#f. So by the time any let code could look, the property is gone.
+;; The `def` leg dodges this by threading the original RHS syntax through the
+;; := rewrite (macros.rkt `def-rhs-stx`); `let` has five spellings, so the same
+;; threading would mean five hooks into machinery that landed today.
+;;
+;; THE REALIZATION. The property's whole information content here is one bit —
+;; "this value was written in parens" — so preserve that bit in the DATUM, where
+;; stripping cannot reach it, by wrapping in a `$goal-rhs` sentinel. The reader
+;; knows POSITION and PARENS; the parser knows the KEYWORD TABLE and decides
+;; goal-ness. Neither needs the other's table, so nothing drifts. This is the
+;; same shape as the existing `$let-block` sentinel, minted here and consumed
+;; downstream.
+;;
+;; THE POSITION RULE, argued from the grammar rather than re-deriving the binding
+;; parser (which would be exactly the F1b.7g drift class): under the LET grammar
+;; a direct child of a `let` form is the head token, a binding NAME, `:=`, a
+;; TYPE, a binding VALUE, or the BODY — and names, `:=` and types are never paren
+;; groups. So a paren-origin direct child is a binding value UNLESS it is the
+;; body, and the body is always LAST. Binding groups (`$let-block` lines, the
+;; bracket form's list) are descended ONE level, since those contain only
+;; binding material. We deliberately do NOT recurse further: a paren goal nested
+;; inside a value (`let x := [f (g a)]`) is an ARGUMENT, not a binding RHS, and
+;; must keep its application reading.
+(define ($goal-rhs-wrap e)
+  (if (and (syntax? e) (syntax-property e 'prologos-paren-origin))
+      (datum->syntax #f (list (datum->syntax #f '$goal-rhs e) e) e)
+      e))
+
+(define (stx-sym=? e s) (and (syntax? e) (eq? (syntax-e e) s)))
+(define (stx-group? e) (and (syntax? e) (let ([d (syntax-e e)]) (and (pair? d) (list? d)))))
+
+;; Wrap the VALUE of each binding in one token list. `single-binding?` says the
+;; list is exactly ONE binding (a `$let-block` group, or the let's own direct
+;; children for the non-block spellings) rather than the bracket form's flat run
+;; of several.
+;;
+;; The value must be a SINGLE element to qualify — POL.9b's own rule for `def`
+;; ("Only a SINGLE element after := qualifies — a multi-token RHS is the
+;; auto-wrapped application"). Mirroring it is what keeps the EXPLICIT spelling
+;; `let ls := solve (goal …)` working: there the paren group is `solve`'s
+;; ARGUMENT, not the value, and wrapping it produced `solve (solve …)` — caught
+;; by acceptance marker 23 (a double solve), which is exactly why the acceptance
+;; file pins the explicit spelling alongside the implicit one.
+(define (mark-binding-values ts single-binding?)
+  (define n (length ts))
+  (define has-assign? (ormap (lambda (e) (stx-sym=? e ':=)) ts))
+  (cond
+    ;; ── one binding, `name [: T] := VALUE` ──
+    [(and single-binding? has-assign?)
+     (define idx (for/last ([e (in-list ts)] [i (in-naturals)] #:when (stx-sym=? e ':=)) i))
+     (if (= n (+ idx 2))                        ;; exactly one element after :=
+         (append (take ts (add1 idx)) (list ($goal-rhs-wrap (last ts))))
+         ts)]
+    ;; ── one binding, bare `name VALUE` (incl. the fused `name:T VALUE`) ──
+    [single-binding?
+     (if (= n 2) (list (car ts) ($goal-rhs-wrap (cadr ts))) ts)]
+    ;; ── the bracket form's flat run: `x := V y := V2` ──
+    [has-assign?
+     (for/list ([e (in-list ts)] [i (in-naturals)])
+       (if (and (> i 0) (stx-sym=? (list-ref ts (sub1 i)) ':=)) ($goal-rhs-wrap e) e))]
+    ;; ── the bracket form's flat PAIRS: `x 5 y 6` — values sit at odd indices ──
+    [else
+     (for/list ([e (in-list ts)] [i (in-naturals)])
+       (if (odd? i) ($goal-rhs-wrap e) e))]))
+
+(define (mark-let-goal-rhs elems)
+  ;; TOTAL BY CONSTRUCTION: accepts whatever `classify-let-block` returned and
+  ;; passes through anything that is not a let-headed element list.
+  ;;
+  ;; ⚠ This is not defensive padding — it is the fix for a REAL whole-file abort
+  ;; this function shipped with. `classify-let-block`'s `fail` path returns
+  ;; `let-block-error`'s value, which is a SYNTAX OBJECT wrapping
+  ;; `($let-error "msg")` — NOT an element list. The `-elems` entry point called
+  ;; this on that result without re-checking let-headedness, so `(length elems)`
+  ;; raised a Racket `contract violation` and took the WHOLE FILE down, where the
+  ;; `$let-error` marker channel exists precisely to produce a per-command error.
+  ;; Guarding at the call sites would work but leaves the trap armed for the next
+  ;; caller; totality here cannot be forgotten. (Found by probing a nested
+  ;; sibling chain; the full suite was GREEN — no test reaches a let-block layout
+  ;; error from inside a let-headed top-level form.)
+  (cond
+    [(not (let-headed? elems)) elems]
+    [(< (length elems) 3) elems]     ;; nothing that could be both binding and body
+    [else
+     (define let-tok (car elems))
+     (define rest (cdr elems))
+     (define body (last rest))
+     (define bindings (reverse (cdr (reverse rest))))
+     (define (rebuild-group g ts) (datum->syntax #f ts g g))
+     (define marked
+       (cond
+         ;; aligned block: (let ($let-block (b1 …) (b2 …)) body) — each group is
+         ;; ONE binding; the `$let-block` head token is not.
+         [(and (= (length bindings) 1) (stx-group? (car bindings))
+               (let ([d (syntax-e (car bindings))])
+                 (and (pair? d) (stx-sym=? (car d) '$let-block))))
+          (define blk (car bindings))
+          (define d (syntax-e blk))
+          (list (rebuild-group
+                 blk
+                 (cons (car d)
+                       (for/list ([g (in-list (cdr d))])
+                         (if (stx-group? g)
+                             (rebuild-group g (mark-binding-values (syntax-e g) #t))
+                             g)))))]
+         ;; bracket form: (let (…bindings…) body) — one group, possibly many bindings
+         [(and (= (length bindings) 1) (stx-group? (car bindings)))
+          (define g (car bindings))
+          (list (rebuild-group g (mark-binding-values (syntax-e g) #f)))]
+         ;; the non-block spellings: the let's own direct children ARE the binding
+         [else (mark-binding-values bindings #t)]))
+     (cons let-tok (append marked (list body)))]))
+
+
+;; ⚠ DO NOT DESCEND INTO A READER-FORM BODY (`racket{…}`). At this stage the
+;; foreign block is still ORDINARY SYNTAX — `combine-foreign-blocks` runs later,
+;; at preparse — so a walk that recurses blindly reaches the HOST language's
+;; code. A Racket `(let loop ([n 10] [acc 0]) …)` inside `racket{…}` is
+;; `let`-headed, so it reached `mark-let-goal-rhs`, which wrapped `([n 10] [acc
+;; 0])` in a `$goal-rhs` sentinel and corrupted the block. Caught by the FULL
+;; SUITE (test-path-selection's multi-line `racket{…}` pin), not by any targeted
+;; run — the single-line pin next to it passes either way, which is exactly why
+;; that test says a single-line pin misses this shape.
+;;
+;; `classify-let-block` had the same theoretical exposure and escaped only
+;; because its heuristics happened to bail; guarding at the RECURSION protects
+;; both, and any future let-shaped rewrite, by construction.
+(define (skip-reader-form-body kids0 lst)
+  ;; keep element i UNTRANSFORMED when element i-1 is a reader-form head
+  (for/list ([k (in-list kids0)] [orig (in-list lst)] [i (in-naturals)])
+    (if (and (> i 0)
+             (let ([prev (list-ref lst (sub1 i))])
+               (and (syntax? prev)
+                    (let ([d (syntax-e prev)])
+                      (and (symbol? d) (reader-form-head? d))))))
+        orig
+        k)))
+
+(define (transform-let-blocks-stx stx)
+  (define lst (syntax->list stx))
+  (if (not lst)
+      stx
+      (let* ([kids0 (skip-reader-form-body (map transform-let-blocks-stx lst) lst)]
+             [kids (absorb-let-siblings kids0)]
+             [kids1 (if (let-headed? kids) (classify-let-block kids) kids)]
+             [kids* (mark-let-goal-rhs kids1)])   ;; total — see its own note
+        (if (and (eq? kids* kids1) (eq? kids1 kids) (eq? kids kids0) (andmap eq? kids0 lst))
+            stx
+            (datum->syntax #f kids* stx stx)))))
+
+;; Entry point for a top-level form's element list (tree-node->stx-elements).
+(define (transform-let-blocks-elems elems)
+  (define elems*
+    (absorb-let-siblings (skip-reader-form-body (map transform-let-blocks-stx elems) elems)))
+  (let ([r (mark-let-goal-rhs (if (let-headed? elems*) (classify-let-block elems*) elems*))])
+    ;; ⚠ CONTRACT REPAIR (pre-existing LET-track defect, verified by neutralising
+    ;; the P2 additions and reproducing at base shape). This entry point is
+    ;; documented to return an ELEMENT LIST, and `tree-node->stx-elements` hands
+    ;; its result straight to `maybe-rewrite-infix-eq-stx`, which does
+    ;; `(in-list elems)`. But `classify-let-block`'s FAIL path returns
+    ;; `let-block-error`'s value — a SYNTAX OBJECT wrapping `($let-error "msg")`,
+    ;; not a list. So a let-block LAYOUT error in a top-level let-headed form
+    ;; raised a Racket `in-list: contract violation` and took the WHOLE FILE
+    ;; down with zero results — defeating the marker channel that exists
+    ;; precisely to make it a PER-COMMAND error at any nesting depth.
+    ;; Wrapping it as a single-element list is what makes it flow as ONE
+    ;; top-level form: read-all-forms-from-tree's "single paren-form" arm then
+    ;; unwraps it, the parser meets `($let-error msg)` and converts it.
+    ;; (The nested `-stx` path never hit this: `let-headed?` on a syntax object
+    ;; is #f, so the error form simply passed through as a child.)
+    (if (list? r) r (list r))))
+
+;; Classify a let-headed element list; return the (possibly rewritten) list.
+;;
+;; LET P4 refinement (multi-line values — owner request): the column model is
+;; now the FULL original design rule. Continuation lines partition by column:
+;;   body-col     = the SHALLOWEST continuation column (> the let column);
+;;                  exactly ONE line sits there, and it must be LAST;
+;;   binding-col  = the SECOND-shallowest;
+;;   anything DEEPER than binding-col is a CONTINUATION of the nearest
+;;                  preceding binding line (or of the head binding) and FOLDS
+;;                  into that binding's value — this is what makes
+;;                      let k := match a
+;;                                 | 1 -> 10   ← deeper: k's value continues
+;;                                 | m -> m
+;;                          j 5
+;;                        body
+;;                  work: the arms fold into k's group.
+;; The pipe exclusion refines with it: a `$pipe`-headed line DEEPER than
+;; binding-col is a value continuation (folded, fine); a pipe AT binding-col or
+;; body-col is arm syntax (a match body / legacy layout) → deactivate,
+;; untouched. With only ONE distinct continuation column the old rules stand
+;; (no-body error / legacy shapes).
+(define (classify-let-block elems)
+  (define let-tok (car elems))
+  (define let-line (syntax-line let-tok))
+  (define let-col (syntax-column let-tok))
+  (define rest (cdr elems))
+  (define (loc-ok? e) (and (syntax-line e) (syntax-column e)))
+  (cond
+    [(or (not let-line) (not let-col) (not (andmap loc-ok? rest))) elems]
+    [else
+     (define head-elems (filter (lambda (e) (= (syntax-line e) let-line)) rest))
+     (define cont-elems (filter (lambda (e) (> (syntax-line e) let-line)) rest))
+     (cond
+       ;; 0/1 continuation lines: every working form (single-line lets, the
+       ;; nested shorthand, bracket lets with one body line, sibling := chains)
+       ;; — untouched, byte-transparent.
+       [(< (length cont-elems) 2) elems]
+       ;; bracket-binding head (car of head-elems is a group) or empty head:
+       ;; not the aligned surface.
+       [(or (null? head-elems) (pair? (syntax-e (car head-elems)))) elems]
+       [else
+        (define cols (sort (remove-duplicates (map syntax-column cont-elems)) <))
+        (define body-col (car cols))
+        (define bcol (if (pair? (cdr cols)) (cadr cols) #f))
+        (define (fail msg) (let-block-error let-tok msg))
+        (cond
+          ;; ONE distinct column only: bindings with no body (the forgot-body
+          ;; shape) — unless pipes live there (arm syntax → untouched).
+          [(not bcol)
+           (cond
+             [(ormap let-block-pipe-headed? cont-elems) elems]
+             [(<= body-col let-col) elems]
+             [else
+              (fail (format
+                     "let block has no body — expected a line indented between column ~a (the `let`) and column ~a (the bindings)"
+                     let-col body-col))])]
+          ;; Pipes at the body or binding column = arm syntax → untouched.
+          [(ormap (lambda (e) (and (let-block-pipe-headed? e)
+                                   (<= (syntax-column e) bcol)))
+                  cont-elems)
+           elems]
+          [(<= body-col let-col) elems]
+          [else
+           ;; FOLD deeper-than-bcol continuations into the nearest preceding
+           ;; binding (or the head binding). Walk in order, accumulating.
+           (define-values (head-extra bindings-rev body-cands)
+             (for/fold ([hx '()] [br '()] [bc '()])
+                       ([e (in-list cont-elems)])
+               (define c (syntax-column e))
+               (cond
+                 [(> c bcol)
+                  ;; value continuation: attach to the last binding, or the
+                  ;; head binding when no binding line has appeared yet.
+                  (if (null? br)
+                      (values (cons e hx) br bc)
+                      (values hx (cons (cons e (car br)) (cdr br)) bc))]
+                 [(= c bcol) (values hx (cons (list e) br) bc)]
+                 [else       (values hx br (cons e bc))])))
+           (define binding-lines
+             (map (lambda (grp) (reverse grp)) (reverse bindings-rev)))
+           (define bodies (reverse body-cands))
+           (cond
+             [(null? bodies)
+              (fail (format
+                     "let block has no body — expected a line indented between column ~a (the `let`) and column ~a (the bindings)"
+                     let-col bcol))]
+             [(> (length bodies) 1)
+              (fail (format
+                     "let block has ~a body lines at columns between ~a and ~a — exactly one body line is allowed"
+                     (length bodies) let-col bcol))]
+             [(not (eq? (car bodies) (last cont-elems)))
+              (fail (format
+                     "let block bindings appear AFTER the body line — the body (column between ~a and ~a) must be last"
+                     let-col bcol))]
+             [(ormap (lambda (grp) (and (= (length grp) 1)
+                                        (not (pair? (syntax-e (car grp))))))
+                     binding-lines)
+              (fail (format
+                     "let block binding line at column ~a needs a name and a value (e.g. `y 5` or `y := 5`)"
+                     bcol))]
+             [else
+              (define body (car bodies))
+              ;; A binding line with folded continuations becomes one group:
+              ;; the line's own elements spliced with its continuation lines.
+              (define (line-group grp)
+                (define base (car grp))
+                (define extra (cdr grp))
+                (if (null? extra)
+                    base
+                    (datum->syntax #f (append (syntax->list base) extra) base base)))
+              (define head-group
+                (datum->syntax #f (append head-elems (reverse head-extra))
+                               let-tok))
+              (define groups (cons head-group (map line-group binding-lines)))
+              (list let-tok
+                    (datum->syntax #f (cons (datum->syntax #f '$let-block let-tok)
+                                            groups)
+                                   let-tok)
+                    body)])])])]))
+
+;; LET P4: absorb ALIGNED SIBLINGS into a bodiless let group. A multi-line
+;; bracket in the HEAD binding's value ends the let's form extent at the
+;; reader, so its continuation lines land as SIBLINGS of the let group:
+;;     let x [+ 1
+;;            3]        ← bracket closes the extent
+;;         y 5          ← sibling of (let x (+ 1 3)), NOT a child
+;;       [+ a [+ x y]]
+;; Without this pass the P2 bodiless-merge would fuse `(let x (+ 1 3))` with
+;; the NEXT sibling as its body — silently applying y to 5. Absorption is
+;; gated hard: the let group must be BODILESS-shaped (a complete let absorbs
+;; nothing), and only siblings on LATER lines at columns STRICTLY DEEPER than
+;; the let's own are taken (a sibling `let` at the same column — the := chain
+;; — is never absorbed).
+(define (let-group-bodiless? g)
+  (define d (syntax->datum g))
+  (and (list? d) (pair? d) (eq? (car d) 'let)
+       (let ([rest (cdr d)])
+         (cond
+           [(memq ':= rest)
+            (let loop ([i 0] [l rest])
+              (cond [(null? l) #f]
+                    [(eq? (car l) ':=) (= (length l) 2)]
+                    [else (loop (add1 i) (cdr l))]))]
+           [else (= (length rest) 2)]))))
+
+(define (let-group-last-line g)
+  (define lst (syntax->list g))
+  (and lst (pair? lst)
+       (for/fold ([m (syntax-line g)]) ([e (in-list lst)])
+         (define l (syntax-line e))
+         (if (and l m (> l m)) l m))))
+
+;; eq?-preserving: when nothing absorbs, the ORIGINAL list object returns
+;; (the identity guard in transform-let-blocks-stx depends on it).
+(define (absorb-let-siblings elems)
+  (define out (absorb-let-siblings* elems))
+  (if (and (= (length out) (length elems)) (andmap eq? out elems))
+      elems
+      out))
+
+(define (absorb-let-siblings* elems)
+  (let loop ([es elems] [acc '()])
+    (cond
+      [(null? es) (reverse acc)]
+      [(let* ([g (car es)]
+              [lst (and (syntax? g) (syntax->list g))])
+         (and lst (pair? lst)
+              (let ([h (syntax-e (car lst))])
+                (and (symbol? h) (eq? h 'let)))
+              (syntax-line g) (syntax-column g)
+              (let-group-bodiless? g)
+              (pair? (cdr es))))
+       (define g (car es))
+       (define gcol (syntax-column g))
+       (define gline (let-group-last-line g))
+       (define-values (absorbed remaining)
+         (let take ([rest (cdr es)] [got '()] [prev-line gline])
+           (cond
+             [(null? rest) (values (reverse got) '())]
+             [(let ([e (car rest)])
+                (and (syntax-line e) (syntax-column e)
+                     (> (syntax-line e) prev-line)
+                     (> (syntax-column e) gcol)))
+              (take (cdr rest) (cons (car rest) got)
+                    (or (let-group-last-line (car rest))
+                        (syntax-line (car rest))))]
+             [else (values (reverse got) rest)])))
+       (cond
+         ;; Need at least binding/body structure to be worth absorbing —
+         ;; a single absorbed element is the nested-body shape the P2 merge
+         ;; already handles; leave it.
+         [(< (length absorbed) 2)
+          (loop (cdr es) (cons g acc))]
+         [else
+          (define fat
+            (datum->syntax #f (append (syntax->list g) absorbed) g g))
+          (define fat* (let ([kids (syntax->list fat)])
+                         (datum->syntax #f (classify-let-block kids) fat fat)))
+          (loop remaining (cons fat* acc))])]
+      [else (loop (cdr es) (cons (car es) acc))])))
 
 ;; Flatten a node into a list of items: token-entries and 'indent-open/'indent-close markers.
 ;; Child line nodes are wrapped in indent-open/indent-close pairs.
@@ -2334,15 +3091,26 @@
 
 ;; Lookahead: check if there's a matching rangle before the current scope closes.
 ;; Scans forward tracking nesting depth for <> pairs.
-(define (has-matching-rangle? vec start end close-type)
+(define (has-matching-rangle? vec start end close-type [src #f])
   ;; Scan forward for matching rangle, tracking ALL bracket depths.
   ;; Skip over nested [...], (...), {...} groups entirely.
+  ;; Q_M4 (D4.P1b-i): the langle-matched? twin — same top-level bound, or a
+  ;; `<` matches a `>` in a later top-level form. The bracket-depth pin
+  ;; passing while the DATUM layer still collapsed is what proved this twin
+  ;; also needs it (the 31d27c83 "layers must agree" lesson).
+  (define langle-pos
+    (and src (not close-type) (> start 0)
+         (let ([prev (vector-ref vec (- start 1))])
+           (and (token-entry? prev) (token-entry-start-pos prev)))))
   (let loop ([i start] [angle-depth 0] [other-depth 0])
     (cond
       [(>= i end) #f]
       [else
        (define item (vector-ref vec i))
        (cond
+         [(and langle-pos (token-entry? item)
+               (token-starts-new-form? src langle-pos (token-entry-start-pos item)))
+          #f]
          [(not (token-entry? item)) (loop (+ i 1) angle-depth other-depth)]
          [else
           (define type (set-first (token-entry-types item)))
@@ -2353,8 +3121,9 @@
             [(eq? type 'langle) (loop (+ i 1) (+ angle-depth 1) other-depth)]
             [(and (eq? type 'rangle) (> angle-depth 0)) (loop (+ i 1) (- angle-depth 1) other-depth)]
             ;; Other brackets — track depth to skip over them
+            ;; Twin of langle-matched?'s opener set — keep IDENTICAL (31d27c83).
             [(memq type '(lbracket lparen lbrace quote-lbracket at-lbracket
-                          tilde-lbracket hash-lbrace dot-lparen))
+                          tilde-lbracket hash-lbrace dot-lparen dot-lbrace))
              (loop (+ i 1) angle-depth (+ other-depth 1))]
             [(and (memq type '(rbracket rparen rbrace)) (> other-depth 0))
              (loop (+ i 1) angle-depth (- other-depth 1))]
@@ -2395,6 +3164,42 @@
 ;; Group items (tokens + indent markers) with bracket matching.
 ;; indent-open/indent-close create implicit sub-lists ONLY when
 ;; not inside an explicit bracket group (bracket groups take priority).
+;; ── D4.P1b-iii: THE adjacency test, hoisted ──────────────────────────────────
+;; Was inlined in the bracket arm as `is-postfix?`. Hoisted so the bracket arm
+;; and the brace arm consume ONE definition rather than two copies that drift.
+;;
+;; ⚠ It is NOT enough to add `lbrace` to the bracket arm's `memq`: that arm's
+;; closer is a two-way `(if (eq? type 'lbracket) 'rbracket 'rparen)`, so a brace
+;; joining it would be handed `'rparen`. That is the identical "a two-way if
+;; cannot express three token types" shape D4.P1b-ii hit in surface-rewrite.rkt.
+;;
+;; `(pair? result)` means THE CURRENT GROUP HAS ALREADY EMITTED A BASE. `result`
+;; is the per-group accumulator, seeded '() at every recursive entry, so it is
+;; false exactly when the opener is the FIRST item inside its group. That is the
+;; only thing distinguishing `xs{…}` (select off xs) from `'[{…}` / `@[{…}`
+;; (a map literal that merely happens to be byte-adjacent to its opener) — ~28
+;; live sites. Drop it and every list-of-maps literal mis-reads its FIRST
+;; element only, at zero errors.
+;;
+;; `(> i 0)` is redundant while `(pair? result)` holds (a non-empty accumulator
+;; implies the loop advanced), and becomes load-bearing only if that conjunct is
+;; ever removed — it also guards the `(- i 1)` index below.
+(define (adjacent-to-base? vec i result item)
+  (and (pair? result)
+       (> i 0)
+       (let ([prev-item (vector-ref vec (- i 1))])
+         (and (token-entry? prev-item)
+              (= (token-entry-end-pos prev-item)
+                 (token-entry-start-pos item))))))
+
+;; Is the physically preceding token a READER-FORM HEAD (`racket{…}`)? Consults
+;; the ONE registry (reader-forms.rkt) — never an inline literal.
+(define (prev-token-reader-form-head? vec i)
+  (and (> i 0)
+       (let ([prev (vector-ref vec (- i 1))])
+         (and (token-entry? prev)
+              (reader-form-head? (string->symbol (token-entry-lexeme prev)))))))
+
 (define (group-items vec start end close-type source source-str [qq-depth 0])
   (let loop ([i start] [result '()])
     (cond
@@ -2441,13 +3246,7 @@
             [(memq type '(lbracket lparen))
              (define is-postfix?
                (and (eq? type 'lbracket)
-                    (pair? result)
-                    ;; Previous item must be adjacent (no whitespace gap)
-                    (> i 0)
-                    (let ([prev-item (vector-ref vec (- i 1))])
-                      (and (token-entry? prev-item)
-                           (= (token-entry-end-pos prev-item)
-                              (token-entry-start-pos item))))))
+                    (adjacent-to-base? vec i result item)))
              (let-values ([(inner next-i)
                            (group-items vec (+ i 1) end
                                         (if (eq? type 'lbracket) 'rbracket 'rparen)
@@ -2480,7 +3279,7 @@
             ;; AND we're not inside a mixfix group (where < > are operators)
             [(eq? type 'langle)
              (if (and (not (mixfix-close? close-type))
-                      (has-matching-rangle? vec (+ i 1) end close-type))
+                      (has-matching-rangle? vec (+ i 1) end close-type source-str))
                  (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rangle source source-str qq-depth)])
                    (let-values ([(al ac) (pos->line-col source-str (token-entry-start-pos item))])
                      (loop next-i
@@ -2488,13 +3287,45 @@
                                            source al ac (+ (token-entry-start-pos item) 1) 1) result))))
                  ;; No matching > → treat < as operator
                  (loop (+ i 1) (cons (token-entry->stx item source source-str) result)))]
-            ;; Braces → $brace-params sentinel
+            ;; Braces → $brace-params (spaced / reader-form head) or $select-brace
+            ;; (adjacent). D4.P1b-iii: THE adjacency fork.
+            ;;
+            ;; Order is load-bearing (Q8.2's grouping table): HEAD PRECEDENCE is
+            ;; checked FIRST, so `racket{…}` stays a foreign block rather than
+            ;; becoming a selection off a variable named `racket`. Spaced braces
+            ;; are never select blocks — 419 of 622 live spaced braces are
+            ;; implicit type binders, and `combine-foreign-blocks` accepts the
+            ;; spaced `racket {…}` too, so both head spellings keep the old
+            ;; sentinel UNCHANGED.
+            ;;
+            ;; `adjacent-to-base?` carries the `(pair? result)` conjunct, which
+            ;; is the ONLY thing keeping opener-adjacent braces (`'[{…}`,
+            ;; `@[{…}` — ~28 live sites) out of the select reading.
             [(eq? type 'lbrace)
+             (define adjacent? (adjacent-to-base? vec i result item))
+             (define head-form? (and adjacent? (prev-token-reader-form-head? vec i)))
+             (define sentinel (if (and adjacent? (not head-form?)) '$select-brace '$brace-params))
              (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbrace source source-str qq-depth)])
                (let-values ([(bl bc) (pos->line-col source-str (token-entry-start-pos item))])
                  (loop next-i
-                       (cons (make-stx (cons (make-stx '$brace-params source bl bc (+ (token-entry-start-pos item) 1) 1) inner)
+                       (cons (make-stx (cons (make-stx sentinel source bl bc (+ (token-entry-start-pos item) 1) 1) inner)
                                        source bl bc (+ (token-entry-start-pos item) 1) 1) result))))]
+            ;; D4.P1b-ii — Dot-brace → $dot-brace sentinel, PLAIN 'rbrace closer.
+            ;; The mid-path sub-block `server^.{ssl port}`. Ruling Q_N1 mints a
+            ;; DISTINCT sentinel rather than reusing $brace-params: that head
+            ;; means IMPLICIT TYPE BINDER to a large consumer surface (driver
+            ;; capability extraction, form-cells, ~30 library sites), and the
+            ;; only signal that distinguishes `x.{a}` from `x{a}` today is the
+            ;; loose `.` token — which THIS token fold destroys. Reuse would be
+            ;; a one-way loss, and srcloc cannot recover it (every group in a
+            ;; form shares the enclosing node's srcloc).
+            ;; Span is 2 (a two-char token), matching hash-lbrace.
+            [(eq? type 'dot-lbrace)
+             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbrace source source-str qq-depth)])
+               (let-values ([(dl dc) (pos->line-col source-str (token-entry-start-pos item))])
+                 (loop next-i
+                       (cons (make-stx (cons (make-stx '$dot-brace source dl dc (+ (token-entry-start-pos item) 1) 2) inner)
+                                       source dl dc (+ (token-entry-start-pos item) 1) 2) result))))]
             ;; Dot-paren → $mixfix sentinel with 'mixfix-rparen (closes on `)`,
             ;; enables `( )` grouping inside — the mixfix ergonomics form).
             [(eq? type 'dot-lparen)

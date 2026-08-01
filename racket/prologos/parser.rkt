@@ -14,7 +14,20 @@
          "errors.rkt"
          "sexp-readtable.rkt"
          "macros.rkt"
-         "global-env.rkt")
+         "global-env.rkt"
+         ;; D4.P3b: the shared select branch-walk helpers (the Q_T3
+         ;; output-level duplicate check consumes the SAME walk as typing +
+         ;; reduction, so check and meaning cannot drift)
+         (only-in "syntax.rkt"
+                  select-key-step? select-sub-step? select-step-cont
+                  select-cont-collapse? select-branch-top-keys
+                  select-step-kind)   ;; D4.P4a: the totality dispatcher
+         ;; LET P4: the fused primitives moved here (the one definition —
+         ;; macros.rkt consumes them at the datum level, and this module
+         ;; requires macros.rkt, so they cannot live in this file).
+         (only-in "reader-forms.rkt"
+                  colon-symbol? digit-headed-colon-symbol?
+                  fused-type-annot? fused-annot->type-symbol))
 
 (provide parse-datum
          parse-toplevel-datum  ;; Rel T1 POL.9: command-position paren-goal dispatch
@@ -79,19 +92,12 @@
 
 ;; The command-position goal predicate: a WS paren-origin group whose head is
 ;; either a non-keyword symbol (a relation) or a GOAL keyword.
+;; (The head test itself lives in `goal-head-datum?` below — the `let` leg needs
+;; it without the paren-origin check, so it is ONE definition with two callers.)
 (define (paren-goal-stx? stx)
-  (define (dollar-sym? s)
-    (let ([str (symbol->string s)])
-      (and (positive? (string-length str))
-           (char=? (string-ref str 0) #\$))))
   (and (syntax? stx)
        (syntax-property stx 'prologos-paren-origin)
-       (let ([d (stx->datum stx)])
-         (and (pair? d)
-              (let* ([h0 (car d)] [h (if (syntax? h0) (syntax-e h0) h0)])
-                (and (symbol? h)
-                     (not (dollar-sym? h))
-                     (or (not (keyword? h)) (goal-keyword? h))))))))
+       (goal-head-datum? (stx->datum stx))))
 
 ;; Parse a datum at COMMAND position (top-level command or def RHS — the
 ;; Q_C scope): a paren goal becomes an implicit solve; everything else
@@ -115,6 +121,41 @@
            (syntax-property stx 'prologos-defrhs-command))
       (parse-command-datum stx)
       (parse-datum stx)))
+
+;; ── SolveCarrier P2 (ruling R6): the `let` binding-RHS leg of Q_C ────────────
+;; `let x := (goal …)` ≡ `let x := solve (goal …)`, matching `def`'s RHS. A
+;; `let` binding RHS is a BINDING RHS, evaluated once at the binding site — the
+;; same act as `def`'s, one scope down — not the general expression position the
+;; standing purity concern is about (a goal inside a `defn` body would make
+;; ordinary calls re-query the ambient fact store). Refusing here would mean
+;; `def x := (g …)` works and `let x := (g …)` does not, for no reason a user
+;; could predict.
+;;
+;; The reader mints `($goal-rhs V)` around a paren-origin value in binding
+;; position (parse-reader.rkt § mark-let-goal-rhs) because the preparse strips
+;; syntax properties before `expand-let` ever runs — the sentinel carries the
+;; one bit that would otherwise be lost. The reader owns POSITION + PARENS; this
+;; owns the KEYWORD TABLE and thus goal-ness, so neither duplicates the other.
+;; A non-goal head (`let x := (+ 1 2)`, `(match …)`, `(the …)`) unwraps to the
+;; ordinary parse, exactly as before the sentinel existed.
+(define (goal-rhs-sentinel? d)
+  (and (pair? d) (= (length d) 2)
+       (let ([h (car d)]) (eq? (if (syntax? h) (syntax-e h) h) '$goal-rhs))))
+
+;; The head test of `paren-goal-stx?`, minus the paren-origin check the sentinel
+;; already witnesses. ONE definition of goal-headedness, two callers.
+(define (goal-head-datum? d0)
+  (define (dollar-sym? s)
+    (let ([str (symbol->string s)])
+      (and (positive? (string-length str)) (char=? (string-ref str 0) #\$))))
+  ;; `stx->datum` is SHALLOW — a list datum's elements are still syntax objects
+  ;; (this cost one debug cycle), so unwrap before testing the head.
+  (define d (if (syntax? d0) (syntax-e d0) d0))
+  (and (pair? d)
+       (let* ([h0 (car d)] [h (if (syntax? h0) (syntax-e h0) h0)])
+         (and (symbol? h)
+              (not (dollar-sym? h))
+              (or (not (keyword? h)) (goal-keyword? h))))))
 
 ;; ========================================
 ;; Keywords: forms with special parsing rules
@@ -143,7 +184,7 @@
     Symbol symbol-lit
     Keyword Char String
     Map map-empty map-assoc map-get nil-safe-get nil? map-dissoc map-size map-has-key? map-keys map-vals
-    get get-in update-in broadcast-get
+    get get-in update-in
     Set set-empty set-insert set-member? set-delete set-size set-union set-intersect set-diff set-to-list
     PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice pvec-to-list pvec-from-list pvec-fold pvec-map pvec-filter
     set-fold set-filter
@@ -580,6 +621,21 @@
     [(char? d)
      (surf-char d loc)]
 
+    ;; SolveCarrier P2: `($goal-rhs V)` — a `let` binding value the reader saw
+    ;; written in PARENS. Goal-headed → the implicit solve (ruling R6); anything
+    ;; else unwraps to the ordinary parse. The sentinel is stripped either way,
+    ;; so it never reaches elaboration.
+    [(goal-rhs-sentinel? d)
+     (let* ([inner-stx (let ([l (and (syntax? stx) (syntax->list stx))])
+                         (if (and l (= (length l) 2)) (cadr l) #f))]
+            [inner-d (cadr d)])
+       (cond
+         [(goal-head-datum? inner-d)
+          (let ([g (parse-relational-goal (or inner-stx (datum->syntax #f inner-d stx)))])
+            (if (prologos-error? g) g (surf-solve g loc)))]
+         [inner-stx (parse-datum inner-stx)]
+         [else (parse-datum (datum->syntax #f inner-d stx))]))]
+
     ;; List form
     [(pair? d)
      (parse-list d loc stx)]
@@ -740,6 +796,371 @@
              inner
              names)))
 
+;; ============================================================
+;; CIU T6 D4.P1a — the retired-selection diagnostic seat (ruling Q_L4).
+;; The reader still tokenizes the retired surfaces (dot-key `.:name`,
+;; nil-dot-key `#:name`/`#.:name`, broadcast `.*name`); preparse normalizes
+;; them — and the retired postfix payloads — to ($retired-selection kind
+;; detail) markers. THIS converts a marker (or a targetless raw sentinel)
+;; into a per-command guided parse-error VALUE: never a raise, the file
+;; continues (the $mixfix-retired mechanism minus its fatal flaw; probed:
+;; a classifier-level raise is a whole-file abort by construction).
+;; ============================================================
+(define (retired-selection-error kind detail loc)
+  ;; :name / #:name / #.:name / name → "name" (strip any #/./: prefix chars)
+  (define (base-name d)
+    (define s (cond [(symbol? d) (symbol->string d)]
+                    [(keyword? d) (keyword->string d)]
+                    [else (format "~a" d)]))
+    (define n (string-length s))
+    (let loop ([i 0])
+      (cond [(>= i n) s]
+            [(memv (string-ref s i) '(#\# #\. #\:)) (loop (add1 i))]
+            [else (substring s i)])))
+  (define f (and detail (base-name detail)))
+  (case kind
+    ;; CIU T6 D4.P1b-iii — NOT-YET, as distinct from the RETIRED kinds below.
+    ;; The marker sentinel now carries two families: forms that were retired,
+    ;; and forms that exist but whose semantics land later. Both need the same
+    ;; thing from this seat — a per-command parse-error VALUE, never a raise —
+    ;; so they share the mechanism rather than minting a second one. (Reusing it
+    ;; also means zero new registrations: `$retired-selection` is already in
+    ;; `pattern-var?` and already has its parser arm, and the nine-tier
+    ;; registration surface is precisely what this phase learned to respect.)
+    [(select-block)
+     ;; D4.P3a: `x{…}` now WORKS — only the top-level `.{…}` form reaches this
+     ;; marker (its meaning outside a block is unruled; refused, monotone).
+     (parse-error loc
+                  (string-append
+                   "a `.{…}` sub-block belongs inside a select block — write "
+                   "`x{server.{host port}}`; at top level, `x{…}` selects and "
+                   "`x.k` accesses")
+                  #f)]
+    [(dot-key)
+     (parse-error loc (format "dot-key `.:~a` was retired — spell field access with `.~a` (e.g. `m.~a`); as a function value use `[fn [m] m.~a]`" f f f f) #f)]
+    [(nil-dot-key)
+     (parse-error loc (format "`#:~a` / `#.:~a` was retired — nil-safe field access is spelled `#.~a`" f f f) #f)]
+    [(broadcast)
+     (parse-error loc (format "broadcast `.*~a` was retired — its replacement `:~a` arrives with Path Selection P4; until then spell it `[map [fn [m] m.~a] xs]`" f f f) #f)]
+    ;; D4.P3b (Q_T4a): `^` after an ordinal, ALL spellings (`x.0^`, `x[0]^`,
+    ;; and the in-block shatter) — ONE guided message. An ordinal returns the
+    ;; value at an index, not a key-value; non-local attachment breaks
+    ;; composition (owner ruling). The macros-side shape-scan emits this kind
+    ;; for the top-level datum shapes; the segmentation seat emits the same
+    ;; message text directly for the in-block shapes.
+    [(ordinal-rekey)
+     (parse-error loc ordinal-rekey-message #f)]
+    [(postfix-kw)
+     (parse-error loc (format "keyword index `[:~a]` was retired — spell the field `m.~a` or use `[get m :~a]`" f f f) #f)]
+    [(postfix-empty)
+     (parse-error loc "empty index `[]` — a postfix index needs a payload (e.g. `v[0]`, `m[k]`)" #f)]
+    [(postfix-neg)
+     (parse-error loc (format "negative index ~a — postfix indices are non-negative (`v[0]` is the first element)" detail) #f)]
+    [(postfix-hole)
+     ;; D4.P2 (Q_R1's accepted cost): `.N` reuses `$postfix-index`, so `_.0`
+     ;; now reaches this arm too — the message must not assume the BRACKET
+     ;; spelling it used to be the only reachable one for.
+     (parse-error loc "`_` cannot be the subject of an index — name the subject or wrap it in a lambda (e.g. `[fn [m] m[k]]`, `[fn [v] v.0]`)" #f)]
+    [else
+     (parse-error loc "this selection form was retired (CIU T6 Path Selection) — see the migration note for its replacement spelling" #f)]))
+
+;; ============================================================
+;; CIU T6 D4.P3a/P3b — select-payload segmentation (the parser seat)
+;; ============================================================
+;; items arrive RAW from the preparse-opaque `$select` head: a plain SYMBOL
+;; opens a branch; `($dot-access k)` attaches a descent key; `($dot-brace …)`
+;; attaches a TERMINAL sub-block (recursing); `^`-bearing lexemes route
+;; through THE ONE SPLITTER (D4.P3b); everything else is the
+;; malformed-payload seat. After segmentation, branch-close validation
+;; enforces positional `^` legality, then each LEVEL is duplicate-checked
+;; over OUTPUT keys after `^`-splicing (Q_T3 — the check runs here,
+;; strictly BEFORE any make-record could last-win).
+;; Returns (values branches #f) or (values #f parse-error).
+
+;; Q_T4a's ONE message, all spellings (`x.0^` · `x[0]^` · the in-block
+;; shatter). Also emitted via the `ordinal-rekey` marker kind for the
+;; top-level datum shapes (macros-side shape-scan).
+(define ordinal-rekey-message
+  "an ordinal has no key — `^` re-keys a NAMED segment; rename the nominal segment instead and then descend (e.g. `admins^first.0`)")
+
+(define caret-needs-segment-message
+  "a `^` operates on the segment to its LEFT — write `k^label` (rename), `k^_` (synth), or mid-path `k^` (dissolve), with no space before the `^`")
+
+;; D4.P3b — THE ONE SPLITTER (Q_M7: nothing liftable — `split-fused-symbol`
+;; splits on `:`, and the sexp-side splitter keeps empty segments, the
+;; F1b.7g class). Continuation grammar: `-`?·{ε | label | `_`} — after `^`
+;; a leading `-` is the COLLAPSE marker (Q_T7; eyes-open cost: a rename
+;; target may not begin with `-`).
+;; Returns (values name cont) on success, (values #f error-message) on a
+;; malformed lexeme.
+(define (split-caret-lexeme s)
+  (define str (symbol->string s))
+  (define carets (for/sum ([c (in-string str)] #:when (char=? c #\^)) 1))
+  (define i (for/first ([c (in-string str)] [j (in-naturals)]
+                        #:when (char=? c #\^))
+              j))
+  (cond
+    [(> carets 1)
+     (values #f (format "`~a` — one `^` per segment; the continuation after `^` is a plain label, `_`, or empty" str))]
+    [(zero? i) (values #f caret-needs-segment-message)]
+    [else
+     (let ([name (string->symbol (substring str 0 i))]
+           [k (substring str (add1 i))])
+       (cond
+         [(string=? k "")   (values name 'dissolve)]
+         [(string=? k "_")  (values name 'synth)]
+         [(string=? k "-")  (values name 'collapse)]
+         [(string=? k "-_") (values name 'collapse-synth)]
+         [(and (>= (string-length k) 2)
+               (char=? (string-ref k 0) #\-) (char=? (string-ref k 1) #\-))
+          (values #f (format "`~a` — a rename target may not begin with `-` (after `^` a leading `-` is the collapse marker)" str))]
+         ;; P3b verify (finding 10): a digit-leading target would mint a
+         ;; field the dot surface cannot reach (`r.0` is ordinal access) —
+         ;; refuse rather than accept-with-degraded-reachability.
+         [(and (char=? (string-ref k 0) #\-)
+               (> (string-length k) 1)
+               (char<=? #\0 (string-ref k 1) #\9))
+          (values #f (format "`~a` — a rename target may not begin with a digit (`.N` is ordinal access; the renamed field would be unreachable)" str))]
+         [(char=? (string-ref k 0) #\-)
+          (values name (cons 'collapse-rename (string->symbol (substring k 1))))]
+         [(char=? (string-ref k 0) #\:)
+          (values #f (format "`~a` — a rename target is a bare label, not a keyword (write `^~a`)" str (substring k 1)))]
+         [(char<=? #\0 (string-ref k 0) #\9)
+          (values #f (format "`~a` — a rename target may not begin with a digit (`.N` is ordinal access; the renamed field would be unreachable)" str))]
+         [else (values name (cons 'rename (string->symbol k)))]))]))
+
+(define (segment-select-items items loc [sub? #f])
+  (define (kw-sym? s)
+    (and (symbol? s)
+         (let ([str (symbol->string s)])
+           (and (> (string-length str) 0) (char=? (string-ref str 0) #\:)))))
+  ;; `^`-bearing lexemes are the re-key family — routed to the splitter
+  ;; (P3a's refuse-and-point gate was this predicate's first duty; the
+  ;; splitter is its demolition, per the phase plan).
+  (define (re-key-sym? s)
+    (and (symbol? s) (regexp-match? #rx"\\^" (symbol->string s))))
+  (define (plain-key? s)
+    (and (symbol? s) (not (kw-sym? s)) (not (eq? s '|.|)) (not (re-key-sym? s))
+         (let ([str (symbol->string s)])
+           (and (> (string-length str) 0)
+                (not (char=? (string-ref str 0) #\$))))))
+  (define (fail msg) (values #f (parse-error loc msg #f)))
+  (define (head-of tagged) (and (pair? tagged) (symbol? (car tagged)) (car tagged)))
+  ;; `^`-ish item: the bare `^` symbol or a `^`-leading lexeme (the ordinal
+  ;; shatter shapes put the caret in a SEPARATE item — probe-measured).
+  (define (caret-ish? x)
+    (or (eq? x '^)
+        (and (symbol? x)
+             (let ([s (symbol->string x)])
+               (and (> (string-length s) 0) (char=? (string-ref s 0) #\^))))))
+  ;; D4.P4a: a parser-local re-implementation of `select-branch-keyless?`'s
+  ;; leaf test — invisible to the original census, which searched three other
+  ;; files. Classify rather than testing `select-key-step?` directly, so an
+  ;; unrecognized leaf kind raises here instead of silently answering #f and
+  ;; mis-gating the `^..` desugar at :1001.
+  (define (dissolve-step? s)
+    (and (eq? (select-step-kind s) 'caret)
+         (eq? (select-step-cont s) 'dissolve)))
+  ;; ---- P3b branch-close validation: positional legality of `^` conts ----
+  ;; br in ORDER (head first). #f = ok, else the error message.
+  (define (branch-problem br)
+    (let check ([steps br])
+      (if (null? steps)
+          #f
+          ;; D4.P4a: `select-step-cont` answers #f for every non-`caret` kind,
+          ;; so this positional-legality check silently PASSED any step kind
+          ;; it did not recognize — a `^`-bearing wrapper in an illegal
+          ;; position would slip through a check written to reject it.
+          ;; Classifying first makes an unrecognized kind loud here.
+          (let* ([s (car steps)] [last? (null? (cdr steps))]
+                 [_kind (select-step-kind s)]
+                 [c (select-step-cont s)])
+            (cond
+              [(and (eq? c 'synth) (not last?))
+               "`^_` synthesizes the leaf key from the surviving path — it attaches to the branch's LAST segment"]
+              [(and c (select-cont-collapse? c) (not last?))
+               "the `^-` collapse family ends a branch — it is a LEAF continuation"]
+              ;; D4.P3c: the bare dissolve LEAF is now the KEYLESS sort —
+              ;; the P3b refusal lifted; L4 (below) governs the mixing.
+              [else (check (cdr steps))])))))
+  ;; ---- Q_T3 + L4: OUTPUT-level checks, after `^`-splicing ----
+  ;; select-branch-top-keys is the SHARED walk (syntax.rkt) — the same
+  ;; computation typing + reduction use, so check and meaning cannot drift.
+  ;; Components: key symbols (keyed) | #f (keyless — D4.P3c).
+  (define (dup-output-key branches)
+    (let dloop ([ks (filter values (append-map select-branch-top-keys branches))]
+                [seen '()])
+      (cond [(null? ks) #f]
+            [(memq (car ks) seen) (car ks)]
+            [else (dloop (cdr ks) (cons (car ks) seen))])))
+  ;; L4 (spec §3.3): every level denotes exactly ONE of Map or tuple —
+  ;; checked over the OUTPUT components (a dissolved branch's spliced
+  ;; components count at the receiving level, same frame as Q_T3).
+  (define (mixed-sorts? branches)
+    (let ([cs (append-map select-branch-top-keys branches)])
+      (and (ormap values cs) (ormap not cs))))
+  ;; split a `^` lexeme and continue with the minted step
+  (define (split-step lexeme k)
+    (let-values ([(name cont) (split-caret-lexeme lexeme)])
+      (cond
+        [(not name) (fail cont)]
+        [(not (plain-key? name))
+         (fail (format "`~a` — the segment before `^` must be a plain field name" lexeme))]
+        [else (k (list '@key name cont))])))
+  (let loop ([items items] [cur #f] [cur-subbed? #f] [acc '()])
+    (define (closed-acc) (if cur (cons (reverse cur) acc) acc))
+    (if (null? items)
+        (let ([branches (reverse (closed-acc))])
+          (cond
+            [(null? branches)
+             (fail (if sub?
+                       "empty sub-block — `.{}` selects nothing; name the fields to keep (e.g. `server.{host port}`)"
+                       "empty selection — `x{}` selects nothing (`{}` alone is the empty map literal)"))]
+            [(ormap branch-problem branches) => fail]
+            [(mixed-sorts? branches)
+             (fail "mixed keyed/keyless sorts in the select block (L4) — every branch keeps a key (`k`, `^k'`, `^_`) or drops one (`k^`, `{N}`); one level assembles a Map OR a tuple, never both")]
+            [(dup-output-key branches)
+             ;; P3b verify (finding 8): `^_` was dropped from this remedy
+             ;; list — in both canonical dup classes the synthesized key
+             ;; REPRODUCES the collision (dissolved ancestry ⇒ synth = the
+             ;; colliding leaf name, Q_T4b′), the advice-that-does-not-work
+             ;; class. `^k'` and sub-block grouping are probe-verified live.
+             => (lambda (l)
+                  (fail (format "duplicate output key :~a in the select block — distinct output keys are required (strict merge); rename a branch with `^k'`, or group same-head branches into one sub-block (`x{k.{a b}}`)" l)))]
+            [else (values branches #f)]))
+        (let ([it (car items)])
+          (cond
+            ;; ---- Q_T4a: ordinal-`^`, the in-block datum shapes. These arms
+            ;; sit AHEAD of the stray-`.` and ordinal arms — the shatter
+            ;; shapes (`admins |.| 0 ^ first`, `($postfix-index 0) ^`) would
+            ;; otherwise take those arms' unrelated messages.
+            [(and (eq? it '|.|) (pair? (cdr items)) (number? (cadr items))
+                  (pair? (cddr items)) (caret-ish? (caddr items)))
+             (fail ordinal-rekey-message)]
+            [(and (eq? (head-of it) '$postfix-index)
+                  (pair? (cdr items)) (caret-ish? (cadr items)))
+             (fail ordinal-rekey-message)]
+            ;; ---- Q_T8: `^..` — TWO bare `|.|` after a dissolve-leaf.
+            ;; Desugared here to the owner-ruled equivalence P.L^.. ≡ P^.L^P
+            ;; (ancestors above the parent are kept), so the node vocabulary
+            ;; never carries a parent-collapse continuation.
+            [(and (eq? it '|.|) (pair? (cdr items))
+                  ;; P3b verify (finding 5): the SECOND dot may arrive FUSED —
+                  ;; `^..enabled` reads [seg^ |.| ($dot-access enabled)] and
+                  ;; `^..{…}` reads [seg^ |.| ($dot-brace …)]. Accept bare
+                  ;; `|.|` (pure `^..`) or a fused continuation (desugar,
+                  ;; then let the normal arms consume the continuation) —
+                  ;; the spaced and fused spellings must agree.
+                  (let ([n (cadr items)])
+                    (or (eq? n '|.|)
+                        (memq (head-of n) '($dot-access $dot-brace))))
+                  cur (dissolve-step? (car cur)))
+             (let ([leaf (car cur)] [above (cdr cur)])
+               (cond
+                 [(null? above)
+                  (fail "`^..` collapses the leaf to its PARENT key — this branch has no parent segment (for a plain rename use `^k'`)")]
+                 [(not (symbol? (car above)))
+                  (fail "`^..` needs a plain KEPT parent segment — spell the reshape explicitly with `^` (dissolve) and `^k'` (rename)")]
+                 [else
+                  (let* ([parent (car above)]
+                         [cur* (cons (list '@key (cadr leaf) (cons 'rename parent))
+                                     (cons (list '@key parent 'dissolve) (cdr above)))])
+                    (if (eq? (cadr items) '|.|)
+                        (loop (cddr items) cur* #f acc)          ;; bare: consume both dots
+                        (loop (cdr items) cur* #f acc)))]))]     ;; fused: keep the continuation item
+            ;; `^.`-near-miss (finding 5's tail, widened per finding 14): a
+            ;; bare `|.|` directly after ANY `^`-bearing step that is not a
+            ;; `^..` shape — `a.b^.` trailing, `a.b^s..` (renamed leaf + dots).
+            ;; A continuation dot would have FUSED (`.c` → ($dot-access c)),
+            ;; so this is the near-miss class; the generic stray-`.` advice
+            ;; ("write the path with no spaces") would be FALSE here.
+            [(and (eq? it '|.|) cur (select-key-step? (car cur)))
+             (fail "a bare `.` cannot follow a `^` continuation — parent-key collapse attaches to the plain leaf as `k^..`")]
+            ;; ---- a lone `^` item (incl. spaced `^ b`)
+            [(eq? it '^) (fail caret-needs-segment-message)]
+            ;; `.^b` class (finding 14): a caret right after a dot — the `^`
+            ;; belongs to the segment on the dot's LEFT, written glued.
+            [(and (eq? it '|.|) (pair? (cdr items)) (caret-ish? (cadr items)))
+             (fail caret-needs-segment-message)]
+            ;; in-block head-position ordinal + `^` (finding 12): `{0^first}`
+            ;; must take the ONE Q_T4a message, not the P3c branch pointer.
+            [(and (number? it) (pair? (cdr items)) (caret-ish? (cadr items)))
+             (fail ordinal-rekey-message)]
+            ;; ---- `^`-bearing branch head → the splitter
+            [(re-key-sym? it)
+             (split-step it (lambda (step)
+                              (loop (cdr items) (list step) #f (closed-acc))))]
+            [(plain-key? it)
+             (loop (cdr items) (list it) #f (closed-acc))]
+            [(and (eq? (head-of it) '$dot-access) cur cur-subbed?)
+             (fail "a segment cannot follow a `.{…}` sub-block — the sub-block is a branch's terminal step")]
+            ;; ---- `^`-bearing descent payload → the splitter
+            [(and (eq? (head-of it) '$dot-access) cur (re-key-sym? (cadr it)))
+             (split-step (cadr it) (lambda (step)
+                                     (loop (cdr items) (cons step cur) #f acc)))]
+            [(and (eq? (head-of it) '$dot-access) cur)
+             (loop (cdr items) (cons (cadr it) cur) #f acc)]
+            [(eq? (head-of it) '$dot-access)
+             (fail (format "a `.~a` segment needs a preceding field — a branch starts with a bare field name (e.g. `x{server.~a}`)" (cadr it) (cadr it)))]
+            [(and (eq? (head-of it) '$dot-brace) cur cur-subbed?)
+             (fail "a `.{…}` sub-block cannot follow another sub-block in the same branch")]
+            [(eq? (head-of it) '$dot-brace)
+             (if (not cur)
+                 (fail "a `.{…}` sub-block needs a preceding segment (e.g. `x{server.{host port}}`)")
+                 (let-values ([(subs suberr) (segment-select-items (cdr it) loc #t)])
+                   (if suberr
+                       (values #f suberr)
+                       (loop (cdr items) (cons (cons '@sub subs) cur) #t acc))))]
+            [(eq? (head-of it) '$select-brace)
+             ;; P3b verify (finding 14): recover the head name through @key
+             ;; steps too — `server^{x}` must name `server`, not "field".
+             (let* ([head-step (and cur (car (reverse cur)))]
+                    [nm (cond [(symbol? head-step) head-step]
+                              [(select-key-step? head-step) (cadr head-step)]
+                              [else "field"])])
+               (fail (format "inside a select block, narrow with `.{…}` — write `~a.{…}`, not `~a{…}`" nm nm)))]
+            ;; D4.P3c (Q_U2 Reading A): an ordinal STEP attaches to the
+            ;; current branch — descends, contributes NO output level. The
+            ;; P3b refusal (this arm's predecessor) lifted here.
+            [(and (eq? (head-of it) '$postfix-index) cur (not cur-subbed?)
+                  (exact-nonnegative-integer? (cadr it)))
+             (loop (cdr items) (cons (cadr it) cur) #f acc)]
+            [(and (eq? (head-of it) '$postfix-index) cur cur-subbed?)
+             (fail "a segment cannot follow a `.{…}` sub-block — the sub-block is a branch's terminal step")]
+            [(eq? (head-of it) '$postfix-index)
+             (fail (format "an ordinal segment `.~a` needs a preceding branch — an ordinal BRANCH is written bare (`x{~a}`)" (cadr it) (cadr it)))]
+            ;; D4.P3c: an ordinal BRANCH head — `{N M}` re-derives indices in
+            ;; written order (keyless sort; the L4 check above governs mixing).
+            [(and (number? it) (exact-nonnegative-integer? it))
+             (loop (cdr items) (list (list '@ord it)) #f (closed-acc))]
+            [(number? it)
+             (fail (format "`~a` is not a valid ordinal — ordinal branches use non-negative indices (`x{0 1}`)" it))]
+            ;; P3c verify (rank 2): `{N.M}` fuses into a DECIMAL literal —
+            ;; without this arm the internal `($decimal-literal q)` sentinel
+            ;; leaked through the `~s` fallback (with the rational value, at
+            ;; a stale message). Name the collision + the working spellings.
+            [(memq (head-of it) '($decimal-literal $rat-literal))
+             (fail "`N.M` reads as a decimal literal inside a select block — for element N then index M write `x{N .M}` (spaced) or `x{N.{M}}`")]
+            ;; P3c verify (rank 4): a head-position bracket group `{[0]}` —
+            ;; ordinal BRANCHES are written bare.
+            [(and (list? it) (= (length it) 1) (number? (car it)))
+             (fail (format "ordinal branches are written bare — `x{~a}`, not `x{[~a]}`" (car it) (car it)))]
+            [(kw-sym? it)
+             (fail (format "block keys are written bare — `x{~a}`, not `x{~a}`"
+                           (substring (symbol->string it) 1) it))]
+            [(eq? it '|.|)
+             (fail "stray `.` in a select block — write the path with no spaces (`server.host`)")]
+            [(or (eq? it '$rest) (eq? (head-of it) '$rest-param))
+             ;; Q_T8 edge: `k^...` absorbs the dots into `$rest`, and
+             ;; `k^...label` into `($rest-param label)` (finding 6 — the
+             ;; tagged shape leaked the internal sentinel verbatim). Reject
+             ;; both, naming the intended spelling.
+             (fail "`...` is not valid in a select block (parent-key collapse is spelled `k^..`)")]
+            [else
+             ;; ~s, not ~a: a string item must display as \"s\" — the bare form
+             ;; is indistinguishable from the valid field-name spelling.
+             (fail (format "`~s` is not a valid selection branch — block branches are field names (e.g. `x{name server.{host}}`)" it))])))))
+
 (define (parse-list elems loc stx)
   ;; elems is either a list of syntax objects or plain datums
   ;; Normalize: if stx is a syntax object, get the list of syntax children
@@ -759,6 +1180,76 @@
     ;; $angle-type sentinel: unwrap as type annotation
     [(and (symbol? head) (eq? head '$angle-type))
      (unwrap-angle-type stx loc)]
+
+    ;; D4.P1a retired-selection marker (preparse-normalized) → guided error.
+    ;; ⚠ The (pair? args) guard is LOAD-BEARING, not defensive: a user may
+    ;; write the head with no arguments, and an unguarded (car args) raises —
+    ;; which at this seam is a WHOLE-FILE ABORT, the exact failure this seat
+    ;; exists to eliminate. Caught by the P1a adversarial verify; its three
+    ;; raw-sentinel siblings below carried the guard from the start.
+    [(and (symbol? head) (eq? head '$retired-selection))
+     (retired-selection-error (and (pair? args) (stx->datum (car args)))
+                              (and (pair? args) (pair? (cdr args)) (stx->datum (cadr args)))
+                              loc)]
+
+    ;; LET P1 — the let syntax-failure marker. expand-let (macros.rkt) converts
+    ;; its family's 13 raise sites into ($let-error "msg") datums so a bad let
+    ;; is a PER-COMMAND parse error instead of a whole-file abort; this arm
+    ;; supplies the loc the datum layer cannot carry. The (pair? args) guard is
+    ;; LOAD-BEARING per the $retired-selection precedent above — an unguarded
+    ;; (car args) here would reintroduce the exact abort this seat eliminates.
+    [(and (symbol? head) (eq? head '$let-error))
+     (parse-error loc
+                  (if (and (pair? args) (string? (stx->datum (car args))))
+                      (stx->datum (car args))
+                      "let: malformed let expression")
+                  #f)]
+    ;; …and the raw retired sentinels (targetless shapes the fold passes through)
+    [(and (symbol? head) (eq? head '$dot-key))
+     (retired-selection-error 'dot-key (and (pair? args) (stx->datum (car args))) loc)]
+    [(and (symbol? head) (eq? head '$nil-dot-key))
+     (retired-selection-error 'nil-dot-key (and (pair? args) (stx->datum (car args))) loc)]
+    [(and (symbol? head) (eq? head '$broadcast-access))
+     (retired-selection-error 'broadcast (and (pair? args) (stx->datum (car args))) loc)]
+
+    ;; CIU T6 D4.P1b-ii — `.{ }` NOT-YET (as distinct from the RETIRED sentinels
+    ;; above). P1b-ii makes the mid-path sub-block LEX and GROUP; its semantics
+    ;; land at P3. Without this arm the form reaches the generic path and reports
+    ;; "Unbound variable" — actively misleading, since the user wrote valid new
+    ;; syntax and is told a variable is missing. Same seat, same discipline: a
+    ;; per-command parse-error VALUE, never a raise (a raise here is a
+    ;; whole-file abort). `args` is deliberately untouched — the P1a adversarial
+    ;; verify found an unguarded `(car args)` at this very seam.
+    ;; D4.P3a: the baseless leg REMAINS as the needs-a-subject backstop (the
+    ;; P3 audit's C23) — a bare brace sentinel with no base can only arrive
+    ;; from constructed datums (macro expansion, sexp); guide, don't raise.
+    [(and (symbol? head) (memq head '($dot-brace $select-brace)))
+     (parse-error loc
+                  (string-append
+                   "a select block needs a subject — `x{…}` and `.{…}` attach "
+                   "to the form on their left (no space)")
+                  #f)]
+
+    ;; CIU T6 D4.P3a ($select — the fused select block, Q_T1 Route A):
+    ;; segment the RAW payload into branches (the head is preparse-opaque, so
+    ;; items arrive unfolded), run the malformed-payload seat + the per-level
+    ;; DUPLICATE check (strict merge BEFORE any make-record can last-win),
+    ;; and mint surf-select. Every refusal is a parse-error VALUE, per-command.
+    [(and (symbol? head) (eq? head '$select))
+     (if (null? args)
+         (parse-error loc "a select block needs a subject — write `x{…}` (adjacent, no space)" #f)
+         (let ([subj (parse-datum (car args))])
+           (if (prologos-error? subj)
+               subj
+               (let-values ([(branches err)
+                             (segment-select-items
+                              ;; items must be PLAIN datums all the way down —
+                              ;; stx->datum is shallow (syntax-e), and payload
+                              ;; items are nested lists of stx
+                              (map (lambda (a) (if (syntax? a) (syntax->datum a) a))
+                                   (cdr args))
+                              loc)])
+                 (or err (surf-select subj branches loc))))))]
 
     ;; $nat-literal sentinel: 42N → surf-nat-lit (Nat suc-chain)
     [(and (symbol? head) (eq? head '$nat-literal))
@@ -2329,25 +2820,11 @@
                        (if (prologos-error? paths) paths
                            (surf-get-in target paths loc))))))])]
 
-       ;; broadcast-get: (broadcast-get target :field1 :field2 ...)
-       ;; Maps field access over a list — produced by .*field broadcast syntax
-       [(broadcast-get)
-        (cond
-          [(< (length args) 2)
-           (parse-error loc "broadcast-get requires target and at least one field" #f)]
-          [else
-           (define target (parse-datum (car args)))
-           (if (prologos-error? target) target
-               (let ([fields (map (lambda (a)
-                                    (define d (if (syntax? a) (syntax->datum a) a))
-                                    (cond
-                                      [(keyword? d) (string->symbol (keyword->string d))]
-                                      [(and (symbol? d) (keyword-like-symbol? d))
-                                       (string->symbol (substring (symbol->string d) 1))]
-                                      [else (parse-error loc (format "broadcast-get field must be a keyword, got: ~a" d) d)]))
-                                  (cdr args))])
-                 (if (ormap prologos-error? fields) (findf prologos-error? fields)
-                     (surf-broadcast-get target fields loc))))])]
+       ;; broadcast-get: RETIRED (CIU T6 D4.P1a, ruling Q_L3 — the full chain).
+       ;; The `.*field` reader surface now yields a guided $retired-selection
+       ;; error; the keyword form had ZERO live users (census) and is gone —
+       ;; `(broadcast-get …)` is an unknown relation / unbound variable now.
+       ;; Broadcast returns as `:field` at Path Selection P4.
 
        ;; update-in: (update-in target path-spec fn-expr)
        ;; path-spec is parsed as selection paths, fn-expr is the update function
@@ -3015,6 +3492,7 @@
                       (and (pair? qvars) qvars)))
                ;; Has ?-variables: parse as narrowing expression
                ;; Phase 3c: rewrite constrained vars (?x:Nat → ?x) before parse-datum
+               ;; D4.P1b-i: JOIN the WS-split `?x` + `:Nat` first (no-op in sexp).
                (let*-values
                  ([(qvars cmap) (collect-narrow-vars+constraints
                                  (car args) (cadr args))]
@@ -3870,6 +4348,23 @@
 ;; ========================================
 ;; Parse def: (def name : type body)
 ;; ========================================
+;; CIU T6 D4.P1b-i (owner ruling Q_M3) — the `?`-namespace RESERVATION.
+;; `?` marks a LOGIC VARIABLE (functional narrowing; `defr` logic-var params),
+;; so a `def` binding was never meant to be one. Legal at HEAD (`def ?cfg :=
+;; {:a 1}` bound fine and `?cfg.a` projected), which made it a silent surprise
+;; waiting to happen once `?`-headed subjects become the broadcast
+;; discriminator (Q_L1). Reserved here: prophylactic, no present soundness
+;; issue [owner]. ONE message, three call sites — the def arms.
+(define (def-name-reservation-error name loc)
+  (and (symbol? name)
+       (narrow-var-symbol? name)
+       (parse-error
+        loc
+        (format "def: `~a` is reserved — a leading `?` marks a logic variable (narrowing / defr params), not a definition; name it `~a`"
+                name
+                (substring (symbol->string name) 1))
+        name)))
+
 (define (parse-def args loc)
   ;; Sprint 10: (def name body) — 2 args, type inferred from body
   ;; NEW: (def name <type> body) — 3 args where second is ($angle-type ...)
@@ -3881,6 +4376,8 @@
        (cond
          [(not (symbol? name))
           (parse-error loc (format "def: expected name, got ~a" name) name)]
+         [(def-name-reservation-error name loc)
+          => values]
          [else
           ;; Rel T1 POL.9b: the def RHS is command position (Q_C) —
           ;; a paren goal binds the solve's rows (POL.10 snapshot governs).
@@ -3894,6 +4391,8 @@
        (cond
          [(not (symbol? name))
           (parse-error loc (format "def: expected name, got ~a" name) name)]
+         [(def-name-reservation-error name loc)
+          => values]
          [else
           (let ([ty (unwrap-angle-type (cadr args) loc)]
                 [bd (parse-defrhs-datum (caddr args))])  ;; POL.9b: := RHS command position
@@ -3910,6 +4409,8 @@
        (cond
          [(not (symbol? name))
           (parse-error loc (format "def: expected name, got ~a" name) name)]
+         [(def-name-reservation-error name loc)
+          => values]
          [(not (eq? colon ':))
           (parse-error loc (format "def: expected ':', got ~a" colon) colon)]
          [else
@@ -4368,8 +4869,35 @@
     ;; ---- Pattern clause: patterns... -> body ----
     ;; Handles both bracketed [pats] -> body and bare pat1 pat2 -> body
     [arrow-idx
-     (define pattern-stxs (take cleaned arrow-idx))
+     ;; Split the pre-arrow forms at `when` into PATTERNS and an optional GUARD.
+     ;;
+     ;; 2026-07-31: this split was missing here, though the bracketed-header
+     ;; clause parser has always had it. So in the bare-`|` form a guard was
+     ;; silently parsed as EXTRA PATTERNS — `| n when [int-lt n 0] -> 7` became
+     ;; three patterns (`n`, `when`, `[…]`) — giving clauses of mismatched
+     ;; arity, and the pattern compiler then indexed off the end of its
+     ;; parameter list and died with a raw Racket
+     ;;   `list-ref: index too large for list, in: '(__arg0 __arg1)`
+     ;; that killed the WHOLE FILE (no per-command error, no earlier command's
+     ;; output). Same split, same guard parsing, as the header path.
+     (define pre-arrow (take cleaned arrow-idx))
+     (define-values (pattern-stxs guard-forms)
+       (let ([when-idx (for/or ([p (in-list pre-arrow)] [i (in-naturals)])
+                         (and (eq? (stx->datum p) 'when) i))])
+         (if when-idx
+             (values (take pre-arrow when-idx) (drop pre-arrow (+ when-idx 1)))
+             (values pre-arrow '()))))
+     (define guard
+       (if (null? guard-forms)
+           #f
+           (let ([guard-stx (if (= (length guard-forms) 1)
+                                (car guard-forms)
+                                (datum->syntax #f (map stx->datum guard-forms)
+                                               (car guard-forms)))])
+             (parse-datum guard-stx))))
      (define body-parts (drop cleaned (+ arrow-idx 1)))
+     (when (and (pair? guard-forms) (null? pattern-stxs))
+       (parse-error loc (format "defn ~a: `when` guard with no pattern before it" name) #f))
      (when (null? pattern-stxs)
        (parse-error loc (format "defn ~a: pattern clause needs at least one pattern before ->" name) #f))
      (when (null? body-parts)
@@ -4416,9 +4944,10 @@
             (parse-single-pattern p loc))]))
      (cond
        [(prologos-error? body) body]
+       [(prologos-error? guard) guard]
        [(prologos-error? patterns) patterns]
        [(findf prologos-error? patterns) => (lambda (err) err)]
-       [else (defn-pattern-clause patterns #f body loc)])]
+       [else (defn-pattern-clause patterns guard body loc)])]
 
     ;; ---- Arity clause: existing logic ----
     [else
@@ -4793,6 +5322,25 @@
                ty
                (loop (cddr es)
                      (cons (binder-info (stx->datum (car es)) #f ty) acc))))]
+        ;; CIU T6 D4.P1b-iii / Q_N4 — a STRAY colon-symbol is never a parameter.
+        ;; By here the fused arms above have already consumed every legitimate
+        ;; `name :Type` pair, so a colon-symbol in head position is either a
+        ;; dangling annotation or an invalid multiplicity. It used to fall into
+        ;; the bare-param arm below and become a PARAMETER NAMED `:7`, silently
+        ;; giving `defn f [x :7] x` arity 2 with hole types — measured, 0 errors.
+        ;; (Before the `fused-type-annot?` repair it was worse still: `:7` was
+        ;; consumed as a TYPE NAME, yielding `[Pi [x :0 <[Type 0]>] x -> x]`.)
+        ;; Nothing legitimate is lost: `[x :0 Int]` / `[x :w Int]` are ALREADY
+        ;; rejected upstream by the defn form-shape gate — probe-verified — so
+        ;; multiplicity annotations were never a working defn-param spelling.
+        [(colon-symbol? (stx->datum (car es)))
+         (parse-error loc
+                      (format (string-append
+                               "defn: `~a` is not a parameter name. Annotate the parameter "
+                               "itself (`[x:Int]`); multiplicity annotations are not supported in "
+                               "a defn parameter list")
+                              (stx->datum (car es)))
+                      #f)]
         ;; sexp glued `name:Type`, or a plain bare param
         [(symbol? (stx->datum (car es)))
          (let-values ([(name ty err)
@@ -5356,10 +5904,10 @@
 ;; A colon-prefixed symbol like `:Int`. The WS reader renders a fused type
 ;; annotation's `:Type` as a SEPARATE colon-prefixed SYMBOL (not a Racket keyword);
 ;; sexp glues it into the preceding symbol. Rel Track 1 Aspect C, C.b.1.
-(define (colon-symbol? x)
-  (and (symbol? x)
-       (let ([s (symbol->string x)])
-         (and (> (string-length s) 0) (char=? (string-ref s 0) #\:)))))
+;; colon-symbol? — MOVED to reader-forms.rkt at LET P4 (macros.rkt needs it at
+;; the datum level and this module requires macros.rkt — the cycle). Imported
+;; below; the definition, its digit-headed sibling and fused-type-annot? live
+;; there as the ONE set of fused primitives.
 
 ;; ── Fused type annotations: the ONE pair of primitives (Rel T1 C.b.2 + POL.6) ──
 ;; `x:Int` reaches the parser in two shapes: WS splits it into `x` + the
@@ -5371,18 +5919,35 @@
 
 ;; WS shape: a colon-symbol that is a TYPE annotation, not a multiplicity.
 ;; `:0`/`:1`/`:w`/`:m` stay multiplicity annotations (so `[fn [x :0 Int] x]` is
-;; untouched) — the cost, named in C.b.2: a type literally named `w`/`m`/`0`/`1`
+;; untouched) — the cost, named in C.b.2: a type literally named `w`/`m`
 ;; cannot be fused in WS; use the spaced form.
-(define (fused-type-annot? d)
-  (and (colon-symbol? d) (not (memq d '(:0 :1 :w :m)))))
+;;
+;; ⚠ CIU T6 D4.P1b-iii / Q_N4 [owner] — THIS EXCLUSION IS STRUCTURAL, NOT A LIST.
+;; It used to be `(not (memq d '(:0 :1 :w :m)))`: FOUR lexemes against a
+;; recognizer that mints TWELVE (`:0`–`:9`, `:w`, `:m`). Everything outside the
+;; four fell through here and was silently consumed as a TYPE NAME — probed:
+;;   `defn g [x :7] x`  =>  g : [Pi [x :0 <[Type 0]>] x -> x]   (0 errors!)
+;; a DIFFERENT function, silently, while `:0`/`:1`/`:10` were all loud. So the
+;; VALID multiplicities were loud in that shape and `:7` was the anomaly.
+;;
+;; Q_M8's digit-run widening would have made `:10` lex exactly like `:7`,
+;; moving it LOUD -> SILENT WRONG. The fix is not a longer list — it is the
+;; observation that **no type name starts with a digit**, so a digit-headed
+;; colon symbol is NEVER a type annotation. That co-migrates with the widened
+;; recognizer for free AND repairs the pre-existing `:7` defect.
+;;
+;; The comment eight lines above warns that "a second copy is how the two paths
+;; would drift". This predicate WAS that second copy; it is now derived from a
+;; property instead of an enumeration, so it cannot drift from the recognizer.
+;; digit-headed-colon-symbol? — moved to reader-forms.rkt (LET P4).
+
+;; fused-type-annot? — moved to reader-forms.rkt (LET P4).
 
 ;; Build the type surf from a WS fused annotation datum (`:Int` → the surf for
 ;; `Int`), via parse-datum so it is IDENTICAL to what the spaced arm produces.
 ;; ctx-stx supplies srcloc context for datum->syntax.
 (define (fused-annot->type-surf annot-datum ctx-stx)
-  (parse-datum (datum->syntax ctx-stx
-                              (string->symbol
-                               (substring (symbol->string annot-datum) 1)))))
+  (parse-datum (datum->syntax ctx-stx (fused-annot->type-symbol annot-datum))))
 
 ;; sexp shape: split a possibly-glued `name:Type` symbol.
 ;; Returns (values name-symbol type-surf-or-#f error-or-#f):

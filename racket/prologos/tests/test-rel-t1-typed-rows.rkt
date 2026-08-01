@@ -7,7 +7,8 @@
 ;;; carry a typed per-solution ROW instead of a bare hole:
 ;;;   - keys  = query-var names Κ′ (Prolog-parity; from B0's classify-goal-args)
 ;;;   - types = the relation schema's field types α (positional bridge)
-;;;   - wrap  = List<row> (solve/solve-with/explain*), bare row (solve-one)
+;;;   - wrap  = PVec<row> (solve/solve-with/explain*), bare row (solve-one)
+;;;           (was List<row> until the SolveCarrier spin-out, 2026-07-31)
 ;;;   - explain rows carry a 'dyn tail for conditional reserved metadata keys
 ;;; Un-schema'd relations stay loose (expr-hole) — B2 refines the codata case.
 ;;;
@@ -74,14 +75,15 @@
    "defr edge : Edge\n  || \"a\" \"b\" 3\n  || \"c\" \"d\" 5\n\n"))
 
 ;; ========================================
-;; B1 — solve over a schema'd relation → List<row> (query-var keys, schema types)
+;; B1 — solve over a schema'd relation → PVec<row> (query-var keys, schema types)
 ;; ========================================
 
-(test-case "B1: solve → List of a row keyed by query-vars, typed by the schema"
+(test-case "B1: solve → PVec of a row keyed by query-vars, typed by the schema"
   (define r (last-result
              (run-prologos-string
               (string-append edge-world "solve (edge f t w)\n"))))
-  (check-true (string-contains? r "List") "solve result is List-wrapped")
+  (check-true (string-contains? r "PVec") "solve result is PVec-wrapped (SolveCarrier)")
+  (check-false (string-contains? r "List") "…and no longer List-wrapped")
   ;; query-var keys (f/t/w), NOT schema field names (from/to/weight)
   (check-true (string-contains? r ":f String") "free arg f typed String (schema :from)")
   (check-true (string-contains? r ":t String") "free arg t typed String (schema :to)")
@@ -96,6 +98,7 @@
   (check-true (string-contains? r ":w Int") "solve-one row typed by the schema")
   (check-true (string-contains? r ":f String"))
   (check-false (string-contains? r "List")   "solve-one is a bare row, not List-wrapped")
+  (check-false (string-contains? r "PVec")   "…and the SolveCarrier flip did NOT reach it (R2)")
   (check-false (string-contains? r "Option") "solve-one is unwrapped (D25.4), not Option"))
 
 (test-case "B1: partially-ground goal → only the FREE positions become typed fields"
@@ -107,11 +110,11 @@
   ;; :f is ground ("a"), so it is NOT a solution key
   (check-false (string-contains? r ":f") "ground position f is not a solution field"))
 
-(test-case "B1: explain → List row with a 'dyn tail (open) for reserved metadata keys"
+(test-case "B1: explain → PVec row with a 'dyn tail (open) for reserved metadata keys"
   (define r (last-result
              (run-prologos-string
               (string-append edge-world "explain (edge f t w)\n"))))
-  (check-true (string-contains? r "List"))
+  (check-true (string-contains? r "PVec"))
   (check-true (string-contains? r ":w Int") "explain row typed by the schema")
   (check-true (string-contains? r "| _") "explain rows are open (dyn tail) for :provenance et al."))
 
@@ -146,7 +149,7 @@
   (define r (last-result
              (run-prologos-string
               (string-append plain-facts-world "solve (edge f t w)\n"))))
-  (check-true (string-contains? r "List"))
+  (check-true (string-contains? r "PVec"))
   (check-true (string-contains? r ":f String") "f observed String from the facts")
   (check-true (string-contains? r ":t String"))
   (check-true (string-contains? r ":w Int")    "w observed Int from the facts")
@@ -309,9 +312,10 @@
          (only-in "../syntax.rkt"
                   expr-champ expr-keyword expr-Record record-field expr-hole
                   expr-Int expr-String expr-Bool expr-union expr-int expr-string
-                  expr-app expr-fvar expr-nil)
+                  expr-app expr-fvar expr-nil expr-PVec expr-rrb)
          (only-in "../pretty-print.rkt" pp-expr)
-         (only-in "../champ.rkt" champ-empty champ-insert))
+         (only-in "../champ.rkt" champ-empty champ-insert)
+         (only-in "../rrb.rkt" rrb-from-list))
 
 (define (b32-row . kvs)
   (expr-champ (for/fold ([c champ-empty]) ([kv (in-list kvs)])
@@ -326,6 +330,13 @@
                  (cons (car f) (record-field (cdr f) 'present)))
                'closed))
 (define (b32-List r) (expr-app (expr-fvar 'prologos::data::list::List) r))
+;; SolveCarrier (2026-07-31): PVec is the PRODUCTION carrier since the flip; the
+;; List builders above now pin the RETAINED arm (narrowing, R3). Each shape-level
+;; case below therefore runs against BOTH carriers — a differential pair, so a
+;; future edit to one arm of display-row-type-parts / display-result-rows cannot
+;; silently diverge from the other.
+(define (b32-PVec r) (expr-PVec r))
+(define (b32-pvec . rows) (expr-rrb (rrb-from-list rows)))
 
 (test-case "B3.2 unit FILL: a hole field takes the observed type of the rows"
   (check-equal? (pp-expr (refine-solve-row-type-for-display
@@ -359,3 +370,46 @@
   (check-equal? (pp-expr (refine-solve-row-type-for-display
                           (b32-List (b32-rec (cons 'b (expr-hole)))) (expr-nil)))
                 "[prologos::data::list::List {:b _}]"))
+
+;; ── SolveCarrier: the PVec twins of the four shape-level cases above ─────────
+;; These are the LOAD-BEARING half since the flip — every production solve echo
+;; now arrives as `(expr-rrb …)` typed `(expr-PVec row)`. Both display walkers
+;; had to grow an arm; miss either and the refinement degrades SILENTLY (holes
+;; stay `_`, unions stay unsharpened) with zero errors. Hence the pins.
+
+(test-case "SolveCarrier unit FILL: a hole field takes the observed type (PVec carrier)"
+  (check-equal? (pp-expr (refine-solve-row-type-for-display
+                          (b32-PVec (b32-rec (cons 'a (expr-Int)) (cons 'b (expr-hole))))
+                          (b32-pvec (b32-row (cons 'a (expr-int 1)) (cons 'b (expr-string "s")))
+                                    (b32-row (cons 'a (expr-int 2)) (cons 'b (expr-string "t"))))))
+                "[PVec {:a Int :b String}]"))
+
+(test-case "SolveCarrier unit FILL: heterogeneous observations join into a union (PVec carrier)"
+  (check-equal? (pp-expr (refine-solve-row-type-for-display
+                          (b32-PVec (b32-rec (cons 'b (expr-hole))))
+                          (b32-pvec (b32-row (cons 'b (expr-string "s")))
+                                    (b32-row (cons 'b (expr-int 3))))))
+                "[PVec {:b String | Int}]"))
+
+(test-case "SolveCarrier unit: observation DISAGREEING with the static union is discarded (PVec carrier)"
+  (check-equal? (pp-expr (refine-solve-row-type-for-display
+                          (b32-PVec (b32-rec (cons 'b (expr-union (expr-Int) (expr-Bool)))))
+                          (b32-pvec (b32-row (cons 'b (expr-string "s"))))))
+                "[PVec {:b Int | Bool}]"))
+
+(test-case "SolveCarrier unit: an EMPTY PVec observes nothing (type unchanged)"
+  ;; the empty result is `@[]` now, not `nil` — the walker must return no rows
+  ;; rather than treating the empty rrb as an unrecognized shape.
+  (check-equal? (pp-expr (refine-solve-row-type-for-display
+                          (b32-PVec (b32-rec (cons 'b (expr-hole)))) (b32-pvec)))
+                "[PVec {:b _}]"))
+
+(test-case "SolveCarrier unit: a PVec with a NON-row member is skipped, not aborted"
+  ;; mirrors the cons arm's filter — an unrecognized member must not poison the
+  ;; observations drawn from its well-formed siblings.
+  (check-equal? (pp-expr (refine-solve-row-type-for-display
+                          (b32-PVec (b32-rec (cons 'b (expr-hole))))
+                          (expr-rrb (rrb-from-list
+                                     (list (b32-row (cons 'b (expr-string "s")))
+                                           (expr-int 99))))))
+                "[PVec {:b String}]"))

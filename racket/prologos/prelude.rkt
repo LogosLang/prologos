@@ -11,7 +11,7 @@
 (provide
  ;; Multiplicities
  m0 m1 mw mult? (struct-out mult-meta)
- mult-add mult-mul mult-leq compatible
+ mult-add mult-mul mult-join mult-leq compatible
  ;; Universe levels
  (struct-out lzero) (struct-out lsuc) (struct-out level-meta)
  level? lmax level<=?)
@@ -60,6 +60,56 @@
       [('m0 'mw) 'm0]
       [('mw 'm0) 'm0]
       [('m1 'm1) 'm1]
+      [('m1 'mw) 'mw]
+      [('mw 'm1) 'mw]
+      [('mw 'mw) 'mw])))
+
+;; ========================================
+;; Join (least upper bound) — the ALTERNATION operator
+;; ========================================
+;; `mult-add` is SEQUENTIAL/parallel composition: both usages happen, so
+;; m1 + m1 = mw. That is right for `f x x` and it is the semiring addition QTT
+;; is built on — PPN 4C Phase 2 analysed it and accepted `:usage` as a
+;; commutative MONOID (see qtt.rkt § ":usage facet SRE domain registration").
+;;
+;; ALTERNATION is a DIFFERENT operation, and until now the tree had no operator
+;; for it. When an eliminator picks exactly ONE branch — `boolrec`, the four
+;; posit `if-nar`s, and a pattern-match's arms — the branches are alternatives,
+;; not co-occurrences, so their usages combine with the least upper bound in the
+;; order `mult-leq` already defines (m0 <= m1 <= mw), i.e. `max`. Adding them
+;; instead OVER-COUNTS: a linear variable used once in each branch is used
+;; exactly once on every execution path, but m1 + m1 = mw rejects it.
+;;
+;; So this is not a correction of `mult-add` — both operators are needed, and
+;; `:usage` carries both a tensor and a join. The D2 note in qtt.rkt that
+;; "REFUTE[d] idempotence" was right about ADDITION and is not overturned; it
+;; simply was not about alternation.
+;;
+;; DIFFERS FROM `mult-add` IN EXACTLY ONE CELL: m1 ⊔ m1 = m1 (add gives mw).
+;; Every other cell is identical, which is what makes swapping add→join at an
+;; alternation site MONOTONE-PERMISSIVE: it can only accept more programs, never
+;; reject more, so no currently-passing program can break.
+;;
+;; Identity = bottom = m0 (same as `mult-add`'s identity), which is why
+;; `join-usage` can safely clone `add-usage`'s "shorter vector is all-m0" null
+;; shortcuts.
+;;
+;; ⚠ NOT `mult-lattice-merge` (mult-lattice.rkt) — that is the FLAT agreement
+;; lattice used for meta SOLUTION agreement, where m0 ⊔ m1 = 'mult-top, a symbol
+;; `compatible` has no clause for. Feeding it here would raise a Racket match
+;; error rather than produce a diagnostic.
+;;
+;; mult-meta treated as 'mw (unsolved → unrestricted), as in every sibling.
+(define (mult-join a b)
+  (let ([a (if (mult-meta? a) 'mw a)]
+        [b (if (mult-meta? b) 'mw b)])
+    (match* (a b)
+      [('m0 'm0) 'm0]
+      [('m0 'm1) 'm1]
+      [('m1 'm0) 'm1]
+      [('m0 'mw) 'mw]
+      [('mw 'm0) 'mw]
+      [('m1 'm1) 'm1]     ;; ← the one cell where this differs from mult-add
       [('m1 'mw) 'mw]
       [('mw 'm1) 'mw]
       [('mw 'mw) 'mw])))

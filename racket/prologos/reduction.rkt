@@ -55,6 +55,12 @@
          ;; SUB.3 hot-scan: the reflective oracle, for the differential
          ;; contract tests ONLY (armed ≡ reflective)
          contains-open-container?/reflective
+         ;; CIU T6 D4.P4a: the select-block value walk. Exported for the
+         ;; TOTALITY pins ONLY — the untotal case (a step kind the walk has no
+         ;; arm for) is UNCONSTRUCTIBLE from surface syntax, so the fixtures
+         ;; must call the walk directly with a synthetic step. Zero behavioural
+         ;; change; production reaches it through the whnf `expr-select` arm.
+         select-reduce
          ;; N6e issue #71: saturated-multi-hole-section classifier (shared by
          ;; infer/inferQ so the 3-stage guard cannot drift between stages).
          saturated-hole-section-app?
@@ -263,25 +269,48 @@
 (define (row-query-vars query-vars)
   (filter (lambda (qv) (not (anon-query-var? qv))) query-vars))
 
-;; Convert solver answer maps (list of hasheq) back to a Prologos expression.
-;; Each answer is a hasheq mapping query variable names (symbols) to ground values.
-;; Returns a Prologos List of Maps: '[(map :x val1 :y val2), ...]
-;; Solution maps carry ONLY query-var keys (CIU T6 F1b.1 / D25: the bound-args
-;; echo — ground call-site values re-emitted under '_'-suffixed relation param
-;; names — is deleted; solutions are pure answers to the queried unknowns).
-;; POL.2: anon `_` vars are additionally excluded (row-query-vars).
+;; Convert solver answer maps (list of hasheq) into the row CHAMPs behind a
+;; result. Each answer is a hasheq mapping query variable names (symbols) to
+;; ground values. Solution maps carry ONLY query-var keys (CIU T6 F1b.1 / D25:
+;; the bound-args echo — ground call-site values re-emitted under '_'-suffixed
+;; relation param names — is deleted; solutions are pure answers to the queried
+;; unknowns). POL.2: anon `_` vars are additionally excluded (row-query-vars).
+;;
+;; This is the SHARED core (SolveCarrier R5). The two wrappers below choose the
+;; CARRIER; keeping one core means the row-key policy can never drift between
+;; them.
+(define (answers->champ-list answers query-vars)
+  (for/list ([answer (in-list answers)])
+    ;; Build a CHAMP map from the answer bindings
+    (define champ-val
+      (for/fold ([c champ-empty])
+                ([qv (in-list (row-query-vars query-vars))])
+        (define val (hash-ref answer qv #f))
+        (define key (query-var->champ-key qv))
+        (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
+        (champ-insert c (equal-hash-code key) key pval)))
+    (expr-champ champ-val)))
+
+;; Rows under the List carrier: '[{:x val1 :y val2}, ...].
+;; Since the SolveCarrier flip this is NARROWING's carrier only (R3) — the
+;; solve/explain family uses answers->prologos-pvec. Narrowing's static type is
+;; expr-hole, so moving it would relocate a runtime shape with no type to match.
 (define (answers->prologos-expr answers query-vars)
-  (racket-list->prologos-list
-   (for/list ([answer (in-list answers)])
-     ;; Build a CHAMP map from the answer bindings
-     (define champ-val
-       (for/fold ([c champ-empty])
-                 ([qv (in-list (row-query-vars query-vars))])
-         (define val (hash-ref answer qv #f))
-         (define key (query-var->champ-key qv))
-         (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
-         (champ-insert c (equal-hash-code key) key pval)))
-     (expr-champ champ-val))))
+  (racket-list->prologos-list (answers->champ-list answers query-vars)))
+
+;; Rows under the PVec carrier: @[{:x val1 :y val2}, ...] — the solve/explain
+;; result since the SolveCarrier flip (2026-07-31, discharging CIU T6 Q_U9).
+;; PVec is ordered and duplicate-bearing, so Rel T1 POL.1's BAG semantics (one
+;; row per derivation path; the multiplicity IS the derivation count) are carried
+;; exactly, and `expr-rrb` is the NATIVE carrier struct path selection's `:`
+;; broadcast requires.
+(define (answers->prologos-pvec answers query-vars)
+  (rows->prologos-pvec (answers->champ-list answers query-vars)))
+
+;; The same carrier, for a caller that already holds the rows (explain's
+;; answer-result → row conversion). Same wrapper, one definition.
+(define (rows->prologos-pvec rows)
+  (expr-rrb (rrb-from-list rows)))
 
 ;; Convert a ground solver value back to a Prologos AST expression.
 ;; If the value is already an AST expression, return it directly.
@@ -580,7 +609,7 @@
     [(expr-snd x) (occ-walk x d)]
     [(expr-map-assoc m k mv)
      (or (occ-walk m d) (occ-walk k d) (occ-walk mv d))]
-    [(expr-map-get m k) (or (occ-walk m d) (occ-walk k d))]
+    [(expr-map-get m k a) (or (occ-walk m d) (occ-walk k d) (occ-walk a d))]
     [(expr-map-empty k mv) (or (occ-walk k d) (occ-walk mv d))]
     [(expr-pvec-literal elems) (for/or ([el (in-list elems)]) (occ-walk el d))]
     ;; the four binder forms — body positions at d+1 (or +binding-count)
@@ -661,7 +690,7 @@
      (define answers
        (parameterize ([current-is-eval-fn nf])
          (stratified-solve-goal config store rel-name goal-args query-vars)))
-     (answers->prologos-expr answers query-vars)]
+     (answers->prologos-pvec answers query-vars)]
     [(expr-rel? goal*)
      ;; Anonymous relation — create temporary relation-info and solve
      (define temp-name (gensym 'anon-rel))
@@ -677,7 +706,7 @@
      (define answers
        (parameterize ([current-is-eval-fn nf])
          (stratified-solve-goal config store temp-name goal-args query-vars)))
-     (answers->prologos-expr answers query-vars)]
+     (answers->prologos-pvec answers query-vars)]
     [(expr-unify-goal? goal*)
      ;; Inline = goal: normalize both sides to solver representation,
      ;; collect query vars, run unification, format answer.
@@ -703,7 +732,7 @@
        (for/list ([ans (in-list answers)])
          (for/hasheq ([qv (in-list query-vars)])
            (values qv (solver-term->prologos-expr (walk* ans qv))))))
-     (answers->prologos-expr converted-answers query-vars)]
+     (answers->prologos-pvec converted-answers query-vars)]
     [(expr-is-goal? goal*)
      ;; Inline is goal: evaluate expr, bind to var, return single-answer list.
      (define var-node (expr-is-goal-var goal*))
@@ -716,7 +745,7 @@
      ;; SUB.1 tripwire: nf-persisting boundary 1 (solve is-goal answer row)
      (assert-no-open-container! 'solve result)
      (define answer (hasheq var-name result))
-     (answers->prologos-expr (list answer) (list var-name))]
+     (answers->prologos-pvec (list answer) (list var-name))]
     [(expr-not-goal? goal*)
      ;; Top-level NAF goal (A.1): run via the DFS engine — solve-single-goal
      ;; handles 'not (prove inner; empty ⇒ NAF succeeds). Mirrors the inline-unify
@@ -747,7 +776,7 @@
        (for/list ([ans (in-list answers)])
          (for/hasheq ([qv (in-list query-vars)])
            (values qv (solver-term->prologos-expr (walk* ans qv))))))
-     (answers->prologos-expr converted-answers query-vars)]
+     (answers->prologos-pvec converted-answers query-vars)]
     ;; If the goal is not yet reduced to a goal-app, return the expression unchanged
     [else (expr-solve goal*)]))
 
@@ -902,7 +931,7 @@
          (if (answer-result? r)
              (answer-result->prologos-expr r query-vars)
              r)))
-     (racket-list->prologos-list prologos-maps)]
+     (rows->prologos-pvec prologos-maps)]
     [(expr-not-goal? goal*)
      ;; Explain over a top-level NAF goal (A.1): a negation has no positive
      ;; provenance chain, so run it via the DFS engine and return plain answer maps
@@ -931,7 +960,7 @@
        (for/list ([ans (in-list answers)])
          (for/hasheq ([qv (in-list query-vars)])
            (values qv (solver-term->prologos-expr (walk* ans qv))))))
-     (answers->prologos-expr converted-answers query-vars)]
+     (answers->prologos-pvec converted-answers query-vars)]
     [else (expr-explain goal*)]))
 
 ;; ----------------------------------------
@@ -1586,6 +1615,203 @@
 ;; name, a [fn ...] value) FAILS LOUD as check-unevaluable (F1b.7a Layer B:
 ;; err-polarity's "skip stuck" governs TYPE-WITNESSING, not the user's
 ;; runtime :check assertion; an un-evaluable check must never silently pass).
+;; CIU T6 D4.P3a: the select-block value assembly (Q_T1 Route A).
+;; subj-champ is the ALREADY-whnf'd subject (evaluated ONCE by the whnf arm —
+;; reused across every branch). Per-branch: project the head key, then walk
+;; the remaining steps rebuilding PROJECTION nesting (traversed nominal keys
+;; are kept — spec §1.2; a `.k` descent contributes a one-field level), with
+;; a terminal `(@sub …)` recursing over the narrowed champ. Typing (Horn D)
+;; sourced every selected field as 'present and the parser rejected duplicate
+;; output keys BEFORE this code can mint — so a miss or a non-map mid-descent
+;; here is an INVARIANT VIOLATION: panic loudly, never fabricate (the P2.b
+;; two-tier discipline; fabricating `none` was exactly divergence site 7).
+(define (select-reduce subj-expr branches)
+  (let/ec return
+    (define (kw-of label) (expr-keyword label))
+    (define (champ-of v what)
+      (let ([v* (whnf v)])
+        (if (expr-champ? v*)
+            (expr-champ-racket-champ v*)
+            (return (expr-panic
+                     (expr-string
+                      (format "select: ~a is not a map at runtime (invariant violation — typing admitted the block)"
+                              what)))))))
+    (define (project c label)
+      (let* ([kw (kw-of label)]
+             [hit (champ-lookup c (equal-hash-code kw) kw)])
+        (if (eq? hit 'none)
+            (return (expr-panic
+                     (expr-string
+                      (format "select: field :~a not found at runtime (invariant violation — typing sourced it as present)"
+                              label))))
+            (whnf hit))))
+    ;; D4.P3c: a level assembles either sort — all-keyed components → champ;
+    ;; all-keyless ((#f . v)) → the rrb tuple mint in written order (ruling
+    ;; 2a: honest at EVERY n, incl. 1-tuples). Parser L4 guaranteed
+    ;; homogeneity.
+    (define (entries->value entries)
+      (if (and (pair? entries) (not (car (car entries))))
+          (expr-rrb (rrb-from-list (map cdr entries)))
+          (expr-champ
+           (for/fold ([acc champ-empty]) ([e (in-list entries)])
+             (let ([kw (kw-of (car e))])
+               (champ-insert acc (equal-hash-code kw) kw (cdr e)))))))
+    ;; ordinal descent over the runtime value (Q_U2 / ordinal branches).
+    ;; Typing admitted the block; a het-row OOB was caught statically; a
+    ;; PVec OOB is a legitimate runtime assertive-tier error — LOUD, the
+    ;; expr-get wording (P2.b: never fabricate).
+    (define (index-into v n what)
+      (let ([v* (whnf v)])
+        (cond
+          [(expr-rrb? v*)
+           (let ([r (expr-rrb-racket-rrb v*)])
+             (if (< n (rrb-size r))
+                 (whnf (rrb-get r n))
+                 (return (expr-panic
+                          (expr-string
+                           (format "select: index ~a out of bounds for the vector of length ~a (at `~a`)"
+                                   n (rrb-size r) what))))))]
+          [else
+           (return (expr-panic
+                    (expr-string
+                     (format "select: ~a is not a vector at runtime (invariant violation — typing admitted the ordinal)"
+                             what))))])))
+    ;; D4.P3b — one branch's entries at the CURRENT level, mirroring
+    ;; typing-core's select-branch-entries over champs (the same shared
+    ;; syntax.rkt walk classifies steps, so meaning cannot drift from the
+    ;; parser's Q_T3 check). Duplicates were excluded at the parser, so
+    ;; champ-insert is never asked to last-win; a miss or non-map
+    ;; mid-descent is an INVARIANT VIOLATION — panic, never fabricate.
+    ;; `seen` mirrors typing-core's select-branch-entries: the branch steps
+    ;; consumed above this recursion, so `^_`'s Reading-N label synthesizes
+    ;; over the FULL branch via the SHARED select-synth-name walk; resets at
+    ;; a `.{…}` sub-block (branch-of-its-block scope — Q_U4: subject-root
+    ;; preferred, flip deferred; DEFERRED 23).
+    ;; D4.P3c: v is the RAW subject value (champ OR rrb) — each branch
+    ;; dispatches per its head kind, mirroring typing's per-branch dispatch.
+    ;; component ::= (cons kw-label . value) keyed | (cons #f value) keyless.
+    (define (branch-entries v b seen)
+      ;; shared by collapse + keyless: descend every step to the leaf value.
+      ;; P3c verify (rank 1): the `(@ord N)` head arm — the ATOMIC twin of
+      ;; typing's walk-to-leaf arm (missing here = champ-of panic on rrb).
+      (define (walk-to-leaf)
+        (let walk ([steps b] [v v])
+          (let* ([s (car steps)]
+                 [name (select-step-name s)]
+                 ;; D4.P4a site 6: was `[else …]` — a sixth kind was silently
+                 ;; projected as a NOMINAL KEY (and would have surfaced, if at
+                 ;; all, as a champ-of "not a map" panic naming the wrong thing).
+                 [hit (case (select-step-kind s)
+                        [(ord-step) (index-into v s name)]
+                        [(ord-branch) (index-into v (cadr s) (cadr s))]
+                        [(key caret sub) (project (champ-of v name) name)]
+                        [else (select-step-kind-unhandled 'select-walk-to-leaf s)])])
+            (if (null? (cdr steps))
+                hit
+                (walk (cdr steps) hit)))))
+      (let ([col (select-branch-collapse b)])
+        (cond
+          [col
+           (list (cons (cond [(select-cont-rename col)]
+                             [(eq? col 'collapse-synth)
+                              (select-synth-name (append seen b))]
+                             [else (select-step-name (car (reverse b)))])
+                       (walk-to-leaf)))]
+          [(select-branch-keyless? b)
+           ;; P3c: the keyless component — the leaf VALUE, no key
+           (list (cons #f (walk-to-leaf)))]
+          [(select-ord-step? (car b))
+           ;; P3c: ordinal BRANCH — keyless component over the element
+           (let* ([n (cadr (car b))]
+                  [elem (index-into v n n)])
+             (if (null? (cdr b))
+                 (list (cons #f elem))
+                 (list (cons #f (below-value elem (cdr b) '())))))]
+          [(number? (car b))
+           ;; bare-number STEP chain (splice continuation): transparent
+           (let ([elem (index-into v (car b) (car b))])
+             (if (null? (cdr b))
+                 (list (cons #f elem))
+                 (branch-entries elem (cdr b) seen)))]
+          ;; D4.P4a site 7: was a bare `[else …]` — a sixth kind was silently
+          ;; projected as a NOMINAL KEY. Guard rather than `case`: the body is
+          ;; the walk's largest arm. `sub` joins `key`/`caret` because that is
+          ;; what the old `else` caught — behaviour-preserving by construction.
+          [(memq (select-step-kind (car b)) '(key caret sub))
+           (let* ([s (car b)]
+                  [rest (cdr b)]
+                  [name (select-step-name s)]
+                  [cont (select-step-cont s)]
+                  [hit (project (champ-of v name) name)])
+             (cond
+               [(null? rest)
+                (list (cons (cond [(and cont (select-cont-rename cont))]
+                                  [(eq? cont 'synth)
+                                   (select-synth-name (append seen (list s)))]
+                                  [else name])
+                            hit))]
+               [(eq? cont 'dissolve)
+                (below-components hit rest (append seen (list s)))]
+               [else
+                (list (cons (or (and cont (select-cont-rename cont)) name)
+                            (below-value hit rest (append seen (list s)))))]))]
+          [else (select-step-kind-unhandled 'select-branch-entries (car b))])))
+    ;; the COMPONENTS a dissolved head splices (terminal sub-block = that
+    ;; block's level, fresh branches; else the steps continue as one branch).
+    ;; D4.P3a verify hardening carried: a sub-block is TERMINAL.
+    (define (below-components v steps seen)
+      (cond
+        [(and (pair? (car steps)) (eq? (car (car steps)) '@sub))
+         (if (null? (cdr steps))
+             (append-map (lambda (b) (branch-entries v b '())) (cdr (car steps)))
+             (return (expr-panic
+                      (expr-string
+                       "select: internal — steps after a terminal sub-block (the parser grammar forbids this shape)"))))]
+        [else (branch-entries v steps seen)]))
+    ;; the VALUE below a kept/renamed head: terminal sub-block assembles
+    ;; honestly (incl. the keyless 1-tuple); ordinal steps descend with no
+    ;; level (Q_U2); keyed chains build their nested level.
+    (define (below-value v steps seen)
+      (cond
+        [(and (pair? (car steps)) (eq? (car (car steps)) '@sub))
+         (if (null? (cdr steps))
+             (entries->value
+              (append-map (lambda (b) (branch-entries v b '())) (cdr (car steps))))
+             (return (expr-panic
+                      (expr-string
+                       "select: internal — steps after a terminal sub-block (the parser grammar forbids this shape)"))))]
+        [(number? (car steps))
+         ;; ordinal STEP: descend, no output level (Reading A); seen carries
+         ;; (numbers contribute no synth name — the shared walk skips them)
+         (let ([elem (index-into v (car steps) (car steps))])
+           (if (null? (cdr steps))
+               elem
+               (below-value elem (cdr steps) seen)))]
+        ;; D4.P4a site 8: was a bare `[else …]`. The guard must list EXACTLY
+        ;; what that else caught. ⚠ The twins are NOT symmetric here, and the
+        ;; first version of this comment said they were (corrected at the P4a
+        ;; verify): typing-core's arm-1 guard is `(and (select-sub-step? …)
+        ;; (null? (cdr steps)))`, so its old else DID see non-terminal `sub`
+        ;; — but reduction's arm at :1753 guards on `@sub` alone and tests
+        ;; terminality INSIDE the arm, so `sub` never reached this else at
+        ;; all. `sub` is therefore a DEAD entry in this list: harmless (a
+        ;; wider guard, unreachable position) but not what the comment
+        ;; claimed. What both twins genuinely omitted in the first cut, and
+        ;; what is actually load-bearing here, is `ord-branch`.
+        [(memq (select-step-kind (car steps)) '(key caret sub ord-branch))
+         (entries->value (branch-entries v steps seen))]
+        [else (select-step-kind-unhandled 'select-below-value (car steps))]))
+    ;; D4.P4a: HOIST the subject's whnf out of the per-branch lambda. The
+    ;; header comment above has claimed since P3a that the subject is
+    ;; "evaluated ONCE ... reused across every branch" — it was not: `(whnf
+    ;; subj-expr)` sat INSIDE the append-map lambda, so an N-branch block
+    ;; whnf'd the subject N times. Pure win (whnf is a pure function of the
+    ;; expr); this makes the code match its own documented contract.
+    (let ([subj* (whnf subj-expr)])
+      (entries->value
+       (append-map (lambda (b) (branch-entries subj* b '()))
+                   branches)))))
+
 (define (validate-tabulate sname closed? plan subj-champ names)
   (define c (expr-champ-racket-champ subj-champ))
   (define ok-name          (list-ref names 2))
@@ -1704,38 +1930,64 @@
            (expr-app (expr-fvar err-name) (expr-champ (car err-pair)))
            (expr-app (expr-fvar ok-name) (expr-champ okc)))])))
 
+;; "Is `e` a CONCRETE non-map VALUE?" — the property the degradation arms
+;; actually need, stated by their own callers: reduction.rkt's map-get arm says
+;; "If m* is a concrete non-map value, return none … map-get on an Int from a
+;; mixed-type union."
+;;
+;; CIU T6 P2.b (SITE 7) — THE POLARITY WAS INVERTED. This was written as
+;; `(not (or <every node kind that might be a map>))`: a hand-maintained
+;; NEGATIVE inclusion list whose DEFAULT was to FABRICATE. Any node kind nobody
+;; remembered to exempt was judged "definitely not a map", so a `map-get` over
+;; it degraded to `none` — a legitimate library value, at the correctly
+;; projected type, with zero errors reported.
+;;
+;; That list was patched FIVE times, always by adding a sixth exemption, and
+;; every patch's own comment records a silent-value-loss bug found AFTER the
+;; fact: get-in/update-in (2026-07-16 P6) · broadcast-get (P2.a — "left out of
+;; the 2026-07-16 fix") · expr-error · expr-panic (D22) · expr-validate
+;; (F1b.5-s2). Site 7 was the sixth instance: a TUPLE's runtime representation
+;; is `expr-rrb`, which nobody had exempted, so `[map-get tup 1N]` on a PRESENT
+;; position returned `none` — and a `def` committed it silently at the right
+;; type. A green suite could not see any of it.
+;;
+;; The fix is the POLARITY, not a sixth exemption (`pipeline.md` § Exhaustive
+;; Walkers — "prefer the STRUCTURAL answer to the checklist"): enumerate
+;; POSITIVELY the values we are certain are not maps, and default to #f. An
+;; unrecognized node — including every node kind added in future — is now
+;; CONSERVATIVE: map-get stays stuck rather than inventing absence. The unsafe
+;; direction is no longer the default, so this list cannot silently rot.
+;;
+;; Deliberately ABSENT (and this is the site-7 fix): `expr-rrb` / `expr-trrb`.
+;; A PVec/tuple is a legitimate nat-keyed map-get subject — it must project,
+;; not degrade. `expr-champ` is absent because it IS a map.
+;; CIU T6 P2.b slice 4: key display for the loud map-get miss. Keywords are the
+;; overwhelmingly common case; the fallback is the raw struct (rare, still
+;; informative). Deliberately NOT pp-expr — reduction must not require
+;; pretty-print (module cycle).
+(define (fmt-map-key k)
+  (cond
+    [(expr-keyword? k) (format ":~a" (expr-keyword-name k))]
+    [(expr-string? k) (format "~s" (expr-string-val k))]
+    [(expr-nat-val? k) (format "~aN" (expr-nat-val-n k))]
+    [(expr-int? k) (format "~a" (expr-int-val k))]
+    [else (format "~a" k)]))
+
 (define (definitely-not-map? e)
-  (not (or (expr-champ? e)          ;; IS a map runtime value
-           (expr-fvar? e)           ;; could resolve to a map
-           (expr-bvar? e)           ;; bound variable, unknown
-           (expr-meta? e)           ;; unsolved meta, unknown
-           (expr-app? e)            ;; application, could produce a map
-           (expr-hole? e)           ;; hole, unknown
-           (expr-typed-hole? e)    ;; typed hole, unknown
-           (expr-map-empty? e)      ;; map constructor
-           (expr-map-assoc? e)      ;; map operation
-           (expr-map-get? e)        ;; nested map-get
-           (expr-get? e)            ;; generic get, could return a map
-           (expr-nil-safe-get? e)  ;; nested nil-safe-get
-           (expr-map-dissoc? e)     ;; map operation
-           (expr-get-in? e)         ;; dynamic path navigation — could return a map
-           (expr-update-in? e)      ;; dynamic path update — its result IS a map
-           ;; CIU T6 P2.a: the third path sibling, left out of the 2026-07-16
-           ;; fix — a stuck broadcast's elements could be maps; degrading a
-           ;; map-get over it to `none` fabricated absence.
-           (expr-broadcast-get? e)
-           (expr-error? e)          ;; error propagation
-           ;; CIU T6 F1b.4c (D22): a PANIC must propagate stuck, never degrade
-           ;; — the :check bridge's failure value was swallowed to `none` by
-           ;; map-get (and to nil by nil-safe-get) under projection, hiding
-           ;; the violation entirely (PROBES §P4). Mirrors the expr-error
-           ;; exemption directly above.
-           (expr-panic? e)
-           ;; CIU T6 F1b.5-s2: a stuck validate must propagate stuck (its
-           ;; reduced result is ok/err over a champ — map-adjacent); the
-           ;; D22/P6 silent-value-loss class, decided explicitly per
-           ;; pipeline.md core item 4.
-           (expr-validate? e))))
+  (or ;; numeric values
+      (expr-zero? e) (expr-suc? e) (expr-nat-val? e)
+      (expr-int? e) (expr-rat? e) (expr-num-lit? e)
+      (expr-posit8? e) (expr-posit16? e) (expr-posit32? e) (expr-posit64? e)
+      ;; text values
+      (expr-string? e) (expr-char? e)
+      ;; other scalar values
+      (expr-true? e) (expr-false? e)
+      (expr-keyword? e) (expr-symbol? e)
+      (expr-unit? e) (expr-nil? e)
+      ;; a function is not a map
+      (expr-lam? e)
+      ;; a SET is not a map (distinct carrier, no key→value association)
+      (expr-hset? e)))
 
 ;; ========================================
 ;; Weak Head Normal Form
@@ -1801,6 +2053,40 @@
       ;; Structural forms (not reducible at head)
       (expr-lam? e) (expr-pair? e) (expr-union? e)
       (expr-vcons? e) (expr-vnil? e)
+      ;; D4.P4a: container VALUE carriers. This list held every container
+      ;; TYPE former (Map/Set/PVec/TVec/TMap/TSet/Record) and ZERO of the
+      ;; value carriers, so every champ/rrb/hset reaching whnf paid the full
+      ;; ~990-arm match to arrive at `[_ e]` (reduction.rkt:3957) — identity.
+      ;; SAFETY PROOF (verified at `cab30b9a`, re-verify if the match moves):
+      ;; `whnf-impl/match` has NO bare-head arm for any of the three — every
+      ;; expr-champ/expr-rrb/expr-hset pattern in it sits at nested indent,
+      ;; matching an already-whnf'd ARGUMENT of a map/set/vector operation,
+      ;; never `e` itself. So the fast path returns exactly what the match
+      ;; returned — VALUE-identical, one predicate instead of the match.
+      ;; ⚠ NOT "identical semantics" without qualification (corrected at the
+      ;; P4a adversarial verify, found independently by two reviewers): the
+      ;; fast path returns at :2062, BEFORE the fuel decrement in the `else`
+      ;; at :2065-2069, so a champ/rrb/hset now consumes ZERO reduction fuel.
+      ;; That is a real semantic delta. It is one-way (a program that used to
+      ;; exhaust the 1M budget may now complete; never the reverse), cannot
+      ;; produce a wrong answer, and matches how the ~70 pre-existing trivial
+      ;; kinds already behave — but it is NOT covered by the match-arm proof
+      ;; above and must not be smuggled under it.
+      (expr-champ? e) (expr-rrb? e) (expr-hset? e)
+      ;; D4.P4b-i: the SELECTOR carrier value. `whnf-trivial?` already held
+      ;; `expr-Path?` (the TYPE, :2014) but not `expr-path?` (the VALUE) — the
+      ;; same type-former-without-its-value-carrier gap P4a closed for
+      ;; champ/rrb/hset, one line away and missed by that census too.
+      ;; VERIFIED at `f072c115`: `whnf-impl/match` has NO arm for `expr-path`
+      ;; at any indent, so it already fell to `[_ e]` (:3957) — identity — and
+      ;; `nf`'s arm is likewise `[(expr-path _) e]`. A path literal is a
+      ;; canonical form with no head reduction rule, which is this predicate's
+      ;; own stated criterion for membership.
+      ;; ⚠ This is a DECISION, not an inheritance (the P4b audit named it as
+      ;; one): the SELECTOR is a literal and belongs here; `expr-select` — the
+      ;; APPLICATION of a selector to a subject — IS reducible (whnf arm at
+      ;; :2967-2982) and must stay OUT.
+      (expr-path? e)
       ;; Bound variables (stuck — no definition to unfold)
       (expr-bvar? e)
       ;; Type constructor names
@@ -2670,12 +2956,66 @@
     [(expr-map-assoc (expr-champ c) k v)
      (let ([k* (whnf k)] [v* (whnf v)])
        (expr-champ (champ-insert c (equal-hash-code k*) k* v*)))]
-    [(expr-map-get (expr-champ c) k)
+    ;; CIU T6 P2.b slice 4: THE FORK. The champ miss arm is type-blind (rows
+    ;; and dicts share the champ), so the tier decision arrives MATERIALIZED in
+    ;; the strictness slot: (expr-true) = typing proved the subject (Map K V)
+    ;; on the user's direct projection → the miss is a LOUD panic naming the
+    ;; key and the available keys (the closed-row diagnostic's quality bar).
+    ;; Anything else (#f raw/lowered/dynamic-tier · an unsolved meta · dyn-row
+    ;; subjects, whose slot typing never solves) → the permissive (expr-error),
+    ;; exactly today's shape (D19 pins: route-soundness B1/B2, records ;;77).
+    [(expr-map-get (expr-champ c) k a)
      (let ([k* (whnf k)])
        (let ([result (champ-lookup c (equal-hash-code k*) k*)])
-         (if (eq? result 'none)
-             (expr-error)
-             (whnf result))))]
+         (cond
+           [(not (eq? result 'none)) (whnf result)]
+           [(expr-true? a)
+            (expr-panic
+             (expr-string
+              (format "map-get: key ~a not found; available keys: ~a"
+                      (fmt-map-key k*)
+                      (if (champ-empty? c)
+                          "(none — the map is empty)"
+                          (string-join (sort (map fmt-map-key (champ-keys c))
+                                             string<?)
+                                       " ")))))]
+           [else (expr-error)])))]
+
+    ;; CIU T6 P2.b (SITE 7): a PVec/tuple subject PROJECTS by position.
+    ;; The typing side already does this — `record-project`'s nat-literal arm
+    ;; returns the position's exact field type — but the VALUE side had no arm
+    ;; at all, so it fell through to the stuck-term degradation and fabricated
+    ;; `none` at that correctly-projected type. Delegating to `expr-get` (rather
+    ;; than re-implementing rrb indexing here) is the point: map-get and get now
+    ;; agree BY CONSTRUCTION on the same carrier, which is exactly the
+    ;; divergence site 7 was. `expr-get`'s arm already handles the Nat-or-Int
+    ;; key gate and out-of-bounds.
+    [(expr-map-get (? expr-rrb? v) k a) (whnf (expr-get v k a))]
+
+    ;; CIU T6 D4.P3a: the select-block redex (Q_T1 Route A).
+    ;; The subject is evaluated ONCE — subj* is computed a single time and
+    ;; reused across every branch (the design's no-let/fn obligation).
+    ;; Typing (select-project, Q_T2 Horn D) guaranteed every selected field is
+    ;; sourced-'present, and the parser guaranteed duplicate-free branches —
+    ;; so a runtime miss here is an INVARIANT VIOLATION and panics loudly
+    ;; (never fabricate), and champ-insert is never asked to last-win.
+    ;; Stuck subject → the node stays stuck (the map-get/validate precedent).
+    [(expr-select subject (expr-path branches))
+     (let ([subj* (whnf subject)])
+       (cond
+         ;; D4.P3c: rrb subjects admitted — ordinal branches select over
+         ;; vectors/tuples (`het{2 0}`); per-branch dispatch inside.
+         [(or (expr-champ? subj*) (expr-rrb? subj*)) (select-reduce subj* branches)]
+         ;; D4.P3a verify hardening: a GROUND non-map subject can never
+         ;; become a champ — panic per the node's own tier discipline
+         ;; (the nested descent one level down is already loud; only the
+         ;; top level silently stuck). Stuck NEUTRALS still fall through.
+         [(definitely-not-map? subj*)
+          (expr-panic
+           (expr-string
+            "select: the subject is not a map at runtime (invariant violation — typing admitted the block)"))]
+         [(equal? subj* subject) e]
+         [else (whnf (expr-select subj* (expr-path branches)))]))]
 
     ;; CIU T6 F1b.5-s2 (D27): validate — the runtime tabulation redex.
     ;; Subject whnf's to exactly two classes (spines/map-empty collapse to
@@ -2688,36 +3028,58 @@
          [(equal? subj* subject) e]
          [else (whnf (expr-validate sname closed? plan subj* names))]))]
     ;; Generic get: dispatch by collection type
-    [(expr-get coll key)
+    [(expr-get coll key sa)
      (let ([c* (whnf coll)])
        ;; Extract numeric index from Nat or Int key
        (define (index-value k)
          (or (nat-value k)
              (and (expr-int? k) (let ([v (expr-int-val k)]) (and (>= v 0) v)))))
        (match c*
-         ;; Map (CHAMP) → delegate to map-get
-         [(expr-champ _) (whnf (expr-map-get c* (whnf key)))]
+         ;; Map (CHAMP) → delegate to map-get (the strictness slot RIDES the
+         ;; delegation — a one-node slot would be dropped exactly here)
+         [(expr-champ _) (whnf (expr-map-get c* (whnf key) sa))]
          ;; PVec (RRB) → index by nat/int
+         ;; CIU T6 P2.b slice 2: OOB is a LOUD assertive-tier error (was a
+         ;; silent `(expr-error)` behind a with-handlers). The explicit bounds
+         ;; check replaces the handler — index-value guarantees n ≥ 0, so an
+         ;; in-bounds rrb-get cannot range-fail; anything else raising there
+         ;; would be a real invariant violation that must not be swallowed.
+         ;; A non-literal index still exits STUCK (the arm below), which is
+         ;; what keeps guarded/honest-tier reads insulated.
          [(expr-rrb r)
           (let* ([k* (whnf key)]
                  [n (index-value k*)])
-            (if n
-                (with-handlers ([exn:fail? (lambda (_) (expr-error))])
-                  (whnf (rrb-get r n)))
-                (expr-get c* k*)))]
+            (cond
+              [(not n) (expr-get c* k* sa)]
+              [(< n (rrb-size r)) (whnf (rrb-get r n))]
+              [else (expr-panic
+                     (expr-string
+                      (format "get: index ~a out of bounds for PVec of length ~a"
+                              n (rrb-size r))))]))]
          ;; List (cons chain) → walk to nth
+         ;; CIU T6 P2.b slice 3: the SPLIT. This arm CONFLATED "index is not a
+         ;; literal" with "out of bounds" — both fell to one `(expr-error)`.
+         ;; The non-literal half was a LIVE bug: nf descends under binders, so
+         ;; a lambda body `[get xs i]` (i a bvar) was destroyed to `<error>`
+         ;; in the DISPLAY while the stored whnf value stayed intact — a
+         ;; silent lie about the value. Non-literal now stays STUCK (mirroring
+         ;; the rrb arm above); true OOB joins the assertive tier, LOUD.
          [_
           (let ([elems (prologos-list->racket-list c*)])
             (if elems
                 (let* ([k* (whnf key)]
                        [n (index-value k*)])
-                  (if (and n (< n (length elems)))
-                      (whnf (list-ref elems n))
-                      (expr-error)))
+                  (cond
+                    [(not n) (expr-get c* k* sa)]
+                    [(< n (length elems)) (whnf (list-ref elems n))]
+                    [else (expr-panic
+                           (expr-string
+                            (format "get: index ~a out of bounds for List of length ~a"
+                                    n (length elems))))]))
                 ;; Not yet reduced → try reducing
                 (if (not (equal? c* coll))
-                    (whnf (expr-get c* key))
-                    (expr-get c* key))))]))]
+                    (whnf (expr-get c* key sa))
+                    (expr-get c* key sa))))]))]
     ;; nil?: nil → true, ground non-nil value → false
     [(expr-nil-check (? expr-nil?)) (expr-true)]
     [(expr-nil-check a)
@@ -2765,13 +3127,20 @@
      (let ([x* (whnf x)])
        (expr-rrb (rrb-push r x*)))]
 
+    ;; CIU T6 P2.b slice 2: OOB is a LOUD assertive-tier error. This was THE
+    ;; DIVERGENT leg — it returned the stuck term `e` where expr-get's rrb arm
+    ;; returned `(expr-error)`: two different silences for one carrier. Both
+    ;; now unify on the same panic shape. Non-literal index stays stuck.
     [(expr-pvec-nth (expr-rrb r) i)
      (let* ([i* (whnf i)]
             [n (nat-value i*)])
-       (if n
-           (with-handlers ([exn:fail? (lambda (_) e)])
-             (whnf (rrb-get r n)))
-           e))]
+       (cond
+         [(not n) e]
+         [(< n (rrb-size r)) (whnf (rrb-get r n))]
+         [else (expr-panic
+                (expr-string
+                 (format "pvec-nth: index ~a out of bounds for PVec of length ~a"
+                         n (rrb-size r))))]))]
 
     [(expr-pvec-update (expr-rrb r) i x)
      (let* ([i* (whnf i)]
@@ -3064,10 +3433,10 @@
     [(expr-map-assoc m k v)
      (let ([m* (whnf m)])
        (if (equal? m* m) e (whnf (expr-map-assoc m* k v))))]
-    [(expr-map-get m k)
+    [(expr-map-get m k a)
      (let ([m* (whnf m)])
        (cond
-         [(not (equal? m* m)) (whnf (expr-map-get m* k))]
+         [(not (equal? m* m)) (whnf (expr-map-get m* k a))]
          ;; If m* is a concrete non-map value, return none (graceful degradation).
          ;; This handles cases like map-get on an Int from a mixed-type union.
          [(definitely-not-map? m*) (expr-fvar 'none)]
@@ -3094,7 +3463,7 @@
            [np (whnf paths)])
        (cond
          [(and (expr-path? np) (pair? (expr-path-branches np)))
-          (foldl (lambda (seg acc) (whnf (expr-map-get acc seg)))
+          (foldl (lambda (seg acc) (whnf (expr-map-get acc (expr-keyword seg) #f)))
                  nt (car (expr-path-branches np)))]
          [(and (equal? nt target) (equal? np paths)) e]
          [else (expr-get-in nt np)]))]
@@ -3114,50 +3483,14 @@
             (cond
               [(null? segs) (whnf (expr-app fn base))]
               [else
-               (let* ([key (car segs)]
-                      [sub (whnf (expr-map-get base key))]
+               (let* ([key (expr-keyword (car segs))]
+                      [sub (whnf (expr-map-get base key #f))]
                       [updated (build sub (cdr segs))])
                  (whnf (expr-map-assoc base key updated)))]))]
          [(and (equal? nt target) (equal? np paths)) e]
          [else (expr-update-in nt np fn)]))]
-    ;; CIU T6 P2.a: broadcast-get at whnf strength — the 2026-07-16 P6
-    ;; value-loss fix (siblings above) left this node out; with no whnf arm a
-    ;; broadcast result was whnf-stuck and map-get's graceful degradation
-    ;; silently converted it to none. Mirrors the nf arm (:~4133) at whnf
-    ;; strength: walk the cons spine, per-element chained map-get.
-    [(expr-broadcast-get target fields)
-     (let ([nt (whnf target)])
-       (define (extract-field elem)
-         (foldl (lambda (fld acc) (whnf (expr-map-get acc fld))) elem fields))
-       (define (list-nil*? x)
-         (or (expr-nil? x)
-             (and (expr-fvar? x)
-                  (let ([s (symbol->string (expr-fvar-name x))])
-                    (or (string=? s "nil") (string-suffix? s "::nil"))))
-             (and (expr-app? x) (expr-fvar? (expr-app-func x))
-                  (let ([s (symbol->string (expr-fvar-name (expr-app-func x)))])
-                    (or (string=? s "nil") (string-suffix? s "::nil"))))))
-       (define (list-cons*? x)
-         (and (expr-app? x) (expr-app? (expr-app-func x))
-              (let ([inner (expr-app-func (expr-app-func x))])
-                (define (cons-fvar? v)
-                  (and (expr-fvar? v)
-                       (let ([s (symbol->string (expr-fvar-name v))])
-                         (or (string=? s "cons") (string-suffix? s "::cons")))))
-                (or (cons-fvar? inner)
-                    (and (expr-app? inner) (cons-fvar? (expr-app-func inner)))))))
-       (define (map-over lst)
-         (cond
-           [(list-nil*? lst) lst]
-           [(list-cons*? lst)
-            (let* ([head-elem (expr-app-arg (expr-app-func lst))]
-                   [tail-lst (whnf (expr-app-arg lst))])
-              (expr-app (expr-app (expr-fvar 'cons) (extract-field head-elem))
-                        (map-over tail-lst)))]
-           ;; stuck target: return SELF (eq?-preserving) so callers see no
-           ;; progress and definitely-not-map?'s exemption keeps map-get honest
-           [else (if (eq? nt target) e (expr-broadcast-get lst fields))]))
-       (map-over nt))]
+    ;; expr-broadcast-get: RETIRED at CIU T6 D4.P1a (ruling Q_L3) — the P2.a
+    ;; whnf arm that lived here is unwound with the node.
     [(expr-map-size m)
      (let ([m* (whnf m)])
        (if (equal? m* m) e (whnf (expr-map-size m*))))]
@@ -4161,7 +4494,7 @@
        ;; Static path on concrete target: walk segments
        [(and (expr-path? np) (pair? (expr-path-branches np)))
         (define segs (car (expr-path-branches np)))
-        (foldl (lambda (seg acc) (nf (expr-map-get acc seg))) nt segs)]
+        (foldl (lambda (seg acc) (nf (expr-map-get acc (expr-keyword seg) #f))) nt segs)]
        [else (expr-get-in nt np)])]
     [(expr-update-in target paths fn)
      (define nt (nf target))
@@ -4177,8 +4510,8 @@
           (cond
             [(null? segs) (nf (expr-app nf-fn base))]
             [else
-             (define key (car segs))
-             (define sub (nf (expr-map-get base key)))
+             (define key (expr-keyword (car segs)))
+             (define sub (nf (expr-map-get base key #f)))
              (define updated (build sub (cdr segs)))
              ;; 2026-07-16: normalize the spine (was returned as a raw
              ;; map-assoc stuck term, leaving map-keys/map-size stuck on
@@ -4186,53 +4519,7 @@
              (nf (expr-map-assoc base key updated))]))
         (build nt segs)]
        [else (expr-update-in nt np nf-fn)])]
-    [(expr-broadcast-get target fields)
-     ;; Reduce target, then map nested map-get over each list element
-     (define nt (nf target))
-     (define (extract-field elem fields)
-       ;; Apply chained map-get for each field keyword
-       (foldl (lambda (fld acc) (nf (expr-map-get acc fld))) elem fields))
-     ;; Check if expression is a nil (any form)
-     (define (list-nil? e)
-       (or (expr-nil? e)
-           (and (expr-fvar? e)
-                (let ([s (symbol->string (expr-fvar-name e))])
-                  (or (string=? s "nil")
-                      (and (>= (string-length s) 5)
-                           (string-suffix? s "::nil")))))
-           ;; (nil A) — nil with type arg
-           (and (expr-app? e)
-                (expr-fvar? (expr-app-func e))
-                (let ([s (symbol->string (expr-fvar-name (expr-app-func e)))])
-                  (or (string=? s "nil")
-                      (and (>= (string-length s) 5)
-                           (string-suffix? s "::nil")))))))
-     ;; Try to destructure as cons cell, returns (values head tail) or #f
-     (define (list-cons? e)
-       (and (expr-app? e)
-            (expr-app? (expr-app-func e))
-            (let ([inner (expr-app-func (expr-app-func e))])
-              (define (cons-fvar? v)
-                (and (expr-fvar? v)
-                     (let ([s (symbol->string (expr-fvar-name v))])
-                       (or (string=? s "cons")
-                           (and (>= (string-length s) 6)
-                                (string-suffix? s "::cons"))))))
-              (or (cons-fvar? inner)
-                  ;; typed cons: ((cons A) x) xs
-                  (and (expr-app? inner) (cons-fvar? (expr-app-func inner)))))))
-     ;; Walk the list structure, applying field extraction to each element
-     (define (map-over lst)
-       (cond
-         [(list-nil? lst) lst]
-         [(list-cons? lst)
-          (define head-elem (expr-app-arg (expr-app-func lst)))
-          (define tail-lst (expr-app-arg lst))
-          (define extracted (extract-field head-elem fields))
-          (expr-app (expr-app (expr-fvar 'cons) extracted) (map-over tail-lst))]
-         ;; Can't reduce further — return as-is
-         [else (expr-broadcast-get lst fields)]))
-     (map-over nt)]
+    ;; expr-broadcast-get: RETIRED at CIU T6 D4.P1a (ruling Q_L3).
 
     ;; Char normalization
     [(expr-Char) e]
@@ -4249,11 +4536,14 @@
     [(expr-champ _) e]
     [(expr-map-empty k v) (expr-map-empty (nf k) (nf v))]
     [(expr-map-assoc m k v) (expr-map-assoc (nf m) (nf k) (nf v))]
-    [(expr-map-get m k) (expr-map-get (nf m) (nf k))]
+    [(expr-map-get m k a) (expr-map-get (nf m) (nf k) (if (expr? a) (nf a) a))]
     ;; CIU T6 F1b.5-s2: a validate that survived whnf is stuck — nf the
     ;; expr slots (subject + plan defaults/preds) via the single helper
     [(? expr-validate? v) (validate-map-exprs nf v)]
-    [(expr-get c k) (expr-get (nf c) (nf k))]
+    ;; CIU T6 D4.P3a: a select reaching nf-whnf is STUCK (whnf fired the
+    ;; redex already) — rebuild the subject, branches are static data
+    [(? expr-select? v) (select-map-exprs nf v)]
+    [(expr-get c k a) (expr-get (nf c) (nf k) (if (expr? a) (nf a) a))]
     [(expr-nil-safe-get m k) (expr-nil-safe-get (nf m) (nf k))]
     [(expr-nil-check a) (expr-nil-check (nf a))]
     [(expr-map-dissoc m k) (expr-map-dissoc (nf m) (nf k))]

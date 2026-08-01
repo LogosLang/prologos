@@ -11,7 +11,9 @@
 ;;;
 
 (require "prelude.rkt"
-         racket/generic)  ;; PM 8F Phase 1: gen:equal+hash for expr-meta
+         racket/generic   ;; PM 8F Phase 1: gen:equal+hash for expr-meta
+         (only-in racket/string string-join)   ;; D4.P3b select-synth-name
+         (only-in racket/list append-map))     ;; D4.P3b select-branch-top-keys
 
 ;; ========================================
 ;; SRE Track 2 Phase 0: O(1) Constructor Tag Dispatch
@@ -166,6 +168,14 @@
  ;; Anonymous structural record / tuple type (CIU T6 F1; internal-only — inferred, not parsed)
  (struct-out expr-Record) (struct-out record-field)
  (struct-out expr-validate) validate-map-exprs
+ ;; Path Selection block node (CIU T6 D4.P3a; step vocabulary D4.P3b)
+ (struct-out expr-select) select-map-exprs
+ select-key-step? select-sub-step? select-ord-step? select-step-name
+ ;; D4.P4a: the step-kind totality dispatcher + the consumer-side else
+ select-step-kind select-step-kind-unhandled select-step-kind/display
+ select-step-cont select-cont-collapse? select-cont-rename
+ select-branch-collapse select-branch-keyless?
+ select-step-output-name select-synth-name select-branch-top-keys
  record-map-field-types make-record record-extend record-lookup-field record-remove
  closed-nat-row? closed-keyword-row? record-mark-all-unknown
  ;; Map (persistent hash map)
@@ -174,7 +184,7 @@
  (struct-out expr-map-get) (struct-out expr-nil-safe-get) (struct-out expr-map-dissoc)
  (struct-out expr-map-size) (struct-out expr-map-has-key)
  (struct-out expr-map-keys) (struct-out expr-map-vals)
- (struct-out expr-get) (struct-out expr-get-in) (struct-out expr-update-in) (struct-out expr-broadcast-get)
+ (struct-out expr-get) (struct-out expr-get-in) (struct-out expr-update-in)
  ;; Path (first-class path values)
  (struct-out expr-path) (struct-out expr-Path)
  ;; Set (persistent hash set)
@@ -743,6 +753,268 @@
                  (proc (expr-validate-subject v))
                  (expr-validate-names v)))
 
+;; ============================================================
+;; expr-select — the Path Selection block node (CIU T6 D4.P3a, Q_T1 Route A)
+;; ============================================================
+;; `x{…}` — a keyed select block over a keyword-row subject. Grades-1-scoped
+;; at P3a (no `^`, no broadcast); P3b extends the step vocabulary with `^`
+;; continuations, P3c adds the keyless sort, P4 broadcast steps.
+;;
+;;   subject  : expr
+;;   branches : (listof branch)              STATIC data — no exprs inside
+;;   branch  ::= (listof step), non-empty
+;;   step    ::= symbol                       nominal descent key (colon-less)
+;;             | (cons '@sub (listof branch)) terminal sub-block  `.{…}`
+;;
+;; The branches are segmented + malformed-checked + duplicate-checked at the
+;; PARSER ($select head arm) — by construction an expr-select carries only
+;; well-formed, duplicate-free plain-key branches at this slice. Typing =
+;; per-branch copattern demand under Q_T2 Horn-D LENIENT presence
+;; (typing-core `select-project`); reduction evaluates the subject ONCE
+;; (reduction.rkt). Walkers: subject is the only expr slot — branches pass
+;; through untouched (P1b/P2 walker discipline; no binder ⇒ no depth routing).
+(struct expr-select (subject branches) #:transparent)
+
+;; Map proc over the single EXPR slot (the record-map-field-types pattern:
+;; ONE reconstruction point for shift/subst/zonk/nf).
+;; D4.P4b-i slice 3: the `branches` slot holds the SELECTOR CARRIER (an
+;; `expr-path`), not a raw list — Q_U5's "one representation". So the mapper
+;; maps into BOTH slots. The selector's own walker arms are all
+;; `[(expr-path _) e]` (identity), so this is a no-op at P4 by the monomorphic
+;; ruling — a selector holds bare symbols, never exprs. It stops being a no-op
+;; when BOUND selectors land (F-row), and mapping it now is what makes that
+;; landing safe rather than a silent under-walk.
+(define (select-map-exprs proc v)
+  (expr-select (proc (expr-select-subject v))
+               (proc (expr-select-branches v))))
+
+;; ============================================================
+;; D4.P3b — the `^` step vocabulary + the ONE shared branch walk
+;; ============================================================
+;; A step is now:
+;;   symbol                          plain kept descent (key preserved)
+;;   (list '@key name cont)          `^`-bearing segment
+;;   (cons '@sub (listof branch))    terminal sub-block  `.{…}`
+;; cont ::= 'dissolve                        k^   mid-path: splice a level up
+;;        | (cons 'rename k')                k^k' rename IN PLACE (Q_T4b)
+;;        | 'synth                           k^_  Reading N (Q_T4b′) — leaf
+;;        | 'collapse                        k^-  flatten branch, keep leaf key
+;;        | (cons 'collapse-rename k')       k^-k'                     (Q_T7)
+;;        | 'collapse-synth                  k^-_  flat provenance      (Q_T7)
+;; `^..` (Q_T8) never reaches the node — the parser desugars it at
+;; segmentation to the owner-ruled equivalence [P^ . L^P].
+;;
+;; These helpers are the ONE walk over the vocabulary: the parser's Q_T3
+;; OUTPUT-level duplicate check, typing-core's select-project and
+;; reduction's select-reduce all consume them, so output-key computation
+;; cannot drift between the check and the semantics (the infer/inferQ-twin
+;; lesson applied to check+meaning).
+
+(define (select-key-step? s) (and (pair? s) (eq? (car s) '@key)))
+(define (select-sub-step? s) (and (pair? s) (eq? (car s) '@sub)))
+;; D4.P3c: `(@ord N)` = an ordinal BRANCH head (written `{N …}` — re-derives,
+;; keyless sort). A bare number N in the steps is an ordinal STEP (`.N` —
+;; Q_U2 Reading A: descends, contributes NO output level, transparent to
+;; keys and synth names). The two are distinct on purpose: after a dissolve
+;; splice, `a^.0.name`'s continuation [0 name] must stay a STEP chain
+;; (output key :name), while `{0.name}` is a keyless component.
+(define (select-ord-step? s) (and (pair? s) (eq? (car s) '@ord)))
+
+;; D4.P4a — THE STEP-KIND TOTALITY DISPATCHER (owner ruling 2026-07-31:
+;; route ALL EIGHT dispatch sites through this one classifier).
+;;
+;; The step vocabulary is a CLOSED union, and it is about to grow: Q_U7 adds
+;; `(@bcast step)` at P4c. Before P4a, eight `cond` arms across THREE modules
+;; dispatched on step kind and SILENTLY absorbed an unknown one — two
+;; contributing no name/component, six silently projecting it as a NOMINAL
+;; KEY. A sixth kind reaching any of them is a silent wrong answer, which is
+;; the exact failure `pipeline.md` § "Exhaustive Walkers" was written for.
+;; This is that rule applied BEFORE the kind lands rather than after a miss.
+;;
+;; The kinds are pairwise disjoint by construction (a symbol and a number are
+;; not pairs; @key/@sub/@ord are pairs with distinct heads), so the classifier
+;; is total and order-independent. `match` cannot help here — steps are
+;; s-expressions, not transparent structs, so the generic-rebuild answer in
+;; pipeline.md does not apply and a named classifier is the available
+;; structural form.
+;;
+;; ADDING A KIND — the COMPLETE site list (13 sites, FIVE files). ⚠ The first
+;; cut of this recipe said "every `case (select-step-kind …)` in syntax.rkt,
+;; typing-core.rkt and reduction.rkt", which was written from the eight sites
+;; a name-grep found. That census was SYNTAX-directed and structurally could
+;; not see two whole classes: dispatchers that OPEN-CODE the shape tests
+;; (pretty-print), and dispatchers shaped as `and`/`if` rather than `cond`
+;; (the leaf classifiers, parser). Following the old recipe literally left
+;; FIVE sites wrong — two of them UPSTREAM of the guards, so they defeat the
+;; guard rather than sit beside it. Corrected at the P4a adversarial verify.
+;;
+;;   syntax.rkt       select-step-output-name · select-branch-top-keys
+;;                    select-branch-collapse  · select-branch-keyless?   [leaf]
+;;   typing-core.rkt  walk-to-leaf · select-branch-entries · select-below-field
+;;   reduction.rkt    walk-to-leaf · branch-entries · below-value
+;;   parser.rkt       dissolve-step? [leaf] · branch-problem
+;;   pretty-print.rkt step->string
+;;
+;; The four LEAF classifiers (marked [leaf]) matter most: they run BEFORE the
+;; branch walks and answer a silent #f if they do not recognize the leaf, so a
+;; missed kind is mis-SORTED (keyed vs keyless) with no raise downstream.
+;;
+;; All sites raise on a missed kind EXCEPT `pretty-print.rkt`'s, which renders
+;; a loud marker instead — `pp-expr` is on the error-message path, so raising
+;; there would turn a diagnostic into an internal crash, and an existing
+;; catch-all handler could swallow it, achieving LESS than a visible marker.
+;; That is a written scope decision, not an omission.
+(define (select-step-kind s)
+  (cond
+    [(symbol? s)          'key]         ;; plain kept descent
+    [(number? s)          'ord-step]    ;; `.N` — Q_U2 Reading A (no output level)
+    [(select-key-step? s) 'caret]       ;; (@key name cont)
+    [(select-sub-step? s) 'sub]         ;; (@sub . branches) — terminal sub-block
+    [(select-ord-step? s) 'ord-branch]  ;; (@ord N) — ordinal BRANCH head
+    [else
+     (error 'select-step-kind
+            (string-append
+             "unknown select step kind: ~s\n"
+             "  the step vocabulary is a CLOSED union: symbol | number"
+             " | (@key name cont) | (@sub . branches) | (@ord N)\n"
+             "  a new kind must be added to select-step-kind AND given an arm"
+             " in every `case` over it (D4.P4a)")
+            s)]))
+
+;; D4.P4a: the NON-RAISING variant, for the DISPLAY path ONLY
+;; (`pretty-print.rkt`'s `step->string`). `pp-expr` is on the error-message
+;; path, so it must never convert a real diagnostic into an internal crash —
+;; it renders a loud marker instead. Defined by DELEGATION rather than by
+;; re-listing the predicates: a second copy of the kind list is precisely the
+;; drift this phase exists to eliminate, so this cannot fall out of step with
+;; the classifier by construction.
+(define (select-step-kind/display s)
+  (with-handlers ([exn:fail? (lambda (_) 'unknown)])
+    (select-step-kind s)))
+
+;; The consumer-side else. Every `case (select-step-kind …)` ends here, so a
+;; kind added to the classifier but missed at a consumer raises AT that
+;; consumer, naming it — rather than falling into a nominal-key arm.
+(define (select-step-kind-unhandled who s)
+  (error who
+         (string-append
+          "no arm for select step kind '~a (step: ~s)\n"
+          "  the kind is known to select-step-kind but this walk has no arm"
+          " for it — add one (D4.P4a totality)")
+         (select-step-kind s) s))
+
+(define (select-step-name s) (if (select-key-step? s) (cadr s) s))
+(define (select-step-cont s) (and (select-key-step? s) (caddr s)))
+
+(define (select-cont-collapse? c)
+  (or (eq? c 'collapse) (eq? c 'collapse-synth)
+      (and (pair? c) (eq? (car c) 'collapse-rename))))
+
+;; the rename target carried by a (collapse-)rename cont, else #f
+(define (select-cont-rename c)
+  (and (pair? c) (memq (car c) '(rename collapse-rename)) (cdr c)))
+
+;; the branch's LEAF collapse continuation, or #f (the `^-` family flattens
+;; the WHOLE branch, so its walk is a pre-classified special case)
+(define (select-branch-collapse b)
+  (let ([s (car (reverse b))])
+    ;; D4.P4a: CLASSIFY the leaf rather than testing `select-key-step?`
+    ;; directly. This runs UPSTREAM of every guarded walk (syntax :932,
+    ;; typing-core :787, reduction :1689), so an unknown leaf kind answering
+    ;; a silent #f here defeats the guards downstream instead of reaching
+    ;; them — the branch is then mis-sorted with no raise anywhere.
+    ;; Identical for all five known kinds (only `caret` ever answered #t).
+    (and (eq? (select-step-kind s) 'caret)
+         (let ([c (select-step-cont s)])
+           (and (select-cont-collapse? c) c)))))
+
+;; A step's contribution to the surviving OUTPUT-name path: kept → its name;
+;; renamed → the new label; dissolved → none ("dropped means dropped");
+;; synth/collapse leaves → their SOURCE name (they have no other). Ordinal
+;; steps and `@ord` heads contribute no name (P3c — contingent keys have no
+;; identity, Q_U2).
+(define (select-step-output-name s)
+  ;; D4.P4a site 1: was `[else #f]` — a sixth kind silently contributed NO
+  ;; name, so every synth name (`^_`, `^-_`) computed from a branch carrying
+  ;; one would be silently short.
+  (case (select-step-kind s)
+    [(key) s]
+    [(ord-step) #f]
+    [(sub) #f]
+    [(ord-branch) #f]
+    [(caret)
+     (let ([c (select-step-cont s)])
+       (cond
+         [(eq? c 'dissolve) #f]
+         [(select-cont-rename c) => values]
+         [else (cadr s)]))]
+    [else (select-step-kind-unhandled 'select-step-output-name s)]))
+
+;; D4.P3c: the `^`-terminated (keyless) branch pre-classifier — a branch
+;; whose LAST step is a bare dissolve contributes the leaf VALUE as a
+;; keyless component (Q_T4b: no keys ⇒ no ancestry question; the whole
+;; branch flattens like the collapse family, minus the label).
+(define (select-branch-keyless? b)
+  (let ([s (car (reverse b))])
+    ;; D4.P4a: classify the leaf — same upstream-of-the-guards argument as
+    ;; select-branch-collapse. A silent #f here mis-sorts the branch as KEYED,
+    ;; which then feeds the parser's L4 sort check and duplicate-key check.
+    (and (eq? (select-step-kind s) 'caret)
+         (eq? (select-step-cont s) 'dissolve))))
+
+;; Reading N (Q_T4b′) + `^-_` flat provenance (Q_T7): join the surviving
+;; output names with `-`. Scope = the branch of the block the leaf sits in.
+(define (select-synth-name steps)
+  (string->symbol
+   (string-join
+    (map symbol->string (filter values (map select-step-output-name steps)))
+    "-")))
+
+;; The output COMPONENTS a branch contributes AT ITS BLOCK'S LEVEL — a
+;; dissolved head splices its continuation's components (Q_T3:
+;; "level-local" means OUTPUT level, after splicing). Each component is a
+;; key SYMBOL (keyed sort) or **#f** (keyless sort — D4.P3c: `^`-terminated
+;; branches, `@ord` heads, and pure ordinal-step chains). Fully static; the
+;; parser's duplicate check (over the keyed subset) AND the L4
+;; sort-homogeneity check both run on these, strictly BEFORE any
+;; make-record could last-win.
+(define (select-branch-top-keys b)
+  (let ([col (select-branch-collapse b)])
+    (cond
+      [col
+       (list (cond
+               [(select-cont-rename col)]
+               [(eq? col 'collapse-synth) (select-synth-name b)]
+               [else (select-step-name (car (reverse b)))]))]
+      [(select-branch-keyless? b) (list #f)]
+      [else
+       ;; D4.P4a site 2: was `[else '()]` — a sixth kind silently contributed
+       ;; NO component, so the parser's L4 sort check and its OUTPUT-key
+       ;; duplicate check would both simply not see it.
+       (let ([s (car b)] [rest (cdr b)])
+         (case (select-step-kind s)
+           [(key) (list s)]
+           [(ord-branch) (list #f)]
+           ;; a bare-number STEP head arises only from dissolve-splice
+           ;; continuations — transparent (Q_U2: no output level); an
+           ;; ordinal-terminal chain has no surviving key → keyless.
+           [(ord-step)
+            (if (null? rest) (list #f) (select-branch-top-keys rest))]
+           [(sub) (append-map select-branch-top-keys (cdr s))]
+           [(caret)
+            (let ([c (select-step-cont s)])
+              (cond
+                [(eq? c 'dissolve)
+                 (cond
+                   [(null? rest) (list #f)] ;; keyless leaf (pre-classified above; defensive)
+                   [(and (select-sub-step? (car rest)) (null? (cdr rest)))
+                    (append-map select-branch-top-keys (cdr (car rest)))]
+                   [else (select-branch-top-keys rest)])]
+                [(select-cont-rename c) => list]
+                [(eq? c 'synth) (list (select-synth-name b))]
+                [else (list (cadr s))]))]
+           [else (select-step-kind-unhandled 'select-branch-top-keys s)]))])))
+
 ;; SMART CONSTRUCTOR (D6 §4.1): the ONLY row producer. Dedups labels right-priority
 ;; (later entries win — Clojure/D10 assoc overwrite) and re-canonicalizes the field order
 ;; (keyword labels by symbol<?, nat labels by <), so structural `equal?` is a valid identity.
@@ -809,8 +1081,16 @@
 
 ;; Operations
 (struct expr-map-assoc (m k v) #:transparent)                 ; assoc : Map K V → K → V → Map K V
-(struct expr-get (coll key) #:transparent)                     ; get : Collection → Key → Option Value (type-directed)
-(struct expr-map-get (m k) #:transparent)                     ; get : Map K V → K → V (error if missing)
+;; CIU T6 P2.b slice 4: both carry a STRICTNESS SLOT (the carried-alpha
+;; pattern, expr-num-lit's precedent): `strict` is #f (permissive — raw
+;; constructions, the get-in/update-in lowering family = the PS12/M3 dynamic
+;; tier), an unsolved expr-meta (minted at elaboration on the USER's direct
+;; projection), or (expr-true) (typing solved it: the subject is (Map K V) —
+;; a runtime miss is a LOUD panic). zonk materializes the meta; reduction reads
+;; only the materialized value. The two nodes delegate to each other at
+;; reduction, so BOTH carry the slot (a one-node slot is dropped at the crossing).
+(struct expr-get (coll key strict) #:transparent)              ; get : Collection → Key → Value (type-directed; ASSERTIVE tier — error if missing/OOB)
+(struct expr-map-get (m k strict) #:transparent)              ; get : Map K V → K → V (assertive: LOUD miss when strict)
 (struct expr-nil-safe-get (m k) #:transparent)                ; nil-safe-get : (Map K V | Nil) → K → (V | Nil)
 (struct expr-map-dissoc (m k) #:transparent)                  ; dissoc : Map K V → K → Map K V
 (struct expr-map-size (m) #:transparent)                      ; size : Map K V → Nat
@@ -821,7 +1101,9 @@
 ;; Path algebra operations
 (struct expr-get-in (target paths) #:transparent)             ; get-in : M → paths → V
 (struct expr-update-in (target paths fn) #:transparent)       ; update-in : M → paths → (V → V) → M
-(struct expr-broadcast-get (target fields) #:transparent)     ; broadcast-get : [List M] → keywords → [List V]
+;; expr-broadcast-get: RETIRED at CIU T6 D4.P1a (ruling Q_L3) — it was
+;; permissive (fabricated <error>/none rows at 0 errors) and its surface
+;; `.*name` is superseded by `:field` broadcast (Path Selection P4).
 
 ;; First-class path values
 (struct expr-path (branches) #:transparent)                   ; path literal: branches = list of (listof expr-keyword|expr-symbol)
@@ -1342,8 +1624,12 @@
       (expr-String? x) (expr-string? x)
       (expr-Record? x)
       (expr-validate? x)
+      (expr-select? x)
       (expr-Map? x) (expr-champ? x) (expr-map-empty? x)
-      (expr-map-assoc? x) (expr-map-get? x) (expr-nil-safe-get? x) (expr-map-dissoc? x)
+      ;; CIU T6 P2.b slice 4: expr-get? was ABSENT here (pipeline.md core item
+      ;; 1 unmet — pre-existing, found by the slice-2 audit C25). Fixed.
+      (expr-map-assoc? x) (expr-map-get? x) (expr-get? x)
+      (expr-nil-safe-get? x) (expr-map-dissoc? x)
       (expr-map-size? x) (expr-map-has-key? x)
       (expr-map-keys? x) (expr-map-vals? x)
       (expr-Set? x) (expr-hset? x) (expr-set-empty? x)

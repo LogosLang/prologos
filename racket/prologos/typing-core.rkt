@@ -35,10 +35,17 @@
          "subtype-predicate.rkt"  ;; SRE Track 1: extracted flat subtype predicate
          "sign-refinement.rkt"    ;; Numerics N5c: Sign transfer + name<->Sign/base tables
          (only-in "champ.rkt" champ-entries)  ;; Rel T1 B3.2: display-time row observation (leaf data module, cycle-free)
+         (only-in "rrb.rkt" rrb-to-list)      ;; SolveCarrier: same, for the PVec-carried solve result (leaf data module)
          "relations.rkt"          ;; Rel T1 Aspect B (B1): relation store → schema-name for typed solution rows (cycle-free — relations has no typing/reduction back-edge)
 )
 
 (provide infer check is-type infer-level
+         ;; CIU T6 D4.P3a: the select walk + failure struct (consumed by the
+         ;; typing-errors select hint — one walk, two consumers, no drift)
+         select-project (struct-out select-fail)
+         ;; QTT P2 (2026-07-30): the reduce-arm binder derivation, shared with
+         ;; qtt.rkt's expr-reduce arm — one derivation, two consumers, no drift
+         reduce-arm-ctx reduce-scrutinee-decompose
          ;; Rel T1 B3.2: display-time coinductive refinement (driver echo seam only)
          refine-solve-row-type-for-display
          (struct-out no-level) (struct-out just-level)
@@ -532,6 +539,20 @@
               #:when (eq? (schema-field-keyword f) keyword-sym))
     f))
 
+;; CIU T6 P2.b slice 4: solve a projection node's STRICTNESS SLOT to ASSERTIVE.
+;; Called from exactly the (expr-Map kt vt) subject legs — the one class whose
+;; type carries NO presence information, so the user's direct projection is an
+;; ASSERTION and a runtime miss must be loud. Everything else leaves the slot
+;; unsolved (⇒ permissive at reduction): closed rows are already statically
+;; loud, dyn rows keep D19, unions serve mixed-type degradation deliberately,
+;; schema/selection subjects are statically gated. Solving rides `unify` — the
+;; standard meta path (solve-meta! coupling included, per pipeline.md § Known
+;; Coupling).
+(define (solve-strict-assert! ctx a)
+  (when (expr-meta? a)
+    (unify ctx a (expr-true)))
+  (void))
+
 ;; CIU T6 F1 (s2): project a field type out of a structural-row type.
 ;;   literal key (keyword/nat) present → the field's type; absent → error (closed-row miss);
 ;;   dynamic key → union of ALL field types (B4-gated on the key domain; empty row → error).
@@ -599,6 +620,288 @@
 ;; same as the historical bare strings — behavior-preserving).
 (define (dyn-row-source tag)
   (meta-source-info #f tag (symbol->string tag) #f #f))
+
+;; ============================================================
+;; CIU T6 D4.P3a — the select-block projection walk (Q_T2 Horn D, LENIENT)
+;; ============================================================
+;; ONE walk, TWO consumers: the `expr-select` infer arm (needs the type) and
+;; typing-errors' select hint (needs the failure) — so the arm and its
+;; diagnostic cannot drift (the infer/inferQ-twin lesson applied to
+;; arm+diagnostic). Returns (values row-or-#f failure-or-#f).
+;;
+;; The rule (owner ruling Q_T2): a block may select a field iff the subject's
+;; type SOURCES that field's presence as 'present. LENIENT: a dyn row's
+;; LISTED-'present fields are selectable (their presence IS sourced); only
+;; 'unknown-marked and unlisted fields refuse. (Map K V) subjects refuse —
+;; no per-field row exists. The result row is CLOSED, all-'present, honestly
+;; (PS15: never ask the presence-blind seal to vouch for fabrication).
+;; NOTE this deliberately does NOT delegate to record-project: its dyn-miss
+;; and 'unknown legs mint fresh metas (D19 exploration — right for `.field`,
+;; WRONG for a block, which is assertive-tier construction).
+;;
+;; Branches arrive duplicate-free and well-formed BY CONSTRUCTION (the parser
+;; seat rejects duplicates before a surf-select is ever minted — the strict
+;; check runs before any make-record can last-win).
+;;
+;; failure kinds: 'subject-map · 'subject-tuple · 'subject-other ·
+;; 'miss-closed · 'miss-dyn (unlisted on dyn) · 'unknown-presence.
+;; `path` = the label trail to the failure (for branch-aware messages).
+(struct select-fail (kind path label row) #:transparent)
+
+;; Subject-kind dispatch shared by every descent level. Returns
+;; (values keyword-row-or-#f fail-or-#f). tm arrives whnf'd.
+;; D4.P3a adversarial verify (TWO skeptics convergent): a SCHEMA-typed
+;; subject projects THROUGH the seal — schema fields are all-'present by
+;; construction (schema->row), the strongest source Horn D recognizes.
+;; SELECTION-typed subjects stay refused at this slice — a selection is a
+;; capability-restricted VIEW (F1b.5-s4 :requires), and projecting through
+;; one without the read-capability check would bypass it (DEFERRED 20).
+(define (select-row-of ctx tm path)
+  (cond
+    [(and (expr-fvar? tm) (lookup-schema-by-name (expr-fvar-name tm)))
+     => (lambda (entry) (values (schema->row entry) #f))]
+    [(expr-Map? tm) (values #f (select-fail 'subject-map path #f tm))]
+    [(and (expr-Record? tm) (eq? (expr-Record-key-domain tm) 'nat))
+     (values #f (select-fail 'subject-tuple path #f tm))]
+    [(not (expr-Record? tm)) (values #f (select-fail 'subject-other path #f tm))]
+    [else (values tm #f)]))
+
+;; Horn D per level: the field's presence must be SOURCED 'present.
+(define (select-project-field ctx row label path)
+  (let ([fld (record-lookup-field row label)])
+    (cond
+      [(and fld (eq? (record-field-presence fld) 'present))
+       (values (record-field-type fld) #f)]
+      [fld  ;; listed, but presence not sourced 'present ('unknown; reserved)
+       (values #f (select-fail 'unknown-presence (append path (list label)) label row))]
+      [(eq? (expr-Record-tail row) 'dyn)
+       (values #f (select-fail 'miss-dyn (append path (list label)) label row))]
+      [else
+       (values #f (select-fail 'miss-closed (append path (list label)) label row))])))
+
+;; D4.P3c: the ordinal-subject dispatch — the nat twin of select-row-of.
+;; An ordinal step/branch needs an INDEXABLE subject: PVec (uniform elem)
+;; or a closed nat row (exact per-position; a literal OOB is a loud static
+;; error — the P2 assertive tier). Everything else refuses.
+;; fill a subject-kind fail's label with the step that was about to
+;; project (rank 3: `.-1` was invisible in the message)
+(define (select-fail-fill-label f name)
+  (if (select-fail-label f)
+      f
+      (select-fail (select-fail-kind f) (select-fail-path f) name
+                   (select-fail-row f))))
+
+(define (select-index-of ctx tm n path)
+  (cond
+    [(expr-PVec? tm) (values (expr-PVec-elem-type tm) #f)]
+    [(closed-nat-row? tm)
+     (let ([fld (record-lookup-field tm n)])
+       (if fld
+           (values (record-field-type fld) #f)
+           (values #f (select-fail 'ordinal-oob (append path (list n)) n tm))))]
+    [else (values #f (select-fail 'not-indexable (append path (list n)) n tm))]))
+
+;; select-project — the node's typing walk (Q_T1's one walk, two consumers).
+;; D4.P3c: a LEVEL now assembles either sort: all-keyed components → a
+;; closed keyword row; all-keyless (#f keys) → the nat-row tuple mint
+;; (indices 0.. in written order — ruling 2a: selection routes around the
+;; collapsing `@[…]` literal arm, so 1-tuples and homogeneous n mint
+;; honestly). The parser's shared-walk L4 check guaranteed homogeneity.
+(define (select-project ctx tm branches [path '()])
+  (let-values ([(comps cf) (select-level-components ctx tm branches path)])
+    (if cf
+        (values #f cf)
+        (values (select-assemble-row comps) #f))))
+
+(define (select-assemble-row comps)
+  (if (and (pair? comps) (not (car (car comps))))
+      (make-record 'nat
+                   (for/list ([c (in-list comps)] [i (in-naturals)])
+                     (cons i (cdr c)))
+                   'closed)
+      (make-record 'keyword comps 'closed)))
+
+;; One output LEVEL: every branch contributes its components (a dissolved
+;; head splices >1 — Q_T3's output-level frame). component ::=
+;; (cons key-symbol record-field) keyed | (cons #f record-field) keyless.
+;; Duplicates/mixing were excluded at the parser's shared-walk checks, so
+;; plain append assembles safely.
+(define (select-level-components ctx tm branches path)
+  (let loop ([bs branches] [comps '()])
+    (if (null? bs)
+        (values (reverse comps) #f)
+        (let-values ([(es bf) (select-branch-entries ctx tm (car bs) path '())])
+          (if bf
+              (values #f bf)
+              (loop (cdr bs) (append (reverse es) comps)))))))
+
+;; D4.P3b/P3c — one branch's components at the CURRENT level, as
+;; (values (listof (key-or-#f . record-field)) fail-or-#f).
+;; PRE-CLASSIFIED whole-branch shapes (both flatten to the LEAF, walking
+;; every level's presence check on the way down):
+;;   · the `^-` collapse family (Q_T7) — one flat KEYED entry
+;;   · the `^`-terminated keyless branch (P3c) — one KEYLESS entry
+;; Otherwise the structural walk: kept/renamed heads contribute ONE keyed
+;; entry (nesting below); a dissolved head SPLICES its continuation's
+;; components (Q_T4b); an `@ord` head is a keyless component over the
+;; indexed element (P3c); bare-number STEPS descend transparently
+;; (Q_U2 Reading A — no output level).
+;;
+;; Each branch does its OWN subject dispatch (keyword heads need row-of;
+;; ordinal heads need index-of) — tm arrives whnf'd and undispatched.
+;;
+;; `seen` = the steps this BRANCH has already consumed above the current
+;; recursion — `^_`'s Reading-N label synthesizes over (seen + leaf) via
+;; the SHARED select-synth-name walk. Scope is the branch of the block the
+;; leaf sits in (`seen` resets at `.{…}` — Q_U4: subject-root preferred,
+;; flip deferred; DEFERRED 23).
+(define (select-branch-entries ctx tm b path seen)
+  (define (walk-to-leaf k)  ;; shared by collapse + keyless: k gets leaf ft
+    ;; P3c verify (rank 1): the `(@ord N)` head arm — an ordinal-headed
+    ;; branch with a keyless/collapse LEAF pre-classifies into THIS walk,
+    ;; and the number-vs-keyed dispatch missed the pair (the label leaked
+    ;; into select-project-field → lying subject diagnostics). The twin arm
+    ;; in reduction's walk-to-leaf lands ATOMICALLY with this one — fixing
+    ;; typing alone would convert the loud lie into a runtime champ-of
+    ;; panic on vectors (the Exhaustive-Walkers twin-drift class).
+    (let walk ([steps b] [tm tm] [path path])
+      (let* ([s (car steps)]
+             ;; path labels: the ordinal ITSELF for @ord steps (the raw pair
+             ;; would leak into branch-str)
+             [name (if (select-ord-step? s) (cadr s) (select-step-name s))])
+        (let-values ([(ft ff)
+                      ;; D4.P4a site 3: was `[else …]` — a sixth kind was
+                      ;; silently projected as a NOMINAL KEY here.
+                      (case (select-step-kind s)
+                        [(ord-step) (select-index-of ctx tm s path)]
+                        [(ord-branch)
+                         (select-index-of ctx tm (cadr s) path)]
+                        [(key caret sub)
+                         (let-values ([(row rf) (select-row-of ctx tm path)])
+                           (if rf (values #f (select-fail-fill-label rf name))
+                               (select-project-field ctx row name path)))]
+                        [else (select-step-kind-unhandled 'select-walk-to-leaf s)])])
+          (cond
+            [ff (values #f ff)]
+            [(null? (cdr steps)) (k ft)]
+            [else (walk (cdr steps) (whnf ft) (append path (list name)))])))))
+  (let ([col (select-branch-collapse b)])
+    (cond
+      [col
+       (walk-to-leaf
+        (lambda (ft)
+          (let ([label (cond
+                         [(select-cont-rename col)]
+                         [(eq? col 'collapse-synth)
+                          (select-synth-name (append seen b))]
+                         [else (select-step-name (car (reverse b)))])])
+            (values (list (cons label (record-field ft 'present))) #f))))]
+      [(select-branch-keyless? b)
+       ;; P3c: the keyless component — the leaf VALUE, no key, no ancestry
+       (walk-to-leaf
+        (lambda (ft) (values (list (cons #f (record-field ft 'present))) #f)))]
+      [(select-ord-step? (car b))
+       ;; P3c: an ordinal BRANCH — keyless component over the element
+       (let ([n (cadr (car b))] [rest (cdr b)])
+         (let-values ([(elem ef) (select-index-of ctx tm n path)])
+           (cond
+             [ef (values #f ef)]
+             [(null? rest)
+              (values (list (cons #f (record-field elem 'present))) #f)]
+             [else
+              (let-values ([(ft bf) (select-below-field ctx (whnf elem) rest
+                                                        (append path (list n)) '())])
+                (if bf
+                    (values #f bf)
+                    (values (list (cons #f (record-field ft 'present))) #f)))])))]
+      [(number? (car b))
+       ;; a bare-number STEP chain (dissolve-splice continuation): descend
+       ;; transparently; an ordinal-terminal chain is a keyless component.
+       (let ([n (car b)] [rest (cdr b)])
+         (let-values ([(elem ef) (select-index-of ctx tm n path)])
+           (cond
+             [ef (values #f ef)]
+             [(null? rest)
+              (values (list (cons #f (record-field elem 'present))) #f)]
+             [else (select-branch-entries ctx (whnf elem) rest
+                                          (append path (list n)) seen)])))]
+      ;; D4.P4a site 4: was a bare `[else …]` — a sixth kind was silently
+      ;; projected as a NOMINAL KEY. The guard routes through the classifier
+      ;; (this arm's body is too large for a `case` to stay reviewable);
+      ;; `sub` joins `key`/`caret` because that is exactly what the old
+      ;; `else` caught, so the refactor is behaviour-preserving.
+      [(memq (select-step-kind (car b)) '(key caret sub))
+       (let* ([s (car b)]
+              [rest (cdr b)]
+              [name (select-step-name s)]
+              [cont (select-step-cont s)])
+         (let*-values ([(row rf) (select-row-of ctx tm path)]
+                       [(ft ff) (if rf (values #f (select-fail-fill-label rf name))
+                                    (select-project-field ctx row name path))])
+           (cond
+             [ff (values #f ff)]
+             [(null? rest)
+              ;; LEAF: kept (plain) · renamed in place · synth (Reading N).
+              (let ([label (cond
+                             [(and cont (select-cont-rename cont))]
+                             [(eq? cont 'synth)
+                              (select-synth-name (append seen (list s)))]
+                             [else name])])
+                (values (list (cons label (record-field ft 'present))) #f))]
+             [(eq? cont 'dissolve)
+              ;; splice: the continuation's components land at THIS level
+              (select-below-components ctx (whnf ft) rest
+                                       (append path (list name))
+                                       (append seen (list s)))]
+             [else
+              (let-values ([(bt bf) (select-below-field ctx (whnf ft) rest
+                                                        (append path (list name))
+                                                        (append seen (list s)))])
+                (if bf
+                    (values #f bf)
+                    (let ([label (or (and cont (select-cont-rename cont)) name)])
+                      (values (list (cons label (record-field bt 'present)))
+                              #f))))])))]
+      [else (select-step-kind-unhandled 'select-branch-entries (car b))])))
+
+;; The COMPONENTS a dissolved head splices to its level: a terminal
+;; `(@sub …)` contributes that block's level components (fresh branches —
+;; `seen` resets); otherwise the remaining steps continue as one branch.
+(define (select-below-components ctx ft steps path seen)
+  (if (and (select-sub-step? (car steps)) (null? (cdr steps)))
+      (select-level-components ctx ft (cdr (car steps)) path)
+      (select-branch-entries ctx ft steps path seen)))
+
+;; The FIELD TYPE below a kept/renamed head (projection nesting — traversed
+;; nominal keys are kept, spec §1.2; ordinal steps contribute NO level,
+;; Q_U2). A terminal `(@sub …)` assembles that block's level honestly —
+;; including the keyless 1-tuple (`admins.{0}` ≠ `admins.0`).
+(define (select-below-field ctx ft steps path seen)
+  (cond
+    [(and (select-sub-step? (car steps)) (null? (cdr steps)))
+     (let-values ([(comps cf) (select-level-components ctx ft (cdr (car steps)) path)])
+       (if cf (values #f cf) (values (select-assemble-row comps) #f)))]
+    [(number? (car steps))
+     ;; ordinal STEP: descend, no output level (Reading A)
+     (let-values ([(elem ef) (select-index-of ctx ft (car steps) path)])
+       (cond
+         [ef (values #f ef)]
+         [(null? (cdr steps)) (values elem #f)]
+         [else (select-below-field ctx (whnf elem) (cdr steps)
+                                   (append path (list (car steps))) seen)]))]
+    ;; D4.P4a site 5: was a bare `[else …]`. The guard must list EXACTLY what
+    ;; that else caught, or the refactor is not behaviour-preserving. The arms
+    ;; above it take TERMINAL `sub` and `ord-step`, so the else caught
+    ;; `key`, `caret`, `ord-branch`, and NON-terminal `sub` — `ord-branch`
+    ;; included. (Self-review at the P4a gate caught it omitted here and at
+    ;; its twin, reduction.rkt's `below-value`: both would have RAISED where
+    ;; they used to delegate to the branch walk. The twin-drift class again —
+    ;; the two "below a kept head" walks are the pair that must move together.)
+    [(memq (select-step-kind (car steps)) '(key caret sub ord-branch))
+     ;; a keyed chain: its components assemble into the nested row
+     (let-values ([(comps cf) (select-branch-entries ctx ft steps path seen)])
+       (if cf (values #f cf) (values (select-assemble-row comps) #f)))]
+    [else (select-step-kind-unhandled 'select-below-field (car steps))]))
 
 (define (record-value-bound ctx rec [src (dyn-row-source 'dyn-row-values)])
   (cond
@@ -1754,12 +2057,6 @@
      ;; Result type is a fresh meta (dynamic paths can't be statically resolved)
      (fresh-meta ctx-empty (expr-hole)
        (meta-source-info #f 'get-in-result "result type of dynamic get-in" #f '()))]
-    [(expr-broadcast-get target fields)
-     (define _tt (infer ctx target))
-     ;; fields are keyword literals — no sub-expressions to infer
-     ;; Result type: [List V] where V is resolved at reduction time
-     (fresh-meta ctx-empty (expr-hole)
-       (meta-source-info #f 'broadcast-get-result "result type of broadcast-get" #f '()))]
     [(expr-update-in target paths fn)
      (define tt (infer ctx target))
      (define _pt (infer ctx paths))
@@ -1850,7 +2147,7 @@
     ;; get: type-directed index/lookup
     ;; List A → Nat → A, PVec A → Nat → A, Map K V → K → V
     ;; Selection/Schema → delegate to expr-map-get
-    [(expr-get coll key)
+    [(expr-get coll key sa)
      (let ([tc (whnf (infer ctx coll))])
        (match tc
          ;; PVec A → Nat/Int → A
@@ -1858,17 +2155,18 @@
           (if (or (check ctx key (expr-Nat)) (check ctx key (expr-Int))) a (expr-error))]
          ;; CIU T6 F1 (s2): structural-row projection (records + tuples)
          [(? expr-Record? rec) (record-project ctx rec key)]
-         ;; Map K V → K → V
+         ;; Map K V → K → V — P2.b slice 4: the ASSERTIVE solve (round 8)
          [(expr-Map kt vt)
+          (solve-strict-assert! ctx sa)
           (if (check ctx key kt) vt (expr-error))]
-         ;; Selection type → delegate to map-get typing
+         ;; Selection type → delegate to map-get typing (slot rides along)
          [(expr-fvar name)
           #:when (lookup-selection-by-name name)
-          (infer ctx (expr-map-get coll key))]
+          (infer ctx (expr-map-get coll key sa))]
          ;; Schema type → delegate to map-get typing
          [(expr-fvar name)
           #:when (lookup-schema-by-name name)
-          (infer ctx (expr-map-get coll key))]
+          (infer ctx (expr-map-get coll key sa))]
          ;; List A → Nat/Int → A
          [(expr-app f a)
           #:when (equal? f (list-type-fvar))
@@ -1882,6 +2180,17 @@
     ;; / union-of-map-ish / unsolved-meta gradual); non-maps reject statically.
     ;; The PLAN is bake-trusted (elaborated + witness-tagged at elaboration —
     ;; the expr-num-lit carried-alpha precedent); the rule never re-checks it.
+    ;; CIU T6 D4.P3a (Q_T1 Route A): the select block — per-branch copattern
+    ;; demand under Q_T2 Horn-D LENIENT presence; result = a CLOSED keyword
+    ;; row, all-'present. The guided message is reconstructed by
+    ;; typing-errors' select hint from the SAME select-project walk.
+    [(expr-select subject (expr-path branches))
+     (let ([tm (whnf (infer ctx subject))])
+       (if (expr-error? tm)
+           (expr-error)
+           (let-values ([(row fail) (select-project ctx tm branches)])
+             (or row (expr-error)))))]
+
     [(expr-validate sname _closed? _plan subject names)
      (let ([tm (whnf (infer ctx subject))])
        (cond
@@ -1893,12 +2202,15 @@
                     (expr-Map (expr-Keyword) (expr-fvar (cadr names))))]
          [else (expr-error)]))]
 
-    [(expr-map-get m k)
+    [(expr-map-get m k a)
      (let ([tm (whnf (infer ctx m))])
        (match tm
          ;; CIU T6 F1 (s2): structural-row projection — {:a 1}.a : Int (THE goal)
          [(? expr-Record? rec) (record-project ctx rec k)]
+         ;; P2.b slice 4: the ASSERTIVE solve — (Map K V) carries no presence
+         ;; information, so the direct projection asserts; the miss is loud.
          [(expr-Map kt vt)
+          (solve-strict-assert! ctx a)
           (if (check ctx k kt) vt (expr-error))]
          ;; Selection type: gate field access to selected fields only
          [(expr-fvar name)
@@ -2953,19 +3265,19 @@
     ;; (else a loose hole — B2 refines the un-schema'd facts case). solve-one is the
     ;; D25.4-unwrapped BARE row; explain rows carry a 'dyn tail for the conditional
     ;; reserved metadata keys (:certainty/:cycle/:provenance).
-    [(expr-solve g) (infer ctx g) (solve-row-type g 'list)]
+    [(expr-solve g) (infer ctx g) (solve-row-type g 'pvec)]
     [(expr-solve-with sv ov g)
      (when sv (infer ctx sv))
      (when ov (infer ctx ov))
      (infer ctx g)
-     (solve-row-type g 'list)]
+     (solve-row-type g 'pvec)]
     [(expr-solve-one g) (infer ctx g) (solve-row-type g 'bare)]
-    [(expr-explain g) (infer ctx g) (solve-row-type g 'list 'dyn)]
+    [(expr-explain g) (infer ctx g) (solve-row-type g 'pvec 'dyn)]
     [(expr-explain-with sv ov g)
      (when sv (infer ctx sv))
      (when ov (infer ctx ov))
      (infer ctx g)
-     (solve-row-type g 'list 'dyn)]
+     (solve-row-type g 'pvec 'dyn)]
 
     ;; Narrow — functional-logic narrowing: type-unsafe (hole) like solve
     [(expr-narrow func args target vars)
@@ -3670,8 +3982,12 @@
 ;; Cost posture: the refinable? gate runs first, so a fully-concrete row type (the
 ;; common case — `{:x Int :z Int}`) costs one shallow field scan and NO row walk.
 
-;; A solve result's displayed type is either `[List <row>]` (solve) or a bare
+;; A solve result's displayed type is either `[PVec <row>]` (solve) or a bare
 ;; `<row>` (solve-one). Returns (values rebuild-fn record) or (values #f #f).
+;;
+;; SolveCarrier: the expr-PVec arm is the carrier's; the expr-app arm is retained
+;; because solve-one's row can still arrive under an application spine from other
+;; producers, and because narrowing (R3) stays List-shaped.
 ;;
 ;; The CLOSED-tail requirement is what scopes this to solution rows: per D-B3.6 a
 ;; solve row is always closed with Κ′ keys, whereas an ordinary record value can
@@ -3684,6 +4000,8 @@
 (define (display-row-type-parts ty)
   (define (row? r) (and (expr-Record? r) (eq? (expr-Record-tail r) 'closed)))
   (cond
+    [(and (expr-PVec? ty) (row? (expr-PVec-elem-type ty)))
+     (values (lambda (rec*) (expr-PVec rec*)) (expr-PVec-elem-type ty))]
     [(and (expr-app? ty) (row? (expr-app-arg ty)))
      (values (lambda (rec*) (expr-app (expr-app-func ty) rec*)) (expr-app-arg ty))]
     [(row? ty) (values (lambda (rec*) rec*) ty)]
@@ -3698,8 +4016,10 @@
 (define (refinable-field-type? t)
   (or (expr-hole? t) (expr-union? t)))
 
-;; The runtime rows behind a displayed value: a cons spine of champs (solve), a
-;; bare champ (solve-one), or nothing observable (`nil`, `none`, a stuck term).
+;; The runtime rows behind a displayed value: an rrb of champs (solve, since the
+;; SolveCarrier flip), a cons spine of champs (narrowing, and pre-flip results
+;; still reachable through List-typed bindings), a bare champ (solve-one), or
+;; nothing observable (`@[]`, `nil`, `none`, a stuck term).
 (define (display-result-rows val)
   (define (cons-head? f)
     (and (expr-fvar? f)
@@ -3708,6 +4028,10 @@
   (let loop ([v val] [acc '()] [fuel 10000])
     (cond
       [(zero? fuel) (reverse acc)]                 ;; cyclic/absurd term — observe what we have
+      ;; SolveCarrier: the PVec carrier. Non-champ members are SKIPPED rather than
+      ;; aborting the walk — mirroring the cons arm below, whose filter is the same.
+      [(expr-rrb? v)
+       (append (reverse acc) (filter expr-champ? (rrb-to-list (expr-rrb-racket-rrb v))))]
       [(expr-champ? v) (reverse (cons v acc))]     ;; bare row (solve-one)
       [(and (expr-app? v)
             (expr-app? (expr-app-func v))
@@ -4042,9 +4366,18 @@
 
 ;; solve-row-type — the static result type for a solve-family node. Pure structural
 ;; derivation from the goal (does NOT infer the goal — the caller does that for
-;; effect/usage). wrapper ∈ 'list (solve/solve-with/explain*) | 'bare (solve-one,
+;; effect/usage). wrapper ∈ 'pvec (solve/solve-with/explain*) | 'bare (solve-one,
 ;; whose runtime is the D25.4-unwrapped champ). Returns the wrapped typed row for a
 ;; typeable goal-app or anonymous rel (B3.1), else expr-hole (loose fallback).
+;;
+;; SolveCarrier spin-out (2026-07-31, discharging CIU T6 Q_U9): the container was
+;; `[List row]` until this commit. `List` is a user-space inductive (`data List
+;; {A} | nil | cons`) with no native carrier struct, so path selection's `:`
+;; broadcast REFUSES over it — and typed rows exist precisely so relational output
+;; composes with the records surface. PVec is the native ordered, duplicate-bearing
+;; carrier, which is exactly the BAG semantics POL.1 ruled for solution sets.
+;; The 'list wrapper value is GONE, not retained: after the flip it had zero
+;; callers, and a dead alternative path is not a safety net.
 (define (solve-row-type g wrapper [tail 'closed])
   (define g* (whnf g))
   (define row (cond
@@ -4054,7 +4387,7 @@
   (cond
     [(not row) (expr-hole)]
     [(eq? wrapper 'bare) row]
-    [else (expr-app (list-type-fvar) row)]))
+    [else (expr-PVec row)]))
 
 ;; F1b.7e: project a schema-fvar type to its row (else identity), so the
 ;; structural map-op infer arms (map-keys/vals/assoc/dissoc/has-key?/nil-safe-get/
@@ -4343,30 +4676,82 @@
     [(unit) (expr-Unit)]
     [else #f]))
 
+;; The ctx a single reduce ARM's body must be checked in: the ambient ctx
+;; extended with that arm's field binders, each carrying the multiplicity the
+;; constructor's own Pi chain declares. Returns the extended ctx, or #f when the
+;; constructor's type is unknown or cannot be instantiated at `type-args`.
+;;
+;; EXPORTED for the QTT twin. qtt.rkt's `expr-reduce` arm needs exactly this
+;; derivation to know what multiplicities the pattern-bound fields carry, and
+;; re-deriving it there would be the twin-drift failure `pipeline.md`
+;; § "infer / inferQ Are Twins" documents. One derivation, two consumers.
+;; (bc = 0 returns `ctx` unchanged, so callers need no special case.)
+;; Is `ctor-name` actually a constructor OF the scrutinee's type?
+;;
+;; 2026-07-31: the bare-name `global-env-lookup-type` fallback below finds ANY
+;; constructor in scope, with no check that it belongs to the type being matched.
+;; So an arm naming a FOREIGN type's constructor was accepted:
+;;
+;;   data Box3 | mk-b3 Nat
+;;   spec f Bool -> Nat
+;;   defn f [b] match b (true -> 1N) (mk-b3 x -> 2N)   ;; defined, 0 errors
+;;
+;; A `Bool` is never a `Box3`, so that arm can never match — silent dead code,
+;; and no diagnostic. (Its body IS type-checked, unlike the unreachable-arm case,
+;; so this is the narrower of the two defects.) The membership test uses the same
+;; registry `reduce-scrutinee-decompose` consults, so the two agree by
+;; construction about what a type's constructors are.
+;;
+;; Returns #t when membership cannot be decided (no registry entry, or a built-in
+;; whose constructors are not registry-backed) — declining rather than rejecting,
+;; so this can only reject what it can show is foreign.
+(define (ctor-belongs-to-type? ctor-name type-ctor-name)
+  (define bare-tc (and type-ctor-name (bare-name type-ctor-name)))
+  (define ctors (and bare-tc (lookup-type-ctors bare-tc)))
+  (cond
+    [(or (not ctors) (null? ctors)) #t]           ;; undecidable → allow
+    [else (and (memq (bare-name ctor-name) (map bare-name ctors)) #t)]))
+
+(define (reduce-arm-ctx ctx arm type-ctor-name type-args)
+  (define ctor-name (expr-reduce-arm-ctor-name arm))
+  (define bc (expr-reduce-arm-binding-count arm))
+  ;; Look up constructor type from global-env (try FQN, bare, then built-in)
+  (define ctor-fqn (qualify-ctor-name ctor-name type-ctor-name))
+  (define ctor-type (and (ctor-belongs-to-type? ctor-name type-ctor-name)
+                         (or (global-env-lookup-type ctor-fqn)
+                             (global-env-lookup-type ctor-name)
+                             (builtin-ctor-type ctor-name))))
+  (and ctor-type
+       (let ([instantiated (instantiate-pi-chain ctor-type type-args)])
+         (and instantiated
+              (if (= bc 0)
+                  ctx
+                  (extend-ctx-with-fields ctx instantiated bc))))))
+
+;; Decompose a scrutinee's type into (values type-ctor-name type-args) and the
+;; constructor list, exactly as `check-reduce` does. EXPORTED alongside
+;; `reduce-arm-ctx` so the QTT twin reaches the arms through the same route.
+;; Returns (values type-ctor-name type-args) with type-ctor-name = #f when the
+;; type has no constructor metadata (the Church-fold fallback case).
+(define (reduce-scrutinee-decompose scrut-type)
+  (let-values ([(type-ctor-name type-args) (decompose-type-app scrut-type)])
+    (define bare-tc (and type-ctor-name (bare-name type-ctor-name)))
+    (define type-ctors (and bare-tc (lookup-type-ctors bare-tc)))
+    (if (and type-ctors (not (null? type-ctors)))
+        (values type-ctor-name type-args)
+        (values #f '()))))
+
 ;; Path A: True structural pattern matching using constructor metadata
 (define (check-reduce-structural ctx arms expected-type
                                   type-ctor-name type-args)
   (for/and ([arm (in-list arms)])
-    (define ctor-name (expr-reduce-arm-ctor-name arm))
     (define bc (expr-reduce-arm-binding-count arm))
     (define body (expr-reduce-arm-body arm))
-    ;; Look up constructor type from global-env (try FQN, bare, then built-in)
-    (define ctor-fqn (qualify-ctor-name ctor-name type-ctor-name))
-    (define ctor-type (or (global-env-lookup-type ctor-fqn)
-                          (global-env-lookup-type ctor-name)
-                          (builtin-ctor-type ctor-name)))
+    (define ext-ctx (reduce-arm-ctx ctx arm type-ctor-name type-args))
     (cond
-      [(not ctor-type) #f]
-      [else
-       (define instantiated (instantiate-pi-chain ctor-type type-args))
-       (cond
-         [(not instantiated) #f]
-         [else
-          (if (= bc 0)
-              (check ctx body expected-type)
-              (let ([ext-ctx (extend-ctx-with-fields ctx instantiated bc)])
-                (define shifted-exp (shift bc 0 expected-type))
-                (check ext-ctx body shifted-exp)))])])))
+      [(not ext-ctx) #f]
+      [(= bc 0) (check ctx body expected-type)]
+      [else (check ext-ctx body (shift bc 0 expected-type))])))
 
 ;; Path B: Church fold desugaring (fallback for built-in types)
 (define (check-reduce-church ctx scrutinee arms expected-type)

@@ -38,7 +38,14 @@
   (define segs (if (pair? (expr-path-branches p))
                    (car (expr-path-branches p))
                    '()))
-  (foldr (lambda (seg acc) (expr-app (expr-app (expr-fvar 'cons) seg) acc))
+  ;; D4.P4b-i: segments are bare SYMBOLS internally (the step encoding), so
+  ;; the FFI boundary marshals them back to Prologos keyword VALUES here.
+  ;; ⚠ PRE-EXISTING (characterized at f072c115, NOT caused by the encoding
+  ;; change): this shim whole-file ABORTS anyway — it builds a Prologos
+  ;; cons-chain while the foreign marshaller expects a RACKET list, so the
+  ;; declared `Path -> [List Keyword]` never marshalled. Filed; `from-segments`
+  ;; and `path-append` are dead with it.
+  (foldr (lambda (seg acc) (expr-app (expr-app (expr-fvar 'cons) (expr-keyword seg)) acc))
          (expr-nil) segs))
 
 ;; path-from-segments : (List Keyword) -> expr-path
@@ -78,7 +85,17 @@
                (expr-app-arg head-app)))
          (loop xs (cons head acc))]
         [else (error 'path-from-segments "expected a List, got ~a" l)])))
-  (expr-path (list segs)))
+  ;; D4.P4b-i: the inverse boundary — Prologos keyword VALUES in, bare symbols
+  ;; (the step encoding) out. A non-keyword segment is refused rather than
+  ;; coerced: coercing an unrecognized segment into a key is precisely the
+  ;; silent-catch-all that made `#p(a.*)` fabricate `<error>` values (Q_U11).
+  (expr-path
+   (list (for/list ([seg (in-list segs)])
+           (cond
+             [(expr-keyword? seg) (expr-keyword-name seg)]
+             [(symbol? seg) seg]
+             [else (error 'path-from-segments
+                          "path segments must be keywords, got ~a" seg)])))))
 
 ;; path-branch-count : expr-path -> Int
 ;; Number of branches in a path (usually 1 unless branching).
@@ -105,8 +122,9 @@
   (define segs (if (pair? (expr-path-branches p))
                    (car (expr-path-branches p))
                    '()))
+  ;; D4.P4b-i: marshal the internal symbol out as a Prologos keyword VALUE
   (if (pair? segs)
-      (car segs)
+      (expr-keyword (car segs))
       (error 'path-head "empty path has no head")))
 
 ;; path-tail : expr-path -> Path

@@ -51,11 +51,18 @@
   (check-equal? (length toks) 1)
   (check-equal? (token-type (car toks)) 'dot-lparen))
 
-(test-case "tokenize: .{ produces NO compound token (retired — CIU T6 P1)"
-  ;; With the dot-lbrace recognizer DELETED, a bare `.` fragment has no token
-  ;; match at the content-token layer — the tokenizer rejects it outright.
-  (check-exn #rx"Unexpected character"
-             (lambda () (content-tokens ".{"))))
+(test-case "tokenize: .{ produces a dot-lbrace token (RE-MINTED — CIU T6 D4.P1b-ii)"
+  ;; FLIPPED. P1 retired `.{`-as-MIXFIX; the 2026-07-28 redesign re-mints the
+  ;; GLYPH for the mid-path sub-block (`server^.{ssl port}` — `.` descends,
+  ;; the brace selects). The old assertion was `(check-exn #rx"Unexpected
+  ;; character" …)`, and it flipped for a MECHANICAL reason worth recording:
+  ;; the compat tokenizer's standalone-`.` rejection is TOKEN-TYPE keyed
+  ;; (`(and (eq? type 'symbol) (equal? lexeme "."))`), so once both chars fold
+  ;; into one non-symbol token no symbol-typed "." survives and the rejection
+  ;; is simply unreachable for `.{` — the validator itself is untouched.
+  (define toks (content-tokens ".{"))
+  (check-equal? (length toks) 1)
+  (check-equal? (token-type (car toks)) 'dot-lbrace))
 
 (test-case "tokenize: .(a + b) produces dot-lparen, symbols, rparen"
   (define toks (content-tokens ".(a + b)"))
@@ -330,15 +337,25 @@
     (run-ws-last "eval .(5N)\n"))
   (check-equal? result "5N : Nat"))
 
-(test-case "e2e/ws: .{ } is fully retired — no special diagnostic, generic error only (CIU T6 P1)"
-  ;; The `.{` recognizer + $mixfix-retired error are DELETED (owner ruling
-  ;; Q_P5/D3-S5): the syntax simply does not exist. `.{2N + 3N}` degrades to a
-  ;; bare `.` + a 3-element brace group -> a generic per-command error whose
-  ;; text must NOT mention mixfix or redesign (no dedicated path remains).
+(test-case "e2e/ws: .{ } is RE-MINTED as the select-block opener, with a GUIDED error (CIU T6 D4.P1b-ii)"
+  ;; FLIPPED (the third flip — the P1b-ii audit found this pin, which the
+  ;; design's own list had missed). P1 retired `.{`-as-MIXFIX and this pin
+  ;; asserted "generic error only, no dedicated path". D4.P1b-ii re-mints the
+  ;; glyph for a DIFFERENT construct (the mid-path sub-block), so a dedicated
+  ;; path exists again — but its SEMANTICS land at P3, so the honest v1
+  ;; behaviour is a guided per-command error.
+  ;;
+  ;; Two properties matter and both are pinned: it must still be a MIXFIX-free
+  ;; message (the retirement genuinely stands — `.{` is not mixfix any more),
+  ;; and it must be GUIDING rather than the misleading "Unbound variable" the
+  ;; generic path produced before the parser seat arm was added.
   (define result (run-ws-last "eval .{2N + 3N}\n"))
   (check-true (prologos-error? result))
-  (check-false (regexp-match? #rx"mixfix|redesign|not currently supported"
-                              (format "~a" result))))
+  (check-false (regexp-match? #rx"mixfix|redesign" (format "~a" result))
+               "the MIXFIX retirement stands — the re-mint is a different construct")
+  (check-regexp-match #rx"select block" (format "~a" result))
+  (check-false (regexp-match? #rx"Unbound variable" (format "~a" result))
+               "a valid new form must not be reported as a missing variable"))
 
 ;; ========================================
 ;; Mixfix carrying dot-access (CIU T6, 2026-07-18)

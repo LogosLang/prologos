@@ -1,0 +1,174 @@
+;; ============================================================================
+;; LET — TOP-LEVEL SCOPE  (owner ruling 2026-07-31)
+;; docs/tracking/2026-07-31_LET_TOPLEVEL.md
+;;
+;;   "The scope of a top-level `let` ceases at the beginning of the next
+;;    toplevel form. It's really only intended for interactive use. A program
+;;    with a toplevel let would be a bit odd, and wouldn't 'do' anything, but it
+;;    shouldn't be an error or invalid, either, nor even a warning per se.
+;;    The let also doesn't bind for the whole file, only the limited, local
+;;    scope. The real use-case is interactively building up some computation,
+;;    then being able to wrap it in a `defn` afterwards as a form of iterative
+;;    design."
+;;
+;; Run:   racket tools/run-file.rkt examples/2026-07-31-let-toplevel.prologos
+;; Check: racket tools/run-file.rkt --check examples/2026-07-31-let-toplevel.prologos
+;;
+;; Written against the TARGET state (failing-test-first).
+;; ============================================================================
+
+ns let-toplevel
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; §A  THE INTERACTIVE WORKFLOW — build a computation up, then wrap it
+;; ───────────────────────────────────────────────────────────────────────────
+;; This is the ONE shape the feature exists for. In the REPL it is a single
+;; blank-line-terminated submission; in a file it is one top-level form.
+;; The sibling `let`s MERGE into one scope, and the body sees all of them.
+
+let a := 4
+let b := 5
+let c := [+ a b]
+  [* c 2]
+;;0=> 18 : Int
+
+;; …and the same computation, once it is ready to become a definition. The
+;; point of the ruling: the let form above and this body are the same text.
+defn twice-sum [a:Int b:Int] : Int
+  let c := [+ a b]
+    [* c 2]
+;;1=> twice-sum : Int Int -> Int defined.
+
+[twice-sum 4 5]
+;;2=> 18 : Int
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; §B  SCOPE ENDS AT THE NEXT TOP-LEVEL FORM
+;; ───────────────────────────────────────────────────────────────────────────
+;; A top-level `let` does NOT bind for the file. `a` above is gone here — this
+;; is the ruling, not a limitation: `def` is the form that binds onward.
+
+def a := 100
+;;3=> a : Int defined.
+
+;; the earlier `let a := 4` did not leak; this reads the def
+a
+;;4=> 100 : Int
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; §C  A BODYLESS TOP-LEVEL `let` IS LEGAL AND DOES NOTHING
+;; ───────────────────────────────────────────────────────────────────────────
+;; "shouldn't be an error or invalid, either, nor even a warning per se."
+;;
+;; REALIZATION: a bodyless `let` desugars to `((fn (x : T) x) v)` — the bound
+;; name IS the body. So it type-checks its value, binds in a scope that ends
+;; with the form, leaks nothing, and ECHOES THE VALUE. That echo is the only
+;; design choice here (the alternative was a Unit-valued no-op printing
+;; nothing); showing the value is more use at a prompt and costs no machinery.
+
+let unused := 5
+;;5=> 5 : Int
+
+;; …and it did NOT bind onward — the scope ended with the form.
+;;6=>~ ERROR:
+unused
+
+;; every spelling behaves the same. `:=` optional:
+let plain 7
+;;7=> 7 : Int
+
+;; fused annotation — was a SILENT WRONG ANSWER: it printed `5 : Int` while
+;; binding the name to the datum `:Int` and evaluating the value as the body,
+;; so the annotation was silently discarded (see §D for the pin that it is now
+;; genuinely enforced, rather than merely printing the same number).
+let fused:Int 5
+;;8=> 5 : Int
+
+;; angle-typed — same silent-wrong class, and this spelling had no bodyless arm
+;; at all until now.
+let angled <Int> 5
+;;9=> 5 : Int
+
+;; spaced annotation
+let spaced : Int := 5
+;;10=> 5 : Int
+
+;; a bodyless run stays SEPARATE forms — each its own no-op. They do not merge,
+;; because a merge needs a body to merge INTO (§A), and per the ruling the next
+;; top-level form ends the scope rather than becoming one.
+let p := 1
+let q := 2
+;;11=> 1 : Int
+;;12=> 2 : Int
+
+;; the bracket form
+let [br := 3]
+;;13=> 3 : Int
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; §D  THE VALUE IS STILL TYPE-CHECKED — legal is not unchecked
+;; ───────────────────────────────────────────────────────────────────────────
+;; a no-op must not become a hole where errors hide.
+
+let bad := [int+ 1 "not a number"]
+;;14=>~ ERROR:
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; §E  ERROR CONTAINMENT — one bad let must never cost the rest of the file
+;; ───────────────────────────────────────────────────────────────────────────
+;; Both of these were WHOLE-FILE ABORTS (raw Racket exceptions, zero results):
+;;   * classify-let-block's error path returning a syntax object into a
+;;     list-expecting caller                                    (fixed 53251a80)
+;;   * normalize-let-binding-group raising OUTSIDE expand-let's
+;;     with-handlers, via merge-sibling-lets → split-last-let    (this slice)
+
+def before := 1
+;;15=> before : Int defined.
+
+defn broken []
+  let a := 1
+  let x 4
+      [+ 1 2] 5
+    [+ a x]
+;;16=>~ let block binding must be
+
+def after := 2
+;;17=> after : Int defined.
+
+;; the file kept going — that is the whole point
+[+ before after]
+;;18=> 3 : Int
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; §E2  A CHAIN MERGES REGARDLESS OF WHAT PRECEDES IT
+;; ───────────────────────────────────────────────────────────────────────────
+;; §A's chain sits FIRST in this file, which is exactly the position that hid a
+;; bug: the first cut tested the whole MAXIMAL RUN of consecutive lets, so a
+;; single COMPLETE let in front of a chain poisoned it. Pinned here in the
+;; position the fixture was otherwise blind to.
+
+let w := 1
+  w
+;;19=> 1 : Int
+
+let d := 4
+let e := 5
+let f := [+ d e]
+  [* f 2]
+;;20=> 18 : Int
+
+;; ───────────────────────────────────────────────────────────────────────────
+;; §F  THE DIAGNOSTIC MUST NOT LIE
+;; ───────────────────────────────────────────────────────────────────────────
+;; A nested bodyless `let` used to report "`let` is not allowed at top level.
+;; Use `def` instead." — naming a location the form is not in, and prescribing
+;; `def`, which is not legal inside a `defn` body. Now a nested bodyless let is
+;; simply a no-op binding like any other, so there is nothing to lie about.
+
+defn nested-noop [] : Int
+  let ignored := 1
+  7
+;;21=> nested-noop : Int defined.
+
+[nested-noop]
+;;22=> 7 : Int

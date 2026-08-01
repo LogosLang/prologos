@@ -18,6 +18,57 @@
 - **`:=` for binding** -- `def x := val`, `type Foo := A | B`, `bundle Num := (Add Sub Mul)`.
 - **`=` is RESERVED** for the `unify` operation -- never use `=` for binding or type definitions.
 
+## `let` — local bindings (LET track, 2026-07-31; discharges issue #21)
+
+All spellings are equivalent and MIX freely (owner ruling); everything desugars
+through one funnel to nested `((fn (name : T) body) value)` applications, so
+scoping is always **sequential** (`let*` — each binding sees the ones before
+it) and `=` never binds.
+
+- **Aligned block (the canonical multi-binding layout).** Bindings share a
+  column; the body sits STRICTLY between the `let` column and the binding
+  column. The discipline is enforced — a forgotten body or mis-indented line is
+  a per-command error naming the columns, never a silent misparse:
+  ```
+  let x 4
+      y 5
+      z [+ x y]
+    [+ a z]
+  ```
+- **Sibling chains — one scope.** Consecutive `let` lines at the same column
+  merge; the body sits under the last:
+  ```
+  let x 4              let x := 4
+  let y 5              let y := 5
+  let z [+ x y]          body
+    [+ a z]
+  ```
+- **`:=` is optional everywhere**; typed bindings are `x : Int := 4` (spaced —
+  `:=` REQUIRED with a spaced multi-token type) or **fused** `x:Int 4` /
+  `x:Int := 4` (single-token types only, exactly like `defn` params; `:0`-style
+  multiplicities never fuse; chained `x:A:B` is reserved for UCS).
+- **Bracket forms** (single-line): `let [x 5 y 6] body` (flat pairs),
+  `let [x : Int := 5 y : Int := 6] body`.
+- **Nested shorthand** (the historical form): `let x 4` with the body indented
+  deeper, one binding per `let`.
+- **Multi-line values**: a value continues on lines DEEPER than the binding
+  column (or inside brackets, which span lines freely):
+  ```
+  let k : Int := match a        let x [+ 1
+                   | 1 -> 10           3]
+                   | m -> m         y 5
+      j 5                          body
+    body
+  ```
+  ⚠ A `match` used as a binding **value** currently needs the type annotation
+  (as above) — unannotated it hits the QTT infer-position limitation (a
+  typing-side item, tracked; the message is the generic multiplicity one).
+- **Top-level `let` is not legal** — the guided error says to use `def`. All
+  `let` syntax failures are per-command errors; they never abort the file.
+- sexp mode: `(let x := 4 body)`, `(let [x := 5 y := 6] body)`,
+  `(let x:Int 4 body)` (glued fused splits, matching WS). The ALIGNED layout
+  is WS-only (columns do not exist in sexp), like `&>` clause groups.
+
 ## Pattern matching and dispatch
 
 - **Multi-arity `defn` is the primary dispatch mechanism.** If a function dispatches on its argument's constructors, use `defn foo | pattern -> body`, NOT `defn foo [x] match x | ...`.

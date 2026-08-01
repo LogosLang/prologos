@@ -201,15 +201,18 @@
   ;; SNAPSHOT FLIPPED at Rel T1 B3.1: rule solves now derive a static row —
   ;; check-ok's `x` is bound by NOTHING in the body (`not` is testing-only),
   ;; so its field honestly degrades to a hole while the row STRUCTURE
-  ;; (List wrapper + the :y key) is known and reported (D-B3.6).
-  (check-equal? solve-result "nil : [List {:y _}]"
+  ;; (the container wrapper + the :y key) is known and reported (D-B3.6).
+  ;; SolveCarrier (2026-07-31): the container is PVec, so an empty result is `@[]`
+  ;; — an empty vector that still ANNOUNCES its row type — where `nil` was a
+  ;; nullary List constructor carrying no container identity at the value level.
+  (check-equal? solve-result "@[] : [PVec {:y _}]"
                 "not (bad \"evil\") should fail (evil IS bad)"))
 
 ;; ========================================
 ;; 6. Empty facts: relation with no data returns empty solve
 ;; ========================================
 
-(test-case "e2e/empty-facts: empty fact block returns nil"
+(test-case "e2e/empty-facts: empty fact block returns an empty PVec"
   (define results
     (run-prologos-string
      (string-append
@@ -220,8 +223,8 @@
   (check-no-errors results)
   (define solve-result (last-result results))
   (check-true (string? solve-result))
-  (check-equal? solve-result "nil : _"
-                "empty relation should return nil"))
+  (check-equal? solve-result "@[] : _"
+                "empty relation should return an empty PVec (SolveCarrier)"))
 
 ;; ========================================
 ;; 7. Mode annotations: +key (in) and -val (out) modes
@@ -382,5 +385,5 @@
   (check-no-errors results)
   (define solve-result (last-result results))
   (check-true (string? solve-result))
-  (check-equal? solve-result "nil : _"
-                "ground query for missing fact should return nil"))
+  (check-equal? solve-result "@[] : _"
+                "ground query for missing fact should return an empty PVec"))

@@ -23,7 +23,9 @@
 
 (require rackunit
          racket/string
-         "test-support.rkt")
+         "test-support.rkt"
+         ;; 2026-07-31: the unreachable-arm cases assert on the error VALUE
+         "../errors.rkt")
 
 ;; ========================================
 ;; Helpers
@@ -232,3 +234,204 @@
      "  | [[cons _ _]]   -> false\n"
      "eval [singleton?-dblbracket '[42N]]"))
    "true : Bool"))
+
+;; ========================================
+;; Unreachable arms are rejected (2026-07-31)
+;; ========================================
+;; An arm following an IRREFUTABLE arm can never run — and, the reason this is a
+;; correctness bug rather than a style nit, it is never TYPE-CHECKED either. The
+;; pattern compiler drops it, so its body escapes the checker entirely and a
+;; String body where a Nat is expected was accepted silently.
+;;
+;; The reported symptom was subtler: `normalize-pattern` turns a bare name into a
+;; constructor pattern only when `lookup-ctor` knows it, so an UNKNOWN name (a
+;; typo, or a constructor whose type is not imported) stays a VARIABLE pattern —
+;; irrefutable — and silently eats every later arm. Same defect, two angles, so
+;; the check is on REACHABILITY: it needs no guess about whether a lowercase name
+;; was "meant" as a constructor, which is genuinely ambiguous in isolation.
+
+(define (unreachable? s)
+  (define r (with-handlers ([(lambda (_) #t) (lambda (e) e)]) (run-last s)))
+  (and (prologos-error? r)
+       (regexp-match? #rx"unreachable match arm" (prologos-error-message r))))
+
+(test-case "unreachable/dead arm after a catch-all is rejected"
+  ;; Before the check this DEFINED CLEAN, with a String body where Nat is
+  ;; expected — the arm was never type-checked.
+  (check-true
+   (unreachable? "(spec d2 Nat -> Nat)\n(defn d2 [v] (match v (n -> 1N) (zero -> \"dead\")))")))
+
+(test-case "unreachable/an unrecognised constructor name eats later arms"
+  ;; THE reported shape. `vnil` is not a known constructor here, so it became an
+  ;; irrefutable variable pattern and arm 2 was dead.
+  (check-true
+   (unreachable?
+    "(spec d1 Nat -> Nat)\n(defn d1 [v] (match v (vnil -> 1N) (vcons a b -> \"not-a-nat\")))")))
+
+(test-case "unreachable/the multi-clause defn form is checked too"
+  ;; The other entry point: clause groups compile through compile-pattern-group,
+  ;; not compile-match-expression.
+  (check-true
+   (unreachable? "(spec d4 Nat -> Nat)\n(defn d4 ($pipe (n) -> 1N) ($pipe (zero) -> 2N))")))
+
+(test-case "unreachable/a variable arm LAST stays legal (idiomatic default)"
+  ;; Only arms AFTER an irrefutable one are flagged — the catch-all itself is the
+  ;; idiomatic default and must keep working, on both entry points.
+  (check-equal?
+   (run-ws-last "defn ok1\n  | zero -> 1N\n  | n    -> 2N\neval [ok1 5N]")
+   "2N : Nat")
+  ;; same, on the match-EXPRESSION entry point (the negative cases above use it)
+  (check-false
+   (unreachable?
+    "(spec ok2 Nat -> Nat)\n(defn ok2 [v] (match v (zero -> 1N) (n -> 2N)))")))
+
+(test-case "unreachable/a GUARD keeps later arms reachable"
+  ;; A guarded arm can fail, so it is refutable and does not shadow what follows.
+  ;; The guard clause in the irrefutability test is what makes this work.
+  (check-false
+   (unreachable?
+    "(spec g1 Nat -> Nat)\n(defn g1 [v] (match v (n when (int-lt n 1N) -> 1N) (m -> 2N)))")))
+
+;; ========================================
+;; A constructor of ANOTHER type is rejected (2026-07-31)
+;; ========================================
+;; `reduce-arm-ctx` resolved an arm's constructor via a bare-name global-env
+;; lookup with no check that it belongs to the type being matched, so an arm
+;; naming a FOREIGN type's constructor was accepted. A `Bool` is never a `Box3`,
+;; so that arm can never match — silent dead code with no diagnostic. Narrower
+;; than the unreachable-arm case above: this arm's body IS type-checked.
+
+(test-case "cross-ctor/an arm naming another type's constructor is rejected"
+  (define r
+    (with-handlers ([(lambda (_) #t) (lambda (e) e)])
+      (run-last
+       (string-append
+        "(data Box3 (mk-b3 : Nat))\n"
+        "(spec crossctor Bool -> Nat)\n"
+        "(defn crossctor [b] (match b (true -> 1N) (mk-b3 x -> 2N)))"))))
+  (check-true (prologos-error? r) (format "expected an error, got: ~v" r)))
+
+(test-case "cross-ctor/the type's OWN constructors still work"
+  ;; The membership test must not reject legitimate arms — including a match on
+  ;; the user type itself, where both constructors belong.
+  (check-equal?
+   (run-ws-last
+    (string-append
+     "data Box3\n  | mk-b3 Nat\n  | empty3\n"
+     "defn unbox\n  | mk-b3 k -> k\n  | empty3  -> 0N\n"
+     "eval [unbox [mk-b3 7N]]"))
+   "7N : Nat"))
+
+;; ========================================
+;; Multiplicities survive an arrow spec (2026-07-31)
+;; ========================================
+;; `extract-pi-binders` matched a `surf-arrow`'s multiplicity field as `_` and
+;; substituted 'mw, so every binder derived from an arrow type came back
+;; unrestricted — `A -1> B` and `A -> B` were indistinguishable to all its
+;; consumers. Visible symptom: a multi-clause `defn` with a linear spec was
+;; rejected OUT OF HAND whatever its body did (the generated lambda got 'mw while
+;; the Pi said :1, and checkQ's lam-vs-Pi arm requires them equal), while the
+;; SAME function written with bracket params + an inline match was accepted.
+
+(define (mult-violation? s)
+  (define r (with-handlers ([(lambda (_) #t) (lambda (e) e)]) (run-last s)))
+  (and (prologos-error? r)
+       (regexp-match? #rx"Multiplicity" (prologos-error-message r))))
+
+(define handle-decl "(data Handle2 (mk-h : Nat))\n")
+
+(test-case "spec-mult/a linear multi-clause defn is ACCEPTED when correct"
+  ;; The regression: this was rejected for its spec alone.
+  (check-false
+   (mult-violation?
+    (string-append handle-decl
+                   "(spec ok1 Handle2 -1> Nat -> Handle2)\n"
+                   "(defn ok1 ($pipe (h n) -> h))"))))
+
+(test-case "spec-mult/linearity is still ENFORCED in that form"
+  ;; The control that matters: the fix must restore checking, not disable it.
+  (check-true
+   (mult-violation?
+    (string-append handle-decl
+                   "(spec bad2 Handle2 -1> Nat -> Nat)\n"
+                   "(defn bad2 ($pipe (h n) -> 0N))"))
+   "a linear parameter left unused must still violate")
+  (check-true
+   (mult-violation?
+    (string-append handle-decl
+                   "(spec bad3 Handle2 -0> Handle2)\n"
+                   "(defn bad3 ($pipe (h) -> h))"))
+   "an erased parameter used at runtime must still violate"))
+
+(test-case "spec-mult/the two spellings of the same function now agree"
+  ;; Destructuring a linear value: bracket-params + inline match (the stdlib fio
+  ;; spelling) and the multi-clause form must both be accepted.
+  ;;
+  ;; ⚠ The function is `hconsume`, NOT a single letter. It was `c`, and that
+  ;; spec LEAKED ACROSS TEST FILES within a batch worker (the cell-backed spec
+  ;; registry rides the shared persistent net-box; restore-macros-registry-
+  ;; snapshot! restores only the parameters), colliding with
+  ;; test-new-lattice-cell's `def c : CellId` — "def c has both a spec and
+  ;; inline type annotation" — whenever the two landed in one worker. The leak
+  ;; itself is filed in DEFERRED (LET P1 close notes); single-letter spec names
+  ;; in test strings are collision bait until it is fixed.
+  (define decl (string-append handle-decl "(spec hconsume Handle2 -1> Nat)\n"))
+  (check-false (mult-violation? (string-append decl "(defn hconsume [h] (match h (mk-h k -> k)))")))
+  (check-false (mult-violation? (string-append decl "(defn hconsume ($pipe (mk-h k) -> k))"))))
+
+;; ========================================
+;; Guards in the bare-`|` clause form (2026-07-31)
+;; ========================================
+;; `parse-defn-clause` split the pre-arrow forms into patterns with NO `when`
+;; handling, though the bracketed-header parser has always had it. So a guard was
+;; silently parsed as EXTRA PATTERNS — `| n when [int-lt n 0] -> 7` became three
+;; patterns — giving clauses of mismatched arity. The pattern compiler then
+;; indexed off the end of its parameter list and died with a raw Racket
+;; `list-ref: index too large for list`, which killed the WHOLE FILE: no
+;; per-command error, and no output from commands BEFORE the offending one.
+;;
+;; Guards now parse, so the form works rather than merely failing politely — and
+;; the semantics are pinned, not just the absence of a crash.
+
+(test-case "guard-bare/a guarded clause group compiles and DISPATCHES"
+  (check-equal?
+   (run-ws-last
+    (string-append
+     "defn classify\n  | n when [int-lt n 0] -> 7\n  | n -> 5\n"
+     "eval [classify -3]"))
+   "7 : Int")
+  (check-equal?
+   (run-ws-last
+    (string-append
+     "defn classify2\n  | n when [int-lt n 0] -> 7\n  | n -> 5\n"
+     "eval [classify2 3]"))
+   "5 : Int"))
+
+(test-case "guard-bare/successive guards fall through in order"
+  (define src
+    (string-append
+     "defn sign\n"
+     "  | n when [int-lt n 0] -> 0\n"
+     "  | n when [int-eq n 0] -> 1\n"
+     "  | n                   -> 2\n"))
+  (check-equal? (run-ws-last (string-append src "eval [sign -5]")) "0 : Int")
+  (check-equal? (run-ws-last (string-append src "eval [sign 0]"))  "1 : Int")
+  (check-equal? (run-ws-last (string-append src "eval [sign 5]"))  "2 : Int"))
+
+(test-case "guard-bare/an earlier command's output survives (no whole-file abort)"
+  ;; The crash took the entire file down, so a command BEFORE the guarded defn
+  ;; produced no output at all. This is the containment pin.
+  (define rs (run-ws (string-append
+                      "def before := 1\n"
+                      "defn m07\n  | n when [int-lt n 0] -> 7\n  | n -> 5\n"
+                      "def after := 2\n")))
+  (check-true (>= (length rs) 3) (format "expected all commands to report; got: ~v" rs))
+  (check-false (ormap prologos-error? rs) (format "expected no errors; got: ~v" rs)))
+
+(test-case "guard-bare/the bracketed-header form is unchanged"
+  (check-equal?
+   (run-ws-last
+    (string-append
+     "defn classify3 [n]\n  | n when [int-lt n 0] -> 7\n  | n -> 5\n"
+     "eval [classify3 -3]"))
+   "7 : Int"))

@@ -884,13 +884,21 @@
   ;; other `examples.*` file). Reject it with a targeted message instead of
   ;; dropping segments. (The `.`-in-namespace convention predates dot-access on
   ;; record fields; hierarchical namespaces now use `::`.)
+  ;; CIU T6 D4.P2 — `$postfix-index` joins the check. This is a NEW-INSTANCE
+  ;; guard, not a feature: before P2 a numeric segment (`ns foo.2`) lexed as a
+  ;; bare `.` plus `2` and died elsewhere, but P2 makes `.N` mint
+  ;; `$postfix-index`, so WITHOUT this arm `ns foo.2` would silently drop
+  ;; `.2` — reintroducing the exact bug `b0db8f3e` fixed for `.name`. The
+  ;; audit's "does P2 create a NEW instance of a known family?" pass caught it.
+  ;; (`ns foo[2]` mints the same sentinel and is equally nonsense, so the
+  ;; message names the SEGMENT rather than asserting which glyph was used.)
   (when (for/or ([e (in-list (cddr datum))])
-          (and (pair? e) (eq? (car e) '$dot-access)))
+          (and (pair? e) (memq (car e) '($dot-access $postfix-index))))
     (error 'ns
       (format (string-append
-               "namespace name cannot contain `.` (that is the record dot-access "
-               "operator). Use `::` for a hierarchical namespace (e.g. `~a::…`) "
-               "or a single segment (e.g. `~a`).")
+               "namespace name cannot contain a `.`/`[…]` segment (those are the "
+               "record access operators). Use `::` for a hierarchical namespace "
+               "(e.g. `~a::…`) or a single segment (e.g. `~a`).")
               (cadr datum) (cadr datum))))
   (define ns-sym (cadr datum))
   (define no-prelude?

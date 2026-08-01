@@ -116,14 +116,15 @@ eval xs[i]
 ;; B. Map indexing
 ;; ========================================
 
-(test-case "postfix-index: Map[:key] returns value"
-  (check-equal?
-   (run-ws-last "
+(test-case "postfix-index: Map[:key] → guided retirement error (D4.P1a)"
+  ;; Keyword-LITERAL payloads retired — the live spellings are m.b / [get m :b].
+  (check-regexp-match
+   #rx"retired"
+   (format "~a" (run-ws-last "
 ns test
 def m : (Map Keyword Nat) := {:a 1N :b 2N :c 3N}
 eval m[:b]
-")
-   "2N : Nat"))
+"))))
 
 (test-case "postfix-index: Map with computed key"
   (check-equal?
@@ -139,14 +140,14 @@ eval m[k]
 ;; C. Chained indexing
 ;; ========================================
 
-(test-case "postfix-index: nested Map m[:a][:x]"
-  (check-equal?
-   (run-ws-last "
+(test-case "postfix-index: nested m[:a][:x] → guided retirement error (D4.P1a)"
+  (check-regexp-match
+   #rx"retired"
+   (format "~a" (run-ws-last "
 ns test
 def m : (Map Keyword (Map Keyword Nat)) := {:a {:x 1N} :b {:y 2N}}
 eval m[:a][:x]
-")
-   "1N : Nat"))
+"))))
 
 (test-case "postfix-index: List of Maps xs[0].field"
   (check-equal?
@@ -187,23 +188,23 @@ eval xs [0]
 ;; E. Additional WS-mode tests
 ;; ========================================
 
-(test-case "postfix-index: Map with string-like key"
-  (check-equal?
-   (run-ws-last "
+(test-case "postfix-index: m[:z] → guided retirement error (D4.P1a)"
+  (check-regexp-match
+   #rx"retired"
+   (format "~a" (run-ws-last "
 ns test
 def m : (Map Keyword Nat) := {:x 1N :y 2N :z 3N}
 eval m[:z]
-")
-   "3N : Nat"))
+"))))
 
-(test-case "postfix-index: chained Map then dot-access"
-  (check-equal?
-   (run-ws-last "
+(test-case "postfix-index: m[:config][:port] → guided retirement error (D4.P1a)"
+  (check-regexp-match
+   #rx"retired"
+   (format "~a" (run-ws-last "
 ns test
 def m : (Map Keyword (Map Keyword Nat)) := {:config {:port 8080N :host 443N}}
 eval m[:config][:port]
-")
-   "8080N : Nat"))
+"))))
 
 (test-case "postfix-index: List index with Nat literal"
   (check-equal?

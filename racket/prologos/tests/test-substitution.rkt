@@ -361,8 +361,11 @@
      (expr-map-assoc POISON ka (expr-int 1))
      (expr-map-assoc (expr-map-empty (expr-hole) (expr-hole)) POISON (expr-int 1))
      (expr-map-assoc (expr-map-empty (expr-hole) (expr-hole)) ka POISON)
-     (expr-map-get POISON ka)
-     (expr-map-get (expr-map-empty (expr-hole) (expr-hole)) POISON)
+     (expr-map-get POISON ka #f)
+     (expr-map-get (expr-map-empty (expr-hole) (expr-hole)) POISON #f)
+     ;; P2.b slice 4: the STRICTNESS field is an armed position — poison must
+     ;; be reachable there too (the every-armed-field-position contract)
+     (expr-map-get (expr-map-empty (expr-hole) (expr-hole)) ka POISON)
      (expr-pvec-literal (list (expr-int 1) POISON))
      ;; binder positions: poison + the bound/free distinction
      (expr-lam 'mw POISON (expr-int 1))

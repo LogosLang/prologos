@@ -34,6 +34,7 @@
 
 (require rackunit
          "../parse-reader.rkt"
+         "../errors.rkt"   ;; LET P1: prologos-error? for the per-command-error pin
          "test-support.rkt")
 
 ;; --- Level 1 (preparse / read) helpers ---------------------------------
@@ -112,9 +113,20 @@
   (check-true (ws-runs? src)))
 
 ;; ========================================
-;; Empty / bare let still raise
+;; Empty / bare let is a per-command ERROR (LET P1: raises retired)
 ;; ========================================
+;; This pinned `check-exn` until 2026-07-31 — but the raise it pinned was a
+;; WHOLE-FILE abort in .prologos files. expand-let now returns a $let-error
+;; marker that the parser converts to a parse-error VALUE; the failure is
+;; still loud, per command, and the file continues.
 
-(test-case "let with bindings but no body still raises"
-  (check-exn exn:fail?
-             (lambda () (run-ns-ws-last "(let [x := 1])"))))
+(test-case "let with bindings but no body is LEGAL (owner ruling 2026-07-31)"
+  ;; SUPERSEDED: this pinned an error, then (LET P1) a per-command error value.
+  ;; The top-level-`let` ruling makes a bodyless let legal everywhere — "it
+  ;; shouldn't be an error or invalid, either, nor even a warning per se" — so
+  ;; it is now a no-op that evaluates to its last bound value. The containment
+  ;; property the LET P1 rewrite cared about is unaffected and still pinned by
+  ;; test-let-blocks' run-file-ws cases.
+  (define r (run-ns-ws-last "(let [x := 1])"))
+  (check-false (prologos-error? r) (format "expected a value, got: ~v" r))
+  (check-true (regexp-match? #rx"1 : Int" (format "~a" r)) (format "got: ~v" r)))

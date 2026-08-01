@@ -30,6 +30,7 @@
          ;; fire-fn bypasses the mnr's cons↔def-entry adapters). Pure leaf → no cycle.
          (only-in "definition-entry.rkt"
                   def-entry def-entry? def-entry-type def-entry-value)
+         (only-in "rrb.rkt" rrb-to-list)  ;; SolveCarrier: POL.3 ordered echo over the PVec carrier (leaf data module)
          "macros.rkt"
          "sexp-readtable.rkt"
          "parse-reader.rkt"  ;; unified reader: WS-mode + sexp re-exports
@@ -290,6 +291,24 @@
                             (expr-string-val (expr-panic-msg forced))
                             (pp-expr (expr-panic-msg forced)))))))))
 
+;; CIU T6 P2.b slice 2 (Q_N5): the def-seam panic check — BOTH def paths
+;; (inferred + annotated) bound their value via `(whnf zonked-body)` and stored
+;; it with NO panic check at all, so `def d := [boom 2]` committed a panic value
+;; silently at zero errors while the same expression at top level was counted.
+;; This converts a panic-valued def into a counted per-command error, exactly
+;; the seal-forcing precedent above but without its schema-shape gate. The
+;; bound is TOP-NODE-ONLY, same as the eval arm (a panic nested inside a
+;; constructed value prints, counts 0 — accepted + named, the D22 bound;
+;; pinned at tests/test-path-selection.rkt B8). Returns a prologos-error or #f
+;; (usable directly as a cond => guard).
+(define (def-panic-error bound-value def-srcloc)
+  (and (expr-panic? bound-value)
+       (prologos-error def-srcloc
+         (format "panic: ~a"
+                 (if (expr-string? (expr-panic-msg bound-value))
+                     (expr-string-val (expr-panic-msg bound-value))
+                     (pp-expr (expr-panic-msg bound-value)))))))
+
 ;; Check if an elaborated type contains unsolved metas (level-meta, mult-meta, or expr-meta).
 ;; When a type has unsolved metas (from implicit parameter inference), is-type may fail
 ;; because infer-level can't handle universe level mismatches caused by Church encoding
@@ -300,39 +319,6 @@
   ;; the ty-ok gate + residuation admissibility consistent with the deep
   ;; scrub (shallow detection under a deep scrub would mis-gate).
   (expr-contains-meta-deep? e))
-
-;; Check if an expression contains node types that the QTT module
-;; doesn't handle yet: expr-reduce (structural PM), Vec, Fin constructors/eliminators.
-;; Other expression types (boolrec, Posit8, fvar, Pi/Sigma/Eq)
-;; are now handled by qtt.rkt directly.
-(define (contains-unsupported-qtt? e)
-  (match e
-    [(expr-reduce _ _ _) #t]
-    [(expr-vnil _) #t]
-    [(expr-vcons _ _ _ _) #t]
-    [(expr-vhead _ _ _) #t]
-    [(expr-vtail _ _ _) #t]
-    [(expr-vindex _ _ _ _) #t]
-    [(expr-fzero _) #t]
-    [(expr-fsuc _ _) #t]
-    [(expr-foreign-fn _ _ _ _ _ _ _ _) #t]
-    [(expr-app f x) (or (contains-unsupported-qtt? f) (contains-unsupported-qtt? x))]
-    [(expr-lam _ a b) (or (contains-unsupported-qtt? a) (contains-unsupported-qtt? b))]
-    [(expr-Pi _ a b) (or (contains-unsupported-qtt? a) (contains-unsupported-qtt? b))]
-    [(expr-Sigma a b) (or (contains-unsupported-qtt? a) (contains-unsupported-qtt? b))]
-    [(expr-pair a b) (or (contains-unsupported-qtt? a) (contains-unsupported-qtt? b))]
-    [(expr-fst e) (contains-unsupported-qtt? e)]
-    [(expr-snd e) (contains-unsupported-qtt? e)]
-    [(expr-ann e t) (or (contains-unsupported-qtt? e) (contains-unsupported-qtt? t))]
-    [(expr-suc e) (contains-unsupported-qtt? e)]
-    [(expr-natrec m b s t) (or (contains-unsupported-qtt? m) (contains-unsupported-qtt? b)
-                               (contains-unsupported-qtt? s) (contains-unsupported-qtt? t))]
-    [(expr-boolrec m tc fc t) (or (contains-unsupported-qtt? m) (contains-unsupported-qtt? tc)
-                                  (contains-unsupported-qtt? fc) (contains-unsupported-qtt? t))]
-    [(expr-J m b l r p) (or (contains-unsupported-qtt? m) (contains-unsupported-qtt? b)
-                            (contains-unsupported-qtt? l) (contains-unsupported-qtt? r)
-                            (contains-unsupported-qtt? p))]
-    [_ #f]))
 
 ;; Sprint 10: For bare-param defn, the type has holes. We skip is-type and
 ;; just run check(body, type) — the holes act as wildcards, accepting any type.
@@ -652,9 +638,10 @@
 
 ;; The ordered display of a solve result value, or #f to fall back to pp-expr.
 ;; Custom-renders ONLY the shapes it fully understands: a bare row champ
-;; (solve-one) or a proper cons spine whose members are ALL row champs; anything
-;; else (nil, none, stuck terms, mixed lists) falls back — the echo must never
-;; drop or reshape an element it did not recognize.
+;; (solve-one), an rrb whose members are ALL row champs (the SolveCarrier PVec
+;; result), or a proper cons spine whose members are ALL row champs; anything
+;; else (@[], nil, none, stuck terms, mixed containers) falls back — the echo
+;; must never drop or reshape an element it did not recognize.
 (define (pp-solve-echo-ordered val ordered-names)
   (define (cons-head? f)
     (and (expr-fvar? f)
@@ -662,6 +649,17 @@
            (or (string=? s "cons") (regexp-match? #rx"::cons$" s)))))
   (cond
     [(expr-champ? val) (pp-row-ordered val ordered-names)]
+    ;; SolveCarrier: the PVec carrier. Renders `@[…]` to match pp-expr's rrb arm.
+    ;; An EMPTY result falls back (like `nil` did) so `@[]` keeps its pp-expr
+    ;; rendering; a non-champ member falls back wholesale, same as the cons arm.
+    [(expr-rrb? val)
+     (let ([rows (rrb-to-list (expr-rrb-racket-rrb val))])
+       (and (pair? rows)
+            (andmap expr-champ? rows)
+            (format "@[~a]"
+                    (string-join
+                     (map (lambda (r) (pp-row-ordered r ordered-names)) rows)
+                     " "))))]
     [else
      (let loop ([v val] [acc '()])
        (cond
@@ -1882,11 +1880,8 @@
                  ;; the stored type is a HARD ERROR — checked on the PRE-scrub type
                  ;; (the scrub above turned OTHER unsolved metas into holes).
                  (define proj-err (check-escaping-projection-metas pre-scrub-type name def-srcloc))
-                 ;; Skip QTT for expressions with unsupported node types (Vec/Fin)
                  (define qtt-ok
-                   (if (contains-unsupported-qtt? zonked-body)
-                       #t
-                       (time-phase! qtt (checkQ-top/err ctx-empty zonked-body zonked-type))))
+                   (time-phase! qtt (checkQ-top/err ctx-empty zonked-body zonked-type)))
                  (cond
                    [proj-err proj-err]  ;; D23 escape error takes precedence
                    [(prologos-error? qtt-ok) qtt-ok]
@@ -1913,15 +1908,20 @@
                     ;; Ruling trail: design §8 POL.10 (F1 = snapshot; recipe
                     ;; invalidation = Rel T2 IVM territory).
                     (define bound-value (time-phase! reduce (whnf zonked-body)))
-                    (global-env-add name zonked-type bound-value)
-                    ;; LSP Tier 2.3: record definition location
-                    (register-definition-location! name def-srcloc)
-                    (when (current-ns-context)
-                      (define fqn (qualify-name name
-                                    (ns-context-current-ns (current-ns-context))))
-                      (global-env-add fqn zonked-type bound-value)
-                      (register-definition-location! fqn def-srcloc))
-                    (format "~a : ~a defined." name (pp-expr zonked-type))])])])])])])]
+                    (cond
+                      ;; CIU T6 P2.b (Q_N5): a panic-valued def is a COUNTED
+                      ;; error, not a silent commit.
+                      [(def-panic-error bound-value def-srcloc) => values]
+                      [else
+                       (global-env-add name zonked-type bound-value)
+                       ;; LSP Tier 2.3: record definition location
+                       (register-definition-location! name def-srcloc)
+                       (when (current-ns-context)
+                         (define fqn (qualify-name name
+                                       (ns-context-current-ns (current-ns-context))))
+                         (global-env-add fqn zonked-type bound-value)
+                         (register-definition-location! fqn def-srcloc))
+                       (format "~a : ~a defined." name (pp-expr zonked-type))])])])])])])])]
     ;; Existing annotated path (type annotation present)
     [else
      ;; 1. Elaborate type
@@ -2095,12 +2095,9 @@
                        ;; a `: _` hole annotation leaves it unsolved → errors here.
                        (define proj-err (check-escaping-projection-metas zonked-type-raw name def-srcloc))
                        ;; 6.5. QTT multiplicity check (on zonked terms with concrete mults).
-                       ;; Skip for expressions containing unsupported node types (Vec/Fin).
                        (define qtt-ok
-                         (if (contains-unsupported-qtt? zonked-body)
-                             #t  ;; skip QTT for unsupported expression types
-                             (time-phase! qtt (checkQ-top/err ctx-empty zonked-body zonked-type
-                                             srcloc-unknown (recover-name-map)))))
+                         (time-phase! qtt (checkQ-top/err ctx-empty zonked-body zonked-type
+                                         srcloc-unknown (recover-name-map))))
                        (cond
                          ;; D23 escape error takes precedence; un-register (this
                          ;; path pre-registered the type for recursion).
@@ -2118,16 +2115,24 @@
                           ;; POL.10: bind the WHNF-reduced value (snapshot) —
                           ;; see the inferred-path twin for the full note.
                           (define bound-value (time-phase! reduce (whnf zonked-body)))
-                          (global-env-add name zonked-type bound-value)
-                          ;; LSP Tier 2.3: record definition location
-                          (register-definition-location! name def-srcloc)
-                          (when (current-ns-context)
-                            (define fqn (qualify-name name
-                                          (ns-context-current-ns (current-ns-context))))
-                            (global-env-add fqn zonked-type bound-value)
-                            (register-definition-location! fqn def-srcloc))
-                          (format "~a : ~a defined."
-                                  name (pp-expr zonked-type))])]
+                          (cond
+                            ;; CIU T6 P2.b (Q_N5): the ANNOTATED def seam is
+                            ;; checked too (the round-8 design named only the
+                            ;; inferred one) — un-register like the QTT-failure
+                            ;; arm above (this path pre-registered the type).
+                            [(def-panic-error bound-value def-srcloc)
+                             => (lambda (err) (remove-failed-definition! name) err)]
+                            [else
+                             (global-env-add name zonked-type bound-value)
+                             ;; LSP Tier 2.3: record definition location
+                             (register-definition-location! name def-srcloc)
+                             (when (current-ns-context)
+                               (define fqn (qualify-name name
+                                             (ns-context-current-ns (current-ns-context))))
+                               (global-env-add fqn zonked-type bound-value)
+                               (register-definition-location! fqn def-srcloc))
+                             (format "~a : ~a defined."
+                                     name (pp-expr zonked-type))])])]
                       )])])])])])])]))
 
 ;; ========================================

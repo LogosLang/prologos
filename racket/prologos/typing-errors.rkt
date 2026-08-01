@@ -139,11 +139,78 @@
         (string-join (map (lambda (l) (string-append ":" (symbol->string l))) shown) " ")
         (if (> more 0) (format " (+~a more)" more) "")))))
 
+;; CIU T6 D4.P2 (owner ruling Q_R5) — the ORDINAL counterpart of
+;; `format-closed-row-miss`.
+;;
+;; P2 makes `t.9` reachable on a het tuple, and the pre-existing hint was
+;; KEYWORD-GATED twice over (an `expr-keyword?` key AND a `'keyword`
+;; key-domain), so a nat-domain closed row got NO hint at all and surfaced as a
+;; bare "Could not infer type" — no index, no arity, no path. Het tuples are
+;; exactly the carrier the acceptance corpus pins (`mixed`, `events`), so this
+;; was the first thing a user would hit on the new surface. The PVec runtime
+;; path was already excellent ("index 9 out of bounds for PVec of length 3");
+;; this brings the STATIC tuple path up to that bar.
+(define (format-closed-tuple-oob rec idx names)
+  (define arity (length (expr-Record-fields rec)))
+  (string-append
+   "Could not infer type — index " (number->string idx)
+   " is out of range for the " (number->string arity) "-tuple "
+   (pp-expr rec names)
+   (if (zero? arity)
+       " (the tuple has no positions)"
+       (format " — valid indices 0–~a" (sub1 arity)))))
+
+;; The key of an ordinal projection, as a plain NON-NEGATIVE integer, or #f.
+;; `expr-get` accepts Nat-or-Int literals, so both shapes reach here.
+;;
+;; ⚠ THE NON-NEGATIVE GUARD IS LOAD-BEARING — caught by adversarial verify.
+;; This predicate mirrors `record-project`'s literal-nat leg
+;; (typing-core.rkt:573-576), whose `#:when` is `(and (eq? kd 'nat)
+;; (exact-nonnegative-integer? n))`. The first draft copied the Nat-or-Int half
+;; and DROPPED the non-negative half — the `infer`/`inferQ`-twin drift shape
+;; `pipeline.md` codifies, where two halves of one rule disagree.
+;;
+;; Because the ordinal branch sits FIRST in `closed-row-miss-hint`'s `or`, a
+;; negative literal made the hint (a) assert something FALSE about a
+;; sub-expression that type-checks fine — `record-project` routes a negative
+;; literal to the DYNAMIC-key path, where `(get het -1)` succeeds as the union
+;; of positions — and (b) SUPPRESS the correct keyword closed-row-miss hint
+;; that the same expression used to get. A/B-verified against a pinned
+;; baseline: it was a diagnostic REGRESSION, not merely a new gap. Reachable
+;; via the paren-keyword forms `(get het -1)` / `(map-get het -1)`; the bracket
+;; surface is intercepted by the `postfix-neg` marker and `.N` cannot lex a
+;; sign, which is exactly why no `.N` test caught it.
+(define (ordinal-key-index k)
+  (cond
+    [(expr-nat-val? k) (expr-nat-val-n k)]
+    [(expr-int? k)
+     (let ([n (expr-int-val k)])
+       (and (exact-nonnegative-integer? n) n))]
+    [else #f]))
+
 (define (closed-row-miss-hint ctx e names)
   (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
     (let search ([x e])
       (and (expr? x)
-           (or (let ([mk (projection-parts x)])
+           (or
+            ;; ---- ORDINAL branch (D4.P2, Q_R5): nat key-domain, integer key ----
+            (let ([mk (projection-parts x)])
+              (and mk
+                   (let ([idx (ordinal-key-index (cdr mk))])
+                     (and idx
+                          (let ([tm (whnf (infer ctx (car mk)))])
+                            ;; `closed-nat-row?` (syntax.rkt) IS this conjunction
+                            ;; — Record ∧ 'nat domain ∧ 'closed tail — and is
+                            ;; already the canonical guard at 5 typing-core
+                            ;; sites. The first draft re-derived it inline; use
+                            ;; the ONE definition (the "check for existing
+                            ;; helpers" lesson). CLOSED-only for the same reason
+                            ;; the keyword branch below is: a 'dyn tail means
+                            ;; the position may live in the remainder.
+                            (and (closed-nat-row? tm)
+                                 (not (record-lookup-field tm idx))
+                                 (format-closed-tuple-oob tm idx names)))))))
+            (let ([mk (projection-parts x)])
                  (and mk
                       (expr-keyword? (cdr mk))
                       (let ([tm (whnf (infer ctx (car mk)))])
@@ -156,6 +223,94 @@
                              (eq? (expr-Record-tail tm) 'closed)
                              (not (record-lookup-field tm (expr-keyword-name (cdr mk))))
                              (format-closed-row-miss tm (expr-keyword-name (cdr mk)) names)))))
+               (ormap search (expr-subfields x)))))))
+
+;; ========================================
+;; CIU T6 D4.P3a: the select-block hint (the S7 pattern).
+;; ========================================
+;; Post-hoc walk on the already-failing expr, most-specific-first. It re-runs
+;; the SAME `select-project` walk the infer arm used (one walk, two consumers
+;; — the arm and its diagnostic cannot drift) and formats the failure with
+;; BRANCH context. The three Q_T2 refusal kinds all name the 4d remedy list:
+;; seal / validate / annotate.
+(define (format-select-fail fail names)
+  (define path (select-fail-path fail))
+  ;; D4.P3c: ordinal steps put NUMBERS in the path — ~a, not symbol->string
+  (define branch-str (string-join (map (lambda (p) (format "~a" p)) path) "."))
+  (define label (select-fail-label fail))
+  (define row (select-fail-row fail))
+  ;; D4.P3a adversarial verify: "annotate its row type" was DROPPED from the
+  ;; remedy list — row-literal annotations have no working spelling at HEAD
+  ;; (zero in-tree uses; `def q : {:a Int} := …` refuses), so naming it was
+  ;; the P1b-iii advice-that-does-not-work class. Seal and validate are both
+  ;; VERIFIED working remedies now that select-project projects through
+  ;; schema-typed subjects. Re-add annotate when row annotations become
+  ;; writable (recorded as a Q_T2 adaptation in D4 §5.P3a).
+  (define remedies
+    "seal the subject against a schema (`the Schema subj`) or validate it against one")
+  (case (select-fail-kind fail)
+    [(miss-closed)
+     (string-append
+      (format-closed-row-miss row label names)
+      (format "; in the select branch `~a` — bare field access (no construction) is spelled `.~a`"
+              branch-str label))]
+    [(miss-dyn)
+     (format
+      "Could not infer type — select: field :~a (branch `~a`) is not listed on the open row ~a; a select block asserts its result, so unlisted fields refuse — ~a"
+      label branch-str (pp-expr row names) remedies)]
+    [(unknown-presence)
+     (format
+      "Could not infer type — select: field :~a's presence (branch `~a`) is 'unknown on ~a; a select block asserts its result — ~a"
+      label branch-str (pp-expr row names) remedies)]
+    [(subject-map)
+     (format
+      "Could not infer type — select: the subject~a is a (Map K V), which has no per-field row; a select block needs a record subject — ~a"
+      (if (null? path) "" (format " (branch `~a`)" branch-str)) remedies)]
+    [(subject-tuple)
+     ;; D4.P3c: ordinal selection is LIVE — the recommendation works now.
+     (format
+      "Could not infer type — select: the subject~a is a tuple (nat-keyed row); a keyed block selects NAMED fields — ordinal selection is `x{N M}`, single-element extraction `x.N`"
+      (if (null? path) "" (format " (branch `~a`)" branch-str)))]
+    [(subject-other)
+     ;; P3c verify (rank 3): PVec subjects deserve the ordinal teaching —
+     ;; ordinal steps/branches over vectors are LIVE; only NAMED steps
+     ;; refuse here. Also surface the offending step label (`.-1` was
+     ;; invisible, byte-identical to `.foo`).
+     (if (expr-PVec? row)
+         (format
+          "Could not infer type — select: `~a`~a is not a field of a vector element position — a vector subject takes ordinal steps (`.N`) or ordinal branches (`x{N M}`)"
+          (or label "the step")
+          (if (null? path) "" (format " (branch `~a`)" branch-str)))
+         (format
+          "Could not infer type — select: the subject~a is not a record; a select block projects fields of a keyword row"
+          (if (null? path) "" (format " (branch `~a`)" branch-str))))]
+    ;; ---- D4.P3c: the ordinal fail kinds ----
+    [(ordinal-oob)
+     (string-append
+      (format-closed-tuple-oob row label names)
+      (format "; in the select branch `~a`" branch-str))]
+    [(not-indexable)
+     (format
+      "Could not infer type — select: ordinal `~a` (branch `~a`) needs a tuple or vector subject; ~a — select named fields instead (`x{k}`)"
+      label branch-str
+      (cond
+        [(and (expr-Record? row) (eq? (expr-Record-key-domain row) 'keyword))
+         (format "~a is keyword-keyed" (pp-expr row names))]
+        [(expr-Map? row) "a (Map K V) has no positions"]
+        [else (format "~a has no positions" (pp-expr row names))]))]
+    [else #f]))
+
+(define (select-block-hint ctx e names)
+  (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+    (let search ([x e])
+      (and (expr? x)
+           (or (match x
+                 [(expr-select subject (expr-path branches))
+                  (let ([tm (whnf (infer ctx subject))])
+                    (and (not (expr-error? tm))
+                         (let-values ([(row fail) (select-project ctx tm branches)])
+                           (and fail (format-select-fail fail names)))))]
+                 [_ #f])
                (ormap search (expr-subfields x)))))))
 
 ;; ========================================
@@ -283,6 +438,252 @@
                (ormap search (expr-subfields x)))))))
 
 ;; ========================================
+;; CIU T6 (2026-07-30): the clause-result-mismatch diagnostic.
+;; ========================================
+;; A multi-clause `defn` whose clause bodies have DIFFERENT result types
+;; reported "cannot infer the type of an unannotated parameter …" — a message
+;; that names a subsystem which is working perfectly, and whose own advice ("add
+;; a `spec`") is structurally unable to help. Verified pre-existing at 5e6d9f41
+;; for BOTH clause-dispatch routes, and NOT map-specific:
+;;   defn f | 0    -> {:a 1} | n     -> 5      (Int-literal dispatch → boolrec)
+;;   defn g | zero -> {:a 1} | suc _ -> 5      (ctor dispatch → reduce)
+;;   defn h | 0    -> 1      | n     -> "x"    (no maps involved at all)
+;;
+;; WHY THE OLD HINT LIED. `infer` on a hole-domain lambda returns `(expr-error)`
+;; WITHOUT EVER INSPECTING THE BODY (typing-core.rkt:1127-1129), and
+;; `compile-pattern-group` hard-codes `(surf-hole loc)` as the binder type of
+;; EVERY generated clause lambda (macros.rkt:10282, :10294) — unconditionally,
+;; even when a `spec` is present (a spec feeds only the def's annotation,
+;; macros.rkt:10290). So `infer-hint-msg`'s guard — `(and (expr-error? actual)
+;; (expr-lam? e) hole-or-meta-domain)` — degenerates to "e is a generated clause
+;; lambda" and fired for EVERY failing multi-clause defn whatever the real
+;; cause. Its in-tree claim to be "surgical — only fires for this shape" was
+;; false, and the reason `add a spec` cannot help is the same one: the spec never
+;; reaches the binder.
+;;
+;; THE REAL CAUSE is that the clause-result join is FIRST-ARM-WINS by
+;; construction, not a lattice join. The synthesized motive's body is a hole, so
+;; typing-core allocates ONE fresh meta for it (typing-core.rkt:1251); clause 1's
+;; check solves that meta to clause 1's type; `nf`/`whnf` then RESOLVE the
+;; solution (reduction.rkt meta arm), so clause 2 is checked against CLAUSE 1'S
+;; TYPE (typing-core.rkt:1255-1260). The reduce route does the same with one
+;; shared `expected-type` pushed into every arm (typing-core.rkt:4451-4473).
+;; Differing clauses ⇒ `(expr-error)`.
+;;
+;; WHY NOT THE UNION ROUTE (make the join emit `<A | B>`) — triaged, REJECTED.
+;; A union in a codomain position emits a fork-on-union request at EVERY call
+;; site (`type-map-write` → `maybe-emit-fork-on-union-request`,
+;; typing-propagators.rkt), and that machinery carries TWO open unbounded-hang
+;; defects: DEFERRED.md § "BUG: Union-type checking hangs the type-checker (BSP
+;; non-quiescence)" and § "DEFECT — union-typed def + implicit-binder spec + call
+;; HANGS the type checker". A hang is strictly worse than a bad message. The same
+;; join also serves user-written 3-arg `if` (parser.rkt:1393), so a semantic
+;; change there would alter `if` typing project-wide. The join therefore stays
+;; strict and ONLY the diagnostic changes; emitting unions remains blocked on the
+;; dedicated debugging session those DEFERRED entries call for.
+;;
+;; ⚠ WHY THIS IS PHRASED "BRANCHES" AND NOT "CLAUSES" — the first version tried
+;; to fire only on a GENERATED clause-dispatch spine, so it could say "clause".
+;; The adversarial verify demolished that premise: post-elaboration a generated
+;; clause dispatch and a USER-WRITTEN `match` / `if` are THE SAME NODES, and
+;; there is no discriminator.
+;;   - `expr-int-eq` looked like a generated-dispatch marker. It is not —
+;;     `int-eq` is a user-callable primitive, so `(if [int-eq x 0] 1 "s")` walked
+;;     straight through the gate and was reported as "clauses of a multi-clause
+;;     definition" for a one-clause function.
+;;   - `expr-reduce` is emitted by user `match` too (`expand-match` compiles
+;;     through the SAME `compile-match-tree`, macros.rkt), so a single-clause
+;;     `defn` whose body is a `match` was also reported as multi-clause.
+;;   - the test that asserted the exclusion was VACUOUS: it used `if true 1 "x"`,
+;;     whose target is `true`, not an `int-eq`.
+;; The fix is not a better gate — no gate exists. It is to say something TRUE of
+;; every producer. `defn` clause bodies, `match` arms and `if` branches all share
+;; ONE result type through the same strict join, so "branches" is accurate for
+;; all of them, and dropping the impossible discriminator also picks up the
+;; guard-fallthrough boolrec that the old int-eq gate silently excluded.
+;;
+;; CONTRACT (the S7 hint contract): a best-effort post-hoc walk that runs ONLY on
+;; the already-failing check path, changes NO typing behaviour, and fires ONLY
+;; when it can EXHIBIT two successfully-inferred, non-convertible, REPORTABLE
+;; branch result types. When it cannot prove that it returns #f and the old
+;; parameter hint stands — a deliberately conservative fallback, though note the
+;; fallback message is itself still wrong for some of those cases (see § the
+;; residual gap in DEFERRED.md).
+
+;; Is this TYPE unfit to show a user (and unfit to compare)? Rejects anything
+;; mentioning a de Bruijn variable or a hole, anywhere.
+;;
+;; This ONE predicate closes three separate defects the adversarial verify
+;; demonstrated, which is why it is a filter and not three special cases:
+;;   (1) BLOCKING — WRONG TYPES with raw internal junk. `names` is never extended
+;;       in lockstep with the ctx this walk builds, so a leaf type mentioning a
+;;       bound variable rendered as `[Pi [x <?bvar0>] ?bvar1]` for a body whose
+;;       real type was `Int -> Int`. A type with no bvars renders identically
+;;       whatever `names` holds, so refusing bvar-bearing types removes the
+;;       entire class rather than trying to reconstruct names.
+;;   (2) ORDER-DEPENDENT FIRING. `conv` treats `expr-hole` as a WILDCARD
+;;       (reduction.rkt), so `distinct-up-to-conv` was folding a NON-TRANSITIVE
+;;       relation: one hole-typed branch arriving FIRST absorbed every later
+;;       type and the diagnosis silently died. Two defns differing only in
+;;       constructor declaration order gave different messages. Hole-free types
+;;       make `conv` a proper equivalence here, so the fold is order-independent.
+;;   (3) ARTIFACT LEAKAGE — `_` (a hole) printed as if it were a user type.
+;; Unsolved METAS are deliberately still allowed: `conv` compares them by
+;; identity, not as wildcards, so they break neither (1) nor (2), and for a
+;; genuinely-unknown element type (`'[]` → `List ?m`) reporting it beats
+;; reporting nothing.
+;;
+;; Reflective by construction, so a new expr node cannot silently escape the
+;; check (pipeline.md § "Exhaustive Walkers: prefer the STRUCTURAL answer to the
+;; checklist").
+;;
+;; ⚠ THE DESCENT MUST BE FULLY GENERIC — this predicate took three rounds to get
+;; right because a single `_` hides behind two different non-expr layers, and
+;; each partial version still leaked `{:v _}` into a user-facing message:
+;;   - it does NOT reuse `expr-subfields` above: that helper does
+;;     `(filter expr? f)` on a LIST field, so a list of (label . type) PAIRS —
+;;     exactly an `expr-Record`'s `fields` — yields NOTHING;
+;;   - and it does NOT gate the struct descent on `expr?`: a record field's value
+;;     is a `record-field` WRAPPER struct (syntax.rkt:690), which is not an expr,
+;;     so an `expr?`-gated walk stopped one layer short of the type.
+;; Hence `struct?` (every relevant struct is `#:transparent`) plus `car`/`cdr` of
+;; any pair — covering lists, improper pairs and lists-of-pairs — plus vectors.
+;; Anything narrower silently under-approximates, and the failure mode is a
+;; wrong user-facing message, not an error.
+(define (type-unreportable? t)
+  (let scan ([x t])
+    (cond
+      [(expr-bvar? x) #t]
+      [(expr-hole? x) #t]
+      [(expr-typed-hole? x) #t]
+      [(struct? x)
+       (let ([v (struct->vector x)])
+         (for/or ([i (in-range 1 (vector-length v))])
+           (scan (vector-ref v i))))]
+      [(pair? x) (or (scan (car x)) (scan (cdr x)))]
+      [(vector? x) (for/or ([y (in-vector x)]) (scan y))]
+      [else #f])))
+
+;; The result leaves of a branch spine, each paired with the ctx it must be
+;; inferred in:
+;;   - `expr-boolrec` — BOTH cases are result positions. Covers user `if`
+;;     (parser.rkt:1393), Int-literal clause dispatch (macros.rkt:9916-9920) and
+;;     guard fallthrough (macros.rkt:9913, :9950) alike; no target check, per the
+;;     note above.
+;;   - `expr-reduce` arms — `match` / constructor dispatch (macros.rkt:10013).
+;;     Each arm binds `binding-count` fields; the ctx is extended by that many
+;;     unknown entries, so an arm body that READS a field yields an unreportable
+;;     type and drops out rather than being guessed at.
+;;   - the let-redex `((fn [v : _] body) scrutinee)` binding a pattern variable
+;;     (macros.rkt:9751-9755): DESCEND UNDER THE BINDER with the ctx extended.
+;;     ⚠ Do NOT beta-reduce via `whnf` — that was a silent proof-killer caught by
+;;     the verification battery. It works for a simple body (`| n -> 5`) but
+;;     OVER-REDUCES a record literal's map-assoc chain into a runtime value whose
+;;     type no longer infers, so EVERY record-bodied clause lost its type and the
+;;     hint fell back to the old lying message, while the Int/String cases passed
+;;     throughout — a battery without a record-bodied case ships it green.
+;;   - `__match-fail` typed holes are the incomplete-match filler, not a branch,
+;;     and check against ANY type — skipped.
+;;
+;; TERMINATION is STRUCTURAL: every recursive call is on a proper subfield of
+;; `x`. The first version carried a `(> depth 64)` guard against `whnf`-driven
+;; recursion; with `whnf` gone that guard bought nothing and cost a silent
+;; CORRECTNESS CLIFF — the verify bisected it at exactly 63 clauses fine / 64
+;; clauses back to the lying message, at identical wall time. Removed.
+;;
+;; ORDER: leaves are deliberately NOT labelled "branch 1 / branch 2". The boolrec
+;; route preserves source order, but reduce arms follow the TYPE's constructor
+;; DECLARATION order (macros.rkt:9971-9980), which need not match source order.
+;; Numbering would assert an ordering this walk cannot honour, so the message
+;; lists the disagreeing TYPES instead.
+(define (branch-result-leaves x ctx)
+  (cond
+    [(not (expr? x)) '()]
+    [(expr-boolrec? x)
+     (append (branch-result-leaves (expr-boolrec-true-case x) ctx)
+             (branch-result-leaves (expr-boolrec-false-case x) ctx))]
+    [(expr-reduce? x)
+     (append*
+      (for/list ([arm (in-list (expr-reduce-arms x))])
+        (branch-result-leaves
+         (expr-reduce-arm-body arm)
+         (for/fold ([c ctx])
+                   ([_ (in-range (expr-reduce-arm-binding-count arm))])
+           (ctx-extend c (expr-hole) 'mw)))))]
+    [(and (expr-app? x) (expr-lam? (expr-app-func x)))
+     (let* ([lam (expr-app-func x)]
+            [arg-ty (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+                      (infer ctx (expr-app-arg x)))]
+            [bound-ty (if (and (expr? arg-ty) (not (expr-error? arg-ty)))
+                          arg-ty
+                          (expr-lam-type lam))])
+       (branch-result-leaves (expr-lam-body lam)
+                             (ctx-extend ctx bound-ty 'mw)))]
+    [(expr-typed-hole? x) '()]
+    [else (list (cons x ctx))]))
+
+;; Distinct up to conversion. `conv` (reduction.rkt:4496) is PURE — normalize
+;; then structural compare; it does NOT solve metas, so it is safe on an error
+;; path. Callers MUST pre-filter with `type-unreportable?`: `conv`'s
+;; hole-as-wildcard rule would otherwise make this fold non-transitive and hence
+;; order-dependent (see (2) above).
+(define (distinct-up-to-conv tys)
+  (for/fold ([acc '()] #:result (reverse acc))
+            ([t (in-list tys)])
+    (if (for/or ([u (in-list acc)]) (conv t u)) acc (cons t acc))))
+
+(define (format-branch-result-mismatch tys names)
+  ;; 6, matching `format-closed-row-miss`'s house convention above.
+  (define shown (if (> (length tys) 6) (take tys 6) tys))
+  (define more (- (length tys) (length shown)))
+  (string-append
+   ;; The "Type mismatch" opening is DELIBERATE, not incidental prose:
+   ;; lsp/diagnostics.rkt's `error->code` derives the diagnostic CODE by regexp
+   ;; over this message text, testing `type.?mismatch` → E1001 FIRST. Without a
+   ;; recognised substring the code would silently degrade to E0000. E1001 is
+   ;; also the honest classification — the struct really is a
+   ;; type-mismatch-error, and the branch results really do mismatch. (The old
+   ;; message matched `cannot infer` → E1004.)
+   "Type mismatch between branches — every branch must have the same result type,"
+   " but these disagree: "
+   (string-join (map (lambda (t) (pp-expr t names)) shown) " vs ")
+   (if (> more 0) (format " (+~a more)" more) "")
+   ". The clauses of a multi-clause `defn`, the arms of a `match`, and both"
+   " branches of an `if` all share ONE result type"
+   " (a union result type is not inferred here)."))
+
+(define (branch-result-mismatch-hint ctx e names)
+  (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+    ;; Peel lambdas to reach the branch spine. Generated clause lambdas are
+    ;; hole-domain by construction (macros.rkt:10282/:10294); an annotated
+    ;; user lambda keeps its own domain and is not peeled, which is why the ctx
+    ;; stays sound. Reaching the spine with ZERO peels is fine and intended — a
+    ;; plain `def x : Int := if c 1 "x"` gets the branch message instead of a
+    ;; bare "Type mismatch".
+    (let peel ([x e] [c ctx])
+      (cond
+        [(and (expr-lam? x)
+              (let ([d (expr-lam-type x)])
+                (or (expr-hole? d) (expr-meta? d))))
+         (peel (expr-lam-body x) (ctx-extend c (expr-lam-type x) 'mw))]
+        [(not (or (expr-reduce? x) (expr-boolrec? x))) #f]
+        [else
+         (let* ([leaves (branch-result-leaves x c)]
+                [tys (filter
+                      (lambda (t)
+                        (and (expr? t)
+                             (not (expr-error? t))
+                             (not (type-unreportable? t))))
+                      (map (lambda (l)
+                             (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+                               (whnf (infer (cdr l) (car l)))))
+                           leaves))]
+                [distinct (distinct-up-to-conv tys)])
+           (and (>= (length leaves) 2)
+                (>= (length distinct) 2)
+                (format-branch-result-mismatch distinct names)))]))))
+
+;; ========================================
 ;; Infer with error reporting
 ;; ========================================
 ;; Returns (or/c Expr? prologos-error?)
@@ -296,6 +697,7 @@
                                     (cross-schema-seal-hint ctx e names);; F1b.7f (c) cross-schema `the`
                                     (validate-nonmap-hint ctx e names)  ;; F1b.7f (d) validate non-map subj
                                     (app-domain-schema-hint ctx e names);; F1b.7f (b) schema arg vs param
+                                    (select-block-hint ctx e names)     ;; D4.P3a (before S7: branch-aware)
                                     (closed-row-miss-hint ctx e names)  ;; S7
                                     (if (hole-lambda-over-generic-op? e)
                                         i70-inference-hint
@@ -451,8 +853,22 @@
                    ;; projection) or `defn f [x] [+ x 1]` (arithmetic): both need
                    ;; p / x to have a known type. Surgical — only fires for this
                    ;; shape, so every other check failure keeps "Type mismatch".
+                   ;; CIU T6 (2026-07-30): ordered BEFORE infer-hint-msg, whose
+                   ;; guard below is VACUOUSLY TRUE for every generated clause
+                   ;; lambda and so mis-attributed a branch-result disagreement
+                   ;; to the parameter. This one PROVES its claim (two inferred,
+                   ;; non-convertible, reportable branch result types) or returns
+                   ;; #f and lets the parameter hint stand. See § the
+                   ;; branch-result-mismatch diagnostic above.
+                   ;; Guarded on the two msgs that PRECEDE it in the `or` so the
+                   ;; walk-and-infer is skipped when it would be discarded.
+                   [branch-result-msg
+                    (and (not seal-msg)
+                         (not seal-type-msg)
+                         (branch-result-mismatch-hint ctx e names))]
                    [infer-hint-msg
                     (and (not seal-msg)
+                         (not branch-result-msg)
                          (expr-error? actual)
                          (expr-lam? e)
                          (let ([dom (expr-lam-type e)])
@@ -464,7 +880,8 @@
                           "Annotate the parameter (`[x : T]`) or add a `spec`."))])
               (type-mismatch-error
                loc
-               (or seal-msg seal-type-msg infer-hint-msg "Type mismatch")
+               (or seal-msg seal-type-msg branch-result-msg infer-hint-msg
+                   "Type mismatch")
                (pp-expr t names)
                (if (expr-error? actual) "<could not infer>" (pp-expr actual names))
                (pp-expr e names)
@@ -619,11 +1036,119 @@
 ;; Returns (or/c #t prologos-error?)
 ;; Runs checkQ-top to verify that variable usage matches declared multiplicities.
 ;; For v1, error message is generic (checkQ-top returns boolean only).
+;; Render a multiplicity for a user, not for the implementation.
+(define (pp-mult-user m)
+  (case m
+    [(m0) "0 — erased, must not be used at runtime"]
+    [(m1) "1 — linear, must be used exactly once"]
+    [(mw) "unrestricted — any number of uses"]
+    [else (format "~a" m)]))
+
+;; The declaration as the user wrote it, for inline use mid-sentence.
+(define (pp-mult-decl-short m)
+  (case m
+    [(m0) "`:0` (erased)"]
+    [(m1) "`:1` (linear)"]
+    [(mw) "unrestricted"]
+    [else (format "~a" m)]))
+
+;; What a branch pair actually did with the resource.
+(define (pp-branch-usage m)
+  (case m
+    [(m0) "not used"]
+    [(m1) "used once"]
+    [(mw) "used more than once"]
+    [else (format "~a" m)]))
+
+;; QTT P4 (2026-07-30): fill `multiplicity-error`'s three rendered fields with
+;; REAL values. They always existed and always rendered (errors.rkt) —
+;; `Variable:` used to receive the entire pretty-printed body, and
+;; `Declared multiplicity:` / `Actual usage:` the string literals "declared" and
+;; "actual". So this is not new plumbing; it is computing what the fields were
+;; always shaped to hold.
+;;
+;; The analysis lives in qtt.rkt (`explain-qtt-failure`) beside the rules it
+;; reproduces — see the contract there. It returns #f whenever it cannot PROVE a
+;; cause, in which case the generic message stands unchanged.
+;;
+;; ⚠ The word "Multiplicity" is load-bearing, not prose: lsp/diagnostics.rkt
+;; derives the diagnostic CODE by regexp over this text and maps
+;; `(?i:multiplicity)` → E1003. Keep it, and keep "type mismatch" OUT — that
+;; pattern is tested FIRST and would silently retag this class as E1001.
 (define (checkQ-top/err ctx e t [loc srcloc-unknown] [names '()])
   (if (checkQ-top ctx e t)
       #t
-      (multiplicity-error loc
-                          "Multiplicity violation"
-                          (pp-expr e names)
-                          "declared"
-                          "actual")))
+      (let ([why (with-handlers ([(lambda (_) #t) (lambda (_) #f)])
+                   (explain-qtt-failure ctx e t))])
+        (match why
+          ;; A linear resource consumed on some branches and dropped on others —
+          ;; the class QTT P3 introduced, which had no diagnostic at all.
+          [(list 'branch ty m-a m-b)
+           (multiplicity-error
+            loc
+            (string-append
+             "Multiplicity violation — a linear value must be used exactly once"
+             " on EVERY path, but the branches disagree: it is "
+             (pp-branch-usage m-a) " in one branch and " (pp-branch-usage m-b)
+             " in another. Dropping it on a path does not release it (there is"
+             " no implicit destructor), so consume it in every branch.")
+            (string-append "the linear value of type " (pp-expr ty names))
+            (pp-mult-user 'm1)
+            (string-append (pp-branch-usage m-a) " / " (pp-branch-usage m-b)
+                           " across branches"))]
+          ;; QTT P6: a branch the checker could not analyse, while a linear
+          ;; resource was in play. The claim is deliberately about the ANALYSIS,
+          ;; not about the program — "I cannot verify this" is a fact we have;
+          ;; "your code leaks" is not, since the unanalysable branch may well
+          ;; have consumed the resource correctly.
+          [(list 'unanalysable ty)
+           (multiplicity-error
+            loc
+            (string-append
+             "Multiplicity violation — this match has a branch that cannot be"
+             " analysed (its scrutinee is not a data type with known"
+             " constructors, so the branch's bindings cannot be derived), and a"
+             " linear value of type " (pp-expr ty names) " is consumed by"
+             " another branch. Whether every path consumes it exactly once"
+             " cannot be decided, so it is refused rather than assumed."
+             " Matching on a `data` type instead makes the branches analysable.")
+            (string-append "the linear value of type " (pp-expr ty names))
+            (pp-mult-user 'm1)
+            "undecidable — one branch could not be analysed")]
+
+          ;; A binder whose usage does not match its declaration.
+          ;;
+          ;; ⚠ THE DETAIL GOES IN THE MESSAGE, not only in the struct fields.
+          ;; `multiplicity-error`'s `variable`/`declared`/`actual` render via
+          ;; `format-error`, but tools/run-file.rkt — and ~11 test files that
+          ;; copy its `result->string` — print `prologos-error-message` ALONE.
+          ;; Detail placed only in the fields is therefore invisible to users and
+          ;; to the `;;N=>` acceptance harness. Caught by running the probe:
+          ;; the first draft did exactly that and printed a bare "Multiplicity
+          ;; violation" for every binder case. The fields are still filled, for
+          ;; `format-error` and LSP consumers.
+          [(list 'binder ty declared actual)
+           (multiplicity-error
+            loc
+            (string-append
+             "Multiplicity violation — the parameter of type "
+             (pp-expr ty names) " is declared " (pp-mult-decl-short declared)
+             " but is " (pp-branch-usage actual) "."
+             (cond
+               [(and (eq? declared 'm1) (eq? actual 'm0))
+                " A linear value must be consumed; nothing may drop it."]
+               [(and (eq? declared 'm1) (eq? actual 'mw))
+                " A linear value must be consumed exactly once."]
+               [(eq? declared 'm0)
+                " An erased value exists only at type level and cannot be used at runtime."]
+               [else ""]))
+            (string-append "the parameter of type " (pp-expr ty names))
+            (pp-mult-user declared)
+            (pp-mult-user actual))]
+          ;; Nothing proven — keep the message that shipped before P4.
+          [_
+           (multiplicity-error loc
+                               "Multiplicity violation"
+                               (pp-expr e names)
+                               "declared"
+                               "actual")]))))
