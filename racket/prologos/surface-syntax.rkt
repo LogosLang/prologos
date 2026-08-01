@@ -1020,7 +1020,12 @@
 ;; CIU T6 D4.P3a: the select block `x{…}`. branches = STATIC data, segmented +
 ;; malformed-checked + duplicate-checked at the parser ($select head arm):
 ;; branch = (listof step); step = symbol | (cons '@sub (listof branch)).
-(struct surf-select          (subject branches srcloc) #:transparent)
+;; D4.P4b-ii-2b: `sort` ∈ 'path | 'block — WHICH SPELLING minted this select.
+;; It must be carried from the PARSER, because the elaborator cannot recover
+;; it: the fold mints its sentinel in preparse, and by the time a surf-select
+;; exists the origin is gone. Before this field the elaborator HARD-CODED
+;; 'block, which is exactly why the fold could not be flipped.
+(struct surf-select          (subject branches sort srcloc) #:transparent)
 ;; Solve: (solve (goal))
 (struct surf-solve            (goal srcloc) #:transparent)
 ;; Solve-one: (solve-one (goal)) — returns first answer or none

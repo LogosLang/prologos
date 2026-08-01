@@ -1163,6 +1163,7 @@
        (not (eq? x '$dot-brace))        ; D4.P1b-ii `.{ }` sub-block sentinel — see below
        (not (eq? x '$select-brace))     ; D4.P1b-iii adjacent-brace select block
        (not (eq? x '$select))           ; D4.P3a fused select head (LOUD-if-missed: whole-file abort in a defmacro template)
+       (not (eq? x '$select-path))      ; D4.P4b-ii-2b the DOT select head — same LOUD-if-missed class
        ;; ⚠ WHY $dot-brace IS HERE (caught by adversarial verify, pre-commit):
        ;; omitting it made `.{ }` inside a defmacro TEMPLATE read as a macro
        ;; pattern variable, so datum-subst raised "Unbound pattern variable" —
@@ -2012,12 +2013,18 @@
     ;; lying downstream errors), while the PAYLOAD stays raw — descending into
     ;; it would fuse `($dot-access k)` items against their neighbours into
     ;; `map-get`, silently destroying the branch structure.
-    [(and (pair? datum) (eq? (car datum) '$select))
+    ;; D4.P4b-ii-2b: `$select-path` (the DOT spelling's head) is opaque the
+    ;; SAME way and for the same reason — hence one arm over both heads rather
+    ;; than a copy. The b-ii-2 audit refuted the claim that this opacity costs
+    ;; the dot surface its sibling passes: every pass the arm bypasses is keyed
+    ;; on a HEAD a folded access node never has (def/defn/spec/…; $pipe;
+    ;; let/racket), probe-verified across five shapes.
+    [(and (pair? datum) (memq (car datum) '($select $select-path)))
      (if (pair? (cdr datum))
          (let ([subj* (preparse-expand-form (cadr datum) reg depth)])
            (if (equal? subj* (cadr datum))
                datum
-               (list* '$select subj* (cddr datum))))
+               (list* (car datum) subj* (cddr datum))))
          datum)]
     ;; List form — check head symbol for macros
     [(and (pair? datum) (symbol? (car datum)))
@@ -2698,6 +2705,8 @@
                       ;; D4.P1b-iii: selection sentinels are opaque here too.
                       ;; D4.P3a: `$select` is NOT skipped — recursion reaches
                       ;; its arm above, which expands the SUBJECT only.
+                      ;; D4.P4b-ii-2b: `$select-path` likewise — it shares that
+                      ;; arm, so it must NOT join this skip list either.
                       (and (pair? sub) (memq (car sub) '($select-brace $dot-brace))))
                   sub
                   (preparse-expand-form sub reg depth)))

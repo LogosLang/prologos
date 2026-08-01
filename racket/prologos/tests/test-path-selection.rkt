@@ -34,7 +34,10 @@
          "../champ.rkt"
          (only-in "../rrb.rkt" rrb-from-list)   ;; D4.P4a: twin-regression fixture
          "test-support.rkt"
-         "../parse-reader.rkt")
+         "../parse-reader.rkt"
+         ;; D4.P4b-ii-2b: the surf-* layer, for the $select-path sentinel pins
+         (only-in "../surface-syntax.rkt"
+                  surf-select? surf-select-sort surf-select-branches))
 
 (define-runtime-path lib-dir "../lib")
 
@@ -3183,3 +3186,48 @@
                                    with-meta))
   (check-equal? (expr-select-tier mapped) (expr-true)
                 "the mapper must DESCEND into the tier, or a meta there can never be solved"))
+
+;; ============================================================
+;; D4.P4b-ii-2b — the `$select-path` sentinel (machinery; the fold not yet flipped)
+;; ============================================================
+
+(test-case "b-ii-2b: `$select-path` parses to a 'path surf-select"
+  ;; a DISTINCT sentinel from `$select` [owner ruling]: the sort cannot be
+  ;; recovered downstream, because the fold mints in preparse and by the time a
+  ;; surf-select exists the origin is gone — which is why the elaborator had to
+  ;; hard-code 'block before this slice.
+  (define r (parse-datum '($select-path foo bar)))
+  (check-true (surf-select? r))
+  (check-eq? (surf-select-sort r) 'path "the DOT spelling carries 'path")
+  (check-equal? (surf-select-branches r) '((bar)) "exactly one branch, per Q_U13's NEST encoding"))
+
+(test-case "b-ii-2b: the ARITY GATE restores the loud behaviour the pipe caller relies on"
+  ;; THE POINT of the distinct sentinel. `map-get`'s parser arm imposes EXACT
+  ;; arity 2; `$select`'s has NO upper bound, so every surplus arg becomes
+  ;; another BRANCH. `apply-pipe-step` appends the accumulator into any
+  ;; hole-free step, so a bare `$select` mint would turn `|> m foo.bar` from a
+  ;; LOUD arity-error into a SILENT two-branch select — the piped value quietly
+  ;; becoming a selection branch, at zero errors. The same append lives in the
+  ;; `>>` compose twin, so a blacklist fix would have had to find BOTH; the
+  ;; gate fixes every caller at once, structurally.
+  (define r (parse-datum '($select-path foo bar m)))
+  (check-true (prologos-error? r) "a surplus payload arg must REFUSE, not become a branch")
+  (check-regexp-match #rx"exactly one field" (format "~a" r))
+  (check-regexp-match #rx"\\|>" (format "~a" r)
+                      "the message must name the pipe, since that is how the surplus arrives"))
+
+(test-case "b-ii-2b: the BLOCK sentinel is untouched — multi-branch stays legal"
+  ;; the gate must be scoped to the path sort; `x{a b}` is a legitimate
+  ;; two-branch block and must not be caught by it
+  (define r (parse-datum '($select foo bar m)))
+  (check-true (surf-select? r))
+  (check-eq? (surf-select-sort r) 'block)
+  (check-equal? (surf-select-branches r) '((bar) (m))))
+
+(test-case "b-ii-2b: the surf-select sort THREADS to the carrier through elaboration"
+  ;; the elaborator no longer hard-codes 'block; before this the sort had no
+  ;; channel at all from parser to carrier
+  (define rs (run-ws-raw "def cfg := {:server {:host \"h\"}}\ncfg{server}\n"))
+  (check-false (ormap prologos-error? rs))
+  ;; the block spelling still round-trips as a block (pp renders by sort)
+  (check-regexp-match #rx"server" (format "~a" (last rs))))

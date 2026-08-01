@@ -3188,14 +3188,15 @@
     ;; elaborated expr-lam (a Racket closure would serialize to an error stub).
     ;; CIU T6 D4.P3a: select block — branches are static data (segmented +
     ;; checked at the parser); only the subject elaborates.
-    [(surf-select subject branches loc)
+    [(surf-select subject branches sort loc)
      (let ([subj (elaborate subject env depth)])
        (if (prologos-error? subj)
            subj
-           ;; D4.P4b-ii-1: sort `'block` — `x{…}` PROJECTS. b-ii-2's fold
-           ;; migration mints the SAME carrier at `'path` for `x.a`, which is
-           ;; exactly why the sort cannot be derived from the node's shape.
-           (expr-select subj (expr-path branches 'block) #f)))]
+           ;; D4.P4b-ii-2b: the sort now ARRIVES from the parser rather than
+           ;; being hard-coded — `x{…}` carries 'block, `x.a` will carry 'path.
+           ;; The tier stays #f here; the assertive tier is a property of the
+           ;; user's DIRECT projection and is minted on the path arm.
+           (expr-select subj (expr-path branches sort) #f)))]
 
     [(surf-validate sname subject loc)
      (let* ([schema-entry (lookup-schema-by-name sname)]

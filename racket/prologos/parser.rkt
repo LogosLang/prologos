@@ -1249,7 +1249,49 @@
                               (map (lambda (a) (if (syntax? a) (syntax->datum a) a))
                                    (cdr args))
                               loc)])
-                 (or err (surf-select subj branches loc))))))]
+                 (or err (surf-select subj branches 'block loc))))))]
+
+    ;; CIU T6 D4.P4b-ii-2b — `$select-path`: the DOT spelling's head, minted by
+    ;; `rewrite-dot-access`. A DISTINCT sentinel from `$select` [owner ruling],
+    ;; because the sort cannot be recovered downstream — the fold mints in
+    ;; preparse, and by the time a surf-select exists the origin is gone, which
+    ;; is why the elaborator had to hard-code 'block before this.
+    ;;
+    ;; ⭐ THE ARITY GATE IS THE POINT, not bookkeeping. `map-get`'s arm imposes
+    ;; EXACT arity 2; `$select`'s has only an emptiness check and NO upper
+    ;; bound, so every surplus arg becomes another BRANCH. `apply-pipe-step`
+    ;; appends the accumulator into any hole-free step, so under a bare
+    ;; `$select` mint `|> m foo.bar` would go from a LOUD arity-error to a
+    ;; SILENT two-branch select — the piped value quietly becoming a selection
+    ;; branch. (The same append lives in the `>>` compose twin, so a blacklist
+    ;; fix would have had to find both.) A path selector is exactly ONE branch
+    ;; under Q_U13's NEST encoding, so enforcing that HERE restores the loud
+    ;; behaviour structurally, for every caller at once.
+    [(and (symbol? head) (eq? head '$select-path))
+     (cond
+       [(null? args)
+        (parse-error loc "a field access needs a subject — write `x.field`" #f)]
+       [else
+        (define subj (parse-datum (car args)))
+        (cond
+          [(prologos-error? subj) subj]
+          [else
+           (define-values (branches err)
+             (segment-select-items
+              (map (lambda (a) (if (syntax? a) (syntax->datum a) a)) (cdr args))
+              loc))
+           (cond
+             [err err]
+             [(not (= (length branches) 1))
+              ;; NOT reachable from well-formed source: the fold mints one
+              ;; branch per level. It IS reachable when something appends into
+              ;; the payload — which is exactly the pipe/compose hazard.
+              (parse-error
+               loc
+               (format "field access takes exactly one field, got ~a — if this came from a `|>` or `>>` step, the piped value was appended into the access; write the step with an explicit hole (`_`)"
+                       (length branches))
+               #f)]
+             [else (surf-select subj branches 'path loc)])])])]
 
     ;; $nat-literal sentinel: 42N → surf-nat-lit (Nat suc-chain)
     [(and (symbol? head) (eq? head '$nat-literal))
