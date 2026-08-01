@@ -892,6 +892,36 @@ items of the hold-point, ruled before P4a opened:
   (the refusal + its guided error); nothing before P4d reads this decision —
   verified, `quests:t` sits COMMENTED at corpus `:235`, so it produces no
   datums and P4c's reader-datum A/B does not touch it.
+
+  > **✅ THE UPSTREAM FIX HAS LANDED — 2026-07-31.** The spun-out mini-track is
+  > COMPLETE: `solve`/`solve-with`/`explain`/`explain-with` now return `PVec`
+  > (`b2c4366a`), and the `let x := (goal …)` implicit-solve gap found alongside
+  > it is closed (`b5b641b9`). Doc: `docs/tracking/2026-07-31_SOLVE_CARRIER_SPINOUT.md`.
+  > **So the Q_U9 refusal now costs solve rows NOTHING** — `def quests := solve
+  > (quest t g r)` is already `[PVec {…}]`, and `quests:t` will work at P4d with
+  > no `pvec-from-list` hop at all. The corpus example's two `map` sites needed
+  > no source change (see the correction below).
+  >
+  > **Two claims in the paragraph above did NOT survive contact — correct them
+  > before relying on either:**
+  > 1. **"Seam measured at TWO lines" — it was SEVEN.** The two named are real,
+  >    but the census missed the three DISPLAY walkers (`display-row-type-parts`
+  >    + `display-result-rows` in typing-core, `pp-solve-echo-ordered` in
+  >    driver), each of which fails **silently** — the B3.2 coinductive echo
+  >    refinement and the POL.3 declaration-order echo just quietly stop firing.
+  >    It also missed `pnet-serialize.rkt`, where the carrier reaches module
+  >    caches via POL.10 and hit a **live hash-persistence defect** (`rrb-root`'s
+  >    `tail` is a raw Racket vector and `deep-s->v` has no `vector?` arm, so
+  >    champ rows leaked through with `equal-hash-code` values baked in).
+  > 2. **"2 live `.prologos` sites" need rewriting — they did NOT.** The census
+  >    read `spec map … [List A] -> List B` and concluded `map` is
+  >    List-monomorphic; that spec is one *instance* under container-generic
+  >    dispatch. `map`/`filter`/`length`/`first` all carry the PVec carrier
+  >    through unchanged, so only the `;;NN=>` markers moved. A `spec` line is
+  >    evidence about an instance, not about dispatch.
+  >
+  > The `~31 mechanical test pins` and the `nil`→`@[]` empty-shape call were
+  > both accurate.
 - **The `update-in` ω FENCE — RATIFIED [owner, 2026-07-31].** `update-in`
   accepts **grade-1 selectors only**; an ω-bearing selector refuses LOUDLY.
   Broadcast WRITES are spec §7.7 traversal territory, explicitly not v1.

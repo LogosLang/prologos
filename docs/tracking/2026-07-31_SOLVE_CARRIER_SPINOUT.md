@@ -1,7 +1,8 @@
 # Rel/CIU seam spin-out — the SOLVE CARRIER: `List` → `PVec`
 
-**Status**: 🔄 in progress · **Opened** 2026-07-31 · **Base HEAD** `cab30b9a` ·
-**Branch** `focused-morse-3454bf`
+**Status**: ✅ **COMPLETE** 2026-07-31 · **Base HEAD** `cab30b9a` ·
+**Branch** `focused-morse-3454bf` (NOT pushed) · **Gate**: full suite **9548 / 477 / 0**;
+8 acceptance files **296/296**
 
 ## Why
 
@@ -26,8 +27,8 @@ Second, unrelated-but-adjacent deliverable: the **`let` implicit-solve gap** (§
 |---|---|---|---|
 | P0 | Census at HEAD, acceptance file, `explain` disposition ruling | ✅ | this doc; `examples/2026-07-31-solve-carrier.prologos` |
 | P1 | Carrier flip: typing + runtime + display walkers + consumers + `.pnet` | ✅ | `b2c4366a` |
-| P2 | `let` implicit-solve gap + guided diagnostic | ✅ | `f2fd9d9d` |
-| X.close | Full-suite gate, roadmap, D4 §Q_U9 back-note | ✅ | `8d0e3d38` |
+| P2 | `let` implicit-solve gap + guided diagnostic | ✅ | `b5b641b9` (+ `353c465e` foreign-block fix) |
+| X.close | Full-suite gate, roadmap, D4 §Q_U9 back-note | ✅ | this commit |
 
 ## 1. The seam — VERIFIED at `cab30b9a`
 
