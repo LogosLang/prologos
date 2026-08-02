@@ -21,29 +21,33 @@ rulings, censuses and test delta live in its own section.
 
 | Phase | Description | Status | Notes |
 |---|---|---|---|
-| **P0** | **Acceptance corpus** — augment the EXISTING acceptance file with the spec §10 examples + Appendix fixtures; `--check` gated; new forms commented until their phase lands | ✅ | §5.P0 · `e2674208` — 28/28 markers, 0 errors; all 7 fixtures load (layout via `def X`, issue #80 sidestepped); corpus phase-tagged in HEAD notation; carrier pins double as §2.3 docs |
-| **P1a** | **Retirement batch + substrate** — dot-key family · the FULL `broadcast-get` chain (reader + parser keyword + surf + elaborator + node) · `m[:kw]` · reject batch · `surface-rewrite.rkt` `dot-lbrace` cleanup (BEFORE any re-mint) · the marker-form diagnostic seat | ✅ | §5.P1a · **`859b529d`** — suite 9253/474/0, acceptance 28/28 + 89/89, −744/+320; adversarial verify found 2 whole-file-abort defects (1 MINE, in the seat) → fixed + pinned pre-commit |
-| **P1b-i** | **Repairs + probes + the Q8 DRAFT** — the top-level `<` swallow fix (Q_M4) · WS narrowing typed vars · `def ?x` reservation (Q_M3) · the Q_M1 gating probe + `:N` / keyword-`*` / `:<` · **Q8 written from the results** | ✅ | §5.P1b-i + **§Q8** · `fc65ca54` — suite 9263/474/0, corpus A/B 160 files / 2 intended diffs; **Q8 owner-reviewed ✅ 2026-07-28, amended by Q_M8** (ordinals multi-digit in both bands) |
-| **P1b-ii** | **The `.{` opener** — `dot-lbrace` re-mint across **EIGHT** edit regions (not six) incl. the surviving `surface-rewrite.rkt:516` POSITIVE addition; plain `'rbrace` closer (Q_M5); new `$dot-brace` sentinel + `dot-brace-group` tag + tree-parser arm (Q_N1); the Q_N3 two-grouper agreement guard | ✅ | §5.P1b-ii · **`1a1091d4`** — suite **9279/474/0**, acceptance 28/28 + 89/89, corpus A/B **158 files / 1 intended diff**; adversarial verify caught a **BLOCKING regression I introduced** (`$dot-brace` missing from `pattern-var?` → whole-file abort in a defmacro template) — fixed + pinned pre-commit |
-| **P1b-iii** | **Brace adjacency + the head registry + Q_M8** — the forced `$select-brace` sentinel (Q_M6) · the `reader-forms.rkt` leaf registry · adjacency in BOTH groupers (Q_N7) · bucket 4 ruled SELECT (Q_N5) · the `:N` digit-run widening + the structural `fused-type-annot?` repair (Q_N4) · P1b-ii's residual CLOSED | ✅ | §5.P1b-iii · **`a6af2761`** — suite **9304/474/0**, acceptance 28/28 + 89/89, corpus A/B **158 files / ZERO diffs**; adversarial verify caught **3 BLOCKING** (one non-idempotent fold → a silently-dropped `defn` clause) + 10 SIGNIFICANT — all fixed or filed pre-commit |
-| **P2** | **Grade-1 core** — `.k`/`.N` access + bare-path extraction. Carries **Q_M8's dot half** (`digit+` at the dot). Ruled at the mini-audit: **`.N` REUSES `$postfix-index`** (Q_R1 — near-zero registrations, fixpoint inherited, `v[0]` ≡ `v.0` byte-identical) · **copy the `:N` trailing guard** (Q_R2) · **dot band stays adjacency-free** (Q_R3) · `m.0` moves out of the v2 block (Q_R4) · **the `.N` error surface IS IN SCOPE** (Q_R5) | ✅ | §5.P2 · **`3005170b`** — suite **9370/475/0**, acceptance **35/35** + 89/89, corpus A/B **158 files / ZERO diffs**; audit `wf_22020418-a5f` (**12th** consecutive premise refuted); doc-truth separately `0e5a56a3` (Q_R6); adversarial verify caught **a diagnostic REGRESSION I introduced** + 2 more, all fixed pre-commit; DEFERRED 9–13 |
-| **P3a** | **The node + KEYED blocks, no `^`** — `surf-select`/`expr-select` (full pipeline.md cost paid once; twins; walkers via the generic fallback; NO PNET bump) · payload segmentation + the malformed-payload seat · **D-lenient presence** (Q_T2) · subject-once reduction · **strict merge for plain keys BEFORE `make-record` can last-win** · type-position refusal · branch-aware miss errors · §9's learnability pair | ✅ | §5.P3a · **`290f77f9`** — suite **9418/475/0**, acceptance **41/41** + records, battery 136/136, neighborhood 623/21; Q_U1 (corpus list corrected, `6d919142`); adversarial verify caught **1 BLOCKING** (block-pipe select corruption at 0 errors — 6th consecutive slice) + 3 SIGNIFICANT, all fixed pre-commit; DEFERRED 15–20 |
-| **P3b** | **The `^` family** — the ONE splitter (continuation grammar `-`?·{ε\|label\|`_`} + `^..`) · dissolve/splice · in-place rename · `^_` Reading N · the `^-` collapse family (Q_T7) · `^..` (Q_T8) · **output-level-local merge** (Q_T3, the monotonicity pin) · the Q_T4a ordinal-`^` guided error · the malformed-`^` battery | ✅ | §5.P3b · **`36ce601c`** — suite **9469/475/0**, acceptance **50/50** + records, battery 178; light re-grounding only (per Q_T5); adversarial verify caught **1 BLOCKING** (whole-datum ordinal-rekey marker → match-arm whole-file abort; fixed ELEMENT-WISE) + 8 SIGNIFICANT — all fixed pre-commit; DEFERRED 21–22; Q_U4 candidate flagged (sub-block synth scope) |
-| **P3c** | **Keyless + L4 + honest nesting** — the nat-row mint at EVERY n (incl. 1 and homogeneous n) · ordinal branches `{N M}` · the L4 mixing error · `⟨String⟩` 1-tuple pins · the G11 one-space pair pinned side by side | ✅ | §5.P3c · **`1b021d57`** — suite **9497/475/0**, acceptance **52/52**, battery 206; P3 (BLOCKS) COMPLETE; the verify's FIRST no-BLOCKING slice in eight (2 SIGNIFICANT fixed pre-commit: the @ord walk-to-leaf twin-drift, the decimal-fusion leak); G11 landed AS AMENDED; in-block `v[0]`≡`.0` ratified-by-pin |
-| **P4** | **Broadcast ω** — ⭐ **P4a ✅ · P4b ✅ COMPLETE** (b-i carrier + b-ii `$dot-access` migration; `x.a` now mints the unified selector carrier) · P4c–P4e ⬜ — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | §5.P4 · CO-DESIGN: audit `wf_8458c23b` + options panel run; **Q_U5** (ONE reified selector carrier, monomorphic — F-row carries bound-selector precision) + **Q_U6** (WHOLESALE path migration; P4a totality/repairs → P4b carrier → P4c+ ω) RULED 2026-07-31; **Q_U7** RULED (the `(@bcast step)` wrapper; 4b restated) · **Q_U8** RULED (uniform positional `$bcast-step` mint + parser position-dispatch; A/B named-diff-set) — partition LOCKED P4a–P4e; **the PAUSE is CLEARED 2026-07-31: Q_U9 RULED (`:` REFUSES over `List` — no native carrier + the key-sort thesis does not reach a cons-spine; guided error naming `pvec-from-list`; the `Functor`-instance door named; the solve-carrier counter resolved UPSTREAM by the `solve-*`→PVec mini-track) + the `update-in` ω fence and the whole-node abort both RATIFIED**; ⚠ LET merge `5e16ead4` landed mid-walk (audit coords @ `02dd27d7`) |
-| **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | §5.P4a · battery 204 → **224** |
-| **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [§5.P4c](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([the inverted default](#p4c-2-inverted)) · **P4c-3 ✅ `d477772c`** ([the enable-set moves to P4c-4](#p4c-3)) · P4c-4/5 ⬜ |
-| **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | §5.P5 · L1–L5 law battery |
-| **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | §5.PX · position flexible |
-| **P6** | **Demand semantics** — RULED STAGED (4a); **decision ✅ Q_U3 (owner, 2026-07-30): option (c)** — deferred to a named post-v1 phase, charter stub in §5.P6 | ⬜ (residue = the X.close gate row only) | §5.P6 |
-| **X.close** | **MANDATORY** — bench matrix · DEFERRED triage · doc-truth sweep · memory fold · **Stage-5 PIR** | ⬜ | §5.X · the track does not flip ✅ without the PIR |
+| **P0** | **Acceptance corpus** — augment the EXISTING acceptance file with the spec §10 examples + Appendix fixtures; `--check` gated; new forms commented until their phase lands | ✅ | [§5.P0](#p0) · `e2674208` — 28/28 markers, 0 errors; all 7 fixtures load (layout via `def X`, issue #80 sidestepped); corpus phase-tagged in HEAD notation; carrier pins double as [§2.3](#s2-3) docs |
+| **P1a** | **Retirement batch + substrate** — dot-key family · the FULL `broadcast-get` chain (reader + parser keyword + surf + elaborator + node) · `m[:kw]` · reject batch · `surface-rewrite.rkt` `dot-lbrace` cleanup (BEFORE any re-mint) · the marker-form diagnostic seat | ✅ | [§5.P1a](#p1a) · **`859b529d`** — suite 9253/474/0, acceptance 28/28 + 89/89, −744/+320; adversarial verify found 2 whole-file-abort defects (1 MINE, in the seat) → fixed + pinned pre-commit |
+| **P1b-i** | **Repairs + probes + the Q8 DRAFT** — the top-level `<` swallow fix (Q_M4) · WS narrowing typed vars · `def ?x` reservation (Q_M3) · the Q_M1 gating probe + `:N` / keyword-`*` / `:<` · **Q8 written from the results** | ✅ | [§5.P1b-i](#p1b-i) + **[§Q8](#q8)** · `fc65ca54` — suite 9263/474/0, corpus A/B 160 files / 2 intended diffs; **Q8 owner-reviewed ✅ 2026-07-28, amended by [Q_M8](#q-m8)** (ordinals multi-digit in both bands) |
+| **P1b-ii** | **The `.{` opener** — `dot-lbrace` re-mint across **EIGHT** edit regions (not six) incl. the surviving `surface-rewrite.rkt:516` POSITIVE addition; plain `'rbrace` closer (Q_M5); new `$dot-brace` sentinel + `dot-brace-group` tag + tree-parser arm (Q_N1); the Q_N3 two-grouper agreement guard | ✅ | [§5.P1b-ii](#p1b-ii) · **`1a1091d4`** — suite **9279/474/0**, acceptance 28/28 + 89/89, corpus A/B **158 files / 1 intended diff**; adversarial verify caught a **BLOCKING regression I introduced** (`$dot-brace` missing from `pattern-var?` → whole-file abort in a defmacro template) — fixed + pinned pre-commit |
+| **P1b-iii** | **Brace adjacency + the head registry + Q_M8** — the forced `$select-brace` sentinel (Q_M6) · the `reader-forms.rkt` leaf registry · adjacency in BOTH groupers (Q_N7) · bucket 4 ruled SELECT (Q_N5) · the `:N` digit-run widening + the structural `fused-type-annot?` repair (Q_N4) · P1b-ii's residual CLOSED | ✅ | [§5.P1b-iii](#p1b-iii) · **`a6af2761`** — suite **9304/474/0**, acceptance 28/28 + 89/89, corpus A/B **158 files / ZERO diffs**; adversarial verify caught **3 BLOCKING** (one non-idempotent fold → a silently-dropped `defn` clause) + 10 SIGNIFICANT — all fixed or filed pre-commit |
+| **P2** | **Grade-1 core** — `.k`/`.N` access + bare-path extraction. Carries **Q_M8's dot half** (`digit+` at the dot). Ruled at the mini-audit: **`.N` REUSES `$postfix-index`** (Q_R1 — near-zero registrations, fixpoint inherited, `v[0]` ≡ `v.0` byte-identical) · **copy the `:N` trailing guard** (Q_R2) · **dot band stays adjacency-free** (Q_R3) · `m.0` moves out of the v2 block (Q_R4) · **the `.N` error surface IS IN SCOPE** (Q_R5) | ✅ | [§5.P2](#p2) · **`3005170b`** — suite **9370/475/0**, acceptance **35/35** + 89/89, corpus A/B **158 files / ZERO diffs**; audit `wf_22020418-a5f` (**12th** consecutive premise refuted); doc-truth separately `0e5a56a3` ([Q_R6](#q-r6)); adversarial verify caught **a diagnostic REGRESSION I introduced** + 2 more, all fixed pre-commit; DEFERRED 9–13 |
+| **P3a** | **The node + KEYED blocks, no `^`** — `surf-select`/`expr-select` (full pipeline.md cost paid once; twins; walkers via the generic fallback; NO PNET bump) · payload segmentation + the malformed-payload seat · **D-lenient presence** (Q_T2) · subject-once reduction · **strict merge for plain keys BEFORE `make-record` can last-win** · type-position refusal · branch-aware miss errors · §9's learnability pair | ✅ | [§5.P3a](#p3a) · **`290f77f9`** — suite **9418/475/0**, acceptance **41/41** + records, battery 136/136, neighborhood 623/21; [Q_U1](#q-u1) (corpus list corrected, `6d919142`); adversarial verify caught **1 BLOCKING** (block-pipe select corruption at 0 errors — 6th consecutive slice) + 3 SIGNIFICANT, all fixed pre-commit; DEFERRED 15–20 |
+| **P3b** | **The `^` family** — the ONE splitter (continuation grammar `-`?·{ε\|label\|`_`} + `^..`) · dissolve/splice · in-place rename · `^_` Reading N · the `^-` collapse family ([Q_T7](#q-t7)) · `^..` ([Q_T8](#q-t8)) · **output-level-local merge** ([Q_T3](#q-t3), the monotonicity pin) · the [Q_T4a](#q-t4a) ordinal-`^` guided error · the malformed-`^` battery | ✅ | §5.P3b · **`36ce601c`** — suite **9469/475/0**, acceptance **50/50** + records, battery 178; light re-grounding only (per Q_T5); adversarial verify caught **1 BLOCKING** (whole-datum ordinal-rekey marker → match-arm whole-file abort; fixed ELEMENT-WISE) + 8 SIGNIFICANT — all fixed pre-commit; DEFERRED 21–22; Q_U4 candidate flagged (sub-block synth scope) |
+| **P3c** | **Keyless + L4 + honest nesting** — the nat-row mint at EVERY n (incl. 1 and homogeneous n) · ordinal branches `{N M}` · the L4 mixing error · `⟨String⟩` 1-tuple pins · the G11 one-space pair pinned side by side | ✅ | [§5.P3c](#p3c) · **`1b021d57`** — suite **9497/475/0**, acceptance **52/52**, battery 206; P3 (BLOCKS) COMPLETE; the verify's FIRST no-BLOCKING slice in eight (2 SIGNIFICANT fixed pre-commit: the @ord walk-to-leaf twin-drift, the decimal-fusion leak); G11 landed AS AMENDED; in-block `v[0]`≡`.0` ratified-by-pin |
+| **P4** | **Broadcast ω** — ⭐ **P4a ✅ · P4b ✅ COMPLETE** (b-i carrier + b-ii `$dot-access` migration; `x.a` now mints the unified selector carrier) · P4c–P4e ⬜ — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | [§5.P4](#p4) · co-design: audit `wf_8458c23b` + options panel · **RULED 2026-07-31**: [Q_U5](#q-u5) · [Q_U6](#q-u6) · [Q_U7](#q-u7) · [Q_U8](#q-u8) · [Q_U9](#q-u9) (the PAUSE cleared) · partition LOCKED P4a–P4e |
+| **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
+| **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [[§5.P4c](#p4c)](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([the inverted default](#p4c-2-inverted)) · **P4c-3 ✅ `d477772c`** ([the enable-set moves to P4c-4](#p4c-3)) · P4c-4/5 ⬜ |
+| **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery |
+| **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | [§5.PX](#px) · position flexible |
+| **P6** | **Demand semantics** — RULED STAGED (4a); **decision ✅ Q_U3 (owner, 2026-07-30): option (c)** — deferred to a named post-v1 phase, charter stub in §5.P6 | ⬜ (residue = the X.close gate row only) | [§5.P6](#p6) |
+| **X.close** | **MANDATORY** — bench matrix · DEFERRED triage · doc-truth sweep · memory fold · **Stage-5 PIR** | ⬜ | [§5.X](#x-close) · the track does not flip ✅ without the PIR |
 
 *Per `workflow.md`: tests are PER-PHASE (each phase's section states its own
 test delta); a behavioural phase shipping +0 tests is INCOMPLETE.*
 
 ---
 
+<a id="s1"></a>
+
 ## §1 The redesign in one page
+
+<a id="s1-1"></a>
 
 ### §1.1 What the spec is
 
@@ -64,6 +68,8 @@ points at the QTT semiring), the **equational theory L1–L7** as test material,
 **Ruling B** merge with a strict-first monotone waypoint (§3.6), and the
 **W1–W4 expressivity walls** each with a designated exit (§6).
 
+<a id="s1-2"></a>
+
 ### §1.2 Supersession of the settled surface (PS1–PS15 → spec)
 
 | Old ruling | Disposition | Where |
@@ -83,6 +89,8 @@ points at the QTT semiring), the **equational theory L1–L7** as test material,
 | PS13 reserved slots | **SUPERSEDED** by the staged-features program (0\|1 grade, `..` as schema-elaborated sugar, observational stratum, bidirectionality, relational reading) | spec §7 |
 | PS14 sexp special form | **STILL NEEDED** — the spec does not address sexp mode; carried as an open implementation item | §3 ledger |
 | PS15 subjects | **SUPERSEDED** by the typing story: copattern blocks, grade/shape result computation, the §5.3 meet rule, §5.4 row-map | spec §5 |
+
+<a id="s1-3"></a>
 
 ### §1.3 What landed and stands (nothing unwinds)
 
@@ -107,7 +115,11 @@ points at the QTT semiring), the **equational theory L1–L7** as test material,
 
 ---
 
+<a id="s2"></a>
+
 ## §2 Grounded code reality (probe-verified 2026-07-28 @ `89bc321c` unless noted)
+
+<a id="s2-1"></a>
 
 ### §2.1 The three lexical seams, as they lex TODAY
 
@@ -123,6 +135,8 @@ Spec §2.2 names three juxtaposition-sensitive characters; probed:
 | `users:{0.userName^}` | `users : ($brace-params …)` — `:{` yields a LONE `:` symbol (no keyword forms) | the broadcast-block form is detectable at grouping via the bare-`:` + adjacency |
 | `app-config{database.*}` | `… database \|.\| *` — `.* }` shatters (broadcast recognizer needs ident-continue after `*`) | block-position row-splat needs its own grouping handling; coexists lexically with the `.*name` retirement |
 
+<a id="s2-2"></a>
+
 ### §2.2 The POL.10 collision — the biggest hidden lift
 
 Spec §1.3 [ADOPTED]: *"unselected computed leaves are never forced."* Today a
@@ -134,6 +148,8 @@ champ? a demand mark? interaction with `.pnet` serialization and the effect
 gate). **Staged as its own phase-gate decision (§5.P6), not silently absorbed.**
 Until it lands, the corpus fixtures' computed leaves run eagerly — every §10
 result is unchanged, only the forcing TIME differs.
+
+<a id="s2-3"></a>
 
 ### §2.3 The carrier table (printed forms + the spec-notation translation)
 
@@ -150,6 +166,8 @@ showed was missing (its "single most important unasked question"). Probed
 | keyed row `{:k T …}` in selection order | type: **canonically sorted** (`syntax.rkt:749-756`, `equal?`-identity, load-bearing) · value: champ-hash order, key-set-determined | the 2c ruling: carrier order, thesis-derived |
 | row-meet (§5.3) | **does not exist** (0 grep hits) | booked as NEW machinery, §5.P4 |
 | presence marks + `dyn` tail | `expr-Record (key-domain fields tail)`, `record-field (type presence)` — the S-lens-declared presence lattice | §6 declares it; dyn-tail semantics RULED by 4d, and for BLOCKS by **Q_T2 (Horn D lenient)** |
+
+<a id="s2-4"></a>
 
 ### §2.4 Standing items the spec does not cover
 
@@ -172,6 +190,8 @@ showed was missing (its "single most important unasked question"). Probed
   seam are SURFACE-INDEPENDENT substrate bugs — carried unchanged (§5.PX).
 
 ---
+
+<a id="s3"></a>
 
 ## §3 Rulings ledger
 
@@ -295,7 +315,7 @@ standalone document**. Its surviving, R-lens-verified findings are recorded in
 facets + completeness critic @ `5c171caa`, all load-bearing findings
 main-session R-lens-verified; full findings in §5.P1):
 
-- **Q_L1 — colon seam: the `?`-PREFIX DISCRIMINATOR adopted; the WS repair is
+- <a id="q-l1"></a>**Q_L1 — colon seam: the `?`-PREFIX DISCRIMINATOR adopted; the WS repair is
   SCOPED IN.** Ruling 3d's position-disjointness is **REFUTED at HEAD**:
   narrowing-query typed logic vars (`[add ?x:Nat ?y:Nat] = 5N` — 6 live sites,
   consumer `narrow-var-constraints` parser.rkt:6871) are `ident:Ident`
@@ -305,11 +325,11 @@ main-session R-lens-verified; full findings in §5.P1):
   broken in WS (the splitter runs on a glued symbol only the sexp reader
   produces; the sole WS test is VACUOUS — passes on substring "x"), so P1b
   repairs it, else P1 cannot tell new breakage from old.
-- **Q_L2 — the WS-vs-sexp `.{` divergence is INSTITUTIONALIZED** (the POL.9
+- <a id="q-l2"></a>**Q_L2 — the WS-vs-sexp `.{` divergence is INSTITUTIONALIZED** (the POL.9
   precedent): sexp `.{` = selection-path fan-out (15 live test sites,
   parser.rkt:3481) STAYS; WS `.{` = the mid-path sub-block (ruling 3a).
   Documented eyes-open; convergence belongs to the future sexp phase (§2.4).
-- **Q_L3 — `broadcast-get` retires as the FULL CHAIN at P1a**: reader token +
+- <a id="q-l3"></a>**Q_L3 — `broadcast-get` retires as the FULL CHAIN at P1a**: reader token +
   parser keyword (parser.rkt:146, arm :2332-2350) + surf struct
   (surface-syntax.rkt:251/:894) + elaborator arm (:2394) + the expr node +
   its 2 walker-safety pins. Census: the keyword form has **ZERO live users**
@@ -319,7 +339,7 @@ main-session R-lens-verified; full findings in §5.P1):
   partial retirements rot (`d18648f0`'s surviving surface-rewrite leg).
   Completeness-over-deferral: no unbuilt dependency exists, so no deferral is
   licensed.
-- **Q_L4 — the diagnostic seat is BUILT at P1a**: reader emits a retirement
+- <a id="q-l4"></a>**Q_L4 — the diagnostic seat is BUILT at P1a**: reader emits a retirement
   MARKER FORM; preparse converts it to a per-command **`parse-error` VALUE**.
   Prior art: `$mixfix-retired` (deleted `d18648f0`) proves the marker
   mechanism end-to-end; its flaw was RAISING (`expand-mixfix-retired` called
@@ -328,11 +348,11 @@ main-session R-lens-verified; full findings in §5.P1):
   reader tokenizes the entire file before any command runs, driver.rkt:2226),
   which would contradict the accepted-gap ruling's own premise (noise, not
   silence) and the spec §3.6/Q8 error-surface obligations.
-- **Q_L5 — the working-tree `.[x]` / `.[a.b]` spellings are PRIOR SKETCHING —
+- <a id="q-l5"></a>**Q_L5 — the working-tree `.[x]` / `.[a.b]` spellings are PRIOR SKETCHING —
   disregard** [owner]. In neither the spec nor D4; all censuses run against
   HEAD (`git show HEAD:<file>`), never the dirty tree (the audit's two
   wrongly-"refuted" counts both measured owner WIP).
-- **Q_L6 — P1 SPLITS into P1a (retirements + substrate) / P1b (seams + Q8)**:
+- <a id="q-l6"></a>**Q_L6 — P1 SPLITS into P1a (retirements + substrate) / P1b (seams + Q8)**:
   audit-discovered scope (the surface-rewrite cleanup, the reader-form-head
   registry, the diagnostic seat, the 4-site chain, net-new pins) made the
   single phase too large for one gated slice.
@@ -341,7 +361,7 @@ main-session R-lens-verified; full findings in §5.P1):
 facets + completeness critic @ `bc0c7578`; every load-bearing finding
 main-session R-lens-verified; full record in §5.P1b):
 
-- **Q_M1 — `:N` disambiguated by POSITION (option b).** ⚠ The audit's largest
+- <a id="q-m1"></a>**Q_M1 — `:N` disambiguated by POSITION (option b).** ⚠ The audit's largest
   find: `:0`/`:1`/`:w`/`:m` are NOT unclaimed lexical space — they are the
   **QTT multiplicity vocabulary** (`recognize-colon-annotation`,
   parse-reader.rkt:847-860), consumed at 18 sites across
@@ -354,12 +374,12 @@ main-session R-lens-verified; full record in §5.P1b):
   REFUTED ONCE on this seam (ruling 3d, by the narrowing typed-vars). P1b-i's
   FIRST probe hunts expression-position `:0`/`:w`/`:m`; a counterexample
   re-opens Q_M1 before anything is built on it.
-- **Q_M2 — P1b SPLITS THREE WAYS** (audit-recommended, owner-approved), with
+- <a id="q-m2"></a>**Q_M2 — P1b SPLITS THREE WAYS** (audit-recommended, owner-approved), with
   an ORDERING CONSTRAINT the design had not stated: **`.{` must be re-minted
   BEFORE or WITH lbrace adjacency**, because `.{` today presents a loose `|.|`
   token whose end-pos abuts the `{`, so adjacency-first would turn every
   in-flight `x.{…}` into a select block anchored on a bare dot.
-- **Q_M3 — `def ?x` becomes a GUIDED ERROR.** Q_L1's "the discriminator
+- <a id="q-m3"></a>**Q_M3 — `def ?x` becomes a GUIDED ERROR.** Q_L1's "the discriminator
   already exists in the surface" is a **namespace RESERVATION we are making**,
   not a property we inherit: `def ?cfg := {:a 1}` is legal at HEAD and
   `?cfg.a` → `1 : Int` at 0 errors (probe-verified). Owner rationale: `?` is a
@@ -367,7 +387,7 @@ main-session R-lens-verified; full record in §5.P1b):
   `def` binding was never meant to be one — reserving it costs nothing now and
   prevents the surprise later. No present soundness issue; the reservation is
   prophylactic.
-- **Q_M4 — the TOP-LEVEL `<` SWALLOW IS FIXED IN P1b-i [owner]**, not
+- <a id="q-m4"></a>**Q_M4 — the TOP-LEVEL `<` SWALLOW IS FIXED IN P1b-i [owner]**, not
   documented as a hazard. The audit REFUTED the design's framing: the
   swallower is a bare depth-0 `<`, NOT `:<` — probe-verified, `users<{a}`
   (no colon) and even `def p := 1 < 2` / `def q := 3 > 4` (no colon, no brace)
@@ -385,7 +405,7 @@ main-session R-lens-verified; full record in §5.P1b):
   CONTINUATION lines while rejecting NEW-FORM lines, and the 15 pins from
   that commit are the gate. If it proves messier than the plumbing suggests,
   STOP and re-checkpoint rather than let the slice swell.
-- **Q_M5 — ruling 3a's PRECEDENT is CORRECTED**: the model is **`hash-lbrace`
+- <a id="q-m5"></a>**Q_M5 — ruling 3a's PRECEDENT is CORRECTED**: the model is **`hash-lbrace`
   (6/6 sites, plain `'rbrace` closer, probe-verified nesting)**, NOT
   `dot-lparen`. Citing dot-lparen silently imported its `'mixfix-rparen`
   sentinel, which exists to carry SEMANTIC MODE, not to disambiguate a
@@ -394,7 +414,7 @@ main-session R-lens-verified; full record in §5.P1b):
   closers (parse-reader.rkt:1311) and `langle-matched?` has no translation
   arm. **`dot-lbrace` uses plain `'rbrace`.** The word "closer" never appeared
   in ruling 3a.
-- **Q_M6 — a DISTINCT SENTINEL for the select block is FORCED, not
+- <a id="q-m6"></a>**Q_M6 — a DISTINCT SENTINEL for the select block is FORCED, not
   preferable.** Adjacency is DESTROYED at the datum layer (probe: `x{a b}`
   and `x {a b}` are byte-identical, as are `racket{42}` / `racket {42}` and
   `spec identity {A : Type}`), so "a fourth fork on `$brace-params`" is not
@@ -409,7 +429,7 @@ main-session R-lens-verified; full record in §5.P1b):
   the new sentinel. Any new sentinel owes `pattern-var?` (macros.rkt:1144+)
   AND tree-parser.rkt's inline skip-list — **P1a's own headline defect
   class**.
-- **Q_M7 — the standing `^` ruling is CORRECTED (it was not executable).**
+- <a id="q-m7"></a>**Q_M7 — the standing `^` ruling is CORRECTED (it was not executable).**
   "`^` splitting is P3-parser-side via POL.6 `split-fused-symbol` — no second
   splitter" names the WRONG primitive: `split-fused-symbol` (parser.rkt:5437)
   splits on `":"`, has two binder-path callers, and REJECTS >2 segments; the
@@ -426,7 +446,7 @@ main-session R-lens-verified; full record in §5.P1b):
   `a^` becomes a rename to the EMPTY keyword and `a^b^c` is silently absorbed
   as one caret-bearing keyword. The F1b.7g drift class, live in the very
   primitive the old ruling proposed to lift.)*
-- **Q_M8 — ORDINALS ARE MULTI-DIGIT IN BOTH BANDS [owner, 2026-07-28].** The
+- <a id="q-m8"></a>**Q_M8 — ORDINALS ARE MULTI-DIGIT IN BOTH BANDS [owner, 2026-07-28].** The
   owner ruled against P1b-i's draft recommendation: *"An ordinal broadcast could
   and should very much be multi-digit, practically — just as an ordinal `.Ndd`."*
   The recommendation was **wrongly premised**, and the refutation is measured:
@@ -464,7 +484,7 @@ main-session R-lens-verified before adjudication. **12th consecutive phase
 whose premise the mini-audit refuted or rescoped.** The doc-truth half landed
 separately at `0e5a56a3` per owner ruling Q_R6):
 
-- **Q_R1 — `.N` REUSES `$postfix-index`; it does NOT mint a new sentinel.**
+- <a id="q-r1"></a>**Q_R1 — `.N` REUSES `$postfix-index`; it does NOT mint a new sentinel.**
   The audit's decisive finding: §5.P2 never ruled the sentinel choice, and it
   is the decision that sets the phase's whole cost. Both naive `$dot-access`
   reuses are BROKEN — a numeric payload **hard-raises** at macros.rkt:5556
@@ -487,7 +507,7 @@ separately at `0e5a56a3` per owner ruling Q_R6):
   produced the BLOCKING defect in *both* of the last two slices, and reuse
   avoids it entirely (no new `pattern-var?` entry, no new pp-datum/form-deps
   omission — the residual stays 23-of-33, not 24-of-34).
-- **Q_R2 — COPY the `:N` twin's TRAILING GUARD.** The just-landed colon half
+- <a id="q-r2"></a>**Q_R2 — COPY the `:N` twin's TRAILING GUARD.** The just-landed colon half
   consumes `digit+` and THEN declines on `ident-continue?`
   (parse-reader.rkt:907). `.N` copies it. This governs five shapes that each
   lex as ONE numeric token today — `x.0N` → `($nat-literal 0)` · `x.1e3` →
@@ -498,14 +518,14 @@ separately at `0e5a56a3` per owner ruling Q_R6):
   as sensible Prologos, but supporting it needs `digit+` plus an optional `N`
   and that is not this phase. Recorded so the next reader does not think it
   was missed.
-- **Q_R3 — the DOT BAND STAYS ADJACENCY-FREE, ruled rather than inherited.**
+- <a id="q-r3"></a>**Q_R3 — the DOT BAND STAYS ADJACENCY-FREE, ruled rather than inherited.**
   The band has no adjacency gate at all (`adjacent-to-base?` is called only
   from the bracket and brace arms), so `x .0` and `x. 0` both read `((x |.|
   0))` and a spaced `.0` WILL select after P2. `.k` never enforced adjacency
   either, so requiring it for `.N` alone would create a NEW inconsistency
   *inside* the band, and retrofitting the whole band is out of scope. Blast
   radius is nil by census. Per Q_N5's precedent this is RULED, not discovered.
-- **Q_R4 — `m.0` MOVES OUT of the `§10.6` v2 block.** The corpus
+- <a id="q-r4"></a>**Q_R4 — `m.0` MOVES OUT of the `§10.6` v2 block.** The corpus
   self-contradicted: `m.0` sat inside a block headed *"v2, PERMANENTLY
   commented (spec §7.3)"* while its own annotation said *"works at D4.P2 via
   .N"*. It moves to a live section rather than the header being amended.
@@ -513,7 +533,7 @@ separately at `0e5a56a3` per owner ruling Q_R6):
   **RESULT INDEX**, so uncommenting `party.0.name` (line 118) costs **23**
   marker renumbers while a trailing addition costs **zero** — land the trailing
   ones first.
-- **Q_R5 — the `.N` ERROR SURFACE IS IN SCOPE.** P2 owns the first user-facing
+- <a id="q-r5"></a>**Q_R5 — the `.N` ERROR SURFACE IS IN SCOPE.** P2 owns the first user-facing
   ordinal-access diagnostics, and the two out-of-range paths are wildly
   asymmetric: PVec at RUNTIME is excellent (`panic: get: index 9 out of bounds
   for PVec of length 3`) while a CLOSED nat-row (het tuple) out-of-range is
@@ -522,7 +542,7 @@ separately at `0e5a56a3` per owner ruling Q_R6):
   (typing-errors.rkt:148, :151). Het tuples are exactly the carrier the
   acceptance file pins (`mixed`, `events`), so this is the FIRST thing a user
   hits on the new surface.
-- **Q_R6 — the doc-truth batch lands SEPARATELY**, before P2's code. Done:
+- <a id="q-r6"></a>**Q_R6 — the doc-truth batch lands SEPARATELY**, before P2's code. Done:
   `0e5a56a3`. It corrected a self-contradiction in **owner-reviewed normative
   text** (§Q8.1's five-vs-six), a **layer error** that had already propagated
   into a session summary (the "0 errors" claim), a **false illustration** in
@@ -544,14 +564,14 @@ Q_T1–Q_T8, ruled across four deliberative rounds,
 in PROSE per the standing discipline; audit `wf_27a84061-c7e` fed them —
 **13th consecutive phase whose premise the mini-audit refuted or rescoped**):
 
-- **Q_T3 — "level-local" means OUTPUT-level-local.** The L4/strict-merge checks
+- <a id="q-t3"></a>**Q_T3 — "level-local" means OUTPUT-level-local.** The L4/strict-merge checks
   run over the keys that reach a result level AFTER `^`-splicing. Ruled because
   the syntactic-block reading ACCEPTS `cfg{server^.{port} database^.port}` —
   two dissolving branches landing `:port` at the same output level — which
   Ruling B B4 REJECTS, and that is the one direction that breaks the strict
   waypoint's monotonicity guarantee ("every error today can become a meaning
   later"). Probe-verified that the naive lowering would silently last-win it.
-- **Q_T4a — `^` NEVER attaches to an ordinal; it is a guided spelling error.**
+- <a id="q-t4a"></a>**Q_T4a — `^` NEVER attaches to an ordinal; it is a guided spelling error.**
   Owner: an ordinal returns the value at an index, not a key-value; and
   non-local attachment (my PS6 reading, scanning left past ordinals to the
   key-generating segment) "breaks composition, first-class re-use, and
@@ -560,7 +580,7 @@ in PROSE per the standing discipline; audit `wf_27a84061-c7e` fed them —
   ⟨admins[0]⟩}`. Consequence: DEFERRED 11 dissolves into a MESSAGE-QUALITY
   item — `x.0^` / `x[0]^` / `{admins.0^first}` all need one guided error
   ("an ordinal has no key; rename the nominal segment"), not a semantics.
-- **Q_T4b — THE `^` BASE RULES** (the mutual-clarity round; misread by me, now
+- <a id="q-t4b"></a>**Q_T4b — THE `^` BASE RULES** (the mutual-clarity round; misread by me, now
   pinned): a branch's output key is its **surviving head key**; every `^` form
   acts **locally on its own segment**; **rename is IN PLACE**; only
   `^`-dissolve removes a level; bare leaf `^` contributes the leaf VALUE as a
@@ -575,19 +595,19 @@ in PROSE per the standing discipline; audit `wf_27a84061-c7e` fed them —
   surface's D3-era "`^_` = derive-ALL" ruling — an old-surface semantic in the
   new corpus without the §8 R5 NOTATION-vs-SEMANTICS classification. The line
   is corrected in this commit.
-- **Q_T4b′ — `^_` takes READING N (local, like its siblings)**: it is `^k'`
+- <a id="q-t4b-prime"></a>**Q_T4b′ — `^_` takes READING N (local, like its siblings)**: it is `^k'`
   with a computed label — rename the leaf IN PLACE to the path-synthesized
   key. `cfg{server.host^_}` → `{:server {:server-host …}}`. The flat
   "provenance" behaviour is NOT lost — it is the explicit collapse spelling
   `server.host^-_` (Q_T7), which is where a structural effect belongs.
-- **Q_T7 — the `^-` COLLAPSE family is IN SCOPE at P3.** `^-` collapses the
+- <a id="q-t7"></a>**Q_T7 — the `^-` COLLAPSE family is IN SCOPE at P3.** `^-` collapses the
   whole branch flat: `h.k^-` → `{:k …}` · `h.k^-k'` → `{:k' …}` · `h.k^-_` →
   `{:h-k …}` (the flat provenance recovery). Makes `i^.h^.k` ergonomically
   `i.h.k^-`. Lexing verified: `k^-` / `k^-k2` / `k^-_` each glue into ONE
   token; the splitter's continuation grammar is `-`?·{ε | label | `_`}.
   ⚠ Eyes-open cost: after `^` a leading `-` IS the collapse marker, so a
   rename target literally beginning with `-` is unsupported.
-- **Q_T8 — the parent-key collapse is IN SCOPE, spelled `^..` (not `^.`).**
+- <a id="q-t8"></a>**Q_T8 — the parent-key collapse is IN SCOPE, spelled `^..` (not `^.`).**
   `ssl.enabled^..` ≡ `ssl^.enabled^ssl` → `{:ssl …}`; ancestors above the
   parent are kept (`server.ssl.enabled^..` → `{:server {:ssl …}}`). The owner
   flagged the `^.` parse hazard and pre-authorized `^..`; probes CONFIRMED the
@@ -599,7 +619,7 @@ in PROSE per the standing discipline; audit `wf_27a84061-c7e` fed them —
   `|.|` mid-branch and are LOUD malformed-payload errors. Edge recorded:
   `a.b^...` absorbs into `$rest`; the malformed-payload seat must reject a
   `$rest` item in a block payload.
-- **Q_T6 — the `spec` type-position hole is FILED** (DEFERRED 14), not fixed in
+- <a id="q-t6"></a>**Q_T6 — the `spec` type-position hole is FILED** (DEFERRED 14), not fixed in
   P3. Pre-existing (the shipped `.`-access is dropped identically) and rooted
   in `spec`'s error architecture (a preparse command inside a `void`-ing
   handler), not in selection. ⚠ The C30 open question is now ANSWERED — it is
@@ -607,7 +627,7 @@ in PROSE per the standing discipline; audit `wf_27a84061-c7e` fed them —
   follow-up `defn h` error QUOTES the raw `($retired-selection …)` marker
   from the stored spec), so the hole stores garbage rather than losing a
   declaration.
-- **Q_T1 — ROUTE A: mint the `expr-select` node NOW, scoped grades-1-only
+- <a id="q-t1"></a>**Q_T1 — ROUTE A: mint the `expr-select` node NOW, scoped grades-1-only
   [owner, 2026-07-29].** Decided from the COMPLETED-feature horizon, on four
   legs: (1) **P5's spine identity is a comparison over a structured step
   representation** ("source-directed steps with `^`-continuations erased") —
@@ -629,7 +649,7 @@ in PROSE per the standing discipline; audit `wf_27a84061-c7e` fed them —
   binder ⇒ no depth routing), NO PNET bump (symbol-keyed tag table,
   verified), subject evaluated ONCE in the node's reduction (no let/fn
   workaround). P3 is a MULTI-SLICE phase; Q_T5 organizes it.
-- **Q_T2 — PRESENCE: HORN D, LENIENT [owner, 2026-07-29].** The rule: **a
+- <a id="q-t2"></a>**Q_T2 — PRESENCE: HORN D, LENIENT [owner, 2026-07-29].** The rule: **a
   block may select a field iff the subject's type SOURCES that field's
   presence as `'present`; everything else is a loud static error** naming the
   4d remedy list (seal / validate / annotate). The result row is closed,
@@ -657,7 +677,7 @@ in PROSE per the standing discipline; audit `wf_27a84061-c7e` fed them —
     carrier state no walker has ever seen; Horn C (presence-aware seal) is
     complementary to B, not an alternative to D, and is F1b-scope growth
     mid-phase. All refusals are MONOTONE (F-row/P6 can later relax them).
-- **Q_T5 — P3 SPLITS THREE WAYS: P3a → P3b → P3c [owner, 2026-07-29 — "that
+- <a id="q-t5"></a>**Q_T5 — P3 SPLITS THREE WAYS: P3a → P3b → P3c [owner, 2026-07-29 — "that
   shape looks good to me"].** **P3a** = the node + keyed blocks, no `^` (the
   full pipeline cost paid once; D-lenient presence from day one; strict merge
   for plain keys BEFORE `make-record` can last-win; the malformed-payload
@@ -681,12 +701,12 @@ in PROSE per the standing discipline; audit `wf_27a84061-c7e` fed them —
   not full re-audits). **The Q_T batch is COMPLETE.**
 
 **The P3a-close checkpoint rulings [owner, 2026-07-30]:**
-- **Q_U1 — P3a owns EVERY no-`^` block line** (the §5.P3a corpus list was
+- <a id="q-u1"></a>**Q_U1 — P3a owns EVERY no-`^` block line** (the §5.P3a corpus list was
   corrected against the file; `6d919142`).
-- **Q_T2 adaptation RATIFIED** — "annotate its row type" dropped from the
+- <a id="q-t2-adaptation"></a>**Q_T2 adaptation RATIFIED** — "annotate its row type" dropped from the
   refusal remedy lists ("annotate comes back when it's real"); DEFERRED 19
   carries the re-entry trigger.
-- **Q_U2 — mid-branch ordinal steps take READING A** ["Reading A stands —
+- <a id="q-u2"></a>**Q_U2 — mid-branch ordinal steps take READING A** ["Reading A stands —
   ordinal blocks own the re-derivation"]. A grade-1 `.N` step inside a keyed
   branch DESCENDS, contributing NO output level — ordinal keys are
   contingent, there is no identity to preserve; nominal ancestry above and
@@ -699,12 +719,12 @@ in PROSE per the standing discipline; audit `wf_27a84061-c7e` fed them —
   consequence ("renames the NOMINAL segment then descends").
   **Implementation: P3c** (rides the ordinal machinery; P3a's parser refusal
   lifts there; P3b untouched).
-- **Q_U3 — the P6 demand DECISION takes option (c)** ["defer it — (c)
+- <a id="q-u3"></a>**Q_U3 — the P6 demand DECISION takes option (c)** ["defer it — (c)
   stands"]: demand semantics deferred to a named post-v1 phase; §5.P6
   carries the ruling + the charter stub; the 4a X.close gate stays armed.
 
 **The P3b-close checkpoint ruling [owner, 2026-07-30]:**
-- **Q_U4 — `^_`/`^-_` synth scope: SUBJECT-ROOT is PREFERRED; the flip is
+- <a id="q-u4"></a>**Q_U4 — `^_`/`^-_` synth scope: SUBJECT-ROOT is PREFERRED; the flip is
   DEFERRED until it next matters.** P3b implemented branch-of-its-block
   scope (`server.{host^_}` → `{:server {:host …}}` while the dot spelling
   gives `{:server {:server-host …}}`). Owner: the local reading is "not a
@@ -724,7 +744,7 @@ challenge then overturned the critic's framing of what blocks. ⚠ The LET
 track's merge (`5e16ead4`) landed MID-WALK — audit coordinates are
 @ `02dd27d7`; re-pin before use):
 
-- **Q_U5 — THE SELECTOR REPRESENTATION: ONE REIFIED CARRIER (panel option
+- <a id="q-u5"></a>**Q_U5 — THE SELECTOR REPRESENTATION: ONE REIFIED CARRIER (panel option
   B), MONOMORPHIC AT P4.** `expr-path` and `expr-select` unify on one
   reifiable selector carrier; `#p(…)`, `x{…}` and path position become
   spellings of ONE representation; the vacuous ground `Path` type is
@@ -760,7 +780,7 @@ track's merge (`5e16ead4`) landed MID-WALK — audit coordinates are
   or Ruling-B pointwise merge. This is the positive argument FOR the data
   carrier, and it rules out the §7.7 lens FRAMING as a representation
   while keeping lenses as an INTERPRETATION).
-- **Q_U6 — WHOLESALE PATH-POSITION MIGRATION AT P4, with the three-stage
+- <a id="q-u6"></a>**Q_U6 — WHOLESALE PATH-POSITION MIGRATION AT P4, with the three-stage
   sequencing.** Dot AND colon path steps mint the node; the preparse
   `map-get`/`nil-safe-get`/`get` fold legs retire into `$select` minting.
   NOT colon-only: that leaves path text on two representations
@@ -782,7 +802,7 @@ track's merge (`5e16ead4`) landed MID-WALK — audit coordinates are
   + wholesale migration with the behavior checklist → (3) the ω semantics
   on top. Sub-slice partition finalizes after Q_U7/Q_U8.
 
-- **Q_U7 — THE ω STEP IS A ONE-STEP WRAPPER: `(@bcast step)` [owner,
+- <a id="q-u7"></a>**Q_U7 — THE ω STEP IS A ONE-STEP WRAPPER: `(@bcast step)` [owner,
   2026-07-31 — "(b) stands"].** `users:name` → `[(@bcast name)]` ·
   `users:{a b}` → `[(@bcast (@sub …))]` · `x:s:t` → `[(@bcast s) (@bcast t)]`.
   **Ruling 4b is RESTATED**: the ω step is a one-step wrapper; EXTENT is
@@ -810,7 +830,7 @@ track's merge (`5e16ead4`) landed MID-WALK — audit coordinates are
   meaning depends on neighbors — exactly what a reified composable
   selector must not do).
 
-- **Q_U8 — THE `:` GATE: UNIFORM POSITIONAL SENTINEL-MINT AT GROUPING +
+- <a id="q-u8"></a>**Q_U8 — THE `:` GATE: UNIFORM POSITIONAL SENTINEL-MINT AT GROUPING +
   PARSER POSITION-DISPATCH [owner, 2026-07-31 — "uniform mint"].** At
   grouping, a `keyword` or `colon-annotation` token BYTE-ADJACENT to a
   non-empty local result mints the new access sentinel
@@ -844,7 +864,7 @@ track's merge (`5e16ead4`) landed MID-WALK — audit coordinates are
 **The P4 pre-implementation PAUSE rulings [owner, 2026-07-31]** — all three
 items of the hold-point, ruled before P4a opened:
 
-- **Q_U9 — `:` REFUSES over `List`, with a guided error [owner, 2026-07-31].**
+- <a id="q-u9"></a>**Q_U9 — `:` REFUSES over `List`, with a guided error [owner, 2026-07-31].**
   Broadcast covers the carriers the KEY-SORT THESIS reaches; `List` is not one
   of them, so `quests:t` does not uncomment and the corpus line's fate changes.
   The grounded argument (probed at `711a9bde`, not asserted):
@@ -940,7 +960,7 @@ items of the hold-point, ruled before P4a opened:
 
 **The P4b opening ruling [owner, 2026-07-31]:**
 
-- **Q_U10 — WHOLESALE STANDS; the `'path` sort GAINS A MAP POSTURE**
+- <a id="q-u10"></a>**Q_U10 — WHOLESALE STANDS; the `'path` sort GAINS A MAP POSTURE**
   ["(a) — keep wholesale, give the 'path sort a Map posture"]. The P4b
   mini-audit (`wf_1cb9d606-89c`, 5 facets + completeness critic @ `2cef148b`,
   1.17M tokens) produced a **BLOCKING objection to Q_U6 as written**, which
@@ -975,7 +995,7 @@ items of the hold-point, ruled before P4a opened:
   subjects — incoherent, elaboration precedes typing so the discriminator is
   not available where the mint happens.
 
-- **Q_U11 — RETIRE the silently-broken `#p(…)` vocabulary, with a guided
+- <a id="q-u11"></a>**Q_U11 — RETIRE the silently-broken `#p(…)` vocabulary, with a guided
   error** ["(a) — retire them with a guided error", owner 2026-07-31]. Opening
   P4b-i by probing the encoding, the path literal turned out to carry FOUR
   spellings of which only ONE works:
@@ -1025,7 +1045,7 @@ items of the hold-point, ruled before P4a opened:
      — into a keyword wholesale: the same silent-catch-all class P4a spent its
      whole phase eliminating, one arm away from it.
 
-- **Q_U12 — "WHOLESALE" MEANS THE `$dot-access` LEG ONLY; b-ii SPLITS THREE
+- <a id="q-u12"></a>**Q_U12 — "WHOLESALE" MEANS THE `$dot-access` LEG ONLY; b-ii SPLITS THREE
   WAYS** ["(b) — $dot-access leg only, split it like b-i", owner 2026-07-31].
   The b-ii mini-audit (`wf_f8568392-b44`, 5 facets + critic @ `2e3fc14e`,
   1.22M tokens) found the ruling's own term ambiguous in a way nobody had
@@ -1057,7 +1077,7 @@ items of the hold-point, ruled before P4a opened:
 
 **The P4c opening rulings [owner, 2026-08-01]:**
 
-- **⭐ Q_U16 — THE BINDER UNWRAP MOVES TO A READER POST-PASS; Q_U8 SURVIVES,
+- <a id="q-u16"></a>**⭐ Q_U16 — THE BINDER UNWRAP MOVES TO A READER POST-PASS; Q_U8 SURVIVES,
   ONE LAYER EARLIER.** ["That looks like the appropriate shape."]
   **Q_U8 as ruled was NOT IMPLEMENTABLE**, and the refutation is verified, not
   argued. The P4c grounding audit (`wf_d7c035da-cee`, 6 facets + completeness
@@ -1130,7 +1150,7 @@ items of the hold-point, ruled before P4a opened:
   ruled the fused surface MORE important than broadcast) · **parser-side fusion
   without membership** (the four-seat refutation above).
 
-- **Q_U16b — `users:0` IS A LEGAL ω STEP** [owner, 2026-08-01]. So the gate
+- <a id="q-u16b"></a>**Q_U16b — `users:0` IS A LEGAL ω STEP** [owner, 2026-08-01]. So the gate
   serves BOTH bands, and the discrimination question is LIVE.
   **Consequence, measured**: `colon-annotation`'s registered classifier returns
   **`'symbol`** (parse-reader.rkt:1166) while `keyword` returns `'keyword`
@@ -1184,6 +1204,8 @@ items of the hold-point, ruled before P4a opened:
 
 ---
 
+<a id="s4"></a>
+
 ## §4 Phase sequencing and dependencies
 
 The Progress Tracker (top) carries status; this section carries WHY the order
@@ -1209,7 +1231,11 @@ is what it is.
 
 ---
 
+<a id="s5"></a>
+
 ## §5 Per-phase sections
+
+<a id="p0"></a>
 
 ### §5.P0 — Acceptance corpus
 
@@ -1254,6 +1280,8 @@ is unaffected.
 
 **Test delta**: the augmented file + its `--check` gate — **28/28** (from
 21/21); records acceptance unchanged at 89/89; zero production code touched.
+
+<a id="p1"></a>
 
 ### §5.P1 — The lexical seams + the retirement batch
 
@@ -1355,6 +1383,8 @@ R-lens-verified unless marked):
   exact silence class the new seat exists to prevent); bare top-level `[]`
   hard-aborts with a raw contract violation (parse-reader.rkt:2160-2161
   position-0 stx → macros.rkt:2804 `max` on #f).
+
+<a id="p1a"></a>
 
 ### §5.P1a — The retirement batch + substrate  ✅ `859b529d`
 
@@ -1511,6 +1541,8 @@ must-not-break pins; the conservative-default replacement pin; net-new reject
 pins. Both modes where the surface exists in both. Failing-test-first.
 Status: ✅ (see this section's close notes / the tracker).
 
+<a id="p1b"></a>
+
 ### §5.P1b — The seams + the Q8 grammar  (SPLIT THREE WAYS, Q_M2)
 
 **Mini-audit `wf_d0862784-5e5`** (6 facets + completeness critic @ `bc0c7578`;
@@ -1592,6 +1624,8 @@ main thread). **9th consecutive phase whose premise the audit refuted.**
   the "Unhandled form" fallthrough. Reusing `'brace-group` avoids that but
   ERASES the `.{` distinction from the tree spine, which P3 will need.
 
+<a id="p1b-i"></a>
+
 ### §5.P1b-i — Repairs, probes, and the Q8 draft  ✅ `fc65ca54`
 
 **Intent**: land the repairs and settle the probe-decided items, so Q8 is
@@ -1636,6 +1670,8 @@ guided-error pin; probe results recorded in this section. Status: ✅ `fc65ca54`
 
 ---
 
+<a id="q8"></a>
+
 ## §Q8 — THE LEXICAL GRAMMAR  ✅ *owner-reviewed 2026-07-28; NORMATIVE*
 
 > **Review outcome**: adopted as written, with **one amendment — Q_M8**
@@ -1646,6 +1682,8 @@ Written FROM the P1b-i probe results, not from leans. Every row is
 probe-verified at `fc65ca54` unless marked `[P1b-ii]` / `[P1b-iii]` (the rows
 those slices will add). Priorities are quoted from the registrations; **see
 the invariant note at the end — priority is NOT the safety property.**
+
+<a id="q8-1"></a>
 
 ### Q8.1 — The `.` band: SIX duties, in matching order
 
@@ -1735,6 +1773,8 @@ tokenizer consumes `.1` at the dot, then `.2`, so `decimal-literal` never gets t
 anchor. Multi-digit is therefore not an extra — it is the same one-line `digit+`
 that fixes `x.1.2`.
 
+<a id="q8-2"></a>
+
 ### Q8.2 — The `{` band: TWO lexical rows, and a separate GROUPING table
 
 ⚠ **The `{` order is not a lexical order at all**, and Q8 must say so. Only
@@ -1757,6 +1797,8 @@ from token POSITIONS.
 The sexp readtable binds `{` as a terminating macro with no positional
 context, so this table is **structurally WS-only** — the Q_L2 divergence,
 stated rather than discovered.
+
+<a id="q8-3"></a>
 
 ### Q8.3 — The `:` seam: position AND adjacency
 
@@ -1787,12 +1829,16 @@ as wrongly-premised** — it treated `:`+digit as QTT-owned space. It is not:
 `mult-annot?` (parser.rkt:3904) accepts **3** (`:0 :1 :w`). Nine of the twelve
 ALREADY lex as one token and are ALREADY not multiplicities.
 
+<a id="q8-4"></a>
+
 ### Q8.4 — `*` and `<`
 
 | Form | Finding |
 |---|---|
 | `:diags*` | `*` GLUES (`recognize-keyword` delegates to `ident-continue?`, and that delegation **is** the F1b.7g anti-drift fix). `int*`/`trait*` are live identifiers, so a charset change is forbidden — the split must happen at a **CONSUMER**. Prior art: `validate-selection-paths` already splits `^` off a keyword lexeme and handles a whole-segment `"*"`. |
 | `:<` disclose | **SAFE as of `fc65ca54`.** The hazard was never `:<` — a bare depth-0 `<` swallowed identically, and so did `def p := 1 < 2` / `def q := 3 > 4` with no colon and no brace. Fixed by the Q_M4 bound; `users:<{a}` + a later `>` now reads as three forms. |
+
+<a id="q8-5"></a>
 
 ### Q8.5 — Standing invariants
 
@@ -1900,6 +1946,8 @@ ALREADY lex as one token and are ALREADY not multiplicities.
    § "CIU T6 D4.P1b-ii spin-offs" item 3.
 4. **Both reader modes, always.** WS and sexp diverge by construction here
    (adjacency, `.{`), so a census in one mode proves nothing about the other.
+
+<a id="p1b-ii"></a>
 
 ### §5.P1b-ii — The `.{` opener  ✅ `1a1091d4`
 
@@ -2080,6 +2128,8 @@ immediately — the test oracle's verbatim copy of the production list
 `dot-lbrace` was added there too.
 
 Status: ✅ `1a1091d4`.
+
+<a id="p1b-iii"></a>
 
 ### §5.P1b-iii — Brace adjacency + the head registry  ✅ `a6af2761`
 
@@ -2351,6 +2401,8 @@ ties uncommenting to a verified `;;N=>` RESULT; there is no honest result for
 "this now tokenizes." Reader pins go to `test-parse-reader.rkt`. ⚠ Six
 currently-PASSING markers are at RISK if `(pair? result)` is dropped.
 
+<a id="p1b-superseded"></a>
+
 ### §5.P1b — (superseded framing; see the three sub-sections above)  ⬜
 
 **Work list**:
@@ -2394,6 +2446,8 @@ three-API finding standardizes here) both modes; the WS narrow-var repair pin
 (replacing the vacuous one); WS `racket{…}` pins; adjacency-bucket pins incl.
 the closing-delimiter bucket and the binder-brace must-not-change population.
 Status: ⬜.
+
+<a id="p2"></a>
 
 ### §5.P2 — Grade-1 core
 
@@ -2662,6 +2716,8 @@ RE-KEY** (`x.0^` declines while `x[0]^` lexes — the two spellings Q_R1 unified
 would diverge on exactly the character P3 introduces) · `reconstitute-path-list`'s
 `$dot-access`-only walk · the `tokenize-string` raise→token flip.
 
+<a id="p3"></a>
+
 ### §5.P3 — Blocks  ✅ COMPLETE (P3a `290f77f9` · P3b `36ce601c` · P3c `1b021d57` — the Q_T batch; split per Q_T5)
 
 **The §3 Q_T rulings govern this phase.** The mini-audit (`wf_27a84061-c7e`,
@@ -2679,6 +2735,8 @@ silently last-wins — the check runs BEFORE minting); the P1a gate has a HOLE
 at `spec` (DEFERRED 14 — P3 ships its OWN type-position refusal); and NO
 tokenizer changes are needed (every ruled spelling already lexes), so NO
 corpus A/B is owed.
+
+<a id="p3a"></a>
 
 #### §5.P3a — The node + keyed blocks, no `^`  ⬜  ← the fresh session opens here
 
@@ -2819,6 +2877,8 @@ should decide a fusable-base posture) · the `re-key-sym?` gate is P3b's
 demolition site · `format-select-fail`'s 'unknown wording will misreport a
 future 'optional mark (no producer today).
 
+<a id="p3b"></a>
+
 #### §5.P3b — The `^` family  ✅ `36ce601c`
 
 **Work**: the ONE splitter over glued lexemes (Q_M7: nothing liftable — the
@@ -2919,6 +2979,8 @@ are P3c's demolition sites (their pins flip); Q_U2's discriminating pair
 keyed-only.
 
 
+<a id="p3c"></a>
+
 #### §5.P3c — Keyless + L4 + honest nesting  ✅ `1b021d57`
 
 **Work** (⚠ boundary note: P3b ships the SPLITTER and every MID-PATH `^`
@@ -3013,6 +3075,8 @@ natural substrate (a broadcast step's per-element results are components);
 the `not-indexable`/`subject-tuple` messages will need `:s` teaching when
 broadcast lands; DEFERRED 9's cross-domain hint family now has the
 `tuple-or-vector` message as its pattern.
+
+<a id="p4"></a>
 
 ### §5.P4 — Broadcast ω  (CO-DESIGN COMPLETE 2026-07-31 — Q_U5–Q_U9 RULED; partition LOCKED P4a–P4e; the PAUSE is CLEARED — implementation opens at P4a)
 
@@ -3257,6 +3321,8 @@ future NTT-modeled track.
 
 **Test delta**: corpus §10.2/§10.4/§10.5/§10.7 uncomment. Status: ⬜.
 
+<a id="p4a"></a>
+
 #### §5.P4a — Totality + strategy-independent repairs  (no new surface)
 
 **Mini-audit (2026-07-31, at `cab30b9a`) — the catch-all count was FOUR, it
@@ -3475,6 +3541,8 @@ owes that fixture.
 
 Status: ✅ (see the Progress Tracker).
 
+<a id="p4b"></a>
+
 #### §5.P4b — The ONE selector carrier + wholesale path migration  (mini-audit folded 2026-07-31)
 
 **The mini-audit** (`wf_1cb9d606-89c`, 5 HEAD-pinned read-only facets +
@@ -3566,6 +3634,8 @@ carry `#p(…)`, and (a)/(c) are therefore not two sizes of the same thing.
 
 Status: ⬜ — scope re-derived; the encoding decision and the slice split are
 the open items.
+
+<a id="p4b-i"></a>
 
 ##### §5.P4b-i — Encoding convergence + the carrier repurpose
 
@@ -3669,6 +3739,8 @@ for zero benefit. Named as cosmetic follow-up rather than left implicit.
 Status: ✅ b-i COMPLETE (Q_U11 retirement ✅ · encoding ✅ · single-carrier ✅;
 the carrier's NAME is a named cosmetic follow-up).
 
+<a id="p4b-ii"></a>
+
 #### §5.P4b-ii — The `$dot-access` fold migration (mini-audit folded 2026-07-31)
 
 **Mini-audit** `wf_f8568392-b44` (5 HEAD-pinned facets + completeness critic
@@ -3752,6 +3824,8 @@ silently drop the segment, while `ns foo.bar` correctly aborts. The guard
 (namespace.rkt:895-896) enumerates **2 of the 8** sentinels in
 `access-sentinel?`. Exactly the bug class `b0db8f3e` fixed and the P2 audit
 re-closed for `.N`; P1b/P3 minted new family members and nobody extended it.
+
+<a id="p4b-ii-1"></a>
 
 ##### §5.P4b-ii-1 — The (subject kind × sort) semantic table  ✅
 
@@ -3896,6 +3970,8 @@ detonating at b-ii-2 — taking them keeps b-ii-1 the safe typing-side slice):
   test file still say `[(expr-path _) e]`.
 
 Status: ✅ b-ii-1 COMPLETE.
+
+<a id="p4b-ii-2"></a>
 
 ##### §5.P4b-ii-2 — The `$dot-access` fold migration (mini-audit folded 2026-08-01)
 
@@ -4154,6 +4230,8 @@ Suite **9732/478/0** · battery **280 → 289** · acceptance 52/52 + 89/89 + 29
 
 Status: ✅ 2b+2c COMPLETE.
 
+<a id="p4b-ii-3"></a>
+
 ##### §5.P4b-ii-3 — DISSOLVED at the close (its scope was discharged at 2b)
 
 `_.field` was RESCUED inside 2b by eta-expansion in the `$select-path` parser
@@ -4166,6 +4244,8 @@ zero errors. Nested `_.a.b` remains broken — verified IDENTICAL at HEAD
 not a regression (DEFERRED 28).
 
 Status: ✅ DISSOLVED — no residue of its own.
+
+<a id="p4b-ii-close"></a>
 
 ##### §5.P4b-ii — CLOSE  ✅ (2026-08-01)
 
@@ -4353,6 +4433,8 @@ path is `racket/prologos/tools/form-deps.rkt`, not `tools/form-deps.rkt`.
 for `:w`/`:m`: **both recognizers match at length 2 and priority 97>95 silently
 decides.**
 
+<a id="p4c-1"></a>
+
 ##### §5.P4c-1 — Prerequisites + the classifier promotion  ✅
 
 **No new surface.** Three deliverables, two of which were LIVE defects.
@@ -4407,6 +4489,8 @@ together: it is the clean attribution baseline that makes P4c-2's SEVEN
 predicted diffs attributable to the MINT alone.
 
 Status: ✅ P4c-1 COMPLETE.
+
+<a id="p4c-2"></a>
 
 ##### §5.P4c-2 — The mint + the reader-post-pass binder unwrap  (mini-design 2026-08-01)
 
@@ -4515,6 +4599,8 @@ being exactly WHY the bucket needs a decline. A pin that asserts a REMEMBERED
 baseline is the one shape that ships vacuously green.
 
 Suite **9758 / 478 / 0** · battery 294 → **312** · acceptance 52/52 · A/B ZERO.
+
+<a id="p4c-2-close"></a>
 
 ##### §5.P4c-2 CLOSE — the table's FOUR measured misses + condition (c)  ✅
 
@@ -4750,6 +4836,8 @@ ALREADY SEE minted sentinels at HEAD — they run BEFORE `apply-binder-unwrap` i
 the same visit (parse-reader.rkt:3220-3225). The empty enable-set protects the
 pass's OUTPUT, not its internals.
 
+<a id="p4c-3a"></a>
+
 ##### §5.P4c-3a — the FOURTEENTH site: `select-step-name` was ω-blind
 
 D4's partition names "the two shape-test helpers OUTSIDE the recipe". Only
@@ -4793,6 +4881,8 @@ pointed into the middle of the comment that made it stale. That is the exact
 class `19ab78a9` had fixed ONE COMMIT EARLIER. Anchor on NAMES; `grep` is the
 index. (Caught by the adversarial verify, which is also how the `parser.rkt`
 sibling below was found.)
+
+<a id="p4c-3a-cont"></a>
 
 ##### §5.P4c-3a (cont.) — and the FIFTEENTH, found by my own false comment
 
@@ -4861,6 +4951,8 @@ still work, so the added unwrap did not make the refusal blanket).
 
 Status: ✅ **P4c-3 COMPLETE**. Status: ⬜ P4c-4..5.
 
+<a id="p5"></a>
+
 ### §5.P5 — Ruling B + factoring
 
 **Intent**: upgrade the strict waypoint to Ruling B — B2 keywise node merge ·
@@ -4873,6 +4965,8 @@ Q6 (idempotent self-merge) ruled here.
 **Test delta**: corpus §10.3 uncomments; L1–L5 law tests as a dedicated
 battery (the equational theory IS test material). Status: ⬜.
 
+<a id="px"></a>
+
 ### §5.PX — Binder-seam substrate (carried unchanged)
 
 The D3-S10 concrete-codomain lambda-adoption hole
@@ -4880,6 +4974,8 @@ The D3-S10 concrete-codomain lambda-adoption hole
 standalone-def seam (`def f := [fn …]` / `def add5 := [int+ 5 _]` fail where
 the body determines the types). Surface-independent; the old doc's round-6b
 capture stands. Position flexible. Status: ⬜.
+
+<a id="p6"></a>
 
 ### §5.P6 — Demand semantics (staging decision + implementation)
 
@@ -4908,6 +5004,8 @@ an [ADOPTED] spec element stays unimplemented through v1; `[now]`/`[env …]`
 leaves force at def-commit (the corpus §A comment documents it).
 Status: **decision ✅ (Q_U3)**; the phase's residue = the X.close gate row.
 
+<a id="x-close"></a>
+
 ### §5.X — X.close
 
 Bench matrix (feature microbench + E2E per testing.md — priced against the P2
@@ -4919,6 +5017,8 @@ re-deferred by the owner** · memory fold · **Stage-5 PIR** (the track does not
 flip ✅ without it). Status: ⬜.
 
 ---
+
+<a id="s6"></a>
 
 ## §6 SRE lattice lens (the six questions, run against the ADAPTED surface)
 
@@ -4967,6 +5067,8 @@ per-field row at all. Ruled in Batch 4.
 3): the broadcast-propagator node track opens on X.close perf pressure or
 F-row, whichever first, with its NTT model mandatory.
 
+<a id="s8"></a>
+
 ## §8 Risks (carried forward + new — the D5 critique's ⑤)
 
 - **R2 (walker gaps)** — carried: every walker touching the NEW nodes (block,
@@ -5007,6 +5109,8 @@ F-row, whichever first, with its NTT model mandatory.
   which is exactly the variant this row previously could not reject on
   principle because it never named it.
 
+<a id="s9"></a>
+
 ## §9 Principles gate (two columns — catalogue ‖ challenge)
 
 | Decision | Catalogue (passes?) | Challenge (could it be MORE aligned?) |
@@ -5016,6 +5120,8 @@ F-row, whichever first, with its NTT model mandatory.
 | Zero-propagator v1 (§5.P4) | Ratified twice (predecessor §7; D3 critique M2 refutation — the Check asks what the track ADDS). | **Challenged and CHANGED**: "the future NTT-modeled track" had no name and no trigger — the ban-"pragmatic" rule demands specificity. Now: **deferred to the broadcast-propagator node track (CIU, post-v1), TRIGGERED by either (a) selection-perf pressure at the X.close bench matrix or (b) F-row landing** — whichever first; the NTT model is mandatory at that opening. |
 | Projection-by-default flips by enclosure (spec §1.2: the same path text means block-projection inside `{…}`, extraction outside) | The spec's own per-step discipline; consistent with copattern reading. | Challenged and KEPT with an obligation: this is the surface's largest learnability bet; the corpus MUST pin the pair (`x.a.b` vs `x{a.b}`) side by side so the flip is documented by executable example — ⚠ **assigned to NO PHASE until 2026-07-29** (found by the P2 audit): **P2 lands the `x.a.b` half; P3 OWNS THE PAIR**, and neither test delta had named it, and the P3 error for the common confusion (a bare path where a block was meant) names the other spelling. |
 | Demand semantics staged (P6) | Honest: the collision is priced, not hidden. | Challenged: is staging an ADOPTED element a "validated-not-deployed" shape? Resolution = Batch-4 ruling: amend the spec tag to [ADOPTED — staged] + an X.close gate row, or commit v1. The gate row is the tripwire either way. |
+
+<a id="s10"></a>
 
 ## §10 References
 
