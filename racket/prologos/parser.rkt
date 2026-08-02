@@ -27,7 +27,8 @@
          ;; requires macros.rkt, so they cannot live in this file).
          (only-in "reader-forms.rkt"
                   colon-symbol? digit-headed-colon-symbol?
-                  fused-type-annot? fused-annot->type-symbol))
+                  fused-type-annot? fused-annot->type-symbol
+                  split-glued-name-datum))
 
 (provide parse-datum
          parse-toplevel-datum  ;; Rel T1 POL.9: command-position paren-goal dispatch
@@ -6219,16 +6220,44 @@
                 (define nm (extract-mode-annotation sym))
                 (define base (car nm))
                 (define mode (cdr nm))
-                (define segs (string-split (symbol->string base) ":"))
-                (define all-nonempty? (andmap (lambda (s) (> (string-length s) 0)) segs))
+                ;; ── The ONE legality question, asked ONE way ────────────────
+                ;; Both spellings below (sexp-glued `?x:Int`, WS-split `?x` +
+                ;; `:Int`) end up holding a candidate type NAME. Route that
+                ;; question through the canonical `fused-type-annot?` by
+                ;; re-attaching the colon, instead of re-testing the shape here.
+                ;;
+                ;; This site is the one a census keyed on `fused-type-annot?`
+                ;; cannot see — its own P4c-2 comment says so — and it had
+                ;; drifted exactly as the anti-second-copy rule predicts: it
+                ;; recognized with the BROAD `colon-symbol?` and then accepted
+                ;; whatever followed, so `?x:0` / `?x:7` / `?x:w` were silently
+                ;; stored as `type-pred (expr-fvar |0|)` — a free variable used
+                ;; as a TYPE PREDICATE, from a token that is a MULTIPLICITY. The
+                ;; Q_N4 defect verbatim ("the four-lexeme list silently ate `:7`
+                ;; as a type name"), still live here after being fixed for
+                ;; `defn`, `let` and `def`. `colon-symbol?` stays the RECOGNIZER
+                ;; (it answers "is there a colon-ish token here", which is what
+                ;; keeps the guiding messages reachable); `fused-type-annot?` is
+                ;; the AUTHORITY on whether it names a type.
+                (define (names-a-type? ty)
+                  (fused-type-annot?
+                   (string->symbol (string-append ":" (symbol->string ty)))))
+                ;; `nm` is the PARAM NAME to show in the remedy — for the glued
+                ;; spelling that is the split name, not `base` (which still has
+                ;; the offending annotation attached and would suggest the
+                ;; nonsense `x:0:Int`).
+                (define (not-a-type-error nm ty)
+                  (prologos-error
+                   loc
+                   (format "defr: `:~a` is not a type — a fused parameter annotation must name one, as in `~a:Int` (digit-headed `:0`/`:7` and `:w`/`:m` are multiplicities)"
+                           ty nm)))
+                (define-values (g-name g-ty g-err) (split-glued-name-datum base))
                 (cond
-                  ;; sexp-glued chained: name:T1:T2... (all segments non-empty) → reject
-                  [(and all-nonempty? (> (length segs) 2))
-                   (prologos-error loc (format "defr: chained type annotation in ~a not supported (reserve for UCS)" base))]
+                  ;; sexp-glued chained: name:T1:T2... → reject (reserve for UCS)
+                  [g-err (prologos-error loc (format "defr: ~a" g-err))]
                   ;; sexp-glued single: name:Type
-                  [(and all-nonempty? (= (length segs) 2))
-                   (loop (cdr ps)
-                         (cons (list (string->symbol (car segs)) mode (string->symbol (cadr segs))) acc))]
+                  [(and g-ty (not (names-a-type? g-ty))) (not-a-type-error g-name g-ty)]
+                  [g-ty (loop (cdr ps) (cons (list g-name mode g-ty) acc))]
                   ;; base has no simple type (plain name, or a `::` module path):
                   ;; WS may carry the type as the NEXT element (a colon-symbol).
                   [else
@@ -6236,18 +6265,19 @@
                                     (let ([n (car (cdr ps))]) (if (syntax? n) (syntax-e n) n))))
                    (cond
                      [(colon-symbol? nxt)
-                      (define tn (substring (symbol->string nxt) 1))
                       (define after (cddr ps))
                       (define nxt2 (and (pair? after)
                                         (let ([n (car after)]) (if (syntax? n) (syntax-e n) n))))
                       (cond
-                        [(= (string-length tn) 0)
+                        [(eq? nxt ':)
                          ;; A bare `:` (e.g. spaced `[?x : Int]`). C.b.1 is fused-only.
                          (prologos-error loc (format "defr: use a fused type annotation `~a:Type` (a spaced/bare `:` in the param list is not supported)" base))]
                         [(colon-symbol? nxt2)
                          (prologos-error loc (format "defr: chained type annotation on ~a not supported (reserve for UCS)" base))]
+                        [(not (fused-type-annot? nxt))
+                         (not-a-type-error base (substring (symbol->string nxt) 1))]
                         [else
-                         (loop after (cons (list base mode (string->symbol tn)) acc))])]
+                         (loop after (cons (list base mode (fused-annot->type-symbol nxt)) acc))])]
                      [else
                       (loop (cdr ps) (cons (list base mode #f) acc))])])])]
             ;; Literal patterns: numbers, strings, booleans
