@@ -1054,6 +1054,110 @@ items of the hold-point, ruled before P4a opened:
   rescue. Each with its own failing-test-first pass, because the per-caller
   obligations are **NOT uniform** (below).
 
+**The P4c opening rulings [owner, 2026-08-01]:**
+
+- **⭐ Q_U16 — THE BINDER UNWRAP MOVES TO A READER POST-PASS; Q_U8 SURVIVES,
+  ONE LAYER EARLIER.** ["That looks like the appropriate shape."]
+  **Q_U8 as ruled was NOT IMPLEMENTABLE**, and the refutation is verified, not
+  argued. The P4c grounding audit (`wf_d7c035da-cee`, 6 facets + completeness
+  critic @ `532474c0`, 7 agents / 1.53M tokens) found that §Q8.5 invariant 3
+  site 8 (join `access-sentinel?` + take a `rewrite-dot-access` arm) and Q_U8's
+  parser position-dispatch are **MUTUALLY EXCLUSIVE**: the preparse fold RUNS
+  OVER BINDER POSITIONS. Main-session probe at HEAD, with the existing
+  structural analogue: `ns t` + `defn f [x.a] x` → **`f : _ _ _ -> _ defined.`
+  — a THREE-arity function at ZERO errors.** So `[x:Int]` would never reach the
+  parser's binder consumers intact, and the parser cannot dispatch by position
+  at a seat the sentinel never arrives at.
+  **The escape that was tried and DOES NOT WORK** (recorded because it was the
+  main session's own lean, and the adversarial options panel `wf_6f15c6ae-6a7`
+  killed it): drop `access-sentinel?` membership and let the PARSER fuse, on the
+  `$brace-params` precedent. Refuted on two independent grounds. (i)
+  `rewrite-dot-access` has **FOUR call seats** — macros.rkt:1965 (map-literal
+  contents) · :2672 (main preparse) · :6316 (the `|>` expander) · :6702 (the
+  `$mixfix` expander) — and **TWO run inside PREPARSE, before the parser
+  exists**, so `users:name` would work in plain application and break inside
+  pipes, `.( )` operands and map literals. (ii) The `$brace-params` precedent is
+  the WRONG STRUCTURAL CLASS: it is self-contained and never fuses onto a base,
+  whereas **every base-consuming marker in the tree without exception is an
+  `access-sentinel?` member**. Measured at HEAD: `[f x{a}]` groups to
+  `(f x ($select-brace a))` and the FOLD makes it `(f ($select x a))`; without
+  the fold `[f users:name]` stays three items and `f` receives TWO arguments.
+  **THE RULING — the owner's reframe, and it keeps BOTH surfaces**
+  [owner: "I want to keep the fused syntax (even more important than
+  broadcast), and I have a strong preference for `:` as the broadcast glyph"]:
+  1. **Mint UNIFORMLY at grouping** — Q_U8's positional rule stands verbatim,
+     no context list, no tokenizer change.
+  2. **`$bcast-step` JOINS `access-sentinel?`** and takes its fold arm, so it
+     inherits all FOUR seats for free — which is exactly what the rejected
+     escape could not do.
+  3. **The binder UNWRAP moves to the READER POST-PASS** —
+     `transform-let-blocks-stx` (parse-reader.rkt:2716), verified a GENERAL
+     recursive syntax walk run from the reader's own entry point, already doing
+     head-keyed structural classification (`let-headed?` · `classify-let-block`
+     · `mark-let-goal-rhs` · `skip-reader-form-body`), and running at READER
+     time — therefore **provably before all four fold seats**.
+  **The owner's discriminator, and why it moved one axis over.** The proposal
+  was to disambiguate on *whether the symbol left of `:` is a collection*. The
+  premise is CORRECT and measured — the contexts genuinely differ (of **289**
+  live multiplicity tokens **287 are SPACED**; the whole measured collision is
+  **SEVEN** sites, every one a fused TYPE annotation in a BINDER position;
+  broadcast lives in EXPRESSION position). But "is it a collection" is a **TYPE**
+  question and the mint fires THREE LAYERS before typing — the same
+  discriminator **Q_U10 already rejected as its option (c)** ("incoherent,
+  elaboration precedes typing so the discriminator is not available where the
+  mint happens"). It is not total even at typing: in `x:Int` the `x` is being
+  BOUND and has no type yet by definition. The distinction that IS available
+  early is **binder position vs expression position** — the same instinct,
+  applied at the axis the pipeline can actually see.
+  **BONUS, and it is why this is a repair rather than scaffolding**: the fold
+  running over binder positions is a **LIVE LATENT DEFECT** today (`defn f
+  [x.a] x` → 3-arity at zero errors). P4c is the phase that SURFACES it, not
+  the phase that causes it.
+  **COST, BOOKED PLAINLY — do not soften this**: the binding-form head list is
+  a **PERMANENT hand-maintained enumeration with a SILENT failure mode** and
+  **no retirement plan**. Not "almost a plan." Three conditions ride with it:
+  (a) the unwrap is `eq?`-preserving BY CONSTRUCTION (the file already carries
+  that warning at :2559); (b) **every binding form gets a test pin so a new form
+  without an entry fails RED**; (c) the binder entries are made TOTAL, so an
+  unrecognized shape is LOUD — otherwise a missed form reproduces the 3-arity
+  class the ruling exists to fix.
+  Rejected-with-reason: **moving the broadcast glyph off `:`** (would dissolve
+  the cluster, but revisits the six-glyph mnemonic family — owner: strong
+  preference for `:`; also BLOCKED, nobody verified a candidate glyph lexes
+  intact where `:` does not) · **retiring the fused `[x:Int]` annotation** (the
+  cheapest resolution by far — 7 corpus sites + 8 datum pins — but the owner
+  ruled the fused surface MORE important than broadcast) · **parser-side fusion
+  without membership** (the four-seat refutation above).
+
+- **Q_U16b — `users:0` IS A LEGAL ω STEP** [owner, 2026-08-01]. So the gate
+  serves BOTH bands, and the discrimination question is LIVE.
+  **Consequence, measured**: `colon-annotation`'s registered classifier returns
+  **`'symbol`** (parse-reader.rkt:1166) while `keyword` returns `'keyword`
+  (:1226), so the ordinal band is type-INDISTINGUISHABLE at grouping. Had the
+  answer been NO, a gate keyed on `(eq? type 'keyword)` would have been
+  dispatchable at HEAD with zero new machinery (colon-annotation would-mint is
+  **ZERO** by census), six of the eight flipping datum pins would stop flipping,
+  and the L1-fusion pin would have had to move off its corpus line. The owner
+  took the fuller surface; the L1 pin **keeps** `users:0:userName`.
+  **MECHANISM — settled by MEASUREMENT, not by ruling**: promote
+  `colon-annotation` to a real token type. The rival (carry a pattern-provenance
+  field on `token-entry`) was costed by the panel at three mutually incompatible
+  numbers (25 / 10 / ~14–16) with OPPOSITE verdicts drawn from them; the main
+  session enumerated exhaustively at HEAD — **25 constructor sites across 7
+  files** (14 production · 11 test/bench) plus 1 `struct-copy`, and
+  **`sre-rewrite.rkt` holds 4 of them, borrowing `token-entry` as a
+  general-purpose term carrier** (`'binding`/`'sample`/`'constant`). That makes
+  the provenance field a struct-OWNERSHIP question, not a field addition.
+  Classifier-promotion wins on cost by an order of magnitude. ⚠ Ship it with an
+  EXPLICIT arm at `token-entry->stx`, never relying on the `[else]` — its safety
+  today is a coincidence of two else-arms doing the identity thing at the exact
+  site the file documents as its silent-miss hazard, and coincidental safety
+  expires silently. The provenance field is filed on its OWN merits
+  (`$exp-literal` + `$rat-literal`, both self-documented as identity-erased),
+  NOT as this gate's justification, and NOT as a scheduled revert of the
+  classifier change — they are RIVALS carrying the same information, and "ship
+  one with a revert clause" is the dual-path shape the rules block.
+
 **Open, GATING (spec §8):**
 - ~~**Q8** (the precise lexical grammar)~~ — **CLOSED 2026-07-28**: written at
   P1b-i, **owner-reviewed**, and ruled (Q_M8 the sole amendment). §Q8 is now
@@ -4096,6 +4200,137 @@ green under mutation. When a change introduces a FORK, both arms need pins, and
 mutation is what proves it.
 
 Suite **9732/478/0** · battery 240 → **289** · acceptance 52/52 + 89/89 + 29/29.
+
+#### §5.P4c — The `:` gate + the ω wrapper + PVec broadcast  (co-design 2026-08-01; Q_U16/Q_U16b RULED)
+
+**Grounding**: audit `wf_d7c035da-cee` (6 facets + completeness critic @
+`532474c0`, 7 agents / 1.53M tokens) → adversarial options panel
+`wf_6f15c6ae-6a7` (3 clusters × propose/critique + synthesis, 7 agents / 1.17M
+tokens). Every load-bearing claim below was **R-lens-verified on the main
+thread**; two of the panel's own numbers were wrong and are corrected here.
+The rulings are §3's Q_U16 / Q_U16b.
+
+##### PREREQUISITES — land FIRST, independently valuable, owed under every option
+
+Both were raised by three independent critics, and both are **live defects at
+HEAD**, not hypotheticals:
+
+1. **Hoist `adjacent-to-base?` into `reader-forms.rkt`.** It is defined at
+   parse-reader.rkt:3187-3193 (four conjuncts, consults NO token type), is NOT
+   exported, has exactly two call sites (:3249 lbracket, :3305 lbrace) — and
+   **surface-rewrite.rkt:550-556 hand-inlines the same four conjuncts** for
+   lbrace only, its own comment admitting it "mirrors parse-reader's
+   `adjacent-to-base?`", in a module that ALREADY requires reader-forms.rkt.
+   That is a live F1b.7g drift instance. Landing the `:` mint in both groupers
+   without hoisting writes the test a THIRD time. ⚠ D4's coordinate for this
+   function (`:2632`) is **555 lines stale**.
+2. **Make the `ns` name guard TOTAL.** namespace.rkt:895-896 enumerates only
+   `$dot-access`/`$postfix-index`; probe: `ns foo:bar` → `((ns foo :bar))`, so
+   the uniform gate FIRES and the guard would silently DROP the segment — a
+   FOURTH instance of the `b0db8f3e` class, which D4 already records as having
+   THREE unclosed instances. **Refuse any PAIR segment** rather than adding a
+   fourth memq entry: that closes the class instead of extending it.
+
+##### The partition
+
+- **P4c-1 — prerequisites + the classifier promotion.** The two above, plus
+  `colon-annotation` promoted to a real token type (Q_U16b) WITH an explicit
+  `token-entry->stx` arm. No new surface; the corpus A/B must be **ZERO diffs**
+  at this point, which is what makes it a clean attribution baseline.
+- **P4c-2 — the mint + the binder unwrap** (the Q_U16 core). The grouping arm
+  in BOTH groupers over the hoisted predicate; `$bcast-step` into
+  `access-sentinel?` + its fold arm; the reader post-pass unwrap with its
+  totality hardening and per-binding-form pins. **The corpus A/B lands here**
+  with the named diff set below.
+- **P4c-3 — the `(@bcast step)` step kind.** Its arm across P4a's THIRTEEN
+  sites (the `ADDING A KIND` recipe at syntax.rkt:879-904 is the authority, NOT
+  this document), plus the two shape-test helpers OUTSIDE the recipe, plus the
+  branch-initial refusal.
+- **P4c-4 — PVec broadcast + the law pins.** The third dispatcher in both
+  walks; the L1 fusion pin (`users:0:userName` → ONE layer) and the §3.2.1
+  extent pair; `quests:t`/`quests:{t r}` uncomment as PVec broadcasts.
+- **P4c-5 — the `.*name` retirement + FULL residue disposal**, in the commit
+  that discharges the parser's `:name` promise.
+
+##### THE NAMED PREDICTED DIFF SET (A/B is MANDATORY; any diff outside is a bug)
+
+Group-aware, independently re-derived at HEAD — **161 tracked `.prologos` ·
+1532 `keyword` tokens · 289 `colon-annotation` tokens · SEVEN would-mint**
+(repo-wide, 163 files: still seven):
+`examples/2026-07-31-let-blocks.prologos:185,:186,:195` ·
+`examples/2026-07-31-let-toplevel.prologos:37` (TWO tokens — **defn params, not
+let**) and `:84` · `examples/homoiconicity.prologos:96` (`':hello`).
+⚠ **Re-derive at implementation HEAD** — `examples/2026-03-20-first-class-paths.prologos`
+and `lib/examples/foray.prologos` are BOTH dirty in the owner's tree, and an
+A/B over a dirty tree measures the tree (3rd sighting of that class). Pin BOTH
+legs' inputs with `git archive`, never a working-tree read.
+
+##### HAZARDS THE AUDIT NAMED — none may be rediscovered mid-slice
+
+1. **The `.prologos` safety net DOES NOT EXIST.** All three would-mint files are
+   UNGATED; all six `process-file`-gated acceptance files contain ZERO. The only
+   suite-RED tripwire is **eight verbatim datum pins** at
+   `tests/test-parse-reader.rkt:494-516`, ALL of which flip — list them as
+   **DELIBERATE** flips or they read as a regression. Safe-by-construction and
+   **must NOT be touched**: `:512-513` (`x:0abc`/`x:10abc` — the annotation arm
+   declines, the colon shatters) and `:522-523` (`{:10 v}`/`{:0 v}` —
+   branch-initial, empty local result). **P4c should gate one would-mint file
+   before the mint lands.**
+2. **⚠ Admitting bare `colon` to the trigger BREAKS `:512-513`.** In both, the
+   shattered bare `:` IS byte-adjacent with a non-empty result. This is a hard
+   constraint on any attempt to reach the five shatter spellings.
+3. **`ident-continue?` accepts `*` and `^`** (parse-reader.rkt:231/:237), so
+   `users:tags*` and `users:name^alias` lex as **SINGLE keyword tokens** with
+   the operator swallowed into the step NAME. Refusing them guidedly needs an
+   explicit lexeme check on the minted name — an enumeration, to be named as
+   such: *"incomplete because `ident-continue?` swallows the operator into the
+   token; deferred for removal to the phase landing the `*` and `^` steps."*
+   And `:name^alias` otherwise **slips past** parser.rkt:1316's `^`-refusal
+   (via `select-step-name` returning the raw pair) — the refusal the b-ii-2b
+   verify installed after five spellings were found silently ignored.
+4. **Quote-adjacency is a THIRD bucket**: `':hello` → `(|'| :hello)` mints in
+   EXPRESSION position where no binder unwrap can rescue it. Prior art for the
+   decline conjunct: `prev-token-reader-form-head?` (parse-reader.rkt:3197-3201).
+5. **The Q_N3 two-grouper agreement guard is BLIND to this sentinel** in both
+   versions (v1 is count-comparing and the mint is count-preserving; v2 pairs a
+   tree TAG with a datum sentinel, a correspondence only OPENERS have). The
+   "one grouper only" failure is UNPINNED — a third guard shape is owed.
+6. **§Q8.5's applicability table has NO ROW for this shape** (third consecutive
+   under-specification of that invariant): `$bcast-step` is NO-NEW-TOKEN *and*
+   NON-OPENER, while the table offers only OPENER and SELF-CONTAINED. Sentinel
+   site 2 (`group-items-to-tree`) is **N/A** for a non-opener — proof in-tree:
+   `tag-dot-access` is defined and exported with ZERO producers.
+7. **TWO DISJOINT registration surfaces, neither cross-referencing the other**:
+   §Q8.5's reader-sentinel sites AND P4a's 13-site step-vocabulary recipe. Carry
+   both checklists side by side in the slice.
+8. **`token-entry->stx`'s keyword arm is `(string->symbol lexeme)`**, so `:Int`
+   already arrives as the colon-symbol `|:Int|`. The mint must WRAP it verbatim
+   so the unwrap is `cadr`; a mint that strips and an unwrap that re-adds `:`
+   is a second copy of the recognizer — the F1b.7g class.
+9. **The scalar `tier` cannot express "some elements hit, some missed"** across
+   a broadcast level (syntax.rkt:792-796; Q_U13's sufficiency argument is stated
+   PER DESCENT LEVEL). Unaddressed anywhere — rule it in P4c-4.
+10. **`parse-rel-params` (parser.rkt:6062/:6108) consumes `colon-symbol?`
+    DIRECTLY** and never calls `fused-type-annot?`, so it is structurally
+    invisible to a census keyed on the narrower predicate. `fused-type-annot?`
+    is ELEVEN sites / 7 functions (not the design's four); counting
+    `colon-symbol?` too gives **17 sites / 8 functions**.
+
+##### DOC-TRUTH REPAIRS owed in this slice
+
+D4:902 still says `quests:t` works "at P4d" and :3067 still says it "does NOT
+uncomment" — both superseded by the solve→PVec spin-out; the corpus cite `:235`
+is stale by 3 (the lines are `:232`/`:233`). §5.P4's Intent block at :3103-3105
+still asserts the RETIRED pre-NEST model ("under the step-list node (4b)", "the
+layer count is unfused-ω-steps"), both superseded by Q_U13/Q_U7. **§Q8.5's
+silent-degradation tier is factually WRONG at HEAD** — `pp-datum` HAS an
+access-family arm (`$select-path`, pretty-print.rkt:1691-1693) — and its sibling
+path is `racket/prologos/tools/form-deps.rkt`, not `tools/form-deps.rkt`.
+§Q8.5 invariant 1's "prefix-disjointness, not priority" framing is also wrong
+for `:w`/`:m`: **both recognizers match at length 2 and priority 97>95 silently
+decides.**
+
+Status: ⬜ (co-design complete; implementation opens at P4c-1).
 
 ### §5.P5 — Ruling B + factoring
 
