@@ -1680,7 +1680,11 @@
          parse-string-to-cells)
 
 ;; Build the parse tree from indent RRB + token RRB + bracket-depth RRB.
-;; This is the fire function for the tree-builder propagator.
+;; ⚠ Described as "the fire function for the tree-builder propagator", but no
+;; such propagator exists — this is CALLED DIRECTLY from the straight-line
+;; net1→net6 sequence below. Kept as written because the SHAPE is right and it
+;; is what an eventual install would use; corrected 2026-08-02 so the comment
+;; states an intention rather than a fact.
 ;;
 ;; Algorithm (expressed as fixpoint, implemented sequentially):
 ;; 1. Map each token to its source line (from start-pos)
@@ -1838,8 +1842,23 @@
 ;; (if changed) re-tokenize affected spans.
 ;;
 ;; For Track 1: disambiguation is applied as a post-pass on the
-;; token RRB (not a separate propagator yet — the propagator wiring
-;; comes when we install these on the network in Phase 1f).
+;; token RRB (not a separate propagator yet).
+;;
+;; ⚠ THE "Phase 1f" IOU THIS COMMENT USED TO CARRY WAS STALE SINCE 2026-03-26,
+;; and it promised something that phase never delivered. PPN Track 1's Phase 1f
+;; as SHIPPED was an integration gate — a golden topology comparison across 110
+;; `.prologos` files (`6df01a9`) — not propagator wiring. Anyone following the
+;; pointer arrived at a completed phase and reasonably concluded the wiring had
+;; happened.
+;;
+;; The measured state, 2026-08-02: the parse layer installs **ZERO** propagators
+;; — all seven files (parse-reader, parse-lattice, tree-parser, surface-rewrite,
+;; form-cells, parser, macros). This file's complete network surface is 1
+;; `make-prop-network`, 5 `net-new-cell`, 5 `net-cell-write`, 1 `net-cell-read`:
+;; a cell LEDGER written by a straight-line net1→net6 sequence. The real home
+;; for the wiring is the reader-layer section of the PPN 4D Implementation Draft
+;; Note (`docs/tracking/2026-05-19_PPN_4D_IMPLEMENTATION_DRAFT_NOTE.md`), and it
+;; is genuinely unbuilt rather than deferred-to-a-shipped-phase.
 
 ;; Disambiguate tokens based on bracket context.
 ;; Returns a new token RRB with narrowed type sets.
