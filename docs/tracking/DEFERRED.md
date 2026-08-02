@@ -2864,3 +2864,61 @@ say so.
 whole-file abort issue is noted for follow-up at some point in this track."
 Candidate home: P4c's close, or X.close's doc-truth/diagnostics sweep.
 
+### 31 — GROUNDED 2026-08-01 (def-seam branch). Four corrections; still DEFERRED, now for a DIFFERENT reason.
+
+Audited while doing the `def`-seam conversions (`536d1728`, `59e58662`,
+`446070fc`, `7a5f7689`), which are the same POL.4 pattern this item asks for.
+The item is still worth doing, but **not as written** — and one of the two
+blockers it never knew about has now been removed.
+
+1. **The function named above does not exist.** `validate-ns-declaration` has
+   ZERO occurrences in `racket/`. The real function is
+   **`process-ns-declaration`** (`namespace.rkt:878`), with two production
+   call sites (`macros.rkt:2955` under a Pass -1 `exn:fail?` swallow, and
+   `macros.rkt:3121` bare — the bare one is the abort you see).
+
+2. **Two raise sites, not one.** `namespace.rkt:880` (shape/arity — reachable
+   by a lone `ns`, `ns "foo"`, `ns 42`) and `namespace.rkt:914` (the P4c-1
+   totality guard — `ns foo:bar`, `ns foo.bar`, `ns foo bar`, `ns foo[2]`, …).
+   A conversion must cover both.
+
+3. **The module-load blocker — REMOVED at `7a5f7689`.** `load-module`'s loop
+   was `(unless (prologos-error? surf) …)` with no else, so an error surf in a
+   LIBRARY module was silently skipped. Converting `ns` on top of that would
+   have regressed a bad `ns` in a library module from a loud abort into a
+   module loading with no namespace and no prelude, silently — the `b0db8f3e`
+   class P4c-1 had just closed. That loop now reports error surfs, so this
+   objection no longer applies. (It applied to the shipped `$let-error` and
+   `$def-error` conversions too; both were quietly affected.)
+
+4. **The remaining blocker is structural and specific to `ns`.** Its fold arm
+   CONSUMES its form — `(process-ns-declaration datum) acc`, bare `acc`,
+   `macros.rkt:3120-3123` — so unlike `def` there is no datum flowing onward
+   for a marker to ride. Converting requires CHANGING THE ARM TO EMIT, and
+   emitting for a normally-consumed head adds a result, which shifts the
+   `;;N=>` acceptance-marker indices (suite-gated, several wrapper files).
+   **A FAILURE-ONLY emission avoids that**: a valid `ns` still returns `acc`,
+   and a malformed one currently yields no results at all, so nothing green
+   shifts. That is the shape to design toward.
+
+   Note also that both raises precede every side effect (`ns-sym` bound at
+   :921, context set at :925, prelude at :945-958), so a failing guard leaves
+   the file with no namespace and no prelude — a per-command error would let a
+   cascade of unbound-variable errors follow. "One guided error, then stop"
+   may be the honest target rather than a literal per-command value.
+
+5. **The pin count is understated.** FIVE `check-exn` assertions across FOUR
+   test cases in `tests/test-path-selection.rkt`, and "the P4c-1 block" misses
+   the strictest (the P2 pin asserts the message text, not just `exn:fail?`).
+
+6. **The P4c-1 pin comment's justification is factually wrong** and this item
+   inherits it: it claims aborting at the first command is
+   "near-indistinguishable from a per-command error". It cannot be —
+   `run-print` never runs, so there is no numbered result list and no
+   `--- N errors ---` line at all.
+
+**Strictly cheaper siblings, same class, NO structural blocker** (their arms
+already cons, so a marker can ride today): `macros.rkt:3348` bare `solver` and
+`macros.rkt:3360` bare `schema` — both verified live whole-file aborts. If the
+goal is to retire whole-file aborts by volume, these come first.
+
