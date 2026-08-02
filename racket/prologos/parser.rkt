@@ -21,7 +21,8 @@
          (only-in "syntax.rkt"
                   select-key-step? select-sub-step? select-step-cont
                   select-cont-collapse? select-branch-top-keys
-                  select-step-kind)   ;; D4.P4a: the totality dispatcher
+                  select-step-kind    ;; D4.P4a: the totality dispatcher
+                  select-bcast-inner) ;; D4.P4c-3 (Q_U7): unwrap the ω step
          ;; LET P4: the fused primitives moved here (the one definition —
          ;; macros.rkt consumes them at the datum level, and this module
          ;; requires macros.rkt, so they cannot live in this file).
@@ -1039,8 +1040,14 @@
   ;; unrecognized leaf kind raises here instead of silently answering #f and
   ;; mis-gating the `^..` desugar at :1001.
   (define (dissolve-step? s)
-    (and (eq? (select-step-kind s) 'caret)
-         (eq? (select-step-cont s) 'dissolve)))
+    ;; D4.P4c-3 (Q_U7): see THROUGH the ω wrapper. This is one of the four
+    ;; [leaf] classifiers the ADDING A KIND recipe flags as mattering most —
+    ;; it answers a silent #f on a kind it does not recognize, so a missed arm
+    ;; mis-sorts with no raise anywhere downstream. `users:k^` dissolves exactly
+    ;; as `users.k^` does: ω changes container arity, not `^` behaviour.
+    (let ([s (if (eq? (select-step-kind s) 'bcast) (select-bcast-inner s) s)])
+      (and (eq? (select-step-kind s) 'caret)
+           (eq? (select-step-cont s) 'dissolve))))
   ;; ---- P3b branch-close validation: positional legality of `^` conts ----
   ;; br in ORDER (head first). #f = ok, else the error message.
   (define (branch-problem br)
@@ -1052,7 +1059,13 @@
           ;; it did not recognize — a `^`-bearing wrapper in an illegal
           ;; position would slip through a check written to reject it.
           ;; Classifying first makes an unrecognized kind loud here.
-          (let* ([s (car steps)] [last? (null? (cdr steps))]
+          (let* ([s0 (car steps)] [last? (null? (cdr steps))]
+                 ;; D4.P4c-3 (Q_U7): unwrap ω before the positional-legality
+                 ;; check. `select-step-cont` answers #f for every non-`caret`
+                 ;; kind, so a `^`-bearing step INSIDE a wrapper would slip
+                 ;; through a check written to reject it — the identical hole
+                 ;; the P4a comment below describes for unrecognized kinds.
+                 [s (if (eq? (select-step-kind s0) 'bcast) (select-bcast-inner s0) s0)]
                  [_kind (select-step-kind s)]
                  [c (select-step-cont s)])
             (cond

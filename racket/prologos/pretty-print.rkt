@@ -155,6 +155,11 @@
                       (cont->string (caddr s)))]
       [(sub)
        (string-append ".{" (string-join (map pp-select-branch (cdr s)) " ") "}")]
+      ;; D4.P4c-3 (Q_U7): the ω step renders with its own glyph and its WRAPPED
+      ;; step's rendering — `users:name`, `users:{a b}`. `first?` passes to the
+      ;; inner step as #t so the inner never emits a leading dot: `:` is already
+      ;; the separator, and `users:.name` would be wrong.
+      [(bcast) (string-append ":" (step->string (select-bcast-inner s) #t))]
       [else (format "«unrendered-step-kind:~a:~s»" (select-step-kind/display s) s)]))
   (apply string-append
          (for/list ([s (in-list b)] [i (in-naturals)])

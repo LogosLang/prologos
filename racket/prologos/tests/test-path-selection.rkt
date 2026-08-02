@@ -3763,3 +3763,59 @@
   ;; WHY the bucket exists. Second guessed-baseline in this slice; the earlier
   ;; one was `{:0 v}` at P4c-1. Measure the baseline, always.
   (check-equal? (read-all-forms-string "':hello") '((|'| :hello))))
+
+;; ============================================================
+;; D4.P4c-3 — the SIXTH step kind, `(@bcast step)` (Q_U7)
+;; ============================================================
+;; The `ADDING A KIND` recipe in syntax.rkt is the AUTHORITY for this phase, not
+;; D4. Its own header records that the FIRST cut of that recipe was
+;; SYNTAX-directed and structurally could not see two whole classes (open-coded
+;; shape tests; `and`/`if`-shaped dispatchers), leaving five sites wrong — two
+;; of them UPSTREAM of the guards. The sixth kind was added THROUGH the recipe
+;; and met all thirteen sites with no correction needed.
+;;
+;; The split these pins encode:
+;;   NAME / KEY walks  → ω is TRANSPARENT: delegate to the wrapped step, because
+;;                       ω changes container ARITY, not key behaviour.
+;;   VALUE walks       → guided NOT-YET: the broadcast semantics land at P4c-4
+;;                       with the PVec dispatcher. Delegating there would
+;;                       project off the CONTAINER instead of broadcasting over
+;;                       it — a silent wrong answer, which is the outcome the
+;;                       totality dispatcher exists to prevent.
+
+(test-case "P4c-3: the wrapper classifies, and its payload is recoverable"
+  (define b (make-select-bcast 'name))
+  (check-equal? b '(@bcast name))
+  (check-equal? (select-step-kind b) 'bcast)
+  (check-equal? (select-bcast-inner b) 'name)
+  ;; extent is STRUCTURAL: the wrapper holds exactly ONE step, so a
+  ;; broadcast-of-nothing is unconstructible (Q_U7 ruling 4b restated)
+  (check-true (select-bcast-step? b)))
+
+(test-case "P4c-3: ω is KEY-TRANSPARENT in the name walks"
+  ;; `users:name` keys `:name` exactly as `users.name` does — NOT #f like an
+  ;; ordinal step. Transparent here means DELEGATE, not "contributes nothing".
+  (check-equal? (select-step-output-name (make-select-bcast 'name)) 'name)
+  (check-equal? (select-branch-top-keys (list (make-select-bcast 'name))) '(name))
+  ;; Q_U7's own examples: x:s:t is TWO one-step wrappers, not one two-step
+  (check-equal? (map select-step-output-name
+                     (list (make-select-bcast 's) (make-select-bcast 't)))
+                '(s t))
+  ;; users:{a b} — the wrapped step is a terminal sub-block, which contributes
+  ;; no single name, exactly as a bare `sub` does
+  (check-equal? (select-step-output-name
+                 (make-select-bcast (cons '@sub (list (list 'a) (list 'b)))))
+                #f))
+
+(test-case "P4c-3: the FOUR [leaf] classifiers see THROUGH the wrapper"
+  ;; The recipe flags these as mattering most: they run BEFORE the branch walks
+  ;; and answer a silent #f on an unrecognized kind, so a missed arm mis-SORTS
+  ;; the branch (keyed vs keyless) with no raise anywhere downstream.
+  (check-equal? (select-branch-collapse
+                 (list (make-select-bcast (list '@key 'k 'collapse))))
+                'collapse)
+  (check-true (select-branch-keyless?
+               (list (make-select-bcast (list '@key 'k 'dissolve)))))
+  ;; and the un-wrapped forms must still behave identically
+  (check-equal? (select-branch-collapse (list (list '@key 'k 'collapse))) 'collapse)
+  (check-true (select-branch-keyless? (list (list '@key 'k 'dissolve)))))

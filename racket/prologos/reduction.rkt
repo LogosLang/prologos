@@ -1755,6 +1755,11 @@
                         [(ord-step) (index-into v s name)]
                         [(ord-branch) (index-into v (cadr s) (cadr s))]
                         [(key caret sub) (project (champ-of v name) name)]
+                        ;; D4.P4c-3 (Q_U7): the TWIN of typing-core's arm, landed
+                        ;; atomically with it. Same reason: delegation here would
+                        ;; be a champ-of over the container, i.e. a panic naming
+                        ;; the wrong thing, or worse a plausible wrong value.
+                        [(bcast) (select-bcast-not-yet 'select-walk-to-leaf s)]
                         [else (select-step-kind-unhandled 'select-walk-to-leaf s)])])
             (if (null? (cdr steps))
                 hit
@@ -1805,6 +1810,13 @@
                [else
                 (list (cons (or (and cont (select-cont-rename cont)) name)
                             (below-value hit rest (append seen (list s)))))]))]
+          ;; D4.P4c-3 (Q_U7): a wrapper never HEADS a branch in v1 (branch-initial
+          ;; `:` is refused, W2/spec §7.3), so this is unreachable-at-head today.
+          ;; It is written, not omitted: the refusal is a SURFACE rule and a surface
+          ;; rule is not a representation invariant — P5's factoring rewrites
+          ;; branches. Loud not-yet rather than a guess at semantics P4c-4 owns.
+          [(eq? (select-step-kind (car b)) 'bcast)
+           (select-bcast-not-yet 'select-branch-entries (car b))]
           [else (select-step-kind-unhandled 'select-branch-entries (car b))])))
     ;; the COMPONENTS a dissolved head splices (terminal sub-block = that
     ;; block's level, fresh branches; else the steps continue as one branch).
@@ -1850,6 +1862,13 @@
         ;; what is actually load-bearing here, is `ord-branch`.
         [(memq (select-step-kind (car steps)) '(key caret sub ord-branch))
          (entries->value (branch-entries v steps seen))]
+        ;; D4.P4c-3 (Q_U7): `bcast` is NOT added to the memq above — that arm
+        ;; delegates to the branch walk, and the ω value semantics land at P4c-4.
+        ;; Kept explicit so the guard names the kind rather than reporting it as
+        ;; unknown, which would be false: it IS known, it is just not yet meaningful
+        ;; at the value level.
+        [(eq? (select-step-kind (car steps)) 'bcast)
+         (select-bcast-not-yet 'select-below-value (car steps))]
         [else (select-step-kind-unhandled 'select-below-value (car steps))]))
     ;; D4.P4a: HOIST the subject's whnf out of the per-branch lambda. The
     ;; header comment above has claimed since P3a that the subject is

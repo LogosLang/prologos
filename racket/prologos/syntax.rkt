@@ -174,6 +174,7 @@
  select-sorts select-sort? select-sort-unhandled
  ;; D4.P4a: the step-kind totality dispatcher + the consumer-side else
  select-step-kind select-step-kind-unhandled select-step-kind/display
+ select-bcast-step? select-bcast-inner make-select-bcast select-bcast-not-yet
  select-step-cont select-cont-collapse? select-cont-rename
  select-branch-collapse select-branch-keyless?
  select-step-output-name select-synth-name select-branch-top-keys
@@ -858,6 +859,53 @@
 ;; (output key :name), while `{0.name}` is a keyless component.
 (define (select-ord-step? s) (and (pair? s) (eq? (car s) '@ord)))
 
+;; D4.P4c-3 (Q_U7): `(@bcast step)` — THE ω/BROADCAST STEP, a ONE-STEP WRAPPER.
+;;   users:name    → [(@bcast name)]
+;;   users:{a b}   → [(@bcast (@sub …))]
+;;   x:s:t         → [(@bcast s) (@bcast t)]
+;;
+;; ⚠ EXTENT IS STRUCTURAL, not a count. The wrapper holds exactly ONE step, so
+;; "broadcasts the next step" IS the representation 1:1 and a broadcast-of-
+;; nothing is UNCONSTRUCTIBLE. L1 fusion (`users:0:userName` → ONE layer) is a
+;; THEOREM the battery pins, not a property this representation maintains —
+;; each ω step consumes one container layer and re-wraps one, so fmap∘fmap =
+;; fmap arithmetically and nothing here computes a layer count. The rejected
+;; alternatives are recorded in D4 §3 Q_U7: the flat nullary marker (extent by
+;; ADJACENCY ⇒ representable malformed states + a backward scan), the
+;; run-carrying wrapper (the surface never writes runs, so the parser would have
+;; to MERGE adjacent wrappers — the normalization pass 4b exists to forbid), and
+;; the per-step grade field (taxes the whole landed vocabulary for one grade).
+;;
+;; ⚠ A WRAPPER NEVER HEADS A BRANCH — branch-initial `:` stays refused in v1
+;; (W2 / spec §7.3). Every branch-shaped walk may therefore treat `'bcast` as
+;; unreachable-at-head, and the ones that do say so at their arm.
+(define (select-bcast-step? s) (and (pair? s) (eq? (car s) '@bcast)))
+
+;; The ω step's VALUE-level semantics (map the wrapped step over the container)
+;; land at P4c-4 together with the PVec dispatcher and the L1/extent law pins.
+;; P4c-3 lands the KIND and its arms; the value walks therefore carry a guided
+;; not-yet rather than a wrong answer.
+;;
+;; ⚠ WHY NOT DELEGATE TO THE INNER STEP HERE. Delegation is exactly right for
+;; the NAME/KEY walks — ω changes container arity, not key behaviour — but at
+;; the value level it would project the field off the CONTAINER instead of
+;; broadcasting over it: a silent wrong answer, which is the one outcome this
+;; track's totality dispatcher exists to prevent. Loud beats plausible.
+(define (select-bcast-not-yet who s)
+  (error who
+         (string-append
+          "broadcast step ~s: the ω value semantics land at CIU T6 D4.P4c-4"
+          " (PVec broadcast + the L1/extent law pins).\n"
+          "  P4c-3 landed the step KIND and its walks; until P4c-4 spell it"
+          " `[map [fn [m] m.k] xs]`")
+         s))
+
+;; The wrapped step. Total on `select-bcast-step?` values by construction: the
+;; smart constructor is the only producer and it always supplies one.
+(define (select-bcast-inner s) (cadr s))
+
+(define (make-select-bcast step) (list '@bcast step))
+
 ;; D4.P4a — THE STEP-KIND TOTALITY DISPATCHER (owner ruling 2026-07-31:
 ;; route ALL EIGHT dispatch sites through this one classifier).
 ;;
@@ -876,7 +924,10 @@
 ;; pipeline.md does not apply and a named classifier is the available
 ;; structural form.
 ;;
-;; ADDING A KIND — the COMPLETE site list (13 sites, FIVE files). ⚠ The first
+;; ADDING A KIND — the COMPLETE site list (13 sites, FIVE files).
+;; ⚠ P4c-3 ADDED THE SIXTH KIND, `(@bcast step)`, THROUGH THIS RECIPE. It met
+;; all thirteen; the recipe held with no correction needed, which is the first
+;; time an enumeration in this track has survived a new member intact. ⚠ The first
 ;; cut of this recipe said "every `case (select-step-kind …)` in syntax.rkt,
 ;; typing-core.rkt and reduction.rkt", which was written from the eight sites
 ;; a name-grep found. That census was SYNTAX-directed and structurally could
@@ -909,12 +960,13 @@
     [(select-key-step? s) 'caret]       ;; (@key name cont)
     [(select-sub-step? s) 'sub]         ;; (@sub . branches) — terminal sub-block
     [(select-ord-step? s) 'ord-branch]  ;; (@ord N) — ordinal BRANCH head
+    [(select-bcast-step? s) 'bcast]     ;; (@bcast step) — the ω/broadcast step
     [else
      (error 'select-step-kind
             (string-append
              "unknown select step kind: ~s\n"
              "  the step vocabulary is a CLOSED union: symbol | number"
-             " | (@key name cont) | (@sub . branches) | (@ord N)\n"
+             " | (@key name cont) | (@sub . branches) | (@ord N) | (@bcast step)\n"
              "  a new kind must be added to select-step-kind AND given an arm"
              " in every `case` over it (D4.P4a)")
             s)]))
@@ -972,7 +1024,14 @@
 ;; the branch's LEAF collapse continuation, or #f (the `^-` family flattens
 ;; the WHOLE branch, so its walk is a pre-classified special case)
 (define (select-branch-collapse b)
-  (let ([s (car (reverse b))])
+  (let* ([s0 (car (reverse b))]
+         ;; D4.P4c-3 (Q_U7): a LEAF classifier sees through the ω wrapper —
+         ;; `users:k^-` collapses exactly as `users.k^-` does. ⚠ This is one of
+         ;; the FOUR [leaf] sites the recipe flags as mattering most: they run
+         ;; BEFORE the branch walks and answer a silent #f on a kind they do
+         ;; not know, so a missed arm MIS-SORTS the branch (keyed vs keyless)
+         ;; with no raise anywhere downstream.
+         [s (if (eq? (select-step-kind s0) 'bcast) (select-bcast-inner s0) s0)])
     ;; D4.P4a: CLASSIFY the leaf rather than testing `select-key-step?`
     ;; directly. This runs UPSTREAM of every guarded walk (syntax :932,
     ;; typing-core :787, reduction :1689), so an unknown leaf kind answering
@@ -1003,6 +1062,11 @@
          [(eq? c 'dissolve) #f]
          [(select-cont-rename c) => values]
          [else (cadr s)]))]
+    ;; D4.P4c-3 (Q_U7): ω is KEY-TRANSPARENT — it changes container ARITY, not
+    ;; key behaviour, so the output name is the WRAPPED step's. `users:name`
+    ;; keys `:name` exactly as `users.name` does. NOT `#f` like `ord-step`:
+    ;; transparent here means DELEGATE, not "contributes nothing".
+    [(bcast) (select-step-output-name (select-bcast-inner s))]
     [else (select-step-kind-unhandled 'select-step-output-name s)]))
 
 ;; D4.P3c: the `^`-terminated (keyless) branch pre-classifier — a branch
@@ -1010,7 +1074,11 @@
 ;; keyless component (Q_T4b: no keys ⇒ no ancestry question; the whole
 ;; branch flattens like the collapse family, minus the label).
 (define (select-branch-keyless? b)
-  (let ([s (car (reverse b))])
+  (let* ([s0 (car (reverse b))]
+         ;; D4.P4c-3 (Q_U7): see through the ω wrapper — same [leaf] argument as
+         ;; select-branch-collapse; a silent #f here mis-sorts the branch as
+         ;; KEYED, which then feeds the parser's L4 sort and duplicate checks.
+         [s (if (eq? (select-step-kind s0) 'bcast) (select-bcast-inner s0) s0)])
     ;; D4.P4a: classify the leaf — same upstream-of-the-guards argument as
     ;; select-branch-collapse. A silent #f here mis-sorts the branch as KEYED,
     ;; which then feeds the parser's L4 sort check and duplicate-key check.
@@ -1056,6 +1124,14 @@
            [(ord-step)
             (if (null? rest) (list #f) (select-branch-top-keys rest))]
            [(sub) (append-map select-branch-top-keys (cdr s))]
+           ;; D4.P4c-3 (Q_U7): ω is key-transparent — the component set is the
+           ;; WRAPPED step's, with the same rest. ⚠ A wrapper never HEADS a
+           ;; branch in v1 (branch-initial `:` is refused, W2/spec §7.3), so
+           ;; this arm is unreachable-at-head today; it is written rather than
+           ;; omitted because the refusal is a SURFACE rule, and a surface rule
+           ;; is not a representation invariant — P5's factoring rewrites
+           ;; branches and could produce one.
+           [(bcast) (select-branch-top-keys (cons (select-bcast-inner s) rest))]
            [(caret)
             (let ([c (select-step-cont s)])
               (cond
