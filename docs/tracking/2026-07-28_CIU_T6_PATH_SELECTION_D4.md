@@ -32,7 +32,7 @@ rulings, censuses and test delta live in its own section.
 | **P3c** | **Keyless + L4 + honest nesting** — the nat-row mint at EVERY n (incl. 1 and homogeneous n) · ordinal branches `{N M}` · the L4 mixing error · `⟨String⟩` 1-tuple pins · the G11 one-space pair pinned side by side | ✅ | §5.P3c · **`1b021d57`** — suite **9497/475/0**, acceptance **52/52**, battery 206; P3 (BLOCKS) COMPLETE; the verify's FIRST no-BLOCKING slice in eight (2 SIGNIFICANT fixed pre-commit: the @ord walk-to-leaf twin-drift, the decimal-fusion leak); G11 landed AS AMENDED; in-block `v[0]`≡`.0` ratified-by-pin |
 | **P4** | **Broadcast ω** — ⭐ **P4a ✅ · P4b ✅ COMPLETE** (b-i carrier + b-ii `$dot-access` migration; `x.a` now mints the unified selector carrier) · P4c–P4e ⬜ — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | §5.P4 · CO-DESIGN: audit `wf_8458c23b` + options panel run; **Q_U5** (ONE reified selector carrier, monomorphic — F-row carries bound-selector precision) + **Q_U6** (WHOLESALE path migration; P4a totality/repairs → P4b carrier → P4c+ ω) RULED 2026-07-31; **Q_U7** RULED (the `(@bcast step)` wrapper; 4b restated) · **Q_U8** RULED (uniform positional `$bcast-step` mint + parser position-dispatch; A/B named-diff-set) — partition LOCKED P4a–P4e; **the PAUSE is CLEARED 2026-07-31: Q_U9 RULED (`:` REFUSES over `List` — no native carrier + the key-sort thesis does not reach a cons-spine; guided error naming `pvec-from-list`; the `Functor`-instance door named; the solve-carrier counter resolved UPSTREAM by the `solve-*`→PVec mini-track) + the `update-in` ω fence and the whole-node abort both RATIFIED**; ⚠ LET merge `5e16ead4` landed mid-walk (audit coords @ `02dd27d7`) |
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | §5.P4a · battery 204 → **224** |
-| **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED**: Q_U8 was NOT implementable (§Q8.5 site 8 and parser position-dispatch are mutually exclusive — the preparse fold RUNS OVER BINDER POSITIONS, probe: `defn f [x.a] x` → a 3-arity function at 0 errors). The binder unwrap moves to the READER POST-PASS, so the mint stays uniform, `$bcast-step` JOINS `access-sentinel?` and inherits all four fold seats, and BOTH surfaces survive (owner: fused `x:Int` is more important than broadcast; `:` stays the glyph). **Q_U16b**: `users:0` IS a legal ω step. | 🔄 | §5.P4c · grounding `wf_d7c035da-cee` (7 agents/1.53M) + options panel `wf_6f15c6ae-6a7` (7 agents/1.17M) · **P4c-1 ✅ `182f1678`** — `adjacent-to-base?` exported + both groupers consume it (the panel's `reader-forms.rkt` target was WRONG: the predicate is over the `token-entry` STRUCT) · the `ns` guard TOTAL by POLARITY INVERSION (it silently dropped `ns foo:bar` at 0 errors — a LIVE `b0db8f3e` instance; raise-channel residue = DEFERRED 31) · `colon-annotation` promoted with EXPLICIT arms at both `case type` sites · **corpus A/B 161 files ZERO DIFFS** (the attribution baseline for P4c-2's seven predicted diffs) · battery 289→294 · suite 9740/478/0. **P4c-2 🔄 `b1399016`** — the mint (both groupers, ONE shared trigger) + the binder unwrap at the reader post-pass; **A/B ZERO where this doc predicted SEVEN** (those sites ROUND-TRIP — corrected in §5.P4c-2); battery 294→**312**; suite **9758/478/0**. ✅ **P4c-2 COMPLETE** — `cbd8d1a7` the table's FOUR MEASURED misses (private-suffix heads, an implicit-binder group eating the arming, `defmacro`, the flat `$pipe` spelling) **+ an OVER-REACH the ruling never booked** (a terminator SEARCH stripped BODY broadcasts; condition (c) structurally cannot catch that direction), root-caused to one STICKY `armed?` flag and replaced with explicit region consumption; `private-form-base` HOISTED to reader-forms.rkt. ⚠ **The private-suffix miss was a LIVE end-to-end regression** invisible to the corpus A/B and to all 18 reader-level pins. · `8c4faee2` **condition (c)**, whose SHAPE changed once measured: the 17 are not where a leak lands (`parse-defn`'s DISPATCHER is a binder consumer keyed on neither predicate — 5th blindness-class instance) and the failure mode was LOUD-generic, not silent, so (c) is a DIAGNOSTIC upgrade. **MUTATION found my own first guard was DEAD CODE.** battery 312→**321**; suite 0 failures/478; A/B ZERO. **P4c-3..5 ⬜** |
+| **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED**: Q_U8 was NOT implementable (§Q8.5 site 8 and parser position-dispatch are mutually exclusive — the preparse fold RUNS OVER BINDER POSITIONS, probe: `defn f [x.a] x` → a 3-arity function at 0 errors). The binder unwrap moves to the READER POST-PASS, so the mint stays uniform, `$bcast-step` JOINS `access-sentinel?` and inherits all four fold seats, and BOTH surfaces survive (owner: fused `x:Int` is more important than broadcast; `:` stays the glyph). **Q_U16b**: `users:0` IS a legal ω step. | 🔄 | §5.P4c · grounding `wf_d7c035da-cee` (7 agents/1.53M) + options panel `wf_6f15c6ae-6a7` (7 agents/1.17M) · **P4c-1 ✅ `182f1678`** — `adjacent-to-base?` exported + both groupers consume it (the panel's `reader-forms.rkt` target was WRONG: the predicate is over the `token-entry` STRUCT) · the `ns` guard TOTAL by POLARITY INVERSION (it silently dropped `ns foo:bar` at 0 errors — a LIVE `b0db8f3e` instance; raise-channel residue = DEFERRED 31) · `colon-annotation` promoted with EXPLICIT arms at both `case type` sites · **corpus A/B 161 files ZERO DIFFS** (the attribution baseline for P4c-2's seven predicted diffs) · battery 289→294 · suite 9740/478/0. **P4c-2 🔄 `b1399016`** — the mint (both groupers, ONE shared trigger) + the binder unwrap at the reader post-pass; **A/B ZERO where this doc predicted SEVEN** (those sites ROUND-TRIP — corrected in §5.P4c-2); battery 294→**312**; suite **9758/478/0**. 🔄 **P4c-2 NOT COMPLETE** (the adversarial verify found 3 BLOCKING regressions — see §5.P4c-2's close) — `cbd8d1a7` the table's FOUR MEASURED misses (private-suffix heads, an implicit-binder group eating the arming, `defmacro`, the flat `$pipe` spelling) **+ an OVER-REACH the ruling never booked** (a terminator SEARCH stripped BODY broadcasts; condition (c) structurally cannot catch that direction), root-caused to one STICKY `armed?` flag and replaced with explicit region consumption; `private-form-base` HOISTED to reader-forms.rkt. ⚠ **The private-suffix miss was a LIVE end-to-end regression** invisible to the corpus A/B and to all 18 reader-level pins. · `8c4faee2` **condition (c)**, whose SHAPE changed once measured: the 17 are not where a leak lands (`parse-defn`'s DISPATCHER is a binder consumer keyed on neither predicate — 5th blindness-class instance) and the failure mode was LOUD-generic, not silent, so (c) is a DIAGNOSTIC upgrade. **MUTATION found my own first guard was DEAD CODE.** battery 312→**321**; suite 0 failures/478; A/B ZERO. **P4c-3..5 ⬜** |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | §5.P5 · L1–L5 law battery |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | §5.PX · position flexible |
 | **P6** | **Demand semantics** — RULED STAGED (4a); **decision ✅ Q_U3 (owner, 2026-07-30): option (c)** — deferred to a named post-v1 phase, charter stub in §5.P6 | ⬜ (residue = the X.close gate row only) | §5.P6 |
@@ -4575,7 +4575,48 @@ rule) · battery 312 → **321** · acceptance 52/52 + 89/89 + 6/6 + 29/29 + 28/
 legs on ONE `git archive` snapshot · row matrix identical to baseline in every
 column.
 
-Status: ✅ **P4c-2 COMPLETE.**
+Status: 🔄 **NOT COMPLETE — the adversarial verify (`wf_cb055ff6-16a`, 6 skeptics
++ adjudicator) found THREE BLOCKING regressions, all re-verified on the main
+thread by A/B against a real `182f1678` build.**
+
+1. **Comma-adjacency FALSE MINT.** `{:a 1,:b 2}` mints — `adjacent-to-base?`
+   reads the raw COMMA token, which `group-items` SKIPS and never emits, so a
+   cosmetic separator reads as a base. Fires in **7 of 7 collection contexts**
+   (map, list, vector, set, application args, goal args, nested). Regression vs
+   **`b1399016`** — i.e. the MINT, not the repair. The only one on ordinary
+   EXPRESSION-position syntax, where the binder unwrap structurally cannot help.
+   Fix: a comma decline conjunct on `bcast-step-trigger?`, exactly parallel to
+   the existing quote decline.
+2. **FIVE more missing binder heads**: `capability` · `Pi` · `Sigma` · `DSend` ·
+   `DRecv`. All regress vs `182f1678`. ⚠ `capability` and `fn` take **N
+   successive binder groups** while `take-param-region` consumes exactly ONE, so
+   a plain table row repairs only the first group.
+3. **`let` regressed in TWO documented spellings** — the BRACKET form
+   (`let [x:Int := 5] …`) and any SPLICED (non-head) `let`. `binder-region-heads`
+   is consulted ONLY by `apply-binder-unwrap`'s HEAD test, so a `let` appearing
+   as a SIBLING is invisible — **the identical blindness this same commit fixed
+   for `rel`**, applied to param-heads but not to region-heads.
+
+Plus SIGNIFICANT: `unwrap-bcast-step`'s unguarded `cadr` is a second, distinct
+whole-file abort on a zero-payload `($bcast-step)`; the over-reach direction
+survives in property clauses, bare-`fn`, and type unions; and
+`parse-param-names-for` is an unhardened binder consumer.
+
+**⚠ THE ADJUDICATOR'S CENTRAL CRITICISM IS FAIR AND IS THE REAL FINDING**: this
+commit correctly drew the lesson that *the enumeration cannot be the safety
+property* — and then shipped one more round of enumeration. Every one of the
+three BLOCKING items is a missing row or a missing arm in a hand-maintained
+table, and every one was invisible to the corpus A/B for the IDENTICAL reason
+the commit itself documented for the private-suffix miss: **no tracked file
+writes the fused spelling** (verified: zero `,:`, zero fused bracket-lets, zero
+fused `capability`/`Pi` params). *A ZERO corpus A/B is not evidence of safety for
+a surface the corpus does not exercise* — that belongs in the close as a stated
+limit, not left as an inference.
+
+**Biggest remaining blind spot (nobody tested it, including me)**: the mint and
+unwrap have never been exercised through the `.pnet` MODULE-CACHE round-trip or
+the REPL/LSP reader entry points. Every probe in the arc went through exactly two
+doors, `read-all-forms-string` and `process-file`.
 
 Status: ⬜ P4c-3..5.
 
