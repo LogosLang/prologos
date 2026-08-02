@@ -1420,8 +1420,21 @@
              ;; over dishonest semantics.
              ;; `^` is a BLOCK operator: it sets the OUTPUT KEY, and a path
              ;; access has no output key, it has a value. So refuse, guided.
-             [(ormap (lambda (st) (and (select-key-step? st) (select-step-cont st)))
-                     (car branches))
+             ;; ⚠ D4.P4c-3a — THIS LINE WAS ω-BLIND. It used to read
+             ;; `(and (select-key-step? st) (select-step-cont st))`, and
+             ;; `select-key-step?` is FALSE for a wrapper, so the `ormap` silently
+             ;; missed a `^` INSIDE one and the refusal above did not fire —
+             ;; re-opening the "SILENT ACCEPT-FLIP" this arm exists to prevent,
+             ;; for the `:` spelling. D4 §4310 had already booked it
+             ;; (`:name^alias` "slips past" the refusal). Measured on the old
+             ;; predicate: `(@key k dissolve)` ⇒ `dissolve` (fires),
+             ;; `(@bcast (@key k dissolve))` ⇒ `#f` (does not).
+             ;; The fix is that `select-step-cont` is now ω-TRANSPARENT, so the
+             ;; guard is unnecessary and the question is asked directly — the
+             ;; `select-key-step?` conjunct was only ever a shape check the
+             ;; accessor already performs. Latent until P4c-4 wires the producer
+             ;; bridge (`make-select-bcast` has ZERO production callers at HEAD).
+             [(ormap select-step-cont (car branches))
               (parse-error
                loc
                "`^` re-keys the OUTPUT of a selection, and a field access has no output key — it yields the value. Use a select block if you want to rename: `x{field^alias}`"

@@ -3820,3 +3820,90 @@
   ;; and the un-wrapped forms must still behave identically
   (check-equal? (select-branch-collapse (list (list '@key 'k 'collapse))) 'collapse)
   (check-true (select-branch-keyless? (list (list '@key 'k 'dissolve)))))
+
+;; ⚠ THE FOURTEENTH SITE — `select-step-name`, which is OUTSIDE the `ADDING A
+;; KIND` recipe's thirteen and was missed because of it. D4's P4c-3 partition
+;; names "the two shape-test helpers OUTSIDE the recipe"; only
+;; `select-step-cont` was covered, and it was covered by unwrapping at each of
+;; its FIVE call sites rather than in the helper.
+;;
+;; The defect is an ASYMMETRY, which is why no existing pin caught it: the
+;; branch CLASSIFIER (`select-branch-collapse`) sees through the wrapper, so the
+;; branch is correctly sorted as collapsing — and then the LABEL is extracted
+;; from the RAW leaf by `select-step-name`, which is ω-blind and returns the
+;; whole `(@bcast …)` list. Measured before the fix:
+;;   (select-branch-top-keys (list (make-select-bcast '(@key k collapse))))
+;;     ⇒ ((@bcast (@key k collapse)))   -- a LIST where the contract at
+;;                                         syntax.rkt:1099 says "a key SYMBOL
+;;                                         (keyed sort) or #f"
+;;
+;; Three call sites share the shape `[else (select-step-name (car (reverse b)))]`
+;; inside a `col`-guarded branch: syntax.rkt:1111, reduction.rkt:1773,
+;; typing-core.rkt:1051. The latter two are MASKED today — their value walks hit
+;; `select-bcast-not-yet` and raise before the label can escape — so they become
+;; live exactly when P4c-4 lands the value semantics and removes the raise.
+;; syntax.rkt's is live NOW: `select-branch-top-keys` is a pure STATIC key
+;; computation feeding the parser's OUTPUT-key duplicate check and its L4
+;; sort-homogeneity check, with no value walk to raise first. A non-symbol
+;; component is compared by `eq?` in the duplicate check, so it can never match
+;; and duplicates go undetected — silent, which is the outcome the totality
+;; dispatcher exists to prevent.
+;;
+;; Fixed in the HELPER, not at the three call sites: a third copy of the unwrap
+;; is the F1b.7g drift class this vocabulary has already paid for.
+
+(test-case "P4c-3: `select-step-name` is ω-transparent (the fourteenth site)"
+  ;; the helper itself — delegate to the wrapped step, per Q_U7's NAME/KEY rule
+  (check-equal? (select-step-name (make-select-bcast 'name)) 'name)
+  (check-equal? (select-step-name (make-select-bcast '(@key k collapse))) 'k)
+  ;; the un-wrapped forms are unchanged
+  (check-equal? (select-step-name 'name) 'name)
+  (check-equal? (select-step-name '(@key k collapse)) 'k)
+  ;; nested wrappers delegate all the way down. The SURFACE cannot write one
+  ;; (extent is one-step, Q_U7), but the REPRESENTATION permits it and P5's
+  ;; factoring rewrites branches — the same argument the `[(bcast)]` arm in
+  ;; `select-branch-top-keys` is written on.
+  (check-equal? (select-step-name (make-select-bcast (make-select-bcast 'name))) 'name))
+
+(test-case "P4c-3: a collapse-terminated ω branch yields a SYMBOL component"
+  ;; THE LIVE ONE. Wrapped and plain must agree — the classifier already did.
+  (check-equal? (select-branch-top-keys
+                 (list (make-select-bcast (list '@key 'k 'collapse))))
+                '(k))
+  (check-equal? (select-branch-top-keys (list (list '@key 'k 'collapse)))
+                '(k))
+  ;; and the component is a SYMBOL, not a list — the contract the parser's
+  ;; duplicate check and L4 sort check both consume
+  (check-true (symbol? (car (select-branch-top-keys
+                             (list (make-select-bcast (list '@key 'k 'collapse)))))))
+  ;; the rename and synth conts are computed from `col`, not from the raw leaf,
+  ;; so they were already ω-safe — pinned so the fix cannot regress them
+  (check-equal? (select-branch-top-keys
+                 (list (make-select-bcast (list '@key 'k (cons 'collapse-rename 'k2)))))
+                '(k2)))
+
+(test-case "P4c-3a: `select-step-cont` is ω-transparent (the fifteenth site)"
+  ;; ⚠ THE FIRST CUT OF THIS PIN COULD NOT FAIL. It defined a LOCAL copy of
+  ;; parser.rkt's predicate and asserted against the copy, so reverting the
+  ;; production fix left it green — a dead tripwire, which this track has already
+  ;; recorded as reading like coverage while providing none. It now exercises the
+  ;; SHIPPED helper, so reverting the fix turns it red.
+  (check-equal? (select-step-cont (make-select-bcast '(@key k dissolve))) 'dissolve)
+  (check-equal? (select-step-cont '(@key k dissolve)) 'dissolve)
+  (check-equal? (select-step-cont (make-select-bcast '(@key k (collapse-rename . k2))))
+                '(collapse-rename . k2))
+  ;; a wrapper with no `^` inside still answers #f — transparency must not turn
+  ;; parser.rkt's `^`-in-path-access refusal into a blanket one
+  (check-equal? (select-step-cont (make-select-bcast 'name)) #f)
+  (check-equal? (select-step-cont 'name) #f)
+  (check-equal? (select-step-cont '(@sub (a) (b))) #f)
+  ;; nested, for the same reason `select-step-name`'s delegation is recursive
+  (check-equal? (select-step-cont (make-select-bcast (make-select-bcast '(@key k dissolve))))
+                'dissolve)
+  ;; and the predicate parser.rkt now actually ships — a bare `ormap` over the
+  ;; helper. THE POINT of transparency: no unwrap, no copy, no standing
+  ;; obligation on the nine call sites.
+  (check-equal? (ormap select-step-cont (list 'a 'b (make-select-bcast '(@key k dissolve))))
+                'dissolve)
+  (check-equal? (ormap select-step-cont (list 'a 'b (make-select-bcast 'name))) #f)
+  (check-equal? (ormap select-step-cont (list 'a 'b '(@key k dissolve))) 'dissolve))

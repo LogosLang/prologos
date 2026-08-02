@@ -1010,8 +1010,71 @@
           "  known sorts: ~a — add an arm (D4.P4b-ii-1 sort totality)")
          sort select-sorts))
 
-(define (select-step-name s) (if (select-key-step? s) (cadr s) s))
-(define (select-step-cont s) (and (select-key-step? s) (caddr s)))
+;; ⚠ D4.P4c-3a — THE TWO ACCESSORS ARE ω-TRANSPARENT. Both were ω-BLIND, both
+;; sit OUTSIDE the `ADDING A KIND` recipe, and both were missed for the same
+;; structural reason: the recipe enumerates `case (select-step-kind …)`
+;; dispatchers, and these are an `if`/`and` over ONE predicate. D4's P4c-3
+;; partition names them as "the two shape-test helpers OUTSIDE the recipe".
+;;
+;; ⚠ NO LINE NUMBERS BELOW, DELIBERATELY. The first cut of this block cited its
+;; own file's coordinates and the block's own length invalidated every one of
+;; them — the exact class `19ab78a9` had fixed one commit earlier. Anchor on
+;; NAMES; `grep` is the index.
+;;
+;; ω is KEY-TRANSPARENT: it changes container ARITY, not key behaviour, so
+;; `users:k` names and re-keys exactly as `users.k` does. Delegation is
+;; RECURSIVE, matching `select-step-output-name`'s `[(bcast)]` arm — the surface
+;; cannot write a nested wrapper (extent is one-step, Q_U7) but the
+;; representation permits one and P5's factoring rewrites branches, and a
+;; surface rule is not a representation invariant.
+;;
+;; ── WHAT WAS BROKEN, MEASURED ──
+;; `select-step-name`: an ASYMMETRY, which is why the P4c-3 pins missed it. The
+;; branch CLASSIFIER `select-branch-collapse` already saw through the wrapper, so
+;; a `users:k^-` branch sorted correctly as collapsing — and then its LABEL came
+;; from the RAW leaf, so `select-branch-top-keys` yielded `((@bcast (@key k
+;; collapse)))`, a LIST, against a contract of "a key SYMBOL … or #f". Three
+;; sites share `[else (select-step-name (car (reverse b)))]`: this file's
+;; `select-branch-top-keys`, `reduction.rkt`'s `branch-entries`, and
+;; `typing-core.rkt`'s `select-branch-entries`. The latter two are MASKED — but
+;; for DIFFERENT reasons, and only one of them is evaluation order: reduction
+;; computes the label first and discards it when `walk-to-leaf` raises, while
+;; typing-core computes it INSIDE the continuation, which the raise precedes.
+;; Both go live when P4c-4 removes the raise. THIS file's is live NOW —
+;; `select-branch-top-keys` is a pure STATIC key computation feeding the parser's
+;; OUTPUT-key duplicate check and its L4 sort-homogeneity check, with nothing to
+;; raise first; a non-symbol can never match under the duplicate check's `eq?`,
+;; so duplicates go UNDETECTED. Silent, the one outcome P4a exists to prevent.
+;;
+;; `select-step-cont`: `parser.rkt`'s `^`-in-path-access refusal asked it "does
+;; this branch carry a `^`?" without unwrapping, so it silently answered no for a
+;; step that had one. Measured on that site's own predicate:
+;; `(@key k dissolve)` ⇒ `dissolve` (refusal fires);
+;; `(@bcast (@key k dissolve))` ⇒ `#f` (refusal does NOT). D4 §4310 had already
+;; booked this hazard for the `:name^alias` spelling.
+;;
+;; ── WHY TRANSPARENCY RATHER THAN UNWRAP-AT-THE-SITE ──
+;; The first cut kept `select-step-cont` blind and hand-copied the unwrap into
+;; the parser, on the theory that its callers "ask several questions (kind AND
+;; cont)" so the unwrap belongs with the classification. **That theory is false
+;; at the one site that needed it**: the refusal asks ONE question, and with a
+;; transparent accessor its whole lambda collapses back to a bare
+;; `(ormap select-step-cont …)`. Measured: transparency is a NO-OP at the other
+;; eight call sites — each has already unwrapped and is looking at a `caret`
+;; step, or is behind a `memq` guard that excludes `bcast` — so it fixes the
+;; ninth and changes nothing else. A standing obligation on nine call sites that
+;; has already been sprung once is not a property to pin; it is a trap to remove.
+(define (select-step-name s)
+  (cond
+    [(select-bcast-step? s) (select-step-name (select-bcast-inner s))]
+    [(select-key-step? s) (cadr s)]
+    [else s]))
+
+(define (select-step-cont s)
+  (cond
+    [(select-bcast-step? s) (select-step-cont (select-bcast-inner s))]
+    [(select-key-step? s) (caddr s)]
+    [else #f]))
 
 (define (select-cont-collapse? c)
   (or (eq? c 'collapse) (eq? c 'collapse-synth)

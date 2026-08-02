@@ -2809,13 +2809,31 @@ arm ⇒ touch nothing), and `binder-nameless-heads` ('(fn)) stops the bare-param
 lambda's name-skip from handing its BODY to the param-group arm. Mutation-
 verified: with preservation force-enabled the two `property` clauses now AGREE.
 
-**⬜ WHAT REMAINS, and it outweighs the fixes — a P4c-3 DESIGN input, not a bug**:
+**⬜ WHAT REMAINS, and it outweighs the fixes — a DESIGN input, not a bug**:
 enabling a context is NOT just adding to the list. With preservation forced on,
 a body broadcast is STILL stripped, because the unknown-head default unwraps
 everything and a body sub-group's head (`users` in `(users :name)`) is by
-definition UNKNOWN. So P4c-3's first enabled context must decide **what an
-unknown head does inside an ALREADY-PRESERVED region** — the inverted default
-and per-context preservation meet exactly there. Deliberately not guessed at.
+definition UNKNOWN. So the first enabled context must decide **what an unknown
+head does inside an ALREADY-PRESERVED region** — the inverted default and
+per-context preservation meet exactly there. Deliberately not guessed at.
+
+**⬜ RE-SCOPED TO P4c-4 (owner ruling 2026-08-02), and SHARPENED BY MEASUREMENT
+at the P4c-3 close.** Both directions of the unknown-head default are now
+refuted from the corpus, so this is not a choice between a safe and an unsafe
+option — it is a demonstration that the head-keyed walk cannot decide it at all:
+
+- **STRIP on unknown** (today): `defn body-app [q] [one users:name]` — measured
+  UNCHANGED between empty and non-empty enable-set, i.e. the broadcast is
+  stripped in ordinary application position, which is the position broadcast is
+  primarily written in.
+- **PRESERVE on unknown**: refuted by `[add ?x:Nat ?y:Nat] = 5N`
+  (`examples/2026-03-09-fc-trait-rel-dom.prologos:141`, runs 0 errors today) — a
+  live BINDER position under an unknown head.
+
+Both spellings are `[SYMBOL item item]`. **Structurally indistinguishable at the
+reader.** Whatever resolves this is not a longer head table. See D4 §5.P4c-3;
+the on-network disposition attribute this points at is chartered under PPN 4D
+(prerequisite-blocked on PPN 4C 🔄 + PM Track 12), not new work to invent here.
 
 ### 33. `parse-param-names-for` and `parse-defn-binder-seq` are unhardened binder consumers
 
@@ -2890,6 +2908,127 @@ produced" because I looked next to the source file; the cache lives under
 `data/cache/pnet/`. The artifact had been written all along. Test artifact
 removed after the probe.
 
+⚠ **THIS ✅ IS SCOPED TO THE EMPTY ENABLE-SET AND DID NOT SAY SO** (noted
+2026-08-02 at the P4c-3 close). The `.pnet` conclusion holds *because the unwrap
+is currently TOTAL*; the REPL/LSP structural argument is independently sound (it
+is about which door is traversed) but says nothing about what SURVIVES. At the
+first grant a surviving sentinel CAN reach a cached body and `pipeline.md`'s
+unregistered-node failure mode — a silent raw VECTOR from the reader's
+unknown-tag fallback, detonating arbitrarily far away — becomes live.
+**Re-probe at the grant; do not inherit this ✅.** Note the item's own text
+already records that `$bcast-step` has no `pnet-serialize.rkt` registration.
+
+## CIU T6 D4.P4c-3 spin-offs (filed 2026-08-02 at the P4c-3 close)
+
+### 37. `$bcast-step` is NOT in `access-sentinel?` — a P4c-2 deliverable that did not land under a ✅
+
+`access-sentinel?` (macros.rkt:6128-6132) lists eight members and `$bcast-step`
+is not one. `broadcast-access?` in that list is the **RETIRED** `$broadcast-access`
+(a different head, retired at D4.P1a — the module's own comment at :6136 says so),
+which is what made the gap read as closed to a name-shaped glance.
+
+D4's P4c-2 partition explicitly lists "`$bcast-step` into `access-sentinel?` +
+its fold arm" as a P4c-2 deliverable, and **P4c-2 closed ✅**. Q_U16's ruling
+item 2 makes it load-bearing: joining `access-sentinel?` is precisely what buys
+the sentinel all FOUR fold seats "for free", and was the stated reason the
+rejected parser-side-fusion escape could not work.
+
+**Not a live defect**: with the enable-set empty no sentinel survives the reader
+post-pass, so the fold never meets one. **It IS a prerequisite of the first
+grant** — without it a survivor never fuses onto its base, so `users` and the
+sentinel stay two separate elements. Moved to P4c-4 with the enable-set.
+D4's partition line has been corrected in place.
+
+### 38. There is no TEST SEAM for the enable-set
+
+`broadcast-enabled-contexts` (parse-reader.rkt:2845) is a plain module-level
+`define` — not a `make-parameter` — and is not in the module's `provide`. So no
+test can enable a context, and the per-phase test gate cannot be satisfied for
+ANY grant. The only validation route available is source mutation on a scratch
+build (the procedure recorded at `tests/test-path-selection.rkt`, search
+"MUTATION"), which is what this session used.
+
+Compounding: because the `(not (broadcast-preservation-active?))` arm is FIRST
+in `apply-binder-unwrap`'s `cond`, arms 2–5 plus ten helpers have **zero standing
+execution** — the first grant is the first production run of that whole
+subsystem at once. Wanted before P4c-4's grant, not after.
+
+### 39. `select-step-name` was the FOURTEENTH site — check for a fifteenth by SHAPE
+
+Fixed at the P4c-3 close (see D4 §5.P4c-3a): the helper was ω-blind, so a
+collapse-terminated ω branch yielded `((@bcast (@key k collapse)))` — a LIST —
+where syntax.rkt:1099's contract says a key SYMBOL or #f.
+
+**The generalizable point**: the `ADDING A KIND` recipe enumerates `case
+(select-step-kind …)` dispatchers, so it structurally cannot see helpers shaped
+as an `if`/`and` over ONE predicate. That is the same blindness-class the recipe's
+own header records for its first cut (open-coded shape tests; `and`/`if`-shaped
+dispatchers). D4 named TWO such helpers — and **BOTH were ω-blind**; the claim
+that `select-step-cont` "was covered" was false (it was covered at five of its
+**NINE** call sites, and the missing one was live).
+
+**⬜ THE SWEEP HAS NOW BEEN RUN** (2026-08-02, after the adversarial verify
+pointed out that this item asked for it and it had not been). Command:
+`grep -rn 'select-key-step?\|select-sub-step?\|select-ord-step?\|select-bcast-step?' racket/prologos/*.rkt`
+filtered to uses outside a `select-step-kind` `case`. Result — **two more ω-blind
+sites, both in `parser.rkt`, both SILENT, both diagnostic-quality**:
+
+- **`parser.rkt:1170`** — `[(and (eq? it '|.|) cur (select-key-step? (car cur)))]`,
+  the `^.`-near-miss message. ω-blind, so a wrapped `^`-bearing step falls
+  through to the generic stray-`.` advice — which **this site's own comment says
+  "would be FALSE here"**. Degraded-to-wrong diagnostic.
+- **`parser.rkt:1212`** — `[(select-key-step? head-step) (cadr head-step)]` else
+  the literal `"field"`. ω-blind ⇒ the `$select-brace` message names `"field"`
+  instead of the real head, defeating exactly the P3b-verify intent its comment
+  states (*"`server^{x}` must name `server`, not 'field'"*).
+
+**DELIBERATELY NOT FIXED, and this is the reason**: I could not construct a probe
+that REACHES either site. `m.foo^.` and `m.foo^s..` are caught earlier by the
+`^`-in-path-access refusal; `server{x}` is the LEGAL brace form. Both are latent
+regardless (nothing constructs an `@bcast` value until P4c-4 wires the producer).
+Fixing a diagnostic I cannot gate would be a change validated by reading only —
+the thing this track has repeatedly paid for. **Fix at P4c-4, when the producer
+exists and both are reachable end-to-end.** For 1212 the fix is likely a REUSE
+rather than a fourth shape test: `select-step-name` is now ω-transparent and
+returns a symbol for symbol/`@key`/`@bcast` and a non-symbol otherwise, so
+`(let ([n (select-step-name head-step)]) (if (symbol? n) n "field"))` is the whole
+arm.
+
+**Sites verified BLIND-BUT-SAFE by the sweep** (no action): `syntax.rkt:1204`
+(`select-sub-step?` in the dissolve arm — measured equivalent on both paths,
+structurally so, since the `[(bcast)]` arm re-enters with the same `rest`);
+`typing-core.rkt:1016`/`:1057`/`:1132`/`:1142` and `reduction.rkt:1778` (all fall
+through to a `memq` guard → the `bcast` arm → `select-bcast-not-yet`, i.e. blind
+but LOUD).
+
+### 40. `select-step-name` is still not TOTAL — `(@ord N)` and `(@sub …)` return LISTS
+
+Raised by the P4c-3a adversarial verify and **confirmed by measurement** at the
+post-fix tree:
+
+```
+(select-step-name '(@ord 3))          ⇒ (@ord 3)          ;; a LIST
+(select-step-name '(@sub (a) (b)))    ⇒ (@sub (a) (b))    ;; a LIST
+```
+
+The stated grievance behind the P4c-3a fix was "a LIST where the contract says a
+key SYMBOL or #f" — and that contract is violated identically by two
+**PRE-EXISTING** kinds, which the fix left alone. So the fourteenth site was
+patched for `bcast` while keeping the exact `[else s]` catch-all shape P4a spent
+a whole phase eliminating.
+
+**Not a regression** (it predates this arc) and **latent** (`parser.rkt` refuses
+a branch-initial sub-block and a segment after one, so `@sub` is always terminal
+and never a branch head). But that is a **SURFACE rule**, and this arc's own
+justification for writing unreachable `bcast` arms is, verbatim, *"a surface rule
+is not a representation invariant — P5's factoring rewrites branches and could
+produce one"*. The same argument applies here.
+
+**Fix shape**: `case (select-step-kind s)` ending in `select-step-kind-unhandled`,
+like every other walk over the vocabulary. ⚠ **Measure before landing** —
+`reduction.rkt`'s `below-value` and `typing-core.rkt`'s `select-below-field`
+compute `name` under a guard that ADMITS `sub` (`'(key caret sub)`), so raising
+on `sub` could break a live path. That is why it is booked rather than done here.
 
 ## CIU T6 D4.P4b-ii spin-offs (filed 2026-08-01 at the b-ii close — from the mini-audit, the adversarial verify, and the close's own triage)
 

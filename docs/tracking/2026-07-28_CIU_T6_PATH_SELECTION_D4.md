@@ -32,7 +32,7 @@ rulings, censuses and test delta live in its own section.
 | **P3c** | **Keyless + L4 + honest nesting** — the nat-row mint at EVERY n (incl. 1 and homogeneous n) · ordinal branches `{N M}` · the L4 mixing error · `⟨String⟩` 1-tuple pins · the G11 one-space pair pinned side by side | ✅ | §5.P3c · **`1b021d57`** — suite **9497/475/0**, acceptance **52/52**, battery 206; P3 (BLOCKS) COMPLETE; the verify's FIRST no-BLOCKING slice in eight (2 SIGNIFICANT fixed pre-commit: the @ord walk-to-leaf twin-drift, the decimal-fusion leak); G11 landed AS AMENDED; in-block `v[0]`≡`.0` ratified-by-pin |
 | **P4** | **Broadcast ω** — ⭐ **P4a ✅ · P4b ✅ COMPLETE** (b-i carrier + b-ii `$dot-access` migration; `x.a` now mints the unified selector carrier) · P4c–P4e ⬜ — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | §5.P4 · CO-DESIGN: audit `wf_8458c23b` + options panel run; **Q_U5** (ONE reified selector carrier, monomorphic — F-row carries bound-selector precision) + **Q_U6** (WHOLESALE path migration; P4a totality/repairs → P4b carrier → P4c+ ω) RULED 2026-07-31; **Q_U7** RULED (the `(@bcast step)` wrapper; 4b restated) · **Q_U8** RULED (uniform positional `$bcast-step` mint + parser position-dispatch; A/B named-diff-set) — partition LOCKED P4a–P4e; **the PAUSE is CLEARED 2026-07-31: Q_U9 RULED (`:` REFUSES over `List` — no native carrier + the key-sort thesis does not reach a cons-spine; guided error naming `pvec-from-list`; the `Functor`-instance door named; the solve-carrier counter resolved UPSTREAM by the `solve-*`→PVec mini-track) + the `update-in` ω fence and the whole-node abort both RATIFIED**; ⚠ LET merge `5e16ead4` landed mid-walk (audit coords @ `02dd27d7`) |
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | §5.P4a · battery 204 → **224** |
-| **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED**: Q_U8 was NOT implementable (§Q8.5 site 8 and parser position-dispatch are mutually exclusive — the preparse fold RUNS OVER BINDER POSITIONS, probe: `defn f [x.a] x` → a 3-arity function at 0 errors). The binder unwrap moves to the READER POST-PASS, so the mint stays uniform, `$bcast-step` JOINS `access-sentinel?` and inherits all four fold seats, and BOTH surfaces survive (owner: fused `x:Int` is more important than broadcast; `:` stays the glyph). **Q_U16b**: `users:0` IS a legal ω step. | 🔄 | §5.P4c · grounding `wf_d7c035da-cee` (7 agents/1.53M) + options panel `wf_6f15c6ae-6a7` (7 agents/1.17M) · **P4c-1 ✅ `182f1678`** — `adjacent-to-base?` exported + both groupers consume it (the panel's `reader-forms.rkt` target was WRONG: the predicate is over the `token-entry` STRUCT) · the `ns` guard TOTAL by POLARITY INVERSION (it silently dropped `ns foo:bar` at 0 errors — a LIVE `b0db8f3e` instance; raise-channel residue = DEFERRED 31) · `colon-annotation` promoted with EXPLICIT arms at both `case type` sites · **corpus A/B 161 files ZERO DIFFS** (the attribution baseline for P4c-2's seven predicted diffs) · battery 289→294 · suite 9740/478/0. **P4c-2 🔄 `b1399016`** — the mint (both groupers, ONE shared trigger) + the binder unwrap at the reader post-pass; **A/B ZERO where this doc predicted SEVEN** (those sites ROUND-TRIP — corrected in §5.P4c-2); battery 294→**312**; suite **9758/478/0**. ✅ **P4c-2 COMPLETE** — the adversarial verify's 3 BLOCKING findings expanded to SEVEN measured regressions; owner ruled **INVERT THE DEFAULT** (`68cdaae7`), enable-set explicit and EMPTY, mint provably ≡ not-minting, matrix byte-identical to a real 182f1678 build, the eight flips FLIPPED BACK — `cbd8d1a7` the table's FOUR MEASURED misses (private-suffix heads, an implicit-binder group eating the arming, `defmacro`, the flat `$pipe` spelling) **+ an OVER-REACH the ruling never booked** (a terminator SEARCH stripped BODY broadcasts; condition (c) structurally cannot catch that direction), root-caused to one STICKY `armed?` flag and replaced with explicit region consumption; `private-form-base` HOISTED to reader-forms.rkt. ⚠ **The private-suffix miss was a LIVE end-to-end regression** invisible to the corpus A/B and to all 18 reader-level pins. · `8c4faee2` **condition (c)**, whose SHAPE changed once measured: the 17 are not where a leak lands (`parse-defn`'s DISPATCHER is a binder consumer keyed on neither predicate — 5th blindness-class instance) and the failure mode was LOUD-generic, not silent, so (c) is a DIAGNOSTIC upgrade. **MUTATION found my own first guard was DEAD CODE.** battery 312→**321**; suite 0 failures/478; A/B ZERO. **P4c-3 🔄** — the THIRTEEN-SITE work ✅ `3b998aa8` (the sixth kind `(@bcast step)`; the `ADDING A KIND` recipe HELD with no correction — first enumeration in this arc to survive a new member intact; NAME/KEY walks TRANSPARENT/delegate, VALUE walks guided NOT-YET naming P4c-4, all four [leaf] classifiers see THROUGH the wrapper; battery 322→325). Prerequisites LANDED per owner ruling: `8fa30336` (DEFERRED 32 over-reach survivors — `param-group-candidate?` replaces a test that matched the walk's OWN mint; `take-arm-region` bounded; `binder-nameless-heads` for bare-param `fn`) · `8c95d4ae` (DEFERRED 36 **RESOLVED** — both untested doors probed CLEAN: REPL/LSP matches process-file, and `.pnet` round-trips with ZERO `bcast-step` in the cached artifact). ⚠ **P4c-3's first design question, surfaced by mutation**: enabling a context is NOT just adding to the enable-set — the unknown-head default still strips bodies, and a body sub-group's head is by definition unknown, so the first enabled context must decide what an unknown head does inside an ALREADY-PRESERVED region. **P4c-4/5 ⬜** |
+| **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED**: Q_U8 was NOT implementable (§Q8.5 site 8 and parser position-dispatch are mutually exclusive — the preparse fold RUNS OVER BINDER POSITIONS, probe: `defn f [x.a] x` → a 3-arity function at 0 errors). The binder unwrap moves to the READER POST-PASS, so the mint stays uniform, `$bcast-step` JOINS `access-sentinel?` and inherits all four fold seats, and BOTH surfaces survive (owner: fused `x:Int` is more important than broadcast; `:` stays the glyph). **Q_U16b**: `users:0` IS a legal ω step. | 🔄 | §5.P4c · grounding `wf_d7c035da-cee` (7 agents/1.53M) + options panel `wf_6f15c6ae-6a7` (7 agents/1.17M) · **P4c-1 ✅ `182f1678`** — `adjacent-to-base?` exported + both groupers consume it (the panel's `reader-forms.rkt` target was WRONG: the predicate is over the `token-entry` STRUCT) · the `ns` guard TOTAL by POLARITY INVERSION (it silently dropped `ns foo:bar` at 0 errors — a LIVE `b0db8f3e` instance; raise-channel residue = DEFERRED 31) · `colon-annotation` promoted with EXPLICIT arms at both `case type` sites · **corpus A/B 161 files ZERO DIFFS** (the attribution baseline for P4c-2's seven predicted diffs) · battery 289→294 · suite 9740/478/0. **P4c-2 🔄 `b1399016`** — the mint (both groupers, ONE shared trigger) + the binder unwrap at the reader post-pass; **A/B ZERO where this doc predicted SEVEN** (those sites ROUND-TRIP — corrected in §5.P4c-2); battery 294→**312**; suite **9758/478/0**. ✅ **P4c-2 COMPLETE** — the adversarial verify's 3 BLOCKING findings expanded to SEVEN measured regressions; owner ruled **INVERT THE DEFAULT** (`68cdaae7`), enable-set explicit and EMPTY, mint provably ≡ not-minting, matrix byte-identical to a real 182f1678 build, the eight flips FLIPPED BACK — `cbd8d1a7` the table's FOUR MEASURED misses (private-suffix heads, an implicit-binder group eating the arming, `defmacro`, the flat `$pipe` spelling) **+ an OVER-REACH the ruling never booked** (a terminator SEARCH stripped BODY broadcasts; condition (c) structurally cannot catch that direction), root-caused to one STICKY `armed?` flag and replaced with explicit region consumption; `private-form-base` HOISTED to reader-forms.rkt. ⚠ **The private-suffix miss was a LIVE end-to-end regression** invisible to the corpus A/B and to all 18 reader-level pins. · `8c4faee2` **condition (c)**, whose SHAPE changed once measured: the 17 are not where a leak lands (`parse-defn`'s DISPATCHER is a binder consumer keyed on neither predicate — 5th blindness-class instance) and the failure mode was LOUD-generic, not silent, so (c) is a DIAGNOSTIC upgrade. **MUTATION found my own first guard was DEAD CODE.** battery 312→**321**; suite 0 failures/478; A/B ZERO. **P4c-3 🔄** — the THIRTEEN-SITE work ✅ `3b998aa8` (the sixth kind `(@bcast step)`; the `ADDING A KIND` recipe HELD with no correction — first enumeration in this arc to survive a new member intact; NAME/KEY walks TRANSPARENT/delegate, VALUE walks guided NOT-YET naming P4c-4, all four [leaf] classifiers see THROUGH the wrapper; battery 322→325). Prerequisites LANDED per owner ruling: `8fa30336` (DEFERRED 32 over-reach survivors — `param-group-candidate?` replaces a test that matched the walk's OWN mint; `take-arm-region` bounded; `binder-nameless-heads` for bare-param `fn`) · `8c95d4ae` (DEFERRED 36 **RESOLVED** — both untested doors probed CLEAN: REPL/LSP matches process-file, and `.pnet` round-trips with ZERO `bcast-step` in the cached artifact). ✅ **P4c-3 COMPLETE** — ⭐ **THE ENABLE-SET MOVES TO P4c-4** (owner ruling 2026-08-02). The sub-phase opened on "what fills `broadcast-enabled-contexts`" (per-FORM vs per-POSITION, transitive or not) and **the question is not answerable as posed** — three MEASURED facts: (1) the set is a BOOLEAN wearing a list's clothes (three production references — definition :2845, the `pair?` predicate :2847, ONE consultation :3007; **nothing tests membership**, so any non-empty value flips the same global switch, and since that arm is FIRST in the cond the first grant switches on ~80 lines of never-executed code at once); (2) mutation A/B — granting anything STRIPS application-position broadcast (`defn body-app [q] [one users:name]` measured UNCHANGED empty vs non-empty) while `def` RHS and arm bodies preserve; (3) flipping the unknown-head default to PRESERVE is refuted from the corpus by `[add ?x:Nat ?y:Nat] = 5N` (fc-trait-rel-dom.prologos:141, 0 errors today), a live BINDER position under an unknown head — both spellings are `[SYMBOL item item]`, **structurally indistinguishable at the reader, so the head-keyed walk cannot decide it in either direction**. And there is NOTHING BEHIND THE SWITCH: `make-select-bcast` has **ZERO production callers** (no producer bridge; the parser's `bcast-step` arm emits the not-yet error instead of constructing) and **`$bcast-step` is ABSENT from `access-sentinel?`** (macros.rkt:6128-6132 — a P4c-2 partition deliverable that did NOT land under a ✅; `broadcast-access?` there is the RETIRED `$broadcast-access`, which is what made the gap read as closed). So no grant can make broadcast work in ANY position today. **P4c-3a** `select-step-name` was the FOURTEENTH site (ω-blind; a collapse-terminated ω branch yielded a LIST where the contract says a key SYMBOL — live at syntax.rkt:1111, MASKED at the reduction/typing-core twins by their not-yet raise, so those go live at P4c-4) — and the fix's own comment claimed all `select-step-cont` sites unwrap, **which checking refuted**: parser.rkt's `^`-in-path-access refusal was a FIFTEENTH ω-blind site, the identical hole its sibling at :1070 documents and unwraps for. ⚠ The recipe held *for its thirteen*; the BOUNDARY around it did not — it structurally cannot see `if`/`and`-shaped helpers (DEFERRED 39 books the sweep BY SHAPE). battery 325→**328**; acceptance 52/52+89/89+6/6+29/29+28/28. **P4c-4/5 ⬜** — P4c-4 now also owns the enable-set + its five prerequisites (`access-sentinel?` membership · the producer bridge · a TEST SEAM, the set being an unexported `define` not a parameter · the per-context dispatch mechanism · the unknown-head ruling). |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | §5.P5 · L1–L5 law battery |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | §5.PX · position flexible |
 | **P6** | **Demand semantics** — RULED STAGED (4a); **decision ✅ Q_U3 (owner, 2026-07-30): option (c)** — deferred to a named post-v1 phase, charter stub in §5.P6 | ⬜ (residue = the X.close gate row only) | §5.P6 |
@@ -4239,17 +4239,37 @@ HEAD**, not hypotheticals:
   `token-entry->stx` arm. No new surface; the corpus A/B must be **ZERO diffs**
   at this point, which is what makes it a clean attribution baseline.
 - **P4c-2 — the mint + the binder unwrap** (the Q_U16 core). The grouping arm
-  in BOTH groupers over the hoisted predicate; `$bcast-step` into
-  `access-sentinel?` + its fold arm; the reader post-pass unwrap with its
+  in BOTH groupers over the hoisted predicate; ~~`$bcast-step` into
+  `access-sentinel?` + its fold arm~~ — ⚠ **THIS DID NOT LAND AND P4c-2 CLOSED ✅
+  ANYWAY** (found 2026-08-02 at the P4c-3 close; `access-sentinel?` at
+  macros.rkt:6128-6132 lists eight members and `$bcast-step` is not one —
+  `broadcast-access?` there is the RETIRED `$broadcast-access`, a different
+  head, which is what made the gap read as closed). **It is NOT a live defect**:
+  with the enable-set empty no sentinel survives the post-pass, so the fold
+  never meets one. It is a PREREQUISITE of the first grant, and it moves to
+  P4c-4 with the grant — see §5.P4c-3. The accurate record of what landed is the
+  in-code comment at parse-reader.rkt:2834-2835, not this line; the design doc
+  was the drifting copy; the reader post-pass unwrap with its
   totality hardening and per-binding-form pins. **The corpus A/B lands here**
   with the named diff set below.
 - **P4c-3 — the `(@bcast step)` step kind.** Its arm across P4a's THIRTEEN
   sites (the `ADDING A KIND` recipe at syntax.rkt:879-904 is the authority, NOT
   this document), plus the two shape-test helpers OUTSIDE the recipe, plus the
-  branch-initial refusal.
-- **P4c-4 — PVec broadcast + the law pins.** The third dispatcher in both
-  walks; the L1 fusion pin (`users:0:userName` → ONE layer) and the §3.2.1
-  extent pair; `quests:t`/`quests:{t r}` uncomment as PVec broadcasts.
+  branch-initial refusal. ⚠ **The enable-set does NOT land here** — owner ruling
+  2026-08-02, see §5.P4c-3. It moves to P4c-4, where the thing it would switch
+  on exists.
+- **P4c-4 — PVec broadcast + the law pins + ⭐ THE ENABLE-SET.** The third
+  dispatcher in both walks; the L1 fusion pin (`users:0:userName` → ONE layer)
+  and the §3.2.1 extent pair; `quests:t`/`quests:{t r}` uncomment as PVec
+  broadcasts. **Plus everything the first grant requires, moved here from
+  P4c-3** (owner ruling 2026-08-02): `$bcast-step` into `access-sentinel?` + its
+  fold arm (the P4c-2 line above) · the PRODUCER BRIDGE (`make-select-bcast` has
+  ZERO production callers at HEAD — the parser's `bcast-step` arm emits the
+  not-yet error instead of constructing, so no grant can yield a working
+  broadcast) · a TEST SEAM (`broadcast-enabled-contexts` is an unexported
+  `define`, not a parameter, so no context can be enabled from a test) · the
+  per-context DISPATCH MECHANISM (only `(pair? …)` is consulted today) · and the
+  unknown-head ruling that DEFERRED 32's open half names.
 - **P4c-5 — the `.*name` retirement + FULL residue disposal**, in the commit
   that discharges the parser's `:name` promise.
 
@@ -4640,7 +4660,200 @@ Gate: suite **0 failures / 478 files** · battery **322** · acceptance 52/52 +
 
 Status: ✅ **P4c-2 COMPLETE** (`b1399016` · `cbd8d1a7` · `8c4faee2` · `68cdaae7`).
 
-Status: ⬜ P4c-3..5.
+##### §5.P4c-3 — The `(@bcast step)` step kind  (close 2026-08-02)
+
+**Deliverable: the KIND and its arms.** `(@bcast step)` added to
+`select-step-kind`'s closed union and armed across the `ADDING A KIND` recipe's
+THIRTEEN sites (`3b998aa8`). The recipe **held with no correction** — the first
+enumeration in this arc to survive a new member intact, which is worth recording
+precisely because the arc's other lesson is the opposite. The NAME/KEY walks
+DELEGATE to the wrapped step (ω changes container ARITY, not key behaviour); the
+VALUE walks emit a guided NOT-YET naming P4c-4, because delegating there would
+project off the CONTAINER instead of broadcasting over it.
+
+Prerequisites landed first per owner ruling: `8fa30336` (DEFERRED 32 over-reach
+survivors) · `8c95d4ae` (DEFERRED 36 RESOLVED). Then `f6310c27`, the `[else]`
+split — the inversion had written `(scan-for-param-heads (map unwrap-binders-deep
+kids))`, stripping deeply FIRST, so the scan was DEAD WORK and the eight
+param-head forms would have been blanket-stripped at the first grant.
+
+##### ⭐ THE ENABLE-SET MOVES TO P4c-4 (owner ruling 2026-08-02)
+
+The sub-phase opened on the question "what fills `broadcast-enabled-contexts`" —
+per-FORM or per-POSITION granting, and is preserve TRANSITIVE. **The question is
+not answerable as posed, and three MEASURED facts say why.**
+
+1. **The enable-set is a boolean wearing a list's clothes.** Exactly three
+   production references — the definition (parse-reader.rkt:2845), the `(pair?
+   …)` predicate (:2847), and ONE consultation (:3007). **Nothing anywhere tests
+   membership.** So "which contexts" is not a choice the code can express; any
+   non-empty value flips the same global switch. And because that arm is FIRST
+   in the `cond`, the first grant switches on ~80 lines of never-executed code
+   at once — arms 2–5 plus ten helpers, including all three `8fa30336` fixes.
+2. **Granting anything breaks the position broadcast is actually written in.**
+   Matched A/B via the recorded MUTATION procedure (force non-empty, rebuild,
+   probe, revert):
+
+   | spelling | empty (HEAD) | non-empty |
+   |---|---|---|
+   | `def flat := users:name` | "Could not infer type" | guided not-yet — **survives** |
+   | `defn armed \| 0 -> users:name` | generic param error | guided not-yet — **survives** |
+   | `defn body-app [q] [one users:name]` | "Too many arguments" | **unchanged — STRIPPED** |
+
+   The third is DEFERRED 32's open half. Head `one` is unknown to the `cond`
+   AND to the scanner, so `recognized? = #f` and `[else]` blanket-strips
+   (:3067-3069). ⚠ **That symptom is OVER-DETERMINED** — the strip and the
+   missing `access-sentinel?` membership both produce it. The strip is confirmed
+   by the code path, not by the probe alone.
+3. **Flipping the unknown-head default to PRESERVE is refuted from the corpus.**
+   `[add ?x:Nat ?y:Nat] = 5N` (examples/2026-03-09-fc-trait-rel-dom.prologos:141,
+   runs 0 errors today) is a live BINDER position under an unknown head.
+   `[one users:name]` is an EXPRESSION position under an unknown head. Both are
+   `[SYMBOL item item]`. **The head-keyed walk cannot separate the two
+   populations in either direction, and the corpus contains live examples of
+   both.**
+
+**And there is nothing behind the switch yet.** `make-select-bcast` has ZERO
+production callers (syntax.rkt:177 provide + :907 definition only) — no producer
+bridge exists, and the parser's `bcast-step` arm emits the not-yet error instead
+of constructing (parser.rkt:863). `$bcast-step` is absent from `access-sentinel?`
+(macros.rkt:6128-6132), so a survivor would not even fuse onto its base. **No
+grant can make broadcast work in any position today; it can only change which
+not-yet error you get, and break application position on the way.**
+
+**Ruling**: P4c-3 closes on the kind + its arms, enable-set still `'()`. The set
+and its five prerequisites move to P4c-4, where the consumer lives. This keeps
+the mint equivalent-to-not-minting through the close, and means the unknown-head
+default gets ruled against a WORKING consumer rather than against a not-yet
+error — spending the ruling on a switch with something behind it.
+
+⚠ **On "provably ≡ not minting"** (P4c-2's close): what holds BY CONSTRUCTION is
+COUNT-PRESERVATION. Full equivalence rests on the shape-sensitive classifiers
+being invariant, which is established EMPIRICALLY (A/B ZERO/163 + the 15-probe
+matrix + the eight flipped-back pins). **A measured equivalence with a named
+limit, not a proof** — and the limit is precisely the one the P4c-2 verify
+already paid for: the corpus DOES carry fused spellings (`defn square [x:Int]`
+at lib/examples/foray.prologos:116, `defr bool [?p:Int]` at :891, `let x:Int 4`
+at examples/2026-07-31-let-blocks.prologos:185, and more), but it carries no
+instance of the particular COMBINATION that broke — a private-suffix head paired
+with a fused annotation — which is why that regression was A/B-invisible AND
+invisible to all 18 reader-level pins. Corpus coverage is per-COMBINATION, not
+per-feature; do not read "the corpus exercises fused annotations" as cover.
+Related: `absorb-let-siblings`, `classify-let-block` and `mark-let-goal-rhs`
+ALREADY SEE minted sentinels at HEAD — they run BEFORE `apply-binder-unwrap` in
+the same visit (parse-reader.rkt:3220-3225). The empty enable-set protects the
+pass's OUTPUT, not its internals.
+
+##### §5.P4c-3a — the FOURTEENTH site: `select-step-name` was ω-blind
+
+D4's partition names "the two shape-test helpers OUTSIDE the recipe". Only
+`select-step-cont` was covered — and covered by unwrapping at its call sites, not
+in the helper. `select-step-name` was missed, and the recipe structurally could
+not catch it: the recipe enumerates `case (select-step-kind …)` dispatchers and
+this is an `if` over ONE predicate.
+
+**The defect is an ASYMMETRY, which is why no P4c-3 pin caught it.** The branch
+CLASSIFIER `select-branch-collapse` sees through the wrapper, so a `users:k^-`
+branch sorts correctly as collapsing — and then the LABEL is taken from the RAW
+leaf. Measured before the fix:
+
+```
+(select-branch-top-keys (list (make-select-bcast '(@key k collapse))))
+  ⇒ ((@bcast (@key k collapse)))     -- a LIST, against a contract of
+                                        "a key SYMBOL … or #f"
+```
+
+Three call sites share `[else (select-step-name (car (reverse b)))]` inside a
+`col`-guarded branch: `select-branch-top-keys` (syntax.rkt), `branch-entries`
+(reduction.rkt), `select-branch-entries` (typing-core.rkt). The latter two are
+**MASKED** today — but for DIFFERENT reasons, and only one is evaluation order:
+reduction computes the label first and discards it when `walk-to-leaf` raises,
+while typing-core computes it INSIDE the continuation, which the raise precedes.
+Both go live when P4c-4 removes the raise. **syntax.rkt's is live now**:
+`select-branch-top-keys` is a pure STATIC key computation feeding the parser's
+OUTPUT-key duplicate check and its L4 sort-homogeneity check, with nothing to
+raise first, and a non-symbol component can never match under the duplicate
+check's `eq?` — so duplicates would go UNDETECTED. Silent, the one outcome the
+P4a totality dispatcher exists to prevent.
+
+Fixed in the HELPER, not at the three call sites: a third copy of the unwrap is
+the F1b.7g drift class this vocabulary has already paid for. Delegation is
+recursive, matching `select-step-output-name`'s `[(bcast)]` arm.
+
+⚠ **NO `syntax.rkt` LINE NUMBERS IN THIS SECTION, DELIBERATELY.** The first cut
+of both the section and the in-code comment cited that file's coordinates, and
+the comment's own +59 lines invalidated every one of them — the section's map
+pointed into the middle of the comment that made it stale. That is the exact
+class `19ab78a9` had fixed ONE COMMIT EARLIER. Anchor on NAMES; `grep` is the
+index. (Caught by the adversarial verify, which is also how the `parser.rkt`
+sibling below was found.)
+
+##### §5.P4c-3a (cont.) — and the FIFTEENTH, found by my own false comment
+
+Writing the fix, I asserted above `select-step-cont` that "every one of this
+helper's call sites already unwraps, so it correctly stays ω-blind." **Checking
+that assertion instead of shipping it refuted it.** `parser.rkt`'s
+`^`-in-path-access refusal did not unwrap, and `select-key-step?` is false for a
+wrapper, so the `ormap` silently missed a `^` inside one. Measured on the exact
+lambda that line carried:
+
+```
+(@key k dissolve)            ⇒ dissolve   -- refusal fires
+(@bcast (@key k dissolve))   ⇒ #f         -- refusal does NOT fire
+```
+
+That is the identical hole `branch-problem` documents **and unwraps for**, at a
+sibling site in the same file that did not. **D4 had already booked this hazard
+independently** at §4310 (`:name^alias` "slips past" the `^`-refusal) — so the
+comment asserted completeness against a hazard its own design doc had recorded.
+
+**⭐ AND THE FIX CHANGED SHAPE UNDER THE ADVERSARIAL VERIFY, which is the part
+worth keeping.** My first cut kept `select-step-cont` ω-BLIND and hand-copied the
+unwrap into the parser, justified as: its callers "ask SEVERAL questions (kind
+AND cont)", so the unwrap belongs with the classification. The verify's sharpest
+finding is that **this justification is false at precisely the site that received
+the copy** — the refusal asks ONE question, and with a transparent accessor its
+whole lambda collapses back to a bare `(ormap select-step-cont …)`. Two further
+facts settled it: the enumeration in my comment said FIVE call sites and there
+are **NINE**; and transparency is a measured NO-OP at the other eight (each has
+already unwrapped and is looking at a `caret` step, or sits behind a `memq` guard
+excluding `bcast`). So: **both accessors are now ω-transparent**, the hand-copy
+is gone, and the standing obligation — which had already been sprung once — is
+removed rather than pinned. My first cut had literally pinned the blindness as
+INTENDED, which would have made the trap permanent and turned removing it into a
+test failure.
+
+Two more verify findings, both acted on: the fifteenth-site pin as first written
+**defined a local COPY of the parser's predicate**, so reverting the production
+fix left it green — a dead tripwire, the very thing P4c-2's close had already
+deleted one instance of. It now exercises the shipped helper (checked: the
+shipped and old-blind definitions disagree on the pinned input). And the
+DEFERRED-39 sweep, which that item ASKED FOR and I had not run, has now been run
+— it found **two more ω-blind sites** (`parser.rkt:1170`, `:1212`), both silent
+and diagnostic-degrading, **deliberately left unfixed because no probe I wrote
+reaches either one**; fixing a diagnostic that cannot be gated is the failure
+mode, not the fix. Booked with mechanism + fix shape in DEFERRED 39, plus
+DEFERRED 40 for `select-step-name`'s remaining non-totality (`(@ord N)` and
+`(@sub …)` still return LISTS against the same contract — pre-existing, and
+raising on `sub` could break a live guarded path, so it needs measurement).
+
+⚠ **THE GENERALIZABLE POINT, and it is the one worth carrying forward.** The
+`ADDING A KIND` recipe enumerates `case (select-step-kind …)` dispatchers, so it
+structurally **cannot see** helpers shaped as an `if`/`and` over ONE predicate.
+That is the same blindness-class the recipe's own header records for its first
+cut (open-coded shape tests; `and`/`if`-shaped dispatchers) — so the recipe's
+"held with no correction needed" is true *of the thirteen* and was never a claim
+about the two helpers D4 named outside it. One of those two was covered, one was
+not, and a fifteenth site nobody had named shared the defect. DEFERRED 39 books
+the sweep BY SHAPE. The honest revision of the P4c-3 headline: the recipe held;
+the boundary around the recipe did not.
+
+Gate: suite **0 failures** · battery **325 → 328** · acceptance 52/52 + 89/89 +
+6/6 + 29/29 + 28/28 (all matching the recorded baseline) · the five `^`-refusal
+spellings re-probed end-to-end (all refused; plain access and `m{foo^alias}`
+still work, so the added unwrap did not make the refusal blanket).
+
+Status: ✅ **P4c-3 COMPLETE**. Status: ⬜ P4c-4..5.
 
 ### §5.P5 — Ruling B + factoring
 
