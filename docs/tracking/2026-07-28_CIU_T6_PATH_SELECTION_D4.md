@@ -4552,7 +4552,8 @@ Both halves of that premise are wrong:
 - **The failure mode is not silence.** Under maximal mutation every reachable
   form already failed LOUDLY — four different generic messages, two dumping raw
   syntax objects at the user. Only `def` was worse than silent (whole-file abort,
-  PRE-EXISTING and filed). So (c) is a **DIAGNOSTIC upgrade**, and is described
+  PRE-EXISTING) — **since FIXED**: the spun-off chip landed and merged, and
+  `def x:Int := 5` now defines cleanly at 0 errors (verified at the merge). So (c) is a **DIAGNOSTIC upgrade**, and is described
   as one rather than as the design framed it.
 
 **⭐ MUTATION CAUGHT A DEAD GUARD OF MINE.** The first `bcast-step-datum?`

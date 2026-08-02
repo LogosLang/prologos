@@ -2778,6 +2778,96 @@ user-visible need. Flip site (one line each + re-pins): typing-core
 at the `@sub` boundary — subject-root = thread `seen` through instead; then
 flip the `server.{host^_}` pins to `{:server {:server-host …}}`.
 
+## CIU T6 D4.P4c-2 spin-offs (filed 2026-08-01 at the P4c-2 close — from the adversarial verify `wf_cb055ff6-16a`, 6 skeptics + adjudicator)
+
+The verify's three BLOCKING findings were FIXED in the slice (`68cdaae7`, the
+inverted default). These are what SURVIVED adjudication unfixed. Items 32 and 33
+**become live the moment P4c-3 enables its first broadcast context** — they are
+inert today only because `broadcast-enabled-contexts` is `'()`.
+
+### 32. The OVER-REACH direction survives in three shapes — and one is POSITION-DEPENDENT
+
+`take-param-region`'s param-group arm tests only "is it a group", so ANY group in
+that slot is deep-unwrapped; and `take-arm-region` runs to the END of its list
+when no `->` terminator is found. Three shapes measured at the reader (all
+byte-identical to pre-mint TODAY, hence corpus-A/B-blind, hence not regressions —
+but all are P4c-3 landmines):
+
+- **`property` clauses are position-dependent**: the same broadcast in clause 1
+  vs clause 2 of one `property` reads differently — sentinel stripped in the
+  first, preserved in the second. Two spellings of one form disagreeing is the
+  exact class this track keeps paying for.
+- **bare-`fn`**: `[fn m [one users:name]]` strips, `[fn [m] [one users:name]]`
+  preserves. The optional-NAME step eats `m` in `(fn NAME GROUP)`.
+- **`type` union alternatives**: `type Foo := A | B users:name` strips.
+
+**Smallest fix** (from the adjudicator, worth taking as written): bound
+`take-arm-region` the way `unwrap-binder-prefix` bounds def/let — stop at the
+region, never run to end-of-list — and make `take-param-region`'s param-group
+test POSITIVE (a bracket group; not `$brace-params`/`$angle-type`/`$bcast-step`)
+rather than "any group". ⚠ Note `group-stx?` currently matches the walk's OWN
+mint, so it can mistake its sentinel for a user's bracket group.
+
+### 33. `parse-param-names-for` and `parse-defn-binder-seq` are unhardened binder consumers
+
+Reachable with an UNMUTATED tree by two-minute probes, so the claim that the
+binder consumers are "a CLOSED set" found by mutation was too strong. Both dump
+**raw Racket syntax objects AND an absolute filesystem path** into user-facing
+text, and `parse-param-names-for` says `defn` for an `fn`. Not functional
+regressions (both spellings error on both legs) — diagnostic quality, which is
+what condition (c) was for. `parse-param-names-for` is also the shared entry for
+`the-fn`, so the gap is not confined to `defn`. **Fix**: a `bcast-step-datum?`
+arm at each `[else]`, same shape as the `parse-binder` guard; and sweep the
+remaining `parse-binder`-calling consumers **by grep, not by head** — the
+head-driven census is what missed these.
+
+### 34. `unwrap-let-block` may have zero standing coverage — SUSPECTED, not reproduced
+
+A 21-mutation matrix on a scratchpad copy reported that deleting the
+`$let-block` clause in `scan-for-param-heads` left all replicated reader pins
+green, while 19 of 21 other mutations turned pins red. **I did not re-run that
+matrix** and am not adopting its VERIFIED label. What IS confirmed: the clause is
+load-bearing (aligned blocks work at HEAD and would silently break without it),
+and the documented mutation fallback keys on `binder-param-heads` /
+`binder-region-heads` — **which this clause does not consult**, so emptying them
+leaves it armed. If the result holds, the branch is covered by neither the
+battery nor the procedure that substitutes for one. **Fix**: one `check-equal?`
+on the aligned-block shape.
+
+### 35. Four cosmetic / doc-truth leftovers in the P4c-2 surface
+
+- The `bcast-step` message interpolates the payload TWICE, so a zero-payload
+  `($bcast-step)` renders ``broadcast `:#f` … spell it `[map [fn [m] m.#f] xs]` ``.
+  No raise (the `(pair? args)` guard holds) and the file continues.
+- `surface-rewrite.rkt`'s `bcast-step-trigger?` arm is byte-identical to its own
+  `[else]` — a no-op whose comment claims it makes the two groupers agree.
+- `binder-region-terminators`' `:=` entry appears unreachable since def/let moved
+  to `unwrap-binder-prefix` (dropping `->` turns pins red; dropping `:=` turns
+  none red).
+- The `⚠ EQ?-PRESERVING BY CONSTRUCTION` comment is **false as written**:
+  `apply-binder-unwrap` returns a fresh list, so the identity short-circuit
+  cannot fire for any non-empty list form. The property it guards (POL.9 paren
+  origin) still holds — via `datum->syntax`'s props argument, not via eq? — and
+  was verified end-to-end. Worth correcting because the comment is cited as the
+  reason a specific bug class cannot recur.
+
+### 36. ⚠ THE BLIND SPOT — the mint/unwrap has never been tested through `.pnet` module caching or the REPL/LSP reader
+
+**Nobody in the arc tested this, including the main session.** Every probe went
+through exactly two doors: `read-all-forms-string` and `process-file`.
+`pipeline.md` documents a whole failure class where a reader artifact in a CACHED
+module body detonates only when that body is first re-linked or beta-reduced,
+with a misleading error arbitrarily far from the cause, and warns the gap "stays
+latent until the node first appears in — or is first INVOKED from — a cached
+module body". `$bcast-step` has no `pnet-serialize.rkt` registration and no
+`access-sentinel?` membership. Separately, `CLAUDE.md`'s two-context audit rule
+names the elaboration-vs-module-loading seam as the permanent architectural
+boundary, and `repl.rkt` / the LSP have their own reader entry points — nobody
+checked whether the post-pass runs on them at all. **Cheap first probe**: compile
+a lib containing a fused annotation to `.pnet`, re-link, and diff; then evaluate
+a fused `def` through the REPL session path.
+
+
 ## CIU T6 D4.P4b-ii spin-offs (filed 2026-08-01 at the b-ii close — from the mini-audit, the adversarial verify, and the close's own triage)
 
 ### 24. `select-block-hint` runs the `'path` column inside an ERROR FORMATTER, with four side-effect classes — NEWLY LIVE
