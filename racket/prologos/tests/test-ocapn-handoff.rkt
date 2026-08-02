@@ -448,3 +448,24 @@
      "  (bs-add-gift \"g\" (suc (suc zero)) (bs-set-peer-key \"ATTACKER\""
      "    (bs-add-gift \"g\" (suc zero) (bs-set-peer-key \"HONEST\" bridge-state-empty)))))))"))
    "HONEST"))
+
+;; ----------------------------------------------------------------
+;; Export reservations survive
+;; ----------------------------------------------------------------
+
+(test-case "handoff/two reservations on one connection do not collide"
+  ;; `reserve-export-id` is fetch → spawn → stash. If the stash does not land
+  ;; (or is later overwritten by a snapshot taken before it), `next-id` rolls
+  ;; back and the SECOND reservation hands out the position the first is
+  ;; already using -- and, worse, a later `fresh-promise` can hand out a
+  ;; position an actor occupies. Structural collision-freedom is the entire
+  ;; reason this function exists rather than a counter starting at 900.
+  ;;
+  ;; A distinctive cid, because the connection table is process-global.
+  (define r
+    (run-last
+     (string-append
+      "(eval (let (a (reserve-export-id 4242N))"
+      "        (let (b (reserve-export-id 4242N))"
+      "          (nat-eq? a b))))")))
+  (check-contains r "false"))

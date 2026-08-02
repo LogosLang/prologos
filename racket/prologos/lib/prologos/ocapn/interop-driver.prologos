@@ -1103,11 +1103,9 @@ defn clear-conn-dials [cs]
 
 ;; The dials have been taken, so the state that persists must not still carry
 ;; them — otherwise every later step re-dials everything this one asked for.
-spec run-step-emit Nat ConnStep [List String] -> String
-defn run-step-emit [cid step extra]
-  let cs2 := [publish-gifts [clear-conn-dials [conn-step-state step]]]
-    emit-after-stash [conn-stash cid cs2]
-                     [append [conn-step-outbound step] extra]
+spec step-state-to-stash ConnStep -> ConnectionState
+defn step-state-to-stash [step]
+  publish-gifts [clear-conn-dials [conn-step-state step]]
 
 ;; Everything this step asks the outside world for: gives handed to us, the
 ;; gifter's two halves, and whatever the vat's behaviours queued. One list,
@@ -1115,6 +1113,14 @@ defn run-step-emit [cid step extra]
 spec step-out-reqs Nat ConnectionState CapTPOp ConnStep -> [List OutReq]
 defn step-out-reqs [cid cs op step]
   append [gives-in-op op] [append [gifter-out-reqs cid cs op] [vat-dials [conn-vat [conn-step-state step]]]]
+
+;; Drain the dials, then emit. Reached only AFTER this step's own state has
+;; been stashed — see `run-step`.
+spec run-step-drain Nat CapTPOp ConnectionState ConnStep Bool -> String
+defn run-step-drain [cid op cs step stashed]
+  match [drain-dials [step-out-reqs cid cs op step]]
+    | true  -> emit-after-stash stashed [append [conn-step-outbound step] [withdraw-frames cid op]]
+    | false -> emit-after-stash stashed [append [conn-step-outbound step] [withdraw-frames cid op]]
 
 spec run-step Nat CapTPOp ConnectionState -> String
 ;; EVERY op goes through `connection-step`. There is no longer an op the
@@ -1140,11 +1146,29 @@ spec run-step Nat CapTPOp ConnectionState -> String
 ;; dropped outright and the side effect never happens — which presents as a
 ;; queue that stays empty with no error anywhere. Same idiom as
 ;; `publish-gifts` and `emit-after-stash` above, for the same reason.
+;;
+;; STASH BEFORE DRAINING, and the match below is what makes that an ORDER
+;; rather than a wish — passing the stash as an argument would only bind it,
+;; and lazy reduction would then run it whenever `emit-after-stash` got round
+;; to matching on it, which is after the drain.
+;;
+;; Why the order matters: `reserve-export-id`, reached from `step-out-reqs`
+;; via the gifter path, does its own conn-fetch → vat-spawn → conn-stash on
+;; the EXPORTER's connection. When the exporter IS this connection — an
+;; enliven naming a peer we already have a session with — draining first let
+;; this step's stash land afterwards carrying a vat snapshot taken BEFORE the
+;; reservation. The reservation vanished and `next-id` rolled back, so a later
+;; `fresh-promise` could hand out the position the sink actor is sitting on: a
+;; promise aliasing an actor, which is the exact collision `reserve-export-id`
+;; exists to make structurally impossible.
+;;
+;; The two arms differ (they pass a different Bool), so unlike the pairs this
+;; file warns about elsewhere, an arm-collapsing rewrite cannot fold them.
 defn run-step [cid op cs]
   let step := [connection-step op [with-global-gifts cs]]
-    match [drain-dials [step-out-reqs cid cs op step]]
-      | true  -> run-step-emit cid step [withdraw-frames cid op]
-      | false -> run-step-emit cid step [withdraw-frames cid op]
+    match [conn-stash cid [step-state-to-stash step]]
+      | true  -> run-step-drain cid op cs step true
+      | false -> run-step-drain cid op cs step false
 
 spec step-connection Nat String -> String
   :doc "Process one inbound wire frame (hex-encoded) for connection
