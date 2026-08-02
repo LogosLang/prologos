@@ -4951,6 +4951,96 @@ still work, so the added unwrap did not make the refusal blanket).
 
 Status: ✅ **P4c-3 COMPLETE**. Status: ⬜ P4c-4..5.
 
+<a id="p4c-4"></a>
+
+##### §5.P4c-4 — PVec broadcast + the enable-set  (mini-design + mini-audit, opened 2026-08-02)
+
+**Grounding**: audit `wf_b5bc52c5-bfd` (5 facets + completeness critic @
+`c3bf0c63`, 6 agents / 1.13M tokens). Every load-bearing claim below was
+**R-lens-verified on the main thread**.
+
+**⚠ THE SLICE ORDER I FIRST RECOMMENDED WAS BACKWARDS, and grounding caught it.**
+I proposed "fold membership + producer bridge first, so the unknown-head question
+becomes decidable against a working consumer." Neither can be **observed**: with
+the enable-set empty, `apply-binder-unwrap`'s first arm strips every sentinel in
+every position, so nothing reaches the parser's `bcast-step` arm. Measured — five
+surface spellings (`users:name`, `def a := …`, `[…]`, map-literal value, `|>`)
+plus the literal internal head `($bcast-step :name)`: **ZERO occurrences** of the
+guided not-yet message; the literal head yields `:name : Keyword`. So the
+**TEST SEAM is a prerequisite, not a successor** — today the only validation
+route is source mutation on a scratch build, which is precisely what let three
+enumeration gaps through this arc.
+
+**THE SLICE IS AT LEAST FOUR SITES, NOT TWO.** `macros.rkt:6125-6127` states the
+obligation as three (a datum-level predicate + the `access-sentinel?` entry + the
+fold arm), and `segment-select-items` needs its own arm or an unarmed
+`($bcast-step …)` lands on its `[else]` and emits a plausible-but-wrong
+diagnostic (`parser.rkt:1252-1255`).
+
+**Verified about the fold**: `access-sentinel?` has exactly ONE production
+consumer — the gate at `macros.rkt:6195` — and no seat carries its own member
+list, so Q_U16's "inherits all four seats for free" **is true at the predicate
+layer**. All four seat coordinates verify unchanged. ⚠ Two corrections: **all
+FOUR seats run inside preparse** (`parse-reader.rkt:2769` says "two of which" —
+third drift in that same comment block, in the SAFE direction, since it
+strengthens Q_U16); and seat `:2714` is **re-entered FROM the parser** via
+`parse-type-segment`, so "before the parser exists" is false of every
+*invocation* though the reader post-pass still precedes it. **The fold arm
+inherits a FIXPOINT OBLIGATION**: its emitted datum must NOT be sentinel-headed,
+or `preparse-expand-subforms` re-enters and swallows one LEFT sibling per pass —
+the P1b-iii bug that silently DROPPED a `defn` clause at zero errors.
+
+**DEFERRED 39's two ω-blind sites are NOT reachable from the headline case** —
+both need a multi-item payload and `$select-path` mints exactly one field per
+level, so they go live only for a BLOCK-position broadcast. Whether they are in
+scope depends on whether this slice lights up block position.
+
+<a id="p4c-4-merge"></a>
+
+###### ⭐ THE DUAL-SPINE MERGE — absent from every prior enumeration
+
+Prologos runs TWO parsers and `merge-form` ends `[else tree-surf]`
+(`driver.rkt:2503`, commented *"tree parser wins for user forms"*). What protects
+every SIBLING selection surface is that it is deliberately **errored** on the tree
+spine (`tree-parser.rkt:147` `select-brace-group`, `:177` `dot-access`), and
+errored surfs are filtered out of `tree-by-line` (`#:when (not (prologos-error?
+s))`, `:2473`), so preparse becomes authoritative. That file states the hazard
+verbatim: *"a missing arm lets a garbage surf BEAT preparse's."*
+
+**`$bcast-step` mints NO TAG, so it has no tag arm and that protection is
+STRUCTURALLY UNAVAILABLE to it.** `same-form-type?` compares the OUTER form
+(`surf-def` vs `surf-def`), not the body — so a `def q := users:name` whose tree
+body is a garbage application would fall to `[else tree-surf]` and win.
+
+**And it is defused today by a plain defect, not by design.** `loc->line`
+(`driver.rkt:2443`) takes `(cadr loc)` for any list ≥2; tree NODES carry
+`(line col start end)` (⇒ COL) and tree TOKENS carry `(0 0 start end)` (⇒ 0),
+while preparse carries srcloc STRUCTS (⇒ real line). The keys are on different
+scales, the lookup misses, preparse wins. **The broadcast is protected by
+accident**, and the day that is corrected every latent tree surf goes live at
+once. Filed OUT OF BAND with the blast radius deliberately unmeasured:
+`docs/tracking/2026-08-02_LOC_TO_LINE_MERGE_DEFECT.md` (`388af899`).
+
+**Recorded assumption of the producer bridge, not an inheritance**: if that fix
+lands, the broadcast needs its own tree-spine protection in the same change —
+a tag + error arm matching the siblings, or a `merge-form` exception arm on the
+POL.9b template (`driver.rkt:2487-2497`).
+
+**Mantra check, honestly**: this is reader/parser-layer work and the parse layer
+installs **ZERO** propagators. "On-network" is not satisfied and cannot be by this
+slice — it is off-network scaffolding whose chartered retirement is **PPN 4D**
+(prerequisite-blocked on 4C + PM Track 12). Named rather than rationalized.
+
+**Drift risks named at the open** (checkpoints for the mid-flight principles
+challenge): the "four seats for free" claim (assume short until each seat's own
+code is read — it held, but only at the predicate layer); `$bcast-step` has no
+`pnet-serialize.rkt` registration and DEFERRED 36's ✅ is scoped to the empty
+enable-set, so caching goes live with the first grant; scope creep from the
+enable-set's MECHANISM into its POLICY (the unknown-head ruling); the `*`/`^`
+swallow hazard, still unowned.
+
+Status: ⬜ P4c-4.
+
 <a id="p5"></a>
 
 ### §5.P5 — Ruling B + factoring
