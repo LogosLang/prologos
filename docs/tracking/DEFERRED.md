@@ -2785,7 +2785,7 @@ inverted default). These are what SURVIVED adjudication unfixed. Items 32 and 33
 **become live the moment P4c-3 enables its first broadcast context** — they are
 inert today only because `broadcast-enabled-contexts` is `'()`.
 
-### 32. The OVER-REACH direction survives in three shapes — and one is POSITION-DEPENDENT
+### 32. 🔄 MOSTLY FIXED (`8fa30336`, P4c-3 prereq) — over-reach survivors; ONE finding remains and it is the important one
 
 `take-param-region`'s param-group arm tests only "is it a group", so ANY group in
 that slot is deep-unwrapped; and `take-arm-region` runs to the END of its list
@@ -2801,12 +2801,21 @@ but all are P4c-3 landmines):
   preserves. The optional-NAME step eats `m` in `(fn NAME GROUP)`.
 - **`type` union alternatives**: `type Foo := A | B users:name` strips.
 
-**Smallest fix** (from the adjudicator, worth taking as written): bound
-`take-arm-region` the way `unwrap-binder-prefix` bounds def/let — stop at the
-region, never run to end-of-list — and make `take-param-region`'s param-group
-test POSITIVE (a bracket group; not `$brace-params`/`$angle-type`/`$bcast-step`)
-rather than "any group". ⚠ Note `group-stx?` currently matches the walk's OWN
-mint, so it can mistake its sentinel for a user's bracket group.
+**FIXED at `8fa30336`** — the adjudicator's recipe taken as written, plus the
+two causes traced: `param-group-candidate?` is now a POSITIVE test (not
+`$`-headed by SHAPE so a future sentinel is excluded by construction, not
+`-`-headed, not keyword-led), `take-arm-region` is BOUNDED (no arrow ⇒ not an
+arm ⇒ touch nothing), and `binder-nameless-heads` ('(fn)) stops the bare-param
+lambda's name-skip from handing its BODY to the param-group arm. Mutation-
+verified: with preservation force-enabled the two `property` clauses now AGREE.
+
+**⬜ WHAT REMAINS, and it outweighs the fixes — a P4c-3 DESIGN input, not a bug**:
+enabling a context is NOT just adding to the list. With preservation forced on,
+a body broadcast is STILL stripped, because the unknown-head default unwraps
+everything and a body sub-group's head (`users` in `(users :name)`) is by
+definition UNKNOWN. So P4c-3's first enabled context must decide **what an
+unknown head does inside an ALREADY-PRESERVED region** — the inverted default
+and per-context preservation meet exactly there. Deliberately not guessed at.
 
 ### 33. `parse-param-names-for` and `parse-defn-binder-seq` are unhardened binder consumers
 
@@ -2851,7 +2860,7 @@ on the aligned-block shape.
   was verified end-to-end. Worth correcting because the comment is cited as the
   reason a specific bug class cannot recur.
 
-### 36. ⚠ THE BLIND SPOT — the mint/unwrap has never been tested through `.pnet` module caching or the REPL/LSP reader
+### 36. ✅ RESOLVED (2026-08-01, at the P4c-3 opening) — BOTH DOORS PROBED, BOTH CLEAN
 
 **Nobody in the arc tested this, including the main session.** Every probe went
 through exactly two doors: `read-all-forms-string` and `process-file`.
@@ -2863,9 +2872,23 @@ module body". `$bcast-step` has no `pnet-serialize.rkt` registration and no
 `access-sentinel?` membership. Separately, `CLAUDE.md`'s two-context audit rule
 names the elaboration-vs-module-loading seam as the permanent architectural
 boundary, and `repl.rkt` / the LSP have their own reader entry points — nobody
-checked whether the post-pass runs on them at all. **Cheap first probe**: compile
-a lib containing a fused annotation to `.pnet`, re-link, and diff; then evaluate
-a fused `def` through the REPL session path.
+checked whether the post-pass runs on them at all. **PROBED, and the answer is clean on both doors.**
+- **REPL/LSP door**: `process-string-ws` handles a fused param (`f : Int -> Int
+  defined.`), a private-suffix form (`p : Int -> Int defined.`) and a broadcast
+  (inert, honest error) — identical to the `process-file` door. Structural
+  reason: `transform-let-blocks-elems` has a SINGLE call site inside the reader
+  (parse-reader.rkt, in `tree-node->stx-elements`), which both doors traverse.
+- **`.pnet` door**: a lib carrying `defn f [n:Int]`, `defn- helper [x:Int]` and
+  `def base:Int := 41` was compiled cold, cached (4088-byte artifact under
+  `data/cache/pnet/`), and re-read warm twice — results identical every time
+  (`2 : Int` / `41 : Int`). **Decisively: `strings` on the cached artifact finds
+  ZERO `bcast-step` occurrences**, i.e. the unwrap runs BEFORE serialization and
+  no reader sentinel can enter a cached body. That is the specific `pipeline.md`
+  failure class this item was raised against, and it does not apply.
+⚠ One honest note on method: the first run of this probe reported "no .pnet
+produced" because I looked next to the source file; the cache lives under
+`data/cache/pnet/`. The artifact had been written all along. Test artifact
+removed after the probe.
 
 
 ## CIU T6 D4.P4b-ii spin-offs (filed 2026-08-01 at the b-ii close — from the mini-audit, the adversarial verify, and the close's own triage)
