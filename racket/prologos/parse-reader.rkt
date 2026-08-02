@@ -3059,7 +3059,7 @@
             (loop (cdr ks) (cons (unwrap-let-block k) acc))]
            ;; a param head (private suffix normalized): take its binder region.
            [(binder-param-head? d)
-            (let-values ([(region rest) (take-param-region (cdr ks))])
+            (let-values ([(region rest) (take-param-region (cdr ks) d)])
               (loop rest (append (reverse region) (cons k acc))))]
            ;; ⚠ A REGION HEAD IS NOT ALWAYS THE FORM HEAD EITHER — the same
            ;; blindness this function already fixes for PARAM heads, which was
@@ -3076,24 +3076,65 @@
            [else (loop (cdr ks) (cons k acc))]))])))
 
 ;; The pattern side of a `$pipe` arm, up to (not including) the arrow.
+;; ⚠ BOUNDED. This used to fall off the end of the list when no `->` was found
+;; and unwrap everything it had walked — the same unbounded-SEARCH shape that
+;; `unwrap-binder-prefix` was bounded to fix for def/let, left in place here.
+;; A well-formed arm always HAS its arrow, so "no terminator" means the shape is
+;; not an arm and nothing in it is a binder: unwrap NOTHING rather than guess.
+;; (DEFERRED 32, from the P4c-2 adversarial verify.)
 (define (take-arm-region ks)
-  (let loop ([ks ks] [acc '()])
+  (let loop ([xs ks] [acc '()])
     (cond
-      [(null? ks) (values (reverse acc) '())]
+      [(null? xs) (values ks '())]   ;; no arrow ⇒ not an arm ⇒ touch nothing
       [else
-       (let* ([k (car ks)]
+       (let* ([k (car xs)]
               [d (and (syntax? k) (syntax-e k))])
          (if (and (symbol? d) (memq d binder-region-terminators))
-             (values (reverse acc) ks)
-             (loop (cdr ks) (cons (unwrap-binders-deep k) acc))))])))
+             (values (reverse acc) xs)
+             (loop (cdr xs) (cons (unwrap-binders-deep k) acc))))])))
 
 ;; After a param head: an optional NAME symbol, then any implicit `{…}` binder
 ;; groups, then exactly ONE param group. Stops there — the next group is the
 ;; BODY (`defn f [a:Int] [g users:name]` must keep its broadcast), and a
 ;; `$pipe` group is an ARM, not params.
-(define (take-param-region ks)
+;; Heads that take NO name — their first element is already a PARAM.
+;; `[fn m body]` is the bare-param lambda: `m` IS the parameter, not a name. The
+;; name-skip therefore consumed it and handed the BODY to the param-group arm,
+;; which unwrapped it: `[fn m [one users:name]]` stripped its body's broadcast
+;; while `[fn [m] [one users:name]]` preserved it — two spellings of one form
+;; disagreeing. (DEFERRED 32.)
+(define binder-nameless-heads '(fn))
+
+;; A group that can be a PARAM LIST. POSITIVE test, replacing "is it a group?".
+;;
+;; ⚠ THE OLD TEST MATCHED THE WALK'S OWN MINT. `group-stx?` is true of
+;; `($bcast-step :Int)`, so the walk could mistake its own sentinel for a user's
+;; bracket group. It also matched every `$`-sentinel group and every CLAUSE
+;; group, which is what made `property` POSITION-DEPENDENT: with no bracket
+;; params present, the first dash-clause was consumed as "the param group" and
+;; deep-unwrapped, so the same broadcast read differently in clause 1 than in
+;; clause 2 of one form.
+(define (param-group-candidate? k)
+  (and (group-stx? k)
+       (let ([d (syntax-e k)])
+         (and (pair? d)
+              (let ([h (syntax-e (car d))])
+                (and
+                 ;; never a sentinel group ($pipe, $brace-params, $angle-type,
+                 ;; $bcast-step, $let-block, …) — checked by SHAPE, not by list
+                 (not (and (symbol? h)
+                           (let ([s (symbol->string h)])
+                             (and (> (string-length s) 0)
+                                  (char=? (string-ref s 0) #\$)))))
+                 ;; never a CLAUSE group: dash-items and keyword-led rows are
+                 ;; content, not binders
+                 (not (eq? h '-))
+                 (not (keyword? h))))))))
+
+(define (take-param-region ks [head #f])
   (define-values (name-part rest0)
     (if (and (pair? ks)
+             (not (memq (binder-head-base head) binder-nameless-heads))
              (let ([d (and (syntax? (car ks)) (syntax-e (car ks)))])
                (and (symbol? d) (not (memq d binder-region-terminators)))))
         (values (list (car ks)) (cdr ks))
@@ -3103,8 +3144,8 @@
       ;; implicit binder groups may precede the param group, any number of them
       [(and (pair? ks) (group-headed-by? (car ks) '$brace-params))
        (loop (cdr ks) (cons (unwrap-binders-deep (car ks)) acc))]
-      ;; the param group itself — exactly one, and never a `$pipe` arm
-      [(and (pair? ks) (group-stx? (car ks)) (not (group-headed-by? (car ks) '$pipe)))
+      ;; the param group itself — exactly one
+      [(and (pair? ks) (param-group-candidate? (car ks)))
        (values (append name-part (reverse (cons (unwrap-binders-deep (car ks)) acc)))
                (cdr ks))]
       [else (values (append name-part (reverse acc)) ks)])))
