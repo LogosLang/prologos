@@ -93,6 +93,23 @@
   (delete-file tmp)
   result)
 
+;; Level 1 (sexp): the SAME fixture, through process-string. Needed because the
+;; GLUED name `x:Int` is a sexp-only surface — the WS reader splits it, so no
+;; .prologos file can produce it and `run-file-ws` cannot reach §E2's subject.
+;; NB it must share this file's fixture rather than call test-support's
+;; `run-ns-all`: that helper installs its own forked network, which collides
+;; with the module-level snapshot above (`net-cell-reset: unknown cell`).
+(define (run-sexp s)
+  (parameterize ([current-file-module-network-ref
+                  (module-network-add-import (make-module-network)
+                                             (module-network-from-snapshot pre-global-env))]
+                 [current-ns-context pre-ns-context]
+                 [current-module-registry pre-module-reg]
+                 [current-trait-registry pre-trait-reg]
+                 [current-impl-registry pre-impl-reg]
+                 [current-param-impl-registry pre-param-impl-reg])
+    (process-string s)))
+
 ;; A file whose MIDDLE command is `body`, flanked by two innocent defs. The
 ;; flanking defs are the containment probe: under a whole-file abort they never
 ;; run, so `(length rs)` is not 3 — it raises before returning anything at all.
@@ -121,11 +138,17 @@
   (check-equal? fused spaced
                 "the fused spelling must emit exactly what the spaced spelling emits"))
 
-(test-case "def-seam/A2 fused annotation without `:=` is untouched (no := ⇒ no rewrite)"
-  ;; `def x:Int 5` has no `:=`, so expand-def-assign returns the datum verbatim.
-  ;; Pinned so fix (1) does not start rewriting the no-`:=` spelling as a side
-  ;; effect — that spelling's meaning is parse-def's business, not the expander's.
-  (check-equal? (expand-def-assign '(def x :Int 5)) '(def x :Int 5)))
+(test-case "def-seam/A2 fused annotation WITHOUT `:=` normalizes to the spaced form"
+  ;; ⚠ THIS PIN WAS INVERTED, deliberately, and the history is the point.
+  ;; It first read `(expand-def-assign '(def x :Int 5))` → UNCHANGED, on the
+  ;; reasoning that a form with no `:=` is not an assignment and so not this
+  ;; function's business. That reasoning was wrong: it left `def x:Int 5`
+  ;; refused while `def x : Int 5` and `let x:Int 5` both worked, purely because
+  ;; the four call sites gated the expander behind `(memq ':= …)`. The gate is
+  ;; gone and this function now owns def-HEAD normalization for every `def`, so
+  ;; the no-`:=` spelling reaches parse-def's name/:/type/body arm — which
+  ;; already worked. See §E4.
+  (check-equal? (expand-def-assign '(def x :Int 5)) '(def x : Int 5)))
 
 (test-case "def-seam/A3 the no-annotation and multi-token spaced forms still work"
   ;; Non-regression around the arm being added.
@@ -211,35 +234,36 @@
                              (prologos-error-message (second rs)))
               (format "message must show the spaced form, got: ~v" (second rs))))
 
-(test-case "def-seam/C7 the PRIVATE `def-` fused spelling is contained (KNOWN GAP, reader-layer)"
-  ;; ⚠ KNOWN GAP, deliberately pinned as CONTAINMENT rather than as success.
+(test-case "def-seam/C7 the PRIVATE `def-` fused spelling works — the two layers compose"
+  ;; ⚠ THIS PIN WAS WRITTEN AS A TRIPWIRE AND FLIPPED, which is the point.
   ;;
-  ;; `def- x:Int := 5` does NOT yet work, and the reason is one layer UP: the
-  ;; reader's binder-unwrap set is `binder-region-heads = '(def let)` and the
-  ;; head test at parse-reader.rkt:2850 is the BARE `(memq hd …)`, so the
-  ;; suffixed `def-` is not normalized. `before` therefore arrives as
-  ;; `(($bcast-step :Int))` — a LIST — and the fused arm, which keys on the
-  ;; SYMBOL predicate `fused-type-annot?`, correctly declines.
+  ;; When the fused arm first landed, `def- x:Int := 5` did NOT work, for a
+  ;; reason one layer UP: the reader's binder-unwrap set `binder-region-heads`
+  ;; was tested with a BARE `(memq hd …)`, so the suffixed `def-` was never
+  ;; normalized and `before` arrived as `(($bcast-step :Int))` — a LIST. The
+  ;; fused arm keys on the SYMBOL predicate `fused-type-annot?` and correctly
+  ;; declined. Fix (2) meant it was at least CONTAINED rather than a whole-file
+  ;; abort, and this pin asserted exactly that containment, with a note saying
+  ;; it would flip to a success assertion if the reader was ever fixed.
   ;;
-  ;; Fixing that HERE would be the wrong layer: the expander would be
-  ;; pattern-matching a reader artifact. The reader is where `def-` should be
-  ;; handed the same shape as `def` — and the in-flight CIU T6 P4c-2
-  ;; condition-(c) work does exactly that (it adds a `binder-head-base`
-  ;; normalization). When that lands, `def- x:Int := 5` arrives as
-  ;; `(def- x :Int := 5)` and starts working through the arm below with NO
-  ;; change to this file's production code.
-  ;;
-  ;; What this fix DOES deliver for `def-` today is the property pinned here:
-  ;; it is a contained per-command error, not the whole-file abort it was.
-  ;; If a future reader change makes it succeed, this pin flips to a success
-  ;; assertion — it is a tripwire on the gap, not an endorsement of it.
-  (check-contained-error "c7" "def- x:Int := 5")
-  ;; …while the SPACED private spelling already works, which is what makes the
-  ;; above an asymmetry rather than a missing feature.
-  (define rs (run-file-ws "ns defseam-c7ok\ndef- p : Int := 5\np\n"))
+  ;; It was fixed, at the right layer: CIU T6 D4.P4c-2 (`cbd8d1a7`) added
+  ;; `binder-head-base`, so `def-` now normalizes to `(def- x :Int := 5)` and
+  ;; flows through the fused arm. NO production change in this seam was needed
+  ;; — which is the argument for having refused to pattern-match the
+  ;; `$bcast-step` artifact here in the first place. Two independent fixes at
+  ;; their own layers compose; a workaround at the wrong layer would now be
+  ;; dead code obscuring the real one.
+  (define rs (run-file-ws (string-append "ns defseam-c7\n"
+                                         "def- x:Int := 5\n"
+                                         "x\n")))
   (check-equal? (length rs) 2 (format "got: ~v" rs))
   (check-false (prologos-error? (first rs))
-               (format "spaced `def-` must still work, got: ~v" (first rs))))
+               (format "fused `def-` must work, got: ~v" (first rs)))
+  ;; …and it agrees with the spaced private spelling, the same parity §B pins
+  ;; for the public form.
+  (define spaced (run-file-ws "ns defseam-c7s\ndef- x : Int := 5\nx\n"))
+  (check-equal? (format "~a" (first rs)) (format "~a" (first spaced)))
+  (check-equal? (format "~a" (second rs)) (format "~a" (second spaced))))
 
 (test-case "def-seam/C4 a bare `$def-error` marker with no args does not crash the parser"
   ;; The (pair? args) guard in the parser's marker arm is LOAD-BEARING — the
@@ -265,6 +289,93 @@
               (format "got: ~v" (first let-rs)))
   (check-not-equal? (prologos-error-message (first def-rs))
                     (prologos-error-message (first let-rs))))
+
+;; ========================================
+;; §E — the other two fused surfaces: the sexp GLUED name, and no-`:=`
+;; ========================================
+;; The `:=` fix left two siblings behind, both now closed by moving ALL def-head
+;; normalization into `expand-def-assign` and calling it for EVERY def (the
+;; `(memq ':= …)` gate at its four call sites is gone). One normalization point
+;; serves three surfaces, so the fused recognition still has exactly one copy.
+
+(test-case "def-seam/E1 all THREE annotation surfaces converge on one emission"
+  ;; WS-split `(:Int)`, sexp-glued `x:Int`, and spaced `: Int` are three ways to
+  ;; write one thing. Pinned as mutual equality rather than three separate
+  ;; expectations, so they cannot drift apart one at a time.
+  (define spaced (expand-def-assign '(def x : Int := 5)))
+  (check-equal? (expand-def-assign '(def x :Int := 5)) spaced "WS-split fused")
+  (check-equal? (expand-def-assign '(def x:Int := 5)) spaced "sexp glued name")
+  (check-equal? spaced '(def x ($angle-type Int) 5)))
+
+(test-case "def-seam/E2 the sexp glued name binds `x`, not a variable named `x:Int`"
+  ;; THE SILENT WRONG ANSWER this closes. `(def x:Int := 5)` used to take the
+  ;; null-`before` arm — the glued symbol was never split — and bind a variable
+  ;; literally NAMED `x:Int`, untyped, with ZERO errors. Worse than the abort
+  ;; fixed alongside it: loud beats silent. `let` closed exactly this at LET P4
+  ;; (ruling 3) via `split-glued-name-datum`; `def` now calls the same helper.
+  ;; This is a SEXP-mode pin by necessity: a .prologos file cannot produce the
+  ;; glued shape at all (the WS reader splits it), so only process-string can
+  ;; reach the surface under test.
+  (define rs (run-sexp "(def x:Int := 5)(def y:Int 6)"))
+  (check-equal? (length rs) 2 (format "got: ~v" rs))
+  (check-true (regexp-match? #rx"^x : Int" (format "~a" (first rs)))
+              (format "must bind `x` at type Int, got: ~v" (first rs)))
+  (check-true (regexp-match? #rx"^y : Int" (format "~a" (second rs)))
+              (format "…and the no-`:=` glued spelling too, got: ~v" (second rs))))
+
+(test-case "def-seam/E3 a module path is NOT a fused annotation"
+  ;; `str::length` produces EMPTY segments, which is exactly how
+  ;; split-glued-name-datum tells a module path from an annotation. If this
+  ;; regresses, every `::`-named def silently loses its name.
+  (check-equal? (expand-def-assign '(def str::length := 5)) '(def str::length 5)))
+
+(test-case "def-seam/E4 the fused spelling works WITHOUT `:=` too, matching spaced"
+  ;; `def x : Int 5` (name/:/type/body) always worked; `def x:Int 5` did not,
+  ;; because expand-def-assign was gated behind `(memq ':= …)` and so never saw
+  ;; the no-`:=` spellings. `let x:Int 5` supported it, making `def` the outlier.
+  (define fused  (run-file-ws "ns defseam-e4f\ndef x:Int 5\nx\n"))
+  (define spaced (run-file-ws "ns defseam-e4s\ndef x : Int 5\nx\n"))
+  (check-equal? (length fused) 2 (format "got: ~v" fused))
+  (check-false (prologos-error? (first fused))
+               (format "fused-without-`:=` must work, got: ~v" (first fused)))
+  (check-equal? (format "~a" (first fused)) (format "~a" (first spaced)))
+  (check-equal? (format "~a" (second fused)) (format "~a" (second spaced))))
+
+(test-case "def-seam/E5 …and for the private `def-` form as well"
+  (define rs (run-file-ws "ns defseam-e5\ndef- x:Int 5\nx\n"))
+  (check-equal? (length rs) 2 (format "got: ~v" rs))
+  (check-false (prologos-error? (first rs)) (format "got: ~v" (first rs))))
+
+(test-case "def-seam/E6 two annotations for one binding is a contained error"
+  ;; `def x:Int : Foo := 5` — the name carries one and another follows. Refusing
+  ;; beats silently preferring either.
+  (define r (expand-def-assign '(def x:Int : Foo := 5)))
+  (check-equal? (car r) '$def-error (format "got: ~v" r))
+  (check-true (regexp-match? #rx"just one" (cadr r)) (format "got: ~v" r))
+  ;; …and a glued name followed by a stray multi-token type is refused too, so
+  ;; sexp stays in step with WS (which refuses `x:List Nat` via §C6).
+  (define m (expand-def-assign '(def x:List Nat := 5)))
+  (check-equal? (car m) '$def-error (format "got: ~v" m))
+  (check-true (regexp-match? #rx"just one type" (cadr m)) (format "got: ~v" m))
+  ;; the glued chained form refuses with the UCS reason, like the WS one (C1)
+  (define c (expand-def-assign '(def x:A:B := 5)))
+  (check-equal? (car c) '$def-error (format "got: ~v" c))
+  (check-true (regexp-match? #rx"UCS" (cadr c)) (format "got: ~v" c)))
+
+(test-case "def-seam/E7 arity stubs pass through untouched (guard on the widened gate)"
+  ;; ⚠ REGRESSION GUARD, and the reason the arity check exists. Removing the
+  ;; `(memq ':= …)` gate means expand-def-assign now runs on EVERY def — so a
+  ;; stub like `(def)` or `(def x)` reaches it, and an unguarded `(cadr datum)`
+  ;; would raise at PREPARSE: a whole-file abort, i.e. this seam's own bug class
+  ;; reintroduced by its own fix. Short forms must pass through to parse-def,
+  ;; which reports them as per-command arity errors.
+  (check-equal? (expand-def-assign '(def)) '(def))
+  (check-equal? (expand-def-assign '(def x)) '(def x))
+  ;; …and end-to-end: a bare `def` must not take the file down.
+  (define rs (run-file-ws (sandwich "defseam-e7" "def")))
+  (check-equal? (length rs) 3 (format "the file must survive a bare `def`; got: ~v" rs))
+  (check-false (prologos-error? (first rs)))
+  (check-false (prologos-error? (third rs))))
 
 ;; ========================================
 ;; §D — non-regression on the spellings that already worked

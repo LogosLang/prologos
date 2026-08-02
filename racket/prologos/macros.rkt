@@ -2184,14 +2184,15 @@
     [(and (pair? datum) (symbol? (car datum)))
      (define head (car datum))
      (cond
-       ;; def with := — expand assignment syntax, then spec injection
-       [(and (eq? head 'def) (memq ':= datum))
+       ;; def — head normalization (glued name, fused annotation) and, when a
+       ;; `:=` is present, assignment expansion; then spec injection. The two
+       ;; arms this replaces were split on `(memq ':= datum)`, which meant the
+       ;; no-`:=` spelling never reached the normalizer — so `def x:Int 5` was
+       ;; refused while `def x : Int 5` worked. `expand-def-assign` is a no-op
+       ;; for a def that needs neither.
+       [(eq? head 'def)
         (define pre (expand-def-assign datum))
         (define injected (maybe-inject-spec-def pre))
-        (preparse-expand-form injected)]
-       ;; def without := — try spec injection
-       [(eq? head 'def)
-        (define injected (maybe-inject-spec-def datum))
         (preparse-expand-form injected)]
        ;; defn — spec injection
        [(eq? head 'defn)
@@ -2213,10 +2214,12 @@
 
   (record! "input" datum)
 
-  ;; Step 1: def := expansion
+  ;; Step 1: def head normalization + := expansion (no `memq ':=` gate — the
+  ;; normalizer must also see the no-`:=` spellings; it is a no-op otherwise,
+  ;; and `record!` still fires only when something actually changed)
   (define after-assign
     (if (and (pair? datum) (symbol? (car datum))
-             (eq? (car datum) 'def) (memq ':= datum))
+             (eq? (car datum) 'def))
         (let ([r (expand-def-assign datum)])
           (unless (equal? r datum) (record! "def-assign" r)) r)
         datum))
@@ -3168,9 +3171,11 @@
                  (define grouped-d
                    (let ([d (syntax->datum new-stx)])
                      (if (eq? base 'defn) (group-defn-pipes d) d)))
-                 ;; Expand := syntax for def- (before spec injection)
+                 ;; Normalize the def- head (glued name, fused annotation) and
+                 ;; expand := if present, before spec injection. No `memq ':=`
+                 ;; gate — the no-`:=` spellings need the normalizer too.
                  (define pre-datum
-                   (if (and (eq? base 'def) (memq ':= grouped-d))
+                   (if (eq? base 'def)
                        (expand-def-assign grouped-d)
                        grouped-d))
                  ;; Inject spec type into bare-param defn- if matching spec exists
@@ -3409,9 +3414,12 @@
          ;; Step 0: group flat $pipe tokens in defn (WS reader produces flat form)
          (define grouped-datum
            (if (eq? head 'defn) (group-defn-pipes datum) datum))
-         ;; Step 1: expand := syntax for def (before spec injection)
+         ;; Step 1: normalize the def head (glued name, fused annotation) and
+         ;; expand := if present, before spec injection. No `memq ':=` gate —
+         ;; the no-`:=` spellings need the normalizer too; expand-def-assign is
+         ;; a no-op for a def that needs neither.
          (define pre-datum
-           (if (and (eq? (car grouped-datum) 'def) (memq ':= grouped-datum))
+           (if (eq? (car grouped-datum) 'def)
                (expand-def-assign grouped-datum)
                grouped-datum))
          ;; Step 2: inject spec type (defn or def)
@@ -4931,52 +4939,126 @@
 ;; exactly that line, so they fall through to the channel below rather than
 ;; being invented into types. `def` has no multiplicity surface at all —
 ;; parse-def takes name / optional type / body (parser.rkt § parse-def).
-(define (expand-def-assign datum)
-  (define name (cadr datum))
-  (define rest (cddr datum))  ; tokens after name
-  (define assign-pos (index-of-symbol ':= rest))
+;; ONE normalization point for a def's ANNOTATION REGION — the tokens between
+;; the name and the value. `(:Int …)` → `(: Int …)`, i.e. the fused spelling is
+;; rewritten to the spaced one and every downstream arm sees a single shape.
+;;
+;; It normalizes the LEADING token of the tail, which is annotation position in
+;; both the `:=` and the no-`:=` spelling (`def x :Int := 5` and `def x :Int 5`).
+;; That is what lets ONE call serve both and keeps the fused recognition from
+;; acquiring a second copy — the F1b.7g anti-drift rule. `:=` and bare `:` are
+;; excluded by `fused-type-annot?` itself, so a no-annotation def passes through.
+;;
+;; ⚠ IT FIRES ONLY WHEN THE FUSED TOKEN IS UNAMBIGUOUSLY THE *WHOLE* ANNOTATION
+;; — followed by `:=`, or followed by exactly one token (the value). Normalizing
+;; unconditionally is WRONG and was caught by the C1/C6 pins: `x:A:B` reaches
+;; here as `(:A :B …)` and `x:List Nat` as `(:List Nat …)`, and rewriting just
+;; the head token turns each into a plausible-looking `(: A :B …)` / `(: List
+;; Nat …)` that the SPACED arm then happily accepts — silently inventing a type
+;; out of a chain the UCS reservation refuses, and out of a multi-token spelling
+;; the single-token rule refuses. Both must stay un-normalized so the error arm
+;; can still SEE the shape it needs to name. The eager version made the fix
+;; regress two of its own refusals; that is why the guard is a conjunction and
+;; not a bare `fused-type-annot?` test.
+(define (normalize-def-annot-tokens tail)
   (cond
-    [(not assign-pos) datum]
+    [(and (pair? tail)
+          (fused-type-annot? (car tail))
+          (pair? (cdr tail))
+          (or (eq? (cadr tail) ':=)     ; `def x:Int := value`
+              (null? (cddr tail))))     ; `def x:Int value`
+     (list* ': (fused-annot->type-symbol (car tail)) (cdr tail))]
+    [else tail]))
+
+(define (expand-def-assign datum)
+  (cond
+    ;; Arity guard. This function is now called for EVERY `def` (not only those
+    ;; containing `:=`), so a stub like `(def)` or `(def x)` reaches it and
+    ;; `(cadr datum)` would raise — which at preparse is a whole-file abort, the
+    ;; very thing this seam exists to prevent. Hand short forms straight to
+    ;; parse-def, whose arity arms already report them as per-command errors.
+    [(or (not (list? datum)) (< (length datum) 3)) datum]
     [else
-     (define before0 (take rest assign-pos))
-     (define after (drop rest (+ assign-pos 1)))
-     ;; Auto-wrap multi-token RHS as application: `some 42N` → `(some 42N)`
-     ;; In WS mode, juxtaposed tokens after := form an application.
-     (define value (if (= (length after) 1) (car after) after))
-     ;; FUSED → SPACED normalization (fix 1). `(:Int)` becomes `(: Int)`, which
-     ;; is byte-identical to what the reader hands us for `def x : Int := 5`.
-     ;; Single-token by construction, so this can only ever produce the 2-token
-     ;; spaced shape; multi-token types keep their spaced spelling.
-     (define before
-       (if (and (= (length before0) 1) (fused-type-annot? (car before0)))
-           (list ': (fused-annot->type-symbol (car before0)))
-           before0))
+     ;; ── Head normalization, in one place, before any branch ──
+     ;; (a) sexp GLUED name. The WS reader splits `x:Int` for us; the sexp
+     ;;     reader glues it into ONE symbol, so `(def x:Int := 5)` used to bind a
+     ;;     variable literally NAMED `x:Int`, untyped, with zero errors — a
+     ;;     silent WS/sexp divergence, and a strictly worse class than a loud
+     ;;     error. `let` closed exactly this at LET P4 (ruling 3) with
+     ;;     `split-glued-name-datum`; this is the same call, on the same
+     ;;     primitive. Module paths (`str::length`) never split — empty segments
+     ;;     — and a chained `x:A:B` is refused for UCS, both by that one helper.
+     (define raw-name (cadr datum))
+     (define-values (split-name glued-ty glued-err)
+       (if (symbol? raw-name)
+           (split-glued-name-datum raw-name)
+           (values raw-name #f #f)))
+     ;; (b) FUSED annotation token → spaced, for both the `:=` and no-`:=` forms.
+     (define tail (normalize-def-annot-tokens (cddr datum)))
+     ;; A glued name has ALREADY supplied the type, so the only legal tails are
+     ;; `(:= value …)` and a bare `(value)`. Anything else is a second
+     ;; annotation — `(def x:Int : Foo := 5)` — or a stray multi-token type —
+     ;; `(def x:List Nat := 5)`. Refuse both rather than silently preferring
+     ;; one; and refusing keeps sexp in step with WS, which rejects the same
+     ;; two shapes via the chained / single-token arms below.
+     (define glued-tail-ok?
+       (and (pair? tail) (or (eq? (car tail) ':=) (null? (cdr tail)))))
      (cond
-       ;; A `:=` with nothing after it. Was a raise; now the channel (fix 2).
-       [(null? after)
-        `($def-error ,(format "def ~a: expected a value after `:=`" name))]
-       ;; No type annotation: (def name := value) → (def name value)
-       [(null? before)
-        `(def ,name ,value)]
-       ;; Type annotation with colon: (def name : T1 T2 ... := value)
-       ;; — reached by BOTH the spaced spelling and the normalized fused one.
-       [(and (>= (length before) 2) (eq? (car before) ':))
-        (define type-tokens (cdr before))
-        `(def ,name ($angle-type ,@type-tokens) ,value)]
-       ;; ── THE CHANNEL (fix 2) ─────────────────────────────────────────────
-       ;; Everything the expander cannot read is a PER-COMMAND error VALUE, via
-       ;; the `$def-error` marker datum — the `$let-error` seat's sibling, and
-       ;; the same conversion arm in parser.rkt (which supplies the loc the
-       ;; datum layer cannot carry). The marker REPLACES the form, exactly as
-       ;; `expand-let` returns `($let-error msg)` in place of the let.
-       ;;
-       ;; No `with-handlers` boundary is needed here, unlike the let family:
-       ;; that family raises from 20 sites buried in recursive helpers whose
-       ;; returns are consumed as DATA, so it needed a handler at its entry.
-       ;; This function has exactly ONE failure site — right here — so it can
-       ;; simply RETURN the marker. Returning beats catching when you can.
+       [glued-err `($def-error ,(format "def ~a: ~a" raw-name glued-err))]
+       [(and glued-ty (not glued-tail-ok?))
+        `($def-error ,(format "def ~a: the name already carries a fused type annotation, so ~a cannot follow — write just one type"
+                              raw-name
+                              (let ([extra (if (index-of-symbol ':= tail)
+                                               (take tail (index-of-symbol ':= tail))
+                                               tail)])
+                                (string-join (map (lambda (t) (format "~a" t)) extra) " "))))]
        [else
-        `($def-error ,(def-assign-error-message name before))])]))
+        (define name split-name)
+        ;; A glued name's type re-enters as the SPACED tokens, so it lands on the
+        ;; same arm as every other annotation. One emission site, still.
+        (define rest (if glued-ty (list* ': glued-ty tail) tail))
+        (define assign-pos (index-of-symbol ':= rest))
+        (cond
+          ;; No `:=`. Not an assignment form, so there is nothing to expand —
+          ;; but the normalization above still applies, which is exactly how
+          ;; `def x:Int 5` becomes `(def x : Int 5)` and reaches parse-def's
+          ;; name/:/type/body arm. That arm already worked for `def x : Int 5`;
+          ;; the fused spelling simply never reached it before.
+          [(not assign-pos) `(def ,name ,@rest)]
+          [else
+           (define before (take rest assign-pos))
+           (define after (drop rest (+ assign-pos 1)))
+           ;; Auto-wrap multi-token RHS as application: `some 42N` → `(some 42N)`
+           ;; In WS mode, juxtaposed tokens after := form an application.
+           (define value (if (= (length after) 1) (car after) after))
+           (cond
+             ;; A `:=` with nothing after it. Was a raise; now the channel.
+             [(null? after)
+              `($def-error ,(format "def ~a: expected a value after `:=`" name))]
+             ;; No type annotation: (def name := value) → (def name value)
+             [(null? before)
+              `(def ,name ,value)]
+             ;; Type annotation with colon: (def name : T1 T2 ... := value)
+             ;; — reached by the spaced spelling, the normalized fused one, AND
+             ;; the split glued one. Three surfaces, one arm.
+             [(and (>= (length before) 2) (eq? (car before) ':))
+              (define type-tokens (cdr before))
+              `(def ,name ($angle-type ,@type-tokens) ,value)]
+             ;; ── THE CHANNEL ─────────────────────────────────────────────────
+             ;; Everything the expander cannot read is a PER-COMMAND error
+             ;; VALUE, via the `$def-error` marker datum — the `$let-error`
+             ;; seat's sibling, and the same conversion arm in parser.rkt (which
+             ;; supplies the loc the datum layer cannot carry). The marker
+             ;; REPLACES the form, exactly as `expand-let` returns
+             ;; `($let-error msg)` in place of the let.
+             ;;
+             ;; No `with-handlers` boundary is needed here, unlike the let
+             ;; family: that family raises from ~20 sites buried in recursive
+             ;; helpers whose returns are consumed as DATA, so it needed
+             ;; handlers at its entries. Every failure in THIS function is a
+             ;; return, so there is nothing to catch. Returning beats catching.
+             [else
+              `($def-error ,(def-assign-error-message name before))])])])]))
 
 ;; The `[else]` message. Guiding, not generic: each shape gets told what it
 ;; actually wrote and what to write instead. These are reachable user inputs —
