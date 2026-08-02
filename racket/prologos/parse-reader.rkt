@@ -3010,12 +3010,37 @@
           ;; ratified on.
           ;;
           ;; ⚠ THE ENUMERATION DOES NOT VANISH, IT MOVES — do not read this as
-          ;; retiring the table. Recognized heads still preserve their BODIES, so
-          ;; the table is now "where broadcast SURVIVES" instead of "where
-          ;; annotations survive". What changed is only the direction a miss
-          ;; fails in, and that is the whole of the ruling. P4c-3 enables each
-          ;; expression context deliberately as it wires the consumer.
-          [else (scan-for-param-heads (map unwrap-binders-deep kids))]))))
+          ;; retiring the table. The table is now "where broadcast SURVIVES"
+          ;; instead of "where annotations survive". What changed is only the
+          ;; direction a miss fails in, and that is the whole of the ruling.
+          ;; P4c-3 enables each expression context deliberately as it wires the
+          ;; consumer.
+          ;;
+          ;; ⭐ P4c-3a — THE `[else]` SPLIT. This arm has TWO populations and the
+          ;; inversion conflated them, which made the enable-set a switch that
+          ;; would have switched on a BROKEN path:
+          ;;   · heads the SCANNER recognizes but this cond does not — the whole
+          ;;     param-head family (`defn fn spec property functor rel defr
+          ;;     defmacro`), plus sibling `$pipe` arms, sibling `def`/`let`, and
+          ;;     `$let-block` groups. `scan-for-param-heads` handles their binder
+          ;;     regions CORRECTLY and leaves their bodies alone.
+          ;;   · heads nobody recognizes — the genuine unknowns (`capability`,
+          ;;     `Pi`, `Sigma`, `DSend`, `DRecv` …), which must fail SAFE.
+          ;; The inversion wrote `(scan-for-param-heads (map unwrap-binders-deep
+          ;; kids))`, which strips deeply FIRST and so hands the scanner kids it
+          ;; can no longer do anything with — the scan was DEAD WORK there, and
+          ;; the eight most important binder forms would have been blanket-
+          ;; stripped at the first grant. Verified against `68cdaae7^`, where the
+          ;; arm was the non-destructive `(scan-for-param-heads kids)`.
+          ;;
+          ;; The split asks the SCANNER whether it recognized anything, rather
+          ;; than re-testing its arms here (a second copy of a recognizer is the
+          ;; F1b.7g class). Recognized ⇒ the scanner's answer stands. Nothing
+          ;; recognized ⇒ genuinely unknown ⇒ the blanket deep-unwrap, i.e. the
+          ;; fail-safe direction the inversion ruling exists to guarantee.
+          [else
+           (let-values ([(scanned recognized?) (scan-for-param-heads/recognized kids)])
+             (if recognized? scanned (map unwrap-binders-deep kids)))]))))
 
 ;; A param-group head is not always the form HEAD. `def q := rel [a:Int] &> …`
 ;; puts `rel` and its group as SIBLINGS inside the `def` element list, so a
@@ -3041,9 +3066,21 @@
 ;; ONE param group · then BODY, which is never touched. `$pipe` arms are their
 ;; own regions, running to the ARROW.
 (define (scan-for-param-heads kids)
-  (let loop ([ks kids] [acc '()])
+  (let-values ([(kids* _seen?) (scan-for-param-heads/recognized kids)]) kids*))
+
+;; ⚠ THE RECOGNITION TEST LIVES HERE AND NOWHERE ELSE. `apply-binder-unwrap`'s
+;; `[else]` needs to know whether this scanner recognized ANYTHING, and the one
+;; thing it must not do is re-test the arms itself — a second copy of a
+;; recognizer is the F1b.7g drift class this file has paid for repeatedly. So
+;; the scanner reports it, as a second value.
+;;
+;; The flag is a WHOLE-LIST property, deliberately, not per-element: inside a
+;; recognized form the `[else]` arm below is what leaves BODY elements alone,
+;; and applying a fail-safe strip per-element would strip exactly those bodies.
+(define (scan-for-param-heads/recognized kids)
+  (let loop ([ks kids] [acc '()] [seen? #f])
     (cond
-      [(null? ks) (reverse acc)]
+      [(null? ks) (values (reverse acc) seen?)]
       [else
        (let* ([k (car ks)]
               [d (and (syntax? k) (syntax-e k))])
@@ -3053,14 +3090,14 @@
            ;; and is handled by `apply-binder-unwrap`'s own `$pipe` arm.
            [(eq? d '$pipe)
             (let-values ([(region rest) (take-arm-region (cdr ks))])
-              (loop rest (append (reverse region) (cons k acc))))]
+              (loop rest (append (reverse region) (cons k acc)) #t))]
            ;; an aligned `let` block, built during this pass — see unwrap-let-block.
            [(group-headed-by? k '$let-block)
-            (loop (cdr ks) (cons (unwrap-let-block k) acc))]
+            (loop (cdr ks) (cons (unwrap-let-block k) acc) #t)]
            ;; a param head (private suffix normalized): take its binder region.
            [(binder-param-head? d)
             (let-values ([(region rest) (take-param-region (cdr ks) d)])
-              (loop rest (append (reverse region) (cons k acc))))]
+              (loop rest (append (reverse region) (cons k acc)) #t))]
            ;; ⚠ A REGION HEAD IS NOT ALWAYS THE FORM HEAD EITHER — the same
            ;; blindness this function already fixes for PARAM heads, which was
            ;; applied to those and not to these. `binder-region-heads` was
@@ -3072,8 +3109,8 @@
            ;; verify; corpus-invisible (zero tracked fused spliced lets).
            [(memq (binder-head-base d) binder-region-heads)
             (let-values ([(region rest) (take-region-prefix (cdr ks))])
-              (loop rest (append (reverse region) (cons k acc))))]
-           [else (loop (cdr ks) (cons k acc))]))])))
+              (loop rest (append (reverse region) (cons k acc)) #t))]
+           [else (loop (cdr ks) (cons k acc) seen?)]))])))
 
 ;; The pattern side of a `$pipe` arm, up to (not including) the arrow.
 ;; ⚠ BOUNDED. This used to fall off the end of the list when no `->` was found
