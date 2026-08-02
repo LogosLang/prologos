@@ -1,8 +1,124 @@
 # `loc->line` mis-extracts the line for tree surfs — the dual-spine merge is defused by a one-line defect
 
-**Filed** 2026-08-02 at the CIU T6 D4.P4c-4 mini-audit · **Status** ⬜ investigation +
-fix, scoped for an OUT-OF-BAND worktree · **Not** CIU T6 work — it is shared
-parser machinery and its blast radius is the whole dual-spine merge.
+**Filed** 2026-08-02 at the CIU T6 D4.P4c-4 mini-audit · **Status** ✅ **RESOLVED
+2026-08-02** (`d4e32398`) — but **not the way this note proposed**; see [§0](#outcome) ·
+**Not** CIU T6 work — it is shared parser machinery and its blast radius is the
+whole dual-spine merge.
+
+---
+
+<a id="outcome"></a>
+
+## §0 — OUTCOME: three defects, not two; the suggested fix is HARMFUL; the spine must stay off
+
+**⚠ THIS NOTE'S §3 "minimal fix" WOULD HAVE SHIPPED A SILENT WRONG-ANSWER BUG.**
+Read §0 before §1–§5. The sections below are preserved **as filed**, errors and
+all, because the shape of the mistake is the lesson.
+
+### The third defect — the one that decides everything
+
+**The two spines number lines on DIFFERENT BASES.** The tree spine is **0-based**
+(`make-indent-rrb-from-char-rrb` starts its `source-line` counter at 0,
+`parse-reader.rkt`); the preparse spine is **1-based** (`pos->line-col` starts at
+1 → `datum-srcloc`, `parser.rkt`). This was in nobody's enumeration — not this
+note's, not the P4c-4 mini-audit's, not five grounding facets'.
+
+It **inverts §3's conclusion**. Swapping the arms does not "fix node-derived
+surfs"; it makes the key pair **form N's preparse surf with form N+1's tree
+surf**, and `same-form-type?` waves that through whenever the neighbours are the
+same kind.
+
+Also corrected: §1's table says arm 2 "yields the COLUMN". It yields a hardcoded
+literal **`0`** — the node srcloc is `(list source-line-num 0 0 0)`, col and both
+positions hardcoded ("simplified srcloc"). So `tree-by-line` holds exactly **one**
+real key, `0`, bound to the file's last non-error tree surf.
+
+### The measurements (§5 steps 1–2; 163-file corpus, 138 files producing output, 5,171 forms)
+
+| Key variant | Hits | Mispairings | Forms flipping to tree |
+|---|---|---|---|
+| **HEAD (broken)** | **0** | — | **0** |
+| §3's arm swap alone | 242 | **176 (73%)** | 216 |
+| arm swap + base normalisation | 1,372 | 0 | **694 (13.4%)** |
+
+- **The tree spine has won 0 forms, ever.** `[else tree-surf]` — "tree parser wins
+  for user forms" — has never once fired in the life of this code.
+- **§3's fix, end-to-end on three `def`s** (`a:=1 b:=2 c:=3`): `a` becomes
+  **`ERROR: Unbound variable`**, because `def a`'s surf is replaced by `def b`'s.
+- **A correct key makes it WORSE.** With the base normalised (emit a 1-based
+  srcloc struct from `item-srcloc`), the tree spine wins 694 forms and the corpus
+  **regresses**: errors **359 → 724** across **35 files, not one improved**
+  (`lib/prologos/core/conversions` 0→56, `ciu-t6-f1-records` 8→75,
+  `ciu-t6-path-selection` 0→24, `records-typing` 0→34), and **32 test files
+  fail** — mixfix, dot-access, let-blocks, records, path-selection, keyword
+  literals. §5 step 2 anticipated exactly this: "the tree spine's arms have gone
+  stale." They have — precisely *because* they never ran.
+
+### The resolution shipped (`d4e32398`)
+
+The measurement picks none of §5 step 4's options cleanly, so: **make the defusal
+deliberate at the key.** A tree-shaped srcloc yields `#f`, and `tree-by-line`'s
+already-present `(gensym)` non-matchable branch takes it. Preparse stays
+authoritative — which is what already happens, now for a **stated reason** rather
+than a broken `cond`.
+
+Option 2 (flip `[else tree-surf]` → `preparse-surf`) was **not** taken: it inverts
+a documented design decision *and* would leave the **unguarded** error-recovery
+path enabled while disabling the guarded one — backwards.
+
+**Gates.** Suite **9,799 tests / 479 files / 0 failures** (baseline). Corpus A/C
+over all 163 files: total errors **359 = 359**, **no file changed its error
+count**. Two deltas, both explained:
+- 11 files differ **only** in generated-name counters (`?meta3125` → `?meta3005`),
+  because more entries now take the pre-existing gensym branch.
+- **One** real change — `homoiconicity.prologos` result 16, `Unbound variable` →
+  `Unexpected datum: ()`. That was the corpus's **sole** accidental
+  error-recovery substitution: a preparse error whose srcloc line fell back to 0
+  (`datum-srcloc`'s `(or (syntax-line stx) 0)`) matched `tree-by-line`'s only real
+  key, and the **unguarded** `(or tree-match s)` swapped in an unrelated tree
+  surf. The file's own diagnostic for `'()` (line 98) now surfaces. An
+  improvement.
+
+### Three downstream consumers that independently block the spine (none were in §4)
+
+A winning tree surf carries a **4-element list** where every downstream consumer
+expects a **`srcloc` struct**:
+
+| Consumer | Behaviour on a bare list |
+|---|---|
+| `format-srcloc` (`source-location.rkt`) | struct accessors, no list guard → **RAISES** `srcloc-file: contract violation` |
+| `srcloc->range` (`lsp/diagnostics.rkt`) | falls to `[else]` → **every diagnostic pinned to 0:0** in the editor |
+| `register-definition-location!` (`driver.rkt`, 8 sites) | values are **`.pnet`-serialized**; only the struct shape is registered (`pnet-serialize.rkt`) → the documented detonate-far-away mode (`pipeline.md`) |
+
+So reviving the spine needs the struct conversion **anyway**. It is recorded
+verbatim and **unapplied** in `item-srcloc`'s comment, with its measurement, so the
+next attempt starts from the known step instead of re-deriving it.
+
+### Answering §4's open question
+
+**Yes, the token line is recoverable** — `pos->line-col` already exists and is
+exported (`parse-reader.rkt`); do not write a new one. But it needs the source
+text, and **`process-file` does not parameterize `current-source-str`** (it is
+`""`). That has a second consequence nobody had noticed: the **file** path takes
+the LEGACY `parse-*-tree` branch while the **string** path (REPL/LSP/tests) takes
+`parse-eval-tree-for-cell` — **the two pipelines run different parsers.** Adjudicate
+that before any spine revival; it decides which parser the merge would trust.
+
+### Owner decision remaining
+
+Commission the tree spine (repair the stale arms + the srcloc type + the
+file/string parser divergence — a track-sized job), **or** retire the merge
+explicitly. The merge already self-describes as "a throwaway bridge" that PPN
+Track 3–4 dissolves, which argues for the latter. This work takes neither step; it
+stops at *the defusal is now deliberate and measured*.
+
+### For CIU T6 D4.P4c-4
+
+Its producer bridge is protected by this defect, and **that protection is
+unchanged** — the tree spine still never wins, so P4c-4 needs no coordinated
+change. What changed is the *reason*: it now rests on a stated invariant in
+`loc->line` rather than on an accident. If the spine is ever revived, the bridge
+needs its own protection at that time (§6 stands).
 
 > **Why this is written down rather than fixed inline**: CIU T6's P4c-4 needs to
 > know whether the merge protects a broadcast. It currently does — *by accident*,
@@ -32,6 +148,11 @@ and arm 3 — which handles the shape that actually flows — is UNREACHABLE**,
 because arm 2 catches every list of length ≥ 2 first.
 
 ### The shapes that actually flow — verified, not assumed
+
+> ❌ **The `(cadr loc)` column reading below is WRONG — see [§0](#outcome).** The node
+> srcloc is `(list source-line-num 0 0 0)`: col and both positions are hardcoded
+> `0`, so arm 2 returns the literal `0` for *every* node, not a column. And the
+> line it does carry is **0-based**, unlike preparse's.
 
 | Producer | Shape | `loc->line` gives | Correct? |
 |---|---|---|---|
@@ -96,6 +217,12 @@ defects in each other. Any tag *lacking* an error arm is protected today solely
 by the broken key.
 
 ## §3 — The minimal fix, and why it is not sufficient
+
+> ❌ **CORRECTED BY [§0](#outcome) — DO NOT APPLY THE CODE IN THIS SECTION.** The
+> two spines number lines on different bases (tree 0-based, preparse 1-based), so
+> this swap does not enable the merge — it MISPAIRS form N with form N+1.
+> Measured: 176 of 242 hits (73%) are mispairings; on three `def`s it leaves the
+> first one unbound.
 
 The two list arms are simply **in the wrong order**. The discriminator is already
 written: a `(file line col span)` shape has a non-number head (a path or string);
