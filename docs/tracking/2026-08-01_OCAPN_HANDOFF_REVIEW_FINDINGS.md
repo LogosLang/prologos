@@ -29,6 +29,7 @@ converged are all real.
 | 7 | **Redeem had no identity binding** (CRITICAL). See "the one that matters most" below. | `interop-driver.prologos` | `9cfa0b16` |
 | 8 | **Zero tests on ~700 lines** of protocol logic. (2 reviewers) | `tests/test-ocapn-handoff.rkt`, 19 cases | `0bb8cb3f` |
 | 9 | **Ten dead functions** in the server, plus `eff-send-on` / `out-req-loc` / `reserve-export`, plus three comments asserting the pre-migration architecture. | server, `behavior`, `vat`, driver | `b998b18b` |
+| 10 | **S1 + S2** — a signed receive was a bearer token, and the replay set died with the connection. See "S1 + S2, and a claim in this document that was wrong" below. (2 reviewers) | `captp-core.prologos`, `ocapn-handoff-ffi.rkt` (new), `ocapn-identity-ffi.rkt` | `d9b3bc2f` |
 
 ### The one that matters most, and its honest limit
 
@@ -55,25 +56,82 @@ to notice and did not.
 
 ---
 
+## S1 + S2, and a claim in this document that was wrong
+
+**FIXED in `d9b3bc2f`.** Both, together, because neither is sound alone.
+
+**S1 was:** the exporter never bound a `desc:handoff-receive` to the connection
+it arrived on. `handoff-session-of` / `handoff-side-of` were read ONLY to build
+the replay-identity string; neither was compared against anything. A signed
+receive was a bearer token at our exporter. Upstream treats the session field as
+the binding and asserts on it (`third_party_handoffs.py:123,159`).
+
+Now checked against this connection's `bs-peer-key` and our own identity. Two
+properties, worth separating because they are not the same one:
+
+- **side == this peer's side-id** — a leaked receive is useless to anybody but
+  the peer that made it. This is what makes a leak a denial rather than a theft.
+- **session == session-id(ours, theirs)** — the receive was aimed at US. Without
+  it, a receive built for exporter X is equally good at exporter Y: both see the
+  same receiver side-id, and only the session field tells them apart.
+
+**S2 was:** the used-set lived on `BridgeState`, which dies with the connection.
+Withdraw, reconnect, replay: double-spend. Now process-wide
+(`ocapn-handoff-ffi.rkt`), and a single test-and-set rather than a check
+followed by a mark — each connection has its own thread, so the gap between the
+two was the same race in miniature.
+
+### The claim in this document that was wrong
+
+This section previously ended: *"Fixing S1 makes this sound; fixing S2 alone
+does not."* The first half is **false**, and it mattered — believed, it would
+have justified fixing S1 and closing S2 as consequential.
+
+A session id is derived ONLY from the two side-ids
+(`utils/captp.py:126-146`), which are key-derived. A peer that reconnects with
+the SAME key gets the SAME session id, so the session check passes on the new
+connection and the fresh used-set lets the replay through. What made this look
+safe is that upstream generates a fresh keypair per session
+(`utils/captp.py:49-50`) — so in the test suite reconnects really do change the
+session id. An attacker is under no such obligation. **Both fixes are
+independently required.**
+
+### Order is load-bearing
+
+The binding is checked BEFORE the identity is claimed. Claiming early means a
+withdrawal refused further down (unauthenticated give) has still burned its
+identity. That is safe — but only because a peer that reaches the claim has
+already proven the identity is its own, so it can burn nothing but its own.
+Reversed, it is a denial-of-service primitive against an honest receiver.
+
+### `ocapn-identity-keypair`'s fallback is not a sentinel
+
+Found while wiring this up, and it cost three conformance tests. The FFI takes a
+fallback so that a missing identity is "visible at the call site instead of
+turning into a signature made with keypair 0" — but `crypto-ffi` numbers handles
+from 0 (`crypto-next-id`) and the server's identity is the FIRST keypair it
+generates, so **0 is the real handle in production**. No call site can tell a
+hit from a miss. Testing `handle == 0` read our own identity as absent and
+refused every legitimate handoff, breaking as "unbound" with the key sitting
+right there.
+
+Added `ocapn-identity-present?`. Note the pre-existing consequence, unchanged:
+every existing call site passes 0 as the fallback, so if the identity were ever
+unset, `interop-driver` would sign with keypair 0 rather than fail — silently
+the wrong key, which is exactly what the fallback was documented to prevent.
+
+### Diagnostics
+
+Breaking as one opaque `unbound-handoff` said nothing for twenty minutes;
+splitting it four ways temporarily found the cause in about one. Shipped with
+two reasons, not four: `no-identity` (OUR fault — nobody called
+`ocapn-identity-set!`) versus `unbound-handoff` (the peer's). Conflating those
+points an operator at the wrong party. The side-vs-session split is not
+reported; it is pure diagnostic and belongs in a debug build.
+
+---
+
 ## Open — security
-
-**S1. The exporter never binds a `desc:handoff-receive` to the connection it
-arrives on.** `handoff-session-of` / `handoff-side-of` (`captp-core.prologos`
-~:1850-1885, :2278-2282) are read ONLY to build the replay-identity string;
-neither is compared against `session-id-of(ours, this peer)` or this peer's
-side-id. A signed receive is therefore a bearer token at our exporter. Upstream
-treats the session field as the binding and asserts on it
-(`third_party_handoffs.py:123,159`). This is what turns any receive-leak into
-theft rather than denial, and it is the other half of finding 7 above.
-
-**S2. The used-set is per-connection, so a withdraw is replayable across
-reconnects.** `bs-mark-used` writes a `gk-used` entry but `bs-exportable-gifts`
-publishes only `gk-gift`, so the used-set does not cross connections. The
-comment justifying that says the single-use identity "carries the receiving
-session id, so keeping the used-set per-connection loses nothing" — which holds
-only if the session field is CHECKED, and per S1 it is not. Withdraw on
-connection 1, reconnect, replay: `bs-identity-used?` is false on connection 2.
-**Double-spend.** Fixing S1 makes this sound; fixing S2 alone does not.
 
 **S3. Gift ids are a predictable sequential counter** (`ocapn-gift-id`,
 `"prologos-gift-" ++ n` from 0), and `bs-add-gift` conses newest-first while
@@ -92,9 +150,13 @@ denial-of-service is bounded, but there is still no provenance check on who
 handed us a give. Partly inherent — the receiver genuinely cannot verify a
 give's signature — but the asymmetry deserves stating.
 
-**S5. Unbounded, peer-driven growth in four tables** (`peers`, `gives`,
-`counts`, `pending`) plus the server's `out-by-cid`. Only `peers`/`out-by-cid`
-are now pruned, on connection close. Nothing expires a parked give or a pending
+**S5. Unbounded, peer-driven growth in five tables** (`peers`, `gives`,
+`counts`, `pending`, and now `used` from the S2 fix) plus the server's
+`out-by-cid`. Only `peers`/`out-by-cid` are now pruned, on connection close.
+The used-set is deliberately not capped: evicting an entry makes a replay
+succeed again, which is the one thing that table exists to deny. Bounding it
+needs an expiry tied to something meaningful (session lifetime, a handoff-count
+watermark), not an LRU. Nothing expires a parked give or a pending
 enliven. Separately, `run-dial` blocks in `read-frame` with **no timeout** and
 `max-outstanding-dials` is 8, so eight peers pointing at a port that accepts and
 never replies hold every dial slot permanently.
@@ -239,6 +301,15 @@ forwards without a reply channel. Explicitly not covered by the §1.2 M3 fix.
 side-id, so a peer reusing a session key across two connections gets the same
 session id twice and the replay guard refuses its legitimate second handoff.
 
+Sharper since `d9b3bc2f`: the replay set is now process-wide, so that refusal
+survives the reconnect instead of being forgotten with the connection. It is
+the correct refusal — reusing all three identity components IS a replay by
+definition — but it means a peer that reuses its key AND restarts its handoff
+count from 0 is locked out permanently rather than per-connection. Our own
+receiver role is unaffected: `ocapn-handoff-count` is monotonic per session id
+and process-wide, so our second handoff over a reconnected session draws count
+1, not 0.
+
 **P3. No retry when the exporter connection does not exist at enliven time.**
 `begin-handoff` returns none; the enliven is dropped. Matches the old Racket
 behaviour; a known limit rather than a decision.
@@ -261,6 +332,13 @@ test; passes 44/44 in isolation; passed in one full-suite run and failed in two
 others with no code change. Our branch adds 37 test files, changing batch
 composition.
 
+Fourth data point, 2026-08-02 during the S1+S2 work: failed at [80/519] in one
+full run, passed in the next with the same tree. Verified isolated at both HEAD
+and the working tree, and the failing assertion
+(`[fn [x <_>] [reduce x | zero -> 1 | suc y -> 2]]` losing its Nat) has no
+connection to anything OCapN touches. Four sightings is past the codification
+threshold; this needs diagnosing rather than re-observing.
+
 **X3. The conformance gate is an allow-list of 24 hand-named upstream tests**,
 not the upstream suite — §0.1 of the gaps doc classifies this as MEDIUM debt and
 it remains the primary evidence for the whole handoff surface.
@@ -269,8 +347,8 @@ it remains the primary evidence for the whole handoff surface.
 
 ## Suggested order
 
-1. **S1 + S2 together** — they are one bug; fixing S1 alone leaves the
-   double-spend, fixing S2 alone is unsound.
+1. ~~**S1 + S2 together**~~ — DONE, `d9b3bc2f`. They are one bug, and the
+   reason given here for pairing them was itself wrong; see the section above.
 2. **S3** — small, self-contained, and closes a shadowing attack.
 3. **C1** — small, and the aliasing it causes is hard to debug later.
 4. **A2** — the decomposition, which unblocks the rest of the test debt.

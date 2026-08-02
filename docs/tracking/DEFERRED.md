@@ -2752,10 +2752,11 @@ concrete failure modes and file:line for each, is
 
 Highest-value items, in the order that document recommends:
 
-- **S1 + S2 (security, one bug).** The exporter never binds a
-  `desc:handoff-receive` to the connection it arrives on, and the used-set is
-  per-connection — together a double-spend across reconnects. Fixing either
-  alone is unsound.
+- ~~**S1 + S2 (security, one bug).**~~ FIXED `d9b3bc2f`. The exporter never
+  bound a `desc:handoff-receive` to the connection it arrived on, and the
+  used-set died with the connection — together a double-spend across
+  reconnects. Both fixes were independently required; the findings document's
+  original claim that S1 subsumed S2 was wrong, and is corrected in place.
 - **S3.** Gift ids are a predictable sequential counter; a peer can shadow an
   honest deposit by guessing a small integer.
 - **C1.** `reserve-export-id` loses its reservation when the enlivened
