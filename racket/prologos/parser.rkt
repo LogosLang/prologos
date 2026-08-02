@@ -850,6 +850,43 @@
     ;; message text directly for the in-block shapes.
     [(ordinal-rekey)
      (parse-error loc ordinal-rekey-message #f)]
+    ;; CIU T6 D4.P4c-2 condition (c) — the TWO faces of a surviving `$bcast-step`,
+    ;; NOT-YET family. Both are reachable today and they mean different things,
+    ;; so they are separate kinds rather than one blunt message.
+    ;;
+    ;; `bcast-step` — EXPRESSION position. The mint fires; the step vocabulary
+    ;; (`(@bcast step)`) lands at P4c-3. Until then this reported the LYING
+    ;; diagnostic "Unbound variable", which names the wrong subsystem for an
+    ;; unbuilt surface (measured end-to-end before this arm existed).
+    [(bcast-step)
+     (parse-error loc
+                  (format (string-append
+                           "broadcast `:~a` is not implemented yet — its step vocabulary "
+                           "arrives with Path Selection P4c-3; until then spell it "
+                           "`[map [fn [m] m.~a] xs]`")
+                          f f)
+                  #f)]
+    ;; `bcast-step-binder` — BINDER position. THIS IS CONDITION (c) ITSELF. A
+    ;; broadcast step reaching a binder consumer means the reader post-pass's
+    ;; binder-head table MISSED this form, so the fused annotation `x:T` was read
+    ;; as a broadcast. Left to fall through, the consumer takes it as an extra
+    ;; POSITIONAL PARAMETER and defines a wrong-arity function at zero errors —
+    ;; the 3-arity class this hardening exists to remove.
+    ;;
+    ;; ⚠ The message names the REMEDY a user can act on (the spaced spelling)
+    ;; AND the maintainer-facing cause, because the two audiences differ: a user
+    ;; hit this by writing a legal fused annotation, and a maintainer needs to
+    ;; know a table row is missing rather than that the surface is unsupported.
+    [(bcast-step-binder)
+     (parse-error loc
+                  (format (string-append
+                           "`:~a` was read as a broadcast step, but this is a BINDER "
+                           "position — write the annotation spaced (`name : ~a`) to work "
+                           "around it. (This form's head is missing from the reader "
+                           "post-pass binder table in parse-reader.rkt; the fused "
+                           "spelling should work here.)")
+                          f f)
+                  #f)]
     [(postfix-kw)
      (parse-error loc (format "keyword index `[:~a]` was retired — spell the field `m.~a` or use `[get m :~a]`" f f f) #f)]
     [(postfix-empty)
@@ -863,6 +900,48 @@
      (parse-error loc "`_` cannot be the subject of an index — name the subject or wrap it in a lambda (e.g. `[fn [m] m[k]]`, `[fn [v] v.0]`)" #f)]
     [else
      (parse-error loc "this selection form was retired (CIU T6 Path Selection) — see the migration note for its replacement spelling" #f)]))
+
+;; ============================================================
+;; CIU T6 D4.P4c-2 condition (c) — the binder-position tripwire
+;; ============================================================
+;; Q_U16 booked the reader post-pass binder table as "a PERMANENT hand-maintained
+;; enumeration with a SILENT failure mode and no retirement plan", and rode three
+;; conditions on it. This is (c): make a missed row LOUD.
+;;
+;; ⚠ WHY THE CONSUMERS AND NOT THE TABLE. Measuring the table produced FOUR
+;; distinct misses inside a single session (private-suffix heads, a leading
+;; implicit-binder group, `defmacro`, and the flat `$pipe` spelling). An
+;; enumeration with that record cannot be the safety property; the consumers are
+;; a CLOSED set and can be. So these guards are the mechanism and the table is
+;; the optimization over it — the inverse of how the design framed them.
+;;
+;; ⚠ NEITHER `fused-type-annot?` NOR `colon-symbol?` CAN DO THIS JOB: both gate
+;; on `(symbol? x)` and a `$bcast-step` is a LIST, so both return #f and the site
+;; DECLINES silently. Widening either predicate is the wrong repair — it would
+;; make a broadcast step look like an annotation. The guard must be a separate
+;; sibling arm, which is why there is one per consumer rather than one shared
+;; predicate edit.
+;; ⚠ THE HEAD MAY STILL BE A SYNTAX OBJECT. `stx->datum` at these seats is not a
+;; deep `syntax->datum` — it peels ONE layer, so a group's elements arrive still
+;; wrapped. The first cut of this predicate compared `(car d)` to the symbol
+;; directly and was therefore DEAD CODE at every site: it never returned #t, the
+;; guards never fired, and the suite stayed green because the dispatchers happen
+;; to fail loudly on their own. Found by MUTATION (emptying the binder tables),
+;; which is the only thing that could have found it — the same lesson the
+;; b-ii-2b verify recorded as "a tripwire on one side of a fork is not coverage".
+(define (unwrap-stx-datum x) (if (syntax? x) (syntax-e x) x))
+
+(define (bcast-step-datum? d)
+  (and (pair? d) (eq? (unwrap-stx-datum (car d)) '$bcast-step)))
+
+;; The payload (`:Int`) of the first surviving broadcast step in `xs`, or #f.
+;; Accepts syntax objects or bare datums, at either wrapping depth.
+(define (first-bcast-step-payload xs)
+  (for/or ([x (in-list xs)])
+    (let ([d (unwrap-stx-datum x)])
+      (and (bcast-step-datum? d)
+           (pair? (cdr d))
+           (unwrap-stx-datum (cadr d))))))
 
 ;; ============================================================
 ;; CIU T6 D4.P3a/P3b — select-payload segmentation (the parser seat)
@@ -1211,6 +1290,11 @@
      (retired-selection-error 'nil-dot-key (and (pair? args) (stx->datum (car args))) loc)]
     [(and (symbol? head) (eq? head '$broadcast-access))
      (retired-selection-error 'broadcast (and (pair? args) (stx->datum (car args))) loc)]
+    ;; CIU T6 D4.P4c-2 condition (c) — a `$bcast-step` in EXPRESSION position.
+    ;; The (pair? args) guard is LOAD-BEARING for the same reason as its three
+    ;; siblings above: a user-written zero-arg head must not raise here.
+    [(and (symbol? head) (eq? head '$bcast-step))
+     (retired-selection-error 'bcast-step (and (pair? args) (stx->datum (car args))) loc)]
 
     ;; CIU T6 D4.P1b-ii — `.{ }` NOT-YET (as distinct from the RETIRED sentinels
     ;; above). P1b-ii makes the mid-path sub-block LEX and GROUP; its semantics
@@ -4359,6 +4443,14 @@
           (if (prologos-error? ty) ty
               (binder-info name #f ty)))]
 
+       ;; CIU T6 D4.P4c-2 condition (c) — a broadcast step survived into this
+       ;; binder group. Without this arm it falls to the generic `[else]` below,
+       ;; which dumps the internal sentinel at the user; with it the message names
+       ;; the fused annotation and the spaced workaround.
+       [(first-bcast-step-payload parts)
+        => (lambda (payload)
+             (retired-selection-error 'bcast-step-binder payload loc))]
+
        ;; NEW: [x :m <T>] — 3 elements where second is mult, third is ($angle-type ...)
        [(and (= (length parts) 3)
              (mult-annot? (stx->datum (cadr parts)))
@@ -5173,6 +5265,20 @@
               [(prologos-error? bd) bd]
               [else (surf-defn name ty params bd loc)]))]))]
 
+    ;; CIU T6 D4.P4c-2 condition (c) — the DISPATCHER is itself a binder consumer,
+    ;; and it is invisible to a census keyed on `fused-type-annot?` /
+    ;; `colon-symbol?` (the `parse-rel-params` blindness class, 5th instance).
+    ;; Its bare-params arm above requires EVERY element to be `symbol?`, so a
+    ;; leaked `($bcast-step …)` — a LIST — declines every arm and lands on the
+    ;; generic `[else]`. Loud, but it names the wrong thing: the user wrote a
+    ;; legal fused annotation, not a malformed `defn`. MUTATION-verified (empty
+    ;; the binder tables and this is the arm that fires).
+    [(and (>= (length args) 2)
+          (let ([elems (let ([s (cadr args)])
+                         (and (syntax? s) (syntax->list s)))])
+            (and elems (first-bcast-step-payload elems))))
+     => (lambda (payload) (retired-selection-error 'bcast-step-binder payload loc))]
+
     [else
      (parse-error loc "defn requires: (defn name [x <T> ...] <ReturnType> body) or (defn name : type [params] body)" #f)]))
 
@@ -5429,6 +5535,21 @@
              [ty (loop (cdr es) (cons (binder-info name #f ty) acc))]
              [else (loop (cdr es)
                          (cons (binder-info name #f (surf-hole loc)) acc))]))]
+        ;; CIU T6 D4.P4c-2 condition (c) — THE WORST FALL-THROUGH IN THE SET, and
+        ;; the one that reproduces the defect POL.6 landed to fix. The `[else]`
+        ;; below builds a `binder-info` whose NAME is whatever it was handed, and
+        ;; `binder-info` imposes no contract on that field — so a surviving
+        ;; `($bcast-step :Int)` silently becomes a SECOND, hole-typed parameter
+        ;; and `defn f [x:Int] x` defines a TWO-parameter function at ZERO errors.
+        ;; That is verbatim the "silently became a TWO-parameter function whose
+        ;; second param was named `:Int`" this function's own header documents.
+        ;; The Q_N4 stray-colon guard above cannot catch it: that tests
+        ;; `colon-symbol?`, which is symbol-only.
+        [(bcast-step-datum? (unwrap-stx-datum (car es)))
+         (retired-selection-error
+          (quote bcast-step-binder)
+          (first-bcast-step-payload (list (car es)))
+          loc)]
         [else
          (loop (cdr es)
                (cons (binder-info (syntax-e (car es)) #f (surf-hole loc)) acc))])))
@@ -6124,6 +6245,19 @@
             [(exact-integer? sym) (loop (cdr ps) (cons (cons '#:literal sym) acc))]
             [(string? sym) (loop (cdr ps) (cons (cons '#:literal sym) acc))]
             [(boolean? sym) (loop (cdr ps) (cons (cons '#:literal sym) acc))]
+            ;; CIU T6 D4.P4c-2 condition (c) — `parse-rel-params` is the site a
+            ;; census keyed on `fused-type-annot?` structurally cannot see: it
+            ;; consumes `colon-symbol?` DIRECTLY and never calls the narrower
+            ;; predicate. Its `[else]` below is already LOUD (a prologos-error
+            ;; value, file continues), so this arm is a MESSAGE upgrade rather
+            ;; than a silence fix — but "expected symbol or literal in params, got
+            ;; ($bcast-step :Int)" dumps an internal sentinel at a user who wrote
+            ;; a legal fused annotation, and names neither the cause nor a remedy.
+            [(bcast-step-datum? sym)
+             (retired-selection-error
+              (quote bcast-step-binder)
+              (first-bcast-step-payload (list p))
+              loc)]
             [else
              (prologos-error loc (format "defr: expected symbol or literal in params, got ~a" sym))])]))]))
 

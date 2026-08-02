@@ -3681,6 +3681,59 @@
   (check-equal? (read-all-forms-string "defn f [a]\n  users:name")
                 '((defn f (a) (users ($bcast-step :name))))))
 
+;; ============================================================
+;; D4.P4c-2 condition (c) — the loud-refusal hardening
+;; ============================================================
+;;
+;; ⚠ THE BINDER GUARDS CANNOT BE PINNED BY A STANDING TEST, and that is the
+;; DESIRED end state rather than a gap in the battery. A guard fires only when
+;; the reader post-pass binder table MISSES a form; with the table correct, no
+;; `$bcast-step` reaches any binder consumer, so there is no input that reaches
+;; them. Feeding the leaked shape by hand does not work either — a sexp-mode
+;; `(defn f (x ($bcast-step :Int)) x)` goes through the SAME post-pass and is
+;; unwrapped before it arrives (probe-verified: it defines `f : Int -> Int` at
+;; zero errors).
+;;
+;; THE VERIFIER IS MUTATION, and it is reproducible in two minutes:
+;;   1. in parse-reader.rkt set `binder-param-heads` and `binder-region-heads`
+;;      to '()  (or drop a single head to test one row)
+;;   2. PLT_CS_COMPILE_LIMIT=1000000 raco make driver.rkt
+;;   3. run a file containing `defn a [x:Int] x`, `defr b [x:Int]`,
+;;      `def g := [fn [x:Int] x]`, and a `let w:Int 5` block
+;;   4. EXPECT: every one reports the guided "…read as a broadcast step, but
+;;      this is a BINDER position…" message, per-command, file continuing.
+;;      Before the hardening these were four DIFFERENT generic messages, two of
+;;      which dumped raw syntax objects at the user.
+;;   5. restore parse-reader.rkt and rebuild.
+;;
+;; That procedure is how the guards were validated, and it is also how the first
+;; cut of `bcast-step-datum?` was caught as DEAD CODE (it compared a still-wrapped
+;; syntax object to a symbol, so it never returned #t at any site while the suite
+;; stayed green). A green suite is not evidence for a tripwire; only mutation is.
+;;
+;; What IS reachable, and therefore pinned below, is the EXPRESSION-position
+;; half — which until now reported a LYING "Unbound variable".
+
+(test-case "P4c-2 (c): an expression-position broadcast is an HONEST not-yet error"
+  ;; Measured before the arm existed: `ERROR: Unbound variable` — a diagnostic
+  ;; that names the wrong subsystem for a surface that simply is not built until
+  ;; P4c-3. It rides the P1a marker seat's NOT-YET family (zero new
+  ;; registrations: `$bcast-step` needs no `pattern-var?` entry it does not
+  ;; already have, and the seat is already total).
+  (define r (run-ws "def users := @[{:name \"a\"}]\ndef bad := users:name\n"))
+  (check-regexp-match #rx"not implemented yet" (last r))
+  (check-regexp-match #rx"P4c-3" (last r))
+  ;; and it must name the workaround, not just refuse
+  (check-regexp-match #rx"map" (last r)))
+
+(test-case "P4c-2 (c): that error is PER-COMMAND — the file is not aborted"
+  ;; The whole point of the marker seat: a classifier-level RAISE is a whole-file
+  ;; abort by construction (Q_L4), and DEFERRED 31 records a live instance of
+  ;; getting this wrong. A command AFTER the offending one must still run.
+  (define r (run-ws "def users := @[{:name \"a\"}]\ndef bad := users:name\ndef after := 99\nafter\n"))
+  (check-equal? (last r) "99 : Int")
+  (check-equal? (length r) 4))
+
 (test-case "P4c-2: the QUOTE bucket declines — it is neither expression nor binder"
   ;; `'` lexes as a loose token with no grouper arm, so it is pushed as a
   ;; SIBLING and the keyword IS byte-adjacent — the mint would fire in

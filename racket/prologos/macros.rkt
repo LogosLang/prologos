@@ -5085,6 +5085,22 @@
      (define bindings-tokens (drop-right rest 1))
      (expand-let-bracket-bindings bindings-tokens body)]
 
+    ;; CIU T6 D4.P4c-2 condition (c) — `let`'s share. Unlike the parser-layer
+    ;; consumers this one is at PREPARSE and cannot return a `parse-error` value,
+    ;; but it does not need to: `let-syntax-error` is already routed through
+    ;; expand-let's handler into a `($let-error msg)` datum, which the parser
+    ;; turns into a per-command error. So the CHANNEL is right and only the
+    ;; MESSAGE needed the upgrade — generic "unrecognized format" printed the
+    ;; internal sentinel at a user who wrote a legal fused annotation.
+    ;; MUTATION-verified (empty the binder tables; this is the arm that fires).
+    [(ormap (lambda (x) (and (pair? x) (eq? (car x) '$bcast-step))) rest)
+     (let-syntax-error
+      (string-append
+       "let: a fused type annotation here was read as a broadcast step — write it "
+       "spaced (`let name : T value`) to work around it. (`let` is missing from "
+       "the reader post-pass binder table in parse-reader.rkt; the fused spelling "
+       "should work here.)"))]
+
     [else
      (let-syntax-error "let: unrecognized format: ~a" datum)]))
 
