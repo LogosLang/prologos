@@ -205,12 +205,26 @@
     (check-false (prologos-error? (last rs))
                  (format "~a: the command AFTER it must run" lit))))
 
-(test-case "L3: `$bcast-step` in a template reaches the user's own diagnostic"
-  ;; The third sighting of this regression, minted by the `:` mint (b1399016)
-  ;; one commit before this fix. Its guided P4c-2 message ("broadcast … is not
-  ;; implemented yet") already existed — the abort was MASKING it. Pinning the
-  ;; message proves the sentinel now flows to its real consumer rather than
-  ;; being eaten as a pattern variable.
+(test-case "L3: a `name:key` template stays contained (the `$bcast-step` sighting)"
+  ;; ⚠ THIS PIN WAS NARROWED, and the reason is worth keeping.
+  ;;
+  ;; It originally also asserted the message text — that the sentinel reached
+  ;; P4c-2's guided "broadcast `:field` is not implemented yet" diagnostic,
+  ;; which the abort had been MASKING. That held while the `:` mint was ON by
+  ;; default: `$u:field` read as `($u ($bcast-step :field))`, and `$bcast-step`
+  ;; was the third sentinel to trip the pattern-variable abort.
+  ;;
+  ;; CIU T6 D4.P4c-2 then INVERTED THE MINT DEFAULT (`68cdaae7`), so at HEAD
+  ;; `$u:field` reads as plain `($u :field)` and mints no sentinel at all. The
+  ;; message assertion was therefore pinned to a reader default, not to this
+  ;; seam's behaviour, and it went red the moment that default flipped — caught
+  ;; on merging main, before it could reach anyone else.
+  ;;
+  ;; What survives here is the property that is actually THIS file's business:
+  ;; the form stays CONTAINED. Coverage of `$bcast-step` itself is unaffected —
+  ;; it is named explicitly in the datum-level "reader sentinels survive a
+  ;; template by construction" pin above, which does not depend on whether the
+  ;; reader currently mints it. That is the durable half; this is the L3 half.
   (define rs (run-file-ws (string-append
                            "ns dm-bcast\n"
                            "def before-marker := 1\n"
@@ -224,9 +238,7 @@
   (check-false (prologos-error? (last rs)) "the command AFTER must run")
   (define msgs (for/list ([r (in-list rs)] #:when (prologos-error? r))
                  (prologos-error-message r)))
-  (check-equal? (length msgs) 1 (format "expected exactly one error; got: ~v" rs))
-  (check-true (regexp-match? #rx"broadcast" (car msgs))
-              (format "the P4c-2 diagnostic must reach the user, got: ~v" (car msgs))))
+  (check-equal? (length msgs) 1 (format "expected exactly one error; got: ~v" rs)))
 
 (test-case "datum-subst: the SPLICE branch keeps its unbound error"
   ;; Deliberately NOT relaxed. A sentinel is a list HEAD followed by its
