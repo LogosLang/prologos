@@ -2757,11 +2757,16 @@ Highest-value items, in the order that document recommends:
   used-set died with the connection — together a double-spend across
   reconnects. Both fixes were independently required; the findings document's
   original claim that S1 subsumed S2 was wrong, and is corrected in place.
-- **S3.** Gift ids are a predictable sequential counter; a peer can shadow an
-  honest deposit by guessing a small integer.
-- **C1.** `reserve-export-id` loses its reservation when the enlivened
-  sturdyref names the connection it arrived on, rolling `next-id` back so a
-  promise can alias an actor.
+- ~~**S3.**~~ FIXED `a1eeaff4`. Gift ids were a predictable sequential
+  counter; a peer could shadow an honest deposit by guessing a small integer.
+  Now 128 random bits, and a duplicate id is refused.
+- ~~**C1.**~~ FIXED `cc9ff44e`. `reserve-export-id` lost its reservation when
+  the enlivened sturdyref named the connection it arrived on. `run-step` now
+  stashes before draining.
+- **C6 (new).** `ocapn-gift-stash` replaces the whole gift list rather than
+  merging, so two connections depositing concurrently lose one gift. The same
+  lost update as C1, one layer out; masked today only by the process-wide
+  `validate-sema`.
 - **A2.** Decompose the ~1100-line driver into `captp-handoff.prologos` +
   `captp-frames.prologos`; this is also how the remaining test debt gets paid.
 - **A3 (design task, not a refactor).** The per-connection vat is the root

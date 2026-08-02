@@ -133,14 +133,17 @@ reported; it is pure diagnostic and belongs in a debug build.
 
 ## Open — security
 
-**S3. Gift ids are a predictable sequential counter** (`ocapn-gift-id`,
-`"prologos-gift-" ++ n` from 0), and `bs-add-gift` conses newest-first while
-`bs-remove-gift` removes EVERY match. A peer can deposit `prologos-gift-3`
-before the honest gifter does, shadowing the real entry so
-`give-authentic-for-gift?` fails against the genuine give. The FFI header states
-the uniqueness hazard; the counter does not meet it. **Mint from
-`crypto-random-bytes`, and make `bs-add-gift` refuse a gid that already has a
-`gk-gift` entry.**
+**S3. Gift ids were a predictable sequential counter.** ✅ FIXED `a1eeaff4`.
+Ids are now 128 random bits from `crypto-random-bytes`, and `bs-add-gift`
+refuses an id that already has a `gk-gift` entry (first deposit wins). Both
+were needed: the random id makes the race infeasible to win, the refusal makes
+winning it useless. The refusal is silent because `deposit-gift` is
+fire-and-forget upstream — there is no reply channel to report it on.
+
+The requirement that was missed is worth naming: the FFI header stated
+UNIQUENESS and the counter met it. What went unwritten was UNGUESSABILITY,
+which a counter fails completely, and which matters because the gift table is
+exporter-global and `deposit-gift` is reachable by any handshaked peer.
 
 **S4. Inbound gives are unauthenticated.** The only gate is "the give names our
 public key as receiver", and our public key is broadcast in every
@@ -165,12 +168,16 @@ never replies hold every dial slot permanently.
 
 ## Open — correctness
 
-**C1. `reserve-export-id` lost update when `ecid == cid`.** It does
-`conn-fetch` → `vat-spawn` → `conn-stash` on a connection; when the enlivened
-sturdyref names the SAME connection, `run-step-emit` then stashes state derived
-from the PRE-reservation snapshot. The reservation is silently overwritten and
-`next-id` rolls back, so a later `fresh-promise` can alias an actor — the exact
-hazard `seeded-vat`'s comment describes. (2 reviewers.)
+**C1. `reserve-export-id` lost update when `ecid == cid`.** ✅ FIXED
+`cc9ff44e`. `run-step` now stashes the step's state BEFORE draining its dials,
+so a reservation made during the drain lands on top of the step instead of
+under it. The stash is forced by matching on it — passing it as an argument
+would let lazy reduction run it whenever `emit-after-stash` got round to
+matching, and the reorder would have been a comment rather than an order.
+
+Not directly tested: reaching `ecid == cid` needs a registered peer and a full
+enliven frame, and conformance exercises only `ecid != cid`. What is pinned is
+the observable form — two reservations on one connection do not collide.
 
 **C2. The FFI headers claim a concurrency safety they do not provide.** Each
 says its semaphore makes the table safe "because the server gives each
@@ -208,6 +215,20 @@ a raised step and an empty reply rather than a diagnosable error.
 unreachable (a start-session produces no out-reqs) — but the redeem now emits
 from that very step, so it is one addition away from a frame that queues work
 nothing drains until the next inbound frame arrives.
+
+---
+
+**C6 (NEW, found 2026-08-02 while fixing S3).** `ocapn-gift-stash` REPLACES
+the whole gift list (`hash-set!`), it does not merge. So the exporter-global
+gift table is last-writer-wins at the granularity of the entire list: two
+connections that both fetch, add a gift, and stash lose one deposit outright.
+
+It does not fire today for the same reason C2 describes — `validate-sema`
+serialises every `process-string` process-wide, so a connection's
+fetch/step/stash is atomic by accident. It is the same lost-update shape as C1,
+one layer out, and it becomes live the moment anything evaluates two
+connections concurrently. The fix is to merge on stash (union by gift-id,
+first-writer-wins, matching `bs-add-gift`) rather than replace.
 
 ---
 
@@ -349,8 +370,9 @@ it remains the primary evidence for the whole handoff surface.
 
 1. ~~**S1 + S2 together**~~ — DONE, `d9b3bc2f`. They are one bug, and the
    reason given here for pairing them was itself wrong; see the section above.
-2. **S3** — small, self-contained, and closes a shadowing attack.
-3. **C1** — small, and the aliasing it causes is hard to debug later.
+2. ~~**S3**~~ — DONE, `a1eeaff4`.
+3. ~~**C1**~~ — DONE, `cc9ff44e`. Its sibling C6 (found while fixing S3) is
+   open and is the same bug one layer out.
 4. **A2** — the decomposition, which unblocks the rest of the test debt.
 5. **U1–U3 upstream**, which are main's to take but ours to report.
 6. **A3** — the design task. Large, but it deletes more than it adds.
