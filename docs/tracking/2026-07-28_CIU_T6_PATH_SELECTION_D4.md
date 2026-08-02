@@ -1073,8 +1073,8 @@ items of the hold-point, ruled before P4a opened:
   main session's own lean, and the adversarial options panel `wf_6f15c6ae-6a7`
   killed it): drop `access-sentinel?` membership and let the PARSER fuse, on the
   `$brace-params` precedent. Refuted on two independent grounds. (i)
-  `rewrite-dot-access` has **FOUR call seats** — macros.rkt:1965 (map-literal
-  contents) · :2672 (main preparse) · :6316 (the `|>` expander) · :6702 (the
+  `rewrite-dot-access` has **FOUR call seats** — macros.rkt:2004 (map-literal
+  contents) · :2714 (main preparse) · :6564 (the `|>` expander) · :6950 (the
   `$mixfix` expander) — and **TWO run inside PREPARSE, before the parser
   exists**, so `users:name` would work in plain application and break inside
   pipes, `.( )` operands and map literals. (ii) The `$brace-params` precedent is

@@ -2747,9 +2747,16 @@
 ;; ============================================================
 ;;
 ;; WHY HERE AND NOWHERE ELSE. `$bcast-step` must join `access-sentinel?` to
-;; inherit all FOUR `rewrite-dot-access` seats (macros.rkt :1965 · :2672 ·
-;; :6316 · :6702) — two of which run inside PREPARSE, so a parser-side unwrap
-;; is unreachable. But the fold RUNS OVER BINDER POSITIONS (`defn f [x.a] x` →
+;; inherit all FOUR `rewrite-dot-access` seats — two of which run inside
+;; PREPARSE, so a parser-side unwrap
+;; is unreachable. ⚠ COORDINATES RE-MEASURED 2026-08-02: the seats are
+;; macros.rkt **:2004** (map-literal contents) · **:2714** (main preparse) ·
+;; **:6564** (the `|>` expander) · **:6950** (the `$mixfix` expander), with the
+;; definition at :6189 and a caller-less alias `rewrite-nil-dot-access` at
+;; :6358. The previously-cited :1965 · :2672 · :6316 · :6702 were ALL FOUR
+;; wrong, and the identical stale quadruple had been copied into the track test
+;; file and D4 — so anchor on the NAMES, not the numbers, when re-checking.
+;; But the fold RUNS OVER BINDER POSITIONS (`defn f [x.a] x` →
 ;; a 3-arity function at ZERO errors). This walk runs at READER time and
 ;; therefore provably precedes all four seats. That is the whole of Q_U16.
 ;;

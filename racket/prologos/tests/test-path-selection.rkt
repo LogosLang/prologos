@@ -3458,7 +3458,8 @@
 ;; because the preparse fold RUNS OVER BINDER POSITIONS (`defn f [x.a] x` →
 ;; a 3-arity function at ZERO errors). Q_U16 keeps BOTH surfaces by moving the
 ;; unwrap to the READER POST-PASS, which provably precedes all FOUR
-;; `rewrite-dot-access` seats (macros.rkt :1965 · :2672 · :6316 · :6702).
+;; `rewrite-dot-access` seats (macros.rkt :2004 · :2714 · :6564 · :6950 —
+;; re-measured 2026-08-02; the previously-cited quadruple was all four wrong).
 ;;
 ;; So the contract is TWO-SIDED and both sides need pins:
 ;;   EXPRESSION position → the mint SURVIVES as `($bcast-step k)`
