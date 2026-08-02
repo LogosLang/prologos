@@ -5535,21 +5535,16 @@
              [ty (loop (cdr es) (cons (binder-info name #f ty) acc))]
              [else (loop (cdr es)
                          (cons (binder-info name #f (surf-hole loc)) acc))]))]
-        ;; CIU T6 D4.P4c-2 condition (c) — THE WORST FALL-THROUGH IN THE SET, and
-        ;; the one that reproduces the defect POL.6 landed to fix. The `[else]`
-        ;; below builds a `binder-info` whose NAME is whatever it was handed, and
-        ;; `binder-info` imposes no contract on that field — so a surviving
-        ;; `($bcast-step :Int)` silently becomes a SECOND, hole-typed parameter
-        ;; and `defn f [x:Int] x` defines a TWO-parameter function at ZERO errors.
-        ;; That is verbatim the "silently became a TWO-parameter function whose
-        ;; second param was named `:Int`" this function's own header documents.
-        ;; The Q_N4 stray-colon guard above cannot catch it: that tests
-        ;; `colon-symbol?`, which is symbol-only.
-        [(bcast-step-datum? (unwrap-stx-datum (car es)))
-         (retired-selection-error
-          (quote bcast-step-binder)
-          (first-bcast-step-payload (list (car es)))
-          loc)]
+        ;; ⚠ NO `$bcast-step` GUARD HERE, DELIBERATELY. An earlier cut of
+        ;; condition (c) put one at this `[else]` on the audit's reading that it
+        ;; was the worst fall-through in the set. It is DEAD BY CONSTRUCTION:
+        ;; this function's sole caller gates on
+        ;; `(andmap (lambda (e) (symbol? (syntax-e e))) elems)`, and a
+        ;; `($bcast-step …)` element's `syntax-e` is a LIST, so the andmap fails
+        ;; and this function is never entered with one. The real catcher is
+        ;; `parse-defn`'s DISPATCHER `[else]`, which is where the guard lives.
+        ;; Removed after the P4c-2 adversarial verify proved the arm unreachable
+        ;; — a dead tripwire reads as coverage, which is worse than no tripwire.
         [else
          (loop (cdr es)
                (cons (binder-info (syntax-e (car es)) #f (surf-hole loc)) acc))])))

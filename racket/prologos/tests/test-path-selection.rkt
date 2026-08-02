@@ -3442,9 +3442,9 @@
   ;; ⚠ DELIBERATE FLIP at P4c-2 — `users:0` now MINTS (Q_U16b makes it a legal
   ;; ω step). Listed as a flip rather than silenced: this is the P4c hazard that
   ;; says the prior rung's flagship pin flips, for the third consecutive phase.
-  (check-equal? (read-all-forms-string "users:0") '((users ($bcast-step :0))))
+  (check-equal? (read-all-forms-string "users:0") '((users :0)))
   (check-equal? (read-all-forms-string "[fn [x :0 Int] x]") '((fn (x :0 Int) x)))
-  (check-equal? (read-all-forms-string "users:w") '((users ($bcast-step :w))))  ;; deliberate flip, as above
+  (check-equal? (read-all-forms-string "users:w") '((users :w)))
   ;; baseline MEASURED, not guessed — the first draft of this pin asserted
   ;; `(((:0 v)))` from memory and failed for the wrong reason.
   (check-equal? (read-all-forms-string "{:0 v}") '(($brace-params :0 v))))
@@ -3475,18 +3475,18 @@
   ;; F1b.7g drift class reader-forms.rkt exists to forbid. `token-entry->stx`'s
   ;; keyword arm already yields `|:name|`; the mint WRAPS it untouched so the
   ;; unwrap is a plain `cadr`.
-  (check-equal? (read-all-forms-string "users:name") '((users ($bcast-step :name)))))
+  (check-equal? (read-all-forms-string "users:name") '((users :name))))
 
 (test-case "P4c-2: the ordinal band mints too (Q_U16b — `users:0` is a legal ω step)"
-  (check-equal? (read-all-forms-string "users:0") '((users ($bcast-step :0))))
-  (check-equal? (read-all-forms-string "users:w") '((users ($bcast-step :w)))))
+  (check-equal? (read-all-forms-string "users:0") '((users :0)))
+  (check-equal? (read-all-forms-string "users:w") '((users :w))))
 
 (test-case "P4c-2: the mint is POSITIONAL — closers and `.N` join the focus set FREE"
   ;; `adjacent-to-base?` consults NO token type, so these come free under the
   ;; positional rule and would each have needed a hand entry under an
   ;; enumerated one.
-  (check-equal? (read-all-forms-string "xs[0]:n") '((xs ($postfix-index 0) ($bcast-step :n))))
-  (check-equal? (read-all-forms-string "(f x):name") '(((f x) ($bcast-step :name)))))
+  (check-equal? (read-all-forms-string "xs[0]:n") '((xs ($postfix-index 0) :n)))
+  (check-equal? (read-all-forms-string "(f x):name") '(((f x) :name))))
 
 ;; ---- side 2: BINDER positions unwrap — one row per MEASURED table entry ----
 ;;
@@ -3660,10 +3660,10 @@
   ;; The binder region here is the name plus an optional fused annotation; the
   ;; value and body are not binders.
   (check-equal? (read-all-forms-string "def z := 0\nlet x 5\n  users:name")
-                '((def z := 0) (let x 5 (users ($bcast-step :name)))))
+                '((def z := 0) (let x 5 (users :name))))
   ;; the `:=` spelling already behaves — pinned so the bound cannot regress it
   (check-equal? (read-all-forms-string "def z := 0\nlet x := 5\n  users:name")
-                '((def z := 0) (let x := 5 (users ($bcast-step :name))))))
+                '((def z := 0) (let x := 5 (users :name)))))
 
 (test-case "P4c-2 (c): an arms-only `defn` must not strip its arm BODY's broadcast"
   ;; `scan-for-param-heads` stays armed through every SYMBOL, so with no bracket
@@ -3672,14 +3672,14 @@
   ;; the PRIMARY multi-arity form per CLAUDE.md, so this is the common shape.
   ;; Measured today: `(defn f ($pipe a -> users :name))` — stripped.
   (check-equal? (read-all-forms-string "defn f\n  | a -> users:name")
-                '((defn f ($pipe a -> users ($bcast-step :name)))))
+                '((defn f ($pipe a -> users :name))))
   ;; two arms already behave (arm 1's group consumes the arming) — pinned so the
   ;; fix does not trade the one-arm case for the two-arm case
   (check-equal? (read-all-forms-string "defn f\n  | 0 -> 1\n  | a -> users:name")
-                '((defn f ($pipe 0 -> 1) ($pipe a -> users ($bcast-step :name)))))
+                '((defn f ($pipe 0 -> 1) ($pipe a -> users :name))))
   ;; and a header param group must still leave the body alone
   (check-equal? (read-all-forms-string "defn f [a]\n  users:name")
-                '((defn f (a) (users ($bcast-step :name))))))
+                '((defn f (a) (users :name)))))
 
 ;; ============================================================
 ;; D4.P4c-2 condition (c) — the loud-refusal hardening
@@ -3714,25 +3714,43 @@
 ;; What IS reachable, and therefore pinned below, is the EXPRESSION-position
 ;; half — which until now reported a LYING "Unbound variable".
 
-(test-case "P4c-2 (c): an expression-position broadcast is an HONEST not-yet error"
-  ;; Measured before the arm existed: `ERROR: Unbound variable` — a diagnostic
-  ;; that names the wrong subsystem for a surface that simply is not built until
-  ;; P4c-3. It rides the P1a marker seat's NOT-YET family (zero new
-  ;; registrations: `$bcast-step` needs no `pattern-var?` entry it does not
-  ;; already have, and the seat is already total).
+(test-case "P4c-2 (c): with the enable-set EMPTY, an expression broadcast is INERT"
+  ;; ⚠ THIS PIN FLIPPED when the default was inverted, and the flip is the
+  ;; POINT rather than a regression. `broadcast-enabled-contexts` is '() at
+  ;; P4c-2, so the post-pass unwraps uniformly and NO `$bcast-step` reaches the
+  ;; parser — which makes the whole mint provably equivalent to not minting,
+  ;; the property that makes "regression-free" checkable rather than promised.
+  ;;
+  ;; The consequence, stated plainly: the guided "not implemented yet" message
+  ;; and the `bcast-step-binder` refusal are both UNREACHABLE today. They are
+  ;; live code with an empty enable-set in front of them, and they become
+  ;; reachable at P4c-3 the moment the first context is enabled. That is a
+  ;; deliberate staging, not dead code — and it is why the seat and both kinds
+  ;; were kept rather than reverted.
+  ;;
+  ;; What a user sees today is the PRE-MINT behaviour, which is honest: the
+  ;; error names the actual expression rather than claiming an unbound variable.
   (define r (run-ws "def users := @[{:name \"a\"}]\ndef bad := users:name\n"))
-  (check-regexp-match #rx"not implemented yet" (last r))
-  (check-regexp-match #rx"P4c-3" (last r))
-  ;; and it must name the workaround, not just refuse
-  (check-regexp-match #rx"map" (last r)))
+  (check-regexp-match #rx"Could not infer type" (last r))
+  ;; and it must NOT be the sentinel leaking into a user-facing message
+  (check-false (regexp-match? #rx"bcast-step" (last r))))
 
-(test-case "P4c-2 (c): that error is PER-COMMAND — the file is not aborted"
-  ;; The whole point of the marker seat: a classifier-level RAISE is a whole-file
-  ;; abort by construction (Q_L4), and DEFERRED 31 records a live instance of
-  ;; getting this wrong. A command AFTER the offending one must still run.
+(test-case "P4c-2 (c): the inert path is still PER-COMMAND — the file is not aborted"
+  ;; The whole-file-abort guard matters independently of the enable-set: a raise
+  ;; at the reader seam loses every command in the file (Q_L4; DEFERRED 31
+  ;; records a live instance).
   (define r (run-ws "def users := @[{:name \"a\"}]\ndef bad := users:name\ndef after := 99\nafter\n"))
   (check-equal? (last r) "99 : Int")
   (check-equal? (length r) 4))
+
+(test-case "P4c-2 (c): a zero-payload `($bcast-step)` must not abort the file"
+  ;; `unwrap-bcast-step`'s `cadr` was unguarded — a user writing the internal
+  ;; head with no payload raised a raw Racket contract violation at READER time,
+  ;; outside any per-command handler. THIRD instance of that shape in this track
+  ;; (P1a's `$retired-selection`, P4c-2's `apply-binder-unwrap`, and this).
+  ;; Found by the P4c-2 adversarial verify.
+  (define r (run-ws "def before := 1\ndefn f [$bcast-step] 1\ndef after := 2\nafter\n"))
+  (check-equal? (last r) "2 : Int"))
 
 (test-case "P4c-2: the QUOTE bucket declines — it is neither expression nor binder"
   ;; `'` lexes as a loose token with no grouper arm, so it is pushed as a
