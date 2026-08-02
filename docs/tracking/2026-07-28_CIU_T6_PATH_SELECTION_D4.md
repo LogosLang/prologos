@@ -32,7 +32,7 @@ rulings, censuses and test delta live in its own section.
 | **P3c** | **Keyless + L4 + honest nesting** — the nat-row mint at EVERY n (incl. 1 and homogeneous n) · ordinal branches `{N M}` · the L4 mixing error · `⟨String⟩` 1-tuple pins · the G11 one-space pair pinned side by side | ✅ | [§5.P3c](#p3c) · **`1b021d57`** — suite **9497/475/0**, acceptance **52/52**, battery 206; P3 (BLOCKS) COMPLETE; the verify's FIRST no-BLOCKING slice in eight (2 SIGNIFICANT fixed pre-commit: the @ord walk-to-leaf twin-drift, the decimal-fusion leak); G11 landed AS AMENDED; in-block `v[0]`≡`.0` ratified-by-pin |
 | **P4** | **Broadcast ω** — ⭐ **P4a ✅ · P4b ✅ COMPLETE** (b-i carrier + b-ii `$dot-access` migration; `x.a` now mints the unified selector carrier) · P4c–P4e ⬜ — `:s` one-step extent, L1 fusion, **map-generic `:`** (Q1 ✅), `*` flatten, `.*` row-splat, **the 2b HETEROGENEITY SPLIT** (per-position exact over tuples; keys-⋂/types-⋃ over PVec-of-union = NEW row-meet machinery) · **disclose `<`/`:<` (Q5 ✅ v1)** · dyn-tail = support-bounded (4d) | 🔄 | [§5.P4](#p4) · co-design: audit `wf_8458c23b` + options panel · **RULED 2026-07-31**: [Q_U5](#q-u5) · [Q_U6](#q-u6) · [Q_U7](#q-u7) · [Q_U8](#q-u8) · [Q_U9](#q-u9) (the PAUSE cleared) · partition LOCKED P4a–P4e |
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
-| **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [[§5.P4c](#p4c)](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([the inverted default](#p4c-2-inverted)) · **P4c-3 ✅ `d477772c`** ([the enable-set moves to P4c-4](#p4c-3)) · P4c-4/5 ⬜ |
+| **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [[§5.P4c](#p4c)](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([the inverted default](#p4c-2-inverted)) · **P4c-3 ✅ `d477772c`** ([the enable-set moves to P4c-4](#p4c-3)) · **P4c-4a ✅ `f31237fd`** ([the test seam + per-context dispatch](#p4c-4a)) · P4c-4b/5 ⬜ |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery |
 | **PX** | **Binder-seam substrate** (carried, surface-independent) — the lambda-adoption hole + the standalone-def seam | ⬜ | [§5.PX](#px) · position flexible |
 | **P6** | **Demand semantics** — RULED STAGED (4a); **decision ✅ Q_U3 (owner, 2026-07-30): option (c)** — deferred to a named post-v1 phase, charter stub in §5.P6 | ⬜ (residue = the X.close gate row only) | [§5.P6](#p6) |
@@ -5039,7 +5039,75 @@ enable-set, so caching goes live with the first grant; scope creep from the
 enable-set's MECHANISM into its POLICY (the unknown-head ruling); the `*`/`^`
 swallow hazard, still unowned.
 
-Status: ⬜ P4c-4.
+<a id="p4c-4a"></a>
+
+###### §5.P4c-4a — the test seam + per-context dispatch  ✅ `f31237fd`
+
+`broadcast-enabled-contexts` was an unexported `define` and
+`broadcast-preservation-active?` was `(pair? …)` — a boolean wearing a list's
+clothes. Now a **guarded parameter**, exported, with the predicate testing
+**membership keyed on the node's own head** (via `binder-head-base`, so the
+eleven private-suffix spellings cannot drift). A grant scopes to the form it
+names; the default stays empty, so production behaviour is byte-identical —
+proven, not merely tested: `(memq X '())` is #f for every X and
+`binder-head-base` is total and effect-free.
+
+**The adversarial verify refuted TWO of my claims and found a real defect.**
+
+1. **No guard**, admitting the whole-file-abort class: this parameter is set BY
+   HAND from tests, so dropping the list is the natural typo, and
+   `(parameterize ([… 'def]) …)` raised `memq: not a proper list` at READ time
+   outside any per-command handler. **Fourth instance of that shape in this
+   track**, with the first three documented one screen away. Guarding at the
+   parameterize makes the membership test total by CONSTRUCTION.
+2. **My totality comment was FALSE** — it argued from "`(memq #f …)` is #f for
+   every list", but `(memq #f (list #f))` is `(#f)`, so a `'(#f)` grant would
+   have granted every group-headed node.
+3. **My scoping story was HALF TOLD**, and the missing half is the operative one.
+   I documented only that an outer grant cannot reach INWARD. Outward runs the
+   other way: an **ungranted ancestor destroys what a granted descendant
+   preserved**, because the not-granted arm's `unwrap-binders-deep` recurses
+   through already-visited sub-groups. So the rule is a **CHAIN** — node granted,
+   every ancestor granted, and each ancestor's rule leaving that position alone.
+   Pre-existing (the old global switch stripped these identically) but
+   undocumented and untested, **and it is what decides whether P4c-4b's first
+   real grant works.** Now documented at the definition site and pinned.
+4. **"Mechanism only" was too strong.** The `[else]` arm's CODE is untouched; its
+   REACHABILITY is not — previously every node reached the cond once anything was
+   granted, now only granted heads do. Production is unaffected (default empty),
+   so the honest claim is "**no production behaviour changes**", not "policy is
+   untouched".
+
+**DEFERRED 32's open half stays untouched and undecided, by design.** A pin
+caught me encoding a wish about it: I asserted granting the INNER head `g` would
+preserve inside `[g users:name]`; it does not, because `g` is unknown and the
+unknown-head arm strips regardless. The failure was correct behaviour, and it
+re-confirms P4c-3's measurement from a second direction — now by a shippable test
+rather than a mutation.
+
+**Perf, measured** (the predicate runs once per node): **+45 ns/call** (50.7 vs
+5.9); ~681 calls on a 1164-line file against 139 ms reader wall ⇒ **~31 µs,
+0.02%**. A 200-entry nonsense grant inflating `memq` ~40× is within noise across
+three interleaved rounds — so suite wall movement is ambient, not this.
+
+**Lint**: baselined by hand with rationale. **NOT** added to `test-support.rkt`'s
+parameterize blocks despite `pipeline.md`'s checklist — five of those six blocks
+are PER-RUN helpers, so registering it there would clear the grant inside the
+very helpers a test uses to exercise it. Not `--save-baseline`d either, since
+that would silently accept two parameters that are not mine (DEFERRED 41).
+
+**Mutation-verified**: reverting to the old global `pair?` turns **2** pins red.
+Said plainly because the first draft turned only ONE red and had to be
+strengthened — and because at assertion granularity that is 2 of 12, i.e. four of
+the six original test-cases are regression ANCHORS, not discriminators.
+
+Gate: suite **9807 / 479 / 0** · battery 328 → **336** · acceptance 52/52 + 89/89
++ 6/6 + 29/29 + 28/28.
+
+Status: ✅ **P4c-4a COMPLETE**. Next: **P4c-4b** — `access-sentinel?` membership +
+the fold arm (with its FIXPOINT obligation: the emitted datum must not be
+sentinel-headed) + the producer bridge + the `segment-select-items` arm, carrying
+the [dual-spine merge assumption](#p4c-4-merge).
 
 <a id="p5"></a>
 
