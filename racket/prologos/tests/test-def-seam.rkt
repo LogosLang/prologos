@@ -203,11 +203,29 @@
   (check-false (prologos-error? (third rs))
                (format "~a: the command AFTER it must still run" label)))
 
-(test-case "def-seam/C1 chained annotation `x:A:B` is a contained error"
-  ;; Reader gives (def x :A :B := 5) — two colon-symbols. Chained annotations are
-  ;; reserved for UCS and must stay refused (split-glued-name-datum rejects the
-  ;; sexp spelling identically). Refused, but not at the cost of the file.
-  (check-contained-error "c1" "def x:A:B := 5"))
+(test-case "def-seam/C1 chained annotation `x:A:B` is a contained, well-worded error"
+  ;; Chained annotations are reserved for UCS and must stay refused
+  ;; (split-glued-name-datum rejects the sexp spelling identically). Refused,
+  ;; but not at the cost of the file.
+  (check-contained-error "c1" "def x:A:B := 5")
+  ;; ⚠ THE MESSAGE IS PINNED, and this is why: since the `:` mint (P4c-2) the
+  ;; reader hands us `(:A ($bcast-step :B))`, NOT two colon-symbols — the first
+  ;; colon fuses onto the binder and the REST become broadcast steps. The
+  ;; original classifier tested `fused-type-annot?` on every token, so after
+  ;; that mint landed it stopped recognizing chains: the message silently
+  ;; degraded to the multi-token one AND printed the raw sentinel
+  ;; `($bcast-step :B)` at a user who had written ordinary syntax. Containment
+  ;; alone could not see it — `check-contained-error` only asks "is it an
+  ;; error". Leaking an internal sentinel is the same defect P4c-2 condition
+  ;; (c) fixed one seam over, so pin the wording, not just the outcome.
+  (define rs (run-file-ws (sandwich "defseam-c1msg" "def x:A:B := 5")))
+  (define msg (prologos-error-message (second rs)))
+  (check-true (regexp-match? #rx"chained type annotation" msg)
+              (format "must classify as chained, got: ~v" msg))
+  (check-true (regexp-match? #rx":A:B" msg)
+              (format "must echo what the user typed, got: ~v" msg))
+  (check-false (regexp-match? #rx"bcast-step" msg)
+               (format "must NOT leak the reader sentinel, got: ~v" msg)))
 
 (test-case "def-seam/C2 multiplicity-shaped `x:0` is a contained error, not a type"
   ;; The Q_N4 discipline: no type name starts with a digit, so `:0` is a

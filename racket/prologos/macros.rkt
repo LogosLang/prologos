@@ -5102,17 +5102,36 @@
 ;; actually wrote and what to write instead. These are reachable user inputs —
 ;; the fused/spaced confusion, the UCS-reserved chained annotation, and the
 ;; multiplicity-in-type-position slip — not defensive filler.
+;; A chain's SECOND colon is not a plain colon-symbol. Since the `:` mint
+;; (CIU T6 D4.P4c-2) the reader hands `x:A:B` to us as `(:A ($bcast-step :B))`
+;; — the first colon fuses onto the binder, the rest become broadcast steps.
+;; Both helpers below exist so the message layer never has to know that:
+;; `chained-annot-token?` classifies either spelling, and `annot-token->display`
+;; renders what the USER TYPED. Leaking `($bcast-step :B)` into a diagnostic is
+;; the same defect P4c-2 condition (c) fixed one seam over — an internal
+;; sentinel shown to someone who wrote ordinary syntax.
+(define (bcast-step-annot t)
+  (and (pair? t) (eq? (car t) '$bcast-step) (pair? (cdr t))
+       (fused-type-annot? (cadr t))
+       (cadr t)))
+
+(define (chained-annot-token? t)
+  (or (fused-type-annot? t) (and (bcast-step-annot t) #t)))
+
+(define (annot-token->display t)
+  (format "~a" (or (bcast-step-annot t) t)))
+
 (define (def-assign-error-message name before)
   (define (spellings)
     (format "write `def ~a : T := value` (or the fused `def ~a:T := value`)" name name))
   (cond
-    ;; `def x:A:B := 5` — the reader splits a chain into successive colon
-    ;; symbols. Reserved for UCS; split-glued-name-datum refuses the sexp
-    ;; spelling with the same reason, so keep the wording aligned.
-    [(and (>= (length before) 2) (andmap fused-type-annot? before))
+    ;; `def x:A:B := 5` — a chain. Reserved for UCS; split-glued-name-datum
+    ;; refuses the sexp spelling with the same reason, so keep the wording
+    ;; aligned.
+    [(and (>= (length before) 2) (andmap chained-annot-token? before))
      (format "def ~a: chained type annotation ~a is not supported (reserve for UCS) — ~a"
              name
-             (string-join (map symbol->string before) "")
+             (apply string-append (map annot-token->display before))
              (spellings))]
     ;; `def x:List Nat := 5` — the fused spelling is SINGLE-TOKEN by rule
     ;; (reader-forms.rkt § fused annotations; `defn` params and `let` bindings
@@ -5122,7 +5141,7 @@
      (format "def ~a: a fused type annotation is single-token — write the spaced form `def ~a : ~a := value`"
              name name (string-join (cons (symbol->string
                                            (fused-annot->type-symbol (car before)))
-                                          (map (lambda (t) (format "~a" t)) (cdr before)))
+                                          (map annot-token->display (cdr before)))
                                     " "))]
     ;; `def x:0 := 5` / `def x:w := 5` — a multiplicity where a type belongs.
     [(and (= (length before) 1)

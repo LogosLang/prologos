@@ -3092,12 +3092,35 @@
        (close-input-port port)
        (define expanded-stxs (preparse-expand-all raw-stxs))
        (define surfs (map parse-toplevel-datum expanded-stxs))
+       ;; ⚠ THE `else` IS LOAD-BEARING (2026-08-01). This loop used to be an
+       ;; `unless` with no else: a surf that was ALREADY a parse error got
+       ;; SKIPPED, silently, and the module finished loading incomplete — while
+       ;; a command that FAILED at process time was reported loudly two lines
+       ;; below. Same severity, opposite treatment, for no stated reason.
+       ;;
+       ;; That asymmetry was harmless only while every preparse syntax failure
+       ;; RAISED (escaping at `preparse-expand-all` above, before this loop).
+       ;; The POL.4 conversions turn those raises into per-command error VALUES
+       ;; — `$let-error` did it first, `$def-error` follows — and each such
+       ;; conversion silently moved the MODULE path from loud-abort to
+       ;; silent-drop, i.e. into the exact class P4c-1 closed at `b0db8f3e`.
+       ;; A conversion should not be able to make a diagnostic disappear.
+       ;;
+       ;; This is also the blocker that made DEFERRED item 31 (the `ns` guard)
+       ;; a bad trade as written: converting it while this loop swallowed error
+       ;; surfs would have regressed `ns` in a library module from a loud abort
+       ;; into a module that loads with no namespace and no prelude, silently.
+       ;; With the else in place that objection is gone.
        (for ([surf (in-list surfs)])
-         (unless (prologos-error? surf)
-           (define result (process-command/solve-guard surf))
-           (when (prologos-error? result)
-             (error 'imports "Error loading module ~a: ~a"
-                    ns-sym (prologos-error-message result)))))
+         (cond
+           [(prologos-error? surf)
+            (error 'imports "Error loading module ~a: ~a"
+                   ns-sym (prologos-error-message surf))]
+           [else
+            (define result (process-command/solve-guard surf))
+            (when (prologos-error? result)
+              (error 'imports "Error loading module ~a: ~a"
+                     ns-sym (prologos-error-message result)))]))
 
        ;; IO-H: Run capability inference after module definitions are processed
        (run-post-compilation-inference!)
